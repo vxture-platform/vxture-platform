@@ -56,7 +56,10 @@ CLIENTS_ALL="website console admin"
 # karda-beta intentionally excluded — deferred until a beta host is assigned
 # (TD-001 in vxture-karda); adding it here now would provision a secret for a
 # client no host can use yet.
-REMOTE_CLIENTS_ALL="umbra arda arda-beta karda"
+# atlas: vx-worker-02 (same host as arda/karda) via Tailscale; RP client_secret
+# for its own outbound token-exchange calls (identity-app-integration-standard §11),
+# separate from ATLAS_PROVISION_WEBHOOK_SECRET (inbound webhook HMAC, unrelated).
+REMOTE_CLIENTS_ALL="umbra arda arda-beta karda atlas"
 
 is_remote() {
   case " $REMOTE_CLIENTS_ALL " in *" $1 "*) return 0 ;; *) return 1 ;; esac
