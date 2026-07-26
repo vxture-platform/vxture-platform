@@ -253,6 +253,17 @@ jobs:
             # 只覆盖 compose；.env.varda-* / secrets 本机长驻（不动）。
             cp -f /tmp/vxture-varda/deploy/worker-02/compose.varda.yml "$DEPLOY_DIR/compose.varda.yml"
 
+            # ── L0 port-plan migration (2026-07-24, 13-infra-allocation-registry.md) ──
+            # varda-bff/varda-server 监听口由 compose environment: 硬编码，不受影响；
+            # 但 .env.varda-bff 里的 VARDA_SERVER_SERVER_INTERNAL_URL 长驻不覆盖，仍会
+            # 停留在旧口 3122，导致 varda-bff -> varda-server 内部调用打不通。就地幂等
+            # 修正（同 deploy.yml 对 worker-01 runtime .env 的处理手法）。
+            ENVF="$DEPLOY_DIR/.env.varda-bff"
+            if [ -f "$ENVF" ]; then
+              sed -i -e 's/varda-server:3122/varda-server:3081/g' "$ENVF"
+              echo "  [ok] .env.varda-bff VARDA_SERVER_INTERNAL_URL port migrated (3122->3081, if stale)"
+            fi
+
             IMAGE_NAMESPACE="${VX_IMAGE_NAMESPACE:-vxture}"
             IMAGE_TAG="${VX_IMAGE_TAG:-latest}"
             IMAGE_REGISTRY="${VX_IMAGE_REGISTRY_PUBLIC:-ghcr.io}"
@@ -280,10 +291,11 @@ jobs:
             docker compose -f compose.varda.yml pull varda-server varda-bff
             docker compose -f compose.varda.yml up -d
 
-            # 健康校验：varda-bff 3121/health（runbook §8）。
+            # 健康校验：varda-bff 3080/health（runbook §8；2026-07-24 随 L0 端口迁移
+            # 由 3121 改为 3080，与 compose.varda.yml 的实际监听口一致）。
             echo "waiting for varda-bff health ..."
             for i in $(seq 1 30); do
-              code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3121/health || true)"
+              code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3080/health || true)"
               [ "$code" = "200" ] && { echo "varda-bff healthy (200)"; exit 0; }
               echo "  varda-bff not ready ($code) [$i/30]"; sleep 5
             done

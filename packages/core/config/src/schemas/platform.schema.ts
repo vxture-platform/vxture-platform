@@ -32,7 +32,7 @@ export const platformSchema = z.object({
   /** Model Platform internal base URL */
   MODEL_PLATFORM_URL: z.string().url().default("http://localhost:3100"),
   /** Auth BFF internal base URL (used by proxy BFFs to delegate auth operations) */
-  AUTH_BFF_URL: z.string().url().default("http://localhost:3090"),
+  AUTH_BFF_URL: z.string().url().default("http://localhost:3061"),
   /**
    * platform-api internal base URL (product_310 D13 host) — consumed by
    * proxy BFFs that resolve the C2 `/platform/entitlements` contract
@@ -41,7 +41,7 @@ export const platformSchema = z.object({
    */
   PLATFORM_API_URL: z.string().url().default("http://localhost:3041"),
   /** Varda agent-server internal base URL (used by varda-bff to proxy chat/confirm) */
-  VARDA_SERVER_INTERNAL_URL: z.string().url().default("http://localhost:3122"),
+  VARDA_SERVER_INTERNAL_URL: z.string().url().default("http://localhost:3081"),
   /** Ruyin product surface base URL (used for post-SSO redirects) */
   RUYIN_BASE_URL: z.string().url().default("http://localhost:3080"),
   /**
