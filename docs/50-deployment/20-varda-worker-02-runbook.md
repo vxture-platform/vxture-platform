@@ -4,6 +4,13 @@
 > 对象：把 **Varda 助手栈**（`varda-bff` + `varda-server`）部署到 **worker-02**（独立业务箱，Tailscale `100.76.219.48`）。
 > 配置：[`deploy/worker-02/compose.varda.yml`](../../deploy/worker-02/compose.varda.yml) · 工作流 [`.github/workflows/deploy-varda.yml`](../../.github/workflows/deploy-varda.yml)
 > 关联：varda 定位/架构见记忆与 `docs/20-specs/agents/varda/`；**worker-02 属外部箱**，本 runbook 走 **CI/CD 部署（GitHub Actions runner SSH），不手连 worker-02**。
+>
+> **2026-07-27 更正**：§1/§3 里的 `MODEL_PLATFORM_URL=http://100.100.197.42:3100`（worker-01）已过期——
+> Atlas 拆仓后（2026-07-24）实际部署在 **worker-02:3100**（`100.76.219.48:3100`，见
+> `docs/50-deployment/13-infra-allocation-registry.md` §3），`deploy/worker-02/.env.varda-server.example`
+> 已同步更正。下方 §3 的 2026-07-11 验证记录是**当时**真实发生过的事，予以保留，但据此配置生产
+> env 的值已不再正确——**若 worker-02 上的真实 `.env.varda-server` 仍是旧值，需 owner 带外更正 +
+> recreate 容器**（同 karda B 段密钥转运的处理方式，本仓无 worker-02 写权限）。
 
 ---
 
@@ -14,7 +21,7 @@
                                                                           └→ varda-server:3122 (同栈)
 worker-02 varda 栈（自包含）：
   varda-bff(3121, 发布 0.0.0.0) · varda-server(3122, 仅内网) · varda-pg(私有) · varda-redis(私有)
-唯一跨主机硬依赖：varda-server → worker-01 model-platform:3100（LLM 网关）
+唯一跨主机硬依赖：varda-server → Atlas（LLM 网关，worker-02:3100，2026-07-27 更正，见 §3；虽同机部署仍走 tailnet IP）
 ```
 
 - **自包含**：会话数据（Vela\* 表）在本栈私有 `varda-pg`；jti 撤销黑名单在本栈私有 `varda-redis`。
@@ -53,17 +60,23 @@ worker-02 varda 栈（自包含）：
 必填要点：
 
 - **`JWT_SECRET` + `JWT_REFRESH_SECRET`**：均为 auth.schema **必填**（≥32 字符），与平台 `platform.env` 同值（owner 转运）。两个 env 文件、两个键都必须一致——缺 `JWT_REFRESH_SECRET` 容器 boot 即 exit(1)。
-- **`MODEL_PLATFORM_URL`**：`http://100.100.197.42:3100`（model-platform 已暴露 live，见 §3）。
+- **`MODEL_PLATFORM_URL`**：`http://100.76.219.48:3100`（Atlas，worker-02 本机 tailnet IP，见 §3 2026-07-27 更正）。
 - **`VARDA_PLATFORM_LLM_TENANT_ID`**：真实平台租户 UUID（LLM 计费归属；admin surface 的回落租户）。
 - **`VARDA_DEFAULT_MODEL_CODE`**：必须是 `model.models` 里 `is_active` 的 `model_code`且 ARK key 实际可调用（生产已注册 `doubao-seed-2-0-lite-260215`；seed 的 doubao-pro-32k 在该 ARK 账号不可调用），否则聊天 404 `MODEL_NOT_ROUTABLE`。
 - **完整必填字段**以 `packages/core/config/src/schemas/{app,auth,redis,platform,varda}.schema.ts` 为准；VxConfig **fail-fast**，缺字段容器启动即退，首部署看 `docker logs`。（注：`APP_ENV` 不被任何 schema 消费，起作用的是 `NODE_ENV`。）
 
-## 3. 跨主机 model-platform 可达（已 live）
+## 3. 跨主机 model-platform 可达（2026-07-27 更正：现指向 Atlas / worker-02，非旧 worker-01 model-platform）
 
-方案 B：`compose.platform.yml` 给 model-platform 绑 `ports: ["100.100.197.42:3100:3100"]`（worker-01 tailscale IP，仅 tailnet）。对应 `.env.varda-server` 的 `MODEL_PLATFORM_URL=http://100.100.197.42:3100`。
+**现状（2026-07-27）**：LLM 网关已是独立仓 `vxture-atlas`，部署于 **worker-02 本机**（`100.76.219.48:3100`，
+登记见 `docs/50-deployment/13-infra-allocation-registry.md` §3）。对应 `.env.varda-server` 的
+`MODEL_PLATFORM_URL=http://100.76.219.48:3100`。虽与 varda-server 同机，Atlas 与 varda 栈是两个独立
+compose 栈/docker network，无 Docker DNS 名互通，仍须走 tailnet IP。
 
-> **已上生产并验证（2026-07-11）**：晋级 main → deploy-production 后，worker-01 `docker port vx-model-platform` = `100.100.197.42:3100`，`curl .../model-platform/health/live` = 200。
-> 若 model-platform 需内部鉴权 token，varda-server 侧对应 env 也要补（按 model-runtime-client 要求）。
+> **历史记录（2026-07-11，已被上面取代）**：方案 B 曾是 `compose.platform.yml` 给 worker-01 上的旧
+> `model-platform` 绑 `ports: ["100.100.197.42:3100:3100"]`；晋级 main → deploy-production 后，
+> worker-01 `docker port vx-model-platform` = `100.100.197.42:3100`，`curl .../model-platform/health/live`
+> = 200 —— **这条验证在当时是真实的，但该服务与地址已随 Atlas 拆仓（2026-07-24）作废，不要再据此配置**。
+> 若 Atlas 需要内部鉴权 token，varda-server 侧对应 env 也要补（按 model-runtime-client 要求）。
 
 ## 4. 首部署：建 Vela\* 表（用仓内迁移 SQL，勿用 db push）
 
