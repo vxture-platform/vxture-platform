@@ -122,3 +122,62 @@ karda 前端如果要给终端用户一个模型选择器，需要 Atlas 暴露"
 不在本文档拍板：deepseek/minimax 的真实型号与成本费率（产品/成本决策，需替换占位值后再启用
 计费）；境外三家的实际代理机型号/带宽/合规文本（owner 决策，暂缓）；Atlas 侧 `model_policy`/
 "可选模型"接口的具体实现（Atlas 自己的仓库与设计文档）。
+
+## 8. 租户自有/自注册模型扩展路径（2026-07-28 owner 拍板：预留全量设计，本期只做 Phase 1）
+
+### 8.1 三种供给形态（行业收敛分类）
+
+| 维度     | ① 平台供给（现状）       | ② 租户自注册三方（BYOK）                  | ③ 租户自有模型（BYOM/自托管）    |
+| -------- | ------------------------ | ----------------------------------------- | -------------------------------- |
+| 注册者   | 平台运营者（能力控制台） | 租户管理员（租户 console）                | 租户管理员（租户 console）       |
+| 凭证归属 | 平台 vault（shared）     | 租户条目（dedicated），租户与厂商直接结算 | 租户端点凭证或无凭证             |
+| 上游成本 | 平台付→计量→向租户收     | 平台不付上游费只计量（服务费=商业决策）   | 无上游费，纯计量                 |
+| 可见性   | 按 `model_grant`         | 仅 owner 租户                             | 仅 owner 租户                    |
+| 端点门槛 | 平台审核                 | known SaaS（受 §4 出境治理约束）          | 任意 URL，必须 OpenAI-compatible |
+
+### 8.2 既有预埋位（激活即用，非新建）
+
+`model_providers.provider_type CHECK ('online','self_hosted','private')`（三形态类型轴 day-one 已建）；
+`private.provider` adapter（代码已存在）；`key.provider_api_keys.key_scope` shared/**dedicated**（租户
+专属凭证位已留）；`commerce.tenant_subscription_quota.allow_custom_model`（权益门已在，套餐档位可把
+自有模型做成付费能力）。
+
+### 8.3 三个真缺口
+
+1. **注册表 owner 作用域**：`model.models` 无租户归属列且 `model_code` 全局唯一——需加
+   `owner_workspace_id nullable`（null=平台条目），唯一约束改 (scope, model_code) 复合；租户条目
+   走保留前缀命名空间（衔接 §1 命名法）；owner 隐式授权（建即可用，不走 grant 发放）；跨租户共享
+   自有模型**不做**（真有需求走既有 SharingGrant 机制，本期不开门）。
+2. **Atlas 第三张 API 脸（租户自助控制面）**：现有运营控制面（M 线）+ S2S 供给面之外，新增
+   customer realm 身份、workspace 作用域、经 console-bff 上租户 console 的自助注册面。分工与
+   `product_250` 三面架构零冲突：能力控制台管平台全局目录，租户 console 管租户自有条目；
+   租户过滤"可选模型"清单端点自然升级为 granted 平台模型 ∪ 租户自有模型的并集。Atlas 仍 L1。
+3. **egress/SSRF 防护（安全刚性项）**：租户可注册任意 URL → Atlas runtime 替其发 POST。必须：
+   目的地址硬拒 RFC1918/loopback/link-local(169.254.0.0/16)/CGNAT(100.64.0.0/10,即 tailnet 段)、
+   DNS 解析后校验（防 rebinding）、独立超时/熔断（租户端点故障域按租户隔离）、平台模型与租户
+   模型**不互为 fallback**。
+
+### 8.4 治理红线：BYOK 不得旁路 §2/§4 出境合规决策
+
+境外三家 registered-closed 是 owner 决策；若 BYOK 无目的地治理，任何租户拿自己的境外厂商 key
+即可让平台向境外发送 prompt——出境合规义务不因 key 是租户的而消失（平台仍是数据处理/传输方）。
+BYOK 端点白名单第一期限定域内厂商；境外 BYOK 与平台自身境外开通走同一个 owner-gated 决策门
+（§4），不另开口子。
+
+### 8.5 分期（2026-07-28 拍板）
+
+| Phase | 内容                                                                                                                                                                                            | 状态                       |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| 1     | **租户自托管模型（BYOM 域内）**：provider_type='private' 激活 + 租户 console 注册页 + 8.3#1/#2/#3 三缺口 + allow_custom_model 权益门；计费零改动（无上游费只计量）；注册时 test-connection 探测 | **本期实现（已批准）**     |
+| 2     | BYOK 域内 SaaS：vault 租户 dedicated 条目 + 计费语义（计不计 period_tokens/服务费=**owner 商业决策**）                                                                                          | 预留，未排期               |
+| 3     | 境外 BYOK                                                                                                                                                                                       | 预留，挂 §4 owner-gated 门 |
+
+### 8.6 密钥托管归属（2026-07-28 拍板，对平台供给与租户形态统一适用）
+
+**所有 provider API key（平台 curated 与租户 dedicated）一律存 Atlas 自己库的 `key.provider_api_keys`
+（信封加密），能力控制台/运维面零持有**。理由：运行时局部性（每次推理都要用，存平台侧即重建
+可用性/延迟耦合）；三平面铁律（控制台是管理面 UI 外壳，无域状态——密钥明文仅在 create/rotate
+写入时过一次网，落库即加密，UI 此后只见掩码与轮换日志，`product_250` M-3）；DDL 既定（`40_model.sql`
+"密钥归本库 key schema"）。信封加密主密钥（KEK）留 Atlas 主机 env，owner 手动转运，不进运维面。
+现行 `apiKeyEnvVar`→env 为过渡态，目标态 runtime 从 vault 解析——Atlas 仓 provider-keys 模块
+（含 crypto）已是实现态，剩 runtime 解析接线 + 守卫按 M-1 切换。

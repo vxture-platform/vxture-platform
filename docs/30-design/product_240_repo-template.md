@@ -123,6 +123,7 @@ DDL 三段式单一权威:`deploy/database/ddl/00_baseline.sql`(建三契约 sch
 - **app profile(默认,arda 已验证)**:`portals/`(workspace 根)= `app`(单 Next.js 全栈:web+BFF+API 一体,一镜像 `<product>-app`)+ `packages/shared`(`@<product>/shared`:brand/locale/version 等,`__GIT_SHA__` CI 打戳模式);运行栈三容器 `<product>-app/-redis/-db`,PROJECT_NAME 驱动 prod/beta 双栈同机;边缘 vhost 源文件放 `configs/edge/`(产品栈纯内网 HTTP,TLS 归共享边缘)。
 - **agent profile(L3 增量)**:app profile 全量 + `agent-server/` 槽(独立编排进程,见 §4)。
 - **services 槽(预留)**:多服务/多镜像产品用;`build.yml` matrix 与 `06-check-deploy-contracts.py` 同步扩展(该脚本 arda 版硬编码 EXPECTED_ARDA_IMAGES、compose 引用串与 arda 哨兵,属 [P] 参数化改造件而非可原样复制)。模板默认单镜像,不超前建。
+- **L1 管理面(2026-07-28 增)**:L1(atlas/runa)"无 portals"不变,但**不等于无管理 UI**——其运营管理界面以 **admin-module** 形式在自己仓内开发、独立部署,挂载到平台侧能力控制台(外壳归 platform,联邦一档=路径挂载),按 [`product_250_management-plane-contract.md`](./product_250_management-plane-contract.md) M-4 交付;操作者身份/权限词表/审计遵 M-1/M-2/M-5。L1 新增 admin 可配置字段的 PR 同批携带模块 UI 或同批开自仓 TD(M-4 同周期强制)。
 
 ### 2.6 文档骨架
 
@@ -149,6 +150,8 @@ DDL 三段式单一权威:`deploy/database/ddl/00_baseline.sql`(建三契约 sch
 - **反带偏保险**:模板中的示例页面仅保留契约面(health/auth/entitlement 演示);arda 的 dataset/datasource/connector 等领域概念在模板中**零出现**;`09-check-ds-usage.py`(DS 纯度)等产品无关检查保留,arda 领域校验剔除。
 
 ## 3. 模块 × 层 适用矩阵
+
+> ⚠️ **ontos 2026-07-28 重定位 L2**(`product_100` v1.1):本表 L1 列的 ontos 项(多为"待定义")按 L2 列口径重读——ontos 建仓套 L2 app profile;全表列头修订随模板线下次迭代,先以本注记为准。
 
 | 模块                                                                    | L1(atlas/ontos/runa)                                                       | L2(arda/karda/terra)                                                                                                    | L3(四 agent)                     |
 | ----------------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------- |

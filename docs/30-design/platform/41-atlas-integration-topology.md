@@ -40,6 +40,9 @@ price_rule/policy CRUD + 租户配额看板），这不是"业务调用模型能
   不应该用同一套凭证语义）。
 - **不做的事**：platform 不通过 S2S provider 面调 Atlas 的 embedding/parse/rerank/generation——
   运营台只管目录和授权,不代表任何产品发起推理调用。
+- **2026-07-28 增**：本节"鉴权升级为运营态凭证"的契约化落点 =
+  [`product_250_management-plane-contract.md`](../product_250_management-plane-contract.md)(M-1 操作者身份传递 / M-4 能力控制台);
+  admin-bff 直连代理为过渡形态,目标态与实施批次见该契约 §2/§4。
 
 ## 2. Varda（L0 内嵌，本仓内）——最短路径，纯 generation
 
