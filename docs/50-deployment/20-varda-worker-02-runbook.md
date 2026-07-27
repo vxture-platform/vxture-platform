@@ -48,6 +48,19 @@ worker-02 varda 栈（自包含）：
 
 ## 2. 一次性：worker-02 本机 env / secret（长驻，不经 CI）
 
+**Docker daemon 镜像加速（一次性，先于其他步骤做）**：worker-01 早就配了
+`registry-mirrors`（`deploy-manual-init/bootstrap/11-bootstrap-host.sh`），
+worker-02 一直没有对应配置，`postgres:18-alpine`/`redis:8-alpine` 等
+docker.io 基础镜像直连拉取，慢且偶尔超时。跑一次：
+
+```
+sudo bash deploy/worker-02/bootstrap-docker-mirror.sh
+```
+
+会 `systemctl restart docker`，短暂中断本机所有容器（`restart: unless-stopped`
+会自动拉起，之后用 `docker compose -f /srv/md0/varda/deploy/compose.varda.yml ps`
+核实）。建议低峰期执行，一次性动作，幂等可重跑。
+
 在 worker-02 上准备 `/srv/md0/varda/deploy/`，从 `*.example` 复制并填 `CHANGE_ME`：
 
 ```

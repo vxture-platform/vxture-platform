@@ -22,6 +22,11 @@ services:
     # recreating the stateful DB on pull. Bump tag+digest together to upgrade.
     # 18-alpine digest resolved 2026-06-09.
     image: postgres:18-alpine@sha256:96d56f7f57c6aacd1fcb908bc83b345ec5f83231ee486dd66a1baadce274db88
+    # Digest-pinned and never expected to change out-of-band; skip the
+    # per-deploy manifest round-trip to docker.io (30-deploy-platform-stack.sh
+    # unconditionally `pull`s every service). Same pattern already validated
+    # on worker-02's compose.varda.yml.
+    pull_policy: missing
     container_name: vx-platform-pg
     restart: unless-stopped
     # Ceiling only (steady state ~40-100MB/container; whole host ~900MB). Stateful:
@@ -47,6 +52,8 @@ services:
   redis:
     # Pinned by digest (see postgres note). 8-alpine digest resolved 2026-06-09.
     image: redis:8-alpine@sha256:09160599abd229764c0fb44cb6be640294e1d360a54b19985ab4843dcf2d90f1
+    # See postgres note above — digest-pinned, skip the redundant per-deploy pull.
+    pull_policy: missing
     container_name: vx-platform-redis
     restart: unless-stopped
     # --maxmemory 96mb (below this 128m ceiling) makes redis self-evict before the
