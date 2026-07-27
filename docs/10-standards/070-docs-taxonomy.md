@@ -23,20 +23,24 @@
 
 ## 1. 顶层目录（decades）
 
-| 编号                | 目录                                   | 收纳                                           |
-| ------------------- | -------------------------------------- | ---------------------------------------------- |
-| `00-meta`           | 关于文档本身                           | `00-index` / glossary / contributing / status  |
-| `10-standards`      | **全栈工程规范（org 级权威，基础层）** | git-workflow / security / testing / DS / 本文… |
-| `20-specs`          | 产品/业务规格                          | product specs、console/tenant spec             |
-| `30-design`         | 架构 · ADR · 域设计 · DB schema        | architecture / decisions / 域设计 / schema     |
-| `40-implementation` | 分层/包指南 · 编码规范 · dev setup     | packages / coding-rules / setup                |
-| `50-deployment`     | 基建 · CI-CD · 环境 · 迁移             | deployment / rebuild                           |
-| `60-operations`     | runbook · 审计 · 技术债 · 事故         | audit / tech-debt / runbooks / incidents       |
-| `70-workplan`       | 计划 · 路线                            | roadmap / 批次跟踪                             |
-| `80-liaison`        | 跨组织对接联络（回函/约定/同步）       | arda 回函、对接契约                            |
-| `90-memory`         | 仓内 AI handoff                        | agent.md、handoff 约定                         |
+| 编号                | 目录                                                                  | 收纳                                           |
+| ------------------- | --------------------------------------------------------------------- | ---------------------------------------------- |
+| `00-meta`           | 关于文档本身                                                          | `00-index` / glossary / contributing / status  |
+| `10-standards`      | **全栈工程规范（org 级权威，基础层）**                                | git-workflow / security / testing / DS / 本文… |
+| `20-specs`          | 产品/业务规格                                                         | product specs、console/tenant spec             |
+| `30-design`         | 架构 · ADR · 域设计 · DB schema                                       | architecture / decisions / 域设计 / schema     |
+| `40-implementation` | 分层/包指南 · 编码规范 · dev setup                                    | packages / coding-rules / setup                |
+| `50-deployment`     | 基建 · CI-CD · 环境 · 迁移                                            | deployment / rebuild                           |
+| `60-operations`     | runbook · 审计 · 技术债 · 事故                                        | audit / tech-debt / runbooks / incidents       |
+| `70-workplan`       | 计划 · 路线                                                           | roadmap / 批次跟踪                             |
+| `80-liaison`        | 跨组织对接联络（回函/约定/同步）——**2026-07-27 起停止新增，见下方注** | arda 回函、对接契约（历史归档）                |
+| `90-memory`         | 仓内 AI handoff                                                       | agent.md、handoff 约定                         |
 
 > 未用满时空号保留（如无 workplan 也占住 `70`，勿挪用）。standards 居 `10`（基础层，governs 一切），非末尾。
+> **`80-liaison`（2026-07-27 起）**：跨仓联络改用 GitHub Issues（`liaison` 标签），不再新建
+> `NN-YYMMDDHHmm-slug.md`——原因与约定见 [`140-repo-governance-standard.md`](./140-repo-governance-standard.md)
+> §10。既有文件保留作历史归档，不追溯迁移、不删除，按各仓节奏陆续退役；本目录不回收（`90-memory`
+> 之前仍占位，避免号段错位），只是不再新增内容。
 > **`95-readme`**（2026-07-17）：内部包 README 归集区（package 只留 `AGENTS.md` 入口，内容收 docs）；
 > 属**过渡 staging**，与十进制分段并存的显式例外（见元规则 2）。**回收条件**：与
 > `40-implementation/packages/` 合并去重后即删除本目录、条目从本表移除。已发布包（shared/design-system）

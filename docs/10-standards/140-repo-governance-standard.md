@@ -236,6 +236,19 @@ required status check（发现新漏洞即 fail 拦合并）。
   由 `lint:docs-numbering` 护栏强制。
 - **域文档命名** `{kind}_{domain}_{NNN}_{slug}`（`kind`∈data/design/ops，`NNN` 段义 1xx 架构/2xx schema/3xx 实施）；
   **域码用全词**（platform/identity/commerce/…，见 taxonomy §5）。
+- **跨仓联络渠道（2026-07-27 起，`80-liaison` 停止新增文件）**：产品仓之间的对接沟通（回函/约定/
+  同步/请求）改用 **GitHub Issues**，不再新建 `80-liaison/NN-YYMMDDHHmm-slug.md`——md 信件这条渠道
+  有两个实测过的真实缺陷：①一封信寄错仓，没有轻量纠正手段，只能再写一封信道歉重发；
+  ②信件写完但"暂存本仓未正式发出"没有强制状态，容易在草稿态卡住导致对方基于过期假设行动
+  （均是本仓与 karda/atlas 对接过程中的真实事故，非假设风险）。GitHub Issues 原生解决这两点：
+  寄错仓可直接 **transfer** 到正确仓库（同组织内）；开出即时可见，无"草稿未发"的中间态；
+  **close/reopen** 天然对应"回函收尾/重新打开"，取代信件里手写"某函已闭环"的做法。
+  **创建原则：需要哪个仓库修改/回应，issue 就开在哪个仓库内**（不是发起方仓库,是承接需求、需要
+  动手的那一方——例如 karda 需要 atlas 改端点,issue 开在 `vxture-atlas`,不开在发起需求的
+  `vxture-karda`）；统一打 `liaison` 标签,与该仓其它 issue（bug/feature）区分；跨仓引用用
+  GitHub 原生 `org/repo#N` 语法，不再发明文件编号地址。**既有 `80-liaison/*.md` 保留作历史归档,
+  不追溯迁移、不删除,按各仓节奏陆续退役（不再新增,存量自然沉淀为历史记录）**；本条对遵循本标准
+  的所有产品仓同样适用（不是本仓专属约定）。
 
 ---
 
@@ -249,6 +262,7 @@ required status check（发现新漏洞即 fail 拦合并）。
 - [ ] 敏感信息四层检测（push protection + gitleaks CI + pre-commit + `.gitleaks.toml`）就位；**仓公开（开发阶段）**；无误标开源残留。
 - [ ] 依赖 SCA 门：`audit` = osv-scanner（pinned 二进制 + `--config`）硬阻断 + required；基线已 triage 清零，残留经 `.osv-scanner.toml` 逐版本记名接受。
 - [ ] secret/variable **分类正确**、**层级正确**（org/repo/env）、无死值/重复。
+- [ ] 跨仓联络：新对接沟通走 GitHub Issues（`liaison` 标签），不再新建 `80-liaison/*.md`；既有信件保留归档不删除。
 - [ ] **每部署目标一个 Environment**，各带 `DEPLOY_*` 且 **`DEPLOY_DIR` 精确**；生产/产品环境 **Required reviewers 已配**。
 - [ ] **迁仓已在新仓重建全部 secrets**（不继承）；ACR `namespace` 从 `vars` 取（非硬编码）；迁移前 SSH 核实目标主机 stack_root/env/ACR 登录在位。
 - [ ] 生产 DB 走 `db-init` + `expected_sha` + 审批；常规部署链不跑 migration/seed。
