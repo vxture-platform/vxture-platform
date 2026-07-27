@@ -61,13 +61,13 @@
 
 - **admin 门户定位收敛为纯 BSS**(租户/账号/订阅/订单/账单/工单/促销);「能力与服务」域整体迁出。
 - **新立 OSS 侧「能力控制台」,独立于 admin**,分立理由:操作者画像分离(客服商务 vs 平台工程)、安全姿态不同(小受众全量 step-up vs 大受众流程密集)、发布节奏不同(provider 各自节奏 vs BSS 列车)。
-  - 命名/域名 = **owner 开放项**(建议:能力控制台 / Capability Console,域名候选 `ops.vxture.com`)。
+  - 命名 = **能力控制台(Capability Console)**;域名 **2026-07-28 已拍板**——按加固方案**真名不入公开仓**(仅落 owner 侧记录/部署主机 env);仓内文档/配置一律以占位符 `x.vxture.com` 指代本控制台域名。
 - **外壳归 platform,模块归 provider**(三平面铁律:外壳=横向管理面设施):
   - 外壳:workforce realm OIDC RP + 导航 + 设计系统 + 审计钩子;复用 `shell-template`(console/admin 已共用)与既有 nginx 边缘模式,边际成本低。
   - 模块:atlas/runa 各自仓内开发、独立部署,外壳只管挂载。
 - **联邦一档起步 = 路径挂载**:各 provider 部署自己的小型 admin 应用,nginx 同 vhost 挂 `/atlas/*`、`/runa/*`,共享 workforce SSO cookie;零 module-federation 构建机械(行业背书:Azure Portal 即 iframe 联邦)。升档(build-time 组装/runtime MF)仅当模块数量或融合度要求触发,不预建。
 - **同周期强制**:联邦后 module UI 与 backend 同仓——provider 新增 admin 可配置字段的 PR **同批携带模块 UI,或同批开自仓 TD 并在 PR 描述引用**;此要求在联邦结构下同仓同 PR 即可满足,结构性消除 #148 类滞后(对比现状需跨仓第二个 PR)。
-- **部署位(2026-07-28 owner 定向)**:外壳随平台栈落 **worker-01**(身份局部性:workforce OIDC 签发方 auth-bff 同机;平台 CD 顺路);**模块与各自 backend 同机**——atlas admin-module 落 worker-02(同仓同 CD,对 atlas admin API localhost 跳),runa 模块随 runa 主机;边缘 nginx(worker-01)在 ops vhost 上按路径反代模块(`/atlas/*`→worker-02 tailnet 内网,operator token 随请求)。约束:worker-01 内存压力已知(性能审计根因之一),外壳必须薄(单小容器+内存限额);**公网 vhost vs 仅 tailnet 访问 = 批A owner 决策项**(受众极小+操作高危,倾向仅 tailnet)。
+- **部署位(2026-07-28 owner 定向)**:外壳随平台栈落 **worker-01**(身份局部性:workforce OIDC 签发方 auth-bff 同机;平台 CD 顺路);**模块与各自 backend 同机**——atlas admin-module 落 worker-02(同仓同 CD,对 atlas admin API localhost 跳),runa 模块随 runa 主机;边缘 nginx(worker-01)在 ops vhost 上按路径反代模块(`/atlas/*`→worker-02 tailnet 内网,operator token 随请求)。约束:worker-01 内存压力已知(性能审计根因之一),外壳必须薄(单小容器+内存限额)。**访问形态 2026-07-28 已拍板 = 公网 vhost + 加固必做清单**(批C 硬性项,非建议):复用通配符证书(单签证书会经 CT 日志即时公开主机名)/公开仓一律占位符不写真名/外壳 SSO 前置(任何路径未认证零内容)/nginx default-server 兜底(裸 IP 扫描不回显 vhost)/限流。
 - **毕业条件**(何时允许某 provider 独立 portal,行业判据):直接外售有自有计费关系,或出现专职运维团队,或操作者画像全天驻留该域。当前无一满足。
 - **BSS 侧保留**:订阅/用量的 C2 权益商务视图不迁(商务画像要看);console(租户端)model-platform 页不动(客户面,C2 形状)。
 
