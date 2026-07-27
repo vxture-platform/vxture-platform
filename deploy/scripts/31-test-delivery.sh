@@ -18,6 +18,9 @@
 # 主体（workspace/tenant）取自 TEST_DELIVERY_ACCOUNT 的默认 workspace，默认为种子
 # 测试用户 zhangsan，不凭空造租户。
 #
+# DATABASE_URL 只存在于容器内（--env-file 注入），本脚本用 `sh -lc` 把 psql 调用留给
+# 容器自己的 shell 解析，宿主 bash 不直接引用 $DATABASE_URL（同 30-verify 的做法）。
+#
 # 运行：
 #   CONFIRM_TEST_DELIVERY=yes TEST_DELIVERY_PRODUCT=karda bash scripts/31-test-delivery.sh
 # 可选：TEST_DELIVERY_ACCOUNT（默认 zhangsan）、TEST_DELIVERY_EVENT
@@ -67,11 +70,14 @@ DELIVERY_ID="$(
   docker run --rm \
     --network vxture-prod \
     --env-file "$PLATFORM_ENV" \
+    --env PRODUCT_CODE="$PRODUCT_CODE" \
+    --env ACCOUNT="$ACCOUNT" \
+    --env EVENT="$EVENT" \
     -v "$VERIFY_DIR:/verify:ro" \
     postgres:18-alpine \
-    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q -A -t \
+    sh -lc 'psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -X -q -A -t \
       -v product_code="$PRODUCT_CODE" -v account="$ACCOUNT" -v event="$EVENT" \
-      -f /verify/test-delivery.sql
+      -f /verify/test-delivery.sql'
 )"
 
 if [ -z "$DELIVERY_ID" ]; then
@@ -89,9 +95,11 @@ while [ "$elapsed" -lt "$POLL_SECONDS" ]; do
     docker run --rm \
       --network vxture-prod \
       --env-file "$PLATFORM_ENV" \
+      --env DELIVERY_ID="$DELIVERY_ID" \
+      -v "$VERIFY_DIR:/verify:ro" \
       postgres:18-alpine \
-      psql "$DATABASE_URL" -X -q -A -t -v delivery_id="$DELIVERY_ID" \
-        -c "select status || '|' || coalesce(attempts::text, '0') from provisioning.webhook_deliveries where id = :'delivery_id';"
+      sh -lc 'psql "$DATABASE_URL" -X -q -A -t \
+        -v delivery_id="$DELIVERY_ID" -f /verify/delivery-status.sql'
   )"
   ST="${STATUS_LINE%%|*}"
   ATT="${STATUS_LINE##*|}"
