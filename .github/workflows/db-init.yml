@@ -23,6 +23,12 @@ name: db-init
 #   action=sync-env          -> ensure each RP's own *_BASE_URL in its runtime env
 #                               (from the example), recreate RP bffs
 #                               (fixes IdP authorize 400 invalid_redirect_uri)
+#   action=test-delivery     -> 31-test-delivery: enqueue one version-less notification event
+#                               (subscription_changed/grant.invalidated) for test_delivery_product
+#                               against an existing seeded account's default workspace, then poll
+#                               provisioning.webhook_deliveries for the real dispatch outcome
+#                               (proves the registered product_webhooks.webhook_url is actually
+#                               reachable, not just registered — karda 120 函 ask)
 on:
   workflow_dispatch:
     inputs:
@@ -46,9 +52,26 @@ on:
           - provision-secrets
           - sync-env
           - verify
+          - test-delivery
       confirm:
         description: "Type yes to confirm"
         required: true
+      test_delivery_product:
+        description: "test-delivery only: target product_code (e.g. karda)"
+        required: false
+        default: ""
+      test_delivery_account:
+        description: "test-delivery only: seeded account whose default workspace is the test subject"
+        required: false
+        default: "zhangsan"
+      test_delivery_event:
+        description: "test-delivery only: version-less event type"
+        required: false
+        default: "subscription_changed"
+        type: choice
+        options:
+          - subscription_changed
+          - grant.invalidated
 
 permissions:
   contents: read
@@ -90,7 +113,7 @@ jobs:
           HEAD_SHA="$(git rev-parse HEAD)"
           if [ -z "$EXPECTED_SHA" ]; then
             case "$DB_ACTION" in
-              reset|migrate-seed|seed|provision-secrets)
+              reset|migrate-seed|seed|provision-secrets|test-delivery)
                 echo "::error::DB-mutating action '$DB_ACTION' requires expected_sha (ref tips move; pin the verified version). HEAD=$HEAD_SHA" >&2
                 exit 1
                 ;;
@@ -132,13 +155,16 @@ jobs:
           # 主机布局来自环境级 vars（治理标准 §6），未设回落已验证默认。
           DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
           DEPLOY_RUNTIME_DIR: ${{ vars.DEPLOY_RUNTIME_DIR }}
+          TEST_DELIVERY_PRODUCT: ${{ inputs.test_delivery_product }}
+          TEST_DELIVERY_ACCOUNT: ${{ inputs.test_delivery_account }}
+          TEST_DELIVERY_EVENT: ${{ inputs.test_delivery_event }}
         with:
           host: ${{ secrets.DEPLOY_HOST_TAILNET }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
           command_timeout: 30m
-          envs: DB_ACTION,DEPLOY_DIR,DEPLOY_RUNTIME_DIR
+          envs: DB_ACTION,DEPLOY_DIR,DEPLOY_RUNTIME_DIR,TEST_DELIVERY_PRODUCT,TEST_DELIVERY_ACCOUNT,TEST_DELIVERY_EVENT
           script: |
             set -e
             SRC=/tmp/vxture-deploy/deploy
@@ -201,8 +227,9 @@ jobs:
             # Admin@2026 default would apply. Check BEFORE any destructive
             # step so `reset` can never leave the DB dropped-but-unseeded
             # midway. Single-quoted PHC form required (sourcing expands an
-            # unquoted/double-quoted hash into garbage).
-            if [ "$DB_ACTION" != "verify" ]; then
+            # unquoted/double-quoted hash into garbage). test-delivery never
+            # calls 29-seed, so this precondition doesn't apply to it.
+            if [ "$DB_ACTION" != "verify" ] && [ "$DB_ACTION" != "test-delivery" ]; then
               # [$] bracket expression = literal $ in ERE, robust across the
               # YAML->ssh->shell quoting layers (a backslashed \$ collapses to a
               # mid-pattern anchor that can never match). Single quote REQUIRED:
@@ -242,6 +269,15 @@ jobs:
               verify)
                 # Read-only live baseline audit (schema set / table count / seed floors).
                 bash scripts/30-verify-platform-baseline.sh
+                ;;
+              test-delivery)
+                # Enqueue one real C3 test event for an already-registered product and
+                # poll for the dispatch outcome (see 31-test-delivery.sh header).
+                CONFIRM_TEST_DELIVERY=yes \
+                TEST_DELIVERY_PRODUCT="$TEST_DELIVERY_PRODUCT" \
+                TEST_DELIVERY_ACCOUNT="$TEST_DELIVERY_ACCOUNT" \
+                TEST_DELIVERY_EVENT="$TEST_DELIVERY_EVENT" \
+                  bash scripts/31-test-delivery.sh
                 ;;
               provision-secrets)
                 # (base-URL backfill + U-line env migration run above, before the case.)
