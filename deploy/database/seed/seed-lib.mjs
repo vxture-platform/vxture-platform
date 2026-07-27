@@ -99,9 +99,15 @@ export const ID = {
   providerDoubao:    '00000000-0000-4000-a000-000000000500',
   providerAnthropic: '00000000-0000-4000-a000-000000000501',
   providerOpenai:    '00000000-0000-4000-a000-000000000502',
+  providerDeepseek:  '00000000-0000-4000-a000-000000000503', // domestic, direct egress
+  providerMinimax:   '00000000-0000-4000-a000-000000000504', // domestic, direct egress
+  providerGoogle:    '00000000-0000-4000-a000-000000000505', // overseas, registered closed (pending egress+compliance)
   modelDoubaoPro:    '00000000-0000-4000-a000-000000000510',
   modelClaudeSonnet: '00000000-0000-4000-a000-000000000511',
   modelGpt4o:        '00000000-0000-4000-a000-000000000512',
+  modelDeepseekChat: '00000000-0000-4000-a000-000000000513',
+  modelMinimaxText:  '00000000-0000-4000-a000-000000000514',
+  modelGeminiFlash:  '00000000-0000-4000-a000-000000000515',
   // identity oauth providers (inbound federation broker config)
   oauthFeishu:       '00000000-0000-4000-a000-000000000900',
   oauthDingtalk:     '00000000-0000-4000-a000-000000000901',

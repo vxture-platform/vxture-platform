@@ -17,6 +17,8 @@ The current implementation is still named `@vxture/service-model-platform` and d
 > 📌 **终态产品名 = Atlas**（2026-07-06 定名，[`product_100_matrix.md`](../product_100_matrix.md) v1.0，L1 模型平台）：统一模型接入/路由/配额/用量治理，大模型与**专用小模型**唯一宿主、唯一 LLM 出口与计量口径（[`product_110_sharing-isolation.md`](../product_110_sharing-isolation.md) v1.0 §6.6/§13）。注意与 schema 迁移工具 `ariga/atlas`（`data_platform_320` 引用）同名不同物。
 >
 > **2026-07-24 更新：Atlas 已拆分为独立仓 `vxture-atlas`**（历史随 `git filter-repo` 迁移，`services/model/platform` 在本仓的定位改为待退役）。本仓与 Atlas 的对接关系（platform 运营台/varda/karda 及同构 L2/L3 agent 各自怎么接 Atlas）见 [`41-atlas-integration-topology.md`](./41-atlas-integration-topology.md)；Atlas 自身的 S2S 供给面契约（embedding/parse/rerank/generation）正本在 `vxture-atlas` 仓 `docs/30-design/200-s2s-provider-surface.md`，不在本仓维护。
+>
+> **2026-07-27 更新：真实 provider 注册表规划（命名规范/域内优先/境外 registered-closed/出境路径）见 [`42-model-provider-registry-plan.md`](./42-model-provider-registry-plan.md)**，落地在本文 §10 引用的 `deploy/database/seed/seed-catalog.mjs`。
 
 Target naming:
 
