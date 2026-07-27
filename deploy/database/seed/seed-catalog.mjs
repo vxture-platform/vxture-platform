@@ -1238,6 +1238,38 @@ export async function seedCatalog(client) {
       ],
     );
     console.log("✓  product — product_webhooks (karda provisioning endpoint)");
+
+    // karda — metering registry keys (docs/80-liaison/120-2607261820-karda-
+    // platform-registration-c.md §2): registered in product_metrics ahead of
+    // plan quota_pools wiring — the key existing here is what unblocks
+    // POST /usage/consume from rejecting karda's reports, independent of
+    // whether the karda-* plans are published yet. karda.ingest is the only
+    // one actually producing usage today; search/ask are declared ahead of
+    // their own activation (recall / A4 wiring on karda's side).
+    const KARDA_METRICS = [
+      // [metric_key, merge_strategy, consume_mode, unit, reset_period]
+      ["karda.ingest", "pool", "divisible", "docs", "month"],
+      ["karda.search", "pool", "divisible", "calls", "month"],
+      ["karda.ask", "pool", "divisible", "calls", "month"],
+    ];
+    for (const [key, strategy, mode, unit, reset] of KARDA_METRICS) {
+      await client.query(
+        `
+        insert into product.product_metrics
+          (id, product_id, metric_key, merge_strategy, consume_mode, metric_unit, reset_period, created_at)
+        values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, now())
+        on conflict (product_id, metric_key) do update set
+          merge_strategy = excluded.merge_strategy,
+          consume_mode   = excluded.consume_mode,
+          metric_unit    = excluded.metric_unit,
+          reset_period   = excluded.reset_period
+      `,
+        [prodMap["karda"], key, strategy, mode, unit, reset],
+      );
+    }
+    console.log(
+      "✓  product — product_metrics (karda.ingest / karda.search / karda.ask)",
+    );
   }
 
   // launch checklist catalog
