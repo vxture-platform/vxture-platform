@@ -137,7 +137,7 @@ export class ModelRuntimeLLMClient {
 
     const request = this.buildRequest(messages, config, options, false);
     const response = await this.post<ModelRuntimeChatResponse>(
-      "/model-platform/chat",
+      "/v1/chat",
       request,
       options.timeout ?? this.defaultTimeoutMs,
     );
@@ -183,18 +183,15 @@ export class ModelRuntimeLLMClient {
 
     let response: Response;
     try {
-      response = await this.fetchImpl(
-        `${this.modelPlatformUrl}/model-platform/chat`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            accept: "text/event-stream",
-          },
-          body: JSON.stringify(request),
-          signal: controller.signal,
+      response = await this.fetchImpl(`${this.modelPlatformUrl}/v1/chat`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "text/event-stream",
         },
-      );
+        body: JSON.stringify(request),
+        signal: controller.signal,
+      });
     } catch (error) {
       clearTimeout(timer);
       throw new ModelRuntimeLLMError(
