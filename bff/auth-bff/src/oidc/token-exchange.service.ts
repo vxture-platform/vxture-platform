@@ -165,6 +165,7 @@ export class TokenExchangeService {
       {
         act: { sub: caller.productCode },
         org_id: context.orgId,
+        tenant_id: context.tenantId,
         workspace_id: context.workspaceId,
         mode: context.mode,
         scope: `tool:${target}`,
@@ -185,6 +186,7 @@ export class TokenExchangeService {
       mode: context.mode,
       workspaceId: context.workspaceId,
       orgId: context.orgId,
+      tenantId: context.tenantId,
     });
     return { accessToken, expiresIn: TOKEN_EXCHANGE_TTL_SECONDS };
   }
@@ -301,11 +303,13 @@ export class TokenExchangeService {
     if (!req.workspaceId) {
       throw new BadRequestException("invalid_request");
     }
+    const tenantId = await this.resolveTenantId(req.workspaceId);
     const jti = randomUUID();
     const accessToken = this.keys.sign(
       {
         act: { sub: caller.clientId },
         org_id: req.orgId ?? null,
+        tenant_id: tenantId,
         workspace_id: req.workspaceId,
         mode: "service",
         scope: `tool:${target}`,
@@ -323,6 +327,7 @@ export class TokenExchangeService {
       mode: "service",
       workspaceId: req.workspaceId,
       orgId: req.orgId ?? null,
+      tenantId,
     });
     return { accessToken, expiresIn: TOKEN_EXCHANGE_TTL_SECONDS };
   }
@@ -344,6 +349,7 @@ export class TokenExchangeService {
     mode: "obo" | "service" | "operator";
     workspaceId: string;
     orgId: string | null;
+    tenantId?: string | null;
   }): Promise<void> {
     try {
       await this.pool.query(
@@ -359,6 +365,7 @@ export class TokenExchangeService {
             mode: input.mode,
             workspace_id: input.workspaceId,
             org_id: input.orgId,
+            tenant_id: input.tenantId ?? null,
           }),
         ],
       );
@@ -367,6 +374,25 @@ export class TokenExchangeService {
         `token-exchange audit write failed (jti=${input.jti}): ${(e as Error).message}`,
       );
     }
+  }
+
+  /**
+   * `tenant_id` claim (vxture-atlas#66 follow-up, platform#170): resolved
+   * server-side from the workspace's owning row, not from a caller-declared
+   * `org_id` or the session's `active_org` claim — those are both nullable
+   * for `personal` tenants (product_210's org concept only covers the
+   * `organization` tenant kind), so a token minted for a personal tenant's
+   * workspace previously carried no tenancy identity at all. A workspace
+   * always has exactly one owning tenant (`tenancy.workspaces.tenant_id`,
+   * NOT NULL), so this is always resolvable regardless of tenant kind.
+   */
+  private async resolveTenantId(workspaceId: string): Promise<string | null> {
+    const res = await this.pool.query<{ tenant_id: string }>(
+      `select tenant_id from tenancy.workspaces
+        where id = $1 and deleted_at is null`,
+      [workspaceId],
+    );
+    return res.rows[0]?.tenant_id ?? null;
   }
 
   /**
@@ -411,6 +437,7 @@ export class TokenExchangeService {
     mode: "obo";
     sub: string;
     orgId: string | null;
+    tenantId: string | null;
     workspaceId: string;
   }> {
     let claims: Record<string, unknown>;
@@ -434,10 +461,12 @@ export class TokenExchangeService {
       throw new BadRequestException("invalid_request");
     }
     const orgId = claims["active_org"];
+    const tenantId = await this.resolveTenantId(workspaceId);
     return {
       mode: "obo",
       sub,
       orgId: typeof orgId === "string" ? orgId : null,
+      tenantId,
       workspaceId,
     };
   }
@@ -457,6 +486,7 @@ export class TokenExchangeService {
     mode: "service";
     sub: undefined;
     orgId: string | null;
+    tenantId: string | null;
     workspaceId: string;
   }> {
     if (!req.workspaceId) {
@@ -486,10 +516,12 @@ export class TokenExchangeService {
     if (!res.rows[0]?.covered) {
       throw new BadRequestException("invalid_target");
     }
+    const tenantId = await this.resolveTenantId(req.workspaceId);
     return {
       mode: "service",
       sub: undefined,
       orgId: req.orgId ?? null,
+      tenantId,
       workspaceId: req.workspaceId,
     };
   }

@@ -84,7 +84,8 @@ describe("TokenExchangeService.exchange — service mode (D2 coverage gate)", ()
   it("mints with no sub claim when the caller holds coverage of the workspace", async () => {
     m.pool.query
       .mockResolvedValueOnce({ rows: [{ product_code: "karda" }] }) // target resolves
-      .mockResolvedValueOnce({ rows: [{ covered: true }] }); // D2 covered
+      .mockResolvedValueOnce({ rows: [{ covered: true }] }) // D2 covered
+      .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] }); // resolveTenantId
 
     const result = await m.service.exchange(CALLER_ARDA, {
       audience: "karda",
@@ -101,6 +102,7 @@ describe("TokenExchangeService.exchange — service mode (D2 coverage gate)", ()
       {
         act: { sub: "arda" },
         org_id: "org-1",
+        tenant_id: "tenant-1",
         workspace_id: "ws-1",
         mode: "service",
         scope: "tool:karda",
@@ -146,7 +148,8 @@ describe("TokenExchangeService.exchange — service mode (D2 coverage gate)", ()
   it("defaults org_id to null when omitted", async () => {
     m.pool.query
       .mockResolvedValueOnce({ rows: [{ product_code: "karda" }] })
-      .mockResolvedValueOnce({ rows: [{ covered: true }] });
+      .mockResolvedValueOnce({ rows: [{ covered: true }] })
+      .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] });
     await m.service.exchange(CALLER_ARDA, {
       audience: "karda",
       subjectToken: undefined,
@@ -165,7 +168,9 @@ describe("TokenExchangeService.exchange — OBO mode", () => {
   beforeEach(() => (m = build()));
 
   it("derives sub/org/workspace from the presented (self-verified) subject_token", async () => {
-    m.pool.query.mockResolvedValueOnce({ rows: [{ product_code: "karda" }] });
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [{ product_code: "karda" }] }) // target
+      .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-9" }] }); // resolveTenantId
     m.keys.verify.mockReturnValue({
       aud: CALLER_ARDA.clientId,
       sub: "usr_123",
@@ -186,6 +191,7 @@ describe("TokenExchangeService.exchange — OBO mode", () => {
       {
         act: { sub: "arda" },
         org_id: "org-9",
+        tenant_id: "tenant-9",
         workspace_id: "ws-9",
         mode: "obo",
         scope: "tool:karda",
@@ -197,8 +203,8 @@ describe("TokenExchangeService.exchange — OBO mode", () => {
         jwtid: expect.any(String),
       },
     );
-    // OBO never touches the D2 coverage query — target lookup + audit insert
-    expect(m.pool.query).toHaveBeenCalledTimes(2);
+    // OBO never touches the D2 coverage query — target lookup + tenantId lookup + audit insert
+    expect(m.pool.query).toHaveBeenCalledTimes(3);
   });
 
   it("rejects an invalid/expired subject_token", async () => {
@@ -281,7 +287,8 @@ describe("TokenExchangeService.exchange — platform-face target (T2, aud=vxture
     // product exists), THEN the D2 coverage query runs.
     m.pool.query
       .mockResolvedValueOnce({ rows: [] }) // target lookup: no product named 'vxture'
-      .mockResolvedValueOnce({ rows: [{ covered: true }] }); // D2
+      .mockResolvedValueOnce({ rows: [{ covered: true }] }) // D2
+      .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] }); // resolveTenantId
 
     const result = await m.service.exchange(CALLER_ARDA, {
       audience: PLATFORM_S2S_AUDIENCE,
@@ -291,7 +298,7 @@ describe("TokenExchangeService.exchange — platform-face target (T2, aud=vxture
     });
 
     expect(result.accessToken).toBe("signed.jwt.token");
-    expect(m.pool.query).toHaveBeenCalledTimes(3); // target lookup + D2 + audit insert
+    expect(m.pool.query).toHaveBeenCalledTimes(4); // target lookup + D2 + tenantId lookup + audit insert
     expect(m.keys.sign).toHaveBeenCalledWith(
       expect.objectContaining({
         act: { sub: "arda" },
@@ -315,7 +322,9 @@ describe("TokenExchangeService.exchange — platform-face target (T2, aud=vxture
   });
 
   it("OBO mode works against the vxture target too (target lookup only, no D2 query)", async () => {
-    m.pool.query.mockResolvedValueOnce({ rows: [] }); // target lookup: no product named 'vxture'
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [] }) // target lookup: no product named 'vxture'
+      .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] }); // resolveTenantId
     m.keys.verify.mockReturnValue({
       aud: CALLER_ARDA.clientId,
       sub: "usr_1",
@@ -329,8 +338,8 @@ describe("TokenExchangeService.exchange — platform-face target (T2, aud=vxture
       orgId: undefined,
     });
     expect(result.accessToken).toBe("signed.jwt.token");
-    // target lookup + audit insert — OBO skips D2
-    expect(m.pool.query).toHaveBeenCalledTimes(2);
+    // target lookup + tenantId lookup + audit insert — OBO skips D2
+    expect(m.pool.query).toHaveBeenCalledTimes(3);
   });
 
   it("prefers a real product.products row over the sentinel when both could match (DB-first collision safety)", async () => {
@@ -340,7 +349,8 @@ describe("TokenExchangeService.exchange — platform-face target (T2, aud=vxture
     // result used) rather than short-circuited by the literal string check.
     m.pool.query
       .mockResolvedValueOnce({ rows: [{ product_code: "vxture" }] }) // a REAL row
-      .mockResolvedValueOnce({ rows: [{ covered: true }] }); // D2
+      .mockResolvedValueOnce({ rows: [{ covered: true }] }) // D2
+      .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] }); // resolveTenantId
 
     await m.service.exchange(CALLER_ARDA, {
       audience: PLATFORM_S2S_AUDIENCE,
@@ -350,9 +360,9 @@ describe("TokenExchangeService.exchange — platform-face target (T2, aud=vxture
     });
 
     // proves the DB was actually consulted for the target (not skipped via
-    // an early sentinel return) — the defense this test guards. (+1 for the
-    // audit insert that follows a successful mint.)
-    expect(m.pool.query).toHaveBeenCalledTimes(3);
+    // an early sentinel return) — the defense this test guards. (+1 each for
+    // the tenantId lookup and the audit insert that follow a successful mint.)
+    expect(m.pool.query).toHaveBeenCalledTimes(4);
   });
 });
 
@@ -364,6 +374,7 @@ describe("TokenExchangeService.exchange — audit trail (TD-034)", () => {
     m.pool.query
       .mockResolvedValueOnce({ rows: [{ product_code: "karda" }] }) // target
       .mockResolvedValueOnce({ rows: [{ covered: true }] }) // D2
+      .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] }) // resolveTenantId
       .mockResolvedValueOnce({ rows: [] }); // audit insert
 
     await m.service.exchange(CALLER_ARDA, {
@@ -375,7 +386,7 @@ describe("TokenExchangeService.exchange — audit trail (TD-034)", () => {
 
     const signedJti = (m.keys.sign.mock.calls[0]![1] as { jwtid: string })
       .jwtid;
-    const [sql, params] = m.pool.query.mock.calls[2]!;
+    const [sql, params] = m.pool.query.mock.calls[3]!;
     expect(sql).toContain("insert into support.audit_logs");
     expect(sql).toContain("'system'");
     expect(sql).toContain("'oidc.token_exchange.issued'");
@@ -387,6 +398,7 @@ describe("TokenExchangeService.exchange — audit trail (TD-034)", () => {
       mode: "service",
       workspace_id: "ws-1",
       org_id: "org-1",
+      tenant_id: "tenant-1",
     });
   });
 
@@ -394,6 +406,7 @@ describe("TokenExchangeService.exchange — audit trail (TD-034)", () => {
     m.pool.query
       .mockResolvedValueOnce({ rows: [{ product_code: "karda" }] })
       .mockResolvedValueOnce({ rows: [{ covered: true }] })
+      .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] })
       .mockRejectedValueOnce(new Error("db unavailable"));
 
     const result = await m.service.exchange(CALLER_ARDA, {
@@ -412,7 +425,9 @@ describe("TokenExchangeService.exchange — platform-caller mode (console→atla
   beforeEach(() => (m = build()));
 
   it("mints a service-mode token for an allowlisted platform-level caller, act.sub = caller clientId", async () => {
-    m.pool.query.mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] }); // target lookup only — no D2 query
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] }) // target lookup — no D2 query
+      .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] }); // resolveTenantId
 
     const result = await m.service.exchange(CALLER_PLATFORM, {
       audience: "atlas",
@@ -429,6 +444,7 @@ describe("TokenExchangeService.exchange — platform-caller mode (console→atla
       {
         act: { sub: "console" },
         org_id: "org-1",
+        tenant_id: "tenant-1",
         workspace_id: "ws-1",
         mode: "service",
         scope: "tool:atlas",
@@ -439,8 +455,8 @@ describe("TokenExchangeService.exchange — platform-caller mode (console→atla
         jwtid: expect.any(String),
       },
     );
-    // target lookup + audit insert — no D2 coverage query (no caller product to check)
-    expect(m.pool.query).toHaveBeenCalledTimes(2);
+    // target lookup + tenantId lookup + audit insert — no D2 coverage query (no caller product to check)
+    expect(m.pool.query).toHaveBeenCalledTimes(3);
   });
 
   it("rejects a non-allowlisted platform-level caller (unchanged invalid_client behavior)", async () => {
@@ -483,6 +499,7 @@ describe("TokenExchangeService.exchange — platform-caller mode (console→atla
   it("writes the audit row with the caller clientId (not a product code) and mode=service", async () => {
     m.pool.query
       .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] }) // resolveTenantId
       .mockResolvedValueOnce({ rows: [] }); // audit insert
 
     await m.service.exchange(CALLER_PLATFORM, {
@@ -492,7 +509,7 @@ describe("TokenExchangeService.exchange — platform-caller mode (console→atla
       orgId: undefined,
     });
 
-    const audit = m.pool.query.mock.calls[1]!;
+    const audit = m.pool.query.mock.calls[2]!;
     expect(String(audit[0])).toContain("insert into support.audit_logs");
     expect(JSON.parse(audit[1][2])).toEqual({
       caller_product: "console",
@@ -500,6 +517,7 @@ describe("TokenExchangeService.exchange — platform-caller mode (console→atla
       mode: "service",
       workspace_id: "ws-1",
       org_id: null,
+      tenant_id: "tenant-1",
     });
   });
 });
