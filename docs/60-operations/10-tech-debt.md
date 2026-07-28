@@ -1001,7 +1001,7 @@
 
 **暂缓（2026-07-28，owner 拍板）**：varda 本身按拆库计划将部署在 worker-02，当前部署形态本就过渡中——**varda 侧暂缓处理，保留页面/功能入口，后端鉴权接线搁置**，随 worker-02 部署一并解决，不单独立项抢跑。console-bff 侧未获得同样的暂缓，维持 Open、按正常优先级排期。
 
----
+**console-bff 侧已解决（2026-07-28，PR#163=`12203f31`）**：接线过程中发现一个共享基础设施的契约缺口——`token-exchange.service.ts` 的 OBO/service 两个既有模式都硬性要求 `caller.productCode` 非空，而 console-bff 的 OIDC 客户端是平台级客户端（故意不挂 productCode，跟 website/admin 同类),故原有任何模式都会在 `invalid_client` 被拒,不是简单接线能解决的。修复=新增 `PLATFORM_LEVEL_S2S_CALLERS` 白名单分支（目前仅 `console`)，复用已被 atlas 守卫接受的 `mode:"service"`（未新造 mode 值——atlas 守卫硬编码只认 `obo`/`service`，新起一个值会被拒收且改 atlas 守卫不在本仓写权限内),`act.sub`=调用方自己的 client_id 而非产品码,跳过 D2 覆盖度检查(workspace 合法性由 console-bff 自己的会话中间件保证)。`console-bff` 新增 `S2sExchangeService`（镜像 `admin-bff` 的 `OperatorExchangeService`,去掉 subject_token 改传 workspace_id),`model-platform.router.ts` 4 个方法全部接入,换票失败直接 502(atlas 已确认严格执行守卫,不做"降级裸调"的过渡期兜底)。**本条两个调用方里,console-bff 半程已解决;varda 半程按上条暂缓,维持 Open——本条整体状态不改(以覆盖面较窄的一半为准)**。
 
 ### TD-044 — atlas 未接入平台 C2/C3，全平台 AI 用量对计量/账单系统不可见
 
