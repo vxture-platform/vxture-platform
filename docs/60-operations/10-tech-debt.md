@@ -1019,3 +1019,9 @@
 **影响**：`metering.usage_events` 里 AI 相关行数应为零——任何挂了 AI 配额组件的套餐，配额从未被真实扣减（对应实证表"配额 activeQuotas: 0 → fail-open 放行"）；TD-008 记录的 commerce 超额计费缺口在当前状态下**无论如何实现都拿不到任何 AI 用量数据可算**，二者互为前提。即使 TD-043（S2S 鉴权）修好，atlas 也没有代码去调用任何 C2/C3 端点，鉴权修好本身不产生任何效果——两条债相邻但独立，均需处理才能打通。
 
 **解决方向**：atlas 侧需要（均属外部仓改动，按边界走 issue 交办，platform 不代做）——① 实现 AI 专属详细用量表（落 atlas 自己的库，不进平台 `metering` schema，粒度不匹配：平台账本是 workspace×product×metric_key 级别，没有 user/model/token 明细维度，这是刻意设计不是疏漏）；② 每次推理成功后调平台 `POST /usage/consume` 上报聚合量（product_200 §4.1 契约，需先有 TD-043 的 S2S token）；③ 入口强制求值补上 entitlement 半程（`grant ∧ entitlement` 公式当前只有 grant 落地，需接平台 `GET /platform/entitlements`）；④ 自己本地的 quota fail-open 逻辑与恒空的 `/capability/usage-summaries` 表建议随①②③退役，改为读平台 C2 返回值做只读展示，不再自行维护平行状态。
+
+**atlas 侧独立复核确认（2026-07-28，`vxture-atlas` PR #63，`docs/30-design/210-usage-metering-and-history.md`）**：atlas 侧同步做了对称分析，结论一致且补齐了本条①的具体落点——AI 专属明细表**已经部署**，不是待建：`reqlog.request_records`（DDL 已上线、按月分区、Prisma 已建模），字段= 归属维度（`tenant_id`/`workspace_id`/`product_id`/`user_id`/`application_id`/`agent_id`/`feature_id`）+ atlas 领域事实（`model_code`/`provider_code`/`input_tokens`/`output_tokens`/`latency_ms`/`usage_type`/`status`）+ 对账关联（`billed_metric_key`/`billed_amount`/`usage_event_id`/`request_id`，**不建跨仓 FK**，靠 `request_id`/`usage_event_id` 松关联——`usage_event_id IS NULL` 即为"consume 未落地"的天然对账信号）。两条决定性理由与本条描述吻合：user 维度只能在 atlas（平台 `usage_events` 故意不设 `user_id`，成本中心是 workspace 不是人）；atlas 挂了不能拖垮计费内核（故两库间零 FK）。
+
+atlas 侧登记的对应 TD（供交叉核对，非本仓 TD 编号，不可与本仓号混用）：**TD-017**（atlas 两边都不写，karda 真实流量已跑但零记录且不可补录——事件从未被捕获，是既成损失非待办）；**TD-016**（C2 权益客户端不存在，PLATFORM_API_URL 零处读取——atlas 自陈这是 fail-open 从"临时降级"变成"永久常态"的真正原因，与本条第②③点对应）；**TD-018**（`reqlog` 分区只建到 2027-01，之后落 DEFAULT 分区、drop 式留存静默失效——现因零写入而休眠，TD-017 一旦修复即开始计时，是 atlas 自己的运维项，不影响本仓）；**TD-019**（已修：`atlas.parse` 已从能力清单摘除，对应本仓实证表"`/v1/parse` 零实现"一项，不再是缺口而是诚实下架）。
+
+**结论：本条①的"实现"改为"接线"**——目标表已存在，缺的只是写入代码（atlas 侧原话）。本条其余判断（②③④）与本仓 metering 设计的关系不变，无需修改。
