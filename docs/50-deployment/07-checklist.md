@@ -134,7 +134,7 @@ secret，再整体重跑 `24`（各阶段幂等，第二次 `25` 通过 gate 后
 
 - [ ] `GET https://vxture.com/` → HTTP 200
 - [ ] `GET https://console.vxture.com/` → 重定向到登录页
-- [ ] `GET https://admin.vxture.com/` → 重定向到登录页
+- [ ] `GET https://y.vxture.com/` → 重定向到登录页
 - [ ] `GET https://vxture.com/api/health` → `{ status: 'ok' }`（gateway-bff）
 - [ ] `POST https://api.vxture.com/auth-api/auth/signin` → 正常响应（不报 500）
 

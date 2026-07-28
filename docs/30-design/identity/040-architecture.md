@@ -32,7 +32,7 @@
 | realm                          | 归属主体            | 数据域（权威）                    | 入口                          | 说明                                 |
 | ------------------------------ | ------------------- | --------------------------------- | ----------------------------- | ------------------------------------ |
 | **customer**（原 `tenant`）    | 终端客户 / 租户用户 | `identity.*`（a§4 / b§4）         | website / console / ruyin / … | PLG 自助注册、全员租户化、手机强锚点 |
-| **workforce**（原 `operator`） | 平台运营 / 管理员   | `admin.operator_*`（a§14 / b§14） | admin.vxture.com              | 无自助注册、MFA 强制、控制面身份     |
+| **workforce**（原 `operator`） | 平台运营 / 管理员   | `admin.operator_*`（a§14 / b§14） | y.vxture.com                  | 无自助注册、MFA 强制、控制面身份     |
 
 > 术语对齐（分类）：**仅 realm 取值改名** `tenant→customer` / `operator→workforce`（数据权威 a/b 已收敛，本文以新名为主、括注旧名）；**cookie 名** `vx_sid`/`vx_sid_op` 与 **`sub` 前缀** `usr_`/`opr_` **未改名、仍是现行权威标识**（topology §1、b§4.18/§14）；**claim `active_tenant*`** 属**过渡态、正随契约 v2 退役**。
 

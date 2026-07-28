@@ -126,7 +126,7 @@ model-platform 对每次 chat 有三道 DB 门（数据在 worker-01 `platform_m
 
 ## 6. worker-01 nginx `/varda/` 路由
 
-已在仓库配好（`deploy/nginx/sites-enabled/admin.vxture.com.conf` 的 `/varda/` → `100.76.219.48:3121`）。若尚未在 worker-01 生效，随平台 nginx 同步/ reload 即可（平台侧动作）。
+已在仓库配好（`deploy/nginx/templates/admin.vhost.template` 的 `/varda/` → `100.76.219.48:3121`；该文件 20-sync-nginx-config.sh 渲染为 `sites-enabled/admin.conf`,真实域名不入仓）。若尚未在 worker-01 生效，随平台 nginx 同步/ reload 即可（平台侧动作）。
 
 ## 7. 常规部署（CI/CD）
 

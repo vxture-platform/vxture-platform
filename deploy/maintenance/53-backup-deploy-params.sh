@@ -63,7 +63,9 @@ copy_if_exists "/srv/vxture/data/nginx/conf/conf.d" "$BACKUP_DIR/nginx/conf/conf
 copy_if_exists "/srv/vxture/data/nginx/conf/snippets" "$BACKUP_DIR/nginx/conf/snippets"
 copy_if_exists "/srv/vxture/data/nginx/conf/sites-enabled/vxture.com.conf" "$BACKUP_DIR/nginx/conf/sites-enabled/vxture.com.conf"
 copy_if_exists "/srv/vxture/data/nginx/conf/sites-enabled/console.vxture.com.conf" "$BACKUP_DIR/nginx/conf/sites-enabled/console.vxture.com.conf"
-copy_if_exists "/srv/vxture/data/nginx/conf/sites-enabled/admin.vxture.com.conf" "$BACKUP_DIR/nginx/conf/sites-enabled/admin.vxture.com.conf"
+# admin.conf is 20-sync-nginx-config.sh's rendered output (hardening: the
+# real hostname is never a filename in the repo, same as opera.conf).
+copy_if_exists "/srv/vxture/data/nginx/conf/sites-enabled/admin.conf" "$BACKUP_DIR/nginx/conf/sites-enabled/admin.conf"
 copy_if_exists "/srv/vxture/data/nginx/conf/sites-enabled/api.vxture.com.conf" "$BACKUP_DIR/nginx/conf/sites-enabled/api.vxture.com.conf"
 copy_if_exists "/srv/vxture/data/nginx/compose.yml" "$BACKUP_DIR/nginx/compose.yml"
 

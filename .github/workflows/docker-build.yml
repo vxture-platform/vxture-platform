@@ -197,6 +197,7 @@ jobs:
             NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY=${{ vars.CF_TURNSTILE_TENANT_SITE_KEY }}
             NEXT_PUBLIC_CF_TURNSTILE_ADMIN_SITE_ID=${{ vars.CF_TURNSTILE_ADMIN_SITE_KEY }}
             NEXT_PUBLIC_CF_TURNSTILE_ADMIN_SITE_KEY=${{ vars.CF_TURNSTILE_ADMIN_SITE_KEY }}
+            NEXT_PUBLIC_ADMIN_BFF_URL=${{ vars.ADMIN_BASE_URL }}
             APP_VERSION=${{ steps.prov.outputs.app_version }}
             GIT_SHA=${{ steps.prov.outputs.git_sha }}
             BUILD_TIME=${{ steps.prov.outputs.build_time }}
@@ -220,6 +221,7 @@ jobs:
             NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY=${{ vars.CF_TURNSTILE_TENANT_SITE_KEY }}
             NEXT_PUBLIC_CF_TURNSTILE_ADMIN_SITE_ID=${{ vars.CF_TURNSTILE_ADMIN_SITE_KEY }}
             NEXT_PUBLIC_CF_TURNSTILE_ADMIN_SITE_KEY=${{ vars.CF_TURNSTILE_ADMIN_SITE_KEY }}
+            NEXT_PUBLIC_ADMIN_BFF_URL=${{ vars.ADMIN_BASE_URL }}
             APP_VERSION=${{ steps.prov.outputs.app_version }}
             GIT_SHA=${{ steps.prov.outputs.git_sha }}
             BUILD_TIME=${{ steps.prov.outputs.build_time }}

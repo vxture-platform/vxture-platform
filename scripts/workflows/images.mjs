@@ -30,12 +30,15 @@ export const IMAGES = [
     "build-args":
       "PORTAL_PATH=portals/console\nPACKAGE_FILTER=@vxture/console\nNEXT_PUBLIC_API_URL=https://api.vxture.com\nNEXT_PUBLIC_CONSOLE_BFF_URL=https://console.vxture.com",
   },
+  // admin：NEXT_PUBLIC_ADMIN_BFF_URL 不在此处硬编码真实域名（加固决策,
+  // 2026-07-28 追加,与 opera 同一性质）——由 docker-build.yml 从 GH Actions
+  // 仓库变量 vars.ADMIN_BASE_URL 注入(与 Turnstile key 同一模式)。
   {
     name: "platform_admin",
     image: "ghcr.io/vxture/platform_admin",
     dockerfile: "deploy/docker/Dockerfile.nextjs",
     "build-args":
-      "PORTAL_PATH=portals/admin\nPACKAGE_FILTER=@vxture/admin\nNEXT_PUBLIC_API_URL=https://api.vxture.com\nNEXT_PUBLIC_ADMIN_BFF_URL=https://admin.vxture.com",
+      "PORTAL_PATH=portals/admin\nPACKAGE_FILTER=@vxture/admin\nNEXT_PUBLIC_API_URL=https://api.vxture.com",
   },
   // opera：能力控制台外壳（product_250 M-4 批C）。不传 NEXT_PUBLIC_*_BFF_URL
   // —— 外壳一律同源相对路径调 BFF（真实域名按加固决策不入仓,由 nginx 同 vhost 路由）。
@@ -43,8 +46,7 @@ export const IMAGES = [
     name: "platform_opera",
     image: "ghcr.io/vxture/platform_opera",
     dockerfile: "deploy/docker/Dockerfile.nextjs",
-    "build-args":
-      "PORTAL_PATH=portals/opera\nPACKAGE_FILTER=@vxture/opera",
+    "build-args": "PORTAL_PATH=portals/opera\nPACKAGE_FILTER=@vxture/opera",
   },
   {
     name: "platform_accounts",

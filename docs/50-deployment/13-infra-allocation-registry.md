@@ -31,7 +31,7 @@
 | ------------- | --------------------------------------------- | --------- | ------------------------------------------- | ----------------------------------------------------- |
 | website       | vxture.com(www 301→apex)                      | 3000-3019 | vx-platform-website:3000 / website-bff:3001 | —                                                     |
 | console       | console.vxture.com                            | 3020-3039 | vx-platform-console:3020 / console-bff:3021 | —                                                     |
-| admin         | admin.vxture.com                              | 3040-3059 | vx-platform-admin:3040 / admin-bff:3043     | —(3041/3042 特意跳过,见下方"不纳入重排"S2S别名注)     |
+| admin         | y.vxture.com                                  | 3040-3059 | vx-platform-admin:3040 / admin-bff:3043     | —(3041/3042 特意跳过,见下方"不纳入重排"S2S别名注)     |
 | accounts(IdP) | accounts.vxture.com(`/oidc/*`→auth-bff)       | 3060-3079 | vx-platform-accounts:3060 / auth-bff:3061   | auth-bff `100.100.197.42:3061`(tailnet-only,原 3090)  |
 | varda         | 无域名(L0 内嵌,console/admin `/varda/*` 反代) | 3080-3099 | varda-bff:3080 / varda-agent:3081           | `100.100.197.42:3080/3081`(tailnet-only,原 3121/3122) |
 

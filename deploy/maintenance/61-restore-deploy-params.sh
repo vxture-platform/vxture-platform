@@ -120,7 +120,10 @@ restore_optional "$BACKUP_DIR/nginx/conf/conf.d" "$NGINX_DIR/conf/conf.d"
 restore_optional "$BACKUP_DIR/nginx/conf/snippets" "$NGINX_DIR/conf/snippets"
 restore_optional "$BACKUP_DIR/nginx/conf/sites-enabled/vxture.com.conf" "$NGINX_DIR/conf/sites-enabled/vxture.com.conf"
 restore_optional "$BACKUP_DIR/nginx/conf/sites-enabled/console.vxture.com.conf" "$NGINX_DIR/conf/sites-enabled/console.vxture.com.conf"
-restore_optional "$BACKUP_DIR/nginx/conf/sites-enabled/admin.vxture.com.conf" "$NGINX_DIR/conf/sites-enabled/admin.vxture.com.conf"
+# admin.conf is 20-sync-nginx-config.sh's rendered output; a fresh sync run
+# regenerates it from ADMIN_BASE_URL, so restoring it is a convenience, not
+# the source of truth.
+restore_optional "$BACKUP_DIR/nginx/conf/sites-enabled/admin.conf" "$NGINX_DIR/conf/sites-enabled/admin.conf"
 restore_optional "$BACKUP_DIR/nginx/conf/sites-enabled/api.vxture.com.conf" "$NGINX_DIR/conf/sites-enabled/api.vxture.com.conf"
 restore_optional "$BACKUP_DIR/nginx/compose.yml" "$NGINX_DIR/compose.yml"
 

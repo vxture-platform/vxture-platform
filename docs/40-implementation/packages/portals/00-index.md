@@ -11,7 +11,7 @@
 | ------------------------------- | ------------------ | ---- | -------------------- | ------------------------------------- |
 | [`website.md`](./30-website.md) | `portals/website/` | 3010 | `vxture.com`         | 公众（官网、注册、登录）              |
 | [`console.md`](./20-console.md) | `portals/console/` | 3020 | `console.vxture.com` | 租户管理员（工作台、成员、账单）      |
-| [`admin.md`](./10-admin.md)     | `portals/admin/`   | 3030 | `admin.vxture.com`   | 平台运营者（租户管理、工单、AI 配置） |
+| [`admin.md`](./10-admin.md)     | `portals/admin/`   | 3030 | `y.vxture.com`       | 平台运营者（租户管理、工单、AI 配置） |
 
 ---
 

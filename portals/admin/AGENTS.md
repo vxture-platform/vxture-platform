@@ -10,4 +10,4 @@
 | 2. 任务路由     | [`docs/90-memory/10-agent.md`](../../docs/90-memory/10-agent.md)                                                   |
 | 3. 包实现上下文 | [`docs/40-implementation/packages/portals/10-admin.md`](../../docs/40-implementation/packages/portals/10-admin.md) |
 
-> 职责：平台运营后台（admin.vxture.com）
+> 职责：平台运营后台（y.vxture.com）

@@ -182,7 +182,14 @@ run_check "Nginx config test" \
 echo "==> Public HTTPS endpoints"
 check_public_https "https://vxture.com/"
 check_public_https "https://console.vxture.com/"
-check_public_https "https://admin.vxture.com/"
+# admin's real hostname is not hardcoded here (hardening, same nature as
+# opera): read from the runtime env this host already has.
+admin_base="$(grep -E '^ADMIN_BASE_URL=' "$RUNTIME_DIR/.env.admin-bff" 2>/dev/null | head -1 | cut -d= -f2-)"
+if [ -n "$admin_base" ]; then
+  check_public_https "${admin_base%/}/"
+else
+  echo "  [skip] admin public endpoint — ADMIN_BASE_URL not found in $RUNTIME_DIR/.env.admin-bff"
+fi
 check_public_https "https://api.vxture.com/healthz"
 echo ""
 

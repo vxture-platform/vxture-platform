@@ -1,18 +1,26 @@
-# admin.vxture.com — 运营后台（vx-platform-admin:3040）
+# admin.vhost.template — 运营后台公网 vhost（vx-platform-admin:3040）
+#
+# 真实域名不入仓（2026-07-28 加固决策追加,与能力控制台/opera 同一性质,见
+# product_250 M-4 附注）：本文件是模板,${VX_ADMIN_HOST} 由
+# 20-sync-nginx-config.sh 从主机 /srv/vxture/runtime/.env.admin-bff 的
+# ADMIN_BASE_URL 渲染;仓内文档一律以 y.vxture.com 指代(与 opera 的
+# x.vxture.com 区分,避免暗示同一主机)。admin 是既有长期生产服务,渲染为
+# 必选步骤——env 缺失时同步脚本报错退出,不静默跳过。
+#
 # /varda/* 经 Tailscale 直连 vx-worker-02 varda-bff（100.76.219.48:3080，原3121，2026-07-24 L0端口迁移）
 
 server {
     listen 80;
     listen [::]:80;
-    server_name admin.vxture.com;
-    return 301 https://admin.vxture.com$request_uri;
+    server_name ${VX_ADMIN_HOST};
+    return 301 https://${VX_ADMIN_HOST}$request_uri;
 }
 
 server {
     listen 443 ssl;
     listen [::]:443 ssl;
     http2 on;
-    server_name admin.vxture.com;
+    server_name ${VX_ADMIN_HOST};
 
     ssl_certificate     /etc/nginx/ssl/live/vxture.com/fullchain.pem;
     ssl_certificate_key /etc/nginx/ssl/live/vxture.com/privkey.pem;

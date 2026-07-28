@@ -1962,7 +1962,7 @@ routing.fallback_rule ( id uuid PK, model_code varchar(128) NOT NULL,
 
 ## 14. operator/admin 域：运营身份安全 + 平台治理
 
-> 范围：平台运营控制面（`admin.vxture.com`）的运营人员身份域 + 平台级治理（配置 / 灰度 / 公告 / 维护 / 治理记录）。
+> 范围：平台运营控制面（`y.vxture.com`）的运营人员身份域 + 平台级治理（配置 / 灰度 / 公告 / 维护 / 治理记录）。
 > 权威专项：运营身份安全的字段级权威设计在 `docs/30-design/identity-platform-operator.md`（下称"专项 §6"）。**本章不复制专项**，只做三件事：(a) 把运营身份域在 v2 总纲里的落库归口讲清（schema=`admin`、与客户 realm 五维硬隔离）；(b) 补齐专项不覆盖的**平台治理表**字段级规格；(c) 收口 schema 命名、表计数、治理表命名等二次分析遗留问题。
 > 现状底数：`deploy/database/prisma/schema.prisma`（76 model，权威基线）中本域 16 张表，全部带 `@@schema("ops")`。identity/iam/admin 自 2026-06-18 上生产，本域改动一律走**保数据迁移**（`ALTER SCHEMA RENAME` / 加列带默认或可空再回填 / 就地 `UPDATE`），**不 reseed**。
 

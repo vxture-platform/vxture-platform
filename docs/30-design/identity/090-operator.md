@@ -3,7 +3,7 @@
 > 🧭 架构层见 [`identity-platform-architecture.md`](./040-architecture.md) §7（workforce realm 概览）。本文 = operator 身份安全（MFA / 隔离 / 审计）的详细层权威 reference。
 > 平台数据模型权威 = [data_platform_100_architecture.md] + [-schema.md]（operator 身份域字段级 = **b §14 admin.operator\_\***，本文不重述 DDL）。
 
-> 版本 v1.0（2026-06-23）。运营控制面 `admin.vxture.com` 的 operator 身份与登录安全 **权威设计**。
+> 版本 v1.0（2026-06-23）。运营控制面 `y.vxture.com` 的 operator 身份与登录安全 **权威设计**。
 > **本文取代并收编**（吸纳优点后删除原件）：
 >
 > - `docs/Operator-Identity-Security-Design-V2.md`（V2 思路稿 → 正式化为本文）

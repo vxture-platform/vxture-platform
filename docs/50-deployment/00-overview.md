@@ -83,7 +83,7 @@ vx-worker-02/03/04/05 等（业务执行面，不由本仓部署）
 | Nginx                 | `vx-nginx`          | 80 / 443 | SSL 终止、所有子域名反向代理              |
 | website               | `vx-website`        | 3010     | Next.js，vxture.com 官网/注册/登录        |
 | console               | `vx-console`        | 3020     | Next.js，console.vxture.com 租户工作台    |
-| admin                 | `vx-admin`          | 3030     | Next.js，admin.vxture.com 运营后台        |
+| admin                 | `vx-admin`          | 3030     | Next.js，y.vxture.com 运营后台            |
 | gateway-bff           | `vx-gateway-bff`    | 8000     | 唯一公共 API 入口                         |
 | auth-bff              | `vx-auth-bff`       | 3090     | JWT 唯一签发源，所有 BFF 依赖             |
 | website-bff           | `vx-website-bff`    | 3011     | 注册/登录/租户初始化                      |
@@ -163,7 +163,7 @@ vx-worker-02 的业务数据目录由外部业务仓库维护，本仓不定义 
 | -------------------- | ------------------------------ | ----------------------- | -------- | ------ |
 | `vxture.com`         | CF Proxy → Nginx → website     | VXTURE_DEPLOY_HOST:3010 | 是       | 待部署 |
 | `www.vxture.com`     | CF Proxy                       | 重定向到 vxture.com     | 是       | 待部署 |
-| `admin.vxture.com`   | CF Proxy → Nginx → admin       | VXTURE_DEPLOY_HOST:3030 | 是       | 待部署 |
+| `y.vxture.com`       | CF Proxy → Nginx → admin       | VXTURE_DEPLOY_HOST:3030 | 是       | 待部署 |
 | `console.vxture.com` | CF Proxy → Nginx → console     | VXTURE_DEPLOY_HOST:3020 | 是       | 待部署 |
 | `api.vxture.com`     | CF Proxy → Nginx → gateway-bff | VXTURE_DEPLOY_HOST:8000 | 是       | 待部署 |
 | `beta.vxture.com`    | 待规划                         | vxture-beta 临时服务器  | 待规划   | 预留   |

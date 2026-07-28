@@ -98,7 +98,7 @@ Single-repository, multi-package architecture. This project uses pnpm workspaces
 ## O
 
 **operator**
-Operator-side user type (JWT claim: `userType: "operator"`). Corresponds to `admin.vxture.com`, with `dataScope: global`, and can access all tenant data. Roles are system-configured (not hardcoded); several standard roles are preconfigured. See the admin package permission design for details.
+Operator-side user type (JWT claim: `userType: "operator"`). Corresponds to `y.vxture.com`, with `dataScope: global`, and can access all tenant data. Roles are system-configured (not hardcoded); several standard roles are preconfigured. See the admin package permission design for details.
 
 ---
 

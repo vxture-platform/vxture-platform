@@ -52,7 +52,7 @@ Varda 不是通用聊天机器人，而是一个**具备平台权限感知能力
 
 | 消费者门户      | URL                | 用户类型    | Varda Surface | 数据范围   |
 | --------------- | ------------------ | ----------- | ------------- | ---------- |
-| portals/admin   | admin.vxture.com   | operator    | `admin`       | 全平台数据 |
+| portals/admin   | y.vxture.com       | operator    | `admin`       | 全平台数据 |
 | portals/console | console.vxture.com | tenant_user | `console`     | 本租户数据 |
 
 ### 1.3 架构位置

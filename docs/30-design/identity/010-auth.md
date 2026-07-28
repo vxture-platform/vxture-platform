@@ -20,7 +20,7 @@ Vxture 维护两套完全独立的账号体系，共用同一个 PostgreSQL 数�
 
 | 维度         | 运营账号                | 租户账号                              |
 | ------------ | ----------------------- | ------------------------------------- |
-| 使用产品     | admin.vxture.com        | console.vxture.com · ruyin.ai · agent |
+| 使用产品     | y.vxture.com            | console.vxture.com · ruyin.ai · agent |
 | tenant_id    | 无（管理所有租户）      | 必填（只能访问自己租户）              |
 | JWT userType | `operator`              | `tenant_user`                         |
 | 角色         | `super_admin` · `admin` | `owner` · `admin` · `member`          |
@@ -212,7 +212,7 @@ callback 只允许签发 `userType = tenant_user`、`authScope = tenant_console`
 ## 5. 域名与产品映射
 
 ```
-admin.vxture.com    →  admin portal        →  admin-bff        运营账号专用
+y.vxture.com    →  admin portal        →  admin-bff        运营账号专用
 console.vxture.com  →  console portal      →  console-bff      租户账号专用
 ruyin.ai            →  Ruyin 外部业务应用   →  外部业务 BFF     租户账号专用
 auth.vxture.com     →  统一认证服务         →  auth-bff         两套账号统一入口

@@ -356,7 +356,7 @@ AUTH_COOKIE_DOMAIN=.vxture.com
 # Portal base URLs
 WEBSITE_BASE_URL=https://vxture.com
 CONSOLE_BASE_URL=https://console.vxture.com
-ADMIN_BASE_URL=https://admin.vxture.com
+ADMIN_BASE_URL=https://y.vxture.com
 
 # Cloudflare Turnstile - tenant surface only
 CF_TURNSTILE_ENABLED=true

@@ -74,7 +74,7 @@
 
    中心会话（按 realm 隔离）：
      tenant-realm   sid_t  → cookie 作用域 .vxture.com（子域静默 SSO；ruyin 跨域靠回跳 IdP）
-     operator-realm sid_o  → cookie 仅 admin.vxture.com（绝不外溢到租户应用）
+     operator-realm sid_o  → cookie 仅 y.vxture.com（绝不外溢到租户应用）
 
    每个 sid 下，按 client_id 维护各自的 active_tenant：
      sid_t ─┬─ (console)  → active_tenant = tn_org_456（可切换）
@@ -127,14 +127,14 @@
 
 ### 4.1 双 realm 隔离（全平台 OIDC 化的关键约束）
 
-现状已有且承重的不变量：**operator（运营，admin.vxture.com）与 tenant_user（租户用户，其余应用）是两套完全隔离的账号**——不同库（`ops.admin` vs `identity.account`）、不同 RBAC（`ops.*` vs `iam.*`）、同一邮箱可在两边各存一份互不相干。ADR 规定 operator 的凭据**绝不能**访问租户数据。
+现状已有且承重的不变量：**operator（运营，y.vxture.com）与 tenant_user（租户用户，其余应用）是两套完全隔离的账号**——不同库（`ops.admin` vs `identity.account`）、不同 RBAC（`ops.*` vs `iam.*`）、同一邮箱可在两边各存一份互不相干。ADR 规定 operator 的凭据**绝不能**访问租户数据。
 
 OIDC 化后用 **realm** 承载这个隔离：
 
 - **realm 由 client 决定**：`admin` client → `operator` realm（认证 `ops.admin`）；其余 client → `tenant` realm（认证 `identity.account`）。
 - **sub 命名空间分离**：operator 的 `sub` 与 tenant_user 的 `sub` 不同前缀/不同空间，物理不可混。
 - **`userType` claim 持久化**：token 携带 `userType: operator|tenant_user`，RP 守卫继续校验；叠加 `aud` 单值 + JWKS，operator 的 token（`aud=admin`）在 console（期望 `aud=console`）结构性被拒。
-- **中心会话按 realm 隔离**：`sid_t`（tenant）cookie 作用域 `.vxture.com`；`sid_o`（operator）cookie 仅 `admin.vxture.com`，**绝不外溢**，运营登录不会静默带入任何租户应用。
+- **中心会话按 realm 隔离**：`sid_t`（tenant）cookie 作用域 `.vxture.com`；`sid_o`（operator）cookie 仅 `y.vxture.com`，**绝不外溢**，运营登录不会静默带入任何租户应用。
 - 同一人若既是运营又是租户用户：在两 realm 各自独立登录、各自 sid、各自 sub（与现状"两个身份"一致）。
 
 ### 4.2 登录方式（IdP 自身的认证手段，在 /authorize 登录页内完成）
@@ -271,7 +271,7 @@ tenant realm 首次登录（任意方式）→ 在事务内创建 `identity.acco
 
 - IdP 为每次"realm 内登录"建一个中心会话 `sid`（tenant realm 的 sid_t / operator realm 的 sid_o），承载"你是谁"（sub、realm、auth_method、device/ua/ip、创建/活跃时间）。
 - **sid 只管身份，不管租户。** 租户上下文挂在 `(sid, client_id)` 维度。
-- 存储：**Redis 为主**（`sess:{sid}` 哈希，含每个 client 的 active_tenant 字段）；**可选持久表** `identity.auth_session`（多设备管理 UI / 审计用，见 §13）。operator sid 的 cookie **仅作用域 `admin.vxture.com`、绝不外溢**（已定 D-7）。
+- 存储：**Redis 为主**（`sess:{sid}` 哈希，含每个 client 的 active_tenant 字段）；**可选持久表** `identity.auth_session`（多设备管理 UI / 审计用，见 §13）。operator sid 的 cookie **仅作用域 `y.vxture.com`、绝不外溢**（已定 D-7）。
 
 ### 7.2 按应用 active_tenant（B4 落地）
 
@@ -455,7 +455,7 @@ sess:{sid_t} = {
 | **D-4** ✅ | 签名算法                 | **RS256**（兼容优先；ES256 已弃）                                                                                                                                                                                                                                   | RP 库兼容                               |
 | **D-5** ✅ | provisioning 落表        | **`commerce`**（状态 + webhook 投递日志，与订阅同源）                                                                                                                                                                                                               | 对账一致                                |
 | **D-6** ✅ | capability 进 token?     | **回查为主**（token 只放 entitlement；capability 由 BFF 按 plan 查、可缓存）                                                                                                                                                                                        | token 不膨胀                            |
-| **D-7** ✅ | operator cookie 作用域   | **仅 `admin.vxture.com`**、绝不外溢（强隔离）                                                                                                                                                                                                                       | 运营/租户隔离                           |
+| **D-7** ✅ | operator cookie 作用域   | **仅 `y.vxture.com`**、绝不外溢（强隔离）                                                                                                                                                                                                                           | 运营/租户隔离                           |
 | **D-8** ✅ | 文档重构节奏             | **随 P1–P5 逐节迁移**，P5 收尾统一标 superseded                                                                                                                                                                                                                     | 文档与实现同步                          |
 | **D-9** 🎯 | 认证服务命名 / 归位      | 目标态（2026-06-12 决）：auth-bff 演进体**更名 `identity-server`、归位 `services/identity/server`**（可运行平台服务，非 `bff/`；服务全体 RP 不是某前端，故非 BFF；先例 `services/model/platform`）。**随 P5 退 legacy 时搬迁**（一次性正名归位，不留中间态）。见 §2 | 包组织正名、分层归位                    |
 | **D-10** ◐ | AuthN ⟂ entitlement 分离 | 目标态（2026-06-12，**建议待终拍**）：**entitlement 移出 access_token**，改**独立权益服务实时回查**（§8）；认证服务只管身份/SSO/签发，至多带非权威提示。**影响 P3/P4 对外契约**（entitlement claim），宜外部对接前定                                                | 计费级硬门控更实时；并解 #9 enforcement |
