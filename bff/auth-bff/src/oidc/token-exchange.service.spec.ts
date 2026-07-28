@@ -32,14 +32,18 @@ const build = (): Mocks => {
 
 const CALLER_ARDA = { clientId: "arda", productCode: "arda" };
 const CALLER_PLATFORM = { clientId: "console", productCode: null };
+// A platform-level client NOT in PLATFORM_LEVEL_S2S_CALLERS — still hits the
+// original invalid_client rejection (unlike CALLER_PLATFORM/"console", which
+// is allowlisted, see the "platform-caller mode" describe block below).
+const CALLER_PLATFORM_UNLISTED = { clientId: "website", productCode: null };
 
 describe("TokenExchangeService.exchange — request validation", () => {
   let m: Mocks;
   beforeEach(() => (m = build()));
 
-  it("rejects a caller with no product identity (platform-level client)", async () => {
+  it("rejects a caller with no product identity and not on the platform-caller allowlist", async () => {
     await expect(
-      m.service.exchange(CALLER_PLATFORM, {
+      m.service.exchange(CALLER_PLATFORM_UNLISTED, {
         audience: "arda",
         subjectToken: undefined,
         workspaceId: "ws-1",
@@ -400,6 +404,103 @@ describe("TokenExchangeService.exchange — audit trail (TD-034)", () => {
     });
 
     expect(result.accessToken).toBe("signed.jwt.token");
+  });
+});
+
+describe("TokenExchangeService.exchange — platform-caller mode (console→atlas wiring)", () => {
+  let m: Mocks;
+  beforeEach(() => (m = build()));
+
+  it("mints a service-mode token for an allowlisted platform-level caller, act.sub = caller clientId", async () => {
+    m.pool.query.mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] }); // target lookup only — no D2 query
+
+    const result = await m.service.exchange(CALLER_PLATFORM, {
+      audience: "atlas",
+      subjectToken: undefined,
+      workspaceId: "ws-1",
+      orgId: "org-1",
+    });
+
+    expect(result).toEqual({
+      accessToken: "signed.jwt.token",
+      expiresIn: TOKEN_EXCHANGE_TTL_SECONDS,
+    });
+    expect(m.keys.sign).toHaveBeenCalledWith(
+      {
+        act: { sub: "console" },
+        org_id: "org-1",
+        workspace_id: "ws-1",
+        mode: "service",
+        scope: "tool:atlas",
+      },
+      {
+        audience: "atlas",
+        expiresInSec: TOKEN_EXCHANGE_TTL_SECONDS,
+        jwtid: expect.any(String),
+      },
+    );
+    // target lookup + audit insert — no D2 coverage query (no caller product to check)
+    expect(m.pool.query).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects a non-allowlisted platform-level caller (unchanged invalid_client behavior)", async () => {
+    await expect(
+      m.service.exchange(CALLER_PLATFORM_UNLISTED, {
+        audience: "atlas",
+        subjectToken: undefined,
+        workspaceId: "ws-1",
+        orgId: undefined,
+      }),
+    ).rejects.toThrow(BadRequestException);
+    expect(m.keys.sign).not.toHaveBeenCalled();
+  });
+
+  it("rejects an allowlisted caller with no workspace_id declared", async () => {
+    m.pool.query.mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] });
+    await expect(
+      m.service.exchange(CALLER_PLATFORM, {
+        audience: "atlas",
+        subjectToken: undefined,
+        workspaceId: undefined,
+        orgId: undefined,
+      }),
+    ).rejects.toThrow(BadRequestException);
+    expect(m.keys.sign).not.toHaveBeenCalled();
+  });
+
+  it("rejects an allowlisted caller with a missing audience", async () => {
+    await expect(
+      m.service.exchange(CALLER_PLATFORM, {
+        audience: undefined,
+        subjectToken: undefined,
+        workspaceId: "ws-1",
+        orgId: undefined,
+      }),
+    ).rejects.toThrow(BadRequestException);
+    expect(m.pool.query).not.toHaveBeenCalled();
+  });
+
+  it("writes the audit row with the caller clientId (not a product code) and mode=service", async () => {
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [] }); // audit insert
+
+    await m.service.exchange(CALLER_PLATFORM, {
+      audience: "atlas",
+      subjectToken: undefined,
+      workspaceId: "ws-1",
+      orgId: undefined,
+    });
+
+    const audit = m.pool.query.mock.calls[1]!;
+    expect(String(audit[0])).toContain("insert into support.audit_logs");
+    expect(JSON.parse(audit[1][2])).toEqual({
+      caller_product: "console",
+      target_product: "atlas",
+      mode: "service",
+      workspace_id: "ws-1",
+      org_id: null,
+    });
   });
 });
 

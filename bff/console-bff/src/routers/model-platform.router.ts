@@ -13,6 +13,11 @@
  * ——atlas 侧改名(TD-013),权威表见 `vxture-atlas/docs/20-specs/10-http-surface.md`。
  * `MODEL_PLATFORM_URL` 已指向外部 atlas 主机,本仓 `services/model/platform`
  * 同步退役(product_250 M-4 线)。
+ *
+ * 2026-07-28(TD-043 platform→atlas 半程):atlas 的 `S2sAuthGuard` 严格要求签名
+ * S2S token,无共享密钥兜底,故每次代理都经 `S2sExchangeService` 先换票
+ * (`token-exchange.service.ts` 新增的平台级调用方分支,`act.sub="console"`)。
+ * 换票失败直接 502,不降级为裸调——裸调必然被 atlas 401,502 是更清晰的信号。
  */
 
 import {
@@ -28,6 +33,7 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import { VxConfigService } from "@vxture/core-config";
+import { S2sExchangeService } from "../auth/s2s-exchange.service";
 
 import type {
   AiModelGrantRecord,
@@ -36,6 +42,9 @@ import type {
   TenantQuotaRecord,
   TenantUsageSummaryRecord,
 } from "../types/console.types";
+
+/** Exchange audience for atlas's capability plane (product_100 code). */
+const ATLAS_AUDIENCE = "atlas";
 
 interface ModelPlatformErrorBody {
   code?: string;
@@ -51,9 +60,22 @@ interface ModelPlatformErrorBody {
 export class ModelPlatformRouter {
   private readonly modelPlatformUrl: string;
 
-  constructor(@Inject(VxConfigService) configService: VxConfigService) {
+  constructor(
+    @Inject(VxConfigService) configService: VxConfigService,
+    @Inject(S2sExchangeService)
+    private readonly s2sExchange: S2sExchangeService,
+  ) {
     this.modelPlatformUrl =
       configService.platform.MODEL_PLATFORM_URL.trim().replace(/\/+$/, "");
+  }
+
+  /** Exchange this request's tenant workspace for an aud=atlas S2S bearer, then proxy. */
+  private async request<T>(tenantId: string, path: string): Promise<T> {
+    const bearer = await this.s2sExchange.getToken(tenantId, ATLAS_AUDIENCE);
+    if (!bearer) {
+      throw new BadGatewayException("Unable to authenticate to Model Platform");
+    }
+    return modelPlatformRequest<T>(path, this.modelPlatformUrl, bearer);
   }
 
   @Get("models")
@@ -62,13 +84,13 @@ export class ModelPlatformRouter {
   ): Promise<AiModelRecord[]> {
     const tenantId = requireTenantId(req);
     const [models, grants] = await Promise.all([
-      modelPlatformRequest<AiModelRecord[]>(
+      this.request<AiModelRecord[]>(
+        tenantId,
         "/capability/models?includeInactive=false",
-        this.modelPlatformUrl,
       ),
-      modelPlatformRequest<AiModelGrantRecord[]>(
+      this.request<AiModelGrantRecord[]>(
+        tenantId,
         `/capability/grants?tenantId=${encodeURIComponent(tenantId)}`,
-        this.modelPlatformUrl,
       ),
     ]);
 
@@ -80,7 +102,7 @@ export class ModelPlatformRouter {
   }
 
   @Get("grants")
-  listGrants(
+  async listGrants(
     @Req() req: Request & RequestContext,
     @Query("modelId") modelId?: string,
     @Query("applicationId") applicationId?: string,
@@ -92,14 +114,14 @@ export class ModelPlatformRouter {
     if (applicationId) params.set("applicationId", applicationId);
     if (applicationType) params.set("applicationType", applicationType);
 
-    return modelPlatformRequest<AiModelGrantRecord[]>(
+    return this.request<AiModelGrantRecord[]>(
+      tenantId,
       `/capability/grants?${params.toString()}`,
-      this.modelPlatformUrl,
     );
   }
 
   @Get("quotas")
-  listQuotas(
+  async listQuotas(
     @Req() req: Request & RequestContext,
     @Query("includeExpired") includeExpired?: string,
   ): Promise<TenantQuotaRecord[]> {
@@ -109,14 +131,14 @@ export class ModelPlatformRouter {
       params.set("includeExpired", includeExpired);
     }
 
-    return modelPlatformRequest<TenantQuotaRecord[]>(
+    return this.request<TenantQuotaRecord[]>(
+      tenantId,
       `/capability/quotas?${params.toString()}`,
-      this.modelPlatformUrl,
     );
   }
 
   @Get("usage-summaries")
-  listUsageSummaries(
+  async listUsageSummaries(
     @Req() req: Request & RequestContext,
     @Query("applicationId") applicationId?: string,
     @Query("applicationType") applicationType?: string,
@@ -130,9 +152,9 @@ export class ModelPlatformRouter {
     if (cycleMonth) params.set("cycleMonth", cycleMonth);
     if (statType) params.set("statType", statType);
 
-    return modelPlatformRequest<TenantUsageSummaryRecord[]>(
+    return this.request<TenantUsageSummaryRecord[]>(
+      tenantId,
       `/capability/usage-summaries?${params.toString()}`,
-      this.modelPlatformUrl,
     );
   }
 }
@@ -155,11 +177,14 @@ function requireTenantId(req: Request & RequestContext): string {
 async function modelPlatformRequest<TResponse>(
   path: string,
   baseUrl: string,
+  bearer: string,
 ): Promise<TResponse> {
   let response: Response;
 
   try {
-    response = await fetch(`${baseUrl}${path}`);
+    response = await fetch(`${baseUrl}${path}`, {
+      headers: { authorization: `Bearer ${bearer}` },
+    });
   } catch {
     throw new BadGatewayException("Model Platform is unavailable");
   }

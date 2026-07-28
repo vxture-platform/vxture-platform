@@ -15,6 +15,7 @@ import { SubscriptionModule } from "@vxture/service-subscription";
 import { SmsModule } from "@vxture/service-sms";
 import { OidcRpModule } from "./oidc/oidc-rp.module";
 import { ConsoleAuthService } from "./auth/auth.service";
+import { S2sExchangeService } from "./auth/s2s-exchange.service";
 import { SessionAggregator } from "./aggregators/session.aggregator";
 import { PhoneChangeService } from "./services/phone-change.service";
 import { EmailChangeService } from "./services/email-change.service";
@@ -64,6 +65,7 @@ import { TenantContextRouter } from "./routers/tenant-context.router";
     PhoneChangeService,
     EmailChangeService,
     PlatformEntitlementsClient,
+    S2sExchangeService,
   ],
 })
 export class AppModule implements NestModule {

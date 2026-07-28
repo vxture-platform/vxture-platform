@@ -73,6 +73,20 @@ export const TOKEN_EXCHANGE_TTL_SECONDS = 300;
  */
 export const PLATFORM_S2S_AUDIENCE = "vxture";
 
+/**
+ * Platform-level caller allowlist (2026-07-28, atlas C2/C3 wiring line):
+ * confidential platform BFFs that are not themselves products (productCode
+ * null) but need to mint service-mode tokens on behalf of an
+ * already-authenticated tenant workspace — their own session middleware,
+ * not this service, establishes that workspace binding before this code
+ * path is ever reached. `console` is the first member: it proxies tenant
+ * model/grant/quota/usage reads to atlas and needs a signed S2S token
+ * (atlas's S2sAuthGuard has no shared-secret fallback). Deliberately an
+ * explicit allowlist, not "any platform-level client" — keeps the blast
+ * radius of this bypass scoped and auditable.
+ */
+const PLATFORM_LEVEL_S2S_CALLERS = new Set(["console"]);
+
 export interface TokenExchangeCaller {
   /** The authenticated client_id (product_210 §2: caller's existing confidential client). */
   clientId: string;
@@ -119,9 +133,17 @@ export class TokenExchangeService {
         return this.exchangeOperator(caller, req, subjClaims);
       }
     }
+    if (
+      !req.subjectToken &&
+      !caller.productCode &&
+      PLATFORM_LEVEL_S2S_CALLERS.has(caller.clientId)
+    ) {
+      return this.exchangePlatformCaller(caller, req);
+    }
     if (!caller.productCode) {
       // A platform-level client (website/console/admin) has no product
-      // identity to assert via act.sub — it is not a valid T1 caller.
+      // identity to assert via act.sub — it is not a valid T1 caller,
+      // unless it's in PLATFORM_LEVEL_S2S_CALLERS (handled above).
       throw new BadRequestException("invalid_client");
     }
     if (!req.audience) {
@@ -241,6 +263,66 @@ export class TokenExchangeService {
       mode: "operator",
       workspaceId: "",
       orgId: null,
+    });
+    return { accessToken, expiresIn: TOKEN_EXCHANGE_TTL_SECONDS };
+  }
+
+  /**
+   * Platform-caller mode (2026-07-28): an allowlisted platform-level BFF
+   * (PLATFORM_LEVEL_S2S_CALLERS, productCode null) mints a service-mode
+   * token declaring an explicit workspace_id, without asserting a product
+   * identity via act.sub — act.sub becomes the caller's own client_id
+   * instead (e.g. "console"), so a provider can distinguish "the platform's
+   * console surface asked on a tenant's behalf" from "product X called for
+   * its own execution".
+   *
+   * Deliberately reuses `mode: "service"` (not a new mode value) — the
+   * shape is the same (no subject_token, explicit workspace_id) and a new
+   * mode would need every provider's guard to accept it; providers that
+   * already accept T1 service-mode tokens need no change on their end.
+   *
+   * No D2 coverage check here (there is no caller product to check
+   * subscription coverage for): workspace legitimacy is the caller's own
+   * responsibility, already established by its session middleware before
+   * this endpoint is reached — these are same-trust-boundary confidential
+   * clients (the allowlist), not external parties.
+   */
+  private async exchangePlatformCaller(
+    caller: TokenExchangeCaller,
+    req: TokenExchangeRequest,
+  ): Promise<TokenExchangeResult> {
+    if (!req.audience) {
+      throw new BadRequestException("invalid_request");
+    }
+    const target = await this.resolveTargetProductCode(req.audience);
+    if (!target || target === PLATFORM_S2S_AUDIENCE) {
+      throw new BadRequestException("invalid_target");
+    }
+    if (!req.workspaceId) {
+      throw new BadRequestException("invalid_request");
+    }
+    const jti = randomUUID();
+    const accessToken = this.keys.sign(
+      {
+        act: { sub: caller.clientId },
+        org_id: req.orgId ?? null,
+        workspace_id: req.workspaceId,
+        mode: "service",
+        scope: `tool:${target}`,
+      },
+      {
+        audience: target,
+        expiresInSec: TOKEN_EXCHANGE_TTL_SECONDS,
+        jwtid: jti,
+      },
+    );
+    await this.recordAudit({
+      jti,
+      callerProduct: caller.clientId,
+      targetProduct: target,
+      mode: "service",
+      workspaceId: req.workspaceId,
+      orgId: req.orgId ?? null,
     });
     return { accessToken, expiresIn: TOKEN_EXCHANGE_TTL_SECONDS };
   }
