@@ -38,6 +38,30 @@ insert，会在 `model.models` 的主键 `id` 上撞车（`on conflict (model_co
 本轮不做，留作待办（登记见 §5 任务表）。新增的三行（deepseek/minimax/google）没有这个历史包袱，
 直接用带前缀的规范命名。
 
+### 1.1 `model_code` 是编址/分发键,不是上游 API 的字面值(2026-07-28 澄清,回应 `vxture-atlas` liaison platform#152)
+
+atlas 真实调用 Doubao/Zhipu 时发现:自己的 provider adapter 把 `model_code` **原样**塞进上游请求体的
+`model` 字段——Doubao/Zhipu 的真实 API 只认各自厂商裸型号 ID(如 `doubao-seed-2-0-lite-260428`/
+`glm-5.2`),不认带 `{provider_code}/` 前缀的字符串,直接 404。
+
+这不是命名约定本身错了,是**两个不同概念被一个字段同时承担**:`model_code` 天然该是**内部编址/
+分发键**(本文开头就是这么定的——"provider adapter 分发键",用来在多厂商场景下避免撞名、决定
+路由到哪个 adapter),从来没有被定义为"逐字节发给上游 API 的值"。两者在无前缀的三个遗留例外
+（`doubao-pro-32k` 等）里恰好相等,掩盖了这个区分从一开始就该存在。
+
+**结论**:`model.models.config`(已有 jsonb 列,无需 DDL 变更)新增一个可选键
+`upstreamModel: string`——provider adapter 构造上游请求体时,优先读
+`config.upstreamModel`,缺省(遗留例外三行)才退回 `model_code` 本身。带前缀的新注册行
+（deepseek/minimax/google 占位型号替换为真实型号时）应同时写好 `config.upstreamModel` 为厂商
+裸型号 ID。**这是 atlas 自己 adapter 代码的实现范围**(读哪个字段、怎么退回),本仓只负责在
+seed 数据里把 `config.upstreamModel` 填对。
+
+**已知偏离,待回收**:atlas 为了让 Doubao/Zhipu 真实调用跑通,临时把这两家的 `model_code` 直接
+改回裸型号(如 `doubao-seed-2-0-lite-260428` 本身,不带 `doubao/` 前缀)注册——这是在 adapter 还
+没实现 `config.upstreamModel` 读取之前的可用性优先选择,**偏离了本节的编址规范,不是新的例外
+条款**。`config.upstreamModel` 落地后应把这两行改回带前缀命名 + 补 `config.upstreamModel`,登记
+见 §6 任务表 #9。
+
 ## 2. 域内优先，境外"注册但关闭"
 
 owner 决策(2026-07-27)：**跨境网络与合规问题暂缓，先聚焦国内模型；境外三家先在模型平台注册好
@@ -106,16 +130,17 @@ karda 前端如果要给终端用户一个模型选择器，需要 Atlas 暴露"
 
 ## 6. 推进任务表
 
-| #   | 任务                                                                   | 归属           | 状态                 | 备注                                                                               |
-| --- | ---------------------------------------------------------------------- | -------------- | -------------------- | ---------------------------------------------------------------------------------- |
-| 1   | modelCode 命名规范定稿                                                 | platform       | ✅ 本轮完成          | 本文 §1                                                                            |
-| 2   | 域内三家(doubao/deepseek/minimax)注册为 active                         | platform       | ✅ 本轮完成          | `seed-catalog.mjs` 第 10 段；deepseek/minimax 为占位型号,上线前需确认真实型号+成本 |
-| 3   | 境外三家(anthropic/openai/google)注册为 registered-closed              | platform       | ✅ 本轮完成          | 含幂等 UPDATE，覆盖已存在环境                                                      |
-| 4   | 已在产 3 个 model_code 补前缀(doubao-pro-32k→doubao/doubao-pro-32k 等) | platform       | 待办(不阻塞)         | 需要显式 UPDATE 迁移，不能靠 reseed；不影响任何当前功能，优先级低                  |
-| 5   | 出境网络路径(专用海外代理机)                                           | platform 基建  | **owner-gated,暂缓** | 参照 Google OAuth 出海方案但不共用同一台机器                                       |
-| 6   | 数据出境合规姿态拍板                                                   | **owner 决策** | **owner-gated,暂缓** | 先于任务 5 落地，网络通了不代表合规                                                |
-| 7   | 任务画像路由(`model_policy` 按 taskProfile 选模型)                     | Atlas 编制     | 待 Atlas 设计        | 本仓不代做，随 A1-A3 一起规划                                                      |
-| 8   | 租户过滤的"可选模型"清单接口                                           | Atlas 编制     | 待 Atlas 设计        | karda 做用户选择器前的前置依赖                                                     |
+| #   | 任务                                                                   | 归属           | 状态                 | 备注                                                                                                     |
+| --- | ---------------------------------------------------------------------- | -------------- | -------------------- | -------------------------------------------------------------------------------------------------------- |
+| 1   | modelCode 命名规范定稿                                                 | platform       | ✅ 本轮完成          | 本文 §1                                                                                                  |
+| 2   | 域内三家(doubao/deepseek/minimax)注册为 active                         | platform       | ✅ 本轮完成          | `seed-catalog.mjs` 第 10 段；deepseek/minimax 为占位型号,上线前需确认真实型号+成本                       |
+| 3   | 境外三家(anthropic/openai/google)注册为 registered-closed              | platform       | ✅ 本轮完成          | 含幂等 UPDATE，覆盖已存在环境                                                                            |
+| 4   | 已在产 3 个 model_code 补前缀(doubao-pro-32k→doubao/doubao-pro-32k 等) | platform       | 待办(不阻塞)         | 需要显式 UPDATE 迁移，不能靠 reseed；不影响任何当前功能，优先级低                                        |
+| 5   | 出境网络路径(专用海外代理机)                                           | platform 基建  | **owner-gated,暂缓** | 参照 Google OAuth 出海方案但不共用同一台机器                                                             |
+| 6   | 数据出境合规姿态拍板                                                   | **owner 决策** | **owner-gated,暂缓** | 先于任务 5 落地，网络通了不代表合规                                                                      |
+| 7   | 任务画像路由(`model_policy` 按 taskProfile 选模型)                     | Atlas 编制     | 待 Atlas 设计        | 本仓不代做，随 A1-A3 一起规划                                                                            |
+| 8   | 租户过滤的"可选模型"清单接口                                           | Atlas 编制     | 待 Atlas 设计        | karda 做用户选择器前的前置依赖                                                                           |
+| 9   | `config.upstreamModel` 落地 + doubao/zhipu 裸型号回收为带前缀命名      | Atlas 实现     | 待 Atlas 排期        | 本文 §1.1；不阻塞现有功能（当前裸型号可用），platform 侧仅需保证 seed 数据里 `config.upstreamModel` 填对 |
 
 ## 7. 边界之外
 
