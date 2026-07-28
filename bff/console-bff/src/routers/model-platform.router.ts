@@ -27,6 +27,17 @@
  * 供 atlas 未来的 `scope=tenant` 汇总查询使用。查询字符串里现有的
  * `tenantId=` 参数是 atlas `/capability/*` 端点自己的既有契约,维持不变,
  * 与本次修正的 S2S token claim 是两回事。
+ *
+ * 2026-07-28(部分切换 `/tenancy/*`,TD-043 收尾一半):atlas 建了 `vxture-atlas`#70
+ * 的"tenant self-service plane"(`/tenancy/models`+`/tenancy/usage`,scope 从 token
+ * claim 解析、调用方声明不了),但只覆盖了本路由四个方法里的一个半——
+ * `/tenancy/models` 内部已做 grant 过滤,直接替代原先"查 models 再查 grants 取交集"
+ * 的两次往返;`/tenancy/usage` 语义和形状都对不上(atlas 自己的 reqlog、非计费口径、
+ * 无 cycleMonth/cost/currency),不是 `usage-summaries` 的直接替代,需要另一轮设计,
+ * 暂不动。**`listGrants`(授权明细:priority/expiresAt/applicationType)和
+ * `listQuotas`(订阅周期配额:maxUsers/periodTokens/allowedModelIds)atlas 完全没建
+ * 对应端点**——已在 `vxture-atlas#66` 追问是有意不建(该数据本该是平台自己的)还是
+ * 遗漏,两个方法暂留在 `/capability/*`,等回复。
  */
 
 import {
@@ -95,30 +106,18 @@ export class ModelPlatformRouter {
     return modelPlatformRequest<T>(path, this.modelPlatformUrl, bearer);
   }
 
+  /** `/tenancy/models` already filters to this workspace's active grants — no separate grants join needed. */
   @Get("models")
   async listModels(
     @Req() req: Request & RequestContext,
   ): Promise<AiModelRecord[]> {
     const tenantId = requireTenantId(req);
     const workspaceId = requireWorkspaceId(req);
-    const [models, grants] = await Promise.all([
-      this.request<AiModelRecord[]>(
-        workspaceId,
-        tenantId,
-        "/capability/models?includeInactive=false",
-      ),
-      this.request<AiModelGrantRecord[]>(
-        workspaceId,
-        tenantId,
-        `/capability/grants?tenantId=${encodeURIComponent(tenantId)}`,
-      ),
-    ]);
-
-    const grantedModelIds = new Set(
-      grants.filter((grant) => grant.isActive).map((grant) => grant.modelId),
+    return this.request<AiModelRecord[]>(
+      workspaceId,
+      tenantId,
+      "/tenancy/models",
     );
-
-    return models.filter((model) => grantedModelIds.has(model.id));
   }
 
   @Get("grants")
