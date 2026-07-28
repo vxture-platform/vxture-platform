@@ -1,7 +1,7 @@
 # 技术债登记表
 
-**版本**: 1.10.0
-**更新**: 2026-07-28（atlas 仓拆分 cutover 完成：新增 **TD-043**（平台调用 atlas 无 S2S 鉴权，varda 侧暂缓）；**TD-005/006/007 作废**、**TD-008 范围收窄**（`services/model/platform` 整体退役，实现迁至 `vxture-atlas`）。此前 2026-07-23（**TD-042** 三阶段整改（S2S 改走 C2 + console 权益展示 + 验收）全部完成，已销号）。此前同日：console 权益展示缺口调研衍生 **TD-042**：console-bff quota-usage 端点绕开 C2 契约直查 DB 并重复实现 reset 逻辑。此前 2026-07-16：GitHub Actions workflow 审查衍生两项，均**待全域确认后执行**：**TD-039** 疑似死 CI 凭证审计清理（跨 org 全仓核引用后 revoke）；**TD-040** 变更门控方法论补进 cicd-optimization-playbook。此前 2026-07-14：backlog 对当前架构审计后修正——**TD-010 作废**、**TD-001 改写**、**TD-033 文档 bug 修复**）
+**版本**: 1.11.0
+**更新**: 2026-07-28（atlas 真实实现逐项审计：新增 **TD-044**（atlas 未接入平台 C2/C3，全平台 AI 用量对计量/账单系统不可见，🔴 HIGH——与 TD-008/TD-043 互为前提）。此前同日，atlas 仓拆分 cutover 完成：新增 **TD-043**（平台调用 atlas 无 S2S 鉴权，varda 侧暂缓）；**TD-005/006/007 作废**、**TD-008 范围收窄**（`services/model/platform` 整体退役，实现迁至 `vxture-atlas`）。此前 2026-07-23（**TD-042** 三阶段整改（S2S 改走 C2 + console 权益展示 + 验收）全部完成，已销号）。此前同日：console 权益展示缺口调研衍生 **TD-042**：console-bff quota-usage 端点绕开 C2 契约直查 DB 并重复实现 reset 逻辑。此前 2026-07-16：GitHub Actions workflow 审查衍生两项，均**待全域确认后执行**：**TD-039** 疑似死 CI 凭证审计清理（跨 org 全仓核引用后 revoke）；**TD-040** 变更门控方法论补进 cicd-optimization-playbook。此前 2026-07-14：backlog 对当前架构审计后修正——**TD-010 作废**、**TD-001 改写**、**TD-033 文档 bug 修复**）
 **维护人**: 架构组
 
 ---
@@ -100,6 +100,7 @@
 | [TD-041](#td-041--admin-订阅动作写路径绕过-provisioning-派发与-c3-invalidate)         | admin 订阅动作写路径绕过 provisioning 派发与 C3 invalidate          | Architecture       | Open        | 🟡 MED                      |
 | [TD-042](#td-042--console-bff-quota-usage-绕开-c2-契约直查-db-并重复实现-reset-逻辑)  | console-bff quota-usage 绕开 C2 契约，直查 DB 并重复实现 reset 逻辑 | Architecture       | Resolved    | 🟢 LOW                      |
 | [TD-043](#td-043--平台调用-atlas-无-s2s-鉴权能力数据面均裸调用)                       | 平台调用 atlas 无 S2S 鉴权，能力/数据面均裸调用                     | Security           | Open        | 🟡 MED（varda 侧暂缓）      |
+| [TD-044](#td-044--atlas-未接入平台-c2c3全平台-ai-用量对计量账单系统不可见)            | atlas 未接入平台 C2/C3，全平台 AI 用量对计量/账单系统不可见         | Architecture       | Open        | 🔴 HIGH                     |
 
 ---
 
@@ -999,3 +1000,22 @@
 **解决方向**：两处调用方接入 `tool:atlas` scope 的 S2S 换票（参考 `bff/auth-bff/src/oidc/token-exchange.service.ts` 的 client-credentials 铸币路径，而非 console-bff 现有的 `AUTH_INTERNAL_TOKEN` 静态密钥模式——那套只适用于平台内部同信任域服务，atlas 是外部仓、不同信任域，必须走签名 OIDC token）。`model-runtime-client` 本身无 NestJS DI（TD-016 同款约束），token 需由调用方（agent-server/varda）注入，类似 `modelPlatformUrl` 现有的显式传参模式。
 
 **暂缓（2026-07-28，owner 拍板）**：varda 本身按拆库计划将部署在 worker-02，当前部署形态本就过渡中——**varda 侧暂缓处理，保留页面/功能入口，后端鉴权接线搁置**，随 worker-02 部署一并解决，不单独立项抢跑。console-bff 侧未获得同样的暂缓，维持 Open、按正常优先级排期。
+
+---
+
+### TD-044 — atlas 未接入平台 C2/C3，全平台 AI 用量对计量/账单系统不可见
+
+| 字段         | 内容                                                                                                                                                                                                                                |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **分类**     | Architecture                                                                                                                                                                                                                        |
+| **状态**     | Open                                                                                                                                                                                                                                |
+| **登记日期** | 2026-07-28                                                                                                                                                                                                                          |
+| **来源**     | atlas 真实实现审计（用户提供逐项实证表）+ 既有设计核对：`product_200_integration.md` §4.1/§6、`product_210_tool-protocol.md` §4/§6、`docs/30-design/data_commerce_200_metering.md`、`vxture-atlas/docs/20-specs/10-http-surface.md` |
+
+**描述**：`product_200_integration.md` §6 产品×通道适用矩阵明确 Atlas 行标注 **"C3 consume 上行 ✔（唯一推理计量入口）"**、备注"Model Platform 只读配额 gate 特权照旧"；`41-atlas-integration-topology.md`（旧版）称"Atlas 是唯一计量入口，karda 不重复上报模型 token 消耗"。即设计上全平台 AI 推理用量（含 karda/varda/L3 agent 经 atlas 路由的调用）唯一入口是 atlas 调平台 `POST /usage/consume`，配额裁决权威在平台 `metering.quota_pools`，atlas 自己只做只读 gate。
+
+实测两层缺口叠加：①atlas 自己这层——`recordUsage()` 只打一条 warn 直接返回 null，AI 专属详细运营历史（旧版 `40-model-platform.md` 曾设计过的 `commerce.tenant_usage_event`：tenant+application+user+token(used/input/output)+model_code+latency+request_id 等字段）**没有落地到 atlas 自己的库**；②atlas→platform 这层——全仓 grep 未发现任何调用 `/usage/consume` 或平台 C2 `/platform/entitlements` 的代码，**C2 权益客户端根本不存在**。两层都空，不是"调用失败"是"压根没写"。
+
+**影响**：`metering.usage_events` 里 AI 相关行数应为零——任何挂了 AI 配额组件的套餐，配额从未被真实扣减（对应实证表"配额 activeQuotas: 0 → fail-open 放行"）；TD-008 记录的 commerce 超额计费缺口在当前状态下**无论如何实现都拿不到任何 AI 用量数据可算**，二者互为前提。即使 TD-043（S2S 鉴权）修好，atlas 也没有代码去调用任何 C2/C3 端点，鉴权修好本身不产生任何效果——两条债相邻但独立，均需处理才能打通。
+
+**解决方向**：atlas 侧需要（均属外部仓改动，按边界走 issue 交办，platform 不代做）——① 实现 AI 专属详细用量表（落 atlas 自己的库，不进平台 `metering` schema，粒度不匹配：平台账本是 workspace×product×metric_key 级别，没有 user/model/token 明细维度，这是刻意设计不是疏漏）；② 每次推理成功后调平台 `POST /usage/consume` 上报聚合量（product_200 §4.1 契约，需先有 TD-043 的 S2S token）；③ 入口强制求值补上 entitlement 半程（`grant ∧ entitlement` 公式当前只有 grant 落地，需接平台 `GET /platform/entitlements`）；④ 自己本地的 quota fail-open 逻辑与恒空的 `/capability/usage-summaries` 表建议随①②③退役，改为读平台 C2 返回值做只读展示，不再自行维护平行状态。
