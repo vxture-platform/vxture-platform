@@ -180,55 +180,66 @@ export type ModelApplicationType =
   | "api_client"
   | "internal_service";
 
+/**
+ * Tenant-facing grant view (`GET /tenancy/grants`, atlas `vxture-atlas`#74).
+ * Deliberately narrower than the operator view (`/capability/grants`) —
+ * `reason` is an operator's internal justification and atlas does not
+ * project it here; scope (which workspace) comes from the S2S token, not a
+ * field on the record.
+ */
 export interface AiModelGrantRecord {
   id: string;
   modelId: string;
-  tenantId: string;
   applicationId: string | null;
   applicationType: ModelApplicationType | null;
   agentId: string | null;
+  taskProfile: string | null;
   priority: number;
-  reason: string | null;
   expiresAt: string | null;
   isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
 }
 
-export interface TenantQuotaRecord {
-  id: string;
-  tenantId: string;
-  subscriptionId: string | null;
-  quotaCycle: string;
-  periodStart: string | null;
-  periodEnd: string | null;
-  maxUsers: number | null;
-  maxAgents: number | null;
-  maxKnowledgeBases: number | null;
-  maxStorageGb: number | null;
-  periodTokens: string | null;
-  usedTokens: string;
-  allowedModelIds: string[];
-  allowCustomModel: boolean;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
+/**
+ * Entitlement as the tenant sees it (`GET /tenancy/quotas`, atlas #74) —
+ * read from the platform's own C2 envelope, not atlas's legacy
+ * `tenant_subscription_quotas` stub (TD-005, always empty). `status`
+ * distinguishes "resolved with no coverage" (atlas's plan catalog is still
+ * an unpublished draft — expected today) from "could not ask the
+ * platform" — the stub could express neither.
+ */
+export interface TenancyQuotaResponse {
+  workspaceId: string;
+  tier: string | null;
+  bundled: boolean;
+  limits: Record<string, number>;
+  pools: Array<{
+    metric: string;
+    limit: number;
+    remaining: number;
+    priority: number;
+  }>;
+  status: "covered" | "uncovered" | "unavailable";
 }
 
-export interface TenantUsageSummaryRecord {
-  id: string;
-  tenantId: string;
-  applicationId: string | null;
-  applicationType: ModelApplicationType | null;
-  cycleMonth: string;
-  statType: string;
-  totalRequests: string;
-  successRequests: string;
-  failedRequests: string;
-  totalInputTokens: string;
-  totalOutputTokens: string;
-  totalTokens: string;
-  totalCostAmount: string;
-  currency: string;
-  updatedAt: string;
+/**
+ * Usage as the tenant sees it (`GET /tenancy/usage`, atlas #70) — sourced
+ * from atlas's own request log (`reqlog`), not the platform's billing
+ * ledger. Explicitly NOT a cost/billing figure; the billing basis is the
+ * platform's `usage_events` summed over the subscription period.
+ */
+export interface TenancyUsageResponse {
+  scope: "workspace" | "tenant";
+  scopeId: string;
+  from: string;
+  to: string;
+  rows: Array<{
+    modelCode: string | null;
+    providerCode: string | null;
+    requests: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    errors: number;
+  }>;
+  source: "atlas.reqlog";
 }

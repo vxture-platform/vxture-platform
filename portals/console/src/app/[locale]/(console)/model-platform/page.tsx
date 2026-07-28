@@ -8,14 +8,14 @@ import {
   fetchAiModelGrants,
   fetchAiModels,
   fetchTenantModelQuotas,
-  fetchTenantModelUsageSummaries,
+  fetchTenantModelUsage,
 } from "@/api/console-bff";
 import type {
   AiModelGrantRecord,
   AiModelRecord,
   SummaryMetric,
-  TenantQuotaRecord,
-  TenantUsageSummaryRecord,
+  TenancyQuotaResponse,
+  TenancyUsageResponse,
 } from "@/entities/console";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { DashboardSplit, PageSection, SignalList } from "@/layout/shell";
@@ -40,51 +40,48 @@ const grantColumns: DataTableColumn<GrantRow>[] = [
 ];
 
 const quotaColumns: DataTableColumn<QuotaRow>[] = [
-  { id: "cycle", header: "Cycle", cell: (row) => row[0] },
-  { id: "tokens", header: "Tokens", cell: (row) => row[1] },
-  { id: "ratio", header: "Usage", cell: (row) => row[2] },
-  { id: "models", header: "Allowed models", cell: (row) => row[3] },
+  { id: "metric", header: "Metric", cell: (row) => row[0] },
+  { id: "remaining", header: "Remaining / Limit", cell: (row) => row[1] },
+  { id: "priority", header: "Priority", cell: (row) => row[2] },
+  { id: "tier", header: "Tier", cell: (row) => row[3] },
 ];
 
 const usageColumns: DataTableColumn<UsageRow>[] = [
-  { id: "cycle", header: "Cycle", cell: (row) => row[0] },
-  { id: "scope", header: "Scope", cell: (row) => row[1] },
-  { id: "tokens", header: "Tokens", cell: (row) => row[2] },
-  { id: "cost", header: "Cost", cell: (row) => row[3], align: "right" },
+  { id: "model", header: "Model", cell: (row) => row[0] },
+  { id: "provider", header: "Provider", cell: (row) => row[1] },
+  { id: "requests", header: "Requests", cell: (row) => row[2] },
+  { id: "tokens", header: "Tokens", cell: (row) => row[3], align: "right" },
 ];
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("zh-CN").format(value);
 }
 
-function formatBigIntText(value: string | null) {
-  if (!value) return "-";
-  return formatNumber(Number(value));
-}
+const quotaStatusLabel: Record<TenancyQuotaResponse["status"], string> = {
+  covered: "已开通",
+  uncovered: "未开通套餐",
+  unavailable: "平台不可达",
+};
 
-function quotaUsageRatio(quota: TenantQuotaRecord) {
-  if (!quota.periodTokens) return "-";
-  const used = Number(quota.usedTokens);
-  const limit = Number(quota.periodTokens);
-  if (!Number.isFinite(used) || !Number.isFinite(limit) || limit <= 0) {
-    return "-";
-  }
-  return `${Math.min(100, Math.round((used / limit) * 100))}%`;
-}
+const quotaStatusTone: Record<
+  TenancyQuotaResponse["status"],
+  Exclude<SummaryMetric["tone"], undefined>
+> = {
+  covered: "positive",
+  uncovered: "default",
+  unavailable: "warning",
+};
 
 function buildMetrics(
   models: AiModelRecord[],
   grants: AiModelGrantRecord[],
-  quotas: TenantQuotaRecord[],
-  usageSummaries: TenantUsageSummaryRecord[],
+  quotas: TenancyQuotaResponse | null,
+  usage: TenancyUsageResponse | null,
   loading: boolean,
 ): SummaryMetric[] {
   const activeGrants = grants.filter((grant) => grant.isActive);
-  const activeQuotas = quotas.filter((quota) => quota.isActive);
-  const totalTokens = usageSummaries.reduce(
-    (total, summary) => total + Number(summary.totalTokens || 0),
-    0,
-  );
+  const totalTokens =
+    usage?.rows.reduce((total, row) => total + row.totalTokens, 0) ?? 0;
 
   return [
     {
@@ -94,15 +91,15 @@ function buildMetrics(
       tone: models.length ? "positive" : "warning",
     },
     {
-      label: "Quota pools",
-      value: loading ? "-" : formatNumber(activeQuotas.length),
-      trend: `${formatNumber(quotas.length)} total`,
-      tone: activeQuotas.length ? "positive" : "default",
+      label: "Quota status",
+      value: loading || !quotas ? "-" : quotaStatusLabel[quotas.status],
+      trend: quotas?.tier ? `tier: ${quotas.tier}` : "no tier",
+      tone: quotas ? quotaStatusTone[quotas.status] : "default",
     },
     {
       label: "Token usage",
       value: loading ? "-" : formatNumber(totalTokens),
-      trend: `${formatNumber(usageSummaries.length)} summaries`,
+      trend: usage ? `${formatNumber(usage.rows.length)} rows` : "-",
       tone: totalTokens > 0 ? "positive" : "default",
     },
   ];
@@ -112,10 +109,8 @@ export default function Page() {
   const { session } = useConsoleSession();
   const [models, setModels] = useState<AiModelRecord[]>([]);
   const [grants, setGrants] = useState<AiModelGrantRecord[]>([]);
-  const [quotas, setQuotas] = useState<TenantQuotaRecord[]>([]);
-  const [usageSummaries, setUsageSummaries] = useState<
-    TenantUsageSummaryRecord[]
-  >([]);
+  const [quotas, setQuotas] = useState<TenancyQuotaResponse | null>(null);
+  const [usage, setUsage] = useState<TenancyUsageResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
@@ -128,14 +123,14 @@ export default function Page() {
       fetchAiModels(),
       fetchAiModelGrants(),
       fetchTenantModelQuotas(),
-      fetchTenantModelUsageSummaries(),
+      fetchTenantModelUsage(),
     ])
-      .then(([modelRecords, grantRecords, quotaRecords, usageRecords]) => {
+      .then(([modelRecords, grantRecords, quotaEnvelope, usageEnvelope]) => {
         if (!active) return;
         setModels(modelRecords);
         setGrants(grantRecords);
-        setQuotas(quotaRecords);
-        setUsageSummaries(usageRecords);
+        setQuotas(quotaEnvelope);
+        setUsage(usageEnvelope);
       })
       .catch(() => {
         if (active) setLoadError(true);
@@ -153,7 +148,7 @@ export default function Page() {
     () => new Map(models.map((model) => [model.id, model])),
     [models],
   );
-  const metrics = buildMetrics(models, grants, quotas, usageSummaries, loading);
+  const metrics = buildMetrics(models, grants, quotas, usage, loading);
 
   const modelRows = models.map<ModelRow>((model) => [
     model.modelName,
@@ -171,22 +166,26 @@ export default function Page() {
       String(grant.priority),
       grant.expiresAt ?? "Never",
     ]);
-  const quotaRows = quotas
-    .filter((quota) => quota.isActive)
-    .map<QuotaRow>((quota) => [
-      quota.quotaCycle,
-      `${formatBigIntText(quota.usedTokens)} / ${formatBigIntText(quota.periodTokens)}`,
-      quotaUsageRatio(quota),
-      formatNumber(quota.allowedModelIds.length),
-    ]);
-  const usageRows = usageSummaries.map<UsageRow>((summary) => [
-    summary.cycleMonth,
-    summary.applicationType
-      ? `${summary.applicationType}:${summary.applicationId ?? "-"}`
-      : summary.statType,
-    formatBigIntText(summary.totalTokens),
-    `${Number.isFinite(Number(summary.totalCostAmount)) ? Number(summary.totalCostAmount).toFixed(2) : "—"} ${summary.currency}`,
+  const quotaRows = (quotas?.pools ?? []).map<QuotaRow>((pool) => [
+    pool.metric,
+    `${formatNumber(pool.remaining)} / ${formatNumber(pool.limit)}`,
+    String(pool.priority),
+    quotas?.tier ?? "-",
   ]);
+  const usageRows = (usage?.rows ?? []).map<UsageRow>((row) => [
+    row.modelCode ?? "-",
+    row.providerCode ?? "-",
+    formatNumber(row.requests),
+    formatNumber(row.totalTokens),
+  ]);
+
+  const quotaEmptyMessage = quotas
+    ? {
+        covered: "No active quota pools.",
+        uncovered: "No plan published for this workspace yet.",
+        unavailable: "Could not reach the platform's entitlement service.",
+      }[quotas.status]
+    : "No quota data.";
 
   const statusSignals = [
     {
@@ -248,25 +247,31 @@ export default function Page() {
       </DashboardSplit>
 
       <DashboardSplit>
-        <PageSection title="配额状态" description="订阅周期内的模型资源池。">
+        <PageSection
+          title="配额状态"
+          description="来自平台侧的套餐配额资源池（非 Atlas 自身数据）。"
+        >
           <DataTable
             columns={quotaColumns}
             rows={quotaRows}
             rowKey={(row, index) => `${row[0]}-${index}`}
             loading={loading}
             loadingLabel="Loading quotas..."
-            empty="No active model quotas."
+            empty={quotaEmptyMessage}
           />
         </PageSection>
 
-        <PageSection title="用量汇总" description="按周期聚合的模型调用消耗。">
+        <PageSection
+          title="用量记录"
+          description="近期实际调用记录（Atlas 自身日志，非计费口径）。"
+        >
           <DataTable
             columns={usageColumns}
             rows={usageRows}
             rowKey={(row, index) => `${row[0]}-${row[1]}-${index}`}
             loading={loading}
             loadingLabel="Loading usage..."
-            empty="No model usage summary."
+            empty="No model usage recorded."
           />
         </PageSection>
       </DashboardSplit>

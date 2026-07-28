@@ -254,55 +254,58 @@ export type ModelApplicationType =
   | "api_client"
   | "internal_service";
 
+/** Tenant-facing grant view (`/api/model-platform/grants` → atlas `/tenancy/grants`). */
 export interface AiModelGrantRecord {
   id: string;
   modelId: string;
-  tenantId: string;
   applicationId: string | null;
   applicationType: ModelApplicationType | null;
   agentId: string | null;
+  taskProfile: string | null;
   priority: number;
-  reason: string | null;
   expiresAt: string | null;
   isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
 }
 
-export interface TenantQuotaRecord {
-  id: string;
-  tenantId: string;
-  subscriptionId: string | null;
-  quotaCycle: string;
-  periodStart: string | null;
-  periodEnd: string | null;
-  maxUsers: number | null;
-  maxAgents: number | null;
-  maxKnowledgeBases: number | null;
-  maxStorageGb: number | null;
-  periodTokens: string | null;
-  usedTokens: string;
-  allowedModelIds: string[];
-  allowCustomModel: boolean;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
+/**
+ * Entitlement envelope (`/api/model-platform/quotas` → atlas `/tenancy/quotas`,
+ * itself reading the platform's own C2 entitlement) — a single object, not a
+ * list. `status` distinguishes "resolved with no coverage" (no plan
+ * published yet) from "could not reach the platform".
+ */
+export interface TenancyQuotaResponse {
+  workspaceId: string;
+  tier: string | null;
+  bundled: boolean;
+  limits: Record<string, number>;
+  pools: Array<{
+    metric: string;
+    limit: number;
+    remaining: number;
+    priority: number;
+  }>;
+  status: "covered" | "uncovered" | "unavailable";
 }
 
-export interface TenantUsageSummaryRecord {
-  id: string;
-  tenantId: string;
-  applicationId: string | null;
-  applicationType: ModelApplicationType | null;
-  cycleMonth: string;
-  statType: string;
-  totalRequests: string;
-  successRequests: string;
-  failedRequests: string;
-  totalInputTokens: string;
-  totalOutputTokens: string;
-  totalTokens: string;
-  totalCostAmount: string;
-  currency: string;
-  updatedAt: string;
+/**
+ * Usage envelope (`/api/model-platform/usage` → atlas `/tenancy/usage`) —
+ * sourced from atlas's own request log, NOT a billing figure. The billing
+ * basis is the platform's `usage_events` summed over the subscription
+ * period.
+ */
+export interface TenancyUsageResponse {
+  scope: "workspace" | "tenant";
+  scopeId: string;
+  from: string;
+  to: string;
+  rows: Array<{
+    modelCode: string | null;
+    providerCode: string | null;
+    requests: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    errors: number;
+  }>;
+  source: "atlas.reqlog";
 }

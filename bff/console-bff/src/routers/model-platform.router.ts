@@ -28,16 +28,26 @@
  * `tenantId=` 参数是 atlas `/capability/*` 端点自己的既有契约,维持不变,
  * 与本次修正的 S2S token claim 是两回事。
  *
- * 2026-07-28(部分切换 `/tenancy/*`,TD-043 收尾一半):atlas 建了 `vxture-atlas`#70
- * 的"tenant self-service plane"(`/tenancy/models`+`/tenancy/usage`,scope 从 token
- * claim 解析、调用方声明不了),但只覆盖了本路由四个方法里的一个半——
- * `/tenancy/models` 内部已做 grant 过滤,直接替代原先"查 models 再查 grants 取交集"
- * 的两次往返;`/tenancy/usage` 语义和形状都对不上(atlas 自己的 reqlog、非计费口径、
- * 无 cycleMonth/cost/currency),不是 `usage-summaries` 的直接替代,需要另一轮设计,
- * 暂不动。**`listGrants`(授权明细:priority/expiresAt/applicationType)和
- * `listQuotas`(订阅周期配额:maxUsers/periodTokens/allowedModelIds)atlas 完全没建
- * 对应端点**——已在 `vxture-atlas#66` 追问是有意不建(该数据本该是平台自己的)还是
- * 遗漏,两个方法暂留在 `/capability/*`,等回复。
+ * 2026-07-28(全量切换 `/tenancy/*`,TD-043 收尾,回应 atlas v0.1.14):atlas 先后交付
+ * `vxture-atlas`#70(models+usage)和 #74(grants+quotas),补齐了本路由全部四个方法的
+ * `/tenancy/*` 对应物——这是 atlas 落地 `#52`(把 `/capability/*` 锁死为纯
+ * `mgmt:atlas`,拒收 `tool:atlas`)的前置条件,故这四个方法必须一次性全切完,不能留
+ * 半只脚在旧命名空间(否则 #52 一上线就是这一半 401)。四个端点里三个响应形状发生了
+ * 实质变化,不是纯换 URL:
+ * - `models`:`/tenancy/models` 内部已做 grant 过滤,原先"查 models 再查 grants 取
+ *   交集"的两次往返收敛成一次(已在 PR#174 切完)。
+ * - `grants`:`/tenancy/grants` 不再投影 `reason`(运营内部理由,不该出现在租户面)和
+ *   `tenantId`(scope 已经是 token 决定的,不需要调用方再报一次)。
+ * - `quotas`:**不再是数组**,改成单个信封 `TenancyQuotaResponse`(`tier`/`bundled`/
+ *   `limits`/`pools[]`/`status`)。atlas 读的是平台自己的 C2 entitlement,不是 atlas
+ *   拆库遗留的恒空 stub(`tenant_subscription_quotas`,TD-005)——`status` 三分
+ *   `covered`/`uncovered`/`unavailable`,把"没订阅套餐"和"平台连不上"区分开,旧 stub
+ *   两种情况都只能返回 `[]`,前端无从区分。
+ * - `usage-summaries` → `usage`:**不再是计费口径**,改成单个信封
+ *   `TenancyUsageResponse`(`rows[]` 按 model/provider 聚合 request/token 计数),数据
+ *   来自 atlas 自己的 `reqlog`("实际跑了什么"),不是平台的 `usage_events`(计费依据)。
+ *   没有 `cycleMonth`/`totalCostAmount`/`currency`——这些字段在新模型里不存在,不是
+ *   传漏了。
  */
 
 import {
@@ -59,8 +69,8 @@ import type {
   AiModelGrantRecord,
   AiModelRecord,
   RequestContext,
-  TenantQuotaRecord,
-  TenantUsageSummaryRecord,
+  TenancyQuotaResponse,
+  TenancyUsageResponse,
 } from "../types/console.types";
 
 /** Exchange audience for atlas's capability plane (product_100 code). */
@@ -120,66 +130,51 @@ export class ModelPlatformRouter {
     );
   }
 
+  /** `/tenancy/grants` scopes to this workspace's own token — no caller-supplied filters accepted. */
   @Get("grants")
   async listGrants(
     @Req() req: Request & RequestContext,
-    @Query("modelId") modelId?: string,
-    @Query("applicationId") applicationId?: string,
-    @Query("applicationType") applicationType?: string,
   ): Promise<AiModelGrantRecord[]> {
     const tenantId = requireTenantId(req);
     const workspaceId = requireWorkspaceId(req);
-    const params = new URLSearchParams({ tenantId });
-    if (modelId) params.set("modelId", modelId);
-    if (applicationId) params.set("applicationId", applicationId);
-    if (applicationType) params.set("applicationType", applicationType);
-
     return this.request<AiModelGrantRecord[]>(
       workspaceId,
       tenantId,
-      `/capability/grants?${params.toString()}`,
+      "/tenancy/grants",
     );
   }
 
+  /** Single entitlement envelope, not a list — see the `status` field for coverage vs reachability. */
   @Get("quotas")
-  async listQuotas(
+  async quotas(
     @Req() req: Request & RequestContext,
-    @Query("includeExpired") includeExpired?: string,
-  ): Promise<TenantQuotaRecord[]> {
+  ): Promise<TenancyQuotaResponse> {
     const tenantId = requireTenantId(req);
     const workspaceId = requireWorkspaceId(req);
-    const params = new URLSearchParams({ tenantId });
-    if (includeExpired !== undefined) {
-      params.set("includeExpired", includeExpired);
-    }
-
-    return this.request<TenantQuotaRecord[]>(
+    return this.request<TenancyQuotaResponse>(
       workspaceId,
       tenantId,
-      `/capability/quotas?${params.toString()}`,
+      "/tenancy/quotas",
     );
   }
 
-  @Get("usage-summaries")
-  async listUsageSummaries(
+  /** Atlas's own request-log usage, not a billing figure — see `TenancyUsageResponse`. */
+  @Get("usage")
+  async usage(
     @Req() req: Request & RequestContext,
-    @Query("applicationId") applicationId?: string,
-    @Query("applicationType") applicationType?: string,
-    @Query("cycleMonth") cycleMonth?: string,
-    @Query("statType") statType?: string,
-  ): Promise<TenantUsageSummaryRecord[]> {
+    @Query("scope") scope?: string,
+    @Query("days") days?: string,
+  ): Promise<TenancyUsageResponse> {
     const tenantId = requireTenantId(req);
     const workspaceId = requireWorkspaceId(req);
-    const params = new URLSearchParams({ tenantId });
-    if (applicationId) params.set("applicationId", applicationId);
-    if (applicationType) params.set("applicationType", applicationType);
-    if (cycleMonth) params.set("cycleMonth", cycleMonth);
-    if (statType) params.set("statType", statType);
-
-    return this.request<TenantUsageSummaryRecord[]>(
+    const params = new URLSearchParams();
+    if (scope) params.set("scope", scope);
+    if (days) params.set("days", days);
+    const query = params.size ? `?${params.toString()}` : "";
+    return this.request<TenancyUsageResponse>(
       workspaceId,
       tenantId,
-      `/capability/usage-summaries?${params.toString()}`,
+      `/tenancy/usage${query}`,
     );
   }
 }

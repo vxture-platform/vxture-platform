@@ -13,11 +13,11 @@ import type {
   MemberRecord,
   OrganizationProfileUpdate,
   SessionSnapshot,
+  TenancyQuotaResponse,
+  TenancyUsageResponse,
   TenantContext,
-  TenantQuotaRecord,
   TenantPermissionRecord,
   TenantRoleRecord,
-  TenantUsageSummaryRecord,
 } from "@/entities/console";
 
 // ── 订阅与账单 DTO（与 BFF 响应结构对齐）────────────────────────────────────
@@ -204,54 +204,41 @@ export async function fetchAiModels(): Promise<AiModelRecord[]> {
   return readJson<AiModelRecord[]>("/api/model-platform/models", []);
 }
 
-export async function fetchAiModelGrants(
-  filters: {
-    modelId?: string;
-    applicationId?: string;
-    applicationType?: "agent" | "workflow" | "api_client" | "internal_service";
-  } = {},
-): Promise<AiModelGrantRecord[]> {
-  const params = new URLSearchParams();
-  if (filters.modelId) params.set("modelId", filters.modelId);
-  if (filters.applicationId) params.set("applicationId", filters.applicationId);
-  if (filters.applicationType) {
-    params.set("applicationType", filters.applicationType);
-  }
-
-  return readJson<AiModelGrantRecord[]>(
-    `/api/model-platform/grants${params.size ? `?${params.toString()}` : ""}`,
-    [],
-  );
+/** `/tenancy/grants` scopes to this workspace's own token — no caller-supplied filters accepted. */
+export async function fetchAiModelGrants(): Promise<AiModelGrantRecord[]> {
+  return readJson<AiModelGrantRecord[]>("/api/model-platform/grants", []);
 }
 
-export async function fetchTenantModelQuotas(
-  includeExpired = false,
-): Promise<TenantQuotaRecord[]> {
-  return readJson<TenantQuotaRecord[]>(
-    `/api/model-platform/quotas?includeExpired=${includeExpired ? "true" : "false"}`,
-    [],
-  );
+/** Single entitlement envelope — see `status` for coverage vs unreachable. */
+export async function fetchTenantModelQuotas(): Promise<TenancyQuotaResponse> {
+  return readJson<TenancyQuotaResponse>("/api/model-platform/quotas", {
+    workspaceId: "",
+    tier: null,
+    bundled: false,
+    limits: {},
+    pools: [],
+    status: "unavailable",
+  });
 }
 
-export async function fetchTenantModelUsageSummaries(
-  filters: {
-    applicationId?: string;
-    applicationType?: "agent" | "workflow" | "api_client" | "internal_service";
-    cycleMonth?: string;
-    statType?: string;
-  } = {},
-): Promise<TenantUsageSummaryRecord[]> {
+/** Atlas's own request-log usage, not a billing figure. */
+export async function fetchTenantModelUsage(
+  filters: { scope?: "workspace" | "tenant"; days?: number } = {},
+): Promise<TenancyUsageResponse> {
   const params = new URLSearchParams();
-  if (filters.applicationId) params.set("applicationId", filters.applicationId);
-  if (filters.applicationType) {
-    params.set("applicationType", filters.applicationType);
-  }
-  if (filters.cycleMonth) params.set("cycleMonth", filters.cycleMonth);
-  if (filters.statType) params.set("statType", filters.statType);
+  if (filters.scope) params.set("scope", filters.scope);
+  if (filters.days) params.set("days", String(filters.days));
 
-  return readJson<TenantUsageSummaryRecord[]>(
-    `/api/model-platform/usage-summaries${params.size ? `?${params.toString()}` : ""}`,
-    [],
+  return readJson<TenancyUsageResponse>(
+    `/api/model-platform/usage${params.size ? `?${params.toString()}` : ""}`,
+    {
+      scope: filters.scope ?? "workspace",
+      scopeId: "",
+      from: "",
+      to: "",
+      rows: [],
+      source: "atlas.reqlog",
+    },
   );
 }
 

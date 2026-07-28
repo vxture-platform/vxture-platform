@@ -64,12 +64,10 @@ export function ConsoleAppShell({ children }: { children: ReactNode }) {
 
     const loadUsage = async () => {
       try {
-        const quotas = await fetchTenantModelQuotas(false);
-        const q = quotas[0];
-        if (alive && q) {
-          const total = Number(q.periodTokens) || 100;
-          const used = Number(q.usedTokens) || 0;
-          setUsage({ used, total });
+        const quotas = await fetchTenantModelQuotas();
+        const pool = quotas.pools[0];
+        if (alive && pool) {
+          setUsage({ used: pool.limit - pool.remaining, total: pool.limit });
         }
       } catch {
         /* fallback 0/100 */
