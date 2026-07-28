@@ -177,6 +177,27 @@ PR 评审比对项，不设新机检）。实例教训：vxtpl 在 `@vxture/shar
 （防浮动 ref 跑到旧 seed）+ `environment: production` 审批门 + tailnet + `DEPLOY_HOST_TAILNET`。
 常规部署链**不跑 migration/seed**，DB 结构/数据变更是独立授权动作。
 
+**已批准维护操作（周期性 DB 维护，第三类，2026-07-28 起，回应 `vxture-atlas` liaison platform#164）**：
+db-init 覆盖"结构设计变更"（每次人工 `confirm`+审批），常规部署链覆盖"应用行为"，两者之间还有
+第三类——**结构不变、幂等、按时钟而非按人的主动性触发**的维护操作（分区滚动、过期分区清理、
+vacuum/analyze）。强套 db-init 的"每次人工审批"，实际后果是"半年一次的手动提醒"：忘记即静默
+失效（分区滚动没跟上 → 写入落入 `DEFAULT` 分区，不报错，只是保留策略悄悄失效）——这正是
+`vxture-atlas`（`reqlog` 月分区）实测撞到的情况。
+
+- **批准粒度下沉到操作集合，而非每次执行**：维护函数作为具名幂等 SQL 函数落
+  `deploy/database/ddl/incr/*`（仍在 DDL 单一权威范围内），**批准发生在合入 main 的 PR review**——
+  这一步就是 db-init 审批的等价物；一旦合入，函数即进入白名单，后续执行不再需要人逐次按审批键。
+- **执行通道 = `db-maintenance.yml`**（复用 db-init 已有的 tailnet + `DEPLOY_HOST_TAILNET` 连接机制，
+  不新开通道）：定时触发（cron，按维护周期，如月度）+ 支持 `workflow_dispatch` 手动补跑；
+  **只能调用白名单里的具名函数**（workflow 输入是函数名枚举，不接受任意 SQL 文本或自由参数）——
+  这是与 db-init 的关键区别：db-init 执行"这次人批准的这段 SQL"，db-maintenance 执行"早就批准过的、
+  参数固定的函数"。
+- **必须留痕**：每次执行写审计记录（同 db-init 审计模式：谁/何时/跑了哪个函数/结果），失败必须
+  可观测（如 `vxture-atlas` TD-018 的 `/readyz` 剩余 runway 探针模式，让维护节奏靠信号驱动而非记忆）。
+- **适用边界**：仅限结构不变的幂等运维（分区滚动/过期清理/vacuum/analyze 类）；任何改表结构、
+  加列、改约束的操作，即使"看起来常规"，仍必须走 db-init——结构设计变更的审批门不能被这条新
+  通道绕过。
+
 ---
 
 ## 7. 数据层（若仓库自带独立 DB）
@@ -267,6 +288,8 @@ required status check（发现新漏洞即 fail 拦合并）。
 - [ ] **每部署目标一个 Environment**，各带 `DEPLOY_*` 且 **`DEPLOY_DIR` 精确**；生产/产品环境 **Required reviewers 已配**。
 - [ ] **迁仓已在新仓重建全部 secrets**（不继承）；ACR `namespace` 从 `vars` 取（非硬编码）；迁移前 SSH 核实目标主机 stack_root/env/ACR 登录在位。
 - [ ] 生产 DB 走 `db-init` + `expected_sha` + 审批；常规部署链不跑 migration/seed。
+- [ ] （有分区表等周期性维护需求）走 `db-maintenance.yml` 白名单函数，不是裸等人工提醒；
+      失败/临近过期需可观测（如 `/readyz` 报剩余 runway）。
 - [ ] （有 DB）DDL 单一权威 + @shared 值域 + 最小权限/列锁 + 活库增量幂等 + 护栏。
 - [ ] 部署 profile 选对（domestic ACR+tailnet / overseas GHCR+公网）。
 - [ ] **仓库骨架 + `docs/` 编号分类**对齐模板。

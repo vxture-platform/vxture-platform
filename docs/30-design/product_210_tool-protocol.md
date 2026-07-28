@@ -1,6 +1,6 @@
 # L0 工具协议规范:产品间直连的身份·授权·计量标准(Tool Protocol)(product_210)
 
-> 版本:**v1.1** · 日期:2026-07-07(v1.0 定稿) / **2026-07-27 补 §11** · 状态:**已定稿**(决策点 D1–D3 已于 2026-07-07 owner 拍板,见 §9;**实施逐项授权**,切分见 §8;**T1/T2 已实施(2026-07-12)**,T3 未实施;§11 治理检查单为新增,不改变已定稿的 §1–§10)
+> 版本:**v1.2** · 日期:2026-07-07(v1.0 定稿) / 2026-07-27 补 §11 / **2026-07-28 补 §4.1a**(`endpoint` 字段,回应 `vxture-atlas` liaison platform#159) · 状态:**已定稿**(决策点 D1–D3 已于 2026-07-07 owner 拍板,见 §9;**实施逐项授权**,切分见 §8;**T1/T2 已实施(2026-07-12)**,T3 未实施;§11 治理检查单、§4.1a `endpoint` 字段均为新增,不改变已定稿的 §1–§10 核心决策)
 > 文档族:产品架构族 `product_{NNN}`,本文 = **210**(细化标准位);族路由见 [`product_100_matrix.md`](./product_100_matrix.md) §0 头部
 > 定位:**产品 ↔ 产品直连调用的平台技术标准**——工具形态(MCP 风格)、S2S 身份透传(token exchange)、grant ∧ entitlement 求值时点、审计与计量归属、错误与版本演进。补齐 [`product_200_integration.md`](./product_200_integration.md) 三通道之外的"第四面":C1/C2/C3 管"产品对平台",本文管"产品对产品"。
 > 上游:[`product_110_sharing-isolation.md`](./product_110_sharing-isolation.md) §7(唯一直连通道,已固化)、product_200 §2.2/§5(登记项)、[`identity-platform-idp.md`](./identity/070-idp.md)(token 设施:RS256/JWKS/`/oidc/token`)、ADR-11/ADR-12、[`data_sharing_100_architecture.md`](./data_sharing_100_architecture.md)(可见集)。
@@ -77,6 +77,7 @@ S2S access token = **RS256 JWT**(header 带 `kid`,与用户级同一 JWKS/轮换
   "name": "arda.query_dataset", // 命名空间 {product_code}.{tool_name},全局唯一
   "title": "查询数据集",
   "description": "按可见集内的 dataset ref 执行只读查询",
+  "endpoint": { "method": "POST", "path": "/v1/query_dataset" }, // 实际调用路径,§4.1a
   "input_schema": {
     /* JSON Schema draft 2020-12 */
   },
@@ -90,13 +91,27 @@ S2S access token = **RS256 JWT**(header 带 `kid`,与用户级同一 JWKS/轮换
 }
 ```
 
+#### 4.1a `endpoint` 字段(2026-07-28 新增,回应 `vxture-atlas` liaison platform#159)
+
+此前的描述符只说"这个工具存在、接受什么、怎么计量",不说"POST 到哪"——消费方能发现能力,却发现不了
+可达性。`vxture-atlas`#61(TD-013)把 `model-platform/*` 整体改名到 `/v1/*`+`/capability/*` 时,轮询
+`GET /.well-known/vxture-tools` 的消费方会看到**字节级不变**的响应,直到下一次真实调用才 404——描述符
+全程"准确",但唯一变了的那件事(路径)恰好是这个 shape 表达不了的。
+
+- **`path` 相对 provider 自己的 base URL**(消费方已从 config/registry 拿到),**不得成为第二处存放主机名
+  的地方**——环境耦合仍然只经由 provider 的部署配置,不经由描述符。
+- 与既有 `deprecated` 字段天然配对:provider 改路径时可以**新旧描述符并存**过渡(旧的
+  `endpoint.path` 保留、标 `deprecated: true`;新的作为一个新条目并列),消费方按 §4.3 的版本纪律
+  平滑迁移,不需要任何带外通知——这正是本字段存在的理由。
+- 按 §7 的演进规则("新增字段向后兼容")是纯新增字段,老消费方忽略它不受影响,可向后兼容发布。
+
 ### 4.2 发现(无中心注册表)
 
 provider 在自己的服务面暴露清单端点 `GET /.well-known/vxture-tools`(**tailnet 面,S2S 绝不公网**,#89 裁定;区别于边缘 `/.well-known/openid-configuration` 仅供浏览器)——S2S token 鉴权,返回工具描述符数组 + `protocol_version`。**平台不建中心工具注册表**——"平台知道哪里有数据"归 Arda 目录、"技能引用哪些工具"归 Runa 技能定义,各自以 `{product_code}.{tool_name}` 字符串松引用,调用时按 provider **在平台 tailnet 内网**直连(类 2 产品 S2S 一律 tailnet、绝不公网,权威 = product_230 §1;`arda.vxture.com` 等域名仅是缺省信号,判类以是否在 tailnet 为准)。
 
 ### 4.3 版本纪律
 
-对齐 Runa 版本 pinning(product_110 §6.7):技能/agent 引用工具**锁定至 major**;provider 弃用工具先置 `deprecated: true` 并保留 ≥1 个发布周期;移除或破坏性变更必升 major 且旧 major 并存过渡。
+对齐 Runa 版本 pinning(product_110 §6.7):技能/agent 引用工具**锁定至 major**;provider 弃用工具先置 `deprecated: true` 并保留 ≥1 个发布周期;移除或破坏性变更必升 major 且旧 major 并存过渡。**路径迁移(改 `endpoint.path`,§4.1a)按同一纪律走**:旧描述符原地保留、置 `deprecated: true`,新路径作为新条目并列发布,双方并存至少一个周期——消费方靠轮询清单端点即可感知迁移,不需要额外的书信广播。
 
 ## 5. 求值时点与义务分配(三方职责表)
 
@@ -150,15 +165,15 @@ provider 在自己的服务面暴露清单端点 `GET /.well-known/vxture-tools`
 **适用范围**:任何 L1 provider(Atlas / Ontos / Runa 分发面)新增工具描述符(新的 `{product_code}.{tool_name}`)
 或对既有工具描述符做破坏性变更(§4.3 定义的"必升 major"级别变更)时,**发布前**必须逐项确认:
 
-| #   | 检查项             | 通过标准                                                                                                                                                                                                                                                           |
-| --- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | 鉴权路径           | 仍且只走本协议 S2S token exchange(§3);不为任何消费方开辟专属凭证形式或旁路鉴权                                                                                                                                                                                     |
-| 2   | 错误语义           | 复用本协议 §7 统一错误封套与语义区分(`invalid_token`/`access_denied`/`quota_exhausted`);限流与配额耗尽必须在 `error` 码上可区分(消费方需要据此决定退避重试还是暂停待续订),不得自造一套 provider 专属错误码                                                         |
-| 3   | 计量归属           | 仍由本 provider 作为执行点统一上报(§6"谁执行谁上报"),消费方不重复计量同一用量;AI 推理用量仍归 Atlas 单一入口                                                                                                                                                       |
-| 4   | workspace 归属原则 | 批处理/资产加工类调用 = 归资产归属方;在线交互类调用 = 归触发请求方;新工具落在哪一类需在描述符/设计稿里明确写出,不留默认假设                                                                                                                                        |
-| 5   | 已知消费方广播     | 设计定稿前已征询全部**已知**消费方(不止最先提需求的一家)——当前已知集合:karda、arda、terra(同构 L2)、raven/anlan/forge/xuanzhen(L3,尚未接入但按 `product_240` §3 天然享有权利);契约形状若明显只服务单一消费方场景,需在设计稿里说明为何其余消费方不适用,而不是未征询 |
-| 6   | 能力发现           | 新工具已在 provider 自己的 `GET /.well-known/vxture-tools` 清单端点(§4.2)登记(`version`/`deprecated`/`metering`/`authz` 齐全);消费方应能通过查询该端点得知可用性,不依赖书信告知                                                                                    |
-| 7   | 跨仓事实回填       | 若本次变更改变了某个"稳态事实"(如端点已实现/已部署/地址变化),已同批回填对应登记表(如 `13-infra-allocation-registry.md`),不仅停留在设计稿或书信里                                                                                                                   |
+| #   | 检查项             | 通过标准                                                                                                                                                                                                                                                                |
+| --- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 鉴权路径           | 仍且只走本协议 S2S token exchange(§3);不为任何消费方开辟专属凭证形式或旁路鉴权                                                                                                                                                                                          |
+| 2   | 错误语义           | 复用本协议 §7 统一错误封套与语义区分(`invalid_token`/`access_denied`/`quota_exhausted`);限流与配额耗尽必须在 `error` 码上可区分(消费方需要据此决定退避重试还是暂停待续订),不得自造一套 provider 专属错误码                                                              |
+| 3   | 计量归属           | 仍由本 provider 作为执行点统一上报(§6"谁执行谁上报"),消费方不重复计量同一用量;AI 推理用量仍归 Atlas 单一入口                                                                                                                                                            |
+| 4   | workspace 归属原则 | 批处理/资产加工类调用 = 归资产归属方;在线交互类调用 = 归触发请求方;新工具落在哪一类需在描述符/设计稿里明确写出,不留默认假设                                                                                                                                             |
+| 5   | 已知消费方广播     | 设计定稿前已征询全部**已知**消费方(不止最先提需求的一家)——当前已知集合:karda、arda、terra(同构 L2)、raven/anlan/forge/xuanzhen(L3,尚未接入但按 `product_240` §3 天然享有权利);契约形状若明显只服务单一消费方场景,需在设计稿里说明为何其余消费方不适用,而不是未征询      |
+| 6   | 能力发现           | 新工具已在 provider 自己的 `GET /.well-known/vxture-tools` 清单端点(§4.2)登记(`endpoint`/`version`/`deprecated`/`metering`/`authz` 齐全);路径变更(含改名/迁移)必须按 §4.3 双描述符并存,不得只改路径不改描述符;消费方应能通过查询该端点得知可用性与可达性,不依赖书信告知 |
+| 7   | 跨仓事实回填       | 若本次变更改变了某个"稳态事实"(如端点已实现/已部署/地址变化),已同批回填对应登记表(如 `13-infra-allocation-registry.md`),不仅停留在设计稿或书信里                                                                                                                        |
 
 本检查单由 **platform 维护**(因为要对"所有 L1 provider 一视同仁"负责,不能让某个 provider 自行决定
 标准);**由 provider 在自己的设计评审中自查**(platform 不做门禁审批,不违背"平台只出规范与凭证,
