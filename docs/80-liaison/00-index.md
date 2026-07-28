@@ -17,19 +17,31 @@
 
 ### vxture-atlas
 
-| Issue                                                   | 内容概要                                                                                                                             | 状态                                                         |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| [#34](https://github.com/vxture/vxture-atlas/issues/34) | 回复 karda 140 函——token-exchange 已实现、host 已分配两个前提已过期                                                                  | **Closed**（`254092f`，回函=`vxture-karda#70`）              |
-| [#35](https://github.com/vxture/vxture-atlas/issues/35) | A2.3 部署亲和结论（host 分配已解除阻塞）                                                                                             | **Closed**（结论=同机 worker-02）                            |
-| [#36](https://github.com/vxture/vxture-atlas/issues/36) | A3.3 rerank P95 延迟基准压测 + 回函                                                                                                  | Open                                                         |
-| [#37](https://github.com/vxture/vxture-atlas/issues/37) | 实现 A1 `POST /v1/embed`                                                                                                             | Open                                                         |
-| [#38](https://github.com/vxture/vxture-atlas/issues/38) | 实现 A2 `POST /v1/parse`                                                                                                             | Open                                                         |
-| [#39](https://github.com/vxture/vxture-atlas/issues/39) | 实现 A3 `POST /v1/rerank`                                                                                                            | Open                                                         |
-| [#40](https://github.com/vxture/vxture-atlas/issues/40) | URL 路径统一：`/model-platform/chat` → `/v1/chat`                                                                                    | **Closed**（本仓对应侧已跟进：PR#157/158 改代理路径）        |
-| [#41](https://github.com/vxture/vxture-atlas/issues/41) | 租户过滤的"可选模型"清单接口（karda 用户选择器依赖）                                                                                 | **Closed**（`GET /model-platform/models?tenantId=`）         |
-| [#42](https://github.com/vxture/vxture-atlas/issues/42) | 任务画像路由（`model_policy`，业务自动适配依赖）                                                                                     | **Closed**（`taskProfile` + `model_grants.task_profile` 列） |
-| [#43](https://github.com/vxture/vxture-atlas/issues/43) | 能力发现登记 `.well-known/vxture-tools`                                                                                              | **Closed**（`service/src/discovery/`）                       |
-| [#66](https://github.com/vxture/vxture-atlas/issues/66) | 信息同步：platform→atlas S2S 已上线（console-bff,`act.sub="console"` 非产品码）+ atlas→platform 方向共享密钥捷径可用（同 arda 先例） | Open                                                         |
+| Issue                                                   | 内容概要                                                                                                                                                       | 状态                                                          |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| [#34](https://github.com/vxture/vxture-atlas/issues/34) | 回复 karda 140 函——token-exchange 已实现、host 已分配两个前提已过期                                                                                            | **Closed**（`254092f`，回函=`vxture-karda#70`）               |
+| [#35](https://github.com/vxture/vxture-atlas/issues/35) | A2.3 部署亲和结论（host 分配已解除阻塞）                                                                                                                       | **Closed**（结论=同机 worker-02）                             |
+| [#36](https://github.com/vxture/vxture-atlas/issues/36) | A3.3 rerank P95 延迟基准压测 + 回函                                                                                                                            | Open                                                          |
+| [#37](https://github.com/vxture/vxture-atlas/issues/37) | 实现 A1 `POST /v1/embed`                                                                                                                                       | Open                                                          |
+| [#38](https://github.com/vxture/vxture-atlas/issues/38) | 实现 A2 `POST /v1/parse`                                                                                                                                       | Open                                                          |
+| [#39](https://github.com/vxture/vxture-atlas/issues/39) | 实现 A3 `POST /v1/rerank`                                                                                                                                      | Open                                                          |
+| [#40](https://github.com/vxture/vxture-atlas/issues/40) | URL 路径统一：`/model-platform/chat` → `/v1/chat`                                                                                                              | **Closed**（本仓对应侧已跟进：PR#157/158 改代理路径）         |
+| [#41](https://github.com/vxture/vxture-atlas/issues/41) | 租户过滤的"可选模型"清单接口（karda 用户选择器依赖）                                                                                                           | **Closed**（`GET /model-platform/models?tenantId=`）          |
+| [#42](https://github.com/vxture/vxture-atlas/issues/42) | 任务画像路由（`model_policy`，业务自动适配依赖）                                                                                                               | **Closed**（`taskProfile` + `model_grants.task_profile` 列）  |
+| [#43](https://github.com/vxture/vxture-atlas/issues/43) | 能力发现登记 `.well-known/vxture-tools`                                                                                                                        | **Closed**（`service/src/discovery/`）                        |
+| [#52](https://github.com/vxture/vxture-atlas/issues/52) | M-1 operator-token 校验落地到 admin 路由（product_250 mgmt-plane 契约 atlas 半，本仓平台半=PR#151）                                                            | Open（排在 `#66` 端到端确认之后，见下）                       |
+| [#66](https://github.com/vxture/vxture-atlas/issues/66) | 主线程：platform→atlas S2S 全量上线（console-bff 四方法已切 `/tenancy/*`，`act.sub="console"` 非产品码）+ atlas→platform C2/C3 已双向打通 + 命名空间冲突已解决 | Open（等 atlas v0.1.15 真实端到端验证回报，之后才推进 `#52`） |
+
+### vxture-platform（atlas 反向开给本仓的 issue）
+
+| Issue                                                        | 内容概要                                                                 | 状态                                                                                                  |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| [#148](https://github.com/vxture/vxture-platform/issues/148) | Atlas 管理界面缺口（provider-keys/taskProfile UI）+ Atlas 管理面归属讨论 | Open（架构问题已由 `product_250` M-1..M-5 回答；UI 缺口排入 atlas admin-module 批次，待 atlas `#52`） |
+| [#152](https://github.com/vxture/vxture-platform/issues/152) | modelCode 前缀约定与真实上游 API 冲突                                    | Open（标准澄清已发：PR#176，`config.upstreamModel` 字段，atlas 侧待排期实现）                         |
+| [#159](https://github.com/vxture/vxture-platform/issues/159) | product_210 ToolDescriptor 缺 endpoint 字段                              | Open（已修：PR#173，`§4.1a`；atlas 已镜像进 `discovery.types.ts`）                                    |
+| [#164](https://github.com/vxture/vxture-platform/issues/164) | 治理标准缺周期性 DB 维护类别                                             | Open（已修：PR#173，新增 `db-maintenance.yml` 第三类）                                                |
+| [#167](https://github.com/vxture/vxture-platform/issues/167) | 安全：五仓 ruleset 均对 admin 开无条件 bypass                            | Open（本仓已修：PR#172 + live ruleset 确认；karda/arda/template 三仓仍待 owner）                      |
+| [#170](https://github.com/vxture/vxture-platform/issues/170) | S2S token 缺 tenant_id claim（personal 类租户无租户身份）                | **Closed**（PR#171 随合并自动关闭）                                                                   |
 
 ### vxture-karda
 
