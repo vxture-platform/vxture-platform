@@ -739,6 +739,10 @@ export async function seedCatalog(client) {
     website: process.env.WEBSITE_BASE_URL || "http://localhost:3000",
     console: process.env.CONSOLE_BASE_URL || "http://localhost:3001",
     admin: process.env.ADMIN_BASE_URL || "http://localhost:3002",
+    // Capability Console (OSS-side operator shell, product_250 M-4). The prod
+    // hostname is repo-external by policy (hardening: placeholder-only) and
+    // arrives via CAPCONSOLE_BASE_URL runtime env.
+    capconsole: process.env.CAPCONSOLE_BASE_URL || "http://localhost:3050",
     // ruyin = NEW client-side product surface (ruyin.vxture.com); the legacy
     // cross-domain RP at ruyin.ai is `umbra` (product_300 §2, U line).
     ruyin: process.env.RUYIN_BASE_URL || "http://localhost:3080",
@@ -805,6 +809,17 @@ export async function seedCatalog(client) {
       displayName: "Vxture Admin",
       realm: "workforce",
       redirectUris: [`${B.admin}/auth/callback`],
+      scopes: ["openid", "profile", "admin"],
+    },
+    // Capability Console shell — second workforce RP (product_250 M-4). Same
+    // operator claims surface as admin; its BFF additionally runs the
+    // operator-OBO exchange (M-1) for mounted provider modules.
+    {
+      clientId: "capconsole",
+      name: "Vxture Capability Console",
+      displayName: "Vxture Capability Console",
+      realm: "workforce",
+      redirectUris: [`${B.capconsole}/auth/callback`],
       scopes: ["openid", "profile", "admin"],
     },
     // umbra — the cross-domain RP at ruyin.ai (ex-`ruyin`; renamed in place by the

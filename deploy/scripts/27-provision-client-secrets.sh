@@ -47,7 +47,7 @@ AUTH_ENV_FILE="${AUTH_ENV_FILE:-$RUNTIME_DIR/.env.auth-bff}"
 SECRETS_DIR="${SECRETS_DIR:-$RUNTIME_DIR/secrets}"
 FORCE="${FORCE_PROVISION_SECRETS:-0}"
 # LOCAL RPs: plaintext → .env.<client>-bff on this box.
-CLIENTS_ALL="website console admin"
+CLIENTS_ALL="website console admin capconsole"
 # REMOTE RPs: the RP lives off-box (umbra = umbra app-bff on worker-04). Plaintext
 # has no local RP env → 0600 file, path printed; the operator transports it
 # (umbra → worker-04 env). NOTE: umbra currently reuses the legacy ruyin secret

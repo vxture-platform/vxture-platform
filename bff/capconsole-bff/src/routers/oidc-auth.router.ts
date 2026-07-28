@@ -1,0 +1,253 @@
+/**
+ * oidc-auth.router.ts - Capability Console (workforce) RP auth endpoints
+ * @package @vxture/bff-capconsole
+ * @description
+ *   /auth/* RP endpoints: login → IdP authorize (workforce realm), callback →
+ *   token exchange + RP session, session lookup, local logout. Tokens stay
+ *   server-side; the browser holds only the opaque __Host-vx_rp_session cookie.
+ *
+ *   /auth/check is the nginx auth_request gate (product_250 M-4 hardening:
+ *   "any path, no content unauthenticated"). It resolves the RP session and,
+ *   when the original URI targets a mounted provider module (/atlas/*, /runa/*),
+ *   mints an operator-OBO management token (M-1) and returns it in
+ *   X-Operator-Token so nginx injects it as the Authorization header on the
+ *   proxied module request. See docs/20-specs/000-platform/capconsole/
+ *   10-shell-mount-contract.md.
+ */
+import {
+  Controller,
+  Get,
+  Headers,
+  Inject,
+  Post,
+  Query,
+  Req,
+  Res,
+  UnauthorizedException,
+} from "@nestjs/common";
+import type { Request, Response } from "express";
+import {
+  generatePkce,
+  randomToken,
+  safeReturnTo,
+  rpSessionCookieName,
+  type OidcRpClient,
+  type RpAuthService,
+  type RpSession,
+  type RpSessionStore,
+} from "@vxture/core-oidc-rp";
+import type { Redis } from "ioredis";
+import { OperatorExchangeService } from "../auth/operator-exchange.service";
+import {
+  RP_AUTH_SERVICE,
+  RP_OIDC_CLIENT,
+  RP_REDIS,
+  RP_RUNTIME,
+  RP_SESSION_STORE,
+  type RpRuntime,
+} from "../oidc/oidc-rp.tokens";
+
+interface AuthReq {
+  codeVerifier: string;
+  nonce: string;
+  returnTo: string;
+  prompt?: string;
+}
+
+/**
+ * Mount-path prefix → provider audience (product_code). The mount points are
+ * contract-fixed (10-shell-mount-contract.md §2); a new L1 module = one more
+ * entry here + its nginx location block.
+ */
+const MODULE_AUD_BY_PREFIX: Record<string, string> = {
+  "/atlas": "atlas",
+  "/runa": "runa",
+};
+
+export function moduleAudFor(originalUri: string | undefined): string | null {
+  if (!originalUri) return null;
+  const path = originalUri.split("?")[0] ?? "";
+  for (const [prefix, aud] of Object.entries(MODULE_AUD_BY_PREFIX)) {
+    if (path === prefix || path.startsWith(`${prefix}/`)) return aud;
+  }
+  return null;
+}
+
+@Controller("auth")
+export class OidcAuthRouter {
+  constructor(
+    @Inject(RP_OIDC_CLIENT) private readonly client: OidcRpClient,
+    @Inject(RP_SESSION_STORE) private readonly store: RpSessionStore,
+    @Inject(RP_AUTH_SERVICE) private readonly auth: RpAuthService,
+    @Inject(RP_REDIS) private readonly redis: Redis,
+    @Inject(RP_RUNTIME) private readonly rt: RpRuntime,
+    @Inject(OperatorExchangeService)
+    private readonly exchange: OperatorExchangeService,
+  ) {}
+
+  private authReqKey(state: string): string {
+    return `${this.rt.keyPrefix}rp:capconsole:authreq:${state}`;
+  }
+
+  /** __Host- in prod https; bare name over local http so the browser stores it. */
+  private get cookieName(): string {
+    return rpSessionCookieName(this.rt.cookieSecure);
+  }
+
+  /** Begin login: stash PKCE/nonce/returnTo, redirect to the IdP authorize page. */
+  @Get("login")
+  async login(
+    @Query("returnTo") returnTo: string | undefined,
+    @Query("prompt") prompt: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { verifier, challenge } = generatePkce();
+    const state = randomToken();
+    const nonce = randomToken();
+    const dest = safeReturnTo(
+      returnTo,
+      this.rt.allowedReturnOrigins,
+      this.rt.defaultReturnTo,
+    );
+    const payload: AuthReq = {
+      codeVerifier: verifier,
+      nonce,
+      returnTo: dest,
+      ...(prompt && { prompt }),
+    };
+    await this.redis.setex(
+      this.authReqKey(state),
+      600,
+      JSON.stringify(payload),
+    );
+    res.redirect(
+      this.client.buildAuthorizeUrl({
+        state,
+        nonce,
+        codeChallenge: challenge,
+        ...(prompt !== undefined && { prompt }),
+      }),
+    );
+  }
+
+  /** OIDC callback: exchange the code, verify, establish the RP session, set cookie. */
+  @Get("callback")
+  async callback(
+    @Query("code") code: string | undefined,
+    @Query("state") state: string | undefined,
+    @Query("error") error: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    if (error) {
+      // prompt=none silent flows: no active central session — return to the
+      // page as unauthenticated without a visible error.
+      if (
+        (error === "login_required" || error === "interaction_required") &&
+        state
+      ) {
+        const raw = await this.redis.getdel(this.authReqKey(state));
+        if (raw) {
+          const authReq = JSON.parse(raw) as AuthReq;
+          if (authReq.prompt === "none") {
+            const u = new URL(authReq.returnTo);
+            u.searchParams.set("vx_sso_silent", "0");
+            res.redirect(u.toString());
+            return;
+          }
+        }
+      }
+      res.status(401).json({ code: "OIDC_ERROR", message: error });
+      return;
+    }
+    if (!code || !state) {
+      res.status(400).json({ code: "INVALID_REQUEST" });
+      return;
+    }
+    const raw = await this.redis.getdel(this.authReqKey(state));
+    if (!raw) {
+      res.status(400).json({ code: "INVALID_STATE" });
+      return;
+    }
+    const authReq = JSON.parse(raw) as AuthReq;
+
+    const tokens = await this.client.exchangeCode({
+      code,
+      codeVerifier: authReq.codeVerifier,
+    });
+    const id = await this.client.verifyIdToken(tokens.idToken, authReq.nonce);
+    await this.client.verifyAccessToken(tokens.accessToken);
+
+    // Operator sessions carry no organization — activeOrg is always null.
+    const session: RpSession = {
+      sid: id.sid,
+      sub: id.sub,
+      idToken: tokens.idToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      accessExpiresAt: tokens.accessExpiresAt,
+      activeOrg: null,
+    };
+    const rpsid = randomToken();
+    await this.store.create(rpsid, session, this.rt.config.sessionTtlSec);
+
+    res.cookie(this.cookieName, rpsid, {
+      httpOnly: true,
+      secure: this.rt.cookieSecure,
+      sameSite: "lax",
+      path: "/",
+      maxAge: this.rt.config.sessionTtlSec * 1000,
+    });
+    res.redirect(authReq.returnTo);
+  }
+
+  /** Current login state (verified claims) for the shell bootstrap. */
+  @Get("session")
+  async session(@Req() req: Request): Promise<Record<string, unknown>> {
+    const rpsid = req.cookies?.[this.cookieName] as string | undefined;
+    const out = await this.auth.resolve(rpsid);
+    if (out.status !== "ok") {
+      throw new UnauthorizedException("No active session");
+    }
+    return { status: "active", claims: out.claims };
+  }
+
+  /**
+   * nginx auth_request gate. 204 = authenticated (nginx serves the gated
+   * location); 401 = no/expired session (nginx redirects the navigation to
+   * /auth/login). For module paths the response carries X-Operator-Token —
+   * the operator-OBO management token nginx injects upstream (M-1). The
+   * exchange is cached per (subject, aud), so per-request cost is a Redis
+   * session read on the hot path.
+   */
+  @Get("check")
+  async check(
+    @Req() req: Request,
+    @Headers("x-original-uri") originalUri: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const rpsid = req.cookies?.[this.cookieName] as string | undefined;
+    const out = await this.auth.resolve(rpsid);
+    if (out.status !== "ok") {
+      res.status(401).end();
+      return;
+    }
+
+    const aud = moduleAudFor(originalUri);
+    if (aud) {
+      const token = await this.exchange.getToken(out.accessToken, aud);
+      if (token) {
+        res.setHeader("X-Operator-Token", token);
+      }
+    }
+    res.status(204).end();
+  }
+
+  /** Local logout: drop the RP session + clear the cookie (does not end the IdP session). */
+  @Post("logout")
+  async logout(@Req() req: Request, @Res() res: Response): Promise<void> {
+    const rpsid = req.cookies?.[this.cookieName] as string | undefined;
+    if (rpsid) await this.store.destroy(rpsid);
+    res.clearCookie(this.cookieName, { path: "/" });
+    res.json({ status: "logged_out" });
+  }
+}

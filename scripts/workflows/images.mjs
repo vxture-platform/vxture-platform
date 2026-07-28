@@ -4,7 +4,7 @@
  * @layer    Infrastructure
  * @category workflow
  * @description
- *   12 个镜像的 matrix 构建配置（name / image / dockerfile / build-args）。
+ *   15 个镜像的 matrix 构建配置（name / image / dockerfile / build-args）。
  *   被 classify-changes.mjs 的 `--matrix` 模式消费，产出 docker-build 的动态 matrix：
  *   只为「本次需重建」的镜像生成 matrix 项，docs/scripts-only 时为空集 → build job
  *   整体跳过。镜像名 + 路径规则的对应在 classify-changes.mjs 的 IMAGE_RULES 维护，
@@ -36,6 +36,15 @@ export const IMAGES = [
     dockerfile: "deploy/docker/Dockerfile.nextjs",
     "build-args":
       "PORTAL_PATH=portals/admin\nPACKAGE_FILTER=@vxture/admin\nNEXT_PUBLIC_API_URL=https://api.vxture.com\nNEXT_PUBLIC_ADMIN_BFF_URL=https://admin.vxture.com",
+  },
+  // capconsole：能力控制台外壳（product_250 M-4 批C）。不传 NEXT_PUBLIC_*_BFF_URL
+  // —— 外壳一律同源相对路径调 BFF（真实域名按加固决策不入仓,由 nginx 同 vhost 路由）。
+  {
+    name: "platform_capconsole",
+    image: "ghcr.io/vxture/platform_capconsole",
+    dockerfile: "deploy/docker/Dockerfile.nextjs",
+    "build-args":
+      "PORTAL_PATH=portals/capconsole\nPACKAGE_FILTER=@vxture/capconsole",
   },
   {
     name: "platform_accounts",
@@ -77,6 +86,13 @@ export const IMAGES = [
     dockerfile: "deploy/docker/Dockerfile.nestjs",
     "build-args":
       "SERVICE_PATH=bff/admin-bff\nPACKAGE_FILTER=@vxture/bff-admin",
+  },
+  {
+    name: "platform_bff-capconsole",
+    image: "ghcr.io/vxture/platform_bff-capconsole",
+    dockerfile: "deploy/docker/Dockerfile.nestjs",
+    "build-args":
+      "SERVICE_PATH=bff/capconsole-bff\nPACKAGE_FILTER=@vxture/bff-capconsole",
   },
   {
     name: "platform_bff-platform-api",

@@ -21,6 +21,12 @@ export const platformSchema = z.object({
   /** Admin (platform ops) base URL */
   ADMIN_BASE_URL: z.string().url().default("http://localhost:3002"),
   /**
+   * Capability Console (OSS-side operator shell, product_250 M-4) base URL.
+   * The public hostname is intentionally NOT recorded in the repo (hardening:
+   * placeholder-only policy) — production injects it via runtime env.
+   */
+  CAPCONSOLE_BASE_URL: z.string().url().default("http://localhost:3050"),
+  /**
    * Login / account UI base URL — the public identity surface that renders the
    * IdP interactive login page (accounts.vxture.com in prod; same-origin with
    * the OIDC endpoints there). The IdP redirects unauthenticated /authorize here

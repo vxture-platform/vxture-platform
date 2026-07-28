@@ -144,6 +144,27 @@ services:
       retries: 3
       start_period: 20s
 
+  # 能力控制台外壳（product_250 M-4 批C,OSS 侧 operator 面）。公网 vhost 域名按
+  # 加固决策不入仓：nginx 模板渲染时从主机 env 注入（20-sync-nginx-config.sh）。
+  # 薄容器：外壳只有 chrome + 总览,严控内存（worker-01 内存压力已知）。
+  capconsole:
+    image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_capconsole:${VX_IMAGE_TAG:-latest}
+    container_name: vx-platform-capconsole
+    restart: unless-stopped
+    mem_limit: 192m
+    memswap_limit: 192m
+    networks: [vxture-prod]
+    environment:
+      NODE_ENV: production
+      PORT: "3050"
+      NODE_OPTIONS: --max-old-space-size=144
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3050/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
   # 中立身份门面（OIDC 登录 UI）。nginx accounts.vxture.com 把 /oidc/* + /.well-known/*
   # 反代到 vx-platform-auth-bff（内部），其余到本前端。见 docs/design/identity-sso-login-surface.md。
   accounts:
@@ -325,6 +346,33 @@ services:
       auth-bff: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3043/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # 能力控制台外壳 BFF（workforce RP + auth_request 门 + operator-OBO 换票,M-1/M-4）。
+  # 不连库（RP 会话在 Redis）；.env.capconsole-bff 携带真实 CAPCONSOLE_BASE_URL。
+  capconsole-bff:
+    image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_bff-capconsole:${VX_IMAGE_TAG:-latest}
+    container_name: vx-platform-capconsole-bff
+    restart: unless-stopped
+    mem_limit: 160m
+    memswap_limit: 160m
+    networks: [vxture-prod]
+    environment:
+      NODE_OPTIONS: --max-old-space-size=120
+      CAPCONSOLE_BFF_PORT: "3051"
+    env_file:
+      [
+        /srv/vxture/runtime/secrets/platform.env,
+        /srv/vxture/runtime/.env.capconsole-bff,
+      ]
+    depends_on:
+      redis: { condition: service_healthy }
+      auth-bff: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3051/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3

@@ -69,6 +69,7 @@
 - **联邦一档起步 = 路径挂载**:各 provider 部署自己的小型 admin 应用,nginx 同 vhost 挂 `/atlas/*`、`/runa/*`,共享 workforce SSO cookie;零 module-federation 构建机械(行业背书:Azure Portal 即 iframe 联邦)。升档(build-time 组装/runtime MF)仅当模块数量或融合度要求触发,不预建。
 - **同周期强制**:联邦后 module UI 与 backend 同仓——provider 新增 admin 可配置字段的 PR **同批携带模块 UI,或同批开自仓 TD 并在 PR 描述引用**;此要求在联邦结构下同仓同 PR 即可满足,结构性消除 #148 类滞后(对比现状需跨仓第二个 PR)。
 - **部署位(2026-07-28 owner 定向)**:外壳随平台栈落 **worker-01**(身份局部性:workforce OIDC 签发方 auth-bff 同机;平台 CD 顺路);**模块与各自 backend 同机**——atlas admin-module 落 worker-02(同仓同 CD,对 atlas admin API localhost 跳),runa 模块随 runa 主机;边缘 nginx(worker-01)在 ops vhost 上按路径反代模块(`/atlas/*`→worker-02 tailnet 内网,operator token 随请求)。约束:worker-01 内存压力已知(性能审计根因之一),外壳必须薄(单小容器+内存限额)。**访问形态 2026-07-28 已拍板 = 公网 vhost + 加固必做清单**(批C 硬性项,非建议):复用通配符证书(单签证书会经 CT 日志即时公开主机名)/公开仓一律占位符不写真名/外壳 SSO 前置(任何路径未认证零内容)/nginx default-server 兜底(裸 IP 扫描不回显 vhost)/限流。
+- **实施绑定(批C 落地,2026-07-28)**:外壳=`portals/capconsole`+`bff/capconsole-bff`(workforce RP `capconsole`,nginx `auth_request` 门实现"未认证零内容"并对模块路径注入 operator-OBO 票);挂载契约与接入步骤固化于 [`../20-specs/000-platform/capconsole/10-shell-mount-contract.md`](../20-specs/000-platform/capconsole/10-shell-mount-contract.md)(批D/F 对接依据)。
 - **毕业条件**(何时允许某 provider 独立 portal,行业判据):直接外售有自有计费关系,或出现专职运维团队,或操作者画像全天驻留该域。当前无一满足。
 - **BSS 侧保留**:订阅/用量的 C2 权益商务视图不迁(商务画像要看);console(租户端)model-platform 页不动(客户面,C2 形状)。
 
