@@ -18,6 +18,15 @@
  * S2S token,无共享密钥兜底,故每次代理都经 `S2sExchangeService` 先换票
  * (`token-exchange.service.ts` 新增的平台级调用方分支,`act.sub="console"`)。
  * 换票失败直接 502,不降级为裸调——裸调必然被 atlas 401,502 是更清晰的信号。
+ *
+ * 2026-07-28(语义修正):换票的 `workspace_id` claim 必须是真实 workspace id
+ * (`req.tenant.workspace`),不是 tenant/org id(`req.tenant.id`)——两者是
+ * `tenancy.tenants`→`tenancy.workspaces` 一对多关系里不同层级的 id,
+ * `TenantContext.id` 从来就是 org 级(见 `session.aggregator.ts` 的
+ * `toTenantContext(orgId, …)`)。同时把 org id 也带上(`org_id` claim),
+ * 供 atlas 未来的 `scope=tenant` 汇总查询使用。查询字符串里现有的
+ * `tenantId=` 参数是 atlas `/capability/*` 端点自己的既有契约,维持不变,
+ * 与本次修正的 S2S token claim 是两回事。
  */
 
 import {
@@ -69,9 +78,17 @@ export class ModelPlatformRouter {
       configService.platform.MODEL_PLATFORM_URL.trim().replace(/\/+$/, "");
   }
 
-  /** Exchange this request's tenant workspace for an aud=atlas S2S bearer, then proxy. */
-  private async request<T>(tenantId: string, path: string): Promise<T> {
-    const bearer = await this.s2sExchange.getToken(tenantId, ATLAS_AUDIENCE);
+  /** Exchange this request's resolved workspace (+ org) for an aud=atlas S2S bearer, then proxy. */
+  private async request<T>(
+    workspaceId: string,
+    orgId: string,
+    path: string,
+  ): Promise<T> {
+    const bearer = await this.s2sExchange.getToken(
+      workspaceId,
+      ATLAS_AUDIENCE,
+      orgId,
+    );
     if (!bearer) {
       throw new BadGatewayException("Unable to authenticate to Model Platform");
     }
@@ -83,12 +100,15 @@ export class ModelPlatformRouter {
     @Req() req: Request & RequestContext,
   ): Promise<AiModelRecord[]> {
     const tenantId = requireTenantId(req);
+    const workspaceId = requireWorkspaceId(req);
     const [models, grants] = await Promise.all([
       this.request<AiModelRecord[]>(
+        workspaceId,
         tenantId,
         "/capability/models?includeInactive=false",
       ),
       this.request<AiModelGrantRecord[]>(
+        workspaceId,
         tenantId,
         `/capability/grants?tenantId=${encodeURIComponent(tenantId)}`,
       ),
@@ -109,12 +129,14 @@ export class ModelPlatformRouter {
     @Query("applicationType") applicationType?: string,
   ): Promise<AiModelGrantRecord[]> {
     const tenantId = requireTenantId(req);
+    const workspaceId = requireWorkspaceId(req);
     const params = new URLSearchParams({ tenantId });
     if (modelId) params.set("modelId", modelId);
     if (applicationId) params.set("applicationId", applicationId);
     if (applicationType) params.set("applicationType", applicationType);
 
     return this.request<AiModelGrantRecord[]>(
+      workspaceId,
       tenantId,
       `/capability/grants?${params.toString()}`,
     );
@@ -126,12 +148,14 @@ export class ModelPlatformRouter {
     @Query("includeExpired") includeExpired?: string,
   ): Promise<TenantQuotaRecord[]> {
     const tenantId = requireTenantId(req);
+    const workspaceId = requireWorkspaceId(req);
     const params = new URLSearchParams({ tenantId });
     if (includeExpired !== undefined) {
       params.set("includeExpired", includeExpired);
     }
 
     return this.request<TenantQuotaRecord[]>(
+      workspaceId,
       tenantId,
       `/capability/quotas?${params.toString()}`,
     );
@@ -146,6 +170,7 @@ export class ModelPlatformRouter {
     @Query("statType") statType?: string,
   ): Promise<TenantUsageSummaryRecord[]> {
     const tenantId = requireTenantId(req);
+    const workspaceId = requireWorkspaceId(req);
     const params = new URLSearchParams({ tenantId });
     if (applicationId) params.set("applicationId", applicationId);
     if (applicationType) params.set("applicationType", applicationType);
@@ -153,6 +178,7 @@ export class ModelPlatformRouter {
     if (statType) params.set("statType", statType);
 
     return this.request<TenantUsageSummaryRecord[]>(
+      workspaceId,
       tenantId,
       `/capability/usage-summaries?${params.toString()}`,
     );
@@ -172,6 +198,20 @@ function requireTenantId(req: Request & RequestContext): string {
   }
 
   return tenantId;
+}
+
+/** The resolved workspace id (not the tenant/org id) — see the S2S claim note above. */
+function requireWorkspaceId(req: Request & RequestContext): string {
+  if (!req.user) {
+    throw new UnauthorizedException("No active session");
+  }
+
+  const workspaceId = req.tenant?.workspace;
+  if (!workspaceId) {
+    throw new ForbiddenException("Tenant context is required");
+  }
+
+  return workspaceId;
 }
 
 async function modelPlatformRequest<TResponse>(

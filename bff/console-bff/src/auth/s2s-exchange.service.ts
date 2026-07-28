@@ -53,8 +53,9 @@ export class S2sExchangeService {
   async getToken(
     workspaceId: string,
     audience: string,
+    orgId?: string,
   ): Promise<string | null> {
-    const key = `${audience}\n${workspaceId}`;
+    const key = `${audience}\n${workspaceId}\n${orgId ?? ""}`;
     const hit = this.cache.get(key);
     if (hit && hit.expiresAtMs > Date.now()) {
       return hit.accessToken;
@@ -62,18 +63,22 @@ export class S2sExchangeService {
 
     const cfg = this.rpRuntime.config;
     const base = (cfg.backchannelIssuer ?? cfg.issuer).replace(/\/+$/, "");
+    const params = new URLSearchParams({
+      grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
+      client_id: cfg.clientId,
+      client_secret: cfg.clientSecret,
+      workspace_id: workspaceId,
+      audience,
+    });
+    if (orgId) {
+      params.set("org_id", orgId);
+    }
     let response: Response;
     try {
       response = await fetch(`${base}/oidc/token`, {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
-          client_id: cfg.clientId,
-          client_secret: cfg.clientSecret,
-          workspace_id: workspaceId,
-          audience,
-        }).toString(),
+        body: params.toString(),
       });
     } catch (e) {
       this.logger.warn(
