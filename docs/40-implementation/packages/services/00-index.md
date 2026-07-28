@@ -9,9 +9,7 @@
 
 ### Model 域
 
-| 包                                            | 路径                       | 端口 | 职责                                                                                              |
-| --------------------------------------------- | -------------------------- | ---- | ------------------------------------------------------------------------------------------------- |
-| [`model-platform.md`](./40-model-platform.md) | `services/model/platform/` | 3100 | Model Platform 当前合并实现：模型控制面 + 模型运行面。所有 agent-server 的 LLM 调用必须经过此服务 |
+**已退役**（2026-07-28，拆仓至 `vxture-atlas`）：见 [`model-platform.md`](./40-model-platform.md)。所有 agent-server 的 LLM 调用仍必须经过 Atlas，只是它不再是本仓的一个包。
 
 ### Identity 域
 
@@ -47,4 +45,4 @@
 - **禁止**跨 service 直接 import，跨服务调用必须走 HTTP
 - **禁止**向上引用 bff / portals / agent-studio
 - PrismaClient 只在 service 层 repository 子层使用，禁止在 BFF 或更高层直接操作数据库
-- model-platform 是当前所有 LLM 调用的唯一入口；目标架构中它对应 model-runtime，禁止绕过直连 provider SDK
+- Atlas 是所有 LLM 调用的唯一入口，禁止绕过直连 provider SDK

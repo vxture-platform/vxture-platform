@@ -26,7 +26,7 @@ RUNTIME_DIR="${RUNTIME_DIR:-/srv/vxture/runtime}"
 PLATFORM_ENV="$RUNTIME_DIR/secrets/platform.env"
 PG_CONTAINER="${PG_CONTAINER:-vx-platform-pg}"
 # 连库的应用容器：drop 前停以释放连接，结束后 docker start 重启（同一镜像）。
-APP_CONTAINERS="${APP_CONTAINERS:-vx-platform-auth-bff vx-platform-console-bff vx-platform-website-bff vx-platform-admin-bff vx-platform-model-platform}"
+APP_CONTAINERS="${APP_CONTAINERS:-vx-platform-auth-bff vx-platform-console-bff vx-platform-website-bff vx-platform-admin-bff}"
 
 check_file() {
   if [ ! -f "$1" ]; then

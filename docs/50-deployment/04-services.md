@@ -9,16 +9,16 @@
 
 ```
 deploy/
-├── compose.platform.yml      ← 平台服务（门户 + 平台 BFF + model-platform + 平台数据库）
+├── compose.platform.yml      ← 平台服务（门户 + 平台 BFF + 平台数据库）
 ```
 
-> **设计原则**：本仓只维护 平台 Compose。`model-platform` 是平台 AI 接入网关，随 平台栈部署；vx-worker-02 业务执行面属于外部业务仓库。P7b 已删除本仓 `deploy/vx-worker-02` 历史资产，不得重新新增为本仓部署入口。
+> **设计原则**：本仓只维护 平台 Compose。Atlas（AI 接入网关，原 model-platform）已拆仓 `vxture-atlas`，不再随本仓平台栈部署；vx-worker-02 业务执行面属于外部业务仓库。P7b 已删除本仓 `deploy/vx-worker-02` 历史资产，不得重新新增为本仓部署入口。
 
 ---
 
 ## VXTURE_DEPLOY_HOST：compose.platform.yml
 
-所有平台服务共享平台 Docker 网络。`auth-bff` 可按平台认证契约对外提供 HTTP/SSO 能力；`model-platform` 只作为平台内部 AI 能力入口，不直接公网暴露。外部业务如需调用平台认证或 AI 能力，必须通过网络和鉴权策略显式接入，不得引用本仓内部包。
+所有平台服务共享平台 Docker 网络。`auth-bff` 可按平台认证契约对外提供 HTTP/SSO 能力。外部业务如需调用平台认证或 AI 能力，必须通过网络和鉴权策略显式接入 Atlas，不得引用本仓内部包。
 
 ```yaml
 # deploy/compose.platform.yml
@@ -166,21 +166,6 @@ services:
       timeout: 5s
       retries: 3
 
-  model-platform:
-    image: ghcr.io/vxture/service-model-platform:latest
-    container_name: vx-model-platform
-    restart: unless-stopped
-    networks: [vxture-prod]
-    env_file: [secrets/platform.env, .env.model-platform]
-    depends_on:
-      postgres: { condition: service_healthy }
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3100/healthz"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-    # 不暴露端口，平台 BFF / 受控内部调用方通过容器网络访问
-
   console-bff:
     image: ghcr.io/vxture/bff-console:latest
     container_name: vx-console-bff
@@ -192,7 +177,6 @@ services:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
-      model-platform: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3021/health"]
       interval: 30s
@@ -272,15 +256,14 @@ docker compose up -d
 | website-bff    | 3011     | VXTURE_DEPLOY_HOST | 容器网络内部            |
 | console-bff    | 3021     | VXTURE_DEPLOY_HOST | 容器网络内部            |
 | admin-bff      | 3031     | VXTURE_DEPLOY_HOST | 容器网络内部            |
-| model-platform | 3100     | VXTURE_DEPLOY_HOST | 容器网络内部            |
 
-vx-worker-02/03/04/05 等业务端口由外部业务仓库维护，不在本表登记。业务服务如需调用平台 Model Platform，应使用受控内部地址和服务凭证，不得在业务 worker 部署 `vx-model-platform`。
+vx-worker-02/03/04/05 等业务端口由外部业务仓库维护，不在本表登记。业务服务如需调用 Atlas，应使用受控内部地址和服务凭证，不得在业务 worker 自行部署网关容器。
 
 ---
 
 ## 健康检查约定
 
-NestJS BFF / Server 服务需实现健康检查端点（返回 200）；当前 `model-platform` 使用 `GET /healthz`。
+NestJS BFF / Server 服务需实现健康检查端点（返回 200）。
 所有 Next.js 门户需实现 `GET /api/health` 端点。
 
 ---

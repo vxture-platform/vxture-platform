@@ -15,11 +15,11 @@
 #   3. 写 /srv/vxture/runtime/secrets/platform-app.env（0600）——compose 中该文件
 #      排在 platform.env 之后，仅对 5 个服务容器覆盖 DATABASE_URL（TD-018）。
 # 幂等：platform-app.env 已存在则跳过（不轮换）；FORCE_ROTATE=yes 才重新生成
-#   密码并覆写（轮换后须 recreate 5 个服务容器）。
+#   密码并覆写（轮换后须 recreate 4 个服务容器）。
 # 运行：CONFIRM_PROVISION_SVC_ROLES=yes bash scripts/32-provision-service-db-roles.sh
 # 后续步②：确保 compose.platform.yml 已含 platform-app.env（本仓库同批变更），
-#   recreate 5 容器（正常走 deploy-production；或手动 compose up -d --force-recreate
-#   --no-deps auth-bff website-bff console-bff admin-bff model-platform）。
+#   recreate 4 容器（正常走 deploy-production；或手动 compose up -d --force-recreate
+#   --no-deps auth-bff website-bff console-bff admin-bff）。
 set -euo pipefail
 
 RUNTIME_DIR="${RUNTIME_DIR:-/srv/vxture/runtime}"

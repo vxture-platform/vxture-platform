@@ -161,7 +161,6 @@ The domain directory is for organization and team ownership — it does not appe
 
 ```
 services/
-├── model/         platform/       → @vxture/service-model-platform
 ├── commerce/      billing/        → @vxture/service-billing
 │                  subscription/   → @vxture/service-subscription
 ├── identity/      iam/            → @vxture/service-iam

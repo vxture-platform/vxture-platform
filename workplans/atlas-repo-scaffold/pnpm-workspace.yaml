@@ -1,5 +1,0 @@
-# pnpm workspace roots. The services profile (product_240 section 2.5) roots
-# the one NestJS package under service/, per the governance source-directory
-# slots (portals/ for app profile, service/ for services profile).
-packages:
-  - "service"

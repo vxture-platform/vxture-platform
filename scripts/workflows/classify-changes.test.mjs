@@ -36,7 +36,6 @@ const ALL_IMAGES = [
   "platform_bff-platform-api",
   "varda_bff",
   "varda_agent",
-  "platform_service-model-platform",
 ];
 
 /** 运行分类器并把 `key=value` 行解析为对象。 */

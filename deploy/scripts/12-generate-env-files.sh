@@ -162,7 +162,6 @@ sync_env_from_example "$WORKER_DIR/.env.website-bff.example" "$PLATFORM_DIR/.env
 sync_env_from_example "$WORKER_DIR/.env.console-bff.example" "$PLATFORM_DIR/.env.console-bff" "console-bff env"
 sync_env_from_example "$WORKER_DIR/.env.admin-bff.example" "$PLATFORM_DIR/.env.admin-bff" "admin-bff env"
 sync_env_from_example "$WORKER_DIR/.env.platform-api.example" "$PLATFORM_DIR/.env.platform-api" "platform-api env"
-sync_env_from_example "$WORKER_DIR/.env.model-platform.example" "$PLATFORM_DIR/.env.model-platform" "model-platform env"
 sync_env_from_example "$WORKER_DIR/.env.gateway-bff.example" "$PLATFORM_DIR/.env.gateway-bff" "gateway-bff env"
 
 fix_runtime_permissions

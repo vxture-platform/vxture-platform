@@ -568,13 +568,12 @@ Aliyun ACR secret 命名建议：
 
 当前 `docker-build.yml` 只保留平台镜像和仍在本仓的 Varda 相关镜像。构建矩阵不等于部署边界；是否构建某个镜像不能推导出本仓可以部署 vx-worker-02。Ruyin 的实际部署与模板沉淀在 `vxture/agentstudio-ruyin`；Varda 的业务仓库迁移等待该模板验证后再规划。
 
-| 类别         | 服务                                       | GHCR 镜像名                             | ACR 镜像名                                                          | Dockerfile                                 |
-| ------------ | ------------------------------------------ | --------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------ |
-| 门户         | website / console / admin                  | `ghcr.io/vxture/{name}`                 | `$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_NAMESPACE/{name}`                 | `Dockerfile.nextjs`                        |
-| 平台 BFF     | gateway / auth / website / console / admin | `ghcr.io/vxture/bff-{name}`             | `$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_NAMESPACE/bff-{name}`             | `Dockerfile.gateway` / `Dockerfile.nestjs` |
-| Agent BFF    | varda                                      | `ghcr.io/vxture/bff-{name}`             | `$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_NAMESPACE/bff-{name}`             | `Dockerfile.nestjs`                        |
-| Agent Server | varda                                      | `ghcr.io/vxture/agent-{name}`           | `$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_NAMESPACE/agent-{name}`           | `Dockerfile.nestjs-prisma`                 |
-| 平台服务     | model-platform                             | `ghcr.io/vxture/service-model-platform` | `$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_NAMESPACE/service-model-platform` | `Dockerfile.nestjs-prisma`                 |
+| 类别         | 服务                                       | GHCR 镜像名                   | ACR 镜像名                                                | Dockerfile                                 |
+| ------------ | ------------------------------------------ | ----------------------------- | --------------------------------------------------------- | ------------------------------------------ |
+| 门户         | website / console / admin                  | `ghcr.io/vxture/{name}`       | `$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_NAMESPACE/{name}`       | `Dockerfile.nextjs`                        |
+| 平台 BFF     | gateway / auth / website / console / admin | `ghcr.io/vxture/bff-{name}`   | `$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_NAMESPACE/bff-{name}`   | `Dockerfile.gateway` / `Dockerfile.nestjs` |
+| Agent BFF    | varda                                      | `ghcr.io/vxture/bff-{name}`   | `$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_NAMESPACE/bff-{name}`   | `Dockerfile.nestjs`                        |
+| Agent Server | varda                                      | `ghcr.io/vxture/agent-{name}` | `$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_NAMESPACE/agent-{name}` | `Dockerfile.nestjs-prisma`                 |
 
 P6a 起按路径影响范围跳过无关镜像；**B10（#234）进一步改为前置 `detect` job + 动态 matrix**：`detect` 调用 `scripts/workflows/classify-changes.mjs --matrix`（镜像构建配置外置 `scripts/workflows/images.mjs`，单一数据源）算出需重建的镜像集合，`build` job 用 `fromJSON(needs.detect.outputs.matrix)` 动态展开——docs/scripts-only 变更产出 **0 腿**（build job 整体跳过，不再逐腿自跳过），单包改只起受影响腿。旧的静态 11 项 `matrix.include` 与 per-leg classify 已移除。release tag 仍构建全部镜像，`package.json` / lockfile / workspace 配置 / `.dockerignore` / Dockerfile / `packages/shared` / `packages/core` 变更按全局影响处理。
 
@@ -637,16 +636,15 @@ CONFIRM_FIRST_DEPLOY=yes bash scripts/24-first-deploy-platform.sh
 
 P7a 把 vx-worker-02 手动部署入口加入了本仓，这是错误边界。P7b 继续删除 Ruyin 残留和 vx-worker-02 历史资产。正确边界如下：
 
-| 项目                              | 正确归属                                        |
-| --------------------------------- | ----------------------------------------------- |
-| VXTURE_DEPLOY_HOST prod 部署      | `vxture` 仓库                                   |
-| VXTURE_DEPLOY_HOST model-platform | `vxture` 仓库，作为平台 AI 接入网关             |
-| vxture 平台 beta                  | 未来临时 `vxture-beta` 服务器，需另行设计       |
-| vx-worker-02 业务 beta            | 当前 Ruyin 归属 `vxture/agentstudio-ruyin`      |
-| vx-worker-02 业务 prod            | 当前 Ruyin 归属 `vxture/agentstudio-ruyin`      |
-| vx-worker-02 secrets              | 外部业务仓库                                    |
-| vx-worker-02 compose              | 外部业务仓库或迁移/归档                         |
-| Varda 业务迁移                    | Ruyin 模板跑顺后规划 `vxture/agentstudio-varda` |
+| 项目                         | 正确归属                                        |
+| ---------------------------- | ----------------------------------------------- |
+| VXTURE_DEPLOY_HOST prod 部署 | `vxture` 仓库                                   |
+| vxture 平台 beta             | 未来临时 `vxture-beta` 服务器，需另行设计       |
+| vx-worker-02 业务 beta       | 当前 Ruyin 归属 `vxture/agentstudio-ruyin`      |
+| vx-worker-02 业务 prod       | 当前 Ruyin 归属 `vxture/agentstudio-ruyin`      |
+| vx-worker-02 secrets         | 外部业务仓库                                    |
+| vx-worker-02 compose         | 外部业务仓库或迁移/归档                         |
+| Varda 业务迁移               | Ruyin 模板跑顺后规划 `vxture/agentstudio-varda` |
 
 已完成：
 

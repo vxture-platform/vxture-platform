@@ -100,9 +100,7 @@ jobs:
 
       - name: Generate Prisma clients
         if: steps.changes.outputs.docs_only != 'true'
-        run: |
-          pnpm --filter @vxture/service-model-platform db:generate
-          pnpm --filter @vxture/agent-server-varda prisma:generate
+        run: pnpm --filter @vxture/agent-server-varda prisma:generate
 
       # 把已构建的后端依赖 dist 与 Prisma client 作为产物上传，供 build / test job 复用，
       # 避免在并行 job 中重复执行 build:backend-deps 与 prisma generate。
@@ -202,12 +200,12 @@ jobs:
           set -euo pipefail
           has() { printf '%s' "$AFFECTED" | grep -q "\"$1\""; }
           smoke() { pnpm --filter "$1" build:bundle && pnpm --filter "$1" boot-smoke; }
-          if has platform_service-model-platform; then pnpm --filter @vxture/service-model-platform build; fi
           if has varda_agent;                     then pnpm --filter @vxture/agent-server-varda build; fi
           if has platform_bff-admin;              then smoke @vxture/bff-admin; fi
           if has platform_bff-auth;               then smoke @vxture/bff-auth; fi
           if has platform_bff-console;            then smoke @vxture/bff-console; fi
           if has platform_bff-website;            then smoke @vxture/bff-website; fi
+          if has platform_bff-opera;              then smoke @vxture/bff-opera; fi
           if has platform_bff-platform-api;       then smoke @vxture/bff-platform-api; fi
           if has varda_bff;                       then smoke @vxture/bff-varda; fi
           echo "built affected bundles: ${AFFECTED:-[]}"
@@ -252,19 +250,11 @@ jobs:
             pnpm --recursive --if-present test
           fi
 
-      - name: Generate coverage report
-        if: needs.check.outputs.docs_only != 'true'
-        run: pnpm --filter @vxture/service-model-platform test:coverage
-
-      - name: Upload coverage report
-        if: needs.check.outputs.docs_only != 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage-report
-          path: services/model/platform/coverage/lcov.info
-          retention-days: 1
-
   # ── 6. SonarQube ───────────────────────────────────────────────────────────
+  # Coverage generate/upload/download steps removed 2026-07-28: model-platform
+  # (services/model/platform) was the only package wired for coverage; it
+  # retired with the atlas repo split. Scan runs without a coverage input
+  # until a new package is wired up — the gate is already non-blocking below.
   sonar:
     name: SonarQube
     runs-on: ubuntu-latest
@@ -281,12 +271,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-
-      - name: Download coverage report
-        uses: actions/download-artifact@v8
-        with:
-          name: coverage-report
-          path: services/model/platform/coverage/
 
       - name: SonarQube Scan
         # 暂非阻塞：新仓库 vxture-platform 尚未在 SonarCloud 侧绑定项目（scan 返回 403）。

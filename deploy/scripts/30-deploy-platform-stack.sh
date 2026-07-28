@@ -63,7 +63,6 @@ check_file "$RUNTIME_DIR/.env.website-bff"
 check_file "$RUNTIME_DIR/.env.console-bff"
 check_file "$RUNTIME_DIR/.env.admin-bff"
 check_file "$RUNTIME_DIR/.env.platform-api"
-check_file "$RUNTIME_DIR/.env.model-platform"
 
 echo "  密钥文件:"
 check_file "$RUNTIME_DIR/secrets/pg-password"

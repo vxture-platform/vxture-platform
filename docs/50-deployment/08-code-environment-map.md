@@ -71,23 +71,9 @@ Ruyin 业务仓库应沉淀为模板，覆盖：beta/prod 容器隔离、端口�
 
 ---
 
-## 四、Model Platform 定位与提升路径
+## 四、Atlas（原 Model Platform）
 
-`services/model/platform` 是 `vxture` 平台能力，不属于任何单个业务。它的职责是把 AI Provider、模型注册、租户/Agent 授权、配额校验、用量计量和 Provider Key 边界集中到平台侧。
-
-| 阶段            | 部署位置                     | 角色                 | 说明                                                                                         |
-| --------------- | ---------------------------- | -------------------- | -------------------------------------------------------------------------------------------- |
-| 当前 prod       | `VXTURE_DEPLOY_HOST`         | 平台 AI 网关常驻容器 | 容器名 `vx-model-platform`，端口 3100，仅平台容器网络内部访问                                |
-| 未来平台 beta   | 临时按量服务器 `vxture-beta` | 平台 beta AI 网关    | 只服务平台 beta 验证，用完关闭；不得复用 vx-worker-02                                        |
-| 未来业务 worker | vx-worker-02/03/04/05 等     | 外部业务服务调用方   | 业务服务可通过受控 HTTP / 内网 / 服务凭证调用平台 Model Platform，不部署本仓 gateway         |
-| 规模化后        | 独立平台 Model Platform 节点 | 平台共享 AI 数据面   | 当 VXTURE_DEPLOY_HOST 资源、密钥隔离、吞吐或审计要求提高时，迁到独立平台节点，而不是业务节点 |
-
-强制边界：
-
-1. Provider API Key 归平台 Model Platform 管理，业务仓库不得持有平台统一 Provider Key。
-2. 业务 worker 只保存调用平台 Model Platform 所需的内部地址、服务凭证或租户上下文，不保存 Provider Key。
-3. 业务服务如需完全独立的模型供应商、Key、计费和配额体系，必须在业务仓库自建业务侧网关；不得复用本仓 `services/model/platform` 部署到业务 worker。
-4. `VXTURE_DEPLOY_HOST` 资源不足时，优先评估“独立平台 Model Platform 节点”，不得把平台网关临时塞入 vx-worker-02。
+已拆分为独立仓 `vxture-atlas`（2026-07-24），本仓 `services/model/platform` 于 2026-07-28 退役删除，不再是本仓部署单元。业务服务如需 AI 能力，只能通过受控 HTTP/API 调用 Atlas，不得持有平台统一 Provider Key、不得在业务 worker 自建网关。详见 [`docs/30-design/platform/40-model-platform.md`](../30-design/platform/40-model-platform.md)。
 
 ---
 
@@ -104,7 +90,7 @@ Ruyin 业务仓库应沉淀为模板，覆盖：beta/prod 容器隔离、端口�
 平台 beta 的约束：
 
 1. `vxture-beta` 是临时按量服务器，不是 vx-worker-02。
-2. `vxture-beta` 只承接平台服务：website、console、admin、gateway-bff、auth-bff、平台 BFF、model-platform、平台数据库/Redis。
+2. `vxture-beta` 只承接平台服务：website、console、admin、gateway-bff、auth-bff、平台 BFF、平台数据库/Redis。
 3. `vxture-beta` 的创建、销毁、数据脱敏、DNS 切换和费用控制必须在启用前单独设计。
 
 ---

@@ -34,15 +34,11 @@
 [vx-website-bff / vx-console-bff / vx-admin-bff / vx-auth-bff]
     ├──▶ vx-platform-pg    :5432  (identity/iam/tenant/commerce/product/model/ops/support schema)
     ├──▶ vx-platform-redis :6379  (会话/限流/Token)
-    ├──▶ vx-model-platform     :3100  (模型注册/授权/配额/计量，仅内部访问)
+    ├──▶ Atlas（外部，`vxture-atlas`，模型注册/授权/配额/计量）
     └──▶ 外部服务（SMTP / OAuth provider / 业务 SSO 调用方）
-
-[vx-model-platform]
-    ├──▶ vx-platform-pg    :5432  (model / commerce)
-    └──▶ 外部 AI Provider / 私有模型端点
 ```
 
-vx-worker-02/03/04/05 等业务 worker 内部拓扑由外部业务仓库维护，本仓不定义。业务服务如需使用平台 AI 能力，应通过受控 HTTP/API 调用 `vx-model-platform`，不得在业务 worker 部署本仓网关容器。
+vx-worker-02/03/04/05 等业务 worker 内部拓扑由外部业务仓库维护，本仓不定义。业务服务如需使用平台 AI 能力，应通过受控 HTTP/API 调用 Atlas，不得在业务 worker 部署本仓网关容器。
 
 ---
 
@@ -88,7 +84,6 @@ Step 4（并行，依赖 service-* / design-system）
   @vxture/website          @vxture/bff-website
   @vxture/console          @vxture/bff-console
   @vxture/admin            @vxture/bff-admin
-  @vxture/service-model-platform
 ```
 
 Agent / 业务相关目录如需继续构建，必须先在 [`08-code-environment-map.md`](./08-code-environment-map.md) 中明确是否仍属于本仓平台职责；默认不得把它们纳入 vx-worker-02 部署。
@@ -189,7 +184,6 @@ CMD ["node", "portals/website/server.js"]
 | vx-website-bff                     | `node fetch http://127.0.0.1:3011/healthz`    | 30s / 5s / 3                 | 15s          |
 | vx-console-bff                     | `node fetch http://127.0.0.1:3021/healthz`    | 30s / 5s / 3                 | 15s          |
 | vx-admin-bff                       | `node fetch http://127.0.0.1:3031/healthz`    | 30s / 5s / 3                 | 15s          |
-| vx-model-platform                  | `node fetch .../model-platform/health/live`   | 30s / 10s / 3                | 20s          |
 | vx-website / vx-console / vx-admin | `node fetch http://127.0.0.1:3000/api/health` | 30s / 5s / 3                 | 20s          |
 | postgres                           | `pg_isready -U vxture -d platform_main`       | 10s / 5s / 5                 | 10s          |
 | redis                              | `redis-cli -a <secret> ping`                  | 10s / 5s / 5                 | 10s          |
@@ -242,10 +236,9 @@ CMD ["node", "portals/website/server.js"]
 | vx-nginx                                       | 64MB            |
 | vx-website / vx-console / vx-admin             | 各 256MB        |
 | vx-website-bff / vx-console-bff / vx-admin-bff | 各 192MB        |
-| vx-model-platform                              | 192MB           |
 | vx-auth-bff                                    | 128MB           |
 | vx-gateway-bff                                 | 64MB            |
-| **合计**                                       | **~2,300MB**    |
+| **合计**                                       | **~2,100MB**    |
 
 ### vxture-beta（未来临时平台 beta）
 

@@ -266,33 +266,8 @@ services:
       retries: 3
       start_period: 15s
 
-  model-platform:
-    image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_service-model-platform:${VX_IMAGE_TAG:-latest}
-    container_name: vx-platform-model-platform
-    restart: unless-stopped
-    mem_limit: 256m
-    memswap_limit: 256m
-    networks: [vxture-prod]
-    environment:
-      NODE_OPTIONS: --max-old-space-size=192
-    # 绑 worker-01 tailscale IP，把 LLM 网关暴露给 tailnet（worker-02 varda-server 消费）。
-    # 仅 100.100.197.42（tailscale0）可达，不绑 0.0.0.0 公网。见 docs/deployment/varda-worker-02-runbook.md §3。
-    ports: ["100.100.197.42:3100:3100"]
-    env_file:
-      [
-        /srv/vxture/runtime/secrets/platform.env,
-        /srv/vxture/runtime/secrets/platform-app.env,
-        /srv/vxture/runtime/.env.model-platform,
-      ]
-    depends_on:
-      postgres: { condition: service_healthy }
-    healthcheck:
-      test:
-        ["CMD", "curl", "-fsS", "http://127.0.0.1:3100/model-platform/health/live"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
+  # model-platform 服务已退役（2026-07-28，product_250 atlas 仓拆分 cutover 完成）：
+  # 实现整体迁至外部 vxture-atlas 仓，MODEL_PLATFORM_URL 现指向 atlas 主机。
 
   console-bff:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_bff-console:${VX_IMAGE_TAG:-latest}
@@ -315,7 +290,6 @@ services:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
-      model-platform: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3021/healthz"]
       interval: 30s

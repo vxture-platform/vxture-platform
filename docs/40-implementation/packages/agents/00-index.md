@@ -2,7 +2,7 @@
 
 > Agent = agent-server（后端）+ agent-studio（前端）两部分，各自独立文档
 
-> 部署边界：当前 `vxture` 仓库不负责 vx-worker-02/03/04/05 等业务 beta/prod 部署。以下目录存在不代表本仓拥有部署职责；业务 worker 相关部署由外部业务仓库维护。Ruyin 迁移与 vx-worker-02 部署归属 `vxture/agentstudio-ruyin`；Varda 待 Ruyin 模板跑顺后再规划迁移到 `vxture/agentstudio-varda`。`model-platform` 是平台能力，当前随 平台栈部署。
+> 部署边界：当前 `vxture` 仓库不负责 vx-worker-02/03/04/05 等业务 beta/prod 部署。以下目录存在不代表本仓拥有部署职责；业务 worker 相关部署由外部业务仓库维护。Ruyin 迁移与 vx-worker-02 部署归属 `vxture/agentstudio-ruyin`；Varda 待 Ruyin 模板跑顺后再规划迁移到 `vxture/agentstudio-varda`。Atlas（原 model-platform）已拆分为独立仓 `vxture-atlas`，不再随本仓平台栈部署。
 
 ---
 
@@ -19,7 +19,7 @@
 
 ### Ruyin — 超级智能体（已迁出）
 
-Ruyin 代码已迁移到 `vxture/agentstudio-ruyin`。本仓 P7b 已删除 Ruyin 本地实现目录和对应实现文档；本仓仅保留平台 auth / SSO / model-platform 等对外契约说明。
+Ruyin 代码已迁移到 `vxture/agentstudio-ruyin`。本仓 P7b 已删除 Ruyin 本地实现目录和对应实现文档；本仓仅保留平台 auth / SSO / Atlas 等对外契约说明。
 
 ---
 

@@ -1,7 +1,7 @@
 # 技术债登记表
 
-**版本**: 1.9.1
-**更新**: 2026-07-23（**TD-042** 三阶段整改（S2S 改走 C2 + console 权益展示 + 验收）全部完成，已销号）。此前同日：console 权益展示缺口调研衍生 **TD-042**：console-bff quota-usage 端点绕开 C2 契约直查 DB 并重复实现 reset 逻辑。此前 2026-07-16：GitHub Actions workflow 审查衍生两项，均**待全域确认后执行**：**TD-039** 疑似死 CI 凭证审计清理（跨 org 全仓核引用后 revoke）；**TD-040** 变更门控方法论补进 cicd-optimization-playbook。此前 2026-07-14：backlog 对当前架构审计后修正——**TD-010 作废**、**TD-001 改写**、**TD-033 文档 bug 修复**）
+**版本**: 1.10.0
+**更新**: 2026-07-28（atlas 仓拆分 cutover 完成：新增 **TD-043**（平台调用 atlas 无 S2S 鉴权，varda 侧暂缓）；**TD-005/006/007 作废**、**TD-008 范围收窄**（`services/model/platform` 整体退役，实现迁至 `vxture-atlas`）。此前 2026-07-23（**TD-042** 三阶段整改（S2S 改走 C2 + console 权益展示 + 验收）全部完成，已销号）。此前同日：console 权益展示缺口调研衍生 **TD-042**：console-bff quota-usage 端点绕开 C2 契约直查 DB 并重复实现 reset 逻辑。此前 2026-07-16：GitHub Actions workflow 审查衍生两项，均**待全域确认后执行**：**TD-039** 疑似死 CI 凭证审计清理（跨 org 全仓核引用后 revoke）；**TD-040** 变更门控方法论补进 cicd-optimization-playbook。此前 2026-07-14：backlog 对当前架构审计后修正——**TD-010 作废**、**TD-001 改写**、**TD-033 文档 bug 修复**）
 **维护人**: 架构组
 
 ---
@@ -61,10 +61,10 @@
 | [TD-002](#td-002--prisma-schema-集中管理待重构)                                       | Prisma schema 集中管理待重构                                        | Architecture       | Resolved    |                             |
 | [TD-003](#td-003--business-bff-认证流程未实现)                                        | Business BFF 认证流程未实现                                         | Implementation Gap | Resolved    |                             |
 | [TD-004](#td-004--会话空闲超时未实现)                                                 | 会话空闲超时未实现                                                  | Implementation Gap | Open        |                             |
-| [TD-005](#td-005--model-platform-流式响应未实现)                                      | Model Platform 流式响应未实现                                       | Implementation Gap | Open        |                             |
-| [TD-006](#td-006--model-platform-provider-api-key-无轮换机制)                         | Model Platform Provider API Key 无轮换机制                          | Security           | Open        |                             |
-| [TD-007](#td-007--model-platform-provider-重试--降级未实现)                           | Model Platform Provider 重试 / 降级未实现                           | Implementation Gap | Open        |                             |
-| [TD-008](#td-008--model-platform-provider-合同价格为占位数据)                         | Model Platform Provider 合同价格为占位数据                          | Implementation Gap | Open        |                             |
+| [TD-005](#td-005--model-platform-流式响应未实现)                                      | Model Platform 流式响应未实现                                       | Implementation Gap | 作废        |                             |
+| [TD-006](#td-006--model-platform-provider-api-key-无轮换机制)                         | Model Platform Provider API Key 无轮换机制                          | Security           | 作废        |                             |
+| [TD-007](#td-007--model-platform-provider-重试--降级未实现)                           | Model Platform Provider 重试 / 降级未实现                           | Implementation Gap | 作废        |                             |
+| [TD-008](#td-008--model-platform-provider-合同价格为占位数据)                         | Model Platform Provider 合同价格为占位数据（范围收窄=commerce 侧）  | Implementation Gap | Open        |                             |
 | [TD-009](#td-009--surface-命名方案待定)                                               | surface 命名方案待定                                                | Design Pending     | Open        |                             |
 | [TD-010](#td-010--platform-sdk-部分模块计划中未实现)                                  | Platform SDK 部分模块计划中未实现                                   | Implementation Gap | 作废        |                             |
 | [TD-011](#td-011--agent-server-直接读取-process.env-绕过-vxconfigservice)             | agent-server 直接读取 process.env                                   | Security           | Resolved    | 🔴 HIGH                     |
@@ -99,6 +99,7 @@
 | [TD-040](#td-040--变更门控方法论未沉淀进-cicd-optimization-playbook)                  | 变更门控方法论未沉淀进 cicd-optimization-playbook                   | Documentation      | Resolved    | 🟢 LOW                      |
 | [TD-041](#td-041--admin-订阅动作写路径绕过-provisioning-派发与-c3-invalidate)         | admin 订阅动作写路径绕过 provisioning 派发与 C3 invalidate          | Architecture       | Open        | 🟡 MED                      |
 | [TD-042](#td-042--console-bff-quota-usage-绕开-c2-契约直查-db-并重复实现-reset-逻辑)  | console-bff quota-usage 绕开 C2 契约，直查 DB 并重复实现 reset 逻辑 | Architecture       | Resolved    | 🟢 LOW                      |
+| [TD-043](#td-043--平台调用-atlas-无-s2s-鉴权能力数据面均裸调用)                       | 平台调用 atlas 无 S2S 鉴权，能力/数据面均裸调用                     | Security           | Open        | 🟡 MED（varda 侧暂缓）      |
 
 ---
 
@@ -199,6 +200,8 @@
 
 **复核 + 范围收窄（2026-07-13，TD-001~010 批量复核）**：`ChatRequest.stream: true` **已非无效参数**——`runtime.controller.ts::chatStream`（真实 SSE 端点，`text/event-stream`）+ `runtime.service.ts::chatStream`（含模型 fallback 迭代）+ `doubao.provider.ts`（真实上游 SSE 解析，OpenAI 兼容协议）+ `varda-bff/chat.router.ts`（把 SSE 流原样中继到浏览器）——Doubao/OpenAI 兼容 provider 一条链路端到端打通且是真实代码，非占位。但 `claude.provider.ts`/`private.provider.ts` 均未覆写 `chatStream`，落到 `base.provider.ts` 的 `throw new Error("... stream chat is not enabled yet")`。**剩余缺口收窄为**：Claude / 私有部署两个 provider 补齐 streaming 适配，而非"从零打通全链路"。维持 Open，解决方向改为仅覆盖这两个 provider。
 
+**作废（2026-07-28）**：`services/model/platform`（本条描述的实现）已随 atlas 仓拆分整体退役，本仓不再持有该实现。剩余缺口是否成立、如何处理，是 `vxture-atlas` 自己的技术债，不在本仓登记范围。
+
 ---
 
 ### TD-006 — Model Platform Provider API Key 无轮换机制
@@ -217,6 +220,8 @@
 **解决方向**：引入 Secret 管理方案（优先考虑 Kubernetes Secrets + RBAC，或 HashiCorp Vault）；gateway 启动时从 Secret Store 拉取 Key，支持定期无感知轮换；保留环境变量方案作为本地开发 fallback。
 
 **复核（2026-07-13，TD-001~010 批量复核）**：运行时行为未变——`runtime.service.ts::resolveApiKey` 仍直读 `process.env[apiKeyEnvVar]`。但 schema 层已有专为本条设计的落地基础：独立 Model Platform DB 的 `key` schema（`key.provider_api_keys`：`encrypted_key bytea` AES-256-GCM 信封加密 + `encryption_key_id` KMS 引用；`key.key_rotation_logs` 追加型轮换审计表），`60_model.sql` 内甚至有硬注释禁止把 Key 存进 `model.model_providers`/`model_price_rules`，明确指向这个 `key` schema。但全仓 grep `provider_api_keys`/`ProviderApiKey` 零命中——无任何应用代码读写这张表。**性质变化**：不再是"需要先做方案设计"，而是"设计已定、schema 已建，只差应用层接线"，具备条件被提上日程。维持 Open。
+
+**作废（2026-07-28）**：`services/model/platform`（本条描述的实现）已随 atlas 仓拆分整体退役,本仓不再持有该实现。provider-keys vault 在 atlas 侧已重建（`key.provider_api_keys`,product_250 M-3）并列入其批D 待接线范围,不在本仓登记范围。
 
 ---
 
@@ -237,6 +242,8 @@
 
 **复核 + 范围收窄（2026-07-13，TD-001~010 批量复核）**：fallback 路由半部分**已实现且是真实工作代码**——`runtime.service.ts::resolveCandidateModels` 从主模型 `config` 读 `fallbackModelCodes` 数组建候选列表，`chat()`/`chatStream()` 均在 provider 失败时遍历候选并记录 `fallbackAttempt`（字段命名为复数数组而非原方案的单值 `fallback_model_code`，语义一致）。重试半部分**仍完全空白**——全仓 grep `retry|backoff|maxRetries|circuit.?breaker` 在 model platform 代码内零命中，无 exponential backoff、无 circuit breaker。**剩余缺口收窄为**：仅重试与熔断，fallback 路由部分从解决方向中移除（已完成）。维持 Open。
 
+**作废（2026-07-28）**：`services/model/platform`（本条描述的实现）已随 atlas 仓拆分整体退役,本仓不再持有该实现。剩余缺口是否成立、如何处理,是 `vxture-atlas` 自己的技术债,不在本仓登记范围。
+
 ---
 
 ### TD-008 — Model Platform Provider 合同价格为占位数据
@@ -255,6 +262,8 @@
 **解决方向**：商务确认各 Provider 合同单价后替换 seed 数据；在 `commerce` 域实现 overage 计费规则、add-on 定价逻辑和客户账单生成。上生产前完成此项。
 
 **复核（2026-07-13，TD-001~010 批量复核，⚠️ 优先级待定，非常规复核收口）**：现状比原描述更糟——`seed-catalog.mjs` 里 `model.model_price_rules`（表已从原文的 `ai_model_cost_rate` 重命名重构）的 `input_unit_price`/`output_unit_price` 是**字面硬编码 0**，不是"占位数字"而是"零价"；旁边同一 seed 文件对产品目录定价也有"价格=0 待 owner 定价"的注释。commerce 侧有真实的纸面设计——`data_commerce_210_billing.md` 已定义 `item_type='metered_overage'` 账单行算法（按订阅周期窗口聚合 `metering.usage_events`，按 `model_price_rule` 计价），`billing.invoice_items` 的 CHECK 约束已包含 `metered_overage`——但全仓 grep `metered_overage` 零命中，`services/commerce/invoice/src/service/invoice.service.ts` 仅 74 行，只覆盖收据/账单地址，**无任何账单生成或超额计费的实现代码**。本条自己的原文写着"**上生产前完成此项**"，但平台已带真实租户上线一段时间——即当前生产环境的 AI 用量超额费用要么完全不计费、要么计费为零，这是本次复核中唯一发现的、可能有实质商业影响的缺口，与本次批量复核中其余"部分已被后续工作解决"的条目性质不同。**未改动状态与优先级**——是否需要立即处理、还是当前阶段本就不打算商业化超额计费（如仍处于统一定价试用期），是业务判断，不是代码可回答的问题，留给 owner 决定后再定级。
+
+**范围收窄（2026-07-28，services/model/platform 退役）**：`model.model_price_rules` 随 atlas 仓拆分迁到 atlas 自己的库（`/capability/price-rules`，见 `vxture-atlas/docs/20-specs/10-http-surface.md`），本仓不再持有该表。本条剩余缺口收窄为**本仓 commerce 侧**：账单/发票不消费任何用量计价数据、`metered_overage` 账单行生成始终缺失——这半个缺口与"数据在哪个库"无关，本仓仍需实现。若要落地，需先接通 atlas 的 usage-summaries/price-rules 只读接口（S2S）。维持 Open。
 
 ---
 
@@ -971,3 +980,22 @@
 **销号（2026-07-23）**：`workplans/console-entitlement-display.md` 三阶段全部完成。验收方法：①代码级审查确认 console-bff 侧（`getEntitlements`/`sumQuotaPools`）对 C2 返回值只做逐字段直传/求和聚合，不存在任何独立 tier/limits/reset 再推导逻辑；②上游合并算法既有单测 `entitlement-view.spec.ts` 27/27 通过（含 product_220 §2 primary+bundled 共存例、needsReset day/month 边界）；③全仓 grep 确认 `needsReset`/`quotaNeedsReset` 仅 `entitlement-view.ts` 一处实现，`console-bff` 侧零残留。真实多租户浏览器冒烟留给部署后由 owner 视需要验证，不阻塞本条销号（本条追踪的是"重复实现"技术债，已消除）。
 
 **进展（2026-07-23，阶段1完成，见 `workplans/console-entitlement-display.md`）**：console-bff 新增 `PlatformEntitlementsClient`，`quota-usage` 端点已完全改走 C2 响应聚合（`sumQuotaPools()`），`QUOTA_POOL_SQL`/`quotaNeedsReset()` 已删除——重复实现的根因已消除。新增 `GET /api/subscription/entitlements` 暴露 tier/status/bundled/limits。**进展（2026-07-23，阶段2完成）**：console 前端 `SubscriptionPage.tsx` overview tab 新增 "Current entitlements" 区块（`DataTable`），消费阶段1新增的 `GET /api/subscription/entitlements`，展示每产品 tier/status（六值+null 直接透传，不折叠）/bundled/limits。`console-bff.ts` 新增 `fetchEntitlements()`。
+
+---
+
+### TD-043 — 平台调用 atlas 无 S2S 鉴权，能力/数据面均裸调用
+
+| 字段         | 内容                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------- |
+| **分类**     | Security                                                                                          |
+| **状态**     | Open                                                                                              |
+| **登记日期** | 2026-07-28                                                                                        |
+| **来源**     | atlas 路径改名排查（随手发现）；`vxture-atlas/docs/20-specs/10-http-surface.md`（权威鉴权要求表） |
+
+**描述**：atlas 的能力面（`/capability/*`）与数据面（`/v1/*`）均要求调用方带 `S2sAuthGuard` 校验的 RS256 `aud=atlas` bearer token（`vxture-atlas/docs/20-specs/10-http-surface.md`）。本仓两处调用方完全不带任何鉴权头：`bff/console-bff/src/routers/model-platform.router.ts`（`modelPlatformRequest()` 零 headers）、`packages/ai/model-runtime-client/src/llm/client.ts`（agent-server/varda 聊天用，`chat`/`chatStream` 均零 headers）。平台已有现成的 `tool:{target}` scope client-credentials 换票机制（`bff/auth-bff/src/oidc/token-exchange.service.ts`，product_210 §3/D3），两处调用方均未接入。
+
+**影响**：若 atlas 严格执行该守卫（已确认：严格执行），这两条链路的请求会被拒绝（401/403），而不只是路径改名前的 404——console-bff 侧影响租户可见模型/授权/配额/用量展示；model-runtime-client 侧影响 varda 聊天。
+
+**解决方向**：两处调用方接入 `tool:atlas` scope 的 S2S 换票（参考 `bff/auth-bff/src/oidc/token-exchange.service.ts` 的 client-credentials 铸币路径，而非 console-bff 现有的 `AUTH_INTERNAL_TOKEN` 静态密钥模式——那套只适用于平台内部同信任域服务，atlas 是外部仓、不同信任域，必须走签名 OIDC token）。`model-runtime-client` 本身无 NestJS DI（TD-016 同款约束），token 需由调用方（agent-server/varda）注入，类似 `modelPlatformUrl` 现有的显式传参模式。
+
+**暂缓（2026-07-28，owner 拍板）**：varda 本身按拆库计划将部署在 worker-02，当前部署形态本就过渡中——**varda 侧暂缓处理，保留页面/功能入口，后端鉴权接线搁置**，随 worker-02 部署一并解决，不单独立项抢跑。console-bff 侧未获得同样的暂缓，维持 Open、按正常优先级排期。

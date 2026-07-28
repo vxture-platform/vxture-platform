@@ -70,7 +70,6 @@ Both surfaces share the same platform infrastructure and are governed independen
 │  SERVICE LAYER                                                  │
 |                                                                 |
 |   services/                                                     |
-|      model/      platform      (@vxture/service-model-platform)     |
 |      commerce/   billing       (@vxture/service-billing)        |
 |                  subscription  (@vxture/service-subscription)   |
 |      identity/   iam           (@vxture/service-iam)            |
@@ -219,7 +218,7 @@ agent-server/
   agent{N}/
 ```
 
-Ruyin 已迁出到 `vxture/agentstudio-ruyin`，其前端、BFF、私有后端和 vx-worker-02 部署不再属于本仓实现范围。本仓只保留平台 SSO、auth-bff 和 Model Platform 的对外契约说明。
+Ruyin 已迁出到 `vxture/agentstudio-ruyin`，其前端、BFF、私有后端和 vx-worker-02 部署不再属于本仓实现范围。本仓只保留平台 SSO、auth-bff 和 Atlas（原 Model Platform，已迁至 `vxture-atlas` 仓）的对外契约说明。
 
 Unlike platform services, agent servers are **not shared across
 the entire platform**. They are designed to evolve quickly and

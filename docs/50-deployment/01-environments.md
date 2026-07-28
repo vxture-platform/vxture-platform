@@ -30,7 +30,7 @@
 3. Cloudflare Turnstile 的 **secret key** 放在实际做服务端校验的 BFF。
 4. OAuth provider secret 放在实际处理 OAuth start/callback 的服务。
 5. SMTP 配置只属于 `secrets/platform-mail.env`，并且只注入实际发送邮件的 BFF。
-6. Provider API Key 只放在 `model-platform`，业务 worker 不持有平台 Provider Key。
+6. Provider API Key 归 Atlas（外部仓 `vxture-atlas`）持有，本仓不再持有；业务 worker 也不持有平台 Provider Key。
 7. `ALIYUN_SMS_*` 只属于 `secrets/platform-sms.env`，只注入实际发送短信的 BFF（当前 `auth-bff`）。
 8. IdP 签名私钥 `OIDC_SIGNING_PRIVATE_KEY`（与 `OIDC_ACTIVE_KID`）只属于 `secrets/platform-identity.env`，只注入 `auth-bff`；公钥 JWK 存 `iam.signing_key`，不入 env。
 
@@ -113,8 +113,6 @@ secrets/redis-password
 | `/srv/vxture/runtime/.env.console-bff`              | 否       | `vx-console-bff`                           | 租户控制台 BFF 专属配置                         |
 | `deploy/.env.admin-bff.example`                     | 是       | 人工参考 / `12-generate-env-files.sh` 对齐 | admin-bff 服务专属模板                          |
 | `/srv/vxture/runtime/.env.admin-bff`                | 否       | `vx-admin-bff`                             | operator realm RP 会话（RP-only，无 Turnstile） |
-| `deploy/.env.model-platform.example`                | 是       | 人工参考 / `12-generate-env-files.sh` 对齐 | model-platform 服务专属模板                     |
-| `/srv/vxture/runtime/.env.model-platform`           | 否       | `vx-model-platform`                        | AI Provider Key、AI 网关运行配置                |
 | `deploy/.env.gateway-bff.example`                   | 是       | 人工参考 / `12-generate-env-files.sh` 对齐 | gateway-bff 服务专属模板                        |
 | `/srv/vxture/runtime/.env.gateway-bff`              | 否       | `vx-gateway-bff`                           | 上游 BFF origin、CORS 白名单                    |
 
@@ -132,7 +130,6 @@ secrets/redis-password
 | `website-bff`                   | `secrets/platform.env` + `secrets/platform-mail.env` + `.env.website-bff`                                                             | 共享密钥 + 邮件配置 + website 专属配置            |
 | `console-bff`                   | `secrets/platform.env` + `secrets/platform-mail.env` + `.env.console-bff`                                                             | 共享密钥 + 邮件配置 + console 专属配置            |
 | `admin-bff`                     | `secrets/platform.env` + `secrets/platform-mail.env` + `.env.admin-bff`                                                               | 共享密钥 + 邮件配置 + admin 专属配置              |
-| `model-platform`                | `secrets/platform.env` + `.env.model-platform`                                                                                        | 共享数据库 + AI Provider Key                      |
 | `gateway-bff`                   | `.env.gateway-bff`                                                                                                                    | 纯代理，不需要平台共享密钥                        |
 | `website` / `console` / `admin` | Compose `environment` + 镜像构建变量                                                                                                  | Next.js 公开变量主要在构建期注入                  |
 
@@ -171,7 +168,7 @@ secrets/redis-password
 | `SMTP_PASS`   | 是   | SMTP 登录密码或授权码                 | 所有 `.env.<service>` |
 | `SMTP_FROM`   | 是   | 默认发件人                            | 所有 `.env.<service>` |
 
-该文件只注入 `auth-bff`、`website-bff`、`console-bff`、`admin-bff`。`model-platform` 和 `gateway-bff` 不发送邮件，不应获得 SMTP 密钥。
+该文件只注入 `auth-bff`、`website-bff`、`console-bff`、`admin-bff`。`gateway-bff` 不发送邮件，不应获得 SMTP 密钥。
 
 如果未来需要不同发件人身份，不直接在 `.env.<service>` 复制整套 SMTP 配置；应先补充设计，再决定是否拆分 `platform-mail.env` 或新增更细粒度的邮件 env。
 
@@ -267,16 +264,16 @@ website-bff 只透传 `turnstileToken` 到 `auth-bff`，不做 Turnstile 服务�
 
 职责：租户控制台 BFF、认证请求代理、租户/成员/账单/订阅聚合、Model Platform 代理。
 
-| 变量                     | 必填 | 说明                             |
-| ------------------------ | ---- | -------------------------------- |
-| `NODE_ENV`               | 是   | `production`                     |
-| `CONSOLE_BFF_PORT`       | 是   | 默认 `3021`                      |
-| `DB_POOL_MAX`            | 否   | DB pool 上限                     |
-| `JWT_ACCESS_EXPIRES_IN`  | 否   | middleware 验证 JWT 时的运行参数 |
-| `JWT_REFRESH_EXPIRES_IN` | 否   | 与共享 auth 配置保持一致         |
-| `AUTH_COOKIE_DOMAIN`     | 是   | `.vxture.com`                    |
-| `AUTH_BFF_URL`           | 是   | `http://vx-auth-bff:3090`        |
-| `MODEL_PLATFORM_URL`     | 是   | `http://vx-model-platform:3100`  |
+| 变量                     | 必填 | 说明                                                         |
+| ------------------------ | ---- | ------------------------------------------------------------ |
+| `NODE_ENV`               | 是   | `production`                                                 |
+| `CONSOLE_BFF_PORT`       | 是   | 默认 `3021`                                                  |
+| `DB_POOL_MAX`            | 否   | DB pool 上限                                                 |
+| `JWT_ACCESS_EXPIRES_IN`  | 否   | middleware 验证 JWT 时的运行参数                             |
+| `JWT_REFRESH_EXPIRES_IN` | 否   | 与共享 auth 配置保持一致                                     |
+| `AUTH_COOKIE_DOMAIN`     | 是   | `.vxture.com`                                                |
+| `AUTH_BFF_URL`           | 是   | `http://vx-auth-bff:3090`                                    |
+| `MODEL_PLATFORM_URL`     | 是   | 外部 Atlas 主机地址（`vxture-atlas` 仓，不再是本仓内部容器） |
 
 禁止放入：
 
@@ -315,22 +312,6 @@ console-bff 只透传 tenant 登录请求到 `auth-bff`。
 - `SMTP_*`
 
 admin-bff 已 RP-only（Batch 8）：运营登录与其 Turnstile 在 IdP(`auth-bff`) 完成，admin-bff 读取 operator RP 会话，自身不校验任何 Turnstile。
-
-### model-platform
-
-文件：`/srv/vxture/runtime/.env.model-platform`
-
-职责：平台 AI 模型接入网关，持有 Provider Key，业务 worker 只能通过受控 HTTP/API 调用。
-
-| 变量                  | 必填   | 说明                   |
-| --------------------- | ------ | ---------------------- |
-| `NODE_ENV`            | 是     | `production`           |
-| `MODEL_PLATFORM_PORT` | 是     | 默认 `3100`            |
-| `DOUBAO_API_KEY`      | 视模型 | Doubao Provider Key    |
-| `OPENAI_API_KEY`      | 视模型 | OpenAI Provider Key    |
-| `ANTHROPIC_API_KEY`   | 视模型 | Anthropic Provider Key |
-
-Provider key 变量名必须与模型注册记录中的 `apiKeyEnvVar` 对齐。
 
 ### gateway-bff
 
@@ -399,7 +380,7 @@ accounts surface（运营登录 UI）
 | operator/admin CF secret                       | `.env.auth-bff`                                                        | `.env.admin-bff` / `.env.website-bff` / `.env.console-bff` |
 | Turnstile site key                             | GitHub Actions Secrets / build args                                    | VXTURE_DEPLOY_HOST `.env.*`                                |
 | OAuth provider secret                          | `.env.auth-bff`                                                        | `.env.website-bff` / `.env.console-bff` / `.env.admin-bff` |
-| Provider API Key                               | `.env.model-platform`                                                  | BFF env / business worker env                              |
+| Provider API Key                               | 归 Atlas（外部仓，本仓不再持有）                                       | BFF env / business worker env                              |
 
 ---
 
@@ -426,8 +407,7 @@ $pairs = @(
   @("auth-bff", "/srv/vxture/runtime/.env.auth-bff", "deploy/.env.auth-bff.example"),
   @("website-bff", "/srv/vxture/runtime/.env.website-bff", "deploy/.env.website-bff.example"),
   @("console-bff", "/srv/vxture/runtime/.env.console-bff", "deploy/.env.console-bff.example"),
-  @("admin-bff", "/srv/vxture/runtime/.env.admin-bff", "deploy/.env.admin-bff.example"),
-  @("model-platform", "/srv/vxture/runtime/.env.model-platform", "deploy/.env.model-platform.example")
+  @("admin-bff", "/srv/vxture/runtime/.env.admin-bff", "deploy/.env.admin-bff.example")
 )
 foreach ($pair in $pairs) {
   $real = @(Get-Content $pair[1] | Where-Object { $_ -match '^\s*[A-Z0-9_]+=' } | ForEach-Object { ($_ -split '=', 2)[0].Trim() })

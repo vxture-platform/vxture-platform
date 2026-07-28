@@ -357,49 +357,7 @@ cleanup_after_at
 
 # 6. Model Platform 架构
 
-## 6.1 核心思想
-
-业务系统不允许直接调用模型厂商，也不部署 `vxture` 仓库的 Model Platform。
-
-必须通过：
-
-```txt
-Platform Model Platform（VXTURE_DEPLOY_HOST / 未来独立平台 AI 节点）
-```
-
-统一接入。
-
----
-
-## 6.2 Model Platform 职责
-
-Model Platform 负责：
-
-```txt
-模型路由
-Token统计
-配额校验
-限流
-缓存
-Provider抽象
-统一审计
-```
-
----
-
-## 6.3 AI 调用链路
-
-```txt
-Business Service
-    ↓
-Platform Model Platform
-    ↓
-Quota Service
-    ↓
-Provider Adapter
-    ↓
-OpenAI / Claude / DeepSeek / Doubao
-```
+业务系统不允许直接调用模型厂商。统一模型接入层的终态产品名是 **Atlas**——2026-07-24 已拆分为独立仓 `vxture-atlas`，不再是本仓部署单元；架构/职责/调用链权威见 [`40-model-platform.md`](./40-model-platform.md)（已改为退役指针）与 `vxture-atlas` 仓自身文档。
 
 ---
 
@@ -468,7 +426,7 @@ tenant_usage
 
 - 平台控制面：`vx-platform` 网络（VXTURE_DEPLOY_HOST）
 - 每个业务数据面：独立网络，由外部业务仓库定义（vx-worker-02/03/04/05 等）
-- 平台 Model Platform：属于平台控制面，当前随 部署；资源或隔离要求提高时迁到独立平台 AI 节点，不迁入业务 worker
+- Atlas（原 Model Platform）：已拆分为独立仓 `vxture-atlas`，不再是本仓部署单元
 
 容器通过容器名访问，禁止固定容器 IP。
 
@@ -505,7 +463,7 @@ vx-varda-bff, vx-varda-server, vx-varda-pg, vx-varda-redis
 vx-{business}-bff, vx-{business}-server, vx-{business}-pg, vx-{business}-redis
 ```
 
-不同业务相互隔离，一个业务崩溃不影响平台控制面。业务容器如需使用 AI 能力，只能通过受控 HTTP/API 调用平台 Model Platform，禁止在业务 worker 部署 `vx-model-platform` 或持有平台 Provider Key。
+不同业务相互隔离，一个业务崩溃不影响平台控制面。业务容器如需使用 AI 能力，只能通过受控 HTTP/API 调用 Atlas，禁止在业务 worker 自行部署模型网关或持有平台 Provider Key。
 
 详见 [`docs/50-deployment/04-services.md`](../../50-deployment/04-services.md)。
 

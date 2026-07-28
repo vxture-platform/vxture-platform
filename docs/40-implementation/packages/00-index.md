@@ -69,16 +69,15 @@
 
 ## Service 层（Domain）→ [`services/index.md`](./services/00-index.md)
 
-| 文件                                                            | 包名                             | 业务域                                                      |
-| --------------------------------------------------------------- | -------------------------------- | ----------------------------------------------------------- |
-| [`services/model-platform.md`](./services/40-model-platform.md) | `@vxture/service-model-platform` | Model Platform 当前合并实现：模型控制面 / 运行面 / 配额计量 |
-| [`services/iam.md`](./services/20-iam.md)                       | `@vxture/service-iam`            | 身份与账户认证                                              |
-| [`services/billing.md`](./services/10-billing.md)               | `@vxture/service-billing`        | 账单 / 计费                                                 |
-| [`services/subscription.md`](./services/70-subscription.md)     | `@vxture/service-subscription`   | 订阅 / Feature Gating                                       |
-| [`services/mail.md`](./services/30-mail.md)                     | `@vxture/service-mail`           | 邮件发送 / 验证码                                           |
-| [`services/sms.md`](./services/60-sms.md)                       | `@vxture/service-sms`            | 短信发送                                                    |
-| [`services/ticket.md`](./services/80-ticket.md)                 | `@vxture/service-ticket`         | 工单支持                                                    |
-| [`services/organization.md`](./services/50-organization.md)     | `@vxture/service-organization`   | 租户组织只读服务                                            |
+| 文件                                                        | 包名                           | 业务域                |
+| ----------------------------------------------------------- | ------------------------------ | --------------------- |
+| [`services/iam.md`](./services/20-iam.md)                   | `@vxture/service-iam`          | 身份与账户认证        |
+| [`services/billing.md`](./services/10-billing.md)           | `@vxture/service-billing`      | 账单 / 计费           |
+| [`services/subscription.md`](./services/70-subscription.md) | `@vxture/service-subscription` | 订阅 / Feature Gating |
+| [`services/mail.md`](./services/30-mail.md)                 | `@vxture/service-mail`         | 邮件发送 / 验证码     |
+| [`services/sms.md`](./services/60-sms.md)                   | `@vxture/service-sms`          | 短信发送              |
+| [`services/ticket.md`](./services/80-ticket.md)             | `@vxture/service-ticket`       | 工单支持              |
+| [`services/organization.md`](./services/50-organization.md) | `@vxture/service-organization` | 租户组织只读服务      |
 
 ## Agent 层 → [`agents/index.md`](./agents/00-index.md)
 

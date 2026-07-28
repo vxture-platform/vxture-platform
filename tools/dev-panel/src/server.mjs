@@ -31,22 +31,6 @@ const ROOT_ENV = loadRootEnv();
 /** @type {Array<{id:string,name:string,port:number,url:string,command:string,priority:number,env?:Record<string,string>,healthChecks:Array<{label:string,kind?:'http'|'tcp',url?:string,port?:number,okStatuses?:number[]}>}>} */
 const SERVICES = [
   {
-    id: "model-platform",
-    name: "Model Platform",
-    port: 3100,
-    priority: 0,
-    url: "http://localhost:3100",
-    command: "pnpm --filter @vxture/service-model-platform dev",
-    healthChecks: [
-      { label: "port", kind: "tcp", port: 3100 },
-      {
-        label: "models",
-        url: "http://localhost:3100/model-platform/models",
-        okStatuses: [200],
-      },
-    ],
-  },
-  {
     id: "website-bff",
     name: "Website BFF",
     port: 3011,
@@ -269,7 +253,6 @@ const SERVICES = [
  */
 const CARD_ORDER = [
   "auth-bff",
-  "model-platform",
   "website-bff",
   "console-bff",
   "admin-bff",
@@ -288,7 +271,6 @@ const CARD_ORDER_INDEX = new Map(CARD_ORDER.map((id, index) => [id, index]));
 /** 启动顺序 — 按依赖顺序逐级等待健康检查通过，并尽量贴近卡片分组顺序 */
 const START_ORDER = [
   "auth-bff",
-  "model-platform",
   "website-bff",
   "console-bff",
   "admin-bff",

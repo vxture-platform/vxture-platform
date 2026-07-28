@@ -20,7 +20,7 @@
 # 运行：bash 33-recreate-service.sh <service> [<service> ...]
 #   service = compose 服务名（不是容器名）：
 #     auth-bff  admin-bff  console-bff  website-bff  gateway-bff
-#     platform-api  model-platform  website  console  admin  accounts
+#     platform-api  website  console  admin  accounts  opera  opera-bff
 #   （postgres/redis 有状态，本脚本拒绝重建——改配置请另行评估。）
 #
 # 注意：本脚本只重载 env / 重建容器，**不拉新镜像、不改代码版本**。要上新代码走晋升 → deploy。
@@ -39,11 +39,12 @@ declare -A CONTAINER_OF=(
   [website-bff]=vx-platform-website-bff
   [gateway-bff]=vx-platform-gateway-bff
   [platform-api]=vx-platform-api
-  [model-platform]=vx-platform-model-platform
   [website]=vx-platform-website
   [console]=vx-platform-console
   [admin]=vx-platform-admin
   [accounts]=vx-platform-accounts
+  [opera]=vx-platform-opera
+  [opera-bff]=vx-platform-opera-bff
 )
 
 if [ "$#" -eq 0 ]; then

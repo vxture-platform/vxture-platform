@@ -35,7 +35,7 @@
 | Next.js / 前端 HTTP 应用 | `GET /api/health` | `GET /api/ready`  |
 | NestJS / 后端服务        | `GET /healthz`    | `GET /readyz`     |
 
-> 现存 `model-platform` 的 `/model-platform/health/{live,ready,diagnostics}` 是命名空间化变体，可保留；新服务用上表规范路径。
+> 新服务一律用上表规范路径。
 
 ---
 
@@ -201,13 +201,13 @@ export function buildHealthIdentity(opts: {
 
 **本仓（vxture-platform）**：
 
-| 服务                                        | 现状                                     | 差距                                                  |
-| ------------------------------------------- | ---------------------------------------- | ----------------------------------------------------- |
-| website / console / admin / accounts (Next) | `{status:"ok"}`                          | 缺整个身份块                                          |
-| console-bff / admin-bff / website-bff       | `{status, service, timestamp}`           | 缺 version/gitSha/stage/buildTime；`timestamp`→`time` |
-| auth-bff / platform-api                     | `{status, service, version:"1.0.0"}`     | **硬编码假版本**；缺 gitSha/stage/buildTime/time      |
-| model-platform                              | `live`/`ready`/`diagnostics`（结构最好） | 身份块缺 version/gitSha/stage/buildTime               |
-| 全部镜像                                    | 无 version/sha/stage 注入                | 需补 §4 build-args                                    |
+| 服务                                          | 现状                                     | 差距                                                  |
+| --------------------------------------------- | ---------------------------------------- | ----------------------------------------------------- |
+| website / console / admin / accounts (Next)   | `{status:"ok"}`                          | 缺整个身份块                                          |
+| console-bff / admin-bff / website-bff         | `{status, service, timestamp}`           | 缺 version/gitSha/stage/buildTime；`timestamp`→`time` |
+| auth-bff / platform-api                       | `{status, service, version:"1.0.0"}`     | **硬编码假版本**；缺 gitSha/stage/buildTime/time      |
+| model-platform（2026-07-28 已退役，见下方注） | `live`/`ready`/`diagnostics`（结构最好） | 已随服务退役失效，不再需要修                          |
+| 全部镜像                                      | 无 version/sha/stage 注入                | 需补 §4 build-args                                    |
 
 **跨仓（各仓 owner 自行修正）**：
 

@@ -16,7 +16,6 @@ COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 COMPOSE_FILE="$COMPOSE_DIR/compose.platform.yml"
 RUNTIME_DIR="${RUNTIME_DIR:-/srv/vxture/runtime}"
 NGINX_COMPOSE_FILE="/srv/vxture/data/nginx/compose.yml"
-MODEL_PLATFORM_CONTAINER="vx-platform-model-platform"
 
 BASELINE_UBUNTU_VERSION="26.04"
 BASELINE_NODE_MAJOR="24"
@@ -176,7 +175,6 @@ check_runtime_files() {
   check_required_file "$RUNTIME_DIR/.env.website-bff"
   check_required_file "$RUNTIME_DIR/.env.console-bff"
   check_required_file "$RUNTIME_DIR/.env.admin-bff"
-  check_required_file "$RUNTIME_DIR/.env.model-platform"
   check_required_file "$RUNTIME_DIR/.env.gateway-bff"
   check_required_file "$RUNTIME_DIR/secrets/platform.env"
   check_required_file "$RUNTIME_DIR/secrets/platform-mail.env"
@@ -265,76 +263,6 @@ check_container_health() {
       high "容器状态异常：$name status=$status health=$health"
     fi
   done
-}
-
-check_model_platform_health() {
-  local status
-  local health
-
-  if ! docker inspect "$MODEL_PLATFORM_CONTAINER" >/dev/null 2>&1; then
-    high "Model Platform 容器缺失：$MODEL_PLATFORM_CONTAINER"
-    return
-  fi
-
-  status="$(docker inspect -f '{{.State.Status}}' "$MODEL_PLATFORM_CONTAINER" 2>/dev/null || true)"
-  health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$MODEL_PLATFORM_CONTAINER" 2>/dev/null || true)"
-  if [ "$status" = "running" ] && { [ "$health" = "healthy" ] || [ "$health" = "none" ]; }; then
-    ok "Model Platform 容器运行正常：$MODEL_PLATFORM_CONTAINER ($health)"
-  else
-    high "Model Platform 容器状态异常：$MODEL_PLATFORM_CONTAINER status=$status health=$health"
-  fi
-}
-
-check_model_platform_readiness() {
-  local payload
-
-  if ! docker inspect "$MODEL_PLATFORM_CONTAINER" >/dev/null 2>&1; then
-    high "Model Platform readiness 无法检查：容器缺失"
-    return
-  fi
-
-  if ! payload="$(docker exec "$MODEL_PLATFORM_CONTAINER" curl -fsS --max-time 10 "http://localhost:3100/model-platform/health/ready" 2>/dev/null)"; then
-    high "Model Platform readiness endpoint 不可达"
-    return
-  fi
-
-  if printf '%s\n' "$payload" | grep -q '"status":"ready"'; then
-    ok "Model Platform readiness=ready"
-    return
-  fi
-
-  if printf '%s\n' "$payload" | grep -q '"status":"degraded"'; then
-    medium "Model Platform readiness=degraded"
-    return
-  fi
-
-  high "Model Platform readiness=blocked 或响应异常"
-}
-
-check_model_platform_metrics() {
-  local payload
-
-  if ! docker inspect "$MODEL_PLATFORM_CONTAINER" >/dev/null 2>&1; then
-    high "Model Platform metrics 无法检查：容器缺失"
-    return
-  fi
-
-  if ! payload="$(docker exec "$MODEL_PLATFORM_CONTAINER" curl -fsS --max-time 10 "http://localhost:3100/metrics" 2>/dev/null)"; then
-    high "Model Platform metrics endpoint 不可达"
-    return
-  fi
-
-  if printf '%s\n' "$payload" | grep -Eq '#\\s*TYPE\\s+model_request_in_flight\\s+gauge'; then
-    ok "Model Platform metrics指标就绪（in-flight）"
-    return
-  fi
-
-  if printf '%s\n' "$payload" | grep -Eq '^# HELP model_request_latency_ms '; then
-    ok "Model Platform metrics指标就绪（延迟）"
-    return
-  fi
-
-  low "Model Platform metrics 未包含预期基础指标，可能尚未产生运行流量"
 }
 
 check_nginx_and_tls() {
@@ -445,9 +373,6 @@ check_compose_images
 check_docker_runtime
 check_host_memory
 check_container_health
-check_model_platform_health
-check_model_platform_readiness
-check_model_platform_metrics
 check_nginx_and_tls
 check_firewall
 check_deploy_bundle

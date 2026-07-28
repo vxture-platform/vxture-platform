@@ -53,7 +53,6 @@ check_required_files() {
   check_file "$RUNTIME_DIR/.env.website-bff"
   check_file "$RUNTIME_DIR/.env.console-bff"
   check_file "$RUNTIME_DIR/.env.admin-bff"
-  check_file "$RUNTIME_DIR/.env.model-platform"
   check_file "$RUNTIME_DIR/secrets/pg-password"
   check_file "$RUNTIME_DIR/secrets/redis-password"
   check_file "$RUNTIME_DIR/secrets/platform.env"
@@ -86,48 +85,6 @@ check_platform_health() {
   check_service_health "website-bff" "http://localhost:3001/healthz"
   check_service_health "console-bff" "http://localhost:3021/healthz"
   check_service_health "admin-bff" "http://localhost:3043/healthz"
-  check_service_health "model-platform" "http://localhost:3100/model-platform/health/live"
-}
-
-check_model_platform_readiness() {
-  local payload
-
-  if ! payload="$(compose_cmd exec -T model-platform curl -fsS --max-time 10 "http://localhost:3100/model-platform/health/ready")"; then
-    echo "  [FAIL] model-platform readiness endpoint unreachable"
-    return 1
-  fi
-
-  if printf '%s\n' "$payload" | grep -q '"status":"ready"'; then
-    echo "  [OK] model-platform readiness=ready"
-    return 0
-  fi
-
-  echo "  [FAIL] model-platform readiness is not ready"
-  printf '%s\n' "$payload"
-  return 1
-}
-
-check_model_platform_metrics() {
-  local payload
-
-  if ! payload="$(compose_cmd exec -T model-platform curl -fsS --max-time 10 "http://localhost:3100/metrics")"; then
-    echo "  [FAIL] model-platform metrics endpoint unreachable"
-    return 1
-  fi
-
-  if printf '%s\n' "$payload" | grep -Eq '#\\s*TYPE\\s+model_request_in_flight\\s+gauge'; then
-    echo "  [OK] model-platform metrics output includes in-flight gauge"
-    return 0
-  fi
-
-  if printf '%s\n' "$payload" | grep -Eq '^# HELP model_request_latency_ms '; then
-    echo "  [OK] model-platform metrics output includes latency histogram"
-    return 0
-  fi
-
-  echo "  [WARN] model-platform metrics output is missing expected model metrics"
-  echo "$payload"
-  return 0
 }
 
 check_nginx_runtime() {
@@ -169,12 +126,6 @@ run_check "Docker Compose service status" \
 echo "==> Internal health endpoints"
 check_platform_health
 echo ""
-
-run_check "Model Platform readiness" \
-  check_model_platform_readiness
-
-run_check "Model Platform metrics endpoint" \
-  check_model_platform_metrics
 
 run_check "Nginx config test" \
   check_nginx_runtime

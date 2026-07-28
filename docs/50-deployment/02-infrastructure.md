@@ -6,7 +6,7 @@
 ---
 
 > 节点规格与 Tailscale IP 见 [`docs/50-deployment/00-overview.md` § 节点信息](./00-overview.md)。
-> 本文件只维护 `vxture` 仓库负责的 平台基础设施；vx-worker-02/03/04/05 等业务基础设施由外部业务仓库维护。`model-platform` 属于平台基础设施，随 平台栈部署。
+> 本文件只维护 `vxture` 仓库负责的 平台基础设施；vx-worker-02/03/04/05 等业务基础设施由外部业务仓库维护。Atlas（原 model-platform）已拆仓 `vxture-atlas`，不再随本仓平台栈部署。
 
 ---
 
@@ -114,16 +114,16 @@ docker run -d \
 
 **Schema 分布：**
 
-| Schema     | 管理方                                   | 主要表                                                                                 |
-| ---------- | ---------------------------------------- | -------------------------------------------------------------------------------------- |
-| `identity` | auth-bff / website-bff                   | account, account_credential, account_session, login_attempt, oauth_provider            |
-| `iam`      | console-bff                              | role, permission, role_permission, member_role_binding, capability                     |
-| `tenant`   | website-bff / console-bff                | tenant, tenant_member, tenant_setting, tenant_invitation                               |
-| `product`  | admin-bff                                | product_agent, product_plan, product_feature, product_plan_price                       |
-| `commerce` | admin-bff / console-bff / model-platform | tenant_invoice, tenant_payment, tenant_subscription, tenant_transaction, tenant_credit |
-| `model`    | admin-bff / console-bff / model-platform | model_provider, model_definition, model_grant, model_price_rule, model_policy          |
-| `ops`      | admin-bff                                | admin, role, permission, setting, governance_record, feature_flag                      |
-| `support`  | admin-bff                                | ticket, ticket_event, audit_log, notification_log                                      |
+| Schema     | 管理方                                           | 主要表                                                                                 |
+| ---------- | ------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `identity` | auth-bff / website-bff                           | account, account_credential, account_session, login_attempt, oauth_provider            |
+| `iam`      | console-bff                                      | role, permission, role_permission, member_role_binding, capability                     |
+| `tenant`   | website-bff / console-bff                        | tenant, tenant_member, tenant_setting, tenant_invitation                               |
+| `product`  | admin-bff                                        | product_agent, product_plan, product_feature, product_plan_price                       |
+| `commerce` | admin-bff / console-bff                          | tenant_invoice, tenant_payment, tenant_subscription, tenant_transaction, tenant_credit |
+| `model`    | admin-bff / console-bff（读）；Atlas（外部，写） | model_provider, model_definition, model_grant, model_price_rule, model_policy          |
+| `ops`      | admin-bff                                        | admin, role, permission, setting, governance_record, feature_flag                      |
+| `support`  | admin-bff                                        | ticket, ticket_event, audit_log, notification_log                                      |
 
 ### Redis — platform
 
@@ -209,7 +209,7 @@ bash 19-check-bootstrap-status.sh
 
 ## 外部业务基础设施边界
 
-vx-worker-02/03/04/05 等业务 worker 的业务数据库、Redis、Docker network、Cloudflare Tunnel、业务域名和数据目录由外部业务仓库维护。本仓基础设施文档不得提供业务 worker 初始化命令，避免 AI 或维护者误把业务执行面纳入 `vxture` 仓库部署范围。平台 `vx-model-platform` 不在业务 worker 部署；若外部业务需要 AI 能力，应通过平台提供的受控 HTTP/API 契约接入。
+vx-worker-02/03/04/05 等业务 worker 的业务数据库、Redis、Docker network、Cloudflare Tunnel、业务域名和数据目录由外部业务仓库维护。本仓基础设施文档不得提供业务 worker 初始化命令，避免 AI 或维护者误把业务执行面纳入 `vxture` 仓库部署范围。Atlas 不在业务 worker 部署；若外部业务需要 AI 能力，应通过平台提供的受控 HTTP/API 契约接入。
 
 ---
 

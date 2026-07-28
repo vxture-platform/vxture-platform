@@ -46,8 +46,6 @@ vxture/
 │   └── agent-template-bff/     # @vxture/bff-agent01       (新 Agent BFF 模板)
 │
 ├── services/                   # Shared platform domain services (stable, promoted from agent-server)
-│   ├── model/
-│   │   └── platform/           # @vxture/service-model-platform
 │   ├── commerce/
 │   │   ├── billing/            # @vxture/service-billing
 │   │   └── subscription/       # @vxture/service-subscription
@@ -314,8 +312,6 @@ The `services` directory contains **shared platform domain services**.
 
 ```
 services/
-├── model/         # Model Platform 域
-│   └── platform/           # @vxture/service-model-platform
 ├── commerce/      # 商务域
 │   ├── billing/            # @vxture/service-billing
 │   └── subscription/       # @vxture/service-subscription
@@ -423,7 +419,6 @@ Examples:
 
 @vxture/model-runtime-client
 
-@vxture/service-model-platform
 @vxture/service-billing
 @vxture/service-iam
 @vxture/service-mail
@@ -488,7 +483,6 @@ Shared platform domain services. Organized by business domain in the directory t
 Package names remain `@vxture/service-{name}` regardless of domain grouping.
 
 ```
-model domain:           @vxture/service-model-platform
 commerce domain:     @vxture/service-billing, service-subscription
 identity domain:     @vxture/service-iam
 notification domain: @vxture/service-mail, service-sms

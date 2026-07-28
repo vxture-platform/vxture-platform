@@ -103,7 +103,6 @@ restore_required "$BACKUP_DIR/runtime/.env.gateway-bff" "$RUNTIME_DIR/.env.gatew
 restore_required "$BACKUP_DIR/runtime/.env.website-bff" "$RUNTIME_DIR/.env.website-bff"
 restore_required "$BACKUP_DIR/runtime/.env.console-bff" "$RUNTIME_DIR/.env.console-bff"
 restore_required "$BACKUP_DIR/runtime/.env.admin-bff" "$RUNTIME_DIR/.env.admin-bff"
-restore_required "$BACKUP_DIR/runtime/.env.model-platform" "$RUNTIME_DIR/.env.model-platform"
 
 echo ""
 echo "==> Platform secret files"

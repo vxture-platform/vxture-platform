@@ -269,7 +269,7 @@ auth → tenant → permission → router
 ### `/api/model-platform` — 租户模型平台状态
 
 **所有端点要求已认证且具备当前租户上下文。** Console BFF 不暴露平台级 Provider、模型、价格、策略写操作。
-本域只代理当前 `req.tenant.id` 范围内的只读查询到 `MODEL_PLATFORM_URL`（model-platform 服务内部地址）。
+本域只代理当前 `req.tenant.id` 范围内的只读查询到 `MODEL_PLATFORM_URL`（现指向外部 Atlas 主机，2026-07-28 本仓 model-platform 服务退役后的目标）。
 
 ---
 

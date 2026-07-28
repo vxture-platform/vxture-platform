@@ -18,12 +18,13 @@ vxture-VXTURE_DEPLOY_HOST（阿里云 ECS，公网入口 39.103.62.17）
   ├── Nginx 反向代理（SSL 终止）
   ├── 平台门户（website / admin / console）
   ├── 平台 BFF（website-bff / console-bff / admin-bff / auth-bff / gateway-bff）
-  ├── 平台 Model Platform（模型接入 / 授权 / 配额 / 计量）
   └── 平台数据库（PostgreSQL platform_main + Redis）
+
+模型接入 / 授权 / 配额 / 计量已拆仓（Atlas，`vxture-atlas`，2026-07-24），不在本仓部署范围。
 
 未来可选：
 vxture-beta（临时按量服务器）
-  └── 平台 beta 环境（同 部署服务器的平台服务集合，含 Model Platform，用完关闭）
+  └── 平台 beta 环境（同 部署服务器的平台服务集合，用完关闭）
 
 外部业务仓库：
 vx-worker-02/03/04/05 等（业务执行面，不由本仓部署）
@@ -39,20 +40,20 @@ vx-worker-02/03/04/05 等（业务执行面，不由本仓部署）
 
 ### 核心分层原则
 
-| 分层                     | 服务器             | 内容                                          | 环境          | 本仓职责 |
-| ------------------------ | ------------------ | --------------------------------------------- | ------------- | -------- |
-| **平台控制面 prod**      | VXTURE_DEPLOY_HOST | 门户 + 平台 BFF + Model Platform + 平台数据库 | 常驻 prod     | 是       |
-| **平台控制面 beta**      | vxture-beta        | 门户 + 平台 BFF + Model Platform + 平台数据库 | 临时按量 beta | 待规划   |
-| **业务执行面 beta/prod** | vx-worker-02+      | 业务 BFF + Server + 业务数据库                | 外部业务环境  | 否       |
+| 分层                     | 服务器             | 内容                           | 环境          | 本仓职责 |
+| ------------------------ | ------------------ | ------------------------------ | ------------- | -------- |
+| **平台控制面 prod**      | VXTURE_DEPLOY_HOST | 门户 + 平台 BFF + 平台数据库   | 常驻 prod     | 是       |
+| **平台控制面 beta**      | vxture-beta        | 门户 + 平台 BFF + 平台数据库   | 临时按量 beta | 待规划   |
+| **业务执行面 beta/prod** | vx-worker-02+      | 业务 BFF + Server + 业务数据库 | 外部业务环境  | 否       |
 
 ### 接入层说明
 
-| 接入方式                 | 适用场景                                         | 本仓职责         |
-| ------------------------ | ------------------------------------------------ | ---------------- |
-| Cloudflare Proxy + Nginx | 平台类域名（website / admin / console / api）    | 是               |
-| Tailscale SSH            | GitHub Actions 到 部署服务器的部署通道           | 是               |
-| Cloudflare Tunnel        | 外部业务域名或 vx-worker-02 直连                 | 否               |
-| Tailscale 跨节点调用     | 外部业务调用平台 auth-bff / SSO / Model Platform | 只维护平台侧契约 |
+| 接入方式                 | 适用场景                                      | 本仓职责         |
+| ------------------------ | --------------------------------------------- | ---------------- |
+| Cloudflare Proxy + Nginx | 平台类域名（website / admin / console / api） | 是               |
+| Tailscale SSH            | GitHub Actions 到 部署服务器的部署通道        | 是               |
+| Cloudflare Tunnel        | 外部业务域名或 vx-worker-02 直连              | 否               |
+| Tailscale 跨节点调用     | 外部业务调用平台 auth-bff / SSO / Atlas       | 只维护平台侧契约 |
 
 ---
 
@@ -78,33 +79,32 @@ vx-worker-02/03/04/05 等（业务执行面，不由本仓部署）
 
 ### VXTURE_DEPLOY_HOST — 平台控制面（仅 prod，无 beta）
 
-| 服务                  | 容器名              | 端口     | 说明                                      |
-| --------------------- | ------------------- | -------- | ----------------------------------------- |
-| Nginx                 | `vx-nginx`          | 80 / 443 | SSL 终止、所有子域名反向代理              |
-| website               | `vx-website`        | 3010     | Next.js，vxture.com 官网/注册/登录        |
-| console               | `vx-console`        | 3020     | Next.js，console.vxture.com 租户工作台    |
-| admin                 | `vx-admin`          | 3030     | Next.js，y.vxture.com 运营后台            |
-| gateway-bff           | `vx-gateway-bff`    | 8000     | 唯一公共 API 入口                         |
-| auth-bff              | `vx-auth-bff`       | 3090     | JWT 唯一签发源，所有 BFF 依赖             |
-| website-bff           | `vx-website-bff`    | 3011     | 注册/登录/租户初始化                      |
-| console-bff           | `vx-console-bff`    | 3021     | 租户管理/成员/账单/订阅                   |
-| admin-bff             | `vx-admin-bff`      | 3031     | 平台运营管理                              |
-| model-platform        | `vx-model-platform` | 3100     | 平台 AI 接入网关，模型路由/授权/配额/计量 |
-| **platform-postgres** | `vx-platform-pg`    | 内部     | 平台数据库（见 Schema 表）                |
-| **platform-redis**    | `vx-platform-redis` | 内部     | 会话/限流/Token 黑名单                    |
+| 服务                  | 容器名              | 端口     | 说明                                   |
+| --------------------- | ------------------- | -------- | -------------------------------------- |
+| Nginx                 | `vx-nginx`          | 80 / 443 | SSL 终止、所有子域名反向代理           |
+| website               | `vx-website`        | 3010     | Next.js，vxture.com 官网/注册/登录     |
+| console               | `vx-console`        | 3020     | Next.js，console.vxture.com 租户工作台 |
+| admin                 | `vx-admin`          | 3030     | Next.js，y.vxture.com 运营后台         |
+| gateway-bff           | `vx-gateway-bff`    | 8000     | 唯一公共 API 入口                      |
+| auth-bff              | `vx-auth-bff`       | 3090     | JWT 唯一签发源，所有 BFF 依赖          |
+| website-bff           | `vx-website-bff`    | 3011     | 注册/登录/租户初始化                   |
+| console-bff           | `vx-console-bff`    | 3021     | 租户管理/成员/账单/订阅                |
+| admin-bff             | `vx-admin-bff`      | 3031     | 平台运营管理                           |
+| **platform-postgres** | `vx-platform-pg`    | 内部     | 平台数据库（见 Schema 表）             |
+| **platform-redis**    | `vx-platform-redis` | 内部     | 会话/限流/Token 黑名单                 |
 
 **平台数据库 Schema 分布（`platform_main`，8 个 schema）：**
 
-| Schema     | 内容                                      | 管理方                                   |
-| ---------- | ----------------------------------------- | ---------------------------------------- |
-| `identity` | 账号、凭证、OAuth、会话、验证码、登录记录 | auth-bff / website-bff                   |
-| `iam`      | 角色、权限、成员角色绑定、能力定义        | console-bff                              |
-| `tenant`   | 租户、成员、配置、邀请                    | website-bff / console-bff                |
-| `product`  | 产品方案、能力定义、定价                  | admin-bff                                |
-| `commerce` | 订单、账单、支付、退款、订阅、积分        | admin-bff / console-bff / model-platform |
-| `model`    | AI 模型目录、授权、定价策略               | admin-bff / console-bff / model-platform |
-| `ops`      | 平台管理员、角色权限、配置、治理记录      | admin-bff                                |
-| `support`  | 工单、审计日志、通知日志                  | admin-bff                                |
+| Schema     | 内容                                      | 管理方                                           |
+| ---------- | ----------------------------------------- | ------------------------------------------------ |
+| `identity` | 账号、凭证、OAuth、会话、验证码、登录记录 | auth-bff / website-bff                           |
+| `iam`      | 角色、权限、成员角色绑定、能力定义        | console-bff                                      |
+| `tenant`   | 租户、成员、配置、邀请                    | website-bff / console-bff                        |
+| `product`  | 产品方案、能力定义、定价                  | admin-bff                                        |
+| `commerce` | 订单、账单、支付、退款、订阅、积分        | admin-bff / console-bff                          |
+| `model`    | AI 模型目录、授权、定价策略               | admin-bff / console-bff（读）；Atlas（外部，写） |
+| `ops`      | 平台管理员、角色权限、配置、治理记录      | admin-bff                                        |
+| `support`  | 工单、审计日志、通知日志                  | admin-bff                                        |
 
 > **VXTURE_DEPLOY_HOST 内存压力提示**：2G RAM 运行全套平台服务较紧。建议 Next.js 使用 `output: 'standalone'`，各容器设置 `--memory` 上限，开启 2G swap 作为应急缓冲。
 
@@ -112,7 +112,7 @@ vx-worker-02/03/04/05 等（业务执行面，不由本仓部署）
 
 业务执行面的目标形态：一台 vx-worker-02 同时承载 Ruyin beta 和 prod，通过独立容器、端口、子域名和数据目录隔离；用户在 beta 满意后，再平滑过渡到 prod。该模式先在 `vxture/agentstudio-ruyin` 中跑通，并沉淀为后续业务仓库工作流模板。
 
-这部分属于外部业务仓库任务。本仓不得新增 vx-worker-02/03/04/05 等业务 worker 的 compose、workflow、secrets、脚本或部署检查单。P7b 已删除本仓 Ruyin 实现目录和 `deploy/vx-worker-02` 历史资产；后续不得重新创建为本仓部署入口。`model-platform` 是平台能力，业务 worker 只能作为受控调用方，不部署本仓网关容器。Varda 迁移需等待 Ruyin 仓库部署闭环稳定后，再规划 `vxture/agentstudio-varda`。
+这部分属于外部业务仓库任务。本仓不得新增 vx-worker-02/03/04/05 等业务 worker 的 compose、workflow、secrets、脚本或部署检查单。P7b 已删除本仓 Ruyin 实现目录和 `deploy/vx-worker-02` 历史资产；后续不得重新创建为本仓部署入口。Atlas 是平台能力（已拆仓 `vxture-atlas`），业务 worker 只能作为受控调用方，不部署本仓网关容器。Varda 迁移需等待 Ruyin 仓库部署闭环稳定后，再规划 `vxture/agentstudio-varda`。
 
 ---
 
@@ -181,16 +181,14 @@ VXTURE_DEPLOY_HOST（平台控制面 prod）
   ├── portals → platform BFFs（内部容器网络）
   ├── platform BFFs → platform-postgres（内部容器网络）
   ├── platform BFFs → platform-redis（内部容器网络）
-  ├── console/admin BFFs → model-platform（内部容器网络）
-  ├── model-platform → platform-postgres（model / commerce）
-  ├── model-platform → 外部 AI Provider / 私有模型端点
+  ├── console/admin BFFs → Atlas（外部，`vxture-atlas`，MODEL_PLATFORM_URL）
   └── auth-bff 对外部业务开放 HTTP/SSO 契约（Tailscale 或公网网关策略另行确认）
 
 外部业务仓库（当前 Ruyin 为 `vxture/agentstudio-ruyin`，后续 Varda 为 `vxture/agentstudio-varda`）
-  └── 如需认证或 AI 能力，只能通过平台公开的 SSO / auth-bff / model-platform HTTP 契约调用，不得引用本仓内部包
+  └── 如需认证或 AI 能力，只能通过平台公开的 SSO / auth-bff / Atlas HTTP 契约调用，不得引用本仓内部包
 ```
 
-**关键约束**：本仓只维护平台侧 auth-bff / SSO / model-platform 契约，不维护业务 worker 容器或部署链路。
+**关键约束**：本仓只维护平台侧 auth-bff / SSO / Atlas 契约，不维护业务 worker 容器或部署链路。
 
 ---
 

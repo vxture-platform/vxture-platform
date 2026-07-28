@@ -8,12 +8,12 @@
 
 ## 包信息
 
-| 项     | 值                                                                             |
-| ------ | ------------------------------------------------------------------------------ |
-| 包名   | `@vxture/model-runtime-client`                                                 |
-| 路径   | `packages/ai/model-runtime-client/`                                            |
-| @layer | `Infrastructure`                                                               |
-| 消费方 | `agent-server/varda`、`services/model/platform`、外部业务仓库中的 Agent Server |
+| 项     | 值                                                  |
+| ------ | --------------------------------------------------- |
+| 包名   | `@vxture/model-runtime-client`                      |
+| 路径   | `packages/ai/model-runtime-client/`                 |
+| @layer | `Infrastructure`                                    |
+| 消费方 | `agent-server/varda`、外部业务仓库中的 Agent Server |
 
 ---
 
@@ -139,7 +139,6 @@ varda-server 的 `ToolUseLoop` 是当前唯一的实现方。
 **允许引用 `@vxture/model-runtime-client` 的包：**
 
 - `agent-server/varda`
-- `services/model/platform`
 - 外部业务仓库中的 Agent Server（通过明确依赖或发布包方式接入）
 
 **禁止引用的包：**

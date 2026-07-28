@@ -4,7 +4,7 @@
  * @layer    Infrastructure
  * @category workflow
  * @description
- *   15 个镜像的 matrix 构建配置（name / image / dockerfile / build-args）。
+ *   14 个镜像的 matrix 构建配置（name / image / dockerfile / build-args）。
  *   被 classify-changes.mjs 的 `--matrix` 模式消费，产出 docker-build 的动态 matrix：
  *   只为「本次需重建」的镜像生成 matrix 项，docs/scripts-only 时为空集 → build job
  *   整体跳过。镜像名 + 路径规则的对应在 classify-changes.mjs 的 IMAGE_RULES 维护，
@@ -119,14 +119,7 @@ export const IMAGES = [
     "build-args":
       "SERVICE_PATH=agent-server/varda\nPACKAGE_FILTER=@vxture/agent-server-varda\nPRISMA_SCHEMA=agent-server/varda/prisma/schema.prisma",
   },
-  // ── 共享服务 ───────────────────────────────────────────────────────────────
-  {
-    name: "platform_service-model-platform",
-    image: "ghcr.io/vxture/platform_service-model-platform",
-    dockerfile: "deploy/docker/Dockerfile.nestjs-prisma",
-    "build-args":
-      "SERVICE_PATH=services/model/platform\nPACKAGE_FILTER=@vxture/service-model-platform\nPRISMA_SCHEMA=services/model/platform/prisma/schema.prisma",
-  },
+  // model-platform 服务已退役（2026-07-28）：实现整体迁至外部 vxture-atlas 仓。
 ];
 
 export const ALL_IMAGE_NAMES = IMAGES.map((entry) => entry.name);

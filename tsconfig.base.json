@@ -77,8 +77,6 @@
       "@vxture/service-iam/*": ["./services/identity/iam/src/*"],
       "@vxture/service-mail": ["./services/notification/mail/src"],
       "@vxture/service-mail/*": ["./services/notification/mail/src/*"],
-      "@vxture/service-model-platform": ["./services/model/platform/src"],
-      "@vxture/service-model-platform/*": ["./services/model/platform/src/*"],
       "@vxture/platform-browser": ["./packages/platform/browser/src"],
       "@vxture/platform-browser/*": ["./packages/platform/browser/src/*"]
     }

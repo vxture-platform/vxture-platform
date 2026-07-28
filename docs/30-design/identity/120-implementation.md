@@ -125,7 +125,7 @@
 ```bash
 cd /srv/vxture/deploy
 # a) 停 DB-连接的应用容器
-docker stop vx-auth-bff vx-console-bff vx-website-bff vx-admin-bff vx-model-platform
+docker stop vx-auth-bff vx-console-bff vx-website-bff vx-admin-bff
 # b) drop+recreate 空库（经 template1，超级用户=POSTGRES_USER，本环境=vxture）
 docker exec vx-platform-pg psql -U vxture -d template1 -c \
   "DROP DATABASE IF EXISTS platform_main WITH (FORCE); CREATE DATABASE platform_main OWNER vxture;"
@@ -135,7 +135,7 @@ bash scripts/21-prepare-platform-database.sh
 env SKIP_DB_CHECK=1 CONFIRM_MIGRATE=yes bash scripts/22-run-platform-migrations.sh
 env SKIP_DB_CHECK=1 CONFIRM_SEED=yes bash scripts/23-seed-platform-database.sh
 # e) 重启现有应用容器（同一镜像）
-docker start vx-auth-bff vx-console-bff vx-website-bff vx-admin-bff vx-model-platform
+docker start vx-auth-bff vx-console-bff vx-website-bff vx-admin-bff
 ```
 
 **验证**：`23-seed` 日志 `SSO provider 凭证注入：9 项` + 逐行 `✓ oauth_provider — google/feishu/dingtalk (is_enabled=true)`、无 ROLLBACK；`select code,is_enabled,redirect_uri from identity.oauth_provider` 三行 `is_enabled=t` + 新回调。

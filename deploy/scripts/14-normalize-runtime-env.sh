@@ -146,7 +146,6 @@ normalize_one "$WORKER_DIR/.env.website-bff.example" "$PLATFORM_DIR/.env.website
 normalize_one "$WORKER_DIR/.env.console-bff.example" "$PLATFORM_DIR/.env.console-bff" "console-bff env"
 normalize_one "$WORKER_DIR/.env.admin-bff.example" "$PLATFORM_DIR/.env.admin-bff" "admin-bff env"
 normalize_one "$WORKER_DIR/.env.platform-api.example" "$PLATFORM_DIR/.env.platform-api" "platform-api env"
-normalize_one "$WORKER_DIR/.env.model-platform.example" "$PLATFORM_DIR/.env.model-platform" "model-platform env"
 normalize_one "$WORKER_DIR/.env.gateway-bff.example" "$PLATFORM_DIR/.env.gateway-bff" "gateway-bff env"
 
 echo ""

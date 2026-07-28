@@ -35,8 +35,6 @@ Package name:
 
 ```
 services/
-├── model/                  # Model Platform domain
-│   └── platform/           # @vxture/service-model-platform
 ├── commerce/               # Commerce domain
 │   ├── billing/            # @vxture/service-billing
 │   └── subscription/       # @vxture/service-subscription
@@ -71,7 +69,6 @@ This makes domain ownership and navigability clear as the number of services gro
 Examples:
 
 ```
-@vxture/service-model-platform
 @vxture/service-billing
 @vxture/service-subscription
 @vxture/service-iam
@@ -91,7 +88,6 @@ It does not appear in the package name. Consumers always import using `@vxture/s
 
 | Domain         | Directory                | Services                                                  |
 | -------------- | ------------------------ | --------------------------------------------------------- |
-| `model`        | `services/model/`        | `@vxture/service-model-platform`                          |
 | `commerce`     | `services/commerce/`     | `@vxture/service-billing`, `@vxture/service-subscription` |
 | `identity`     | `services/identity/`     | `@vxture/service-iam`                                     |
 | `notification` | `services/notification/` | `@vxture/service-mail`, `@vxture/service-sms`             |
