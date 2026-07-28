@@ -33,7 +33,8 @@ PR 评审比对项，不设新机检）。实例教训：vxtpl 在 `@vxture/shar
   `deploy-production.yml`、`PROMOTION_TOKEN`/`PROMOTION_ACTOR`、Fast-forward Promotion。
 - **分支保护 ruleset**（`rebuild/main-ruleset.json` 同款套用）：required status checks（按 job 名匹配）、
   push 前需 PR、禁 force-push、线性历史；单人仓 `required_approving_review_count=0`（靠 checks 把关），
-  多人仓改 `1`；`bypass_actors` 留仓库 admin 应急。
+  多人仓改 `1`；**`bypass_actors` 清空（2026-07-28 起）**，含仓库 admin 在内一律不得绕过，PR + required checks
+  是唯一入 `main` 通道。
   - **必需 checks 集合权威 = `main-ruleset.json` 的五项**：`quality-gate` / `build` / `test-coverage` /
     `audit` / `gitleaks`（CI job 名必须精确产出这五个 context，改 job 名 = 分支保护失效）。**无单测的产品仓仍须提供
     一个恒绿的 `test-coverage` job**（占住该 context，零测试即通过）——不得从 required 里删该项。

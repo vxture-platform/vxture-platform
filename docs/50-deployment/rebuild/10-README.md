@@ -78,7 +78,7 @@ org 级共享凭证（ACR/tailscale/npm）按需共用无需重录；GHCR 凭证
 ## 6. 开放决策（模板里已留默认值/TODO）
 
 - ruleset 的 `required_approving_review_count`：vxture-platform 单人 = `0`（自审自合，靠 checks 把关）；Arda/Umbra 若多人改 `1`。
-- `bypass_actors`：默认给仓库 admin 紧急 bypass，防单人自锁；团队仓库可收紧。
+- ~~`bypass_actors`：默认给仓库 admin 紧急 bypass，防单人自锁~~ **已定（2026-07-28 收紧）**：`bypass_actors` 清空，admin 无条件绕过撤销，一律走 PR + required checks，不留自锁应急口子。
 - ~~GHCR vs ACR~~ **已定**：ACR 主（domestic/tailnet）+ GHCR 专供 umbra（海外），双仓按地理分（§2/§5）。
 - ~~varda 归属~~ **已定**：varda 收敛进 vxture-platform，不单独建仓（见 §7）。
 
