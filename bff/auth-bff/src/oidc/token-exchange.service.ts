@@ -108,6 +108,17 @@ export class TokenExchangeService {
     caller: TokenExchangeCaller,
     req: TokenExchangeRequest,
   ): Promise<TokenExchangeResult> {
+    // Operator-OBO (product_250 M-1, batch B): a workforce-realm RP (admin —
+    // and later the capability-console shell) presents its operator's access
+    // token to mint a management-plane token for a provider (aud=atlas/...).
+    // Dispatched before the product-caller gate below, because these callers
+    // are platform-level clients (productCode null) which T1 rightly rejects.
+    if (req.subjectToken) {
+      const subjClaims = this.tryVerify(req.subjectToken);
+      if (subjClaims && subjClaims["userType"] === "operator") {
+        return this.exchangeOperator(caller, req, subjClaims);
+      }
+    }
     if (!caller.productCode) {
       // A platform-level client (website/console/admin) has no product
       // identity to assert via act.sub — it is not a valid T1 caller.
@@ -156,6 +167,84 @@ export class TokenExchangeService {
     return { accessToken, expiresIn: TOKEN_EXCHANGE_TTL_SECONDS };
   }
 
+  /** Local verify that reports "not ours/expired" as null instead of throwing. */
+  private tryVerify(token: string): Record<string, unknown> | null {
+    try {
+      return this.keys.verify(token);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Operator-OBO mode (product_250 M-1): mint a short-lived management-plane
+   * token carrying the OPERATOR's identity for a provider audience. Distinct
+   * from T1 in every dimension that matters:
+   *  - caller = a workforce-realm RP client (platform-level, productCode null),
+   *    asserted via the same single-audience discipline as T1 OBO — the
+   *    presented operator token must have been minted FOR this exact caller;
+   *  - subject = a person (opr_<id>), not a service; `amr` is mirrored from
+   *    the operator session so providers can enforce step-up freshness on
+   *    high-stakes endpoints (M-1) without re-running the ceremony;
+   *  - no org/workspace context (operators are global, dataScope=global) and
+   *    scope = `mgmt:{target}` — structurally distinguishable from S2S
+   *    `tool:{target}` tokens so a management token can never pass a supply-
+   *    surface guard by accident (and vice versa).
+   * The platform sentinel audience is refused: management tokens target real
+   * provider products only.
+   */
+  private async exchangeOperator(
+    caller: TokenExchangeCaller,
+    req: TokenExchangeRequest,
+    subjClaims: Record<string, unknown>,
+  ): Promise<TokenExchangeResult> {
+    if (subjClaims["aud"] !== caller.clientId) {
+      throw new BadRequestException("invalid_request");
+    }
+    if (!req.audience || req.audience === PLATFORM_S2S_AUDIENCE) {
+      throw new BadRequestException("invalid_target");
+    }
+    const target = await this.resolveTargetProductCode(req.audience);
+    if (!target || target === PLATFORM_S2S_AUDIENCE) {
+      throw new BadRequestException("invalid_target");
+    }
+    const sub = subjClaims["sub"];
+    if (typeof sub !== "string" || !sub) {
+      throw new BadRequestException("invalid_request");
+    }
+    const amr = subjClaims["amr"];
+    const operatorRole = subjClaims["operator_role"];
+    const jti = randomUUID();
+    const accessToken = this.keys.sign(
+      {
+        act: { sub: caller.clientId },
+        mode: "operator",
+        userType: "operator",
+        realm: "workforce",
+        scope: `mgmt:${target}`,
+        ...(typeof operatorRole === "string" && operatorRole
+          ? { operator_role: operatorRole }
+          : {}),
+        ...(Array.isArray(amr) && amr.length > 0 ? { amr } : {}),
+      },
+      {
+        audience: target,
+        subject: sub,
+        expiresInSec: TOKEN_EXCHANGE_TTL_SECONDS,
+        jwtid: jti,
+      },
+    );
+    await this.recordAudit({
+      jti,
+      callerProduct: caller.clientId,
+      targetProduct: target,
+      mode: "operator",
+      workspaceId: "",
+      orgId: null,
+    });
+    return { accessToken, expiresIn: TOKEN_EXCHANGE_TTL_SECONDS };
+  }
+
   /**
    * product_210 §6: append-only audit trail for successful token exchanges
    * (actor_type='system' — the caller is a product/client, not a person; see
@@ -167,9 +256,10 @@ export class TokenExchangeService {
    */
   private async recordAudit(input: {
     jti: string;
+    /** product_code for T1 modes; the workforce client_id for operator mode. */
     callerProduct: string;
     targetProduct: string;
-    mode: "obo" | "service";
+    mode: "obo" | "service" | "operator";
     workspaceId: string;
     orgId: string | null;
   }): Promise<void> {

@@ -16,6 +16,7 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import { VxConfigService } from "@vxture/core-config";
+import { OperatorExchangeService } from "../auth/operator-exchange.service";
 
 import type {
   AiModelGrantRecord,
@@ -38,20 +39,46 @@ interface ModelPlatformErrorBody {
   details?: unknown;
 }
 
+/** Exchange audience for the model platform's management API (product_100 code). */
+const MODEL_PLATFORM_AUDIENCE = "atlas";
+
 @Controller("api/model-platform")
 export class ModelPlatformRouter {
   private readonly modelPlatformUrl: string;
 
-  constructor(@Inject(VxConfigService) configService: VxConfigService) {
+  constructor(
+    @Inject(VxConfigService) configService: VxConfigService,
+    @Inject(OperatorExchangeService)
+    private readonly operatorExchange: OperatorExchangeService,
+  ) {
     this.modelPlatformUrl =
       configService.platform.MODEL_PLATFORM_URL.trim().replace(/\/+$/, "");
   }
 
-  private request<T>(
+  /**
+   * Proxy an admin call to the model platform, propagating the OPERATOR's
+   * identity (product_250 M-1): the session's access token is exchanged for a
+   * short-lived aud=atlas management token and forwarded as the bearer. The
+   * BFF never calls the provider with its own identity. During the transition
+   * (provider not yet verifying) a failed exchange degrades to an
+   * unauthenticated upstream call instead of blocking the page.
+   */
+  private async request<T>(
+    req: Request & RequestContext,
     path: string,
     options?: { method?: "GET" | "POST" | "PUT" | "DELETE"; body?: JsonObject },
   ): Promise<T> {
-    return modelPlatformRequest<T>(path, options, this.modelPlatformUrl);
+    const bearer = req.operatorAccessToken
+      ? await this.operatorExchange.getToken(
+          req.operatorAccessToken,
+          MODEL_PLATFORM_AUDIENCE,
+        )
+      : null;
+    return modelPlatformRequest<T>(
+      path,
+      { ...options, ...(bearer ? { bearer } : {}) },
+      this.modelPlatformUrl,
+    );
   }
 
   @Get("providers")
@@ -61,6 +88,7 @@ export class ModelPlatformRouter {
   ): Promise<ModelProviderRecord[]> {
     assertCanManageModels(req);
     return this.request<ModelProviderRecord[]>(
+      req,
       `/model-platform/admin/providers?includeInactive=${includeInactive === "false" ? "false" : "true"}`,
     );
   }
@@ -72,6 +100,7 @@ export class ModelPlatformRouter {
   ): Promise<ModelProviderRecord> {
     assertCanManageModels(req);
     return this.request<ModelProviderRecord>(
+      req,
       "/model-platform/admin/providers",
       {
         method: "POST",
@@ -88,6 +117,7 @@ export class ModelPlatformRouter {
   ): Promise<ModelProviderRecord> {
     assertCanManageModels(req);
     return this.request<ModelProviderRecord>(
+      req,
       `/model-platform/admin/providers/${encodeURIComponent(providerId)}`,
       {
         method: "PUT",
@@ -103,6 +133,7 @@ export class ModelPlatformRouter {
   ): Promise<ModelProviderRecord> {
     assertCanManageModels(req);
     return this.request<ModelProviderRecord>(
+      req,
       `/model-platform/admin/providers/${encodeURIComponent(providerId)}/activate`,
       {
         method: "POST",
@@ -117,6 +148,7 @@ export class ModelPlatformRouter {
   ): Promise<ModelProviderRecord> {
     assertCanManageModels(req);
     return this.request<ModelProviderRecord>(
+      req,
       `/model-platform/admin/providers/${encodeURIComponent(providerId)}/deactivate`,
       {
         method: "POST",
@@ -131,6 +163,7 @@ export class ModelPlatformRouter {
   ): Promise<ModelProviderRecord> {
     assertCanManageModels(req);
     return this.request<ModelProviderRecord>(
+      req,
       `/model-platform/admin/providers/${encodeURIComponent(providerId)}`,
       {
         method: "DELETE",
@@ -145,6 +178,7 @@ export class ModelPlatformRouter {
   ): Promise<AiModelRecord[]> {
     assertCanManageModels(req);
     return this.request<AiModelRecord[]>(
+      req,
       `/model-platform/admin/models?includeInactive=${includeInactive === "false" ? "false" : "true"}`,
     );
   }
@@ -155,7 +189,7 @@ export class ModelPlatformRouter {
     @Body() body: JsonObject,
   ): Promise<AiModelRecord> {
     assertCanManageModels(req);
-    return this.request<AiModelRecord>("/model-platform/admin/models", {
+    return this.request<AiModelRecord>(req, "/model-platform/admin/models", {
       method: "POST",
       body,
     });
@@ -169,6 +203,7 @@ export class ModelPlatformRouter {
   ): Promise<AiModelRecord> {
     assertCanManageModels(req);
     return this.request<AiModelRecord>(
+      req,
       `/model-platform/admin/models/${encodeURIComponent(modelId)}`,
       {
         method: "PUT",
@@ -184,6 +219,7 @@ export class ModelPlatformRouter {
   ): Promise<AiModelRecord> {
     assertCanManageModels(req);
     return this.request<AiModelRecord>(
+      req,
       `/model-platform/admin/models/${encodeURIComponent(modelId)}/activate`,
       {
         method: "POST",
@@ -198,6 +234,7 @@ export class ModelPlatformRouter {
   ): Promise<AiModelRecord> {
     assertCanManageModels(req);
     return this.request<AiModelRecord>(
+      req,
       `/model-platform/admin/models/${encodeURIComponent(modelId)}/deactivate`,
       {
         method: "POST",
@@ -212,6 +249,7 @@ export class ModelPlatformRouter {
   ): Promise<AiModelRecord> {
     assertCanManageModels(req);
     return this.request<AiModelRecord>(
+      req,
       `/model-platform/admin/models/${encodeURIComponent(modelId)}`,
       {
         method: "DELETE",
@@ -236,6 +274,7 @@ export class ModelPlatformRouter {
     if (applicationType) params.set("applicationType", applicationType);
 
     return this.request<AiModelGrantRecord[]>(
+      req,
       `/model-platform/admin/grants${params.size ? `?${params.toString()}` : ""}`,
     );
   }
@@ -246,10 +285,14 @@ export class ModelPlatformRouter {
     @Body() body: JsonObject,
   ): Promise<AiModelGrantRecord> {
     assertCanManageModels(req);
-    return this.request<AiModelGrantRecord>("/model-platform/admin/grants", {
-      method: "POST",
-      body,
-    });
+    return this.request<AiModelGrantRecord>(
+      req,
+      "/model-platform/admin/grants",
+      {
+        method: "POST",
+        body,
+      },
+    );
   }
 
   @Put("grants/:grantId")
@@ -260,6 +303,7 @@ export class ModelPlatformRouter {
   ): Promise<AiModelGrantRecord> {
     assertCanManageModels(req);
     return this.request<AiModelGrantRecord>(
+      req,
       `/model-platform/admin/grants/${encodeURIComponent(grantId)}`,
       {
         method: "PUT",
@@ -275,6 +319,7 @@ export class ModelPlatformRouter {
   ): Promise<AiModelGrantRecord> {
     assertCanManageModels(req);
     return this.request<AiModelGrantRecord>(
+      req,
       `/model-platform/admin/grants/${encodeURIComponent(grantId)}/activate`,
       {
         method: "POST",
@@ -289,6 +334,7 @@ export class ModelPlatformRouter {
   ): Promise<AiModelGrantRecord> {
     assertCanManageModels(req);
     return this.request<AiModelGrantRecord>(
+      req,
       `/model-platform/admin/grants/${encodeURIComponent(grantId)}`,
       {
         method: "DELETE",
@@ -309,6 +355,7 @@ export class ModelPlatformRouter {
       params.set("includeInactive", includeInactive);
     }
     return this.request<ModelPriceRuleRecord[]>(
+      req,
       `/model-platform/admin/price-rules${params.size ? `?${params.toString()}` : ""}`,
     );
   }
@@ -320,6 +367,7 @@ export class ModelPlatformRouter {
   ): Promise<ModelPriceRuleRecord> {
     assertCanManageModels(req);
     return this.request<ModelPriceRuleRecord>(
+      req,
       "/model-platform/admin/price-rules",
       {
         method: "POST",
@@ -336,6 +384,7 @@ export class ModelPlatformRouter {
   ): Promise<ModelPriceRuleRecord> {
     assertCanManageModels(req);
     return this.request<ModelPriceRuleRecord>(
+      req,
       `/model-platform/admin/price-rules/${encodeURIComponent(priceRuleId)}`,
       {
         method: "PUT",
@@ -351,6 +400,7 @@ export class ModelPlatformRouter {
   ): Promise<ModelPriceRuleRecord> {
     assertCanManageModels(req);
     return this.request<ModelPriceRuleRecord>(
+      req,
       `/model-platform/admin/price-rules/${encodeURIComponent(priceRuleId)}/activate`,
       {
         method: "POST",
@@ -365,6 +415,7 @@ export class ModelPlatformRouter {
   ): Promise<ModelPriceRuleRecord> {
     assertCanManageModels(req);
     return this.request<ModelPriceRuleRecord>(
+      req,
       `/model-platform/admin/price-rules/${encodeURIComponent(priceRuleId)}/deactivate`,
       {
         method: "POST",
@@ -387,6 +438,7 @@ export class ModelPlatformRouter {
       params.set("includeInactive", includeInactive);
     }
     return this.request<ModelPolicyRecord[]>(
+      req,
       `/model-platform/admin/policies${params.size ? `?${params.toString()}` : ""}`,
     );
   }
@@ -397,10 +449,14 @@ export class ModelPlatformRouter {
     @Body() body: JsonObject,
   ): Promise<ModelPolicyRecord> {
     assertCanManageModels(req);
-    return this.request<ModelPolicyRecord>("/model-platform/admin/policies", {
-      method: "POST",
-      body,
-    });
+    return this.request<ModelPolicyRecord>(
+      req,
+      "/model-platform/admin/policies",
+      {
+        method: "POST",
+        body,
+      },
+    );
   }
 
   @Put("policies/:policyId")
@@ -411,6 +467,7 @@ export class ModelPlatformRouter {
   ): Promise<ModelPolicyRecord> {
     assertCanManageModels(req);
     return this.request<ModelPolicyRecord>(
+      req,
       `/model-platform/admin/policies/${encodeURIComponent(policyId)}`,
       {
         method: "PUT",
@@ -426,6 +483,7 @@ export class ModelPlatformRouter {
   ): Promise<ModelPolicyRecord> {
     assertCanManageModels(req);
     return this.request<ModelPolicyRecord>(
+      req,
       `/model-platform/admin/policies/${encodeURIComponent(policyId)}/activate`,
       {
         method: "POST",
@@ -440,6 +498,7 @@ export class ModelPlatformRouter {
   ): Promise<ModelPolicyRecord> {
     assertCanManageModels(req);
     return this.request<ModelPolicyRecord>(
+      req,
       `/model-platform/admin/policies/${encodeURIComponent(policyId)}/deactivate`,
       {
         method: "POST",
@@ -460,6 +519,7 @@ export class ModelPlatformRouter {
       params.set("includeExpired", includeExpired);
     }
     return this.request<TenantQuotaRecord[]>(
+      req,
       `/model-platform/admin/quotas${params.size ? `?${params.toString()}` : ""}`,
     );
   }
@@ -481,6 +541,7 @@ export class ModelPlatformRouter {
     if (cycleMonth) params.set("cycleMonth", cycleMonth);
     if (statType) params.set("statType", statType);
     return this.request<TenantUsageSummaryRecord[]>(
+      req,
       `/model-platform/admin/usage-summaries${params.size ? `?${params.toString()}` : ""}`,
     );
   }
@@ -501,17 +562,21 @@ async function modelPlatformRequest<TResponse>(
   options: {
     method?: "GET" | "POST" | "PUT" | "DELETE";
     body?: JsonObject;
+    /** Operator-OBO management token (product_250 M-1), forwarded verbatim. */
+    bearer?: string;
   } = {},
   baseUrl: string = "http://localhost:3100",
 ): Promise<TResponse> {
   let response: Response;
 
+  const headers: Record<string, string> = {
+    ...(options.body ? { "content-type": "application/json" } : {}),
+    ...(options.bearer ? { authorization: `Bearer ${options.bearer}` } : {}),
+  };
   try {
     response = await fetch(`${baseUrl}${path}`, {
       method: options.method ?? "GET",
-      ...(options.body
-        ? { headers: { "content-type": "application/json" } }
-        : {}),
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
       ...(options.body ? { body: JSON.stringify(options.body) } : {}),
     });
   } catch {

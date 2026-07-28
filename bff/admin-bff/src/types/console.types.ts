@@ -103,6 +103,12 @@ export interface MemberRecord {
 export interface RequestContext {
   user?: ConsoleUser;
   capabilities?: Capability[];
+  /**
+   * Raw operator access token backing this request's RP session — the
+   * subject_token for operator-OBO exchange (product_250 M-1) when proxying
+   * to a provider's management API. Server-side only.
+   */
+  operatorAccessToken?: string;
 }
 
 export type PlatformGovernanceKind =

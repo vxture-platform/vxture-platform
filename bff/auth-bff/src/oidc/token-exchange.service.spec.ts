@@ -402,3 +402,144 @@ describe("TokenExchangeService.exchange — audit trail (TD-034)", () => {
     expect(result.accessToken).toBe("signed.jwt.token");
   });
 });
+
+describe("TokenExchangeService.exchange — operator-OBO mode (product_250 M-1)", () => {
+  let m: Mocks;
+  beforeEach(() => (m = build()));
+
+  const CALLER_ADMIN = { clientId: "admin", productCode: null };
+  const operatorClaims = (over: Record<string, unknown> = {}) => ({
+    sub: "opr_11111111-1111-1111-1111-111111111111",
+    aud: "admin",
+    userType: "operator",
+    operator_role: "superadmin",
+    amr: ["pwd", "otp"],
+    ...over,
+  });
+
+  it("mints an operator management token for a platform-level workforce client", async () => {
+    m.keys.verify.mockReturnValue(operatorClaims());
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] }) // resolveTargetProductCode
+      .mockResolvedValueOnce({ rows: [] }); // audit insert
+
+    const result = await m.service.exchange(CALLER_ADMIN, {
+      audience: "atlas",
+      subjectToken: "operator.subject.jwt",
+      workspaceId: undefined,
+      orgId: undefined,
+    });
+
+    expect(result.accessToken).toBe("signed.jwt.token");
+    expect(result.expiresIn).toBe(TOKEN_EXCHANGE_TTL_SECONDS);
+    const [claims, opts] = m.keys.sign.mock.calls[0]!;
+    expect(claims).toMatchObject({
+      act: { sub: "admin" },
+      mode: "operator",
+      userType: "operator",
+      realm: "workforce",
+      scope: "mgmt:atlas",
+      operator_role: "superadmin",
+      amr: ["pwd", "otp"],
+    });
+    expect(claims.org_id).toBeUndefined();
+    expect(claims.workspace_id).toBeUndefined();
+    expect(opts).toMatchObject({
+      audience: "atlas",
+      subject: "opr_11111111-1111-1111-1111-111111111111",
+      expiresInSec: TOKEN_EXCHANGE_TTL_SECONDS,
+    });
+  });
+
+  it("omits amr/operator_role claims when the subject token has none", async () => {
+    m.keys.verify.mockReturnValue(
+      operatorClaims({ amr: undefined, operator_role: undefined }),
+    );
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await m.service.exchange(CALLER_ADMIN, {
+      audience: "atlas",
+      subjectToken: "operator.subject.jwt",
+      workspaceId: undefined,
+      orgId: undefined,
+    });
+
+    const [claims] = m.keys.sign.mock.calls[0]!;
+    expect("amr" in claims).toBe(false);
+    expect("operator_role" in claims).toBe(false);
+  });
+
+  it("enforces single-audience discipline: subject token minted for another client is refused", async () => {
+    m.keys.verify.mockReturnValue(operatorClaims({ aud: "some-other-rp" }));
+    await expect(
+      m.service.exchange(CALLER_ADMIN, {
+        audience: "atlas",
+        subjectToken: "operator.subject.jwt",
+        workspaceId: undefined,
+        orgId: undefined,
+      }),
+    ).rejects.toThrow(BadRequestException);
+    expect(m.keys.sign).not.toHaveBeenCalled();
+  });
+
+  it("refuses the platform sentinel audience for operator tokens", async () => {
+    m.keys.verify.mockReturnValue(operatorClaims());
+    await expect(
+      m.service.exchange(CALLER_ADMIN, {
+        audience: PLATFORM_S2S_AUDIENCE,
+        subjectToken: "operator.subject.jwt",
+        workspaceId: undefined,
+        orgId: undefined,
+      }),
+    ).rejects.toThrow(BadRequestException);
+    expect(m.keys.sign).not.toHaveBeenCalled();
+  });
+
+  it("a customer user token via a platform-level client still fails invalid_client (T1 unchanged)", async () => {
+    m.keys.verify.mockReturnValue({
+      sub: "usr_2",
+      aud: "console",
+      userType: "tenant_user",
+      active_workspace: "ws-1",
+    });
+    await expect(
+      m.service.exchange(CALLER_PLATFORM, {
+        audience: "arda",
+        subjectToken: "customer.subject.jwt",
+        workspaceId: undefined,
+        orgId: undefined,
+      }),
+    ).rejects.toThrow(BadRequestException);
+    expect(m.keys.sign).not.toHaveBeenCalled();
+  });
+
+  it("writes the audit row with the workforce client as caller and mode=operator", async () => {
+    m.keys.verify.mockReturnValue(operatorClaims());
+    m.keys.sign.mockImplementation(
+      (_claims: Record<string, unknown>, opts: { jwtid: string }) => {
+        void opts.jwtid;
+        return "signed.jwt.token";
+      },
+    );
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await m.service.exchange(CALLER_ADMIN, {
+      audience: "atlas",
+      subjectToken: "operator.subject.jwt",
+      workspaceId: undefined,
+      orgId: undefined,
+    });
+
+    const audit = m.pool.query.mock.calls[1]!;
+    expect(String(audit[0])).toContain("insert into support.audit_logs");
+    expect(JSON.parse(audit[1][2])).toMatchObject({
+      caller_product: "admin",
+      target_product: "atlas",
+      mode: "operator",
+    });
+  });
+});

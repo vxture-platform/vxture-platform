@@ -44,6 +44,7 @@
 - 形态:platform workforce realm 签发的 operator token(RS256,provider 经 JWKS 验签;`aud` = provider;`realm=workforce`)。workforce realm OIDC 为已实现设施(`appoidc.oidc_clients` CHECK 含 workforce;auth-bff operator 流程/refresh/挑战已在产),非新建。
 - provider 义务:验签 + 校 `aud`/`realm`/`exp`;**高危端点(密钥轮换/激活停用等)额外校 step-up 新鲜度(`acr`/`amr` claim)**——platform 侧 operator MFA/step-up 栈(P0–P4)经此传导,不因跨仓降级。
 - 现状缺口与切换:admin-bff 裸 fetch 与 atlas `S2sAuthGuard` 守 admin 路由均不合本条;目标态一步切换(operator token 透传 + provider 侧换验签守卫)。过渡期姿态由实施批次定(§4 批B),契约只定目标态;S2S token(`product_210` §3)回归其本职——仅用于产品互调供给面,不再出现在管理链路。
+- **实施绑定(批B 落地,2026-07-28)**:铸币复用既有 RFC 8693 token 端点,新增 **operator-OBO 模式**——workforce RP(admin,后续控制台外壳)以自己的 client 凭证 + 操作者 access token 为 subject*token 调 `POST /oidc/token`(grant_type=token-exchange),单受众纪律(subject 的 `aud` 必须=调用方 client_id)。铸出 claims:`aud`=provider product_code · `sub`=`opr*<id>`·`act.sub`=workforce client_id · `mode="operator"`·`userType="operator"`·`realm="workforce"`·`scope="mgmt:{aud}"`(与 S2S `tool:{aud}`结构性互斥,管理票过不了供给面守卫,反之亦然) ·`amr`/`operator_role`自 subject 镜像(step-up 新鲜度凭`amr` 判) · TTL 300s · jti 入 audit(`mode='operator'`)。平台 sentinel 受众拒绝。BFF 侧按 (subject,aud) 缓存 240s;exchange 失败在过渡期降级为无凭证上游调用(provider 未验签时无感,验签后表现为 provider 401)。
 
 ### M-2 权限词表注册
 

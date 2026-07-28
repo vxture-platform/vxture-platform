@@ -77,6 +77,9 @@ export class AuthMiddleware implements NestMiddleware {
     const context = req as Request & RequestContext;
     context.user = user;
     context.capabilities = capabilities;
+    // Kept for operator-OBO exchange when proxying to provider management
+    // APIs (product_250 M-1); never serialized into any response.
+    context.operatorAccessToken = outcome.accessToken;
     next();
   }
 }

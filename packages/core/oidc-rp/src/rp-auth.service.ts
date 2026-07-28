@@ -24,6 +24,12 @@ export type RpAuthOutcome =
       claims: Record<string, unknown>;
       /** true if the access token was refreshed on this request */
       refreshed: boolean;
+      /**
+       * The raw (verified) access token backing this session — needed when the
+       * BFF must present it as an RFC 8693 subject_token (e.g. the operator-OBO
+       * exchange of product_250 M-1). Server-side only; never send to the browser.
+       */
+      accessToken: string;
     }
   | { status: "expired" }; // no usable session / refresh failed → re-login
 
@@ -73,6 +79,12 @@ export class RpAuthService {
     } catch {
       return { status: "expired" };
     }
-    return { status: "ok", rpsid, claims, refreshed };
+    return {
+      status: "ok",
+      rpsid,
+      claims,
+      refreshed,
+      accessToken: session.accessToken,
+    };
   }
 }

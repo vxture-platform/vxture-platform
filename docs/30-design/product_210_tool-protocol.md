@@ -66,6 +66,8 @@ S2S access token = **RS256 JWT**(header 带 `kid`,与用户级同一 JWKS/轮换
 
 现行 `x-vxture-internal-auth` 仅限**产品 → 平台**的 C2/C3/可见集端点(`/platform/*`,product_310 D1 过渡态);**产品 ↔ 产品一律不得使用**。本协议落地后,平台面端点迁移到同款 S2S token(`aud=vxture`),届时退役共享口令——迁移为独立实施项,随 §8 T2 登记,不在 v1 强制。
 
+> **同端点的 operator-OBO 模式(2026-07-28 登记,不属本协议)**:token 端点另承载管理面的操作者换票(subject=workforce 操作者 access token,铸 `mode="operator"`/`scope="mgmt:{aud}"`),治理归 `product_250_management-plane-contract.md` M-1——**不是 S2S 产品契约的一部分**,供给面守卫按 `scope` 前缀即可结构性拒收管理票。
+
 ## 4. 工具 schema 约定(MCP 风格)
 
 ### 4.1 工具描述符

@@ -14,6 +14,7 @@ import {
 } from "./providers/commerce-services.provider";
 import { OidcRpModule } from "./oidc/oidc-rp.module";
 import { PlatformAuthService } from "./auth/auth.service";
+import { OperatorExchangeService } from "./auth/operator-exchange.service";
 import { OperatorStepUpService } from "./auth/operator-stepup.service";
 import { OperatorAdminService } from "./auth/operator-admin.service";
 import { OperatorStepUpGuard } from "./auth/step-up.guard";
@@ -98,6 +99,7 @@ import { NotificationLogsRouter } from "./routers/notification-logs.router";
   ],
   providers: [
     PlatformAuthService,
+    OperatorExchangeService,
     SessionAggregator,
     OperatorStepUpService,
     OperatorAdminService,
