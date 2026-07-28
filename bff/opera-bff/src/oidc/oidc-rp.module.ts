@@ -1,10 +1,10 @@
 /**
- * oidc-rp.module.ts - capconsole-bff OIDC Relying Party wiring (product_250 M-4)
- * @package @vxture/bff-capconsole
+ * oidc-rp.module.ts - opera-bff OIDC Relying Party wiring (product_250 M-4)
+ * @package @vxture/bff-opera
  * @description
  *   Wires @vxture/core-oidc-rp for the Capability Console shell as a
- *   confidential RP in the WORKFORCE realm (client_id=capconsole). Same shape
- *   as admin-bff's RP wiring; base URL comes from CAPCONSOLE_BASE_URL, which in
+ *   confidential RP in the WORKFORCE realm (client_id=opera). Same shape
+ *   as admin-bff's RP wiring; base URL comes from OPERA_BASE_URL, which in
  *   production carries the real (repo-external) hostname. RP routes live under
  *   /auth/*; /auth/check additionally serves the nginx auth_request gate that
  *   enforces the "no content unauthenticated" hardening at the vhost edge.
@@ -29,7 +29,7 @@ import {
   type RpRuntime,
 } from "./oidc-rp.tokens";
 
-const CLIENT_ID = "capconsole";
+const CLIENT_ID = "opera";
 
 @Module({
   imports: [
@@ -41,7 +41,7 @@ const CLIENT_ID = "capconsole";
       provide: RP_RUNTIME,
       inject: [VxConfigService],
       useFactory: (c: VxConfigService): RpRuntime => {
-        const consoleBase = c.platform.CAPCONSOLE_BASE_URL;
+        const consoleBase = c.platform.OPERA_BASE_URL;
         const cfg: OidcRpConfig = {
           issuer: c.auth.OIDC_ISSUER,
           // Back-channel (token + JWKS) over the internal IdP URL so it never

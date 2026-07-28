@@ -37,14 +37,14 @@ export const IMAGES = [
     "build-args":
       "PORTAL_PATH=portals/admin\nPACKAGE_FILTER=@vxture/admin\nNEXT_PUBLIC_API_URL=https://api.vxture.com\nNEXT_PUBLIC_ADMIN_BFF_URL=https://admin.vxture.com",
   },
-  // capconsole：能力控制台外壳（product_250 M-4 批C）。不传 NEXT_PUBLIC_*_BFF_URL
+  // opera：能力控制台外壳（product_250 M-4 批C）。不传 NEXT_PUBLIC_*_BFF_URL
   // —— 外壳一律同源相对路径调 BFF（真实域名按加固决策不入仓,由 nginx 同 vhost 路由）。
   {
-    name: "platform_capconsole",
-    image: "ghcr.io/vxture/platform_capconsole",
+    name: "platform_opera",
+    image: "ghcr.io/vxture/platform_opera",
     dockerfile: "deploy/docker/Dockerfile.nextjs",
     "build-args":
-      "PORTAL_PATH=portals/capconsole\nPACKAGE_FILTER=@vxture/capconsole",
+      "PORTAL_PATH=portals/opera\nPACKAGE_FILTER=@vxture/opera",
   },
   {
     name: "platform_accounts",
@@ -88,11 +88,11 @@ export const IMAGES = [
       "SERVICE_PATH=bff/admin-bff\nPACKAGE_FILTER=@vxture/bff-admin",
   },
   {
-    name: "platform_bff-capconsole",
-    image: "ghcr.io/vxture/platform_bff-capconsole",
+    name: "platform_bff-opera",
+    image: "ghcr.io/vxture/platform_bff-opera",
     dockerfile: "deploy/docker/Dockerfile.nestjs",
     "build-args":
-      "SERVICE_PATH=bff/capconsole-bff\nPACKAGE_FILTER=@vxture/bff-capconsole",
+      "SERVICE_PATH=bff/opera-bff\nPACKAGE_FILTER=@vxture/bff-opera",
   },
   {
     name: "platform_bff-platform-api",

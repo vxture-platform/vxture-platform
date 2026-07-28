@@ -1,12 +1,12 @@
-# capconsole.vhost.template — 能力控制台公网 vhost（product_250 M-4 批C）
+# opera.vhost.template — 能力控制台公网 vhost（product_250 M-4 批C）
 #
 # 加固决策（2026-07-28 批A 拍板,均为硬性项）：
-#  1. 真实域名不入仓：本文件是模板,${VX_CAPCONSOLE_HOST} 由
-#     20-sync-nginx-config.sh 从主机 /srv/vxture/runtime/.env.capconsole-bff
-#     的 CAPCONSOLE_BASE_URL 渲染;仓内文档一律以 x.vxture.com 指代。
+#  1. 真实域名不入仓：本文件是模板,${VX_OPERA_HOST} 由
+#     20-sync-nginx-config.sh 从主机 /srv/vxture/runtime/.env.opera-bff
+#     的 OPERA_BASE_URL 渲染;仓内文档一律以 x.vxture.com 指代。
 #  2. 通配符证书（*.vxture.com 既有）：单签证书会经 CT 日志即时公开主机名。
 #  3. SSO 前置零内容：除 /auth/*（登录/回调必须匿名可达）外,一切路径过
-#     auth_request 门（capconsole-bff /auth/check）;未认证 → 302 /auth/login,
+#     auth_request 门（opera-bff /auth/check）;未认证 → 302 /auth/login,
 #     不回显任何页面/静态资源内容。
 #  4. default_server 兜底见 00-default.conf;限流继承 conf.d/00-hardening.conf。
 #
@@ -18,15 +18,15 @@
 server {
     listen 80;
     listen [::]:80;
-    server_name ${VX_CAPCONSOLE_HOST};
-    return 301 https://${VX_CAPCONSOLE_HOST}$request_uri;
+    server_name ${VX_OPERA_HOST};
+    return 301 https://${VX_OPERA_HOST}$request_uri;
 }
 
 server {
     listen 443 ssl;
     listen [::]:443 ssl;
     http2 on;
-    server_name ${VX_CAPCONSOLE_HOST};
+    server_name ${VX_OPERA_HOST};
 
     ssl_certificate     /etc/nginx/ssl/live/vxture.com/fullchain.pem;
     ssl_certificate_key /etc/nginx/ssl/live/vxture.com/privkey.pem;
@@ -43,11 +43,11 @@ server {
 
     resolver 127.0.0.11 valid=10s ipv6=off;
 
-    # ── auth_request 门（内部子请求,capconsole-bff 校验 RP 会话）──
+    # ── auth_request 门（内部子请求,opera-bff 校验 RP 会话）──
     location = /__vx_auth {
         internal;
-        set $capbff vx-platform-capconsole-bff:3051;
-        proxy_pass              http://$capbff/auth/check;
+        set $operabff vx-platform-opera-bff:3051;
+        proxy_pass              http://$operabff/auth/check;
         proxy_pass_request_body off;
         proxy_set_header        Content-Length "";
         proxy_set_header        X-Original-URI $request_uri;
@@ -62,8 +62,8 @@ server {
 
     # ── RP 登录/回调/登出 —— 唯一匿名可达面 ──
     location /auth/ {
-        set $capbff vx-platform-capconsole-bff:3051;
-        proxy_pass         http://$capbff;
+        set $operabff vx-platform-opera-bff:3051;
+        proxy_pass         http://$operabff;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;
         proxy_set_header   X-Real-IP         $remote_addr;
@@ -73,7 +73,7 @@ server {
 
     location /_next/static/ {
         auth_request /__vx_auth;
-        set $upstream vx-platform-capconsole:3050;
+        set $upstream vx-platform-opera:3050;
         proxy_pass         http://$upstream;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;
@@ -97,7 +97,7 @@ server {
 
     location / {
         auth_request /__vx_auth;
-        set $upstream vx-platform-capconsole:3050;
+        set $upstream vx-platform-opera:3050;
         proxy_pass         http://$upstream;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;

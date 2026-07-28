@@ -1,6 +1,6 @@
 /**
  * health.router.ts - 健康检查路由
- * @package @vxture/bff-capconsole
+ * @package @vxture/bff-opera
  *
  * @description GET /healthz 存活探针（standards 020 + 025）。零依赖，返回统一
  *              身份块（service/version/gitSha/stage/buildTime/time）。
@@ -18,7 +18,7 @@ export class HealthRouter {
   @Get("healthz")
   check() {
     return buildHealthIdentity({
-      service: "capconsole-bff",
+      service: "opera-bff",
       product: "vxture",
     });
   }

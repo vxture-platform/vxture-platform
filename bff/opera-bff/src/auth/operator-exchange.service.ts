@@ -1,6 +1,6 @@
 /**
  * operator-exchange.service.ts — operator-OBO token acquisition (product_250 M-1)
- * @package @vxture/bff-capconsole
+ * @package @vxture/bff-opera
  * @layer BFF
  * @description
  *   Exchanges the current operator's RP-session access token for a short-lived

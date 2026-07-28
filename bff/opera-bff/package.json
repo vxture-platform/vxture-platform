@@ -1,5 +1,5 @@
 {
-  "name": "@vxture/bff-capconsole",
+  "name": "@vxture/bff-opera",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "build:bundle": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node22 --outfile=dist/main.cjs --tsconfig=tsconfig.json --external:@nestjs/websockets/socket-module --external:@nestjs/microservices --external:@nestjs/microservices/microservices-module",
     "dev": "pnpm run build && node dist/main.cjs",
     "start": "node dist/main.cjs",
-    "boot-smoke": "node ../../scripts/guardrails/boot-smoke.mjs dist/main.cjs capconsole-bff",
+    "boot-smoke": "node ../../scripts/guardrails/boot-smoke.mjs dist/main.cjs opera-bff",
     "type-check": "tsc --noEmit",
     "lint": "eslint src",
     "lint:fix": "eslint --fix src",

@@ -12,7 +12,7 @@ async function bootstrap() {
     await app.init();
     await app.close();
 
-    console.log("[boot-smoke] capconsole-bff DI graph resolved OK");
+    console.log("[boot-smoke] opera-bff DI graph resolved OK");
     process.exit(0);
   }
 
@@ -20,7 +20,7 @@ async function bootstrap() {
   app.use(cookieParser());
   // Same-origin only (portal + BFF share the console vhost through nginx);
   // no CORS surface is opened on purpose — the shell never calls cross-origin.
-  await app.listen(Number(process.env.CAPCONSOLE_BFF_PORT ?? 3051));
+  await app.listen(Number(process.env.OPERA_BFF_PORT ?? 3051));
 }
 
 void bootstrap();

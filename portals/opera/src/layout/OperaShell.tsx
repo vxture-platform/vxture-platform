@@ -11,7 +11,7 @@ import Image from "next/image";
 import { capNavSections } from "@/config/navigation";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 
-const LS_NAV = "vx-capconsole-nav-collapsed";
+const LS_NAV = "vx-opera-nav-collapsed";
 const BRAND_NAME = "Vxture Capability Console";
 
 function SkeletonFrame() {
@@ -48,7 +48,7 @@ function SkeletonFrame() {
   );
 }
 
-export function CapShell({ children }: { children: ReactNode }) {
+export function OperaShell({ children }: { children: ReactNode }) {
   const { operator, status, signOut } = useOperatorSession();
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [userPanel, setUserPanel] = useState(false);

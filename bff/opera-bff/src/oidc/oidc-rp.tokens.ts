@@ -1,6 +1,6 @@
 /**
- * oidc-rp.tokens.ts - DI tokens + runtime config for the capconsole (workforce) RP.
- * @package @vxture/bff-capconsole
+ * oidc-rp.tokens.ts - DI tokens + runtime config for the opera (workforce) RP.
+ * @package @vxture/bff-opera
  */
 import type { OidcRpConfig } from "@vxture/core-oidc-rp";
 

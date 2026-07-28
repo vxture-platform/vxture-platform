@@ -1,6 +1,6 @@
 /**
  * oidc-auth.router.ts - Capability Console (workforce) RP auth endpoints
- * @package @vxture/bff-capconsole
+ * @package @vxture/bff-opera
  * @description
  *   /auth/* RP endpoints: login → IdP authorize (workforce realm), callback →
  *   token exchange + RP session, session lookup, local logout. Tokens stay
@@ -11,7 +11,7 @@
  *   when the original URI targets a mounted provider module (/atlas/*, /runa/*),
  *   mints an operator-OBO management token (M-1) and returns it in
  *   X-Operator-Token so nginx injects it as the Authorization header on the
- *   proxied module request. See docs/20-specs/000-platform/capconsole/
+ *   proxied module request. See docs/20-specs/000-platform/opera/
  *   10-shell-mount-contract.md.
  */
 import {
@@ -86,7 +86,7 @@ export class OidcAuthRouter {
   ) {}
 
   private authReqKey(state: string): string {
-    return `${this.rt.keyPrefix}rp:capconsole:authreq:${state}`;
+    return `${this.rt.keyPrefix}rp:opera:authreq:${state}`;
   }
 
   /** __Host- in prod https; bare name over local http so the browser stores it. */

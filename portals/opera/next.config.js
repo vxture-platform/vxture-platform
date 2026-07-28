@@ -35,7 +35,7 @@ const nextConfig = {
     return [
       {
         source: "/auth/:path*",
-        destination: `${process.env.CAPCONSOLE_BFF_DEV_URL ?? "http://localhost:3051"}/auth/:path*`,
+        destination: `${process.env.OPERA_BFF_DEV_URL ?? "http://localhost:3051"}/auth/:path*`,
       },
     ];
   },

@@ -40,21 +40,21 @@ cp -v "$SRC/sites-enabled/"*.conf           "$DST/sites-enabled/"
 cp -v "$COMPOSE_SRC"                        "$COMPOSE_DST"
 
 # ── 模板渲染：能力控制台 vhost（product_250 批C）─────────────────────────────
-# 真实域名不入仓（加固决策）：从主机 runtime env 的 CAPCONSOLE_BASE_URL 取
-# 主机名渲染模板。envsubst 只替换 ${VX_CAPCONSOLE_HOST}，nginx 自身变量不受影响。
+# 真实域名不入仓（加固决策）：从主机 runtime env 的 OPERA_BASE_URL 取
+# 主机名渲染模板。envsubst 只替换 ${VX_OPERA_HOST}，nginx 自身变量不受影响。
 # env 缺失时跳过（该 vhost 未启用），不影响其余站点同步。
-CAPCONSOLE_ENV_FILE="${CAPCONSOLE_ENV_FILE:-/srv/vxture/runtime/.env.capconsole-bff}"
-CAPCONSOLE_TEMPLATE="$SRC/templates/capconsole.vhost.template"
-if [ -f "$CAPCONSOLE_TEMPLATE" ]; then
-  cap_base="$(grep -E '^CAPCONSOLE_BASE_URL=' "$CAPCONSOLE_ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true)"
-  cap_host="${cap_base#https://}"; cap_host="${cap_host#http://}"; cap_host="${cap_host%%/*}"
-  if [ -n "$cap_host" ] && [ "$cap_host" != "x.vxture.com" ]; then
-    VX_CAPCONSOLE_HOST="$cap_host" envsubst '${VX_CAPCONSOLE_HOST}' \
-      <"$CAPCONSOLE_TEMPLATE" >"$DST/sites-enabled/capconsole.conf"
-    echo "==> 已渲染能力控制台 vhost → $DST/sites-enabled/capconsole.conf"
+OPERA_ENV_FILE="${OPERA_ENV_FILE:-/srv/vxture/runtime/.env.opera-bff}"
+OPERA_TEMPLATE="$SRC/templates/opera.vhost.template"
+if [ -f "$OPERA_TEMPLATE" ]; then
+  op_base="$(grep -E '^OPERA_BASE_URL=' "$OPERA_ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+  op_host="${op_base#https://}"; op_host="${op_host#http://}"; op_host="${op_host%%/*}"
+  if [ -n "$op_host" ] && [ "$op_host" != "x.vxture.com" ]; then
+    VX_OPERA_HOST="$op_host" envsubst '${VX_OPERA_HOST}' \
+      <"$OPERA_TEMPLATE" >"$DST/sites-enabled/opera.conf"
+    echo "==> 已渲染能力控制台 vhost → $DST/sites-enabled/opera.conf"
   else
-    rm -f "$DST/sites-enabled/capconsole.conf"
-    echo "  提示：未在 $CAPCONSOLE_ENV_FILE 找到有效 CAPCONSOLE_BASE_URL，跳过能力控制台 vhost"
+    rm -f "$DST/sites-enabled/opera.conf"
+    echo "  提示：未在 $OPERA_ENV_FILE 找到有效 OPERA_BASE_URL，跳过能力控制台 vhost"
   fi
 fi
 

@@ -104,10 +104,10 @@ const OIDC_CLIENT_SECRET_HASH_KEYS = new Set([
 // in auth-bff (become required when Phase E deploys each RP). Already forbidden in all
 // RP envs to prevent accidental misplacement.
 const OIDC_FUTURE_APP_HASH_KEYS = new Set([
-  // capconsole = Capability Console shell, second workforce RP (product_250 M-4
+  // opera = Capability Console shell, second workforce RP (product_250 M-4
   // batch C); local RP on the deploy host like admin. Becomes REQUIRED (move to
-  // OIDC_CLIENT_SECRET_HASH_KEYS) when the capconsole stack first deploys.
-  "OIDC_CLIENT_SECRET_HASH_CAPCONSOLE",
+  // OIDC_CLIENT_SECRET_HASH_KEYS) when the opera stack first deploys.
+  "OIDC_CLIENT_SECRET_HASH_OPERA",
   // ruyin = NEW client-side product surface (ruyin.vxture.com); provisioned when it ships.
   "OIDC_CLIENT_SECRET_HASH_RUYIN",
   "OIDC_CLIENT_SECRET_HASH_RUNA",
@@ -391,11 +391,11 @@ const ENV_FILE_RULES = [
   {
     // Capability Console shell BFF (product_250 M-4 batch C) — second workforce
     // RP, same RP-only posture as admin-bff. requiredActual stays false until
-    // the capconsole stack first deploys (then flip to STRICT_RUNTIME so a
+    // the opera stack first deploys (then flip to STRICT_RUNTIME so a
     // missing env fails closed like the other services).
-    label: "capconsole-bff env",
-    actual: `${RUNTIME_DIR}/.env.capconsole-bff`,
-    example: `${WORKER_DIR}/.env.capconsole-bff.example`,
+    label: "opera-bff env",
+    actual: `${RUNTIME_DIR}/.env.opera-bff`,
+    example: `${WORKER_DIR}/.env.opera-bff.example`,
     requiredActual: false,
     requiredExample: true,
     forbiddenKeys: new Set([
@@ -413,12 +413,12 @@ const ENV_FILE_RULES = [
     ]),
     requiredKeys: new Set([
       "NODE_ENV",
-      "CAPCONSOLE_BFF_PORT",
+      "OPERA_BFF_PORT",
       "AUTH_BFF_URL",
       "OIDC_ISSUER",
       // this RP's own public origin (the real hostname lives ONLY in runtime
       // env — the repo carries the x.vxture.com placeholder by hardening policy).
-      "CAPCONSOLE_BASE_URL",
+      "OPERA_BASE_URL",
       // confidential RP secret presented at the IdP token endpoint; missing →
       // 401 invalid_client. Provisioned by scripts/27-provision-client-secrets.sh.
       "OIDC_CLIENT_SECRET",
