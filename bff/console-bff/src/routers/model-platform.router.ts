@@ -8,6 +8,11 @@
  *
  * Console BFF 只暴露当前租户可见的模型、授权、配额和用量状态。
  * 平台级模型、Provider、价格、策略写操作必须走 Admin BFF。
+ *
+ * 代理路径前缀 2026-07-28 从 `/model-platform/admin/*` 改为 `/capability/*`
+ * ——atlas 侧改名(TD-013),权威表见 `vxture-atlas/docs/20-specs/10-http-surface.md`。
+ * `MODEL_PLATFORM_URL` 已指向外部 atlas 主机,本仓 `services/model/platform`
+ * 同步退役(product_250 M-4 线)。
  */
 
 import {
@@ -58,11 +63,11 @@ export class ModelPlatformRouter {
     const tenantId = requireTenantId(req);
     const [models, grants] = await Promise.all([
       modelPlatformRequest<AiModelRecord[]>(
-        "/model-platform/admin/models?includeInactive=false",
+        "/capability/models?includeInactive=false",
         this.modelPlatformUrl,
       ),
       modelPlatformRequest<AiModelGrantRecord[]>(
-        `/model-platform/admin/grants?tenantId=${encodeURIComponent(tenantId)}`,
+        `/capability/grants?tenantId=${encodeURIComponent(tenantId)}`,
         this.modelPlatformUrl,
       ),
     ]);
@@ -88,7 +93,7 @@ export class ModelPlatformRouter {
     if (applicationType) params.set("applicationType", applicationType);
 
     return modelPlatformRequest<AiModelGrantRecord[]>(
-      `/model-platform/admin/grants?${params.toString()}`,
+      `/capability/grants?${params.toString()}`,
       this.modelPlatformUrl,
     );
   }
@@ -105,7 +110,7 @@ export class ModelPlatformRouter {
     }
 
     return modelPlatformRequest<TenantQuotaRecord[]>(
-      `/model-platform/admin/quotas?${params.toString()}`,
+      `/capability/quotas?${params.toString()}`,
       this.modelPlatformUrl,
     );
   }
@@ -126,7 +131,7 @@ export class ModelPlatformRouter {
     if (statType) params.set("statType", statType);
 
     return modelPlatformRequest<TenantUsageSummaryRecord[]>(
-      `/model-platform/admin/usage-summaries?${params.toString()}`,
+      `/capability/usage-summaries?${params.toString()}`,
       this.modelPlatformUrl,
     );
   }
