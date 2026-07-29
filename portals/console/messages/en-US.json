@@ -304,7 +304,7 @@
         "label": "Usage Quotas",
         "description": "Resource progress for API calls, storage, and more"
       },
-      "modelPlatform": {
+      "atlas": {
         "label": "Model Platform",
         "description": "Online models, private models, and tenant grants"
       },
@@ -338,7 +338,7 @@
     "subscription": "Subscription",
     "billing": "Billing",
     "quotas": "Quotas",
-    "modelPlatform": "Model Platform",
+    "atlas": "Model Platform",
     "notifications": "Notifications",
     "security": "Security Settings",
     "settings": "Tenant Settings",

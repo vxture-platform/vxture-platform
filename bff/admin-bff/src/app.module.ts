@@ -23,7 +23,7 @@ import { AuthMiddleware } from "./middleware/auth.middleware";
 import { PermissionMiddleware } from "./middleware/permission.middleware";
 import { AdminPermissionsRouter } from "./routers/admin-permissions.router";
 import { AdminRolesRouter } from "./routers/admin-roles.router";
-import { ModelPlatformRouter } from "./routers/model-platform.router";
+import { AtlasRouter } from "./routers/atlas.router";
 import { AnnouncementsRouter } from "./routers/announcements.router";
 import { AuditLogsRouter } from "./routers/audit-logs.router";
 import { AuthRouter } from "./routers/auth.router";
@@ -69,7 +69,7 @@ import { NotificationLogsRouter } from "./routers/notification-logs.router";
     AuthRouter,
     MeRouter,
     CapabilitiesRouter,
-    ModelPlatformRouter,
+    AtlasRouter,
     AdminPermissionsRouter,
     AdminRolesRouter,
     AnnouncementsRouter,

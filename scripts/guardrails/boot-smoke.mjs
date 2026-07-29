@@ -60,7 +60,7 @@ const FAKE_ENV = {
   CONSOLE_BASE_URL: "https://console.smoke.example.com",
   ADMIN_BASE_URL: "https://admin.smoke.example.com",
   AUTH_BFF_URL: "https://auth.smoke.example.com",
-  MODEL_PLATFORM_URL: "https://model.smoke.example.com",
+  ATLAS_API_URL: "https://atlas.smoke.example.com",
   ADMIN_BFF_ORIGIN: "https://admin.smoke.example.com",
   AUTH_BFF_ORIGIN: "https://auth.smoke.example.com",
   ADMIN_BFF_PORT: "3031",

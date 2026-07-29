@@ -79,7 +79,7 @@ const SERVICES = [
     url: "http://localhost:3122",
     command: "pnpm --filter @vxture/agent-server-varda dev",
     env: {
-      MODEL_PLATFORM_URL: "http://localhost:3100",
+      ATLAS_API_URL: "http://localhost:3100",
       VARDA_SERVER_PORT: "3122",
       VARDA_PLATFORM_LLM_TENANT_ID: "82cf3e39-f7f0-4597-bb55-b1303ca19d46",
       VARDA_DEFAULT_MODEL_CODE: "doubao-seed-2-0-lite-260215",
@@ -113,7 +113,7 @@ const SERVICES = [
     url: "http://localhost:3021",
     command: "pnpm --filter @vxture/bff-console dev",
     env: {
-      MODEL_PLATFORM_URL: "http://localhost:3100",
+      ATLAS_API_URL: "http://localhost:3100",
       AUTH_BFF_URL: "http://localhost:3090",
     },
     healthChecks: [
@@ -137,7 +137,7 @@ const SERVICES = [
     url: "http://localhost:3031",
     command: "pnpm --filter @vxture/bff-admin dev",
     env: {
-      MODEL_PLATFORM_URL: "http://localhost:3100",
+      ATLAS_API_URL: "http://localhost:3100",
       ADMIN_BFF_PORT: "3031",
       AUTH_BFF_URL: "http://localhost:3090",
     },

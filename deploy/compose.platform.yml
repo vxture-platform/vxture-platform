@@ -267,7 +267,8 @@ services:
       start_period: 15s
 
   # model-platform 服务已退役（2026-07-28，product_250 atlas 仓拆分 cutover 完成）：
-  # 实现整体迁至外部 vxture-atlas 仓，MODEL_PLATFORM_URL 现指向 atlas 主机。
+  # 实现整体迁至外部 vxture-atlas 仓，ATLAS_API_URL（原 MODEL_PLATFORM_URL，
+  # 2026-07-29 改名）现指向 atlas 主机。
 
   console-bff:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_bff-console:${VX_IMAGE_TAG:-latest}

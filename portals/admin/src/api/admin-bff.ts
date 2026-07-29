@@ -211,7 +211,7 @@ export async function fetchAiModels(
   includeInactive = true,
 ): Promise<AiModelRecord[]> {
   return readJsonStrict<AiModelRecord[]>(
-    `/api/model-platform/models?includeInactive=${includeInactive ? "true" : "false"}`,
+    `/api/atlas/models?includeInactive=${includeInactive ? "true" : "false"}`,
   );
 }
 
@@ -232,7 +232,7 @@ export async function fetchAiModelGrants(
   }
 
   return readJsonStrict<AiModelGrantRecord[]>(
-    `/api/model-platform/grants${params.size ? `?${params.toString()}` : ""}`,
+    `/api/atlas/grants${params.size ? `?${params.toString()}` : ""}`,
   );
 }
 
@@ -240,7 +240,7 @@ export async function fetchModelProviders(
   includeInactive = true,
 ): Promise<ModelProviderRecord[]> {
   return readJsonStrict<ModelProviderRecord[]>(
-    `/api/model-platform/providers?includeInactive=${includeInactive ? "true" : "false"}`,
+    `/api/atlas/providers?includeInactive=${includeInactive ? "true" : "false"}`,
   );
 }
 
@@ -254,7 +254,7 @@ export async function fetchModelPriceRules(
   }
 
   return readJsonStrict<ModelPriceRuleRecord[]>(
-    `/api/model-platform/price-rules${params.size ? `?${params.toString()}` : ""}`,
+    `/api/atlas/price-rules${params.size ? `?${params.toString()}` : ""}`,
   );
 }
 
@@ -273,7 +273,7 @@ export async function fetchModelPolicies(
   }
 
   return readJsonStrict<ModelPolicyRecord[]>(
-    `/api/model-platform/policies${params.size ? `?${params.toString()}` : ""}`,
+    `/api/atlas/policies${params.size ? `?${params.toString()}` : ""}`,
   );
 }
 
@@ -287,7 +287,7 @@ export async function fetchTenantModelQuotas(
   }
 
   return readJsonStrict<TenantQuotaRecord[]>(
-    `/api/model-platform/quotas${params.size ? `?${params.toString()}` : ""}`,
+    `/api/atlas/quotas${params.size ? `?${params.toString()}` : ""}`,
   );
 }
 
@@ -310,7 +310,7 @@ export async function fetchTenantModelUsageSummaries(
   if (filters.statType) params.set("statType", filters.statType);
 
   return readJsonStrict<TenantUsageSummaryRecord[]>(
-    `/api/model-platform/usage-summaries${params.size ? `?${params.toString()}` : ""}`,
+    `/api/atlas/usage-summaries${params.size ? `?${params.toString()}` : ""}`,
   );
 }
 
@@ -1178,7 +1178,7 @@ export async function createAiModel(payload: {
   config?: Record<string, unknown> | null;
 }): Promise<AiModelRecord> {
   const response = await fetch(
-    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/model-platform/models`,
+    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/atlas/models`,
     {
       method: "POST",
       credentials: "include",
@@ -1211,7 +1211,7 @@ export async function updateAiModel(
   },
 ): Promise<AiModelRecord> {
   const response = await fetch(
-    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/model-platform/models/${modelId}`,
+    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/atlas/models/${modelId}`,
     {
       method: "PUT",
       credentials: "include",
@@ -1233,7 +1233,7 @@ export async function setAiModelActive(
   active: boolean,
 ): Promise<AiModelRecord> {
   const response = await fetch(
-    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/model-platform/models/${modelId}/${active ? "activate" : "deactivate"}`,
+    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/atlas/models/${modelId}/${active ? "activate" : "deactivate"}`,
     {
       method: "POST",
       credentials: "include",
@@ -1250,7 +1250,7 @@ export async function setAiModelActive(
 
 export async function deleteAiModel(modelId: string): Promise<AiModelRecord> {
   const response = await fetch(
-    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/model-platform/models/${modelId}`,
+    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/atlas/models/${modelId}`,
     {
       method: "DELETE",
       credentials: "include",
@@ -1282,7 +1282,7 @@ export async function createAiModelGrant(payload: {
   isActive?: boolean;
 }): Promise<AiModelGrantRecord> {
   const response = await fetch(
-    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/model-platform/grants`,
+    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/atlas/grants`,
     {
       method: "POST",
       credentials: "include",
@@ -1317,7 +1317,7 @@ export async function updateAiModelGrant(
   },
 ): Promise<AiModelGrantRecord> {
   const response = await fetch(
-    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/model-platform/grants/${grantId}`,
+    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/atlas/grants/${grantId}`,
     {
       method: "PUT",
       credentials: "include",
@@ -1339,7 +1339,7 @@ export async function setAiModelGrantActive(
   active: boolean,
 ): Promise<AiModelGrantRecord> {
   const response = await fetch(
-    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/model-platform/grants/${grantId}${active ? "/activate" : ""}`,
+    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/atlas/grants/${grantId}${active ? "/activate" : ""}`,
     {
       method: active ? "POST" : "DELETE",
       credentials: "include",
@@ -1375,7 +1375,7 @@ export async function createModelProvider(
   payload: ModelProviderWriteInput,
 ): Promise<ModelProviderRecord> {
   return mutateJson<ModelProviderRecord>(
-    "/api/model-platform/providers",
+    "/api/atlas/providers",
     "POST",
     payload,
     "Model provider creation failed",
@@ -1387,7 +1387,7 @@ export async function updateModelProvider(
   payload: Partial<ModelProviderWriteInput>,
 ): Promise<ModelProviderRecord> {
   return mutateJson<ModelProviderRecord>(
-    `/api/model-platform/providers/${encodeURIComponent(providerId)}`,
+    `/api/atlas/providers/${encodeURIComponent(providerId)}`,
     "PUT",
     payload,
     "Model provider update failed",
@@ -1398,7 +1398,7 @@ export async function activateModelProvider(
   providerId: string,
 ): Promise<ModelProviderRecord> {
   return mutateJson<ModelProviderRecord>(
-    `/api/model-platform/providers/${encodeURIComponent(providerId)}/activate`,
+    `/api/atlas/providers/${encodeURIComponent(providerId)}/activate`,
     "POST",
     undefined,
     "Model provider activation failed",
@@ -1409,7 +1409,7 @@ export async function deactivateModelProvider(
   providerId: string,
 ): Promise<ModelProviderRecord> {
   return mutateJson<ModelProviderRecord>(
-    `/api/model-platform/providers/${encodeURIComponent(providerId)}/deactivate`,
+    `/api/atlas/providers/${encodeURIComponent(providerId)}/deactivate`,
     "POST",
     undefined,
     "Model provider deactivation failed",
@@ -1420,7 +1420,7 @@ export async function deleteModelProvider(
   providerId: string,
 ): Promise<ModelProviderRecord> {
   return mutateJson<ModelProviderRecord>(
-    `/api/model-platform/providers/${encodeURIComponent(providerId)}`,
+    `/api/atlas/providers/${encodeURIComponent(providerId)}`,
     "DELETE",
     undefined,
     "Model provider deletion failed",
@@ -1447,7 +1447,7 @@ export async function createModelPriceRule(
   payload: ModelPriceRuleWriteInput,
 ): Promise<ModelPriceRuleRecord> {
   return mutateJson<ModelPriceRuleRecord>(
-    "/api/model-platform/price-rules",
+    "/api/atlas/price-rules",
     "POST",
     payload,
     "Model price rule creation failed",
@@ -1459,7 +1459,7 @@ export async function updateModelPriceRule(
   payload: Partial<Omit<ModelPriceRuleWriteInput, "modelId">>,
 ): Promise<ModelPriceRuleRecord> {
   return mutateJson<ModelPriceRuleRecord>(
-    `/api/model-platform/price-rules/${encodeURIComponent(priceRuleId)}`,
+    `/api/atlas/price-rules/${encodeURIComponent(priceRuleId)}`,
     "PUT",
     payload,
     "Model price rule update failed",
@@ -1470,7 +1470,7 @@ export async function activateModelPriceRule(
   priceRuleId: string,
 ): Promise<ModelPriceRuleRecord> {
   return mutateJson<ModelPriceRuleRecord>(
-    `/api/model-platform/price-rules/${encodeURIComponent(priceRuleId)}/activate`,
+    `/api/atlas/price-rules/${encodeURIComponent(priceRuleId)}/activate`,
     "POST",
     undefined,
     "Model price rule activation failed",
@@ -1481,7 +1481,7 @@ export async function deactivateModelPriceRule(
   priceRuleId: string,
 ): Promise<ModelPriceRuleRecord> {
   return mutateJson<ModelPriceRuleRecord>(
-    `/api/model-platform/price-rules/${encodeURIComponent(priceRuleId)}/deactivate`,
+    `/api/atlas/price-rules/${encodeURIComponent(priceRuleId)}/deactivate`,
     "POST",
     undefined,
     "Model price rule deactivation failed",

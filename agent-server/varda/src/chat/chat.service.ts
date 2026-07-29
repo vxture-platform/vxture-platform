@@ -59,17 +59,17 @@ export class ChatService {
   ): AsyncGenerator<ChatStreamEvent> {
     const vardaCfg = this.configService.varda;
     const llmTenantId = ctx.tenantId ?? vardaCfg.VARDA_PLATFORM_LLM_TENANT_ID;
-    const modelPlatformUrl = this.configService.platform.MODEL_PLATFORM_URL;
+    const atlasApiUrl = this.configService.platform.ATLAS_API_URL;
 
     const client = new ModelRuntimeLLMClient(
       vardaCfg.VARDA_LLM_AGENT_ID
         ? {
-            modelPlatformUrl,
+            atlasApiUrl,
             tenantId: llmTenantId,
             applicationId: vardaCfg.VARDA_LLM_AGENT_ID,
             applicationType: "agent",
           }
-        : { modelPlatformUrl, tenantId: llmTenantId },
+        : { atlasApiUrl, tenantId: llmTenantId },
     );
 
     // 1. 获取可用工具

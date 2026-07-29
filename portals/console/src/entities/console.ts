@@ -254,7 +254,7 @@ export type ModelApplicationType =
   | "api_client"
   | "internal_service";
 
-/** Tenant-facing grant view (`/api/model-platform/grants` → atlas `/tenancy/grants`). */
+/** Tenant-facing grant view (`/api/atlas/grants` → atlas `/tenancy/grants`). */
 export interface AiModelGrantRecord {
   id: string;
   modelId: string;
@@ -268,7 +268,7 @@ export interface AiModelGrantRecord {
 }
 
 /**
- * Entitlement envelope (`/api/model-platform/quotas` → atlas `/tenancy/quotas`,
+ * Entitlement envelope (`/api/atlas/quotas` → atlas `/tenancy/quotas`,
  * itself reading the platform's own C2 entitlement) — a single object, not a
  * list. `status` distinguishes "resolved with no coverage" (no plan
  * published yet) from "could not reach the platform".
@@ -288,7 +288,7 @@ export interface TenancyQuotaResponse {
 }
 
 /**
- * Usage envelope (`/api/model-platform/usage` → atlas `/tenancy/usage`) —
+ * Usage envelope (`/api/atlas/usage` → atlas `/tenancy/usage`) —
  * sourced from atlas's own request log, NOT a billing figure. The billing
  * basis is the platform's `usage_events` summed over the subscription
  * period.

@@ -11,10 +11,10 @@
 Architecture Decision Record. Documents the background, options, outcomes, and consequences of major technical decisions. Once Accepted, it is not modified; it can only be superseded by a new ADR. See `docs/30-design/decisions/`.
 
 **Atlas**
-Final product name (2026-07-06, `docs/30-design/product_100_matrix.md` v1.0) of the L1 model platform — the current model-platform service/domain. Sole host for all models (LLMs and specialized small models), sole LLM egress, and the single metering authority (all inference volume flows through Atlas → consume). Disambiguation: not the schema migration tool `ariga/atlas` referenced in `data_platform_320`.
+Final product name (2026-07-06, `docs/30-design/product_100_matrix.md` v1.0) of the L1 model platform. Sole host for all models (LLMs and specialized small models), sole LLM egress, and the single metering authority (all inference volume flows through Atlas → consume). Runs as an external service (`vxture-atlas` repo); this repo reaches it via `ATLAS_API_URL` (BFF route `/api/atlas/*`, env var and route renamed from the old `model-platform` naming 2026-07-29 — see the retired **model-platform** entry below). Disambiguation: not the schema migration tool `ariga/atlas` referenced in `data_platform_320`.
 
 **agent-server**
-Private backend for an Agent. Runs the Tool Use Loop, invokes the LLM through model-platform, and persists sessions and messages. Each Agent instance has its own agent-server; cross-instance imports are prohibited.
+Private backend for an Agent. Runs the Tool Use Loop, invokes the LLM through Atlas, and persists sessions and messages. Each Agent instance has its own agent-server; cross-instance imports are prohibited.
 
 **agent-studio**
 Agent frontend (`agent-studio/*`). A Next.js application that renders the conversation UI. Different Agents use different deployment modes:
@@ -35,7 +35,7 @@ The platform's sole JWT issuer (`@vxture/bff-auth`). Platform BFFs log in direct
 IETF language tag standard (RFC 5646). This platform uses two tags: `zh-CN` (Simplified Chinese) and `en-US` (American English). They are used throughout URL route segments, the `<html lang>` attribute, `Intl.*` APIs, and translation file directories. See ADR-002.
 
 **BFF (Backend For Frontend)**
-Backend services tailored for specific frontends (`bff/*`). Classified by authentication mode into three categories: Platform BFF (with its own login page), Business BFF (reuses console Cookie), and functional BFF (auth / gateway). BFFs do not call LLMs directly; they must go through model-platform.
+Backend services tailored for specific frontends (`bff/*`). Classified by authentication mode into three categories: Platform BFF (with its own login page), Business BFF (reuses console Cookie), and functional BFF (auth / gateway). BFFs do not call LLMs directly; they must go through Atlas.
 
 **business/**
 Historical/candidate directory for scenario-specific business applications. After P7b, this repository no longer keeps the local Ruyin implementation; Ruyin has been migrated and deployed to vx-worker-02 by `vxture/agentstudio-ruyin`. Future vertical scenario applications should go into the corresponding external business repository.
@@ -172,7 +172,7 @@ Current values:
 ## T
 
 **Tailscale**
-Zero-configuration VPN mesh. The `vxture` repository currently only maintains the GitHub Actions deployment channel to VXTURE_DEPLOY_HOST, as well as the external contracts for platform auth-bff / SSO / model-platform against. Business worker internal network calls are maintained by external business repositories.
+Zero-configuration VPN mesh. The `vxture` repository currently only maintains the GitHub Actions deployment channel to VXTURE_DEPLOY_HOST, as well as the external contracts for platform auth-bff / SSO / Atlas against. Business worker internal network calls are maintained by external business repositories.
 
 **tenant**
 Data boundary for multi-tenant isolation. Each tenant_user belongs to at least one tenant and may belong to multiple tenants. Current authoritative model is the four-layer structure **User → Tenant (personal/organization) → Workspace → two-level Membership** (`data_platform_100_architecture.md` §3.4; ADR-11): the tenant/org is the **absolute isolation boundary and billing/settlement subject**; the **workspace** is the subscription/entitlement/isolation subject. Plan tiers are per-product 5 levels (free → starter → pro → business → enterprise, ADR-11); the older Free/Pro/Enterprise 3-tier table is obsolete.
@@ -181,7 +181,7 @@ Data boundary for multi-tenant isolation. Each tenant_user belongs to at least o
 Tenant-side user type (JWT claim: `userType: "tenant_user"`). Corresponds to `console.vxture.com` and Agent products, with `dataScope: tenant`, and can only access data belonging to their own tenant.
 
 **Tool Use Loop**
-AI Agent reasoning loop: LLM decides to call a tool → tool executes → result returns to LLM → continue or terminate. Implemented in agent-server. All LLM calls **must go through model-platform** (unified billing, quota, and authorization control); directly importing provider SDKs (Anthropic / Doubao, etc.) is prohibited, otherwise control is bypassed and metering/auditing become impossible.
+AI Agent reasoning loop: LLM decides to call a tool → tool executes → result returns to LLM → continue or terminate. Implemented in agent-server. All LLM calls **must go through Atlas** (unified billing, quota, and authorization control); directly importing provider SDKs (Anthropic / Doubao, etc.) is prohibited, otherwise control is bypassed and metering/auditing become impossible.
 
 **ToolRegistry**
 Agent tool whitelist registry (`agent-server/*/tools/tool-registry.ts`). Tools must be whitelist-validated before execution; `allowedTools` comes from CallerContext, not accepted from the frontend.
@@ -218,5 +218,5 @@ Annotation in a code file header declaring its architectural layer (e.g., `@laye
 
 ## AI Infrastructure
 
-**model-platform**
-Unified AI model access layer. Final product name: **Atlas** (see entry). Retired from this repo 2026-07-28 — the implementation (`@vxture/service-model-platform`) was extracted into the standalone `vxture-atlas` repo (2026-07-24 split); this repo now calls it as an external L1 provider via `MODEL_PLATFORM_URL`. It is the sole entry point for all LLM calls and is responsible for: model routing, billing metering, quota control, and Provider abstraction. agent-server / business services call it through controlled HTTP/API, and must not bypass it to connect directly to providers. Business workers must not hold platform Provider Keys.
+**model-platform** (retired naming — see **Atlas**)
+Unified AI model access layer. Final product name: **Atlas** (see entry). The implementation (`@vxture/service-model-platform`) was extracted into the standalone `vxture-atlas` repo (2026-07-24 split, service retired from this repo 2026-07-28). The naming itself lingered a bit longer in this repo's own plumbing — env var `MODEL_PLATFORM_URL`, BFF route `/api/model-platform/*`, frontend route/page — and was fully renamed to `ATLAS_API_URL` / `/api/atlas/*` on 2026-07-29 (kept causing "is there still a repo-local model-platform service" confusion otherwise). It is the sole entry point for all LLM calls and is responsible for: model routing, billing metering, quota control, and Provider abstraction. agent-server / business services call it through controlled HTTP/API, and must not bypass it to connect directly to providers. Business workers must not hold platform Provider Keys.

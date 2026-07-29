@@ -201,17 +201,17 @@ export async function fetchTenantPermissions(): Promise<
 }
 
 export async function fetchAiModels(): Promise<AiModelRecord[]> {
-  return readJson<AiModelRecord[]>("/api/model-platform/models", []);
+  return readJson<AiModelRecord[]>("/api/atlas/models", []);
 }
 
 /** `/tenancy/grants` scopes to this workspace's own token — no caller-supplied filters accepted. */
 export async function fetchAiModelGrants(): Promise<AiModelGrantRecord[]> {
-  return readJson<AiModelGrantRecord[]>("/api/model-platform/grants", []);
+  return readJson<AiModelGrantRecord[]>("/api/atlas/grants", []);
 }
 
 /** Single entitlement envelope — see `status` for coverage vs unreachable. */
 export async function fetchTenantModelQuotas(): Promise<TenancyQuotaResponse> {
-  return readJson<TenancyQuotaResponse>("/api/model-platform/quotas", {
+  return readJson<TenancyQuotaResponse>("/api/atlas/quotas", {
     workspaceId: "",
     tier: null,
     bundled: false,
@@ -230,7 +230,7 @@ export async function fetchTenantModelUsage(
   if (filters.days) params.set("days", String(filters.days));
 
   return readJson<TenancyUsageResponse>(
-    `/api/model-platform/usage${params.size ? `?${params.toString()}` : ""}`,
+    `/api/atlas/usage${params.size ? `?${params.toString()}` : ""}`,
     {
       scope: filters.scope ?? "workspace",
       scopeId: "",

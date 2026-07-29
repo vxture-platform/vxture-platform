@@ -35,8 +35,8 @@ export const platformSchema = z.object({
    * See docs/design/identity-platform-idp.md.
    */
   LOGIN_UI_BASE_URL: z.string().url().default("http://localhost:3040"),
-  /** Model Platform internal base URL */
-  MODEL_PLATFORM_URL: z.string().url().default("http://localhost:3100"),
+  /** Atlas (AI model supply provider) internal S2S API base URL. */
+  ATLAS_API_URL: z.string().url().default("http://localhost:3100"),
   /** Auth BFF internal base URL (used by proxy BFFs to delegate auth operations) */
   AUTH_BFF_URL: z.string().url().default("http://localhost:3061"),
   /**

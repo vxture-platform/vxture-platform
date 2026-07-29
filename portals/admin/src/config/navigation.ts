@@ -406,11 +406,11 @@ const platformAutonomySections: AdminNavigationSection[] = [
     title: "平台资源",
     items: [
       {
-        id: "modelPlatform",
+        id: "atlas",
         code: "model_gateway",
         i18nKey: "menu.platform.model_gateway",
         status: "active",
-        href: "/model-platform",
+        href: "/atlas",
         label: "模型平台",
         description:
           "管理大模型供应商、模型路由、调用策略、限流策略与可用性状态。",

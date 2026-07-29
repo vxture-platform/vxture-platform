@@ -1841,7 +1841,7 @@ export default function AdminOverviewPage() {
         summary: "Token 调用量前三。",
         detail: "按 Token 调用量观察模型平台后的真实使用强度。",
         tone: "blue",
-        href: "/model-platform",
+        href: "/atlas",
         rankStyle: "medal",
         rows: fillCapabilityRows(modelRows, "model"),
       },

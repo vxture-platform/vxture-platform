@@ -304,7 +304,7 @@
         "label": "用量配额",
         "description": "API 调用、存储等资源用量进度"
       },
-      "modelPlatform": {
+      "atlas": {
         "label": "模型接入",
         "description": "在线模型、自建模型与租户授权"
       },
@@ -338,7 +338,7 @@
     "subscription": "订阅",
     "billing": "账单",
     "quotas": "配额",
-    "modelPlatform": "模型接入",
+    "atlas": "模型接入",
     "notifications": "通知提醒",
     "security": "安全设置",
     "settings": "租户设置",

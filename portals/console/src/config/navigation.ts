@@ -189,10 +189,10 @@ const platformSection: NavigationSection = {
   titleKey: "platform",
   items: [
     {
-      href: "/model-platform",
-      labelKey: "modelPlatform.label",
+      href: "/atlas",
+      labelKey: "atlas.label",
       icon: "database",
-      descriptionKey: "modelPlatform.description",
+      descriptionKey: "atlas.description",
       capability: "platform.model.manage",
     },
   ],

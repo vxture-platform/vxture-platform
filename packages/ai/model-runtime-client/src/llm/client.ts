@@ -15,13 +15,13 @@ import type {
 export interface ModelRuntimeLLMClientOptions {
   /**
    * TD-016: required — this package has no NestJS DI, so it cannot read
-   * validated config itself. The caller must resolve MODEL_PLATFORM_URL
+   * validated config itself. The caller must resolve ATLAS_API_URL
    * through its own Zod-validated VxConfigService (packages/core/config
    * platform.schema.ts) and pass it here; this client no longer falls back
-   * to reading process.env.MODEL_PLATFORM_URL directly (that value was
+   * to reading process.env.ATLAS_API_URL directly (that value was
    * never Zod-validated at this call site).
    */
-  modelPlatformUrl: string;
+  atlasApiUrl: string;
   tenantId: string;
   applicationId?: string;
   applicationType?: ModelRuntimeApplicationType;
@@ -98,7 +98,7 @@ export class ModelRuntimeLLMError extends Error implements LLMError {
 }
 
 export class ModelRuntimeLLMClient {
-  private readonly modelPlatformUrl: string;
+  private readonly atlasApiUrl: string;
   private readonly tenantId: string;
   private readonly applicationId: string | undefined;
   private readonly applicationType: ModelRuntimeApplicationType | undefined;
@@ -107,7 +107,7 @@ export class ModelRuntimeLLMClient {
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: ModelRuntimeLLMClientOptions) {
-    this.modelPlatformUrl = normalizeModelPlatformUrl(options.modelPlatformUrl);
+    this.atlasApiUrl = normalizeAtlasApiUrl(options.atlasApiUrl);
     if (!options.tenantId.trim()) {
       throw new ModelRuntimeLLMError(
         "MISSING_TENANT_ID",
@@ -183,7 +183,7 @@ export class ModelRuntimeLLMClient {
 
     let response: Response;
     try {
-      response = await this.fetchImpl(`${this.modelPlatformUrl}/v1/chat`, {
+      response = await this.fetchImpl(`${this.atlasApiUrl}/v1/chat`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -279,7 +279,7 @@ export class ModelRuntimeLLMClient {
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const response = await this.fetchImpl(`${this.modelPlatformUrl}${path}`, {
+      const response = await this.fetchImpl(`${this.atlasApiUrl}${path}`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -459,11 +459,11 @@ export function createModelRuntimeLLMClient(
   return new ModelRuntimeLLMClient(options);
 }
 
-function normalizeModelPlatformUrl(url: string | undefined): string {
+function normalizeAtlasApiUrl(url: string | undefined): string {
   if (!url?.trim()) {
     throw new ModelRuntimeLLMError(
-      "MISSING_MODEL_PLATFORM_URL",
-      "MODEL_PLATFORM_URL is required for ModelRuntimeLLMClient",
+      "MISSING_ATLAS_API_URL",
+      "ATLAS_API_URL is required for ModelRuntimeLLMClient",
     );
   }
 
@@ -475,8 +475,8 @@ function normalizeModelPlatformUrl(url: string | undefined): string {
     new URL(normalized);
   } catch {
     throw new ModelRuntimeLLMError(
-      "INVALID_MODEL_PLATFORM_URL",
-      `modelPlatformUrl is not a valid URL: ${normalized}`,
+      "INVALID_ATLAS_API_URL",
+      `atlasApiUrl is not a valid URL: ${normalized}`,
     );
   }
   return normalized;

@@ -24,7 +24,7 @@ import { AuthMiddleware } from "./middleware/auth.middleware";
 import { PermissionMiddleware } from "./middleware/permission.middleware";
 import { TenantMiddleware } from "./middleware/tenant.middleware";
 import { ApplicationsRouter } from "./routers/applications.router";
-import { ModelPlatformRouter } from "./routers/model-platform.router";
+import { AtlasRouter } from "./routers/atlas.router";
 import { BillingRouter } from "./routers/billing.router";
 import { CapabilitiesRouter } from "./routers/capabilities.router";
 import { HealthRouter } from "./routers/health.router";
@@ -57,7 +57,7 @@ import { TenantContextRouter } from "./routers/tenant-context.router";
     IamRouter,
     SubscriptionRouter,
     BillingRouter,
-    ModelPlatformRouter,
+    AtlasRouter,
   ],
   providers: [
     ConsoleAuthService,

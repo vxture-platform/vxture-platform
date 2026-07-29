@@ -53,7 +53,7 @@ const autonomyDomains = [
     links: [
       {
         label: "模型平台",
-        href: "/model-platform",
+        href: "/atlas",
         meta: "Provider、端点、链路",
       },
       {

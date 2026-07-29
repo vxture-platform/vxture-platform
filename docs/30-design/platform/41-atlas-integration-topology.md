@@ -34,8 +34,8 @@ price_rule/policy CRUD + 租户配额看板），这不是"业务调用模型能
 
 - **关系**：platform 是 Atlas 的**运营方**，不是 Atlas 的客户，也不是需要 S2S token exchange
   的对等服务。
-- **对接方式（任务5）**：`bff/admin-bff`、`bff/console-bff` 的 `model-platform.router.ts`
-  从"进程内 fetch localhost"改成调 Atlas 真实网络地址，鉴权升级为运营态凭证（沿用平台内部
+- **对接方式（任务5）**：`bff/admin-bff`、`bff/console-bff` 的 `atlas.router.ts`（2026-07-29 前
+  叫 `model-platform.router.ts`）从"进程内 fetch localhost"改成调 Atlas 真实网络地址，鉴权升级为运营态凭证（沿用平台内部
   管理面认证，不是 S2S token exchange——运营台调后台管理 API 和"产品互调模型能力"不是一回事，
   不应该用同一套凭证语义）。
 - **不做的事**：platform 不通过 S2S provider 面调 Atlas 的 embedding/parse/rerank/generation——
@@ -53,8 +53,9 @@ Varda 是唯一"活在 vxture-platform monorepo 里"的智能助手（`agent-ser
   `applicationId`+`applicationType` 等），不涉及 embedding/parse/rerank——Varda 没有知识库/
   检索管线,不是资产面产品。
 - **调用路径**：`agent-server/varda` → `@vxture/model-runtime-client`（留在本仓,决策5,未发布,
-  只服务 monorepo 内的 agent-server）→ Atlas 真实网络地址（原来是同网段 `MODEL_PLATFORM_URL`
-  指向 monorepo 内服务，现在指向独立仓部署的 Atlas）。
+  只服务 monorepo 内的 agent-server）→ Atlas 真实网络地址（原来是同网段的这个环境变量
+  指向 monorepo 内服务，现在指向独立仓部署的 Atlas，变量本身 2026-07-29 也从
+  `MODEL_PLATFORM_URL` 改名为 `ATLAS_API_URL`）。
 - **鉴权**：service 模式 S2S token exchange（`aud=atlas`，`act.sub`=varda 服务身份）——虽然
   Varda 是内嵌产品,但它对 Atlas 而言就是一个调用方,和外部产品仓走同一套 S2S 契约,不因为"住在
   同一个 monorepo"就搞特殊、走内部裸调用。

@@ -1,5 +1,5 @@
 /**
- * model-platform.router.ts - 租户模型平台只读路由
+ * atlas.router.ts - 租户 AI 模型能力只读路由(代理 atlas)
  * @package @vxture/bff-console
  * @layer Application
  * @category Router
@@ -9,10 +9,14 @@
  * Console BFF 只暴露当前租户可见的模型、授权、配额和用量状态。
  * 平台级模型、Provider、价格、策略写操作必须走 Admin BFF。
  *
+ * 2026-07-29(命名收尾):本文件/路由/环境变量此前沿用"model-platform"这个已退役的
+ * 旧称——`services/model/platform` 本身已整体退役、实现迁至外部 `vxture-atlas` 仓
+ * (product_250 M-4 线,2026-07-28),继续用旧名只会制造"这是不是还有一个本仓自带的
+ * model-platform 服务"的误解。改回真实身份:路由前缀 `/api/model-platform/*` →
+ * `/api/atlas/*`,环境变量 `MODEL_PLATFORM_URL` → `ATLAS_API_URL`,类型/函数名同步。
+ *
  * 代理路径前缀 2026-07-28 从 `/model-platform/admin/*` 改为 `/capability/*`
  * ——atlas 侧改名(TD-013),权威表见 `vxture-atlas/docs/20-specs/10-http-surface.md`。
- * `MODEL_PLATFORM_URL` 已指向外部 atlas 主机,本仓 `services/model/platform`
- * 同步退役(product_250 M-4 线)。
  *
  * 2026-07-28(TD-043 platform→atlas 半程):atlas 的 `S2sAuthGuard` 严格要求签名
  * S2S token,无共享密钥兜底,故每次代理都经 `S2sExchangeService` 先换票
@@ -76,7 +80,7 @@ import type {
 /** Exchange audience for atlas's capability plane (product_100 code). */
 const ATLAS_AUDIENCE = "atlas";
 
-interface ModelPlatformErrorBody {
+interface AtlasErrorBody {
   code?: string;
   message?: string | string[];
   error?: string;
@@ -86,17 +90,19 @@ interface ModelPlatformErrorBody {
 
 // ── Router ───────────────────────────────────────────────────────────────────
 
-@Controller("api/model-platform")
-export class ModelPlatformRouter {
-  private readonly modelPlatformUrl: string;
+@Controller("api/atlas")
+export class AtlasRouter {
+  private readonly atlasApiUrl: string;
 
   constructor(
     @Inject(VxConfigService) configService: VxConfigService,
     @Inject(S2sExchangeService)
     private readonly s2sExchange: S2sExchangeService,
   ) {
-    this.modelPlatformUrl =
-      configService.platform.MODEL_PLATFORM_URL.trim().replace(/\/+$/, "");
+    this.atlasApiUrl = configService.platform.ATLAS_API_URL.trim().replace(
+      /\/+$/,
+      "",
+    );
   }
 
   /** Exchange this request's resolved workspace (+ org) for an aud=atlas S2S bearer, then proxy. */
@@ -111,9 +117,9 @@ export class ModelPlatformRouter {
       orgId,
     );
     if (!bearer) {
-      throw new BadGatewayException("Unable to authenticate to Model Platform");
+      throw new BadGatewayException("Unable to authenticate to Atlas");
     }
-    return modelPlatformRequest<T>(path, this.modelPlatformUrl, bearer);
+    return atlasRequest<T>(path, this.atlasApiUrl, bearer);
   }
 
   /** `/tenancy/models` already filters to this workspace's active grants — no separate grants join needed. */
@@ -208,7 +214,7 @@ function requireWorkspaceId(req: Request & RequestContext): string {
   return workspaceId;
 }
 
-async function modelPlatformRequest<TResponse>(
+async function atlasRequest<TResponse>(
   path: string,
   baseUrl: string,
   bearer: string,
@@ -220,14 +226,14 @@ async function modelPlatformRequest<TResponse>(
       headers: { authorization: `Bearer ${bearer}` },
     });
   } catch {
-    throw new BadGatewayException("Model Platform is unavailable");
+    throw new BadGatewayException("Atlas is unavailable");
   }
 
   const responseText = await response.text();
 
   if (!response.ok) {
     throw new HttpException(
-      parseModelPlatformError(responseText, response.status),
+      parseAtlasError(responseText, response.status),
       response.status,
     );
   }
@@ -239,33 +245,30 @@ async function modelPlatformRequest<TResponse>(
   return JSON.parse(responseText) as TResponse;
 }
 
-function parseModelPlatformError(
-  responseText: string,
-  status: number,
-): ModelPlatformErrorBody {
+function parseAtlasError(responseText: string, status: number): AtlasErrorBody {
   if (!responseText.trim()) {
     return {
-      code: "MODEL_PLATFORM_REQUEST_FAILED",
-      message: `Model Platform request failed with status ${status}`,
+      code: "ATLAS_REQUEST_FAILED",
+      message: `Atlas request failed with status ${status}`,
       statusCode: status,
     };
   }
 
   try {
-    const parsed = JSON.parse(responseText) as ModelPlatformErrorBody;
+    const parsed = JSON.parse(responseText) as AtlasErrorBody;
     if (parsed.message !== undefined || parsed.code !== undefined) {
       return { ...parsed, statusCode: parsed.statusCode ?? status };
     }
 
     return {
-      code: "MODEL_PLATFORM_REQUEST_FAILED",
-      message: `Model Platform request failed with status ${status}`,
+      code: "ATLAS_REQUEST_FAILED",
+      message: `Atlas request failed with status ${status}`,
       statusCode: status,
       details: parsed,
     };
   } catch {
     return {
-      code: "MODEL_PLATFORM_REQUEST_FAILED",
+      code: "ATLAS_REQUEST_FAILED",
       message: responseText,
       statusCode: status,
     };

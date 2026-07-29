@@ -993,7 +993,7 @@
 | **登记日期** | 2026-07-28                                                                                        |
 | **来源**     | atlas 路径改名排查（随手发现）；`vxture-atlas/docs/20-specs/10-http-surface.md`（权威鉴权要求表） |
 
-**描述**：atlas 的能力面（`/capability/*`）与数据面（`/v1/*`）均要求调用方带 `S2sAuthGuard` 校验的 RS256 `aud=atlas` bearer token（`vxture-atlas/docs/20-specs/10-http-surface.md`）。本仓两处调用方完全不带任何鉴权头：`bff/console-bff/src/routers/model-platform.router.ts`（`modelPlatformRequest()` 零 headers）、`packages/ai/model-runtime-client/src/llm/client.ts`（agent-server/varda 聊天用，`chat`/`chatStream` 均零 headers）。平台已有现成的 `tool:{target}` scope client-credentials 换票机制（`bff/auth-bff/src/oidc/token-exchange.service.ts`，product_210 §3/D3），两处调用方均未接入。
+**描述**：atlas 的能力面（`/capability/*`）与数据面（`/v1/*`）均要求调用方带 `S2sAuthGuard` 校验的 RS256 `aud=atlas` bearer token（`vxture-atlas/docs/20-specs/10-http-surface.md`）。本仓两处调用方完全不带任何鉴权头：`bff/console-bff/src/routers/model-platform.router.ts`（2026-07-29 改名 `atlas.router.ts`，`modelPlatformRequest()` 同期改名 `atlasRequest()`，零 headers）、`packages/ai/model-runtime-client/src/llm/client.ts`（agent-server/varda 聊天用，`chat`/`chatStream` 均零 headers）。平台已有现成的 `tool:{target}` scope client-credentials 换票机制（`bff/auth-bff/src/oidc/token-exchange.service.ts`，product_210 §3/D3），两处调用方均未接入。
 
 **影响**：若 atlas 严格执行该守卫（已确认：严格执行），这两条链路的请求会被拒绝（401/403），而不只是路径改名前的 404——console-bff 侧影响租户可见模型/授权/配额/用量展示；model-runtime-client 侧影响 varda 聊天。
 
