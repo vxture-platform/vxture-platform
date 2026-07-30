@@ -117,7 +117,7 @@ sync_env_from_example() {
     {
       printf '\n'
       printf '# ============================================================================\n'
-      printf '# 从 .example 追加的新配置项，请手动填写真实值；已有配置不会被覆盖。\n'
+      printf '# New keys appended from .example — fill in real values by hand; existing keys are never overwritten.\n'
       printf '# Added from: %s\n' "$(basename "$example_file")"
       printf '# ============================================================================\n'
       for key in "${missing_keys[@]}"; do
