@@ -16,6 +16,7 @@ import {
   confirmOrderOfflinePayment,
   fetchOrderOperation,
   rejectOrderPaymentDeclaration,
+  restoreOrder,
   voidOrder,
 } from "@/api/admin-bff";
 import type {
@@ -101,6 +102,13 @@ function voidDisabledReason(order: OrderOperationDetailRecord) {
   if (canVoidOrder(order)) return null;
   if (order.paidAmount > 0) return "已收到支付的订单不能驳回，请走结算流程。";
   return "该订单不是待支付状态，无需驳回。";
+}
+
+// restorable 由后端判定：从未激活过（订阅 end_at 为空）且没有支付记录的
+// 已取消/已过期订单才可恢复；已激活后再取消的订阅不在此列（见 admin-bff）。
+function restoreDisabledReason(order: OrderOperationDetailRecord) {
+  if (order.restorable) return null;
+  return "该订单不是可恢复的已取消状态（已激活过的订阅取消后无法在此恢复）。";
 }
 
 function subscriptionStatusLabel(
@@ -401,6 +409,9 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
   const [submittingReject, setSubmittingReject] = useState(false);
   const [voidReason, setVoidReason] = useState("");
   const [submittingVoid, setSubmittingVoid] = useState(false);
+  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
+  const [restoreReason, setRestoreReason] = useState("");
+  const [submittingRestore, setSubmittingRestore] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [operationFeedback, setOperationFeedback] = useState<string | null>(
     null,
@@ -535,6 +546,31 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
     }
   }
 
+  async function handleRestoreOrder() {
+    if (!order) return;
+
+    setSubmittingRestore(true);
+    setOperationError(null);
+
+    try {
+      // Restore is 危 commerce:order.restore → step-up.
+      const updatedOrder = await runWithStepUp(() =>
+        restoreOrder(order.id, restoreReason),
+      );
+      setOrder(updatedOrder);
+      setOperationFeedback("订单已恢复为待支付状态。");
+      setRestoreDialogOpen(false);
+      setRestoreReason("");
+    } catch (error) {
+      if (isStepUpCancelled(error)) return;
+      setOperationError(
+        error instanceof Error ? error.message : "恢复订单失败，请稍后重试。",
+      );
+    } finally {
+      setSubmittingRestore(false);
+    }
+  }
+
   if (!loading && !order) {
     return (
       <div className="vx-page-stack vx-product-capability-page">
@@ -639,6 +675,20 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                 >
                   <Icon name="x" size="xs" fallback="placeholder" />
                   驳回订单
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setOperationError(null);
+                    setOperationFeedback(null);
+                    setRestoreReason("");
+                    setRestoreDialogOpen(true);
+                  }}
+                  disabled={!order.restorable}
+                  title={restoreDisabledReason(order) ?? undefined}
+                >
+                  <Icon name="play" size="xs" fallback="placeholder" />
+                  恢复订单
                 </Button>
               </>
             ) : null}
@@ -794,6 +844,46 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             onChange={(e) => setVoidReason(e.target.value)}
             rows={3}
             placeholder="例如：客户电话取消，重复下单。"
+            autoFocus
+          />
+          {operationError ? (
+            <p className="text-sm text-vx-danger">{operationError}</p>
+          ) : null}
+        </DialogForm>
+      ) : null}
+
+      {order && restoreDialogOpen ? (
+        <DialogForm
+          open
+          title="恢复订单"
+          description={
+            <>
+              订单号：<strong>{order.orderNo}</strong>
+              {order.tenantName ? `  ·  ${order.tenantName}` : ""}
+              。恢复后订单回到待付款状态，账单与折扣一并复原。
+            </>
+          }
+          submitLabel="确认恢复"
+          cancelLabel="取消"
+          submitting={submittingRestore}
+          submitDisabled={restoreReason.trim().length < 4}
+          onOpenChange={(open) => {
+            if (!open && !submittingRestore) setRestoreDialogOpen(false);
+          }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleRestoreOrder();
+          }}
+        >
+          <Label htmlFor="vx-order-restore-reason">
+            恢复原因 <small>（必填，最少 4 字）</small>
+          </Label>
+          <Textarea
+            id="vx-order-restore-reason"
+            value={restoreReason}
+            onChange={(e) => setRestoreReason(e.target.value)}
+            rows={3}
+            placeholder="例如：客户已确认继续购买，误操作驳回，现恢复订单。"
             autoFocus
           />
           {operationError ? (

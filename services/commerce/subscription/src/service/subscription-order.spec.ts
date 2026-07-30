@@ -59,6 +59,7 @@ interface Mocks {
     createOfflineOrder: ReturnType<typeof vi.fn>;
     activateOrder: ReturnType<typeof vi.fn>;
     cancelOfflineOrder: ReturnType<typeof vi.fn>;
+    restoreOfflineOrder: ReturnType<typeof vi.fn>;
   };
   provisioning: {
     onSubscriptionActivated: ReturnType<typeof vi.fn>;
@@ -79,6 +80,7 @@ const build = (): Mocks => {
     createOfflineOrder: vi.fn(),
     activateOrder: vi.fn(),
     cancelOfflineOrder: vi.fn(),
+    restoreOfflineOrder: vi.fn(),
   };
   const provisioning = {
     onSubscriptionActivated: vi
@@ -307,5 +309,47 @@ describe("cancelPendingOrder", () => {
         actorId: "op-1",
       }),
     ).resolves.toMatchObject({ status: "cancelled" });
+  });
+});
+
+describe("restoreOfflineOrder", () => {
+  let m: Mocks;
+  beforeEach(() => (m = build()));
+
+  const CANCELLED_ORDER: SubscriptionRecord = { ...ORDER, status: "cancelled" };
+
+  it("restores the order and fires only the cache-bust (no re-provisioning)", async () => {
+    m.repo.getById.mockResolvedValue(CANCELLED_ORDER);
+    m.repo.restoreOfflineOrder.mockResolvedValue({
+      ...ORDER,
+      status: "suspended",
+    });
+    const result = await m.service.restoreOfflineOrder("order-1", {
+      actorType: "operator",
+      actorId: "op-1",
+    });
+    expect(result.status).toBe("suspended");
+    expect(m.repo.restoreOfflineOrder).toHaveBeenCalledWith(
+      "order-1",
+      expect.objectContaining({ actorType: "operator", actorId: "op-1" }),
+    );
+    expect(m.provisioning.enqueueEvent).toHaveBeenCalledTimes(1);
+    expect(m.provisioning.onSubscriptionDeactivated).not.toHaveBeenCalled();
+    expect(m.provisioning.onSubscriptionActivated).not.toHaveBeenCalled();
+  });
+
+  it("an enqueue failure never fails the committed restore", async () => {
+    m.repo.getById.mockResolvedValue(CANCELLED_ORDER);
+    m.repo.restoreOfflineOrder.mockResolvedValue({
+      ...ORDER,
+      status: "suspended",
+    });
+    m.provisioning.enqueueEvent.mockRejectedValue(new Error("db"));
+    await expect(
+      m.service.restoreOfflineOrder("order-1", {
+        actorType: "operator",
+        actorId: "op-1",
+      }),
+    ).resolves.toMatchObject({ status: "suspended" });
   });
 });

@@ -80,6 +80,7 @@ function makeSubscriptionsMock() {
     activatePendingOrder: vi.fn().mockResolvedValue({ id: ORDER_ID }),
     applyUpgradeOrder: vi.fn().mockResolvedValue({ id: "old-sub" }),
     cancelPendingOrder: vi.fn().mockResolvedValue({ id: ORDER_ID }),
+    restoreOfflineOrder: vi.fn().mockResolvedValue({ id: ORDER_ID }),
   };
 }
 
@@ -482,6 +483,82 @@ describe("void: authz + delegation", () => {
     await expect(
       router.voidOrder(makeReq(["commerce:order.void"]), ORDER_ID, {
         reason: "duplicate order, please ignore",
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+});
+
+describe("restore: authz + delegation", () => {
+  it("rejects a caller without order.restore before any DB access", async () => {
+    const rw = noDbPool();
+    const subs = makeSubscriptionsMock();
+    const router = new OrdersRouter(
+      noDbPool().pool,
+      rw.pool,
+      subs as unknown as SubscriptionService,
+      PROMOTION_STUB,
+    );
+    await expect(
+      router.restoreOrder(makeReq(["commerce:order.void"]), ORDER_ID, {
+        reason: "customer confirmed, un-void",
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(subs.restoreOfflineOrder).not.toHaveBeenCalled();
+  });
+
+  it("rejects a reason shorter than 4 characters before calling the service", async () => {
+    const subs = makeSubscriptionsMock();
+    const router = new OrdersRouter(
+      dummyRoPool(),
+      dummyRoPool(),
+      subs as unknown as SubscriptionService,
+      PROMOTION_STUB,
+    );
+    await expect(
+      router.restoreOrder(makeReq(["commerce:order.restore"]), ORDER_ID, {
+        reason: "no",
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(subs.restoreOfflineOrder).not.toHaveBeenCalled();
+  });
+
+  it("delegates to restoreOfflineOrder and returns the refreshed order", async () => {
+    const subs = makeSubscriptionsMock();
+    const router = new OrdersRouter(
+      dummyRoPool(),
+      dummyRoPool(),
+      subs as unknown as SubscriptionService,
+      PROMOTION_STUB,
+    );
+    stubGetOrder(router);
+
+    const result = await router.restoreOrder(
+      makeReq(["commerce:order.restore"]),
+      ORDER_ID,
+      { reason: "customer confirmed, un-void the order" },
+    );
+
+    expect(subs.restoreOfflineOrder).toHaveBeenCalledWith(
+      ORDER_ID,
+      expect.objectContaining({ actorType: "operator", actorId: OPERATOR_ID }),
+    );
+    expect(result).toEqual({ id: ORDER_ID });
+  });
+
+  it("propagates a ConflictException when the order is not a restorable cancelled order", async () => {
+    const subs = makeSubscriptionsMock();
+    subs.restoreOfflineOrder.mockRejectedValue(
+      new ConflictException("订单不存在或不是可恢复的已取消状态"),
+    );
+    const router = new OrdersRouter(
+      dummyRoPool(),
+      dummyRoPool(),
+      subs as unknown as SubscriptionService,
+      PROMOTION_STUB,
+    );
+    await expect(
+      router.restoreOrder(makeReq(["commerce:order.restore"]), ORDER_ID, {
+        reason: "attempted restore, already active",
       }),
     ).rejects.toBeInstanceOf(ConflictException);
   });

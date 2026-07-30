@@ -178,6 +178,14 @@ export interface CancelOfflineOrderInput {
   changeType?: "cancelled" | "order_expired";
 }
 
+export interface RestoreOfflineOrderInput {
+  actorType: "operator" | "system";
+  /** null for system actors — actor_id is a uuid column (jobs have no uuid). */
+  actorId: string | null;
+  remark?: string;
+  clientIp?: string;
+}
+
 // ── Payment declaration (product_321 P8) ────────────────────────────────────
 
 export type DeclarePayChannel = "alipay" | "bank_transfer";

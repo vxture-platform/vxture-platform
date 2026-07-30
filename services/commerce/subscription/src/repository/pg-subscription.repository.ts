@@ -13,6 +13,7 @@ import type {
   OfflineOrderRecord,
   ActivateOrderInput,
   CancelOfflineOrderInput,
+  RestoreOfflineOrderInput,
 } from "../types/subscription.types";
 
 interface SubscriptionRow {
@@ -522,6 +523,99 @@ export class PgSubscriptionRepository {
           sub.tenant_id,
           id,
           input.changeType ?? "cancelled",
+          input.actorType,
+          input.actorId,
+          input.remark ?? null,
+          input.clientIp ?? null,
+        ],
+      );
+
+      await client.query("commit");
+      return this.mapSubscription(updated);
+    } catch (err) {
+      await client.query("rollback");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Restore a voided/expired pending offline order back to `suspended`
+   * (undo of cancelOfflineOrder). Scoped to `end_at IS NULL` — the pending-order
+   * cancel path never touches `end_at`, only cancelSubscription() does (sets it
+   * to now()) — so this predicate can never match a once-activated subscription
+   * that was later cancelled, only an order that was cancelled/expired before
+   * ever being activated. Restoring a real cancelled subscription is out of
+   * scope (would need re-provisioning, not just a status flip).
+   */
+  async restoreOfflineOrder(
+    id: string,
+    input: RestoreOfflineOrderInput,
+  ): Promise<SubscriptionRecord> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+
+      const subResult = await client.query<SubscriptionRow>(
+        `select * from metering.subscriptions
+         where id = $1 and status = 'cancelled' and activation_method = 'offline_purchase'
+           and end_at is null and deleted_at is null
+         for update`,
+        [id],
+      );
+      const sub = subResult.rows[0];
+      if (!sub) {
+        throw new ConflictException("订单不存在或不是可恢复的已取消状态");
+      }
+
+      const invoiceResult = await client.query<{
+        id: string;
+        bill_status: string;
+        paid_amount: string;
+      }>(
+        `select id, bill_status, paid_amount from billing.invoices
+         where subscription_id = $1 and deleted_at is null
+         order by created_at desc limit 1
+         for update`,
+        [id],
+      );
+      const invoice = invoiceResult.rows[0];
+      if (invoice && Number(invoice.paid_amount) > 0) {
+        throw new ConflictException("订单已有支付记录，不能恢复");
+      }
+
+      if (invoice) {
+        if (invoice.bill_status !== "cancelled") {
+          throw new ConflictException("账单状态异常，无法恢复");
+        }
+        // Undo the defensive discount soft-delete from cancelOfflineOrder.
+        await client.query(
+          `update billing.invoice_items set deleted_at = null, updated_at = now()
+            where bill_id = $1 and item_type = 'discount' and deleted_at is not null`,
+          [invoice.id],
+        );
+        await client.query(
+          `update billing.invoices set bill_status = 'unpaid', updated_at = now() where id = $1`,
+          [invoice.id],
+        );
+      }
+
+      const updateResult = await client.query<SubscriptionRow>(
+        `update metering.subscriptions set status = 'suspended', updated_at = now()
+         where id = $1 returning *`,
+        [id],
+      );
+      const updated = updateResult.rows[0]!;
+
+      await client.query(
+        `insert into metering.subscription_histories (
+          tenant_id, subscription_id, change_type, from_status, to_status,
+          actor_type, actor_id, remark, client_ip, created_at
+        ) values ($1, $2, 'restored', 'cancelled', 'suspended', $3, $4, $5, $6, now())`,
+        [
+          sub.tenant_id,
+          id,
           input.actorType,
           input.actorId,
           input.remark ?? null,

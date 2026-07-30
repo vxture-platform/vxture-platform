@@ -77,6 +77,7 @@
 
 - **重复挂单防护**：同 workspace × product 已有待支付订单 → 409 携带既有订单，console 直接跳转其待支付面板。
 - **取消未付订单**（客户 console cancel / 运营 admin void）：invoice → cancelled、订阅行 → cancelled、池退役；**不走 `cancelSubscription()`**（其无条件 `fireDeprovisionIfUncovered` 会对从未开通的 workspace 误发 `tenant.deprovisioned`）。
+- **恢复已取消订单**（2026-07-30 新增，admin 管理入口）：仅限从未激活过（`end_at is null`，即从未走过 `cancelSubscription()`）且未收到任何支付的 offline_purchase 订单——把订阅行拉回 `suspended`、账单拉回 `unpaid`、还原被软删的折扣行；新权限码 **`commerce:order.restore`** + step-up（`POST /api/orders/:orderId/restore`）。**范围外**：已激活后再取消的订阅（真实退量/解除配置已发生，恢复需重新开通，不在此端点范围）。
 - **确认即开通**：`start_at = now()`（确认时刻重算，非下单时刻）、`end_at = start + cycle_count × cycle_unit`、**配额池 `period_anchor`/`current_period_start` 重锚**——否则月池重置锚在下单时间产生配额漂移。
 
 ### O6 既有旁路封堵（本期必修）

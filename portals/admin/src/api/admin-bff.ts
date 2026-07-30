@@ -820,6 +820,39 @@ export async function rejectOrderPaymentDeclaration(
   return (await response.json()) as OrderOperationDetailRecord;
 }
 
+export async function restoreOrder(
+  orderId: string,
+  reason: string,
+): Promise<OrderOperationDetailRecord> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/orders/${encodeURIComponent(orderId)}/restore`,
+    {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
+    },
+  );
+
+  if (!response.ok) {
+    let message = "Order restore failed";
+
+    try {
+      const body = (await response.json()) as { message?: string | string[] };
+      message = Array.isArray(body.message)
+        ? (body.message[0] ?? message)
+        : (body.message ?? message);
+    } catch {
+      // Keep a typed error for non-JSON proxy responses.
+    }
+
+    throw new AdminBffError(message, response.status);
+  }
+
+  return (await response.json()) as OrderOperationDetailRecord;
+}
+
 export async function voidOrder(
   orderId: string,
   reason: string,

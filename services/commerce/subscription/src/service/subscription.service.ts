@@ -278,6 +278,28 @@ export class SubscriptionService {
     return after;
   }
 
+  /**
+   * Restore a voided/expired pending offline order back to `suspended`
+   * (admin-only undo of cancelPendingOrder). See repo.restoreOfflineOrder for
+   * why this can never reach a once-activated, later-cancelled subscription.
+   */
+  async restoreOfflineOrder(
+    orderId: string,
+    params: {
+      actorType: "operator" | "system";
+      actorId: string | null;
+      remark?: string;
+      clientIp?: string;
+    },
+  ): Promise<SubscriptionRecord> {
+    const before = await this.getSubscription(orderId);
+    const after = await this.repo.restoreOfflineOrder(orderId, params);
+    await this.safeProvisioningHook("restore-order:invalidate", orderId, () =>
+      this.fireEntitlementInvalidate(after, [before.planVersionId]),
+    );
+    return after;
+  }
+
   // ── payment declaration + jobs (product_321 P8/§4.3) ──────────────────────
 
   /**

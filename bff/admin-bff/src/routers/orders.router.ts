@@ -704,6 +704,36 @@ export class OrdersRouter {
     }
     return detail;
   }
+
+  // 恢复被作废/超时关闭的未付线下订单（撤销 void/expire）：仅当从未激活过（订阅层
+  // end_at is null，见 repo.restoreOfflineOrder 注释）才可恢复；已激活后再取消的订阅
+  // 走真实退量/解除配置，不在本端点范围内。危码独立 commerce:order.restore。
+  @Post(":orderId/restore")
+  @RequireStepUp()
+  async restoreOrder(
+    @Req() req: Request & RequestContext,
+    @Param("orderId") orderId: string,
+    @Body() body: VoidOrderBody,
+  ): Promise<OrderOperationDetailRecord> {
+    assertCanRestoreOrder(req);
+
+    const actorId = requireOperatorId(req.user?.id);
+    const subscriptionId = requireUuid(orderId, "Invalid order id");
+    const reason = normalizeVoidReason(body);
+
+    await this.subscriptions.restoreOfflineOrder(subscriptionId, {
+      actorType: "operator",
+      actorId,
+      remark: reason,
+      clientIp: extractClientIp(req),
+    });
+
+    const detail = await this.getOrder(req, subscriptionId);
+    if (!detail) {
+      throw new NotFoundException("Order not found after restore");
+    }
+    return detail;
+  }
 }
 
 // 读取租户预付款池当前余额（无池视为 0）——供流水 balance 快照。
@@ -974,6 +1004,12 @@ function assertCanVoidOrder(req: Request & RequestContext): void {
   assertAnyCapability(req, ["commerce:order.void"]);
 }
 
+// Restore undoes a void/expire on a never-activated pending order — its own
+// danger class (reopens a closed bill), gated on commerce:order.restore.
+function assertCanRestoreOrder(req: Request & RequestContext): void {
+  assertAnyCapability(req, ["commerce:order.restore"]);
+}
+
 // ── 合成主 SELECT：订阅为订单主体，横向取最近账单/支付（LATERAL），套餐名取 plan_versions→plans。
 //   region 无 province/city 源列 → 空态兜底；operatorName 按 created_by_type 解 admin.operator_account。
 const ORDER_BASE_SQL = `
@@ -982,6 +1018,7 @@ select
   sub.order_no,
   sub.status                       as subscription_status,
   sub.activation_method,
+  sub.end_at,
   sub.cycle_unit,
   sub.pay_amount,
   sub.currency,
@@ -1223,6 +1260,15 @@ function mapOrderRow(row: OrderRow): OrderOperationRecord {
     row.bill_status,
     inFlightOrder,
   );
+  // Restorable = a pending order that was voided/expired before ever being
+  // activated (end_at is only ever set by cancelSubscription — see
+  // repo.restoreOfflineOrder). paidAmount>0 also blocks it defensively,
+  // mirroring the write-path guard.
+  const restorable =
+    row.subscription_status === "cancelled" &&
+    row.activation_method === "offline_purchase" &&
+    row.end_at == null &&
+    paidAmount === 0;
   return {
     id: row.id,
     orderNo: row.order_no ?? row.id,
@@ -1241,6 +1287,7 @@ function mapOrderRow(row: OrderRow): OrderOperationRecord {
     subscriptionStatus: mapSubscriptionStatus(row.subscription_status),
     cycleType: mapCycle(row.cycle_unit),
     orderStatus,
+    restorable,
     paymentStatus: mapPaymentStatus(row.pay_status, hasInvoice),
     paySource: mapPaySource(row.pay_source),
     payMethod: row.pay_method,
@@ -1344,6 +1391,7 @@ interface OrderRow {
   order_no: string | null;
   subscription_status: string;
   activation_method: string | null;
+  end_at: Date | string | null;
   cycle_unit: string;
   pay_amount: string | number | null;
   currency: string | null;

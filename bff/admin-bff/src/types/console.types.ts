@@ -1053,6 +1053,8 @@ export interface OrderOperationRecord {
   subscriptionStatus: SubscriptionOperationStatus;
   cycleType: SubscriptionOperationCycle;
   orderStatus: OrderOperationStatus;
+  /** True when this cancelled/expired order was never activated and can be undone via /restore. */
+  restorable: boolean;
   paymentStatus: OrderPaymentStatus;
   paySource: OrderPaySource;
   payMethod: string | null;
