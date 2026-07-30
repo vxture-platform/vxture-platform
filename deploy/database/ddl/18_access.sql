@@ -44,7 +44,7 @@ CREATE TABLE access.permissions (
     id             uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
     parent_id      uuid         REFERENCES access.permissions(id),  -- 树形自引用（域内）
     perm_code      varchar(64)  NOT NULL,
-    perm_name      varchar(64),                                     -- 显示名
+    perm_name      varchar(128),                                    -- 显示名（2026-07-30 64→128，与 admin.operator_permission 一致）
     perm_name_key  varchar(128),                                    -- i18n 键
     description_key varchar(128),                                   -- i18n 键（access.perm.{perm_code}.desc）
     perm_type      varchar(20),                                     -- menu/button/api（控制台模式，开放集）

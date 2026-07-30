@@ -45,7 +45,7 @@ CREATE TABLE admin.operator_permission (
     id           uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
     parent_id    uuid         REFERENCES admin.operator_permission(id),  -- 自引用（域内）
     perm_code    varchar(64)  NOT NULL,
-    perm_name    varchar(64)  NOT NULL,                            -- 显示名（统一三元）
+    perm_name    varchar(128) NOT NULL,                            -- 显示名（统一三元；2026-07-30 64→128，见 seed-catalog.mjs 头注）
     perm_name_key varchar(128),                                    -- i18n 键（统一三元；与 access.permissions 一致）
     description_key varchar(128),                                  -- i18n 键（ops.perm.{code 冒号→点}.desc）
     perm_type    varchar(20)  NOT NULL,                            -- menu/button/api（开放集，不加 CHECK）

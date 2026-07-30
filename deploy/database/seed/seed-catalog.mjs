@@ -155,9 +155,14 @@ const OPERATOR_PERMISSIONS = [
   ["commerce:subscription.read", "View subscriptions"],
   ["commerce:subscription.manage", "Manage subscriptions"],
   ["commerce:order.read", "View orders"],
-  ["commerce:order.void", "Void / reject an unpaid offline order (high-risk)"],
+  [
+    "commerce:order.void",
+    "Void unpaid order",
+    "Void / reject an unpaid offline order (high-risk)",
+  ],
   [
     "commerce:order.restore",
+    "Restore voided order",
     "Restore a voided/expired offline order back to pending (high-risk)",
   ],
   ["commerce:billing.read", "View bills"],
@@ -439,6 +444,22 @@ const OPERATOR_ROLE_PERMS = {
 };
 
 export async function seedCatalog(client) {
+  // ── 0. Live column-width patch (2026-07-30) ───────────────────────────────
+  //   DDL baseline (80_admin.sql / 18_access.sql) now declares perm_name
+  //   varchar(128); this repo's clean-baseline apply.sh only CREATEs on
+  //   --reset (destructive, not viable against a live prod DB with real data —
+  //   see check-seed-idempotency.mjs header), and there is no separate
+  //   deferred-DDL runner yet for the new 18-schema system. ALTER COLUMN TYPE
+  //   to a wider varchar is a metadata-only, idempotent, safe operation
+  //   (no-op once already widened), so it rides along here until a proper
+  //   deferred-DDL mechanism exists. Remove once that lands.
+  await client.query(
+    `alter table admin.operator_permission alter column perm_name type varchar(128)`,
+  );
+  await client.query(
+    `alter table access.permissions alter column perm_name type varchar(128)`,
+  );
+
   // ── 1. operator realm: operator_role + operator_account + operator_credential ─
   //   Two built-in accounts:
   //   • systemadmin — account_type=system_builtin, status=disabled, NO credential:
@@ -553,12 +574,14 @@ export async function seedCatalog(client) {
   // ── operator_permission catalog (three-segment perm_code; perm_type=api) ─────
   // gen_random_uuid + perm_code natural key (no pinned UUIDs; mapping resolves by code).
   // created_by/updated_by = SYS (systemadmin meta; bare value, no FK).
-  for (const [code, name] of OPERATOR_PERMISSIONS) {
+  // Third tuple element is an optional longer description (up to varchar(255));
+  // omitted → description mirrors the short display name, same as before.
+  for (const [code, name, description] of OPERATOR_PERMISSIONS) {
     await client.query(
       `
       insert into admin.operator_permission
         (perm_code, perm_type, perm_name, perm_name_key, is_system, description, description_key, created_by, updated_by, created_at, updated_at)
-      values ($1, 'api', $2, $3, true, $2, $4, $5, $5, now(), now())
+      values ($1, 'api', $2, $3, true, $6, $4, $5, $5, now(), now())
       on conflict (perm_code) do nothing
     `,
       [
@@ -567,6 +590,7 @@ export async function seedCatalog(client) {
         `ops.perm.${code.replace(/:/g, ".")}`,
         `ops.perm.${code.replace(/:/g, ".")}.desc`,
         SYS,
+        description ?? name,
       ],
     );
   }

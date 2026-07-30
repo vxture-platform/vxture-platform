@@ -8,6 +8,10 @@
 //      （唯一自然键 + on conflict = 普适幂等保证，防重复初始化）。
 //   ② perm_code：运营 realm 权限码（OPERATOR_PERMISSIONS）必须匹配三段式
 //      `{domain}:{...}`（冒号分顶域）。客户 realm 点分式历史码 grandfather，不在此查。
+//   ③ perm_name 长度：OPERATOR_PERMISSIONS 每项第二元素（同时写入
+//      admin.operator_permission.perm_name/description）须 ≤64 字符，匹配
+//      80_admin.sql 的 `perm_name varchar(64)` 列宽——超长在 seed 期直接 22001
+//      报错回滚，此前一次线上 reseed 就是这样炸的（2026-07-30）。
 //
 // 设计目标可扩展：新问题 → 加一条 check。
 // 运行：  node scripts/guardrails/check-seed-idempotency.mjs
@@ -59,18 +63,28 @@ function checkFile(file) {
       `insert into ${tbl} 无幂等机制（缺 on conflict / not exists / 条件式守卫）→ 违反 seed 幂等约定（§2.2.5），重跑会重复插入`);
   }
 
-  // ── ② perm_code 三段式（仅 OPERATOR_PERMISSIONS 运营 realm）─────────────────
+  // ── ② perm_code 三段式 + ③ perm_name 长度（仅 OPERATOR_PERMISSIONS 运营 realm）──
+  // 80_admin.sql: admin.operator_permission.perm_name varchar(128)（2026-07-30 64→128）。
+  // 每项 [code, name] 或 [code, name, description]（description 独立列 varchar(255)，不受此限）。
+  const PERM_NAME_MAX = 128;
   const opBlock = content.match(/const\s+OPERATOR_PERMISSIONS\s*=\s*\[([\s\S]*?)\]\s*;/);
   if (opBlock) {
     const body = opBlock[1];
     const baseLine = lineOf(content, opBlock.index);
-    body.split(/\r?\n/).forEach((row, i) => {
-      const codeM = row.match(/\[\s*['"]([^'"]+)['"]/); // 每项首元素 = perm_code
-      if (!codeM) return;
-      const code = codeM[1];
-      if (PERM_CODE_RE.test(code)) return;
-      report(file, baseLine + i, `operator perm_code「${code}」不匹配三段式 {domain}:{resource}.{action}（冒号分顶域）`);
-    });
+    // 逐项（非逐行）解析：一个项可能跨多行（长 name/description 换行书写）。
+    const itemRe =
+      /\[\s*['"]([^'"]+)['"]\s*,\s*['"]((?:[^'"\\]|\\.)*)['"]\s*(?:,\s*['"](?:[^'"\\]|\\.)*['"]\s*)?,?\s*\]/g;
+    let im;
+    while ((im = itemRe.exec(body))) {
+      const [, code, name] = im;
+      const line = baseLine + lineOf(body, im.index) - 1;
+      if (!PERM_CODE_RE.test(code)) {
+        report(file, line, `operator perm_code「${code}」不匹配三段式 {domain}:{resource}.{action}（冒号分顶域）`);
+      }
+      if (name.length > PERM_NAME_MAX) {
+        report(file, line, `operator perm_code「${code}」的 name「${name}」长度 ${name.length} 超过 perm_name varchar(${PERM_NAME_MAX})，reseed 会 22001 回滚`);
+      }
+    }
   }
 }
 
