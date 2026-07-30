@@ -58,6 +58,8 @@ const nextConfig = {
     // operator surface reuses the ops/admin Turnstile (运营面)
     NEXT_PUBLIC_CF_TURNSTILE_ADMIN_SITE_KEY:
       process.env.NEXT_PUBLIC_CF_TURNSTILE_ADMIN_SITE_KEY ?? "",
+    // Dead-end recovery fallback (see AutoReturnToApp / resolveReturnUrl).
+    NEXT_PUBLIC_WEBSITE_URL: process.env.NEXT_PUBLIC_WEBSITE_URL ?? "",
   },
   turbopack: { resolveAlias: turboAliases },
   webpack: (config) => {

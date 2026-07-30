@@ -53,7 +53,7 @@ export const IMAGES = [
     image: "ghcr.io/vxture/platform_accounts",
     dockerfile: "deploy/docker/Dockerfile.nextjs",
     "build-args":
-      "PORTAL_PATH=portals/accounts\nPACKAGE_FILTER=@vxture/accounts\nNEXT_PUBLIC_OIDC_API_BASE=https://accounts.vxture.com",
+      "PORTAL_PATH=portals/accounts\nPACKAGE_FILTER=@vxture/accounts\nNEXT_PUBLIC_OIDC_API_BASE=https://accounts.vxture.com\nNEXT_PUBLIC_WEBSITE_URL=https://vxture.com",
   },
   // ── 平台 BFF ───────────────────────────────────────────────────────────────
   {

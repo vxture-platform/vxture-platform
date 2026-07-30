@@ -195,7 +195,7 @@ export interface AuthTurnstileProps {
 
 export interface AuthLoginOptionsProps {
   disabled?: boolean;
-  rememberChecked: boolean;
+  rememberChecked?: boolean | undefined;
   agreementChecked: boolean;
   rememberLabel?: ReactNode;
   agreementPrefix?: ReactNode;
@@ -210,7 +210,9 @@ export interface AuthLoginOptionsProps {
   forgetMeTitle?: string;
   /** Show the "forgot password" link. Off for verification-code login. */
   showForgot?: boolean;
-  onRememberChange: (checked: boolean) => void;
+  /** Show the "remember me" checkbox. Off for the accounts login surface. */
+  showRemember?: boolean | undefined;
+  onRememberChange?: ((checked: boolean) => void) | undefined;
   onAgreementChange: (checked: boolean) => void;
   onForgot?: (() => void) | undefined;
   onForgetMe?: (() => void) | undefined;
@@ -238,13 +240,14 @@ export interface AuthLoginOptionOverrides extends Pick<
   | "forgotHref"
   | "forgetMeLabel"
   | "forgetMeTitle"
+  | "showRemember"
 > {}
 
 export interface AuthPasswordLoginPanelProps {
   tabs?: ReactNode;
   identifier: string;
   password: string;
-  rememberChecked: boolean;
+  rememberChecked?: boolean | undefined;
   agreementChecked: boolean;
   errors?:
     | {
@@ -273,7 +276,7 @@ export interface AuthPasswordLoginPanelProps {
   options?: AuthLoginOptionOverrides | undefined;
   onChangeIdentifier: (value: string) => void;
   onChangePassword: (value: string) => void;
-  onRememberChange: (checked: boolean) => void;
+  onRememberChange?: ((checked: boolean) => void) | undefined;
   onAgreementChange: (checked: boolean) => void;
   onForgot?: (() => void) | undefined;
   onForgetMe?: (() => void) | undefined;
@@ -284,7 +287,7 @@ export interface AuthPhoneLoginPanelProps {
   tabs?: ReactNode;
   phone: string;
   code: string;
-  rememberChecked: boolean;
+  rememberChecked?: boolean | undefined;
   agreementChecked: boolean;
   errors?:
     | {
@@ -323,7 +326,7 @@ export interface AuthPhoneLoginPanelProps {
   onChangePhone: (value: string) => void;
   onChangeCode: (value: string) => void;
   onSendCode: () => void;
-  onRememberChange: (checked: boolean) => void;
+  onRememberChange?: ((checked: boolean) => void) | undefined;
   onAgreementChange: (checked: boolean) => void;
   onForgot?: (() => void) | undefined;
   onForgetMe?: (() => void) | undefined;
@@ -899,7 +902,7 @@ export function AuthLoginContent({
 
 export function AuthLoginOptions({
   disabled = false,
-  rememberChecked,
+  rememberChecked = false,
   agreementChecked,
   rememberLabel = "记住登录信息",
   agreementPrefix = "我已阅读并同意",
@@ -913,6 +916,7 @@ export function AuthLoginOptions({
   forgetMeLabel = "忘记我",
   forgetMeTitle = "清除浏览器保存的账号密码",
   showForgot = true,
+  showRemember = true,
   onRememberChange,
   onAgreementChange,
   onForgot,
@@ -921,15 +925,19 @@ export function AuthLoginOptions({
   return (
     <div className="vx-auth-control-set">
       <div className="vx-auth-control-row vx-auth-control-row--utility">
-        <label className="vx-auth-checkbox">
-          <input
-            type="checkbox"
-            checked={rememberChecked}
-            disabled={disabled}
-            onChange={(event) => onRememberChange(event.target.checked)}
-          />
-          <span>{rememberLabel}</span>
-        </label>
+        {showRemember ? (
+          <label className="vx-auth-checkbox">
+            <input
+              type="checkbox"
+              checked={rememberChecked}
+              disabled={disabled}
+              onChange={(event) => onRememberChange?.(event.target.checked)}
+            />
+            <span>{rememberLabel}</span>
+          </label>
+        ) : (
+          <span />
+        )}
         <div className="vx-auth-control-links">
           {showForgot ? (
             onForgot ? (

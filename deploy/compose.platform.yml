@@ -178,6 +178,7 @@ services:
       NODE_ENV: production
       PORT: "3060"
       NEXT_PUBLIC_OIDC_API_BASE: https://accounts.vxture.com
+      NEXT_PUBLIC_WEBSITE_URL: https://vxture.com
       NODE_OPTIONS: --max-old-space-size=192
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3060/api/health"]

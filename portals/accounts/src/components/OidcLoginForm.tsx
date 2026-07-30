@@ -22,11 +22,9 @@ import {
   AuthTurnstile,
   type AuthLoginTab,
 } from "@vxture/design-system";
+import { rememberRpOrigin, resolveReturnUrl } from "@vxture/platform-browser";
 import {
-  persistRememberedLogin,
-  readRememberedLogin,
-} from "@vxture/platform-browser";
-import {
+  SessionExpiredError,
   completeOidcLogin,
   completeOidcLoginWithEmail,
   completeOidcLoginWithPhone,
@@ -37,6 +35,8 @@ import {
 } from "@/api/oidc";
 import { OperatorMfaFlow } from "./OperatorMfaFlow";
 import { SocialLoginButtons } from "./SocialLoginButtons";
+
+const WEBSITE_HOME_URL = process.env.NEXT_PUBLIC_WEBSITE_URL ?? "";
 
 type Realm = "customer" | "workforce";
 
@@ -80,14 +80,22 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
   // Phone OR email for the verification-code tab (smart-detected, D-CC).
   const [codeId, setCodeId] = useState("");
   const [code, setCode] = useState("");
-  const [rememberLogin, setRememberLogin] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  // Whether a code has actually been sent this session — gates the code-login
+  // submit button so it can't be clicked before a code exists to check.
+  const [codeSent, setCodeSent] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileResetSignal, setTurnstileResetSignal] = useState(0);
+  // The current token was already consumed by a send-code call (single-use
+  // server-side) — the next resend needs a fresh one, not this one.
+  const [turnstileConsumed, setTurnstileConsumed] = useState(false);
+  // Set while waiting for a fresh token after resetTurnstile() so the code can
+  // actually be (re)sent once it arrives (or once Turnstile degrades to best-effort).
+  const pendingResendRef = useRef(false);
   // Graceful degradation: if the Turnstile widget can't load/complete (e.g. the
   // Cloudflare script is unreachable), don't hard-block login — treat it as
   // best-effort. The server still enforces when CF_TURNSTILE_ENABLED is on.
@@ -110,17 +118,21 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
     return () => clearTimeout(t);
   }, [countdown]);
 
-  // "记住登录信息": prefill the last identifier used on this device (the browser
-  // also offers its own autofill suggestions via the inputs' autocomplete).
+  // Cache the referring app's origin so a later expired/missing challenge on
+  // this surface can send the user back to where they actually came from.
   useEffect(() => {
-    const remembered = readRememberedLogin();
-    if (!remembered.remember) return;
-    setRememberLogin(true);
-    if (remembered.identifier) {
-      setIdentifier(remembered.identifier);
-      setCodeId(remembered.identifier);
-    }
+    rememberRpOrigin();
   }, []);
+
+  // Once a send-code call has consumed the current token, wait for a fresh one
+  // (issued via resetTurnstile()) before actually firing the resend request.
+  useEffect(() => {
+    if (!pendingResendRef.current) return;
+    if (!turnstileToken && !turnstileFailed) return;
+    pendingResendRef.current = false;
+    void doSendCode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turnstileToken, turnstileFailed]);
 
   // Cross-tab session detection: when the user logs in via another RP while this
   // login page is open, the vx_sid cookie appears on accounts.vxture.com. On
@@ -176,6 +188,12 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
     return null;
   };
 
+  // The parked login_challenge is gone — there is nothing to retry inline,
+  // send the user back to wherever they actually came from.
+  const redirectToReturnUrl = () => {
+    window.location.assign(resolveReturnUrl(WEBSITE_HOME_URL));
+  };
+
   const handlePasswordSubmit = async (event: FormEvent) => {
     event.preventDefault();
     const next: Record<string, string> = {};
@@ -194,7 +212,6 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
         password,
         ...(turnstileToken ? { turnstileToken } : {}),
       });
-      persistRememberedLogin(identifier.trim(), rememberLogin);
       if ("status" in result) {
         // Operator owes a second factor → hand off to the MFA continuation.
         setMfaChallenge(result);
@@ -202,11 +219,41 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
       }
       window.location.assign(result.redirectTo);
     } catch (error) {
+      if (error instanceof SessionExpiredError) {
+        redirectToReturnUrl();
+        return;
+      }
       setErrors({
         form: error instanceof Error ? error.message : "登录失败，请重试",
       });
       resetTurnstile();
       setLoading(false);
+    }
+  };
+
+  // Actually calls the send-code API once a usable Turnstile token is in hand
+  // (either the page-load token on the first send, or a freshly re-verified
+  // one on a resend — see handleSendCode/the pending-resend effect above).
+  const doSendCode = async () => {
+    const channel = detectCodeChannel(codeId);
+    if (!channel) return;
+
+    setSending(true);
+    try {
+      if (channel === "phone") {
+        await sendPhoneCode(codeId.trim(), turnstileToken);
+      } else {
+        await sendEmailCode(codeId.trim(), turnstileToken);
+      }
+      setCountdown(60);
+      setCodeSent(true);
+      // This token is now spent server-side; only a resend after it expires
+      // needs a new one, so don't force a visible re-verification yet.
+      setTurnstileConsumed(true);
+    } catch (error) {
+      setErrors({ form: error instanceof Error ? error.message : "发送失败" });
+    } finally {
+      setSending(false);
     }
   };
 
@@ -219,20 +266,16 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
-    setSending(true);
-    try {
-      if (channel === "phone") {
-        await sendPhoneCode(codeId.trim(), turnstileToken);
-      } else {
-        await sendEmailCode(codeId.trim(), turnstileToken);
-      }
-      setCountdown(60);
-    } catch (error) {
-      setErrors({ form: error instanceof Error ? error.message : "发送失败" });
-    } finally {
-      setSending(false);
+    if (turnstileConsumed && turnstileKey) {
+      // Resending: the held token was already used for the previous send —
+      // get a fresh one (this is the only case Turnstile re-verifies).
+      setTurnstileConsumed(false);
       resetTurnstile();
+      pendingResendRef.current = true;
+      setSending(true);
+      return;
     }
+    await doSendCode();
   };
 
   const handleCodeSubmit = async (event: FormEvent) => {
@@ -259,9 +302,12 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
               email: codeId.trim(),
               code: code.trim(),
             });
-      persistRememberedLogin(codeId.trim(), rememberLogin);
       window.location.assign(redirectTo);
     } catch (error) {
+      if (error instanceof SessionExpiredError) {
+        redirectToReturnUrl();
+        return;
+      }
       setErrors({
         form: error instanceof Error ? error.message : "登录失败，请重试",
       });
@@ -304,6 +350,23 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
     <SocialLoginButtons loginChallenge={loginChallenge} />
   );
 
+  const turnstileReady =
+    Boolean(turnstileToken) || turnstileFailed || !turnstileKey;
+  // Code-login submit never re-checks Turnstile server-side (D-CA), but the
+  // button itself still waits for a code to have actually been sent + a token
+  // to have been available at some point, matching the password path's gate.
+  const codeCanSubmit =
+    codeSent &&
+    Boolean(detectCodeChannel(codeId)) &&
+    code.trim().length === 6 &&
+    acceptedTerms &&
+    turnstileReady;
+  const passwordCanSubmit =
+    identifier.trim().length > 0 &&
+    password.length > 0 &&
+    acceptedTerms &&
+    turnstileReady;
+
   return (
     <AuthLoginTemplate
       header={<AuthChromeHeader brandLabel="Vxture" />}
@@ -316,7 +379,6 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
           tabs={tabsNode}
           phone={codeId}
           code={code}
-          rememberChecked={rememberLogin}
           agreementChecked={acceptedTerms}
           errors={errors}
           loading={loading}
@@ -326,15 +388,17 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
           turnstile={turnstileNode}
           social={socialNode}
           showForgot={false}
+          submitLabel="登录 / 注册"
+          primaryDisabled={!codeCanSubmit}
           phoneLabel="手机号 / 邮箱"
           phonePlaceholder="请输入手机号或邮箱"
           phoneInputType="text"
           phoneIcon="user"
           phoneAutoComplete="username"
+          options={{ showRemember: false }}
           onChangePhone={setCodeId}
           onChangeCode={setCode}
           onSendCode={handleSendCode}
-          onRememberChange={setRememberLogin}
           onAgreementChange={setAcceptedTerms}
           onSubmit={handleCodeSubmit}
         />
@@ -343,19 +407,19 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
           tabs={tabsNode}
           identifier={identifier}
           password={password}
-          rememberChecked={rememberLogin}
           agreementChecked={acceptedTerms}
           errors={errors}
           loading={loading}
           turnstile={turnstileNode}
           social={socialNode}
           showForgot={!isOperator}
+          primaryDisabled={!passwordCanSubmit}
           identifierPlaceholder={
             isOperator ? "运营账号" : "邮箱 / 用户名 / 手机号"
           }
+          options={{ showRemember: false }}
           onChangeIdentifier={setIdentifier}
           onChangePassword={setPassword}
-          onRememberChange={setRememberLogin}
           onAgreementChange={setAcceptedTerms}
           onForgot={
             isOperator

@@ -11,6 +11,18 @@
 const OIDC_API_BASE =
   process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3090";
 
+/**
+ * The parked login_challenge is gone (expired / already consumed / never
+ * existed). Distinct from a wrong-credential 401 — the caller should send the
+ * user back to the originating app rather than show an inline retry error.
+ */
+export class SessionExpiredError extends Error {
+  constructor() {
+    super("登录会话已失效，请从应用重新发起登录");
+    this.name = "SessionExpiredError";
+  }
+}
+
 export interface CompleteOidcLoginInput {
   loginChallenge: string;
   identifier: string;
@@ -63,9 +75,7 @@ export async function completeOidcLogin(
 
   if (!res.ok) {
     if (res.status === 401) throw new Error("账号或密码错误");
-    if (res.status === 400) {
-      throw new Error("登录会话已失效，请从应用重新发起登录");
-    }
+    if (res.status === 400) throw new SessionExpiredError();
     throw new Error("登录失败，请稍后重试");
   }
 
@@ -415,9 +425,7 @@ export async function completeOidcLoginWithPhone(
   }
   if (!res.ok) {
     if (res.status === 401) throw new Error("验证码错误或已过期");
-    if (res.status === 400) {
-      throw new Error("登录会话已失效，请从应用重新发起登录");
-    }
+    if (res.status === 400) throw new SessionExpiredError();
     throw new Error("登录失败，请稍后重试");
   }
   const data = (await res.json().catch(() => ({}))) as { redirectTo?: string };
@@ -459,9 +467,7 @@ export async function completeOidcLoginWithEmail(
     if (res.status === 404) {
       throw new Error("该邮箱未注册，请先用手机号注册后在账号中心绑定邮箱");
     }
-    if (res.status === 400) {
-      throw new Error("登录会话已失效，请从应用重新发起登录");
-    }
+    if (res.status === 400) throw new SessionExpiredError();
     throw new Error("登录失败，请稍后重试");
   }
   const data = (await res.json().catch(() => ({}))) as { redirectTo?: string };

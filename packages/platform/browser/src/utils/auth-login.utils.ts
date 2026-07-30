@@ -114,6 +114,58 @@ export function persistRememberedLogin(
   clearRememberedLogin();
 }
 
+const LAST_RP_ORIGIN_KEY = "vxture-last-rp-origin";
+/** Absolute last-resort landing page when no RP/referrer/configured home is known. */
+const DEFAULT_HOME_URL = "https://vxture.com";
+
+function originOf(url: string): string | null {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Cache the current page's referrer origin as "last known RP" so a later
+ * dead-end visit (expired challenge, bookmarked accounts URL) can send the
+ * user back to the app they actually came from.
+ */
+export function rememberRpOrigin(): void {
+  if (!isBrowser()) return;
+  const origin = originOf(globalThis.document.referrer);
+  if (!origin || origin === globalThis.window.location.origin) return;
+  try {
+    globalThis.window.localStorage.setItem(LAST_RP_ORIGIN_KEY, origin);
+  } catch {
+    // storage unavailable (private mode, quota) — nothing to fall back to here
+  }
+}
+
+/**
+ * Resolve where to send a user stranded on the accounts surface with no live
+ * login flow, in priority order: (1) the last RP we cached via
+ * `rememberRpOrigin`, (2) the current request's referrer, (3) the caller-
+ * supplied configured home URL, (4) the hardcoded public site root.
+ */
+export function resolveReturnUrl(configuredHomeUrl?: string): string {
+  if (!isBrowser()) return configuredHomeUrl?.trim() || DEFAULT_HOME_URL;
+
+  try {
+    const cached = globalThis.window.localStorage.getItem(LAST_RP_ORIGIN_KEY);
+    if (cached) return cached;
+  } catch {
+    // storage unavailable — fall through to referrer/config
+  }
+
+  const referrerOrigin = originOf(globalThis.document.referrer);
+  if (referrerOrigin && referrerOrigin !== globalThis.window.location.origin) {
+    return referrerOrigin;
+  }
+
+  return configuredHomeUrl?.trim() || DEFAULT_HOME_URL;
+}
+
 export async function storeBrowserPasswordCredential(
   identifier: string,
   password: string,
