@@ -29,6 +29,13 @@ name: db-init
 #                               provisioning.webhook_deliveries for the real dispatch outcome
 #                               (proves the registered product_webhooks.webhook_url is actually
 #                               reachable, not just registered — karda 120 函 ask)
+#   action=restamp-ddl-baseline -> 28c-restamp-ddl-baseline (re-stamp public.vx_ddl_baseline to
+#                               match the current DDL files, WITHOUT a destructive --reset). Only
+#                               for a DDL change already applied live out-of-band via a safe,
+#                               idempotent ALTER (e.g. seedCatalog()'s column-width patch) — never
+#                               run this after a real structural change the live DB hasn't gotten.
+#                               Followed by 30-verify so the run only goes green if the re-stamped
+#                               hash now actually matches.
 on:
   workflow_dispatch:
     inputs:
@@ -53,6 +60,7 @@ on:
           - sync-env
           - verify
           - test-delivery
+          - restamp-ddl-baseline
       confirm:
         description: "Type yes to confirm"
         required: true
@@ -113,7 +121,7 @@ jobs:
           HEAD_SHA="$(git rev-parse HEAD)"
           if [ -z "$EXPECTED_SHA" ]; then
             case "$DB_ACTION" in
-              reset|migrate-seed|seed|provision-secrets|test-delivery)
+              reset|migrate-seed|seed|provision-secrets|test-delivery|restamp-ddl-baseline)
                 echo "::error::DB-mutating action '$DB_ACTION' requires expected_sha (ref tips move; pin the verified version). HEAD=$HEAD_SHA" >&2
                 exit 1
                 ;;
@@ -227,9 +235,10 @@ jobs:
             # Admin@2026 default would apply. Check BEFORE any destructive
             # step so `reset` can never leave the DB dropped-but-unseeded
             # midway. Single-quoted PHC form required (sourcing expands an
-            # unquoted/double-quoted hash into garbage). test-delivery never
-            # calls 29-seed, so this precondition doesn't apply to it.
-            if [ "$DB_ACTION" != "verify" ] && [ "$DB_ACTION" != "test-delivery" ]; then
+            # unquoted/double-quoted hash into garbage). test-delivery and
+            # restamp-ddl-baseline never call 29-seed, so this precondition
+            # doesn't apply to either.
+            if [ "$DB_ACTION" != "verify" ] && [ "$DB_ACTION" != "test-delivery" ] && [ "$DB_ACTION" != "restamp-ddl-baseline" ]; then
               # [$] bracket expression = literal $ in ERE, robust across the
               # YAML->ssh->shell quoting layers (a backslashed \$ collapses to a
               # mid-pattern anchor that can never match). Single quote REQUIRED:
@@ -268,6 +277,14 @@ jobs:
                 ;;
               verify)
                 # Read-only live baseline audit (schema set / table count / seed floors).
+                bash scripts/30-verify-platform-baseline.sh
+                ;;
+              restamp-ddl-baseline)
+                # Re-stamp public.vx_ddl_baseline to match current DDL files, no --reset.
+                # Only for a DDL change already applied live via a safe out-of-band ALTER
+                # (28c's own header repeats this danger note). 30-verify after so the run
+                # only goes green if the live structure genuinely matches.
+                CONFIRM_RESTAMP=yes bash scripts/28c-restamp-ddl-baseline.sh
                 bash scripts/30-verify-platform-baseline.sh
                 ;;
               test-delivery)

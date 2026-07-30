@@ -447,12 +447,12 @@ export async function seedCatalog(client) {
   // ── 0. Live column-width patch (2026-07-30) ───────────────────────────────
   //   DDL baseline (80_admin.sql / 18_access.sql) now declares perm_name
   //   varchar(128); this repo's clean-baseline apply.sh only CREATEs on
-  //   --reset (destructive, not viable against a live prod DB with real data —
-  //   see check-seed-idempotency.mjs header), and there is no separate
-  //   deferred-DDL runner yet for the new 18-schema system. ALTER COLUMN TYPE
-  //   to a wider varchar is a metadata-only, idempotent, safe operation
-  //   (no-op once already widened), so it rides along here until a proper
-  //   deferred-DDL mechanism exists. Remove once that lands.
+  //   --reset (destructive, not viable against a live prod DB with real data),
+  //   so a safe metadata-only ALTER COLUMN TYPE rides along in the seed path
+  //   instead (idempotent, no-op once already widened). After this runs once
+  //   against a given DB, also run `action=restamp-ddl-baseline` in db-init.yml
+  //   (deploy/scripts/28c-restamp-ddl-baseline.sh) so 30-verify's [B0] DDL
+  //   fingerprint check reflects reality instead of staying permanently red.
   await client.query(
     `alter table admin.operator_permission alter column perm_name type varchar(128)`,
   );
