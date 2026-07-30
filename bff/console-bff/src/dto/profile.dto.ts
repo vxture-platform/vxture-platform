@@ -35,6 +35,10 @@ export class ChangePasswordDto {
   nextPassword = "";
 }
 
+export class SetInitialPasswordDto {
+  nextPassword = "";
+}
+
 export class VerifyPhoneIdentityDto {
   method: "phone" | "email" = "phone";
   code = "";

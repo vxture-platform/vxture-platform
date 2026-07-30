@@ -32,6 +32,8 @@ export interface UserView {
   userNo?: string;
   /** ISO timestamp of account creation. */
   createdAt?: string;
+  /** Whether the user has a password credential set (false for phone/social-only registrants). */
+  hasPassword?: boolean;
 }
 
 /** Mutable profile fields a user may edit (console info spec §1.1). */

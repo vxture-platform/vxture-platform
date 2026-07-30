@@ -163,6 +163,13 @@ export interface OrganizationReadRepository {
     userId: string,
     name?: string | null,
   ): Promise<ProvisionedOrg>;
+  /**
+   * Rename the user's personal org (type='personal') to `name`. No-op (resolves
+   * false) if the user has no personal org — should not happen in practice since
+   * every account gets one at onboarding, but the caller must not assume it does.
+   * Never touches team/organization-type tenants.
+   */
+  renamePersonalOrg(userId: string, name: string): Promise<boolean>;
   /** Provision a team org + default workspace + owner membership at both levels. */
   createTeamOrg(ownerUserId: string, name: string): Promise<ProvisionedOrg>;
   getOrgById(orgId: string): Promise<OrgView | null>;

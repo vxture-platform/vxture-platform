@@ -35,6 +35,7 @@ interface UserRow {
   account_login_disabled: boolean | null;
   user_no: string | null;
   created_at: string | null;
+  has_password: boolean | null;
 }
 
 interface UserCredentialRow {
@@ -147,9 +148,11 @@ export class PgUserRepository implements UserReadRepository {
               p.display_name as name, u.status, p.avatar_hash, p.bio, p.timezone, p.language,
               u.account_changed_at::text as account_changed_at,
               u.account_login_disabled,
-              u.user_no::text as user_no, u.created_at::text as created_at
+              u.user_no::text as user_no, u.created_at::text as created_at,
+              (c.password_hash is not null) as has_password
          from account.users u
          left join account.user_profiles p on p.user_id = u.id
+         left join credential.user_credentials c on c.user_id = u.id
         where u.id = $1 and u.deleted_at is null and u.status = 'active'
         limit 1`,
       [userId],
@@ -667,6 +670,7 @@ function mapUser(row?: UserRow): UserView | null {
   };
   if (row.user_no != null) view.userNo = row.user_no;
   if (row.created_at != null) view.createdAt = row.created_at;
+  view.hasPassword = row.has_password ?? false;
   return view;
 }
 

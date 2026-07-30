@@ -110,6 +110,14 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
   ): Promise<ProvisionedOrg> {
     return this.provision(ownerUserId, "organization", name.trim());
   }
+  async renamePersonalOrg(userId: string, name: string): Promise<boolean> {
+    const org = [...this.orgs.values()].find(
+      (o) => o.ownerUserId === userId && o.type === "personal",
+    );
+    if (!org) return false;
+    org.name = name;
+    return true;
+  }
   private provision(
     ownerUserId: string,
     type: "personal" | "organization",

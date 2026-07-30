@@ -181,7 +181,11 @@ export class SessionAggregator {
     newUsername: string,
   ): Promise<ConsoleUserProfile | null> {
     const user = await this.account.changeUsername(userId, newUsername);
-    return user ? toUserProfile(user, this.pictureFor(user)) : null;
+    if (!user) return null;
+    // Keep the personal tenant's display name following the account (owner
+    // 2026-07-30): only the personal tenant, never a team/organization tenant.
+    await this.org.renamePersonalOrg(userId, user.account);
+    return toUserProfile(user, this.pictureFor(user));
   }
 
   /** Store/replace the caller's avatar (bytes already validated); returns picture URL. */
@@ -352,6 +356,18 @@ export class SessionAggregator {
     if (!ok) {
       throw new UnauthorizedException("Current password is incorrect");
     }
+  }
+
+  /**
+   * Self-service initial password setup for a user with no existing credential
+   * (phone/social-only registrant). No old password to verify. Throws 400 if
+   * the caller already has a password (must use `changeCurrentUserPassword`).
+   */
+  async setCurrentUserInitialPassword(
+    userId: string,
+    nextPassword: string,
+  ): Promise<void> {
+    await this.account.setInitialPassword(userId, nextPassword);
   }
 
   async getTenantContext(
@@ -624,6 +640,7 @@ function toUserProfile(
     accountChangedAt?: string | null;
     userNo?: string;
     createdAt?: string;
+    hasPassword?: boolean;
   },
   picture: string | null,
 ): ConsoleUserProfile {
@@ -646,6 +663,7 @@ function toUserProfile(
     userNo: user.userNo ?? null,
     accountCreatedAt: user.createdAt ?? null,
     accountStatus: user.status ?? null,
+    hasPassword: user.hasPassword ?? false,
   };
 }
 

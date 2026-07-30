@@ -51,6 +51,8 @@ export interface ConsoleUserProfile {
   accountCreatedAt: string | null;
   /** Account status: active | suspended. */
   accountStatus?: string | null;
+  /** Whether the user has a password credential set (false for phone/social-only registrants). */
+  hasPassword: boolean;
 }
 
 export interface ConsoleOrganizationProfile {

@@ -132,6 +132,15 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     return this.provisionOrg(ownerUserId, "organization", name.trim());
   }
 
+  async renamePersonalOrg(userId: string, name: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `update tenancy.tenants set name = $2, updated_at = now()
+        where owner_user_id = $1 and type = 'personal'`,
+      [userId, name],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
   /** Transactionally create org + default workspace + owner membership at both levels. */
   private async provisionOrg(
     ownerUserId: string,

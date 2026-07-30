@@ -13,11 +13,22 @@ import { TenantProvider } from "@/features/tenant";
 import { PortalEntryProvider } from "@/contexts/PortalEntryContext";
 import { ConsoleAppShell } from "@/layout/template/ConsoleAppShell";
 
+// Default username shape assigned at account creation (`_{user_no}`, see
+// identity-platform-account.md §1.2). A user still on this default has never
+// completed first-time setup — that state alone (no extra DB flag) drives the
+// onboarding redirect below, since setup always changes the username away
+// from it.
+const DEFAULT_USERNAME_RE = /^_\d+$/;
+const ONBOARDING_PATH = "/onboarding";
+
 function ShellFrame({ children }: { children: ReactNode }) {
   const { session, status } = useConsoleSession();
   const router = useRouter();
   const pathname = usePathname();
   const t = useTranslations("shell.loading");
+  const needsOnboarding = Boolean(
+    session.user?.username && DEFAULT_USERNAME_RE.test(session.user.username),
+  );
 
   useEffect(() => {
     if (
@@ -29,8 +40,20 @@ function ShellFrame({ children }: { children: ReactNode }) {
       const search =
         typeof window === "undefined" ? "" : window.location.search;
       router.replace(`/signin?next=${encodeURIComponent(pathname + search)}`);
+      return;
+    }
+    if (
+      status === "ready" &&
+      session.isAuthenticated &&
+      session.user &&
+      session.tenant &&
+      needsOnboarding &&
+      pathname !== ONBOARDING_PATH
+    ) {
+      router.replace(ONBOARDING_PATH);
     }
   }, [
+    needsOnboarding,
     pathname,
     router,
     session.isAuthenticated,
@@ -39,12 +62,13 @@ function ShellFrame({ children }: { children: ReactNode }) {
     status,
   ]);
 
-  // 覆盖两种等待态：会话加载中 + token 已过期（useEffect 正在触发重定向）
+  // 覆盖三种等待态：会话加载中 + token 已过期 + 首次设置未完成（useEffect 正在触发重定向）
   if (
     status !== "ready" ||
     !session.isAuthenticated ||
     !session.user ||
-    !session.tenant
+    !session.tenant ||
+    (needsOnboarding && pathname !== ONBOARDING_PATH)
   ) {
     return (
       <div className="console-loading">

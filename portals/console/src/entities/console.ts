@@ -51,6 +51,8 @@ export interface ConsoleUserProfile {
   accountStatus?: string | null;
   /** Whether username+password login is disabled (phone/email/social unaffected). */
   accountLoginDisabled?: boolean;
+  /** Whether the user has a password credential set (false for phone/social-only registrants). */
+  hasPassword?: boolean;
 }
 
 export interface IdentityRecord {

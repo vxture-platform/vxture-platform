@@ -24,6 +24,7 @@ import {
   ConfirmPhoneChangeDto,
   SendNewEmailOtpDto,
   SetAccountLoginEnabledDto,
+  SetInitialPasswordDto,
   UpdateOrganizationDto,
   UpdateProfileDto,
   UpdateUsernameDto,
@@ -361,6 +362,31 @@ export class MeRouter {
     await this.sessionAggregator.changeCurrentUserPassword(
       req.user.id,
       body.currentPassword,
+      body.nextPassword,
+    );
+
+    return { status: "ok" as const };
+  }
+
+  /**
+   * Self-service initial password setup — for a user with no existing
+   * credential (registered via phone/social login), so there's no old
+   * password to verify. Rejects (400) if a password is already set.
+   */
+  @Post("password/initial")
+  async setInitialPassword(
+    @Req() req: Request & RequestContext,
+    @Body() body: SetInitialPasswordDto,
+  ) {
+    if (!req.user) {
+      throw new UnauthorizedException("No active session");
+    }
+    if ((body.nextPassword ?? "").length < 8) {
+      throw new BadRequestException("weak_password");
+    }
+
+    await this.sessionAggregator.setCurrentUserInitialPassword(
+      req.user.id,
       body.nextPassword,
     );
 

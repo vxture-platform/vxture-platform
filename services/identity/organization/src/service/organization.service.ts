@@ -40,6 +40,10 @@ export class OrganizationService {
   createTeamOrg(ownerUserId: string, name: string): Promise<ProvisionedOrg> {
     return this.repo.createTeamOrg(ownerUserId, name);
   }
+  /** Keep the user's personal org name in sync with their account/display name. */
+  renamePersonalOrg(userId: string, name: string): Promise<boolean> {
+    return this.repo.renamePersonalOrg(userId, name);
+  }
   getOrgById(orgId: string): Promise<OrgView | null> {
     return this.repo.getOrgById(orgId);
   }

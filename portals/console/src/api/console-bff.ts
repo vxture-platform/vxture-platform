@@ -1072,6 +1072,28 @@ export async function changeUserPassword(payload: {
   }
 }
 
+/** Self-service initial password setup (no old password to verify). */
+export async function setInitialUserPassword(payload: {
+  nextPassword: string;
+}) {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/me/password/initial`,
+    {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    throw new ConsoleBffError("Password setup failed", response.status);
+  }
+}
+
 /** Upload a custom avatar (raw image bytes); returns the new versioned picture URL. */
 export async function uploadUserAvatar(
   file: Blob,

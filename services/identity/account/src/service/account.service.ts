@@ -150,6 +150,21 @@ export class AccountService {
     await this.users.setPassword(userId, hash);
   }
 
+  /**
+   * Self-service initial password setup, for a user who registered via
+   * phone/social login and has no credential row yet (no old password to
+   * verify). Refuses (400) if a password is already set — those users must go
+   * through `changePassword` instead.
+   */
+  async setInitialPassword(userId: string, password: string): Promise<void> {
+    const record = await this.users.findCredentialById(userId);
+    if (!record) throw new NotFoundException("account_not_found");
+    if (record.passwordHash) {
+      throw new BadRequestException("password_already_set");
+    }
+    await this.setPassword(userId, password);
+  }
+
   /** Update mutable profile fields (name/email/bio/timezone/language). */
   updateProfile(
     userId: string,

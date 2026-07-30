@@ -305,5 +305,6 @@ function toView(u: UserCredentialRecord): UserView {
     timezone: u.timezone ?? null,
     language: u.language ?? null,
     accountChangedAt: u.accountChangedAt ?? null,
+    hasPassword: u.passwordHash != null,
   };
 }

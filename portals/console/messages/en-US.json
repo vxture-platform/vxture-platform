@@ -1,4 +1,26 @@
 {
+  "onboarding": {
+    "title": "Finish setting up your account",
+    "description": "One last step: pick an account name and confirm your info to continue.",
+    "fields": {
+      "account": "Account",
+      "accountPlaceholder": "Letters, digits, underscore — starts with a letter",
+      "displayName": "Display name",
+      "phone": "Phone",
+      "email": "Email",
+      "emailPlaceholder": "Optional — verify it later in your profile"
+    },
+    "errors": {
+      "accountFormat": "Account must start with a letter, contain only letters/digits/underscore, and be 3-24 characters.",
+      "displayNameRequired": "Display name is required.",
+      "emailFormat": "Enter a valid email address.",
+      "accountTaken": "This account name is already taken.",
+      "generic": "Setup failed. Please try again."
+    },
+    "actions": {
+      "submit": "Continue"
+    }
+  },
   "shell": {
     "loading": {
       "label": "Loading"
@@ -766,6 +788,7 @@
     },
     "security": {
       "passwordSet": "Set",
+      "passwordNotSet": "Not set",
       "disableLogin": "Disable username login",
       "enableLogin": "Enable username login",
       "loginDisabled": "Login disabled",
@@ -810,6 +833,7 @@
       "uploadAvatar": "Upload avatar",
       "clearAvatar": "Clear avatar",
       "changePassword": "Change password",
+      "setPassword": "Set password",
       "changePhone": "Change",
       "cancel": "Cancel",
       "save": "Save",
@@ -839,7 +863,9 @@
       },
       "password": {
         "title": "Change password",
-        "description": "Use a new password with at least 6 characters."
+        "description": "Use a new password with at least 6 characters.",
+        "setupTitle": "Set password",
+        "setupDescription": "You signed up with phone/social login and have no password yet. Set one with at least 6 characters to also log in with an account and password."
       },
       "phoneChange": {
         "step1Title": "Change phone number",

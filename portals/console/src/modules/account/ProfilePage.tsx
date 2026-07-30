@@ -35,6 +35,7 @@ import {
   sendNewPhoneOtp,
   sendOldPhoneOtp,
   setAccountLogin,
+  setInitialUserPassword,
   unbindIdentity,
   updateUsername,
   updateUserProfile,
@@ -511,10 +512,17 @@ export function ProfilePage() {
     }
     setSubmitting(true);
     try {
-      await changeUserPassword({
-        currentPassword: passwordForm.currentPassword,
-        nextPassword: passwordForm.nextPassword,
-      });
+      if (profile?.hasPassword) {
+        await changeUserPassword({
+          currentPassword: passwordForm.currentPassword,
+          nextPassword: passwordForm.nextPassword,
+        });
+      } else {
+        await setInitialUserPassword({
+          nextPassword: passwordForm.nextPassword,
+        });
+        setProfile((old) => (old ? { ...old, hasPassword: true } : old));
+      }
       setPasswordDialogOpen(false);
       setFeedback({ tone: "success", key: "feedback.passwordSaved" });
     } catch {
@@ -1171,14 +1179,20 @@ export function ProfilePage() {
         </div>
         <div className="vx-profile-row vx-profile-row--actionable">
           <span>{t("fields.password")}</span>
-          <span className="vx-profile-value">{t("security.passwordSet")}</span>
+          <span className="vx-profile-value">
+            {profile?.hasPassword
+              ? t("security.passwordSet")
+              : t("security.passwordNotSet")}
+          </span>
           <ActionButton
             variant="ghost"
             size="sm"
             icon="shield-check"
             onClick={openPasswordDialog}
           >
-            {t("actions.changePassword")}
+            {profile?.hasPassword
+              ? t("actions.changePassword")
+              : t("actions.setPassword")}
           </ActionButton>
         </div>
       </section>
@@ -1576,24 +1590,34 @@ export function ProfilePage() {
             onSubmit={(event) => void submitPassword(event)}
           >
             <header className="vx-account-profile-dialog__header">
-              <h3>{t("dialogs.password.title")}</h3>
-              <p>{t("dialogs.password.description")}</p>
+              <h3>
+                {profile?.hasPassword
+                  ? t("dialogs.password.title")
+                  : t("dialogs.password.setupTitle")}
+              </h3>
+              <p>
+                {profile?.hasPassword
+                  ? t("dialogs.password.description")
+                  : t("dialogs.password.setupDescription")}
+              </p>
             </header>
-            <Label>
-              {t("fields.currentPassword")}
-              <Input
-                type="password"
-                value={passwordForm.currentPassword}
-                onChange={(event) =>
-                  setPasswordForm((old) => ({
-                    ...old,
-                    currentPassword: event.target.value,
-                  }))
-                }
-                autoComplete="current-password"
-                required
-              />
-            </Label>
+            {profile?.hasPassword ? (
+              <Label>
+                {t("fields.currentPassword")}
+                <Input
+                  type="password"
+                  value={passwordForm.currentPassword}
+                  onChange={(event) =>
+                    setPasswordForm((old) => ({
+                      ...old,
+                      currentPassword: event.target.value,
+                    }))
+                  }
+                  autoComplete="current-password"
+                  required
+                />
+              </Label>
+            ) : null}
             <Label>
               {t("fields.nextPassword")}
               <Input
@@ -1634,7 +1658,9 @@ export function ProfilePage() {
                 {t("actions.cancel")}
               </Button>
               <Button type="submit" disabled={submitting}>
-                {t("actions.updatePassword")}
+                {profile?.hasPassword
+                  ? t("actions.updatePassword")
+                  : t("actions.setPassword")}
               </Button>
             </div>
           </form>
