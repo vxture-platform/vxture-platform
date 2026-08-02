@@ -72,6 +72,8 @@ Thumbs.db
 !.vscode/extensions.json
 !.vscode/settings.json.template
 !.vscode/*.template
+# SonarLint 的本地分析缓存与连接配置，逐人逐机不同，且可能带上绑定的 token。
+.sonarlint/
 
 # Logs
 logs/
