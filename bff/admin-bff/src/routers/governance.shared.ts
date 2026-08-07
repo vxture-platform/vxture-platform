@@ -20,8 +20,32 @@ import { BadRequestException, UnauthorizedException } from "@nestjs/common";
 import type { Request } from "express";
 import type { RequestContext } from "../types/console.types";
 
+/**
+ * 只校验**格式良好**，不校验 RFC 4122 的 version / variant 位。
+ *
+ * 这条护栏问的是"这串东西能不能安全当 uuid 参数用"，不是"它是不是规范的
+ * v1–v5 UUID"。Postgres 的 `uuid` 类型接受任意 128 位值——校验器比它所校验的列
+ * 更严，就会出现**库里存得下、接口反而不认**的行。
+ *
+ * 原正则要求 version ∈ [1-5] 且 variant ∈ [89ab]。生产数据全部来自
+ * `gen_random_uuid()`（DDL 里 91 处默认值），产出的是 v4、variant 必在 [89ab]，
+ * 所以线上一直没被触发。真正被挡住的是**不由该函数生成的 id**：
+ *
+ *   - 本地种子为幂等用固定 UUID 段拼 id（见 deploy/database/seed/seed-bulk*），
+ *     变体位是段值本身。2026-08-07 实测活库，27 张有数据的表被拒，其中
+ *     `admin.operator_account` 102 行里 100 行不合格——也就是说
+ *     `requireOperatorId` 会把绝大多数种子操作者判成"无效主体"直接 401，
+ *     本地根本没法验任何治理写路径。
+ *   - 将来的数据导入 / 从别的系统迁入的 GUID 同理（微软风格 GUID 的变体位就常
+ *     不在 [89ab]）。
+ *
+ * 发现于把维护窗口迁去 opera 时第一次真按下"开始维护"（此前走查只看不点）。
+ *
+ * 没改种子而是改这里：种子的固定段是为幂等**刻意**设计的，改它会翻动所有既有
+ * 本地库的 id；而"校验器不该比存储层更严"本身就是这条护栏的缺陷，与种子无关。
+ */
 export const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const GOVERNANCE_LIST_LIMIT = 500;
 

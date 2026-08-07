@@ -13,6 +13,7 @@ import { PaymentsRouter } from "./payments.router";
 import { TenantsRouter } from "./tenants.router";
 import { BillingRouter } from "./billing.router";
 import type { RequestContext } from "../types/console.types";
+import { UUID_RE } from "./governance.shared";
 
 // C16 — admin-bff transactional write-path coverage. These specs assert the two
 // invariants every operator write must uphold and that tsc/lint cannot see:
@@ -387,5 +388,34 @@ describe("billing runBillAction", () => {
     expect(o.committed).toBe(false);
     expect(o.rolledBack).toBe(true);
     expect(o.released).toBe(true);
+  });
+});
+
+describe("UUID_RE 只校验格式良好，不校验 RFC 4122 的 version/variant", () => {
+  // 回归钉子：原正则要求 version∈[1-5] 且 variant∈[89ab]，把活库里 27 张表的
+  // 种子行全判为非法（admin.operator_account 102 行中 100 行不合格，导致
+  // requireOperatorId 直接 401）。Postgres 的 uuid 列接受任意 128 位值，
+  // 校验器不该比存储层更严。
+  it("接受 variant 不在 [89ab] 的合法 uuid（种子 / 导入数据）", () => {
+    expect(UUID_RE.test("00000000-0000-4000-c000-000000220089")).toBe(true);
+    expect(UUID_RE.test("00000000-0000-4000-d000-000000000001")).toBe(true);
+  });
+
+  it("接受 version 位不在 [1-5] 的合法 uuid", () => {
+    expect(UUID_RE.test("00000000-0000-0000-0000-000000000000")).toBe(true);
+    expect(UUID_RE.test("ffffffff-ffff-ffff-ffff-ffffffffffff")).toBe(true);
+  });
+
+  it("仍然拒绝格式不合法的输入", () => {
+    for (const bad of [
+      "not-a-uuid",
+      "00000000-0000-4000-c000-00000022008", // 少一位
+      "00000000-0000-4000-c000-0000002200890", // 多一位
+      "00000000-0000-4000-c000_000000220089", // 分隔符错
+      "0000000g-0000-4000-c000-000000220089", // 非十六进制
+      "",
+    ]) {
+      expect(UUID_RE.test(bad)).toBe(false);
+    }
   });
 });
