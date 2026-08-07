@@ -22,6 +22,7 @@
     "@nestjs/platform-express": "^11.0.0",
     "@nestjs/swagger": "^11.0.0",
     "@vxture/core-config": "workspace:*",
+    "@vxture/core-identity-sdk": "workspace:*",
     "@vxture/core-oidc-rp": "workspace:*",
     "@vxture/service-account": "workspace:*",
     "@vxture/service-mail": "workspace:*",

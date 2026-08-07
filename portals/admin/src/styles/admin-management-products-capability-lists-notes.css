@@ -14,8 +14,8 @@
     minmax(var(--vx-admin-management-grid-column-md), 1.15fr) minmax(var(--vx-admin-management-track-8r), 0.65fr) minmax(var(--vx-admin-management-track-11r-large), 0.8fr)
     minmax(var(--vx-admin-management-track-18r-large), 1.4fr);
   align-items: center;
-  gap: var(--vx-admin-management-space-125r);
-  padding: var(--vx-admin-management-space-095r) 0;
+  gap: var(--space-md);
+  padding: var(--space-md) 0;
   border-bottom: var(--vx-admin-management-line-width-1p) dashed color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
   color: inherit;
   text-decoration: none;
@@ -40,7 +40,7 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: var(--vx-admin-management-space-0625r);
+  gap: var(--space-sm);
 }
 
 .vx-product-detail-list__row svg {
@@ -95,8 +95,8 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
-  gap: var(--vx-admin-management-space-0625r);
-  padding: var(--vx-admin-management-space-09r) 0;
+  gap: var(--space-sm);
+  padding: var(--space-md) 0;
   border-bottom: var(--vx-admin-management-line-width-1p) dashed color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
   color: var(--vx-color-gray-600);
   font-size: var(--vx-admin-meta-size);
@@ -109,6 +109,6 @@
 }
 
 .vx-product-detail-notes svg {
-  margin-top: var(--vx-admin-management-space-035r);
+  margin-top: var(--space-2xs);
   color: var(--tenant-blue);
 }

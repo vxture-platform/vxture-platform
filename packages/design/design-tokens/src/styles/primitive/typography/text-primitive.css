@@ -1,0 +1,44 @@
+/**
+ * primitive/typography/text-primitive.css - T1 原子层 · 字号。
+ * @package @vxture/design-tokens
+ * @layer Presentation
+ * @category styles
+ * @author AI-Generated
+ * @date 2026-07-31
+ *
+ * ⚠ 本文件由脚本生成，请勿手工编辑。
+ *   生成：node scripts/design-tokens/generate-primitive.mjs
+ *
+ * T1 是 Tailwind v4 theme 的镜像，取值与之逐项一致；偏离登记在
+ * scripts/design-tokens/primitive-policy.mjs。工具类族：text-*
+ */
+
+:root {
+  /* 字号。 */
+  --vx-text-xs: 0.75rem;
+  --vx-text-xs--line-height: calc(1 / 0.75);
+  --vx-text-sm: 0.875rem;
+  --vx-text-sm--line-height: calc(1.25 / 0.875);
+  --vx-text-base: 1rem;
+  --vx-text-base--line-height: calc(1.5 / 1);
+  --vx-text-lg: 1.125rem;
+  --vx-text-lg--line-height: calc(1.75 / 1.125);
+  --vx-text-xl: 1.25rem;
+  --vx-text-xl--line-height: calc(1.75 / 1.25);
+  --vx-text-2xl: 1.5rem;
+  --vx-text-2xl--line-height: calc(2 / 1.5);
+  --vx-text-3xl: 1.875rem;
+  --vx-text-3xl--line-height: calc(2.25 / 1.875);
+  --vx-text-4xl: 2.25rem;
+  --vx-text-4xl--line-height: calc(2.5 / 2.25);
+  --vx-text-5xl: 3rem;
+  --vx-text-5xl--line-height: 1;
+  --vx-text-6xl: 3.75rem;
+  --vx-text-6xl--line-height: 1;
+  --vx-text-7xl: 4.5rem;
+  --vx-text-7xl--line-height: 1;
+  --vx-text-8xl: 6rem;
+  --vx-text-8xl--line-height: 1;
+  --vx-text-9xl: 8rem;
+  --vx-text-9xl--line-height: 1;
+}

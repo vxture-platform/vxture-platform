@@ -58,13 +58,13 @@ export default function AboutUsPage() {
               ))}
             </div>
             <div className="mt-8 flex flex-wrap items-center gap-4">
-              <Button asChild size="lg" className="px-5 hover:bg-vx-brand-500">
+              <Button asChild size="xl" className="px-5 hover:bg-vx-brand-500">
                 <Link href="/signin">{t("hero.primaryAction")}</Link>
               </Button>
               <Button
                 asChild
                 variant="ghost"
-                size="lg"
+                size="xl"
                 className="border border-vx-brand-200 bg-vx-white/60 px-5 text-vx-brand-700 hover:border-vx-brand-300 hover:bg-vx-white dark:border-vx-white/25 dark:bg-vx-white/10 dark:text-vx-white dark:hover:bg-vx-white/15"
               >
                 <a href="#about-positioning">{t("hero.secondaryAction")}</a>
@@ -217,7 +217,7 @@ export default function AboutUsPage() {
           </div>
           <Button
             asChild
-            size="lg"
+            size="xl"
             className="w-max px-5 hover:bg-vx-brand-500"
           >
             <Link href="/signin">{t("cta.action")}</Link>

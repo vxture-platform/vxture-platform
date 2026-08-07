@@ -35,7 +35,7 @@ function renderData(data: unknown, hint?: string) {
           cell: (row: Record<string, unknown>) => String(row[key] ?? ""),
         }))}
         rows={rows}
-        rowKey={(_row, index) => index}
+        rowKey={(_row, index) => String(index)}
       />
     );
   }

@@ -18,11 +18,9 @@
 
   .vx-service-health-filters select {
     width: var(--vx-admin-service-health-filter-select-width-compact);
-  }
-}
+  }}
 
 @media (max-width: 960px) {
-  .vx-service-health-page .vx-page-header,
   .vx-service-health-summary,
   .vx-service-health-grid {
     grid-template-columns: 1fr;
@@ -54,9 +52,4 @@
   .vx-service-health-summary__item,
   .vx-service-health-card {
     padding: var(--vx-admin-service-health-compact-padding);
-  }
-
-  .vx-service-health-page .vx-page-header.admin-overview-heading {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-}
+  }}

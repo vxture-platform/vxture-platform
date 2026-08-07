@@ -6,16 +6,8 @@
 .vx-admin-permission-tree-node__status .vx-tenant-pill {
   display: inline-flex;
   align-items: center;
-  gap: var(--vx-admin-permission-space-03125r);
+  gap: var(--space-2xs);
   font-weight: 800;
-}
-
-.vx-admin-permission-tree-node__status .vx-admin-role-status-pill--enabled {
-  color: var(--tenant-green);
-}
-
-.vx-admin-permission-tree-node__status .vx-admin-role-status-pill--disabled {
-  color: var(--vx-color-gray-500);
 }
 
 .vx-admin-permission-tree-node__actions {
@@ -28,17 +20,23 @@
   align-items: center;
   justify-content: center;
   background: transparent;
-  box-shadow: calc(var(--vx-admin-permission-effect-1p) * -1) 0 0 color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
+  box-shadow: calc(var(--vx-admin-permission-effect-1p) * -1) 0 0
+    color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
 }
 
-.vx-admin-permission-tree-node__title-tags .vx-admin-permission-layer-pill--root {
+.vx-admin-permission-tree-node__title-tags
+  .vx-admin-permission-layer-pill--root {
   border-color: color-mix(in srgb, var(--vx-color-gray-600) 20%, transparent);
   background: color-mix(in srgb, var(--vx-color-gray-600) 8%, transparent);
   color: var(--vx-color-gray-600);
 }
 
 .vx-admin-permission-tree-node__title-tags .vx-admin-permission-layer-pill--l1 {
-  border-color: color-mix(in srgb, var(--vx-color-auth-accent) 22%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--vx-color-auth-accent) 22%,
+    transparent
+  );
   background: color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
   color: var(--vx-color-brand-700);
 }
@@ -50,7 +48,11 @@
 }
 
 .vx-admin-permission-tree-node__title-tags .vx-admin-permission-layer-pill--l3 {
-  border-color: color-mix(in srgb, var(--vx-color-warning-600) 26%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--vx-color-warning-600) 26%,
+    transparent
+  );
   background: color-mix(in srgb, var(--vx-color-warning-600) 10%, transparent);
   color: var(--vx-color-warning-700);
 }

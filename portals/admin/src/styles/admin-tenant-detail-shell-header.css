@@ -8,11 +8,11 @@
       0.85fr
     );
   align-items: stretch;
-  gap: var(--vx-admin-management-space-15r);
+  gap: var(--space-lg);
 }
 
 .vx-tenant-detail__header > section:not(:last-child) {
-  padding-right: var(--vx-admin-management-space-15r);
+  padding-right: var(--space-lg);
   border-right: var(--vx-admin-management-line-width-1p) dashed var(--tenant-line);
 }
 
@@ -21,7 +21,7 @@
   display: grid;
   grid-template-columns: var(--vx-admin-management-track-25r) minmax(0, 1fr);
   align-items: start;
-  gap: var(--vx-admin-management-space-2r);
+  gap: var(--space-xl);
 }
 
 .vx-tenant-detail__icon {
@@ -40,14 +40,14 @@
 .vx-tenant-detail__title {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-0375r);
+  gap: var(--space-2xs);
 }
 
 .vx-tenant-title-line {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
 }
 
 .vx-tenant-detail__title p {

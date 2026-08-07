@@ -1,3 +1,5 @@
+import type { SubscriptionStatus } from "@vxture/shared";
+
 export type Capability = string;
 
 export interface ConsoleUser {
@@ -426,7 +428,6 @@ export interface AuditLogRecord {
   operatorName: string;
   operatorEmail: string;
   action: string;
-  actionLabel: string;
   targetType: string;
   targetId: string | null;
   targetLabel: string | null;
@@ -960,13 +961,17 @@ export interface TenantVerificationRecord {
   updatedAt: string;
 }
 
-export type SubscriptionOperationStatus =
-  | "trial"
-  | "active"
-  | "expiring"
-  | "overdue"
-  | "suspended"
-  | "cancelled";
+/**
+ * 订阅态直接采用 `@vxture/shared` 的六值，**不再自建一份**。
+ *
+ * 自建那份与权威差两个词，而其中一个是错译：admin 把库里的 `expired`（权益已终止）
+ * 映射成 `overdue`（欠费宽限、权益仍在），两者含义正好相反；库里真正的 `overdue`
+ * 反而没有分支，落进 `default` 显示成"正常"。声明里还有个 `expiring`（即将到期），
+ * 没有任何 router 产出过它——幻影值，配了颜色但永远不出现。
+ *
+ * 值域权威在 @shared，DDL 与它对齐由 guardrail 校验；产品侧对齐它，不反向迁就。
+ */
+export type SubscriptionOperationStatus = SubscriptionStatus;
 export type SubscriptionOperationCycle = "monthly" | "yearly" | "once";
 export type SubscriptionOperationQuotaRisk = "normal" | "warning" | "danger";
 export type SubscriptionOperationAction =
@@ -1032,6 +1037,8 @@ export interface SubscriptionOperationRecord {
   solutionName: string;
   servicePlanCode: string;
   servicePlanName: string;
+  /** 机器可读的等级码。`tierName` 是展示名（已本地化），做不了映射。 */
+  tierCode: ProductSolutionTierCode;
   tierName: string;
   status: SubscriptionOperationStatus;
   rawStatus: string;
@@ -1307,10 +1314,13 @@ export interface PromotionRedemptionRecord {
 export interface CommerceOverviewMetric {
   key: string;
   label: string;
+  /** 笔数。给了 `amount` 时它是"多少笔"，卡面把金额当读数、笔数当标。 */
   value: number;
+  /** 金额型指标的金额。给了它，`value` 必须是对应的笔数。 */
   amount?: number;
   currency?: string;
   tone: "blue" | "green" | "amber" | "rose";
+  /** 口径说明（表名 + 条件），落到 `MetricCard.help` 的 `?`，不进标。 */
   hint: string;
 }
 
@@ -1509,7 +1519,14 @@ export interface AccountOperationRecord {
   tenantBindings: AccountTenantBinding[];
 }
 
-export type PlatformPermissionType = "MENU" | "BUTTON" | "API";
+/**
+ * platform_permissions.perm_type 的真实取值——**小写**，与接口返回一致
+ * （`/api/admin-permissions` 实测 2026-08-06：55 条全是 "api"）。
+ *
+ * 此前声明为大写 MENU|BUTTON|API，前端据此建的查表全部落空，权限树整页崩在
+ * `meta.className` 上。类型说的是契约，不是期望。
+ */
+export type PlatformPermissionType = "menu" | "button" | "api";
 
 export interface PlatformRolePermissionRecord {
   id: string;

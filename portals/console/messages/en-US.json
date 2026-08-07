@@ -27,6 +27,18 @@
     },
     "featureBoards": "Feature boards",
     "searchPlaceholder": "Search members, subscriptions, settings…",
+    "search": {
+      "title": "Global search",
+      "description": "Search pages and business data by keyword",
+      "empty": "No matches",
+      "error": "Search is unavailable; showing page matches only",
+      "loading": "Searching",
+      "groups": {
+        "pages": "Pages",
+        "member": "Members",
+        "invoice": "Invoices"
+      }
+    },
     "help": "Help",
     "notifications": "Notifications",
     "settings": "System settings",
@@ -67,9 +79,8 @@
     },
     "appcenter": {
       "title": "Agents Center",
-      "desc": "Apps you have subscribed to — click a card to enter.",
-      "subscribedTag": "{count} apps subscribed",
-      "statusSubscribed": "Subscribed",
+      "desc": "Shortcuts to every board in the console.",
+      "shortcutTag": "{count} entries",
       "enter": "Enter"
     },
     "apps": {
@@ -1077,6 +1088,7 @@
       "tenantStatus": "Tenant status",
       "contactRole": "Title / role",
       "region": "Country / region",
+      "countryCode": "Country / region code",
       "isBillingRecipient": "Billing recipient",
       "verifiedStatus": "Verification status",
       "unifiedSocialCreditCode": "Unified social credit code",
@@ -1201,7 +1213,9 @@
     },
     "common": {
       "empty": "--",
-      "loading": "Loading..."
+      "loading": "Loading...",
+      "loadError": "Could not load login history and sessions. Please retry.",
+      "revokeError": "Could not sign this device out. Please retry."
     },
     "sections": {
       "loginHistory": {
@@ -1889,5 +1903,28 @@
     "orderFailed": "Failed to place the order. Please retry or contact support.",
     "cancelOrderFailed": "Failed to cancel the order. Please retry.",
     "myOrdersEmpty": "No orders yet."
+  },
+  "manageSubscription": {
+    "title": "Manage subscription",
+    "description": "Pause, resume, or cancel the active subscription. Changes take effect immediately.",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "actionPause": "Pause subscription",
+    "actionResume": "Resume subscription",
+    "actionCancel": "Cancel subscription",
+    "actionPauseHint": "Pausing stops billing and service; you can resume at any time.",
+    "actionResumeHint": "Resuming restarts billing and restores service.",
+    "actionCancelHint": "Cancelling ends the subscription for good — you would need to order again.",
+    "reasonLabel": "Reason (optional)",
+    "upgradeHint": "To upgrade or switch plans, pick a new plan on the subscribe page — not here.",
+    "goUpgrade": "Change plan",
+    "successPause": "Subscription paused.",
+    "successResume": "Subscription resumed.",
+    "successCancel": "Subscription cancelled.",
+    "error": "The operation failed. Please retry."
+  },
+  "planned": {
+    "badge": "Planned",
+    "sectionEmpty": "This feature is still planned — there is nothing to show yet."
   }
 }

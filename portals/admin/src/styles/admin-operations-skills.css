@@ -1,25 +1,9 @@
-.vx-skills-directory-list {
-  grid-template-columns: var(--vx-admin-operations-skill-grid);
-}
-.vx-skills-directory-list .vx-tenant-directory-list__header,
-.vx-skill-row {
-  grid-template-columns: var(--vx-admin-operations-skill-grid);
-}
-
-.vx-skill-row__info { display: flex; flex-direction: column; gap: var(--vx-admin-operations-skill-row-info-gap); min-width: 0; }
-.vx-skill-row__name { font-weight: 640; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vx-skill-row__code { color: var(--vx-console-muted); font-size: var(--vx-admin-meta-size); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vx-skill-row__endpoint { color: var(--vx-console-muted); font-size: var(--vx-admin-meta-size); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vx-skill-row__index,
-.vx-skill-row__category,
-.vx-skill-row__version,
-.vx-skill-row__invocations,
-.vx-skill-row__updated { font-size: var(--vx-admin-meta-size); color: var(--vx-console-muted); white-space: nowrap; }
-.vx-skill-row__status { display: flex; align-items: center; gap: var(--vx-admin-operations-skill-row-status-gap); flex-wrap: wrap; }
-
 .vx-skills-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--vx-admin-operations-skill-card-grid-min-width), 1fr));
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(var(--vx-admin-operations-skill-card-grid-min-width), 1fr)
+  );
   gap: var(--vx-admin-operations-skill-card-grid-gap);
 }
 
@@ -28,7 +12,8 @@
   flex-direction: column;
   gap: var(--vx-admin-operations-skill-card-gap);
   padding: var(--vx-admin-operations-skill-card-padding);
-  border: var(--vx-admin-operations-skill-card-border-width) solid var(--vx-console-border);
+  border: var(--vx-admin-operations-skill-card-border-width) solid
+    var(--vx-console-border);
   border-radius: var(--vx-admin-card-radius);
   background: var(--vx-console-surface);
   box-shadow: var(--vx-console-shadow-soft);
@@ -83,14 +68,7 @@
 
 @media (max-width: 1200px) {
   .vx-audit-directory-list,
-  .vx-audit-directory-list .vx-tenant-directory-list__header,
   .vx-audit-row {
     grid-template-columns: var(--vx-admin-operations-audit-grid-compact);
   }
-  .vx-skills-directory-list,
-  .vx-skills-directory-list .vx-tenant-directory-list__header,
-  .vx-skill-row {
-    grid-template-columns: var(--vx-admin-operations-skill-grid-compact);
-  }
-  .vx-skill-row__endpoint { display: none; }
 }

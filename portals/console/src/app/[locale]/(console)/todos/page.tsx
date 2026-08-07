@@ -3,7 +3,7 @@ import { TenantPlaceholderPage } from "@/modules/shared/TenantPlaceholderPage";
 export default function Page() {
   return (
     <TenantPlaceholderPage
-      eyebrow="工作空间"
+      icon="calendar"
       title="待办事项"
       description="聚合当前租户需要处理的订阅、邀请、配额和安全提醒。"
       signals={[

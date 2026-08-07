@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500" role="img" aria-label="V">
+  <!-- main V body: left & right strokes with angled cuts -->
+  <path fill="#0052D9" d="M396 90 L297 382 L208 381 L114 100 L22 140 L218 498 L477 219 Z"/>
+  <!-- detached chip at the top of the right arm -->
+  <path fill="#0052D9" d="M339 1 L192 65 L253 280 L320 47 L368 46 Z"/>
+</svg>

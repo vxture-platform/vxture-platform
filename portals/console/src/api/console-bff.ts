@@ -151,6 +151,29 @@ async function readJson<T>(path: string, fallback: T): Promise<T> {
   }
 }
 
+/**
+ * Strict counterpart to `readJson`: it THROWS instead of degrading to a
+ * fallback. `readJson` turning every failure into an empty value is the right
+ * default for decorative reads, but it makes "the backend is down" and "you
+ * have no data" indistinguishable — which on some screens is actively
+ * misleading (an outage on the security page reads as "you have no active
+ * sessions", the reassuring answer, and the wrong one). Pages that must tell
+ * the two apart use this and render their own error state.
+ */
+async function readJsonStrict<T>(path: string): Promise<T> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${path}`,
+    { credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) {
+    throw new ConsoleBffError(
+      `Request failed: ${response.status}`,
+      response.status,
+    );
+  }
+  return (await response.json()) as T;
+}
+
 function withTenant(path: string) {
   return path;
 }
@@ -363,6 +386,10 @@ export async function updateMember(
   payload: {
     nickname?: string | null;
     remark?: string | null;
+    /** The backend only reads `roleCode`; `roleId` was silently dropped. The
+     *  role catalog sets `id === roleCode` (toConsoleRole), so callers pass the
+     *  same value under the name the backend actually reads. */
+    roleCode?: string | null;
     roleId?: string | null;
     status?: "active" | "inactive" | "banned";
   },
@@ -707,6 +734,44 @@ export async function fetchCredits(): Promise<{
   );
 }
 
+/**
+ * Subscription lifecycle actions (`POST /api/subscription/actions`).
+ *
+ * `upgrade` is deliberately not exposed here: it requires a `planId`, and
+ * picking a plan is the whole job of the /subscribe ladder — routing there is
+ * both simpler and the flow the product already has. This helper covers the
+ * three actions that need no plan choice. The server also emails a
+ * confirmation; failures there do not block the action.
+ */
+export type SubscriptionLifecycleAction = "pause" | "resume" | "cancel";
+
+export async function executeSubscriptionAction(payload: {
+  subscriptionId: string;
+  action: SubscriptionLifecycleAction;
+  reason?: string;
+}): Promise<ConsoleSubscription> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant("/api/subscription/actions")}`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!response.ok) {
+    let message = `Request failed: ${response.status}`;
+    try {
+      const body = (await response.json()) as { message?: string };
+      if (body?.message) message = body.message;
+    } catch {
+      /* keep the status-based message */
+    }
+    throw new ConsoleBffError(message, response.status);
+  }
+  return (await response.json()) as ConsoleSubscription;
+}
+
 export interface ConsoleQuotaMetric {
   used: number;
   limit: number;
@@ -877,11 +942,45 @@ export async function fetchBillingInvoices(
   return Array.isArray(raw) ? raw.map(toConsoleInvoice) : [];
 }
 
+/**
+ * `GET /api/billing/overview` returns `{total, paid, pending, cancelled}` —
+ * none of the six field names `ConsoleBillingOverview` declares. Without this
+ * adapter every consumer read `undefined`, which rendered literally as
+ * "undefined" and made `overdueInvoices > 0` false, so BillingPage claimed
+ * "All paid" for any tenant. Two fields the backend does not compute yet are
+ * reported honestly rather than guessed:
+ *   - overdueInvoices: the backend has no overdue bucket → 0
+ *   - totalRevenue / activeSubscriptions: not in this response → 0
+ * Widening the backend response is the real fix; this keeps the UI truthful
+ * until then.
+ */
+interface BillingOverviewWire {
+  total: number;
+  paid: number;
+  pending: number;
+  cancelled: number;
+}
+
+function toBillingOverview(
+  wire: BillingOverviewWire | null,
+): ConsoleBillingOverview | null {
+  if (!wire) return null;
+  return {
+    totalInvoices: wire.total,
+    paidInvoices: wire.paid,
+    pendingInvoices: wire.pending,
+    overdueInvoices: 0,
+    totalRevenue: 0,
+    activeSubscriptions: 0,
+  };
+}
+
 export async function fetchBillingOverview(): Promise<ConsoleBillingOverview | null> {
-  return readJson<ConsoleBillingOverview | null>(
+  const wire = await readJson<BillingOverviewWire | null>(
     withTenant("/api/billing/overview"),
     null,
   );
+  return toBillingOverview(wire);
 }
 
 export async function fetchUserProfile(): Promise<ConsoleUserProfile | null> {
@@ -911,12 +1010,14 @@ export async function fetchLastLogin(): Promise<LastLoginInfo | null> {
   return readJson<LastLoginInfo | null>("/api/me/last-login", null);
 }
 
+/* Strict on purpose — see readJsonStrict. On the security screen an outage
+ * must not render as "no sign-in history" / "no active sessions". */
 export async function fetchLoginHistory(): Promise<LoginHistoryEntry[]> {
-  return readJson<LoginHistoryEntry[]>("/api/me/login-history", []);
+  return readJsonStrict<LoginHistoryEntry[]>("/api/me/login-history");
 }
 
 export async function fetchSessions(): Promise<AuthSessionRecord[]> {
-  return readJson<AuthSessionRecord[]>("/api/me/sessions", []);
+  return readJsonStrict<AuthSessionRecord[]>("/api/me/sessions");
 }
 
 export async function fetchMyWorkspaces(): Promise<ConsoleWorkspaceItem[]> {
@@ -1471,4 +1572,51 @@ export function buildLogoutUrl(): string {
  */
 export function buildSwitchUrl(): string {
   return `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/auth/switch`;
+}
+
+/* ── 全局搜索（header ⌘K）───────────────────────────────────────────────── */
+
+export type SearchResultKind = "member" | "invoice";
+
+export interface GlobalSearchItem {
+  kind: SearchResultKind;
+  id: string;
+  label: string;
+  description?: string;
+  meta?: string;
+  /** 目标路径由 BFF 给出，前端不拼——路由形状变了只改一处。 */
+  href: string;
+}
+
+export interface GlobalSearchResponse {
+  query: string;
+  items: GlobalSearchItem[];
+  /** true = 查询串太短，后端没检索（跟"检索了但没命中"不是一回事）。 */
+  skipped: boolean;
+}
+
+/**
+ * 走 `readJsonStrict` 而非 `readJson`：搜索面板要能区分"后端挂了"和"没搜到"。
+ * 降级成空数组会让服务不可用长得跟无结果一模一样，用户以为数据不存在。
+ * 调用方负责 catch 并渲染自己的错误态。
+ */
+export async function searchConsole(
+  query: string,
+  signal?: AbortSignal,
+): Promise<GlobalSearchResponse> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/search?q=${encodeURIComponent(query)}`,
+    {
+      credentials: "include",
+      cache: "no-store",
+      ...(signal ? { signal } : {}),
+    },
+  );
+  if (!response.ok) {
+    throw new ConsoleBffError(
+      `Request failed: ${response.status}`,
+      response.status,
+    );
+  }
+  return (await response.json()) as GlobalSearchResponse;
 }

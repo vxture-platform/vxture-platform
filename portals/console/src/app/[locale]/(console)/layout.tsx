@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { cookies } from "next/headers";
+import { readNavCollapsed } from "@vxture/shared";
 import { ConsoleShell } from "@/layout/ConsoleShell";
 import { loadServerSessionSnapshot } from "@/lib/server/bff-server";
 
@@ -12,7 +14,18 @@ export default async function ConsoleLayout({
   children: ReactNode;
 }) {
   const initialSession = await loadServerSessionSnapshot();
+  /* 侧栏收起态同样在服务端读出——localStorage 对服务端不可见，靠它就必然是
+   * "首帧展开、effect 里再收起"，刷新时看得到那一下跳变。 */
+  const navCollapsed = readNavCollapsed(
+    (await cookies()).toString(),
+    "console",
+  );
   return (
-    <ConsoleShell initialSession={initialSession}>{children}</ConsoleShell>
+    <ConsoleShell
+      initialSession={initialSession}
+      initialNavCollapsed={navCollapsed}
+    >
+      {children}
+    </ConsoleShell>
   );
 }

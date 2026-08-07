@@ -1,0 +1,11 @@
+/**
+ * admin-tokens.css - admin 页面样式的取值层（对外入口）。
+ *
+ * 在 assets/ 而不在 src/styles/：与 shell-template 同一先例。这些是 admin 的
+ * 产品绑定层，不是 DS 的公共刻度——放进 src/styles 会让它们混进 DS 的 token 体系，
+ * 而 ds/no-app-vx-token-definitions 又不允许它们留在应用侧（token 归 DS 所有）。
+ * assets/ 是这类「DS 托管、单一产品消费」样式的既有位置。
+ *
+ * 消费方：portals/admin/src/app/globals.css。
+ */
+@import "./admin-tokens/tokens-admin.css";

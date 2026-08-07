@@ -3,18 +3,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Icon,
+  ActionButton,
   ActionMenu,
   Badge,
-  Button,
-  Checkbox,
-  Input,
-  NativeSelect,
-  Pagination,
-  ActionButton,
+  DataTable,
   EmptyState,
-  ViewModeSwitch,
+  FilterBar,
+  Icon,
+  Input,
+  ListPageTemplate,
+  MetricGrid,
+  NativeSelect,
+  StatusBadge,
+  TableTitleCell,
 } from "@vxture/design-system";
+import type { DataTableColumn } from "@vxture/design-system";
+import { tierBadgeClass } from "@/modules/shared/tier-level";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import type { IconName } from "@vxture/design-system";
 import { fetchProductSolutions } from "@/api/admin-bff";
 import type {
@@ -25,11 +30,12 @@ import type {
   ProductSolutionStatus,
   ProductSolutionVisibility,
 } from "@/entities/console";
-import { PageHeader } from "@/modules/shared/PageHeader";
 import {
-  PageSizePicker as AdminPageSizePicker,
-  type PageSize,
-} from "@/modules/shared/PageSizePicker";
+  PUBLISH_STATUS_TONE,
+  VISIBILITY_TONE,
+} from "@/modules/shared/publish-tone";
+import { PageHeader } from "@/modules/shared/PageHeader";
+import { type PageSize } from "@/modules/shared/PageSizePicker";
 import {
   formatDate,
   formatMoney,
@@ -97,35 +103,6 @@ function solutionSearchText(solution: ProductSolutionRecord) {
     .toLowerCase();
 }
 
-function SolutionSummaryItem({
-  icon,
-  label,
-  value,
-  tags,
-  tone = "blue",
-}: {
-  icon: IconName;
-  label: string;
-  value: string;
-  tags?: string[];
-  tone?: "blue" | "green" | "amber" | "rose";
-}) {
-  return (
-    <article className={`vx-tenant-summary__item vx-tenant-tone--${tone}`}>
-      <Icon name={icon} size="lg" fallback="placeholder" />
-      <div>
-        <span>{label}</span>
-        <p>
-          <strong>{value}</strong>
-          {tags?.map((tag) => (
-            <em key={tag}>{tag}</em>
-          ))}
-        </p>
-      </div>
-    </article>
-  );
-}
-
 function ProductSolutionActionsMenu({
   solution,
   onViewDetails,
@@ -140,37 +117,29 @@ function ProductSolutionActionsMenu({
     >
       <ActionMenu
         label={`${solution.solutionName} 操作`}
-        triggerClassName="vx-tenant-actions__trigger"
-        triggerProps={{ title: "操作" }}
         items={[
           {
             id: "details",
             label: "查看详情",
-            icon: <Icon name="arrow-right" size="xs" fallback="placeholder" />,
+            icon: "arrow-right",
             onSelect: onViewDetails,
           },
           {
             id: "edit",
             label: "编辑方案",
-            icon: <Icon name="edit" size="xs" fallback="placeholder" />,
+            icon: "edit",
             disabled: true,
           },
           {
             id: "products",
             label: "配置产品",
-            icon: <Icon name="cube" size="xs" fallback="placeholder" />,
+            icon: "cube",
             disabled: true,
           },
           {
             id: "toggle-status",
             label: solution.status === "active" ? "停用方案" : "启用方案",
-            icon: (
-              <Icon
-                name={solution.status === "active" ? "x" : "check"}
-                size="xs"
-                fallback="placeholder"
-              />
-            ),
+            icon: solution.status === "active" ? "x" : "check",
             disabled: true,
           },
         ]}
@@ -194,191 +163,104 @@ function CapabilityTags({
       {visibleProducts.map((product) => (
         <Badge
           key={product.id}
-          className={`vx-tenant-pill vx-product-solution-pill--${product.productType}`}
           title={`${capabilityTypeLabel(product.productType)} | ${capabilitySourceLabel(product.source)} | ${product.role}`}
         >
           {product.productName}
         </Badge>
       ))}
-      {hiddenCount ? (
-        <Badge className="vx-tenant-pill vx-product-solution-pill--more">
-          +{formatNumber(hiddenCount)}
-        </Badge>
-      ) : null}
+      {hiddenCount ? <Badge>+{formatNumber(hiddenCount)}</Badge> : null}
     </span>
   );
 }
 
-function ProductSolutionListRows({
-  solutions,
-  startIndex,
-  selectedSolutionIds,
-  isPageSelected,
-  onOpenDetails,
-  onToggleSolution,
-  onTogglePage,
-}: {
-  solutions: ProductSolutionRecord[];
-  startIndex: number;
-  selectedSolutionIds: Set<string>;
-  isPageSelected: boolean;
-  onOpenDetails: (solutionCode: string) => void;
-  onToggleSolution: (solutionId: string, checked: boolean) => void;
-  onTogglePage: (checked: boolean) => void;
-}) {
-  const selectedOnPage = solutions.filter((solution) =>
-    selectedSolutionIds.has(solution.id),
-  ).length;
-  const isPagePartiallySelected =
-    selectedOnPage > 0 && selectedOnPage < solutions.length;
-
-  return (
-    <div
-      className="vx-tenant-directory-list vx-product-solution-directory-list"
-      role="region"
-      aria-label="解决方案清单"
-    >
-      <div className="vx-tenant-directory-list__header">
-        <span>
-          <Checkbox
-            className="vx-model-select-checkbox"
-            checked={
-              isPageSelected
-                ? true
-                : isPagePartiallySelected
-                  ? "indeterminate"
-                  : false
-            }
-            onCheckedChange={(value) => onTogglePage(value === true)}
-            aria-label="选择当前页业务方案"
-          />
-        </span>
-        <span>序号</span>
-        <span>业务方案</span>
-        <span>行业场景</span>
-        <span>产品能力</span>
-        <span>服务套餐</span>
-        <span>运营</span>
-        <span>操作</span>
-      </div>
-      {solutions.map((solution, index) => {
-        const partnerCount = solution.products.filter(
-          (product) => product.source === "partner",
-        ).length;
-
-        return (
-          <div
-            key={solution.id}
-            className={joinClasses(
-              "vx-tenant-directory-row",
-              "vx-product-solution-operation-row",
-              `vx-product-solution-row--${solution.status}`,
-              selectedSolutionIds.has(solution.id)
-                ? "vx-product-solution-operation-row--selected"
-                : "",
-            )}
-            onClick={(event) => {
-              if (
-                event.target instanceof HTMLElement &&
-                event.target.closest(
-                  'button, input, select, textarea, a, [role="button"], [role="menu"], [role="menuitem"]',
-                )
-              )
-                return;
-              onToggleSolution(
-                solution.id,
-                !selectedSolutionIds.has(solution.id),
-              );
-            }}
-          >
-            <span className="vx-product-solution-operation-row__select">
-              <Checkbox
-                className="vx-model-select-checkbox"
-                checked={selectedSolutionIds.has(solution.id)}
-                onClick={(event) => event.stopPropagation()}
-                onCheckedChange={(value) =>
-                  onToggleSolution(solution.id, value === true)
-                }
-                aria-label={`选择 ${solution.solutionName}`}
-              />
+/**
+ * 发布态与可见性走 `StatusBadge`，语气由 `publish-tone.ts` 给；套餐等级仍是 pill
+ * （等级是序不是语气，另算）。
+ */
+function useProductSolutionColumns(
+  onOpenDetails: (solutionCode: string) => void,
+): DataTableColumn<ProductSolutionRecord>[] {
+  return [
+    {
+      id: "solution",
+      header: "业务方案",
+      cell: (solution) => (
+        <TableTitleCell
+          icon="workflow"
+          title={solution.solutionName}
+          description={`${solution.solutionCode} · ${solution.ownerTeam}`}
+          onTitleClick={() => onOpenDetails(solution.solutionCode)}
+        />
+      ),
+    },
+    {
+      id: "scenario",
+      header: "行业场景",
+      align: "center",
+      cell: (solution) => (
+        <TableTitleCell
+          title={
+            <span className="inline-flex flex-wrap justify-center gap-2xs">
+              <StatusBadge tone={PUBLISH_STATUS_TONE[solution.status]}>
+                {solutionStatusLabel(solution.status)}
+              </StatusBadge>
+              <StatusBadge tone={VISIBILITY_TONE[solution.visibility]}>
+                {solutionVisibilityLabel(solution.visibility)}
+              </StatusBadge>
             </span>
-            <span className="vx-tenant-directory-row__index">
-              {formatNumber(startIndex + index + 1)}
-            </span>
-            <span className="vx-tenant-directory-row__tenant vx-product-solution-row__identity">
-              <Icon name="workflow" size="sm" fallback="placeholder" />
-              <span>
-                <span className="vx-tenant-directory-row__title-line">
-                  <Button
-                    variant="link"
-                    className="vx-model-name-button"
-                    onClick={() => onOpenDetails(solution.solutionCode)}
-                  >
-                    {solution.solutionName}
-                  </Button>
-                </span>
-                <small>
-                  {solution.solutionCode} · {solution.ownerTeam}
-                </small>
-              </span>
-            </span>
-            <span className="vx-product-solution-row__scenario">
-              <span className="vx-tenant-directory-row__tag-line">
+          }
+          description={`${solution.industry} | ${solution.scenario}`}
+        />
+      ),
+    },
+    {
+      id: "products",
+      header: "产品能力",
+      cell: (solution) => (
+        <TableTitleCell
+          title={<CapabilityTags products={solution.products} />}
+          description={`${formatNumber(solution.products.length)} 产品能力 | 三方 ${formatNumber(
+            solution.products.filter((product) => product.source === "partner")
+              .length,
+          )}`}
+        />
+      ),
+    },
+    {
+      id: "tiers",
+      header: "服务套餐",
+      align: "center",
+      cell: (solution) => (
+        <TableTitleCell
+          title={
+            <span className="inline-flex flex-wrap justify-center gap-2xs">
+              {solution.tiers.map((tier) => (
                 <Badge
-                  className={`vx-tenant-pill vx-product-solution-pill--${solution.status}`}
+                  key={tier.tierCode}
+                  className={tierBadgeClass(tier.tierCode)}
+                  title={tier.summary}
                 >
-                  {solutionStatusLabel(solution.status)}
+                  {tier.tierName}
                 </Badge>
-                <Badge
-                  className={`vx-tenant-pill vx-product-solution-pill--${solution.visibility}`}
-                >
-                  {solutionVisibilityLabel(solution.visibility)}
-                </Badge>
-              </span>
-              <small>
-                {solution.industry} | {solution.scenario}
-              </small>
+              ))}
             </span>
-            <span className="vx-product-solution-row__products">
-              <CapabilityTags products={solution.products} />
-              <small>
-                {formatNumber(solution.products.length)} 产品能力 | 三方{" "}
-                {formatNumber(partnerCount)}
-              </small>
-            </span>
-            <span className="vx-product-solution-row__tiers">
-              <span className="vx-product-solution-tier-tags">
-                {solution.tiers.map((tier) => (
-                  <Badge
-                    key={tier.tierCode}
-                    className={`vx-tenant-pill vx-product-solution-pill--tier-${tier.tierCode}`}
-                    title={tier.summary}
-                  >
-                    {tier.tierName}
-                  </Badge>
-                ))}
-              </span>
-              <small>
-                {formatNumber(solution.tiers.length)} 个版本 |{" "}
-                {formatDate(solution.updatedAt)} 更新
-              </small>
-            </span>
-            <span className="vx-product-solution-row__subscriptions">
-              <strong>{formatMoney(solution.monthlyRevenue)}</strong>
-              <small>
-                {formatNumber(solution.subscriptionCount)} 订阅 | 活跃{" "}
-                {formatNumber(solution.activeTenantCount)}
-              </small>
-            </span>
-            <ProductSolutionActionsMenu
-              solution={solution}
-              onViewDetails={() => onOpenDetails(solution.solutionCode)}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
+          }
+          description={`${formatNumber(solution.tiers.length)} 个版本 | ${formatDate(solution.updatedAt)} 更新`}
+        />
+      ),
+    },
+    {
+      id: "operation",
+      header: "运营",
+      align: "right",
+      cell: (solution) => (
+        <TableTitleCell
+          title={formatMoney(solution.monthlyRevenue)}
+          description={`${formatNumber(solution.subscriptionCount)} 订阅 | 活跃 ${formatNumber(solution.activeTenantCount)}`}
+        />
+      ),
+    },
+  ];
 }
 
 function ProductSolutionCards({
@@ -421,16 +303,12 @@ function ProductSolutionCards({
             />
           </header>
           <div className="vx-tenant-directory-card__badges">
-            <Badge
-              className={`vx-tenant-pill vx-product-solution-pill--${solution.status}`}
-            >
+            <StatusBadge tone={PUBLISH_STATUS_TONE[solution.status]}>
               {solutionStatusLabel(solution.status)}
-            </Badge>
-            <Badge
-              className={`vx-tenant-pill vx-product-solution-pill--${solution.visibility}`}
-            >
+            </StatusBadge>
+            <StatusBadge tone={VISIBILITY_TONE[solution.visibility]}>
               {solutionVisibilityLabel(solution.visibility)}
-            </Badge>
+            </StatusBadge>
           </div>
           <p className="vx-product-solution-card__description">
             {solution.description}
@@ -468,39 +346,6 @@ function ProductSolutionCards({
         </article>
       ))}
     </div>
-  );
-}
-
-function ProductSolutionPagination({
-  currentPage,
-  pageCount,
-  total,
-  pageSize,
-  onPageSizeChange,
-  onPageChange,
-}: {
-  currentPage: number;
-  pageCount: number;
-  total: number;
-  pageSize: PageSize;
-  onPageSizeChange: (value: PageSize) => void;
-  onPageChange: (page: number) => void;
-}) {
-  return (
-    <footer className="vx-tenant-pagination">
-      <span className="vx-tenant-pagination__total">
-        共 {formatNumber(total)} 条记录
-      </span>
-      <div className="vx-tenant-pagination__actions">
-        <AdminPageSizePicker value={pageSize} onChange={onPageSizeChange} />
-        <Pagination
-          className="vx-tenant-pagination__pager"
-          page={currentPage}
-          pageCount={pageCount}
-          onPageChange={onPageChange}
-        />
-      </div>
-    </footer>
   );
 }
 
@@ -546,6 +391,8 @@ export function ProductSolutionsPage() {
       ),
     [solutions],
   );
+  const solutionColumns = useProductSolutionColumns(handleOpenDetails);
+
   const filteredSolutions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
@@ -586,13 +433,6 @@ export function ProductSolutionsPage() {
     (activePage - 1) * pageSize,
     activePage * pageSize,
   );
-  const visibleSolutionIds = visibleSolutions.map((solution) => solution.id);
-  const selectedVisibleSolutionCount = visibleSolutionIds.filter((solutionId) =>
-    selectedSolutionIds.has(solutionId),
-  ).length;
-  const isSolutionPageSelected =
-    visibleSolutionIds.length > 0 &&
-    selectedVisibleSolutionCount === visibleSolutionIds.length;
   const activeSolutions = solutions.filter(
     (solution) => solution.status === "active",
   ).length;
@@ -644,195 +484,216 @@ export function ProductSolutionsPage() {
     router.push(`/product-solutions/${encodeURIComponent(solutionCode)}`);
   }
 
-  function toggleSolutionSelection(solutionId: string, checked: boolean) {
-    setSelectedSolutionIds((current) => {
-      const next = new Set(current);
-      if (checked) {
-        next.add(solutionId);
-      } else {
-        next.delete(solutionId);
-      }
-      return next;
-    });
-  }
-
-  function toggleSolutionPageSelection(checked: boolean) {
-    setSelectedSolutionIds((current) => {
-      const next = new Set(current);
-      for (const solutionId of visibleSolutionIds) {
-        if (checked) {
-          next.add(solutionId);
-        } else {
-          next.delete(solutionId);
-        }
-      }
-      return next;
-    });
-  }
-
   return (
-    <div className="vx-page-stack vx-tenant-management-page vx-product-solutions-page">
-      <PageHeader
-        icon="workflow"
-        title="解决方案"
-        description="按行业业务场景组合产品能力，定义方案边界、包含产品、服务套餐和适用客户。"
-      />
-
-      <section className="vx-tenant-summary" aria-label="解决方案统计">
-        <SolutionSummaryItem
-          icon="workflow"
-          label="方案总数"
-          value={formatNumber(solutions.length)}
-          tags={[`启用 ${formatNumber(activeSolutions)}`]}
-        />
-        <SolutionSummaryItem
-          icon="cube"
-          label="产品能力"
-          value={formatNumber(productCount)}
-          tags={[`三方 ${formatNumber(partnerProductCount)}`]}
-          tone="green"
-        />
-        <SolutionSummaryItem
-          icon="star"
-          label="服务套餐"
-          value={formatNumber(tierCount)}
-          tags={[`订阅 ${formatNumber(subscriptionCount)}`]}
-          tone="amber"
-        />
-        <SolutionSummaryItem
-          icon="chart-bar"
-          label="月度收入"
-          value={formatMoney(monthlyRevenue)}
-          tags={[`场景 ${formatNumber(industries.length)}`]}
-          tone="blue"
-        />
-      </section>
-
-      <div className="vx-tenant-list-shell">
-        <section className="vx-tenant-toolbar" aria-label="解决方案筛选">
-          <ViewModeSwitch
-            value={viewMode}
-            onChange={setViewMode}
-            ariaLabel="解决方案展示方式"
+    <>
+      <ListPageTemplate
+        className="vx-tenant-management-page vx-product-solutions-page"
+        header={
+          <PageHeader
+            icon="workflow"
+            title="解决方案"
+            description="按行业业务场景组合产品能力，定义方案边界、包含产品、服务套餐和适用客户。"
           />
-          <span className="vx-tenant-view-count">
-            {formatNumber(filteredSolutions.length)}
-          </span>
-          <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索方案、行业、产品能力"
-            className="vx-tenant-search vx-product-solution-search"
-            aria-label="搜索解决方案"
-          />
-          <Button variant="outline" onClick={handleReset}>
-            重置
-          </Button>
-          <div className="vx-tenant-filters">
-            <NativeSelect
-              className="vx-input vx-tenant-select"
-              value={statusFilter}
-              onChange={(event) =>
-                setStatusFilter(event.target.value as StatusFilter)
-              }
-              aria-label="方案状态"
-            >
-              <option value="all">全部状态</option>
-              <option value="active">启用</option>
-              <option value="draft">草稿</option>
-              <option value="archived">归档</option>
-            </NativeSelect>
-            <NativeSelect
-              className="vx-input vx-tenant-select"
-              value={visibilityFilter}
-              onChange={(event) =>
-                setVisibilityFilter(event.target.value as VisibilityFilter)
-              }
-              aria-label="可见范围"
-            >
-              <option value="all">全部范围</option>
-              <option value="public">公开</option>
-              <option value="internal">内部</option>
-            </NativeSelect>
-            <NativeSelect
-              className="vx-input vx-tenant-select vx-product-solution-select--industry"
-              value={industryFilter}
-              onChange={(event) => setIndustryFilter(event.target.value)}
-              aria-label="行业场景"
-            >
-              <option value="all">全部行业</option>
-              {industries.map((industry) => (
-                <option key={industry} value={industry}>
-                  {industry}
-                </option>
-              ))}
-            </NativeSelect>
-            <NativeSelect
-              className="vx-input vx-tenant-select"
-              value={sourceFilter}
-              onChange={(event) =>
-                setSourceFilter(event.target.value as SourceFilter)
-              }
-              aria-label="产品来源"
-            >
-              <option value="all">全部来源</option>
-              <option value="self">自建</option>
-              <option value="partner">三方</option>
-            </NativeSelect>
-          </div>
-          <ActionButton variant="outline" icon="plus" disabled>
-            新建方案
-          </ActionButton>
-        </section>
-
-        <section className="vx-tenant-directory" aria-label="解决方案清单">
-          {loading ? (
-            <header className="vx-tenant-directory__header">
-              <span>读取中</span>
-            </header>
-          ) : null}
-
-          {visibleSolutions.length ? (
-            viewMode === "list" ? (
-              <ProductSolutionListRows
-                solutions={visibleSolutions}
-                startIndex={(activePage - 1) * pageSize}
-                selectedSolutionIds={selectedSolutionIds}
-                isPageSelected={isSolutionPageSelected}
-                onOpenDetails={handleOpenDetails}
-                onToggleSolution={toggleSolutionSelection}
-                onTogglePage={toggleSolutionPageSelection}
+        }
+        summary={
+          <>
+            {" "}
+            <MetricGrid
+              loading={loading}
+              aria-label="解决方案统计"
+              items={[
+                {
+                  id: "total",
+                  help: "业务方案总数。",
+                  icon: "workflow",
+                  label: "方案总数",
+                  value: formatNumber(solutions.length),
+                  tags: [`启用 ${formatNumber(activeSolutions)}`],
+                },
+                {
+                  id: "products",
+                  help: "各方案关联的产品能力条目之和（跨方案不去重）。",
+                  icon: "cube",
+                  label: "产品能力",
+                  value: formatNumber(productCount),
+                  tags: [`三方 ${formatNumber(partnerProductCount)}`],
+                  tone: "success",
+                },
+                {
+                  id: "tiers",
+                  help: "各方案下服务套餐数之和。",
+                  icon: "star",
+                  label: "服务套餐",
+                  value: formatNumber(tierCount),
+                  tags: [`订阅 ${formatNumber(subscriptionCount)}`],
+                  tone: "warning",
+                },
+                {
+                  id: "revenue",
+                  help: "各方案月度收入之和。",
+                  icon: "chart-bar",
+                  label: "月度收入",
+                  value: formatMoney(monthlyRevenue),
+                  tags: [`场景 ${formatNumber(industries.length)}`],
+                  tone: "brand",
+                },
+              ]}
+            />
+          </>
+        }
+        filters={
+          <FilterBar
+            view={viewMode}
+            onViewChange={setViewMode}
+            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            count={formatNumber(filteredSolutions.length)}
+            aria-label="解决方案筛选"
+            search={
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="搜索方案、行业、产品能力"
+                className="vx-tenant-search vx-product-solution-search"
+                aria-label="搜索解决方案"
               />
-            ) : (
+            }
+            onReset={handleReset}
+            actions={
+              <>
+                <ActionButton variant="outline" icon="plus" disabled>
+                  新建方案
+                </ActionButton>
+              </>
+            }
+          >
+            <div className="vx-tenant-filters">
+              <NativeSelect
+                className="vx-input vx-tenant-select"
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(event.target.value as StatusFilter)
+                }
+                aria-label="方案状态"
+              >
+                <option value="all">全部状态</option>
+                <option value="active">启用</option>
+                <option value="draft">草稿</option>
+                <option value="archived">归档</option>
+              </NativeSelect>
+              <NativeSelect
+                className="vx-input vx-tenant-select"
+                value={visibilityFilter}
+                onChange={(event) =>
+                  setVisibilityFilter(event.target.value as VisibilityFilter)
+                }
+                aria-label="可见范围"
+              >
+                <option value="all">全部范围</option>
+                <option value="public">公开</option>
+                <option value="internal">内部</option>
+              </NativeSelect>
+              <NativeSelect
+                className="vx-input vx-tenant-select vx-product-solution-select--industry"
+                value={industryFilter}
+                onChange={(event) => setIndustryFilter(event.target.value)}
+                aria-label="行业场景"
+              >
+                <option value="all">全部行业</option>
+                {industries.map((industry) => (
+                  <option key={industry} value={industry}>
+                    {industry}
+                  </option>
+                ))}
+              </NativeSelect>
+              <NativeSelect
+                className="vx-input vx-tenant-select"
+                value={sourceFilter}
+                onChange={(event) =>
+                  setSourceFilter(event.target.value as SourceFilter)
+                }
+                aria-label="产品来源"
+              >
+                <option value="all">全部来源</option>
+                <option value="self">自建</option>
+                <option value="partner">三方</option>
+              </NativeSelect>
+            </div>
+          </FilterBar>
+        }
+        table={
+          <section className="vx-tenant-directory" aria-label="解决方案清单">
+            {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
+            {loading && viewMode === "cards" ? (
+              <header className="vx-tenant-directory__header">
+                <span>读取中</span>
+              </header>
+            ) : null}
+
+            {viewMode === "list" ? (
+              <DataTable
+                columns={solutionColumns}
+                rows={visibleSolutions}
+                rowKey={(solution) => solution.id}
+                loading={loading}
+                indexStart={(activePage - 1) * pageSize + 1}
+                selectedKeys={[...selectedSolutionIds]}
+                onSelectionChange={(keys) =>
+                  setSelectedSolutionIds(new Set(keys))
+                }
+                rowActions={(solution) => (
+                  <ProductSolutionActionsMenu
+                    solution={solution}
+                    onViewDetails={() =>
+                      handleOpenDetails(solution.solutionCode)
+                    }
+                  />
+                )}
+                empty={
+                  <EmptyState
+                    title="没有匹配的解决方案"
+                    description="清空筛选条件后可查看全部解决方案。"
+                    action={
+                      <ActionButton
+                        variant="outline"
+                        icon="x"
+                        onClick={handleReset}
+                      >
+                        清空筛选
+                      </ActionButton>
+                    }
+                  />
+                }
+              />
+            ) : visibleSolutions.length ? (
               <ProductSolutionCards
                 solutions={visibleSolutions}
                 onOpenDetails={handleOpenDetails}
               />
-            )
-          ) : (
-            <section className="vx-tenant-empty">
-              <EmptyState
-                title={loading ? "正在加载解决方案" : "没有匹配的解决方案"}
-                description={
-                  loading
-                    ? "正在读取行业解决方案数据。"
-                    : "清空筛选条件后可查看全部解决方案。"
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    清空筛选
-                  </ActionButton>
-                }
-              />
-            </section>
-          )}
-
-          <ProductSolutionPagination
+            ) : (
+              <section className="vx-tenant-empty">
+                <EmptyState
+                  title={loading ? "正在加载解决方案" : "没有匹配的解决方案"}
+                  description={
+                    loading
+                      ? "正在读取行业解决方案数据。"
+                      : "清空筛选条件后可查看全部解决方案。"
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      清空筛选
+                    </ActionButton>
+                  }
+                />
+              </section>
+            )}
+          </section>
+        }
+        footer={
+          <ListPagination
             currentPage={activePage}
             pageCount={pageCount}
             total={filteredSolutions.length}
@@ -842,8 +703,8 @@ export function ProductSolutionsPage() {
               setCurrentPage(Math.min(Math.max(page, 1), pageCount))
             }
           />
-        </section>
-      </div>
-    </div>
+        }
+      />
+    </>
   );
 }

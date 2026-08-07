@@ -1,31 +1,9 @@
-.vx-announcement-directory-list {
-  grid-template-columns: var(--vx-admin-operations-announcement-grid);
-}
-
-.vx-announcement-directory-list .vx-tenant-directory-list__header,
-.vx-announcement-row {
-  grid-template-columns: var(--vx-admin-operations-announcement-grid);
-}
-
-.vx-announcement-row__title {
-  overflow: hidden;
-  font-weight: 640;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vx-announcement-row__index,
-.vx-announcement-row__scope,
-.vx-announcement-row__published,
-.vx-announcement-row__expires {
-  color: var(--vx-console-muted);
-  font-size: var(--vx-admin-meta-size);
-  white-space: nowrap;
-}
-
 .vx-announcement-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--vx-admin-operations-announcement-card-grid-min-width), 1fr));
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(var(--vx-admin-operations-announcement-card-grid-min-width), 1fr)
+  );
   gap: var(--vx-admin-operations-announcement-card-grid-gap);
 }
 
@@ -34,7 +12,8 @@
   flex-direction: column;
   gap: var(--vx-admin-operations-announcement-card-gap);
   padding: var(--vx-admin-operations-announcement-card-padding);
-  border: var(--vx-admin-operations-announcement-card-border-width) solid var(--vx-console-border);
+  border: var(--vx-admin-operations-announcement-card-border-width) solid
+    var(--vx-console-border);
   border-radius: var(--vx-admin-card-radius);
   background: var(--vx-console-surface);
   box-shadow: var(--vx-console-shadow-soft);

@@ -1,0 +1,55 @@
+/**
+ * primitive/animate-primitive.css - T1 原子层 · 动画。
+ * @package @vxture/design-tokens
+ * @layer Presentation
+ * @category styles
+ * @author AI-Generated
+ * @date 2026-07-31
+ *
+ * ⚠ 本文件由脚本生成，请勿手工编辑。
+ *   生成：node scripts/design-tokens/generate-primitive.mjs
+ *
+ * T1 是 Tailwind v4 theme 的镜像，取值与之逐项一致；偏离登记在
+ * scripts/design-tokens/primitive-policy.mjs。工具类族：animate-*
+ */
+
+:root {
+  /* 动画。 */
+  --vx-animate-spin: spin 1s linear infinite;
+  --vx-animate-ping: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+  --vx-animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --vx-animate-bounce: bounce 1s infinite;
+}
+
+@keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+@keyframes ping {
+    75%,
+    100% {
+      transform: scale(2);
+      opacity: 0;
+    }
+  }
+
+@keyframes pulse {
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+@keyframes bounce {
+    0%,
+    100% {
+      transform: translateY(-25%);
+      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+    }
+
+    50% {
+      transform: none;
+      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+    }
+  }

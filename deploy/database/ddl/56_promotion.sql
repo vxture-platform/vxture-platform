@@ -81,9 +81,13 @@ CREATE INDEX idx_vouchers_assigned_user ON promotion.vouchers (assigned_user_id)
 --   invoice_item_id discount 挂靠账单项                           → billing.invoice_items
 --   payment_id      redemption 线下 payment 追溯                  → billing.payments
 -- 不加 UNIQUE(voucher_id)——discount 复用可多次核销（§3）。设计 §3 以 redeemed_at 为时戳，无 created/updated/deleted。
+-- redemption_no 是本表的对外编号：UUID 只走内部，对外一律 *_no（与 tenant_no / bill_no /
+--   ticket_no / pay_order_no 同规）。补于 2026-08-07——此前本表没有可视码，BFF 只好拿
+--   row.id 冒充 redemptionNo，核销台账主列因此摆着一张 UUID。
 -- tenant_id/workspace_id/user_id 跨 schema→tenancy/account（核销侧强制归属，客户 realm，见 90）。
 CREATE TABLE promotion.voucher_redemptions (
     id               uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
+    redemption_no    varchar(64)  NOT NULL,                          -- 可视码（永不做 FK 目标，铁律二）
     voucher_id       uuid         NOT NULL REFERENCES promotion.vouchers(id),  -- 域内真 FK（无 CASCADE，留证据）
     tenant_id        uuid         NOT NULL,                          -- 跨 schema→tenancy.tenants（90）
     workspace_id     uuid         NOT NULL,                          -- 跨 schema→tenancy.workspaces（90）
@@ -95,6 +99,7 @@ CREATE TABLE promotion.voucher_redemptions (
     invoice_item_id  uuid,                                           -- 跨 schema→billing.invoice_items（90）
     payment_id       uuid,                                           -- 跨 schema→billing.payments（90）
     redeemed_at      timestamptz  NOT NULL DEFAULT now(),
+    CONSTRAINT uq_voucher_redemptions_redemption_no UNIQUE (redemption_no),
     CONSTRAINT chk_voucher_redemptions_kind
         CHECK (kind IN ('credit_voucher','recharge_card','redemption','discount','extension'))
 );

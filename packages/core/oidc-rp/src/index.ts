@@ -29,18 +29,17 @@ export { HttpOidcRpClient } from "./http-client";
 export { RpAuthService } from "./rp-auth.service";
 export type { RpAuthOutcome } from "./rp-auth.service";
 
-/** Browser cookie carrying only the opaque RP session id (tokens stay server-side). */
-export const RP_SESSION_COOKIE = "__Host-vx_rp_session";
-
-/** Cookie name without the __Host- prefix, for local http dev (Secure absent). */
-export const RP_SESSION_COOKIE_INSECURE = "vx_rp_session";
-
 /**
- * Resolve the RP session cookie name. The `__Host-` prefix mandates Secure, so
- * over local http (secure=false) we drop the prefix so the browser will store
- * it; prod https keeps `__Host-`+Secure. The setter (router) and reader
- * (middleware/session) must pass the same `secure` so the names agree.
+ * RP session cookie naming.
+ *
+ * The contract itself now lives in `@vxture/core-identity-sdk`, because the
+ * portal middleware needs it too and runs on the Edge runtime, where this
+ * package (ioredis, node builtins) cannot be imported at all. Re-exported here
+ * so every existing RP consumer keeps its import site — there is exactly one
+ * definition, and the middleware no longer keeps a hand-copied duplicate.
  */
-export function rpSessionCookieName(secure: boolean): string {
-  return secure ? RP_SESSION_COOKIE : RP_SESSION_COOKIE_INSECURE;
-}
+export {
+  RP_SESSION_COOKIE_SECURE_BASE as RP_SESSION_COOKIE,
+  RP_SESSION_COOKIE_BASE as RP_SESSION_COOKIE_INSECURE,
+  rpSessionCookieName,
+} from "@vxture/core-identity-sdk";

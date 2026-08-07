@@ -52,6 +52,7 @@ import { MaintenanceWindowsRouter } from "./routers/maintenance-windows.router";
 import { FeatureTogglesRouter } from "./routers/feature-toggles.router";
 import { SystemParametersRouter } from "./routers/system-parameters.router";
 import { NotificationLogsRouter } from "./routers/notification-logs.router";
+import { SearchRouter } from "./routers/search.router";
 @Module({
   imports: [
     VxConfigModule.register({
@@ -92,6 +93,7 @@ import { NotificationLogsRouter } from "./routers/notification-logs.router";
     FeatureTogglesRouter,
     SystemParametersRouter,
     NotificationLogsRouter,
+    SearchRouter,
     PlatformAdminsRouter,
     OperatorContactRouter,
     PlatformGovernanceRouter,

@@ -1,6 +1,6 @@
 .vx-tenant-pill {
   min-height: var(--vx-admin-management-size-15r);
-  padding: 0 var(--vx-admin-management-space-05r);
+  padding: 0 var(--space-xs);
   border-color: transparent;
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
@@ -8,40 +8,4 @@
   font-size: var(--vx-admin-caption-size);
   font-weight: 800;
   white-space: nowrap;
-}
-
-.vx-tenant-pill--active,
-.vx-tenant-pill--normal,
-.vx-tenant-pill--verified,
-.vx-tenant-pill--effective,
-.vx-tenant-pill--success,
-.vx-tenant-pill--closed {
-  background: color-mix(in srgb, var(--vx-color-success) 8%, transparent);
-  color: var(--tenant-green);
-}
-
-.vx-tenant-pill--trial,
-.vx-tenant-pill--attention,
-.vx-tenant-pill--pending,
-.vx-tenant-pill--invited,
-.vx-tenant-pill--limited,
-.vx-tenant-pill--warning,
-.vx-tenant-pill--open,
-.vx-tenant-pill--processing {
-  background: color-mix(in srgb, var(--vx-color-warning-600) 10%, transparent);
-  color: var(--tenant-amber);
-}
-
-.vx-tenant-pill--suspended,
-.vx-tenant-pill--locked,
-.vx-tenant-pill--cancelled,
-.vx-tenant-pill--rejected,
-.vx-tenant-pill--unverified,
-.vx-tenant-pill--past_due,
-.vx-tenant-pill--disabled,
-.vx-tenant-pill--undefined,
-.vx-tenant-pill--danger,
-.vx-tenant-pill--blocked {
-  background: color-mix(in srgb, var(--vx-color-danger) 8%, transparent);
-  color: var(--tenant-rose);
 }

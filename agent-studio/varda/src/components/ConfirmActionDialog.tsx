@@ -65,7 +65,7 @@ export function ConfirmActionDialog() {
         </div>
         <p className="vx-varda-confirm__summary">{confirmError}</p>
         <div className="vx-varda-confirm__actions">
-          <Button onClick={dismiss} variant="secondary" size="sm">
+          <Button onClick={dismiss} variant="secondary" size="md">
             关闭
           </Button>
         </div>

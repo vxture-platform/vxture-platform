@@ -2,7 +2,18 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Icon, Badge, Button, EmptyState } from "@vxture/design-system";
+import {
+  Badge,
+  Button,
+  DetailList,
+  DetailPageTemplate,
+  DetailRow,
+  EmptyState,
+  Icon,
+  MetricGrid,
+  StatusBadge,
+} from "@vxture/design-system";
+import { orUnset } from "@/modules/shared/display";
 import type { IconName } from "@vxture/design-system";
 import { fetchProductSolution } from "@/api/admin-bff";
 import type {
@@ -11,6 +22,10 @@ import type {
   ProductSolutionDetailRecord,
   ProductSolutionStatus,
 } from "@/entities/console";
+import {
+  PUBLISH_STATUS_TONE,
+  VISIBILITY_TONE,
+} from "@/modules/shared/publish-tone";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import {
@@ -45,39 +60,6 @@ function sourceLabel(source: ProductSolutionCapabilitySource) {
   return source === "self" ? "自建" : "三方";
 }
 
-function SectionHeading({ icon, title }: { icon: IconName; title: string }) {
-  return <DetailSectionHeading icon={icon} title={title} />;
-}
-
-function DetailField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="vx-product-capability-field">
-      <span>{label}</span>
-      <strong>{value || "未设置"}</strong>
-    </div>
-  );
-}
-
-function DetailMetric({
-  label,
-  value,
-  tag,
-}: {
-  label: string;
-  value: string;
-  tag?: string;
-}) {
-  return (
-    <div className="vx-product-capability-metric">
-      <span>{label}</span>
-      <p>
-        <strong>{value}</strong>
-        {tag ? <em>{tag}</em> : null}
-      </p>
-    </div>
-  );
-}
-
 function ProductSolutionSummary({
   solution,
 }: {
@@ -96,41 +78,48 @@ function ProductSolutionSummary({
           <h2>{solution.solutionName}</h2>
           <p>{solution.solutionCode}</p>
           <div className="vx-product-capability-summary__badges">
-            <Badge
-              className={`vx-tenant-pill vx-product-solution-pill--${solution.status}`}
-            >
+            <StatusBadge tone={PUBLISH_STATUS_TONE[solution.status]}>
               {solutionStatusLabel(solution.status)}
-            </Badge>
-            <Badge
-              className={`vx-tenant-pill vx-product-solution-pill--${solution.visibility}`}
-            >
+            </StatusBadge>
+            <StatusBadge tone={VISIBILITY_TONE[solution.visibility]}>
               {solution.visibility === "public" ? "公开" : "内部"}
-            </Badge>
+            </StatusBadge>
           </div>
         </div>
       </div>
-      <div className="vx-product-capability-summary__metrics">
-        <DetailMetric
-          label="产品能力"
-          value={formatNumber(solution.products.length)}
-          tag={`三方 ${formatNumber(solution.products.filter((item) => item.source === "partner").length)}`}
-        />
-        <DetailMetric
-          label="服务套餐"
-          value={formatNumber(solution.tiers.length)}
-          tag={solution.tiers.map((tier) => tier.tierName).join(" | ")}
-        />
-        <DetailMetric
-          label="订阅使用"
-          value={formatNumber(solution.subscriptionCount)}
-          tag={`活跃 ${formatNumber(solution.activeTenantCount)}`}
-        />
-        <DetailMetric
-          label="月度收入"
-          value={formatMoney(solution.monthlyRevenue)}
-          tag="方案口径"
-        />
-      </div>
+      <MetricGrid
+        items={[
+          {
+            id: "products",
+            help: "本方案关联的产品能力条目数。",
+            label: "产品能力",
+            value: formatNumber(solution.products.length),
+            tags: [
+              `三方 ${formatNumber(solution.products.filter((item) => item.source === "partner").length)}`,
+            ],
+          },
+          {
+            id: "tiers",
+            help: "本方案下的服务套餐数。",
+            label: "服务套餐",
+            value: formatNumber(solution.tiers.length),
+            tags: [solution.tiers.map((tier) => tier.tierName).join(" | ")],
+          },
+          {
+            id: "subscriptions",
+            help: "订阅了本方案的订阅实例数。",
+            label: "订阅使用",
+            value: formatNumber(solution.subscriptionCount),
+            tags: [`活跃 ${formatNumber(solution.activeTenantCount)}`],
+          },
+          {
+            id: "revenue",
+            label: "月度收入",
+            value: formatMoney(solution.monthlyRevenue),
+            tags: ["方案口径"],
+          },
+        ]}
+      />
     </section>
   );
 }
@@ -146,38 +135,42 @@ function ProductSolutionDetails({
       aria-label={`${solution.solutionName} 详情`}
     >
       <section className="vx-product-capability-section">
-        <SectionHeading icon="database" title="基础资料" />
-        <div className="vx-product-capability-fields">
-          <DetailField label="方案编码" value={solution.solutionCode} />
-          <DetailField label="方案名称" value={solution.solutionName} />
-          <DetailField
-            label="方案状态"
-            value={solutionStatusLabel(solution.status)}
-          />
-          <DetailField
-            label="可见范围"
-            value={solution.visibility === "public" ? "公开" : "内部"}
-          />
-          <DetailField label="负责团队" value={solution.ownerTeam} />
-          <DetailField
-            label="创建时间"
-            value={formatDate(solution.createdAt)}
-          />
-          <DetailField
-            label="更新时间"
-            value={formatDate(solution.updatedAt)}
-          />
-        </div>
+        <DetailSectionHeading icon="database" title="基础资料" />
+        <DetailList columns={3}>
+          <DetailRow label="方案编码">
+            {orUnset(solution.solutionCode)}
+          </DetailRow>
+          <DetailRow label="方案名称">
+            {orUnset(solution.solutionName)}
+          </DetailRow>
+          <DetailRow label="方案状态">
+            {orUnset(solutionStatusLabel(solution.status))}
+          </DetailRow>
+          <DetailRow label="可见范围">
+            {solution.visibility === "public" ? "公开" : "内部"}
+          </DetailRow>
+          <DetailRow label="负责团队">{orUnset(solution.ownerTeam)}</DetailRow>
+          <DetailRow label="创建时间">
+            {orUnset(formatDate(solution.createdAt))}
+          </DetailRow>
+          <DetailRow label="更新时间">
+            {orUnset(formatDate(solution.updatedAt))}
+          </DetailRow>
+        </DetailList>
       </section>
 
       <section className="vx-product-capability-section">
-        <SectionHeading icon="map-pin" title="适用行业" />
-        <div className="vx-product-capability-fields">
-          <DetailField label="行业领域" value={solution.industry} />
-          <DetailField label="业务场景" value={solution.scenario} />
-          <DetailField label="客户群体" value={solution.customerSegment} />
-          <DetailField label="交付模式" value={solution.deliveryMode} />
-        </div>
+        <DetailSectionHeading icon="map-pin" title="适用行业" />
+        <DetailList columns={3}>
+          <DetailRow label="行业领域">{orUnset(solution.industry)}</DetailRow>
+          <DetailRow label="业务场景">{orUnset(solution.scenario)}</DetailRow>
+          <DetailRow label="客户群体">
+            {orUnset(solution.customerSegment)}
+          </DetailRow>
+          <DetailRow label="交付模式">
+            {orUnset(solution.deliveryMode)}
+          </DetailRow>
+        </DetailList>
         <div className="vx-product-capability-description">
           <strong>{solution.description}</strong>
         </div>
@@ -194,7 +187,7 @@ function ProductSolutionDetails({
       </section>
 
       <section className="vx-product-capability-section">
-        <SectionHeading icon="cube" title="包含产品能力" />
+        <DetailSectionHeading icon="cube" title="包含产品能力" />
         <div className="vx-product-detail-list">
           {solution.products.map((product) => (
             <Link
@@ -222,7 +215,7 @@ function ProductSolutionDetails({
       </section>
 
       <section className="vx-product-capability-section">
-        <SectionHeading icon="shield-check" title="交付边界" />
+        <DetailSectionHeading icon="shield-check" title="交付边界" />
         <div className="vx-product-detail-notes">
           {solution.deliveryBoundaries.map((item) => (
             <article key={item}>
@@ -234,7 +227,7 @@ function ProductSolutionDetails({
       </section>
 
       <section className="vx-product-capability-section">
-        <SectionHeading icon="star" title="关联服务套餐" />
+        <DetailSectionHeading icon="star" title="关联服务套餐" />
         <div className="vx-product-detail-list">
           {solution.relatedServicePlans.map((plan) => (
             <Link
@@ -287,50 +280,57 @@ export function ProductSolutionDetailPage({
 
   if (!loading && !solution) {
     return (
-      <div className="vx-page-stack vx-product-capability-page">
-        <PageHeader
-          icon="workflow"
-          title="解决方案详情"
-          description="未找到对应的解决方案。"
-          action={
-            <Button asChild variant="outline">
-              <Link href="/product-solutions">
-                <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                返回列表
-              </Link>
-            </Button>
-          }
-        />
+      <DetailPageTemplate
+        className="vx-product-capability-page"
+        header={
+          <PageHeader
+            icon="workflow"
+            title="解决方案详情"
+            description="未找到对应的解决方案。"
+            action={
+              <Button asChild variant="outline">
+                <Link href="/product-solutions">
+                  <Icon name="arrow-left" size="xs" fallback="placeholder" />
+                  返回列表
+                </Link>
+              </Button>
+            }
+          />
+        }
+      >
         <EmptyState
           title="解决方案不存在"
           description="该方案可能已归档，或当前账号无权访问。"
         />
-      </div>
+      </DetailPageTemplate>
     );
   }
 
   return (
-    <div className="vx-page-stack vx-product-capability-page">
-      <PageHeader
-        icon="workflow"
-        title={solution?.solutionName ?? "解决方案详情"}
-        description={solution?.description ?? "正在读取解决方案详情。"}
-        action={
-          <div className="vx-product-capability-actions">
-            <Button asChild variant="outline">
-              <Link href="/product-solutions">
-                <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                返回列表
-              </Link>
-            </Button>
-            <Button variant="outline" disabled>
-              <Icon name="edit" size="xs" fallback="placeholder" />
-              修改
-            </Button>
-          </div>
-        }
-      />
-
+    <DetailPageTemplate
+      className="vx-product-capability-page"
+      header={
+        <PageHeader
+          icon="workflow"
+          title={solution?.solutionName ?? "解决方案详情"}
+          description={solution?.description ?? "正在读取解决方案详情。"}
+          action={
+            <div className="vx-product-capability-actions">
+              <Button asChild variant="outline">
+                <Link href="/product-solutions">
+                  <Icon name="arrow-left" size="xs" fallback="placeholder" />
+                  返回列表
+                </Link>
+              </Button>
+              <Button variant="outline" disabled>
+                <Icon name="edit" size="xs" fallback="placeholder" />
+                修改
+              </Button>
+            </div>
+          }
+        />
+      }
+    >
       {solution ? (
         <>
           <ProductSolutionSummary solution={solution} />
@@ -341,6 +341,6 @@ export function ProductSolutionDetailPage({
           <span>读取中</span>
         </section>
       )}
-    </div>
+    </DetailPageTemplate>
   );
 }

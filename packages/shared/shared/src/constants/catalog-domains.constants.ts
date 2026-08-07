@@ -58,9 +58,19 @@ export type PlanVersionStatus = (typeof PLAN_VERSION_STATUSES)[number];
  * plane — nothing writes it yet; it exists now so the contract and DDL do
  * not move again when payment lands. Exit paths: settle → active, grace
  * lapses → expired.
+ *
+ * expiring = still entitled, end_at is near. A live state, not a lapsed one,
+ * which is why it ranks second: an expiring row must not be masked by an
+ * older trialing one, but a fully active row still wins. Distinct from
+ * expired — one is a warning, the other is the entitlement being gone, and
+ * conflating them tells an operator the opposite of the truth (admin did
+ * exactly that until 2026-08-07: it mapped the DB's expired onto overdue).
+ * Reserved like overdue — nothing writes it yet; whoever lands renewal
+ * reminders flips it from end_at.
  */
 export const SUBSCRIPTION_STATUSES = [
   "active",
+  "expiring",
   "trialing",
   "overdue",
   "suspended",

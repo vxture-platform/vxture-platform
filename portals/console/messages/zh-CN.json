@@ -27,6 +27,18 @@
     },
     "featureBoards": "功能板块",
     "searchPlaceholder": "搜索成员、订阅、设置…",
+    "search": {
+      "title": "全局搜索",
+      "description": "输入关键词检索页面与业务数据",
+      "empty": "没有匹配结果",
+      "error": "搜索服务暂时不可用，仅显示页面匹配",
+      "loading": "检索中",
+      "groups": {
+        "pages": "页面",
+        "member": "成员",
+        "invoice": "发票"
+      }
+    },
     "help": "帮助",
     "notifications": "告警通知",
     "settings": "系统设置",
@@ -38,7 +50,7 @@
     "tenantSettings": "租户设置",
     "switchOrg": "切换组织",
     "prefsTitle": "偏好设置",
-    "themeSystem": "跟随系统",
+    "themeSystem": "系统",
     "themeLight": "亮色",
     "themeDark": "暗色",
     "densityCompact": "紧凑",
@@ -67,9 +79,8 @@
     },
     "appcenter": {
       "title": "智能体",
-      "desc": "您已订阅的应用，点击卡片即可进入。",
-      "subscribedTag": "已订阅 {count} 个应用",
-      "statusSubscribed": "已订阅",
+      "desc": "控制台内各功能板块的快捷入口。",
+      "shortcutTag": "{count} 个入口",
       "enter": "进入"
     },
     "apps": {
@@ -1077,6 +1088,7 @@
       "tenantStatus": "租户状态",
       "contactRole": "职务 / 角色",
       "region": "国家 / 地区",
+      "countryCode": "国家 / 地区代码",
       "isBillingRecipient": "账单接收人",
       "verifiedStatus": "认证状态",
       "unifiedSocialCreditCode": "统一社会信用代码",
@@ -1201,7 +1213,9 @@
     },
     "common": {
       "empty": "--",
-      "loading": "加载中..."
+      "loading": "加载中...",
+      "loadError": "无法读取登录记录与会话，请稍后重试。",
+      "revokeError": "下线该设备失败，请稍后重试。"
     },
     "sections": {
       "loginHistory": {
@@ -1889,5 +1903,28 @@
     "orderFailed": "下单失败，请稍后重试或联系支持。",
     "cancelOrderFailed": "取消订单失败，请稍后重试。",
     "myOrdersEmpty": "暂无订单。"
+  },
+  "manageSubscription": {
+    "title": "管理订阅",
+    "description": "对当前生效的订阅执行暂停、恢复或退订。变更即时生效。",
+    "confirm": "确认执行",
+    "cancel": "取消",
+    "actionPause": "暂停订阅",
+    "actionResume": "恢复订阅",
+    "actionCancel": "退订",
+    "actionPauseHint": "暂停后停止计费与服务，可随时恢复。",
+    "actionResumeHint": "恢复后重新开始计费并继续提供服务。",
+    "actionCancelHint": "退订后订阅终止且不可恢复，需重新下单。",
+    "reasonLabel": "原因（可选）",
+    "upgradeHint": "升级 / 变更套餐请前往订阅页选择新套餐，不在此处操作。",
+    "goUpgrade": "变更套餐",
+    "successPause": "订阅已暂停。",
+    "successResume": "订阅已恢复。",
+    "successCancel": "订阅已退订。",
+    "error": "操作失败，请稍后重试。"
+  },
+  "planned": {
+    "badge": "规划中",
+    "sectionEmpty": "该功能仍在规划中，暂无可展示的数据。"
   }
 }

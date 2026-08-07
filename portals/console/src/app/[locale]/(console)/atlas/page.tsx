@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { DataTable, MetricGrid, PageHeader } from "@vxture/design-system";
+import {
+  Banner,
+  DataTable,
+  EmptyState,
+  MetricGrid,
+  ViewHeader,
+  ViewLayout,
+} from "@vxture/design-system";
 import type { DataTableColumn } from "@vxture/design-system";
 
 import {
@@ -67,8 +74,8 @@ const quotaStatusTone: Record<
   TenancyQuotaResponse["status"],
   Exclude<SummaryMetric["tone"], undefined>
 > = {
-  covered: "positive",
-  uncovered: "default",
+  covered: "success",
+  uncovered: "neutral",
   unavailable: "warning",
 };
 
@@ -85,22 +92,25 @@ function buildMetrics(
 
   return [
     {
+      id: "available-models",
       label: "Available models",
       value: loading ? "-" : formatNumber(models.length),
       trend: `${formatNumber(activeGrants.length)} active grants`,
-      tone: models.length ? "positive" : "warning",
+      tone: models.length ? "success" : "warning",
     },
     {
+      id: "quota-status",
       label: "Quota status",
       value: loading || !quotas ? "-" : quotaStatusLabel[quotas.status],
       trend: quotas?.tier ? `tier: ${quotas.tier}` : "no tier",
-      tone: quotas ? quotaStatusTone[quotas.status] : "default",
+      tone: quotas ? quotaStatusTone[quotas.status] : "neutral",
     },
     {
+      id: "token-usage",
       label: "Token usage",
       value: loading ? "-" : formatNumber(totalTokens),
       trend: usage ? `${formatNumber(usage.rows.length)} rows` : "-",
-      tone: totalTokens > 0 ? "positive" : "default",
+      tone: totalTokens > 0 ? "success" : "neutral",
     },
   ];
 }
@@ -202,36 +212,38 @@ export default function Page() {
   ];
 
   return (
-    <div className="vx-page-stack">
-      <PageHeader
-        eyebrow="Model Platform"
+    <ViewLayout>
+      <ViewHeader
+        icon="cube"
         title="模型平台"
         description="当前租户可用模型、应用授权、配额和用量状态。"
       />
 
       {loadError ? (
-        <p className="vx-profile-error">模型平台状态加载失败，请稍后重试。</p>
+        <Banner tone="danger" title="模型平台状态加载失败，请稍后重试。" />
       ) : null}
 
       <MetricGrid items={metrics} />
 
       <DashboardSplit>
         <PageSection
+          icon="cube"
+          level={2}
           title="可用模型"
           description="由平台控制面授权给当前租户的模型。"
-          tone="muted"
         >
           <DataTable
             columns={modelColumns}
             rows={modelRows}
-            rowKey={(row, index) => row[0] ?? index}
+            rowKey={(row, index) => row[0] ?? String(index)}
             loading={loading}
-            loadingLabel="Loading models..."
-            empty="No available models."
+            empty={<EmptyState title="No available models." />}
           />
         </PageSection>
 
         <PageSection
+          icon="key"
+          level={2}
           title="模型授权"
           description="租户级与应用级模型访问范围。"
         >
@@ -240,14 +252,15 @@ export default function Page() {
             rows={grantRows}
             rowKey={(row, index) => `${row[0]}-${row[1]}-${index}`}
             loading={loading}
-            loadingLabel="Loading grants..."
-            empty="No active model grants."
+            empty={<EmptyState title="No active model grants." />}
           />
         </PageSection>
       </DashboardSplit>
 
       <DashboardSplit>
         <PageSection
+          icon="database"
+          level={2}
           title="配额状态"
           description="来自平台侧的套餐配额资源池（非 Atlas 自身数据）。"
         >
@@ -256,12 +269,13 @@ export default function Page() {
             rows={quotaRows}
             rowKey={(row, index) => `${row[0]}-${index}`}
             loading={loading}
-            loadingLabel="Loading quotas..."
-            empty={quotaEmptyMessage}
+            empty={<EmptyState title={quotaEmptyMessage} />}
           />
         </PageSection>
 
         <PageSection
+          icon="chart-bar"
+          level={2}
           title="用量记录"
           description="近期实际调用记录（Atlas 自身日志，非计费口径）。"
         >
@@ -270,19 +284,19 @@ export default function Page() {
             rows={usageRows}
             rowKey={(row, index) => `${row[0]}-${row[1]}-${index}`}
             loading={loading}
-            loadingLabel="Loading usage..."
-            empty="No model usage recorded."
+            empty={<EmptyState title="No model usage recorded." />}
           />
         </PageSection>
       </DashboardSplit>
 
       <PageSection
+        icon="info"
+        level={2}
         title="状态说明"
         description="租户侧仅显示当前上下文可见状态。"
-        tone="muted"
       >
         <SignalList items={statusSignals} />
       </PageSection>
-    </div>
+    </ViewLayout>
   );
 }

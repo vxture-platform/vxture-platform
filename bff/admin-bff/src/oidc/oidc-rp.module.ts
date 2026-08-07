@@ -56,7 +56,10 @@ const CLIENT_ID = "admin";
           scopes: (process.env.OIDC_SCOPES ?? "openid profile admin")
             .split(/\s+/)
             .filter(Boolean),
-          sessionTtlSec: Number(process.env.RP_SESSION_TTL ?? 2592000),
+          // 会话由两个时钟界定：门户的闲置钟（identity-sdk/idle.ts）与 IdP 的总时效
+          // （24h）。RP 会话没有独立于这两者之外的第三个寿命——原先那个 30 天的值
+          // 比它所代表的登录态活得久得多，是纯粹的摆设（见 workplans §二十三）。
+          sessionTtlSec: Number(process.env.RP_SESSION_TTL ?? 86400),
         };
         return {
           config: cfg,

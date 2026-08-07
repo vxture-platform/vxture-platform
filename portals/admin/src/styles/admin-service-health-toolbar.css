@@ -85,20 +85,3 @@
   outline-offset: 0;
   border-color: color-mix(in srgb, var(--vx-color-auth-accent) 32%, transparent);
 }
-
-.vx-service-health-toolbar > .vx-btn {
-  min-height: var(--vx-admin-service-health-control-height);
-  height: var(--vx-admin-service-health-control-height);
-  padding-block: 0;
-  border-color: var(--vx-color-auth-border);
-  background: transparent;
-  color: var(--vx-color-text-secondary);
-  font-size: var(--vx-admin-meta-size);
-  font-weight: 400;
-}
-
-.vx-service-health-toolbar > .vx-btn:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--vx-color-auth-accent) 28%, transparent);
-  background: transparent;
-  color: var(--vx-color-auth-accent);
-}

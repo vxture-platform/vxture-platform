@@ -4,24 +4,29 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  ActionButton,
   ActionMenu,
   Badge,
   Banner,
   BulkActionBar,
   Button,
-  Checkbox,
+  DataTable,
   DialogForm,
+  EmptyState,
+  FilterBar,
   Icon,
   Input,
   Label,
+  ListPageTemplate,
+  MetricGrid,
   NativeSelect,
-  Pagination as DsPagination,
+  StatusBadge,
+  TableTitleCell,
   Textarea,
-  ActionButton,
-  EmptyState,
-  ViewModeSwitch,
 } from "@vxture/design-system";
-import type { IconName } from "@vxture/design-system";
+import type { DataTableColumn } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
+import type { ActionMenuItem, IconName } from "@vxture/design-system";
 import { exportRowsToCsv, type CsvColumn } from "@/lib/exportCsv";
 import { isListTruncated } from "@/lib/list-truncation";
 import {
@@ -37,11 +42,13 @@ import type {
   PaymentOperationRecord,
   PaymentReconciliationStatus,
 } from "@/entities/console";
-import { PageHeader } from "@/modules/shared/PageHeader";
 import {
-  PageSizePicker as AdminPageSizePicker,
-  type PageSize,
-} from "@/modules/shared/PageSizePicker";
+  BILL_STATUS_TONE,
+  PAYMENT_STATUS_TONE,
+  RECONCILIATION_TONE,
+} from "@/modules/shared/status-tone";
+import { PageHeader } from "@/modules/shared/PageHeader";
+import { type PageSize } from "@/modules/shared/PageSizePicker";
 import {
   formatDate,
   formatNumber,
@@ -211,35 +218,6 @@ function paymentTargetHref(payment: PaymentOperationRecord) {
   return `/tenants/${encodeURIComponent(payment.tenantId)}`;
 }
 
-function SummaryItem({
-  icon,
-  label,
-  value,
-  tags,
-  tone = "blue",
-}: {
-  icon: IconName;
-  label: string;
-  value: string;
-  tags?: string[];
-  tone?: "blue" | "green" | "amber" | "rose";
-}) {
-  return (
-    <article className={`vx-tenant-summary__item vx-tenant-tone--${tone}`}>
-      <Icon name={icon} size="lg" fallback="placeholder" />
-      <div>
-        <span>{label}</span>
-        <p>
-          <strong>{value}</strong>
-          {tags?.map((tag) => (
-            <em key={tag}>{tag}</em>
-          ))}
-        </p>
-      </div>
-    </article>
-  );
-}
-
 function PaymentRemarkDialog({
   title,
   payment,
@@ -316,29 +294,29 @@ function PaymentActionsMenu({
     >
       <ActionMenu
         label={`${payment.paymentNo} 收款操作`}
-        triggerClassName="vx-tenant-actions__trigger"
-        triggerProps={{ title: "操作" }}
         items={[
+          // 标注为 ActionMenuItem[]：条件展开会把字面量 icon 拓宽成 string，
+          // 而 ActionMenuItem.icon 现在收的是 IconName 联合。
           ...(isPendingVerify
-            ? [
+            ? ([
                 {
                   id: "verify",
                   label: "核销确认",
-                  icon: <Icon name="check" size="xs" fallback="placeholder" />,
+                  icon: "check",
                   onSelect: () => onVerify(payment),
                 },
                 {
                   id: "reject",
                   label: "驳回退回",
-                  icon: <Icon name="x" size="xs" fallback="placeholder" />,
+                  icon: "x",
                   onSelect: () => onReject(payment),
                 },
-              ]
+              ] satisfies ActionMenuItem[])
             : []),
           {
             id: "bill",
             label: "账单详情",
-            icon: <Icon name="arrow-right" size="xs" fallback="placeholder" />,
+            icon: "arrow-right",
             disabled: !payment.billId,
             onSelect: () => {
               if (!payment.billId) return;
@@ -348,7 +326,7 @@ function PaymentActionsMenu({
           {
             id: "order",
             label: "订单详情",
-            icon: <Icon name="table" size="xs" fallback="placeholder" />,
+            icon: "table",
             disabled: !payment.subscriptionId,
             onSelect: () => {
               if (!payment.subscriptionId) return;
@@ -360,14 +338,14 @@ function PaymentActionsMenu({
           {
             id: "tenant",
             label: "查看租户",
-            icon: <Icon name="buildings" size="xs" fallback="placeholder" />,
+            icon: "buildings",
             onSelect: () =>
               router.push(`/tenants/${encodeURIComponent(payment.tenantId)}`),
           },
           {
             id: "evidence",
             label: "查看凭证",
-            icon: <Icon name="key" size="xs" fallback="placeholder" />,
+            icon: "key",
             disabled: !payment.offlineEvidenceUrl,
             onSelect: () => {
               if (!payment.offlineEvidenceUrl) return;
@@ -384,199 +362,116 @@ function PaymentActionsMenu({
   );
 }
 
-function PaymentListRows({
-  payments,
-  startIndex,
-  selectedPaymentIds,
-  isPageSelected,
-  onTogglePayment,
-  onTogglePage,
-  onVerify,
-  onReject,
-}: {
-  payments: PaymentOperationRecord[];
-  startIndex: number;
-  selectedPaymentIds: Set<string>;
-  isPageSelected: boolean;
-  onTogglePayment: (id: string, checked: boolean) => void;
-  onTogglePage: (checked: boolean) => void;
-  onVerify: (payment: PaymentOperationRecord) => void;
-  onReject: (payment: PaymentOperationRecord) => void;
-}) {
+/**
+ * 行内的状态标仍是 pill（`vx-payment-pill--*`）而非 `StatusBadge`：那一族是业务
+ * 值域着色表，整族改 Badge 归批 4，一次改动不跨两个语义面。
+ */
+function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
   const router = useRouter();
-  const selectedOnPage = payments.filter((payment) =>
-    selectedPaymentIds.has(payment.id),
-  ).length;
-  const isPagePartiallySelected =
-    selectedOnPage > 0 && selectedOnPage < payments.length;
 
-  return (
-    <div
-      className="vx-tenant-directory-list vx-payment-directory-list"
-      role="region"
-      aria-label="收款管理清单"
-    >
-      <div className="vx-tenant-directory-list__header">
-        <span>
-          <Checkbox
-            className="vx-model-select-checkbox"
-            checked={isPagePartiallySelected ? "indeterminate" : isPageSelected}
-            onCheckedChange={(checked) => onTogglePage(checked === true)}
-            aria-label="选择当前页收款"
-          />
-        </span>
-        <span>序号</span>
-        <span>收款流水</span>
-        <span>租户</span>
-        <span>关联账单</span>
-        <span>金额</span>
-        <span>收款状态</span>
-        <span>对账</span>
-        <span>操作</span>
-      </div>
-      {payments.map((payment, index) => {
-        const selected = selectedPaymentIds.has(payment.id);
-
-        return (
-          <div
-            key={payment.id}
-            className={joinClasses(
-              "vx-tenant-directory-row",
-              "vx-payment-operation-row",
-              `vx-payment-row--${payment.reconciliationStatus}`,
-              selected ? "vx-payment-operation-row--selected" : undefined,
-            )}
-            onClick={(event) => {
-              const target = event.target as HTMLElement;
-              if (
-                target.closest(
-                  'button, input, select, textarea, a, [role="button"], [role="menu"], [role="menuitem"]',
-                )
-              )
-                return;
-              onTogglePayment(payment.id, !selected);
-            }}
-          >
-            <span className="vx-payment-operation-row__select">
-              <Checkbox
-                className="vx-model-select-checkbox"
-                checked={selected}
-                onCheckedChange={(checked) =>
-                  onTogglePayment(payment.id, checked === true)
+  return [
+    {
+      id: "payment",
+      header: "收款流水",
+      cell: (payment) => (
+        <TableTitleCell
+          title={payment.paymentNo}
+          description={`${paySourceLabel(payment.paySource)} · ${
+            payment.paySource === "offline"
+              ? offlineTypeLabel(payment.offlinePayType)
+              : (payment.payMethod ?? "未设置")
+          }`}
+          onTitleClick={() => router.push(paymentTargetHref(payment))}
+        />
+      ),
+    },
+    {
+      id: "tenant",
+      header: "租户",
+      cell: (payment) => (
+        <TableTitleCell
+          icon={payment.tenantType === "company" ? "buildings" : "user"}
+          title={payment.tenantName}
+          description={`${payment.tenantCode} · ${typeLabel(payment.tenantType)}`}
+        />
+      ),
+    },
+    {
+      id: "bill",
+      header: "关联账单",
+      cell: (payment) => (
+        <TableTitleCell
+          title={
+            <span className="inline-flex flex-wrap gap-2xs">
+              <StatusBadge
+                tone={
+                  payment.billStatus
+                    ? BILL_STATUS_TONE[payment.billStatus]
+                    : "neutral"
                 }
-                aria-label={`选择收款 ${payment.paymentNo}`}
-              />
+              >
+                {billStatusLabel(payment.billStatus)}
+              </StatusBadge>
+              <Badge className="vx-tenant-pill vx-payment-pill--source">
+                {payment.orderNo ?? "未关联订单"}
+              </Badge>
             </span>
-            <span className="vx-tenant-directory-row__index">
-              {formatNumber(startIndex + index + 1)}
-            </span>
-            <span className="vx-payment-row__payment">
-              <span className="vx-tenant-directory-row__title-line">
-                <Button
-                  variant="link"
-                  className="vx-model-name-button"
-                  onClick={() => router.push(paymentTargetHref(payment))}
-                >
-                  {payment.paymentNo}
-                </Button>
-              </span>
-              <small>
-                {paySourceLabel(payment.paySource)} ·{" "}
-                {payment.paySource === "offline"
-                  ? offlineTypeLabel(payment.offlinePayType)
-                  : (payment.payMethod ?? "未设置")}
-              </small>
-            </span>
-            <span className="vx-payment-row__tenant">
-              <Icon
-                name={payment.tenantType === "company" ? "buildings" : "user"}
-                size="sm"
-                fallback="placeholder"
-              />
-              <span>
-                <strong>{payment.tenantName}</strong>
-                <small>
-                  {payment.tenantCode} · {typeLabel(payment.tenantType)}
-                </small>
-              </span>
-            </span>
-            <span className="vx-payment-row__bill">
-              <span className="vx-tenant-directory-row__tag-line">
-                <Badge
-                  className={`vx-tenant-pill vx-payment-pill--bill-${payment.billStatus ?? "none"}`}
-                >
-                  {billStatusLabel(payment.billStatus)}
-                </Badge>
-                <Badge className="vx-tenant-pill vx-payment-pill--source">
-                  {payment.orderNo ?? "未关联订单"}
-                </Badge>
-              </span>
-              <small>{payment.billNo ?? "未关联账单"}</small>
-            </span>
-            <span className="vx-payment-row__amount">
-              <strong>
-                {formatCurrency(payment.paidAmount, payment.currency)}
-              </strong>
-              <small>
-                应收{" "}
-                {formatCurrency(
-                  payment.billPayableAmount || payment.totalAmount,
-                  payment.currency,
-                )}
-              </small>
-            </span>
-            <span className="vx-payment-row__status">
-              <span className="vx-payment-status-line">
-                <span
-                  className={`vx-payment-status-dot vx-payment-status-dot--${payment.paymentStatus}`}
-                  role="img"
-                  aria-label={paymentStatusLabel(payment.paymentStatus)}
-                >
-                  <Icon
-                    name={paymentStatusIcon(payment.paymentStatus)}
-                    size="xs"
-                    fallback="placeholder"
-                  />
-                </span>
-                <Badge
-                  className={`vx-tenant-pill vx-payment-pill--${payment.paymentStatus}`}
-                >
-                  {paymentStatusLabel(payment.paymentStatus)}
-                </Badge>
-              </span>
-              <small>{formatDate(payment.paidAt ?? payment.createdAt)}</small>
-            </span>
-            <span className="vx-payment-row__reconcile">
-              <span className="vx-payment-status-line">
-                <span
-                  className={`vx-payment-status-dot vx-payment-status-dot--reconcile-${payment.reconciliationStatus}`}
-                  role="img"
-                  aria-label={reconciliationLabel(payment.reconciliationStatus)}
-                >
-                  <Icon
-                    name={reconciliationIcon(payment.reconciliationStatus)}
-                    size="xs"
-                    fallback="placeholder"
-                  />
-                </span>
-                <Badge
-                  className={`vx-tenant-pill vx-payment-pill--reconcile-${payment.reconciliationStatus}`}
-                >
-                  {reconciliationLabel(payment.reconciliationStatus)}
-                </Badge>
-              </span>
-              <small>{payment.remark ?? payment.operatorName}</small>
-            </span>
-            <PaymentActionsMenu
-              payment={payment}
-              onVerify={onVerify}
-              onReject={onReject}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
+          }
+          description={payment.billNo ?? "未关联账单"}
+        />
+      ),
+    },
+    {
+      id: "amount",
+      header: "金额",
+      align: "right",
+      cell: (payment) => (
+        <TableTitleCell
+          title={formatCurrency(payment.paidAmount, payment.currency)}
+          description={`应收 ${formatCurrency(
+            payment.billPayableAmount || payment.totalAmount,
+            payment.currency,
+          )}`}
+        />
+      ),
+    },
+    {
+      id: "status",
+      header: "收款状态",
+      align: "center",
+      cell: (payment) => (
+        <TableTitleCell
+          title={
+            <StatusBadge
+              tone={PAYMENT_STATUS_TONE[payment.paymentStatus]}
+              icon={paymentStatusIcon(payment.paymentStatus)}
+            >
+              {paymentStatusLabel(payment.paymentStatus)}
+            </StatusBadge>
+          }
+          description={formatDate(payment.paidAt ?? payment.createdAt)}
+        />
+      ),
+    },
+    {
+      id: "reconcile",
+      header: "对账",
+      align: "center",
+      cell: (payment) => (
+        <TableTitleCell
+          title={
+            <StatusBadge
+              tone={RECONCILIATION_TONE[payment.reconciliationStatus]}
+              icon={reconciliationIcon(payment.reconciliationStatus)}
+            >
+              {reconciliationLabel(payment.reconciliationStatus)}
+            </StatusBadge>
+          }
+          description={payment.remark ?? payment.operatorName}
+        />
+      ),
+    },
+  ];
 }
 
 function PaymentCards({
@@ -625,16 +520,14 @@ function PaymentCards({
             />
           </header>
           <div className="vx-tenant-directory-card__badges">
-            <Badge
-              className={`vx-tenant-pill vx-payment-pill--${payment.paymentStatus}`}
-            >
+            <StatusBadge tone={PAYMENT_STATUS_TONE[payment.paymentStatus]}>
               {paymentStatusLabel(payment.paymentStatus)}
-            </Badge>
-            <Badge
-              className={`vx-tenant-pill vx-payment-pill--reconcile-${payment.reconciliationStatus}`}
+            </StatusBadge>
+            <StatusBadge
+              tone={RECONCILIATION_TONE[payment.reconciliationStatus]}
             >
               {reconciliationLabel(payment.reconciliationStatus)}
-            </Badge>
+            </StatusBadge>
             <Badge className="vx-tenant-pill vx-payment-pill--source">
               {paySourceLabel(payment.paySource)}
             </Badge>
@@ -673,39 +566,6 @@ function PaymentCards({
         </article>
       ))}
     </div>
-  );
-}
-
-function Pagination({
-  currentPage,
-  pageCount,
-  total,
-  pageSize,
-  onPageSizeChange,
-  onPageChange,
-}: {
-  currentPage: number;
-  pageCount: number;
-  total: number;
-  pageSize: PageSize;
-  onPageSizeChange: (value: PageSize) => void;
-  onPageChange: (page: number) => void;
-}) {
-  return (
-    <footer className="vx-tenant-pagination">
-      <span className="vx-tenant-pagination__total">
-        共 {formatNumber(total)} 条收款记录
-      </span>
-      <div className="vx-tenant-pagination__actions">
-        <AdminPageSizePicker value={pageSize} onChange={onPageSizeChange} />
-        <DsPagination
-          className="vx-tenant-pagination__pager"
-          page={currentPage}
-          pageCount={pageCount}
-          onPageChange={onPageChange}
-        />
-      </div>
-    </footer>
   );
 }
 
@@ -768,6 +628,8 @@ export function PaymentsPage() {
     };
   }, []);
 
+  const paymentColumns = usePaymentColumns();
+
   const filteredPayments = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
@@ -804,16 +666,6 @@ export function PaymentsPage() {
     (activePage - 1) * pageSize,
     activePage * pageSize,
   );
-  const visiblePaymentIds = useMemo(
-    () => visiblePayments.map((payment) => payment.id),
-    [visiblePayments],
-  );
-  const selectedVisiblePaymentCount = visiblePaymentIds.filter((id) =>
-    selectedPaymentIds.has(id),
-  ).length;
-  const isPaymentPageSelected =
-    visiblePaymentIds.length > 0 &&
-    selectedVisiblePaymentCount === visiblePaymentIds.length;
   const paidPayments = payments.filter((item) => item.paymentStatus === "paid");
   const paidAmount = paidPayments.reduce(
     (sum, item) => sum + item.paidAmount,
@@ -908,267 +760,287 @@ export function PaymentsPage() {
     setSelectedPaymentIds(new Set());
   }
 
-  function togglePaymentSelection(id: string, checked: boolean) {
-    setSelectedPaymentIds((current) => {
-      const next = new Set(current);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }
-
-  function togglePaymentPageSelection(checked: boolean) {
-    setSelectedPaymentIds((current) => {
-      const next = new Set(current);
-      visiblePaymentIds.forEach((id) => {
-        if (checked) next.add(id);
-        else next.delete(id);
-      });
-      return next;
-    });
-  }
-
   return (
-    <div className="vx-page-stack vx-tenant-management-page vx-payments-page">
-      <PageHeader
-        icon="check"
-        eyebrow="财务结算"
-        title="收款管理"
-        description="运营侧收款台账 MVP：集中查看线下/线上收款记录、账单关联和对账状态；确认收款仍从订单侧进入。"
-        action={
-          <Button asChild variant="outline">
-            <Link href="/orders">
-              <Icon name="table" size="xs" fallback="placeholder" />
-              订单收款入口
-            </Link>
-          </Button>
-        }
-      />
-
-      <section className="vx-tenant-summary" aria-label="收款统计">
-        <SummaryItem
-          icon="check"
-          label="收款记录"
-          value={formatNumber(payments.length)}
-          tags={[`筛选 ${formatNumber(filteredPayments.length)}`]}
-        />
-        <SummaryItem
-          icon="chart-bar"
-          label="已收金额"
-          value={formatCurrency(paidAmount, "CNY")}
-          tags={[`线下 ${formatCurrency(offlineAmount, "CNY")}`]}
-          tone="green"
-        />
-        <SummaryItem
-          icon="clock"
-          label="待复核"
-          value={formatNumber(pendingVerifyCount)}
-          tags={[`部分 ${formatNumber(partialCount)}`]}
-          tone={pendingVerifyCount || partialCount ? "amber" : "green"}
-        />
-        <SummaryItem
-          icon="warning"
-          label="需关注"
-          value={formatNumber(attentionCount)}
-          tags={["对账异常"]}
-          tone={attentionCount ? "rose" : "green"}
-        />
-      </section>
-
-      {paymentsTruncated ? (
-        <Banner
-          tone="warning"
-          title="当前收款列表可能未展示全部数据"
-          description="本次加载已达到单次读取上限（500 条），如未看到目标收款记录，请尝试缩小筛选范围（如按状态、来源等）重新查询。"
-        />
-      ) : null}
-
-      <div className="vx-tenant-list-shell">
-        <section className="vx-tenant-toolbar" aria-label="收款筛选">
-          <ViewModeSwitch
-            value={viewMode}
-            onChange={setViewMode}
-            ariaLabel="收款展示方式"
-          />
-          <span className="vx-tenant-view-count">
-            {formatNumber(filteredPayments.length)}
-          </span>
-          <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索流水、租户、账单、付款方"
-            className="vx-tenant-search vx-payment-search"
-            aria-label="搜索收款"
-          />
-          <Button variant="outline" onClick={handleReset}>
-            重置
-          </Button>
-          <div className="vx-tenant-filters">
-            <NativeSelect
-              className="vx-tenant-select"
-              value={paymentStatusFilter}
-              onChange={(event) =>
-                setPaymentStatusFilter(
-                  event.target.value as PaymentStatusFilter,
-                )
-              }
-              aria-label="收款状态"
-            >
-              <option value="all">全部收款</option>
-              <option value="pending">支付中</option>
-              <option value="pending_verify">线下待核</option>
-              <option value="paid">已收款</option>
-              <option value="partial">部分收款</option>
-              <option value="failed">支付失败</option>
-              <option value="closed">已关闭</option>
-              <option value="refunding">退款中</option>
-            </NativeSelect>
-            <NativeSelect
-              className="vx-tenant-select"
-              value={paySourceFilter}
-              onChange={(event) =>
-                setPaySourceFilter(event.target.value as PaySourceFilter)
-              }
-              aria-label="收款来源"
-            >
-              <option value="all">全部来源</option>
-              <option value="offline">线下</option>
-              <option value="online">线上</option>
-              <option value="none">无</option>
-            </NativeSelect>
-            <NativeSelect
-              className="vx-tenant-select"
-              value={reconciliationFilter}
-              onChange={(event) =>
-                setReconciliationFilter(
-                  event.target.value as ReconciliationFilter,
-                )
-              }
-              aria-label="对账状态"
-            >
-              <option value="all">全部对账</option>
-              <option value="attention">需关注</option>
-              <option value="normal">已对账</option>
-              <option value="pending_verify">待复核</option>
-              <option value="partial">部分收款</option>
-              <option value="overpaid">超额收款</option>
-              <option value="bill_cancelled">账单作废</option>
-              <option value="failed">支付异常</option>
-              <option value="unlinked">未关联</option>
-            </NativeSelect>
-            <NativeSelect
-              className="vx-tenant-select"
-              value={offlineTypeFilter}
-              onChange={(event) =>
-                setOfflineTypeFilter(event.target.value as OfflineTypeFilter)
-              }
-              aria-label="收款方式"
-            >
-              <option value="all">全部方式</option>
-              <option value="bank_transfer">银行转账</option>
-              <option value="cash">现金</option>
-              <option value="other">其他线下</option>
-              <option value="online">线上</option>
-              <option value="none">无</option>
-            </NativeSelect>
-          </div>
-          <ActionButton
-            variant="outline"
-            icon="arrow-down"
-            onClick={() =>
-              exportRowsToCsv(
-                "payments-export",
-                PAYMENT_CSV_COLUMNS,
-                filteredPayments,
-              )
+    <>
+      <ListPageTemplate
+        className="vx-tenant-management-page vx-payments-page"
+        header={
+          <PageHeader
+            icon="check"
+            eyebrow="财务结算"
+            title="收款管理"
+            description="运营侧收款台账 MVP：集中查看线下/线上收款记录、账单关联和对账状态；确认收款仍从订单侧进入。"
+            action={
+              <Button asChild variant="outline">
+                <Link href="/orders">
+                  <Icon name="table" size="xs" fallback="placeholder" />
+                  订单收款入口
+                </Link>
+              </Button>
             }
-            disabled={filteredPayments.length === 0}
-          >
-            导出全部
-          </ActionButton>
-        </section>
-
-        {selectedPaymentIds.size > 0 ? (
-          <BulkActionBar
-            selectedLabel={<>已选 {formatNumber(selectedPaymentIds.size)} 项</>}
-            selectionActions={
+          />
+        }
+        summary={
+          <>
+            {" "}
+            <MetricGrid
+              loading={loading}
+              aria-label="收款统计"
+              items={[
+                {
+                  id: "records",
+                  help: "当前筛选条件下的收款记录条数。",
+                  icon: "check",
+                  label: "收款记录",
+                  value: formatNumber(payments.length),
+                  tags: [`筛选 ${formatNumber(filteredPayments.length)}`],
+                },
+                {
+                  id: "paid-amount",
+                  help: "已收款记录的金额合计。",
+                  icon: "chart-bar",
+                  label: "已收金额",
+                  value: formatCurrency(paidAmount, "CNY"),
+                  tags: [`线下 ${formatCurrency(offlineAmount, "CNY")}`],
+                  tone: "success",
+                },
+                {
+                  id: "pending-verify",
+                  help: "状态为待复核的收款记录。",
+                  icon: "clock",
+                  label: "待复核",
+                  value: formatNumber(pendingVerifyCount),
+                  tags: [`部分 ${formatNumber(partialCount)}`],
+                  tone:
+                    pendingVerifyCount || partialCount ? "warning" : "success",
+                },
+                {
+                  id: "attention",
+                  help: "对账状态非正常的收款记录。",
+                  icon: "warning",
+                  label: "需关注",
+                  value: formatNumber(attentionCount),
+                  tags: ["对账异常"],
+                  tone: attentionCount ? "danger" : "success",
+                },
+              ]}
+            />
+            {paymentsTruncated ? (
+              <Banner
+                tone="warning"
+                title="当前收款列表可能未展示全部数据"
+                description="本次加载已达到单次读取上限（500 条），如未看到目标收款记录，请尝试缩小筛选范围（如按状态、来源等）重新查询。"
+              />
+            ) : null}
+          </>
+        }
+        filters={
+          <FilterBar
+            view={viewMode}
+            onViewChange={setViewMode}
+            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            count={formatNumber(filteredPayments.length)}
+            aria-label="收款筛选"
+            search={
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="搜索流水、租户、账单、付款方"
+                className="vx-tenant-search vx-payment-search"
+                aria-label="搜索收款"
+              />
+            }
+            onReset={handleReset}
+            actions={
               <>
-                <Button
-                  variant="outline"
+                <ActionButton
+                  variant={selectedPaymentIds.size > 0 ? "default" : "outline"}
+                  icon="arrow-down"
                   onClick={() =>
                     exportRowsToCsv(
                       "payments-export",
                       PAYMENT_CSV_COLUMNS,
-                      selectedPayments,
+                      filteredPayments.filter((item) =>
+                        selectedPaymentIds.has(item.id),
+                      ),
                     )
                   }
+                  disabled={selectedPaymentIds.size === 0}
                 >
-                  导出所选
-                </Button>
-                <Button variant="ghost" onClick={clearPaymentSelection}>
-                  清除
-                </Button>
+                  导出
+                </ActionButton>
               </>
             }
-          />
-        ) : null}
+          >
+            <div className="vx-tenant-filters">
+              <NativeSelect
+                className="vx-tenant-select"
+                value={paymentStatusFilter}
+                onChange={(event) =>
+                  setPaymentStatusFilter(
+                    event.target.value as PaymentStatusFilter,
+                  )
+                }
+                aria-label="收款状态"
+              >
+                <option value="all">全部收款</option>
+                <option value="pending">支付中</option>
+                <option value="pending_verify">线下待核</option>
+                <option value="paid">已收款</option>
+                <option value="partial">部分收款</option>
+                <option value="failed">支付失败</option>
+                <option value="closed">已关闭</option>
+                <option value="refunding">退款中</option>
+              </NativeSelect>
+              <NativeSelect
+                className="vx-tenant-select"
+                value={paySourceFilter}
+                onChange={(event) =>
+                  setPaySourceFilter(event.target.value as PaySourceFilter)
+                }
+                aria-label="收款来源"
+              >
+                <option value="all">全部来源</option>
+                <option value="offline">线下</option>
+                <option value="online">线上</option>
+                <option value="none">无</option>
+              </NativeSelect>
+              <NativeSelect
+                className="vx-tenant-select"
+                value={reconciliationFilter}
+                onChange={(event) =>
+                  setReconciliationFilter(
+                    event.target.value as ReconciliationFilter,
+                  )
+                }
+                aria-label="对账状态"
+              >
+                <option value="all">全部对账</option>
+                <option value="attention">需关注</option>
+                <option value="normal">已对账</option>
+                <option value="pending_verify">待复核</option>
+                <option value="partial">部分收款</option>
+                <option value="overpaid">超额收款</option>
+                <option value="bill_cancelled">账单作废</option>
+                <option value="failed">支付异常</option>
+                <option value="unlinked">未关联</option>
+              </NativeSelect>
+              <NativeSelect
+                className="vx-tenant-select"
+                value={offlineTypeFilter}
+                onChange={(event) =>
+                  setOfflineTypeFilter(event.target.value as OfflineTypeFilter)
+                }
+                aria-label="收款方式"
+              >
+                <option value="all">全部方式</option>
+                <option value="bank_transfer">银行转账</option>
+                <option value="cash">现金</option>
+                <option value="other">其他线下</option>
+                <option value="online">线上</option>
+                <option value="none">无</option>
+              </NativeSelect>
+            </div>
+          </FilterBar>
+        }
+        bulkBar={
+          selectedPaymentIds.size > 0 ? (
+            <BulkActionBar
+              count={selectedPaymentIds.size}
+              actions={[
+                {
+                  id: "export",
+                  label: "导出所选",
+                  onSelect: () =>
+                    exportRowsToCsv(
+                      "payments-export",
+                      PAYMENT_CSV_COLUMNS,
+                      selectedPayments,
+                    ),
+                },
+              ]}
+              onClear={clearPaymentSelection}
+            />
+          ) : null
+        }
+        table={
+          <section className="vx-tenant-directory" aria-label="收款清单">
+            {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
+            {loading && viewMode === "cards" ? (
+              <header className="vx-tenant-directory__header">
+                <span>读取中</span>
+              </header>
+            ) : null}
 
-        <section className="vx-tenant-directory" aria-label="收款清单">
-          {loading ? (
-            <header className="vx-tenant-directory__header">
-              <span>读取中</span>
-            </header>
-          ) : null}
-
-          {visiblePayments.length ? (
-            viewMode === "list" ? (
-              <PaymentListRows
-                payments={visiblePayments}
-                startIndex={(activePage - 1) * pageSize}
-                selectedPaymentIds={selectedPaymentIds}
-                isPageSelected={isPaymentPageSelected}
-                onTogglePayment={togglePaymentSelection}
-                onTogglePage={togglePaymentPageSelection}
-                onVerify={handleOpenVerify}
-                onReject={handleOpenReject}
+            {viewMode === "list" ? (
+              <DataTable
+                columns={paymentColumns}
+                rows={visiblePayments}
+                rowKey={(payment) => payment.id}
+                loading={loading}
+                indexStart={(activePage - 1) * pageSize + 1}
+                selectedKeys={[...selectedPaymentIds]}
+                onSelectionChange={(keys) =>
+                  setSelectedPaymentIds(new Set(keys))
+                }
+                rowActions={(payment) => (
+                  <PaymentActionsMenu
+                    payment={payment}
+                    onVerify={handleOpenVerify}
+                    onReject={handleOpenReject}
+                  />
+                )}
+                empty={
+                  <EmptyState
+                    title={
+                      loadError ? "收款记录读取失败" : "没有匹配的收款记录"
+                    }
+                    description={
+                      loadError ?? "清空筛选条件后可查看全部收款记录。"
+                    }
+                    action={
+                      <ActionButton
+                        variant="outline"
+                        icon="x"
+                        onClick={handleReset}
+                      >
+                        清空筛选
+                      </ActionButton>
+                    }
+                  />
+                }
               />
-            ) : (
+            ) : visiblePayments.length ? (
               <PaymentCards
                 payments={visiblePayments}
                 onVerify={handleOpenVerify}
                 onReject={handleOpenReject}
               />
-            )
-          ) : (
-            <section className="vx-tenant-empty">
-              <EmptyState
-                title={
-                  loading
-                    ? "正在加载收款记录"
-                    : loadError
-                      ? "收款记录读取失败"
-                      : "没有匹配的收款记录"
-                }
-                description={
-                  loading
-                    ? "正在读取收款台账和账单关联。"
-                    : (loadError ?? "清空筛选条件后可查看全部收款记录。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    清空筛选
-                  </ActionButton>
-                }
-              />
-            </section>
-          )}
-
-          <Pagination
+            ) : (
+              <section className="vx-tenant-empty">
+                <EmptyState
+                  title={loading ? "正在加载收款记录" : "没有匹配的收款记录"}
+                  description={
+                    loading
+                      ? "正在读取收款台账和账单关联。"
+                      : (loadError ?? "清空筛选条件后可查看全部收款记录。")
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      清空筛选
+                    </ActionButton>
+                  }
+                />
+              </section>
+            )}
+          </section>
+        }
+        footer={
+          <ListPagination
             currentPage={activePage}
             pageCount={pageCount}
             total={filteredPayments.length}
@@ -1178,8 +1050,8 @@ export function PaymentsPage() {
               setCurrentPage(Math.min(Math.max(page, 1), pageCount))
             }
           />
-        </section>
-      </div>
+        }
+      />
 
       {(verifyTarget ?? rejectTarget) ? (
         <PaymentRemarkDialog
@@ -1193,6 +1065,6 @@ export function PaymentsPage() {
           onCancel={handleCloseDialog}
         />
       ) : null}
-    </div>
+    </>
   );
 }

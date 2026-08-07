@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { IDLE_MS, startIdleWatcher } from "@vxture/core-identity-sdk";
 import { buildRpLoginUrl, logout, restoreSession } from "@/api/admin-bff";
 import type { SessionSnapshot } from "@/entities/console";
 
@@ -51,12 +52,24 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
       .then((snapshot) => {
         if (!active) return;
         setSession(snapshot);
-        setStatus("ready");
-        if (!snapshot.isAuthenticated && !silentJustFailed) {
-          window.location.replace(
-            buildRpLoginUrl(window.location.href, { prompt: "none" }),
-          );
+        if (snapshot.isAuthenticated) {
+          setStatus("ready");
+          return;
         }
+        /* 未登录：**不置 ready**，直接把浏览器送走。
+         *
+         * 原先这里先 setStatus('ready') 再跳转，于是外壳会拿着"已就绪但未登录"
+         * 的状态渲染一帧（骨架/空壳），紧接着整页被替换掉——冷启动要落回门户
+         * 两次，这一帧就闪两次。状态停在 loading，加载页一直盖着，直到导航发生。
+         *
+         * 静默失败过就直接走交互式登录，不再退回 `/login` 中转页：那一跳是一次
+         * 完整的页面加载，只为了在屏幕上写一句"正在跳转到登录…"再跳走。
+         * BFF 侧还记了一个 5 分钟的备忘 cookie，所以连着刷新也不会重复静默往返。 */
+        window.location.replace(
+          silentJustFailed
+            ? buildRpLoginUrl(window.location.href)
+            : buildRpLoginUrl(window.location.href, { prompt: "none" }),
+        );
       })
       .catch(() => {
         if (!active) return;
@@ -67,6 +80,26 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
+  }, []);
+
+  /**
+   * 闲置钟。运营面 30 分钟，到点**直接登出，不弹窗询问**。
+   *
+   * "要不要继续"是消费级网银的 UX 惯例而非安全要求（NIST 800-63B 未要求），对
+   * 正在操作的人定期打断是荒谬的（owner 2026-08-07 判，见 workplans §二十三）。
+   * 判据由真实交互事件给出，不是请求频率——读长表格、填长表单的人一个请求都不发，
+   * 但他在场。
+   */
+  useEffect(() => {
+    return startIdleWatcher({
+      idleMs: IDLE_MS.workforce,
+      storageKey: "vx:admin:last-activity",
+      onIdle: () => {
+        void signOut();
+      },
+    });
+    // signOut 只依赖模块级的 logout 与两个 setter，身份稳定，不必进依赖数组。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function signOut() {

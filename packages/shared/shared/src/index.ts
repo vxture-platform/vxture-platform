@@ -54,6 +54,23 @@ export type {
   MetricKind,
 } from "./constants";
 
+// 业务状态 → 展示语气的映射（跨门户共用；不进 DS，DS 零业务语义）
+export type { StatusTone } from "./constants";
+export {
+  SUBSCRIPTION_STATUS_TONE,
+  TIER_TONE,
+  PLAN_VERSION_STATUS_TONE,
+  resolveStatusTone,
+} from "./constants";
+
+// 侧栏收起态的 cookie 约定（服务端 layout 与客户端外壳共用；不进 DS，那边是
+// "use client" 入口，服务端 import 会在 RSC 边界上报错）
+export {
+  navCollapsedCookieName,
+  readNavCollapsed,
+  writeNavCollapsed,
+} from "./constants";
+
 // Value Exports
 export {
   // Auth constants

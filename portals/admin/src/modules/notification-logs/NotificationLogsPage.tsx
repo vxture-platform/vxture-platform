@@ -2,17 +2,24 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Badge,
+  ActionButton,
+  DataTable,
   EmptyState,
+  FilterBar,
   Input,
+  ListPageTemplate,
+  MetricGrid,
   NativeSelect,
   Pagination,
+  StatusBadge,
+  TableTitleCell,
   useToast,
 } from "@vxture/design-system";
+import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
 import { fetchNotificationLogs } from "@/api/admin-bff";
 import type { NotificationLogRecord } from "@/entities/console";
+import { exportRowsToCsv, type CsvColumn } from "@/lib/exportCsv";
 import { PageHeader } from "@/modules/shared/PageHeader";
-import { joinClasses } from "@/modules/tenants/tenant-utils";
 
 function formatDateTime(value: string) {
   const d = new Date(value);
@@ -48,13 +55,12 @@ const STATUS_LABELS: Record<string, string> = {
   bounced: "退回",
 };
 
-function statusBadgeClass(status: string): string {
-  if (status === "delivered" || status === "opened")
-    return "vx-admin-role-status-pill--enabled";
-  if (status === "failed" || status === "bounced")
-    return "vx-platform-user-status-pill--attention";
-  if (status === "sent") return "vx-platform-user-status-pill--pending";
-  return "vx-admin-role-status-pill--disabled";
+/** 投递状态 -> DS 语气。映射留产品侧，DS 不认业务状态。 */
+function statusTone(status: string): StatusBadgeTone {
+  if (status === "delivered" || status === "opened") return "success";
+  if (status === "failed" || status === "bounced") return "danger";
+  if (status === "sent") return "info";
+  return "neutral";
 }
 
 function describeError(error: unknown): { description?: string } {
@@ -62,6 +68,56 @@ function describeError(error: unknown): { description?: string } {
     ? { description: error.message }
     : {};
 }
+
+const CSV_COLUMNS: readonly CsvColumn<NotificationLogRecord>[] = [
+  { label: "时间", value: (item) => item.createdAt },
+  {
+    label: "渠道",
+    value: (item) => CHANNEL_LABELS[item.channel] ?? item.channel,
+  },
+  { label: "模板", value: (item) => item.templateCode },
+  { label: "接收方", value: (item) => item.recipient },
+  { label: "状态", value: (item) => STATUS_LABELS[item.status] ?? item.status },
+  { label: "重试", value: (item) => String(item.retryCount) },
+  { label: "租户", value: (item) => item.tenantName ?? "" },
+  { label: "错误", value: (item) => item.errorMessage ?? "" },
+];
+
+const COLUMNS: readonly DataTableColumn<NotificationLogRecord>[] = [
+  {
+    id: "createdAt",
+    header: "时间",
+    cell: (item) => formatDateTime(item.createdAt),
+  },
+  {
+    id: "channel",
+    header: "渠道",
+    cell: (item) => CHANNEL_LABELS[item.channel] ?? item.channel,
+  },
+  {
+    id: "template",
+    header: "模板",
+    cell: (item) => (
+      <TableTitleCell
+        title={item.templateCode}
+        {...(item.referenceType ? { description: item.referenceType } : {})}
+      />
+    ),
+  },
+  { id: "recipient", header: "接收方", cell: (item) => item.recipient },
+  {
+    id: "status",
+    header: "状态",
+    align: "center",
+    cell: (item) => (
+      <StatusBadge tone={statusTone(item.status)}>
+        {STATUS_LABELS[item.status] ?? item.status}
+        {item.retryCount > 0 ? ` ·${item.retryCount}` : ""}
+      </StatusBadge>
+    ),
+  },
+  { id: "tenant", header: "租户", cell: (item) => item.tenantName ?? "-" },
+];
 
 export function NotificationLogsPage() {
   const { toast } = useToast();
@@ -71,12 +127,13 @@ export function NotificationLogsPage() {
   const [channelFilter, setChannelFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchNotificationLogs()
       .then(setItems)
       .catch((error) =>
-        toast({ tone: "error", title: "加载失败", ...describeError(error) }),
+        toast({ tone: "danger", title: "加载失败", ...describeError(error) }),
       )
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,41 +168,87 @@ export function NotificationLogsPage() {
   ).length;
 
   return (
-    <div className={joinClasses("vx-page-stack", "vx-notification-page")}>
-      <PageHeader
-        icon="bell"
-        title="通知记录"
-        description="平台通知投递台账（只读）。涵盖邮件、短信、站内、Webhook、推送渠道的发送与回执状态，用于投递排障。"
-      />
-      <div className="vx-models-summary">
-        <div className="vx-models-summary__item">
-          <span>投递总数</span>
-          <strong>{items.length}</strong>
-        </div>
-        <div className="vx-models-summary__item">
-          <span>失败 / 退回</span>
-          <strong>{failedCount}</strong>
-        </div>
-      </div>
-      <div className="vx-models-toolbar">
-        <Input
-          className="vx-models-toolbar__search"
-          type="search"
-          placeholder="搜索接收方、模板、业务号、租户…"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
+    <ListPageTemplate
+      className="vx-notification-page"
+      header={
+        <PageHeader
+          icon="bell"
+          title="通知记录"
+          description="平台通知投递台账（只读）。涵盖邮件、短信、站内、Webhook、推送渠道的发送与回执状态，用于投递排障。"
+        />
+      }
+      summary={
+        <MetricGrid
+          loading={loading}
+          aria-label="通知投递统计"
+          columns={2}
+          items={[
+            {
+              id: "total",
+              help: "当前筛选条件下的投递记录条数。",
+              icon: "bell",
+              label: "投递总数",
+              value: String(items.length),
+            },
+            {
+              id: "failed",
+              help: "投递失败与被退回的记录合计。",
+              icon: "warning",
+              label: "失败 / 退回",
+              value: String(failedCount),
+              tone: failedCount ? "danger" : "success",
+            },
+          ]}
+        />
+      }
+      filters={
+        <FilterBar
+          count={`${filtered.length} 条`}
+          aria-label="通知记录筛选"
+          search={
+            <Input
+              type="search"
+              className="vx-tenant-search"
+              placeholder="搜索接收方、模板、业务号、租户…"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+            />
+          }
+          actions={
+            <ActionButton
+              icon="arrow-down"
+              variant={selectedIds.size > 0 ? "default" : "outline"}
+              disabled={selectedIds.size === 0}
+              onClick={() =>
+                exportRowsToCsv(
+                  "notification-logs",
+                  CSV_COLUMNS,
+                  filtered.filter((item) => selectedIds.has(item.id)),
+                )
+              }
+            >
+              导出
+            </ActionButton>
+          }
+          onReset={() => {
+            setSearch("");
+            setChannelFilter("all");
+            setStatusFilter("all");
             setPage(1);
           }}
-        />
-        <div className="vx-models-toolbar__filters">
+        >
           <NativeSelect
-            className="vx-admin-filter-select"
+            wrapperClassName="w-fit"
+            className="vx-tenant-select"
             value={channelFilter}
             onChange={(e) => {
               setChannelFilter(e.target.value);
               setPage(1);
             }}
+            aria-label="投递渠道"
           >
             <option value="all">全部渠道</option>
             {Object.entries(CHANNEL_LABELS).map(([value, label]) => (
@@ -155,12 +258,14 @@ export function NotificationLogsPage() {
             ))}
           </NativeSelect>
           <NativeSelect
-            className="vx-admin-filter-select"
+            wrapperClassName="w-fit"
+            className="vx-tenant-select"
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value);
               setPage(1);
             }}
+            aria-label="投递状态"
           >
             <option value="all">全部状态</option>
             {Object.entries(STATUS_LABELS).map(([value, label]) => (
@@ -169,74 +274,38 @@ export function NotificationLogsPage() {
               </option>
             ))}
           </NativeSelect>
-        </div>
-        <div className="vx-models-toolbar__spacer" />
-        <span className="vx-models-toolbar__count">{filtered.length} 条</span>
-      </div>
-      {loading ? (
-        <EmptyState title="加载中…" />
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          title="暂无通知记录"
-          description={
-            search || channelFilter !== "all" || statusFilter !== "all"
-              ? "尝试调整筛选条件"
-              : "数据库中没有通知投递记录"
+        </FilterBar>
+      }
+      table={
+        <DataTable
+          columns={COLUMNS}
+          rows={pageItems}
+          rowKey={(item) => item.id}
+          loading={loading}
+          indexStart={(page - 1) * PAGE_SIZE + 1}
+          selectedKeys={[...selectedIds]}
+          onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
+          empty={
+            <EmptyState
+              title="暂无通知记录"
+              description={
+                search || channelFilter !== "all" || statusFilter !== "all"
+                  ? "尝试调整筛选条件"
+                  : "数据库中没有通知投递记录"
+              }
+            />
+          }
+          footer={
+            pageCount > 1 ? (
+              <Pagination
+                page={page}
+                pageCount={pageCount}
+                onPageChange={setPage}
+              />
+            ) : null
           }
         />
-      ) : (
-        <>
-          <div
-            className="vx-tenant-directory-list vx-notification-directory-list"
-            role="region"
-            aria-label="通知记录列表"
-          >
-            <div className="vx-tenant-directory-list__header">
-              <span>序号</span>
-              <span>时间</span>
-              <span>渠道</span>
-              <span>模板</span>
-              <span>接收方</span>
-              <span>状态</span>
-              <span>租户</span>
-            </div>
-            {pageItems.map((item, index) => (
-              <div
-                key={item.id}
-                className="vx-tenant-directory-row vx-notification-row"
-                title={item.errorMessage ?? undefined}
-              >
-                <span className="vx-tenant-directory-row__index">
-                  {(page - 1) * PAGE_SIZE + index + 1}
-                </span>
-                <span>{formatDateTime(item.createdAt)}</span>
-                <span>{CHANNEL_LABELS[item.channel] ?? item.channel}</span>
-                <span className="vx-config-row__key">
-                  {item.templateCode}
-                  {item.referenceType ? (
-                    <small>{item.referenceType}</small>
-                  ) : null}
-                </span>
-                <span className="vx-config-row__value">{item.recipient}</span>
-                <span>
-                  <Badge className={statusBadgeClass(item.status)}>
-                    {STATUS_LABELS[item.status] ?? item.status}
-                    {item.retryCount > 0 ? ` ·${item.retryCount}` : ""}
-                  </Badge>
-                </span>
-                <span>{item.tenantName ?? "-"}</span>
-              </div>
-            ))}
-          </div>
-          {pageCount > 1 ? (
-            <Pagination
-              page={page}
-              pageCount={pageCount}
-              onPageChange={setPage}
-            />
-          ) : null}
-        </>
-      )}
-    </div>
+      }
+    />
   );
 }

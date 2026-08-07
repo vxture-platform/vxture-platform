@@ -1,8 +1,15 @@
-@import "./tailwind.css";
-@import "./tokens.css";
-@import "./typography.css";
+@import "@vxture/design-tokens/styles/tailwind.css";
+@import "@vxture/design-tokens/styles/tokens.css";
+
+/* Tailwind v4 的自动内容探测**排除 node_modules**，而工作区包是软链进去的。
+ * 不显式声明来源，DS 组件内部用的每一个工具类（bg-primary / h-control-lg /
+ * shadow-raised）都不会被生成——变量注册成功、规则不产出、且不报错，页面渲染
+ * 成一片灰。消费方自己文件里写的同名类照常生成，所以这个缺失极难从现象倒推。
+ *
+ * 路径相对本文件。两个包都要声明：组件在 design-ui，shell 与 auth 在本包。 */
+@source "../../../design-ui/src";
+@source "../components";
 @import "./brand.css";
-@import "./components.css";
 @import "./platform.css";
 @import "./auth.css";
 @import "./fullscreen.css";

@@ -731,7 +731,9 @@ function mapPromotionRedemptionRow(
 ): PromotionRedemptionRecord {
   return {
     id: row.id,
-    redemptionNo: row.id,
+    // 取真列。此前是拿 `row.id` 冒充的，于是核销台账主列摆着一张 UUID——
+    // UUID 只走内部，对外一律 *_no（DDL 56 表头，2026-08-07 补列）。
+    redemptionNo: row.redemption_no,
     promotionCode: row.voucher_code,
     promotionName: row.batch_name,
     tenantId: row.tenant_id,
@@ -759,6 +761,7 @@ function mapPromotionRedemptionRow(
 const PROMOTION_REDEMPTIONS_SQL = `
 select
   rd.id,
+  rd.redemption_no,
   v.code                           as voucher_code,
   b.name                           as batch_name,
   rd.tenant_id,
@@ -789,6 +792,7 @@ limit 500
 
 interface PromotionRedemptionRow {
   id: string;
+  redemption_no: string;
   voucher_code: string;
   batch_name: string;
   tenant_id: string;
@@ -816,10 +820,12 @@ function buildOverviewSnapshot(
 ): CommerceOverviewSnapshot {
   const activeSubscriptions = toNumber(kpi?.active_subscriptions ?? 0);
   const paidTotal = toNumber(kpi?.paid_total ?? 0);
+  const paidCount = toNumber(kpi?.paid_count ?? 0);
   const outstandingAmount = toNumber(kpi?.outstanding_amount ?? 0);
   const outstandingCount = toNumber(kpi?.outstanding_count ?? 0);
   const overdueCount = toNumber(kpi?.overdue_count ?? 0);
   const rechargeVolume = toNumber(kpi?.recharge_volume ?? 0);
+  const rechargeCount = toNumber(kpi?.recharge_count ?? 0);
   const redemptionCount = toNumber(kpi?.redemption_count ?? 0);
 
   const metrics: CommerceOverviewMetric[] = [
@@ -833,7 +839,7 @@ function buildOverviewSnapshot(
     {
       key: "paid_total",
       label: "累计实收",
-      value: paidTotal,
+      value: paidCount,
       amount: paidTotal,
       currency: "CNY",
       tone: "green",
@@ -851,7 +857,7 @@ function buildOverviewSnapshot(
     {
       key: "recharge_volume",
       label: "充值流水",
-      value: rechargeVolume,
+      value: rechargeCount,
       amount: rechargeVolume,
       currency: "CNY",
       tone: "blue",
@@ -919,6 +925,9 @@ select
   (select coalesce(sum(paid_amount), 0)
      from billing.payments
     where pay_status = 'paid') as paid_total,
+  (select count(*)
+     from billing.payments
+    where pay_status = 'paid') as paid_count,
   (select coalesce(sum(payable_amount - coalesce(paid_amount, 0)), 0)
      from billing.invoices
     where bill_status in ('unpaid', 'partial', 'overdue')
@@ -934,16 +943,21 @@ select
      from billing.transactions
     where trade_type = 'recharge' and trade_status = 'success') as recharge_volume,
   (select count(*)
+     from billing.transactions
+    where trade_type = 'recharge' and trade_status = 'success') as recharge_count,
+  (select count(*)
      from promotion.voucher_redemptions) as redemption_count
 `;
 
 interface OverviewKpiRow {
   active_subscriptions: string | number | null;
   paid_total: string | number | null;
+  paid_count: string | number | null;
   outstanding_amount: string | number | null;
   outstanding_count: string | number | null;
   overdue_count: string | number | null;
   recharge_volume: string | number | null;
+  recharge_count: string | number | null;
   redemption_count: string | number | null;
 }
 

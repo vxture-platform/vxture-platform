@@ -2,7 +2,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
   flex: 1 1 auto;
   overflow-x: auto;
   padding: 0;
@@ -23,7 +23,7 @@
 
 .vx-tenant-tab-grid {
   display: grid;
-  gap: var(--vx-admin-management-space-15r);
+  gap: var(--space-lg);
 }
 
 .vx-tenant-tab-grid--two {
@@ -40,8 +40,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--vx-admin-management-space-05r);
-  padding: 0 var(--vx-admin-management-space-0375r);
+  gap: var(--space-xs);
+  padding: 0 var(--space-2xs);
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -59,9 +59,9 @@
 
 .vx-tenant-tabs button.is-active::after {
   position: absolute;
-  right: var(--vx-admin-management-space-025r);
+  right: var(--space-2xs);
   bottom: 0;
-  left: var(--vx-admin-management-space-025r);
+  left: var(--space-2xs);
   height: var(--vx-admin-management-size-2p);
   border-radius: var(--vx-radius-full);
   background: var(--tenant-blue);

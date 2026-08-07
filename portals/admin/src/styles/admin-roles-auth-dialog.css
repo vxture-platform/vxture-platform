@@ -7,12 +7,12 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--vx-admin-roles-space-075r);
+  gap: var(--space-sm);
 }
 
 .vx-admin-role-auth-dialog__error {
   margin: 0;
-  padding: var(--vx-admin-roles-space-0625r) var(--vx-admin-roles-space-075r);
+  padding: var(--space-sm) var(--space-sm);
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-danger) 8%, transparent);
   color: var(--vx-color-danger-700);
@@ -43,9 +43,9 @@
   display: grid;
   grid-template-columns: var(--vx-admin-roles-track-15r) minmax(0, 1fr);
   align-items: center;
-  gap: var(--vx-admin-roles-space-0625r);
-  padding: var(--vx-admin-roles-space-0625r) var(--vx-admin-roles-space-075r);
-  padding-left: calc(var(--vx-admin-roles-space-075r) + var(--permission-depth, 0) * var(--vx-admin-roles-space-125r));
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-sm);
+  padding-left: calc(var(--space-sm) + var(--permission-depth, 0) * var(--space-md));
   border-bottom: var(--vx-admin-roles-line-width-1p) solid color-mix(in srgb, var(--vx-color-gray-500) 8%, transparent);
   cursor: pointer;
 }
@@ -57,7 +57,7 @@
 .vx-admin-role-auth-node__main {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-roles-space-025r);
+  gap: var(--space-2xs);
   justify-items: start;
   text-align: left;
 }
@@ -81,7 +81,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: var(--vx-admin-roles-space-0375r);
+  gap: var(--space-2xs);
   flex-wrap: wrap;
 }
 
@@ -95,5 +95,5 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--vx-admin-roles-space-075r);
+  gap: var(--space-sm);
 }

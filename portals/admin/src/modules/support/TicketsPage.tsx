@@ -4,20 +4,25 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Icon,
   ActionMenu,
   Badge,
   Button,
-  Checkbox,
-  DetailDrawer,
+  DataTable,
+  DetailList,
+  DetailRow,
   DialogForm,
+  Drawer,
+  EmptyState,
   Input,
   Label,
+  ListPageTemplate,
+  MetricGrid,
   NativeSelect,
+  StatusBadge,
+  TableTitleCell,
   Textarea,
-  EmptyState,
 } from "@vxture/design-system";
-import type { IconName } from "@vxture/design-system";
+import type { DataTableColumn, IconName } from "@vxture/design-system";
 import {
   AdminBffError,
   addTicketComment,
@@ -34,6 +39,10 @@ import type {
   TicketCommentRecord,
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
+import {
+  TICKET_PRIORITY_TONE,
+  TICKET_STATUS_TONE,
+} from "@/modules/shared/tenant-tone";
 import {
   formatNumber,
   ticketStatusLabel,
@@ -123,13 +132,6 @@ function ticketStatusIcon(status: TenantOperationTicket["status"]): IconName {
   return "check";
 }
 
-function ticketTone(ticket: TenantOperationTicket) {
-  if (ticket.priority === "p0" || ticket.status === "blocked") return "danger";
-  if (ticket.priority === "p1" || ticket.status === "open") return "warning";
-  if (ticket.status === "closed") return "muted";
-  return "normal";
-}
-
 function ticketSearchText(ticket: SupportTicketRecord) {
   return [
     ticket.id,
@@ -144,35 +146,6 @@ function ticketSearchText(ticket: SupportTicketRecord) {
   ]
     .join(" ")
     .toLowerCase();
-}
-
-function SummaryItem({
-  icon,
-  label,
-  value,
-  tags,
-  tone = "blue",
-}: {
-  icon: IconName;
-  label: string;
-  value: string;
-  tags: string[];
-  tone?: "blue" | "green" | "amber" | "rose";
-}) {
-  return (
-    <article className={`vx-tenant-summary__item vx-tenant-tone--${tone}`}>
-      <Icon name={icon} size="lg" fallback="placeholder" />
-      <div>
-        <span>{label}</span>
-        <strong>{value}</strong>
-        <p>
-          {tags.map((tag) => (
-            <em key={tag}>{tag}</em>
-          ))}
-        </p>
-      </div>
-    </article>
-  );
 }
 
 function TicketActionsMenu({
@@ -191,26 +164,24 @@ function TicketActionsMenu({
     >
       <ActionMenu
         label={`${ticket.title} 工单操作`}
-        triggerClassName="vx-tenant-actions__trigger"
-        triggerProps={{ title: "操作" }}
         items={[
           {
             id: "detail",
             label: "工单详情",
-            icon: <Icon name="chat-circle" size="xs" fallback="placeholder" />,
+            icon: "chat-circle",
             onSelect: () => onOpenDetail(ticket),
           },
           {
             id: "tenant",
             label: "查看租户",
-            icon: <Icon name="buildings" size="xs" fallback="placeholder" />,
+            icon: "buildings",
             onSelect: () =>
               router.push(`/tenants/${encodeURIComponent(ticket.tenantId)}`),
           },
           {
             id: "ops-todos",
-            label: "运营待办",
-            icon: <Icon name="table" size="xs" fallback="placeholder" />,
+            label: "待办任务",
+            icon: "table",
             onSelect: () => router.push("/ops-todos"),
           },
         ]}
@@ -219,107 +190,94 @@ function TicketActionsMenu({
   );
 }
 
-function TicketRow({
-  ticket,
-  index,
-  selected,
-  onToggleSelected,
-  onOpenDetail,
-}: {
-  ticket: SupportTicketRecord;
-  index: number;
-  selected: boolean;
-  onToggleSelected: (checked: boolean) => void;
-  onOpenDetail: (ticket: SupportTicketRecord) => void;
-}) {
-  const tone = ticketTone(ticket);
+/** 工单号只在租户内唯一，行 key 必须带上租户。 */
+function ticketKey(ticket: SupportTicketRecord) {
+  return `${ticket.tenantId}-${ticket.id}`;
+}
+
+/**
+ * 三枚标是三件不同的事，各自取色，不共用一个 `ticketTone()`。
+ *
+ * 原先它们全走 `vx-commercial-pill--*`，而那族色调**一个都没生效**——实测三种
+ * 状态计算出来是同一个蓝灰（2026-08-06 登录态走查）。两条独立的原因叠在一起：
+ *
+ * 1. **文字色**：`Badge variant="outline"` 带 `text-foreground`，Tailwind 的
+ *    utilities 层压过 admin CSS 的 `layer(components)`，于是**每一枚 pill 的
+ *    文字色都失效**，无论哪个修饰符都是近黑。
+ * 2. **背景色**：outline 不设背景，背景归 pill CSS 管；但基类 `.vx-tenant-pill`
+ *    自带背景，且在 `globals.css` 里排第 34 行，而本族色调随
+ *    `admin-management.css` 在第 32 行——**同层同特异度，后写的赢**，基类把它
+ *    前面定义的所有修饰符背景压死。排在基类之后的族（admin-roles 等）反而正常。
+ *
+ * 这类"看着还活着的死类"搜不出来：类名有引用、文件有导入、选择器也匹配得上，
+ * 只有量计算样式才知道它被压掉了。判死码不能只看引用（同 §十三 的模板拼接那条）。
+ */
+function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
   const router = useRouter();
 
-  return (
-    <div
-      className={`vx-tenant-directory-row vx-ticket-row vx-ticket-operation-row vx-commercial-row--${tone} ${selected ? "vx-ticket-operation-row--selected" : ""}`}
-      onClick={(event) => {
-        const target = event.target as HTMLElement;
-        if (
-          target.closest(
-            'button, input, select, textarea, a, [role="button"], [role="menu"], [role="menuitem"]',
-          )
-        )
-          return;
-        onToggleSelected(!selected);
-      }}
-    >
-      <span className="vx-ticket-operation-row__select">
-        <Checkbox
-          className="vx-model-select-checkbox"
-          checked={selected}
-          onCheckedChange={(value) => onToggleSelected(value === true)}
-          aria-label={`选择工单 ${ticket.id}`}
-        />
-      </span>
-      <span className="vx-tenant-directory-row__index">
-        {String(index + 1).padStart(2, "0")}
-      </span>
-      <span className="vx-commercial-row__main">
-        <Button
-          variant="link"
-          className="vx-model-name-button"
-          onClick={() =>
+  return [
+    {
+      id: "ticket",
+      header: "工单",
+      cell: (ticket) => (
+        <TableTitleCell
+          title={ticket.title}
+          description={`${ticket.id} / ${ticket.ownerName}`}
+          onTitleClick={() =>
             router.push(`/tenants/${encodeURIComponent(ticket.tenantId)}`)
           }
-        >
-          {ticket.title}
-        </Button>
-        <small>
-          {ticket.id} / {ticket.ownerName}
-        </small>
-      </span>
-      <span className="vx-commercial-row__tenant">
-        <Icon
-          name={ticket.tenantType === "company" ? "buildings" : "user"}
-          size="sm"
-          fallback="placeholder"
         />
-        <span>
-          <strong>{ticket.tenantName}</strong>
-          <small>
-            {ticket.tenantCode} / {typeLabel(ticket.tenantType)}
-          </small>
-        </span>
-      </span>
-      <span className="vx-commercial-status-line">
-        <span
-          className={`vx-commercial-status-dot vx-commercial-status-dot--${tone === "danger" ? "danger" : tone === "warning" ? "warning" : tone === "muted" ? "muted" : "normal"}`}
-        >
-          <Icon
-            name={ticketStatusIcon(ticket.status)}
-            size="xs"
-            fallback="placeholder"
-          />
-        </span>
-        <Badge
-          className={`vx-tenant-pill vx-commercial-pill vx-commercial-pill--${tone}`}
+      ),
+    },
+    {
+      id: "tenant",
+      header: "租户",
+      cell: (ticket) => (
+        <TableTitleCell
+          icon={ticket.tenantType === "company" ? "buildings" : "user"}
+          title={ticket.tenantName}
+          description={`${ticket.tenantCode} / ${typeLabel(ticket.tenantType)}`}
+        />
+      ),
+    },
+    {
+      id: "status",
+      header: "状态",
+      align: "center",
+      cell: (ticket) => (
+        <StatusBadge
+          tone={TICKET_STATUS_TONE[ticket.status]}
+          icon={ticketStatusIcon(ticket.status)}
         >
           {ticketStatusLabel(ticket.status)}
-        </Badge>
-      </span>
-      <span className="vx-tenant-directory-row__tag-line">
-        <Badge
-          className={`vx-tenant-pill vx-commercial-pill vx-commercial-pill--${tone}`}
-        >
-          {priorityLabels[ticket.priority]}
-        </Badge>
-        <Badge className="vx-tenant-pill vx-commercial-pill vx-commercial-pill--muted">
-          {ticket.industry}
-        </Badge>
-      </span>
-      <span>
-        <strong>{formatDateTime(ticket.updatedAt)}</strong>
-        <small>{ticket.region}</small>
-      </span>
-      <TicketActionsMenu ticket={ticket} onOpenDetail={onOpenDetail} />
-    </div>
-  );
+        </StatusBadge>
+      ),
+    },
+    {
+      id: "tags",
+      header: "标签",
+      align: "center",
+      cell: (ticket) => (
+        <span className="inline-flex flex-wrap justify-center gap-2xs">
+          <StatusBadge tone={TICKET_PRIORITY_TONE[ticket.priority]}>
+            {priorityLabels[ticket.priority]}
+          </StatusBadge>
+          {/* 行业是类目，没有严重度，用朴素 Badge——理由同 publish-tone.ts 文件尾。 */}
+          <Badge variant="outline">{ticket.industry}</Badge>
+        </span>
+      ),
+    },
+    {
+      id: "updated",
+      header: "更新时间",
+      cell: (ticket) => (
+        <TableTitleCell
+          title={formatDateTime(ticket.updatedAt)}
+          description={ticket.region}
+        />
+      ),
+    },
+  ];
 }
 
 function TicketAssignDialog({
@@ -578,12 +536,20 @@ function TicketDetailDrawer({
     : undefined;
 
   return (
-    <DetailDrawer
-      title={title}
-      {...(fields ? { fields } : {})}
-      onClose={onClose}
-      closeLabel="关闭工单详情"
-    >
+    /* DS 的 `DetailDrawer` 在分类重构里被拆成两件：容器归 `Drawer`（自带遮罩、
+     * 关闭按钮、焦点管理），字段表归 `DetailList`/`DetailRow`。原先那件把两者
+     * 焊死，字段只能走 `fields` 数组、值只能是纯文本；拆开后字段值可以是
+     * 「文本 + StatusBadge」这类就地拼的表达式。 */
+    <Drawer open onClose={onClose} title={title}>
+      {fields ? (
+        <DetailList>
+          {fields.map((field) => (
+            <DetailRow key={field.label} label={field.label}>
+              {field.value}
+            </DetailRow>
+          ))}
+        </DetailList>
+      ) : null}
       {loading ? (
         <EmptyState
           title="正在加载工单详情"
@@ -596,14 +562,14 @@ function TicketDetailDrawer({
           <div className="grid gap-2">
             <Button
               variant="outline"
-              size="sm"
+              size="md"
               onClick={() => setAssignOpen(true)}
             >
               指派
             </Button>
             <Button
               variant="outline"
-              size="sm"
+              size="md"
               onClick={() => setStatusOpen(true)}
             >
               改状态
@@ -650,7 +616,7 @@ function TicketDetailDrawer({
             <div>
               <Button
                 type="submit"
-                size="sm"
+                size="md"
                 disabled={replySubmitting || replyBody.trim().length === 0}
               >
                 {replySubmitting ? "处理中..." : "回复"}
@@ -680,7 +646,7 @@ function TicketDetailDrawer({
           }}
         />
       ) : null}
-    </DetailDrawer>
+    </Drawer>
   );
 }
 
@@ -755,41 +721,13 @@ export function TicketsPage() {
   );
   const affectedTenants = new Set(openTickets.map((ticket) => ticket.tenantId))
     .size;
-  const visibleTicketIds = useMemo(
-    () => visibleTickets.map((ticket) => `${ticket.tenantId}-${ticket.id}`),
-    [visibleTickets],
-  );
-  const selectedVisibleTicketCount = visibleTicketIds.filter((id) =>
-    selectedTicketIds.has(id),
-  ).length;
-  const isTicketPageSelected =
-    visibleTicketIds.length > 0 &&
-    selectedVisibleTicketCount === visibleTicketIds.length;
+
+  const ticketColumns = useTicketColumns();
 
   function resetFilters() {
     setQuery("");
     setStatus("all");
     setPriority("all");
-  }
-
-  function toggleTicketSelection(id: string, checked: boolean) {
-    setSelectedTicketIds((current) => {
-      const next = new Set(current);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }
-
-  function toggleTicketPageSelection(checked: boolean) {
-    setSelectedTicketIds((current) => {
-      const next = new Set(current);
-      visibleTicketIds.forEach((id) => {
-        if (checked) next.add(id);
-        else next.delete(id);
-      });
-      return next;
-    });
   }
 
   function applyTicketUpdate(updated: SupportTicketRecord) {
@@ -839,189 +777,176 @@ export function TicketsPage() {
   }
 
   return (
-    <div className="vx-page-stack vx-tenant-management-page vx-tickets-page">
-      <PageHeader
-        icon="chat-circle"
-        eyebrow="客户服务"
-        title="工单中心"
-        description="聚合租户侧待处理工单，按优先级、阻塞状态和更新时间推进支持闭环。"
-        secondary={<Badge>只读聚合</Badge>}
-      />
-
-      <section className="vx-tenant-summary" aria-label="工单统计">
-        <SummaryItem
-          icon="chat-circle"
-          label="未关闭工单"
-          value={formatNumber(openTickets.length)}
-          tags={[`影响租户 ${formatNumber(affectedTenants)}`]}
-          tone={openTickets.length ? "amber" : "green"}
-        />
-        <SummaryItem
-          icon="warning"
-          label="P0/P1 工单"
-          value={formatNumber(urgentTickets.length)}
-          tags={["优先处理"]}
-          tone={urgentTickets.length ? "rose" : "green"}
-        />
-        <SummaryItem
-          icon="clock"
-          label="阻塞中"
-          value={formatNumber(blockedTickets.length)}
-          tags={["需要协同"]}
-          tone={blockedTickets.length ? "rose" : "green"}
-        />
-        <SummaryItem
-          icon="table"
-          label="工单总数"
-          value={formatNumber(tickets.length)}
-          tags={["来自工单数据库"]}
-        />
-      </section>
-
-      <section className="vx-tenant-toolbar" aria-label="工单筛选">
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="搜索工单、租户、行业、负责人"
-          className="vx-tenant-search vx-commercial-search"
-          aria-label="搜索工单"
-        />
-        <div className="vx-tenant-toolbar__spacer" aria-hidden="true" />
-        <label aria-label="状态筛选">
-          <NativeSelect
-            value={status}
-            onChange={(event) =>
-              setStatus(event.target.value as TicketStatusFilter)
-            }
-          >
-            <option value="all">全部状态</option>
-            <option value="open">待处理</option>
-            <option value="processing">处理中</option>
-            <option value="blocked">搁置</option>
-            <option value="closed">完成</option>
-          </NativeSelect>
-        </label>
-        <label aria-label="优先级筛选">
-          <NativeSelect
-            value={priority}
-            onChange={(event) =>
-              setPriority(event.target.value as TicketPriorityFilter)
-            }
-          >
-            <option value="all">全部优先级</option>
-            <option value="p0">P0</option>
-            <option value="p1">P1</option>
-            <option value="p2">P2</option>
-            <option value="p3">P3</option>
-          </NativeSelect>
-        </label>
-        <Button variant="outline" size="sm" onClick={resetFilters}>
-          重置
-        </Button>
-      </section>
-
-      <section
-        className="vx-tenant-directory vx-ticket-directory"
-        aria-label="工单列表"
-      >
-        <header className="vx-tenant-directory__header">
-          <strong>工单队列</strong>
-          <span>{formatNumber(visibleTickets.length)} 条匹配</span>
-        </header>
-        {selectedTickets.length ? (
-          <div className="vx-tenant-toolbar" aria-label="工单批量操作">
-            <span>已选 {formatNumber(selectedTickets.length)} 条</span>
+    <>
+      <ListPageTemplate
+        className="vx-tenant-management-page vx-tickets-page"
+        header={
+          <PageHeader
+            icon="chat-circle"
+            eyebrow="客户服务"
+            title="工单中心"
+            description="聚合租户侧待处理工单，按优先级、阻塞状态和更新时间推进支持闭环。"
+            secondary={<Badge>只读聚合</Badge>}
+          />
+        }
+        summary={
+          <MetricGrid
+            loading={isLoading}
+            aria-label="工单统计"
+            items={[
+              {
+                id: "open",
+                help: "状态不为已关闭的工单。",
+                icon: "chat-circle",
+                label: "未关闭工单",
+                value: formatNumber(openTickets.length),
+                tags: [`影响租户 ${formatNumber(affectedTenants)}`],
+                tone: openTickets.length ? "warning" : "success",
+              },
+              {
+                id: "urgent",
+                help: "优先级为 P0 或 P1 的工单。",
+                icon: "warning",
+                label: "P0/P1 工单",
+                value: formatNumber(urgentTickets.length),
+                tags: ["优先处理"],
+                tone: urgentTickets.length ? "danger" : "success",
+              },
+              {
+                id: "blocked",
+                help: "状态为阻塞中、等待外部条件的工单。",
+                icon: "clock",
+                label: "阻塞中",
+                value: formatNumber(blockedTickets.length),
+                tags: ["需要协同"],
+                tone: blockedTickets.length ? "danger" : "success",
+              },
+              {
+                id: "total",
+                help: "当前筛选条件下的工单条数。",
+                icon: "table",
+                label: "工单总数",
+                value: formatNumber(tickets.length),
+                tags: ["来自工单数据库"],
+              },
+            ]}
+          />
+        }
+        filters={
+          <section className="vx-tenant-toolbar" aria-label="工单筛选">
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="搜索工单、租户、行业、负责人"
+              className="vx-tenant-search vx-commercial-search"
+              aria-label="搜索工单"
+            />
             <div className="vx-tenant-toolbar__spacer" aria-hidden="true" />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setBatchError(null);
-                setBatchStatusOpen(true);
-              }}
-            >
-              批量改状态
+            <label aria-label="状态筛选">
+              <NativeSelect
+                value={status}
+                onChange={(event) =>
+                  setStatus(event.target.value as TicketStatusFilter)
+                }
+              >
+                <option value="all">全部状态</option>
+                <option value="open">待处理</option>
+                <option value="processing">处理中</option>
+                <option value="blocked">搁置</option>
+                <option value="closed">完成</option>
+              </NativeSelect>
+            </label>
+            <label aria-label="优先级筛选">
+              <NativeSelect
+                value={priority}
+                onChange={(event) =>
+                  setPriority(event.target.value as TicketPriorityFilter)
+                }
+              >
+                <option value="all">全部优先级</option>
+                <option value="p0">P0</option>
+                <option value="p1">P1</option>
+                <option value="p2">P2</option>
+                <option value="p3">P3</option>
+              </NativeSelect>
+            </label>
+            <Button variant="outline" size="md" onClick={resetFilters}>
+              重置
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSelectedTicketIds(new Set())}
-            >
-              清空选择
-            </Button>
-          </div>
-        ) : null}
-        {isLoading ? (
-          <div className="vx-service-health-empty">
-            <EmptyState
-              title="正在加载工单"
-              description="正在从工单数据库读取数据。"
-            />
-          </div>
-        ) : loadError ? (
-          <div className="vx-service-health-empty">
-            <EmptyState title="工单数据读取失败" description={loadError} />
-          </div>
-        ) : visibleTickets.length ? (
-          <div className="vx-tenant-directory-list vx-ticket-directory-list">
-            <div className="vx-tenant-directory-list__header">
-              <span>
-                <Checkbox
-                  className="vx-model-select-checkbox"
-                  checked={
-                    isTicketPageSelected
-                      ? true
-                      : selectedVisibleTicketCount > 0
-                        ? "indeterminate"
-                        : false
-                  }
-                  onCheckedChange={(value) =>
-                    toggleTicketPageSelection(value === true)
-                  }
-                  aria-label="选择当前页工单"
-                />
-              </span>
-              <span>#</span>
-              <span>工单</span>
-              <span>租户</span>
-              <span>状态</span>
-              <span>标签</span>
-              <span>更新时间</span>
-              <span>操作</span>
-            </div>
-            {visibleTickets.map((ticket, index) => {
-              const ticketKey = `${ticket.tenantId}-${ticket.id}`;
-
-              return (
-                <TicketRow
-                  key={ticketKey}
-                  ticket={ticket}
-                  index={index}
-                  selected={selectedTicketIds.has(ticketKey)}
-                  onToggleSelected={(checked) =>
-                    toggleTicketSelection(ticketKey, checked)
-                  }
-                  onOpenDetail={(selectedTicket) =>
-                    setDetailTicketId(selectedTicket.id)
-                  }
-                />
-              );
-            })}
-          </div>
-        ) : (
-          <div className="vx-service-health-empty">
-            <EmptyState
-              title="没有匹配的工单"
-              description="调整筛选条件，或重置后查看全部工单。"
-              action={
-                <Button variant="outline" onClick={resetFilters}>
-                  重置
+          </section>
+        }
+        table={
+          <section
+            className="vx-tenant-directory vx-ticket-directory"
+            aria-label="工单列表"
+          >
+            <header className="vx-tenant-directory__header">
+              <strong>工单队列</strong>
+              <span>{formatNumber(visibleTickets.length)} 条匹配</span>
+            </header>
+            {selectedTickets.length ? (
+              <div className="vx-tenant-toolbar" aria-label="工单批量操作">
+                <span>已选 {formatNumber(selectedTickets.length)} 条</span>
+                <div className="vx-tenant-toolbar__spacer" aria-hidden="true" />
+                <Button
+                  variant="outline"
+                  size="md"
+                  onClick={() => {
+                    setBatchError(null);
+                    setBatchStatusOpen(true);
+                  }}
+                >
+                  批量改状态
                 </Button>
-              }
-            />
-          </div>
-        )}
-      </section>
+                <Button
+                  variant="ghost"
+                  size="md"
+                  onClick={() => setSelectedTicketIds(new Set())}
+                >
+                  清空选择
+                </Button>
+              </div>
+            ) : null}
+            {/* 读取失败是第三态，DataTable 只认加载/空/有数据，故留在外层。 */}
+            {loadError ? (
+              <div className="vx-service-health-empty">
+                <EmptyState title="工单数据读取失败" description={loadError} />
+              </div>
+            ) : (
+              <DataTable
+                columns={ticketColumns}
+                rows={visibleTickets}
+                rowKey={ticketKey}
+                loading={isLoading}
+                indexStart={1}
+                selectedKeys={[...selectedTicketIds]}
+                onSelectionChange={(keys) =>
+                  setSelectedTicketIds(new Set(keys))
+                }
+                rowActions={(ticket) => (
+                  <TicketActionsMenu
+                    ticket={ticket}
+                    onOpenDetail={(selectedTicket) =>
+                      setDetailTicketId(selectedTicket.id)
+                    }
+                  />
+                )}
+                empty={
+                  <EmptyState
+                    title="没有匹配的工单"
+                    description="调整筛选条件，或重置后查看全部工单。"
+                    action={
+                      <Button variant="outline" onClick={resetFilters}>
+                        重置
+                      </Button>
+                    }
+                  />
+                }
+              />
+            )}
+          </section>
+        }
+      />
 
       {detailTicketId ? (
         <TicketDetailDrawer
@@ -1067,6 +992,6 @@ export function TicketsPage() {
           ) : null}
         </DialogForm>
       ) : null}
-    </div>
+    </>
   );
 }

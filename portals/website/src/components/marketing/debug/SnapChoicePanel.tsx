@@ -62,7 +62,7 @@ export interface SnapChoicePanelProps {
 const DEFAULT_POSITION = {
   top: "80px",
   left: "20px",
-  zIndex: "var(--vx-z-toast)",
+  zIndex: "var(--z-index-toast)",
 };
 /** 默认可见性 */
 const DEFAULT_VISIBLE = true;
@@ -210,7 +210,7 @@ export default function SnapChoicePanel(
           <Button
             key={id}
             variant={isActive ? "default" : "secondary"}
-            size="sm"
+            size="md"
             onClick={() => handleButtonClick(id)}
             className={`min-w-20 px-2 py-2 rounded transition text-left ${
               isActive

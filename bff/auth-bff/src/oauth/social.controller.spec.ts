@@ -52,7 +52,7 @@ function fakeRes(): Response {
 const LOGIN_COMPLETION = {
   sid: "sid-123",
   realm: "customer",
-  sessionIdleTtl: 3600,
+  sessionMaxAge: 3600,
   redirectTo: "https://rp.example.com/callback?code=abc",
 };
 

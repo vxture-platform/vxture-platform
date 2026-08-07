@@ -9,16 +9,32 @@ import {
   type FormEvent,
 } from "react";
 import {
-  Icon,
+  Banner,
   Button,
+  DataTable,
+  DetailList,
+  DetailRow,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  EmptyState,
+  Field,
+  FieldGroup,
+  FieldLabel,
+  Icon,
   Input,
-  Label,
   NativeSelect,
+  StatusBadge,
   Textarea,
   UserAvatar,
-  ActionButton,
-  PageHeader,
+  ViewHeader,
+  ViewLayout,
 } from "@vxture/design-system";
+import { ConnectedRow, IdentityCard } from "@/components/detail";
+import { PageSection } from "@/layout/shell";
 import {
   ConsoleBffError,
   changeUserPassword,
@@ -90,6 +106,14 @@ const PROVIDER_LOGO_SRC: Record<ConnectedAccountProvider, string> = {
   dingtalk: "/brand/dingtalk-logo-icon.svg",
   wechat: "/brand/wechat_logo_icon.svg",
 };
+
+/**
+ * Record lists (connected accounts / workspaces) own the dashed dividers between
+ * their rows, the same way `DetailList` does for its field rows — `ConnectedRow`
+ * only draws itself so the last row never carries a stray bottom rule.
+ */
+const CONNECTED_LIST_CLASS =
+  "flex flex-col [&>*+*]:border-t [&>*+*]:border-dashed [&>*+*]:border-primary/10 dark:[&>*+*]:border-primary/20";
 
 function normalizeOptional(value: string) {
   const normalized = value.trim();
@@ -312,14 +336,19 @@ export function ProfilePage() {
 
   useEffect(() => {
     if (!profile?.id) return;
-    void Promise.all([
+    /* allSettled, not all: fetchLoginHistory now throws on failure (it is
+     * strict so the security screen can tell an outage from "no sessions"),
+     * and with Promise.all a single failing read would blank the identities
+     * and workspaces sections too — and reject unhandled. Each section falls
+     * back independently instead. */
+    void Promise.allSettled([
       fetchUserIdentities(),
       fetchLoginHistory(),
       fetchMyWorkspaces(),
     ]).then(([ids, history, ws]) => {
-      setIdentities(ids);
-      setLoginHistory(history);
-      setWorkspaces(ws);
+      if (ids.status === "fulfilled") setIdentities(ids.value);
+      if (history.status === "fulfilled") setLoginHistory(history.value);
+      if (ws.status === "fulfilled") setWorkspaces(ws.value);
     });
   }, [profile?.id]);
 
@@ -837,27 +866,25 @@ export function ProfilePage() {
     ];
     const activeIdx = phoneChangeStep === "step1" ? 0 : 1;
     return (
-      <div className="vx-phone-change-steps">
+      <div className="flex flex-wrap items-center gap-xs">
         {steps.map((label, i) => {
           const isActive = i === activeIdx;
           const isDone = i < activeIdx;
           return (
             <Fragment key={label}>
-              {i > 0 && <span className="vx-phone-change-steps__connector" />}
+              {i > 0 && <span className="h-px w-media-xs bg-border" />}
               <span
                 className={
-                  isDone
-                    ? "vx-phone-change-steps__dot vx-phone-change-steps__dot--done"
-                    : isActive
-                      ? "vx-phone-change-steps__dot vx-phone-change-steps__dot--active"
-                      : "vx-phone-change-steps__dot"
+                  isDone || isActive
+                    ? "size-2xs rounded-full bg-primary"
+                    : "size-2xs rounded-full bg-border"
                 }
               />
               <span
                 className={
                   isActive
-                    ? "vx-phone-change-steps__label vx-phone-change-steps__label--active"
-                    : "vx-phone-change-steps__label"
+                    ? "text-label-sm text-foreground"
+                    : "text-label-sm text-muted-foreground"
                 }
               >
                 {label}
@@ -870,23 +897,18 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="vx-page-stack vx-profile-page vx-account-profile-page">
-      <PageHeader
-        eyebrow={t("header.eyebrow")}
+    <ViewLayout>
+      <ViewHeader
+        icon="user"
         title={t("header.title")}
         description={t("header.description")}
       />
 
       {feedback ? (
-        <p
-          className={
-            feedback.tone === "success"
-              ? "vx-profile-message"
-              : "vx-profile-error"
-          }
-        >
-          {t(feedback.key, feedback.values)}
-        </p>
+        <Banner
+          tone={feedback.tone === "success" ? "success" : "danger"}
+          title={t(feedback.key, feedback.values)}
+        />
       ) : null}
 
       <Input
@@ -898,314 +920,286 @@ export function ProfilePage() {
       />
 
       {/* ── §一 Avatar header card (grid: avatar | info | actions) ──────────── */}
-      <div className="vx-account-profile-compact-card">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="vx-account-profile-avatar-button"
-          aria-label={t("avatar.upload")}
-          title={t("avatar.upload")}
-          onClick={() => fileInputRef.current?.click()}
-          disabled={!profile || submitting}
-        >
+      <IdentityCard
+        avatar={
           <UserAvatar
-            className="vx-account-profile-compact-avatar vx-account-profile-avatar"
+            className="size-full"
             src={profile?.picture ?? null}
             alt={t("avatar.alt", { name: displayName })}
           />
-          <span
-            className="vx-account-profile-avatar-button__edit"
-            aria-hidden="true"
-          >
-            <Icon name="edit" size="xs" fallback="placeholder" />
-          </span>
-        </Button>
-
-        <div className="vx-account-profile-compact-card__info">
-          <span className="vx-account-profile-compact-name-row">
-            <strong>{loading ? loadingText : displayName}</strong>
-            <span className="vx-account-profile-compact-tags">
-              {profile?.accountStatus ? (
-                <span
-                  className={
-                    profile.accountStatus === "suspended"
-                      ? "vx-profile-tag vx-profile-tag--error"
-                      : "vx-profile-tag"
-                  }
-                >
-                  {accountStatusLabel(profile.accountStatus)}
-                </span>
-              ) : null}
-              <span className="vx-profile-tag vx-profile-tag--warning">
-                {t("verification.unverified")}
-              </span>
-            </span>
-          </span>
-          <span className="vx-account-profile-compact-account-no">
+        }
+        avatarLabel={t("avatar.upload")}
+        onAvatarClick={() => fileInputRef.current?.click()}
+        avatarDisabled={!profile || submitting}
+        name={loading ? loadingText : displayName}
+        tags={
+          <>
+            {profile?.accountStatus ? (
+              <StatusBadge
+                tone={
+                  profile.accountStatus === "suspended" ? "danger" : "success"
+                }
+              >
+                {accountStatusLabel(profile.accountStatus)}
+              </StatusBadge>
+            ) : null}
+            {/* No verification badge here: nothing computes a verification
+             * state, so an unconditional "unverified" badge was a fabrication. */}
+          </>
+        }
+        meta={
+          <>
             {t("fields.userNo")}:{" "}
             {loading ? loadingText : (profile?.userNo ?? empty)}
-          </span>
-        </div>
-
-        <div className="vx-account-profile-compact-card__actions">
-          <ActionButton
-            variant="outline"
-            icon="shield-check"
-            size="sm"
-            onClick={() => router.push("/profile/verification")}
-          >
-            {t("verification.goVerify")}
-          </ActionButton>
-          <ActionButton
-            variant="outline"
-            icon="x"
-            size="sm"
-            onClick={() => void removeAvatar()}
-            disabled={submitting || !profile?.picture}
-          >
-            {t("actions.clearAvatar")}
-          </ActionButton>
-        </div>
-      </div>
+          </>
+        }
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="md"
+              onClick={() => router.push("/profile/verification")}
+            >
+              <Icon name="shield-check" size="xs" fallback="placeholder" />
+              <span>{t("verification.goVerify")}</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="md"
+              onClick={() => void removeAvatar()}
+              disabled={submitting || !profile?.picture}
+            >
+              <Icon name="x" size="xs" fallback="placeholder" />
+              <span>{t("actions.clearAvatar")}</span>
+            </Button>
+          </>
+        }
+      />
 
       {/* ── §二 Account info: name / phone / email ─────────────────────────── */}
-      <section className="vx-profile-group">
-        <div className="vx-profile-group__header">
-          <div>
-            <h2>{t("sections.account.title")}</h2>
-            <p>{t("sections.account.description")}</p>
-          </div>
-        </div>
-        <div className="vx-profile-row vx-profile-row--actionable">
-          <span>{t("fields.displayName")}</span>
-          <span className="vx-profile-value">
-            {loading ? loadingText : displayName}
-          </span>
-          <ActionButton
-            variant="outline"
-            size="sm"
-            icon="edit"
-            onClick={openNameDialog}
-            disabled={!profile || loading}
+      <PageSection
+        title={t("sections.account.title")}
+        icon="user-circle"
+        level={2}
+        description={t("sections.account.description")}
+      >
+        <DetailList>
+          <DetailRow
+            label={t("fields.displayName")}
+            actions={
+              <Button
+                variant="outline"
+                size="md"
+                onClick={openNameDialog}
+                disabled={!profile || loading}
+              >
+                <Icon name="edit" size="xs" fallback="placeholder" />
+                <span>{t("actions.edit")}</span>
+              </Button>
+            }
           >
-            {t("actions.edit")}
-          </ActionButton>
-        </div>
-        <div className="vx-profile-row vx-profile-row--actionable">
-          <span>{t("fields.phone")}</span>
-          <span className="vx-profile-value">
+            {loading ? loadingText : displayName}
+          </DetailRow>
+          <DetailRow
+            label={t("fields.phone")}
+            actions={
+              <>
+                {!loading && profile?.phone && !profile.phoneVerified ? (
+                  <Button
+                    variant="ghost"
+                    size="md"
+                    onClick={() => openContactVerify("phone-verify")}
+                  >
+                    <Icon
+                      name="shield-check"
+                      size="xs"
+                      fallback="placeholder"
+                    />
+                    <span>{t("actions.verify")}</span>
+                  </Button>
+                ) : null}
+                <Button
+                  variant="ghost"
+                  size="md"
+                  onClick={openPhoneChangeDialog}
+                  disabled={!profile || loading}
+                >
+                  <Icon name="phone" size="xs" fallback="placeholder" />
+                  <span>{t("actions.change")}</span>
+                </Button>
+              </>
+            }
+          >
             {loading ? loadingText : phone}
             {!loading && profile?.phone ? (
+              <StatusBadge tone={profile.phoneVerified ? "success" : "warning"}>
+                {profile.phoneVerified
+                  ? t("verified.verified")
+                  : t("verified.unverified")}
+              </StatusBadge>
+            ) : null}
+          </DetailRow>
+          <DetailRow
+            label={t("fields.email")}
+            actions={
               <>
-                {" "}
-                <span
-                  className={
-                    profile.phoneVerified
-                      ? "vx-profile-tag"
-                      : "vx-profile-tag vx-profile-tag--warning"
-                  }
+                {!loading && profile?.email && !profile.emailVerified ? (
+                  <Button
+                    variant="ghost"
+                    size="md"
+                    onClick={() => openContactVerify("email-verify")}
+                  >
+                    <Icon
+                      name="shield-check"
+                      size="xs"
+                      fallback="placeholder"
+                    />
+                    <span>{t("actions.verify")}</span>
+                  </Button>
+                ) : null}
+                <Button
+                  variant="ghost"
+                  size="md"
+                  onClick={() => openContactVerify("email-change")}
+                  disabled={!profile || loading}
                 >
-                  {profile.phoneVerified
-                    ? t("verified.verified")
-                    : t("verified.unverified")}
-                </span>
+                  <Icon name="mail" size="xs" fallback="placeholder" />
+                  <span>{t("actions.change")}</span>
+                </Button>
               </>
-            ) : null}
-          </span>
-          <span className="vx-profile-row__actions">
-            {!loading && profile?.phone && !profile.phoneVerified ? (
-              <ActionButton
-                variant="ghost"
-                size="sm"
-                icon="shield-check"
-                onClick={() => openContactVerify("phone-verify")}
-              >
-                {t("actions.verify")}
-              </ActionButton>
-            ) : null}
-            <ActionButton
-              variant="ghost"
-              size="sm"
-              icon="phone"
-              onClick={openPhoneChangeDialog}
-              disabled={!profile || loading}
-            >
-              {t("actions.change")}
-            </ActionButton>
-          </span>
-        </div>
-        <div className="vx-profile-row vx-profile-row--actionable">
-          <span>{t("fields.email")}</span>
-          <span className="vx-profile-value">
+            }
+          >
             {loading ? loadingText : email}
             {!loading && profile?.email ? (
-              <>
-                {" "}
-                <span
-                  className={
-                    profile.emailVerified
-                      ? "vx-profile-tag"
-                      : "vx-profile-tag vx-profile-tag--warning"
-                  }
-                >
-                  {profile.emailVerified
-                    ? t("verified.verified")
-                    : t("verified.unverified")}
-                </span>
-              </>
+              <StatusBadge tone={profile.emailVerified ? "success" : "warning"}>
+                {profile.emailVerified
+                  ? t("verified.verified")
+                  : t("verified.unverified")}
+              </StatusBadge>
             ) : null}
-          </span>
-          <span className="vx-profile-row__actions">
-            {!loading && profile?.email && !profile.emailVerified ? (
-              <ActionButton
-                variant="ghost"
-                size="sm"
-                icon="shield-check"
-                onClick={() => openContactVerify("email-verify")}
-              >
-                {t("actions.verify")}
-              </ActionButton>
-            ) : null}
-            <ActionButton
-              variant="ghost"
-              size="sm"
-              icon="mail"
-              onClick={() => openContactVerify("email-change")}
-              disabled={!profile || loading}
-            >
-              {t("actions.change")}
-            </ActionButton>
-          </span>
-        </div>
-      </section>
+          </DetailRow>
+        </DetailList>
+      </PageSection>
 
       {/* ── §三 Personal info: language / timezone / bio / created (one edit) ─ */}
-      <section className="vx-profile-group">
-        <div className="vx-profile-group__header">
-          <div>
-            <h2>{t("sections.personal.title")}</h2>
-            <p>{t("sections.personal.description")}</p>
-          </div>
-          <ActionButton
+      <PageSection
+        title={t("sections.personal.title")}
+        icon="faders"
+        level={2}
+        description={t("sections.personal.description")}
+        action={
+          <Button
             variant="outline"
-            icon="edit"
+            size="md"
             onClick={openPersonalDialog}
             disabled={!profile}
           >
-            {t("actions.edit")}
-          </ActionButton>
-        </div>
-        <div className="vx-profile-row">
-          <span>{t("fields.language")}</span>
-          <span className="vx-profile-value">
+            <Icon name="edit" size="xs" fallback="placeholder" />
+            <span>{t("actions.edit")}</span>
+          </Button>
+        }
+      >
+        <DetailList>
+          <DetailRow label={t("fields.language")}>
             {loading ? loadingText : language}
-          </span>
-        </div>
-        <div className="vx-profile-row">
-          <span>{t("fields.timezone")}</span>
-          <span className="vx-profile-value">
+          </DetailRow>
+          <DetailRow label={t("fields.timezone")}>
             {loading ? loadingText : timezone}
-          </span>
-        </div>
-        <div className="vx-profile-row">
-          <span>{t("fields.bio")}</span>
-          <span className="vx-profile-value">
+          </DetailRow>
+          <DetailRow label={t("fields.bio")}>
             {loading ? loadingText : bio}
-          </span>
-        </div>
-        <div className="vx-profile-row">
-          <span>{t("fields.createdAt")}</span>
-          <span className="vx-profile-value">
+          </DetailRow>
+          <DetailRow label={t("fields.createdAt")}>
             {loading ? loadingText : createdAt}
-          </span>
-        </div>
-      </section>
+          </DetailRow>
+        </DetailList>
+      </PageSection>
 
       {/* ── §四 Account security: username / password + login toggle ────────── */}
-      <section className="vx-profile-group">
-        <div className="vx-profile-group__header">
-          <div>
-            <h2>{t("sections.security.title")}</h2>
-            <p>{t("sections.security.description")}</p>
-          </div>
-          <ActionButton
+      <PageSection
+        title={t("sections.security.title")}
+        icon="shield-check"
+        level={2}
+        description={t("sections.security.description")}
+        action={
+          <Button
             variant="outline"
-            icon={accountLoginEnabled ? "x" : "shield-check"}
+            size="md"
             onClick={() => void toggleAccountLogin(!accountLoginEnabled)}
             disabled={!profile || submitting}
           >
-            {accountLoginEnabled
-              ? t("security.disableLogin")
-              : t("security.enableLogin")}
-          </ActionButton>
-        </div>
-        <div className="vx-profile-row vx-profile-row--actionable">
-          <span>{t("fields.username")}</span>
-          <span className="vx-profile-value">
+            <Icon
+              name={accountLoginEnabled ? "x" : "shield-check"}
+              size="xs"
+              fallback="placeholder"
+            />
+            <span>
+              {accountLoginEnabled
+                ? t("security.disableLogin")
+                : t("security.enableLogin")}
+            </span>
+          </Button>
+        }
+      >
+        <DetailList>
+          <DetailRow
+            label={t("fields.username")}
+            actions={
+              <Button
+                variant="ghost"
+                size="md"
+                onClick={openUsernameDialog}
+                disabled={!profile || loading || !usernameChangeable}
+              >
+                <Icon name="edit" size="xs" fallback="placeholder" />
+                <span>{t("actions.edit")}</span>
+              </Button>
+            }
+          >
             {loading ? loadingText : username}
             {!loading ? (
-              <>
-                {" "}
-                <span
-                  className={
-                    accountLoginEnabled
-                      ? "vx-profile-tag"
-                      : "vx-profile-tag vx-profile-tag--error"
-                  }
-                >
-                  {accountLoginEnabled
-                    ? t("security.canLogin")
-                    : t("security.cannotLogin")}
-                </span>
-              </>
+              <StatusBadge tone={accountLoginEnabled ? "success" : "danger"}>
+                {accountLoginEnabled
+                  ? t("security.canLogin")
+                  : t("security.cannotLogin")}
+              </StatusBadge>
             ) : null}
             {!loading && !usernameChangeable ? (
-              <span className="vx-profile-tag">
+              <StatusBadge tone="neutral">
                 {t("username.cooldownHint", {
                   date: usernameNextChangeLabel,
                 })}
-              </span>
+              </StatusBadge>
             ) : null}
-          </span>
-          <ActionButton
-            variant="ghost"
-            size="sm"
-            icon="edit"
-            onClick={openUsernameDialog}
-            disabled={!profile || loading || !usernameChangeable}
+          </DetailRow>
+          <DetailRow
+            label={t("fields.password")}
+            actions={
+              <Button variant="ghost" size="md" onClick={openPasswordDialog}>
+                <Icon name="shield-check" size="xs" fallback="placeholder" />
+                <span>
+                  {profile?.hasPassword
+                    ? t("actions.changePassword")
+                    : t("actions.setPassword")}
+                </span>
+              </Button>
+            }
           >
-            {t("actions.edit")}
-          </ActionButton>
-        </div>
-        <div className="vx-profile-row vx-profile-row--actionable">
-          <span>{t("fields.password")}</span>
-          <span className="vx-profile-value">
             {profile?.hasPassword
               ? t("security.passwordSet")
               : t("security.passwordNotSet")}
-          </span>
-          <ActionButton
-            variant="ghost"
-            size="sm"
-            icon="shield-check"
-            onClick={openPasswordDialog}
-          >
-            {profile?.hasPassword
-              ? t("actions.changePassword")
-              : t("actions.setPassword")}
-          </ActionButton>
-        </div>
-      </section>
+          </DetailRow>
+        </DetailList>
+      </PageSection>
 
       {/* ── §五 Connected accounts (all 4; google>feishu>dingtalk>wechat) ───── */}
-      <section className="vx-profile-group">
-        <div className="vx-profile-group__header">
-          <div>
-            <h2>{t("sections.connectedAccounts.title")}</h2>
-            <p>{t("sections.connectedAccounts.description")}</p>
-          </div>
-        </div>
-        <div className="vx-account-connected-list">
+      <PageSection
+        title={t("sections.connectedAccounts.title")}
+        icon="plugs-connected"
+        level={2}
+        description={t("sections.connectedAccounts.description")}
+      >
+        <div className={CONNECTED_LIST_CLASS}>
           {connectedAccounts.map((account) => {
             const providerName = t(
               `connectedAccounts.providers.${account.provider}.name`,
@@ -1219,77 +1213,70 @@ export function ProfilePage() {
               ? formatProfileDate(account.connectedAt, locale, empty)
               : empty;
             return (
-              <div
+              <ConnectedRow
                 key={account.provider}
-                className={
-                  account.connected
-                    ? "vx-account-connected-row vx-account-connected-row--connected"
-                    : "vx-account-connected-row"
-                }
-                title={providerName}
-              >
-                <span
-                  className={`vx-account-connected-logo vx-account-connected-logo--${account.provider}`}
-                  aria-hidden="true"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                title_={providerName}
+                logo={
+                  /* eslint-disable-next-line @next/next/no-img-element */
                   <img
                     src={PROVIDER_LOGO_SRC[account.provider]}
                     alt=""
                     width={22}
                     height={22}
                   />
-                </span>
-                <div className="vx-account-connected-copy">
-                  <div className="vx-account-connected-copy__title">
-                    <strong>{providerName}</strong>
-                    <span className="vx-profile-tag">
-                      {account.connected
-                        ? t("connectedAccounts.status.connected")
-                        : t("connectedAccounts.status.disconnected")}
-                    </span>
-                  </div>
-                  <p>{providerDescription}</p>
-                </div>
-                <div className="vx-account-connected-meta">
-                  <span>{t("connectedAccounts.fields.account")}</span>
-                  <span title={accountId}>{accountId}</span>
-                </div>
-                <div className="vx-account-connected-meta">
-                  <span>{t("connectedAccounts.fields.connectedAt")}</span>
-                  <span title={connectedAt}>{connectedAt}</span>
-                </div>
-                <div className="vx-account-connected-actions">
-                  {account.connected ? (
+                }
+                title={providerName}
+                status={
+                  <StatusBadge tone={account.connected ? "success" : "neutral"}>
+                    {account.connected
+                      ? t("connectedAccounts.status.connected")
+                      : t("connectedAccounts.status.disconnected")}
+                  </StatusBadge>
+                }
+                description={providerDescription}
+                meta={[
+                  {
+                    label: t("connectedAccounts.fields.account"),
+                    value: accountId,
+                    title: accountId,
+                  },
+                  {
+                    label: t("connectedAccounts.fields.connectedAt"),
+                    value: connectedAt,
+                    title: connectedAt,
+                  },
+                ]}
+                actions={
+                  account.connected ? (
                     <Button
                       variant="outline"
-                      size="sm"
+                      size="md"
                       onClick={() => setUnbindTarget(account)}
                     >
                       {t("connectedAccounts.actions.unbind")}
                     </Button>
-                  ) : null}
-                </div>
-              </div>
+                  ) : null
+                }
+              />
             );
           })}
         </div>
-      </section>
+      </PageSection>
 
       {/* ── §六 Workspaces (horizontal rows) ────────────────────────────────── */}
-      <section className="vx-profile-group">
-        <div className="vx-profile-group__header">
-          <div>
-            <h2>{t("sections.workspaces.title")}</h2>
-            <p>{t("sections.workspaces.description")}</p>
-          </div>
-        </div>
+      <PageSection
+        title={t("sections.workspaces.title")}
+        icon="buildings"
+        level={2}
+        description={t("sections.workspaces.description")}
+      >
         {workspaces.length === 0 ? (
-          <p className="vx-profile-message">
-            {loading ? loadingText : t("sections.workspaces.empty")}
-          </p>
+          <EmptyState
+            icon="buildings"
+            title={loading ? loadingText : t("sections.workspaces.empty")}
+          />
         ) : (
-          <div className="vx-account-connected-list">
+          <div className={CONNECTED_LIST_CLASS}>
             {workspaces.map((ws) => {
               const roleLabel = ["owner", "manager", "member"].includes(ws.role)
                 ? t(`workspaces.role.${ws.role}`)
@@ -1299,38 +1286,27 @@ export function ProfilePage() {
               const workspaceId = ws.workspaceId ?? ws.tenantId;
               const isDefault = ws.tenantType === "personal";
               return (
-                <div
+                <ConnectedRow
                   key={ws.tenantId}
-                  className="vx-account-connected-row"
-                  title={workspaceName}
-                >
-                  <span
-                    className="vx-account-connected-logo vx-account-connected-logo--workspace"
-                    aria-hidden="true"
-                  >
+                  title_={workspaceName}
+                  logo={
                     <Icon name="buildings" size="sm" fallback="placeholder" />
-                  </span>
-                  <div className="vx-account-connected-copy">
-                    <div className="vx-account-connected-copy__title">
-                      <strong>{workspaceName}</strong>
-                      {isDefault ? (
-                        <span className="vx-profile-tag">default</span>
-                      ) : null}
-                    </div>
-                    <p title={workspaceId}>{workspaceId}</p>
-                  </div>
-                  <div className="vx-account-connected-meta">
-                    <span>{t("fields.role")}</span>
-                    <span>{roleLabel}</span>
-                  </div>
-                  <div className="vx-account-connected-meta">
-                    <span>{t("workspaces.joinedAt")}</span>
-                    <span>{joinedAt}</span>
-                  </div>
-                  <div className="vx-account-connected-actions">
+                  }
+                  title={workspaceName}
+                  status={
+                    isDefault ? (
+                      <StatusBadge tone="neutral">default</StatusBadge>
+                    ) : null
+                  }
+                  description={<span title={workspaceId}>{workspaceId}</span>}
+                  meta={[
+                    { label: t("fields.role"), value: roleLabel },
+                    { label: t("workspaces.joinedAt"), value: joinedAt },
+                  ]}
+                  actions={
                     <Button
                       variant="outline"
-                      size="sm"
+                      size="md"
                       onClick={() =>
                         ws.isCurrent
                           ? router.push("/organization")
@@ -1340,85 +1316,89 @@ export function ProfilePage() {
                     >
                       {t("workspaces.detail")}
                     </Button>
-                  </div>
-                </div>
+                  }
+                />
               );
             })}
           </div>
         )}
-      </section>
+      </PageSection>
 
       {/* ── §七 Login history (last 3) ──────────────────────────────────────── */}
-      <section className="vx-profile-group">
-        <div className="vx-profile-group__header">
-          <div>
-            <h2>{t("sections.loginHistory.title")}</h2>
-            <p>{t("sections.loginHistory.description")}</p>
-          </div>
-        </div>
+      <PageSection
+        title={t("sections.loginHistory.title")}
+        icon="clock-counter-clockwise"
+        level={2}
+        description={t("sections.loginHistory.description")}
+      >
         {recentLogins.length === 0 ? (
-          <p className="vx-profile-message">
-            {loading ? loadingText : t("sections.loginHistory.empty")}
-          </p>
+          <EmptyState
+            icon="clock"
+            title={loading ? loadingText : t("sections.loginHistory.empty")}
+          />
         ) : (
-          <div className="vx-login-history" role="table">
-            <div className="vx-login-history__head" role="row">
-              <span role="columnheader">{t("loginHistory.index")}</span>
-              <span role="columnheader">{t("loginHistory.time")}</span>
-              <span role="columnheader">{t("loginHistory.ip")}</span>
-              <span role="columnheader">{t("loginHistory.os")}</span>
-            </div>
-            {recentLogins.map((entry, i) => (
-              <div
-                className="vx-login-history__row"
-                role="row"
-                key={`${entry.loginAt}-${i}`}
-              >
-                <span role="cell">{i + 1}</span>
-                <span role="cell">
-                  {formatProfileDate(entry.loginAt, locale, empty)}
-                </span>
-                <span role="cell">{entry.ipAddress || empty}</span>
-                <span role="cell">{parseOS(entry.userAgent) || empty}</span>
-              </div>
-            ))}
-          </div>
+          /* The index column is declared explicitly rather than via DataTable's
+             `indexStart` so its header keeps this page's own i18n key. */
+          <DataTable
+            rows={recentLogins}
+            rowKey={(entry, i) => `${entry.loginAt}-${i}`}
+            columns={[
+              {
+                id: "index",
+                header: t("loginHistory.index"),
+                align: "center",
+                cell: (_entry, i) => i + 1,
+              },
+              {
+                id: "time",
+                header: t("loginHistory.time"),
+                cell: (entry) =>
+                  formatProfileDate(entry.loginAt, locale, empty),
+              },
+              {
+                id: "ip",
+                header: t("loginHistory.ip"),
+                cell: (entry) => entry.ipAddress || empty,
+              },
+              {
+                id: "os",
+                header: t("loginHistory.os"),
+                cell: (entry) => parseOS(entry.userAgent) || empty,
+              },
+            ]}
+          />
         )}
-      </section>
+      </PageSection>
 
       {/* ── Dialogs ──────────────────────────────────────────────────────────── */}
 
       {/* Display-name edit dialog */}
-      {nameDialogOpen ? (
-        <div
-          className="vx-profile-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("dialogs.name.title")}
-        >
-          <div
-            className="vx-profile-dialog__backdrop"
-            onClick={() => setNameDialogOpen(false)}
-          />
+      <Dialog open={nameDialogOpen} onOpenChange={setNameDialogOpen}>
+        <DialogContent>
           <form
-            className="vx-profile-dialog__content vx-account-profile-dialog"
+            className="flex flex-col gap-lg"
             onSubmit={(event) => void submitName(event)}
           >
-            <header className="vx-account-profile-dialog__header">
-              <h3>{t("dialogs.name.title")}</h3>
-              <p>{t("dialogs.name.description")}</p>
-            </header>
-            <div className="vx-account-profile-form-grid">
-              <Label className="vx-account-profile-form-grid__wide">
-                {t("fields.displayName")}
+            <DialogHeader>
+              <DialogTitle>{t("dialogs.name.title")}</DialogTitle>
+              <DialogDescription>
+                {t("dialogs.name.description")}
+              </DialogDescription>
+            </DialogHeader>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="profile-display-name">
+                  {t("fields.displayName")}
+                </FieldLabel>
                 <Input
+                  id="profile-display-name"
                   value={nameForm}
                   onChange={(event) => setNameForm(event.target.value)}
                   autoComplete="name"
                 />
-              </Label>
-            </div>
-            <div className="vx-profile-dialog__actions">
+              </Field>
+            </FieldGroup>
+            <DialogFooter>
               <Button
                 variant="outline"
                 onClick={() => setNameDialogOpen(false)}
@@ -1428,43 +1408,36 @@ export function ProfilePage() {
               <Button type="submit" disabled={submitting}>
                 {t("actions.save")}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
-        </div>
-      ) : null}
+        </DialogContent>
+      </Dialog>
 
       {/* Username edit dialog — unique, once per 30 days */}
-      {usernameDialogOpen ? (
-        <div
-          className="vx-profile-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("dialogs.username.title")}
-        >
-          <div
-            className="vx-profile-dialog__backdrop"
-            onClick={() => setUsernameDialogOpen(false)}
-          />
-          <form
-            className="vx-profile-dialog__content vx-account-profile-dialog"
-            onSubmit={submitUsername}
-          >
-            <header className="vx-account-profile-dialog__header">
-              <h3>{t("dialogs.username.title")}</h3>
-              <p>{t("dialogs.username.description")}</p>
-            </header>
-            <div className="vx-account-profile-form-grid">
-              <Label className="vx-account-profile-form-grid__wide">
-                {t("fields.username")}
+      <Dialog open={usernameDialogOpen} onOpenChange={setUsernameDialogOpen}>
+        <DialogContent>
+          <form className="flex flex-col gap-lg" onSubmit={submitUsername}>
+            <DialogHeader>
+              <DialogTitle>{t("dialogs.username.title")}</DialogTitle>
+              <DialogDescription>
+                {t("dialogs.username.description")}
+              </DialogDescription>
+            </DialogHeader>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="profile-username">
+                  {t("fields.username")}
+                </FieldLabel>
                 <Input
+                  id="profile-username"
                   value={usernameForm}
                   onChange={(event) => setUsernameForm(event.target.value)}
                   autoComplete="username"
                   placeholder={t("placeholders.username")}
                 />
-              </Label>
-            </div>
-            <div className="vx-profile-dialog__actions">
+              </Field>
+            </FieldGroup>
+            <DialogFooter>
               <Button
                 variant="outline"
                 onClick={() => setUsernameDialogOpen(false)}
@@ -1475,90 +1448,89 @@ export function ProfilePage() {
               <Button type="submit" disabled={submitting}>
                 {t("actions.save")}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
-        </div>
-      ) : null}
+        </DialogContent>
+      </Dialog>
 
       {/* Personal info edit dialog — bio / timezone / language */}
-      {personalDialogOpen ? (
-        <div
-          className="vx-profile-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("dialogs.personal.title")}
-        >
-          <div
-            className="vx-profile-dialog__backdrop"
-            onClick={() => setPersonalDialogOpen(false)}
-          />
+      <Dialog open={personalDialogOpen} onOpenChange={setPersonalDialogOpen}>
+        <DialogContent>
           <form
-            className="vx-profile-dialog__content vx-account-profile-dialog"
+            className="flex flex-col gap-lg"
             onSubmit={(event) => void submitPersonal(event)}
           >
-            <header className="vx-account-profile-dialog__header">
-              <h3>{t("dialogs.personal.title")}</h3>
-              <p>{t("dialogs.personal.description")}</p>
-            </header>
-            <Label>
-              {t("fields.language")}
-              <NativeSelect
-                className="vx-input"
-                value={personalForm.language}
-                onChange={(event) =>
-                  setPersonalForm((old) => ({
-                    ...old,
-                    language: event.target.value,
-                  }))
-                }
-              >
-                <option value="">{t("common.empty")}</option>
-                <option value="zh-CN">{t("language.zhCN")}</option>
-                <option value="en-US">{t("language.enUS")}</option>
-              </NativeSelect>
-            </Label>
-            <Label>
-              {t("fields.timezone")}
-              <NativeSelect
-                className="vx-input"
-                value={personalForm.timezone}
-                onChange={(event) =>
-                  setPersonalForm((old) => ({
-                    ...old,
-                    timezone: event.target.value,
-                  }))
-                }
-              >
-                <option value="">{t("common.empty")}</option>
-                {personalForm.timezone &&
-                !TIMEZONE_OPTIONS.includes(personalForm.timezone) ? (
-                  <option value={personalForm.timezone}>
-                    {personalForm.timezone}
-                  </option>
-                ) : null}
-                {TIMEZONE_OPTIONS.map((tz) => (
-                  <option key={tz} value={tz}>
-                    {tz}
-                  </option>
-                ))}
-              </NativeSelect>
-            </Label>
-            <Label>
-              {t("fields.bio")}
-              <Textarea
-                className="vx-profile-dialog__textarea"
-                rows={4}
-                value={personalForm.bio}
-                onChange={(event) =>
-                  setPersonalForm((old) => ({
-                    ...old,
-                    bio: event.target.value,
-                  }))
-                }
-                placeholder={t("placeholders.bio")}
-              />
-            </Label>
-            <div className="vx-profile-dialog__actions">
+            <DialogHeader>
+              <DialogTitle>{t("dialogs.personal.title")}</DialogTitle>
+              <DialogDescription>
+                {t("dialogs.personal.description")}
+              </DialogDescription>
+            </DialogHeader>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="profile-language">
+                  {t("fields.language")}
+                </FieldLabel>
+                <NativeSelect
+                  id="profile-language"
+                  value={personalForm.language}
+                  onChange={(event) =>
+                    setPersonalForm((old) => ({
+                      ...old,
+                      language: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="">{t("common.empty")}</option>
+                  <option value="zh-CN">{t("language.zhCN")}</option>
+                  <option value="en-US">{t("language.enUS")}</option>
+                </NativeSelect>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="profile-timezone">
+                  {t("fields.timezone")}
+                </FieldLabel>
+                <NativeSelect
+                  id="profile-timezone"
+                  value={personalForm.timezone}
+                  onChange={(event) =>
+                    setPersonalForm((old) => ({
+                      ...old,
+                      timezone: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="">{t("common.empty")}</option>
+                  {personalForm.timezone &&
+                  !TIMEZONE_OPTIONS.includes(personalForm.timezone) ? (
+                    <option value={personalForm.timezone}>
+                      {personalForm.timezone}
+                    </option>
+                  ) : null}
+                  {TIMEZONE_OPTIONS.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {tz}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="profile-bio">{t("fields.bio")}</FieldLabel>
+                <Textarea
+                  id="profile-bio"
+                  rows={4}
+                  value={personalForm.bio}
+                  onChange={(event) =>
+                    setPersonalForm((old) => ({
+                      ...old,
+                      bio: event.target.value,
+                    }))
+                  }
+                  placeholder={t("placeholders.bio")}
+                />
+              </Field>
+            </FieldGroup>
+            <DialogFooter>
               <Button
                 variant="outline"
                 onClick={() => setPersonalDialogOpen(false)}
@@ -1568,89 +1540,91 @@ export function ProfilePage() {
               <Button type="submit" disabled={submitting}>
                 {t("actions.save")}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
-        </div>
-      ) : null}
+        </DialogContent>
+      </Dialog>
 
       {/* Password change dialog */}
-      {passwordDialogOpen ? (
-        <div
-          className="vx-profile-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("dialogs.password.title")}
-        >
-          <div
-            className="vx-profile-dialog__backdrop"
-            onClick={() => setPasswordDialogOpen(false)}
-          />
+      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+        <DialogContent>
           <form
-            className="vx-profile-dialog__content vx-account-profile-dialog"
+            className="flex flex-col gap-lg"
             onSubmit={(event) => void submitPassword(event)}
           >
-            <header className="vx-account-profile-dialog__header">
-              <h3>
+            <DialogHeader>
+              <DialogTitle>
                 {profile?.hasPassword
                   ? t("dialogs.password.title")
                   : t("dialogs.password.setupTitle")}
-              </h3>
-              <p>
+              </DialogTitle>
+              <DialogDescription>
                 {profile?.hasPassword
                   ? t("dialogs.password.description")
                   : t("dialogs.password.setupDescription")}
-              </p>
-            </header>
-            {profile?.hasPassword ? (
-              <Label>
-                {t("fields.currentPassword")}
+              </DialogDescription>
+            </DialogHeader>
+            <FieldGroup>
+              {profile?.hasPassword ? (
+                <Field>
+                  <FieldLabel htmlFor="profile-current-password">
+                    {t("fields.currentPassword")}
+                  </FieldLabel>
+                  <Input
+                    id="profile-current-password"
+                    type="password"
+                    value={passwordForm.currentPassword}
+                    onChange={(event) =>
+                      setPasswordForm((old) => ({
+                        ...old,
+                        currentPassword: event.target.value,
+                      }))
+                    }
+                    autoComplete="current-password"
+                    required
+                  />
+                </Field>
+              ) : null}
+              <Field>
+                <FieldLabel htmlFor="profile-next-password">
+                  {t("fields.nextPassword")}
+                </FieldLabel>
                 <Input
+                  id="profile-next-password"
                   type="password"
-                  value={passwordForm.currentPassword}
+                  value={passwordForm.nextPassword}
                   onChange={(event) =>
                     setPasswordForm((old) => ({
                       ...old,
-                      currentPassword: event.target.value,
+                      nextPassword: event.target.value,
                     }))
                   }
-                  autoComplete="current-password"
+                  autoComplete="new-password"
+                  minLength={6}
                   required
                 />
-              </Label>
-            ) : null}
-            <Label>
-              {t("fields.nextPassword")}
-              <Input
-                type="password"
-                value={passwordForm.nextPassword}
-                onChange={(event) =>
-                  setPasswordForm((old) => ({
-                    ...old,
-                    nextPassword: event.target.value,
-                  }))
-                }
-                autoComplete="new-password"
-                minLength={6}
-                required
-              />
-            </Label>
-            <Label>
-              {t("fields.confirmPassword")}
-              <Input
-                type="password"
-                value={passwordForm.confirmPassword}
-                onChange={(event) =>
-                  setPasswordForm((old) => ({
-                    ...old,
-                    confirmPassword: event.target.value,
-                  }))
-                }
-                autoComplete="new-password"
-                minLength={6}
-                required
-              />
-            </Label>
-            <div className="vx-profile-dialog__actions">
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="profile-confirm-password">
+                  {t("fields.confirmPassword")}
+                </FieldLabel>
+                <Input
+                  id="profile-confirm-password"
+                  type="password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(event) =>
+                    setPasswordForm((old) => ({
+                      ...old,
+                      confirmPassword: event.target.value,
+                    }))
+                  }
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
+                />
+              </Field>
+            </FieldGroup>
+            <DialogFooter>
               <Button
                 variant="outline"
                 onClick={() => setPasswordDialogOpen(false)}
@@ -1662,33 +1636,31 @@ export function ProfilePage() {
                   ? t("actions.updatePassword")
                   : t("actions.setPassword")}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
-        </div>
-      ) : null}
+        </DialogContent>
+      </Dialog>
 
       {/* Unified contact-verify dialog (phone verify / email verify / change) */}
-      {contactVerifyOpen ? (
-        <div
-          className="vx-profile-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t(`dialogs.contactVerify.${cvMode}.title`)}
-        >
-          <div
-            className="vx-profile-dialog__backdrop"
-            onClick={() => setContactVerifyOpen(false)}
-          />
-          <div className="vx-profile-dialog__content vx-account-profile-dialog">
-            <header className="vx-account-profile-dialog__header">
-              <h3>{t(`dialogs.contactVerify.${cvMode}.title`)}</h3>
-              <p>{t(`dialogs.contactVerify.${cvMode}.description`)}</p>
-            </header>
+      <Dialog open={contactVerifyOpen} onOpenChange={setContactVerifyOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t(`dialogs.contactVerify.${cvMode}.title`)}
+            </DialogTitle>
+            <DialogDescription>
+              {t(`dialogs.contactVerify.${cvMode}.description`)}
+            </DialogDescription>
+          </DialogHeader>
 
+          <FieldGroup>
             {cvMode === "email-change" ? (
-              <Label>
-                {t("fields.newEmail")}
+              <Field>
+                <FieldLabel htmlFor="profile-new-email">
+                  {t("fields.newEmail")}
+                </FieldLabel>
                 <Input
+                  id="profile-new-email"
                   type="email"
                   value={cvNewEmail}
                   onChange={(event) => {
@@ -1698,11 +1670,11 @@ export function ProfilePage() {
                   placeholder={t("placeholders.newEmail")}
                   autoComplete="email"
                 />
-              </Label>
+              </Field>
             ) : null}
 
             {cvSent ? (
-              <p className="vx-phone-change-sent-hint">
+              <p className="flex items-center gap-xs text-body-sm text-success-text">
                 <Icon name="check" size="xs" fallback="placeholder" />
                 {cvMode === "phone-verify"
                   ? t("dialogs.phoneChange.sentToPhone", {
@@ -1717,6 +1689,7 @@ export function ProfilePage() {
             ) : (
               <Button
                 variant="outline"
+                className="self-start"
                 onClick={() => void cvSend()}
                 disabled={
                   cvSubmitting ||
@@ -1727,9 +1700,12 @@ export function ProfilePage() {
               </Button>
             )}
 
-            <Label>
-              {t("fields.verificationCode")}
+            <Field>
+              <FieldLabel htmlFor="profile-verify-code">
+                {t("fields.verificationCode")}
+              </FieldLabel>
               <Input
+                id="profile-verify-code"
                 value={cvCode}
                 onChange={(event) => setCvCode(event.target.value)}
                 placeholder={t("placeholders.verificationCode")}
@@ -1737,75 +1713,68 @@ export function ProfilePage() {
                 maxLength={6}
                 disabled={!cvSent}
               />
-            </Label>
+            </Field>
+          </FieldGroup>
 
-            <div className="vx-profile-dialog__actions">
-              <Button
-                variant="outline"
-                onClick={() => setContactVerifyOpen(false)}
-              >
-                {t("actions.cancel")}
-              </Button>
-              <Button
-                onClick={() => void cvSubmit()}
-                disabled={cvSubmitting || !cvSent || cvCode.length < 6}
-              >
-                {t("actions.confirm")}
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setContactVerifyOpen(false)}
+            >
+              {t("actions.cancel")}
+            </Button>
+            <Button
+              onClick={() => void cvSubmit()}
+              disabled={cvSubmitting || !cvSent || cvCode.length < 6}
+            >
+              {t("actions.confirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Phone change dialog — two-step, all-or-nothing */}
-      {phoneChangeOpen ? (
-        <div
-          className="vx-profile-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("dialogs.phoneChange.step1Title")}
-        >
-          <div
-            className="vx-profile-dialog__backdrop"
-            onClick={() => setPhoneChangeOpen(false)}
-          />
-          <div className="vx-profile-dialog__content vx-account-profile-dialog">
+      <Dialog open={phoneChangeOpen} onOpenChange={setPhoneChangeOpen}>
+        <DialogContent>
+          <div className="flex flex-col gap-lg">
             {phoneChangeStep === "success" ? (
               <>
-                <header className="vx-account-profile-dialog__header">
-                  <h3>{t("dialogs.phoneChange.successTitle")}</h3>
-                  <p>
+                <DialogHeader>
+                  <DialogTitle>
+                    {t("dialogs.phoneChange.successTitle")}
+                  </DialogTitle>
+                  <DialogDescription>
                     {t("dialogs.phoneChange.successMessage", {
                       phone: profile?.phone ?? "",
                     })}
-                  </p>
-                </header>
-                <div className="vx-profile-dialog__actions">
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
                   <Button onClick={() => setPhoneChangeOpen(false)}>
                     {t("actions.close")}
                   </Button>
-                </div>
+                </DialogFooter>
               </>
             ) : (
               <>
-                <header className="vx-account-profile-dialog__header">
+                <DialogHeader>
                   {renderPhoneSteps()}
-                  <h3>
+                  <DialogTitle>
                     {phoneChangeStep === "step1"
                       ? t("dialogs.phoneChange.step1Title")
                       : t("dialogs.phoneChange.step2Title")}
-                  </h3>
-                  <p>
+                  </DialogTitle>
+                  <DialogDescription>
                     {phoneChangeStep === "step1"
                       ? t("dialogs.phoneChange.step1Description")
                       : t("dialogs.phoneChange.step2Description")}
-                  </p>
-                </header>
+                  </DialogDescription>
+                </DialogHeader>
 
                 {phoneChangeStep === "step1" ? (
                   <>
                     {step1Sent ? (
-                      <p className="vx-phone-change-sent-hint">
+                      <p className="flex items-center gap-xs text-body-sm text-success-text">
                         <Icon name="check" size="xs" fallback="placeholder" />
                         {phoneIdMethod === "phone"
                           ? t("dialogs.phoneChange.sentToPhone", {
@@ -1818,6 +1787,7 @@ export function ProfilePage() {
                     ) : (
                       <Button
                         variant="outline"
+                        className="self-start"
                         onClick={() =>
                           void (phoneIdMethod === "phone"
                             ? sendStep1PhoneOtp()
@@ -1833,9 +1803,12 @@ export function ProfilePage() {
                       </Button>
                     )}
 
-                    <Label>
-                      {t("fields.verificationCode")}
+                    <Field>
+                      <FieldLabel htmlFor="profile-step1-code">
+                        {t("fields.verificationCode")}
+                      </FieldLabel>
                       <Input
+                        id="profile-step1-code"
                         value={step1Code}
                         onChange={(event) => setStep1Code(event.target.value)}
                         placeholder={t("placeholders.verificationCode")}
@@ -1843,14 +1816,13 @@ export function ProfilePage() {
                         maxLength={6}
                         disabled={!step1Sent}
                       />
-                    </Label>
+                    </Field>
 
-                    <div className="vx-phone-change-alt">
+                    <div className="flex flex-wrap items-center gap-xs">
                       {step1Sent && (
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className="vx-phone-change-alt__btn"
+                          size="md"
                           type="button"
                           onClick={() =>
                             void (phoneIdMethod === "phone"
@@ -1865,8 +1837,7 @@ export function ProfilePage() {
                       {phoneIdMethod === "phone" && profile?.email ? (
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className="vx-phone-change-alt__btn"
+                          size="md"
                           type="button"
                           onClick={switchToEmailMethod}
                         >
@@ -1877,8 +1848,7 @@ export function ProfilePage() {
                       ) : phoneIdMethod === "email" ? (
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className="vx-phone-change-alt__btn"
+                          size="md"
                           type="button"
                           onClick={switchToPhoneMethod}
                         >
@@ -1887,7 +1857,7 @@ export function ProfilePage() {
                       ) : null}
                     </div>
 
-                    <div className="vx-profile-dialog__actions">
+                    <DialogFooter>
                       <Button
                         variant="outline"
                         onClick={() => setPhoneChangeOpen(false)}
@@ -1902,14 +1872,18 @@ export function ProfilePage() {
                       >
                         {t("actions.next")}
                       </Button>
-                    </div>
+                    </DialogFooter>
                   </>
                 ) : (
                   <>
-                    <Label>
-                      {t("fields.newPhone")}
-                      <div className="vx-phone-change-new-phone-row">
+                    <Field>
+                      <FieldLabel htmlFor="profile-new-phone">
+                        {t("fields.newPhone")}
+                      </FieldLabel>
+                      <div className="flex items-center gap-sm">
                         <Input
+                          id="profile-new-phone"
+                          className="flex-1"
                           type="tel"
                           value={newPhone}
                           onChange={(event) => {
@@ -1918,7 +1892,6 @@ export function ProfilePage() {
                           }}
                           placeholder={t("placeholders.newPhone")}
                           autoComplete="tel"
-                          style={{ flex: 1 }}
                         />
                         <Button
                           variant="outline"
@@ -1930,10 +1903,10 @@ export function ProfilePage() {
                             : t("actions.sendCode")}
                         </Button>
                       </div>
-                    </Label>
+                    </Field>
 
                     {step2Sent && (
-                      <p className="vx-phone-change-sent-hint">
+                      <p className="flex items-center gap-xs text-body-sm text-success-text">
                         <Icon name="check" size="xs" fallback="placeholder" />
                         {t("dialogs.phoneChange.sentToPhone", {
                           phone: newPhone,
@@ -1941,9 +1914,12 @@ export function ProfilePage() {
                       </p>
                     )}
 
-                    <Label>
-                      {t("fields.verificationCode")}
+                    <Field>
+                      <FieldLabel htmlFor="profile-new-phone-code">
+                        {t("fields.verificationCode")}
+                      </FieldLabel>
                       <Input
+                        id="profile-new-phone-code"
                         value={newPhoneCode}
                         onChange={(event) =>
                           setNewPhoneCode(event.target.value)
@@ -1953,9 +1929,9 @@ export function ProfilePage() {
                         maxLength={6}
                         disabled={!step2Sent}
                       />
-                    </Label>
+                    </Field>
 
-                    <div className="vx-profile-dialog__actions">
+                    <DialogFooter>
                       <Button
                         variant="outline"
                         onClick={() => setPhoneChangeStep("step1")}
@@ -1972,92 +1948,83 @@ export function ProfilePage() {
                       >
                         {t("actions.completeChange")}
                       </Button>
-                    </div>
+                    </DialogFooter>
                   </>
                 )}
               </>
             )}
           </div>
-        </div>
-      ) : null}
+        </DialogContent>
+      </Dialog>
 
       {/* Disable account-login confirmation */}
-      {disableLoginConfirmOpen ? (
-        <div
-          className="vx-profile-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("dialogs.disableLogin.title")}
-        >
-          <div
-            className="vx-profile-dialog__backdrop"
-            onClick={() => setDisableLoginConfirmOpen(false)}
-          />
-          <div className="vx-profile-dialog__content vx-account-profile-dialog">
-            <header className="vx-account-profile-dialog__header">
-              <h3>{t("dialogs.disableLogin.title")}</h3>
-              <p>{t("dialogs.disableLogin.description")}</p>
-            </header>
-            <div className="vx-profile-dialog__actions">
-              <Button
-                variant="outline"
-                onClick={() => setDisableLoginConfirmOpen(false)}
-                disabled={submitting}
-              >
-                {t("actions.cancel")}
-              </Button>
-              <Button
-                onClick={() => void confirmDisableAccountLogin()}
-                disabled={submitting}
-              >
-                {t("security.disableLogin")}
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <Dialog
+        open={disableLoginConfirmOpen}
+        onOpenChange={setDisableLoginConfirmOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("dialogs.disableLogin.title")}</DialogTitle>
+            <DialogDescription>
+              {t("dialogs.disableLogin.description")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDisableLoginConfirmOpen(false)}
+              disabled={submitting}
+            >
+              {t("actions.cancel")}
+            </Button>
+            <Button
+              onClick={() => void confirmDisableAccountLogin()}
+              disabled={submitting}
+            >
+              {t("security.disableLogin")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Unbind connected account confirmation dialog */}
       {unbindTarget ? (
-        <div
-          className="vx-profile-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("connectedAccounts.dialogs.unbindTitle")}
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setUnbindTarget(null);
+          }}
         >
-          <div
-            className="vx-profile-dialog__backdrop"
-            onClick={() => setUnbindTarget(null)}
-          />
-          <form
-            className="vx-profile-dialog__content vx-account-profile-dialog"
-            onSubmit={submitUnbind}
-          >
-            <header className="vx-account-profile-dialog__header">
-              <h3>{t("connectedAccounts.dialogs.unbindTitle")}</h3>
-              <p>
-                {t("connectedAccounts.dialogs.unbindDescription", {
-                  provider: t(
-                    `connectedAccounts.providers.${unbindTarget.provider}.name`,
-                  ),
-                })}
-              </p>
-            </header>
-            <div className="vx-profile-dialog__actions">
-              <Button
-                variant="outline"
-                onClick={() => setUnbindTarget(null)}
-                disabled={submitting}
-              >
-                {t("actions.cancel")}
-              </Button>
-              <Button type="submit" disabled={submitting}>
-                {t("connectedAccounts.actions.confirmUnbind")}
-              </Button>
-            </div>
-          </form>
-        </div>
+          <DialogContent>
+            <form className="flex flex-col gap-lg" onSubmit={submitUnbind}>
+              <DialogHeader>
+                <DialogTitle>
+                  {t("connectedAccounts.dialogs.unbindTitle")}
+                </DialogTitle>
+                <DialogDescription>
+                  {t("connectedAccounts.dialogs.unbindDescription", {
+                    provider: t(
+                      `connectedAccounts.providers.${unbindTarget.provider}.name`,
+                    ),
+                  })}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setUnbindTarget(null)}
+                  disabled={submitting}
+                >
+                  {t("actions.cancel")}
+                </Button>
+                <Button type="submit" disabled={submitting}>
+                  {t("connectedAccounts.actions.confirmUnbind")}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       ) : null}
-    </div>
+    </ViewLayout>
   );
 }

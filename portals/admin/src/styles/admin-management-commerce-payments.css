@@ -1,118 +1,3 @@
-/* Payment transaction row base styles. */
-
-.vx-payment-row__payment,
-.vx-payment-row__tenant,
-.vx-payment-row__bill,
-.vx-payment-row__amount,
-.vx-payment-row__status,
-.vx-payment-row__reconcile {
-  min-width: 0;
-  display: grid;
-  gap: var(--vx-admin-management-space-05r);
-}
-
-.vx-payment-row__payment,
-.vx-payment-row__bill {
-  justify-self: start;
-  justify-items: start;
-  text-align: left;
-}
-
-.vx-payment-row__amount,
-.vx-payment-row__status,
-.vx-payment-row__reconcile {
-  justify-self: center;
-  justify-items: center;
-  text-align: center;
-}
-
-.vx-payment-row__tenant {
-  justify-self: start;
-  grid-template-columns: var(--vx-admin-management-track-2r) minmax(0, 1fr);
-  align-items: center;
-  gap: var(--vx-admin-management-space-1r);
-  text-align: left;
-}
-
-.vx-payment-row__tenant svg {
-  color: var(--tenant-row-tone);
-}
-
-.vx-payment-row__payment small,
-.vx-payment-row__tenant small,
-.vx-payment-row__bill small,
-.vx-payment-row__amount small,
-.vx-payment-row__status small,
-.vx-payment-row__reconcile small {
-  margin-top: 0;
-  font-weight: 400;
-}
-
-.vx-payment-row__reconcile small {
-  max-width: var(--vx-admin-management-size-10r);
-  overflow: hidden;
-  color: var(--tenant-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vx-payment-status-line {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--vx-admin-management-space-05r);
-}
-
-.vx-payment-status-dot {
-  width: var(--vx-admin-management-size-1125r);
-  height: var(--vx-admin-management-size-1125r);
-  flex: 0 0 auto;
-  display: inline-grid;
-  place-items: center;
-  border-radius: var(--vx-radius-full);
-  background: var(--payment-status-dot, var(--vx-color-gray-400));
-  color: var(--vx-color-white);
-  box-shadow: 0 0 0 var(--vx-admin-management-effect-0125r)
-    var(--payment-status-halo, color-mix(in srgb, var(--vx-color-gray-400) 14%, transparent));
-}
-
-.vx-payment-status-dot svg {
-  width: var(--vx-admin-management-size-06875r);
-  height: var(--vx-admin-management-size-06875r);
-  stroke-width: 2.5;
-}
-
-.vx-payment-status-dot--paid,
-.vx-payment-status-dot--reconcile-normal {
-  --payment-status-dot: var(--tenant-green);
-  --payment-status-halo: color-mix(in srgb, var(--vx-color-success) 12%, transparent);
-}
-
-.vx-payment-status-dot--pending,
-.vx-payment-status-dot--pending_verify,
-.vx-payment-status-dot--partial,
-.vx-payment-status-dot--reconcile-pending_verify,
-.vx-payment-status-dot--reconcile-partial {
-  --payment-status-dot: var(--tenant-amber);
-  --payment-status-halo: color-mix(in srgb, var(--vx-color-warning-600) 14%, transparent);
-}
-
-.vx-payment-status-dot--failed,
-.vx-payment-status-dot--refunding,
-.vx-payment-status-dot--reconcile-overpaid,
-.vx-payment-status-dot--reconcile-bill_cancelled,
-.vx-payment-status-dot--reconcile-failed {
-  --payment-status-dot: var(--tenant-rose);
-  --payment-status-halo: color-mix(in srgb, var(--vx-color-danger) 14%, transparent);
-}
-
-.vx-payment-status-dot--closed,
-.vx-payment-status-dot--reconcile-unlinked {
-  --payment-status-dot: var(--vx-color-gray-400);
-  --payment-status-halo: color-mix(in srgb, var(--vx-color-gray-400) 14%, transparent);
-}
-
 /* Payment transaction card styles. */
 
 .vx-payment-card__bill {
@@ -127,57 +12,16 @@
 }
 
 .vx-commercial-search {
-  width: clamp(var(--vx-admin-management-size-13r), 16vw, var(--vx-admin-management-size-20r));
-  flex-basis: clamp(var(--vx-admin-management-size-13r), 16vw, var(--vx-admin-management-size-20r));
-}
-
-.vx-promotions-page .vx-tenant-directory-row {
-  cursor: default;
-}
-
-.vx-commercial-row__tenant,
-.vx-commercial-row__main,
-.vx-commercial-row__center {
-  min-width: 0;
-  display: grid;
-  gap: var(--vx-admin-management-space-05r);
-}
-
-.vx-commercial-row__tenant {
-  justify-self: start;
-  grid-template-columns: var(--vx-admin-management-track-2r) minmax(0, 1fr);
-  align-items: center;
-  gap: var(--vx-admin-management-space-1r);
-  text-align: left;
-}
-
-.vx-commercial-row__tenant svg {
-  color: var(--tenant-row-tone);
-}
-
-.vx-commercial-row__main {
-  justify-self: start;
-  justify-items: start;
-  text-align: left;
-}
-
-.vx-commercial-row__center {
-  justify-self: center;
-  justify-items: center;
-  text-align: center;
-}
-
-.vx-commercial-row__tenant small,
-.vx-commercial-row__main small,
-.vx-commercial-row__center small {
-  margin-top: 0;
-  max-width: 100%;
-  color: var(--tenant-muted);
-  font-weight: 400;
-}
-
-.vx-commercial-row__center small {
-  max-width: var(--vx-admin-management-size-13r);
+  width: clamp(
+    var(--vx-admin-management-size-13r),
+    16vw,
+    var(--vx-admin-management-size-20r)
+  );
+  flex-basis: clamp(
+    var(--vx-admin-management-size-13r),
+    16vw,
+    var(--vx-admin-management-size-20r)
+  );
 }
 
 .vx-commercial-card__description {
@@ -189,51 +33,4 @@
   line-height: 1.55;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.vx-commercial-status-line {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--vx-admin-management-space-05r);
-}
-
-.vx-commercial-status-dot {
-  width: var(--vx-admin-management-size-1125r);
-  height: var(--vx-admin-management-size-1125r);
-  flex: 0 0 auto;
-  display: inline-grid;
-  place-items: center;
-  border-radius: var(--vx-radius-full);
-  background: var(--commercial-status-dot, var(--vx-color-gray-400));
-  color: var(--vx-color-white);
-  box-shadow: 0 0 0 var(--vx-admin-management-effect-0125r)
-    var(--commercial-status-halo, color-mix(in srgb, var(--vx-color-gray-400) 14%, transparent));
-}
-
-.vx-commercial-status-dot svg {
-  width: var(--vx-admin-management-size-06875r);
-  height: var(--vx-admin-management-size-06875r);
-  stroke-width: 2.5;
-}
-
-.vx-commercial-status-dot--normal {
-  --commercial-status-dot: var(--tenant-green);
-  --commercial-status-halo: color-mix(in srgb, var(--vx-color-success) 12%, transparent);
-}
-
-.vx-commercial-status-dot--warning {
-  --commercial-status-dot: var(--tenant-amber);
-  --commercial-status-halo: color-mix(in srgb, var(--vx-color-warning-600) 14%, transparent);
-}
-
-.vx-commercial-status-dot--danger {
-  --commercial-status-dot: var(--tenant-rose);
-  --commercial-status-halo: color-mix(in srgb, var(--vx-color-danger) 14%, transparent);
-}
-
-.vx-commercial-status-dot--muted {
-  --commercial-status-dot: var(--vx-color-gray-400);
-  --commercial-status-halo: color-mix(in srgb, var(--vx-color-gray-400) 14%, transparent);
 }

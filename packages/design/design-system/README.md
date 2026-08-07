@@ -37,7 +37,7 @@ import "@vxture/design-system/styles/globals.css";
 
 禁止从 `@vxture/design-system/src/**` 或其他未导出的子路径导入。
 
-跨仓库消费项目应先引入 `styles/globals.css`，再选择一个品牌入口。平台级应用使用 `brands/vxture.css`，如影产品级应用使用 `brands/ruyin.css`；禁止同时引入两个品牌入口。完整接入标准见 `docs/10-standards/design-system.md`。
+跨仓库消费项目应先引入 `styles/globals.css`，再选择一个品牌入口。平台级应用使用 `brands/vxture.css`，如影产品级应用使用 `brands/ruyin.css`；禁止同时引入两个品牌入口。完整使用规范随包发布，见本包 [`docs/`](./docs/README.md)。
 
 ## Root Layout
 
@@ -172,7 +172,7 @@ Foundation 层统一维护 spacing、radius、shadow、motion 和 animation keyf
 
 ```tsx
 // 禁止：内部路径
-import { Button } from "@vxture/design-system/src/components/ui/button";
+import { Button } from "@vxture/design-ui/src/components/base/Button";
 
 // 禁止：应用直接使用底层图标库
 import { User } from "@phosphor-icons/react";

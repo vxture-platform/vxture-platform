@@ -1,0 +1,141 @@
+/**
+ * semantic/spacing-semantic.css - T2 语义层 · 间距与控件高度（工具类族 p-* / gap-* / h-*）。
+ * @package @vxture/design-tokens
+ * @layer Presentation
+ * @category styles
+ * @author AI-Generated
+ * @date 2026-08-01
+ *
+ * ⚠ 本文件由脚本生成，请勿手工编辑。
+ *   生成：node scripts/design-tokens/generate-semantic-scales.mjs
+ *   输入：scripts/design-tokens/semantic-policy.mjs
+ *
+ * T2 契约见 packages/design/design-system/docs/04-tokens-contract.md。
+ * 构建规范见 docs/10-standards/065-design-token-pipeline.md。
+ *
+ * 密度三档是**用户偏好轴**，与组件自身的尺寸变体（cva size）正交：前者由祖先
+ * 类重定向变量、任意深度生效，后者由类名逐处指定。组件不需要知道密度存在。
+ *
+ * 三档之间是档位平移而非等比缩放（比值 1.0–1.5 不等），故必须逐档列表，
+ * 不能靠一个乘数推导。
+ *
+ * 末尾的流体档三块各写一遍且文本相同：它的上下界引用同块内的固定档，自定义
+ * 属性在使用处求值，所以三档密度各自拿到自己的边界。
+ */
+
+:root, .density-default {
+  /* inset */
+  --space-none: 0px;
+  --space-2xs: calc(var(--vx-spacing) * 1);
+  --space-xs: calc(var(--vx-spacing) * 2);
+  --space-sm: calc(var(--vx-spacing) * 2.5);
+  --space-md: calc(var(--vx-spacing) * 4);
+  --space-lg: calc(var(--vx-spacing) * 6);
+  --space-xl: calc(var(--vx-spacing) * 8);
+  --space-2xl: calc(var(--vx-spacing) * 10);
+  --space-3xl: calc(var(--vx-spacing) * 12);
+  --space-4xl: calc(var(--vx-spacing) * 14);
+  --space-5xl: calc(var(--vx-spacing) * 16);
+  --space-6xl: calc(var(--vx-spacing) * 20);
+
+  /* row */
+  --space-row-sm: calc(var(--vx-spacing) * 12);
+  --space-row-md: calc(var(--vx-spacing) * 14);
+  --space-row-lg: calc(var(--vx-spacing) * 16);
+  --space-row-xl: calc(var(--vx-spacing) * 20);
+  --space-row-2xl: calc(var(--vx-spacing) * 24);
+  --space-row-3xl: calc(var(--vx-spacing) * 28);
+  --space-row-4xl: calc(var(--vx-spacing) * 32);
+
+  /* control */
+  --space-control-3xs: calc(var(--vx-spacing) * 4);
+  --space-control-2xs: calc(var(--vx-spacing) * 5);
+  --space-control-xs: calc(var(--vx-spacing) * 6);
+  --space-control-sm: calc(var(--vx-spacing) * 7);
+  --space-control-md: calc(var(--vx-spacing) * 8);
+  --space-control-lg: calc(var(--vx-spacing) * 9);
+  --space-control-xl: calc(var(--vx-spacing) * 10);
+  --space-control-2xl: calc(var(--vx-spacing) * 12);
+  --space-control-3xl: calc(var(--vx-spacing) * 14);
+
+  /* fluid */
+  --space-page-inset: clamp(var(--space-lg), 3.2vw, var(--space-3xl));  /* 内容区四周留白：窄屏贴到 lg，宽屏放开到 3xl */
+}
+
+.density-compact {
+  /* inset */
+  --space-none: 0px;
+  --space-2xs: calc(var(--vx-spacing) * 0.5);
+  --space-xs: calc(var(--vx-spacing) * 1);
+  --space-sm: calc(var(--vx-spacing) * 1.5);
+  --space-md: calc(var(--vx-spacing) * 2);
+  --space-lg: calc(var(--vx-spacing) * 3);
+  --space-xl: calc(var(--vx-spacing) * 4);
+  --space-2xl: calc(var(--vx-spacing) * 6);
+  --space-3xl: calc(var(--vx-spacing) * 8);
+  --space-4xl: calc(var(--vx-spacing) * 10);
+  --space-5xl: calc(var(--vx-spacing) * 12);
+  --space-6xl: calc(var(--vx-spacing) * 14);
+
+  /* row */
+  --space-row-sm: calc(var(--vx-spacing) * 8);
+  --space-row-md: calc(var(--vx-spacing) * 10);
+  --space-row-lg: calc(var(--vx-spacing) * 12);
+  --space-row-xl: calc(var(--vx-spacing) * 14);
+  --space-row-2xl: calc(var(--vx-spacing) * 16);
+  --space-row-3xl: calc(var(--vx-spacing) * 20);
+  --space-row-4xl: calc(var(--vx-spacing) * 24);
+
+  /* control */
+  --space-control-3xs: calc(var(--vx-spacing) * 3);
+  --space-control-2xs: calc(var(--vx-spacing) * 4);
+  --space-control-xs: calc(var(--vx-spacing) * 5);
+  --space-control-sm: calc(var(--vx-spacing) * 6);
+  --space-control-md: calc(var(--vx-spacing) * 7);
+  --space-control-lg: calc(var(--vx-spacing) * 8);
+  --space-control-xl: calc(var(--vx-spacing) * 9);
+  --space-control-2xl: calc(var(--vx-spacing) * 10);
+  --space-control-3xl: calc(var(--vx-spacing) * 12);
+
+  /* fluid */
+  --space-page-inset: clamp(var(--space-lg), 3.2vw, var(--space-3xl));  /* 内容区四周留白：窄屏贴到 lg，宽屏放开到 3xl */
+}
+
+.density-comfortable {
+  /* inset */
+  --space-none: 0px;
+  --space-2xs: calc(var(--vx-spacing) * 1);
+  --space-xs: calc(var(--vx-spacing) * 2);
+  --space-sm: calc(var(--vx-spacing) * 2.5);
+  --space-md: calc(var(--vx-spacing) * 4);
+  --space-lg: calc(var(--vx-spacing) * 6);
+  --space-xl: calc(var(--vx-spacing) * 8);
+  --space-2xl: calc(var(--vx-spacing) * 10);
+  --space-3xl: calc(var(--vx-spacing) * 12);
+  --space-4xl: calc(var(--vx-spacing) * 14);
+  --space-5xl: calc(var(--vx-spacing) * 16);
+  --space-6xl: calc(var(--vx-spacing) * 20);
+
+  /* row */
+  --space-row-sm: calc(var(--vx-spacing) * 12);
+  --space-row-md: calc(var(--vx-spacing) * 14);
+  --space-row-lg: calc(var(--vx-spacing) * 16);
+  --space-row-xl: calc(var(--vx-spacing) * 20);
+  --space-row-2xl: calc(var(--vx-spacing) * 24);
+  --space-row-3xl: calc(var(--vx-spacing) * 28);
+  --space-row-4xl: calc(var(--vx-spacing) * 32);
+
+  /* control */
+  --space-control-3xs: calc(var(--vx-spacing) * 5);
+  --space-control-2xs: calc(var(--vx-spacing) * 6);
+  --space-control-xs: calc(var(--vx-spacing) * 7);
+  --space-control-sm: calc(var(--vx-spacing) * 8);
+  --space-control-md: calc(var(--vx-spacing) * 9);
+  --space-control-lg: calc(var(--vx-spacing) * 10);
+  --space-control-xl: calc(var(--vx-spacing) * 11);
+  --space-control-2xl: calc(var(--vx-spacing) * 14);
+  --space-control-3xl: calc(var(--vx-spacing) * 16);
+
+  /* fluid */
+  --space-page-inset: clamp(var(--space-lg), 3.2vw, var(--space-3xl));  /* 内容区四周留白：窄屏贴到 lg，宽屏放开到 3xl */
+}

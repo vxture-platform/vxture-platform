@@ -145,7 +145,7 @@ const SolutionCard = memo(function SolutionCard({
                 <div className="flex gap-6">
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="md"
                     aria-label="Previous"
                     onClick={prev}
                     className="flex items-center gap-2 px-3 py-2 rounded-full hover:bg-vx-gray-100 dark:hover:bg-vx-gray-600 transition-all duration-300 hover:shadow-md"
@@ -160,7 +160,7 @@ const SolutionCard = memo(function SolutionCard({
                   </Button>
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="md"
                     aria-label="Next"
                     onClick={next}
                     className="flex items-center gap-2 px-3 py-2 rounded-full hover:bg-vx-gray-100 dark:hover:bg-vx-gray-600 transition-all duration-300 hover:shadow-md"
@@ -284,7 +284,7 @@ const SolutionSection = memo(function SolutionSection({
                   <Button
                     key={solution.id}
                     variant={idx === current ? "secondary" : "ghost"}
-                    size="sm"
+                    size="md"
                     onClick={() => setCurrent(idx)}
                     className={`text-xs sm:text-sm transition-all duration-300 px-2 sm:px-3 py-1 rounded-full ${
                       idx === current

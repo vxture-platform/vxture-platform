@@ -134,6 +134,15 @@
       "name": "packages/ai/model-runtime-client",
       "path": "packages/ai/model-runtime-client",
     },
+    // 设计三包，按依赖方向排：tokens ← ui ← system
+    {
+      "name": "packages/design-tokens",
+      "path": "packages/design/design-tokens",
+    },
+    {
+      "name": "packages/design-ui",
+      "path": "packages/design/design-ui",
+    },
     {
       "name": "packages/design-system",
       "path": "packages/design/design-system",
@@ -171,7 +180,17 @@
     "claudeCode.autosave": true,
     "claudeCode.respectGitIgnore": true,
     "claudeCode.usePythonEnvironment": true,
-    "cSpell.words": ["ASVS", "bytea", "cfaccess", "Dypnsapi", "otpauth", "PNVS", "TOTP", "uidx"],
+    "cSpell.words": [
+      "ASVS",
+      "bytea",
+      "cfaccess",
+      "Dypnsapi",
+      "otpauth",
+      "PNVS",
+      "TOTP",
+      "uidx",
+      "Varda",
+    ],
   },
   "extensions": {
     "recommendations": [],

@@ -21,7 +21,13 @@ import { ConsoleAppShell } from "@/layout/template/ConsoleAppShell";
 const DEFAULT_USERNAME_RE = /^_\d+$/;
 const ONBOARDING_PATH = "/onboarding";
 
-function ShellFrame({ children }: { children: ReactNode }) {
+function ShellFrame({
+  children,
+  initialNavCollapsed,
+}: {
+  children: ReactNode;
+  initialNavCollapsed: boolean;
+}) {
   const { session, status } = useConsoleSession();
   const router = useRouter();
   const pathname = usePathname();
@@ -82,7 +88,7 @@ function ShellFrame({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ConsoleAppShell>
+    <ConsoleAppShell initialNavCollapsed={initialNavCollapsed}>
       <div className="console-page">
         <div className="console-page__body">{children}</div>
       </div>
@@ -93,15 +99,19 @@ function ShellFrame({ children }: { children: ReactNode }) {
 export function ConsoleShell({
   children,
   initialSession,
+  initialNavCollapsed = false,
 }: {
   children: ReactNode;
   initialSession?: SessionSnapshot | null;
+  initialNavCollapsed?: boolean;
 }) {
   return (
     <ConsoleSessionProvider initialSession={initialSession ?? null}>
       <TenantProvider>
         <PortalEntryProvider>
-          <ShellFrame>{children}</ShellFrame>
+          <ShellFrame initialNavCollapsed={initialNavCollapsed}>
+            {children}
+          </ShellFrame>
         </PortalEntryProvider>
       </TenantProvider>
     </ConsoleSessionProvider>

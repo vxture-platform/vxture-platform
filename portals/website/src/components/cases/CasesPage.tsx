@@ -95,7 +95,7 @@ export default function CasesPage() {
           <div className="flex flex-wrap gap-2">
             <Button
               variant={selectedCategory === "all" ? "default" : "outline"}
-              size="sm"
+              size="md"
               onClick={() => setSelectedCategory("all")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 selectedCategory === "all"
@@ -111,7 +111,7 @@ export default function CasesPage() {
                 variant={
                   selectedCategory === category.slug ? "default" : "outline"
                 }
-                size="sm"
+                size="md"
                 onClick={() => setSelectedCategory(category.slug)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   selectedCategory === category.slug

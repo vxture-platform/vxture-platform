@@ -12,7 +12,6 @@
   --tenant-ink: var(--vx-color-brand-950);
   --tenant-muted: var(--vx-color-text-muted);
   --tenant-line: color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
-  gap: var(--vx-admin-management-space-2r);
 }
 
 .vx-tenant-management-page h2,
@@ -24,7 +23,7 @@
 .vx-tenant-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--vx-admin-management-space-1r);
+  gap: var(--space-md);
 }
 
 .vx-platform-users-summary,
@@ -32,8 +31,7 @@
 .vx-admin-permissions-summary,
 .vx-model-platform-summary,
 .vx-model-strategy-summary,
-.vx-platform-governance-summary,
-.vx-audit-summary {
+.vx-platform-governance-summary{
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
@@ -43,8 +41,8 @@
   display: grid;
   grid-template-columns: var(--vx-admin-management-track-25r) minmax(0, 1fr);
   align-items: center;
-  gap: var(--vx-admin-management-space-1r);
-  padding: var(--vx-admin-management-space-15r);
+  gap: var(--space-md);
+  padding: var(--space-lg);
   border: var(--vx-admin-management-line-width-1p) solid color-mix(in srgb, var(--vx-color-brand-400) 16%, transparent);
   border-top: var(--vx-admin-management-line-width-2p) solid var(--tenant-tone);
   border-radius: var(--tenant-card-radius);
@@ -62,7 +60,7 @@
 .vx-tenant-summary__item div {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
 }
 
 .vx-tenant-summary__item span {
@@ -76,7 +74,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
 }
 
 .vx-tenant-summary__item strong {
@@ -90,7 +88,7 @@
   min-height: var(--vx-admin-management-size-15r);
   display: inline-flex;
   align-items: center;
-  padding: 0 var(--vx-admin-management-space-05r);
+  padding: 0 var(--space-xs);
   border-radius: var(--tenant-card-radius);
   background: color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
   color: var(--tenant-tone);
@@ -120,124 +118,44 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-1r);
-  padding: var(--vx-admin-management-space-1r) 0 var(--vx-admin-management-space-085r);
+  gap: var(--space-md);
+  padding: var(--space-md) 0 var(--space-md);
   border: 0;
-  border-radius: var(--vx-admin-management-radius-05r) var(--vx-admin-management-radius-05r) 0 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
   background: transparent;
 }
-
-.vx-tenant-toolbar .vx-btn,
-.vx-tenant-toolbar .vx-input {
-  height: var(--vx-admin-management-size-25r);
-  min-height: var(--vx-admin-management-size-25r);
-  padding-block: 0;
-  border-radius: var(--vx-radius-lg);
-  font-size: var(--vx-admin-meta-size);
-  font-weight: 400;
-}
-
+/* 控件外观归 DS：这里原本把 Input 重画了一遍——40px 高、自己的描边与焦点环，
+   于是工具行里搜索框比按钮和下拉高出一截。基准控件高度 32px（--space-control-md），
+   由 DS 的件统一出（owner 2026-08-06）。 */
 .vx-tenant-search {
   width: clamp(var(--vx-admin-management-size-11r-large), 14vw, var(--vx-admin-management-size-17r));
   flex: 0 0 clamp(var(--vx-admin-management-size-11r-large), 14vw, var(--vx-admin-management-size-17r));
-}
-
-.vx-tenant-toolbar .vx-input {
-  border: var(--vx-admin-management-line-width-1p) solid var(--vx-color-auth-border);
-  background-color: transparent;
-  color: var(--vx-color-text-secondary);
-}
-
-.vx-tenant-toolbar .vx-input::placeholder {
-  color: var(--vx-color-gray-400);
-  font-weight: 400;
-}
-
-.vx-tenant-toolbar .vx-input:focus {
-  border-color: color-mix(in srgb, var(--vx-color-auth-accent) 32%, transparent);
-  outline: var(--vx-admin-management-line-width-2p) solid color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
-  outline-offset: 0;
-}
-
-.vx-tenant-toolbar .vx-btn--outline {
-  border-color: var(--vx-color-auth-border);
-  background: transparent;
-  color: var(--vx-color-text-secondary);
-  font-weight: 400;
-}
-
-.vx-tenant-toolbar .vx-btn--outline:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--vx-color-auth-accent) 28%, transparent);
-  background: transparent;
-  color: var(--tenant-blue);
 }
 
 .vx-tenant-filters {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-1r);
+  gap: var(--space-md);
   flex: 0 1 auto;
 }
 
+/* 只留宽度。外观、内边距、箭头都归 DS 的 NativeSelect——这里原本自绘了第二个
+   箭头（data-uri 的 chevron），与件自带的那个重叠成两个（owner 2026-08-06 实测）。 */
 .vx-tenant-select {
-  appearance: none;
   width: var(--vx-admin-management-size-75r);
   min-width: 0;
-  padding-right: var(--vx-admin-management-space-225r);
-  background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 14 14' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3.5 5.25L7 8.75L10.5 5.25' stroke='%2394A3B8' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right var(--vx-admin-management-pattern-075r) center;
-  background-size: var(--vx-admin-management-pattern-0875r);
 }
 
 .vx-tenant-select option {
   font-weight: 400;
 }
 
-.vx-view-mode-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 0;
-}
-
-.vx-view-mode-switch button {
-  width: var(--vx-admin-management-size-225r);
-  height: var(--vx-admin-management-size-225r);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: var(--vx-radius-md);
-  background: transparent;
-  color: var(--vx-color-gray-400);
-  cursor: pointer;
-  font-weight: 400;
-  transition:
-    background-color 160ms ease,
-    color 160ms ease;
-}
-
-.vx-view-mode-switch button:hover {
-  color: var(--tenant-blue);
-}
-
-.vx-view-mode-switch button.is-active {
-  background: var(--vx-color-auth-border);
-  color: var(--tenant-blue);
-}
-
-.vx-view-mode-switch svg {
-  width: var(--vx-admin-management-size-15r);
-  height: var(--vx-admin-management-size-15r);
-}
-
 .vx-tenant-view-count {
   min-height: var(--vx-admin-management-size-225r);
   display: inline-flex;
   align-items: center;
-  padding-left: var(--vx-admin-management-space-05r);
+  padding-left: var(--space-xs);
   color: var(--tenant-ink);
   font-size: var(--vx-admin-body-size);
   font-weight: 800;

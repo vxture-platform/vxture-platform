@@ -3,20 +3,36 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Banner,
-  Icon,
+  ActionButton,
   ActionMenu,
   Badge,
+  Banner,
   BulkActionBar,
-  Button,
-  Checkbox,
-  Input,
-  NativeSelect,
-  Pagination as DsPagination,
-  ActionButton,
+  DataTable,
   EmptyState,
-  ViewModeSwitch,
+  FilterBar,
+  Input,
+  ListCardGrid,
+  ListPageTemplate,
+  MetricGrid,
+  MetricListCard,
+  NativeSelect,
+  StatusBadge,
+  TableTitleCell,
 } from "@vxture/design-system";
+import type { DataTableColumn } from "@vxture/design-system";
+import { resolveStatusTone, type StatusTone } from "@vxture/shared";
+import {
+  BILL_STATUS_TONE,
+  INVOICE_STATUS_TONE,
+} from "@/modules/shared/status-tone";
+import {
+  TIER_FILTER_OPTIONS,
+  tierBadgeClass,
+  tierFilterOf,
+  type TierFilterValue,
+} from "@/modules/shared/tier-level";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import type { IconName } from "@vxture/design-system";
 import { exportRowsToCsv, type CsvColumn } from "@/lib/exportCsv";
 import { isListTruncated } from "@/lib/list-truncation";
@@ -28,10 +44,7 @@ import type {
   BillingRecord,
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
-import {
-  PageSizePicker as AdminPageSizePicker,
-  type PageSize,
-} from "@/modules/shared/PageSizePicker";
+import { type PageSize } from "@/modules/shared/PageSizePicker";
 import {
   canSyncOfflineInvoice,
   offlineInvoiceDisabledReason,
@@ -40,7 +53,6 @@ import {
 import {
   formatDate,
   formatNumber,
-  joinClasses,
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
 
@@ -48,7 +60,7 @@ type ViewMode = "list" | "cards";
 type BillStatusFilter = "all" | BillingBillStatus;
 type InvoiceStatusFilter = "all" | BillingInvoiceStatus;
 type BillTypeFilter = "all" | BillingBillType;
-type TierFilter = "all" | "free" | "pro" | "enterprise" | "other";
+type TierFilter = "all" | TierFilterValue;
 type BillingExceptionFilter =
   | "all"
   | "attention"
@@ -106,11 +118,16 @@ function invoiceStatusLabel(status: BillingInvoiceStatus) {
   return "未开票";
 }
 
+/**
+ * 账单上的异常标。`tone` 直接给 DS 语气档，不再走 `vx-billing-exception-pill--*`
+ * 那套色名——调整单与补录单原先分蓝、紫两色，DS 没有紫档，两者同归 `brand`：
+ * 它们的区别由"调整单"/"补录单"这两个词说，不该靠记颜色。
+ */
 function billingExceptionTags(bill: BillingRecord) {
   const tags: Array<{
     key: string;
     label: string;
-    tone: string;
+    tone: StatusTone;
     title?: string;
   }> = [];
 
@@ -119,7 +136,7 @@ function billingExceptionTags(bill: BillingRecord) {
     tags.push({
       key: "adjust",
       label: "调整单",
-      tone: "adjust",
+      tone: "brand",
       ...(title ? { title } : {}),
     });
   }
@@ -128,7 +145,7 @@ function billingExceptionTags(bill: BillingRecord) {
     tags.push({
       key: "supplement",
       label: "补录单",
-      tone: "supplement",
+      tone: "brand",
       ...(title ? { title } : {}),
     });
   }
@@ -136,7 +153,7 @@ function billingExceptionTags(bill: BillingRecord) {
     tags.push({
       key: "discounted",
       label: "已减免",
-      tone: "discount",
+      tone: "warning",
       title: `减免 ${formatCurrency(bill.discountAmount, bill.currency)}`,
     });
   }
@@ -144,7 +161,7 @@ function billingExceptionTags(bill: BillingRecord) {
     tags.push({
       key: "overdue_followup",
       label: bill.operationRemark ? "逾期跟进" : "逾期待跟进",
-      tone: "overdue",
+      tone: "danger",
       title: bill.operationRemark ?? "当前账单已逾期，尚未登记跟进原因。",
     });
   }
@@ -153,7 +170,7 @@ function billingExceptionTags(bill: BillingRecord) {
     tags.push({
       key: "cancelled",
       label: "已作废",
-      tone: "cancelled",
+      tone: "neutral",
       ...(title ? { title } : {}),
     });
   }
@@ -162,7 +179,7 @@ function billingExceptionTags(bill: BillingRecord) {
     tags.push({
       key: "invoice_exception",
       label: bill.invoiceStatus === "red" ? "发票红冲" : "发票驳回",
-      tone: "invoice",
+      tone: "danger",
       ...(title ? { title } : {}),
     });
   }
@@ -193,15 +210,6 @@ function cycleLabel(cycle: string) {
   if (cycle === "monthly") return "月度";
   if (cycle === "once") return "一次性";
   return cycle || "未设置";
-}
-
-function tierFilterValue(record: BillingRecord): TierFilter {
-  const tierName = (record.tierName ?? "").toLowerCase();
-  if (tierName === "free" || record.tierName === "Free") return "free";
-  if (tierName === "pro" || record.tierName === "Pro") return "pro";
-  if (tierName === "enterprise" || record.tierName === "Enterprise")
-    return "enterprise";
-  return record.tierName ? "other" : "other";
 }
 
 function billingSearchText(record: BillingRecord) {
@@ -251,35 +259,6 @@ const billingCsvColumns: CsvColumn<BillingRecord>[] = [
   { label: "经办人", value: (b) => b.operatorName },
 ];
 
-function SummaryItem({
-  icon,
-  label,
-  value,
-  tags,
-  tone = "blue",
-}: {
-  icon: IconName;
-  label: string;
-  value: string;
-  tags?: string[];
-  tone?: "blue" | "green" | "amber" | "rose";
-}) {
-  return (
-    <article className={`vx-tenant-summary__item vx-tenant-tone--${tone}`}>
-      <Icon name={icon} size="lg" fallback="placeholder" />
-      <div>
-        <span>{label}</span>
-        <p>
-          <strong>{value}</strong>
-          {tags?.map((tag) => (
-            <em key={tag}>{tag}</em>
-          ))}
-        </p>
-      </div>
-    </article>
-  );
-}
-
 function BillingActionsMenu({
   bill,
   onSyncInvoice,
@@ -297,27 +276,25 @@ function BillingActionsMenu({
     >
       <ActionMenu
         label={`${bill.billNo} 账单操作`}
-        triggerClassName="vx-tenant-actions__trigger"
-        triggerProps={{ title: "操作" }}
         items={[
           {
             id: "details",
             label: "账单详情",
-            icon: <Icon name="arrow-right" size="xs" fallback="placeholder" />,
+            icon: "arrow-right",
             onSelect: () =>
               router.push(`/billing/${encodeURIComponent(bill.id)}`),
           },
           {
             id: "tenant",
             label: "查看租户",
-            icon: <Icon name="buildings" size="xs" fallback="placeholder" />,
+            icon: "buildings",
             onSelect: () =>
               router.push(`/tenants/${encodeURIComponent(bill.tenantId)}`),
           },
           {
             id: "subscription",
             label: "查看订阅",
-            icon: <Icon name="star" size="xs" fallback="placeholder" />,
+            icon: "star",
             disabled: !bill.subscriptionId,
             onSelect: () => {
               if (!bill.subscriptionId) return;
@@ -329,7 +306,7 @@ function BillingActionsMenu({
           {
             id: "order",
             label: "查看订单",
-            icon: <Icon name="table" size="xs" fallback="placeholder" />,
+            icon: "table",
             disabled: !bill.subscriptionId,
             onSelect: () => {
               if (!bill.subscriptionId) return;
@@ -339,7 +316,7 @@ function BillingActionsMenu({
           {
             id: "invoice",
             label: "登记发票",
-            icon: <Icon name="key" size="xs" fallback="placeholder" />,
+            icon: "key",
             disabled: !canSyncOfflineInvoice(bill),
             ...(invoiceDisabledReason ? { title: invoiceDisabledReason } : {}),
             onSelect: () => onSyncInvoice(bill),
@@ -350,205 +327,139 @@ function BillingActionsMenu({
   );
 }
 
-function BillingListRows({
-  bills,
-  startIndex,
-  onSyncInvoice,
-  selectedBillIds,
-  isPageSelected,
-  onToggleBill,
-  onTogglePage,
-}: {
-  bills: BillingRecord[];
-  startIndex: number;
-  onSyncInvoice: (bill: BillingRecord) => void;
-  selectedBillIds: Set<string>;
-  isPageSelected: boolean;
-  onToggleBill: (id: string, checked: boolean) => void;
-  onTogglePage: (checked: boolean) => void;
-}) {
+/**
+ * 状态标（账单态、发票态、异常标）走 `StatusBadge`，语气由 `status-tone.ts` 给。
+ *
+ * 套餐等级仍是 pill：等级是**序**不是语气（free < pro < enterprise），DS 的六档
+ * 语气里没有"高一级"这回事，套上去只会把它读成状态。它归 `--level-1..5` 阶梯，
+ * 与缺色（starter / business）一起另算。
+ */
+function useBillingColumns(): DataTableColumn<BillingRecord>[] {
   const router = useRouter();
-  const selectedOnPage = bills.filter((bill) =>
-    selectedBillIds.has(bill.id),
-  ).length;
-  const isPagePartiallySelected =
-    selectedOnPage > 0 && selectedOnPage < bills.length;
 
-  return (
-    <div
-      className="vx-tenant-directory-list vx-billing-directory-list"
-      role="region"
-      aria-label="账单中心清单"
-    >
-      <div className="vx-tenant-directory-list__header">
-        <span>
-          <Checkbox
-            className="vx-model-select-checkbox"
-            checked={isPagePartiallySelected ? "indeterminate" : isPageSelected}
-            onCheckedChange={(checked) => onTogglePage(checked === true)}
-            aria-label="选择当前页账单"
-          />
-        </span>
-        <span>序号</span>
-        <span>账单</span>
-        <span>租户</span>
-        <span>订阅套餐</span>
-        <span>金额</span>
-        <span>处理</span>
-        <span>收款</span>
-        <span>发票</span>
-        <span>操作</span>
-      </div>
-      {bills.map((bill, index) => {
-        const selected = selectedBillIds.has(bill.id);
-
+  return [
+    {
+      id: "bill",
+      header: "账单",
+      cell: (bill) => (
+        <TableTitleCell
+          title={bill.billNo}
+          description={`${cycleLabel(bill.billCycle)} · ${formatDate(bill.cycleStartDate)} - ${formatDate(bill.cycleEndDate)}`}
+          onTitleClick={() =>
+            router.push(`/billing/${encodeURIComponent(bill.id)}`)
+          }
+        />
+      ),
+    },
+    {
+      id: "tenant",
+      header: "租户",
+      cell: (bill) => (
+        <TableTitleCell
+          icon={bill.tenantType === "company" ? "buildings" : "user"}
+          title={bill.tenantName}
+          description={`${bill.tenantCode} · ${typeLabel(bill.tenantType)}`}
+        />
+      ),
+    },
+    {
+      id: "plan",
+      header: "订阅套餐",
+      cell: (bill) => (
+        <TableTitleCell
+          title={
+            <Badge className={tierBadgeClass(bill.tierName)}>
+              {bill.tierName ?? "未关联"}
+            </Badge>
+          }
+          description={bill.servicePlanName ?? bill.orderNo ?? "未关联订阅"}
+        />
+      ),
+    },
+    {
+      id: "amount",
+      header: "金额",
+      align: "right",
+      cell: (bill) => (
+        <TableTitleCell
+          title={formatCurrency(bill.payableAmount, bill.currency)}
+          description={
+            bill.discountAmount > 0
+              ? `原价 ${formatCurrency(bill.totalAmount, bill.currency)} · 减免 ${formatCurrency(bill.discountAmount, bill.currency)}`
+              : `原价 ${formatCurrency(bill.totalAmount, bill.currency)}`
+          }
+        />
+      ),
+    },
+    {
+      id: "exception",
+      header: "处理",
+      align: "center",
+      cell: (bill) => {
+        const tags = billingExceptionTags(bill);
         return (
-          <div
-            key={bill.id}
-            className={joinClasses(
-              "vx-tenant-directory-row",
-              "vx-billing-operation-row",
-              `vx-billing-row--${bill.billStatus}`,
-              selected ? "vx-billing-operation-row--selected" : undefined,
-            )}
-            onClick={(event) => {
-              const target = event.target as HTMLElement;
-              if (
-                target.closest(
-                  'button, input, select, textarea, a, [role="button"], [role="menu"], [role="menuitem"]',
-                )
-              )
-                return;
-              onToggleBill(bill.id, !selected);
-            }}
-          >
-            <span className="vx-billing-operation-row__select">
-              <Checkbox
-                className="vx-model-select-checkbox"
-                checked={selected}
-                onCheckedChange={(checked) =>
-                  onToggleBill(bill.id, checked === true)
-                }
-                aria-label={`选择账单 ${bill.billNo}`}
-              />
-            </span>
-            <span className="vx-tenant-directory-row__index">
-              {formatNumber(startIndex + index + 1)}
-            </span>
-            <span className="vx-billing-row__bill">
-              <span className="vx-tenant-directory-row__title-line">
-                <Button
-                  variant="link"
-                  className="vx-model-name-button"
-                  onClick={() =>
-                    router.push(`/billing/${encodeURIComponent(bill.id)}`)
-                  }
-                >
-                  {bill.billNo}
-                </Button>
-              </span>
-              <small>
-                {cycleLabel(bill.billCycle)} · {formatDate(bill.cycleStartDate)}{" "}
-                - {formatDate(bill.cycleEndDate)}
-              </small>
-            </span>
-            <span className="vx-billing-row__tenant">
-              <Icon
-                name={bill.tenantType === "company" ? "buildings" : "user"}
-                size="sm"
-                fallback="placeholder"
-              />
-              <span>
-                <strong>{bill.tenantName}</strong>
-                <small>
-                  {bill.tenantCode} · {typeLabel(bill.tenantType)}
-                </small>
-              </span>
-            </span>
-            <span className="vx-billing-row__plan">
-              <span className="vx-tenant-directory-row__tag-line">
-                <Badge
-                  className={`vx-tenant-pill vx-billing-pill--tier-${tierFilterValue(bill)}`}
-                >
-                  {bill.tierName ?? "未关联"}
-                </Badge>
-              </span>
-              <small>
-                {bill.servicePlanName ?? bill.orderNo ?? "未关联订阅"}
-              </small>
-            </span>
-            <span className="vx-billing-row__amount">
-              <strong>
-                {formatCurrency(bill.payableAmount, bill.currency)}
-              </strong>
-              <small>
-                {bill.discountAmount > 0
-                  ? `原价 ${formatCurrency(bill.totalAmount, bill.currency)} · 减免 ${formatCurrency(bill.discountAmount, bill.currency)}`
-                  : `原价 ${formatCurrency(bill.totalAmount, bill.currency)}`}
-              </small>
-            </span>
-            <span className="vx-billing-row__exception">
-              {billingExceptionTags(bill).length ? (
-                <span className="vx-billing-exception-tags">
-                  {billingExceptionTags(bill).map((tag) => (
-                    <Badge
+          <TableTitleCell
+            title={
+              tags.length ? (
+                <span className="inline-flex flex-wrap gap-2xs">
+                  {tags.map((tag) => (
+                    <StatusBadge
                       key={tag.key}
-                      className={`vx-tenant-pill vx-billing-exception-pill vx-billing-exception-pill--${tag.tone}`}
-                      title={tag.title}
+                      tone={tag.tone}
+                      {...(tag.title ? { title: tag.title } : {})}
                     >
                       {tag.label}
-                    </Badge>
+                    </StatusBadge>
                   ))}
                 </span>
               ) : (
-                <small className="vx-billing-exception-empty">-</small>
-              )}
-              {bill.operationRemark ? (
-                <small title={bill.operationRemark}>
-                  {bill.operationRemark}
-                </small>
-              ) : null}
-            </span>
-            <span className="vx-billing-row__payment">
-              <span className="vx-billing-status-line">
-                <span
-                  className={`vx-billing-status-dot vx-billing-status-dot--${bill.billStatus}`}
-                  role="img"
-                  aria-label={billStatusLabel(bill.billStatus)}
-                >
-                  <Icon
-                    name={billStatusIcon(bill.billStatus)}
-                    size="xs"
-                    fallback="placeholder"
-                  />
-                </span>
-                <Badge
-                  className={`vx-tenant-pill vx-billing-pill--${bill.billStatus}`}
-                >
-                  {billStatusLabel(bill.billStatus)}
-                </Badge>
-              </span>
-              <small>
-                已收 {formatCurrency(bill.paidAmount, bill.currency)}
-              </small>
-            </span>
-            <span className="vx-billing-row__invoice">
-              <Badge
-                className={`vx-tenant-pill vx-billing-pill--invoice-${bill.invoiceStatus}`}
-              >
-                {invoiceStatusLabel(bill.invoiceStatus)}
-              </Badge>
-              <small>
-                {bill.invoiceNo ??
-                  `已登记 ${formatCurrency(bill.invoicedAmount, bill.currency)}`}
-              </small>
-            </span>
-            <BillingActionsMenu bill={bill} onSyncInvoice={onSyncInvoice} />
-          </div>
+                "-"
+              )
+            }
+            {...(bill.operationRemark
+              ? { description: bill.operationRemark }
+              : {})}
+          />
         );
-      })}
-    </div>
-  );
+      },
+    },
+    {
+      id: "payment",
+      header: "收款",
+      align: "center",
+      cell: (bill) => (
+        <TableTitleCell
+          title={
+            <StatusBadge
+              tone={BILL_STATUS_TONE[bill.billStatus]}
+              icon={billStatusIcon(bill.billStatus)}
+            >
+              {billStatusLabel(bill.billStatus)}
+            </StatusBadge>
+          }
+          description={`已收 ${formatCurrency(bill.paidAmount, bill.currency)}`}
+        />
+      ),
+    },
+    {
+      id: "invoice",
+      header: "发票",
+      align: "center",
+      cell: (bill) => (
+        <TableTitleCell
+          title={
+            <StatusBadge tone={INVOICE_STATUS_TONE[bill.invoiceStatus]}>
+              {invoiceStatusLabel(bill.invoiceStatus)}
+            </StatusBadge>
+          }
+          description={
+            bill.invoiceNo ??
+            `已登记 ${formatCurrency(bill.invoicedAmount, bill.currency)}`
+          }
+        />
+      ),
+    },
+  ];
 }
 
 function BillingCards({
@@ -561,116 +472,67 @@ function BillingCards({
   const router = useRouter();
 
   return (
-    <div
-      className="vx-tenant-directory-cards vx-billing-cards"
-      aria-label="账单中心卡片"
-    >
+    <ListCardGrid aria-label="账单中心卡片">
       {bills.map((bill) => (
-        <article
+        <MetricListCard
           key={bill.id}
-          className={joinClasses(
-            "vx-tenant-directory-card",
-            `vx-billing-card--${bill.billStatus}`,
-          )}
-          role="button"
-          tabIndex={0}
+          icon="key"
+          title={bill.billNo}
+          description={`${bill.tenantName} · ${bill.tierName ?? "未关联套餐"}`}
+          tone={resolveStatusTone(BILL_STATUS_TONE, bill.billStatus)}
           onClick={() => router.push(`/billing/${encodeURIComponent(bill.id)}`)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter")
-              router.push(`/billing/${encodeURIComponent(bill.id)}`);
-          }}
-        >
-          <header>
-            <Icon name="key" size="lg" fallback="placeholder" />
-            <div>
-              <strong>{bill.billNo}</strong>
-              <span>
-                {bill.tenantName} · {bill.tierName ?? "未关联套餐"}
-              </span>
-            </div>
+          actions={
             <BillingActionsMenu bill={bill} onSyncInvoice={onSyncInvoice} />
-          </header>
-          <div className="vx-tenant-directory-card__badges">
-            <Badge
-              className={`vx-tenant-pill vx-billing-pill--${bill.billStatus}`}
-            >
-              {billStatusLabel(bill.billStatus)}
-            </Badge>
-            <Badge
-              className={`vx-tenant-pill vx-billing-pill--invoice-${bill.invoiceStatus}`}
-            >
-              {invoiceStatusLabel(bill.invoiceStatus)}
-            </Badge>
-            {billingExceptionTags(bill).map((tag) => (
-              <Badge
-                key={tag.key}
-                className={`vx-tenant-pill vx-billing-exception-pill vx-billing-exception-pill--${tag.tone}`}
-                title={tag.title}
-              >
-                {tag.label}
-              </Badge>
-            ))}
-          </div>
-          <p className="vx-billing-card__plan">
-            {bill.servicePlanName ?? bill.orderNo ?? "未关联订阅"}
-          </p>
-          <div className="vx-tenant-directory-card__metrics">
-            <span>
-              <b>{formatCurrency(bill.payableAmount, bill.currency)}</b>
-              <small>账单应收</small>
-            </span>
-            <span>
-              <b>{formatCurrency(bill.paidAmount, bill.currency)}</b>
-              <small>已收金额</small>
-            </span>
-            <span>
-              <b>{formatCurrency(bill.invoicedAmount, bill.currency)}</b>
-              <small>已开票</small>
-            </span>
-          </div>
-          <footer>
-            <span>
-              {formatDate(bill.cycleStartDate)} -{" "}
-              {formatDate(bill.cycleEndDate)}
-            </span>
-            <strong>{bill.operatorName}</strong>
-          </footer>
-        </article>
-      ))}
-    </div>
-  );
-}
-
-function Pagination({
-  currentPage,
-  pageCount,
-  total,
-  pageSize,
-  onPageSizeChange,
-  onPageChange,
-}: {
-  currentPage: number;
-  pageCount: number;
-  total: number;
-  pageSize: PageSize;
-  onPageSizeChange: (value: PageSize) => void;
-  onPageChange: (page: number) => void;
-}) {
-  return (
-    <footer className="vx-tenant-pagination">
-      <span className="vx-tenant-pagination__total">
-        共 {formatNumber(total)} 条账单记录
-      </span>
-      <div className="vx-tenant-pagination__actions">
-        <AdminPageSizePicker value={pageSize} onChange={onPageSizeChange} />
-        <DsPagination
-          className="vx-tenant-pagination__pager"
-          page={currentPage}
-          pageCount={pageCount}
-          onPageChange={onPageChange}
+          }
+          badges={
+            <>
+              <StatusBadge tone={BILL_STATUS_TONE[bill.billStatus]}>
+                {billStatusLabel(bill.billStatus)}
+              </StatusBadge>
+              <StatusBadge tone={INVOICE_STATUS_TONE[bill.invoiceStatus]}>
+                {invoiceStatusLabel(bill.invoiceStatus)}
+              </StatusBadge>
+              {billingExceptionTags(bill).map((tag) => (
+                <StatusBadge
+                  key={tag.key}
+                  tone={tag.tone}
+                  {...(tag.title ? { title: tag.title } : {})}
+                >
+                  {tag.label}
+                </StatusBadge>
+              ))}
+            </>
+          }
+          note={bill.servicePlanName ?? bill.orderNo ?? "未关联订阅"}
+          metrics={[
+            {
+              key: "payable",
+              value: formatCurrency(bill.payableAmount, bill.currency),
+              label: "账单应收",
+            },
+            {
+              key: "paid",
+              value: formatCurrency(bill.paidAmount, bill.currency),
+              label: "已收金额",
+            },
+            {
+              key: "invoiced",
+              value: formatCurrency(bill.invoicedAmount, bill.currency),
+              label: "已开票",
+            },
+          ]}
+          footer={
+            <>
+              <span className="truncate">
+                {formatDate(bill.cycleStartDate)} -{" "}
+                {formatDate(bill.cycleEndDate)}
+              </span>
+              <span className="shrink-0">{bill.operatorName}</span>
+            </>
+          }
         />
-      </div>
-    </footer>
+      ))}
+    </ListCardGrid>
   );
 }
 
@@ -733,6 +595,8 @@ export function BillingPage() {
     };
   }, []);
 
+  const billingColumns = useBillingColumns();
+
   const filteredBills = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
@@ -746,7 +610,7 @@ export function BillingPage() {
         return false;
       if (billTypeFilter !== "all" && bill.billType !== billTypeFilter)
         return false;
-      if (tierFilter !== "all" && tierFilterValue(bill) !== tierFilter)
+      if (tierFilter !== "all" && tierFilterOf(bill.tierName) !== tierFilter)
         return false;
       if (!matchesBillingExceptionFilter(bill, exceptionFilter)) return false;
       if (normalizedQuery && !billingSearchText(bill).includes(normalizedQuery))
@@ -769,16 +633,6 @@ export function BillingPage() {
     (activePage - 1) * pageSize,
     activePage * pageSize,
   );
-  const visibleBillIds = useMemo(
-    () => visibleBills.map((bill) => bill.id),
-    [visibleBills],
-  );
-  const selectedVisibleBillCount = visibleBillIds.filter((id) =>
-    selectedBillIds.has(id),
-  ).length;
-  const isBillPageSelected =
-    visibleBillIds.length > 0 &&
-    selectedVisibleBillCount === visibleBillIds.length;
   const receivableAmount = bills.reduce(
     (sum, item) => sum + item.payableAmount,
     0,
@@ -832,30 +686,6 @@ export function BillingPage() {
     setExceptionFilter("all");
   }
 
-  function toggleBillSelection(id: string, checked: boolean) {
-    setSelectedBillIds((current) => {
-      const next = new Set(current);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }
-
-  function toggleBillPageSelection(checked: boolean) {
-    setSelectedBillIds((current) => {
-      const next = new Set(current);
-      visibleBillIds.forEach((id) => {
-        if (checked) next.add(id);
-        else next.delete(id);
-      });
-      return next;
-    });
-  }
-
-  function handleExportAll() {
-    exportRowsToCsv("billing-export", billingCsvColumns, filteredBills);
-  }
-
   function handleExportSelected() {
     const rows = filteredBills.filter((bill) => selectedBillIds.has(bill.id));
     exportRowsToCsv("billing-selected-export", billingCsvColumns, rows);
@@ -898,256 +728,300 @@ export function BillingPage() {
   }
 
   return (
-    <div className="vx-page-stack vx-tenant-management-page vx-billing-page">
-      <PageHeader
-        icon="key"
-        eyebrow="财务结算"
-        title="账单中心"
-        description="运营侧查看租户账单、收款进度和线下发票处理结果；当前仅支持人工同步登记，不调用在线开票接口。"
-      />
-
-      <section className="vx-tenant-summary" aria-label="账单中心统计">
-        <SummaryItem
-          icon="key"
-          label="账单总数"
-          value={formatNumber(bills.length)}
-          tags={[
-            `筛选 ${formatNumber(filteredBills.length)}`,
-            `异常 ${formatNumber(exceptionCount)}`,
-          ]}
-        />
-        <SummaryItem
-          icon="clock"
-          label="待收款"
-          value={formatNumber(pendingCount)}
-          tags={[
-            `逾期 ${formatNumber(bills.filter((item) => item.billStatus === "overdue").length)}`,
-          ]}
-          tone={pendingCount ? "amber" : "green"}
-        />
-        <SummaryItem
-          icon="chart-bar"
-          label="应收金额"
-          value={formatCurrency(receivableAmount, "CNY")}
-          tags={[
-            `已收 ${formatCurrency(paidAmount, "CNY")}`,
-            `减免 ${formatCurrency(discountedAmount, "CNY")}`,
-          ]}
-          tone="green"
-        />
-        <SummaryItem
-          icon="table"
-          label="开票进度"
-          value={formatCurrency(invoicedAmount, "CNY")}
-          tags={[
-            `待处理 ${formatNumber(invoicePendingCount)}`,
-            `调整 ${formatNumber(exceptionBillCount)}`,
-          ]}
-          tone={invoicePendingCount ? "amber" : "green"}
-        />
-      </section>
-
-      {operationFeedback ? (
-        <div className="vx-subscription-operation-feedback">
-          {operationFeedback}
-        </div>
-      ) : null}
-
-      {billsTruncated ? (
-        <Banner
-          tone="warning"
-          title="当前账单列表可能未展示全部数据"
-          description="本次加载已达到单次读取上限（500 条），如未看到目标账单，请尝试缩小筛选范围（如按状态、类型等）重新查询。"
-        />
-      ) : null}
-
-      <div className="vx-tenant-list-shell">
-        <section className="vx-tenant-toolbar" aria-label="账单筛选">
-          <ViewModeSwitch
-            value={viewMode}
-            onChange={setViewMode}
-            ariaLabel="账单展示方式"
+    <>
+      <ListPageTemplate
+        className="vx-tenant-management-page vx-billing-page"
+        header={
+          <PageHeader
+            icon="key"
+            eyebrow="财务结算"
+            title="账单中心"
+            description="运营侧查看租户账单、收款进度和线下发票处理结果；当前仅支持人工同步登记，不调用在线开票接口。"
           />
-          <span className="vx-tenant-view-count">
-            {formatNumber(filteredBills.length)}
-          </span>
-          <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索账单、租户、订单、发票"
-            className="vx-tenant-search vx-billing-search"
-            aria-label="搜索账单"
-          />
-          <Button variant="outline" onClick={handleReset}>
-            重置
-          </Button>
-          <ActionButton
-            variant="outline"
-            icon="table"
-            onClick={handleExportAll}
-            disabled={!filteredBills.length}
-          >
-            导出全部
-          </ActionButton>
-          <div className="vx-tenant-filters">
-            <NativeSelect
-              className="vx-tenant-select"
-              value={billStatusFilter}
-              onChange={(event) =>
-                setBillStatusFilter(event.target.value as BillStatusFilter)
-              }
-              aria-label="账单状态"
-            >
-              <option value="all">全部账单</option>
-              <option value="unpaid">待收款</option>
-              <option value="paying">支付中</option>
-              <option value="partial">部分收款</option>
-              <option value="paid">已结清</option>
-              <option value="overdue">逾期</option>
-              <option value="cancelled">已取消</option>
-            </NativeSelect>
-            <NativeSelect
-              className="vx-tenant-select"
-              value={invoiceStatusFilter}
-              onChange={(event) =>
-                setInvoiceStatusFilter(
-                  event.target.value as InvoiceStatusFilter,
-                )
-              }
-              aria-label="发票状态"
-            >
-              <option value="all">全部发票</option>
-              <option value="none">未开票</option>
-              <option value="applying">申请中</option>
-              <option value="auditing">审核中</option>
-              <option value="issued">已开票</option>
-              <option value="sending">寄送中</option>
-              <option value="finished">已完成</option>
-              <option value="rejected">已驳回</option>
-              <option value="red">已红冲</option>
-            </NativeSelect>
-            <NativeSelect
-              className="vx-tenant-select"
-              value={billTypeFilter}
-              onChange={(event) =>
-                setBillTypeFilter(event.target.value as BillTypeFilter)
-              }
-              aria-label="账单类型"
-            >
-              <option value="all">全部类型</option>
-              <option value="normal">正常账单</option>
-              <option value="adjust">调整单</option>
-              <option value="supplement">补录单</option>
-              <option value="prepaid">预付费</option>
-            </NativeSelect>
-            <NativeSelect
-              className="vx-tenant-select"
-              value={exceptionFilter}
-              onChange={(event) =>
-                setExceptionFilter(event.target.value as BillingExceptionFilter)
-              }
-              aria-label="处理类型"
-            >
-              <option value="all">全部处理</option>
-              <option value="attention">需关注</option>
-              <option value="overdue_followup">逾期跟进</option>
-              <option value="discounted">应收减免</option>
-              <option value="adjust">调整单</option>
-              <option value="supplement">补录单</option>
-              <option value="cancelled">已作废</option>
-              <option value="invoice_exception">发票异常</option>
-            </NativeSelect>
-            <NativeSelect
-              className="vx-tenant-select"
-              value={tierFilter}
-              onChange={(event) =>
-                setTierFilter(event.target.value as TierFilter)
-              }
-              aria-label="套餐版本"
-            >
-              <option value="all">全部套餐</option>
-              <option value="free">Free</option>
-              <option value="pro">Pro</option>
-              <option value="enterprise">Enterprise</option>
-              <option value="other">其他</option>
-            </NativeSelect>
-          </div>
-        </section>
-
-        {selectedBillIds.size > 0 ? (
-          <BulkActionBar
-            selectedLabel={<>已选 {formatNumber(selectedBillIds.size)} 项</>}
-            selectionActions={
+        }
+        summary={
+          <>
+            {" "}
+            <MetricGrid
+              loading={loading}
+              aria-label="账单中心统计"
+              items={[
+                {
+                  id: "total",
+                  help: "当前筛选条件下的账单条数。",
+                  icon: "key",
+                  label: "账单总数",
+                  value: formatNumber(bills.length),
+                  tags: [
+                    `筛选 ${formatNumber(filteredBills.length)}`,
+                    `异常 ${formatNumber(exceptionCount)}`,
+                  ],
+                },
+                {
+                  id: "pending",
+                  help: "未结清账单：未支付、支付中、部分支付、已逾期。",
+                  icon: "clock",
+                  label: "待收款",
+                  value: formatNumber(pendingCount),
+                  tags: [
+                    `逾期 ${formatNumber(bills.filter((item) => item.billStatus === "overdue").length)}`,
+                  ],
+                  tone: pendingCount ? "warning" : "success",
+                },
+                {
+                  id: "receivable",
+                  help: "全部账单应收金额合计。",
+                  icon: "chart-bar",
+                  label: "应收金额",
+                  value: formatCurrency(receivableAmount, "CNY"),
+                  tags: [
+                    `已收 ${formatCurrency(paidAmount, "CNY")}`,
+                    `减免 ${formatCurrency(discountedAmount, "CNY")}`,
+                  ],
+                  tone: "success",
+                },
+                {
+                  id: "invoiced",
+                  help: "全部账单已开票金额合计，与应收的差额即待开票部分。",
+                  icon: "table",
+                  label: "开票进度",
+                  value: formatCurrency(invoicedAmount, "CNY"),
+                  tags: [
+                    `待处理 ${formatNumber(invoicePendingCount)}`,
+                    `调整 ${formatNumber(exceptionBillCount)}`,
+                  ],
+                  tone: invoicePendingCount ? "warning" : "success",
+                },
+              ]}
+            />
+            {operationFeedback ? (
+              <div className="vx-subscription-operation-feedback">
+                {operationFeedback}
+              </div>
+            ) : null}
+            {billsTruncated ? (
+              <Banner
+                tone="warning"
+                title="当前账单列表可能未展示全部数据"
+                description="本次加载已达到单次读取上限（500 条），如未看到目标账单，请尝试缩小筛选范围（如按状态、类型等）重新查询。"
+              />
+            ) : null}
+          </>
+        }
+        filters={
+          <FilterBar
+            view={viewMode}
+            onViewChange={setViewMode}
+            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            count={formatNumber(filteredBills.length)}
+            aria-label="账单筛选"
+            search={
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="搜索账单、租户、订单、发票"
+                className="vx-tenant-search vx-billing-search"
+                aria-label="搜索账单"
+              />
+            }
+            onReset={handleReset}
+            actions={
               <>
                 <ActionButton
-                  variant="outline"
-                  icon="table"
+                  variant={selectedBillIds.size > 0 ? "default" : "outline"}
+                  icon="arrow-down"
                   onClick={handleExportSelected}
+                  disabled={selectedBillIds.size === 0}
                 >
-                  导出所选
+                  导出
                 </ActionButton>
-                <Button variant="ghost" onClick={clearBillSelection}>
-                  清除
-                </Button>
               </>
             }
-          />
-        ) : null}
+          >
+            <div className="vx-tenant-filters">
+              <NativeSelect
+                className="vx-tenant-select"
+                value={billStatusFilter}
+                onChange={(event) =>
+                  setBillStatusFilter(event.target.value as BillStatusFilter)
+                }
+                aria-label="账单状态"
+              >
+                <option value="all">全部账单</option>
+                <option value="unpaid">待收款</option>
+                <option value="paying">支付中</option>
+                <option value="partial">部分收款</option>
+                <option value="paid">已结清</option>
+                <option value="overdue">逾期</option>
+                <option value="cancelled">已取消</option>
+              </NativeSelect>
+              <NativeSelect
+                className="vx-tenant-select"
+                value={invoiceStatusFilter}
+                onChange={(event) =>
+                  setInvoiceStatusFilter(
+                    event.target.value as InvoiceStatusFilter,
+                  )
+                }
+                aria-label="发票状态"
+              >
+                <option value="all">全部发票</option>
+                <option value="none">未开票</option>
+                <option value="applying">申请中</option>
+                <option value="auditing">审核中</option>
+                <option value="issued">已开票</option>
+                <option value="sending">寄送中</option>
+                <option value="finished">已完成</option>
+                <option value="rejected">已驳回</option>
+                <option value="red">已红冲</option>
+              </NativeSelect>
+              <NativeSelect
+                className="vx-tenant-select"
+                value={billTypeFilter}
+                onChange={(event) =>
+                  setBillTypeFilter(event.target.value as BillTypeFilter)
+                }
+                aria-label="账单类型"
+              >
+                <option value="all">全部类型</option>
+                <option value="normal">正常账单</option>
+                <option value="adjust">调整单</option>
+                <option value="supplement">补录单</option>
+                <option value="prepaid">预付费</option>
+              </NativeSelect>
+              <NativeSelect
+                className="vx-tenant-select"
+                value={exceptionFilter}
+                onChange={(event) =>
+                  setExceptionFilter(
+                    event.target.value as BillingExceptionFilter,
+                  )
+                }
+                aria-label="处理类型"
+              >
+                <option value="all">全部处理</option>
+                <option value="attention">需关注</option>
+                <option value="overdue_followup">逾期跟进</option>
+                <option value="discounted">应收减免</option>
+                <option value="adjust">调整单</option>
+                <option value="supplement">补录单</option>
+                <option value="cancelled">已作废</option>
+                <option value="invoice_exception">发票异常</option>
+              </NativeSelect>
+              <NativeSelect
+                className="vx-tenant-select"
+                value={tierFilter}
+                onChange={(event) =>
+                  setTierFilter(event.target.value as TierFilter)
+                }
+                aria-label="套餐版本"
+              >
+                <option value="all">全部套餐</option>
+                {TIER_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+          </FilterBar>
+        }
+        /* BulkActionBar 数据驱动：计数与"清除"由组件自己画，调用方只给动作清单。
+         原先两者都要调用方手拼，于是每个列表页的计数文案与清除按钮各写一遍。 */
+        bulkBar={
+          selectedBillIds.size > 0 ? (
+            <BulkActionBar
+              count={selectedBillIds.size}
+              actions={[
+                {
+                  id: "export",
+                  label: "导出所选",
+                  icon: "table",
+                  onSelect: handleExportSelected,
+                },
+              ]}
+              onClear={clearBillSelection}
+            />
+          ) : null
+        }
+        table={
+          <section className="vx-tenant-directory" aria-label="账单清单">
+            {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
+            {loading && viewMode === "cards" ? (
+              <header className="vx-tenant-directory__header">
+                <span>读取中</span>
+              </header>
+            ) : null}
 
-        <section className="vx-tenant-directory" aria-label="账单清单">
-          {loading ? (
-            <header className="vx-tenant-directory__header">
-              <span>读取中</span>
-            </header>
-          ) : null}
-
-          {visibleBills.length ? (
-            viewMode === "list" ? (
-              <BillingListRows
-                bills={visibleBills}
-                startIndex={(activePage - 1) * pageSize}
-                onSyncInvoice={requestInvoiceSync}
-                selectedBillIds={selectedBillIds}
-                isPageSelected={isBillPageSelected}
-                onToggleBill={toggleBillSelection}
-                onTogglePage={toggleBillPageSelection}
+            {viewMode === "list" ? (
+              <DataTable
+                columns={billingColumns}
+                rows={visibleBills}
+                rowKey={(bill) => bill.id}
+                loading={loading}
+                indexStart={(activePage - 1) * pageSize + 1}
+                selectedKeys={[...selectedBillIds]}
+                onSelectionChange={(keys) => setSelectedBillIds(new Set(keys))}
+                rowActions={(bill) => (
+                  <BillingActionsMenu
+                    bill={bill}
+                    onSyncInvoice={requestInvoiceSync}
+                  />
+                )}
+                empty={
+                  <EmptyState
+                    title={loadError ? "账单数据读取失败" : "没有匹配的账单"}
+                    description={
+                      loadError ?? "清空筛选条件后可查看全部账单记录。"
+                    }
+                    action={
+                      <ActionButton
+                        variant="outline"
+                        icon="x"
+                        onClick={handleReset}
+                      >
+                        清空筛选
+                      </ActionButton>
+                    }
+                  />
+                }
               />
-            ) : (
+            ) : visibleBills.length ? (
               <BillingCards
                 bills={visibleBills}
                 onSyncInvoice={requestInvoiceSync}
               />
-            )
-          ) : (
-            <section className="vx-tenant-empty">
-              <EmptyState
-                title={
-                  loading
-                    ? "正在加载账单"
-                    : loadError
-                      ? "账单数据读取失败"
-                      : "没有匹配的账单"
-                }
-                description={
-                  loading
-                    ? "正在读取账单、收款和发票登记数据。"
-                    : (loadError ?? "清空筛选条件后可查看全部账单记录。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    清空筛选
-                  </ActionButton>
-                }
-              />
-            </section>
-          )}
-
-          <Pagination
+            ) : (
+              <section className="vx-tenant-empty">
+                <EmptyState
+                  title={
+                    loading
+                      ? "正在加载账单"
+                      : loadError
+                        ? "账单数据读取失败"
+                        : "没有匹配的账单"
+                  }
+                  description={
+                    loading
+                      ? "正在读取账单、收款和发票登记数据。"
+                      : (loadError ?? "清空筛选条件后可查看全部账单记录。")
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      清空筛选
+                    </ActionButton>
+                  }
+                />
+              </section>
+            )}
+          </section>
+        }
+        footer={
+          <ListPagination
             currentPage={activePage}
             pageCount={pageCount}
             total={filteredBills.length}
@@ -1157,8 +1031,8 @@ export function BillingPage() {
               setCurrentPage(Math.min(Math.max(page, 1), pageCount))
             }
           />
-        </section>
-      </div>
+        }
+      />
 
       {invoiceTarget ? (
         <OfflineInvoiceDialog
@@ -1171,6 +1045,6 @@ export function BillingPage() {
           onSubmit={handleSyncOfflineInvoice}
         />
       ) : null}
-    </div>
+    </>
   );
 }

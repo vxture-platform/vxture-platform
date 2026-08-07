@@ -1,4 +1,4 @@
-import { Icon, EmptyState } from "@vxture/design-system";
+import { EmptyState, Icon, ViewLayout } from "@vxture/design-system";
 import type { AdminNavigationItem } from "@/config/navigation";
 import { PageHeader } from "./PageHeader";
 
@@ -10,7 +10,7 @@ export function AdminPlaceholderPage({
   sectionTitle: string;
 }) {
   return (
-    <div className="vx-page-stack admin-placeholder-page">
+    <ViewLayout className="admin-placeholder-page">
       <PageHeader
         icon={item.icon}
         eyebrow={sectionTitle}
@@ -30,6 +30,6 @@ export function AdminPlaceholderPage({
           description="此板块已纳入平台运营菜单，详细字段、操作和权限将在确认后逐步补齐。"
         />
       </section>
-    </div>
+    </ViewLayout>
   );
 }

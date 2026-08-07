@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    // `dom` 是为了 next/server 与 URL/URLSearchParams —— middleware 跑在 Edge，
+    // 那里有 web 平台 API 但没有 node 内建，types 也照此配。
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}

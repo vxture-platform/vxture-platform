@@ -92,9 +92,9 @@
 .vxh-prefs-title { font: 500 var(--vx-admin-shell-item-size) var(--font-cjk); letter-spacing: 0; text-transform: none; color: var(--fg-disabled); padding: 0 0 4px 10px; }
 .vxh-pref-row { display: flex; align-items: center; gap: 12px; padding: 0 2px 0 10px; }
 .vxh-pref-ico { font-size: var(--vx-icon-size-sm); color: var(--fg-muted); flex-shrink: 0; width: var(--vx-icon-size-sm); text-align: center; }
-.vxh-pref-select { flex: 1; min-width: 0; height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--vx-radius-lg); background: var(--bg-surface); font: var(--vx-admin-shell-caption-size) var(--font-cjk); color: var(--fg); cursor: pointer; outline: none; }
+.vxh-pref-select { flex: 1; min-width: 0; height: 36px; padding: 0 12px; border: 1px solid var(--shell-border); border-radius: var(--vx-radius-lg); background: var(--bg-surface); font: var(--vx-admin-shell-caption-size) var(--font-cjk); color: var(--fg); cursor: pointer; outline: none; }
 .vxh-pref-select:focus { border-color: color-mix(in srgb, var(--primary) 56%, transparent); }
-.vxh-seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--bg-muted); border: 1px solid var(--border); border-radius: var(--vx-radius-lg); }
+.vxh-seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--bg-muted); border: 1px solid var(--shell-border); border-radius: var(--vx-radius-lg); }
 .vxh-seg button { border: 0; background: transparent; padding: 6px 10px; border-radius: var(--vx-radius-md); font: 500 var(--vx-admin-shell-caption-size) var(--font-cjk); color: var(--fg-2); cursor: pointer; transition: background 140ms, color 140ms; }
 .vxh-seg.full { flex: 1; min-width: 0; }
 .vxh-seg.full button { flex: 1; text-align: center; }

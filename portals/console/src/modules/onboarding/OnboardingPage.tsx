@@ -1,7 +1,16 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Button, Input, Label } from "@vxture/design-system";
+import {
+  Banner,
+  Button,
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FormPageTemplate,
+  Input,
+  ViewHeader,
+} from "@vxture/design-system";
 import { useTranslations } from "next-intl";
 import {
   ConsoleBffError,
@@ -82,61 +91,75 @@ export function OnboardingPage() {
   }
 
   return (
-    <div className="vx-profile-dialog" style={{ position: "static" }}>
-      <form
-        className="vx-profile-dialog__content vx-account-profile-dialog"
-        onSubmit={(event) => void handleSubmit(event)}
-      >
-        <header className="vx-account-profile-dialog__header">
-          <h3>{t("title")}</h3>
-          <p>{t("description")}</p>
-        </header>
-
-        <Label>
-          {t("fields.account")}
-          <Input
-            value={account}
-            onChange={(event) => setAccount(event.target.value)}
-            placeholder={t("fields.accountPlaceholder")}
-            minLength={3}
-            maxLength={24}
-            required
-            autoFocus
+    /* Onboarding was styled as a dialog forced to `position: static` — it is
+     * a full page, so it gets the form page skeleton like every other form. */
+    <form onSubmit={(event) => void handleSubmit(event)}>
+      <FormPageTemplate
+        header={
+          <ViewHeader
+            icon="user"
+            title={t("title")}
+            description={t("description")}
           />
-        </Label>
-
-        <Label>
-          {t("fields.displayName")}
-          <Input
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
-            required
-          />
-        </Label>
-
-        <Label>
-          {t("fields.phone")}
-          <Input value={phone} disabled readOnly />
-        </Label>
-
-        <Label>
-          {t("fields.email")}
-          <Input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder={t("fields.emailPlaceholder")}
-          />
-        </Label>
-
-        {error ? <p className="vx-profile-error">{error}</p> : null}
-
-        <div className="vx-profile-dialog__actions">
+        }
+        footer={
           <Button type="submit" disabled={submitting}>
             {t("actions.submit")}
           </Button>
-        </div>
-      </form>
-    </div>
+        }
+      >
+        {error ? <Banner tone="danger" title={error} /> : null}
+
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="onboarding-account">
+              {t("fields.account")}
+            </FieldLabel>
+            <Input
+              id="onboarding-account"
+              value={account}
+              onChange={(event) => setAccount(event.target.value)}
+              placeholder={t("fields.accountPlaceholder")}
+              minLength={3}
+              maxLength={24}
+              required
+              autoFocus
+            />
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="onboarding-display-name">
+              {t("fields.displayName")}
+            </FieldLabel>
+            <Input
+              id="onboarding-display-name"
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              required
+            />
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="onboarding-phone">
+              {t("fields.phone")}
+            </FieldLabel>
+            <Input id="onboarding-phone" value={phone} disabled readOnly />
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="onboarding-email">
+              {t("fields.email")}
+            </FieldLabel>
+            <Input
+              id="onboarding-email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder={t("fields.emailPlaceholder")}
+            />
+          </Field>
+        </FieldGroup>
+      </FormPageTemplate>
+    </form>
   );
 }

@@ -176,12 +176,6 @@ const advancedSettingsSection: NavigationSection = {
       icon: "shield-check",
       descriptionKey: "security.description",
     },
-    {
-      href: "/tenant-settings",
-      labelKey: "tenantSettings.label",
-      icon: "settings",
-      descriptionKey: "tenantSettings.description",
-    },
   ],
 };
 

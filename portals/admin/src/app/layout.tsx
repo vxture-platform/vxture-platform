@@ -9,7 +9,7 @@ import {
   type Locale,
   type Theme,
 } from "@vxture/shared";
-import { themeBootstrapScript } from "@vxture/design-system";
+import { BootSplash, themeBootstrapScript } from "@vxture/design-system";
 import type { Density } from "@vxture/design-system";
 import { ConsoleAppProviders } from "@/providers/ConsoleAppProviders";
 import {
@@ -88,6 +88,10 @@ export default async function RootLayout({
       <body
         className={`${fontBrand.variable} ${inter.variable} ${geistMono.variable}`}
       >
+        {/* 启动占位在 React 根**之外**：进了根就会被水合接管，跟其余组件一样
+            要等 JS，也就失去了填补空窗的意义。ThemeProvider 挂载后打上
+            html[data-app-ready]，CSS 随即把它隐藏。 */}
+        <BootSplash />
         <ConsoleAppProviders
           initialLocale={locale}
           initialMessages={messages}

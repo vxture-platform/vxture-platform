@@ -1,7 +1,7 @@
 /**
  * Shell-level shared types for the admin shell chrome.
  * 顶层视图（运营域 / 自治域，对齐 AdminWorkspaceId）与抽屉类型，
- * 供 AdminAppShell / TemplateHeader / TemplateDrawer 共享。
+ * 供 AdminAppShell / AdminHeader / TemplateDrawer 共享。
  */
 
 import type { AdminWorkspaceId } from "@/config/navigation";

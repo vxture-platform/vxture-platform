@@ -1,9 +1,20 @@
-# publish-design-system.yml - Design System 发布流程。
+# publish-design-system.yml - 设计三包 + shared 的发布流程。
 # @package vxture
 # @layer Presentation
 # @category ci
 # @author AI-Generated
-# @date 2026-06-07
+# @date 2026-08-01
+#
+# ── 为什么是有序的 ──
+# pnpm 在打包时把 `workspace:` 协议替换成真实版本号，所以 @vxture/design-ui 发出去
+# 会声明 `"@vxture/design-tokens": "^x.y.z"`，@vxture/design-system 会同时声明另外
+# 两个。若上游那一版还没进 registry，消费方 install 直接失败——而流水线自己是绿的，
+# 因为 publish 本身不校验依赖可解析。故顺序是硬约束，不是习惯：
+#
+#   shared → design-tokens → design-ui → design-system
+#
+# 每包各自判断"这个版本是否已存在"，已存在就跳过。整条流水线因此是幂等的：
+# 同一个 tag 重跑不会失败，只发新版本的那些包。
 
 name: publish-design-system
 
@@ -34,6 +45,12 @@ jobs:
 
     env:
       NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # 发布顺序即依赖方向，不得调换。格式：<目录>|<包名>
+      RELEASE_ORDER: |
+        packages/shared/shared|@vxture/shared
+        packages/design/design-tokens|@vxture/design-tokens
+        packages/design/design-ui|@vxture/design-ui
+        packages/design/design-system|@vxture/design-system
 
     steps:
       - name: Checkout
@@ -44,71 +61,90 @@ jobs:
       - name: Build shared package
         run: pnpm --filter @vxture/shared build
 
-      - name: Check design system
+      # 三包各自 type-check 与 lint。design-system 的类型依赖 design-ui 的产物，
+      # 故按依赖方向逐个构建，不用 --parallel。
+      - name: Check and build design packages
         run: |
-          pnpm --filter @vxture/design-system type-check
-          pnpm --filter @vxture/design-system lint
-          pnpm lint:design
+          set -euo pipefail
+          for pkg in @vxture/design-tokens @vxture/design-ui @vxture/design-system; do
+            echo "::group::$pkg"
+            pnpm --filter "$pkg" type-check
+            pnpm --filter "$pkg" lint
+            pnpm --filter "$pkg" build
+            echo "::endgroup::"
+          done
 
-      - name: Build design system package
-        run: pnpm --filter @vxture/design-system build
+      # 仓库级守卫。token 生成物与产物必须同步，组件类名必须真能产出——
+      # 这两条在包内 build 全绿时仍可能是坏的，见各脚本头部说明。
+      - name: Repository-level design guardrails
+        run: |
+          pnpm lint:design-tokens
+          pnpm lint:design
+          pnpm lint:design-classes
+          pnpm lint:boundaries
+
+      - name: Verify public exports snapshot
+        run: node scripts/guardrails/check-design-system-exports.mjs --strict
 
       - name: Verify publish payloads
+        shell: bash
         run: |
-          pnpm --filter @vxture/shared pack --dry-run
-          pnpm --filter @vxture/design-system pack --dry-run
+          set -euo pipefail
+          while IFS='|' read -r dir name; do
+            [ -z "$dir" ] && continue
+            echo "::group::pack $name"
+            pnpm --filter "$name" pack --dry-run
+            echo "::endgroup::"
+          done <<< "$RELEASE_ORDER"
 
       - name: Configure GitHub Packages registry
         run: |
           echo "@vxture:registry=https://npm.pkg.github.com" >> ~/.npmrc
           echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> ~/.npmrc
 
-      - name: Resolve package versions
-        id: versions
+      # 按依赖方向逐个发布。dry run 只报告"会发什么"，不推送。
+      - name: Publish
+        id: publish
         shell: bash
+        env:
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
-          shared_version="$(node -p "require('./packages/shared/shared/package.json').version")"
-          ds_version="$(node -p "require('./packages/design/design-system/package.json').version")"
-          echo "shared_version=${shared_version}" >> "$GITHUB_OUTPUT"
-          echo "ds_version=${ds_version}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          summary=""
+          while IFS='|' read -r dir name; do
+            [ -z "$dir" ] && continue
+            version="$(node -p "require('./${dir}/package.json').version")"
 
-      - name: Check existing package versions
-        id: published
-        shell: bash
-        run: |
-          if npm view "@vxture/shared@${{ steps.versions.outputs.shared_version }}" version --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
-            echo "shared_exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "shared_exists=false" >> "$GITHUB_OUTPUT"
-          fi
+            if npm view "${name}@${version}" version \
+                 --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
+              echo "· ${name}@${version} 已存在，跳过"
+              summary="${summary}- ${name}@${version} — 已存在，跳过"$'\n'
+              continue
+            fi
 
-          if npm view "@vxture/design-system@${{ steps.versions.outputs.ds_version }}" version --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
-            echo "ds_exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ds_exists=false" >> "$GITHUB_OUTPUT"
-          fi
+            # dist-tag 从版本号自己推出来。publish 不带 --tag 一律打 latest，
+            # **预发布版也不例外**——那会让 `pnpm add @vxture/design-system` 装到
+            # alpha，且没有任何提示。预发布走自己的通道，标识符即通道名
+            # （2.0.0-alpha.0 → alpha，2.0.0-rc.1 → rc）。
+            case "${version}" in
+              *-*) id="${version#*-}"; tag="${id%%.*}" ;;
+              *)   tag="latest" ;;
+            esac
 
-      - name: Publish shared package
-        if: ${{ github.event.inputs.dry_run != 'true' && steps.published.outputs.shared_exists != 'true' }}
-        working-directory: packages/shared/shared
-        run: pnpm publish --no-git-checks
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "· ${name}@${version} 待发布（dry run，未推送）dist-tag=${tag}"
+              summary="${summary}- ${name}@${version} — **待发布**（dist-tag \`${tag}\`）"$'\n'
+              continue
+            fi
 
-      - name: Skip shared package
-        if: ${{ steps.published.outputs.shared_exists == 'true' }}
-        run: echo "@vxture/shared@${{ steps.versions.outputs.shared_version }} already exists; skipping."
+            echo "· 发布 ${name}@${version} dist-tag=${tag}"
+            ( cd "${dir}" && pnpm publish --no-git-checks --tag "${tag}" )
+            summary="${summary}- ${name}@${version} — 已发布（dist-tag \`${tag}\`）"$'\n'
+          done <<< "$RELEASE_ORDER"
 
-      - name: Publish design system package
-        if: ${{ github.event.inputs.dry_run != 'true' && steps.published.outputs.ds_exists != 'true' }}
-        working-directory: packages/design/design-system
-        run: pnpm publish --no-git-checks
-
-      - name: Skip design system package
-        if: ${{ steps.published.outputs.ds_exists == 'true' }}
-        run: echo "@vxture/design-system@${{ steps.versions.outputs.ds_version }} already exists; skipping."
-
-      - name: Dry run summary
-        if: ${{ github.event.inputs.dry_run == 'true' }}
-        run: |
-          echo "Dry run completed."
-          echo "@vxture/shared@${{ steps.versions.outputs.shared_version }} exists: ${{ steps.published.outputs.shared_exists }}"
-          echo "@vxture/design-system@${{ steps.versions.outputs.ds_version }} exists: ${{ steps.published.outputs.ds_exists }}"
+          {
+            echo "## 设计包发布结果"
+            echo ""
+            [ "${DRY_RUN}" = "true" ] && echo "**dry run — 未推送任何包。**" && echo ""
+            echo "${summary}"
+          } >> "$GITHUB_STEP_SUMMARY"

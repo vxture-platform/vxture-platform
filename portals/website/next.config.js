@@ -106,7 +106,12 @@ const nextConfig = {
     // OIDC-RP routes (/auth/*) and website-bff data API (/api/*) to website-bff so
     // the browser sees one origin → the RP session cookie works. Array form =
     // afterFiles, so the portal's own /api/health filesystem route still wins.
-    const bff = process.env.LOCAL_BFF_PROXY_URL;
+    /* 门户各用自己的变量名。共用名 `LOCAL_BFF_PROXY_URL` 保留作兜底，但它是个
+     * 陷阱：dev-panel 会把仓库根 .env.local 注入每个子进程，那里的值是
+     * console-bff(3021)，于是 website 会把自己的 /auth/* 转发到 console 的 BFF，
+     * 而门户目录下的同名 .env.local 覆盖不掉进程环境变量（2026-08-04 实测）。 */
+    const bff =
+      process.env.WEBSITE_BFF_DEV_URL ?? process.env.LOCAL_BFF_PROXY_URL;
     if (!bff) return [];
     return [
       { source: "/auth/:path*", destination: `${bff}/auth/:path*` },

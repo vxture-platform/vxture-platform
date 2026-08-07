@@ -2662,3 +2662,49 @@ export async function fetchNotificationLogs(
     [],
   );
 }
+
+// ── Global search (header ⌘K) ───────────────────────────────────────────────
+
+export type AdminSearchKind = "tenant" | "order" | "operator";
+
+export interface AdminSearchItem {
+  kind: AdminSearchKind;
+  id: string;
+  label: string;
+  description?: string;
+  meta?: string;
+  /** 目标路径由 BFF 给出，前端不拼——路由形状变了只改一处。 */
+  href: string;
+}
+
+export interface AdminSearchResponse {
+  query: string;
+  items: AdminSearchItem[];
+  /** true = 查询串太短，后端没检索（跟"检索了但没命中"不是一回事）。 */
+  skipped: boolean;
+}
+
+/**
+ * 走裸 fetch 而不是 readJson/readJsonStrict：这两个都不接 AbortSignal，而搜索
+ * 是连续输入触发的，必须能取消——否则慢的旧请求后到会盖掉新关键词的结果。
+ */
+export async function searchAdmin(
+  query: string,
+  signal?: AbortSignal,
+): Promise<AdminSearchResponse> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/search?q=${encodeURIComponent(query)}`,
+    {
+      credentials: "include",
+      cache: "no-store",
+      ...(signal ? { signal } : {}),
+    },
+  );
+  if (!response.ok) {
+    throw new AdminBffError(
+      `Request failed: ${response.status}`,
+      response.status,
+    );
+  }
+  return (await response.json()) as AdminSearchResponse;
+}

@@ -1,18 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
-  Badge,
+  Banner,
   Button,
-  ActionButton,
+  Card,
+  CardContent,
+  DialogForm,
+  CardFooter,
+  CardHeader,
+  CardTitle,
   DataTable,
-  PageHeader,
+  DetailList,
+  DetailRow,
+  EmptyState,
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  Input,
+  NativeSelect,
+  Icon,
+  StatusBadge,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  ViewHeader,
+  ViewLayout,
 } from "@vxture/design-system";
-import type { DataTableColumn } from "@vxture/design-system";
+import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
 import {
   cancelSubscriptionOrder,
+  executeSubscriptionAction,
   fetchBillingInvoices,
   fetchCredits,
   fetchEntitlements,
@@ -22,15 +44,12 @@ import {
   type ConsoleInvoice,
   type ConsoleSubscription,
   type MyOrder,
+  type SubscriptionLifecycleAction,
   type WorkspaceEntitlement,
 } from "@/api/console-bff";
+import { PlannedBadge } from "@/components/planned";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
-import {
-  DashboardSplit,
-  PageSection,
-  SignalList,
-  SummaryStrip,
-} from "@/layout/shell";
+import { PageSection, SummaryStrip } from "@/layout/shell";
 import type { ModuleCardStat } from "@/entities/console";
 
 // ============================================================================
@@ -107,24 +126,26 @@ function formatOrderAmount(amount: string, currency: string): string {
 // Six-state contract (product_321 P1); labels come from the orderPay i18n
 // namespace at render time (this page's own copy stays the 320-era English
 // placeholder debt — the ORDERS tab is the one surface localized here).
-const ORDER_STATUS_BADGES: Record<MyOrder["orderStatus"], string> = {
-  pending_payment: "vx-badge-warning",
-  paid_pending_verify: "vx-badge-info",
-  activating: "vx-badge-info",
-  completed: "vx-badge-positive",
-  cancelled: "vx-badge-muted",
-  expired: "vx-badge-muted",
+const ORDER_STATUS_TONES: Record<MyOrder["orderStatus"], StatusBadgeTone> = {
+  pending_payment: "warning",
+  paid_pending_verify: "info",
+  activating: "info",
+  completed: "success",
+  cancelled: "neutral",
+  expired: "neutral",
 };
 
 // C2 subscription-status six-value domain (@vxture/shared SUBSCRIPTION_STATUSES)
 // + null = never subscribed (product_220 §3 — absence, not a status value).
-const ENTITLEMENT_STATUS_BADGES: Record<string, string> = {
-  active: "vx-badge-positive",
-  trialing: "vx-badge-info",
-  overdue: "vx-badge-warning",
-  suspended: "vx-badge-warning",
-  expired: "vx-badge-muted",
-  cancelled: "vx-badge-muted",
+const ENTITLEMENT_STATUS_TONES: Record<string, StatusBadgeTone> = {
+  active: "success",
+  trialing: "info",
+  overdue: "warning",
+  // A suspended entitlement is a hard stop (access is off), unlike `overdue`
+  // which is a grace period — the two read as different severities.
+  suspended: "danger",
+  expired: "neutral",
+  cancelled: "neutral",
 };
 
 /**
@@ -160,35 +181,12 @@ function formatLimits(limits: Record<string, number>): string {
 // SubscriptionPage
 // ============================================================================
 
-const changePlanningNotes = [
-  {
-    title: "Upgrade recommendation",
-    body: "Fine-tune demand suggests moving GPU budget into the next tier before the next contract checkpoint.",
-  },
-  {
-    title: "Renewal note",
-    body: "Seats can still be adjusted before the invoice locks on the next billing date.",
-  },
-];
-
-const paymentMethods = [
-  {
-    title: "Corporate Visa",
-    body: "Primary method for annual subscription charges and variable overage billing.",
-  },
-  {
-    title: "Bank transfer",
-    body: "Reserved for negotiated invoice settlements and manual approval workflow.",
-  },
-];
-
 export function SubscriptionPage() {
   const { session } = useConsoleSession();
   const tOrder = useTranslations("orderPay");
+  const tManage = useTranslations("manageSubscription");
   const router = useRouter();
-  const [tab, setTab] = useState<
-    "overview" | "billing" | "orders" | "payments"
-  >("overview");
+  const [tab, setTab] = useState<"overview" | "billing" | "orders">("overview");
   const [subscriptions, setSubscriptions] = useState<ConsoleSubscription[]>([]);
   const [invoices, setInvoices] = useState<ConsoleInvoice[]>([]);
   const [orders, setOrders] = useState<MyOrder[]>([]);
@@ -200,6 +198,18 @@ export function SubscriptionPage() {
   const [loading, setLoading] = useState(true);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
+
+  /* Subscription lifecycle dialog. `POST /api/subscription/actions` has been
+   * live all along with nothing calling it; the header button was inert. Only
+   * pause/resume/cancel land here — `upgrade` needs a planId, which is what
+   * the /subscribe ladder is for. */
+  const [manageOpen, setManageOpen] = useState(false);
+  const [manageAction, setManageAction] =
+    useState<SubscriptionLifecycleAction>("pause");
+  const [manageReason, setManageReason] = useState("");
+  const [manageBusy, setManageBusy] = useState(false);
+  const [manageError, setManageError] = useState<string | null>(null);
+  const [manageMessage, setManageMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -239,33 +249,49 @@ export function SubscriptionPage() {
 
   const summaryItems = buildSummaryItems(subscriptions);
   const invoiceRows = buildInvoiceRows(invoices);
-  const planningSignals = changePlanningNotes.map((note) => ({
-    title: note.title,
-    description: note.body,
-  }));
-  const paymentSignals = paymentMethods.map((method) => ({
-    title: method.title,
-    description: method.body,
-  }));
 
   const activeSubscription =
     subscriptions.find((s) => s.status === "active") ?? subscriptions[0];
 
-  const postureSignals = [
-    {
-      title: "Invoice readiness",
-      description:
-        "Finance contact and payment routing are configured, renewal can proceed without manual intervention.",
-    },
-  ];
+  /** Offer resume for a suspended subscription, pause for a live one. */
+  function openManage() {
+    setManageAction(
+      activeSubscription?.status === "suspended" ? "resume" : "pause",
+    );
+    setManageReason("");
+    setManageError(null);
+    setManageMessage(null);
+    setManageOpen(true);
+  }
 
-  const chargeSignals = [
-    {
-      title: "Overage driver",
-      description:
-        "Most variable spend comes from burst model access rather than additional seat growth.",
-    },
-  ];
+  async function submitManage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeSubscription) return;
+    setManageBusy(true);
+    setManageError(null);
+    try {
+      await executeSubscriptionAction({
+        subscriptionId: activeSubscription.id,
+        action: manageAction,
+        ...(manageReason.trim() ? { reason: manageReason.trim() } : {}),
+      });
+      setSubscriptions(await fetchMySubscriptions());
+      setManageOpen(false);
+      setManageMessage(
+        manageAction === "pause"
+          ? tManage("successPause")
+          : manageAction === "resume"
+            ? tManage("successResume")
+            : tManage("successCancel"),
+      );
+    } catch (err) {
+      setManageError(
+        err instanceof ConsoleBffError ? err.message : tManage("error"),
+      );
+    } finally {
+      setManageBusy(false);
+    }
+  }
 
   const entitlementColumns: DataTableColumn<WorkspaceEntitlement>[] = [
     { id: "product", header: "Product", cell: (e) => e.productCode },
@@ -274,17 +300,17 @@ export function SubscriptionPage() {
       id: "status",
       header: "Status",
       cell: (e) => (
-        <Badge
-          className={
+        <StatusBadge
+          tone={
             e.status
-              ? (ENTITLEMENT_STATUS_BADGES[e.status] ?? "vx-badge-muted")
+              ? (ENTITLEMENT_STATUS_TONES[e.status] ?? "neutral")
               : e.bundled
-                ? "vx-badge-info"
-                : "vx-badge-muted"
+                ? "info"
+                : "neutral"
           }
         >
           {formatEntitlementStatus(e.status, e.bundled)}
-        </Badge>
+        </StatusBadge>
       ),
     },
     {
@@ -293,6 +319,22 @@ export function SubscriptionPage() {
       cell: (e) => (e.bundled ? "Yes" : "—"),
     },
     { id: "limits", header: "Limits", cell: (e) => formatLimits(e.limits) },
+  ];
+
+  // Invoice rows stay pre-formatted `string[]` (see `buildInvoiceRows`); the
+  // columns below only carry the header copy that used to live in the hand
+  // rolled table header row, in the same order.
+  const invoiceColumns: DataTableColumn<string[]>[] = [
+    { id: "invoice", header: "Invoice", cell: (row) => row[0] ?? "—" },
+    { id: "date", header: "Date", cell: (row) => row[1] ?? "—" },
+    { id: "scope", header: "Scope", cell: (row) => row[2] ?? "—" },
+    { id: "status", header: "Status", cell: (row) => row[3] ?? "—" },
+    {
+      id: "amount",
+      header: "Amount",
+      align: "right",
+      cell: (row) => row[4] ?? "—",
+    },
   ];
 
   const orderColumns: DataTableColumn<MyOrder>[] = [
@@ -320,7 +362,7 @@ export function SubscriptionPage() {
         <span>
           {formatOrderAmount(o.amount, o.currency)}
           {Number(o.voucherOff) > 0 ? (
-            <span className="vx-empty-hint">
+            <span className="text-body-sm text-muted-foreground">
               {" "}
               {tOrder("list.voucherOff", {
                 amount: formatOrderAmount(o.voucherOff, o.currency),
@@ -334,9 +376,9 @@ export function SubscriptionPage() {
       id: "status",
       header: "Status",
       cell: (o) => (
-        <Badge className={ORDER_STATUS_BADGES[o.orderStatus]}>
+        <StatusBadge tone={ORDER_STATUS_TONES[o.orderStatus]}>
           {tOrder(`status.${o.orderStatus}`)}
-        </Badge>
+        </StatusBadge>
       ),
     },
     { id: "placed", header: "Placed", cell: (o) => formatDate(o.createdAt) },
@@ -346,16 +388,16 @@ export function SubscriptionPage() {
       align: "right",
       cell: (o) =>
         o.orderStatus === "pending_payment" ? (
-          <span className="vx-inline-between">
+          <span className="flex items-center justify-end gap-2xs">
             <Button
-              size="sm"
+              size="md"
               onClick={() => router.push(`/subscribe/pay/${o.orderId}`)}
             >
               {tOrder("list.payNow")}
             </Button>
             <Button
               variant="ghost"
-              size="sm"
+              size="md"
               disabled={cancelingId === o.orderId || Number(o.paidAmount) > 0}
               onClick={() => handleCancelOrder(o.orderId)}
             >
@@ -365,7 +407,7 @@ export function SubscriptionPage() {
         ) : (
           <Button
             variant="ghost"
-            size="sm"
+            size="md"
             onClick={() => router.push(`/subscribe/pay/${o.orderId}`)}
           >
             {tOrder("list.view")}
@@ -375,226 +417,233 @@ export function SubscriptionPage() {
   ];
 
   return (
-    <div className="vx-page-stack">
-      <PageHeader
-        eyebrow="Commerce"
+    <ViewLayout>
+      <ViewHeader
+        icon="chart-bar"
         title="Subscription"
         description="Surface current plan, renewal timing, and pooled resource posture before dropping into billing records."
-        action={<ActionButton icon="settings">Manage plan</ActionButton>}
+        action={
+          <Button
+            size="md"
+            disabled={!activeSubscription}
+            onClick={() => openManage()}
+          >
+            <Icon name="settings" size="xs" fallback="placeholder" />
+            <span>{tManage("title")}</span>
+          </Button>
+        }
       />
+
+      {manageMessage ? <Banner tone="success" title={manageMessage} /> : null}
 
       <SummaryStrip items={summaryItems} />
 
-      <div
-        className="vx-tabs-list"
-        role="tablist"
-        aria-label="Subscription tabs"
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value as typeof tab)}
+        className="flex flex-col gap-lg"
       >
-        <Button
-          variant="ghost"
-          size="sm"
-          className={tab === "overview" ? "vx-tab vx-tab--active" : "vx-tab"}
-          onClick={() => setTab("overview")}
-        >
-          Plan overview
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={tab === "billing" ? "vx-tab vx-tab--active" : "vx-tab"}
-          onClick={() => setTab("billing")}
-        >
-          Recent billing
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={tab === "orders" ? "vx-tab vx-tab--active" : "vx-tab"}
-          onClick={() => setTab("orders")}
-        >
-          My orders
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={tab === "payments" ? "vx-tab vx-tab--active" : "vx-tab"}
-          onClick={() => setTab("payments")}
-        >
-          Payment methods
-        </Button>
-      </div>
+        <TabsList aria-label="Subscription tabs" className="self-start">
+          <TabsTrigger value="overview">Plan overview</TabsTrigger>
+          <TabsTrigger value="billing">Recent billing</TabsTrigger>
+          <TabsTrigger value="orders">My orders</TabsTrigger>
+        </TabsList>
 
-      {tab === "overview" ? (
-        <DashboardSplit>
+        <TabsContent value="overview" className="flex flex-col gap-xl">
           <PageSection
+            icon="package"
+            level={2}
             title="Current package"
             description="A modern SaaS billing page starts with the plan, not the table."
           >
             {loading ? (
-              <p className="vx-empty-hint">Loading subscription…</p>
+              <EmptyState icon="clock" title="Loading subscription…" />
             ) : activeSubscription ? (
-              <div className="vx-subscription-panel">
-                <div className="vx-stack-sm">
-                  <div className="vx-inline-between">
-                    <strong>{activeSubscription.planName}</strong>
-                    <Badge className="vx-badge-positive">
+              <Card surface="soft">
+                <CardHeader>
+                  <div className="flex flex-wrap items-center justify-between gap-sm">
+                    <CardTitle>{activeSubscription.planName}</CardTitle>
+                    <StatusBadge tone="success">
                       {activeSubscription.status}
-                    </Badge>
+                    </StatusBadge>
                   </div>
-                  <div className="vx-detail-grid">
-                    <div>
-                      <span>Renewal</span>
-                      <strong>
-                        {formatDate(activeSubscription.nextBillingDate)}
-                      </strong>
-                    </div>
-                    <div>
-                      <span>Price</span>
-                      <strong>
-                        {formatAmount(
-                          activeSubscription.price,
-                          activeSubscription.currency,
-                        )}{" "}
-                        / {activeSubscription.cycle}
-                      </strong>
-                    </div>
-                  </div>
-                </div>
-                <div className="vx-detail-actions">
-                  <ActionButton variant="outline" icon="chart-bar">
-                    Compare tiers
-                  </ActionButton>
-                  <ActionButton variant="outline" icon="calendar">
-                    Preview renewal
-                  </ActionButton>
-                </div>
-              </div>
+                </CardHeader>
+                <CardContent>
+                  <DetailList>
+                    <DetailRow label="Renewal">
+                      {formatDate(activeSubscription.nextBillingDate)}
+                    </DetailRow>
+                    <DetailRow label="Price">
+                      {formatAmount(
+                        activeSubscription.price,
+                        activeSubscription.currency,
+                      )}{" "}
+                      / {activeSubscription.cycle}
+                    </DetailRow>
+                  </DetailList>
+                </CardContent>
+                <CardFooter className="flex-wrap">
+                  {/* "Compare tiers" is just navigation — the plan ladder is
+                   * the /subscribe page, so this now goes there instead of
+                   * doing nothing. */}
+                  <Button
+                    size="md"
+                    variant="outline"
+                    onClick={() => router.push("/subscribe")}
+                  >
+                    <Icon name="chart-bar" size="xs" fallback="placeholder" />
+                    <span>{tManage("goUpgrade")}</span>
+                  </Button>
+                  {/* Renewal preview has no endpoint; kept visible so the
+                   * intent is legible, disabled so it cannot lie. */}
+                  <Button size="md" variant="outline" disabled>
+                    <Icon name="calendar" size="xs" fallback="placeholder" />
+                    <span>Preview renewal</span>
+                  </Button>
+                  <PlannedBadge />
+                </CardFooter>
+              </Card>
             ) : (
-              <p className="vx-empty-hint">No active subscription found.</p>
+              <EmptyState
+                icon="package"
+                title="No active subscription found."
+              />
             )}
           </PageSection>
 
           <PageSection
-            title="Change planning"
-            description="Keep upgrade or downgrade actions available, but visually secondary to the current state."
-            tone="muted"
+            icon="seal-check"
+            level={2}
+            title="Current entitlements"
+            description="Per-product tier, status, and pooled-resource ceilings resolved from the platform's commercial contract (product_220 §3)."
           >
-            <SignalList items={planningSignals} />
+            <DataTable
+              columns={entitlementColumns}
+              rows={entitlements}
+              rowKey={(e) => e.productCode}
+              loading={loading}
+              empty={<EmptyState title="No product entitlements yet." />}
+            />
           </PageSection>
-        </DashboardSplit>
-      ) : null}
 
-      {tab === "overview" ? (
-        <PageSection
-          title="Current entitlements"
-          description="Per-product tier, status, and pooled-resource ceilings resolved from the platform's commercial contract (product_220 §3)."
-        >
-          <DataTable
-            columns={entitlementColumns}
-            rows={entitlements}
-            rowKey={(e) => e.productCode}
-            loading={loading}
-            loadingLabel="Loading entitlements…"
-            empty="No product entitlements yet."
-          />
-        </PageSection>
-      ) : null}
-
-      {tab === "overview" ? (
-        <DashboardSplit>
           <PageSection
+            icon="wallet"
+            level={2}
             title={tOrder("list.creditsTitle")}
             description={tOrder("list.creditsNote")}
-            tone="muted"
           >
             {/* Dormant wallet (product_321 P6): read-only balance, no top-up. */}
-            <div className="vx-subscription-panel">
-              <div className="vx-inline-between">
-                <strong>
+            <Card surface="soft">
+              <CardContent>
+                <strong className="text-title-lg text-foreground">
                   {formatOrderAmount(
                     credits?.balance ?? "0.00",
                     credits?.currency ?? "CNY",
                   )}
                 </strong>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </PageSection>
-          <PageSection
-            title="Billing posture"
-            description="Keep payment context available without turning subscription into a finance page."
-            tone="muted"
-          >
-            <SignalList items={postureSignals} />
-          </PageSection>
-        </DashboardSplit>
-      ) : null}
+        </TabsContent>
 
-      {tab === "billing" ? (
-        <DashboardSplit>
+        <TabsContent value="billing">
           <PageSection
+            icon="receipt"
+            level={2}
             title="Recent charges"
             description="Invoices and overage records remain secondary to the subscription overview."
           >
-            {loading ? (
-              <p className="vx-empty-hint">Loading invoices…</p>
-            ) : invoiceRows.length > 0 ? (
-              <div className="vx-table">
-                <div className="vx-table__header vx-table__row">
-                  <span>Invoice</span>
-                  <span>Date</span>
-                  <span>Scope</span>
-                  <span>Status</span>
-                  <span>Amount</span>
-                </div>
-                {invoiceRows.map((row) => (
-                  <div key={row[0]} className="vx-table__row">
-                    {row.map((cell, idx) => (
-                      <span key={idx}>{cell}</span>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="vx-empty-hint">No invoices found.</p>
-            )}
+            <DataTable
+              columns={invoiceColumns}
+              rows={invoiceRows}
+              rowKey={(row) => row[0] ?? ""}
+              loading={loading}
+              empty={<EmptyState title="No invoices found." />}
+            />
           </PageSection>
+        </TabsContent>
 
+        <TabsContent value="orders">
           <PageSection
-            title="Charge guidance"
-            description="Explain what changed and what operators need to review next."
-            tone="muted"
+            icon="list-checks"
+            level={2}
+            title="My orders"
+            description="Offline subscription orders you placed — track the order number, transfer status, and cancel one that is still awaiting confirmation."
           >
-            <SignalList items={chargeSignals} />
+            {orderError ? <Banner tone="danger" title={orderError} /> : null}
+            <DataTable
+              columns={orderColumns}
+              rows={orders}
+              rowKey={(order) => order.orderId}
+              loading={loading}
+              empty={<EmptyState title="No orders yet." />}
+            />
           </PageSection>
-        </DashboardSplit>
-      ) : null}
+        </TabsContent>
+      </Tabs>
 
-      {tab === "orders" ? (
-        <PageSection
-          title="My orders"
-          description="Offline subscription orders you placed — track the order number, transfer status, and cancel one that is still awaiting confirmation."
-        >
-          {orderError ? <p className="vx-empty-hint">{orderError}</p> : null}
-          <DataTable
-            columns={orderColumns}
-            rows={orders}
-            rowKey={(order) => order.orderId}
-            loading={loading}
-            loadingLabel="Loading orders…"
-            empty="No orders yet."
-          />
-        </PageSection>
-      ) : null}
+      <DialogForm
+        open={manageOpen}
+        onOpenChange={(open) => {
+          if (!open) setManageOpen(false);
+        }}
+        title={tManage("title")}
+        description={tManage("description")}
+        submitLabel={tManage("confirm")}
+        cancelLabel={tManage("cancel")}
+        danger={manageAction === "cancel"}
+        submitting={manageBusy}
+        submitDisabled={!activeSubscription}
+        onSubmit={submitManage}
+      >
+        {manageError ? <Banner tone="danger" title={manageError} /> : null}
 
-      {tab === "payments" ? (
-        <PageSection
-          title="Payment methods"
-          description="Payment management stays available without turning the page into a finance system."
-          tone="muted"
-        >
-          <SignalList items={paymentSignals} />
-        </PageSection>
-      ) : null}
-    </div>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="manage-action">{tManage("title")}</FieldLabel>
+            <NativeSelect
+              id="manage-action"
+              value={manageAction}
+              onChange={(event) =>
+                setManageAction(
+                  event.target.value as SubscriptionLifecycleAction,
+                )
+              }
+            >
+              {/* Resume only makes sense for a suspended subscription, pause
+               * only for a running one — the two are mutually exclusive. */}
+              {activeSubscription?.status === "suspended" ? (
+                <option value="resume">{tManage("actionResume")}</option>
+              ) : (
+                <option value="pause">{tManage("actionPause")}</option>
+              )}
+              <option value="cancel">{tManage("actionCancel")}</option>
+            </NativeSelect>
+            <FieldDescription>
+              {manageAction === "pause"
+                ? tManage("actionPauseHint")
+                : manageAction === "resume"
+                  ? tManage("actionResumeHint")
+                  : tManage("actionCancelHint")}
+            </FieldDescription>
+          </Field>
+
+          {manageAction !== "resume" ? (
+            <Field>
+              <FieldLabel htmlFor="manage-reason">
+                {tManage("reasonLabel")}
+              </FieldLabel>
+              <Input
+                id="manage-reason"
+                value={manageReason}
+                onChange={(event) => setManageReason(event.target.value)}
+              />
+            </Field>
+          ) : null}
+
+          <FieldDescription>{tManage("upgradeHint")}</FieldDescription>
+        </FieldGroup>
+      </DialogForm>
+    </ViewLayout>
   );
 }

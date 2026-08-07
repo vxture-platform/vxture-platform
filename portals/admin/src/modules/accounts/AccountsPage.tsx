@@ -2,23 +2,27 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
-  Banner,
-  Icon,
+  ActionButton,
   ActionMenu,
   Badge,
-  Button,
-  Checkbox,
+  Banner,
+  DataTable,
   DialogForm,
+  EmptyState,
+  FilterBar,
+  Icon,
   Input,
   Label,
+  ListPageTemplate,
+  MetricGrid,
   NativeSelect,
-  Pagination,
-  ActionButton,
-  EmptyState,
+  StatusBadge,
+  TableTitleCell,
   Textarea,
-  ViewModeSwitch,
   useToast,
 } from "@vxture/design-system";
+import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import type { IconName } from "@vxture/design-system";
 import {
   disableAccount,
@@ -29,15 +33,8 @@ import {
 import type { AccountOperationRecord } from "@/entities/console";
 import { isListTruncated } from "@/lib/list-truncation";
 import { PageHeader } from "@/modules/shared/PageHeader";
-import {
-  PageSizePicker as AdminPageSizePicker,
-  type PageSize,
-} from "@/modules/shared/PageSizePicker";
-import {
-  formatDate,
-  formatNumber,
-  joinClasses,
-} from "@/modules/tenants/tenant-utils";
+import { type PageSize } from "@/modules/shared/PageSizePicker";
+import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 
 type ViewMode = "list" | "cards";
 type StatusFilter = "all" | AccountOperationRecord["status"];
@@ -171,9 +168,16 @@ function accountStatusLabel(status: AccountOperationRecord["status"]) {
   return "已停用";
 }
 
-function accountStatusPillClass(status: AccountOperationRecord["status"]) {
-  return `vx-tenant-pill vx-tenant-pill--${status} vx-account-status-pill--${status}`;
-}
+/** 账号态 → 语气。取自 `.vx-account-status-pill--*`：invited 是蓝（brand）。 */
+const ACCOUNT_STATUS_TONE: Record<
+  AccountOperationRecord["status"],
+  StatusBadgeTone
+> = {
+  active: "success",
+  invited: "brand",
+  locked: "warning",
+  disabled: "neutral",
+};
 
 function accountStatusIndicator(account: AccountOperationRecord): {
   tone: AccountStatusIndicatorTone;
@@ -215,42 +219,6 @@ function accountSearchText(account: AccountOperationRecord) {
     .toLowerCase();
 }
 
-function AccountSummaryItem({
-  icon,
-  label,
-  value,
-  tags,
-  tone = "blue",
-}: {
-  icon: IconName;
-  label: string;
-  value: string;
-  tags?: string[];
-  tone?: "blue" | "green" | "amber" | "rose";
-}) {
-  return (
-    <article
-      className={joinClasses(
-        `vx-tenant-summary__item vx-tenant-tone--${tone}`,
-        icon === "user" || icon === "role"
-          ? "vx-tenant-summary__item--identity-icon"
-          : "",
-      )}
-    >
-      <Icon name={icon} size="lg" fallback="placeholder" />
-      <div>
-        <span>{label}</span>
-        <p>
-          <strong>{value}</strong>
-          {tags?.map((tag) => (
-            <em key={tag}>{tag}</em>
-          ))}
-        </p>
-      </div>
-    </article>
-  );
-}
-
 function AccountActionsMenu({
   account,
   busy,
@@ -270,39 +238,32 @@ function AccountActionsMenu({
     >
       <ActionMenu
         label={`${account.displayName} 操作`}
-        triggerClassName="vx-tenant-actions__trigger"
-        triggerProps={{ title: "操作", disabled: busy }}
+        disabled={busy}
         items={[
           {
             id: "details",
             label: "查看详情",
-            icon: <Icon name="arrow-right" size="xs" fallback="placeholder" />,
+            icon: "arrow-right",
             disabled: true,
           },
           {
             id: "reset-password",
             label: "重置密码",
-            icon: <Icon name="key" size="xs" fallback="placeholder" />,
+            icon: "key",
             // 凭据重置对 C 端用户（可能社交-only/无验证邮箱）需专用设计，C12 延后。
             disabled: true,
           },
           {
             id: "force-logout",
             label: "强制下线",
-            icon: <Icon name="sign-out" size="xs" fallback="placeholder" />,
+            icon: "sign-out",
             disabled: busy || isDisabled,
             onSelect: () => onForceLogout(account),
           },
           {
             id: "toggle-status",
             label: isDisabled ? "恢复账号" : "停用账号",
-            icon: (
-              <Icon
-                name={isDisabled ? "success" : "warning"}
-                size="xs"
-                fallback="placeholder"
-              />
-            ),
+            icon: isDisabled ? "success" : "warning",
             disabled: busy,
             onSelect: () => onToggleStatus(account),
           },
@@ -318,189 +279,97 @@ interface AccountRowActions {
   onForceLogout: (account: AccountOperationRecord) => void;
 }
 
-function AccountListRows({
-  accounts,
-  startIndex,
-  selectedAccountIds,
-  isPageSelected,
-  showTenantContext,
-  onToggleAccount,
-  onTogglePage,
-  actions,
-}: {
-  accounts: AccountOperationRecord[];
-  startIndex: number;
-  selectedAccountIds: Set<string>;
-  isPageSelected: boolean;
-  showTenantContext: boolean;
-  onToggleAccount: (accountId: string, checked: boolean) => void;
-  onTogglePage: (checked: boolean) => void;
-  actions: AccountRowActions;
-}) {
-  const selectedOnPage = accounts.filter((account) =>
-    selectedAccountIds.has(account.id),
-  ).length;
-  const isPagePartiallySelected =
-    selectedOnPage > 0 && selectedOnPage < accounts.length;
-
-  return (
-    <div
-      className={joinClasses(
-        "vx-tenant-directory-list vx-account-directory-list",
-        !showTenantContext ? "vx-account-directory-list--platform" : "",
-      )}
-      role="region"
-      aria-label="账号清单"
-    >
-      <div className="vx-tenant-directory-list__header">
-        <span>
-          <Checkbox
-            className="vx-model-select-checkbox"
-            checked={
-              isPageSelected
-                ? true
-                : isPagePartiallySelected
-                  ? "indeterminate"
-                  : false
-            }
-            onCheckedChange={(value) => onTogglePage(value === true)}
-            aria-label="选择当前页账号"
-          />
-        </span>
-        <span>序号</span>
-        <span>账号</span>
-        {showTenantContext ? <span>租户</span> : null}
-        <span>状态</span>
-        <span>权限</span>
-        <span>登录</span>
-        <span>操作</span>
-      </div>
-      {accounts.map((account, index) => {
+/**
+ * 状态标走 `StatusBadge`，语气由 `ACCOUNT_STATUS_TONE` 给。
+ *
+ * 租户列随 `showTenantContext` 出没——平台账号视图没有租户归属这回事。
+ */
+function useAccountColumns(
+  showTenantContext: boolean,
+): DataTableColumn<AccountOperationRecord>[] {
+  return [
+    {
+      id: "account",
+      header: "账号",
+      cell: (account) => (
+        <TableTitleCell
+          icon="user"
+          title={account.displayName}
+          description={`${account.accountCode} · ${account.email}`}
+        />
+      ),
+    },
+    ...(showTenantContext
+      ? [
+          {
+            id: "tenant",
+            header: "租户",
+            cell: (account: AccountOperationRecord) => {
+              const summary = accountTenantSummary(account);
+              return (
+                <TableTitleCell
+                  title={
+                    <span className="inline-flex flex-wrap gap-2xs">
+                      {summary.tags.map((tag) => (
+                        <Badge
+                          key={tag}
+                          className="vx-tenant-pill vx-account-muted-pill"
+                        >
+                          {tag}
+                        </Badge>
+                      ))}
+                    </span>
+                  }
+                  description={summary.primaryName}
+                />
+              );
+            },
+          },
+        ]
+      : []),
+    {
+      id: "status",
+      header: "状态",
+      align: "center",
+      cell: (account) => {
         const indicator = accountStatusIndicator(account);
-        const tenantSummary = accountTenantSummary(account);
-
         return (
-          <div
-            key={account.id}
-            className={joinClasses(
-              "vx-tenant-directory-row",
-              "vx-account-operation-row",
-              selectedAccountIds.has(account.id)
-                ? "vx-account-operation-row--selected"
-                : "",
-            )}
-            onClick={(event) => {
-              if (
-                event.target instanceof HTMLElement &&
-                event.target.closest(
-                  'button, input, select, textarea, a, [role="button"], [role="menu"], [role="menuitem"]',
-                )
-              )
-                return;
-              onToggleAccount(account.id, !selectedAccountIds.has(account.id));
-            }}
+          <StatusBadge
+            tone={ACCOUNT_STATUS_TONE[account.status]}
+            icon={indicator.icon}
           >
-            <span className="vx-account-operation-row__select">
-              <Checkbox
-                className="vx-model-select-checkbox"
-                checked={selectedAccountIds.has(account.id)}
-                onClick={(event) => event.stopPropagation()}
-                onCheckedChange={(value) =>
-                  onToggleAccount(account.id, value === true)
-                }
-                aria-label={`选择 ${account.displayName}`}
-              />
-            </span>
-            <span className="vx-tenant-directory-row__index">
-              {formatNumber(startIndex + index + 1)}
-            </span>
-            <span className="vx-tenant-directory-row__tenant">
-              <Icon name="user" size="sm" fallback="placeholder" />
-              <span>
-                <span className="vx-tenant-directory-row__title-line">
-                  <Button
-                    variant="link"
-                    className="vx-model-name-button"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    {account.displayName}
-                  </Button>
-                </span>
-                <small>
-                  {account.accountCode} · {account.email}
-                </small>
-              </span>
-            </span>
-            {showTenantContext ? (
-              <span className="vx-tenant-directory-row__subscription">
-                <span className="vx-tenant-directory-row__tag-line">
-                  {tenantSummary.tags.map((tag) => (
-                    <Badge
-                      key={tag}
-                      className="vx-tenant-pill vx-account-muted-pill"
-                    >
-                      {tag}
-                    </Badge>
-                  ))}
-                </span>
-                <small>{tenantSummary.primaryName}</small>
-              </span>
-            ) : null}
-            <span className="vx-tenant-directory-row__status">
-              <span className="vx-tenant-directory-row__status-line">
-                <span
-                  className={`vx-tenant-status-dot vx-tenant-status-dot--${indicator.tone}`}
-                  role="img"
-                  aria-label={indicator.label}
-                  title={indicator.label}
-                >
-                  <Icon
-                    name={indicator.icon}
-                    size="xs"
-                    fallback="placeholder"
-                  />
-                </span>
-                <span className="vx-tenant-directory-row__badges">
-                  <Badge className={accountStatusPillClass(account.status)}>
-                    {accountStatusLabel(account.status)}
-                  </Badge>
-                </span>
-              </span>
-            </span>
-            <span className="vx-tenant-directory-row__subscription">
-              <span className="vx-tenant-directory-row__tag-line">
-                <Badge className="vx-tenant-pill vx-account-muted-pill vx-tenant-pill--permission">
-                  {accountHighestRoleLabel(account)}
-                </Badge>
-              </span>
-              <small>
-                {showTenantContext
-                  ? `${formatNumber(account.tenantCount)} 个租户`
-                  : "平台角色"}
-              </small>
-            </span>
-            <span className="vx-tenant-directory-row__service">
-              <span className="vx-tenant-directory-row__tag-line">
-                <Badge className="vx-tenant-pill vx-account-muted-pill vx-tenant-pill--product">
-                  {account.lastActiveLocation}
-                </Badge>
-              </span>
-              <small>
-                {formatDate(account.lastActiveAt)} ·{" "}
-                {formatNumber(account.loginCount30d)} 次
-              </small>
-            </span>
-            <AccountActionsMenu
-              account={account}
-              busy={actions.actionBusy}
-              onToggleStatus={actions.onToggleStatus}
-              onForceLogout={actions.onForceLogout}
-            />
-          </div>
+            {accountStatusLabel(account.status)}
+          </StatusBadge>
         );
-      })}
-    </div>
-  );
+      },
+    },
+    {
+      id: "permission",
+      header: "权限",
+      align: "center",
+      cell: (account) => (
+        <TableTitleCell
+          title={<Badge>{accountHighestRoleLabel(account)}</Badge>}
+          description={
+            showTenantContext
+              ? `${formatNumber(account.tenantCount)} 个租户`
+              : "平台角色"
+          }
+        />
+      ),
+    },
+    {
+      id: "login",
+      header: "登录",
+      align: "center",
+      cell: (account) => (
+        <TableTitleCell
+          title={<Badge>{account.lastActiveLocation}</Badge>}
+          description={`${formatDate(account.lastActiveAt)} · ${formatNumber(account.loginCount30d)} 次`}
+        />
+      ),
+    },
+  ];
 }
 
 function AccountCards({
@@ -532,9 +401,9 @@ function AccountCards({
             />
           </header>
           <div className="vx-tenant-directory-card__badges">
-            <Badge className={accountStatusPillClass(account.status)}>
+            <StatusBadge tone={ACCOUNT_STATUS_TONE[account.status]}>
               {accountStatusLabel(account.status)}
-            </Badge>
+            </StatusBadge>
             {showTenantContext
               ? accountTenantSummary(account).tags.map((tag) => (
                   <Badge
@@ -545,9 +414,7 @@ function AccountCards({
                   </Badge>
                 ))
               : null}
-            <Badge className="vx-tenant-pill vx-account-muted-pill vx-tenant-pill--permission">
-              {accountHighestRoleLabel(account)}
-            </Badge>
+            <Badge>{accountHighestRoleLabel(account)}</Badge>
           </div>
           <div className="vx-tenant-directory-card__metrics">
             {showTenantContext ? (
@@ -581,39 +448,6 @@ function AccountCards({
         </article>
       ))}
     </div>
-  );
-}
-
-function AccountPagination({
-  currentPage,
-  pageCount,
-  total,
-  pageSize,
-  onPageSizeChange,
-  onPageChange,
-}: {
-  currentPage: number;
-  pageCount: number;
-  total: number;
-  pageSize: PageSize;
-  onPageSizeChange: (value: PageSize) => void;
-  onPageChange: (page: number) => void;
-}) {
-  return (
-    <footer className="vx-tenant-pagination">
-      <span className="vx-tenant-pagination__total">
-        共 {formatNumber(total)} 条记录
-      </span>
-      <div className="vx-tenant-pagination__actions">
-        <AdminPageSizePicker value={pageSize} onChange={onPageSizeChange} />
-        <Pagination
-          className="vx-tenant-pagination__pager"
-          page={currentPage}
-          pageCount={pageCount}
-          onPageChange={onPageChange}
-        />
-      </div>
-    </footer>
   );
 }
 
@@ -725,7 +559,7 @@ export function AccountsPage({
       setActionReason("");
     } catch (error) {
       toast({
-        tone: "error",
+        tone: "danger",
         title: "操作失败",
         ...(error instanceof Error && error.message
           ? { description: error.message }
@@ -740,6 +574,8 @@ export function AccountsPage({
     onToggleStatus: requestToggleStatus,
     onForceLogout: requestForceLogout,
   };
+
+  const accountColumns = useAccountColumns(showTenantContext);
 
   const filteredAccounts = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -775,13 +611,6 @@ export function AccountsPage({
     (currentPage - 1) * pageSize,
     currentPage * pageSize,
   );
-  const visibleAccountIds = visibleAccounts.map((account) => account.id);
-  const selectedVisibleAccountCount = visibleAccountIds.filter((accountId) =>
-    selectedAccountIds.has(accountId),
-  ).length;
-  const isAccountPageSelected =
-    visibleAccountIds.length > 0 &&
-    selectedVisibleAccountCount === visibleAccountIds.length;
   const activeAccounts = accounts.filter(
     (account) => account.status === "active",
   ).length;
@@ -806,213 +635,224 @@ export function AccountsPage({
     setRoleFilter("all");
   }
 
-  function toggleAccountSelection(accountId: string, checked: boolean) {
-    setSelectedAccountIds((current) => {
-      const next = new Set(current);
-      if (checked) {
-        next.add(accountId);
-      } else {
-        next.delete(accountId);
-      }
-      return next;
-    });
-  }
-
-  function toggleAccountPageSelection(checked: boolean) {
-    setSelectedAccountIds((current) => {
-      const next = new Set(current);
-      for (const accountId of visibleAccountIds) {
-        if (checked) {
-          next.add(accountId);
-        } else {
-          next.delete(accountId);
-        }
-      }
-      return next;
-    });
-  }
-
   return (
-    <div className="vx-page-stack vx-tenant-management-page vx-account-management-page">
-      <PageHeader
-        icon="user"
-        eyebrow={pageCopy.eyebrow}
-        title={pageCopy.title}
-        description={pageCopy.description}
-      />
-
-      <section
-        className="vx-tenant-summary"
-        aria-label={pageCopy.summaryAriaLabel}
-      >
-        <AccountSummaryItem
-          icon="user"
-          label="账号总数"
-          value={formatNumber(accounts.length)}
-          tags={[`活跃 ${formatNumber(activeAccounts)}`]}
-        />
-        <AccountSummaryItem
-          icon="clock"
-          label="待激活"
-          value={formatNumber(invitedAccounts)}
-          tags={["邀请中"]}
-          tone="amber"
-        />
-        <AccountSummaryItem
-          icon="warning"
-          label="已锁定"
-          value={formatNumber(lockedAccounts)}
-          tags={["临时锁定"]}
-          tone={lockedAccounts ? "amber" : "green"}
-        />
-        <AccountSummaryItem
-          icon="x"
-          label="已停用"
-          value={formatNumber(disabledAccounts)}
-          tags={["长期未用"]}
-          tone={disabledAccounts ? "rose" : "green"}
-        />
-      </section>
-
-      {accountsTruncated ? (
-        <Banner
-          tone="warning"
-          title="当前账号列表可能未展示全部数据"
-          description="本次加载已达到单次读取上限（500 条），如未看到目标账号，请尝试缩小筛选范围（如按状态、权限等）重新查询。"
-        />
-      ) : null}
-
-      <div className="vx-tenant-list-shell">
-        <section
-          className="vx-tenant-toolbar"
-          aria-label={pageCopy.toolbarAriaLabel}
-        >
-          <ViewModeSwitch
-            value={viewMode}
-            onChange={setViewMode}
-            ariaLabel={`${pageCopy.title}展示方式`}
+    <>
+      <ListPageTemplate
+        className="vx-tenant-management-page vx-account-management-page"
+        header={
+          <PageHeader
+            icon="user"
+            eyebrow={pageCopy.eyebrow}
+            title={pageCopy.title}
+            description={pageCopy.description}
           />
-          <span className="vx-tenant-view-count">
-            {formatNumber(filteredAccounts.length)}
-          </span>
-          <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={pageCopy.searchPlaceholder}
-            className="vx-tenant-search"
-            aria-label={pageCopy.searchAriaLabel}
-          />
-          <Button variant="outline" onClick={handleReset}>
-            重置
-          </Button>
-          <div className="vx-tenant-filters">
-            <NativeSelect
-              className="vx-input vx-tenant-select"
-              value={statusFilter}
-              onChange={(event) =>
-                setStatusFilter(event.target.value as StatusFilter)
-              }
-              aria-label={pageCopy.statusAriaLabel}
-            >
-              <option value="all">全部状态</option>
-              <option value="active">正常</option>
-              <option value="invited">待激活</option>
-              <option value="locked">已锁定</option>
-              <option value="disabled">已停用</option>
-            </NativeSelect>
-            {showTenantContext ? (
+        }
+        summary={
+          <>
+            {" "}
+            <MetricGrid
+              loading={loading}
+              aria-label={pageCopy.summaryAriaLabel}
+              items={[
+                {
+                  id: "total",
+                  help: "当前列表加载到的全部账号数，不区分状态。",
+                  icon: "user",
+                  label: "账号总数",
+                  value: formatNumber(accounts.length),
+                  tags: [`活跃 ${formatNumber(activeAccounts)}`],
+                  // 身份类图标原本走 `--identity-icon` 修饰去色（gray-400）：这张卡是
+                  // 基数不是状态，不该跟着染品牌色。neutral 是 DS 里表达"刻意去色"的档。
+                  tone: "neutral",
+                },
+                {
+                  id: "invited",
+                  help: "已发出邀请但本人尚未激活的账号（状态 invited）。",
+                  icon: "clock",
+                  label: "待激活",
+                  value: formatNumber(invitedAccounts),
+                  tags: ["邀请中"],
+                  tone: "warning",
+                },
+                {
+                  id: "locked",
+                  help: "因风控或连续登录失败被锁定的账号（状态 locked）。",
+                  icon: "warning",
+                  label: "已锁定",
+                  value: formatNumber(lockedAccounts),
+                  tags: ["临时锁定"],
+                  tone: lockedAccounts ? "warning" : "success",
+                },
+                {
+                  id: "disabled",
+                  help: "被管理员停用、无法登录的账号（状态 disabled）。",
+                  icon: "x",
+                  label: "已停用",
+                  value: formatNumber(disabledAccounts),
+                  tags: ["长期未用"],
+                  tone: disabledAccounts ? "danger" : "success",
+                },
+              ]}
+            />
+            {accountsTruncated ? (
+              <Banner
+                tone="warning"
+                title="当前账号列表可能未展示全部数据"
+                description="本次加载已达到单次读取上限（500 条），如未看到目标账号，请尝试缩小筛选范围（如按状态、权限等）重新查询。"
+              />
+            ) : null}
+          </>
+        }
+        filters={
+          <FilterBar
+            view={viewMode}
+            onViewChange={setViewMode}
+            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            count={formatNumber(filteredAccounts.length)}
+            search={
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={pageCopy.searchPlaceholder}
+                className="vx-tenant-search"
+                aria-label={pageCopy.searchAriaLabel}
+              />
+            }
+            onReset={handleReset}
+            actions={
+              <>
+                <ActionButton variant="outline" icon="plus" disabled>
+                  {pageCopy.createActionLabel}
+                </ActionButton>
+              </>
+            }
+          >
+            <div className="vx-tenant-filters">
               <NativeSelect
                 className="vx-input vx-tenant-select"
-                value={tenantTypeFilter}
+                value={statusFilter}
                 onChange={(event) =>
-                  setTenantTypeFilter(event.target.value as TenantTypeFilter)
+                  setStatusFilter(event.target.value as StatusFilter)
                 }
-                aria-label={pageCopy.tenantTypeAriaLabel}
+                aria-label={pageCopy.statusAriaLabel}
               >
-                <option value="all">全部租户</option>
-                <option value="individual">个人</option>
-                <option value="company">组织</option>
-                <option value="mixed">个人+组织</option>
+                <option value="all">全部状态</option>
+                <option value="active">正常</option>
+                <option value="invited">待激活</option>
+                <option value="locked">已锁定</option>
+                <option value="disabled">已停用</option>
               </NativeSelect>
+              {showTenantContext ? (
+                <NativeSelect
+                  className="vx-input vx-tenant-select"
+                  value={tenantTypeFilter}
+                  onChange={(event) =>
+                    setTenantTypeFilter(event.target.value as TenantTypeFilter)
+                  }
+                  aria-label={pageCopy.tenantTypeAriaLabel}
+                >
+                  <option value="all">全部租户</option>
+                  <option value="individual">个人</option>
+                  <option value="company">组织</option>
+                  <option value="mixed">个人+组织</option>
+                </NativeSelect>
+              ) : null}
+              <NativeSelect
+                className="vx-input vx-tenant-select"
+                value={roleFilter}
+                onChange={(event) =>
+                  setRoleFilter(event.target.value as RoleFilter)
+                }
+                aria-label={pageCopy.roleAriaLabel}
+              >
+                <option value="all">全部权限</option>
+                <option value="owner">Owner</option>
+                <option value="admin">Admin</option>
+                <option value="member">Member</option>
+              </NativeSelect>
+            </div>
+          </FilterBar>
+        }
+        table={
+          <section
+            className="vx-tenant-directory"
+            aria-label={pageCopy.directoryAriaLabel}
+          >
+            {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
+            {loading && viewMode === "cards" ? (
+              <header className="vx-tenant-directory__header">
+                <span>读取中</span>
+              </header>
             ) : null}
-            <NativeSelect
-              className="vx-input vx-tenant-select"
-              value={roleFilter}
-              onChange={(event) =>
-                setRoleFilter(event.target.value as RoleFilter)
-              }
-              aria-label={pageCopy.roleAriaLabel}
-            >
-              <option value="all">全部权限</option>
-              <option value="owner">Owner</option>
-              <option value="admin">Admin</option>
-              <option value="member">Member</option>
-            </NativeSelect>
-          </div>
-          <ActionButton variant="outline" icon="plus" disabled>
-            {pageCopy.createActionLabel}
-          </ActionButton>
-        </section>
 
-        <section
-          className="vx-tenant-directory"
-          aria-label={pageCopy.directoryAriaLabel}
-        >
-          {loading ? (
-            <header className="vx-tenant-directory__header">
-              <span>读取中</span>
-            </header>
-          ) : null}
-
-          {visibleAccounts.length ? (
-            viewMode === "list" ? (
-              <AccountListRows
-                accounts={visibleAccounts}
-                startIndex={(Math.min(currentPage, pageCount) - 1) * pageSize}
-                selectedAccountIds={selectedAccountIds}
-                isPageSelected={isAccountPageSelected}
-                showTenantContext={showTenantContext}
-                onToggleAccount={toggleAccountSelection}
-                onTogglePage={toggleAccountPageSelection}
-                actions={accountActions}
+            {viewMode === "list" ? (
+              <DataTable
+                columns={accountColumns}
+                rows={visibleAccounts}
+                rowKey={(account) => account.id}
+                loading={loading}
+                indexStart={
+                  (Math.min(currentPage, pageCount) - 1) * pageSize + 1
+                }
+                selectedKeys={[...selectedAccountIds]}
+                onSelectionChange={(keys) =>
+                  setSelectedAccountIds(new Set(keys))
+                }
+                rowActions={(account) => (
+                  <AccountActionsMenu
+                    account={account}
+                    busy={accountActions.actionBusy}
+                    onToggleStatus={accountActions.onToggleStatus}
+                    onForceLogout={accountActions.onForceLogout}
+                  />
+                )}
+                empty={
+                  <EmptyState
+                    title={loadError ? "账号数据读取失败" : pageCopy.emptyTitle}
+                    description={loadError ?? pageCopy.emptyDescription}
+                    action={
+                      <ActionButton
+                        variant="outline"
+                        icon="x"
+                        onClick={handleReset}
+                      >
+                        清空筛选
+                      </ActionButton>
+                    }
+                  />
+                }
               />
-            ) : (
+            ) : visibleAccounts.length ? (
               <AccountCards
                 accounts={visibleAccounts}
                 showTenantContext={showTenantContext}
                 actions={accountActions}
               />
-            )
-          ) : (
-            <section className="vx-tenant-empty">
-              <EmptyState
-                title={
-                  loading
-                    ? pageCopy.loadingTitle
-                    : loadError
-                      ? "账号数据读取失败"
-                      : pageCopy.emptyTitle
-                }
-                description={
-                  loading
-                    ? pageCopy.loadingDescription
-                    : (loadError ?? pageCopy.emptyDescription)
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    清空筛选
-                  </ActionButton>
-                }
-              />
-            </section>
-          )}
-
-          <AccountPagination
+            ) : (
+              <section className="vx-tenant-empty">
+                <EmptyState
+                  title={loading ? pageCopy.loadingTitle : pageCopy.emptyTitle}
+                  description={
+                    loading
+                      ? pageCopy.loadingDescription
+                      : (loadError ?? pageCopy.emptyDescription)
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      清空筛选
+                    </ActionButton>
+                  }
+                />
+              </section>
+            )}
+          </section>
+        }
+        footer={
+          <ListPagination
             currentPage={Math.min(currentPage, pageCount)}
             pageCount={pageCount}
             total={filteredAccounts.length}
@@ -1022,8 +862,8 @@ export function AccountsPage({
               setCurrentPage(Math.min(Math.max(page, 1), pageCount))
             }
           />
-        </section>
-      </div>
+        }
+      />
       {pendingAction ? (
         <DialogForm
           open
@@ -1048,9 +888,7 @@ export function AccountsPage({
                 ? "确认恢复"
                 : "确认下线"
           }
-          submitVariant={
-            pendingAction.kind === "disable" ? "destructive" : "default"
-          }
+          danger={pendingAction.kind === "disable"}
           submitting={actionBusy}
           onOpenChange={(open) => {
             if (!open) closePending();
@@ -1069,6 +907,6 @@ export function AccountsPage({
           </Label>
         </DialogForm>
       ) : null}
-    </div>
+    </>
   );
 }

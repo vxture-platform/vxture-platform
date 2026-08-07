@@ -1,45 +1,23 @@
 /**
- * middleware.ts - Next.js Middleware
+ * middleware.ts —— website 的认证前置闸 + i18n 路由。
+ *
+ * 与 admin/console 用同一份三态机（`@vxture/core-identity-sdk/edge`），但**默认相反**：
+ * website 是公开站点，只有 `/dashboard` 需要认证，其余全部豁免。这个反转恰好是
+ * SDK 通不通用的检验点——`isExempt` 表达得了"只保护一条路径"，就不需要为它开特例。
+ *
+ * 豁免不是省事，是必须：营销页对未登录访客做静默探测，等于给每个首次访问的人
+ * 加一趟 IdP 往返，而他们本来就不该登录。
+ *
  * @package @vxture/website
- * @description Middleware for authentication redirect and next-intl locale routing
- * @author AI-Generated
- * @date 2026-03-15
- * @version 1.0
- * @copyright Vxture Team
  * @layer Presentation
  * @category Infrastructure
  */
 
-import { NextRequest, NextResponse } from "next/server";
 import createMiddleware from "next-intl/middleware";
+import { createAuthMiddleware } from "@vxture/core-identity-sdk/edge";
 import { routing } from "./lib/i18n/routing";
 
 const intlMiddleware = createMiddleware(routing);
-
-/**
- * RP session cookie names (set by the BFF OIDC-RP callback). Mirrors
- * @vxture/core-oidc-rp RP_SESSION_COOKIE / RP_SESSION_COOKIE_INSECURE; duplicated
- * here because edge middleware cannot import that node-runtime package. Presence
- * is a cheap pre-gate only — the BFF remains the authoritative session verifier.
- */
-const RP_SESSION_COOKIES = ["__Host-vx_rp_session", "vx_rp_session"] as const;
-
-function hasRpSession(request: NextRequest): boolean {
-  return RP_SESSION_COOKIES.some((name) => request.cookies.has(name));
-}
-
-function resolveLocalePrefix(pathname: string): string {
-  const [firstSegment] = pathname.split("/").filter(Boolean);
-
-  if (
-    firstSegment &&
-    routing.locales.includes(firstSegment as (typeof routing.locales)[number])
-  ) {
-    return `/${firstSegment}`;
-  }
-
-  return `/${routing.defaultLocale}`;
-}
 
 function stripLocalePrefix(pathname: string): string {
   const segments = pathname.split("/").filter(Boolean);
@@ -55,32 +33,21 @@ function stripLocalePrefix(pathname: string): string {
   return pathname;
 }
 
-export function middleware(request: NextRequest) {
-  const normalizedPath = stripLocalePrefix(request.nextUrl.pathname);
-  const localePrefix = resolveLocalePrefix(request.nextUrl.pathname);
-  const isProtectedRoute = normalizedPath.startsWith("/dashboard");
-  // OIDC-RP session cookie presence (set by website-bff callback). Cookie
-  // presence ≠ valid session; the BFF re-verifies on /api/me. See 16a.
-  const hasSession = hasRpSession(request);
+export const middleware = createAuthMiddleware({
+  app: "website",
+  // 只有 /dashboard 参与认证；其余（含 /signin 自身）一律豁免。
+  isExempt: (pathname) => !stripLocalePrefix(pathname).startsWith("/dashboard"),
+  onAllow: intlMiddleware,
+});
 
-  // 认证重定向（在 intl 处理之前）
-  // 只保护 dashboard：无 session cookie 时跳转到登录页，携带 next 参数供登录后回跳
-  if (isProtectedRoute && !hasSession) {
-    return NextResponse.redirect(
-      new URL(
-        `${localePrefix}/signin?next=${encodeURIComponent(normalizedPath)}`,
-        request.url,
-      ),
-    );
-  }
-
-  // 注意：不在 middleware 层拦截"已登录用户访问登录页"的情况
-  // 原因：cookie 存在不代表 session 仍然有效（token 可能已过期）
-  // 如需已登录跳转，由客户端 AuthSessionBootstrap + 各页面自行处理
-
-  // 交给 next-intl 处理语言前缀路由
-  return intlMiddleware(request);
-}
+/* 未认证访问 /dashboard 时直接去 `/auth/login`，不再经 `/signin` 中转。
+ *
+ * `/signin` 是个纯跳板页：渲染一屏"正在跳转到登录…"，水合，然后 `location.assign`
+ * 去同一个 `/auth/login`。它给用户的是一次完整页面加载 + 一次绘制，信息量为零。
+ * 文件保留（首页等处可能有外链），但认证链路不再穿过它。
+ *
+ * 另注：仍然不拦截"已登录用户访问登录页"——cookie 在不代表 session 有效，
+ * 那个判断要向 BFF 求证，不值得放在每个请求的关键路径上。 */
 
 export const config = {
   matcher: [

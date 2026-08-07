@@ -36,6 +36,13 @@ import {
   type RpSession,
   type RpSessionStore,
 } from "@vxture/core-oidc-rp";
+import {
+  anonymousPresenceCookie,
+  clearPresenceCookie,
+  presenceCookieName,
+  resolveLoginPrompt,
+  silentFailureReturnTo,
+} from "@vxture/core-identity-sdk";
 import type { Redis } from "ioredis";
 import { OperatorExchangeService } from "../auth/operator-exchange.service";
 import {
@@ -91,7 +98,27 @@ export class OidcAuthRouter {
 
   /** __Host- in prod https; bare name over local http so the browser stores it. */
   private get cookieName(): string {
-    return rpSessionCookieName(this.rt.cookieSecure);
+    return rpSessionCookieName(this.rt.cookieSecure, this.rt.config.clientId);
+  }
+
+  /**
+   * SSO Presence —— 三态里唯一需要显式存储的那一态（Authenticated 由 RP 会话
+   * cookie 自己表达，Unknown 是"两个都没有"）。契约在 `@vxture/core-identity-sdk`，
+   * 与门户 middleware 共用一份；这里只把它给的 cookie 描述接到 express 上。
+   */
+  private get app(): string {
+    return this.rt.config.clientId;
+  }
+
+  private markAnonymous(res: Response): void {
+    const c = anonymousPresenceCookie(this.app, this.rt.cookieSecure);
+    res.cookie(c.name, c.value, c.options);
+  }
+
+  /** 回到 Unknown。会话建立/注销时清掉，避免它继续压制静默探测。 */
+  private clearPresence(res: Response): void {
+    const c = clearPresenceCookie(this.app, this.rt.cookieSecure);
+    res.clearCookie(c.name, c.options);
   }
 
   /** Begin login: stash PKCE/nonce/returnTo, redirect to the IdP authorize page. */
@@ -99,8 +126,17 @@ export class OidcAuthRouter {
   async login(
     @Query("returnTo") returnTo: string | undefined,
     @Query("prompt") prompt: string | undefined,
+    @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
+    /* 上一轮刚确认过没有中央会话 → 这一轮别再静默问一遍，省掉
+     * 「authorize(prompt=none) → callback(login_required) → 回门户」那 3 跳。
+     * 门户 middleware 也做同一判断，这里是兜底：请求未必经过它（生产上 nginx
+     * auth_request 网关会先拦，且 /auth/login 可被直连）。 */
+    prompt = resolveLoginPrompt(
+      prompt,
+      req.cookies?.[presenceCookieName(this.app)] as string | undefined,
+    );
     const { verifier, challenge } = generatePkce();
     const state = randomToken();
     const nonce = randomToken();
@@ -149,9 +185,9 @@ export class OidcAuthRouter {
         if (raw) {
           const authReq = JSON.parse(raw) as AuthReq;
           if (authReq.prompt === "none") {
-            const u = new URL(authReq.returnTo);
-            u.searchParams.set("vx_sso_silent", "0");
-            res.redirect(u.toString());
+            // 记住这次静默失败，下一次 /auth/login?prompt=none 直接转交互式。
+            this.markAnonymous(res);
+            res.redirect(silentFailureReturnTo(authReq.returnTo));
             return;
           }
         }
@@ -197,6 +233,9 @@ export class OidcAuthRouter {
       path: "/",
       maxAge: this.rt.config.sessionTtlSec * 1000,
     });
+    /* 会话真建立了 → 清掉"没有中央会话"的备忘，否则它会在剩余有效期里继续压制
+     * 静默 SSO（表现为登出后再登录要多走一次交互）。 */
+    this.clearPresence(res);
     res.redirect(authReq.returnTo);
   }
 
@@ -248,6 +287,9 @@ export class OidcAuthRouter {
     const rpsid = req.cookies?.[this.cookieName] as string | undefined;
     if (rpsid) await this.store.destroy(rpsid);
     res.clearCookie(this.cookieName, { path: "/" });
+    /* 登出后不要留着"没有中央会话"的备忘：IdP 那边的中央会话未必跟着结束
+     * （这是本地登出），留着会让下一次登录白白跳过一次本可成功的静默 SSO。 */
+    this.clearPresence(res);
     res.json({ status: "logged_out" });
   }
 }

@@ -1,9 +1,4 @@
 /* Admin overview style entry. Keep concrete rules in admin-overview-* modules. */
 
-@import "./admin-overview-core.css";
-@import "./admin-overview-metrics.css";
-@import "./admin-overview-business.css";
-@import "./admin-overview-products.css";
-@import "./admin-overview-models.css";
-@import "./admin-overview-service.css";
-@import "./admin-overview-responsive.css";
+@import "./admin-overview-layout.css";
+@import "./admin-overview-widgets.css";

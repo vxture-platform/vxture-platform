@@ -16,8 +16,8 @@
   min-width: 0;
   display: grid;
   align-items: center;
-  gap: var(--vx-admin-management-space-1r);
-  padding: var(--vx-admin-management-space-1r) 0;
+  gap: var(--space-md);
+  padding: var(--space-md) 0;
   border-bottom: var(--vx-admin-management-line-width-1p) dashed color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
   color: inherit;
   text-decoration: none;

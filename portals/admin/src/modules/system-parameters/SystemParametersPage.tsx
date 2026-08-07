@@ -3,21 +3,24 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ActionMenu,
-  Badge,
+  DataTable,
   DialogForm,
   EmptyState,
-  Icon,
+  FilterBar,
   Input,
   Label,
+  ListPageTemplate,
   NativeSelect,
   Pagination,
+  StatusBadge,
+  TableTitleCell,
   Textarea,
   useToast,
 } from "@vxture/design-system";
 import { fetchPlatformSettings, updatePlatformSetting } from "@/api/admin-bff";
+import type { DataTableColumn } from "@vxture/design-system";
 import type { PlatformSettingRecord } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
-import { joinClasses } from "@/modules/tenants/tenant-utils";
 
 // P2 占位板块建设：平台配置（admin.settings）。读 is_sensitive/is_encrypted 脱敏；
 // 编辑仅非敏感/非加密/非只读行（守卫 platform:setting.read|.manage，seed §4.3）。
@@ -37,6 +40,37 @@ function protectionLabel(item: PlatformSettingRecord): string | null {
   return null;
 }
 
+const COLUMNS: readonly DataTableColumn<PlatformSettingRecord>[] = [
+  {
+    id: "key",
+    header: "配置键 / 分组",
+    cell: (item) => (
+      <TableTitleCell title={item.configKey} description={item.configGroup} />
+    ),
+  },
+  { id: "type", header: "类型", cell: (item) => item.valueType },
+  {
+    id: "value",
+    header: "值",
+    cell: (item) => {
+      const protection = protectionLabel(item);
+      return (
+        <span className="flex min-w-0 items-center gap-xs">
+          <span className="truncate">{item.configValue}</span>
+          {protection ? (
+            <StatusBadge tone="neutral">{protection}</StatusBadge>
+          ) : null}
+        </span>
+      );
+    },
+  },
+  {
+    id: "description",
+    header: "说明",
+    cell: (item) => item.description ?? "-",
+  },
+];
+
 export function SystemParametersPage() {
   const { toast } = useToast();
   const [items, setItems] = useState<PlatformSettingRecord[]>([]);
@@ -44,6 +78,7 @@ export function SystemParametersPage() {
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [editing, setEditing] = useState<PlatformSettingRecord | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -56,7 +91,7 @@ export function SystemParametersPage() {
   useEffect(() => {
     load()
       .catch((error) =>
-        toast({ tone: "error", title: "加载失败", ...describeError(error) }),
+        toast({ tone: "danger", title: "加载失败", ...describeError(error) }),
       )
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -109,136 +144,110 @@ export function SystemParametersPage() {
       toast({ tone: "success", title: "配置已更新" });
       setEditing(null);
     } catch (error) {
-      toast({ tone: "error", title: "保存失败", ...describeError(error) });
+      toast({ tone: "danger", title: "保存失败", ...describeError(error) });
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div className={joinClasses("vx-page-stack", "vx-setting-page")}>
-      <PageHeader
-        icon="settings"
-        title="系统参数"
-        description="查看与维护平台运行时配置。敏感/加密配置值脱敏显示；加密、只读、敏感配置不在本页编辑（分别经密钥管理器 / 业务锁 / 专用安全流程）。"
-      />
-      <div className="vx-models-toolbar">
-        <Input
-          className="vx-models-toolbar__search"
-          type="search"
-          placeholder="搜索配置键、说明…"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-        />
-        <div className="vx-models-toolbar__filters">
-          <NativeSelect
-            className="vx-admin-filter-select"
-            value={groupFilter}
-            onChange={(e) => {
-              setGroupFilter(e.target.value);
+    <>
+      <ListPageTemplate
+        className="vx-setting-page"
+        header={
+          <PageHeader
+            icon="settings"
+            title="系统参数"
+            description="查看与维护平台运行时配置。敏感/加密配置值脱敏显示；加密、只读、敏感配置不在本页编辑（分别经密钥管理器 / 业务锁 / 专用安全流程）。"
+          />
+        }
+        filters={
+          <FilterBar
+            count={`${filtered.length} 条`}
+            aria-label="系统参数筛选"
+            search={
+              <Input
+                type="search"
+                className="vx-tenant-search"
+                placeholder="搜索配置键、说明…"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+              />
+            }
+            onReset={() => {
+              setSearch("");
+              setGroupFilter("all");
               setPage(1);
             }}
           >
-            <option value="all">全部分组</option>
-            {groups.map((g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
-            ))}
-          </NativeSelect>
-        </div>
-        <div className="vx-models-toolbar__spacer" />
-        <span className="vx-models-toolbar__count">{filtered.length} 条</span>
-      </div>
-      {loading ? (
-        <EmptyState title="加载中…" />
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          title="暂无配置"
-          description={
-            search || groupFilter !== "all"
-              ? "尝试调整筛选条件"
-              : "数据库中没有平台配置项"
-          }
-        />
-      ) : (
-        <>
-          <div
-            className="vx-tenant-directory-list vx-setting-directory-list"
-            role="region"
-            aria-label="平台配置列表"
-          >
-            <div className="vx-tenant-directory-list__header">
-              <span>序号</span>
-              <span>配置键 / 分组</span>
-              <span>类型</span>
-              <span>值</span>
-              <span>说明</span>
-              <span>操作</span>
-            </div>
-            {pageItems.map((item, index) => {
-              const protection = protectionLabel(item);
-              return (
-                <div
-                  key={item.id}
-                  className="vx-tenant-directory-row vx-setting-row"
-                  title={item.description ?? undefined}
-                >
-                  <span className="vx-tenant-directory-row__index">
-                    {(page - 1) * PAGE_SIZE + index + 1}
-                  </span>
-                  <span className="vx-config-row__key">
-                    {item.configKey}
-                    <small>{item.configGroup}</small>
-                  </span>
-                  <span>{item.valueType}</span>
-                  <span className="vx-config-row__value">
-                    {item.configValue}
-                    {protection ? (
-                      <Badge className="vx-admin-role-status-pill--disabled">
-                        {protection}
-                      </Badge>
-                    ) : null}
-                  </span>
-                  <span>{item.description ?? "-"}</span>
-                  <span className="vx-tenant-actions">
-                    <ActionMenu
-                      label="配置操作"
-                      triggerClassName="vx-tenant-actions__trigger"
-                      triggerProps={{ title: "操作", disabled: submitting }}
-                      items={[
-                        {
-                          id: "edit",
-                          label: item.isEditable ? "编辑值" : "不可编辑",
-                          icon: (
-                            <Icon
-                              name="edit"
-                              size="xs"
-                              fallback="placeholder"
-                            />
-                          ),
-                          disabled: submitting || !item.isEditable,
-                          onSelect: () => openEdit(item),
-                        },
-                      ]}
-                    />
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          {pageCount > 1 ? (
-            <Pagination
-              page={page}
-              pageCount={pageCount}
-              onPageChange={setPage}
-            />
-          ) : null}
-        </>
-      )}
+            <NativeSelect
+              wrapperClassName="w-fit"
+              className="vx-tenant-select"
+              value={groupFilter}
+              onChange={(e) => {
+                setGroupFilter(e.target.value);
+                setPage(1);
+              }}
+              aria-label="配置分组"
+            >
+              <option value="all">全部分组</option>
+              {groups.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </NativeSelect>
+          </FilterBar>
+        }
+        table={
+          <DataTable
+            columns={COLUMNS}
+            rows={pageItems}
+            rowKey={(item) => item.id}
+            loading={loading}
+            indexStart={(page - 1) * PAGE_SIZE + 1}
+            selectedKeys={[...selectedIds]}
+            onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
+            rowActions={(item) => (
+              <ActionMenu
+                label="配置操作"
+                disabled={submitting}
+                items={[
+                  {
+                    id: "edit",
+                    label: item.isEditable ? "编辑值" : "不可编辑",
+                    icon: "edit",
+                    disabled: submitting || !item.isEditable,
+                    onSelect: () => openEdit(item),
+                  },
+                ]}
+              />
+            )}
+            empty={
+              <EmptyState
+                title="暂无配置"
+                description={
+                  search || groupFilter !== "all"
+                    ? "尝试调整筛选条件"
+                    : "数据库中没有平台配置项"
+                }
+              />
+            }
+            footer={
+              pageCount > 1 ? (
+                <Pagination
+                  page={page}
+                  pageCount={pageCount}
+                  onPageChange={setPage}
+                />
+              ) : null
+            }
+          />
+        }
+      />
       {editing ? (
         <DialogForm
           open
@@ -284,6 +293,6 @@ export function SystemParametersPage() {
           ) : null}
         </DialogForm>
       ) : null}
-    </div>
+    </>
   );
 }

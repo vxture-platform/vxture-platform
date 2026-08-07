@@ -3,7 +3,8 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "@/lib/i18n/navigation";
 import { useAuthStore } from "@/stores/auth.store";
-import { buildRpLoginUrl } from "@/api/auth.api";
+import { IDLE_MS, startIdleWatcher } from "@vxture/core-identity-sdk";
+import { buildLogoutUrl, buildRpLoginUrl } from "@/api/auth.api";
 
 const SESSION_RESTORE_THROTTLE_MS = 1500;
 // Background heartbeat only. Foreground focus/visibilitychange already trigger an
@@ -56,6 +57,23 @@ export function AuthSessionBootstrap() {
   const lastRestoreAtRef = useRef(0);
   const bootstrappedRef = useRef(false);
   const inFlightRef = useRef(false);
+
+  /**
+   * 闲置钟。C 端 4 小时，到点**直接登出，不弹窗询问**（owner 2026-08-07 判，见
+   * workplans §二十三）。判据由真实交互事件给出，不是请求频率。
+   *
+   * 登出走顶层跳转而不是 fetch：要让浏览器把 vx_sid 带到 IdP 的 end_session，
+   * 完成跨 RP 单点登出——与手动登出同一条路径。
+   */
+  useEffect(() => {
+    return startIdleWatcher({
+      idleMs: IDLE_MS.customer,
+      storageKey: "vx:website:last-activity",
+      onIdle: () => {
+        window.location.assign(buildLogoutUrl());
+      },
+    });
+  }, []);
 
   useEffect(() => {
     const isFirstLoad = !bootstrappedRef.current;

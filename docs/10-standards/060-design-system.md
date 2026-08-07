@@ -1,210 +1,115 @@
-# Design System 使用规范
+# Design System 内部工程规范
 
-版本：1.3.2
-日期：2026-06-23
-范围：`portals/*`、`agent-studio/*` 以及通过包发布接入的外部业务前端消费者
+版本：1.5.0
+日期：2026-08-02
+范围：本仓 DS 三包的维护者与守卫脚本
 
-Design System 是平台 UI 的规则层、基准层和通用能力层。应用端负责业务语义组装，不负责重新定义基础控件、底层 UI 引擎、设计 token 或通用模式。
+> **对外使用规范已随包发布**，见 `packages/design/design-system/docs/`（01 使用契约 / 02 视觉规格 / 03 模式选用 / 04 token 契约 / 05 内容规范 / 06 无障碍达标线），随 `@vxture/design-system` 的 `files` 一同发包。本文只保留内部工程内容：token 管线决策、守卫机制、偏离登记与历史判据。消费方规则一律以包内 docs 为准，本文不得复述。
 
-## 1. 分层原则
+## 1. 分层与 token 管线（内部）
 
-| 层级                 | 归属     | 允许内容                                                                                                      |
-| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
-| L0 Foundation        | DS       | token、字体、主题、密度、Tailwind `@theme` 映射                                                               |
-| L1 Primitive         | DS       | Button/Input/Card/Dialog/Icon 等基础组件                                                                      |
-| L2 Platform Pattern  | DS       | DataTable、FilterBar、ActionMenu、Pagination、DialogForm、StatusBadge、MetricCard、通用 shell/page/table 模式 |
-| L3 Portal Experience | Portal   | 导航、门户 chrome、工作区体验、产品气质                                                                       |
-| L4 Domain Assembly   | 业务模块 | 业务实体页面的语义布局和状态组装                                                                              |
-| L5 Runtime Dynamic   | 调用现场 | 坐标、进度、背景图 URL、动画延迟等运行时值                                                                    |
+L0–L5 组件归属与 T1–T4 token 分层的对外定义见包内 `docs/01-usage.md`；T2 全族契约见 `docs/04-tokens-contract.md`。本节只留生成侧机制。
 
-应用可以组装 DS 能力，但不能把组装写成新的基础定义。
+### 1.1 T1 镜像与偏离登记
+
+**T1 是镜像，不是差分**。命名空间、分组、挡位、名称、取值与 Tailwind v4 逐项一致，由 `scripts/design-tokens/generate-primitive.mjs` 读上游 `theme.css` 生成，一致性由构造保证。全部偏离登记在 `scripts/design-tokens/primitive-policy.mjs`，逐条带理由，生成时打印：
+
+- **扩展**（Tailwind 没有的挡位）：`breakpoint-xs/3xl/4xl/5xl`、`font-brand/cjk`（字号档无扩展，最小档即上游的 `xs`=12px）
+- **覆盖**（Tailwind 有、DS 判定要改）：`font-sans` / `font-mono` 的字体栈
+- **减法**：色板只留 neutral / red / amber / emerald / sky / purple 六个色相（完整色阶）加品牌色
+
+**命名空间必须写对**：`--transition-duration-*`、`--z-index-*`、`--spacing-*`。写错则变量声明成功、工具类不产出且不报错。由 `check-utilities.mjs` 逐族取样实测。
+
+**零增益的族也走 T2**，使分层边界处处成立。**radius 族不指向 T1**：T1 镜像的是 Tailwind 固定阶梯，那条梯子没有基数概念，逐档改才能换基调——这是 T2 对上游值域的有意偏离。
+
+**三族有模式轴**，在模式选择器下声明、由 `theme.css` 以 `@theme inline` 注册，故模式切换自动跟随：色彩（`.dark`）、排版角色（`html.vx-font-*`）、间距（`.density-*`）。其余各族在自己的 semantic 文件里 `@theme` 一处声明即完成注册。
+
+**四族在 T2 落字面量**：z-index、opacity、border-width 上游无原子层可指；容器宽度是因为容器查询里 `var()` 不参与求值。
+
+**T3 已退役**，组件尺寸由 cva variant 承担（三根轴见包内 `docs/01-usage.md` §3）。
+
+### 1.2 尺寸一致性的三道防线
+
+三根轴的对外定义见包内 `docs/01-usage.md` §3。一致性靠三道，只有第二道是真保证：
+
+1. **cva 定义合法集合** —— `size` 只有 sm/default/lg，写别的 TS 报错。
+2. **图案件固定"哪个上下文用哪档"** —— 由图案件自己渲染控件或经 context 下发 `size`，调用方没有选择余地。
+3. **护栏** —— 禁任意值语法、禁应用层定义 `--vx-*`、禁裸设计值。
+
+### 1.2.1 视觉规格的上游对照留档
+
+规格本体见包内 `docs/02-visual-spec.md`。上游取舍留档：
+
+- 组件视觉规格取 shadcn vega，原语基座保持 Radix。实测三个基座（radix / base / aria）的 vega 类名逐字相同——style 与基座正交，换基座不改变任何视觉。
+- 危险动作淡底取自 vega，但不照抄它的 `bg-destructive/10`——alpha 不自适应暗色，vega 必须补写 `dark:` 变体，而我们有十档 destructive 阶，实色结果确定。**采纳的是上游的判断，不是它缺 muted 阶时的将就手段。**
+- `destructive-strong` 上游没有，是因为它不发确认对话框图案，从未遇到这个问题。
+- 密度不改控件高度：实测 shadcn 的 maia（generous）与 vega 控件高度完全相同（24/32/36/40）。故 `SPACING_SCALE` 的 `control` 族默认档取中间列，`inset` 与 `row` 取最宽列。
+- 透明模式的视觉权威 = admin 内容区语法，来源 `workplans/ds-transparent-mode-uplift.md` §1。
+
+### 1.2.2 配方层
+
+T2 装得下"值"，装不下"规则"。跨组件恒定的类名片段抽到 `design-ui/src/styles/recipes.ts`，所有 cva 引用：
+
+| 配方                       | 管什么                                                                        |
+| -------------------------- | ----------------------------------------------------------------------------- |
+| `interactive`              | 焦点环 + 禁用态 + 过渡                                                        |
+| `pressable`                | `active:not-aria-[haspopup]:translate-y-px`（菜单触发器排除，否则面板跟着抖） |
+| `expandable`               | 触发器在面板展开期间保持高亮                                                  |
+| `invalid`                  | `aria-invalid` 驱动的失败态                                                   |
+| `inlineIcon` / `iconInset` | 内联图标的尺寸与单侧内边距收紧                                                |
+| `radiusClamp`              | 小控件圆角封顶                                                                |
+| `panel` / `overlayMotion`  | 叠层面板外观与进出场（必须 `data-[state=*]`，`data-open:` 永远匹配不上）      |
+| `hairline`                 | 发丝线：实线开区块 / 虚线分行分字段                                           |
+| `veil`                     | 透明模式叠层三档（58 / 68 / 72%）                                             |
+| `revealOnHover`            | 次要操作随父容器 hover / focus-within 渐显                                    |
+
+**只放跨组件恒定的片段**。只有一个组件用到的写在它自己的 cva 里。由 `lint:design-classes` 双向守：清单外的组件手写这些片段报错（挡新增漂移），清单内的组件已经不写了也报错（挡豁免清单腐烂）。
+
+### 1.3 组件目录（内部约定）
+
+目录五级的对外判据见包内 `docs/03-patterns-guide.md`。仓内另有：
+
+- `_pending/`：临时目录，收待重写或待删除件，会被清空并删除，不接受新增。
+- 产品专名一律禁止（D16）。
+
+### 1.4 结构件命名
+
+已切至包内 `docs/02-visual-spec.md` §7（含标题阶梯定稿表）。
 
 ## 2. 合法使用方式
 
-```tsx
-import { Button, DataTable, DialogForm, Icon } from "@vxture/design-system";
-import "@vxture/design-system/styles/globals.css";
-import "@vxture/design-system/styles/brands/vxture.css";
-
-<Button>
-  <Icon name="search" size="sm" />
-  搜索
-</Button>;
-```
-
-允许的 DS 子入口只有：
-
-- `@vxture/design-system`
-- `@vxture/design-system/tokens`
-- `@vxture/design-system/types`
-- `@vxture/design-system/server`
-- package exports 明确暴露的 `@vxture/design-system/styles/*`
-
-`@vxture/design-system/styles/globals.css` 已聚合品牌标识组合基线。若调用场景只需要品牌标识样式，也可以单独引入 `@vxture/design-system/styles/brand.css`。
-
-品牌样式入口必须显式选择且单应用只能选择一个：
-
-- `@vxture/design-system/styles/brands/vxture.css`
-- `@vxture/design-system/styles/brands/ruyin.css`
-
-`vxture` 是平台级品牌，`ruyin` 是产品级品牌。两者当前可以保持同构，但消费项目必须通过各自品牌入口接入，后续品牌独立修改时不需要改应用接入方式。
+已切至包内 `docs/01-usage.md` §5（入口白名单、品牌入口）。
 
 ## 3. 跨仓库消费最小标准
 
-Vxture 组织内其他仓库消费 DS 时，只把 `@vxture/design-system` 视为应用层主依赖。`@vxture/shared` 是 DS 的底层契约依赖，会随 DS 传递安装；只有业务代码直接使用 shared 的类型、常量或工具函数时，才在消费项目中显式声明 `@vxture/shared`。
-
-### 3.1 registry 配置
-
-消费仓库必须把 `@vxture` scope 指向 GitHub Packages。项目级 `.npmrc` 可以提交 registry 和环境变量占位，不得提交真实 token：
-
-```ini
-@vxture:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
-```
-
-本地开发者把 `GITHUB_PACKAGES_TOKEN` 配到自己的 shell 环境或用户级 npm 配置中；CI 使用仓库或组织 secret 注入。安装私有 GitHub Packages 至少需要具备读取包权限的 token。若消费仓库已被授予对应 package access，也可以在 GitHub Actions 中改用该仓库的 `GITHUB_TOKEN`。
-
-### 3.2 依赖声明
-
-消费仓库使用已发布版本，不得使用 `workspace:*`：
-
-```bash
-pnpm add @vxture/design-system
-```
-
-如果业务源码直接导入 `@vxture/shared`，再显式安装：
-
-```bash
-pnpm add @vxture/shared
-```
-
-`@vxture/design-system` 的 peer dependencies 必须由消费项目提供，至少包括当前 React / Tailwind 栈所需的 `react`、`react-dom`、`next-themes`、`tailwindcss`、`tailwindcss-animate` 和 `@phosphor-icons/react`。已有 Next.js / React 项目通常已经具备其中一部分，缺失项按 peer dependency 提示补齐。
-
-### 3.3 应用入口
-
-每个应用根入口必须引入 DS globals，再选择一个品牌入口：
-
-```tsx
-import "@vxture/design-system/styles/globals.css";
-import "@vxture/design-system/styles/brands/ruyin.css";
-```
-
-平台级应用使用 `brands/vxture.css`；如影产品级应用使用 `brands/ruyin.css`。禁止同时引入两个品牌入口，禁止在应用侧复制品牌 token。
-
-### 3.4 允许和禁止
-
-允许：
-
-- 从 `@vxture/design-system` 导入组件、Icon、Provider、hook 和 `cn`。
-- 从 `@vxture/design-system/tokens` 或 `/types` 导入 server-safe token 引用和类型。
-- 从 package exports 明确暴露的 `styles/*` 导入稳定 CSS 入口。
-- 业务代码确有需要时，从 `@vxture/shared` 导入平台共享类型、常量和纯工具。
-
-禁止：
-
-- 从 `@vxture/design-system/src/**`、`@vxture/shared/src/**` 或任意未导出子路径导入。
-- 在消费项目中使用 `workspace:*` 指向 Vxture monorepo 包。
-- 在消费项目中定义 `--vx-*` token、复制品牌色或重新实现基础控件。
-- 将 GitHub Packages token 写入仓库、日志或 `.env.example` 的真实值中。
-
-### 3.5 CI 接入模板
-
-```yaml
-steps:
-  - uses: actions/checkout@v6
-
-  - uses: pnpm/action-setup@v6
-
-  - uses: actions/setup-node@v6
-    with:
-      node-version: "24"
-      cache: "pnpm"
-      registry-url: "https://npm.pkg.github.com"
-      scope: "@vxture"
-
-  - name: Install dependencies
-    env:
-      GITHUB_PACKAGES_TOKEN: ${{ secrets.VXTURE_PACKAGES_READ_TOKEN }}
-    run: pnpm install --frozen-lockfile
-```
-
-`VXTURE_PACKAGES_READ_TOKEN` 应作为组织或仓库 secret 管理，权限只给读取 GitHub Packages 所需范围。
-
-### 3.6 接入验收
-
-消费仓库完成接入后至少验证：
-
-```bash
-pnpm install --frozen-lockfile
-pnpm type-check
-pnpm lint
-pnpm build
-```
-
-若消费仓库也启用 DS guardrail，应追加同等约束：不得新增 DS 深层导入、应用侧 `--vx-*` token、原生基础控件和硬编码设计值。
+已切至包内 `docs/01-usage.md` §5（registry / 依赖声明 / CI / 接入验收）。
 
 ## 4. 禁止事项
 
-应用层禁止：
-
-- 从 `@vxture/design-system/src/**` 或未授权子路径导入。
-- 直接依赖或导入 `@phosphor-icons/react`、`lucide-react`、`react-icons`、`@radix-ui/*`。
-- 手写 `button`、`input`、`select`、`textarea`、`table` 等基础控件。
-- 定义 `--vx-*` CSS custom property。
-- 新增硬编码颜色、字号、间距、圆角、阴影等设计值。
-- 用 inline style 承载设计值。
-- 在聚合入口文件里继续写具体规则，例如 `platform.css`、`console.css`、`admin-management.css`。
-
-允许的应用 CSS 只表达业务组装语义，例如布局排列、状态组合、实体信息密度。若某个结构具备跨应用复用价值，先补 DS，再迁移应用调用。
+已切至包内 `docs/01-usage.md` §6。
 
 ## 5. AI 色彩语义
 
-DS 1.3.0 完整迁入 Quantum AI 色彩层，品牌主色、auth 视觉、shell brand 与 AI 专属语义均统一到 DS token。AI primitive 色阶只属于 DS Foundation 和 DS 内部组装，应用只能消费语义 token，不得直接引用 `--vx-color-ai-500`、`--vx-color-ai-cyan-500`、`--vx-color-spark-400` 或 `bg-vx-ai-500` 这类 primitive 工具类。
+已切至包内 `docs/04-tokens-contract.md` §2。应用侧越界由 `pnpm lint:design` 的 `ds/no-app-ai-primitive-token` 阻止。
 
-| token                  | 用途                                                                                |
-| ---------------------- | ----------------------------------------------------------------------------------- |
-| `--vx-color-primary`   | 产品主色：CTA、链接、焦点环、激活导航和品牌 chrome；承担大多数 blue usage           |
-| `--vx-color-ai`        | AI 专属 UI：模型徽章、助手 chrome、AI 生成标识、AI 导航入口                         |
-| `--vx-color-ai-cyan`   | 仅与 `--vx-color-ai` 成对使用，用于 AI 渐变层次、图谱线条和内发光；不得单独作为主色 |
-| `--vx-color-spark`     | 仅用于生成中、完成闪烁、token stream 等短暂动画瞬间                                 |
-| `--vx-gradient-aurora` | 品牌级重点视觉：登录视觉面板、营销 hero、Agent 落地页；单屏最多一个                 |
+## 6. 新挡位流程
 
-禁止把 `--vx-color-ai` 用作通用 CTA，禁止把 `--vx-color-spark` 用在静态表面。
-`pnpm lint:design` 通过 `ds/no-app-ai-primitive-token` 阻止应用侧直接消费 AI primitive 色阶。
-如果需要使用 Tailwind 工具类，应用只能使用 `bg-vx-ai`、`bg-vx-ai-soft`、`text-vx-ai-foreground`、`border-vx-ai-border` 等语义映射；`bg-vx-ai-500`、`from-vx-ai-cyan-500`、`text-vx-spark-400` 这类 primitive utility 只允许 DS 内部样式组装。
+新挡位分两种情况：**T1 缺档**（上游没有的取值）走 §9 的流程补进 `primitive-policy.mjs` 的扩展表；**T2 缺语义名**（取值有了但没有对应角色）补进 `semantic-policy.mjs`。两者都要写理由，生成时逐条打印。就地写死一律不接受。
 
-DS 已在 `@vxture/design-system/tokens` 暴露 `colors.semantic.ai*` 与 `gradients.*` 引用，在 Tailwind `@theme` 暴露 `bg-vx-gradient-aurora`、`bg-vx-gradient-brand`、`bg-vx-gradient-ai-duo`、`bg-vx-gradient-spark-pulse`，并在 `components.css` 提供 `.vx-ai-surface`、`.vx-ai-chip`、`.vx-ai-dot`、`.vx-ai-gradient-text`、`.vx-ai-ambient` 通用类。应用端应该优先组合这些 DS 基准类表达 AI 业务界面；只有实体布局、内容密度、交互状态编排留在应用层。
-
-## 6. Foundation 尺度、阴影与动效
-
-Foundation patch 已正式迁入 DS，临时 patch 文件不再保留为源码。`--vx-space-3xl/4xl`、`--vx-radius-xs/2xl/3xl`、`--vx-shadow-xs/xl/2xl/glow/focus-ring/focus-ring-ai`、`--vx-duration-*`、`--vx-ease-*`、`--vx-motion-*` 和 `--animate-vx-*` 由 `tokens-foundation-radius-space.css`、`tokens-foundation-shadow.css`、`tokens-foundation-motion.css` 与 `tokens-foundation-type-layout.css` 分层维护，并通过 `tokens-theme-foundation.css` 映射为 Tailwind `vx-*` 工具能力。
-
-应用端只能消费这些语义 token、Tailwind `vx-*` 映射或 DS 组件封装；不得在应用 CSS 中重新定义阴影、圆角、动效曲线、动画关键帧或发光基线。`--vx-shadow-glow`、`--vx-motion-ai-pop`、`--animate-vx-shimmer` 属于 AI / 生成态视觉语义，只能用于 AI 入口、生成中状态、模型徽章和 DS 授权的 AI 组件组装。
-
-Reduced motion 已在 DS Foundation 层处理，应用端不需要重复写全局 `prefers-reduced-motion` 基线；业务确需动态延迟、坐标或进度时，保留在 L5 Runtime Dynamic，不能借此承载固定设计值。
-
-`packages/design/*.css` 下的迁移 patch 文件只允许作为短期输入。迁入完成后必须删除，正式事实来源只允许是 `packages/design/design-system/src/styles/*`、`packages/design/design-system/src/tokens/*` 和本规范文档。
+事实来源只有四处：`src/styles/primitive|semantic/*`（生成物）、`primitive-policy.mjs`（T1 相对上游的偏离）、`semantic-policy.mjs` / `color-policy.mjs` / `typography-policy.mjs`（T2 的全部输入）与规范文档。生成物不得手工编辑，改动会被下一次生成静默覆盖。
 
 ## 7. 品牌标识组合
 
-DS 提供 `.vx-brand-lockup`、`.vx-brand-mark`、`.vx-brand-name`、`.vx-brand-local-name` 与 `.vx-brand-separator` 五个品牌标识组合类，用于产品名、子品牌和本地化名称的轻量组装。它们只承载品牌字体、间距、颜色和图标尺寸基线，不规定链接、文案或导航行为。
-
-应用端可以组合这些类表达具体品牌上下文，但不得重新定义品牌字体、字号、间距、颜色或图标尺寸。如果现有类无法覆盖新的跨应用品牌结构，应先扩展 DS，再迁移应用调用。
+已切至包内 `docs/01-usage.md` §7。
 
 ## 8. Motion / Z-index / Breakpoint
 
-Motion 只能消费 DS Foundation token：`--vx-duration-*`、`--vx-ease-*`、`--vx-motion-*` 或 `--animate-vx-*`。业务层不得重新声明固定时长、缓动曲线或全局 keyframes；AI 生成态优先使用 DS AI 组件内建 motion。
-
-Z-index 只能使用 `--vx-z-*` 语义层级。业务层允许 `0-99` 内的局部堆叠值，超过 `99` 的 overlay、drawer、toast、popover、modal 必须使用 `--vx-z-dropdown`、`--vx-z-popover`、`--vx-z-tooltip`、`--vx-z-modal`、`--vx-z-drawer`、`--vx-z-toast` 等 token。
-
-断点使用 Tailwind 语义类或 DS breakpoint token 体系。业务 CSS 不得在 media query 中复制 `640px`、`768px`、`1024px`、`1280px`、`1536px` 标准断点；容器宽度优先使用 `--vx-container-*`，页面栅格使用 `--vx-grid-*`。
-
-暗色模式由 DS token 在 `.dark` / `:root.dark` 下重映射。业务源码不得定义新的 `.dark {}` 块，也不得为暗色主题复制颜色、阴影和边框值。
+档位契约已切至包内 `docs/04-tokens-contract.md` §8–§11。z-index 阶梯依据 Bootstrap / MUI / Ant Design 三家共识，权威表在 `scripts/design-tokens/semantic-policy.mjs`；内联 style 等拿不到类名的场合可直写档位值，守卫 `ds/no-hardcoded-z-index` 按白名单兜底校验。
 
 ## 9. DS 不足时的处理
 
 1. 确认 DS 没有对应 primitive、pattern 或 token。
-2. 在 `packages/design/design-system/` 中补齐能力。
+2. 在 `packages/design/` 相应包中补齐能力。
 3. 从公共入口导出，必要时同步 style entry 和 guardrail 白名单。
 4. 应用端改为消费 DS 能力。
 5. 运行 `pnpm lint:design` 和受影响 package 的 `lint` / `type-check` / `build`。
@@ -224,18 +129,23 @@ AI 修改前端代码时必须：
 
 ```bash
 pnpm lint:design
+pnpm lint:design-exports
 pnpm --filter @vxture/design-system lint
 pnpm --filter @vxture/design-system type-check
 pnpm --filter @vxture/design-system build
 ```
 
+`lint:design-exports` 守卫 DS 公开入口（exports 子路径 + 具名导出 + files + peerDependencies）。入口变化必须先按 `050-design-system-release.md` 判定 SemVer，再用 `--update` 显式更新快照。
+
 消费者变更还要运行对应应用的 `lint` / `type-check` / `build`。
 
 ## 12. 关联文档
 
+- `packages/design/design-system/docs/` —— 对外使用规范（随包发布）
 - `packages/design/design-system/README.md`
-- `docs/40-implementation/packages/design/design-system.md`
-- `docs/10-standards/design-system-release.md`
-- `docs/10-standards/design-system-consumer-trial.md`
-- `docs/10-standards/design-system-package-convergence.md`
+- `docs/40-implementation/packages/design/10-design-system.md`
+- `docs/10-standards/065-design-token-pipeline.md`
+- `docs/10-standards/050-design-system-release.md`
+- `docs/10-standards/030-design-system-consumer-trial.md`
+- `docs/10-standards/040-design-system-package-convergence.md`
 - `docs/60-operations/audit/checklist-ds.md`

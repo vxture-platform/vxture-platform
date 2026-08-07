@@ -1,148 +1,29 @@
-/* Model platform directory layout and row state styles. */
-
-.vx-model-platform-directory-list .vx-tenant-directory-list__header,
-.vx-model-platform-directory-list .vx-tenant-directory-row {
-  min-width: var(--vx-admin-directory-row-min-width);
-  grid-template-columns:
-    var(--vx-admin-management-track-25r) var(--vx-admin-management-track-275r) minmax(0, 1.25fr) minmax(0, 0.5fr)
-    minmax(0, 0.5fr) minmax(0, 0.68fr) minmax(0, 0.9fr) var(--vx-admin-management-track-5r);
-}
-
-.vx-model-platform-page .vx-tenant-directory-row {
-  cursor: default;
-}
-
-.vx-model-platform-page .vx-model-platform-row {
-  cursor: pointer;
-}
-
-.vx-model-platform-page .vx-model-platform-row--selected {
-  background: var(--vx-color-brand-50);
-}
+/* Model platform directory layout styles. */
 
 .vx-model-platform-card {
   cursor: default;
 }
 
-.vx-model-platform-directory-list .vx-tenant-directory-list__header > span {
-  justify-self: center;
-  text-align: center;
-}
-
-/* Model platform directory sticky start column styles. */
-
-.vx-model-platform-directory-list
-  .vx-tenant-directory-list__header
-  > span:first-child,
-.vx-model-platform-directory-list
-  .vx-tenant-directory-row
-  > .vx-model-platform-row__select {
-  position: sticky;
-  left: 0;
-  z-index: 3;
-  align-self: stretch;
-  width: 100%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  box-shadow: var(--vx-admin-management-effect-1p) 0 0 color-mix(in srgb, var(--vx-color-auth-accent) 6%, transparent);
-}
-
-.vx-model-platform-directory-list
-  .vx-tenant-directory-list__header
-  > span:first-child {
-  z-index: 4;
-}
-
-.vx-model-platform-directory-list
-  .vx-tenant-directory-list__header
-  > span:last-child,
-.vx-model-platform-directory-list .vx-tenant-directory-row > .vx-tenant-actions {
-  position: sticky;
-  right: 0;
-  z-index: 3;
-  align-self: stretch;
-  width: 100%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  box-shadow: calc(var(--vx-admin-management-effect-1p) * -1) 0 0 color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
-}
-
-.vx-model-platform-directory-list
-  .vx-tenant-directory-list__header
-  > span:last-child {
-  z-index: 4;
-}
-
-.vx-model-platform-directory-list
-  .vx-tenant-directory-row
-  > .vx-tenant-directory-row__tenant,
-.vx-model-platform-directory-list
-  .vx-tenant-directory-row
-  > .vx-model-platform-row__capabilities {
-  justify-self: start;
-  text-align: left;
-}
-
-.vx-model-platform-directory-list
-  .vx-tenant-directory-row
-  > .vx-model-platform-row__status,
-.vx-model-platform-directory-list
-  .vx-tenant-directory-row
-  > .vx-model-platform-row__link,
-.vx-model-platform-directory-list
-  .vx-tenant-directory-row
-  > .vx-model-platform-row__source {
-  justify-self: center;
-  text-align: center;
-}
-
-.vx-model-platform-row__select {
-  justify-self: center;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
+/* 这个类原本是给原生表单复选框写的：accent-color 配色、:checked 提亮、常态压到
+ * 34% 不透明度。JSX 早已换成 DS 的 Checkbox（Radix 渲染的是按钮而非表单控件），
+ * 于是 :checked 永远不匹配——选中后仍挂着 0.34，品牌色
+ * 被冲淡，只有 hover 的 0.72 让它短暂变深，看起来像"选中反而变淡"
+ * （2026-08-05 owner 实测）。三态的样子归 DS Checkbox 管，这里只留尺寸与指针。 */
 .vx-model-select-checkbox {
   width: var(--vx-admin-management-size-1r);
   height: var(--vx-admin-management-size-1r);
   margin: 0;
-  border-color: color-mix(in srgb, var(--vx-color-gray-500) 18%, transparent);
-  opacity: 0.34;
-  accent-color: var(--tenant-blue);
   cursor: pointer;
-  transition:
-    opacity 120ms ease,
-    filter 120ms ease;
 }
 
-.vx-model-select-checkbox:hover,
-.vx-model-select-checkbox:focus-visible {
-  opacity: 0.72;
-  filter: saturate(1.05);
-}
-
-.vx-model-select-checkbox:checked,
-.vx-model-platform-row--selected .vx-model-select-checkbox:checked {
-  opacity: 1;
-  filter: saturate(1.05);
-}
-
-.vx-model-platform-row--private,
 .vx-model-platform-card--private {
   --tenant-row-tone: var(--tenant-green);
 }
 
-.vx-model-platform-row--active,
 .vx-model-platform-card--active {
   --tenant-row-tone: var(--tenant-blue);
 }
 
-.vx-model-platform-row--muted,
 .vx-model-platform-card--muted {
   --tenant-row-tone: var(--vx-color-gray-400);
 }

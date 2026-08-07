@@ -4,22 +4,30 @@ import {
   useEffect,
   useRef,
   useState,
-  type CSSProperties,
   type ChangeEvent,
   type FormEvent,
 } from "react";
 import {
   Icon,
   Avatar,
-  Badge,
+  AvatarFallback,
+  AvatarImage,
+  Banner,
   Button,
+  DetailList,
+  DetailRow,
+  DialogForm,
+  Field,
+  FieldGroup,
+  FieldLabel,
   Input,
-  Label,
   NativeSelect,
+  StatusBadge,
   Switch,
   Textarea,
-  ActionButton,
-  PageHeader,
+  ViewHeader,
+  ViewLayout,
+  type StatusBadgeTone,
 } from "@vxture/design-system";
 import { useRouter } from "next/navigation";
 import {
@@ -29,6 +37,8 @@ import {
   updateOrganization,
   uploadOrgLogo,
 } from "@/api/console-bff";
+import { IdentityCard } from "@/components/detail";
+import { PageSection } from "@/layout/shell";
 import type { ConsoleOrganizationProfile } from "@/entities/console";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { formatTenantDisplay } from "@/features/tenant/tenant-display";
@@ -37,6 +47,28 @@ import { useLocale, useTranslations } from "next-intl";
 const LOGO_UPLOAD_MAX_SIZE = 5 * 1024 * 1024;
 const CURRENCY_OPTIONS = ["CNY", "USD", "EUR", "GBP", "JPY", "HKD", "SGD"];
 const LANGUAGE_OPTIONS = ["zh-CN", "en-US"];
+
+/** Tenant lifecycle status → badge tone. */
+const TENANT_STATUS_TONE: Record<
+  ConsoleOrganizationProfile["status"],
+  StatusBadgeTone
+> = {
+  trial: "warning",
+  active: "success",
+  suspended: "danger",
+  cancelled: "neutral",
+};
+
+/** KYC verification status → badge tone. */
+const VERIFIED_STATUS_TONE: Record<
+  NonNullable<ConsoleOrganizationProfile["verifiedStatus"]>,
+  StatusBadgeTone
+> = {
+  unverified: "neutral",
+  pending: "warning",
+  verified: "success",
+  rejected: "danger",
+};
 
 /** Canonical IANA timezone list, with a curated fallback for older runtimes. */
 function listTimeZones(): string[] {
@@ -117,12 +149,6 @@ function formatOrganizationDate(
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
-}
-
-function logoStyle(value?: string | null): CSSProperties | undefined {
-  return value
-    ? { backgroundImage: `url(${JSON.stringify(value)})` }
-    : undefined;
 }
 
 function organizationInitials(value: string) {
@@ -268,9 +294,14 @@ export function OrganizationPage() {
   const logoInitials = organizationInitials(baseTenantName || "VX");
   const logoSrc = profile?.logoHash ? orgLogoUrl(profile.logoHash) : null;
   const status = profile ? t(`status.tenant.${profile.status}`) : empty;
+  const statusTone: StatusBadgeTone = profile
+    ? TENANT_STATUS_TONE[profile.status]
+    : "neutral";
   const verifiedStatus = profile?.verifiedStatus
     ? t(`status.verified.${profile.verifiedStatus}`)
     : t("status.verified.unverified");
+  const verifiedTone: StatusBadgeTone =
+    VERIFIED_STATUS_TONE[profile?.verifiedStatus ?? "unverified"];
   const tenantType = profile ? t(`tenantType.${profile.tenantType}`) : empty;
   const createdAt = formatOrganizationDate(profile?.createdAt, locale, empty);
   const updatedAt = formatOrganizationDate(profile?.updatedAt, locale, empty);
@@ -280,475 +311,491 @@ export function OrganizationPage() {
 
   function readonlyRow(label: string, value: string) {
     return (
-      <div className="vx-profile-row" key={label}>
-        <span>{label}</span>
-        <strong>{loading ? loadingText : value}</strong>
-      </div>
+      <DetailRow label={label} key={label}>
+        {loading ? loadingText : value}
+      </DetailRow>
     );
   }
 
   return (
-    <div className="vx-page-stack vx-profile-page vx-account-profile-page vx-organization-profile-page">
-      <PageHeader
-        eyebrow={t("header.eyebrow")}
+    <ViewLayout>
+      <ViewHeader
+        icon="building-library"
         title={t("header.title")}
         description={t("header.description")}
       />
 
-      {messageKey ? (
-        <p className="vx-profile-message">{t(messageKey)}</p>
-      ) : null}
-      {errorKey ? <p className="vx-profile-error">{t(errorKey)}</p> : null}
+      {messageKey ? <Banner tone="success" title={t(messageKey)} /> : null}
+      {errorKey ? <Banner tone="danger" title={t(errorKey)} /> : null}
 
       {/* Logo + tenant identity card */}
-      <section className="vx-profile-group">
-        <div className="vx-profile-group__header">
-          <div>
-            <h2>{t("sections.foundation.title")}</h2>
-            <p>{t("sections.foundation.description")}</p>
-          </div>
-          {!isPersonal ? (
-            <ActionButton
+      <PageSection
+        title={t("sections.foundation.title")}
+        icon="building"
+        level={2}
+        description={t("sections.foundation.description")}
+        action={
+          !isPersonal ? (
+            <Button
               variant="outline"
-              icon="edit"
+              size="md"
               onClick={openEdit}
               disabled={!profile || loading || submitting}
             >
-              {t("actions.edit")}
-            </ActionButton>
-          ) : null}
-        </div>
-
-        <div className="vx-account-profile-compact-card">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="vx-organization-logo-button"
-            aria-label={t("logo.edit")}
-            title={t("logo.edit")}
-            onClick={() => logoFileInputRef.current?.click()}
-            disabled={submitting}
-          >
-            <Avatar
-              className={
-                logoSrc
-                  ? "vx-organization-logo vx-organization-logo--image"
-                  : "vx-organization-logo"
-              }
-              role="img"
-              aria-label={t("logo.alt", { name: displayName })}
-              style={logoStyle(logoSrc)}
-            >
-              {!logoSrc ? <strong>{logoInitials}</strong> : null}
-            </Avatar>
-            <span
-              className="vx-account-profile-avatar-button__edit"
-              aria-hidden="true"
-            >
               <Icon name="edit" size="xs" fallback="placeholder" />
-            </span>
-          </Button>
-          <div className="vx-account-profile-compact-card__info">
-            <strong>{loading ? loadingText : displayName}</strong>
-            <span>
-              {profile?.tenantCode || session.tenant?.tenantCode || empty}
-            </span>
-          </div>
-          <div className="vx-account-profile-compact-card__actions">
-            <ActionButton
-              icon="plus"
-              size="sm"
-              onClick={() => logoFileInputRef.current?.click()}
-              disabled={submitting}
-            >
-              {t("actions.uploadLogo")}
-            </ActionButton>
-            <ActionButton
-              variant="outline"
-              icon="x"
-              size="sm"
-              onClick={clearLogo}
-              disabled={!logoSrc || submitting}
-            >
-              {t("actions.clearLogo")}
-            </ActionButton>
-          </div>
-          <Input
-            ref={logoFileInputRef}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={(event) => void handleLogoFile(event)}
-          />
-        </div>
+              <span>{t("actions.edit")}</span>
+            </Button>
+          ) : undefined
+        }
+      >
+        <IdentityCard
+          avatar={
+            <Avatar className="size-full">
+              {logoSrc ? (
+                <AvatarImage
+                  src={logoSrc}
+                  alt={t("logo.alt", { name: displayName })}
+                />
+              ) : null}
+              <AvatarFallback>
+                <strong>{logoInitials}</strong>
+              </AvatarFallback>
+            </Avatar>
+          }
+          avatarLabel={t("logo.edit")}
+          onAvatarClick={() => logoFileInputRef.current?.click()}
+          avatarDisabled={submitting}
+          name={loading ? loadingText : displayName}
+          tags={
+            loading ? null : (
+              <StatusBadge tone={statusTone}>{status}</StatusBadge>
+            )
+          }
+          meta={profile?.tenantCode || session.tenant?.tenantCode || empty}
+          actions={
+            <>
+              <Button
+                size="md"
+                onClick={() => logoFileInputRef.current?.click()}
+                disabled={submitting}
+              >
+                <Icon name="plus" size="xs" fallback="placeholder" />
+                <span>{t("actions.uploadLogo")}</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="md"
+                onClick={clearLogo}
+                disabled={!logoSrc || submitting}
+              >
+                <Icon name="x" size="xs" fallback="placeholder" />
+                <span>{t("actions.clearLogo")}</span>
+              </Button>
+            </>
+          }
+        />
+        <Input
+          ref={logoFileInputRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(event) => void handleLogoFile(event)}
+        />
 
-        {readonlyRow(t("fields.tenantCode"), profile?.tenantCode || empty)}
-        {readonlyRow(t("fields.tenantType"), tenantType)}
-        <div className="vx-profile-row">
-          <span>{t("fields.tenantStatus")}</span>
-          <strong>
+        <DetailList>
+          {readonlyRow(t("fields.tenantCode"), profile?.tenantCode || empty)}
+          {readonlyRow(t("fields.tenantType"), tenantType)}
+          <DetailRow label={t("fields.tenantStatus")}>
             {loading ? (
               loadingText
             ) : (
-              <Badge
-                className={`vx-organization-status vx-organization-status--${profile?.status ?? "trial"}`}
-              >
-                {status}
-              </Badge>
+              <StatusBadge tone={statusTone}>{status}</StatusBadge>
             )}
-          </strong>
-        </div>
-        {readonlyRow(t("fields.createdAt"), createdAt)}
-        {readonlyRow(
-          t("fields.description"),
-          displayValue(profile?.description, empty),
-        )}
-      </section>
+          </DetailRow>
+          {readonlyRow(t("fields.createdAt"), createdAt)}
+          {readonlyRow(
+            t("fields.description"),
+            displayValue(profile?.description, empty),
+          )}
+        </DetailList>
+      </PageSection>
 
       {/* Personal tenant → verification summary + jump (spec §3.4) */}
       {isPersonal ? (
-        <section className="vx-profile-group">
-          <div className="vx-profile-group__header">
-            <div>
-              <h2>{t("sections.verification.title")}</h2>
-              <p>{t("sections.verification.personalHint")}</p>
-            </div>
-          </div>
-          <div className="vx-profile-row vx-profile-row--actionable">
-            <span>{t("fields.verifiedStatus")}</span>
-            <strong>{loading ? loadingText : verifiedStatus}</strong>
-            <ActionButton
-              variant="outline"
-              size="sm"
-              icon="shield-check"
-              onClick={() => router.push("/profile/verification")}
+        <PageSection
+          title={t("sections.verification.title")}
+          icon="seal-check"
+          level={2}
+          description={t("sections.verification.personalHint")}
+        >
+          <DetailList>
+            <DetailRow
+              label={t("fields.verifiedStatus")}
+              actions={
+                <Button
+                  variant="outline"
+                  size="md"
+                  onClick={() => router.push("/profile/verification")}
+                >
+                  <Icon name="shield-check" size="xs" fallback="placeholder" />
+                  <span>{t("actions.goVerify")}</span>
+                </Button>
+              }
             >
-              {t("actions.goVerify")}
-            </ActionButton>
-          </div>
-        </section>
+              {loading ? (
+                loadingText
+              ) : (
+                <StatusBadge tone={verifiedTone}>{verifiedStatus}</StatusBadge>
+              )}
+            </DetailRow>
+          </DetailList>
+        </PageSection>
       ) : (
         <>
           {/* Organization → industry / scale / website */}
-          <section className="vx-profile-group">
-            <div className="vx-profile-group__header">
-              <div>
-                <h2>{t("sections.business.title")}</h2>
-                <p>{t("sections.business.description")}</p>
-              </div>
-            </div>
-            {readonlyRow(
-              t("fields.industry"),
-              displayValue(profile?.industry, empty),
-            )}
-            {readonlyRow(
-              t("fields.scale"),
-              displayValue(profile?.scale, empty),
-            )}
-            {readonlyRow(
-              t("fields.website"),
-              displayValue(profile?.website, empty),
-            )}
-          </section>
+          <PageSection
+            title={t("sections.business.title")}
+            icon="certificate"
+            level={2}
+            description={t("sections.business.description")}
+          >
+            <DetailList>
+              {readonlyRow(
+                t("fields.industry"),
+                displayValue(profile?.industry, empty),
+              )}
+              {readonlyRow(
+                t("fields.scale"),
+                displayValue(profile?.scale, empty),
+              )}
+              {readonlyRow(
+                t("fields.website"),
+                displayValue(profile?.website, empty),
+              )}
+            </DetailList>
+          </PageSection>
 
           {/* Organization → admin / contact (spec §3.3) */}
-          <section className="vx-profile-group">
-            <div className="vx-profile-group__header">
-              <div>
-                <h2>{t("sections.contact.title")}</h2>
-                <p>{t("sections.contact.description")}</p>
-              </div>
-            </div>
-            {readonlyRow(
-              t("fields.contactName"),
-              displayValue(profile?.contactName, empty),
-            )}
-            {readonlyRow(
-              t("fields.contactRole"),
-              displayValue(profile?.contactRole, empty),
-            )}
-            {readonlyRow(
-              t("fields.contactEmail"),
-              displayValue(profile?.contactEmail, empty),
-            )}
-            {readonlyRow(
-              t("fields.contactPhone"),
-              displayValue(profile?.contactPhone, empty),
-            )}
-            {readonlyRow(t("fields.region"), region)}
-            {readonlyRow(
-              t("fields.postalCode"),
-              displayValue(profile?.postalCode, empty),
-            )}
-            <div className="vx-profile-row">
-              <span>{t("fields.isBillingRecipient")}</span>
-              <strong>
+          <PageSection
+            title={t("sections.contact.title")}
+            icon="user-circle"
+            level={2}
+            description={t("sections.contact.description")}
+          >
+            <DetailList>
+              {readonlyRow(
+                t("fields.contactName"),
+                displayValue(profile?.contactName, empty),
+              )}
+              {readonlyRow(
+                t("fields.contactRole"),
+                displayValue(profile?.contactRole, empty),
+              )}
+              {readonlyRow(
+                t("fields.contactEmail"),
+                displayValue(profile?.contactEmail, empty),
+              )}
+              {readonlyRow(
+                t("fields.contactPhone"),
+                displayValue(profile?.contactPhone, empty),
+              )}
+              {readonlyRow(t("fields.region"), region)}
+              {readonlyRow(
+                t("fields.postalCode"),
+                displayValue(profile?.postalCode, empty),
+              )}
+              <DetailRow label={t("fields.isBillingRecipient")}>
                 {loading
                   ? loadingText
                   : profile?.isBillingRecipient
                     ? t("common.yes")
                     : t("common.no")}
-              </strong>
-            </div>
-          </section>
+              </DetailRow>
+            </DetailList>
+          </PageSection>
 
           {/* Organization → localization (tenant-level; WS inherits, spec §3.6) */}
-          <section className="vx-profile-group">
-            <div className="vx-profile-group__header">
-              <div>
-                <h2>{t("sections.localization.title")}</h2>
-                <p>{t("sections.localization.description")}</p>
-              </div>
-            </div>
-            {readonlyRow(
-              t("fields.timeZone"),
-              displayValue(profile?.timezone, empty),
-            )}
-            {readonlyRow(
-              t("fields.language"),
-              displayValue(profile?.language, empty),
-            )}
-            {readonlyRow(
-              t("fields.currency"),
-              displayValue(profile?.currency, empty),
-            )}
-          </section>
+          <PageSection
+            title={t("sections.localization.title")}
+            icon="translate"
+            level={2}
+            description={t("sections.localization.description")}
+          >
+            <DetailList>
+              {readonlyRow(
+                t("fields.timeZone"),
+                displayValue(profile?.timezone, empty),
+              )}
+              {readonlyRow(
+                t("fields.language"),
+                displayValue(profile?.language, empty),
+              )}
+              {readonlyRow(
+                t("fields.currency"),
+                displayValue(profile?.currency, empty),
+              )}
+            </DetailList>
+          </PageSection>
 
           {/* Organization → enterprise verification summary + jump (spec §3.4) */}
-          <section className="vx-profile-group">
-            <div className="vx-profile-group__header">
-              <div>
-                <h2>{t("sections.verification.title")}</h2>
-                <p>{t("sections.verification.orgHint")}</p>
-              </div>
-            </div>
-            <div className="vx-profile-row vx-profile-row--actionable">
-              <span>{t("fields.verifiedStatus")}</span>
-              <strong>{loading ? loadingText : verifiedStatus}</strong>
-              <ActionButton
-                variant="outline"
-                size="sm"
-                icon="shield-check"
-                onClick={() => router.push("/organization/verification")}
+          <PageSection
+            title={t("sections.verification.title")}
+            icon="seal-check"
+            level={2}
+            description={t("sections.verification.orgHint")}
+          >
+            <DetailList>
+              <DetailRow
+                label={t("fields.verifiedStatus")}
+                actions={
+                  <Button
+                    variant="outline"
+                    size="md"
+                    onClick={() => router.push("/organization/verification")}
+                  >
+                    <Icon
+                      name="shield-check"
+                      size="xs"
+                      fallback="placeholder"
+                    />
+                    <span>{t("actions.goVerify")}</span>
+                  </Button>
+                }
               >
-                {t("actions.goVerify")}
-              </ActionButton>
-            </div>
-            {readonlyRow(t("fields.updatedAt"), updatedAt)}
-          </section>
+                {loading ? (
+                  loadingText
+                ) : (
+                  <StatusBadge tone={verifiedTone}>
+                    {verifiedStatus}
+                  </StatusBadge>
+                )}
+              </DetailRow>
+              {readonlyRow(t("fields.updatedAt"), updatedAt)}
+            </DetailList>
+          </PageSection>
         </>
       )}
 
       {/* Edit dialog (organization only) */}
-      {editOpen ? (
-        <div
-          className="vx-profile-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("dialogs.edit.title")}
-        >
-          <div
-            className="vx-profile-dialog__backdrop"
-            onClick={() => setEditOpen(false)}
-          />
-          <form
-            className="vx-profile-dialog__content vx-account-profile-dialog vx-account-profile-dialog--wide"
-            onSubmit={submitEdit}
-          >
-            <header className="vx-account-profile-dialog__header">
-              <h3>{t("dialogs.edit.title")}</h3>
-              <p>{t("dialogs.edit.description")}</p>
-            </header>
-
-            <div className="vx-account-profile-form-grid">
-              <Label className="vx-account-profile-form-grid__wide">
-                {t("fields.description")}
-                <Textarea
-                  className="vx-profile-dialog__textarea"
-                  rows={3}
-                  value={form.description}
-                  onChange={(e) =>
-                    setForm((o) => ({ ...o, description: e.target.value }))
-                  }
-                />
-              </Label>
-              <Label>
-                {t("fields.industry")}
-                <Input
-                  value={form.industry}
-                  onChange={(e) =>
-                    setForm((o) => ({ ...o, industry: e.target.value }))
-                  }
-                />
-              </Label>
-              <Label>
-                {t("fields.scale")}
-                <Input
-                  value={form.scale}
-                  onChange={(e) =>
-                    setForm((o) => ({ ...o, scale: e.target.value }))
-                  }
-                />
-              </Label>
-              <Label className="vx-account-profile-form-grid__wide">
-                {t("fields.website")}
-                <Input
-                  value={form.website}
-                  onChange={(e) =>
-                    setForm((o) => ({ ...o, website: e.target.value }))
-                  }
-                  autoComplete="url"
-                />
-              </Label>
-              <Label>
-                {t("fields.contactName")}
-                <Input
-                  value={form.contactName}
-                  onChange={(e) =>
-                    setForm((o) => ({ ...o, contactName: e.target.value }))
-                  }
-                />
-              </Label>
-              <Label>
-                {t("fields.contactRole")}
-                <Input
-                  value={form.contactRole}
-                  onChange={(e) =>
-                    setForm((o) => ({ ...o, contactRole: e.target.value }))
-                  }
-                />
-              </Label>
-              <Label>
-                {t("fields.contactEmail")}
-                <Input
-                  type="email"
-                  value={form.contactEmail}
-                  onChange={(e) =>
-                    setForm((o) => ({ ...o, contactEmail: e.target.value }))
-                  }
-                />
-              </Label>
-              <Label>
-                {t("fields.contactPhone")}
-                <Input
-                  value={form.contactPhone}
-                  onChange={(e) =>
-                    setForm((o) => ({ ...o, contactPhone: e.target.value }))
-                  }
-                />
-              </Label>
-              <Label>
-                {t("fields.countryCode")}
-                <Input
-                  value={form.countryCode}
-                  onChange={(e) =>
-                    setForm((o) => ({ ...o, countryCode: e.target.value }))
-                  }
-                />
-              </Label>
-              <Label>
-                {t("fields.postalCode")}
-                <Input
-                  value={form.postalCode}
-                  onChange={(e) =>
-                    setForm((o) => ({ ...o, postalCode: e.target.value }))
-                  }
-                />
-              </Label>
-              <Label className="vx-account-profile-form-grid__wide">
-                {t("fields.address")}
-                <Input
-                  value={form.address}
-                  onChange={(e) =>
-                    setForm((o) => ({ ...o, address: e.target.value }))
-                  }
-                />
-              </Label>
-              <Label className="vx-account-profile-form-grid__wide vx-organization-checkbox">
-                <Switch
-                  checked={form.isBillingRecipient}
-                  aria-label={t("fields.isBillingRecipient")}
-                  onChange={(e) =>
-                    setForm((o) => ({
-                      ...o,
-                      isBillingRecipient: e.target.checked,
-                    }))
-                  }
-                />
-                <span>{t("fields.isBillingRecipient")}</span>
-              </Label>
-              <Label>
-                {t("fields.timeZone")}
-                <NativeSelect
-                  className="vx-input"
-                  value={form.timezone}
-                  onChange={(e) =>
-                    setForm((o) => ({ ...o, timezone: e.target.value }))
-                  }
-                >
-                  <option value="">{t("common.empty")}</option>
-                  {form.timezone &&
-                  !TIMEZONE_OPTIONS.includes(form.timezone) ? (
-                    <option value={form.timezone}>{form.timezone}</option>
-                  ) : null}
-                  {TIMEZONE_OPTIONS.map((tz) => (
-                    <option key={tz} value={tz}>
-                      {tz}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </Label>
-              <Label>
-                {t("fields.language")}
-                <NativeSelect
-                  className="vx-input"
-                  value={form.language}
-                  onChange={(e) =>
-                    setForm((o) => ({ ...o, language: e.target.value }))
-                  }
-                >
-                  <option value="">{t("common.empty")}</option>
-                  {LANGUAGE_OPTIONS.map((lng) => (
-                    <option key={lng} value={lng}>
-                      {lng}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </Label>
-              <Label>
-                {t("fields.currency")}
-                <NativeSelect
-                  className="vx-input"
-                  value={form.currency}
-                  onChange={(e) =>
-                    setForm((o) => ({ ...o, currency: e.target.value }))
-                  }
-                >
-                  <option value="">{t("common.empty")}</option>
-                  {CURRENCY_OPTIONS.map((cur) => (
-                    <option key={cur} value={cur}>
-                      {cur}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </Label>
-            </div>
-
-            <div className="vx-profile-dialog__actions">
-              <Button
-                variant="outline"
-                onClick={() => setEditOpen(false)}
-                disabled={submitting}
-              >
-                {t("actions.cancel")}
-              </Button>
-              <Button type="submit" disabled={submitting}>
-                {t("actions.save")}
-              </Button>
-            </div>
-          </form>
-        </div>
-      ) : null}
-    </div>
+      <DialogForm
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        size="lg"
+        title={t("dialogs.edit.title")}
+        description={t("dialogs.edit.description")}
+        submitLabel={t("actions.save")}
+        cancelLabel={t("actions.cancel")}
+        submitting={submitting}
+        onSubmit={submitEdit}
+      >
+        {/* Two-column field grid; wide fields span both columns. */}
+        <FieldGroup className="grid grid-cols-1 gap-md sm:grid-cols-2">
+          <Field className="sm:col-span-2">
+            <FieldLabel htmlFor="org-description">
+              {t("fields.description")}
+            </FieldLabel>
+            <Textarea
+              id="org-description"
+              rows={3}
+              value={form.description}
+              onChange={(e) =>
+                setForm((o) => ({ ...o, description: e.target.value }))
+              }
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="org-industry">
+              {t("fields.industry")}
+            </FieldLabel>
+            <Input
+              id="org-industry"
+              value={form.industry}
+              onChange={(e) =>
+                setForm((o) => ({ ...o, industry: e.target.value }))
+              }
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="org-scale">{t("fields.scale")}</FieldLabel>
+            <Input
+              id="org-scale"
+              value={form.scale}
+              onChange={(e) =>
+                setForm((o) => ({ ...o, scale: e.target.value }))
+              }
+            />
+          </Field>
+          <Field className="sm:col-span-2">
+            <FieldLabel htmlFor="org-website">{t("fields.website")}</FieldLabel>
+            <Input
+              id="org-website"
+              value={form.website}
+              onChange={(e) =>
+                setForm((o) => ({ ...o, website: e.target.value }))
+              }
+              autoComplete="url"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="org-contact-name">
+              {t("fields.contactName")}
+            </FieldLabel>
+            <Input
+              id="org-contact-name"
+              value={form.contactName}
+              onChange={(e) =>
+                setForm((o) => ({ ...o, contactName: e.target.value }))
+              }
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="org-contact-role">
+              {t("fields.contactRole")}
+            </FieldLabel>
+            <Input
+              id="org-contact-role"
+              value={form.contactRole}
+              onChange={(e) =>
+                setForm((o) => ({ ...o, contactRole: e.target.value }))
+              }
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="org-contact-email">
+              {t("fields.contactEmail")}
+            </FieldLabel>
+            <Input
+              id="org-contact-email"
+              type="email"
+              value={form.contactEmail}
+              onChange={(e) =>
+                setForm((o) => ({ ...o, contactEmail: e.target.value }))
+              }
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="org-contact-phone">
+              {t("fields.contactPhone")}
+            </FieldLabel>
+            <Input
+              id="org-contact-phone"
+              value={form.contactPhone}
+              onChange={(e) =>
+                setForm((o) => ({ ...o, contactPhone: e.target.value }))
+              }
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="org-country-code">
+              {t("fields.countryCode")}
+            </FieldLabel>
+            <Input
+              id="org-country-code"
+              value={form.countryCode}
+              onChange={(e) =>
+                setForm((o) => ({ ...o, countryCode: e.target.value }))
+              }
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="org-postal-code">
+              {t("fields.postalCode")}
+            </FieldLabel>
+            <Input
+              id="org-postal-code"
+              value={form.postalCode}
+              onChange={(e) =>
+                setForm((o) => ({ ...o, postalCode: e.target.value }))
+              }
+            />
+          </Field>
+          <Field className="sm:col-span-2">
+            <FieldLabel htmlFor="org-address">{t("fields.address")}</FieldLabel>
+            <Input
+              id="org-address"
+              value={form.address}
+              onChange={(e) =>
+                setForm((o) => ({ ...o, address: e.target.value }))
+              }
+            />
+          </Field>
+          <Field orientation="horizontal" className="sm:col-span-2">
+            <Switch
+              id="org-billing-recipient"
+              checked={form.isBillingRecipient}
+              onCheckedChange={(checked) =>
+                setForm((o) => ({
+                  ...o,
+                  isBillingRecipient: checked,
+                }))
+              }
+            />
+            <FieldLabel htmlFor="org-billing-recipient">
+              {t("fields.isBillingRecipient")}
+            </FieldLabel>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="org-timezone">
+              {t("fields.timeZone")}
+            </FieldLabel>
+            <NativeSelect
+              id="org-timezone"
+              value={form.timezone}
+              onChange={(e) =>
+                setForm((o) => ({ ...o, timezone: e.target.value }))
+              }
+            >
+              <option value="">{t("common.empty")}</option>
+              {form.timezone && !TIMEZONE_OPTIONS.includes(form.timezone) ? (
+                <option value={form.timezone}>{form.timezone}</option>
+              ) : null}
+              {TIMEZONE_OPTIONS.map((tz) => (
+                <option key={tz} value={tz}>
+                  {tz}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="org-language">
+              {t("fields.language")}
+            </FieldLabel>
+            <NativeSelect
+              id="org-language"
+              value={form.language}
+              onChange={(e) =>
+                setForm((o) => ({ ...o, language: e.target.value }))
+              }
+            >
+              <option value="">{t("common.empty")}</option>
+              {LANGUAGE_OPTIONS.map((lng) => (
+                <option key={lng} value={lng}>
+                  {lng}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="org-currency">
+              {t("fields.currency")}
+            </FieldLabel>
+            <NativeSelect
+              id="org-currency"
+              value={form.currency}
+              onChange={(e) =>
+                setForm((o) => ({ ...o, currency: e.target.value }))
+              }
+            >
+              <option value="">{t("common.empty")}</option>
+              {CURRENCY_OPTIONS.map((cur) => (
+                <option key={cur} value={cur}>
+                  {cur}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
+        </FieldGroup>
+      </DialogForm>
+    </ViewLayout>
   );
 }

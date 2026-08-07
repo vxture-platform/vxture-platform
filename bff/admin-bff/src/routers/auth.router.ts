@@ -38,7 +38,7 @@ export class AuthRouter {
   ) {}
 
   private get cookieName(): string {
-    return rpSessionCookieName(this.rt.cookieSecure);
+    return rpSessionCookieName(this.rt.cookieSecure, this.rt.config.clientId);
   }
 
   /** Current operator session state (req.user is populated by AuthMiddleware). */

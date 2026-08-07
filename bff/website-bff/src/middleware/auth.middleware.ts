@@ -35,7 +35,10 @@ export class AuthMiddleware implements NestMiddleware {
     // Non-blocking enrichment: the only /api/* routes are the RP-backed MeRouter;
     // anonymous requests (no/invalid RP cookie) simply fall through.
     const rpsid = req.cookies?.[
-      rpSessionCookieName(this.rpRuntime.cookieSecure)
+      rpSessionCookieName(
+        this.rpRuntime.cookieSecure,
+        this.rpRuntime.config.clientId,
+      )
     ] as string | undefined;
     if (rpsid) {
       const outcome = await this.rpAuth.resolve(rpsid);

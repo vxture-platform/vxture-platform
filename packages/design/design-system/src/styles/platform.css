@@ -1,22 +1,13 @@
 /**
- * platform.css - Cross-application platform semantics
+ * platform.css - 已退役的平台形态样式入口（空壳）。
  * @package @vxture/design-system
+ * @layer Presentation
+ * @category styles
  *
- * This file is the stable style entry. Keep concrete rules in the
- * layered platform-* modules so DS / portal / domain boundaries stay visible.
+ * 原 70 个 platform-* 模块整体引用遗留 token，与 T1–T3 无交集，故随遗留 token
+ * 一并退役。形态样式在各产品逐批收敛时以工具类重建，需要沉淀回 DS 的部分
+ * 按 T3 门槛评估后再入包。历史实现见本次退役提交的父提交。
+ *
+ * 保留空文件仅为使既有 import 解析成功，避免各 portal 在收敛前构建失败。
+ * 收敛约定见 docs/10-standards/040-design-system-package-convergence.md。
  */
-
-@import "./platform-core.css";
-@import "./platform-account.css";
-@import "./platform-notifications.css";
-@import "./platform-tenant-settings.css";
-@import "./platform-layout.css";
-@import "./platform-models.css";
-@import "./platform-access.css";
-@import "./platform-shell.css";
-@import "./platform-brand-hero.css";
-@import "./platform-navigation-tabs.css";
-@import "./platform-data-table.css";
-@import "./platform-toolbar.css";
-@import "./platform-responsive.css";
-@import "./console-order-pay.css";

@@ -1,0 +1,31 @@
+/**
+ * primitive/container-primitive.css - T1 原子层 · 容器宽度。
+ * @package @vxture/design-tokens
+ * @layer Presentation
+ * @category styles
+ * @author AI-Generated
+ * @date 2026-07-31
+ *
+ * ⚠ 本文件由脚本生成，请勿手工编辑。
+ *   生成：node scripts/design-tokens/generate-primitive.mjs
+ *
+ * T1 是 Tailwind v4 theme 的镜像，取值与之逐项一致；偏离登记在
+ * scripts/design-tokens/primitive-policy.mjs。工具类族：max-w-*
+ */
+
+:root {
+  /* 容器宽度。 */
+  --vx-container-3xs: 16rem;
+  --vx-container-2xs: 18rem;
+  --vx-container-xs: 20rem;
+  --vx-container-sm: 24rem;
+  --vx-container-md: 28rem;
+  --vx-container-lg: 32rem;
+  --vx-container-xl: 36rem;
+  --vx-container-2xl: 42rem;
+  --vx-container-3xl: 48rem;
+  --vx-container-4xl: 56rem;
+  --vx-container-5xl: 64rem;
+  --vx-container-6xl: 72rem;
+  --vx-container-7xl: 80rem;
+}

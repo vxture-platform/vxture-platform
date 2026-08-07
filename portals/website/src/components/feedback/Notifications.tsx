@@ -86,7 +86,7 @@ export default function Notifications() {
             <p>{notification.message}</p>
             <Button
               variant="ghost"
-              size="icon"
+              size="icon-md"
               onClick={() => removeNotification(notification.id)}
               className="text-vx-gray-500 hover:text-vx-gray-700"
               aria-label="关闭通知"

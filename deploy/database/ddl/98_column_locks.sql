@@ -355,7 +355,7 @@ GRANT UPDATE (tenant_id, kind, name, code_prefix, effect, total_count, issued_co
 REVOKE UPDATE ON promotion.vouchers FROM platform_svc;
 GRANT UPDATE (batch_id, code, status, max_uses, used_count, assigned_workspace_id, assigned_user_id, expires_at, redeemed_at) ON promotion.vouchers TO platform_svc;
 
--- promotion.voucher_redemptions  [anchor: id]
+-- promotion.voucher_redemptions  [anchor: id, redemption_no]
 REVOKE UPDATE ON promotion.voucher_redemptions FROM platform_svc;
 GRANT UPDATE (voucher_id, tenant_id, workspace_id, user_id, kind, effect_snapshot, transaction_id, subscription_id, invoice_item_id, payment_id, redeemed_at) ON promotion.voucher_redemptions TO platform_svc;
 

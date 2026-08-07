@@ -135,7 +135,10 @@
   --vx-color-info-surface:    var(--vx-color-info-50);
 
   /* ── Semantic · Shell (portal chrome) ─────────────────────────────────── */
-  --vx-color-shell-bg:       #f5f7fb;
+  /* 工作台浅蓝底。原本是就地写死的 #f5f7fb，与 opera 用的 T1 brand-20 (#f4f7fd)
+   * 差 1 个 r 通道、2 个 b 通道——本就是同一个意图的两次手写。改指 brand-20，
+   * 两个控制台从此同一取值：它们是同一套工作界面语言，底色不该各是各的。 */
+  --vx-color-shell-bg:       var(--vx-color-brand-20);
   --vx-color-shell-surface:  var(--vx-color-white);
   --vx-color-shell-border:   rgba(15, 23, 42, 0.07);
   --vx-color-shell-text:     #162033;
@@ -220,7 +223,9 @@
   /* ── Foundation · Layout · Shell dimensions ───────────────────────────── */
   --vx-shell-header-height:           64px;
   --vx-shell-rail-height:             3.25rem;
-  --vx-shell-sidebar-width:           252px;
+  /* 与 T2 侧栏刻度对齐（--spacing-sidebar-*：展开 256 / 收起 64 / 最小 48）。
+     原 252px 是 off-scale 值；本文件不 import T2，故写同值字面量。 */
+  --vx-shell-sidebar-width:           256px;
   --vx-shell-sidebar-collapsed-width: 4rem;
   --vx-shell-sidebar-icon-size:       24px;
   --vx-shell-sidebar-content-inset:   1.25rem;
@@ -346,23 +351,23 @@
   --fg-strong:    var(--vx-color-text-strong);
   --fg-inverse:   var(--vx-color-text-inverse);
 
-  --border:       var(--vx-color-border);
+  --shell-border:       var(--vx-color-border);
   --border-muted: var(--vx-color-border-muted);
   --border-strong: var(--vx-color-border-strong);
 
-  --primary:      var(--vx-color-primary);
-  --primary-hover: var(--vx-color-primary-hover);
+  /* 这里只放 DS **没有**的名字。`--primary` / `--primary-hover` / `--border` /
+   * `--ai` / `--success` / `--warning` / `--info` 曾经也在这一段，那是照上面
+   * 那句「NOT provided by DS」写的——但 DS 全都有。别名一旦与 DS 的语义名撞上，
+   * admin 里所有 DS 组件读到的就不再是 DS 的色（2026-08-05 查：其中 5 个连
+   * app.css 都没用过，纯粹在污染；`--border` 更把中性描边整体换成了品牌蓝 10%，
+   * 于是 admin 的卡片/输入框/分隔线与 opera、console 长得不一样）。 */
   --primary-soft: var(--vx-color-primary-soft);
   --primary-subtle: var(--vx-color-primary-subtle);
 
-  --ai:           var(--vx-color-ai);
   --ai-soft:      var(--vx-color-ai-soft);
   --ai-fg:        var(--vx-color-ai-fg);
 
-  --success:      var(--vx-color-success);
-  --warning:      var(--vx-color-warning);
   --danger:       var(--vx-color-danger);
-  --info:         var(--vx-color-info);
 
   --font-brand:   var(--vx-font-brand);
   --font-display: var(--vx-font-display);

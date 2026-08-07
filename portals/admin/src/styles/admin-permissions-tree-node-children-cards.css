@@ -2,8 +2,8 @@
   display: grid;
   grid-template-columns: var(--vx-admin-permission-track-15r) var(--vx-admin-permission-track-175r) minmax(0, 1fr);
   align-items: center;
-  gap: var(--vx-admin-permission-space-05r);
-  padding-left: calc(var(--permission-depth, 0) * var(--vx-admin-permission-space-125r));
+  gap: var(--space-xs);
+  padding-left: calc(var(--permission-depth, 0) * var(--space-md));
   justify-items: start;
   text-align: left;
 }

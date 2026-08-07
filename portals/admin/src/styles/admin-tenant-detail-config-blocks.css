@@ -3,12 +3,12 @@
 .vx-tenant-audit-list {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-15r);
+  gap: var(--space-lg);
 }
 
 .vx-tenant-block--wide {
   grid-column: 1 / -1;
-  padding-top: var(--vx-admin-management-space-05r);
+  padding-top: var(--space-xs);
 }
 
 .vx-tenant-block > .vx-tenant-config-stack,
@@ -34,9 +34,9 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-15r);
+  gap: var(--space-lg);
   flex-wrap: wrap;
-  padding-bottom: var(--vx-admin-management-space-1r);
+  padding-bottom: var(--space-md);
   border-bottom: var(--vx-admin-management-line-width-1p) dashed color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
 }
 
@@ -51,13 +51,13 @@
 .vx-tenant-config-stack {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-1r);
+  gap: var(--space-md);
 }
 
 .vx-tenant-config-row {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-1r) var(--vx-admin-management-space-15r);
+  gap: var(--space-md) var(--space-lg);
 }
 
 .vx-tenant-config-row--three {
@@ -76,8 +76,8 @@
   min-height: var(--vx-admin-management-size-275r);
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-075r);
-  padding-bottom: var(--vx-admin-management-space-075r);
+  gap: var(--space-sm);
+  padding-bottom: var(--space-sm);
   border-bottom: var(--vx-admin-management-line-width-1p) dashed var(--vx-color-auth-border);
 }
 
@@ -94,14 +94,14 @@
   flex: 1 1 auto;
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
 }
 
 .vx-tenant-config-item__value > strong {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
   overflow: hidden;
   color: var(--vx-color-text-secondary);
   font-size: var(--vx-admin-meta-size);

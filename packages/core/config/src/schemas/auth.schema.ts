@@ -69,21 +69,34 @@ export const authSchema = z.object({
   /** refresh_token lifetime (seconds) */
   OIDC_REFRESH_TTL: z.coerce.number().int().positive().default(2592000),
 
-  /** central session sliding idle TTL (seconds) */
-  OIDC_SESSION_IDLE_TTL: z.coerce.number().int().positive().default(14400),
-
-  /** central session absolute max TTL (seconds). Generic fallback default;
-   *  the authoritative value is env-driven per deployment (.env.auth-bff) —
-   *  FB-006 set worker-01 to 86400 (1d). Do NOT bake policy values here. */
-  OIDC_SESSION_ABS_TTL: z.coerce.number().int().positive().default(604800),
+  /**
+   * 客户面（console / website）中央会话的**总时效**，秒。
+   *
+   * ── 闲置去哪了 ───────────────────────────────────────────────────────
+   * 原先还有一个 `OIDC_SESSION_IDLE_TTL`，由 IdP 拿"空闲"的名义计时。**IdP 没有
+   * 判断空闲所需的信息**：它看不见用户点击，只看得见换票，于是那个"空闲 TTL"实际
+   * 退化成固定寿命——`min(idle, abs)` 恒等于 idle，`abs` 从未生效，配套的
+   * `touchOidcSession` 又全仓零调用点，活跃用户照样被踢。
+   *
+   * 在场判断已移到门户：`@vxture/core-identity-sdk` 的 `startIdleWatcher`，由真实
+   * 交互事件驱动，客户面阈值 4 小时（`IDLE_MS.customer`）。
+   *
+   * 总时效不因活动延长——这正是它存在的意义：给"一直有人点"的会话画一个终点。
+   * 24 小时是 NIST 800-63B AAL2 的建议上限（owner 2026-08-07 定，workplans §二十三）。
+   */
+  OIDC_SESSION_ABS_TTL: z.coerce.number().int().positive().default(86400),
 
   /**
-   * Operator central session (vx_sid_op) TTLs — deliberately shorter than the
-   * tenant session for the high-privilege control plane (operator-identity-
-   * security.md §2.3): idle ≤ 30min, absolute ≤ 8h.
+   * 运营面（admin / opera）中央会话的**总时效**，秒。
+   *
+   * **与 `OIDC_SESSION_ABS_TTL` 是两条独立的策略**，当前取值相同纯属巧合，不要合并
+   * 成一个变量：运营面是高权限面，将来收紧总时效时只会动这一个。两者的差别今天体
+   * 现在门户的闲置阈值上——运营面 30 分钟对客户面 4 小时（`IDLE_MS.workforce`）。
+   *
+   * 取 24 小时而不是原来的 8 小时：8 小时正好卡在一个工作日的长度上，必然切断正在
+   * 干活的人，而 owner 的要求是连续工作不被打断（同上）。
    */
-  OPERATOR_SESSION_IDLE_TTL: z.coerce.number().int().positive().default(1800),
-  OPERATOR_SESSION_ABS_TTL: z.coerce.number().int().positive().default(28800),
+  OPERATOR_SESSION_ABS_TTL: z.coerce.number().int().positive().default(86400),
 
   /**
    * AES-256-GCM key for operator TOTP secrets at rest (admin.operator_mfa.totp_secret).

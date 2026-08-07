@@ -26,6 +26,7 @@ import {
 import type { Density } from "../density";
 import { DEFAULT_DENSITY, DENSITY_STORAGE_KEY } from "../density";
 import { THEME_CONSTANTS } from "@vxture/shared";
+import { markAppReady } from "./boot-splash";
 import {
   readFontSizePreference,
   writeFontSizePreference,
@@ -97,6 +98,10 @@ function DensityProvider({
   // ── 挂载后从 localStorage 恢复 ────────────────────────────────────────────
   useEffect(() => {
     mountedRef.current = true;
+    /* 让服务端直出的启动占位让位。放在这里是因为 ThemeProvider 已经在四个门户
+     * 的根上，且它本来就负责"首帧那些事"（.dark / density / 字号）——再加一个
+     * 挂载点只会多一处要记得接的线。 */
+    markAppReady();
     const saved = localStorage.getItem(DENSITY_STORAGE_KEY) as Density | null;
     if (
       saved &&

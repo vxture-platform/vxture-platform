@@ -2,7 +2,7 @@
   "name": "@vxture/opera",
   "version": "0.1.0",
   "private": true,
-  "description": "Vxture Capability Console shell (OSS-side operator surface, product_250 M-4)",
+  "description": "Opera — Vxture infrastructure control plane (operator surface, product_250 M-4)",
   "type": "module",
   "scripts": {
     "dev": "next dev --turbo -p 3050",
@@ -13,6 +13,7 @@
     "clean": "rimraf .next"
   },
   "dependencies": {
+    "@vxture/core-identity-sdk": "workspace:*",
     "@vxture/design-system": "workspace:*",
     "@vxture/shared": "workspace:*",
     "next": "^15.5.21",

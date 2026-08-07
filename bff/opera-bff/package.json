@@ -22,6 +22,7 @@
     "@nestjs/core": "^11.1.28",
     "@nestjs/platform-express": "^11.0.0",
     "@vxture/core-config": "workspace:*",
+    "@vxture/core-identity-sdk": "workspace:*",
     "@vxture/core-oidc-rp": "workspace:*",
     "@vxture/shared": "workspace:*",
     "cookie-parser": "^1.4.7",

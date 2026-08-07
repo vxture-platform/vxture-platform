@@ -3,7 +3,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
   min-width: 0;
 }
 
@@ -13,7 +13,8 @@
   display: inline-grid;
   place-items: center;
   padding: 0;
-  border: var(--vx-admin-management-line-width-1p) solid color-mix(in srgb, var(--vx-color-gray-500) 12%, transparent);
+  border: var(--vx-admin-management-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-gray-500) 12%, transparent);
   border-radius: var(--vx-radius-lg);
   background: transparent;
   color: var(--vx-color-text-muted);
@@ -38,7 +39,11 @@
 }
 
 .vx-model-batch-actions button:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--tenant-blue) 88%, var(--vx-color-black));
+  border-color: color-mix(
+    in srgb,
+    var(--tenant-blue) 88%,
+    var(--vx-color-black)
+  );
   background: color-mix(in srgb, var(--tenant-blue) 88%, var(--vx-color-black));
   color: var(--vx-color-white);
 }
@@ -49,12 +54,6 @@
   cursor: default;
   color: var(--vx-color-text-muted);
   opacity: 1;
-}
-
-.vx-btn.vx-model-operation-buttons__danger:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--vx-color-danger) 24%, transparent);
-  background: color-mix(in srgb, var(--vx-color-danger) 8%, transparent);
-  color: var(--vx-color-danger);
 }
 
 .vx-model-operation-buttons .vx-model-operation-buttons__danger:not(:disabled) {
@@ -81,96 +80,18 @@
   padding: 0;
 }
 
-.vx-model-provider-pill--online {
-  background: color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
-  color: var(--tenant-blue);
-}
-
-.vx-model-provider-pill--private {
-  background: color-mix(in srgb, var(--vx-color-success) 8%, transparent);
-  color: var(--tenant-green);
-}
-
-.vx-model-link-pill--normal {
-  background: color-mix(in srgb, var(--vx-color-success) 8%, transparent);
-  color: var(--tenant-green);
-}
-
-.vx-model-link-pill--abnormal {
-  background: color-mix(in srgb, var(--vx-color-danger) 10%, transparent);
-  color: var(--tenant-rose);
-}
-
-.vx-model-link-pill--checking {
-  background: color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
-  color: var(--tenant-blue);
-}
-
-.vx-model-state-icon {
-  width: var(--vx-admin-management-size-1125r);
-  height: var(--vx-admin-management-size-1125r);
-  display: inline-grid;
-  place-items: center;
-  border-radius: var(--vx-radius-full);
-  color: var(--vx-color-white);
-}
-
-.vx-model-state-icon--active {
-  background: var(--tenant-blue);
-}
-
-.vx-model-state-icon--inactive {
-  background: var(--tenant-amber);
-}
-
-.vx-model-state-icon svg {
-  width: var(--vx-admin-management-size-06875r);
-  height: var(--vx-admin-management-size-06875r);
-  stroke-width: 2.8;
-}
-
-.vx-model-platform-row__status .vx-tenant-pill--active {
-  background: color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
-  color: var(--tenant-blue);
-}
-
-.vx-model-platform-row__status .vx-tenant-pill--disabled {
-  background: color-mix(in srgb, var(--vx-color-warning-600) 10%, transparent);
-  color: var(--tenant-amber);
-}
-
-.vx-verification-row__status small,
-.vx-verification-row__subject small,
-.vx-verification-row__contact small,
-.vx-verification-row__time small,
-.vx-admin-role-row__admins small,
-.vx-admin-role-row__permissions small,
-.vx-admin-role-row__updated small,
-.vx-product-row__status small,
-.vx-product-row__supply small,
-.vx-product-row__access small,
-.vx-product-row__updated small,
 .vx-product-plan-row__status small,
 .vx-product-plan-row__price small,
 .vx-product-plan-row__features small,
 .vx-product-plan-row__agents small,
-.vx-product-plan-row__subscriptions small,
-.vx-product-solution-row__scenario small,
-.vx-product-solution-row__products small,
-.vx-product-solution-row__tiers small,
-.vx-product-solution-row__subscriptions small,
-.vx-product-solution-row__updated small {
+.vx-product-plan-row__subscriptions small {
   margin-top: 0;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.vx-admin-role-row__identity svg,
-.vx-product-row__identity svg,
-.vx-product-plan-row__identity svg,
-.vx-product-solution-row__identity svg {
+.vx-product-plan-row__identity svg {
   color: var(--tenant-row-tone);
 }
 
@@ -178,33 +99,73 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
   flex-wrap: wrap;
 }
 
 .vx-verification-search {
-  width: clamp(var(--vx-admin-management-size-13r), 16vw, var(--vx-admin-management-size-20r));
-  flex-basis: clamp(var(--vx-admin-management-size-13r), 16vw, var(--vx-admin-management-size-20r));
+  width: clamp(
+    var(--vx-admin-management-size-13r),
+    16vw,
+    var(--vx-admin-management-size-20r)
+  );
+  flex-basis: clamp(
+    var(--vx-admin-management-size-13r),
+    16vw,
+    var(--vx-admin-management-size-20r)
+  );
 }
 
 .vx-admin-role-search {
-  width: clamp(var(--vx-admin-management-size-12r-large), 15vw, var(--vx-admin-management-size-18r-large));
-  flex-basis: clamp(var(--vx-admin-management-size-12r-large), 15vw, var(--vx-admin-management-size-18r-large));
+  width: clamp(
+    var(--vx-admin-management-size-12r-large),
+    15vw,
+    var(--vx-admin-management-size-18r-large)
+  );
+  flex-basis: clamp(
+    var(--vx-admin-management-size-12r-large),
+    15vw,
+    var(--vx-admin-management-size-18r-large)
+  );
 }
 
 .vx-product-search {
-  width: clamp(var(--vx-admin-management-size-13r), 16vw, var(--vx-admin-management-size-20r));
-  flex-basis: clamp(var(--vx-admin-management-size-13r), 16vw, var(--vx-admin-management-size-20r));
+  width: clamp(
+    var(--vx-admin-management-size-13r),
+    16vw,
+    var(--vx-admin-management-size-20r)
+  );
+  flex-basis: clamp(
+    var(--vx-admin-management-size-13r),
+    16vw,
+    var(--vx-admin-management-size-20r)
+  );
 }
 
 .vx-product-plan-search {
-  width: clamp(var(--vx-admin-management-size-13r), 16vw, var(--vx-admin-management-size-20r));
-  flex-basis: clamp(var(--vx-admin-management-size-13r), 16vw, var(--vx-admin-management-size-20r));
+  width: clamp(
+    var(--vx-admin-management-size-13r),
+    16vw,
+    var(--vx-admin-management-size-20r)
+  );
+  flex-basis: clamp(
+    var(--vx-admin-management-size-13r),
+    16vw,
+    var(--vx-admin-management-size-20r)
+  );
 }
 
 .vx-product-solution-search {
-  width: clamp(var(--vx-admin-management-size-13r), 16vw, var(--vx-admin-management-size-20r));
-  flex-basis: clamp(var(--vx-admin-management-size-13r), 16vw, var(--vx-admin-management-size-20r));
+  width: clamp(
+    var(--vx-admin-management-size-13r),
+    16vw,
+    var(--vx-admin-management-size-20r)
+  );
+  flex-basis: clamp(
+    var(--vx-admin-management-size-13r),
+    16vw,
+    var(--vx-admin-management-size-20r)
+  );
 }
 
 .vx-product-solution-select--industry {

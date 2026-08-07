@@ -3,8 +3,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Icon, Badge, Button, EmptyState } from "@vxture/design-system";
-import type { IconName } from "@vxture/design-system";
+import {
+  Badge,
+  Button,
+  DetailList,
+  DetailPageTemplate,
+  DetailRow,
+  EmptyState,
+  Icon,
+  MetricGrid,
+} from "@vxture/design-system";
+import { orUnset } from "@/modules/shared/display";
 import {
   fetchBillingRecord,
   submitBillingBillAction,
@@ -120,39 +129,6 @@ function paymentStatusLabel(status: string) {
   return "支付中";
 }
 
-function SectionHeading({ icon, title }: { icon: IconName; title: string }) {
-  return <DetailSectionHeading icon={icon} title={title} />;
-}
-
-function DetailField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="vx-product-capability-field">
-      <span>{label}</span>
-      <strong>{value || "未设置"}</strong>
-    </div>
-  );
-}
-
-function DetailMetric({
-  label,
-  value,
-  tag,
-}: {
-  label: string;
-  value: string;
-  tag?: string;
-}) {
-  return (
-    <div className="vx-product-capability-metric">
-      <span>{label}</span>
-      <p>
-        <strong>{value}</strong>
-        {tag ? <em>{tag}</em> : null}
-      </p>
-    </div>
-  );
-}
-
 function BillingSummary({ bill }: { bill: BillingDetailRecord }) {
   return (
     <section className="vx-product-capability-summary">
@@ -182,28 +158,38 @@ function BillingSummary({ bill }: { bill: BillingDetailRecord }) {
           </div>
         </div>
       </div>
-      <div className="vx-product-capability-summary__metrics">
-        <DetailMetric
-          label="账单应收"
-          value={formatCurrency(bill.payableAmount, bill.currency)}
-          tag={billTypeLabel(bill.billType)}
-        />
-        <DetailMetric
-          label="已收金额"
-          value={formatCurrency(bill.paidAmount, bill.currency)}
-          tag={bill.paymentMethod ?? "未收款"}
-        />
-        <DetailMetric
-          label="已开票"
-          value={formatCurrency(bill.invoicedAmount, bill.currency)}
-          tag={bill.invoiceNo ?? invoiceStatusLabel(bill.invoiceStatus)}
-        />
-        <DetailMetric
-          label="账期"
-          value={`${formatDate(bill.cycleStartDate)} - ${formatDate(bill.cycleEndDate)}`}
-          tag={cycleLabel(bill.billCycle)}
-        />
-      </div>
+      <MetricGrid
+        items={[
+          {
+            id: "payable",
+            help: "本期账单应收总额，按账单币种展示。",
+            label: "账单应收",
+            value: formatCurrency(bill.payableAmount, bill.currency),
+            tags: [billTypeLabel(bill.billType)],
+          },
+          {
+            id: "paid",
+            help: "已核销到本账单的回款金额。",
+            label: "已收金额",
+            value: formatCurrency(bill.paidAmount, bill.currency),
+            tags: [bill.paymentMethod ?? "未收款"],
+          },
+          {
+            id: "invoiced",
+            help: "本账单已开具发票的金额，不等于已回款。",
+            label: "已开票",
+            value: formatCurrency(bill.invoicedAmount, bill.currency),
+            tags: [bill.invoiceNo ?? invoiceStatusLabel(bill.invoiceStatus)],
+          },
+          {
+            id: "cycle",
+            help: "账单所属计费周期的起止日期。",
+            label: "账期",
+            value: `${formatDate(bill.cycleStartDate)} - ${formatDate(bill.cycleEndDate)}`,
+            tags: [cycleLabel(bill.billCycle)],
+          },
+        ]}
+      />
     </section>
   );
 }
@@ -224,49 +210,56 @@ function BillingDetails({
       aria-label={`${bill.billNo} 账单详情`}
     >
       <section className="vx-product-capability-section">
-        <SectionHeading icon="key" title="基础资料" />
-        <div className="vx-product-capability-fields">
-          <DetailField label="账单编号" value={bill.billNo} />
-          <DetailField
-            label="账单状态"
-            value={billStatusLabel(bill.billStatus)}
-          />
-          <DetailField label="账单类型" value={billTypeLabel(bill.billType)} />
-          <DetailField label="账期类型" value={cycleLabel(bill.billCycle)} />
-          <DetailField
-            label="账期开始"
-            value={formatDate(bill.cycleStartDate)}
-          />
-          <DetailField label="账期结束" value={formatDate(bill.cycleEndDate)} />
-          <DetailField label="生成时间" value={formatDate(bill.createdAt)} />
-          <DetailField label="更新时间" value={formatDate(bill.updatedAt)} />
-          <DetailField label="经办人" value={bill.operatorName} />
-          <DetailField
-            label="运营备注"
-            value={bill.operationRemark ?? "未设置"}
-          />
-        </div>
+        <DetailSectionHeading icon="key" title="基础资料" />
+        <DetailList columns={3}>
+          <DetailRow label="账单编号">{orUnset(bill.billNo)}</DetailRow>
+          <DetailRow label="账单状态">
+            {orUnset(billStatusLabel(bill.billStatus))}
+          </DetailRow>
+          <DetailRow label="账单类型">
+            {orUnset(billTypeLabel(bill.billType))}
+          </DetailRow>
+          <DetailRow label="账期类型">
+            {orUnset(cycleLabel(bill.billCycle))}
+          </DetailRow>
+          <DetailRow label="账期开始">
+            {orUnset(formatDate(bill.cycleStartDate))}
+          </DetailRow>
+          <DetailRow label="账期结束">
+            {orUnset(formatDate(bill.cycleEndDate))}
+          </DetailRow>
+          <DetailRow label="生成时间">
+            {orUnset(formatDate(bill.createdAt))}
+          </DetailRow>
+          <DetailRow label="更新时间">
+            {orUnset(formatDate(bill.updatedAt))}
+          </DetailRow>
+          <DetailRow label="经办人">{orUnset(bill.operatorName)}</DetailRow>
+          <DetailRow label="运营备注">
+            {orUnset(bill.operationRemark)}
+          </DetailRow>
+        </DetailList>
       </section>
 
       <section className="vx-product-capability-section">
-        <SectionHeading icon="buildings" title="租户与订阅" />
-        <div className="vx-product-capability-fields">
-          <DetailField label="租户" value={bill.tenantName} />
-          <DetailField label="租户编码" value={bill.tenantCode} />
-          <DetailField label="租户类型" value={typeLabel(bill.tenantType)} />
-          <DetailField label="所属区域" value={bill.region} />
-          <DetailField label="所属行业" value={bill.industry} />
-          <DetailField
-            label="服务套餐"
-            value={bill.servicePlanName ?? "未关联"}
-          />
-          <DetailField label="套餐版本" value={bill.tierName ?? "未关联"} />
-          <DetailField label="订单编号" value={bill.orderNo ?? "未关联"} />
-          <DetailField
-            label="订阅 ID"
-            value={bill.subscriptionId ?? "未关联"}
-          />
-        </div>
+        <DetailSectionHeading icon="buildings" title="租户与订阅" />
+        <DetailList columns={3}>
+          <DetailRow label="租户">{orUnset(bill.tenantName)}</DetailRow>
+          <DetailRow label="租户编码">{orUnset(bill.tenantCode)}</DetailRow>
+          <DetailRow label="租户类型">
+            {orUnset(typeLabel(bill.tenantType))}
+          </DetailRow>
+          <DetailRow label="所属区域">{orUnset(bill.region)}</DetailRow>
+          <DetailRow label="所属行业">{orUnset(bill.industry)}</DetailRow>
+          <DetailRow label="服务套餐">
+            {bill.servicePlanName || "未关联"}
+          </DetailRow>
+          <DetailRow label="套餐版本">{bill.tierName || "未关联"}</DetailRow>
+          <DetailRow label="订单编号">{bill.orderNo || "未关联"}</DetailRow>
+          <DetailRow label="订阅 ID">
+            {bill.subscriptionId || "未关联"}
+          </DetailRow>
+        </DetailList>
         <div className="vx-product-capability-actions vx-subscription-detail-links">
           <Button asChild variant="outline">
             <Link href={`/tenants/${encodeURIComponent(bill.tenantId)}`}>
@@ -298,46 +291,39 @@ function BillingDetails({
       </section>
 
       <section className="vx-product-capability-section">
-        <SectionHeading icon="chart-bar" title="收款信息" />
-        <div className="vx-product-capability-fields">
-          <DetailField
-            label="账单原价"
-            value={formatCurrency(bill.totalAmount, bill.currency)}
-          />
-          <DetailField
-            label="优惠金额"
-            value={formatCurrency(bill.discountAmount, bill.currency)}
-          />
-          <DetailField
-            label="应收金额"
-            value={formatCurrency(bill.payableAmount, bill.currency)}
-          />
-          <DetailField
-            label="已收金额"
-            value={formatCurrency(bill.paidAmount, bill.currency)}
-          />
-          <DetailField
-            label="剩余应收"
-            value={formatCurrency(
-              Math.max(0, bill.payableAmount - bill.paidAmount),
-              bill.currency,
+        <DetailSectionHeading icon="chart-bar" title="收款信息" />
+        <DetailList columns={3}>
+          <DetailRow label="账单原价">
+            {orUnset(formatCurrency(bill.totalAmount, bill.currency))}
+          </DetailRow>
+          <DetailRow label="优惠金额">
+            {orUnset(formatCurrency(bill.discountAmount, bill.currency))}
+          </DetailRow>
+          <DetailRow label="应收金额">
+            {orUnset(formatCurrency(bill.payableAmount, bill.currency))}
+          </DetailRow>
+          <DetailRow label="已收金额">
+            {orUnset(formatCurrency(bill.paidAmount, bill.currency))}
+          </DetailRow>
+          <DetailRow label="剩余应收">
+            {orUnset(
+              formatCurrency(
+                Math.max(0, bill.payableAmount - bill.paidAmount),
+                bill.currency,
+              ),
             )}
-          />
-          <DetailField label="收款时间" value={formatDate(bill.paidAt)} />
-          <DetailField
-            label="支付方式"
-            value={bill.paymentMethod ?? "未设置"}
-          />
-          <DetailField
-            label="交易流水"
-            value={bill.transactionNo ?? "未设置"}
-          />
-          <DetailField label="币种" value={bill.currency} />
-        </div>
+          </DetailRow>
+          <DetailRow label="收款时间">
+            {orUnset(formatDate(bill.paidAt))}
+          </DetailRow>
+          <DetailRow label="支付方式">{orUnset(bill.paymentMethod)}</DetailRow>
+          <DetailRow label="交易流水">{orUnset(bill.transactionNo)}</DetailRow>
+          <DetailRow label="币种">{orUnset(bill.currency)}</DetailRow>
+        </DetailList>
       </section>
 
       <section className="vx-product-capability-section">
-        <SectionHeading icon="list" title="账单明细" />
+        <DetailSectionHeading icon="list" title="账单明细" />
         <div className="vx-product-detail-list vx-product-detail-list--entitlements">
           {bill.invoiceItems.map((item) => (
             <div key={item.id} className="vx-product-detail-list__row">
@@ -360,7 +346,7 @@ function BillingDetails({
       </section>
 
       <section className="vx-product-capability-section">
-        <SectionHeading icon="check" title="支付记录" />
+        <DetailSectionHeading icon="check" title="支付记录" />
         <div className="vx-product-detail-list vx-product-detail-list--entitlements">
           {bill.paymentRecords.length ? (
             bill.paymentRecords.map((payment) => (
@@ -393,7 +379,7 @@ function BillingDetails({
       </section>
 
       <section className="vx-product-capability-section">
-        <SectionHeading icon="key" title="发票登记" />
+        <DetailSectionHeading icon="key" title="发票登记" />
         <div className="vx-product-detail-list vx-product-detail-list--entitlements">
           {bill.invoiceReceipts.length ? (
             bill.invoiceReceipts.map((receipt) => (
@@ -431,7 +417,7 @@ function BillingDetails({
                       <Button
                         key={action}
                         variant={action === "red" ? "destructive" : "outline"}
-                        size="sm"
+                        size="md"
                         className={action === "red" ? "is-danger" : undefined}
                         disabled={!canRunInvoiceReceiptAction(action, receipt)}
                         title={
@@ -467,7 +453,7 @@ function BillingDetails({
       </section>
 
       <section className="vx-product-capability-section">
-        <SectionHeading icon="clock" title="运营记录" />
+        <DetailSectionHeading icon="clock" title="运营记录" />
         <div className="vx-subscription-timeline">
           {bill.operationTimeline.map((event) => (
             <article
@@ -649,118 +635,126 @@ export function BillingDetailPage({ billId }: { billId: string }) {
 
   if (!loading && !bill) {
     return (
-      <div className="vx-page-stack vx-product-capability-page">
-        <PageHeader
-          icon="key"
-          title="账单详情"
-          description="未找到对应的账单记录。"
-          action={
-            <Button asChild variant="outline">
-              <Link href="/billing">
-                <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                返回列表
-              </Link>
-            </Button>
-          }
-        />
+      <DetailPageTemplate
+        className="vx-product-capability-page"
+        header={
+          <PageHeader
+            icon="key"
+            title="账单详情"
+            description="未找到对应的账单记录。"
+            action={
+              <Button asChild variant="outline">
+                <Link href="/billing">
+                  <Icon name="arrow-left" size="xs" fallback="placeholder" />
+                  返回列表
+                </Link>
+              </Button>
+            }
+          />
+        }
+      >
         <EmptyState
           title="账单不存在"
           description="该账单可能已归档，或当前账号无权访问。"
         />
-      </div>
+      </DetailPageTemplate>
     );
   }
 
   return (
-    <div className="vx-page-stack vx-product-capability-page vx-billing-detail-page">
-      <PageHeader
-        icon="key"
-        title={bill ? bill.billNo : "账单详情"}
-        description={
-          bill
-            ? `${bill.tenantName} · ${bill.servicePlanName ?? "未关联套餐"} · ${invoiceStatusLabel(bill.invoiceStatus)}`
-            : "正在读取账单、收款和发票登记数据。"
-        }
-        action={
-          <div className="vx-product-capability-actions">
-            <Button asChild variant="outline">
-              <Link href="/billing">
-                <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                返回列表
-              </Link>
-            </Button>
-            {bill?.subscriptionId ? (
+    <DetailPageTemplate
+      className="vx-product-capability-page vx-billing-detail-page"
+      header={
+        <PageHeader
+          icon="key"
+          title={bill ? bill.billNo : "账单详情"}
+          description={
+            bill
+              ? `${bill.tenantName} · ${bill.servicePlanName ?? "未关联套餐"} · ${invoiceStatusLabel(bill.invoiceStatus)}`
+              : "正在读取账单、收款和发票登记数据。"
+          }
+          action={
+            <div className="vx-product-capability-actions">
               <Button asChild variant="outline">
-                <Link
-                  href={`/orders/${encodeURIComponent(bill.subscriptionId)}`}
-                >
-                  <Icon name="table" size="xs" fallback="placeholder" />
-                  订单详情
+                <Link href="/billing">
+                  <Icon name="arrow-left" size="xs" fallback="placeholder" />
+                  返回列表
                 </Link>
               </Button>
-            ) : null}
-            {bill ? (
-              <>
-                {(
-                  [
-                    "mark_overdue",
-                    "discount",
-                    "create_adjustment",
-                    "create_supplement",
-                    "cancel",
-                  ] as const
-                ).map((action) => (
-                  <Button
-                    key={action}
-                    variant="outline"
-                    className={
-                      action === "cancel"
-                        ? "vx-subscription-action-button--danger"
-                        : undefined
-                    }
-                    onClick={() => requestBillAction(action)}
-                    disabled={!canRunBillingBillAction(action, bill)}
-                    title={
-                      billingBillActionDisabledReason(action, bill) ?? undefined
-                    }
+              {bill?.subscriptionId ? (
+                <Button asChild variant="outline">
+                  <Link
+                    href={`/orders/${encodeURIComponent(bill.subscriptionId)}`}
                   >
-                    <Icon
-                      name={
-                        action === "cancel"
-                          ? "warning"
-                          : action === "mark_overdue"
-                            ? "clock"
-                            : action === "discount"
-                              ? "chart-bar"
-                              : action === "create_adjustment"
-                                ? "edit"
-                                : "plus"
-                      }
-                      size="xs"
-                      fallback="placeholder"
-                    />
-                    {billingBillActionLabel(action)}
-                  </Button>
-                ))}
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setOperationError(null);
-                    setOperationFeedback(null);
-                    setInvoiceDialogOpen(true);
-                  }}
-                  disabled={!canSyncOfflineInvoice(bill)}
-                  title={offlineInvoiceDisabledReason(bill) ?? undefined}
-                >
-                  <Icon name="key" size="xs" fallback="placeholder" />
-                  登记发票
+                    <Icon name="table" size="xs" fallback="placeholder" />
+                    订单详情
+                  </Link>
                 </Button>
-              </>
-            ) : null}
-          </div>
-        }
-      />
-
+              ) : null}
+              {bill ? (
+                <>
+                  {(
+                    [
+                      "mark_overdue",
+                      "discount",
+                      "create_adjustment",
+                      "create_supplement",
+                      "cancel",
+                    ] as const
+                  ).map((action) => (
+                    <Button
+                      key={action}
+                      variant="outline"
+                      className={
+                        action === "cancel"
+                          ? "vx-subscription-action-button--danger"
+                          : undefined
+                      }
+                      onClick={() => requestBillAction(action)}
+                      disabled={!canRunBillingBillAction(action, bill)}
+                      title={
+                        billingBillActionDisabledReason(action, bill) ??
+                        undefined
+                      }
+                    >
+                      <Icon
+                        name={
+                          action === "cancel"
+                            ? "warning"
+                            : action === "mark_overdue"
+                              ? "clock"
+                              : action === "discount"
+                                ? "chart-bar"
+                                : action === "create_adjustment"
+                                  ? "edit"
+                                  : "plus"
+                        }
+                        size="xs"
+                        fallback="placeholder"
+                      />
+                      {billingBillActionLabel(action)}
+                    </Button>
+                  ))}
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setOperationError(null);
+                      setOperationFeedback(null);
+                      setInvoiceDialogOpen(true);
+                    }}
+                    disabled={!canSyncOfflineInvoice(bill)}
+                    title={offlineInvoiceDisabledReason(bill) ?? undefined}
+                  >
+                    <Icon name="key" size="xs" fallback="placeholder" />
+                    登记发票
+                  </Button>
+                </>
+              ) : null}
+            </div>
+          }
+        />
+      }
+    >
       {operationFeedback ? (
         <div className="vx-subscription-operation-feedback">
           {operationFeedback}
@@ -815,6 +809,6 @@ export function BillingDetailPage({ billId }: { billId: string }) {
           onSubmit={handleSubmitBillAction}
         />
       ) : null}
-    </div>
+    </DetailPageTemplate>
   );
 }

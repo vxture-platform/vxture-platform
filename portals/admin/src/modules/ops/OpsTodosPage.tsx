@@ -1,16 +1,33 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Icon,
+  ActionButton,
   ActionMenu,
   Badge,
-  Button,
+  DataTable,
   EmptyState,
+  FilterBar,
+  Input,
+  ListPageTemplate,
+  ListCard,
+  ListCardGrid,
+  MetricGrid,
+  NativeSelect,
+  Section,
+  SegmentedControl,
+  StatusBadge,
+  TableTitleCell,
 } from "@vxture/design-system";
-import type { IconName } from "@vxture/design-system";
+import type {
+  FilterBarView,
+  IconName,
+  StatusBadgeTone,
+} from "@vxture/design-system";
+import { exportRowsToCsv, type CsvColumn } from "@/lib/exportCsv";
+import { ListPagination } from "@/modules/shared/ListPagination";
+import type { PageSize } from "@/modules/shared/PageSizePicker";
 import {
   fetchSupportTicketsStrict,
   fetchTenantOperationsStrict,
@@ -61,14 +78,6 @@ const TODO_TYPE_ICON: Record<TodoType, IconName> = {
   ticket: "chat-circle",
   usage: "database",
   subscription: "star",
-};
-
-const TODO_TYPE_HREF: Record<TodoType, string> = {
-  verification: "/verifications",
-  risk: "/tenants",
-  ticket: "/tickets",
-  usage: "/usage-metering",
-  subscription: "/subscriptions",
 };
 
 function formatDateTime(value: string) {
@@ -231,136 +240,33 @@ function buildOpsTodos(
   });
 }
 
-function SummaryItem({
-  icon,
-  label,
-  value,
-  tags,
-  tone = "blue",
-}: {
-  icon: IconName;
-  label: string;
-  value: string;
-  tags: string[];
-  tone?: TodoSeverity;
-}) {
-  return (
-    <article className={`vx-tenant-summary__item vx-tenant-tone--${tone}`}>
-      <Icon name={icon} size="lg" fallback="placeholder" />
-      <div>
-        <span>{label}</span>
-        <strong>{value}</strong>
-        <p>
-          {tags.map((tag) => (
-            <em key={tag}>{tag}</em>
-          ))}
-        </p>
-      </div>
-    </article>
-  );
-}
+const SEVERITY_LABEL: Record<TodoSeverity, string> = {
+  rose: "紧急",
+  amber: "关注",
+  blue: "一般",
+  green: "正常",
+};
 
-function TodoTypeSummary({ type, count }: { type: TodoType; count: number }) {
-  return (
-    <Link
-      className="vx-tenant-list-card vx-ops-todo-type-card"
-      href={TODO_TYPE_HREF[type]}
-    >
-      <span className="vx-tenant-list-card__icon" aria-hidden="true">
-        <Icon name={TODO_TYPE_ICON[type]} size="lg" fallback="placeholder" />
-      </span>
-      <div className="vx-tenant-list-card__body">
-        <div className="vx-tenant-list-card__title">
-          <strong>{TODO_TYPE_LABEL[type]}</strong>
-          <span>{formatNumber(count)}</span>
-        </div>
-        <div className="vx-tenant-list-card__meta">
-          <small>{count ? "有待处理事项" : "当前无积压"}</small>
-        </div>
-      </div>
-    </Link>
-  );
-}
+const SEVERITY_TONE: Record<TodoSeverity, StatusBadgeTone> = {
+  rose: "danger",
+  amber: "warning",
+  blue: "info",
+  green: "success",
+};
 
-function TodoActionsMenu({ item }: { item: OpsTodoItem }) {
-  const router = useRouter();
-
-  return (
-    <div
-      className="vx-tenant-actions"
-      onClick={(event) => event.stopPropagation()}
-    >
-      <ActionMenu
-        label={`${item.title} 待办操作`}
-        triggerClassName="vx-tenant-actions__trigger"
-        triggerProps={{ title: "操作" }}
-        items={[
-          {
-            id: "entry",
-            label: "处理入口",
-            icon: <Icon name="arrow-right" size="xs" fallback="placeholder" />,
-            onSelect: () => router.push(item.href),
-          },
-          {
-            id: "tenant",
-            label: "查看租户",
-            icon: <Icon name="buildings" size="xs" fallback="placeholder" />,
-            onSelect: () =>
-              router.push(`/tenants/${encodeURIComponent(item.tenantId)}`),
-          },
-        ]}
-      />
-    </div>
-  );
-}
-
-function TodoRow({ item, index }: { item: OpsTodoItem; index: number }) {
-  const router = useRouter();
-
-  return (
-    <div
-      className={`vx-tenant-directory-row vx-tenant-directory-row--${item.severity} vx-ops-todo-row`}
-    >
-      <span className="vx-tenant-directory-row__index">
-        {String(index + 1).padStart(2, "0")}
-      </span>
-      <span className="vx-tenant-directory-row__tenant">
-        <Icon name={item.icon} size="sm" fallback="placeholder" />
-        <span>
-          <Button
-            variant="link"
-            className="vx-model-name-button"
-            onClick={() => router.push(item.href)}
-          >
-            {item.title}
-          </Button>
-          <small>{item.description}</small>
-        </span>
-      </span>
-      <span>
-        <strong>{item.tenantName}</strong>
-        <small>{item.tenantMeta}</small>
-      </span>
-      <span>
-        <strong>{TODO_TYPE_LABEL[item.type]}</strong>
-        <small>{formatDateTime(item.updatedAt)}</small>
-      </span>
-      <span className="vx-tenant-directory-row__tag-line">
-        {item.tags.slice(0, 3).map((tag) => (
-          <Badge
-            key={tag}
-            className={`vx-tenant-pill vx-tenant-pill--${item.severity === "rose" ? "danger" : item.severity === "amber" ? "warning" : "normal"}`}
-          >
-            {tag}
-          </Badge>
-        ))}
-      </span>
-      <TodoActionsMenu item={item} />
-    </div>
-  );
-}
+const CSV_COLUMNS: readonly CsvColumn<OpsTodoItem>[] = [
+  { label: "事项", value: (item) => item.title },
+  { label: "说明", value: (item) => item.description },
+  { label: "租户", value: (item) => item.tenantName },
+  { label: "租户属性", value: (item) => item.tenantMeta },
+  { label: "类型", value: (item) => TODO_TYPE_LABEL[item.type] },
+  { label: "紧急度", value: (item) => SEVERITY_LABEL[item.severity] },
+  { label: "标签", value: (item) => item.tags.join(" / ") },
+  { label: "更新时间", value: (item) => item.updatedAt },
+];
 
 export function OpsTodosPage() {
+  const router = useRouter();
   const [tenants, setTenants] = useState<TenantOperationRecord[]>([]);
   const [tickets, setTickets] = useState<SupportTicketRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -376,11 +282,73 @@ export function OpsTodosPage() {
   );
   const ticketTodos = todos.filter((todo) => todo.type === "ticket");
   const affectedTenants = new Set(todos.map((todo) => todo.tenantId)).size;
-  const typeCounts = (Object.keys(TODO_TYPE_LABEL) as TodoType[]).map(
-    (type) => ({
-      type,
-      count: todos.filter((todo) => todo.type === type).length,
-    }),
+  const [typeFilter, setTypeFilter] = useState<TodoType | "all">("all");
+  const [severityFilter, setSeverityFilter] = useState<TodoSeverity | "all">(
+    "all",
+  );
+  const [query, setQuery] = useState("");
+  const [viewMode, setViewMode] = useState<FilterBarView>("list");
+  const [selectedKeys, setSelectedKeys] = useState<readonly string[]>([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(20);
+
+  const filteredTodos = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    return todos.filter((todo) => {
+      if (typeFilter !== "all" && todo.type !== typeFilter) return false;
+      if (severityFilter !== "all" && todo.severity !== severityFilter)
+        return false;
+      if (!keyword) return true;
+      return [todo.title, todo.description, todo.tenantName, ...todo.tags]
+        .join(" ")
+        .toLowerCase()
+        .includes(keyword);
+    });
+  }, [todos, typeFilter, severityFilter, query]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredTodos.length / pageSize));
+  const activePage = Math.min(page, pageCount);
+  const pageTodos = filteredTodos.slice(
+    (activePage - 1) * pageSize,
+    activePage * pageSize,
+  );
+  const selectedTodos = filteredTodos.filter((todo) =>
+    selectedKeys.includes(todo.id),
+  );
+
+  const todoActions = (item: OpsTodoItem) => (
+    <ActionMenu
+      label={`${item.title} 待办操作`}
+      items={[
+        {
+          id: "entry",
+          label: "处理入口",
+          icon: "arrow-right",
+          onSelect: () => router.push(item.href),
+        },
+        {
+          id: "tenant",
+          label: "查看租户",
+          icon: "buildings",
+          onSelect: () =>
+            router.push(`/tenants/${encodeURIComponent(item.tenantId)}`),
+        },
+      ]}
+    />
+  );
+
+  const pagination = (
+    <ListPagination
+      currentPage={activePage}
+      pageCount={pageCount}
+      total={filteredTodos.length}
+      pageSize={pageSize}
+      onPageSizeChange={(value) => {
+        setPageSize(value);
+        setPage(1);
+      }}
+      onPageChange={setPage}
+    />
   );
   useEffect(() => {
     let cancelled = false;
@@ -427,119 +395,287 @@ export function OpsTodosPage() {
   }, []);
 
   return (
-    <div className="vx-page-stack vx-tenant-management-page vx-ops-todos-page">
-      <PageHeader
-        icon="table"
-        title="运营待办"
-        description="聚合认证审核、风险租户、工单、用量和订阅异常，帮助运营按优先级推进人工处理。"
-        secondary={<Badge>只读聚合</Badge>}
-      />
-
-      <section className="vx-tenant-summary" aria-label="运营待办统计">
-        <SummaryItem
-          icon="warning"
-          label="紧急事项"
-          value={formatNumber(urgentTodos.length)}
-          tags={[`影响租户 ${formatNumber(affectedTenants)}`]}
-          tone={urgentTodos.length ? "rose" : "green"}
-        />
-        <SummaryItem
-          icon="medal"
-          label="认证待审"
-          value={formatNumber(verificationTodos.length)}
-          tags={["组织资质"]}
-          tone={verificationTodos.length ? "amber" : "green"}
-        />
-        <SummaryItem
-          icon="chat-circle"
-          label="未关闭工单"
-          value={formatNumber(ticketTodos.length)}
-          tags={[
-            `P0/P1 ${formatNumber(ticketTodos.filter((todo) => todo.priority <= 10).length)}`,
-          ]}
-          tone={ticketTodos.length ? "amber" : "green"}
-        />
-        <SummaryItem
+    <ListPageTemplate
+      className="vx-tenant-management-page"
+      header={
+        <PageHeader
           icon="table"
-          label="全部待办"
-          value={formatNumber(todos.length)}
-          tags={["按优先级排序"]}
+          title="待办任务"
+          description="聚合认证审核、风险租户、工单、用量和订阅异常，帮助运营按优先级推进人工处理。"
+          secondary={<Badge>只读聚合</Badge>}
         />
-      </section>
-
-      <section
-        className="vx-tenant-workspace vx-ops-todos-workspace"
-        aria-label="运营待办工作台"
-      >
-        <aside
-          className="vx-tenant-list vx-ops-todo-type-list"
-          aria-label="待办分类"
+      }
+      summary={
+        <MetricGrid
+          loading={isLoading}
+          aria-label="待办任务统计"
+          items={[
+            {
+              id: "urgent",
+              help: "严重程度为最高档的待办。",
+              icon: "warning",
+              label: "紧急事项",
+              value: formatNumber(urgentTodos.length),
+              tags: [`影响租户 ${formatNumber(affectedTenants)}`],
+              tone: urgentTodos.length ? "danger" : "success",
+            },
+            {
+              id: "verification",
+              help: "来源为租户认证审核的待办。",
+              icon: "medal",
+              label: "认证待审",
+              value: formatNumber(verificationTodos.length),
+              tags: ["组织资质"],
+              tone: verificationTodos.length ? "warning" : "success",
+            },
+            {
+              id: "tickets",
+              help: "来源为工单的待办。",
+              icon: "chat-circle",
+              label: "未关闭工单",
+              value: formatNumber(ticketTodos.length),
+              tags: [
+                `P0/P1 ${formatNumber(ticketTodos.filter((todo) => todo.priority <= 10).length)}`,
+              ],
+              tone: ticketTodos.length ? "warning" : "success",
+            },
+            {
+              id: "all",
+              help: "全部待办条数，不分来源与紧急度。",
+              icon: "table",
+              label: "全部待办",
+              value: formatNumber(todos.length),
+              tags: ["按优先级排序"],
+            },
+          ]}
+        />
+      }
+      table={
+        <Section
+          title="优先处理队列"
+          // 图标跟随当前分类，"全部"档退回队列自身图标。
+          icon={typeFilter === "all" ? "table" : TODO_TYPE_ICON[typeFilter]}
+          level={2}
+          description={`按紧急度与优先级排序，共 ${formatNumber(todos.length)} 条${ticketLoadError ? "（工单未接入）" : ""}。`}
+          action={
+            <SegmentedControl
+              ariaLabel="待办分类"
+              value={typeFilter}
+              onChange={(next) => {
+                setTypeFilter(next);
+                // 换分类即换行集，旧选择与页码随之失效。
+                setSelectedKeys([]);
+                setPage(1);
+              }}
+              items={[
+                { value: "all" as const, label: "全部", count: todos.length },
+                ...(Object.keys(TODO_TYPE_LABEL) as TodoType[]).map((type) => ({
+                  value: type,
+                  label: TODO_TYPE_LABEL[type],
+                  icon: TODO_TYPE_ICON[type],
+                  count: todos.filter((todo) => todo.type === type).length,
+                })),
+              ]}
+            />
+          }
         >
-          <header>
-            <strong>待办分类</strong>
-            <span>按业务入口分流</span>
-          </header>
-          <div>
-            {typeCounts.map((item) => (
-              <TodoTypeSummary
-                key={item.type}
-                type={item.type}
-                count={item.count}
+          <FilterBar
+            aria-label="待办任务筛选"
+            view={viewMode}
+            onViewChange={setViewMode}
+            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            count={`${formatNumber(filteredTodos.length)} 条`}
+            search={
+              <Input
+                type="search"
+                className="vx-tenant-search"
+                placeholder="搜索事项、租户、标签…"
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setPage(1);
+                }}
+                aria-label="搜索待办任务"
               />
-            ))}
-          </div>
-        </aside>
+            }
+            onReset={() => {
+              setQuery("");
+              setTypeFilter("all");
+              setSeverityFilter("all");
+              setSelectedKeys([]);
+              setPage(1);
+            }}
+            actions={
+              /* 无"新建"：待办由聚合产生。 */
+              <ActionButton
+                icon="arrow-down"
+                variant={selectedTodos.length > 0 ? "default" : "outline"}
+                disabled={selectedTodos.length === 0}
+                onClick={() =>
+                  exportRowsToCsv("ops-todos", CSV_COLUMNS, selectedTodos)
+                }
+              >
+                导出
+              </ActionButton>
+            }
+          >
+            <NativeSelect
+              wrapperClassName="w-fit"
+              className="vx-tenant-select"
+              value={severityFilter}
+              onChange={(event) => {
+                setSeverityFilter(event.target.value as TodoSeverity | "all");
+                setPage(1);
+              }}
+              aria-label="紧急度"
+            >
+              <option value="all">全部紧急度</option>
+              {(Object.keys(SEVERITY_LABEL) as TodoSeverity[]).map(
+                (severity) => (
+                  <option key={severity} value={severity}>
+                    {SEVERITY_LABEL[severity]}
+                  </option>
+                ),
+              )}
+            </NativeSelect>
+          </FilterBar>
 
-        <section className="vx-tenant-list-shell">
-          <div className="vx-tenant-directory vx-ops-todo-directory">
-            <header className="vx-tenant-directory__header">
-              <strong>优先处理队列</strong>
-              <span>
-                {formatNumber(todos.length)} 条事项
-                {ticketLoadError ? " / 工单未接入" : ""}
-              </span>
-            </header>
-            {isLoading ? (
-              <div className="vx-service-health-empty">
-                <EmptyState
-                  title="正在加载待办"
-                  description="正在从租户、用量、订阅与工单数据库读取数据。"
-                />
-              </div>
-            ) : tenantLoadError ? (
-              <div className="vx-service-health-empty">
-                <EmptyState
-                  title="待办数据读取失败"
-                  description={tenantLoadError}
-                />
-              </div>
-            ) : todos.length ? (
-              <div className="vx-tenant-directory-list vx-ops-todo-directory-list">
-                <div className="vx-tenant-directory-list__header">
-                  <span>#</span>
-                  <span>事项</span>
-                  <span>租户</span>
-                  <span>类型 / 更新时间</span>
-                  <span>标签</span>
-                  <span>操作</span>
-                </div>
-                {todos.map((item, index) => (
-                  <TodoRow key={item.id} item={item} index={index} />
-                ))}
-              </div>
+          {viewMode === "cards" ? (
+            isLoading || !pageTodos.length ? (
+              <EmptyState
+                title={
+                  isLoading
+                    ? "正在加载待办"
+                    : tenantLoadError
+                      ? "待办数据读取失败"
+                      : "当前没有待办"
+                }
+                description={
+                  isLoading
+                    ? "正在从租户、用量、订阅与工单数据库读取数据。"
+                    : (tenantLoadError ??
+                      (query || typeFilter !== "all" || severityFilter !== "all"
+                        ? "尝试调整筛选条件"
+                        : (ticketLoadError ?? "数据库中没有匹配的待办任务。")))
+                }
+              />
             ) : (
-              <div className="vx-service-health-empty">
+              <>
+                <ListCardGrid>
+                  {pageTodos.map((item) => (
+                    <ListCard
+                      key={item.id}
+                      icon={item.icon}
+                      title={item.title}
+                      description={item.description}
+                      onTitleClick={() => router.push(item.href)}
+                      status={
+                        <StatusBadge tone={SEVERITY_TONE[item.severity]}>
+                          {SEVERITY_LABEL[item.severity]}
+                        </StatusBadge>
+                      }
+                      actions={todoActions(item)}
+                      meta={
+                        <>
+                          <span>{item.tenantName}</span>
+                          <span>{TODO_TYPE_LABEL[item.type]}</span>
+                          <span>{formatDateTime(item.updatedAt)}</span>
+                          {item.tags.slice(0, 3).map((tag) => (
+                            <Badge key={tag}>{tag}</Badge>
+                          ))}
+                        </>
+                      }
+                    />
+                  ))}
+                </ListCardGrid>
+                {pagination}
+              </>
+            )
+          ) : (
+            <DataTable
+              columns={[
+                {
+                  id: "item",
+                  header: "事项",
+                  cell: (item) => (
+                    <TableTitleCell
+                      icon={item.icon}
+                      title={item.title}
+                      description={item.description}
+                      onTitleClick={() => router.push(item.href)}
+                    />
+                  ),
+                },
+                {
+                  id: "tenant",
+                  header: "租户",
+                  cell: (item) => (
+                    <TableTitleCell
+                      title={item.tenantName}
+                      description={item.tenantMeta}
+                      onTitleClick={() =>
+                        router.push(
+                          `/tenants/${encodeURIComponent(item.tenantId)}`,
+                        )
+                      }
+                    />
+                  ),
+                },
+                {
+                  id: "type",
+                  header: "类型",
+                  cell: (item) => TODO_TYPE_LABEL[item.type],
+                },
+                {
+                  id: "severity",
+                  header: "紧急度",
+                  cell: (item) => (
+                    <StatusBadge tone={SEVERITY_TONE[item.severity]}>
+                      {SEVERITY_LABEL[item.severity]}
+                    </StatusBadge>
+                  ),
+                },
+                {
+                  id: "tags",
+                  header: "标签",
+                  cell: (item) => (
+                    <span className="flex flex-wrap gap-xs">
+                      {item.tags.slice(0, 3).map((tag) => (
+                        <Badge key={tag}>{tag}</Badge>
+                      ))}
+                    </span>
+                  ),
+                },
+                {
+                  id: "updated",
+                  header: "更新时间",
+                  align: "right",
+                  cell: (item) => formatDateTime(item.updatedAt),
+                },
+              ]}
+              rows={pageTodos}
+              rowKey={(item) => item.id}
+              indexStart={(activePage - 1) * pageSize + 1}
+              selectedKeys={selectedKeys}
+              onSelectionChange={setSelectedKeys}
+              loading={isLoading}
+              empty={
                 <EmptyState
-                  title="当前没有待办"
+                  title={tenantLoadError ? "待办数据读取失败" : "当前没有待办"}
                   description={
-                    ticketLoadError ?? "数据库中没有匹配的运营待办。"
+                    tenantLoadError ??
+                    (query || typeFilter !== "all" || severityFilter !== "all"
+                      ? "尝试调整筛选条件"
+                      : (ticketLoadError ?? "数据库中没有匹配的待办任务。"))
                   }
                 />
-              </div>
-            )}
-          </div>
-        </section>
-      </section>
-    </div>
+              }
+              footer={pagination}
+              rowActions={todoActions}
+            />
+          )}
+        </Section>
+      }
+    />
   );
 }

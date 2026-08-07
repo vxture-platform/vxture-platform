@@ -2,8 +2,23 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Icon } from "@vxture/design-system";
-import type { IconName } from "@vxture/design-system";
+import {
+  DashboardTemplate,
+  DataTable,
+  EmptyState,
+  Icon,
+  MetricGrid,
+  PanelCard,
+  PanelItem,
+  PanelList,
+  StatusBadge,
+  TableTitleCell,
+} from "@vxture/design-system";
+import type {
+  DataTableColumn,
+  IconName,
+  StatusBadgeTone,
+} from "@vxture/design-system";
 import {
   fetchAiModelGrants,
   fetchAiModels,
@@ -13,13 +28,12 @@ import type { PlatformOverview } from "@/api/admin-bff";
 import type { AiModelGrantRecord, AiModelRecord } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
 
-type Tone = "blue" | "green" | "amber" | "rose";
 type AutonomyMetric = {
   label: string;
   value: string;
   detail: string;
   icon: IconName;
-  tone: Tone;
+  tone: StatusBadgeTone;
 };
 type ResourceRow = {
   subject: string;
@@ -94,7 +108,7 @@ function buildOperationRows(overview: PlatformOverview | null): Array<{
   label: string;
   value: string;
   meta: string;
-  tone: Tone;
+  tone: StatusBadgeTone;
   href: string;
 }> {
   const o = overview;
@@ -106,7 +120,7 @@ function buildOperationRows(overview: PlatformOverview | null): Array<{
       label: "待审核认证",
       value: formatNumber(pendingVerifications),
       meta: "租户实名待复核",
-      tone: pendingVerifications > 0 ? "amber" : "green",
+      tone: pendingVerifications > 0 ? "warning" : "success",
       href: "/verifications",
     },
     {
@@ -114,21 +128,21 @@ function buildOperationRows(overview: PlatformOverview | null): Array<{
       label: "待处理风险",
       value: formatNumber(openRisk),
       meta: "风险记录待处置",
-      tone: openRisk > 0 ? "rose" : "green",
+      tone: openRisk > 0 ? "danger" : "success",
       href: "/risk-records?reviewed=false&riskLevel=follow_up,high",
     },
     {
       label: "未结工单",
       value: formatNumber(openTickets),
       meta: "支持工单待跟进",
-      tone: openTickets > 0 ? "amber" : "green",
+      tone: openTickets > 0 ? "warning" : "success",
       href: "/tickets",
     },
     {
       label: "在营订阅",
       value: formatNumber(o?.activeSubscriptions ?? 0),
       meta: "生效中的订阅",
-      tone: "blue",
+      tone: "brand",
       href: "/subscriptions",
     },
   ];
@@ -155,31 +169,62 @@ function buildAutonomyMetrics(
       value: formatNumber(models.length),
       detail: `自治域已接入 ${formatNumber(activeModels)} 个启用模型，停用模型 ${formatNumber(models.length - activeModels)} 个。`,
       icon: "cloud",
-      tone: "blue",
+      tone: "brand",
     },
     {
       label: "平台用户",
       value: formatNumber(o?.operatorCount ?? 0),
       detail: "内部运营账号接入平台角色、MFA 和审计边界。",
       icon: "user",
-      tone: "green",
+      tone: "success",
     },
     {
       label: "租户",
       value: formatNumber(o?.tenantCount ?? 0),
       detail: "已入驻租户纳入平台治理、计费与审计边界。",
       icon: "server",
-      tone: "blue",
+      tone: "brand",
     },
     {
       label: "待审批",
       value: formatNumber(o?.pendingVerifications ?? 0),
       detail: "待复核的实名认证进入审批中心与确认链路。",
       icon: "check",
-      tone: (o?.pendingVerifications ?? 0) > 0 ? "amber" : "green",
+      tone: (o?.pendingVerifications ?? 0) > 0 ? "warning" : "success",
     },
   ];
 }
+
+/** 面板头右端的入口。与总览页同一个写法。 */
+function DetailLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link className="admin-overview-panel-detail" href={href}>
+      {label}
+    </Link>
+  );
+}
+
+const RESOURCE_COLUMNS: readonly DataTableColumn<ResourceRow>[] = [
+  {
+    id: "subject",
+    header: "主体",
+    cell: (row) => <strong>{row.subject}</strong>,
+  },
+  { id: "key", header: "标识", cell: (row) => row.key },
+  { id: "model", header: "模型", cell: (row) => row.model },
+  { id: "quota", header: "配额", cell: (row) => row.quota, align: "right" },
+  { id: "usage", header: "用量", cell: (row) => row.usage, align: "right" },
+  {
+    id: "status",
+    header: "状态",
+    align: "center",
+    cell: (row) => (
+      <StatusBadge tone={row.status === "启用" ? "success" : "neutral"}>
+        {row.status}
+      </StatusBadge>
+    ),
+  },
+];
 
 function buildResourceRows(
   models: AiModelRecord[],
@@ -259,155 +304,106 @@ export function PlatformAutonomyPage() {
   );
 
   return (
-    <div className="vx-page-stack platform-autonomy-page">
-      <PageHeader
-        icon="shield-check"
-        title="平台总览"
-        description="平台自治域只管理平台自身的身份、资源、运行、安全和审计；租户运营、订阅交易和客户服务保持在运营业务域。"
-      />
-
-      <section className="platform-autonomy-metrics" aria-label="平台自治态势">
-        {autonomyMetrics.map((metric) => (
-          <article
-            key={metric.label}
-            className={`platform-autonomy-metric platform-autonomy-tone--${metric.tone}`}
-          >
-            <span className="platform-autonomy-metric__icon" aria-hidden="true">
-              <Icon name={metric.icon} size="md" fallback="placeholder" />
-            </span>
-            <div className="platform-autonomy-metric__copy">
-              <span>{metric.label}</span>
-              <strong>{metric.value}</strong>
-              <p>{metric.detail}</p>
-            </div>
-          </article>
-        ))}
-      </section>
-
-      <section className="platform-autonomy-domains" aria-label="自治域能力">
-        {autonomyDomains.map((domain) => (
-          <article key={domain.title} className="platform-autonomy-domain">
-            <header>
-              <span aria-hidden="true">
-                <Icon name={domain.icon} size="md" fallback="placeholder" />
-              </span>
-              <div>
-                <h2>{domain.title}</h2>
-                <p>{domain.description}</p>
-              </div>
-            </header>
-            <div className="platform-autonomy-domain__links">
-              {domain.links.map((link) => (
-                <Link key={link.href} href={link.href}>
-                  <span>
-                    <strong>{link.label}</strong>
-                    <small>{link.meta}</small>
-                  </span>
-                  <Icon
-                    name="chevron-right"
-                    size="sm"
-                    fallback="chevron-right"
+    <DashboardTemplate
+      className="platform-autonomy-page"
+      header={
+        <PageHeader
+          icon="shield-check"
+          title="平台总览"
+          description="平台自治域只管理平台自身的身份、资源、运行、安全和审计；租户运营、订阅交易和客户服务保持在运营业务域。"
+        />
+      }
+      metrics={
+        <MetricGrid
+          aria-label="平台自治态势"
+          items={autonomyMetrics.map((metric) => ({
+            id: metric.label,
+            label: metric.label,
+            value: metric.value,
+            icon: metric.icon,
+            tone: metric.tone,
+            // 口径是整句，落在标签行的 `?` 里；常驻会把一排卡撑成一排段落。
+            help: metric.detail,
+          }))}
+        />
+      }
+      entries={
+        <div className="grid gap-md sm:grid-cols-2 lg:grid-cols-4">
+          {autonomyDomains.map((domain) => (
+            <PanelCard
+              key={domain.title}
+              icon={domain.icon}
+              title={domain.title}
+              description={domain.description}
+            >
+              <PanelList>
+                {domain.links.map((link) => (
+                  <PanelItem
+                    key={link.href}
+                    main={
+                      <Link href={link.href} className="block">
+                        <TableTitleCell
+                          title={link.label}
+                          description={link.meta}
+                        />
+                      </Link>
+                    }
+                    trail={
+                      <Icon
+                        name="chevron-right"
+                        size="sm"
+                        fallback="chevron-right"
+                        aria-hidden="true"
+                      />
+                    }
                   />
-                </Link>
-              ))}
-            </div>
-          </article>
-        ))}
-      </section>
+                ))}
+              </PanelList>
+            </PanelCard>
+          ))}
+        </div>
+      }
+    >
+      <div className="grid gap-md lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <PanelCard
+          title="平台资源"
+          description="一期只支持 tenant 与 platform 两类主体，平台不进入租户表，但拥有独立模型配额和统计归属。"
+          action={<DetailLink href="/model-grants" label="模型授权" />}
+        >
+          <DataTable
+            columns={RESOURCE_COLUMNS}
+            rows={resourceRows}
+            rowKey={(row) => `${row.key}-${row.model}`}
+            loading={loadingResources}
+            loadingRows={3}
+            empty={
+              <EmptyState
+                title={resourceError ? "模型资源读取失败" : "暂无模型"}
+                description={resourceError ?? "尚未接入模型资源。"}
+              />
+            }
+          />
+        </PanelCard>
 
-      <section
-        className="platform-autonomy-grid"
-        aria-label="平台主体与风险态势"
-      >
-        <article className="platform-autonomy-panel platform-autonomy-panel--wide">
-          <header className="platform-autonomy-panel__header">
-            <div>
-              <h2>平台资源</h2>
-              <p>
-                一期只支持 tenant 与 platform
-                两类主体，平台不进入租户表，但拥有独立模型配额和统计归属。
-              </p>
-            </div>
-            <Link href="/model-grants">模型授权</Link>
-          </header>
-          <div className="platform-autonomy-resource-table">
-            <div className="platform-autonomy-resource-table__header">
-              <span>主体</span>
-              <span>标识</span>
-              <span>模型</span>
-              <span>配额</span>
-              <span>用量</span>
-              <span>状态</span>
-            </div>
-            {loadingResources ? (
-              <div className="platform-autonomy-resource-row">
-                <strong>读取中</strong>
-                <span>Model Platform</span>
-                <span>模型平台</span>
-                <span>-</span>
-                <span>-</span>
-                <em>同步中</em>
-              </div>
-            ) : resourceError ? (
-              <div className="platform-autonomy-resource-row platform-autonomy-resource-row--error">
-                <strong>读取失败</strong>
-                <span>Model Platform</span>
-                <span>{resourceError}</span>
-                <span>-</span>
-                <span>-</span>
-                <em>异常</em>
-              </div>
-            ) : resourceRows.length ? (
-              resourceRows.map((row) => (
-                <div
-                  key={`${row.key}-${row.model}`}
-                  className="platform-autonomy-resource-row"
-                >
-                  <strong>{row.subject}</strong>
-                  <span>{row.key}</span>
-                  <span>{row.model}</span>
-                  <span>{row.quota}</span>
-                  <span>{row.usage}</span>
-                  <em>{row.status}</em>
-                </div>
-              ))
-            ) : (
-              <div className="platform-autonomy-resource-row">
-                <strong>暂无模型</strong>
-                <span>Model Platform</span>
-                <span>未接入模型资源</span>
-                <span>-</span>
-                <span>-</span>
-                <em>空</em>
-              </div>
-            )}
-          </div>
-        </article>
-
-        <article className="platform-autonomy-panel">
-          <header className="platform-autonomy-panel__header">
-            <div>
-              <h2>待处理风险</h2>
-              <p>面向平台控制面，不展示租户运营事项。</p>
-            </div>
-          </header>
-          <div className="platform-autonomy-risk-list">
+        <PanelCard
+          title="待处理风险"
+          description="面向平台控制面，不展示租户运营事项。"
+        >
+          <PanelList>
             {operationRows.map((row) => (
-              <Link
+              <PanelItem
                 key={row.label}
-                href={row.href}
-                className={`platform-autonomy-risk platform-autonomy-tone--${row.tone}`}
-              >
-                <span>
-                  <strong>{row.label}</strong>
-                  <small>{row.meta}</small>
-                </span>
-                <em>{row.value}</em>
-              </Link>
+                main={
+                  <Link href={row.href} className="block">
+                    <TableTitleCell title={row.label} description={row.meta} />
+                  </Link>
+                }
+                trail={<StatusBadge tone={row.tone}>{row.value}</StatusBadge>}
+              />
             ))}
-          </div>
-        </article>
-      </section>
-    </div>
+          </PanelList>
+        </PanelCard>
+      </div>
+    </DashboardTemplate>
   );
 }

@@ -3,18 +3,31 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ActionMenu,
-  Badge,
+  Banner,
   BulkActionBar,
   Button,
   Checkbox,
+  DataTable,
   DialogForm,
+  EmptyState,
+  FieldLabel,
+  FilterBar,
   Icon,
   Input,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
   Label,
+  ListCard,
+  ListCardGrid,
+  ListPageTemplate,
   NativeSelect,
-  ActionButton,
-  EmptyState,
-  PageHeader,
+  Pagination,
+  StatusBadge,
+  TableTitleCell,
+  type FilterBarView,
+  useListPagination,
+  ViewHeader,
 } from "@vxture/design-system";
 import {
   createTenantRole,
@@ -28,6 +41,7 @@ import type {
   TenantRoleRecord,
 } from "@/entities/console";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { PlannedBadge, PlannedNotice } from "@/components/planned";
 import { useTranslations } from "next-intl";
 
 type RoleFilter = "all" | "active" | "disabled" | "system" | "custom";
@@ -36,8 +50,6 @@ type Feedback = {
   key: string;
   values?: Record<string, number | string>;
 } | null;
-
-const ROLES_PAGE_SIZE = 10;
 
 function rolePermissionSummary(role: TenantRoleRecord) {
   return role.permissions
@@ -69,7 +81,7 @@ export function RolesPage() {
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<RoleFilter>("all");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [view, setView] = useState<FilterBarView>("list");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dialogMode, setDialogMode] = useState<"create" | "edit" | null>(null);
@@ -117,10 +129,6 @@ export function RolesPage() {
       active = false;
     };
   }, [currentTenantId]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [query, filter]);
 
   function resetFeedback() {
     setFeedback(null);
@@ -339,17 +347,13 @@ export function RolesPage() {
     [roles],
   );
 
+  const pager = useListPagination(filtered);
+  const pagedRoles = pager.pageRows;
+
   const selected = roles.find((role) => role.id === selectedId) ?? null;
-  const totalPages = Math.max(1, Math.ceil(filtered.length / ROLES_PAGE_SIZE));
-  const safeCurrentPage = Math.min(currentPage, totalPages);
-  const pageStart = (safeCurrentPage - 1) * ROLES_PAGE_SIZE;
-  const pagedRoles = filtered.slice(pageStart, pageStart + ROLES_PAGE_SIZE);
   const selectedRoles = roles.filter((role) => selectedIds.has(role.id));
   const selectedCount = selectedRoles.length;
-  const selectablePageIds = pagedRoles.map((role) => role.id);
-  const isPageSelected =
-    selectablePageIds.length > 0 &&
-    selectablePageIds.every((id) => selectedIds.has(id));
+  const selectedKeys = useMemo(() => [...selectedIds], [selectedIds]);
   const hasSelectedActive = selectedRoles.some(
     (role) => role.status === "active",
   );
@@ -376,514 +380,474 @@ export function RolesPage() {
 
   const canCreateRole = true;
 
-  function toggleRoleSelection(roleId: string, checked: boolean) {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (checked) {
-        next.add(roleId);
-      } else {
-        next.delete(roleId);
-      }
-      return next;
-    });
+  /* Reads work; every write is rejected by the backend with
+   * CUSTOM_ROLES_UNSUPPORTED (HTTP 400). The write affordances stay visible so
+   * the intended capability remains legible, but they are inert until the
+   * platform supports tenant-defined roles. */
+  const writesPlanned = true;
+
+  /* Row action menu: shared by the table rows and the card view. */
+  function roleMenu(role: TenantRoleRecord) {
+    return (
+      <ActionMenu
+        label={t("actions.menuLabel", { name: role.roleName })}
+        items={[
+          {
+            id: "edit",
+            label: t("actions.edit"),
+            icon: "edit",
+            disabled: writesPlanned || submitting,
+            onSelect: () => openEditDialog(role),
+          },
+          {
+            id: "toggle-status",
+            label:
+              role.status === "active"
+                ? t("actions.disable")
+                : t("actions.enable"),
+            icon: "shield-check",
+            disabled: writesPlanned || submitting,
+            onSelect: () => void handleToggleRoleStatus(role),
+          },
+          ...(!role.isSystem
+            ? [
+                {
+                  id: "delete",
+                  label: t("actions.delete"),
+                  icon: "trash" as const,
+                  disabled: writesPlanned || submitting,
+                  danger: true,
+                  onSelect: () => openDeleteDialog(role),
+                },
+              ]
+            : []),
+        ]}
+      />
+    );
   }
 
-  function togglePageSelection(checked: boolean) {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      selectablePageIds.forEach((id) => {
-        if (checked) {
-          next.add(id);
-        } else {
-          next.delete(id);
-        }
-      });
-      return next;
-    });
+  function roleStatusBadge(role: TenantRoleRecord) {
+    const label =
+      role.status === "active" ? t("status.active") : t("status.disabled");
+    return (
+      <StatusBadge
+        tone={role.status === "active" ? "success" : "neutral"}
+        dot
+        title={label}
+      >
+        {label}
+      </StatusBadge>
+    );
   }
+
+  const resetFiltersAction = (
+    <Button
+      size="md"
+      variant="outline"
+      onClick={() => {
+        setQuery("");
+        setFilter("all");
+        pager.resetPage();
+      }}
+    >
+      <Icon name="x" size="xs" fallback="placeholder" />
+      <span>{t("empty.resetFilters")}</span>
+    </Button>
+  );
+
+  const pagination = (
+    <Pagination
+      className="w-full"
+      page={pager.page}
+      pageCount={pager.pageCount}
+      total={roles.length}
+      filteredTotal={filtered.length}
+      pageSize={pager.pageSize}
+      onPageSizeChange={pager.onPageSizeChange}
+      onPageChange={pager.onPageChange}
+      previousLabel={t("pagination.previous")}
+      nextLabel={t("pagination.next")}
+    />
+  );
 
   return (
-    <div
-      className={
-        selectedCount
-          ? "vx-page-stack vx-roles-page vx-roles-page--selecting"
-          : "vx-page-stack vx-roles-page"
-      }
-    >
-      <PageHeader
-        eyebrow={t("header.eyebrow")}
-        title={t("header.title")}
-        description={t("header.description")}
-      />
-
-      {feedback ? (
-        <p
-          className={
-            feedback.tone === "success"
-              ? "vx-profile-message"
-              : "vx-profile-error"
-          }
-        >
-          {t(`feedback.${feedback.key}`, feedback.values)}
-        </p>
-      ) : null}
-
-      <div className="vx-roles-workspace">
-        <div className="vx-roles-actionbar">
-          <BulkActionBar
-            selectedLabel={
-              selectedCount
-                ? t("bulk.selected", { count: selectedCount })
-                : undefined
+    <>
+      <ListPageTemplate
+        header={
+          <div className="flex flex-col gap-md">
+            <ViewHeader
+              icon="shield-check"
+              title={t("header.title")}
+              description={t("header.description")}
+              secondary={<PlannedBadge />}
+            />
+            <PlannedNotice />
+            {feedback ? (
+              <Banner
+                tone={feedback.tone === "success" ? "success" : "danger"}
+                title={t(`feedback.${feedback.key}`, feedback.values)}
+              />
+            ) : null}
+          </div>
+        }
+        filters={
+          <FilterBar
+            view={view}
+            onViewChange={setView}
+            count={
+              <span title={countTitle}>
+                {t("toolbar.count", { count: filtered.length })}
+              </span>
             }
-            selectionActions={
-              selectedCount ? (
-                <>
-                  <ActionButton
-                    variant="outline"
-                    icon="shield-check"
-                    disabled={submitting || !hasSelectedActive}
-                    onClick={() => void handleBulkStatus("disabled")}
-                  >
-                    {t("bulk.disable")}
-                  </ActionButton>
-                  <ActionButton
-                    variant="outline"
-                    icon="check"
-                    disabled={submitting || !hasSelectedDisabled}
-                    onClick={() => void handleBulkStatus("active")}
-                  >
-                    {t("bulk.enable")}
-                  </ActionButton>
-                  <ActionButton
-                    variant="outline"
-                    icon="trash"
-                    disabled={submitting || !hasSelectedCustom}
-                    onClick={() => setBulkDeleteOpen(true)}
-                  >
-                    {t("bulk.delete")}
-                  </ActionButton>
-                </>
-              ) : null
-            }
-            primaryActions={
+            actions={
               canCreateRole ? (
-                <ActionButton icon="plus" onClick={openCreateDialog}>
-                  {t("header.create")}
-                </ActionButton>
+                <Button
+                  size="md"
+                  disabled={writesPlanned}
+                  onClick={openCreateDialog}
+                >
+                  <Icon name="plus" size="xs" fallback="placeholder" />
+                  <span>{t("header.create")}</span>
+                </Button>
               ) : null
             }
-          />
-        </div>
-
-        <div className="vx-roles-toolbar">
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={t("toolbar.searchPlaceholder")}
-            className="vx-search-input vx-roles-toolbar__search"
-            aria-label={t("toolbar.searchAriaLabel")}
-          />
-          <div className="vx-roles-toolbar__filters">
-            <span className="vx-roles-toolbar__count" title={countTitle}>
-              {t("toolbar.count", { count: filtered.length })}
-            </span>
-            <div
-              className="vx-segmented-control"
-              role="tablist"
+          >
+            <InputGroup className="grow basis-media-3xl max-w-panel-sm">
+              <InputGroupAddon>
+                <Icon name="search" size="sm" aria-hidden="true" />
+              </InputGroupAddon>
+              <InputGroupInput
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  pager.resetPage();
+                }}
+                placeholder={t("toolbar.searchPlaceholder")}
+                aria-label={t("toolbar.searchAriaLabel")}
+              />
+            </InputGroup>
+            <NativeSelect
+              wrapperClassName="w-fit"
+              value={filter}
               aria-label={t("toolbar.filterAriaLabel")}
+              onChange={(event) => {
+                setFilter(event.target.value as RoleFilter);
+                pager.resetPage();
+              }}
             >
               {roleFilters.map((item) => (
-                <Button
-                  key={item.value}
-                  variant={filter === item.value ? "secondary" : "ghost"}
-                  size="sm"
-                  role="tab"
-                  title={item.label}
-                  aria-selected={filter === item.value}
-                  className={
-                    filter === item.value
-                      ? "vx-segmented-control__item vx-segmented-control__item--active"
-                      : "vx-segmented-control__item"
-                  }
-                  onClick={() => setFilter(item.value)}
-                >
+                <option key={item.value} value={item.value}>
                   {item.label}
-                </Button>
+                </option>
+              ))}
+            </NativeSelect>
+          </FilterBar>
+        }
+        bulkBar={
+          <BulkActionBar
+            count={selectedCount}
+            noun="个角色"
+            onClear={() => setSelectedIds(new Set())}
+            actions={[
+              {
+                id: "disable",
+                label: t("bulk.disable"),
+                icon: "shield-check",
+                disabled: writesPlanned || submitting || !hasSelectedActive,
+                onSelect: () => void handleBulkStatus("disabled"),
+              },
+              {
+                id: "enable",
+                label: t("bulk.enable"),
+                icon: "check",
+                disabled: writesPlanned || submitting || !hasSelectedDisabled,
+                onSelect: () => void handleBulkStatus("active"),
+              },
+              {
+                id: "delete",
+                label: t("bulk.delete"),
+                icon: "trash",
+                disabled: writesPlanned || submitting || !hasSelectedCustom,
+                danger: true,
+                onSelect: () => setBulkDeleteOpen(true),
+              },
+            ]}
+          />
+        }
+        table={
+          view === "list" ? (
+            <DataTable
+              columns={[
+                {
+                  id: "name",
+                  header: t("list.columns.name"),
+                  cell: (role) => (
+                    <span
+                      className="block"
+                      title={t("list.roleTitle", {
+                        name: role.roleName,
+                        code: role.roleCode,
+                        status:
+                          role.status === "active"
+                            ? t("status.active")
+                            : t("status.disabled"),
+                        type: role.isSystem
+                          ? t("type.system")
+                          : t("type.custom"),
+                        permissions: role.permissions.length,
+                      })}
+                    >
+                      <TableTitleCell
+                        icon={role.isSystem ? "shield-check" : "users"}
+                        title={role.roleName}
+                        description={
+                          role.description || t("list.noDescription")
+                        }
+                        onTitleClick={() => openEditDialog(role)}
+                      />
+                    </span>
+                  ),
+                },
+                {
+                  id: "code",
+                  header: t("list.columns.code"),
+                  cell: (role) => (
+                    <span
+                      className="text-muted-foreground"
+                      title={role.roleCode}
+                    >
+                      {role.roleCode}
+                    </span>
+                  ),
+                },
+                {
+                  id: "status",
+                  header: t("list.columns.status"),
+                  cell: (role) => roleStatusBadge(role),
+                },
+                {
+                  id: "type",
+                  header: t("list.columns.type"),
+                  cell: (role) => (
+                    <span className="text-muted-foreground">
+                      {role.isSystem ? t("type.system") : t("type.custom")}
+                    </span>
+                  ),
+                },
+                {
+                  id: "permissions",
+                  header: t("list.columns.permissions"),
+                  align: "right",
+                  cell: (role) => (
+                    <span
+                      title={
+                        rolePermissionSummary(role) || t("list.noPermissions")
+                      }
+                    >
+                      {t("list.permissionCount", {
+                        count: role.permissions.length,
+                      })}
+                    </span>
+                  ),
+                },
+              ]}
+              rows={pagedRoles}
+              rowKey={(role) => role.id}
+              loading={loading}
+              empty={
+                <EmptyState
+                  title={loading ? t("empty.loadingTitle") : t("empty.title")}
+                  description={
+                    loading
+                      ? t("empty.loadingDescription")
+                      : t("empty.description")
+                  }
+                  action={resetFiltersAction}
+                />
+              }
+              selectedKeys={selectedKeys}
+              onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
+              indexStart={pager.indexStart}
+              rowActions={roleMenu}
+              footer={pagination}
+            />
+          ) : (
+            <div className="flex flex-col gap-sm">
+              <ListCardGrid>
+                {pagedRoles.map((role) => (
+                  <ListCard
+                    key={role.id}
+                    icon={role.isSystem ? "shield-check" : "users"}
+                    title={role.roleName}
+                    description={role.description || t("list.noDescription")}
+                    onTitleClick={() => openEditDialog(role)}
+                    status={roleStatusBadge(role)}
+                    actions={roleMenu(role)}
+                    meta={
+                      <span
+                        title={
+                          rolePermissionSummary(role) || t("list.noPermissions")
+                        }
+                      >
+                        {role.roleCode} ·{" "}
+                        {role.isSystem ? t("type.system") : t("type.custom")} ·{" "}
+                        {t("list.permissionCount", {
+                          count: role.permissions.length,
+                        })}
+                      </span>
+                    }
+                  />
+                ))}
+              </ListCardGrid>
+              {pagination}
+            </div>
+          )
+        }
+      />
+
+      {dialogMode ? (
+        <DialogForm
+          open
+          title={
+            dialogMode === "create"
+              ? t("dialog.createTitle")
+              : t("dialog.editTitle")
+          }
+          submitLabel={
+            dialogMode === "create" ? t("dialog.create") : t("dialog.save")
+          }
+          cancelLabel={t("dialog.cancel")}
+          submitDisabled={writesPlanned}
+          submitting={submitting}
+          onOpenChange={(open) => {
+            if (!open) setDialogMode(null);
+          }}
+          onSubmit={(event) => void submitRole(event)}
+        >
+          <Label>
+            {t("dialog.fields.code")}
+            <Input
+              value={form.roleCode}
+              disabled={dialogMode === "edit"}
+              onChange={(event) =>
+                setForm((old) => ({ ...old, roleCode: event.target.value }))
+              }
+              required
+            />
+          </Label>
+          <Label>
+            {t("dialog.fields.name")}
+            <Input
+              value={form.roleName}
+              onChange={(event) =>
+                setForm((old) => ({ ...old, roleName: event.target.value }))
+              }
+              required
+            />
+          </Label>
+          <Label>
+            {t("dialog.fields.description")}
+            <Input
+              value={form.description}
+              onChange={(event) =>
+                setForm((old) => ({
+                  ...old,
+                  description: event.target.value,
+                }))
+              }
+            />
+          </Label>
+          <Label>
+            {t("dialog.fields.status")}
+            <NativeSelect
+              value={form.status}
+              onChange={(event) =>
+                setForm((old) => ({
+                  ...old,
+                  status: event.target.value as "active" | "disabled",
+                }))
+              }
+            >
+              <option value="active">{t("status.active")}</option>
+              <option value="disabled">{t("status.disabled")}</option>
+            </NativeSelect>
+          </Label>
+          {/* Permission multi-select: one checkbox per permission, each label
+                bound via htmlFor so the whole row stays keyboard reachable. */}
+          <div className="flex flex-col gap-sm">
+            <div className="flex flex-col gap-2xs">
+              <span className="text-label-md">
+                {t("dialog.permissionsTitle")}
+              </span>
+              <span className="text-body-sm text-muted-foreground">
+                {t("dialog.permissionsDescription")}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-sm">
+              {permissions.map((permission) => (
+                <div key={permission.id} className="flex items-center gap-xs">
+                  <Checkbox
+                    id={`role-permission-${permission.id}`}
+                    checked={form.permissionIds.includes(permission.id)}
+                    onCheckedChange={() => togglePermission(permission.id)}
+                  />
+                  <FieldLabel
+                    htmlFor={`role-permission-${permission.id}`}
+                    className="text-body-sm"
+                    title={permission.description ?? permission.permissionName}
+                  >
+                    {permission.permissionCode}
+                  </FieldLabel>
+                </div>
               ))}
             </div>
           </div>
-        </div>
+        </DialogForm>
+      ) : null}
 
-        <div className="vx-role-list">
-          <div className="vx-role-list__header">
-            <span
-              className="vx-role-select vx-role-select--header"
-              title={t("list.selectPage")}
-            >
-              <Checkbox
-                checked={isPageSelected}
-                aria-label={t("list.selectPage")}
-                onCheckedChange={(value) => togglePageSelection(value === true)}
-              />
-            </span>
-            <span>{t("list.columns.name")}</span>
-            <span>{t("list.columns.code")}</span>
-            <span>{t("list.columns.status")}</span>
-            <span>{t("list.columns.type")}</span>
-            <span>{t("list.columns.permissions")}</span>
-            <span>{t("list.columns.description")}</span>
-            <span />
-          </div>
+      {deleteOpen && selected ? (
+        <DialogForm
+          open
+          title={t("dialog.deleteTitle")}
+          description={t("dialog.deleteDescription", {
+            name: selected.roleName,
+          })}
+          submitLabel={t("dialog.delete")}
+          danger
+          submitDisabled={writesPlanned}
+          cancelLabel={t("dialog.cancel")}
+          submitting={submitting}
+          onOpenChange={(open) => {
+            if (!open) setDeleteOpen(false);
+          }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleDeleteRole();
+          }}
+        />
+      ) : null}
 
-          {pagedRoles.length ? (
-            pagedRoles.map((role) => {
-              const permissionCodes =
-                rolePermissionSummary(role) || t("list.noPermissions");
-              const roleTitle = t("list.roleTitle", {
-                name: role.roleName,
-                code: role.roleCode,
-                status:
-                  role.status === "active"
-                    ? t("status.active")
-                    : t("status.disabled"),
-                type: role.isSystem ? t("type.system") : t("type.custom"),
-                permissions: role.permissions.length,
-              });
-
-              return (
-                <div key={role.id} className="vx-role-row" title={roleTitle}>
-                  <span
-                    className="vx-role-select"
-                    title={t("list.selectRole", { name: role.roleName })}
-                  >
-                    <Checkbox
-                      checked={selectedIds.has(role.id)}
-                      aria-label={t("list.selectRole", { name: role.roleName })}
-                      onCheckedChange={(value) =>
-                        toggleRoleSelection(role.id, value === true)
-                      }
-                    />
-                  </span>
-                  <div className="vx-role-row__identity">
-                    <span
-                      className={
-                        role.isSystem
-                          ? "vx-role-avatar vx-role-avatar--system"
-                          : "vx-role-avatar vx-role-avatar--custom"
-                      }
-                      role="img"
-                      aria-label={
-                        role.isSystem
-                          ? t("type.systemIcon")
-                          : t("type.customIcon")
-                      }
-                      title={
-                        role.isSystem
-                          ? t("type.systemIcon")
-                          : t("type.customIcon")
-                      }
-                    >
-                      <Icon
-                        name={role.isSystem ? "shield-check" : "users"}
-                        size="xs"
-                        fallback="placeholder"
-                      />
-                    </span>
-                    <div className="vx-role-row__identity-copy">
-                      <strong>{role.roleName}</strong>
-                      <p title={role.description || t("list.noDescription")}>
-                        {role.description || t("list.noDescription")}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="vx-role-row__muted" title={role.roleCode}>
-                    {role.roleCode}
-                  </span>
-                  <span>
-                    <Badge
-                      className={
-                        role.status === "active"
-                          ? "vx-role-status vx-role-status--active"
-                          : "vx-role-status vx-role-status--disabled"
-                      }
-                      title={
-                        role.status === "active"
-                          ? t("status.active")
-                          : t("status.disabled")
-                      }
-                    >
-                      {role.status === "active"
-                        ? t("status.active")
-                        : t("status.disabled")}
-                    </Badge>
-                  </span>
-                  <span className="vx-role-row__muted">
-                    {role.isSystem ? t("type.system") : t("type.custom")}
-                  </span>
-                  <span className="vx-role-row__text" title={permissionCodes}>
-                    {t("list.permissionCount", {
-                      count: role.permissions.length,
-                    })}
-                  </span>
-                  <span
-                    className="vx-role-row__muted"
-                    title={role.description || t("list.noDescription")}
-                  >
-                    {role.description || t("list.noDescription")}
-                  </span>
-                  <div className="vx-role-row__menu">
-                    <ActionMenu
-                      label={t("actions.menuLabel", { name: role.roleName })}
-                      triggerProps={{
-                        title: t("actions.menuLabel", { name: role.roleName }),
-                      }}
-                      items={[
-                        {
-                          id: "edit",
-                          label: t("actions.edit"),
-                          icon: (
-                            <Icon
-                              name="edit"
-                              size="xs"
-                              fallback="placeholder"
-                            />
-                          ),
-                          onSelect: () => openEditDialog(role),
-                        },
-                        {
-                          id: "toggle-status",
-                          label:
-                            role.status === "active"
-                              ? t("actions.disable")
-                              : t("actions.enable"),
-                          icon: (
-                            <Icon
-                              name="shield-check"
-                              size="xs"
-                              fallback="placeholder"
-                            />
-                          ),
-                          disabled: submitting,
-                          onSelect: () => void handleToggleRoleStatus(role),
-                        },
-                        ...(!role.isSystem
-                          ? [
-                              {
-                                id: "delete",
-                                label: t("actions.delete"),
-                                icon: (
-                                  <Icon
-                                    name="trash"
-                                    size="xs"
-                                    fallback="placeholder"
-                                  />
-                                ),
-                                disabled: submitting,
-                                danger: true,
-                                onSelect: () => openDeleteDialog(role),
-                              },
-                            ]
-                          : []),
-                      ]}
-                    />
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <EmptyState
-              title={loading ? t("empty.loadingTitle") : t("empty.title")}
-              description={
-                loading ? t("empty.loadingDescription") : t("empty.description")
-              }
-              action={
-                <ActionButton
-                  variant="outline"
-                  icon="x"
-                  onClick={() => {
-                    setQuery("");
-                    setFilter("all");
-                  }}
-                >
-                  {t("empty.resetFilters")}
-                </ActionButton>
-              }
-            />
-          )}
-        </div>
-
-        <div className="vx-roles-pagination">
-          <div className="vx-roles-pagination__actions">
-            <span>
-              {t("pagination.summary", {
-                page: safeCurrentPage,
-                totalPages,
-                total: filtered.length,
-              })}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={safeCurrentPage <= 1}
-              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-            >
-              {t("pagination.previous")}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={safeCurrentPage >= totalPages}
-              onClick={() =>
-                setCurrentPage((page) => Math.min(totalPages, page + 1))
-              }
-            >
-              {t("pagination.next")}
-            </Button>
-          </div>
-        </div>
-
-        {dialogMode ? (
-          <DialogForm
-            open
-            title={
-              dialogMode === "create"
-                ? t("dialog.createTitle")
-                : t("dialog.editTitle")
-            }
-            submitLabel={
-              dialogMode === "create" ? t("dialog.create") : t("dialog.save")
-            }
-            cancelLabel={t("dialog.cancel")}
-            submitting={submitting}
-            onOpenChange={(open) => {
-              if (!open) setDialogMode(null);
-            }}
-            onSubmit={(event) => void submitRole(event)}
-          >
-            <Label>
-              {t("dialog.fields.code")}
-              <Input
-                value={form.roleCode}
-                disabled={dialogMode === "edit"}
-                onChange={(event) =>
-                  setForm((old) => ({ ...old, roleCode: event.target.value }))
-                }
-                required
-              />
-            </Label>
-            <Label>
-              {t("dialog.fields.name")}
-              <Input
-                value={form.roleName}
-                onChange={(event) =>
-                  setForm((old) => ({ ...old, roleName: event.target.value }))
-                }
-                required
-              />
-            </Label>
-            <Label>
-              {t("dialog.fields.description")}
-              <Input
-                value={form.description}
-                onChange={(event) =>
-                  setForm((old) => ({
-                    ...old,
-                    description: event.target.value,
-                  }))
-                }
-              />
-            </Label>
-            <Label>
-              {t("dialog.fields.status")}
-              <NativeSelect
-                className="vx-input"
-                value={form.status}
-                onChange={(event) =>
-                  setForm((old) => ({
-                    ...old,
-                    status: event.target.value as "active" | "disabled",
-                  }))
-                }
-              >
-                <option value="active">{t("status.active")}</option>
-                <option value="disabled">{t("status.disabled")}</option>
-              </NativeSelect>
-            </Label>
-            <div className="vx-role-permission-picker">
-              <header>
-                <h2>{t("dialog.permissionsTitle")}</h2>
-                <p>{t("dialog.permissionsDescription")}</p>
-              </header>
-              <div className="vx-role-permission-picker__list">
-                {permissions.map((permission) => (
-                  <Button
-                    key={permission.id}
-                    variant={
-                      form.permissionIds.includes(permission.id)
-                        ? "secondary"
-                        : "outline"
-                    }
-                    size="sm"
-                    title={permission.description ?? permission.permissionName}
-                    className={
-                      form.permissionIds.includes(permission.id)
-                        ? "vx-role-permission-chip vx-role-permission-chip--active"
-                        : "vx-role-permission-chip"
-                    }
-                    onClick={() => togglePermission(permission.id)}
-                  >
-                    {permission.permissionCode}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </DialogForm>
-        ) : null}
-
-        {deleteOpen && selected ? (
-          <DialogForm
-            open
-            title={t("dialog.deleteTitle")}
-            description={t("dialog.deleteDescription", {
-              name: selected.roleName,
-            })}
-            submitLabel={t("dialog.delete")}
-            submitVariant="destructive"
-            cancelLabel={t("dialog.cancel")}
-            submitting={submitting}
-            onOpenChange={(open) => {
-              if (!open) setDeleteOpen(false);
-            }}
-            onSubmit={(event) => {
-              event.preventDefault();
-              void handleDeleteRole();
-            }}
-          />
-        ) : null}
-
-        {bulkDeleteOpen ? (
-          <DialogForm
-            open
-            title={t("dialog.bulkDeleteTitle")}
-            description={t("dialog.bulkDeleteDescription", {
-              count: bulkDeleteCount,
-            })}
-            submitLabel={t("dialog.delete")}
-            submitVariant="destructive"
-            submitDisabled={!bulkDeleteCount}
-            cancelLabel={t("dialog.cancel")}
-            submitting={submitting}
-            onOpenChange={(open) => {
-              if (!open) setBulkDeleteOpen(false);
-            }}
-            onSubmit={(event) => {
-              event.preventDefault();
-              void handleBulkDeleteRoles();
-            }}
-          />
-        ) : null}
-      </div>
-    </div>
+      {bulkDeleteOpen ? (
+        <DialogForm
+          open
+          title={t("dialog.bulkDeleteTitle")}
+          description={t("dialog.bulkDeleteDescription", {
+            count: bulkDeleteCount,
+          })}
+          submitLabel={t("dialog.delete")}
+          danger
+          submitDisabled={writesPlanned || !bulkDeleteCount}
+          cancelLabel={t("dialog.cancel")}
+          submitting={submitting}
+          onOpenChange={(open) => {
+            if (!open) setBulkDeleteOpen(false);
+          }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleBulkDeleteRoles();
+          }}
+        />
+      ) : null}
+    </>
   );
 }

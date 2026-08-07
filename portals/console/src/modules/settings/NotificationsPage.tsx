@@ -2,13 +2,18 @@
 
 import { useEffect, useState } from "react";
 import {
-  Badge,
+  Banner,
+  Button,
   Checkbox,
+  DataTable,
+  FormPageTemplate,
   Icon,
-  ActionButton,
-  PageHeader,
+  StatusBadge,
+  ViewHeader,
 } from "@vxture/design-system";
-import type { IconName } from "@vxture/design-system";
+import type { DataTableColumn, IconName } from "@vxture/design-system";
+import { PageSection, SummaryStrip } from "@/layout/shell";
+import { PlannedBadge, PlannedNotice } from "@/components/planned";
 import { useTranslations } from "next-intl";
 
 type ChannelKey = "inbox" | "email" | "sms";
@@ -195,193 +200,177 @@ export function NotificationsPage() {
     setMessageKey(null);
   }
 
+  /* A topic × channel matrix. Every column header already exists as an i18n
+   * key (topics.columns.* / channels.short.*), so this is a real table rather
+   * than a headerless list. */
+  const topicColumns: DataTableColumn<TopicPreference>[] = [
+    {
+      id: "topic",
+      header: t("topics.columns.topic"),
+      cell: (topic) => (
+        <span className="flex min-w-0 items-center gap-sm">
+          <Icon
+            name={topic.icon}
+            size="sm"
+            fallback="placeholder"
+            aria-hidden="true"
+            className="shrink-0 text-muted-foreground"
+          />
+          <strong className="min-w-0 truncate text-label-md text-foreground">
+            {t(`topics.items.${topic.key}.title`)}
+          </strong>
+          {topic.lockedChannels?.length ? (
+            <StatusBadge tone="neutral">{t("topics.policyLocked")}</StatusBadge>
+          ) : null}
+        </span>
+      ),
+    },
+    ...CHANNELS.map<DataTableColumn<TopicPreference>>((channel) => ({
+      id: channel.key,
+      align: "center",
+      header: (
+        <span className="inline-flex items-center gap-2xs">
+          <Icon name={channel.icon} size="xs" fallback="placeholder" />
+          {t(`channels.short.${channel.key}`)}
+        </span>
+      ),
+      cell: (topic) => {
+        const channelLocked =
+          topic.lockedChannels?.includes(channel.key) ?? false;
+        return (
+          <span
+            title={
+              channelLocked
+                ? t("topics.policyLockedDescription")
+                : t(`channels.short.${channel.key}`)
+            }
+          >
+            <Checkbox
+              checked={topic.channels[channel.key]}
+              disabled
+              aria-label={t("topics.toggleLabel", {
+                topic: t(`topics.items.${topic.key}.title`),
+                channel: t(`channels.items.${channel.key}.title`),
+              })}
+              onCheckedChange={(value) =>
+                toggleTopicChannel(topic.key, channel.key, value === true)
+              }
+            />
+          </span>
+        );
+      },
+    })),
+    {
+      id: "status",
+      header: t("topics.columns.status"),
+      align: "right",
+      cell: (topic) => {
+        const enabled = CHANNELS.some((channel) => topic.channels[channel.key]);
+        return (
+          <StatusBadge tone={enabled ? "success" : "neutral"} dot>
+            {enabled ? t("topics.subscribed") : t("topics.unsubscribed")}
+          </StatusBadge>
+        );
+      },
+    },
+  ];
+
   return (
-    <div className="vx-page-stack vx-notifications-page">
-      <PageHeader
-        eyebrow={t("header.eyebrow")}
-        title={t("header.title")}
-        description={t("header.description")}
-        secondary={<Badge>{t("backend.pending")}</Badge>}
-        action={
-          <div className="vx-notification-header-actions">
-            <ActionButton variant="outline" icon="x" onClick={resetDefaults}>
-              {t("actions.reset")}
-            </ActionButton>
-            <ActionButton icon="check" onClick={markSaved}>
-              {t("actions.save")}
-            </ActionButton>
-          </div>
-        }
-      />
-
-      {messageKey ? (
-        <p className="vx-profile-message">{t(messageKey)}</p>
-      ) : null}
-
-      <section className="vx-notification-preferences">
-        <div className="vx-notification-preferences__status">
-          <Icon name="bell" size="sm" fallback="placeholder" />
-          <div>
-            <span>{t("preference.label")}</span>
-            <strong>{t("preference.enabled")}</strong>
-          </div>
+    <FormPageTemplate
+      header={
+        <div className="flex flex-col gap-md">
+          <ViewHeader
+            icon="mail"
+            title={t("header.title")}
+            description={t("header.description")}
+            secondary={<PlannedBadge />}
+          />
+          <PlannedNotice variant="controls" />
         </div>
-        <div
-          className="vx-notification-preferences__stats"
-          aria-label={t("summary.title")}
-        >
-          <div>
-            <Icon name="bell" size="xs" fallback="placeholder" />
-            <span>{t("summary.inboxDefault")}</span>
-          </div>
-          <div>
-            <Icon name="mail" size="xs" fallback="placeholder" />
-            <span>{t("summary.emailValue", { count: emailTopics })}</span>
-          </div>
-          <div>
-            <Icon name="phone" size="xs" fallback="placeholder" />
-            <span>{t("summary.smsValue", { count: smsTopics })}</span>
-          </div>
-          <div>
-            <span>{t("summary.topics")}</span>
-            <strong>
-              {t("summary.topicsValue", {
+      }
+      footer={
+        <>
+          <Button size="md" variant="outline" disabled onClick={resetDefaults}>
+            <Icon name="x" size="xs" fallback="placeholder" />
+            <span>{t("actions.reset")}</span>
+          </Button>
+          <Button size="md" disabled onClick={markSaved}>
+            <Icon name="check" size="xs" fallback="placeholder" />
+            <span>{t("actions.save")}</span>
+          </Button>
+        </>
+      }
+    >
+      {messageKey ? <Banner tone="success" title={t(messageKey)} /> : null}
+
+      <PageSection>
+        <SummaryStrip
+          items={[
+            {
+              label: t("preference.label"),
+              value: t("preference.enabled"),
+              aside: <Icon name="bell" size="sm" fallback="placeholder" />,
+            },
+            {
+              label: t("summary.topics"),
+              value: t("summary.topicsValue", {
                 enabled: enabledTopics,
                 total: totalTopics,
+              }),
+            },
+          ]}
+        />
+        {/* Channel coverage sentences — prose, not label/value pairs, so they
+         * stay a chip row rather than being forced into SummaryStrip. */}
+        <div
+          className="flex flex-wrap items-center gap-lg text-body-sm text-muted-foreground"
+          aria-label={t("summary.title")}
+        >
+          <span className="flex items-center gap-2xs">
+            <Icon name="bell" size="xs" fallback="placeholder" />
+            {t("summary.inboxDefault")}
+          </span>
+          <span className="flex items-center gap-2xs">
+            <Icon name="mail" size="xs" fallback="placeholder" />
+            {t("summary.emailValue", { count: emailTopics })}
+          </span>
+          <span className="flex items-center gap-2xs">
+            <Icon name="phone" size="xs" fallback="placeholder" />
+            {t("summary.smsValue", { count: smsTopics })}
+          </span>
+        </div>
+      </PageSection>
+
+      <PageSection
+        icon="megaphone"
+        level={2}
+        title={t("topics.title")}
+        description={t("topics.count", { count: totalTopics })}
+      >
+        {TOPIC_GROUPS.map((group) => {
+          const groupTopics = state.topics.filter(
+            (topic) => topic.group === group.key,
+          );
+
+          return (
+            <PageSection
+              key={group.key}
+              level={3}
+              icon={group.icon}
+              title={t(`groups.${group.key}`)}
+              description={t("topics.groupCount", {
+                count: groupTopics.length,
               })}
-            </strong>
-          </div>
-        </div>
-      </section>
-
-      <section className="vx-notification-board">
-        <header className="vx-notification-board__header">
-          <h2>{t("topics.title")}</h2>
-          <span>{t("topics.count", { count: totalTopics })}</span>
-        </header>
-
-        <div className="vx-notification-groups">
-          {TOPIC_GROUPS.map((group) => {
-            const groupTopics = state.topics.filter(
-              (topic) => topic.group === group.key,
-            );
-
-            return (
-              <section key={group.key} className="vx-notification-group">
-                <div className="vx-notification-group__title">
-                  <Icon name={group.icon} size="xs" fallback="placeholder" />
-                  <div>
-                    <h3>{t(`groups.${group.key}`)}</h3>
-                    <span>
-                      {t("topics.groupCount", { count: groupTopics.length })}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="vx-notification-table">
-                  <div className="vx-notification-table__header">
-                    <span>{t("topics.columns.topic")}</span>
-                    {CHANNELS.map((channel) => (
-                      <span key={channel.key}>
-                        <Icon
-                          name={channel.icon}
-                          size="xs"
-                          fallback="placeholder"
-                        />
-                        {t(`channels.short.${channel.key}`)}
-                      </span>
-                    ))}
-                    <span>{t("topics.columns.status")}</span>
-                  </div>
-
-                  {groupTopics.map((topic) => {
-                    const enabled = CHANNELS.some(
-                      (channel) => topic.channels[channel.key],
-                    );
-                    const locked = Boolean(topic.lockedChannels?.length);
-
-                    return (
-                      <div
-                        key={topic.key}
-                        className="vx-notification-table__row"
-                      >
-                        <div className="vx-notification-topic-cell">
-                          <span aria-hidden="true">
-                            <Icon
-                              name={topic.icon}
-                              size="xs"
-                              fallback="placeholder"
-                            />
-                          </span>
-                          <strong>
-                            {t(`topics.items.${topic.key}.title`)}
-                          </strong>
-                          {locked ? (
-                            <Badge>{t("topics.policyLocked")}</Badge>
-                          ) : null}
-                        </div>
-
-                        {CHANNELS.map((channel) => {
-                          const channelLocked =
-                            topic.lockedChannels?.includes(channel.key) ??
-                            false;
-                          const checked = topic.channels[channel.key];
-
-                          return (
-                            <span
-                              key={channel.key}
-                              className={
-                                channelLocked
-                                  ? "vx-notification-check vx-notification-check--locked"
-                                  : "vx-notification-check"
-                              }
-                              title={
-                                channelLocked
-                                  ? t("topics.policyLockedDescription")
-                                  : t(`channels.short.${channel.key}`)
-                              }
-                            >
-                              <Checkbox
-                                checked={checked}
-                                disabled={channelLocked}
-                                aria-label={t("topics.toggleLabel", {
-                                  topic: t(`topics.items.${topic.key}.title`),
-                                  channel: t(
-                                    `channels.items.${channel.key}.title`,
-                                  ),
-                                })}
-                                onCheckedChange={(value) =>
-                                  toggleTopicChannel(
-                                    topic.key,
-                                    channel.key,
-                                    value === true,
-                                  )
-                                }
-                              />
-                            </span>
-                          );
-                        })}
-
-                        <span
-                          className={
-                            enabled
-                              ? "vx-notification-status vx-notification-status--on"
-                              : "vx-notification-status"
-                          }
-                        >
-                          {enabled
-                            ? t("topics.subscribed")
-                            : t("topics.unsubscribed")}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })}
-        </div>
-      </section>
-    </div>
+            >
+              <DataTable
+                columns={topicColumns}
+                rows={groupTopics}
+                rowKey={(topic) => topic.key}
+              />
+            </PageSection>
+          );
+        })}
+      </PageSection>
+    </FormPageTemplate>
   );
 }

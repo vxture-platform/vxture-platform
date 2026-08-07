@@ -218,7 +218,6 @@ function mapAuditLogRow(row: AuditLogRow): AuditLogRecord {
     operatorName: row.operator_name ?? row.actor_type,
     operatorEmail: row.operator_email ?? "",
     action: row.action,
-    actionLabel: row.action,
     targetType: row.resource_type,
     targetId: row.resource_id ?? null,
     targetLabel: null,

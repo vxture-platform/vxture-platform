@@ -4,16 +4,19 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import Link from "next/link";
 import {
-  Icon,
   ActionMenu,
   Badge,
   Button,
+  DetailPageTemplate,
   DialogForm,
+  EmptyState,
+  Icon,
   Input,
   NativeSelect,
-  EmptyState,
-  ViewModeSwitch,
+  StatusBadge,
   useToast,
+  ViewLayout,
+  ViewModeSwitch,
 } from "@vxture/design-system";
 import type { IconName } from "@vxture/design-system";
 import {
@@ -33,6 +36,13 @@ import type {
   TenantOperationSubscription,
   TenantOperationUsageMetric,
 } from "@/entities/console";
+import {
+  AUDIT_RESULT_TONE,
+  MEMBER_STATUS_TONE,
+  POLICY_STATE_TONE,
+  TENANT_SUBSCRIPTION_TONE,
+  TICKET_STATUS_TONE,
+} from "@/modules/shared/tenant-tone";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import { resolveIpLocation } from "@/shared/ip-location";
 import {
@@ -43,12 +53,16 @@ import {
   joinClasses,
   memberStatusLabel,
   modelPolicyStateLabel,
+  normalizeTenantRiskLevel,
   policySourceLabel,
   riskLabel,
   statusLabel,
   subscriptionStatusLabel,
+  TENANT_RISK_TONE,
+  TENANT_STATUS_TONE,
   ticketStatusLabel,
   usagePercent,
+  VERIFICATION_TONE,
   verifiedLabel,
 } from "./tenant-utils";
 
@@ -163,16 +177,6 @@ function TenantKeyMetric({
       </p>
     </div>
   );
-}
-
-function TenantSectionHeading({
-  icon,
-  title,
-}: {
-  icon: IconName;
-  title: string;
-}) {
-  return <DetailSectionHeading icon={icon} title={title} />;
 }
 
 function createTenantInfoDraft(tenant: TenantOperationRecord): TenantInfoDraft {
@@ -320,7 +324,7 @@ function TenantInfoTab({
     <div className="vx-tenant-tab-grid vx-tenant-tab-grid--info">
       <section className="vx-tenant-block">
         <header>
-          <TenantSectionHeading icon="buildings" title="基础资料" />
+          <DetailSectionHeading icon="buildings" title="基础资料" />
           <div className="vx-tenant-block__actions" aria-label="基础资料操作">
             {editing ? (
               <>
@@ -414,9 +418,7 @@ function TenantInfoTab({
                   ))}
                 </NativeSelect>
               ) : (
-                <Badge
-                  className={`vx-tenant-pill vx-tenant-pill--${draft.tenantType}`}
-                >
+                <Badge>
                   {
                     tenantTypeOptions.find(
                       (option) => option.value === draft.tenantType,
@@ -444,19 +446,15 @@ function TenantInfoTab({
                   ))}
                 </NativeSelect>
               ) : (
-                <Badge
-                  className={`vx-tenant-pill vx-tenant-pill--${draft.status}`}
-                >
+                <StatusBadge tone={TENANT_STATUS_TONE[draft.status]}>
                   {statusLabel(draft.status)}
-                </Badge>
+                </StatusBadge>
               )}
             </TenantConfigItem>
             <TenantConfigItem label="认证状态">
-              <Badge
-                className={`vx-tenant-pill vx-tenant-pill--${tenant.verifiedStatus}`}
-              >
+              <StatusBadge tone={VERIFICATION_TONE[tenant.verifiedStatus]}>
                 {verifiedLabel(tenant.verifiedStatus)}
-              </Badge>
+              </StatusBadge>
             </TenantConfigItem>
           </div>
 
@@ -476,17 +474,13 @@ function TenantInfoTab({
 
       <section className="vx-tenant-block">
         <header>
-          <TenantSectionHeading icon="user-switch" title="主管理员" />
+          <DetailSectionHeading icon="user-switch" title="主管理员" />
         </header>
         <div className="vx-tenant-config-row vx-tenant-config-row--contact">
           <TenantConfigItem label="姓名">
             <TenantConfigValue>
               {tenant.ownerName}
-              {tenant.tenantType === "individual" ? (
-                <Badge className="vx-tenant-pill vx-tenant-pill--owner">
-                  owner
-                </Badge>
-              ) : null}
+              {tenant.tenantType === "individual" ? <Badge>owner</Badge> : null}
             </TenantConfigValue>
           </TenantConfigItem>
           <TenantConfigItem label="Mail">
@@ -497,12 +491,12 @@ function TenantInfoTab({
           </TenantConfigItem>
           <div className="vx-tenant-admin-actions">
             {/* 换 owner / 改主管理员无对应后端端点，保持 disabled（见 completion-plan）。 */}
-            <Button variant="outline" size="sm" disabled>
+            <Button variant="outline" size="md" disabled>
               <Icon name="user-switch" size="xs" fallback="placeholder" />
               <span>修改主管理员</span>
             </Button>
             {/* 凭据操作（重置密码）须经 IdP 内部端点，不在本轮直写库（见 completion-plan）。 */}
-            <Button variant="outline" size="sm" disabled>
+            <Button variant="outline" size="md" disabled>
               <Icon name="key" size="xs" fallback="placeholder" />
               <span>重置密码</span>
             </Button>
@@ -512,7 +506,7 @@ function TenantInfoTab({
 
       <section className="vx-tenant-block vx-tenant-block--wide">
         <header>
-          <TenantSectionHeading icon="info" title="运营备注" />
+          <DetailSectionHeading icon="info" title="运营备注" />
         </header>
         <p className="vx-tenant-note">{tenant.notes}</p>
         <div className="vx-tenant-tags">
@@ -541,13 +535,11 @@ function MemberActionsMenu({
     >
       <ActionMenu
         label={`${member.name} 操作`}
-        triggerClassName="vx-tenant-actions__trigger"
-        triggerProps={{ title: "操作" }}
         items={[
           {
             id: "role",
             label: "调整权限",
-            icon: <Icon name="user-switch" size="xs" fallback="placeholder" />,
+            icon: "user-switch",
             disabled: actions.busy,
             onSelect: () => actions.onChangeRole(member),
           },
@@ -555,27 +547,21 @@ function MemberActionsMenu({
             // 凭据操作（重置密码）须经 IdP 内部端点，不在本轮直写库（见 completion-plan）。
             id: "password",
             label: "重置密码",
-            icon: <Icon name="key" size="xs" fallback="placeholder" />,
+            icon: "key",
             disabled: true,
           },
           {
             // 仅提供停用；成员「恢复」暂无对应后端端点，已停用时置灰（见 completion-plan）。
             id: "status",
             label: isSuspended ? "恢复账号" : "停用账号",
-            icon: (
-              <Icon
-                name={isSuspended ? "success" : "warning"}
-                size="xs"
-                fallback="placeholder"
-              />
-            ),
+            icon: isSuspended ? "success" : "warning",
             disabled: actions.busy || isSuspended,
             onSelect: () => actions.onSuspend(member),
           },
           {
             id: "remove",
             label: "移除账号",
-            icon: <Icon name="trash" size="xs" fallback="placeholder" />,
+            icon: "trash",
             disabled: actions.busy,
             danger: true,
             onSelect: () => actions.onRemove(member),
@@ -609,11 +595,9 @@ function TenantMemberStatus({ member }: { member: TenantOperationMember }) {
 
   return (
     <span className="vx-tenant-member-row__status">
-      <Badge
-        className={`vx-tenant-pill vx-tenant-member-status-pill vx-tenant-pill--${member.status}`}
-      >
+      <StatusBadge tone={MEMBER_STATUS_TONE[member.status]}>
         {memberStatusLabel(member.status)}
-      </Badge>
+      </StatusBadge>
       <small
         title={`注册激活时间 ${statusTime}`}
         aria-label={`注册激活时间 ${statusTime}`}
@@ -651,7 +635,7 @@ function TenantMemberList({
   return (
     <div className="vx-tenant-member-list" role="region" aria-label="账号列表">
       <div className="vx-tenant-member-list__header">
-        <span>序号</span>
+        <span>#</span>
         <span>账号</span>
         <span>权限</span>
         <span>状态</span>
@@ -671,9 +655,7 @@ function TenantMemberList({
           </span>
           <TenantMemberIdentity member={member} />
           <span className="vx-tenant-member-row__permission">
-            <Badge className="vx-tenant-pill vx-tenant-pill--permission">
-              {member.role}
-            </Badge>
+            <Badge>{member.role}</Badge>
           </span>
           <TenantMemberStatus member={member} />
           <TenantMemberActiveAt member={member} />
@@ -723,14 +705,10 @@ function TenantMemberCards({
               <MemberActionsMenu member={member} actions={actions} />
             </header>
             <div className="vx-tenant-member-card__badges">
-              <Badge className="vx-tenant-pill vx-tenant-pill--permission">
-                {member.role}
-              </Badge>
-              <Badge
-                className={`vx-tenant-pill vx-tenant-member-status-pill vx-tenant-pill--${member.status}`}
-              >
+              <Badge>{member.role}</Badge>
+              <StatusBadge tone={MEMBER_STATUS_TONE[member.status]}>
                 {memberStatusLabel(member.status)}
-              </Badge>
+              </StatusBadge>
             </div>
             <div className="vx-tenant-member-card__metrics">
               <span>
@@ -905,7 +883,7 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
       });
     } catch (error) {
       toast({
-        tone: "error",
+        tone: "danger",
         title: "操作失败",
         description:
           error instanceof Error ? error.message : "无法停用账号，请稍后重试。",
@@ -972,15 +950,15 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
           {formatNumber(filteredMembers.length)}
         </span>
         <div className="vx-tenant-member-summary" aria-label="账号统计">
-          <Badge className="vx-tenant-pill vx-tenant-pill--active">
+          <StatusBadge tone={"success"}>
             活跃 {formatNumber(activeCount)}
-          </Badge>
-          <Badge className="vx-tenant-pill vx-tenant-pill--invited">
+          </StatusBadge>
+          <StatusBadge tone={"brand"}>
             邀请 {formatNumber(invitedCount)}
-          </Badge>
-          <Badge className="vx-tenant-pill vx-tenant-pill--suspended">
+          </StatusBadge>
+          <StatusBadge tone={"danger"}>
             停用 {formatNumber(suspendedCount)}
-          </Badge>
+          </StatusBadge>
         </div>
         <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
         <Input
@@ -1108,7 +1086,7 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
           title="移除成员账号"
           description={`将把 ${removeTarget.name}（${removeTarget.email || removeTarget.userId}）从该租户移除，移除后该成员将失去本租户的访问权限。`}
           submitLabel="确认移除"
-          submitVariant="destructive"
+          danger
           cancelLabel="取消"
           submitting={actionBusy}
           onOpenChange={(open) => {
@@ -1144,11 +1122,9 @@ function TenantSubscriptionsTab({
               <strong>{subscription.productName}</strong>
               <span>{subscription.releaseName}</span>
             </div>
-            <Badge
-              className={`vx-tenant-pill vx-tenant-pill--${subscription.status}`}
-            >
+            <StatusBadge tone={TENANT_SUBSCRIPTION_TONE[subscription.status]}>
               {subscriptionStatusLabel(subscription.status)}
-            </Badge>
+            </StatusBadge>
           </header>
           <div className="vx-tenant-subscription__metrics">
             <TenantKeyMetric label="发布版本" value={subscription.planName} />
@@ -1230,9 +1206,9 @@ function TenantModelsTab({
             {formatNumber(policy.quotaTokens)}
           </span>
           <span>
-            <Badge className={`vx-tenant-pill vx-tenant-pill--${policy.state}`}>
+            <StatusBadge tone={POLICY_STATE_TONE[policy.state]}>
               {modelPolicyStateLabel(policy.state)}
-            </Badge>
+            </StatusBadge>
           </span>
         </div>
       ))}
@@ -1273,9 +1249,9 @@ function TenantRiskTab({ tenant }: { tenant: TenantOperationRecord }) {
               <small>{event.actor}</small>
             </span>
             <em>{formatDate(event.at)}</em>
-            <Badge className={`vx-tenant-pill vx-tenant-pill--${event.result}`}>
+            <StatusBadge tone={AUDIT_RESULT_TONE[event.result]}>
               {auditResultLabel(event.result)}
-            </Badge>
+            </StatusBadge>
           </div>
         ))}
       </section>
@@ -1308,9 +1284,9 @@ function TenantTicketsTab({ tenant }: { tenant: TenantOperationRecord }) {
               {ticket.id} · {ticket.priority.toUpperCase()}
             </small>
           </span>
-          <Badge className={`vx-tenant-pill vx-tenant-pill--${ticket.status}`}>
+          <StatusBadge tone={TICKET_STATUS_TONE[ticket.status]}>
             {ticketStatusLabel(ticket.status)}
-          </Badge>
+          </StatusBadge>
           <em>{formatDate(ticket.updatedAt)}</em>
         </article>
       ))}
@@ -1371,7 +1347,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
 
   if (!tenant) {
     return (
-      <div className="vx-page-stack vx-tenant-management-page">
+      <ViewLayout className="vx-tenant-management-page">
         <Link className="vx-tenant-back-link" href="/tenants">
           <Icon name="arrow-left" size="xs" fallback="placeholder" />
           返回租户列表
@@ -1386,7 +1362,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
             }
           />
         </section>
-      </div>
+      </ViewLayout>
     );
   }
 
@@ -1446,7 +1422,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
       });
     } catch (error) {
       toast({
-        tone: "error",
+        tone: "danger",
         title: "保存失败",
         description:
           error instanceof Error
@@ -1469,133 +1445,145 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
   }
 
   return (
-    <div className="vx-page-stack vx-tenant-management-page">
-      <Link className="vx-tenant-back-link" href="/tenants">
-        <Icon name="arrow-left" size="xs" fallback="placeholder" />
-        返回租户列表
-      </Link>
+    <DetailPageTemplate
+      className="vx-tenant-management-page"
+      header={
+        <>
+          <Link className="vx-tenant-back-link" href="/tenants">
+            <Icon name="arrow-left" size="xs" fallback="placeholder" />
+            返回租户列表
+          </Link>
 
-      <section
-        className={
-          summaryExpanded
-            ? "vx-tenant-detail-summary"
-            : "vx-tenant-detail-summary vx-tenant-detail-summary--collapsed"
-        }
-        aria-label={`${tenant.displayName} 标题概要`}
-      >
-        <Button
-          className="vx-tenant-detail-summary__toggle"
-          variant="ghost"
-          size="icon"
-          aria-expanded={summaryExpanded}
-          aria-label={summaryExpanded ? "收起标题概要" : "展开标题概要"}
-          title={summaryExpanded ? "收起标题概要" : "展开标题概要"}
-          onClick={() => setSummaryExpanded((expanded) => !expanded)}
-        >
-          <Icon
-            name={summaryExpanded ? "chevron-up" : "chevron-down"}
-            size="xs"
-            fallback="chevron-down"
-          />
-        </Button>
-
-        <header className="vx-tenant-detail__header">
-          <section className="vx-tenant-detail__identity" aria-label="租户概要">
-            <span className="vx-tenant-detail__icon" aria-hidden="true">
+          <section
+            className={
+              summaryExpanded
+                ? "vx-tenant-detail-summary"
+                : "vx-tenant-detail-summary vx-tenant-detail-summary--collapsed"
+            }
+            aria-label={`${tenant.displayName} 标题概要`}
+          >
+            <Button
+              className="vx-tenant-detail-summary__toggle"
+              variant="ghost"
+              size="icon-md"
+              aria-expanded={summaryExpanded}
+              aria-label={summaryExpanded ? "收起标题概要" : "展开标题概要"}
+              title={summaryExpanded ? "收起标题概要" : "展开标题概要"}
+              onClick={() => setSummaryExpanded((expanded) => !expanded)}
+            >
               <Icon
-                name={tenant.tenantType === "company" ? "buildings" : "user"}
-                size="lg"
-                fallback="placeholder"
+                name={summaryExpanded ? "chevron-up" : "chevron-down"}
+                size="xs"
+                fallback="chevron-down"
               />
-            </span>
-            <div className="vx-tenant-detail__title">
-              <div className="vx-tenant-title-line vx-tenant-title-line--name">
-                <h2>{tenant.displayName}</h2>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="vx-tenant-title-copy"
-                  aria-label="复制租户名称"
-                  title="复制租户名称"
-                  onClick={() => void handleCopyText(tenant.displayName)}
-                >
-                  <Icon name="copy" size="xs" fallback="placeholder" />
-                </Button>
-              </div>
-              <div className="vx-tenant-title-line vx-tenant-title-line--code">
-                <p>{tenant.tenantCode}</p>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="vx-tenant-title-copy"
-                  aria-label="复制租户代码"
-                  title="复制租户代码"
-                  onClick={() => void handleCopyText(tenant.tenantCode)}
-                >
-                  <Icon name="copy" size="xs" fallback="placeholder" />
-                </Button>
-              </div>
-              <div>
-                <Badge
-                  className={`vx-tenant-pill vx-tenant-pill--${tenant.status}`}
-                >
-                  {statusLabel(tenant.status)}
-                </Badge>
-                <Badge
-                  className={`vx-tenant-pill vx-tenant-pill--${tenant.verifiedStatus}`}
-                >
-                  {verifiedLabel(tenant.verifiedStatus)}
-                </Badge>
-                <Badge
-                  className={`vx-tenant-pill vx-tenant-pill--risk-${tenant.riskLevel}`}
-                >
-                  {riskLabel(tenant.riskLevel)}
-                </Badge>
-              </div>
-            </div>
+            </Button>
+
+            <header className="vx-tenant-detail__header">
+              <section
+                className="vx-tenant-detail__identity"
+                aria-label="租户概要"
+              >
+                <span className="vx-tenant-detail__icon" aria-hidden="true">
+                  <Icon
+                    name={
+                      tenant.tenantType === "company" ? "buildings" : "user"
+                    }
+                    size="lg"
+                    fallback="placeholder"
+                  />
+                </span>
+                <div className="vx-tenant-detail__title">
+                  <div className="vx-tenant-title-line vx-tenant-title-line--name">
+                    <h2>{tenant.displayName}</h2>
+                    <Button
+                      variant="ghost"
+                      size="icon-md"
+                      className="vx-tenant-title-copy"
+                      aria-label="复制租户名称"
+                      title="复制租户名称"
+                      onClick={() => void handleCopyText(tenant.displayName)}
+                    >
+                      <Icon name="copy" size="xs" fallback="placeholder" />
+                    </Button>
+                  </div>
+                  <div className="vx-tenant-title-line vx-tenant-title-line--code">
+                    <p>{tenant.tenantCode}</p>
+                    <Button
+                      variant="ghost"
+                      size="icon-md"
+                      className="vx-tenant-title-copy"
+                      aria-label="复制租户代码"
+                      title="复制租户代码"
+                      onClick={() => void handleCopyText(tenant.tenantCode)}
+                    >
+                      <Icon name="copy" size="xs" fallback="placeholder" />
+                    </Button>
+                  </div>
+                  <div>
+                    <StatusBadge tone={TENANT_STATUS_TONE[tenant.status]}>
+                      {statusLabel(tenant.status)}
+                    </StatusBadge>
+                    <StatusBadge
+                      tone={VERIFICATION_TONE[tenant.verifiedStatus]}
+                    >
+                      {verifiedLabel(tenant.verifiedStatus)}
+                    </StatusBadge>
+                    <StatusBadge
+                      tone={
+                        TENANT_RISK_TONE[
+                          normalizeTenantRiskLevel(tenant.riskLevel)
+                        ]
+                      }
+                    >
+                      {riskLabel(tenant.riskLevel)}
+                    </StatusBadge>
+                  </div>
+                </div>
+              </section>
+
+              {summaryExpanded ? (
+                <>
+                  <section
+                    className="vx-tenant-detail__metric-column"
+                    aria-label="成员和订阅概要"
+                  >
+                    <TenantKeyMetric
+                      label="用户数量"
+                      value={formatNumber(tenant.memberCount)}
+                      tag={`活跃 ${formatNumber(tenant.activeMemberCount)}`}
+                    />
+                    <TenantKeyMetric
+                      label="订阅产品"
+                      value={formatNumber(tenant.subscriptionCount)}
+                      tags={[
+                        `智能体${formatNumber(subscriptionSummary.agentCount)}个`,
+                        `平台${formatNumber(subscriptionSummary.platformCount)}个`,
+                      ]}
+                    />
+                  </section>
+
+                  <section
+                    className="vx-tenant-detail__metric-column"
+                    aria-label="用量和收入概要"
+                  >
+                    <TenantKeyMetric
+                      label="配额消耗"
+                      value={formatNumber(tenant.tokenUsed)}
+                      tag="token"
+                    />
+                    <TenantKeyMetric
+                      label="本月收入"
+                      value={formatMoney(tenant.monthlyRevenue)}
+                      tag={`累计 ${formatMoney(cumulativeRevenue)}`}
+                    />
+                  </section>
+                </>
+              ) : null}
+            </header>
           </section>
-
-          {summaryExpanded ? (
-            <>
-              <section
-                className="vx-tenant-detail__metric-column"
-                aria-label="成员和订阅概要"
-              >
-                <TenantKeyMetric
-                  label="用户数量"
-                  value={formatNumber(tenant.memberCount)}
-                  tag={`活跃 ${formatNumber(tenant.activeMemberCount)}`}
-                />
-                <TenantKeyMetric
-                  label="订阅产品"
-                  value={formatNumber(tenant.subscriptionCount)}
-                  tags={[
-                    `智能体${formatNumber(subscriptionSummary.agentCount)}个`,
-                    `平台${formatNumber(subscriptionSummary.platformCount)}个`,
-                  ]}
-                />
-              </section>
-
-              <section
-                className="vx-tenant-detail__metric-column"
-                aria-label="用量和收入概要"
-              >
-                <TenantKeyMetric
-                  label="配额消耗"
-                  value={formatNumber(tenant.tokenUsed)}
-                  tag="token"
-                />
-                <TenantKeyMetric
-                  label="本月收入"
-                  value={formatMoney(tenant.monthlyRevenue)}
-                  tag={`累计 ${formatMoney(cumulativeRevenue)}`}
-                />
-              </section>
-            </>
-          ) : null}
-        </header>
-      </section>
-
+        </>
+      }
+    >
       <section
         className="vx-tenant-detail"
         aria-label={`${tenant.displayName} 管理详情`}
@@ -1611,7 +1599,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                 <Button
                   key={tab.id}
                   variant={activeTab === tab.id ? "secondary" : "ghost"}
-                  size="sm"
+                  size="md"
                   role="tab"
                   aria-selected={activeTab === tab.id}
                   className={activeTab === tab.id ? "is-active" : undefined}
@@ -1659,6 +1647,6 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
           </section>
         </div>
       </section>
-    </div>
+    </DetailPageTemplate>
   );
 }

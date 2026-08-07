@@ -1,7 +1,88 @@
 # @vxture/design-system — 更新日志
 
 发布走 `publish-design-system.yml`（GitHub Packages `npm.pkg.github.com`）。版本规则见
-`docs/10-standards/design-system-release.md`：新增公开入口为 minor，删除/改名入口为 major。
+`docs/10-standards/050-design-system-release.md` §2。
+
+---
+
+## 5.0.0-alpha.0 — 未发布
+
+admin → DS 收敛批次。major 号在批次开启时已定（删除公开导出属破坏性），按 050 §2.1
+批次内不重复决策；本条尚未发布到任何 dist-tag。
+
+### 💥 Breaking
+
+- **`navCollapsedCookieName` / `readNavCollapsed` / `writeNavCollapsed` 迁出**至
+  `@vxture/shared`。侧栏收起状态是 cookie 契约不是视觉件，服务端 layout 要在渲染前
+  读到它，留在 DS 会把纯服务端组件拖进 DS 的客户端依赖。仓内三个门户的调用点已全部
+  改从 `@vxture/shared` 引入；外部消费方需同样改引入源，行为不变。
+
+### ✨ 新增
+
+- **公开入口** `./styles/admin-tokens.css`（admin 遗留 token 桥，收敛期间的过渡资产）
+  与 `./styles/workbench.css`。
+- **组件** `MetricListCard`、`PanelCard` / `PanelItem` / `PanelList`、`FactList` /
+  `LabeledValue`、`LevelMarker`——均从 admin 的重复实现里提炼。
+- **浮层宽度梯** `OVERLAY_WIDTHS` 与 `overlayWidthClass` / `overlayMinWidthClass`。
+  取名 overlay 而非 control：`--spacing-control-*` 已占用同名命名空间，Tailwind v4 的
+  `w-*` 解析顺序会让 `--container-control-*` 被高度档影响掉（实测 `min-w-control-xs`
+  解析成 1.5rem 的高度值）。
+
+### 🔧 内部
+
+- `@vxture/design-ui` 新增 `./styles` 子入口，只导出配方层（`interactive` 等纯字符串
+  常量）。刻意不并进主入口：伞包用 `export *` 转发主入口，配方进主入口就会成为产品
+  可见的公开面，产品侧便能拿它手搓控件——那正是配方层要杜绝的。
+
+---
+
+## 4.0.0 — 2026-08-01
+
+设计系统重构收口。`3.0.0` 是本次重构分支内的中间态，从未发布，其变更并入本条。
+
+### 💥 Breaking
+
+- **拆为三包。** 本包成为**伞包 + 运行时接线**：只持有主题 / 密度 / 字号 provider、
+  shell 与 auth，其余转发 `@vxture/design-tokens`（token 两层 CSS）与
+  `@vxture/design-ui`（无状态组件层）。**消费方仍只依赖本包**，入口不变，拆包不可见。
+  对另两包用精确版本——本包把它们的类型原样 re-export，caret 会在转发边界上产生
+  类型不匹配。
+- **移除公开入口** `./next`（cva 组件的过渡入口，迁移已完成）、`./styles/tokens.css`
+  （迁至 `@vxture/design-tokens/styles/tokens.css`）、`./styles/components.css`。
+- **移除 11 张 TS token 表**（`colors` / `spacing` / `typography` / `radius` / `shadow` /
+  `gradients` / `motion` / `easing` / `duration` / `animation` / `motionPresets`）。
+  它们的 `var()` 目标多数早已不存在，且零消费者。取值的出口是工具类，不是 JS 字符串。
+- **色板换为 Tailwind v4 的 oklch / P3**，并收窄到六个色相加品牌色。原先停在 v3 的
+  hex，且多出 5 个只为图表各取一档的色相；`chart-2..6` 已改用保留色相，
+  **图表配色可辨识度下降**。
+- **遗留样式层退役**（155 个文件、约 12.3k 行）。43 个组件仍依赖其中的 BEM 类名，
+  **当前渲染无样式**，重写进度见 `check-component-classes.mjs` 的 PENDING 清单。
+- **排版规则化。** 行高改取字号档自带的值（display 与品牌标题收紧到 `leading-tight`）；
+  字距统一为零，仅 `overline` 因全大写保留放开。原先逐角色写死的 72 个行高里
+  有七组同字号不同值，规则化后这类分歧在结构上不可能存在。
+- Button 合并：cva 版本取代原实现，`.vx-btn` 随遗留层消失。
+
+### ✨ Added
+
+- `DENSITIES` / `FONT_SIZES` / `densityClass` / `fontSizeClass`，由与 CSS 同一份策略生成。
+- 中文排版轴：`:lang(zh)` 自动加大行高，作用于任何角色。
+- T1 扩展档：`text-3xs/2xs`、`breakpoint-xs/3xl/4xl/5xl`、`font-brand/cjk`。
+
+### 🛠 Internal
+
+- T1 改为直接读 Tailwind `theme.css` 生成，一致性由构造保证；全部偏离登记在
+  `foundation-policy.mjs`，逐条带理由。
+- token 输入全部迁入 DS 自有的 `*-policy.mjs`，设计导出文件退役。
+- 新增守卫 `lint:design-classes`（组件类名必须真能产出）与两条包依赖方向规则。
+
+---
+
+## 2.1.0 — 2026-07-31
+
+### ✨ Added
+
+- **`@vxture/design-system/next`** —— 按 shadcn 惯例（cva + Radix）重写、只绑 T2 语义层的组件并行入口。首个组件为 `Button`。根入口的既有组件保持不变，消费方可按自身节奏迁移；两处同名导出属预期。
+- T1/T2/T3 三层 token 已完整落入 `src/styles/{foundation,semantic,components}`，并通过 `styles/tokens.css` 聚合。本版本尚无组件消费新层，**无视觉变更**。
 
 ---
 

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { CSSProperties } from "react";
 import {
-  Icon,
+  ActionButton,
   ActionMenu,
   Badge,
   Button,
@@ -12,14 +12,18 @@ import {
   DialogDescription,
   DialogForm,
   DialogTitle,
+  EmptyState,
+  Icon,
   Input,
   Label,
+  MetricGrid,
   NativeSelect,
+  SectionHeader,
+  StatusBadge,
   Textarea,
-  ActionButton,
-  EmptyState,
-  ViewModeSwitch,
   useToast,
+  ViewLayout,
+  ViewModeSwitch,
 } from "@vxture/design-system";
 import type { IconName, ViewModeSwitchValue } from "@vxture/design-system";
 import {
@@ -53,22 +57,36 @@ const DEFAULT_DOMAIN_FILTERS: DomainFilterState = {
 };
 
 const permissionTypeMeta = {
-  MENU: {
+  menu: {
     label: "菜单",
     icon: "table",
     className: "vx-admin-permission-type--menu",
   },
-  BUTTON: {
+  button: {
     label: "按钮",
     icon: "check",
     className: "vx-admin-permission-type--button",
   },
-  API: {
+  api: {
     label: "接口",
     icon: "api",
     className: "vx-admin-permission-type--api",
   },
 } as const;
+
+/** 查不到就退回中性档：一个没见过的类型不该让整棵权限树崩掉。 */
+const UNKNOWN_PERMISSION_TYPE = {
+  label: "未知类型",
+  icon: "info",
+  className: "",
+} as const;
+
+function permissionTypeMetaOf(type: string) {
+  return (
+    permissionTypeMeta[type as keyof typeof permissionTypeMeta] ??
+    UNKNOWN_PERMISSION_TYPE
+  );
+}
 
 function permissionStatusIndicator(permission: PlatformAdminPermissionRecord): {
   label: string;
@@ -489,7 +507,7 @@ interface PermissionFormState {
 const EMPTY_PERMISSION_FORM: PermissionFormState = {
   permCode: "",
   permName: "",
-  permType: "MENU",
+  permType: "menu",
   parentId: "",
   routePath: "",
   component: "",
@@ -521,7 +539,7 @@ function reportPermissionError(
     return;
   }
   toast({
-    tone: "error",
+    tone: "danger",
     title: fallbackTitle,
     ...(error instanceof Error && error.message
       ? { description: error.message }
@@ -557,7 +575,6 @@ function PermissionFormDialog({
       submitLabel={mode === "create" ? "创建权限" : "保存修改"}
       submitting={submitting}
       submitDisabled={!valid}
-      contentClassName="max-w-3xl"
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
@@ -594,9 +611,9 @@ function PermissionFormDialog({
               })
             }
           >
-            <option value="MENU">菜单</option>
-            <option value="BUTTON">按钮</option>
-            <option value="API">接口</option>
+            <option value="menu">菜单</option>
+            <option value="button">按钮</option>
+            <option value="api">接口</option>
           </NativeSelect>
         </Label>
         <Label>
@@ -682,37 +699,29 @@ function PermissionActionsMenu({
     >
       <ActionMenu
         label={`${permissionDisplayName(permission)} 操作`}
-        triggerClassName="vx-tenant-actions__trigger"
-        triggerProps={{ title: "操作" }}
         items={[
           {
             id: "detail",
             label: "权限详情",
-            icon: <Icon name="info" size="xs" fallback="placeholder" />,
+            icon: "info",
             onSelect: () => onOpenDetail(permission),
           },
           {
             id: "edit",
             label: "编辑权限",
-            icon: <Icon name="edit" size="xs" fallback="placeholder" />,
+            icon: "edit",
             onSelect: () => onEdit(permission),
           },
           {
             id: "copy",
             label: "复制权限",
-            icon: <Icon name="copy" size="xs" fallback="placeholder" />,
+            icon: "copy",
             disabled: true,
           },
           {
             id: "toggle",
             label: permission.status ? "停用权限" : "启用权限",
-            icon: (
-              <Icon
-                name={permission.status ? "x" : "check"}
-                size="xs"
-                fallback="placeholder"
-              />
-            ),
+            icon: permission.status ? "x" : "check",
             onSelect: () => onToggle(permission),
           },
         ]}
@@ -749,22 +758,16 @@ function PermissionDetailDialog({
           </div>
         </header>
         <div className="vx-admin-role-permission-dialog__summary">
-          <Badge className="vx-tenant-pill vx-tenant-pill--system">
-            {permissionTypeMeta[permission.permType].label}
-          </Badge>
-          <Badge
-            className={`vx-tenant-pill ${permission.status ? "vx-admin-role-status-pill--enabled" : "vx-admin-role-status-pill--disabled"}`}
-          >
+          <Badge>{permissionTypeMetaOf(permission.permType).label}</Badge>
+          <StatusBadge tone={permission.status ? "success" : "neutral"}>
             <Icon
               name={statusIndicator.icon}
               size="xs"
               fallback="placeholder"
             />
             {statusIndicator.label}
-          </Badge>
-          <Badge className="vx-tenant-pill vx-tenant-pill--system">
-            {permissionSourceLabel(permission)}
-          </Badge>
+          </StatusBadge>
+          <Badge>{permissionSourceLabel(permission)}</Badge>
         </div>
         <dl className="vx-admin-permission-detail-dialog__grid">
           <div>
@@ -818,43 +821,42 @@ function PermissionDetailDialog({
 
 function PermissionDomainStats({ group }: { group: PermissionDomainGroup }) {
   return (
-    <section
-      className="vx-tenant-summary vx-admin-permission-domain__stats vx-admin-permissions-summary"
+    <MetricGrid
       aria-label={`${group.title}统计`}
-    >
-      <article className="vx-tenant-summary__item vx-tenant-tone--blue">
-        <Icon name="shield-check" size="lg" fallback="placeholder" />
-        <div>
-          <span>权限总数</span>
-          <p>
-            <strong>{formatNumber(group.totalCount)}</strong>
-            <em>L1 {formatNumber(group.levelCounts.l1)}</em>
-            <em>L2 {formatNumber(group.levelCounts.l2)}</em>
-            <em>L3 {formatNumber(group.levelCounts.l3)}</em>
-          </p>
-        </div>
-      </article>
-      <article className="vx-tenant-summary__item vx-tenant-tone--green">
-        <Icon name="check" size="lg" fallback="placeholder" />
-        <div>
-          <span>启用权限</span>
-          <p>
-            <strong>{formatNumber(group.activeCount)}</strong>
-            <em>停用 {formatNumber(group.disabledCount)}</em>
-          </p>
-        </div>
-      </article>
-      <article className="vx-tenant-summary__item vx-tenant-tone--amber">
-        <Icon name="key" size="lg" fallback="placeholder" />
-        <div>
-          <span>绑定权限</span>
-          <p>
-            <strong>{formatNumber(group.assignedCount)}</strong>
-            <em>未绑定 {formatNumber(group.unassignedCount)}</em>
-          </p>
-        </div>
-      </article>
-    </section>
+      columns={3}
+      items={[
+        {
+          id: "total",
+          help: "权限点总数，含未启用的。",
+          icon: "shield-check",
+          label: "权限总数",
+          value: formatNumber(group.totalCount),
+          tags: [
+            `L1 ${formatNumber(group.levelCounts.l1)}`,
+            `L2 ${formatNumber(group.levelCounts.l2)}`,
+            `L3 ${formatNumber(group.levelCounts.l3)}`,
+          ],
+        },
+        {
+          id: "active",
+          help: "处于启用状态的权限点。",
+          icon: "check",
+          label: "启用权限",
+          value: formatNumber(group.activeCount),
+          tags: [`停用 ${formatNumber(group.disabledCount)}`],
+          tone: "success",
+        },
+        {
+          id: "assigned",
+          help: "至少被一个角色引用的权限点；未绑定的权限点不会对任何人生效。",
+          icon: "key",
+          label: "绑定权限",
+          value: formatNumber(group.assignedCount),
+          tags: [`未绑定 ${formatNumber(group.unassignedCount)}`],
+          tone: "warning",
+        },
+      ]}
+    />
   );
 }
 
@@ -874,7 +876,7 @@ function PermissionCardGrid({
   return (
     <div className="vx-admin-permission-card-grid" aria-label="权限卡片清单">
       {flattenedNodes.map(({ permission, depth }) => {
-        const meta = permissionTypeMeta[permission.permType];
+        const meta = permissionTypeMetaOf(permission.permType);
         const statusIndicator = permissionStatusIndicator(permission);
 
         return (
@@ -895,9 +897,7 @@ function PermissionCardGrid({
               </span>
               <div>
                 <strong>{permissionDisplayName(permission)}</strong>
-                <Badge className="vx-tenant-pill vx-tenant-pill--system">
-                  {permissionSourceLabel(permission)}
-                </Badge>
+                <Badge>{permissionSourceLabel(permission)}</Badge>
               </div>
               <PermissionActionsMenu
                 permission={permission}
@@ -907,9 +907,7 @@ function PermissionCardGrid({
               />
             </header>
             <span className="vx-admin-permission-card__type">
-              <Badge className="vx-tenant-pill vx-tenant-pill--system">
-                {meta.label}
-              </Badge>
+              <Badge>{meta.label}</Badge>
             </span>
             <dl>
               <div>
@@ -964,7 +962,7 @@ function PermissionTreeNodeView({
   onTogglePermission: (permission: PlatformAdminPermissionRecord) => void;
 }) {
   const { permission, children, depth } = node;
-  const meta = permissionTypeMeta[permission.permType];
+  const meta = permissionTypeMetaOf(permission.permType);
   const expanded = expandedIds.has(permission.id);
   const titleClassName =
     isSectionPermission(permission) || depth === 0
@@ -993,7 +991,7 @@ function PermissionTreeNodeView({
         <span className="vx-admin-permission-tree-node__name">
           <Button
             variant="ghost"
-            size="icon"
+            size="icon-md"
             className="vx-admin-permission-tree-node__toggle"
             onClick={() => onToggle(permission.id)}
             disabled={!children.length}
@@ -1030,39 +1028,27 @@ function PermissionTreeNodeView({
                 {depth === 0 ? "根权限" : `L${depth}`}
               </Badge>
               {children.length ? (
-                <Badge className="vx-tenant-pill vx-tenant-pill--system">
-                  {formatNumber(children.length)} 子级
-                </Badge>
+                <Badge>{formatNumber(children.length)} 子级</Badge>
               ) : null}
-              {isSectionPermission(permission) ? (
-                <Badge className="vx-tenant-pill vx-tenant-pill--system">
-                  业务分组
-                </Badge>
-              ) : null}
+              {isSectionPermission(permission) ? <Badge>业务分组</Badge> : null}
             </span>
           </span>
         </span>
         <span className="vx-admin-permission-tree-node__status">
-          <Badge
-            className={`vx-tenant-pill ${permission.status ? "vx-admin-role-status-pill--enabled" : "vx-admin-role-status-pill--disabled"}`}
-          >
+          <StatusBadge tone={permission.status ? "success" : "neutral"}>
             <Icon
               name={statusIndicator.icon}
               size="xs"
               fallback="placeholder"
             />
             {statusIndicator.label}
-          </Badge>
+          </StatusBadge>
         </span>
         <span className="vx-admin-permission-tree-node__type">
-          <Badge className="vx-tenant-pill vx-tenant-pill--system">
-            {meta.label}
-          </Badge>
+          <Badge>{meta.label}</Badge>
         </span>
         <span className="vx-admin-permission-tree-node__source">
-          <Badge className="vx-tenant-pill vx-tenant-pill--system">
-            {permissionSourceLabel(permission)}
-          </Badge>
+          <Badge>{permissionSourceLabel(permission)}</Badge>
         </span>
         <span className="vx-admin-permission-tree-node__roles">
           <strong>
@@ -1147,17 +1133,17 @@ function PermissionDomainSection({
   return (
     <section
       className="vx-admin-permission-domain"
-      aria-labelledby={`permission-domain-${group.key}`}
+      /* 原先靠 `aria-labelledby` 指向标题的 h2#id。SectionHeader 不保证 id 落在
+       * h2 上（透传属性去的是根元素），换成 aria-label——可访问名称一样，且不再
+       * 依赖别人的 DOM 内部结构。 */
+      aria-label={group.title}
     >
-      <header className="admin-overview-heading vx-admin-permission-domain__header">
-        <span className="admin-overview-heading__icon" aria-hidden="true">
-          <Icon name={group.icon} size="lg" fallback="placeholder" />
-        </span>
-        <div className="admin-overview-heading__copy">
-          <h2 id={`permission-domain-${group.key}`}>{group.title}</h2>
-          <p>{group.description}</p>
-        </div>
-      </header>
+      <SectionHeader
+        level={2}
+        icon={group.icon}
+        title={group.title}
+        description={group.description}
+      />
       <PermissionDomainStats group={group} />
       <section
         className="vx-tenant-toolbar vx-admin-permission-domain__toolbar"
@@ -1194,9 +1180,9 @@ function PermissionDomainSection({
             aria-label={`${group.title}权限类型`}
           >
             <option value="all">全部类型</option>
-            <option value="MENU">菜单权限</option>
-            <option value="BUTTON">按钮权限</option>
-            <option value="API">接口权限</option>
+            <option value="menu">菜单权限</option>
+            <option value="button">按钮权限</option>
+            <option value="api">接口权限</option>
           </NativeSelect>
           <NativeSelect
             className="vx-input vx-tenant-select"
@@ -1252,7 +1238,7 @@ function PermissionDomainSection({
             aria-label={group.title}
           >
             <div className="vx-admin-permission-tree__header">
-              <span>序号</span>
+              <span>#</span>
               <span>权限名称</span>
               <span>状态</span>
               <span>类型</span>
@@ -1557,50 +1543,50 @@ export function AdminPermissionsPage() {
   }
 
   return (
-    <div className="vx-page-stack vx-tenant-management-page vx-admin-permissions-page">
+    <ViewLayout className="vx-tenant-management-page vx-admin-permissions-page">
       <PageHeader
         icon="shield-check"
         title="权限策略"
         description="统一维护平台菜单、按钮和接口权限，用于角色授权、访问控制和平台自治治理。"
       />
 
-      <section
-        className="vx-tenant-summary vx-admin-permissions-summary"
+      <MetricGrid
+        loading={loading}
         aria-label="平台权限统计"
-      >
-        <article className="vx-tenant-summary__item vx-tenant-tone--blue">
-          <Icon name="shield-check" size="lg" fallback="placeholder" />
-          <div>
-            <span>权限总数</span>
-            <p>
-              <strong>{formatNumber(permissions.length)}</strong>
-              <em>L1 {formatNumber(permissionLevelCounts.l1)}</em>
-              <em>L2 {formatNumber(permissionLevelCounts.l2)}</em>
-              <em>L3 {formatNumber(permissionLevelCounts.l3)}</em>
-            </p>
-          </div>
-        </article>
-        <article className="vx-tenant-summary__item vx-tenant-tone--green">
-          <Icon name="check" size="lg" fallback="placeholder" />
-          <div>
-            <span>启用权限</span>
-            <p>
-              <strong>{formatNumber(activeCount)}</strong>
-              <em>停用 {formatNumber(disabledCount)}</em>
-            </p>
-          </div>
-        </article>
-        <article className="vx-tenant-summary__item vx-tenant-tone--amber">
-          <Icon name="key" size="lg" fallback="placeholder" />
-          <div>
-            <span>绑定权限</span>
-            <p>
-              <strong>{formatNumber(assignedCount)}</strong>
-              <em>未绑定 {formatNumber(unassignedCount)}</em>
-            </p>
-          </div>
-        </article>
-      </section>
+        columns={3}
+        items={[
+          {
+            id: "total",
+            help: "权限点总数，含未启用的。",
+            icon: "shield-check",
+            label: "权限总数",
+            value: formatNumber(permissions.length),
+            tags: [
+              `L1 ${formatNumber(permissionLevelCounts.l1)}`,
+              `L2 ${formatNumber(permissionLevelCounts.l2)}`,
+              `L3 ${formatNumber(permissionLevelCounts.l3)}`,
+            ],
+          },
+          {
+            id: "active",
+            help: "处于启用状态的权限点。",
+            icon: "check",
+            label: "启用权限",
+            value: formatNumber(activeCount),
+            tags: [`停用 ${formatNumber(disabledCount)}`],
+            tone: "success",
+          },
+          {
+            id: "assigned",
+            help: "至少被一个角色引用的权限点；未绑定的权限点不会对任何人生效。",
+            icon: "key",
+            label: "绑定权限",
+            value: formatNumber(assignedCount),
+            tags: [`未绑定 ${formatNumber(unassignedCount)}`],
+            tone: "warning",
+          },
+        ]}
+      />
 
       <div className="vx-tenant-list-shell">
         {permissions.length ? (
@@ -1665,6 +1651,6 @@ export function AdminPermissionsPage() {
           onSubmit={submitPermissionForm}
         />
       ) : null}
-    </div>
+    </ViewLayout>
   );
 }

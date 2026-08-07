@@ -3,20 +3,30 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Banner,
-  Icon,
+  ActionButton,
   ActionMenu,
   Badge,
-  Button,
+  Banner,
   BulkActionBar,
-  Checkbox,
-  Input,
-  NativeSelect,
-  Pagination as DsPagination,
-  ActionButton,
+  DataTable,
   EmptyState,
-  ViewModeSwitch,
+  FilterBar,
+  Icon,
+  Input,
+  ListPageTemplate,
+  MetricGrid,
+  NativeSelect,
+  StatusBadge,
+  TableTitleCell,
 } from "@vxture/design-system";
+import type { DataTableColumn } from "@vxture/design-system";
+import {
+  TIER_FILTER_OPTIONS,
+  tierBadgeClass,
+  tierFilterOf,
+  type TierFilterValue,
+} from "@/modules/shared/tier-level";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import type { IconName } from "@vxture/design-system";
 import { exportRowsToCsv, type CsvColumn } from "@/lib/exportCsv";
 import { isListTruncated } from "@/lib/list-truncation";
@@ -30,11 +40,12 @@ import type {
   SubscriptionOperationRecord,
   SubscriptionOperationStatus,
 } from "@/entities/console";
-import { PageHeader } from "@/modules/shared/PageHeader";
 import {
-  PageSizePicker as AdminPageSizePicker,
-  type PageSize,
-} from "@/modules/shared/PageSizePicker";
+  QUOTA_RISK_TONE,
+  SUBSCRIPTION_OPERATION_TONE,
+} from "@/modules/shared/status-tone";
+import { PageHeader } from "@/modules/shared/PageHeader";
+import { type PageSize } from "@/modules/shared/PageSizePicker";
 import {
   canRunSubscriptionAction,
   SubscriptionOperationDialog,
@@ -53,12 +64,12 @@ import {
 
 type ViewMode = "list" | "cards";
 type StatusFilter = "all" | SubscriptionOperationStatus;
-type TierFilter = "all" | "free" | "pro" | "enterprise" | "other";
+type TierFilter = "all" | TierFilterValue;
 type RiskFilter = "all" | SubscriptionOperationQuotaRisk;
 type RenewFilter = "all" | "auto" | "manual";
 
 function subscriptionStatusLabel(status: SubscriptionOperationStatus) {
-  if (status === "trial") return "试用";
+  if (status === "trialing") return "试用";
   if (status === "active") return "已生效";
   if (status === "expiring") return "即将到期";
   if (status === "overdue") return "逾期";
@@ -68,7 +79,7 @@ function subscriptionStatusLabel(status: SubscriptionOperationStatus) {
 
 function subscriptionStatusIcon(status: SubscriptionOperationStatus): IconName {
   if (status === "active") return "check";
-  if (status === "trial" || status === "expiring") return "clock";
+  if (status === "trialing" || status === "expiring") return "clock";
   if (status === "cancelled") return "x";
   return "warning";
 }
@@ -83,16 +94,6 @@ function quotaRiskLabel(risk: SubscriptionOperationQuotaRisk) {
   if (risk === "danger") return "高风险";
   if (risk === "warning") return "需关注";
   return "正常";
-}
-
-function tierFilterValue(record: SubscriptionOperationRecord): TierFilter {
-  const tierName = record.tierName.toLowerCase();
-  if (tierName === "free" || record.servicePlanCode === "starter")
-    return "free";
-  if (tierName === "pro" || record.servicePlanCode === "growth") return "pro";
-  if (tierName === "enterprise" || record.servicePlanCode === "enterprise")
-    return "enterprise";
-  return "other";
 }
 
 function subscriptionSearchText(record: SubscriptionOperationRecord) {
@@ -141,35 +142,6 @@ const SUBSCRIPTION_CSV_COLUMNS: CsvColumn<SubscriptionOperationRecord>[] = [
   { label: "结束时间", value: (record) => record.endAt ?? "" },
 ];
 
-function SummaryItem({
-  icon,
-  label,
-  value,
-  tags,
-  tone = "blue",
-}: {
-  icon: IconName;
-  label: string;
-  value: string;
-  tags?: string[];
-  tone?: "blue" | "green" | "amber" | "rose";
-}) {
-  return (
-    <article className={`vx-tenant-summary__item vx-tenant-tone--${tone}`}>
-      <Icon name={icon} size="lg" fallback="placeholder" />
-      <div>
-        <span>{label}</span>
-        <p>
-          <strong>{value}</strong>
-          {tags?.map((tag) => (
-            <em key={tag}>{tag}</em>
-          ))}
-        </p>
-      </div>
-    </article>
-  );
-}
-
 function SubscriptionActionsMenu({
   subscription,
   onAction,
@@ -190,13 +162,11 @@ function SubscriptionActionsMenu({
     >
       <ActionMenu
         label={`${subscription.tenantName} 订阅操作`}
-        triggerClassName="vx-tenant-actions__trigger"
-        triggerProps={{ title: "操作" }}
         items={[
           {
             id: "details",
             label: "查看详情",
-            icon: <Icon name="arrow-right" size="xs" fallback="placeholder" />,
+            icon: "arrow-right",
             onSelect: () =>
               router.push(
                 `/subscriptions/${encodeURIComponent(subscription.id)}`,
@@ -205,7 +175,7 @@ function SubscriptionActionsMenu({
           {
             id: "tenant",
             label: "查看租户",
-            icon: <Icon name="buildings" size="xs" fallback="placeholder" />,
+            icon: "buildings",
             onSelect: () =>
               router.push(
                 `/tenants/${encodeURIComponent(subscription.tenantId)}`,
@@ -214,21 +184,15 @@ function SubscriptionActionsMenu({
           {
             id: "plan",
             label: "调整套餐",
-            icon: <Icon name="star" size="xs" fallback="placeholder" />,
+            icon: "star",
             disabled: true,
           },
           {
             id: "renew",
             label: subscriptionActionLabel("renew"),
-            icon: (
-              <Icon
-                name={subscriptionActionIcon("renew")}
-                size="xs"
-                fallback="placeholder"
-              />
-            ),
+            icon: subscriptionActionIcon("renew"),
             disabled: !canRunSubscriptionAction("renew", subscription),
-            title:
+            hint:
               subscriptionActionDisabledReason("renew", subscription) ??
               undefined,
             onSelect: () => onAction(subscription, "renew"),
@@ -236,15 +200,9 @@ function SubscriptionActionsMenu({
           {
             id: toggleAction,
             label: subscriptionActionLabel(toggleAction),
-            icon: (
-              <Icon
-                name={subscriptionActionIcon(toggleAction)}
-                size="xs"
-                fallback="placeholder"
-              />
-            ),
+            icon: subscriptionActionIcon(toggleAction),
             disabled: !canRunSubscriptionAction(toggleAction, subscription),
-            title:
+            hint:
               subscriptionActionDisabledReason(toggleAction, subscription) ??
               undefined,
             onSelect: () => onAction(subscription, toggleAction),
@@ -252,15 +210,9 @@ function SubscriptionActionsMenu({
           {
             id: "cancel",
             label: subscriptionActionLabel("cancel"),
-            icon: (
-              <Icon
-                name={subscriptionActionIcon("cancel")}
-                size="xs"
-                fallback="placeholder"
-              />
-            ),
+            icon: subscriptionActionIcon("cancel"),
             disabled: !canRunSubscriptionAction("cancel", subscription),
-            title:
+            hint:
               subscriptionActionDisabledReason("cancel", subscription) ??
               undefined,
             danger: true,
@@ -272,188 +224,100 @@ function SubscriptionActionsMenu({
   );
 }
 
-function SubscriptionListRows({
-  subscriptions,
-  startIndex,
-  selectedSubscriptionIds,
-  isPageSelected,
-  onAction,
-  onToggleSubscription,
-  onTogglePage,
-}: {
-  subscriptions: SubscriptionOperationRecord[];
-  startIndex: number;
-  selectedSubscriptionIds: Set<string>;
-  isPageSelected: boolean;
-  onAction: (
-    subscription: SubscriptionOperationRecord,
-    action: SubscriptionOperationAction,
-  ) => void;
-  onToggleSubscription: (id: string, checked: boolean) => void;
-  onTogglePage: (checked: boolean) => void;
-}) {
+/**
+ * 行内的状态标仍是 pill（`vx-subscription-pill--*`）而非 `StatusBadge`：那一族是
+ * 业务值域着色表，整族改 Badge 归批 4，一次改动不跨两个语义面。
+ */
+function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[] {
   const router = useRouter();
-  const selectedOnPage = subscriptions.filter((subscription) =>
-    selectedSubscriptionIds.has(subscription.id),
-  ).length;
-  const isPagePartiallySelected =
-    selectedOnPage > 0 && selectedOnPage < subscriptions.length;
 
-  return (
-    <div
-      className="vx-tenant-directory-list vx-subscription-directory-list"
-      role="region"
-      aria-label="租户订阅运营清单"
-    >
-      <div className="vx-tenant-directory-list__header">
-        <span>
-          <Checkbox
-            className="vx-model-select-checkbox"
-            checked={isPagePartiallySelected ? "indeterminate" : isPageSelected}
-            onCheckedChange={(checked) => onTogglePage(checked === true)}
-            aria-label="选择当前页订阅"
-          />
-        </span>
-        <span>序号</span>
-        <span>租户</span>
-        <span>业务方案</span>
-        <span>套餐权益</span>
-        <span>状态</span>
-        <span>配额</span>
-        <span>收入</span>
-        <span>操作</span>
-      </div>
-      {subscriptions.map((subscription, index) => (
-        <div
-          key={subscription.id}
-          className={joinClasses(
-            "vx-tenant-directory-row",
-            "vx-subscription-operation-row",
-            `vx-subscription-row--${subscription.status}`,
-            `vx-subscription-row--quota-${subscription.quota.risk}`,
-            selectedSubscriptionIds.has(subscription.id)
-              ? "vx-subscription-operation-row--selected"
-              : "",
-          )}
-          onClick={(event) => {
-            if (
-              event.target instanceof HTMLElement &&
-              event.target.closest(
-                'button, input, select, textarea, a, [role="button"], [role="menu"], [role="menuitem"]',
-              )
-            )
-              return;
-            onToggleSubscription(
-              subscription.id,
-              !selectedSubscriptionIds.has(subscription.id),
-            );
-          }}
-        >
-          <span className="vx-subscription-operation-row__select">
-            <Checkbox
-              className="vx-model-select-checkbox"
-              checked={selectedSubscriptionIds.has(subscription.id)}
-              onClick={(event) => event.stopPropagation()}
-              onCheckedChange={(checked) =>
-                onToggleSubscription(subscription.id, checked === true)
-              }
-              aria-label={`选择 ${subscription.tenantName}`}
-            />
-          </span>
-          <span className="vx-tenant-directory-row__index">
-            {formatNumber(startIndex + index + 1)}
-          </span>
-          <span className="vx-subscription-row__tenant">
-            <Icon
-              name={
-                subscription.tenantType === "company" ? "buildings" : "user"
-              }
-              size="sm"
-              fallback="placeholder"
-            />
-            <span>
-              <span className="vx-tenant-directory-row__title-line">
-                <Button
-                  variant="link"
-                  className="vx-model-name-button"
-                  onClick={() =>
-                    router.push(
-                      `/subscriptions/${encodeURIComponent(subscription.id)}`,
-                    )
-                  }
-                >
-                  {subscription.tenantName}
-                </Button>
-              </span>
-              <small>
-                {subscription.tenantCode} · {subscription.region}
-              </small>
-            </span>
-          </span>
-          <span className="vx-subscription-row__solution">
-            <strong>{subscription.solutionName}</strong>
-            <small>{subscription.industry}</small>
-          </span>
-          <span className="vx-subscription-row__plan">
-            <span className="vx-tenant-directory-row__tag-line">
-              <Badge
-                className={`vx-tenant-pill vx-subscription-pill--tier-${tierFilterValue(subscription)}`}
-              >
+  return [
+    {
+      id: "tenant",
+      header: "租户",
+      cell: (subscription) => (
+        <TableTitleCell
+          icon={subscription.tenantType === "company" ? "buildings" : "user"}
+          title={subscription.tenantName}
+          description={`${subscription.tenantCode} · ${subscription.region}`}
+          onTitleClick={() =>
+            router.push(`/subscriptions/${encodeURIComponent(subscription.id)}`)
+          }
+        />
+      ),
+    },
+    {
+      id: "solution",
+      header: "业务方案",
+      cell: (subscription) => (
+        <TableTitleCell
+          title={subscription.solutionName}
+          description={subscription.industry}
+        />
+      ),
+    },
+    {
+      id: "plan",
+      header: "套餐权益",
+      cell: (subscription) => (
+        <TableTitleCell
+          title={
+            <span className="inline-flex flex-wrap gap-2xs">
+              <Badge className={tierBadgeClass(subscription.tierCode)}>
                 {subscription.tierName}
               </Badge>
               <Badge className="vx-tenant-pill vx-subscription-pill--cycle">
                 {cycleLabel(subscription.cycleType)}
               </Badge>
             </span>
-            <small>
-              {subscription.orderNo ?? subscription.subscriptionCode}
-            </small>
-          </span>
-          <span className="vx-subscription-row__status">
-            <span className="vx-subscription-status-line">
-              <span
-                className={`vx-subscription-status-dot vx-subscription-status-dot--${subscription.status}`}
-                role="img"
-                aria-label={subscriptionStatusLabel(subscription.status)}
-              >
-                <Icon
-                  name={subscriptionStatusIcon(subscription.status)}
-                  size="xs"
-                  fallback="placeholder"
-                />
-              </span>
-              <Badge
-                className={`vx-tenant-pill vx-subscription-pill--${subscription.status}`}
-              >
-                {subscriptionStatusLabel(subscription.status)}
-              </Badge>
-            </span>
-            <small>
-              {formatDate(subscription.startAt)} -{" "}
-              {formatDate(subscription.endAt)}
-            </small>
-          </span>
-          <span className="vx-subscription-row__quota">
-            <strong>{formatNumber(subscription.quota.usageRate)}%</strong>
-            <small>
-              {quotaRiskLabel(subscription.quota.risk)} ·{" "}
-              {formatNumber(subscription.quota.maxUsers)} 席位
-            </small>
-          </span>
-          <span className="vx-subscription-row__revenue">
-            <strong>{formatMoney(subscription.monthlyRevenue)}</strong>
-            <small>
-              {subscription.autoRenew ? "自动续期" : subscription.operationHint}
-            </small>
-          </span>
-          <SubscriptionActionsMenu
-            subscription={subscription}
-            onAction={onAction}
-          />
-        </div>
-      ))}
-    </div>
-  );
+          }
+          description={subscription.orderNo ?? subscription.subscriptionCode}
+        />
+      ),
+    },
+    {
+      id: "status",
+      header: "状态",
+      align: "center",
+      cell: (subscription) => (
+        <TableTitleCell
+          title={
+            <StatusBadge
+              tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
+              icon={subscriptionStatusIcon(subscription.status)}
+            >
+              {subscriptionStatusLabel(subscription.status)}
+            </StatusBadge>
+          }
+          description={`${formatDate(subscription.startAt)} - ${formatDate(subscription.endAt)}`}
+        />
+      ),
+    },
+    {
+      id: "quota",
+      header: "配额",
+      align: "right",
+      cell: (subscription) => (
+        <TableTitleCell
+          title={`${formatNumber(subscription.quota.usageRate)}%`}
+          description={`${quotaRiskLabel(subscription.quota.risk)} · ${formatNumber(subscription.quota.maxUsers)} 席位`}
+        />
+      ),
+    },
+    {
+      id: "revenue",
+      header: "收入",
+      align: "right",
+      cell: (subscription) => (
+        <TableTitleCell
+          title={formatMoney(subscription.monthlyRevenue)}
+          description={
+            subscription.autoRenew ? "自动续期" : subscription.operationHint
+          }
+        />
+      ),
+    },
+  ];
 }
 
 function SubscriptionCards({
@@ -512,21 +376,17 @@ function SubscriptionCards({
             />
           </header>
           <div className="vx-tenant-directory-card__badges">
-            <Badge
-              className={`vx-tenant-pill vx-subscription-pill--${subscription.status}`}
+            <StatusBadge
+              tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
             >
               {subscriptionStatusLabel(subscription.status)}
-            </Badge>
-            <Badge
-              className={`vx-tenant-pill vx-subscription-pill--tier-${tierFilterValue(subscription)}`}
-            >
+            </StatusBadge>
+            <Badge className={tierBadgeClass(subscription.tierCode)}>
               {subscription.tierName}
             </Badge>
-            <Badge
-              className={`vx-tenant-pill vx-subscription-pill--quota-${subscription.quota.risk}`}
-            >
+            <StatusBadge tone={QUOTA_RISK_TONE[subscription.quota.risk]}>
               {quotaRiskLabel(subscription.quota.risk)}
-            </Badge>
+            </StatusBadge>
           </div>
           <p className="vx-subscription-card__solution">
             {subscription.solutionName} · {subscription.servicePlanName}
@@ -555,39 +415,6 @@ function SubscriptionCards({
         </article>
       ))}
     </div>
-  );
-}
-
-function Pagination({
-  currentPage,
-  pageCount,
-  total,
-  pageSize,
-  onPageSizeChange,
-  onPageChange,
-}: {
-  currentPage: number;
-  pageCount: number;
-  total: number;
-  pageSize: PageSize;
-  onPageSizeChange: (value: PageSize) => void;
-  onPageChange: (page: number) => void;
-}) {
-  return (
-    <footer className="vx-tenant-pagination">
-      <span className="vx-tenant-pagination__total">
-        共 {formatNumber(total)} 条订阅记录
-      </span>
-      <div className="vx-tenant-pagination__actions">
-        <AdminPageSizePicker value={pageSize} onChange={onPageSizeChange} />
-        <DsPagination
-          className="vx-tenant-pagination__pager"
-          page={currentPage}
-          pageCount={pageCount}
-          onPageChange={onPageChange}
-        />
-      </div>
-    </footer>
   );
 }
 
@@ -649,13 +476,18 @@ export function SubscriptionsPage() {
     };
   }, []);
 
+  const subscriptionColumns = useSubscriptionColumns();
+
   const filteredSubscriptions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
     return subscriptions.filter((subscription) => {
       if (statusFilter !== "all" && subscription.status !== statusFilter)
         return false;
-      if (tierFilter !== "all" && tierFilterValue(subscription) !== tierFilter)
+      if (
+        tierFilter !== "all" &&
+        tierFilterOf(subscription.tierName) !== tierFilter
+      )
         return false;
       if (riskFilter !== "all" && subscription.quota.risk !== riskFilter)
         return false;
@@ -679,21 +511,12 @@ export function SubscriptionsPage() {
     (activePage - 1) * pageSize,
     activePage * pageSize,
   );
-  const visibleSubscriptionIds = visibleSubscriptions.map(
-    (subscription) => subscription.id,
-  );
-  const selectedVisibleSubscriptionCount = visibleSubscriptionIds.filter((id) =>
-    selectedSubscriptionIds.has(id),
-  ).length;
-  const isSubscriptionPageSelected =
-    visibleSubscriptionIds.length > 0 &&
-    selectedVisibleSubscriptionCount === visibleSubscriptionIds.length;
   const effectiveCount = subscriptions.filter(
     (item) => item.status === "active" || item.status === "expiring",
   ).length;
   const followUpCount = subscriptions.filter(
     (item) =>
-      item.status === "trial" ||
+      item.status === "trialing" ||
       item.status === "expiring" ||
       item.status === "overdue" ||
       item.quota.risk !== "normal",
@@ -738,32 +561,6 @@ export function SubscriptionsPage() {
     setActionTarget({ subscription, action });
   }
 
-  function toggleSubscriptionSelection(id: string, checked: boolean) {
-    setSelectedSubscriptionIds((current) => {
-      const next = new Set(current);
-      if (checked) {
-        next.add(id);
-      } else {
-        next.delete(id);
-      }
-      return next;
-    });
-  }
-
-  function toggleSubscriptionPageSelection(checked: boolean) {
-    setSelectedSubscriptionIds((current) => {
-      const next = new Set(current);
-      for (const id of visibleSubscriptionIds) {
-        if (checked) {
-          next.add(id);
-        } else {
-          next.delete(id);
-        }
-      }
-      return next;
-    });
-  }
-
   const selectedSubscriptions = subscriptions.filter((subscription) =>
     selectedSubscriptionIds.has(subscription.id),
   );
@@ -777,14 +574,6 @@ export function SubscriptionsPage() {
       "subscriptions-export",
       SUBSCRIPTION_CSV_COLUMNS,
       selectedSubscriptions,
-    );
-  }
-
-  function handleExportAllSubscriptions() {
-    exportRowsToCsv(
-      "subscriptions-export",
-      SUBSCRIPTION_CSV_COLUMNS,
-      filteredSubscriptions,
     );
   }
 
@@ -816,227 +605,265 @@ export function SubscriptionsPage() {
   }
 
   return (
-    <div className="vx-page-stack vx-tenant-management-page vx-subscriptions-page">
-      <PageHeader
-        icon="star"
-        eyebrow="订阅交易"
-        title="租户订阅运营"
-        description="运营侧管理租户服务权益实例，跟进试用转正、续期、暂停、配额风险和收入状态。"
-      />
-
-      <section className="vx-tenant-summary" aria-label="租户订阅运营统计">
-        <SummaryItem
-          icon="star"
-          label="订阅实例"
-          value={formatNumber(subscriptions.length)}
-          tags={[`有效 ${formatNumber(effectiveCount)}`]}
-        />
-        <SummaryItem
-          icon="warning"
-          label="待跟进"
-          value={formatNumber(followUpCount)}
-          tags={[
-            `逾期 ${formatNumber(subscriptions.filter((item) => item.status === "overdue").length)}`,
-          ]}
-          tone={followUpCount ? "amber" : "green"}
-        />
-        <SummaryItem
-          icon="chart-bar"
-          label="月收入"
-          value={formatMoney(monthlyRevenue)}
-          tags={["运营口径"]}
-          tone="green"
-        />
-        <SummaryItem
-          icon="shield-check"
-          label="配额风险"
-          value={formatNumber(dangerQuotaCount + warningQuotaCount)}
-          tags={[`高风险 ${formatNumber(dangerQuotaCount)}`]}
-          tone={
-            dangerQuotaCount ? "rose" : warningQuotaCount ? "amber" : "green"
-          }
-        />
-      </section>
-
-      {operationFeedback ? (
-        <div className="vx-subscription-operation-feedback">
-          {operationFeedback}
-        </div>
-      ) : null}
-
-      {subscriptionsTruncated ? (
-        <Banner
-          tone="warning"
-          title="当前订阅列表可能未展示全部数据"
-          description="本次加载已达到单次读取上限（500 条），如未看到目标订阅，请尝试缩小筛选范围（如按状态、套餐等）重新查询。"
-        />
-      ) : null}
-
-      <div className="vx-tenant-list-shell">
-        <section className="vx-tenant-toolbar" aria-label="租户订阅筛选">
-          <ViewModeSwitch
-            value={viewMode}
-            onChange={setViewMode}
-            ariaLabel="租户订阅展示方式"
+    <>
+      <ListPageTemplate
+        className="vx-tenant-management-page vx-subscriptions-page"
+        header={
+          <PageHeader
+            icon="star"
+            eyebrow="订阅交易"
+            title="租户订阅运营"
+            description="运营侧管理租户服务权益实例，跟进试用转正、续期、暂停、配额风险和收入状态。"
           />
-          <span className="vx-tenant-view-count">
-            {formatNumber(filteredSubscriptions.length)}
-          </span>
-          <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索租户、方案、套餐、订单"
-            className="vx-tenant-search vx-subscription-search"
-            aria-label="搜索租户订阅"
-          />
-          <Button variant="outline" onClick={handleReset}>
-            重置
-          </Button>
-          <ActionButton
-            variant="outline"
-            icon="arrow-down"
-            onClick={handleExportAllSubscriptions}
-            disabled={!filteredSubscriptions.length}
-          >
-            导出全部
-          </ActionButton>
-          <div className="vx-tenant-filters">
-            <NativeSelect
-              className="vx-tenant-select"
-              value={statusFilter}
-              onChange={(event) =>
-                setStatusFilter(event.target.value as StatusFilter)
-              }
-              aria-label="订阅状态"
-            >
-              <option value="all">全部状态</option>
-              <option value="trial">试用</option>
-              <option value="active">已生效</option>
-              <option value="expiring">即将到期</option>
-              <option value="overdue">逾期</option>
-              <option value="suspended">暂停</option>
-              <option value="cancelled">已取消</option>
-            </NativeSelect>
-            <NativeSelect
-              className="vx-tenant-select"
-              value={tierFilter}
-              onChange={(event) =>
-                setTierFilter(event.target.value as TierFilter)
-              }
-              aria-label="套餐版本"
-            >
-              <option value="all">全部套餐</option>
-              <option value="free">Free</option>
-              <option value="pro">Pro</option>
-              <option value="enterprise">Enterprise</option>
-              <option value="other">其他</option>
-            </NativeSelect>
-            <NativeSelect
-              className="vx-tenant-select"
-              value={riskFilter}
-              onChange={(event) =>
-                setRiskFilter(event.target.value as RiskFilter)
-              }
-              aria-label="配额风险"
-            >
-              <option value="all">全部配额</option>
-              <option value="normal">正常</option>
-              <option value="warning">需关注</option>
-              <option value="danger">高风险</option>
-            </NativeSelect>
-            <NativeSelect
-              className="vx-tenant-select"
-              value={renewFilter}
-              onChange={(event) =>
-                setRenewFilter(event.target.value as RenewFilter)
-              }
-              aria-label="续期方式"
-            >
-              <option value="all">全部续期</option>
-              <option value="auto">自动续期</option>
-              <option value="manual">人工跟进</option>
-            </NativeSelect>
-          </div>
-          <ActionButton variant="outline" icon="plus" disabled>
-            开通订阅
-          </ActionButton>
-        </section>
-
-        {selectedSubscriptions.length ? (
-          <BulkActionBar
-            selectedLabel={
-              <>已选 {formatNumber(selectedSubscriptions.length)} 项</>
+        }
+        summary={
+          <>
+            {" "}
+            <MetricGrid
+              loading={loading}
+              aria-label="租户订阅运营统计"
+              items={[
+                {
+                  id: "instances",
+                  help: "当前筛选条件下的订阅实例数。",
+                  icon: "star",
+                  label: "订阅实例",
+                  value: formatNumber(subscriptions.length),
+                  tags: [`有效 ${formatNumber(effectiveCount)}`],
+                },
+                {
+                  id: "follow-up",
+                  help: "需跟进的订阅：试用、即将到期、欠费，或配额风险非正常。",
+                  icon: "warning",
+                  label: "待跟进",
+                  value: formatNumber(followUpCount),
+                  tags: [
+                    `逾期 ${formatNumber(subscriptions.filter((item) => item.status === "overdue").length)}`,
+                  ],
+                  tone: followUpCount ? "warning" : "success",
+                },
+                {
+                  id: "monthly-revenue",
+                  help: "这些订阅的月收入之和；年付按 12 个月折算，一次性买断计 0。",
+                  icon: "chart-bar",
+                  label: "月收入",
+                  value: formatMoney(monthlyRevenue),
+                  tags: ["运营口径"],
+                  tone: "success",
+                },
+                {
+                  id: "quota-risk",
+                  help: "配额风险为危险或警告的订阅数。",
+                  icon: "shield-check",
+                  label: "配额风险",
+                  value: formatNumber(dangerQuotaCount + warningQuotaCount),
+                  tags: [`高风险 ${formatNumber(dangerQuotaCount)}`],
+                  tone: dangerQuotaCount
+                    ? "danger"
+                    : warningQuotaCount
+                      ? "warning"
+                      : "success",
+                },
+              ]}
+            />
+            {operationFeedback ? (
+              <div className="vx-subscription-operation-feedback">
+                {operationFeedback}
+              </div>
+            ) : null}
+            {subscriptionsTruncated ? (
+              <Banner
+                tone="warning"
+                title="当前订阅列表可能未展示全部数据"
+                description="本次加载已达到单次读取上限（500 条），如未看到目标订阅，请尝试缩小筛选范围（如按状态、套餐等）重新查询。"
+              />
+            ) : null}
+          </>
+        }
+        filters={
+          <FilterBar
+            view={viewMode}
+            onViewChange={setViewMode}
+            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            count={formatNumber(filteredSubscriptions.length)}
+            aria-label="租户订阅筛选"
+            search={
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="搜索租户、方案、套餐、订单"
+                className="vx-tenant-search vx-subscription-search"
+                aria-label="搜索租户订阅"
+              />
             }
-            selectionActions={
+            onReset={handleReset}
+            actions={
               <>
-                <Button
-                  variant="outline"
+                <ActionButton
+                  variant={
+                    selectedSubscriptions.length > 0 ? "default" : "outline"
+                  }
+                  icon="arrow-down"
                   onClick={handleExportSelectedSubscriptions}
+                  disabled={selectedSubscriptions.length === 0}
                 >
-                  导出所选
-                </Button>
-                <Button variant="ghost" onClick={clearSubscriptionSelection}>
-                  清除
-                </Button>
+                  导出
+                </ActionButton>
+                <ActionButton variant="outline" icon="plus" disabled>
+                  开通订阅
+                </ActionButton>
               </>
             }
-          />
-        ) : null}
+          >
+            <div className="vx-tenant-filters">
+              <NativeSelect
+                className="vx-tenant-select"
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(event.target.value as StatusFilter)
+                }
+                aria-label="订阅状态"
+              >
+                <option value="all">全部状态</option>
+                <option value="trialing">试用</option>
+                <option value="active">已生效</option>
+                <option value="expiring">即将到期</option>
+                <option value="overdue">逾期</option>
+                <option value="suspended">暂停</option>
+                <option value="cancelled">已取消</option>
+              </NativeSelect>
+              <NativeSelect
+                className="vx-tenant-select"
+                value={tierFilter}
+                onChange={(event) =>
+                  setTierFilter(event.target.value as TierFilter)
+                }
+                aria-label="套餐版本"
+              >
+                <option value="all">全部套餐</option>
+                {TIER_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </NativeSelect>
+              <NativeSelect
+                className="vx-tenant-select"
+                value={riskFilter}
+                onChange={(event) =>
+                  setRiskFilter(event.target.value as RiskFilter)
+                }
+                aria-label="配额风险"
+              >
+                <option value="all">全部配额</option>
+                <option value="normal">正常</option>
+                <option value="warning">需关注</option>
+                <option value="danger">高风险</option>
+              </NativeSelect>
+              <NativeSelect
+                className="vx-tenant-select"
+                value={renewFilter}
+                onChange={(event) =>
+                  setRenewFilter(event.target.value as RenewFilter)
+                }
+                aria-label="续期方式"
+              >
+                <option value="all">全部续期</option>
+                <option value="auto">自动续期</option>
+                <option value="manual">人工跟进</option>
+              </NativeSelect>
+            </div>
+          </FilterBar>
+        }
+        bulkBar={
+          selectedSubscriptions.length ? (
+            <BulkActionBar
+              count={selectedSubscriptions.length}
+              actions={[
+                {
+                  id: "export",
+                  label: "导出所选",
+                  onSelect: handleExportSelectedSubscriptions,
+                },
+              ]}
+              onClear={clearSubscriptionSelection}
+            />
+          ) : null
+        }
+        table={
+          <section className="vx-tenant-directory" aria-label="租户订阅清单">
+            {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
+            {loading && viewMode === "cards" ? (
+              <header className="vx-tenant-directory__header">
+                <span>读取中</span>
+              </header>
+            ) : null}
 
-        <section className="vx-tenant-directory" aria-label="租户订阅清单">
-          {loading ? (
-            <header className="vx-tenant-directory__header">
-              <span>读取中</span>
-            </header>
-          ) : null}
-
-          {visibleSubscriptions.length ? (
-            viewMode === "list" ? (
-              <SubscriptionListRows
-                subscriptions={visibleSubscriptions}
-                startIndex={(activePage - 1) * pageSize}
-                selectedSubscriptionIds={selectedSubscriptionIds}
-                isPageSelected={isSubscriptionPageSelected}
-                onAction={requestSubscriptionAction}
-                onToggleSubscription={toggleSubscriptionSelection}
-                onTogglePage={toggleSubscriptionPageSelection}
+            {viewMode === "list" ? (
+              <DataTable
+                columns={subscriptionColumns}
+                rows={visibleSubscriptions}
+                rowKey={(subscription) => subscription.id}
+                loading={loading}
+                indexStart={(activePage - 1) * pageSize + 1}
+                selectedKeys={[...selectedSubscriptionIds]}
+                onSelectionChange={(keys) =>
+                  setSelectedSubscriptionIds(new Set(keys))
+                }
+                rowActions={(subscription) => (
+                  <SubscriptionActionsMenu
+                    subscription={subscription}
+                    onAction={requestSubscriptionAction}
+                  />
+                )}
+                empty={
+                  <EmptyState
+                    title={loadError ? "订阅数据读取失败" : "没有匹配的订阅"}
+                    description={
+                      loadError ?? "清空筛选条件后可查看全部订阅实例。"
+                    }
+                    action={
+                      <ActionButton
+                        variant="outline"
+                        icon="x"
+                        onClick={handleReset}
+                      >
+                        清空筛选
+                      </ActionButton>
+                    }
+                  />
+                }
               />
-            ) : (
+            ) : visibleSubscriptions.length ? (
               <SubscriptionCards
                 subscriptions={visibleSubscriptions}
                 onAction={requestSubscriptionAction}
               />
-            )
-          ) : (
-            <section className="vx-tenant-empty">
-              <EmptyState
-                title={
-                  loading
-                    ? "正在加载租户订阅"
-                    : loadError
-                      ? "订阅数据读取失败"
-                      : "没有匹配的订阅"
-                }
-                description={
-                  loading
-                    ? "正在读取租户订阅运营数据。"
-                    : (loadError ?? "清空筛选条件后可查看全部订阅实例。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    清空筛选
-                  </ActionButton>
-                }
-              />
-            </section>
-          )}
-
-          <Pagination
+            ) : (
+              <section className="vx-tenant-empty">
+                <EmptyState
+                  title={loading ? "正在加载租户订阅" : "没有匹配的订阅"}
+                  description={
+                    loading
+                      ? "正在读取租户订阅运营数据。"
+                      : (loadError ?? "清空筛选条件后可查看全部订阅实例。")
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      清空筛选
+                    </ActionButton>
+                  }
+                />
+              </section>
+            )}
+          </section>
+        }
+        footer={
+          <ListPagination
             currentPage={activePage}
             pageCount={pageCount}
             total={filteredSubscriptions.length}
@@ -1046,8 +873,8 @@ export function SubscriptionsPage() {
               setCurrentPage(Math.min(Math.max(page, 1), pageCount))
             }
           />
-        </section>
-      </div>
+        }
+      />
 
       {actionTarget ? (
         <SubscriptionOperationDialog
@@ -1061,6 +888,6 @@ export function SubscriptionsPage() {
           onSubmit={handleSubmitSubscriptionAction}
         />
       ) : null}
-    </div>
+    </>
   );
 }

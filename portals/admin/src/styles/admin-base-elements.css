@@ -2,14 +2,22 @@ select {
   line-height: normal;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
+/* 这里原本有一条 `a { color: inherit; text-decoration: none; }`。删掉，因为它
+ * 让 admin 里**所有链接**的颜色工具类失效——包括侧栏选中项的 `text-primary-text`
+ * 与常态项的 `text-muted-foreground`，于是每个导航项都渲染成继承来的近黑色，
+ * 选中态只剩背景、没有品牌色文字（2026-08-05 实测：同一个 `text-primary-text`
+ * 类挂在 span 上拿到品牌色，挂在 a 上拿到继承的近黑）。
+ *
+ * 原因是层叠层：本文件不在任何 `@layer` 内，而**未分层规则的优先级高于所有
+ * 分层规则**，与特异性无关。Tailwind 的工具类都在 `@layer utilities`，所以这条
+ * 标签选择器压过了它们全部。
+ *
+ * 它想做的事 Tailwind preflight 已经做了（`a { color: inherit;
+ * text-decoration: inherit }`），而 preflight 在 `@layer base`，不会压 utilities。 */
 
 .vx-eyebrow,
 .eyebrow {
-  margin: 0 0 var(--vx-admin-base-space-05r);
+  margin: 0 0 var(--space-xs);
   font-size: var(--vx-admin-base-text-size-072r);
   letter-spacing: var(--vx-admin-base-text-tracking-018e);
   text-transform: uppercase;

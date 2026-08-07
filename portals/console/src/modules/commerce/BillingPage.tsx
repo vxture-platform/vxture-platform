@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 import {
+  Button,
   DataTable,
-  ActionButton,
+  EmptyState,
+  Icon,
   MetricGrid,
-  PageHeader,
+  ViewHeader,
+  ViewLayout,
 } from "@vxture/design-system";
 import type { DataTableColumn } from "@vxture/design-system";
 import {
@@ -15,7 +18,8 @@ import {
   type ConsoleInvoice,
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
-import { DashboardSplit, PageSection, SignalList } from "@/layout/shell";
+import { PlannedBadge } from "@/components/planned";
+import { PageSection, SignalList } from "@/layout/shell";
 import type { SummaryMetric } from "@/entities/console";
 
 // ============================================================================
@@ -50,13 +54,26 @@ function buildBillingMetrics(
 ): SummaryMetric[] {
   if (!overview) {
     return [
-      { label: "Outstanding", value: "—", trend: "No data", tone: "default" },
-      { label: "Paid this cycle", value: "—", trend: "—", tone: "default" },
       {
+        id: "outstanding",
+        label: "Outstanding",
+        value: "—",
+        trend: "No data",
+        tone: "neutral",
+      },
+      {
+        id: "paid-this-cycle",
+        label: "Paid this cycle",
+        value: "—",
+        trend: "—",
+        tone: "neutral",
+      },
+      {
+        id: "active-subscriptions",
         label: "Active subscriptions",
         value: "—",
         trend: "—",
-        tone: "default",
+        tone: "neutral",
       },
     ];
   }
@@ -68,22 +85,25 @@ function buildBillingMetrics(
 
   return [
     {
+      id: "pending-invoices",
       label: "Pending invoices",
       value: String(overview.pendingInvoices),
       trend: overdueLabel,
-      tone: overview.overdueInvoices > 0 ? "warning" : "positive",
+      tone: overview.overdueInvoices > 0 ? "warning" : "success",
     },
     {
+      id: "total-paid",
       label: "Total paid",
       value: formatAmount(overview.totalRevenue),
       trend: `${overview.paidInvoices} invoices paid`,
-      tone: "positive",
+      tone: "success",
     },
     {
+      id: "active-subscriptions",
       label: "Active subscriptions",
       value: String(overview.activeSubscriptions),
       trend: `${overview.totalInvoices} invoices total`,
-      tone: "default",
+      tone: "neutral",
     },
   ];
 }
@@ -109,17 +129,6 @@ const invoiceColumns: DataTableColumn<string[]>[] = [
 // ============================================================================
 // BillingPage
 // ============================================================================
-
-const payoutNotes = [
-  {
-    title: "Primary billing contact",
-    body: "Billing contacts receive due reminders, VAT exports, and failed charge notifications.",
-  },
-  {
-    title: "Retry policy",
-    body: "Failed card charges retry twice before moving into manual review with a finance task.",
-  },
-];
 
 export function BillingPage() {
   const { session } = useConsoleSession();
@@ -151,69 +160,48 @@ export function BillingPage() {
     },
   ];
 
-  const noteSignals = payoutNotes.map((note) => ({
-    title: note.title,
-    description: note.body,
-  }));
-
   return (
-    <div className="vx-page-stack">
-      <PageHeader
-        eyebrow="Commerce"
+    <ViewLayout>
+      <ViewHeader
+        icon="calendar"
         title="Billing"
         description="Invoices, payment instruments, and charge visibility in a layout that feels like SaaS operations rather than ERP."
+        secondary={<PlannedBadge />}
         action={
-          <ActionButton icon="arrow-down">Download statement</ActionButton>
+          /* No statement-export endpoint exists. Kept visible so the intent is
+           * legible, disabled so it cannot pretend to work. */
+          <Button size="md" disabled>
+            <Icon name="arrow-down" size="xs" fallback="placeholder" />
+            <span>Download statement</span>
+          </Button>
         }
       />
 
       <MetricGrid items={billingMetrics} />
 
-      <DashboardSplit>
-        <PageSection
-          title="Billing health"
-          description="Lead with due-state context before expanding into invoice history."
-        >
-          <SignalList items={healthSignals} />
-        </PageSection>
+      <PageSection
+        icon="gauge"
+        level={2}
+        title="Billing health"
+        description="Lead with due-state context before expanding into invoice history."
+      >
+        <SignalList items={healthSignals} />
+      </PageSection>
 
-        <PageSection
-          title="Billing notes"
-          description="Operational context for finance contacts."
-          tone="muted"
-        >
-          <SignalList items={noteSignals} />
-        </PageSection>
-      </DashboardSplit>
-
-      <DashboardSplit>
-        <PageSection
-          title="Recent invoices"
-          description="Keep the table focused on the most recent invoice and overage records."
-          action={
-            <ActionButton variant="outline" icon="arrow-right">
-              View all invoices
-            </ActionButton>
-          }
-        >
-          <DataTable
-            columns={invoiceColumns}
-            rows={invoiceRows}
-            rowKey={(row, index) => row[0] ?? index}
-            loading={loading}
-            loadingLabel="Loading invoices…"
-            empty="No invoices found."
-          />
-        </PageSection>
-
-        <PageSection
-          title="Billing notes"
-          description="Use concise operational context instead of pushing more columns into the table."
-          tone="muted"
-        >
-          <SignalList items={noteSignals} />
-        </PageSection>
-      </DashboardSplit>
-    </div>
+      <PageSection
+        icon="receipt"
+        level={2}
+        title="Recent invoices"
+        description="Keep the table focused on the most recent invoice and overage records."
+      >
+        <DataTable
+          columns={invoiceColumns}
+          rows={invoiceRows}
+          rowKey={(row, index) => row[0] ?? String(index)}
+          loading={loading}
+          empty={<EmptyState title="No invoices found." />}
+        />
+      </PageSection>
+    </ViewLayout>
   );
 }

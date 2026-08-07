@@ -47,7 +47,7 @@ function build(): Mocks {
     completeLoginWithUser: vi.fn().mockResolvedValue({
       sid: "sid-1",
       realm: "customer",
-      sessionIdleTtl: 3600,
+      sessionMaxAge: 3600,
       redirectTo: "https://rp.example.com/callback?code=abc",
     }),
   };

@@ -1,6 +1,6 @@
 {
   "name": "@vxture/design-system",
-  "version": "2.0.0",
+  "version": "5.0.0-alpha.0",
   "description": "Vxture platform — design tokens, UI components, theme, icons",
   "private": false,
   "type": "module",
@@ -10,6 +10,21 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.mjs",
+      "require": "./dist/server.cjs"
+    },
+    "./styles/admin-tokens.css": "./assets/admin-tokens.css",
+    "./styles/auth.css": "./src/styles/auth.css",
+    "./styles/brand.css": "./src/styles/brand.css",
+    "./styles/brands/ruyin.css": "./src/styles/brands/ruyin.css",
+    "./styles/brands/vxture.css": "./src/styles/brands/vxture.css",
+    "./styles/fullscreen.css": "./src/styles/fullscreen.css",
+    "./styles/globals.css": "./src/styles/globals.css",
+    "./styles/shell-template-user-panel.css": "./assets/shell-template-user-panel.css",
+    "./styles/shell-template.css": "./assets/shell-template.css",
+    "./styles/workbench.css": "./src/styles/workbench.css",
     "./tokens": {
       "types": "./dist/tokens.d.ts",
       "import": "./dist/tokens.mjs",
@@ -19,26 +34,11 @@
       "types": "./dist/types.d.ts",
       "import": "./dist/types.mjs",
       "require": "./dist/types.cjs"
-    },
-    "./server": {
-      "types": "./dist/server.d.ts",
-      "import": "./dist/server.mjs",
-      "require": "./dist/server.cjs"
-    },
-    "./styles/auth.css": "./src/styles/auth.css",
-    "./styles/brand.css": "./src/styles/brand.css",
-    "./styles/components.css": "./src/styles/components.css",
-    "./styles/fullscreen.css": "./src/styles/fullscreen.css",
-    "./styles/globals.css": "./src/styles/globals.css",
-    "./styles/shell-template.css": "./assets/shell-template.css",
-    "./styles/shell-template-user-panel.css": "./assets/shell-template-user-panel.css",
-    "./styles/tokens.css": "./src/styles/tokens.css",
-    "./styles/typography.css": "./src/styles/typography.css",
-    "./styles/brands/vxture.css": "./src/styles/brands/vxture.css",
-    "./styles/brands/ruyin.css": "./src/styles/brands/ruyin.css"
+    }
   },
   "files": [
     "dist",
+    "docs",
     "src/styles",
     "assets",
     "CHANGELOG.md"
@@ -54,21 +54,9 @@
   },
   "dependencies": {
     "@marsidev/react-turnstile": "^1.5.2",
-    "@radix-ui/react-avatar": "^1.1.11",
-    "@radix-ui/react-checkbox": "^1.3.3",
-    "@radix-ui/react-dialog": "^1.1.15",
-    "@radix-ui/react-dropdown-menu": "^2.1.16",
-    "@radix-ui/react-label": "^2.1.8",
-    "@radix-ui/react-popover": "^1.1.15",
-    "@radix-ui/react-select": "^2.2.6",
-    "@radix-ui/react-separator": "^1.1.8",
-    "@radix-ui/react-slot": "^1.2.4",
-    "@radix-ui/react-switch": "^1.1.1",
-    "@radix-ui/react-tabs": "^1.1.13",
-    "@radix-ui/react-tooltip": "^1.2.8",
-    "@vxture/shared": "workspace:^",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^3.5.0"
+    "@vxture/design-tokens": "workspace:*",
+    "@vxture/design-ui": "workspace:*",
+    "@vxture/shared": "workspace:^"
   },
   "peerDependencies": {
     "@phosphor-icons/react": "^2.1.10",

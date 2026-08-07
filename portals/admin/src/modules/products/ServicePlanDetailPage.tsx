@@ -2,14 +2,25 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Icon, Badge, Button, EmptyState } from "@vxture/design-system";
+import {
+  Button,
+  DetailList,
+  DetailPageTemplate,
+  DetailRow,
+  EmptyState,
+  Icon,
+  MetricGrid,
+  StatusBadge,
+} from "@vxture/design-system";
 import type { IconName } from "@vxture/design-system";
+import { orUnset } from "@/modules/shared/display";
 import { fetchProductServicePlan } from "@/api/admin-bff";
 import type {
   ProductServicePlanDetailRecord,
   ProductSolutionCapabilityType,
   ProductSolutionStatus,
 } from "@/entities/console";
+import { PUBLISH_STATUS_TONE } from "@/modules/shared/publish-tone";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
@@ -36,39 +47,6 @@ function capabilityTypeLabel(type: ProductSolutionCapabilityType) {
   return "服务";
 }
 
-function SectionHeading({ icon, title }: { icon: IconName; title: string }) {
-  return <DetailSectionHeading icon={icon} title={title} />;
-}
-
-function DetailField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="vx-product-capability-field">
-      <span>{label}</span>
-      <strong>{value || "未设置"}</strong>
-    </div>
-  );
-}
-
-function DetailMetric({
-  label,
-  value,
-  tag,
-}: {
-  label: string;
-  value: string;
-  tag?: string;
-}) {
-  return (
-    <div className="vx-product-capability-metric">
-      <span>{label}</span>
-      <p>
-        <strong>{value}</strong>
-        {tag ? <em>{tag}</em> : null}
-      </p>
-    </div>
-  );
-}
-
 function ServicePlanSummary({
   plan,
 }: {
@@ -91,41 +69,48 @@ function ServicePlanSummary({
             {plan.solutionCode} · {plan.tierCode}
           </p>
           <div className="vx-product-capability-summary__badges">
-            <Badge
-              className={`vx-tenant-pill vx-service-plan-pill--${plan.status}`}
-            >
+            <StatusBadge tone={PUBLISH_STATUS_TONE[plan.status]}>
               {statusLabel(plan.status)}
-            </Badge>
-            <Badge
-              className={`vx-tenant-pill vx-service-plan-pill--${plan.isPublic ? "public" : "internal"}`}
-            >
+            </StatusBadge>
+            <StatusBadge tone={plan.isPublic ? "success" : "neutral"}>
               {plan.isPublic ? "公开" : "内部"}
-            </Badge>
+            </StatusBadge>
           </div>
         </div>
       </div>
-      <div className="vx-product-capability-summary__metrics">
-        <DetailMetric
-          label="价格"
-          value={plan.price.priceLabel}
-          tag={plan.price.periodType === "contract" ? "专属商务" : "标准价格"}
-        />
-        <DetailMetric
-          label="包含产品"
-          value={formatNumber(plan.includedProductCount)}
-          tag={`不含 ${formatNumber(plan.excludedProductCount)}`}
-        />
-        <DetailMetric
-          label="订阅使用"
-          value={formatNumber(plan.subscriptionCount)}
-          tag={`活跃 ${formatNumber(plan.activeTenantCount)}`}
-        />
-        <DetailMetric
-          label="适用范围"
-          value={formatNumber(plan.applicableScope.length)}
-          tag={plan.industry}
-        />
-      </div>
+      <MetricGrid
+        items={[
+          {
+            id: "price",
+            label: "价格",
+            value: plan.price.priceLabel,
+            tags: [
+              plan.price.periodType === "contract" ? "专属商务" : "标准价格",
+            ],
+          },
+          {
+            id: "included",
+            help: "本套餐包含的产品能力数。",
+            label: "包含产品",
+            value: formatNumber(plan.includedProductCount),
+            tags: [`不含 ${formatNumber(plan.excludedProductCount)}`],
+          },
+          {
+            id: "subscriptions",
+            help: "使用本套餐的订阅实例数。",
+            label: "订阅使用",
+            value: formatNumber(plan.subscriptionCount),
+            tags: [`活跃 ${formatNumber(plan.activeTenantCount)}`],
+          },
+          {
+            id: "scope",
+            help: "本套餐适用范围条目数。",
+            label: "适用范围",
+            value: formatNumber(plan.applicableScope.length),
+            tags: [plan.industry],
+          },
+        ]}
+      />
     </section>
   );
 }
@@ -141,20 +126,23 @@ function ServicePlanDetails({
       aria-label={`${plan.solutionName} ${plan.tierName} 详情`}
     >
       <section className="vx-product-capability-section">
-        <SectionHeading icon="database" title="基础资料" />
-        <div className="vx-product-capability-fields">
-          <DetailField label="业务方案" value={plan.solutionName} />
-          <DetailField label="方案编码" value={plan.solutionCode} />
-          <DetailField label="套餐版本" value={plan.tierName} />
-          <DetailField label="版本编码" value={plan.tierCode} />
-          <DetailField label="套餐状态" value={statusLabel(plan.status)} />
-          <DetailField
-            label="可见范围"
-            value={plan.isPublic ? "公开" : "内部"}
-          />
-          <DetailField label="负责团队" value={plan.ownerTeam} />
-          <DetailField label="更新时间" value={formatDate(plan.updatedAt)} />
-        </div>
+        <DetailSectionHeading icon="database" title="基础资料" />
+        <DetailList columns={3}>
+          <DetailRow label="业务方案">{orUnset(plan.solutionName)}</DetailRow>
+          <DetailRow label="方案编码">{orUnset(plan.solutionCode)}</DetailRow>
+          <DetailRow label="套餐版本">{orUnset(plan.tierName)}</DetailRow>
+          <DetailRow label="版本编码">{orUnset(plan.tierCode)}</DetailRow>
+          <DetailRow label="套餐状态">
+            {orUnset(statusLabel(plan.status))}
+          </DetailRow>
+          <DetailRow label="可见范围">
+            {plan.isPublic ? "公开" : "内部"}
+          </DetailRow>
+          <DetailRow label="负责团队">{orUnset(plan.ownerTeam)}</DetailRow>
+          <DetailRow label="更新时间">
+            {orUnset(formatDate(plan.updatedAt))}
+          </DetailRow>
+        </DetailList>
         <div className="vx-product-capability-description">
           <strong>{plan.summary}</strong>
           <p>{plan.deliveryMode}</p>
@@ -162,33 +150,24 @@ function ServicePlanDetails({
       </section>
 
       <section className="vx-product-capability-section">
-        <SectionHeading icon="chart-bar" title="配额价格" />
-        <div className="vx-product-capability-fields">
-          <DetailField label="价格" value={plan.price.priceLabel} />
-          <DetailField label="币种" value={plan.price.currency} />
-          <DetailField
-            label="周期"
-            value={
-              plan.price.periodType === "contract"
-                ? "合同约定"
-                : plan.price.periodType === "yearly"
-                  ? "年付"
-                  : "月付"
-            }
-          />
-          <DetailField
-            label="订阅数量"
-            value={`${formatNumber(plan.subscriptionCount)} 个`}
-          />
-          <DetailField
-            label="活跃租户"
-            value={`${formatNumber(plan.activeTenantCount)} 个`}
-          />
-        </div>
+        <DetailSectionHeading icon="chart-bar" title="配额价格" />
+        <DetailList columns={3}>
+          <DetailRow label="价格">{orUnset(plan.price.priceLabel)}</DetailRow>
+          <DetailRow label="币种">{orUnset(plan.price.currency)}</DetailRow>
+          <DetailRow label="周期">
+            {plan.price.periodType === "contract"
+              ? "合同约定"
+              : plan.price.periodType === "yearly"
+                ? "年付"
+                : "月付"}
+          </DetailRow>
+          <DetailRow label="订阅数量">{`${formatNumber(plan.subscriptionCount)} 个`}</DetailRow>
+          <DetailRow label="活跃租户">{`${formatNumber(plan.activeTenantCount)} 个`}</DetailRow>
+        </DetailList>
       </section>
 
       <section className="vx-product-capability-section">
-        <SectionHeading icon="cube" title="包含 / 不包含产品" />
+        <DetailSectionHeading icon="cube" title="包含 / 不包含产品" />
         <div className="vx-product-detail-list vx-product-detail-list--entitlements">
           {plan.entitlements.map((item) => (
             <Link
@@ -218,7 +197,7 @@ function ServicePlanDetails({
       </section>
 
       <section className="vx-product-capability-section">
-        <SectionHeading icon="map-pin" title="适用范围" />
+        <DetailSectionHeading icon="map-pin" title="适用范围" />
         <div className="vx-product-detail-notes">
           {plan.applicableScope.map((item) => (
             <article key={item}>
@@ -230,13 +209,17 @@ function ServicePlanDetails({
       </section>
 
       <section className="vx-product-capability-section">
-        <SectionHeading icon="shield-check" title="售卖状态" />
-        <div className="vx-product-capability-fields">
-          <DetailField label="售卖状态" value={statusLabel(plan.status)} />
-          <DetailField label="公开售卖" value={plan.isPublic ? "是" : "否"} />
-          <DetailField label="客户群体" value={plan.customerSegment} />
-          <DetailField label="业务场景" value={plan.scenario} />
-        </div>
+        <DetailSectionHeading icon="shield-check" title="售卖状态" />
+        <DetailList columns={3}>
+          <DetailRow label="售卖状态">
+            {orUnset(statusLabel(plan.status))}
+          </DetailRow>
+          <DetailRow label="公开售卖">{plan.isPublic ? "是" : "否"}</DetailRow>
+          <DetailRow label="客户群体">
+            {orUnset(plan.customerSegment)}
+          </DetailRow>
+          <DetailRow label="业务场景">{orUnset(plan.scenario)}</DetailRow>
+        </DetailList>
         <div className="vx-product-detail-notes">
           {plan.salesNotes.map((item) => (
             <article key={item}>
@@ -280,62 +263,69 @@ export function ServicePlanDetailPage({
 
   if (!loading && !plan) {
     return (
-      <div className="vx-page-stack vx-product-capability-page">
-        <PageHeader
-          icon="star"
-          title="服务套餐详情"
-          description="未找到对应的服务套餐。"
-          action={
-            <Button asChild variant="outline">
-              <Link href="/service-plans">
-                <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                返回列表
-              </Link>
-            </Button>
-          }
-        />
+      <DetailPageTemplate
+        className="vx-product-capability-page"
+        header={
+          <PageHeader
+            icon="star"
+            title="服务套餐详情"
+            description="未找到对应的服务套餐。"
+            action={
+              <Button asChild variant="outline">
+                <Link href="/service-plans">
+                  <Icon name="arrow-left" size="xs" fallback="placeholder" />
+                  返回列表
+                </Link>
+              </Button>
+            }
+          />
+        }
+      >
         <EmptyState
           title="服务套餐不存在"
           description="该套餐可能已归档，或当前账号无权访问。"
         />
-      </div>
+      </DetailPageTemplate>
     );
   }
 
   return (
-    <div className="vx-page-stack vx-product-capability-page">
-      <PageHeader
-        icon="star"
-        title={
-          plan ? `${plan.solutionName} / ${plan.tierName}` : "服务套餐详情"
-        }
-        description={plan?.summary ?? "正在读取服务套餐详情。"}
-        action={
-          <div className="vx-product-capability-actions">
-            <Button asChild variant="outline">
-              <Link href="/service-plans">
-                <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                返回列表
-              </Link>
-            </Button>
-            {plan ? (
+    <DetailPageTemplate
+      className="vx-product-capability-page"
+      header={
+        <PageHeader
+          icon="star"
+          title={
+            plan ? `${plan.solutionName} / ${plan.tierName}` : "服务套餐详情"
+          }
+          description={plan?.summary ?? "正在读取服务套餐详情。"}
+          action={
+            <div className="vx-product-capability-actions">
               <Button asChild variant="outline">
-                <Link
-                  href={`/product-solutions/${encodeURIComponent(plan.solutionCode)}`}
-                >
-                  <Icon name="workflow" size="xs" fallback="placeholder" />
-                  业务方案
+                <Link href="/service-plans">
+                  <Icon name="arrow-left" size="xs" fallback="placeholder" />
+                  返回列表
                 </Link>
               </Button>
-            ) : null}
-            <Button variant="outline" disabled>
-              <Icon name="edit" size="xs" fallback="placeholder" />
-              修改
-            </Button>
-          </div>
-        }
-      />
-
+              {plan ? (
+                <Button asChild variant="outline">
+                  <Link
+                    href={`/product-solutions/${encodeURIComponent(plan.solutionCode)}`}
+                  >
+                    <Icon name="workflow" size="xs" fallback="placeholder" />
+                    业务方案
+                  </Link>
+                </Button>
+              ) : null}
+              <Button variant="outline" disabled>
+                <Icon name="edit" size="xs" fallback="placeholder" />
+                修改
+              </Button>
+            </div>
+          }
+        />
+      }
+    >
       {plan ? (
         <>
           <ServicePlanSummary plan={plan} />
@@ -346,6 +336,6 @@ export function ServicePlanDetailPage({
           <span>读取中</span>
         </section>
       )}
-    </div>
+    </DetailPageTemplate>
   );
 }

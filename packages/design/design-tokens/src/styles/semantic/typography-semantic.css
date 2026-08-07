@@ -1,0 +1,390 @@
+/**
+ * semantic/typography-semantic.css - T2 语义层 · 排版角色（工具类族 text-*）。
+ * @package @vxture/design-tokens
+ * @layer Presentation
+ * @category styles
+ * @author AI-Generated
+ * @date 2026-08-01
+ *
+ * ⚠ 本文件由脚本生成，请勿手工编辑。
+ *   生成：node scripts/design-tokens/generate-semantic-scales.mjs
+ *   输入：scripts/design-tokens/typography-policy.mjs
+ *
+ * T2 契约见 packages/design/design-system/docs/04-tokens-contract.md。
+ * 构建规范见 docs/10-standards/065-design-token-pipeline.md。
+ *
+ * 每个角色一次落齐字号 / 行高 / 字距 / 字重，由 theme.css 注册为 v4 的
+ * `--text-<role>` 及其修饰子键；字体族不在修饰子键之列，仍由独立的
+ * `font-*` 工具类承担。
+ */
+
+:root, html.vx-font-default {
+  /* display */
+  --display-lg-font-family: var(--vx-font-brand);
+  --display-lg-font-size: var(--vx-text-7xl);
+  --display-lg-font-weight: var(--vx-font-weight-bold);
+  --display-lg-line-height: calc(var(--vx-leading-tight) + var(--vx-cjk-leading-add));
+  --display-lg-letter-spacing: var(--vx-tracking-normal);
+  --display-md-font-family: var(--vx-font-brand);
+  --display-md-font-size: var(--vx-text-6xl);
+  --display-md-font-weight: var(--vx-font-weight-bold);
+  --display-md-line-height: calc(var(--vx-leading-tight) + var(--vx-cjk-leading-add));
+  --display-md-letter-spacing: var(--vx-tracking-normal);
+  --display-sm-font-family: var(--vx-font-brand);
+  --display-sm-font-size: var(--vx-text-5xl);
+  --display-sm-font-weight: var(--vx-font-weight-bold);
+  --display-sm-line-height: calc(var(--vx-leading-tight) + var(--vx-cjk-leading-add));
+  --display-sm-letter-spacing: var(--vx-tracking-normal);
+
+  /* heading */
+  --heading-1-font-family: var(--vx-font-brand);
+  --heading-1-font-size: var(--vx-text-4xl);
+  --heading-1-font-weight: var(--vx-font-weight-semibold);
+  --heading-1-line-height: calc(var(--vx-leading-tight) + var(--vx-cjk-leading-add));
+  --heading-1-letter-spacing: var(--vx-tracking-normal);
+  --heading-2-font-family: var(--vx-font-brand);
+  --heading-2-font-size: var(--vx-text-3xl);
+  --heading-2-font-weight: var(--vx-font-weight-semibold);
+  --heading-2-line-height: calc(var(--vx-leading-tight) + var(--vx-cjk-leading-add));
+  --heading-2-letter-spacing: var(--vx-tracking-normal);
+  --heading-3-font-family: var(--vx-font-brand);
+  --heading-3-font-size: var(--vx-text-2xl);
+  --heading-3-font-weight: var(--vx-font-weight-semibold);
+  --heading-3-line-height: calc(var(--vx-text-2xl--line-height) + var(--vx-cjk-leading-add));
+  --heading-3-letter-spacing: var(--vx-tracking-normal);
+
+  /* title */
+  --title-xl-font-family: var(--vx-font-sans);
+  --title-xl-font-size: var(--vx-text-xl);
+  --title-xl-font-weight: var(--vx-font-weight-semibold);
+  --title-xl-line-height: calc(var(--vx-text-xl--line-height) + var(--vx-cjk-leading-add));
+  --title-xl-letter-spacing: var(--vx-tracking-normal);
+  --title-lg-font-family: var(--vx-font-sans);
+  --title-lg-font-size: var(--vx-text-lg);
+  --title-lg-font-weight: var(--vx-font-weight-semibold);
+  --title-lg-line-height: calc(var(--vx-text-lg--line-height) + var(--vx-cjk-leading-add));
+  --title-lg-letter-spacing: var(--vx-tracking-normal);
+  --title-md-font-family: var(--vx-font-sans);
+  --title-md-font-size: var(--vx-text-base);
+  --title-md-font-weight: var(--vx-font-weight-semibold);
+  --title-md-line-height: calc(var(--vx-text-base--line-height) + var(--vx-cjk-leading-add));
+  --title-md-letter-spacing: var(--vx-tracking-normal);
+  --title-sm-font-family: var(--vx-font-sans);
+  --title-sm-font-size: var(--vx-text-sm);
+  --title-sm-font-weight: var(--vx-font-weight-semibold);
+  --title-sm-line-height: calc(var(--vx-text-sm--line-height) + var(--vx-cjk-leading-add));
+  --title-sm-letter-spacing: var(--vx-tracking-normal);
+
+  /* body */
+  --body-xl-font-family: var(--vx-font-sans);
+  --body-xl-font-size: var(--vx-text-lg);
+  --body-xl-font-weight: var(--vx-font-weight-normal);
+  --body-xl-line-height: calc(var(--vx-text-lg--line-height) + var(--vx-cjk-leading-add));
+  --body-xl-letter-spacing: var(--vx-tracking-normal);
+  --body-lg-font-family: var(--vx-font-sans);
+  --body-lg-font-size: var(--vx-text-base);
+  --body-lg-font-weight: var(--vx-font-weight-normal);
+  --body-lg-line-height: calc(var(--vx-text-base--line-height) + var(--vx-cjk-leading-add));
+  --body-lg-letter-spacing: var(--vx-tracking-normal);
+  --body-md-font-family: var(--vx-font-sans);
+  --body-md-font-size: var(--vx-text-sm);
+  --body-md-font-weight: var(--vx-font-weight-normal);
+  --body-md-line-height: calc(var(--vx-text-sm--line-height) + var(--vx-cjk-leading-add));
+  --body-md-letter-spacing: var(--vx-tracking-normal);
+  --body-sm-font-family: var(--vx-font-sans);
+  --body-sm-font-size: var(--vx-text-xs);
+  --body-sm-font-weight: var(--vx-font-weight-normal);
+  --body-sm-line-height: calc(var(--vx-text-xs--line-height) + var(--vx-cjk-leading-add));
+  --body-sm-letter-spacing: var(--vx-tracking-normal);
+
+  /* label */
+  --label-xl-font-family: var(--vx-font-sans);
+  --label-xl-font-size: var(--vx-text-lg);
+  --label-xl-font-weight: var(--vx-font-weight-medium);
+  --label-xl-line-height: calc(var(--vx-text-lg--line-height) + var(--vx-cjk-leading-add));
+  --label-xl-letter-spacing: var(--vx-tracking-normal);
+  --label-lg-font-family: var(--vx-font-sans);
+  --label-lg-font-size: var(--vx-text-base);
+  --label-lg-font-weight: var(--vx-font-weight-medium);
+  --label-lg-line-height: calc(var(--vx-text-base--line-height) + var(--vx-cjk-leading-add));
+  --label-lg-letter-spacing: var(--vx-tracking-normal);
+  --label-md-font-family: var(--vx-font-sans);
+  --label-md-font-size: var(--vx-text-sm);
+  --label-md-font-weight: var(--vx-font-weight-medium);
+  --label-md-line-height: calc(var(--vx-text-sm--line-height) + var(--vx-cjk-leading-add));
+  --label-md-letter-spacing: var(--vx-tracking-normal);
+  --label-sm-font-family: var(--vx-font-sans);
+  --label-sm-font-size: var(--vx-text-xs);
+  --label-sm-font-weight: var(--vx-font-weight-medium);
+  --label-sm-line-height: calc(var(--vx-text-xs--line-height) + var(--vx-cjk-leading-add));
+  --label-sm-letter-spacing: var(--vx-tracking-normal);
+
+  /* code */
+  --code-md-font-family: var(--vx-font-mono);
+  --code-md-font-size: var(--vx-text-sm);
+  --code-md-font-weight: var(--vx-font-weight-normal);
+  --code-md-line-height: calc(var(--vx-text-sm--line-height) + var(--vx-cjk-leading-add));
+  --code-md-letter-spacing: var(--vx-tracking-normal);
+  --code-sm-font-family: var(--vx-font-mono);
+  --code-sm-font-size: var(--vx-text-xs);
+  --code-sm-font-weight: var(--vx-font-weight-normal);
+  --code-sm-line-height: calc(var(--vx-text-xs--line-height) + var(--vx-cjk-leading-add));
+  --code-sm-letter-spacing: var(--vx-tracking-normal);
+
+  /* overline */
+  --overline-font-family: var(--vx-font-sans);
+  --overline-font-size: var(--vx-text-xs);
+  --overline-font-weight: var(--vx-font-weight-semibold);
+  --overline-line-height: calc(var(--vx-text-xs--line-height) + var(--vx-cjk-leading-add));
+  --overline-letter-spacing: var(--vx-tracking-wider);
+}
+
+html.vx-font-small {
+  /* display */
+  --display-lg-font-family: var(--vx-font-brand);
+  --display-lg-font-size: var(--vx-text-6xl);
+  --display-lg-font-weight: var(--vx-font-weight-bold);
+  --display-lg-line-height: calc(var(--vx-leading-tight) + var(--vx-cjk-leading-add));
+  --display-lg-letter-spacing: var(--vx-tracking-normal);
+  --display-md-font-family: var(--vx-font-brand);
+  --display-md-font-size: var(--vx-text-5xl);
+  --display-md-font-weight: var(--vx-font-weight-bold);
+  --display-md-line-height: calc(var(--vx-leading-tight) + var(--vx-cjk-leading-add));
+  --display-md-letter-spacing: var(--vx-tracking-normal);
+  --display-sm-font-family: var(--vx-font-brand);
+  --display-sm-font-size: var(--vx-text-4xl);
+  --display-sm-font-weight: var(--vx-font-weight-bold);
+  --display-sm-line-height: calc(var(--vx-leading-tight) + var(--vx-cjk-leading-add));
+  --display-sm-letter-spacing: var(--vx-tracking-normal);
+
+  /* heading */
+  --heading-1-font-family: var(--vx-font-brand);
+  --heading-1-font-size: var(--vx-text-3xl);
+  --heading-1-font-weight: var(--vx-font-weight-semibold);
+  --heading-1-line-height: calc(var(--vx-leading-tight) + var(--vx-cjk-leading-add));
+  --heading-1-letter-spacing: var(--vx-tracking-normal);
+  --heading-2-font-family: var(--vx-font-brand);
+  --heading-2-font-size: var(--vx-text-2xl);
+  --heading-2-font-weight: var(--vx-font-weight-semibold);
+  --heading-2-line-height: calc(var(--vx-leading-tight) + var(--vx-cjk-leading-add));
+  --heading-2-letter-spacing: var(--vx-tracking-normal);
+  --heading-3-font-family: var(--vx-font-brand);
+  --heading-3-font-size: var(--vx-text-xl);
+  --heading-3-font-weight: var(--vx-font-weight-semibold);
+  --heading-3-line-height: calc(var(--vx-text-xl--line-height) + var(--vx-cjk-leading-add));
+  --heading-3-letter-spacing: var(--vx-tracking-normal);
+
+  /* title */
+  --title-xl-font-family: var(--vx-font-sans);
+  --title-xl-font-size: var(--vx-text-lg);
+  --title-xl-font-weight: var(--vx-font-weight-semibold);
+  --title-xl-line-height: calc(var(--vx-text-lg--line-height) + var(--vx-cjk-leading-add));
+  --title-xl-letter-spacing: var(--vx-tracking-normal);
+  --title-lg-font-family: var(--vx-font-sans);
+  --title-lg-font-size: var(--vx-text-base);
+  --title-lg-font-weight: var(--vx-font-weight-semibold);
+  --title-lg-line-height: calc(var(--vx-text-base--line-height) + var(--vx-cjk-leading-add));
+  --title-lg-letter-spacing: var(--vx-tracking-normal);
+  --title-md-font-family: var(--vx-font-sans);
+  --title-md-font-size: var(--vx-text-sm);
+  --title-md-font-weight: var(--vx-font-weight-semibold);
+  --title-md-line-height: calc(var(--vx-text-sm--line-height) + var(--vx-cjk-leading-add));
+  --title-md-letter-spacing: var(--vx-tracking-normal);
+  --title-sm-font-family: var(--vx-font-sans);
+  --title-sm-font-size: var(--vx-text-xs);
+  --title-sm-font-weight: var(--vx-font-weight-semibold);
+  --title-sm-line-height: calc(var(--vx-text-xs--line-height) + var(--vx-cjk-leading-add));
+  --title-sm-letter-spacing: var(--vx-tracking-normal);
+
+  /* body */
+  --body-xl-font-family: var(--vx-font-sans);
+  --body-xl-font-size: var(--vx-text-base);
+  --body-xl-font-weight: var(--vx-font-weight-normal);
+  --body-xl-line-height: calc(var(--vx-text-base--line-height) + var(--vx-cjk-leading-add));
+  --body-xl-letter-spacing: var(--vx-tracking-normal);
+  --body-lg-font-family: var(--vx-font-sans);
+  --body-lg-font-size: var(--vx-text-sm);
+  --body-lg-font-weight: var(--vx-font-weight-normal);
+  --body-lg-line-height: calc(var(--vx-text-sm--line-height) + var(--vx-cjk-leading-add));
+  --body-lg-letter-spacing: var(--vx-tracking-normal);
+  --body-md-font-family: var(--vx-font-sans);
+  --body-md-font-size: var(--vx-text-xs);
+  --body-md-font-weight: var(--vx-font-weight-normal);
+  --body-md-line-height: calc(var(--vx-text-xs--line-height) + var(--vx-cjk-leading-add));
+  --body-md-letter-spacing: var(--vx-tracking-normal);
+  --body-sm-font-family: var(--vx-font-sans);
+  --body-sm-font-size: var(--vx-text-xs);
+  --body-sm-font-weight: var(--vx-font-weight-normal);
+  --body-sm-line-height: calc(var(--vx-text-xs--line-height) + var(--vx-cjk-leading-add));
+  --body-sm-letter-spacing: var(--vx-tracking-normal);
+
+  /* label */
+  --label-xl-font-family: var(--vx-font-sans);
+  --label-xl-font-size: var(--vx-text-base);
+  --label-xl-font-weight: var(--vx-font-weight-medium);
+  --label-xl-line-height: calc(var(--vx-text-base--line-height) + var(--vx-cjk-leading-add));
+  --label-xl-letter-spacing: var(--vx-tracking-normal);
+  --label-lg-font-family: var(--vx-font-sans);
+  --label-lg-font-size: var(--vx-text-sm);
+  --label-lg-font-weight: var(--vx-font-weight-medium);
+  --label-lg-line-height: calc(var(--vx-text-sm--line-height) + var(--vx-cjk-leading-add));
+  --label-lg-letter-spacing: var(--vx-tracking-normal);
+  --label-md-font-family: var(--vx-font-sans);
+  --label-md-font-size: var(--vx-text-xs);
+  --label-md-font-weight: var(--vx-font-weight-medium);
+  --label-md-line-height: calc(var(--vx-text-xs--line-height) + var(--vx-cjk-leading-add));
+  --label-md-letter-spacing: var(--vx-tracking-normal);
+  --label-sm-font-family: var(--vx-font-sans);
+  --label-sm-font-size: var(--vx-text-xs);
+  --label-sm-font-weight: var(--vx-font-weight-medium);
+  --label-sm-line-height: calc(var(--vx-text-xs--line-height) + var(--vx-cjk-leading-add));
+  --label-sm-letter-spacing: var(--vx-tracking-normal);
+
+  /* code */
+  --code-md-font-family: var(--vx-font-mono);
+  --code-md-font-size: var(--vx-text-xs);
+  --code-md-font-weight: var(--vx-font-weight-normal);
+  --code-md-line-height: calc(var(--vx-text-xs--line-height) + var(--vx-cjk-leading-add));
+  --code-md-letter-spacing: var(--vx-tracking-normal);
+  --code-sm-font-family: var(--vx-font-mono);
+  --code-sm-font-size: var(--vx-text-xs);
+  --code-sm-font-weight: var(--vx-font-weight-normal);
+  --code-sm-line-height: calc(var(--vx-text-xs--line-height) + var(--vx-cjk-leading-add));
+  --code-sm-letter-spacing: var(--vx-tracking-normal);
+
+  /* overline */
+  --overline-font-family: var(--vx-font-sans);
+  --overline-font-size: var(--vx-text-xs);
+  --overline-font-weight: var(--vx-font-weight-semibold);
+  --overline-line-height: calc(var(--vx-text-xs--line-height) + var(--vx-cjk-leading-add));
+  --overline-letter-spacing: var(--vx-tracking-wider);
+}
+
+html.vx-font-large {
+  /* display */
+  --display-lg-font-family: var(--vx-font-brand);
+  --display-lg-font-size: var(--vx-text-8xl);
+  --display-lg-font-weight: var(--vx-font-weight-bold);
+  --display-lg-line-height: calc(var(--vx-leading-tight) + var(--vx-cjk-leading-add));
+  --display-lg-letter-spacing: var(--vx-tracking-normal);
+  --display-md-font-family: var(--vx-font-brand);
+  --display-md-font-size: var(--vx-text-7xl);
+  --display-md-font-weight: var(--vx-font-weight-bold);
+  --display-md-line-height: calc(var(--vx-leading-tight) + var(--vx-cjk-leading-add));
+  --display-md-letter-spacing: var(--vx-tracking-normal);
+  --display-sm-font-family: var(--vx-font-brand);
+  --display-sm-font-size: var(--vx-text-6xl);
+  --display-sm-font-weight: var(--vx-font-weight-bold);
+  --display-sm-line-height: calc(var(--vx-leading-tight) + var(--vx-cjk-leading-add));
+  --display-sm-letter-spacing: var(--vx-tracking-normal);
+
+  /* heading */
+  --heading-1-font-family: var(--vx-font-brand);
+  --heading-1-font-size: var(--vx-text-5xl);
+  --heading-1-font-weight: var(--vx-font-weight-semibold);
+  --heading-1-line-height: calc(var(--vx-leading-tight) + var(--vx-cjk-leading-add));
+  --heading-1-letter-spacing: var(--vx-tracking-normal);
+  --heading-2-font-family: var(--vx-font-brand);
+  --heading-2-font-size: var(--vx-text-4xl);
+  --heading-2-font-weight: var(--vx-font-weight-semibold);
+  --heading-2-line-height: calc(var(--vx-leading-tight) + var(--vx-cjk-leading-add));
+  --heading-2-letter-spacing: var(--vx-tracking-normal);
+  --heading-3-font-family: var(--vx-font-brand);
+  --heading-3-font-size: var(--vx-text-3xl);
+  --heading-3-font-weight: var(--vx-font-weight-semibold);
+  --heading-3-line-height: calc(var(--vx-text-3xl--line-height) + var(--vx-cjk-leading-add));
+  --heading-3-letter-spacing: var(--vx-tracking-normal);
+
+  /* title */
+  --title-xl-font-family: var(--vx-font-sans);
+  --title-xl-font-size: var(--vx-text-2xl);
+  --title-xl-font-weight: var(--vx-font-weight-semibold);
+  --title-xl-line-height: calc(var(--vx-text-2xl--line-height) + var(--vx-cjk-leading-add));
+  --title-xl-letter-spacing: var(--vx-tracking-normal);
+  --title-lg-font-family: var(--vx-font-sans);
+  --title-lg-font-size: var(--vx-text-xl);
+  --title-lg-font-weight: var(--vx-font-weight-semibold);
+  --title-lg-line-height: calc(var(--vx-text-xl--line-height) + var(--vx-cjk-leading-add));
+  --title-lg-letter-spacing: var(--vx-tracking-normal);
+  --title-md-font-family: var(--vx-font-sans);
+  --title-md-font-size: var(--vx-text-lg);
+  --title-md-font-weight: var(--vx-font-weight-semibold);
+  --title-md-line-height: calc(var(--vx-text-lg--line-height) + var(--vx-cjk-leading-add));
+  --title-md-letter-spacing: var(--vx-tracking-normal);
+  --title-sm-font-family: var(--vx-font-sans);
+  --title-sm-font-size: var(--vx-text-base);
+  --title-sm-font-weight: var(--vx-font-weight-semibold);
+  --title-sm-line-height: calc(var(--vx-text-base--line-height) + var(--vx-cjk-leading-add));
+  --title-sm-letter-spacing: var(--vx-tracking-normal);
+
+  /* body */
+  --body-xl-font-family: var(--vx-font-sans);
+  --body-xl-font-size: var(--vx-text-xl);
+  --body-xl-font-weight: var(--vx-font-weight-normal);
+  --body-xl-line-height: calc(var(--vx-text-xl--line-height) + var(--vx-cjk-leading-add));
+  --body-xl-letter-spacing: var(--vx-tracking-normal);
+  --body-lg-font-family: var(--vx-font-sans);
+  --body-lg-font-size: var(--vx-text-lg);
+  --body-lg-font-weight: var(--vx-font-weight-normal);
+  --body-lg-line-height: calc(var(--vx-text-lg--line-height) + var(--vx-cjk-leading-add));
+  --body-lg-letter-spacing: var(--vx-tracking-normal);
+  --body-md-font-family: var(--vx-font-sans);
+  --body-md-font-size: var(--vx-text-base);
+  --body-md-font-weight: var(--vx-font-weight-normal);
+  --body-md-line-height: calc(var(--vx-text-base--line-height) + var(--vx-cjk-leading-add));
+  --body-md-letter-spacing: var(--vx-tracking-normal);
+  --body-sm-font-family: var(--vx-font-sans);
+  --body-sm-font-size: var(--vx-text-sm);
+  --body-sm-font-weight: var(--vx-font-weight-normal);
+  --body-sm-line-height: calc(var(--vx-text-sm--line-height) + var(--vx-cjk-leading-add));
+  --body-sm-letter-spacing: var(--vx-tracking-normal);
+
+  /* label */
+  --label-xl-font-family: var(--vx-font-sans);
+  --label-xl-font-size: var(--vx-text-xl);
+  --label-xl-font-weight: var(--vx-font-weight-medium);
+  --label-xl-line-height: calc(var(--vx-text-xl--line-height) + var(--vx-cjk-leading-add));
+  --label-xl-letter-spacing: var(--vx-tracking-normal);
+  --label-lg-font-family: var(--vx-font-sans);
+  --label-lg-font-size: var(--vx-text-lg);
+  --label-lg-font-weight: var(--vx-font-weight-medium);
+  --label-lg-line-height: calc(var(--vx-text-lg--line-height) + var(--vx-cjk-leading-add));
+  --label-lg-letter-spacing: var(--vx-tracking-normal);
+  --label-md-font-family: var(--vx-font-sans);
+  --label-md-font-size: var(--vx-text-base);
+  --label-md-font-weight: var(--vx-font-weight-medium);
+  --label-md-line-height: calc(var(--vx-text-base--line-height) + var(--vx-cjk-leading-add));
+  --label-md-letter-spacing: var(--vx-tracking-normal);
+  --label-sm-font-family: var(--vx-font-sans);
+  --label-sm-font-size: var(--vx-text-sm);
+  --label-sm-font-weight: var(--vx-font-weight-medium);
+  --label-sm-line-height: calc(var(--vx-text-sm--line-height) + var(--vx-cjk-leading-add));
+  --label-sm-letter-spacing: var(--vx-tracking-normal);
+
+  /* code */
+  --code-md-font-family: var(--vx-font-mono);
+  --code-md-font-size: var(--vx-text-base);
+  --code-md-font-weight: var(--vx-font-weight-normal);
+  --code-md-line-height: calc(var(--vx-text-base--line-height) + var(--vx-cjk-leading-add));
+  --code-md-letter-spacing: var(--vx-tracking-normal);
+  --code-sm-font-family: var(--vx-font-mono);
+  --code-sm-font-size: var(--vx-text-sm);
+  --code-sm-font-weight: var(--vx-font-weight-normal);
+  --code-sm-line-height: calc(var(--vx-text-sm--line-height) + var(--vx-cjk-leading-add));
+  --code-sm-letter-spacing: var(--vx-tracking-normal);
+
+  /* overline */
+  --overline-font-family: var(--vx-font-sans);
+  --overline-font-size: var(--vx-text-sm);
+  --overline-font-weight: var(--vx-font-weight-semibold);
+  --overline-line-height: calc(var(--vx-text-sm--line-height) + var(--vx-cjk-leading-add));
+  --overline-letter-spacing: var(--vx-tracking-wider);
+}
+
+:root {
+  --vx-cjk-leading-add: 0;
+}
+
+:lang(zh) {
+  --vx-cjk-leading-add: 0.15;
+}

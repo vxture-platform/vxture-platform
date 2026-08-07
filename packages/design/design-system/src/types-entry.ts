@@ -3,4 +3,4 @@
  * @package @vxture/design-system
  */
 
-export type * from "./types";
+export type * from "@vxture/design-ui";

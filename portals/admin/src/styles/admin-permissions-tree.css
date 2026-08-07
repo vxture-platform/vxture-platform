@@ -26,8 +26,8 @@
   grid-template-columns:
     var(--vx-admin-permission-track-325r) minmax(var(--vx-admin-permission-track-22r), 1.65fr) minmax(var(--vx-admin-permission-track-55r), 0.48fr) minmax(var(--vx-admin-permission-track-475r), 0.42fr) minmax(var(--vx-admin-permission-track-5r), 0.42fr) minmax(var(--vx-admin-permission-grid-column-2xs), 0.52fr) var(--vx-admin-permission-track-5r);
   align-items: center;
-  gap: var(--vx-admin-permission-space-05r);
-  padding: var(--vx-admin-permission-space-0625r) var(--vx-admin-permission-space-0875r);
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
   border-bottom: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-gray-500) 14%, transparent);
   color: var(--vx-color-gray-500);
   font-size: var(--vx-admin-caption-size);
@@ -48,8 +48,8 @@
   display: grid;
   grid-template-columns: var(--vx-admin-permission-track-175r) minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--vx-admin-permission-space-075r);
-  padding: var(--vx-admin-permission-space-1r) var(--vx-admin-permission-space-0875r) var(--vx-admin-permission-space-075r);
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-md) var(--space-sm);
   border-bottom: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-gray-500) 11%, transparent);
   background: transparent;
 }
@@ -60,7 +60,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--vx-admin-permission-radius-04375r);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--vx-color-gray-600);
 }
@@ -68,7 +68,7 @@
 .vx-admin-permission-tree__workspace > header div {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-permission-space-01875r);
+  gap: var(--space-2xs);
 }
 
 .vx-admin-permission-tree__workspace > header strong,

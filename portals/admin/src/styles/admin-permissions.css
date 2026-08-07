@@ -1,6 +1,12 @@
 /* Admin permissions style entry. Keep concrete rules in admin-permissions-* modules. */
 
-@import "./admin-permissions-core.css";
+/*
+ * 2026-08-07 恢复进构建。`5f91f314`「archive 22 dead stylesheets」按"tsx 里已无引用"
+ * 把它移进了 styles-absorbed/，但引用核查漏了——本文件仍有活选择器，页面自 8 月 5 日
+ * 起一直缺样式（权限树表头七列网格塌成一行）。判死码不能只看一次搜索。
+ */
 @import "./admin-permissions-tree.css";
+@import "./admin-permissions-tree-node-detail.css";
+@import "./admin-permissions-core.css";
 @import "./admin-permissions-tree-node.css";
 @import "./admin-permissions-dialog.css";

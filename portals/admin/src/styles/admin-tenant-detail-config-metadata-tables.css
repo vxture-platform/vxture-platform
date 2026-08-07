@@ -9,15 +9,15 @@
 .vx-tenant-kv-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--vx-admin-management-space-1r) var(--vx-admin-management-space-2r);
+  gap: var(--space-md) var(--space-xl);
   margin: 0;
 }
 
 .vx-tenant-kv-grid div {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-05r);
-  padding-bottom: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
+  padding-bottom: var(--space-xs);
   border-bottom: var(--vx-admin-management-line-width-1p) dashed var(--vx-color-auth-border);
 }
 
@@ -53,7 +53,7 @@
 .vx-tenant-risk-panel__level {
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
   flex-wrap: wrap;
 }
 
@@ -62,7 +62,7 @@
   min-height: var(--vx-admin-management-size-15r);
   display: inline-flex;
   align-items: center;
-  padding: 0 var(--vx-admin-management-space-05r);
+  padding: 0 var(--space-xs);
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
   color: var(--tenant-blue);
@@ -80,8 +80,8 @@
   min-width: var(--vx-admin-management-size-48r-large);
   display: grid;
   align-items: center;
-  gap: var(--vx-admin-management-space-1r);
-  padding: var(--vx-admin-management-space-1r) 0;
+  gap: var(--space-md);
+  padding: var(--space-md) 0;
   border-bottom: var(--vx-admin-management-line-width-1p) dashed var(--tenant-line);
 }
 
@@ -136,7 +136,7 @@
 }
 
 .vx-tenant-table__row small {
-  margin-top: var(--vx-admin-management-space-05r);
+  margin-top: var(--space-xs);
   color: var(--tenant-muted);
   font-size: var(--vx-admin-caption-size);
   font-weight: 700;

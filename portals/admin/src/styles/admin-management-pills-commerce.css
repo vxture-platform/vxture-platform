@@ -1,235 +1,30 @@
-.vx-subscription-pill--active,
-.vx-subscription-pill--tier-free,
-.vx-subscription-pill--quota-normal {
-  background: color-mix(in srgb, var(--vx-color-success) 8%, transparent);
-  color: var(--tenant-green);
-}
-
-.vx-subscription-pill--trial,
-.vx-subscription-pill--expiring,
-.vx-subscription-pill--tier-pro,
-.vx-subscription-pill--quota-warning {
-  background: color-mix(in srgb, var(--vx-color-warning-600) 10%, transparent);
-  color: var(--tenant-amber);
-}
-
-.vx-subscription-pill--overdue,
-.vx-subscription-pill--suspended,
-.vx-subscription-pill--quota-danger {
-  background: color-mix(in srgb, var(--vx-color-danger) 12%, transparent);
-  color: var(--tenant-rose);
-}
-
-.vx-subscription-pill--cancelled,
-.vx-subscription-pill--cycle,
-.vx-subscription-pill--tier-other {
+.vx-subscription-pill--cycle {
   background: var(--vx-color-neutral-surface);
   color: var(--vx-color-gray-500);
 }
-
-.vx-subscription-pill--tier-enterprise {
-  background: color-mix(in srgb, var(--vx-color-purple-600) 8%, transparent);
-  color: var(--vx-color-purple-600);
-}
-
-.vx-order-pill--confirmed,
-.vx-order-pill--payment-paid,
-.vx-order-pill--payment-not_required,
-.vx-order-pill--tier-free {
-  background: color-mix(in srgb, var(--vx-color-success) 8%, transparent);
-  color: var(--tenant-green);
-}
-
-.vx-order-pill--pending,
-.vx-order-pill--pending_verify,
-.vx-order-pill--payment-pending,
-.vx-order-pill--payment-pending_verify,
-.vx-order-pill--payment-partial,
-.vx-order-pill--tier-pro {
-  background: color-mix(in srgb, var(--vx-color-warning-600) 10%, transparent);
-  color: var(--tenant-amber);
-}
-
-.vx-order-pill--overdue,
-.vx-order-pill--abnormal,
-.vx-order-pill--payment-failed,
-.vx-order-pill--payment-refunding {
-  background: color-mix(in srgb, var(--vx-color-danger) 12%, transparent);
-  color: var(--tenant-rose);
-}
-
-.vx-order-pill--closed,
-.vx-order-pill--payment-unpaid,
-.vx-order-pill--payment-closed,
-.vx-order-pill--source,
-.vx-order-pill--tier-other {
+.vx-order-pill--source {
   background: var(--vx-color-neutral-surface);
   color: var(--vx-color-gray-500);
 }
-
-.vx-order-pill--tier-enterprise {
-  background: color-mix(in srgb, var(--vx-color-purple-600) 8%, transparent);
-  color: var(--vx-color-purple-600);
-}
-
-.vx-billing-pill--paid,
-.vx-billing-pill--invoice-issued,
-.vx-billing-pill--invoice-finished {
-  background: color-mix(in srgb, var(--vx-color-success) 8%, transparent);
-  color: var(--tenant-green);
-}
-
-.vx-billing-pill--unpaid,
-.vx-billing-pill--paying,
-.vx-billing-pill--partial,
-.vx-billing-pill--invoice-applying,
-.vx-billing-pill--invoice-auditing,
-.vx-billing-pill--invoice-sending {
-  background: color-mix(in srgb, var(--vx-color-warning-600) 10%, transparent);
-  color: var(--tenant-amber);
-}
-
-.vx-billing-pill--overdue,
-.vx-billing-pill--invoice-rejected,
-.vx-billing-pill--invoice-red {
-  background: color-mix(in srgb, var(--vx-color-danger) 12%, transparent);
-  color: var(--tenant-rose);
-}
-
-.vx-billing-pill--cancelled,
-.vx-billing-pill--invoice-none {
-  background: var(--vx-color-neutral-surface);
-  color: var(--vx-color-gray-500);
-}
-
-.vx-billing-pill--tier-free {
-  background: color-mix(in srgb, var(--vx-color-success) 8%, transparent);
-  color: var(--tenant-green);
-}
-
-.vx-billing-pill--tier-pro {
-  background: color-mix(in srgb, var(--vx-color-warning-600) 10%, transparent);
-  color: var(--tenant-amber);
-}
-
-.vx-billing-pill--type-normal,
-.vx-billing-pill--type-adjust,
-.vx-billing-pill--type-supplement,
-.vx-billing-pill--type-prepaid,
-.vx-billing-pill--tier-other {
-  background: var(--vx-color-neutral-surface);
-  color: var(--vx-color-gray-500);
-}
-
-.vx-billing-pill--tier-enterprise {
-  background: color-mix(in srgb, var(--vx-color-purple-600) 8%, transparent);
-  color: var(--vx-color-purple-600);
-}
-
-.vx-billing-exception-pill--adjust {
-  background: color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
-  color: var(--tenant-blue);
-}
-
-.vx-billing-exception-pill--supplement {
-  background: color-mix(in srgb, var(--vx-color-purple-600) 8%, transparent);
-  color: var(--vx-color-purple-600);
-}
-
-.vx-billing-exception-pill--discount {
-  background: color-mix(in srgb, var(--vx-color-warning-600) 10%, transparent);
-  color: var(--tenant-amber);
-}
-
-.vx-billing-exception-pill--overdue,
-.vx-billing-exception-pill--invoice {
-  background: color-mix(in srgb, var(--vx-color-danger) 12%, transparent);
-  color: var(--tenant-rose);
-}
-
-.vx-billing-exception-pill--cancelled {
-  background: var(--vx-color-neutral-surface);
-  color: var(--vx-color-gray-500);
-}
-
-.vx-invoice-pill--finished,
-.vx-invoice-pill--bill-paid,
 .vx-invoice-pill--tax-enterprise {
   background: color-mix(in srgb, var(--vx-color-success) 8%, transparent);
   color: var(--tenant-green);
 }
-
-.vx-invoice-pill--issued,
-.vx-invoice-pill--sending,
-.vx-invoice-pill--applying,
-.vx-invoice-pill--auditing,
-.vx-invoice-pill--bill-unpaid,
-.vx-invoice-pill--bill-paying,
-.vx-invoice-pill--bill-partial,
-.vx-invoice-pill--bill-overdue {
-  background: color-mix(in srgb, var(--vx-color-warning-600) 10%, transparent);
-  color: var(--tenant-amber);
-}
-
-.vx-invoice-pill--red,
-.vx-invoice-pill--rejected {
-  background: color-mix(in srgb, var(--vx-color-danger) 12%, transparent);
-  color: var(--tenant-rose);
-}
-
-.vx-invoice-pill--none,
-.vx-invoice-pill--bill-cancelled,
-.vx-invoice-pill--type-normal,
-.vx-invoice-pill--type-adjust,
-.vx-invoice-pill--type-supplement,
-.vx-invoice-pill--type-prepaid,
-.vx-invoice-pill--type-special_vat,
-.vx-invoice-pill--type-normal_vat,
-.vx-invoice-pill--type-electronic,
-.vx-invoice-pill--type-paper,
-.vx-invoice-pill--type-other,
+.vx-invoice-pill--bill-type-normal,
+.vx-invoice-pill--bill-type-adjust,
+.vx-invoice-pill--bill-type-supplement,
+.vx-invoice-pill--bill-type-prepaid,
+.vx-invoice-pill--doc-type-special_vat,
+.vx-invoice-pill--doc-type-normal_vat,
+.vx-invoice-pill--doc-type-electronic,
+.vx-invoice-pill--doc-type-paper,
+.vx-invoice-pill--doc-type-other,
 .vx-invoice-pill--tax-individual,
 .vx-invoice-pill--tax-government,
 .vx-invoice-pill--tax-other {
   background: var(--vx-color-neutral-surface);
   color: var(--vx-color-gray-500);
 }
-
-.vx-payment-pill--paid,
-.vx-payment-pill--reconcile-normal,
-.vx-payment-pill--bill-paid {
-  background: color-mix(in srgb, var(--vx-color-success) 8%, transparent);
-  color: var(--tenant-green);
-}
-
-.vx-payment-pill--pending,
-.vx-payment-pill--pending_verify,
-.vx-payment-pill--partial,
-.vx-payment-pill--reconcile-pending_verify,
-.vx-payment-pill--reconcile-partial,
-.vx-payment-pill--bill-unpaid,
-.vx-payment-pill--bill-paying,
-.vx-payment-pill--bill-partial,
-.vx-payment-pill--bill-overdue {
-  background: color-mix(in srgb, var(--vx-color-warning-600) 10%, transparent);
-  color: var(--tenant-amber);
-}
-
-.vx-payment-pill--failed,
-.vx-payment-pill--refunding,
-.vx-payment-pill--reconcile-overpaid,
-.vx-payment-pill--reconcile-bill_cancelled,
-.vx-payment-pill--reconcile-failed {
-  background: color-mix(in srgb, var(--vx-color-danger) 12%, transparent);
-  color: var(--tenant-rose);
-}
-
-.vx-payment-pill--closed,
-.vx-payment-pill--unpaid,
-.vx-payment-pill--not_required,
-.vx-payment-pill--reconcile-unlinked,
-.vx-payment-pill--bill-cancelled,
-.vx-payment-pill--bill-none,
 .vx-payment-pill--source {
   background: var(--vx-color-neutral-surface);
   color: var(--vx-color-gray-500);

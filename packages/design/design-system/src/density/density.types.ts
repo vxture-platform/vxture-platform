@@ -10,10 +10,9 @@
  */
 
 /**
- * Density 类型
- *
- * - compact: 紧凑模式，高密度数据展示
- * - default: 默认模式，平衡展示
- * - comfortable: 舒适模式，更大的间距和字体
+ * Density 类型的**权威在 @vxture/design-tokens**：密度三档是 T2 的模式轴，
+ * 类名与取值由 CSS 侧的 `.density-*` 块决定，两处各写一份必然漂移。
+ * 此处只转发，使既有的 `from "../../density"` 引用保持不变。
  */
-export type Density = "compact" | "default" | "comfortable";
+export type { Density } from "@vxture/design-tokens";
+export { DENSITIES, densityClass } from "@vxture/design-tokens";

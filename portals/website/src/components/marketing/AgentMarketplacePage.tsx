@@ -74,7 +74,7 @@ export default function AgentMarketplacePage() {
               {hasTenantSession ? (
                 <Button
                   asChild
-                  size="lg"
+                  size="xl"
                   className="px-5 hover:bg-vx-brand-500"
                 >
                   <a href={consoleEntryUrl}>{t("hero.primaryAction")}</a>
@@ -82,7 +82,7 @@ export default function AgentMarketplacePage() {
               ) : (
                 <Button
                   asChild
-                  size="lg"
+                  size="xl"
                   className="px-5 hover:bg-vx-brand-500"
                 >
                   <Link href="/signin">{t("hero.guestPrimaryAction")}</Link>
@@ -91,7 +91,7 @@ export default function AgentMarketplacePage() {
               <Button
                 asChild
                 variant="ghost"
-                size="lg"
+                size="xl"
                 className="border border-vx-brand-200 bg-vx-white/60 px-5 text-vx-brand-700 hover:border-vx-brand-300 hover:bg-vx-white dark:border-vx-white/35 dark:bg-transparent dark:text-vx-white dark:hover:border-vx-white dark:hover:bg-vx-white/10"
               >
                 <a href="#agent-marketplace">{t("hero.secondaryAction")}</a>
@@ -124,7 +124,7 @@ export default function AgentMarketplacePage() {
                 <Button
                   key={filter.id}
                   variant={active ? "default" : "outline"}
-                  size="sm"
+                  size="md"
                   onClick={() => setActiveIndustry(filter.id)}
                   className={`h-10 rounded-md border px-4 text-sm font-medium transition ${
                     active

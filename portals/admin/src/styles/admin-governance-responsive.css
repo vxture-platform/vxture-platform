@@ -4,10 +4,3 @@
   }
 }
 
-@media (max-width: 1200px) {
-  .vx-platform-governance-list,
-  .vx-platform-governance-list .vx-tenant-directory-list__header,
-  .vx-platform-governance-row {
-    grid-template-columns: var(--vx-admin-governance-list-grid-compact);
-  }
-}

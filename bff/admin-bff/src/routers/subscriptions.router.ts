@@ -21,6 +21,7 @@
  * @category Router
  */
 
+import { SUBSCRIPTION_STATUSES } from "@vxture/shared";
 import {
   BadRequestException,
   Body,
@@ -324,21 +325,22 @@ function toNumber(value: string | number | null): number {
 }
 
 // subscriptions.status ∈ active/trialing/expired/cancelled/suspended → 前端运营口径。
+/**
+ * 库里的订阅态直接就是契约值域，不再改写。
+ *
+ * 原先这里做了一次改名，而改名里藏着一个错译：`expired`（权益已终止）被映射成
+ * `overdue`（欠费宽限、权益仍在），两者含义正好相反；库里真正的 `overdue` 没有分支，
+ * 落进 `default` 显示成"正常"——一个欠费的订阅在运营台上是绿的。
+ *
+ * `default` 兜底也一并去掉。DDL 的 CHECK 已经保证只有这六个值，真出现第七个说明
+ * 契约破了，**这时候显示成"正常"是最坏的处理**：它把一次契约破裂伪装成一切正常。
+ */
 function normalizeStatus(raw: string): SubscriptionOperationStatus {
-  switch (raw) {
-    case "trialing":
-      return "trial";
-    case "active":
-      return "active";
-    case "expired":
-      return "overdue";
-    case "suspended":
-      return "suspended";
-    case "cancelled":
-      return "cancelled";
-    default:
-      return "active";
+  const status = SUBSCRIPTION_STATUSES.find((value) => value === raw);
+  if (!status) {
+    throw new Error(`Unknown subscription status from DB: ${raw}`);
   }
+  return status;
 }
 
 // subscriptions.cycle_unit ∈ day/week/month/year/perpetual → monthly/yearly/once。
@@ -440,7 +442,7 @@ function operationHint(
       return "存在逾期，需跟进催款";
     case "suspended":
       return "已暂停，待恢复";
-    case "trial":
+    case "trialing":
       return "试用中";
     case "cancelled":
       return "已取消";
@@ -479,6 +481,7 @@ function mapSubscriptionRow(row: SubscriptionRow): SubscriptionOperationRecord {
     solutionName: planName,
     servicePlanCode: row.plan_code ?? "",
     servicePlanName: planName,
+    tierCode,
     tierName: tierName(tierCode),
     status,
     rawStatus: row.raw_status,

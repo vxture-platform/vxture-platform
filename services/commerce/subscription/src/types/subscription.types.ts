@@ -14,6 +14,7 @@ export enum BillingCycle {
  */
 export enum SubscriptionStatus {
   ACTIVE = "active",
+  EXPIRING = "expiring",
   TRIALING = "trialing",
   OVERDUE = "overdue",
   SUSPENDED = "suspended",

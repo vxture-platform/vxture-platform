@@ -5,33 +5,51 @@
  * @vxture/design-system/styles/console-base.css) so the DS no longer carries a
  * console-specific shell pack. Holds the console body/base resets, the
  * session-loading spinner, and the muted text in signal/action lists.
+ *
+ * ⚠ 元素级重置**必须**包在 `@layer base` 里。未分层的 CSS 压过所有 @layer，
+ *   包括 Tailwind 的 utilities——这里的 `a { color: inherit }` 原先没有层，
+ *   于是 console 全站每一个 <a> 的 `text-*` 工具类都静默失效：侧栏导航项
+ *   本该是 muted 灰，实测拿到的却是从 body 继承下来的正文色，而 opera
+ *   （同一个 ShellSidebarNav 组件、没有这条重置）是对的。同一个失败模式已在
+ *   design-system/src/styles/brand.css 文件头记过一次，这是第二次。
  */
 
-html,
-body {
-  min-height: 100%;
-  background: linear-gradient(180deg, var(--vx-color-gray-50) 0%, var(--vx-color-shell-bg) 100%);
-  color: var(--vx-console-text);
+/* 页面底色，与 opera 同一取值（见 portals/opera/src/app/globals.css）。DS 的
+ * --background 走中性档（design-tokens 的 color-policy.mjs："表面阶梯用中性
+ * 档，不带品牌调"），这是产品级定制，不改 DS，也不影响别的门户。
+ *
+ * 原实现是下面那条挂在 html 上的裸值线性渐变，它**绕开了 --background**：
+ * 外壳与卡片按 DS 的中性底渲染、页面底却是另一套颜色，两者永远对不上，而且
+ * brand-20 这类 token 改了也不生效（2026-08-04 实测：token 在包里，console
+ * 从没接上）。只覆盖浅色档；暗色档没有生产参照，保留 DS 默认的 neutral-950。
+ *
+ * **不进 @layer**：DS 的 --background 是未分层的 :root 声明，覆盖方也必须
+ * 未分层才压得住——分层的规则一律输给未分层的。 */
+:root {
+  --background: var(--vx-color-brand-20);
 }
 
-html.dark,
-body.dark {
-  background: linear-gradient(180deg, var(--vx-color-background) 0%, var(--vx-color-surface-soft) 100%);
-}
+@layer base {
+  html,
+  body {
+    min-height: 100%;
+    color: var(--vx-console-text);
+  }
 
-body {
-  min-height: var(--vx-console-viewport-min-height);
-  margin: 0;
-  font-feature-settings: "ss01" 1, "ss02" 1;
-}
+  body {
+    min-height: var(--vx-console-viewport-min-height);
+    margin: 0;
+    font-feature-settings: "ss01" 1, "ss02" 1;
+  }
 
-select {
-  line-height: normal;
-}
+  select {
+    line-height: normal;
+  }
 
-a {
-  color: inherit;
-  text-decoration: none;
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 
 .console-loading {

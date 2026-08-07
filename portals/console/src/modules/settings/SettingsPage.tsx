@@ -2,14 +2,19 @@
 
 import { useEffect, useState } from "react";
 import {
-  Badge,
+  Banner,
+  Button,
+  DataTable,
+  FormPageTemplate,
   Icon,
   NativeSelect,
+  StatusBadge,
   Switch,
-  ActionButton,
-  PageHeader,
+  ViewHeader,
 } from "@vxture/design-system";
-import type { IconName } from "@vxture/design-system";
+import type { DataTableColumn, IconName } from "@vxture/design-system";
+import { PageSection, SummaryStrip } from "@/layout/shell";
+import { PlannedBadge, PlannedNotice } from "@/components/planned";
 import { useTranslations } from "next-intl";
 
 type BooleanSettingKey =
@@ -173,183 +178,191 @@ export function SettingsPage() {
     return t(`options.${row.key}.${value}`);
   }
 
+  /** Policy cell: icon + title + hint. Shared by the settings table and the
+   * danger row, which render the same two-line descriptor. */
+  const policyCell = (icon: IconName, title: string, hint: string) => (
+    <span className="flex min-w-0 items-start gap-sm">
+      <Icon
+        name={icon}
+        size="sm"
+        fallback="placeholder"
+        aria-hidden="true"
+        className="mt-2xs shrink-0 text-muted-foreground"
+      />
+      <span className="flex min-w-0 flex-col gap-2xs">
+        <strong className="text-label-md text-foreground">{title}</strong>
+        <span className="text-body-sm text-muted-foreground">{hint}</span>
+      </span>
+    </span>
+  );
+
+  /* Three real column headers exist as i18n keys (table.policy / .state /
+   * .value), so this is a genuine table rather than a headerless list. */
+  const settingColumns: DataTableColumn<SettingRow>[] = [
+    {
+      id: "policy",
+      header: t("table.policy"),
+      cell: (row) =>
+        policyCell(
+          row.icon,
+          t(`rows.${row.key}.title`),
+          t(`rows.${row.key}.hint`),
+        ),
+    },
+    {
+      id: "state",
+      header: t("table.state"),
+      cell: (row) => {
+        const stateLabel = settingStateLabel(row);
+        return (
+          <StatusBadge
+            tone={stateLabel === t("states.disabled") ? "neutral" : "success"}
+            dot
+          >
+            {stateLabel}
+          </StatusBadge>
+        );
+      },
+    },
+    {
+      id: "value",
+      header: t("table.value"),
+      align: "right",
+      cell: (row) =>
+        row.type === "switch" ? (
+          <Switch
+            checked={Boolean(settings[row.key])}
+            disabled
+            aria-label={t(`rows.${row.key}.title`)}
+            onCheckedChange={(checked) =>
+              updateBooleanSetting(row.key as BooleanSettingKey, checked)
+            }
+          />
+        ) : (
+          <NativeSelect
+            wrapperClassName="w-fit"
+            value={String(settings[row.key])}
+            disabled
+            aria-label={t(`rows.${row.key}.title`)}
+            onChange={(event) =>
+              updateSelectSetting(
+                row.key as SelectSettingKey,
+                event.target.value,
+              )
+            }
+          >
+            {row.options?.map((option) => (
+              <option key={option} value={option}>
+                {t(`options.${row.key}.${option}`)}
+              </option>
+            ))}
+          </NativeSelect>
+        ),
+    },
+  ];
+
   return (
-    <div className="vx-page-stack vx-tenant-settings-page">
-      <div className="vx-tenant-settings-title">
-        <PageHeader
-          eyebrow={t("eyebrow")}
-          title={t("title")}
-          description={t("description")}
-          secondary={<Badge>{t("backend.pending")}</Badge>}
-          action={
-            <div className="vx-tenant-settings-actions">
-              <ActionButton variant="outline" icon="x" onClick={resetDefaults}>
-                {t("reset")}
-              </ActionButton>
-              <ActionButton icon="check" onClick={saveSettings}>
-                {t("save")}
-              </ActionButton>
-            </div>
-          }
-        />
-
-        {messageKey ? (
-          <p className="vx-profile-message">{t(messageKey)}</p>
-        ) : null}
-
-        <section
-          className="vx-tenant-settings-summary"
-          aria-label={t("summary.title")}
-        >
-          <div className="vx-tenant-settings-summary__item">
-            <Icon name="settings" size="xs" fallback="placeholder" />
-            <span>{t("summary.scope")}</span>
-            <strong>{t("summary.scopeValue")}</strong>
-          </div>
-          <div className="vx-tenant-settings-summary__item">
+    /* Settings is a form page: the reset / save pair belongs in the template's
+     * action bar, not floating in the page header. */
+    <FormPageTemplate
+      header={
+        <div className="flex flex-col gap-md">
+          <ViewHeader
+            icon="settings"
+            title={t("title")}
+            description={t("description")}
+            secondary={<PlannedBadge />}
+          />
+          <PlannedNotice variant="controls" />
+        </div>
+      }
+      footer={
+        <>
+          <Button size="md" variant="outline" disabled onClick={resetDefaults}>
+            <Icon name="x" size="xs" fallback="placeholder" />
+            <span>{t("reset")}</span>
+          </Button>
+          <Button size="md" disabled onClick={saveSettings}>
             <Icon name="check" size="xs" fallback="placeholder" />
-            <span>{t("summary.enabled")}</span>
-            <strong>
-              {t("summary.enabledValue", { count: enabledPolicies })}
-            </strong>
-          </div>
-          <div className="vx-tenant-settings-summary__item">
-            <Icon name="building-library" size="xs" fallback="placeholder" />
-            <span>{t("summary.profile")}</span>
-            <strong>{t("summary.profileValue")}</strong>
-          </div>
-        </section>
-      </div>
+            <span>{t("save")}</span>
+          </Button>
+        </>
+      }
+    >
+      {messageKey ? <Banner tone="success" title={t(messageKey)} /> : null}
 
-      <div className="vx-tenant-settings-general">
-        <header className="vx-tenant-settings-block-header">
-          <div>
-            <h2>{t("general.title")}</h2>
-            <span>
-              {t("general.count", { count: SETTING_SECTIONS.length })}
-            </span>
-          </div>
-        </header>
+      <SummaryStrip
+        items={[
+          {
+            label: t("summary.scope"),
+            value: t("summary.scopeValue"),
+            aside: <Icon name="settings" size="sm" fallback="placeholder" />,
+          },
+          {
+            label: t("summary.enabled"),
+            value: t("summary.enabledValue", { count: enabledPolicies }),
+            aside: <Icon name="check" size="sm" fallback="placeholder" />,
+          },
+          {
+            label: t("summary.profile"),
+            value: t("summary.profileValue"),
+            aside: (
+              <Icon name="building-library" size="sm" fallback="placeholder" />
+            ),
+          },
+        ]}
+      />
 
-        <main className="vx-tenant-settings-workspace">
-          {SETTING_SECTIONS.map((section) => (
-            <section key={section.key} className="vx-tenant-settings-section">
-              <header className="vx-tenant-settings-section__title">
-                <Icon name={section.icon} size="xs" fallback="placeholder" />
-                <div>
-                  <h2>{t(`sections.${section.key}.title`)}</h2>
-                  <span>
-                    {t(`sections.${section.key}.count`, {
-                      count: section.rows.length,
-                    })}
-                  </span>
-                </div>
-              </header>
+      <PageSection
+        icon="faders"
+        level={2}
+        title={t("general.title")}
+        description={t("general.count", { count: SETTING_SECTIONS.length })}
+      >
+        {SETTING_SECTIONS.map((section) => (
+          <PageSection
+            key={section.key}
+            level={3}
+            icon={section.icon}
+            title={t(`sections.${section.key}.title`)}
+            description={t(`sections.${section.key}.count`, {
+              count: section.rows.length,
+            })}
+          >
+            <DataTable
+              columns={settingColumns}
+              rows={section.rows}
+              rowKey={(row) => row.key}
+            />
+          </PageSection>
+        ))}
+      </PageSection>
 
-              <div className="vx-tenant-settings-list">
-                <div className="vx-tenant-settings-list__header">
-                  <span>{t("table.policy")}</span>
-                  <span>{t("table.state")}</span>
-                  <span>{t("table.value")}</span>
-                </div>
-
-                {section.rows.map((row) => {
-                  const stateLabel = settingStateLabel(row);
-
-                  return (
-                    <div key={row.key} className="vx-tenant-settings-row">
-                      <div className="vx-tenant-settings-row__policy">
-                        <span aria-hidden="true">
-                          <Icon
-                            name={row.icon}
-                            size="xs"
-                            fallback="placeholder"
-                          />
-                        </span>
-                        <div>
-                          <strong>{t(`rows.${row.key}.title`)}</strong>
-                          <p>{t(`rows.${row.key}.hint`)}</p>
-                        </div>
-                      </div>
-
-                      <span
-                        className={
-                          stateLabel === t("states.disabled")
-                            ? "vx-tenant-settings-state"
-                            : "vx-tenant-settings-state vx-tenant-settings-state--on"
-                        }
-                      >
-                        {stateLabel}
-                      </span>
-
-                      <div className="vx-tenant-settings-control">
-                        {row.type === "switch" ? (
-                          <Switch
-                            checked={Boolean(settings[row.key])}
-                            aria-label={t(`rows.${row.key}.title`)}
-                            onChange={(event) =>
-                              updateBooleanSetting(
-                                row.key as BooleanSettingKey,
-                                event.target.checked,
-                              )
-                            }
-                          />
-                        ) : (
-                          <NativeSelect
-                            className="vx-input vx-tenant-settings-select"
-                            value={String(settings[row.key])}
-                            aria-label={t(`rows.${row.key}.title`)}
-                            onChange={(event) =>
-                              updateSelectSetting(
-                                row.key as SelectSettingKey,
-                                event.target.value,
-                              )
-                            }
-                          >
-                            {row.options?.map((option) => (
-                              <option key={option} value={option}>
-                                {t(`options.${row.key}.${option}`)}
-                              </option>
-                            ))}
-                          </NativeSelect>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-        </main>
-      </div>
-
-      <div className="vx-tenant-settings-danger">
-        <section className="vx-tenant-settings-section vx-tenant-settings-section--danger">
-          <header className="vx-tenant-settings-section__title">
-            <Icon name="warning" size="xs" fallback="placeholder" />
-            <div>
-              <h2>{t("danger.title")}</h2>
-              <span>{t("danger.count")}</span>
-            </div>
-          </header>
-
-          <div className="vx-tenant-settings-danger-row">
-            <div className="vx-tenant-settings-row__policy">
-              <span aria-hidden="true">
-                <Icon name="x" size="xs" fallback="placeholder" />
-              </span>
-              <div>
-                <strong>{t("danger.cancelTenant.title")}</strong>
-                <p>{t("danger.cancelTenant.confirmHint")}</p>
-              </div>
-            </div>
-            <Badge>{t("danger.confirmRequired")}</Badge>
-            <ActionButton variant="outline" icon="x">
-              {t("danger.cancelTenant.action")}
-            </ActionButton>
-          </div>
-        </section>
-      </div>
-    </div>
+      <PageSection
+        tone="raised"
+        icon="warning"
+        level={2}
+        title={t("danger.title")}
+        description={t("danger.count")}
+      >
+        <div className="flex flex-wrap items-center gap-md">
+          <span className="min-w-0 flex-1">
+            {policyCell(
+              "x",
+              t("danger.cancelTenant.title"),
+              t("danger.cancelTenant.confirmHint"),
+            )}
+          </span>
+          <StatusBadge tone="warning">
+            {t("danger.confirmRequired")}
+          </StatusBadge>
+          {/* No handler exists behind this action; keep it legible but inert. */}
+          <Button size="md" variant="outline" disabled>
+            <Icon name="x" size="xs" fallback="placeholder" />
+            <span>{t("danger.cancelTenant.action")}</span>
+          </Button>
+        </div>
+      </PageSection>
+    </FormPageTemplate>
   );
 }

@@ -7,15 +7,9 @@
 .vx-product-capability-actions {
   display: inline-flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-075r);
+  gap: var(--space-sm);
   flex-wrap: wrap;
   justify-content: flex-end;
-}
-
-.vx-product-capability-actions .vx-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--vx-admin-management-space-0375r);
 }
 
 .vx-product-capability-summary {
@@ -23,8 +17,8 @@
   display: grid;
   grid-template-columns: minmax(var(--vx-admin-management-track-18r-large), 1.1fr) minmax(var(--vx-admin-management-track-22r), 1.4fr);
   align-items: stretch;
-  gap: var(--vx-admin-management-space-2r);
-  padding: var(--vx-admin-management-space-15r) 0 var(--vx-admin-management-space-175r);
+  gap: var(--space-xl);
+  padding: var(--space-lg) 0 var(--space-lg);
   border-top: var(--vx-admin-management-line-width-2p) solid color-mix(in srgb, var(--vx-color-auth-accent) 22%, transparent);
   border-bottom: var(--vx-admin-management-line-width-1p) dashed var(--vx-color-auth-border);
 }
@@ -35,7 +29,7 @@
   min-width: 0;
   display: grid;
   grid-template-columns: var(--vx-admin-management-track-3r) minmax(0, 1fr);
-  gap: var(--vx-admin-management-space-1r);
+  gap: var(--space-md);
 }
 
 .vx-product-capability-summary__icon {
@@ -64,7 +58,7 @@
 }
 
 .vx-product-capability-summary__identity p {
-  margin: var(--vx-admin-management-space-025r) 0 0;
+  margin: var(--space-2xs) 0 0;
   overflow: hidden;
   color: var(--tenant-muted);
   font-size: var(--vx-admin-caption-size);
@@ -78,12 +72,12 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
   flex-wrap: wrap;
 }
 
 .vx-product-capability-summary__badges {
-  margin-top: var(--vx-admin-management-space-075r);
+  margin-top: var(--space-sm);
 }
 
 /* Product capability summary metric layout styles. */
@@ -92,14 +86,14 @@
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--vx-admin-management-space-1r) var(--vx-admin-management-space-15r);
+  gap: var(--space-md) var(--space-lg);
 }
 
 .vx-product-capability-metric,
 .vx-product-capability-field {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-035r);
+  gap: var(--space-2xs);
 }
 
 .vx-product-capability-metric span,
@@ -113,7 +107,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
   margin: 0;
 }
 

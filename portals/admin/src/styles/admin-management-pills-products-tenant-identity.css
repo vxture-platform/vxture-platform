@@ -1,48 +1,5 @@
-/* Admin management verification and tenant identity pill styles. */
-
-.vx-tenant-pill--company {
-  background: color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
-  color: var(--tenant-blue);
-}
-
-.vx-tenant-pill--individual {
-  background: color-mix(in srgb, var(--vx-color-cyan-600) 8%, transparent);
-  color: var(--tenant-cyan);
-}
-
-.vx-verification-pill--verified {
-  background: color-mix(in srgb, var(--vx-color-success) 8%, transparent);
-  color: var(--tenant-green);
-}
-
-.vx-verification-pill--pending {
-  background: color-mix(in srgb, var(--vx-color-warning-600) 10%, transparent);
-  color: var(--tenant-amber);
-}
-
-.vx-verification-pill--rejected {
-  background: color-mix(in srgb, var(--vx-color-danger) 12%, transparent);
-  color: var(--tenant-rose);
-}
-
-.vx-verification-pill--unverified,
-.vx-verification-muted-pill {
-  background: color-mix(in srgb, var(--vx-color-gray-400) 10%, transparent);
-  color: var(--vx-color-gray-500);
-}
-
-.vx-admin-role-muted-pill,
-.vx-tenant-pill--system {
-  background: color-mix(in srgb, var(--vx-color-gray-500) 8%, transparent);
-  color: var(--vx-color-gray-600);
-  box-shadow: inset 0 0 0 var(--vx-admin-management-effect-1p) var(--vx-color-neutral-surface);
-}
-
-.vx-account-management-page .vx-tenant-directory-row__tenant svg,
 .vx-account-management-page .vx-tenant-directory-card header > svg,
-.vx-platform-users-page .vx-tenant-directory-row__tenant svg,
 .vx-platform-users-page .vx-tenant-directory-card header > svg,
-.vx-admin-roles-page .vx-admin-role-row__identity svg,
 .vx-admin-roles-page .vx-tenant-directory-card header > svg {
   color: var(--vx-color-gray-400);
 }

@@ -58,7 +58,10 @@ export class AuthMiddleware implements NestMiddleware {
     // OIDC RP session is the only auth path (legacy HS256 retired). The cookie
     // holds an opaque rpsid; tokens stay server-side (RpAuthService).
     const rpsid = req.cookies?.[
-      rpSessionCookieName(this.rpRuntime.cookieSecure)
+      rpSessionCookieName(
+        this.rpRuntime.cookieSecure,
+        this.rpRuntime.config.clientId,
+      )
     ] as string | undefined;
     const unauthorized = () =>
       res

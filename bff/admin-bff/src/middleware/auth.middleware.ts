@@ -46,7 +46,10 @@ export class AuthMiddleware implements NestMiddleware {
         .json({ code: "UNAUTHORIZED", message: "No active session" });
 
     const rpsid = req.cookies?.[
-      rpSessionCookieName(this.rpRuntime.cookieSecure)
+      rpSessionCookieName(
+        this.rpRuntime.cookieSecure,
+        this.rpRuntime.config.clientId,
+      )
     ] as string | undefined;
     if (!rpsid) {
       unauthorized();

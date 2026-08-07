@@ -4,20 +4,20 @@
 .vx-tenant-usage-list,
 .vx-tenant-ticket-list {
   display: grid;
-  gap: var(--vx-admin-management-space-15r);
+  gap: var(--space-lg);
 }
 
 .vx-tenant-subscription,
 .vx-tenant-usage,
 .vx-tenant-ticket {
   min-width: 0;
-  padding-bottom: var(--vx-admin-management-space-15r);
+  padding-bottom: var(--space-lg);
   border-bottom: var(--vx-admin-management-line-width-1p) dashed var(--tenant-line);
 }
 
 .vx-tenant-subscription {
   display: grid;
-  gap: var(--vx-admin-management-space-15r);
+  gap: var(--space-lg);
 }
 
 .vx-tenant-subscription > header {
@@ -25,13 +25,13 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  gap: var(--vx-admin-management-space-1r);
+  gap: var(--space-md);
 }
 
 .vx-tenant-subscription > header div {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
 }
 
 .vx-tenant-subscription strong {
@@ -55,14 +55,14 @@
 .vx-tenant-subscription__metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--vx-admin-management-space-1r);
+  gap: var(--space-md);
 }
 
 /* Tenant detail usage activity layout styles. */
 
 .vx-tenant-usage {
   display: grid;
-  gap: var(--vx-admin-management-space-1r);
+  gap: var(--space-md);
 }
 
 .vx-tenant-usage > header,
@@ -72,7 +72,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--vx-admin-management-space-1r);
+  gap: var(--space-md);
 }
 
 .vx-tenant-usage__bar {
@@ -132,7 +132,7 @@
 
 .vx-tenant-risk-panel {
   align-content: start;
-  padding-right: var(--vx-admin-management-space-15r);
+  padding-right: var(--space-lg);
   border-right: var(--vx-admin-management-line-width-1p) dashed var(--tenant-line);
 }
 
@@ -166,15 +166,15 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: var(--vx-admin-management-space-1r);
-  padding-bottom: var(--vx-admin-management-space-1r);
+  gap: var(--space-md);
+  padding-bottom: var(--space-md);
   border-bottom: var(--vx-admin-management-line-width-1p) dashed var(--tenant-line);
 }
 
 .vx-tenant-audit-list__item span {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
 }
 
 .vx-tenant-audit-list__item strong,
@@ -201,5 +201,5 @@
 .vx-tenant-ticket > span {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
 }

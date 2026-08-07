@@ -549,7 +549,10 @@ export default function Header() {
               >
                 {guestActions.map((action) => (
                   <Link
-                    key={action.href}
+                    // 用 labelKey 而不是 href 做键：注册与登录当前都指向
+                    // /signin（同一个入口页的两个 CTA），拿 href 当键会撞成
+                    // 同一个 key，React 报重复键并可能丢掉其中一个按钮。
+                    key={action.labelKey}
                     href={action.href}
                     className={
                       action.variant === "secondary"

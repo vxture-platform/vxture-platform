@@ -1,20 +1,19 @@
 .vx-commerce-overview-page {
-  gap: var(--vx-admin-management-space-2r);
 }
 
 .vx-commerce-overview-layout {
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
-  gap: var(--vx-admin-management-space-2r);
+  gap: var(--space-xl);
   align-items: start;
 }
 
 .vx-commerce-panel {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-125r);
-  padding-top: var(--vx-admin-management-space-15r);
+  gap: var(--space-md);
+  padding-top: var(--space-lg);
   border-top: var(--vx-admin-management-line-width-1p) dashed var(--vx-color-auth-border);
 }
 
@@ -23,12 +22,12 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  gap: var(--vx-admin-management-space-125r);
+  gap: var(--space-md);
 }
 
 .vx-commerce-panel__header > a,
 .vx-commerce-panel__header > small {
-  margin-top: var(--vx-admin-management-space-035r);
+  margin-top: var(--space-2xs);
   color: var(--tenant-blue);
   font-size: var(--vx-admin-meta-size);
   font-weight: 760;

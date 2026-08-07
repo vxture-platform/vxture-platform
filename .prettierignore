@@ -29,3 +29,6 @@ yarn.lock
 # Cache
 .cache/
 .parcel-cache/
+
+# Figma DTCG 导出：上游设计源，格式化会破坏与后续重新导出的可比性
+packages/design/design-system/Figma-Token/

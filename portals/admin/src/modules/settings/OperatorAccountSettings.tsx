@@ -58,7 +58,7 @@ export function OperatorAccountSettings() {
       toast({ tone: "success", title: `验证码已发送至 ${res.sentTo}` });
     } catch (error) {
       toast({
-        tone: "error",
+        tone: "danger",
         title: "发送验证码失败",
         ...(error instanceof Error && error.message
           ? { description: error.message }
@@ -82,7 +82,7 @@ export function OperatorAccountSettings() {
       reload();
     } catch (error) {
       toast({
-        tone: "error",
+        tone: "danger",
         title: "验证失败",
         ...(error instanceof Error && error.message
           ? { description: error.message }

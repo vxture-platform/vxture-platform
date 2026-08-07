@@ -3,7 +3,7 @@ import { TenantPlaceholderPage } from "@/modules/shared/TenantPlaceholderPage";
 export default function Page() {
   return (
     <TenantPlaceholderPage
-      eyebrow="成员与权限"
+      icon="mail"
       title="邀请记录"
       description="查看待接受邀请、历史邀请和邀请处理状态。"
       signals={[

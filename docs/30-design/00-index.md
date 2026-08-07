@@ -26,7 +26,7 @@
 | [`console.md`](./platform/20-console.md)                                                                                      | Console UI 设计规范 — 视觉原则 / Shell 规格 / 页面模板 / 视觉系统 / Workspace Switcher    | ✅ v1.0.0        |
 | ~~`database.md`~~（已删除）→ [`data_platform_100_architecture.md`](./data_platform_100_architecture.md)（已并入，superseded） | 数据库顶层架构 — 双平面拓扑 / Platform DB 8 域 Schema / 业务 DB Beta-Prod 分离 / 治理原则 | ✅ v1.0.0        |
 | [`data_platform_100_architecture.md`](./data_platform_100_architecture.md)                                                    | Platform DB 详细设计 — 8 个 Schema 字段级目标态 / 现态对照 / 迁移行动清单                 | ✅ v1.0.0 待评审 |
-| [`docs/10-standards/design-system.md`](../10-standards/060-design-system.md)                                                  | DS 使用规范 / 应用侧禁止自建样式·组件·图标 / AI 行为约束                                  | ✅ 在 standards/ |
+| [`docs/10-standards/design-system.md`](../10-standards/060-design-system.md)                                                  | DS 内部工程规范（对外使用规范随包发布：`packages/design/design-system/docs/`）            | ✅ 在 standards/ |
 | [`docs/10-standards/font-system.md`](../10-standards/090-font-system.md)                                                      | 字体系统 / Virtual Nature Studio 字体规范                                                 | ✅ 在 standards/ |
 
 ---

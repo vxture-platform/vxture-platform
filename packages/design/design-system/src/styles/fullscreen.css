@@ -4,6 +4,9 @@
  *
  * 功能：定义全屏系统的 CSS 样式
  *
+ * 不显式写视口单位尺寸：`position: fixed; inset: 0` 已使元素铺满视口，
+ * 且视口宽度单位含滚动条宽度、会在有滚动条时横向溢出。
+ *
  * @copyright Vxture Team
  * @layer Presentation
  * @category Styles
@@ -23,25 +26,18 @@
 .vx-fullscreen-active {
   position: fixed;
   inset: 0;
-  z-index: 1400;
-  width: var(--vx-fullscreen-viewport-width);
-  height: var(--vx-fullscreen-viewport-height);
-  background: var(--vx-color-background);
+  z-index: var(--z-index-max);
+  background: var(--background);
   overflow: hidden;
   /* 隐藏滚动条 */
   -ms-overflow-style: none;
   scrollbar-width: none;
   /* 进入/退出过渡 */
-  transition: var(--vx-fullscreen-transition);
+  transition: opacity var(--transition-duration-base) var(--ease-standard);
 }
 
 .vx-fullscreen-active::-webkit-scrollbar {
   display: none;
-}
-
-.vx-fullscreen-active .vx-fullscreen-container {
-  width: var(--vx-fullscreen-viewport-width);
-  height: var(--vx-fullscreen-viewport-height);
 }
 
 /* ─── 退出过渡状态 ───────────────────────────────────────────────────────────── */
@@ -53,9 +49,9 @@
 /* ─── 原生全屏（Fullscreen API）样式 ────────────────────────────────────────── */
 
 :fullscreen {
-  background: var(--vx-color-background);
+  background: var(--background);
 }
 
 :-webkit-full-screen {
-  background: var(--vx-color-background);
+  background: var(--background);
 }

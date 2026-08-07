@@ -1,22 +1,40 @@
 @import "@vxture/design-system/styles/globals.css";
 @import "@vxture/design-system/styles/brands/vxture.css";
+@import "@vxture/design-system/styles/workbench.css";
 /* Shared portal shell visual system — single source of truth in the design
  * system, identical to console. Loaded after the DS packs so the template's
  * .app/.vxh/.sidebar/.assistant chrome and ergonomic aliases win. The Phosphor
  * icon font is loaded via <link> in app/layout.tsx. */
 @import "@vxture/design-system/styles/shell-template.css";
-@import "../styles/admin-base.css";
-@import "../styles/admin-auth-captcha.css";
-@import "../styles/admin-service-health.css";
-@import "../styles/admin-overview.css";
-@import "../styles/admin-products.css";
-@import "../styles/admin-management.css";
-@import "../styles/admin-tenant-detail.css";
-@import "../styles/admin-management-pills.css";
-@import "../styles/admin-placeholder.css";
-@import "../styles/admin-permissions.css";
-@import "../styles/admin-roles.css";
-@import "../styles/admin-directory.css";
-@import "../styles/admin-governance.css";
-@import "../styles/admin-operations.css";
-@import "../styles/admin-platform-autonomy.css";
+
+/* admin 页面样式的取值层，托管在 DS（token 归 DS 所有，见
+ * ds/no-app-vx-token-definitions）。必须排在页面样式之前——它定义的变量正是下面
+ * 那些文件在 var() 里取的值。它是 8ca6284e 抽走取值层之后补上的桥，见文件头。 */
+@import "@vxture/design-system/styles/admin-tokens.css";
+
+/* 页面样式。已被 DS 组件取代、且选择器全仓零引用的那批已退出构建，存档在
+ * portals/admin/styles-absorbed/（在 src 外——守卫不允许 src/styles 下存在
+ * 不可达模块）。判据与名单见该目录的 README。
+ *
+ * **全部导入 `layer(components)`。** 此前它们是未分层规则，而未分层规则的优先级
+ * 高于所有 `@layer` 内的规则、与特异性无关——Tailwind 的工具类都在
+ * `@layer utilities`，于是页面样式里随便一条标签选择器就能压过 DS 组件的所有
+ * 工具类。侧栏那次正是如此：一条 `a { color: inherit }` 让每个导航项的
+ * `text-primary-text` / `text-muted-foreground` 全部失效（见
+ * admin-base-elements.css 的说明）。
+ *
+ * 放 `components` 而不是新起一层：Tailwind 已有这一层且排在 `utilities` 之前，
+ * 于是工具类重新成为最终覆盖手段——这正是它该有的位置。页面样式之间的相互
+ * 覆盖不受影响：同层内仍按特异性与顺序。 */
+@import "../styles/admin-base.css" layer(components);
+@import "../styles/admin-service-health.css" layer(components);
+@import "../styles/admin-overview.css" layer(components);
+@import "../styles/admin-management.css" layer(components);
+@import "../styles/admin-tenant-detail.css" layer(components);
+@import "../styles/admin-management-pills.css" layer(components);
+@import "../styles/admin-placeholder.css" layer(components);
+@import "../styles/admin-permissions.css" layer(components);
+@import "../styles/admin-roles.css" layer(components);
+@import "../styles/admin-directory.css" layer(components);
+@import "../styles/admin-governance.css" layer(components);
+@import "../styles/admin-operations.css" layer(components);

@@ -30,6 +30,7 @@ import { CapabilitiesRouter } from "./routers/capabilities.router";
 import { HealthRouter } from "./routers/health.router";
 import { IamRouter } from "./routers/iam.router";
 import { MeRouter } from "./routers/me.router";
+import { SearchRouter } from "./routers/search.router";
 import { SubscriptionRouter } from "./routers/subscription.router";
 import { TenantContextRouter } from "./routers/tenant-context.router";
 
@@ -58,6 +59,7 @@ import { TenantContextRouter } from "./routers/tenant-context.router";
     SubscriptionRouter,
     BillingRouter,
     AtlasRouter,
+    SearchRouter,
   ],
   providers: [
     ConsoleAuthService,

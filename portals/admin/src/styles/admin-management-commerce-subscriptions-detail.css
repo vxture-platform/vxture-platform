@@ -27,8 +27,8 @@
   display: grid;
   grid-template-columns: var(--vx-admin-management-track-175r) minmax(0, 1fr);
   align-items: start;
-  gap: var(--vx-admin-management-space-0875r);
-  padding: var(--vx-admin-management-space-1r) 0;
+  gap: var(--space-md);
+  padding: var(--space-md) 0;
   border-bottom: var(--vx-admin-management-line-width-1p) dashed color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
 }
 
@@ -54,7 +54,7 @@
 }
 
 .vx-subscription-timeline__item p {
-  margin: var(--vx-admin-management-space-035r) 0 0;
+  margin: var(--space-2xs) 0 0;
   color: var(--vx-color-gray-600);
   font-size: var(--vx-admin-meta-size);
   font-weight: 400;
@@ -63,7 +63,7 @@
 
 .vx-subscription-timeline__item small {
   display: block;
-  margin-top: var(--vx-admin-management-space-035r);
+  margin-top: var(--space-2xs);
   color: var(--tenant-muted);
   font-size: var(--vx-admin-caption-size);
   font-weight: 400;
@@ -88,23 +88,12 @@
   width: fit-content;
   display: inline-flex;
   align-items: center;
-  padding: var(--vx-admin-management-space-05r) var(--vx-admin-management-space-075r);
+  padding: var(--space-xs) var(--space-sm);
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-success-500) 10%, transparent);
   color: var(--vx-color-success-700);
   font-size: var(--vx-admin-meta-size);
   font-weight: 400;
-}
-
-.vx-btn.vx-subscription-action-button--danger {
-  border-color: color-mix(in srgb, var(--vx-color-danger) 18%, transparent);
-  color: var(--vx-color-danger);
-}
-
-.vx-btn.vx-subscription-action-button--danger:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--vx-color-danger) 32%, transparent);
-  background: color-mix(in srgb, var(--vx-color-danger) 8%, transparent);
-  color: var(--vx-color-danger);
 }
 
 .vx-tenant-actions__menu button.vx-subscription-menu-action--danger {

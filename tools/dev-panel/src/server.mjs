@@ -13,6 +13,7 @@ import net from "node:net";
 import { URL, fileURLToPath } from "node:url";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { SERVICES, CARD_ORDER, START_ORDER } from "./services.mjs";
 
 // ─── 全局常量 ──────────────────────────────────────────────────────────────────
 
@@ -28,268 +29,17 @@ const ROOT_ENV = loadRootEnv();
 
 // ─── 服务清单 ──────────────────────────────────────────────────────────────────
 
-/** @type {Array<{id:string,name:string,port:number,url:string,command:string,priority:number,env?:Record<string,string>,healthChecks:Array<{label:string,kind?:'http'|'tcp',url?:string,port?:number,okStatuses?:number[]}>}>} */
-const SERVICES = [
-  {
-    id: "website-bff",
-    name: "Website BFF",
-    port: 3011,
-    priority: 0,
-    url: "http://localhost:3011",
-    command: "pnpm --filter @vxture/bff-website dev",
-    env: {
-      AUTH_BFF_URL: "http://localhost:3090",
-    },
-    healthChecks: [
-      {
-        label: "healthz",
-        url: "http://localhost:3011/healthz",
-        okStatuses: [200],
-      },
-      {
-        label: "api.me",
-        url: "http://localhost:3011/api/me",
-        okStatuses: [401],
-      },
-    ],
-  },
-  {
-    id: "auth-bff",
-    name: "Auth BFF",
-    port: 3090,
-    priority: 0,
-    url: "http://localhost:3090",
-    command: "pnpm --filter @vxture/bff-auth dev",
-    env: {
-      AUTH_BFF_PORT: "3090",
-    },
-    healthChecks: [
-      {
-        label: "healthz",
-        url: "http://localhost:3090/healthz",
-        okStatuses: [200],
-      },
-    ],
-  },
-  {
-    id: "varda-server",
-    name: "Varda Server",
-    port: 3122,
-    priority: 0,
-    url: "http://localhost:3122",
-    command: "pnpm --filter @vxture/agent-server-varda dev",
-    env: {
-      ATLAS_API_URL: "http://localhost:3100",
-      VARDA_SERVER_PORT: "3122",
-      VARDA_PLATFORM_LLM_TENANT_ID: "82cf3e39-f7f0-4597-bb55-b1303ca19d46",
-      VARDA_DEFAULT_MODEL_CODE: "doubao-seed-2-0-lite-260215",
-    },
-    healthChecks: [{ label: "port", kind: "tcp", port: 3122 }],
-  },
-  {
-    id: "varda-bff",
-    name: "Varda BFF",
-    port: 3121,
-    priority: 0,
-    url: "http://localhost:3121",
-    command: "pnpm --filter @vxture/bff-varda dev",
-    env: {
-      VARDA_BFF_PORT: "3121",
-      VARDA_SERVER_INTERNAL_URL: "http://localhost:3122",
-    },
-    healthChecks: [
-      {
-        label: "health",
-        url: "http://localhost:3121/health",
-        okStatuses: [200],
-      },
-    ],
-  },
-  {
-    id: "console-bff",
-    name: "Console BFF",
-    port: 3021,
-    priority: 0,
-    url: "http://localhost:3021",
-    command: "pnpm --filter @vxture/bff-console dev",
-    env: {
-      ATLAS_API_URL: "http://localhost:3100",
-      AUTH_BFF_URL: "http://localhost:3090",
-    },
-    healthChecks: [
-      {
-        label: "healthz",
-        url: "http://localhost:3021/healthz",
-        okStatuses: [200],
-      },
-      {
-        label: "auth.session",
-        url: "http://localhost:3021/api/auth/session",
-        okStatuses: [401],
-      },
-    ],
-  },
-  {
-    id: "admin-bff",
-    name: "Admin BFF",
-    port: 3031,
-    priority: 0,
-    url: "http://localhost:3031",
-    command: "pnpm --filter @vxture/bff-admin dev",
-    env: {
-      ATLAS_API_URL: "http://localhost:3100",
-      ADMIN_BFF_PORT: "3031",
-      AUTH_BFF_URL: "http://localhost:3090",
-    },
-    healthChecks: [
-      {
-        label: "healthz",
-        url: "http://localhost:3031/healthz",
-        okStatuses: [200],
-      },
-      {
-        label: "auth.session",
-        url: "http://localhost:3031/api/auth/session",
-        okStatuses: [401],
-      },
-      {
-        label: "model-platform",
-        url: "http://localhost:3031/api/model-platform/models",
-        okStatuses: [401],
-      },
-    ],
-  },
-  {
-    id: "gateway",
-    name: "Gateway BFF",
-    port: 8000,
-    priority: 1,
-    url: "http://localhost:8000",
-    command: "pnpm dev:gateway",
-    env: {
-      WEBSITE_BFF_ORIGIN: "http://localhost:3011",
-      CONSOLE_BFF_ORIGIN: "http://localhost:3021",
-      ADMIN_BFF_ORIGIN: "http://localhost:3031",
-      AUTH_BFF_ORIGIN: "http://localhost:3090",
-    },
-    healthChecks: [
-      {
-        label: "healthz",
-        url: "http://localhost:8000/healthz",
-        okStatuses: [200],
-      },
-      {
-        label: "website-api",
-        url: "http://localhost:8000/website-api/api/me",
-        okStatuses: [401],
-      },
-      {
-        label: "console-api",
-        url: "http://localhost:8000/console-api/api/auth/session",
-        okStatuses: [401],
-      },
-      {
-        label: "admin-api",
-        url: "http://localhost:8000/admin-api/api/auth/session",
-        okStatuses: [401],
-      },
-      {
-        label: "auth-api",
-        url: "http://localhost:8000/auth-api/healthz",
-        okStatuses: [200],
-      },
-    ],
-  },
-  {
-    id: "website",
-    name: "Website",
-    port: 3010,
-    priority: 2,
-    url: "http://localhost:3010",
-    command: "pnpm --filter @vxture/website dev",
-    healthChecks: [{ label: "port", kind: "tcp", port: 3010 }],
-  },
-  {
-    id: "console",
-    name: "Console",
-    port: 3020,
-    priority: 2,
-    url: "http://localhost:3020",
-    command: "pnpm --filter @vxture/console dev",
-    healthChecks: [{ label: "port", kind: "tcp", port: 3020 }],
-  },
-  {
-    id: "admin",
-    name: "Admin",
-    port: 3030,
-    priority: 2,
-    url: "http://localhost:3030",
-    command: "pnpm --filter @vxture/admin dev",
-    healthChecks: [{ label: "port", kind: "tcp", port: 3030 }],
-  },
-  {
-    id: "varda-studio",
-    name: "Varda Studio",
-    port: 3120,
-    priority: 2,
-    url: "http://localhost:3120",
-    command: "pnpm --filter @vxture/agent-studio-varda dev",
-    healthChecks: [{ label: "port", kind: "tcp", port: 3120 }],
-  },
-  {
-    id: "website-alias",
-    name: "Website :3000 Alias",
-    port: 3000,
-    priority: 2,
-    url: "http://localhost:3000",
-    command: "node tools/dev-panel/redirect-3000.mjs",
-    healthChecks: [{ label: "port", kind: "tcp", port: 3000 }],
-  },
-];
-
-/**
- * 卡片展示顺序 — 每层保持同一产品族顺序：
- * 基础平台 → website/console/admin → varda → 辅助入口。
- */
-const CARD_ORDER = [
-  "auth-bff",
-  "website-bff",
-  "console-bff",
-  "admin-bff",
-  "varda-server",
-  "varda-bff",
-  "gateway",
-  "website",
-  "console",
-  "admin",
-  "varda-studio",
-  "website-alias",
-];
+/* 服务清单、展示顺序、启动顺序全部来自 services.mjs——那里是唯一事实来源。
+ * 原先这三份 id 列表都写在本文件里、各抄一遍，加服务要改三处且漏改不报错。 */
 
 const CARD_ORDER_INDEX = new Map(CARD_ORDER.map((id, index) => [id, index]));
-
-/** 启动顺序 — 按依赖顺序逐级等待健康检查通过，并尽量贴近卡片分组顺序 */
-const START_ORDER = [
-  "auth-bff",
-  "website-bff",
-  "console-bff",
-  "admin-bff",
-  "varda-server",
-  "varda-bff",
-  "gateway",
-  "website",
-  "console",
-  "admin",
-  "varda-studio",
-  "website-alias",
-];
 
 // ─── 运行时状态 ─────────────────────────────────────────────────────────────────
 
 const runtime = new Map(
   SERVICES.map((service) => [
     service.id,
-    { child: null, logs: [], startedAt: null, stopping: false },
+    { child: null, logs: [], startedAt: null, stopping: false, foreignPort: false },
   ]),
 );
 
@@ -610,6 +360,9 @@ async function getServiceSnapshot(service) {
     uptimeMs,
     uptime: uptimeMs !== null ? formatUptime(uptimeMs) : null,
     stopping: Boolean(state?.stopping),
+    /* true = 端口被外部进程占着，本面板没有这个服务的子进程。健康检查可能仍
+     * 为绿（那是外部进程在答），但面板停不了、重启不了、也感知不到它退出。 */
+    foreignPort: Boolean(state?.foreignPort) && !isChildAlive(state?.child),
     logs: state?.logs ?? [],
   };
 }
@@ -624,9 +377,22 @@ async function startService(service) {
     return;
   }
   if (await checkPort(service.port)) {
-    panelLog(service.id, `跳过启动：端口 ${service.port} 已被占用`);
+    /* 端口被本面板**不拥有**的进程占着（上一轮遗留、手工起的、或别的服务抢了
+     * 端口）。原先这里只写一行日志就 return，而卡片仍按健康检查显示为绿——那个
+     * 外部进程会照常答 healthz，于是面板看起来一切正常，实际上"启动"根本没发生，
+     * 面板也管不了它的生死。它一旦退出就是静默失联（2026-08-04 auth-bff 就是这么
+     * 消失的，症状是浏览器 ERR_CONNECTION_REFUSED，而面板此前一直显示绿）。
+     * 现在把这个状态记下来并透出到状态接口，卡片可据此标注。 */
+    state.foreignPort = true;
+    panelLog(
+      service.id,
+      `⚠ 未启动：端口 ${service.port} 已被本面板之外的进程占用。` +
+        `健康检查可能是那个进程在答，面板无法管理它的生命周期。` +
+        `先停掉占用者再启动本服务。`,
+    );
     return;
   }
+  state.foreignPort = false;
 
   const shell = shellForPlatform(service.command);
   const child = spawn(shell.file, shell.args, {
@@ -1274,6 +1040,9 @@ function pageHtml() {
     .status-badge.stopped::before { background: #6b7280; }
     .status-badge.changing { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-border); }
     .status-badge.changing::before { background: #f59e0b; animation: pulse .9s ease-in-out infinite; }
+    /* 端口被面板外的进程占着：绿色的健康标记可能是那个进程答的，不代表面板在管它。 */
+    .status-badge.foreign { background: var(--warn-bg); color: var(--warn); border: 1px dashed var(--warn-border); }
+    .status-badge.foreign::before { background: #f59e0b; }
 
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
 
@@ -1556,6 +1325,7 @@ function pageHtml() {
             <span class="badge-p p\${s.priority}">P\${s.priority}</span>
             <span class="svc-name">\${esc(s.name)}</span>
             <span class="status-badge \${cls}">\${txt}</span>
+            \${s.foreignPort ? '<span class="status-badge foreign" title="端口被本面板之外的进程占用：健康检查可能是那个进程在答，面板无法停止/重启它，也感知不到它退出。先停掉占用者再启动。">外部占用</span>' : ''}
             <span class="card-head-spacer"></span>
             <span class="svc-port">:\${s.port}</span>
             <span class="probe-summary" aria-label="探针总数和问题探针数">

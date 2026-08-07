@@ -4,6 +4,7 @@
  * 通知/设置内容为占位（demo）数据，待接真实消息中心 / 系统设置。 */
 
 import { useEffect } from "react";
+import { toneSurfaceClasses, type Tone } from "@vxture/design-system";
 
 export type DrawerType = "notifications" | "settings";
 
@@ -30,10 +31,15 @@ export interface TemplateDrawerProps {
   };
 }
 
-const LEVEL_COLOR: Record<DrawerNotif["level"], string> = {
-  danger: "var(--vx-color-danger-600)",
-  warning: "var(--vx-color-warning-500)",
-  info: "var(--vx-color-info-600)",
+/* The three tokens this used to reference (--vx-color-danger-600 /
+ * -warning-500 / -info-600) do not exist in the design tokens, so the icon
+ * colour and its tint both resolved to nothing. Use the DS tone helper, which
+ * pairs a same-hue foreground with a same-hue muted surface — exactly what the
+ * hand-rolled color-mix was approximating. */
+const LEVEL_TONE: Record<DrawerNotif["level"], Tone> = {
+  danger: "danger",
+  warning: "warning",
+  info: "info",
 };
 
 export function TemplateDrawer({
@@ -109,14 +115,7 @@ export function TemplateDrawer({
                   }}
                 >
                   <span
-                    className="dn-ico"
-                    style={{
-                      color: LEVEL_COLOR[n.level],
-                      background:
-                        "color-mix(in srgb, " +
-                        LEVEL_COLOR[n.level] +
-                        " 14%, transparent)",
-                    }}
+                    className={`dn-ico ${toneSurfaceClasses[LEVEL_TONE[n.level]]}`}
                   >
                     <i className={"ph-fill " + n.icon}></i>
                   </span>

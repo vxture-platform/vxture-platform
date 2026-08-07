@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Icon, EmptyState } from "@vxture/design-system";
+import {
+  Button,
+  EmptyState,
+  Icon,
+  MetricGrid,
+  SectionHeader,
+  ViewLayout,
+} from "@vxture/design-system";
 import type { IconName } from "@vxture/design-system";
 import { fetchCommerceOverview } from "@/api/admin-bff";
 import type {
@@ -11,7 +18,8 @@ import type {
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
-import { formatCurrency, SummaryItem } from "./CommercialUtils";
+import { formatCurrency } from "./CommercialUtils";
+import { toStatusTone } from "@/modules/shared/tone";
 
 const quickLinks: Array<{
   href: string;
@@ -76,10 +84,16 @@ function metricValue(metric: CommerceOverviewMetric) {
   return formatNumber(metric.value);
 }
 
+/**
+ * 金额型指标的读数是金额，笔数退成标；计数型指标读数本身就是笔数，不再重复。
+ *
+ * `hint` 不在这里——它是口径说明（"metering.subscriptions 中 status=active 的订阅数"
+ * 这类），归 `MetricCard.help` 的 `?`。当成标挂出来，一整句表名条件会顶掉读数的位置。
+ */
 function metricTags(metric: CommerceOverviewMetric) {
-  if (typeof metric.amount === "number")
-    return [`${formatNumber(metric.value)} 笔`, metric.hint];
-  return [metric.hint];
+  return typeof metric.amount === "number"
+    ? [`${formatNumber(metric.value)} 笔`]
+    : [];
 }
 
 function riskIcon(
@@ -96,18 +110,19 @@ function OverviewMetricSummary({
   metrics: CommerceOverviewMetric[];
 }) {
   return (
-    <section className="vx-tenant-summary" aria-label="商业总览统计">
-      {metrics.map((metric) => (
-        <SummaryItem
-          key={metric.key}
-          icon={metricIcon(metric)}
-          label={metric.label}
-          value={metricValue(metric)}
-          tags={metricTags(metric)}
-          tone={metric.tone}
-        />
-      ))}
-    </section>
+    <MetricGrid
+      aria-label="商业总览统计"
+      columns={5}
+      items={metrics.map((metric) => ({
+        id: metric.key,
+        icon: metricIcon(metric),
+        label: metric.label,
+        value: metricValue(metric),
+        help: metric.hint,
+        tags: metricTags(metric),
+        tone: toStatusTone(metric.tone),
+      }))}
+    />
   );
 }
 
@@ -117,18 +132,17 @@ function RiskPanel({ snapshot }: { snapshot: CommerceOverviewSnapshot }) {
       className="vx-commerce-panel vx-commerce-risk-panel"
       aria-label="商业风险"
     >
-      <header className="vx-commerce-panel__header">
-        <div className="admin-overview-heading">
-          <span className="admin-overview-heading__icon" aria-hidden="true">
-            <Icon name="warning" size="lg" fallback="placeholder" />
+      <SectionHeader
+        level={2}
+        icon="warning"
+        title="风险与待办"
+        description="从账单、收款、发票和用量中抽取运营侧需要跟进的事项。"
+        action={
+          <span className="text-body-sm text-muted-foreground">
+            生成 {formatDate(snapshot.generatedAt)}
           </span>
-          <div className="admin-overview-heading__copy">
-            <h2>风险与待办</h2>
-            <p>从账单、收款、发票和用量中抽取运营侧需要跟进的事项。</p>
-          </div>
-        </div>
-        <small>生成 {formatDate(snapshot.generatedAt)}</small>
-      </header>
+        }
+      />
       <div className="vx-commerce-risk-list">
         {snapshot.risks.map((risk) => (
           <Link
@@ -165,20 +179,17 @@ function PlanRevenuePanel({
       className="vx-commerce-panel vx-commerce-plan-panel"
       aria-label="套餐收入"
     >
-      <header className="vx-commerce-panel__header">
-        <div className="admin-overview-heading">
-          <span className="admin-overview-heading__icon" aria-hidden="true">
-            <Icon name="chart-bar" size="lg" fallback="placeholder" />
-          </span>
-          <div className="admin-overview-heading__copy">
-            <h2>套餐收入</h2>
-            <p>
-              按服务套餐汇总订阅数量与订阅应收（Σ subscriptions.pay_amount）。
-            </p>
-          </div>
-        </div>
-        <Link href="/service-plans">套餐管理</Link>
-      </header>
+      <SectionHeader
+        level={2}
+        icon="chart-bar"
+        title="套餐收入"
+        description="按服务套餐汇总订阅数量与订阅应收（Σ subscriptions.pay_amount）。"
+        action={
+          <Button variant="link" size="sm" asChild>
+            <Link href="/service-plans">套餐管理</Link>
+          </Button>
+        }
+      />
       {/* C15: tierName / paidAmount / discountAmount removed — no source (tier not
           grouped; paidAmount was a dup of revenueAmount; discount never computed). */}
       <div className="vx-commerce-plan-list">
@@ -215,17 +226,12 @@ function QuickLinkPanel() {
       className="vx-commerce-panel vx-commerce-link-panel"
       aria-label="商业财务入口"
     >
-      <header className="vx-commerce-panel__header">
-        <div className="admin-overview-heading">
-          <span className="admin-overview-heading__icon" aria-hidden="true">
-            <Icon name="squares-four" size="lg" fallback="placeholder" />
-          </span>
-          <div className="admin-overview-heading__copy">
-            <h2>业务入口</h2>
-            <p>商业财务域的运营台账入口，保持人工处理和规则配置边界清晰。</p>
-          </div>
-        </div>
-      </header>
+      <SectionHeader
+        level={2}
+        icon="squares-four"
+        title="业务入口"
+        description="商业财务域的运营台账入口，保持人工处理和规则配置边界清晰。"
+      />
       <div className="vx-commerce-link-grid">
         {quickLinks.map((link) => (
           <Link
@@ -269,7 +275,7 @@ export function CommerceOverviewPage() {
   const metricCount = useMemo(() => snapshot?.metrics.length ?? 0, [snapshot]);
 
   return (
-    <div className="vx-page-stack vx-tenant-management-page vx-commerce-overview-page">
+    <ViewLayout className="vx-tenant-management-page vx-commerce-overview-page">
       <PageHeader
         icon="chart-bar"
         eyebrow="商业分析"
@@ -305,6 +311,6 @@ export function CommerceOverviewPage() {
           </footer>
         </>
       ) : null}
-    </div>
+    </ViewLayout>
   );
 }

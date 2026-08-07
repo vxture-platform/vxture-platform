@@ -1,25 +1,30 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Link } from "@/lib/i18n/navigation";
+import { getPathname, useRouter } from "@/lib/i18n/navigation";
 import {
-  Badge,
+  Button,
+  DashboardTemplate,
   DataTable,
+  EmptyState,
+  EntryCard,
   Icon,
-  ActionButton,
-  PageHeader,
-  TableToolbar,
+  ViewHeader,
 } from "@vxture/design-system";
 import type { DataTableColumn, IconName } from "@vxture/design-system";
-import { fetchBillingInvoices, type ConsoleInvoice } from "@/api/console-bff";
-import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
-import { useTranslations } from "next-intl";
 import {
-  DashboardSplit,
-  PageSection,
-  SignalList,
-  SummaryStrip,
-} from "@/layout/shell";
+  fetchBillingInvoices,
+  fetchMyOrders,
+  fetchMySubscriptions,
+  fetchQuotaUsage,
+  type ConsoleInvoice,
+  type ConsoleQuotaUsage,
+  type ConsoleSubscription,
+  type MyOrder,
+} from "@/api/console-bff";
+import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { useLocale, useTranslations } from "next-intl";
+import { PageSection, SummaryStrip } from "@/layout/shell";
 
 // ============================================================================
 // 数据格式化工具
@@ -90,8 +95,15 @@ function invoiceColumns(
 export function DashboardPage() {
   const { session } = useConsoleSession();
   const t = useTranslations("dashboard");
+  // localePrefix="always"：EntryCard 是个原生 <a>，不能套在 next-intl 的 Link
+  // 里（<a> 嵌 <a> 非法），所以自己把 locale 前缀拼进 href。
+  const locale = useLocale();
+  const router = useRouter();
   const [invoices, setInvoices] = useState<ConsoleInvoice[]>([]);
   const [invoicesLoading, setInvoicesLoading] = useState(true);
+  const [subscriptions, setSubscriptions] = useState<ConsoleSubscription[]>([]);
+  const [quota, setQuota] = useState<ConsoleQuotaUsage | null>(null);
+  const [orders, setOrders] = useState<MyOrder[]>([]);
 
   useEffect(() => {
     setInvoicesLoading(true);
@@ -100,11 +112,32 @@ export function DashboardPage() {
       .finally(() => setInvoicesLoading(false));
   }, [session.tenant?.id]);
 
-  const dashboardStats = [
-    { id: "plan", icon: "medal" },
-    { id: "quota", icon: "chart-bar" },
-    { id: "reminders", icon: "warning" },
-  ] as const;
+  /* The three summary tiles used to render i18n literals — "Growth", "78%",
+   * "3" — presented as this tenant's own plan, quota and pending items. They
+   * are computed from live reads now; allSettled so one failing endpoint
+   * blanks only its own tile. */
+  useEffect(() => {
+    void Promise.allSettled([
+      fetchMySubscriptions(),
+      fetchQuotaUsage(),
+      fetchMyOrders(),
+    ]).then(([subs, q, ord]) => {
+      if (subs.status === "fulfilled") setSubscriptions(subs.value);
+      if (q.status === "fulfilled") setQuota(q.value);
+      if (ord.status === "fulfilled") setOrders(ord.value);
+    });
+  }, [session.tenant?.id]);
+
+  const activeSubscription =
+    subscriptions.find((s) => s.status === "active") ?? subscriptions[0];
+  const aiCredit = quota?.aiCredit;
+  const quotaPct =
+    aiCredit && aiCredit.limit > 0
+      ? `${Math.round((aiCredit.used / aiCredit.limit) * 100)}%`
+      : null;
+  const openItems =
+    orders.filter((o) => o.orderStatus === "pending_payment").length +
+    invoices.filter((i) => i.status === "pending").length;
 
   const quickActions = [
     { id: "addMember", href: "/members", icon: "users" },
@@ -112,29 +145,27 @@ export function DashboardPage() {
     { id: "adjustQuotas", href: "/quotas", icon: "database" },
   ] as const;
 
-  const summaryItems = dashboardStats.map((stat) => ({
-    label: t(`stats.${stat.id}.label`),
-    value: t(`stats.${stat.id}.value`),
-    hint: t(`stats.${stat.id}.hint`),
-    aside: (
-      <span className="vx-summary-strip__icon" aria-hidden="true">
-        <Icon name={stat.icon as IconName} size="sm" fallback="info" />
-      </span>
-    ),
-  }));
-
-  const signalItems = [
+  /* Labels stay in i18n; values come from the reads above. No `hint` is
+   * passed: the old hints were specific fabricated sentences ("renews on
+   * 2026-05-18", "GPU fine-tuning is near its threshold") and there is no
+   * endpoint that could produce a true equivalent — a bare true value beats a
+   * plausible false sentence. `—` marks "not loaded / not applicable" rather
+   * than inventing a number. */
+  const summaryItems = [
     {
-      title: t("signals.billing.title"),
-      description: t("signals.billing.description"),
+      label: t("stats.plan.label"),
+      value: activeSubscription?.planName ?? "—",
+      aside: <Icon name="medal" size="sm" fallback="info" />,
     },
     {
-      title: t("signals.quota.title"),
-      description: t("signals.quota.description"),
+      label: t("stats.quota.label"),
+      value: quotaPct ?? "—",
+      aside: <Icon name="chart-bar" size="sm" fallback="info" />,
     },
     {
-      title: t("signals.access.title"),
-      description: t("signals.access.description"),
+      label: t("stats.reminders.label"),
+      value: String(openItems),
+      aside: <Icon name="warning" size="sm" fallback="info" />,
     },
   ];
 
@@ -142,96 +173,82 @@ export function DashboardPage() {
   const invoiceTableColumns = invoiceColumns(t);
 
   return (
-    <div className="vx-page-stack">
-      <PageHeader
-        eyebrow={t("eyebrow")}
-        title={t("title")}
-        description={t("description")}
-        action={<ActionButton icon="plus">{t("createAction")}</ActionButton>}
-      />
-
-      <SummaryStrip items={summaryItems} />
-
-      <DashboardSplit>
-        <PageSection
-          title={t("quickActions.title")}
-          description={t("quickActions.description")}
-        >
-          <div className="vx-action-list">
-            {quickActions.map((action) => (
-              <Link
-                key={action.id}
-                href={action.href}
-                className="vx-action-item"
-              >
-                <div className="vx-action-item__icon">
-                  <Icon
-                    name={action.icon as IconName}
-                    size={20}
-                    fallback="arrow-right"
-                  />
-                </div>
-                <div>
-                  <strong>{t(`quickActions.${action.id}.label`)}</strong>
-                  <p>{t(`quickActions.${action.id}.description`)}</p>
-                </div>
-                <span className="vx-action-item__arrow" aria-hidden="true">
-                  →
-                </span>
-              </Link>
-            ))}
-          </div>
-        </PageSection>
-
-        <PageSection
-          title={t("signals.title")}
-          description={t("signals.description")}
-          action={
-            <Badge className="vx-badge-neutral">{t("signals.badge")}</Badge>
-          }
-          tone="muted"
-        >
-          <SignalList items={signalItems} />
-        </PageSection>
-      </DashboardSplit>
-
+    /* DashboardTemplate 焊死工作台的阅读顺序：先看数（metrics）、再选路
+     * （entries）、最后处理具体事项（children）。原实现把「快捷入口」和
+     * 「信号」并排塞在同一层，入口卡因此沉在指标下方与正文同级——这里让它
+     * 回到模板的 entries 槽。 */
+    <DashboardTemplate
+      header={
+        <ViewHeader
+          icon="home"
+          title={t("title")}
+          description={t("description")}
+        />
+      }
+      metrics={<SummaryStrip items={summaryItems} />}
+      entries={
+        <div className="grid gap-md sm:grid-cols-2 xl:grid-cols-3">
+          {quickActions.map((action) => (
+            <EntryCard
+              key={action.id}
+              href={getPathname({ href: action.href, locale })}
+              icon={action.icon as IconName}
+              title={t(`quickActions.${action.id}.label`)}
+              description={t(`quickActions.${action.id}.description`)}
+            />
+          ))}
+        </div>
+      }
+    >
       <PageSection
+        icon="receipt"
+        level={2}
         title={t("invoices.title")}
         description={t("invoices.description")}
+        action={
+          /* Was inert. It is navigation, not a feature — point it at the
+           * billing page instead of leaving a button that does nothing. */
+          <Button
+            size="md"
+            variant="outline"
+            onClick={() => router.push("/billing")}
+          >
+            <Icon name="arrow-right" size="xs" fallback="placeholder" />
+            <span>{t("signals.billing.title")}</span>
+          </Button>
+        }
       >
-        <TableToolbar
-          title={
-            invoicesLoading
+        <div className="flex items-center justify-between gap-sm">
+          <span className="text-label-sm text-muted-foreground">
+            {invoicesLoading
               ? "Loading…"
-              : `${invoiceRows.length} recent invoices`
-          }
-          hint={t("invoices.headers.scope")}
-          action={
-            <ActionButton variant="outline" icon="arrow-right">
-              {t("signals.billing.title")}
-            </ActionButton>
-          }
-        />
+              : `${invoiceRows.length} recent invoices`}
+          </span>
+          <span className="text-label-sm text-muted-foreground">
+            {t("invoices.headers.scope")}
+          </span>
+        </div>
         <DataTable
           columns={invoiceTableColumns}
           rows={invoiceRows}
-          rowKey={(row, index) => row[0] ?? index}
+          rowKey={(row, index) => row[0] ?? String(index)}
           loading={invoicesLoading}
-          loadingLabel="Loading invoices…"
-          empty="No invoices found."
+          empty={<EmptyState title="No invoices found." />}
         />
       </PageSection>
 
       <PageSection
+        icon="gauge"
+        level={2}
         title={t("quotas.title")}
         description={t("quotas.description")}
-        tone="muted"
       >
-        <p className="vx-empty-hint">
-          Quota monitoring is not yet available. Check back after your first
-          billing cycle.
-        </p>
+        <EmptyState
+          icon="chart-bar"
+          title="Quota monitoring is not yet available."
+          description="Check back after your first billing cycle."
+        />
       </PageSection>
-    </div>
+    </DashboardTemplate>
   );
 }

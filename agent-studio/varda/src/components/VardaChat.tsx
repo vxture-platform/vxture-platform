@@ -106,7 +106,7 @@ export function VardaChat({
         className="vx-varda-float-button"
         onClick={toggleOpen}
         aria-label="打开 Varda 助手"
-        size="icon"
+        size="icon-md"
       >
         {isOpen ? "✕" : "✦"}
       </Button>
@@ -145,7 +145,7 @@ function Header({ onClose, mode, onToggleWide, onToggleFull }: HeaderProps) {
               aria-label={mode === "wide" ? "还原窄版" : "加宽"}
               title={mode === "wide" ? "还原窄版" : "加宽"}
               variant="ghost"
-              size="icon"
+              size="icon-md"
             >
               {/* 设计图标（Phosphor，由宿主 console 全局加载）。 */}
               <i
@@ -165,7 +165,7 @@ function Header({ onClose, mode, onToggleWide, onToggleFull }: HeaderProps) {
               aria-label={mode === "full" ? "退出全屏" : "全屏"}
               title={mode === "full" ? "退出全屏" : "全屏"}
               variant="ghost"
-              size="icon"
+              size="icon-md"
             >
               <i
                 className={
@@ -180,7 +180,7 @@ function Header({ onClose, mode, onToggleWide, onToggleFull }: HeaderProps) {
               className="vx-varda-header__close"
               aria-label="关闭"
               variant="ghost"
-              size="icon"
+              size="icon-md"
             >
               {/* inline（console，已加载 Phosphor）用设计图标；float 兜底字形。 */}
               {mode ? <i className="ph ph-x" /> : "✕"}

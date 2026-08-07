@@ -1,113 +1,14 @@
-.vx-verification-row__status,
-.vx-verification-row__subject,
-.vx-verification-row__contact,
-.vx-verification-row__time,
-.vx-admin-role-row__status,
-.vx-admin-role-row__admins,
-.vx-admin-role-row__permissions,
-.vx-admin-role-row__updated,
-.vx-product-row__type,
-.vx-product-row__status,
-.vx-product-row__supply,
-.vx-product-row__access,
-.vx-product-row__updated,
 .vx-product-plan-row__status,
 .vx-product-plan-row__price,
 .vx-product-plan-row__features,
 .vx-product-plan-row__agents,
-.vx-product-plan-row__subscriptions,
-.vx-product-solution-row__scenario,
-.vx-product-solution-row__products,
-.vx-product-solution-row__tiers,
-.vx-product-solution-row__subscriptions,
-.vx-product-solution-row__updated {
+.vx-product-plan-row__subscriptions {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
   justify-items: start;
   text-align: left;
 }
-
-.vx-verification-row__status .vx-tenant-directory-row__status-line,
-.vx-verification-row__subject .vx-tenant-directory-row__tag-line,
-.vx-admin-role-row__status .vx-tenant-directory-row__status-line,
-.vx-admin-role-permission-tags,
-.vx-product-row__type .vx-tenant-directory-row__tag-line,
-.vx-product-plan-row__status .vx-tenant-directory-row__tag-line,
-.vx-product-solution-row__scenario .vx-tenant-directory-row__tag-line {
+.vx-admin-role-permission-tags {
   justify-content: flex-start;
-}
-
-.vx-model-platform-row__source,
-.vx-model-platform-row__capabilities,
-.vx-model-platform-row__link,
-.vx-model-platform-row__status {
-  min-width: 0;
-  display: grid;
-  gap: var(--vx-admin-management-space-05r);
-  justify-items: start;
-  text-align: left;
-}
-
-.vx-model-platform-row__capabilities .vx-tenant-directory-row__tag-line,
-.vx-model-platform-row__status .vx-tenant-directory-row__status-line {
-  justify-content: flex-start;
-}
-
-.vx-model-platform-row__source,
-.vx-model-platform-row__link,
-.vx-model-platform-row__status {
-  justify-items: center;
-}
-
-.vx-model-platform-row__source .vx-tenant-directory-row__tag-line,
-.vx-model-platform-row__link .vx-tenant-directory-row__status-line,
-.vx-model-platform-row__status .vx-tenant-directory-row__status-line {
-  justify-content: center;
-}
-
-.vx-model-name-button {
-  display: block;
-  max-width: 100%;
-  overflow: hidden;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--tenant-ink);
-  cursor: pointer;
-  font: inherit;
-  font-size: var(--vx-admin-body-size);
-  font-weight: 800;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vx-model-name-button:hover,
-.vx-model-name-button:focus-visible {
-  color: var(--tenant-blue);
-}
-
-.vx-admin-role-directory-list
-  .vx-tenant-directory-row
-  > .vx-tenant-directory-row__tenant.vx-admin-role-row__identity {
-  width: 100%;
-  justify-self: stretch;
-  justify-content: start;
-  justify-items: start;
-  text-align: left;
-}
-
-.vx-admin-role-directory-list
-  .vx-tenant-directory-row
-  > .vx-tenant-directory-row__tenant.vx-admin-role-row__identity
-  > span,
-.vx-admin-role-directory-list
-  .vx-tenant-directory-row
-  > .vx-tenant-directory-row__tenant.vx-admin-role-row__identity
-  .vx-tenant-directory-row__title-line {
-  width: 100%;
-  justify-content: flex-start;
-  justify-items: start;
-  text-align: left;
 }

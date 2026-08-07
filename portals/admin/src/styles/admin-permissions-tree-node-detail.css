@@ -15,15 +15,15 @@
       0.52fr
     )
     var(--vx-admin-permission-track-5r);
-  gap: var(--vx-admin-permission-space-05r);
-  padding: var(--vx-admin-permission-space-0625r)
-    var(--vx-admin-permission-space-0875r);
+  gap: var(--space-xs);
+  padding: var(--space-sm)
+    var(--space-md);
 }
 
 .vx-admin-permission-tree-node__detail-row > span {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-permission-space-01875r);
+  gap: var(--space-2xs);
   align-content: center;
 }
 

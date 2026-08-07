@@ -8,15 +8,26 @@ import {
   type FormEvent,
 } from "react";
 import {
-  Icon,
+  Banner,
   Button,
+  DetailList,
+  DetailRow,
+  EmptyState,
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  Icon,
   Input,
-  Label,
   NativeSelect,
+  StatusBadge,
+  type StatusBadgeTone,
   UserAvatar,
-  ActionButton,
-  PageHeader,
+  ViewHeader,
+  ViewLayout,
 } from "@vxture/design-system";
+import { ConnectedRow, IdentityCard } from "@/components/detail";
+import { PageSection } from "@/layout/shell";
 import {
   deleteOrgLogo,
   fetchMySubscriptions,
@@ -44,6 +55,13 @@ type Feedback = {
 const LOGO_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";
 const LOGO_MAX_BYTES = 5 * 1024 * 1024;
 const CURRENCY_OPTIONS = ["CNY", "USD", "EUR", "GBP", "JPY", "HKD", "SGD"];
+
+/**
+ * Record lists (subscriptions / workspaces) separate their rows with the same
+ * dashed hairline `DetailList` uses, so both kinds of rows read as one system.
+ */
+const CONNECTED_LIST_CLASS =
+  "flex flex-col [&>*+*]:border-t [&>*+*]:border-dashed [&>*+*]:border-primary/10 dark:[&>*+*]:border-primary/20";
 
 function displayValue(value: string | null | undefined, fallback: string) {
   return value?.trim() || fallback;
@@ -109,13 +127,11 @@ function formatProfileDate(
   }).format(date);
 }
 
-/** Tenant status → unified annotation-tag class (same system as the profile page). */
-function statusTagClass(status: string | null | undefined) {
-  if (status === "suspended" || status === "cancelled") {
-    return "vx-profile-tag vx-profile-tag--error";
-  }
-  if (status === "trial") return "vx-profile-tag vx-profile-tag--warning";
-  return "vx-profile-tag";
+/** Tenant status → StatusBadge tone (same scale as the profile page). */
+function statusTone(status: string | null | undefined): StatusBadgeTone {
+  if (status === "suspended" || status === "cancelled") return "danger";
+  if (status === "trial") return "warning";
+  return "success";
 }
 
 function normalizeOptional(value: string) {
@@ -302,23 +318,18 @@ export function TenantInfoPage() {
   );
 
   return (
-    <div className="vx-page-stack vx-profile-page vx-account-profile-page">
-      <PageHeader
-        eyebrow={t("header.eyebrow")}
+    <ViewLayout>
+      <ViewHeader
+        icon="buildings"
         title={t("header.title")}
         description={t("header.description")}
       />
 
       {feedback ? (
-        <p
-          className={
-            feedback.tone === "success"
-              ? "vx-profile-message"
-              : "vx-profile-error"
-          }
-        >
-          {t(feedback.key)}
-        </p>
+        <Banner
+          tone={feedback.tone === "success" ? "success" : "danger"}
+          title={t(feedback.key)}
+        />
       ) : null}
 
       <Input
@@ -330,239 +341,192 @@ export function TenantInfoPage() {
       />
 
       {/* ── §一 Header card (logo | name + status/type tags | actions) ──────── */}
-      <div className="vx-account-profile-compact-card">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="vx-account-profile-avatar-button"
-          aria-label={t("actions.uploadLogo")}
-          title={t("actions.uploadLogo")}
-          onClick={() => fileInputRef.current?.click()}
-          disabled={!profile || submitting}
-        >
+      <IdentityCard
+        avatar={
           <UserAvatar
-            className="vx-account-profile-compact-avatar vx-account-profile-avatar"
+            className="size-full"
             src={logoSrc}
             alt={t("logo.alt", { name: tenantName })}
           />
-          <span
-            className="vx-account-profile-avatar-button__edit"
-            aria-hidden="true"
-          >
-            <Icon name="edit" size="xs" fallback="placeholder" />
-          </span>
-        </Button>
-
-        <div className="vx-account-profile-compact-card__info">
-          <span className="vx-account-profile-compact-name-row">
-            <strong>{loading ? loadingText : tenantName}</strong>
-            <span className="vx-account-profile-compact-tags">
-              {profile?.status ? (
-                <span className={statusTagClass(profile.status)}>
-                  {statusLabel(profile.status)}
-                </span>
-              ) : null}
-              {profile?.tenantType ? (
-                <span className="vx-profile-tag">
-                  {typeLabel(profile.tenantType)}
-                </span>
-              ) : null}
-            </span>
-          </span>
-          <span className="vx-account-profile-compact-account-no">
-            {t("fields.tenantId")}: {loading ? loadingText : tenantCode}
-          </span>
-        </div>
-
-        <div className="vx-account-profile-compact-card__actions">
-          <ActionButton
+        }
+        avatarLabel={t("actions.uploadLogo")}
+        onAvatarClick={() => fileInputRef.current?.click()}
+        avatarDisabled={!profile || submitting}
+        name={loading ? loadingText : tenantName}
+        tags={
+          <>
+            {profile?.status ? (
+              <StatusBadge tone={statusTone(profile.status)}>
+                {statusLabel(profile.status)}
+              </StatusBadge>
+            ) : null}
+            {profile?.tenantType ? (
+              <StatusBadge tone="neutral">
+                {typeLabel(profile.tenantType)}
+              </StatusBadge>
+            ) : null}
+          </>
+        }
+        meta={`${t("fields.tenantId")}: ${loading ? loadingText : tenantCode}`}
+        actions={
+          <Button
             variant="outline"
-            icon="x"
-            size="sm"
+            size="md"
             onClick={() => void removeLogo()}
             disabled={submitting || !profile?.logoHash}
           >
-            {t("actions.clearLogo")}
-          </ActionButton>
-        </div>
-      </div>
+            <Icon name="x" size="xs" fallback="placeholder" />
+            <span>{t("actions.clearLogo")}</span>
+          </Button>
+        }
+      />
 
       {/* ── §二 Tenant info (read-only identity rows) ───────────────────────── */}
-      <section className="vx-profile-group">
-        <div className="vx-profile-group__header">
-          <div>
-            <h2>{t("sections.info.title")}</h2>
-            <p>{t("sections.info.description")}</p>
-          </div>
-        </div>
-        <div className="vx-profile-row">
-          <span>{t("fields.tenantName")}</span>
-          <span className="vx-profile-value">
+      <PageSection
+        title={t("sections.info.title")}
+        icon="building"
+        level={2}
+        description={t("sections.info.description")}
+      >
+        <DetailList>
+          <DetailRow label={t("fields.tenantName")}>
             {loading ? loadingText : tenantName}
-          </span>
-        </div>
-        <div className="vx-profile-row">
-          <span>{t("fields.tenantId")}</span>
-          <span className="vx-profile-value">
+          </DetailRow>
+          <DetailRow label={t("fields.tenantId")}>
             {loading ? loadingText : tenantCode}
-          </span>
-        </div>
-        <div className="vx-profile-row">
-          <span>{t("fields.tenantType")}</span>
-          <span className="vx-profile-value">
+          </DetailRow>
+          <DetailRow label={t("fields.tenantType")}>
             {loading ? loadingText : typeLabel(profile?.tenantType)}
-          </span>
-        </div>
-        <div className="vx-profile-row">
-          <span>{t("fields.status")}</span>
-          <span className="vx-profile-value">
+          </DetailRow>
+          <DetailRow label={t("fields.status")}>
             {loading ? (
               loadingText
             ) : profile?.status ? (
-              <span className={statusTagClass(profile.status)}>
+              <StatusBadge tone={statusTone(profile.status)}>
                 {statusLabel(profile.status)}
-              </span>
+              </StatusBadge>
             ) : (
               empty
             )}
-          </span>
-        </div>
-        <div className="vx-profile-row">
-          <span>{t("fields.createdAt")}</span>
-          <span className="vx-profile-value">
+          </DetailRow>
+          <DetailRow label={t("fields.createdAt")}>
             {loading ? loadingText : createdAt}
-          </span>
-        </div>
-        <div className="vx-profile-row">
-          <span>{t("fields.description")}</span>
-          <span className="vx-profile-value">
+          </DetailRow>
+          <DetailRow label={t("fields.description")}>
             {loading ? loadingText : description}
-          </span>
-        </div>
-      </section>
+          </DetailRow>
+        </DetailList>
+      </PageSection>
 
       {/* ── §三 Localization (the one editable section) ─────────────────────── */}
-      <section className="vx-profile-group">
-        <div className="vx-profile-group__header">
-          <div>
-            <h2>{t("sections.localization.title")}</h2>
-            <p>{t("sections.localization.description")}</p>
-          </div>
-          <ActionButton
+      <PageSection
+        title={t("sections.localization.title")}
+        icon="translate"
+        level={2}
+        description={t("sections.localization.description")}
+        action={
+          <Button
             variant="outline"
-            icon="edit"
+            size="md"
             onClick={openLocaleDialog}
             disabled={!profile}
           >
-            {t("actions.edit")}
-          </ActionButton>
-        </div>
-        <div className="vx-profile-row">
-          <span>{t("fields.language")}</span>
-          <span className="vx-profile-value">
+            <Icon name="edit" size="xs" fallback="placeholder" />
+            <span>{t("actions.edit")}</span>
+          </Button>
+        }
+      >
+        <DetailList>
+          <DetailRow label={t("fields.language")}>
             {loading ? loadingText : language}
-          </span>
-        </div>
-        <div className="vx-profile-row">
-          <span>{t("fields.timezone")}</span>
-          <span className="vx-profile-value">
+          </DetailRow>
+          <DetailRow label={t("fields.timezone")}>
             {loading ? loadingText : timezone}
-          </span>
-        </div>
-        <div className="vx-profile-row">
-          <span>{t("fields.currency")}</span>
-          <span className="vx-profile-value">
+          </DetailRow>
+          <DetailRow label={t("fields.currency")}>
             {loading ? loadingText : currency}
-          </span>
-        </div>
-      </section>
+          </DetailRow>
+        </DetailList>
+      </PageSection>
 
       {/* ── §四 Subscription ────────────────────────────────────────────────── */}
-      <section className="vx-profile-group">
-        <div className="vx-profile-group__header">
-          <div>
-            <h2>{t("sections.subscription.title")}</h2>
-            <p>{t("sections.subscription.description")}</p>
-          </div>
-        </div>
+      <PageSection
+        title={t("sections.subscription.title")}
+        icon="sparkles"
+        level={2}
+        description={t("sections.subscription.description")}
+      >
         {subscriptions.length === 0 ? (
-          <p className="vx-profile-message">
-            {loading || extrasLoading
-              ? loadingText
-              : t("sections.subscription.empty")}
-          </p>
+          <EmptyState
+            title={
+              loading || extrasLoading
+                ? loadingText
+                : t("sections.subscription.empty")
+            }
+          />
         ) : (
-          <div className="vx-account-connected-list">
+          <div className={CONNECTED_LIST_CLASS}>
             {subscriptions.map((sub) => (
-              <div key={sub.id} className="vx-account-connected-row">
-                <span
-                  className="vx-account-connected-logo vx-account-connected-logo--workspace"
-                  aria-hidden="true"
-                >
-                  <Icon name="sparkles" size="sm" fallback="placeholder" />
-                </span>
-                <div className="vx-account-connected-copy">
-                  <div className="vx-account-connected-copy__title">
-                    <strong>{sub.planName}</strong>
-                    <span
-                      className={
-                        sub.isTrial
-                          ? "vx-profile-tag vx-profile-tag--warning"
-                          : "vx-profile-tag"
-                      }
-                    >
-                      {sub.isTrial
-                        ? t("subscription.trial")
-                        : t("subscription.active")}
-                    </span>
-                  </div>
-                  <p>{sub.planId}</p>
-                </div>
-                <div className="vx-account-connected-meta">
-                  <span>{t("fields.price")}</span>
-                  <span>
-                    {Number.isFinite(Number(sub.price))
+              <ConnectedRow
+                key={sub.id}
+                logo={<Icon name="sparkles" size="sm" fallback="placeholder" />}
+                title={sub.planName}
+                status={
+                  <StatusBadge tone={sub.isTrial ? "warning" : "success"}>
+                    {sub.isTrial
+                      ? t("subscription.trial")
+                      : t("subscription.active")}
+                  </StatusBadge>
+                }
+                description={sub.planId}
+                meta={[
+                  {
+                    label: t("fields.price"),
+                    value: Number.isFinite(Number(sub.price))
                       ? `${Number(sub.price).toFixed(2)} ${sub.currency}`
-                      : `— ${sub.currency}`}
-                  </span>
-                </div>
-                <div className="vx-account-connected-meta">
-                  <span>{t("fields.nextBilling")}</span>
-                  <span>
-                    {formatProfileDate(sub.nextBillingDate, locale, empty)}
-                  </span>
-                </div>
-                <div className="vx-account-connected-actions">
+                      : `— ${sub.currency}`,
+                  },
+                  {
+                    label: t("fields.nextBilling"),
+                    value: formatProfileDate(
+                      sub.nextBillingDate,
+                      locale,
+                      empty,
+                    ),
+                  },
+                ]}
+                actions={
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="md"
                     onClick={() => router.push("/subscription")}
                   >
                     {t("actions.viewPlans")}
                   </Button>
-                </div>
-              </div>
+                }
+              />
             ))}
           </div>
         )}
-      </section>
+      </PageSection>
 
       {/* ── §五 Workspaces (this tenant) ────────────────────────────────────── */}
-      <section className="vx-profile-group">
-        <div className="vx-profile-group__header">
-          <div>
-            <h2>{t("sections.workspaces.title")}</h2>
-            <p>{t("sections.workspaces.description")}</p>
-          </div>
-        </div>
+      <PageSection
+        title={t("sections.workspaces.title")}
+        icon="buildings"
+        level={2}
+        description={t("sections.workspaces.description")}
+      >
         {tenantWorkspaces.length === 0 ? (
-          <p className="vx-profile-message">
-            {loading || extrasLoading
-              ? loadingText
-              : t("sections.workspaces.empty")}
-          </p>
+          <EmptyState
+            title={
+              loading || extrasLoading
+                ? loadingText
+                : t("sections.workspaces.empty")
+            }
+          />
         ) : (
-          <div className="vx-account-connected-list">
+          <div className={CONNECTED_LIST_CLASS}>
             {tenantWorkspaces.map((ws) => {
               const roleLabel = ["owner", "manager", "member"].includes(ws.role)
                 ? t(`workspaces.role.${ws.role}`)
@@ -572,132 +536,134 @@ export function TenantInfoPage() {
               const workspaceId = ws.workspaceId ?? ws.tenantId;
               const isDefault = ws.tenantType === "personal";
               return (
-                <div
+                <ConnectedRow
                   key={ws.tenantId}
-                  className="vx-account-connected-row"
-                  title={workspaceName}
-                >
-                  <span
-                    className="vx-account-connected-logo vx-account-connected-logo--workspace"
-                    aria-hidden="true"
-                  >
+                  title_={workspaceName}
+                  logo={
                     <Icon name="buildings" size="sm" fallback="placeholder" />
-                  </span>
-                  <div className="vx-account-connected-copy">
-                    <div className="vx-account-connected-copy__title">
-                      <strong>{workspaceName}</strong>
-                      {isDefault ? (
-                        <span className="vx-profile-tag">default</span>
-                      ) : null}
-                    </div>
-                    <p title={workspaceId}>{workspaceId}</p>
-                  </div>
-                  <div className="vx-account-connected-meta">
-                    <span>{t("fields.role")}</span>
-                    <span>{roleLabel}</span>
-                  </div>
-                  <div className="vx-account-connected-meta">
-                    <span>{t("fields.joinedAt")}</span>
-                    <span>{joinedAt}</span>
-                  </div>
-                  <div className="vx-account-connected-actions" />
-                </div>
+                  }
+                  title={workspaceName}
+                  {...(isDefault
+                    ? {
+                        status: (
+                          <StatusBadge tone="neutral">default</StatusBadge>
+                        ),
+                      }
+                    : {})}
+                  description={<span title={workspaceId}>{workspaceId}</span>}
+                  meta={[
+                    { label: t("fields.role"), value: roleLabel },
+                    { label: t("fields.joinedAt"), value: joinedAt },
+                  ]}
+                />
               );
             })}
           </div>
         )}
-      </section>
+      </PageSection>
 
       {/* ── Localization edit dialog ────────────────────────────────────────── */}
       {localeDialogOpen ? (
         <div
-          className="vx-profile-dialog"
+          className="fixed inset-0 z-modal flex items-center justify-center p-lg"
           role="dialog"
           aria-modal="true"
           aria-label={t("dialogs.localization.title")}
         >
           <div
-            className="vx-profile-dialog__backdrop"
+            className="absolute inset-0 bg-scrim supports-backdrop-filter:backdrop-blur-xs"
             onClick={() => setLocaleDialogOpen(false)}
           />
           <form
-            className="vx-profile-dialog__content vx-account-profile-dialog"
+            className="relative flex w-full max-w-panel-md flex-col gap-lg rounded-xl bg-popover p-xl text-foreground shadow-dialog ring-1 ring-foreground/10"
             onSubmit={(event) => void submitLocale(event)}
           >
-            <header className="vx-account-profile-dialog__header">
-              <h3>{t("dialogs.localization.title")}</h3>
-              <p>{t("dialogs.localization.description")}</p>
+            <header className="flex flex-col gap-2xs">
+              <h3 className="text-title-md text-foreground">
+                {t("dialogs.localization.title")}
+              </h3>
+              <FieldDescription>
+                {t("dialogs.localization.description")}
+              </FieldDescription>
             </header>
-            <Label>
-              {t("fields.language")}
-              <NativeSelect
-                className="vx-input"
-                value={localeForm.language}
-                onChange={(event) =>
-                  setLocaleForm((old) => ({
-                    ...old,
-                    language: event.target.value,
-                  }))
-                }
-              >
-                <option value="">{t("common.empty")}</option>
-                <option value="zh-CN">{t("language.zhCN")}</option>
-                <option value="en-US">{t("language.enUS")}</option>
-              </NativeSelect>
-            </Label>
-            <Label>
-              {t("fields.timezone")}
-              <NativeSelect
-                className="vx-input"
-                value={localeForm.timezone}
-                onChange={(event) =>
-                  setLocaleForm((old) => ({
-                    ...old,
-                    timezone: event.target.value,
-                  }))
-                }
-              >
-                <option value="">{t("common.empty")}</option>
-                {localeForm.timezone &&
-                !TIMEZONE_OPTIONS.includes(localeForm.timezone) ? (
-                  <option value={localeForm.timezone}>
-                    {localeForm.timezone}
-                  </option>
-                ) : null}
-                {TIMEZONE_OPTIONS.map((tz) => (
-                  <option key={tz} value={tz}>
-                    {tz}
-                  </option>
-                ))}
-              </NativeSelect>
-            </Label>
-            <Label>
-              {t("fields.currency")}
-              <NativeSelect
-                className="vx-input"
-                value={localeForm.currency}
-                onChange={(event) =>
-                  setLocaleForm((old) => ({
-                    ...old,
-                    currency: event.target.value,
-                  }))
-                }
-              >
-                <option value="">{t("common.empty")}</option>
-                {localeForm.currency &&
-                !CURRENCY_OPTIONS.includes(localeForm.currency) ? (
-                  <option value={localeForm.currency}>
-                    {localeForm.currency}
-                  </option>
-                ) : null}
-                {CURRENCY_OPTIONS.map((cur) => (
-                  <option key={cur} value={cur}>
-                    {cur}
-                  </option>
-                ))}
-              </NativeSelect>
-            </Label>
-            <div className="vx-profile-dialog__actions">
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="tenant-locale-language">
+                  {t("fields.language")}
+                </FieldLabel>
+                <NativeSelect
+                  id="tenant-locale-language"
+                  value={localeForm.language}
+                  onChange={(event) =>
+                    setLocaleForm((old) => ({
+                      ...old,
+                      language: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="">{t("common.empty")}</option>
+                  <option value="zh-CN">{t("language.zhCN")}</option>
+                  <option value="en-US">{t("language.enUS")}</option>
+                </NativeSelect>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="tenant-locale-timezone">
+                  {t("fields.timezone")}
+                </FieldLabel>
+                <NativeSelect
+                  id="tenant-locale-timezone"
+                  value={localeForm.timezone}
+                  onChange={(event) =>
+                    setLocaleForm((old) => ({
+                      ...old,
+                      timezone: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="">{t("common.empty")}</option>
+                  {localeForm.timezone &&
+                  !TIMEZONE_OPTIONS.includes(localeForm.timezone) ? (
+                    <option value={localeForm.timezone}>
+                      {localeForm.timezone}
+                    </option>
+                  ) : null}
+                  {TIMEZONE_OPTIONS.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {tz}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="tenant-locale-currency">
+                  {t("fields.currency")}
+                </FieldLabel>
+                <NativeSelect
+                  id="tenant-locale-currency"
+                  value={localeForm.currency}
+                  onChange={(event) =>
+                    setLocaleForm((old) => ({
+                      ...old,
+                      currency: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="">{t("common.empty")}</option>
+                  {localeForm.currency &&
+                  !CURRENCY_OPTIONS.includes(localeForm.currency) ? (
+                    <option value={localeForm.currency}>
+                      {localeForm.currency}
+                    </option>
+                  ) : null}
+                  {CURRENCY_OPTIONS.map((cur) => (
+                    <option key={cur} value={cur}>
+                      {cur}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+            </FieldGroup>
+            <div className="flex flex-wrap items-center justify-end gap-sm">
               <Button
                 variant="outline"
                 onClick={() => setLocaleDialogOpen(false)}
@@ -711,6 +677,6 @@ export function TenantInfoPage() {
           </form>
         </div>
       ) : null}
-    </div>
+    </ViewLayout>
   );
 }

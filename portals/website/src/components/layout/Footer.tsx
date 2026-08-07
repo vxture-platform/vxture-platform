@@ -149,7 +149,7 @@ export default function Footer() {
                   {social.icon === "wechat" ? (
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="icon-md"
                       aria-label={t(social.ariaLabelKey)}
                       className="text-vx-gray-600 hover:text-vx-primary transition-colors"
                       onMouseEnter={() => setQrCodeVisible(true)}

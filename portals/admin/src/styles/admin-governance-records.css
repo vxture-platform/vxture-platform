@@ -1,12 +1,3 @@
-/* TD-021 governance record lists (risk / compliance / maintenance).
-   Row grids follow the house directory-list pattern (admin-directory-list.css);
-   grid scale lives in DS tokens-admin-governance-records.css. */
-
-.vx-risk-directory-list .vx-tenant-directory-list__header,
-.vx-risk-directory-list .vx-tenant-directory-row {
-  grid-template-columns: var(--vx-admin-governance-records-risk-grid);
-}
-
 .vx-risk-row__tenant {
   display: flex;
   flex-direction: column;
@@ -27,11 +18,6 @@
   white-space: nowrap;
 }
 
-.vx-compliance-directory-list .vx-tenant-directory-list__header,
-.vx-compliance-directory-list .vx-tenant-directory-row {
-  grid-template-columns: var(--vx-admin-governance-records-compliance-grid);
-}
-
 .vx-compliance-row__type {
   display: inline-flex;
   align-items: center;
@@ -40,11 +26,6 @@
   font-weight: 640;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.vx-maintenance-directory-list .vx-tenant-directory-list__header,
-.vx-maintenance-directory-list .vx-tenant-directory-row {
-  grid-template-columns: var(--vx-admin-governance-records-maintenance-grid);
 }
 
 .vx-maintenance-row__title {

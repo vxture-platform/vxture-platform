@@ -1,8 +1,10 @@
 @import "@vxture/design-system/styles/globals.css";
 @import "@vxture/design-system/styles/brands/vxture.css";
-/* Shared portal shell visual system — single source of truth in the design
- * system, identical to console/admin. Loaded after the DS packs so the
- * template's .app/.vxh/.sidebar chrome wins. The Phosphor icon font is loaded
- * via <link> in app/layout.tsx. No portal-local CSS on purpose: the shell is
- * chrome-only; provider modules ship their own styling. */
-@import "@vxture/design-system/styles/shell-template.css";
+@import "@vxture/design-system/styles/workbench.css";
+
+/* Mostly DS-only wiring, same as design-preview — shell-template.css is
+ * retired here, the Opera shell is rebuilt on DS components + T2 utilities
+ * (transparent mode), no legacy chrome classes.
+ *
+ * 工作台底色不再在本文件里就地覆盖，改引 DS 的 workbench.css——admin / console /
+ * accounts 与本应用同用一份，见那个文件的说明。 */

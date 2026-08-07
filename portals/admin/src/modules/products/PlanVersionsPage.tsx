@@ -14,6 +14,7 @@ import {
   Input,
   NativeSelect,
   Textarea,
+  ViewLayout,
 } from "@vxture/design-system";
 import {
   fetchPlanVersion,
@@ -151,7 +152,7 @@ export function PlanVersionsPage() {
   }
 
   return (
-    <div className="vx-page-stack">
+    <ViewLayout>
       <PageHeader
         title="套餐版本"
         description="管理 plan_version 的草稿与发布：编辑草稿的价格与配额，发布后版本冻结并成为当前版本。"
@@ -275,6 +276,6 @@ export function PlanVersionsPage() {
           </div>
         )}
       </div>
-    </div>
+    </ViewLayout>
   );
 }

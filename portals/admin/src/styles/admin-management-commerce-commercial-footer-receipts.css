@@ -3,8 +3,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--vx-admin-management-space-1r);
-  padding: var(--vx-admin-management-space-075r) 0 var(--vx-admin-management-space-095r);
+  gap: var(--space-md);
+  padding: var(--space-sm) 0 var(--space-md);
   border-top: var(--vx-admin-management-line-width-1p) dashed var(--vx-color-auth-border);
   color: var(--tenant-muted);
   font-size: var(--vx-admin-meta-size);
@@ -19,7 +19,7 @@
 .vx-product-detail-list__row .vx-billing-receipt-actions {
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
   flex-wrap: wrap;
   overflow: visible;
   white-space: normal;
@@ -35,7 +35,7 @@
 
 .vx-billing-receipt-actions button {
   min-height: var(--vx-admin-management-size-175r);
-  padding: 0 var(--vx-admin-management-space-055r);
+  padding: 0 var(--space-xs);
   border: var(--vx-admin-management-line-width-1p) solid color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
   border-radius: var(--vx-radius-lg);
   background: transparent;

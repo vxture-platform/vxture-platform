@@ -46,7 +46,7 @@ CREATE TABLE metering.subscriptions (
     CONSTRAINT chk_subscriptions_cycle_unit      CHECK (cycle_unit IN ('day','week','month','year','perpetual')),
     CONSTRAINT chk_subscriptions_cycle_count     CHECK (cycle_count >= 1),
     -- 值域权威 = @vxture/shared catalog-domains SUBSCRIPTION_STATUSES(lint:catalog-domains 强制一致)。
-    CONSTRAINT chk_subscriptions_status          CHECK (status IN ('active','trialing','overdue','suspended','expired','cancelled')),
+    CONSTRAINT chk_subscriptions_status          CHECK (status IN ('active','expiring','trialing','overdue','suspended','expired','cancelled')),
     CONSTRAINT chk_subscriptions_activation      CHECK (activation_method IN ('online_purchase','offline_purchase','redemption','operator_grant','trial','free')),
     CONSTRAINT chk_subscriptions_renewal_source  CHECK (renewal_source IS NULL OR renewal_source IN ('mandate','balance','manual')),
     CONSTRAINT chk_subscriptions_created_by_type CHECK (created_by_type IN ('system','customer','operator')),

@@ -2,19 +2,23 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
+  ActionButton,
   ActionMenu,
-  Badge,
-  Button,
+  DataTable,
   DialogForm,
-  Icon,
+  EmptyState,
+  FilterBar,
   Input,
   Label,
+  ListPageTemplate,
+  MetricGrid,
   NativeSelect,
   Pagination,
+  StatusBadge,
   Textarea,
-  EmptyState,
   useToast,
 } from "@vxture/design-system";
+import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
 import {
   archiveAnnouncement,
   createAnnouncement,
@@ -26,7 +30,7 @@ import {
 } from "@/api/admin-bff";
 import type { AnnouncementRecord } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
-import { formatDate, joinClasses } from "@/modules/tenants/tenant-utils";
+import { formatDate } from "@/modules/tenants/tenant-utils";
 
 // ─── 类型 ─────────────────────────────────────────────────────────────────────
 
@@ -74,18 +78,29 @@ const SCOPE_LABELS: Record<AnnouncementRecord["targetScope"], string> = {
   custom: "自定义",
 };
 
-function statusBadgeClass(status: AnnouncementRecord["status"]) {
-  if (status === "published") return "vx-admin-role-status-pill--enabled";
-  if (status === "draft") return "vx-platform-user-status-pill--pending";
-  return "vx-admin-role-status-pill--disabled";
-}
+/**
+ * 状态与类型标换 `StatusBadge`：这两组原先借用了 `vx-admin-role-status-pill--*`
+ * 与 `vx-platform-user-status-pill--*`——那是另外两个域的着色类，跨域借用一旦
+ * 批 4 重排那两族就会跟着变。它们本身是页面自己的几档语气，归 DS 语气即可。
+ */
+const ANNOUNCEMENT_STATUS_TONE: Record<
+  AnnouncementRecord["status"],
+  StatusBadgeTone
+> = {
+  published: "success",
+  draft: "info",
+  archived: "neutral",
+};
 
-function typeBadgeClass(type: AnnouncementRecord["type"]) {
-  if (type === "security") return "vx-platform-user-status-pill--attention";
-  if (type === "maintenance") return "vx-platform-user-status-pill--pending";
-  if (type === "system") return "vx-admin-role-status-pill--enabled";
-  return "vx-admin-role-status-pill--disabled";
-}
+const ANNOUNCEMENT_TYPE_TONE: Record<
+  AnnouncementRecord["type"],
+  StatusBadgeTone
+> = {
+  security: "warning",
+  maintenance: "info",
+  system: "success",
+  marketing: "neutral",
+};
 
 function announcementSearchText(item: AnnouncementRecord) {
   return [
@@ -190,23 +205,33 @@ function AnnouncementSummary({ items }: { items: AnnouncementRecord[] }) {
   }).length;
 
   return (
-    <div className="vx-models-summary">
-      <div className="vx-models-summary__item">
-        <Icon name="bell" size="md" fallback="placeholder" />
-        <span>已发布公告</span>
-        <strong>{published}</strong>
-      </div>
-      <div className="vx-models-summary__item">
-        <Icon name="edit" size="md" fallback="placeholder" />
-        <span>草稿中</span>
-        <strong>{drafts}</strong>
-      </div>
-      <div className="vx-models-summary__item">
-        <Icon name="calendar" size="md" fallback="placeholder" />
-        <span>本月已发送</span>
-        <strong>{thisMonth}</strong>
-      </div>
-    </div>
+    <MetricGrid
+      aria-label="公告统计"
+      columns={3}
+      items={[
+        {
+          id: "published",
+          help: "状态为已发布的公告，含历史发布。",
+          icon: "bell",
+          label: "已发布公告",
+          value: String(published),
+        },
+        {
+          id: "drafts",
+          help: "尚未发布的草稿。",
+          icon: "edit",
+          label: "草稿中",
+          value: String(drafts),
+        },
+        {
+          id: "month",
+          help: "发布时间落在本自然月内的公告。",
+          icon: "calendar",
+          label: "本月已发送",
+          value: String(thisMonth),
+        },
+      ]}
+    />
   );
 }
 
@@ -236,188 +261,153 @@ function AnnouncementToolbar({
   onCreate: () => void;
 }) {
   return (
-    <div className="vx-models-toolbar">
-      <Input
-        className="vx-models-toolbar__search"
-        type="search"
-        placeholder="搜索标题、内容…"
-        value={search}
-        onChange={(e) => onSearchChange(e.target.value)}
-      />
-      <div className="vx-models-toolbar__filters">
-        <NativeSelect
-          className="vx-admin-filter-select"
-          value={typeFilter}
-          onChange={(e) =>
-            onTypeFilterChange(e.target.value as AnnouncementTypeFilter)
-          }
-        >
-          <option value="all">全部类型</option>
-          <option value="system">系统</option>
-          <option value="maintenance">维护</option>
-          <option value="marketing">营销</option>
-          <option value="security">安全</option>
-        </NativeSelect>
-        <NativeSelect
-          className="vx-admin-filter-select"
-          value={statusFilter}
-          onChange={(e) =>
-            onStatusFilterChange(e.target.value as AnnouncementStatusFilter)
-          }
-        >
-          <option value="all">全部状态</option>
-          <option value="draft">草稿</option>
-          <option value="published">已发布</option>
-          <option value="archived">已归档</option>
-        </NativeSelect>
-        <div className="vx-admin-view-toggle">
-          <Button
-            variant="ghost"
-            size="icon"
-            className={joinClasses(
-              "vx-admin-view-toggle__btn",
-              viewMode === "list" ? "vx-admin-view-toggle__btn--active" : "",
-            )}
-            onClick={() => onViewModeChange("list")}
-            title="列表视图"
-          >
-            <Icon name="rows" size="sm" fallback="placeholder" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={joinClasses(
-              "vx-admin-view-toggle__btn",
-              viewMode === "cards" ? "vx-admin-view-toggle__btn--active" : "",
-            )}
-            onClick={() => onViewModeChange("cards")}
-            title="卡片视图"
-          >
-            <Icon name="squares-four" size="sm" fallback="placeholder" />
-          </Button>
-        </div>
-      </div>
-      <div className="vx-models-toolbar__spacer" />
-      <span className="vx-models-toolbar__count">{total} 条</span>
-      <Button
-        variant="default"
-        size="sm"
-        className="vx-admin-action-btn"
-        onClick={onCreate}
-        title="新建公告"
+    <FilterBar
+      view={viewMode}
+      onViewChange={onViewModeChange}
+      cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+      count={`${total} 条`}
+      aria-label="公告筛选"
+      search={
+        <Input
+          className="vx-tenant-search"
+          type="search"
+          placeholder="搜索标题、内容…"
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+        />
+      }
+      onReset={() => {
+        onSearchChange("");
+        onTypeFilterChange("all");
+        onStatusFilterChange("all");
+      }}
+      actions={
+        <ActionButton icon="plus" onClick={onCreate}>
+          新建公告
+        </ActionButton>
+      }
+    >
+      <NativeSelect
+        wrapperClassName="w-fit"
+        className="vx-tenant-select"
+        value={typeFilter}
+        onChange={(e) =>
+          onTypeFilterChange(e.target.value as AnnouncementTypeFilter)
+        }
+        aria-label="公告类型"
       >
-        <Icon name="plus" size="sm" fallback="placeholder" />
-        新建公告
-      </Button>
-    </div>
+        <option value="all">全部类型</option>
+        <option value="system">系统</option>
+        <option value="maintenance">维护</option>
+        <option value="marketing">营销</option>
+        <option value="security">安全</option>
+      </NativeSelect>
+      <NativeSelect
+        wrapperClassName="w-fit"
+        className="vx-tenant-select"
+        value={statusFilter}
+        onChange={(e) =>
+          onStatusFilterChange(e.target.value as AnnouncementStatusFilter)
+        }
+        aria-label="公告状态"
+      >
+        <option value="all">全部状态</option>
+        <option value="draft">草稿</option>
+        <option value="published">已发布</option>
+        <option value="archived">已归档</option>
+      </NativeSelect>
+    </FilterBar>
   );
 }
 
-// ─── 子组件：列表视图 ──────────────────────────────────────────────────────────
+// ─── 列表列定义 ───────────────────────────────────────────────────────────────
 
-function AnnouncementList({
-  items,
-  startIndex,
-  busy,
-  onEdit,
-  onPublish,
-  onArchive,
-  onDelete,
-}: {
-  items: AnnouncementRecord[];
-  startIndex: number;
-  busy: boolean;
-  onEdit: (item: AnnouncementRecord) => void;
-  onPublish: (item: AnnouncementRecord) => void;
-  onArchive: (item: AnnouncementRecord) => void;
-  onDelete: (item: AnnouncementRecord) => void;
-}) {
+const ANNOUNCEMENT_COLUMNS: readonly DataTableColumn<AnnouncementRecord>[] = [
+  { id: "title", header: "标题", cell: (item) => item.title },
+  {
+    id: "type",
+    header: "类型",
+    align: "center",
+    cell: (item) => (
+      <StatusBadge tone={ANNOUNCEMENT_TYPE_TONE[item.type]}>
+        {TYPE_LABELS[item.type]}
+      </StatusBadge>
+    ),
+  },
+  {
+    id: "scope",
+    header: "对象范围",
+    cell: (item) => SCOPE_LABELS[item.targetScope],
+  },
+  {
+    id: "status",
+    header: "状态",
+    align: "center",
+    cell: (item) => (
+      <StatusBadge tone={ANNOUNCEMENT_STATUS_TONE[item.status]}>
+        {STATUS_LABELS[item.status]}
+      </StatusBadge>
+    ),
+  },
+  {
+    id: "published",
+    header: "发布时间",
+    cell: (item) => (item.publishedAt ? formatDate(item.publishedAt) : "-"),
+  },
+  {
+    id: "expires",
+    header: "到期时间",
+    cell: (item) => (item.expiresAt ? formatDate(item.expiresAt) : "-"),
+  },
+];
+
+function announcementActions(
+  item: AnnouncementRecord,
+  busy: boolean,
+  handlers: {
+    onEdit: (item: AnnouncementRecord) => void;
+    onPublish: (item: AnnouncementRecord) => void;
+    onArchive: (item: AnnouncementRecord) => void;
+    onDelete: (item: AnnouncementRecord) => void;
+  },
+) {
   return (
-    <div
-      className="vx-tenant-directory-list vx-announcement-directory-list"
-      role="region"
-      aria-label="公告列表"
-    >
-      <div className="vx-tenant-directory-list__header">
-        <span>序号</span>
-        <span>标题</span>
-        <span>类型</span>
-        <span>对象范围</span>
-        <span>状态</span>
-        <span>发布时间</span>
-        <span>到期时间</span>
-        <span>操作</span>
-      </div>
-      {items.map((item, index) => (
-        <div
-          key={item.id}
-          className="vx-tenant-directory-row vx-announcement-row"
-        >
-          <span className="vx-announcement-row__index">
-            {startIndex + index + 1}
-          </span>
-          <span className="vx-announcement-row__title">{item.title}</span>
-          <span className="vx-announcement-row__type">
-            <Badge className={typeBadgeClass(item.type)}>
-              {TYPE_LABELS[item.type]}
-            </Badge>
-          </span>
-          <span className="vx-announcement-row__scope">
-            {SCOPE_LABELS[item.targetScope]}
-          </span>
-          <span className="vx-announcement-row__status">
-            <Badge className={statusBadgeClass(item.status)}>
-              {STATUS_LABELS[item.status]}
-            </Badge>
-          </span>
-          <span className="vx-announcement-row__published">
-            {item.publishedAt ? formatDate(item.publishedAt) : "-"}
-          </span>
-          <span className="vx-announcement-row__expires">
-            {item.expiresAt ? formatDate(item.expiresAt) : "-"}
-          </span>
-          <span className="vx-tenant-actions">
-            <ActionMenu
-              label={`${item.title} 操作`}
-              triggerClassName="vx-tenant-actions__trigger"
-              triggerProps={{ title: "操作", disabled: busy }}
-              items={[
-                {
-                  id: "edit",
-                  label: "编辑",
-                  icon: <Icon name="edit" size="xs" fallback="placeholder" />,
-                  disabled: busy,
-                  onSelect: () => onEdit(item),
-                },
-                {
-                  id: "publish",
-                  label: "发布",
-                  icon: <Icon name="check" size="xs" fallback="placeholder" />,
-                  disabled: busy || item.status !== "draft",
-                  onSelect: () => onPublish(item),
-                },
-                {
-                  id: "archive",
-                  label: "归档",
-                  icon: <Icon name="stop" size="xs" fallback="placeholder" />,
-                  disabled: busy || item.status !== "published",
-                  onSelect: () => onArchive(item),
-                },
-                {
-                  id: "delete",
-                  label: "删除",
-                  icon: <Icon name="trash" size="xs" fallback="placeholder" />,
-                  danger: true,
-                  disabled: busy,
-                  separatorBefore: true,
-                  onSelect: () => onDelete(item),
-                },
-              ]}
-            />
-          </span>
-        </div>
-      ))}
-    </div>
+    <ActionMenu
+      label={`${item.title} 操作`}
+      disabled={busy}
+      items={[
+        {
+          id: "edit",
+          label: "编辑",
+          icon: "edit",
+          disabled: busy,
+          onSelect: () => handlers.onEdit(item),
+        },
+        {
+          id: "publish",
+          label: "发布",
+          icon: "check",
+          disabled: busy || item.status !== "draft",
+          onSelect: () => handlers.onPublish(item),
+        },
+        {
+          id: "archive",
+          label: "归档",
+          icon: "stop",
+          disabled: busy || item.status !== "published",
+          onSelect: () => handlers.onArchive(item),
+        },
+        {
+          id: "delete",
+          label: "删除",
+          icon: "trash",
+          danger: true,
+          disabled: busy,
+          separatorBefore: true,
+          onSelect: () => handlers.onDelete(item),
+        },
+      ]}
+    />
   );
 }
 
@@ -429,12 +419,12 @@ function AnnouncementCards({ items }: { items: AnnouncementRecord[] }) {
       {items.map((item) => (
         <div key={item.id} className="vx-announcement-card">
           <div className="vx-announcement-card__header">
-            <Badge className={typeBadgeClass(item.type)}>
+            <StatusBadge tone={ANNOUNCEMENT_TYPE_TONE[item.type]}>
               {TYPE_LABELS[item.type]}
-            </Badge>
-            <Badge className={statusBadgeClass(item.status)}>
+            </StatusBadge>
+            <StatusBadge tone={ANNOUNCEMENT_STATUS_TONE[item.status]}>
               {STATUS_LABELS[item.status]}
-            </Badge>
+            </StatusBadge>
           </div>
           <h3 className="vx-announcement-card__title">{item.title}</h3>
           <p className="vx-announcement-card__content">{item.content}</p>
@@ -473,7 +463,6 @@ function AnnouncementFormDialog({
       submitLabel={mode === "create" ? "创建草稿" : "保存修改"}
       submitting={submitting}
       submitDisabled={!formIsValid(form)}
-      contentClassName="max-w-3xl"
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
@@ -666,7 +655,7 @@ export function AnnouncementsPage() {
       await reload();
       closeDialog();
     } catch (error) {
-      toast({ tone: "error", title: "保存失败", ...describeError(error) });
+      toast({ tone: "danger", title: "保存失败", ...describeError(error) });
     } finally {
       setSubmitting(false);
     }
@@ -679,7 +668,7 @@ export function AnnouncementsPage() {
       await reload();
       toast({ tone: "success", title: label });
     } catch (error) {
-      toast({ tone: "error", title: `${label}失败`, ...describeError(error) });
+      toast({ tone: "danger", title: `${label}失败`, ...describeError(error) });
     } finally {
       setSubmitting(false);
     }
@@ -701,65 +690,99 @@ export function AnnouncementsPage() {
   }
 
   return (
-    <div className={joinClasses("vx-page-stack", "vx-announcement-page")}>
-      <PageHeader
-        icon="bell"
-        title="消息公告"
-        description="发布平台公告和定向通知，查询通知触达与历史记录。"
-      />
-      <AnnouncementSummary items={items} />
-      <AnnouncementToolbar
-        search={search}
-        typeFilter={typeFilter}
-        statusFilter={statusFilter}
-        viewMode={viewMode}
-        total={filtered.length}
-        onSearchChange={handleSearch}
-        onTypeFilterChange={handleTypeFilter}
-        onStatusFilterChange={handleStatusFilter}
-        onViewModeChange={setViewMode}
-        onCreate={openCreate}
-      />
-      {loading ? (
-        <EmptyState title="加载中…" />
-      ) : loadError ? (
-        <EmptyState title="公告读取失败" description={loadError} />
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          title="暂无公告"
-          description={
-            search || typeFilter !== "all" || statusFilter !== "all"
-              ? "尝试调整筛选条件"
-              : "点击「新建公告」发布第一条平台通知"
-          }
-        />
-      ) : (
-        <>
-          {viewMode === "list" ? (
-            <AnnouncementList
-              items={pageItems}
-              startIndex={(page - 1) * PAGE_SIZE}
-              busy={submitting}
-              onEdit={openEdit}
-              onPublish={handlePublish}
-              onArchive={handleArchive}
-              onDelete={setPendingDelete}
+    <>
+      <ListPageTemplate
+        className="vx-announcement-page"
+        header={
+          <PageHeader
+            icon="bell"
+            title="消息公告"
+            description="发布平台公告和定向通知，查询通知触达与历史记录。"
+          />
+        }
+        summary={<AnnouncementSummary items={items} />}
+        filters={
+          <AnnouncementToolbar
+            search={search}
+            typeFilter={typeFilter}
+            statusFilter={statusFilter}
+            viewMode={viewMode}
+            total={filtered.length}
+            onSearchChange={handleSearch}
+            onTypeFilterChange={handleTypeFilter}
+            onStatusFilterChange={handleStatusFilter}
+            onViewModeChange={setViewMode}
+            onCreate={openCreate}
+          />
+        }
+        table={
+          /* 读取失败是第三态，DataTable 只认加载/空/有数据，故留在外层。 */
+          loadError ? (
+            <EmptyState title="公告读取失败" description={loadError} />
+          ) : viewMode === "list" ? (
+            <DataTable
+              columns={ANNOUNCEMENT_COLUMNS}
+              rows={pageItems}
+              rowKey={(item) => item.id}
+              loading={loading}
+              indexStart={(page - 1) * PAGE_SIZE + 1}
+              rowActions={(item) =>
+                announcementActions(item, submitting, {
+                  onEdit: openEdit,
+                  onPublish: handlePublish,
+                  onArchive: handleArchive,
+                  onDelete: setPendingDelete,
+                })
+              }
+              empty={
+                <EmptyState
+                  title="暂无公告"
+                  description={
+                    search || typeFilter !== "all" || statusFilter !== "all"
+                      ? "尝试调整筛选条件"
+                      : "点击「新建公告」发布第一条平台通知"
+                  }
+                />
+              }
+              footer={
+                pageCount > 1 ? (
+                  <Pagination
+                    page={page}
+                    pageCount={pageCount}
+                    total={filtered.length}
+                    pageSize={PAGE_SIZE}
+                    onPageChange={setPage}
+                  />
+                ) : null
+              }
             />
+          ) : loading ? (
+            <EmptyState title="加载中…" />
+          ) : pageItems.length ? (
+            <>
+              <AnnouncementCards items={pageItems} />
+              {pageCount > 1 ? (
+                <Pagination
+                  page={page}
+                  pageCount={pageCount}
+                  total={filtered.length}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={setPage}
+                />
+              ) : null}
+            </>
           ) : (
-            <AnnouncementCards items={pageItems} />
-          )}
-          {pageCount > 1 ? (
-            <Pagination
-              className="vx-tenant-pagination"
-              page={page}
-              pageCount={pageCount}
-              total={filtered.length}
-              pageSize={PAGE_SIZE}
-              onPageChange={setPage}
+            <EmptyState
+              title="暂无公告"
+              description={
+                search || typeFilter !== "all" || statusFilter !== "all"
+                  ? "尝试调整筛选条件"
+                  : "点击「新建公告」发布第一条平台通知"
+              }
             />
-          ) : null}
-        </>
-      )}
+          )
+        }
+      />
 
       {dialogMode ? (
         <AnnouncementFormDialog
@@ -778,7 +801,7 @@ export function AnnouncementsPage() {
           title="删除公告"
           description={`确认删除「${pendingDelete.title}」？此操作不可撤销。`}
           submitLabel="删除"
-          submitVariant="destructive"
+          danger
           submitting={submitting}
           onOpenChange={(open) => {
             if (!open) setPendingDelete(null);
@@ -789,6 +812,6 @@ export function AnnouncementsPage() {
           }}
         />
       ) : null}
-    </div>
+    </>
   );
 }

@@ -162,7 +162,7 @@ export default function ScrollToButton({
     <div className={`${positionClass} z-40`}>
       <Button
         variant="ghost"
-        size="icon"
+        size="icon-md"
         onClick={handleClick}
         aria-label={ariaLabel || text}
         className={`

@@ -10,21 +10,12 @@
   display: grid;
   align-content: center;
   justify-items: center;
-  padding: var(--vx-admin-management-space-2r);
-  border: var(--vx-admin-management-line-width-1p) solid color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
+  padding: var(--space-xl);
+  border: var(--vx-admin-management-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-white) 58%, transparent);
 }
-
-.vx-tenant-empty .vx-empty-state {
-  justify-items: center;
-  text-align: center;
-}
-
-.vx-model-row__identity p,
-.vx-model-grant-row__model p,
-.vx-model-row__muted,
-.vx-tenant-directory-row small,
 .vx-tenant-directory-card small,
 .vx-tenant-list-card__meta small,
 .vx-tenant-list-card__metrics small,
@@ -51,8 +42,7 @@
   .vx-admin-permissions-summary,
   .vx-model-platform-summary,
   .vx-model-strategy-summary,
-  .vx-platform-governance-summary,
-  .vx-audit-summary {
+  .vx-platform-governance-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -104,8 +94,7 @@
   .vx-admin-permissions-summary,
   .vx-model-platform-summary,
   .vx-model-strategy-summary,
-  .vx-platform-governance-summary,
-  .vx-audit-summary {
+  .vx-platform-governance-summary {
     grid-template-columns: 1fr;
   }
 }
@@ -122,8 +111,7 @@
   }
 
   .vx-tenant-search,
-  .vx-tenant-select,
-  .vx-tenant-toolbar .vx-btn {
+  .vx-tenant-select {
     width: 100%;
     flex-basis: auto;
   }
@@ -155,7 +143,7 @@
 
 @media (max-width: 960px) {
   .vx-tenant-detail-summary {
-    padding: var(--vx-admin-management-space-15r);
+    padding: var(--space-lg);
   }
 
   .vx-tenant-detail {
@@ -163,7 +151,7 @@
   }
 
   .vx-tenant-detail-summary--collapsed {
-    padding-block: var(--vx-admin-management-space-1r);
+    padding-block: var(--space-md);
   }
 
   .vx-tenant-detail__header {
@@ -172,9 +160,10 @@
 
   .vx-tenant-detail__header > section:not(:last-child) {
     padding-right: 0;
-    padding-bottom: var(--vx-admin-management-space-1r);
+    padding-bottom: var(--space-md);
     border-right: 0;
-    border-bottom: var(--vx-admin-management-line-width-1p) dashed var(--tenant-line);
+    border-bottom: var(--vx-admin-management-line-width-1p) dashed
+      var(--tenant-line);
   }
 
   .vx-tenant-block__actions {
@@ -184,7 +173,7 @@
   .vx-tenant-detail__toolbar {
     align-items: stretch;
     flex-direction: column;
-    gap: var(--vx-admin-management-space-075r);
+    gap: var(--space-sm);
   }
 }
 
@@ -208,23 +197,16 @@
     justify-content: flex-start;
   }
 
-  .vx-tenant-admin-actions .vx-btn {
-    width: fit-content;
-  }
-
   .vx-tenant-risk-panel {
     padding-right: 0;
-    padding-bottom: var(--vx-admin-management-space-15r);
+    padding-bottom: var(--space-lg);
     border-right: 0;
-    border-bottom: var(--vx-admin-management-line-width-1p) dashed var(--tenant-line);
+    border-bottom: var(--vx-admin-management-line-width-1p) dashed
+      var(--tenant-line);
   }
 }
 
 @media (max-width: 960px) {
-  .vx-view-mode-switch {
-    justify-content: flex-start;
-  }
-
   .vx-product-capability-summary,
   .vx-product-capability-summary__metrics,
   .vx-product-capability-fields,
@@ -240,12 +222,12 @@
   }
 
   .vx-product-capability-summary {
-    gap: var(--vx-admin-management-space-125r);
+    gap: var(--space-md);
   }
 
   .vx-product-detail-list__row,
   .vx-service-plan-tier-row {
     align-items: start;
-    gap: var(--vx-admin-management-space-05r);
+    gap: var(--space-xs);
   }
 }

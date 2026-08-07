@@ -4,13 +4,13 @@
   min-width: 0;
   display: grid;
   align-content: center;
-  gap: var(--vx-admin-management-space-1r);
+  gap: var(--space-md);
 }
 
 .vx-tenant-detail-summary .vx-tenant-key-metric {
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-075r);
+  gap: var(--space-sm);
   min-height: var(--vx-admin-management-size-175r);
 }
 
@@ -22,7 +22,7 @@
   flex: 1 1 auto;
   flex-wrap: wrap;
   overflow: hidden;
-  row-gap: var(--vx-admin-management-space-035r);
+  row-gap: var(--space-2xs);
 }
 
 .vx-tenant-detail-summary .vx-tenant-key-metric em {
@@ -31,13 +31,13 @@
 
 .vx-tenant-detail-summary--collapsed .vx-tenant-detail__header {
   grid-template-columns: 1fr;
-  padding-right: var(--vx-admin-management-space-3r);
+  padding-right: var(--space-3xl);
 }
 
 .vx-tenant-detail-summary--collapsed .vx-tenant-detail__identity {
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-0625r);
+  gap: var(--space-sm);
 }
 
 .vx-tenant-detail-summary--collapsed .vx-tenant-detail__icon {
@@ -55,7 +55,7 @@
 .vx-tenant-detail-summary--collapsed .vx-tenant-detail__title {
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-075r);
+  gap: var(--space-sm);
 }
 
 .vx-tenant-detail-summary--collapsed .vx-tenant-detail__title p,
@@ -77,7 +77,7 @@
 .vx-tenant-block__actions {
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
   flex-wrap: wrap;
 }
 
@@ -96,8 +96,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--vx-admin-management-space-15r);
-  padding-bottom: var(--vx-admin-management-space-0375r);
+  gap: var(--space-lg);
+  padding-bottom: var(--space-2xs);
   border-bottom: var(--vx-admin-management-line-width-1p) dashed color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
 }
 
@@ -120,8 +120,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--vx-admin-management-space-05r);
-  padding: 0 var(--vx-admin-management-space-074r);
+  gap: var(--space-xs);
+  padding: 0 var(--space-sm);
   border: var(--vx-admin-management-line-width-1p) solid color-mix(in srgb, var(--vx-color-warning-600) 26%, transparent);
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-warning-600) 10%, transparent);
@@ -135,8 +135,8 @@
 .vx-tenant-detail__metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--vx-admin-management-space-1r);
-  padding: var(--vx-admin-management-space-1r) 0;
+  gap: var(--space-md);
+  padding: var(--space-md) 0;
   border-top: var(--vx-admin-management-line-width-1p) dashed var(--tenant-line);
   border-bottom: var(--vx-admin-management-line-width-1p) dashed var(--tenant-line);
 }
@@ -144,7 +144,7 @@
 .vx-tenant-key-metric {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
 }
 
 .vx-tenant-key-metric p {
@@ -152,7 +152,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
 }
 
 .vx-tenant-key-metric span {
@@ -187,7 +187,7 @@
   min-height: var(--vx-admin-management-size-1375r);
   display: inline-flex;
   align-items: center;
-  padding: 0 var(--vx-admin-management-space-045r);
+  padding: 0 var(--space-xs);
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
   color: var(--tenant-blue);

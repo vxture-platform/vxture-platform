@@ -49,7 +49,6 @@ export function ConsolePreferenceControls() {
       <label className="console-preferences__field">
         <span>{t("locale.label")}</span>
         <NativeSelect
-          className="vx-select-trigger"
           value={locale}
           onChange={(event) => {
             const nextLocale = event.target.value as Locale;
@@ -65,7 +64,6 @@ export function ConsolePreferenceControls() {
       <label className="console-preferences__field">
         <span>{t("density.label")}</span>
         <NativeSelect
-          className="vx-select-trigger"
           value={mounted ? density : getGlobalUserPreferences().density}
           onChange={(event) => {
             const nextDensity = event.target.value as Density;
@@ -83,7 +81,7 @@ export function ConsolePreferenceControls() {
 
       <Button
         variant="outline"
-        size="sm"
+        size="md"
         onClick={() => {
           setTheme(nextTheme);
           setGlobalThemePreference(nextTheme);

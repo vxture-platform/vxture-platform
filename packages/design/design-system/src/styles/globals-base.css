@@ -7,18 +7,144 @@
  * @date 2026-05-15
  */
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
+/**
+ * ⚠ 全文包在 `@layer base` 里，这一层不是装饰。
+ *
+ * **未分层的 CSS 压过所有 `@layer`**，包括 Tailwind 的 utilities。本文件原先没有
+ * 层（`@layer Presentation` 只是文档注释），于是下面那条
+ * `button, input, select, textarea { font: inherit }` 赢过了每一个排版工具类——
+ * 结果是**整个设计系统里，任何加在按钮或输入框上的 text-* 类全部静默失效**：
+ * 类名在 DOM 上、规则也生成了，只是永远不被采用。
+ *
+ * 实测判据：`<div class="text-label-sm">` 是 12px，`<button class="text-label-sm">`
+ * 是 14px，而裸 `<button>` 也是 14px——加不加那个类毫无区别。
+ *
+ * 进 base 层后这些规则仍然压得住 UA 样式（UA 在所有作者层之下），但让位给
+ * 工具类，正是它该待的位置。
+ */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    padding: 0;
+    margin: 0;
+  }
+
+  /**
+ * 底色铺在 html 上，**不等 JS**。
+ *
+ * 此前只有外壳根节点（React 渲染的 `.app`）带 `bg-background`，于是从 HTML 到达
+ * 到 React 挂载完成之间，露出来的是浏览器的默认画布——刷新时那一下白闪就是它。
+ * 暗色模式下尤其刺眼：一片纯白闪过再变深。
+ *
+ * `--background` 定义在 `:root` / `.dark` 上，主题启动脚本（themeBootstrapScript，
+ * 阻塞式）在首帧前就把 `.dark` 打到了 html 上，所以这里取到的值从第一帧起就是
+ * 对的，两种主题都不会先画错再纠正。
+ *
+ * body 跟着继承，不重复声明——重复声明会让"改一处底色"变成改两处。
+ */
+  html {
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+
+  /**
+ * 文档默认排版必须落在角色上，否则**字号三档只影响显式写了 text-* 的元素**。
+ * 没写角色类的文字（组件内部的普通文本、产品页面里的裸 <p>）会退回浏览器默认的
+ * 16px，与用户的字号偏好完全脱钩——而且看不出错，只是"切了没反应"。
+ *
+ * 取 body-md 作基线：它是正文角色，三档分别落在 text-xs / text-sm / text-base。
+ */
+  body {
+    font-family: var(--body-md-font-family);
+    font-size: var(--body-md-font-size);
+    font-weight: var(--body-md-font-weight);
+    line-height: var(--body-md-line-height);
+    letter-spacing: var(--body-md-letter-spacing);
+  }
+
+  /* 表单控件的 UA 样式不继承字体，逐个拉回文档基线。 */
+  button,
+  input,
+  select,
+  textarea,
+  optgroup {
+    font: inherit;
+    letter-spacing: inherit;
+  }
 }
 
-html,
-body {
-  padding: 0;
-  margin: 0;
-}
+/**
+ * 启动占位（server-rendered boot splash）。
+ *
+ * 四个门户的外壳**全部是客户端渲染**——实测服务端 HTML 里没有任何 header /
+ * 侧栏标记（2026-08-05）。所以刷新时从 HTML 到达到 React 画出第一屏之间是一段
+ * 空窗，用户看到的就是"白屏再加载"。`ShellBootScreen` 补不了这一段：它自己也是
+ * React 组件，要等挂载。
+ *
+ * 这里的做法是把占位写成**静态标记**放进 layout，由 CSS 控制显隐：React 根挂载
+ * 后在 html 上打 `data-app-ready`，占位随即隐藏。整个过程不依赖任何 JS 计时。
+ *
+ * 250ms 才淡入：会话/首屏通常远快于此，提前显示反而制造了一次本来不存在的闪烁。
+ * 用 animation-delay 而不是 JS 定时器——快加载时它从未可见，也就无需被"隐藏"。
+ */
+@layer base {
+  .vx-boot-splash {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--background);
+    opacity: 0;
+    /* 时长与延迟都走 token（DS 叶子不许硬编码 motion）。延迟取 `slow`(300ms)：
+       首屏通常远快于此，占位因而从未可见——不会制造一次本来不存在的闪烁。 */
+    animation-name: vx-boot-splash-in;
+    animation-duration: var(--transition-duration-base);
+    animation-timing-function: var(--ease-enter);
+    animation-delay: var(--transition-duration-slow);
+    animation-fill-mode: forwards;
+  }
 
-button {
-  font-family: inherit;
+  /* 应用就绪即让位。用属性而不是删节点：删节点要 JS 找到并操作 DOM，
+     而属性只需一次赋值，且 CSS 隐藏发生在同一帧。 */
+  html[data-app-ready] .vx-boot-splash {
+    display: none;
+  }
+
+  .vx-boot-splash__spinner {
+    width: var(--spacing-icon-xl);
+    height: var(--spacing-icon-xl);
+    border: var(--border-width-medium) solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    /* 用 tokens 提供的旋转动画（`spin` 关键帧 + linear + infinite 已在里面）。
+       自己写 animation-timing-function 会被护栏拦（DS 叶子的 motion 必须是
+       token 的 var()），而唯一合规的缓动档都是 ease-*，套到持续旋转上会让它
+       忽快忽慢——转圈需要的恰恰是匀速。 */
+    animation: var(--vx-animate-spin);
+  }
+
+  @keyframes vx-boot-splash-in {
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* 尊重减少动效偏好：不转圈，只留一个静态的底色面。 */
+  @media (prefers-reduced-motion: reduce) {
+    .vx-boot-splash {
+      animation: none;
+      opacity: 1;
+    }
+    .vx-boot-splash__spinner {
+      animation: none;
+    }
+  }
 }

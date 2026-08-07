@@ -1,0 +1,27 @@
+/**
+ * primitive/typography/weight-primitive.css - T1 原子层 · 字重。
+ * @package @vxture/design-tokens
+ * @layer Presentation
+ * @category styles
+ * @author AI-Generated
+ * @date 2026-07-31
+ *
+ * ⚠ 本文件由脚本生成，请勿手工编辑。
+ *   生成：node scripts/design-tokens/generate-primitive.mjs
+ *
+ * T1 是 Tailwind v4 theme 的镜像，取值与之逐项一致；偏离登记在
+ * scripts/design-tokens/primitive-policy.mjs。工具类族：font-*
+ */
+
+:root {
+  /* 字重。 */
+  --vx-font-weight-thin: 100;
+  --vx-font-weight-extralight: 200;
+  --vx-font-weight-light: 300;
+  --vx-font-weight-normal: 400;
+  --vx-font-weight-medium: 500;
+  --vx-font-weight-semibold: 600;
+  --vx-font-weight-bold: 700;
+  --vx-font-weight-extrabold: 800;
+  --vx-font-weight-black: 900;
+}

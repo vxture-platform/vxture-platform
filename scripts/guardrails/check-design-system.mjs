@@ -4,6 +4,25 @@ import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
+/** admin token 桥里定义过的全部 `--vx-admin-*`。读一次，供 ds/no-undefined-admin-token 用。 */
+let ADMIN_TOKEN_CACHE = null;
+function adminTokenDefinitions() {
+  if (ADMIN_TOKEN_CACHE) return ADMIN_TOKEN_CACHE;
+  const dir = "packages/design/design-system/assets/admin-tokens";
+  const names = new Set();
+  try {
+    for (const entry of readdirSync(dir)) {
+      if (!entry.endsWith(".css")) continue;
+      const text = readFileSync(`${dir}/${entry}`, "utf8");
+      for (const m of text.matchAll(/(--vx-admin-[a-z0-9-]+)\s*:/g)) names.add(m[1]);
+    }
+  } catch {
+    // 目录不在（子集检出）→ 规则自动噤声，不误报。
+  }
+  ADMIN_TOKEN_CACHE = names;
+  return names;
+}
+
 const ROOT = process.cwd();
 const SCAN_ROOTS = ["portals", "packages", "agent-studio", "business"];
 const SOURCE_EXTENSIONS = new Set([
@@ -22,6 +41,13 @@ const BASELINE_PATH = path.join(
   "scripts/guardrails/design-system-baseline.json",
 );
 const DS_STYLE_HARDCODED_SCALE_BUDGET = 0;
+/**
+ * DS 叠放阶梯的取值。**首选仍是 `var(--z-index-*)` 语义名**；本表只是兜底，
+ * 容许内联 style 等确实拿不到类名的场合直写档位值，档外取值一律拦。
+ * 阶梯语义与推导依据见 scripts/design-tokens/semantic-policy.mjs 与
+ * packages/design/design-system/docs/04-tokens-contract.md §8。
+ */
+const Z_LADDER = new Set([100, 200, 300, 400, 500, 600, 700, 800, 900, 9999]);
 const BASELINED_RULE_IDS = new Set([
   "ds/no-inline-design-style",
   "ds/no-native-primitive",
@@ -50,12 +76,32 @@ const IGNORED_PARTS = new Set([
 ]);
 
 const DS_ROOT = normalize("packages/design/design-system");
+/**
+ * 设计三包。凡"这是 DS 自己的代码，不受应用层规则约束"的判断都要认全三个，
+ * 否则拆包之后 design-ui / design-tokens 会被当成业务代码误报。
+ */
+const DS_PACKAGE_ROOTS = [
+  DS_ROOT,
+  normalize("packages/design/design-ui"),
+  normalize("packages/design/design-tokens"),
+];
+const isDsPackage = (file) =>
+  DS_PACKAGE_ROOTS.some((root) => normalize(file).startsWith(`${root}/`));
 const DS_TOKEN_PATHS = [
   normalize("packages/design/design-system/src/tokens"),
-  normalize("packages/design/design-system/src/styles/tokens.css"),
+  normalize("packages/design/design-tokens/src/styles/tokens.css"),
 ];
+// 顶层 tokens*.css 是历史平铺形态；primitive/ semantic/ components/ 是
+// docs/10-standards/040-design-system-package-convergence.md §3 的目标结构，
+// T1–T4 分层落地后 token 文件迁入这些子目录，同样属 DS token 层。
+// 允许 primitive/ semantic/ components/ 下任意深度——排版原子按子命名空间
+// 归入 primitive/typography/，只认一层会把它们判成裸值违规。
+// token owner = 分层 token 模块（T1 primitive / T2 semantic）、聚合入口 tokens.css，
+// 以及 @theme 注册 theme.css。theme.css 必须算 owner：断点与容器宽度进的是媒体查询
+// 与容器查询，那里 var() 不参与求值，只能落字面量——它是有依据的刻度真值源，
+// 不是"叶子里随手写死的数"。components/ 已随 T3 层退役。
 const DS_RUNTIME_TOKEN_STYLE_PATTERN =
-  /^packages\/design\/design-system\/src\/styles\/tokens(?:-[\w-]+)?\.css$/;
+  /^packages\/design\/design-tokens\/src\/styles\/(?:tokens\.css|tailwind\.css|theme\.css|(?:primitive|semantic)\/(?:[\w-]+\/)*[\w-]+\.css)$/;
 const DS_RUNTIME_SCALE_BRIDGE_VAR_PATTERN =
   /var\(--vx-(?:scale|platform-scale|auth-scale|console-scale|component-scale)-/;
 const DS_RUNTIME_COMPONENT_METRIC_VAR_PATTERN = /var\(--vx-component-metric-/;
@@ -95,76 +141,17 @@ const LEGACY_COMPONENT_METRIC_TOKEN_STYLE_PATHS = new Set(
   ].map((name) => normalize(`${DS_ROOT}/src/styles/${name}`)),
 );
 const DS_SEMANTIC_STYLE_PATHS = new Set([
-  normalize("packages/design/design-system/src/styles/components.css"),
   normalize("packages/design/design-system/src/styles/platform.css"),
 ]);
+/*
+ * 原有 16 条 auth-* / components-* / platform-* 例外随遗留样式层退役而清空，
+ * 仅 fullscreen.css 存活。清单不留已删路径：陈旧条目会让规则永远报 stale。
+ */
 const DS_EFFECT_LOCKED_STYLE_PATHS = new Set([
-  normalize("packages/design/design-system/src/styles/auth-actions-social.css"),
-  normalize(
-    "packages/design/design-system/src/styles/auth-fields-controls.css",
-  ),
-  normalize("packages/design/design-system/src/styles/auth-header-locale.css"),
-  normalize("packages/design/design-system/src/styles/auth-signup.css"),
-  normalize("packages/design/design-system/src/styles/auth-visual-panel.css"),
-  normalize("packages/design/design-system/src/styles/components-ai.css"),
-  normalize("packages/design/design-system/src/styles/components-button.css"),
-  normalize(
-    "packages/design/design-system/src/styles/components-shell-footer-switch.css",
-  ),
-  normalize(
-    "packages/design/design-system/src/styles/components-shell-preferences.css",
-  ),
-  normalize(
-    "packages/design/design-system/src/styles/components-shell-tools.css",
-  ),
-  normalize(
-    "packages/design/design-system/src/styles/components-shell-user-menu.css",
-  ),
   normalize("packages/design/design-system/src/styles/fullscreen.css"),
-  normalize(
-    "packages/design/design-system/src/styles/platform-shell-assistant.css",
-  ),
-  normalize(
-    "packages/design/design-system/src/styles/platform-shell-header-buttons.css",
-  ),
-  normalize(
-    "packages/design/design-system/src/styles/platform-access-list.css",
-  ),
-  normalize(
-    "packages/design/design-system/src/styles/platform-models-actions.css",
-  ),
-  normalize(
-    "packages/design/design-system/src/styles/platform-models-list.css",
-  ),
 ]);
 const DS_SHADOW_LOCKED_STYLE_PATHS = new Set([
-  normalize("packages/design/design-system/src/styles/auth-actions-social.css"),
-  normalize(
-    "packages/design/design-system/src/styles/auth-fields-controls.css",
-  ),
-  normalize("packages/design/design-system/src/styles/auth-header-locale.css"),
-  normalize("packages/design/design-system/src/styles/auth-signup.css"),
-  normalize("packages/design/design-system/src/styles/auth-visual-panel.css"),
-  normalize("packages/design/design-system/src/styles/components-ai.css"),
-  normalize("packages/design/design-system/src/styles/components-button.css"),
-  normalize(
-    "packages/design/design-system/src/styles/components-shell-footer-switch.css",
-  ),
-  normalize(
-    "packages/design/design-system/src/styles/components-shell-preferences.css",
-  ),
-  normalize(
-    "packages/design/design-system/src/styles/components-shell-user-menu.css",
-  ),
-  normalize(
-    "packages/design/design-system/src/styles/platform-access-list.css",
-  ),
-  normalize(
-    "packages/design/design-system/src/styles/platform-models-actions.css",
-  ),
-  normalize(
-    "packages/design/design-system/src/styles/platform-models-list.css",
-  ),
+  /* 全部条目随遗留样式层退役，无存活项。 */
 ]);
 const IMPORT_ONLY_STYLE_ENTRIES = new Map([
   [normalize("agent-studio/varda/src/app/globals.css"), "Varda globals.css"],
@@ -175,64 +162,19 @@ const IMPORT_ONLY_STYLE_ENTRIES = new Map([
     "DS auth.css",
   ],
   [
-    normalize("packages/design/design-system/src/styles/components.css"),
-    "DS components.css",
-  ],
-  [
     normalize("packages/design/design-system/src/styles/globals.css"),
     "DS globals.css",
   ],
-  [
-    normalize("packages/design/design-system/src/styles/platform-access.css"),
-    "DS platform access.css",
-  ],
-  [
-    normalize("packages/design/design-system/src/styles/platform-account.css"),
-    "DS platform account.css",
-  ],
+  /* 八条 platform-* 子模块随遗留样式层退役，仅保留聚合入口 platform.css。 */
   [
     normalize("packages/design/design-system/src/styles/platform.css"),
     "DS platform.css",
   ],
   [
-    normalize("packages/design/design-system/src/styles/platform-layout.css"),
-    "DS platform layout.css",
-  ],
-  [
-    normalize("packages/design/design-system/src/styles/platform-models.css"),
-    "DS platform models.css",
-  ],
-  [
-    normalize(
-      "packages/design/design-system/src/styles/platform-notifications.css",
-    ),
-    "DS platform notifications.css",
-  ],
-  [
-    normalize("packages/design/design-system/src/styles/platform-shell.css"),
-    "DS platform shell.css",
-  ],
-  [
-    normalize(
-      "packages/design/design-system/src/styles/platform-shell-header.css",
-    ),
-    "DS platform shell header.css",
-  ],
-  [
-    normalize(
-      "packages/design/design-system/src/styles/platform-tenant-settings.css",
-    ),
-    "DS platform tenant settings.css",
-  ],
-  [
-    normalize("packages/design/design-system/src/styles/tokens.css"),
+    normalize("packages/design/design-tokens/src/styles/tokens.css"),
     "DS tokens.css",
   ],
   [normalize("portals/admin/src/app/globals.css"), "admin globals.css"],
-  [
-    normalize("portals/admin/src/styles/admin-auth-captcha.css"),
-    "admin auth captcha.css",
-  ],
   [normalize("portals/admin/src/styles/admin-base.css"), "admin base.css"],
   [
     normalize("portals/admin/src/styles/admin-directory.css"),
@@ -265,14 +207,6 @@ const IMPORT_ONLY_STYLE_ENTRIES = new Map([
   [
     normalize("portals/admin/src/styles/admin-placeholder.css"),
     "admin placeholder.css",
-  ],
-  [
-    normalize("portals/admin/src/styles/admin-platform-autonomy.css"),
-    "admin platform autonomy.css",
-  ],
-  [
-    normalize("portals/admin/src/styles/admin-products.css"),
-    "admin products.css",
   ],
   [normalize("portals/admin/src/styles/admin-roles.css"), "admin roles.css"],
   [
@@ -489,7 +423,7 @@ const rules = [
   },
   {
     id: "ds/no-hardcoded-z-index",
-    description: "业务层 z-index 大于 99 必须使用 DS 语义层级 token。",
+    description: "业务层 z-index 大于 99 必须取自 DS 叠放阶梯。",
     checkLine(file, line, lineNumber) {
       if (!isFrontendSource(file) || isGeneratedOrAsset(file)) return null;
       const text = stripLineComment(line);
@@ -497,10 +431,11 @@ const rules = [
       const inlineMatch = text.match(/\bzIndex\s*:\s*(-?\d+)\b/);
       const value = Number(cssMatch?.[1] ?? inlineMatch?.[1] ?? NaN);
       if (!Number.isFinite(value) || value <= 99) return null;
+      if (Z_LADDER.has(value)) return null;
       return violation(
         file,
         lineNumber,
-        "改为使用 --vx-z-* 语义层级 token，例如 var(--vx-z-dropdown)、var(--vx-z-modal)。",
+        `z-index 须取 DS 叠放阶梯（${[...Z_LADDER].join(" / ")}），阶梯语义见 packages/design/design-system/docs/04-tokens-contract.md §8。`,
         line,
       );
     },
@@ -536,6 +471,107 @@ const rules = [
         "移除应用层 .dark{} 定义，改为消费 DS 暗色 token。",
         line,
       );
+    },
+  },
+  {
+    id: "ds/no-retired-page-stack",
+    description:
+      "vx-page-stack 已退役且无任何规则，页面纵向骨架用 DS 的 ViewLayout。",
+    checkLine(file, line, lineNumber) {
+      if (!/\.(tsx|css)$/.test(file)) return null;
+      // 只查真用法：JSX 的 className 与 CSS 选择器。散文里提到这个名字是在
+      // 解释它为什么退役，不该被判违规。
+      const isUsage =
+        (line.includes("vx-page-stack") && line.includes("className")) ||
+        /^\s*\.vx-page-stack/.test(line);
+      if (!isUsage) return null;
+      return violation(
+        file,
+        lineNumber,
+        "改用 <ViewLayout>：这个类没有规则，挂着它页级块之间没有任何间距。",
+        line,
+      );
+    },
+  },
+  {
+    id: "ds/no-undefined-admin-token",
+    description:
+      "admin 样式引用的 --vx-admin-* 必须在 token 桥里有定义；归档样式表同样算数。",
+    checkFile(file) {
+      const normalized = normalize(file);
+      // 只查**在构建里**的样式表。styles-absorbed/ 不查——那 13 份的 token 早在
+      // 上一次清理时就没了（79 个），现在补回来等于把已退役的设计意图复活，
+      // 而不查它们也不会漏掉事故：样式表一旦被接回 src/styles/，本规则立刻就报
+      // （2026-08-07 就是这么抓到 admin-roles-auth-dialog 少 5 个 token 的）。
+      if (!/^portals\/admin\/src\/styles\/.*\.css$/.test(normalized)) {
+        return [];
+      }
+      let source;
+      try {
+        source = readFileSync(file, "utf8");
+      } catch {
+        return [];
+      }
+
+      const defined = adminTokenDefinitions();
+      const violations = [];
+      const seen = new Set();
+      const re = /var\(\s*(--vx-admin-[a-z0-9-]+)/g;
+      let match;
+      while ((match = re.exec(source)) !== null) {
+        const name = match[1];
+        if (defined.has(name) || seen.has(name)) continue;
+        seen.add(name);
+        violations.push(
+          violation(
+            file,
+            source.slice(0, match.index).split("\n").length,
+            `${name} 在 token 桥里没有定义。补定义，或连同引用它的规则一起退役——` +
+              `**不要只删一边**：样式表离开构建后它引用的 token 会显得无人使用，` +
+              `随后被当成死 token 清掉，等有人把样式表接回来时栅格就塌了` +
+              `（2026-08-05/08-07 两次事故，见 workplans §十九）。`,
+          ),
+        );
+      }
+      return violations;
+    },
+  },
+  {
+    id: "ds/no-duplicate-status-badge-icon",
+    description:
+      "StatusBadge 自带语气图标；children 里不要再手写同一个 <Icon>，否则一枚标画两个。",
+    checkFile(file) {
+      if (!file.endsWith(".tsx")) return [];
+      let source;
+      try {
+        source = readFileSync(file, "utf8");
+      } catch {
+        return [];
+      }
+      if (!source.includes("<StatusBadge")) return [];
+
+      // 走查里同一个错犯了四次（accounts / admin-roles / usage-metering /
+      // platform-admins）：迁移到自带图标的组件时，调用点原来自己画的那个图标忘了删。
+      const violations = [];
+      const opening = /<StatusBadge\b[^>]*\bicon=\{[^}]*\}[^>]*>/g;
+      let match;
+      while ((match = opening.exec(source)) !== null) {
+        const start = match.index + match[0].length;
+        const rest = source.slice(start, start + 240);
+        const close = rest.indexOf("</StatusBadge>");
+        const children = close === -1 ? rest : rest.slice(0, close);
+        if (/<Icon\b/.test(children)) {
+          const lineNumber = source.slice(0, match.index).split("\n").length;
+          violations.push(
+            violation(
+              file,
+              lineNumber,
+              "删掉 children 里的 <Icon>：图标由 StatusBadge 的 icon 属性出。",
+            ),
+          );
+        }
+      }
+      return violations;
     },
   },
   {
@@ -595,14 +631,11 @@ const rules = [
       const normalized = normalize(file);
       if (!DS_EFFECT_LOCKED_STYLE_PATHS.has(normalized)) return null;
       const text = stripLineComment(line);
-      if (
-        /\b\d+(?:\.\d+)?(?:ms|s)\b/.test(text) &&
-        /\b(?:ease|linear|cubic-bezier)\b/.test(text)
-      ) {
+      if (/\d+(?:\.\d+)?(?:ms|s)/.test(text) || hasLiteralEasing(text)) {
         return violation(
           file,
           lineNumber,
-          "使用 --vx-control-transition、--vx-motion-* 或组件 effect token，不能回流硬编码动效。",
+          "改用 T2 动效 token：var(--transition-duration-*) 与 var(--ease-*)。",
           line,
         );
       }
@@ -723,11 +756,11 @@ const rules = [
         return null;
       const text = stripLineComment(line);
 
-      if (/\b\d+(?:\.\d+)?(?:ms|s)\b/.test(text)) {
+      if (/\d+(?:\.\d+)?(?:ms|s)/.test(text)) {
         return violation(
           file,
           lineNumber,
-          "DS 样式叶子不能直接写 motion 时长；请迁入 token owner 后通过 var(--vx-*) 消费。",
+          "DS 样式叶子不能直接写 motion 时长；改用 var(--transition-duration-*)。",
           line,
         );
       }
@@ -742,7 +775,7 @@ const rules = [
         return violation(
           file,
           lineNumber,
-          "DS 样式叶子的 motion 属性必须使用 var(--vx-*) token 或 none。",
+          "DS 样式叶子的 motion 属性必须由 token 的 var() 引用构成，或为 none。",
           line,
         );
       }
@@ -1106,7 +1139,7 @@ const rules = [
         violation(
           file,
           1,
-          "DS tokens-* 模块超过 8KB；请按 theme、colors、foundation、component、platform、admin、console、website 等语义域继续拆分。",
+          "DS tokens-* 模块超过 8KB；请按 theme、colors、primitive、component、platform、admin、console、website 等语义域继续拆分。",
         ),
       ];
     },
@@ -1155,7 +1188,13 @@ const rules = [
           if (!text.includes("*/")) inBlockComment = true;
           return;
         }
-        if (/^@import\s+["'][^"']+["'];$/.test(text)) return;
+        // `layer(...)` 是 @import 的标准形式，仍然只是聚合导入，不是样式规则。
+        if (/^@import\s+["'][^"']+["'](\s+layer\([a-z-]+\))?;$/.test(text))
+          return;
+        // `@source` 和 @import 一样是构建指令，不是样式规则：它告诉 Tailwind 去哪
+        // 扫类名。路径相对声明它的文件，挪进分层模块只会让这条极易失效的声明更难
+        // 维护——而它一旦失效，DS 组件的工具类全部不产出且不报错。
+        if (/^@source\s+["'][^"']+["'];$/.test(text)) return;
         items.push(
           violation(
             file,
@@ -1173,7 +1212,7 @@ const rules = [
     description: "颜色、字号、圆角等 token 文件只能存在于 DS token 包。",
     checkFile(file) {
       const normalized = normalize(file);
-      if (normalized.startsWith(`${DS_ROOT}/`)) return [];
+      if (isDsPackage(file)) return [];
       if (
         /\/tokens\/(colors|typography|radius|spacing|shadow)\.(ts|tsx|js|mjs|css)$/.test(
           normalized,
@@ -1853,7 +1892,7 @@ function isImportOnlyStyleContent(content) {
       if (!text.includes("*/")) inBlockComment = true;
       return true;
     }
-    return /^@import\s+["'][^"']+["'];$/.test(text);
+    return /^@import\s+["'][^"']+["'](\s+layer\([a-z-]+\))?;$/.test(text);
   });
 }
 
@@ -2160,7 +2199,11 @@ function collectDsStyleHardcodedScaleCount(sourceFiles) {
   for (const file of sourceFiles) {
     const normalized = normalize(path.relative(ROOT, file));
     if (!isDsStyleScaleDebtFile(normalized)) continue;
-    const lines = readFileSync(file, "utf8").split(/\r?\n/);
+    // 先整体剥掉块注释再逐行看。`stripLineComment` 认的是 `//`，那不是 CSS 的
+    // 注释语法——注释里写一句"16px"就会被记成一处硬编码尺度，把预算顶穿。
+    const lines = stripCssBlockComments(readFileSync(file, "utf8")).split(
+      /\r?\n/,
+    );
     for (const line of lines) {
       if (hasDsStyleHardcodedScale(line)) count += 1;
     }
@@ -2289,12 +2332,19 @@ function collectDsStyleExactScalePrefixViolations(sourceFiles, prefix) {
 }
 
 function isDsStyleScaleDebtFile(normalized) {
+  // typography.css 曾在此豁免（手写角色类里满是裸字号）。该文件已退役——24 档角色
+  // 改由 `@theme` 的 `--text-*` 注册产出工具类，不再有手写刻度可豁免。
   return (
     normalized.startsWith(`${DS_ROOT}/src/styles/`) &&
     normalized.endsWith(".css") &&
-    normalized !==
-      normalize("packages/design/design-system/src/styles/typography.css") &&
     !DS_RUNTIME_TOKEN_STYLE_PATTERN.test(normalized)
+  );
+}
+
+/** 抹掉 CSS 块注释，保留行数（换行不动），行号才对得上。 */
+function stripCssBlockComments(content) {
+  return content.replace(/\/\*[\s\S]*?\*\//g, (m) =>
+    m.replace(/[^\n]/g, " "),
   );
 }
 
@@ -2431,6 +2481,11 @@ function isDsTokenOwner(file) {
   );
 }
 
+/** 裸缓动曲线：`--vx-ease-*` 是可引用的 token，没有理由写字面量。 */
+function hasLiteralEasing(text) {
+  return /\b(?:cubic-bezier|steps)\s*\(/.test(text) || /\bease(?:-in|-out|-in-out)?\b(?!\s*\))/.test(text.replace(/var\([^)]*\)/g, ""));
+}
+
 function isTokenOrNoneShadowValue(value) {
   const normalized = (value ?? "").trim();
   if (!normalized) return false;
@@ -2440,18 +2495,29 @@ function isTokenOrNoneShadowValue(value) {
   return !/,\s*(?:-?\d|inset\b|calc\()/u.test(normalized);
 }
 
+/**
+ * motion 值是否只由 token 构成。
+ *
+ * 判据是「除 var() 引用外不得出现字面时长或曲线」。
+ *
+ * 不要求 `--vx-` 前缀：T2 的时长与缓动刻意命名为 `--transition-duration-*` /
+ * `--ease-*`——那是 v4 的真实命名空间名，带前缀就不产出 duration-fast / ease-enter
+ * 工具类。前缀只属于 T1。
+ */
 function isTokenOrNoneMotionValue(value) {
   const normalized = (value ?? "").trim();
   if (!normalized) return true;
-  const isNone = normalized === "none" || normalized.startsWith("none ");
-  if (isNone) return true;
-  if (
-    normalized.startsWith("var(") &&
-    !/,\s*(?:\d|[a-z-]+\s+\d|cubic-bezier\()/u.test(normalized)
-  )
-    return true;
-  if (/^[\w-]+\s+var\(--vx-[^)]+\)(?:\s+\w+)?$/.test(normalized)) return true;
-  return false;
+  if (normalized === "none" || normalized.startsWith("none ")) return true;
+
+  // 字面时长与曲线函数：连 var() 的回退值里也不允许，故在剥离前先查。
+  if (/\d+(?:\.\d+)?m?s/.test(normalized)) return false;
+  if (/cubic-bezier\(|steps\(/.test(normalized)) return false;
+
+  const withoutVars = normalized.replace(/var\((?:[^()]|\([^()]*\))*\)/g, " ");
+  // 剥掉 var() 后只应剩属性名、时长字面量、空白与分段逗号；缓动关键字属字面值。
+  if (/\b(?:ease|ease-in|ease-out|ease-in-out|linear|step-start|step-end)\b/.test(withoutVars))
+    return false;
+  return /^[\w\s,.-]*$/.test(withoutVars);
 }
 
 function isGeneratedOrAsset(file) {

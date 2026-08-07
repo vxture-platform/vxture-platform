@@ -117,6 +117,19 @@ jobs:
           retention-days: 1
           include-hidden-files: true
 
+      # 伞包的类型引用的是 design-ui / design-tokens 的**产物**（.d.ts），不是它们的
+      # 源码；而 type-check 自己不产出声明。不先构建就必然 TS2307，且这个失败只在
+      # 干净检出上出现——本地留着上一次的 dist，看起来一直是绿的。
+      # 顺序是硬约束，见 docs/10-standards/050-design-system-release.md §3。
+      # 不用 `pnpm build:design`：那个 filter 会连带 next build 整个预览面，
+      # 而预览面是私有包，不发布不部署。
+      - name: Build design packages (tokens → ui → system)
+        if: steps.changes.outputs.docs_only != 'true'
+        run: |
+          for p in design-tokens design-ui design-system; do
+            pnpm --filter "@vxture/$p" build
+          done
+
       - name: Type check
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm type-check:all
@@ -128,6 +141,26 @@ jobs:
       - name: Design system guardrail
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:design
+
+      - name: Design system public exports snapshot
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:design-exports
+
+      - name: Design tokens in sync with policy source
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:design-tokens
+
+      # 组件写的类名和 T2 注册脱节时不会报错，只会渲染成没有样式——本地 lint 不覆盖，
+      # 必须在这里实测每处类名真能生成。
+      - name: Design component classes actually generate
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:design-classes
+
+      # 预览面是这套系统唯一的验收面。组件没有条目就等于改了也没人看得见，
+      # 而统计卡照样给出一个自洽但偏小的数字。
+      - name: Design preview covers every component
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:design-preview
 
       - name: Env audit (deploy bundle + runtime template contract)
         if: steps.changes.outputs.docs_only != 'true'

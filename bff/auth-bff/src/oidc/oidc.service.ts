@@ -160,7 +160,7 @@ export interface OidcEmailLoginInput {
 export interface OidcLoginCompletion {
   sid: string;
   realm: string;
-  sessionIdleTtl: number;
+  sessionMaxAge: number;
   redirectTo: string;
 }
 
@@ -863,7 +863,7 @@ export class OidcService {
     const activeOrg = ctx?.activeOrg ?? null;
 
     const now = Math.floor(Date.now() / 1000);
-    const idleTtl = this.config.auth.OIDC_SESSION_IDLE_TTL;
+    // IdP 侧只剩总时效一个钟；在场判断在门户（见 identity-sdk/idle.ts）。
     const absTtl = this.config.auth.OIDC_SESSION_ABS_TTL;
     const sid = randomUUID();
     await this.redis.createOidcSession(
@@ -876,7 +876,7 @@ export class OidcService {
         lastActiveAt: now,
         absExpiresAt: now + absTtl,
       },
-      idleTtl,
+      absTtl,
     );
     if (activeOrg) {
       await this.redis.setOidcActiveOrg(sid, client.clientId, activeOrg);
@@ -897,7 +897,7 @@ export class OidcService {
     return {
       sid,
       realm: "customer",
-      sessionIdleTtl: idleTtl,
+      sessionMaxAge: absTtl,
       redirectTo: this.appendParams(challenge.redirectUri, {
         code,
         ...(challenge.state ? { state: challenge.state } : {}),
@@ -1518,7 +1518,7 @@ export class OidcService {
     const now = Math.floor(Date.now() / 1000);
     // Operator plane uses shorter session TTLs than tenant (§2.3): idle ≤ 30min,
     // absolute ≤ 8h.
-    const idleTtl = this.config.auth.OPERATOR_SESSION_IDLE_TTL;
+    // 同上；运营面与客户面的差别现在体现在门户的闲置阈值（30min vs 4h），不在这里。
     const absTtl = this.config.auth.OPERATOR_SESSION_ABS_TTL;
     const sid = randomUUID();
     const sub = `opr_${operator.id}`;
@@ -1534,7 +1534,7 @@ export class OidcService {
         lastActiveAt: now,
         absExpiresAt: now + absTtl,
       },
-      idleTtl,
+      absTtl,
     );
 
     const code = await this.issueAuthCode({
@@ -1553,7 +1553,7 @@ export class OidcService {
     return {
       sid,
       realm: "workforce",
-      sessionIdleTtl: idleTtl,
+      sessionMaxAge: absTtl,
       redirectTo: this.appendParams(snap.redirectUri, {
         code,
         ...(snap.state ? { state: snap.state } : {}),

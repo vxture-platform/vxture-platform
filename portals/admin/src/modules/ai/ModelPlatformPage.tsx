@@ -2,23 +2,28 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
+  ActionButton,
   ActionMenu,
   Badge,
   Button,
-  Checkbox,
+  DataTable,
   DialogForm,
+  EmptyState,
+  FilterBar,
   Icon,
   Input,
   Label,
+  ListPageTemplate,
+  MetricGrid,
   NativeSelect,
-  Pagination,
+  StatusBadge,
+  TableTitleCell,
   Textarea,
-  ActionButton,
-  EmptyState,
-  ViewModeSwitch,
   useToast,
 } from "@vxture/design-system";
-import type { IconName } from "@vxture/design-system";
+import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
+import { activeTone } from "@/modules/shared/tenant-tone";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import {
   activateModelPriceRule,
   activateModelProvider,
@@ -51,10 +56,7 @@ import type {
 } from "@/entities/console";
 import { useConsoleTranslations } from "@/lib/ConsoleIntl";
 import { PageHeader } from "@/modules/shared/PageHeader";
-import {
-  PageSizePicker as AdminPageSizePicker,
-  type PageSize,
-} from "@/modules/shared/PageSizePicker";
+import { type PageSize } from "@/modules/shared/PageSizePicker";
 
 type ViewMode = "list" | "cards";
 type ModelStatusFilter = "all" | "active" | "inactive";
@@ -247,52 +249,24 @@ function modelTone(model: AiModelRecord) {
   return isPrivateProvider(model.provider) ? "private" : "active";
 }
 
+const LINK_STATUS_TONE: Record<ModelLinkStatus, StatusBadgeTone> = {
+  normal: "success",
+  abnormal: "danger",
+  checking: "info",
+};
+
+const LINK_STATUS_LABEL: Record<ModelLinkStatus, string> = {
+  normal: "正常",
+  abnormal: "异常",
+  checking: "检测中",
+};
+
 function detectModelLinkStatus(model: AiModelRecord): ModelLinkStatus {
   return model.endpointUrl.trim() &&
     model.protocol.trim() &&
     (model.keyReference === null || model.keyReference.configured)
     ? "normal"
     : "abnormal";
-}
-
-function isInteractiveTarget(target: EventTarget | null) {
-  return (
-    target instanceof HTMLElement &&
-    Boolean(
-      target.closest(
-        'button, input, select, textarea, a, [role="button"], [role="menu"], [role="menuitem"]',
-      ),
-    )
-  );
-}
-
-function ModelSummaryItem({
-  icon,
-  label,
-  value,
-  tags,
-  tone = "blue",
-}: {
-  icon: IconName;
-  label: string;
-  value: string;
-  tags?: string[];
-  tone?: "blue" | "green" | "amber" | "rose";
-}) {
-  return (
-    <article className={`vx-tenant-summary__item vx-tenant-tone--${tone}`}>
-      <Icon name={icon} size={24} fallback="placeholder" />
-      <div>
-        <span>{label}</span>
-        <p>
-          <strong>{value}</strong>
-          {tags?.map((tag) => (
-            <em key={tag}>{tag}</em>
-          ))}
-        </p>
-      </div>
-    </article>
-  );
 }
 
 function ModelOperationButtons({
@@ -315,7 +289,7 @@ function ModelOperationButtons({
     >
       <Button
         variant="ghost"
-        size="icon"
+        size="icon-md"
         title="启用"
         aria-label={`启用 ${model.modelName}`}
         disabled={submitting || model.isActive}
@@ -325,7 +299,7 @@ function ModelOperationButtons({
       </Button>
       <Button
         variant="ghost"
-        size="icon"
+        size="icon-md"
         title="停用"
         aria-label={`停用 ${model.modelName}`}
         disabled={submitting || !model.isActive}
@@ -335,7 +309,7 @@ function ModelOperationButtons({
       </Button>
       <Button
         variant="ghost"
-        size="icon"
+        size="icon-md"
         title={model.isActive ? "启用状态不可删除" : "删除"}
         aria-label={`删除 ${model.modelName}`}
         className="vx-model-operation-buttons__danger"
@@ -372,7 +346,7 @@ function ModelBatchOperationButtons({
     >
       <Button
         variant="ghost"
-        size="icon"
+        size="icon-md"
         title="批量启用"
         aria-label="批量启用"
         disabled={submitting || !canEnable}
@@ -387,7 +361,7 @@ function ModelBatchOperationButtons({
       </Button>
       <Button
         variant="ghost"
-        size="icon"
+        size="icon-md"
         title="批量停用"
         aria-label="批量停用"
         disabled={submitting || !canDisable}
@@ -402,7 +376,7 @@ function ModelBatchOperationButtons({
       </Button>
       <Button
         variant="ghost"
-        size="icon"
+        size="icon-md"
         title="批量删除"
         aria-label="批量删除"
         className="vx-model-operation-buttons__danger"
@@ -447,6 +421,11 @@ export function ModelPlatformPage() {
   const [selectedModelIds, setSelectedModelIds] = useState<Set<string>>(
     () => new Set(),
   );
+  /**
+   * 上游读取是否失败。**不复用 `feedback`**：那条横幅会被后续的保存、启停操作
+   * 覆盖，而"这张表为什么是空的"必须一直可查。
+   */
+  const [loadFailed, setLoadFailed] = useState(false);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const [modelForm, setModelForm] = useState(defaultModelForm);
@@ -497,10 +476,14 @@ export function ModelPlatformPage() {
             ),
           );
           setSelectedModelId(null);
+          setLoadFailed(false);
         },
       )
       .catch(() => {
-        if (active) setFeedback({ tone: "error", key: "feedback.loadError" });
+        if (active) {
+          setLoadFailed(true);
+          setFeedback({ tone: "error", key: "feedback.loadError" });
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -543,14 +526,6 @@ export function ModelPlatformPage() {
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStart = (safeCurrentPage - 1) * pageSize;
   const pagedModels = filteredModels.slice(pageStart, pageStart + pageSize);
-  const pagedModelIds = pagedModels.map((model) => model.id);
-  const selectedOnPage = pagedModelIds.filter((id) =>
-    selectedModelIds.has(id),
-  ).length;
-  const isPageSelected =
-    pagedModelIds.length > 0 && selectedOnPage === pagedModelIds.length;
-  const isPagePartiallySelected =
-    selectedOnPage > 0 && selectedOnPage < pagedModelIds.length;
   const selectedModel = selectedModelId
     ? (modelById.get(selectedModelId) ?? null)
     : null;
@@ -596,6 +571,74 @@ export function ModelPlatformPage() {
     const label = t(`providers.${provider}`);
     return label.startsWith("modelPlatformPage.providers.") ? provider : label;
   }
+
+  /* 列定义每次渲染重建：单元格取值依赖 t / 对话框开关等本次渲染的闭包，
+     memo 起来反而要把它们全列进依赖数组。 */
+  const modelColumns: DataTableColumn<AiModelRecord>[] = [
+    {
+      id: "model",
+      header: t("table.columns.model"),
+      cell: (model) => (
+        <TableTitleCell
+          icon={isPrivateProvider(model.provider) ? "code" : "plug"}
+          title={model.modelName}
+          description={model.modelCode}
+          onTitleClick={() => openEditModelDialog(model)}
+        />
+      ),
+    },
+    {
+      id: "status",
+      header: t("table.columns.status"),
+      align: "center",
+      cell: (model) => (
+        <StatusBadge
+          tone={model.isActive ? "success" : "neutral"}
+          icon={model.isActive ? "check" : "x"}
+        >
+          {model.isActive ? t("status.active") : t("status.inactive")}
+        </StatusBadge>
+      ),
+    },
+    {
+      id: "link",
+      header: "链路状态",
+      align: "center",
+      cell: (model) => {
+        const link =
+          linkStatusByModelId[model.id] ?? detectModelLinkStatus(model);
+        return (
+          <StatusBadge tone={LINK_STATUS_TONE[link]}>
+            {LINK_STATUS_LABEL[link]}
+          </StatusBadge>
+        );
+      },
+    },
+    {
+      id: "source",
+      header: "来源",
+      cell: (model) => (
+        <TableTitleCell
+          title={providerLabel(model.provider)}
+          description={model.protocol}
+        />
+      ),
+    },
+    {
+      id: "capabilities",
+      header: "模型能力",
+      cell: (model) => (
+        <span className="flex flex-wrap gap-2xs">
+          {model.capabilities.slice(0, 3).map((capability) => (
+            <Badge key={capability}>{capability}</Badge>
+          ))}
+          {model.capabilities.length > 3 ? (
+            <Badge>+{model.capabilities.length - 3}</Badge>
+          ) : null}
+        </span>
+      ),
+    },
+  ];
 
   function handleReset() {
     setQuery("");
@@ -849,32 +892,6 @@ export function ModelPlatformPage() {
     }
   }
 
-  function toggleModelSelection(modelId: string, checked: boolean) {
-    setSelectedModelIds((current) => {
-      const next = new Set(current);
-      if (checked) {
-        next.add(modelId);
-      } else {
-        next.delete(modelId);
-      }
-      return next;
-    });
-  }
-
-  function togglePageSelection(checked: boolean) {
-    setSelectedModelIds((current) => {
-      const next = new Set(current);
-      for (const modelId of pagedModelIds) {
-        if (checked) {
-          next.add(modelId);
-        } else {
-          next.delete(modelId);
-        }
-      }
-      return next;
-    });
-  }
-
   // ── Provider 写路径 ────────────────────────────────────────────────────────
 
   async function reloadProviders() {
@@ -918,7 +935,7 @@ export function ModelPlatformPage() {
       await reloadProviders();
       setProviderDialog(null);
     } catch (error) {
-      toast({ tone: "error", title: "保存失败", ...describeError(error) });
+      toast({ tone: "danger", title: "保存失败", ...describeError(error) });
     } finally {
       setCatalogBusy(false);
     }
@@ -939,7 +956,7 @@ export function ModelPlatformPage() {
         title: activate ? "厂商已启用" : "厂商已停用",
       });
     } catch (error) {
-      toast({ tone: "error", title: "操作失败", ...describeError(error) });
+      toast({ tone: "danger", title: "操作失败", ...describeError(error) });
     } finally {
       setCatalogBusy(false);
     }
@@ -956,7 +973,7 @@ export function ModelPlatformPage() {
       setPendingDeleteProvider(null);
       toast({ tone: "success", title: "厂商已删除" });
     } catch (error) {
-      toast({ tone: "error", title: "删除失败", ...describeError(error) });
+      toast({ tone: "danger", title: "删除失败", ...describeError(error) });
     } finally {
       setCatalogBusy(false);
     }
@@ -1002,7 +1019,7 @@ export function ModelPlatformPage() {
     try {
       if (priceRuleDialog.mode === "create") {
         if (!priceRuleForm.modelId) {
-          toast({ tone: "error", title: "请先选择模型" });
+          toast({ tone: "danger", title: "请先选择模型" });
           return;
         }
         await createModelPriceRule({
@@ -1017,7 +1034,7 @@ export function ModelPlatformPage() {
       await reloadPriceRules();
       setPriceRuleDialog(null);
     } catch (error) {
-      toast({ tone: "error", title: "保存失败", ...describeError(error) });
+      toast({ tone: "danger", title: "保存失败", ...describeError(error) });
     } finally {
       setCatalogBusy(false);
     }
@@ -1038,519 +1055,384 @@ export function ModelPlatformPage() {
         title: activate ? "规则已启用" : "规则已停用",
       });
     } catch (error) {
-      toast({ tone: "error", title: "操作失败", ...describeError(error) });
+      toast({ tone: "danger", title: "操作失败", ...describeError(error) });
     } finally {
       setCatalogBusy(false);
     }
   }
 
   return (
-    <div className="vx-page-stack vx-tenant-management-page vx-model-platform-page">
-      <PageHeader
-        icon="code"
-        eyebrow={t("header.eyebrow")}
-        title={t("header.title")}
-        description={t("header.description")}
-        secondary={<Badge>{t("header.badge")}</Badge>}
-      />
-
-      {feedback ? (
-        <p
-          className={
-            feedback.tone === "success"
-              ? "vx-profile-message"
-              : "vx-profile-error"
-          }
-        >
-          {t(feedback.key, feedback.values)}
-        </p>
-      ) : null}
-
-      <section
-        className="vx-tenant-summary vx-model-platform-summary"
-        aria-label={t("summary.ariaLabel")}
-      >
-        <ModelSummaryItem
-          icon="plug"
-          label={t("summary.models")}
-          value={formatNumber(models.length)}
-          tags={[
-            `${t("filters.online")} ${formatNumber(onlineModels)}`,
-            `${t("filters.private")} ${formatNumber(privateModels)}`,
-          ]}
-        />
-        <ModelSummaryItem
-          icon="play"
-          label={t("filters.active")}
-          value={formatNumber(activeModels)}
-          tags={["可调度"]}
-          tone={activeModels ? "green" : "amber"}
-        />
-        <ModelSummaryItem
-          icon="code"
-          label={t("status.inactive")}
-          value={formatNumber(inactiveModels)}
-          tags={inactiveModels ? ["需复核"] : ["无停用"]}
-          tone={inactiveModels ? "amber" : "green"}
-        />
-        <ModelSummaryItem
-          icon="settings"
-          label="Provider"
-          value={formatNumber(providers.length)}
-          tags={[`启用 ${formatNumber(activeProviders.length)}`]}
-          tone={activeProviders.length ? "green" : "amber"}
-        />
-        <ModelSummaryItem
-          icon="database"
-          label="策略 / 成本"
-          value={`${formatNumber(activePolicies.length)} / ${formatNumber(activePriceRules.length)}`}
-          tags={[
-            `策略 ${formatNumber(policies.length)}`,
-            `价格 ${formatNumber(priceRules.length)}`,
-          ]}
-          tone="blue"
-        />
-        <ModelSummaryItem
-          icon="chart-bar"
-          label="配额 / 用量"
-          value={`${formatNumber(activeQuotas.length)} / ${formatNumber(totalUsageTokens)}`}
-          tags={[
-            `配额 ${formatNumber(quotas.length)}`,
-            `汇总 ${formatNumber(usageSummaries.length)}`,
-          ]}
-          tone={usageSummaries.length ? "green" : "amber"}
-        />
-      </section>
-
-      <div className="vx-tenant-list-shell">
-        <section
-          className="vx-tenant-toolbar"
-          aria-label={t("table.filterAriaLabel")}
-        >
-          <ViewModeSwitch
-            value={viewMode}
-            onChange={setViewMode}
-            ariaLabel="模型展示方式"
+    <>
+      <ListPageTemplate
+        className="vx-tenant-management-page vx-model-platform-page"
+        header={
+          <PageHeader
+            icon="code"
+            eyebrow={t("header.eyebrow")}
+            title={t("header.title")}
+            description={t("header.description")}
+            secondary={<Badge>{t("header.badge")}</Badge>}
           />
-          <span className="vx-tenant-view-count">
-            {formatNumber(filteredModels.length)}
-          </span>
-          <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={t("table.searchPlaceholder")}
-            className="vx-tenant-search"
-            aria-label={t("table.searchAriaLabel")}
-          />
-          <Button variant="outline" onClick={handleReset}>
-            重置
-          </Button>
-          <div className="vx-tenant-filters">
-            <NativeSelect
-              className="vx-tenant-select"
-              value={statusFilter}
-              onChange={(event) =>
-                setStatusFilter(event.target.value as ModelStatusFilter)
-              }
-              aria-label="模型状态"
-            >
-              {statusFilters.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </NativeSelect>
-            <NativeSelect
-              className="vx-tenant-select"
-              value={sourceFilter}
-              onChange={(event) =>
-                setSourceFilter(event.target.value as ModelSourceFilter)
-              }
-              aria-label="模型来源"
-            >
-              {sourceFilters.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </NativeSelect>
-          </div>
-          <ModelBatchOperationButtons
-            canEnable={canBatchEnable}
-            canDisable={canBatchDisable}
-            canDelete={canBatchDelete}
-            submitting={submitting}
-            onEnable={() => void handleBatchEnableModels()}
-            onDisable={() => void handleBatchDisableModels()}
-            onDelete={() => void handleBatchDeleteModels()}
-          />
-          <ActionButton
-            icon="shield-check"
-            variant="outline"
-            disabled={detectingLinks || selectedModels.length === 0}
-            onClick={() => void handleDetectLinks()}
-          >
-            状态检测
-          </ActionButton>
-          <ActionButton icon="plus" onClick={openCreateModelDialog}>
-            {t("actions.addModel")}
-          </ActionButton>
-        </section>
-
-        <section
-          className="vx-tenant-directory"
-          aria-label={t("table.toolbarTitle", { count: filteredModels.length })}
-        >
-          {loading ? (
-            <header className="vx-tenant-directory__header">
-              <span>{t("empty.loadingTitle")}</span>
-            </header>
-          ) : null}
-
-          {pagedModels.length && viewMode === "list" ? (
-            <div
-              className="vx-tenant-directory-list vx-model-platform-directory-list"
-              role="region"
-              aria-label={t("table.toolbarTitle", {
-                count: filteredModels.length,
-              })}
-            >
-              <div className="vx-tenant-directory-list__header">
-                <span>
-                  <Checkbox
-                    className="vx-model-select-checkbox"
-                    checked={
-                      isPagePartiallySelected ? "indeterminate" : isPageSelected
-                    }
-                    onCheckedChange={(checked) =>
-                      togglePageSelection(checked === true)
-                    }
-                    aria-label="选择当前页模型"
-                  />
-                </span>
-                <span>序号</span>
-                <span>{t("table.columns.model")}</span>
-                <span>{t("table.columns.status")}</span>
-                <span>链路状态</span>
-                <span>来源</span>
-                <span>模型能力</span>
-                <span>操作</span>
-              </div>
-              {pagedModels.map((model, index) => (
-                <div
-                  key={model.id}
-                  className={`vx-tenant-directory-row vx-model-platform-row vx-model-platform-row--${modelTone(model)} ${selectedModelIds.has(model.id) ? "vx-model-platform-row--selected" : ""}`}
-                  title={`${model.modelName} · ${model.modelCode}`}
-                  onClick={(event) => {
-                    if (isInteractiveTarget(event.target)) return;
-                    toggleModelSelection(
-                      model.id,
-                      !selectedModelIds.has(model.id),
-                    );
-                  }}
+        }
+        summary={
+          <>
+            {" "}
+            {feedback ? (
+              <p
+                className={
+                  feedback.tone === "success"
+                    ? "vx-profile-message"
+                    : "vx-profile-error"
+                }
+              >
+                {t(feedback.key, feedback.values)}
+              </p>
+            ) : null}
+            <MetricGrid
+              loading={loading}
+              aria-label={t("summary.ariaLabel")}
+              columns={3}
+              items={[
+                {
+                  id: "models",
+                  help: t("summary.modelsHelp"),
+                  icon: "plug",
+                  label: t("summary.models"),
+                  value: formatNumber(models.length),
+                  tags: [
+                    `${t("filters.online")} ${formatNumber(onlineModels)}`,
+                    `${t("filters.private")} ${formatNumber(privateModels)}`,
+                  ],
+                },
+                {
+                  id: "active",
+                  help: t("summary.activeHelp"),
+                  icon: "play",
+                  label: t("filters.active"),
+                  value: formatNumber(activeModels),
+                  tags: ["可调度"],
+                  tone: activeModels ? "success" : "warning",
+                },
+                {
+                  id: "inactive",
+                  help: t("summary.inactiveHelp"),
+                  icon: "code",
+                  label: t("status.inactive"),
+                  value: formatNumber(inactiveModels),
+                  tags: inactiveModels ? ["需复核"] : ["无停用"],
+                  tone: inactiveModels ? "warning" : "success",
+                },
+                {
+                  id: "providers",
+                  help: "已接入的模型供应商数量。",
+                  icon: "settings",
+                  label: "Provider",
+                  value: formatNumber(providers.length),
+                  tags: [`启用 ${formatNumber(activeProviders.length)}`],
+                  tone: activeProviders.length ? "success" : "warning",
+                },
+                {
+                  id: "policies-cost",
+                  help: "启用中的模型策略数 / 启用中的价格规则数。",
+                  icon: "database",
+                  label: "策略 / 成本",
+                  value: `${formatNumber(activePolicies.length)} / ${formatNumber(activePriceRules.length)}`,
+                  tags: [
+                    `策略 ${formatNumber(policies.length)}`,
+                    `价格 ${formatNumber(priceRules.length)}`,
+                  ],
+                  tone: "brand",
+                },
+                {
+                  id: "quota-usage",
+                  help: "启用中的配额条数 / 统计期内累计消耗 token。",
+                  icon: "chart-bar",
+                  label: "配额 / 用量",
+                  value: `${formatNumber(activeQuotas.length)} / ${formatNumber(totalUsageTokens)}`,
+                  tags: [
+                    `配额 ${formatNumber(quotas.length)}`,
+                    `汇总 ${formatNumber(usageSummaries.length)}`,
+                  ],
+                  tone: usageSummaries.length ? "success" : "warning",
+                },
+              ]}
+            />
+          </>
+        }
+        filters={
+          <FilterBar
+            view={viewMode}
+            onViewChange={setViewMode}
+            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            count={formatNumber(filteredModels.length)}
+            aria-label="模型状态"
+            search={
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t("table.searchPlaceholder")}
+                className="vx-tenant-search"
+                aria-label={t("table.searchAriaLabel")}
+              />
+            }
+            onReset={handleReset}
+            actions={
+              <>
+                <ModelBatchOperationButtons
+                  canEnable={canBatchEnable}
+                  canDisable={canBatchDisable}
+                  canDelete={canBatchDelete}
+                  submitting={submitting}
+                  onEnable={() => void handleBatchEnableModels()}
+                  onDisable={() => void handleBatchDisableModels()}
+                  onDelete={() => void handleBatchDeleteModels()}
+                />
+                <ActionButton
+                  icon="shield-check"
+                  variant="outline"
+                  disabled={detectingLinks || selectedModels.length === 0}
+                  onClick={() => void handleDetectLinks()}
                 >
-                  <span className="vx-model-platform-row__select">
-                    <Checkbox
-                      className="vx-model-select-checkbox"
-                      checked={selectedModelIds.has(model.id)}
-                      onClick={(event) => event.stopPropagation()}
-                      onCheckedChange={(checked) =>
-                        toggleModelSelection(model.id, checked === true)
-                      }
-                      aria-label={`选择 ${model.modelName}`}
+                  状态检测
+                </ActionButton>
+                <ActionButton icon="plus" onClick={openCreateModelDialog}>
+                  {t("actions.addModel")}
+                </ActionButton>
+              </>
+            }
+          >
+            <div className="vx-tenant-filters">
+              <NativeSelect
+                className="vx-tenant-select"
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(event.target.value as ModelStatusFilter)
+                }
+                aria-label="模型状态"
+              >
+                {statusFilters.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </NativeSelect>
+              <NativeSelect
+                className="vx-tenant-select"
+                value={sourceFilter}
+                onChange={(event) =>
+                  setSourceFilter(event.target.value as ModelSourceFilter)
+                }
+                aria-label="模型来源"
+              >
+                {sourceFilters.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+          </FilterBar>
+        }
+        table={
+          <section
+            className="vx-tenant-directory"
+            aria-label={t("table.toolbarTitle", {
+              count: filteredModels.length,
+            })}
+          >
+            {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
+            {loading && viewMode === "cards" ? (
+              <header className="vx-tenant-directory__header">
+                <span>{t("empty.loadingTitle")}</span>
+              </header>
+            ) : null}
+
+            {viewMode === "list" ? (
+              <DataTable
+                columns={modelColumns}
+                rows={pagedModels}
+                rowKey={(model) => model.id}
+                loading={loading}
+                indexStart={pageStart + 1}
+                selectedKeys={[...selectedModelIds]}
+                onSelectionChange={(keys) => setSelectedModelIds(new Set(keys))}
+                rowActions={(model) => (
+                  <ActionMenu
+                    label={t("actions.modelMenu", { name: model.modelName })}
+                    items={[
+                      {
+                        id: "edit",
+                        label: t("actions.editModel"),
+                        icon: "edit",
+                        onSelect: () => openEditModelDialog(model),
+                      },
+                      {
+                        id: "enable",
+                        label: t("actions.enableModel"),
+                        icon: "play",
+                        disabled: submitting || model.isActive,
+                        onSelect: () => void handleToggleModel(model),
+                      },
+                      {
+                        id: "disable",
+                        label: t("actions.disableModel"),
+                        icon: "stop",
+                        disabled: submitting || !model.isActive,
+                        onSelect: () => void handleToggleModel(model),
+                      },
+                      {
+                        id: "delete",
+                        label: t("actions.deleteModel"),
+                        icon: "trash",
+                        disabled: submitting || model.isActive,
+                        danger: true,
+                        onSelect: () => void handleDeleteModel(model),
+                      },
+                    ]}
+                  />
+                )}
+                empty={
+                  loadFailed ? (
+                    /* 读取失败与"筛选没匹配上"是两回事。混成一种，本页就会在顶部
+                     横幅已经报出「模型数据读取失败」的同时，两行之下劝人去放宽
+                     筛选——同一屏自相矛盾（2026-08-07 走查）。 */
+                    <EmptyState
+                      icon="warning"
+                      title={t("empty.loadFailedTitle")}
+                      description={t("empty.loadFailedDescription")}
                     />
-                  </span>
-                  <span className="vx-tenant-directory-row__index">
-                    {formatNumber(pageStart + index + 1)}
-                  </span>
-                  <span className="vx-tenant-directory-row__tenant">
-                    <Icon
-                      name={isPrivateProvider(model.provider) ? "code" : "plug"}
-                      size={20}
-                      fallback="placeholder"
-                    />
-                    <span>
-                      <span className="vx-tenant-directory-row__title-line">
-                        <Button
-                          variant="link"
-                          className="vx-model-name-button"
-                          onClick={() => openEditModelDialog(model)}
+                  ) : (
+                    <EmptyState
+                      title={t("empty.title")}
+                      description={t("empty.description")}
+                      action={
+                        <ActionButton
+                          variant="outline"
+                          icon="x"
+                          onClick={handleReset}
                         >
-                          {model.modelName}
-                        </Button>
-                      </span>
-                      <small>{model.modelCode}</small>
-                    </span>
-                  </span>
-                  <span className="vx-model-platform-row__status">
-                    <span className="vx-tenant-directory-row__status-line">
-                      <span
-                        className={`vx-model-state-icon vx-model-state-icon--${model.isActive ? "active" : "inactive"}`}
-                        role="img"
-                        aria-label={
-                          model.isActive
-                            ? t("status.active")
-                            : t("status.inactive")
+                          {t("empty.resetFilters")}
+                        </ActionButton>
+                      }
+                    />
+                  )
+                }
+              />
+            ) : pagedModels.length ? (
+              <div
+                className="vx-tenant-directory-cards vx-model-platform-cards"
+                aria-label={t("table.toolbarTitle", {
+                  count: filteredModels.length,
+                })}
+              >
+                {pagedModels.map((model) => (
+                  <article
+                    key={model.id}
+                    className={`vx-tenant-directory-card vx-model-platform-card vx-model-platform-card--${modelTone(model)}`}
+                  >
+                    <header>
+                      <Icon
+                        name={
+                          isPrivateProvider(model.provider) ? "code" : "plug"
                         }
-                        title={
-                          model.isActive
-                            ? t("status.active")
-                            : t("status.inactive")
-                        }
-                      >
-                        <Icon
-                          name={model.isActive ? "check" : "x"}
-                          size="xs"
-                          fallback="placeholder"
+                        size={24}
+                        fallback="placeholder"
+                      />
+                      <div>
+                        <TableTitleCell
+                          title={model.modelName}
+                          description={model.modelCode}
+                          onTitleClick={() => openEditModelDialog(model)}
                         />
-                      </span>
-                      <Badge
-                        className={`vx-tenant-pill vx-tenant-pill--${model.isActive ? "active" : "disabled"}`}
-                      >
+                      </div>
+                      <ModelOperationButtons
+                        model={model}
+                        submitting={submitting}
+                        onEnable={(target) => void handleToggleModel(target)}
+                        onDisable={(target) => void handleToggleModel(target)}
+                        onDelete={(target) => void handleDeleteModel(target)}
+                      />
+                    </header>
+                    <div className="vx-tenant-directory-card__badges">
+                      {/* 厂商是类目（在线 / 私有部署），没有严重度——不给语气色。
+                          原先的蓝/绿两档背景实测从未生效：那族 CSS 排在
+                          `.vx-tenant-pill` 基类之前，同层同特异度被基类压死。 */}
+                      <Badge variant="outline">
+                        {providerLabel(model.provider)}
+                      </Badge>
+                      <StatusBadge tone={activeTone(model.isActive)}>
                         {model.isActive
                           ? t("status.active")
                           : t("status.inactive")}
-                      </Badge>
-                    </span>
-                  </span>
-                  <span className="vx-model-platform-row__link">
-                    <Badge
-                      className={`vx-tenant-pill vx-model-link-pill--${linkStatusByModelId[model.id] ?? detectModelLinkStatus(model)}`}
-                    >
-                      {(linkStatusByModelId[model.id] ??
-                        detectModelLinkStatus(model)) === "checking"
-                        ? "检测中"
-                        : (linkStatusByModelId[model.id] ??
-                              detectModelLinkStatus(model)) === "normal"
-                          ? "正常"
-                          : "异常"}
-                    </Badge>
-                  </span>
-                  <span className="vx-model-platform-row__source">
-                    <Badge
-                      className={`vx-tenant-pill vx-model-provider-pill--${isPrivateProvider(model.provider) ? "private" : "online"}`}
-                    >
-                      {providerLabel(model.provider)}
-                    </Badge>
-                    <small>{model.protocol}</small>
-                  </span>
-                  <span className="vx-model-platform-row__capabilities">
-                    <span className="vx-tenant-directory-row__tag-line">
-                      {model.capabilities.slice(0, 3).map((capability) => (
-                        <Badge
-                          key={capability}
-                          className="vx-tenant-pill vx-tenant-pill--permission"
-                        >
-                          {capability}
-                        </Badge>
-                      ))}
-                      {model.capabilities.length > 3 ? (
-                        <Badge className="vx-tenant-pill vx-tenant-pill--quota">
-                          +{model.capabilities.length - 3}
-                        </Badge>
-                      ) : null}
-                    </span>
-                  </span>
-                  <div
-                    className="vx-tenant-actions"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <ActionMenu
-                      label={t("actions.modelMenu", { name: model.modelName })}
-                      triggerClassName="vx-tenant-actions__trigger"
-                      triggerProps={{
-                        title: t("actions.modelMenu", {
-                          name: model.modelName,
-                        }),
-                      }}
-                      items={[
-                        {
-                          id: "edit",
-                          label: t("actions.editModel"),
-                          icon: (
-                            <Icon
-                              name="edit"
-                              size="xs"
-                              fallback="placeholder"
-                            />
-                          ),
-                          onSelect: () => openEditModelDialog(model),
-                        },
-                        {
-                          id: "enable",
-                          label: t("actions.enableModel"),
-                          icon: (
-                            <Icon
-                              name="play"
-                              size={16}
-                              weight="fill"
-                              fallback="placeholder"
-                            />
-                          ),
-                          disabled: submitting || model.isActive,
-                          onSelect: () => void handleToggleModel(model),
-                        },
-                        {
-                          id: "disable",
-                          label: t("actions.disableModel"),
-                          icon: (
-                            <Icon
-                              name="stop"
-                              size={16}
-                              weight="fill"
-                              fallback="placeholder"
-                            />
-                          ),
-                          disabled: submitting || !model.isActive,
-                          onSelect: () => void handleToggleModel(model),
-                        },
-                        {
-                          id: "delete",
-                          label: t("actions.deleteModel"),
-                          icon: (
-                            <Icon
-                              name="trash"
-                              size={16}
-                              fallback="placeholder"
-                            />
-                          ),
-                          disabled: submitting || model.isActive,
-                          danger: true,
-                          onSelect: () => void handleDeleteModel(model),
-                        },
-                      ]}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : pagedModels.length ? (
-            <div
-              className="vx-tenant-directory-cards vx-model-platform-cards"
-              aria-label={t("table.toolbarTitle", {
-                count: filteredModels.length,
-              })}
-            >
-              {pagedModels.map((model) => (
-                <article
-                  key={model.id}
-                  className={`vx-tenant-directory-card vx-model-platform-card vx-model-platform-card--${modelTone(model)}`}
-                >
-                  <header>
-                    <Icon
-                      name={isPrivateProvider(model.provider) ? "code" : "plug"}
-                      size={24}
-                      fallback="placeholder"
-                    />
-                    <div>
-                      <Button
-                        variant="link"
-                        className="vx-model-name-button"
-                        onClick={() => openEditModelDialog(model)}
-                      >
-                        {model.modelName}
-                      </Button>
-                      <span>{model.modelCode}</span>
+                      </StatusBadge>
                     </div>
-                    <ModelOperationButtons
-                      model={model}
-                      submitting={submitting}
-                      onEnable={(target) => void handleToggleModel(target)}
-                      onDisable={(target) => void handleToggleModel(target)}
-                      onDelete={(target) => void handleDeleteModel(target)}
-                    />
-                  </header>
-                  <div className="vx-tenant-directory-card__badges">
-                    <Badge
-                      className={`vx-tenant-pill vx-model-provider-pill--${isPrivateProvider(model.provider) ? "private" : "online"}`}
+                    <div className="vx-tenant-directory-card__metrics">
+                      <span>
+                        <b>{model.capabilities.length}</b>
+                        <small>{t("table.columns.capabilities")}</small>
+                      </span>
+                      <span>
+                        <b>
+                          {isPrivateProvider(model.provider)
+                            ? t("filters.private")
+                            : t("filters.online")}
+                        </b>
+                        <small>{t("table.columns.provider")}</small>
+                      </span>
+                      <span>
+                        <b>{model.protocol}</b>
+                        <small>{t("dialogs.fields.protocol")}</small>
+                      </span>
+                    </div>
+                    <footer>
+                      <span>
+                        {model.capabilities.slice(0, 2).join(", ") || "-"}
+                      </span>
+                      <strong>{model.keyReference?.name || "-"}</strong>
+                    </footer>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <section className="vx-tenant-empty">
+                <EmptyState
+                  title={loading ? t("empty.loadingTitle") : t("empty.title")}
+                  description={
+                    loading
+                      ? t("empty.loadingDescription")
+                      : t("empty.description")
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
                     >
-                      {providerLabel(model.provider)}
-                    </Badge>
-                    <Badge
-                      className={`vx-tenant-pill vx-tenant-pill--${model.isActive ? "active" : "disabled"}`}
-                    >
-                      {model.isActive
-                        ? t("status.active")
-                        : t("status.inactive")}
-                    </Badge>
-                  </div>
-                  <div className="vx-tenant-directory-card__metrics">
-                    <span>
-                      <b>{model.capabilities.length}</b>
-                      <small>{t("table.columns.capabilities")}</small>
-                    </span>
-                    <span>
-                      <b>
-                        {isPrivateProvider(model.provider)
-                          ? t("filters.private")
-                          : t("filters.online")}
-                      </b>
-                      <small>{t("table.columns.provider")}</small>
-                    </span>
-                    <span>
-                      <b>{model.protocol}</b>
-                      <small>{t("dialogs.fields.protocol")}</small>
-                    </span>
-                  </div>
-                  <footer>
-                    <span>
-                      {model.capabilities.slice(0, 2).join(", ") || "-"}
-                    </span>
-                    <strong>{model.keyReference?.name || "-"}</strong>
-                  </footer>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <section className="vx-tenant-empty">
-              <EmptyState
-                title={loading ? t("empty.loadingTitle") : t("empty.title")}
-                description={
-                  loading
-                    ? t("empty.loadingDescription")
-                    : t("empty.description")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {t("empty.resetFilters")}
-                  </ActionButton>
-                }
-              />
-            </section>
-          )}
-
-          <footer className="vx-tenant-pagination">
-            <span className="vx-tenant-pagination__total">
-              {t("pagination.summary", {
-                page: safeCurrentPage,
-                totalPages,
-                total: filteredModels.length,
-              })}
-            </span>
-            <div className="vx-tenant-pagination__actions">
-              <AdminPageSizePicker
-                value={pageSize}
-                onChange={setPageSize}
-                activeVariant="ghost"
-                inactiveVariant="ghost"
-                aria-label="page size"
-                optionAriaLabel={(option) => `Page size ${option}`}
-              />
-              <Pagination
-                className="vx-tenant-pagination__pager"
-                page={safeCurrentPage}
-                pageCount={totalPages}
-                onPageChange={setCurrentPage}
-              />
-            </div>
-          </footer>
-        </section>
-      </div>
+                      {t("empty.resetFilters")}
+                    </ActionButton>
+                  }
+                />
+              </section>
+            )}
+          </section>
+        }
+        footer={
+          <ListPagination
+            currentPage={safeCurrentPage}
+            pageCount={totalPages}
+            // 这一页的计数语走 i18n（本页整体已接 useConsoleTranslations），
+            // 不是 DS 那句固定中文。
+            countLabel={t("pagination.summary", {
+              page: safeCurrentPage,
+              totalPages,
+              total: filteredModels.length,
+            })}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
+            onPageChange={setCurrentPage}
+          />
+        }
+      />
 
       <div className="vx-tenant-list-shell">
         <section className="vx-tenant-toolbar" aria-label="模型厂商管理">
@@ -1574,70 +1456,39 @@ export function ModelPlatformPage() {
                   <header>
                     <Icon name="settings" size={24} fallback="placeholder" />
                     <div>
-                      <Button
-                        variant="link"
-                        className="vx-model-name-button"
-                        onClick={() => openEditProviderDialog(provider)}
-                      >
-                        {provider.providerName}
-                      </Button>
-                      <span>{provider.providerCode}</span>
+                      <TableTitleCell
+                        title={provider.providerName}
+                        description={provider.providerCode}
+                        onTitleClick={() => openEditProviderDialog(provider)}
+                      />
                     </div>
                     <ActionMenu
                       label={`${provider.providerName} 操作`}
-                      triggerClassName="vx-tenant-actions__trigger"
-                      triggerProps={{ title: `${provider.providerName} 操作` }}
                       items={[
                         {
                           id: "edit",
                           label: "编辑",
-                          icon: (
-                            <Icon
-                              name="edit"
-                              size="xs"
-                              fallback="placeholder"
-                            />
-                          ),
+                          icon: "edit",
                           onSelect: () => openEditProviderDialog(provider),
                         },
                         {
                           id: "enable",
                           label: "启用",
-                          icon: (
-                            <Icon
-                              name="play"
-                              size={16}
-                              weight="fill"
-                              fallback="placeholder"
-                            />
-                          ),
+                          icon: "play",
                           disabled: catalogBusy || provider.isActive,
                           onSelect: () => void toggleProvider(provider, true),
                         },
                         {
                           id: "disable",
                           label: "停用",
-                          icon: (
-                            <Icon
-                              name="stop"
-                              size={16}
-                              weight="fill"
-                              fallback="placeholder"
-                            />
-                          ),
+                          icon: "stop",
                           disabled: catalogBusy || !provider.isActive,
                           onSelect: () => void toggleProvider(provider, false),
                         },
                         {
                           id: "delete",
                           label: "删除",
-                          icon: (
-                            <Icon
-                              name="trash"
-                              size={16}
-                              fallback="placeholder"
-                            />
-                          ),
+                          icon: "trash",
                           disabled: catalogBusy || provider.isActive,
                           danger: true,
                           onSelect: () => setPendingDeleteProvider(provider),
@@ -1646,16 +1497,12 @@ export function ModelPlatformPage() {
                     />
                   </header>
                   <div className="vx-tenant-directory-card__badges">
-                    <Badge className="vx-tenant-pill vx-tenant-pill--permission">
-                      {provider.providerType}
-                    </Badge>
-                    <Badge
-                      className={`vx-tenant-pill vx-tenant-pill--${provider.isActive ? "active" : "disabled"}`}
-                    >
+                    <Badge>{provider.providerType}</Badge>
+                    <StatusBadge tone={activeTone(provider.isActive)}>
                       {provider.isActive
                         ? t("status.active")
                         : t("status.inactive")}
-                    </Badge>
+                    </StatusBadge>
                   </div>
                 </article>
               ))}
@@ -1699,59 +1546,32 @@ export function ModelPlatformPage() {
                     <header>
                       <Icon name="database" size={24} fallback="placeholder" />
                       <div>
-                        <Button
-                          variant="link"
-                          className="vx-model-name-button"
-                          onClick={() => openEditPriceRuleDialog(rule)}
-                        >
-                          {ruleModel?.modelName ?? rule.modelId}
-                        </Button>
-                        <span>
-                          {rule.billingMode} · {rule.currency}
-                        </span>
+                        <TableTitleCell
+                          title={ruleModel?.modelName ?? rule.modelId}
+                          description={`${rule.billingMode} · ${rule.currency}`}
+                          onTitleClick={() => openEditPriceRuleDialog(rule)}
+                        />
                       </div>
                       <ActionMenu
                         label={`${ruleModel?.modelName ?? rule.modelId} 计价规则操作`}
-                        triggerClassName="vx-tenant-actions__trigger"
-                        triggerProps={{ title: "计价规则操作" }}
                         items={[
                           {
                             id: "edit",
                             label: "编辑",
-                            icon: (
-                              <Icon
-                                name="edit"
-                                size="xs"
-                                fallback="placeholder"
-                              />
-                            ),
+                            icon: "edit",
                             onSelect: () => openEditPriceRuleDialog(rule),
                           },
                           {
                             id: "enable",
                             label: "启用",
-                            icon: (
-                              <Icon
-                                name="play"
-                                size={16}
-                                weight="fill"
-                                fallback="placeholder"
-                              />
-                            ),
+                            icon: "play",
                             disabled: catalogBusy || rule.isActive,
                             onSelect: () => void togglePriceRule(rule, true),
                           },
                           {
                             id: "disable",
                             label: "停用",
-                            icon: (
-                              <Icon
-                                name="stop"
-                                size={16}
-                                weight="fill"
-                                fallback="placeholder"
-                              />
-                            ),
+                            icon: "stop",
                             disabled: catalogBusy || !rule.isActive,
                             onSelect: () => void togglePriceRule(rule, false),
                           },
@@ -1759,16 +1579,12 @@ export function ModelPlatformPage() {
                       />
                     </header>
                     <div className="vx-tenant-directory-card__badges">
-                      <Badge className="vx-tenant-pill vx-tenant-pill--permission">
-                        {rule.currency}
-                      </Badge>
-                      <Badge
-                        className={`vx-tenant-pill vx-tenant-pill--${rule.isActive ? "active" : "disabled"}`}
-                      >
+                      <Badge>{rule.currency}</Badge>
+                      <StatusBadge tone={activeTone(rule.isActive)}>
                         {rule.isActive
                           ? t("status.active")
                           : t("status.inactive")}
-                      </Badge>
+                      </StatusBadge>
                     </div>
                     <div className="vx-tenant-directory-card__metrics">
                       <span>
@@ -1806,7 +1622,6 @@ export function ModelPlatformPage() {
           submitLabel={t("dialogs.actions.save")}
           cancelLabel={t("dialogs.actions.cancel")}
           submitting={submitting}
-          contentClassName="max-w-3xl"
           onOpenChange={(open) => {
             if (!open) setDialogMode(null);
           }}
@@ -1941,7 +1756,6 @@ export function ModelPlatformPage() {
           submitLabel={t("dialogs.actions.save")}
           cancelLabel={t("dialogs.actions.cancel")}
           submitting={catalogBusy}
-          contentClassName="max-w-3xl"
           onOpenChange={(open) => {
             if (!open) setProviderDialog(null);
           }}
@@ -2063,7 +1877,6 @@ export function ModelPlatformPage() {
           submitLabel={t("dialogs.actions.save")}
           cancelLabel={t("dialogs.actions.cancel")}
           submitting={catalogBusy}
-          contentClassName="max-w-3xl"
           onOpenChange={(open) => {
             if (!open) setPriceRuleDialog(null);
           }}
@@ -2208,7 +2021,7 @@ export function ModelPlatformPage() {
           title="删除厂商"
           description={`确认删除「${pendingDeleteProvider.providerName}」？此操作不可撤销。`}
           submitLabel="删除"
-          submitVariant="destructive"
+          danger
           submitting={catalogBusy}
           onOpenChange={(open) => {
             if (!open) setPendingDeleteProvider(null);
@@ -2219,6 +2032,6 @@ export function ModelPlatformPage() {
           }}
         />
       ) : null}
-    </div>
+    </>
   );
 }

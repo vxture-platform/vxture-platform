@@ -1,0 +1,27 @@
+/**
+ * primitive/radius-primitive.css - T1 原子层 · 圆角。
+ * @package @vxture/design-tokens
+ * @layer Presentation
+ * @category styles
+ * @author AI-Generated
+ * @date 2026-07-31
+ *
+ * ⚠ 本文件由脚本生成，请勿手工编辑。
+ *   生成：node scripts/design-tokens/generate-primitive.mjs
+ *
+ * T1 是 Tailwind v4 theme 的镜像，取值与之逐项一致；偏离登记在
+ * scripts/design-tokens/primitive-policy.mjs。工具类族：rounded-*
+ */
+
+:root {
+  /* 圆角。 */
+  --vx-radius-xs: 0.125rem;
+  --vx-radius-sm: 0.25rem;
+  --vx-radius-md: 0.375rem;
+  --vx-radius-lg: 0.5rem;
+  --vx-radius-xl: 0.75rem;
+  --vx-radius-2xl: 1rem;
+  --vx-radius-3xl: 1.5rem;
+  --vx-radius-4xl: 2rem;
+  --vx-radius: 0.25rem;
+}

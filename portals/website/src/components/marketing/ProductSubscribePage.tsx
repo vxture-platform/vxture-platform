@@ -85,12 +85,14 @@ function buildCompareColumns(
   return [
     {
       id: "feature",
+      /* 宽度落在内容上而不是列上：DataTable 删掉了列级 className（列的对齐由
+       * `align` 表达，其余交给单元格内容）。`block w-56` 让这一列的内容撑出固定
+       * 宽度，效果与原先的列宽一致。 */
       header: (
-        <span className="text-xs uppercase tracking-wide text-vx-gray-500 dark:text-vx-gray-400">
+        <span className="block w-56 text-xs uppercase tracking-wide text-vx-gray-500 dark:text-vx-gray-400">
           {featureHeader}
         </span>
       ),
-      className: "w-56",
       cell: (row) =>
         row.kind === "group" ? (
           <span className="text-xs font-semibold uppercase tracking-wide text-vx-brand-600 dark:text-vx-brand-300">
@@ -106,15 +108,16 @@ function buildCompareColumns(
       (plan, planIndex): DataTableColumn<CompareTableRow> => ({
         id: plan.tier,
         align: "center",
-        ...(plan.highlight
-          ? { headerClassName: HIGHLIGHT_COL, cellClassName: HIGHLIGHT_COL }
-          : {}),
+        /* 推荐列的底色画在**内容**上。原先走 headerClassName / cellClassName，
+         * 那两个口子随 DataTable 收窄一起没了——但它们藏在条件展开里，TypeScript
+         * 不对展开做多余属性检查，于是编译通过、样式静默失效：推荐列一直没有底色，
+         * 也没有任何东西报错（2026-08-05 排查 #24 时发现）。 */
         header: (
           <span
             className={
               plan.highlight
-                ? "font-bold text-vx-brand-600 dark:text-vx-brand-300"
-                : "text-vx-gray-900 dark:text-vx-white"
+                ? `block ${HIGHLIGHT_COL} font-bold text-vx-brand-600 dark:text-vx-brand-300`
+                : "block text-vx-gray-900 dark:text-vx-white"
             }
           >
             {plan.name}
@@ -122,7 +125,11 @@ function buildCompareColumns(
         ),
         cell: (row) =>
           row.kind === "group" ? null : (
-            <ComparisonCell value={row.values[planIndex] ?? false} />
+            <span
+              className={plan.highlight ? `block ${HIGHLIGHT_COL}` : undefined}
+            >
+              <ComparisonCell value={row.values[planIndex] ?? false} />
+            </span>
           ),
       }),
     ),
@@ -211,7 +218,7 @@ export default function ProductSubscribePage() {
                     <Button
                       key={c}
                       variant={cycle === c ? "default" : "ghost"}
-                      size="sm"
+                      size="md"
                       onClick={() => setCycle(c)}
                       className="rounded-full px-5"
                     >
@@ -368,9 +375,9 @@ export default function ProductSubscribePage() {
               rowKey={(row) =>
                 row.kind === "group" ? `group:${row.title}` : row.label
               }
-              getRowClassName={(row) =>
-                row.kind === "group" ? "bg-vx-surface-muted" : undefined
-              }
+              /* 分组行不再靠底色区分：DataTable 删掉了 getRowClassName（按行改
+               * 样式等于把行的视觉状态交回调用方）。分组行的文字本来就是
+               * 品牌色 + 大写 + 加粗，与功能行明显不同，去掉底色仍分得清。 */
             />
           </div>
         </section>

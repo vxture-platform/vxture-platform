@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { IDLE_MS, startIdleWatcher } from "@vxture/core-identity-sdk";
 import {
   buildLogoutUrl,
   buildRpLoginUrl,
@@ -254,6 +255,20 @@ export function ConsoleSessionProvider({
     // unified post-logout page. The page unloads, so no local commit is needed.
     window.location.assign(buildLogoutUrl());
   }, []);
+
+  /**
+   * 闲置钟。到点**直接登出，不弹窗询问**——"要不要继续"是消费级网银的 UX 惯例
+   * 而非安全要求（NIST 800-63B 未要求），对正在操作的人定期打断是荒谬的
+   * （owner 2026-08-07 判，见 workplans §二十三）。判据由真实交互事件给出，
+   * 不是请求频率：读长表格、填长表单的人一个请求都不发，但他在场。
+   */
+  useEffect(() => {
+    return startIdleWatcher({
+      idleMs: IDLE_MS.customer,
+      storageKey: "vx:console:last-activity",
+      onIdle: signOut,
+    });
+  }, [signOut]);
 
   const switchTenant = useCallback(
     async (tenantId: string) => {

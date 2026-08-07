@@ -57,7 +57,10 @@ const CLIENT_ID = "opera";
             .filter(Boolean),
           // Operator surface: short RP session (default 12h), not the 30d
           // customer default — small audience, high privilege.
-          sessionTtlSec: Number(process.env.RP_SESSION_TTL ?? 43200),
+          // 会话由两个时钟界定：门户的闲置钟（identity-sdk/idle.ts）与 IdP 的总时效
+          // （24h）。RP 会话没有独立于这两者之外的第三个寿命——原先那些 30 天 / 12 小时
+          // 的值和它们所代表的登录态都对不上（见 workplans §二十三）。
+          sessionTtlSec: Number(process.env.RP_SESSION_TTL ?? 86400),
         };
         return {
           config: cfg,

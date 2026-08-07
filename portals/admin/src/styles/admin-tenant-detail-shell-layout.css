@@ -4,8 +4,8 @@
 .vx-tenant-detail {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-15r);
-  padding: var(--vx-admin-management-space-2r);
+  gap: var(--space-lg);
+  padding: var(--space-xl);
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-white) 58%, transparent);
 }
@@ -17,14 +17,14 @@
 
 .vx-tenant-detail-summary__toggle {
   position: absolute;
-  top: var(--vx-admin-management-space-075r);
-  right: var(--vx-admin-management-space-075r);
+  top: var(--space-sm);
+  right: var(--space-sm);
   z-index: 1;
 }
 
 .vx-tenant-detail-summary--collapsed {
   gap: 0;
-  padding-block: var(--vx-admin-management-space-075r);
+  padding-block: var(--space-sm);
 }
 
 .vx-tenant-detail {
@@ -38,5 +38,5 @@
 .vx-tenant-detail__form {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-15r);
+  gap: var(--space-lg);
 }

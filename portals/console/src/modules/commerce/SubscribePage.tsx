@@ -17,7 +17,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Badge, Button, PageHeader } from "@vxture/design-system";
+import {
+  Banner,
+  Button,
+  Card,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  DetailList,
+  DetailRow,
+  EmptyState,
+  SegmentedControl,
+  StatusBadge,
+  ViewHeader,
+  ViewLayout,
+} from "@vxture/design-system";
 import { useRouter } from "@/lib/i18n/navigation";
 import { PageSection } from "@/layout/shell";
 import {
@@ -109,9 +124,9 @@ export function SubscribePage() {
 
   if (loading || !ctx) {
     return (
-      <div className="vx-page-stack">
-        <p className="vx-empty-hint">{t("loading")}</p>
-      </div>
+      <ViewLayout>
+        <EmptyState title={t("loading")} />
+      </ViewLayout>
     );
   }
 
@@ -127,35 +142,28 @@ export function SubscribePage() {
   // ── 待支付订单：直接引导进付款页（product_321 §6.1，占位面板退役）──────────
   if (pendingOrder) {
     return (
-      <div className="vx-page-stack">
-        <PageHeader
-          eyebrow={product.name}
+      <ViewLayout>
+        <ViewHeader
+          icon="chart-bar"
           title={t("pending.title")}
           description={t("pending.awaiting")}
         />
-        <PageSection title={t("pending.title")}>
-          <div className="vx-subscription-panel">
-            <div className="vx-detail-grid">
-              <div>
-                <span>{t("pending.orderNo")}</span>
-                <strong>{pendingOrder.orderNo}</strong>
-              </div>
-              <div>
-                <span>{t("plansSection")}</span>
-                <strong>
-                  {pendingOrder.planCode}
-                  {pendingOrder.tier ? ` · ${pendingOrder.tier}` : ""}
-                </strong>
-              </div>
-              <div>
-                <span>{t("pending.amount")}</span>
-                <strong>
-                  {formatMoney(pendingOrder.amount, pendingOrder.currency)} /{" "}
-                  {t(`cycle.${pendingOrder.cycleUnit}`)}
-                </strong>
-              </div>
-            </div>
-            <div className="vx-detail-actions">
+        <PageSection icon="clock" level={2} title={t("pending.title")}>
+          <div className="flex flex-col gap-md">
+            <DetailList>
+              <DetailRow label={t("pending.orderNo")}>
+                {pendingOrder.orderNo}
+              </DetailRow>
+              <DetailRow label={t("plansSection")}>
+                {pendingOrder.planCode}
+                {pendingOrder.tier ? ` · ${pendingOrder.tier}` : ""}
+              </DetailRow>
+              <DetailRow label={t("pending.amount")}>
+                {formatMoney(pendingOrder.amount, pendingOrder.currency)} /{" "}
+                {t(`cycle.${pendingOrder.cycleUnit}`)}
+              </DetailRow>
+            </DetailList>
+            <div className="flex flex-wrap items-center gap-sm">
               <Button
                 onClick={() =>
                   router.push(`/subscribe/pay/${pendingOrder.orderId}`)
@@ -169,8 +177,8 @@ export function SubscribePage() {
             </div>
           </div>
         </PageSection>
-        {error ? <p className="vx-empty-hint">{error}</p> : null}
-      </div>
+        {error ? <Banner tone="danger" title={error} /> : null}
+      </ViewLayout>
     );
   }
 
@@ -232,86 +240,86 @@ export function SubscribePage() {
           : t("actions.renew");
 
   return (
-    <div className="vx-page-stack">
-      <PageHeader
-        eyebrow={product.name}
+    <ViewLayout>
+      <ViewHeader
+        icon="chart-bar"
         title={t(`title.${intent}`)}
         description={t(`hint.${stateKey}`)}
       />
 
-      <PageSection title={t("currentSection")}>
+      <PageSection
+        icon="package"
+        level={2}
+        title={t("currentSection")}
+        action={
+          current ? (
+            <StatusBadge tone={isLive ? "success" : "neutral"}>
+              {STATUS_KEYS.has(current.status)
+                ? t(`status.${current.status}`)
+                : current.status}
+            </StatusBadge>
+          ) : undefined
+        }
+      >
         {current ? (
-          <div className="vx-subscription-panel">
-            <div className="vx-stack-sm">
-              <div className="vx-inline-between">
-                <strong>{current.planCode}</strong>
-                <Badge className={isLive ? "vx-badge-positive" : undefined}>
-                  {STATUS_KEYS.has(current.status)
-                    ? t(`status.${current.status}`)
-                    : current.status}
-                </Badge>
-              </div>
-              <div className="vx-detail-grid">
-                <div>
-                  <span>{t("fields.tier")}</span>
-                  <strong>{current.tier ?? "—"}</strong>
-                </div>
-                <div>
-                  <span>
-                    {current.status === "trialing"
-                      ? t("fields.trialEndsAt")
-                      : t("fields.periodEnd")}
-                  </span>
-                  <strong>
-                    {formatDate(
-                      current.status === "trialing"
-                        ? current.trialEndAt
-                        : current.endAt,
-                    )}
-                  </strong>
-                </div>
-                <div>
-                  <span>{t("fields.autoRenew")}</span>
-                  <strong>
-                    {current.autoRenew
-                      ? t("fields.autoRenewOn")
-                      : t("fields.autoRenewOff")}
-                  </strong>
-                </div>
-              </div>
-            </div>
+          <div className="flex flex-col gap-md">
+            <strong className="text-title-sm text-foreground">
+              {current.planCode}
+            </strong>
+            <DetailList>
+              <DetailRow label={t("fields.tier")}>
+                {current.tier ?? "—"}
+              </DetailRow>
+              <DetailRow
+                label={
+                  current.status === "trialing"
+                    ? t("fields.trialEndsAt")
+                    : t("fields.periodEnd")
+                }
+              >
+                {formatDate(
+                  current.status === "trialing"
+                    ? current.trialEndAt
+                    : current.endAt,
+                )}
+              </DetailRow>
+              <DetailRow label={t("fields.autoRenew")}>
+                {current.autoRenew
+                  ? t("fields.autoRenewOn")
+                  : t("fields.autoRenewOff")}
+              </DetailRow>
+            </DetailList>
           </div>
         ) : (
-          <p className="vx-empty-hint">{t("noSubscription")}</p>
+          <EmptyState title={t("noSubscription")} />
         )}
       </PageSection>
 
       {intent === "addon" ? (
-        <PageSection title={t("addonSection")} tone="muted">
-          <p className="vx-empty-hint">
-            {metric ? t("addonNoticeMetric", { metric }) : t("addonNotice")}
-          </p>
+        <PageSection icon="puzzle" level={2} title={t("addonSection")}>
+          <EmptyState
+            title={
+              metric ? t("addonNoticeMetric", { metric }) : t("addonNotice")
+            }
+          />
         </PageSection>
       ) : null}
 
-      <PageSection title={t("plansSection")}>
-        <div className="vx-stack-sm">
-          <div className="vx-detail-actions">
-            {CYCLES.map((c) => (
-              <Button
-                key={c}
-                variant={cycle === c ? "default" : "outline"}
-                onClick={() => setCycle(c)}
-              >
-                {t(`cycleToggle.${c === "month" ? "monthly" : "yearly"}`)}
-              </Button>
-            ))}
-          </div>
+      <PageSection icon="chart-bar" level={2} title={t("plansSection")}>
+        <div className="flex flex-col gap-md">
+          <SegmentedControl
+            value={cycle}
+            onChange={(next) => setCycle(next)}
+            items={CYCLES.map((c) => ({
+              value: c,
+              label: t(`cycleToggle.${c === "month" ? "monthly" : "yearly"}`),
+            }))}
+          />
 
           {plans.length === 0 ? (
-            <p className="vx-empty-hint">{t("noPlans")}</p>
+            <EmptyState title={t("noPlans")} />
           ) : (
-            <div className="vx-stack-sm">
+            <div className="grid gap-md sm:grid-cols-2 xl:grid-cols-3">
               {plans.map((plan) => {
                 const isCurrent =
                   current !== null &&
@@ -323,63 +331,62 @@ export function SubscribePage() {
                 const isFree = price
                   ? Number.parseFloat(price.price) <= 0
                   : false;
+                const action = isCurrent ? null : isEnterprise ? (
+                  <Button variant="outline" onClick={contactSales}>
+                    {t("actions.contactSales")}
+                  </Button>
+                ) : price ? (
+                  <Button
+                    disabled={busy !== null}
+                    onClick={() => void onSelect(plan)}
+                  >
+                    {busy === plan.planVersionId
+                      ? t("actions.processing")
+                      : planButtonLabel(isFree)}
+                  </Button>
+                ) : null;
                 return (
-                  <div key={plan.planId} className="vx-subscription-panel">
-                    <div className="vx-inline-between">
-                      <div className="vx-stack-sm">
-                        <div className="vx-inline-between">
-                          <strong>{plan.planName}</strong>
-                          <Badge>{plan.tier}</Badge>
-                          {isCurrent ? (
-                            <Badge>{t("badges.current")}</Badge>
-                          ) : null}
-                          {isTarget && !isCurrent ? (
-                            <Badge className="vx-badge-positive">
-                              {t("badges.recommended")}
-                            </Badge>
-                          ) : null}
-                        </div>
-                        <span>
-                          {isEnterprise
-                            ? t("actions.contactSales")
-                            : price
-                              ? `${formatMoney(price.price, price.currency)} / ${t(
-                                  `cycle.${price.cycleUnit}`,
-                                )}`
-                              : t("pricePending")}
-                        </span>
-                      </div>
-                      <div className="vx-detail-actions">
-                        {isCurrent ? null : isEnterprise ? (
-                          <Button variant="outline" onClick={contactSales}>
-                            {t("actions.contactSales")}
-                          </Button>
-                        ) : price ? (
-                          <Button
-                            disabled={busy !== null}
-                            onClick={() => void onSelect(plan)}
-                          >
-                            {busy === plan.planVersionId
-                              ? t("actions.processing")
-                              : planButtonLabel(isFree)}
-                          </Button>
+                  <Card key={plan.planId} surface="soft">
+                    <CardHeader>
+                      <div className="flex flex-wrap items-center gap-xs">
+                        <CardTitle>{plan.planName}</CardTitle>
+                        <StatusBadge>{plan.tier}</StatusBadge>
+                        {isCurrent ? (
+                          <StatusBadge tone="info">
+                            {t("badges.current")}
+                          </StatusBadge>
+                        ) : null}
+                        {isTarget && !isCurrent ? (
+                          <StatusBadge tone="success">
+                            {t("badges.recommended")}
+                          </StatusBadge>
                         ) : null}
                       </div>
-                    </div>
-                  </div>
+                      <CardDescription>
+                        {isEnterprise
+                          ? t("actions.contactSales")
+                          : price
+                            ? `${formatMoney(price.price, price.currency)} / ${t(
+                                `cycle.${price.cycleUnit}`,
+                              )}`
+                            : t("pricePending")}
+                      </CardDescription>
+                    </CardHeader>
+                    {action ? <CardFooter>{action}</CardFooter> : null}
+                  </Card>
                 );
               })}
             </div>
           )}
-          {error ? <p className="vx-empty-hint">{error}</p> : null}
+          {error ? <Banner tone="danger" title={error} /> : null}
         </div>
       </PageSection>
 
-      <PageSection title={t("moreSection")} tone="muted">
+      <PageSection icon="dots-three" level={2} title={t("moreSection")}>
         <Button variant="outline" onClick={() => router.push("/subscription")}>
           {t("actions.backToSubscription")}
         </Button>
       </PageSection>
-    </div>
+    </ViewLayout>
   );
 }

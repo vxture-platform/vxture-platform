@@ -32,7 +32,7 @@
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: var(--vx-admin-permission-space-05r);
+  gap: var(--space-xs);
   flex: 0 0 auto;
   flex-wrap: nowrap;
   font-family: inherit;
@@ -48,9 +48,9 @@
   display: grid;
   grid-template-columns: var(--vx-admin-permission-track-175r) var(--vx-admin-permission-track-175r) minmax(0, 1fr);
   align-items: center;
-  gap: var(--vx-admin-permission-space-05r);
-  padding: var(--vx-admin-permission-space-08125r) var(--vx-admin-permission-space-0875r) var(--vx-admin-permission-space-025r);
-  padding-left: calc(var(--vx-admin-permission-space-0875r) + var(--permission-depth, 0) * var(--vx-admin-permission-space-15r));
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md) var(--space-2xs);
+  padding-left: calc(var(--space-md) + var(--permission-depth, 0) * var(--space-lg));
 }
 
 .vx-admin-permission-tree-node__toggle {
@@ -83,7 +83,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-permission-space-0625r);
+  gap: var(--space-sm);
   flex-wrap: nowrap;
   overflow: hidden;
 }

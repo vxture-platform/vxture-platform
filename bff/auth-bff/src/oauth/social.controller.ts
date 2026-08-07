@@ -126,19 +126,19 @@ export class SocialController {
   /** Set the tenant central-session cookie (shares .vxture.com; mirrors oidc.router). */
   private setSessionCookie(
     res: Response,
-    completion: { sid: string; realm: string; sessionIdleTtl: number },
+    completion: { sid: string; realm: string; sessionMaxAge: number },
   ): void {
     const cookie = buildSidCookie({
       sid: completion.sid,
       realm: completion.realm === "workforce" ? "workforce" : "customer",
-      maxAgeSeconds: completion.sessionIdleTtl,
+      maxAgeSeconds: completion.sessionMaxAge,
       platformCookieDomain: this.config.platform.COOKIE_DOMAIN_PLATFORM ?? null,
     });
     res.cookie(cookie.name, cookie.value, cookie.options);
     // Tenant realm: mirror oidc.router — set the JS-readable login-state hint.
     if (completion.realm !== "workforce") {
       const hint = buildHintCookie({
-        maxAgeSeconds: completion.sessionIdleTtl,
+        maxAgeSeconds: completion.sessionMaxAge,
         platformCookieDomain:
           this.config.platform.COOKIE_DOMAIN_PLATFORM ?? null,
       });

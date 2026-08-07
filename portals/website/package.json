@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@types/uuid": "^11.0.0",
+    "@vxture/core-identity-sdk": "workspace:*",
     "@vxture/core-locale": "workspace:*",
     "@vxture/design-system": "workspace:*",
     "@vxture/platform-browser": "workspace:*",

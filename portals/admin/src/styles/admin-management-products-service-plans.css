@@ -1,6 +1,4 @@
 /* Product capability directory interactive affordance styles. */
-
-.vx-tenant-directory-row[role="button"],
 .vx-tenant-directory-card[role="button"] {
   cursor: pointer;
 }
@@ -11,8 +9,16 @@
 }
 
 .vx-service-plan-search {
-  width: clamp(var(--vx-admin-management-size-13r), 16vw, var(--vx-admin-management-size-20r));
-  flex-basis: clamp(var(--vx-admin-management-size-13r), 16vw, var(--vx-admin-management-size-20r));
+  width: clamp(
+    var(--vx-admin-management-size-13r),
+    16vw,
+    var(--vx-admin-management-size-20r)
+  );
+  flex-basis: clamp(
+    var(--vx-admin-management-size-13r),
+    16vw,
+    var(--vx-admin-management-size-20r)
+  );
 }
 
 .vx-service-plan-select--industry {
@@ -22,23 +28,25 @@
 .vx-service-plan-directory {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
 }
 
 .vx-service-plan-groups {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-15r);
-  padding-top: var(--vx-admin-management-space-025r);
-  border-top: var(--vx-admin-management-line-width-1p) solid color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
+  gap: var(--space-lg);
+  padding-top: var(--space-2xs);
+  border-top: var(--vx-admin-management-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
 }
 
 .vx-service-plan-group {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-1r);
-  padding: var(--vx-admin-management-space-125r) 0 0;
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed var(--vx-color-auth-border);
+  gap: var(--space-md);
+  padding: var(--space-md) 0 0;
+  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+    var(--vx-color-auth-border);
 }
 
 .vx-service-plan-group:last-child {
@@ -50,19 +58,19 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--vx-admin-management-space-1r);
+  gap: var(--space-md);
 }
 
 .vx-service-plan-group__identity {
   min-width: 0;
   display: flex;
   align-items: flex-start;
-  gap: var(--vx-admin-management-space-0875r);
+  gap: var(--space-md);
 }
 
 .vx-service-plan-group__identity > svg {
   flex: 0 0 auto;
-  margin-top: var(--vx-admin-management-space-01r);
+  margin-top: var(--space-2xs);
   color: var(--tenant-blue);
 }
 
@@ -79,7 +87,7 @@
 }
 
 .vx-service-plan-group__identity p {
-  margin: var(--vx-admin-management-space-035r) 0 0;
+  margin: var(--space-2xs) 0 0;
   overflow: hidden;
   color: var(--tenant-muted);
   font-size: var(--vx-admin-caption-size);
@@ -96,7 +104,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
   flex-wrap: wrap;
 }
 
@@ -106,7 +114,8 @@
 }
 
 .vx-service-plan-group__meta {
-  gap: var(--vx-admin-management-space-075r) var(--vx-admin-management-space-125r);
+  gap: var(--space-sm)
+    var(--space-md);
   color: var(--tenant-muted);
   font-size: var(--vx-admin-caption-size);
   font-weight: 400;
@@ -127,12 +136,18 @@
   min-width: 0;
   display: grid;
   grid-template-columns:
-    minmax(var(--vx-admin-management-track-12r-large), 1.1fr) minmax(var(--vx-admin-management-track-85r), 0.75fr) minmax(var(--vx-admin-management-track-18r-large), 1.5fr)
-    minmax(var(--vx-admin-management-track-8r), 0.7fr) var(--vx-admin-management-track-3r);
+    minmax(var(--vx-admin-management-track-12r-large), 1.1fr) minmax(
+      var(--vx-admin-management-track-85r),
+      0.75fr
+    ) minmax(var(--vx-admin-management-track-18r-large), 1.5fr)
+    minmax(var(--vx-admin-management-track-8r), 0.7fr) var(
+      --vx-admin-management-track-3r
+    );
   align-items: center;
-  gap: var(--vx-admin-management-space-1r);
-  padding: var(--vx-admin-management-space-1r) 0;
-  border-top: var(--vx-admin-management-line-width-1p) dashed color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
+  gap: var(--space-md);
+  padding: var(--space-md) 0;
+  border-top: var(--vx-admin-management-line-width-1p) dashed
+    color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
 }
 
 .vx-service-plan-tier-row:hover {
@@ -148,7 +163,7 @@
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--vx-admin-management-space-1r);
+  gap: var(--space-md);
 }
 
 .vx-service-plan-tier-card {
@@ -156,10 +171,11 @@
   min-width: 0;
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: var(--vx-admin-management-space-1r);
+  gap: var(--space-md);
   align-content: start;
-  padding: var(--vx-admin-management-space-1r) 0;
-  border-top: var(--vx-admin-management-line-width-2p) solid var(--service-plan-tone);
+  padding: var(--space-md) 0;
+  border-top: var(--vx-admin-management-line-width-2p) solid
+    var(--service-plan-tone);
 }
 
 .vx-service-plan-tier--active {
@@ -180,7 +196,7 @@
 .vx-service-plan-tier__price {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
 }
 
 .vx-service-plan-product-tags {
@@ -204,7 +220,7 @@
 
 .vx-service-plan-tier-card .vx-tenant-actions {
   position: absolute;
-  top: var(--vx-admin-management-space-0625r);
+  top: var(--space-sm);
   right: 0;
 }
 

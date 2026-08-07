@@ -6,7 +6,7 @@
   z-index: var(--vx-z-modal);
   display: grid;
   place-items: center;
-  padding: var(--vx-admin-roles-space-15r);
+  padding: var(--space-lg);
   background: color-mix(in srgb, var(--vx-color-gray-900) 22%, transparent);
   backdrop-filter: blur(var(--vx-admin-roles-effect-8p));
 }
@@ -16,8 +16,8 @@
   max-height: min(var(--vx-admin-roles-panel-max-height-md), calc(100vh - var(--vx-admin-roles-size-3r)));
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
-  gap: var(--vx-admin-roles-space-1r);
-  padding: var(--vx-admin-roles-space-125r);
+  gap: var(--space-md);
+  padding: var(--space-md);
   border: var(--vx-admin-roles-line-width-1p) solid color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
   border-radius: var(--tenant-card-radius);
   background: color-mix(in srgb, var(--vx-color-white) 98%, transparent);
@@ -28,7 +28,7 @@
   display: grid;
   grid-template-columns: var(--vx-admin-roles-track-275r) minmax(0, 1fr) var(--vx-admin-roles-track-25r);
   align-items: center;
-  gap: var(--vx-admin-roles-space-0875r);
+  gap: var(--space-md);
 }
 
 .vx-admin-role-permission-dialog__icon {
@@ -62,19 +62,18 @@
 .vx-admin-role-permission-dialog__summary {
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-roles-space-05r);
+  gap: var(--space-xs);
   flex-wrap: wrap;
 }
 
 .vx-admin-role-permission-dialog__summary .vx-tenant-pill {
   display: inline-flex;
   align-items: center;
-  gap: var(--vx-admin-roles-space-03125r);
+  gap: var(--space-2xs);
 }
 
 .vx-admin-role-permission-dialog__close {
   width: var(--vx-admin-roles-size-25r);
-  height: var(--vx-admin-roles-size-25r);
   display: inline-grid;
   place-items: center;
   border: 0;
@@ -93,13 +92,13 @@
   min-height: 0;
   overflow: auto;
   display: grid;
-  gap: var(--vx-admin-roles-space-1r);
-  padding-right: var(--vx-admin-roles-space-025r);
+  gap: var(--space-md);
+  padding-right: var(--space-2xs);
 }
 
 .vx-admin-role-permission-dialog__group {
   display: grid;
-  gap: var(--vx-admin-roles-space-075r);
+  gap: var(--space-sm);
 }
 
 .vx-admin-role-permission-dialog__group h3 {
@@ -111,14 +110,14 @@
 .vx-admin-role-permission-dialog__list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--vx-admin-roles-space-075r);
+  gap: var(--space-sm);
 }
 
 .vx-admin-role-permission-dialog__list article {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-roles-space-0375r);
-  padding: var(--vx-admin-roles-space-075r);
+  gap: var(--space-2xs);
+  padding: var(--space-sm);
   border: var(--vx-admin-roles-line-width-1p) solid color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-gray-50) 75%, transparent);

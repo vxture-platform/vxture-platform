@@ -125,7 +125,7 @@ export default function ProductsOverviewPage() {
               {t("catalog.description")}
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-4">
-              <Button asChild size="lg" className="px-5">
+              <Button asChild size="xl" className="px-5">
                 <Link href="/pricing">{t("catalog.pricingCta")}</Link>
               </Button>
             </div>
@@ -219,7 +219,7 @@ export default function ProductsOverviewPage() {
                       {!available ? (
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="md"
                           disabled
                           className="h-10"
                         >

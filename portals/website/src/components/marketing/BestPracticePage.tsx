@@ -64,13 +64,13 @@ export default function BestPracticePage() {
               ))}
             </div>
             <div className="mt-8 flex flex-wrap items-center gap-4">
-              <Button asChild size="lg" className="px-5 hover:bg-vx-brand-500">
+              <Button asChild size="xl" className="px-5 hover:bg-vx-brand-500">
                 <Link href="/signin">{t("page.hero.primaryAction")}</Link>
               </Button>
               <Button
                 asChild
                 variant="ghost"
-                size="lg"
+                size="xl"
                 className="border border-vx-brand-200 bg-vx-white/60 px-5 text-vx-brand-700 hover:border-vx-brand-300 hover:bg-vx-white dark:border-vx-white/35 dark:bg-transparent dark:text-vx-white dark:hover:border-vx-white dark:hover:bg-vx-white/10"
               >
                 <a href="#practice-list">{t("page.hero.secondaryAction")}</a>
@@ -263,7 +263,7 @@ export default function BestPracticePage() {
           </div>
           <Button
             asChild
-            size="lg"
+            size="xl"
             className="w-max px-5 hover:bg-vx-brand-500"
           >
             <Link href="/signin">{t("page.cta.action")}</Link>

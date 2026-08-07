@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Funnel_Display, Geist_Mono, Inter } from "next/font/google";
-import { themeBootstrapScript } from "@vxture/design-system";
+import {
+  BootSplash,
+  ThemeProvider,
+  themeBootstrapScript,
+} from "@vxture/design-system";
 import "./globals.css";
 
 const fontBrand = Funnel_Display({
@@ -26,9 +30,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Vxture Capability Console",
+  title: "Opera · Vxture 基础设施控制平面",
   description:
-    "OSS-side operator console hosting L1 provider admin modules (product_250 M-4).",
+    "平台技术资源、运行、计量、发布、可观测与安全管理。不承担商业运营职责。",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -36,24 +40,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
-        {/* Phosphor icon font — shell templates use `ph ph-*` classes. */}
-        <link
-          rel="stylesheet"
-          href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css"
-        />
-        <link
-          rel="stylesheet"
-          href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css"
-        />
-        <link
-          rel="stylesheet"
-          href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css"
-        />
+        {/* Icons are DS React components (@phosphor-icons/react via iconRegistry);
+            the legacy icon webfont links are gone with shell-template. */}
       </head>
       <body
         className={`${fontBrand.variable} ${inter.variable} ${geistMono.variable}`}
       >
-        {children}
+        {/* 启动占位在 React 根**之外**：进了根就会被水合接管，跟其余组件一样
+            要等 JS，也就失去了填补空窗的意义。ThemeProvider 挂载后打上
+            html[data-app-ready]，CSS 随即把它隐藏。 */}
+        <BootSplash />
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

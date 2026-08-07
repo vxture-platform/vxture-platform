@@ -1,9 +1,0 @@
-/**
- * platform-shell-header.css - Platform shell header style pack entry.
- * @package @vxture/design-system
- * @layer Presentation
- * @category styles
- */
-
-@import "./platform-shell-header-controls.css";
-@import "./platform-shell-header-buttons.css";

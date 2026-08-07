@@ -674,25 +674,21 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return `${this.prefix}sess:${sid}:org`;
   }
 
-  private cappedIdleTtl(
-    absExpiresAt: number,
-    idleTtlSeconds: number,
-    nowSeconds?: number,
-  ): number {
-    const now = nowSeconds ?? Math.floor(Date.now() / 1000);
-    const absRemaining = Math.max(1, absExpiresAt - now);
-    return Math.min(idleTtlSeconds, absRemaining);
-  }
-
-  /** Create/replace a central session; idle TTL capped by the absolute TTL. */
+  /**
+   * 建立中央会话。TTL 就是**总时效**——IdP 侧不再有"空闲"这个概念。
+   *
+   * 原先这里取 `min(idle, abs)`，而 idle 恒小于 abs，于是 abs 从未生效、会话变成
+   * 一个固定寿命；配套的 `touchOidcSession` 又全仓零调用点，所以活跃用户照样被踢。
+   * 在场判断已移到门户（`startIdleWatcher`，由真实交互事件驱动）。
+   */
   async createOidcSession(
     sid: string,
     session: OidcCentralSession,
-    idleTtlSeconds: number,
+    absTtlSeconds: number,
   ): Promise<void> {
     const client = this.requireReadyClient();
     const key = this.sessionKey(sid);
-    const ttl = this.cappedIdleTtl(session.absExpiresAt, idleTtlSeconds);
+    const ttl = absTtlSeconds;
     try {
       await client.hset(key, {
         sub: session.sub,
@@ -728,36 +724,6 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     } catch (err) {
       this.logger.error(`getOidcSession failed: ${String(err)}`);
       throw new ServiceUnavailableException("OIDC session lookup failed");
-    }
-  }
-
-  /** Sliding-renew a session's idle TTL (capped by abs); updates lastActiveAt. Returns false if past abs. */
-  async touchOidcSession(
-    sid: string,
-    idleTtlSeconds: number,
-    nowSeconds: number,
-  ): Promise<boolean> {
-    const client = this.requireReadyClient();
-    const key = this.sessionKey(sid);
-    try {
-      const absStr = await client.hget(key, "absExpiresAt");
-      if (!absStr) return false;
-      const abs = Number(absStr);
-      if (nowSeconds >= abs) {
-        await this.deleteOidcSession(sid);
-        return false;
-      }
-      const ttl = this.cappedIdleTtl(abs, idleTtlSeconds, nowSeconds);
-      await client.hset(key, "lastActiveAt", String(nowSeconds));
-      await client.expire(key, ttl);
-      const orgKey = this.sessionActiveOrgKey(sid);
-      if ((await client.exists(orgKey)) === 1) {
-        await client.expire(orgKey, ttl);
-      }
-      return true;
-    } catch (err) {
-      this.logger.error(`touchOidcSession failed: ${String(err)}`);
-      throw new ServiceUnavailableException("OIDC session renewal failed");
     }
   }
 

@@ -1,5 +1,6 @@
 @import "@vxture/design-system/styles/globals.css";
 @import "@vxture/design-system/styles/brands/vxture.css";
+@import "@vxture/design-system/styles/workbench.css";
 @import "@vxture/agent-studio-varda/styles/chat.css";
 @import "@vxture/agent-studio-varda/styles/tool.css";
 

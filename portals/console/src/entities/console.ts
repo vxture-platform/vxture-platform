@@ -180,10 +180,11 @@ export interface ModuleCardStat {
 }
 
 export interface SummaryMetric {
+  id: string;
   label: string;
   value: string;
   trend?: string;
-  tone?: "default" | "positive" | "warning";
+  tone?: "neutral" | "success" | "warning";
 }
 
 export interface QuickAction {

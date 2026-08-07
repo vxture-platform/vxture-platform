@@ -23,6 +23,7 @@
     "@nestjs/platform-express": "^11.0.0",
     "@vxture/core-api": "workspace:*",
     "@vxture/core-config": "workspace:*",
+    "@vxture/core-identity-sdk": "workspace:*",
     "@vxture/core-mail": "workspace:*",
     "@vxture/core-oidc-rp": "workspace:*",
     "@vxture/core-utils": "workspace:*",

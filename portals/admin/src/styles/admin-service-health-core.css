@@ -1,4 +1,13 @@
+/* 卡面统一：底色与描边不随状态变，状态只由顶缘色条、读数颜色和标体现
+   （owner 2026-08-06）。此前每个状态各铺一层浅绿/浅黄/浅红底，一排卡片看起来像
+   四种不同的控件。 */
 .vx-service-health-page {
+  --service-bg: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--gradient-card-from) 88%, transparent),
+    color-mix(in srgb, var(--gradient-card-to) 64%, transparent)
+  );
+  --service-border: color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
   --service-blue: var(--vx-color-auth-accent);
   --service-green: var(--vx-color-success-600);
   --service-amber: var(--vx-color-warning-600);
@@ -6,7 +15,6 @@
   --service-indigo: var(--vx-color-indigo-600);
   width: 100%;
   max-width: none;
-  gap: var(--vx-admin-service-health-page-gap);
   cursor: default;
 }
 
@@ -23,68 +31,24 @@
   cursor: text;
 }
 
-.vx-service-health-page .vx-page-header.admin-overview-heading {
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: start;
-  gap: var(--vx-admin-service-health-header-gap);
-  margin-bottom: 0;
-}
-
-.vx-service-health-page .vx-page-header {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: var(--vx-admin-service-health-page-header-gap);
-}
-
-.vx-service-health-page .vx-page-header__title-row .vx-badge {
-  min-height: var(--vx-admin-service-health-pill-min-height);
-  border-color: color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
-  background: color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
-  color: var(--vx-color-auth-accent);
-}
-
 .vx-service-health-status--healthy {
   --service-tone: var(--service-green);
   --service-soft: color-mix(in srgb, var(--vx-color-success) 10%, transparent);
-  --service-border: color-mix(in srgb, var(--vx-color-success) 22%, transparent);
-  --service-bg: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--vx-color-success-surface) 72%, transparent),
-    color-mix(in srgb, var(--vx-color-white) 54%, transparent)
-  );
 }
 
 .vx-service-health-status--degraded {
   --service-tone: var(--service-amber);
   --service-soft: color-mix(in srgb, var(--vx-color-warning-600) 12%, transparent);
-  --service-border: color-mix(in srgb, var(--vx-color-warning-600) 24%, transparent);
-  --service-bg: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--vx-color-warning-surface) 78%, transparent),
-    color-mix(in srgb, var(--vx-color-white) 54%, transparent)
-  );
 }
 
 .vx-service-health-status--offline {
   --service-tone: var(--service-rose);
   --service-soft: color-mix(in srgb, var(--vx-color-danger) 10%, transparent);
-  --service-border: color-mix(in srgb, var(--vx-color-danger) 22%, transparent);
-  --service-bg: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--vx-color-danger-surface) 78%, transparent),
-    color-mix(in srgb, var(--vx-color-white) 54%, transparent)
-  );
 }
 
 .vx-service-health-status--stopping {
   --service-tone: var(--service-indigo);
   --service-soft: color-mix(in srgb, var(--vx-color-indigo-600) 10%, transparent);
-  --service-border: color-mix(in srgb, var(--vx-color-indigo-600) 22%, transparent);
-  --service-bg: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--vx-color-brand-100) 78%, transparent),
-    color-mix(in srgb, var(--vx-color-white) 54%, transparent)
-  );
 }
 
 .vx-service-health-summary {

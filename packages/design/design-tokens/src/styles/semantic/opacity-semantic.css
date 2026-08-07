@@ -1,0 +1,38 @@
+/**
+ * semantic/opacity-semantic.css - T2 语义层 · 透明度（工具类族 opacity-*）。
+ * @package @vxture/design-tokens
+ * @layer Presentation
+ * @category styles
+ * @author AI-Generated
+ * @date 2026-08-01
+ *
+ * ⚠ 本文件由脚本生成，请勿手工编辑。
+ *   生成：node scripts/design-tokens/generate-semantic-scales.mjs
+ *   输入：scripts/design-tokens/semantic-policy.mjs
+ *
+ * T2 契约见 packages/design/design-system/docs/04-tokens-contract.md。
+ * 构建规范见 docs/10-standards/065-design-token-pipeline.md。
+ *
+ * 无 T1 可指：上游对 opacity 既无 theme 变量也无封闭档位表，接受任意 0–100。
+ *
+ * 末尾的 `:root` 块是卡面底纹的浓淡（VEIL_ALPHAS）：只给 var() 用、不产工具类，
+ * 留在 @theme 里会被 Tailwind 摇掉。
+ */
+
+@theme {
+  /* opacity */
+  --opacity-disabled: 0.45;  /* 禁用态：控件与其文字整体压暗 */
+  --opacity-overlay: 0.5;  /* 遮罩：盖住底层内容但仍可辨认 */
+  --opacity-subtle: 0.6;  /* 次要信息：时间戳、辅助说明 */
+  --opacity-muted: 0.75;  /* 弱化但仍需阅读：占位、提示 */
+}
+
+:root {
+  /* veil */
+  --opacity-veil-soft-top: 0.56;  /* 叠层 soft 上端：大面积实体卡、列表卡 */
+  --opacity-veil-soft-bottom: 0.36;  /* 叠层 soft 下端 */
+  --opacity-veil-base-top: 0.66;  /* 叠层 base 上端：面板、统计卡 */
+  --opacity-veil-base-bottom: 0.46;  /* 叠层 base 下端 */
+  --opacity-veil-strong-top: 0.72;  /* 叠层 strong 上端：入口卡、重点卡 */
+  --opacity-veil-strong-bottom: 0.52;  /* 叠层 strong 下端 */
+}

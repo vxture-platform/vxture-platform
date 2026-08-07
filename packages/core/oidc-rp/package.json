@@ -23,6 +23,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@vxture/core-identity-sdk": "workspace:*",
     "@vxture/shared": "workspace:*",
     "ioredis": "^5.0.0"
   },

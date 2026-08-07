@@ -57,7 +57,7 @@ const tenantOpsSections: AdminNavigationSection[] = [
         i18nKey: "menu.operation.todo",
         status: "active",
         href: "/ops-todos",
-        label: "运营待办",
+        label: "待办任务",
         description: "聚合待审核、异常告警和需要人工介入的运营任务。",
         icon: "table",
       },

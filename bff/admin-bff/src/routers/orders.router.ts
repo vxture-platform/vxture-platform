@@ -1168,9 +1168,9 @@ function mapSubscriptionStatus(status: string): SubscriptionOperationStatus {
     case "active":
       return "active";
     case "trialing":
-      return "trial";
+      return "trialing";
     case "expired":
-      return "overdue";
+      return "expired";
     case "cancelled":
       return "cancelled";
     case "suspended":

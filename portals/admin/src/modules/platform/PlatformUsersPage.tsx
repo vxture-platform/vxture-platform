@@ -2,22 +2,33 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
-  Icon,
+  ActionButton,
   ActionMenu,
   Badge,
   Button,
-  Checkbox,
+  DataTable,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogForm,
+  DialogHeader,
+  DialogTitle,
+  EmptyState,
+  FilterBar,
+  Icon,
   Input,
   Label,
+  ListPageTemplate,
+  MetricGrid,
   NativeSelect,
-  Pagination,
+  StatusBadge,
+  TableTitleCell,
   Textarea,
-  ActionButton,
-  EmptyState,
-  ViewModeSwitch,
   useToast,
 } from "@vxture/design-system";
+import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import {
   changePlatformAdminRole,
   createPlatformAdmin,
@@ -38,16 +49,9 @@ import type {
   PlatformRoleRecord,
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
-import {
-  PageSizePicker as AdminPageSizePicker,
-  type PageSize,
-} from "@/modules/shared/PageSizePicker";
+import { type PageSize } from "@/modules/shared/PageSizePicker";
 import { useConsoleTranslations } from "@/lib/ConsoleIntl";
-import {
-  formatDate,
-  formatNumber,
-  joinClasses,
-} from "@/modules/tenants/tenant-utils";
+import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
 
 type ViewMode = "list" | "cards";
@@ -69,12 +73,10 @@ function platformRoleStatusLabel(admin: PlatformAdminRecord) {
   return "停用";
 }
 
-function platformRoleStatusPillClass(admin: PlatformAdminRecord) {
-  if (admin.roleStatusCode === "active")
-    return "vx-admin-role-status-pill--enabled";
-  if (admin.roleStatusCode === "archived")
-    return "vx-platform-user-status-pill--attention";
-  return "vx-admin-role-status-pill--disabled";
+function platformRoleStatusTone(admin: PlatformAdminRecord): StatusBadgeTone {
+  if (admin.roleStatusCode === "active") return "success";
+  if (admin.roleStatusCode === "archived") return "warning";
+  return "neutral";
 }
 
 function platformAdminStatusCode(
@@ -125,14 +127,6 @@ function platformAdminStatusLabel(admin: PlatformAdminRecord) {
   return labels[platformAdminStatusCode(admin)];
 }
 
-function platformAdminStatusTone(admin: PlatformAdminRecord) {
-  const statusCode = platformAdminStatusCode(admin);
-  if (statusCode === "active") return "normal";
-  if (statusCode === "pending") return "progress";
-  if (statusCode === "locked" || statusCode === "suspended") return "attention";
-  return "closed";
-}
-
 function platformAdminStatusIcon(admin: PlatformAdminRecord) {
   const statusCode = platformAdminStatusCode(admin);
   if (statusCode === "active") return "check";
@@ -140,13 +134,13 @@ function platformAdminStatusIcon(admin: PlatformAdminRecord) {
   return "x";
 }
 
-function platformAdminStatusPillClass(admin: PlatformAdminRecord) {
+/** 平台用户态 → 语气。pending 是蓝（brand）：待激活不是异常，只是还没开始。 */
+function platformAdminStatusTone(admin: PlatformAdminRecord): StatusBadgeTone {
   const statusCode = platformAdminStatusCode(admin);
-  if (statusCode === "active") return "vx-admin-role-status-pill--enabled";
-  if (statusCode === "pending") return "vx-platform-user-status-pill--pending";
-  if (statusCode === "locked" || statusCode === "suspended")
-    return "vx-platform-user-status-pill--attention";
-  return "vx-admin-role-status-pill--disabled";
+  if (statusCode === "active") return "success";
+  if (statusCode === "pending") return "brand";
+  if (statusCode === "locked" || statusCode === "suspended") return "warning";
+  return "neutral";
 }
 
 function PlatformUserActionsMenu({
@@ -178,26 +172,24 @@ function PlatformUserActionsMenu({
     >
       <ActionMenu
         label={`${admin.displayName} 操作`}
-        triggerClassName="vx-tenant-actions__trigger"
-        triggerProps={{ title: "操作" }}
         items={[
           {
             id: "profile",
             label: "查看详情",
-            icon: <Icon name="user" size="xs" fallback="placeholder" />,
+            icon: "user",
             onSelect: () => onView(admin),
           },
           {
             id: "role",
             label: "调整角色",
-            icon: <Icon name="shield-check" size="xs" fallback="placeholder" />,
+            icon: "shield-check",
             disabled: !managed,
             onSelect: () => onChangeRole(admin),
           },
           {
             id: "metadata",
             label: "编辑资料",
-            icon: <Icon name="edit" size="xs" fallback="placeholder" />,
+            icon: "edit",
             disabled: !managed,
             onSelect: () => onEditMetadata(admin),
           },
@@ -207,15 +199,7 @@ function PlatformUserActionsMenu({
               platformAdminStatusCode(admin) === "active"
                 ? "停用用户"
                 : "启用用户",
-            icon: (
-              <Icon
-                name={
-                  platformAdminStatusCode(admin) === "active" ? "x" : "check"
-                }
-                size="xs"
-                fallback="placeholder"
-              />
-            ),
+            icon: platformAdminStatusCode(admin) === "active" ? "x" : "check",
             // B9-P1b-α：经 IdP 委托停用/启用（+ 停用即吊销会话）。
             disabled: !managed,
             onSelect: () => onToggleStatus(admin),
@@ -223,7 +207,7 @@ function PlatformUserActionsMenu({
           {
             id: "force-logout",
             label: "强制下线",
-            icon: <Icon name="clock" size="xs" fallback="placeholder" />,
+            icon: "clock",
             // B9-P1b-α：经 IdP 委托吊销该用户全部会话。
             disabled: !managed,
             onSelect: () => onForceLogout(admin),
@@ -231,7 +215,7 @@ function PlatformUserActionsMenu({
           {
             id: "mfa-reset",
             label: "重置 MFA",
-            icon: <Icon name="shield-check" size="xs" fallback="placeholder" />,
+            icon: "shield-check",
             // B9-P1b-α：经 IdP 委托清除已登记的第二因子（保留策略，下次登录重登记）+ 吊销会话。
             disabled: !managed,
             onSelect: () => onResetMfa(admin),
@@ -239,7 +223,7 @@ function PlatformUserActionsMenu({
           {
             id: "reset-password",
             label: "重置密码",
-            icon: <Icon name="key" size="xs" fallback="placeholder" />,
+            icon: "key",
             // B9-P1b-β/TD-017：经 IdP 生成一次性重置链接并带外投递至目标本人邮箱，发起方不接触链接。
             disabled: !managed,
             onSelect: () => onResetPassword(admin),
@@ -250,182 +234,74 @@ function PlatformUserActionsMenu({
   );
 }
 
-function PlatformUsersList({
-  admins,
-  startIndex,
-  selectedIds,
-  onToggleSelected,
-  onTogglePage,
-  onView,
-  onChangeRole,
-  onEditMetadata,
-  onToggleStatus,
-  onForceLogout,
-  onResetMfa,
-  onResetPassword,
-  t,
-}: {
-  admins: PlatformAdminRecord[];
-  startIndex: number;
-  selectedIds: Set<string>;
-  onToggleSelected: (id: string, checked: boolean) => void;
-  onTogglePage: (checked: boolean) => void;
-  onView: (admin: PlatformAdminRecord) => void;
-  onChangeRole: (admin: PlatformAdminRecord) => void;
-  onEditMetadata: (admin: PlatformAdminRecord) => void;
-  onToggleStatus: (admin: PlatformAdminRecord) => void;
-  onForceLogout: (admin: PlatformAdminRecord) => void;
-  onResetMfa: (admin: PlatformAdminRecord) => void;
-  onResetPassword: (admin: PlatformAdminRecord) => void;
-  t: ReturnType<typeof useConsoleTranslations>;
-}) {
-  const selectedCount = admins.filter((admin) =>
-    selectedIds.has(admin.id),
-  ).length;
-  const pageSelected = admins.length > 0 && selectedCount === admins.length;
-  const pagePartial = selectedCount > 0 && selectedCount < admins.length;
-
-  return (
-    <div
-      className="vx-tenant-directory-list vx-tenant-operation-directory-list vx-platform-user-directory-list"
-      role="region"
-      aria-label="平台用户清单"
-    >
-      <div className="vx-tenant-directory-list__header">
-        <span>
-          <Checkbox
-            className="vx-model-select-checkbox"
-            checked={
-              pageSelected ? true : pagePartial ? "indeterminate" : false
-            }
-            onCheckedChange={(value) => onTogglePage(value === true)}
-            aria-label="选择当前页平台用户"
-          />
-        </span>
-        <span>序号</span>
-        <span>用户</span>
-        <span>状态</span>
-        <span>角色</span>
-        <span>最后登录</span>
-        <span>联系方式</span>
-        <span>操作</span>
-      </div>
-      {admins.map((admin, index) => {
-        const selected = selectedIds.has(admin.id);
-        return (
-          <div
-            key={admin.id}
-            className={joinClasses(
-              "vx-tenant-directory-row",
-              "vx-tenant-operation-row",
-              "vx-platform-user-row",
-              selected
-                ? "vx-tenant-operation-row--selected vx-platform-user-row--selected"
-                : "",
-            )}
-            onClick={(event) => {
-              if (
-                event.target instanceof HTMLElement &&
-                event.target.closest(
-                  'button, input, select, textarea, a, [role="button"], [role="menu"], [role="menuitem"]',
-                )
-              )
-                return;
-              onToggleSelected(admin.id, !selected);
-            }}
-          >
-            <span className="vx-tenant-operation-row__select vx-platform-user-row__select">
-              <Checkbox
-                className="vx-model-select-checkbox"
-                checked={selected}
-                onClick={(event) => event.stopPropagation()}
-                onCheckedChange={(value) =>
-                  onToggleSelected(admin.id, value === true)
-                }
-                aria-label={`选择 ${admin.displayName || admin.username}`}
-              />
-            </span>
-            <span className="vx-tenant-directory-row__index">
-              {formatNumber(startIndex + index + 1)}
-            </span>
-            <span className="vx-tenant-directory-row__tenant">
-              <Icon name="user" size="sm" fallback="placeholder" />
-              <span>
-                <span className="vx-tenant-directory-row__title-line">
-                  <Button
-                    variant="link"
-                    className="vx-model-name-button"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    {admin.displayName || admin.username}
-                  </Button>
-                  {admin.isSystem ? (
-                    <Badge className="vx-tenant-pill vx-tenant-pill--system">
-                      系统
-                    </Badge>
-                  ) : null}
-                </span>
-                <small>
-                  {admin.username ? `@${admin.username}` : EMPTY_MARK}
-                </small>
-              </span>
-            </span>
-            <span className="vx-tenant-directory-row__status">
-              <span className="vx-tenant-directory-row__status-line">
-                <span
-                  className={`vx-tenant-status-dot vx-tenant-status-dot--${platformAdminStatusTone(admin)}`}
-                  role="img"
-                  aria-label={platformAdminStatusLabel(admin)}
-                  title={platformAdminStatusLabel(admin)}
-                >
-                  <Icon
-                    name={platformAdminStatusIcon(admin)}
-                    size="xs"
-                    fallback="placeholder"
-                  />
-                </span>
-                <Badge
-                  className={`vx-tenant-pill ${platformAdminStatusPillClass(admin)}`}
-                >
-                  {platformAdminStatusLabel(admin)}
-                </Badge>
-              </span>
-            </span>
-            <span className="vx-platform-user-row__role">
-              <span className="vx-platform-user-row__role-line">
-                <strong>{platformRoleDisplayName(admin, t)}</strong>
-                <Badge
-                  className={`vx-tenant-pill ${platformRoleStatusPillClass(admin)}`}
-                >
-                  {platformRoleStatusLabel(admin)}
-                </Badge>
-              </span>
-            </span>
-            <span className="vx-platform-user-row__login">
-              <strong>
-                {admin.lastLoginAt ? formatDate(admin.lastLoginAt) : EMPTY_MARK}
-              </strong>
-              <small>{admin.lastLoginIp || EMPTY_MARK}</small>
-            </span>
-            <span className="vx-platform-user-row__contact">
-              <strong>{admin.email || EMPTY_MARK}</strong>
-              <small>{admin.phone || EMPTY_MARK}</small>
-            </span>
-            <PlatformUserActionsMenu
-              admin={admin}
-              onView={onView}
-              onChangeRole={onChangeRole}
-              onEditMetadata={onEditMetadata}
-              onToggleStatus={onToggleStatus}
-              onForceLogout={onForceLogout}
-              onResetMfa={onResetMfa}
-              onResetPassword={onResetPassword}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
+/**
+ * 状态标走 `StatusBadge`，语气由 `platformAdminStatusTone` / `platformRoleStatusTone` 给。
+ */
+function usePlatformUserColumns(
+  t: ReturnType<typeof useConsoleTranslations>,
+): DataTableColumn<PlatformAdminRecord>[] {
+  return [
+    {
+      id: "user",
+      header: "用户",
+      cell: (admin) => (
+        <TableTitleCell
+          icon="user"
+          title={admin.displayName || admin.username}
+          titleSuffix={admin.isSystem ? <Badge>系统</Badge> : null}
+          description={admin.username ? `@${admin.username}` : EMPTY_MARK}
+        />
+      ),
+    },
+    {
+      id: "status",
+      header: "状态",
+      align: "center",
+      cell: (admin) => (
+        <StatusBadge
+          tone={platformAdminStatusTone(admin)}
+          icon={platformAdminStatusIcon(admin)}
+        >
+          {platformAdminStatusLabel(admin)}
+        </StatusBadge>
+      ),
+    },
+    {
+      id: "role",
+      header: "角色",
+      align: "center",
+      cell: (admin) => (
+        <TableTitleCell
+          title={platformRoleDisplayName(admin, t)}
+          titleSuffix={
+            <StatusBadge tone={platformRoleStatusTone(admin)}>
+              {platformRoleStatusLabel(admin)}
+            </StatusBadge>
+          }
+        />
+      ),
+    },
+    {
+      id: "login",
+      header: "最后登录",
+      cell: (admin) => (
+        <TableTitleCell
+          title={admin.lastLoginAt ? formatDate(admin.lastLoginAt) : EMPTY_MARK}
+          description={admin.lastLoginIp || EMPTY_MARK}
+        />
+      ),
+    },
+    {
+      id: "contact",
+      header: "联系方式",
+      cell: (admin) => (
+        <TableTitleCell
+          title={admin.email || EMPTY_MARK}
+          description={admin.phone || EMPTY_MARK}
+        />
+      ),
+    },
+  ];
 }
 
 function PlatformUsersCards({
@@ -445,26 +321,19 @@ function PlatformUsersCards({
               <strong>{admin.displayName || admin.username}</strong>
               <span>{admin.username ? `@${admin.username}` : EMPTY_MARK}</span>
             </div>
-            <Badge
-              className={`vx-tenant-pill ${platformAdminStatusPillClass(admin)}`}
+            <StatusBadge
+              tone={platformAdminStatusTone(admin)}
+              icon={platformAdminStatusIcon(admin)}
             >
               {platformAdminStatusLabel(admin)}
-            </Badge>
+            </StatusBadge>
           </header>
           <div className="vx-tenant-directory-card__badges">
-            <Badge className="vx-tenant-pill vx-account-muted-pill vx-tenant-pill--permission">
-              {platformRoleDisplayName(admin, t)}
-            </Badge>
-            <Badge
-              className={`vx-tenant-pill ${platformRoleStatusPillClass(admin)}`}
-            >
+            <Badge>{platformRoleDisplayName(admin, t)}</Badge>
+            <StatusBadge tone={platformRoleStatusTone(admin)}>
               {platformRoleStatusLabel(admin)}
-            </Badge>
-            {admin.isSystem ? (
-              <Badge className="vx-tenant-pill vx-tenant-pill--system">
-                系统
-              </Badge>
-            ) : null}
+            </StatusBadge>
+            {admin.isSystem ? <Badge>系统</Badge> : null}
           </div>
           <div className="vx-tenant-directory-card__metrics">
             <span>
@@ -517,68 +386,78 @@ function PlatformUserDetailDialog({
   onClose: () => void;
 }) {
   return (
-    <DialogForm
+    /* 这是只读详情，不是表单：DialogForm 现在固定渲染「取消 + 提交」两个按钮，
+     * 原来的 `footer` 逃生口随之取消。只读浮层直接用 Dialog 原语组装。 */
+    <Dialog
       open
-      title={admin.displayName || admin.username}
-      description={admin.username ? `@${admin.username}` : undefined}
-      footer={
-        <Button variant="outline" onClick={onClose}>
-          关闭
-        </Button>
-      }
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
     >
-      <dl className="vx-admin-permission-detail-dialog__grid">
-        <div>
-          <dt>显示名</dt>
-          <dd>{admin.displayName || EMPTY_MARK}</dd>
-        </div>
-        <div>
-          <dt>用户名</dt>
-          <dd>{admin.username || EMPTY_MARK}</dd>
-        </div>
-        <div>
-          <dt>角色</dt>
-          <dd>{roleLabel}</dd>
-        </div>
-        <div>
-          <dt>状态</dt>
-          <dd>{platformAdminStatusLabel(admin)}</dd>
-        </div>
-        <div>
-          <dt>邮箱</dt>
-          <dd>{admin.email || EMPTY_MARK}</dd>
-        </div>
-        <div>
-          <dt>手机</dt>
-          <dd>{admin.phone || EMPTY_MARK}</dd>
-        </div>
-        <div>
-          <dt>最后登录</dt>
-          <dd>
-            {admin.lastLoginAt ? formatDate(admin.lastLoginAt) : EMPTY_MARK}
-          </dd>
-        </div>
-        <div>
-          <dt>登录 IP</dt>
-          <dd>{admin.lastLoginIp || EMPTY_MARK}</dd>
-        </div>
-        <div>
-          <dt>排序</dt>
-          <dd>{formatNumber(admin.sort)}</dd>
-        </div>
-        <div>
-          <dt>创建时间</dt>
-          <dd>{admin.createdAt ? formatDate(admin.createdAt) : EMPTY_MARK}</dd>
-        </div>
-        <div className="vx-admin-permission-detail-dialog__wide">
-          <dt>备注</dt>
-          <dd>{admin.remark || EMPTY_MARK}</dd>
-        </div>
-      </dl>
-    </DialogForm>
+      <DialogContent className="max-w-panel-md">
+        <DialogHeader>
+          <DialogTitle>{admin.displayName || admin.username}</DialogTitle>
+          {admin.username ? (
+            <DialogDescription>{`@${admin.username}`}</DialogDescription>
+          ) : null}
+        </DialogHeader>
+        <dl className="vx-admin-permission-detail-dialog__grid">
+          <div>
+            <dt>显示名</dt>
+            <dd>{admin.displayName || EMPTY_MARK}</dd>
+          </div>
+          <div>
+            <dt>用户名</dt>
+            <dd>{admin.username || EMPTY_MARK}</dd>
+          </div>
+          <div>
+            <dt>角色</dt>
+            <dd>{roleLabel}</dd>
+          </div>
+          <div>
+            <dt>状态</dt>
+            <dd>{platformAdminStatusLabel(admin)}</dd>
+          </div>
+          <div>
+            <dt>邮箱</dt>
+            <dd>{admin.email || EMPTY_MARK}</dd>
+          </div>
+          <div>
+            <dt>手机</dt>
+            <dd>{admin.phone || EMPTY_MARK}</dd>
+          </div>
+          <div>
+            <dt>最后登录</dt>
+            <dd>
+              {admin.lastLoginAt ? formatDate(admin.lastLoginAt) : EMPTY_MARK}
+            </dd>
+          </div>
+          <div>
+            <dt>登录 IP</dt>
+            <dd>{admin.lastLoginIp || EMPTY_MARK}</dd>
+          </div>
+          <div>
+            <dt>排序</dt>
+            <dd>{formatNumber(admin.sort)}</dd>
+          </div>
+          <div>
+            <dt>创建时间</dt>
+            <dd>
+              {admin.createdAt ? formatDate(admin.createdAt) : EMPTY_MARK}
+            </dd>
+          </div>
+          <div className="vx-admin-permission-detail-dialog__wide">
+            <dt>备注</dt>
+            <dd>{admin.remark || EMPTY_MARK}</dd>
+          </div>
+        </dl>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            关闭
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -802,39 +681,6 @@ function PlatformUserMetadataDialog({
   );
 }
 
-function PlatformUserPagination({
-  currentPage,
-  pageCount,
-  total,
-  pageSize,
-  onPageSizeChange,
-  onPageChange,
-}: {
-  currentPage: number;
-  pageCount: number;
-  total: number;
-  pageSize: PageSize;
-  onPageSizeChange: (value: PageSize) => void;
-  onPageChange: (page: number) => void;
-}) {
-  return (
-    <footer className="vx-tenant-pagination">
-      <span className="vx-tenant-pagination__total">
-        共 {formatNumber(total)} 条记录
-      </span>
-      <div className="vx-tenant-pagination__actions">
-        <AdminPageSizePicker value={pageSize} onChange={onPageSizeChange} />
-        <Pagination
-          className="vx-tenant-pagination__pager"
-          page={currentPage}
-          pageCount={pageCount}
-          onPageChange={onPageChange}
-        />
-      </div>
-    </footer>
-  );
-}
-
 export function PlatformUsersPage() {
   const t = useConsoleTranslations();
   const { toast } = useToast();
@@ -936,13 +782,15 @@ export function PlatformUsersPage() {
       return;
     }
     toast({
-      tone: "error",
+      tone: "danger",
       title: fallbackTitle,
       ...(error instanceof Error && error.message
         ? { description: error.message }
         : {}),
     });
   }
+
+  const platformUserColumns = usePlatformUserColumns(t);
 
   const filteredAdmins = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -987,26 +835,6 @@ export function PlatformUsersPage() {
     (clampedCurrentPage - 1) * pageSize,
     clampedCurrentPage * pageSize,
   );
-
-  function toggleSelected(id: string, checked: boolean) {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }
-
-  function togglePage(checked: boolean) {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      visibleAdmins.forEach((admin) => {
-        if (checked) next.add(admin.id);
-        else next.delete(admin.id);
-      });
-      return next;
-    });
-  }
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1204,176 +1032,213 @@ export function PlatformUsersPage() {
   }
 
   return (
-    <div className="vx-page-stack vx-tenant-management-page vx-platform-users-page">
-      <PageHeader
-        icon="user"
-        eyebrow="身份权限"
-        title="平台用户"
-        description="管理平台内部管理员、运营人员和运维人员；平台用户不归属于任何租户。"
-      />
-
-      <section
-        className="vx-tenant-summary vx-platform-users-summary"
-        aria-label="平台用户统计"
-      >
-        <article className="vx-tenant-summary__item vx-tenant-summary__item--identity-icon vx-tenant-tone--blue">
-          <Icon name="user" size="lg" fallback="placeholder" />
-          <div>
-            <span>用户总数</span>
-            <p>
-              <strong>{formatNumber(admins.length)}</strong>
-              <em>系统用户 {formatNumber(systemCount)}人</em>
-            </p>
-          </div>
-        </article>
-        <article className="vx-tenant-summary__item vx-tenant-tone--green">
-          <Icon name="check" size="lg" fallback="placeholder" />
-          <div>
-            <span>启用用户</span>
-            <p>
-              <strong>{formatNumber(enabledCount)}</strong>
-              <em>可登录</em>
-            </p>
-          </div>
-        </article>
-        <article className="vx-tenant-summary__item vx-tenant-tone--rose">
-          <Icon name="x" size="lg" fallback="placeholder" />
-          <div>
-            <span>其他用户</span>
-            <p>
-              <strong>{formatNumber(otherUserCount)}</strong>
-              {disabledCount ? (
-                <em>停用 {formatNumber(disabledCount)}</em>
-              ) : null}
-              {lockedCount ? <em>锁定 {formatNumber(lockedCount)}</em> : null}
-              {pendingCount ? (
-                <em>待激活 {formatNumber(pendingCount)}</em>
-              ) : null}
-              {suspendedCount ? (
-                <em>暂停 {formatNumber(suspendedCount)}</em>
-              ) : null}
-            </p>
-          </div>
-        </article>
-      </section>
-
-      <div className="vx-tenant-list-shell">
-        <section className="vx-tenant-toolbar" aria-label="平台用户筛选">
-          <ViewModeSwitch
-            value={viewMode}
-            onChange={setViewMode}
-            ariaLabel="平台用户展示方式"
+    <>
+      <ListPageTemplate
+        className="vx-tenant-management-page vx-platform-users-page"
+        header={
+          <PageHeader
+            icon="user"
+            eyebrow="身份权限"
+            title="平台用户"
+            description="管理平台内部管理员、运营人员和运维人员；平台用户不归属于任何租户。"
           />
-          <span className="vx-tenant-view-count">
-            {formatNumber(filteredAdmins.length)}
-          </span>
-          <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索用户名、显示名、邮箱、手机、角色"
-            className="vx-tenant-search"
-            aria-label="搜索平台用户"
-          />
-          <Button variant="outline" onClick={resetFilters}>
-            重置
-          </Button>
-          <div className="vx-tenant-filters">
-            <NativeSelect
-              className="vx-input vx-tenant-select"
-              value={statusFilter}
-              onChange={(event) =>
-                setStatusFilter(event.target.value as StatusFilter)
-              }
-              aria-label="用户状态"
-            >
-              <option value="all">全部状态</option>
-              <option value="active">启用</option>
-              <option value="disabled">停用</option>
-              <option value="locked">锁定</option>
-              <option value="pending">待激活</option>
-              <option value="suspended">暂停</option>
-            </NativeSelect>
-            <NativeSelect
-              className="vx-input vx-tenant-select"
-              value={typeFilter}
-              onChange={(event) =>
-                setTypeFilter(event.target.value as UserTypeFilter)
-              }
-              aria-label="用户类型"
-            >
-              <option value="all">全部类型</option>
-              <option value="system">系统用户</option>
-              <option value="normal">普通用户</option>
-            </NativeSelect>
-          </div>
-          {/* TD-017 §③⑤：create-operator 已随分级模型整改启用——初始设置密码链接
-              带外投递至新用户本人邮箱，不回传发起方。见 docs/tech-debt.md。 */}
-          <ActionButton
-            variant="outline"
-            icon="plus"
-            onClick={openCreateDialog}
+        }
+        summary={
+          <>
+            {" "}
+            <MetricGrid
+              loading={loading}
+              aria-label="平台用户统计"
+              columns={3}
+              items={[
+                {
+                  id: "total",
+                  help: "平台管理员账号总数，含停用与锁定的。",
+                  icon: "user",
+                  label: "用户总数",
+                  value: formatNumber(admins.length),
+                  tags: [`系统用户 ${formatNumber(systemCount)}人`],
+                  // 身份类图标原本走 `--identity-icon` 修饰去色：这张是基数不是状态。
+                  tone: "neutral",
+                },
+                {
+                  id: "enabled",
+                  help: "状态为启用、可登录的管理员。",
+                  icon: "check",
+                  label: "启用用户",
+                  value: formatNumber(enabledCount),
+                  tags: ["可登录"],
+                  tone: "success",
+                },
+                {
+                  id: "other",
+                  help: "停用、锁定、待激活、暂停之和。",
+                  icon: "x",
+                  label: "其他用户",
+                  value: formatNumber(otherUserCount),
+                  tags: [
+                    ...(disabledCount
+                      ? [`停用 ${formatNumber(disabledCount)}`]
+                      : []),
+                    ...(lockedCount
+                      ? [`锁定 ${formatNumber(lockedCount)}`]
+                      : []),
+                    ...(pendingCount
+                      ? [`待激活 ${formatNumber(pendingCount)}`]
+                      : []),
+                    ...(suspendedCount
+                      ? [`暂停 ${formatNumber(suspendedCount)}`]
+                      : []),
+                  ],
+                  tone: "danger",
+                },
+              ]}
+            />
+          </>
+        }
+        filters={
+          <FilterBar
+            view={viewMode}
+            onViewChange={setViewMode}
+            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            count={formatNumber(filteredAdmins.length)}
+            aria-label="平台用户筛选"
+            search={
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="搜索用户名、显示名、邮箱、手机、角色"
+                className="vx-tenant-search"
+                aria-label="搜索平台用户"
+              />
+            }
+            onReset={resetFilters}
+            actions={
+              <>
+                <ActionButton
+                  variant="outline"
+                  icon="plus"
+                  onClick={openCreateDialog}
+                >
+                  新建用户
+                </ActionButton>
+              </>
+            }
           >
-            新建用户
-          </ActionButton>
-        </section>
+            <div className="vx-tenant-filters">
+              <NativeSelect
+                className="vx-input vx-tenant-select"
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(event.target.value as StatusFilter)
+                }
+                aria-label="用户状态"
+              >
+                <option value="all">全部状态</option>
+                <option value="active">启用</option>
+                <option value="disabled">停用</option>
+                <option value="locked">锁定</option>
+                <option value="pending">待激活</option>
+                <option value="suspended">暂停</option>
+              </NativeSelect>
+              <NativeSelect
+                className="vx-input vx-tenant-select"
+                value={typeFilter}
+                onChange={(event) =>
+                  setTypeFilter(event.target.value as UserTypeFilter)
+                }
+                aria-label="用户类型"
+              >
+                <option value="all">全部类型</option>
+                <option value="system">系统用户</option>
+                <option value="normal">普通用户</option>
+              </NativeSelect>
+            </div>
+          </FilterBar>
+        }
+        table={
+          <section className="vx-tenant-directory" aria-label="平台用户清单">
+            {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
+            {loading && viewMode === "cards" ? (
+              <header className="vx-tenant-directory__header">
+                <span>读取中</span>
+              </header>
+            ) : null}
 
-        <section className="vx-tenant-directory" aria-label="平台用户清单">
-          {loading ? (
-            <header className="vx-tenant-directory__header">
-              <span>读取中</span>
-            </header>
-          ) : null}
-
-          {filteredAdmins.length ? (
-            viewMode === "list" ? (
-              <PlatformUsersList
-                admins={visibleAdmins}
-                startIndex={(clampedCurrentPage - 1) * pageSize}
-                selectedIds={selectedIds}
-                onToggleSelected={toggleSelected}
-                onTogglePage={togglePage}
-                onView={(admin) => setDetailAdminId(admin.id)}
-                onChangeRole={openRoleDialog}
-                onEditMetadata={openMetadataDialog}
-                onToggleStatus={handleToggleStatus}
-                onForceLogout={handleForceLogout}
-                onResetMfa={handleResetMfa}
-                onResetPassword={handleResetPassword}
-                t={t}
+            {viewMode === "list" ? (
+              <DataTable
+                columns={platformUserColumns}
+                rows={visibleAdmins}
+                rowKey={(admin) => admin.id}
+                loading={loading}
+                indexStart={(clampedCurrentPage - 1) * pageSize + 1}
+                selectedKeys={[...selectedIds]}
+                onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
+                rowActions={(admin) => (
+                  <PlatformUserActionsMenu
+                    admin={admin}
+                    onView={(target) => setDetailAdminId(target.id)}
+                    onChangeRole={openRoleDialog}
+                    onEditMetadata={openMetadataDialog}
+                    onToggleStatus={handleToggleStatus}
+                    onForceLogout={handleForceLogout}
+                    onResetMfa={handleResetMfa}
+                    onResetPassword={handleResetPassword}
+                  />
+                )}
+                empty={
+                  <EmptyState
+                    title={
+                      loadError ? "平台用户读取失败" : "没有匹配的平台用户"
+                    }
+                    description={
+                      loadError ?? "清空筛选条件后可查看全部平台用户。"
+                    }
+                    action={
+                      <ActionButton
+                        variant="outline"
+                        icon="x"
+                        onClick={resetFilters}
+                      >
+                        清空筛选
+                      </ActionButton>
+                    }
+                  />
+                }
               />
-            ) : (
+            ) : filteredAdmins.length ? (
               <PlatformUsersCards admins={visibleAdmins} t={t} />
-            )
-          ) : (
-            <section className="vx-tenant-empty">
-              <EmptyState
-                title={
-                  loading
-                    ? "正在加载平台用户"
-                    : loadError
-                      ? "平台用户读取失败"
-                      : "没有匹配的平台用户"
-                }
-                description={
-                  loading
-                    ? "正在读取平台用户账号。"
-                    : (loadError ?? "清空筛选条件后可查看全部平台用户。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={resetFilters}
-                  >
-                    清空筛选
-                  </ActionButton>
-                }
-              />
-            </section>
-          )}
-
-          <PlatformUserPagination
+            ) : (
+              <section className="vx-tenant-empty">
+                <EmptyState
+                  title={
+                    loading
+                      ? "正在加载平台用户"
+                      : loadError
+                        ? "平台用户读取失败"
+                        : "没有匹配的平台用户"
+                  }
+                  description={
+                    loading
+                      ? "正在读取平台用户账号。"
+                      : (loadError ?? "清空筛选条件后可查看全部平台用户。")
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={resetFilters}
+                    >
+                      清空筛选
+                    </ActionButton>
+                  }
+                />
+              </section>
+            )}
+          </section>
+        }
+        footer={
+          <ListPagination
             currentPage={clampedCurrentPage}
             pageCount={pageCount}
             total={filteredAdmins.length}
@@ -1383,8 +1248,8 @@ export function PlatformUsersPage() {
               setCurrentPage(Math.min(Math.max(page, 1), pageCount))
             }
           />
-        </section>
-      </div>
+        }
+      />
       {detailAdmin ? (
         <PlatformUserDetailDialog
           admin={detailAdmin}
@@ -1447,6 +1312,6 @@ export function PlatformUsersPage() {
           }}
         />
       ) : null}
-    </div>
+    </>
   );
 }

@@ -76,6 +76,24 @@ module.exports = {
       },
     },
 
+    // ── 设计三包的依赖方向：tokens ← ui ← system ─────────────────────
+    // 单向，且不得成环。ui 一旦 import system 就把 React context（主题 / 密度）
+    // 拖进无状态组件层，伞包也就无法再独立于组件层演进——拆包的意义随之消失。
+    {
+      name: 'no-design-ui-to-system',
+      comment: '@vxture/design-ui 禁止引用 @vxture/design-system（方向只能反过来）',
+      severity: 'error',
+      from: { path: '^packages/design/design-ui/' },
+      to: { path: '^packages/design/design-system/' },
+    },
+    {
+      name: 'no-design-tokens-to-upper',
+      comment: '@vxture/design-tokens 是零依赖叶子，禁止引用 ui 与 system',
+      severity: 'error',
+      from: { path: '^packages/design/design-tokens/' },
+      to: { path: '^packages/design/design-(ui|system)/' },
+    },
+
     // ── Design System / Platform 不可引用业务层 ───────────────────────
     {
       name: 'no-infra-package-to-business',

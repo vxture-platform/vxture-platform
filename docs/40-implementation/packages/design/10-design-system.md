@@ -1,6 +1,6 @@
 # @vxture/design-system
 
-> 使用规范：[`docs/10-standards/design-system.md`](../../../10-standards/060-design-system.md)
+> 对外使用规范：[`packages/design/design-system/docs/`](../../../../packages/design/design-system/docs/README.md)（随包发布）；内部工程规范：[`docs/10-standards/060-design-system.md`](../../../10-standards/060-design-system.md)
 > 发布规范：[`docs/10-standards/design-system-release.md`](../../../10-standards/050-design-system-release.md)
 > 审计记录：[`docs/60-operations/audit/checklist-ds.md`](../../../60-operations/audit/20-checklist-ds.md)
 

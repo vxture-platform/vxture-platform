@@ -21,8 +21,7 @@ export interface AppCenterProps {
   labels: {
     title: string;
     desc: string;
-    subscribedTag: string;
-    statusSubscribed: string;
+    shortcutTag: string;
     enter: string;
   };
 }
@@ -37,7 +36,7 @@ export function AppCenter({ apps, onOpen, labels }: AppCenterProps) {
         </div>
         <span className="ac-head-tag">
           <i className="ph ph-squares-four"></i>
-          {labels.subscribedTag}
+          {labels.shortcutTag}
         </span>
       </div>
       <div className="ac-grid">
@@ -59,11 +58,10 @@ export function AppCenter({ apps, onOpen, labels }: AppCenterProps) {
               <strong className="ac-card-name">{a.name}</strong>
             </div>
             <p className="ac-card-desc">{a.desc}</p>
+            {/* The per-card status pill claimed these were subscribed
+             * products. They are the console's own sections, so the claim
+             * was removed rather than restated. */}
             <div className="ac-card-foot">
-              <span className="ac-card-status">
-                <span className="ac-card-dot"></span>
-                {labels.statusSubscribed}
-              </span>
               <span className="ac-card-go">
                 {labels.enter}
                 <i className="ph ph-arrow-right"></i>

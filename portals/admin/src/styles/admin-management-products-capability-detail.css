@@ -1,14 +1,14 @@
 .vx-product-capability-detail {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-2r);
+  gap: var(--space-xl);
 }
 
 .vx-product-capability-section {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-1r);
-  padding-top: var(--vx-admin-management-space-15r);
+  gap: var(--space-md);
+  padding-top: var(--space-lg);
   border-top: var(--vx-admin-management-line-width-1p) dashed var(--vx-color-auth-border);
 }
 
@@ -16,7 +16,7 @@
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--vx-admin-management-space-125r) var(--vx-admin-management-space-2r);
+  gap: var(--space-md) var(--space-xl);
 }
 
 .vx-product-capability-fields--compact {
@@ -26,7 +26,7 @@
 .vx-product-capability-description {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-management-space-05r);
+  gap: var(--space-xs);
 }
 
 .vx-product-capability-description strong {
@@ -61,8 +61,8 @@
       1.2fr
     );
   align-items: center;
-  gap: var(--vx-admin-management-space-1r);
-  padding: var(--vx-admin-management-space-0875r) 0;
+  gap: var(--space-md);
+  padding: var(--space-md) 0;
   border-bottom: var(--vx-admin-management-line-width-1p) dashed color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
 }
 
