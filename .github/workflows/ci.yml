@@ -314,11 +314,38 @@ jobs:
           fetch-depth: 0
 
       - name: SonarQube Scan
-        # 暂非阻塞：新仓库 vxture-platform 尚未在 SonarCloud 侧绑定项目（scan 返回 403）。
-        # 在 SonarCloud 导入本仓库建项目 + 更新 sonar-project.properties 后，移除本行恢复硬门禁。
+        # 暂非阻塞。**注意真因**（2026-08-10 更正，见 liaison platform#189）：此前这里写的是
+        # "本仓尚未在 SonarCloud 绑定项目"，那个诊断是错的——`vxture-atlas` 报的是逐字节相同的
+        # 错误，说明失败在**组织级 `SONAR_TOKEN` 全域 403**，不在本仓的项目绑定上。照旧注释去
+        # SonarCloud 建项目，建完仍然不通。恢复硬门禁的前提是先在 SonarCloud/org 侧换掉那把 token。
+        id: sonar
         continue-on-error: true
         uses: SonarSource/sonarqube-scan-action@v7
         with:
           skipSignatureVerification: false
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      # `continue-on-error` 让本 job 无论如何都显示为通过——这本身没错（Sonar 不在 ruleset 的
+      # 必需检查里），但一个恒绿的检查会让人以为代码被扫过了。这一步把真实结果写进 run summary
+      # 与 annotation，使"没扫"可见而不是被绿色掩盖。
+      - name: Report scan outcome honestly
+        if: always()
+        env:
+          OUTCOME: ${{ steps.sonar.outcome }}
+        run: |
+          if [ "$OUTCOME" = "success" ]; then
+            echo "✅ SonarQube scanned this commit." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "::warning title=SonarQube did not scan this commit::扫描失败被 continue-on-error 吞掉；本次提交没有被静态分析覆盖。真因追踪见 liaison platform#189（组织级 SONAR_TOKEN 403）。"
+          {
+            echo "### ⚠️ SonarQube 没有扫描本次提交"
+            echo ""
+            echo "扫描步骤失败（outcome=\`$OUTCOME\`），被 \`continue-on-error\` 吞掉，所以本 job 仍显示通过。"
+            echo "**本次提交未被静态分析覆盖**——绿色不代表扫过了。"
+            echo ""
+            echo "已知真因：组织级 \`SONAR_TOKEN\` 对 \`api.sonarcloud.io\` 返回 403，全 org 同症"
+            echo "（\`vxture-atlas\` 报错逐字节相同）。修复点在 SonarCloud/org 侧的 token，不在本仓。"
+            echo "追踪：liaison platform#189。"
+          } >> "$GITHUB_STEP_SUMMARY"
