@@ -2009,6 +2009,17 @@ export async function seedCatalog(client) {
   );
 
   // ── 10. model — model_providers + models + model_price_rules (per-tenant grant OUT) ─
+  // config.upstreamModel (2026-08-10, §1.1 of the same plan, answering liaison platform#152):
+  // model_code is a dispatch key, never a promise about the wire value. Providers reject the
+  // prefixed form — Volcano Ark wants `doubao-seed-2-0-lite-260428`, not `doubao/...` — so any
+  // row whose model_code carries a provider prefix must also say what to actually send, and
+  // adapters read config.upstreamModel in preference to model_code. The legacy unprefixed rows
+  // keep config NULL on purpose: for them the fallback to model_code is already the right value,
+  // and writing it twice would just be a second place to forget to update.
+  // Note this only reaches a fresh database. The insert is `on conflict (model_code) do nothing`,
+  // so a live database that already has these rows keeps config NULL until an explicit UPDATE is
+  // run through db-init — a reseed will not backfill it.
+  //
   // model_code convention (2026-07-27, see docs/30-design/platform/42-model-provider-registry-plan.md):
   // `{provider_code}/{vendor_model_name}` — namespaced so callers/logs/dashboards never collide across
   // vendors and the prefix doubles as the provider-adapter dispatch key.
@@ -2061,26 +2072,26 @@ export async function seedCatalog(client) {
   await client.query(
     `
     insert into model.models
-      (id, provider_id, model_code, model_type, protocol, model_name, description, description_key, endpoint_url, context_window, max_output_tokens, capabilities, is_active, sort, created_by, created_at, updated_at)
+      (id, provider_id, model_code, model_type, protocol, model_name, description, description_key, endpoint_url, context_window, max_output_tokens, capabilities, config, is_active, sort, created_by, created_at, updated_at)
     values
       ($1, $7,  'doubao-pro-32k', 'chat', 'openai', 'Doubao Pro 32k',
        'General chat model, 32k context. NOTE: model_code kept unprefixed (legacy row, already live) — same reason as claude-sonnet-4/gpt-4o below.', 'model.model.doubao-pro-32k.desc',
-       'https://ark.cn-beijing.volces.com/api/v3', 32768, 4096, ARRAY['chat','tools'], true, 1, $10, now(), now()),
+       'https://ark.cn-beijing.volces.com/api/v3', 32768, 4096, ARRAY['chat','tools'], NULL, true, 1, $10, now(), now()),
       ($2, $8,  'deepseek/deepseek-chat', 'chat', 'openai', 'DeepSeek Chat',
        'General chat model (placeholder model code, confirm current vendor identifier before enabling billing).', 'model.model.deepseek-chat.desc',
-       'https://api.deepseek.com', 64000, 8192, ARRAY['chat','tools'], true, 2, $10, now(), now()),
+       'https://api.deepseek.com', 64000, 8192, ARRAY['chat','tools'], '{"upstreamModel":"deepseek-chat"}'::jsonb, true, 2, $10, now(), now()),
       ($3, $9,  'minimax/minimax-text-01', 'chat', 'openai', 'MiniMax Text 01',
        'General chat model (placeholder model code, confirm current vendor identifier before enabling billing).', 'model.model.minimax-text-01.desc',
-       'https://api.minimax.chat/v1', 245000, 8192, ARRAY['chat','tools'], true, 3, $10, now(), now()),
+       'https://api.minimax.chat/v1', 245000, 8192, ARRAY['chat','tools'], '{"upstreamModel":"minimax-text-01"}'::jsonb, true, 3, $10, now(), now()),
       ($4, $11, 'claude-sonnet-4', 'chat', 'anthropic', 'Claude Sonnet 4',
        'Balanced chat model with vision and tools, 200k context. Registered closed — see model_providers.config. NOTE: model_code kept unprefixed (legacy row, already live) — do not rename to the provider/model convention in-place (same fixed id + different model_code would collide with the existing primary key on any environment where this row already exists); rename requires an explicit UPDATE migration, not a reseed.', 'model.model.claude-sonnet-4.desc',
-       'https://api.anthropic.com', 200000, 8192, ARRAY['chat','tools','vision'], false, 11, $10, now(), now()),
+       'https://api.anthropic.com', 200000, 8192, ARRAY['chat','tools','vision'], NULL, false, 11, $10, now(), now()),
       ($5, $12, 'gpt-4o', 'chat', 'openai', 'GPT-4o',
        'Multimodal chat model with vision and tools, 128k context. Registered closed — see model_providers.config. NOTE: model_code kept unprefixed for the same reason as claude-sonnet-4 above.', 'model.model.gpt-4o.desc',
-       'https://api.openai.com/v1', 128000, 16384, ARRAY['chat','tools','vision'], false, 12, $10, now(), now()),
+       'https://api.openai.com/v1', 128000, 16384, ARRAY['chat','tools','vision'], NULL, false, 12, $10, now(), now()),
       ($6, $13, 'google/gemini-2.5-flash', 'chat', 'openai', 'Gemini 2.5 Flash',
        'Multimodal chat model, fast tier. Registered closed — see model_providers.config (placeholder model code).', 'model.model.gemini-2.5-flash.desc',
-       'https://generativelanguage.googleapis.com', 1000000, 8192, ARRAY['chat','tools','vision'], false, 13, $10, now(), now())
+       'https://generativelanguage.googleapis.com', 1000000, 8192, ARRAY['chat','tools','vision'], '{"upstreamModel":"gemini-2.5-flash"}'::jsonb, false, 13, $10, now(), now())
     on conflict (model_code) do nothing
   `,
     [
