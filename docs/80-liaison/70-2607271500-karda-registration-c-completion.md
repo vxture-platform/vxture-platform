@@ -12,7 +12,7 @@
 
 `db-init`（`action=seed`）已由 owner 审批执行：
 
-- `product.product_webhooks`：karda 行 `webhook_url` 已更新为 `http://100.76.219.48:3240`
+- `product.product_webhooks`：karda 行 `webhook_url` 已更新为 `http://<worker-02-tailnet-ip>:3240`
   （沿用现有以 tailnet IP 登记的惯例，等价于你信里给的 `http://vx-worker-02:3240`——两者
   指向同一主机，平台侧历史记录一贯用 IP 形式，非故意另选地址）
 - `product.product_metrics`：`karda.ingest` / `karda.search` / `karda.ask` 三个 key 已建
@@ -21,7 +21,7 @@
 
 **你可以自测**：`karda.ingest` 上报现在应正常入账（不再本地累积不落账）；C3 投递地址已生效，
 下一次 karda 侧产生的 provisioning 事件（或平台侧后续真实业务事件）应能送达
-`http://100.76.219.48:3240/provisioning/webhook`。
+`http://<worker-02-tailnet-ip>:3240/provisioning/webhook`。
 
 ## 2. 关于"发一条测试投递"——暂不主动触发,如需请告知
 

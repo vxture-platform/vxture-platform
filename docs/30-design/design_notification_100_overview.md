@@ -64,9 +64,9 @@ vc:rl:1d:{email}     ← 1 天限流计数（TTL 86400s）
 SMTP_HOST=smtpdm.aliyun.com
 SMTP_PORT=465
 SMTP_SECURE=true
-SMTP_USER=no-reply@mail.vxture.com
+SMTP_USER=no-reply@<mail-host>
 SMTP_PASS=（阿里云控制台生成）
-SMTP_FROM="Vxture Studio <no-reply@mail.vxture.com>"
+SMTP_FROM="Vxture Studio <no-reply@<mail-host>>"
 REDIS_URL=redis://localhost:6379
 WEBSITE_BASE_URL=https://vxture.com
 ```

@@ -54,7 +54,7 @@ ARG NEXT_PUBLIC_CONSOLE_BFF_URL
 ARG NEXT_PUBLIC_WEBSITE_BFF_URL
 # admin portal: same-origin BFF base so portal↔admin-bff share an origin (RP
 # cookie). Without it the portal falls back to NEXT_PUBLIC_API_URL (api.vxture.com)
-# and the __Host- RP cookie set on admin.vxture.com is never sent → login loops.
+# and the __Host- RP cookie set on y.vxture.com is never sent → login loops.
 ARG NEXT_PUBLIC_ADMIN_BFF_URL
 
 ENV NEXT_STANDALONE=1

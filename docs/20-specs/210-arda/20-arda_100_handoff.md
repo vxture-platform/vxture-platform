@@ -39,7 +39,7 @@
 
 | 项      | 值                                                                                                                                                                                                                                                |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| base    | 平台内网别名 `http://100.100.197.42:8080`（tailnet 接口绑定；平台重构拓扑产品零改动）                                                                                                                                                             |
+| base    | 平台内网别名 `http://<worker-01-tailnet-ip>:8080`（tailnet 接口绑定；平台重构拓扑产品零改动）                                                                                                                                                     |
 | C2 权益 | `GET /platform/entitlements?workspace_id={W}&product=arda`（批量 `products=`）；短 TTL 缓存（`Cache-Control: private, max-age=45`）                                                                                                               |
 | C3 用量 | `POST /usage/consume`（counter）+ `PUT /usage/gauge`（storage 水位快照）                                                                                                                                                                          |
 | 鉴权    | 请求头 `x-vxture-internal-auth`（= 平台 `AUTH_INTERNAL_TOKEN`，arda 侧键名 `PLATFORM_INTERNAL_AUTH_TOKEN`，owner 手动转运）——过渡 S2S 凭证，[`product_210`](../../30-design/product_210_tool-protocol.md) token exchange 落地后迁移，端点契约不变 |

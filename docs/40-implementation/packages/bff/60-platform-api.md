@@ -25,7 +25,7 @@
 
 拆分后分工：auth-bff = 纯身份（OIDC/authn/operator），admin-bff = 运营治理面，platform-api = commerce 单一宿主。
 
-**接入路径**：产品侧经 nginx 内网别名 `http://100.100.197.42:8080`（Tailscale 接口绑定，`deploy/nginx/sites-enabled/platform-internal.conf` 路由 `/platform/*`、`/usage/*`），公网 nginx 不路由这些前缀（边界对称）。
+**接入路径**：产品侧经 nginx 内网别名 `http://<worker-01-tailnet-ip>:8080`（Tailscale 接口绑定，`deploy/nginx/sites-enabled/platform-internal.conf` 路由 `/platform/*`、`/usage/*`），公网 nginx 不路由这些前缀（边界对称）。
 
 ## 鉴权
 

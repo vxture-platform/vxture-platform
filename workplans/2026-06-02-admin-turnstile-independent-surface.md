@@ -14,7 +14,7 @@ admin 属于平台运营安全域，不应复用 tenant 端 Turnstile key。需�
 
 - admin 登录改为使用 Cloudflare Turnstile 原生验证。
 - admin 使用独立 site key / secret key。
-- admin 验证只允许 `admin.vxture.com`。
+- admin 验证只允许 `y.vxture.com`。
 - 移除或停用自建拖动滑块，避免两套人机验证并存。
 
 ## 非目标
@@ -28,7 +28,7 @@ admin 属于平台运营安全域，不应复用 tenant 端 Turnstile key。需�
 - [ ] GitHub Secret 补充 `CF_TURNSTILE_ADMIN_SITE_KEY`。
 - [ ] VXTURE_DEPLOY_HOST `.env.admin-bff` 生产环境补充 `CF_TURNSTILE_ADMIN_SECRET_KEY`。
 - [x] `.env.admin-bff.example` 补充 `CF_TURNSTILE_ADMIN_SECRET_KEY`。
-- [x] 补充 `CF_TURNSTILE_ADMIN_ALLOWED_HOSTNAMES=admin.vxture.com` 模板。
+- [x] 补充 `CF_TURNSTILE_ADMIN_ALLOWED_HOSTNAMES=y.vxture.com` 模板。
 - [x] admin 登录页接入 `AuthTurnstile`。
 - [x] admin 登录请求提交 Turnstile token。
 - [x] admin 短信验证码发送/登录请求提交 Turnstile token。

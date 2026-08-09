@@ -19,12 +19,16 @@ import type { IMailProvider, MailMessage } from "../types/mail.types";
 
 // ─── 环境变量读取 ──────────────────────────────────────────────────────────────
 
-const SMTP_HOST = process.env["SMTP_HOST"] ?? "smtpdm.aliyun.com";
+// No real hostnames or addresses as fallbacks — this repo is public, and a
+// default that names the live mail relay leaks it whether or not it is ever
+// used. SMTP_PASS was already unset-by-default, so the old defaults could
+// never authenticate on their own; requiring every value from env only makes
+// that explicit. Production supplies all four via deploy/secrets/platform-mail.env.
+const SMTP_HOST = process.env["SMTP_HOST"] ?? "";
 const SMTP_PORT = Number(process.env["SMTP_PORT"] ?? 465);
-const SMTP_USER = process.env["SMTP_USER"] ?? "no-reply@mail.vxture.com";
+const SMTP_USER = process.env["SMTP_USER"] ?? "";
 const SMTP_PASS = process.env["SMTP_PASS"] ?? "";
-const SMTP_FROM =
-  process.env["SMTP_FROM"] ?? '"vxture studio" <no-reply@mail.vxture.com>';
+const SMTP_FROM = process.env["SMTP_FROM"] ?? "";
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 

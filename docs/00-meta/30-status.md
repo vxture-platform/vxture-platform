@@ -26,9 +26,9 @@
 SMTP_HOST=smtpdm.aliyun.com
 SMTP_PORT=465
 SMTP_SECURE=true
-SMTP_USER=no-reply@mail.vxture.com
+SMTP_USER=no-reply@<mail-host>
 SMTP_PASS=(generated in Aliyun console)
-SMTP_FROM="Vxture Studio <no-reply@mail.vxture.com>"
+SMTP_FROM="Vxture Studio <no-reply@<mail-host>>"
 REDIS_URL=redis://localhost:6379
 WEBSITE_BASE_URL=https://vxture.com
 ```

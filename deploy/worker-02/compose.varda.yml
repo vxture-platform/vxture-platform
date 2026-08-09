@@ -4,7 +4,7 @@
 # 使用：docker compose -f compose.varda.yml up -d
 #
 # 拓扑（详见 docs/deployment/varda-worker-02-runbook.md）：
-#   - nginx(worker-01) 的 /varda/ 直连 100.76.219.48:3080（本栈 varda-bff，须发布到 0.0.0.0，UFW 仅放行 Tailscale 子网）
+#   - nginx(worker-01) 的 /varda/ 直连 <worker-02-tailnet-ip>:3080（本栈 varda-bff，须发布到 0.0.0.0，UFW 仅放行 Tailscale 子网）
 #   - varda-server → Atlas（LLM 网关，独立仓 vxture-atlas，现部署本机 worker-02:3100，2026-07-27 更正
 #     此前指向 worker-01 旧 model-platform 的错误）经 MODEL_PLATFORM_URL 配置；虽同机部署，仍走
 #     tailnet IP（不同 compose 栈/docker network，无 Docker DNS 名互通）

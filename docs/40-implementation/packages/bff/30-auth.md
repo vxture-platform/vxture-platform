@@ -375,9 +375,9 @@ FEISHU_REDIRECT_URI=https://api.vxture.com/auth-api/auth/oauth/feishu/callback
 SMTP_HOST=smtpdm.aliyun.com
 SMTP_PORT=465
 SMTP_SECURE=true
-SMTP_USER=no-reply@mail.vxture.com
+SMTP_USER=no-reply@<mail-host>
 SMTP_PASS=
-SMTP_FROM="Vxture Studio <no-reply@mail.vxture.com>"
+SMTP_FROM="Vxture Studio <no-reply@<mail-host>>"
 ```
 
 admin Turnstile secret belongs to `/srv/vxture/runtime/.env.admin-bff`, because

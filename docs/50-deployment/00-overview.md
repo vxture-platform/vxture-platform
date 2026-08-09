@@ -59,13 +59,13 @@ vx-worker-02/03/04/05 等（业务执行面，不由本仓部署）
 
 ## 二、节点信息
 
-| 节点                      | 角色               | 系统         | 规格                | Tailscale IP   | 公网 IP      | 本仓职责 |
-| ------------------------- | ------------------ | ------------ | ------------------- | -------------- | ------------ | -------- |
-| vxture-VXTURE_DEPLOY_HOST | 平台控制面 prod    | Ubuntu 26.04 | 2C 2G 40G+2G ESSD   | 100.100.197.42 | 39.103.62.17 | 是       |
-| vxture-beta               | 平台控制面 beta    | 待定         | 临时按量            | 待定           | 待定         | 待规划   |
-| vxture-vx-worker-02       | 外部业务执行面     | Ubuntu 26.04 | 8C 24G 200G+3T RAID | 100.76.219.48  | 无           | 否       |
-| stone-work                | 办公电脑（开发）   | Windows 11   | —                   | 100.75.104.94  | —            | 开发访问 |
-| stone-mix14               | 个人笔记本（管理） | Windows 11   | —                   | 100.72.64.52   | —            | 管理访问 |
+| 节点                      | 角色               | 系统         | 规格                | Tailscale IP                 | 公网 IP      | 本仓职责 |
+| ------------------------- | ------------------ | ------------ | ------------------- | ---------------------------- | ------------ | -------- |
+| vxture-VXTURE_DEPLOY_HOST | 平台控制面 prod    | Ubuntu 26.04 | 2C 2G 40G+2G ESSD   | <worker-01-tailnet-ip>       | 39.103.62.17 | 是       |
+| vxture-beta               | 平台控制面 beta    | 待定         | 临时按量            | 待定                         | 待定         | 待规划   |
+| vxture-vx-worker-02       | 外部业务执行面     | Ubuntu 26.04 | 8C 24G 200G+3T RAID | <worker-02-tailnet-ip>       | 无           | 否       |
+| stone-work                | 办公电脑（开发）   | Windows 11   | —                   | <dev-workstation-tailnet-ip> | —            | 开发访问 |
+| stone-mix14               | 个人笔记本（管理） | Windows 11   | —                   | <admin-laptop-tailnet-ip>    | —            | 管理访问 |
 
 **VXTURE_DEPLOY_HOST 存储**：40G 系统盘（OS + 容器镜像）+ 2G ESSD `/data`（平台数据库 + Nginx）。初始化检查要求数据盘不低于 2G（含 2G），用量增长后再在线扩容。
 

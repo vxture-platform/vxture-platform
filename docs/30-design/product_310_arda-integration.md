@@ -12,14 +12,14 @@
 
 三通道平台侧**全部定型上产**（develop=beta=main）。Arda 作为首个消费者的对接链路（登录→开通→门控→consume→缓存重拉）已端到端跑通。
 
-| 通道            | 平台侧交付                                                                                             | 端点                                                   |
-| --------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| C1 身份         | ✅ arda/arda-beta OIDC client（realm=customer），access_token 零商业字段                               | IdP `accounts.vxture.com`                              |
-| C2 权益         | ✅ 信封 v2（订阅事实块 + 销售轴 + quota_pools），短 TTL                                                | `GET /platform/entitlements`                           |
-| C3 用量         | ✅ consume（counter 瀑布）+ gauge（storage 水位快照）                                                  | `POST /usage/consume`、`PUT /usage/gauge`              |
-| C3 provisioning | ✅ webhook 派发（HMAC/幂等/tailnet 投递）                                                              | arda 侧 `{ARDA_WEBHOOK_BASE_URL}/provisioning/webhook` |
-| C2 可见集       | ✅ 平台侧已实现（资产面共享，随共享面接入）                                                            | `GET /platform/sharing/visible-set`                    |
-| 宿主            | ✅ 独立宿主 `platform-api`（身份面/商业面分离，D13）；产品经内网别名 `http://100.100.197.42:8080` 接入 | —                                                      |
+| 通道            | 平台侧交付                                                                                                     | 端点                                                   |
+| --------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| C1 身份         | ✅ arda/arda-beta OIDC client（realm=customer），access_token 零商业字段                                       | IdP `accounts.vxture.com`                              |
+| C2 权益         | ✅ 信封 v2（订阅事实块 + 销售轴 + quota_pools），短 TTL                                                        | `GET /platform/entitlements`                           |
+| C3 用量         | ✅ consume（counter 瀑布）+ gauge（storage 水位快照）                                                          | `POST /usage/consume`、`PUT /usage/gauge`              |
+| C3 provisioning | ✅ webhook 派发（HMAC/幂等/tailnet 投递）                                                                      | arda 侧 `{ARDA_WEBHOOK_BASE_URL}/provisioning/webhook` |
+| C2 可见集       | ✅ 平台侧已实现（资产面共享，随共享面接入）                                                                    | `GET /platform/sharing/visible-set`                    |
+| 宿主            | ✅ 独立宿主 `platform-api`（身份面/商业面分离，D13）；产品经内网别名 `http://<worker-01-tailnet-ip>:8080` 接入 | —                                                      |
 
 **剩线 B 项**（不阻塞平台）：P3.2 v1 功能切片、P4.4 入口 grant 求值（随共享面）、T3 工具面 provider（随 product_210 逐项授权）。
 

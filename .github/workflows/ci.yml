@@ -169,6 +169,12 @@ jobs:
           VX_ENV_AUDIT_FAIL_WARNINGS=1 \
           node scripts/guardrails/audit-env.mjs
 
+      # 公开仓卫生门：本仓 public 是有意设置，边缘用通配符证书正是为了让主机名不进
+      # CT 日志——真名/ tailnet 地址一旦提交就白送。文档恰恰是最常泄露的地方，所以
+      # 这一步不挂 docs_only 跳过条件，任何改动都要过。
+      - name: Public repo hygiene guardrail
+        run: pnpm lint:public-hygiene
+
       - name: Package boundary check
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:boundaries

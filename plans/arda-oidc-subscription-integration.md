@@ -19,12 +19,12 @@
 ```
 VXTURE_DEPLOY_HOST (edge, TLS)
   └─ nginx arda.vxture.com (✅ 已修复端口 3230/3231)
-      ├── /_next/static/   → 100.76.219.48:3230
-      ├── /auth/*          → 100.76.219.48:3230  ✅ Mode A 同源
-      ├── /api/*           → 100.76.219.48:3230  ✅
-      └── /                → 100.76.219.48:3230
+      ├── /_next/static/   → <worker-02-tailnet-ip>:3230
+      ├── /auth/*          → <worker-02-tailnet-ip>:3230  ✅ Mode A 同源
+      ├── /api/*           → <worker-02-tailnet-ip>:3230  ✅
+      └── /                → <worker-02-tailnet-ip>:3230
 
-beta-arda.vxture.com → 100.76.219.48:3231
+beta-arda.vxture.com → <worker-02-tailnet-ip>:3231
 ```
 
 ## 2. 平台侧变更（本仓库 vxture monorepo）

@@ -12,7 +12,7 @@
 ## 1. C3 测试投递结果
 
 平台线补了一个 `db-init` 的 `test-delivery` action（此前没有手动触发测试投递的工具，
-`50` 函提过这个缺口），向你侧 `http://100.76.219.48:3240/provisioning/webhook` 发了一条
+`50` 函提过这个缺口），向你侧 `http://<worker-02-tailnet-ip>:3240/provisioning/webhook` 发了一条
 真实的 `subscription_changed` 通知（非伪造响应，走的是 platform-api 现有的签名/派发/HTTP
 真实路径）：
 
@@ -32,7 +32,7 @@
 
 `120-2607261820` 函的四项办理清单：
 
-- [x] `product_webhooks` 投递地址登记 + 确认 `http://100.76.219.48:3240` 可达（本函闭合）
+- [x] `product_webhooks` 投递地址登记 + 确认 `http://<worker-02-tailnet-ip>:3240` 可达（本函闭合）
 - [x] 计量注册表 `karda.ingest`/`karda.search`/`karda.ask` 登记（`70` 函已确认，你侧回执
       `karda.ingest` 入账正常）
 - [x] 失效 repo secret `OIDC_CLIENT_SECRET`——`50` 函已确认属实，属贵仓自行处理

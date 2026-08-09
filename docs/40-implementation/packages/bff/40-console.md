@@ -419,9 +419,9 @@ ALLOWED_ORIGIN=https://console.vxture.com
 SMTP_HOST=smtpdm.aliyun.com
 SMTP_PORT=465
 SMTP_SECURE=true
-SMTP_USER=no-reply@mail.vxture.com
+SMTP_USER=no-reply@<mail-host>
 SMTP_PASS=
-SMTP_FROM="Vxture Studio <no-reply@mail.vxture.com>"
+SMTP_FROM="Vxture Studio <no-reply@<mail-host>>"
 ```
 
 ---
