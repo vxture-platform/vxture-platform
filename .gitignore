@@ -208,7 +208,16 @@ docs/architecture/package-architecture.html
 # - vpn-proxy note is a per-workstation baseline (self-declared local-only)
 # - design-system-gallery is a regenerable claude.ai design import: large binaries
 #   (multi-MB JPEGs) and raw-color mocks that trip the DS guardrail
+# - the management-plane workplan is the owner-side record of the real opera and
+#   admin FQDNs. product_250 §2 keeps those names out of this repo (the edge
+#   serves a wildcard cert so they never reach CT logs), and the file says so
+#   itself — it is untracked on purpose, not by omission. It stays readable in
+#   place; ignoring it only stops `git add -A` from staging it. Committing it
+#   anyway would still fail CI on the ops-hostname rule in
+#   scripts/guardrails/check-public-repo-hygiene.mjs — this is the convenience
+#   layer, that is the guarantee.
 /vpn-proxy-claude-cli-baseline.md
 packages/design/design-system-gallery/
+/workplans/mgmt-plane-contract-capability-console.md
 
 # End of additional ignores
