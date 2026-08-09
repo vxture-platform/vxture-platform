@@ -87,6 +87,14 @@ jobs:
       - name: Docs numbering guardrail
         run: node scripts/guardrails/check-docs-numbering.mjs --strict
 
+      # 公开仓卫生门：本仓 public 是有意设置，边缘用通配符证书正是为了让主机名不进
+      # CT 日志——真名/ tailnet 地址一旦提交就白送。文档恰恰是最常泄露的地方，所以
+      # 这一步不挂 docs_only 跳过条件。也因此它必须跑在依赖安装**之前**、直接用
+      # runner 自带的 node：pnpm 由下面的 setup-node-pnpm 提供，而那一步是挂
+      # docs_only 的，docs-only PR 上并不执行。
+      - name: Public repo hygiene guardrail
+        run: node scripts/guardrails/check-public-repo-hygiene.mjs
+
       - name: Docs-only quality gate
         if: steps.changes.outputs.docs_only == 'true'
         run: echo "::notice::Docs-only change; heavy quality gate steps skipped while keeping the required check stable."
@@ -168,12 +176,6 @@ jobs:
           VX_WORKER_DIR="deploy" \
           VX_ENV_AUDIT_FAIL_WARNINGS=1 \
           node scripts/guardrails/audit-env.mjs
-
-      # 公开仓卫生门：本仓 public 是有意设置，边缘用通配符证书正是为了让主机名不进
-      # CT 日志——真名/ tailnet 地址一旦提交就白送。文档恰恰是最常泄露的地方，所以
-      # 这一步不挂 docs_only 跳过条件，任何改动都要过。
-      - name: Public repo hygiene guardrail
-        run: pnpm lint:public-hygiene
 
       - name: Package boundary check
         if: steps.changes.outputs.docs_only != 'true'
