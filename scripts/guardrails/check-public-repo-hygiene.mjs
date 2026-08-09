@@ -53,6 +53,19 @@ const RULES = [
     test: (line) => [...line.matchAll(/\bmail\.vxture\.com\b/g)].map((m) => m[0]),
     fix: "use <mail-host>; the real relay is supplied via deploy/secrets/platform-mail.env",
   },
+  {
+    id: "aliyun-account-endpoint",
+    // The ACR instance id and the mirror accelerator id are per-account and
+    // identify the tenancy. Aliyun's shared service endpoints (dysmsapi,
+    // dypnsapi, dashscope) are the same for everyone and are not matched.
+    // Placeholders like <acr-instance> or crpi-* fail these patterns by design.
+    test: (line) =>
+      [
+        ...line.matchAll(/\bcrpi-[a-z0-9]+\.[a-z0-9-]+\.personal\.cr\.aliyuncs\.com\b/g),
+        ...line.matchAll(/\b[a-z0-9]{6,}\.mirror\.aliyuncs\.com\b/g),
+      ].map((m) => m[0]),
+    fix: "use a placeholder (<acr-instance>, <id>.mirror.aliyuncs.com) and supply the real endpoint from host runtime env",
+  },
 ];
 
 /**

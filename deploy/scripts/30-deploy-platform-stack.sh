@@ -38,6 +38,14 @@ IMAGE_REGISTRY="$(read_compose_env VX_IMAGE_REGISTRY ghcr.io)"
 IMAGE_NAMESPACE="$(read_compose_env VX_IMAGE_NAMESPACE vxture)"
 IMAGE_TAG="$(read_compose_env VX_IMAGE_TAG latest)"
 
+# Host tailnet addresses. No defaults on purpose: the repo is public, so the
+# addresses live only in the host's runtime .env. Nothing consumes these yet —
+# compose and the nginx templates start interpolating them in a follow-up, and
+# an empty value there trips `${VAR:?}` loudly instead of silently binding a
+# published port to every interface.
+WORKER01_TAILNET_IP="$(read_compose_env VX_WORKER01_TAILNET_IP "")"
+WORKER02_TAILNET_IP="$(read_compose_env VX_WORKER02_TAILNET_IP "")"
+
 # ── 前置检查 ─────────────────────────────────────────────────────────────────
 
 check_file() {
@@ -110,6 +118,7 @@ echo ""
 echo "==> [3/4]+[4/4] 逐服务拉取并替换（memory-safe）"
 cd "$COMPOSE_DIR"
 export VX_IMAGE_REGISTRY="$IMAGE_REGISTRY" VX_IMAGE_NAMESPACE="$IMAGE_NAMESPACE" VX_IMAGE_TAG="$IMAGE_TAG"
+export VX_WORKER01_TAILNET_IP="$WORKER01_TAILNET_IP" VX_WORKER02_TAILNET_IP="$WORKER02_TAILNET_IP"
 SERVICES="$(docker compose -f compose.platform.yml config --services)"
 for svc in $SERVICES; do
   echo "  -- $svc: pull"

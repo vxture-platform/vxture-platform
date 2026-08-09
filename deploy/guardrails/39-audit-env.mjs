@@ -48,6 +48,14 @@ const COMPOSE_ONLY_KEYS = new Set([
   "VX_IMAGE_REGISTRY",
   "VX_IMAGE_NAMESPACE",
   "VX_IMAGE_TAG",
+  // Tailnet addresses of the deployment hosts. They are values, not names, so
+  // they belong on the host rather than in a public repo — compose and the
+  // nginx templates will interpolate them instead of hardcoding the addresses.
+  // Allow-listed here first: this audit rejects unknown keys with an error, so
+  // adding them to the host's runtime .env before this landed would fail the
+  // next deploy's pre-flight rather than the deploy itself.
+  "VX_WORKER01_TAILNET_IP",
+  "VX_WORKER02_TAILNET_IP",
 ]);
 
 const TENANT_TURNSTILE_KEYS = new Set([

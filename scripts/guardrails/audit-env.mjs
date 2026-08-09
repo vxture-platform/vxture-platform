@@ -43,7 +43,16 @@ const SHARED_SECRET_KEYS = new Set([
   'AUTH_INTERNAL_TOKEN',
 ]);
 
-const COMPOSE_ONLY_KEYS = new Set(['VX_IMAGE_REGISTRY', 'VX_IMAGE_NAMESPACE', 'VX_IMAGE_TAG']);
+// Kept in step with deploy/guardrails/39-audit-env.mjs — that copy is the one the
+// host runs before a deploy, and a key allowed there but not here (or vice versa)
+// means CI and production disagree about what may sit in the compose env.
+const COMPOSE_ONLY_KEYS = new Set([
+  'VX_IMAGE_REGISTRY',
+  'VX_IMAGE_NAMESPACE',
+  'VX_IMAGE_TAG',
+  'VX_WORKER01_TAILNET_IP',
+  'VX_WORKER02_TAILNET_IP',
+]);
 
 const TENANT_TURNSTILE_KEYS = new Set([
   'CF_TURNSTILE_TENANT_SECRET_KEY',

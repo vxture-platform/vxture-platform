@@ -124,11 +124,22 @@ check_url_head() {
 configure_docker_daemon() {
   echo "==> 配置 Docker daemon registry mirrors 与日志限制"
   mkdir -p /etc/docker
-  cat > /etc/docker/daemon.json <<'EOF'
+
+  # 阿里云加速器端点是账号级标识，不入公开仓。运行时传入以保持原有镜像源集合
+  # （sudo 需 -E 透传）：ALIYUN_DOCKER_MIRROR=https://<id>.mirror.aliyuncs.com
+  # 不传也能跑，只是少了阿里云这一跳，下面三个公共镜像源照常生效。
+  local aliyun_mirror_entry=""
+  if [ -n "${ALIYUN_DOCKER_MIRROR:-}" ]; then
+    aliyun_mirror_entry="    \"${ALIYUN_DOCKER_MIRROR}\",
+"
+  else
+    echo "提示：未设置 ALIYUN_DOCKER_MIRROR，跳过阿里云加速器，仅配置公共镜像源。" >&2
+  fi
+
+  cat > /etc/docker/daemon.json <<EOF
 {
   "registry-mirrors": [
-    "https://vp6xaxdh.mirror.aliyuncs.com",
-    "https://docker.m.daocloud.io",
+${aliyun_mirror_entry}    "https://docker.m.daocloud.io",
     "https://dockerhub.icu",
     "https://hub.rat.dev"
   ],

@@ -6,8 +6,8 @@
 # @category deployment-script
 #
 # worker-01 的 deploy-manual-init/bootstrap/11-bootstrap-host.sh 早就给
-# /etc/docker/daemon.json 配了 registry-mirrors（vp6xaxdh.mirror.aliyuncs.com
-# 等），worker-02 从未有对应脚本 —— postgres:18-alpine / redis:8-alpine /
+# /etc/docker/daemon.json 配了 registry-mirrors（阿里云加速器等），
+# worker-02 从未有对应脚本 —— postgres:18-alpine / redis:8-alpine /
 # 未来任何 docker.io 基础镜像，都在直连 docker.io，没有走镜像加速。
 # 本脚本只做这一件事，不重跑 worker-01 脚本里那套 DNS/UFW/swap/tailscale/
 # node 初始化 —— worker-02 已在正常运行 varda，不动其余已验证配置。
@@ -33,11 +33,23 @@ fi
 
 echo "==> 配置 Docker daemon registry mirrors 与日志限制（与 worker-01 同一份）"
 mkdir -p /etc/docker
-cat > /etc/docker/daemon.json <<'EOF'
+
+# 阿里云加速器端点是账号级标识，不入公开仓。要保持与以往完全相同的镜像源集合，
+# 运行时传入（注意 sudo 需 -E 才能透传环境变量）：
+#   ALIYUN_DOCKER_MIRROR=https://<id>.mirror.aliyuncs.com sudo -E bash bootstrap-docker-mirror.sh
+# 不传也能跑，只是少了阿里云这一跳，下面三个公共镜像源照常生效。
+aliyun_mirror_entry=""
+if [ -n "${ALIYUN_DOCKER_MIRROR:-}" ]; then
+  aliyun_mirror_entry="    \"${ALIYUN_DOCKER_MIRROR}\",
+"
+else
+  echo "提示：未设置 ALIYUN_DOCKER_MIRROR，跳过阿里云加速器，仅配置公共镜像源。" >&2
+fi
+
+cat > /etc/docker/daemon.json <<EOF
 {
   "registry-mirrors": [
-    "https://vp6xaxdh.mirror.aliyuncs.com",
-    "https://docker.m.daocloud.io",
+${aliyun_mirror_entry}    "https://docker.m.daocloud.io",
     "https://dockerhub.icu",
     "https://hub.rat.dev"
   ],
