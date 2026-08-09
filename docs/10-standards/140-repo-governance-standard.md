@@ -39,6 +39,13 @@ PR 评审比对项，不设新机检）。实例教训：vxtpl 在 `@vxture/shar
     `audit` / `gitleaks`（CI job 名必须精确产出这五个 context，改 job 名 = 分支保护失效）。**无单测的产品仓仍须提供
     一个恒绿的 `test-coverage` job**（占住该 context，零测试即通过）——不得从 required 里删该项。
     （`vxture-arda` 现行只有四项、缺 `test-coverage`，属偏差，见其仓整改线。）
+  - **matrix 作业必须另配聚合作业承载 context（2026-08-10 起，回应 `vxture-umbra` liaison platform#190）**：
+    matrix 只产出 `build (website)` 这类按腿 context，**永远不产出裸 `build`**。把 required check 指向 matrix
+    作业，得到的是一个**永不上报**的必需检查——表现为永久 pending 而非失败，所以看起来不像配置错误，
+    而是"CI 还没跑完"，分支就此永久不可合。多产物仓的正确形状：matrix 用别的名字（如 `portal-build`），
+    再加一个 `needs: [portal-build]` 的空壳作业叫 `build` 承载该 context。任一腿失败时聚合作业被 skip，
+    ruleset 视 skip 为未通过，**门禁强度不变**——这与 `quality-gate` 已在用的形状同源。
+    参照实现见 `vxture-umbra` `.github/workflows/ci.yml`。
 - **落地时机（关键顺序）**：空仓先 `git init`→`main`→首推建立 `main`→跑一次 CI 让 required checks
   至少产生一次→**此时**再 apply ruleset（先加限制性 ruleset 会挡住首次代码导入）。
 
@@ -114,6 +121,19 @@ PR 评审比对项，不设新机检）。实例教训：vxtpl 在 `@vxture/shar
 - **生产写走人工审批门**：生产部署/DB 写由 owner 在 GitHub 环境 **Review deployments 点击批准**，
   不靠 agent/口头授权自审。
 
+**第三方 action 钉版（2026-08-10 起，回应 `vxture-atlas` liaison platform#188）**：本规范 §9 已因供应链
+顾虑拒用第三方 SCA action、改跑 pinned 二进制，但同一顾虑此前没有落到**握凭证的** action 上——那才是
+爆炸半径最大的地方。规则：
+
+- **first-party（`actions/*`、`github/*`）用 major tag 即可**：与 runner 同一信任根，钉 SHA 收益甚微、噪声不小。
+- **第三方一律钉完整 commit SHA**，尾随 `# vX.Y.Z` 注释标明版本。Dependabot 原生支持 SHA pin 的更新并会
+  同步改注释，维护成本≈0（"钉 SHA 会破坏 dependabot 流"是常见误解，不成立）。
+- **按爆炸半径排序整改，不按字母**：持有 SSH 私钥/passphrase 的最先，其次 tailnet OAuth，再次 registry
+  凭证，最后只读 token 的扫描器。可变 tag 意味着上游一次账号失陷即可把 tag 移到恶意提交上，而**你的
+  生产私钥正作为输入递给它**。
+- **能删就别钉**：凡涉及凭证的第三方 action，优先换成"复合动作 + 原生命令"（见下方交付构件里的原生
+  `ssh`/`rsync` 条）。钉 SHA 只是缩小窗口，移除才是关闭窗口。
+
 **稳健 CD 构件（`vxture-arda` 范本，新仓/迁入照此搭，别现搓）：**
 
 - **复用复合动作 `.github/actions/tailnet-ssh-connect`**：一处封装 tailnet join + 写部署私钥/known_hosts，
@@ -144,6 +164,18 @@ PR 评审比对项，不设新机检）。实例教训：vxtpl 在 `@vxture/shar
   入 tailnet 走内网到主机 + ACR 同区内网拉镜像。
 - **overseas（GHCR + 公网）**：海外部署机（umbra→worker-04，**不在 tailnet**）。去掉 tailscale join、
   镜像换 GHCR、直连公网 SSH。ACR 内网端点对海外主机不适用。
+
+**跨 registry 拷贝必须带退避重试（2026-08-10 起，回应 `vxture-umbra` liaison platform#191）**：双仓要求
+配合 `docker buildx imagetools create` 做 GHCR→ACR 拷贝时，GHCR 在并发下会对部分镜像返回
+`403 Forbidden / denied`。**这是限流，不是权限问题**——判据是同一次运行里用同一套凭证、同一份 workflow
+代码，有的镜像成功有的失败；单纯 `rerun --failed` 即可全过。权限故障不会挑镜像。
+
+- 每次拷贝**独立重试 3 次、指数退避**（如 5s/15s/45s），而不是整个作业重跑——重跑会把已成功的镜像
+  再推一遍，放大并发、加剧限流。
+- **串行化拷贝循环**，或把并发上限压到 2；`matrix` 并行拷贝正是触发条件。
+- 重试耗尽才失败，且错误信息里**写明"疑似 GHCR 限流，非权限"**——照字面读 `403 denied` 会把人送去查
+  token 权限，那条路是死的（本仓 `docker-build.yml` 的 buildx setup 与 build+push 已有同款 retry idiom，
+  拷贝步照抄即可）。
 
 ---
 
