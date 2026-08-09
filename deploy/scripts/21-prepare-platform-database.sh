@@ -13,6 +13,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# 统一变量入口：compose 里的 ${VX_*} 在调用方进程环境求值，tailnet 地址既不能
+# 空默认（会绑定全网卡）也不能缺值即炸（排障脚本正是最需要能跑的时候）。
+. "$COMPOSE_DIR/scripts/lib/compose-env.sh"
+load_compose_env
 COMPOSE_FILE="$COMPOSE_DIR/compose.platform.yml"
 RUNTIME_DIR="${RUNTIME_DIR:-/srv/vxture/runtime}"
 POSTGRES_DATA_DIR="${POSTGRES_DATA_DIR:-/srv/vxture/data/platform-pg}"

@@ -23,7 +23,7 @@ services:
       # bound to the Tailscale interface only — tailnet peers reach the
       # product-facing S2S surface via nginx path routing, so the platform
       # can re-home /platform/* + /usage/* without any product-side change.
-      - "100.100.197.42:8080:8080"
+      - "${VX_WORKER01_TAILNET_IP:?set it in runtime/.env}:8080:8080"
     volumes:
       - /srv/vxture/data/nginx/conf/conf.d:/etc/nginx/conf.d:ro
       - /srv/vxture/data/nginx/conf/sites-enabled:/etc/nginx/sites-enabled:ro

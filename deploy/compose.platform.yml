@@ -197,7 +197,7 @@ services:
     memswap_limit: 192m
     networks: [vxture-prod]
     ports:
-      - "100.100.197.42:3061:3061" # 绑定 Tailscale 接口，仅 Tailscale 对端可达（原3090，2026-07-24 L0端口迁移）
+      - "${VX_WORKER01_TAILNET_IP:?set it in runtime/.env}:3061:3061" # 绑定 Tailscale 接口，仅 Tailscale 对端可达（原3090，2026-07-24 L0端口迁移）
     # Overrides any NODE_OPTIONS from env_file (inline wins). Owner: confirm no
     # host .env.* already sets NODE_OPTIONS flags that would be clobbered.
     environment:

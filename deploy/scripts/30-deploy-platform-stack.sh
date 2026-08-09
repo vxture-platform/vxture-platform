@@ -16,35 +16,14 @@ COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 COMPOSE_FILE="$COMPOSE_DIR/compose.platform.yml"
 RUNTIME_DIR="${RUNTIME_DIR:-/srv/vxture/runtime}"
 
-read_compose_env() {
-  local key="$1"
-  local default_value="$2"
-  local value=""
+# 变量加载器已抽到 lib/compose-env.sh —— 这里原有的 read_compose_env 是它的出处，
+# 现在由所有 compose 调用方共用，避免各脚本各拿一份、tailnet 变量漏喂。
+. "$COMPOSE_DIR/scripts/lib/compose-env.sh"
+load_compose_env
 
-  if [ "${!key+x}" = "x" ]; then
-    value="${!key}"
-  elif [ -f "$RUNTIME_DIR/.env" ]; then
-    value="$(grep -E "^${key}=" "$RUNTIME_DIR/.env" | tail -n 1 | cut -d= -f2- || true)"
-    value="${value%\"}"
-    value="${value#\"}"
-    value="${value%\'}"
-    value="${value#\'}"
-  fi
-
-  printf "%s" "${value:-$default_value}"
-}
-
-IMAGE_REGISTRY="$(read_compose_env VX_IMAGE_REGISTRY ghcr.io)"
-IMAGE_NAMESPACE="$(read_compose_env VX_IMAGE_NAMESPACE vxture)"
-IMAGE_TAG="$(read_compose_env VX_IMAGE_TAG latest)"
-
-# Host tailnet addresses. No defaults on purpose: the repo is public, so the
-# addresses live only in the host's runtime .env. Nothing consumes these yet —
-# compose and the nginx templates start interpolating them in a follow-up, and
-# an empty value there trips `${VAR:?}` loudly instead of silently binding a
-# published port to every interface.
-WORKER01_TAILNET_IP="$(read_compose_env VX_WORKER01_TAILNET_IP "")"
-WORKER02_TAILNET_IP="$(read_compose_env VX_WORKER02_TAILNET_IP "")"
+IMAGE_REGISTRY="$VX_IMAGE_REGISTRY"
+IMAGE_NAMESPACE="$VX_IMAGE_NAMESPACE"
+IMAGE_TAG="$VX_IMAGE_TAG"
 
 # ── 前置检查 ─────────────────────────────────────────────────────────────────
 
@@ -117,8 +96,7 @@ echo "  如 registry 需要认证，请先在服务器上完成人工认证；�
 echo ""
 echo "==> [3/4]+[4/4] 逐服务拉取并替换（memory-safe）"
 cd "$COMPOSE_DIR"
-export VX_IMAGE_REGISTRY="$IMAGE_REGISTRY" VX_IMAGE_NAMESPACE="$IMAGE_NAMESPACE" VX_IMAGE_TAG="$IMAGE_TAG"
-export VX_WORKER01_TAILNET_IP="$WORKER01_TAILNET_IP" VX_WORKER02_TAILNET_IP="$WORKER02_TAILNET_IP"
+# VX_IMAGE_* 与 VX_WORKER0x_TAILNET_IP 已由 load_compose_env 导出，此处不再重复。
 SERVICES="$(docker compose -f compose.platform.yml config --services)"
 for svc in $SERVICES; do
   echo "  -- $svc: pull"
@@ -133,7 +111,7 @@ docker compose -f compose.platform.yml up -d --remove-orphans
 
 # 部署只负责"拉起并等待就绪"。完整健康/契约验证交给 40-verify-platform-runtime.sh，
 # 基线/证书/防火墙等常态漂移巡检交给 platform-alerts 定时 workflow（51），均不在此重复。
-export VX_IMAGE_REGISTRY VX_IMAGE_NAMESPACE VX_IMAGE_TAG
+# 变量在 load_compose_env 中已 export，无需重复。
 
 echo ""
 echo "==> 等待容器就绪（最多 ${VX_READINESS_TIMEOUT:-90}s）"

@@ -69,22 +69,15 @@ const RULES = [
 ];
 
 /**
- * Known-pending exceptions. Each entry is debt, not a blessing: these files are
- * consumed by nginx/compose at deploy time and cannot take a placeholder until
- * the corresponding variable exists in the worker-01 runtime env (an owner-gated
- * host change). Delete the entry in the same PR that parameterises the file.
+ * Known-pending exceptions, as [file, rule] pairs. Empty, and meant to stay that
+ * way: an entry here is debt, not a blessing. The nine deploy-time nginx and
+ * compose files that used to sit in this list now interpolate
+ * VX_WORKER0x_TAILNET_IP instead — compose from the exported process env,
+ * nginx from an envsubst pass in 20-sync-nginx-config.sh. Add an entry only when
+ * a file genuinely cannot take a placeholder yet, and delete it in the same PR
+ * that fixes the file.
  */
-const ALLOW = [
-  ["deploy/compose.nginx.yml", "tailnet-ip"],
-  ["deploy/compose.platform.yml", "tailnet-ip"],
-  ["deploy/nginx/sites-enabled/arda.vxture.com.conf", "tailnet-ip"],
-  ["deploy/nginx/sites-enabled/console.vxture.com.conf", "tailnet-ip"],
-  ["deploy/nginx/sites-enabled/karda.vxture.com.conf", "tailnet-ip"],
-  ["deploy/nginx/sites-enabled/platform-internal.conf", "tailnet-ip"],
-  ["deploy/nginx/sites-enabled/vxtpl.vxture.com.conf", "tailnet-ip"],
-  ["deploy/nginx/snippets/varda.conf", "tailnet-ip"],
-  ["deploy/nginx/templates/admin.vhost.template", "tailnet-ip"],
-];
+const ALLOW = [];
 const allowed = new Set(ALLOW.map(([f, r]) => `${f} ${r}`));
 
 // This file states the very patterns it forbids, so it cannot police itself.

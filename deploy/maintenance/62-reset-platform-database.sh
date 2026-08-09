@@ -13,6 +13,10 @@ set -euo pipefail
 
 OWNER_USER="${SUDO_USER:-$(id -un)}"
 COMPOSE_DIR="${COMPOSE_DIR:-/srv/vxture/deploy}"
+# 统一变量入口：compose 里的 ${VX_*} 在调用方进程环境求值，tailnet 地址既不能
+# 空默认（会绑定全网卡）也不能缺值即炸（排障脚本正是最需要能跑的时候）。
+. "$COMPOSE_DIR/scripts/lib/compose-env.sh"
+load_compose_env
 COMPOSE_FILE="$COMPOSE_DIR/compose.platform.yml"
 DATA_DIR="${DATA_DIR:-/srv/vxture/data/platform-pg}"
 BACKUP_ROOT="${BACKUP_ROOT:-/srv/vxture/backups/platform-pg-reset}"
