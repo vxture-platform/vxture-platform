@@ -289,24 +289,6 @@ export interface ComplianceEventItem {
   updatedAt: string;
 }
 
-export interface MaintenanceWindowItem {
-  id: string;
-  severity: "minor" | "major" | "critical";
-  status: "scheduled" | "in_progress" | "completed" | "cancelled";
-  title: string;
-  description: string | null;
-  impactDescription: string | null;
-  affectedServices: string[];
-  startAt: string;
-  endAt: string;
-  actualEndAt: string | null;
-  createdBy: string;
-  createdByName: string | null;
-  updatedBy: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface SkillRecord {
   id: string;
   skillCode: string;

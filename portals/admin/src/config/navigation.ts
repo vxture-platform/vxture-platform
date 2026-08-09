@@ -456,17 +456,10 @@ const platformAutonomySections: AdminNavigationSection[] = [
           "管理平台后台任务、异步队列、执行记录、失败重试与调度状态。",
         icon: "workflow",
       },
-      {
-        id: "maintenanceWindows",
-        code: "maintenance_window",
-        i18nKey: "menu.platform.maintenance_window",
-        status: "active",
-        href: "/maintenance-windows",
-        label: "维护窗口",
-        description:
-          "声明与管理平台维护窗口：计划、执行、完成与取消，实际结束时间对账。",
-        icon: "clock",
-      },
+      // 维护窗口（maintenance_window）2026-08-07 迁往 opera 的「运行保障」组：
+      // 它是基础设施运维，归控制平面而不是运营后台。数据仍是
+      // admin.maintenance_windows，只是改由 opera-bff 供给。菜单码与 i18n key
+      // 一并撤走，避免 admin 侧留一个指向 404 的入口。
     ],
   },
   {

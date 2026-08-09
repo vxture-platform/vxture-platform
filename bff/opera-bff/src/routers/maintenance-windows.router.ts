@@ -1,24 +1,21 @@
 /**
- * maintenance-windows.router.ts - 维护窗口路由
- * @package @vxture/bff-admin
- *
- * Description: admin.maintenance_windows 读写（TD-021）。设计权威 =
- *   docs/product/platform/admin/governance-write-paths.md §3.3/§4。
- *   状态机 scheduled→(start)in_progress→(complete)completed，
- *   scheduled|in_progress→(cancel)cancelled；无删除（表无 deleted_at，
- *   终态即归档留存对账）。scheduled 全字段可编；in_progress 仅 end_at
- *   顺延 + description/impact_description 追记。转移走条件 UPDATE
- *   （0 行 = 404/409），写 = 事务 + 事务内审计。锚点列 id/created_by/
- *   created_at 永不出现在 SET（98_column_locks）。
- *
- * @author AI-Generated
- * @date 2026-07-05
- * @version 1.0
- *
- * @copyright Vxture Team
- *
+ * maintenance-windows.router.ts — 维护窗口读写。
+ * @package @vxture/bff-opera
  * @layer Application
  * @category Router
+ *
+ * 自 admin-bff 迁入（2026-08-07，批 A）。**行为逐条保持不变**，只换了宿主与主体
+ * 类型：能力码仍是 `release:maintenance.read|manage`，状态机仍是
+ *   scheduled →(start) in_progress →(complete) completed
+ *   scheduled|in_progress →(cancel) cancelled
+ * 无删除（表无 deleted_at，终态即归档留存对账）。
+ *
+ * scheduled 全字段可编；in_progress 仅 end_at 顺延 + description/impact 追记；
+ * 终态只读。状态转移走**条件 UPDATE**（0 行 = 404 还是 409 再查一次区分），
+ * 写 = 事务 + 事务内审计。锚点列 id / created_by / created_at 永不出现在 SET
+ * （deploy/database/ddl/98_column_locks.sql）。
+ *
+ * 设计权威仍是 docs/product/platform/admin/governance-write-paths.md §3.3/§4。
  */
 
 import {
@@ -41,13 +38,10 @@ import type { Request } from "express";
 import type { Pool } from "pg";
 import { insertOperatorAuditLog } from "../audit/audit-log";
 import { withTransaction } from "../db/tx";
-import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
-import type {
-  MaintenanceWindowItem,
-  RequestContext,
-} from "../types/console.types";
+import { OPERA_BFF_RO_POOL, OPERA_BFF_RW_POOL } from "../tokens";
+import type { RequestContext } from "../types/request-context";
 import {
-  GOVERNANCE_LIST_LIMIT,
+  LIST_LIMIT,
   normalizeStringArray,
   optionalText,
   parseIso,
@@ -56,7 +50,25 @@ import {
   requireUuid,
   toIso,
   toIsoOrNull,
-} from "./governance.shared";
+} from "./router.shared";
+
+export interface MaintenanceWindowItem {
+  id: string;
+  severity: "minor" | "major" | "critical";
+  status: "scheduled" | "in_progress" | "completed" | "cancelled";
+  title: string;
+  description: string | null;
+  impactDescription: string | null;
+  affectedServices: string[];
+  startAt: string;
+  endAt: string;
+  actualEndAt: string | null;
+  createdBy: string;
+  createdByName: string | null;
+  updatedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 
 const WINDOW_SEVERITIES: ReadonlySet<MaintenanceWindowItem["severity"]> =
   new Set(["minor", "major", "critical"]);
@@ -71,12 +83,12 @@ const WINDOW_STATUSES: ReadonlySet<MaintenanceWindowItem["status"]> = new Set([
 @Controller("api/maintenance-windows")
 export class MaintenanceWindowsRouter {
   constructor(
-    @Inject(ADMIN_BFF_RO_POOL) private readonly pool: Pool,
-    @Inject(ADMIN_BFF_RW_POOL) private readonly rwPool: Pool,
+    @Inject(OPERA_BFF_RO_POOL) private readonly pool: Pool,
+    @Inject(OPERA_BFF_RW_POOL) private readonly rwPool: Pool,
   ) {}
 
-  // Contract: GET /api/maintenance-windows?status=a,b&from=ISO&to=ISO
-  //   from/to filter on start_at. Most-recent GOVERNANCE_LIST_LIMIT rows.
+  // GET /api/maintenance-windows?status=a,b&from=ISO&to=ISO
+  //   from/to 过滤 start_at；取最近 LIST_LIMIT 行。
   @Get()
   async listMaintenanceWindows(
     @Req() req: Request & RequestContext,
@@ -108,7 +120,7 @@ export class MaintenanceWindowsRouter {
       params.push(parseIso(to, "to"));
       where.push(`w.start_at <= $${params.length}`);
     }
-    params.push(GOVERNANCE_LIST_LIMIT);
+    params.push(LIST_LIMIT);
 
     const { rows } = await this.pool.query<MaintenanceWindowRow>(
       `${MAINTENANCE_WINDOW_SELECT} where ${where.join(" and ")}
@@ -135,11 +147,10 @@ export class MaintenanceWindowsRouter {
     return mapMaintenanceWindowRow(rows[0]);
   }
 
-  // Contract: POST /api/maintenance-windows
-  //   body: { title: string(<=256), startAt: ISO, endAt: ISO (> startAt; past
-  //           windows accepted for backfill), severity?: minor|major|critical,
-  //           description?, impactDescription?, affectedServices?: string[] }.
-  //   status starts 'scheduled'; created_by = acting operator.
+  // POST /api/maintenance-windows
+  //   body: { title(<=256), startAt: ISO, endAt: ISO(> startAt；过去的窗口允许
+  //           补录), severity?, description?, impactDescription?,
+  //           affectedServices?: string[] }。status 起始 'scheduled'。
   @Post()
   async createMaintenanceWindow(
     @Req() req: Request & RequestContext,
@@ -184,9 +195,8 @@ export class MaintenanceWindowsRouter {
     });
   }
 
-  // Contract: PUT /api/maintenance-windows/:id
-  //   scheduled: all editable fields; in_progress: endAt may only be pushed
-  //   later（顺延）+ description/impactDescription live updates; terminal: 409.
+  // PUT /api/maintenance-windows/:id
+  //   scheduled：全字段可编；in_progress：end_at 只可顺延 + 描述追记；终态 409。
   @Put(":id")
   async updateMaintenanceWindow(
     @Req() req: Request & RequestContext,
@@ -243,8 +253,8 @@ export class MaintenanceWindowsRouter {
           body.endAt !== ""
         ) {
           endAt = parseIso(body.endAt, "endAt");
-          // 顺延 only（design §3.3）: an in_progress window that ends early is
-          // completed (records actual_end_at), not shortened.
+          // 只可顺延（设计 §3.3）：进行中的窗口提前结束叫"完成"（记 actual_end_at），
+          // 不是把计划结束时间改短。
           if (new Date(endAt) < new Date(row.end_at)) {
             throw new BadRequestException(
               "endAt of an in_progress window can only be extended",
@@ -278,8 +288,7 @@ export class MaintenanceWindowsRouter {
     });
   }
 
-  // Contract: POST /api/maintenance-windows/:id/start — scheduled → in_progress
-  //   (manual trigger; no scheduler).
+  // POST /api/maintenance-windows/:id/start — scheduled → in_progress（手动触发，无调度器）
   @Post(":id/start")
   async startMaintenanceWindow(
     @Req() req: Request & RequestContext,
@@ -294,8 +303,8 @@ export class MaintenanceWindowsRouter {
     );
   }
 
-  // Contract: POST /api/maintenance-windows/:id/complete { actualEndAt?: ISO }
-  //   in_progress → completed; actual_end_at = body value or now().
+  // POST /api/maintenance-windows/:id/complete { actualEndAt?: ISO }
+  //   in_progress → completed；actual_end_at 取 body 值或 now()。
   @Post(":id/complete")
   async completeMaintenanceWindow(
     @Req() req: Request & RequestContext,
@@ -335,8 +344,8 @@ export class MaintenanceWindowsRouter {
     });
   }
 
-  // Contract: POST /api/maintenance-windows/:id/cancel — scheduled|in_progress
-  //   → cancelled (cancelling an in_progress window records actual_end_at).
+  // POST /api/maintenance-windows/:id/cancel — scheduled|in_progress → cancelled
+  //   （取消一个进行中的窗口会记 actual_end_at）。
   @Post(":id/cancel")
   async cancelMaintenanceWindow(
     @Req() req: Request & RequestContext,
@@ -376,6 +385,7 @@ export class MaintenanceWindowsRouter {
     });
   }
 
+  /** 条件 UPDATE 影响 0 行有两种可能：行不存在（404），或状态不允许（409）。 */
   private async throwNotFoundOrConflict(
     db: Pick<Pool, "query">,
     windowId: string,
@@ -436,7 +446,7 @@ values
 returning id
 `;
 
-// scheduled only — anchor columns (id/created_by/created_at) never in SET.
+// scheduled only —— 锚点列（id/created_by/created_at）永不进 SET。
 const MAINTENANCE_WINDOW_FULL_UPDATE_SQL = `
 update admin.maintenance_windows
 set severity           = $2,
@@ -451,7 +461,7 @@ set severity           = $2,
 where id = $1 and status = 'scheduled'
 `;
 
-// in_progress live updates: extend end_at ($2 null = keep) + descriptions.
+// in_progress 实时更新：顺延 end_at（$2 为 null 则保持）+ 描述追记。
 const MAINTENANCE_WINDOW_LIVE_UPDATE_SQL = `
 update admin.maintenance_windows
 set end_at             = coalesce($2, end_at),
@@ -552,19 +562,23 @@ function normalizeMaintenanceWindowInput(
   if (!body || typeof body !== "object") {
     throw new BadRequestException("Request body is required");
   }
+  if (
+    body.severity !== undefined &&
+    body.severity !== null &&
+    !(
+      typeof body.severity === "string" &&
+      WINDOW_SEVERITIES.has(body.severity as MaintenanceWindowItem["severity"])
+    )
+  ) {
+    throw new BadRequestException(
+      "severity must be one of minor/major/critical",
+    );
+  }
   const severity =
     body.severity === undefined || body.severity === null
       ? "minor"
-      : typeof body.severity === "string" &&
-          WINDOW_SEVERITIES.has(
-            body.severity as MaintenanceWindowItem["severity"],
-          )
-        ? (body.severity as MaintenanceWindowItem["severity"])
-        : (() => {
-            throw new BadRequestException(
-              "severity must be one of minor/major/critical",
-            );
-          })();
+      : (body.severity as MaintenanceWindowItem["severity"]);
+
   const startAt = parseIso(body.startAt, "startAt");
   const endAt = parseIso(body.endAt, "endAt");
   if (new Date(endAt) <= new Date(startAt)) {
@@ -588,10 +602,10 @@ function normalizeMaintenanceWindowInput(
   };
 }
 
-// ── capability guards（能力码 = 既有 release:maintenance.*，见设计 §1.3）────
+// ── 能力门（能力码沿用既有 release:maintenance.*，迁移不改）──────────────
 
 function assertCanReadMaintenanceWindows(req: Request & RequestContext): void {
-  if (!req.user) {
+  if (!req.operator) {
     throw new UnauthorizedException("No active session");
   }
   if (
@@ -606,7 +620,7 @@ function assertCanReadMaintenanceWindows(req: Request & RequestContext): void {
 function assertCanManageMaintenanceWindows(
   req: Request & RequestContext,
 ): void {
-  if (!req.user) {
+  if (!req.operator) {
     throw new UnauthorizedException("No active session");
   }
   if (

@@ -48,7 +48,6 @@ import { SubscriptionsRouter } from "./routers/subscriptions.router";
 import { CommercialRouter } from "./routers/commercial.router";
 import { RiskRecordsRouter } from "./routers/risk-records.router";
 import { ComplianceEventsRouter } from "./routers/compliance-events.router";
-import { MaintenanceWindowsRouter } from "./routers/maintenance-windows.router";
 import { FeatureTogglesRouter } from "./routers/feature-toggles.router";
 import { SystemParametersRouter } from "./routers/system-parameters.router";
 import { NotificationLogsRouter } from "./routers/notification-logs.router";
@@ -89,7 +88,6 @@ import { SearchRouter } from "./routers/search.router";
     CommercialRouter,
     RiskRecordsRouter,
     ComplianceEventsRouter,
-    MaintenanceWindowsRouter,
     FeatureTogglesRouter,
     SystemParametersRouter,
     NotificationLogsRouter,

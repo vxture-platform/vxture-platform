@@ -30,12 +30,17 @@ const nextConfig = {
   },
   async rewrites() {
     // Dev-only same-origin seam: the shell always calls its BFF with relative
-    // /auth/* URLs (in prod nginx routes them on the same vhost, keeping the
-    // real hostname out of the repo). `next dev` proxies them to the local BFF.
+    // /auth/* and /api/* URLs (in prod nginx routes them on the same vhost,
+    // keeping the real hostname out of the repo). `next dev` proxies them to
+    // the local BFF.
+    const operaBff = process.env.OPERA_BFF_DEV_URL ?? "http://localhost:3051";
     return [
+      { source: "/auth/:path*", destination: `${operaBff}/auth/:path*` },
+      // /api/health 是 Next 自己的路由（app/api/health），不能代出去——把它排除在
+      // 外，其余 /api/* 才交给 BFF。
       {
-        source: "/auth/:path*",
-        destination: `${process.env.OPERA_BFF_DEV_URL ?? "http://localhost:3051"}/auth/:path*`,
+        source: "/api/:path((?!health$).*)",
+        destination: `${operaBff}/api/:path*`,
       },
     ];
   },

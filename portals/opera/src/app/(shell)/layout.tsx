@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cookies } from "next/headers";
+import { ToastProvider } from "@vxture/design-system";
 import { readNavCollapsed } from "@vxture/shared";
 import { SessionProvider } from "@/features/session/SessionProvider";
 import { OperaShell } from "@/layout/OperaShell";
@@ -14,7 +15,11 @@ export default async function ShellLayout({
   const navCollapsed = readNavCollapsed((await cookies()).toString(), "opera");
   return (
     <SessionProvider>
-      <OperaShell initialNavCollapsed={navCollapsed}>{children}</OperaShell>
+      {/* 写操作的结果反馈要有落点：opera 此前全是只读页，没挂过 ToastProvider，
+          而 `useToast` 在 provider 外是直接抛错的。 */}
+      <ToastProvider>
+        <OperaShell initialNavCollapsed={navCollapsed}>{children}</OperaShell>
+      </ToastProvider>
     </SessionProvider>
   );
 }

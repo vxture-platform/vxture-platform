@@ -77,6 +77,17 @@ export const operaNavSections: OperaNavSection[] = [
     ],
   },
   {
+    title: "运行保障",
+    items: [
+      {
+        href: "/ops/maintenance-windows",
+        label: "维护窗口",
+        icon: "clock",
+        description: "计划内停机与影响范围",
+      },
+    ],
+  },
+  {
     title: "Security",
     items: [
       { href: "/security/rbac", label: "RBAC", icon: "role" },

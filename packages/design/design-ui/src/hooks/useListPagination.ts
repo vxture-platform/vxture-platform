@@ -26,6 +26,15 @@ const FOOTER_RESERVE_PX = 104;
 const FALLBACK_ROW_PX = 56;
 const MIN_AUTO_ROWS = 3;
 
+/**
+ * ⚠ 探测只在**有真实数据行**时才有意义。`DataTable` 的空态是一整行
+ * `<tr><td colSpan>`（见 DataTable 的 empty 槽），高度是一屏 EmptyState 的高度，
+ * 拿它当行高算出来的档必然砸到 `MIN_AUTO_ROWS` 地板上。
+ *
+ * 异步取数的清单页首帧就是这个形态：mount 时数据还没到，DOM 里只有那一行空态。
+ * 2026-08-07 opera 维护窗口页（opera 第一个异步清单页）实测：945px 视口本可放 6 行，
+ * 实际只出 3 行——正是量到了空态行。同步喂 mock 的页面碰不到，所以一直没露头。
+ */
 function measureAutoRows(): number {
   const probe =
     document.querySelector("main tbody tr") ??
@@ -59,13 +68,16 @@ export function useListPagination<T>(
   const [choice, setChoice] = useState<PageSizeChoice>(initialPageSize);
   const [autoSize, setAutoSize] = useState(10);
 
+  // `hasRows` 进依赖：数据从无到有的那一帧要重量一次，否则异步页永远停在
+  // 用空态行算出的地板值上。effect 在 commit 之后跑，那时真实行已经在 DOM 里。
+  const hasRows = filtered.length > 0;
   useEffect(() => {
     if (choice !== "auto") return;
     const measure = () => setAutoSize(measureAutoRows());
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, [choice]);
+  }, [choice, hasRows]);
 
   const pageSize = choice === "auto" ? autoSize : choice;
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));

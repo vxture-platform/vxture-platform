@@ -41,7 +41,6 @@ import type {
   ProductSolutionDetailRecord,
   ProductSolutionRecord,
   ComplianceEventItem,
-  MaintenanceWindowItem,
   PlatformRoleRecord,
   RiskRecordItem,
   SessionSnapshot,
@@ -2459,87 +2458,6 @@ export async function deleteComplianceEvent(
     "DELETE",
     undefined,
     "Compliance event deletion failed",
-  );
-}
-
-export interface MaintenanceWindowListFilters {
-  status?: string;
-  from?: string;
-  to?: string;
-}
-
-export async function fetchMaintenanceWindows(
-  filters: MaintenanceWindowListFilters = {},
-): Promise<MaintenanceWindowItem[]> {
-  return readJsonStrict<MaintenanceWindowItem[]>(
-    `/api/maintenance-windows${queryString(filters)}`,
-  );
-}
-
-export interface MaintenanceWindowWriteInput {
-  severity?: MaintenanceWindowItem["severity"];
-  title: string;
-  description?: string | null;
-  impactDescription?: string | null;
-  affectedServices?: string[];
-  startAt: string;
-  endAt: string;
-}
-
-export async function createMaintenanceWindow(
-  payload: MaintenanceWindowWriteInput,
-): Promise<MaintenanceWindowItem> {
-  return mutateJson<MaintenanceWindowItem>(
-    "/api/maintenance-windows",
-    "POST",
-    payload,
-    "Maintenance window creation failed",
-  );
-}
-
-export async function updateMaintenanceWindow(
-  windowId: string,
-  payload: Partial<MaintenanceWindowWriteInput>,
-): Promise<MaintenanceWindowItem> {
-  return mutateJson<MaintenanceWindowItem>(
-    `/api/maintenance-windows/${windowId}`,
-    "PUT",
-    payload,
-    "Maintenance window update failed",
-  );
-}
-
-export async function startMaintenanceWindow(
-  windowId: string,
-): Promise<MaintenanceWindowItem> {
-  return mutateJson<MaintenanceWindowItem>(
-    `/api/maintenance-windows/${windowId}/start`,
-    "POST",
-    undefined,
-    "Maintenance window start failed",
-  );
-}
-
-export async function completeMaintenanceWindow(
-  windowId: string,
-  actualEndAt?: string,
-): Promise<MaintenanceWindowItem> {
-  return mutateJson<MaintenanceWindowItem>(
-    `/api/maintenance-windows/${windowId}/complete`,
-    "POST",
-    actualEndAt ? { actualEndAt } : {},
-    "Maintenance window completion failed",
-  );
-}
-
-export async function cancelMaintenanceWindow(
-  windowId: string,
-): Promise<MaintenanceWindowItem> {
-  return mutateJson<MaintenanceWindowItem>(
-    `/api/maintenance-windows/${windowId}/cancel`,
-    "POST",
-    undefined,
-    "Maintenance window cancellation failed",
   );
 }
 
