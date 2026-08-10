@@ -49,6 +49,17 @@
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---- |
 | [#72](https://github.com/vxture/vxture-karda/issues/72) | 确认模型选择 UX 方向（业务自动适配 vs 用户主动选择，依赖的 atlas #41/#42 均已 Closed，karda 可以据此确认了） | Open |
 
+### vxture-platform（runos 开给本仓的 issue）
+
+runos 于 2026-08-09～10 建仓并首次生产部署（worker-02，v0.1.0/v0.2.0），三封请求全部开在本仓。
+runos 仓内现有 issue（`vxture-runos#9`，Prisma 7 adapter 抢先读 `DATABASE_URL`）是 atlas↔runos 的事，不涉本仓。
+
+| Issue                                                        | 内容概要                                                                                   | 状态                                                                                                                                                                                                        |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [#205](https://github.com/vxture/vxture-platform/issues/205) | `runa`→`runos` 改名/注册（product 行、OIDC client、`aud=runos`、`mgmt:runos`、C3 webhook） | Open（主体已办：PR#211 产品行/显示名/audiences、PR#213 迁移语句退役、PR#214 infra registry；收尾：中文名 **鲁诺斯** + 定位纠正 + 残留 `runos.ai` 清除；`runos.ai` 域名**从不存在**，owner 2026-08-10 明确） |
+| [#209](https://github.com/vxture/vxture-platform/issues/209) | CD 参照模式加固：显式 build `target:` + 多镜像构建指引 + worker-02 宿主 Docker socket      | Open（1/2 已办：PR#215 标准 §4 + 本仓 `docker-build.yml` 补 `target: runner`；**3 待 owner 拍板**：宿主 socket = host-root 等价，worker-02 与 atlas/arda/varda/vxtpl 同机，blast radius 需显式决定）        |
+| [#216](https://github.com/vxture/vxture-platform/issues/216) | `product_110` §6/§7 + 矩阵 runos 行按**商业能力面**收窄改写（TD-004 / runos ADR-003）      | **Closed**（main `c2e4975`，PR#218；`product_110` v1.1 + `product_100` v1.2；未决项转 `product_110` §6.8：商业域计量归属/去重、org grant 求值点）                                                           |
+
 ## 历史归档（既有信件文件，本目录同级，不再新增同类文件）
 
 `10`–`40` 号为 2026-07-22～23 期间的信件往来（taxonomy 修订回函 / karda 注册 A 段回函+完成确认），

@@ -1130,6 +1130,28 @@ export async function seedCatalog(client) {
        and not exists (select 1 from product.products where product_code = 'umbra')
   `);
 
+  // runos identity correction (platform#205 follow-up + #216): the row was seeded
+  // from the retired "multimodal assistant agent" framing — product_type='agent',
+  // category=agent, an English product_name where every other platform product
+  // carries the Chinese one, and no Chinese name at all. ADR-003 makes runos the
+  // L1 commercial capability plane and the owner fixed its Chinese name as 鲁诺斯
+  // (there is no earlier Chinese name to preserve — 露娜/露娜之语 were Luna-derived
+  // and are purged, not renamed). Same guarded shape as the arda/umbra renames
+  // above and it must run BEFORE the PRODUCTS loop, whose `on conflict do nothing`
+  // would otherwise leave the stale row standing. The product_type='agent' guard
+  // pins the old row, so a re-run after the fix is a no-op.
+  await client.query(`
+    update product.products
+       set product_type = 'capability_platform', category_id = 2,
+           product_name = '鲁诺斯', product_nick = 'Runos',
+           description = 'Commercial capability plane: the single gate for a business-scenario agent''s non-model capabilities.',
+           updated_at = now()
+     where product_code = 'runos' and product_type = 'agent'
+  `);
+  console.log(
+    "✓  product.products — runos identity correction (guarded; no-op when done)",
+  );
+
   const PRODUCTS = [
     // desc = placeholder external copy; i18n key derived product.product.{code}.desc
     {
@@ -1150,11 +1172,11 @@ export async function seedCatalog(client) {
     },
     {
       code: "runos",
-      type: "agent",
-      cat: 1,
-      name: "Runos",
+      type: "capability_platform",
+      cat: 2,
+      name: "鲁诺斯",
       nick: "Runos",
-      desc: "Multimodal assistant agent.",
+      desc: "Commercial capability plane: the single gate for a business-scenario agent's non-model capabilities.",
     },
     {
       code: "arda",
@@ -1264,8 +1286,7 @@ export async function seedCatalog(client) {
   // revision), not derived from B.karda (which stays public
   // for the OIDC redirect_uris). Only seeded once karda's product row exists.
   if (prodMap["karda"]) {
-    const kardaWebhookBase =
-      process.env.KARDA_WEBHOOK_BASE_URL || B.karda;
+    const kardaWebhookBase = process.env.KARDA_WEBHOOK_BASE_URL || B.karda;
     await client.query(
       `
       insert into product.product_webhooks (product_id, home_url, webhook_url, webhook_secret_ref, created_at, updated_at)

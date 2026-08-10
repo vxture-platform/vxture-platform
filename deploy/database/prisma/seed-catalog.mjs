@@ -352,7 +352,7 @@ export async function seedCatalog(client) {
   `);
   const PRODUCTS = [
     { code: 'ruyin', type: 'agent',         cat: 1, zh: '如影', zhNick: '如影',     en: 'Ruyin', enNick: 'Ruyin' },
-    { code: 'runos', type: 'agent',         cat: 1, zh: '露娜', zhNick: '露娜之语', en: 'Runos',  enNick: 'Runos' },
+    { code: 'runos', type: 'capability_platform', cat: 2, zh: '鲁诺斯', zhNick: '鲁诺斯', en: 'Runos',  enNick: 'Runos' },
     { code: 'data',  type: 'data_platform', cat: 2, zh: '数据', zhNick: '数据平台', en: 'Data',  enNick: 'Data Platform' },
   ];
   for (const p of PRODUCTS) {

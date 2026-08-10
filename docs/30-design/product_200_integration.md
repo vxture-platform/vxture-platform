@@ -142,7 +142,7 @@ PUSH invalidate { grant_id | resource_ref, affected: [...] }    # grant 变更/�
 | Hermes                           | ✘                    | 内部凭证                     | ✘                            | ✘               | ✘                       | ✘             | ✘               | internal                                       |
 | Varda                            | —(内嵌,复用宿主会话) | —                            | —                            | —               | 经 Atlas                | —             | —               | 非独立产品                                     |
 
-> **传输面分级(mesh 类别,权威 = [`product_230`](./product_230_mesh-architecture.md) §1,2026-07-12 增)**:上表产品按"域关系 × 产品层"归入两类——**类 2 · 同 apex 内网 fabric**(S2S 一律 tailnet,绝不公网;C2/C3/gauge/可见集出站指平台内网 base,webhook tailnet 投递):Atlas/Ontos/Runos/Arda/Karda/Terra/Raven/Anlan/Forge/Xuanzhen(其中 runos.ai/anlan.ai/xuanzhen.ai 虽异 apex 域名,只要部署在平台 tailnet 内即按类 2 走内网 S2S;cookie 互验面另论);**类 1 · 跨 apex 轻集成**(异网,仅公网 HTTPS + HMAC/允许名单兜底):umbra(worker-04 境外不入 tailnet)。Ruyin(client 端)/Hermes(internal)不适用。判类以**是否在平台 tailnet**为准,域名仅是缺省信号。
+> **传输面分级(mesh 类别,权威 = [`product_230`](./product_230_mesh-architecture.md) §1,2026-07-12 增)**:上表产品按"域关系 × 产品层"归入两类——**类 2 · 同 apex 内网 fabric**(S2S 一律 tailnet,绝不公网;C2/C3/gauge/可见集出站指平台内网 base,webhook tailnet 投递):Atlas/Ontos/Runos/Arda/Karda/Terra/Raven/Anlan/Forge/Xuanzhen(其中 anlan.ai/xuanzhen.ai 虽异 apex 域名,只要部署在平台 tailnet 内即按类 2 走内网 S2S;cookie 互验面另论;runos 已于 2026-08-09 迁回 `runos.vxture.com`,不再是异 apex 例子);**类 1 · 跨 apex 轻集成**(异网,仅公网 HTTPS + HMAC/允许名单兜底):umbra(worker-04 境外不入 tailnet)。Ruyin(client 端)/Hermes(internal)不适用。判类以**是否在平台 tailnet**为准,域名仅是缺省信号。
 
 ## 7. 新产品接入 checklist
 

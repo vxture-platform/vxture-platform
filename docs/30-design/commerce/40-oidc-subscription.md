@@ -20,7 +20,7 @@
 | -------- | -------- | -------- | ----------------- | ------------ | -------- | ---------------------------- |
 | arda     | Arda     | platform | —                 | 否           | 否       | 平台门户，内部 shell         |
 | ruyin    | Ruyin    | saas     | ruyin.ai          | 是（仅正式） | 是       | 跨域 RP，仅正式环境，无 beta |
-| runos    | Runos    | saas     | runos.ai          | 是           | 是       | —                            |
+| runos    | Runos    | saas     | runos.vxture.com  | 是           | 是       | —                            |
 | vault    | Vault    | saas     | vault.vxture.com  | 是           | 是       | —                            |
 | cortex   | Cortex   | saas     | cortex.vxture.com | 是           | 是       | —                            |
 | ontos    | Ontos    | saas     | ontos.vxture.com  | 是           | 是       | —                            |
@@ -49,7 +49,7 @@
 
 | client_code | redirect_uris                                                               |
 | ----------- | --------------------------------------------------------------------------- |
-| runos       | https://runos.ai/callback, https://beta.runos.ai/callback                   |
+| runos       | https://runos.vxture.com/callback, https://beta-runos.vxture.com/callback   |
 | vault       | https://vault.vxture.com/callback, https://beta.vault.vxture.com/callback   |
 | cortex      | https://cortex.vxture.com/callback, https://beta.cortex.vxture.com/callback |
 | ontos       | https://ontos.vxture.com/callback, https://beta.ontos.vxture.com/callback   |
