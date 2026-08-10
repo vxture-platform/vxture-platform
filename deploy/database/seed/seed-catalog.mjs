@@ -1351,6 +1351,52 @@ export async function seedCatalog(client) {
     end $$;
   `);
 
+  // Live-DB increments for the two structural changes #186 (2026-08-07) declared in ddl/ but
+  // that never reached a database built before it — exactly the create-once gap the
+  // plan_versions.status block above exists for, missed on that PR. Confirmed absent on
+  // worker-01 on 2026-08-10, which is why [B0] of the baseline audit had gone red: the audit
+  // was right, and restamping the fingerprint would have buried a real finding.
+  //
+  // redemption_no is not merely latent — admin-bff's PROMOTION_REDEMPTIONS_SQL already selects
+  // rd.redemption_no, so the redemption ledger errors on any live database missing the column.
+  await client.query(
+    `alter table promotion.voucher_redemptions add column if not exists redemption_no varchar(64)`,
+  );
+  // NOT NULL only once nothing violates it. Production has zero rows, so this promotes on the
+  // first run; a database with legacy rows keeps the column nullable rather than failing the
+  // whole seed, and promotes itself once those rows are given codes.
+  await client.query(`
+    do $$ begin
+      if not exists (select 1 from promotion.voucher_redemptions where redemption_no is null) then
+        alter table promotion.voucher_redemptions alter column redemption_no set not null;
+      end if;
+    end $$;
+  `);
+  await client.query(`
+    do $$ begin
+      if not exists (select 1 from pg_constraint where conname = 'uq_voucher_redemptions_redemption_no') then
+        alter table promotion.voucher_redemptions
+          add constraint uq_voucher_redemptions_redemption_no unique (redemption_no);
+      end if;
+    end $$;
+  `);
+  // 'expiring' joined chk_subscriptions_status in ddl/50_metering.sql on the same PR. No code
+  // writes it yet, so this is latent rather than broken — but a constraint that silently
+  // rejects a value the DDL says is legal is the kind of drift that surfaces at the worst time.
+  await client.query(`
+    do $$ begin
+      if exists (
+        select 1 from pg_constraint
+         where conname = 'chk_subscriptions_status'
+           and pg_get_constraintdef(oid) not like '%expiring%'
+      ) then
+        alter table metering.subscriptions drop constraint chk_subscriptions_status;
+        alter table metering.subscriptions add constraint chk_subscriptions_status
+          check (status in ('active','expiring','trialing','overdue','suspended','expired','cancelled'));
+      end if;
+    end $$;
+  `);
+
   // product_321 PR2 — live-DB self-sufficiency (ddl/ apply is create-once):
   // ① pay_source CHECK gains 'voucher' (the settlement leg, P7). Drop+add is
   //    safe: the constraint only widens, existing rows all satisfy it.
