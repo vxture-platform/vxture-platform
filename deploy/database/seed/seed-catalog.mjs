@@ -1018,22 +1018,6 @@ export async function seedCatalog(client) {
     "✓  appoidc.oidc_clients — U-line legacy ruyin → umbra (guarded; no-op when done)",
   );
 
-  // runa → runos (platform#205, ADR-004). Same guarded shape as the umbra rename above,
-  // and it must run BEFORE the loop below: the loop's `on conflict (client_id) do update` keys
-  // on the NEW id, so on a live database it would insert a second client and leave `runa`
-  // standing — the split catalog the issue explicitly asked us to avoid. Renaming in place also
-  // keeps client_secret_hash attached to the row, which a delete-and-recreate would not: that
-  // answers the "does a client-id rename preserve the secret" question with yes, this way.
-  await client.query(`
-    update appoidc.oidc_clients
-       set client_id = 'runos', updated_at = now()
-     where client_id = 'runa'
-       and not exists (select 1 from appoidc.oidc_clients c2 where c2.client_id = 'runos')
-  `);
-  console.log(
-    "✓  appoidc.oidc_clients — runa → runos (guarded; secret preserved; no-op when done)",
-  );
-
   for (const c of oidcClients) {
     const envKey = c.clientId.toUpperCase().replace(/-/g, "_");
     const secretHash = process.env[`OIDC_CLIENT_SECRET_HASH_${envKey}`] || null;
@@ -1201,23 +1185,6 @@ export async function seedCatalog(client) {
       desc: "Unified model access, routing, quota and metering platform.",
     },
   ];
-  // runa → runos (platform#205). Must precede the loop: its `on conflict (product_code) do
-  // nothing` keys on the NEW code, so on a live database it inserts a second product row and
-  // leaves `runos` behind — two catalog entries for one product, which is exactly what the issue
-  // asked us not to create. Renaming in place keeps the row's uuid, so plans, oidc_clients,
-  // product_webhooks and product_metrics all keep pointing at it (they reference product_id,
-  // never the code). Guarded and idempotent: a no-op once done, and a no-op if both exist.
-  await client.query(`
-    update product.products
-       set product_code = 'runos',
-           product_name = 'Runos', product_nick = 'Runos',
-           description_key = 'product.product.runos.desc', updated_at = now()
-     where product_code = 'runa'
-       and not exists (select 1 from product.products p2 where p2.product_code = 'runos')
-  `);
-  console.log(
-    "✓  product.products — runa → runos (guarded; uuid + downstream refs preserved)",
-  );
   for (const p of PRODUCTS) {
     await client.query(
       `
