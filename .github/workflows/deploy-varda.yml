@@ -52,14 +52,14 @@ jobs:
       - name: Set up Docker Buildx
         id: buildx
         continue-on-error: true
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
       - name: Set up Docker Buildx (retry)
         if: steps.buildx.outcome == 'failure'
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -89,7 +89,7 @@ jobs:
 
       - name: Docker metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ matrix.image }}
           tags: |
@@ -124,7 +124,7 @@ jobs:
       - name: Build and push
         id: build
         continue-on-error: true
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -138,7 +138,7 @@ jobs:
 
       - name: Build and push (retry)
         if: steps.build.outcome == 'failure'
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -171,13 +171,15 @@ jobs:
           ALIYUN_ACR_PASSWORD: ${{ secrets.ALIYUN_ACR_PASSWORD }}
         run: bash scripts/workflows/resolve-acr-registry.sh
 
-      # tailscale/github-action 的 SHA256SUM 下载步无 retry，pkgs.tailscale.com 一次 504
-      # 即整步失败（2026-07-16 首上线实测）。按本 workflow build 段同款 continue-on-error+retry
-      # idiom 做 3 次尝试 + 递增退避，兜住 CDN 瞬时降级。
+      # tailscale action 的 SHA256SUM 下载步无 retry，pkgs.tailscale.com 一次 504 即整步失败
+      # （2026-07-16 首上线实测，当时是 @v3）。按本 workflow build 段同款 continue-on-error+retry
+      # idiom 做 3 次尝试 + 递增退避，兜住 CDN 瞬时降级。**2026-08-10 已升 v4 并钉 SHA**（治理标准
+      # §4：握凭证的第三方 action 一律钉完整 SHA）——v4 上该下载步是否已自带 retry 未实测，
+      # 退避层保留：它便宜，且 CDN 瞬时降级与 action 版本无关。
       - name: Join tailnet
         id: tailnet1
         continue-on-error: true
-        uses: tailscale/github-action@v3
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4
         with:
           oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TAILSCALE_OAUTH_CLIENT_SECRET }}
@@ -191,7 +193,7 @@ jobs:
         id: tailnet2
         if: steps.tailnet1.outcome == 'failure'
         continue-on-error: true
-        uses: tailscale/github-action@v3
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4
         with:
           oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TAILSCALE_OAUTH_CLIENT_SECRET }}
@@ -203,7 +205,7 @@ jobs:
 
       - name: Join tailnet (retry 2)
         if: steps.tailnet1.outcome == 'failure' && steps.tailnet2.outcome == 'failure'
-        uses: tailscale/github-action@v3
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4
         with:
           oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TAILSCALE_OAUTH_CLIENT_SECRET }}
@@ -212,7 +214,7 @@ jobs:
       # 只上传 compose（+ example 作参考）；worker-02 本机 .env.varda-* / secrets 长驻不覆盖
       # （缺则 compose fail-fast，不起坏栈——runbook §2/§7）。
       - name: Upload varda compose to worker-02
-        uses: appleboy/scp-action@v1.0.0
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
         with:
           host: ${{ secrets.VARDA_DEPLOY_HOST }}
           username: ${{ secrets.VARDA_DEPLOY_USER }}
@@ -225,7 +227,7 @@ jobs:
           command_timeout: 10m
 
       - name: Deploy varda via SSH
-        uses: appleboy/ssh-action@v1.2.5
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         env:
           VX_IMAGE_TAG: ${{ github.ref_name }}
           VX_ACR_ENABLED: ${{ steps.registry.outputs.acr_enabled }}

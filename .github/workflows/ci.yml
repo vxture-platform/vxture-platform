@@ -320,7 +320,7 @@ jobs:
         # SonarCloud 建项目，建完仍然不通。恢复硬门禁的前提是先在 SonarCloud/org 侧换掉那把 token。
         id: sonar
         continue-on-error: true
-        uses: SonarSource/sonarqube-scan-action@v7
+        uses: SonarSource/sonarqube-scan-action@c7ee0f9df90b7aa20e8dcf9695dcfe2e7da5b4f2 # v7
         with:
           skipSignatureVerification: false
         env:

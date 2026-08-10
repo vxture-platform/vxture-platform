@@ -95,7 +95,7 @@ jobs:
         run: bash scripts/workflows/resolve-acr-registry.sh
 
       - name: Join tailnet
-        uses: tailscale/github-action@v3
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4
         with:
           oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TAILSCALE_OAUTH_CLIENT_SECRET }}
@@ -103,7 +103,7 @@ jobs:
 
       # 只同步部署包；实际 .env / secrets / 证书保持在 worker-01 本机。
       - name: Upload deploy files to worker-01
-        uses: appleboy/scp-action@v1.0.0
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
         with:
           host: ${{ secrets.DEPLOY_HOST_TAILNET }}
           username: ${{ secrets.DEPLOY_USER }}
@@ -116,7 +116,7 @@ jobs:
           command_timeout: 10m
 
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.5
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         env:
           VX_IMAGE_TAG: ${{ github.ref_name }}
           VX_ACR_ENABLED: ${{ steps.registry.outputs.acr_enabled }}

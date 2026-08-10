@@ -7,7 +7,7 @@ description: Install pnpm, set up Node 24 with pnpm cache, and install dependenc
 runs:
   using: composite
   steps:
-    - uses: pnpm/action-setup@v6
+    - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
     - uses: actions/setup-node@v6
       with:

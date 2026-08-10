@@ -137,14 +137,14 @@ jobs:
           fi
 
       - name: Join tailnet
-        uses: tailscale/github-action@v3
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4
         with:
           oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TAILSCALE_OAUTH_CLIENT_SECRET }}
           tags: ${{ vars.TAILSCALE_OAUTH_CLIENT_TAG }}
 
       - name: Upload DB scripts to worker-01
-        uses: appleboy/scp-action@v1.0.0
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
         with:
           host: ${{ secrets.DEPLOY_HOST_TAILNET }}
           username: ${{ secrets.DEPLOY_USER }}
@@ -157,7 +157,7 @@ jobs:
           command_timeout: 10m
 
       - name: Run DB action via SSH
-        uses: appleboy/ssh-action@v1.2.5
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         env:
           DB_ACTION: ${{ inputs.action }}
           # 主机布局来自环境级 vars（治理标准 §6），未设回落已验证默认。
