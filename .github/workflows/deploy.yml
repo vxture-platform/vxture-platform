@@ -202,38 +202,26 @@ jobs:
             # never mangles vx-admin-bff). Shipped nginx confs already carry the
             # new names; this only fixes host-side runtime env.
             #
-            # ── L0 port-plan migration (2026-07-24, 13-infra-allocation-registry.md) ──
-            # The same hand-maintained runtime .env carries stale ports for the
-            # inter-service URLs/origins AND each service's own *_PORT= line
-            # (auth-bff 3090->3061, website-bff 3011->3001, admin-bff 3031->3043).
-            # Unlike nginx confs and compose.platform.yml (both shipped fresh
-            # every deploy), this file is never regenerated, so the port bump
-            # needs the same in-place sed treatment as the name migration above,
-            # applied to the ALREADY-renamed vx-platform-* host:port pairs.
+            # ── container-name migration (vx-* → vx-platform-*) ─────────────
+            # The runtime .env is hand-maintained and never regenerated (unlike
+            # nginx confs and compose.platform.yml, both shipped fresh every
+            # deploy), so an in-place rewrite is the only way these reach it.
             RT="${DEPLOY_RUNTIME_DIR:-/srv/vxture/runtime}"
             for envf in "$RT"/.env.*; do
               [ -f "$envf" ] || continue
-              sed -i \
-                -e 's/vx-website-bff/vx-platform-website-bff/g' \
-                -e 's/vx-console-bff/vx-platform-console-bff/g' \
-                -e 's/vx-admin-bff/vx-platform-admin-bff/g' \
-                -e 's/vx-auth-bff/vx-platform-auth-bff/g' \
-                -e 's/vx-gateway-bff/vx-platform-gateway-bff/g' \
-                -e 's/vx-model-platform/vx-platform-model-platform/g' \
-                -e 's/vx-accounts/vx-platform-accounts/g' \
-                -e 's/vx-website/vx-platform-website/g' \
-                -e 's/vx-console/vx-platform-console/g' \
-                -e 's/vx-admin/vx-platform-admin/g' \
-                -e 's/vx-platform-auth-bff:3090/vx-platform-auth-bff:3061/g' \
-                -e 's/vx-platform-website-bff:3011/vx-platform-website-bff:3001/g' \
-                -e 's/vx-platform-admin-bff:3031/vx-platform-admin-bff:3043/g' \
-                -e 's/^AUTH_BFF_PORT=3090$/AUTH_BFF_PORT=3061/' \
-                -e 's/^WEBSITE_BFF_PORT=3011$/WEBSITE_BFF_PORT=3001/' \
-                -e 's/^ADMIN_BFF_PORT=3031$/ADMIN_BFF_PORT=3043/' \
-                "$envf"
+              sed -i                 -e 's/vx-website-bff/vx-platform-website-bff/g'                 -e 's/vx-console-bff/vx-platform-console-bff/g'                 -e 's/vx-admin-bff/vx-platform-admin-bff/g'                 -e 's/vx-auth-bff/vx-platform-auth-bff/g'                 -e 's/vx-gateway-bff/vx-platform-gateway-bff/g'                 -e 's/vx-model-platform/vx-platform-model-platform/g'                 -e 's/vx-accounts/vx-platform-accounts/g'                 -e 's/vx-website/vx-platform-website/g'                 -e 's/vx-console/vx-platform-console/g'                 -e 's/vx-admin/vx-platform-admin/g'                 "$envf"
             done
             echo "  [ok] runtime .env inter-service names migrated to vx-platform-*"
-            echo "  [ok] runtime .env L0 port-plan migrated (auth-bff 3090->3061, website-bff 3011->3001, admin-bff 3031->3043)"
+
+            # ── L0 port re-map (2026-08-10) ─────────────────────────────────
+            # Moved out of this inline sed block into a script, because the
+            # inline version had become actively wrong: its 2026-07-24 rules
+            # rewrote ADMIN_BFF_PORT=3031 → 3043, which is the exact reverse of
+            # the current plan, so leaving it here would have reverted admin-bff
+            # on every deploy while compose and nginx moved the other way.
+            # 15- carries both generations (3090 and 3061 both land on 3081) and
+            # is old-value-matched, so it is a no-op on an already-migrated host.
+            APPLY=1 DEPLOY_RUNTIME_DIR="$RT" bash scripts/15-migrate-runtime-ports.sh
 
             # 拉取新镜像并执行常规升级发布链路；migration/seed 只允许首次部署或人工脚本执行。
             cd "$DEPLOY_DIR"
