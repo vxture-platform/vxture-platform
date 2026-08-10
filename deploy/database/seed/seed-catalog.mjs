@@ -2118,6 +2118,28 @@ export async function seedCatalog(client) {
      where model_code in ('claude-sonnet-4', 'gpt-4o', 'google/gemini-2.5-flash')
   `,
   );
+  // Live-database increment for config.upstreamModel (standard §7: increments are embedded in
+  // seed so `db-init seed` is self-sufficient on a live database). The insert above is
+  // `on conflict (model_code) do nothing`, so it never reaches rows that already exist — on any
+  // database seeded before 2026-08-10 the three prefixed rows still have config NULL, and an
+  // adapter following §1.1 falls back to model_code and sends the prefixed string upstream.
+  // Idempotent twice over: it only writes where upstreamModel is absent, so a rerun is a no-op,
+  // and a value someone set by hand is never overwritten. `||` merges rather than replaces, so
+  // any other key already in config survives.
+  await client.query(
+    `
+    update model.models m
+       set config = coalesce(m.config, '{}'::jsonb) || jsonb_build_object('upstreamModel', v.upstream),
+           updated_at = now()
+      from (values
+        ('deepseek/deepseek-chat',  'deepseek-chat'),
+        ('minimax/minimax-text-01', 'minimax-text-01'),
+        ('google/gemini-2.5-flash', 'gemini-2.5-flash')
+      ) as v(code, upstream)
+     where m.model_code = v.code
+       and coalesce(m.config ->> 'upstreamModel', '') = ''
+  `,
+  );
   const modelRes = await client.query(
     `select id, model_code from model.models`,
   );
