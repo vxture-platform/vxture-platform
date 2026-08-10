@@ -1,4 +1,4 @@
-# admin.vhost.template — 运营后台公网 vhost（vx-platform-admin:3040）
+# admin.vhost.template — 运营后台公网 vhost（vx-platform-admin:3030）
 #
 # 真实域名不入仓（2026-07-28 加固决策追加,与能力控制台/opera 同一性质,见
 # product_250 M-4 附注）：本文件是模板,${VX_ADMIN_HOST} 由
@@ -50,7 +50,7 @@ server {
     resolver 127.0.0.11 valid=10s ipv6=off;
 
     location /_next/static/ {
-        set $upstream vx-platform-admin:3040;
+        set $upstream vx-platform-admin:3030;
         proxy_pass         http://$upstream;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;
@@ -67,7 +67,7 @@ server {
     # portal 同源（identity-access-topology.md §4）。/api/health 是 portal 自身
     # 容器健康检查路由，精确避让到前端。
     location = /api/health {
-        set $upstream vx-platform-admin:3040;
+        set $upstream vx-platform-admin:3030;
         proxy_pass         http://$upstream;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;
@@ -97,7 +97,7 @@ server {
     }
 
     location / {
-        set $upstream vx-platform-admin:3040;
+        set $upstream vx-platform-admin:3030;
         proxy_pass         http://$upstream;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;

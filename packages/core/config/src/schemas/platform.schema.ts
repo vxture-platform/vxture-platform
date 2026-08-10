@@ -17,15 +17,15 @@ export const platformSchema = z.object({
   /** Website (marketing / end-user) base URL */
   WEBSITE_BASE_URL: z.string().url().default("http://localhost:3000"),
   /** Console (tenant admin) base URL */
-  CONSOLE_BASE_URL: z.string().url().default("http://localhost:3001"),
+  CONSOLE_BASE_URL: z.string().url().default("http://localhost:3020"),
   /** Admin (platform ops) base URL */
-  ADMIN_BASE_URL: z.string().url().default("http://localhost:3002"),
+  ADMIN_BASE_URL: z.string().url().default("http://localhost:3030"),
   /**
    * Capability Console (OSS-side operator shell, product_250 M-4) base URL.
    * The public hostname is intentionally NOT recorded in the repo (hardening:
    * placeholder-only policy) — production injects it via runtime env.
    */
-  OPERA_BASE_URL: z.string().url().default("http://localhost:3050"),
+  OPERA_BASE_URL: z.string().url().default("http://localhost:3040"),
   /**
    * Login / account UI base URL — the public identity surface that renders the
    * IdP interactive login page (accounts.vxture.com in prod; same-origin with
@@ -38,18 +38,18 @@ export const platformSchema = z.object({
   /** Atlas (AI model supply provider) internal S2S API base URL. */
   ATLAS_API_URL: z.string().url().default("http://localhost:3100"),
   /** Auth BFF internal base URL (used by proxy BFFs to delegate auth operations) */
-  AUTH_BFF_URL: z.string().url().default("http://localhost:3061"),
+  AUTH_BFF_URL: z.string().url().default("http://localhost:3081"),
   /**
    * platform-api internal base URL (product_310 D13 host) — consumed by
    * proxy BFFs that resolve the C2 `/platform/entitlements` contract
    * (product_220 §3) server-to-server instead of re-deriving it from raw DB
    * queries. Container-internal only; nginx does not route /platform/*.
    */
-  PLATFORM_API_URL: z.string().url().default("http://localhost:3041"),
+  PLATFORM_API_URL: z.string().url().default("http://localhost:8080"),
   /** Varda agent-server internal base URL (used by varda-bff to proxy chat/confirm) */
-  VARDA_SERVER_INTERNAL_URL: z.string().url().default("http://localhost:3081"),
+  VARDA_SERVER_INTERNAL_URL: z.string().url().default("http://localhost:3091"),
   /** Ruyin product surface base URL (used for post-SSO redirects) */
-  RUYIN_BASE_URL: z.string().url().default("http://localhost:3080"),
+  RUYIN_BASE_URL: z.string().url().default("http://localhost:3900"),
   /**
    * Cookie domain shared across platform surfaces (website / console / admin).
    * Omit for localhost development (browser ignores explicit localhost domain).
