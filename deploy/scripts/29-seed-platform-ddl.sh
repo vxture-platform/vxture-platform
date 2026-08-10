@@ -73,16 +73,18 @@ if [ -f "$AUTH_ENV_FILE" ]; then
   set +a
   # accounts 面 base：优先显式 ACCOUNTS_BASE_URL，否则用 LOGIN_UI_BASE_URL（同一面）。
   : "${ACCOUNTS_BASE_URL:=${LOGIN_UI_BASE_URL:-}}"
+  # Every OIDC_CLIENT_SECRET_HASH_* present in the file, discovered rather than
+  # listed (2026-08-10, owner directive). The enumerated version silently dropped
+  # whatever was not in it: OIDC_CLIENT_SECRET_HASH_RUNOS was missing, so even once
+  # 27 minted the hash the seed container never received it and the DB row stayed
+  # NULL — invalid_client on every runos token exchange, with nothing in any log
+  # naming the cause (platform#205). A per-product list in a projection step fails
+  # exactly when a new product is added, which is the only time it matters.
+  HASH_KEYS="$(grep -oE '^OIDC_CLIENT_SECRET_HASH_[A-Z0-9_]+' "$AUTH_ENV_FILE" 2>/dev/null | sort -u || true)"
   for k in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GOOGLE_REDIRECT_URI \
            DINGTALK_APP_KEY DINGTALK_APP_SECRET DINGTALK_REDIRECT_URI \
            FEISHU_APP_ID FEISHU_APP_SECRET FEISHU_REDIRECT_URI \
-           OIDC_CLIENT_SECRET_HASH_WEBSITE OIDC_CLIENT_SECRET_HASH_CONSOLE OIDC_CLIENT_SECRET_HASH_ADMIN \
-           OIDC_CLIENT_SECRET_HASH_OPERA \
-           OIDC_CLIENT_SECRET_HASH_UMBRA OIDC_CLIENT_SECRET_HASH_RUYIN \
-           OIDC_CLIENT_SECRET_HASH_ARDA OIDC_CLIENT_SECRET_HASH_ARDA_BETA \
-           OIDC_CLIENT_SECRET_HASH_KARDA OIDC_CLIENT_SECRET_HASH_KARDA_BETA \
-           OIDC_CLIENT_SECRET_HASH_ATLAS OIDC_CLIENT_SECRET_HASH_ONTOS OIDC_CLIENT_SECRET_HASH_RAVEN \
-           OIDC_CLIENT_SECRET_HASH_ANLAN OIDC_CLIENT_SECRET_HASH_FORGE OIDC_CLIENT_SECRET_HASH_XUANZHEN \
+           $HASH_KEYS \
            OPERATOR_SUPERADMIN_PASSWORD_HASH \
            OPERATOR_SUPERADMIN_EMAIL OPERATOR_SUPERADMIN_PHONE \
            SAMPLE_USER_PASSWORD_HASH \

@@ -111,6 +111,13 @@ const OIDC_CLIENT_SECRET_HASH_KEYS = new Set([
 // Future saas app RPs �?hashes documented in .env.auth-bff.example but NOT yet required
 // in auth-bff (become required when Phase E deploys each RP). Already forbidden in all
 // RP envs to prevent accidental misplacement.
+// NOTE (2026-08-10): this list no longer has to be maintained per product for
+// the *forbidden-in-RP-env* checks — those now match the whole
+// `OIDC_CLIENT_SECRET_HASH_*` prefix (see isClientSecretHashKey below), so a new
+// product's hash is caught in the wrong file without anyone editing this file.
+// What remains list-driven is the deliberate policy split: REQUIRED in
+// .env.auth-bff (above) vs merely allowed (here). Keeping a product here is a
+// statement that its RP is not live yet, which is a judgement, not an inventory.
 const OIDC_FUTURE_APP_HASH_KEYS = new Set([
   // opera = Capability Console shell, second workforce RP (product_250 M-4
   // batch C); local RP on the deploy host like admin. Becomes REQUIRED (move to
@@ -301,6 +308,7 @@ const ENV_FILE_RULES = [
     example: `${WORKER_DIR}/.env.website-bff.example`,
     requiredActual: STRICT_RUNTIME,
     requiredExample: true,
+    forbidsClientSecretHashes: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
       "REDIS_PASSWORD",
@@ -333,6 +341,7 @@ const ENV_FILE_RULES = [
     example: `${WORKER_DIR}/.env.console-bff.example`,
     requiredActual: STRICT_RUNTIME,
     requiredExample: true,
+    forbidsClientSecretHashes: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
       "REDIS_PASSWORD",
@@ -365,6 +374,7 @@ const ENV_FILE_RULES = [
     example: `${WORKER_DIR}/.env.admin-bff.example`,
     requiredActual: STRICT_RUNTIME,
     requiredExample: true,
+    forbidsClientSecretHashes: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
       "REDIS_PASSWORD",
@@ -406,6 +416,7 @@ const ENV_FILE_RULES = [
     example: `${WORKER_DIR}/.env.opera-bff.example`,
     requiredActual: false,
     requiredExample: true,
+    forbidsClientSecretHashes: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
       "REDIS_PASSWORD",
@@ -443,6 +454,7 @@ const ENV_FILE_RULES = [
       "ARDA_PROVISION_WEBHOOK_SECRET",
       "KARDA_PROVISION_WEBHOOK_SECRET",
     ]),
+    forbidsClientSecretHashes: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
       "REDIS_PASSWORD",
@@ -879,7 +891,16 @@ function auditEnvFileRule(rule) {
 
     if (rule.forbiddenKeys) {
       for (const record of envFile.records) {
-        if (rule.forbiddenKeys.has(record.key)) {
+        // Prefix rule in addition to the explicit set: every
+        // OIDC_CLIENT_SECRET_HASH_* belongs in .env.auth-bff and nowhere else,
+        // so a NEW product's hash landing in an RP env is caught without this
+        // file having been updated for that product. Enumerating them per
+        // product is what let OIDC_CLIENT_SECRET_HASH_RUNOS slip through three
+        // separate lists (platform#205).
+        const misplacedHash =
+          rule.forbidsClientSecretHashes === true &&
+          record.key.startsWith("OIDC_CLIENT_SECRET_HASH_");
+        if (rule.forbiddenKeys.has(record.key) || misplacedHash) {
           results.push(
             diagnostic(
               "error",

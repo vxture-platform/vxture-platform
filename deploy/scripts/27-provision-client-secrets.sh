@@ -46,23 +46,64 @@ PROVISION_TIMEOUT_SECONDS="${PROVISION_TIMEOUT_SECONDS:-300}"
 AUTH_ENV_FILE="${AUTH_ENV_FILE:-$RUNTIME_DIR/.env.auth-bff}"
 SECRETS_DIR="${SECRETS_DIR:-$RUNTIME_DIR/secrets}"
 FORCE="${FORCE_PROVISION_SECRETS:-0}"
-# LOCAL RPs: plaintext → .env.<client>-bff on this box.
-CLIENTS_ALL="website console admin opera"
-# REMOTE RPs: the RP lives off-box (umbra = umbra app-bff on worker-04). Plaintext
-# has no local RP env → 0600 file, path printed; the operator transports it
-# (umbra → worker-04 env). NOTE: umbra currently reuses the legacy ruyin secret
-# (hash migrated to OIDC_CLIENT_SECRET_HASH_UMBRA by db-init; product_300 §2.4),
-# so this script only mints one on FORCE rotation or a fresh install.
-# karda-beta intentionally excluded — deferred until a beta host is assigned
-# (TD-001 in vxture-karda); adding it here now would provision a secret for a
-# client no host can use yet.
-# atlas: vx-worker-02 (same host as arda/karda) via Tailscale; RP client_secret
-# for its own outbound token-exchange calls (identity-app-integration-standard §11),
-# separate from ATLAS_PROVISION_WEBHOOK_SECRET (inbound webhook HMAC, unrelated).
-REMOTE_CLIENTS_ALL="umbra arda arda-beta karda atlas"
+# ── Client set: read from the database, never from a list in this file ───────
+# (2026-08-10, owner directive: provision every registered client — prod AND
+# beta — in one run, and stop editing lists on every new product.)
+#
+# The authority for "which OIDC clients exist" is `appoidc.oidc_clients`, which
+# the seed maintains. Enumerating them again here produced exactly the failure
+# it looks like it should prevent: `runos` was in NEITHER list, so this script
+# skipped it silently however many times it ran, its `client_secret_hash` stayed
+# NULL, and every runos token exchange returned invalid_client — reported as
+# platform#205 and diagnosed as a missing operator step rather than a missing
+# list entry. `karda-beta` was excluded on purpose for the same class of reason
+# and has the same effect. A list that must be updated per product will be
+# out of date exactly when a new product needs it.
+#
+# LOCAL vs REMOTE is likewise derived, not listed: an RP is local iff this box
+# has a runtime env file for it (`.env.<client>-bff`) — which is precisely the
+# thing that decides whether the plaintext has somewhere local to land.
+#
+# Remote plaintext (umbra on worker-04, arda/karda/atlas/runos on worker-02) has
+# nowhere local to land, so it goes to a 0600 file under secrets/ and only the
+# PATH is printed — never the secret, keeping it out of CI logs. The operator
+# transports it to the remote app-bff env and deletes the file.
+#
+# `CLIENT_IDS_OVERRIDE="a b c"` restricts a run to named clients (rotation of a
+# single client); unset = every registered client.
 
+# An RP is local iff this box holds its runtime env file.
 is_remote() {
-  case " $REMOTE_CLIENTS_ALL " in *" $1 "*) return 0 ;; *) return 1 ;; esac
+  [ ! -f "$RUNTIME_DIR/.env.${1}-bff" ]
+}
+
+# All active clients from the live catalog, one per line. Runs in the same
+# node+pg throwaway container the seed uses, so this adds no host dependency.
+discover_clients() {
+  if [ -n "${CLIENT_IDS_OVERRIDE:-}" ]; then
+    printf '%s\n' $CLIENT_IDS_OVERRIDE
+    return 0
+  fi
+  mkdir -p "$DB_TOOL_CACHE_DIR"
+  docker run --rm \
+    --network vxture-prod \
+    --env-file "$RUNTIME_DIR/secrets/platform.env" \
+    -v "$DB_TOOL_CACHE_DIR:/tmp/vxture-db" \
+    node:24-alpine \
+    sh -lc '
+      set -e
+      if [ ! -d /tmp/vxture-db/node_modules/pg ]; then
+        npm install --prefix /tmp/vxture-db pg@8.20.0 >/dev/null 2>&1
+      fi
+      NODE_PATH=/tmp/vxture-db/node_modules node -e "
+        const { Client } = require(\"pg\");
+        const c = new Client({ connectionString: process.env.DATABASE_URL });
+        c.connect()
+          .then(() => c.query(\"select client_id from appoidc.oidc_clients where status = '\''active'\'' order by client_id\"))
+          .then(r => { r.rows.forEach(x => console.log(x.client_id)); return c.end(); })
+          .catch(e => { console.error(e.message); process.exit(1); });
+      "
+    '
 }
 
 if [ "${CONFIRM_PROVISION_SECRETS:-}" != "yes" ]; then
@@ -137,8 +178,16 @@ else
 fi
 
 # Decide which clients still need a secret + hash pair.
+check_file "$RUNTIME_DIR/secrets/platform.env"
+CLIENTS_DISCOVERED="$(discover_clients)"
+if [ -z "$CLIENTS_DISCOVERED" ]; then
+  echo "错误：未从 appoidc.oidc_clients 读到任何 active 客户端——库不可达或未 seed。" >&2
+  exit 1
+fi
+echo "==> 目录中 active 客户端 $(printf '%s\n' "$CLIENTS_DISCOVERED" | wc -l) 个：$(printf '%s ' $CLIENTS_DISCOVERED)"
+
 NEED=()
-for c in $CLIENTS_ALL $REMOTE_CLIENTS_ALL; do
+for c in $CLIENTS_DISCOVERED; do
   C="$(printf '%s' "$c" | tr '[:lower:]-' '[:upper:]_')"
   hash="$(read_kv "$AUTH_ENV_FILE" "OIDC_CLIENT_SECRET_HASH_${C}")"
   if is_remote "$c"; then
