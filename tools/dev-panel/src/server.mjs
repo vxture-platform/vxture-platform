@@ -25,7 +25,23 @@ const PANEL_PORT = Number(process.env.DEV_PANEL_PORT ?? 8090);
 const MAX_LOG_LINES = 500;
 const START_WAIT_TIMEOUT_MS = 30_000;
 const START_WAIT_INTERVAL_MS = 1_000;
-const ROOT_ENV = loadRootEnv();
+/**
+ * .env.local is re-read on every service START, not once at panel boot.
+ *
+ * Read-once meant the panel served whatever the file said when it happened to
+ * launch, for the whole session. Edit .env.local, restart a service from the
+ * panel, and it silently keeps the old value — the panel is the one thing in
+ * the loop that looks like it re-read anything. It surfaces far away and much
+ * later: a stale DATABASE_URL becomes `database "..." does not exist` inside
+ * platform-api's dispatch job, twenty minutes after the edit that fixed it
+ * (2026-08-10, this exact sequence).
+ *
+ * The file is tiny and a start is a human action, so re-reading costs nothing
+ * measurable and removes a whole class of "but I changed that" confusion.
+ */
+function rootEnv() {
+  return loadRootEnv();
+}
 
 // ─── 服务清单 ──────────────────────────────────────────────────────────────────
 
@@ -92,7 +108,7 @@ function loadRootEnv() {
 function perClientOidcSecret(serviceId) {
   const client = serviceId.endsWith("-bff") ? serviceId.slice(0, -4) : null;
   if (!client) return {};
-  const specific = ROOT_ENV[`OIDC_CLIENT_SECRET_${client.toUpperCase()}`];
+  const specific = rootEnv()[`OIDC_CLIENT_SECRET_${client.toUpperCase()}`];
   return specific ? { OIDC_CLIENT_SECRET: specific } : {};
 }
 
@@ -422,7 +438,7 @@ async function startService(service) {
     cwd: ROOT_DIR,
     env: {
       ...process.env,
-      ...ROOT_ENV,
+      ...rootEnv(),
       ...perClientOidcSecret(service.id),
       ...(service.env ?? {}),
     },
