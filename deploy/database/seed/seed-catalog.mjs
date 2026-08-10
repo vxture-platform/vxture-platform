@@ -777,7 +777,7 @@ export async function seedCatalog(client) {
     // cross-domain RP at ruyin.ai is `umbra` (product_300 §2, U line).
     ruyin: process.env.RUYIN_BASE_URL || "http://localhost:3080",
     umbra: process.env.UMBRA_BASE_URL || "http://localhost:3082",
-    runa: process.env.RUNA_BASE_URL || "http://localhost:3081",
+    runos: process.env.RUNOS_BASE_URL || "http://localhost:3081",
     atlas: process.env.ATLAS_BASE_URL || "http://localhost:3083",
     ontos: process.env.ONTOS_BASE_URL || "http://localhost:3084",
     raven: process.env.RAVEN_BASE_URL || "http://localhost:3085",
@@ -789,7 +789,7 @@ export async function seedCatalog(client) {
   };
   const betaB = {
     ruyin: process.env.RUYIN_BETA_BASE_URL || null,
-    runa: process.env.RUNA_BETA_BASE_URL || null,
+    runos: process.env.RUNOS_BETA_BASE_URL || null,
     atlas: process.env.ATLAS_BETA_BASE_URL || null,
     ontos: process.env.ONTOS_BETA_BASE_URL || null,
     raven: process.env.RAVEN_BETA_BASE_URL || null,
@@ -882,12 +882,12 @@ export async function seedCatalog(client) {
       scopes: ["openid", "profile", "email"],
     },
     {
-      clientId: "runa",
-      name: "Runa",
-      displayName: "Runa",
+      clientId: "runos",
+      name: "Runos",
+      displayName: "Runos",
       realm: "customer",
-      redirectUris: appUris(B.runa, betaB.runa),
-      scopes: ["openid", "profile", "email", "runa:subscription"],
+      redirectUris: appUris(B.runos, betaB.runos),
+      scopes: ["openid", "profile", "email", "runos:subscription"],
     },
     {
       clientId: "atlas",
@@ -1016,6 +1016,22 @@ export async function seedCatalog(client) {
   `);
   console.log(
     "✓  appoidc.oidc_clients — U-line legacy ruyin → umbra (guarded; no-op when done)",
+  );
+
+  // runa → runos (platform#205, ADR-004). Same guarded shape as the umbra rename above,
+  // and it must run BEFORE the loop below: the loop's `on conflict (client_id) do update` keys
+  // on the NEW id, so on a live database it would insert a second client and leave `runa`
+  // standing — the split catalog the issue explicitly asked us to avoid. Renaming in place also
+  // keeps client_secret_hash attached to the row, which a delete-and-recreate would not: that
+  // answers the "does a client-id rename preserve the secret" question with yes, this way.
+  await client.query(`
+    update appoidc.oidc_clients
+       set client_id = 'runos', updated_at = now()
+     where client_id = 'runa'
+       and not exists (select 1 from appoidc.oidc_clients c2 where c2.client_id = 'runos')
+  `);
+  console.log(
+    "✓  appoidc.oidc_clients — runa → runos (guarded; secret preserved; no-op when done)",
   );
 
   for (const c of oidcClients) {
@@ -1149,11 +1165,11 @@ export async function seedCatalog(client) {
       desc: "Boundary VPN product (ruyin.ai).",
     },
     {
-      code: "runa",
+      code: "runos",
       type: "agent",
       cat: 1,
-      name: "露娜",
-      nick: "Runa",
+      name: "Runos",
+      nick: "Runos",
       desc: "Multimodal assistant agent.",
     },
     {
@@ -1185,6 +1201,23 @@ export async function seedCatalog(client) {
       desc: "Unified model access, routing, quota and metering platform.",
     },
   ];
+  // runa → runos (platform#205). Must precede the loop: its `on conflict (product_code) do
+  // nothing` keys on the NEW code, so on a live database it inserts a second product row and
+  // leaves `runos` behind — two catalog entries for one product, which is exactly what the issue
+  // asked us not to create. Renaming in place keeps the row's uuid, so plans, oidc_clients,
+  // product_webhooks and product_metrics all keep pointing at it (they reference product_id,
+  // never the code). Guarded and idempotent: a no-op once done, and a no-op if both exist.
+  await client.query(`
+    update product.products
+       set product_code = 'runos',
+           product_name = 'Runos', product_nick = 'Runos',
+           description_key = 'product.product.runos.desc', updated_at = now()
+     where product_code = 'runa'
+       and not exists (select 1 from product.products p2 where p2.product_code = 'runos')
+  `);
+  console.log(
+    "✓  product.products — runa → runos (guarded; uuid + downstream refs preserved)",
+  );
   for (const p of PRODUCTS) {
     await client.query(
       `

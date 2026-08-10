@@ -144,8 +144,8 @@
         "status": "coming"
       },
       {
-        "code": "runa",
-        "name": "Runa 可组合能力平台",
+        "code": "runos",
+        "name": "Runos 可组合能力平台",
         "type": "L1 · 能力编排",
         "icon": "sparkles",
         "description": "可组合 AI 能力平台：将模型、工具、工作流封装为可复用能力单元并编排成应用。",

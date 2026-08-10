@@ -343,10 +343,10 @@ describe("parseEntitlementQuery (§11.7 params)", () => {
 
   it("parses the batch form and dedupes", () => {
     expect(
-      parseEntitlementQuery({ workspace_id: W, products: "arda,runa,arda" }),
+      parseEntitlementQuery({ workspace_id: W, products: "arda,runos,arda" }),
     ).toEqual({
       workspaceId: W,
-      productCodes: ["arda", "runa"],
+      productCodes: ["arda", "runos"],
       single: false,
     });
   });
@@ -365,7 +365,7 @@ describe("parseEntitlementQuery (§11.7 params)", () => {
       parseEntitlementQuery({
         workspace_id: W,
         product: "arda",
-        products: "runa",
+        products: "runos",
       }),
     ).toThrow("product_or_products_required");
   });

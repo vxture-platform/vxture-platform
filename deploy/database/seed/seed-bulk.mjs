@@ -65,7 +65,7 @@ const pick = (arr, i, salt = 0) => arr[(i * 7 + salt * 13) % arr.length];
 const spread = (i, mod, salt = 0) => (i * 31 + salt * 17) % mod;
 
 // ── 测试产品线 ───────────────────────────────────────────────────────────────
-// catalog seed 里那 6 个（arda/atlas/karda/runa/ruyin/umbra）是**真实产品线**，
+// catalog seed 里那 6 个（arda/atlas/karda/runos/ruyin/umbra）是**真实产品线**，
 // 本文件不碰。下面 12 个是编出来的测试产品，前缀统一 `demo-`，一眼可辨。
 const TEST_PRODUCTS = [
   {

@@ -36,9 +36,9 @@ const ARDA = {
   productCode: "arda",
   planCode: "arda-free",
 };
-const RUNA = {
-  productId: "prod-runa",
-  productCode: "runa",
+const RUNOS = {
+  productId: "prod-runos",
+  productCode: "runos",
   planCode: "bundle-pro",
 };
 
@@ -92,7 +92,7 @@ describe("createSubscription → tenant.provisioned per component", () => {
 
   it("fires one provisioned event per bundled product", async () => {
     m.repo.create.mockResolvedValue(SUB);
-    m.repo.listVersionProducts.mockResolvedValue([ARDA, RUNA]);
+    m.repo.listVersionProducts.mockResolvedValue([ARDA, RUNOS]);
     await m.service.createSubscription({} as never);
     expect(m.provisioning.onSubscriptionActivated).toHaveBeenCalledTimes(2);
     expect(m.provisioning.onSubscriptionActivated).toHaveBeenCalledWith({
@@ -163,14 +163,14 @@ describe("upgradeSubscription → provision new set, deprovision dropped set", (
 
   it("provisions the new version's products and deprovisions dropped ones", async () => {
     m.repo.listVersionProducts.mockImplementation(async (pv: string) =>
-      pv === "pv-2" ? [RUNA] : [ARDA, RUNA],
+      pv === "pv-2" ? [RUNOS] : [ARDA, RUNOS],
     );
     await m.service.upgradeSubscription("sub-1", "pv-2");
     // new set provisioned
     expect(m.provisioning.onSubscriptionActivated).toHaveBeenCalledTimes(1);
     expect(
       m.provisioning.onSubscriptionActivated.mock.calls[0]![0].appCode,
-    ).toBe("runa");
+    ).toBe("runos");
     // arda dropped and uncovered → deprovisioned
     expect(m.provisioning.onSubscriptionDeactivated).toHaveBeenCalledTimes(1);
     expect(
@@ -180,7 +180,7 @@ describe("upgradeSubscription → provision new set, deprovision dropped set", (
 
   it("keeps dropped products that another subscription still covers", async () => {
     m.repo.listVersionProducts.mockImplementation(async (pv: string) =>
-      pv === "pv-2" ? [RUNA] : [ARDA, RUNA],
+      pv === "pv-2" ? [RUNOS] : [ARDA, RUNOS],
     );
     m.repo.hasOtherActiveCoverage.mockResolvedValue(true);
     await m.service.upgradeSubscription("sub-1", "pv-2");
@@ -240,7 +240,7 @@ describe("subscription_changed → C2 entitlement invalidate (P2.4 debt)", () =>
 
   it("create fires subscription_changed per covered product", async () => {
     m.repo.create.mockResolvedValue(SUB);
-    m.repo.listVersionProducts.mockResolvedValue([ARDA, RUNA]);
+    m.repo.listVersionProducts.mockResolvedValue([ARDA, RUNOS]);
     await m.service.createSubscription({} as never);
     const events = m.provisioning.enqueueEvent.mock.calls.map((c) => c[0]);
     expect(events).toHaveLength(2);
@@ -277,13 +277,13 @@ describe("subscription_changed → C2 entitlement invalidate (P2.4 debt)", () =>
     m.repo.getById.mockResolvedValue(SUB);
     m.repo.update.mockResolvedValue({ ...SUB, planVersionId: "pv-2" });
     m.repo.listVersionProducts.mockImplementation(async (pv: string) =>
-      pv === "pv-2" ? [RUNA] : [ARDA, RUNA],
+      pv === "pv-2" ? [RUNOS] : [ARDA, RUNOS],
     );
     await m.service.upgradeSubscription("sub-1", "pv-2");
     const codes = m.provisioning.enqueueEvent.mock.calls
       .map((c) => c[0].appCode)
       .sort();
-    expect(codes).toEqual(["arda", "runa"]);
+    expect(codes).toEqual(["arda", "runos"]);
   });
 
   it("no-op update fires nothing", async () => {

@@ -56,7 +56,7 @@
 
 ### 2.4 风险与专项约束(v1.1 修订)
 
-- **secret 沿用**:umbra 沿用原 ruyin 的 secret(同一对接方、同一信任边界,换绑新 client_id 不降低安全性);平台侧仅 bcrypt hash 随行/随 env 键搬移,**免去明文转运环节**;可在切换稳定后按契约 §13 机制择机轮换(可选)。新 `ruyin` client 的 secret 待其应用部署时经 27-provision 单独派发(runa 等"先注册无 hash"同模式);
+- **secret 沿用**:umbra 沿用原 ruyin 的 secret(同一对接方、同一信任边界,换绑新 client_id 不降低安全性);平台侧仅 bcrypt hash 随行/随 env 键搬移,**免去明文转运环节**;可在切换稳定后按契约 §13 机制择机轮换(可选)。新 `ruyin` client 的 secret 待其应用部署时经 27-provision 单独派发(runos 等"先注册无 hash"同模式);
 - **`RUYIN_BASE_URL` 变意是本窗口最大 footgun**:运行时 `.env.auth-bff` 存量值为 ruyin.ai,若只发代码不迁运行时 env,新 `ruyin` client 的 redirect 会错挂 ruyin.ai。防线三层:db-init 迁移 shim(检测 ruyin.ai 值→搬到 `UMBRA_BASE_URL` 并改写)、seed fail-fast(`RUYIN_BASE_URL` 含 ruyin.ai 即中止)、baseline 归属断言;
 - **audit/登录流水**:历史 `client_id='ruyin'` 记录不改写,报表按"umbra=原 ruyin 同一产品"口径解读(U0 已消歧);历史 refresh_token/session 记录的 client_id 裸值(无 FK)随旧 client 消失自然失效;
 - **契约文档**:`identity-platform-ruyin-contract.md` 的 client_id/scope 字面量在切换落库后回填为 umbra(条款本身不变)。

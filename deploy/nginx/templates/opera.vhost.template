@@ -11,7 +11,7 @@
 #  4. default_server 兜底见 00-default.conf;限流继承 conf.d/00-hardening.conf。
 #
 # 模块挂载（联邦一档 = 路径挂载,10-shell-mount-contract.md）：
-#  /atlas/* → atlas admin-module（worker-02,批D 启用）;/runa/* → runa 模块(批F)。
+#  /atlas/* → atlas admin-module（worker-02,批D 启用）;/runos/* → runos 模块(批F)。
 #  auth_request 门对模块路径额外铸 operator-OBO 管理票(M-1),经
 #  X-Operator-Token 注入上游 Authorization,模块永远见操作者本人身份。
 
@@ -82,7 +82,7 @@ server {
         add_header         Cache-Control "public, max-age=31536000, immutable";
     }
 
-    # ── 模块挂载位（批D 启用 atlas;批F 启用 runa）──────────────────────────
+    # ── 模块挂载位（批D 启用 atlas;批F 启用 runos）──────────────────────────
     # 启用时取消注释并填 worker-02 tailnet 地址;auth_request 门铸 aud=atlas 的
     # operator-OBO 票,经 X-Operator-Token 注入 Authorization(M-1)。
     #location /atlas/ {

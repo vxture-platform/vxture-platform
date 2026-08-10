@@ -9,7 +9,7 @@ const KNOWN_PRODUCTS = new Set([
   "arda",
   "atlas",
   "ontos",
-  "runa",
+  "runos",
   "karda",
   "terra",
 ]);

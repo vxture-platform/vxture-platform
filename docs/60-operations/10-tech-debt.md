@@ -363,7 +363,7 @@
 
 **解决方向**：随对应业务场景立项时按需开发，遵循 `packages/platform/` 下的包结构规范；不提前实现，避免过度设计。
 
-**复核 + 场景更正（2026-07-13，TD-001~010 批量复核）**：`packages/platform/` 仍只有 `browser/` 是真实实现，`amap/`/`cesium/` 仍是空 `.gitkeep` 占位。但**原文引用的业务场景已过时**：`admin-platform-refinement-plan.md` 记录 C14 去 mock 工作已**明确删除**了包含"无人机/洪涝视频/法务库"的 mock 能力示例数据——即本条引用的"无人机监测/地质灾害分析"场景本身就是被后续工作清理掉的旧 mock 范畴。核对当前真实产品线——Arda/Ontos/Runa/Karda/Terra + Varda 助手，是结构化数据聚合/共享与 AI agent 平台，产品文档中无任何地理空间、测绘、无人机相关的产品方向。
+**复核 + 场景更正（2026-07-13，TD-001~010 批量复核）**：`packages/platform/` 仍只有 `browser/` 是真实实现，`amap/`/`cesium/` 仍是空 `.gitkeep` 占位。但**原文引用的业务场景已过时**：`admin-platform-refinement-plan.md` 记录 C14 去 mock 工作已**明确删除**了包含"无人机/洪涝视频/法务库"的 mock 能力示例数据——即本条引用的"无人机监测/地质灾害分析"场景本身就是被后续工作清理掉的旧 mock 范畴。核对当前真实产品线——Arda/Ontos/Runos/Karda/Terra + Varda 助手，是结构化数据聚合/共享与 AI agent 平台，产品文档中无任何地理空间、测绘、无人机相关的产品方向。
 
 **作废（2026-07-14）**：核实 `amap`/`cesium` 全仓**零消费方**（空 `.gitkeep`，无任何 import），且激励它们的业务场景（无人机/地质灾害）已随 C14 清理、与当前产品线无关。**在当前架构下，"这两个 SDK 占位未实现"不构成技术债**——没有任何东西需要它们，"未实现"= 按当前产品方向本就不该有，而非欠账。按 backlog 保留原则（只留"新架构下仍缺失、只是暂缓"的项），本条不符，改判**作废**。空 `.gitkeep` 占位目录本身可另行清理（非技术债）。若未来出现真实地理空间产品方向，另立新号登记，不复用本号。
 
@@ -732,7 +732,7 @@
 
 **描述**：`products.router` 的 `capabilities` / `agents` 两端点已于 C14 去 mock 接活库（`product.products` 统一目录 + `product_metrics` + `product_webhooks`）。其余四端点——`solutions`（行业解决方案，如洪涝监管/智慧法务）、`service-plans`（solution × tier）、`releases`（发布+定价+版本标签的复合结构）、`model-policies`（模型授权策略）——在 `product` schema 里**无对应表**，仍返回硬编码 mock（时间戳恒 `2026-04-25`）。solutions/releases 是产品目录里尚未定义的建模概念；model-policies 归属 model platform（B11 延后）。
 
-**影响**：admin「产品」板块的解决方案页 / 服务套餐页 / 发布信息 / 模型授权仍展示虚构 demo 数据，与真实 4 产品（ruyin/umbra/runa/arda）目录脱节；运营无法据此做真实决策。去 mock 不是代码机械问题，而是产品目录成熟度问题——无表可接。
+**影响**：admin「产品」板块的解决方案页 / 服务套餐页 / 发布信息 / 模型授权仍展示虚构 demo 数据，与真实 4 产品（ruyin/umbra/runos/arda）目录脱节；运营无法据此做真实决策。去 mock 不是代码机械问题，而是产品目录成熟度问题——无表可接。
 
 **解决方向**：先出**产品目录细化设计**定义 solutions（行业方案聚合模型）与 releases（发布/版本/定价打包模型）的 schema + seed，model-policies 随 B11 Model Platform DB infra 落地；表与 seed 就绪后按 capabilities/agents 同款方式接活库。**不投机建表**：无产品设计前不预造 solution/release 模型（起步最小化 + 先有依据才动手）。owner 2026-07-12 裁定 C14 仅接 capabilities+agents，其余登记本 TD。
 

@@ -8,7 +8,7 @@
  *
  *   /auth/check is the nginx auth_request gate (product_250 M-4 hardening:
  *   "any path, no content unauthenticated"). It resolves the RP session and,
- *   when the original URI targets a mounted provider module (/atlas/*, /runa/*),
+ *   when the original URI targets a mounted provider module (/atlas/*, /runos/*),
  *   mints an operator-OBO management token (M-1) and returns it in
  *   X-Operator-Token so nginx injects it as the Authorization header on the
  *   proxied module request. See docs/20-specs/000-platform/opera/
@@ -68,7 +68,7 @@ interface AuthReq {
  */
 const MODULE_AUD_BY_PREFIX: Record<string, string> = {
   "/atlas": "atlas",
-  "/runa": "runa",
+  "/runos": "runos",
 };
 
 export function moduleAudFor(originalUri: string | undefined): string | null {

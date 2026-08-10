@@ -99,10 +99,10 @@ L3 是"行业业务领域智能体"（文档编写/客户管理/轨迹分析/战
 - **调用路径**：L3 agent-server 内的 caller 模块（`product_210` token exchange 规范，尚无
   参照实现——T3 首个消费场景 arda→? 尚未落地，caller 模块要么先按规范抄样例，要么等 T3）→
   Atlas 的 generation 端点。
-- **技能装载**：走 **Runa**（分发面），不是 Atlas——`product_240` §3 把"技能装载器"和"Atlas LLM
-  客户端"并列为 L3 agent-server 槽的两个不同组件：技能从 Runa 拉取（版本 pinning+装载前验签），
+- **技能装载**：走 **Runos**（分发面），不是 Atlas——`product_240` §3 把"技能装载器"和"Atlas LLM
+  客户端"并列为 L3 agent-server 槽的两个不同组件：技能从 Runos 拉取（版本 pinning+装载前验签），
   模型调用走 Atlas，两条线不要混在一起设计。
-- **本仓的角色**：同 karda——只做 Atlas/Runa 作为产品的平台侧登记，不介入 L3 agent 仓↔Atlas
+- **本仓的角色**：同 karda——只做 Atlas/Runos 作为产品的平台侧登记，不介入 L3 agent 仓↔Atlas
   的调用链路本身。
 
 ## 5. 统一契约层（四类消费方不因来源不同而分裂）
@@ -162,5 +162,5 @@ L3 agent↔atlas 的 S2S 调用链路完全在两个独立仓之间发生，本�
 ### 7.3 本次落地
 
 - `13-infra-allocation-registry.md` §3 atlas 行已回填 `worker-02:3100 在产`（本次同批修正）。
-- `product_210` §11 新增"供给面契约变更检查单"，作为 Atlas（及未来 ontos/runa）新增/变更 S2S
+- `product_210` §11 新增"供给面契约变更检查单"，作为 Atlas（及未来 ontos/runos）新增/变更 S2S
   供给面契约前的强制检查项，见该文档。

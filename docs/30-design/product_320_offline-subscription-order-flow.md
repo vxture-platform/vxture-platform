@@ -140,7 +140,7 @@ free / beta-trial 保持 v1。既有订阅钉在 v1 不受影响；console `quer
 
 ### 4.5 website `/products` 改版（`portals/website` + `bff/website-bff`）
 
-- IA：`/products` 总介绍页 = hero + **六产品卡片**（L1 Atlas/Ontos/Runa + L2 Arda/Karda/Terra）+ **arda 五档定价区块**（月/年切换；V1 静态 i18n 与目录人工对齐，后续接公开目录 API）；`/products/[slug]` 详情页——arda 承接原"全域数智平台"内容更正归位，其余 5 个"待建设"占位。
+- IA：`/products` 总介绍页 = hero + **六产品卡片**（L1 Atlas/Ontos/Runos + L2 Arda/Karda/Terra）+ **arda 五档定价区块**（月/年切换；V1 静态 i18n 与目录人工对齐，后续接公开目录 API）；`/products/[slug]` 详情页——arda 承接原"全域数智平台"内容更正归位，其余 5 个"待建设"占位。
 - 卡片：克隆 `AgentMarketplacePage` 解剖，**去 capabilities/tags**，留 logo + 类型 + 标题 + 概要 + 业务价值；title 徽标 `可试用|已开通`；操作区：未订阅 {订阅}+[申请演示]+[产品介绍(新tab)] / 已订阅 {升级}+[进入]+[产品介绍] / 待建设禁用。
 - 订阅态：website-bff 新 `GET /api/me/product-subscriptions`（active_org 的 default workspace，C2 同款代表订阅谓词）；未登录一律未订阅态。
 - 深链：`console-entry.ts` 加 `buildConsoleSubscribeUrl`；护栏：新 token 进 DS `tokens-website.css`，`pnpm lint:design` 必跑；i18n 静态 switch 注册。

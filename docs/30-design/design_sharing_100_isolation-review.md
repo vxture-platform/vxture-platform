@@ -11,7 +11,7 @@
 
 ## 0. 总评（一段话）
 
-v0.2 是一份**质量很高的顶层产品架构稿**：它给平台补上了此前完全缺位的一层——L0–L3 产品分层、L2 域平台统一原型（P-T-A + 托管水位线）、SharingGrant 共享策略。其核心公理（能力同构 / 数据异构 / 共享是策略非结构 / 供给直连）与本仓已实施的底座**高度同源**：entitlement 粒度（workspace × product，state × tier 双轴）就是 ADR-11 的原文；"Atlas 唯一模型宿主 + 计量口径唯一"就是本仓"consume 唯一写入方 + Model Platform 只读 gate"铁律的产品化表述；org 硬隔离 + agent-db 一产品一套按 WS 隔离与双平面架构一致。**建议整体采纳为平台产品架构权威**，但有 4 处与仓内现状的实质冲突需裁定（产品目录命名重排、Ruyin 订阅处置、业务面模板 workspace 化、旧租户文档作废）、5 处模型自身缺口需在 v0.3 修补（策略 SoT 落位、P 级供给两形态、Runa eval 运行时口子、grant 语义精确化、级联撤销一等化）。
+v0.2 是一份**质量很高的顶层产品架构稿**：它给平台补上了此前完全缺位的一层——L0–L3 产品分层、L2 域平台统一原型（P-T-A + 托管水位线）、SharingGrant 共享策略。其核心公理（能力同构 / 数据异构 / 共享是策略非结构 / 供给直连）与本仓已实施的底座**高度同源**：entitlement 粒度（workspace × product，state × tier 双轴）就是 ADR-11 的原文；"Atlas 唯一模型宿主 + 计量口径唯一"就是本仓"consume 唯一写入方 + Model Platform 只读 gate"铁律的产品化表述；org 硬隔离 + agent-db 一产品一套按 WS 隔离与双平面架构一致。**建议整体采纳为平台产品架构权威**，但有 4 处与仓内现状的实质冲突需裁定（产品目录命名重排、Ruyin 订阅处置、业务面模板 workspace 化、旧租户文档作废）、5 处模型自身缺口需在 v0.3 修补（策略 SoT 落位、P 级供给两形态、Runos eval 运行时口子、grant 语义精确化、级联撤销一等化）。
 
 ---
 
@@ -31,7 +31,7 @@ v0.2 是一份**质量很高的顶层产品架构稿**：它给平台补上了�
 
 ### 1.2 ⚠️ 上游文档不在仓（阻塞项）
 
-稿件引用 `product-matrix.md v1.1`、`ADR-entitlement-and-workspace.md v2` 为上游，且 §13 多处"沿用上游既定"——**两份文档在本仓均不存在**。L1 层的成员构成（Atlas/Ontos/Runa 谁在 L1）全稿未定义，只能靠上游文档解释。按吸纳留档对账硬规（inputs 先入仓、对账清单、对账完前不删原稿）：
+稿件引用 `product-matrix.md v1.1`、`ADR-entitlement-and-workspace.md v2` 为上游，且 §13 多处"沿用上游既定"——**两份文档在本仓均不存在**。L1 层的成员构成（Atlas/Ontos/Runos 谁在 L1）全稿未定义，只能靠上游文档解释。按吸纳留档对账硬规（inputs 先入仓、对账清单、对账完前不删原稿）：
 
 1. **请 owner 提供两份上游文档**，与 v0.2 原稿一并 commit 进 `docs/30-design/inputs/`；
 2. 本评审即对账清单的分析部分；实体级对账（上游 vs 仓内 catalog/entitlement 逐项）在上游入仓后补做；
@@ -93,15 +93,15 @@ org 硬边界"无此路径"而非"权限不允许"、唯一跨 org 形态为 P �
 
 **冲突**：现行 `product-oidc-subscription.md` 把 `arda` 定义为"平台门户/内部 shell、无订阅"；live seed 中数据平台占位 product_code 是 `data`。新稿把 Arda 重定义为可售 L2 产品。处置建议见 §5 目录映射（"arda=门户"语义作废，门户就是 website/console/admin 平台位，不占 product code；`data` 占位改名 `arda`）。**此即产品命名定型待决项（runbook §18.2#5）的答案**——v0.2 事实上完成了定名，owner 确认映射表即可销号。
 
-### 3.6 Runa：技能与专用模型资产平台（§6）——采纳+修补一处口子
+### 3.6 Runos：技能与专用模型资产平台（§6）——采纳+修补一处口子
 
-纯控制面、不在任何调用链路、非 API 网关/模型平台/工作流引擎、Rule of Two 准入、构件分布式就位（声明部分进 agent 运行时 / 工具引用直连 / 小模型推理在 Atlas / 重计算在 L0 沙箱）——**全部采纳**。这套设计精确规避了 ESB 反模式，与 MCP + Skills 生态对齐，且"Runa 无推理与执行负载 → SaaS 成本极轻"的推论成立。
+纯控制面、不在任何调用链路、非 API 网关/模型平台/工作流引擎、Rule of Two 准入、构件分布式就位（声明部分进 agent 运行时 / 工具引用直连 / 小模型推理在 Atlas / 重计算在 L0 沙箱）——**全部采纳**。这套设计精确规避了 ESB 反模式，与 MCP + Skills 生态对齐，且"Runos 无推理与执行负载 → SaaS 成本极轻"的推论成立。
 
-**一处口子**：§6.3#1 把"评测基线（eval）"列为 Runa 职责，但 eval **执行**需要运行时（跑评测要调模型、跑工具）。若不澄清，"无运行时"会被 eval 撕开。建议 v0.3 补一句：**eval 的执行按构件就位模型走（推理在 Atlas、执行在 L0 沙箱），Runa 只持有 eval 定义与结果记录**——与 §6.6 自洽。
+**一处口子**：§6.3#1 把"评测基线（eval）"列为 Runos 职责，但 eval **执行**需要运行时（跑评测要调模型、跑工具）。若不澄清，"无运行时"会被 eval 撕开。建议 v0.3 补一句：**eval 的执行按构件就位模型走（推理在 Atlas、执行在 L0 沙箱），Runos 只持有 eval 定义与结果记录**——与 §6.6 自洽。
 
 ### 3.7 供给唯一直连 + L0 工具协议（§7）——采纳；指出最大工程缺口
 
-"L2 供给通道唯一为直连、Runa 位于消费侧、协议统一≠物理网关"的必要性分析（双接口面/双重求值/产品完整性受损）成立，采纳。
+"L2 供给通道唯一为直连、Runos 位于消费侧、协议统一≠物理网关"的必要性分析（双接口面/双重求值/产品完整性受损）成立，采纳。
 
 **最大工程缺口 = 身份透传**。"技能运行时对 L2 的每次调用以调用方 agent 身份走直连"，要求 L2 入口能拿到可信的 (org, ws, product, user?) 调用方身份并做 grant ∧ entitlement 求值。现有身份体系只覆盖**用户级 OIDC RP 登录**（identity-app-integration-standard），服务间只有"经服务间 API、不塞 token"的原则声明，**无 S2S 凭证/token 交换（RFC 8693 on-behalf-of）设计**。L0 工具协议规范（§7.1 已固化归 L0）必须包含：工具 schema 约定、**S2S 鉴权与调用方身份透传**、grant∧entitlement 求值时点、审计与计量归属。这是采纳后第一个要开的新设计线（见 §7 计划）。
 
@@ -181,7 +181,7 @@ data_platform_100 §2.3.1 业务库模板（context.app_instance 等）仍以 te
 - **(a) 完全退出**：ruyin 从 product/plan/claim 体系摘除，其商业化完全在 ruyin 侧自理 → 需要清 seed + claim + RP contract 改造（worker-03 侧 OUT，只动本仓侧）；
 - **(b) 只是不进新引擎**：保留现有租户级订阅/claim 原样，不参与 workspace × product 权益引擎与 SharingGrant → 文档注明豁免即可，代码不动。
 
-倾向 **(b)**（起步最小化：不为边界产品做拆除工程；且 ruyin 跨域 RP 契约已上生产）。同时 Karda 知识库能力默认不对 Ruyin 开放、仅 Atlas/Runa 层互通（§11）照录进 ruyin contract。
+倾向 **(b)**（起步最小化：不为边界产品做拆除工程；且 ruyin 跨域 RP 契约已上生产）。同时 Karda 知识库能力默认不对 Ruyin 开放、仅 Atlas/Runos 层互通（§11）照录进 ruyin contract。
 
 ### 4.5 旧租户文档撕裂（顺带清理，非本稿引入）
 
@@ -198,7 +198,7 @@ v0.2 事实上完成了产品定名。建议映射表（owner 确认后回填 §
 | L0                             | vxture 平台                      | 无（不作 product code） | 门户 = website/console/admin，**"arda=平台 shell"旧表述作废**                                       |
 | 平台能力（L1，待上游确认层名） | Atlas 模型平台                   | `atlas`                 | 现 Model Platform 的终态产品名（model-platform.md 已声明现名非终态）；seed 已有 atlas OIDC client ✔ |
 | 〃                             | Ontos 语义平台                   | `ontos`                 | seed 已有 client ✔；产品定义空白，待建                                                              |
-| 〃                             | Runa 技能平台                    | `runa`                  | seed 已有 product+client；**定位改写**（原"多模态助手 agent"文案作废 → 技能与专用模型资产平台）     |
+| 〃                             | Runos 技能平台                   | `runos`                 | seed 已有 product+client；**定位改写**（原"多模态助手 agent"文案作废 → 技能与专用模型资产平台）     |
 | L2                             | Arda 数据平台                    | `arda`                  | seed 占位 `data` → 改名 `arda`（type=data_platform 已对）                                           |
 | L2                             | Karda 知识平台                   | `karda`                 | 全新；候选名 `nocus`（seed 有 client）/`vault`/`cortex`（design 稿）→ 处置：改名或退役              |
 | L2                             | Terra 时空平台                   | `terra`                 | 全新                                                                                                |
@@ -218,7 +218,7 @@ v0.2 事实上完成了产品定名。建议映射表（owner 确认后回填 §
 2. §4.2 P 级供给形态二分：自有资产 vs 代理持牌服务（§3.2#2/§3.4）；
 3. §5.1 级联撤销升级为 day-one 硬约束：ingestion 记派生边、撤销按边重算（§3.3#1）；
 4. §10#4 命名空间隔离改"逻辑强制、物理分档"（§3.3#2）；
-5. §6.3 补 eval 执行位置（推理在 Atlas、执行在 L0 沙箱，Runa 只存定义与结果）（§3.6）；
+5. §6.3 补 eval 执行位置（推理在 Atlas、执行在 L0 沙箱，Runos 只存定义与结果）（§3.6）；
 6. §8.1 grant 加可选 `expires_at`；grantee=product 谓词写死；scope 按 resource_type 参数化（§3.8）；
 7. §8.3 管理权由"建议"转"已固化"（合并待拍板#2）；
 8. 上游引用改指入仓后的 inputs 路径；L1 成员构成补一句明示。
@@ -236,7 +236,7 @@ v0.2 事实上完成了产品定名。建议映射表（owner 确认后回填 §
 
 **P2 新设计线（依赖 P0 拍板）** 6. `data_sharing_100/200`：SharingGrant 域数据设计（按 §4.2 草图展开字段级；命名遵循 data*{domain}*{NNN} 前缀规则）；7. **L0 工具协议规范**（`docs/10-standards/` 或 design/）：工具 schema、S2S 鉴权与身份透传（token exchange）、grant∧entitlement 求值时点、审计计量归属——扩展而非替代 identity-app-integration-standard（§3.7）；8. **Karda 产品定义**（稿件明示本模型是其前置输入）：含待拍板#3 裁定规则、#4 之 Karda 侧、级联撤销硬约束、命名空间分档。
 
-**P3 逐产品展开**（按业务节奏）9. Terra / Arda / Ontos / Runa 产品定义；L3 应用架构模板（agent-db + 接入标准 + 工具协议消费方指南）。
+**P3 逐产品展开**（按业务节奏）9. Terra / Arda / Ontos / Runos 产品定义；L3 应用架构模板（agent-db + 接入标准 + 工具协议消费方指南）。
 
 **明确不做**（对齐负面清单与起步最小化）：不建中心网关/ESB；不在平台控制面建向量/索引表；L0 共享沙箱本轮只留文档占位不实施；umbra 不进模型。
 

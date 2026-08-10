@@ -321,7 +321,7 @@ POST /v1/audio
 例如：
 
 ```text
-runa-engine
+runos-engine
 
 arda-service
 ```

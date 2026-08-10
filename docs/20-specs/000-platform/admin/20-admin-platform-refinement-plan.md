@@ -238,7 +238,7 @@ owner 裁：A（全禁用 status='disabled'）+ 本轮做停用/恢复 + 强制�
 
 ### P3 C14 产品目录去 mock — capabilities + agents 接活库（2026-07-12，分支 `feature/admin-products-demock`）✅
 
-**摸底关键发现**：`products.router` 8 端点中真实活库支撑两极分化。`plans` 早已接活库；`capabilities`/`agents` 可接 `product.products`（统一目录，合并旧 agent+application，seed 只 4 真产品 ruyin/umbra/runa/arda）；`solutions`/`service-plans`/`releases`/`model-policies` 在 `product` schema **无对应表**，是纯 mock 概念。**去 mock 不是代码机械问题，是产品目录成熟度问题**（无表可接）。
+**摸底关键发现**：`products.router` 8 端点中真实活库支撑两极分化。`plans` 早已接活库；`capabilities`/`agents` 可接 `product.products`（统一目录，合并旧 agent+application，seed 只 4 真产品 ruyin/umbra/runos/arda）；`solutions`/`service-plans`/`releases`/`model-policies` 在 `product` schema **无对应表**，是纯 mock 概念。**去 mock 不是代码机械问题，是产品目录成熟度问题**（无表可接）。
 
 **owner 裁定 2026-07-12：C14 仅接 capabilities+agents，其余保留 mock+显式注释+登记 TD-029。**
 

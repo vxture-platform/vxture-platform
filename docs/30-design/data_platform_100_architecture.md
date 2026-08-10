@@ -42,7 +42,7 @@
 
 Vxture 是 **PLG 的多产品矩阵 SaaS 控制平面**，不是单产品。下列业务目标共同决定了为什么会有"产品目录 / workspace / 双 realm / 双平面"这些维度——每个 schema 决策都应能追溯到其中至少一条。
 
-1. **产品矩阵目录**：分层产品矩阵（L1 = Atlas/Ontos/Runa 横向能力平台，L2 = Arda/Karda/Terra 域平台，L3 = Raven/Anlan/Forge/Xuanzhen 行业 agent；另 Ruyin=client 端、umbra=外部边界 VPN(域名 ruyin.ai)、Hermes=internal）+ 平台位，每产品独立 5 档套餐（free→starter→pro→business→enterprise）、i18n、发布渠道（stable/beta）。**命名已定型为终版**（2026-07-06 owner 拍板，销 runbook §18.2#5），权威 = [`product_100_matrix.md`](./product_100_matrix.md) v1.0；共享/隔离语义 = [`product_110_sharing-isolation.md`](./product_110_sharing-isolation.md) v1.0。
+1. **产品矩阵目录**：分层产品矩阵（L1 = Atlas/Ontos/Runos 横向能力平台，L2 = Arda/Karda/Terra 域平台，L3 = Raven/Anlan/Forge/Xuanzhen 行业 agent；另 Ruyin=client 端、umbra=外部边界 VPN(域名 ruyin.ai)、Hermes=internal）+ 平台位，每产品独立 5 档套餐（free→starter→pro→business→enterprise）、i18n、发布渠道（stable/beta）。**命名已定型为终版**（2026-07-06 owner 拍板，销 runbook §18.2#5），权威 = [`product_100_matrix.md`](./product_100_matrix.md) v1.0；共享/隔离语义 = [`product_110_sharing-isolation.md`](./product_110_sharing-isolation.md) v1.0。
 2. **中心化 OIDC IdP**：同源子域 + 跨域 RP（ruyin.ai），双 realm 硬隔离（customer/tenant vs workforce/operator），含联邦登录/会话/刷新/SSO-SLO 全表面。
 3. **订阅/权益引擎（ADR-11）**：workspace = 成本中心（持订阅/配额/账单），tenant/org = 结算账户，多组件版本化 Plan，能力就高合并 + 消耗瀑布扣减，权益**实时派生、不入 token**。
 4. **AI 模型网关与计量权威**：单一 LLM 出口，provider/model/grant/price/policy 治理，token 计价计量（唯一上行写入方），按产品保管下游 provider key（归属待定，见 §12）。
@@ -371,7 +371,7 @@ schema: {domain} × N
 2. **不读平台库**：业务服务禁止直连 `vxturestudio_platform_main`；一切平台状态经 BFF / 契约接口获取，access token 只带治理角色、不含业务 entitlement（业务侧按需实时回查）。
 3. **不持 Key**：业务库与业务 worker 不得持有 Provider Key 明文。Provider Key 与请求日志只在独立 Model Platform DB（`vxturestudio_modelruntime_main` 的 `key` / `reqlog`）；`gateway` schema 已取消，平台控制面库不接触 Key。
 4. **用量按约上报，不本地判配额**：业务侧只把原始 counter 用量写入 `local_usage.raw`，再由异步 Job 按契约调用平台**用量写入唯一入口**——`metering` consume 服务（`POST /usage/consume`，单事务写入原始事件 + 更新聚合；gauge 型 metric 如 storage.bytes 走 `PUT /usage/gauge` 绝对水位、不入缓冲表）。业务侧**不做配额判断**；配额 gate 由 Model Platform 只读平台配额执行，Model Platform 不直写用量。
-5. **L2 域平台条款（2026-07-06 新增，权威 = [`product_110_sharing-isolation.md`](./product_110_sharing-isolation.md) v1.0）**：L2 域平台产品（Arda/Karda/Terra，及 Runa 技能资产）可在**自己的业务面基础设施**内按 P-T-A 三级模型托管**其他产品**的资产（如 L3 agent 的知识库索引托管于 Karda）——托管资产的归属键恒为 `(org, ws, product)`，可见性由 SharingGrant ∧ entitlement 在 L2 入口求值（召回层强制）。**产品间调用一律走 L0 工具协议直连**（见 [`product_200_integration.md`](./product_200_integration.md) §5），禁止直连对方数据库；本条不改变第 1–4 款对平台库的全部约束（L2 亦不读平台库、不持 Key、用量经 consume 上行）。
+5. **L2 域平台条款（2026-07-06 新增，权威 = [`product_110_sharing-isolation.md`](./product_110_sharing-isolation.md) v1.0）**：L2 域平台产品（Arda/Karda/Terra，及 Runos 技能资产）可在**自己的业务面基础设施**内按 P-T-A 三级模型托管**其他产品**的资产（如 L3 agent 的知识库索引托管于 Karda）——托管资产的归属键恒为 `(org, ws, product)`，可见性由 SharingGrant ∧ entitlement 在 L2 入口求值（召回层强制）。**产品间调用一律走 L0 工具协议直连**（见 [`product_200_integration.md`](./product_200_integration.md) §5），禁止直连对方数据库；本条不改变第 1–4 款对平台库的全部约束（L2 亦不读平台库、不持 Key、用量经 consume 上行）。
 
 #### 2.3.3 用量上报路径（对齐 v2 用量写入模型）
 

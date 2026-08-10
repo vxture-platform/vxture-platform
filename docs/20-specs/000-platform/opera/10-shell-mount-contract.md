@@ -1,7 +1,7 @@
 # 能力控制台:外壳与模块挂载契约(批C 交付)
 
 > 上游:`docs/30-design/product_250_management-plane-contract.md` M-1/M-4。
-> 本文=外壳实现说明 + **L1 admin-module 的挂载契约**(atlas 批D / runa 批F 的对接依据)。
+> 本文=外壳实现说明 + **L1 admin-module 的挂载契约**(atlas 批D / runos 批F 的对接依据)。
 > 域名纪律:仓内一律以占位符 `x.vxture.com` 指代本控制台域名,真实主机名仅存在于部署主机 runtime env。
 
 ## 1. 外壳(platform 仓交付,worker-01)
@@ -19,7 +19,7 @@
 
 联邦一档 = **nginx 路径挂载**:模块是独立小应用,与自家 backend 同仓同机同 CD;外壳不参与其构建。
 
-1. **挂载位**:`/{product_code}/*`(`/atlas/*`、`/runa/*`)。模块的一切路由、静态资源、API 调用必须收在自己的前缀下(Next.js 用 `basePath`,其他框架等价物)。
+1. **挂载位**:`/{product_code}/*`(`/atlas/*`、`/runos/*`)。模块的一切路由、静态资源、API 调用必须收在自己的前缀下(Next.js 用 `basePath`,其他框架等价物)。
 2. **身份(M-1)**:每个到达模块的请求携带 `Authorization: Bearer <operator-OBO token>`(边缘 `auth_request` 门铸造,`aud={product_code}`、`scope=mgmt:{product_code}`、`realm=workforce`、TTL 300s)。模块义务:JWKS 验签 + 校 `aud`/`realm`/`exp`;高危端点加验 step-up 新鲜度(`amr`)。**模块不做自己的登录**——浏览器侧 SSO 完全由外壳 vhost 承担,未认证请求到不了模块。
 3. **审计(M-5)**:模块域内审计表记录传入 token 的 `sub`(`opr_<id>`)。
 4. **健康**:模块暴露自己的健康端点,由自家 compose/healthcheck 消费(边缘不探测)。

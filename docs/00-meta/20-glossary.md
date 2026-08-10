@@ -105,7 +105,7 @@ Operator-side user type (JWT claim: `userType: "operator"`). Corresponds to `y.v
 ## P
 
 **product matrix (L0–L3)**
-The platform's layered product structure, finalized 2026-07-06 (`docs/30-design/product_100_matrix.md` v1.0, names are final; doc family `product_{NNN}`, routing in its header): **L0** = the vxture platform itself (org/workspace/entitlement/metering/tool-protocol/sandbox; not a product, no product code); **L1** horizontal capability platforms = Atlas (models), Ontos (semantics), Runa (skills); **L2** object-domain platforms = Arda (structured data), Karda (unstructured knowledge), Terra (spatiotemporal/physical world); **L3** industry agents = Raven, Anlan, Forge, Xuanzhen. Outside the layers: Ruyin (client/desktop product, redefined), umbra (edge VPN at ruyin.ai, external), Hermes (internal). Sharing/isolation semantics: `docs/30-design/product_110_sharing-isolation.md` v1.0.
+The platform's layered product structure, finalized 2026-07-06 (`docs/30-design/product_100_matrix.md` v1.0, names are final; doc family `product_{NNN}`, routing in its header): **L0** = the vxture platform itself (org/workspace/entitlement/metering/tool-protocol/sandbox; not a product, no product code); **L1** horizontal capability platforms = Atlas (models), Ontos (semantics), Runos (skills); **L2** object-domain platforms = Arda (structured data), Karda (unstructured knowledge), Terra (spatiotemporal/physical world); **L3** industry agents = Raven, Anlan, Forge, Xuanzhen. Outside the layers: Ruyin (client/desktop product, redefined), umbra (edge VPN at ruyin.ai, external), Hermes (internal). Sharing/isolation semantics: `docs/30-design/product_110_sharing-isolation.md` v1.0.
 
 **platform-browser**
 `@vxture/platform-browser`. Browser-side wrapper for third-party SDKs; currently the only implemented Platform SDK.
@@ -137,7 +137,7 @@ See `docs/30-design/identity-platform-authorization.md`.
 Long-lived credential used to renew access tokens (default 7 days). Stored in Redis and deleted immediately on logout. Operators and tenants have separate Redis key prefixes (`refresh:operator:{userId}` vs `refresh:tenant:{surface}:{userId}`).
 
 **ruyin**
-Redefined 2026-07-06 (ADR-12): **Ruyin now names a client-side (desktop) product** (product definition pending; not in the workspace×product entitlement engine; interoperates only at the Atlas/Runa layer). The product previously called "ruyin" — the external integration at domain `ruyin.ai`, maintained in `vxture/agentstudio-ruyin` (worker-04 stack) — is now named **umbra** (see entry). The domain `ruyin.ai` and the existing OIDC RP contract (`docs/30-design/identity-platform-ruyin-contract.md`) are unchanged and remain valid for umbra.
+Redefined 2026-07-06 (ADR-12): **Ruyin now names a client-side (desktop) product** (product definition pending; not in the workspace×product entitlement engine; interoperates only at the Atlas/Runos layer). The product previously called "ruyin" — the external integration at domain `ruyin.ai`, maintained in `vxture/agentstudio-ruyin` (worker-04 stack) — is now named **umbra** (see entry). The domain `ruyin.ai` and the existing OIDC RP contract (`docs/30-design/identity-platform-ruyin-contract.md`) are unchanged and remain valid for umbra.
 
 ---
 

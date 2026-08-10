@@ -118,7 +118,7 @@ const OIDC_FUTURE_APP_HASH_KEYS = new Set([
   "OIDC_CLIENT_SECRET_HASH_OPERA",
   // ruyin = NEW client-side product surface (ruyin.vxture.com); provisioned when it ships.
   "OIDC_CLIENT_SECRET_HASH_RUYIN",
-  "OIDC_CLIENT_SECRET_HASH_RUNA",
+  "OIDC_CLIENT_SECRET_HASH_RUNOS",
   "OIDC_CLIENT_SECRET_HASH_NOCUS",
   "OIDC_CLIENT_SECRET_HASH_ATLAS",
   "OIDC_CLIENT_SECRET_HASH_ONTOS",
@@ -235,7 +235,7 @@ const ENV_FILE_RULES = [
       "OPERATOR_SUPERADMIN_PHONE",
       // beta base URLs (optional until beta deployment is live)
       "RUYIN_BETA_BASE_URL",
-      "RUNA_BETA_BASE_URL",
+      "RUNOS_BETA_BASE_URL",
       "NOCUS_BETA_BASE_URL",
       "ATLAS_BETA_BASE_URL",
       "ONTOS_BETA_BASE_URL",

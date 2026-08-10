@@ -17,8 +17,8 @@
 ## 2. 参与方与信任模型
 
 ```
-调用方(caller)  = 发起调用的产品(L3 agent / Runa 技能执行位 / L2 互调)
-被调方(provider) = 暴露工具面的产品(L1/L2:Atlas/Ontos/Karda/Terra/Arda/Runa 分发面)
+调用方(caller)  = 发起调用的产品(L3 agent / Runos 技能执行位 / L2 互调)
+被调方(provider) = 暴露工具面的产品(L1/L2:Atlas/Ontos/Karda/Terra/Arda/Runos 分发面)
 L0(平台 IdP)    = 唯一凭证签发方(accounts.vxture.com,RS256 + JWKS,既有设施复用)
 ```
 
@@ -107,11 +107,11 @@ S2S access token = **RS256 JWT**(header 带 `kid`,与用户级同一 JWKS/轮换
 
 ### 4.2 发现(无中心注册表)
 
-provider 在自己的服务面暴露清单端点 `GET /.well-known/vxture-tools`(**tailnet 面,S2S 绝不公网**,#89 裁定;区别于边缘 `/.well-known/openid-configuration` 仅供浏览器)——S2S token 鉴权,返回工具描述符数组 + `protocol_version`。**平台不建中心工具注册表**——"平台知道哪里有数据"归 Arda 目录、"技能引用哪些工具"归 Runa 技能定义,各自以 `{product_code}.{tool_name}` 字符串松引用,调用时按 provider **在平台 tailnet 内网**直连(类 2 产品 S2S 一律 tailnet、绝不公网,权威 = product_230 §1;`arda.vxture.com` 等域名仅是缺省信号,判类以是否在 tailnet 为准)。
+provider 在自己的服务面暴露清单端点 `GET /.well-known/vxture-tools`(**tailnet 面,S2S 绝不公网**,#89 裁定;区别于边缘 `/.well-known/openid-configuration` 仅供浏览器)——S2S token 鉴权,返回工具描述符数组 + `protocol_version`。**平台不建中心工具注册表**——"平台知道哪里有数据"归 Arda 目录、"技能引用哪些工具"归 Runos 技能定义,各自以 `{product_code}.{tool_name}` 字符串松引用,调用时按 provider **在平台 tailnet 内网**直连(类 2 产品 S2S 一律 tailnet、绝不公网,权威 = product_230 §1;`arda.vxture.com` 等域名仅是缺省信号,判类以是否在 tailnet 为准)。
 
 ### 4.3 版本纪律
 
-对齐 Runa 版本 pinning(product_110 §6.7):技能/agent 引用工具**锁定至 major**;provider 弃用工具先置 `deprecated: true` 并保留 ≥1 个发布周期;移除或破坏性变更必升 major 且旧 major 并存过渡。**路径迁移(改 `endpoint.path`,§4.1a)按同一纪律走**:旧描述符原地保留、置 `deprecated: true`,新路径作为新条目并列发布,双方并存至少一个周期——消费方靠轮询清单端点即可感知迁移,不需要额外的书信广播。
+对齐 Runos 版本 pinning(product_110 §6.7):技能/agent 引用工具**锁定至 major**;provider 弃用工具先置 `deprecated: true` 并保留 ≥1 个发布周期;移除或破坏性变更必升 major 且旧 major 并存过渡。**路径迁移(改 `endpoint.path`,§4.1a)按同一纪律走**:旧描述符原地保留、置 `deprecated: true`,新路径作为新条目并列发布,双方并存至少一个周期——消费方靠轮询清单端点即可感知迁移,不需要额外的书信广播。
 
 ## 5. 求值时点与义务分配(三方职责表)
 
@@ -162,7 +162,7 @@ provider 在自己的服务面暴露清单端点 `GET /.well-known/vxture-tools`
 > `docs/30-design/platform/41-atlas-integration-topology.md` §7)。本节把"谁能对新增/变更供给面
 > 契约的正确性负责"过程化,防止单个 provider 各自为政、或单一消费方驱动出不通用的契约形状。
 
-**适用范围**:任何 L1 provider(Atlas / Ontos / Runa 分发面)新增工具描述符(新的 `{product_code}.{tool_name}`)
+**适用范围**:任何 L1 provider(Atlas / Ontos / Runos 分发面)新增工具描述符(新的 `{product_code}.{tool_name}`)
 或对既有工具描述符做破坏性变更(§4.3 定义的"必升 major"级别变更)时,**发布前**必须逐项确认:
 
 | #   | 检查项             | 通过标准                                                                                                                                                                                                                                                                |

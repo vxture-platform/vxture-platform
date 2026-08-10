@@ -79,7 +79,7 @@ GET /platform/sharing/visible-set?workspace_id={W}&product={P}
 - 守卫 = InternalAuthGuard（`x-vxture-internal-auth`，与 entitlements/consume 同款，product_210 token exchange 落地前的过渡凭证）；
 - `Cache-Control: private, max-age=30`（产品侧短 TTL，D2 契约）；
 - `scope` 为多 grant 就高合成后的单值（§8.3）；调用方无 grant 命中时返回空数组（合法状态，非错误）；
-- 仅资产面产品（Arda/Karda/Terra/Runa）接入；L3 agent 不直查（经 L2 入口被求值，§3.2）。
+- 仅资产面产品（Arda/Karda/Terra/Runos）接入；L3 agent 不直查（经 L2 入口被求值，§3.2）。
 
 ## 5. 非目标（v1 边界）
 
@@ -87,7 +87,7 @@ GET /platform/sharing/visible-set?workspace_id={W}&product={P}
 - 不做 grant 审批流（WS 管理员发起即生效，§8.7；审批流按需后置）；
 - 不做 WS onboarding 共享策略模板 / org-all 预设 grant 的自动播种（product_110 §10#3 冷启动应对，随 WS onboarding 线另建）；
 - 不含 P 级资产供给（D3，entitlement 通道）；
-- 首个消费者 = Arda（`resource_type = dataset`），knowledge_base/skill 值域 day-one 建全（[`feedback_schema_completeness`] 数据模型完整性），求值接入随 Karda/Runa 产品线。
+- 首个消费者 = Arda（`resource_type = dataset`），knowledge_base/skill 值域 day-one 建全（[`feedback_schema_completeness`] 数据模型完整性），求值接入随 Karda/Runos 产品线。
 
 ## 6. 状态跟踪
 

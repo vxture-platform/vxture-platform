@@ -61,7 +61,7 @@ Opera 不承担商业运营职责。
  │         │         │
  ▼         ▼         ▼
 
-Atlas     Arda      Runa
+Atlas     Arda      Runos
 Model     Data      Ability
 
            │
@@ -403,7 +403,7 @@ Opera 管理 Atlas。
 未来同样管理：
 
 - Arda
-- Runa
+- Runos
 - Ruyin
 - Future Products
 

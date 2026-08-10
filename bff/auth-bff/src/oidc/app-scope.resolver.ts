@@ -26,7 +26,7 @@ export const APP_SCOPE_CODES = [
   // umbra = the cross-domain RP at ruyin.ai (ex-ruyin, product_300 §2); the new
   // client-side `ruyin` product stays out of the entitlement engine.
   "umbra",
-  "runa",
+  "runos",
   "nocus",
   "atlas",
   "ontos",

@@ -6,7 +6,7 @@ describe("moduleAudFor (auth_request gate → operator-OBO audience)", () => {
     expect(moduleAudFor("/atlas")).toBe("atlas");
     expect(moduleAudFor("/atlas/")).toBe("atlas");
     expect(moduleAudFor("/atlas/providers?includeInactive=true")).toBe("atlas");
-    expect(moduleAudFor("/runa/skills")).toBe("runa");
+    expect(moduleAudFor("/runos/skills")).toBe("runos");
   });
 
   it("returns null for shell paths (no exchange on non-module requests)", () => {

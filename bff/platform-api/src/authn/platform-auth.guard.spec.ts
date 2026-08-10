@@ -196,7 +196,7 @@ describe("PlatformAuthGuard — S2S Bearer path (T2, JWKS-verified)", () => {
     const guard = makeGuard({ authInternalToken: SHARED_SECRET });
     const token = signer.sign(
       { act: { sub: "arda" } },
-      { audience: "runa", expiresInSec: 300 }, // real T1 grant, wrong target
+      { audience: "runos", expiresInSec: 300 }, // real T1 grant, wrong target
     );
     const req = fakeRequest({ authorization: `Bearer ${token}` });
     await expect(guard.canActivate(ctx(req))).rejects.toThrow(

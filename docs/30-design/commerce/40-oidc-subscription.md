@@ -20,7 +20,7 @@
 | -------- | -------- | -------- | ----------------- | ------------ | -------- | ---------------------------- |
 | arda     | Arda     | platform | —                 | 否           | 否       | 平台门户，内部 shell         |
 | ruyin    | Ruyin    | saas     | ruyin.ai          | 是（仅正式） | 是       | 跨域 RP，仅正式环境，无 beta |
-| runa     | Runa     | saas     | runa.ai           | 是           | 是       | —                            |
+| runos    | Runos    | saas     | runos.ai          | 是           | 是       | —                            |
 | vault    | Vault    | saas     | vault.vxture.com  | 是           | 是       | —                            |
 | cortex   | Cortex   | saas     | cortex.vxture.com | 是           | 是       | —                            |
 | ontos    | Ontos    | saas     | ontos.vxture.com  | 是           | 是       | —                            |
@@ -49,7 +49,7 @@
 
 | client_code | redirect_uris                                                               |
 | ----------- | --------------------------------------------------------------------------- |
-| runa        | https://runa.ai/callback, https://beta.runa.ai/callback                     |
+| runos       | https://runos.ai/callback, https://beta.runos.ai/callback                   |
 | vault       | https://vault.vxture.com/callback, https://beta.vault.vxture.com/callback   |
 | cortex      | https://cortex.vxture.com/callback, https://beta.cortex.vxture.com/callback |
 | ontos       | https://ontos.vxture.com/callback, https://beta.ontos.vxture.com/callback   |
@@ -130,7 +130,7 @@ commerce schema 新增的 `BundlePlanComponent`、`BundleSubscription`、`Bundle
 
 const APP_SCOPE_CODES = [
   "ruyin",
-  "runa",
+  "runos",
   "vault",
   "cortex",
   "ontos",
@@ -190,7 +190,7 @@ seed 中固定 UUID 前缀：`00000000-0000-0000-0000-`
 | app_code | UUID 尾缀             |
 | -------- | --------------------- |
 | arda     | 0000000003a3          |
-| runa     | 0000000003a4          |
+| runos    | 0000000003a4          |
 | vault    | 0000000003a5          |
 | cortex   | 0000000003a6          |
 | ontos    | 0000000003a7          |
@@ -217,7 +217,7 @@ App base（12 位）：
 | app_code | base         |
 | -------- | ------------ |
 | ruyin    | 000000030001 |
-| runa     | 000000030101 |
+| runos    | 000000030101 |
 | vault    | 000000030201 |
 | cortex   | 000000030301 |
 | ontos    | 000000030401 |
@@ -226,7 +226,7 @@ App base（12 位）：
 | forge    | 000000030701 |
 | xuanzhen | 000000030801 |
 
-示例：runa-pro = `00000000-0000-0000-0000-000000030103`
+示例：runos-pro = `00000000-0000-0000-0000-000000030103`
 
 ---
 
@@ -236,9 +236,9 @@ App base（12 位）：
 
 **A1** 更新 `hermes` 的 `app_type` 为 `'internal'`（现有记录）  
 **A2** 更新 `ruyin` OIDC 客户端：确认 redirect_uri 只有 `https://ruyin.ai/callback`，无 beta 条目  
-**A3** 新增 Applications：arda、runa、vault、cortex、ontos、raven、anlan、forge（xuanzhen 已存在）  
+**A3** 新增 Applications：arda、runos、vault、cortex、ontos、raven、anlan、forge（xuanzhen 已存在）  
 **A4** 新增订阅计划：每个 saas 应用各 4 个（free/starter/pro/business）  
-**A5** 新增 OIDC 客户端：runa、vault、cortex、ontos、raven、anlan、forge、xuanzhen（每个 prod+beta redirect_uri）
+**A5** 新增 OIDC 客户端：runos、vault、cortex、ontos、raven、anlan、forge、xuanzhen（每个 prod+beta redirect_uri）
 
 依赖：无（纯 seed 扩展）
 

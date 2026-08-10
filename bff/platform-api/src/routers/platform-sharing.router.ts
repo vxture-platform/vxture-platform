@@ -8,7 +8,7 @@
  *
  * The response is the grant-hit portion of the caller's visible set; the
  * owned / P-level components are assembled at the L2 product entry
- * (data_sharing_100 §2). Asset-plane products only (Arda/Karda/Terra/Runa);
+ * (data_sharing_100 §2). Asset-plane products only (Arda/Karda/Terra/Runos);
  * L3 agents are evaluated at the L2 entry and never call this directly.
  */
 import {

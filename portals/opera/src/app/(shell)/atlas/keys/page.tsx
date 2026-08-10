@@ -420,7 +420,7 @@ export default function KeysPage() {
               id="key-name"
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              placeholder="runa-engine"
+              placeholder="runos-engine"
             />
             <FieldDescription>调用方在日志与计量里按它归集。</FieldDescription>
           </Field>
@@ -445,7 +445,7 @@ export default function KeysPage() {
               id="key-owner"
               value={draft.owner}
               onChange={(e) => setDraft({ ...draft, owner: e.target.value })}
-              placeholder="Runa / 外部合作方"
+              placeholder="Runos / 外部合作方"
             />
           </Field>
         </FieldGroup>

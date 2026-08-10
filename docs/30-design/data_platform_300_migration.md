@@ -435,7 +435,7 @@ ALTER SCHEMA ops RENAME TO admin;
 
 #### 7.10 依赖的待决项
 
-1. ✅ **产品矩阵命名已定型为终版**（2026-07-06 owner 拍板，§18.2#5 同步销号）：L1=Atlas/Ontos/Runa、L2=Arda/Karda/Terra、L3=Raven/Anlan/Forge/Xuanzhen；权威 = [`product_100_matrix.md`](./product_100_matrix.md) v1.0。seed 取值迁移登记（`data`→`arda` 改名、`nocus` 处置、现 `ruyin` code→`umbra` 迁移考量、`karda`/`terra` 新增）见 product_100_matrix §6（实施规划 = product_300_naming-migration），为独立实施项；中文品牌名/i18n 文案仍由运营后补。
+1. ✅ **产品矩阵命名已定型为终版**（2026-07-06 owner 拍板，§18.2#5 同步销号）：L1=Atlas/Ontos/Runos、L2=Arda/Karda/Terra、L3=Raven/Anlan/Forge/Xuanzhen；权威 = [`product_100_matrix.md`](./product_100_matrix.md) v1.0。seed 取值迁移登记（`data`→`arda` 改名、`nocus` 处置、现 `ruyin` code→`umbra` 迁移考量、`karda`/`terra` 新增）见 product_100_matrix §6（实施规划 = product_300_naming-migration），为独立实施项；中文品牌名/i18n 文案仍由运营后补。
 2. `product_category` 字典枚举（大类/小类命名与层级关系，业务侧给出，§18.4）。
 3. 是否为 admin 展示重建一张轻量"功能键名称"字典（默认 `feature` 退役为 `text[]`，§7.9-B）。
 4. 各 `pool` 型 `product_metric` 的 `consume_mode` 取值（`divisible` vs `atomic`，随 metric 定义给出）。
@@ -471,7 +471,7 @@ ALTER SCHEMA ops RENAME TO admin;
 2. ✅ `realm` = **customer / workforce**（全栈 rename 工程）。
 3. ✅ 运营 schema = **admin**（原 ops）。
 4. ✅ **命名归一 = 全按 database.md**（owner 决）：`model_provider`（弃 provider）、`ticket_comment`（弃 ticket_event）、`risk_record` + `compliance_event`（拆分，弃 governance_record 通用表）。已在 §11.1/§14.4.5/§15.2 落实。
-5. ✅ **产品矩阵/品牌命名 = 已定型终版**（2026-07-06 owner 拍板，取代原"暂缓定名"决议）：`product_code` 终版见 [`product_100_matrix.md`](./product_100_matrix.md) v1.0 §2（L1 Atlas/Ontos/Runa · L2 Arda/Karda/Terra · L3 Raven/Anlan/Forge/Xuanzhen · client Ruyin · 外部 umbra(域名 ruyin.ai) · internal Hermes）；旧候选 Vault/Cortex/Nocus 废弃。seed 迁移登记见 product_100_matrix §6（实施规划 = product_300_naming-migration，独立实施项；ruyin→umbra 仅规划本次不实施）；中文品牌名/i18n 由运营后补。
+5. ✅ **产品矩阵/品牌命名 = 已定型终版**（2026-07-06 owner 拍板，取代原"暂缓定名"决议）：`product_code` 终版见 [`product_100_matrix.md`](./product_100_matrix.md) v1.0 §2（L1 Atlas/Ontos/Runos · L2 Arda/Karda/Terra · L3 Raven/Anlan/Forge/Xuanzhen · client Ruyin · 外部 umbra(域名 ruyin.ai) · internal Hermes）；旧候选 Vault/Cortex/Nocus 废弃。seed 迁移登记见 product_100_matrix §6（实施规划 = product_300_naming-migration，独立实施项；ruyin→umbra 仅规划本次不实施）；中文品牌名/i18n 由运营后补。
 
 #### 18.3 计量/计费
 

@@ -160,8 +160,8 @@
         "status": "coming"
       },
       {
-        "code": "runa",
-        "name": "Runa Composable Ability Platform",
+        "code": "runos",
+        "name": "Runos Composable Ability Platform",
         "type": "L1 · Ability orchestration",
         "icon": "sparkles",
         "description": "Composable AI ability platform: wrap models, tools and workflows into reusable ability units and orchestrate them into apps.",

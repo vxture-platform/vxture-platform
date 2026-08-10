@@ -86,7 +86,7 @@ GET {CONSOLE_BASE}/subscribe?product={P}&intent={subscribe|upgrade|renew|addon}[
 
 ### 3.3 共享可见集解析(v1.0 新增,承共享模型 §8.5)
 
-- 平台(`sharing` 域)对资产面产品(Arda/Karda/Terra/Runa)提供**可见集解析**:给定 caller(org, ws, product),返回其可见资产集(自有 ∪ 被授权 ∪ org 级 ∪ 已订阅 P 级)及各自 scope;
+- 平台(`sharing` 域)对资产面产品(Arda/Karda/Terra/Runos)提供**可见集解析**:给定 caller(org, ws, product),返回其可见资产集(自有 ∪ 被授权 ∪ org 级 ∪ 已订阅 P 级)及各自 scope;
 - 形态 = 按 grantee 预展开的**物化可见集**(对齐 entitlement_current 模式:短 TTL + invalidate);
 - **求值执行点在产品入口**(召回层强制,不做生成后裁剪);联合求值公式与谓词按共享模型 §8.3,产品侧不得自定义放宽;
 - 仅资产面产品需要接入本节;L3 agent 作为调用方不直接查 grant(它经 L2 的入口被求值)。
@@ -130,19 +130,19 @@ PUSH invalidate { grant_id | resource_ref, affected: [...] }    # grant 变更/�
 
 ## 6. 产品 × 通道适用矩阵
 
-| 产品                             | C1 用户级            | C1 S2S(目标态)              | C2 entitlement               | C2 可见集       | C3 consume 上行         | C3 invalidate | C3 provisioning | 备注                                           |
-| -------------------------------- | -------------------- | --------------------------- | ---------------------------- | --------------- | ----------------------- | ------------- | --------------- | ---------------------------------------------- |
-| Atlas                            | ✔                    | ✔(被调方+调用方)            | ✔                            | —               | **✔(唯一推理计量入口)** | ✔             | ✔               | Model Platform 只读配额 gate 特权照旧          |
-| Ontos                            | ✔                    | ✔                           | ✔                            | 待产品定义      | ✔                       | ✔             | ✔               |                                                |
-| Runa                             | ✔                    | ✔(分发面)                   | ✔                            | ✔(技能资产)     | —(零计量路径)           | ✔             | ✔               |                                                |
-| Arda / Karda / Terra             | ✔                    | ✔(被调方,入口求值)          | ✔                            | **✔(资产面)**   | ✔                       | ✔(含 grant)   | ✔               |                                                |
-| Raven / Anlan / Forge / Xuanzhen | ✔                    | ✔(调用方)                   | ✔                            | —(经 L2 被求值) | ✔                       | ✔             | ✔               | agent-db 业务面模板                            |
-| Ruyin(client 端)                 | 待产品定义           | 待产品定义(Atlas/Runa 互通) | ✘(不进新引擎)                | ✘               | 待定                    | ✘             | ✘               |                                                |
-| umbra                            | ✔(现 RP 契约照旧)    | ✘                           | ✘(现状租户级订阅 claim 豁免) | ✘               | ✘                       | ✘             | ✘               | `identity-platform-ruyin-contract.md` 继续有效 |
-| Hermes                           | ✘                    | 内部凭证                    | ✘                            | ✘               | ✘                       | ✘             | ✘               | internal                                       |
-| Varda                            | —(内嵌,复用宿主会话) | —                           | —                            | —               | 经 Atlas                | —             | —               | 非独立产品                                     |
+| 产品                             | C1 用户级            | C1 S2S(目标态)               | C2 entitlement               | C2 可见集       | C3 consume 上行         | C3 invalidate | C3 provisioning | 备注                                           |
+| -------------------------------- | -------------------- | ---------------------------- | ---------------------------- | --------------- | ----------------------- | ------------- | --------------- | ---------------------------------------------- |
+| Atlas                            | ✔                    | ✔(被调方+调用方)             | ✔                            | —               | **✔(唯一推理计量入口)** | ✔             | ✔               | Model Platform 只读配额 gate 特权照旧          |
+| Ontos                            | ✔                    | ✔                            | ✔                            | 待产品定义      | ✔                       | ✔             | ✔               |                                                |
+| Runos                            | ✔                    | ✔(分发面)                    | ✔                            | ✔(技能资产)     | —(零计量路径)           | ✔             | ✔               |                                                |
+| Arda / Karda / Terra             | ✔                    | ✔(被调方,入口求值)           | ✔                            | **✔(资产面)**   | ✔                       | ✔(含 grant)   | ✔               |                                                |
+| Raven / Anlan / Forge / Xuanzhen | ✔                    | ✔(调用方)                    | ✔                            | —(经 L2 被求值) | ✔                       | ✔             | ✔               | agent-db 业务面模板                            |
+| Ruyin(client 端)                 | 待产品定义           | 待产品定义(Atlas/Runos 互通) | ✘(不进新引擎)                | ✘               | 待定                    | ✘             | ✘               |                                                |
+| umbra                            | ✔(现 RP 契约照旧)    | ✘                            | ✘(现状租户级订阅 claim 豁免) | ✘               | ✘                       | ✘             | ✘               | `identity-platform-ruyin-contract.md` 继续有效 |
+| Hermes                           | ✘                    | 内部凭证                     | ✘                            | ✘               | ✘                       | ✘             | ✘               | internal                                       |
+| Varda                            | —(内嵌,复用宿主会话) | —                            | —                            | —               | 经 Atlas                | —             | —               | 非独立产品                                     |
 
-> **传输面分级(mesh 类别,权威 = [`product_230`](./product_230_mesh-architecture.md) §1,2026-07-12 增)**:上表产品按"域关系 × 产品层"归入两类——**类 2 · 同 apex 内网 fabric**(S2S 一律 tailnet,绝不公网;C2/C3/gauge/可见集出站指平台内网 base,webhook tailnet 投递):Atlas/Ontos/Runa/Arda/Karda/Terra/Raven/Anlan/Forge/Xuanzhen(其中 runa.ai/anlan.ai/xuanzhen.ai 虽异 apex 域名,只要部署在平台 tailnet 内即按类 2 走内网 S2S;cookie 互验面另论);**类 1 · 跨 apex 轻集成**(异网,仅公网 HTTPS + HMAC/允许名单兜底):umbra(worker-04 境外不入 tailnet)。Ruyin(client 端)/Hermes(internal)不适用。判类以**是否在平台 tailnet**为准,域名仅是缺省信号。
+> **传输面分级(mesh 类别,权威 = [`product_230`](./product_230_mesh-architecture.md) §1,2026-07-12 增)**:上表产品按"域关系 × 产品层"归入两类——**类 2 · 同 apex 内网 fabric**(S2S 一律 tailnet,绝不公网;C2/C3/gauge/可见集出站指平台内网 base,webhook tailnet 投递):Atlas/Ontos/Runos/Arda/Karda/Terra/Raven/Anlan/Forge/Xuanzhen(其中 runos.ai/anlan.ai/xuanzhen.ai 虽异 apex 域名,只要部署在平台 tailnet 内即按类 2 走内网 S2S;cookie 互验面另论);**类 1 · 跨 apex 轻集成**(异网,仅公网 HTTPS + HMAC/允许名单兜底):umbra(worker-04 境外不入 tailnet)。Ruyin(client 端)/Hermes(internal)不适用。判类以**是否在平台 tailnet**为准,域名仅是缺省信号。
 
 ## 7. 新产品接入 checklist
 

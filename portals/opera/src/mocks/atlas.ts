@@ -255,9 +255,9 @@ export interface ApiKeyRow {
 export const apiKeys: ApiKeyRow[] = [
   {
     id: "k-1",
-    name: "runa-engine",
+    name: "runos-engine",
     kind: "internal",
-    owner: "Runa",
+    owner: "Runos",
     prefix: "vxk_int_9f2…",
     status: "active",
     lastUsed: "2 分钟前",
@@ -462,7 +462,7 @@ export const meteringByTenant: MeteringRow[] = [
   },
   {
     id: "mt-t2",
-    dimension: "Runa",
+    dimension: "Runos",
     requests: "1,402,551",
     inputTokens: "2.88B",
     outputTokens: "1.01B",
@@ -604,7 +604,7 @@ export const auditTrail: AuditRow[] = [
     time: "2026-08-03 11:24",
     actor: "op-chen",
     action: "Key 轮换",
-    target: "runa-engine",
+    target: "runos-engine",
     detail: "internal key rotated (vxk_int_8d1 → 9f2)",
   },
   {

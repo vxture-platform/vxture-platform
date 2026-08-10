@@ -2,7 +2,7 @@
 
 /**
  * ProductsOverviewPage — /products 产品中心总览（product_320 §4.5）。
- * 六产品卡片（L1 Atlas/Ontos/Runa + L2 Arda/Karda/Terra）。
+ * 六产品卡片（L1 Atlas/Ontos/Runos + L2 Arda/Karda/Terra）。
  * 卡片解剖借鉴智能体广场，去掉功能/特色，保留 logo + 类型 + 标题 + 概要 + 业务价值。
  * 定价/订阅移至独立通用订阅页 /pricing（ProductSubscribePage）；
  * 卡片「订阅」跳 /pricing?product=code，档位选定后由订阅页深链 console /subscribe。

@@ -8,7 +8,7 @@
 > 上游:`product_100_matrix.md`(分层,v1.1 ontos 重定位为本文伴生修订)、`product_240_repo-template.md` §2.5(仓形态槽)、
 > [`platform/41-atlas-integration-topology.md`](./platform/41-atlas-integration-topology.md) §1/§7、operator 身份安全设计(identity 线,workforce realm 已实现)。
 > 触发:`vxture-platform#148`(atlas 管理 UI 两次滞后 + 架构追问)。
-> 下游:`product_240` §2.5 修订、`docs/20-specs/000-platform/admin/45-menu-design.md` 演进、atlas/runa 仓各自 admin-module 实施、`bff/admin-bff` model-platform 代理退役。
+> 下游:`product_240` §2.5 修订、`docs/20-specs/000-platform/admin/45-menu-design.md` 演进、atlas/runos 仓各自 admin-module 实施、`bff/admin-bff` model-platform 代理退役。
 
 ---
 
@@ -31,7 +31,7 @@
 
 ## 1. 适用范围
 
-- **适用**:L1 能力平台——当前 **atlas(模型)、runa(技能/工具)**。二者同构:API-first、零端用户界面、控制面需持续人工运维(provider/密钥/路由策略;技能注册/上下线/验签)。
+- **适用**:L1 能力平台——当前 **atlas(模型)、runos(技能/工具)**。二者同构:API-first、零端用户界面、控制面需持续人工运维(provider/密钥/路由策略;技能注册/上下线/验签)。
 - **不适用**:L2/L3(自有 portal、customer realm、app/agent profile,走 `product_240` §2.5);ontos(2026-07-28 owner 拍板重定位 L2,见 `product_100` v1.1 修订记录);umbra/ruyin/hermes(层外)。
 - L1 判据收紧后的类别不变量:**L1 = API-first、无端用户 UI、管理面统一按本契约交付**——无例外,无特判。
 
@@ -48,7 +48,7 @@
 
 ### M-2 权限词表注册
 
-- provider 定义自己的操作码词表 `{product_code}.{resource}.{action}`(如 `atlas.provider_key.rotate`、`runa.skill.publish`),**注册进 platform operator RBAC 目录**;每个操作码标注是否要求 step-up。
+- provider 定义自己的操作码词表 `{product_code}.{resource}.{action}`(如 `atlas.provider_key.rotate`、`runos.skill.publish`),**注册进 platform operator RBAC 目录**;每个操作码标注是否要求 step-up。
 - 分工(行业参照 IAM actions 模式):**词表内容归 provider**(随其能力演进,platform 不代拟);**评估、授予、step-up 策略、审计归 platform**(横向管理面,全 L1 一视同仁)。
 - 现状退役映射:`platform.model.manage` 单一 capability 一刀切,随 atlas 词表注册后退役。
 
@@ -65,10 +65,10 @@
   - 命名 = **能力控制台(Capability Console)**;域名 **2026-07-28 已拍板**——按加固方案**真名不入公开仓**(仅落 owner 侧记录/部署主机 env);仓内文档/配置一律以占位符 `x.vxture.com` 指代本控制台域名。
 - **外壳归 platform,模块归 provider**(三平面铁律:外壳=横向管理面设施):
   - 外壳:workforce realm OIDC RP + 导航 + 设计系统 + 审计钩子;复用 `shell-template`(console/admin 已共用)与既有 nginx 边缘模式,边际成本低。
-  - 模块:atlas/runa 各自仓内开发、独立部署,外壳只管挂载。
-- **联邦一档起步 = 路径挂载**:各 provider 部署自己的小型 admin 应用,nginx 同 vhost 挂 `/atlas/*`、`/runa/*`,共享 workforce SSO cookie;零 module-federation 构建机械(行业背书:Azure Portal 即 iframe 联邦)。升档(build-time 组装/runtime MF)仅当模块数量或融合度要求触发,不预建。
+  - 模块:atlas/runos 各自仓内开发、独立部署,外壳只管挂载。
+- **联邦一档起步 = 路径挂载**:各 provider 部署自己的小型 admin 应用,nginx 同 vhost 挂 `/atlas/*`、`/runos/*`,共享 workforce SSO cookie;零 module-federation 构建机械(行业背书:Azure Portal 即 iframe 联邦)。升档(build-time 组装/runtime MF)仅当模块数量或融合度要求触发,不预建。
 - **同周期强制**:联邦后 module UI 与 backend 同仓——provider 新增 admin 可配置字段的 PR **同批携带模块 UI,或同批开自仓 TD 并在 PR 描述引用**;此要求在联邦结构下同仓同 PR 即可满足,结构性消除 #148 类滞后(对比现状需跨仓第二个 PR)。
-- **部署位(2026-07-28 owner 定向)**:外壳随平台栈落 **worker-01**(身份局部性:workforce OIDC 签发方 auth-bff 同机;平台 CD 顺路);**模块与各自 backend 同机**——atlas admin-module 落 worker-02(同仓同 CD,对 atlas admin API localhost 跳),runa 模块随 runa 主机;边缘 nginx(worker-01)在 ops vhost 上按路径反代模块(`/atlas/*`→worker-02 tailnet 内网,operator token 随请求)。约束:worker-01 内存压力已知(性能审计根因之一),外壳必须薄(单小容器+内存限额)。**访问形态 2026-07-28 已拍板 = 公网 vhost + 加固必做清单**(批C 硬性项,非建议):复用通配符证书(单签证书会经 CT 日志即时公开主机名)/公开仓一律占位符不写真名/外壳 SSO 前置(任何路径未认证零内容)/nginx default-server 兜底(裸 IP 扫描不回显 vhost)/限流。
+- **部署位(2026-07-28 owner 定向)**:外壳随平台栈落 **worker-01**(身份局部性:workforce OIDC 签发方 auth-bff 同机;平台 CD 顺路);**模块与各自 backend 同机**——atlas admin-module 落 worker-02(同仓同 CD,对 atlas admin API localhost 跳),runos 模块随 runos 主机;边缘 nginx(worker-01)在 ops vhost 上按路径反代模块(`/atlas/*`→worker-02 tailnet 内网,operator token 随请求)。约束:worker-01 内存压力已知(性能审计根因之一),外壳必须薄(单小容器+内存限额)。**访问形态 2026-07-28 已拍板 = 公网 vhost + 加固必做清单**(批C 硬性项,非建议):复用通配符证书(单签证书会经 CT 日志即时公开主机名)/公开仓一律占位符不写真名/外壳 SSO 前置(任何路径未认证零内容)/nginx default-server 兜底(裸 IP 扫描不回显 vhost)/限流。
 - **实施绑定(批C 落地,2026-07-28)**:外壳=`portals/opera`+`bff/opera-bff`(workforce RP `opera`,nginx `auth_request` 门实现"未认证零内容"并对模块路径注入 operator-OBO 票);挂载契约与接入步骤固化于 [`../20-specs/000-platform/opera/10-shell-mount-contract.md`](../20-specs/000-platform/opera/10-shell-mount-contract.md)(批D/F 对接依据)。
 - **真名不入仓政策扩至 admin(2026-07-28 owner 追加拍板)**:owner 判定 admin 门户域名与本控制台域名"同一性质"(均为高权限运营面公网 hostname,域名本身可随时轮换,代码只应固定引用方式不固定真名)——两者一并纳入加固:仓内占位符统一为 **`x.vxture.com` = opera(能力控制台)、`y.vxture.com` = admin**(区分标记,避免暗示同一主机);admin 侧落地=`deploy/nginx/templates/admin.vhost.template`(20-sync-nginx-config.sh 从 `.env.admin-bff` 的 `ADMIN_BASE_URL` 渲染,**缺失即报错退出**,不同于 opera 未上产时的可选跳过)+ `NEXT_PUBLIC_ADMIN_BFF_URL` 改由 CI `vars.ADMIN_BASE_URL`(GitHub Actions 仓库变量,不入 git 历史)注入构建,不再硬编码于 `images.mjs`。
 - **毕业条件**(何时允许某 provider 独立 portal,行业判据):直接外售有自有计费关系,或出现专职运维团队,或操作者画像全天驻留该域。当前无一满足。
@@ -86,7 +86,7 @@
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 菜单      | 「能力与服务」域迁出(model-platform / model-grants / skills 三页;service-monitor 归属批E 定)。先例:`45-menu-design.md` 既有"工单→独立客服工作台"演进路径,本次为第二实例 |
 | admin-bff | `model-platform.router.ts` 代理退役(凭证真空第二跳随之消灭)                                                                                                             |
-| 权限目录  | `platform.model.manage` 退役,换 M-2 注册的 `atlas.*`/`runa.*` 词表                                                                                                      |
+| 权限目录  | `platform.model.manage` 退役,换 M-2 注册的 `atlas.*`/`runos.*` 词表                                                                                                     |
 | 文档      | `45-menu-design.md` 增演进记录;`product_240` §2.5 增 L1 admin-module 槽位说明                                                                                           |
 | 不动      | C2 权益/用量商务视图;console 租户页;varda 调用链                                                                                                                        |
 
@@ -99,9 +99,9 @@
 | C   | 能力控制台外壳(workforce RP + 导航 + 挂载约定)                                                                                    | platform 仓                                        | A        |
 | D   | atlas admin-module(首个模块;**#148 Part 1 两缺口——provider-keys UI、taskProfile 表单——落此**)                                     | atlas 仓(issue 交办)                               | B、C     |
 | E   | admin 迁出退役(三页下线、代理删除、菜单/权限目录修订)                                                                             | platform 仓                                        | D 验收后 |
-| F   | runa admin-module(随 runa 产品线启动排期)                                                                                         | runa 仓                                            | C        |
+| F   | runos admin-module(随 runos 产品线启动排期)                                                                                       | runos 仓                                           | C        |
 
-跨仓边界纪律:atlas/runa 仓内实施一律 issue 交办(`liaison` 标签,per `140-repo-governance-standard.md` §10),platform 不代做、不代拟对方执行步骤。
+跨仓边界纪律:atlas/runos 仓内实施一律 issue 交办(`liaison` 标签,per `140-repo-governance-standard.md` §10),platform 不代做、不代拟对方执行步骤。
 
 ## 5. 与既有标准的关系
 
@@ -113,4 +113,4 @@
 
 ## 6. 边界之外
 
-不在本文拍板:ontos 产品定义本身(重定位只改层,定义仍空白);能力控制台视觉/DS 细节;atlas/runa 仓内实施方案(契约只管边界行为);跨仓审计聚合;L2/L3 portal 形态(归 `product_240`);`key.provider_api_keys` 信封加密的 KMS 选型(atlas 仓自决,契约只要求 M-3 密钥不出响应)。
+不在本文拍板:ontos 产品定义本身(重定位只改层,定义仍空白);能力控制台视觉/DS 细节;atlas/runos 仓内实施方案(契约只管边界行为);跨仓审计聚合;L2/L3 portal 形态(归 `product_240`);`key.provider_api_keys` 信封加密的 KMS 选型(atlas 仓自决,契约只要求 M-3 密钥不出响应)。

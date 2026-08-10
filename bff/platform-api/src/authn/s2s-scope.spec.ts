@@ -29,9 +29,9 @@ describe("scopeToS2sCaller", () => {
   });
 
   it("allows a request for the caller's own product code", () => {
-    const result = scopeToS2sCaller(caller({ productCode: "runa" }), {
+    const result = scopeToS2sCaller(caller({ productCode: "runos" }), {
       workspaceId: "11111111-1111-1111-1111-111111111111",
-      productCodes: ["runa"],
+      productCodes: ["runos"],
     });
     expect(result.workspaceId).toBe("11111111-1111-1111-1111-111111111111");
   });
@@ -40,7 +40,7 @@ describe("scopeToS2sCaller", () => {
     expect(() =>
       scopeToS2sCaller(caller({ productCode: "arda" }), {
         workspaceId: "11111111-1111-1111-1111-111111111111",
-        productCodes: ["runa"],
+        productCodes: ["runos"],
       }),
     ).toThrow(ForbiddenException);
   });
@@ -49,7 +49,7 @@ describe("scopeToS2sCaller", () => {
     expect(() =>
       scopeToS2sCaller(caller({ productCode: "arda" }), {
         workspaceId: "11111111-1111-1111-1111-111111111111",
-        productCodes: ["arda", "runa"],
+        productCodes: ["arda", "runos"],
       }),
     ).toThrow(ForbiddenException);
   });

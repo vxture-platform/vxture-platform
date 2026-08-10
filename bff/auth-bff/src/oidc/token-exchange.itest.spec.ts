@@ -123,7 +123,7 @@ describe.runIf(RUN)("T1 token exchange — D2 coverage gate (live DB)", () => {
     const result = await service.exchange(
       { clientId: "arda", productCode: "arda" },
       {
-        audience: "runa",
+        audience: "runos",
         subjectToken: undefined,
         workspaceId: WS_SUBSCRIBED,
         orgId: undefined,
@@ -137,7 +137,7 @@ describe.runIf(RUN)("T1 token exchange — D2 coverage gate (live DB)", () => {
     const result = await service.exchange(
       { clientId: "arda", productCode: "arda" },
       {
-        audience: "runa",
+        audience: "runos",
         subjectToken: undefined,
         workspaceId: WS_PROVISIONED_ONLY,
         orgId: undefined,
@@ -151,7 +151,7 @@ describe.runIf(RUN)("T1 token exchange — D2 coverage gate (live DB)", () => {
       service.exchange(
         { clientId: "arda", productCode: "arda" },
         {
-          audience: "runa",
+          audience: "runos",
           subjectToken: undefined,
           workspaceId: WS_UNCOVERED,
           orgId: undefined,

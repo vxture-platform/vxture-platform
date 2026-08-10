@@ -257,18 +257,18 @@ describe("TokenExchangeService.exchange — OBO mode", () => {
 
   it("rejects a subject_token minted for a DIFFERENT client (cross-product OBO replay)", async () => {
     m.pool.query.mockResolvedValueOnce({ rows: [{ product_code: "karda" }] });
-    // a real user token, validly signed, but aud='runa' — CALLER_ARDA (clientId
+    // a real user token, validly signed, but aud='runos' — CALLER_ARDA (clientId
     // 'arda') presenting it must be rejected: this is exactly the single-
     // audience discipline product_210 §3.1 states ("A 的 token 到 B 必拒").
     m.keys.verify.mockReturnValue({
-      aud: "runa",
+      aud: "runos",
       sub: "usr_1",
       active_workspace: "ws-9",
     });
     await expect(
       m.service.exchange(CALLER_ARDA, {
         audience: "karda",
-        subjectToken: "runa-audienced.user.token",
+        subjectToken: "runos-audienced.user.token",
         workspaceId: undefined,
         orgId: undefined,
       }),
