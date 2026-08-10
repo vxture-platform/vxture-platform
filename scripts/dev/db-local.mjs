@@ -19,9 +19,13 @@
  *   ddl     apply the DDL; --reset drops the schemas first (DATA LOSS, local only)
  *   secrets generate local OIDC client secrets + hashes into .env.local
  *   signing-key provision the IdP RS256 key (DB) + write the pair into .env.local
- *   seed    catalog + sample seed
+ *   sample-user  hash the local sample password into .env.local (else the seed skips the tenant)
+ *   seed    catalog + sample seed (one identity, one workspace)
+ *
+ * Test data (demo matrix / bulk volume) is NOT here — it is a separate decision
+ * with its own script: scripts/dev/fixtures.mjs (pnpm fixtures:*).
  *   verify  run the baseline assertions
- *   all     up → ddl --reset → secrets → signing-key → seed → verify
+ *   all     up → ddl --reset → secrets → signing-key → sample-user → seed → verify
  *   status  containers + schema count
  */
 import { spawnSync } from "node:child_process";
@@ -209,6 +213,53 @@ function secrets() {
   console.log("  next: pnpm db:local:seed  (hashes only reach the DB through a seed)");
 }
 
+
+/**
+ * Argon2id hash for the local sample user, written into .env.local.
+ *
+ * Without `SAMPLE_USER_PASSWORD_HASH` the seed skips the sample user — correct
+ * for production, useless for a dev box: it leaves the database with zero
+ * tenants, zero workspaces and zero users, so nothing workspace-scoped can be
+ * exercised at all. Console, entitlements, `/usage/consume` and service-mode
+ * token exchange are all unreachable, and each fails in its own way rather than
+ * saying "there is no tenant here".
+ *
+ * The password is fixed and public on purpose — local only, documented in the
+ * setup guide. The production guard is untouched: the seed still refuses the
+ * default-password route when NODE_ENV=production.
+ */
+function sampleUser() {
+  const password = process.env["SAMPLE_USER_PASSWORD"] ?? "Dev@2026";
+  const r = spawnSync(
+    "docker",
+    [
+      "run", "--rm",
+      "-e", `SAMPLE_PW=${password}`,
+      "-v", `${resolve(ROOT, "scripts/dev")}:/hasher:ro`,
+      "-v", "vx-platform-db-tools:/tmp/vxture-db",
+      "node:24-alpine", "sh", "-lc",
+      "set -e; " +
+        "if [ ! -d /tmp/vxture-db/node_modules/hash-wasm ]; then npm install --prefix /tmp/vxture-db hash-wasm@4.12.0 >/dev/null 2>&1; fi; " +
+        "NODE_PATH=/tmp/vxture-db/node_modules node /hasher/hash-sample-password.mjs",
+    ],
+    { cwd: ROOT, encoding: "utf8" },
+  );
+  const hash = (r.stdout ?? "").trim().split(/\r?\n/).pop();
+  if (r.status !== 0 || !hash?.startsWith("$argon2")) {
+    console.error(r.stderr || "could not generate the sample-user hash");
+    process.exit(1);
+  }
+  const file = resolve(ROOT, ".env.local");
+  let content = existsSync(file) ? readFileSync(file, "utf8") : "";
+  const re = /^SAMPLE_USER_PASSWORD_HASH=.*$/m;
+  const line = `SAMPLE_USER_PASSWORD_HASH='${hash}'`;
+  content = re.test(content)
+    ? content.replace(re, line)
+    : `${content.trimEnd()}\n${line}\n`;
+  writeFileSync(file, content, "utf8");
+  console.log(`✓ sample user hash written to .env.local (login: zhangsan / ${password})`);
+}
+
 /**
  * Same two expectations 30-verify-platform-baseline.sh derives on worker-01:
  * the table count from the authoritative DDL, and the DDL fingerprint. Both are
@@ -298,6 +349,7 @@ switch (cmd) {
   case "ddl": ddl({ reset }); break;
   case "secrets": secrets(); break;
   case "signing-key": signingKey({ force: reset || rest.includes("--force") }); break;
+  case "sample-user": sampleUser(); break;
   case "seed": seed(); break;
   case "verify": verify(); break;
   case "status": status(); break;
@@ -307,10 +359,11 @@ switch (cmd) {
     ddl({ reset: true });
     secrets();
     signingKey({ force: true });
+    sampleUser();
     seed();
     verify();
     break;
   default:
-    console.error("usage: node scripts/dev/db-local.mjs <up|down|ddl [--reset]|secrets|signing-key [--force]|seed|verify|status|all>");
+    console.error("usage: node scripts/dev/db-local.mjs <up|down|ddl [--reset]|secrets|signing-key [--force]|sample-user|seed|verify|status|all>");
     process.exit(1);
 }

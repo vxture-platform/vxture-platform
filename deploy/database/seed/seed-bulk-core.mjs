@@ -954,25 +954,38 @@ export async function seedBulkCore(c) {
       const parentId = 500 + ci * 10;
       const r1 = await c.query(
         `insert into product.product_categories
-           (id, parent_id, code, name, sort, is_customer_visible,
+           (id, parent_id, code, name, name_key, sort, is_customer_visible,
             is_workforce_visible, created_at)
-         values ($1, null, $2, $3, $4, true, true, $5)
+         values ($1, null, $2, $3, $4, $5, true, true, $6)
          on conflict do nothing`,
-        [parentId, `bulk-cat-${parentId}`, name, ci, day(ci)],
+        [
+          parentId,
+          `bulk-cat-${parentId}`,
+          name,
+          // i18n key is NOT optional here: the baseline audit's [C2] assertion
+          // fails the whole database when a seeded catalog row leaves an i18n
+          // key NULL — row floors alone let entire columns stay silently empty
+          // (the 2026-07-05 seed-correction line). Same shape catalog uses:
+          // product.category.<code>.
+          `product.category.bulk-cat-${parentId}`,
+          ci,
+          day(ci),
+        ],
       );
       catRows += r1.rowCount;
       for (let j = 1; j <= 9; j += 1) {
         const r2 = await c.query(
           `insert into product.product_categories
-             (id, parent_id, code, name, sort, is_customer_visible,
+             (id, parent_id, code, name, name_key, sort, is_customer_visible,
               is_workforce_visible, created_at)
-           values ($1, $2, $3, $4, $5, $6, true, $7)
+           values ($1, $2, $3, $4, $5, $6, $7, true, $8)
            on conflict do nothing`,
           [
             parentId + j,
             parentId,
             `bulk-cat-${parentId + j}`,
             `${name} · 子类 ${j}`,
+            `product.category.bulk-cat-${parentId + j}`,
             j,
             j % 5 !== 0,
             day(ci + j),

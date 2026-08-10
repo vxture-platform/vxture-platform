@@ -25,7 +25,7 @@ cp .env.example .env.local        # 2. 环境变量，按需填
 pnpm db:local:all                 # 3. 起库 + 建表 + seed + 校验（见下）
 ```
 
-`db:local:all` = `up` → `ddl --reset` → `secrets` → `signing-key` → `seed` → `verify`，每步也可以单独跑：
+`db:local:all` = `up` → `ddl --reset` → `secrets` → `signing-key` → `sample-user` → `seed` → `verify`，每步也可以单独跑：
 
 | 命令                    | 做什么                                                                             |
 | ----------------------- | ---------------------------------------------------------------------------------- |
@@ -37,6 +37,8 @@ pnpm db:local:all                 # 3. 起库 + 建表 + seed + 校验（见下�
 | `pnpm db:local:verify`  | 跑 `baseline-assertions.sql`——**与生产同一份断言，本地应当全绿**                   |
 | `pnpm db:local:status`  | 容器状态 + schema 计数                                                             |
 | `pnpm db:local:down`    | 停容器（数据留在 `deploy/dev/data/`，已 gitignore）                                |
+
+**`sample-user` 这步不能跳**：没有 `SAMPLE_USER_PASSWORD_HASH`，seed 会**整段跳过样例用户**——生产如此是对的，本地如此等于库里 0 租户 / 0 workspace / 0 用户，凡是要 workspace 的东西全都测不了：console、权益、`/usage/consume`、service-mode 换票，而且各自以各自的方式失败，没有一个会说"这里没有租户"。本地账号 = `zhangsan` / `Dev@2026`（口令是公开的、只在本地；生产那道 `NODE_ENV=production` 拒绝默认口令的门没有动）。
 
 **`signing-key` 这步也不能跳**：公钥进 `appoidc.signing_keys`（`/oidc/jwks` 就是读它），私钥只在 env。库里没有 → `/oidc/jwks` 直接 500，登录无从谈起；库里有而 env 对不上 → auth-bff 用一个 kid 签、JWKS 公布另一个 kid，RP 一律 `kid not found`，看起来像 RP 坏了。
 
@@ -118,6 +120,30 @@ AUTH_COOKIE_DOMAIN=localhost
 本地 RP 会话 cookie 必须用裸名（`RP_COOKIE_INSECURE=true`）——`__Host-` 前缀的 cookie 在明文 http 上会被浏览器静默丢弃，表现为"服务端登录成功、浏览器始终未登录"。dev-panel 已自动注入。
 
 第三方登录（钉钉 / 飞书）本地不必配。
+
+---
+
+## 测试数据（独立脚本，**不在部署链路里**）
+
+`db:local:all` 建出来的是一个干净的、与生产同形的基线：一个身份、一个 workspace。要看列表页、筛选、分页、计数卡在**有量**的时候成不成立，另外灌：
+
+```bash
+pnpm fixtures:status          # 现在库里有多少测试数据
+pnpm fixtures:inject          # demo + bulk（按依赖顺序）
+pnpm fixtures:inject demo     # 只要状态矩阵：每个枚举至少一行
+pnpm fixtures:inject bulk     # 只要量：主干 + 叶子表各上百行
+CONFIRM_PURGE=yes pnpm fixtures:purge
+```
+
+**为什么是独立脚本**：灌测试数据是人做的决定，不是建库的副作用。它不接进 `db-init`、不接进 `deploy.yml`、也不接进 `db:local:all`。
+
+**幂等**：所有 fixture 行的 id 由行号确定性算出，落在各自的 UUID 段——catalog `a000` / demo `b000` / bulk `c000`，互不重叠。所以重复灌只补缺行，而 purge 是"删掉某个段"，catalog 永远不会被误伤。
+
+**purge 删不干净，这是设计**：`metering.usage_events`、`subscription_histories`、`billing.transactions`、`support.audit_logs` 等是**append-only 账本**，DDL 里有触发器直接拒绝 DELETE；被它们引用的行（users / tenants / workspaces / subscriptions）也就跟着删不掉。purge 会把这些逐条列出来，而不是打个勾了事。要彻底清干净只有一条路——**重建，而不是删除**：
+
+```bash
+CONFIRM_RESET=yes pnpm db:local:reset && pnpm db:local:seed
+```
 
 ---
 
