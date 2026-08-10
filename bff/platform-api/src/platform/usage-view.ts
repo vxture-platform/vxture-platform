@@ -7,11 +7,14 @@
  * engine results + a post-consume period-aware pool read into the contract
  * body, and decides 200 vs 409 (gated):
  *   engine status "ok"           → 200 { gated:false, consumed, remaining_total, per_pool_breakdown }
- *   engine status "insufficient" → 409 { gated:true, reason:"quota_exhausted", consumed, remaining_total }
- * (atomic mode rejects with consumed=0; divisible partial success keeps
- * consumed>0 — both are 409 per the contract. remaining_total is the real
- * post-consume total, not the literal 0 of the ADR example: an atomic reject
- * can leave a positive balance that the caller should see.)
+ *   engine status "insufficient" → 200 { gated:true,  reason:"quota_exhausted", … }
+ *
+ * Both are 200 since 2026-08-10: `gated` reports that quota did not cover the
+ * call, and the caller decides what that means for it. `consumed` is what the
+ * caller USED, not what the pools covered — the two differ exactly when quota
+ * ran out, which is the case worth measuring. remaining_total is the real
+ * post-consume total, not the literal 0 of the ADR example: an atomic
+ * over-limit call deducts nothing and can leave a positive balance.
  */
 import type { QuotaPoolView } from "./entitlement-view";
 // C3 consume response body now lives in @vxture/shared (single SoT); re-export
@@ -39,7 +42,7 @@ export function buildConsumeResponse(
   result: EngineConsumeResult,
   pools: PoolIdentity[],
   metric: string,
-): { statusCode: 200 | 409; body: ConsumeResponseBody } {
+): { statusCode: 200; body: ConsumeResponseBody } {
   const byPoolId = new Map(pools.map((p) => [p.poolId, p]));
   const remainingTotal = pools.reduce((s, p) => s + p.view.remaining, 0);
 
@@ -64,9 +67,15 @@ export function buildConsumeResponse(
     // rows to reconcile as the only ones without a correlation key.
     ...(result.eventId ? { event_id: result.eventId } : {}),
   };
+  // Always 200 (owner determination 2026-08-10): this endpoint records usage and
+  // reports coverage; it does not decide what the caller should do about a gap.
+  // `gated` stays in the body as INFORMATION — "your quota did not cover this" —
+  // and the caller acts on it (disable the control, keep serving, upsell). It
+  // used to be a 409, which made the platform's opinion look like an error the
+  // caller had to obey, and callers who disagreed simply failed open and served
+  // anyway. The signal is the same; only the pretence of authority is gone.
   if (result.status === "insufficient") {
     body.reason = "quota_exhausted";
-    return { statusCode: 409, body };
   }
   return { statusCode: 200, body };
 }

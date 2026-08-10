@@ -96,9 +96,20 @@ export interface EntitlementResponseBatch {
 
 /**
  * C3 consume response body: `POST /usage/consume` (product_200 §4.1 / ADR-11
- * §11.7). 200 → gated:false; 409 → gated:true, reason:"quota_exhausted".
- * remaining_total is the real post-consume total (an atomic reject can leave a
- * positive balance the caller should see). Idempotent replay adds replayed:true.
+ * §11.7).
+ *
+ * **Always 200 since 2026-08-10** (owner determination). The endpoint records
+ * usage and reports coverage; it does not adjudicate. `gated: true` means "your
+ * quota did not cover this call" — information, not an instruction. What to do
+ * about it belongs to the caller: disable the control, keep serving, upsell.
+ * It used to be a 409, which dressed the platform's opinion as an error the
+ * caller must obey; callers who disagreed failed open and served anyway, so the
+ * only thing the status code bought was ambiguity.
+ *
+ * `consumed` is what the caller USED, not what the pools covered — they differ
+ * exactly when quota ran out, which is the case worth measuring. remaining_total
+ * is the real post-consume total (an atomic over-limit call deducts nothing and
+ * can leave a positive balance). Idempotent replay adds replayed:true.
  */
 export interface ConsumeResponseBody {
   gated: boolean;

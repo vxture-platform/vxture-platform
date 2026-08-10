@@ -10,8 +10,10 @@
  * The commerce consume engine stays the single writer (idempotent waterfall);
  * this router only validates, resolves product_code → id, and enriches the
  * engine result with the contract's remaining_total / per-subscription
- * breakdown via a read-only period-aware pool read. Gated (409) is a normal
- * contract outcome, returned via passthrough response, not an exception.
+ * breakdown via a read-only period-aware pool read. Every consume answers 200
+ * (2026-08-10): `gated` in the body reports that quota did not cover the call,
+ * and the caller decides what that means — the platform records, it does not
+ * adjudicate.
  */
 import {
   BadRequestException,

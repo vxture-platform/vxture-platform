@@ -15,11 +15,21 @@ import type {
  *   2. lock candidate quota_pools FOR UPDATE in the total order
  *      priority, component_role(bundled first), effective_at, id (also the lock order).
  *   3. lazy zero-out pools whose reset period rolled over (+ quota_pool_reset audit).
- *   4. mode branch (product_metric.consume_mode): atomic => all-or-nothing (409,
- *      consumed=0, nothing written); divisible => waterfall, partial success allowed.
+ *   4. mode branch (product_metric.consume_mode): atomic => the deduction is
+ *      all-or-nothing (an over-limit call deducts nothing); divisible =>
+ *      waterfall, partial coverage allowed. **Either way the call is recorded.**
  *   5. UPDATE quota_used += took on the locked pools.
- *   6. INSERT tenant_usage_event(head) + tenant_usage_event_pool(detail); backfill
+ *   6. INSERT usage_event(head) + usage_event_pools(detail); backfill
  *      usage_idempotency(event_id, consumed, per_pool).
+ *
+ * This endpoint RECORDS; it does not adjudicate (owner determination
+ * 2026-08-10). It answers "how much was used" and "how much quota covered it",
+ * and the caller decides what to do about the gap — disable the control, keep
+ * serving, upsell. Two consequences fall out of that and both used to be wrong:
+ * the event records the **requested** amount rather than the covered amount,
+ * and it is written even when nothing could be deducted. Under the old shape a
+ * workspace with no published plan metered as zero: the usage happened, the
+ * record did not, and the only trail left was the caller's own log.
  *
  * NOTE: the SQL locking/waterfall/reset logic is verifiable only against a live DB
  * (integration test at the B15 cutover); typecheck does not exercise it.
@@ -168,28 +178,23 @@ export class PgConsumeRepository {
 
       const totalAvailable = pools.reduce((s, p) => s + p.available, 0n);
 
-      // 4. atomic mode: all-or-nothing → reject without writing head/detail
-      if (mode === "atomic" && totalAvailable < amount) {
-        await client.query("rollback");
-        return {
-          status: "insufficient",
-          consumed: "0",
-          perPool: [],
-          replayed: false,
-        };
-      }
+      // 4. atomic mode: all-or-nothing applies to the POOL DEDUCTION, not to the
+      // record. The caller has already used what it is reporting — refusing to
+      // write it down does not un-use it, it only loses the number. So an
+      // over-limit atomic call deducts nothing and is still recorded in full.
+      const atomicOverLimit = mode === "atomic" && totalAvailable < amount;
 
       // 5. waterfall deduction (divisible allows partial success)
       let remaining = amount;
       const takes: { poolId: string; took: bigint }[] = [];
-      for (const p of pools) {
+      for (const p of atomicOverLimit ? [] : pools) {
         if (remaining <= 0n) break;
         const take = p.available < remaining ? p.available : remaining;
         if (take <= 0n) continue;
         takes.push({ poolId: p.id, took: take });
         remaining -= take;
       }
-      const consumed = amount - remaining;
+      const covered = amount - remaining;
 
       for (const t of takes) {
         await client.query(
@@ -204,16 +209,18 @@ export class PgConsumeRepository {
         poolId: t.poolId,
         took: t.took.toString(),
       }));
-      let eventId: string | undefined;
-      if (consumed > 0n) {
-        eventId = await this.writeUsageEvent(
-          client,
-          input,
-          amount,
-          consumed,
-          takes,
-        );
-      }
+      // The event records what the caller USED (the requested amount), not what
+      // the pools happened to cover. Those are different facts and the table
+      // holds both: total_amount = used, and the per-pool detail = covered.
+      // Writing only the covered part is how a workspace with no published plan
+      // ended up metered as zero — the usage happened, the record did not.
+      const eventId = await this.writeUsageEvent(
+        client,
+        input,
+        amount,
+        amount,
+        takes,
+      );
       await client.query(
         `update metering.usage_idempotencies
             set event_id = $2, consumed = $3, per_pool = $4::jsonb
@@ -221,15 +228,19 @@ export class PgConsumeRepository {
         [
           input.idempotencyKey,
           eventId ?? null,
-          consumed.toString(),
+          amount.toString(),
           JSON.stringify(perPool),
         ],
       );
 
       await client.query("commit");
       return {
-        status: consumed >= amount ? "ok" : "insufficient",
-        consumed: consumed.toString(),
+        // `consumed` is what the caller used; `status` reports whether quota
+        // covered it. Neither is a verdict — the caller decides what to do with
+        // an uncovered call (disable the control, keep serving, upsell). The
+        // platform records and reports; it does not gate.
+        status: covered >= amount ? "ok" : "insufficient",
+        consumed: amount.toString(),
         perPool,
         ...(eventId ? { eventId } : {}),
         replayed: false,

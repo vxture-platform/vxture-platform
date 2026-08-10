@@ -97,9 +97,16 @@ GET {CONSOLE_BASE}/subscribe?product={P}&intent={subscribe|upgrade|renew|addon}[
 
 ```
 POST /usage/consume  { workspace_id, product, metric, amount, idempotency_key }
-→ 200 { consumed, remaining_total, per_pool_breakdown, event_id? }   # 瀑布扣减明细
-→ 409 { gated: true, reason: "quota_exhausted", consumed, event_id? } # 门控
+→ 200 { consumed, remaining_total, per_pool_breakdown, event_id? }                 # 配额覆盖住了
+→ 200 { gated: true, reason: "quota_exhausted", consumed, remaining_total, … }    # 没覆盖住(仍是 200)
 ```
+
+- **本端点记账,不裁决(owner 裁定 2026-08-10;取代原 409 门控)**:它回答"用了多少"和"配额覆盖了多少",
+  **不回答"你该怎么办"**——没余量时是禁用按钮、继续服务、还是引导升级,由**调用方**决定。`gated` 留在
+  body 里作**信息**,不再是 HTTP 错误。原来的 409 把平台的意见包装成调用方必须服从的错误,而不认同的
+  调用方本来就 fail-open 照常服务——**status code 只买到了歧义**。
+- **`consumed` = 调用方实际用掉的量**,不是配额覆盖住的量。两者只在"配额不够"时才不同,而那恰恰是最需要
+  被量到的一次。**配额为零(尚未发布计划)也照常记录**——用量已经发生,不写下来不会让它没发生,只会让账消失。
 
 - **`event_id`(2026-08-10 增,`@vxture/shared` 1.6.0,回应 liaison platform#220)**:本次写入的
   `metering.usage_events.id`,回显给调用方存在自己的请求记录旁,两边账可以直接对上,不必绕

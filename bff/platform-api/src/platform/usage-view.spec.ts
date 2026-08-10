@@ -72,7 +72,7 @@ describe("buildConsumeResponse (ADR-11 §11.7 ③)", () => {
     });
   });
 
-  it("maps insufficient to 409 gated with the real remaining_total", () => {
+  it("reports insufficient as 200 + gated, never as an error status", () => {
     // atomic reject: consumed=0 but pools still hold balance — the caller
     // should see the true remaining, not the ADR example's literal 0.
     const { statusCode, body } = buildConsumeResponse(
@@ -80,20 +80,20 @@ describe("buildConsumeResponse (ADR-11 §11.7 ③)", () => {
       [pool("p1", "sub-1", 30)],
       "doc.words",
     );
-    expect(statusCode).toBe(409);
+    expect(statusCode).toBe(200);
     expect(body.gated).toBe(true);
     expect(body.reason).toBe("quota_exhausted");
     expect(body.consumed).toBe(0);
     expect(body.remaining_total).toBe(30);
   });
 
-  it("keeps partial-success consumed in the 409 body (divisible)", () => {
+  it("keeps partial-success consumed in the body (divisible)", () => {
     const { statusCode, body } = buildConsumeResponse(
       okResult({ status: "insufficient", consumed: "70" }),
       [pool("p1", "sub-1", 0)],
       "doc.words",
     );
-    expect(statusCode).toBe(409);
+    expect(statusCode).toBe(200);
     expect(body.consumed).toBe(70);
     expect(body.remaining_total).toBe(0);
   });
@@ -107,7 +107,7 @@ describe("buildConsumeResponse (ADR-11 §11.7 ③)", () => {
     expect(body.event_id).toBe("3f2b1a90-0000-4000-8000-000000000001");
   });
 
-  it("echoes the event id on a divisible partial success too (409)", () => {
+  it("echoes the event id on a divisible partial success too", () => {
     // The 409-with-consumed>0 rows are the ones hardest to reconcile by hand,
     // so they are exactly the rows that must carry the correlation key.
     const { statusCode, body } = buildConsumeResponse(
@@ -119,7 +119,7 @@ describe("buildConsumeResponse (ADR-11 §11.7 ③)", () => {
       [pool("p1", "sub-1", 0)],
       "atlas.chat",
     );
-    expect(statusCode).toBe(409);
+    expect(statusCode).toBe(200);
     expect(body.event_id).toBe("3f2b1a90-0000-4000-8000-000000000002");
   });
 
@@ -130,6 +130,21 @@ describe("buildConsumeResponse (ADR-11 §11.7 ③)", () => {
       "atlas.chat",
     );
     expect("event_id" in body).toBe(false);
+  });
+
+  it("still reports gated in the body so the caller can act on it", () => {
+    // The signal survives the status-code change — what is gone is the pretence
+    // that the platform is deciding. A caller that wants to stop still can; one
+    // that wants to keep serving no longer has to treat a normal outcome as an
+    // HTTP error to do so.
+    const { statusCode, body } = buildConsumeResponse(
+      okResult({ status: "insufficient", consumed: "0" }),
+      [pool("p1", "sub-1", 0)],
+      "atlas.tokens",
+    );
+    expect(statusCode).toBe(200);
+    expect(body.gated).toBe(true);
+    expect(body.reason).toBe("quota_exhausted");
   });
 
   it("marks idempotent replays and tolerates a since-retired pool", () => {
