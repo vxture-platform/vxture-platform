@@ -73,6 +73,29 @@ function loadRootEnv() {
   return env;
 }
 
+/**
+ * Give each RP BFF its OWN client secret.
+ *
+ * The four portals are four separate confidential OIDC clients with four
+ * separate secrets, but every RP reads the same variable name
+ * (`OIDC_CLIENT_SECRET`). A single shared value therefore lets exactly ONE of
+ * them complete token exchange; the other three get `invalid_client` — and the
+ * symptom is "login just doesn't come back" on whichever portal you happened to
+ * open, with the failure on the server side of a redirect nobody is watching.
+ *
+ * `pnpm db:local:secrets` writes per-client values as
+ * `OIDC_CLIENT_SECRET_<CLIENT>`; this maps the right one onto the name the RP
+ * actually reads. Falls back to the shared `OIDC_CLIENT_SECRET` when no
+ * per-client value exists, so an older .env.local keeps working exactly as
+ * before (one portal works, three do not — but no worse than it already was).
+ */
+function perClientOidcSecret(serviceId) {
+  const client = serviceId.endsWith("-bff") ? serviceId.slice(0, -4) : null;
+  if (!client) return {};
+  const specific = ROOT_ENV[`OIDC_CLIENT_SECRET_${client.toUpperCase()}`];
+  return specific ? { OIDC_CLIENT_SECRET: specific } : {};
+}
+
 function unwrapEnvValue(value) {
   const q = value[0];
   if ((q === '"' || q === "'") && value.endsWith(q)) return value.slice(1, -1);
@@ -397,7 +420,12 @@ async function startService(service) {
   const shell = shellForPlatform(service.command);
   const child = spawn(shell.file, shell.args, {
     cwd: ROOT_DIR,
-    env: { ...process.env, ...ROOT_ENV, ...(service.env ?? {}) },
+    env: {
+      ...process.env,
+      ...ROOT_ENV,
+      ...perClientOidcSecret(service.id),
+      ...(service.env ?? {}),
+    },
     windowsHide: true,
   });
 

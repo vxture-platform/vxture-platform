@@ -10,9 +10,9 @@
     "./styles/tool.css": "./src/styles/varda-tool.css"
   },
   "scripts": {
-    "dev": "next dev --turbo -p 3120",
+    "dev": "next dev --turbo -p 3092",
     "build": "next build",
-    "start": "next start -p 3120",
+    "start": "next start -p 3092",
     "type-check": "tsc --noEmit",
     "lint": "eslint ."
   },
