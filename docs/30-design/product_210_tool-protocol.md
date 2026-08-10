@@ -14,11 +14,13 @@
 
 **非目标**:不建网关/ESB;不做流量转发与中心限流(provider 自理);不改变 C1 用户级 OIDC(人用产品照旧);不含跨 org 调用(org 为绝对隔离边界,唯一跨 org 形态 = P 级资产经 entitlement);不做产品↔平台面的替换实施(仅登记迁移方向,§3.5)。
 
+> **与 Runos 商业域网关的关系(2026-08-10 补注,`product_110` v1.1 §6.1)**:"不建网关"约束的是 **L0 协议层**——平台不设中心代理节点,联邦域调用恒为对等直连。Runos 的商业域网关是 **runos 产品自己的数据面**,只服务商业能力域(以订阅独立交付的业务场景 agent),它在本协议中既是 caller(代 agent 调提供方)也是 provider(对 agent 暴露能力面),**不是平台级中心网关**,也不改变本文任何条款。
+
 ## 2. 参与方与信任模型
 
 ```
-调用方(caller)  = 发起调用的产品(L3 agent / Runos 技能执行位 / L2 互调)
-被调方(provider) = 暴露工具面的产品(L1/L2:Atlas/Ontos/Karda/Terra/Arda/Runos 分发面)
+调用方(caller)  = 发起调用的产品(L3 agent / Runos 技能执行位 / Runos 商业域网关 / L2 互调)
+被调方(provider) = 暴露工具面的产品(L1/L2:Atlas/Ontos/Karda/Terra/Arda/Runos 分发面 + 商业域能力面)
 L0(平台 IdP)    = 唯一凭证签发方(accounts.vxture.com,RS256 + JWKS,既有设施复用)
 ```
 
