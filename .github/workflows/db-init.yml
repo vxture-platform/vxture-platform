@@ -151,7 +151,7 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
           source: "deploy/scripts,deploy/database,deploy/guardrails,deploy/.env.*.example,deploy/secrets/*.example"
-          target: "/tmp/vxture-deploy"
+          target: "/tmp/vxture-deploy-${{ github.run_id }}"
           rm: true
           timeout: 120s
           command_timeout: 10m
@@ -166,16 +166,20 @@ jobs:
           TEST_DELIVERY_PRODUCT: ${{ inputs.test_delivery_product }}
           TEST_DELIVERY_ACCOUNT: ${{ inputs.test_delivery_account }}
           TEST_DELIVERY_EVENT: ${{ inputs.test_delivery_event }}
+          # Per-run staging dir (platform#223): a fixed /tmp path is shared state
+          # between concurrent CD runs on the same host, and scp `rm: true` wipes
+          # it before writing.
+          STAGE_DIR: /tmp/vxture-deploy-${{ github.run_id }}
         with:
           host: ${{ secrets.DEPLOY_HOST_TAILNET }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
           command_timeout: 30m
-          envs: DB_ACTION,DEPLOY_DIR,DEPLOY_RUNTIME_DIR,TEST_DELIVERY_PRODUCT,TEST_DELIVERY_ACCOUNT,TEST_DELIVERY_EVENT
+          envs: DB_ACTION,DEPLOY_DIR,DEPLOY_RUNTIME_DIR,TEST_DELIVERY_PRODUCT,TEST_DELIVERY_ACCOUNT,TEST_DELIVERY_EVENT,STAGE_DIR
           script: |
             set -e
-            SRC=/tmp/vxture-deploy/deploy
+            SRC="${STAGE_DIR:?}/deploy"
             DEPLOY_DIR="${DEPLOY_DIR:-/srv/vxture/deploy}"
             mkdir -p "$DEPLOY_DIR" "$DEPLOY_DIR/secrets"
 

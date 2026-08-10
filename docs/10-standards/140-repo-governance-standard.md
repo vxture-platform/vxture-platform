@@ -121,6 +121,21 @@ PR 评审比对项，不设新机检）。实例教训：vxtpl 在 `@vxture/shar
 - **生产写走人工审批门**：生产部署/DB 写由 owner 在 GitHub 环境 **Review deployments 点击批准**，
   不靠 agent/口头授权自审。
 
+**远端投放路径必须每仓每 run 唯一（2026-08-10 起，回应 `vxture-atlas` liaison platform#223）**：CD 往部署
+主机投放的一切临时物——包装脚本、部署包 staging 目录——**路径里必须带 `${{ github.run_id }}`**（如
+`/tmp/<code>-deploy-${GITHUB_RUN_ID}`），成功后自删、失败后保留（失败时那份负载正是你要看的）。
+
+- **固定路径是跨 run 的共享可变状态**，共享主机上同时有两个产品的 CD 就会互相踩。已实证：2026-08-10
+  arda 的 deploy 在 atlas 执行中途覆写了共享的 `/tmp/deploy.sh`，**bash 是增量读脚本文件的**，atlas 正在
+  跑的 shell 从旧偏移量接着读进 arda 的字节 → 语法垃圾 → 一个**其实已经成功**（健康校验已过）的部署
+  报 `unexpected EOF` 退出 2。换个时序，它同样能毁掉一个尚未通过校验的部署。
+- **本仓自查发现同类且更锋利的一处**：`deploy.yml` 与 `db-init.yml` 共用固定的 `/tmp/vxture-deploy`，
+  而两者的 concurrency group 不同（`deploy-<ref>` vs `db-init`）——GitHub 会让它们**并发**。更糟的是
+  `appleboy/scp-action` 的 `rm: true` 会**先删目标目录再写**，所以一次 db-init 足以让一个执行中的 deploy
+  读到半删状态的目录树。同机不同产品是运气问题，同仓不同 workflow 是必然问题。
+- **concurrency group 不解决这个**：它按 group 串行，而跨 workflow、跨仓天然不同 group。唯一可靠的是
+  让路径本身不共享。
+
 **第三方 action 钉版（2026-08-10 起，回应 `vxture-atlas` liaison platform#188）**：本规范 §9 已因供应链
 顾虑拒用第三方 SCA action、改跑 pinned 二进制，但同一顾虑此前没有落到**握凭证的** action 上——那才是
 爆炸半径最大的地方。规则：

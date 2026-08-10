@@ -110,7 +110,7 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
           source: "deploy/compose.platform.yml,deploy/compose.nginx.yml,deploy/.env.example,deploy/.env.*.example,deploy/secrets/*.example,deploy/scripts,deploy/maintenance,deploy/nginx,deploy/guardrails,deploy/database"
-          target: "/tmp/vxture-deploy"
+          target: "/tmp/vxture-deploy-${{ github.run_id }}"
           rm: true
           timeout: 120s
           command_timeout: 10m
@@ -130,35 +130,44 @@ jobs:
           # 未设时回落已验证默认（标准 §4 认可的 ${VAR:-<已验证默认>} 形态）。
           DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
           DEPLOY_RUNTIME_DIR: ${{ vars.DEPLOY_RUNTIME_DIR }}
+          # Per-run staging dir (platform#223): a fixed /tmp path is shared state
+          # between concurrent CD runs on the same host, and appleboy/scp-action
+          # `rm: true` wipes it before writing.
+          STAGE_DIR: /tmp/vxture-deploy-${{ github.run_id }}
         with:
           host: ${{ secrets.DEPLOY_HOST_TAILNET }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
           command_timeout: 60m
-          envs: VX_IMAGE_TAG,VX_ACR_ENABLED,VX_IMAGE_REGISTRY_INTERNAL,VX_IMAGE_REGISTRY_PUBLIC,VX_IMAGE_NAMESPACE,ALIYUN_ACR_USERNAME,ALIYUN_ACR_PASSWORD,DEPLOY_DIR,DEPLOY_RUNTIME_DIR
+          envs: VX_IMAGE_TAG,VX_ACR_ENABLED,VX_IMAGE_REGISTRY_INTERNAL,VX_IMAGE_REGISTRY_PUBLIC,VX_IMAGE_NAMESPACE,ALIYUN_ACR_USERNAME,ALIYUN_ACR_PASSWORD,DEPLOY_DIR,DEPLOY_RUNTIME_DIR,STAGE_DIR
           script: |
             set -e
 
             # 服务端只同步部署包，实际 .env、secrets、证书保持在 worker-01 本机。
             DEPLOY_DIR="${DEPLOY_DIR:-/srv/vxture/deploy}"
             mkdir -p "$DEPLOY_DIR"
-            cp -f /tmp/vxture-deploy/deploy/compose.platform.yml "$DEPLOY_DIR/compose.platform.yml"
-            cp -f /tmp/vxture-deploy/deploy/compose.nginx.yml "$DEPLOY_DIR/compose.nginx.yml"
-            cp -f /tmp/vxture-deploy/deploy/.env.example "$DEPLOY_DIR/.env.example"
-            cp -f /tmp/vxture-deploy/deploy/.env.*.example "$DEPLOY_DIR/"
+            cp -f "$STAGE_DIR"/deploy/compose.platform.yml "$DEPLOY_DIR/compose.platform.yml"
+            cp -f "$STAGE_DIR"/deploy/compose.nginx.yml "$DEPLOY_DIR/compose.nginx.yml"
+            cp -f "$STAGE_DIR"/deploy/.env.example "$DEPLOY_DIR/.env.example"
+            cp -f "$STAGE_DIR"/deploy/.env.*.example "$DEPLOY_DIR/"
             mkdir -p "$DEPLOY_DIR/secrets"
-            cp -f /tmp/vxture-deploy/deploy/secrets/*.example "$DEPLOY_DIR/secrets/"
+            cp -f "$STAGE_DIR"/deploy/secrets/*.example "$DEPLOY_DIR/secrets/"
             rm -rf "$DEPLOY_DIR/scripts"
-            cp -R /tmp/vxture-deploy/deploy/scripts "$DEPLOY_DIR/scripts"
+            cp -R "$STAGE_DIR"/deploy/scripts "$DEPLOY_DIR/scripts"
             rm -rf "$DEPLOY_DIR/maintenance"
-            cp -R /tmp/vxture-deploy/deploy/maintenance "$DEPLOY_DIR/maintenance"
+            cp -R "$STAGE_DIR"/deploy/maintenance "$DEPLOY_DIR/maintenance"
             rm -rf "$DEPLOY_DIR/nginx"
-            cp -R /tmp/vxture-deploy/deploy/nginx "$DEPLOY_DIR/nginx"
+            cp -R "$STAGE_DIR"/deploy/nginx "$DEPLOY_DIR/nginx"
             rm -rf "$DEPLOY_DIR/guardrails"
-            cp -R /tmp/vxture-deploy/deploy/guardrails "$DEPLOY_DIR/guardrails"
+            cp -R "$STAGE_DIR"/deploy/guardrails "$DEPLOY_DIR/guardrails"
             rm -rf "$DEPLOY_DIR/database"
-            cp -R /tmp/vxture-deploy/deploy/database "$DEPLOY_DIR/database"
+            cp -R "$STAGE_DIR"/deploy/database "$DEPLOY_DIR/database"
+
+            # Staging dir is per-run, so removing it here keeps /tmp from growing
+            # one tree per deploy. Failure paths leave it behind on purpose —
+            # a failed deploy is the case where you want the payload to inspect.
+            rm -rf "$STAGE_DIR"
 
             IMAGE_NAMESPACE="${VX_IMAGE_NAMESPACE:-vxture}"
             IMAGE_TAG="${VX_IMAGE_TAG:-latest}"

@@ -116,7 +116,7 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
           source: "cert-out/fullchain.pem,cert-out/privkey.pem"
-          target: "/tmp/vxture-cert"
+          target: "/tmp/vxture-cert-${{ github.run_id }}"
           rm: true
           timeout: 60s
 
@@ -125,17 +125,21 @@ jobs:
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         env:
           CERT_NAME: ${{ env.CERT_NAME }}
+          # Per-run staging dir (platform#223): a fixed /tmp path is shared state
+          # between concurrent CD runs on the same host, and scp `rm: true` wipes
+          # it before writing.
+          STAGE_DIR: /tmp/vxture-cert-${{ github.run_id }}
         with:
           host: ${{ secrets.DEPLOY_HOST_TAILNET }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
           command_timeout: 5m
-          envs: CERT_NAME
+          envs: CERT_NAME,STAGE_DIR
           script: |
             set -e
             SSLDIR="/srv/vxture/data/nginx/ssl/live/${CERT_NAME:-vxture.com}"
-            SRC=/tmp/vxture-cert/cert-out
+            SRC="${STAGE_DIR:?}/cert-out"
 
             BK="/srv/vxture/data/nginx/ssl/backup-$(date +%Y%m%d-%H%M%S)"
             mkdir -p "$BK"
@@ -155,8 +159,8 @@ jobs:
               echo "nginx -t FAILED after cert swap — rolling back to $BK"
               cp -a "$BK/." "$SSLDIR/"
               docker exec vxture-nginx nginx -s reload || true
-              rm -rf /tmp/vxture-cert
+              rm -rf "$STAGE_DIR"
               exit 1
             fi
 
-            rm -rf /tmp/vxture-cert
+            rm -rf "$STAGE_DIR"

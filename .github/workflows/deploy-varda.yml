@@ -221,7 +221,7 @@ jobs:
           key: ${{ secrets.VARDA_DEPLOY_SSH_KEY }}
           passphrase: ${{ secrets.VARDA_DEPLOY_SSH_PASSPHRASE }}
           source: "deploy/worker-02/compose.varda.yml,deploy/worker-02/.env.*.example,deploy/worker-02/secrets/*.example"
-          target: "/tmp/vxture-varda"
+          target: "/tmp/vxture-varda-${{ github.run_id }}"
           rm: true
           timeout: 120s
           command_timeout: 10m
@@ -240,20 +240,24 @@ jobs:
           # DEPLOY_DIR（治理标准 §6 键名权威；路径非敏感值，2026-07-21 由
           # secret VARDA_DEPLOY_DIR 迁为 var），未设则回落已验证的默认。
           VARDA_DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
+          # Per-run staging dir (platform#223). worker-02 is the shared host where
+          # arda's deploy overwrote atlas's wrapper mid-run on 2026-08-10, so this
+          # one is not hypothetical.
+          STAGE_DIR: /tmp/vxture-varda-${{ github.run_id }}
         with:
           host: ${{ secrets.VARDA_DEPLOY_HOST }}
           username: ${{ secrets.VARDA_DEPLOY_USER }}
           key: ${{ secrets.VARDA_DEPLOY_SSH_KEY }}
           passphrase: ${{ secrets.VARDA_DEPLOY_SSH_PASSPHRASE }}
           command_timeout: 40m
-          envs: VX_IMAGE_TAG,VX_ACR_ENABLED,VX_IMAGE_REGISTRY_INTERNAL,VX_IMAGE_REGISTRY_PUBLIC,VX_IMAGE_NAMESPACE,ALIYUN_ACR_USERNAME,ALIYUN_ACR_PASSWORD,VARDA_DEPLOY_DIR
+          envs: VX_IMAGE_TAG,VX_ACR_ENABLED,VX_IMAGE_REGISTRY_INTERNAL,VX_IMAGE_REGISTRY_PUBLIC,VX_IMAGE_NAMESPACE,ALIYUN_ACR_USERNAME,ALIYUN_ACR_PASSWORD,VARDA_DEPLOY_DIR,STAGE_DIR
           script: |
             set -e
 
             DEPLOY_DIR="${VARDA_DEPLOY_DIR:-/srv/md0/varda/deploy}"
             mkdir -p "$DEPLOY_DIR"
             # 只覆盖 compose；.env.varda-* / secrets 本机长驻（不动）。
-            cp -f /tmp/vxture-varda/deploy/worker-02/compose.varda.yml "$DEPLOY_DIR/compose.varda.yml"
+            cp -f "$STAGE_DIR"/deploy/worker-02/compose.varda.yml "$DEPLOY_DIR/compose.varda.yml"
 
             # ── L0 port-plan migration (2026-07-24, 13-infra-allocation-registry.md) ──
             # varda-bff/varda-server 监听口由 compose environment: 硬编码，不受影响；
