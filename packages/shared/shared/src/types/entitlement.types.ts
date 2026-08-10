@@ -112,4 +112,17 @@ export interface ConsumeResponseBody {
     remaining: number;
   }[];
   replayed?: true;
+  /**
+   * The `metering.usage_events.id` this call wrote, echoed back so the caller
+   * can store it beside its own request record and reconcile the two ledgers
+   * directly (atlas `reqlog.request_records.usage_event_id`, atlas 210 §4).
+   * Without it, correlation runs indirectly through `request_id` /
+   * `idempotency_key`, which only works while both sides keep those in step.
+   *
+   * Optional and additive on purpose: absent when the engine wrote no event
+   * (an atomic reject consumes nothing), present on a replay — a replay's event
+   * id is the ORIGINAL event's, which is exactly what makes it useful for
+   * reconciliation rather than a duplicate row.
+   */
+  event_id?: string;
 }

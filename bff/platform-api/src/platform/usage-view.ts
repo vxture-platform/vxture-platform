@@ -57,6 +57,12 @@ export function buildConsumeResponse(
       };
     }),
     ...(result.replayed ? { replayed: true as const } : {}),
+    // Echo the usage event id whenever the engine wrote one (platform#220).
+    // Deliberately NOT restricted to the 200 path as the request suggested: a
+    // divisible partial success answers 409 with consumed>0, and that call did
+    // write an event — dropping the id exactly there would leave the hardest
+    // rows to reconcile as the only ones without a correlation key.
+    ...(result.eventId ? { event_id: result.eventId } : {}),
   };
   if (result.status === "insufficient") {
     body.reason = "quota_exhausted";

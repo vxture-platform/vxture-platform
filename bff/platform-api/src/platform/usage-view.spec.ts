@@ -98,6 +98,40 @@ describe("buildConsumeResponse (ADR-11 §11.7 ③)", () => {
     expect(body.remaining_total).toBe(0);
   });
 
+  it("echoes the usage event id when the engine wrote one", () => {
+    const { body } = buildConsumeResponse(
+      okResult({ eventId: "3f2b1a90-0000-4000-8000-000000000001" }),
+      [pool("p1", "sub-1", 500)],
+      "atlas.chat",
+    );
+    expect(body.event_id).toBe("3f2b1a90-0000-4000-8000-000000000001");
+  });
+
+  it("echoes the event id on a divisible partial success too (409)", () => {
+    // The 409-with-consumed>0 rows are the ones hardest to reconcile by hand,
+    // so they are exactly the rows that must carry the correlation key.
+    const { statusCode, body } = buildConsumeResponse(
+      okResult({
+        status: "insufficient",
+        consumed: "70",
+        eventId: "3f2b1a90-0000-4000-8000-000000000002",
+      }),
+      [pool("p1", "sub-1", 0)],
+      "atlas.chat",
+    );
+    expect(statusCode).toBe(409);
+    expect(body.event_id).toBe("3f2b1a90-0000-4000-8000-000000000002");
+  });
+
+  it("omits event_id entirely when the engine wrote no event", () => {
+    const { body } = buildConsumeResponse(
+      okResult({ status: "insufficient", consumed: "0", perPool: [] }),
+      [pool("p1", "sub-1", 0)],
+      "atlas.chat",
+    );
+    expect("event_id" in body).toBe(false);
+  });
+
   it("marks idempotent replays and tolerates a since-retired pool", () => {
     const { statusCode, body } = buildConsumeResponse(
       okResult({ replayed: true, perPool: [{ poolId: "gone", took: "100" }] }),

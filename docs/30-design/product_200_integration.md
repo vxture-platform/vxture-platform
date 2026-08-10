@@ -97,9 +97,15 @@ GET {CONSOLE_BASE}/subscribe?product={P}&intent={subscribe|upgrade|renew|addon}[
 
 ```
 POST /usage/consume  { workspace_id, product, metric, amount, idempotency_key }
-→ 200 { consumed, remaining_total, per_pool_breakdown }         # 瀑布扣减明细
-→ 409 { gated: true, reason: "quota_exhausted", consumed }      # 门控
+→ 200 { consumed, remaining_total, per_pool_breakdown, event_id? }   # 瀑布扣减明细
+→ 409 { gated: true, reason: "quota_exhausted", consumed, event_id? } # 门控
 ```
+
+- **`event_id`(2026-08-10 增,`@vxture/shared` 1.6.0,回应 liaison platform#220)**:本次写入的
+  `metering.usage_events.id`,回显给调用方存在自己的请求记录旁,两边账可以直接对上,不必绕
+  `request_id`/`idempotency_key` 间接关联(那只在两侧都不掉队时才成立)。**可选字段、纯增量**,老调用方
+  忽略即可。**409 上也给**:可分割 metric 的部分成功是 409 且 `consumed>0`、确实写了事件——这批行恰恰
+  是最难人工对账的,把关联键只给 200 等于把最需要的那批漏掉。原子拒绝没写事件,字段整个不出现。
 
 - **唯一写入方 = commerce consume 服务**(单事务:校验配额 → 记事件 → 更新池),产品侧与 Model Platform 均禁止直写用量表;
 - 产品侧模式:本地 `local_usage.usage_raw` 缓冲 → 异步 Job 上报;`idempotency_key` 强制(防重放/重复计量);超额语义按 metric 声明(可分割=部分成功 / 原子=全有全无);
