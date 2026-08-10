@@ -277,3 +277,42 @@ AI 工具在新建或修改任何包时必须遵守本规范。
 | 省略 `engines`                             | 确保 CI 和本地环境一致性                                                                    |
 | `@prisma/client` 精确版本（如 `"6.19.3"`） | 使用范围约束（`"^6.0.0"`）                                                                  |
 | `license` 字段 / 文件头 `@license` 标记    | 本仓库**非开源**（开发阶段公开但非开源；无 license = all-rights-reserved），不加此字段/标记 |
+
+---
+
+## 10. 工具链版本基线（org 级，2026-08-10 起）
+
+> owner 拍板（2026-08-10）：**新项目就用新的**。回应 `vxture-runos` liaison platform#212 ——
+> 该决定原本只活在各产品仓的 `CLAUDE.md` 里，按"先补平台标准、各仓再引用"的治理规则收进本文。
+
+**规则（会长期成立的是这三条，不是下表的数字——数字会往前走）：**
+
+1. **每个组件跟当前最新稳定大版本。** 新建仓一律按最新大版本起步；既有仓按各自节奏跟进，不强制齐步。
+2. **"最新可兼容" 只在存在硬生态上限时才压过 "最新绝对"，且上限必须记在施加处**——即写在钉版本的
+   那一行旁边，注明被谁卡住、何时复查。没有记录的降级 = 无依据的落后。
+3. **`@types/node` 跟 Node **运行时**大版本，不跟 types 包自己的最新大版本**——types 领先于 runtime 时
+   会引入运行时不存在的 API 声明，编译过、运行炸。
+
+**决策时点快照（2026-08-10，仅供对照，非冻结值）：**
+
+| 组件       | 基线                | 落点与备注                                                                                   |
+| ---------- | ------------------- | -------------------------------------------------------------------------------------------- |
+| Node       | 24 LTS              | `.node-version` · `engines.node` · `@types/node ^24`                                         |
+| pnpm       | 11                  | `.pnpm-version` · `packageManager`                                                           |
+| TypeScript | 6.0.x               | TS 7(native) 被 typescript-eslint peer `>=4.8.4 <6.1.0` 卡住——**上限记在钉版处**，解除后复查 |
+| Postgres   | 18                  | 镜像 + 挂载路径 + 初始化探针，见下                                                           |
+| Prisma     | 7（driver-adapter） | url 移出 schema，`@prisma/adapter-pg` 进构造函数                                             |
+
+**两项带迁移动作的，标准必须点名（否则各仓各踩一遍）：**
+
+- **pnpm 11 供应链收紧**（两种 profile 都受影响）：① 提交进仓的项目级 `.npmrc` **不再展开环境变量**，
+  所以项目 `.npmrc` 只留 scope→registry 映射，**认证移到用户级 / CI `~/.npmrc` / Dockerfile deps 阶段的
+  BuildKit secret**（同一层内写入并 `rm`）；② build-script 白名单移到 `pnpm-workspace.yaml` 的 `allowBuilds`。
+- **Postgres 18 运维变更**：① 数据卷挂到**父目录**（`/var/lib/postgresql`，不是 `.../data`）——18 镜像
+  拒绝 18 之前的布局；② **首次初始化时 `pg_isready` 会说谎**：entrypoint 先起一个临时 server，此时
+  `POSTGRES_DB` 还不存在但 `pg_isready` 已返回成功。任何等待就绪的循环必须**对目标库发真查询**
+  （`psql -d "$DB" -c 'SELECT 1'`），不能用 `pg_isready`。
+
+**两个 pin 必须一致**：`.node-version`/`.pnpm-version` 与 `engines`/`packageManager` 说的是同一件事，
+分歧即偏差。`vxture-platform` 自身当前不达标（`.pnpm-version` 停在 8.15.0，而 `packageManager` 是
+10.30.3，基线是 11），已在 platform#212 记名——**参照实现不达标要写出来，不能靠"标准写了"充数**。
