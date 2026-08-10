@@ -20,7 +20,7 @@
  *
  * ── How purge knows what to delete ──────────────────────────────────────────
  * Every fixture row carries a deterministic id in its own UUID segment:
- *   catalog `…-a000-…`   demo `…-b000-…`   bulk `…-c000-…`
+ *   catalog `…-a000-…`  demo `…-b000-…`  bulk leaves `…-c000-…`  bulk trunk `…-d000-…`
  * so purge is "delete rows whose id lives in this segment" — no timestamps, no
  * name matching, and catalog data (a000) can never be caught by it. Tables are
  * discovered from information_schema rather than listed here, because a list
@@ -49,8 +49,18 @@ const DB_NAME = process.env["POSTGRES_DB"] ?? "platform_main";
 const DB_PASSWORD = process.env["POSTGRES_PASSWORD"] ?? "localdev";
 const NETWORK = process.env["FIXTURES_NETWORK"] ?? "platform-net";
 
-/** The seed layers' id segments. `a000` (catalog) is deliberately absent. */
-const SEGMENTS = { demo: "b000", bulk: "c000" };
+/**
+ * The seed layers' id segments. `a000` (catalog) is deliberately absent.
+ *
+ * `bulk` is TWO segments, and getting that wrong is not a cosmetic bug: the
+ * trunk (seed-bulk-core — users, tenants, workspaces, subscriptions, invoices,
+ * tickets) lives in `d000`, the leaves (seed-bulk) in `c000`. An earlier version
+ * of this file knew only `c000`, so `status` under-reported by ~500 rows and
+ * `purge` printed a tick while leaving the entire trunk in place — precisely the
+ * silent-leftover failure this script's header claims to design against. Adding
+ * a fixture segment means adding it here; there is no discovery for segments.
+ */
+const SEGMENTS = { demo: ["b000"], bulk: ["c000", "d000"] };
 
 /**
  * Ledger and audit tables whose DELETE is refused by an append-only trigger
@@ -136,8 +146,8 @@ function purge(layer) {
     console.error("refusing: purge deletes fixture rows. Re-run with CONFIRM_PURGE=yes");
     process.exit(1);
   }
-  const segments = layer === "all" ? Object.values(SEGMENTS) : [SEGMENTS[layer]];
-  if (segments.some((s) => !s)) {
+  const segments = (layer === "all" ? Object.values(SEGMENTS).flat() : SEGMENTS[layer]) ?? [];
+  if (!segments.length) {
     console.error(`unknown layer '${layer}' — use demo | bulk | all`);
     process.exit(1);
   }
@@ -181,7 +191,10 @@ function purge(layer) {
       [...tables, ...skipped]
         .map(
           (t) =>
-            `select 1 from ${t} where id::text like '00000000-0000-4000-b000-%' or id::text like '00000000-0000-4000-c000-%'`,
+            `select 1 from ${t} where ` +
+            ["b000", "c000", "d000"]
+              .map((seg) => `id::text like '00000000-0000-4000-${seg}-%'`)
+              .join(" or "),
         )
         .join(" union all ") +
       `) x`,
@@ -202,7 +215,8 @@ function status() {
   for (const t of uuidTables()) {
     const r = psql(
       `select count(*) filter (where id::text like '00000000-0000-4000-b000-%'),
-              count(*) filter (where id::text like '00000000-0000-4000-c000-%'),
+              count(*) filter (where id::text like '00000000-0000-4000-c000-%'
+                                  or id::text like '00000000-0000-4000-d000-%'),
               count(*) from ${t}`,
     );
     if (!r.ok) continue;
