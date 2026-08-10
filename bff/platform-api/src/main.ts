@@ -13,6 +13,7 @@ import { Logger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { AppModule } from "./app.module";
+import { setupOpenApi } from "@vxture/core-config/openapi";
 import { AllExceptionsFilter } from "./filters/all-exceptions.filter";
 
 async function bootstrap() {
@@ -33,6 +34,20 @@ async function bootstrap() {
   // Log the real stack of every 5xx / unhandled throw (otherwise hidden behind
   // NestJS's generic 500), and return a clean error body.
   app.useGlobalFilters(new AllExceptionsFilter());
+
+  // Machine-readable contract for the product repos that consume this service
+  // (C2 entitlements, C3 usage, sharing visible-set). `serveSpec` is on here and
+  // nowhere else: consumers are other repos rather than browsers, the surface is
+  // tailnet-only, and a fetchable spec is what stops a product transcribing our
+  // field names out of prose (liaison #226 had `active_workspace` for
+  // `workspace_id`). The /docs UI stays non-production, as everywhere.
+  setupOpenApi(app, {
+    title: "platform-api",
+    description:
+      "Platform S2S surface for product repos: C2 entitlements, C3 usage (consume/gauge), sharing visible-set. Internal network only — see product_200 §3/§4.",
+    version: process.env["npm_package_version"] ?? "0.0.0",
+    serveSpec: true,
+  });
 
   // S2S-only surface: no cookies, no CORS, no browser callers.
   const port = Number(process.env.PLATFORM_API_PORT ?? 8080);

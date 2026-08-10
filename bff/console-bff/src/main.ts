@@ -3,6 +3,7 @@ import { NestFactory } from "@nestjs/core";
 import cookieParser from "cookie-parser";
 import express from "express";
 import { AppModule } from "./app.module";
+import { setupOpenApi } from "@vxture/core-config/openapi";
 
 async function bootstrap() {
   // TD-024 boot-smoke: build the REAL esbuild bundle and resolve the full DI graph
@@ -37,6 +38,15 @@ async function bootstrap() {
     origin: allowedOrigins.length > 0 ? allowedOrigins : true,
     credentials: true,
   });
+  // Dev-only route browser (non-production; see setupOpenApi). Nest's
+  // decorators are the source, so the route list cannot drift from the code.
+  setupOpenApi(app, {
+    title: "console-bff",
+    description:
+      "Tenant console BFF: workspace/member/subscription self-service, quota views.",
+    version: process.env["npm_package_version"] ?? "0.0.0",
+  });
+
   await app.listen(Number(process.env.CONSOLE_BFF_PORT ?? 3021));
 }
 

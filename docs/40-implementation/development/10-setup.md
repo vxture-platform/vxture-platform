@@ -121,6 +121,25 @@ AUTH_COOKIE_DOMAIN=localhost
 
 ---
 
+## 接口浏览（`/docs`）
+
+每个 BFF 在**非生产**环境挂了 Swagger UI，起了服务直接开：
+
+| 服务                      | 地址                         |
+| ------------------------- | ---------------------------- |
+| auth-bff                  | `http://localhost:3081/docs` |
+| website-bff / console-bff | `:3001/docs` · `:3021/docs`  |
+| admin-bff / opera-bff     | `:3031/docs` · `:3041/docs`  |
+| platform-api              | `:8080/docs`                 |
+
+路由和方法是从 Nest 的装饰器直接生成的，**不会和代码漂移**——这是它相对手写契约文档的全部意义。请求/响应的字段形状只在 DTO 带了 `@ApiProperty` 的地方出现，那部分是增量补的，不影响现在就能用。
+
+**生产不开 `/docs`**：把全部端点、参数结构、错误码公开给未认证访问者，等于我们自己发布一份攻击面地图。
+
+**`platform-api` 例外地在所有环境提供 `/openapi.json`**（不是 UI，是机器读的规格）：它的消费方是别的产品仓而不是浏览器，surface 本来就只在 tailnet 内。产品仓照着规格生成客户端，就不会再把字段名从散文文档里抄错（liaison #226 把 `workspace_id` 抄成了 `active_workspace`）。
+
+---
+
 ## 常见问题
 
 **端口冲突**：`netstat -ano | findstr :3081`（Windows）。先确认不是兄弟栈——`docker ps` 看 vx-atlas / vx-runos / vx-arda。

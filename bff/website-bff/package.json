@@ -8,7 +8,7 @@
   "description": "Vxture platform — website BFF (Backend For Frontend)",
   "scripts": {
     "build": "pnpm -w build:backend-deps && pnpm run build:bundle",
-    "build:bundle": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node22 --outfile=dist/main.cjs --tsconfig=tsconfig.json --external:@nestjs/websockets/socket-module --external:@nestjs/microservices --external:@nestjs/microservices/microservices-module",
+    "build:bundle": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node22 --outfile=dist/main.cjs --tsconfig=tsconfig.json --external:@nestjs/websockets/socket-module --external:@nestjs/microservices --external:@nestjs/microservices/microservices-module --external:class-transformer/storage",
     "dev": "pnpm run build && node dist/main.cjs",
     "start": "node dist/main.cjs",
     "boot-smoke": "node ../../scripts/guardrails/boot-smoke.mjs dist/main.cjs website-bff",

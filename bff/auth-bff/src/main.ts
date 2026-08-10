@@ -12,6 +12,7 @@ import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./filters/all-exceptions.filter";
+import { setupOpenApi } from "@vxture/core-config/openapi";
 
 async function bootstrap() {
   // TD-024 boot-smoke: build the REAL esbuild bundle and resolve the full DI graph
@@ -60,6 +61,15 @@ async function bootstrap() {
   });
 
   const port = Number(process.env.AUTH_BFF_PORT ?? 3081);
+  // Dev-only route browser (non-production; see setupOpenApi). Nest's
+  // decorators are the source, so the route list cannot drift from the code.
+  setupOpenApi(app, {
+    title: "auth-bff",
+    description:
+      "Identity provider: OIDC authorize/token/jwks, RP session, operator step-up, social login.",
+    version: process.env["npm_package_version"] ?? "0.0.0",
+  });
+
   await app.listen(port);
   Logger.log(`✅ auth-bff listening on http://localhost:${port}`, "Bootstrap");
 }

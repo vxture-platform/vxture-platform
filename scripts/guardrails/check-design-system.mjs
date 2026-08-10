@@ -1791,6 +1791,14 @@ function exists(target) {
 }
 
 function hasRawColor(line) {
+  // Comment text is never a violation — a colour written in prose renders
+  // nothing. stripLineComment only handles `//`, so a JSDoc/block-comment line
+  // reached the hex pattern intact, and this repo writes issue references like
+  // `#226` in exactly those comments: three hex-valid digits behind a `#`,
+  // indistinguishable from a colour to a regex. Worse, it only fires in scanned
+  // directories, so the same sentence passes in bff/ and fails in packages/ —
+  // a trap that springs on file location rather than on content.
+  if (isCommentLine(line)) return false;
   const text = stripLineComment(line);
   if (/#(?:[0-9a-fA-F]{3,8})\b/.test(text)) return true;
   if (/\b(?:rgb|rgba|hsl|hsla)\(\s*(?:\d|#)/i.test(text)) return true;
@@ -1851,6 +1859,12 @@ function isHairlineOnly(value) {
     scaleValues.length > 0 &&
     scaleValues.every((item) => item === "1px" || item === "0px")
   );
+}
+
+/** A whole-line comment: `// …`, `/* …`, or a JSDoc continuation `* …`. */
+function isCommentLine(line) {
+  const t = line.trim();
+  return t.startsWith("//") || t.startsWith("/*") || t.startsWith("*");
 }
 
 function stripLineComment(line) {
