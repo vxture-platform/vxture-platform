@@ -25,7 +25,7 @@ cp .env.example .env.local        # 2. 环境变量，按需填
 pnpm db:local:all                 # 3. 起库 + 建表 + seed + 校验（见下）
 ```
 
-`db:local:all` = `up` → `ddl --reset` → `secrets` → `seed` → `verify`，每步也可以单独跑：
+`db:local:all` = `up` → `ddl --reset` → `secrets` → `signing-key` → `seed` → `verify`，每步也可以单独跑：
 
 | 命令                    | 做什么                                                                             |
 | ----------------------- | ---------------------------------------------------------------------------------- |
@@ -37,6 +37,8 @@ pnpm db:local:all                 # 3. 起库 + 建表 + seed + 校验（见下�
 | `pnpm db:local:verify`  | 跑 `baseline-assertions.sql`——**与生产同一份断言，本地应当全绿**                   |
 | `pnpm db:local:status`  | 容器状态 + schema 计数                                                             |
 | `pnpm db:local:down`    | 停容器（数据留在 `deploy/dev/data/`，已 gitignore）                                |
+
+**`signing-key` 这步也不能跳**：公钥进 `appoidc.signing_keys`（`/oidc/jwks` 就是读它），私钥只在 env。库里没有 → `/oidc/jwks` 直接 500，登录无从谈起；库里有而 env 对不上 → auth-bff 用一个 kid 签、JWKS 公布另一个 kid，RP 一律 `kid not found`，看起来像 RP 坏了。
 
 **`secrets` 这步不能跳**：四个门户是四个 confidential OIDC client，IdP 要用 `client_secret_hash` 校验换票。没有它，登录会在 token exchange 处以 `invalid_client` 失败——而现象是"登录跳回来就没了"，不会有任何一层报错。生成的明文按客户端分别落 `OIDC_CLIENT_SECRET_{WEBSITE,CONSOLE,ADMIN,OPERA,UMBRA}`：四个 RP 共用一个 `OIDC_CLIENT_SECRET` 变量的话，只有一个客户端能换票成功，另外三个静默失败。
 
@@ -123,9 +125,10 @@ AUTH_COOKIE_DOMAIN=localhost
 
 **端口冲突**：`netstat -ano | findstr :3081`（Windows）。先确认不是兄弟栈——`docker ps` 看 vx-atlas / vx-runos / vx-arda。
 
-**数据库连不上**：
+**数据库连不上 / auth-bff 起不来报 `Auth session store unavailable`**：先看 Docker Desktop 是不是没开——那条 503 说的是 Redis 连不上，而 pg 和 redis 都在 Docker 里。
 
 ```bash
+docker info                 # 守护进程没起的话，先开 Docker Desktop
 pnpm db:local:status
 docker logs vx-platform-postgres-db-dev
 ```

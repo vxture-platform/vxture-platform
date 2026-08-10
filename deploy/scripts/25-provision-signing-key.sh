@@ -10,7 +10,7 @@
 # 运行：CONFIRM_PROVISION_KEY=yes bash scripts/25-provision-signing-key.sh
 # 幂等：provision-signing-key.mjs 已有 active key 时跳过（不轮换；--force 才轮换）。
 #
-# D-AG：本阶段把公钥写入 iam.signing_key 并打印 OIDC_ACTIVE_KID + 私钥（base64
+# D-AG：本阶段把公钥写入 appoidc.signing_keys 并打印 OIDC_ACTIVE_KID + 私钥（base64
 # PKCS8）。私钥不落盘——请手动粘贴到 secrets/platform-identity.env，再继续部署。
 # 若该 secret 仍为占位（CHANGEME/空），本脚本打印密钥后以非零退出，提示先粘贴再重跑
 # （首发聚合脚本幂等，可整体重跑）。
@@ -49,7 +49,7 @@ fi
 mkdir -p "$DB_TOOL_CACHE_DIR"
 chmod 700 "$DB_TOOL_CACHE_DIR" 2>/dev/null || true
 
-echo "==> 执行 provision-signing-key.mjs（公钥入 iam.signing_key，私钥打印）"
+echo "==> 执行 provision-signing-key.mjs（公钥入 appoidc.signing_keys，私钥打印）"
 docker run --rm \
   --network vxture-prod \
   --env-file "$RUNTIME_DIR/secrets/platform.env" \

@@ -18,9 +18,10 @@
  *   down    stop them (data survives in deploy/dev/data/)
  *   ddl     apply the DDL; --reset drops the schemas first (DATA LOSS, local only)
  *   secrets generate local OIDC client secrets + hashes into .env.local
+ *   signing-key provision the IdP RS256 key (DB) + write the pair into .env.local
  *   seed    catalog + sample seed
  *   verify  run the baseline assertions
- *   all     up → ddl --reset → secrets → seed → verify
+ *   all     up → ddl --reset → secrets → signing-key → seed → verify
  *   status  containers + schema count
  */
 import { spawnSync } from "node:child_process";
@@ -213,6 +214,58 @@ function secrets() {
  * the table count from the authoritative DDL, and the DDL fingerprint. Both are
  * derived, never hardcoded, so the assertion follows the DDL as it evolves.
  */
+/**
+ * Provision the IdP's RS256 signing key and write the matching pair into
+ * .env.local.
+ *
+ * Both halves matter and they must agree: the PUBLIC jwk goes into
+ * `appoidc.signing_keys` (served at `/oidc/jwks`), the PRIVATE key only ever
+ * lives in env. If the DB has a key the env does not match, auth-bff signs with
+ * one `kid` while JWKS publishes another and every RP rejects the id_token with
+ * "kid not found" — a failure that looks like a broken RP rather than a
+ * mismatched key. If the DB has no key at all, `/oidc/jwks` answers 500 and no
+ * login can complete.
+ *
+ * `--force` rotates (current active → retiring). Without it, an existing active
+ * key is left alone and .env.local is not touched, because the private half of
+ * an existing key cannot be recovered from the database — it is not there.
+ */
+function signingKey({ force }) {
+  const url = `postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}`;
+  const r = spawnSync("docker", [
+    "run", "--rm", "--network", NETWORK,
+    "-e", `DATABASE_URL=${url}`,
+    "-v", `${resolve(ROOT, "deploy/database/prisma")}:/db/prisma:ro`,
+    "-v", "vx-platform-db-tools:/tmp/vxture-db",
+    "node:24-alpine", "sh", "-lc",
+    "set -e; " +
+      "if [ ! -d /tmp/vxture-db/node_modules/pg ]; then npm install --prefix /tmp/vxture-db pg@8.20.0 >/dev/null; fi; " +
+      "cd /db/prisma && NODE_PATH=/tmp/vxture-db/node_modules node provision-signing-key.mjs" +
+      (force ? " --force" : ""),
+  ], { cwd: ROOT, encoding: "utf8" });
+  if (r.status !== 0) {
+    console.error(r.stderr || "✗ signing-key provisioning failed");
+    process.exit(1);
+  }
+  const kid = /^OIDC_ACTIVE_KID=(.+)$/m.exec(r.stdout ?? "")?.[1];
+  const pem = /^OIDC_SIGNING_PRIVATE_KEY=(.+)$/m.exec(r.stdout ?? "")?.[1];
+  if (!kid || !pem) {
+    // The script exits 0 and prints nothing new when a key is already active.
+    console.log("• signing key already active — .env.local left as is (use --force to rotate)");
+    return;
+  }
+  const file = resolve(ROOT, ".env.local");
+  let content = existsSync(file) ? readFileSync(file, "utf8") : "";
+  for (const [k, v] of [["OIDC_ACTIVE_KID", kid], ["OIDC_SIGNING_PRIVATE_KEY", pem]]) {
+    const re = new RegExp(`^${k}=.*$`, "m");
+    content = re.test(content)
+      ? content.replace(re, `${k}=${v}`)
+      : `${content.trimEnd()}\n${k}=${v}\n`;
+  }
+  writeFileSync(file, content, "utf8");
+  console.log(`✓ signing key provisioned (kid=${kid.slice(0, 12)}…) and written to .env.local`);
+}
+
 function verify() {
   const file = resolve(ROOT, "deploy/database/verify/baseline-assertions.sql");
   if (!existsSync(file)) {
@@ -244,6 +297,7 @@ switch (cmd) {
   case "down": run("docker", [...COMPOSE, "down"]); break;
   case "ddl": ddl({ reset }); break;
   case "secrets": secrets(); break;
+  case "signing-key": signingKey({ force: reset || rest.includes("--force") }); break;
   case "seed": seed(); break;
   case "verify": verify(); break;
   case "status": status(); break;
@@ -252,10 +306,11 @@ switch (cmd) {
     process.env.CONFIRM_RESET = "yes";
     ddl({ reset: true });
     secrets();
+    signingKey({ force: true });
     seed();
     verify();
     break;
   default:
-    console.error("usage: node scripts/dev/db-local.mjs <up|down|ddl [--reset]|secrets|seed|verify|status|all>");
+    console.error("usage: node scripts/dev/db-local.mjs <up|down|ddl [--reset]|secrets|signing-key [--force]|seed|verify|status|all>");
     process.exit(1);
 }
