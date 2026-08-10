@@ -145,6 +145,19 @@ PR 评审比对项，不设新机检）。实例教训：vxtpl 在 `@vxture/shar
 - **原生 `ssh -i ~/.ssh/deploy_key` / `rsync -az --delete`（带 staging 目录）**做交付，不用未 pin 的第三方
   ssh/scp action；staging 让 `--delete` 原子、不会中途留下半套 compose/config。
 - **拉不可变 `sha-<short>` tag**（确定性、可精确回滚），而非可变 release tag。
+- **build 必须显式 `target:`，不得靠 stage 顺序（2026-08-10 起，回应 `vxture-runos` liaison platform#209）**：
+  `docker build` 不给 `--target` 时构建**最后一个** stage。于是仓库一旦在 app 之后加了第二个 stage
+  （worker、迁移镜像、executor sidecar…），app 镜像会**静默地**换成错误的 entrypoint——**CI 全绿**
+  （镜像确实构建成功了），下一个 tag 直接发出一个坏应用。runos 加 `executor` stage 时正好撞上：
+  `runos-app` 启动的是 `node dist/executor.cjs`，靠部署前本地拉栈才发现。
+  - 参照 `build.yml` 的 app 作业**必须写 `target:`**（如 `target: runtime`）；仓库模板的 Dockerfile
+    指引写明"**app stage 由显式 target 构建，永不依赖 stage 顺序**"。
+  - 这是"最省事的写法恰好会静默出错"的又一例：不写 target 在单 stage 时永远正确，直到某天不是。
+- **多镜像仓（第二个可部署物）的构建形状**：参照 `build.yml` 是单镜像（一个 `docker-build` 作业产出
+  `<code>-app`）。需要额外可部署物的仓（如 runos 的 executor broker + 其 sandbox RUN 镜像，product_240
+  的 L1 executor 义务）照此加：**独立 matrix 作业**（如 `docker-build-executor`）用**同一 sha/ref tag**
+  构建并推送附加镜像，**不产出 `image_tag` output**——deploy 按 sha 拉 app，附加镜像随同一 sha 对齐。
+  范本见 `vxture-runos` `build.yml`。别各仓自创形状。
 - **`docker login` 带 `timeout` + 多端点 fallback，主源按主机 profile（§5）定、非单一固定序**：Aliyun-VPC
   同区主机 = 内网 ACR 主源 → 公网 ACR → GHCR 兜底；**非 VPC 主机**（worker-02、海外 worker-04）= GHCR 主源 →
   公网 ACR 兜底（内网 ACR 端点不可达）。`IMAGE_REGISTRY`/`FALLBACK_IMAGE_REGISTRY` 按主机置。

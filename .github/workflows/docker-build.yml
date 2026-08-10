@@ -192,6 +192,10 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
+          # 显式 target，不靠 stage 顺序（标准 §4，platform#209）：不给 target 时 docker
+          # 构建最后一个 stage，日后在 app 之后加任何 stage 都会静默换掉 entrypoint，
+          # 且 CI 全绿。三份 Dockerfile 的应用 stage 均名为 runner。
+          target: runner
           build-args: |
             ${{ matrix.build-args }}
             NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY=${{ vars.CF_TURNSTILE_TENANT_SITE_KEY }}
@@ -216,6 +220,10 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
+          # 显式 target，不靠 stage 顺序（标准 §4，platform#209）：不给 target 时 docker
+          # 构建最后一个 stage，日后在 app 之后加任何 stage 都会静默换掉 entrypoint，
+          # 且 CI 全绿。三份 Dockerfile 的应用 stage 均名为 runner。
+          target: runner
           build-args: |
             ${{ matrix.build-args }}
             NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY=${{ vars.CF_TURNSTILE_TENANT_SITE_KEY }}
