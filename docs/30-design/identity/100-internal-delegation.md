@@ -13,7 +13,7 @@ admin 侧「平台用户(operator)/账号(customer) 管理」的动作按钮当�
 
 - **唯一现存内部端点**：`POST /internal/operator/stepup/totp`（`bff/auth-bff/src/routers/operator-stepup.router.ts`，类级 `InternalAuthGuard`）。全仓仅此一个 `/internal/*`。
 - **委托 plumbing 已成型**（B9 直接复用为模板）：
-  - admin-bff `OperatorStepUpService`（`bff/admin-bff/src/auth/operator-stepup.service.ts`）：`fetch(${idpBaseUrl}/internal/...)` + header `x-vxture-internal-auth: AUTH_INTERNAL_TOKEN`；`idpBaseUrl = OIDC_BACKCHANNEL_ISSUER ?? AUTH_BFF_URL`（容器内网 `http://vx-auth-bff:3090`，**绝不走公开 issuer** `accounts.vxture.com`）；未配置 fail-closed。
+  - admin-bff `OperatorStepUpService`（`bff/admin-bff/src/auth/operator-stepup.service.ts`）：`fetch(${idpBaseUrl}/internal/...)` + header `x-vxture-internal-auth: AUTH_INTERNAL_TOKEN`；`idpBaseUrl = OIDC_BACKCHANNEL_ISSUER ?? AUTH_BFF_URL`（容器内网 `http://vx-auth-bff:3081`，**绝不走公开 issuer** `accounts.vxture.com`）；未配置 fail-closed。
   - auth-bff `InternalAuthGuard`（`bff/auth-bff/src/authn/internal-auth.guard.ts`）：`x-vxture-internal-auth` 与 `AUTH_INTERNAL_TOKEN` `timingSafeEqual`；未配置/不匹配 401。
   - `AUTH_INTERNAL_TOKEN` = 共享密钥（`deploy/secrets/platform.env`），compose 同一 env_file 注入 auth-bff 与 admin-bff。
 - **凭据存储（realm 硬隔离，无跨 realm FK）**：

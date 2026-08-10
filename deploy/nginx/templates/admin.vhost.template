@@ -7,7 +7,7 @@
 # x.vxture.com 区分,避免暗示同一主机)。admin 是既有长期生产服务,渲染为
 # 必选步骤——env 缺失时同步脚本报错退出,不静默跳过。
 #
-# /varda/* 经 Tailscale 直连 vx-worker-02 varda-bff（${VX_WORKER02_TAILNET_IP}:3080，原3121，2026-07-24 L0端口迁移）
+# /varda/* 经 Tailscale 直连 vx-worker-02 varda-bff（${VX_WORKER02_TAILNET_IP}:3090，原3121，2026-07-24 L0端口迁移）
 
 server {
     listen 80;
@@ -35,7 +35,7 @@ server {
 
     # Varda SSE — 直连 Tailscale IP，无需 resolver
     location /varda/ {
-        proxy_pass         http://${VX_WORKER02_TAILNET_IP}:3080;
+        proxy_pass         http://${VX_WORKER02_TAILNET_IP}:3090;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;
         proxy_set_header   X-Real-IP         $remote_addr;
@@ -77,7 +77,7 @@ server {
     }
 
     location /auth/ {
-        set $adminbff vx-platform-admin-bff:3043;
+        set $adminbff vx-platform-admin-bff:3031;
         proxy_pass         http://$adminbff;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;
@@ -87,7 +87,7 @@ server {
     }
 
     location /api/ {
-        set $adminbff vx-platform-admin-bff:3043;
+        set $adminbff vx-platform-admin-bff:3031;
         proxy_pass         http://$adminbff;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;

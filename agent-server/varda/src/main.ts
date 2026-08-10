@@ -14,7 +14,7 @@ import { AppModule } from "./app.module";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const port = Number(process.env["VARDA_SERVER_PORT"] ?? 3081);
+  const port = Number(process.env["VARDA_SERVER_PORT"] ?? 3091);
   await app.listen(port);
 }
 

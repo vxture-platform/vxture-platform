@@ -17,7 +17,7 @@ import type {
 } from "@simplewebauthn/browser";
 
 const OIDC_API_BASE =
-  process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3090";
+  process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3081";
 
 /**
  * Register a new operator passkey. Throws a user-facing message on failure

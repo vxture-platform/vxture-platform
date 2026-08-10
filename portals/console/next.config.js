@@ -71,7 +71,7 @@ const nextConfig = {
     const rules = [
       {
         source: "/varda/:path*",
-        destination: `${process.env.VARDA_BFF_DEV_URL ?? "http://localhost:3121"}/varda/:path*`,
+        destination: `${process.env.VARDA_BFF_DEV_URL ?? "http://localhost:3090"}/varda/:path*`,
       },
     ];
     // Local-dev same-origin shim (gated on LOCAL_BFF_PROXY_URL; unset in prod,

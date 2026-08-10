@@ -10,7 +10,7 @@ import axios from "axios";
 function normalizeOrigin(value: string | undefined): string {
   const normalized = value?.trim().replace(/\/+$/, "");
   if (!normalized) {
-    return "http://localhost:3011";
+    return "http://localhost:3001";
   }
   return normalized;
 }

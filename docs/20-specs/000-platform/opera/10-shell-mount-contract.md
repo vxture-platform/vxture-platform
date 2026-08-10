@@ -9,7 +9,7 @@
 | 件    | 位置                                          | 说明                                                                                                                                |
 | ----- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | 前端  | `portals/opera`(`vx-platform-opera`:3050)     | Next.js 薄壳:workforce 会话头 + 侧栏导航 + 总览页;复用 shell-template CSS;**零本地 CSS、零 NEXT_PUBLIC 域名**(BFF 一律同源相对路径) |
-| BFF   | `bff/opera-bff`(`vx-platform-opera-bff`:3051) | workforce realm OIDC RP(client_id=`opera`)+ nginx `auth_request` 门 + operator-OBO 换票(M-1);RP 会话 Redis,默认 TTL 12h;不连库      |
+| BFF   | `bff/opera-bff`(`vx-platform-opera-bff`:3041) | workforce realm OIDC RP(client_id=`opera`)+ nginx `auth_request` 门 + operator-OBO 换票(M-1);RP 会话 Redis,默认 TTL 12h;不连库      |
 | vhost | `deploy/nginx/templates/opera.vhost.template` | 20-sync 脚本从 `.env.opera-bff` 的 `OPERA_BASE_URL` 渲染真实 `server_name`;env 缺失即跳过                                           |
 | 兜底  | `deploy/nginx/sites-enabled/00-default.conf`  | default_server:80→444、443→`ssl_reject_handshake`(未知 SNI 不出证书)                                                                |
 

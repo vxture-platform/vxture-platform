@@ -35,7 +35,7 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
 
   // S2S-only surface: no cookies, no CORS, no browser callers.
-  const port = Number(process.env.PLATFORM_API_PORT ?? 3041);
+  const port = Number(process.env.PLATFORM_API_PORT ?? 8080);
   await app.listen(port);
   Logger.log(
     `✅ platform-api listening on http://localhost:${port}`,

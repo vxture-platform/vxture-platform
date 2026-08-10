@@ -7,23 +7,25 @@
  * 里的不会出现在面板上，而两种情况看起来都像"这个服务坏了"。现在展示顺序与
  * 启动顺序都从本数组推导（数组顺序 + tier），加服务只改一处。
  *
- * ── 端口分配 ────────────────────────────────────────────────────────────────
- * 按产品族分段，同族的门户与 BFF 相邻（门户取整十，BFF 取 +1）：
+ * ── 端口分配（2026-08-10 重排，本地=生产同一套数）────────────────────────────
+ * 权威 = docs/40-implementation/ai/10-port-allocation.md +
+ * docs/50-deployment/13-infra-allocation-registry.md §2。**5 个面**各占一段，
+ * 段内 x0=UI、x1=BFF，段内余位归本面所有：
  *
- *   3000  website 别名跳转        3001  （website-bff 代码默认，本地不用）
- *   3010  website                 3011  website-bff
- *   3020  console                 3021  console-bff
- *   3030  admin                   3031  admin-bff
- *   3040  accounts（登录 UI）      3041  platform-api
- *   3050  opera                   3051  opera-bff
- *   3090  auth-bff（IdP 后端）
- *   3100  atlas / ai-gateway（外部仓库，本面板不启）
- *   3120  varda-studio            3121  varda-bff      3122  varda-server
- *   8000  gateway-bff
+ *   3000  website                 3001  website-bff     （3000-3019，留白给行业门户）
+ *   3020  console                 3021  console-bff     （3020-3029）
+ *   3030  admin                   3031  admin-bff       （3030-3039）
+ *   3040  opera                   3041  opera-bff       （3040-3049）
+ *   3080  accounts（登录 UI）      3081  auth-bff（IdP 后端，同一张脸的两半）
+ *   3050-3079  留白（未来新面）
+ *   3090  varda-bff               3091  varda-server    3092  varda-studio（仅本地）
+ *   3100  atlas（外部仓库，本面板不启；L1 段 3100-3199）
  *
- * 多数 BFF 的**代码内默认端口与这里不同**（admin-bff 3043 / auth-bff 3061 /
- * website-bff 3001 / varda-bff 3080 / varda-server 3081）——代码默认是给容器部署
- * 用的，本地由下面的 `env` 显式覆盖。改端口要两边一起看。
+ * 边缘带 80xx（不占应用段）：8000 gateway-bff（公网边缘）、8080 platform-api
+ * （S2S tailnet 边缘）。auth-bff 的 tailnet 暴露口也在这带（生产 8081 → 容器 3081）。
+ *
+ * 本地端口 = 代码内默认端口 = 生产容器内口，三者从此是同一套数；下面的 `env`
+ * 仍显式写出，是为了让面板启的进程不依赖 .env.local 是否正确。
  *
  * ── 门户 → BFF 的本地同源代理 ───────────────────────────────────────────────
  * 每个门户用**自己的**变量名（`<PORTAL>_BFF_DEV_URL`），不共用一个。
@@ -56,9 +58,9 @@
  */
 const RP_LOCAL_COOKIE = { RP_COOKIE_INSECURE: "true" };
 
-const AUTH_BFF = "http://localhost:3090";
+const AUTH_BFF = "http://localhost:3081";
 const ATLAS_API = "http://localhost:3100";
-const PLATFORM_API = "http://localhost:3041";
+const PLATFORM_API = "http://localhost:8080";
 
 /** GET /healthz 存活探针（standards 020 + 025），所有 Nest BFF 都有。 */
 const healthz = (port) => ({
@@ -82,36 +84,36 @@ export const SERVICES = [
   {
     id: "auth-bff",
     name: "Auth BFF (IdP)",
-    port: 3090,
+    port: 3081,
     priority: 0,
     url: AUTH_BFF,
     command: "pnpm --filter @vxture/bff-auth dev",
-    env: { AUTH_BFF_PORT: "3090" },
-    healthChecks: [healthz(3090)],
+    env: { AUTH_BFF_PORT: "3081" },
+    healthChecks: [healthz(3081)],
   },
   {
     id: "platform-api",
     name: "Platform API",
-    port: 3041,
+    port: 8080,
     priority: 0,
     url: PLATFORM_API,
     command: "pnpm --filter @vxture/bff-platform-api dev",
     // 承接 product_310 D13 拆分出来的商务后台作业（开通派发、共享/试用到期扫描），
     // 并向 console-bff 提供权益解析。缺它时 console 的配额会 fail-closed 降级。
-    env: { PLATFORM_API_PORT: "3041" },
-    healthChecks: [healthz(3041)],
+    env: { PLATFORM_API_PORT: "8080" },
+    healthChecks: [healthz(8080)],
   },
   {
     id: "website-bff",
     name: "Website BFF",
-    port: 3011,
+    port: 3001,
     priority: 0,
-    url: "http://localhost:3011",
+    url: "http://localhost:3001",
     command: "pnpm --filter @vxture/bff-website dev",
-    env: { WEBSITE_BFF_PORT: "3011", AUTH_BFF_URL: AUTH_BFF, ...RP_LOCAL_COOKIE },
+    env: { WEBSITE_BFF_PORT: "3001", AUTH_BFF_URL: AUTH_BFF, ...RP_LOCAL_COOKIE },
     healthChecks: [
-      healthz(3011),
-      unauthorized("api.me", "http://localhost:3011/api/me"),
+      healthz(3001),
+      unauthorized("api.me", "http://localhost:3001/api/me"),
     ],
   },
   {
@@ -158,49 +160,49 @@ export const SERVICES = [
   {
     id: "opera-bff",
     name: "Opera BFF",
-    port: 3051,
+    port: 3041,
     priority: 0,
-    url: "http://localhost:3051",
+    url: "http://localhost:3041",
     command: "pnpm --filter @vxture/bff-opera dev",
     env: {
       ...RP_LOCAL_COOKIE,
-      OPERA_BFF_PORT: "3051",
+      OPERA_BFF_PORT: "3041",
       AUTH_BFF_URL: AUTH_BFF,
       ATLAS_API_URL: ATLAS_API,
     },
     healthChecks: [
-      healthz(3051),
-      unauthorized("auth.session", "http://localhost:3051/auth/session"),
+      healthz(3041),
+      unauthorized("auth.session", "http://localhost:3041/auth/session"),
     ],
   },
   {
     id: "varda-server",
     name: "Varda Server",
-    port: 3122,
+    port: 3091,
     priority: 0,
-    url: "http://localhost:3122",
+    url: "http://localhost:3091",
     command: "pnpm --filter @vxture/agent-server-varda dev",
     env: {
-      VARDA_SERVER_PORT: "3122",
+      VARDA_SERVER_PORT: "3091",
       ATLAS_API_URL: ATLAS_API,
       VARDA_PLATFORM_LLM_TENANT_ID: "82cf3e39-f7f0-4597-bb55-b1303ca19d46",
       VARDA_DEFAULT_MODEL_CODE: "doubao-seed-2-0-lite-260215",
     },
-    healthChecks: [listening(3122)],
+    healthChecks: [listening(3091)],
   },
   {
     id: "varda-bff",
     name: "Varda BFF",
-    port: 3121,
+    port: 3090,
     priority: 0,
-    url: "http://localhost:3121",
+    url: "http://localhost:3090",
     command: "pnpm --filter @vxture/bff-varda dev",
     env: {
-      VARDA_BFF_PORT: "3121",
-      VARDA_SERVER_INTERNAL_URL: "http://localhost:3122",
+      VARDA_BFF_PORT: "3090",
+      VARDA_SERVER_INTERNAL_URL: "http://localhost:3091",
     },
     healthChecks: [
-      { label: "health", url: "http://localhost:3121/health", okStatuses: [200] },
+      { label: "health", url: "http://localhost:3090/health", okStatuses: [200] },
     ],
   },
 
@@ -214,7 +216,7 @@ export const SERVICES = [
     command: "pnpm dev:gateway",
     env: {
       GATEWAY_PORT: "8000",
-      WEBSITE_BFF_ORIGIN: "http://localhost:3011",
+      WEBSITE_BFF_ORIGIN: "http://localhost:3001",
       CONSOLE_BFF_ORIGIN: "http://localhost:3021",
       ADMIN_BFF_ORIGIN: "http://localhost:3031",
       AUTH_BFF_ORIGIN: AUTH_BFF,
@@ -245,25 +247,25 @@ export const SERVICES = [
      * 的地址栏上，很难联想到是这个服务没起。 */
     id: "accounts",
     name: "Accounts (登录 UI)",
-    port: 3040,
+    port: 3080,
     priority: 2,
-    url: "http://localhost:3040",
+    url: "http://localhost:3080",
     command: "pnpm --filter @vxture/accounts dev",
     env: {
       NEXT_PUBLIC_OIDC_API_BASE: AUTH_BFF,
-      NEXT_PUBLIC_WEBSITE_URL: "http://localhost:3010",
+      NEXT_PUBLIC_WEBSITE_URL: "http://localhost:3000",
     },
-    healthChecks: [listening(3040)],
+    healthChecks: [listening(3080)],
   },
   {
     id: "website",
     name: "Website",
-    port: 3010,
+    port: 3000,
     priority: 2,
-    url: "http://localhost:3010",
+    url: "http://localhost:3000",
     command: "pnpm --filter @vxture/website dev",
-    env: { WEBSITE_BFF_DEV_URL: "http://localhost:3011" },
-    healthChecks: [listening(3010)],
+    env: { WEBSITE_BFF_DEV_URL: "http://localhost:3001" },
+    healthChecks: [listening(3000)],
   },
   {
     id: "console",
@@ -288,30 +290,21 @@ export const SERVICES = [
   {
     id: "opera",
     name: "Opera",
-    port: 3050,
+    port: 3040,
     priority: 2,
-    url: "http://localhost:3050",
+    url: "http://localhost:3040",
     command: "pnpm --filter @vxture/opera dev",
-    env: { OPERA_BFF_DEV_URL: "http://localhost:3051" },
-    healthChecks: [listening(3050)],
+    env: { OPERA_BFF_DEV_URL: "http://localhost:3041" },
+    healthChecks: [listening(3040)],
   },
   {
     id: "varda-studio",
     name: "Varda Studio",
-    port: 3120,
+    port: 3092,
     priority: 2,
-    url: "http://localhost:3120",
+    url: "http://localhost:3092",
     command: "pnpm --filter @vxture/agent-studio-varda dev",
-    healthChecks: [listening(3120)],
-  },
-  {
-    id: "website-alias",
-    name: "Website :3000 别名",
-    port: 3000,
-    priority: 2,
-    url: "http://localhost:3000",
-    command: "node tools/dev-panel/redirect-3000.mjs",
-    healthChecks: [listening(3000)],
+    healthChecks: [listening(3092)],
   },
 ];
 

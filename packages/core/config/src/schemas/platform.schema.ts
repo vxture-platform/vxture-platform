@@ -31,10 +31,10 @@ export const platformSchema = z.object({
    * IdP interactive login page (accounts.vxture.com in prod; same-origin with
    * the OIDC endpoints there). The IdP redirects unauthenticated /authorize here
    * as `${LOGIN_UI_BASE_URL}/login?login_challenge&realm`. Dev: the standalone
-   * accounts frontend port (3040; website 3010 / console 3020 / admin 3030).
+   * accounts frontend port (3080; website 3000 / console 3020 / admin 3030 / opera 3040).
    * See docs/design/identity-platform-idp.md.
    */
-  LOGIN_UI_BASE_URL: z.string().url().default("http://localhost:3040"),
+  LOGIN_UI_BASE_URL: z.string().url().default("http://localhost:3080"),
   /** Atlas (AI model supply provider) internal S2S API base URL. */
   ATLAS_API_URL: z.string().url().default("http://localhost:3100"),
   /** Auth BFF internal base URL (used by proxy BFFs to delegate auth operations) */

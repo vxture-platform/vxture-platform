@@ -1,233 +1,105 @@
 # 端口分配规范 — Port Allocation
 
-> **本文件具有强制约束力。**
-> AI coding 和 human coding 在启动新服务、分配端口时，**必须**查阅本文件并严格遵守。
-> 任何端口变更须先修改本文件，再修改代码。
+> **本文件具有强制约束力。** AI coding 和 human coding 在启动新服务、分配端口时，**必须**查阅本文件并严格遵守。任何端口变更须先改文档，再改代码。
+>
+> **2026-08-10 重排(owner 拍板)**：本仓从此**只有一套端口方案**——本地开发端口 = 代码内回退默认值 = 生产容器内口。此前"本地一套 3NNX、生产一套分层块"的双轨制已废止：它让 varda 本地占 3120/3121，而同机跑的 runos dev 栈也是 3120，两边撞车，且没人能一眼说出哪个数是对的。
+>
+> **分配权威 = [`13-infra-allocation-registry.md`](../../50-deployment/13-infra-allocation-registry.md)**（登记表，含 L0–L3 全部产品）。本文只做两件事：给出本地开发的速查表，和写死几条不许违反的规则。
 
 ---
 
-## 一、设计原则
+## 一、分层分块（千位即层号）
 
-全局使用 `3NNX` 四位端口格式：
+| 块          | 层                       | 说明                                                                           |
+| ----------- | ------------------------ | ------------------------------------------------------------------------------ |
+| `3000–3099` | **L0** 平台本体          | 5 个面 + 内嵌 varda，见下表                                                    |
+| `3100–3199` | **L1** 横向能力平台      | atlas 3100 / ontos 3110 / runos 3120                                           |
+| `3200–3299` | **L2** 对象域平台        | vxtpl 3210 / arda 3230 / karda 3240 / terra 3250                               |
+| `4000–5999` | **L3** 行业智能体        | raven 4010 / anlan 4020 / forge 4030 / xuanzhen 4040                           |
+| `80xx`      | **边缘带**（不占应用块） | gateway-bff 8000（公网）· platform-api 8080（S2S）· auth-bff tailnet 暴露 8081 |
 
-| 位   | 含义                      |
-| ---- | ------------------------- |
-| `3`  | 固定前缀                  |
-| `NN` | 服务组编号（两位，00~99） |
-| `X`  | 组内服务偏移（0~9）       |
+L1/L2/L3 是**外部产品仓**的端口，本仓不启这些服务；列在这里是为了本地同机开发时不撞车（这台机上 atlas/runos/arda 的 dev 栈都在跑）。
 
-**分区规则：**
+## 二、L0：5 个面 + varda
 
-| NN 范围 | 区域             | 用途                                      |
-| ------- | ---------------- | ----------------------------------------- |
-| `00`    | 别名/特殊        | 3000 = website 别名（302→3010），其余保留 |
-| `01~03` | Platform Portals | 三个运营 Portal（UI + BFF 对）            |
-| `10`    | Infrastructure   | Model Platform 及基础服务                 |
-| `11~99` | Agents           | 每个 Agent 独占一个 `NN` 段               |
+**面 = 有自己域名的门户**，共 5 个。varda 是 L0 内嵌副驾（无域名，经 console/admin `/varda/*` 反代），**不是面**，但单独占一段。
 
-**单独保留：**
+段内规则：**x0 = UI，x1 = BFF，x2–x9 归本面**（该面将来的附属服务：worker / ws / cron 之类），段尾留白。
 
-| 端口   | 用途                                     |
-| ------ | ---------------------------------------- |
-| `8000` | API Gateway（唯一公共入口，NN 规则之外） |
-| `8090` | Dev Panel（开发工具面板）                |
+| 面            | 段            | UI                    | BFF                    | 本地起法                              |
+| ------------- | ------------- | --------------------- | ---------------------- | ------------------------------------- |
+| website       | **3000–3019** | 3000                  | website-bff 3001       | `pnpm -F @vxture/website dev`         |
+| console       | **3020–3029** | 3020                  | console-bff 3021       | `pnpm -F @vxture/console dev`         |
+| admin         | **3030–3039** | 3030                  | admin-bff 3031         | `pnpm -F @vxture/admin dev`           |
+| opera         | **3040–3049** | 3040                  | opera-bff 3041         | `pnpm -F @vxture/opera dev`           |
+| （留白）      | **3050–3079** | —                     | —                      | 30 位，给未来新面；**现有面不得蚕食** |
+| accounts(IdP) | **3080–3089** | 3080（登录/账户 UI）  | auth-bff 3081          | `pnpm -F @vxture/accounts dev`        |
+| varda（非面） | **3090–3099** | studio 3092（仅本地） | bff 3090 / server 3091 | `pnpm -F @vxture/bff-varda dev`       |
 
-**外部项目预留：**
+> **accounts 与 auth-bff 是同一张脸的两半**：accounts 是人看的登录/账户 UI（`accounts.vxture.com`），auth-bff 是 IdP 后端（签发令牌、`/oidc/*`、JWKS），由 accounts 域的 `/oidc/*` 反代过去。所以它们是 x0/x1 一对，不是两个面。
+>
+> website 段留白最多（20 位），因为后续行业门户在本段内取号。
 
-| 端口   | 用途                                                |
-| ------ | --------------------------------------------------- |
-| `3210` | ruyin.ai 网站外部项目预留，Vxture 本地服务不得占用  |
-| `3220` | ruyin.ai 网站外部项目预留，本地 SSO callback/origin |
-| `3281` | ruyin.ai 网站外部项目预留，Vxture 本地服务不得占用  |
+## 三、边缘带 80xx
 
-> ruyin.ai 网站端口与 Ruyin 业务服务端口均属于外部业务仓库边界。`3110/3111/3112/3114/3115` 只作为 `vxture/agentstudio-ruyin` 跨仓预留，本仓本地服务不得占用，也不得据此规划 vx-worker-02 部署。
+| 端口   | 服务                       | 性质                                                                   |
+| ------ | -------------------------- | ---------------------------------------------------------------------- |
+| `8000` | gateway-bff                | 公网 API 边缘（`api.vxture.com`），http-alt 惯例端口                   |
+| `8080` | platform-api               | S2S tailnet 边缘；**跨仓契约值**，产品仓 `PLATFORM_API_URL` 写死此地址 |
+| `8081` | auth-bff 的 tailnet 暴露口 | 产品仓 S2S 换票入口（容器内口是 3081）                                 |
+| `8090` | dev-panel                  | 本地开发工具面板，不部署                                               |
 
-### ruyin.ai 网站本地接口要求
+**为什么 tailnet 暴露口不跟 L0 map**：对外契约值一旦等于内部端口，内部每次重排都会破坏跨仓契约——2026-07-24 那次 auth-bff 从 3090 挪到 3061，`product_230` 三处却仍写 3090，契约文档与运行态对不上两周。现在解耦：**内部随便重排都不出 3xxx，对外只暴露 80xx**。
 
-| 项              | 要求                                                                                                               |
-| --------------- | ------------------------------------------------------------------------------------------------------------------ |
-| 本地 origin     | `http://localhost:3220`                                                                                            |
-| SSO start       | `http://localhost:3020/{locale}/sso/start?ctx=...`，生产为 `https://console.vxture.com/{locale}/sso/start?ctx=...` |
-| `ctx.from`      | 固定为 `ruyin`                                                                                                     |
-| `ctx.returnTo`  | 必须落在 `http://localhost:3220` origin 下，Vxture 会追加 `token` 和可选 `state` 查询参数                          |
-| token 交换      | 必须由服务端/BFF 处理，不允许浏览器直接调用 `auth-bff` 内部 verify/sign 接口                                       |
-| 当前 Vxture BFF | `GET /api/auth/callback?token=...`、`GET /api/auth/session`、`POST /api/auth/logout`                               |
+## 四、外部项目预留（本仓不得占用）
 
----
+`3110`–`3115`、`3210`、`3220`、`3281` 属 `vxture/agentstudio-ruyin` 等外部仓的本地/部署预留，本仓本地服务不得占用。ruyin.ai 网站本地 origin = `http://localhost:3220`，其 SSO 起始地址 = `http://localhost:3020/{locale}/sso/start?ctx=...`（生产 `https://console.vxture.com/...`），`ctx.from` 固定 `ruyin`，`ctx.returnTo` 必须落在 `http://localhost:3220` origin 下。
 
-## 二、Platform Portals（NN = 01~03）
-
-**偏移规则：**
-
-- `X = 0`：UI（Next.js）
-- `X = 1`：BFF（NestJS）
-
-| 端口      | 服务                       | 包                    | 环境变量           |
-| --------- | -------------------------- | --------------------- | ------------------ |
-| **3010**  | website-portal             | `@vxture/website`     | —                  |
-| **3011**  | website-bff                | `@vxture/bff-website` | `WEBSITE_BFF_PORT` |
-| **3020**  | console-portal             | `@vxture/console`     | —                  |
-| **3021**  | console-bff                | `@vxture/bff-console` | `CONSOLE_BFF_PORT` |
-| **3030**  | admin-portal               | `@vxture/admin`       | —                  |
-| **3031**  | admin-bff                  | `@vxture/bff-admin`   | `ADMIN_BFF_PORT`   |
-| **3090**  | auth-bff                   | `@vxture/bff-auth`    | `AUTH_BFF_PORT`    |
-| 3040~3089 | 预留（最多 5 个新 portal） | —                     | —                  |
-
----
-
-## 三、Infrastructure（NN = 10）
-
-| 端口      | 服务          | 说明                                                                                                                                                                                                          |
-| --------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **3100**  | Atlas（外部） | 本仓 `services/model/platform` 已退役（2026-07-24 拆仓至 `vxture-atlas`）；本地开发 `ATLAS_API_URL`（2026-07-29 由 `MODEL_PLATFORM_URL` 改名）默认值仍指向该端口，**保留不得迁移**，避免与本地 atlas 联调冲突 |
-| 3101~3109 | 预留          | 监控、消息队列等基础设施                                                                                                                                                                                      |
-
----
-
-## 四、Agents / 外部业务预留（NN = 11~99）
-
-本节只维护端口编号，避免本地开发和跨仓业务冲突；不代表 `vxture` 仓库负责部署这些服务。vx-worker-02 上的业务 beta/prod 部署由外部业务仓库维护，边界见 [`docs/50-deployment/08-code-environment-map.md`](../../50-deployment/08-code-environment-map.md)。
-
-**偏移规则（Agent 层统一）：**
-
-- `X = 0`：Agent Studio（Next.js 前端，prod）
-- `X = 1`：Agent BFF（NestJS，prod）
-- `X = 2`：Agent Server（私有后端，prod）
-- `X = 4`：Agent BFF（NestJS，beta）
-- `X = 5`：Agent Server（私有后端，beta）
-- `X = 3 / 6~9`：预留（beta studio / 子服务 / WebSocket / gRPC 等）
-
-### Agent 注册表
-
-| Agent                 | NN   | prod X0         | prod X1      | prod X2         | beta X4  | beta X5     | 状态                                         |
-| --------------------- | ---- | --------------- | ------------ | --------------- | -------- | ----------- | -------------------------------------------- |
-| **Ruyin**（外部业务） | `11` | 3110 studio     | 3111 BFF     | **3112** server | 3114 BFF | 3115 server | 已迁出至 `vxture/agentstudio-ruyin`          |
-| **Varda**（次子）     | `12` | **3120** studio | **3121** BFF | **3122** server | 3124 BFF | 3125 server | ✅ 三端运行中；业务仓迁移待 Ruyin 跑顺后规划 |
-| Future Agent #3       | `13` | 3130            | 3131         | 3132            | 3134     | 3135        | 预留                                         |
-| Future Agent #4       | `14` | 3140            | 3141         | 3142            | 3144     | 3145        | 预留                                         |
-| …                     | …    | …               | …            | …               | …        | …           | …                                            |
-| Future Agent #99      | `99` | 3990            | 3991         | 3992            | 3994     | 3995        | 预留                                         |
-
----
-
-## 五、完整端口速查表
-
-```
-8000   API Gateway（唯一公共入口）
-8090   Dev Panel
-
-3000   website 别名（302 → 3010，方便开发者习惯性访问）
-3010   website-portal（Next.js）
-3011   website-bff（NestJS）
-3020   console-portal（Next.js）
-3021   console-bff（NestJS）
-3030   admin-portal（Next.js）
-3031   admin-bff（NestJS）
-3090   auth-bff（NestJS，JWT 唯一签发源）
-
-3100   Model Platform（固定）
-
-3110   Ruyin Studio（外部业务仓库 / vx-worker-02 prod 预留）
-3111   Ruyin BFF（外部业务仓库 / vx-worker-02 prod 预留）
-3112   Ruyin Server（外部业务仓库 / vx-worker-02 prod 预留）
-3114   Ruyin BFF beta（外部业务仓库 / vx-worker-02 beta 预留）
-3115   Ruyin Server beta（外部业务仓库 / vx-worker-02 beta 预留）
-
-3120   varda-studio（Next.js）
-3121   varda-bff（NestJS）
-3122   varda-server（NestJS）
-3124   varda-bff-beta（外部业务仓库 / vx-worker-02 beta 预留）
-3125   varda-server-beta（外部业务仓库 / vx-worker-02 beta 预留）
-
-3210   ruyin.ai 网站外部项目预留（Vxture 不占用）
-3220   ruyin.ai 网站外部项目预留 / 本地 SSO callback origin（Vxture 不占用）
-3281   ruyin.ai 网站外部项目预留（Vxture 不占用）
-```
-
----
-
-## 六、环境变量命名约定
+## 五、环境变量命名约定
 
 ```bash
-# Platform BFF（变量名固定格式：{NAME}_BFF_PORT）
-WEBSITE_BFF_PORT=3011
+# 门户 BFF（变量名固定格式：{NAME}_BFF_PORT）
+WEBSITE_BFF_PORT=3001
 CONSOLE_BFF_PORT=3021
 ADMIN_BFF_PORT=3031
+OPERA_BFF_PORT=3041
+AUTH_BFF_PORT=3081
 
-# Ruyin 外部业务仓预留（本仓不消费）
-RUYINAGENT_BFF_PORT=3111
-RUYINAGENT_SERVER_PORT=3112
-RUYINAGENT_BETA_BFF_PORT=3114
-RUYINAGENT_BETA_SERVER_PORT=3115
+# varda（{AGENT}_BFF_PORT / {AGENT}_SERVER_PORT）
+VARDA_BFF_PORT=3090
+VARDA_SERVER_PORT=3091
+VARDA_SERVER_INTERNAL_URL=http://localhost:3091
 
-# Agent（变量名固定格式：{AGENT}_BFF_PORT / {AGENT}_SERVER_PORT）
-VARDA_BFF_PORT=3121
-VARDA_SERVER_PORT=3122
-VARDA_SERVER_INTERNAL_URL=http://localhost:3122
-VARDA_BETA_BFF_PORT=3124
-VARDA_BETA_SERVER_PORT=3125
-VARDA_BETA_SERVER_INTERNAL_URL=http://localhost:3125
-
-# 基础设施
-ATLAS_API_URL=http://localhost:3100
+# 边缘
 GATEWAY_PORT=8000
+PLATFORM_API_PORT=8080
+
+# 外部（本地联调指向同机 dev 栈）
+ATLAS_API_URL=http://localhost:3100
 ```
 
----
+## 六、强制执行规则
 
-## 七、强制执行规则
+### R1 — 先登记，后用号
 
-### R1 — 新 Agent 上线前必须登记
+新服务的端口先写进 [`13-infra-allocation-registry.md`](../../50-deployment/13-infra-allocation-registry.md)（新产品/新面）或本文（L0 段内的附属服务），才允许在代码里用。**禁止自取未登记的端口。**
 
-在本文件 **四、Agent 注册表** 中登记 `NN` 编号后，才允许在代码中使用端口。
-**禁止**自行选取未登记的端口。
+### R2 — 端口必须来自环境变量
 
-### R2 — 代码中的端口必须来自环境变量
-
-所有服务的监听端口通过环境变量注入，代码中只允许写**回退默认值**：
+代码里只允许写回退默认值：
 
 ```typescript
 // ✅ 正确
-const port = Number(process.env.VARDA_BFF_PORT ?? 3121);
+const port = Number(process.env.OPERA_BFF_PORT ?? 3041);
 
-// ❌ 错误：硬编码无环境变量覆盖
-await app.listen(3121);
+// ❌ 错误：硬编码，无环境变量覆盖
+await app.listen(3041);
 ```
 
-### R3 — 回退默认值必须与本表一致
+### R3 — 回退默认值 = 本表 = 生产内口
 
-代码中 `?? 端口号` 的回退默认值必须与本文件中登记的端口完全一致。
-发现不一致时，以本文件为准修正代码。
+三者必须是同一个数。这是 2026-08-10 重排要买下的东西：此前代码默认（生产值）和本地值不同，改端口要两边对着看，漏一边不报错、只在运行时表现为"登录转不回来"。发现不一致，以本文与登记表为准修正代码。
 
-### R4 — 禁止在 Platform 区间（3010~3099）放 Agent 服务
+### R4 — 段内取号，不得跨段
 
-Platform（NN=01~09）和 Agent（NN=11~99）区间已明确隔离，不得跨区使用。
-
-### R5 — 禁止占用外部项目预留端口
-
-`3210`、`3220`、`3281` 由 ruyin.ai 网站外部项目使用，Vxture 本地服务、Agent、BFF、Portal、Dev Panel 均不得占用。
-
-### R6 — 变更流程
-
-1. 修改本文件（登记新端口或标记迁移）
-2. 修改 `.env.local.template`
-3. 修改服务代码中的默认值
-4. 修改 `tools/dev-panel/src/server.mjs` 的 SERVICES 数组
-5. 通知团队（更新 PR 描述）
-
----
-
-## 八、保留端口说明
-
-以下端口由外部系统管理，不纳入 `3NNX` 规则：
-
-| 端口 | 用途                    |
-| ---- | ----------------------- |
-| 5432 | PostgreSQL              |
-| 6379 | Redis                   |
-| 8000 | API Gateway（单独保留） |
-| 8090 | Dev Panel（单独保留）   |
-
----
-
-_版本：1.0.0 | 2026-05-02_
+某个面要加附属服务，在**自己段内**取 x2–x9，不许去别的段或留白区拿号。留白区（3050–3079）只在**新开一个面**时启用，且须同步登记表。

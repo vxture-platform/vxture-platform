@@ -27,7 +27,7 @@ ruyin 从「console 生成一次性 token → 跨域桥」迁移为**标准 OIDC
 
 | 项                        | 值                                                                                 |
 | ------------------------- | ---------------------------------------------------------------------------------- |
-| Issuer                    | `https://accounts.vxture.com`（dev：`http://localhost:3090`）                      |
+| Issuer                    | `https://accounts.vxture.com`（dev：`http://localhost:3081`）                      |
 | Discovery                 | `GET {issuer}/.well-known/openid-configuration`                                    |
 | JWKS                      | `GET {issuer}/oidc/jwks`（RS256 公钥；**支持轮换**，见 §6）                        |
 | `client_id`               | `umbra`（2026-07-07 起；原 `ruyin`）                                               |
@@ -397,5 +397,5 @@ ruyin 是 **business app**，**每请求**按 `access_token.entitlement` 门控�
 1. **client_secret 派发**：经 secret manager，不入任一代码库；轮换机制约定。
 2. **redirect_uri / back_channel_logout_uri / post_logout_redirect_uri 生产值**登记：当前 seed 取 `RUYIN_BASE_URL`（dev `http://localhost:3080`），**生产域名须确认**并更新 `identity.oidc_client(ruyin)`。
 3. **JWKS 轮换**：ruyin 须实现「未知 kid → 刷新 JWKS」；平台轮换前会保留旧 kid 一段重叠期。
-4. **联调环境**：平台提供 dev IdP（`http://localhost:3090`）+ dev client secret，供 ruyin 本地 e2e。
+4. **联调环境**：平台提供 dev IdP（`http://localhost:3081`）+ dev client secret，供 ruyin 本地 e2e。
 5. **provisioning（开通 webhook）** 在平台 **P4** 落地；P3 期 ruyin 个人租户可走「注册即激活」路径。

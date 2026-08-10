@@ -1,0 +1,87 @@
+# Local development data layer — Postgres + Redis only.
+#
+# The 12 platform apps are NOT containerised here on purpose: locally they run
+# as `pnpm dev` processes (hot reload, and the dev panel on :8090 supervises
+# them). Only the stateful pieces belong in Docker, and only these two.
+# `--profile full` is reserved for a future whole-stack local run against the
+# CI-built images; it does not exist yet.
+#
+# Naming follows the convention the sibling product repos already use, so every
+# stack on this machine reads the same way (`docker ps` currently shows
+# vx-atlas-*-dev, vx-runos-*-dev, vx-arda-*-dev):
+#   vx-<stack>-<engine>-db-<env>   containers
+#   <stack>                        compose project + network prefix
+#   db / redis                     compose SERVICE names = network aliases —
+#                                  short and stable, so renaming a container
+#                                  never breaks a DATABASE_URL.
+#
+# `platform` is the L0 stack identifier, NOT a product code: product_100 §1 and
+# ADR-12 D6 both fix "L0 vxture 不作 product code", so the database keeps its
+# production name (platform_main) rather than taking the product-shaped
+# vx_<code>_db form. See 140-repo-governance-standard.md §4.
+#
+# Usage:  pnpm db:local:up   (or: docker compose -f deploy/dev/compose.dev.yml up -d)
+name: ${COMPOSE_PROJECT_NAME:-platform}
+
+services:
+  db:
+    # Same tag AND digest as production (deploy/compose.platform.yml) — a local
+    # database that is a different Postgres build from production is a local
+    # database that can prove nothing about production.
+    image: postgres:18-alpine@sha256:96d56f7f57c6aacd1fcb908bc83b345ec5f83231ee486dd66a1baadce274db88
+    container_name: vx-platform-postgres-db-${DEPLOY_ENV:-dev}
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-vxture}
+      POSTGRES_DB: ${POSTGRES_DB:-platform_main}
+      # Dev-only default. Production takes the password from a docker secret
+      # file; nothing here is ever used outside this machine.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-localdev}
+    ports:
+      # 5433 on the host, not 5432: this machine already has the atlas dev
+      # stack's socat forwarder bound to 127.0.0.1:5432.
+      - "${POSTGRES_PUBLISH_PORT:-5433}:5432"
+    volumes:
+      # postgres 18+ convention: mount the PARENT dir, data lives in a versioned
+      # subdirectory (lets pg_upgrade --link work across major versions).
+      # Mounting .../data directly is the pre-18 layout and the 18 entrypoint
+      # refuses to start on it.
+      - ./data/db:/var/lib/postgresql
+      # DDL + seed + verify SQL, so `pnpm db:local:ddl` can run psql INSIDE the
+      # container — there is no psql client on a Windows dev host.
+      - ../database:/database:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-vxture} -d ${POSTGRES_DB:-platform_main}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks: [appnet]
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine@sha256:09160599abd229764c0fb44cb6be640294e1d360a54b19985ab4843dcf2d90f1
+    container_name: vx-platform-redis-db-${DEPLOY_ENV:-dev}
+    # No requirepass locally (production sets one from a docker secret): the
+    # local REDIS_URL in .env.local is passwordless, and a password that lives
+    # in two places drifts. Nothing is published beyond localhost.
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PUBLISH_PORT:-6379}:6379"
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks: [appnet]
+    restart: unless-stopped
+
+networks:
+  appnet:
+    name: ${COMPOSE_PROJECT_NAME:-platform}-net

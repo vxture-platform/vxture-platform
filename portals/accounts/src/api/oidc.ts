@@ -9,7 +9,7 @@
  * returns the RP redirect carrying the authorization code.
  */
 const OIDC_API_BASE =
-  process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3090";
+  process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3081";
 
 /**
  * The parked login_challenge is gone (expired / already consumed / never

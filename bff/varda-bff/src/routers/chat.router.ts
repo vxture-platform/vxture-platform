@@ -9,7 +9,7 @@
  *   X-Varda-Context Header，透传给 agent-server/varda，并将 SSE 流式响应
  *   原样回传给前端，不缓冲、不解析内容（spec §6.3）。
  *
- *   目标地址由环境变量 VARDA_SERVER_INTERNAL_URL 控制（默认 http://localhost:3081）。
+ *   目标地址由环境变量 VARDA_SERVER_INTERNAL_URL 控制（默认 http://localhost:3091）。
  *
  * @author AI-Generated
  * @date 2026-04-30

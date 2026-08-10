@@ -63,7 +63,7 @@ function makeSigner(kid = KID): Signer {
 function makeVerifier(): S2sTokenVerifier {
   const config = {
     auth: { OIDC_ISSUER: ISSUER },
-    platform: { AUTH_BFF_URL: "http://vx-auth-bff:3061" },
+    platform: { AUTH_BFF_URL: "http://vx-auth-bff:3081" },
   } as unknown as VxConfigService;
   return new S2sTokenVerifier(config);
 }

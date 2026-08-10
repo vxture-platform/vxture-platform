@@ -273,7 +273,7 @@ admin-bff 通过 `reporting_ro`（只读）或 `DATABASE_URL`（读写）连接�
 ```
 前端 POST /api/auth/login (admin-bff)
   → admin-bff: 限速 → 验证码 → DB 密码校验
-  → admin-bff: fetch POST http://auth-bff:3090/auth/internal/sign
+  → admin-bff: fetch POST http://auth-bff:3081/auth/internal/sign
       Header: x-vxture-internal-auth: <INTERNAL_TOKEN>
       Body: { sub, email, username, displayName, role, roleLabel, permissions, source: 'admin' }
   → auth-bff: 签发 JWT → Set-Cookie: vx_admin_access_token
@@ -385,7 +385,7 @@ PostgreSQL: vxturestudio_platform_main
 | --------------------------- | ---------------------------------------------------------- |
 | `DATABASE_URL`              | 主库读写连接（RW Pool + Prisma migrations）                |
 | `REPORTING_RO_DATABASE_URL` | 只读副本（RO Pool，未设置时降级用 DATABASE_URL）           |
-| `AUTH_BFF_URL`              | auth-bff 地址，默认 `http://localhost:3090`                |
+| `AUTH_BFF_URL`              | auth-bff 地址，默认 `http://localhost:3081`                |
 | `AUTH_INTERNAL_TOKEN`       | 内部服务鉴权 token，生产环境必填                           |
 | `MODEL_PLATFORM_URL`        | Model Platform 地址（admin-bff model-platform 路由透传用） |
 

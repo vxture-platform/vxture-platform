@@ -91,7 +91,7 @@ const nextConfig = {
     CUSTOM_API_URL:
       process.env.NEXT_PUBLIC_WEBSITE_BFF_URL ||
       process.env.NEXT_PUBLIC_API_URL ||
-      "http://localhost:3011",
+      "http://localhost:3001",
     NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY:
       process.env.NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY ?? "",
   },

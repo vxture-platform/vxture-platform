@@ -8,7 +8,7 @@
 
 ## 1. 接入总则：一种机制，两种部署模式
 
-所有应用都是 IdP（issuer `https://accounts.vxture.com`，dev `http://localhost:3090`）的 **OIDC 授权码 + PKCE(S256) RP**，RS256 验签，**token 只在 app 后端（app-bff）服务端流转，浏览器只持不透明的 RP 会话 cookie**。登录对两种模式**机制相同**——顶级整页跳转到 IdP `/oidc/authorize`，**禁 iframe / XHR 静默授权**；差异只在**域、cookie 作用域、登出依赖**：
+所有应用都是 IdP（issuer `https://accounts.vxture.com`，dev `http://localhost:3081`）的 **OIDC 授权码 + PKCE(S256) RP**，RS256 验签，**token 只在 app 后端（app-bff）服务端流转，浏览器只持不透明的 RP 会话 cookie**。登录对两种模式**机制相同**——顶级整页跳转到 IdP `/oidc/authorize`，**禁 iframe / XHR 静默授权**；差异只在**域、cookie 作用域、登出依赖**：
 
 | 维度              | 模式 A：跨子域（`*.vxture.com`）                           | 模式 B：跨域（独立注册域）                                |
 | ----------------- | ---------------------------------------------------------- | --------------------------------------------------------- |
@@ -160,7 +160,7 @@ IdP 发 `POST {back_channel_logout_uri}`，`application/x-www-form-urlencoded`�
 
 | 变量                                    | 说明                                                                           |
 | --------------------------------------- | ------------------------------------------------------------------------------ |
-| `OIDC_ISSUER`                           | `https://accounts.vxture.com`（dev `http://localhost:3090`）                   |
+| `OIDC_ISSUER`                           | `https://accounts.vxture.com`（dev `http://localhost:3081`）                   |
 | `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | 平台登记派发（secret 经 secret manager，不入库不入前端）                       |
 | `OIDC_REDIRECT_URI`                     | app 的 `/auth/callback`（须 = 登记白名单）                                     |
 | `OIDC_SCOPES`                           | 如 `openid profile ruyin`                                                      |

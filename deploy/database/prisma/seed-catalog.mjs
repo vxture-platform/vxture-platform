@@ -201,21 +201,21 @@ export async function seedCatalog(client) {
 
   const B = {
     website:  process.env.WEBSITE_BASE_URL  || 'http://localhost:3000',
-    console:  process.env.CONSOLE_BASE_URL  || 'http://localhost:3001',
-    admin:    process.env.ADMIN_BASE_URL    || 'http://localhost:3002',
+    console:  process.env.CONSOLE_BASE_URL  || 'http://localhost:3020',
+    admin:    process.env.ADMIN_BASE_URL    || 'http://localhost:3030',
     // ruyin.ai — platform-level cross-domain RP; no beta variant (prod only).
     // See docs/design/identity-platform-rp-integration.md §11.
-    ruyin:    process.env.RUYIN_BASE_URL    || 'http://localhost:3080',
+    ruyin:    process.env.RUYIN_BASE_URL    || 'http://localhost:3900',
     // New saas apps — prod + optional beta
-    runos:    process.env.RUNOS_BASE_URL     || 'http://localhost:3081',
-    nocus:    process.env.NOCUS_BASE_URL    || 'http://localhost:3082',
-    atlas:    process.env.ATLAS_BASE_URL    || 'http://localhost:3083',
-    ontos:    process.env.ONTOS_BASE_URL    || 'http://localhost:3084',
-    raven:    process.env.RAVEN_BASE_URL    || 'http://localhost:3085',
-    anlan:    process.env.ANLAN_BASE_URL    || 'http://localhost:3086',
-    forge:    process.env.FORGE_BASE_URL    || 'http://localhost:3087',
-    xuanzhen: process.env.XUANZHEN_BASE_URL || 'http://localhost:3088',
-    arda:     process.env.ARDA_BASE_URL     || 'http://localhost:3089',
+    runos:    process.env.RUNOS_BASE_URL     || 'http://localhost:3120',
+    nocus:    process.env.NOCUS_BASE_URL    || 'http://localhost:3902',
+    atlas:    process.env.ATLAS_BASE_URL    || 'http://localhost:3100',
+    ontos:    process.env.ONTOS_BASE_URL    || 'http://localhost:3110',
+    raven:    process.env.RAVEN_BASE_URL    || 'http://localhost:4010',
+    anlan:    process.env.ANLAN_BASE_URL    || 'http://localhost:4020',
+    forge:    process.env.FORGE_BASE_URL    || 'http://localhost:4030',
+    xuanzhen: process.env.XUANZHEN_BASE_URL || 'http://localhost:4040',
+    arda:     process.env.ARDA_BASE_URL     || 'http://localhost:3230',
   };
   const betaB = {
     runos:    process.env.RUNOS_BETA_BASE_URL     || null,
@@ -231,7 +231,7 @@ export async function seedCatalog(client) {
 
   // Unified post-logout surface (accounts). In prod the issuer IS the accounts
   // origin; the IdP validates post_logout_redirect_uri (origin+path) against this.
-  const accountsBase = process.env.ACCOUNTS_BASE_URL || 'http://localhost:3040';
+  const accountsBase = process.env.ACCOUNTS_BASE_URL || 'http://localhost:3080';
   const postLogout = `${accountsBase}/logout`;
 
   const oidcClients = [

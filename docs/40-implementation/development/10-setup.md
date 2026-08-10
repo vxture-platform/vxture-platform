@@ -1,177 +1,143 @@
 # 本地开发环境启动指南
 
-> 更新：2026-05-14
+> 更新：2026-08-10（上一版 2026-05-14 已失效：它指向不存在的 `docker/dev.compose.yml`、用 prisma migrate 建库、端口是废止的 3NNX 一套）
 
 ---
 
 ## 前置条件
 
-| 工具           | 版本要求 | 说明                    |
-| -------------- | -------- | ----------------------- |
-| Node.js        | ≥ 22.x   | 推荐通过 nvm 管理       |
-| pnpm           | ≥ 9.x    | `npm install -g pnpm`   |
-| Docker Desktop | ≥ 4.x    | 运行 PostgreSQL + Redis |
-| Git            | ≥ 2.40   |                         |
+| 工具           | 版本要求                 | 说明                                  |
+| -------------- | ------------------------ | ------------------------------------- |
+| Node.js        | 见 `.node-version`       | 推荐 nvm 管理                         |
+| pnpm           | 见 `packageManager` 字段 | `npm install -g pnpm`                 |
+| Docker Desktop | ≥ 4.x                    | 只跑 PostgreSQL + Redis，应用不进容器 |
+| Git            | ≥ 2.40                   |                                       |
 
-可选：
-
-- **Tailscale**：连接到 VXTURE_DEPLOY_HOST/02 节点（远程调试用）
-- **VS Code**：推荐扩展 ESLint、Prisma、TypeScript
+不需要 psql 客户端：所有 SQL 都在 db 容器内执行。
 
 ---
 
 ## 一次性初始化
 
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/vxture/vxture.git
-cd vxture
-
-# 2. 安装所有依赖（pnpm workspace 自动链接本地包）
-pnpm install
-
-# 3. 启动基础设施（PostgreSQL + Redis）
-docker compose -f docker/dev.compose.yml up -d
-
-# 4. 配置环境变量（从模板复制，按需填写）
-cp .env.example .env.local
-
-# 5. 生成 Prisma Client
-pnpm -F @vxture/core-database db:generate
-
-# 6. 运行数据库迁移（创建表结构）
-pnpm -F @vxture/core-database db:migrate:dev
+pnpm install                      # 1. 依赖（pnpm workspace 自动链接本地包）
+cp .env.example .env.local        # 2. 环境变量，按需填
+pnpm db:local:all                 # 3. 起库 + 建表 + seed + 校验（见下）
 ```
+
+`db:local:all` = `up` → `ddl --reset` → `secrets` → `seed` → `verify`，每步也可以单独跑：
+
+| 命令                    | 做什么                                                                             |
+| ----------------------- | ---------------------------------------------------------------------------------- |
+| `pnpm db:local:up`      | 起 `vx-platform-postgres-db-dev`(5433) + `vx-platform-redis-db-dev`(6379)          |
+| `pnpm db:local:ddl`     | 按文件名顺序 apply `deploy/database/ddl/*.sql`（**与生产同一套 DDL**）+ 打基线指纹 |
+| `pnpm db:local:reset`   | 先 DROP 19 个 schema 再 apply（本地专用，数据全丢，需 `CONFIRM_RESET=yes`）        |
+| `pnpm db:local:secrets` | 生成本地 OIDC client secret + bcrypt hash 写进 `.env.local`（见下）                |
+| `pnpm db:local:seed`    | catalog + sample seed（与生产同一份 `deploy/database/seed/`）                      |
+| `pnpm db:local:verify`  | 跑 `baseline-assertions.sql`——**与生产同一份断言，本地应当全绿**                   |
+| `pnpm db:local:status`  | 容器状态 + schema 计数                                                             |
+| `pnpm db:local:down`    | 停容器（数据留在 `deploy/dev/data/`，已 gitignore）                                |
+
+**`secrets` 这步不能跳**：四个门户是四个 confidential OIDC client，IdP 要用 `client_secret_hash` 校验换票。没有它，登录会在 token exchange 处以 `invalid_client` 失败——而现象是"登录跳回来就没了"，不会有任何一层报错。生成的明文按客户端分别落 `OIDC_CLIENT_SECRET_{WEBSITE,CONSOLE,ADMIN,OPERA,UMBRA}`：四个 RP 共用一个 `OIDC_CLIENT_SECRET` 变量的话，只有一个客户端能换票成功，另外三个静默失败。
+
+`verify` 跑的是生产那份基线断言（schema 集合、表数、DDL 指纹、seed 底线、super_admin 全授），**本地跑出来应当是 PASSED**；跑不过说明本地库确实和目标态不一致，不要当成"本地本来就这样"。
+
+**为什么不是 prisma migrate**：2026-07-02 的 B15 cutover 之后，平台库的唯一权威建库路径是 `deploy/database/ddl/`（clean-baseline 模型），生产就是这么建的。本地用另一条路径建出来的库，证明不了任何关于生产的事。Prisma 仍用于生成 client（`pnpm -F @vxture/core-database db:generate`），不再用于建表。
+
+---
+
+## 端口
+
+**本地端口 = 代码内默认值 = 生产容器内口**，一套数。权威 = [`10-port-allocation.md`](../ai/10-port-allocation.md)。
+
+| 面      | UI   | BFF              | 面            | UI          | BFF                    |
+| ------- | ---- | ---------------- | ------------- | ----------- | ---------------------- |
+| website | 3000 | website-bff 3001 | opera         | 3040        | opera-bff 3041         |
+| console | 3020 | console-bff 3021 | accounts(IdP) | 3080        | auth-bff 3081          |
+| admin   | 3030 | admin-bff 3031   | varda(非面)   | studio 3092 | bff 3090 / server 3091 |
+
+边缘：`gateway-bff 8000`、`platform-api 8080`、`dev-panel 8090`。
+
+同机还跑着兄弟产品的 dev 栈（atlas 3100 / runos 3120 / arda 3230），端口互不重叠——这正是 2026-08-10 重排要解决的问题（此前本地 varda 占 3120，和 runos 撞车）。
 
 ---
 
 ## 按工作类型启动服务
 
-不同工作内容需要启动的服务不同，**只启动你需要的**。
+最省事的方式是开发面板：`pnpm dev:panel`（:8090），它按 tier 顺序拉起服务并做健康探测。手动起也行，**只启动你需要的**：
 
-### 场景 A：修改 portals（website / admin / console）
-
-```bash
-# 必须运行
-pnpm -F @vxture/bff-auth dev          # port 3090
-pnpm -F @vxture/bff-gateway dev       # port 8000
-
-# 按需选一个 portal
-pnpm -F @vxture/website dev           # port 3010
-pnpm -F @vxture/admin dev             # port 3030
-pnpm -F @vxture/console dev           # port 3020
-
-# 对应的 BFF
-pnpm -F @vxture/bff-website dev       # port 3011
-pnpm -F @vxture/bff-console dev       # port 3021
-pnpm -F @vxture/bff-admin dev         # port 3031
-```
-
-### 场景 B：修改 Varda 功能
+### 场景 A：改门户（website / console / admin / opera）
 
 ```bash
-pnpm -F @vxture/bff-auth dev          # port 3090
-pnpm -F @vxture/bff-varda dev          # port 3121
-pnpm -F varda-server dev               # port 3122
-pnpm -F @vxture/bff-admin dev         # port 3031（Varda 宿主）
-pnpm -F @vxture/admin dev             # port 3030
+pnpm -F @vxture/bff-auth dev          # 3081，登录必需
+pnpm -F @vxture/bff-gateway dev       # 8000
+pnpm -F @vxture/accounts dev          # 3080，登录 UI，缺它登录页打不开
+
+pnpm -F @vxture/website dev           # 3000  + pnpm -F @vxture/bff-website dev  # 3001
+pnpm -F @vxture/console dev           # 3020  + pnpm -F @vxture/bff-console dev  # 3021
+pnpm -F @vxture/admin   dev           # 3030  + pnpm -F @vxture/bff-admin   dev  # 3031
+pnpm -F @vxture/opera   dev           # 3040  + pnpm -F @vxture/bff-opera   dev  # 3041
 ```
 
-### 场景 C：修改 auth / 认证流程
+### 场景 B：改 Varda
 
 ```bash
-pnpm -F @vxture/bff-auth dev          # port 3090
-# 无需其他服务，直接用 curl / Postman 测试接口
+pnpm -F @vxture/bff-auth dev          # 3081
+pnpm -F @vxture/bff-varda dev         # 3090
+pnpm -F @vxture/agent-server-varda dev # 3091
+pnpm -F @vxture/bff-admin dev         # 3031（Varda 宿主）+ pnpm -F @vxture/admin dev  # 3030
 ```
 
-### 场景 D：修改 Service 层 / Core 层
+### 场景 C：改 auth / 认证流程
 
 ```bash
-# 通常只需要单元测试，无需启动任何服务
-pnpm -F @vxture/service-iam test:watch
-pnpm -F @vxture/core-locale test:watch
+pnpm -F @vxture/bff-auth dev          # 3081，直接 curl / Postman 测
 ```
+
+### 场景 D：改 Service / Core 层
+
+通常只跑单测：`pnpm -F @vxture/service-iam test:watch`。
 
 ---
 
-## 环境变量说明
+## 环境变量
 
-`.env.local` 最小配置（本地开发）：
+`.env.local`（gitignore）从 `.env.example` 复制，关键几项：
 
 ```bash
-# 数据库（docker compose 默认值）
-DATABASE_URL=postgresql://vxture:vxture@localhost:5432/vxture_dev
+DATABASE_URL=postgresql://vxture:localdev@localhost:5433/platform_main
 REDIS_URL=redis://localhost:6379
-
-# JWT（本地随机值即可，不要与生产共用）
-JWT_SECRET=local-dev-jwt-secret-at-least-64-chars-long-xxxxxxxxxx
-JWT_REFRESH_SECRET=local-dev-refresh-secret-at-least-64-chars-long-xxxxxxxxxx
-JWT_ACCESS_EXPIRES_IN=8h
-JWT_REFRESH_EXPIRES_IN=30d
-
-# 内部服务鉴权
 AUTH_INTERNAL_TOKEN=local-dev-internal-token
-
-# Cookie 域（本地开发用 localhost）
 AUTH_COOKIE_DOMAIN=localhost
 ```
 
-OAuth（DingTalk / Feishu / WeChat Work）：本地开发不需要配置，登录时跳过第三方登录即可。
+库名 `platform_main` 与生产一致（`platform` 是 L0 stack 标识符，不是 product code，见 [`140-repo-governance-standard.md`](../../10-standards/140-repo-governance-standard.md) §4）。端口 5433 而非 5432：本机 atlas dev 栈的 forwarder 已经占了 127.0.0.1:5432。
+
+本地 RP 会话 cookie 必须用裸名（`RP_COOKIE_INSECURE=true`）——`__Host-` 前缀的 cookie 在明文 http 上会被浏览器静默丢弃，表现为"服务端登录成功、浏览器始终未登录"。dev-panel 已自动注入。
+
+第三方登录（钉钉 / 飞书）本地不必配。
 
 ---
 
 ## 常见问题
 
-**`pnpm install` 失败：**
+**端口冲突**：`netstat -ano | findstr :3081`（Windows）。先确认不是兄弟栈——`docker ps` 看 vx-atlas / vx-runos / vx-arda。
+
+**数据库连不上**：
 
 ```bash
-# 检查 pnpm 版本
-pnpm --version  # 需要 ≥ 9.x
-
-# 清除缓存重试
-pnpm store prune && pnpm install
+pnpm db:local:status
+docker logs vx-platform-postgres-db-dev
 ```
 
-**Prisma Client 未生成（`@prisma/client` 找不到类型）：**
+**Prisma Client 找不到类型**：`pnpm -F @vxture/core-database db:generate`。
 
-```bash
-pnpm -F @vxture/core-database db:generate
-```
-
-**端口冲突：**
-
-```bash
-# 查看占用端口的进程
-netstat -ano | findstr :3090   # Windows
-lsof -i :3090                  # macOS/Linux
-```
-
-**数据库连接失败：**
-
-```bash
-# 检查 docker 容器是否运行
-docker compose -f docker/dev.compose.yml ps
-docker compose -f docker/dev.compose.yml logs postgres
-```
+**库脏了**：`CONFIRM_RESET=yes pnpm db:local:reset && pnpm db:local:seed`。
 
 ---
 
 ## 开发工作流
 
-```
-修改代码（Next.js / NestJS 均支持热重载）
-    │
-    ▼
-类型检查（无需手动运行，IDE 实时提示）
-    │
-    ▼
-单元测试（pnpm -F <package> test:watch）
-    │
-    ▼
-提交前钩子（Husky）自动运行：ESLint + dep-cruiser 边界检查
-    │
-    ▼
-git commit（Conventional Commits 格式）
-```
+改代码（Next.js / NestJS 都热重载）→ IDE 实时类型检查 → `pnpm -F <package> test:watch` → 提交前 Husky 跑 ESLint + dep-cruiser 边界检查 → `git commit`（Conventional Commits）。
 
-提交格式参见 `docs/10-standards/git-workflow.md`。
+提交规范见 `docs/10-standards/` 下的 git 工作流文档。

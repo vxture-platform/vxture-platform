@@ -52,7 +52,7 @@ const nextConfig = {
     // Public base of the OIDC API (prod: accounts.vxture.com, same-origin;
     // dev: auth-bff directly). The login form POSTs to ${base}/oidc/authorize/login.
     NEXT_PUBLIC_OIDC_API_BASE:
-      process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3090",
+      process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3081",
     NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY:
       process.env.NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY ?? "",
     // operator surface reuses the ops/admin Turnstile (运营面)

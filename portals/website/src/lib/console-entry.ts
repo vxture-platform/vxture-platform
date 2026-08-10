@@ -25,7 +25,7 @@ const DEFAULT_CONSOLE_BASE_URL =
 const DEFAULT_WEBSITE_BASE_URL =
   process.env.NODE_ENV === "production"
     ? "https://vxture.com"
-    : "http://localhost:3010";
+    : "http://localhost:3000";
 
 const CONSOLE_BASE_URL = normalizeBaseUrl(
   process.env.NEXT_PUBLIC_CONSOLE_URL ?? DEFAULT_CONSOLE_BASE_URL,

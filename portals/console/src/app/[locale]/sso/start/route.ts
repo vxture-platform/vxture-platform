@@ -151,7 +151,7 @@ function authBffUrl(): string {
   const authBffUrl = (
     process.env.NEXT_PUBLIC_AUTH_BFF_URL ??
     process.env.NEXT_PUBLIC_API_URL ??
-    "http://localhost:3090"
+    "http://localhost:3081"
   ).replace(/\/+$/, "");
   const usesDirectAuthBff =
     Boolean(process.env.NEXT_PUBLIC_AUTH_BFF_URL?.trim()) ||

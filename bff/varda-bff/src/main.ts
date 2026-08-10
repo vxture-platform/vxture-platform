@@ -39,7 +39,7 @@ async function bootstrap() {
     origin: allowedOrigins.length > 0 ? allowedOrigins : true,
     credentials: true,
   });
-  const port = Number(process.env["VARDA_BFF_PORT"] ?? 3080);
+  const port = Number(process.env["VARDA_BFF_PORT"] ?? 3090);
   await app.listen(port);
 }
 

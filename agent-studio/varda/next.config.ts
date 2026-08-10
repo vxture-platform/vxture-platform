@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/varda/:path*",
-        destination: `${process.env["VARDA_BFF_DEV_URL"] ?? "http://localhost:3121"}/varda/:path*`,
+        destination: `${process.env["VARDA_BFF_DEV_URL"] ?? "http://localhost:3090"}/varda/:path*`,
       },
     ];
   },

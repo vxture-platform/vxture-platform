@@ -86,6 +86,20 @@ function checkFile(file) {
       }
     }
   }
+
+  // ── ④ `platform` 是 L0 stack 标识符，不是 product code ────────────────────
+  // product_100 §1 / ADR-12 D6 写死「L0 vxture 不作 product code」。但 `platform`
+  // 在仓里到处是合法标识符（容器前缀 vx-platform-*、镜像 platform_*、库
+  // platform_main、compose 项目名），所以「顺手也给它建个产品行」是个随时会发生
+  // 的错误——一旦落库，它就进了产品目录、entitlement 与 aud 值域，正是那条铁律
+  // 要挡的事，而且没有任何测试会失败。这里在 seed 侧就挡住。
+  const platformProductRe = /product_code\s*=\s*['"]platform['"]|code:\s*['"]platform['"]/g;
+  let pm;
+  while ((pm = platformProductRe.exec(content))) {
+    report(file, lineOf(content, pm.index),
+      '不得为 `platform` 建产品行：L0 平台本体不作 product code（product_100 §1 / ADR-12 D6）。' +
+      '`platform` 只是 stack 标识符（容器/镜像/库名前缀），见 140-repo-governance-standard §7');
+  }
 }
 
 const files = existsSync(SEED_DIR)

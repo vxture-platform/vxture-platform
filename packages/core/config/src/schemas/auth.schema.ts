@@ -49,7 +49,7 @@ export const authSchema = z.object({
 
   // ── OIDC IdP (P0; coexists with the HS256 path until P5) ──────────────────
   /** OIDC issuer — the public-facing auth origin used as the `iss` claim */
-  OIDC_ISSUER: z.string().default("http://localhost:3090"),
+  OIDC_ISSUER: z.string().default("http://localhost:3081"),
 
   /** Asymmetric signing algorithm for OIDC assets (id_token / access_token) */
   OIDC_ALGORITHM: z.enum(["RS256", "ES256"]).default("RS256"),

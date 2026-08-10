@@ -247,6 +247,15 @@ vacuum/analyze）。强套 db-init 的"每次人工审批"，实际后果是"半
 
 ## 7. 数据层（若仓库自带独立 DB）
 
+- **命名（2026-08-10 定，跨仓统一）**：容器 `vx-<stack>-<engine>-db-<env>`（如 `vx-runos-postgres-db-dev`）；
+  compose **服务名用短名**（`db` / `redis`）——它才是网络别名，`DATABASE_URL` 只认它，这样改容器名永远
+  不会断连接串；库名 `vx_<product_code>_db`（snake*case，第二个同引擎库用 `vx*<code>\_<purpose>\_db`）。
+  - **L0 平台本体是例外**：`platform` 是 **stack 标识符，不是 product code**（`product_100` §1 / ADR-12 D6
+    写死「L0 vxture 不作 product code」），所以库名沿用 `platform_main`，**不**套 `vx_<code>_db`——套了就
+    等于宣称 L0 是个产品。容器/镜像/网络前缀照用 `platform`（`vx-platform-*` / `platform_*`）。
+  - **护栏**：`check-seed-idempotency` 断言 seed 从不出现 `product_code = 'platform'` 的产品行。这条容易
+    错在"顺手"上：`platform` 在仓里到处是合法标识符，给它建个产品行不会有任何测试失败，但它一旦落库
+    就进了产品目录、entitlement 与 `aud` 值域。
 - **DDL 单一权威** = 手写 `deploy/database/ddl/*.sql`（`apply.sh` clean-baseline，非 prisma migrate）。
 - **值域权威** = `@vxture/shared`；guardrail 校 DDL CHECK == @shared（新增可写列/值须同步）。
 - **最小权限服务角色** + **列锁**（`98_column_locks`：REVOKE 整表 UPDATE + GRANT 可写列白名单，锚点列

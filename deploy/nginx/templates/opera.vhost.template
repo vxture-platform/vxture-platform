@@ -46,7 +46,7 @@ server {
     # ── auth_request 门（内部子请求,opera-bff 校验 RP 会话）──
     location = /__vx_auth {
         internal;
-        set $operabff vx-platform-opera-bff:3051;
+        set $operabff vx-platform-opera-bff:3041;
         proxy_pass              http://$operabff/auth/check;
         proxy_pass_request_body off;
         proxy_set_header        Content-Length "";
@@ -62,7 +62,7 @@ server {
 
     # ── RP 登录/回调/登出 —— 唯一匿名可达面 ──
     location /auth/ {
-        set $operabff vx-platform-opera-bff:3051;
+        set $operabff vx-platform-opera-bff:3041;
         proxy_pass         http://$operabff;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;

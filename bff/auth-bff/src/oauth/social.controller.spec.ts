@@ -25,7 +25,7 @@ function build(): Mocks {
   };
   const config = {
     platform: {
-      LOGIN_UI_BASE_URL: "http://localhost:3040",
+      LOGIN_UI_BASE_URL: "http://localhost:3080",
       COOKIE_DOMAIN_PLATFORM: null,
     },
   };

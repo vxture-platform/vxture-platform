@@ -197,7 +197,7 @@ export function buildPortalOAuthStartUrl({
   authBffUrl,
   apiUrl,
   apiPrefix,
-  fallbackAuthBffUrl = "http://localhost:3090",
+  fallbackAuthBffUrl = "http://localhost:3081",
 }: PortalOAuthStartOptions): string {
   const hasDirectAuthBff = Boolean(authBffUrl?.trim());
   const baseUrl = normalizeBaseUrl(authBffUrl ?? apiUrl, fallbackAuthBffUrl);

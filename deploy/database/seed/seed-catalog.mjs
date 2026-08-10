@@ -765,27 +765,34 @@ export async function seedCatalog(client) {
     return uris;
   }
 
+  // Local fallbacks are the SAME numbers as the port registry (2026-08-10):
+  // L0 faces 3000-3099 (docs/40-implementation/ai/10-port-allocation.md), L1
+  // 31xx, L2 32xx, L3 40xx (docs/50-deployment/13-infra-allocation-registry.md
+  // §3). They only apply when the env var is unset — production always sets it —
+  // but a local seed writes them into oidc_clients.redirect_uris, so a wrong
+  // fallback means a login that cannot come back. Layer-outside products get an
+  // inert 39xx placeholder: no local service exists, and 39xx belongs to no block.
   const B = {
     website: process.env.WEBSITE_BASE_URL || "http://localhost:3000",
-    console: process.env.CONSOLE_BASE_URL || "http://localhost:3001",
-    admin: process.env.ADMIN_BASE_URL || "http://localhost:3002",
+    console: process.env.CONSOLE_BASE_URL || "http://localhost:3020",
+    admin: process.env.ADMIN_BASE_URL || "http://localhost:3030",
     // Capability Console (OSS-side operator shell, product_250 M-4). The prod
     // hostname is repo-external by policy (hardening: placeholder-only) and
     // arrives via OPERA_BASE_URL runtime env.
-    opera: process.env.OPERA_BASE_URL || "http://localhost:3050",
+    opera: process.env.OPERA_BASE_URL || "http://localhost:3040",
     // ruyin = NEW client-side product surface (ruyin.vxture.com); the legacy
     // cross-domain RP at ruyin.ai is `umbra` (product_300 §2, U line).
-    ruyin: process.env.RUYIN_BASE_URL || "http://localhost:3080",
-    umbra: process.env.UMBRA_BASE_URL || "http://localhost:3082",
-    runos: process.env.RUNOS_BASE_URL || "http://localhost:3081",
-    atlas: process.env.ATLAS_BASE_URL || "http://localhost:3083",
-    ontos: process.env.ONTOS_BASE_URL || "http://localhost:3084",
-    raven: process.env.RAVEN_BASE_URL || "http://localhost:3085",
-    anlan: process.env.ANLAN_BASE_URL || "http://localhost:3086",
-    forge: process.env.FORGE_BASE_URL || "http://localhost:3087",
-    xuanzhen: process.env.XUANZHEN_BASE_URL || "http://localhost:3088",
-    arda: process.env.ARDA_BASE_URL || "http://localhost:3089",
-    karda: process.env.KARDA_BASE_URL || "http://localhost:3090",
+    ruyin: process.env.RUYIN_BASE_URL || "http://localhost:3900",
+    umbra: process.env.UMBRA_BASE_URL || "http://localhost:3901",
+    atlas: process.env.ATLAS_BASE_URL || "http://localhost:3100",
+    ontos: process.env.ONTOS_BASE_URL || "http://localhost:3110",
+    runos: process.env.RUNOS_BASE_URL || "http://localhost:3120",
+    arda: process.env.ARDA_BASE_URL || "http://localhost:3230",
+    karda: process.env.KARDA_BASE_URL || "http://localhost:3240",
+    raven: process.env.RAVEN_BASE_URL || "http://localhost:4010",
+    anlan: process.env.ANLAN_BASE_URL || "http://localhost:4020",
+    forge: process.env.FORGE_BASE_URL || "http://localhost:4030",
+    xuanzhen: process.env.XUANZHEN_BASE_URL || "http://localhost:4040",
   };
   const betaB = {
     ruyin: process.env.RUYIN_BETA_BASE_URL || null,
@@ -801,7 +808,7 @@ export async function seedCatalog(client) {
     karda: process.env.KARDA_BETA_BASE_URL || null,
   };
 
-  const accountsBase = process.env.ACCOUNTS_BASE_URL || "http://localhost:3040";
+  const accountsBase = process.env.ACCOUNTS_BASE_URL || "http://localhost:3080";
   const postLogout = `${accountsBase}/logout`;
 
   // U-line fail-fast (product_300 §2.4): RUYIN_BASE_URL changed meaning — it now

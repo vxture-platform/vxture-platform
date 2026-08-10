@@ -19,7 +19,7 @@
 import { useEffect, useState } from "react";
 
 const OIDC_API_BASE =
-  process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3090";
+  process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3081";
 
 /** Clients that own the public marketing surface → land on the website home. */
 const HOME_CLIENTS = new Set(["website", "console"]);

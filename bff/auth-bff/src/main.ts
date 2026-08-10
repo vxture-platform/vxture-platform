@@ -47,7 +47,7 @@ async function bootstrap() {
   // CORS for credentialed browser calls (the accounts login UI POSTs
   // /oidc/authorize/login with credentials). Prod: accounts is same-origin with
   // the OIDC endpoints (accounts.vxture.com via reverse proxy) so this is moot;
-  // dev: accounts (:3040) → auth-bff (:3090) is cross-port and needs it. Mirrors
+  // dev: accounts (:3080) → auth-bff (:3081) is cross-port and needs it. Mirrors
   // the other BFFs: explicit ALLOWED_ORIGIN allowlist, else reflect (dev).
   const allowedOrigins =
     process.env["ALLOWED_ORIGIN"]
@@ -59,7 +59,7 @@ async function bootstrap() {
     credentials: true,
   });
 
-  const port = Number(process.env.AUTH_BFF_PORT ?? 3061);
+  const port = Number(process.env.AUTH_BFF_PORT ?? 3081);
   await app.listen(port);
   Logger.log(`✅ auth-bff listening on http://localhost:${port}`, "Bootstrap");
 }

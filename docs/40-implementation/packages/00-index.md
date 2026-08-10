@@ -64,7 +64,7 @@
 - **middleware 执行顺序**：`auth` → `tenant` → `router`（console-bff 额外加 `permission`）
 - **错误隔离**：每个 router 独立 try/catch，不冒泡
 - **响应投影**：做字段投影，不透传后端原始结构
-- **auth-bff 调用路径**：平台 BFF（VXTURE_DEPLOY_HOST）容器直连 `http://vx-auth-bff:3090`；外部业务仓库如需接入平台认证，只能通过 HTTP/SSO 契约调用 auth-bff，不引用本仓内部包
+- **auth-bff 调用路径**：平台 BFF（VXTURE_DEPLOY_HOST）容器直连 `http://vx-auth-bff:3081`；外部业务仓库如需接入平台认证，只能通过 HTTP/SSO 契约调用 auth-bff，不引用本仓内部包
 - **禁止**：直接签发 JWT / 跨 BFF 代码引用 / 引入 `@vxture/model-runtime-client` / BFF 层实现业务逻辑
 
 ## Service 层（Domain）→ [`services/index.md`](./services/00-index.md)

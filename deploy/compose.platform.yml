@@ -134,11 +134,11 @@ services:
     networks: [vxture-prod]
     environment:
       NODE_ENV: production
-      PORT: "3040"
+      PORT: "3030"
       NEXT_PUBLIC_API_URL: https://api.vxture.com
       NODE_OPTIONS: --max-old-space-size=192
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3040/api/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3030/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -156,10 +156,10 @@ services:
     networks: [vxture-prod]
     environment:
       NODE_ENV: production
-      PORT: "3050"
+      PORT: "3040"
       NODE_OPTIONS: --max-old-space-size=144
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3050/api/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3040/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -176,12 +176,12 @@ services:
     networks: [vxture-prod]
     environment:
       NODE_ENV: production
-      PORT: "3060"
+      PORT: "3080"
       NEXT_PUBLIC_OIDC_API_BASE: https://accounts.vxture.com
       NEXT_PUBLIC_WEBSITE_URL: https://vxture.com
       NODE_OPTIONS: --max-old-space-size=192
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3060/api/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3080/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -197,12 +197,12 @@ services:
     memswap_limit: 192m
     networks: [vxture-prod]
     ports:
-      - "${VX_WORKER01_TAILNET_IP:?set it in runtime/.env}:3061:3061" # 绑定 Tailscale 接口，仅 Tailscale 对端可达（原3090，2026-07-24 L0端口迁移）
+      - "${VX_WORKER01_TAILNET_IP:?set it in runtime/.env}:8081:3081" # 绑定 Tailscale 接口，仅 Tailscale 对端可达。宿主口进 80xx 边缘带（8080=platform-api S2S，8081=auth-bff S2S），容器内口跟 L0 map（3081）——跨仓契约从此只认 80xx，内部重排不再波及产品仓（原 3090 → 3061 → 本次）
     # Overrides any NODE_OPTIONS from env_file (inline wins). Owner: confirm no
     # host .env.* already sets NODE_OPTIONS flags that would be clobbered.
     environment:
       NODE_OPTIONS: --max-old-space-size=144
-      AUTH_BFF_PORT: "3061"
+      AUTH_BFF_PORT: "3081"
     env_file:
       [
         /srv/vxture/runtime/secrets/platform.env,
@@ -216,7 +216,7 @@ services:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3061/healthz"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3081/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -308,7 +308,7 @@ services:
     networks: [vxture-prod]
     environment:
       NODE_OPTIONS: --max-old-space-size=144
-      ADMIN_BFF_PORT: "3043"
+      ADMIN_BFF_PORT: "3031"
     env_file:
       [
         /srv/vxture/runtime/secrets/platform.env,
@@ -321,7 +321,7 @@ services:
       redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3043/healthz"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3031/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -338,7 +338,7 @@ services:
     networks: [vxture-prod]
     environment:
       NODE_OPTIONS: --max-old-space-size=120
-      OPERA_BFF_PORT: "3051"
+      OPERA_BFF_PORT: "3041"
     env_file:
       [
         /srv/vxture/runtime/secrets/platform.env,
@@ -348,7 +348,7 @@ services:
       redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3051/healthz"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3041/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -357,7 +357,7 @@ services:
   # Product-facing S2S host (product_310 D13): C2 entitlements/visible-set +
   # C3 consume/gauge + commerce jobs (provisioning dispatch, expiry sweeps).
   # No host ports — products reach it only through the nginx internal alias
-  # (compose.nginx.yml tailnet-bound listener → vx-platform-api:3041).
+  # (compose.nginx.yml tailnet-bound listener → vx-platform-api:8080).
   platform-api:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_bff-platform-api:${VX_IMAGE_TAG:-latest}
     container_name: vx-platform-api
@@ -378,7 +378,7 @@ services:
       redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3041/healthz"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3

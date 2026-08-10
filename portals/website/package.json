@@ -5,9 +5,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --turbo -p 3010",
+    "dev": "next dev --turbo -p 3000",
     "build": "next build",
-    "start": "next start -p 3010",
+    "start": "next start -p 3000",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
     "clean": "rimraf .next"

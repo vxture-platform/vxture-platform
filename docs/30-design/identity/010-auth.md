@@ -157,7 +157,7 @@ DINGTALK_REDIRECT_URI=https://api.vxture.com/auth-api/auth/oauth/dingtalk/callba
 
 ```
 生产：https://api.vxture.com/auth-api/auth/oauth/dingtalk/callback
-本地：http://localhost:3090/auth/oauth/dingtalk/callback
+本地：http://localhost:3081/auth/oauth/dingtalk/callback
 ```
 
 钉钉开放平台配置的回调地址必须与 `DINGTALK_REDIRECT_URI` 完全一致。

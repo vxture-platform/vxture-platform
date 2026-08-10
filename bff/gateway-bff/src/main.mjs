@@ -8,7 +8,7 @@ const ADMIN_BFF_ORIGIN = (process.env.ADMIN_BFF_ORIGIN ?? 'http://localhost:3043
 const AUTH_BFF_ORIGIN = (process.env.AUTH_BFF_ORIGIN ?? 'http://localhost:3061').replace(/\/+$/, '');
 const ALLOWED_ORIGINS = new Set(
   (process.env.GATEWAY_ALLOWED_ORIGINS ??
-    'http://localhost:3010,http://localhost:3020,http://localhost:3030,http://127.0.0.1:3010,http://127.0.0.1:3020,http://127.0.0.1:3030')
+    'http://localhost:3000,http://localhost:3020,http://localhost:3030,http://127.0.0.1:3000,http://127.0.0.1:3020,http://127.0.0.1:3030')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean),

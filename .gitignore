@@ -220,4 +220,7 @@ docs/architecture/package-architecture.html
 packages/design/design-system-gallery/
 /workplans/mgmt-plane-contract-capability-console.md
 
+# Local dev data layer (deploy/dev/compose.dev.yml bind-mounts these)
+deploy/dev/data/
+
 # End of additional ignores
