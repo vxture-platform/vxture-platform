@@ -304,11 +304,13 @@ jobs:
             docker compose -f compose.varda.yml pull varda-server varda-bff
             docker compose -f compose.varda.yml up -d
 
-            # 健康校验：varda-bff 3080/health（runbook §8；2026-07-24 随 L0 端口迁移
-            # 由 3121 改为 3080，与 compose.varda.yml 的实际监听口一致）。
+            # 健康校验：varda-bff 3090/health（端口登记表 L0 varda 段）。
+            # 历史：3121 →（07-24 误定）3080 → 3090。3080 那次定错了对象——它
+            # 后来归了 accounts；varda-20260818.2 实测容器四健而本步探 3080 失败，
+            # 把一次成功的部署标成 failure。
             echo "waiting for varda-bff health ..."
             for i in $(seq 1 30); do
-              code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3080/health || true)"
+              code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3090/health || true)"
               [ "$code" = "200" ] && { echo "varda-bff healthy (200)"; exit 0; }
               echo "  varda-bff not ready ($code) [$i/30]"; sleep 5
             done
