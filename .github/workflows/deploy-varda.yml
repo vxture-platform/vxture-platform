@@ -131,6 +131,11 @@ jobs:
           build-args: ${{ matrix.build-args }}
           platforms: linux/amd64
           push: true
+          # 阿里云个人版 registry 拒收 provenance/SBOM 附属清单
+          # （`unknown manifest class for application/vnd.oci.empty.v1+json`）。
+          # docker-build.yml 修过同一个病（varda-20260818.1 实测本工作流也中）。
+          provenance: false
+          sbom: false
           tags: ${{ steps.image-tags.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.name }}
@@ -145,6 +150,8 @@ jobs:
           build-args: ${{ matrix.build-args }}
           platforms: linux/amd64
           push: true
+          provenance: false
+          sbom: false
           tags: ${{ steps.image-tags.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.name }}
