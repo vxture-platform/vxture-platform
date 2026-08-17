@@ -91,11 +91,31 @@ while IFS='|' read -r file old new; do
     missing=$((missing + 1))
     continue
   fi
-  if grep -qxF "$old" "$path"; then
+  # Whole-line match (keeps a value like :30610 from being touched), but the
+  # comparison must ignore a trailing CR: these runtime files are hand-maintained
+  # and at least one of them on worker-01 is CRLF, so the real line 16 reads
+  # `PLATFORM_API_PORT=3041\r` and `grep -xF 'PLATFORM_API_PORT=3041'` does not
+  # match it. That produced `[warn] neither old nor new value present`, the port
+  # stayed 3041, the healthcheck kept probing 8080, and platform-api came up
+  # unhealthy — exactly the failure this script's header says it exists to prevent.
+  #
+  # Note the neighbouring inline `sed 's/vx-website-bff/…/g'` in deploy.yml is
+  # immune to the same file: substring substitution never sees the line end.
+  # **Same file, two matching strictnesses — one passes, one silently doesn't.**
+  has_line() { # $1 = literal line, $2 = path — CR-tolerant whole-line match
+    awk -v want="$1" '{ sub(/\r$/, ""); if ($0 == want) { found = 1; exit } }
+                      END { exit found ? 0 : 1 }' "$2"
+  }
+  if has_line "$old" "$path"; then
     if [ "$APPLY" = "1" ]; then
-      # Whole-line match keeps a value like :30610 from being touched.
       tmp="$(mktemp)"
-      awk -v o="$old" -v n="$new" '$0 == o { print n; next } { print }' "$path" >"$tmp"
+      # 保留该行原本的行尾风格：整份文件是 CRLF 时只改这一行为 LF，会在同一个
+      # 文件里混出两种行尾，下一个读它的工具未必宽容。
+      awk -v o="$old" -v n="$new" '
+        { line = $0; cr = ""
+          if (line ~ /\r$/) { cr = "\r"; sub(/\r$/, "", line) }
+          if (line == o) { print n cr; next }
+          print $0 }' "$path" >"$tmp"
       cat "$tmp" >"$path" # preserve mode/ownership of the original
       rm -f "$tmp"
       echo "  [ok] $file: $old → $new"
@@ -103,7 +123,7 @@ while IFS='|' read -r file old new; do
       echo "  [would] $file: $old → $new"
     fi
     changed=$((changed + 1))
-  elif grep -qxF "$new" "$path"; then
+  elif has_line "$new" "$path"; then
     echo "  [skip] $file: already on $new"
   else
     echo "  [warn] $file: neither old nor new value present for ${old%%=*} — check by hand"
