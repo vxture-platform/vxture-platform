@@ -69,9 +69,21 @@ ENV NEXT_PUBLIC_CONSOLE_BFF_URL=${NEXT_PUBLIC_CONSOLE_BFF_URL}
 ENV NEXT_PUBLIC_WEBSITE_BFF_URL=${NEXT_PUBLIC_WEBSITE_BFF_URL}
 ENV NEXT_PUBLIC_ADMIN_BFF_URL=${NEXT_PUBLIC_ADMIN_BFF_URL}
 
-# Build only the workspace packages that this portal actually depends on
-# (pnpm ...^ = recursive deps of PACKAGE_FILTER, excluding PACKAGE_FILTER itself)
-RUN pnpm --filter "...^${PACKAGE_FILTER}" --if-present build
+# Build only the workspace packages that this portal actually depends on.
+#
+# 选择器方向很容易写反，而写反了**不报错**——pnpm 对空集只说一句 "No projects matched
+# the filters" 然后成功退出，于是这一步静默什么都不做：
+#
+#   <pkg>^...   该包的**被依赖方**（它的依赖），排除自身   ← 要的是这个
+#   ...^<pkg>   该包的**依赖方**（依赖它的），排除自身     ← 门户没有依赖方 = 空集
+#
+# 这里原来写的是后者，配着一句方向相反的注释。空转一直存在，只是三包拆分之前没有任何
+# 依赖需要预构建（design-system 由门户 alias 到源码消费），所以看不出来；`design-ui`
+# 与 `design-tokens` 拆出去、经 `exports` 走 dist 之后，这一步的缺席才变成
+# `Module not found: Can't resolve '@vxture/design-ui'`。
+#
+# `.dockerignore` 排除 `**/dist`，所以 dist 只可能来自这一步——它一旦空转就必然缺。
+RUN pnpm --filter "${PACKAGE_FILTER}^..." --if-present build
 
 # B7: Next 增量编译缓存（.next/cache）走 cache mount，按 portal 独立 id，避免冷编译。
 # 仅 .next/cache 被挂载；.next/standalone 与 .next/static 仍落在层内供运行层 COPY。

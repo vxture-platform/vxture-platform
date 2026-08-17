@@ -286,6 +286,42 @@ buildx 把 provenance 与 SBOM 作为**独立 manifest** 一起推，其 config 
 `actor_console` 的记录，列不存在则 insert 失败，而**审计写在业务写的同一个事务里**，
 业务写跟着回滚——表现是所有写操作都失败。
 
+#### 第一次打 tag 撞出的第三个基础设施缺陷：一步静默空转的依赖预构建
+
+`v0.20.23` 的 `docker-build` 里五个前端全线失败（BFF 全过）：
+
+```
+Module not found: Can't resolve '@vxture/design-ui'
+  ../../packages/design/design-system/src/components/auth/AuthLogin.tsx
+```
+
+`Dockerfile.nextjs` 有一步预构建门户的工作区依赖，写的是：
+
+```dockerfile
+RUN pnpm --filter "...^${PACKAGE_FILTER}" --if-present build   # 空集
+```
+
+**选择器方向写反了，而写反不报错**——pnpm 对空集只说一句 `No projects matched the
+filters` 然后成功退出。实测：
+
+| 写法                | 匹配  |
+| ------------------- | ----- |
+| `...^@vxture/opera` | **0** |
+| `@vxture/opera^...` | **5** |
+
+`^` 在左边是「依赖方」（谁依赖它），门户没有依赖方，所以是空集；`^` 在右边才是
+「被依赖方」。旁边那行注释写的正是后者的意思，代码用的是前者。
+
+**这一步一直在空转，只是以前看不出来。** 三包拆分之前，`design-system` 由门户
+alias 到源码消费，没有任何依赖需要 dist；拆分后 `design-ui` / `design-tokens` 经
+`exports` 走 `dist/`，而 `.dockerignore` 排除 `**/dist`——dist 只可能来自这一步。
+它一空转，dist 就必然缺。
+
+**为什么本地与 CI 的 `build` 都是绿的**：两者都在完整 workspace 上装完再构建，dist
+早就在了。只有 Docker 那条「干净上下文 + 排除 dist」的路径会暴露它。这也是本次发布
+链上第三个「基础设施缺陷伪装成应用故障」的例子，前两个是 registry 拒收 provenance
+与 env 审计落后于主机。
+
 ---
 
 ## 3. 两条贯穿的纪律
