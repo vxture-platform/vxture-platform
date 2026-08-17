@@ -318,9 +318,41 @@ alias 到源码消费，没有任何依赖需要 dist；拆分后 `design-ui` / 
 它一空转，dist 就必然缺。
 
 **为什么本地与 CI 的 `build` 都是绿的**：两者都在完整 workspace 上装完再构建，dist
-早就在了。只有 Docker 那条「干净上下文 + 排除 dist」的路径会暴露它。这也是本次发布
-链上第三个「基础设施缺陷伪装成应用故障」的例子，前两个是 registry 拒收 provenance
-与 env 审计落后于主机。
+早就在了。只有 Docker 那条「干净上下文 + 排除 dist」的路径会暴露它。
+
+#### 修好那一步之后，它替谁挡了枪立刻现形
+
+`v0.20.24` 带上修复重发，`design-ui` 那条报错消失——**然后当场冒出两个新的**。
+两个都是老问题，一直藏在空转背后：
+
+**其一，五个门户里只有一个 alias 写对。** 报错
+`Can't resolve '@vxture/design-system/styles/fonts.css'`。webpack 的 alias 默认前缀
+匹配，而这一条的值是个**文件**（`client.ts`）不是目录，于是子路径被改写成
+`…/src/client.ts/styles/fonts.css`，必然解析失败。加 `$` 精确匹配才只让裸包名走 alias。
+
+**这个修复此前只打在 website 一个门户上**——把病因说得明明白白的那段注释就写在
+website 的 config 里，另外四个照旧。`opera` / `admin` / `console` / `accounts` 现已
+补齐。
+
+**其二，`@vxture/platform-browser` 根本不可构建。** 它是整个 workspace 里**唯一有
+`build` 脚本却没有 `tsup.config.ts`** 的包，tsup 只会说 `No input files` 然后失败；
+而它的 `package.json` 声称 `main: dist/index.js`——**一个指向从不存在的产物的入口
+声明**。三个消费方门户都把它 alias 到 `src`，所以谁也没被它绊过。
+
+补配置而不是删 build 脚本：删了会让 `main` / `types` 那两行继续说假话，那是留给下一个
+人的陷阱。已验证 `main` 指向的文件现在真的存在。
+
+#### 一条模式：四次失败没有一次是应用代码的问题
+
+| #   | 缺陷                                     | 伪装成             |
+| --- | ---------------------------------------- | ------------------ |
+| 1   | 阿里云 registry 拒收 provenance manifest | 构建失败           |
+| 2   | env 审计脚本落后于主机 runtime env       | 部署失败           |
+| 3   | 依赖预构建选择器方向写反，静默空转       | `Module not found` |
+| 4   | alias 只修了一个门户 + 一个不可构建的包  | `Module not found` |
+
+**第 4 条是被第 3 条掩盖的**——一个静默的空操作，替两个真问题挡了不知多久。
+这也是这份计划反复撞上的同一件事：**不报错的失败最贵**。
 
 ---
 
