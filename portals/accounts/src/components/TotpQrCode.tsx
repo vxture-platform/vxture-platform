@@ -37,7 +37,8 @@ export function TotpQrCode({ value, size = 192 }: TotpQrCodeProps) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      className="vx-totp-qr"
+      // 白底二维码贴在卡面上，给一圈白色内衬 + 圆角，边缘才不会和卡面直接切开。
+      className="mx-auto block rounded-lg bg-white p-sm"
       src={dataUrl}
       alt="TOTP 二维码"
       width={size}

@@ -6,11 +6,14 @@
  * shadow-raised）都不会被生成——变量注册成功、规则不产出、且不报错，页面渲染
  * 成一片灰。消费方自己文件里写的同名类照常生成，所以这个缺失极难从现象倒推。
  *
- * 路径相对本文件。两个包都要声明：组件在 design-ui，shell 与 auth 在本包。 */
+ * 路径相对本文件。两个包都要声明：组件在 design-ui，shell 在本包。
+ *
+ * auth 族已迁出（2026-08-18，owner 判：DS 只收通用、无业务含义的件）——
+ * 组件归 accounts（其工具类由 accounts 自己的 Tailwind 扫描产出），
+ * auth.css 入口本就是零消费的空壳，一并删除。 */
 @source "../../../design-ui/src";
 @source "../components";
 @import "./brand.css";
 @import "./platform.css";
-@import "./auth.css";
 @import "./fullscreen.css";
 @import "./globals-base.css";

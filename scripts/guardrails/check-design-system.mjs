@@ -157,10 +157,7 @@ const IMPORT_ONLY_STYLE_ENTRIES = new Map([
   [normalize("agent-studio/varda/src/app/globals.css"), "Varda globals.css"],
   [normalize("agent-studio/varda/src/styles/varda-chat.css"), "Varda chat.css"],
   [normalize("agent-studio/varda/src/styles/varda-tool.css"), "Varda tool.css"],
-  [
-    normalize("packages/design/design-system/src/styles/auth.css"),
-    "DS auth.css",
-  ],
+  // auth.css 已删（2026-08-18）：认证样式归业务层，DS 不收业务含义的入口。
   [
     normalize("packages/design/design-system/src/styles/globals.css"),
     "DS globals.css",
@@ -1327,14 +1324,13 @@ const rules = [
     id: "ds/no-native-primitive",
     description:
       "业务源码默认不能直接写 button/input/select/textarea，应使用 DS 组件或补充 DS 能力。",
-    checkLine(file, line, lineNumber) {
-      if (!isFrontendSource(file) || isGeneratedOrAsset(file)) return null;
-      if (!/<(?:button|input|select|textarea)\b/.test(line)) return null;
-      return violation(
+    // 走 checkContent 而不是 checkLine：判据要先抹掉注释（见 maskComments）。
+    checkContent(file, content) {
+      return checkCodeLines(
         file,
-        lineNumber,
+        content,
+        /<(?:button|input|select|textarea)\b/,
         "使用 @vxture/design-system 的 Button/Input/Select 等组件；DS 不足时先补 DS。",
-        line,
       );
     },
   },
@@ -1342,14 +1338,14 @@ const rules = [
     id: "ds/no-native-table",
     description:
       "业务源码默认不能直接写 table/thead/tbody/tr/th/td，应使用 DS DataTable 或补充 DS 表格能力。",
-    checkLine(file, line, lineNumber) {
-      if (!isFrontendSource(file) || isGeneratedOrAsset(file)) return null;
-      if (!/<(?:table|thead|tbody|tr|th|td)\b/.test(line)) return null;
-      return violation(
+    // 同 no-native-primitive：先抹注释再判，否则「这里原先是裸 <table>」这句话
+    // 自己会撞上规则。
+    checkContent(file, content) {
+      return checkCodeLines(
         file,
-        lineNumber,
+        content,
+        /<(?:table|thead|tbody|tr|th|td)\b/,
         "使用 @vxture/design-system 的 DataTable；DS 不足时先补 DS 表格能力。",
-        line,
       );
     },
   },
@@ -1885,6 +1881,88 @@ function isCommentLine(line) {
 function stripLineComment(line) {
   const commentIndex = line.indexOf("//");
   return commentIndex >= 0 ? line.slice(0, commentIndex) : line;
+}
+
+/**
+ * 把注释里的字符换成空格，行数与列数保持不变。
+ *
+ * 为什么需要它：`isCommentLine` 只认**整行以 `//` / `/*` / `*` 开头**的那一种。
+ * 块注释（含 JSX 的 `{/* … *\/}`）的第二行往后是普通文字开头，它一条都认不出。
+ * 于是「我为什么把这里的原生 `<input>` 换掉了」这句话本身会撞上
+ * `ds/no-native-primitive`——**规则在惩罚写清楚原因的人**，而绕过它的办法是
+ * 把原因删掉。这跟当初 fonts.css 那条注释触发字体守卫是同一类毛病。
+ *
+ * 逐字符扫，识别行注释、块注释与三种字符串字面量（引号里的 `//` 不是注释，
+ * `"https://…"` 不该被吞掉）。JSX 正文里出现的裸 `//` 会被误判成注释起点，
+ * 但那只会让该行漏检，不会误报——守卫宁可漏也不能冤枉。
+ */
+function maskComments(content) {
+  const out = content.split("");
+  let state = "code"; // code | line | block | single | double | template
+  for (let i = 0; i < content.length; i += 1) {
+    const ch = content[i];
+    const next = content[i + 1];
+    if (state === "code") {
+      if (ch === "/" && next === "/") {
+        state = "line";
+        out[i] = " ";
+        out[i + 1] = " ";
+        i += 1;
+      } else if (ch === "/" && next === "*") {
+        state = "block";
+        out[i] = " ";
+        out[i + 1] = " ";
+        i += 1;
+      } else if (ch === "'") state = "single";
+      else if (ch === '"') state = "double";
+      else if (ch === "`") state = "template";
+      continue;
+    }
+    if (state === "line") {
+      if (ch === "\n") state = "code";
+      else out[i] = " ";
+      continue;
+    }
+    if (state === "block") {
+      if (ch === "*" && next === "/") {
+        out[i] = " ";
+        out[i + 1] = " ";
+        i += 1;
+        state = "code";
+      } else if (ch !== "\n") out[i] = " ";
+      continue;
+    }
+    // 字符串字面量：内容原样保留，只负责找到收尾引号。
+    if (ch === "\\") {
+      i += 1;
+      continue;
+    }
+    if (
+      (state === "single" && ch === "'") ||
+      (state === "double" && ch === '"') ||
+      (state === "template" && ch === "`")
+    ) {
+      state = "code";
+    }
+  }
+  return out.join("");
+}
+
+/**
+ * 逐行跑一条正则，但**先把注释抹掉**。给 `no-native-primitive` /
+ * `no-native-table` 这类"源码里不许出现某个写法"的规则用——它们要禁的是代码，
+ * 不是讲代码的话。
+ */
+function checkCodeLines(file, content, pattern, message) {
+  if (!isFrontendSource(file) || isGeneratedOrAsset(file)) return [];
+  const results = [];
+  maskComments(content)
+    .split(/\r?\n/)
+    .forEach((line, index) => {
+      if (!pattern.test(line)) return;
+      results.push(violation(file, index + 1, message, line.trim()));
+    });
+  return results;
 }
 
 function hasAiPrimitiveTokenUsage(line) {

@@ -14,14 +14,14 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { Banner, Button } from "@vxture/design-system";
 import {
-  AuthChromeFooter,
-  AuthChromeHeader,
   AuthField,
   AuthFlowForm,
   AuthLoginTemplate,
   AuthPrimaryButton,
-} from "@vxture/design-system";
+} from "./auth/AuthLogin";
+import { AccountsAuthFooter, AccountsAuthHeader } from "./AuthChrome";
 import {
   beginOperatorTotpEnroll,
   confirmOperatorTotpEnroll,
@@ -160,7 +160,10 @@ export function OperatorMfaFlow({
   // ── verify ────────────────────────────────────────────────────────────────
   if (phase === "verify") {
     return (
-      <Shell title="二次验证">
+      <Shell
+        title="二次验证"
+        description="第一重凭据已通过。再完成一次验证即可进入运营台。"
+      >
         <AuthFlowForm
           onSubmit={handleVerify}
           input={
@@ -182,27 +185,34 @@ export function OperatorMfaFlow({
                 }
                 onChange={setCode}
               />
-              <button
-                type="button"
-                className="vx-auth-link-button"
-                onClick={() => {
-                  setUseRecovery((v) => !v);
-                  setCode("");
-                  setError("");
-                }}
-              >
-                {useRecovery ? "改用验证器验证码" : "使用恢复码"}
-              </button>
-              {methods.includes("webauthn") ? (
-                <button
-                  type="button"
-                  className="vx-auth-link-button"
-                  disabled={loading}
-                  onClick={() => void handlePasskey()}
+              {/* 两个换用其他验证方式的入口。原先是挂 `.vx-auth-link-button`
+                  的原生 <button>（accounts 自己的一条局部样式，注释里写着
+                  "pending a DS Button primitive"）——那件 primitive 已经有了，
+                  就是 `variant="link"`。两个入口并排成一行，而不是各占一行：
+                  它们是同一个问题（"我用不了验证器"）的两个答案。 */}
+              <div className="flex flex-wrap items-center gap-md">
+                <Button
+                  variant="link"
+                  size="xs"
+                  onClick={() => {
+                    setUseRecovery((v) => !v);
+                    setCode("");
+                    setError("");
+                  }}
                 >
-                  使用通行密钥（Passkey）
-                </button>
-              ) : null}
+                  {useRecovery ? "改用验证器验证码" : "使用恢复码"}
+                </Button>
+                {methods.includes("webauthn") ? (
+                  <Button
+                    variant="link"
+                    size="xs"
+                    disabled={loading}
+                    onClick={() => void handlePasskey()}
+                  >
+                    使用通行密钥（Passkey）
+                  </Button>
+                ) : null}
+              </div>
             </>
           }
           primary={
@@ -220,20 +230,25 @@ export function OperatorMfaFlow({
   // ── enroll: WebAuthn (high-privilege bootstrap) ─────────────────────────--
   if (phase === "enroll" && enrollWebauthn) {
     return (
-      <Shell title="设置通行密钥">
-        <p className="vx-auth-hint">
-          运营账号要求使用通行密钥（Passkey）作为二次验证。请点击下方按钮，使用
-          Windows Hello / Touch ID / 安全密钥完成注册后即可登录。
-        </p>
-        {error ? <p className="vx-auth-hint">{error}</p> : null}
-        <button
-          type="button"
-          className="vx-auth-primary"
+      <Shell
+        title="设置通行密钥"
+        description="运营账号要求使用通行密钥（Passkey）作为二次验证。"
+      >
+        <StepHint>
+          点击下方按钮，使用 Windows Hello / Touch ID /
+          安全密钥完成注册，注册后即可登录。
+        </StepHint>
+        {/* 错误原先和说明文字用同一个类名，同样的字号同样的颜色——出错时页面上
+            只是多了一行字。 */}
+        {error ? <Banner tone="danger" title={error} /> : null}
+        <Button
+          size="xl"
+          className="w-full"
           disabled={loading}
           onClick={() => void handleEnrollPasskey()}
         >
           {loading ? "注册中…" : "注册通行密钥并登录"}
-        </button>
+        </Button>
       </Shell>
     );
   }
@@ -241,16 +256,24 @@ export function OperatorMfaFlow({
   // ── enroll: TOTP ────────────────────────────────────────────────────────--
   if (phase === "enroll") {
     return (
-      <Shell title="设置二次验证">
-        <p className="vx-auth-hint">
-          为保护运营账号，请使用验证器 App
-          扫描下方二维码，或手动输入密钥，然后输入生成的 6 位验证码完成绑定。
-        </p>
+      <Shell
+        title="设置二次验证"
+        description="为保护运营账号，需先绑定一个验证器 App。"
+      >
+        <StepHint>
+          用验证器扫描下方二维码，或手动输入密钥，然后填入它生成的 6
+          位验证码完成绑定。
+        </StepHint>
         {otpauthUri ? <TotpQrCode value={otpauthUri} /> : null}
         {secret ? (
-          <p className="vx-auth-hint" style={{ wordBreak: "break-all" }}>
-            手动输入密钥：<code>{secret}</code>
-          </p>
+          /* 密钥是要被逐字抄进另一台设备的：等宽、可断行、给一块底，
+             而不是夹在正文里的一段 <code>。 */
+          <div className="flex flex-col gap-2xs">
+            <StepHint>扫不了码就手动输入密钥：</StepHint>
+            <code className="break-all rounded-md bg-accent px-sm py-xs font-mono text-body-sm text-foreground select-all">
+              {secret}
+            </code>
+          </div>
         ) : null}
         <AuthFlowForm
           onSubmit={handleConfirmEnroll}
@@ -281,31 +304,38 @@ export function OperatorMfaFlow({
 
   // ── recovery ────────────────────────────────────────────────────────────--
   return (
-    <Shell title="保存恢复码">
-      <p className="vx-auth-hint">
-        以下恢复码仅显示一次，请妥善保存。当无法使用验证器时，可用一条恢复码登录（每条仅可使用一次）。
-      </p>
-      <ul className="vx-operator-recovery-codes">
+    <Shell
+      title="保存恢复码"
+      description="以下恢复码仅显示这一次，离开本页后无法再看到。"
+    >
+      {/* 「只显示一次」是这一页唯一重要的信息，此前它和别的说明文字长得一样。
+          用 warning 语气把它抬起来——不是报错，是"现在不做以后会后悔"。 */}
+      <Banner
+        tone="warning"
+        title="请立刻保存"
+        description="当验证器不可用时，可用一条恢复码登录，每条仅可使用一次。"
+      />
+      {/* 恢复码要被逐条抄下来：等宽、居中、两列成表。原先挂 `.vx-operator-
+          recovery-codes`，那条规则里的 gap / padding / border 引用的是本仓没有
+          定义的 `--vx-space-*` 与 `--vx-color-border`，浏览器整条丢弃——渲染
+          出来是一个没有任何间距和描边的两列网格。 */}
+      <ul className="grid list-none grid-cols-2 gap-sm rounded-lg border border-dashed border-border p-md">
         {recoveryCodes.map((c) => (
-          <li key={c}>
-            <code>{c}</code>
+          <li key={c} className="text-center">
+            <code className="font-mono text-body-md text-foreground select-all">
+              {c}
+            </code>
           </li>
         ))}
       </ul>
-      <button
-        type="button"
-        className="vx-auth-link-button"
-        onClick={copyRecoveryCodes}
-      >
-        复制全部
-      </button>
-      <button
-        type="button"
-        className="vx-auth-primary"
-        onClick={() => window.location.assign(redirectTo)}
-      >
-        我已保存，继续登录
-      </button>
+      <div className="flex flex-col gap-sm">
+        <Button variant="outline" size="xl" onClick={copyRecoveryCodes}>
+          复制全部
+        </Button>
+        <Button size="xl" onClick={() => window.location.assign(redirectTo)}>
+          我已保存，继续登录
+        </Button>
+      </div>
     </Shell>
   );
 }
@@ -313,19 +343,44 @@ export function OperatorMfaFlow({
 /** Shared chrome for the MFA steps (same template as the login form). */
 function Shell({
   title,
+  description,
   children,
 }: {
   readonly title: string;
+  readonly description?: string | undefined;
   readonly children: React.ReactNode;
 }) {
   return (
     <AuthLoginTemplate
-      header={<AuthChromeHeader brandLabel="Vxture" />}
-      footer={<AuthChromeFooter />}
+      header={<AccountsAuthHeader />}
+      footer={<AccountsAuthFooter />}
+      // 办事面，单栏：二次验证是登录流程的续篇，人已经在里面了。
+      layout="single"
       title={title}
+      description={description}
       useLoginLayout
     >
-      {children}
+      {/* 各步骤的内容原先直接堆在模板里，块与块之间没有间距——`AuthFlowForm`
+          自带竖向节奏，但它上面的说明文字、二维码、按钮不在它里面。 */}
+      <div className="flex flex-col gap-md">{children}</div>
     </AuthLoginTemplate>
+  );
+}
+
+/**
+ * 步骤说明文字。原先挂 `.vx-auth-hint`——那个类名随遗留样式层退役后没有定义，
+ * 这四段说明在页面上是一色的正文，既不弱化也不分层。
+ */
+function StepHint({
+  children,
+  className,
+}: {
+  readonly children: React.ReactNode;
+  readonly className?: string;
+}) {
+  return (
+    <p className={`text-body-sm text-muted-foreground ${className ?? ""}`}>
+      {children}
+    </p>
   );
 }

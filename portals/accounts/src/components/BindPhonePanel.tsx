@@ -11,12 +11,11 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import {
-  AuthChromeFooter,
-  AuthChromeHeader,
   AuthLoginTemplate,
   AuthPhoneLoginPanel,
   AuthTurnstile,
-} from "@vxture/design-system";
+} from "./auth/AuthLogin";
+import { AccountsAuthFooter, AccountsAuthHeader } from "./AuthChrome";
 import { bindOAuthPhone, sendPhoneCode } from "@/api/oidc";
 
 const TENANT_TURNSTILE_KEY =
@@ -26,7 +25,6 @@ const PHONE_RE = /^1[3-9]\d{9}$/;
 export function BindPhonePanel({ token }: { readonly token: string }) {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
-  const [remember, setRemember] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -106,15 +104,17 @@ export function BindPhonePanel({ token }: { readonly token: string }) {
 
   return (
     <AuthLoginTemplate
-      header={<AuthChromeHeader brandLabel="Vxture" />}
-      footer={<AuthChromeFooter />}
+      header={<AccountsAuthHeader />}
+      footer={<AccountsAuthFooter />}
+      // 办事面，单栏。到这一步三方登录已经过了，只差一个手机号。
+      layout="single"
       title="绑定手机号"
+      description="你的第三方账号没有带回手机号。验证一个手机号后即可完成登录，之后也用它找回账号。"
       useLoginLayout
     >
       <AuthPhoneLoginPanel
         phone={phone}
         code={code}
-        rememberChecked={remember}
         agreementChecked={agreed}
         errors={errors}
         loading={loading}
@@ -123,10 +123,14 @@ export function BindPhonePanel({ token }: { readonly token: string }) {
         sendCodeDisabled={countdown > 0 || sending}
         turnstile={turnstileNode}
         submitLabel="绑定并登录"
+        // 这两条是从登录面板的缺省值继承来的，在绑手机这一页都说不通：
+        // 「忘记密码？」——这里从头到尾没有密码；
+        // 「记住登录信息」——记的是这一台设备上的登录，而这一步在建账号绑定。
+        showForgot={false}
+        options={{ showRemember: false }}
         onChangePhone={setPhone}
         onChangeCode={setCode}
         onSendCode={handleSendCode}
-        onRememberChange={setRemember}
         onAgreementChange={setAgreed}
         onSubmit={handleSubmit}
       />

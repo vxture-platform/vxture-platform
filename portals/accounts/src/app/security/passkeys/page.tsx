@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default function OperatorPasskeysPage() {
   return (
-    <main className="vx-accounts-notice">
+    <main className="mx-auto w-full max-w-panel-lg px-md py-3xl">
       <OperatorPasskeyManager />
     </main>
   );

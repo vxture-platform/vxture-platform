@@ -1,8 +1,19 @@
 /**
  * AuthLogin.tsx - 认证形态组件族（统一登录页、密码/验证码/找回面板、三方登录、chrome）。
- * @package @vxture/design-system
+ * @package @vxture/accounts
  * @layer Presentation
  * @category Components - Auth
+ *
+ * ── 为什么在 accounts 而不在 design-system（owner 2026-08-18 判）─────────────
+ * DS 只收**通用、无业务含义**的件。这一族说的全是登录 / 绑定 / 找回 / MFA——
+ * 认证业务的页面语汇，不是设计系统的原语；它由 DS 的原语（Card / Input /
+ * Button / Shell* / Banner）**组合**而成，组合的知识属于拥有认证面的应用，
+ * 即 accounts。原先放在 DS 里的代价已经付过一次：DS 被迫携带品牌资产路径、
+ * 杜撰的运营指标、Turnstile 依赖——全是业务作答，DS 不该替业务答。
+ *
+ * 其余门户不 import 这里（门户间禁互引）：console 首次补齐、website 的
+ * set-nickname 各自用 DS 通用件就地组装同款观感，重复的是几十行版式组合，
+ * 换来的是层的干净。
  *
  * T2 重写（批 O）：原实现整份挂 .vx-auth-* 遗留类名，随 155 个遗留样式文件退役后
  * 完全无样式。重写原则：
@@ -29,14 +40,7 @@ import {
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import { DEFAULT_LOCALE, type Locale, type Theme } from "@vxture/shared";
 import {
-  ShellBrand,
-  ShellLegalFooter,
-  ShellLocaleSwitcher,
-  ShellThemeToggle,
-  type LocaleSelectOption,
-  type ShellLegalFooterLink,
-} from "../shell";
-import {
+  Banner,
   Button,
   Card,
   Checkbox,
@@ -44,12 +48,18 @@ import {
   Input,
   Label,
   Separator,
+  ShellBrand,
+  ShellLegalFooter,
+  ShellLocaleSwitcher,
+  ShellThemeToggle,
   Tabs,
   TabsList,
   TabsTrigger,
   cn,
-} from "@vxture/design-ui";
-import type { IconName } from "@vxture/design-ui";
+  type IconName,
+  type LocaleSelectOption,
+  type ShellLegalFooterLink,
+} from "@vxture/design-system";
 
 export type AuthLoginScreen = "login" | "phone" | "forgot";
 export type AuthLoginTab = Exclude<AuthLoginScreen, "forgot">;
@@ -70,6 +80,13 @@ export interface AuthVisualConfig {
   stats?: AuthVisualStat[] | undefined;
 }
 
+/**
+ * 版式：`split` 左视觉 + 右表单（登录 / 绑定 / 找回）；`single` 只有表单列，
+ * 用于首次信息补齐一类的独立门——它们没有招徕的任务，一块营销色块只会把
+ * "还差几步"这件事推远。
+ */
+export type AuthPageLayout = "split" | "single";
+
 export interface UnifiedAuthPageProps {
   className?: string | undefined;
   pageBackgroundImage?: string | undefined;
@@ -79,10 +96,13 @@ export interface UnifiedAuthPageProps {
   overlay?: ReactNode | undefined;
   children: ReactNode;
   ariaLabel?: string | undefined;
+  layout?: AuthPageLayout | undefined;
 }
 
 export interface AuthLoginLayoutProps {
   title?: string;
+  /** 标题下的一行说明。缺省不占位。 */
+  description?: ReactNode | undefined;
   children: ReactNode;
 }
 
@@ -118,7 +138,17 @@ export interface AuthFieldProps {
   type: string;
   placeholder: string;
   icon?: AuthFieldIcon | ReactNode | undefined;
+  /** 贴在输入框**内**右缘的小控件（显示密码之类的图标按钮）。 */
   trailingAction?: ReactNode | undefined;
+  /**
+   * 与输入框并排、在标签**之下**的独立控件（"获取验证码"这一类）。
+   *
+   * 单独给一个槽是因为对齐：原先由调用方在外面拼 `flex` 再给按钮补一个
+   * `mt-lg` 去跳过标签，那个数字等于「标签行高 + 间距」，标签字号或密度一改
+   * 就错位，而错位不报错。放进来之后按钮和输入框同在标签下的那一行里，
+   * 由 flex 自己对齐，也不必再猜。
+   */
+  action?: ReactNode | undefined;
   value: string;
   error?: string | undefined;
   hint?: string | undefined;
@@ -256,11 +286,12 @@ export interface AuthLoginTemplateProps extends Omit<
   "children"
 > {
   title?: string;
+  description?: ReactNode | undefined;
   useLoginLayout?: boolean;
   children: ReactNode;
 }
 
-export interface AuthLoginOptionOverrides extends Pick<
+export type AuthLoginOptionOverrides = Pick<
   AuthLoginOptionsProps,
   | "rememberLabel"
   | "agreementPrefix"
@@ -274,7 +305,7 @@ export interface AuthLoginOptionOverrides extends Pick<
   | "forgetMeLabel"
   | "forgetMeTitle"
   | "showRemember"
-> {}
+>;
 
 export interface AuthPasswordLoginPanelProps {
   tabs?: ReactNode;
@@ -389,22 +420,26 @@ export interface AuthForgotPasswordPanelProps {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
 
-const DEFAULT_AUTH_BRAND_LOGO = "/brand/vxture-logo-white.png";
 // 中性占位。真实品牌名由调用方传入——真名不入仓。
 const DEFAULT_AUTH_BRAND_LABEL = "Brand";
 
+/**
+ * 视觉面板的缺省文案。**只留中性占位，不带任何可核实的数字。**
+ *
+ * 原先这里默认了 `40ms / 99.97% / 12B+` 和 "All systems operational"。accounts
+ * 从不传 `visual`，于是这四条一路默认到了生产登录页上——那是把杜撰的运行指标
+ * 当事实展示给每一个来登录的人，且没有任何数据源能对上。缺省值不该是"看起来
+ * 像真的"，因为看起来像真的就没人会去传真的。
+ *
+ * 要展示指标的调用方自己传 `stats`，并且自己对数字负责。
+ */
 const DEFAULT_AUTH_VISUAL: Required<
   Omit<AuthVisualConfig, "leftBackgroundImage" | "pageBackgroundImage">
 > = {
-  title: "Build intelligence into everything.",
-  description:
-    "Orchestrate models, manage pipelines, and deploy AI workflows at scale from a single workspace.",
-  statusText: "All systems operational",
-  stats: [
-    { value: "40ms", label: "avg latency" },
-    { value: "99.97%", label: "uptime SLA" },
-    { value: "12B+", label: "tokens/day" },
-  ],
+  title: "Brand",
+  description: "",
+  statusText: "",
+  stats: [],
 };
 
 const DEFAULT_SOCIAL_ICON_SRC: Record<AuthSocialProvider, string> = {
@@ -441,7 +476,9 @@ export function UnifiedAuthPage({
   overlay,
   children,
   ariaLabel = "authentication",
+  layout = "split",
 }: Readonly<UnifiedAuthPageProps>) {
+  const single = layout === "single";
   // 背景图 URL 是运行时值（L5），经 inline style 落地，不属于设计值硬编码。
   const style: CSSProperties = {};
   if (pageBackgroundImage) {
@@ -459,18 +496,47 @@ export function UnifiedAuthPage({
       {overlay}
       {header}
       <main className="flex flex-1 items-center justify-center px-md py-xl">
-        {/* 登录卡：veil 叠层（strong 档）+ 发丝线，无阴影（02-visual-spec.md §3）。 */}
+        {/* 登录卡：veil 叠层（strong 档）+ 发丝线，无阴影（02-visual-spec.md §3）。
+         *
+         * `py-none gap-none` 不是微调，是必须的。`Card` 基座把竖向节奏
+         * （`py-xl` + `gap-xl`）烤在自己身上，那一对值是给「页头 / 正文 / 动作条」
+         * 竖排的卡准备的；这里把它改成 `flex-row` 之后，同一对值变成了左侧色块
+         * 四周的一圈 32px 白边和两列之间的一道 32px 空档。分栏登录卡要的是
+         * **通栏出血**——色块必须咬住卡的三条边。`overflow-hidden` 只挡溢出，
+         * 挡不住内边距，所以它清不掉这一圈（2026-08-17 生产实测：色块四周确实
+         * 浮着白边，两列间隔 65px = 32 gap + 33 表单内边距）。
+         *
+         * 出血之后原先那条竖 `Separator` 一并撤掉：两侧一边是实色渐变、一边是
+         * 卡面，界已经由颜色划开了，再画一条线是同一件事说两遍。
+         *
+         * 圆角显式给 `xl`：`veil` 三档一律 `rounded-md`(8)，而 060 的选档表里
+         * Card 是 `xl`(14)。改 `veil` 会动到所有产品的每一张卡，不在这条工作线
+         * 里，故只在此处就地对齐——两者的分歧另记。
+         */}
         <Card
           surface="strong"
           aria-label={ariaLabel}
-          className="w-full max-w-page-lg flex-row overflow-hidden"
+          className={cn(
+            "w-full flex-row gap-none overflow-hidden rounded-xl py-none",
+            single ? "max-w-panel-md" : "max-w-page-lg",
+          )}
         >
-          <AuthVisualPanel visual={visual} />
-          <Separator
-            orientation="vertical"
-            className="hidden h-auto self-stretch bg-primary/10 lg:block dark:bg-primary/20"
-          />
-          <div className="flex min-w-0 flex-1 flex-col justify-center gap-lg p-xl">
+          {single ? null : <AuthVisualPanel visual={visual} />}
+          {/* 两列等宽（owner 2026-08-18 判，推翻此前的"表单列定宽"）：两半都
+              锁 `w-1/2` 而不是各给 `flex-1`——理论上 1 1 0% 该平分，实测差了
+              16px（内容的自动最小尺寸参与了分配），百分比宽度没有这层歧义。
+              原先担心的"行长随屏幕走"不成立：卡自身有 max-w 封顶，lg 起两半
+              就是常数。表单列内边距同步放大（原 p-xl 的 32px 贴边，拥挤）：
+              竖向 2xl、两侧 3xl，内容行长约 415px，与定宽方案相当，但呼吸感
+              回来了。窄屏下视觉面板 `hidden`，这一列 `w-full` 吃满、退回 p-xl。 */}
+          <div
+            className={cn(
+              "flex min-w-0 flex-col justify-center gap-lg",
+              single
+                ? "flex-1 p-xl"
+                : "w-full p-xl lg:w-1/2 lg:shrink-0 lg:px-3xl lg:py-2xl",
+            )}
+          >
             {children}
           </div>
         </Card>
@@ -482,13 +548,20 @@ export function UnifiedAuthPage({
 
 export function AuthLoginLayout({
   title = "欢迎回来",
+  description,
   children,
 }: Readonly<AuthLoginLayoutProps>) {
   return (
     <div className="flex flex-col gap-lg">
       <section aria-label="登录标题">
         <div className="flex flex-col gap-2xs">
-          <h1 className="text-heading-3 text-foreground">{title}</h1>
+          {/* `text-balance`：标题折行时两行不要一长一短。 */}
+          <h1 className="text-balance text-heading-3 text-foreground">
+            {title}
+          </h1>
+          {description ? (
+            <p className="text-body-sm text-muted-foreground">{description}</p>
+          ) : null}
         </div>
       </section>
       {children}
@@ -498,6 +571,7 @@ export function AuthLoginLayout({
 
 export function AuthLoginTemplate({
   title = "欢迎回来",
+  description,
   useLoginLayout = true,
   children,
   ...pageProps
@@ -505,7 +579,9 @@ export function AuthLoginTemplate({
   return (
     <UnifiedAuthPage {...pageProps}>
       {useLoginLayout ? (
-        <AuthLoginLayout title={title}>{children}</AuthLoginLayout>
+        <AuthLoginLayout title={title} description={description}>
+          {children}
+        </AuthLoginLayout>
       ) : (
         children
       )}
@@ -588,7 +664,9 @@ export function AuthTabs({
       value={active}
       onValueChange={(value) => onChange(value as AuthLoginTab)}
     >
-      <TabsList className="w-full">
+      {/* 与输入框、提交按钮同高（control-xl / 40）。认证表单是竖着一列控件，
+          三种高度（36 / 32 / 40）叠在一起时参差是一眼能看出来的。 */}
+      <TabsList className="h-control-xl w-full">
         {order.map((tab) => (
           <TabsTrigger key={tab} value={tab}>
             {labels[tab]}
@@ -601,7 +679,12 @@ export function AuthTabs({
 
 export function AuthChromeHeader({
   brandHref = "/",
-  brandLogoSrc = DEFAULT_AUTH_BRAND_LOGO,
+  // **不设默认 logo。** 原先默认 `/brand/vxture-logo-white.png`：DS 不该指向某个
+  // 产品的资产路径（与 `brandLabel` 同一条纪律——真名与真资产都不入仓）。而且
+  // accounts 的 public 下根本没有这个文件，于是它的登录页眉长期是一个碎图标；
+  // 就算把文件补进去，那也是一枚**白色**字标压在浅色页眉上，同样看不见。
+  // 需要图形标的调用方自己传 `brandLogoSrc`（website 一直是这么传的）。
+  brandLogoSrc,
   brandLogoAlt = "",
   brandLabel = DEFAULT_AUTH_BRAND_LABEL,
   currentLocale = DEFAULT_LOCALE,
@@ -696,8 +779,11 @@ export function AuthTurnstile({
       return undefined;
     }
 
+    // 清理时要摘除的是**挂载这轮**的 widget 实例；直接在 cleanup 里读
+    // widgetRef.current，读到的可能已是下一轮的实例（react-hooks 规则）。
+    const widget = widgetRef;
     return () => {
-      widgetRef.current?.remove();
+      widget.current?.remove();
     };
   }, [siteKey]);
 
@@ -751,6 +837,7 @@ export function AuthField({
   placeholder,
   icon,
   trailingAction,
+  action,
   value,
   error,
   hint,
@@ -760,46 +847,63 @@ export function AuthField({
   onChange,
 }: Readonly<AuthFieldProps>) {
   const inputId = `vx-auth-${name}`;
+  const describedById = error || hint ? `${inputId}-desc` : undefined;
   return (
     <div className="flex flex-col gap-2xs">
       <Label htmlFor={inputId}>{label}</Label>
-      <div className="relative flex items-center">
-        {icon ? (
-          <span
-            className="pointer-events-none absolute left-sm flex text-muted-foreground"
-            aria-hidden="true"
-          >
-            {isAuthFieldIcon(icon) ? (
-              <Icon name={AUTH_FIELD_ICON_NAME[icon]} size="sm" />
-            ) : (
-              icon
+      {/* 标签下的一行：输入框 + 可选的并列控件。并列控件在这一行里对齐，
+          不靠调用方补 margin 去跳过标签高度。 */}
+      <div className="flex items-center gap-sm">
+        <div className="relative flex min-w-0 flex-1 items-center">
+          {icon ? (
+            <span
+              className="pointer-events-none absolute left-sm flex text-muted-foreground"
+              aria-hidden="true"
+            >
+              {isAuthFieldIcon(icon) ? (
+                <Icon name={AUTH_FIELD_ICON_NAME[icon]} size="sm" />
+              ) : (
+                icon
+              )}
+            </span>
+          ) : null}
+          <Input
+            // 认证表单统一到 control-xl(40)：`Input` 基座是 control-md(32)，
+            // 与同屏的 Tabs(36) / 提交按钮(40) 三个高度并存。
+            className={cn(
+              "h-control-xl",
+              icon && "pl-xl",
+              trailingAction && "pr-3xl",
             )}
-          </span>
-        ) : null}
-        <Input
-          className={cn(icon && "pl-xl", trailingAction && "pr-3xl")}
-          id={inputId}
-          name={name}
-          type={type}
-          value={value}
-          placeholder={placeholder}
-          autoComplete={autoComplete}
-          autoFocus={autoFocus}
-          disabled={disabled}
-          onChange={(event) => onChange(event.target.value)}
-          aria-invalid={Boolean(error)}
-        />
-        {trailingAction ? (
-          <span className="absolute right-2xs flex items-center">
-            {trailingAction}
-          </span>
-        ) : null}
+            id={inputId}
+            name={name}
+            type={type}
+            value={value}
+            placeholder={placeholder}
+            autoComplete={autoComplete}
+            autoFocus={autoFocus}
+            disabled={disabled}
+            onChange={(event) => onChange(event.target.value)}
+            aria-invalid={Boolean(error)}
+            aria-describedby={describedById}
+          />
+          {trailingAction ? (
+            <span className="absolute right-2xs flex items-center">
+              {trailingAction}
+            </span>
+          ) : null}
+        </div>
+        {action}
       </div>
       {error ? (
-        <p className="text-body-sm text-destructive-text">{error}</p>
+        <p id={describedById} className="text-body-sm text-destructive-text">
+          {error}
+        </p>
       ) : null}
       {hint && !error ? (
-        <p className="text-body-sm text-muted-foreground">{hint}</p>
+        <p id={describedById} className="text-body-sm text-muted-foreground">
+          {hint}
+        </p>
       ) : null}
     </div>
   );
@@ -808,6 +912,49 @@ export function AuthField({
 function isAuthFieldIcon(icon: AuthFieldProps["icon"]): icon is AuthFieldIcon {
   return (
     typeof icon === "string" && AUTH_FIELD_ICONS.has(icon as AuthFieldIcon)
+  );
+}
+
+/**
+ * 两个登录面板的"登录验证区"逐字相同（人机验证 + 表单级错误 + 提交按钮）。
+ * 各写一份的话，改其中一处另一处会静默不跟——批 O 重写后它们已经这样并排
+ * 存在了一段时间。合成一处。
+ */
+function AuthPrimarySection({
+  turnstile,
+  formError,
+  loading,
+  disabled,
+  label,
+  loadingLabel,
+  disabledLabel,
+}: Readonly<{
+  turnstile?: ReactNode;
+  formError?: string | undefined;
+  loading: boolean;
+  disabled: boolean;
+  label: string;
+  loadingLabel: string;
+  disabledLabel?: string | undefined;
+}>) {
+  return (
+    <>
+      <div className="flex flex-col gap-sm empty:hidden">
+        {turnstile}
+        {/* 表单级错误原先是一行居中的红字，夹在 Turnstile 那块灰盒子和提交按钮
+            中间——整页视觉最重的元素正好压在它上面，而它自己没有任何形状。
+            改用 `Banner`：这就是 DS 收「常驻提示条」的那一件，语气与图标都由
+            六档语气给，不必在这里再配一套。 */}
+        {formError ? <Banner tone="danger" title={formError} /> : null}
+      </div>
+      <AuthPrimaryButton
+        loading={loading}
+        disabled={disabled}
+        label={label}
+        loadingLabel={loadingLabel}
+        disabledLabel={disabledLabel}
+      />
+    </>
   );
 }
 
@@ -977,6 +1124,10 @@ export function AuthLoginOptions({
   onForgetMe,
 }: Readonly<AuthLoginOptionsProps>) {
   const linkClass = "text-link hover:text-link-hover hover:underline";
+  // 同意行里的链接**贴着**中文正文排，"同意用户协议和隐私政策"会挤成一条。
+  // 补一点左右留白，链接才从句子里读得出来。这一档只给内联的那两条——
+  // "忘记密码？"是句末独立的链接，补 margin 会把它推离右缘。
+  const inlineLinkClass = cn(linkClass, "mx-2xs");
   return (
     <div className="flex flex-col gap-sm">
       <div className="flex items-center justify-between gap-sm">
@@ -1039,11 +1190,11 @@ export function AuthLoginOptions({
           className="block text-body-sm text-muted-foreground"
         >
           {agreementPrefix}
-          <a href={termsHref} className={linkClass}>
+          <a href={termsHref} className={inlineLinkClass}>
             {termsLabel}
           </a>
           {agreementJoiner}
-          <a href={privacyHref} className={linkClass}>
+          <a href={privacyHref} className={inlineLinkClass}>
             {privacyLabel}
           </a>
         </Label>
@@ -1152,23 +1303,15 @@ export function AuthPasswordLoginPanel({
         </>
       }
       primary={
-        <>
-          <div className="flex flex-col gap-sm empty:hidden">
-            {turnstile}
-            {errors?.form ? (
-              <p className="text-center text-body-sm text-destructive-text">
-                {errors.form}
-              </p>
-            ) : null}
-          </div>
-          <AuthPrimaryButton
-            loading={loading}
-            disabled={primaryDisabled}
-            label={submitLabel}
-            loadingLabel={submitLoadingLabel}
-            disabledLabel={primaryDisabledLabel}
-          />
-        </>
+        <AuthPrimarySection
+          turnstile={turnstile}
+          formError={errors?.form}
+          loading={loading}
+          disabled={primaryDisabled}
+          label={submitLabel}
+          loadingLabel={submitLoadingLabel}
+          disabledLabel={primaryDisabledLabel}
+        />
       }
       social={social}
       footer={footer}
@@ -1250,37 +1393,37 @@ export function AuthPhoneLoginPanel({
               onChange={onChangePhone}
             />
 
-            <div className="flex items-start gap-sm">
-              <div className="min-w-0 flex-1">
-                <AuthField
-                  label={codeLabel}
-                  name={codeName}
-                  type="text"
-                  placeholder={codePlaceholder}
-                  icon="shield"
-                  value={code}
-                  error={errors?.code}
-                  autoComplete="one-time-code"
-                  disabled={loading}
-                  onChange={onChangeCode}
-                />
-              </div>
-              {/* mt 对齐输入行：跳过 Label（label-md 行高）+ gap-2xs。 */}
-              <Button
-                type="button"
-                variant="outline"
-                className="mt-lg shrink-0"
-                onClick={onSendCode}
-                disabled={
-                  loading ||
-                  codeSending ||
-                  codeCountdown > 0 ||
-                  sendCodeDisabled
-                }
-              >
-                {resolvedSendCodeLabel}
-              </Button>
-            </div>
+            <AuthField
+              label={codeLabel}
+              name={codeName}
+              type="text"
+              placeholder={codePlaceholder}
+              icon="shield"
+              value={code}
+              error={errors?.code}
+              autoComplete="one-time-code"
+              disabled={loading}
+              onChange={onChangeCode}
+              action={
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xl"
+                  // 倒计时文案（"58s 后重试"）比"获取验证码"窄，按钮会随读秒
+                  // 一下下地缩，旁边的输入框跟着抖。定一个下限把它按住。
+                  className="min-w-overlay-xs shrink-0"
+                  onClick={onSendCode}
+                  disabled={
+                    loading ||
+                    codeSending ||
+                    codeCountdown > 0 ||
+                    sendCodeDisabled
+                  }
+                >
+                  {resolvedSendCodeLabel}
+                </Button>
+              }
+            />
 
             <AuthLoginOptions
               {...options}
@@ -1297,27 +1440,86 @@ export function AuthPhoneLoginPanel({
         </>
       }
       primary={
-        <>
-          <div className="flex flex-col gap-sm empty:hidden">
-            {turnstile}
-            {errors?.form ? (
-              <p className="text-center text-body-sm text-destructive-text">
-                {errors.form}
-              </p>
-            ) : null}
-          </div>
-          <AuthPrimaryButton
-            loading={loading}
-            disabled={primaryDisabled}
-            label={submitLabel}
-            loadingLabel={submitLoadingLabel}
-            disabledLabel={primaryDisabledLabel}
-          />
-        </>
+        <AuthPrimarySection
+          turnstile={turnstile}
+          formError={errors?.form}
+          loading={loading}
+          disabled={primaryDisabled}
+          label={submitLabel}
+          loadingLabel={submitLoadingLabel}
+          disabledLabel={primaryDisabledLabel}
+        />
       }
       social={social}
       footer={footer}
     />
+  );
+}
+
+/**
+ * 认证流程的终态屏（"邮件已发送" / "密码已重置" / "绑定完成"）。
+ *
+ * 抽出来是因为它已经有三份：`AuthForgotPasswordPanel` 的 `resetSent` 分支写了
+ * 一份完整的，accounts 的两个重置面各自另写了一份——而后两份挂的是
+ * `.vx-auth-reset-done` / `.vx-auth-check`，那批类名随 155 个遗留样式文件一起
+ * 退役了，没有任何地方再定义它们。于是那两页的成功态是：一个裸的 ✓ 字符、
+ * 一个没有间距的标题、一段没有层次的正文。**不报错，只是难看。**
+ */
+export type AuthResultTone = "success" | "danger" | "neutral";
+
+export interface AuthResultPanelProps {
+  /** 终态的性质：办成了 / 办不成 / 只是告知。缺省是办成了。 */
+  readonly tone?: AuthResultTone | undefined;
+  readonly title: ReactNode;
+  readonly description?: ReactNode | undefined;
+  readonly hint?: ReactNode | undefined;
+  /** 收尾动作（"返回登录"一类）。 */
+  readonly action?: ReactNode | undefined;
+}
+
+/** 三档只换图与徽底的语气，形状是同一个——终态屏的版式只有一种。 */
+const AUTH_RESULT_TONES: Record<
+  AuthResultTone,
+  { readonly icon: IconName; readonly badge: string }
+> = {
+  success: { icon: "check", badge: "bg-success-muted text-success-text" },
+  danger: {
+    icon: "error",
+    badge: "bg-destructive-muted text-destructive-text",
+  },
+  neutral: { icon: "info", badge: "bg-accent text-muted-foreground" },
+};
+
+export function AuthResultPanel({
+  tone = "success",
+  title,
+  description,
+  hint,
+  action,
+}: Readonly<AuthResultPanelProps>) {
+  const { icon, badge } = AUTH_RESULT_TONES[tone];
+  return (
+    <div className="flex flex-col items-center gap-md text-center">
+      <span
+        className={cn(
+          "flex size-media-md items-center justify-center rounded-full",
+          badge,
+        )}
+        aria-hidden="true"
+      >
+        <Icon name={icon} size="lg" />
+      </span>
+      <h1 className="text-balance text-title-lg text-foreground">{title}</h1>
+      {description ? (
+        <p className="text-pretty text-body-md text-muted-foreground">
+          {description}
+        </p>
+      ) : null}
+      {hint ? (
+        <p className="text-body-sm text-muted-foreground">{hint}</p>
+      ) : null}
+      {action ? <div className="w-full pt-2xs">{action}</div> : null}
+    </div>
   );
 }
 
@@ -1347,16 +1549,10 @@ export function AuthForgotPasswordPanel({
     return (
       <>
         <AuthBackButton onClick={onBack}>{backLabel}</AuthBackButton>
-        <div className="flex flex-col items-center gap-md text-center">
-          <span
-            className="flex size-media-md items-center justify-center rounded-full bg-success-muted text-success-text"
-            aria-hidden="true"
-          >
-            <Icon name="check" size="lg" />
-          </span>
-          <h1 className="text-title-lg text-foreground">{sentTitle}</h1>
-          <p className="text-body-md text-muted-foreground">
-            {sentDescription ?? (
+        <AuthResultPanel
+          title={sentTitle}
+          description={
+            sentDescription ?? (
               <>
                 重置链接已发送至{" "}
                 <strong className="text-foreground">
@@ -1364,15 +1560,15 @@ export function AuthForgotPasswordPanel({
                 </strong>
                 {"，请在 15 分钟内查收并完成重置。"}
               </>
-            )}
-          </p>
-          {sentHint ? (
-            <p className="text-body-sm text-muted-foreground">{sentHint}</p>
-          ) : null}
-          <Button className="w-full" onClick={onBack}>
-            {sentActionLabel}
-          </Button>
-        </div>
+            )
+          }
+          hint={sentHint}
+          action={
+            <Button size="xl" className="w-full" onClick={onBack}>
+              {sentActionLabel}
+            </Button>
+          }
+        />
       </>
     );
   }
@@ -1443,6 +1639,9 @@ export function BrandProviderIcon({
   src?: string | undefined;
 }>) {
   return (
+    // 20px 的三方品牌小图标（本地 public 静态 SVG）——next/image 的优化管线
+    // 对它没有收益，只有开销。
+    // eslint-disable-next-line @next/next/no-img-element
     <img
       className="size-icon-md shrink-0"
       src={src ?? DEFAULT_SOCIAL_ICON_SRC[provider]}
@@ -1476,16 +1675,27 @@ function AuthVisualPanel({
   return (
     <aside
       className={cn(
-        "relative hidden flex-1 flex-col justify-between gap-xl overflow-hidden",
+        // `justify-end` 而不是 `justify-between`：状态行是可选的，用
+        // `justify-between` 时它一旦缺席，剩下的那一块文案就会从底部弹到顶部，
+        // 整个面板的重心跟着换一个位置。改成"文案永远压底、状态行用 mb-auto
+        // 自己顶上去"，在有无状态行两种情况下版面是同一个。
+        // `w-1/2 shrink-0`：与表单列各占一半（见表单列注释，owner 判等宽）。
+        "relative hidden w-1/2 shrink-0 flex-col justify-end gap-xl overflow-hidden",
         "bg-gradient-to-br from-primary to-primary-active bg-cover bg-center",
         "p-2xl text-primary-foreground lg:flex",
       )}
       style={style}
     >
       <NodeGraph />
+      {/* 底部压一层同色暗端的渐变：节点图是亮点，文案也是亮色，两者叠在一起时
+          正文那几行会被点阵咬得发花。渐变只压底部三分之一，图形上半部分不动。 */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-primary-active to-transparent"
+      />
 
       {statusText ? (
-        <div className="relative flex items-center gap-xs text-label-sm text-primary-foreground/80">
+        <div className="relative mb-auto flex items-center gap-xs text-label-sm text-primary-foreground/80">
           <span
             className="size-2xs rounded-full bg-success"
             aria-hidden="true"
@@ -1495,9 +1705,9 @@ function AuthVisualPanel({
       ) : null}
 
       <div className="relative flex flex-col gap-md">
-        <h2 className="text-heading-3">{title}</h2>
+        <h2 className="text-balance text-heading-3">{title}</h2>
         {description ? (
-          <p className="text-body-md text-primary-foreground/80">
+          <p className="text-pretty text-body-md text-primary-foreground/80">
             {description}
           </p>
         ) : null}
@@ -1508,7 +1718,11 @@ function AuthVisualPanel({
                 key={`${stat.value}-${stat.label}`}
                 className="flex flex-col gap-2xs"
               >
-                <strong className="text-title-lg">{stat.value}</strong>
+                {/* 读数对位：并排的几个数字若不等宽，基线看着是齐的、
+                    数字列却不齐。 */}
+                <strong className="text-title-lg tabular-nums">
+                  {stat.value}
+                </strong>
                 <span className="text-label-sm text-primary-foreground/70">
                   {stat.label}
                 </span>
@@ -1631,6 +1845,11 @@ function NodeGraph() {
     // 画布颜色取自身的 computed color（类名给的 text-primary-foreground），
     // 不再依赖已退役的 auth 专属 token。透明度经 globalAlpha 施加。
     const graphColor = getComputedStyle(canvas).color;
+    // 减弱动效偏好：这块画布是持续跑 rAF 的，对前庭敏感的人来说是一整屏
+    // 一直在动的点。开了偏好就只画一帧静态的图——图形本身仍在，只是不动。
+    const stillOnly =
+      globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ??
+      false;
     let frame = 0;
     let width = 0;
     let height = 0;
@@ -1662,12 +1881,15 @@ function NodeGraph() {
       context.clearRect(0, 0, width, height);
       const mouse = mouseRef.current;
 
-      for (const node of nodes) {
-        moveVisualNode(node, width, height, mouse);
+      if (!stillOnly) {
+        for (const node of nodes) {
+          moveVisualNode(node, width, height, mouse);
+        }
       }
       drawVisualLinks(context, nodes, graphColor);
       drawVisualNodes(context, nodes, graphColor);
 
+      if (stillOnly) return;
       frame = globalThis.requestAnimationFrame(draw);
     };
 
@@ -1683,15 +1905,21 @@ function NodeGraph() {
       mouseRef.current = { x: -999, y: -999 };
     };
 
+    // 静态档下 rAF 不再跑，重排后必须自己补一帧，否则画布停留在旧尺寸的那张图。
+    const handleResize = () => {
+      resize();
+      if (stillOnly) draw();
+    };
+
     resize();
     draw();
-    globalThis.addEventListener("resize", resize);
+    globalThis.addEventListener("resize", handleResize);
     canvas.addEventListener("mousemove", handleMouseMove);
     canvas.addEventListener("mouseleave", handleMouseLeave);
 
     return () => {
       globalThis.cancelAnimationFrame(frame);
-      globalThis.removeEventListener("resize", resize);
+      globalThis.removeEventListener("resize", handleResize);
       canvas.removeEventListener("mousemove", handleMouseMove);
       canvas.removeEventListener("mouseleave", handleMouseLeave);
     };

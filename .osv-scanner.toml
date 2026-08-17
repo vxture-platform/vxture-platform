@@ -36,3 +36,21 @@ version = "1.1.16"
 ecosystem = "npm"
 ignore = true
 reason = "transitive dev-tooling only (minimatch@3.1.5 glob matching); no patched 1.x release exists; not exposed to untrusted input in production"
+
+# deepmerge-ts 7.1.5 — GHSA-ggr8-5vv4-36mx (8.2, stack-overflow DoS when merging
+# self-referential object graphs; no cycle detection). Patch exists only in the
+# 8.0.0 major, and our sole resolution is transitive dev-tooling:
+# prisma@6.19.3 -> @prisma/config -> deepmerge-ts@7.1.5, used to merge values
+# from *our own* prisma config file when the CLI runs — never attacker-controlled
+# input, never a production request path. Forcing v8 under @prisma/config via
+# override risks breaking the prisma CLI on a major-version API change for zero
+# production exposure. Revisit when prisma's own dep moves to >=8, or if
+# deepmerge-ts ever appears outside the prisma CLI subtree (then this entry
+# stops matching that resolution and the alarm comes back — which is the point
+# of per-package-version scoping).
+[[PackageOverrides]]
+name = "deepmerge-ts"
+version = "7.1.5"
+ecosystem = "npm"
+ignore = true
+reason = "transitive dev-tooling only (prisma CLI config merge); patch is a major (8.0.0) that @prisma/config does not accept; input is our own config file, not attacker-controlled"

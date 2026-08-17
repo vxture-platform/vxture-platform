@@ -23,7 +23,6 @@
 | `@vxture/design-system/types`                    | server-safe 类型                           |
 | `@vxture/design-system/server`                   | server-safe 工具入口                       |
 | `@vxture/design-system/styles/globals.css`       | 标准全局样式入口                           |
-| `@vxture/design-system/styles/auth.css`          | 认证模板样式                               |
 | `@vxture/design-system/styles/brand.css`         | 品牌标识组合基础样式                       |
 | `@vxture/design-system/styles/components.css`    | 基础组件语义类                             |
 | `@vxture/design-system/styles/console.css`       | Console portal style pack                  |

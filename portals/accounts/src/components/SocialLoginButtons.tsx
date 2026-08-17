@@ -20,7 +20,7 @@ import {
   AuthSocialButtons,
   type AuthSocialButtonConfig,
   type AuthSocialProvider,
-} from "@vxture/design-system";
+} from "./auth/AuthLogin";
 import {
   buildSocialStartUrl,
   fetchEnabledProviders,

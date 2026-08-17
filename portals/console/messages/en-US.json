@@ -1,14 +1,17 @@
 {
   "onboarding": {
-    "title": "Finish setting up your account",
-    "description": "One last step: pick an account name and confirm your info to continue.",
+    "brand": "Vxture Studio",
+    "title": "Finish your account",
+    "description": "A few details and you're in. The account name is how you sign in; the display name is what others see.",
     "fields": {
       "account": "Account",
       "accountPlaceholder": "Letters, digits, underscore — starts with a letter",
       "displayName": "Display name",
       "phone": "Phone",
+      "phoneVerified": "Verified",
       "email": "Email",
-      "emailPlaceholder": "Optional — verify it later in your profile"
+      "emailPlaceholder": "you@company.com",
+      "emailHint": "Optional. Verify it later in your profile to use it for account recovery."
     },
     "errors": {
       "accountFormat": "Account must start with a letter, contain only letters/digits/underscore, and be 3-24 characters.",
@@ -18,7 +21,8 @@
       "generic": "Setup failed. Please try again."
     },
     "actions": {
-      "submit": "Continue"
+      "submit": "Finish setup",
+      "submitting": "Submitting…"
     }
   },
   "shell": {

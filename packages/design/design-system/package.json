@@ -16,7 +16,6 @@
       "require": "./dist/server.cjs"
     },
     "./styles/admin-tokens.css": "./assets/admin-tokens.css",
-    "./styles/auth.css": "./src/styles/auth.css",
     "./styles/brand.css": "./src/styles/brand.css",
     "./styles/brands/ruyin.css": "./src/styles/brands/ruyin.css",
     "./styles/brands/vxture.css": "./src/styles/brands/vxture.css",
@@ -58,7 +57,6 @@
     "@fontsource/funnel-display": "^5.3.0",
     "@fontsource/geist-mono": "^5.3.0",
     "@fontsource/inter": "^5.3.0",
-    "@marsidev/react-turnstile": "^1.5.2",
     "@vxture/design-tokens": "workspace:*",
     "@vxture/design-ui": "workspace:*",
     "@vxture/shared": "workspace:^"

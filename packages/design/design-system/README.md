@@ -25,7 +25,6 @@ import "@vxture/design-system/styles/globals.css";
 - `@vxture/design-system/tokens`
 - `@vxture/design-system/types`
 - `@vxture/design-system/server`
-- `@vxture/design-system/styles/auth.css`
 - `@vxture/design-system/styles/brand.css`
 - `@vxture/design-system/styles/components.css`
 - `@vxture/design-system/styles/fullscreen.css`

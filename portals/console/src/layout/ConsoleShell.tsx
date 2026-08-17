@@ -87,6 +87,16 @@ function ShellFrame({
     );
   }
 
+  // 首次补齐是**强制门，不是普通页面**：上面那个 useEffect 会把用户从任何别的
+  // 路径弹回这里，所以外壳里的侧栏、导航、租户切换器在这一步全部点不动——画出
+  // 一个走不通的壳，等于请人去按一排按不动的按钮。这一页不套外壳。
+  //
+  // 位置在会话闸之后：`status` / 登录态 / user / tenant 四项仍然先过一遍，
+  // 这里只决定"过了闸之后套不套外壳"。
+  if (pathname === ONBOARDING_PATH) {
+    return <>{children}</>;
+  }
+
   return (
     <ConsoleAppShell initialNavCollapsed={initialNavCollapsed}>
       <div className="console-page">

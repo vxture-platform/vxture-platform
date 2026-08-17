@@ -68,6 +68,10 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY:
       process.env.NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY ?? "",
+    // 首次补齐页的法务链接指门户站（console 没有 /legal 路由）。缺省生产域：
+    // compose 未注入时（本地 dev）也不至于拼出相对 404。
+    NEXT_PUBLIC_WEBSITE_URL:
+      process.env.NEXT_PUBLIC_WEBSITE_URL ?? "https://vxture.com",
   },
   turbopack: {
     resolveAlias: turboAliases,

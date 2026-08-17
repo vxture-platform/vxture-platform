@@ -1,82 +1,24 @@
-/* Accounts surface global style entry — reuses the design-system tokens/brand. */
+/* Accounts surface global style entry — reuses the design-system tokens/brand.
+ *
+ * ── 2026-08-17：本文件原有的五条局部规则全部删除 ─────────────────────────
+ * 不是"迁移到别处"，是它们**本来就没生效**。五条规则里的尺度与颜色引用的是
+ * `--vx-space-*` / `--vx-color-border`，而这两族在本仓只定义在
+ * `design-system/assets/shell-template/tokens.css` 里——那是发给**外部产品仓**
+ * 的模板，accounts 从来没有 import 过它。未定义的 `var()` 且不带兜底，是
+ * invalid at computed-value time，浏览器把**整条声明**丢掉。
+ *
+ * 于是实际渲染出来是：`.vx-accounts-notice` 没有内边距（`margin: 0 auto` 也
+ * 因为没有宽度上限而不起作用）；`.vx-operator-recovery-codes` 是一个没有间距、
+ * 没有内边距、没有描边的两列网格——恰好是"保存恢复码"那一屏，唯一必须看清楚
+ * 的地方；`.vx-passkey-list__item` 的描边与内边距同样全丢。
+ *
+ * **一条都不报错。** 与 website 那次 token 桥失效（耦合⑤）是同一族毛病：
+ * CSS 变量拼错不会有人告诉你，只会安静地少一层样式。
+ *
+ * 现在这些版面一律用 Tailwind 工具类落在组件上——那一层的每个挡位都是 T2 注册
+ * 出来的真 token，拼错编译期就没有类名，守卫也拦得住。
+ */
 
 @import "@vxture/design-system/styles/globals.css";
 @import "@vxture/design-system/styles/brands/vxture.css";
 @import "@vxture/design-system/styles/workbench.css";
-
-/* Minimal notice/placeholder layout (root + missing-challenge fallback). */
-.vx-accounts-notice {
-  margin: 0 auto;
-  padding: var(--vx-space-4xl) var(--vx-space-xl);
-}
-
-/* Operator MFA step affordances (accounts-local; DS tokens only — no hardcoded
-   scale/color). Native button-element usage is tracked in the DS guardrail
-   baseline pending a DS Button primitive. */
-.vx-auth-link-button {
-  background: none;
-  border: none;
-  padding: 0;
-  margin-top: var(--vx-space-sm);
-  color: var(--vx-color-primary);
-  font: inherit;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-.vx-operator-recovery-codes {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--vx-space-sm);
-  list-style: none;
-  margin: var(--vx-space-md) 0;
-  padding: var(--vx-space-md);
-  border: 1px solid var(--vx-color-border);
-  border-radius: var(--vx-radius-md);
-  font-family: var(--vx-font-mono, monospace);
-}
-
-.vx-operator-recovery-codes li {
-  text-align: center;
-}
-
-.vx-totp-qr {
-  display: block;
-  margin: 0 auto;
-  border-radius: var(--vx-radius-md);
-}
-
-.vx-passkey-manager__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--vx-space-md);
-}
-
-.vx-passkey-list {
-  list-style: none;
-  margin: var(--vx-space-md) 0 0;
-  padding: 0;
-  display: grid;
-  gap: var(--vx-space-sm);
-}
-
-.vx-passkey-list__item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--vx-space-md);
-  padding: var(--vx-space-md);
-  border: 1px solid var(--vx-color-border);
-  border-radius: var(--vx-radius-md);
-}
-
-.vx-passkey-list__item span {
-  display: block;
-}
-
-.vx-passkey-list__actions {
-  display: flex;
-  gap: var(--vx-space-md);
-  white-space: nowrap;
-}

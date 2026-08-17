@@ -10,13 +10,14 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { Banner, Button } from "@vxture/design-system";
 import {
-  AuthChromeFooter,
-  AuthChromeHeader,
   AuthField,
   AuthLoginTemplate,
   AuthPrimaryButton,
-} from "@vxture/design-system";
+  AuthResultPanel,
+} from "./auth/AuthLogin";
+import { AccountsAuthFooter, AccountsAuthHeader } from "./AuthChrome";
 import { resetOperatorPassword } from "@/api/oidc";
 
 export function OperatorResetPasswordPanel({
@@ -53,21 +54,36 @@ export function OperatorResetPasswordPanel({
 
   return (
     <AuthLoginTemplate
-      header={<AuthChromeHeader brandLabel="Vxture" />}
-      footer={<AuthChromeFooter />}
+      header={<AccountsAuthHeader />}
+      footer={<AccountsAuthFooter />}
+      layout="single"
       title="设置运营账号新密码"
-      useLoginLayout
+      description="运营密码至少 12 位。重置后当前账号的全部会话都会失效，需要重新登录。"
+      useLoginLayout={!done}
     >
       {done ? (
-        <div className="vx-auth-reset-done">
-          <div className="vx-auth-check">✓</div>
-          <h1>密码已重置</h1>
-          <p>
-            请使用新密码<a href="/login">重新登录</a>。
-          </p>
-        </div>
+        /* 同 ResetPasswordPanel：`.vx-auth-reset-done` / `.vx-auth-check` 已是
+         * 无定义的死类名。原先"重新登录"是句子里的一个裸 <a>，在一屏只有一件
+         * 事可做的终态屏上，它该是那个按钮。 */
+        <AuthResultPanel
+          title="密码已重置"
+          description="原有会话已全部失效，请使用新密码重新登录。"
+          action={
+            <Button
+              size="xl"
+              className="w-full"
+              onClick={() => window.location.assign("/login")}
+            >
+              重新登录
+            </Button>
+          }
+        />
       ) : (
-        <form onSubmit={onSubmit} autoComplete="on">
+        <form
+          className="flex flex-col gap-md"
+          onSubmit={onSubmit}
+          autoComplete="on"
+        >
           <AuthField
             label="新密码"
             name="new-password"
@@ -87,11 +103,11 @@ export function OperatorResetPasswordPanel({
             placeholder="再次输入新密码"
             icon="lock"
             value={confirm}
-            error={error}
             autoComplete="new-password"
             disabled={loading}
             onChange={setConfirm}
           />
+          {error ? <Banner tone="danger" title={error} /> : null}
           <AuthPrimaryButton
             loading={loading}
             label="重置密码"

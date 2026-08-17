@@ -6,6 +6,7 @@
  * one-time binding token and renders the phone-binding form; a missing token
  * means the page was opened out of band — show a friendly notice.
  */
+import { AccountsNotice } from "@/components/AuthChrome";
 import { BindPhonePanel } from "@/components/BindPhonePanel";
 
 export const dynamic = "force-dynamic";
@@ -21,10 +22,10 @@ export default async function BindPhonePage({
 
   if (!token) {
     return (
-      <main className="vx-accounts-notice">
-        <h1>绑定会话无效</h1>
-        <p>请重新发起登录。</p>
-      </main>
+      <AccountsNotice
+        title="绑定会话无效"
+        description="这个绑定链接已过期或被使用过。请回到应用重新发起登录。"
+      />
     );
   }
 

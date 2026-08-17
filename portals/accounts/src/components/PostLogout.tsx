@@ -17,6 +17,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AccountsNotice } from "./AuthChrome";
 
 const OIDC_API_BASE =
   process.env.NEXT_PUBLIC_OIDC_API_BASE ?? "http://localhost:3081";
@@ -97,23 +98,39 @@ export function PostLogout({
 
   if (dest) {
     return (
-      <main className="vx-accounts-notice">
-        <p>正在跳转…</p>
+      <main className="flex min-h-screen flex-col items-center justify-center gap-md px-md">
+        <span
+          className="size-icon-lg animate-spin rounded-full border-medium border-primary border-t-transparent"
+          aria-hidden="true"
+        />
+        <p className="text-body-md text-muted-foreground">正在跳转…</p>
       </main>
     );
   }
 
   const title = info?.displayName || info?.name || "Vxture";
 
+  // 登出后是**唯一**一屏"事情办完了"的确认。原先它顶着页面左上角，一个 48px
+  // 的 logo、一个裸 h1、一段裸 p——`.vx-accounts-notice` 的内边距因为引用未定义
+  // 的 `--vx-space-*` 被浏览器整条丢掉，连居中都没有。
   return (
-    <main className="vx-accounts-notice">
-      {info?.logoUrl ? (
-        // Logo is an arbitrary per-client URL — a plain img is intentional.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={info.logoUrl} alt={title} style={{ height: 48 }} />
-      ) : null}
-      <h1>已从 {title} 安全退出</h1>
-      <p>你已登出当前及所有关联应用。</p>
-    </main>
+    <AccountsNotice
+      tone="success"
+      title={`已从 ${title} 安全退出`}
+      description={
+        <>
+          {info?.logoUrl ? (
+            // Logo is an arbitrary per-client URL — a plain img is intentional.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              className="mx-auto mb-md block size-media-xs object-contain"
+              src={info.logoUrl}
+              alt={title}
+            />
+          ) : null}
+          你已登出当前应用及所有关联应用。
+        </>
+      }
+    />
   );
 }

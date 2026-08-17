@@ -13,15 +13,18 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  AuthChromeFooter,
-  AuthChromeHeader,
   AuthLoginTemplate,
   AuthPasswordLoginPanel,
   AuthPhoneLoginPanel,
   AuthTabs,
   AuthTurnstile,
   type AuthLoginTab,
-} from "@vxture/design-system";
+} from "./auth/AuthLogin";
+import {
+  ACCOUNTS_AUTH_VISUAL,
+  AccountsAuthFooter,
+  AccountsAuthHeader,
+} from "./AuthChrome";
 import { rememberRpOrigin, resolveReturnUrl } from "@vxture/platform-browser";
 import {
   SessionExpiredError,
@@ -369,9 +372,18 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
 
   return (
     <AuthLoginTemplate
-      header={<AuthChromeHeader brandLabel="Vxture" />}
-      footer={<AuthChromeFooter />}
-      title={isOperator ? "运营登录" : "Welcome to Vxture"}
+      header={<AccountsAuthHeader />}
+      footer={<AccountsAuthFooter />}
+      // 标题此前是 "Welcome to Vxture"，一句英文孤零零挂在一整页中文上面。
+      // 副标题写的是"登录之后会到哪里"——登录页最该回答的问题就是这个，
+      // 而两个 realm 的去向不是同一个地方。
+      title={isOperator ? "运营登录" : "欢迎回来"}
+      description={
+        isOperator
+          ? "运营账号仅限内部使用，登录需通过二次验证。"
+          : "登录后进入控制台，管理你的模型、凭据与配额。"
+      }
+      visual={ACCOUNTS_AUTH_VISUAL}
       useLoginLayout
     >
       {!isOperator && mode === "phone" ? (
@@ -414,8 +426,11 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
           social={socialNode}
           showForgot={!isOperator}
           primaryDisabled={!passwordCanSubmit}
+          // 标签与占位符要说同一件事：面板缺省标签是"邮箱"，而这里接受的是
+          // 账号/手机号/邮箱三种——标签写"账号"，具体形态由占位符举例。
+          identifierLabel={isOperator ? "运营账号" : "账号"}
           identifierPlaceholder={
-            isOperator ? "运营账号" : "邮箱 / 用户名 / 手机号"
+            isOperator ? "请输入运营账号" : "邮箱 / 用户名 / 手机号"
           }
           options={{ showRemember: false }}
           onChangeIdentifier={setIdentifier}

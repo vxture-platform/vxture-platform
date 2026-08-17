@@ -99,7 +99,8 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
       },
     });
     // signOut 只依赖模块级的 logout 与两个 setter，身份稳定，不必进依赖数组。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // （新版 react-hooks 已不再对此报 exhaustive-deps，原来的行内豁免成了
+    // "unused disable directive"，反过来卡 CI 的零警告闸——豁免随规则一起退。）
   }, []);
 
   async function signOut() {

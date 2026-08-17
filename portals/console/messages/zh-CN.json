@@ -1,14 +1,17 @@
 {
   "onboarding": {
-    "title": "完成账号初始设置",
-    "description": "最后一步：设置账号并确认信息后即可继续使用。",
+    "brand": "Vxture Studio",
+    "title": "完善你的账号",
+    "description": "还差几步就能开始。账号名用于登录，显示名称是别人看到的你。",
     "fields": {
       "account": "账号",
       "accountPlaceholder": "字母、数字、下划线，字母开头",
       "displayName": "显示名称",
       "phone": "手机号",
+      "phoneVerified": "已验证",
       "email": "邮箱",
-      "emailPlaceholder": "选填，之后可在个人中心验证"
+      "emailPlaceholder": "you@company.com",
+      "emailHint": "选填。填了之后可在个人中心完成验证，用于找回账号。"
     },
     "errors": {
       "accountFormat": "账号需以字母开头，仅含字母/数字/下划线，长度 3-24 位。",
@@ -18,7 +21,8 @@
       "generic": "设置失败，请重试。"
     },
     "actions": {
-      "submit": "继续"
+      "submit": "完成设置",
+      "submitting": "提交中…"
     }
   },
   "shell": {

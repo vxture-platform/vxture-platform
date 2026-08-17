@@ -184,8 +184,6 @@ import {
   useToast,
 } from "@vxture/design-system";
 import {
-  AuthLoginTemplate,
-  AuthPasswordLoginPanel,
   ShellBrand,
   ShellIconButton,
   ShellLegalFooter,
@@ -2058,15 +2056,8 @@ export const ENTRIES: readonly Entry[] = [
       "批 O 重写：图标按钮复用 Button（ghost/icon-sm，焦点环与 aria-expanded 高亮在配方层），语言面板与用户菜单改走 Popover（外点/Escape/动效由 Radix 提供，替代手写监听），偏好面板的下拉与互斥选项复用 NativeSelect / SegmentedControl，认证标与徽章复用 StatusBadge；品牌标识走 §7 的 .vx-brand-* 基线，默认 label 为中性占位 Brand（真名不入仓）",
     render: () => <ShellChromeDemo />,
   },
-  {
-    name: "AuthLogin",
-    layer: "pattern",
-    group: "外壳与登录",
-    tags: ["vxture", "patterns"],
-    deviation:
-      "批 O 重写：字段复用 Input/Label/Checkbox（移动端 16px 防缩放、失效态在原子件里），tab 走 Radix Tabs，主按钮/三方登录复用 Button，分隔走 Separator + 发丝线；登录卡走 Card 的 veil 叠层（strong 档）无阴影；视觉面板底色改语义色 primary 渐变，NodeGraph 画布颜色从自身 computed color 读取，不再依赖已退役的 auth 专属 token。这里摆的是最常用的一条组合：AuthLoginTemplate + AuthPasswordLoginPanel",
-    render: () => <AuthLoginDemo />,
-  },
+  /* AuthLogin 条目已撤（2026-08-18）：认证族迁出 DS 归 accounts——DS 只收
+     通用、无业务含义的件，预览面只陈列 DS 自己的东西。 */
   /* ── 批 S：上游目录补齐 ─────────────────────────────────── */
   {
     name: "Spinner",
@@ -2589,42 +2580,6 @@ function ShellChromeDemo() {
           ]}
         />
       </Row>
-    </div>
-  );
-}
-
-function AuthLoginDemo() {
-  const [identifier, setIdentifier] = React.useState("");
-  const [password, setPassword] = React.useState("");
-  const [agreed, setAgreed] = React.useState(false);
-  return (
-    <div className="flex w-full flex-col gap-md">
-      {/* 登录卡在窄容器里也要完整可见，给一个自适应外框即可。 */}
-      <div className="w-full">
-        <AuthLoginTemplate
-          title="欢迎回来"
-          visual={{
-            title: "Vxture 平台",
-            description: "一个账号，贯通全部工作台。",
-            statusText: "服务正常",
-            stats: [
-              { value: "99.9%", label: "可用性" },
-              { value: "12ms", label: "中位时延" },
-            ],
-          }}
-        >
-          <AuthPasswordLoginPanel
-            identifier={identifier}
-            password={password}
-            agreementChecked={agreed}
-            loading={false}
-            onChangeIdentifier={setIdentifier}
-            onChangePassword={setPassword}
-            onAgreementChange={setAgreed}
-            onSubmit={(e) => e.preventDefault()}
-          />
-        </AuthLoginTemplate>
-      </div>
     </div>
   );
 }

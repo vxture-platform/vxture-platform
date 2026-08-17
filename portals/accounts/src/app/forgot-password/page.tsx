@@ -12,11 +12,13 @@
 
 import { useState, type FormEvent } from "react";
 import {
-  AuthChromeFooter,
-  AuthChromeHeader,
   AuthForgotPasswordPanel,
   AuthLoginTemplate,
-} from "@vxture/design-system";
+} from "@/components/auth/AuthLogin";
+import {
+  AccountsAuthFooter,
+  AccountsAuthHeader,
+} from "@/components/AuthChrome";
 import { requestPasswordReset } from "@/api/oidc";
 
 export default function ForgotPasswordPage() {
@@ -45,10 +47,16 @@ export default function ForgotPasswordPage() {
 
   return (
     <AuthLoginTemplate
-      header={<AuthChromeHeader brandLabel="Vxture" />}
-      footer={<AuthChromeFooter />}
-      title="重置密码"
-      useLoginLayout
+      header={<AccountsAuthHeader />}
+      footer={<AccountsAuthFooter />}
+      // 单栏：**招徕面用分栏，办事面用单栏。** 左边那块视觉面板的工作是把还没
+      // 决定的人拉进来；到了找回密码这一步，人已经在里面了，一块营销色块只会
+      // 把「填个邮箱」这件事往右推半屏。
+      layout="single"
+      // `useLoginLayout={false}`：`AuthForgotPasswordPanel` 自带返回按钮 + 标题 +
+      // 说明，而模板的 `useLoginLayout` 会在它上面**再**画一个标题——两者的默认
+      // 文案都是"重置密码"，于是这一页一直顶着两个一模一样的 h1。
+      useLoginLayout={false}
     >
       <AuthForgotPasswordPanel
         email={email}
