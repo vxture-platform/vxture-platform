@@ -1,6 +1,6 @@
 {
   "name": "@vxture/design-system",
-  "version": "5.0.0-alpha.0",
+  "version": "5.0.0",
   "description": "Vxture platform — design tokens, UI components, theme, icons",
   "private": false,
   "type": "module",
