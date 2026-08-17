@@ -81,14 +81,32 @@ check_service_health() {
 }
 
 check_platform_health() {
+  # 端口以 compose.platform.yml 的 healthcheck 为准（那是唯一被容器自己持续验证的一份）。
+  #
+  # L0 端口重排后这份清单过时了三处：`admin` 3040→3030、`auth-bff` 3061→3081、
+  # `admin-bff` 3043→3031（最后一条方向还是反的，见 15-migrate-runtime-ports.sh）。
+  # 三条在 v0.20.28 的部署里同时 FAIL，而那时 14/14 容器自身的 healthcheck 全绿、
+  # 四个公网端点也全通——**报警的是这份清单，不是平台**。
+  #
+  # 探测走 `compose exec -T <service>`，在各自容器内 curl，所以端口写错只会连不上、
+  # 不会打到别的服务上（一度以为 `admin` 探 3040 会命中 opera 而形成假绿，实测三条
+  # 全是 FAIL，那个担心不成立）。
+  #
+  # 另外补上原先完全漏掉的四个：opera / opera-bff / accounts / platform-api。
+  # **platform-api 正是上一版唯一真出问题的那个**——它 unhealthy 了整整一轮，而这份
+  # 清单里根本没有它，是靠 `docker ps` 的 STATUS 才被发现的。
   check_service_health "website" "http://localhost:3000/"
   check_service_health "console" "http://localhost:3020/"
-  check_service_health "admin" "http://localhost:3040/"
+  check_service_health "admin" "http://localhost:3030/"
+  check_service_health "opera" "http://localhost:3040/"
+  check_service_health "accounts" "http://localhost:3080/"
   check_service_health "gateway-bff" "http://localhost:8000/healthz"
-  check_service_health "auth-bff" "http://localhost:3061/healthz"
+  check_service_health "auth-bff" "http://localhost:3081/healthz"
   check_service_health "website-bff" "http://localhost:3001/healthz"
   check_service_health "console-bff" "http://localhost:3021/healthz"
-  check_service_health "admin-bff" "http://localhost:3043/healthz"
+  check_service_health "admin-bff" "http://localhost:3031/healthz"
+  check_service_health "opera-bff" "http://localhost:3041/healthz"
+  check_service_health "platform-api" "http://localhost:8080/healthz"
 }
 
 check_nginx_runtime() {
