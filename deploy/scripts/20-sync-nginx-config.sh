@@ -56,6 +56,14 @@ render_nginx() {
 render_nginx "$SRC/nginx.conf" "$DST/nginx.conf"
 for f in "$SRC/conf.d/"*.conf;        do render_nginx "$f" "$DST/conf.d/$(basename "$f")"; done
 for f in "$SRC/snippets/"*.conf;      do render_nginx "$f" "$DST/snippets/$(basename "$f")"; done
+# 先清后渲：sites-enabled 的每一份都由本脚本产出（仓内 conf + 下方 admin/opera
+# 模板），"只拷不删"会让改名/退役的旧文件永远活着——2026-08-18 实查线上就躺着
+# 一份前模板时代的 admin 域名 vhost 残留（文件名即真实域名，按 product_250 §2
+# 此处以 y.vxture.com 占位指代），与渲出的 admin.conf 同名 server_name 冲突，
+# 且把 /varda/ 指向 3080（如今是 accounts 的 UI 口）。宁可整目录重建。
+# 失败安全：脚本 set -e，渲染中途失败则不会走到下方 reload，运行中的 nginx
+# 不受影响；下次成功运行即完整重建。
+rm -f "$DST/sites-enabled/"*.conf
 for f in "$SRC/sites-enabled/"*.conf; do render_nginx "$f" "$DST/sites-enabled/$(basename "$f")"; done
 cp -v "$COMPOSE_SRC"                        "$COMPOSE_DST"
 
