@@ -990,6 +990,17 @@ function auditEnvFileRule(rule) {
     const placeholderOptional = rule.placeholderOptionalKeys ?? new Set();
     for (const record of actual.records) {
       if (placeholderOptional.has(record.key)) continue;
+      /* 已被上面判为「弃用待删」（example 里没有这个键）的，不再按占位值判错。
+         同一个键同时报「可以删除」和「必须填值」是自相矛盾——**一个正在退场、连
+         example 都不再声明的键，本来就不该有值**，要求它填反而是在挽留它。
+
+         这条不是为了让审计好过：真正在用的键仍然逐个检查，只有 example 已经不认的
+         才豁免，而那种键同一轮里必定已经带着一条 warning 出现，不会无声消失。
+
+         实测触发点：worker-01 的 `.env.auth-bff` 留着 `OIDC_CLIENT_SECRET_HASH_RUNA`
+         （RUNA → RUNOS 改名的残留，值为空，仓内零消费方）。审计一边说它可以删、
+         一边因为它是空值判 ERROR，把一次发布卡在一行早该消失的残留上。 */
+      if (!example.byKey.has(record.key)) continue;
       if (isPlaceholder(record.value)) {
         results.push(
           diagnostic(
