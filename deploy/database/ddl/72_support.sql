@@ -80,6 +80,10 @@ CREATE INDEX idx_ticket_comments_ticket_created ON support.ticket_comments (tick
 -- 平台中央审计：identity/commerce/admin 全域"谁在何时对什么做了什么"统一落此。
 -- 分区键 created_at 必进 PK。tenant_id/actor_id 刻意不建 FK：合规不可变记录须活过
 -- 租户/actor 注销(边界#3)、actor 跨 customer/operator 两 realm(边界#2)。
+-- actor_console（product_251 X-3）：这一笔是从哪个管理面发起的。**不是**用来把审计
+-- 分家——全平台仍然一张表；是因为同一个运营者同时面对 opera / admin / atlas / runos
+-- 四个控制台，「谁改了什么」答得出、「他当时在哪个面」答不出时，跨面对账就断在这里。
+-- 可空：auth-bff 的后台通道换票不属于任何控制台，那种行就该是 NULL，不该硬编一个。
 -- append-only：封 UPDATE+DELETE（触发器见 triggers_ddl）；留存靠 DROP PARTITION(O(1))。
 -- 月分区 + DEFAULT 兜底由部署脚本据 partitioned_tables 预建（与 metering usage_events 共用）。
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -87,6 +91,8 @@ CREATE TABLE support.audit_logs (
     id            uuid          NOT NULL DEFAULT gen_random_uuid(),
     actor_type    varchar(32)   NOT NULL,
     actor_id      uuid          NOT NULL,                             -- 裸值，按 actor_type 跨 realm（边界#2/#3）
+    actor_console varchar(32),                                        -- 'opera'|'admin'|NULL(非控制台发起)；见下
+
     tenant_id     uuid,                                               -- 可空(平台级)；裸值，不建 FK（边界#3）
     action        varchar(128)  NOT NULL,                            -- 'tenant.member.invite'
     result        varchar(32)   NOT NULL DEFAULT 'success',

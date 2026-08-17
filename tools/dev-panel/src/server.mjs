@@ -264,9 +264,17 @@ async function killProcessTree(pid) {
     );
     return r.code === 0;
   }
+  /* -pid targets the whole process GROUP, not just the shell itself — this only
+   * reaches grandchildren (the actual node dev server, its own workers, etc.)
+   * because startService spawns with detached:true, making pid its own group
+   * leader. Without that, -pid here would silently hit the panel's own group
+   * instead (spawn() does not create a new group by default on POSIX), and
+   * only the top `sh` would die while everything under it kept running. */
+  let groupTargetable = true;
   try {
     process.kill(-pid, "SIGTERM");
   } catch {
+    groupTargetable = false;
     try {
       process.kill(pid, "SIGTERM");
     } catch {
@@ -276,7 +284,10 @@ async function killProcessTree(pid) {
   await sleep(900);
   try {
     process.kill(pid, 0);
-    process.kill(pid, "SIGKILL");
+    // Still alive after SIGTERM's grace period — escalate on the same target
+    // (group if we could reach it, single pid otherwise) so stragglers under
+    // a signal-ignoring shell don't survive the "stop" click.
+    process.kill(groupTargetable ? -pid : pid, "SIGKILL");
   } catch {
     /* already exited */
   }
@@ -329,13 +340,18 @@ function sleep(ms) {
 
 // ─── 健康检查 ──────────────────────────────────────────────────────────────────
 
-async function runHealthChecks(service) {
+/**
+ * `portListening` 是调用方（getServiceSnapshot）已经探过一次的 service.port 结果——
+ * 大多数 tcp 检查探的就是同一个端口，不重新 connect 省一轮 socket（每轮 IPv4+IPv6
+ * 两条），15 个服务 × 每 1.5s 轮询一次，这个重复探测本来是常年空转的背景负载。
+ */
+async function runHealthChecks(service, portListening) {
   return Promise.all(
     (service.healthChecks ?? []).map(async (check) => {
       const t0 = Date.now();
       if (check.kind === "tcp") {
         const port = check.port ?? service.port;
-        const ok = await checkPort(port);
+        const ok = port === service.port ? portListening : await checkPort(port);
         return {
           label: check.label,
           url: `tcp://127.0.0.1:${port}`,
@@ -379,7 +395,7 @@ async function getServiceSnapshot(service) {
   const state = runtime.get(service.id);
   const listening = await checkPort(service.port);
   const running = isChildAlive(state?.child);
-  const health = await runHealthChecks(service);
+  const health = await runHealthChecks(service, listening);
   const uptimeMs = state?.startedAt
     ? Date.now() - new Date(state.startedAt).getTime()
     : null;
@@ -443,6 +459,15 @@ async function startService(service) {
       ...(service.env ?? {}),
     },
     windowsHide: true,
+    /* POSIX only: makes the shell its own process-group leader so
+     * killProcessTree's `process.kill(-pid, …)` actually reaches the real
+     * dev-server process (and its own child workers) under it instead of —
+     * absent this — landing on the panel's own process group, since spawn()
+     * does not create a new group by default. Windows has no equivalent
+     * concept; taskkill /t already walks the real parent-child tree there,
+     * and detached:true on Windows would instead pop the child into its own
+     * console window, which is not what we want. */
+    detached: process.platform !== "win32",
   });
 
   state.child = child;
@@ -472,21 +497,31 @@ async function stopService(service) {
   state.stopping = true;
   panelLog(service.id, "正在停止服务进程树");
 
-  const pids = new Set();
-  if (isChildAlive(state.child)) pids.add(state.child.pid);
-  for (const pid of await findListeningPids(service.port)) pids.add(pid);
-
-  if (pids.size === 0) {
-    panelLog(service.id, `端口 ${service.port} 无需停止`);
-    state.child = null;
-    state.startedAt = null;
-    state.stopping = false;
-    return;
+  const knownPid = isChildAlive(state.child) ? state.child.pid : null;
+  if (knownPid !== null) {
+    const killed = await killProcessTree(knownPid);
+    panelLog(service.id, killed ? `已停止 pid=${knownPid}` : `停止失败 pid=${knownPid}`);
   }
 
-  for (const pid of pids) {
-    const killed = await killProcessTree(pid);
-    panelLog(service.id, killed ? `已停止 pid=${pid}` : `停止失败 pid=${pid}`);
+  /* findListeningPids 在 Windows 上要 spawn powershell/netstat，比一次 TCP 探测贵
+   * 得多。已知子进程杀掉后端口通常已经关了，没必要每次停止都额外拉起一个
+   * powershell 进程去扫监听者——只有端口还占着（残留孙进程，或本来就是
+   * foreignPort、没有 known pid 可杀）时才升级到全量扫描。 */
+  const stillOpen = knownPid === null || (await checkPort(service.port));
+  if (stillOpen) {
+    const strays = (await findListeningPids(service.port)).filter(
+      (pid) => pid !== knownPid,
+    );
+    if (strays.length === 0 && knownPid === null) {
+      panelLog(service.id, `端口 ${service.port} 无需停止`);
+    }
+    for (const pid of strays) {
+      const killed = await killProcessTree(pid);
+      panelLog(
+        service.id,
+        killed ? `已停止残留 pid=${pid}` : `停止残留失败 pid=${pid}`,
+      );
+    }
   }
 
   const closed = await waitForPortClosed(service.port);
@@ -554,10 +589,15 @@ async function startAllOrdered() {
 
 async function stopAll() {
   bulkOperationVersion += 1;
-  for (const serviceId of [...START_ORDER].reverse()) {
-    const service = findService(serviceId);
-    if (service) await stopService(service);
-  }
+  /* 停止不像启动那样有依赖顺序（健康门控只在"起"的方向上有意义），并发杀比
+   * 顺序 for 循环快得多——尤其是每个还要经过 stopService 里可能的 findListeningPids
+   * 兜底扫描。 */
+  await Promise.all(
+    START_ORDER.map((serviceId) => {
+      const service = findService(serviceId);
+      return service ? stopService(service) : null;
+    }),
+  );
 }
 
 // ─── HTTP 工具 ─────────────────────────────────────────────────────────────────
@@ -1703,13 +1743,21 @@ function pageHtml() {
     /* ── 首次加载 ── */
     refreshOnce();
 
-    /* ── 轮询：每 1.5s 刷新服务，每 2s 刷新状态 ── */
+    /* ── 轮询：每 1.5s 刷新服务，每 2s 刷新状态；标签页不在前台时暂停 ──
+     * 面板一整天挂在后台标签页里是常态，不暂停的话服务端要为 15 个服务持续做
+     * 端口探测+健康检查（每轮约 44 次 socket + 17 次 fetch），纯粹空转。切回前台
+     * 立即补一次，不用等下一个 tick。 */
+    let pollingSuspended = document.hidden;
     setInterval(async () => {
-      if (pollBusy) return;
+      if (pollBusy || pollingSuspended) return;
       pollBusy = true;
       try { await loadServices(); } finally { pollBusy = false; }
     }, 1500);
-    setInterval(loadStatus, 2000);
+    setInterval(() => { if (!pollingSuspended) loadStatus(); }, 2000);
+    document.addEventListener('visibilitychange', () => {
+      pollingSuspended = document.hidden;
+      if (!pollingSuspended) refreshOnce();
+    });
   </script>
 </body>
 </html>`;
@@ -1785,6 +1833,87 @@ async function handleListenError(err) {
   process.exit(1);
 }
 
+/**
+ * 面板启动时探一遍所有端口——此时 runtime 里每个 state.child 都是 null（进程
+ * 刚起，还没认领任何子进程），所以任何已经在监听的端口只可能是**上一轮会话
+ * 遗留下来的进程**：面板异常退出（关终端、任务管理器强杀、没有走"停止"）时不会
+ * 触发任何清理，那些被拉起的 Next/Nest/esbuild watch 继续常驻，面板重开后也不
+ * 认识它们的 pid，只能标"外部占用"——而这个标记本身要点进卡片才看得到。这里在
+ * 启动日志里把它们直接点名，别指望开发者会主动去逐张卡片核对。
+ */
+async function reportPreexistingOrphans() {
+  const results = await Promise.all(
+    SERVICES.map(async (s) => ({
+      id: s.id,
+      name: s.name,
+      port: s.port,
+      open: await checkPort(s.port),
+    })),
+  );
+  const orphans = results.filter((r) => r.open);
+  if (orphans.length === 0) return;
+  for (const o of orphans) {
+    const state = runtime.get(o.id);
+    if (state) state.foreignPort = true;
+  }
+  console.log(
+    `[dev-panel] ⚠ ${orphans.length} 个端口在本次启动前就已被占用（很可能是上一轮` +
+      `会话未经"停止"清理的残留进程，而不是刚起的新服务）：`,
+  );
+  for (const o of orphans) {
+    console.log(`[dev-panel]     ${o.name} :${o.port}`);
+  }
+  console.log(
+    "[dev-panel]   面板不知道这些进程的 pid，无法自动收拾——去对应卡片点「停止」" +
+      "（会扫端口找 pid 再杀），或者去任务管理器手动结束。",
+  );
+}
+
+/**
+ * 清理本面板这次会话自己拉起、且还活着的子进程树。仅覆盖 SIGINT（Ctrl+C，最常见
+ * 的手动停止路径，Windows 上 Node 对此有原生支持）和 SIGTERM；`taskkill /F` 或
+ * 任务管理器"结束任务"不投递信号，这两种没有进程内钩子能兜底，只能靠下次启动时
+ * reportPreexistingOrphans 事后发现。故意只杀 state.child 认领的进程，不做
+ * findListeningPids 那种owner-agnostic 的端口扫描——退出清理不该动一个面板不认识
+ * 是不是这次会话自己起的外部进程。
+ */
+let shuttingDown = false;
+async function shutdownCleanup(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  const alive = [...runtime.entries()].filter(([, state]) =>
+    isChildAlive(state.child),
+  );
+  if (alive.length === 0) {
+    process.exit(0);
+    return;
+  }
+  console.log(
+    `\n[dev-panel] ${signal} — 正在停止本次会话拉起的 ${alive.length} 个服务进程…`,
+  );
+  try {
+    await Promise.all(
+      alive.map(async ([id, state]) => {
+        const pid = state.child.pid;
+        const killed = await killProcessTree(pid);
+        console.log(
+          `[dev-panel]   ${id} pid=${pid}: ${killed ? "已停止" : "停止失败，可能需要手动结束"}`,
+        );
+      }),
+    );
+  } catch (err) {
+    console.error("[dev-panel] 退出清理出错:", err);
+  } finally {
+    process.exit(0);
+  }
+}
+process.on("SIGINT", () => {
+  shutdownCleanup("SIGINT").catch(() => process.exit(0));
+});
+process.on("SIGTERM", () => {
+  shutdownCleanup("SIGTERM").catch(() => process.exit(0));
+});
+
 async function startPanelServer() {
   const existingPanel = await detectExistingPanel(PANEL_PORT);
   if (existingPanel) {
@@ -1805,6 +1934,9 @@ async function startPanelServer() {
     console.log(
       `[dev-panel] http://localhost:${PANEL_PORT}  (ROOT_DIR: ${ROOT_DIR})`,
     );
+    reportPreexistingOrphans().catch((err) => {
+      console.error("[dev-panel] 残留进程检测失败:", err);
+    });
   });
 }
 

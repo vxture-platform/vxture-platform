@@ -28,7 +28,7 @@ services:
     # Same tag AND digest as production (deploy/compose.platform.yml) — a local
     # database that is a different Postgres build from production is a local
     # database that can prove nothing about production.
-    image: postgres:18-alpine@sha256:96d56f7f57c6aacd1fcb908bc83b345ec5f83231ee486dd66a1baadce274db88
+    image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
     container_name: vx-platform-postgres-db-${DEPLOY_ENV:-dev}
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-vxture}
@@ -61,14 +61,42 @@ services:
       start_period: 10s
     networks: [appnet]
     restart: unless-stopped
+    # 与生产同值（compose.platform.yml）——本地库若连资源包线都和生产不同，它同样
+    # 证明不了生产的事，理由与上面"同 tag 同 digest"那条是同一条。
+    #
+    # 实测空闲 62MiB（`docker stats`，2026-08-17）。512m 是天花板不是预算：DDL apply
+    # 与 bulk seed 会冲上去，而 postgres 默认 shared_buffers 就是 128MB。
+    mem_limit: 512m
+    # **有状态件刻意不禁 swap**（不设 memswap_limit）：宁可它在压力下变慢，也不要被
+    # OOM 杀掉——库一死，所有 depend_on 它的 BFF 跟着倒，这是级联而不是单点。
+    #
+    # CPU 是**垄断闸**不是配额：本机 CPU 多，但生产 worker-01 只有 2 核，跑飞的
+    # 一个查询就能把整台机器吃光。1.5 让它能爆发、但永远留得下另半核给别人。
+    cpus: 1.5
+    # fork 炸弹护栏。postgres 每个连接一个进程，实测空闲 9；几个 BFF 的连接池加起来
+    # 到不了三位数，256 是"异常"的门槛而不是"够用"的门槛。
+    pids_limit: 256
 
   redis:
-    image: redis:8-alpine@sha256:09160599abd229764c0fb44cb6be640294e1d360a54b19985ab4843dcf2d90f1
+    image: redis:8-alpine@sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241
     container_name: vx-platform-redis-db-${DEPLOY_ENV:-dev}
     # No requirepass locally (production sets one from a docker secret): the
     # local REDIS_URL in .env.local is passwordless, and a password that lives
     # in two places drifts. Nothing is published beyond localhost.
-    command: ["redis-server", "--appendonly", "yes"]
+    # `--maxmemory 96mb` 与生产同策略：让 redis 在触到 cgroup 上限**之前**自己淘汰，
+    # 而不是被 OOM 杀掉丢掉全部会话。`volatile-lru` 只淘汰带 TTL 的键（会话/令牌/
+    # 限流键都有 TTL）——被淘汰的空闲会话意味着用户重登一次，比 redis 整个被杀好。
+    # 本地不设 requirepass（见上），这是与生产唯一的差别。
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--maxmemory",
+        "96mb",
+        "--maxmemory-policy",
+        "volatile-lru",
+      ]
     ports:
       - "${REDIS_PUBLISH_PORT:-6379}:6379"
     volumes:
@@ -81,6 +109,12 @@ services:
       start_period: 5s
     networks: [appnet]
     restart: unless-stopped
+    # 实测空闲 16.7MiB。128m 与生产同值，且高于上面的 maxmemory 96mb——
+    # 留出的那 32m 是 RDB/AOF 重写时的副本开销，不是余量。
+    mem_limit: 128m
+    cpus: 1.0
+    # 实测 17（redis 8 的 IO 线程）。64 足够，且能挡住异常派生。
+    pids_limit: 64
 
 networks:
   appnet:

@@ -4,11 +4,22 @@ import {
   dispatchIntervalMs,
 } from "./provisioning-dispatch.job";
 import type { ProvisioningService } from "@vxture/service-provisioning";
+import type { JobHeartbeatService } from "./job-heartbeat.service";
+
+// 心跳写入不是本文件的测试对象（见 job-heartbeat.service.spec.ts 的位置——目前无独立
+// spec，方法本身只是三条 UPSERT，行为由 provisioning.background_jobs 的 DDL 约束保底）；
+// 这里只给一个吞掉调用的哑桩，不让 tick() 因为缺这个依赖而报错。
+const noopHeartbeat = {
+  recordStart: vi.fn().mockResolvedValue(undefined),
+  recordSuccess: vi.fn().mockResolvedValue(undefined),
+  recordFailure: vi.fn().mockResolvedValue(undefined),
+} as unknown as JobHeartbeatService;
 
 const jobWith = (dispatchPending: () => Promise<unknown>) =>
-  new ProvisioningDispatchJob({
-    dispatchPending,
-  } as unknown as ProvisioningService);
+  new ProvisioningDispatchJob(
+    { dispatchPending } as unknown as ProvisioningService,
+    noopHeartbeat,
+  );
 
 describe("dispatchIntervalMs", () => {
   it("defaults to 10s and enforces a 1s floor", () => {

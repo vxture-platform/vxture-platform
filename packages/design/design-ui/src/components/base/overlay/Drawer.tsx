@@ -27,12 +27,32 @@ import { cn } from "../../../utils/cn";
 import { interactive } from "../../../styles/recipes";
 import { Icon } from "../../../icons";
 
+/** 抽屉宽度挡位，走 `panel` 梯——见 `width` 的注释，别接 overlay 梯。 */
+export type DrawerWidth = "sm" | "md" | "lg";
+
+/** ⚠ 必须是完整字面量：Tailwind 扫源码文本，拼接产不出工具类且不报错。 */
+const DRAWER_WIDTH_CLASS: Record<DrawerWidth, string> = {
+  sm: "w-panel-sm",
+  md: "w-panel-md",
+  lg: "w-panel-lg",
+};
+
 export interface DrawerProps {
   readonly open: boolean;
   readonly onClose: () => void;
   readonly side?: "right" | "left";
-  /** 面板宽度。运行时数据，不属于设计刻度，故走内联样式。 */
-  readonly width?: number | string;
+  /**
+   * 面板宽度。**优先给挡位**（`panel` 梯：sm 448 / md 512 / lg 672），数字只留给
+   * 确有理由的例外。
+   *
+   * 原注写着「运行时数据，不属于设计刻度」——那句话是错的，实测后果就是四个抽屉两个
+   * 520 两个 560，没有任何理由，只是各写各的。面板多宽是设计决定。
+   *
+   * ⚠ **不要接 `OverlayWidth`**（我第一版接错了）：那道梯是给下拉与气泡的，最宽一档
+   * `xl` 只有 384px，`layout-semantic.css` 的注释写着「再宽应分栏或改用 panel」。
+   * 抽屉全部在 500px 以上，上那道梯只会得到一个被腰斩的面板——而且不报错。
+   */
+  readonly width?: DrawerWidth | number | string;
   readonly title?: React.ReactNode;
   readonly description?: React.ReactNode;
   readonly footer?: React.ReactNode;
@@ -57,7 +77,18 @@ export function Drawer({
   children,
   className,
 }: DrawerProps) {
-  const widthValue = typeof width === "number" ? `${width}px` : width;
+  /* 挡位走类名（Tailwind 扫的是完整字面量，拼接扫不到且不报错），数字/裸串仍走
+     内联样式——两条路不能混，混了会同时出现 class 与 style 而 style 永远赢，挡位
+     就成了摆设。 */
+  const ladder =
+    typeof width === "string" && width in DRAWER_WIDTH_CLASS
+      ? DRAWER_WIDTH_CLASS[width as DrawerWidth]
+      : null;
+  const widthValue = ladder
+    ? undefined
+    : typeof width === "number"
+      ? `${width}px`
+      : width;
 
   return (
     <DialogPrimitive.Root
@@ -78,6 +109,7 @@ export function Drawer({
         <DialogPrimitive.Content
           style={widthValue ? { width: widthValue } : undefined}
           className={cn(
+            ladder,
             // 抽屉贴着视口边缘，只有朝内的一侧需要边——故留 border 不改 ring，
             // 由 SIDE_CLASS 决定是 border-l 还是 border-r。
             "fixed z-drawer flex h-full w-full flex-col border-border bg-popover text-foreground shadow-dialog",

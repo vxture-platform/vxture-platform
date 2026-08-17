@@ -17,11 +17,32 @@ networks:
 services:
   # ── 数据层 ──────────────────────────────────────────────────────────────────
 
+  # ── 资源上限的判据（2026-08-17 补 cpus / pids_limit）─────────────────────────
+  #
+  # worker-01 标称 2C2G，**实际可用内存 1607 MB**（`free -m`，2026-08-17）——标称与
+  # 可用差着一截，按 2048 算会低估拥挤程度。跑这一栈 14 个容器外加 vx-nginx。
+  #
+  # 三件事要分开说：
+  #
+  # 1. `mem_limit` 挡的是**单个**容器跑飞。它挡不住"所有容器一起涨"。
+  #    **这台机器上「总和 ≤ 内存」做不到**：留 ~400 MB 给内核与 docker 后，15 个容器
+  #    人均只剩 80 MB，而那正好是稳态值——等于一点爆发余量都不给，第一次 SSR 高峰或
+  #    一次 pg_dump 就会有容器被 OOM 杀掉。所以目标是**把最坏情况压进 swap 兜得住的
+  #    范围**，不是压到内存以下。2026-08-17 按真机实测重定后：合计 2304 MB，占
+  #    内存+swap(3654) 的 63%，余量 1350 MB —— 此前是 87% / 余 486 MB。
+  # 2. `cpus` 是**垄断闸不是配额**：两核的机器上，一个跑飞的查询就能吃光整机。
+  #    上限之和远大于 2 是有意的——它们是天花板，不是预留。
+  # 3. `pids_limit` 是 fork 炸弹护栏，按"异常"的门槛设，不是按"够用"设。
+  #
+  # 有状态件（postgres/redis）刻意不设 `memswap_limit`：宁可变慢也不要被 OOM 杀掉，
+  # 库一死所有 depend_on 它的 BFF 跟着倒。无状态件则钉死无 swap（见各自注释）。
+
   postgres:
     # Pinned by digest to prevent upstream 18-alpine tag drift from silently
     # recreating the stateful DB on pull. Bump tag+digest together to upgrade.
-    # 18-alpine digest resolved 2026-06-09.
-    image: postgres:18-alpine@sha256:96d56f7f57c6aacd1fcb908bc83b345ec5f83231ee486dd66a1baadce274db88
+    # 18-alpine digest resolved 2026-08-17 (18.4 -> 18.6, same major:
+    # the data directory format is unchanged, so this is a restart not a migration).
+    image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
     # Digest-pinned and never expected to change out-of-band; skip the
     # per-deploy manifest round-trip to docker.io (30-deploy-platform-stack.sh
     # unconditionally `pull`s every service). Same pattern already validated
@@ -33,7 +54,9 @@ services:
     # NOT pinned to no-swap (no memswap_limit) so it can lean on swap under pressure
     # rather than be OOM-killed — a killed pg cascades (all BFF depend_on it).
     # Owner: verify against `docker stats` on worker-01 before trusting this value.
-    mem_limit: 512m
+    mem_limit: 320m # 实测 43MiB（worker-01，2026-08-17）
+    cpus: 1.5
+    pids_limit: 256
     networks: [vxture-prod]
     environment:
       POSTGRES_USER: vxture
@@ -50,8 +73,9 @@ services:
       start_period: 10s
 
   redis:
-    # Pinned by digest (see postgres note). 8-alpine digest resolved 2026-06-09.
-    image: redis:8-alpine@sha256:09160599abd229764c0fb44cb6be640294e1d360a54b19985ab4843dcf2d90f1
+    # Pinned by digest (see postgres note). 8-alpine digest resolved 2026-08-17
+    # (8.8.0 -> 8.10.0, same major).
+    image: redis:8-alpine@sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241
     # See postgres note above — digest-pinned, skip the redundant per-deploy pull.
     pull_policy: missing
     container_name: vx-platform-redis
@@ -61,6 +85,8 @@ services:
     # token/rate-limit keys have TTLs) — an evicted idle session (user re-logs in)
     # beats redis being OOM-killed and losing every session.
     mem_limit: 128m
+    cpus: 1.0
+    pids_limit: 64
     networks: [vxture-prod]
     secrets: [platform_redis_password]
     volumes:
@@ -88,8 +114,10 @@ services:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_website:${VX_IMAGE_TAG:-latest}
     container_name: vx-platform-website
     restart: unless-stopped
-    mem_limit: 256m
-    memswap_limit: 256m # == mem_limit: no swap, so a runaway dies at its own ceiling instead of eating host swap
+    mem_limit: 192m # 实测 85MiB（worker-01，2026-08-17）
+    cpus: 1.0
+    pids_limit: 128
+    memswap_limit: 192m # == mem_limit: no swap, so a runaway dies at its own ceiling instead of eating host swap
     networks: [vxture-prod]
     environment:
       NODE_ENV: production
@@ -106,8 +134,10 @@ services:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_console:${VX_IMAGE_TAG:-latest}
     container_name: vx-platform-console
     restart: unless-stopped
-    mem_limit: 256m
-    memswap_limit: 256m
+    mem_limit: 192m # 实测 77MiB（worker-01，2026-08-17）
+    cpus: 1.0
+    pids_limit: 128
+    memswap_limit: 192m
     networks: [vxture-prod]
     environment:
       NODE_ENV: production
@@ -129,8 +159,10 @@ services:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_admin:${VX_IMAGE_TAG:-latest}
     container_name: vx-platform-admin
     restart: unless-stopped
-    mem_limit: 256m
-    memswap_limit: 256m
+    mem_limit: 192m # 实测 78MiB（worker-01，2026-08-17）
+    cpus: 1.0
+    pids_limit: 128
+    memswap_limit: 192m
     networks: [vxture-prod]
     environment:
       NODE_ENV: production
@@ -151,8 +183,10 @@ services:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_opera:${VX_IMAGE_TAG:-latest}
     container_name: vx-platform-opera
     restart: unless-stopped
-    mem_limit: 192m
-    memswap_limit: 192m
+    mem_limit: 160m # 实测 54MiB（worker-01，2026-08-17）
+    cpus: 1.0
+    pids_limit: 128
+    memswap_limit: 160m
     networks: [vxture-prod]
     environment:
       NODE_ENV: production
@@ -171,8 +205,10 @@ services:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_accounts:${VX_IMAGE_TAG:-latest}
     container_name: vx-platform-accounts
     restart: unless-stopped
-    mem_limit: 256m
-    memswap_limit: 256m
+    mem_limit: 160m # 实测 60MiB（worker-01，2026-08-17）
+    cpus: 1.0
+    pids_limit: 128
+    memswap_limit: 160m
     networks: [vxture-prod]
     environment:
       NODE_ENV: production
@@ -193,8 +229,10 @@ services:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_bff-auth:${VX_IMAGE_TAG:-latest}
     container_name: vx-platform-auth-bff
     restart: unless-stopped
-    mem_limit: 192m
-    memswap_limit: 192m
+    mem_limit: 160m # 实测 64MiB（worker-01，2026-08-17）
+    cpus: 1.0
+    pids_limit: 128
+    memswap_limit: 160m
     networks: [vxture-prod]
     ports:
       - "${VX_WORKER01_TAILNET_IP:?set it in runtime/.env}:8081:3081" # 绑定 Tailscale 接口，仅 Tailscale 对端可达。宿主口进 80xx 边缘带（8080=platform-api S2S，8081=auth-bff S2S），容器内口跟 L0 map（3081）——跨仓契约从此只认 80xx，内部重排不再波及产品仓（原 3090 → 3061 → 本次）
@@ -226,8 +264,10 @@ services:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_bff-gateway:${VX_IMAGE_TAG:-latest}
     container_name: vx-platform-gateway-bff
     restart: unless-stopped
-    mem_limit: 128m
-    memswap_limit: 128m
+    mem_limit: 96m # 实测 30MiB（worker-01，2026-08-17）
+    cpus: 1.0
+    pids_limit: 128
+    memswap_limit: 96m
     networks: [vxture-prod]
     environment:
       NODE_OPTIONS: --max-old-space-size=96
@@ -243,8 +283,10 @@ services:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_bff-website:${VX_IMAGE_TAG:-latest}
     container_name: vx-platform-website-bff
     restart: unless-stopped
-    mem_limit: 192m
-    memswap_limit: 192m
+    mem_limit: 128m # 实测 52MiB（worker-01，2026-08-17）
+    cpus: 1.0
+    pids_limit: 128
+    memswap_limit: 128m
     networks: [vxture-prod]
     environment:
       NODE_OPTIONS: --max-old-space-size=144
@@ -275,8 +317,10 @@ services:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_bff-console:${VX_IMAGE_TAG:-latest}
     container_name: vx-platform-console-bff
     restart: unless-stopped
-    mem_limit: 192m
-    memswap_limit: 192m
+    mem_limit: 128m # 实测 59MiB（worker-01，2026-08-17）
+    cpus: 1.0
+    pids_limit: 128
+    memswap_limit: 128m
     networks: [vxture-prod]
     environment:
       NODE_OPTIONS: --max-old-space-size=144
@@ -303,8 +347,10 @@ services:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_bff-admin:${VX_IMAGE_TAG:-latest}
     container_name: vx-platform-admin-bff
     restart: unless-stopped
-    mem_limit: 192m
-    memswap_limit: 192m
+    mem_limit: 128m # 实测 51MiB（worker-01，2026-08-17）
+    cpus: 1.0
+    pids_limit: 128
+    memswap_limit: 128m
     networks: [vxture-prod]
     environment:
       NODE_OPTIONS: --max-old-space-size=144
@@ -333,8 +379,10 @@ services:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_bff-opera:${VX_IMAGE_TAG:-latest}
     container_name: vx-platform-opera-bff
     restart: unless-stopped
-    mem_limit: 160m
-    memswap_limit: 160m
+    mem_limit: 128m # 实测 45MiB（worker-01，2026-08-17）
+    cpus: 1.0
+    pids_limit: 128
+    memswap_limit: 128m
     networks: [vxture-prod]
     environment:
       NODE_OPTIONS: --max-old-space-size=120
@@ -362,8 +410,10 @@ services:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_bff-platform-api:${VX_IMAGE_TAG:-latest}
     container_name: vx-platform-api
     restart: unless-stopped
-    mem_limit: 192m
-    memswap_limit: 192m # owner: verify RSS — this one runs commerce cron jobs (dispatch/expiry sweeps)
+    mem_limit: 128m # 实测 50MiB（worker-01，2026-08-17）
+    cpus: 1.0
+    pids_limit: 128
+    memswap_limit: 128m # owner: verify RSS — this one runs commerce cron jobs (dispatch/expiry sweeps)
     networks: [vxture-prod]
     environment:
       NODE_OPTIONS: --max-old-space-size=144

@@ -34,13 +34,13 @@
 
 ### 1.1 各 BFF 端口与 Cookie
 
-| BFF         | 端口 | Cookie 名                                     | 服务前端                        |
-| ----------- | ---- | --------------------------------------------- | ------------------------------- |
-| auth-bff    | 3090 | （无固定 Cookie，由调用方指定 source 后转发） | —                               |
-| admin-bff   | 3031 | `vx_admin_access_token`                       | portals/admin                   |
-| console-bff | 3032 | `vx_session`                                  | portals/console                 |
-| website-bff | 3030 | `vx_session`                                  | portals/website                 |
-| varda-bff   | 3041 | 透传宿主 Cookie                               | portals/admin + portals/console |
+| BFF         | 端口         | Cookie 名                                     | 服务前端                        |
+| ----------- | ------------ | --------------------------------------------- | ------------------------------- |
+| auth-bff    | 见端口登记表 | （无固定 Cookie，由调用方指定 source 后转发） | —                               |
+| admin-bff   | 见端口登记表 | `vx_admin_access_token`                       | portals/admin                   |
+| console-bff | 见端口登记表 | `vx_session`                                  | portals/console                 |
+| website-bff | 见端口登记表 | `vx_session`                                  | portals/website                 |
+| varda-bff   | 见端口登记表 | 透传宿主 Cookie                               | portals/admin + portals/console |
 
 ### 1.2 请求格式
 

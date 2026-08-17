@@ -23,7 +23,6 @@ import {
   Query,
   Req,
   Res,
-  UnauthorizedException,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 import {
@@ -45,6 +44,7 @@ import {
 } from "@vxture/core-identity-sdk";
 import type { Redis } from "ioredis";
 import { OperatorExchangeService } from "../auth/operator-exchange.service";
+import { unauthenticated } from "../errors/api-error";
 import {
   RP_AUTH_SERVICE,
   RP_OIDC_CLIENT,
@@ -192,16 +192,36 @@ export class OidcAuthRouter {
           }
         }
       }
-      res.status(401).json({ code: "OIDC_ERROR", message: error });
+      /* 这三处是手写响应、不经异常过滤器，所以封套要在这里补齐（X-1）：原来
+         `INVALID_REQUEST` / `INVALID_STATE` 连 message 都没有，浏览器上就是一
+         片空白，而这恰恰是登录失败最需要说清楚的地方。 */
+      res.status(401).json({
+        code: "OIDC_ERROR",
+        message: error,
+        retryable: false,
+        statusCode: 401,
+      });
       return;
     }
     if (!code || !state) {
-      res.status(400).json({ code: "INVALID_REQUEST" });
+      res.status(400).json({
+        code: "OIDC_INVALID_REQUEST",
+        message: "Missing code or state on the OIDC callback",
+        retryable: false,
+        statusCode: 400,
+      });
       return;
     }
     const raw = await this.redis.getdel(this.authReqKey(state));
     if (!raw) {
-      res.status(400).json({ code: "INVALID_STATE" });
+      /* state 在 Redis 里找不到——过期或已被用掉。重新发起登录就好，所以这是
+         少数几个真的可重试的 4xx。 */
+      res.status(400).json({
+        code: "OIDC_INVALID_STATE",
+        message: "Authorization request expired or already consumed",
+        retryable: true,
+        statusCode: 400,
+      });
       return;
     }
     const authReq = JSON.parse(raw) as AuthReq;
@@ -245,7 +265,7 @@ export class OidcAuthRouter {
     const rpsid = req.cookies?.[this.cookieName] as string | undefined;
     const out = await this.auth.resolve(rpsid);
     if (out.status !== "ok") {
-      throw new UnauthorizedException("No active session");
+      throw unauthenticated("AUTH_NO_SESSION", "No active session");
     }
     return { status: "active", claims: out.claims };
   }

@@ -84,10 +84,15 @@ function TableTitleCell({
             <button
               type="button"
               onClick={onTitleClick}
+              /* 悬停只换颜色，**不加下划线**（owner 2026-08-14）。一屏几十行标题
+                 各自挂一条下划线，读起来像一列断续的横线，而下划线在这套界面里已经
+                 是链接的记号——这里点开的是详情，不是导航。
+                 也没有改字重：`font-medium` 会让文字变宽、把同一行后面的内容挤动，
+                 悬停时整行发生位移比没有反馈更糟。颜色变化本身已经够指示可点。 */
               className={cn(
                 "min-w-0 truncate rounded-sm text-label-md text-foreground",
                 interactive,
-                "hover:text-primary-text hover:underline",
+                "hover:text-primary-text",
               )}
             >
               {title}

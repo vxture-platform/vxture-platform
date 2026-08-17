@@ -207,15 +207,31 @@ export class TokenExchangeService {
    *  - caller = a workforce-realm RP client (platform-level, productCode null),
    *    asserted via the same single-audience discipline as T1 OBO — the
    *    presented operator token must have been minted FOR this exact caller;
-   *  - subject = a person (opr_<id>), not a service; `amr` is mirrored from
-   *    the operator session so providers can enforce step-up freshness on
-   *    high-stakes endpoints (M-1) without re-running the ceremony;
+   *  - subject = a person (opr_<id>), not a service;
    *  - no org/workspace context (operators are global, dataScope=global) and
    *    scope = `mgmt:{target}` — structurally distinguishable from S2S
    *    `tool:{target}` tokens so a management token can never pass a supply-
    *    surface guard by accident (and vice versa).
    * The platform sentinel audience is refused: management tokens target real
    * provider products only.
+   *
+   * **`amr` and `operator_role` are deliberately NOT minted** (owner
+   * 2026-08-13; `product_250` v0.4 §M-2 补注). They used to be mirrored from
+   * the operator session so a provider could gate high-stakes endpoints on
+   * step-up freshness. That clause is withdrawn: step-up is judged from
+   * `admin.operator_permission.requires_step_up` and executed by the console
+   * at the moment of the action — a provider has no UI, cannot run the
+   * ceremony, and `amr` only ever said "this session logged in with MFA,
+   * possibly eight hours ago", which is a session-level property standing in
+   * for an operation-level one. Atlas removed the guard that read `amr` and
+   * the parsing of both claims (vxture-atlas#167/#169); runos never read
+   * either. The test is whether a claim has a reject branch somewhere — these
+   * two had none left, so they stop being minted rather than sitting in the
+   * token implying a check that no longer happens.
+   *
+   * Note the operator SESSION token still carries `operator_role`
+   * (oidc.service.ts) — admin-bff and opera-bff read it. Only the OBO mint
+   * for provider audiences drops it.
    */
   private async exchangeOperator(
     caller: TokenExchangeCaller,
@@ -236,8 +252,6 @@ export class TokenExchangeService {
     if (typeof sub !== "string" || !sub) {
       throw new BadRequestException("invalid_request");
     }
-    const amr = subjClaims["amr"];
-    const operatorRole = subjClaims["operator_role"];
     const jti = randomUUID();
     const accessToken = this.keys.sign(
       {
@@ -246,10 +260,6 @@ export class TokenExchangeService {
         userType: "operator",
         realm: "workforce",
         scope: `mgmt:${target}`,
-        ...(typeof operatorRole === "string" && operatorRole
-          ? { operator_role: operatorRole }
-          : {}),
-        ...(Array.isArray(amr) && amr.length > 0 ? { amr } : {}),
       },
       {
         audience: target,

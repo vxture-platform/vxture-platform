@@ -12,13 +12,13 @@
 
 执行任何代码任务前，以下三份文档必须遵守：
 
-| 文档             | 内容                                            | 路径                                                    |
-| ---------------- | ----------------------------------------------- | ------------------------------------------------------- |
-| **注释规范**     | 文件头模板、JSDoc 格式、分区注释、英文注释要求  | `docs/40-implementation/ai/03-coding-comments.md`       |
-| **编码规则**     | 包边界约束、层职责、AI 行为规范                 | `docs/40-implementation/ai/01-coding-rules.md`          |
-| **代码风格**     | TypeScript 约定、命名规则、导出风格             | `docs/40-implementation/ai/02-coding-style.md`          |
-| **端口分配**     | 全局端口表、3NNX 规则、新 Agent 登记流程        | `docs/40-implementation/ai/port-allocation.md`          |
-| **BFF 数据访问** | Pool 注入、req.user、auth 委托签发、Schema 速查 | `docs/40-implementation/ai/05-bff-data-access-guide.md` |
+| 文档             | 内容                                            | 路径                                                                                                           |
+| ---------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **注释规范**     | 文件头模板、JSDoc 格式、分区注释、英文注释要求  | `docs/40-implementation/ai/03-coding-comments.md`                                                              |
+| **编码规则**     | 包边界约束、层职责、AI 行为规范                 | `docs/40-implementation/ai/01-coding-rules.md`                                                                 |
+| **代码风格**     | TypeScript 约定、命名规则、导出风格             | `docs/40-implementation/ai/02-coding-style.md`                                                                 |
+| **端口分配**     | 分层分块、取号规则、新 Agent 登记流程           | [端口登记表](https://claude.ai/code/artifact/0f44735a-c6bc-4881-a440-3446a2411a5f)（**唯一源**，仓内不存副本） |
+| **BFF 数据访问** | Pool 注入、req.user、auth 委托签发、Schema 速查 | `docs/40-implementation/ai/05-bff-data-access-guide.md`                                                        |
 
 > 三份文档与本文件如有冲突，**以本文件为准**。
 

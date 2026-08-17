@@ -30,22 +30,22 @@
 | [`09-deployment-scripts.md`](./09-deployment-scripts.md)     | **脚本设计**       | 部署脚本命名、职责边界、执行顺序、审计与验证关系                                                                                                    |
 | [`10-version-baseline.md`](./10-version-baseline.md)         | **版本基线**       | Ubuntu / Node / Docker / Compose / 容器镜像 / CI 的生产与开发版本基线                                                                               |
 
-**端口分配** → [`docs/40-implementation/ai/port-allocation.md`](../40-implementation/ai/10-port-allocation.md)（端口权威来源，部署文档只引用，不重复定义）
+**端口分配** → [端口登记表](https://claude.ai/code/artifact/0f44735a-c6bc-4881-a440-3446a2411a5f)（**唯一源**，部署文档只引用，不重复定义）
 
 ---
 
 ## 本仓平台服务清单
 
-| 服务           | 端口     | 类型    | 节点               |
-| -------------- | -------- | ------- | ------------------ |
-| Nginx          | 80 / 443 | nginx   | VXTURE_DEPLOY_HOST |
-| gateway-bff    | 8000     | Node.js | VXTURE_DEPLOY_HOST |
-| auth-bff       | 3090     | NestJS  | VXTURE_DEPLOY_HOST |
-| website-portal | 3010     | Next.js | VXTURE_DEPLOY_HOST |
-| website-bff    | 3011     | NestJS  | VXTURE_DEPLOY_HOST |
-| console-portal | 3020     | Next.js | VXTURE_DEPLOY_HOST |
-| console-bff    | 3021     | NestJS  | VXTURE_DEPLOY_HOST |
-| admin-portal   | 3030     | Next.js | VXTURE_DEPLOY_HOST |
-| admin-bff      | 3031     | NestJS  | VXTURE_DEPLOY_HOST |
+| 服务           | 类型    | 节点               |
+| -------------- | ------- | ------------------ |
+| Nginx          | nginx   | VXTURE_DEPLOY_HOST |
+| gateway-bff    | Node.js | VXTURE_DEPLOY_HOST |
+| auth-bff       | NestJS  | VXTURE_DEPLOY_HOST |
+| website-portal | Next.js | VXTURE_DEPLOY_HOST |
+| website-bff    | NestJS  | VXTURE_DEPLOY_HOST |
+| console-portal | Next.js | VXTURE_DEPLOY_HOST |
+| console-bff    | NestJS  | VXTURE_DEPLOY_HOST |
+| admin-portal   | Next.js | VXTURE_DEPLOY_HOST |
+| admin-bff      | NestJS  | VXTURE_DEPLOY_HOST |
 
 业务执行面服务（例如 vx-worker-02 上的业务 BFF / Server / 数据库）不在本表维护，也不由本仓部署。

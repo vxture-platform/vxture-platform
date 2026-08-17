@@ -19,6 +19,10 @@
       "path": "portals/admin",
     },
     {
+      "name": "portals/opera",
+      "path": "portals/opera",
+    },
+    {
       "name": "portals/accounts",
       "path": "portals/accounts",
     },
@@ -37,7 +41,7 @@
       "path": "services/identity/organization",
     },
     {
-      "name": "bff/auth-bff (identity IdP)",
+      "name": "bff/auth-bff",
       "path": "bff/auth-bff",
     },
 
@@ -57,6 +61,14 @@
     {
       "name": "bff/admin-bff",
       "path": "bff/admin-bff",
+    },
+    {
+      "name": "bff/opera-bff",
+      "path": "bff/opera-bff",
+    },
+    {
+      "name": "bff/platform-api",
+      "path": "bff/platform-api",
     },
     {
       "name": "bff/varda-bff",
@@ -79,6 +91,16 @@
     {
       "name": "services/commerce/provisioning",
       "path": "services/commerce/provisioning",
+    },
+    {
+      "name": "services/commerce/promotion",
+      "path": "services/commerce/promotion",
+    },
+
+    // ── Platform 域 ────────────────────────────────────────────────────
+    {
+      "name": "services/platform/sharing",
+      "path": "services/platform/sharing",
     },
 
     // ── Model 域 ───────────────────────────────────────────────────────
@@ -134,7 +156,7 @@
       "name": "packages/ai/model-runtime-client",
       "path": "packages/ai/model-runtime-client",
     },
-    // 设计三包，按依赖方向排：tokens ← ui ← system
+    // 设计四包，按依赖方向排：tokens ← ui ← system ← preview
     {
       "name": "packages/design-tokens",
       "path": "packages/design/design-tokens",
@@ -146,6 +168,10 @@
     {
       "name": "packages/design-system",
       "path": "packages/design/design-system",
+    },
+    {
+      "name": "packages/design-preview",
+      "path": "packages/design/design-preview",
     },
 
     // ── 工具 ───────────────────────────────────────────────────────────

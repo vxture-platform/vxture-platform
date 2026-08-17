@@ -19,8 +19,30 @@ admin → DS 收敛批次。major 号在批次开启时已定（删除公开导�
 
 ### ✨ 新增
 
+- **`ShellNavItem.subLabel?`**——导航项副名，渲染成主名下方一行小字（收起态两行都不
+  显）。为中文主名 + 英文代号的双语菜单而加：此前只有单行 `label`，双语要么挤在一行
+  括号里、要么只能二选一。**纯增量**——不传时行高与渲染与旧版逐像素一致（`NavItemRow`
+  由 `h-control-xl` 改成 `min-h-control-xl`，单行项不受影响），副名在选中态不跟随高亮。
+- **`ShellNavSection.brandPosition?`**（`"prefix" | "suffix" | "none"`，缺省
+  `"prefix"`）——分组标题里产品代号的染色位置。原 `splitBrandTitle` 只认前缀，
+  `模型管理 · Atlas` 这类后置写法会把中文主名当成代号染掉。**不做启发式判断**（"哪段
+  像代号"在 `安全审计 · RBAC` 上必然误判），由调用方显式声明；`"none"` 表示整条标题
+  不分段。类型同为可选，五个消费方门户不传即旧行为。
 - **公开入口** `./styles/admin-tokens.css`（admin 遗留 token 桥，收敛期间的过渡资产）
   与 `./styles/workbench.css`。
+- **公开入口** `./styles/website-tokens.css`——website 的同类 token 桥。3d5ef7c 退役
+  legacy token 层时 admin 补了桥、website 没有，于是营销页两处同时失效：68 个
+  `--vx-website-*` 版面刻度随 `tokens-website.css` 一起删除（`min-height` /
+  `grid-template-columns` / `padding` 全部 invalid at computed-value time，栅格塌成
+  单列），且 `--color-vx-*` 命名空间的 `@theme` 注册被删，源码里 975 处 `text-vx-*` /
+  `bg-vx-*` 共 123 个类名一个都不再产出 CSS。两类失效都不报错。桥恢复这批取值，但
+  **不复刻 legacy 色值**：数值色阶挂 T1 对应色族（gray→neutral、error→red、
+  success→emerald、warning→amber、info→sky），角色型挂 T2 语义槽，故这批第一次
+  跟随暗色模式。与 admin 桥同样是过渡资产，逐族换成 T2 类名后即可缩小消失。
+- **公开入口** `./styles/fonts.css`（dd8eea5 自托管字体时引入，此前漏登记）。
+- **`FieldTier`**（经 design-ui 再导出）——表单字段的分层容器，把「主字段 / 次要字段」
+  的分层从各页手写的 `div` + 间距类收进一件组件，使同类表单在不同页上的疏密一致。
+  纯新增导出，不影响任何既有入口。
 - **组件** `MetricListCard`、`PanelCard` / `PanelItem` / `PanelList`、`FactList` /
   `LabeledValue`、`LevelMarker`——均从 admin 的重复实现里提炼。
 - **浮层宽度梯** `OVERLAY_WIDTHS` 与 `overlayWidthClass` / `overlayMinWidthClass`。

@@ -196,6 +196,9 @@ export function OperaShell({
         .filter(
           (item) =>
             item.label.toLowerCase().includes(needle) ||
+            /* 副名进匹配：保留英文原词的全部意义就在于运营者从审计事件里抄一个
+               `endpoint` 过来能搜到「模型路由」——只匹配中文主名等于把它废掉。 */
+            item.subLabel?.toLowerCase().includes(needle) ||
             item.description?.toLowerCase().includes(needle) ||
             section.title?.toLowerCase().includes(needle),
         )

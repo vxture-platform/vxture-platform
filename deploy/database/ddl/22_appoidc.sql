@@ -36,7 +36,11 @@ CREATE TABLE appoidc.oidc_clients (
     CONSTRAINT chk_oidc_clients_realm          CHECK (realm IN ('customer','workforce')),
     CONSTRAINT chk_oidc_clients_release_channel CHECK (release_channel IN ('stable','beta','canary')),
     CONSTRAINT chk_oidc_clients_slo            CHECK (slo_participation IN ('none','back_channel','front_channel')),
-    CONSTRAINT chk_oidc_clients_status         CHECK (status IN ('active','disabled')),
+    -- product_251 B-3：「算不算数」最小词表是 active / inactive。原来这里是
+    -- 'disabled'——不是词表的扩展，是同一概念的第三种拼法（atlas 用布尔
+    -- isActive、runos 用 state/status/lifecycle 三个词）。列名 status 保留：
+    -- 规范管接口形状，DDL 是另一层。
+    CONSTRAINT chk_oidc_clients_status         CHECK (status IN ('active','inactive')),
     -- back_channel 参与时 back_channel_logout_uri 必填（§7.1）
     CONSTRAINT chk_oidc_clients_bclo_uri
         CHECK (slo_participation <> 'back_channel' OR back_channel_logout_uri IS NOT NULL)

@@ -37,6 +37,8 @@ export const platformSchema = z.object({
   LOGIN_UI_BASE_URL: z.string().url().default("http://localhost:3080"),
   /** Atlas (AI model supply provider) internal S2S API base URL. */
   ATLAS_API_URL: z.string().url().default("http://localhost:3100"),
+  /** Runos (capability platform) internal management API base URL. */
+  RUNOS_API_URL: z.string().url().default("http://localhost:3120"),
   /** Auth BFF internal base URL (used by proxy BFFs to delegate auth operations) */
   AUTH_BFF_URL: z.string().url().default("http://localhost:3081"),
   /**

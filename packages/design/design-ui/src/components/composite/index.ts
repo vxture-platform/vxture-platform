@@ -22,6 +22,7 @@ export * from "./form/Combobox";
 export * from "./data/DataTable";
 export * from "./form/DatePicker";
 export * from "./form/DialogForm";
+export * from "./form/FieldTier";
 export * from "./data/FilterBar";
 export * from "./data/ViewModeSwitch";
 export * from "./data/EntryCard";

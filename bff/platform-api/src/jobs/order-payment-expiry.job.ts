@@ -21,6 +21,7 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { SubscriptionService } from "@vxture/service-subscription";
+import { JobHeartbeatService } from "./job-heartbeat.service";
 import { sweepIntervalMs } from "./sweep-interval.util";
 
 const ttlMinutes = (): number => {
@@ -28,20 +29,30 @@ const ttlMinutes = (): number => {
   return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : 30;
 };
 
+/** provisioning.background_jobs 主键，opera「任务调度」用它认作业。 */
+export const JOB_NAME = "order-payment-expiry";
+
 @Injectable()
 export class OrderPaymentExpiryJob {
   private readonly logger = new Logger(OrderPaymentExpiryJob.name);
   private inFlight = false;
+  private readonly intervalMs = sweepIntervalMs(
+    process.env.ORDER_PAYMENT_SWEEP_INTERVAL_MS,
+  );
 
   constructor(
     @Inject(SubscriptionService)
     private readonly subscriptions: SubscriptionService,
+    @Inject(JobHeartbeatService)
+    private readonly heartbeat: JobHeartbeatService,
   ) {}
 
   @Interval(sweepIntervalMs(process.env.ORDER_PAYMENT_SWEEP_INTERVAL_MS))
   async tick(): Promise<void> {
     if (this.inFlight) return;
     this.inFlight = true;
+    const startedAt = Date.now();
+    await this.heartbeat.recordStart(JOB_NAME, this.intervalMs);
     try {
       const closed =
         await this.subscriptions.sweepExpiredPaymentOrders(ttlMinutes());
@@ -52,9 +63,19 @@ export class OrderPaymentExpiryJob {
       if (healed > 0) {
         this.logger.log(`payment reconcile: ${healed} hung order(s) activated`);
       }
+      await this.heartbeat.recordSuccess(
+        JOB_NAME,
+        Date.now() - startedAt,
+        closed + healed,
+      );
     } catch (err) {
       // Never let a pass kill the interval; the next tick retries.
       this.logger.error(`payment order sweep failed: ${String(err)}`);
+      await this.heartbeat.recordFailure(
+        JOB_NAME,
+        Date.now() - startedAt,
+        String(err),
+      );
     } finally {
       this.inFlight = false;
     }

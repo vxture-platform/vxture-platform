@@ -1,21 +1,26 @@
 # 能力控制台:外壳与模块挂载契约(批C 交付)
 
-> 上游:`docs/30-design/product_250_management-plane-contract.md` M-1/M-4。
-> 本文=外壳实现说明 + **L1 admin-module 的挂载契约**(atlas 批D / runos 批F 的对接依据)。
+> 上游:`docs/30-design/product_250_management-plane-contract.md` M-1/M-4(**v0.2 起模块归属已反转,见该文头部修订**)。
+> 本文=外壳实现说明 + **provider 自建模块的挂载契约**(§2;v0.2 后此形态暂无实例,atlas/runos 管理 UI 均在 `portals/opera` 内)。
 > 域名纪律:仓内一律以占位符 `x.vxture.com` 指代本控制台域名,真实主机名仅存在于部署主机 runtime env。
 
 ## 1. 外壳(platform 仓交付,worker-01)
 
 | 件    | 位置                                          | 说明                                                                                                                                |
 | ----- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| 前端  | `portals/opera`(`vx-platform-opera`:3040)     | Next.js 薄壳:workforce 会话头 + 侧栏导航 + 总览页;复用 shell-template CSS;**零本地 CSS、零 NEXT_PUBLIC 域名**(BFF 一律同源相对路径) |
-| BFF   | `bff/opera-bff`(`vx-platform-opera-bff`:3041) | workforce realm OIDC RP(client_id=`opera`)+ nginx `auth_request` 门 + operator-OBO 换票(M-1);RP 会话 Redis,默认 TTL 12h;不连库      |
+| 前端  | `portals/opera`(`vx-platform-opera`)          | Next.js 薄壳:workforce 会话头 + 侧栏导航 + 总览页;复用 shell-template CSS;**零本地 CSS、零 NEXT_PUBLIC 域名**(BFF 一律同源相对路径) |
+| BFF   | `bff/opera-bff`(`vx-platform-opera-bff`)      | workforce realm OIDC RP(client_id=`opera`)+ nginx `auth_request` 门 + operator-OBO 换票(M-1);RP 会话 Redis,默认 TTL 12h;不连库      |
 | vhost | `deploy/nginx/templates/opera.vhost.template` | 20-sync 脚本从 `.env.opera-bff` 的 `OPERA_BASE_URL` 渲染真实 `server_name`;env 缺失即跳过                                           |
 | 兜底  | `deploy/nginx/sites-enabled/00-default.conf`  | default_server:80→444、443→`ssl_reject_handshake`(未知 SNI 不出证书)                                                                |
 
 加固硬性项落点(批A 拍板):通配符证书(复用 `*.vxture.com`)/真名不入仓(模板渲染)/SSO 前置零内容(`auth_request` 全路径门,仅 `/auth/*` 匿名可达)/default-server 兜底/限流(继承 `conf.d/00-hardening.conf` 全局 zone)。
 
 ## 2. 挂载契约(provider admin-module 必须满足)
+
+> **v0.2 归属改写(owner 决定 2026-08-11,`product_250` v0.2 头部记)**:「挂载内容归 opera 统一创建」——管理 UI 不再由 provider 仓交付。
+> **本节整节的适用条件因此收窄**:下列 1–5 条只在**真的存在一个 provider 自建的独立模块应用**时才生效(当前 atlas/runos 均**不属于**此形态,二者的管理 UI 都在 `portals/opera` 内,走同源 `/api/*` 代理,不经 nginx 路径挂载)。
+> 保留本节的理由:联邦路径挂载仍是**核心路线**(owner 口径原文),将来某 provider 真的自建模块时按此接入;删掉等于把这条路线的接入规格也删了。
+> **现状读法**:`/atlas/*`、`/runos/*` 这两个挂载位**目前是空的**,不要据本节推断"已有模块挂在那里"。
 
 联邦一档 = **nginx 路径挂载**:模块是独立小应用,与自家 backend 同仓同机同 CD;外壳不参与其构建。
 

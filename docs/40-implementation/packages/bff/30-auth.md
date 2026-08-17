@@ -13,7 +13,6 @@
 | 路径     | `bff/auth-bff/`                               |
 | @layer   | `Application`                                 |
 | 框架     | NestJS                                        |
-| 端口     | 3090                                          |
 | 服务对象 | 所有 BFF（内部）+ portal 前端（部分直接调用） |
 
 ---

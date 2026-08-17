@@ -120,6 +120,7 @@ import {
   DataTable,
   DetailPageTemplate,
   DialogForm,
+  FieldTier,
   FormPageTemplate,
   ListPageTemplate,
   ResultPageTemplate,
@@ -1582,6 +1583,16 @@ export const ENTRIES: readonly Entry[] = [
     axes: [{ name: "size", values: ["sm", "md", "lg"] }],
     render: () => <DialogFormDemo />,
   },
+  {
+    name: "FieldTier",
+    layer: "pattern",
+    group: "图案",
+    tags: ["vxture", "patterns"],
+    deviation:
+      "档位是三值枚举不是开放字符串——档一多就退化成随手分组，跨页面对不上。advanced 默认折叠：它的存在本身就是「这里你多半不用碰」的信号",
+    axes: [{ name: "tier", values: ["identity", "details", "advanced"] }],
+    render: () => <FieldTierDemo />,
+  },
 
   /* ── 模板（页面级骨架，只定结构与区块占位）───────────────── */
   {
@@ -2951,6 +2962,33 @@ function BulkActionBarDemo() {
         ]}
       />
     </div>
+  );
+}
+
+function FieldTierDemo() {
+  return (
+    <Row label="三档并排：identity / details 默认展开，advanced 默认折叠">
+      <div className="flex w-full max-w-xl flex-col gap-md">
+        <FieldTier tier="identity" hint="决定这条记录是什么，创建后多半改不了">
+          <div className="flex flex-col gap-2xs">
+            <Label htmlFor="preview-ft-code">接入代号</Label>
+            <Input id="preview-ft-code" placeholder="例如：openai-main" />
+          </div>
+        </FieldTier>
+        <FieldTier tier="details" hint="影响展示与运营，改了不动身份">
+          <div className="flex flex-col gap-2xs">
+            <Label htmlFor="preview-ft-note">备注</Label>
+            <Textarea id="preview-ft-note" rows={2} />
+          </div>
+        </FieldTier>
+        <FieldTier tier="advanced" hint="少用、易错、或有副作用">
+          <div className="flex flex-col gap-2xs">
+            <Label htmlFor="preview-ft-timeout">超时（毫秒）</Label>
+            <Input id="preview-ft-timeout" placeholder="30000" />
+          </div>
+        </FieldTier>
+      </div>
+    </Row>
   );
 }
 

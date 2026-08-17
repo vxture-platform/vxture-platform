@@ -174,7 +174,7 @@ const module = await Test.createTestingModule({
 ```bash
 # App
 NODE_ENV=development
-PORT=3000
+PORT=<见端口登记表>
 LOG_LEVEL=info
 APP_NAME=vxture
 

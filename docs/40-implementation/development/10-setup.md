@@ -52,50 +52,46 @@ pnpm db:local:all                 # 3. 起库 + 建表 + seed + 校验（见下�
 
 ## 端口
 
-**本地端口 = 代码内默认值 = 生产容器内口**，一套数。权威 = [`10-port-allocation.md`](../ai/10-port-allocation.md)。
+**本地端口 = 代码内默认值 = 生产容器内口**，一套数。
 
-| 面      | UI   | BFF              | 面            | UI          | BFF                    |
-| ------- | ---- | ---------------- | ------------- | ----------- | ---------------------- |
-| website | 3000 | website-bff 3001 | opera         | 3040        | opera-bff 3041         |
-| console | 3020 | console-bff 3021 | accounts(IdP) | 3080        | auth-bff 3081          |
-| admin   | 3030 | admin-bff 3031   | varda(非面)   | studio 3092 | bff 3090 / server 3091 |
+端口取号唯一源 = [端口登记表](https://claude.ai/code/artifact/0f44735a-c6bc-4881-a440-3446a2411a5f)；**本仓文档不再保存端口数值**，下面的启动命令也不再标注端口——要查号去登记表，或直接读代码里的回退默认值（`process.env.X_PORT ?? NNNN`）。
 
-边缘：`gateway-bff 8000`、`platform-api 8080`、`dev-panel 8090`。
-
-同机还跑着兄弟产品的 dev 栈（atlas 3100 / runos 3120 / arda 3230），端口互不重叠——这正是 2026-08-10 重排要解决的问题（此前本地 varda 占 3120，和 runos 撞车）。
+同机还跑着兄弟产品的 dev 栈（atlas / runos / arda），端口互不重叠——这正是 2026-08-10 重排要解决的问题（此前本地 varda 和 runos 撞车）。
 
 ---
 
 ## 按工作类型启动服务
 
-最省事的方式是开发面板：`pnpm dev:panel`（:8090），它按 tier 顺序拉起服务并做健康探测。手动起也行，**只启动你需要的**：
+最省事的方式是开发面板：`pnpm dev:panel`，它按 tier 顺序拉起服务并做健康探测。手动起也行，**只启动你需要的**：
 
 ### 场景 A：改门户（website / console / admin / opera）
 
 ```bash
-pnpm -F @vxture/bff-auth dev          # 3081，登录必需
-pnpm -F @vxture/bff-gateway dev       # 8000
-pnpm -F @vxture/accounts dev          # 3080，登录 UI，缺它登录页打不开
+pnpm -F @vxture/bff-auth dev  # 登录必需
+pnpm -F @vxture/bff-gateway dev
+pnpm -F @vxture/accounts dev  # 登录 UI，缺它登录页打不开
 
-pnpm -F @vxture/website dev           # 3000  + pnpm -F @vxture/bff-website dev  # 3001
-pnpm -F @vxture/console dev           # 3020  + pnpm -F @vxture/bff-console dev  # 3021
-pnpm -F @vxture/admin   dev           # 3030  + pnpm -F @vxture/bff-admin   dev  # 3031
-pnpm -F @vxture/opera   dev           # 3040  + pnpm -F @vxture/bff-opera   dev  # 3041
+# 门户与它的 BFF 成对起，只起你要改的那一对：
+pnpm -F @vxture/website dev   &&  pnpm -F @vxture/bff-website dev
+pnpm -F @vxture/console dev   &&  pnpm -F @vxture/bff-console dev
+pnpm -F @vxture/admin   dev   &&  pnpm -F @vxture/bff-admin   dev
+pnpm -F @vxture/opera   dev   &&  pnpm -F @vxture/bff-opera   dev
 ```
 
 ### 场景 B：改 Varda
 
 ```bash
-pnpm -F @vxture/bff-auth dev          # 3081
-pnpm -F @vxture/bff-varda dev         # 3090
-pnpm -F @vxture/agent-server-varda dev # 3091
-pnpm -F @vxture/bff-admin dev         # 3031（Varda 宿主）+ pnpm -F @vxture/admin dev  # 3030
+pnpm -F @vxture/bff-auth dev
+pnpm -F @vxture/bff-varda dev
+pnpm -F @vxture/agent-server-varda dev
+pnpm -F @vxture/bff-admin dev         # Varda 宿主
+pnpm -F @vxture/admin dev
 ```
 
 ### 场景 C：改 auth / 认证流程
 
 ```bash
-pnpm -F @vxture/bff-auth dev          # 3081，直接 curl / Postman 测
+pnpm -F @vxture/bff-auth dev  # 直接 curl / Postman 测
 ```
 
 ### 场景 D：改 Service / Core 层
@@ -117,7 +113,7 @@ AUTH_COOKIE_DOMAIN=localhost
 
 库名 `platform_main` 与生产一致（`platform` 是 L0 stack 标识符，不是 product code，见 [`140-repo-governance-standard.md`](../../10-standards/140-repo-governance-standard.md) §4）。端口 5433 而非 5432：本机 atlas dev 栈的 forwarder 已经占了 127.0.0.1:5432。
 
-本地 RP 会话 cookie 必须用裸名（`RP_COOKIE_INSECURE=true`）——`__Host-` 前缀的 cookie 在明文 http 上会被浏览器静默丢弃，表现为"服务端登录成功、浏览器始终未登录"。dev-panel 已自动注入。
+本地 RP 会话 cookie 必须用裸名（`RP_COOKIE_INSECURE=true`）——`__Host-` 前缀的 cookie 在明文 http 上会被浏览器静默丢弃，表现为"服务端登录成功、浏览器始终未登录"。auth-bff 自己的中心会话 cookie 同理，用 `IDP_COOKIE_INSECURE=true`。dev-panel 已自动注入两者。
 
 第三方登录（钉钉 / 飞书）本地不必配。
 

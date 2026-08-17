@@ -24,7 +24,7 @@ export default function ProductComingSoon({ code }: { code: string }) {
   return (
     <div className="vx-page-surface">
       <section className="vx-section-odd">
-        <div className="mx-auto max-w-3xl px-6 py-24 text-center lg:px-8">
+        <div className="mx-auto max-w-website-3xl px-6 py-24 text-center lg:px-8">
           <p className="text-sm font-semibold uppercase text-vx-brand-600 dark:text-vx-brand-300">
             {t("catalog.eyebrow")}
           </p>
@@ -32,7 +32,7 @@ export default function ProductComingSoon({ code }: { code: string }) {
             {item?.name ?? code}
           </h1>
           {item?.description ? (
-            <p className="mx-auto mt-5 max-w-2xl text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
+            <p className="mx-auto mt-5 max-w-website-2xl text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
               {item.description}
             </p>
           ) : null}

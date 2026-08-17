@@ -14,7 +14,6 @@
 | 路径     | `bff/varda-bff/`                                     |
 | @layer   | `Application`                                        |
 | 服务对象 | `agent-studio/varda`（admin + console 两个 surface） |
-| 端口     | 3121                                                 |
 
 ## 唯一职责
 

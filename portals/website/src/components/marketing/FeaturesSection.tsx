@@ -167,7 +167,7 @@ const FeaturesSection = memo(function FeaturesSection({
             {t("title")}
           </h2>
           {t("subtitle") && (
-            <p className="text-lg text-vx-gray-600 dark:text-vx-gray-300 max-w-4xl mx-auto">
+            <p className="text-lg text-vx-gray-600 dark:text-vx-gray-300 max-w-website-4xl mx-auto">
               {t("subtitle")}
             </p>
           )}

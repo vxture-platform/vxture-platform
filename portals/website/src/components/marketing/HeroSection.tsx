@@ -200,7 +200,7 @@ export default function HeroSection({ id, name = "Hero" }: HeroSectionProps) {
 
       {/* 中央文字区 */}
       <div className="relative w-full flex flex-col items-center justify-center pointer-events-auto z-10">
-        <div className="max-w-5xl px-4 sm:px-6 lg:px-8 py-32 text-center">
+        <div className="max-w-website-5xl px-4 sm:px-6 lg:px-8 py-32 text-center">
           {/* 主标题 + 高亮部分 */}
           <h1 className="font-brand text-5xl lg:text-7xl font-bold py-8 leading-tight">
             {/* light: 深灰渐变；dark: 浅白渐变，在深色背景上清晰可读 */}
@@ -219,7 +219,7 @@ export default function HeroSection({ id, name = "Hero" }: HeroSectionProps) {
 
           {/* 描述 */}
           {t("description") && (
-            <p className="text-xl text-vx-gray-700 dark:text-vx-gray-200 mb-12 max-w-2xl mx-auto">
+            <p className="text-xl text-vx-gray-700 dark:text-vx-gray-200 mb-12 max-w-website-2xl mx-auto">
               {t("description")}
             </p>
           )}

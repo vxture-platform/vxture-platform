@@ -137,6 +137,48 @@ const ROLE_PERMS = {
 // perm_code = three-segment {domain}:{resource}.{action}; .manage ⊇ .read (both granted
 // when a role has manage). 危 = high-risk (step-up enforced app-side). perm_type='api'.
 // [perm_code, perm_name].
+/**
+ * 需要 step-up（二次验证）的操作码 —— `product_250` M-2：「每个操作码标注是否要求
+ * step-up」，且「**step-up 策略归 platform**（横向管理面，全 L1 一视同仁）」。
+ *
+ * 2026-08-13 落地。此前这个标注只存在于上面那行注释里的「危」字和各条 description
+ * 末尾的 "(high-risk)"，**没有任何一处是机器可读的**，后果是：各 provider 只能在自己
+ * 代码里硬编码高危清单——atlas 曾在 `StepUpRequiredGuard` 写死 9 个写操作，runos 一条
+ * 没有。两边都托管第三方密钥材料，保护等级却不同，而这个差异不是任何人决策的结果。
+ * （已闭环：2026-08-13 atlas 撤除该守卫，vxture-atlas#167；两边现在都不判，判据统一
+ * 落在这张表上。）
+ *
+ * **消费方是 console/BFF，不是 provider。** console 读这张目录，命中即在**动作发生的
+ * 那一刻**跑 step-up 仪式（IdP 签 300s 短时凭证，见 auth-bff `issueOperatorStepUp`），
+ * 过了再放行。provider 无 UI、跑不了仪式，只能拒绝；且它能看到的 `amr` 是**会话级**
+ *（"登录时用过 MFA"，可能是 8 小时前）而非**操作级**（"此刻本人在键盘前"），
+ * 强度本就不是一回事。
+ *
+ * **粗粒度码刻意不标。** `model:provider.manage` / `capability:runos.manage` 这类码
+ * 同时覆盖"改 provider 简介"（无害）和"轮换密钥"（凭证材料），整码标 true 会把无害
+ * 编辑也卡上二次验证。拆分归 provider（M-2：词表内容归 provider，platform 不代拟）
+ * ——已 issue 交办 atlas / runos 注册操作级词表，落地后这里再补标。
+ */
+const STEP_UP_REQUIRED = new Set([
+  // 不可逆的钱相关动作
+  "commerce:order.void",
+  "commerce:order.restore",
+  "commerce:billing.discount",
+  "commerce:invoice.void",
+  "commerce:payment.settle",
+  "commerce:refund.execute",
+  "promotion:campaign.manage",
+  // 身份 / 凭证材料
+  "security:signing_key.manage",
+  "security:oidc_client.manage",
+  "operator:account.manage",
+  "operator:role.manage",
+  // 数据主体权益 / 越权视角
+  "user:pii.read",
+  "support:impersonate",
+  "tenant:lifecycle.suspend",
+]);
+
 const OPERATOR_PERMISSIONS = [
   ["tenant:profile.read", "View tenant profiles"],
   ["tenant:profile.manage", "Manage tenant profiles"],
@@ -185,12 +227,16 @@ const OPERATOR_PERMISSIONS = [
   ["model:provider.manage", "Manage model providers"],
   ["model:model.read", "View models"],
   ["model:model.manage", "Manage models"],
+  ["capability:runos.read", "View runos capabilities and endpoints"],
+  ["capability:runos.manage", "Register / promote runos capabilities and endpoints"],
   ["release:feature_flag.read", "View feature flags"],
   ["release:feature_flag.manage", "Manage feature flags"],
   ["release:maintenance.read", "View maintenance windows"],
   ["release:maintenance.manage", "Manage maintenance windows"],
   ["platform:setting.read", "View platform settings (sensitive masked)"],
   ["platform:setting.manage", "Manage platform settings (system config)"],
+  ["platform:product.read", "View the product catalog"],
+  ["platform:product.manage", "Register / edit products, manage OIDC clients"],
   ["content:announcement.read", "View announcements"],
   ["content:announcement.manage", "Manage announcements"],
   ["notification:log.read", "View notification delivery logs"],
@@ -332,11 +378,15 @@ const OPERATOR_ROLE_PERMS = {
     "model:provider.manage",
     "model:model.read",
     "model:model.manage",
+    "capability:runos.read",
+    "capability:runos.manage",
     "release:feature_flag.read",
     "release:feature_flag.manage",
     "release:maintenance.read",
     "release:maintenance.manage",
     "platform:setting.read",
+    "platform:product.read",
+    "platform:product.manage",
     "content:announcement.read",
     "content:announcement.manage",
     "notification:log.read",
@@ -363,6 +413,8 @@ const OPERATOR_ROLE_PERMS = {
     "product:price.manage",
     "model:provider.read",
     "model:model.read",
+    "capability:runos.read",
+    "platform:product.read",
     "release:feature_flag.read",
     "release:maintenance.read",
     "content:announcement.read",
@@ -400,12 +452,16 @@ const OPERATOR_ROLE_PERMS = {
     "model:provider.manage",
     "model:model.read",
     "model:model.manage",
+    "capability:runos.read",
+    "capability:runos.manage",
     "release:feature_flag.read",
     "release:feature_flag.manage",
     "release:maintenance.read",
     "release:maintenance.manage",
     "platform:setting.read",
     "platform:setting.manage",
+    "platform:product.read",
+    "platform:product.manage",
     "content:announcement.read",
     "notification:log.read",
   ],
@@ -433,6 +489,8 @@ const OPERATOR_ROLE_PERMS = {
     "product:price.read",
     "model:provider.read",
     "model:model.read",
+    "capability:runos.read",
+    "platform:product.read",
     "release:feature_flag.read",
     "release:maintenance.read",
     "platform:setting.read",
@@ -458,6 +516,16 @@ export async function seedCatalog(client) {
   );
   await client.query(
     `alter table access.permissions alter column perm_name type varchar(128)`,
+  );
+
+  //   requires_step_up (2026-08-13, product_250 v0.4 §M-2 补注) — 同一条道理:
+  //   80_admin.sql 已声明这一列，但 clean-baseline 的 apply.sh 只在 --reset 时
+  //   CREATE，对有真实数据的活库不可行。所以补一条幂等 ALTER 走 seed 通道，
+  //   否则下面 OPERATOR_PERMISSIONS 的 insert 会在活库上直接 42703 报错、整个
+  //   seed 回滚（2026-08-13 本地实测就是这样炸的——先加 DDL 声明、没配 ALTER）。
+  //   新建库从 ddl/80_admin.sql 拿到它，这里是 no-op。
+  await client.query(
+    `alter table admin.operator_permission add column if not exists requires_step_up boolean not null default false`,
   );
 
   // ── 1. operator realm: operator_role + operator_account + operator_credential ─
@@ -580,9 +648,14 @@ export async function seedCatalog(client) {
     await client.query(
       `
       insert into admin.operator_permission
-        (perm_code, perm_type, perm_name, perm_name_key, is_system, description, description_key, created_by, updated_by, created_at, updated_at)
-      values ($1, 'api', $2, $3, true, $6, $4, $5, $5, now(), now())
-      on conflict (perm_code) do nothing
+        (perm_code, perm_type, perm_name, perm_name_key, is_system, description, description_key, requires_step_up, created_by, updated_by, created_at, updated_at)
+      values ($1, 'api', $2, $3, true, $6, $4, $7, $5, $5, now(), now())
+      -- requires_step_up 是**平台持有的策略**，不是管理员自定义字段：重新 seed 必须
+      -- 让它回到目录声明的值，否则改了 STEP_UP_REQUIRED 却对已有库无效（其余列保持
+      -- do-nothing 语义，不覆盖运营改过的显示名/描述）。
+      on conflict (perm_code) do update set
+        requires_step_up = excluded.requires_step_up,
+        updated_at = now()
     `,
       [
         code,
@@ -591,6 +664,7 @@ export async function seedCatalog(client) {
         `ops.perm.${code.replace(/:/g, ".")}.desc`,
         SYS,
         description ?? name,
+        STEP_UP_REQUIRED.has(code),
       ],
     );
   }
@@ -789,6 +863,10 @@ export async function seedCatalog(client) {
     runos: process.env.RUNOS_BASE_URL || "http://localhost:3120",
     arda: process.env.ARDA_BASE_URL || "http://localhost:3230",
     karda: process.env.KARDA_BASE_URL || "http://localhost:3240",
+    // vxtpl = 开发样本 / 测试智能体（原 vxture-template，名称已归一化）。owner
+    // 2026-08-13 裁定它与 agent-template 是同一个业务、智能体级，归 L3 块首
+    // 子块 4000-4009；它腾出的 L2 子块由 ontos 接手。
+    vxtpl: process.env.VXTPL_BASE_URL || "http://localhost:4000",
     raven: process.env.RAVEN_BASE_URL || "http://localhost:4010",
     anlan: process.env.ANLAN_BASE_URL || "http://localhost:4020",
     forge: process.env.FORGE_BASE_URL || "http://localhost:4030",
@@ -799,6 +877,7 @@ export async function seedCatalog(client) {
     runos: process.env.RUNOS_BETA_BASE_URL || null,
     atlas: process.env.ATLAS_BETA_BASE_URL || null,
     ontos: process.env.ONTOS_BETA_BASE_URL || null,
+    vxtpl: process.env.VXTPL_BETA_BASE_URL || null,
     raven: process.env.RAVEN_BETA_BASE_URL || null,
     anlan: process.env.ANLAN_BETA_BASE_URL || null,
     forge: process.env.FORGE_BETA_BASE_URL || null,
@@ -913,6 +992,18 @@ export async function seedCatalog(client) {
       realm: "customer",
       redirectUris: appUris(B.ontos, betaB.ontos),
       scopes: ["openid", "profile", "email", "ontos:subscription"],
+    },
+    // vxtpl — 模板演示产品（在产，vxtpl.vxture.com）。scope 取 D12 之后的四段式
+    // （同 arda/karda/atlas）：token 不携带任何商业字段，权益一律走 C2。不给
+    // `vxtpl:subscription`——那是 D12 之前的旧形态，新登记不再复制。
+    {
+      clientId: "vxtpl",
+      name: "Vxtpl",
+      displayName: "Vxtpl",
+      realm: "customer",
+      redirectUris: appUris(B.vxtpl, betaB.vxtpl),
+      scopes: ["openid", "profile", "email", "phone"],
+      postLogoutUris: [`${B.vxtpl}/`, postLogout],
     },
     {
       clientId: "raven",
@@ -1073,11 +1164,11 @@ export async function seedCatalog(client) {
   // in the final product matrix (product_100 §6#2); Karda registers a fresh
   // client on its own onboarding instead of reusing this row.
   await client.query(`
-    update appoidc.oidc_clients set status = 'disabled', updated_at = now()
-     where client_id = 'nocus' and status <> 'disabled'
+    update appoidc.oidc_clients set status = 'inactive', updated_at = now()
+     where client_id = 'nocus' and status <> 'inactive'
   `);
   console.log(
-    "✓  appoidc.oidc_clients — nocus retired (status=disabled if present)",
+    "✓  appoidc.oidc_clients — nocus retired (status=inactive if present)",
   );
 
   // ── 8. appoidc.signing_keys (RS256 JWKS public key; private key stays in secret mgr) ─
@@ -1200,6 +1291,20 @@ export async function seedCatalog(client) {
       name: "知识平台",
       nick: "Karda",
       desc: "Enterprise knowledge platform.",
+    },
+    {
+      // vxtpl — 模板演示产品，owner 2026-08-13 裁定**完全产品化**（此前只有域名与
+      // nginx，平台目录里完全不存在：PRODUCTS / B map / OIDC client 一样都没有，
+      // 而 product_240 §7 批3 早就把"登记产品行/OIDC client/webhook secret"列为
+      // 平台侧义务）。type='agent' + category=1（智能体）对齐 owner 的层归属裁定。
+      // ⚠️ product_name 待 owner 确认：其余平台产品的中文主名均由 owner 亲自定
+      // （runos 的 鲁诺斯 是先例），此处先按定位直译，不代表已拍板。
+      code: "vxtpl",
+      type: "agent",
+      cat: 1,
+      name: "模板智能体",
+      nick: "Vxtpl",
+      desc: "Repository template demo instance: a runnable reference product used to verify the three channels and plan tiers end to end.",
     },
     {
       // Atlas repo-split prep (see docs/30-design/platform/40-model-platform.md §13):
@@ -1345,6 +1450,33 @@ export async function seedCatalog(client) {
     );
   }
 
+  // vxtpl — C3 provisioning endpoint (owner 2026-08-13 完全产品化)。与 karda 同形状:
+  // VXTPL_WEBHOOK_BASE_URL 是 tailnet 投递目标，与 VXTPL_BASE_URL 解耦——后者还要喂
+  // OIDC redirect_uris，必须保持公网可达。未设时回退公网 base。
+  // ⚠️ webhook_secret_ref 指向的 VXTPL_PROVISION_WEBHOOK_SECRET 需 owner 生成并
+  // 带外转运到 vxtpl 主机（同 karda 先例，见 40-2607230130 §2）——本 seed 只登记
+  // 引用名，不生成密钥；密钥缺失时投递会在 dispatcher 侧失败，不是这里报错。
+  {
+    const vxtplWebhookBase = process.env.VXTPL_WEBHOOK_BASE_URL || B.vxtpl;
+    await client.query(
+      `
+      insert into product.product_webhooks (product_id, home_url, webhook_url, webhook_secret_ref, created_at, updated_at)
+      select id, $1, $2, $3, now(), now() from product.products where product_code = 'vxtpl'
+      on conflict (product_id) do update set
+        home_url = excluded.home_url,
+        webhook_url = excluded.webhook_url,
+        webhook_secret_ref = excluded.webhook_secret_ref,
+        updated_at = now()
+    `,
+      [
+        B.vxtpl,
+        `${vxtplWebhookBase}/provisioning/webhook`,
+        "VXTPL_PROVISION_WEBHOOK_SECRET",
+      ],
+    );
+    console.log("✓  product — product_webhooks (vxtpl provisioning endpoint)");
+  }
+
   // launch checklist catalog
   await client.query(`
     insert into product.launch_checklist_items
@@ -1353,6 +1485,28 @@ export async function seedCatalog(client) {
        'A verification policy is configured for the product.', 'product.checklist.verification_policy.desc', true, 10),
       ('pricing_set', '定价已配置', 'product.checklist.pricing_set',
        'Pricing is configured for the product.', 'product.checklist.pricing_set.desc', true, 20)
+    on conflict (item_code) do nothing
+  `);
+
+  // product_200 §7 新产品接入 checklist（六步，technical onboarding；2026-08-12
+  // 产品发布管理阶段三引入）——复用同一张字典表，不另开一套：一个产品"能不能
+  // 上线"本来就是技术接入 + 商业配置合起来的一张单子，opera 只消费/勾选这六
+  // 项，商业那两项（verification_policy/pricing_set）继续留给 admin。
+  await client.query(`
+    insert into product.launch_checklist_items
+      (item_code, item_name, item_name_key, description, description_key, is_required, sort) values
+      ('catalog_registered', '目录已登记', 'product.checklist.catalog_registered',
+       'Product code/layer/type registered in product.products; checklist + plan structure scaffolded.', 'product.checklist.catalog_registered.desc', true, 30),
+      ('c1_identity', 'C1 身份接入', 'product.checklist.c1_identity',
+       'OIDC client registered; RP implementation (login/callback/session) completed.', 'product.checklist.c1_identity.desc', true, 40),
+      ('c3_metering', 'C3 计量上报', 'product.checklist.c3_metering',
+       'Webhook endpoint + provisioning consumption + local_usage buffer + consume job wired.', 'product.checklist.c3_metering.desc', true, 50),
+      ('c2_entitlement', 'C2 权益接入', 'product.checklist.c2_entitlement',
+       'Entitlement fetch/cache invalidation wired; gating renders correctly.', 'product.checklist.c2_entitlement.desc', true, 60),
+      ('data_plane', '数据面就绪', 'product.checklist.data_plane',
+       'Agent-db provisioned per product_240 §2.4 template (vx_provision/local_authz/local_usage schemas).', 'product.checklist.data_plane.desc', true, 70),
+      ('acceptance', '端到端验收', 'product.checklist.acceptance',
+       'Full e2e verified: login → provision → gate → consume → invalidate; launch checklist reviewed.', 'product.checklist.acceptance.desc', true, 80)
     on conflict (item_code) do nothing
   `);
 

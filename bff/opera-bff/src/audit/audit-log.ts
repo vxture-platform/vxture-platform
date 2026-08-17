@@ -27,11 +27,15 @@ export interface OperatorAuditEntry {
   after?: unknown;
 }
 
+/**
+ * `actor_console` 恒为 `'opera'`（product_251 X-3）——这个进程只服务一个控制台，
+ * 所以是常量而不是入参：让调用方传，迟早有人传错或不传。
+ */
 const OPERATOR_AUDIT_INSERT_SQL = `
 insert into support.audit_logs
-  (actor_type, actor_id, action, result, resource_type, resource_id, before, after, ip_address, user_agent)
+  (actor_type, actor_console, actor_id, action, result, resource_type, resource_id, before, after, ip_address, user_agent)
 values
-  ('operator', $1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9)
+  ('operator', 'opera', $1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9)
 `;
 
 export async function insertOperatorAuditLog(

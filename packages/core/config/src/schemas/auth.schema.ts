@@ -113,6 +113,18 @@ export const authSchema = z.object({
   OPERATOR_WEBAUTHN_RP_NAME: z.string().default("Vxture"),
   /** Expected ceremony origin (exact scheme+host[+port]) for attestation/assertion. */
   OPERATOR_WEBAUTHN_ORIGIN: z.string().optional(),
+
+  /**
+   * Skip operator MFA entirely for local login testing. Explicit opt-in, local
+   * convenience only — OperatorMfaService also gates this on `!config.isProduction`,
+   * so it has no effect in production regardless of this value. Only the literal
+   * string "true" enables it (not `z.coerce.boolean()`, which would treat any
+   * non-empty string — including "false" — as true).
+   */
+  OPERATOR_MFA_DEV_BYPASS: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
 });
 
 export type AuthConfig = z.infer<typeof authSchema>;

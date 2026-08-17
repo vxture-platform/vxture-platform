@@ -16,6 +16,11 @@ services:
     container_name: vxture-nginx
     restart: always
     mem_limit: 64m
+    # 边缘节点与整栈同规格（worker-01 2C2G）。nginx 是**所有流量的入口**，
+    # 所以它的 CPU 闸比业务容器松一档：它被饿死等于全站不可达，而一个业务容器
+    # 被饿死只是那一个面慢。1.5 仍然拿不满两核。
+    cpus: 1.5
+    pids_limit: 128
     ports:
       - "80:80"
       - "443:443"

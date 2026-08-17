@@ -58,6 +58,9 @@
  */
 const RP_LOCAL_COOKIE = { RP_COOKIE_INSECURE: "true" };
 
+/** auth-bff（IdP）自己的中心会话 cookie 同款开关，见 authn/cookie.ts。 */
+const IDP_LOCAL_COOKIE = { IDP_COOKIE_INSECURE: "true" };
+
 const AUTH_BFF = "http://localhost:3081";
 const ATLAS_API = "http://localhost:3100";
 const PLATFORM_API = "http://localhost:8080";
@@ -83,12 +86,12 @@ export const SERVICES = [
   // ── tier 0：后端 ──────────────────────────────────────────────────────────
   {
     id: "auth-bff",
-    name: "Auth BFF (IdP)",
+    name: "Auth BFF",
     port: 3081,
     priority: 0,
     url: AUTH_BFF,
     command: "pnpm --filter @vxture/bff-auth dev",
-    env: { AUTH_BFF_PORT: "3081" },
+    env: { AUTH_BFF_PORT: "3081", ...IDP_LOCAL_COOKIE },
     healthChecks: [healthz(3081)],
   },
   {
@@ -246,7 +249,7 @@ export const SERVICES = [
      * 它这里。缺它时表现为登录页 ERR_CONNECTION_REFUSED，而报错发生在别的门户
      * 的地址栏上，很难联想到是这个服务没起。 */
     id: "accounts",
-    name: "Accounts (登录 UI)",
+    name: "Accounts",
     port: 3080,
     priority: 2,
     url: "http://localhost:3080",

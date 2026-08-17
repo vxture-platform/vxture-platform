@@ -76,7 +76,7 @@ export default function CasesPage() {
           <h1 className="font-display text-4xl font-bold text-vx-gray-900 mb-4">
             {t(CASES_DATA.titleKey)}
           </h1>
-          <p className="text-xl text-vx-gray-600 max-w-3xl mx-auto">
+          <p className="text-xl text-vx-gray-600 max-w-website-3xl mx-auto">
             {t(CASES_DATA.subtitleKey)}
           </p>
         </div>

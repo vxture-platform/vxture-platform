@@ -58,6 +58,16 @@ CREATE TABLE admin.operator_permission (
     is_customer_visible  boolean      NOT NULL DEFAULT false,  -- 铁律七：运营域数据客户端结构性恒不可见（统一双列保留，可接受恒 false）
     is_workforce_visible boolean      NOT NULL DEFAULT true,   -- 展示可见性（运营端）——预置元锚点行（sys_config/systemadmin）置 false
     is_system    boolean      NOT NULL DEFAULT true,               -- 权限目录默认系统预置（区分管理员自建）
+    -- product_250 M-2：「每个操作码标注是否要求 step-up」+「step-up 策略归 platform（横向管理面，全 L1 一视同仁）」。
+    -- 2026-08-13 补列（此前缺失，后果见下）：没有这一列，"什么算高危"就没有唯一定义处，各 provider 只能在
+    -- 自己代码里硬编码——实测 atlas 曾在 StepUpRequiredGuard 里写死 9 个写操作，runos 一条没有，同样是托管
+    -- 第三方密钥材料的金库，两边保护等级不同，而这个差异不是任何人决策的结果，是"谁先写的谁说了算"。
+    -- 已闭环：atlas 2026-08-13 撤除该守卫（vxture-atlas#167），两侧 provider 现均不判，本列成为唯一判据。
+    -- 默认 false：绝大多数操作不需要二次验证；标 true 的必须是**不可逆或涉及凭证材料**的操作。
+    -- 消费方 = console/BFF（admin-bff / opera-bff）：读目录，命中即跑 step-up 仪式后再放行。
+    -- **不是** provider 的判据——provider 无 UI、跑不了仪式，只能拒绝，且它看到的 amr 是会话级
+    --（"登录时用过 MFA"）而非操作级（"此刻本人在场"），强度本就不同。见 product_250 M-2 补注。
+    requires_step_up boolean  NOT NULL DEFAULT false,
     sort         int          NOT NULL DEFAULT 999,
     created_by   uuid         NOT NULL,                            -- 运营专属（裸值）
     updated_by   uuid         NOT NULL,

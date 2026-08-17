@@ -1,0 +1,324 @@
+/**
+ * tokens-website.css - website 营销页样式所依赖的取值层（恢复自 3d5ef7c 之前）。
+ * @package @vxture/website
+ * @layer Presentation
+ * @category styles
+ *
+ * ── 为什么存在 ────────────────────────────────────────────────────────────
+ * 3d5ef7c（2026-08-07）把 DS 重建到 Tailwind v4 原生 token 上时，退役了整个 legacy
+ * token 层。admin 当时补了桥（assets/admin-tokens/），**website 没有**——它是同一次
+ * 迁移里第二个没收敛、也没搭桥的产品，于是两处同时塌掉：
+ *
+ *   1. `tokens-website.css`（68 个尺寸 token）随 legacy 层一起删除。website 自己的
+ *      `website-marketing-assembly.css` / `website-legal-pages.css` 里 70 个 var()
+ *      引用从此 invalid at computed-value time——`min-height:` / `padding:` /
+ *      `grid-template-columns:` / `max-width:` 全部落空，栅格塌成单列、分节内距归零。
+ *      这才是「布局混乱」的直接原因。
+ *   2. `tokens-theme-colors-{brand-ai,status}.css` 与 `tokens-theme.css` 里的
+ *      `@theme` 注册被删，`--color-vx-*` 命名空间整个消失。website 源码里 975 处
+ *      `text-vx-* / bg-vx-* / border-vx-*` 共 123 个类名**一个都不再产出 CSS**。
+ *
+ * 两类失效都不报错：变量声明缺失只是让该条声明作废，工具类不产出更是静默的
+ * （见 scripts/design-tokens/check-utilities.mjs 开头对这个盲区的说明——那个脚本
+ * 只测 DS 自家的样例类，测不到消费方实际用的类名）。
+ *
+ * ── 取值一律挂到迁移后的 token 体系 ──────────────────────────────────────
+ * 与 admin 桥「按原值恢复」不同，本文件**不复刻 legacy 色值**（owner 定）：
+ *
+ *   - 数值色阶挂 T1 的对应色族：gray-* → neutral-*、error-* → red-*、
+ *     success-* → emerald-*、warning-* → amber-*、info-* → sky-*、brand-* 原样。
+ *     色族对应关系取自 T2 六个意图族用的色相，不是另挑的。
+ *   - 角色型的挂 T2 语义槽（--primary / --foreground / --card / --border …），
+ *     这批因此第一次真正跟随暗色模式。
+ *
+ * 代价是明确的：neutral 是 v4 的中性灰（oklch，无蓝调），legacy gray 是 v3 带蓝调的
+ * 灰，营销页面的灰度会有可见但一致的偏移；text-secondary / text-muted 因为 T2 的
+ * 内容档比 legacy 少一级，分别由 700/500 提到 500/400。
+ *
+ * ── 它是桥，不是终点 ──────────────────────────────────────────────────────
+ * `--color-vx-*` 是已退役的词汇表，这里复活它只是为了不让 975 处类名一次性重写。
+ * 页面应当逐批换成 T2 类名（bg-primary / text-muted-foreground / border-border …），
+ * 换完一族就从下面的 @theme 里删一族，本文件缩小直至消失。尺寸 token 同理——
+ * 值落在 T2 挡位上的应当换成 `--space-*` / `--container-*` 引用。
+ */
+
+/* ── 一、Tailwind 工具类命名空间 ──────────────────────────────────────────
+ *
+ * 注册 `--color-vx-*` 才会产出 `text-vx-* / bg-vx-* / border-vx-*` 等工具类。
+ * 值写成 var() 引用而非字面量，所以挂到 T2 槽的那几个会跟着明暗模式走；
+ * 挂到 T1 色阶的是定值——与 legacy 行为一致，页面本来就按分节明暗自己选档
+ * （深色分节上直接写 text-vx-gray-300）。
+ *
+ * 色阶按**整族**注册而不是按当前用到的 50 个：Tailwind 只为实际出现的类名产出
+ * 规则，整族注册不增加产物体积，却能挡住「下次有人写 text-vx-gray-200 又静默失效」。
+ */
+@theme {
+  --color-vx-white: var(--vx-color-white);
+  --color-vx-black: var(--vx-color-black);
+
+  --color-vx-brand-50: var(--vx-color-brand-50);
+  --color-vx-brand-100: var(--vx-color-brand-100);
+  --color-vx-brand-200: var(--vx-color-brand-200);
+  --color-vx-brand-300: var(--vx-color-brand-300);
+  --color-vx-brand-400: var(--vx-color-brand-400);
+  --color-vx-brand-500: var(--vx-color-brand-500);
+  --color-vx-brand-600: var(--vx-color-brand-600);
+  --color-vx-brand-700: var(--vx-color-brand-700);
+  --color-vx-brand-800: var(--vx-color-brand-800);
+  --color-vx-brand-900: var(--vx-color-brand-900);
+  --color-vx-brand-950: var(--vx-color-brand-950);
+
+  /* gray → neutral：v4 中性灰，无 v3 的蓝调。 */
+  --color-vx-gray-50: var(--vx-color-neutral-50);
+  --color-vx-gray-100: var(--vx-color-neutral-100);
+  --color-vx-gray-200: var(--vx-color-neutral-200);
+  --color-vx-gray-300: var(--vx-color-neutral-300);
+  --color-vx-gray-400: var(--vx-color-neutral-400);
+  --color-vx-gray-500: var(--vx-color-neutral-500);
+  --color-vx-gray-600: var(--vx-color-neutral-600);
+  --color-vx-gray-700: var(--vx-color-neutral-700);
+  --color-vx-gray-800: var(--vx-color-neutral-800);
+  --color-vx-gray-900: var(--vx-color-neutral-900);
+
+  /* info → sky：T2 `--info` 族用的色相。 */
+  --color-vx-info-50: var(--vx-color-sky-50);
+  --color-vx-info-100: var(--vx-color-sky-100);
+  --color-vx-info-200: var(--vx-color-sky-200);
+  --color-vx-info-300: var(--vx-color-sky-300);
+  --color-vx-info-400: var(--vx-color-sky-400);
+  --color-vx-info-500: var(--vx-color-sky-500);
+  --color-vx-info-600: var(--vx-color-sky-600);
+  --color-vx-info-700: var(--vx-color-sky-700);
+  --color-vx-info-800: var(--vx-color-sky-800);
+  --color-vx-info-900: var(--vx-color-sky-900);
+
+  /* success → emerald。 */
+  --color-vx-success-50: var(--vx-color-emerald-50);
+  --color-vx-success-100: var(--vx-color-emerald-100);
+  --color-vx-success-200: var(--vx-color-emerald-200);
+  --color-vx-success-300: var(--vx-color-emerald-300);
+  --color-vx-success-400: var(--vx-color-emerald-400);
+  --color-vx-success-500: var(--vx-color-emerald-500);
+  --color-vx-success-600: var(--vx-color-emerald-600);
+  --color-vx-success-700: var(--vx-color-emerald-700);
+  --color-vx-success-800: var(--vx-color-emerald-800);
+  --color-vx-success-900: var(--vx-color-emerald-900);
+
+  /* warning → amber。 */
+  --color-vx-warning-50: var(--vx-color-amber-50);
+  --color-vx-warning-100: var(--vx-color-amber-100);
+  --color-vx-warning-200: var(--vx-color-amber-200);
+  --color-vx-warning-300: var(--vx-color-amber-300);
+  --color-vx-warning-400: var(--vx-color-amber-400);
+  --color-vx-warning-500: var(--vx-color-amber-500);
+  --color-vx-warning-600: var(--vx-color-amber-600);
+  --color-vx-warning-700: var(--vx-color-amber-700);
+  --color-vx-warning-800: var(--vx-color-amber-800);
+  --color-vx-warning-900: var(--vx-color-amber-900);
+
+  /* error → red（T2 里这一族叫 destructive，色相是 red）。 */
+  --color-vx-error-50: var(--vx-color-red-50);
+  --color-vx-error-100: var(--vx-color-red-100);
+  --color-vx-error-200: var(--vx-color-red-200);
+  --color-vx-error-300: var(--vx-color-red-300);
+  --color-vx-error-400: var(--vx-color-red-400);
+  --color-vx-error-500: var(--vx-color-red-500);
+  --color-vx-error-600: var(--vx-color-red-600);
+  --color-vx-error-700: var(--vx-color-red-700);
+  --color-vx-error-800: var(--vx-color-red-800);
+  --color-vx-error-900: var(--vx-color-red-900);
+
+  /* 角色型 → T2 语义槽。这批跟随明暗模式。
+   * primary / primary-strong 与 legacy 逐值相同（brand-600 / brand-700）；
+   * primary-soft 取 --primary-muted-hover 而非 --primary-muted，因为亮色下前者
+   * 正是 legacy 的 brand-100，后者是 brand-50——差一档。
+   * text-secondary / text-muted 是 T2 内容档比 legacy 少一级导致的上提（见文件头）。 */
+  --color-vx-primary: var(--primary);
+  --color-vx-primary-strong: var(--primary-hover);
+  --color-vx-primary-soft: var(--primary-muted-hover);
+  --color-vx-info: var(--info);
+  --color-vx-surface: var(--card);
+  --color-vx-border: var(--border);
+  --color-vx-ring-strong: var(--ring);
+  --color-vx-text-primary: var(--foreground);
+  --color-vx-text-secondary: var(--muted-foreground);
+  --color-vx-text-muted: var(--content-tertiary);
+}
+
+/* ── 二、营销页容器梯 ─────────────────────────────────────────────────────
+ *
+ * 为什么不能直接用上游的 `max-w-2xl` 这类原生类名：
+ *
+ * T2 的间距族注册在 `--spacing-*` 命名空间下（04-tokens-contract §1），用的又是
+ * `md / lg / xl / 2xl … 5xl` 这套 T 恤码。而 Tailwind v4 解析 `max-w-<名>` 时
+ * **先查 `--spacing-*`、再查 `--container-*`**，于是 DS 一注册，上游的
+ * `max-w-md`…`max-w-5xl` 就集体从容器梯（28rem–64rem）掉到间距梯（16px–64px），
+ * 窄了 20–60 倍——营销页那些 `max-w-2xl` 的正文栏因此塌成一字一行。
+ *
+ * 补注 `--container-2xl` 抢不回来（实测：`--spacing-*` 优先级在前），所以只能换名。
+ * 这里另起 `--container-website-*` 一梯，值逐项等于上游容器梯，一个像素不动；
+ * 页面侧改用 `max-w-website-*`。名字带 website 也顺带说明了这是营销页自己的栏宽，
+ * 与应用内的 `max-w-page-*` / `max-w-content-*` 不是一回事。
+ *
+ * 同源的还有两个踩关键字的：DS 注册的 `--space-none: 0px` 把上游的 `max-w-none`
+ * 变成了 `max-width: 0`、`leading-none` 变成了 `line-height: 0`（前者会让 Footer
+ * 的图整个不可见）。同样只能换名，故一并在此补两个还原关键字语义的挡位。
+ * 这两个坑对所有消费方都在，不只是 website。
+ */
+@theme {
+  --container-website-none: none;
+  --leading-website-none: 1;
+
+  --container-website-md: 28rem;
+  --container-website-lg: 32rem;
+  --container-website-xl: 36rem;
+  --container-website-2xl: 42rem;
+  --container-website-3xl: 48rem;
+  --container-website-4xl: 56rem;
+  --container-website-5xl: 64rem;
+}
+
+/* ── 三、分节底色与 Hero 画布 ─────────────────────────────────────────────
+ *
+ * 营销页把整页切成交替的 odd / even 分节，底色是渐变而不是单色，故不能直接用
+ * T2 的 `--background`——渐变端点分别取 T2 槽，明暗两套各自声明（暗色不只是换值，
+ * 渐变角度也从 180deg 变 135deg，这是原设计，保留）。
+ */
+:root {
+  --vx-page-bg: var(--card);
+  --vx-section-odd-bg: linear-gradient(
+    180deg,
+    var(--vx-color-brand-100) 0%,
+    var(--card) 100%
+  );
+  --vx-section-even-bg: linear-gradient(
+    180deg,
+    var(--vx-color-brand-100) 0%,
+    var(--card) 100%
+  );
+  /* legacy 是 rgba(191,219,254,0)——完全透明，分节间实际不画线。保留该意图。 */
+  --vx-section-border: transparent;
+
+  /*
+   * Hero 画布的节点/连线颜色**必须是裸通道值**：AnimatedHeroBg.tsx 把它们拼进
+   * `rgb(${nodeRgb} / ${alpha})`（见该文件 readHeroCanvasPalette）。T1 色阶是
+   * oklch()，插进 rgb() 会得到无效颜色、canvas 静默画不出东西，所以这三个只能
+   * 留字面量。取值 = brand-600 / indigo-500 的 sRGB 等价值，与迁移前一致。
+   */
+  --vx-color-hero-node-rgb: 37 99 235;
+  --vx-color-hero-line-rgb: 99 102 241;
+  --vx-color-hero-scan: rgb(37 99 235 / 0.18);
+}
+
+.dark,
+:root.dark {
+  --vx-page-bg: var(--background);
+  --vx-section-odd-bg: linear-gradient(
+    135deg,
+    var(--vx-color-neutral-800) 0%,
+    var(--vx-color-neutral-700) 100%
+  );
+  --vx-section-even-bg: linear-gradient(
+    135deg,
+    var(--vx-color-neutral-700) 0%,
+    var(--vx-color-neutral-800) 100%
+  );
+  --vx-section-border: var(--border);
+
+  --vx-color-hero-node-rgb: 147 197 253;
+  --vx-color-hero-line-rgb: 147 197 253;
+  --vx-color-hero-scan: rgb(147 197 253 / 0.45);
+}
+
+/* ── 四、营销页与法务页的尺寸刻度 ─────────────────────────────────────────
+ *
+ * 逐值取自 3d5ef7c~1 的 src/styles/tokens-website.css，**一个像素不动**：这批是
+ * 版面刻度，改值等于改设计，不在本次「接回 token 体系」的范围内。两处引用了
+ * legacy gray 的阴影改挂 neutral（gray 已不存在），其余原样。
+ *
+ * 收敛方向：值落在 T2 挡位上的换成 `--space-*` / `--container-*` 引用，
+ * 换过之后密度轴才会对营销页生效。
+ */
+:root {
+  /* 法务页：容器与页头 */
+  --vx-website-legal-container-width: min(1120px, calc(100% - 40px));
+  --vx-website-legal-container-padding: 88px 0 96px;
+  --vx-website-legal-hero-max-width: 780px;
+  --vx-website-legal-hero-margin-bottom: 36px;
+  --vx-website-legal-label-size: 0.78rem;
+  --vx-website-legal-label-letter-spacing: 0.08em;
+  --vx-website-legal-heading-margin: 12px 0 16px;
+  --vx-website-legal-heading-size: clamp(2.3rem, 4vw, 4.25rem);
+  --vx-website-legal-copy-max-width: 720px;
+  --vx-website-legal-copy-size: 1.02rem;
+  --vx-website-legal-meta-margin-top: 18px;
+
+  /* 法务页：索引卡片栅格 */
+  --vx-website-legal-grid-gap: 16px;
+  --vx-website-legal-card-min-height: 220px;
+  --vx-website-legal-card-gap: 12px;
+  --vx-website-legal-card-padding: 22px;
+  --vx-website-legal-border-width: 1px;
+  --vx-website-legal-card-radius: 8px;
+  --vx-website-legal-card-shadow: 0 12px 32px
+    color-mix(in srgb, var(--vx-color-neutral-900) 6%, transparent);
+  --vx-website-legal-card-hover-translate: calc(3px * -1);
+  --vx-website-legal-card-hover-shadow: 0 18px 44px
+    color-mix(in srgb, var(--vx-color-neutral-900) 10%, transparent);
+  --vx-website-legal-card-title-size: 1.05rem;
+
+  /* 法务页：正文文档 */
+  --vx-website-legal-document-max-width: 920px;
+  --vx-website-legal-breadcrumb-gap: 10px;
+  --vx-website-legal-breadcrumb-margin-bottom: 28px;
+  --vx-website-legal-document-hero-margin-bottom: 24px;
+  --vx-website-legal-notice-margin: 24px 0 36px;
+  --vx-website-legal-notice-padding: 18px 20px;
+  --vx-website-legal-notice-border-width: 4px;
+  --vx-website-legal-sections-gap: 18px;
+  --vx-website-legal-section-padding: 28px;
+  --vx-website-legal-section-title-margin: 0 0 14px;
+  --vx-website-legal-section-title-size: 1.35rem;
+  --vx-website-legal-section-paragraph-gap: 12px;
+
+  /* 法务页：窄屏 */
+  --vx-website-legal-container-width-mobile: min(100% - 28px, 1120px);
+  --vx-website-legal-container-padding-mobile: 56px 0 72px;
+  --vx-website-legal-card-min-height-mobile: 180px;
+
+  /* 营销页：Hero */
+  --vx-website-hero-section-min-height: 540px;
+  --vx-website-hero-section-padding-top: 80px;
+  --vx-website-hero-content-max-width: 1280px;
+  --vx-website-hero-content-padding: 80px 24px 48px;
+  --vx-website-hero-content-padding-x-lg: 32px;
+  --vx-website-hero-content-max-width-xl: 1536px;
+  --vx-website-hero-eyebrow-tracking: 0.16em;
+  --vx-website-hero-eyebrow-tracking-wide: 0.18em;
+
+  /* 营销页：分节 */
+  --vx-website-section-padding-y: 64px;
+  --vx-website-section-border-width: 1px;
+
+  /* 营销页：左右分栏。左栏占比逐块微调，故按占比逐个列出而不是一个通用值。 */
+  --vx-website-split-grid-30-columns: 30% 1fr;
+  --vx-website-split-grid-32-columns: 32% 1fr;
+  --vx-website-split-grid-34-columns: 34% 1fr;
+  --vx-website-split-grid-36-columns: 36% 1fr;
+  --vx-website-split-grid-38-columns: 38% 1fr;
+  --vx-website-split-grid-42-columns: 42% 1fr;
+
+  /* 营销页：卡片与媒体块 */
+  --vx-website-marketplace-card-min-height: 360px;
+  --vx-website-practice-card-media-min-height: 280px;
+  --vx-website-emergency-practice-media-min-height: 420px;
+  --vx-website-solution-card-grid-columns-lg: 38% 62%;
+  --vx-website-solution-index-size: 3rem;
+
+  /* 营销页：CTA 与页脚 */
+  --vx-website-cta-section-min-height: 65vh;
+  --vx-website-cta-action-min-width: 200px;
+  --vx-website-footer-min-height: 35vh;
+  --vx-website-footer-brand-basis: 30%;
+  --vx-website-footer-links-basis: 70%;
+}

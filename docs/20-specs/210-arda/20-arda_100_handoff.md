@@ -26,7 +26,7 @@
 | 项                  | prod                                    | beta                                         |
 | ------------------- | --------------------------------------- | -------------------------------------------- |
 | client_id           | `arda`                                  | `arda-beta`                                  |
-| 站点                | `https://arda.vxture.com`（nginx→3230） | `https://beta-arda.vxture.com`（nginx→3231） |
+| 站点                | `https://arda.vxture.com`（nginx 回源） | `https://beta-arda.vxture.com`（nginx 回源） |
 | redirect_uri        | `{站点}/auth/callback`                  | 同左                                         |
 | back_channel_logout | `{站点}/auth/backchannel-logout`        | 同左                                         |
 | realm               | `customer`                              | `customer`（release_channel=beta）           |

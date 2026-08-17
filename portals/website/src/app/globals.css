@@ -3,5 +3,8 @@
 @import "@vxture/design-system/styles/globals.css";
 @import "@vxture/design-system/styles/brands/vxture.css";
 @import "@vxture/design-system/styles/shell-template-user-panel.css";
+/* 营销页取值层。缺了它，src/styles 下的 70 个 var() 引用全部作废、且 975 处
+ * text-vx-* / bg-vx-* 类名不产出任何 CSS——两者都不报错。见该文件头部。 */
+@import "@vxture/design-system/styles/website-tokens.css";
 @import "../styles/website-legal.css";
 @import "../styles/website-marketing.css";

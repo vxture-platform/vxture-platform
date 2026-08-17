@@ -19,25 +19,28 @@
  */
 
 import {
-  BadRequestException,
   Body,
-  ConflictException,
   Controller,
-  ForbiddenException,
   Get,
   Inject,
-  NotFoundException,
   Param,
   Post,
   Put,
   Query,
   Req,
-  UnauthorizedException,
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
 import { insertOperatorAuditLog } from "../audit/audit-log";
 import { withTransaction } from "../db/tx";
+import {
+  conflict,
+  internalError,
+  invalidRequest,
+  notEntitled,
+  notFound,
+  unauthenticated,
+} from "../errors/api-error";
 import { OPERA_BFF_RO_POOL, OPERA_BFF_RW_POOL } from "../tokens";
 import type { RequestContext } from "../types/request-context";
 import {
@@ -55,7 +58,13 @@ import {
 export interface MaintenanceWindowItem {
   id: string;
   severity: "minor" | "major" | "critical";
-  status: "scheduled" | "in_progress" | "completed" | "cancelled";
+  /**
+   * product_251 B-3：字段名统一叫 `state`。窗口的四态不是「启用/停用」，但 B-3
+   * 的下半句同样适用——**一个产品内不得混用多个字段名**：产品目录与 OIDC 客户端
+   * 都叫 `state` 了，这里再叫 `status`，运营者面对的仍然是两个词。
+   * DB 列 `admin.maintenance_windows.status` 不动，只换接口字段名。
+   */
+  state: "scheduled" | "in_progress" | "completed" | "cancelled";
   title: string;
   description: string | null;
   impactDescription: string | null;
@@ -73,7 +82,7 @@ export interface MaintenanceWindowItem {
 const WINDOW_SEVERITIES: ReadonlySet<MaintenanceWindowItem["severity"]> =
   new Set(["minor", "major", "critical"]);
 
-const WINDOW_STATUSES: ReadonlySet<MaintenanceWindowItem["status"]> = new Set([
+const WINDOW_STATES: ReadonlySet<MaintenanceWindowItem["state"]> = new Set([
   "scheduled",
   "in_progress",
   "completed",
@@ -87,12 +96,12 @@ export class MaintenanceWindowsRouter {
     @Inject(OPERA_BFF_RW_POOL) private readonly rwPool: Pool,
   ) {}
 
-  // GET /api/maintenance-windows?status=a,b&from=ISO&to=ISO
+  // GET /api/maintenance-windows?state=a,b&from=ISO&to=ISO
   //   from/to 过滤 start_at；取最近 LIST_LIMIT 行。
   @Get()
   async listMaintenanceWindows(
     @Req() req: Request & RequestContext,
-    @Query("status") status?: string,
+    @Query("state") state?: string,
     @Query("from") from?: string,
     @Query("to") to?: string,
   ): Promise<MaintenanceWindowItem[]> {
@@ -100,16 +109,18 @@ export class MaintenanceWindowsRouter {
 
     const where: string[] = ["true"];
     const params: unknown[] = [];
-    if (status) {
-      const statuses = status.split(",").map((v) => v.trim());
-      for (const s of statuses) {
-        if (!WINDOW_STATUSES.has(s as MaintenanceWindowItem["status"])) {
-          throw new BadRequestException(
-            "status must be of scheduled/in_progress/completed/cancelled",
+    if (state) {
+      const states = state.split(",").map((v) => v.trim());
+      for (const s of states) {
+        if (!WINDOW_STATES.has(s as MaintenanceWindowItem["state"])) {
+          throw invalidRequest(
+            "VALIDATION_INVALID_VALUE",
+            "state must be of scheduled/in_progress/completed/cancelled",
+            "state",
           );
         }
       }
-      params.push(statuses);
+      params.push(states);
       where.push(`w.status = any($${params.length}::varchar[])`);
     }
     if (from) {
@@ -136,13 +147,16 @@ export class MaintenanceWindowsRouter {
     @Param("id") id: string,
   ): Promise<MaintenanceWindowItem> {
     assertCanReadMaintenanceWindows(req);
-    const windowId = requireUuid(id, "Invalid maintenance window id");
+    const windowId = requireUuid(id, "id", "Invalid maintenance window id");
     const { rows } = await this.pool.query<MaintenanceWindowRow>(
       `${MAINTENANCE_WINDOW_SELECT} where w.id = $1`,
       [windowId],
     );
     if (!rows[0]) {
-      throw new NotFoundException("Maintenance window not found");
+      throw notFound(
+        "MAINTENANCE_WINDOW_NOT_FOUND",
+        "Maintenance window not found",
+      );
     }
     return mapMaintenanceWindowRow(rows[0]);
   }
@@ -150,7 +164,7 @@ export class MaintenanceWindowsRouter {
   // POST /api/maintenance-windows
   //   body: { title(<=256), startAt: ISO, endAt: ISO(> startAt；过去的窗口允许
   //           补录), severity?, description?, impactDescription?,
-  //           affectedServices?: string[] }。status 起始 'scheduled'。
+  //           affectedServices?: string[] }。state 起始 'scheduled'。
   @Post()
   async createMaintenanceWindow(
     @Req() req: Request & RequestContext,
@@ -176,7 +190,10 @@ export class MaintenanceWindowsRouter {
       );
       const created = rows[0];
       if (!created) {
-        throw new BadRequestException(
+        /* 库没有按要求插进去——这是本方故障。原来这里回 400，运营者会以为是
+           自己填错了，然后反复改一个永远改不好的输入。 */
+        throw internalError(
+          "MAINTENANCE_WINDOW_INSERT_FAILED",
           "Maintenance window insert returned no row",
         );
       }
@@ -195,8 +212,19 @@ export class MaintenanceWindowsRouter {
     });
   }
 
-  // PUT /api/maintenance-windows/:id
-  //   scheduled：全字段可编；in_progress：end_at 只可顺延 + 描述追记；终态 409。
+  /**
+   * PUT /api/maintenance-windows/:id
+   *   scheduled：全字段可编（真·全量替换）；in_progress：end_at 只可顺延 + 描述追记；终态 409。
+   *
+   * **同一个 URL 在两个状态下语义不同**——这是有意的业务规则，不是失误：一个正在跑的
+   * 维护窗口，改标题改开始时间没有意义（它已经开始了）。但语义不同必须**说得出来**：
+   * 原来 in_progress 分支把 `title`/`severity`/`startAt`/`affectedServices` **静默丢弃**，
+   * 返回 200 和一行看起来正常的数据，运营者以为改了。这正是 product_251 P3 说的那类——
+   * 「静默地做与请求不同的事，比报错更糟」。
+   *
+   * 现在的规则（B-1）：**送来的锁定字段与库里不同就拒**，相同则视为无操作放行。
+   * 后者不能少——控制台编辑框在 live 模式下是 disabled 而不是不提交，它送的是原值。
+   */
   @Put(":id")
   async updateMaintenanceWindow(
     @Req() req: Request & RequestContext,
@@ -205,21 +233,28 @@ export class MaintenanceWindowsRouter {
   ): Promise<MaintenanceWindowItem> {
     assertCanManageMaintenanceWindows(req);
     const updatedBy = requireOperatorId(req);
-    const windowId = requireUuid(id, "Invalid maintenance window id");
+    const windowId = requireUuid(id, "id", "Invalid maintenance window id");
 
     return withTransaction(this.rwPool, async (client) => {
       const current = await client.query<{
-        status: MaintenanceWindowItem["status"];
+        status: MaintenanceWindowItem["state"];
+        severity: MaintenanceWindowItem["severity"];
+        title: string;
+        affected_services: string[];
         start_at: Date;
         end_at: Date;
       }>(
-        `select status, start_at, end_at from admin.maintenance_windows
-         where id = $1 for update`,
+        `select status, severity, title, affected_services, start_at, end_at
+           from admin.maintenance_windows
+          where id = $1 for update`,
         [windowId],
       );
       const row = current.rows[0];
       if (!row) {
-        throw new NotFoundException("Maintenance window not found");
+        throw notFound(
+          "MAINTENANCE_WINDOW_NOT_FOUND",
+          "Maintenance window not found",
+        );
       }
 
       if (row.status === "scheduled") {
@@ -236,6 +271,7 @@ export class MaintenanceWindowsRouter {
           updatedBy,
         ]);
       } else if (row.status === "in_progress") {
+        assertLiveEditable(body, row);
         const description = optionalText(
           body.description,
           "description",
@@ -256,8 +292,10 @@ export class MaintenanceWindowsRouter {
           // 只可顺延（设计 §3.3）：进行中的窗口提前结束叫"完成"（记 actual_end_at），
           // 不是把计划结束时间改短。
           if (new Date(endAt) < new Date(row.end_at)) {
-            throw new BadRequestException(
+            throw invalidRequest(
+              "MAINTENANCE_WINDOW_END_AT_NOT_EXTENDABLE",
               "endAt of an in_progress window can only be extended",
+              "endAt",
             );
           }
         }
@@ -269,7 +307,8 @@ export class MaintenanceWindowsRouter {
           updatedBy,
         ]);
       } else {
-        throw new ConflictException(
+        throw conflict(
+          "MAINTENANCE_WINDOW_READ_ONLY",
           "Completed/cancelled maintenance windows are read-only",
         );
       }
@@ -279,7 +318,7 @@ export class MaintenanceWindowsRouter {
         resourceType: "maintenance_window",
         resourceId: windowId,
         before: {
-          status: row.status,
+          state: row.status,
           startAt: toIso(row.start_at),
           endAt: toIso(row.end_at),
         },
@@ -313,7 +352,7 @@ export class MaintenanceWindowsRouter {
   ): Promise<MaintenanceWindowItem> {
     assertCanManageMaintenanceWindows(req);
     const updatedBy = requireOperatorId(req);
-    const windowId = requireUuid(id, "Invalid maintenance window id");
+    const windowId = requireUuid(id, "id", "Invalid maintenance window id");
     const actualEndAt =
       body?.actualEndAt === undefined ||
       body.actualEndAt === null ||
@@ -369,7 +408,7 @@ export class MaintenanceWindowsRouter {
   ): Promise<MaintenanceWindowItem> {
     assertCanManageMaintenanceWindows(req);
     const updatedBy = requireOperatorId(req);
-    const windowId = requireUuid(id, "Invalid maintenance window id");
+    const windowId = requireUuid(id, "id", "Invalid maintenance window id");
 
     return withTransaction(this.rwPool, async (client) => {
       const { rowCount } = await client.query(sql, [windowId, updatedBy]);
@@ -396,9 +435,12 @@ export class MaintenanceWindowsRouter {
       [windowId],
     );
     if (rowCount === 0) {
-      throw new NotFoundException("Maintenance window not found");
+      throw notFound(
+        "MAINTENANCE_WINDOW_NOT_FOUND",
+        "Maintenance window not found",
+      );
     }
-    throw new ConflictException(conflictMessage);
+    throw conflict("MAINTENANCE_WINDOW_INVALID_TRANSITION", conflictMessage);
   }
 
   private async fetchMaintenanceWindow(
@@ -410,7 +452,10 @@ export class MaintenanceWindowsRouter {
       [id],
     );
     if (!rows[0]) {
-      throw new NotFoundException("Maintenance window not found");
+      throw notFound(
+        "MAINTENANCE_WINDOW_NOT_FOUND",
+        "Maintenance window not found",
+      );
     }
     return mapMaintenanceWindowRow(rows[0]);
   }
@@ -499,7 +544,7 @@ where id = $1 and status in ('scheduled', 'in_progress')
 interface MaintenanceWindowRow {
   id: string;
   severity: MaintenanceWindowItem["severity"];
-  status: MaintenanceWindowItem["status"];
+  status: MaintenanceWindowItem["state"];
   title: string;
   description: string | null;
   impact_description: string | null;
@@ -540,7 +585,7 @@ function mapMaintenanceWindowRow(
   return {
     id: row.id,
     severity: row.severity,
-    status: row.status,
+    state: row.status,
     title: row.title,
     description: row.description,
     impactDescription: row.impact_description,
@@ -556,11 +601,70 @@ function mapMaintenanceWindowRow(
   };
 }
 
+/**
+ * in_progress 下哪些字段动不了（product_251 B-1 / P3）。
+ *
+ * **只拦「要改」，不拦「提到了」**：控制台的编辑框在 live 模式下是 disabled 而不是
+ * 不提交，送来的是原值。把「送了原值」也拦掉，等于让人在界面上根本存不了描述。
+ */
+export function assertLiveEditable(
+  body: MaintenanceWindowWriteBody,
+  row: {
+    severity: MaintenanceWindowItem["severity"];
+    title: string;
+    affected_services: string[];
+    start_at: Date;
+  },
+): void {
+  const locked: string[] = [];
+
+  if (typeof body.title === "string" && body.title.trim() !== row.title) {
+    locked.push("title");
+  }
+  if (
+    body.severity !== undefined &&
+    body.severity !== null &&
+    body.severity !== row.severity
+  ) {
+    locked.push("severity");
+  }
+  if (body.startAt !== undefined && body.startAt !== null) {
+    /* 解析失败也算"不同"——一个连格式都不对的值肯定不是库里那个。 */
+    const sent = new Date(String(body.startAt)).getTime();
+    if (Number.isNaN(sent) || sent !== row.start_at.getTime()) {
+      locked.push("startAt");
+    }
+  }
+  if (Array.isArray(body.affectedServices)) {
+    /* 按**集合**比，不按顺序——2026-08-16 联调证伪了原来的按序比较：送
+       `['beta','alpha']` 而库里是 `['alpha','beta']` 会被拒，可运营者一个服务都
+       没改。`affectedServices` 回答的是「哪些服务受影响」，先后不承载任何语义。
+       **误拒比漏拒更伤**：漏拒是少挡一次，误拒是让人对着一个自己没做过的改动
+       找半天，还找不到。 */
+    const key = (xs: readonly string[]) =>
+      [...new Set(xs.map((v) => String(v).trim()))].sort().join(" ");
+    if (key(body.affectedServices) !== key(row.affected_services ?? [])) {
+      locked.push("affectedServices");
+    }
+  }
+
+  if (locked.length > 0) {
+    throw conflict(
+      "MAINTENANCE_WINDOW_LIVE_FIELDS_LOCKED",
+      `进行中的窗口不能改这些字段：${locked.join(" / ")}。` +
+        `只能顺延结束时间、追记描述与影响说明；要改其它内容请先取消这个窗口再重建。`,
+    );
+  }
+}
+
 function normalizeMaintenanceWindowInput(
   body: MaintenanceWindowWriteBody,
 ): NormalizedMaintenanceWindowInput {
   if (!body || typeof body !== "object") {
-    throw new BadRequestException("Request body is required");
+    throw invalidRequest(
+      "VALIDATION_BODY_REQUIRED",
+      "Request body is required",
+    );
   }
   if (
     body.severity !== undefined &&
@@ -570,8 +674,10 @@ function normalizeMaintenanceWindowInput(
       WINDOW_SEVERITIES.has(body.severity as MaintenanceWindowItem["severity"])
     )
   ) {
-    throw new BadRequestException(
+    throw invalidRequest(
+      "VALIDATION_INVALID_VALUE",
       "severity must be one of minor/major/critical",
+      "severity",
     );
   }
   const severity =
@@ -582,7 +688,11 @@ function normalizeMaintenanceWindowInput(
   const startAt = parseIso(body.startAt, "startAt");
   const endAt = parseIso(body.endAt, "endAt");
   if (new Date(endAt) <= new Date(startAt)) {
-    throw new BadRequestException("endAt must be after startAt");
+    throw invalidRequest(
+      "VALIDATION_INVALID_VALUE",
+      "endAt must be after startAt",
+      "endAt",
+    );
   }
   return {
     severity,
@@ -606,14 +716,14 @@ function normalizeMaintenanceWindowInput(
 
 function assertCanReadMaintenanceWindows(req: Request & RequestContext): void {
   if (!req.operator) {
-    throw new UnauthorizedException("No active session");
+    throw unauthenticated("AUTH_NO_SESSION", "No active session");
   }
   if (
     !req.capabilities ||
     (!req.capabilities.includes("release:maintenance.read") &&
       !req.capabilities.includes("release:maintenance.manage"))
   ) {
-    throw new ForbiddenException("Missing release:maintenance.read capability");
+    throw notEntitled("release:maintenance.read");
   }
 }
 
@@ -621,14 +731,12 @@ function assertCanManageMaintenanceWindows(
   req: Request & RequestContext,
 ): void {
   if (!req.operator) {
-    throw new UnauthorizedException("No active session");
+    throw unauthenticated("AUTH_NO_SESSION", "No active session");
   }
   if (
     !req.capabilities ||
     !req.capabilities.includes("release:maintenance.manage")
   ) {
-    throw new ForbiddenException(
-      "Missing release:maintenance.manage capability",
-    );
+    throw notEntitled("release:maintenance.manage");
   }
 }

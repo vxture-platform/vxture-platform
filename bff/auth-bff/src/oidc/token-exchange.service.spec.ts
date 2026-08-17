@@ -558,8 +558,6 @@ describe("TokenExchangeService.exchange — operator-OBO mode (product_250 M-1)"
       userType: "operator",
       realm: "workforce",
       scope: "mgmt:atlas",
-      operator_role: "superadmin",
-      amr: ["pwd", "otp"],
     });
     expect(claims.org_id).toBeUndefined();
     expect(claims.workspace_id).toBeUndefined();
@@ -570,10 +568,15 @@ describe("TokenExchangeService.exchange — operator-OBO mode (product_250 M-1)"
     });
   });
 
-  it("omits amr/operator_role claims when the subject token has none", async () => {
-    m.keys.verify.mockReturnValue(
-      operatorClaims({ amr: undefined, operator_role: undefined }),
-    );
+  /* Note the subject token DOES carry both claims here — that is the point.
+     They used to be mirrored into the OBO token so a provider could gate on
+     step-up freshness; owner withdrew that clause 2026-08-13 (product_250 v0.4
+     §M-2 补注) after atlas removed the only guard that read `amr`
+     (vxture-atlas#167/#169) and runos never read either. A claim with no
+     reject branch left anywhere should not sit in the token implying a check
+     that no longer happens. */
+  it("does not mirror amr/operator_role into the OBO token even when the subject has them", async () => {
+    m.keys.verify.mockReturnValue(operatorClaims());
     m.pool.query
       .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
       .mockResolvedValueOnce({ rows: [] });
@@ -660,5 +663,128 @@ describe("TokenExchangeService.exchange — operator-OBO mode (product_250 M-1)"
       target_product: "atlas",
       mode: "operator",
     });
+  });
+});
+
+/**
+ * `scope` 是**跨仓契约**，不是本仓的内部细节（vxture-atlas TD-036）。
+ *
+ * Atlas 的 `S2sAuthGuard` 此前只把 `scope` 读进上下文、从不比对——真正撑住数据面与
+ * 管理面隔离的是 `mode` 检查（operator 票不带 `obo|service`）。Atlas 要把 `scope`
+ * 也断言上去补齐纵深，而那件事**卡在一个只有本仓能回答的事实**上：平台是不是给每
+ * 一张在飞的 S2S 票都签了 `scope`。答案是「是」，依据就是下面这几条路径。
+ *
+ * 这一组的职责与上面各 describe 里那些顺带的 scope 断言不同：那些验的是"这个场景
+ * 签出的票长什么样"，这一组验的是**"没有任何一条签发路径可以不带 scope"**。谁把
+ * `scope` 改成条件式、或加了第四条不带它的签发路径，红的是这里——而不是 atlas 在
+ * 生产上 401 掉 karda 的活流量。
+ *
+ * 删这一组之前请先确认 atlas 已经撤掉那两行断言，否则等于单方面解除了一个它正在
+ * 依赖的保证。
+ */
+describe("TokenExchangeService.exchange — scope 是跨仓契约（atlas TD-036）", () => {
+  let m: Mocks;
+  beforeEach(() => (m = build()));
+
+  const scopeOf = (): unknown =>
+    (m.keys.sign.mock.calls[0]![0] as Record<string, unknown>)["scope"];
+
+  it("service 模式签出的 S2S 票带 tool:{target}", async () => {
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [{ covered: true }] })
+      .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] });
+
+    await m.service.exchange(CALLER_ARDA, {
+      audience: "atlas",
+      subjectToken: undefined,
+      workspaceId: "ws-1",
+      orgId: "org-1",
+    });
+
+    expect(scopeOf()).toBe("tool:atlas");
+  });
+
+  it("OBO 模式签出的 S2S 票带 tool:{target}", async () => {
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-9" }] });
+    m.keys.verify.mockReturnValue({
+      aud: CALLER_ARDA.clientId,
+      sub: "usr_123",
+      active_org: "org-9",
+      active_workspace: "ws-9",
+    });
+
+    await m.service.exchange(CALLER_ARDA, {
+      audience: "atlas",
+      subjectToken: "raw.user.token",
+      workspaceId: undefined,
+      orgId: undefined,
+    });
+
+    expect(scopeOf()).toBe("tool:atlas");
+  });
+
+  it("平台级调用方（console→atlas）签出的 S2S 票带 tool:{target}", async () => {
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] });
+
+    await m.service.exchange(CALLER_PLATFORM, {
+      audience: "atlas",
+      subjectToken: undefined,
+      workspaceId: "ws-1",
+      orgId: "org-1",
+    });
+
+    expect(scopeOf()).toBe("tool:atlas");
+  });
+
+  it("operator 模式签的是 mgmt:{target}——与 S2S 面结构性不同，这是隔离的另一半", async () => {
+    m.keys.verify.mockReturnValue({
+      sub: "opr_11111111-1111-1111-1111-111111111111",
+      aud: "admin",
+      userType: "operator",
+      operator_role: "superadmin",
+      amr: ["pwd", "otp"],
+    });
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await m.service.exchange(
+      { clientId: "admin", productCode: null },
+      {
+        audience: "atlas",
+        subjectToken: "operator.subject.jwt",
+        workspaceId: undefined,
+        orgId: undefined,
+      },
+    );
+
+    /* 两个面的 scope 前缀必须不同：atlas 两侧各断言各的，前缀一旦相同，
+       "任一面的票在另一面必然 401" 这句话就不再成立。 */
+    expect(scopeOf()).toBe("mgmt:atlas");
+    expect(String(scopeOf()).startsWith("tool:")).toBe(false);
+  });
+
+  it("scope 由 target 派生，调用方给不进来", async () => {
+    m.pool.query
+      .mockResolvedValueOnce({ rows: [{ product_code: "atlas" }] })
+      .mockResolvedValueOnce({ rows: [{ covered: true }] })
+      .mockResolvedValueOnce({ rows: [{ tenant_id: "tenant-1" }] });
+
+    await m.service.exchange(CALLER_ARDA, {
+      audience: "atlas",
+      subjectToken: undefined,
+      workspaceId: "ws-1",
+      orgId: "org-1",
+      /* 请求体里塞一个 scope：它不在 grant 的入参形状里，必须被完全忽略，而不是
+         覆盖签出的值——否则调用方可以自签任意 scope，纵深当场失效。 */
+      ...({ scope: "mgmt:atlas" } as Record<string, unknown>),
+    } as Parameters<typeof m.service.exchange>[1]);
+
+    expect(scopeOf()).toBe("tool:atlas");
   });
 });

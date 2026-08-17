@@ -21,7 +21,7 @@
 
 `@vxture/model-runtime-client` 是平台的 **AI 能力基础层**，对上层 agent-server 提供统一的 LLM 调用、Embedding、RAG 检索和工作流编排接口，屏蔽底层当前 Model Platform / 目标 Model Runtime 的 HTTP 协议细节。
 
-所有 LLM 请求经由当前 **Model Platform**（端口 3100）转发，不直接调用 LLM provider API。目标架构中，该入口对应 `model-runtime`；计费归因、模型路由、Provider adapter 和用量计量均在运行面完成。
+所有 LLM 请求经由当前 **Model Platform**转发，不直接调用 LLM provider API。目标架构中，该入口对应 `model-runtime`；计费归因、模型路由、Provider adapter 和用量计量均在运行面完成。
 
 ---
 

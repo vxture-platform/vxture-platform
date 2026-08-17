@@ -208,6 +208,13 @@ jobs:
             DEPLOY_STAGE=${{ steps.prov.outputs.deploy_stage }}
           platforms: linux/amd64
           push: true
+          # 关掉 provenance / SBOM 证明。buildx 默认把它们作为独立 manifest 一起推，
+          # 其 config 是 `application/vnd.oci.empty.v1+json`——**阿里云个人版 registry
+          # 不认这个 manifest class，直接 denied**。GHCR 收得下，所以现象是「镜像推上去
+          # 了一半」：ghcr 有、阿里云没有，而部署拉的是阿里云那份。
+          # 2026-08-09 之前一直是绿的，中间 runner 的 buildkit 升级把这两项转成了默认开。
+          provenance: false
+          sbom: false
           tags: ${{ steps.image-tags.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # 每个服务独立 scope，互不干扰
@@ -236,6 +243,13 @@ jobs:
             DEPLOY_STAGE=${{ steps.prov.outputs.deploy_stage }}
           platforms: linux/amd64
           push: true
+          # 关掉 provenance / SBOM 证明。buildx 默认把它们作为独立 manifest 一起推，
+          # 其 config 是 `application/vnd.oci.empty.v1+json`——**阿里云个人版 registry
+          # 不认这个 manifest class，直接 denied**。GHCR 收得下，所以现象是「镜像推上去
+          # 了一半」：ghcr 有、阿里云没有，而部署拉的是阿里云那份。
+          # 2026-08-09 之前一直是绿的，中间 runner 的 buildkit 升级把这两项转成了默认开。
+          provenance: false
+          sbom: false
           tags: ${{ steps.image-tags.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.name }}

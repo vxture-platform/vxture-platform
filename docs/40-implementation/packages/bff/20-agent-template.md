@@ -7,13 +7,13 @@
 
 ## 包信息
 
-| 项       | 值                                                           |
-| -------- | ------------------------------------------------------------ |
-| 包名     | `@vxture/bff-agent01`（分叉后按 `@vxture/bff-{name}` 命名）  |
-| 路径     | `bff/agent-template-bff/`                                    |
-| @layer   | `Application`                                                |
-| 服务对象 | 对应 `agent-studio/agent-template` 前端                      |
-| 端口     | 按 `docs/40-implementation/ai/port-allocation.md` 登记新端口 |
+| 项       | 值                                                          |
+| -------- | ----------------------------------------------------------- |
+| 包名     | `@vxture/bff-agent01`（分叉后按 `@vxture/bff-{name}` 命名） |
+| 路径     | `bff/agent-template-bff/`                                   |
+| @layer   | `Application`                                               |
+| 服务对象 | 对应 `agent-studio/agent-template` 前端                     |
+| 端口     | 按端口登记表登记（见文末「分叉步骤」）                      |
 
 ## 唯一职责
 
@@ -43,7 +43,7 @@ src/
 
 1. 复制 `bff/agent-template-bff/` → `bff/{name}-bff/`
 2. 在 `package.json` 中更新包名为 `@vxture/bff-{name}`
-3. 在 `docs/40-implementation/ai/port-allocation.md` 登记新端口（3NNX 规则）
+3. 在[端口登记表](https://claude.ai/code/artifact/0f44735a-c6bc-4881-a440-3446a2411a5f)登记新端口——L3 智能体在 `4000–5999` 段内**另起一个 10 位子块**，不接着上一个挤。**先登记，后用号**
 4. 创建 `docs/40-implementation/packages/bff/{name}.md`（参照本文件）
 5. 在 `docs/30-design/architecture/00-index.md` Agent 实例表中添加一行
 

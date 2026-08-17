@@ -89,8 +89,26 @@ export class OperatorMfaService {
    * (anomalous after a successful first factor) resolves to "no MFA" so the
    * caller fails downstream on findById rather than this path leaking account
    * existence.
+   *
+   * OPERATOR_MFA_DEV_BYPASS: explicit opt-in, local convenience only. Read via
+   * VxConfigService (not raw process.env) so it can't leak across test workers
+   * that load `.env.local` for unrelated config domains, and fails closed in
+   * production regardless of the value — never gate it on anything an operator
+   * deploy could set.
    */
   async resolveLoginMfa(operatorId: string): Promise<OperatorLoginMfa> {
+    if (!this.config.isProduction && this.config.auth.OPERATOR_MFA_DEV_BYPASS) {
+      return {
+        decision: {
+          effectivePolicy: "disabled",
+          mfaRequired: false,
+          enrollRequired: false,
+          webauthnRequired: false,
+          enrollFactor: null,
+        },
+        methods: [],
+      };
+    }
     const ctx = await this.operators.getMfaContext(operatorId);
     if (!ctx) {
       return {

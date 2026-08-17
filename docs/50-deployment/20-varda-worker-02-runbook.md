@@ -17,10 +17,10 @@
 ## 0. 拓扑与设计
 
 ```
-用户 → admin/console 前端 → (worker-01 nginx /varda/ 直连 Tailscale) → worker-02:3121 varda-bff
-                                                                          └→ varda-server:3122 (同栈)
+用户 → admin/console 前端 → (worker-01 nginx /varda/ 直连 Tailscale) → worker-02: varda-bff
+                                                                          └→ varda-server: (同栈)
 worker-02 varda 栈（自包含）：
-  varda-bff(3121, 发布 0.0.0.0) · varda-server(3122, 仅内网) · varda-pg(私有) · varda-redis(私有)
+  varda-bff(发布 0.0.0.0) · varda-server(仅内网) · varda-pg(私有) · varda-redis(私有)
 唯一跨主机硬依赖：varda-server → Atlas（LLM 网关，worker-02:3100，2026-07-27 更正，见 §3；虽同机部署仍走 tailnet IP）
 ```
 
@@ -126,7 +126,7 @@ model-platform 对每次 chat 有三道 DB 门（数据在 worker-01 `platform_m
 
 ## 6. worker-01 nginx `/varda/` 路由
 
-已在仓库配好（`deploy/nginx/templates/admin.vhost.template` 的 `/varda/` → `<worker-02-tailnet-ip>:3121`；该文件 20-sync-nginx-config.sh 渲染为 `sites-enabled/admin.conf`,真实域名不入仓）。若尚未在 worker-01 生效，随平台 nginx 同步/ reload 即可（平台侧动作）。
+已在仓库配好（`deploy/nginx/templates/admin.vhost.template` 的 `/varda/` → `<worker-02-tailnet-ip>:`；该文件 20-sync-nginx-config.sh 渲染为 `sites-enabled/admin.conf`,真实域名不入仓）。若尚未在 worker-01 生效，随平台 nginx 同步/ reload 即可（平台侧动作）。
 
 ## 7. 常规部署（CI/CD）
 
@@ -140,14 +140,14 @@ git tag varda-YYYYMMDD.N && git push origin varda-YYYYMMDD.N
 
 1. **build**：build+push `varda_bff` + `varda_agent` 镜像到 ACR（tag = `github.ref_name`）。
 2. **deploy**（`environment: varda`，**独立审批门** = owner 在 GitHub 点批准，与平台生产门分开 = 两次审核）：
-   runner 解析 registry → tailscale → scp `compose.varda.yml` 到 worker-02 → SSH `docker compose pull varda-server varda-bff && up -d` → 等健康（3121/health=200）。**不覆盖** worker-02 本机 `.env.varda-*` / `secrets`（缺则 fail-fast 报错，不起坏栈）。
+   runner 解析 registry → tailscale → scp `compose.varda.yml` 到 worker-02 → SSH `docker compose pull varda-server varda-bff && up -d` → 等健康/health=200）。**不覆盖** worker-02 本机 `.env.varda-*` / `secrets`（缺则 fail-fast 报错，不起坏栈）。
 
 > 平台线（`docker-build.yml`/`deploy.yml`）已去掉 `varda-*`；打平台 tag 不会 build/部署 varda，反之亦然。
 
 ## 8. 验证
 
 - 工作流日志末尾应显示 `varda-bff=healthy varda-server=healthy`。
-- 从 worker-01 探活：`curl -s -o /dev/null -w '%{http_code}' http://<worker-02-tailnet-ip>:3121/health` → 期望 **200**。
+- 从 worker-01 探活：`curl -s -o /dev/null -w '%{http_code}' http://<worker-02-tailnet-ip>:/health` → 期望 **200**。
 - 真人：admin/console 打开 Varda 助手对话，能出 token 流（走 SSE）。
 
 ## 9. 排障
@@ -155,7 +155,7 @@ git tag varda-YYYYMMDD.N && git push origin varda-YYYYMMDD.N
 - **容器起后即退**：VxConfig fail-fast，`docker logs vx-varda-bff` / `vx-varda-server` 看缺哪个必填 env。
 - **varda-bff healthy 但对话 500**：多半 `MODEL_PLATFORM_URL` 不可达（§3）或 `VARDA_PLATFORM_LLM_TENANT_ID` 非法。
 - **鉴权全 401**：`JWT_SECRET` 与平台不一致，或 redis 不可达（fail-closed）。
-- **`/varda/` 502**（从公网）：worker-02 栈没起 / 3121 未发布 / UFW 未放行 Tailscale 子网。
+- **`/varda/` 502**（从公网）：worker-02 栈没起 / 未发布 / UFW 未放行 Tailscale 子网。
 
 ---
 

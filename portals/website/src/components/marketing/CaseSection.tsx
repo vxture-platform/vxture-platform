@@ -142,7 +142,7 @@ export default function CaseSection({ id, name = "Cases" }: CaseSectionProps) {
           <h2 className="font-display text-3xl lg:text-4xl font-bold text-vx-brand-700 dark:text-vx-brand-200 mb-4">
             {t(HOME_CASES_DATA.titleKey)}
           </h2>
-          <p className="text-lg text-vx-gray-600 dark:text-vx-gray-300 max-w-4xl mx-auto mb-8">
+          <p className="text-lg text-vx-gray-600 dark:text-vx-gray-300 max-w-website-4xl mx-auto mb-8">
             {t(HOME_CASES_DATA.subtitleKey)}
           </p>
         </div>

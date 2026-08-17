@@ -369,17 +369,6 @@ function formatTokenCount(value: number) {
   return value.toLocaleString("en-US");
 }
 
-function serviceStatus(service: DevServiceSnapshot) {
-  if (service.stopping) return "停止中";
-  if (service.listening && service.healthy) return "健康";
-  if (service.listening) return "未就绪";
-  return "离线";
-}
-
-function serviceMaxDuration(service: DevServiceSnapshot) {
-  return Math.max(0, ...service.health.map((check) => check.durationMs));
-}
-
 // TD-036: fetchDevServices() proxies a local dev-tools panel
 // (localhost:8090), unreachable from a deployed admin instance — in any real
 // production environment `services` is always empty here, and the old code
@@ -1654,12 +1643,6 @@ export default function AdminOverviewPage() {
   ]);
 
   const capabilityPanels = useMemo(() => {
-    const serviceRows = services.map((service) => ({
-      id: service.id,
-      name: service.name,
-      meta: serviceStatus(service),
-      value: `${serviceMaxDuration(service)}ms`,
-    }));
     // TD-036: only rank models that actually carry a real token figure in
     // config — models with no usage data are excluded rather than ranked
     // by a fabricated zero; fillCapabilityRows() below pads the remainder
@@ -1702,28 +1685,6 @@ export default function AdminOverviewPage() {
 
     return [
       {
-        title: "服务监控",
-        summary: "运行、探针和响应时间。",
-        detail: "查看服务运行、探针响应和异常状态。",
-        tone: "blue",
-        href: "/service-monitor",
-        rankStyle: "number",
-        // TD-036: no real production infra-monitoring table exists —
-        // serviceRows is only ever populated from a local dev-tools panel
-        // unreachable in production, so it's always empty there. No fake
-        // fallback rows; fillCapabilityRows() renders the honest empty state.
-        rows: fillCapabilityRows(
-          serviceRows
-            .sort(
-              (left, right) =>
-                Number.parseInt(right.value.replace(/\D/g, ""), 10) -
-                Number.parseInt(left.value.replace(/\D/g, ""), 10),
-            )
-            .slice(0, 3),
-          "service",
-        ),
-      },
-      {
         title: "模型平台",
         summary: "Token 调用量前三。",
         detail: "按 Token 调用量观察模型平台后的真实使用强度。",
@@ -1759,7 +1720,7 @@ export default function AdminOverviewPage() {
       rankStyle: "number" | "medal";
       rows: CapabilityServiceRow[];
     }>;
-  }, [agents, modelPeriod, modelPolicies, models, services]);
+  }, [agents, modelPeriod, modelPolicies, models]);
 
   const serviceMetrics = useMemo(
     () => serviceMetricsFor(serviceOverview),

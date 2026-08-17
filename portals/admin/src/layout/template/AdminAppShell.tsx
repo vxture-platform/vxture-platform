@@ -207,13 +207,6 @@ function ShellFrame({
       href: "/approval-center",
     },
     {
-      level: "warning",
-      icon: "ph-warning",
-      title: tDrawer("notifications.items.service.title", "服务可用率低于阈值"),
-      meta: tDrawer("notifications.items.service.meta", "服务监控 · 1 小时前"),
-      href: "/service-monitor",
-    },
-    {
       level: "info",
       icon: "ph-ticket",
       title: tDrawer("notifications.items.ticket.title", "新增待处理工单 6 条"),

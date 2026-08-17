@@ -11,7 +11,6 @@
 | 包名   | `@vxture/dev-panel`                   |
 | 路径   | `tools/dev-panel/`                    |
 | @layer | `Tools`（开发工具，不属于任何业务层） |
-| 端口   | 8090                                  |
 
 ## 职责
 

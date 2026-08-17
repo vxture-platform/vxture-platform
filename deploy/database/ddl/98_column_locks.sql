@@ -187,7 +187,7 @@ GRANT UPDATE (parent_id, code, name, sort, name_key, is_customer_visible, is_wor
 
 -- product.products  [anchor: id, created_by, created_at]
 REVOKE UPDATE ON product.products FROM platform_svc;
-GRANT UPDATE (product_code, product_type, category_id, product_name, product_nick, description, capability_keys, tags, standalone_subscribable, icon_url, sort, config, release_version, build_number, released_at, status, updated_by, description_key, is_customer_visible, is_workforce_visible, updated_at, deleted_at) ON product.products TO platform_svc;
+GRANT UPDATE (product_code, product_type, category_id, product_name, product_nick, description, capability_keys, tags, standalone_subscribable, icon_url, sort, config, release_version, build_number, released_at, status, updated_by, description_key, is_customer_visible, is_workforce_visible, origin, origin_provider, updated_at, deleted_at) ON product.products TO platform_svc;
 
 -- product.product_metrics  [anchor: id, created_at]
 REVOKE UPDATE ON product.product_metrics FROM platform_svc;
@@ -347,6 +347,11 @@ GRANT UPDATE (workspace_id, tenant_id, product_id, status, version, provisioned_
 REVOKE UPDATE ON provisioning.webhook_deliveries FROM platform_svc;
 GRANT UPDATE (idempotency_key, provisioning_id, provisioning_version, workspace_id, tenant_id, product_id, event_type, payload, status, attempts, max_attempts, response_code, last_error, signature, leased_by, leased_until, last_attempt_at, next_retry_at, delivered_at, updated_at) ON provisioning.webhook_deliveries TO platform_svc;
 
+-- provisioning.background_jobs  [anchor: job_name]
+-- 主键即业务名（job_name），不是代理键——所以锚只有它一列，其余全部可写。
+REVOKE UPDATE ON provisioning.background_jobs FROM platform_svc;
+GRANT UPDATE (status, interval_ms, last_started_at, last_finished_at, last_duration_ms, last_items_processed, last_error, run_count, failure_count, updated_at) ON provisioning.background_jobs TO platform_svc;
+
 -- promotion.voucher_batches  [anchor: id, created_by, created_at]
 REVOKE UPDATE ON promotion.voucher_batches FROM platform_svc;
 GRANT UPDATE (tenant_id, kind, name, code_prefix, effect, total_count, issued_count, per_user_limit, valid_from, valid_until, status, updated_at) ON promotion.voucher_batches TO platform_svc;
@@ -397,7 +402,7 @@ GRANT UPDATE (ticket_id, event_type, actor_type, actor_id, actor_name, payload) 
 
 -- support.audit_logs  [anchor: id, created_at]
 REVOKE UPDATE ON support.audit_logs FROM platform_svc;
-GRANT UPDATE (actor_type, actor_id, tenant_id, action, result, resource_type, resource_id, error_code, before, after, request_id, duration_ms, ip_address, user_agent) ON support.audit_logs TO platform_svc;
+GRANT UPDATE (actor_type, actor_id, actor_console, tenant_id, action, result, resource_type, resource_id, error_code, before, after, request_id, duration_ms, ip_address, user_agent) ON support.audit_logs TO platform_svc;
 
 -- support.notification_logs  [anchor: id, created_at]
 REVOKE UPDATE ON support.notification_logs FROM platform_svc;
@@ -409,7 +414,7 @@ GRANT UPDATE (role_code, status, role_name, role_name_key, description, descript
 
 -- admin.operator_permission  [anchor: id, created_by, created_at]
 REVOKE UPDATE ON admin.operator_permission FROM platform_svc;
-GRANT UPDATE (parent_id, perm_code, perm_name, perm_name_key, perm_type, route_path, component, icon, category, description, is_active, is_system, sort, updated_by, description_key, is_customer_visible, is_workforce_visible, updated_at) ON admin.operator_permission TO platform_svc;
+GRANT UPDATE (parent_id, perm_code, perm_name, perm_name_key, perm_type, route_path, component, icon, category, description, is_active, is_system, sort, updated_by, description_key, is_customer_visible, is_workforce_visible, requires_step_up, updated_at) ON admin.operator_permission TO platform_svc;
 
 -- admin.operator_account  [anchor: id, created_by, created_at]
 REVOKE UPDATE ON admin.operator_account FROM platform_svc;

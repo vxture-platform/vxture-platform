@@ -30,11 +30,13 @@ export interface OperatorAuditEntry {
 
 // actor_type fixed 'operator'; actor_id/action/resource_type/resource_id NOT NULL;
 // result defaults 'success'; before/after jsonb + ip_address/user_agent nullable.
+// actor_console fixed 'admin' (product_251 X-3): this process serves exactly one
+// console, so the value is a constant here rather than a caller-supplied field.
 const OPERATOR_AUDIT_INSERT_SQL = `
 insert into support.audit_logs
-  (actor_type, actor_id, action, result, resource_type, resource_id, before, after, ip_address, user_agent)
+  (actor_type, actor_console, actor_id, action, result, resource_type, resource_id, before, after, ip_address, user_agent)
 values
-  ('operator', $1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9)
+  ('operator', 'admin', $1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9)
 `;
 
 export async function insertOperatorAuditLog(

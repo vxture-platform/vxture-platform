@@ -3,7 +3,9 @@
 > Dockerfile 模板、构建顺序、服务调用拓扑、资源规格
 > 更新：2026-06-10
 
-相关文档：[`00-overview.md`](./00-overview.md) · [`04-services.md`](./04-services.md) · [`08-code-environment-map.md`](./08-code-environment-map.md) · [`../ai/port-allocation.md`](../40-implementation/ai/10-port-allocation.md)
+相关文档：[`00-overview.md`](./00-overview.md) · [`04-services.md`](./04-services.md) · [`08-code-environment-map.md`](./08-code-environment-map.md)
+
+> **端口**：端口取号唯一源 = [端口登记表](https://claude.ai/code/artifact/0f44735a-c6bc-4881-a440-3446a2411a5f)；**本仓文档不再保存端口数值**。
 
 ---
 
@@ -24,10 +26,10 @@
     ├──▶ vx-admin    :3030  (Next.js)
     └──▶ vx-gateway-bff :8000
                 │
-         /website-api ──▶ vx-website-bff :3011
-         /console-api ──▶ vx-console-bff :3021
-         /admin-api   ──▶ vx-admin-bff   :3031
-         /auth-api    ──▶ vx-auth-bff    :3090
+         /website-api ──▶ vx-website-bff
+         /console-api ──▶ vx-console-bff
+         /admin-api   ──▶ vx-admin-bff
+         /auth-api    ──▶ vx-auth-bff
 
 ──── VXTURE_DEPLOY_HOST 内部（vxture-prod 网络）──────────────────────────
 
@@ -131,7 +133,7 @@ COPY --from=builder /app/bff/website-bff/dist         ./dist
 COPY --from=builder /app/bff/website-bff/node_modules ./node_modules
 COPY --from=builder /app/bff/website-bff/package.json .
 ENV NODE_ENV=production
-EXPOSE 3011
+EXPOSE ${PORT}   # 实际值见端口登记表
 CMD ["node", "dist/main.js"]
 ```
 
@@ -163,7 +165,7 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=builder /app/portals/website/.next/standalone            ./
 COPY --from=builder /app/portals/website/.next/static                ./portals/website/.next/static
 COPY --from=builder /app/portals/website/public                      ./portals/website/public
-EXPOSE 3010
+EXPOSE ${PORT}   # 实际值见端口登记表
 CMD ["node", "portals/website/server.js"]
 ```
 
@@ -177,16 +179,18 @@ CMD ["node", "portals/website/server.js"]
 
 11 个服务均配置了 `healthcheck`，生产 40-verify 全 `(healthy)`。各服务实际探测命令与参数：
 
-| 服务                               | 实际探测端点（H3 起用 node 运行时 fetch）     | interval / timeout / retries | start_period |
-| ---------------------------------- | --------------------------------------------- | ---------------------------- | ------------ |
-| vx-gateway-bff                     | `node fetch http://127.0.0.1:8000/healthz`    | 30s / 5s / 3                 | 15s          |
-| vx-auth-bff                        | `node fetch http://127.0.0.1:3090/healthz`    | 30s / 5s / 3                 | 15s          |
-| vx-website-bff                     | `node fetch http://127.0.0.1:3011/healthz`    | 30s / 5s / 3                 | 15s          |
-| vx-console-bff                     | `node fetch http://127.0.0.1:3021/healthz`    | 30s / 5s / 3                 | 15s          |
-| vx-admin-bff                       | `node fetch http://127.0.0.1:3031/healthz`    | 30s / 5s / 3                 | 15s          |
-| vx-website / vx-console / vx-admin | `node fetch http://127.0.0.1:3000/api/health` | 30s / 5s / 3                 | 20s          |
-| postgres                           | `pg_isready -U vxture -d platform_main`       | 10s / 5s / 5                 | 10s          |
-| redis                              | `redis-cli -a <secret> ping`                  | 10s / 5s / 5                 | 10s          |
+| 服务                               | 实际探测端点（H3 起用 node 运行时 fetch）       | interval / timeout / retries | start_period |
+| ---------------------------------- | ----------------------------------------------- | ---------------------------- | ------------ |
+| vx-gateway-bff                     | `node fetch http://127.0.0.1:{PORT}/healthz`    | 30s / 5s / 3                 | 15s          |
+| vx-auth-bff                        | `node fetch http://127.0.0.1:{PORT}/healthz`    | 30s / 5s / 3                 | 15s          |
+| vx-website-bff                     | `node fetch http://127.0.0.1:{PORT}/healthz`    | 30s / 5s / 3                 | 15s          |
+| vx-console-bff                     | `node fetch http://127.0.0.1:{PORT}/healthz`    | 30s / 5s / 3                 | 15s          |
+| vx-admin-bff                       | `node fetch http://127.0.0.1:{PORT}/healthz`    | 30s / 5s / 3                 | 15s          |
+| vx-website / vx-console / vx-admin | `node fetch http://127.0.0.1:{PORT}/api/health` | 30s / 5s / 3                 | 20s          |
+
+`{PORT}` = 该容器的内口，实际值见 compose 与端口登记表。
+| postgres | `pg_isready -U vxture -d platform_main` | 10s / 5s / 5 | 10s |
+| redis | `redis-cli -a <secret> ping` | 10s / 5s / 5 | 10s |
 
 约定：node 服务（门户/BFF/model）的 healthcheck 用 **node 运行时 fetch**（`node -e "fetch(...).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"`，H3，去掉对镜像内 curl 的依赖，探 `127.0.0.1` 避免 IPv6 歧义）；BFF 用浅层 liveness `/healthz`（不查依赖，正确）；门户用 dependency-free `/api/health`（H2，`app/api/health/route.ts`）。所有服务已配 `start_period`（H1）。pg/redis 用原生 `pg_isready`/`redis-cli`。`restart: unless-stopped`（注意：unhealthy **不会**触发重启，运行时自愈见 H4）。unhealthy 由 `51-check-platform-alerts.sh` 每日巡检 `inspect .State.Health` 告警。
 

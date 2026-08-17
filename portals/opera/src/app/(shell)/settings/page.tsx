@@ -21,7 +21,7 @@ export default function SettingsPage() {
       header={
         <ViewHeader
           icon="settings"
-          title="Settings"
+          title="系统配置"
           description="控制平面基础配置：健康探测、计量聚合与审计保留策略。"
         />
       }

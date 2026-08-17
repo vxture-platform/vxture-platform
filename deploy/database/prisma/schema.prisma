@@ -1756,6 +1756,9 @@ model OperatorPermission {
   description String   @default("") @db.VarChar(255)
   isActive    Boolean  @default(true) @map("is_active")
   isVisible   Boolean  @default(true) @map("is_visible")
+  /// product_250 M-2：「什么算高危」的唯一定义处，平台持有的策略。
+  /// 消费方 = console/BFF（读目录 → 跑 step-up 仪式 → 放行），不是 provider。
+  requiresStepUp Boolean @default(false) @map("requires_step_up")
   sort        Int      @default(999)
   createdBy   String   @map("created_by") @db.Uuid
   updatedBy   String   @map("updated_by") @db.Uuid

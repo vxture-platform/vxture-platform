@@ -69,3 +69,18 @@ karda 主机上的 `.env`，GitHub secret 只是转运媒介之一次性用途�
 - [ ] owner 设置生产宿主 `KARDA_WEBHOOK_BASE_URL=http://vx-worker-02:3240`
 - [ ] owner 批准一次 `db-init`（`action=seed`）使上述两项生效，随后发一条测试投递
 - [ ] （无动作）repo secret 清理、五档发布依赖——均确认收悉，属贵仓/待办事项
+
+---
+
+## 结案（2026-08-13 平台侧核实）
+
+**§1/§2 已由 `70-2607271500` 函确认生产生效**，代码态与运行态均已核对：
+
+| 办理项                                   | 现状      | 依据                                                                                                                                                                           |
+| ---------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `KARDA_METRICS` 登记块                   | ✅ 已在   | `deploy/database/seed/seed-catalog.mjs` 的 `KARDA_METRICS`（三个 key：`karda.ingest` docs / `karda.search` calls / `karda.ask` calls，均 `pool` + `divisible` + `month`）      |
+| `KARDA_WEBHOOK_BASE_URL` 生产赋值        | ✅ 已办   | seed 块 `kardaWebhookBase = process.env.KARDA_WEBHOOK_BASE_URL \|\| B.karda`；变量已在 `deploy/guardrails/39-audit-env.mjs` 与 `deploy/scripts/29-seed-platform-ddl.sh` 白名单 |
+| `db-init`（`action=seed`）owner 审批执行 | ✅ 已执行 | `70` 函 §1 记录生产落地确认                                                                                                                                                    |
+| §3 repo secret 清理 / §4 五档发布        | —         | 属贵仓自办 / 后续依赖，平台侧无动作                                                                                                                                            |
+
+**平台侧本函无遗留项。**

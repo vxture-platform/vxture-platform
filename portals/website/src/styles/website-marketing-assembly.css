@@ -38,24 +38,17 @@
   letter-spacing: var(--vx-website-hero-eyebrow-tracking-wide);
 }
 
+/* --foreground 自身跟随明暗模式，故两块都不再需要各自的 .dark 覆盖。 */
 .vx-page-surface {
   min-height: 100vh;
   background: var(--vx-page-bg);
-  color: var(--vx-color-gray-900);
-}
-
-.dark .vx-page-surface {
-  color: var(--vx-color-gray-50);
+  color: var(--foreground);
 }
 
 .vx-legal-page {
   min-height: 70vh;
   background: var(--vx-section-odd-bg);
-  color: var(--vx-color-gray-900);
-}
-
-.dark .vx-legal-page {
-  color: var(--vx-color-gray-50);
+  color: var(--foreground);
 }
 
 .vx-section-odd {

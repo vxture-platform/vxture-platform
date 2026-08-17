@@ -36,10 +36,17 @@ export class OperatorAuthMiddleware implements NestMiddleware {
   ) {}
 
   async use(req: Request, res: Response, next: NextFunction) {
+    /* 中间件在过滤器之前、自己写响应——出口那层兜不到这里，封套只能就地补齐
+       （product_251 X-1）。码与 router 层统一用 `AUTH_NO_SESSION`：原来这里是
+       `UNAUTHORIZED`，同一件事在中间件与 router 两处两个码，消费方要判两次。
+       `retryable: false`——重发同一个请求不会突然有会话，得先去登录。 */
     const unauthorized = () =>
-      res
-        .status(401)
-        .json({ code: "UNAUTHORIZED", message: "No active session" });
+      res.status(401).json({
+        code: "AUTH_NO_SESSION",
+        message: "No active session",
+        retryable: false,
+        statusCode: 401,
+      });
 
     const rpsid = req.cookies?.[
       rpSessionCookieName(
@@ -73,6 +80,7 @@ export class OperatorAuthMiddleware implements NestMiddleware {
     const context = req as Request & RequestContext;
     context.operator = resolved.operator;
     context.capabilities = resolved.capabilities;
+    context.operatorAccessToken = outcome.accessToken;
     next();
   }
 }

@@ -49,16 +49,21 @@ CREATE TABLE product.products (
     status                   varchar(32)  NOT NULL DEFAULT 'active',
     is_customer_visible  boolean      NOT NULL DEFAULT true,   -- 展示可见性（客户端/customer realm）——独立轴，不派生自 status/is_active/is_public/is_enabled
     is_workforce_visible boolean      NOT NULL DEFAULT true,   -- 展示可见性（运营端/workforce realm）
+    origin                   varchar(16)  NOT NULL DEFAULT 'self',    -- 来源轴：self=自建/third_party=三方接入/other；产品发布管理 2026-08-12 引入
+    origin_provider          varchar(128),                            -- 来源方名称（origin='self' 时留空；third_party 时必填，公司/团队名，不是 product_code）
     created_by               uuid,                                    -- 裸值→admin.operator_accounts（不建 FK，边界#2）
     updated_by               uuid,                                    -- 裸值→admin.operator_accounts（不建 FK，边界#2）
     created_at               timestamptz  NOT NULL DEFAULT now(),
     updated_at               timestamptz  NOT NULL DEFAULT now(),
     deleted_at               timestamptz,
     CONSTRAINT uq_products_product_code UNIQUE (product_code),
-    CONSTRAINT chk_products_status CHECK (status IN ('active','inactive','draft','deprecated'))
+    CONSTRAINT chk_products_status CHECK (status IN ('active','inactive','draft','deprecated')),
+    CONSTRAINT chk_products_origin CHECK (origin IN ('self','third_party','other')),
+    CONSTRAINT chk_products_origin_provider CHECK (origin <> 'third_party' OR origin_provider IS NOT NULL)
 );
 CREATE INDEX idx_products_category_id ON product.products (category_id);
 CREATE INDEX idx_products_status      ON product.products (status);
+CREATE INDEX idx_products_origin      ON product.products (origin);
 CREATE INDEX idx_products_deleted_at  ON product.products (deleted_at);
 CREATE INDEX idx_products_tags_gin    ON product.products USING gin (tags);
 CREATE INDEX idx_products_cap_gin     ON product.products USING gin (capability_keys);

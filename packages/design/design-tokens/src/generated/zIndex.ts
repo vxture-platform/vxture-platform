@@ -15,11 +15,11 @@ export const Z_INDEX = {
   base: 0, // 文档流基线
   raised: 10, // 同层内的轻微抬起，如 hover 卡片
   sticky: 100, // 粘性表头 / 工具栏
-  dropdown: 200, // portal 化菜单须压过粘性表头
   overlay: 300, // 浮层遮罩
   drawer: 400, // 低于 modal——模态可从抽屉内唤起
   modal: 500, // 模态对话框
   popover: 600, // 高于 modal——气泡可用在模态内
+  dropdown: 650, // 高于 popover——ActionMenu 这类 portal 化下拉菜单常挂在表格行操作上，而表格常年出现在 Drawer/Dialog 内部（如详情抽屉的行操作），下拉必须能压过触发它的任意容器；同时仍压过粘性表头。2026-08-12 由 200 上调：原值低于 drawer(400)，Drawer 内的 ActionMenu portal 后被抽屉自身盖住，点了没反应（products 页 OIDC 客户端抽屉行操作实测复现）
   toast: 700, // 全局反馈，不应被浮层遮挡
   notification: 800, // 常驻更久且可堆叠，压在 toast 之上
   tooltip: 900, // 必须最高，否则被所描述的元素遮挡

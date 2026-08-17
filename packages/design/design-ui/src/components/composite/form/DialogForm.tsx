@@ -80,7 +80,14 @@ function DialogForm({
             ) : null}
           </DialogHeader>
           {children ? (
-            <div className="flex flex-col gap-md">{children}</div>
+            /* 字段区自带滚动，**不由调用方各写一遍**。此前有三处手写
+               `max-h-[60vh] overflow-y-auto pr-2xs`、其余一处没有——于是同样长的
+               表单在不同页上一个能滚一个把对话框顶穿。滚动只发生在这一段：标题与
+               页脚钉住，长表单滚到底时提交按钮仍在原位。
+               `pr-2xs` 是给滚动条让位，不是装饰：不留这一格，聚焦环会被裁掉半圈。 */
+            <div className="flex max-h-[60vh] flex-col gap-md overflow-y-auto pr-2xs">
+              {children}
+            </div>
           ) : null}
           <DialogFooter>
             <Button

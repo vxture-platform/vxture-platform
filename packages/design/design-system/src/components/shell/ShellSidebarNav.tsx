@@ -62,9 +62,18 @@
  * 才存在，不影响收起态）——不加的话文字贴着按钮左边缘，hover/active
  * 背景一亮就很难看。
  *
- * 复合标题（"<品牌> · <子域>"）按 " · " 分隔符拆出品牌前缀单独染
- * text-primary-text（品牌主色），不含分隔符的标题原样渲染——见
- * splitBrandTitle，认分隔符不认具体品牌名，不把业务名称写死进组件。
+ * 复合标题按 " · " 拆出**品牌段**单独染
+ * text-primary-text（品牌主色）+ font-mono（等宽——品牌名长短不一，比例字体
+ * 下几个分组标题的对齐基线参差不齐，等宽消除这个视觉噪音），不含分隔符的
+ * 标题原样渲染——见 splitBrandTitle，认分隔符不认具体品牌名，不把业务名称
+ * 写死进组件。品牌段在前还是在后由 section 的 `brandPosition` 显式声明（缺省
+ * `"prefix"`）：`<品牌> · <子域>` 读作"这块属于该品牌"，`<子域> · <品牌>` 读作
+ * "这块管理该品牌"——opera 用后者。**不做启发式猜测**：靠"哪段更短/是否全 ASCII"
+ * 之类判断，会在 `安全审计 · RBAC` 这种两段都非品牌的标题上误判，而误判的表现是
+ * 一段文字莫名变色，没人会想到去查一个字符串拆分函数。
+ *
+ * 导航项可带 `subLabel`，渲染成主名下方的小字第二行（中文主名 + 英文原词）。
+ * 不传就是单行，行高与只有单行时完全一致。
  *
  * 颜色：图标维持 muted-foreground 不变；标签文字单独提一级到
  * foreground（NavLabel 上单独盖一层 text-foreground，不影响图标的颜色，
@@ -112,11 +121,46 @@ export interface ShellNavItem {
   href: string;
   label: string;
   icon: IconName;
+  /**
+   * 副名，渲染成 `label` 下方的小字第二行。**可选，不传就是单行**——五个门户共用
+   * 本件，不传新字段时行为与加这个字段之前完全一致。
+   *
+   * 用途是让一个导航项同时给出两套词汇：中文主名给人读，英文原词给人对上游。
+   * opera 的判断（`portals/opera/docs/opera-navigation-design.md` 规则一）是——
+   * 运营者在审计事件里看到的是 `mgmt.grant.create`，界面得让他从中文标签直接找到
+   * 那个词，否则"与 API 分叉的词表在控制台这头买到的清晰，会在两者相接的每一个点
+   * 上还回去"。
+   *
+   * 收起态两行都不渲染（只剩图标），tooltip 里也只给主名——副名是给"扫一眼对上
+   * 概念"用的，不是标识，挤进 tooltip 只会让那一行变长。
+   */
+  subLabel?: string;
 }
+
+/**
+ * 复合标题里品牌段的位置，决定 `" · "` 哪一侧染品牌色。
+ *
+ * `"prefix"` 是历史默认（`<品牌> · <子域>` = 这块属于该品牌）；`"suffix"` 用于
+ * opera 的 `<子域> · <品牌>`（= 这块管理该品牌）；`"none"` 显式关掉高亮。
+ */
+export type BrandPosition = "prefix" | "suffix" | "none";
 
 export interface ShellNavSection {
   title: string;
   items: ShellNavItem[];
+  /** 缺省 `"prefix"`——不传时行为与加这个字段之前完全一致。 */
+  brandPosition?: BrandPosition;
+  /**
+   * 在本组**之前**画一条分隔线，用来把分组再聚成层。
+   *
+   * 分隔线要表达的是**层级**而不是装饰：opera 用它切出「概览 / 四个管理域 / 两个
+   * 通用面」三层，没有这条线时七个分组读起来是七个并列项，那张真实的分层图就丢了。
+   * 因此它挂在 section 上而不是由调用方在 sections 数组里插入哨兵元素——哨兵会污染
+   * `sections.map` 的每一处消费（分组展开状态用 `title` 做 key）。
+   *
+   * 缺省 `false`；首组即使传 `true` 也不画（顶上没有要分隔的东西）。
+   */
+  dividerBefore?: boolean;
 }
 
 export interface ShellSidebarNavProps {
@@ -234,7 +278,10 @@ function NavItemRow({
       aria-current={active ? "page" : undefined}
       className={cn(
         interactive,
-        "flex h-control-xl items-center gap-xs rounded-md",
+        /* 两行项比单行高，所以行高由内容撑（min-h 而非固定 h）。不传 subLabel
+           时内容仍是一行，min-h 与原来的 h-control-xl 等值——单行项的高度、
+           图标位置、间距全部不变，这是"纯增量"的具体含义。 */
+        "flex min-h-control-xl items-center gap-xs rounded-md",
         "text-label-md transition-colors duration-fast ease-standard",
         active
           ? "bg-surface-selected text-primary-text"
@@ -246,7 +293,18 @@ function NavItemRow({
       </NavRail>
       {!collapsed && (
         <NavLabel className={cn(!active && "text-foreground")}>
-          {item.label}
+          {item.subLabel ? (
+            <span className="flex flex-col justify-center py-2xs">
+              <span className="truncate leading-tight">{item.label}</span>
+              {/* 副名恒 muted，选中态也不跟着变主色——它是注解不是标题，两行
+                  一起高亮会让主名失去重音。 */}
+              <span className="truncate font-mono text-label-sm leading-tight text-muted-foreground">
+                {item.subLabel}
+              </span>
+            </span>
+          ) : (
+            item.label
+          )}
         </NavLabel>
       )}
     </LinkComponent>
@@ -262,15 +320,38 @@ function NavItemRow({
 }
 
 /**
- * 复合标题（"<品牌> · <子域>"）的品牌前缀高亮：按 " · " 分隔符拆出第一段，
- * 不认具体品牌名——不含分隔符的标题原样返回。
+ * 复合标题里的**品牌段**高亮：按 " · " 分隔，不认具体品牌名。
+ *
+ * 两种写法，语义相反，都要支持：
+ *
+ * - `"<品牌> · <子域>"` —— 品牌在前，读作**这块属于该品牌**。
+ * - `"<子域> · <品牌>"` —— 品牌在后，读作**这块管理该品牌**。
+ *
+ * opera 用的是后者（`模型管理 · Atlas`）：Atlas 与 Runos 是独立产品，opera 是它们的
+ * 管理平面，前缀写法会把从属关系读反（`opera-top-level-design.md` §11：
+ * 「Opera 不属于 Atlas。Opera 管理 Atlas。」）。
+ *
+ * 靠什么分辨谁是品牌？**不猜**——由调用方在 section 上显式声明 `brandPosition`。
+ * 曾考虑按"哪一段更短 / 是否全 ASCII"之类启发式判断，那会在
+ * `安全审计 · RBAC` 这种两段都非品牌的标题上误判，而误判的表现是一段文字莫名
+ * 变色，没人会想到去查一个字符串拆分函数。
  */
 function splitBrandTitle(
   title: string,
-): { brand: string; rest: string } | null {
-  const idx = title.indexOf(" · ");
+  position: BrandPosition,
+): { brand: string; rest: string; brandFirst: boolean } | null {
+  const sep = " · ";
+  if (position === "none") return null;
+  const idx =
+    position === "prefix" ? title.indexOf(sep) : title.lastIndexOf(sep);
   if (idx === -1) return null;
-  return { brand: title.slice(0, idx), rest: title.slice(idx) };
+  return position === "prefix"
+    ? { brand: title.slice(0, idx), rest: title.slice(idx), brandFirst: true }
+    : {
+        brand: title.slice(idx + sep.length),
+        rest: title.slice(0, idx + sep.length),
+        brandFirst: false,
+      };
 }
 
 /**
@@ -294,16 +375,18 @@ function splitBrandTitle(
  */
 function NavGroupHeader({
   title,
+  brandPosition,
   open,
   collapsed,
   onToggle,
 }: {
   title: string;
+  brandPosition: BrandPosition;
   open: boolean;
   collapsed: boolean;
   onToggle: () => void;
 }) {
-  const brandTitle = splitBrandTitle(title);
+  const brandTitle = splitBrandTitle(title, brandPosition);
   const trigger = (
     <Button
       variant="ghost"
@@ -321,10 +404,23 @@ function NavGroupHeader({
       {!collapsed && (
         <NavLabel className="pl-xs text-foreground">
           {brandTitle ? (
-            <>
-              <span className="text-primary-text">{brandTitle.brand}</span>
-              {brandTitle.rest}
-            </>
+            /* 品牌段恒用等宽 + 主色，位置由 brandFirst 决定谁先渲染——
+               两种写法共用同一套样式，只是顺序不同。 */
+            brandTitle.brandFirst ? (
+              <>
+                <span className="font-mono text-primary-text">
+                  {brandTitle.brand}
+                </span>
+                {brandTitle.rest}
+              </>
+            ) : (
+              <>
+                {brandTitle.rest}
+                <span className="font-mono text-primary-text">
+                  {brandTitle.brand}
+                </span>
+              </>
+            )
           ) : (
             title
           )}
@@ -445,12 +541,22 @@ export function ShellSidebarNav({
           )}
         >
           <nav className="flex flex-col">
-            {sections.map((section) => {
+            {sections.map((section, sectionIndex) => {
               const open = !closedGroups.has(section.title);
               return (
-                <div key={section.title} className="flex flex-col gap-xs p-2xs">
+                <div
+                  key={section.title}
+                  className={cn(
+                    "flex flex-col gap-xs p-2xs",
+                    /* 首组不画：顶上没有要分隔的东西，画了只是一条贴着容器边的线。 */
+                    section.dividerBefore &&
+                      sectionIndex > 0 &&
+                      "mt-2xs border-t border-border pt-xs",
+                  )}
+                >
                   <NavGroupHeader
                     title={section.title}
+                    brandPosition={section.brandPosition ?? "prefix"}
                     open={open}
                     collapsed={collapsed}
                     onToggle={() => toggleGroup(section.title)}

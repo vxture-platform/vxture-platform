@@ -12,7 +12,6 @@
 | 路径   | `portals/console/`       |
 | @layer | `Presentation`           |
 | 框架   | Next.js 15（App Router） |
-| 端口   | 3020                     |
 
 ## 职责
 

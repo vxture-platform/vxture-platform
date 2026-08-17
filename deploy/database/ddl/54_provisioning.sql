@@ -1,12 +1,13 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 60_provisioning.sql — schema provisioning（开通生命周期 + webhook 投递）
+-- 60_provisioning.sql — schema provisioning（开通生命周期 + webhook 投递 + 后台任务心跳）
 -- 设计权威：docs/design/data_commerce_220_provisioning.md
 -- 命名清理：schema 名 provisioning 已限定上下文 → tenant_app_provisioning/
 --   app_webhook_delivery 简化为 provisionings / webhook_deliveries。
 -- 域内 FK 内联（webhook_deliveries.provisioning_id → provisionings.id）；
 -- 跨 schema FK（→ tenancy.workspaces/tenants、product.products）一律不内联，见 cross_schema_fks（铁律一）。
--- 两表皆「可变工作队列」，非 append-only、无分区、无软删（仅 created_at/updated_at 四件套之二）。
--- 表序 = 域内依赖序：provisionings → webhook_deliveries。
+-- 三表皆「可变工作队列/状态」，非 append-only、无分区、无软删（仅 created_at/updated_at 四件套之二，
+-- background_jobs 甚至只有 updated_at——job_name 主键即天然的"created"信号）。
+-- 表序 = 域内依赖序：provisionings → webhook_deliveries → background_jobs（无 FK，纯宿主同域挂靠）。
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- 开通状态机（每 workspace+product 至多一条，UNIQUE 约束）。系统触发型，无独立 actor 字段——
@@ -73,3 +74,30 @@ CREATE TABLE provisioning.webhook_deliveries (
 CREATE INDEX idx_webhook_deliveries_claim           ON provisioning.webhook_deliveries (status, next_retry_at);  -- 投递队列领取
 CREATE INDEX idx_webhook_deliveries_workspace_prod  ON provisioning.webhook_deliveries (workspace_id, product_id);
 CREATE INDEX idx_webhook_deliveries_provisioning_id ON provisioning.webhook_deliveries (provisioning_id);
+
+-- 后台任务心跳（opera「任务调度」2026-08-11 建，取代 admin.governance_record——那张表
+-- 设计已弃用、从未建过，见 docs/30-design/data_admin_200_schema.md）。platform-api 四个
+-- @Interval 驱动的作业（provisioning-dispatch / sharing-expiry / trial-expiry /
+-- order-payment-expiry）各占一行、每 tick 原地 UPSERT，不是逐 tick 追加的执行日志——
+-- 这些作业最短 10s 一跳，日志化会在一天内堆出数万条噪音行，心跳表只答"这个作业活着吗、
+-- 上次跑得怎么样"，不答"每一次都发生了什么"（真要追溯用 support.audit_logs 或应用日志）。
+-- 落在 provisioning schema 而非更贴语义的 admin：四个作业的宿主 platform-api 只有
+-- provisioning/sharing/trial/order 相关 schema 的库权限（97_service_roles.sql），没有
+-- admin schema 写权限，边界不能为了这一张表破例。
+-- job_name 是自然主键（进程内常量，不经用户输入，无需代理键）。
+CREATE TABLE provisioning.background_jobs (
+    job_name              varchar(64)   PRIMARY KEY,
+    status                varchar(16)   NOT NULL DEFAULT 'idle',
+    interval_ms           int,
+    last_started_at       timestamptz,
+    last_finished_at      timestamptz,
+    last_duration_ms      int,
+    last_items_processed  int,
+    last_error            varchar(1024),
+    run_count             bigint        NOT NULL DEFAULT 0,
+    failure_count         bigint        NOT NULL DEFAULT 0,
+    updated_at            timestamptz   NOT NULL DEFAULT now(),
+    CONSTRAINT chk_background_jobs_status CHECK (status IN ('idle','running','success','failed')),
+    CONSTRAINT chk_background_jobs_run_count CHECK (run_count >= 0),
+    CONSTRAINT chk_background_jobs_failure_count CHECK (failure_count >= 0)
+);

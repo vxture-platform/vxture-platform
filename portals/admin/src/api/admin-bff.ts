@@ -1198,104 +1198,9 @@ export async function fetchDevServices(
   return (await response.json()) as DevServiceSnapshot[];
 }
 
-export async function createAiModel(payload: {
-  modelCode: string;
-  modelName: string;
-  provider: string;
-  endpointUrl: string;
-  protocol: string;
-  capabilities: string[];
-  keyReference: { source: "env"; name: string };
-  providerId?: string | null;
-  config?: Record<string, unknown> | null;
-}): Promise<AiModelRecord> {
-  const response = await fetch(
-    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/atlas/models`,
-    {
-      method: "POST",
-      credentials: "include",
-      cache: "no-store",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    },
-  );
-
-  if (!response.ok) {
-    throw new AdminBffError("AI model creation failed", response.status);
-  }
-
-  return (await response.json()) as AiModelRecord;
-}
-
-export async function updateAiModel(
-  modelId: string,
-  payload: {
-    modelCode?: string;
-    modelName?: string;
-    provider?: string;
-    endpointUrl?: string;
-    protocol?: string;
-    capabilities?: string[];
-    keyReference?: { source: "env"; name: string };
-    providerId?: string | null;
-    config?: Record<string, unknown> | null;
-    isActive?: boolean;
-  },
-): Promise<AiModelRecord> {
-  const response = await fetch(
-    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/atlas/models/${modelId}`,
-    {
-      method: "PUT",
-      credentials: "include",
-      cache: "no-store",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    },
-  );
-
-  if (!response.ok) {
-    throw new AdminBffError("AI model update failed", response.status);
-  }
-
-  return (await response.json()) as AiModelRecord;
-}
-
-export async function setAiModelActive(
-  modelId: string,
-  active: boolean,
-): Promise<AiModelRecord> {
-  const response = await fetch(
-    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/atlas/models/${modelId}/${active ? "activate" : "deactivate"}`,
-    {
-      method: "POST",
-      credentials: "include",
-      cache: "no-store",
-    },
-  );
-
-  if (!response.ok) {
-    throw new AdminBffError("AI model state update failed", response.status);
-  }
-
-  return (await response.json()) as AiModelRecord;
-}
-
-export async function deleteAiModel(modelId: string): Promise<AiModelRecord> {
-  const response = await fetch(
-    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/atlas/models/${modelId}`,
-    {
-      method: "DELETE",
-      credentials: "include",
-      cache: "no-store",
-    },
-  );
-
-  if (!response.ok) {
-    throw new AdminBffError("AI model deletion failed", response.status);
-  }
-
-  return (await response.json()) as AiModelRecord;
-}
+// AI 模型的创建/编辑/启停/删除已迁往 opera-bff 自己的 atlas.router.ts（2026-08-11,
+// 两段裁决:opera 管技术供给,admin 管商业封装)。这里只留 fetchAiModels 只读——
+// 本文件下面的 grants/price-rules/policies/quotas 写路径要用它做 model 下拉。
 
 export async function createAiModelGrant(payload: {
   modelId: string;
@@ -1389,75 +1294,8 @@ export async function setAiModelGrantActive(
   return (await response.json()) as AiModelGrantRecord;
 }
 
-// ── Model providers 写路径（B14）─────────────────────────────────────────────
-
-export interface ModelProviderWriteInput {
-  providerCode: string;
-  providerName: string;
-  providerType?: string;
-  description?: string | null;
-  logoUrl?: string | null;
-  homepageUrl?: string | null;
-  consoleUrl?: string | null;
-  billingUrl?: string | null;
-  isActive?: boolean;
-}
-
-export async function createModelProvider(
-  payload: ModelProviderWriteInput,
-): Promise<ModelProviderRecord> {
-  return mutateJson<ModelProviderRecord>(
-    "/api/atlas/providers",
-    "POST",
-    payload,
-    "Model provider creation failed",
-  );
-}
-
-export async function updateModelProvider(
-  providerId: string,
-  payload: Partial<ModelProviderWriteInput>,
-): Promise<ModelProviderRecord> {
-  return mutateJson<ModelProviderRecord>(
-    `/api/atlas/providers/${encodeURIComponent(providerId)}`,
-    "PUT",
-    payload,
-    "Model provider update failed",
-  );
-}
-
-export async function activateModelProvider(
-  providerId: string,
-): Promise<ModelProviderRecord> {
-  return mutateJson<ModelProviderRecord>(
-    `/api/atlas/providers/${encodeURIComponent(providerId)}/activate`,
-    "POST",
-    undefined,
-    "Model provider activation failed",
-  );
-}
-
-export async function deactivateModelProvider(
-  providerId: string,
-): Promise<ModelProviderRecord> {
-  return mutateJson<ModelProviderRecord>(
-    `/api/atlas/providers/${encodeURIComponent(providerId)}/deactivate`,
-    "POST",
-    undefined,
-    "Model provider deactivation failed",
-  );
-}
-
-export async function deleteModelProvider(
-  providerId: string,
-): Promise<ModelProviderRecord> {
-  return mutateJson<ModelProviderRecord>(
-    `/api/atlas/providers/${encodeURIComponent(providerId)}`,
-    "DELETE",
-    undefined,
-    "Model provider deletion failed",
-  );
-}
+// Model providers 的创建/编辑/启停/删除已迁往 opera-bff（2026-08-11，同上）。
+// fetchModelProviders 只读留着给下面的商业写路径当 provider 上下文。
 
 // ── Model price rules 写路径（B14）───────────────────────────────────────────
 // 注：后端仅提供 create/update/activate/deactivate，没有 price-rule 的 delete 端点。

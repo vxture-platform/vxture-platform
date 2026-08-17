@@ -133,6 +133,10 @@ const OIDC_FUTURE_APP_HASH_KEYS = new Set([
   "OIDC_CLIENT_SECRET_HASH_ANLAN",
   "OIDC_CLIENT_SECRET_HASH_FORGE",
   "OIDC_CLIENT_SECRET_HASH_XUANZHEN",
+  // vxtpl — 2026-08-13 完全产品化。其栈**已在产**（vxtpl.vxture.com），但 OIDC
+  // client 是本次首登，secret 尚未生成转运，所以先留在 FUTURE（可选）；
+  // owner 转运完成后按上面 opera 那条注释的规矩迁进 OIDC_CLIENT_SECRET_HASH_KEYS。
+  "OIDC_CLIENT_SECRET_HASH_VXTPL",
   "OIDC_CLIENT_SECRET_HASH_ARDA",
   // arda-beta is a separate confidential client (beta release channel)
   "OIDC_CLIENT_SECRET_HASH_ARDA_BETA",
@@ -261,6 +265,10 @@ const ENV_FILE_RULES = [
       "OIDC_CLIENT_SECRET_HASH_KARDA_BETA",
       // tailnet webhook delivery target — same pattern as ARDA_WEBHOOK_BASE_URL
       "KARDA_WEBHOOK_BASE_URL",
+      // vxtpl — full productization 2026-08-13 (owner). Same trio as karda.
+      "VXTPL_BASE_URL",
+      "VXTPL_BETA_BASE_URL",
+      "VXTPL_WEBHOOK_BASE_URL",
       // future saas app RP hashes (required when each RP goes live)
       ...OIDC_FUTURE_APP_HASH_KEYS,
     ]),
@@ -392,6 +400,7 @@ const ENV_FILE_RULES = [
       // moved to platform-api with the provisioning dispatcher (D13).
       "ARDA_PROVISION_WEBHOOK_SECRET",
       "KARDA_PROVISION_WEBHOOK_SECRET",
+      "VXTPL_PROVISION_WEBHOOK_SECRET",
     ]),
     requiredKeys: new Set([
       "NODE_ENV",
@@ -453,6 +462,7 @@ const ENV_FILE_RULES = [
     placeholderOptionalKeys: new Set([
       "ARDA_PROVISION_WEBHOOK_SECRET",
       "KARDA_PROVISION_WEBHOOK_SECRET",
+      "VXTPL_PROVISION_WEBHOOK_SECRET",
     ]),
     forbidsClientSecretHashes: true,
     forbiddenKeys: new Set([

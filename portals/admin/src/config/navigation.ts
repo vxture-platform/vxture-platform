@@ -428,40 +428,13 @@ const platformAutonomySections: AdminNavigationSection[] = [
       },
     ],
   },
-  {
-    id: "runtimeOps",
-    code: "runtime_ops",
-    i18nKey: "menu.platform.runtime_ops",
-    status: "active",
-    title: "运行保障",
-    items: [
-      {
-        id: "serviceMonitor",
-        code: "service_monitor",
-        i18nKey: "menu.platform.service_monitor",
-        status: "active",
-        href: "/service-monitor",
-        label: "服务监控",
-        description: "查看服务健康状态、接口可用性、异常趋势和核心运行指标。",
-        icon: "server",
-      },
-      {
-        id: "platformJobs",
-        code: "job_scheduler",
-        i18nKey: "menu.platform.job_scheduler",
-        status: "active",
-        href: "/platform-jobs",
-        label: "任务调度",
-        description:
-          "管理平台后台任务、异步队列、执行记录、失败重试与调度状态。",
-        icon: "workflow",
-      },
-      // 维护窗口（maintenance_window）2026-08-07 迁往 opera 的「运行保障」组：
-      // 它是基础设施运维，归控制平面而不是运营后台。数据仍是
-      // admin.maintenance_windows，只是改由 opera-bff 供给。菜单码与 i18n key
-      // 一并撤走，避免 admin 侧留一个指向 404 的入口。
-    ],
-  },
+  // runtimeOps（「运行保障」组）已整体撤走：维护窗口（2026-08-07）、服务监控
+  // （2026-08-11）、任务调度（2026-08-11）先后迁往 opera，三项都是基础设施运维，
+  // 归控制平面而不是运营后台。任务调度在 opera 侧换了数据源——admin 这份读的
+  // admin.governance_record 从未建过表（设计已弃用，见
+  // docs/30-design/data_admin_200_schema.md），opera 那份改成
+  // provisioning.webhook_deliveries（真实的 webhook 投递队列，此前无任何观测面）
+  // 的观测视图，不是同一份代码搬家。菜单码/i18n key 随组一并撤走。
   {
     id: "securityAudit",
     code: "security_audit",

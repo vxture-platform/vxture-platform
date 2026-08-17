@@ -4,11 +4,13 @@
  * docs/design/identity-platform-architecture.md §3: the tenant-realm session cookie `vx_sid`
  * is set on `.vxture.com` (Domain shared across subdomains for SSO); the operator
  * realm uses `vx_sid_op` host-only (hard isolation). Secure/HttpOnly/SameSite=Lax.
+ *
+ * `secure` is caller-supplied (IDP_COOKIE_INSECURE), not hardcoded.
  */
 
 export interface SidCookieOptions {
   httpOnly: true;
-  secure: true;
+  secure: boolean;
   sameSite: "lax";
   path: "/";
   maxAge: number;
@@ -36,11 +38,12 @@ export function buildSidCookie(input: {
   realm: "customer" | "workforce";
   maxAgeSeconds: number;
   platformCookieDomain?: string | null;
+  secure: boolean;
 }): SidCookie {
   const isOperator = input.realm === "workforce";
   const options: SidCookieOptions = {
     httpOnly: true,
-    secure: true,
+    secure: input.secure,
     sameSite: "lax",
     path: "/",
     maxAge: input.maxAgeSeconds * 1000,
@@ -64,7 +67,7 @@ export interface HintCookie {
   value: string;
   options: {
     httpOnly: false;
-    secure: true;
+    secure: boolean;
     sameSite: "lax";
     path: "/";
     maxAge: number;
@@ -88,10 +91,11 @@ export interface HintCookie {
 export function buildHintCookie(input: {
   maxAgeSeconds: number;
   platformCookieDomain?: string | null;
+  secure: boolean;
 }): HintCookie {
   const options: HintCookie["options"] = {
     httpOnly: false,
-    secure: true,
+    secure: input.secure,
     sameSite: "lax",
     path: "/",
     maxAge: input.maxAgeSeconds * 1000,

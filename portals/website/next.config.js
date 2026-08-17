@@ -61,7 +61,12 @@ loadRootEnv();
 const internalAliases = {
   "@vxture/shared": join(__dirname, "../../packages/shared/shared/src"),
   "@vxture/core-locale": join(__dirname, "../../packages/core/locale/src"),
-  "@vxture/design-system": join(
+  /* 键上的 `$` 表示**精确匹配**，不可省。webpack 的 alias 默认是前缀匹配，而本条的
+   * 值是个文件（client.ts）而不是目录，于是 `@vxture/design-system/styles/fonts.css`
+   * 会被改写成 `…/src/client.ts/styles/fonts.css` —— 路径里夹着一个文件名，必然
+   * 解析失败。加 `$` 后只有裸包名走 alias，`/styles/*` 子路径回落到 package.json
+   * exports 正常解析。（其余三条的值都是目录，前缀匹配对它们是对的，故不加 `$`。） */
+  "@vxture/design-system$": join(
     __dirname,
     "../../packages/design/design-system/src/client.ts",
   ),

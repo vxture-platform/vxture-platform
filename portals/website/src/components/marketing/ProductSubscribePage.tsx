@@ -170,7 +170,7 @@ export default function ProductSubscribePage() {
       <section className="vx-section-odd">
         <div className="mx-auto max-w-7xl px-6 pt-24 lg:px-8 xl:max-w-screen-2xl">
           {/* ── 居中页头：产品订阅统一入口 ─────────────────────────────── */}
-          <div className="mx-auto max-w-3xl text-center">
+          <div className="mx-auto max-w-website-3xl text-center">
             <p className="vx-website-hero-eyebrow text-sm font-semibold uppercase text-vx-brand-600 dark:text-vx-info-200">
               {t("eyebrow")}
             </p>
@@ -183,7 +183,7 @@ export default function ProductSubscribePage() {
           </div>
 
           {!product ? (
-            <div className="mx-auto mt-12 max-w-xl rounded-lg border border-vx-gray-200 bg-vx-white p-8 text-center dark:border-vx-gray-800 dark:bg-vx-gray-900">
+            <div className="mx-auto mt-12 max-w-website-xl rounded-lg border border-vx-gray-200 bg-vx-white p-8 text-center dark:border-vx-gray-800 dark:bg-vx-gray-900">
               <p className="text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
                 {t("unavailable")}
               </p>
@@ -254,7 +254,7 @@ export default function ProductSubscribePage() {
                               {plan.name}
                             </p>
                             <div className="mt-2 flex items-baseline gap-1">
-                              <span className="text-2xl font-semibold leading-none text-vx-text-primary">
+                              <span className="text-2xl font-semibold leading-website-none text-vx-text-primary">
                                 {isContact ? t("contact") : price}
                               </span>
                               {isContact ? null : (
@@ -354,7 +354,7 @@ export default function ProductSubscribePage() {
         <section className="vx-section-even">
           <div className="mx-auto max-w-7xl px-6 lg:px-8 xl:max-w-screen-2xl">
             {/* ── 板块二：对比所有功能 ─────────────────────────────────── */}
-            <div className="mx-auto max-w-2xl text-center">
+            <div className="mx-auto max-w-website-2xl text-center">
               <h2 className="font-display text-2xl font-bold text-vx-gray-900 dark:text-vx-white md:text-3xl">
                 {t("compare.title")}
               </h2>

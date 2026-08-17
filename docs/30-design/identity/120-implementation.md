@@ -3,7 +3,7 @@
 > 🧭 架构层见 [`identity-platform-architecture.md`](./040-architecture.md)；机制详细层见 identity-platform-{idp,account,rp-integration,access-topology,authorization,operator}。本文 = **实施衔接层**：现状→新版迁移 / rollout 进度 / 部署 runbook / 收尾。
 > 数据落地/迁移见 [`data_platform_300_migration.md`](../data_platform_300_migration.md)（c）。合并自 website-rp-migration + identity-platform-workplan + identity-rebuild-deploy-runbook + operator-identity-security-workplan + p5-closeout + p3-ruyin，2026-07-01。
 >
-> ⚠️ **端口数字按当时值留档，不回改**（本文是实施记录）：文中的 auth-bff `3090`、accounts `3040`、website `3010`/`3011` 等是 2026-07 当时的值。现行分配 = auth-bff **3081**、accounts **3080**、website **3000/3001**、admin **3030/3031**、opera **3040/3041**，权威见 [`10-port-allocation.md`](../../40-implementation/ai/10-port-allocation.md)（2026-08-10 重排，本地=生产同一套数）。
+> ⚠️ **本文里的端口数字是 2026-07 当时值，按实施记录留档、不回改**——它们**已经全部作废**，一个都不要照抄。现行分配见[端口登记表](https://claude.ai/code/artifact/0f44735a-c6bc-4881-a440-3446a2411a5f)（唯一源；2026-08-10 重排后本地=生产同一套数）。
 
 ---
 

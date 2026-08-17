@@ -77,7 +77,7 @@ UI component library and design tokens (`@vxture/design-system`). Applications m
 ## G
 
 **gateway-bff**
-Browser-side API gateway (`@vxture/bff-gateway`, port 8000). Routes frontend requests to the corresponding dedicated BFF by path prefix. Zero business logic, zero authentication, zero aggregation.
+Browser-side API gateway (`@vxture/bff-gateway`). Routes frontend requests to the corresponding dedicated BFF by path prefix. Zero business logic, zero authentication, zero aggregation.
 
 ---
 

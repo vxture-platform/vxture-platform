@@ -128,11 +128,13 @@ export class SocialController {
     res: Response,
     completion: { sid: string; realm: string; sessionMaxAge: number },
   ): void {
+    const secure = process.env["IDP_COOKIE_INSECURE"] !== "true";
     const cookie = buildSidCookie({
       sid: completion.sid,
       realm: completion.realm === "workforce" ? "workforce" : "customer",
       maxAgeSeconds: completion.sessionMaxAge,
       platformCookieDomain: this.config.platform.COOKIE_DOMAIN_PLATFORM ?? null,
+      secure,
     });
     res.cookie(cookie.name, cookie.value, cookie.options);
     // Tenant realm: mirror oidc.router — set the JS-readable login-state hint.
@@ -141,6 +143,7 @@ export class SocialController {
         maxAgeSeconds: completion.sessionMaxAge,
         platformCookieDomain:
           this.config.platform.COOKIE_DOMAIN_PLATFORM ?? null,
+        secure,
       });
       res.cookie(hint.name, hint.value, hint.options);
     }

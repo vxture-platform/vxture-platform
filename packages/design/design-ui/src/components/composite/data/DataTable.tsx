@@ -73,14 +73,47 @@ export type DataTableAlign = "left" | "center" | "right";
 
 export type DataTableSortDirection = "asc" | "desc";
 
+/**
+ * 内容列的宽度分档——不是自由值。文件头"删 className 逃生口"针对的是任意 CSS，
+ * 不是受控词表：`align` 一直是词表，`width` 只是把"占多少横向空间"也收进同一种
+ * 形状，而不是任由浏览器的表格 auto 布局按单元格内容宽度乱分（2026-08-12，起因
+ * 是 atlas 六张表各自 auto 出不同比例，肉眼看不出"同一套表"）。省下来的空间由
+ * 浏览器自动分给没设 `width` 的列——约定上那应该是主列（标题/描述），所以只给
+ * 状态、类型、计数这类短内容列标宽度，主列永远留 `"auto"`（不设）。
+ *
+ * 是**最小宽度**，不是定宽（2026-08-12 由固定 `w-*` 改过来，runos 板块核对时
+ * 发现原先的固定宽度太窄，个别列内容比列宽本身还长）。同档的列对齐后视觉宽度
+ * 一致是常态，但某一行内容一旦超出这个下限，列跟着撑开，不强行截断——状态、
+ * 类型这类值域本就有限的列不会触发，真触发的多半是本该给更宽档位的列，撑开
+ * 是暴露问题而不是掩盖它。
+ */
+export type DataTableColumnWidth = "auto" | "xs" | "sm" | "md" | "lg";
+
 const ALIGN: Record<DataTableAlign, string> = {
   left: "text-left",
   center: "text-center",
   right: "text-right",
 };
 
+const WIDTH: Record<Exclude<DataTableColumnWidth, "auto">, string> = {
+  xs: "min-w-[120px]", // 短徽标：状态、类型这类二选几枚举
+  sm: "min-w-[140px]", // 数字、日期一类定长信息
+  md: "min-w-[160px]", // 中等信息列，多个短字段并排、或多枚徽标
+  lg: "min-w-[200px]", // 需要比 md 更宽、但仍希望与同档列对齐的列
+};
+
 /** 选择列 / 序号列 / 操作列共用：固定 64px、居中，不吃首末列零边距。 */
 const EDGE_COL = "w-control-3xl px-md text-center";
+
+/**
+ * `Checkbox` 自己的命中区外扩默认给的是 `after:-inset-x-lg`（表单场景够宽，
+ * 撑不出问题）。选择列只有 `EDGE_COL` 减去左右 `px-md` 那点内容宽——default
+ * 密度下量出来是 24px，checkbox 本体 16px 居中，两侧各只剩 4px 富余，`-lg`
+ * 要 24px 每侧，实测（2026-08-12 浏览器量的，不是算的）命中区两侧各溢出
+ * EDGE_COL 边界 4px，蹭进相邻的序号列/表格外沿。缩到 `-md`（16px）三档密度
+ * 下都有正富余（default 4px、compact 16px、comfortable 8px），仍比 16px 的框
+ * 本身宽得多，没有退回"点不中"的老问题。 */
+const EDGE_CHECKBOX_CLASS = "after:-inset-x-md";
 
 export interface DataTableColumn<TRow> {
   readonly id: string;
@@ -91,6 +124,11 @@ export interface DataTableColumn<TRow> {
    * 状态列一律 `center`；数值列 `right`；其余文本列留默认。
    */
   readonly align?: DataTableAlign;
+  /**
+   * 列宽分档，默认 `"auto"`（不设宽度，交给浏览器按内容分配）。主列（标题/
+   * 描述）留默认；状态、类型、计数这类短内容列标一档，把空间让给主列。
+   */
+  readonly width?: DataTableColumnWidth;
   /** 可排序。排序本身由调用方做，本件只出表头控件与方向指示。 */
   readonly sortable?: boolean;
 }
@@ -121,6 +159,14 @@ export interface DataTableProps<TRow> {
   readonly selectedKeys?: readonly string[];
   readonly onSelectionChange?: (keys: readonly string[]) => void;
   /**
+   * 哪些行可勾选。缺省全部可选。
+   *
+   * 为**一张表里混着两级行**的场合而有：父行是对象、子行是它的附属明细，勾选一条
+   * 附属明细没有意义。返回 `false` 的行不出复选框（而不是出一个点了没反应的），
+   * 也不参与表头全选的计数——否则"全选"会因为几条永远选不上的行而永远显示半选。
+   */
+  readonly isRowSelectable?: (row: TRow, rowIndex: number) => boolean;
+  /**
    * 给了才出序号列（复选框之后、首业务列之前），值为本页首行的序号——
    * 翻页时由调用方递进（`(page-1)*pageSize+1`），本件不认分页。
    */
@@ -130,6 +176,27 @@ export interface DataTableProps<TRow> {
    * 惯例），内容居中——放的是单个图标触发器（`ActionMenu`），不是一排按钮。
    */
   readonly rowActions?: (row: TRow, rowIndex: number) => React.ReactNode;
+  /**
+   * 展开一行时在它**正下方**渲染的内容，占满整行宽度。返回 `null` = 这一行不可
+   * 展开，折叠列上不出箭头（而不是给一个点了没反应的箭头）。
+   *
+   * 用在"一级是汇总、二级是它的成员"这种归属关系上：二级内容与一级同处一张表，
+   * 缩进对齐，比另开一页或弹抽屉更能说明"这些属于那个"。
+   *
+   * 三个属性一起给才生效，且展开态是**受控**的——由调用方持有，因为"全部展开 /
+   * 全部收起"这类操作要能从表格外面按。
+   */
+  readonly expandedContent?: (row: TRow, rowIndex: number) => React.ReactNode;
+  readonly expandedKeys?: readonly string[];
+  readonly onExpandedChange?: (keys: readonly string[]) => void;
+  /**
+   * 行首留一格空位，宽度与选择／折叠列相同，**不提供任何功能**。
+   *
+   * 给嵌在展开行里的二级表用：它靠这一格与父表的行首对齐，于是"这些属于上面那
+   * 一行"是从**列的对齐**读出来的，而不是靠一个缩进的盒子。二级表因此仍然是一张
+   * 正常的表——选择列位置、序号列、操作列各就各位，只是选择那一格空着。
+   */
+  readonly leadingSpacer?: boolean;
   /* 没有 rowTone / getRowClassName：行不表达业务语气，见文件头。 */
   /** 表尾：分页、总数一类。渲染在虚线上边框之下，左右两端由调用方内容自摆。 */
   readonly footer?: React.ReactNode;
@@ -156,25 +223,53 @@ function DataTable<TRow>({
   onSortChange,
   selectedKeys,
   onSelectionChange,
+  isRowSelectable,
   indexStart,
   rowActions,
+  expandedContent,
+  expandedKeys,
+  onExpandedChange,
+  leadingSpacer = false,
   footer,
   className,
 }: DataTableProps<TRow>) {
   const selectable = selectedKeys !== undefined;
   const indexed = indexStart !== undefined;
+  const expandable =
+    expandedContent !== undefined && onExpandedChange !== undefined;
+  const expanded = React.useMemo(
+    () => new Set(expandedKeys ?? []),
+    [expandedKeys],
+  );
   const selected = React.useMemo(
     () => new Set(selectedKeys ?? []),
     [selectedKeys],
   );
   const keys = rows.map((row, i) => rowKey(row, i));
-  const allSelected = keys.length > 0 && keys.every((k) => selected.has(k));
-  const someSelected = !allSelected && keys.some((k) => selected.has(k));
+  /** 全选 / 半选只数**可选的**那些行。 */
+  const selectableKeys = rows
+    .map((row, i) =>
+      (isRowSelectable?.(row, i) ?? true) ? rowKey(row, i) : null,
+    )
+    .filter((k): k is string => k !== null);
+  const allSelected =
+    selectableKeys.length > 0 && selectableKeys.every((k) => selected.has(k));
+  const someSelected =
+    !allSelected && selectableKeys.some((k) => selected.has(k));
   const colSpan =
     columns.length +
     (selectable ? 1 : 0) +
     (indexed ? 1 : 0) +
+    (expandable ? 1 : 0) +
+    (leadingSpacer ? 1 : 0) +
     (rowActions ? 1 : 0);
+
+  const toggleExpanded = (key: string) => {
+    const next = new Set(expanded);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    onExpandedChange?.([...next]);
+  };
 
   /**
    * 只加减本页的 key，页外的选中项原样留着——本件拿到的 `rows` 只有当前页，
@@ -183,7 +278,7 @@ function DataTable<TRow>({
    */
   const toggleAll = () => {
     const next = new Set(selected);
-    for (const key of keys) {
+    for (const key of selectableKeys) {
       if (allSelected) next.delete(key);
       else next.add(key);
     }
@@ -210,10 +305,21 @@ function DataTable<TRow>({
             )}
           >
             <tr>
+              {/* 折叠列在最前：它是"这一行还有下一层"的指示，读在行的开头才成立。
+                  表头这一格空着——列名要标注的是数据，而这一列没有数据。 */}
+              {expandable ? (
+                <th scope="col" className={cn(EDGE_COL, "py-sm font-normal")}>
+                  <span className="sr-only">展开</span>
+                </th>
+              ) : null}
+              {leadingSpacer ? (
+                <th scope="col" className={cn(EDGE_COL, "py-sm font-normal")} />
+              ) : null}
               {selectable ? (
                 <th scope="col" className={cn(EDGE_COL, "py-sm font-normal")}>
                   <div className="flex items-center justify-center">
                     <Checkbox
+                      className={EDGE_CHECKBOX_CLASS}
                       checked={allSelected || (someSelected && "indeterminate")}
                       onCheckedChange={toggleAll}
                       aria-label={allSelected ? "取消本页全选" : "全选本页"}
@@ -250,6 +356,9 @@ function DataTable<TRow>({
                       "first:pl-none last:pr-none",
                       // 表头一律居中，与列的 align 无关——align 说的是数据。
                       "text-center",
+                      column.width && column.width !== "auto"
+                        ? WIDTH[column.width]
+                        : undefined,
                     )}
                   >
                     {column.sortable && onSortChange ? (
@@ -290,7 +399,11 @@ function DataTable<TRow>({
                   scope="col"
                   className={cn(
                     EDGE_COL,
-                    "sticky right-0 whitespace-nowrap bg-background py-sm font-normal",
+                    "sticky right-0 whitespace-nowrap py-sm font-normal",
+                    // 与下方数据格同一个可覆写遮罩色。表头当初写死 `bg-background`，
+                    // 于是二级表的「操作」表头在浅色展开区里单独白一格——数据格改对了
+                    // 而表头没改，接缝正好落在最显眼的那一行上。
+                    "bg-[var(--vx-table-sticky-bg,var(--background))]",
                   )}
                 >
                   操作
@@ -327,58 +440,129 @@ function DataTable<TRow>({
                   "transition-colors duration-fast ease-standard",
                   isSelected ? "bg-surface-selected" : "group-hover:bg-accent",
                 );
+                const sub = expandable ? expandedContent(row, rowIndex) : null;
+                const isExpanded = expanded.has(key);
                 return (
-                  <tr
-                    key={key}
-                    {...(selectable ? { "aria-selected": isSelected } : {})}
-                    className={cn(
-                      "group border-b last:border-b-0",
-                      hairline.field,
-                    )}
-                  >
-                    {selectable ? (
-                      <td
-                        className={cn(
-                          EDGE_COL,
-                          "py-md align-middle",
-                          cellSurface,
-                        )}
-                      >
-                        <div className="flex items-center justify-center">
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={() => toggleRow(key)}
-                            aria-label="选择本行"
-                          />
-                        </div>
-                      </td>
-                    ) : null}
-                    {indexed ? (
-                      <td
-                        className={cn(
-                          EDGE_COL,
-                          "py-md align-middle whitespace-nowrap text-body-sm text-muted-foreground",
-                          cellSurface,
-                        )}
-                      >
-                        {indexStart + rowIndex}
-                      </td>
-                    ) : null}
-                    {columns.map((column) => (
-                      <td
-                        key={column.id}
-                        className={cn(
-                          "px-md py-md align-middle text-foreground",
-                          "first:pl-none last:pr-none",
-                          ALIGN[column.align ?? "left"],
-                          cellSurface,
-                        )}
-                      >
-                        {column.cell(row, rowIndex)}
-                      </td>
-                    ))}
-                    {rowActions ? (
-                      /* 锁定列自己铺底：横向滚动时业务列从其下方经过，需要
+                  <React.Fragment key={key}>
+                    <tr
+                      {...(selectable ? { "aria-selected": isSelected } : {})}
+                      {...(sub !== null
+                        ? {
+                            /* 整行都是展开热区（owner 2026-08-14）：只有那个小箭头
+                             能点，等于把一个整行宽的动作压进 16px。箭头保留作为
+                             "还有下一层"的标识，但不再是唯一入口。
+                             行内的按钮 / 链接 / 菜单要让路——点标题是进详情、点操作
+                             是执行动作，两者都不该顺手把行展开。 */
+                            onClick: (
+                              e: React.MouseEvent<HTMLTableRowElement>,
+                            ) => {
+                              if (
+                                (e.target as HTMLElement).closest(
+                                  'button,a,input,select,textarea,[role="menuitem"]',
+                                )
+                              ) {
+                                return;
+                              }
+                              toggleExpanded(key);
+                            },
+                          }
+                        : {})}
+                      className={cn(
+                        "group border-b last:border-b-0",
+                        hairline.field,
+                        sub !== null && "cursor-pointer",
+                      )}
+                    >
+                      {expandable ? (
+                        <td
+                          className={cn(
+                            EDGE_COL,
+                            "py-md align-middle",
+                            cellSurface,
+                          )}
+                        >
+                          {/* 不可展开的行不给箭头：一个点了没反应的控件，比没有控件
+                            更让人怀疑是不是坏了。 */}
+                          {sub === null ? null : (
+                            <button
+                              type="button"
+                              onClick={() => toggleExpanded(key)}
+                              aria-expanded={isExpanded}
+                              className={cn(
+                                "flex size-control-xs items-center justify-center",
+                                "rounded-sm text-muted-foreground",
+                                "hover:bg-accent hover:text-foreground",
+                              )}
+                            >
+                              <Icon
+                                name={
+                                  isExpanded ? "chevron-down" : "chevron-right"
+                                }
+                                size="sm"
+                                aria-hidden="true"
+                              />
+                            </button>
+                          )}
+                        </td>
+                      ) : null}
+                      {leadingSpacer ? (
+                        <td
+                          className={cn(
+                            EDGE_COL,
+                            "py-md align-middle",
+                            cellSurface,
+                          )}
+                        />
+                      ) : null}
+                      {selectable ? (
+                        <td
+                          className={cn(
+                            EDGE_COL,
+                            "py-md align-middle",
+                            cellSurface,
+                          )}
+                        >
+                          {(isRowSelectable?.(row, rowIndex) ?? true) ? (
+                            <div className="flex items-center justify-center">
+                              <Checkbox
+                                className={EDGE_CHECKBOX_CLASS}
+                                checked={isSelected}
+                                onCheckedChange={() => toggleRow(key)}
+                                aria-label="选择本行"
+                              />
+                            </div>
+                          ) : null}
+                        </td>
+                      ) : null}
+                      {indexed ? (
+                        <td
+                          className={cn(
+                            EDGE_COL,
+                            "py-md align-middle whitespace-nowrap text-body-sm text-muted-foreground",
+                            cellSurface,
+                          )}
+                        >
+                          {indexStart + rowIndex}
+                        </td>
+                      ) : null}
+                      {columns.map((column) => (
+                        <td
+                          key={column.id}
+                          className={cn(
+                            "px-md py-md align-middle text-foreground",
+                            "first:pl-none last:pr-none",
+                            ALIGN[column.align ?? "left"],
+                            column.width && column.width !== "auto"
+                              ? WIDTH[column.width]
+                              : undefined,
+                            cellSurface,
+                          )}
+                        >
+                          {column.cell(row, rowIndex)}
+                        </td>
+                      ))}
+                      {rowActions ? (
+                        /* 锁定列自己铺底：横向滚动时业务列从其下方经过，需要
                          不透明底色遮住。背景色直接落在 td 本体上，不借内层
                          div——`<td>` 在表格布局里的盒子天然与整行同高，div 的
                          `height:100%` 在表格单元格里解析不出结果（父 td 高度
@@ -390,22 +574,65 @@ function DataTable<TRow>({
                          百分比高度限制）；水平居中交给 EDGE_COL 的 `text-center`
                          （ActionMenu 触发按钮是 inline-flex，服从文本对齐），
                          与选择列 / 序号列同宽同轴。 */
-                      <td
+                        <td
+                          className={cn(
+                            EDGE_COL,
+                            "sticky right-0 whitespace-nowrap align-middle",
+                            // 未选中态补一层不透明底：横向滚动时业务列从它下方
+                            // 经过，需要遮住。选中态的 surface-selected 本身也是
+                            // 半透明 token，遮不住滚动内容——与其余选中行同样的
+                            // 已知小缺口，不在本次两个 bug 的范围内。
+                            //
+                            // 遮罩色**可被祖先覆写**（`--vx-table-sticky-bg`）：嵌在
+                            // 展开行里的二级表坐在一层浅色底上，而这一格如果硬涂
+                            // `--background`，就会在那层浅色里戳出一个白洞——一列白的
+                            // 操作格贯穿整个二级区，看起来像没渲染完。缺省仍是
+                            // `--background`，独立使用的表格不受影响。
+                            !isSelected &&
+                              "bg-[var(--vx-table-sticky-bg,var(--background))]",
+                            cellSurface,
+                          )}
+                        >
+                          {rowActions(row, rowIndex)}
+                        </td>
+                      ) : null}
+                    </tr>
+                    {/* 展开行：占满整行，不参与列对齐——它装的是**另一层**数据，
+                      硬套父表的列宽只会让两层都难读。 */}
+                    {isExpanded && sub !== null ? (
+                      <tr
                         className={cn(
-                          EDGE_COL,
-                          "sticky right-0 whitespace-nowrap align-middle",
-                          // 未选中态补一层不透明底：横向滚动时业务列从它下方
-                          // 经过，需要遮住。选中态的 surface-selected 本身也是
-                          // 半透明 token，遮不住滚动内容——与其余选中行同样的
-                          // 已知小缺口，不在本次两个 bug 的范围内。
-                          !isSelected && "bg-background",
-                          cellSurface,
+                          "border-b last:border-b-0",
+                          hairline.field,
                         )}
                       >
-                        {rowActions(row, rowIndex)}
-                      </td>
+                        {/* 底色**必须不透明**，这是这一格的硬约束，有两个各自独立
+                          的理由：
+                          1. sticky 的操作格画在展开区**之上**。两层都半透明的话，
+                             同一个颜色会叠两遍——声明值一模一样，渲染出来却更深。
+                          2. sticky 的本职就是遮住横向滚动时从下面经过的业务列，
+                             半透明遮不住。
+                          用 `--primary-muted`：实心的极浅品牌蓝（亮色 brand-50，暗色
+                          自动切到 brand-950），与页面底色同色系、只深一档。
+                          **不用 `--accent`**——它是半透明的悬停色，拿它当底必然叠加；
+                          **也不用 `--surface-1`**——那是中性灰，压在一片浅蓝界面里显得脏。
+
+                          变量只算一次，展开区与里面的 sticky 格共用同一个来源：写成
+                          两个字面量迟早分叉，而分叉的表现就是那一列颜色对不上。 */}
+                        <td
+                          colSpan={colSpan}
+                          className="bg-primary-muted p-none"
+                          style={
+                            {
+                              "--vx-table-sticky-bg": "var(--primary-muted)",
+                            } as React.CSSProperties
+                          }
+                        >
+                          {sub}
+                        </td>
+                      </tr>
                     ) : null}
-                  </tr>
+                  </React.Fragment>
                 );
               })
             )}

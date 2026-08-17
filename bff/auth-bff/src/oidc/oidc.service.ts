@@ -1575,6 +1575,18 @@ export class OidcService {
     code: string;
     ip?: string | undefined;
     userAgent?: string | undefined;
+    /**
+     * 目标 workforce RP 的 client_id（凭证的 `aud`）。缺省 `admin` 保持既有
+     * 行为不变——2026-08-13 之前这里硬编码 `OPERATOR_CLIENT_ID = "admin"`，
+     * 后果是**除 admin 外没有任何门户能用 step-up**：opera 拿到 `aud=admin`
+     * 的凭证，用自己的 RP client（`aud=opera`）验签必然失败。
+     * `product_250` v0.4 把 step-up 的执行位定在 console 层，opera 也要跑
+     * 仪式，所以这里必须按调用方参数化。
+     *
+     * 调用方是持 `AUTH_INTERNAL_TOKEN` 的同信任域 BFF，与 `operatorId` 同等
+     * 信任级别——它已经在替操作者声明身份了，再替自己声明受众不放大风险。
+     */
+    audience?: string | undefined;
   }): Promise<{ stepUpToken: string; expiresIn: number } | null> {
     if (!this.keys.isReady()) {
       throw new BadRequestException("temporarily_unavailable");
@@ -1609,7 +1621,7 @@ export class OidcService {
     const stepUpToken = this.keys.sign(
       { stepup: true, userType: "operator", amr: ["otp"] },
       {
-        audience: OPERATOR_CLIENT_ID,
+        audience: input.audience ?? OPERATOR_CLIENT_ID,
         subject: `opr_${input.operatorId}`,
         expiresInSec: OPERATOR_STEPUP_TTL_SECONDS,
       },

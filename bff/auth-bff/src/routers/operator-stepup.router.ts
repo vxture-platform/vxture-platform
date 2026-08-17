@@ -35,7 +35,7 @@ export class OperatorStepUpRouter {
   @Post("internal/operator/stepup/totp")
   @HttpCode(HttpStatus.OK)
   async totp(
-    @Body() body: { operatorId?: string; code?: string },
+    @Body() body: { operatorId?: string; code?: string; audience?: string },
     @Req() req: Request,
     @Headers("user-agent") userAgent?: string,
   ): Promise<{ stepUpToken: string; expiresIn: number }> {
@@ -48,6 +48,8 @@ export class OperatorStepUpRouter {
       code: body.code,
       ip: extractClientIp(req),
       userAgent,
+      /* 缺省 admin（见 issueOperatorStepUp 的参数注释）：老调用方不传也不变。 */
+      ...(body.audience ? { audience: body.audience } : {}),
     });
     if (!result) {
       throw new UnauthorizedException("invalid_mfa_code");

@@ -13,8 +13,8 @@
 | 路径   | `portals/website/`                       |
 | @layer | `Presentation`                           |
 | 框架   | Next.js 15.5.6（App Router + Turbopack） |
-| 端口   | 3010                                     |
-| 版本   | 2.0.0（2026-05-06）                      |
+
+| 版本 | 2.0.0（2026-05-06） |
 
 ## 依赖约束
 

@@ -342,6 +342,14 @@ jobs:
                 ensure_kv "$RT/.env.website-bff" WEBSITE_BASE_URL "$(ex_val .env.website-bff.example WEBSITE_BASE_URL)"
                 ensure_kv "$RT/.env.console-bff" CONSOLE_BASE_URL "$(ex_val .env.console-bff.example CONSOLE_BASE_URL)"
                 ensure_kv "$RT/.env.admin-bff"   ADMIN_BASE_URL   "$(ex_val .env.admin-bff.example ADMIN_BASE_URL)"
+                # vxtpl — 2026-08-13 完全产品化。auth-bff 用 VXTPL_BASE_URL 生成
+                # OIDC redirect_uris；缺它则 seed 把本地回退值 (localhost:4000)
+                # 写进生产 oidc_clients.redirect_uris，登录转不回来。
+                # VXTPL_PROVISION_WEBHOOK_SECRET **刻意不走这里**——.example 是提交物，
+                # 密钥经它同步等于写进 git；密钥仍由 owner 带外转运、手工写入
+                # runtime/.env.platform-api（同 ARDA/KARDA 先例）。
+                ensure_kv "$RT/.env.auth-bff" VXTPL_BASE_URL "$(ex_val .env.auth-bff.example VXTPL_BASE_URL)"
+                ensure_kv "$RT/.env.auth-bff" VXTPL_WEBHOOK_BASE_URL "$(ex_val .env.auth-bff.example VXTPL_WEBHOOK_BASE_URL)"
                 # Offline payment channel config (product_321 §4.4) — append-only
                 # from the example; a channel with any key missing/blank ships
                 # DISABLED on the payment page, so landing these enables alipay +
@@ -358,7 +366,7 @@ jobs:
                 export VX_IMAGE_NAMESPACE="$(printf '%s' "$REPO" | awk -F/ '{print $(NF-1)}')"
                 export VX_IMAGE_REGISTRY="${REPO%/*/*}"
                 docker compose -f compose.platform.yml up -d --force-recreate --no-deps \
-                  website-bff console-bff admin-bff
+                  auth-bff website-bff console-bff admin-bff
                 ;;
               *)
                 echo "unknown action: $DB_ACTION" >&2; exit 1

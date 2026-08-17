@@ -26,6 +26,7 @@
     "@vxture/core-oidc-rp": "workspace:*",
     "@vxture/core-utils": "workspace:*",
     "@vxture/shared": "workspace:*",
+    "bcryptjs": "^3.0.2",
     "class-transformer": "^0.5.1",
     "cookie-parser": "^1.4.7",
     "express": "^4.22.1",

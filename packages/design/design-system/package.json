@@ -20,10 +20,12 @@
     "./styles/brand.css": "./src/styles/brand.css",
     "./styles/brands/ruyin.css": "./src/styles/brands/ruyin.css",
     "./styles/brands/vxture.css": "./src/styles/brands/vxture.css",
+    "./styles/fonts.css": "./src/styles/fonts.css",
     "./styles/fullscreen.css": "./src/styles/fullscreen.css",
     "./styles/globals.css": "./src/styles/globals.css",
     "./styles/shell-template-user-panel.css": "./assets/shell-template-user-panel.css",
     "./styles/shell-template.css": "./assets/shell-template.css",
+    "./styles/website-tokens.css": "./assets/website-tokens.css",
     "./styles/workbench.css": "./src/styles/workbench.css",
     "./tokens": {
       "types": "./dist/tokens.d.ts",
@@ -53,6 +55,9 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@fontsource/funnel-display": "^5.3.0",
+    "@fontsource/geist-mono": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
     "@marsidev/react-turnstile": "^1.5.2",
     "@vxture/design-tokens": "workspace:*",
     "@vxture/design-ui": "workspace:*",

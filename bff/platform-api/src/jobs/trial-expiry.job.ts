@@ -18,22 +18,33 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { SubscriptionService } from "@vxture/service-subscription";
+import { JobHeartbeatService } from "./job-heartbeat.service";
 import { sweepIntervalMs } from "./sweep-interval.util";
+
+/** provisioning.background_jobs 主键，opera「任务调度」用它认作业。 */
+export const JOB_NAME = "trial-expiry";
 
 @Injectable()
 export class TrialExpiryJob {
   private readonly logger = new Logger(TrialExpiryJob.name);
   private inFlight = false;
+  private readonly intervalMs = sweepIntervalMs(
+    process.env.TRIAL_EXPIRY_SWEEP_INTERVAL_MS,
+  );
 
   constructor(
     @Inject(SubscriptionService)
     private readonly subscriptions: SubscriptionService,
+    @Inject(JobHeartbeatService)
+    private readonly heartbeat: JobHeartbeatService,
   ) {}
 
   @Interval(sweepIntervalMs(process.env.TRIAL_EXPIRY_SWEEP_INTERVAL_MS))
   async tick(): Promise<void> {
     if (this.inFlight) return;
     this.inFlight = true;
+    const startedAt = Date.now();
+    await this.heartbeat.recordStart(JOB_NAME, this.intervalMs);
     try {
       const transitioned = await this.subscriptions.sweepLapsedTrials();
       if (transitioned > 0) {
@@ -41,9 +52,19 @@ export class TrialExpiryJob {
           `trial expiry sweep: ${transitioned} trialing → expired`,
         );
       }
+      await this.heartbeat.recordSuccess(
+        JOB_NAME,
+        Date.now() - startedAt,
+        transitioned,
+      );
     } catch (err) {
       // Never let a pass kill the interval; the next tick retries.
       this.logger.error(`trial expiry sweep failed: ${String(err)}`);
+      await this.heartbeat.recordFailure(
+        JOB_NAME,
+        Date.now() - startedAt,
+        String(err),
+      );
     } finally {
       this.inFlight = false;
     }

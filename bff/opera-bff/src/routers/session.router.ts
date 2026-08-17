@@ -13,7 +13,8 @@
  * ⚠ 前端拿能力码只用于**决定界面显示什么**。真正的裁决在各 router 的能力门上——
  * 前端藏了按钮不等于接口关了，接口自己会 403。
  */
-import { Controller, Get, Req, UnauthorizedException } from "@nestjs/common";
+import { Controller, Get, Req } from "@nestjs/common";
+import { unauthenticated } from "../errors/api-error";
 import type { Request } from "express";
 import type {
   Capability,
@@ -31,7 +32,7 @@ export class SessionRouter {
   @Get()
   currentSession(@Req() req: Request & RequestContext): SessionView {
     if (!req.operator) {
-      throw new UnauthorizedException("No active session");
+      throw unauthenticated("AUTH_NO_SESSION", "No active session");
     }
     return {
       operator: req.operator,

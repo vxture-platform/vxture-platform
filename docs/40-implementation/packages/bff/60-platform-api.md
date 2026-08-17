@@ -6,13 +6,13 @@
 
 ## 包信息
 
-| 项       | 值                                        |
-| -------- | ----------------------------------------- |
-| 包名     | `@vxture/bff-platform-api`                |
-| 路径     | `bff/platform-api/`                       |
-| @layer   | `Application`                             |
-| 框架     | NestJS                                    |
-| 端口     | 3041（容器内；宿主不发布端口）            |
+| 项     | 值                         |
+| ------ | -------------------------- |
+| 包名   | `@vxture/bff-platform-api` |
+| 路径   | `bff/platform-api/`        |
+| @layer | `Application`              |
+| 框架   | NestJS                     |
+
 | 服务对象 | 产品侧 S2S（arda 为首个消费方），非浏览器 |
 
 ## 职责

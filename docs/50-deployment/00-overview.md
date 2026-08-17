@@ -79,19 +79,19 @@ vx-worker-02/03/04/05 等（业务执行面，不由本仓部署）
 
 ### VXTURE_DEPLOY_HOST — 平台控制面（仅 prod，无 beta）
 
-| 服务                  | 容器名              | 端口     | 说明                                   |
-| --------------------- | ------------------- | -------- | -------------------------------------- |
-| Nginx                 | `vx-nginx`          | 80 / 443 | SSL 终止、所有子域名反向代理           |
-| website               | `vx-website`        | 3010     | Next.js，vxture.com 官网/注册/登录     |
-| console               | `vx-console`        | 3020     | Next.js，console.vxture.com 租户工作台 |
-| admin                 | `vx-admin`          | 3030     | Next.js，y.vxture.com 运营后台         |
-| gateway-bff           | `vx-gateway-bff`    | 8000     | 唯一公共 API 入口                      |
-| auth-bff              | `vx-auth-bff`       | 3090     | JWT 唯一签发源，所有 BFF 依赖          |
-| website-bff           | `vx-website-bff`    | 3011     | 注册/登录/租户初始化                   |
-| console-bff           | `vx-console-bff`    | 3021     | 租户管理/成员/账单/订阅                |
-| admin-bff             | `vx-admin-bff`      | 3031     | 平台运营管理                           |
-| **platform-postgres** | `vx-platform-pg`    | 内部     | 平台数据库（见 Schema 表）             |
-| **platform-redis**    | `vx-platform-redis` | 内部     | 会话/限流/Token 黑名单                 |
+| 服务                  | 容器名              | 说明                                   |
+| --------------------- | ------------------- | -------------------------------------- |
+| Nginx                 | `vx-nginx`          | SSL 终止、所有子域名反向代理           |
+| website               | `vx-website`        | Next.js，vxture.com 官网/注册/登录     |
+| console               | `vx-console`        | Next.js，console.vxture.com 租户工作台 |
+| admin                 | `vx-admin`          | Next.js，y.vxture.com 运营后台         |
+| gateway-bff           | `vx-gateway-bff`    | 唯一公共 API 入口                      |
+| auth-bff              | `vx-auth-bff`       | JWT 唯一签发源，所有 BFF 依赖          |
+| website-bff           | `vx-website-bff`    | 注册/登录/租户初始化                   |
+| console-bff           | `vx-console-bff`    | 租户管理/成员/账单/订阅                |
+| admin-bff             | `vx-admin-bff`      | 平台运营管理                           |
+| **platform-postgres** | `vx-platform-pg`    | 平台数据库（见 Schema 表）             |
+| **platform-redis**    | `vx-platform-redis` | 会话/限流/Token 黑名单                 |
 
 **平台数据库 Schema 分布（`platform_main`，8 个 schema）：**
 
@@ -194,7 +194,7 @@ VXTURE_DEPLOY_HOST（平台控制面 prod）
 
 ## 七、端口速查
 
-> 端口权威定义见 [`docs/40-implementation/ai/port-allocation.md`](../40-implementation/ai/10-port-allocation.md)，本文件不再维护端口表。
+> 端口权威定义见[端口登记表](https://claude.ai/code/artifact/0f44735a-c6bc-4881-a440-3446a2411a5f)，本文件不再维护端口表。
 
 ---
 

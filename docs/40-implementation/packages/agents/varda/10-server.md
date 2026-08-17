@@ -8,12 +8,12 @@
 
 ## 包信息
 
-| 项       | 值                                               |
-| -------- | ------------------------------------------------ |
-| 名称     | `varda-server`（无 @vxture 包名，独立应用）      |
-| 路径     | `agent-server/varda/`                            |
-| @layer   | `Application` / `Domain`（agent 私有）           |
-| 端口     | 3122                                             |
+| 项     | 值                                          |
+| ------ | ------------------------------------------- |
+| 名称   | `varda-server`（无 @vxture 包名，独立应用） |
+| 路径   | `agent-server/varda/`                       |
+| @layer | `Application` / `Domain`（agent 私有）      |
+
 | 对外接口 | `POST /internal/varda/chat`（仅 varda-bff 调用） |
 
 ## 职责

@@ -132,7 +132,7 @@ DDL 三段式单一权威:`deploy/database/ddl/00_baseline.sql`(建三契约 sch
 ### 2.7 参数表(单一 PRODUCT_CODE 级联 + 基建分配登记)
 
 - **PRODUCT_CODE 级联**(满足 `^[a-z][a-z0-9_-]{0,31}$`),一处定义全仓派生:OIDC client 对(`{code}` / `{code}-beta`)、compose 项目/容器前缀、镜像名 `<code>-app`、DB 名/角色(`vxturebiz_{code}_{env}` / `{code}_svc`)、workspace 包域 `@{code}/*`、secret 名 `{CODE}_DB_SVC_PASSWORD`、平台侧镜像键 `{CODE}_PROVISION_WEBHOOK_SECRET` / `{CODE}_WEBHOOK_BASE_URL`、deploy 契约校验 EXPECTED_IMAGES、compose 哨兵服务名(deploy.yml 交付校验 grep)。
-- **基建分配登记表(新增标准构件,放平台仓 docs)**:每产品一行——APP_PUBLISH_PORT 对(arda 已占 3230/3231)、部署主机(worker-NN)、stack_root(`/srv/mdX/<product>[-beta]`)、apex 域名、ACR namespace、tailnet 归属(定 mesh 类 1/类 2)。deploy/db-init/rollback 三个 workflow 的 stack_root case 块由此表生成。目前**无此登记表,是缺口**(§6#10)。
+- **基建分配登记表(新增标准构件,放平台仓 docs)**:每产品一行——部署主机(worker-NN)、stack_root(`/srv/mdX/<product>[-beta]`)、apex 域名、ACR namespace、tailnet 归属(定 mesh 类 1/类 2)。deploy/db-init/rollback 三个 workflow 的 stack_root case 块由此表生成。目前**无此登记表,是缺口**(§6#10)。
 - **env 键目录**(.env.example 编写法本身是交付物:prod 值 + "BETA OVERRIDES"注释块;secret 键在位留空 + 采办说明):OIDC*\* 七键(080-rp §2.11:ISSUER/CLIENT_ID/CLIENT_SECRET/REDIRECT_URI/SCOPES/POST_LOGOUT_REDIRECT_URI/RP_ENABLED;arda .env 实况仅前六键)+ RP_SESSION_TTL/RP_SESSION_COOKIE*_、REDIS*URL、DATABASE_URL(连接身份 = `{code}_svc`,**不照抄** arda 属主直连)、POSTGRES*_、PLATFORM*API_URL、PLATFORM_INTERNAL_AUTH_TOKEN、PROVISION_WEBHOOK_SECRET(轮换双键是模板强化项,§6#19)、INTERNAL_JOB_TOKEN、DATA_ENCRYPTION_KEY、NEXT_PUBLIC_APP_ENV/PROD_URL/BETA_URL/CONSOLE_URL、IMAGE*_ / FALLBACK*IMAGE*_、DATA_DIR 等(以 arda .env.example 为**版式**泛化;其 OIDC_SCOPES 仍残留已退役 `arda:subscription`、DB 名/连接角色未按契约——时点产物不照抄,见 §5 arda 反向对账)。
 
 ### 2.8 平台侧登记 + GitHub bootstrap(代码外动作 checklist)
@@ -250,7 +250,7 @@ DDL 三段式单一权威:`deploy/database/ddl/00_baseline.sql`(建三契约 sch
 1. **批 0(平台仓)**:§6 31 项标准修订(owner 已同意,按需两侧修订;优先 #27/#28 两处 CONFIRMED bug)+ 本文升 v1.0。
 2. **批 1(vxture-template)**:治理基座 + CI/CD 构件 + docs 骨架(§2.1/2.2/2.6)+ 占位符与实例化脚本 + 两份 checklist(§2.8);runbook 批 A–D 自验绿。
 3. **批 2(vxture-template)**:平台对接层 + 业务面 DB 基线(§2.3/2.4)+ 两类验证能力,Mock 层离线全绿。
-4. **批 3(vxture-template)**:接平台在线联测——平台侧登记 template 演示产品行/OIDC client/webhook secret(owner 转运),三通道 + 档位真实验证跑通;agent profile 增量随 §4.2 裁决落定。
+4. **批 3(vxtpl,原 vxture-template)**:接平台在线联测——~~平台侧登记 template 演示产品行/OIDC client/webhook secret~~ **平台侧已办(2026-08-13)**:产品行(`agent`/智能体)、OIDC client(四段式 scope,D12 之后形态)、`product_webhooks` 三项均已进 seed 并本地实测落库;**余 owner 两项动作**——生成并带外转运 `VXTPL_PROVISION_WEBHOOK_SECRET`、批一次 `db-init` 使其落生产库。三通道 + 档位真实验证跑通;agent profile 增量随 §4.2 裁决落定。
 5. **批 4**:首个真产品实例化(karda/terra,产品定义就绪者优先)全链 e2e;同步启动**计划2**:§9 整改要求清单以 liaison 回函交 arda 任务线。
 
 ## 8. 决策清单(owner 2026-07-20 拍板记录)

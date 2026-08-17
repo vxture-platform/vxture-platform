@@ -23,6 +23,22 @@ volumes:
   varda-pg:
   varda-redis:
 
+# ── 资源上限（2026-08-17 新增；此前本文件一个限额都没有）─────────────────────
+#
+# worker-02 是 8C24G，但**它不是 varda 一家的**：arda 栈与 vxtpl 栈（都是外仓部署）
+# 共享同一台主机。没有上限时，varda 这边一个跑飞的进程会先打垮邻居，而邻居的
+# owner 连"是谁干的"都查不出来——他们看到的只是自己被 OOM 了。
+#
+# 与 worker-01 同一套判据：`mem_limit` 挡单容器跑飞、`cpus` 是垄断闸不是配额、
+# `pids_limit` 是 fork 炸弹护栏。有状态件（pg/redis）不禁 swap，宁可慢不要被杀。
+#
+# **关于本文件不钉 digest**：这是有理由的决定，理由写在 varda-pg 上方——worker-02 走的
+# 境内镜像源对 by-digest 拉取限速（实测一个镜像 30 分钟以上），镜像内容改由 worker-01
+# `docker save/load` 预载。**不要"顺手补上" digest**：那会把一次部署变成半小时。
+#
+# 代价是升级不会自己传过来：worker-01 于 2026-08-17 升到 pg 18.6 / redis 8.10.0 后，
+# 本机仍是 load 进来的那一版，**要再做一次 save/load 才同步**。
+
 services:
   varda-pg:
     # Tag reference (NOT digest-pinned like worker-01): worker-02 is a mainland box
@@ -33,6 +49,9 @@ services:
     image: postgres:18-alpine
     pull_policy: missing
     container_name: vx-varda-pg
+    mem_limit: 512m
+    cpus: 2.0
+    pids_limit: 256
     restart: unless-stopped
     networks: [vx-varda]
     environment:
@@ -54,6 +73,9 @@ services:
     image: redis:8-alpine
     pull_policy: missing
     container_name: vx-varda-redis
+    mem_limit: 128m
+    cpus: 1.0
+    pids_limit: 64
     restart: unless-stopped
     networks: [vx-varda]
     volumes:
@@ -69,6 +91,10 @@ services:
   varda-server:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/varda_agent:${VX_IMAGE_TAG:-latest}
     container_name: vx-varda-server
+    mem_limit: 512m
+    memswap_limit: 512m # == mem_limit：不给 swap，跑飞的进程死在自己的天花板上，而不是去啃宿主的 swap
+    cpus: 2.0
+    pids_limit: 128
     restart: unless-stopped
     networks: [vx-varda]
     environment:
@@ -93,6 +119,10 @@ services:
   varda-bff:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/varda_bff:${VX_IMAGE_TAG:-latest}
     container_name: vx-varda-bff
+    mem_limit: 256m
+    memswap_limit: 256m # == mem_limit：不给 swap，跑飞的进程死在自己的天花板上，而不是去啃宿主的 swap
+    cpus: 1.0
+    pids_limit: 128
     restart: unless-stopped
     networks: [vx-varda]
     # 发布到 0.0.0.0 供 worker-01 nginx 经 Tailscale 直连；UFW 限制仅 Tailscale 子网可达

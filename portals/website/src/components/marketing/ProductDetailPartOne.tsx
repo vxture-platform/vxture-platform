@@ -33,14 +33,14 @@ export default function ProductDetailPartOne() {
       <section className="vx-hero-section">
         <AnimatedHeroBg />
         <div className="vx-hero-content">
-          <div className="max-w-3xl">
+          <div className="max-w-website-3xl">
             <p className="vx-website-hero-eyebrow vx-website-hero-eyebrow--wide mb-3 text-sm font-semibold uppercase text-vx-brand-600 dark:text-vx-info-200">
               {t("hero.eyebrow")}
             </p>
             <h1 className="font-brand text-4xl font-bold leading-tight text-vx-gray-900 dark:text-vx-white md:text-6xl">
               {t("hero.title")}
             </h1>
-            <p className="mt-5 max-w-2xl text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200">
+            <p className="mt-5 max-w-website-2xl text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200">
               {t("hero.description")}
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
@@ -81,7 +81,7 @@ export default function ProductDetailPartOne() {
                 {t("capabilities.title")}
               </h2>
             </div>
-            <p className="max-w-2xl text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
+            <p className="max-w-website-2xl text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
               {t("capabilities.description")}
             </p>
           </div>
@@ -197,7 +197,7 @@ export default function ProductDetailPartOne() {
             <h2 className="font-display text-2xl font-bold text-vx-gray-900 dark:text-vx-white">
               {t("cta.title")}
             </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
+            <p className="mt-3 max-w-website-2xl text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
               {t("cta.description")}
             </p>
           </div>

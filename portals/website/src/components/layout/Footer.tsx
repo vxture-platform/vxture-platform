@@ -209,7 +209,7 @@ export default function Footer() {
                   alt={t(wechatData.ariaLabelKey)}
                   width={200}
                   height={200}
-                  className="w-auto max-w-none h-48 object-contain"
+                  className="w-auto max-w-website-none h-48 object-contain"
                 />
                 <div className="mt-1 text-center text-xs text-vx-gray-600">
                   {t(wechatData.ariaLabelKey)}

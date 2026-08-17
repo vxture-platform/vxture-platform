@@ -161,6 +161,6 @@ L3 agent↔atlas 的 S2S 调用链路完全在两个独立仓之间发生，本�
 
 ### 7.3 本次落地
 
-- `13-infra-allocation-registry.md` §3 atlas 行已回填 `worker-02:3100 在产`（本次同批修正）。
+- `13-infra-allocation-registry.md` §3 atlas 行已回填 `worker-02 在产`（本次同批修正；端口见[端口登记表](https://claude.ai/code/artifact/0f44735a-c6bc-4881-a440-3446a2411a5f)）。
 - `product_210` §11 新增"供给面契约变更检查单"，作为 Atlas（及未来 ontos/runos）新增/变更 S2S
   供给面契约前的强制检查项，见该文档。

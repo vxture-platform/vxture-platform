@@ -36,10 +36,10 @@ docker run -d \
 ├── conf/
 │   ├── nginx.conf
 │   ├── sites-enabled/
-│   │   ├── vxture.com.conf       ← website portal (3010)
-│   │   ├── console.conf          ← console portal (3020)
-│   │   ├── admin.conf            ← admin portal (3030)
-│   │   └── api.conf              ← gateway-bff (8000)
+│   │   ├── vxture.com.conf       ← website portal
+│   │   ├── console.conf          ← console portal
+│   │   ├── admin.conf            ← admin portal
+│   │   └── api.conf              ← gateway-bff
 │   └── snippets/
 │       ├── ssl-params.conf       ← TLS 版本、cipher suite
 │       └── proxy-params.conf     ← proxy_set_header 公共参数
@@ -274,6 +274,8 @@ echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
 ```
 
+各容器设置资源上限。**2026-08-17 实测复核后，这一节的说法要改**——见下表之后的更正。
+
 各容器设置内存上限（`--memory`）防止单容器吃满内存导致 OOM：
 
 | 容器                                  | 建议上限 |
@@ -285,6 +287,107 @@ sudo sysctl -p
 | website-bff / console-bff / admin-bff | 各 192MB |
 | auth-bff                              | 128MB    |
 | gateway-bff                           | 64MB     |
+
+### 2026-08-17：按真机实测重定内存上限（原判 152% 是低估）
+
+**先更正一个前提**：worker-01 标称 2G，`free -m` 实测**可用只有 1607 MB**。按 2048 算低估了
+拥挤程度——真实超配比初判更糟。
+
+|                            | 重定前          | 重定后               |
+| -------------------------- | --------------- | -------------------- |
+| 15 个容器 `mem_limit` 之和 | 3168 m          | **2304 m**           |
+| vs 物理内存 1607 m         | 197%            | 143%                 |
+| vs 内存 + swap 3654 m      | 87%（余 486 m） | **63%（余 1350 m）** |
+
+**「总和 ≤ 内存」在这台机器上做不到**，这点要说清楚：留 ~400 MB 给内核与 docker 后，15 个
+容器人均只剩 80 MB，而那正好是稳态实测值——等于**一点爆发余量都不给**，第一次 SSR 高峰或
+一次 `pg_dump` 就会有容器被 OOM 杀。所以目标改成**把最坏情况压进 swap 兜得住的范围**，
+而不是压到内存以下。（实测 swap 2047 MB，当前用量 0。）
+
+真机稳态实测与重定值：
+
+| 服务                                                             | 实测      | 原上限    | 新上限                                     |
+| ---------------------------------------------------------------- | --------- | --------- | ------------------------------------------ |
+| postgres                                                         | 43 MiB    | 512 m     | **320 m**                                  |
+| redis                                                            | 6.5 MiB   | 128 m     | 128 m（不动——redis 被 OOM 杀＝全部会话丢） |
+| website / console / admin                                        | 78–85 MiB | 256 m     | **192 m**                                  |
+| accounts / opera / auth-bff                                      | 54–64 MiB | 192–256 m | **160 m**                                  |
+| website-bff / console-bff / admin-bff / opera-bff / platform-api | 45–59 MiB | 160–192 m | **128 m**                                  |
+| gateway-bff                                                      | 30 MiB    | 128 m     | **96 m**                                   |
+| nginx                                                            | 7.6 MiB   | 64 m      | 64 m                                       |
+
+留的是**实测的 2～3 倍**，不是贴着稳态压。
+
+**`memswap_limit` 与 `mem_limit` 必须同步改**：两者相等才是「禁 swap」，只改前者等于
+**悄悄放开了 swap**——那比不改更糟，因为它看起来像收紧了。
+
+初判时写「往下调是危险的，必须先量真机」——这条判断没变，只是前提满足了：现在每个值
+都有实测支撑，不是估的。
+
+### 2026-08-17 补齐：`cpus` 与 `pids_limit`（四份 compose 全覆盖）
+
+此前**只有内存一个维度**有上限。一个跑飞的查询能吃光两核里的两核，一个 fork 循环能耗尽
+进程表，两者都不受 `mem_limit` 约束。
+
+| 文件                                 | 此前             | 现在                               |
+| ------------------------------------ | ---------------- | ---------------------------------- |
+| `deploy/compose.platform.yml`        | 14 × `mem_limit` | 补 14 × `cpus` + `pids_limit`      |
+| `deploy/compose.nginx.yml`           | 1 × `mem_limit`  | 补 `cpus: 1.5` / `pids_limit: 128` |
+| `deploy/dev/compose.dev.yml`         | **零**           | 补全四项，值与生产一致             |
+| `deploy/worker-02/compose.varda.yml` | **零**           | 补全四项                           |
+
+三条判据，写在各文件头部：
+
+1. **`cpus` 是垄断闸不是配额。** 上限之和远大于核数是有意的——它们是天花板，不是预留。
+   两核机器上任一容器都拿不满两核，就够了。
+2. **`pids_limit` 按「异常」的门槛设**，不是按「够用」设。postgres 实测空闲 9 个进程，
+   给 256。
+3. **有状态件不禁 swap**（不设 `memswap_limit`）：宁可变慢也不要被 OOM 杀掉——库一死，
+   所有 `depend_on` 它的 BFF 跟着倒，那是级联不是单点。无状态件则钉死无 swap。
+
+本级 dev 已实测生效并验证数据无损（`docker inspect` 显示 Memory=536870912 / NanoCpus=
+1500000000 / PidsLimit=256；重建后 `support.audit_logs` 25693 行、`actor_console` 列均在）。
+
+### 镜像 digest 升级（2026-08-17）
+
+两个基础镜像都按 digest 钉死（做法正确），但钉的是 **2026-06-09 解析**的那一版，与 registry
+当前的 `18-alpine` / `8-alpine` 已经不是同一个。**已升级**：
+
+| 镜像                 | 仓里钉的               | registry 当前          |
+| -------------------- | ---------------------- | ---------------------- |
+| `postgres:18-alpine` | `sha256:96d56f7f57c6…` | `sha256:d3e1620b530c…` |
+| `redis:8-alpine`     | `sha256:09160599abd2…` | `sha256:978f0e01593e…` |
+
+**已升级（2026-08-17）**：`compose.platform.yml` 与 `dev/compose.dev.yml` 同步换到上表右列。
+同大版本补丁升级（**pg 18.4 → 18.6、redis 8.8.0 → 8.10.0**），数据目录格式不变，
+是一次重启而不是一次迁移；本级已实测重建并核对数据无损。
+
+> **一处更正**：本节初稿写「`worker-02/compose.varda.yml` 根本没钉 digest……正是平台那份
+> 注释警告的情形」——**这是错的，我没读那一行上面的注释**。worker-02 不钉是**有实测理由的
+> 决定**：境内镜像源对 by-digest 拉取限速（实测一个镜像 30 分钟以上），镜像内容改由
+> worker-01 `docker save/load` 预载。**不要"顺手补上"**。
+>
+> 但它有个真实代价：**升级不会自己传过去**。worker-01 换到 18.6 之后，worker-02 仍是
+> load 进来的那一版，要再做一次 `save/load` 才同步——这一步现在挂在 worker-02 的升级清单上。
+
+**本级实测（升级前后对账）**：
+
+|                                           | 升级前   | 升级后                          |
+| ----------------------------------------- | -------- | ------------------------------- |
+| postgres                                  | 18.4     | **18.6**                        |
+| redis                                     | 8.8.0    | **8.10.0**                      |
+| `support.audit_logs`                      | 25693 行 | 25693 行                        |
+| `product.products`                        | 21 行    | 21 行                           |
+| redis `dbsize`                            | 3        | 3                               |
+| `actor_console` 列 / `oidc_clients` CHECK | 在       | 在                              |
+| 资源上限                                  | —        | 重建后仍在（mem/cpu/pids 三项） |
+
+两个容器 healthy，opera-bff 与门户正常。**重建的是容器不是卷**——数据在 `./data/` 下的
+绑定挂载里，所以对账数字一个都没变，这正是可以放心做补丁升级的原因。
+
+**生产侧未执行**：`compose.platform.yml` 已改好，但 apply 在 worker-01 上，由 owner 走部署流程。
+`pull_policy: missing` 意味着**必须先 `docker compose pull`**，否则本地已有的旧 digest 镜像
+不会被换掉。
 
 ---
 

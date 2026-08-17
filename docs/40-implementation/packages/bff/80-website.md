@@ -6,14 +6,14 @@
 
 ## 包信息
 
-| 项       | 值                    |
-| -------- | --------------------- |
-| 包名     | `@vxture/bff-website` |
-| 路径     | `bff/website-bff/`    |
-| @layer   | `Application`         |
-| 框架     | NestJS                |
-| 端口     | 3011                  |
-| 服务对象 | `portals/website`     |
+| 项     | 值                    |
+| ------ | --------------------- |
+| 包名   | `@vxture/bff-website` |
+| 路径   | `bff/website-bff/`    |
+| @layer | `Application`         |
+| 框架   | NestJS                |
+
+| 服务对象 | `portals/website` |
 
 ---
 
@@ -300,7 +300,7 @@ AUTH_INTERNAL_TOKEN=            # internal BFF calls, if needed
 
 # From /srv/vxture/runtime/.env.website-bff
 NODE_ENV=production
-WEBSITE_BFF_PORT=3011
+WEBSITE_BFF_PORT=<见端口登记表>
 
 # 上游服务
 AUTH_BFF_URL=http://vx-auth-bff:3090   # auth-bff 内部地址

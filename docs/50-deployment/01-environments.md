@@ -203,7 +203,7 @@ secrets/redis-password
 | 变量                                    | 必填   | 说明                                                    |
 | --------------------------------------- | ------ | ------------------------------------------------------- |
 | `NODE_ENV`                              | 是     | `production`                                            |
-| `AUTH_BFF_PORT`                         | 是     | 默认 `3090`                                             |
+| `AUTH_BFF_PORT`                         | 是     | 默认值见端口登记表                                      |
 | `DB_POOL_MAX`                           | 否     | DB pool 上限                                            |
 | `JWT_ACCESS_EXPIRES_IN`                 | 否     | access token 有效期                                     |
 | `JWT_REFRESH_EXPIRES_IN`                | 否     | refresh token 有效期                                    |
@@ -240,7 +240,7 @@ operator/admin Turnstile 现由 `auth-bff`(IdP) 校验（运营登录迁到 acco
 | 变量                     | 必填 | 说明                             |
 | ------------------------ | ---- | -------------------------------- |
 | `NODE_ENV`               | 是   | `production`                     |
-| `WEBSITE_BFF_PORT`       | 是   | 默认 `3011`                      |
+| `WEBSITE_BFF_PORT`       | 是   | 默认值见端口登记表               |
 | `DB_POOL_MAX`            | 否   | DB pool 上限                     |
 | `JWT_ACCESS_EXPIRES_IN`  | 否   | middleware 验证 JWT 时的运行参数 |
 | `JWT_REFRESH_EXPIRES_IN` | 否   | 与共享 auth 配置保持一致         |
@@ -267,7 +267,7 @@ website-bff 只透传 `turnstileToken` 到 `auth-bff`，不做 Turnstile 服务�
 | 变量                     | 必填 | 说明                                                         |
 | ------------------------ | ---- | ------------------------------------------------------------ |
 | `NODE_ENV`               | 是   | `production`                                                 |
-| `CONSOLE_BFF_PORT`       | 是   | 默认 `3021`                                                  |
+| `CONSOLE_BFF_PORT`       | 是   | 默认值见端口登记表                                           |
 | `DB_POOL_MAX`            | 否   | DB pool 上限                                                 |
 | `JWT_ACCESS_EXPIRES_IN`  | 否   | middleware 验证 JWT 时的运行参数                             |
 | `JWT_REFRESH_EXPIRES_IN` | 否   | 与共享 auth 配置保持一致                                     |
@@ -293,7 +293,7 @@ console-bff 只透传 tenant 登录请求到 `auth-bff`。
 | 变量                     | 必填 | 说明                             |
 | ------------------------ | ---- | -------------------------------- |
 | `NODE_ENV`               | 是   | `production`                     |
-| `ADMIN_BFF_PORT`         | 是   | 默认 `3031`                      |
+| `ADMIN_BFF_PORT`         | 是   | 默认值见端口登记表               |
 | `DB_POOL_MAX`            | 否   | DB pool 上限                     |
 | `JWT_ACCESS_EXPIRES_IN`  | 否   | middleware 验证 JWT 时的运行参数 |
 | `JWT_REFRESH_EXPIRES_IN` | 否   | 与共享 auth 配置保持一致         |
@@ -322,7 +322,7 @@ admin-bff 已 RP-only（Batch 8）：运营登录与其 Turnstile 在 IdP(`auth-
 | 变量                      | 必填 | 说明                         |
 | ------------------------- | ---- | ---------------------------- |
 | `NODE_ENV`                | 是   | `production`                 |
-| `GATEWAY_PORT`            | 是   | 默认 `8000`                  |
+| `GATEWAY_PORT`            | 是   | 默认值见端口登记表           |
 | `WEBSITE_BFF_ORIGIN`      | 是   | `http://vx-website-bff:3011` |
 | `CONSOLE_BFF_ORIGIN`      | 是   | `http://vx-console-bff:3021` |
 | `ADMIN_BFF_ORIGIN`        | 是   | `http://vx-admin-bff:3031`   |

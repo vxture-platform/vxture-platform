@@ -126,7 +126,7 @@ services:
     restart: unless-stopped
     networks: [vxture-prod]
     ports:
-      - "3090:3090" # UFW 限制仅 Tailscale 子网（100.64.0.0/10）可达
+      - "${PORT}:${PORT}" # 端口见端口登记表；UFW 限制仅 Tailscale 子网（100.64.0.0/10）可达
     env_file: [secrets/platform.env, secrets/platform-mail.env, .env.auth-bff]
     depends_on:
       redis: { condition: service_healthy }
@@ -243,21 +243,13 @@ docker compose up -d
 
 ---
 
-## 端口分配总表
+## 端口
 
-| 服务           | 端口     | 节点               | 对外可达方式            |
-| -------------- | -------- | ------------------ | ----------------------- |
-| Nginx          | 80 / 443 | VXTURE_DEPLOY_HOST | 公网（Cloudflare 代理） |
-| website-portal | 3010     | VXTURE_DEPLOY_HOST | 容器网络（Nginx 代理）  |
-| console-portal | 3020     | VXTURE_DEPLOY_HOST | 容器网络（Nginx 代理）  |
-| admin-portal   | 3030     | VXTURE_DEPLOY_HOST | 容器网络（Nginx 代理）  |
-| gateway-bff    | 8000     | VXTURE_DEPLOY_HOST | 容器网络（Nginx 代理）  |
-| auth-bff       | 3090     | VXTURE_DEPLOY_HOST | 宿主机 / 受控内网入口   |
-| website-bff    | 3011     | VXTURE_DEPLOY_HOST | 容器网络内部            |
-| console-bff    | 3021     | VXTURE_DEPLOY_HOST | 容器网络内部            |
-| admin-bff      | 3031     | VXTURE_DEPLOY_HOST | 容器网络内部            |
+端口取号唯一源 = [端口登记表](https://claude.ai/code/artifact/0f44735a-c6bc-4881-a440-3446a2411a5f)；**本仓文档不再保存端口数值**。
 
-vx-worker-02/03/04/05 等业务端口由外部业务仓库维护，不在本表登记。业务服务如需调用 Atlas，应使用受控内部地址和服务凭证，不得在业务 worker 自行部署网关容器。
+此前这里有一张「端口分配总表」，值早已过时，且与它自己在文末链接的权威文档直接矛盾——2026-08-13 撤除。
+
+vx-worker-02/03/04/05 等业务端口由外部业务仓库维护，不在本仓登记。业务服务如需调用 Atlas，应使用受控内部地址和服务凭证，不得在业务 worker 自行部署网关容器。
 
 ---
 
@@ -272,4 +264,4 @@ NestJS BFF / Server 服务需实现健康检查端点（返回 200）。
 
 - `docs/50-deployment/02-infrastructure.md` — 数据目录与底层配置
 - `docs/50-deployment/01-environments.md` — env 文件职责、变量归属和重复项禁止清单
-- `docs/40-implementation/ai/port-allocation.md` — 端口分配规范
+- 端口取号唯一源 = [端口登记表](https://claude.ai/code/artifact/0f44735a-c6bc-4881-a440-3446a2411a5f)；**本仓文档不再保存端口数值**。

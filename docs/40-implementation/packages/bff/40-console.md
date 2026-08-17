@@ -6,14 +6,14 @@
 
 ## 包信息
 
-| 项       | 值                    |
-| -------- | --------------------- |
-| 包名     | `@vxture/bff-console` |
-| 路径     | `bff/console-bff/`    |
-| @layer   | `Application`         |
-| 框架     | NestJS                |
-| 端口     | 3021                  |
-| 服务对象 | `portals/console`     |
+| 项     | 值                    |
+| ------ | --------------------- |
+| 包名   | `@vxture/bff-console` |
+| 路径   | `bff/console-bff/`    |
+| @layer | `Application`         |
+| 框架   | NestJS                |
+
+| 服务对象 | `portals/console` |
 
 ---
 
@@ -406,7 +406,7 @@ AUTH_INTERNAL_TOKEN=            # internal BFF calls, if needed
 
 # From /srv/vxture/runtime/.env.console-bff
 NODE_ENV=production
-CONSOLE_BFF_PORT=3021
+CONSOLE_BFF_PORT=<见端口登记表>
 
 # 上游服务（内部地址）
 AUTH_BFF_URL=http://vx-auth-bff:3090

@@ -331,7 +331,6 @@ export interface ModelProviderRecord {
   providerType: string;
   providerName: string;
   description: string | null;
-  logoUrl: string | null;
   homepageUrl: string | null;
   consoleUrl: string | null;
   billingUrl: string | null;

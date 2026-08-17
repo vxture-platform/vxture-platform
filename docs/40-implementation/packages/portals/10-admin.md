@@ -12,7 +12,6 @@
 | 路径   | `portals/admin/`         |
 | @layer | `Presentation`           |
 | 框架   | Next.js 15（App Router） |
-| 端口   | 3030                     |
 
 ## 职责
 

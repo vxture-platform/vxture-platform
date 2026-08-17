@@ -147,7 +147,7 @@ PUSH invalidate { grant_id | resource_ref, affected: [...] }    # grant 变更/�
 | -------------------------------- | -------------------- | ---------------------------- | ---------------------------- | --------------- | ----------------------- | ------------- | --------------- | ---------------------------------------------- |
 | Atlas                            | ✔                    | ✔(被调方+调用方)             | ✔                            | —               | **✔(唯一推理计量入口)** | ✔             | ✔               | Model Platform 只读配额 gate 特权照旧          |
 | Ontos                            | ✔                    | ✔                            | ✔                            | 待产品定义      | ✔                       | ✔             | ✔               |                                                |
-| Runos                            | ✔                    | ✔(分发面)                    | ✔                            | ✔(技能资产)     | —(零计量路径)           | ✔             | ✔               |                                                |
+| Runos                            | ✔                    | ✔(分发面 + **商业域网关**)   | ✔                            | ✔(技能资产)     | **按域二分,见下注**     | ✔             | ✔               | **零计量仅限联邦域**;商业域上报归属未收口      |
 | Arda / Karda / Terra             | ✔                    | ✔(被调方,入口求值)           | ✔                            | **✔(资产面)**   | ✔                       | ✔(含 grant)   | ✔               |                                                |
 | Raven / Anlan / Forge / Xuanzhen | ✔                    | ✔(调用方)                    | ✔                            | —(经 L2 被求值) | ✔                       | ✔             | ✔               | agent-db 业务面模板                            |
 | Ruyin(client 端)                 | 待产品定义           | 待产品定义(Atlas/Runos 互通) | ✘(不进新引擎)                | ✘               | 待定                    | ✘             | ✘               |                                                |
@@ -155,6 +155,17 @@ PUSH invalidate { grant_id | resource_ref, affected: [...] }    # grant 变更/�
 | Hermes                           | ✘                    | 内部凭证                     | ✘                            | ✘               | ✘                       | ✘             | ✘               | internal                                       |
 | Varda                            | —(内嵌,复用宿主会话) | —                            | —                            | —               | 经 Atlas                | —             | —               | 非独立产品                                     |
 
+> **Runos C3 计量按域二分(2026-08-13 补齐 v1.2 漏改)**:本行原写 `—(零计量路径)`,那是 runos v1.0「纯控制面 / 无运行时 / 零计量 / 不在调用链路」的旧口径。[`product_100_matrix`](./product_100_matrix.md) v1.2(2026-08-10,runos `ADR-003`)已把 runos 改写为**商业能力面**,并在修订依据里**点名**该说法与新定义冲突;但 v1.2 的下游同步清单只列了 `product_240`,**漏了本文**——本次按已裁定内容机械补齐,不引入新判断。
+>
+> 正确读法(权威 = [`product_110`](./product_110_sharing-isolation.md) §6 两域模型):
+>
+> - **联邦域**:确为**零计量路径**——技能"使用数"仅作目录统计,不作计费;Runos 分发不转发,不在调用链路上。原表述在这个域内成立。
+> - **商业域**:Runos 网关**在调用链路上**,承担配额执行(最终一致软执行)、每调用成本、计费维度;账务对账 SoR = Runos 审计事件流。**这个域有计量路径**。
+>
+> **但上报归属尚未收口**:`product_110` §6.8 #1 登记——商业域一次调用会同时被网关(能力包口径,计费维度)与提供方 L2(供给侧 consume 口径)记录,两条记录是**同一次调用的两个商业口径**,不自动构成重复计费;**consume 的上报归属、去重键与账单呈现规则待 runos × 提供方 L2 × billing 三方裁定**,收口时点 = **商业域首个可售能力包上线前**。在此之前本行不填 ✔ 或 ✘——填任何一个都是替三方预判。同步项另见 `product_100_matrix` v1.2 下游清单 #4(状态:待定)。
+>
+> **配额计数的 SoR 不受此未决影响**:`governance.quota_counter` 在 `vx_runos_db`(`product_100_matrix` §2 列语义注明文,runos `ADR-007`),按网关节点分片、调用路径上原子递增。未决的是**上报给平台 C3 的归属与去重**,不是计数器归谁。
+>
 > **传输面分级(mesh 类别,权威 = [`product_230`](./product_230_mesh-architecture.md) §1,2026-07-12 增)**:上表产品按"域关系 × 产品层"归入两类——**类 2 · 同 apex 内网 fabric**(S2S 一律 tailnet,绝不公网;C2/C3/gauge/可见集出站指平台内网 base,webhook tailnet 投递):Atlas/Ontos/Runos/Arda/Karda/Terra/Raven/Anlan/Forge/Xuanzhen(其中 anlan.ai/xuanzhen.ai 虽异 apex 域名,只要部署在平台 tailnet 内即按类 2 走内网 S2S;cookie 互验面另论;runos 已于 2026-08-09 迁回 `runos.vxture.com`,不再是异 apex 例子);**类 1 · 跨 apex 轻集成**(异网,仅公网 HTTPS + HMAC/允许名单兜底):umbra(worker-04 境外不入 tailnet)。Ruyin(client 端)/Hermes(internal)不适用。判类以**是否在平台 tailnet**为准,域名仅是缺省信号。
 
 ## 7. 新产品接入 checklist

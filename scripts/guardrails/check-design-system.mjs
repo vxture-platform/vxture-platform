@@ -240,6 +240,9 @@ const FONT_LOADER_ALLOWLIST = [
   /^business\/[^/]+\/src\/app\/layout\.tsx$/,
   /^business\/[^/]+\/src\/app\/layout\.ts$/,
 ];
+/** 真正把 next/font 拉进来的三种写法。散文里提到这个名字不算。 */
+const NEXT_FONT_LOAD =
+  /(?:\bfrom\s*|\brequire\s*\(\s*|\bimport\s*\(\s*)["']next\/font/;
 const DIRECT_UI_ENGINE_DEPENDENCIES = [
   "@phosphor-icons/react",
   "lucide-react",
@@ -596,8 +599,12 @@ const rules = [
       "字体族只能由 DS typography token 定义；应用层只允许加载字体变量。",
     checkLine(file, line, lineNumber) {
       if (isGeneratedOrAsset(file)) return null;
+      /* 只认**真正的加载**（import / require / 动态 import），不认散文里提到这个名字。
+         原来是 `line.includes("next/font")`，于是 `fonts.css` 那篇「为什么把 next/font
+         删掉、改自托管」的文件头注释被报了四处——**一条因为你写清楚了为什么删它就报警
+         的规则，是在惩罚写文档**，而且它拦不住任何真实违例（真要加载的人不写注释）。 */
       if (
-        line.includes("next/font") &&
+        NEXT_FONT_LOAD.test(line) &&
         !FONT_LOADER_ALLOWLIST.some((pattern) => pattern.test(normalize(file)))
       ) {
         return violation(
@@ -1798,9 +1805,17 @@ function hasRawColor(line) {
   // indistinguishable from a colour to a regex. Worse, it only fires in scanned
   // directories, so the same sentence passes in bff/ and fails in packages/ —
   // a trap that springs on file location rather than on content.
+  //
+  // 上面那条只挡住了整行是注释的情形。仓库里还有另一类：issue 号写在**JSX 文案与模板
+  // 串里**（`description="…由 vxture-atlas#159 交付…"`），那不是注释，照样被当成色值。
+  //
+  // 真正的判据不是"在不在注释里"，而是 `#` 前面是什么：**CSS / Tailwind 的色值，`#`
+  // 前面永远不是单词字符**——写法只有 `: #abc`、`-[#abc]`、`"#abc"`、`=#abc` 这几种；
+  // 而 `atlas#159` 前面是个 `s`。按这一条判，散文里的 issue 引用一次都不会误伤，
+  // 真色值一个都不会漏。
   if (isCommentLine(line)) return false;
   const text = stripLineComment(line);
-  if (/#(?:[0-9a-fA-F]{3,8})\b/.test(text)) return true;
+  if (/(?:^|[^\w])#(?:[0-9a-fA-F]{3,8})\b/.test(text)) return true;
   if (/\b(?:rgb|rgba|hsl|hsla)\(\s*(?:\d|#)/i.test(text)) return true;
   return false;
 }

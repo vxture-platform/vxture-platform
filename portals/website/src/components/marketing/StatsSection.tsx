@@ -205,7 +205,7 @@ export default function StatsSection() {
             <h2 className="font-display text-3xl lg:text-4xl font-bold text-vx-brand-700 dark:text-vx-brand-200 mb-6">
               服务的客户
             </h2>
-            <p className="text-lg text-vx-gray-500 dark:text-vx-gray-300 max-w-4xl mx-auto">
+            <p className="text-lg text-vx-gray-500 dark:text-vx-gray-300 max-w-website-4xl mx-auto">
               用数字见证我们在数据智能领域的专业实力与客户信赖
             </p>
           </div>

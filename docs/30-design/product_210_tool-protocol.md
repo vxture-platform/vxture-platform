@@ -1,10 +1,26 @@
 # L0 工具协议规范:产品间直连的身份·授权·计量标准(Tool Protocol)(product_210)
 
-> 版本:**v1.2** · 日期:2026-07-07(v1.0 定稿) / 2026-07-27 补 §11 / **2026-07-28 补 §4.1a**(`endpoint` 字段,回应 `vxture-atlas` liaison platform#159) · 状态:**已定稿**(决策点 D1–D3 已于 2026-07-07 owner 拍板,见 §9;**实施逐项授权**,切分见 §8;**T1/T2 已实施(2026-07-12)**,T3 未实施;§11 治理检查单、§4.1a `endpoint` 字段均为新增,不改变已定稿的 §1–§10 核心决策)
+> 版本:**v1.3** · 日期:2026-07-07(v1.0 定稿) / 2026-07-27 补 §11 / 2026-07-28 补 §4.1a(`endpoint` 字段,回应 `vxture-atlas` liaison platform#159) / **2026-08-16 v1.3**:§4.4 新增请求元数据(`task_id` 必备)、§7 错误封套并入 `product_251` X-1、头部声明与 runos `210-consumption-contract` 的关系 · 状态:**已定稿**(决策点 D1–D3 已于 2026-07-07 owner 拍板,见 §9;**实施逐项授权**,切分见 §8;**T1/T2 已实施(2026-07-12)**,T3 未实施;§11 治理检查单、§4.1a `endpoint` 字段均为新增,不改变已定稿的 §1–§10 核心决策)
 > 文档族:产品架构族 `product_{NNN}`,本文 = **210**(细化标准位);族路由见 [`product_100_matrix.md`](./product_100_matrix.md) §0 头部
 > 定位:**产品 ↔ 产品直连调用的平台技术标准**——工具形态(MCP 风格)、S2S 身份透传(token exchange)、grant ∧ entitlement 求值时点、审计与计量归属、错误与版本演进。补齐 [`product_200_integration.md`](./product_200_integration.md) 三通道之外的"第四面":C1/C2/C3 管"产品对平台",本文管"产品对产品"。
 > 上游:[`product_110_sharing-isolation.md`](./product_110_sharing-isolation.md) §7(唯一直连通道,已固化)、product_200 §2.2/§5(登记项)、[`identity-platform-idp.md`](./identity/070-idp.md)(token 设施:RS256/JWKS/`/oidc/token`)、ADR-11/ADR-12、[`data_sharing_100_architecture.md`](./data_sharing_100_architecture.md)(可见集)。
 > 铁律承接:**平台只出规范与凭证,不出网关**——不设中心代理节点,调用永远产品↔产品直连(product_110 §7.2 已否决 ESB 模式);产品不读平台库、不持 Provider Key。
+
+> ### ⚠ 与 runos `210-consumption-contract.md` 的关系(2026-08-16 声明,`product_251` R-4)
+>
+> **有两份文件都叫「210」,而且都在讲消费面——它们不是同一份的两个副本,也不是上下游。**
+>
+> |      | 本文 `product_210`                                          | runos `210-consumption-contract`                    |
+> | ---- | ----------------------------------------------------------- | --------------------------------------------------- |
+> | 层   | **L0 平台标准**:产品↔产品直连的身份、授权求值时点、计量归属 | **runos 产品自己的消费面契约**:agent 怎么调它的能力 |
+> | 管谁 | 所有产品(含 runos 自己作为 caller / provider 时)            | 只管 runos 的消费面                                 |
+> | 谁改 | 平台仓                                                      | runos 仓                                            |
+>
+> runos 的那份 MUST 满足本文与 `product_251` 的 MUST 条款;本文不规定它的具体端点形状。
+> **重号是跨仓巧合**——两个仓各有各的 `{NNN}` 序列,谁也没占用谁的号段。但巧合不构成辩护:
+> 一个人同时读两个仓时,「210」这个词指两件事,而上下文并不总是在场。**改号需两仓同时定**,
+> 已作为待办登记(`docs/70-workplan/30-l1-consistency-audit.md` R-4);在改成之前,引用时一律
+> 带仓名前缀,不许单写「210」。
 
 ---
 
@@ -64,6 +80,8 @@ S2S access token = **RS256 JWT**(header 带 `kid`,与用户级同一 JWKS/轮换
 
 不得伪造/降级/拼装身份上下文;不得转借 token(受众单值天然限制);不得缓存超过 `exp`;OBO 场景用户 token 失效则重走用户级刷新再换,不得降级为 service 模式续命(用户已离场的语义不同)。
 
+**另须携带 `task_id`**——见 §4.4。身份回答"谁在调",`task_id` 回答"这次调用属于哪一件事";两者缺一,一个 agent 任务同时用了能力与模型时就拼不回一棵树。
+
 ### 3.5 与 `AUTH_INTERNAL_TOKEN` 的关系(过渡登记)
 
 现行 `x-vxture-internal-auth` 仅限**产品 → 平台**的 C2/C3/可见集端点(`/platform/*`,product_310 D1 过渡态);**产品 ↔ 产品一律不得使用**。本协议落地后,平台面端点迁移到同款 S2S token(`aud=vxture`),届时退役共享口令——迁移为独立实施项,随 §8 T2 登记,不在 v1 强制。
@@ -115,6 +133,38 @@ provider 在自己的服务面暴露清单端点 `GET /.well-known/vxture-tools`
 
 对齐 Runos 版本 pinning(product_110 §6.7):技能/agent 引用工具**锁定至 major**;provider 弃用工具先置 `deprecated: true` 并保留 ≥1 个发布周期;移除或破坏性变更必升 major 且旧 major 并存过渡。**路径迁移(改 `endpoint.path`,§4.1a)按同一纪律走**:旧描述符原地保留、置 `deprecated: true`,新路径作为新条目并列发布,双方并存至少一个周期——消费方靠轮询清单端点即可感知迁移,不需要额外的书信广播。
 
+### 4.4 请求元数据:`task_id` 必备,其余永远可选(2026-08-16 新增,`product_251` G-1 / X-2)
+
+每次调用 MUST 携带一条**身份链**:
+
+| 项              | 必备性                    | 说明                                                                  |
+| --------------- | ------------------------- | --------------------------------------------------------------------- |
+| `task_id`       | **MUST**                  | 调用方给,**整个任务内稳定**;被调方 MUST 原样落库到自己的调用/请求记录 |
+| 传输层身份(S2S) | **MUST**                  | 即 §3 的 token,不在元数据里重复                                       |
+| 委托凭证        | 存在最终用户上下文时 MUST | OBO 模式(§3.2)                                                        |
+| `session_id`    | SHOULD                    | 归因用                                                                |
+| `agent_version` | SHOULD                    | 归因用                                                                |
+
+形状取 Runos 已冻结的 `_meta.vxture`(理由完整,不另起一套):
+
+```jsonc
+{
+  "_meta": {
+    "vxture": {
+      "task_id": "tsk_...",
+      "session_id": "...",
+      "agent_version": "...",
+    },
+  },
+}
+```
+
+**「其余永远可选」是承诺,不是描述**:agent 运行时的升级成本很高,事后给元数据新增一个必填项,等于让所有在跑的 agent 一起失败。这条对 agent 侧的承诺一旦破坏就不可恢复,所以它写在规范里而不是留给各产品自己把握。
+
+被调方 MUST NOT 只生成自己的 `request_id` 就算完成归因——那样每个产品各有一堆互不相关的请求号,谁也拼不出"这一个任务花了多少、碰过什么、在哪一步失败"。这也是计量能汇总的前提(`product_251` X-3)。
+
+> **实测出处**:Runos 侧已有完整的任务→调用树(`task_id` 必填,另有 `trace_id`/`parent_call_id`);Atlas 侧全仓零 `task_id`,只有一堆 `requestId`。本条是把已经跑通的那一侧固化成规范,不是新发明。
+
 ## 5. 求值时点与义务分配(三方职责表)
 
 | 方                   | 职责                                                                                                                                                                                                                                         | 禁止                                            |
@@ -134,9 +184,24 @@ provider 在自己的服务面暴露清单端点 `GET /.well-known/vxture-tools`
 
 ## 7. 错误与版本演进约定
 
-- 统一错误封套:`{ "error": "<code>", "error_description": "...", "retryable": bool }`;
-- 语义区分(供调用方程序化处理):`401 invalid_token`(凭证无效/过期 → 重换 token)≠ `403 access_denied`(求值拒绝:无 grant/无 entitlement/配额 gated → 不要重试,提示用户/降级);`409 quota_exhausted` 沿用 C3 consume 语义;
-- `protocol_version` 随清单端点声明;本规范演进遵循"新增字段向后兼容、语义变更升版并双版本过渡"。
+**错误封套并入 `product_251` X-1(2026-08-16 修订)**——本节此前自定义了一套 OAuth 风味的封套,与 atlas / runos 各自的那套并列,同一件事因此有三种拼法。三方共用的形状是:
+
+```jsonc
+{
+  "code": "QUOTA_EXCEEDED", // SCREAMING_SNAKE,带模块前缀;拒绝类用统一词表
+  "message": "...", // 给人读
+  "retryable": false, // MUST 有
+  "field": "workspaceId", // 可选,校验类错误指向具体入参
+}
+```
+
+- **拒绝一律用这四个码**,不得各造各的:`NOT_ENTITLED`(没有授权)· `POLICY_DENIED`(策略拒绝)· `APPROVAL_REQUIRED`(需要人批准——**这是一条出路,不是一个错误**)· `QUOTA_EXCEEDED`(配额耗尽)。
+- **承载位置随传输,字段名不随传输变**:HTTP 走响应体;MCP 走 tool result 的 `structuredContent`(协议规定,非偏好)。
+- HTTP 状态码的语义区分不变:`401`(凭证无效/过期 → 重换 token)≠ `403`(求值拒绝 → 不要重试,提示用户/降级)≠ `409`(配额)。变的只是**体内的码**。
+
+**被替换的旧形状**:`{ error, error_description, retryable }` 与小写码 `quota_exhausted` 已作废。同一件事此前有三种拼法——`quota_exceeded`(runos)/ `QUOTA_EXCEEDED`(atlas)/ `quota_exhausted`(本文),消费方要按错误分支处理时得写三套。此前一版建议"不统一拼写、只做映射表",那是错的:映射表是让每个消费方永远多背一层翻译,而当前零用户零债务,改拼写的成本几乎为零。
+
+`protocol_version` 随清单端点声明;本规范演进遵循"新增字段向后兼容、语义变更升版并双版本过渡"。
 
 ## 8. 实施切分(逐项授权,本文仅规范不含实施)
 

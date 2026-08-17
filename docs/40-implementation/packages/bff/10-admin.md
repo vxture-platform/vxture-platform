@@ -6,14 +6,14 @@
 
 ## 包信息
 
-| 项       | 值                  |
-| -------- | ------------------- |
-| 包名     | `@vxture/bff-admin` |
-| 路径     | `bff/admin-bff/`    |
-| @layer   | `Application`       |
-| 框架     | NestJS              |
-| 端口     | 3031                |
-| 服务对象 | `portals/admin`     |
+| 项     | 值                  |
+| ------ | ------------------- |
+| 包名   | `@vxture/bff-admin` |
+| 路径   | `bff/admin-bff/`    |
+| @layer | `Application`       |
+| 框架   | NestJS              |
+
+| 服务对象 | `portals/admin` |
 
 ## 职责
 

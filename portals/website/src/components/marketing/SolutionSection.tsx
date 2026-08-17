@@ -181,7 +181,7 @@ const SolutionCard = memo(function SolutionCard({
         {/* 右侧图片内容 */}
         <div className="bg-linear-to-r from-vx-brand-50 via-vx-brand-100 to-vx-brand-50 dark:from-vx-gray-600 dark:via-vx-gray-500 dark:to-vx-gray-600">
           <div className="relative flex items-center justify-center px-38">
-            <div className="relative w-full max-w-2xl h-auto flex flex-col items-center justify-start hover:scale-105 transition-all duration-300 py-6">
+            <div className="relative w-full max-w-website-2xl h-auto flex flex-col items-center justify-start hover:scale-105 transition-all duration-300 py-6">
               <div className="relative w-full pointer-events-none select-none">
                 <div className="vx-solution-cover-frame absolute flex items-center justify-center">
                   <div className="w-full h-full overflow-hidden z-10">
@@ -193,7 +193,7 @@ const SolutionCard = memo(function SolutionCard({
                       // Solutions is an below-the-fold section (3rd full-screen
                       // snap section) and a carousel that only mounts the active
                       // slide. Lazy-load it instead of preloading; and cap the
-                      // requested variant to the real display width (max-w-2xl
+                      // requested variant to the real display width (max-w-website-2xl
                       // ≈ 672px) rather than the full viewport.
                       sizes="(max-width: 768px) 100vw, 672px"
                       loading="lazy"
@@ -269,7 +269,7 @@ const SolutionSection = memo(function SolutionSection({
           <h2 className="font-display text-3xl lg:text-4xl font-bold text-vx-brand-700 dark:text-vx-brand-200 mb-4">
             {title}
           </h2>
-          <p className="text-lg text-vx-gray-600 dark:text-vx-gray-300 max-w-4xl mx-auto">
+          <p className="text-lg text-vx-gray-600 dark:text-vx-gray-300 max-w-website-4xl mx-auto">
             {subtitle}
           </p>
         </div>

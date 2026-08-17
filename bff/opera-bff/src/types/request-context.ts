@@ -24,4 +24,11 @@ export interface OperatorPrincipal {
 export interface RequestContext {
   operator?: OperatorPrincipal;
   capabilities?: Capability[];
+  /**
+   * 当前 RP 会话的 access token（未做任何本地校验，只作为 operator-OBO 换票的
+   * subject_token）。AtlasRouter 一类需要代操作者向 provider 管理面亮明身份的
+   * 路由用它换 aud=atlas 的短时令牌——同 admin-bff `ConsoleUser.operatorAccessToken`
+   * 的用法，字段名保持一致，但两边类型各自独立定义，不共享导入。
+   */
+  operatorAccessToken?: string;
 }

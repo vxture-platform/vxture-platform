@@ -12,8 +12,8 @@
 | 包名   | `@vxture/agent-studio-varda` |
 | 路径   | `agent-studio/varda/`        |
 | @layer | `Presentation`               |
-| 端口   | 3120                         |
-| 框架   | Next.js（嵌入式微前端）      |
+
+| 框架 | Next.js（嵌入式微前端） |
 
 ## 职责
 

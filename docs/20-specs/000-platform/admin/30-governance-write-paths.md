@@ -100,7 +100,7 @@ scheduled ──start──▶ in_progress ──complete──▶ completed   (
 |                           | POST `/:id/resolve`                                      | 同上                                  | `governance.compliance.resolve`   |
 |                           | POST `/:id/dismiss`                                      | 同上                                  | `governance.compliance.dismiss`   |
 |                           | DELETE `/:id`（软删，仅终态）                            | 同上                                  | `governance.compliance.delete`    |
-| `api/maintenance-windows` | GET `/`（filters: status/from/to/分页）                  | `release:maintenance.read`\|`.manage` | —                                 |
+| `api/maintenance-windows` | GET `/`（filters: state/from/to/分页）[^mw-state]        | `release:maintenance.read`\|`.manage` | —                                 |
 |                           | GET `/:id`                                               | 同上                                  | —                                 |
 |                           | POST `/`                                                 | `release:maintenance.manage`          | `governance.maintenance.create`   |
 |                           | PUT `/:id`                                               | 同上                                  | `governance.maintenance.update`   |
@@ -109,6 +109,13 @@ scheduled ──start──▶ in_progress ──complete──▶ completed   (
 |                           | POST `/:id/cancel`                                       | 同上                                  | `governance.maintenance.cancel`   |
 
 审计 `resourceType` 分别为 `risk_record` / `compliance_event` / `maintenance_window`，状态转移类动作记 `before/after`。
+
+[^mw-state]:
+    维护窗口迁入 opera-bff 后，接口字段与过滤参数由 `status` 改为 `state`
+    （`product_251` B-3：一个产品内不得混用多个「算不算数」的字段名）。**只改接口层**，
+    `admin.maintenance_windows.status` 这个列不动。`api/risk-records` 与
+    `api/compliance-events` 仍在 admin-bff、仍用 `status`——它们不在 opera 管理面，
+    留待 admin 侧一并收敛，不在这里单独改一半。
 
 ### 4.2 实现要点
 

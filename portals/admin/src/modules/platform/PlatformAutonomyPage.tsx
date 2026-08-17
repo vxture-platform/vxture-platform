@@ -77,16 +77,9 @@ const autonomyDomains = [
       },
     ],
   },
-  {
-    title: "运行保障",
-    description:
-      "平台服务、后台任务、探针和告警统一纳入自治域，不混入租户运营。",
-    icon: "server",
-    links: [
-      { label: "服务监控", href: "/service-monitor", meta: "健康、响应、异常" },
-      { label: "任务调度", href: "/platform-jobs", meta: "调度、重试、死信" },
-    ],
-  },
+  // 「运行保障」域已整体撤走（2026-08-11）：维护窗口/服务监控/任务调度三项全部
+  // 迁往 opera，admin 侧不再托管任何运行保障入口——见
+  // portals/admin/src/config/navigation.ts 同批次注释。
   {
     title: "安全审计",
     description:

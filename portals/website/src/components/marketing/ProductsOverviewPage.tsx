@@ -114,14 +114,14 @@ export default function ProductsOverviewPage() {
       <section className="vx-hero-section">
         <AnimatedHeroBg />
         <div className="vx-hero-content">
-          <div className="max-w-3xl">
+          <div className="max-w-website-3xl">
             <p className="vx-website-hero-eyebrow mb-3 text-sm font-semibold uppercase text-vx-brand-600 dark:text-vx-info-200">
               {t("catalog.eyebrow")}
             </p>
             <h1 className="font-brand text-4xl font-bold leading-tight text-vx-gray-900 dark:text-vx-white md:text-6xl">
               {t("catalog.title")}
             </h1>
-            <p className="mt-5 max-w-2xl text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200">
+            <p className="mt-5 max-w-website-2xl text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200">
               {t("catalog.description")}
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-4">

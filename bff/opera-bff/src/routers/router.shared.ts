@@ -6,8 +6,8 @@
  * 只收了当前真正用到的几个。admin-bff 那份 governance.shared 还带着 risk-records /
  * compliance-events 才用的帮手，那些没有消费方，不搬。
  */
-import { BadRequestException, UnauthorizedException } from "@nestjs/common";
 import type { Request } from "express";
+import { invalidRequest, unauthenticated } from "../errors/api-error";
 import type { RequestContext } from "../types/request-context";
 
 /**
@@ -34,17 +34,25 @@ export const LIST_LIMIT = 500;
 export function requireOperatorId(req: Request & RequestContext): string {
   const id = req.operator?.id;
   if (!id || !UUID_RE.test(id)) {
-    throw new UnauthorizedException("Invalid platform operator principal");
+    throw unauthenticated(
+      "AUTH_INVALID_PRINCIPAL",
+      "Invalid platform operator principal",
+    );
   }
   return id;
 }
 
+/**
+ * `field` 是给控制台定位用的（X-1 的可选 `field`），`message` 是给人读的。
+ * 两个都要：只有 message 时前端只能整体弹一句话，只有 field 时人不知道错在哪。
+ */
 export function requireUuid(
   value: string | undefined,
-  message: string,
+  field: string,
+  message = `${field} must be a valid UUID`,
 ): string {
   if (!value || !UUID_RE.test(value)) {
-    throw new BadRequestException(message);
+    throw invalidRequest("VALIDATION_INVALID_UUID", message, field);
   }
   return value;
 }
@@ -55,11 +63,15 @@ export function requireText(
   maxLen: number,
 ): string {
   if (typeof value !== "string" || value.trim().length === 0) {
-    throw new BadRequestException(`${field} is required`);
+    throw invalidRequest("VALIDATION_REQUIRED", `${field} is required`, field);
   }
   const trimmed = value.trim();
   if (trimmed.length > maxLen) {
-    throw new BadRequestException(`${field} exceeds ${maxLen} characters`);
+    throw invalidRequest(
+      "VALIDATION_TOO_LONG",
+      `${field} exceeds ${maxLen} characters`,
+      field,
+    );
   }
   return trimmed;
 }
@@ -81,7 +93,11 @@ export function normalizeStringArray(
 ): string[] {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) {
-    throw new BadRequestException(`${field} must be an array of strings`);
+    throw invalidRequest(
+      "VALIDATION_INVALID_TYPE",
+      `${field} must be an array of strings`,
+      field,
+    );
   }
   const out: string[] = [];
   for (const item of value) {
@@ -90,7 +106,11 @@ export function normalizeStringArray(
       item.trim().length === 0 ||
       item.trim().length > itemMaxLen
     ) {
-      throw new BadRequestException(`${field} contains an invalid value`);
+      throw invalidRequest(
+        "VALIDATION_INVALID_VALUE",
+        `${field} contains an invalid value`,
+        field,
+      );
     }
     out.push(item.trim());
   }
@@ -99,11 +119,19 @@ export function normalizeStringArray(
 
 export function parseIso(value: unknown, field: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
-    throw new BadRequestException(`${field} is required (ISO timestamp)`);
+    throw invalidRequest(
+      "VALIDATION_REQUIRED",
+      `${field} is required (ISO timestamp)`,
+      field,
+    );
   }
   const ts = new Date(value);
   if (Number.isNaN(ts.getTime())) {
-    throw new BadRequestException(`${field} is not a valid timestamp`);
+    throw invalidRequest(
+      "VALIDATION_INVALID_TIMESTAMP",
+      `${field} is not a valid timestamp`,
+      field,
+    );
   }
   return ts.toISOString();
 }

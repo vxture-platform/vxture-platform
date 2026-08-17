@@ -4,9 +4,13 @@
  * @layer Presentation
  * @category Components - Pattern
  *
- * 结构（owner 拍板 2026-08-03，三次修订 2026-08-06）：
- * 居左【{视图切换} {计数}】—【自适应留白】—居右【{搜索} {重置} {筛选组} {操作区}】。
- * 视图切换与计数是可选段：不传 `view` / `count` 时左段为空，右段照常靠右。
+ * 结构（owner 拍板 2026-08-03，三次修订 2026-08-06；2026-08-14 左段增设切面槽）：
+ * 居左【{视图切换} {计数} {切面}】—【自适应留白】—居右【{搜索} {重置} {筛选组} {操作区}】。
+ * 三个左段槽都是可选的：都不传时左段为空，右段照常靠右。
+ *
+ * 切面（`scope`）与筛选组（`children`）刻意分列两段：筛选是"在同一份数据里少看几
+ * 行"，切面是"换一份数据"。混在右段那串下拉里，换轴的控件会读成又一个筛选条件，
+ * 而它一动整张表的列都会变。
  * 标题与描述由 `SectionHeader` 承担——板块的标题层级只有一个来源。
  *
  * **右段顺序是契约，不是建议**：`search` / `onReset` / `children`（筛选组）/ `actions`
@@ -51,6 +55,17 @@ export interface FilterBarProps extends React.HTMLAttributes<HTMLDivElement> {
   readonly cardsDisabledReason?: string;
   /** 计数：总数或"筛选后 N 条"，由调用方给成品文案或数字。 */
   readonly count?: React.ReactNode;
+  /**
+   * 左段末位：**这一屏在看哪一个切面**——通常是一件 `SegmentedControl`。
+   *
+   * 与右段的筛选组（`children`）分开，因为它们不是一回事：筛选是"在同一份数据里
+   * 少看几行"，切面是"换一份数据"。把换轴的控件混进右段的一串下拉里，它会读成
+   * 又一个筛选条件，而它一动整张表的列都会变。
+   *
+   * 放在计数之后而不是之前：先答"有多少"再答"按什么分"，与视图切换同属"这张表
+   * 长什么样"的一段，一起靠左。
+   */
+  readonly scope?: React.ReactNode;
 }
 
 const FilterBar = React.forwardRef<HTMLDivElement, FilterBarProps>(
@@ -65,6 +80,7 @@ const FilterBar = React.forwardRef<HTMLDivElement, FilterBarProps>(
       onViewChange,
       cardsDisabledReason,
       count,
+      scope,
       children,
       ...props
     },
@@ -79,7 +95,7 @@ const FilterBar = React.forwardRef<HTMLDivElement, FilterBarProps>(
         )}
         {...props}
       >
-        {/* 左段：视图切换 + 计数。shrink-0 保证窄屏下先折右段不挤左段。 */}
+        {/* 左段：视图切换 + 计数 + 切面。shrink-0 保证窄屏下先折右段不挤左段。 */}
         <div className="flex shrink-0 items-center gap-sm">
           {/* 视图切换本身是独立一件（ViewModeSwitch）：不止工具行要用，
               admin 的列表页有二十多处不经 FilterBar 直接摆一个。原先这里内联
@@ -96,6 +112,7 @@ const FilterBar = React.forwardRef<HTMLDivElement, FilterBarProps>(
               {count}
             </span>
           ) : null}
+          {scope}
         </div>
         {/* 右段：搜索 → 重置 → 筛选组 → 操作区，一起靠右；中间由 justify-between 留白。 */}
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-sm">

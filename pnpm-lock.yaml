@@ -18,6 +18,7 @@ overrides:
   file-type: ^21.3.2
   flatted: ^3.4.2
   js-yaml@4: ^4.3.1
+  nanoid@3: ^3.3.18
   lodash: ^4.18.0
   multer: ^2.2.0
   path-to-regexp@0: ^0.1.13
@@ -189,6 +190,15 @@ importers:
 
   agent-studio/varda:
     dependencies:
+      '@fontsource/funnel-display':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/geist-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/inter':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@vxture/design-system':
         specifier: workspace:*
         version: link:../../packages/design/design-system
@@ -544,6 +554,9 @@ importers:
       '@vxture/shared':
         specifier: workspace:*
         version: link:../../packages/shared/shared
+      bcryptjs:
+        specifier: ^3.0.2
+        version: 3.0.3
       class-transformer:
         specifier: ^0.5.1
         version: 0.5.1
@@ -1059,6 +1072,15 @@ importers:
 
   packages/design/design-system:
     dependencies:
+      '@fontsource/funnel-display':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/geist-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/inter':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@marsidev/react-turnstile':
         specifier: ^1.5.2
         version: 1.5.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -1300,6 +1322,15 @@ importers:
 
   portals/accounts:
     dependencies:
+      '@fontsource/funnel-display':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/geist-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/inter':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@simplewebauthn/browser':
         specifier: ^13.3.0
         version: 13.3.0
@@ -1370,6 +1401,15 @@ importers:
 
   portals/admin:
     dependencies:
+      '@fontsource/funnel-display':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/geist-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/inter':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@vxture/agent-studio-varda':
         specifier: workspace:*
         version: link:../../agent-studio/varda
@@ -1434,6 +1474,15 @@ importers:
 
   portals/console:
     dependencies:
+      '@fontsource/funnel-display':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/geist-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/inter':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@vxture/agent-studio-varda':
         specifier: workspace:*
         version: link:../../agent-studio/varda
@@ -1501,6 +1550,15 @@ importers:
 
   portals/opera:
     dependencies:
+      '@fontsource/funnel-display':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/geist-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/inter':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@vxture/core-identity-sdk':
         specifier: workspace:*
         version: link:../../packages/core/identity-sdk
@@ -1559,6 +1617,15 @@ importers:
 
   portals/website:
     dependencies:
+      '@fontsource/funnel-display':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/geist-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/inter':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@types/uuid':
         specifier: ^11.0.0
         version: 11.0.0
@@ -2734,6 +2801,15 @@ packages:
 
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
+
+  '@fontsource/funnel-display@5.3.0':
+    resolution: {integrity: sha512-3TA/c8FdK+W8Sme1A0Ukg7oEofFk1h+LJYy7A3NFqAJiL2KYDwJHwPTkgPA/GLCridQcaIcYaNJW8OjoQvWFrA==}
+
+  '@fontsource/geist-mono@5.3.0':
+    resolution: {integrity: sha512-UtJ1BBBCVpMYdIcW7nEB45UAoAw5M53ZXs2t0ciPW+IokuAAIc56M8+kW5tXbRJCTpDw4XTtU7proT6NdQAHTg==}
+
+  '@fontsource/inter@5.3.0':
+    resolution: {integrity: sha512-RofMylZmjlJEfELXeNHFWBRcSs75rGU/6bV2S2jfnvv/3rPXPGe0LgUJTklcHZ9lM4OZmAVFhcJPnACfb91A3g==}
 
   '@formatjs/fast-memoize@3.1.0':
     resolution: {integrity: sha512-b5mvSWCI+XVKiz5WhnBCY3RJ4ZwfjAidU0yVlKa3d3MSgKmH1hC3tBGEAtYyN5mqL7N0G5x0BOUYyO8CEupWgg==}
@@ -6895,8 +6971,8 @@ packages:
   mz@2.7.0:
     resolution: {integrity: sha512-z81GNO7nnYMEhrGh9LeymoE4+Yr0Wn5McHIZMK5cfQCl+NDX08sCZgUc9/6MHni9IWuFLm1Z3HTCXu2z9fN62Q==}
 
-  nanoid@3.3.17:
-    resolution: {integrity: sha512-xQLf0A3HOMlgHq0n247/LRuAOYmB7dXJ/DvAxGvsSBij45XtBSmQycu+F8ODbHwns/XyFZagyL1+J0Offw1E0g==}
+  nanoid@3.3.18:
+    resolution: {integrity: sha512-DTg4MJbGMWkfi6VZFdNt2/caMbQy4Ou+Op/hJQvGEWcnVfoA1QA+xzRKAzw9jD6+GVOOeYr/mIcuDSdug6F6+w==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
@@ -9307,6 +9383,12 @@ snapshots:
       react-dom: 19.2.4(react@19.2.4)
 
   '@floating-ui/utils@0.2.11': {}
+
+  '@fontsource/funnel-display@5.3.0': {}
+
+  '@fontsource/geist-mono@5.3.0': {}
+
+  '@fontsource/inter@5.3.0': {}
 
   '@formatjs/fast-memoize@3.1.0':
     dependencies:
@@ -13601,7 +13683,7 @@ snapshots:
       object-assign: 4.1.1
       thenify-all: 1.6.0
 
-  nanoid@3.3.17: {}
+  nanoid@3.3.18: {}
 
   napi-postinstall@0.3.4: {}
 
@@ -13912,7 +13994,7 @@ snapshots:
 
   postcss@8.5.26:
     dependencies:
-      nanoid: 3.3.17
+      nanoid: 3.3.18
       picocolors: 1.1.1
       source-map-js: 1.2.1
 

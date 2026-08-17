@@ -94,6 +94,8 @@ const num = (v: string | undefined, d: number): number => {
     PgProvisioningRepository,
     ProvisioningService,
   ],
-  exports: [ProvisioningService],
+  // PROVISIONING_PG_POOL 额外导出：platform-api 的 JobHeartbeatService（后台任务
+  // 心跳，provisioning.background_jobs）复用同一个池，不为一张心跳表另开一条连接。
+  exports: [ProvisioningService, PROVISIONING_PG_POOL],
 })
 export class ProvisioningModule {}
