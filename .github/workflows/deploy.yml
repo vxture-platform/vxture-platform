@@ -221,7 +221,13 @@ jobs:
             # on every deploy while compose and nginx moved the other way.
             # 15- carries both generations (3090 and 3061 both land on 3081) and
             # is old-value-matched, so it is a no-op on an already-migrated host.
-            APPLY=1 DEPLOY_RUNTIME_DIR="$RT" bash scripts/15-migrate-runtime-ports.sh
+            #
+            # 路径写绝对，不写 `scripts/15-...`：此处的 `cd "$DEPLOY_DIR"` 在下一行才
+            # 执行，相对路径会在 SSH 登录默认目录（$HOME）里找，必然 `No such file or
+            # directory` 然后 exit 127。上面那句 `[ok] …migrated to vx-platform-*`
+            # 来自内联 sed 块而不是脚本文件，所以现象会像「14 能跑、15 找不到」，
+            # 而两者根本不在同一种调用方式上。
+            APPLY=1 DEPLOY_RUNTIME_DIR="$RT" bash "$DEPLOY_DIR/scripts/15-migrate-runtime-ports.sh"
 
             # 拉取新镜像并执行常规升级发布链路；migration/seed 只允许首次部署或人工脚本执行。
             cd "$DEPLOY_DIR"
