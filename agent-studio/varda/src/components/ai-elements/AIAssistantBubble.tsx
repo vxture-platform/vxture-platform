@@ -2,7 +2,7 @@
 
 /**
  * AIAssistantBubble.tsx - AI 对话气泡
- * @package @vxture/design-ui
+ * @package @vxture/agent-studio-varda
  * @layer Presentation
  * @category Components - AI
  * @description
@@ -19,8 +19,8 @@
  */
 
 import type { ReactNode } from "react";
-import { cn } from "../../utils/cn";
-import { Avatar, AvatarFallback, AvatarImage } from "../base/display/Avatar";
+import { cn } from "@vxture/design-system";
+import { Avatar, AvatarFallback, AvatarImage } from "@vxture/design-system";
 
 export interface AIAssistantBubbleProps {
   readonly role: "user" | "ai";

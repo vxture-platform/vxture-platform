@@ -2,7 +2,7 @@
 
 /**
  * GenerationStream.tsx - AI 流式生成展示面
- * @package @vxture/design-ui
+ * @package @vxture/agent-studio-varda
  * @layer Presentation
  * @category Components - AI
  * @description
@@ -17,7 +17,7 @@
  * @date 2026-05-16
  */
 
-import { cn } from "../../utils/cn";
+import { cn } from "@vxture/design-system";
 
 export interface GenerationStreamProps {
   readonly text: string;

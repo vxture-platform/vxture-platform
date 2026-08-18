@@ -14,6 +14,7 @@
 @source "../../../design-ui/src";
 @source "../components";
 @import "./brand.css";
-@import "./platform.css";
+/* platform.css 已删（2026-08-18）：它与 auth.css 同批退役后只剩空壳注释，
+ * 留着的唯一理由（"使既有 import 解析成功"）随各 portal 收敛完成而消失。 */
 @import "./fullscreen.css";
 @import "./globals-base.css";

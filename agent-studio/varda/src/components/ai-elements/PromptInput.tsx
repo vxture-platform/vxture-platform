@@ -2,7 +2,7 @@
 
 /**
  * PromptInput.tsx - AI Prompt 输入框
- * @package @vxture/design-ui
+ * @package @vxture/agent-studio-varda
  * @layer Presentation
  * @category Components - AI
  * @description
@@ -18,9 +18,9 @@
  */
 
 import type { KeyboardEvent } from "react";
-import { cn } from "../../utils/cn";
-import { Button } from "../base/form/Button";
-import { Textarea } from "../base/form/Textarea";
+import { cn } from "@vxture/design-system";
+import { Button } from "@vxture/design-system";
+import { Textarea } from "@vxture/design-system";
 
 export interface PromptInputChip {
   readonly label: string;

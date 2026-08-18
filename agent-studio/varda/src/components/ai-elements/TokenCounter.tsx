@@ -2,7 +2,7 @@
 
 /**
  * TokenCounter.tsx - AI token 用量条
- * @package @vxture/design-ui
+ * @package @vxture/agent-studio-varda
  * @layer Presentation
  * @category Components - AI
  * @description
@@ -16,8 +16,8 @@
  * @date 2026-05-16
  */
 
-import { cn } from "../../utils/cn";
-import type { Tone } from "../tone";
+import { cn } from "@vxture/design-system";
+import { type Tone } from "@vxture/design-system";
 
 export interface TokenCounterProps {
   readonly used: number;

@@ -140,9 +140,8 @@ const LEGACY_COMPONENT_METRIC_TOKEN_STYLE_PATHS = new Set(
     "tokens-component-metrics-rem-ui.css",
   ].map((name) => normalize(`${DS_ROOT}/src/styles/${name}`)),
 );
-const DS_SEMANTIC_STYLE_PATHS = new Set([
-  normalize("packages/design/design-system/src/styles/platform.css"),
-]);
+// platform.css 已删（2026-08-18，与 auth.css 同类空壳退役）——集合暂空，留位。
+const DS_SEMANTIC_STYLE_PATHS = new Set([]);
 /*
  * 原有 16 条 auth-* / components-* / platform-* 例外随遗留样式层退役而清空，
  * 仅 fullscreen.css 存活。清单不留已删路径：陈旧条目会让规则永远报 stale。
@@ -162,11 +161,7 @@ const IMPORT_ONLY_STYLE_ENTRIES = new Map([
     normalize("packages/design/design-system/src/styles/globals.css"),
     "DS globals.css",
   ],
-  /* 八条 platform-* 子模块随遗留样式层退役，仅保留聚合入口 platform.css。 */
-  [
-    normalize("packages/design/design-system/src/styles/platform.css"),
-    "DS platform.css",
-  ],
+  /* platform.css 聚合入口已删（2026-08-18）：八条子模块退役后它只剩空壳。 */
   [
     normalize("packages/design/design-tokens/src/styles/tokens.css"),
     "DS tokens.css",

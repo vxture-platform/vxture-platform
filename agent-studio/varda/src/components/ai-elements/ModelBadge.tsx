@@ -2,7 +2,7 @@
 
 /**
  * ModelBadge.tsx - AI 模型身份徽章
- * @package @vxture/design-ui
+ * @package @vxture/agent-studio-varda
  * @layer Presentation
  * @category Components - AI
  * @description
@@ -16,9 +16,16 @@
  */
 
 import type { KeyboardEvent } from "react";
-import { cn } from "../../utils/cn";
-import { interactive } from "../../styles/recipes";
-import type { Tone } from "../tone";
+import { cn, type Tone } from "@vxture/design-system";
+
+// DS 配方层（styles/recipes）不出公共 API；`interactive` 的等价类名就地展开，
+// 取值来源 design-ui/src/styles/recipes.ts——DS 基调变更时此处需跟随。
+const interactive = [
+  "outline-none",
+  "transition-all duration-fast ease-standard",
+  "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+  "disabled:pointer-events-none disabled:opacity-disabled",
+].join(" ");
 
 export type ModelBadgeStatus = "active" | "idle" | "deploying" | "error";
 
