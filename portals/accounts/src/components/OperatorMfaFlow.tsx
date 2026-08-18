@@ -21,7 +21,11 @@ import {
   AuthLoginTemplate,
   AuthPrimaryButton,
 } from "./auth/AuthLogin";
-import { AccountsAuthFooter, AccountsAuthHeader } from "./AuthChrome";
+import {
+  ACCOUNTS_AUTH_VISUAL,
+  AccountsAuthFooter,
+  AccountsAuthHeader,
+} from "./AuthChrome";
 import {
   beginOperatorTotpEnroll,
   confirmOperatorTotpEnroll,
@@ -181,7 +185,7 @@ export function OperatorMfaFlow({
                 hint={
                   useRecovery
                     ? "使用注册时保存的一次性恢复码"
-                    : "打开验证器 App（如 Google Authenticator）查看"
+                    : "打开你绑定的验证器 App 查看"
                 }
                 onChange={setCode}
               />
@@ -354,10 +358,12 @@ function Shell({
     <AuthLoginTemplate
       header={<AccountsAuthHeader />}
       footer={<AccountsAuthFooter />}
-      // 办事面，单栏：二次验证是登录流程的续篇，人已经在里面了。
-      layout="single"
+      // 与登录同壳（owner 2026-08-18 判）：二次验证是登录流程的续篇，页面
+      // 骨架不该换——左侧视觉面板原样保留，只换右栏内容。此前是
+      // layout="single" 的独立居中白页，步进时整页跳变、前后不像同一流程。
       title={title}
       description={description}
+      visual={ACCOUNTS_AUTH_VISUAL}
       useLoginLayout
     >
       {/* 各步骤的内容原先直接堆在模板里，块与块之间没有间距——`AuthFlowForm`
