@@ -2,7 +2,8 @@
 
 @import "@vxture/design-system/styles/globals.css";
 @import "@vxture/design-system/styles/brands/vxture.css";
-@import "@vxture/design-system/styles/shell-template-user-panel.css";
+/* shell-template-user-panel.css 已退役（2026-08-18）：头部用户面板迁 DS
+ * ShellUserMenu 组件，.vxh-user* 誊抄样式与其 token 随之整体删除。 */
 /* 营销页取值层。缺了它，src/styles 下的 70 个 var() 引用全部作废、且 975 处
  * text-vx-* / bg-vx-* 类名不产出任何 CSS——两者都不报错。见该文件头部。 */
 /* website 取值桥（legacy token 层）：2026-08-18 由 DS assets/ 迁回 website 自有

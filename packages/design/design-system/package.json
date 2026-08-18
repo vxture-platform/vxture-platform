@@ -21,7 +21,6 @@
     "./styles/fonts.css": "./src/styles/fonts.css",
     "./styles/fullscreen.css": "./src/styles/fullscreen.css",
     "./styles/globals.css": "./src/styles/globals.css",
-    "./styles/shell-template-user-panel.css": "./assets/shell-template-user-panel.css",
     "./styles/shell-template.css": "./assets/shell-template.css",
     "./styles/workbench.css": "./src/styles/workbench.css",
     "./tokens": {

@@ -19,8 +19,6 @@
     "open": "Open user menu",
     "status": "Signed in",
     "unnamed": "Unnamed user",
-    "noEmail": "No email set",
-    "missingPhone": "No phone",
     "authStatus": {
       "verified": "Verified",
       "unverified": "Unverified"
@@ -74,7 +72,13 @@
     "signOut": "Sign out",
     "switchReady": "Signed out. Please sign in with another account.",
     "logoutSuccess": "Signed out securely",
-    "logoutFailed": "Failed to sign out"
+    "logoutFailed": "Failed to sign out",
+    "phonePlaceholder": "Phone number: ",
+    "emailPlaceholder": "Email address: ",
+    "slots": {
+      "title": "Level",
+      "locked": "More badges · locked"
+    }
   },
   "language": {
     "title": "Language",

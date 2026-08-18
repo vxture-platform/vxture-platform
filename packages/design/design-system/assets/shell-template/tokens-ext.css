@@ -3,11 +3,7 @@
  * verbatim from design tokens-ext.css.
  * ════════════════════════════════════════════════════════════════════════ */
 :root {
-  /* ── 图标尺寸（原四档 GC 后仅存 sm——md/lg/xl 全仓零引用，2026-08-18）── */
+  /* ── 图标尺寸（原四档 GC 后仅存 sm——md/lg/xl 全仓零引用，2026-08-18；
+   * 头像尺寸三档随 user-panel.css 退役一并删除）── */
   --vx-icon-size-sm: 1rem;     /* 16px · 行内 / 面板内操作图标 */
-
-  /* ── 头像尺寸（DS 有 control 32 / agent 40，补 48）── */
-  --vx-avatar-size-sm: 2rem;     /* 32px · 顶栏头像 */
-  --vx-avatar-size-md: 2.75rem;  /* 44px · 中号 */
-  --vx-avatar-size-lg: 3rem;     /* 48px · 用户面板大头像 */
 }

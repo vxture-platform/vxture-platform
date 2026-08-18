@@ -19,8 +19,6 @@
     "open": "打开用户菜单",
     "status": "已登录",
     "unnamed": "未命名用户",
-    "noEmail": "未设置邮箱",
-    "missingPhone": "未设置手机号",
     "authStatus": {
       "verified": "已认证",
       "unverified": "未认证"
@@ -74,7 +72,13 @@
     "signOut": "退出登录",
     "switchReady": "已退出，请登录其他账号",
     "logoutSuccess": "已安全退出",
-    "logoutFailed": "退出登录失败"
+    "logoutFailed": "退出登录失败",
+    "phonePlaceholder": "手机号：",
+    "emailPlaceholder": "邮箱：",
+    "slots": {
+      "title": "用户等级",
+      "locked": "其他奖章 · 待解锁"
+    }
   },
   "language": {
     "title": "语言",

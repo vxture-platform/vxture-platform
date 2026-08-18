@@ -53,7 +53,6 @@
   --vx-color-warning-500: #f59e0b;
   --vx-color-warning-700: #b45309;
 
-  --vx-color-danger-50:  #fff1f2;
   --vx-color-danger-600: #e11d48;
   --vx-color-danger-700: #be123c;
 
@@ -96,7 +95,6 @@
   --vx-color-warning:         var(--vx-color-warning-500);
   --vx-color-warning-surface: var(--vx-color-warning-50);
   --vx-color-danger:          var(--vx-color-danger-600);
-  --vx-color-danger-surface:  var(--vx-color-danger-50);
   --vx-color-info-surface:    var(--vx-color-info-50);
 
   /* ── Semantic · Shell (portal chrome) ─────────────────────────────────── */
@@ -113,7 +111,6 @@
   --vx-color-shell-hover:    color-mix(in srgb, var(--vx-color-brand-600) 8%, transparent);
 
   /* ── Gradients ────────────────────────────────────────────────────────── */
-  --vx-gradient-brand:
     linear-gradient(135deg, var(--vx-color-brand-600) 0%, var(--vx-color-brand-400) 100%);
   --vx-gradient-ai-duo:
     linear-gradient(135deg, var(--vx-color-ai-500) 0%, var(--vx-color-ai-cyan-400) 100%);
@@ -139,13 +136,10 @@
   --vx-shadow-sm:   0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 1px rgba(15, 23, 42, 0.04);
   --vx-shadow-md:   0 4px 8px rgba(15, 23, 42, 0.06), 0 2px 4px rgba(15, 23, 42, 0.04);
   --vx-shadow-lg:   0 12px 24px rgba(29, 78, 216, 0.08), 0 4px 8px rgba(15, 23, 42, 0.06);
-  --vx-shadow-xl:   0 24px 48px rgba(29, 78, 216, 0.12), 0 8px 16px rgba(15, 23, 42, 0.08);
   --vx-shadow-2xl:  0 40px 80px rgba(29, 78, 216, 0.16), 0 16px 32px rgba(168, 85, 247, 0.08);
   --vx-shadow-focus-ring:    0 0 0 3px rgba(29, 81, 255, 0.15);
 
   /* ── Foundation · Motion ──────────────────────────────────────────────── */
-
-  --vx-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* ── Foundation · Z-index ─────────────────────────────────────────────── */
   --vx-z-dropdown: 1000;
@@ -177,7 +171,6 @@
 
   /* ── Type · Scale ─────────────────────────────────────────────────────── */
   --vx-type-body-size:    1rem;
-  --vx-type-body-lg-size:    1.125rem;
 }
 
 /* ─── Dark mode ─────────────────────────────────────────────────────────── */
@@ -209,7 +202,6 @@
 
   --vx-shadow-md:  0 4px 8px rgba(0, 0, 0, 0.40), 0 2px 4px rgba(0, 0, 0, 0.30);
   --vx-shadow-lg:  0 12px 24px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(120, 156, 255, 0.06);
-  --vx-shadow-xl:  0 24px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(120, 156, 255, 0.08);
 
   --vx-color-shell-bg:      #0a0e1a;
   --vx-color-shell-surface: #12172a;
@@ -231,7 +223,6 @@
   --fg:           var(--vx-color-text-primary);
   --fg-2:         var(--vx-color-text-secondary);
   --fg-muted:     var(--vx-color-text-muted);
-  --fg-disabled:  var(--vx-color-text-disabled);
   --fg-strong:    var(--vx-color-text-strong);
 
   --shell-border:       var(--vx-color-border);

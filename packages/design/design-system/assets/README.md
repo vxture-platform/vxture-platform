@@ -19,7 +19,9 @@
   选择器（app.css 282/365，含血缘画布、环图/雷达、演示助手 `.vela-*` 等整屏
 死件）与 213 个 token 定义全仓零引用，已删；`tokens-admin-shell.css` 从 97
   个变量剩 6 个。存者皆有 console/admin/website 消费方，判据=全仓源码整词
-  可达性（根含模板串），git 史可回。
+  可达性（根含模板串），git 史可回。同日第三轮：user-panel.css 与
+  shell-template-user-panel.css 切片入口整体删除——website 头部迁 DS
+  ShellUserMenu 后四端用户面板同源，styles 导出随 6.0 批结清。
 
 ## 2026-08-18 迁出记录（产品自有 → 各归其主）
 

@@ -150,8 +150,8 @@ body { background: var(--bg-shell); color: var(--fg); font-family: var(--font-sa
 
 .vxh-org:hover, .vxh-org.is-active { background: var(--bg-muted); }
 
-/* 用户头像 + 下拉面板（.vxh-user* 族）→ shell-template/user-panel.css，
- * 现仅 website 头部消费（console/admin 已走 DS Shell 组件，全量入口不再装载）。 */
+/* 用户头像 + 下拉面板：四端（console/admin/opera/website）均已走 DS
+ * ShellUserMenu 组件，user-panel.css 誊抄层 2026-08-18 整体删除。 */
 @media (max-width: 1024px) {
   /* --vx-bp-lg */
   .vxh { grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; }

@@ -21,11 +21,17 @@ import Image from "next/image";
 import {
   ShellFullscreenToggle,
   ShellLocaleSwitcher,
+  ShellPanelSlots,
+  ShellPreferencePanel,
   ShellThemeToggle,
-  UserAvatar,
+  ShellUserMenu,
   useTheme,
 } from "@vxture/design-system";
-import type { Density, ShellThemePreference } from "@vxture/design-system";
+import type {
+  Density,
+  ShellFontSizePreference,
+  ShellThemePreference,
+} from "@vxture/design-system";
 import { HEADER_DATA } from "@/data/layout/header.data";
 import { useAuthStore } from "@/stores/auth.store";
 import { Link, usePathname, useRouter } from "@/lib/i18n/navigation";
@@ -170,7 +176,6 @@ function UserMenu({
   onSwitchUser: () => Promise<void>;
   onSignOut: () => Promise<void>;
 }) {
-  const [open, setOpen] = useState(false);
   const t = useTranslations("layout.header.userMenu");
   const router = useRouter();
   const pathname = usePathname();
@@ -226,191 +231,108 @@ function UserMenu({
   };
 
   return (
-    <div className="vxh-pop-anchor">
-      <button
-        className="vxh-user"
-        title={t("open")}
-        aria-label={t("open")}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <UserAvatar
-          className="vxh-avatar"
-          src={avatarSrc ?? null}
-          alt={displayName}
+    <ShellUserMenu
+      openLabel={t("open")}
+      user={{
+        displayName,
+        ...(avatarSrc ? { avatarSrc } : {}),
+        avatarAlt: displayName,
+        // 联系方式两行（owner 2026-08-18 判）：缺失走「名称+值」占位骨架、值
+        // 空缺（"手机号："后面空着 = 该补了）；有值只显真值本身，不带名称前缀。
+        // 同一行永远不会出现「名称: 真值」的组合。
+        uniqueLine: userPhone || t("phonePlaceholder"),
+        meta: userEmail || t("emailPlaceholder"),
+        ...(verified
+          ? {
+              statusTag: { label: t("authStatus.verified"), verified: true },
+            }
+          : {}),
+      }}
+      extras={
+        <ShellPanelSlots
+          label={t("slots.title")}
+          leadIcon="medal"
+          lead="row"
+          slots={[
+            {
+              key: "personal",
+              icon: "user",
+              label: t("badges.personal"),
+              earned: hasPersonalVerification(user),
+            },
+            {
+              key: "organization",
+              icon: "buildings",
+              label: t("badges.organization"),
+              earned: hasOrganizationVerification(user),
+            },
+            // 等级体系尚未产出真实数据，槽位保留但不点亮——与 console 同判。
+            { key: "level", icon: "star", label: t("slots.locked") },
+            { key: "slot-4", icon: "medal", label: t("slots.locked") },
+          ]}
         />
-        <span className="vxh-user-status"></span>
-      </button>
-      {open && (
-        <div className="vxh-panel vxh-user-panel">
-          <div className="vxh-user-head">
-            <UserAvatar
-              className="vxh-avatar xl"
-              src={avatarSrc ?? null}
-              alt={displayName}
-            />
-            <div className="vxh-user-meta">
-              <div className="vxh-user-name">
-                {displayName}
-                {verified && (
-                  <span className="vxh-verify">
-                    <i className="ph-fill ph-seal-check"></i>
-                    {t("authStatus.verified")}
-                  </span>
-                )}
-              </div>
-              <div className="vxh-user-contacts">
-                <span
-                  className={
-                    "vxh-user-contact" + (userPhone ? "" : " is-missing")
-                  }
-                >
-                  {userPhone || t("missingPhone")}
-                </span>
-                <span
-                  className={
-                    "vxh-user-contact" + (userEmail ? "" : " is-missing")
-                  }
-                >
-                  {userEmail || t("noEmail")}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="vxh-acct-div"></div>
-
-          <div className="vxh-acct-block">
-            <a
-              className="vxh-acct-row"
-              href={buildConsoleProfileUrl(locale)}
-              target="_blank"
-              rel="noreferrer"
-              onClick={() => setOpen(false)}
-            >
-              <i className="ph ph-user"></i>
-              <span className="vxh-acct-label">{t("profileLink")}</span>
-              <i className="ph ph-caret-right vxh-acct-go"></i>
-            </a>
-          </div>
-
-          <div className="vxh-acct-div"></div>
-
-          <div className="vxh-prefs">
-            <div className="vxh-prefs-title">{t("settings.title")}</div>
-            <div className="vxh-pref-row">
-              <i className="ph ph-globe vxh-pref-ico"></i>
-              <select
-                className="vxh-pref-select"
-                value={selectedLocale}
-                onChange={(e) => setLangPref(e.target.value as Locale)}
-              >
-                <option value="zh-CN">简体中文</option>
-                <option value="en-US">English</option>
-              </select>
-            </div>
-            <div className="vxh-pref-row">
-              <i className="ph ph-sun vxh-pref-ico"></i>
-              <div className="vxh-seg full">
-                <button
-                  className={themePref === "system" ? "on" : ""}
-                  onClick={() => setThemePref("system")}
-                >
-                  {t("settings.theme.system")}
-                </button>
-                <button
-                  className={themePref === "light" ? "on" : ""}
-                  onClick={() => setThemePref("light")}
-                >
-                  {t("settings.theme.light")}
-                </button>
-                <button
-                  className={themePref === "dark" ? "on" : ""}
-                  onClick={() => setThemePref("dark")}
-                >
-                  {t("settings.theme.dark")}
-                </button>
-              </div>
-            </div>
-            <div className="vxh-pref-row">
-              <i className="ph ph-rows vxh-pref-ico"></i>
-              <div className="vxh-seg full">
-                <button
-                  className={selectedDensity === "compact" ? "on" : ""}
-                  onClick={() => setDensityPref("compact")}
-                >
-                  {t("settings.density.compact")}
-                </button>
-                <button
-                  className={selectedDensity === "default" ? "on" : ""}
-                  onClick={() => setDensityPref("default")}
-                >
-                  {t("settings.density.default")}
-                </button>
-                <button
-                  className={selectedDensity === "comfortable" ? "on" : ""}
-                  onClick={() => setDensityPref("comfortable")}
-                >
-                  {t("settings.density.comfortable")}
-                </button>
-              </div>
-            </div>
-            <div className="vxh-pref-row">
-              <i className="ph ph-text-aa vxh-pref-ico"></i>
-              <div className="vxh-seg full">
-                <button
-                  className={fontSize === "small" ? "on" : ""}
-                  onClick={() => setFontSize("small")}
-                >
-                  {t("settings.fontSize.small")}
-                </button>
-                <button
-                  className={fontSize === "default" ? "on" : ""}
-                  onClick={() => setFontSize("default")}
-                >
-                  {t("settings.fontSize.default")}
-                </button>
-                <button
-                  className={fontSize === "large" ? "on" : ""}
-                  onClick={() => setFontSize("large")}
-                >
-                  {t("settings.fontSize.large")}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="vxh-acct-div"></div>
-
-          <div className="vxh-user-actions">
-            <button
-              className="vxh-menu-item"
-              onClick={() => {
-                setOpen(false);
-                void onSwitchUser();
-              }}
-              disabled={disabled}
-            >
-              <i className="ph ph-user-switch"></i>
-              {t("switchUser")}
-            </button>
-            <button
-              className="vxh-menu-item danger"
-              onClick={() => {
-                setOpen(false);
-                void onSignOut();
-              }}
-              disabled={disabled}
-            >
-              <i className="ph ph-sign-out"></i>
-              {t("signOut")}
-            </button>
-          </div>
-        </div>
-      )}
-      {open && (
-        <div className="vxh-backdrop" onClick={() => setOpen(false)}></div>
-      )}
-    </div>
+      }
+      links={[
+        {
+          key: "profile",
+          label: t("profileLink"),
+          href: buildConsoleProfileUrl(locale),
+          icon: "user",
+          newTab: true,
+        },
+      ]}
+      settings={
+        <ShellPreferencePanel
+          locale={selectedLocale}
+          localeOptions={[
+            { locale: "zh-CN", nativeName: "简体中文" },
+            { locale: "en-US", nativeName: "English" },
+          ]}
+          theme={themePref as ShellThemePreference}
+          density={selectedDensity}
+          fontSize={fontSize as ShellFontSizePreference}
+          labels={{
+            title: t("settings.title"),
+            themeOptions: {
+              system: t("settings.theme.system"),
+              light: t("settings.theme.light"),
+              dark: t("settings.theme.dark"),
+            },
+            densityOptions: {
+              compact: t("settings.density.compact"),
+              default: t("settings.density.default"),
+              comfortable: t("settings.density.comfortable"),
+            },
+            fontSizeOptions: {
+              small: t("settings.fontSize.small"),
+              default: t("settings.fontSize.default"),
+              large: t("settings.fontSize.large"),
+            },
+          }}
+          onLocaleChange={setLangPref}
+          onThemeChange={setThemePref}
+          onDensityChange={setDensityPref}
+          onFontSizeChange={setFontSize}
+        />
+      }
+      actions={[
+        {
+          key: "switch-user",
+          label: t("switchUser"),
+          icon: "user-switch",
+          disabled,
+          onClick: onSwitchUser,
+        },
+        {
+          key: "sign-out",
+          label: t("signOut"),
+          icon: "sign-out",
+          danger: true,
+          disabled,
+          onClick: onSignOut,
+        },
+      ]}
+    />
   );
 }
 
