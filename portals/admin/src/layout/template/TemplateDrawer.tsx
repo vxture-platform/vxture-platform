@@ -4,6 +4,7 @@
  * 通知/设置内容为占位（demo）数据，待接真实消息中心 / 系统设置。 */
 
 import { useEffect } from "react";
+import { toneSurfaceClasses, type Tone } from "@vxture/design-system";
 
 export type DrawerType = "notifications" | "settings";
 
@@ -30,10 +31,12 @@ export interface TemplateDrawerProps {
   };
 }
 
-const LEVEL_COLOR: Record<DrawerNotif["level"], string> = {
-  danger: "var(--vx-color-danger-600)",
-  warning: "var(--vx-color-warning-500)",
-  info: "var(--vx-color-info-600)",
+/* 与 console 同构（批 C 对齐）：图标色 + 同色淡底走 DS tone helper，
+ * 不再手写 color-mix 内联样式。 */
+const LEVEL_TONE: Record<DrawerNotif["level"], Tone> = {
+  danger: "danger",
+  warning: "warning",
+  info: "info",
 };
 
 export function TemplateDrawer({
@@ -109,14 +112,7 @@ export function TemplateDrawer({
                   }}
                 >
                   <span
-                    className="dn-ico"
-                    style={{
-                      color: LEVEL_COLOR[n.level],
-                      background:
-                        "color-mix(in srgb, " +
-                        LEVEL_COLOR[n.level] +
-                        " 14%, transparent)",
-                    }}
+                    className={`dn-ico ${toneSurfaceClasses[LEVEL_TONE[n.level]]}`}
                   >
                     <i className={"ph-fill " + n.icon}></i>
                   </span>

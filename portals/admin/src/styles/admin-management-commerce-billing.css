@@ -3,7 +3,7 @@
 .vx-billing-card__plan {
   margin: 0;
   overflow: hidden;
-  color: var(--vx-color-gray-700);
+  color: var(--vx-color-neutral-700);
   font-size: var(--vx-admin-caption-size);
   font-weight: 400;
   line-height: 1.55;
@@ -14,7 +14,7 @@
 .vx-invoice-card__bill {
   margin: 0;
   overflow: hidden;
-  color: var(--vx-color-gray-700);
+  color: var(--vx-color-neutral-700);
   font-size: var(--vx-admin-caption-size);
   font-weight: 400;
   line-height: 1.55;

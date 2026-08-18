@@ -4,6 +4,6 @@
 }
 
 .vx-product-capability-pill--tag {
-  background: color-mix(in srgb, var(--vx-color-gray-500) 8%, transparent);
-  color: var(--vx-color-gray-600);
+  background: color-mix(in srgb, var(--vx-color-neutral-500) 8%, transparent);
+  color: var(--vx-color-neutral-600);
 }

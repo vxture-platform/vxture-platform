@@ -59,10 +59,10 @@
 }
 
 .console-loading__spinner {
-  width: var(--vx-space-2xl);
-  height: var(--vx-space-2xl);
-  border: var(--vx-space-xs) solid var(--vx-console-border);
-  border-top-color: var(--vx-color-primary);
+  width: var(--space-xl);
+  height: var(--space-xl);
+  border: var(--border-width-thick) solid var(--vx-console-border);
+  border-top-color: var(--primary);
   border-radius: var(--vx-radius-full);
   animation: vx-spin var(--vx-motion-spinner) infinite;
 }
@@ -78,7 +78,7 @@
  * .vxh-user:hover 头像光晕未迁——其目标 DOM 在 console/admin 已不存在
  * （用户面板走 DS Shell 组件），纯死码，随文件一并删除。 */
 .vxh-skeleton-block {
-  background: color-mix(in srgb, var(--vx-color-shell-brand) 10%, var(--vx-color-shell-surface));
+  background: color-mix(in srgb, var(--primary) 10%, var(--card));
   animation: vxh-shimmer 1.5s ease-in-out infinite;
 }
 

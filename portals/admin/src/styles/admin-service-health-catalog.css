@@ -46,7 +46,7 @@
 }
 
 .vx-service-health-card__header p {
-  color: var(--vx-color-text-muted);
+  color: var(--muted-foreground);
   font-size: var(--vx-admin-caption-size);
   font-weight: 780;
 }
@@ -83,7 +83,7 @@
   padding: 0 var(--vx-admin-service-health-pill-padding-x);
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-white) 72%, transparent);
-  color: var(--vx-color-gray-600);
+  color: var(--vx-color-neutral-600);
   font-size: var(--vx-admin-caption-size);
   font-weight: 780;
 }
@@ -117,15 +117,15 @@
 }
 
 .vx-service-health-check--ok {
-  border-color: color-mix(in srgb, var(--vx-color-success) 18%, transparent);
-  background: color-mix(in srgb, var(--vx-color-success) 8%, transparent);
-  color: var(--vx-color-success-700);
+  border-color: color-mix(in srgb, var(--success) 18%, transparent);
+  background: color-mix(in srgb, var(--success) 8%, transparent);
+  color: var(--success-text);
 }
 
 .vx-service-health-check--bad {
-  border-color: color-mix(in srgb, var(--vx-color-danger) 20%, transparent);
-  background: color-mix(in srgb, var(--vx-color-danger) 8%, transparent);
-  color: var(--vx-color-danger-700);
+  border-color: color-mix(in srgb, var(--destructive) 20%, transparent);
+  background: color-mix(in srgb, var(--destructive) 8%, transparent);
+  color: var(--destructive-text);
 }
 
 .vx-service-health-card__footer {
@@ -145,7 +145,7 @@
 }
 
 .vx-service-health-card__footer span {
-  color: var(--vx-color-text-muted);
+  color: var(--muted-foreground);
   font-weight: 700;
 }
 
@@ -177,14 +177,14 @@
 }
 
 .vx-service-health-list th {
-  color: var(--vx-color-text-muted);
+  color: var(--muted-foreground);
   font-size: var(--vx-admin-caption-size);
   font-weight: 820;
   text-align: center;
 }
 
 .vx-service-health-list td {
-  color: var(--vx-color-text-secondary);
+  color: var(--vx-color-neutral-700);
   font-size: var(--vx-admin-meta-size);
   font-weight: 720;
   text-align: left;
@@ -226,7 +226,7 @@
 }
 
 .vx-service-health-list__service span {
-  color: var(--vx-color-text-muted);
+  color: var(--muted-foreground);
   font-size: var(--vx-admin-caption-size);
   font-weight: 700;
 }

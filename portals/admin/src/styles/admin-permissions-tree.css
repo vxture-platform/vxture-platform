@@ -1,8 +1,8 @@
 .vx-admin-permission-tree {
   min-width: 0;
   overflow-x: auto;
-  border-top: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-gray-500) 14%, transparent);
-  border-bottom: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-gray-500) 14%, transparent);
+  border-top: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-neutral-500) 14%, transparent);
+  border-bottom: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-neutral-500) 14%, transparent);
   background: transparent;
 }
 
@@ -28,8 +28,8 @@
   align-items: center;
   gap: var(--space-xs);
   padding: var(--space-sm) var(--space-md);
-  border-bottom: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-gray-500) 14%, transparent);
-  color: var(--vx-color-gray-500);
+  border-bottom: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-neutral-500) 14%, transparent);
+  color: var(--vx-color-neutral-500);
   font-size: var(--vx-admin-caption-size);
   font-weight: 800;
 }
@@ -50,7 +50,7 @@
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-md) var(--space-md) var(--space-sm);
-  border-bottom: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-gray-500) 11%, transparent);
+  border-bottom: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-neutral-500) 11%, transparent);
   background: transparent;
 }
 
@@ -62,7 +62,7 @@
   justify-content: center;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--vx-color-gray-600);
+  color: var(--vx-color-neutral-600);
 }
 
 .vx-admin-permission-tree__workspace > header div {
@@ -88,7 +88,7 @@
 
 .vx-admin-permission-tree__workspace > header p {
   margin: 0;
-  color: var(--vx-color-gray-500);
+  color: var(--vx-color-neutral-500);
   font-size: var(--vx-admin-caption-size);
   line-height: 1.35;
 }

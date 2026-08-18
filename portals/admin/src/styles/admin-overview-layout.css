@@ -6,10 +6,10 @@
   max-width: none;
   --admin-overview-card-radius: var(--vx-admin-card-radius);
   --admin-overview-blue: var(--vx-color-auth-accent);
-  --admin-overview-green: var(--vx-color-success-600);
+  --admin-overview-green: var(--success);
   --admin-overview-cyan: var(--vx-color-cyan-600);
   --admin-overview-amber: var(--vx-color-warning-600);
-  --admin-overview-rose: var(--vx-color-danger);
+  --admin-overview-rose: var(--destructive);
   --admin-overview-indigo: var(--vx-color-indigo-600);
 }
 

@@ -8,11 +8,10 @@
  */
 
 :root {
-  --vx-admin-directory-row-min-width: min(100%, 74rem);
-  --vx-admin-shell-header-height: 4rem;
+  /* directory-row-min-width / header-height 已迁 admin 桥（批 C，admin 自有
+   * 取值归 admin）。本文件只剩 app.css 自用的字号阶。 */
 
   /* shell 字号阶（app.css 消费） */
-  --vx-admin-shell-body-size: 0.875rem;
   --vx-admin-shell-item-size: 0.8125rem;
   --vx-admin-shell-caption-size: 0.75rem;
 }

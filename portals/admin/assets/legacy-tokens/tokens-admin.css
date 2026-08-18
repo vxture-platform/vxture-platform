@@ -614,33 +614,41 @@
   --vx-color-cyan-600: #0891b2;
   --vx-color-cyan-700: #0e7490;
   --vx-color-indigo-600: #4f46e5;
-  --vx-color-danger-strong: var(--vx-color-danger-700);
+  --vx-color-danger-strong: var(--destructive-text);
   --vx-color-neutral-surface: color-mix(
     in srgb,
-    var(--vx-color-gray-500) 10%,
+    var(--vx-color-neutral-500) 10%,
     transparent
   );
   --vx-color-shell-panel-strong: color-mix(
     in srgb,
-    var(--vx-color-gray-900) 66%,
+    var(--vx-color-neutral-900) 66%,
     transparent
   );
-  --vx-console-muted: var(--vx-color-shell-muted);
-  --vx-console-brand: var(--vx-color-shell-brand);
-  --vx-console-brand-soft: var(--vx-color-primary-soft);
-  --vx-console-text: var(--vx-color-shell-text);
-  --vx-console-border: var(--vx-color-shell-border);
-  --vx-console-surface: var(--vx-color-shell-surface);
+  --vx-console-muted: #6b7a90;
+  --vx-console-brand: var(--primary);
+  --vx-console-brand-soft: var(--vx-color-brand-100);
+  --vx-console-text: #162033;
+  --vx-console-border: var(--border);
+  --vx-console-surface: var(--card);
   --vx-console-shadow-soft: 0 10px 26px
     color-mix(in srgb, var(--vx-color-black) 28%, transparent);
 
   /* 改指主题感知语义色（原值是亮/暗两份，或转发目标已死） */
-  --vx-console-brand-strong: var(--vx-color-shell-brand);
-  --vx-shell-ink: var(--vx-color-shell-ink);
-  --vx-shell-muted: var(--vx-color-shell-muted);
-  --vx-shell-surface: var(--vx-color-shell-surface);
-  --vx-shell-surface-soft: var(--vx-color-surface-soft);
-  --vx-shell-line-soft: var(--vx-color-shell-divider);
-  --vx-shell-hover: var(--vx-color-shell-hover);
-  --vx-shell-subtle: var(--vx-color-surface-muted);
+  --vx-console-brand-strong: var(--primary);
+  --vx-shell-ink: var(--vx-color-brand-950);
+  --vx-shell-muted: #6b7a90;
+  --vx-shell-surface: var(--card);
+  --vx-shell-surface-soft: #fbfcfe;
+  /* 批 C 修复:原引 --vx-color-shell-divider——该名全仓从未定义(.vxh 用它时
+   * 带 fallback),var() 失效导致治理卡边框回落 currentColor(深色粗线)。
+   * 按原 fallback 的意图值落地:品牌墨 12% 的柔分隔线。 */
+  --vx-shell-line-soft: color-mix(in srgb, var(--vx-color-brand-950) 12%, transparent);
+  --vx-shell-hover: var(--accent);
+  --vx-shell-subtle: var(--surface-3);
+
+  /* 批 C 迁入(2026-08-18):这两个 admin 语义尺寸原定义在 DS
+   * shell-template/tokens-admin-shell.css——admin 自有取值归 admin 桥。 */
+  --vx-admin-directory-row-min-width: min(100%, 74rem);
+  --vx-admin-shell-header-height: 4rem;
 }

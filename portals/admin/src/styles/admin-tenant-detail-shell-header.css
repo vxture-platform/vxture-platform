@@ -107,7 +107,7 @@
 
 .vx-tenant-title-copy:hover,
 .vx-tenant-title-copy:focus-visible {
-  background: color-mix(in srgb, var(--vx-color-gray-500) 10%, transparent);
-  color: var(--vx-color-text-secondary);
+  background: color-mix(in srgb, var(--vx-color-neutral-500) 10%, transparent);
+  color: var(--vx-color-neutral-700);
   outline: none;
 }

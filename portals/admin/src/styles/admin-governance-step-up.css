@@ -7,7 +7,7 @@
 
 .vx-step-up-error {
   margin: 0;
-  color: var(--vx-color-danger-600);
+  color: var(--destructive);
   font-size: var(--vx-admin-caption-size);
   font-weight: 600;
 }

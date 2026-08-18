@@ -3,11 +3,11 @@
 .vx-admin-role-permission-dialog {
   position: fixed;
   inset: 0;
-  z-index: var(--vx-z-modal);
+  z-index: var(--z-index-modal);
   display: grid;
   place-items: center;
   padding: var(--space-lg);
-  background: color-mix(in srgb, var(--vx-color-gray-900) 22%, transparent);
+  background: color-mix(in srgb, var(--vx-color-neutral-900) 22%, transparent);
   backdrop-filter: blur(var(--vx-admin-roles-effect-8p));
 }
 
@@ -38,7 +38,7 @@
   place-items: center;
   border-radius: 50%;
   background: var(--vx-color-neutral-surface);
-  color: var(--vx-color-gray-400);
+  color: var(--vx-color-neutral-400);
 }
 
 .vx-admin-role-permission-dialog__panel h2,
@@ -79,13 +79,13 @@
   border: 0;
   border-radius: var(--vx-radius-lg);
   background: transparent;
-  color: var(--vx-color-gray-500);
+  color: var(--vx-color-neutral-500);
   cursor: pointer;
 }
 
 .vx-admin-role-permission-dialog__close:hover {
   background: var(--vx-color-neutral-surface);
-  color: var(--vx-color-gray-700);
+  color: var(--vx-color-neutral-700);
 }
 
 .vx-admin-role-permission-dialog__body {
@@ -120,7 +120,7 @@
   padding: var(--space-sm);
   border: var(--vx-admin-roles-line-width-1p) solid color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
   border-radius: var(--vx-radius-lg);
-  background: color-mix(in srgb, var(--vx-color-gray-50) 75%, transparent);
+  background: color-mix(in srgb, var(--vx-color-neutral-50) 75%, transparent);
 }
 
 .vx-admin-role-permission-dialog__list strong,

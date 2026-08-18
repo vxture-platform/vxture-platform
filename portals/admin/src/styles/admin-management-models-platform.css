@@ -25,5 +25,5 @@
 }
 
 .vx-model-platform-card--muted {
-  --tenant-row-tone: var(--vx-color-gray-400);
+  --tenant-row-tone: var(--vx-color-neutral-400);
 }

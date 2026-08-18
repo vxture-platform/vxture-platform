@@ -34,6 +34,15 @@ export const KEEP_COLOR_SINGLES = ["black", "white"];
  * 每条都要能回答"为什么 Tailwind 的挡位不够用"，答不上来的不算扩展，算私货。
  */
 export const EXTENSIONS = {
+  radius: [
+    [
+      "full",
+      "9999px",
+      "胶囊/圆点档。Tailwind 的 rounded-full 是硬编码 calc(infinity*1px)、不进 theme，" +
+        "CSS 文件层（取值桥/遗留层）没有可引用的 var 面；2026-08-18 批 C 按原则 3 自 " +
+        "shell-template 收编（同名同值零漂移，admin/console 5 个既有消费位）",
+    ],
+  ],
   font: [
     [
       "brand",

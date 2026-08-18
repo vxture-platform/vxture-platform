@@ -23,39 +23,26 @@
 
   /* ── Primitives · Neutral ─────────────────────────────────────────────── */
   --vx-color-gray-50:  #f9fafb;
-  --vx-color-gray-300: #d1d5db;
   --vx-color-gray-400: #9ca3af;
   --vx-color-gray-500: #6b7280;
-  --vx-color-gray-600: #4b5563;
   --vx-color-gray-700: #374151;
   --vx-color-gray-900: #111827;
 
   /* ── Primitives · Semantic status ─────────────────────────────────────── */
   --vx-color-success-50:  #ecfdf5;
-  --vx-color-success-500: #10b981;
-  --vx-color-success-600: #059669;
-  --vx-color-success-700: #047857;
 
   --vx-color-warning-50:  #fffbeb;
-  --vx-color-warning-500: #f59e0b;
-  --vx-color-warning-700: #b45309;
-
-  --vx-color-danger-600: #e11d48;
-  --vx-color-danger-700: #be123c;
 
   --vx-color-info-50:  #f0f9ff;
-  --vx-color-info-600: #0284c7;
 
   /* ── Semantic · Surfaces ──────────────────────────────────────────────── */
   --vx-color-background:     var(--vx-color-brand-50);
   --vx-color-surface:        var(--vx-color-white);
   --vx-color-surface-muted:  var(--vx-color-gray-50);
-  --vx-color-surface-soft:   #fbfcfe;
 
   /* ── Semantic · Borders / rings / overlay ─────────────────────────────── */
   --vx-color-border:         rgba(30, 81, 255, 0.10);
   --vx-color-border-muted:   rgba(15, 23, 42, 0.07);
-  --vx-color-border-strong:  rgba(30, 81, 255, 0.32);
   --vx-color-overlay:        rgba(15, 23, 42, 0.46);
 
   /* ── Semantic · Primary ───────────────────────────────────────────────── */
@@ -77,11 +64,8 @@
   --vx-color-text-strong:    var(--vx-color-brand-950);
 
   /* ── Semantic · Status ────────────────────────────────────────────────── */
-  --vx-color-success:         var(--vx-color-success-600);
   --vx-color-success-surface: var(--vx-color-success-50);
-  --vx-color-warning:         var(--vx-color-warning-500);
   --vx-color-warning-surface: var(--vx-color-warning-50);
-  --vx-color-danger:          var(--vx-color-danger-600);
   --vx-color-info-surface:    var(--vx-color-info-50);
 
   /* ── Semantic · Shell (portal chrome) ─────────────────────────────────── */
@@ -89,13 +73,6 @@
    * 差 1 个 r 通道、2 个 b 通道——本就是同一个意图的两次手写。改指 brand-20，
    * 两个控制台从此同一取值：它们是同一套工作界面语言，底色不该各是各的。 */
   --vx-color-shell-bg:       var(--vx-color-brand-20);
-  --vx-color-shell-surface:  var(--vx-color-white);
-  --vx-color-shell-border:   rgba(15, 23, 42, 0.07);
-  --vx-color-shell-text:     #162033;
-  --vx-color-shell-muted:    #6b7a90;
-  --vx-color-shell-brand:    var(--vx-color-brand-600);
-  --vx-color-shell-ink:      var(--vx-color-brand-950);
-  --vx-color-shell-hover:    color-mix(in srgb, var(--vx-color-brand-600) 8%, transparent);
 
   /* ── Gradients（--vx-gradient-brand 随 user-panel 退役删除；此处曾留断肢
    * 值行导致 console/admin 构建 CSS 语法错——2026-08-18 修） */
@@ -108,22 +85,18 @@
   --vx-space-md:  12px;
   --vx-space-lg:  16px;
   --vx-space-xl:  24px;
-  --vx-space-2xl: 32px;
 
   /* ── Foundation · Radius ──────────────────────────────────────────────── */
-  --vx-radius-full: 9999px;
 
   /* ── Foundation · Shadow ──────────────────────────────────────────────── */
   --vx-shadow-sm:   0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 1px rgba(15, 23, 42, 0.04);
   --vx-shadow-md:   0 4px 8px rgba(15, 23, 42, 0.06), 0 2px 4px rgba(15, 23, 42, 0.04);
   --vx-shadow-lg:   0 12px 24px rgba(29, 78, 216, 0.08), 0 4px 8px rgba(15, 23, 42, 0.06);
   --vx-shadow-2xl:  0 40px 80px rgba(29, 78, 216, 0.16), 0 16px 32px rgba(168, 85, 247, 0.08);
-  --vx-shadow-focus-ring:    0 0 0 3px rgba(29, 81, 255, 0.15);
 
   /* ── Foundation · Motion ──────────────────────────────────────────────── */
 
   /* ── Foundation · Z-index ─────────────────────────────────────────────── */
-  --vx-z-dropdown: 1000;
   --vx-z-modal:    2000;
   --vx-z-toast:    3000;
   --vx-z-command:  4000;
@@ -131,7 +104,6 @@
   /* ── Foundation · Layout · Shell dimensions ───────────────────────────── */
   /* 与 T2 侧栏刻度对齐（--spacing-sidebar-*：展开 256 / 收起 64 / 最小 48）。
      原 252px 是 off-scale 值；本文件不 import T2，故写同值字面量。 */
-  --vx-shell-sidebar-width:           256px;
   --vx-shell-assistant-width:         420px;
 
   /* ── Foundation · Layout · Content regions ────────────────────────────── */
@@ -158,11 +130,9 @@
   --vx-color-background:     #0a0e1a;
   --vx-color-surface:         #12172a;
   --vx-color-surface-muted:   #1a2038;
-  --vx-color-surface-soft:    #161b2e;
 
   --vx-color-border:        rgba(148, 163, 200, 0.10);
   --vx-color-border-muted:  rgba(148, 163, 200, 0.06);
-  --vx-color-border-strong: rgba(120, 156, 255, 0.32);
   --vx-color-overlay:       rgba(2, 6, 23, 0.72);
 
   --vx-color-text-primary:   #e6ebff;
@@ -182,12 +152,6 @@
   --vx-shadow-lg:  0 12px 24px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(120, 156, 255, 0.06);
 
   --vx-color-shell-bg:      #0a0e1a;
-  --vx-color-shell-surface: #12172a;
-  --vx-color-shell-border:  rgba(148, 163, 200, 0.08);
-  --vx-color-shell-text:    #e6ebff;
-  --vx-color-shell-muted:   #aab4d4;
-  --vx-color-shell-brand:   var(--vx-color-brand-400);
-  --vx-color-shell-ink:     #ffffff;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -204,7 +168,6 @@
   --fg-strong:    var(--vx-color-text-strong);
 
   --border-muted: var(--vx-color-border-muted);
-  --border-strong: var(--vx-color-border-strong);
 
   /* 这里只放 DS **没有**的名字。`--primary` / `--primary-hover` / `--border` /
    * `--ai` / `--success` / `--warning` / `--info` 曾经也在这一段，那是照上面

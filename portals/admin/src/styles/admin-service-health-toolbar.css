@@ -40,13 +40,13 @@
   border: var(--vx-admin-service-health-border-width) solid var(--vx-color-auth-border);
   border-radius: var(--vx-radius-lg);
   background: transparent;
-  color: var(--vx-color-text-secondary);
+  color: var(--vx-color-neutral-700);
   font-size: var(--vx-admin-meta-size);
   font-weight: 400;
 }
 
 .vx-service-health-search::placeholder {
-  color: var(--vx-color-gray-400);
+  color: var(--vx-color-neutral-400);
   font-weight: 400;
 }
 
@@ -75,7 +75,7 @@
 }
 
 .vx-service-health-filters select {
-  color: var(--vx-color-text-secondary);
+  color: var(--vx-color-neutral-700);
   font-size: var(--vx-admin-meta-size);
   font-weight: 400;
 }

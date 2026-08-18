@@ -30,7 +30,7 @@
   position: absolute;
   right: 0;
   top: calc(100% + var(--vx-admin-directory-actions-menu-offset));
-  z-index: var(--vx-z-dropdown);
+  z-index: var(--z-index-dropdown);
   width: var(--vx-admin-directory-actions-menu-width);
   display: grid;
   gap: var(--vx-admin-directory-actions-menu-gap);
@@ -44,7 +44,7 @@
 .vx-tenant-actions__menu--portal {
   position: fixed;
   right: auto;
-  z-index: var(--vx-z-modal);
+  z-index: var(--z-index-modal);
 }
 
 .vx-tenant-actions__menu::before {
@@ -65,7 +65,7 @@
   border: 0;
   border-radius: var(--vx-radius-lg);
   background: transparent;
-  color: var(--vx-color-text-secondary);
+  color: var(--vx-color-neutral-700);
   cursor: pointer;
   font-size: var(--vx-admin-meta-size);
   font-weight: 400;

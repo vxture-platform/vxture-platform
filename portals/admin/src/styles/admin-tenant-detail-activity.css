@@ -142,14 +142,14 @@
 }
 
 .vx-tenant-risk-panel p {
-  color: var(--vx-color-text-secondary);
+  color: var(--vx-color-neutral-700);
   font-size: var(--vx-admin-meta-size);
   font-weight: 700;
   line-height: 1.6;
 }
 
 .vx-tenant-risk-text--normal {
-  color: var(--vx-color-gray-500);
+  color: var(--vx-color-neutral-500);
 }
 
 .vx-tenant-risk-text--follow_up {

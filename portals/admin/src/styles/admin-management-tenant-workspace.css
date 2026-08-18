@@ -118,7 +118,7 @@
 }
 
 .vx-tenant-list-card--normal {
-  --tenant-list-tone: var(--vx-color-gray-400);
+  --tenant-list-tone: var(--vx-color-neutral-400);
 }
 
 .vx-tenant-list-card--follow_up {

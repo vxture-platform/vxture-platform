@@ -86,7 +86,7 @@
   display: grid;
   gap: var(--space-sm);
   padding: var(--space-md);
-  border: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-gray-500) 14%, transparent);
+  border: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-neutral-500) 14%, transparent);
   border-top: var(--vx-admin-permission-line-width-2p) solid var(--tenant-row-tone, var(--vx-color-auth-accent));
   border-radius: var(--vx-admin-permission-card-radius);
   background: transparent;
@@ -139,7 +139,7 @@
 }
 
 .vx-admin-permission-card code {
-  color: var(--vx-color-gray-500);
+  color: var(--vx-color-neutral-500);
   font-family: var(--font-mono);
   font-size: var(--vx-admin-caption-size);
   font-weight: 680;
@@ -147,7 +147,7 @@
 
 .vx-admin-permission-card p {
   margin: 0;
-  color: var(--vx-color-text-muted);
+  color: var(--muted-foreground);
   font-size: var(--vx-admin-caption-size);
   line-height: 1.45;
 }
@@ -166,14 +166,14 @@
 }
 
 .vx-admin-permission-card dt {
-  color: var(--vx-color-gray-400);
+  color: var(--vx-color-neutral-400);
   font-size: var(--vx-admin-caption-size);
   font-weight: 680;
 }
 
 .vx-admin-permission-card dd {
   margin: 0;
-  color: var(--vx-color-gray-700);
+  color: var(--vx-color-neutral-700);
   font-size: var(--vx-admin-caption-size);
   font-weight: 720;
 }

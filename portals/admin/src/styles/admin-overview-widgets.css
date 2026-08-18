@@ -5,7 +5,7 @@
 .admin-overview-panel-chart {
   display: inline-flex;
   align-items: center;
-  color: var(--vx-color-text-muted);
+  color: var(--muted-foreground);
   line-height: 1;
   transition: color 160ms ease;
 }
@@ -97,7 +97,7 @@
   border: 0;
   border-radius: var(--admin-overview-card-radius);
   background: transparent;
-  color: var(--vx-color-text-muted);
+  color: var(--muted-foreground);
   cursor: pointer;
   font-size: var(--vx-admin-meta-size);
   font-weight: 760;
@@ -138,7 +138,7 @@
   border: var(--vx-admin-overview-line-width-1p) solid color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
   border-radius: var(--admin-overview-card-radius);
   background: color-mix(in srgb, var(--vx-color-white) 98%, transparent);
-  color: var(--vx-color-text-secondary);
+  color: var(--vx-color-neutral-700);
   font-size: var(--vx-admin-meta-size);
   font-weight: 650;
   line-height: 1.5;
@@ -160,13 +160,13 @@
 .admin-overview-stars {
   display: inline-flex;
   gap: var(--space-xs);
-  color: var(--vx-color-gray-300);
+  color: var(--vx-color-neutral-300);
   font-size: var(--vx-admin-overview-text-size-1r);
   line-height: 1;
 }
 
 .admin-overview-stars__item--active {
-  color: var(--vx-color-warning);
+  color: var(--warning);
 }
 
 /* ── 语气变量 ─────────────────────────────────────────────── */

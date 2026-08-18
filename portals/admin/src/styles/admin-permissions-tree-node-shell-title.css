@@ -5,7 +5,7 @@
 .vx-admin-permission-tree-node {
   min-width: 0;
   display: grid;
-  border-bottom: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-gray-500) 11%, transparent);
+  border-bottom: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-neutral-500) 11%, transparent);
   border-left: 0;
   background: transparent;
   transition: background-color 0.14s ease;
@@ -61,7 +61,7 @@
   border: 0;
   border-radius: var(--vx-radius-md);
   background: transparent;
-  color: var(--vx-color-gray-500);
+  color: var(--vx-color-neutral-500);
   cursor: pointer;
 }
 
@@ -72,11 +72,11 @@
 
 .vx-admin-permission-tree-node__toggle:not(:disabled):hover {
   background: transparent;
-  color: var(--vx-color-gray-700);
+  color: var(--vx-color-neutral-700);
 }
 
 .vx-admin-permission-tree-node__title-row > svg {
-  color: var(--vx-color-gray-500);
+  color: var(--vx-color-neutral-500);
 }
 
 .vx-admin-permission-tree-node__title {
@@ -103,7 +103,7 @@
 
 .vx-admin-permission-tree-node__title-tags,
 .vx-admin-permission-tree-node__title > em {
-  color: var(--vx-color-gray-400);
+  color: var(--vx-color-neutral-400);
   font-family: var(--font-mono);
   font-size: var(--vx-admin-caption-size);
   font-weight: 620;

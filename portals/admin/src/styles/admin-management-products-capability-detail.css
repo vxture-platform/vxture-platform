@@ -38,7 +38,7 @@
 
 .vx-product-capability-description p {
   margin: 0;
-  color: var(--vx-color-gray-600);
+  color: var(--vx-color-neutral-600);
   font-size: var(--vx-admin-meta-size);
   font-weight: 400;
   line-height: 1.7;

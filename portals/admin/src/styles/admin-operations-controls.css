@@ -11,7 +11,7 @@
   cursor: pointer;
 }
 .dark .vx-admin-filter-select {
-  border-color: var(--vx-color-border);
+  border-color: var(--border);
   background: transparent;
   color: var(--vx-console-text);
 }
@@ -24,7 +24,7 @@
   overflow: hidden;
 }
 .dark .vx-admin-view-toggle {
-  border-color: var(--vx-color-border);
+  border-color: var(--border);
 }
 .vx-admin-view-toggle__btn {
   display: flex;

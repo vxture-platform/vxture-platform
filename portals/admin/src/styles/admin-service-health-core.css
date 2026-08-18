@@ -9,9 +9,9 @@
   );
   --service-border: color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
   --service-blue: var(--vx-color-auth-accent);
-  --service-green: var(--vx-color-success-600);
+  --service-green: var(--success);
   --service-amber: var(--vx-color-warning-600);
-  --service-rose: var(--vx-color-danger);
+  --service-rose: var(--destructive);
   --service-indigo: var(--vx-color-indigo-600);
   width: 100%;
   max-width: none;
@@ -33,7 +33,7 @@
 
 .vx-service-health-status--healthy {
   --service-tone: var(--service-green);
-  --service-soft: color-mix(in srgb, var(--vx-color-success) 10%, transparent);
+  --service-soft: color-mix(in srgb, var(--success) 10%, transparent);
 }
 
 .vx-service-health-status--degraded {
@@ -43,7 +43,7 @@
 
 .vx-service-health-status--offline {
   --service-tone: var(--service-rose);
-  --service-soft: color-mix(in srgb, var(--vx-color-danger) 10%, transparent);
+  --service-soft: color-mix(in srgb, var(--destructive) 10%, transparent);
 }
 
 .vx-service-health-status--stopping {
@@ -86,7 +86,7 @@
 
 .vx-service-health-summary__item div > span {
   overflow: hidden;
-  color: var(--vx-color-text-muted);
+  color: var(--muted-foreground);
   font-size: var(--vx-admin-caption-size);
   font-weight: 780;
   text-overflow: ellipsis;

@@ -58,7 +58,7 @@
   border-bottom: var(--vx-admin-management-line-width-1p) dashed
     var(--vx-color-auth-border);
   background: transparent;
-  color: var(--vx-color-text-secondary);
+  color: var(--vx-color-neutral-700);
   font-size: var(--vx-admin-body-size);
   font-weight: 720;
   text-align: left;

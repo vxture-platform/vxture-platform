@@ -1,5 +1,5 @@
 .vx-tenant-directory-card:has(.vx-tenant-actions__menu) {
-  z-index: var(--vx-z-dropdown);
+  z-index: var(--z-index-dropdown);
 }
 
 /* 缺失值：占主信息的位置，但按辅助信息的语气——常规字重、弱化前景。

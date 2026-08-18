@@ -6,11 +6,11 @@
   --tenant-card-radius: var(--vx-admin-management-card-radius);
   --tenant-blue: var(--vx-color-auth-accent);
   --tenant-cyan: var(--vx-color-cyan-600);
-  --tenant-green: var(--vx-color-success-600);
+  --tenant-green: var(--success);
   --tenant-amber: var(--vx-color-warning-600);
-  --tenant-rose: var(--vx-color-danger);
+  --tenant-rose: var(--destructive);
   --tenant-ink: var(--vx-color-brand-950);
-  --tenant-muted: var(--vx-color-text-muted);
+  --tenant-muted: var(--muted-foreground);
   --tenant-line: color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
 }
 
@@ -54,7 +54,7 @@
 }
 
 .vx-tenant-summary__item--identity-icon svg {
-  color: var(--vx-color-gray-400);
+  color: var(--vx-color-neutral-400);
 }
 
 .vx-tenant-summary__item div {

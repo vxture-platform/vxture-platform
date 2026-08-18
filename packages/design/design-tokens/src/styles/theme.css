@@ -280,4 +280,5 @@
   --font-cjk: var(--vx-font-cjk);
   --font-mono: var(--vx-font-mono);
   --font-sans: var(--vx-font-sans);
+  --radius-full: var(--vx-radius-full);
 }

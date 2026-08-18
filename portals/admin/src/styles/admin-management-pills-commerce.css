@@ -1,13 +1,13 @@
 .vx-subscription-pill--cycle {
   background: var(--vx-color-neutral-surface);
-  color: var(--vx-color-gray-500);
+  color: var(--vx-color-neutral-500);
 }
 .vx-order-pill--source {
   background: var(--vx-color-neutral-surface);
-  color: var(--vx-color-gray-500);
+  color: var(--vx-color-neutral-500);
 }
 .vx-invoice-pill--tax-enterprise {
-  background: color-mix(in srgb, var(--vx-color-success) 8%, transparent);
+  background: color-mix(in srgb, var(--success) 8%, transparent);
   color: var(--tenant-green);
 }
 .vx-invoice-pill--bill-type-normal,
@@ -23,9 +23,9 @@
 .vx-invoice-pill--tax-government,
 .vx-invoice-pill--tax-other {
   background: var(--vx-color-neutral-surface);
-  color: var(--vx-color-gray-500);
+  color: var(--vx-color-neutral-500);
 }
 .vx-payment-pill--source {
   background: var(--vx-color-neutral-surface);
-  color: var(--vx-color-gray-500);
+  color: var(--vx-color-neutral-500);
 }

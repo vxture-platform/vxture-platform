@@ -44,7 +44,7 @@
 }
 
 .vx-commerce-risk-item--green {
-  --commerce-item-bg: color-mix(in srgb, var(--vx-color-success) 8%, transparent);
+  --commerce-item-bg: color-mix(in srgb, var(--success) 8%, transparent);
   --commerce-item-tone: var(--tenant-green);
 }
 
@@ -54,7 +54,7 @@
 }
 
 .vx-commerce-risk-item--rose {
-  --commerce-item-bg: color-mix(in srgb, var(--vx-color-danger) 12%, transparent);
+  --commerce-item-bg: color-mix(in srgb, var(--destructive) 12%, transparent);
   --commerce-item-tone: var(--tenant-rose);
 }
 

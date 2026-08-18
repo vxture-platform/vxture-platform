@@ -3,11 +3,11 @@
 .vx-subscription-action-dialog {
   position: fixed;
   inset: 0;
-  z-index: var(--vx-z-modal);
+  z-index: var(--z-index-modal);
   display: grid;
   place-items: center;
   padding: var(--space-lg);
-  background: color-mix(in srgb, var(--vx-color-gray-900) 22%, transparent);
+  background: color-mix(in srgb, var(--vx-color-neutral-900) 22%, transparent);
   backdrop-filter: blur(var(--vx-admin-management-effect-8p));
 }
 
@@ -41,7 +41,7 @@
 
 .vx-subscription-action-dialog__icon--suspend,
 .vx-subscription-action-dialog__icon--cancel {
-  background: color-mix(in srgb, var(--vx-color-danger) 10%, transparent);
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
   color: var(--tenant-rose);
 }
 
@@ -51,7 +51,7 @@
 }
 
 .vx-subscription-action-dialog__icon--resume {
-  background: color-mix(in srgb, var(--vx-color-success-500) 10%, transparent);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
   color: var(--tenant-green);
 }
 
@@ -104,7 +104,7 @@
   border: var(--vx-admin-management-line-width-1p) solid color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
   border-radius: var(--vx-radius-lg);
   background: transparent;
-  color: var(--vx-color-text-secondary);
+  color: var(--vx-color-neutral-700);
   font: inherit;
   line-height: 1.6;
 }
@@ -116,7 +116,7 @@
   border: var(--vx-admin-management-line-width-1p) solid color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
   border-radius: var(--vx-radius-lg);
   background: transparent;
-  color: var(--vx-color-text-secondary);
+  color: var(--vx-color-neutral-700);
   font: inherit;
 }
 

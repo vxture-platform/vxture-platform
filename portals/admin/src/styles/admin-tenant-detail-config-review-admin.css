@@ -61,7 +61,7 @@
 
 .vx-tenant-readonly-field strong {
   overflow: hidden;
-  color: var(--vx-color-text-secondary);
+  color: var(--vx-color-neutral-700);
   font-size: var(--vx-admin-meta-size);
   font-weight: 780;
   text-overflow: ellipsis;
@@ -94,7 +94,7 @@
   align-items: center;
   gap: var(--space-xs);
   overflow: hidden;
-  color: var(--vx-color-text-secondary);
+  color: var(--vx-color-neutral-700);
   font-size: var(--vx-admin-meta-size);
   font-weight: 780;
   text-overflow: ellipsis;

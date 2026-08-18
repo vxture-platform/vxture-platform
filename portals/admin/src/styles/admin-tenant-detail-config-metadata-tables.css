@@ -35,7 +35,7 @@
 
 .vx-tenant-kv-grid dd {
   overflow: hidden;
-  color: var(--vx-color-text-secondary);
+  color: var(--vx-color-neutral-700);
   font-size: var(--vx-admin-meta-size);
   font-weight: 780;
   text-overflow: ellipsis;
@@ -43,7 +43,7 @@
 }
 
 .vx-tenant-note {
-  color: var(--vx-color-text-secondary);
+  color: var(--vx-color-neutral-700);
   font-size: var(--vx-admin-meta-size);
   font-weight: 700;
   line-height: 1.6;
@@ -109,7 +109,7 @@
 
 .vx-tenant-table__row {
   justify-items: start;
-  color: var(--vx-color-text-secondary);
+  color: var(--vx-color-neutral-700);
   font-size: var(--vx-admin-meta-size);
   font-weight: 720;
   text-align: left;

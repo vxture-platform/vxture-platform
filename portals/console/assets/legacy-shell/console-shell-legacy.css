@@ -13,7 +13,7 @@
 
 /* ── 侧栏 · 与内容一体化（无背景/无硬线条）── */
 .sidebar {
-  width: var(--vx-shell-sidebar-width); flex-shrink: 0; min-width: 0; background: transparent;
+  width: var(--spacing-sidebar-expanded); flex-shrink: 0; min-width: 0; background: transparent;
   display: flex; flex-direction: column; overflow: hidden; padding: var(--vx-space-md) 0 var(--vx-space-lg);
   transition: width 380ms cubic-bezier(0.32, 0.72, 0, 1);
   will-change: width;
@@ -21,7 +21,7 @@
 
 .sidebar::-webkit-scrollbar { width: 9px; height: 9px; }
 
-.sidebar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--input); border-radius: 999px; }
 
 @media (prefers-reduced-motion: reduce) {
   .sidebar { transition: none; }
@@ -38,21 +38,21 @@
 /* ═══ 应用中心（App Center）═══ */
 .appcenter { gap: 28px; }
 
-.ac-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--vx-space-2xl); }
+.ac-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-xl); }
 
 /* ⚠ 悬空引用（HEAD 既有）：--vx-admin-shell-h1-size 全仓从未定义，font
  * 简写整条失效——标题实际一直以继承字体渲染。保持现状迁入，外壳收敛时
  * 连页一起重做，不在这里就地"修好"它。 */
-.ac-title { font: 700 var(--vx-admin-shell-h1-size) var(--font-cjk); color: var(--fg-strong); margin: 0; letter-spacing: 0.01em; }
+.ac-title { font: 700 var(--vx-admin-shell-h1-size) var(--font-cjk); color: var(--vx-color-brand-950); margin: 0; letter-spacing: 0.01em; }
 
-.ac-desc { font: 400 var(--vx-admin-shell-body-size) var(--font-cjk); color: var(--fg-muted); margin: 6px 0 0; line-height: 1.6; }
+.ac-desc { font: 400 0.875rem var(--font-cjk); color: var(--muted-foreground); margin: 6px 0 0; line-height: 1.6; }
 
 /* ⚠ 原 background/color 引 --vxh-brand-soft/strong——那两个自定义属性只在
  * 已删除的 .vxh 头部规则上定义、且 .vxh 从未渲染，故实际一直是透明底 +
  * 继承色。按真实渲染行为落地，删掉两条从未生效的声明。 */
-.ac-head-tag { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--vx-radius-full); font: 600 var(--vx-admin-shell-caption-size) var(--font-cjk); }
+.ac-head-tag { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--vx-radius-full); font: 600 0.75rem var(--font-cjk); }
 
-.ac-head-tag i { font-size: var(--vx-icon-size-sm); }
+.ac-head-tag i { font-size: var(--spacing-icon-sm); }
 
 .ac-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 
@@ -68,14 +68,14 @@
   --tone: var(--vx-color-brand-600);
   position: relative; overflow: hidden; isolation: isolate;
   display: flex; flex-direction: column; gap: 10px; text-align: left; min-height: 260px;
-  padding: 28px; border: 1px solid var(--vx-color-border); border-radius: var(--vx-radius-2xl);
-  background: var(--vx-color-surface, #fff); box-shadow: var(--vx-shadow-sm); cursor: pointer;
+  padding: 28px; border: 1px solid var(--border); border-radius: var(--vx-radius-2xl);
+  background: var(--card); box-shadow: var(--vx-shadow-sm); cursor: pointer;
   transition: box-shadow 300ms cubic-bezier(0.4,0,0.2,1), border-color 300ms, transform 300ms;
 }
 
-.ac-card:hover { box-shadow: var(--vx-shadow-lg); border-color: color-mix(in srgb, var(--tone) 34%, var(--vx-color-border)); transform: translateY(-3px); }
+.ac-card:hover { box-shadow: var(--vx-shadow-lg); border-color: color-mix(in srgb, var(--tone) 34%, var(--border)); transform: translateY(-3px); }
 
-.ac-card:focus-visible { outline: 0; box-shadow: var(--vx-shadow-focus-ring); }
+.ac-card:focus-visible { outline: 0; box-shadow: 0 0 0 3px rgba(29, 81, 255, 0.15); }
 
 /* decorative background artwork — soft tone bloom + embedded glyph, fades toward text */
 .ac-card-art {
@@ -102,24 +102,24 @@
 
 .ac-card-lead { flex-shrink: 0; width: var(--ac-lead); text-align: center; font-size: var(--ac-lead); line-height: 1; color: var(--tone); }
 
-.ac-card-name { font: 600 var(--vx-admin-shell-h2-size, 20px) var(--font-cjk); color: var(--fg-strong); letter-spacing: 0.01em; min-width: 0; }
+.ac-card-name { font: 600 20px var(--font-cjk); color: var(--vx-color-brand-950); letter-spacing: 0.01em; min-width: 0; }
 
 /* description indented to align with the title */
-.ac-card-desc { margin: 0; padding-left: calc(var(--ac-lead) + var(--ac-gap)); font: 400 var(--vx-admin-shell-caption-size) var(--font-cjk); color: var(--fg-muted); line-height: 1.65; max-width: 90%; }
+.ac-card-desc { margin: 0; padding-left: calc(var(--ac-lead) + var(--ac-gap)); font: 400 0.75rem var(--font-cjk); color: var(--muted-foreground); line-height: 1.65; max-width: 90%; }
 
 /* bottom row — divider + 已订阅 + 进入 */
-.ac-card-foot { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--vx-color-border-muted); display: flex; align-items: center; justify-content: space-between; }
+.ac-card-foot { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
 
 .ac-card-go {
   display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: var(--vx-radius-lg);
-  font: 600 var(--vx-admin-shell-caption-size) var(--font-cjk); color: var(--tone);
+  font: 600 0.75rem var(--font-cjk); color: var(--tone);
   background: color-mix(in srgb, var(--tone) 9%, transparent); transition: gap .2s, background .2s;
 }
 
 .ac-card:hover .ac-card-go { gap: 9px; background: color-mix(in srgb, var(--tone) 15%, transparent); }
 
-.ac-card-go i { font-size: var(--vx-icon-size-sm); }
+.ac-card-go i { font-size: var(--spacing-icon-sm); }
 
 /* 誊抄自带的 .ac-desc 二次定义（原 Catalog 段）：与上面的定义同名冲突,
  * 后写者赢——迁移按原顺序保留，行为不变。外壳收敛时一并了断。 */
-.ac-desc { font: 400 12.5px var(--font-cjk); line-height: 1.6; color: var(--fg-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 40px; }
+.ac-desc { font: 400 12.5px var(--font-cjk); line-height: 1.6; color: var(--vx-color-neutral-700); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 40px; }

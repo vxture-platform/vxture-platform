@@ -3,7 +3,7 @@
 .vx-subscription-card__solution {
   margin: 0;
   overflow: hidden;
-  color: var(--vx-color-gray-700);
+  color: var(--vx-color-neutral-700);
   font-size: var(--vx-admin-caption-size);
   font-weight: 400;
   line-height: 1.55;
@@ -43,7 +43,7 @@
   place-items: center;
   border-radius: var(--vx-radius-full);
   background: var(--subscription-timeline-bg, var(--vx-color-neutral-surface));
-  color: var(--subscription-timeline-color, var(--vx-color-gray-500));
+  color: var(--subscription-timeline-color, var(--vx-color-neutral-500));
 }
 
 .vx-subscription-timeline__item strong {
@@ -55,7 +55,7 @@
 
 .vx-subscription-timeline__item p {
   margin: var(--space-2xs) 0 0;
-  color: var(--vx-color-gray-600);
+  color: var(--vx-color-neutral-600);
   font-size: var(--vx-admin-meta-size);
   font-weight: 400;
   line-height: 1.65;
@@ -70,7 +70,7 @@
 }
 
 .vx-subscription-timeline__item--success {
-  --subscription-timeline-bg: color-mix(in srgb, var(--vx-color-success) 8%, transparent);
+  --subscription-timeline-bg: color-mix(in srgb, var(--success) 8%, transparent);
   --subscription-timeline-color: var(--tenant-green);
 }
 
@@ -80,7 +80,7 @@
 }
 
 .vx-subscription-timeline__item--danger {
-  --subscription-timeline-bg: color-mix(in srgb, var(--vx-color-danger) 12%, transparent);
+  --subscription-timeline-bg: color-mix(in srgb, var(--destructive) 12%, transparent);
   --subscription-timeline-color: var(--tenant-rose);
 }
 
@@ -90,8 +90,8 @@
   align-items: center;
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--vx-radius-lg);
-  background: color-mix(in srgb, var(--vx-color-success-500) 10%, transparent);
-  color: var(--vx-color-success-700);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+  color: var(--success-text);
   font-size: var(--vx-admin-meta-size);
   font-weight: 400;
 }
@@ -102,6 +102,6 @@
 
 .vx-tenant-actions__menu
   button.vx-subscription-menu-action--danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--vx-color-danger) 8%, transparent);
+  background: color-mix(in srgb, var(--destructive) 8%, transparent);
   color: var(--tenant-rose);
 }

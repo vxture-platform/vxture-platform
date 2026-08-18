@@ -8,9 +8,9 @@
  * 两边说的其实是同一件事，admin 自己的 CSS 就是证据：
  *
  *   --tenant-blue:  var(--vx-color-auth-accent)   → 品牌色
- *   --tenant-green: var(--vx-color-success-600)
+ *   --tenant-green: var(--success)
  *   --tenant-amber: var(--vx-color-warning-600)
- *   --tenant-rose:  var(--vx-color-danger)
+ *   --tenant-rose:  var(--destructive)
  *
  * 所以这不是"把颜色映射成语义"这种有损翻译，是把一直隐含的语义显式写出来。
  *

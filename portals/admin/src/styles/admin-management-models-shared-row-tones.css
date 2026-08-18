@@ -1,5 +1,5 @@
 .vx-tenant-directory-card--normal {
-  --tenant-row-tone: var(--vx-color-gray-400);
+  --tenant-row-tone: var(--vx-color-neutral-400);
 }
 .vx-tenant-directory-card--follow_up {
   --tenant-row-tone: var(--tenant-amber);
@@ -11,7 +11,7 @@
   --tenant-row-tone: var(--tenant-blue);
 }
 .vx-admin-role-card--disabled {
-  --tenant-row-tone: var(--vx-color-gray-400);
+  --tenant-row-tone: var(--vx-color-neutral-400);
 }
 .vx-product-card--active {
   --tenant-row-tone: var(--tenant-blue);
@@ -20,7 +20,7 @@
   --tenant-row-tone: var(--tenant-amber);
 }
 .vx-product-card--archived {
-  --tenant-row-tone: var(--vx-color-gray-400);
+  --tenant-row-tone: var(--vx-color-neutral-400);
 }
 
 .vx-product-plan-row--active,
@@ -30,7 +30,7 @@
 
 .vx-product-plan-row--inactive,
 .vx-product-plan-card--inactive {
-  --tenant-row-tone: var(--vx-color-gray-400);
+  --tenant-row-tone: var(--vx-color-neutral-400);
 }
 .vx-product-solution-card--active {
   --tenant-row-tone: var(--tenant-blue);
@@ -39,7 +39,7 @@
   --tenant-row-tone: var(--tenant-amber);
 }
 .vx-product-solution-card--archived {
-  --tenant-row-tone: var(--vx-color-gray-400);
+  --tenant-row-tone: var(--vx-color-neutral-400);
 }
 
 .vx-subscription-row--active,
@@ -63,7 +63,7 @@
 
 .vx-subscription-row--cancelled,
 .vx-subscription-card--cancelled {
-  --tenant-row-tone: var(--vx-color-gray-400);
+  --tenant-row-tone: var(--vx-color-neutral-400);
 }
 
 .vx-order-row--confirmed,
@@ -87,7 +87,7 @@
 
 .vx-order-row--closed,
 .vx-order-card--closed {
-  --tenant-row-tone: var(--vx-color-gray-400);
+  --tenant-row-tone: var(--vx-color-neutral-400);
 }
 
 .vx-billing-row--paid,
@@ -111,7 +111,7 @@
 
 .vx-billing-row--cancelled,
 .vx-billing-card--cancelled {
-  --tenant-row-tone: var(--vx-color-gray-400);
+  --tenant-row-tone: var(--vx-color-neutral-400);
 }
 
 .vx-invoice-row--finished,
@@ -160,7 +160,7 @@
 
 .vx-payment-row--unlinked,
 .vx-payment-card--unlinked {
-  --tenant-row-tone: var(--vx-color-gray-400);
+  --tenant-row-tone: var(--vx-color-neutral-400);
 }
 .vx-commercial-card--normal {
   --tenant-row-tone: var(--tenant-green);
@@ -172,5 +172,5 @@
   --tenant-row-tone: var(--tenant-rose);
 }
 .vx-commercial-card--muted {
-  --tenant-row-tone: var(--vx-color-gray-400);
+  --tenant-row-tone: var(--vx-color-neutral-400);
 }

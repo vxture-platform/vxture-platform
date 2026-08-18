@@ -39,7 +39,7 @@
   border: var(--vx-admin-management-line-width-1p) solid color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
   border-radius: var(--vx-radius-lg);
   background: transparent;
-  color: var(--vx-color-text-secondary);
+  color: var(--vx-color-neutral-700);
   cursor: pointer;
   font-size: var(--vx-admin-caption-size);
   font-weight: 400;
@@ -51,13 +51,13 @@
 }
 
 .vx-billing-receipt-actions button.is-danger {
-  border-color: color-mix(in srgb, var(--vx-color-danger) 20%, transparent);
+  border-color: color-mix(in srgb, var(--destructive) 20%, transparent);
   color: var(--tenant-rose);
 }
 
 .vx-billing-receipt-actions button.is-danger:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--vx-color-danger) 34%, transparent);
-  background: color-mix(in srgb, var(--vx-color-danger) 6%, transparent);
+  border-color: color-mix(in srgb, var(--destructive) 34%, transparent);
+  background: color-mix(in srgb, var(--destructive) 6%, transparent);
 }
 
 .vx-billing-receipt-actions button:disabled {

@@ -26,9 +26,9 @@
 
 .vx-admin-permission-tree-node__title-tags
   .vx-admin-permission-layer-pill--root {
-  border-color: color-mix(in srgb, var(--vx-color-gray-600) 20%, transparent);
-  background: color-mix(in srgb, var(--vx-color-gray-600) 8%, transparent);
-  color: var(--vx-color-gray-600);
+  border-color: color-mix(in srgb, var(--vx-color-neutral-600) 20%, transparent);
+  background: color-mix(in srgb, var(--vx-color-neutral-600) 8%, transparent);
+  color: var(--vx-color-neutral-600);
 }
 
 .vx-admin-permission-tree-node__title-tags .vx-admin-permission-layer-pill--l1 {
@@ -54,5 +54,5 @@
     transparent
   );
   background: color-mix(in srgb, var(--vx-color-warning-600) 10%, transparent);
-  color: var(--vx-color-warning-700);
+  color: var(--warning-text);
 }
