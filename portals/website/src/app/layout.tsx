@@ -30,6 +30,7 @@ import "@vxture/design-system/styles/fonts.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  icons: { icon: "/assets/favicon.ico" },
   title: "vxture AI",
   description: "AI-based virtual nature exploration platform",
 };
