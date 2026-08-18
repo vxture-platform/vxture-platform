@@ -3,7 +3,7 @@
  * ── 2026-08-17：本文件原有的五条局部规则全部删除 ─────────────────────────
  * 不是"迁移到别处"，是它们**本来就没生效**。五条规则里的尺度与颜色引用的是
  * `--vx-space-*` / `--vx-color-border`，而这两族在本仓只定义在
- * `design-system/assets/shell-template/tokens.css` 里——那是发给**外部产品仓**
+ * `已退役的 shell-template tokens（批 D 删除）` 里——那是发给**外部产品仓**
  * 的模板，accounts 从来没有 import 过它。未定义的 `var()` 且不带兜底，是
  * invalid at computed-value time，浏览器把**整条声明**丢掉。
  *

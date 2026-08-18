@@ -1,7 +1,7 @@
 "use client";
 
 /* Admin 壳层容器。
- * Header 置顶 + .app-body(Sidebar / 内容 / Assistant) + Drawer。
+ * Header 置顶 + 主体行(Sidebar / 内容 / Assistant) + Drawer——全 DS 组件与 T2 工具类。
  * 顶层视图 = 管理工作域（运营域 / 自治域），launcher 切换即路由跳转；
  * 导航来自 adminWorkspaces；助手为真实 VardaChat（admin surface）。
  *
@@ -295,9 +295,8 @@ function ShellFrame({
       className={
         // bg-background 由外壳自己上：底色原先由遗留样式层画在 html 上，
         // 退役后必须有人把 --background 画出来，跟 console 是同一个位置。
-        "app bg-background text-foreground" +
-        (velaActive ? " vela-open" : "") +
-        (navCollapsed ? " nav-collapsed" : "")
+        // 批 D：.app 遗留类换工具类；vela-open/nav-collapsed 状态钩子全仓无样式引用，删。
+        "flex h-screen flex-col overflow-hidden bg-background text-foreground"
       }
     >
       <AdminHeader
@@ -316,7 +315,7 @@ function ShellFrame({
         navEntries={navEntries}
       />
 
-      <div className="app-body">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* DS 外壳 + DS 导航内容：宽度状态机归 ShellSidebarFrame（w-sidebar-*），
          * 内容归 ShellSidebarNav。原先外层是 shell-template.css 的 .sidebar，
          * 它自带 padding 与另一套宽度，跟导航内容自己的内距叠加，这正是三个

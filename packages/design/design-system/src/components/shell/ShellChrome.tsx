@@ -905,6 +905,44 @@ export function ShellUserMenu({
   );
 }
 
+export type ShellDockMode = "narrow" | "wide" | "full";
+
+export interface ShellDockProps {
+  mode?: ShellDockMode | undefined;
+  className?: string | undefined;
+  children: ReactNode;
+}
+
+/**
+ * 工作台停靠面板——外壳右缘的停靠列（助手、检查器一类的伴随内容）。
+ * 三档：narrow 固定列 / wide 近半屏（clamp 480–760）/ full 全屏接管。
+ *
+ * 批 D（2026-08-18，原则 3）自 shell-template 的 `.assistant` 收编：console 与
+ * admin 的 Varda 停靠列共用此形状，opera 亦可复用；narrow/wide 取值原样保留
+ * （420px / clamp(480px,46vw,760px)），零视觉漂移。full 档的叠放从遗留的
+ * z-command(4000) 收敛到 T2 的 z-modal——全屏接管本质上就是一层模态。
+ */
+export function ShellDock({
+  mode = "narrow",
+  className,
+  children,
+}: ShellDockProps) {
+  return (
+    <aside
+      className={cn(
+        "flex min-h-0 shrink-0 flex-col border-l border-border bg-card shadow-overlay",
+        mode === "narrow" && "w-[26.25rem]",
+        mode === "wide" && "w-[clamp(30rem,46vw,47.5rem)]",
+        mode === "full" &&
+          "fixed inset-0 z-modal w-auto border-l-0 shadow-none",
+        className,
+      )}
+    >
+      {children}
+    </aside>
+  );
+}
+
 export function ShellLegalFooter({
   copyright = "© 2026 Brand. All rights reserved.",
   links = DEFAULT_LEGAL_LINKS,

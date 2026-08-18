@@ -1,10 +1,17 @@
 "use client";
 
-/* 1:1 转写自设计稿 shell.jsx Drawer / DrawerNotifications / DrawerSettings.
- * 通知/设置内容为占位（demo）数据，待接真实消息中心 / 系统设置。 */
+/* 通知/系统信息抽屉：外壳走 DS Drawer（批 D——Radix 底座自带遮罩/Escape/
+ * 动效/关闭钮，替代 shell-template 的 .drawer-* 手搓层）；设置行走
+ * ShellPanelRow 只读态。通知内容为占位（demo）数据，待接真实消息中心。
+ * 宽度按 Drawer 的 panel 梯取 sm（448px，原 400px 就近吸附）。 */
 
-import { useEffect } from "react";
-import { toneSurfaceClasses, type Tone } from "@vxture/design-system";
+import {
+  Button,
+  Drawer,
+  ShellPanelRow,
+  toneSurfaceClasses,
+  type Tone,
+} from "@vxture/design-system";
 
 export type DrawerType = "notifications" | "settings";
 
@@ -31,11 +38,6 @@ export interface TemplateDrawerProps {
   };
 }
 
-/* The three tokens this used to reference (--vx-color-danger-600 /
- * -warning-500 / -info-600) do not exist in the design tokens, so the icon
- * colour and its tint both resolved to nothing. Use the DS tone helper, which
- * pairs a same-hue foreground with a same-hue muted surface — exactly what the
- * hand-rolled color-mix was approximating. */
 const LEVEL_TONE: Record<DrawerNotif["level"], Tone> = {
   danger: "danger",
   warning: "warning",
@@ -50,95 +52,77 @@ export function TemplateDrawer({
   settingsRows,
   labels,
 }: TemplateDrawerProps) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const isNotif = type === "notifications";
   const title = isNotif ? labels.notificationsTitle : labels.settingsTitle;
   const icon = isNotif ? "ph-bell" : "ph-gear-six";
 
   return (
-    <div className="drawer-layer">
-      <div className="drawer-backdrop" onClick={onClose}></div>
-      <aside
-        className="drawer"
-        role="dialog"
-        aria-label={title}
-        aria-modal="true"
-      >
-        <div className="drawer-hd">
-          <div className="drawer-title">
-            <i className={"ph " + icon}></i>
-            {title}
-          </div>
-          <div className="drawer-actions">
-            {isNotif && (
-              <>
-                <button className="drawer-act" onClick={() => {}}>
-                  <i className="ph ph-checks"></i>
-                  {labels.markAllRead}
-                </button>
-                <button
-                  className="drawer-iconbtn"
-                  title={labels.openCenter}
-                  aria-label={labels.openCenter}
-                  onClick={() => {}}
-                >
-                  <i className="ph ph-arrow-square-out"></i>
-                </button>
-              </>
-            )}
-            <button
-              className="drawer-close"
-              onClick={onClose}
-              aria-label={labels.close}
+    <Drawer
+      open
+      onClose={onClose}
+      side="right"
+      width="sm"
+      title={
+        <span className="flex items-center gap-sm">
+          <i className={"ph " + icon} aria-hidden="true"></i>
+          {title}
+        </span>
+      }
+    >
+      {isNotif ? (
+        <div className="flex flex-col gap-xs">
+          <div className="flex items-center justify-end gap-2xs">
+            <Button variant="ghost" size="sm" onClick={() => {}}>
+              <i className="ph ph-checks" aria-hidden="true"></i>
+              {labels.markAllRead}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title={labels.openCenter}
+              aria-label={labels.openCenter}
+              onClick={() => {}}
             >
-              <i className="ph ph-x"></i>
-            </button>
+              <i className="ph ph-arrow-square-out" aria-hidden="true"></i>
+            </Button>
           </div>
+          {notifications.map((n, i) => (
+            <button
+              key={i}
+              type="button"
+              className="flex w-full items-center gap-md rounded-lg p-md text-left transition-colors hover:bg-accent"
+              onClick={() => {
+                onClose();
+                onNavigate(n.href);
+              }}
+            >
+              <span
+                className={`inline-flex size-icon-xl shrink-0 items-center justify-center rounded-lg ${toneSurfaceClasses[LEVEL_TONE[n.level]]}`}
+              >
+                <i className={"ph-fill " + n.icon} aria-hidden="true"></i>
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col gap-2xs">
+                <span className="truncate text-label-md font-semibold text-foreground">
+                  {n.title}
+                </span>
+                <span className="truncate text-body-sm text-muted-foreground">
+                  {n.meta}
+                </span>
+              </span>
+              <i
+                className="ph ph-caret-right shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              ></i>
+            </button>
+          ))}
         </div>
-        <div className="drawer-body">
-          {isNotif ? (
-            <div className="dn-list">
-              {notifications.map((n, i) => (
-                <button
-                  key={i}
-                  className="dn-item"
-                  onClick={() => {
-                    onClose();
-                    onNavigate(n.href);
-                  }}
-                >
-                  <span
-                    className={`dn-ico ${toneSurfaceClasses[LEVEL_TONE[n.level]]}`}
-                  >
-                    <i className={"ph-fill " + n.icon}></i>
-                  </span>
-                  <span className="dn-text">
-                    <span className="dn-title">{n.title}</span>
-                    <span className="dn-meta">{n.meta}</span>
-                  </span>
-                  <i className="ph ph-caret-right dn-caret"></i>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="ds-list">
-              {settingsRows.map(([k, v]) => (
-                <div className="ds-row" key={k}>
-                  <span className="ds-key">{k}</span>
-                  <span className="ds-val">{v}</span>
-                </div>
-              ))}
-            </div>
-          )}
+      ) : (
+        <div className="flex flex-col">
+          {settingsRows.map(([k, v]) => (
+            <ShellPanelRow key={k} label={k} value={v} />
+          ))}
         </div>
-      </aside>
-    </div>
+      )}
+    </Drawer>
   );
 }

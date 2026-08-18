@@ -5,7 +5,7 @@
  * system, identical to console. Loaded after the DS packs so the template's
  * .app/.vxh/.sidebar/.assistant chrome and ergonomic aliases win. The Phosphor
  * icon font is loaded via <link> in app/layout.tsx. */
-@import "@vxture/design-system/styles/shell-template.css";
+/* shell-template.css 已随批 D 整体退役——外壳全走 DS 组件与 T2 工具类。 */
 
 /* admin 页面样式的取值层，托管在 DS（token 归 DS 所有，见
  * ds/no-app-vx-token-definitions）。必须排在页面样式之前——它定义的变量正是下面

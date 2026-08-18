@@ -148,3 +148,9 @@
     }
   }
 }
+
+/* 文本选区着品牌淡色——批 D 自 shell-template 的 ::selection 同值收编
+ * （brand-100，即 --primary-muted-hover），四端工作台与营销站统一。 */
+::selection {
+  background: var(--primary-muted-hover);
+}

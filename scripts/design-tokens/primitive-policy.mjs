@@ -91,8 +91,11 @@ export const EXTENSIONS = {
 export const OVERRIDES = {
   "font/sans": {
     value:
-      "Inter, 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'",
-    why: "平台正文字体为 Inter + Noto Sans SC，其后接 Tailwind 原栈作回退",
+      "Inter, 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'",
+    why:
+      "平台正文字体为 Inter + Noto Sans SC，其后接系统中文（PingFang macOS / 雅黑 Windows，" +
+      "2026-08-18 批 D 原则 3 自 shell-template 收编：webfont 未载入时中文落系统 CJK 而非" +
+      "无中文字形的 ui-sans-serif）与 Tailwind 原栈作回退",
   },
   "font/mono": {
     value:

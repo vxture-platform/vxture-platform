@@ -19,7 +19,6 @@
     "./styles/brands/vxture.css": "./src/styles/brands/vxture.css",
     "./styles/fonts.css": "./src/styles/fonts.css",
     "./styles/globals.css": "./src/styles/globals.css",
-    "./styles/shell-template.css": "./assets/shell-template.css",
     "./styles/workbench.css": "./src/styles/workbench.css",
     "./tokens": {
       "types": "./dist/tokens.d.ts",

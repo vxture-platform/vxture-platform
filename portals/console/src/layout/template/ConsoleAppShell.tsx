@@ -1,7 +1,7 @@
 "use client";
 
 /* 控制台壳层容器 — 1:1 转写自设计稿 main-template.jsx App。
- * Header 置顶 + .app-body(Sidebar / 内容 / Assistant) + Drawer。
+ * Header 置顶 + 主体行(Sidebar / 内容 / Assistant) + Drawer——全 DS 组件与 T2 工具类。
  * 路由走 Next；导航/授权来自 P2 注册表；助手为真实 VardaChat。 */
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -43,9 +43,8 @@ import { TemplateAssistant } from "./TemplateAssistant";
 import { TemplateDrawer, type DrawerNotif } from "./TemplateDrawer";
 import { AppCenter, type ConsoleApp } from "./AppCenter";
 
-/* 内容滚动区：原先是遗留 CSS 的 `.content-scroll`（shell-template/app.css，
- * admin 仍在消费，不动）。等价 Tailwind 写法搬到这里，console 因此不再依赖
- * 那份 CSS 的布局规则。`data-content-scroll` 是给路由跳转后复位滚动条用的
+/* 内容滚动区：原先是遗留 CSS 的 `.content-scroll`（shell-template 已随批 D
+ * 整体退役）。等价 Tailwind 写法在此。`data-content-scroll` 是给路由跳转后复位滚动条用的
  * 锚点——用数据属性而不是继续拿类名当选择器，类名以后可以随便改。 */
 const CONTENT_SCROLL = "min-w-0 flex-1 scroll-smooth overflow-y-auto";
 const CONTENT_SCROLL_ATTR = "data-content-scroll";
@@ -402,7 +401,7 @@ export function ConsoleAppShell({
 
   if (status === "loading") {
     return (
-      <div className="app bg-background text-foreground">
+      <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
         {/* 骨架用 DS 的 ShellHeader 本体（而非旧的 .vxh--skeleton 类）撑版位：
             两者高度必须逐像素相同，否则会话就绪的一刻整页会往下跳一格。 */}
         <ShellHeader
@@ -423,8 +422,9 @@ export function ConsoleAppShell({
             </div>
           }
         />
-        <div className="app-body">
-          <div className="sidebar">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          {/* 骨架侧栏与真实侧栏同走 ShellSidebarFrame，宽度天然逐像素一致。 */}
+          <ShellSidebarFrame mode="expanded">
             <div className="vxh-skeleton-nav">
               {[...Array(6)].map((_, i) => (
                 <div
@@ -433,7 +433,7 @@ export function ConsoleAppShell({
                 />
               ))}
             </div>
-          </div>
+          </ShellSidebarFrame>
           <main className={CONTENT_SCROLL} {...{ [CONTENT_SCROLL_ATTR]: "" }}>
             <ShellPageContainer className="gap-lg">
               <Skeleton className="h-icon-2xl w-media-2xl" />
@@ -448,14 +448,11 @@ export function ConsoleAppShell({
 
   return (
     <div
-      className={
-        // bg-background 由外壳自己上：底色原先是 console-base.css 挂在 html
-        // 上的一条渐变，退役后必须有人把 --background 画出来，跟 opera 的
-        // ShellViewport 是同一个位置（外壳根节点）。
-        "app bg-background text-foreground" +
-        (velaActive ? " vela-open" : "") +
-        (view === "console" && navCollapsed ? " nav-collapsed" : "")
-      }
+      // bg-background 由外壳自己上：底色原先是 console-base.css 挂在 html
+      // 上的一条渐变，退役后必须有人把 --background 画出来，跟 opera 的
+      // ShellViewport 是同一个位置（外壳根节点）。批 D：.app 遗留类换
+      // 工具类；vela-open/nav-collapsed 两个状态钩子全仓无样式引用，删。
+      className="flex h-screen flex-col overflow-hidden bg-background text-foreground"
     >
       <ConsoleHeader
         view={view}
@@ -474,7 +471,7 @@ export function ConsoleAppShell({
       />
 
       {view === "appcenter" ? (
-        <div className="app-body">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
           <main className={CONTENT_SCROLL} {...{ [CONTENT_SCROLL_ATTR]: "" }}>
             <ShellPageContainer>
               <AppCenter
@@ -486,11 +483,11 @@ export function ConsoleAppShell({
           </main>
         </div>
       ) : (
-        <div className="app-body">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
           {/* DS 外壳 + DS 导航内容：宽度状态机归 ShellSidebarFrame（w-sidebar-*），
            * 内容归 ShellSidebarNav。原先外层是 shell-template.css 的 .sidebar，
            * 它自带 padding 与另一套宽度，跟导航内容自己的 L1 p-xs 叠加，这正是
-           * 两个门户间距对不齐的来源。admin 仍用 .sidebar，共享 CSS 未改动。 */}
+           * 两个门户间距对不齐的来源（批 D：.sidebar 已随 shell-template 退役）。 */}
           <ShellSidebarFrame mode={navCollapsed ? "collapsed" : "expanded"}>
             <ShellSidebarNav
               domainName={domainName ?? tShell("views.console.name")}

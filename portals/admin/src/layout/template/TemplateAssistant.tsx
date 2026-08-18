@@ -1,10 +1,12 @@
 "use client";
 
-/* 设计稿 .assistant 外壳（is-wide/is-full 三档、reflow 由 app.css 承接），
- * 内部渲染真实 VardaChat（inline 模式，自带 header/消息/输入与档位控制）。
- * admin surface —— 与 console 外壳完全一致，仅 surface 不同。 */
+/* Varda 停靠列：外壳走 DS ShellDock（批 D 自 shell-template 的 .assistant
+ * 收编，narrow/wide/full 三档同值），内部渲染真实 VardaChat（inline 模式，
+ * 自带 header/消息/输入与档位控制）。admin surface——与 console 完全一致，
+ * 仅 surface 不同。 */
 
 import dynamic from "next/dynamic";
+import { ShellDock } from "@vxture/design-system";
 import type { VardaInlineMode } from "@vxture/agent-studio-varda";
 
 const VardaChat = dynamic(
@@ -26,13 +28,7 @@ export function TemplateAssistant({
   onToggleFull,
 }: TemplateAssistantProps) {
   return (
-    <aside
-      className={
-        "assistant" +
-        (mode === "wide" ? " is-wide" : "") +
-        (mode === "full" ? " is-full" : "")
-      }
-    >
+    <ShellDock mode={mode}>
       <VardaChat
         surface="admin"
         position="inline"
@@ -41,6 +37,6 @@ export function TemplateAssistant({
         onToggleWide={onToggleWide}
         onToggleFull={onToggleFull}
       />
-    </aside>
+    </ShellDock>
   );
 }

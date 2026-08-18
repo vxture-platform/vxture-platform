@@ -15,7 +15,7 @@
 
 :root {
   /* 字体栈。 */
-  --vx-font-sans: Inter, 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --vx-font-sans: Inter, 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
   --vx-font-serif: ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
   --vx-font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Noto Sans Mono CJK SC', 'Liberation Mono', 'Courier New', monospace;
 
