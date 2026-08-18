@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-labelledby="t">
+  <title id="t">Vxture</title>
+
+  <!-- 底板：全出血圆角方，rx=7（约 11%） -->
+  <rect width="64" height="64" rx="7" fill="#F8804A"/>
+
+  <!--
+    V：填充多边形（非描边），保证上端水平平齐、下端水平平底
+    网格 64 × 64 ／ 上沿 y=13 ／ 下沿 y=51 ／ 外宽 33（x 15.5–48.5）
+    笔画水平厚度 10 ／ 平底宽 11 ／ 内侧交点 (32, 35.45) ／ 斜边斜率 dx:dy = 0.289
+  -->
+  <path fill="#FFFFFF" d="M15.5 13
+                          L25.5 13
+                          L32 35.45
+                          L38.5 13
+                          L48.5 13
+                          L37.5 51
+                          L26.5 51 Z"/>
+</svg>

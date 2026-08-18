@@ -5,6 +5,43 @@
 
 ---
 
+## 6.0.0 — 2026-08-18
+
+DS 治理批次收口：2026-08-18 全面审查（报告存档）+ shell-template 退役战役（#288–#295
+八个 PR 当日走完）。判据「DS 只收通用、无业务含义的件」全面落地；下层 design-ui 3.0.0
+major 向上传导，伞包按 major 处理。
+
+**外部消费方迁移总表**（从 `5.0.0` 升级）：
+
+| 变更                                                                     | 消费方要做的                                                                           |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| 认证族删除（AuthLogin 及 auth.css）                                      | 认证 UI 归 accounts 门户；外部仓自建或参照 accounts 实现                               |
+| ai-elements 五件删除（ModelBadge 等）                                    | 已归 agent-studio/varda；AI 会话件从 varda 包取                                        |
+| `./styles/{admin,website}-tokens.css` 删除                               | 产品取值桥归各自门户 assets；外部仓自带                                                |
+| `./styles/shell-template{,-user-panel}.css` 删除                         | 外壳走 DS 组件 + T2 工具类（opera/console/admin 同款路线）；用户面板走 `ShellUserMenu` |
+| `./styles/brands/ruyin.css`、`./styles/fullscreen.css` 删除              | ruyin 品牌由其外部仓自带；fullscreen 样式随 `globals.css` 分发，无需单独引             |
+| `DENSITY_PRESETS` 删除                                                   | 密度落地走 `densityClass` + CSS token 重映射，px 预设表从未被运行时读取                |
+| `FullscreenContainer` / `FullscreenToggle` / `Portal` 删除（经 ui 传导） | 改用 `FullscreenProvider` + `useFullscreen` / 伞包 `ShellFullscreenToggle`             |
+
+### 💥 Breaking
+
+- 上表七类公开入口/导出删除（各删除的判据与过程详见 2026-08-18 审查报告与
+  #279/#284/#285/#291/#292/#295）。
+
+### ✨ 新增
+
+- **`ShellDock`**（+ `ShellDockMode` / `ShellDockProps`）——工作台停靠面板：外壳
+  右缘停靠列（助手、检查器一类伴随内容），narrow 420px / wide clamp(480,46vw,760)
+  / full 全屏接管三档。自 shell-template 的 `.assistant` 同值收编，console/admin
+  的 Varda 停靠列共用，opera 可复用。
+- **`ShellUserMenuAction.danger`**——用户菜单危险动作（登出等）走 destructive
+  语气；console/admin/opera 三端登出已接。
+- **`::selection` 品牌选区色**入 `globals.css`（brand-100，与原 shell 同值）。
+- Dialog `width` 档位、`ShellPanelRow.danger`、T2 `panel-xl`、T1 `radius-full`、
+  `font/sans` CJK 系统回退——经下层包传导，见 design-ui 3.0.0 / design-tokens 2.1.0。
+
+---
+
 ## 5.0.0 — 2026-08-17
 
 admin → DS 收敛批次收口。major 号在批次开启时已定（删除公开导出属破坏性），按 050 §2.1

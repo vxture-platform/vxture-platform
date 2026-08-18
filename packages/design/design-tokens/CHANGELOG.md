@@ -8,6 +8,27 @@
 
 ---
 
+## 2.1.0 — 2026-08-18
+
+纯增量，无删改——minor。
+
+### ✨ 新增
+
+- **T2 `--container-panel-xl: 58rem`**——panel 梯补超宽档（双栏表单、并排预览），
+  owner 批准新增；@theme 字面量消费方为 design-ui Dialog 的 `width="xl"` 档
+  （v4 只发射被工具类字面量消费的变量，无消费方会静默失效）。
+- **T1 `--vx-radius-full: 9999px`**（EXTENSIONS 扩展）——胶囊/圆点档。Tailwind 的
+  `rounded-full` 是硬编码 `calc(infinity*1px)`、不进 theme，CSS 文件层（取值桥/
+  遗留层）此前没有可引用的 var 面；自 shell-template 同名同值收编，零漂移。
+
+### 🔧 取值调整（不增删名字，patch 级随批）
+
+- **`font/sans` 覆盖栈**补中文系统回退：`'PingFang SC', 'Microsoft YaHei'` 插在
+  `'Noto Sans SC'` 与 `ui-sans-serif` 之间——webfont 未载入时中文落系统 CJK 字形，
+  而非无中文字形的 ui-sans-serif。自 shell-template 的刻意设计经生成器管路收编。
+
+---
+
 ## 2.0.0 — 2026-08-17
 
 首个版本。从 `@vxture/design-system` 拆出，零运行时依赖。

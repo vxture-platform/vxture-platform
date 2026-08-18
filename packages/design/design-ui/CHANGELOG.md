@@ -5,6 +5,33 @@
 
 ---
 
+## 3.0.0 — 2026-08-18
+
+DS 治理批次（2026-08-18 审查 + shell-template 退役战役）收口。删除公开导出属破坏性
+——major。
+
+### 💥 Breaking
+
+- **全屏死零件删除**：`FullscreenContainer`、`FullscreenToggle`、`Portal` 三件组件
+  及其 props 类型（`FullscreenContainerProps` / `FullscreenContainerRef` /
+  `FullscreenToggleProps` / `FullscreenPortalProps`）——全仓零消费（owner 批）。
+  **存活链不变**：`FullscreenProvider` + `useFullscreen`（经伞包
+  `ShellFullscreenToggle` 消费）照常；迁移即改用它们。
+- **`SegmentedControl` 选中态视觉改判**（API 不变）：胶囊槽 + 品牌实底滑块 →
+  `rounded-lg` 槽 + `rounded-sm` 浮起面片（`bg-card` + `text-primary` +
+  `shadow-xs`，同心圆角），向用户面板原型收敛、全 token 实现。视觉变更故随
+  major 批说明；调用方零改动。
+
+### ✨ 新增
+
+- **`DialogContent.width` 档位 prop**（`sm 28 / md 32 / lg 42 / xl 58rem`，缺省
+  md）与配套导出 `DIALOG_WIDTHS` / `DialogWidth`。xl 档为 T2 panel 梯新档的
+  @theme 字面量消费方。
+- **`ShellPanelRow.danger`**（经伞包生效）：面板动作行 destructive 语气——红字 +
+  hover 淡红底，与 ActionMenu 的 danger 同一判断。
+
+---
+
 ## 2.0.0 — 2026-08-17
 
 首个版本。从 `@vxture/design-system` 拆出的**无状态组件层**：基础组件、平台图案、

@@ -179,6 +179,7 @@ import {
 } from "@vxture/design-system";
 import {
   ShellBrand,
+  ShellDock,
   ShellFullscreenToggle,
   ShellIconButton,
   ShellLegalFooter,
@@ -1943,6 +1944,32 @@ export const ENTRIES: readonly Entry[] = [
       "批 O 重写：图标按钮复用 Button（ghost/icon-sm，焦点环与 aria-expanded 高亮在配方层），语言面板与用户菜单改走 Popover（外点/Escape/动效由 Radix 提供，替代手写监听），偏好面板的下拉与互斥选项复用 NativeSelect / SegmentedControl，认证标与徽章复用 StatusBadge；品牌标识走 §7 的 .vx-brand-* 基线，默认 label 为中性占位 Brand（真名不入仓）",
     render: () => <ShellChromeDemo />,
   },
+  {
+    // 批 D（2026-08-18）自 shell-template 的 .assistant 收编：外壳右缘停靠列
+    // （console/admin 的 Varda 停靠今日共用，opera 可复用）。full 档是全屏
+    // 接管（z-modal），预览页只摆 narrow / wide 两档，full 用文字注明。
+    name: "ShellDock",
+    layer: "pattern",
+    group: "外壳与登录",
+    tags: ["vxture", "patterns"],
+    axes: [{ name: "mode", values: ["narrow", "wide", "full"] }],
+    deviation:
+      "narrow 固定列 420px / wide clamp(480,46vw,760) / full 全屏接管（本页不演示，会盖住预览器）。取值自 shell-template 逐字收编，零漂移",
+    render: () => (
+      <Row label="mode=narrow（外壳右缘停靠列，此处限高演示）" stack>
+        <div className="flex h-media-3xl w-full overflow-hidden rounded-lg border border-border">
+          <div className="flex flex-1 items-center justify-center text-body-sm text-muted-foreground">
+            内容区（被停靠列挤压）
+          </div>
+          <ShellDock mode="narrow" className="h-full">
+            <div className="flex flex-1 items-center justify-center text-body-sm text-muted-foreground">
+              停靠内容（如 VardaChat inline）
+            </div>
+          </ShellDock>
+        </div>
+      </Row>
+    ),
+  },
   /* AuthLogin 条目已撤（2026-08-18）：认证族迁出 DS 归 accounts——DS 只收
      通用、无业务含义的件，预览面只陈列 DS 自己的东西。 */
   /* ── 批 S：上游目录补齐 ─────────────────────────────────── */
@@ -2445,7 +2472,22 @@ function ShellChromeDemo() {
             badges: [{ key: "lv", label: "Lv.4" }],
           }}
           links={[{ key: "profile", label: "个人信息", href: "#profile" }]}
-          actions={[{ key: "logout", label: "退出登录", onClick: () => {} }]}
+          actions={[
+            {
+              key: "switch",
+              label: "切换用户",
+              icon: "user-switch",
+              onClick: () => {},
+            },
+            // danger 语气（2026-08-18 批 D 补齐）：红字 + hover 淡红底，四端登出同款。
+            {
+              key: "logout",
+              label: "退出登录",
+              icon: "sign-out",
+              danger: true,
+              onClick: () => {},
+            },
+          ]}
         />
       </Row>
       <Row label="ShellPreferencePanel" stack>

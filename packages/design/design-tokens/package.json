@@ -1,6 +1,6 @@
 {
   "name": "@vxture/design-tokens",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Vxture 设计系统的 token 层：T1 原子（Tailwind v4 theme 镜像）与 T2 语义。",
   "license": "UNLICENSED",
   "private": false,
