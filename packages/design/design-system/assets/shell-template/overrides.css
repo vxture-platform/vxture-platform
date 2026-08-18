@@ -1,11 +1,11 @@
 /* Console template — console-owned enhancements layered on the verbatim app.css.
  * Keep app.css a faithful 1:1 copy of the design; put deltas here. */
-
 /* 用户头像 —— 浅色圆形光晕 hover。光晕加在圆形的 .vxh-avatar（非方形的
  * .vxh-user 按钮）上，box-shadow 跟随圆形 border-radius → 圆形光晕。 */
 .vxh-avatar {
   transition: box-shadow 180ms var(--vx-ease-standard);
 }
+
 .vxh-user:hover .vxh-avatar {
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--vx-color-brand-200) 55%, transparent),
@@ -17,27 +17,13 @@
   background: color-mix(in srgb, var(--vx-color-shell-brand) 10%, var(--vx-color-shell-surface));
   animation: vxh-shimmer 1.5s ease-in-out infinite;
 }
-.vxh-skeleton-block--icon  { width: 2rem; height: 2rem; border-radius: var(--vx-radius-md); }
-.vxh-skeleton-block--brand { width: 6rem; height: 1.25rem; border-radius: var(--vx-radius-sm); }
-.vxh-skeleton-block--search { flex: 1; max-width: 28rem; height: 2rem; border-radius: var(--vx-radius-md); }
-.vxh-skeleton-block--circle { width: 2rem; height: 2rem; border-radius: var(--vx-radius-full); }
-.vxh-skeleton-block--nav   { height: 2.25rem; border-radius: var(--vx-radius-md); }
-.vxh-skeleton-block--title { height: 2rem; width: 40%; border-radius: var(--vx-radius-md); }
-.vxh-skeleton-block--card  { height: 8rem; border-radius: var(--vx-radius-lg); }
-.vxh-skeleton-nav    { padding: var(--vx-console-space-065r); display: grid; gap: var(--vx-console-space-065r); }
-.vxh-skeleton-content { padding: 2rem; display: grid; gap: 1rem; }
+
+.vxh-skeleton-block--nav { height: 2.25rem; border-radius: var(--vx-radius-md); }
+
+.vxh-skeleton-nav { padding: var(--vx-console-space-065r); display: grid; gap: var(--vx-console-space-065r); }
 
 @keyframes vxh-shimmer {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
 }
 
-/* Varda AI 按钮 —— 参照 action-tools(.vxh-icon) 的背景色 hover：圆形背景填充，
- * 无光晕、无位移、不变暗。 */
-.vxh-agent {
-  transition: background 150ms var(--vx-ease-standard);
-}
-.vxh-agent:hover {
-  background: var(--vxh-brand-soft);
-  opacity: 1;
-}

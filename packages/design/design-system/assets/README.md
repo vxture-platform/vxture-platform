@@ -14,8 +14,12 @@
 - `icons/levels/01–05.svg` — 通用五档等级图，配 DS 的 `LevelMarker`（第几名/哪一档
   配哪张图是业务判断，由调用方决定）。
 - `shell-template/` — console + admin 共用的后台外壳遗留样式层（`shell-template.css`
-  聚合入口）。方向：随 Shell* 组件族收敛逐步消亡；其中 `tokens-admin-shell.css`
-  与 `.vela-*` 段是共性层里的产品私货，收敛时优先拆出。
+  聚合入口）。方向：随 Shell* 组件族收敛逐步消亡——opera 已零依赖跑通该路线。
+  2026-08-18 尸检+GC：整包出身是「城市数据中台」演示应用的逐字誊抄，78% 的
+  选择器（app.css 282/365，含血缘画布、环图/雷达、演示助手 `.vela-*` 等整屏
+死件）与 213 个 token 定义全仓零引用，已删；`tokens-admin-shell.css` 从 97
+  个变量剩 6 个。存者皆有 console/admin/website 消费方，判据=全仓源码整词
+  可达性（根含模板串），git 史可回。
 
 ## 2026-08-18 迁出记录（产品自有 → 各归其主）
 

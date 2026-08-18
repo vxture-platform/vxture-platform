@@ -1,112 +1,19 @@
 /**
- * tokens-admin-shell.css — Admin/Console Shell 框架语义 token（verbatim from design）.
+ * tokens-admin-shell.css — Admin/Console Shell 框架语义 token（残存 6 个）。
+ *
+ * 2026-08-18 GC：原 97 个变量里 91 个全仓零引用（誊抄自演示模板的头部/侧栏/
+ * 搜索/语言面板等整套框架尺寸，对应的 .vxh-*/.nav-* 死规则已随 app.css 一并
+ * 删除），仅存下面 6 个仍被 shell-template css 与门户消费。console/admin 外壳
+ * 收敛到 DS 组件路线后，本文件随 shell-template 整体退役。
  */
 
 :root {
-  --vx-admin-header-search-width: min(32.5rem, 100%);
   --vx-admin-directory-row-min-width: min(100%, 74rem);
-  --vx-admin-directory-row-max-width: min(100%, 74rem);
-  --vx-admin-directory-row-min-width-compact: min(100%, 64rem);
-  --vx-admin-shell-center-column-width: 32.5rem;
-  --vx-admin-workspace-switcher-width: 20rem;
-  --vx-admin-shell-min-width: 1180px;
-  --vx-admin-shell-content-visual-min-height: 8rem;
-  --vx-admin-shell-sidebar-width: 20rem;
-  --vx-admin-shell-sidebar-collapsed-width: 4rem;
-  --vx-admin-shell-sidebar-icon-size: 1.5rem;
-  --vx-admin-shell-sidebar-content-inset: 1.5rem;
-  --vx-admin-shell-sidebar-padding-y: 1rem;
-  --vx-admin-shell-sidebar-section-gap: 0.5rem;
-  --vx-admin-shell-sidebar-control-inset: 8px;
-  --vx-admin-shell-sidebar-transition: 420ms cubic-bezier(0.22, 1, 0.36, 1);
-  --vx-admin-shell-content-margin-x: 4rem;
-  --vx-admin-shell-content-padding-x: 4rem;
-  --vx-admin-shell-content-padding-top: 3rem;
-  --vx-admin-shell-content-padding-bottom: 4rem;
-  --vx-admin-shell-content-max-width: 92.5rem;
-}
-
-:root {
   --vx-admin-shell-header-height: 4rem;
-  --vx-admin-shell-header-center-min-width: 18rem;
-  --vx-admin-shell-header-columns: minmax(0, 1fr) minmax(var(--vx-admin-shell-header-center-min-width), var(--vx-admin-shell-center-column-width)) auto;
-  --vx-admin-shell-header-gap: 1.5rem;
-  --vx-admin-shell-header-padding-x: 1rem;
-  --vx-admin-shell-header-blur: 24px;
-  --vx-admin-shell-header-search-height: 2.25rem;
-  --vx-admin-shell-header-search-highlight-width: 1px;
-  --vx-admin-shell-header-search-focus-ring-width: 2px;
-  --vx-admin-shell-header-left-gap: 0.75rem;
-  --vx-admin-shell-brand-gap: 0.5rem;
-  --vx-admin-shell-brand-logo-size: 1.5rem;
-  --vx-admin-shell-brand-logo-shadow-y: 6px;
-  --vx-admin-shell-brand-logo-shadow-blur: 14px;
-  --vx-admin-shell-brand-title-size: 1.5rem;
-  --vx-admin-shell-brand-title-line: 2rem;
-  --vx-admin-shell-divider-width: 1px;
-  --vx-admin-shell-context-max-width: 12rem;
-  --vx-admin-shell-actions-gap: 1rem;
-  --vx-admin-shell-action-group-gap: 0.25rem;
-  --vx-admin-shell-action-group-padding: 0.125rem;
-  --vx-admin-shell-section-gap: 1rem;
-  --vx-admin-shell-control-size: 2rem;
-  --vx-admin-shell-rail-size: 2.5rem;
-  --vx-admin-shell-rail-track: 2.5rem;
-  --vx-admin-shell-compact-icon-box-size: 1.5rem;
-  --vx-admin-shell-icon-size: 1rem;
-  --vx-admin-shell-border-width: 1px;
-  --vx-admin-shell-status-min-width: 1.85rem;
-  --vx-admin-shell-status-padding-x: 0.375rem;
-  --vx-admin-shell-status-font-size: 0.625rem;
-  --vx-admin-shell-status-line: 1rem;
-  --vx-admin-shell-workspace-title-size: 1rem;
-  --vx-admin-shell-sidebar-title-padding-start: 1rem;
-  --vx-admin-shell-hidden-offset: 0.25rem;
-  --vx-admin-shell-badge-offset: 0.18rem;
-}
 
-:root {
-  --vx-admin-shell-assistant-gap: 1rem;
-  --vx-admin-shell-assistant-copy-gap: 0.35rem;
-  --vx-admin-shell-assistant-tag-gap: 0.2rem;
-  --vx-admin-shell-nav-gap: 1rem;
-  --vx-admin-shell-nav-section-gap: 0.5rem;
-  --vx-admin-shell-nav-section-action-track: 1.5rem;
-  --vx-admin-shell-nav-section-trigger-gap: 0.5rem;
-  --vx-admin-shell-nav-label-gap: 0.375rem;
-  --vx-admin-shell-nav-item-gap: 1rem;
-  --vx-admin-shell-nav-item-height: 2.5rem;
-  --vx-admin-shell-footer-height: 2.5rem;
-  --vx-admin-shell-footer-divider-height: 1px;
-  --vx-admin-shell-collapsed-nav-gap: 0.25rem;
-}
-
-:root {
-  --vx-admin-shell-title-size: 1rem;
+  /* shell 字号阶（app.css / user-panel.css 消费） */
   --vx-admin-shell-body-size: 0.875rem;
   --vx-admin-shell-item-size: 0.8125rem;
   --vx-admin-shell-caption-size: 0.75rem;
   --vx-admin-shell-tag-size: 0.625rem;
-  --vx-admin-shell-header-text-line: 1.25rem;
-  --vx-admin-shell-header-control-size: 2rem;
-  --vx-admin-shell-panel-radius: 1rem;
-  --vx-admin-shell-control-radius: 0.75rem;
-  --vx-admin-shell-item-radius: 0.75rem;
-  --vx-admin-shell-pill-radius: var(--vx-radius-full);
-  --vx-admin-shell-header-shadow: 0 3px 4px color-mix(in srgb, var(--vx-color-gray-900) 6%, transparent);
-  --vx-admin-shell-assistant-border-width: 2px;
-  --vx-admin-shell-assistant-shadow: calc(12px * -1) 0 24px calc(24px * -1) color-mix(in srgb, var(--vx-color-brand-800) 16%, transparent);
-  --vx-admin-shell-floating-shadow: 0 18px 48px var(--vx-admin-shadow-spread-lg) color-mix(in srgb, var(--vx-color-brand-800) 34%, transparent);
-  --vx-admin-shell-agent-button-size: 2.5rem;
-  --vx-admin-shell-agent-button-icon-size: 2.25rem;
-  --vx-admin-shell-agent-button-hover-opacity: 0.86;
-  --vx-admin-shell-locale-panel-offset: 1.25rem;
-  --vx-admin-shell-locale-panel-gap: 0.25rem;
-  --vx-admin-shell-locale-panel-padding: 0.375rem;
-  --vx-admin-shell-locale-panel-border-width: 1px;
-  --vx-admin-shell-locale-panel-blur: 18px;
-  --vx-admin-shell-locale-option-min-height: 1.875rem;
-  --vx-admin-shell-locale-option-padding-y: 0.3125rem;
-  --vx-admin-shell-locale-option-padding-x: 0.625rem;
-  --vx-admin-shell-locale-option-line: 1.125rem;
 }

@@ -2,10 +2,11 @@
  * shell-template.css — shared portal shell visual system
  * @package @vxture/design-system
  *
- * Verbatim transcription of the Claude Design "通用 Console 模板" shell
- * (shell.jsx / main-template.jsx): the .app / .vxh / .sidebar / .assistant /
- * .vela-* chrome plus its tokens. Single source of truth consumed by both the
- * console and admin portals so the two shells stay pixel-identical.
+ * 出身：Claude Design「通用 Console 模板」（"城市数据中台"演示）shell.jsx /
+ * main-template.jsx 的誊抄。2026-08-18 GC 后只剩 console/admin 实际消费的
+ * .app / .vxh / .sidebar / .assistant 外壳件与其 token——演示专属的整屏死件
+ * （.vela-* 助手、图表、血缘画布等，78% 的选择器）已删，两个门户共用本入口
+ * 保持外壳一致。方向：随 Shell* 组件族收敛整体退役（opera 已零依赖跑通）。
  *
  * Load AFTER the DS base packs (globals/console) so the template chrome and its
  * ergonomic aliases win. The Phosphor icon font is loaded via <link> in each

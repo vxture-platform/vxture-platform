@@ -14,98 +14,106 @@
  * are the `--vxh-ctrl` / `--vxh-glass` context vars the full shell would
  * otherwise provide.
  * ═══════════════════════════════════════════════════════════════════════════ */
-
-/* popover anchor — standalone context vars (full shell sets these on .vxh-actions) */
+/* popover anchor — standalone context vars（完整外壳里由 .vxh 头部提供） */
 .vxh-pop-anchor {
   position: relative;
   display: inline-flex;
   --vxh-ctrl: 2rem;
   --vxh-glass: color-mix(in srgb, var(--vx-color-white) 90%, transparent);
 }
+
 .dark .vxh-pop-anchor {
   --vxh-glass: color-mix(in srgb, var(--vx-color-shell-bg) 90%, transparent);
 }
+
 .vxh-backdrop { position: fixed; inset: 0; z-index: 1; }
+
 .vxh-panel { position: absolute; top: calc(100% + 12px); z-index: 10; background: var(--bg-surface); border: 1px solid var(--border-muted); border-radius: var(--vx-radius-lg); box-shadow: var(--vx-shadow-xl); padding: 12px; }
 
 /* avatar trigger */
 .vxh-user { position: relative; width: var(--vxh-ctrl); height: var(--vxh-ctrl); border: 0; padding: 0; background: transparent; cursor: pointer; display: inline-grid; place-items: center; transition: opacity 150ms; }
+
 .vxh-user:hover { opacity: 0.86; }
+
 .vxh-avatar { width: var(--vx-avatar-size-sm); height: var(--vx-avatar-size-sm); border-radius: var(--vx-radius-full); background: var(--vx-gradient-brand); color: var(--vx-color-white); display: inline-flex; align-items: center; justify-content: center; font: 700 var(--vx-admin-shell-item-size) var(--font-brand); flex-shrink: 0; overflow: hidden; }
+
 .vxh-avatar.lg { width: var(--vx-avatar-size-md); height: var(--vx-avatar-size-md); font-size: var(--vx-type-body-size); }
+
 .vxh-avatar.xl { width: var(--vx-avatar-size-lg); height: var(--vx-avatar-size-lg); font-size: var(--vx-type-body-lg-size); }
+
 .vxh-user-status { position: absolute; right: 1px; bottom: 1px; width: 9px; height: 9px; border-radius: var(--vx-radius-full); background: var(--vx-color-success-500); border: 2px solid var(--vxh-glass); }
 
 /* panel — identity head */
 .vxh-user-panel { right: 0; width: 300px; }
+
 .vxh-user-head { display: flex; align-items: center; gap: var(--vx-space-md); padding: 8px 8px 14px; }
+
 .vxh-user-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
 .vxh-user-name { display: flex; align-items: center; gap: 8px; font: 700 var(--vx-type-body-size) var(--font-cjk); color: var(--fg-strong); }
-.vxh-user-id { font: 400 var(--vx-admin-shell-caption-size) var(--font-mono); color: var(--fg-muted); }
+
 .vxh-user-contacts { display: flex; flex-direction: column; gap: 3px; margin-top: 5px; min-width: 0; }
+
 /* 纯文字（无 icon）；过长（如长邮箱）单行截断省略号，不溢出固定宽度面板 */
 .vxh-user-contact { display: block; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 var(--vx-admin-shell-caption-size) var(--font-mono); color: var(--fg-muted); }
+
 .vxh-user-contact.is-missing { color: var(--vx-color-danger-600); }
+
 .vxh-verify { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; border-radius: var(--vx-radius-full); background: var(--vx-color-success-surface); color: var(--vx-color-success-700); font: 600 var(--vx-admin-shell-tag-size) var(--font-cjk); }
+
 .vxh-verify i { font-size: var(--vx-admin-shell-caption-size); }
-.vxh-user-badges { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 8px 2px; padding-left: calc(8px + 48px + var(--vx-space-md)); }
 
-/* level row + level chip + 5-slot badges */
-.vxh-level-row { display: flex; align-items: center; gap: 12px; padding: 6px 10px 10px; }
-.vxh-level-lead { font-size: var(--vx-icon-size-sm); color: var(--fg-muted); flex-shrink: 0; }
-.vxh-level-row .vxh-acct-label { flex-shrink: 0; font: 500 var(--vx-admin-shell-body-size) var(--font-cjk); color: var(--fg); }
-.vxh-lvchip { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: var(--vx-radius-full); font: 600 var(--vx-admin-shell-caption-size) var(--font-cjk); }
-.vxh-lvchip i { font-size: var(--vx-admin-shell-caption-size); }
-.vxh-lvchip.lv1 { background: var(--bg-muted); color: var(--fg-2); }
-.vxh-lvchip.lv2 { background: var(--vx-color-info-surface); color: var(--vx-color-info-600); }
-.vxh-lvchip.lv3 { background: color-mix(in srgb, var(--vx-color-ai-cyan-600) 13%, transparent); color: var(--vx-color-ai-cyan-600); }
-.vxh-lvchip.lv4 { background: var(--primary-soft); color: var(--primary); }
-.vxh-lvchip.lv5 { background: color-mix(in srgb, var(--vx-color-spark-500) 18%, transparent); color: color-mix(in srgb, var(--vx-color-spark-500) 72%, #000); }
-.vxh-lvslots { display: inline-flex; gap: 14px; margin-left: 30px; }
-.vxh-lvslot { width: 32px; height: 32px; border-radius: var(--vx-radius-full); display: inline-grid; place-items: center; background: color-mix(in srgb, var(--fg) 5%, transparent); color: color-mix(in srgb, var(--fg-disabled) 60%, transparent); transition: transform 140ms; }
-.vxh-lvslot i { font-size: 17px; }
-.vxh-lvslot.is-earned.lv1 { background: color-mix(in srgb, var(--fg) 9%, transparent); color: var(--fg-2); }
-.vxh-lvslot.is-earned.lv2 { background: var(--vx-color-info-surface); color: var(--vx-color-info-600); }
-.vxh-lvslot.is-earned.lv3 { background: color-mix(in srgb, var(--vx-color-ai-cyan-600) 14%, transparent); color: var(--vx-color-ai-cyan-600); }
-.vxh-lvslot.is-earned.lv4 { background: var(--primary-soft); color: var(--primary); }
-.vxh-lvslot.is-earned.lv5 { background: color-mix(in srgb, var(--vx-color-spark-500) 20%, transparent); color: color-mix(in srgb, var(--vx-color-spark-500) 72%, #000); }
-.vxh-lvslot.is-current { box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 3.5px currentColor; }
-.vxh-lvslot-num { font: 700 15px var(--font-number); line-height: 1; }
-.vxh-lvslot.is-earned.slot-role { background: color-mix(in srgb, var(--vx-color-spark-500) 20%, transparent); color: color-mix(in srgb, var(--vx-color-spark-500) 72%, #000); }
-.vxh-lvslot.is-earned.slot-level { background: var(--primary-soft); color: var(--primary); }
-.vxh-badge-chip { padding: 3px 10px; border-radius: var(--vx-radius-full); background: var(--primary-soft); color: var(--primary); font: 600 var(--vx-admin-shell-caption-size) var(--font-cjk); }
-.vxh-badge-chip.alt { background: var(--bg-muted); color: var(--fg-2); }
-
-/* account rows */
+/* account rows（等级行/徽章槽 lv*·vxh-lvchip 族已删——全仓零引用，2026-08-18 GC） */
 .vxh-acct-div { height: 1px; background: var(--border-muted); margin: 10px 0; }
+
 .vxh-acct-block { display: flex; flex-direction: column; gap: 2px; }
+
 .vxh-acct-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px; border: 0; background: transparent; border-radius: var(--vx-radius-lg); cursor: pointer; text-align: left; font: 500 var(--vx-admin-shell-item-size) var(--font-cjk); color: var(--fg); transition: background 140ms; text-decoration: none; }
+
 .vxh-acct-row > i:first-child { font-size: var(--vx-icon-size-sm); color: var(--fg-muted); }
+
 .vxh-acct-row:hover { background: var(--bg-muted); }
+
 .vxh-acct-label { flex-shrink: 0; }
-.vxh-acct-val { margin-left: auto; font: 400 var(--vx-admin-shell-caption-size) var(--font-cjk); color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .vxh-acct-go { margin-left: auto; color: var(--fg-disabled); font-size: var(--vx-icon-size-sm); }
-.vxh-acct-switch { margin-left: 8px; color: var(--primary); font-size: var(--vx-icon-size-sm); flex-shrink: 0; }
 
 /* preferences */
 .vxh-prefs { display: flex; flex-direction: column; gap: 9px; }
+
 .vxh-prefs-title { font: 500 var(--vx-admin-shell-item-size) var(--font-cjk); letter-spacing: 0; text-transform: none; color: var(--fg-disabled); padding: 0 0 4px 10px; }
+
 .vxh-pref-row { display: flex; align-items: center; gap: 12px; padding: 0 2px 0 10px; }
+
 .vxh-pref-ico { font-size: var(--vx-icon-size-sm); color: var(--fg-muted); flex-shrink: 0; width: var(--vx-icon-size-sm); text-align: center; }
+
 .vxh-pref-select { flex: 1; min-width: 0; height: 36px; padding: 0 12px; border: 1px solid var(--shell-border); border-radius: var(--vx-radius-lg); background: var(--bg-surface); font: var(--vx-admin-shell-caption-size) var(--font-cjk); color: var(--fg); cursor: pointer; outline: none; }
+
 .vxh-pref-select:focus { border-color: color-mix(in srgb, var(--primary) 56%, transparent); }
+
 .vxh-seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--bg-muted); border: 1px solid var(--shell-border); border-radius: var(--vx-radius-lg); }
+
 .vxh-seg button { border: 0; background: transparent; padding: 6px 10px; border-radius: var(--vx-radius-md); font: 500 var(--vx-admin-shell-caption-size) var(--font-cjk); color: var(--fg-2); cursor: pointer; transition: background 140ms, color 140ms; }
+
 .vxh-seg.full { flex: 1; min-width: 0; }
+
 .vxh-seg.full button { flex: 1; text-align: center; }
+
 .vxh-seg button.on { background: var(--bg-surface); color: var(--primary); font-weight: 600; box-shadow: var(--vx-shadow-xs); }
 
 /* footer actions */
 .vxh-user-actions { display: flex; flex-direction: column; gap: 2px; }
+
 .vxh-menu-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px; border: 0; background: transparent; border-radius: var(--vx-radius-lg); cursor: pointer; text-align: left; font: 500 var(--vx-admin-shell-item-size) var(--font-cjk); color: var(--fg); transition: background 140ms; }
+
 .vxh-menu-item i { font-size: var(--vx-icon-size-sm); color: var(--fg-muted); }
+
 .vxh-menu-item:hover { background: var(--bg-muted); }
+
 .vxh-menu-item.danger { color: var(--vx-color-danger); }
+
 .vxh-menu-item.danger i { color: var(--vx-color-danger); }
+
 .vxh-menu-item.danger:hover { background: var(--vx-color-danger-surface); }
+
 .vxh-menu-item:disabled { opacity: 0.45; cursor: not-allowed; }

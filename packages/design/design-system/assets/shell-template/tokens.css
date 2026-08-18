@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
- * Console template tokens — verbatim from the Console templates design
- * (colors_and_type.css), minus @font-face / Google @import (fonts come from
- * @vxture/design-system). Values are 1:1 with the DS --vx-* ramp (no drift);
- * the ergonomic aliases (--bg, --fg, --primary, …) are what the template
- * app.css consumes and are NOT provided by DS, so they live here.
+ * Console template tokens — 誊抄自 Console 模板设计（colors_and_type.css），
+ * 去掉 @font-face / Google @import（字体走 @vxture/design-system）。
+ * 2026-08-18 GC：117 个全仓零引用的定义已删（演示专属的 AI 色阶、动效时长阶、
+ * display/h1-h3 字阶、z-index 别名等），存者皆有消费方。人机别名段（--bg-*,
+ * --fg-*, --font-*）是 shell-template css 的取值面，DS 不提供，保留。
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
@@ -24,96 +24,62 @@
 
   /* ── Primitives · Quantum AI accents ──────────────────────────────────── */
   --vx-color-ai-50:  #faf5ff;
-  --vx-color-ai-100: #f3e8ff;
-  --vx-color-ai-200: #e9d5ff;
-  --vx-color-ai-300: #d8b4fe;
   --vx-color-ai-400: #c084fc;
   --vx-color-ai-500: #a855f7;
-  --vx-color-ai-600: #9333ea;
-  --vx-color-ai-700: #7e22ce;
 
-  --vx-color-ai-cyan-100: #cffafe;
-  --vx-color-ai-cyan-300: #67e8f9;
   --vx-color-ai-cyan-400: #22d3ee;
   --vx-color-ai-cyan-500: #06b6d4;
-  --vx-color-ai-cyan-600: #0891b2;
 
-  --vx-color-spark-100: #fef3c7;
-  --vx-color-spark-300: #fcd34d;
   --vx-color-spark-400: #fbbf24;
-  --vx-color-spark-500: #f59e0b;
 
   /* ── Primitives · Neutral ─────────────────────────────────────────────── */
   --vx-color-white: #ffffff;
   --vx-color-black: #000000;
   --vx-color-gray-50:  #f9fafb;
-  --vx-color-gray-100: #f3f4f6;
-  --vx-color-gray-200: #e5e7eb;
   --vx-color-gray-300: #d1d5db;
   --vx-color-gray-400: #9ca3af;
   --vx-color-gray-500: #6b7280;
   --vx-color-gray-600: #4b5563;
   --vx-color-gray-700: #374151;
-  --vx-color-gray-800: #1f2937;
   --vx-color-gray-900: #111827;
 
   /* ── Primitives · Semantic status ─────────────────────────────────────── */
   --vx-color-success-50:  #ecfdf5;
-  --vx-color-success-300: #6ee7b7;
   --vx-color-success-500: #10b981;
   --vx-color-success-600: #059669;
   --vx-color-success-700: #047857;
 
   --vx-color-warning-50:  #fffbeb;
-  --vx-color-warning-300: #fcd34d;
   --vx-color-warning-500: #f59e0b;
   --vx-color-warning-700: #b45309;
 
   --vx-color-danger-50:  #fff1f2;
-  --vx-color-danger-300: #fda4af;
-  --vx-color-danger-500: #f43f5e;
   --vx-color-danger-600: #e11d48;
   --vx-color-danger-700: #be123c;
 
   --vx-color-info-50:  #f0f9ff;
-  --vx-color-info-300: #7dd3fc;
-  --vx-color-info-500: #0ea5e9;
   --vx-color-info-600: #0284c7;
-
-  --vx-color-social-wechat:   #07c160;
-  --vx-color-social-dingtalk: #1677ff;
-  --vx-color-social-feishu:   #3370ff;
 
   /* ── Semantic · Surfaces ──────────────────────────────────────────────── */
   --vx-color-background:     var(--vx-color-brand-50);
-  --vx-color-page:           var(--vx-color-white);
   --vx-color-surface:        var(--vx-color-white);
   --vx-color-surface-muted:  var(--vx-color-gray-50);
   --vx-color-surface-soft:   #fbfcfe;
-  --vx-color-surface-raised: var(--vx-color-white);
 
   /* ── Semantic · Borders / rings / overlay ─────────────────────────────── */
   --vx-color-border:         rgba(30, 81, 255, 0.10);
   --vx-color-border-muted:   rgba(15, 23, 42, 0.07);
   --vx-color-border-strong:  rgba(30, 81, 255, 0.32);
-  --vx-color-ring:           rgba(30, 81, 255, 0.12);
-  --vx-color-ring-strong:    rgba(30, 81, 255, 0.55);
   --vx-color-overlay:        rgba(15, 23, 42, 0.46);
 
   /* ── Semantic · Primary ───────────────────────────────────────────────── */
   --vx-color-primary:        var(--vx-color-brand-600);
-  --vx-color-primary-hover:  var(--vx-color-brand-700);
   --vx-color-primary-soft:   var(--vx-color-brand-100);
-  --vx-color-primary-subtle: rgba(30, 81, 255, 0.08);
 
   /* ── Semantic · AI ────────────────────────────────────────────────────── */
   --vx-color-ai:           var(--vx-color-ai-500);
-  --vx-color-ai-hover:     var(--vx-color-ai-600);
   --vx-color-ai-surface:   var(--vx-color-ai-50);
-  --vx-color-ai-soft:      var(--vx-color-ai-100);
   --vx-color-ai-border:    rgba(168, 85, 247, 0.32);
-  --vx-color-ai-fg:        var(--vx-color-ai-700);
-  --vx-color-ai-cyan:      var(--vx-color-ai-cyan-500);
   --vx-color-spark:        var(--vx-color-spark-400);
 
   /* ── Semantic · Text ──────────────────────────────────────────────────── */
@@ -131,7 +97,6 @@
   --vx-color-warning-surface: var(--vx-color-warning-50);
   --vx-color-danger:          var(--vx-color-danger-600);
   --vx-color-danger-surface:  var(--vx-color-danger-50);
-  --vx-color-info:            var(--vx-color-info-600);
   --vx-color-info-surface:    var(--vx-color-info-50);
 
   /* ── Semantic · Shell (portal chrome) ─────────────────────────────────── */
@@ -143,21 +108,15 @@
   --vx-color-shell-border:   rgba(15, 23, 42, 0.07);
   --vx-color-shell-text:     #162033;
   --vx-color-shell-muted:    #6b7a90;
-  --vx-color-shell-icon:     #5f7088;
   --vx-color-shell-brand:    var(--vx-color-brand-600);
   --vx-color-shell-ink:      var(--vx-color-brand-950);
   --vx-color-shell-hover:    color-mix(in srgb, var(--vx-color-brand-600) 8%, transparent);
 
   /* ── Gradients ────────────────────────────────────────────────────────── */
-  --vx-gradient-aurora:
-    linear-gradient(135deg, var(--vx-color-brand-700) 0%, var(--vx-color-ai-500) 100%);
   --vx-gradient-brand:
     linear-gradient(135deg, var(--vx-color-brand-600) 0%, var(--vx-color-brand-400) 100%);
   --vx-gradient-ai-duo:
     linear-gradient(135deg, var(--vx-color-ai-500) 0%, var(--vx-color-ai-cyan-400) 100%);
-  --vx-gradient-spark-pulse:
-    radial-gradient(circle,
-      color-mix(in srgb, var(--vx-color-spark-300) 55%, transparent) 0%, transparent 80%);
 
   /* ── Foundation · Spacing ─────────────────────────────────────────────── */
   --vx-space-xs:  4px;
@@ -166,18 +125,13 @@
   --vx-space-lg:  16px;
   --vx-space-xl:  24px;
   --vx-space-2xl: 32px;
-  --vx-space-3xl: 48px;
-  --vx-space-4xl: 64px;
-  --vx-space-5xl: 96px;
 
   /* ── Foundation · Radius ──────────────────────────────────────────────── */
-  --vx-radius-xs:   2px;
   --vx-radius-sm:   4px;
   --vx-radius-md:   6px;
   --vx-radius-lg:   8px;
   --vx-radius-xl:   12px;
   --vx-radius-2xl:  16px;
-  --vx-radius-3xl:  20px;
   --vx-radius-full: 9999px;
 
   /* ── Foundation · Shadow ──────────────────────────────────────────────── */
@@ -187,67 +141,32 @@
   --vx-shadow-lg:   0 12px 24px rgba(29, 78, 216, 0.08), 0 4px 8px rgba(15, 23, 42, 0.06);
   --vx-shadow-xl:   0 24px 48px rgba(29, 78, 216, 0.12), 0 8px 16px rgba(15, 23, 42, 0.08);
   --vx-shadow-2xl:  0 40px 80px rgba(29, 78, 216, 0.16), 0 16px 32px rgba(168, 85, 247, 0.08);
-  --vx-shadow-glow: 0 0 32px rgba(168, 85, 247, 0.35), 0 0 16px rgba(29, 78, 216, 0.25);
   --vx-shadow-focus-ring:    0 0 0 3px rgba(29, 81, 255, 0.15);
-  --vx-shadow-focus-ring-ai: 0 0 0 3px rgba(168, 85, 247, 0.20);
-  --vx-shadow-inset:         inset 0 1px 2px rgba(15, 23, 42, 0.06);
 
   /* ── Foundation · Motion ──────────────────────────────────────────────── */
-  --vx-duration-instant:  75ms;
-  --vx-duration-fast:     150ms;
-  --vx-duration-base:     200ms;
-  --vx-duration-moderate: 300ms;
-  --vx-duration-slow:     400ms;
-  --vx-duration-slower:   600ms;
-  --vx-duration-spinner:  800ms;
-  --vx-duration-pulse:    1500ms;
-  --vx-duration-shimmer:  2000ms;
 
   --vx-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
-  --vx-ease-out:      cubic-bezier(0,   0, 0.2, 1);
-  --vx-ease-in:       cubic-bezier(0.4, 0, 1,   1);
-  --vx-ease-in-out:   cubic-bezier(0.4, 0, 0.2, 1);
-  --vx-ease-snappy:   cubic-bezier(0.34, 1.56, 0.64, 1);
 
   /* ── Foundation · Z-index ─────────────────────────────────────────────── */
-  --vx-z-sticky:   100;
-  --vx-z-fixed:    200;
-  --vx-z-overlay:  300;
   --vx-z-dropdown: 1000;
-  --vx-z-popover:  1100;
-  --vx-z-tooltip:  1200;
   --vx-z-modal:    2000;
   --vx-z-toast:    3000;
   --vx-z-command:  4000;
 
   /* ── Foundation · Layout · Shell dimensions ───────────────────────────── */
-  --vx-shell-header-height:           64px;
-  --vx-shell-rail-height:             3.25rem;
   /* 与 T2 侧栏刻度对齐（--spacing-sidebar-*：展开 256 / 收起 64 / 最小 48）。
      原 252px 是 off-scale 值；本文件不 import T2，故写同值字面量。 */
   --vx-shell-sidebar-width:           256px;
-  --vx-shell-sidebar-collapsed-width: 4rem;
-  --vx-shell-sidebar-icon-size:       24px;
-  --vx-shell-sidebar-content-inset:   1.25rem;
   --vx-shell-assistant-width:         420px;
-  --vx-shell-body-gap:                0px;
-  --vx-shell-section-gap:             1rem;
-  --vx-shell-panel-radius:            var(--vx-radius-xl);
 
   /* ── Foundation · Layout · Content regions ────────────────────────────── */
   --vx-layout-console-body-max-width:   1480px;
-  --vx-layout-console-body-padding:     clamp(1.5rem, 3vw, 2.5rem)
-                                        clamp(1.35rem, 3.2vw, 3.25rem) 3rem;
-  --vx-layout-settings-split-columns:   280px minmax(0, 1fr);
-  --vx-layout-dashboard-columns:        minmax(0, 1.08fr) minmax(320px, 0.92fr);
-  --vx-layout-stack-gap:                1rem;
   --vx-layout-page-bottom-safe-space:   4.5rem;
 
   /* ── Type · Families ──────────────────────────────────────────────────── */
   --vx-font-brand:  "Funnel Display", "PingFang SC", "Hiragino Sans GB",
                     "Microsoft YaHei", "Noto Sans SC", ui-sans-serif,
                     system-ui, sans-serif;
-  --vx-font-display: var(--vx-font-brand);
   --vx-font-sans:   "Inter", "Noto Sans SC", "PingFang SC", "Hiragino Sans GB",
                     "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
   --vx-font-cjk:    "Noto Sans SC", "PingFang SC", "Hiragino Sans GB",
@@ -257,34 +176,8 @@
   --vx-font-number: var(--vx-font-sans);
 
   /* ── Type · Scale ─────────────────────────────────────────────────────── */
-  --vx-type-display-hero-size:    clamp(3.5rem, 8vw, 8rem);
-  --vx-type-display-hero-leading: 0.95;
-  --vx-type-display-hero-tracking: -0.048em;
-  --vx-type-display-xl-size:    clamp(2.75rem, 6vw, 5.5rem);
-  --vx-type-display-xl-leading: 0.98;
-  --vx-type-display-xl-tracking: -0.045em;
-  --vx-type-h1-size:    clamp(2.25rem, 4vw, 3.5rem);
-  --vx-type-h1-leading: 1.08;
-  --vx-type-h1-tracking: -0.04em;
-  --vx-type-h2-size:    clamp(1.875rem, 3vw, 2.5rem);
-  --vx-type-h2-leading: 1.15;
-  --vx-type-h2-tracking: -0.03em;
-  --vx-type-h3-size:    1.5rem;
-  --vx-type-h3-leading: 1.25;
-  --vx-type-h3-tracking: -0.015em;
   --vx-type-body-size:    1rem;
-  --vx-type-body-leading: 1.6;
   --vx-type-body-lg-size:    1.125rem;
-  --vx-type-body-lg-leading: 1.7;
-  --vx-type-body-sm-size:    0.875rem;
-  --vx-type-body-sm-leading: 1.55;
-  --vx-type-cjk-leading:    1.75;
-  --vx-type-cjk-tracking:   0.01em;
-  --vx-type-code-size:    0.8125rem;
-  --vx-type-code-leading: 1.55;
-  --vx-type-metric-size:    clamp(2rem, 4vw, 4rem);
-  --vx-type-metric-leading: 1;
-  --vx-type-metric-tracking: -0.035em;
 }
 
 /* ─── Dark mode ─────────────────────────────────────────────────────────── */
@@ -292,16 +185,13 @@
   color-scheme: dark;
 
   --vx-color-background:     #0a0e1a;
-  --vx-color-page:            #0a0e1a;
   --vx-color-surface:         #12172a;
   --vx-color-surface-muted:   #1a2038;
   --vx-color-surface-soft:    #161b2e;
-  --vx-color-surface-raised:  #1c2440;
 
   --vx-color-border:        rgba(148, 163, 200, 0.10);
   --vx-color-border-muted:  rgba(148, 163, 200, 0.06);
   --vx-color-border-strong: rgba(120, 156, 255, 0.32);
-  --vx-color-ring:          rgba(120, 156, 255, 0.18);
   --vx-color-overlay:       rgba(2, 6, 23, 0.72);
 
   --vx-color-text-primary:   #e6ebff;
@@ -312,12 +202,9 @@
   --vx-color-text-strong:    #ffffff;
 
   --vx-color-primary:       var(--vx-color-brand-500);
-  --vx-color-primary-hover: var(--vx-color-brand-400);
   --vx-color-primary-soft:  rgba(30, 81, 255, 0.18);
 
   --vx-color-ai:        var(--vx-color-ai-400);
-  --vx-color-ai-hover:  var(--vx-color-ai-300);
-  --vx-color-ai-soft:   rgba(168, 85, 247, 0.18);
   --vx-color-ai-border: rgba(168, 85, 247, 0.40);
 
   --vx-shadow-md:  0 4px 8px rgba(0, 0, 0, 0.40), 0 2px 4px rgba(0, 0, 0, 0.30);
@@ -329,7 +216,6 @@
   --vx-color-shell-border:  rgba(148, 163, 200, 0.08);
   --vx-color-shell-text:    #e6ebff;
   --vx-color-shell-muted:   #aab4d4;
-  --vx-color-shell-icon:    #aab4d4;
   --vx-color-shell-brand:   var(--vx-color-brand-400);
   --vx-color-shell-ink:     #ffffff;
 }
@@ -338,8 +224,6 @@
  * Ergonomic aliases — what the template app.css consumes. NOT provided by DS.
  * ═══════════════════════════════════════════════════════════════════════════ */
 :root {
-  --bg:           var(--vx-color-background);
-  --bg-page:      var(--vx-color-page);
   --bg-surface:   var(--vx-color-surface);
   --bg-muted:     var(--vx-color-surface-muted);
   --bg-shell:     var(--vx-color-shell-bg);
@@ -349,7 +233,6 @@
   --fg-muted:     var(--vx-color-text-muted);
   --fg-disabled:  var(--vx-color-text-disabled);
   --fg-strong:    var(--vx-color-text-strong);
-  --fg-inverse:   var(--vx-color-text-inverse);
 
   --shell-border:       var(--vx-color-border);
   --border-muted: var(--vx-color-border-muted);
@@ -362,15 +245,8 @@
    * app.css 都没用过，纯粹在污染；`--border` 更把中性描边整体换成了品牌蓝 10%，
    * 于是 admin 的卡片/输入框/分隔线与 opera、console 长得不一样）。 */
   --primary-soft: var(--vx-color-primary-soft);
-  --primary-subtle: var(--vx-color-primary-subtle);
-
-  --ai-soft:      var(--vx-color-ai-soft);
-  --ai-fg:        var(--vx-color-ai-fg);
-
-  --danger:       var(--vx-color-danger);
 
   --font-brand:   var(--vx-font-brand);
-  --font-display: var(--vx-font-display);
   --font-sans:    var(--vx-font-sans);
   --font-cjk:     var(--vx-font-cjk);
   --font-mono:    var(--vx-font-mono);
