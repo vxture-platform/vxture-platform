@@ -31,7 +31,10 @@ export interface DialogOverlayProps extends React.ComponentPropsWithoutRef<
 
 export interface DialogContentProps extends React.ComponentPropsWithoutRef<
   typeof DialogPrimitive.Content
-> {}
+> {
+  /** 宽度档 = T2 panel 族（sm 28 / md 32 / lg 42 / xl 58rem）。缺省 md。 */
+  readonly width?: "sm" | "md" | "lg" | "xl";
+}
 
 export interface DialogHeaderProps extends React.HTMLAttributes<HTMLDivElement> {}
 
@@ -77,8 +80,24 @@ const DialogOverlay = React.forwardRef<HTMLDivElement, DialogOverlayProps>(
   },
 );
 
+/**
+ * 对话框宽度四档 = T2 panel 族（28 / 32 / 42 / 58rem）。
+ * 同 overlayWidth 的纪律：类名必须写完整字面量（Tailwind 扫源码文本，拼接
+ * 扫不到）；且每一档都要有工具类消费方，@theme 变量才会被 v4 吐出——
+ * xl 档（2026-08-18 owner 批准新增）的 var() 消费方在 admin 的取值层里，
+ * 没有这里这条字面量它会静默失效。
+ */
+export const DIALOG_WIDTHS = ["sm", "md", "lg", "xl"] as const;
+export type DialogWidth = (typeof DIALOG_WIDTHS)[number];
+const dialogWidthClass: Record<DialogWidth, string> = {
+  sm: "max-w-panel-sm",
+  md: "max-w-panel-md",
+  lg: "max-w-panel-lg",
+  xl: "max-w-panel-xl",
+};
+
 const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
-  function DialogContent({ className, children, ...props }, ref) {
+  function DialogContent({ className, width = "md", children, ...props }, ref) {
     return (
       <DialogPortal>
         <DialogOverlay />
@@ -88,7 +107,8 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
             // ⚠ 不能写上游的 `max-w-lg`：本仓 spacing 命名空间有同名 `--spacing-lg`，
             //   v4 宽度工具类优先吃 spacing 档——类名照常生成，对话框塌成 24px 宽。
             //   浮层面板宽走 panel 族（md = 512px，即上游 max-w-lg 的意图值）。
-            "fixed left-[50%] top-[50%] z-modal grid w-full max-w-panel-md",
+            "fixed left-[50%] top-[50%] z-modal grid w-full",
+            dialogWidthClass[width],
             "translate-x-[-50%] translate-y-[-50%] gap-lg p-xl outline-none",
             panel.base,
             panel.dialog,

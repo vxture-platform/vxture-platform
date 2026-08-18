@@ -15,14 +15,11 @@ select {
  * 它想做的事 Tailwind preflight 已经做了（`a { color: inherit;
  * text-decoration: inherit }`），而 preflight 在 `@layer base`，不会压 utilities。 */
 
-.vx-eyebrow,
-.eyebrow {
-  margin: 0 0 var(--space-xs);
-  font-size: var(--vx-admin-base-text-size-072r);
-  letter-spacing: var(--vx-admin-base-text-tracking-018e);
-  text-transform: uppercase;
-  color: var(--vx-console-muted);
-}
+/* `.vx-eyebrow` / `.eyebrow` 已删（2026-08-18，owner 判）。实测它从不渲染：
+ * 15 个页面把 `eyebrow` 传给 PageHeader，PageHeader 解构后**直接丢弃**——
+ * ViewHeader 根本收不到这个 prop，DOM 里从来没有过这两个类名。0.72rem 的
+ * 迷你字号因此只是纸面值；若将来真要小标语，走 T2 的 label/overline 角色，
+ * 不复活这套 admin 私有字号。 */
 
 .console-user-pill span,
 .vx-kpi-card p,

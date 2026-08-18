@@ -43,6 +43,7 @@
   --container-panel-sm: 28rem;  /* 紧凑对话框：确认框、单字段表单 */
   --container-panel-md: 32rem;  /* 默认对话框（= 上游 max-w-lg 的意图值） */
   --container-panel-lg: 42rem;  /* 宽对话框：多列表单、预览面板 */
+  --container-panel-xl: 58rem;  /* 超宽对话框：双栏表单、并排预览 */
 
   /* control */
   --container-overlay-xs: calc(var(--vx-spacing) * 32);  /* 下拉 / 上下文菜单：只有短标签 */

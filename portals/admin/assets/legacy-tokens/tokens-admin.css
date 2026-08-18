@@ -143,6 +143,32 @@
  *   列宽/轨道族维持批五判：内容决定、非梯子，**作为 admin 独有设计值永久字面量
  *   归档**——按 owner 第②条，这在 admin 自有文件里是合法的终态，不再是欠账。
  *
+ * 【第七批 2026-08-18｜批六三悬案的 owner 批复落地】339 → 335 条。
+ *
+ *   **① icon 2–3rem 空档 → 吸附（owner 批 ±8px 改设计）**：11 个方形容器
+ *   token 挂 icon 梯（不随密度，批一判据），平手向下取密：
+ *   1r→icon-sm、135r/1375r→icon-md、15r/175r→icon-lg、2r/235r/25r/40p→icon-xl、
+ *   275r/3r→icon-2xl。另 2 个**纯高度** token 挂 control 梯（随密度）：
+ *   225r→control-lg（精确）、24r→control-xl（+1.6px）。实测甄别中剔出三个
+ *   假方形：45r/475r 是 flex-basis、directory-card-header-track 是 grid 轨道
+ *   ——归列宽/几何档，维持字面量。05r/0875r 两个小点（8/14px）不吸：最近挡
+ *   位移是自身尺寸的 30–50%，不在本批 2–3rem 议题内。
+ *
+ *   **② .vx-eyebrow → 删除（owner 判"这么小不合逻辑"，实测更狠：根本不渲染）**：
+ *   15 个页面把 eyebrow 传给 PageHeader，PageHeader 解构后直接丢弃，ViewHeader
+ *   收不到——类名从未进过 DOM。类规则（admin-base-elements.css）与四个 token
+ *   （text-size-072r / text-tracking-018e 及 base- 别名）一并删除。PageHeader
+ *   的死 prop 保留签名（删字段会让 15 个调用点的对象字面量报多余属性），
+ *   待哪天真要小标语时走 T2 label/overline 角色接活。
+ *
+ *   **③ 对话框族 → T2 panel（owner 批：补 panel-xl=58，其他吸附）**：
+ *   sm 34→panel-md 32（−2rem）、md 40→panel-lg 42（+2rem）、lg 42→panel-lg
+ *   （精确）、xl 58→panel-xl（新挡，semantic-policy 同批新增并重生成）。
+ *   md/lg 并挡是批三既有先例（名字仍分开，将来要拉开只改一行）。
+ *   ⚠ panel-xl 的 @theme 吐出由 DS DialogContent 新开的 width 档
+ *   （max-w-panel-xl 字面量）保证——纯 var() 消费会被 v4 静默丢弃，
+ *   与批四 overlay 族同一处理。
+ *
  * 另有 138 个条目是别名转发（--vx-admin-base-space-05r → --vx-admin-space-05r），
  * 刻意保留而不压平：那一层记录了原设计的语义分层，压平会把它抹掉。
  *
@@ -365,26 +391,26 @@
   --vx-admin-size-10r: 10rem;
   --vx-admin-size-11r-large: 11rem;
   --vx-admin-size-12r-large: 12rem;
-  --vx-admin-size-135r: 1.35rem;
-  --vx-admin-size-1375r: 1.375rem;
+  --vx-admin-size-135r: var(--spacing-icon-md);
+  --vx-admin-size-1375r: var(--spacing-icon-md);
   --vx-admin-size-13r: 13rem;
-  --vx-admin-size-15r: 1.5rem;
+  --vx-admin-size-15r: var(--spacing-icon-lg);
   --vx-admin-size-16r: 16rem;
-  --vx-admin-size-175r: 1.75rem;
+  --vx-admin-size-175r: var(--spacing-icon-lg);
   --vx-admin-size-17r: 17rem;
   --vx-admin-size-18r-large: 18rem;
-  --vx-admin-size-1r: 1rem;
+  --vx-admin-size-1r: var(--spacing-icon-sm);
   --vx-admin-size-20r: 20rem;
-  --vx-admin-size-225r: 2.25rem;
+  --vx-admin-size-225r: var(--space-control-lg);
   --vx-admin-size-22r: 22rem;
-  --vx-admin-size-235r: 2.35rem;
-  --vx-admin-size-24r: 2.4rem;
-  --vx-admin-size-25r: 2.5rem;
-  --vx-admin-size-275r: 2.75rem;
+  --vx-admin-size-235r: var(--spacing-icon-xl);
+  --vx-admin-size-24r: var(--space-control-xl);
+  --vx-admin-size-25r: var(--spacing-icon-xl);
+  --vx-admin-size-275r: var(--spacing-icon-2xl);
   --vx-admin-size-2p: 2px;
-  --vx-admin-size-2r: 2rem;
-  --vx-admin-size-3r: 3rem;
-  --vx-admin-size-40p: 40px;
+  --vx-admin-size-2r: var(--spacing-icon-xl);
+  --vx-admin-size-3r: var(--spacing-icon-2xl);
+  --vx-admin-size-40p: var(--spacing-icon-xl);
   --vx-admin-size-45r: 4.5rem;
   --vx-admin-size-475r: 4.75rem;
   --vx-admin-size-48r-large: 48rem;
@@ -424,7 +450,7 @@
    * 它的 token 没跟着回来**，是同一次事故没扫干净。由新加的
    * `ds/no-undefined-admin-token` 当场抓出。值同样取自 8ca6284e~1。
    */
-  --vx-admin-dialog-max-width-xl: min(58rem, calc(100vw - 2rem));
+  --vx-admin-dialog-max-width-xl: min(var(--container-panel-xl), calc(100vw - 2rem));
   --vx-admin-panel-max-height-lg: 44rem;
 
   /*
@@ -435,7 +461,7 @@
    * 权限树表头的七列网格打成了单列。
    */
   --vx-admin-grid-column-2xs: 5.75rem;
-  --vx-admin-size-25r: 2.5rem;
+  --vx-admin-size-25r: var(--spacing-icon-xl);
   --vx-admin-size-62r: 62rem;
   --vx-admin-track-22r: 22rem;
   --vx-admin-track-325r: 3.25rem;
@@ -512,9 +538,7 @@
   --vx-admin-effect-8p: 8px;
 
   /* text —— 10 项 */
-  --vx-admin-text-size-072r: 0.72rem;
   --vx-admin-text-size-1r: 1rem;
-  --vx-admin-text-tracking-018e: 0.18em;
 
   /* grid —— 5 项 */
   --vx-admin-grid-column-md: 14rem;
@@ -527,14 +551,12 @@
   --vx-admin-card-title-size: var(--title-md-font-size);
 
   /* dialog —— 4 项 */
-  --vx-admin-dialog-width-lg: min(100%, 42rem);
-  --vx-admin-dialog-width-md: min(100%, 40rem);
-  --vx-admin-dialog-width-sm: min(100%, 34rem);
-  --vx-admin-dialog-width-xl: min(58rem, 100%);
+  --vx-admin-dialog-width-lg: min(100%, var(--container-panel-lg));
+  --vx-admin-dialog-width-md: min(100%, var(--container-panel-lg));
+  --vx-admin-dialog-width-sm: min(100%, var(--container-panel-md));
+  --vx-admin-dialog-width-xl: min(var(--container-panel-xl), 100%);
 
   /* base —— 3 项 */
-  --vx-admin-base-text-size-072r: var(--vx-admin-text-size-072r);
-  --vx-admin-base-text-tracking-018e: var(--vx-admin-text-tracking-018e);
 
   /* placeholder —— 2 项 */
   --vx-admin-placeholder-size-16r: var(--vx-admin-size-16r);
