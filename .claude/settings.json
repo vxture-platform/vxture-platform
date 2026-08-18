@@ -3,6 +3,23 @@
     "deny": [
       "Bash(gh api repos/*/actions/runs/*/pending_deployments*)",
       "PowerShell(gh api repos/*/actions/runs/*/pending_deployments*)"
+    ],
+    "allow": [
+      "Bash(pnpm lint:design)",
+      "Bash(pnpm lint:boundaries)",
+      "Bash(pnpm lint:design-tokens)",
+      "Bash(pnpm lint:design-classes)",
+      "Bash(pnpm lint:docs-numbering)",
+      "Bash(gh run watch *)",
+      "Bash(node scripts/guardrails/check-design-system-exports.mjs)",
+      "Bash(node scripts/guardrails/check-preview-coverage.mjs)",
+      "Bash(node scripts/guardrails/check-data-architecture.mjs)",
+      "mcp__claude-in-chrome__tabs_context_mcp",
+      "mcp__claude-in-chrome__get_page_text",
+      "mcp__claude-in-chrome__read_console_messages",
+      "mcp__claude-in-chrome__read_network_requests",
+      "mcp__claude-in-chrome__read_page",
+      "mcp__claude-in-chrome__find"
     ]
   },
   "hooks": {
