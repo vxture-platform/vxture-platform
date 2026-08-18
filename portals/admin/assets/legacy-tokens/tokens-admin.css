@@ -115,6 +115,34 @@
  *     直接套用会让全大写小标题的观感明显变紧，需要 owner 看一眼实际渲染再定，
  *     不能当成误差吸附掉。
  *
+ * 【第六批 2026-08-18｜拆桥】owner 三条判定落地：①能靠现有 T2 的一律吸附，不为
+ * 对照而架桥；②确属 admin 独有的合法留在 admin 包（本文件已于同日随「产品自有
+ * 迁出 DS」从 design-system/assets 迁到此处——它从这天起不再是"DS 里的桥"，
+ * 而是 **admin 自有取值层**）；③要新增 T2 挡位的必须先经 owner 批准。
+ *
+ *   **删 82 条不可达定义**（标记-清扫：以 portals/admin/src 的 var() 引用为根、
+ *   沿桥内 var() 链传递）：platform-autonomy 整块 34 条、directory-row 族 13 条、
+ *   governance-records 三个 grid 模板、operations-skill / overview 残留等——
+ *   批五之后 admin 页面继续收敛，把这些定义的最后调用方也改走了 T2，桥上尸体
+ *   无人再查。421 → 339 条。
+ *
+ *   **边线宽族 13 条挂 T2**（1px → --border-width-thin、2px → --border-width-medium，
+ *   零像素位移）：各卡片/列表/控制条 border-width、line-width-1p/2p、
+ *   service-health 的 strong 与 focus-ring。T2 的 medium 注释本就写着
+ *   "强调描边：选中态、焦点框"，语义正合。
+ *
+ *   **待 owner 批（第③条，新增 T2 挡位类，全部不动直到批复）：**
+ *   a. icon 梯 2–3rem 空档：size 方形族（2.5rem×13 处、2.75rem×10 处等）
+ *      命中空档，补挡（如 icon-xl2=2.5rem）/吸附（±8px 改设计）/判非 icon 三选一
+ *      ——即批五并入 #44 的那批实测数字。
+ *   b. `.vx-eyebrow` 的 0.72rem/0.18em vs T2 overline（letter-spacing 差 3.6 倍）
+ *      ——需看实际渲染再定。
+ *   c. 对话框宽族 34/40/58rem vs T2 panel 28/32/42：仅 42（dialog-width-lg 的
+ *      内值）恰合 panel-lg；整族对齐要么 ±2rem 位移、要么补 panel-xl(58)。
+ *
+ *   列宽/轨道族维持批五判：内容决定、非梯子，**作为 admin 独有设计值永久字面量
+ *   归档**——按 owner 第②条，这在 admin 自有文件里是合法的终态，不再是欠账。
+ *
  * 另有 138 个条目是别名转发（--vx-admin-base-space-05r → --vx-admin-space-05r），
  * 刻意保留而不压平：那一层记录了原设计的语义分层，压平会把它抹掉。
  *
@@ -132,12 +160,10 @@
   --vx-admin-management-dialog-width-md: var(--vx-admin-dialog-width-md);
   --vx-admin-management-dialog-width-sm: var(--vx-admin-dialog-width-sm);
   --vx-admin-management-dialog-width-xl: var(--vx-admin-dialog-width-xl);
-  --vx-admin-management-effect-1p: var(--vx-admin-effect-1p);
   --vx-admin-management-effect-24p: var(--vx-admin-effect-24p);
   --vx-admin-management-effect-3p: var(--vx-admin-effect-3p);
   --vx-admin-management-effect-64p: var(--vx-admin-effect-64p);
   --vx-admin-management-effect-8p: var(--vx-admin-effect-8p);
-  --vx-admin-management-grid-column-lg: var(--vx-admin-grid-column-lg);
   --vx-admin-management-grid-column-md: var(--vx-admin-grid-column-md);
   --vx-admin-management-grid-column-xs: var(--vx-admin-grid-column-xs);
   --vx-admin-management-header-height: var(--vx-admin-header-height);
@@ -192,14 +218,13 @@
   --vx-admin-management-track-275r: var(--vx-admin-track-275r);
   --vx-admin-management-track-2r: var(--vx-admin-track-2r);
   --vx-admin-management-track-3r: var(--vx-admin-track-3r);
-  --vx-admin-management-track-5r: var(--vx-admin-track-5r);
   --vx-admin-management-track-85r: var(--vx-admin-track-85r);
   --vx-admin-management-track-8r: var(--vx-admin-track-8r);
   --vx-admin-management-track-9r: var(--vx-admin-track-9r);
 
   /* service —— 51 项 */
-  --vx-admin-service-health-border-width: 1px;
-  --vx-admin-service-health-border-width-strong: 2px;
+  --vx-admin-service-health-border-width: var(--border-width-thin);
+  --vx-admin-service-health-border-width-strong: var(--border-width-medium);
   --vx-admin-service-health-card-copy-gap: var(--space-2xs);
   --vx-admin-service-health-card-gap: var(--space-md);
   --vx-admin-service-health-card-header-gap: var(--space-md);
@@ -222,18 +247,15 @@
   --vx-admin-service-health-filter-select-padding-end: var(--space-xl);
   --vx-admin-service-health-filter-select-width: var(--container-overlay-xs);
   --vx-admin-service-health-filter-select-width-compact: var(--container-overlay-sm);
-  --vx-admin-service-health-focus-ring-width: 2px;
+  --vx-admin-service-health-focus-ring-width: var(--border-width-medium);
   --vx-admin-service-health-footer-gap: var(--space-2xs);
   --vx-admin-service-health-footer-padding-top: var(--space-sm);
   --vx-admin-service-health-grid-gap: var(--space-md);
-  --vx-admin-service-health-header-gap: var(--space-xl);
   --vx-admin-service-health-icon-size: var(--spacing-icon-xl);
   --vx-admin-service-health-list-copy-gap: var(--space-2xs);
   --vx-admin-service-health-list-service-gap: var(--space-sm);
   --vx-admin-service-health-list-service-grid: 1.5rem minmax(0, 1fr);
   --vx-admin-service-health-meta-gap: var(--space-xs);
-  --vx-admin-service-health-page-gap: var(--space-md);
-  --vx-admin-service-health-page-header-gap: var(--space-md);
   --vx-admin-service-health-pill-min-height: var(--space-control-xs);
   --vx-admin-service-health-pill-padding-x: var(--space-xs);
   --vx-admin-service-health-summary-gap: var(--space-md);
@@ -251,7 +273,7 @@
   --vx-admin-service-health-value-size: var(--title-xl-font-size);
 
   /* directory —— 47 项 */
-  --vx-admin-directory-actions-menu-border-width: 1px;
+  --vx-admin-directory-actions-menu-border-width: var(--border-width-thin);
   --vx-admin-directory-actions-menu-button-gap: var(--space-xs);
   --vx-admin-directory-actions-menu-button-height: var(--space-control-xl);
   --vx-admin-directory-actions-menu-button-padding-x: var(--space-sm);
@@ -264,9 +286,9 @@
   --vx-admin-directory-actions-menu-width: var(--container-overlay-sm);
   --vx-admin-directory-actions-trigger-icon-size: var(--spacing-icon-lg);
   --vx-admin-directory-actions-trigger-size: var(--space-control-xl);
-  --vx-admin-directory-card-accent-border-width: 2px;
+  --vx-admin-directory-card-accent-border-width: var(--border-width-medium);
   --vx-admin-directory-card-body-gap: var(--space-xs);
-  --vx-admin-directory-card-border-width: 1px;
+  --vx-admin-directory-card-border-width: var(--border-width-thin);
   --vx-admin-directory-card-footer-gap: var(--space-md);
   --vx-admin-directory-card-footer-padding-top: var(--space-md);
   --vx-admin-directory-card-gap: var(--space-lg);
@@ -280,7 +302,7 @@
   --vx-admin-directory-card-padding: var(--space-lg);
   --vx-admin-directory-gap: var(--space-xs);
   --vx-admin-directory-header-gap: var(--space-sm);
-  --vx-admin-directory-list-border-width: 1px;
+  --vx-admin-directory-list-border-width: var(--border-width-thin);
   --vx-admin-directory-page-size-button-padding-x: var(--space-xs);
   --vx-admin-directory-page-size-button-size: var(--space-control-md);
   --vx-admin-directory-page-size-gap: var(--space-xs);
@@ -288,63 +310,35 @@
   --vx-admin-directory-pagination-padding-bottom: var(--space-md);
   --vx-admin-directory-pagination-padding-top: var(--space-sm);
   --vx-admin-directory-row-badge-gap: var(--space-xs);
-  --vx-admin-directory-row-cell-gap: var(--space-xs);
-  --vx-admin-directory-row-default-grid: 2.75rem minmax(0, 1.8fr) minmax(0, 0.5fr) minmax(0, 0.85fr) minmax(0, 1.15fr) minmax(0, 1fr) 3rem;
-  --vx-admin-directory-row-gap: var(--space-sm);
-  --vx-admin-directory-row-identity-gap: var(--space-md);
-  --vx-admin-directory-row-identity-track: var(--spacing-icon-xl);
-  --vx-admin-directory-row-inline-gap: var(--space-xs);
   /* 行内两行的节奏（2026-08-05 owner 定型）。三个值一起决定"一行数据横向能否
    * 连读"：主信息行钉在 badge 的高度上（--space-control-2xs = 20px），首行是
    * 文字还是标都占同样高；辅助行 16px；行距 4px = DS 的 gap-2xs，与
    * TableTitleCell 同值。不钉高就会因为某格首行放了标而整体下沉，与邻格错开。 */
-  --vx-admin-directory-row-line-main: var(--space-control-2xs);
-  --vx-admin-directory-row-line-aux: var(--space-control-3xs);
-  --vx-admin-directory-row-line-gap: var(--space-2xs);
-  --vx-admin-directory-row-padding-y: var(--space-md);
-  --vx-admin-directory-status-dot-halo-width: 0.125rem;
-  --vx-admin-directory-status-dot-icon-size: var(--spacing-icon-xs);
-  --vx-admin-directory-status-dot-size: var(--spacing-icon-sm);
 
   /* overview —— 47 项 */
-  --vx-admin-overview-effect-1p: var(--vx-admin-effect-1p);
   --vx-admin-overview-effect-1r: var(--vx-admin-effect-1r);
   --vx-admin-overview-effect-2r: var(--vx-admin-effect-2r);
-  --vx-admin-overview-grid-column-sm: var(--vx-admin-grid-column-sm);
-  --vx-admin-overview-grid-column-xl: var(--vx-admin-grid-column-xl);
   --vx-admin-overview-line-width-1p: var(--vx-admin-line-width-1p);
-  --vx-admin-overview-line-width-2p: var(--vx-admin-line-width-2p);
   --vx-admin-overview-motion-05r: var(--vx-admin-motion-05r);
   --vx-admin-overview-size-05r: var(--vx-admin-size-05r);
-  --vx-admin-overview-size-135r: var(--vx-admin-size-135r);
   --vx-admin-overview-size-15r: var(--vx-admin-size-15r);
-  --vx-admin-overview-size-175r: var(--vx-admin-size-175r);
   --vx-admin-overview-size-18r-large: var(--vx-admin-size-18r-large);
   --vx-admin-overview-size-1r: var(--vx-admin-size-1r);
   --vx-admin-overview-size-235r: var(--vx-admin-size-235r);
-  --vx-admin-overview-size-25r: var(--vx-admin-size-25r);
-  --vx-admin-overview-size-2r: var(--vx-admin-size-2r);
   --vx-admin-overview-size-3r: var(--vx-admin-size-3r);
-  --vx-admin-overview-size-56r: var(--vx-admin-size-56r);
-  --vx-admin-overview-size-6r: var(--vx-admin-size-6r);
-  --vx-admin-overview-size-8r: var(--vx-admin-size-8r);
   --vx-admin-overview-text-size-1r: var(--vx-admin-text-size-1r);
-  --vx-admin-overview-track-25r: var(--vx-admin-track-25r);
-  --vx-admin-overview-track-3r: var(--vx-admin-track-3r);
-  --vx-admin-overview-track-8r: var(--vx-admin-track-8r);
 
   /* operations —— 40 项 */
   --vx-admin-operations-action-button-gap: var(--space-xs);
   --vx-admin-operations-action-button-height: var(--space-control-lg);
   --vx-admin-operations-action-button-padding-x: var(--space-md);
-  --vx-admin-operations-announcement-card-border-width: 1px;
+  --vx-admin-operations-announcement-card-border-width: var(--border-width-thin);
   --vx-admin-operations-announcement-card-gap: var(--space-xs);
   --vx-admin-operations-announcement-card-grid-gap: var(--space-md);
   --vx-admin-operations-announcement-card-grid-min-width: var(--vx-admin-card-grid-min-width-lg);
   --vx-admin-operations-announcement-card-header-gap: var(--space-xs);
   --vx-admin-operations-announcement-card-meta-gap: var(--space-md);
   --vx-admin-operations-announcement-card-padding: var(--space-md);
-  --vx-admin-operations-announcement-grid: 3rem 1fr 6rem var(--vx-admin-grid-column-xs) var(--vx-admin-grid-column-xs) 10rem 10rem 4rem;
   --vx-admin-operations-audit-grid: 2.75rem minmax(12rem, 0.95fr) minmax(13rem, 1fr) minmax(12rem, 0.95fr) minmax(var(--vx-admin-grid-column-xs), 0.48fr) minmax(var(--vx-admin-grid-column-xs), 0.48fr) minmax(8rem, 0.56fr) minmax(10rem, 0.72fr);
   --vx-admin-operations-audit-grid-compact: 3rem 13rem 12rem 12rem var(--vx-admin-grid-column-xs) 6rem 9rem 1fr;
   --vx-admin-operations-audit-result-gap: var(--space-2xs);
@@ -353,24 +347,16 @@
   --vx-admin-operations-audit-row-min-height: var(--space-row-lg);
   --vx-admin-operations-audit-row-min-width: var(--vx-admin-directory-row-min-width);
   --vx-admin-operations-audit-row-title-line: var(--body-md-line-height);
-  --vx-admin-operations-control-border-width: 1px;
+  --vx-admin-operations-control-border-width: var(--border-width-thin);
   --vx-admin-operations-control-height: var(--space-control-xl);
   --vx-admin-operations-control-padding-x: var(--space-sm);
-  --vx-admin-operations-effect-1p: var(--vx-admin-effect-1p);
   --vx-admin-operations-skill-card-badges-gap: var(--space-2xs);
-  --vx-admin-operations-skill-card-border-width: 1px;
+  --vx-admin-operations-skill-card-border-width: var(--border-width-thin);
   --vx-admin-operations-skill-card-gap: var(--space-xs);
   --vx-admin-operations-skill-card-grid-gap: var(--space-md);
   --vx-admin-operations-skill-card-grid-min-width: var(--vx-admin-card-grid-min-width-md);
   --vx-admin-operations-skill-card-meta-gap: var(--space-md);
   --vx-admin-operations-skill-card-padding: var(--space-md);
-  --vx-admin-operations-skill-grid: 3rem 1fr var(--vx-admin-grid-column-xs) 5rem var(--vx-admin-grid-column-md) var(--vx-admin-grid-column-xs) 9rem 10rem 4rem;
-  --vx-admin-operations-skill-grid-compact: 3rem 1fr var(--vx-admin-grid-column-xs) 5rem 0 var(--vx-admin-grid-column-xs) 9rem 10rem 4rem;
-  --vx-admin-operations-skill-row-info-gap: var(--space-2xs);
-  --vx-admin-operations-skill-row-status-gap: var(--space-2xs);
-  --vx-admin-operations-track-25r: var(--vx-admin-track-25r);
-  --vx-admin-operations-track-275r: var(--vx-admin-track-275r);
-  --vx-admin-operations-track-5r: var(--vx-admin-track-5r);
   --vx-admin-operations-view-toggle-button-size: var(--space-control-lg);
 
   /* size —— 39 项 */
@@ -411,7 +397,7 @@
 
   /* governance —— 36 项 */
   --vx-admin-governance-card-body-min-height: var(--space-control-xl);
-  --vx-admin-governance-card-border-width: 1px;
+  --vx-admin-governance-card-border-width: var(--border-width-thin);
   --vx-admin-governance-card-copy-line: var(--body-md-line-height);
   --vx-admin-governance-card-copy-size: var(--body-md-font-size);
   --vx-admin-governance-card-footer-gap: var(--space-sm);
@@ -428,15 +414,6 @@
   --vx-admin-governance-card-tags-gap: var(--space-2xs);
   --vx-admin-governance-card-title-line: var(--title-md-line-height);
   --vx-admin-governance-card-title-size: var(--title-md-font-size);
-  --vx-admin-governance-records-compliance-grid: 3rem minmax(9rem, 1.3fr)
-    minmax(8rem, 1fr) 6rem minmax(6rem, 0.8fr) var(--vx-admin-grid-column-xs)
-    8rem 4rem;
-  --vx-admin-governance-records-maintenance-grid: 3rem minmax(10.5rem, 1.5fr)
-    5.5rem 6rem 8rem 8rem 8rem 4rem;
-  --vx-admin-governance-records-risk-grid: 3rem minmax(10rem, 1.4fr) 6rem 4rem
-    minmax(var(--vx-admin-grid-column-xs), 1fr)
-    minmax(var(--vx-admin-grid-column-xs), 1fr)
-    var(--vx-admin-grid-column-xs) 8rem 4rem;
   --vx-admin-governance-status-gap: var(--space-2xs);
 
   /* space —— 34 项 */
@@ -468,39 +445,6 @@
   --vx-admin-space-45r: 4.5rem;
 
   /* platform —— 33 项 */
-  --vx-admin-platform-autonomy-border-width: 1px;
-  --vx-admin-platform-autonomy-card-grid: 2.5rem minmax(0, 1fr);
-  --vx-admin-platform-autonomy-card-padding: var(--space-md);
-  --vx-admin-platform-autonomy-gap-2xl: var(--space-md);
-  --vx-admin-platform-autonomy-gap-lg: var(--space-sm);
-  --vx-admin-platform-autonomy-gap-md: var(--space-xs);
-  --vx-admin-platform-autonomy-gap-sm: var(--space-2xs);
-  --vx-admin-platform-autonomy-gap-xl: var(--space-md);
-  --vx-admin-platform-autonomy-gap-xs: var(--space-2xs);
-  --vx-admin-platform-autonomy-grid-aside-min-width: 18rem;
-  --vx-admin-platform-autonomy-icon-size: 2.5rem;
-  --vx-admin-platform-autonomy-line-body: var(--space-control-2xs);
-  --vx-admin-platform-autonomy-line-caption: var(--space-control-3xs);
-  --vx-admin-platform-autonomy-line-link: 1.125rem;
-  --vx-admin-platform-autonomy-line-metric: var(--space-control-md);
-  --vx-admin-platform-autonomy-line-value: var(--space-control-xs);
-  --vx-admin-platform-autonomy-link-grid: minmax(0, 1fr) 1.25rem;
-  --vx-admin-platform-autonomy-link-min-height: var(--space-control-2xl);
-  --vx-admin-platform-autonomy-link-padding-x: var(--space-sm);
-  --vx-admin-platform-autonomy-link-padding-y: var(--space-sm);
-  --vx-admin-platform-autonomy-page-max-width: var(--vx-admin-directory-row-max-width);
-  --vx-admin-platform-autonomy-resource-grid: minmax(6rem, 0.7fr) minmax(8rem, 0.8fr) minmax(10rem, 1fr) minmax(var(--vx-admin-grid-column-xs), 0.65fr) minmax(var(--vx-admin-grid-column-xs), 0.65fr) minmax(5rem, 0.45fr);
-  --vx-admin-platform-autonomy-resource-header-min-height: var(--space-control-xl);
-  --vx-admin-platform-autonomy-resource-min-width: 46rem;
-  --vx-admin-platform-autonomy-resource-padding-x: var(--space-sm);
-  --vx-admin-platform-autonomy-resource-row-min-height: var(--space-row-sm);
-  --vx-admin-platform-autonomy-risk-min-height: var(--space-control-3xl);
-  --vx-admin-platform-autonomy-risk-value-min-width: 1.75rem;
-  --vx-admin-platform-autonomy-text-body: 0.8125rem;
-  --vx-admin-platform-autonomy-text-caption: 0.75rem;
-  --vx-admin-platform-autonomy-text-metric: 1.5rem;
-  --vx-admin-platform-autonomy-text-title: 0.9375rem;
-  --vx-admin-platform-autonomy-text-value: 1.25rem;
 
   /* permission —— 23 项 */
   --vx-admin-permission-card-radius: var(--vx-admin-card-radius);
@@ -573,10 +517,7 @@
   --vx-admin-text-tracking-018e: 0.18em;
 
   /* grid —— 5 项 */
-  --vx-admin-grid-column-lg: 15rem;
   --vx-admin-grid-column-md: 14rem;
-  --vx-admin-grid-column-sm: 7.25rem;
-  --vx-admin-grid-column-xl: 24rem;
   --vx-admin-grid-column-xs: 7rem;
 
   /* card —— 4 项 */
@@ -600,8 +541,8 @@
   --vx-admin-placeholder-size-3r: var(--vx-admin-size-3r);
 
   /* line —— 2 项 */
-  --vx-admin-line-width-1p: 1px;
-  --vx-admin-line-width-2p: 2px;
+  --vx-admin-line-width-1p: var(--border-width-thin);
+  --vx-admin-line-width-2p: var(--border-width-medium);
 
   /* motion —— 2 项 */
   --vx-admin-motion-0125r: 0.125rem;
@@ -618,7 +559,6 @@
   --vx-admin-caption-size: var(--body-sm-font-size);
 
   /* font —— 1 项 */
-  --vx-admin-font-base: 1rem;
 
   /* header —— 1 项 */
   --vx-admin-header-height: var(--vx-admin-shell-header-height);
