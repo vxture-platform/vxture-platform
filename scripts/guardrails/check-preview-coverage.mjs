@@ -41,14 +41,8 @@ const EXCLUDED = new Map([
     "packages/design/design-ui/src/components/layout/fullscreen/Provider.tsx",
     "context provider，无可渲染外观",
   ],
-  [
-    "packages/design/design-ui/src/components/layout/fullscreen/Portal.tsx",
-    "挂载点，无可渲染外观",
-  ],
-  [
-    "packages/design/design-ui/src/components/layout/fullscreen/Container.tsx",
-    "只是把子树挂进全屏元素，本身没有外观；与 layout/container/Container 同名不同物",
-  ],
+  // Portal.tsx / Container.tsx 两条排除项已随组件退役删除（2026-08-18 owner
+  // 批，全仓零消费）——本脚本要求排除清单不留死条目，正确。
 ]);
 
 async function walk(dir, out = []) {

@@ -9,8 +9,6 @@
  * @category Exports
  */
 
+/* Container/Portal/Toggle 已退役（2026-08-18 owner 批，全仓零消费）。 */
 export * from "./Provider";
-export * from "./Container";
-export * from "./Portal";
-export * from "./Toggle";
 export * from "../../../hooks/useFullscreen";

@@ -16,10 +16,8 @@
       "require": "./dist/server.cjs"
     },
     "./styles/brand.css": "./src/styles/brand.css",
-    "./styles/brands/ruyin.css": "./src/styles/brands/ruyin.css",
     "./styles/brands/vxture.css": "./src/styles/brands/vxture.css",
     "./styles/fonts.css": "./src/styles/fonts.css",
-    "./styles/fullscreen.css": "./src/styles/fullscreen.css",
     "./styles/globals.css": "./src/styles/globals.css",
     "./styles/shell-template.css": "./assets/shell-template.css",
     "./styles/workbench.css": "./src/styles/workbench.css",

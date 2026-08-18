@@ -87,7 +87,6 @@ import {
   BUTTON_VARIANTS,
   Container,
   FullscreenProvider,
-  FullscreenToggle,
   Grid,
   Stack,
   AvatarFallback,
@@ -180,6 +179,7 @@ import {
 } from "@vxture/design-system";
 import {
   ShellBrand,
+  ShellFullscreenToggle,
   ShellIconButton,
   ShellLegalFooter,
   ShellLocaleSwitcher,
@@ -1881,9 +1881,10 @@ export const ENTRIES: readonly Entry[] = [
     ),
   },
   {
-    // 原条目名 "Toggle" 让位给 ui 层新增的双态按钮——这里摆的本来就是
-    // FullscreenToggle 这个导出名，条目名改成一致。
-    name: "FullscreenToggle",
+    // 原条目摆的是 design-ui 的 FullscreenToggle——那件已随全屏死零件退役
+    // （2026-08-18 owner 批，全仓零消费）。全屏系统的存活开关是伞包的
+    // ShellFullscreenToggle（website 头部在用），条目随之改摆它。
+    name: "ShellFullscreenToggle",
     layer: "atom",
     group: "布局",
     tags: ["vxture", "component"],
@@ -1900,7 +1901,13 @@ export const ENTRIES: readonly Entry[] = [
             <span className="text-body-md text-muted-foreground">
               可全屏区域
             </span>
-            <FullscreenToggle targetId="preview-fullscreen-target" />
+            <ShellFullscreenToggle
+              targetId="preview-fullscreen-target"
+              mode="pseudo"
+              getTargetElement={() =>
+                document.getElementById("preview-fullscreen-target")
+              }
+            />
           </div>
         </Row>
         <Row label="mode=native（显示器全屏，Esc 退出）">
@@ -1911,9 +1918,12 @@ export const ENTRIES: readonly Entry[] = [
             <span className="text-body-md text-muted-foreground">
               可全屏区域
             </span>
-            <FullscreenToggle
+            <ShellFullscreenToggle
               targetId="preview-fullscreen-native-target"
               mode="native"
+              getTargetElement={() =>
+                document.getElementById("preview-fullscreen-native-target")
+              }
             />
           </div>
         </Row>

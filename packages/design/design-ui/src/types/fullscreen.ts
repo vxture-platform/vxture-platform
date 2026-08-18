@@ -58,40 +58,5 @@ export interface FullscreenProviderProps {
   defaultLockScroll?: boolean;
 }
 
-export interface FullscreenContainerProps {
-  id: string;
-  mode?: FullscreenMode | undefined;
-  /** 是否禁止页面滚动，覆盖 Provider 的 defaultLockScroll */
-  lockScroll?: boolean | undefined;
-  portal?: boolean | undefined;
-  className?: string | undefined;
-  children: React.ReactNode;
-}
-
-export interface FullscreenContainerRef {
-  /**
-   * 进入全屏
-   */
-  enter: () => void;
-  /**
-   * 退出全屏
-   */
-  exit: () => void;
-  /**
-   * 切换全屏
-   */
-  toggle: () => void;
-}
-
-export interface FullscreenToggleProps {
-  targetId: string;
-  mode?: FullscreenMode | undefined;
-  /** 是否禁止页面滚动，覆盖 Provider 的 defaultLockScroll */
-  lockScroll?: boolean | undefined;
-  className?: string | undefined;
-  children?: React.ReactNode | undefined;
-}
-
-export interface FullscreenPortalProps {
-  children: React.ReactNode;
-}
+/* FullscreenContainer / FullscreenToggle / FullscreenPortal 的 props 类型已随
+ * 三件组件退役删除（2026-08-18 owner 批，全仓零消费）。 */

@@ -9,14 +9,12 @@
  * @category Types
  */
 
+/* Container/Toggle/Portal 三件已退役（2026-08-18 owner 批）：全仓零消费的
+ * 死零件。存活链是 Provider + useFullscreen + ShellFullscreenToggle。 */
 export type {
   FullscreenMode,
   FullscreenOptions,
   FullscreenState,
   FullscreenContextValue,
   FullscreenProviderProps,
-  FullscreenContainerProps,
-  FullscreenContainerRef,
-  FullscreenToggleProps,
-  FullscreenPortalProps,
 } from "./fullscreen";
