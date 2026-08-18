@@ -17,13 +17,9 @@
     { "path": "services/support/workers" },
     { "path": "bff/website-bff" },
     { "path": "bff/console-bff" },
-    { "path": "bff/varda-bff" },
+
     { "path": "bff/admin-bff" },
-    { "path": "bff/agent-template-bff" },
-    { "path": "agent-server/varda" },
-    { "path": "agent-server/agent-template" },
-    { "path": "agent-studio/agent-template" },
-    { "path": "agent-studio/varda" },
+
     { "path": "packages/platform/browser" },
     { "path": "portals/website" },
     { "path": "portals/console" },

@@ -5,10 +5,10 @@
  * 违反规则的 import 在 CI 中报 error 级别错误。
  *
  * 层级顺序（高→低，只能向下引用）：
- *   Presentation (portals / agent-studio / business)
- *     → Application (bff / agent-server)
+ *   Presentation (portals / business)
+ *     → Application (bff)
  *       → Domain (services)
- *         → Infrastructure (packages/core / packages/ai)
+ *         → Infrastructure (packages/core)
  *           → Shared (packages/shared)
  *
  * 门户层必须通过 HTTP 调用 BFF，禁止任何直接包引用。
@@ -21,11 +21,11 @@ module.exports = {
     {
       name: 'no-portal-to-backend',
       comment:
-        '门户层（portals / agent-studio / business）禁止直接引用 core / service / bff 包，只能通过 HTTP 调用 BFF',
+        '门户层（portals / business）禁止直接引用 core / service / bff 包，只能通过 HTTP 调用 BFF',
       severity: 'error',
-      from: { path: '^(portals|agent-studio|business)/' },
+      from: { path: '^(portals|business)/' },
       to: {
-        path: '^(packages/core|packages/ai|services|bff|agent-server)/',
+        path: '^(packages/core|services|bff)/',
       },
     },
 
@@ -35,17 +35,9 @@ module.exports = {
       comment: 'Service 层禁止引用 BFF / 门户层',
       severity: 'error',
       from: { path: '^services/' },
-      to: { path: '^(bff|portals|agent-studio|business)/' },
+      to: { path: '^(bff|portals|business)/' },
     },
 
-    // ── Agent Server 不可向上引用 ─────────────────────────────────────
-    {
-      name: 'no-agent-server-to-portal',
-      comment: 'Agent Server 禁止引用门户层和 BFF 层',
-      severity: 'error',
-      from: { path: '^agent-server/' },
-      to: { path: '^(portals|agent-studio|business|bff)/' },
-    },
 
     // ── Core 层不可向上引用 ───────────────────────────────────────────
     {
@@ -53,16 +45,7 @@ module.exports = {
       comment: 'Core 层禁止引用 service / bff / portal',
       severity: 'error',
       from: { path: '^packages/core/' },
-      to: { path: '^(services|bff|portals|agent-studio|business|packages/ai)/' },
-    },
-
-    // ── AI SDK 不可向上引用 ───────────────────────────────────────────
-    {
-      name: 'no-ai-sdk-to-upper',
-      comment: 'AI SDK 禁止引用 service / bff / portal',
-      severity: 'error',
-      from: { path: '^packages/ai/' },
-      to: { path: '^(services|bff|portals|agent-studio|business)/' },
+      to: { path: '^(services|bff|portals|business)/' },
     },
 
     // ── Shared 层不可引用任何业务包 ───────────────────────────────────
@@ -72,7 +55,7 @@ module.exports = {
       severity: 'error',
       from: { path: '^packages/shared/' },
       to: {
-        path: '^(packages/core|packages/ai|services|bff|portals|agent-studio|business)/',
+        path: '^(packages/core|services|bff|portals|business)/',
       },
     },
 
@@ -100,7 +83,7 @@ module.exports = {
       comment: 'Design System 和 Platform 工具包禁止引用业务层（service / bff / portal）',
       severity: 'error',
       from: { path: '^packages/(design|platform)/' },
-      to: { path: '^(services|bff|portals|agent-studio|business)/' },
+      to: { path: '^(services|bff|portals|business)/' },
     },
   ],
 
