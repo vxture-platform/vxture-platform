@@ -65,11 +65,11 @@ export const HERO_DATA: HeroData = {
   },
   media: {
     type: "image",
-    videoUrl: "/videos/herosection/banner-hero-01.mp4",
-    url: "/images/herosection/banner-hero-poster-light-01.png",
-    urlDark: "/images/herosection/banner-hero-poster-dark-01.png",
-    posterImage: "/images/herosection/banner-hero-poster-light-01.png",
-    posterImageDark: "/images/herosection/banner-hero-poster-dark-01.png",
+    videoUrl: "/videos/hero/banner-hero-01.mp4",
+    url: "/images/hero/banner-hero-poster-light-01.png",
+    urlDark: "/images/hero/banner-hero-poster-dark-01.png",
+    posterImage: "/images/hero/banner-hero-poster-light-01.png",
+    posterImageDark: "/images/hero/banner-hero-poster-dark-01.png",
   },
   scrollIndicator: {
     enabled: true,

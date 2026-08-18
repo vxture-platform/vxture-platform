@@ -100,7 +100,7 @@ export interface FooterData {
 export const FOOTER_DATA: FooterData = {
   enabled: true,
   brand: {
-    logo: "/assets/favicon.ico",
+    logo: "/favicon.ico",
     shortname: "vxture",
     website: "vxture.ai",
     foundedYear: "2024",

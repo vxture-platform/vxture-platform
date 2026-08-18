@@ -16,7 +16,6 @@ import "@vxture/design-system/styles/fonts.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  icons: { icon: "/assets/favicon.ico" },
   title: "登录 · Vxture",
   description: "Vxture 统一身份登录",
 };

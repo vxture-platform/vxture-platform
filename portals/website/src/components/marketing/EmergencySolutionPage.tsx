@@ -37,7 +37,7 @@ type Practice = {
   tags: string[];
 };
 
-const PRACTICE_IMAGE = "/images/casessection/case-intro-03.jpg";
+const PRACTICE_IMAGE = "/images/cases/case-intro-03.jpg";
 
 export default function EmergencySolutionPage() {
   const t = useTranslations("solutions");

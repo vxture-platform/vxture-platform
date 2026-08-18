@@ -78,7 +78,7 @@ export interface HeaderData {
 export const HEADER_DATA: HeaderData = {
   enabled: true,
   logo: {
-    image: "/images/header/vxture-logo-white.png",
+    image: "/brand/vxture-logo-white.png",
     href: "/",
     labelKey: "logo.text",
     altKey: "logo.alt",

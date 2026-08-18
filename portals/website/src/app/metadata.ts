@@ -62,19 +62,19 @@ export function buildMetadata(locale: string): Metadata {
       url: "https://vxture.com",
       title: titles[validLocale],
       description: descriptions[validLocale],
-      images: ["/assets/favicon.ico"],
+      images: ["/favicon.ico"],
     },
 
     twitter: {
       card: "summary_large_image",
       title: titles[validLocale],
       description: descriptions[validLocale],
-      images: ["/assets/favicon.ico"],
+      images: ["/favicon.ico"],
     },
 
     icons: {
-      icon: "/assets/favicon.ico",
-      apple: "/assets/favicon.ico",
+      icon: "/favicon.ico",
+      apple: "/favicon.ico",
     },
 
     manifest: "/manifest.json",

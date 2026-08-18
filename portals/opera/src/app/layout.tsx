@@ -9,7 +9,6 @@ import "@vxture/design-system/styles/fonts.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  icons: { icon: "/assets/favicon.ico" },
   title: "Opera · Vxture 基础设施控制平面",
   description:
     "平台技术资源、运行、计量、发布、可观测与安全管理。不承担商业运营职责。",

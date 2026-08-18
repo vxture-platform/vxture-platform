@@ -20,7 +20,6 @@ import "@vxture/design-system/styles/fonts.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  icons: { icon: "/assets/favicon.ico" },
   title: "Vxture Control Center",
   description:
     "Platform operations portal for Vxture supply-side capabilities.",

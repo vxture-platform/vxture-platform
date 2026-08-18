@@ -85,7 +85,7 @@ export const SOLUTIONS_DATA: SolutionsData = {
       variant: "grid",
       capabilities: ["data-graph-building", "multi-source-data-fusion"],
       cover: {
-        url: "/images/productssection/product-intro-01.jpg",
+        url: "/images/products/product-intro-01.jpg",
       },
       cta: {
         href: "/solutions/data-integration-platform",
@@ -104,7 +104,7 @@ export const SOLUTIONS_DATA: SolutionsData = {
         "fusion-analysis",
       ],
       cover: {
-        url: "/images/productssection/product-intro-02.jpg",
+        url: "/images/products/product-intro-02.jpg",
       },
       cta: {
         href: "/solutions/knowledge-graph-engine",
@@ -123,7 +123,7 @@ export const SOLUTIONS_DATA: SolutionsData = {
         "incident-response",
       ],
       cover: {
-        url: "/images/productssection/product-intro-03.jpg",
+        url: "/images/products/product-intro-03.jpg",
       },
       cta: {
         href: "/solutions/intelligent-dispatch-system",
@@ -142,7 +142,7 @@ export const SOLUTIONS_DATA: SolutionsData = {
         "predictive-analysis",
       ],
       cover: {
-        url: "/images/productssection/product-intro-04.jpg",
+        url: "/images/products/product-intro-04.jpg",
       },
       cta: {
         href: "/solutions/digital-twin-simulation-platform",

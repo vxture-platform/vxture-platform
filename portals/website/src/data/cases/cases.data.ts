@@ -118,7 +118,7 @@ export const CASES_DATA: CasesData = {
       theme: "success",
       intent: "case",
       variant: "card",
-      cover: { url: "/images/casessection/case-intro-01.jpg" },
+      cover: { url: "/images/cases/case-intro-01.jpg" },
       cta: { href: "/cases-pages/geo-disaster-graph" },
     },
     {
@@ -128,7 +128,7 @@ export const CASES_DATA: CasesData = {
       theme: "brand",
       intent: "new",
       variant: "card",
-      cover: { url: "/images/casessection/case-intro-02.jpg" },
+      cover: { url: "/images/cases/case-intro-02.jpg" },
       cta: { href: "/cases-pages/intelligent-emergency" },
     },
     {
@@ -138,7 +138,7 @@ export const CASES_DATA: CasesData = {
       theme: "info",
       intent: "featured",
       variant: "card",
-      cover: { url: "/images/casessection/case-intro-03.jpg" },
+      cover: { url: "/images/cases/case-intro-03.jpg" },
       cta: { href: "/cases-pages/public-safety-analysis" },
     },
     {
@@ -148,7 +148,7 @@ export const CASES_DATA: CasesData = {
       theme: "primary",
       intent: "case",
       variant: "card",
-      cover: { url: "/images/casessection/case-intro-01.jpg" },
+      cover: { url: "/images/cases/case-intro-01.jpg" },
       cta: { href: "/cases-pages/environmental-monitoring" },
     },
     {
@@ -158,7 +158,7 @@ export const CASES_DATA: CasesData = {
       theme: "success",
       intent: "new",
       variant: "card",
-      cover: { url: "/images/casessection/case-intro-02.jpg" },
+      cover: { url: "/images/cases/case-intro-02.jpg" },
       cta: { href: "/cases-pages/transportation-simulation" },
     },
     {
@@ -168,7 +168,7 @@ export const CASES_DATA: CasesData = {
       theme: "info",
       intent: "featured",
       variant: "card",
-      cover: { url: "/images/casessection/case-intro-03.jpg" },
+      cover: { url: "/images/cases/case-intro-03.jpg" },
       cta: { href: "/cases-pages/healthcare-intelligent" },
     },
   ],

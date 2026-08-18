@@ -162,6 +162,11 @@ export default function HeroSection({ id, name = "Hero" }: HeroSectionProps) {
               playsInline
               preload="auto"
             >
+              {/* webm 在前(同源同名、体积更小),mp4 兜底。 */}
+              <source
+                src={HERO_DATA.media.videoUrl.replace(/.mp4$/, ".webm")}
+                type="video/webm"
+              />
               <source src={HERO_DATA.media.videoUrl} type="video/mp4" />
             </video>
 
