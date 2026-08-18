@@ -53,7 +53,7 @@ export function buildConsoleEntryUrl(locale: string): string {
     from: "website",
     returnTo: `${WEBSITE_BASE_URL}/${locale}`,
     caller: "Vxture 官网",
-    callerLogo: "/images/logo.png",
+    callerLogo: "/images/common/vxturelogo.png",
   });
   return `${CONSOLE_BASE_URL}?${queryString}`;
 }
@@ -82,7 +82,7 @@ export function buildConsoleSubscribeUrl(
     from: "website",
     returnTo: `${WEBSITE_BASE_URL}/${locale}`,
     caller: "Vxture 官网",
-    callerLogo: "/images/logo.png",
+    callerLogo: "/images/common/vxturelogo.png",
   });
   const params = new URLSearchParams({ product, intent });
   if (tier) params.set("target_tier", tier);
@@ -102,7 +102,7 @@ export function buildConsoleProfileUrl(locale: string): string {
     from: "website",
     returnTo: `${WEBSITE_BASE_URL}/${locale}`,
     caller: "Vxture 官网",
-    callerLogo: "/images/logo.png",
+    callerLogo: "/images/common/vxturelogo.png",
   });
   return `${CONSOLE_BASE_URL}/${locale}/profile?${queryString}`;
 }

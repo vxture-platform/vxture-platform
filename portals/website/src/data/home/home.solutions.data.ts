@@ -12,12 +12,8 @@ export interface SolutionCover {
   url: string;
 }
 
-/**
- * 方案背景图片配置
- */
-export interface SolutionBgImage {
-  url: string;
-}
+/* 方案背景图片(SolutionBgImage/bgImage)已删——全仓零组件消费的死数据,
+ * 且四张 bg-0X.jpg 从未入库。 */
 
 /**
  * 方案 CTA 配置
@@ -38,7 +34,6 @@ export interface SolutionItem {
   variant: string;
   capabilities: string[];
   cover: SolutionCover;
-  bgImage: SolutionBgImage;
   cta: SolutionCta;
 }
 
@@ -92,9 +87,6 @@ export const SOLUTIONS_DATA: SolutionsData = {
       cover: {
         url: "/images/productssection/product-intro-01.jpg",
       },
-      bgImage: {
-        url: "/images/solutionssection/bg-01.jpg",
-      },
       cta: {
         href: "/solutions/data-integration-platform",
       },
@@ -113,9 +105,6 @@ export const SOLUTIONS_DATA: SolutionsData = {
       ],
       cover: {
         url: "/images/productssection/product-intro-02.jpg",
-      },
-      bgImage: {
-        url: "/images/solutionssection/bg-02.jpg",
       },
       cta: {
         href: "/solutions/knowledge-graph-engine",
@@ -136,9 +125,6 @@ export const SOLUTIONS_DATA: SolutionsData = {
       cover: {
         url: "/images/productssection/product-intro-03.jpg",
       },
-      bgImage: {
-        url: "/images/solutionssection/bg-03.jpg",
-      },
       cta: {
         href: "/solutions/intelligent-dispatch-system",
       },
@@ -157,9 +143,6 @@ export const SOLUTIONS_DATA: SolutionsData = {
       ],
       cover: {
         url: "/images/productssection/product-intro-04.jpg",
-      },
-      bgImage: {
-        url: "/images/solutionssection/bg-04.jpg",
       },
       cta: {
         href: "/solutions/digital-twin-simulation-platform",

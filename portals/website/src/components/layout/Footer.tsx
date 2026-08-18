@@ -142,7 +142,7 @@ export default function Footer() {
 
         {/* 社交链接 */}
         <div className="flex items-center py-4">
-          {FOOTER_DATA.social?.length > 0 && (
+          {FOOTER_DATA.socialEnabled && FOOTER_DATA.social?.length > 0 && (
             <div className="flex space-x-4">
               {FOOTER_DATA.social.map((social) => (
                 <div key={social.name} className="relative group">

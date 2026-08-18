@@ -421,7 +421,9 @@ export default function Header() {
               height={24}
               className="object-contain"
             />
-            <h1 className="logo-text text-2xl text-vx-gray-800 dark:text-vx-text-secondary">
+            {/* 品牌字标走 font-brand（Funnel Display）——原挂的 .logo-text 类
+             * 全仓无定义，一直以默认正文字体渲染。 */}
+            <h1 className="font-brand text-2xl font-semibold text-vx-gray-800 dark:text-vx-text-secondary">
               {t(HEADER_DATA.logo.labelKey)}
             </h1>
           </Link>

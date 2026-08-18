@@ -85,6 +85,8 @@ export interface FooterData {
   brand: FooterBrand;
   contact: FooterContact;
   social: FooterSocial[];
+  /** 社交入口显示开关(owner 2026-08-18 判:显示层删除,数据与组件保留备用)。 */
+  socialEnabled: boolean;
   sections: FooterSection[];
   legal: FooterLegal[];
   icp: FooterIcp;
@@ -112,6 +114,7 @@ export const FOOTER_DATA: FooterData = {
     service_email: "support@vxture.com",
     partner_email: "partner@vxture.com",
   },
+  socialEnabled: false,
   social: [
     {
       name: "GitHub",

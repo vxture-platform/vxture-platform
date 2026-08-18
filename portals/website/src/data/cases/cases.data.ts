@@ -148,7 +148,7 @@ export const CASES_DATA: CasesData = {
       theme: "primary",
       intent: "case",
       variant: "card",
-      cover: { url: "/images/casessection/case-intro-04.jpg" },
+      cover: { url: "/images/casessection/case-intro-01.jpg" },
       cta: { href: "/cases-pages/environmental-monitoring" },
     },
     {
@@ -158,7 +158,7 @@ export const CASES_DATA: CasesData = {
       theme: "success",
       intent: "new",
       variant: "card",
-      cover: { url: "/images/casessection/case-intro-05.jpg" },
+      cover: { url: "/images/casessection/case-intro-02.jpg" },
       cta: { href: "/cases-pages/transportation-simulation" },
     },
     {
@@ -168,7 +168,7 @@ export const CASES_DATA: CasesData = {
       theme: "info",
       intent: "featured",
       variant: "card",
-      cover: { url: "/images/casessection/case-intro-06.jpg" },
+      cover: { url: "/images/casessection/case-intro-03.jpg" },
       cta: { href: "/cases-pages/healthcare-intelligent" },
     },
   ],

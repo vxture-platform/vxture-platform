@@ -273,7 +273,10 @@ export default function StatsSection() {
         </div>
         {/* 客户logo展示区域，两行五列布局 */}
         <div className="my-8 grid grid-cols-5 gap-x-24 gap-y-8">
-          {Array.from({ length: 10 }).map((_, idx) => {
+          {/* 只渲染磁盘上真实存在的客户 logo（当前 2 张）——原来硬写 10 个，
+           * 8 个 404 后靠 onError 换占位块，控制台整版加载错误。补图后把
+           * 数量改回去即可。 */}
+          {Array.from({ length: 2 }).map((_, idx) => {
             const num = String(idx + 1).padStart(2, "0");
             const src = `/images/costomlogo/costom-logo-${num}.png`;
             return (

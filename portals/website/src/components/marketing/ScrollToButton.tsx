@@ -44,8 +44,10 @@ interface ScrollToButtonProps {
 const DEFAULT_TEXT = "Top";
 /** 默认位置 */
 const DEFAULT_POSITION_CLASS = "absolute right-16 bottom-20";
-/** 默认动画 */
-const DEFAULT_ANIMATION_CLASS = "animate-bounce";
+/** 默认动画：无（owner 2026-08-18 判）。原默认 `animate-bounce` 是 Tailwind 的
+ * **无限循环**弹跳（1s 一跳、位移 25%），按钮在页面上永远疯狂跳动——装饰动画
+ * 不该常驻，交互反馈已有 hover 位移与阴影。要引导注意力由调用方显式传入。 */
+const DEFAULT_ANIMATION_CLASS = "";
 /** 默认图标尺寸 */
 const DEFAULT_ICON_SIZE = "w-5 h-5";
 /** 默认目标选择器 */
