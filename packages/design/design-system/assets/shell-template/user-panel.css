@@ -1,18 +1,14 @@
 /* ═══════════════════════════════════════════════════════════════════════════
  * shell-template / user-panel — header user avatar + dropdown menu slice
  *
- * Canonical, standalone slice of the shell's user menu panel (avatar trigger +
- * popover with identity / level / preferences / actions). Portals that need the
- * user panel WITHOUT the full app shell (e.g. the marketing website header)
- * import this via `@vxture/design-system/styles/shell-template-user-panel.css`
- * instead of carrying their own copy. console/admin get the same rules through
- * the full shell-template app.css.
- *
- * Rules are 1:1 with the user-panel section of shell-template/app.css — keep the
- * two visually consistent. Aliases (--fg-*, --bg-*, --primary, --font-*) come
- * from the template tokens loaded by the slim barrel; the only standalone bits
- * are the `--vxh-ctrl` / `--vxh-glass` context vars the full shell would
- * otherwise provide.
+ * 头像触发器 + 用户下拉面板（身份/偏好/操作）切片，经
+ * `@vxture/design-system/styles/shell-template-user-panel.css` 供给。
+ * 2026-08-18 归属核查：**唯一消费方是 website 的营销头部**——console/admin
+ * 的用户面板已走 DS Shell 组件族，本文件已从全量入口 shell-template.css
+ * 移除（26 个 .vxh-user* 类在两门户 DOM 里不存在）。别名（--fg-*, --bg-*,
+ * --font-*）来自切片入口装载的模板 tokens；--vxh-ctrl / --vxh-glass 由
+ * 本文件的 .vxh-pop-anchor 自供。单一消费方=候选迁 website（涉 exports
+ * 删除，攒 6.0 批，owner 批）。
  * ═══════════════════════════════════════════════════════════════════════════ */
 /* popover anchor — standalone context vars（完整外壳里由 .vxh 头部提供） */
 .vxh-pop-anchor {

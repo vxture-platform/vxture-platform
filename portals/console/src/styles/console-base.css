@@ -71,3 +71,24 @@
 .vx-signal-list__item p {
   color: var(--vx-console-muted);
 }
+
+/* Shell 骨架屏 —— 2026-08-18 自 DS shell-template/overrides.css 迁入：那份文件
+ * 自述"console-owned enhancements"，本就是 console 私货（骨架类仅
+ * ConsoleAppShell 渲染），按"共性层不收产品私货"归位。同文件里的
+ * .vxh-user:hover 头像光晕未迁——其目标 DOM 在 console/admin 已不存在
+ * （用户面板走 DS Shell 组件），纯死码，随文件一并删除。 */
+.vxh-skeleton-block {
+  background: color-mix(in srgb, var(--vx-color-shell-brand) 10%, var(--vx-color-shell-surface));
+  animation: vxh-shimmer 1.5s ease-in-out infinite;
+}
+
+.vxh-skeleton-block--nav { height: 2.25rem; border-radius: var(--vx-radius-md); }
+
+/* 原文件的 padding/gap 引了一个全仓从未定义过的 065r 间距 token，var() 解析
+ * 失败一直回落 0——迁入时按真实渲染行为落地（无内距无间隙），不复活。 */
+.vxh-skeleton-nav { display: grid; }
+
+@keyframes vxh-shimmer {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}

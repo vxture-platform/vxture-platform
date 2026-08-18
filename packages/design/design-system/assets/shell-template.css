@@ -14,9 +14,13 @@
  * rules" once inlined after the DS rules).
  */
 
+/* 入口卫生（2026-08-18 按门户归属核查）：
+ * - user-panel.css 不再从这里灌给 console/admin——那 26 个 .vxh-user* 类只有
+ *   website 渲染（console/admin 的用户面板已走 DS Shell 组件），走
+ *   shell-template-user-panel.css 切片；本入口只装两个门户真消费的件。
+ * - overrides.css 已解散：骨架屏三类是 console 私货 → 迁 console-base.css；
+ *   头像光晕的目标 DOM 两门户皆无 → 死码删除。 */
 @import "./shell-template/tokens.css";
 @import "./shell-template/tokens-admin-shell.css";
 @import "./shell-template/tokens-ext.css";
-@import "./shell-template/user-panel.css";
 @import "./shell-template/app.css";
-@import "./shell-template/overrides.css";

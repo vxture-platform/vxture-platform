@@ -150,12 +150,8 @@ body { background: var(--bg-shell); color: var(--fg); font-family: var(--font-sa
 
 .vxh-org:hover, .vxh-org.is-active { background: var(--bg-muted); }
 
-/* user avatar trigger + popover base (.vxh-user/.vxh-avatar/.vxh-user-status/
- * .vxh-pop-anchor/.vxh-backdrop/.vxh-panel) → shell-template/user-panel.css
- * (single source, shared with the website header). */
-/* popovers */
-/* user dropdown panel (.vxh-user-panel / identity head / level / account rows /
- * preferences / actions) → shell-template/user-panel.css (single source). */
+/* 用户头像 + 下拉面板（.vxh-user* 族）→ shell-template/user-panel.css，
+ * 现仅 website 头部消费（console/admin 已走 DS Shell 组件，全量入口不再装载）。 */
 @media (max-width: 1024px) {
   /* --vx-bp-lg */
   .vxh { grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; }
