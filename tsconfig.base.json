@@ -51,12 +51,6 @@
       "@vxture/design-system/server": [
         "./packages/design/design-system/src/server.ts"
       ],
-      "@vxture/model-runtime-client": [
-        "./packages/ai/model-runtime-client/src"
-      ],
-      "@vxture/model-runtime-client/*": [
-        "./packages/ai/model-runtime-client/src/*"
-      ],
       "@vxture/service-ticket": ["./services/support/ticket/src"],
       "@vxture/service-ticket/*": ["./services/support/ticket/src/*"],
       "@vxture/service-billing": ["./services/commerce/billing/src"],

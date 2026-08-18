@@ -28,7 +28,6 @@ export default [
     files: [
       'bff/**/src/**/*.ts',
       'services/**/src/**/*.ts',
-      'agent-server/**/src/**/*.ts',
       'packages/**/src/**/*.ts',
       'business/**/src/**/*.ts',
     ],
