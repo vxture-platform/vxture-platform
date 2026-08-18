@@ -81,14 +81,16 @@ function SegmentedControl<TValue extends string | number>({
         // 滑块比槽矮一圈、四周留一线底色，才有"嵌在里面"的观感；分段直接顶
         // 满外框会退化成三个方格子拼接，看不出这是一个可切换的控件。
         //
-        // 两者都走 rounded-full 胶囊：槽和滑块的圆角必须同族，槽用大圆角而
-        // 滑块用方角的话，滑到两端时滑块的直角会戳出槽的弧线。
+        // 圆角走 lg 槽 + sm 滑块而非胶囊（2026-08-18 owner 判：向用户面板
+        // 原型 vxh-seg 的方圆观感收敛，但全部走 token 不手搓）。同心圆角：
+        // 滑块半径 = 槽半径 − 内边距（lg 8px − 2xs 4px = sm 4px），滑到两端
+        // 时滑块的弧线与槽的弧线平行，不会戳角。
         //
         // 槽底走 surface-3（浅色档 neutral-50）而不是 muted（neutral-200）：
         // 槽只需要"这里是个凹处"的一点点暗示，muted 那一档在白卡片上已经是
         // 一块明确的灰色面，比它承载的滑块还抢眼。暗色档 surface-3 比 card
         // 亮一级，凹陷感在两个模式下都成立。
-        "flex items-stretch rounded-full border border-input bg-surface-3 p-2xs",
+        "flex items-stretch rounded-lg border border-input bg-surface-3 p-2xs",
         fill ? "w-full" : "inline-flex",
         BY_SIZE[size].root,
         className,
@@ -106,12 +108,14 @@ function SegmentedControl<TValue extends string | number>({
             disabled={item.disabled}
             onClick={() => onChange(item.value)}
             className={cn(
-              "inline-flex h-full items-center justify-center gap-2xs rounded-full",
+              "inline-flex h-full items-center justify-center gap-2xs rounded-sm",
               fill && "flex-1",
               interactive,
               BY_SIZE[size].item,
+              // 选中态是"浮起的面片"而不是实心品牌块（vxh-seg 收敛）：卡面底
+              // + 主色文字 + 一线投影表达"托起"，品牌色只用在文字这一小面积。
               active
-                ? "bg-primary text-primary-foreground shadow-flat"
+                ? "bg-card font-semibold text-primary shadow-xs"
                 : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >
@@ -123,8 +127,9 @@ function SegmentedControl<TValue extends string | number>({
               <span
                 className={cn(
                   "rounded-full px-2xs text-label-sm tabular-nums",
+                  // 滑块底改浅色后，徽标不再需要反白——淡主色底 + 主色字。
                   active
-                    ? "bg-primary-foreground/20 text-primary-foreground"
+                    ? "bg-primary/10 text-primary"
                     : "bg-surface-2 text-muted-foreground",
                 )}
               >

@@ -67,15 +67,17 @@ const IDENTITY_WIDTH = "w-media-sm";
 function RowLead({
   icon,
   width,
+  danger = false,
 }: Readonly<{
   icon?: IconName | undefined;
   width?: "row" | "identity" | undefined;
+  danger?: boolean | undefined;
 }>) {
   return (
     <span
       className={cn(
         "inline-grid h-full shrink-0 place-items-center",
-        ROW_ICON_TONE,
+        danger ? "text-destructive-text" : ROW_ICON_TONE,
         width === "identity" ? IDENTITY_WIDTH : ROW_LEAD_WIDTH,
       )}
       aria-hidden="true"
@@ -272,6 +274,12 @@ export interface ShellPanelRowProps {
   trailingIcon?: IconName | undefined;
   /** 在新标签页打开（仅 href 生效），自动补 rel。 */
   newTab?: boolean | undefined;
+  /**
+   * 危险动作（登出、删除…），destructive 语义色——与 ActionMenu 的 danger
+   * 同一判断：文字与图标着色、hover 淡红底，不做实心红（危险项常与常规项
+   * 挨着，实心底会让整个面板看起来在报警）。
+   */
+  danger?: boolean | undefined;
   /** 选中/展开态——用 secondary 底色标注，跟 hover 区分。 */
   active?: boolean | undefined;
   disabled?: boolean | undefined;
@@ -298,6 +306,7 @@ export function ShellPanelRow({
   newTab = false,
   active = false,
   disabled = false,
+  danger = false,
   href,
   linkComponent,
   onClick,
@@ -310,7 +319,7 @@ export function ShellPanelRow({
 
   const inner = (
     <>
-      <RowLead icon={icon} />
+      <RowLead icon={icon} danger={danger} />
       <span className="flex min-w-0 flex-1 flex-col items-start gap-none text-left">
         <span className="w-full truncate text-label-md">{label}</span>
         {description ? (
@@ -342,6 +351,8 @@ export function ShellPanelRow({
     ROW_INSET,
     ROW_GAP,
     "flex",
+    danger &&
+      "text-destructive-text hover:bg-destructive-muted hover:text-destructive-muted-foreground",
     className,
   );
 

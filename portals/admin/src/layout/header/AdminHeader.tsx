@@ -327,6 +327,7 @@ export function AdminHeader({
                 key: "sign-out",
                 label: t("signOut"),
                 icon: "sign-out",
+                danger: true,
                 onClick: onSignOut,
               },
             ]}

@@ -353,6 +353,7 @@ export function OperaShell({
                         key: "sign-out",
                         label: "退出登录",
                         icon: "sign-out",
+                        danger: true,
                         onClick: () => void signOut(),
                       },
                     ]}

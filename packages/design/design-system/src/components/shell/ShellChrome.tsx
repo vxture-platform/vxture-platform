@@ -186,6 +186,8 @@ export interface ShellUserMenuAction {
   label: ReactNode;
   icon?: IconName | undefined;
   disabled?: boolean | undefined;
+  /** 危险动作（登出等），行走 destructive 语义色（见 ShellPanelRow.danger）。 */
+  danger?: boolean | undefined;
   onClick: () => void | Promise<void>;
 }
 
@@ -887,6 +889,7 @@ export function ShellUserMenu({
                 icon={action.icon}
                 label={action.label}
                 disabled={action.disabled ?? false}
+                danger={action.danger ?? false}
                 // 动作就地生效，不去别处，所以右端不画去向图标。
                 chevron={false}
                 onClick={() => {

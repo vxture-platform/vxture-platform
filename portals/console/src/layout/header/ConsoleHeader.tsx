@@ -337,6 +337,7 @@ export function ConsoleHeader({
                 key: "sign-out",
                 label: t("signOut"),
                 icon: "sign-out",
+                danger: true,
                 onClick: () => window.location.assign(buildLogoutUrl()),
               },
             ]}
