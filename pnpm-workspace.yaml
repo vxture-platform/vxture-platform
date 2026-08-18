@@ -1,6 +1,5 @@
 packages:
   - 'portals/*'
-  - 'business/*'
   - 'bff/*'
   - 'services/*/*'
   - 'packages/shared/shared'

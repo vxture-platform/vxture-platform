@@ -9,9 +9,7 @@
     "monorepo",
     "nextjs",
     "fastapi",
-    "saas",
-    "ai",
-    "agents"
+    "saas"
   ],
   "author": "vxture team",
   "scripts": {
