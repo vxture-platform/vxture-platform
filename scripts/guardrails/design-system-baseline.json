@@ -2,30 +2,8 @@
   "version": 1,
   "description": "Existing DS inline-style/native-primitive/scale debt. The guardrail blocks new signatures; shrink this file as modules migrate to DS.",
   "allowed": [
-    "ds/no-app-hardcoded-scale|agent-studio/varda/src/styles/varda-chat-shell.css|font-size: 0.6875rem;",
-    "ds/no-app-hardcoded-scale|agent-studio/varda/src/styles/varda-chat-shell.css|letter-spacing: 0.02em;",
-    "ds/no-inline-design-style|portals/admin/src/layout/template/TemplateDrawer.tsx|style={{ color: LEVEL_COLOR[n.level], background: \"color-mix(in srgb, \" + LEVEL_COLOR[n.level] + \" 14%, transparent)\", }}",
-    "ds/no-inline-design-style|portals/console/src/layout/template/TemplateDrawer.tsx|style={{ color: LEVEL_COLOR[n.level], background: \"color-mix(in srgb, \" + LEVEL_COLOR[n.level] + \" 14%, transparent)\", }}",
-    "ds/no-native-primitive|portals/accounts/src/components/OperatorMfaFlow.tsx|<button",
-    "ds/no-native-primitive|portals/accounts/src/components/OperatorPasskeyManager.tsx|<button",
     "ds/no-native-primitive|portals/admin/src/layout/template/TemplateDrawer.tsx|<button",
-    "ds/no-native-primitive|portals/admin/src/layout/template/TemplateDrawer.tsx|<button className=\"drawer-act\" onClick={() => {}}>",
-    "ds/no-native-primitive|portals/admin/src/layout/template/TemplateHeader.tsx|<button",
-    "ds/no-native-primitive|portals/admin/src/layout/template/TemplateHeader.tsx|<input",
-    "ds/no-native-primitive|portals/admin/src/layout/template/TemplateHeader.tsx|<select",
-    "ds/no-native-primitive|portals/admin/src/layout/template/TemplateSidebar.tsx|<button",
-    "ds/no-native-primitive|portals/opera/src/layout/OperaShell.tsx|<button",
-    "ds/no-native-primitive|portals/opera/src/layout/OperaShell.tsx|<button className=\"nav-section-trigger\" aria-expanded>",
     "ds/no-native-primitive|portals/console/src/layout/template/AppCenter.tsx|<button",
-    "ds/no-native-primitive|portals/console/src/layout/template/TemplateDrawer.tsx|<button",
-    "ds/no-native-primitive|portals/console/src/layout/template/TemplateDrawer.tsx|<button className=\"drawer-act\" onClick={() => {}}>",
-    "ds/no-native-primitive|portals/console/src/layout/template/TemplateHeader.tsx|<button",
-    "ds/no-native-primitive|portals/console/src/layout/template/TemplateHeader.tsx|<button className=\"vxh-menu-item danger\" onClick={logoutToHome}>",
-    "ds/no-native-primitive|portals/console/src/layout/template/TemplateHeader.tsx|<button className=\"vxh-menu-item\" onClick={switchUser}>",
-    "ds/no-native-primitive|portals/console/src/layout/template/TemplateHeader.tsx|<input type=\"search\" placeholder={labels.searchPlaceholder} />",
-    "ds/no-native-primitive|portals/console/src/layout/template/TemplateHeader.tsx|<select",
-    "ds/no-native-primitive|portals/console/src/layout/template/TemplateSidebar.tsx|<button",
-    "ds/no-native-primitive|portals/website/src/components/layout/Header.tsx|<button",
-    "ds/no-native-primitive|portals/website/src/components/layout/Header.tsx|<select"
+    "ds/no-native-primitive|portals/console/src/layout/template/TemplateDrawer.tsx|<button"
   ]
 }

@@ -31,34 +31,31 @@ Vxture 是基于 **pnpm workspace monorepo** 的企业 SaaS 平台，TypeScript 
 两个产品面：
 
 - **Platform**：`portals/` — 运营后台，面向管理员，迭代慢
-- **Agent Studio**：`agent-studio/` + `agent-server/` — AI 产品，面向终端用户，迭代快
+<!-- agent 系(agent-studio/agent-server/varda)已迁独立仓 vxture-varda 与 vxture-agent-template(2026-08-18):与平台无关,全部独立。 -->
 
 ### 层级 ↔ 目录 ↔ @layer 对照表
 
-| 目录                               | @layer 值                | 变更频率  |
-| ---------------------------------- | ------------------------ | --------- |
-| `portals/*`                        | `Presentation`           | Slow      |
-| `agent-studio/*`                   | `Presentation`           | Fast      |
-| `bff/*`                            | `Application`            | Medium    |
-| `agent-server/*`                   | `Application` / `Domain` | Fast      |
-| `services/*/*`                     | `Domain`                 | Slow      |
-| `packages/core/*`                  | `Infrastructure`         | Very Slow |
-| `packages/ai/model-runtime-client` | `Infrastructure`         | Medium    |
-| `packages/platform/*`              | `Infrastructure`         | Low       |
-| `packages/design/*`                | `Presentation`           | Slow      |
-| `packages/shared/*`                | `Shared`                 | Very Slow |
+| 目录                               | @layer 值        | 变更频率  |
+| ---------------------------------- | ---------------- | --------- |
+| `portals/*`                        | `Presentation`   | Slow      |
+| `bff/*`                            | `Application`    | Medium    |
+| `services/*/*`                     | `Domain`         | Slow      |
+| `packages/core/*`                  | `Infrastructure` | Very Slow |
+| `packages/ai/model-runtime-client` | `Infrastructure` | Medium    |
+| `packages/platform/*`              | `Infrastructure` | Low       |
+| `packages/design/*`                | `Presentation`   | Slow      |
+| `packages/shared/*`                | `Shared`         | Very Slow |
 
 ### 依赖方向（违反即破坏架构，无例外）
 
 ```
-portals/* / agent-studio/*
+portals/*
         │  HTTP only，禁止包引用
         ▼
       bff/*
         │
         ├──────────────────┐
-        ▼                  ▼
-  agent-server/*      services/*/*
+        ▼                  ▼  services/*/*
         │                  │
         ├──────────┬───────┘
         │          ▼
@@ -131,16 +128,15 @@ portals/* / agent-studio/*
 
 所有包的 `AGENTS.md` 已统一改为**导航指针**，完整上下文在 `docs/40-implementation/packages/` 体系：
 
-| 目录                 | 指针目标                                              |
-| -------------------- | ----------------------------------------------------- |
-| `packages/shared/`   | `docs/40-implementation/packages/shared/00-index.md`  |
-| `packages/core/`     | `docs/40-implementation/packages/core/{包名}.md`      |
-| `packages/platform/` | `docs/40-implementation/packages/sdk/{包名}.md`       |
-| `packages/design/`   | `docs/40-implementation/packages/design/{包名}.md`    |
-| `services/*/*`       | `docs/40-implementation/packages/services/{包名}.md`  |
-| `bff/*`              | `docs/40-implementation/packages/bff/{bff名}.md`      |
-| `portals/*`          | `docs/40-implementation/packages/portals/{包名}.md`   |
-| `agent-server/*`     | `docs/40-implementation/packages/agents/{agent名}.md` |
+| 目录                 | 指针目标                                             |
+| -------------------- | ---------------------------------------------------- |
+| `packages/shared/`   | `docs/40-implementation/packages/shared/00-index.md` |
+| `packages/core/`     | `docs/40-implementation/packages/core/{包名}.md`     |
+| `packages/platform/` | `docs/40-implementation/packages/sdk/{包名}.md`      |
+| `packages/design/`   | `docs/40-implementation/packages/design/{包名}.md`   |
+| `services/*/*`       | `docs/40-implementation/packages/services/{包名}.md` |
+| `bff/*`              | `docs/40-implementation/packages/bff/{bff名}.md`     |
+| `portals/*`          | `docs/40-implementation/packages/portals/{包名}.md`  |
 
 ---
 

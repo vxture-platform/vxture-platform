@@ -18,7 +18,7 @@
  *   3040  opera                   3041  opera-bff       （3040-3049）
  *   3080  accounts（登录 UI）      3081  auth-bff（IdP 后端，同一张脸的两半）
  *   3050-3079  留白（未来新面）
- *   3090  varda-bff               3091  varda-server    3092  varda-studio（仅本地）
+ *   3090-3092 varda 系已迁独立仓 vxture-varda(2026-08-18)
  *   3100  atlas（外部仓库，本面板不启；L1 段 3100-3199）
  *
  * 边缘带 80xx（不占应用段）：8000 gateway-bff（公网边缘）、8080 platform-api
@@ -178,37 +178,6 @@ export const SERVICES = [
       unauthorized("auth.session", "http://localhost:3041/auth/session"),
     ],
   },
-  {
-    id: "varda-server",
-    name: "Varda Server",
-    port: 3091,
-    priority: 0,
-    url: "http://localhost:3091",
-    command: "pnpm --filter @vxture/agent-server-varda dev",
-    env: {
-      VARDA_SERVER_PORT: "3091",
-      ATLAS_API_URL: ATLAS_API,
-      VARDA_PLATFORM_LLM_TENANT_ID: "82cf3e39-f7f0-4597-bb55-b1303ca19d46",
-      VARDA_DEFAULT_MODEL_CODE: "doubao-seed-2-0-lite-260215",
-    },
-    healthChecks: [listening(3091)],
-  },
-  {
-    id: "varda-bff",
-    name: "Varda BFF",
-    port: 3090,
-    priority: 0,
-    url: "http://localhost:3090",
-    command: "pnpm --filter @vxture/bff-varda dev",
-    env: {
-      VARDA_BFF_PORT: "3090",
-      VARDA_SERVER_INTERNAL_URL: "http://localhost:3091",
-    },
-    healthChecks: [
-      { label: "health", url: "http://localhost:3090/health", okStatuses: [200] },
-    ],
-  },
-
   // ── tier 1：网关 ──────────────────────────────────────────────────────────
   {
     id: "gateway",
@@ -299,15 +268,6 @@ export const SERVICES = [
     command: "pnpm --filter @vxture/opera dev",
     env: { OPERA_BFF_DEV_URL: "http://localhost:3041" },
     healthChecks: [listening(3040)],
-  },
-  {
-    id: "varda-studio",
-    name: "Varda Studio",
-    port: 3092,
-    priority: 2,
-    url: "http://localhost:3092",
-    command: "pnpm --filter @vxture/agent-studio-varda dev",
-    healthChecks: [listening(3092)],
   },
 ];
 

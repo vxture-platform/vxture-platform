@@ -3,8 +3,7 @@ name: docker-build
 # 主干 + tag 触发：平台部署 tag（dev-*/beta-*/v*.*.*）→ build+push 到 ACR，
 # 镜像 tag = github.ref_name（deploy.yml 按同名 tag 拉取部署）。
 # 不再在 push main 上构建 :latest（避免首推/日常合并触发无谓构建；镜像只在部署 tag 上出）。
-# **varda 已独立**：varda-* tag 走 deploy-varda.yml（自建 varda 镜像 + 部署 worker-02），
-# 本 workflow 与 classify-changes 的平台 tag「全建」均排除 varda_*。
+# varda 已迁独立仓 vxture-varda(2026-08-18):本仓镜像清单不再含 varda_*。
 
 on:
   push:

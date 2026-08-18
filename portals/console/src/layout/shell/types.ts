@@ -6,6 +6,3 @@
 export type ShellView = "appcenter" | "console";
 
 export type ShellDrawerType = "notifications" | "settings";
-
-/** Varda 内联助手面板档位（与 @vxture/agent-studio-varda 的 VardaInlineMode 对齐）。 */
-export type AssistantMode = "narrow" | "wide" | "full";

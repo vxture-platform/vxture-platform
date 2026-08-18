@@ -27,10 +27,10 @@
 
 ### Business BFF（复用 console Cookie，未登录跳转 console 登录页）
 
-| 包                                            | 路径                      | 职责                                                 |
-| --------------------------------------------- | ------------------------- | ---------------------------------------------------- |
-| [`varda.md`](./70-varda.md)                   | `bff/varda-bff/`          | Varda 智能助手 BFF，SSE 流式转发，CallerContext 组装 |
-| [`agent-template.md`](./20-agent-template.md) | `bff/agent-template-bff/` | 新 Agent BFF fork 起点                               |
+| 包                                            | 路径                                 | 职责                   |
+| --------------------------------------------- | ------------------------------------ | ---------------------- |
+| Varda BFF                                     | 已迁 vxture-varda 独立仓(2026-08-18) | ➡ 迁出                 |
+| [`agent-template.md`](./20-agent-template.md) | `bff/agent-template-bff/`            | 新 Agent BFF fork 起点 |
 
 ---
 

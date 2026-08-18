@@ -18,7 +18,7 @@ on:
       - "dev-*"
       - "beta-*"
       - "v*.*.*"
-    # varda 已独立：varda-* 走 deploy-varda.yml（worker-02，独立审批门）。本 workflow 纯平台。
+    # varda 已迁独立仓 vxture-varda(2026-08-18)。本 workflow 纯平台。
 
 permissions:
   contents: read

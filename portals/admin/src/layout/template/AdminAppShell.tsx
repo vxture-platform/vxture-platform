@@ -31,8 +31,7 @@ import {
 import { useConsoleTranslations } from "@/lib/ConsoleIntl";
 import { AdminHeader, type AdminHeaderViewOption } from "../header/AdminHeader";
 import type { NavSearchEntry } from "../header/useAdminSearch";
-import type { ShellView, ShellDrawerType, AssistantMode } from "./shell/types";
-import { TemplateAssistant } from "./TemplateAssistant";
+import type { ShellView, ShellDrawerType } from "./shell/types";
 import { TemplateDrawer, type DrawerNotif } from "./TemplateDrawer";
 
 /* 内容滚动区：原先是遗留 CSS 的 `.content-scroll`（shell-template/app.css）。
@@ -41,13 +40,6 @@ import { TemplateDrawer, type DrawerNotif } from "./TemplateDrawer";
  * 继续拿类名当选择器，类名以后可以随便改。与 console 同一处理。 */
 const CONTENT_SCROLL = "min-w-0 flex-1 scroll-smooth overflow-y-auto";
 const CONTENT_SCROLL_ATTR = "data-content-scroll";
-
-/* nav 收起态已迁到 cookie（见 layout.tsx / nav-preference.constants.ts），不再列在这里——
- * 留一个用不到的 key 会让下一个人以为它还是权威来源。 */
-const LS = {
-  vela: "vx-admin-tpl-vela-open",
-  velaMode: "vx-admin-tpl-vela-mode",
-};
 
 function ShellFrame({
   children,
@@ -67,17 +59,12 @@ function ShellFrame({
    * 里纠正，会让刷新时导航"先展开再收起"闪一下——localStorage 对服务端不可见，
    * 那个时序问题无法在客户端解决。 */
   const [navCollapsed, setNavCollapsed] = useState(initialNavCollapsed);
-  const [velaOpen, setVelaOpen] = useState(false);
-  const [assistantMode, setAssistantMode] = useState<AssistantMode>("narrow");
   const [drawer, setDrawer] = useState<ShellDrawerType | null>(null);
 
   // hydrate persisted UI state (client-only, avoids SSR mismatch)
   useEffect(() => {
     try {
       // nav 收起态不在这里读：它已经由服务端经 cookie 传进来了（见上）。
-      setVelaOpen(window.localStorage.getItem(LS.vela) === "1");
-      const m = window.localStorage.getItem(LS.velaMode);
-      if (m === "narrow" || m === "wide" || m === "full") setAssistantMode(m);
     } catch {
       /* ignore */
     }
@@ -97,38 +84,8 @@ function ShellFrame({
       writeNavCollapsed("admin", n);
       return n;
     });
-  const persistVela = (open: boolean, mode: AssistantMode) => {
-    try {
-      window.localStorage.setItem(LS.vela, open ? "1" : "0");
-      window.localStorage.setItem(LS.velaMode, mode);
-    } catch {
-      /* ignore */
-    }
-  };
-  const openVela = (open: boolean) => {
-    setVelaOpen(open);
-    persistVela(open, assistantMode);
-  };
-  const closeAssistant = () => {
-    setVelaOpen(false);
-    setAssistantMode("narrow");
-    persistVela(false, "narrow");
-  };
-  const toggleAssistantWide = () => {
-    const goingWide = assistantMode !== "wide";
-    const next: AssistantMode = goingWide ? "wide" : "narrow";
-    setAssistantMode(next);
-    persistVela(velaOpen, next);
-    if (goingWide) {
-      setNavCollapsed(true);
-      writeNavCollapsed("admin", true);
-    }
-  };
-  const toggleAssistantFull = () => {
-    const next: AssistantMode = assistantMode === "full" ? "narrow" : "full";
-    setAssistantMode(next);
-    persistVela(velaOpen, next);
-  };
+  /* Varda 已迁独立仓重构(2026-08-18):助手停靠列与其状态机随之移除,
+   * 重构完成发包后按新包名 @vxture/varda 重新接入。 */
 
   const navigate = (href: string) => {
     router.push(href);
@@ -256,8 +213,6 @@ function ShellFrame({
     router.replace("/login");
   };
 
-  const velaActive = velaOpen;
-
   /* 会话未定 → 整屏加载页，不是骨架屏。
    *
    * 骨架屏的前提是「这块内容一定会出现，只是还没到」——它承诺布局。会话未定时
@@ -304,9 +259,6 @@ function ShellFrame({
         activeViewId={activeWorkspace.id}
         onSelectView={selectView}
         activeMenuName={activeWorkspace.label}
-        assistantOpen={velaOpen}
-        setAssistantOpen={openVela}
-        showAssistant
         openDrawer={(t) => setDrawer(t)}
         onNavigate={navigate}
         onSwitchUser={handleSwitchUser}
@@ -342,14 +294,6 @@ function ShellFrame({
         <main className={CONTENT_SCROLL} {...{ [CONTENT_SCROLL_ATTR]: "" }}>
           <ShellPageContainer>{children}</ShellPageContainer>
         </main>
-        {velaActive && (
-          <TemplateAssistant
-            mode={assistantMode}
-            onClose={closeAssistant}
-            onToggleWide={toggleAssistantWide}
-            onToggleFull={toggleAssistantFull}
-          />
-        )}
       </div>
 
       {drawer && (

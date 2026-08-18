@@ -364,25 +364,8 @@ GRANT UPDATE (batch_id, code, status, max_uses, used_count, assigned_workspace_i
 REVOKE UPDATE ON promotion.voucher_redemptions FROM platform_svc;
 GRANT UPDATE (voucher_id, tenant_id, workspace_id, user_id, kind, effect_snapshot, transaction_id, subscription_id, invoice_item_id, payment_id, redeemed_at) ON promotion.voucher_redemptions TO platform_svc;
 
--- model.model_providers  [anchor: id, created_by, created_at]
-REVOKE UPDATE ON model.model_providers FROM platform_svc;
-GRANT UPDATE (provider_code, provider_type, provider_name, description, logo_url, homepage_url, console_url, billing_url, is_active, config, updated_by, description_key, is_customer_visible, is_workforce_visible, updated_at, deleted_at) ON model.model_providers TO platform_svc;
 
--- model.models  [anchor: id, created_by, created_at]
-REVOKE UPDATE ON model.models FROM platform_svc;
-GRANT UPDATE (provider_id, model_code, model_type, protocol, model_name, description, endpoint_url, context_window, max_output_tokens, capabilities, supports_streaming, is_active, sort, config, updated_by, description_key, is_customer_visible, is_workforce_visible, updated_at, deleted_at) ON model.models TO platform_svc;
 
--- model.model_grants  [anchor: id, created_by, created_at]
-REVOKE UPDATE ON model.model_grants FROM platform_svc;
-GRANT UPDATE (model_id, tenant_id, application_id, application_type, agent_id, priority, is_active, reason, expires_at, updated_by, updated_at, deleted_at) ON model.model_grants TO platform_svc;
-
--- model.model_price_rules  [anchor: id, created_by, created_at]
-REVOKE UPDATE ON model.model_price_rules FROM platform_svc;
-GRANT UPDATE (model_id, billing_mode, currency, unit_tokens, input_unit_price, output_unit_price, request_unit_price, is_active, effective_at, expires_at, updated_by, updated_at) ON model.model_price_rules TO platform_svc;
-
--- model.model_policies  [anchor: id, created_by, created_at]
-REVOKE UPDATE ON model.model_policies FROM platform_svc;
-GRANT UPDATE (model_id, tenant_id, name, priority, max_concurrent, rate_limit_rpm, rate_limit_tpm, rate_limit_tpd, max_context_tokens, is_active, effective_at, expires_at, updated_by, updated_at) ON model.model_policies TO platform_svc;
 
 -- safety.moderation_policies  [anchor: id, created_by, created_at]
 REVOKE UPDATE ON safety.moderation_policies FROM platform_svc;

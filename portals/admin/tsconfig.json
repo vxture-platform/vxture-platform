@@ -26,9 +26,7 @@
         "../../packages/design/design-system/src/server.ts"
       ],
       "@vxture/platform-browser": ["../../packages/platform/browser/src"],
-      "@vxture/platform-browser/*": ["../../packages/platform/browser/src/*"],
-      "@vxture/agent-studio-varda": ["../../agent-studio/varda/src"],
-      "@vxture/agent-studio-varda/*": ["../../agent-studio/varda/src/*"]
+      "@vxture/platform-browser/*": ["../../packages/platform/browser/src/*"]
     },
     "allowJs": true,
     "incremental": true,

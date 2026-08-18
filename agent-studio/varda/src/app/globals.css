@@ -1,5 +1,0 @@
-/* Varda global style entry. Keep concrete rules in src/styles modules. */
-
-@import "@vxture/design-system/styles/globals.css";
-@import "../styles/varda-chat.css";
-@import "../styles/varda-tool.css";

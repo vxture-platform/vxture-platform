@@ -20,7 +20,6 @@
 import { useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
-  ShellAgentButton,
   ShellBrand,
   ShellHeader,
   ShellIconButton,
@@ -74,8 +73,6 @@ export interface ConsoleHeaderProps {
   view: ShellView;
   setView: (next: ShellView) => void;
   viewOptions: ConsoleHeaderViewOption[];
-  assistantOpen: boolean;
-  setAssistantOpen: (open: boolean) => void;
   openDrawer: (type: "notifications" | "settings") => void;
   onNavigate: (href: string) => void;
   brandName: string;
@@ -91,8 +88,6 @@ export function ConsoleHeader({
   view,
   setView,
   viewOptions,
-  assistantOpen,
-  setAssistantOpen,
   openDrawer,
   onNavigate,
   brandName,
@@ -232,12 +227,7 @@ export function ConsoleHeader({
         // 三个板块（助手 / 系统工具组 / 账户）之间 gap-md，组内图标 gap-2xs：
         // 组间是板块边界，组内是同类项。与 opera 同一套间距。
         <div className="flex items-center gap-md">
-          <ShellAgentButton
-            iconSrc="/assets/ai/varda-agent.gif"
-            label={t("assistant")}
-            active={assistantOpen}
-            onClick={() => setAssistantOpen(!assistantOpen)}
-          />
+          {/* Varda 助手入口已随独立仓迁出移除(2026-08-18),重构发包后恢复。 */}
           <ShellIconGroup label={t("settings")}>
             <ShellIconButton icon="help" label={t("help")} onClick={() => {}} />
             <ShellIconButton

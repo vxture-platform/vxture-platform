@@ -34,8 +34,6 @@ const ALL_IMAGES = [
   "platform_bff-admin",
   "platform_bff-opera",
   "platform_bff-platform-api",
-  "varda_bff",
-  "varda_agent",
 ];
 
 /** 运行分类器并把 `key=value` 行解析为对象。 */
@@ -148,7 +146,6 @@ test("image set: services/identity/organization → 依赖它的 BFF（回归 #2
     "platform_bff-auth",
     "platform_bff-website",
     "platform_bff-console",
-    "varda_agent",
   ]);
 });
 
@@ -215,8 +212,8 @@ test("matrix include 镜像名与 ALL_IMAGES 一致（单一数据源对齐）",
   );
 });
 
-// varda 已独立发布线（deploy-varda.yml）：平台部署 tag 的「全建」必须排除 varda_*。
-test("matrix: 平台 tag ref → 全平台镜像但排除 varda_*", () => {
+// varda 已迁独立仓（2026-08-18）：清单本就不含 varda_*，全建即全清单。
+test("matrix: 平台 tag ref → 全平台镜像", () => {
   const out = execFileSync(
     process.execPath,
     [SCRIPT, "--files", "docs/noop.md", "--matrix"],
@@ -227,12 +224,8 @@ test("matrix: 平台 tag ref → 全平台镜像但排除 varda_*", () => {
     (entry) => entry.name,
   );
   assert.ok(names.length > 0, "平台 tag 应触发全建");
-  assert.ok(
-    !names.some((n) => n.startsWith("varda_")),
-    `平台 tag 全建不应含 varda：${names.join(",")}`,
-  );
   assert.deepEqual(
     names,
-    ALL_IMAGES.filter((n) => !n.startsWith("varda_")),
+    ALL_IMAGES,
   );
 });

@@ -1,13 +1,10 @@
 packages:
   - 'portals/*'
-  - 'agent-studio/*'
-  - 'agent-server/*'
   - 'business/*'
   - 'bff/*'
   - 'services/*/*'
   - 'packages/shared/shared'
   - 'packages/core/*'
-  - 'packages/ai/model-runtime-client'
   - 'packages/platform/*'
   - 'packages/design/design-tokens'
   - 'packages/design/design-ui'

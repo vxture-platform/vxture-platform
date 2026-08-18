@@ -1,8 +1,7 @@
 @import "@vxture/design-system/styles/globals.css";
 @import "@vxture/design-system/styles/brands/vxture.css";
 @import "@vxture/design-system/styles/workbench.css";
-@import "@vxture/agent-studio-varda/styles/chat.css";
-@import "@vxture/agent-studio-varda/styles/tool.css";
+/* varda 样式已随独立仓迁出(2026-08-18),重构发包后按 @vxture/varda 重新引入。 */
 
 /* Console templates design — verbatim shell visual system (loaded after DS so
  * the template's .app/.vxh/.sidebar/.assistant chrome and ergonomic aliases win).

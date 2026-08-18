@@ -445,24 +445,8 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --   promotion.voucher_batches.created_by → admin.operator_accounts.id：不建外键
 --   （运营专属操作，realm=operator，与客户 realm 硬隔离；仅逻辑引用）。
 
--- ═══ model ═══
--- ── model → tenancy（授权/策略主体 tenant_id，普通引用，铁律一）─────────────────
-DO $$ BEGIN
-  ALTER TABLE model.model_grants ADD CONSTRAINT fk_model_grants_tenant
-    FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants(id) ON DELETE CASCADE;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN
-  ALTER TABLE model.model_policies ADD CONSTRAINT fk_model_policies_tenant
-    FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants(id) ON DELETE CASCADE;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- ═══ model ═══ 已随 Atlas 拆仓退役(2026-08-18):schema 不复存在,FK 无从建。
 
--- ── model → admin.operator_* / 未落地域：一律裸 UUID 不建 FK ─────────────────────
---   model_providers/models/model_grants/model_price_rules/model_policies 的
---     created_by/updated_by → admin.operator_accounts：跨 realm 身份 FK 禁止（铁律七 / 边界#2），裸值不建 FK。
---   model_grants.application_id/agent_id → product.agent_catalog（未落地，跨轮硬前置）：裸值不建 FK；
---     agent_id 为退役过渡列，调用方切走后 drop。
---   跨物理库（Model Platform DB key/reqlog/routing）经 provider_code/request_id 关联（边界#1）：
---     不在本平台库建任何跨库 FK。
 
 -- ═══ safety ═══
 -- ── B?：safety → tenancy（审核策略归属租户；NULL=平台默认，普通引用真 FK，铁律一）─────

@@ -24,7 +24,6 @@
 
 import { useMemo } from "react";
 import {
-  ShellAgentButton,
   ShellBrand,
   ShellHeader,
   ShellIconButton,
@@ -74,9 +73,6 @@ export interface AdminHeaderProps {
   onSelectView: (id: ShellView) => void;
   /** 当前工作域名，占品牌右侧那一槽。 */
   activeMenuName: string;
-  assistantOpen: boolean;
-  setAssistantOpen: (open: boolean) => void;
-  showAssistant: boolean;
   openDrawer: (type: "notifications" | "settings") => void;
   onNavigate: (href: string) => void;
   onSwitchUser: () => void;
@@ -91,9 +87,6 @@ export function AdminHeader({
   activeViewId,
   onSelectView,
   activeMenuName,
-  assistantOpen,
-  setAssistantOpen,
-  showAssistant,
   openDrawer,
   onNavigate,
   onSwitchUser,
@@ -219,14 +212,7 @@ export function AdminHeader({
         // 三个板块（助手 / 系统工具组 / 账户）之间 gap-md，组内图标 gap-2xs：
         // 组间是板块边界，组内是同类项。与 console / opera 同一套间距。
         <div className="flex items-center gap-md">
-          {showAssistant ? (
-            <ShellAgentButton
-              iconSrc="/assets/ai/varda-agent.gif"
-              label={t("assistant")}
-              active={assistantOpen}
-              onClick={() => setAssistantOpen(!assistantOpen)}
-            />
-          ) : null}
+          {/* Varda 助手入口已随独立仓迁出移除(2026-08-18),重构发包后恢复。 */}
           <ShellIconGroup label={t("settings")}>
             <ShellIconButton icon="help" label={t("help")} onClick={() => {}} />
             <ShellIconButton

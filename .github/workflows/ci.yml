@@ -106,10 +106,6 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm build:backend-deps
 
-      - name: Generate Prisma clients
-        if: steps.changes.outputs.docs_only != 'true'
-        run: pnpm --filter @vxture/agent-server-varda prisma:generate
-
       # 把已构建的后端依赖 dist 与 Prisma client 作为产物上传，供 build / test job 复用，
       # 避免在并行 job 中重复执行 build:backend-deps 与 prisma generate。
       - name: Upload backend build (deps dist + prisma clients)
@@ -117,11 +113,13 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: backend-build
+          # ⚠ upload-artifact 的归档根=各 path 的最近公共祖先。此前清单里有
+          # agent/varda 的根级路径,祖先=仓根;它们随拆仓删除后祖先漂到 packages/,
+          # 下载解包全部错位(2026-08-18 实翻车)。用仓根文件作锚点钉死归档根。
           path: |
+            pnpm-workspace.yaml
             packages/shared/shared/dist
             packages/core/*/dist
-            services/model/platform/src/generated/prisma
-            agent-server/varda/src/generated/prisma
           retention-days: 1
           include-hidden-files: true
 
@@ -234,10 +232,10 @@ jobs:
           name: backend-build
 
       # 变更门控：只建/smoke 受影响的组件（quality-gate 的 affected_images，走 docker-build
-      # 同款传递依赖规则）。改一个官网页只建 website-bff；varda 没动就不建 varda_*
-      # （varda 独立部署 worker-02，见 repo-governance-standard）。改共享包则正确牵连全部。
+      # 同款传递依赖规则）。改一个官网页只建 website-bff;改共享包则正确牵连全部。
+      # （varda 已迁独立仓 vxture-varda,2026-08-18,本仓不再有 varda 构建面。）
       # TD-024 boot-smoke：建 esbuild bundle 并用假 env 启全 DI 图——唯一验 bundle 运行态
-      # 形态的门（隐式构造注入陷阱在此暴露，tsc/单测看不到）。auth-bff/varda-bff 的 boot-smoke
+      # 形态的门（隐式构造注入陷阱在此暴露，tsc/单测看不到）。auth-bff 的 boot-smoke
       # 需真 Redis（RedisService.onModuleInit fail-closed）；REDIS_URL 全局设，其余 smoke 忽略。
       - name: Build & boot-smoke affected bundles
         if: needs.check.outputs.docs_only != 'true'
@@ -248,14 +246,12 @@ jobs:
           set -euo pipefail
           has() { printf '%s' "$AFFECTED" | grep -q "\"$1\""; }
           smoke() { pnpm --filter "$1" build:bundle && pnpm --filter "$1" boot-smoke; }
-          if has varda_agent;                     then pnpm --filter @vxture/agent-server-varda build; fi
           if has platform_bff-admin;              then smoke @vxture/bff-admin; fi
           if has platform_bff-auth;               then smoke @vxture/bff-auth; fi
           if has platform_bff-console;            then smoke @vxture/bff-console; fi
           if has platform_bff-website;            then smoke @vxture/bff-website; fi
           if has platform_bff-opera;              then smoke @vxture/bff-opera; fi
           if has platform_bff-platform-api;       then smoke @vxture/bff-platform-api; fi
-          if has varda_bff;                       then smoke @vxture/bff-varda; fi
           echo "built affected bundles: ${AFFECTED:-[]}"
 
   # ── 5. Test Coverage ───────────────────────────────────────────────────────

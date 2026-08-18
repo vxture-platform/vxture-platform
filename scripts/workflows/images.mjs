@@ -103,22 +103,7 @@ export const IMAGES = [
     "build-args":
       "SERVICE_PATH=bff/platform-api\nPACKAGE_FILTER=@vxture/bff-platform-api",
   },
-  // ── Agent BFF ──────────────────────────────────────────────────────────────
-  {
-    name: "varda_bff",
-    image: "ghcr.io/vxture/varda_bff",
-    dockerfile: "deploy/docker/Dockerfile.nestjs",
-    "build-args":
-      "SERVICE_PATH=bff/varda-bff\nPACKAGE_FILTER=@vxture/bff-varda",
-  },
-  // ── Agent Server ───────────────────────────────────────────────────────────
-  {
-    name: "varda_agent",
-    image: "ghcr.io/vxture/varda_agent",
-    dockerfile: "deploy/docker/Dockerfile.nestjs-prisma",
-    "build-args":
-      "SERVICE_PATH=agent-server/varda\nPACKAGE_FILTER=@vxture/agent-server-varda\nPRISMA_SCHEMA=agent-server/varda/prisma/schema.prisma",
-  },
+  // varda 两镜像已随 vxture-varda 独立仓迁出(2026-08-18):构建与部署归其自持。
   // model-platform 服务已退役（2026-07-28）：实现整体迁至外部 vxture-atlas 仓。
 ];
 

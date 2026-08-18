@@ -33,13 +33,12 @@ import {
   Skeleton,
   type ShellNavSection,
 } from "@vxture/design-system";
-import type { ShellView, ShellDrawerType, AssistantMode } from "../shell/types";
+import type { ShellView, ShellDrawerType } from "../shell/types";
 import {
   ConsoleHeader,
   type ConsoleHeaderViewOption,
 } from "../header/ConsoleHeader";
 import type { NavSearchEntry } from "../header/useGlobalSearch";
-import { TemplateAssistant } from "./TemplateAssistant";
 import { TemplateDrawer, type DrawerNotif } from "./TemplateDrawer";
 import { AppCenter, type ConsoleApp } from "./AppCenter";
 
@@ -53,8 +52,6 @@ const CONTENT_SCROLL_ATTR = "data-content-scroll";
  * 列在这里——留一个用不到的 key 会让下一个人以为它还是权威来源。 */
 const LS = {
   view: "vx-console-view",
-  vela: "vx-console-vela-open",
-  velaMode: "vx-console-vela-mode",
 };
 
 export function ConsoleAppShell({
@@ -76,8 +73,6 @@ export function ConsoleAppShell({
    * 纠正，会让刷新时导航"先展开再收起"闪一下——localStorage 对服务端不可见，
    * 那个时序问题无法在客户端解决。 */
   const [navCollapsed, setNavCollapsed] = useState(initialNavCollapsed);
-  const [velaOpen, setVelaOpen] = useState(false);
-  const [assistantMode, setAssistantMode] = useState<AssistantMode>("narrow");
   const [drawer, setDrawer] = useState<ShellDrawerType | null>(null);
   // 真实数据：Token 用量（配额）与本月账单。无 BFF/无数据时按决策 fallback。
   const [usage, setUsage] = useState<{ used: number; total: number }>({
@@ -173,9 +168,6 @@ export function ConsoleAppShell({
       const v = window.localStorage.getItem(LS.view);
       if (v === "appcenter" || v === "console") setViewState(v);
       // nav 收起态不在这里读：已由服务端经 cookie 传入（见上）。
-      setVelaOpen(window.localStorage.getItem(LS.vela) === "1");
-      const m = window.localStorage.getItem(LS.velaMode);
-      if (m === "narrow" || m === "wide" || m === "full") setAssistantMode(m);
     } catch {
       /* ignore */
     }
@@ -199,42 +191,8 @@ export function ConsoleAppShell({
       }
       return n;
     });
-  const persistVela = (open: boolean, mode: AssistantMode) => {
-    try {
-      window.localStorage.setItem(LS.vela, open ? "1" : "0");
-      window.localStorage.setItem(LS.velaMode, mode);
-    } catch {
-      /* ignore */
-    }
-  };
-  const openVela = (open: boolean) => {
-    setVelaOpen(open);
-    persistVela(open, assistantMode);
-  };
-  const closeAssistant = () => {
-    setVelaOpen(false);
-    setAssistantMode("narrow");
-    persistVela(false, "narrow");
-  };
-  const toggleAssistantWide = () => {
-    const goingWide = assistantMode !== "wide";
-    const next: AssistantMode = goingWide ? "wide" : "narrow";
-    setAssistantMode(next);
-    persistVela(velaOpen, next);
-    if (goingWide) {
-      setNavCollapsed(true);
-      try {
-        writeNavCollapsed("console", true);
-      } catch {
-        /* ignore */
-      }
-    }
-  };
-  const toggleAssistantFull = () => {
-    const next: AssistantMode = assistantMode === "full" ? "narrow" : "full";
-    setAssistantMode(next);
-    persistVela(velaOpen, next);
-  };
+  /* Varda 已迁独立仓重构(2026-08-18):助手停靠列与其状态机随之移除,
+   * 重构完成发包后按新包名 @vxture/varda 重新接入。 */
 
   const navigate = (href: string) => {
     router.push(href);
@@ -394,10 +352,8 @@ export function ConsoleAppShell({
   const openApp = (app: ConsoleApp) => {
     setView("console");
     navigate(app.target);
-    if (app.openVela) openVela(true);
+    // app.openVela:Varda 已迁独立仓,入口暂不生效(重构后恢复)。
   };
-
-  const velaActive = velaOpen && view === "console";
 
   if (status === "loading") {
     return (
@@ -458,8 +414,6 @@ export function ConsoleAppShell({
         view={view}
         setView={setView}
         viewOptions={viewOptions}
-        assistantOpen={velaOpen}
-        setAssistantOpen={openVela}
         openDrawer={(type) => setDrawer(type)}
         onNavigate={navigate}
         brandName="Workspace Console"
@@ -506,14 +460,6 @@ export function ConsoleAppShell({
           <main className={CONTENT_SCROLL} {...{ [CONTENT_SCROLL_ATTR]: "" }}>
             <ShellPageContainer>{children}</ShellPageContainer>
           </main>
-          {velaActive && (
-            <TemplateAssistant
-              mode={assistantMode}
-              onClose={closeAssistant}
-              onToggleWide={toggleAssistantWide}
-              onToggleFull={toggleAssistantFull}
-            />
-          )}
         </div>
       )}
 

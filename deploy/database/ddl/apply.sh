@@ -19,7 +19,7 @@ if [[ "${1:-}" == "--reset" ]]; then
   echo "⚠ --reset: dropping all 19 platform schemas + any residual non-target schemas (CASCADE). Data loss."
   [[ "${CONFIRM_RESET:-}" == "yes" ]] || { echo "refusing: set CONFIRM_RESET=yes"; exit 1; }
   # ① 19 目标 schema（显式清单 = 目标态文档；幂等）
-  "${PSQL[@]}" -c "DROP SCHEMA IF EXISTS account,identity,credential,kyc,tenancy,access,appoidc,session,loyalty,metering,billing,provisioning,promotion,product,model,safety,support,admin,sharing CASCADE;"
+  "${PSQL[@]}" -c "DROP SCHEMA IF EXISTS account,identity,credential,kyc,tenancy,access,appoidc,session,loyalty,metering,billing,provisioning,promotion,product,safety,support,admin,sharing CASCADE;"
   # ② 动态清任意残留（旧 8-schema 遗留如 commerce/iam，或历史演进遗留）——按实际状态清，不硬编码。
   #    保留系统 schema（public / pg_* / information_schema）。见 data_platform_320 §8。
   "${PSQL[@]}" -c "DO \$\$
@@ -30,7 +30,7 @@ if [[ "${1:-}" == "--reset" ]]; then
          WHERE nspname NOT LIKE 'pg_%'
            AND nspname NOT IN ('public','information_schema',
              'account','identity','credential','kyc','tenancy','access','appoidc','session','loyalty',
-             'metering','billing','provisioning','promotion','product','model','safety','support','admin','sharing')
+             'metering','billing','provisioning','promotion','product','safety','support','admin','sharing')
       LOOP
         RAISE NOTICE 'dropping residual schema %', r.nspname;
         EXECUTE format('DROP SCHEMA IF EXISTS %I CASCADE', r.nspname);

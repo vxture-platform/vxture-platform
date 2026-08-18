@@ -46,7 +46,7 @@ services:
     # Digest-pinned and never expected to change out-of-band; skip the
     # per-deploy manifest round-trip to docker.io (30-deploy-platform-stack.sh
     # unconditionally `pull`s every service). Same pattern already validated
-    # on worker-02's compose.varda.yml.
+    # varda 已迁独立仓 vxture-varda(2026-08-18),其部署自持。
     pull_policy: missing
     container_name: vx-platform-pg
     restart: unless-stopped

@@ -44,7 +44,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["identity", "iam", "product", "commerce", "model", "safety", "admin", "support"]
+  schemas  = ["identity", "iam", "product", "commerce", "safety", "admin", "support"]
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1408,155 +1408,9 @@ model TenantPaymentMethod {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// schema: model（从 model_platform 迁入，去除 api_key_env_var）
-// ═══════════════════════════════════════════════════════════════
+// schema: model 已随 Atlas 拆仓退役(2026-08-18):五表(provider/model/model_grant/
+// model_price_rule/model_policy)归 Atlas 独立库,平台库不再持有模型面。
 
-model ModelProvider {
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  providerCode String    @unique(map: "model_provider_code_key") @map("provider_code") @db.VarChar(64)
-  providerType String    @default("online") @map("provider_type") @db.VarChar(32)
-  providerName String    @map("provider_name") @db.VarChar(128)
-  description  String?   @db.VarChar(512)
-  logoUrl      String?   @map("logo_url") @db.Text
-  homepageUrl  String?   @map("homepage_url") @db.Text
-  consoleUrl   String?   @map("console_url") @db.Text
-  billingUrl   String?   @map("billing_url") @db.Text
-  isActive     Boolean   @default(true) @map("is_active")
-  config       Json?     @db.JsonB
-  createdBy    String?   @map("created_by") @db.Uuid
-  updatedBy    String?   @map("updated_by") @db.Uuid
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
-  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
-
-  models ModelDefinition[]
-
-  @@index([isActive], map: "idx_model_provider_is_active")
-  @@index([providerType], map: "idx_model_provider_type")
-  @@map("model_provider")
-  @@schema("model")
-}
-
-// model 是 Prisma 关键字（小写），Prisma 模型名用 ModelDefinition 避免混淆
-model ModelDefinition {
-  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  providerId        String?   @map("provider_id") @db.Uuid
-  modelCode         String    @unique(map: "model_definition_code_key") @map("model_code") @db.VarChar(128)
-  modelType         String    @default("chat") @map("model_type") @db.VarChar(32)
-  protocol          String    @db.VarChar(64)
-  modelName         String    @map("model_name") @db.VarChar(128)
-  description       String?   @db.VarChar(512)
-  endpointUrl       String    @map("endpoint_url") @db.Text
-  contextWindow     Int?      @map("context_window")
-  maxOutputTokens   Int?      @map("max_output_tokens")
-  capabilities      String[]  @default([])
-  supportsStreaming  Boolean   @default(true) @map("supports_streaming")
-  isActive          Boolean   @default(true) @map("is_active")
-  sort              Int       @default(999)
-  config            Json?     @db.JsonB
-  createdBy         String?   @map("created_by") @db.Uuid
-  updatedBy         String?   @map("updated_by") @db.Uuid
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
-  deletedAt         DateTime? @map("deleted_at") @db.Timestamptz(6)
-
-  providerRef ModelProvider?    @relation(fields: [providerId], references: [id])
-  grants      ModelGrant[]
-  priceRules  ModelPriceRule[]
-  policies    ModelPolicy[]
-
-  @@index([isActive], map: "idx_model_def_is_active")
-  @@index([modelType], map: "idx_model_def_type")
-  @@index([providerId], map: "idx_model_def_provider_id")
-  @@map("model")
-  @@schema("model")
-}
-
-model ModelGrant {
-  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  modelId   String    @map("model_id") @db.Uuid
-  tenantId  String    @map("tenant_id") @db.Uuid
-  applicationId   String?   @map("application_id") @db.Uuid
-  applicationType String?   @map("application_type") @db.VarChar(32)
-  agentId   String?   @map("agent_id") @db.Uuid
-  priority  Int       @default(100)
-  isActive  Boolean   @default(true) @map("is_active")
-  reason    String?   @db.VarChar(512)
-  expiresAt DateTime? @map("expires_at") @db.Timestamptz(6)
-  createdBy String?   @map("created_by") @db.Uuid
-  updatedBy String?   @map("updated_by") @db.Uuid
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
-  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
-
-  modelDef ModelDefinition @relation(fields: [modelId], references: [id])
-
-  @@index([applicationId], map: "idx_model_grant_application")
-  @@index([applicationType], map: "idx_model_grant_application_type")
-  @@index([agentId], map: "idx_model_grant_agent")
-  @@index([isActive], map: "idx_model_grant_is_active")
-  @@index([modelId], map: "idx_model_grant_model")
-  @@index([tenantId], map: "idx_model_grant_tenant")
-  @@map("model_grant")
-  @@schema("model")
-}
-
-model ModelPriceRule {
-  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  modelId          String    @map("model_id") @db.Uuid
-  billingMode      String    @default("token") @map("billing_mode") @db.VarChar(32)
-  currency         String    @default("CNY") @db.VarChar(16)
-  unitTokens       Int       @default(1000000) @map("unit_tokens")
-  inputUnitPrice   Decimal   @default(0) @map("input_unit_price") @db.Decimal(18, 8)
-  outputUnitPrice  Decimal   @default(0) @map("output_unit_price") @db.Decimal(18, 8)
-  requestUnitPrice Decimal   @default(0) @map("request_unit_price") @db.Decimal(18, 8)
-  isActive         Boolean   @default(true) @map("is_active")
-  effectiveAt      DateTime  @default(now()) @map("effective_at") @db.Timestamptz(6)
-  expiresAt        DateTime? @map("expires_at") @db.Timestamptz(6)
-  createdBy        String?   @map("created_by") @db.Uuid
-  updatedBy        String?   @map("updated_by") @db.Uuid
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
-
-  modelDef ModelDefinition @relation(fields: [modelId], references: [id])
-
-  @@index([effectiveAt], map: "idx_model_price_effective")
-  @@index([isActive], map: "idx_model_price_is_active")
-  @@index([modelId], map: "idx_model_price_model")
-  @@map("model_price_rule")
-  @@schema("model")
-}
-
-model ModelPolicy {
-  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  modelId           String    @map("model_id") @db.Uuid
-  tenantId          String?   @map("tenant_id") @db.Uuid
-  name              String?   @db.VarChar(128)
-  priority          Int       @default(100)
-  maxConcurrent     Int?      @map("max_concurrent")
-  rateLimitRpm      Int?      @map("rate_limit_rpm")
-  rateLimitTpm      BigInt?   @map("rate_limit_tpm")
-  rateLimitTpd      BigInt?   @map("rate_limit_tpd")
-  maxContextTokens  Int?      @map("max_context_tokens")
-  isActive          Boolean   @default(true) @map("is_active")
-  effectiveAt       DateTime  @default(now()) @map("effective_at") @db.Timestamptz(6)
-  expiresAt         DateTime? @map("expires_at") @db.Timestamptz(6)
-  createdBy         String?   @map("created_by") @db.Uuid
-  updatedBy         String?   @map("updated_by") @db.Uuid
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
-
-  modelDef ModelDefinition @relation(fields: [modelId], references: [id])
-
-  @@unique([modelId, tenantId], map: "model_policy_model_tenant_key")
-  @@index([isActive], map: "idx_model_policy_is_active")
-  @@index([modelId], map: "idx_model_policy_model")
-  @@index([tenantId], map: "idx_model_policy_tenant")
-  @@map("model_policy")
-  @@schema("model")
-}
-
-// ═══════════════════════════════════════════════════════════════
 // schema: admin（原 ops，2026-07-02 改名；运营身份 operator_* + 平台治理）
 // ═══════════════════════════════════════════════════════════════
 

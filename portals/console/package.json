@@ -13,7 +13,6 @@
     "clean": "rimraf .next"
   },
   "dependencies": {
-    "@vxture/agent-studio-varda": "workspace:*",
     "@vxture/core-identity-sdk": "workspace:*",
     "@fontsource/funnel-display": "^5.3.0",
     "@fontsource/geist-mono": "^5.3.0",

@@ -43,31 +43,31 @@ $$;
 GRANT USAGE ON SCHEMA
   account, identity, credential, kyc, tenancy, access, appoidc, session, loyalty,
   metering, billing, provisioning, promotion,
-  product, model, safety, support, admin, sharing
+  product, safety, support, admin, sharing
   TO platform_svc;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA
   account, identity, credential, kyc, tenancy, access, appoidc, session, loyalty,
   metering, billing, provisioning, promotion,
-  product, model, safety, support, admin, sharing
+  product, safety, support, admin, sharing
   TO platform_svc;
 
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA
   account, identity, credential, kyc, tenancy, access, appoidc, session, loyalty,
   metering, billing, provisioning, promotion,
-  product, model, safety, support, admin, sharing
+  product, safety, support, admin, sharing
   TO platform_svc;
 
 ALTER DEFAULT PRIVILEGES IN SCHEMA
   account, identity, credential, kyc, tenancy, access, appoidc, session, loyalty,
   metering, billing, provisioning, promotion,
-  product, model, safety, support, admin, sharing
+  product, safety, support, admin, sharing
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO platform_svc;
 
 ALTER DEFAULT PRIVILEGES IN SCHEMA
   account, identity, credential, kyc, tenancy, access, appoidc, session, loyalty,
   metering, billing, provisioning, promotion,
-  product, model, safety, support, admin, sharing
+  product, safety, support, admin, sharing
   GRANT USAGE, SELECT ON SEQUENCES TO platform_svc;
 
 -- ── GRANT: reporting_ro（只读，全部 19 schema）──────────────────────────────
@@ -75,19 +75,19 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA
 GRANT USAGE ON SCHEMA
   account, identity, credential, kyc, tenancy, access, appoidc, session, loyalty,
   metering, billing, provisioning, promotion,
-  product, model, safety, support, admin, sharing
+  product, safety, support, admin, sharing
   TO reporting_ro;
 
 GRANT SELECT ON ALL TABLES IN SCHEMA
   account, identity, credential, kyc, tenancy, access, appoidc, session, loyalty,
   metering, billing, provisioning, promotion,
-  product, model, safety, support, admin, sharing
+  product, safety, support, admin, sharing
   TO reporting_ro;
 
 ALTER DEFAULT PRIVILEGES IN SCHEMA
   account, identity, credential, kyc, tenancy, access, appoidc, session, loyalty,
   metering, billing, provisioning, promotion,
-  product, model, safety, support, admin, sharing
+  product, safety, support, admin, sharing
   GRANT SELECT ON TABLES TO reporting_ro;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -114,7 +114,7 @@ DECLARE r text;
 BEGIN
   FOREACH r IN ARRAY ARRAY[
     'svc_auth_bff','svc_admin_bff','svc_console_bff',
-    'svc_website_bff','svc_platform_api','svc_model_platform'
+    'svc_website_bff','svc_platform_api'
   ] LOOP
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = r) THEN
       EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', r, 'REPLACE_ME_' || r);
@@ -143,9 +143,9 @@ BEGIN
       ('svc_website_bff', ARRAY['account','identity','credential','session','tenancy','access','loyalty']),
       -- platform-api（7）：C2/C3 产品面 + provisioning/sharing 作业
       -- + billing/promotion（product_321 超时/对账 sweep 谓词 + 券释放）
-      ('svc_platform_api',ARRAY['metering','product','sharing','provisioning','tenancy','billing','promotion']),
-      -- model-platform（2）：模型注册表 + 配额计量（Prisma @@schema=model+metering）
-      ('svc_model_platform', ARRAY['model','metering'])
+      -- + billing/promotion（product_321 超时/对账 sweep 谓词 + 券释放）
+      ('svc_platform_api',ARRAY['metering','product','sharing','provisioning','tenancy','billing','promotion'])
+      -- svc_model_platform 已随 Atlas 拆仓退役（2026-08-18）：model schema 不复存在。
     ) AS t(role_name, schemas)
   LOOP
     EXECUTE format('GRANT USAGE ON SCHEMA %s TO %I',

@@ -19,14 +19,12 @@ const internalAliases = {
     __dirname,
     "../../packages/platform/browser/src",
   ),
-  "@vxture/agent-studio-varda": join(__dirname, "../../agent-studio/varda/src"),
 };
 
 const turboAliases = {
   "@vxture/shared": "../../packages/shared/shared/src",
   "@vxture/design-system": "../../packages/design/design-system/src/client.ts",
   "@vxture/platform-browser": "../../packages/platform/browser/src",
-  "@vxture/agent-studio-varda": "../../agent-studio/varda/src",
 };
 
 /** @type {import('next').NextConfig} */
@@ -36,7 +34,7 @@ const nextConfig = {
   experimental: {
     webpackBuildWorker: false,
   },
-  transpilePackages: ["@vxture/design-system", "@vxture/agent-studio-varda"],
+  transpilePackages: ["@vxture/design-system"],
   turbopack: {
     resolveAlias: turboAliases,
   },

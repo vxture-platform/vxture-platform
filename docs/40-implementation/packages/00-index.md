@@ -48,14 +48,14 @@
 
 ## BFF 层（Application）→ [`bff/index.md`](./bff/00-index.md)
 
-| 文件                                    | 包名                  | 服务对象                        |
-| --------------------------------------- | --------------------- | ------------------------------- |
-| [`bff/auth.md`](./bff/30-auth.md)       | `@vxture/bff-auth`    | 统一认证网关（唯一 JWT 签发者） |
-| [`bff/gateway.md`](./bff/50-gateway.md) | `@vxture/bff-gateway` | 浏览器侧统一 API 入口网关       |
-| [`bff/admin.md`](./bff/10-admin.md)     | `@vxture/bff-admin`   | 运营后台                        |
-| [`bff/console.md`](./bff/40-console.md) | `@vxture/bff-console` | 租户工作台                      |
-| [`bff/website.md`](./bff/80-website.md) | `@vxture/bff-website` | 营销站点                        |
-| [`bff/varda.md`](./bff/70-varda.md)     | `@vxture/bff-varda`   | Varda 智能助手                  |
+| 文件                                    | 包名                                 | 服务对象                        |
+| --------------------------------------- | ------------------------------------ | ------------------------------- |
+| [`bff/auth.md`](./bff/30-auth.md)       | `@vxture/bff-auth`                   | 统一认证网关（唯一 JWT 签发者） |
+| [`bff/gateway.md`](./bff/50-gateway.md) | `@vxture/bff-gateway`                | 浏览器侧统一 API 入口网关       |
+| [`bff/admin.md`](./bff/10-admin.md)     | `@vxture/bff-admin`                  | 运营后台                        |
+| [`bff/console.md`](./bff/40-console.md) | `@vxture/bff-console`                | 租户工作台                      |
+| [`bff/website.md`](./bff/80-website.md) | `@vxture/bff-website`                | 营销站点                        |
+| Varda BFF                               | 已迁 vxture-varda 独立仓(2026-08-18) | ➡ 迁出                          |
 
 **BFF 层通用约束：**
 
@@ -79,14 +79,11 @@
 | [`services/ticket.md`](./services/80-ticket.md)             | `@vxture/service-ticket`       | 工单支持              |
 | [`services/organization.md`](./services/50-organization.md) | `@vxture/service-organization` | 租户组织只读服务      |
 
-## Agent 层 → [`agents/index.md`](./agents/00-index.md)
+## Agent 层(已整体迁出:vxture-varda / vxture-agent-template,2026-08-18)
 
-| 文件                                                                      | 名称                           | 部署模式  | 职责摘要                                 |
-| ------------------------------------------------------------------------- | ------------------------------ | --------- | ---------------------------------------- |
-| [`agents/varda/server.md`](./agents/varda/10-server.md)                   | `varda-server`                 | 嵌入式    | Varda Tool Use Loop / SSE / 会话持久化   |
-| [`agents/varda/studio.md`](./agents/varda/20-studio.md)                   | `@vxture/agent-studio-varda`   | 嵌入式    | Varda 前端（微前端，载入 admin/console） |
-| [`agents/agent-template/server.md`](./agents/agent-template/10-server.md) | `agent-template-server`        | fork 起点 | 新 Agent 后端 fork 模板                  |
-| [`agents/agent-template/studio.md`](./agents/agent-template/20-studio.md) | `@vxture/agent-studio-agent01` | fork 起点 | 新 Agent 前端 fork 模板                  |
+| 文件                | 名称                                 | 部署模式 | 职责摘要                                    |
+| ------------------- | ------------------------------------ | -------- | ------------------------------------------- |
+| Varda server/studio | 已迁 vxture-varda 独立仓(2026-08-18) | —        | agent-template 系已迁 vxture-agent-template |
 
 ## Portal 层（Presentation）→ [`portals/index.md`](./portals/00-index.md)
 

@@ -77,175 +77,6 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  agent-server/agent-template:
-    dependencies:
-      '@vxture/core-api':
-        specifier: workspace:*
-        version: link:../../packages/core/api
-      '@vxture/core-auth':
-        specifier: workspace:*
-        version: link:../../packages/core/auth
-      '@vxture/core-config':
-        specifier: workspace:*
-        version: link:../../packages/core/config
-      '@vxture/model-runtime-client':
-        specifier: workspace:*
-        version: link:../../packages/ai/model-runtime-client
-      '@vxture/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared/shared
-    devDependencies:
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  agent-server/varda:
-    dependencies:
-      '@nestjs/common':
-        specifier: ^11.0.0
-        version: 11.1.16(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/core':
-        specifier: ^11.1.28
-        version: 11.1.28(@nestjs/common@11.1.16(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.16)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/platform-express':
-        specifier: ^11.0.0
-        version: 11.1.16(@nestjs/common@11.1.16(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.28)
-      '@prisma/client':
-        specifier: ^6.0.0
-        version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
-      '@vxture/core-auth':
-        specifier: workspace:*
-        version: link:../../packages/core/auth
-      '@vxture/core-config':
-        specifier: workspace:*
-        version: link:../../packages/core/config
-      '@vxture/model-runtime-client':
-        specifier: workspace:*
-        version: link:../../packages/ai/model-runtime-client
-      '@vxture/service-billing':
-        specifier: workspace:*
-        version: link:../../services/commerce/billing
-      '@vxture/service-organization':
-        specifier: workspace:*
-        version: link:../../services/identity/organization
-      '@vxture/service-subscription':
-        specifier: workspace:*
-        version: link:../../services/commerce/subscription
-      '@vxture/service-ticket':
-        specifier: workspace:*
-        version: link:../../services/support/ticket
-      '@vxture/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared/shared
-      class-transformer:
-        specifier: ^0.5.1
-        version: 0.5.1
-      express:
-        specifier: ^4.22.1
-        version: 4.22.1
-      reflect-metadata:
-        specifier: ^0.2.0
-        version: 0.2.2
-    devDependencies:
-      '@types/express':
-        specifier: ^4.17.21
-        version: 4.17.25
-      esbuild:
-        specifier: ^0.28.1
-        version: 0.28.1
-      prisma:
-        specifier: ^6.0.0
-        version: 6.19.3(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  agent-studio/agent-template:
-    dependencies:
-      '@vxture/design-system':
-        specifier: workspace:*
-        version: link:../../packages/design/design-system
-      '@vxture/platform-browser':
-        specifier: workspace:*
-        version: link:../../packages/platform/browser
-      '@vxture/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared/shared
-    devDependencies:
-      '@eslint/js':
-        specifier: ^9.39.3
-        version: 9.39.3
-      '@typescript-eslint/eslint-plugin':
-        specifier: ^8.46.1
-        version: 8.56.1(@typescript-eslint/parser@8.56.1(eslint@9.39.3(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.3(jiti@2.6.1))(typescript@5.9.3)
-      '@typescript-eslint/parser':
-        specifier: ^8.46.1
-        version: 8.56.1(eslint@9.39.3(jiti@2.6.1))(typescript@5.9.3)
-      eslint:
-        specifier: ^9.39.3
-        version: 9.39.3(jiti@2.6.1)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  agent-studio/varda:
-    dependencies:
-      '@fontsource/funnel-display':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource/geist-mono':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource/inter':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@vxture/design-system':
-        specifier: workspace:*
-        version: link:../../packages/design/design-system
-      '@vxture/platform-browser':
-        specifier: workspace:*
-        version: link:../../packages/platform/browser
-      '@vxture/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared/shared
-      next:
-        specifier: ^15.5.21
-        version: 15.5.21(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.13.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.3)
-      react:
-        specifier: ^19.2.0
-        version: 19.2.4
-      react-dom:
-        specifier: ^19.2.0
-        version: 19.2.4(react@19.2.4)
-      zustand:
-        specifier: ^5.0.0
-        version: 5.0.11(@types/react@19.2.14)(react@19.2.4)(use-sync-external-store@1.6.0(react@19.2.4))
-    devDependencies:
-      '@eslint/eslintrc':
-        specifier: ^3.3.1
-        version: 3.3.4
-      '@eslint/js':
-        specifier: ^9.39.3
-        version: 9.39.3
-      '@types/node':
-        specifier: ^24.0.0
-        version: 24.13.0
-      '@types/react':
-        specifier: ^19.0.0
-        version: 19.2.14
-      '@types/react-dom':
-        specifier: ^19.0.0
-        version: 19.2.3(@types/react@19.2.14)
-      eslint:
-        specifier: ^9.39.3
-        version: 9.39.3(jiti@2.6.1)
-      eslint-config-next:
-        specifier: ^15.5.6
-        version: 15.5.6(eslint@9.39.3(jiti@2.6.1))(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
   bff/admin-bff:
     dependencies:
       '@nestjs/common':
@@ -324,22 +155,6 @@ importers:
       vitest:
         specifier: ^4.1.8
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(vite@7.3.6(@types/node@24.13.0)(jiti@2.6.1)(lightningcss@1.31.1)(sass@1.97.3)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))
-
-  bff/agent-template-bff:
-    dependencies:
-      '@vxture/core-api':
-        specifier: workspace:*
-        version: link:../../packages/core/api
-      '@vxture/core-auth':
-        specifier: workspace:*
-        version: link:../../packages/core/auth
-      '@vxture/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared/shared
-    devDependencies:
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
 
   bff/auth-bff:
     dependencies:
@@ -653,55 +468,6 @@ importers:
         specifier: ^4.1.8
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(vite@7.3.6(@types/node@24.13.0)(jiti@2.6.1)(lightningcss@1.31.1)(sass@1.97.3)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))
 
-  bff/varda-bff:
-    dependencies:
-      '@nestjs/common':
-        specifier: ^11.0.0
-        version: 11.1.16(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/core':
-        specifier: ^11.1.28
-        version: 11.1.28(@nestjs/common@11.1.16(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.16)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/jwt':
-        specifier: ^11.0.0
-        version: 11.0.2(@nestjs/common@11.1.16(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))
-      '@nestjs/platform-express':
-        specifier: ^11.0.0
-        version: 11.1.16(@nestjs/common@11.1.16(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.28)
-      '@vxture/core-auth':
-        specifier: workspace:*
-        version: link:../../packages/core/auth
-      '@vxture/core-config':
-        specifier: workspace:*
-        version: link:../../packages/core/config
-      '@vxture/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared/shared
-      cookie-parser:
-        specifier: ^1.4.7
-        version: 1.4.7
-      express:
-        specifier: ^4.22.1
-        version: 4.22.1
-      ioredis:
-        specifier: ^5.6.1
-        version: 5.9.3
-      reflect-metadata:
-        specifier: ^0.2.0
-        version: 0.2.2
-    devDependencies:
-      '@types/cookie-parser':
-        specifier: ^1.4.7
-        version: 1.4.10(@types/express@4.17.25)
-      '@types/express':
-        specifier: ^4.17.21
-        version: 4.17.25
-      esbuild:
-        specifier: ^0.28.1
-        version: 0.28.1
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
   bff/website-bff:
     dependencies:
       '@nestjs/common':
@@ -771,16 +537,6 @@ importers:
       esbuild:
         specifier: ^0.28.1
         version: 0.28.1
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  packages/ai/model-runtime-client:
-    dependencies:
-      '@vxture/shared':
-        specifier: workspace:*
-        version: link:../../shared/shared
-    devDependencies:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -1410,9 +1166,6 @@ importers:
       '@fontsource/inter':
         specifier: ^5.3.0
         version: 5.3.0
-      '@vxture/agent-studio-varda':
-        specifier: workspace:*
-        version: link:../../agent-studio/varda
       '@vxture/core-identity-sdk':
         specifier: workspace:*
         version: link:../../packages/core/identity-sdk
@@ -1483,9 +1236,6 @@ importers:
       '@fontsource/inter':
         specifier: ^5.3.0
         version: 5.3.0
-      '@vxture/agent-studio-varda':
-        specifier: workspace:*
-        version: link:../../agent-studio/varda
       '@vxture/core-identity-sdk':
         specifier: workspace:*
         version: link:../../packages/core/identity-sdk
