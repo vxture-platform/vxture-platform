@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(gh api repos/*/actions/runs/*/pending_deployments*)",
+      "PowerShell(gh api repos/*/actions/runs/*/pending_deployments*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/guardrails/hook-block-deploy-approval.mjs"
+          }
+        ]
+      }
+    ]
+  }
+}
