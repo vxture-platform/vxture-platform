@@ -70,14 +70,6 @@
       "name": "bff/platform-api",
       "path": "bff/platform-api",
     },
-    {
-      "name": "bff/varda-bff",
-      "path": "bff/varda-bff",
-    },
-    {
-      "name": "bff/agent-template-bff",
-      "path": "bff/agent-template-bff",
-    },
 
     // ── Commerce 域 ────────────────────────────────────────────────────
     {
@@ -103,12 +95,6 @@
       "path": "services/platform/sharing",
     },
 
-    // ── Model 域 ───────────────────────────────────────────────────────
-    {
-      "name": "services/model/platform",
-      "path": "services/model/platform",
-    },
-
     // ── Notification 域 ────────────────────────────────────────────────
     {
       "name": "services/notification/mail",
@@ -129,16 +115,6 @@
       "path": "services/support/workers",
     },
 
-    // ── Agents ─────────────────────────────────────────────────────────
-    {
-      "name": "agent-studio",
-      "path": "agent-studio",
-    },
-    {
-      "name": "agent-server",
-      "path": "agent-server",
-    },
-
     // ── 共享包 ─────────────────────────────────────────────────────────
     {
       "name": "packages/core",
@@ -151,10 +127,6 @@
     {
       "name": "packages/shared",
       "path": "packages/shared/shared",
-    },
-    {
-      "name": "packages/ai/model-runtime-client",
-      "path": "packages/ai/model-runtime-client",
     },
     // 设计四包，按依赖方向排：tokens ← ui ← system ← preview
     {

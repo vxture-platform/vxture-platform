@@ -21,7 +21,7 @@ const SCAN_DIRS = ['services', 'bff', 'packages', 'deploy'];
 const EXCLUDE = [
   `deploy${sep}database${sep}prisma`, // 旧 Prisma 权威已 SUPERSEDED（历史参考，不 apply）
   `packages${sep}core${sep}database${sep}prisma`, // 同上，旧 prisma 副本 + seed.sql
-  `deploy${sep}database${sep}ddl`, // 新 DDL 权威本身（含 ddl-modelruntime）；注释用「commerce.metering」是域分组 prose，非残留
+  `deploy${sep}database${sep}ddl`, // 新 DDL 权威本身（modelruntime 已迁 Atlas）；注释用「commerce.metering」是域分组 prose，非残留
   'node_modules', `${sep}.prisma${sep}`, 'generated', 'dist', '.turbo', '.next', // `\.prisma\` = 生成的 client 目录；勿写裸 '.prisma'（会连 schema.prisma 源文件一起排掉）
 
 ];

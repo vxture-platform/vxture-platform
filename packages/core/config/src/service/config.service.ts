@@ -15,7 +15,6 @@ import type {
   DatabaseConfig,
   RedisConfig,
   AuthConfig,
-  AiConfig,
   MailEnvConfig,
   OauthConfig,
   PlatformConfig,
@@ -42,7 +41,6 @@ export class VxConfigService {
     @Inject(CONFIG_TOKEN.REDIS)
     private readonly _redis: RedisConfig,
     @Optional() @Inject(CONFIG_TOKEN.AUTH) private readonly _auth: AuthConfig,
-    @Optional() @Inject(CONFIG_TOKEN.AI) private readonly _ai: AiConfig,
     @Optional()
     @Inject(CONFIG_TOKEN.MAIL)
     private readonly _mail: MailEnvConfig,
@@ -78,10 +76,6 @@ export class VxConfigService {
   }
 
   /** Available only when ai domain is registered (agent-server only) */
-  get ai(): AiConfig {
-    this.assertLoaded(this._ai, "ai");
-    return this._ai;
-  }
 
   /** SMTP mail config. Available only when mail domain is registered. */
   get mail(): MailEnvConfig {

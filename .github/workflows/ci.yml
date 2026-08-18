@@ -296,7 +296,7 @@ jobs:
 
   # ── 6. SonarQube ───────────────────────────────────────────────────────────
   # Coverage generate/upload/download steps removed 2026-07-28: model-platform
-  # (services/model/platform) was the only package wired for coverage; it
+      # (旧 model-platform 服务已迁 vxture-atlas,2026-07-28)
   # retired with the atlas repo split. Scan runs without a coverage input
   # until a new package is wired up — the gate is already non-blocking below.
   sonar:

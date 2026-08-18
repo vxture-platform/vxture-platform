@@ -347,7 +347,7 @@ function modelConfigNumber(model: AiModelRecord, keys: readonly string[]) {
 }
 
 // TD-036: no usage/token-tracking table exists anywhere for models (the
-// write path was never built — see services/model/platform's own schema
+// write path was never built — 该服务已迁 vxture-atlas(其 schema 注释随迁),
 // comment). model.config almost never carries these keys in practice; when
 // it doesn't, return null (no data) instead of the old deterministic-hash
 // fake number — a stable-looking number is still a fabricated one.

@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════════════════════
 // ⚠️ SUPERSEDED — 非权威（2026-07-04）。平台库结构的单一权威已迁至手写 SQL DDL：
-//     deploy/database/ddl/  (+ deploy/database/ddl-modelruntime/)。决策见 data_platform_320 §0–§3。
+//     deploy/database/ddl/  (modelruntime 已随 Atlas 拆仓迁出)。决策见 data_platform_320 §0–§3。
 //   本文件为旧 8-schema 快照，仅保留供 `prisma db pull` 类型生成；**禁止**手编当权威、
 //   禁止 `prisma db push`。生产切换后由 db pull 从新库重生成。
 // ════════════════════════════════════════════════════════════════════════════

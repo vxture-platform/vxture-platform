@@ -16,7 +16,6 @@ export {
   databaseSchema,
   redisSchema,
   authSchema,
-  aiSchema,
   mailSchema,
   toSmtpConfig,
   oauthSchema,

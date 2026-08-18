@@ -13,7 +13,6 @@ import type {
   AuthConfig,
   DatabaseConfig,
   RedisConfig,
-  AiConfig,
   OauthConfig,
   PlatformConfig,
   MailEnvConfig,
@@ -29,7 +28,6 @@ export interface VxConfig {
   database: DatabaseConfig;
   redis: RedisConfig;
   auth: AuthConfig;
-  ai: AiConfig;
   oauth: OauthConfig;
   platform: PlatformConfig;
   mail: MailEnvConfig;
@@ -41,7 +39,6 @@ export const CONFIG_TOKEN = {
   DATABASE: Symbol("VX_CONFIG_DATABASE"),
   REDIS: Symbol("VX_CONFIG_REDIS"),
   AUTH: Symbol("VX_CONFIG_AUTH"),
-  AI: Symbol("VX_CONFIG_AI"),
   OAUTH: Symbol("VX_CONFIG_OAUTH"),
   PLATFORM: Symbol("VX_CONFIG_PLATFORM"),
   MAIL: Symbol("VX_CONFIG_MAIL"),

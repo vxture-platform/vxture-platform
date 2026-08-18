@@ -2,7 +2,6 @@
 -- 00_schemas.sql — 平台库 schema 与全局序列（apply 顺序第一）
 -- 权威机制：手写 SQL DDL 单一权威（取代 prisma db push；见 data_platform_320）。
 -- 平台库 vxturestudio_platform_main：19 schema（18 + sharing，M5 2026-07-07）。
--- Model Platform DB(key/reqlog/routing) 为独立物理库，DDL 另置 ddl-modelruntime/。
 -- 幂等：CREATE SCHEMA/SEQUENCE IF NOT EXISTS。
 -- ═══════════════════════════════════════════════════════════════════════════
 

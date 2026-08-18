@@ -213,11 +213,7 @@ function matchesRule(filePath, rule) {
 
 function collectReasons(changedFiles, imageName, isTagRef) {
   if (isTagRef) {
-    // varda 有独立发布线（deploy-varda.yml 自建 varda 镜像 + 部署 worker-02）。docker-build
-    // 只由平台 tag（dev/beta/v）触发，其「全建」必须排除 varda_*，否则平台发布连带重建 varda。
-    // 注意：仅 tag 路径排除；PR/push 的 affected_images 仍含 varda（ci.yml 变更门控在本仓覆盖
-    // varda boot-smoke，直到 varda 真拆仓）。
-    if (imageName.startsWith("varda_")) return [];
+    // varda 已迁独立仓 vxture-varda(2026-08-18):镜像清单不再含 varda_*。
     return ["release tag builds all images"];
   }
 

@@ -3,7 +3,7 @@
 # ⚠️ SUPERSEDED（2026-07-04）：`prisma db push` 机制已弃。平台库结构单一权威 =
 #    deploy/database/ddl/。新 apply（psql，clean-baseline）：
 #      CONFIRM_RESET=yes DATABASE_URL=...            deploy/database/ddl/apply.sh --reset
-#      CONFIRM_RESET=yes MODELRUNTIME_DATABASE_URL=... deploy/database/ddl-modelruntime/apply.sh --reset
+#      (modelruntime 库已随 Atlas 拆仓迁出,2026-08-18)
 #    见 data_platform_320 §6。本脚本保留至任务4部署侧改造完成前，**勿再调用**。
 # ════════════════════════════════════════════════════════════════════════════
 # deploy/scripts/22-run-platform-migrations.sh

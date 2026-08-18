@@ -22,9 +22,7 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
 COPY packages/ packages/
 COPY services/ services/
 COPY bff/ bff/
-COPY agent-server/ agent-server/
 COPY portals/ portals/
-COPY agent-studio/ agent-studio/
 COPY business/ business/
 # tools/dev-panel is excluded from build context (dev-only) but pnpm needs it as workspace stub
 RUN mkdir -p tools/dev-panel && echo '{"name":"@vxture/dev-panel","version":"0.0.0"}' > tools/dev-panel/package.json
