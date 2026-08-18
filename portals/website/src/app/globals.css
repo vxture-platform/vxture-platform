@@ -5,6 +5,9 @@
 @import "@vxture/design-system/styles/shell-template-user-panel.css";
 /* 营销页取值层。缺了它，src/styles 下的 70 个 var() 引用全部作废、且 975 处
  * text-vx-* / bg-vx-* 类名不产出任何 CSS——两者都不报错。见该文件头部。 */
-@import "@vxture/design-system/styles/website-tokens.css";
+/* website 取值桥（legacy token 层）：2026-08-18 由 DS assets/ 迁回 website 自有
+ * ——owner 判「产品自有的全部迁出 DS」。文件自识别 @package @vxture/website；
+ * 桥的命运=收敛进 T2 后消失。路径落 assets/ 以继承守卫的取值层豁免语义。 */
+@import "../../assets/legacy-tokens/tokens-website.css";
 @import "../styles/website-legal.css";
 @import "../styles/website-marketing.css";

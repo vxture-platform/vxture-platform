@@ -8,7 +8,8 @@ import process from "node:process";
 let ADMIN_TOKEN_CACHE = null;
 function adminTokenDefinitions() {
   if (ADMIN_TOKEN_CACHE) return ADMIN_TOKEN_CACHE;
-  const dir = "packages/design/design-system/assets/admin-tokens";
+  // 2026-08-18 桥迁回 admin 自有（owner 判「产品自有的全部迁出 DS」）。
+  const dir = "portals/admin/assets/legacy-tokens";
   const names = new Set();
   try {
     for (const entry of readdirSync(dir)) {

@@ -15,7 +15,6 @@
       "import": "./dist/server.mjs",
       "require": "./dist/server.cjs"
     },
-    "./styles/admin-tokens.css": "./assets/admin-tokens.css",
     "./styles/brand.css": "./src/styles/brand.css",
     "./styles/brands/ruyin.css": "./src/styles/brands/ruyin.css",
     "./styles/brands/vxture.css": "./src/styles/brands/vxture.css",
@@ -24,7 +23,6 @@
     "./styles/globals.css": "./src/styles/globals.css",
     "./styles/shell-template-user-panel.css": "./assets/shell-template-user-panel.css",
     "./styles/shell-template.css": "./assets/shell-template.css",
-    "./styles/website-tokens.css": "./assets/website-tokens.css",
     "./styles/workbench.css": "./src/styles/workbench.css",
     "./tokens": {
       "types": "./dist/tokens.d.ts",
