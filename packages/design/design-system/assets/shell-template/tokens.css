@@ -10,17 +10,6 @@
   color-scheme: light;
 
   /* ── Primitives · Brand (Iris Blue) ───────────────────────────────────── */
-  --vx-color-brand-50:  #eef2ff;
-  --vx-color-brand-100: #dbe3ff;
-  --vx-color-brand-200: #b8c5ff;
-  --vx-color-brand-300: #8597ff;
-  --vx-color-brand-400: #5a72ff;
-  --vx-color-brand-500: #3057ff;
-  --vx-color-brand-600: #1e51ff;
-  --vx-color-brand-700: #1740d4;
-  --vx-color-brand-800: #0d2eab;
-  --vx-color-brand-900: #061b75;
-  --vx-color-brand-950: #020a3d;
 
   /* ── Primitives · Quantum AI accents ──────────────────────────────────── */
   --vx-color-ai-50:  #faf5ff;
@@ -33,8 +22,6 @@
   --vx-color-spark-400: #fbbf24;
 
   /* ── Primitives · Neutral ─────────────────────────────────────────────── */
-  --vx-color-white: #ffffff;
-  --vx-color-black: #000000;
   --vx-color-gray-50:  #f9fafb;
   --vx-color-gray-300: #d1d5db;
   --vx-color-gray-400: #9ca3af;
@@ -110,8 +97,8 @@
   --vx-color-shell-ink:      var(--vx-color-brand-950);
   --vx-color-shell-hover:    color-mix(in srgb, var(--vx-color-brand-600) 8%, transparent);
 
-  /* ── Gradients ────────────────────────────────────────────────────────── */
-    linear-gradient(135deg, var(--vx-color-brand-600) 0%, var(--vx-color-brand-400) 100%);
+  /* ── Gradients（--vx-gradient-brand 随 user-panel 退役删除；此处曾留断肢
+   * 值行导致 console/admin 构建 CSS 语法错——2026-08-18 修） */
   --vx-gradient-ai-duo:
     linear-gradient(135deg, var(--vx-color-ai-500) 0%, var(--vx-color-ai-cyan-400) 100%);
 
@@ -124,15 +111,9 @@
   --vx-space-2xl: 32px;
 
   /* ── Foundation · Radius ──────────────────────────────────────────────── */
-  --vx-radius-sm:   4px;
-  --vx-radius-md:   6px;
-  --vx-radius-lg:   8px;
-  --vx-radius-xl:   12px;
-  --vx-radius-2xl:  16px;
   --vx-radius-full: 9999px;
 
   /* ── Foundation · Shadow ──────────────────────────────────────────────── */
-  --vx-shadow-xs:   0 1px 0   rgba(15, 23, 42, 0.04);
   --vx-shadow-sm:   0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 1px rgba(15, 23, 42, 0.04);
   --vx-shadow-md:   0 4px 8px rgba(15, 23, 42, 0.06), 0 2px 4px rgba(15, 23, 42, 0.04);
   --vx-shadow-lg:   0 12px 24px rgba(29, 78, 216, 0.08), 0 4px 8px rgba(15, 23, 42, 0.06);
@@ -154,8 +135,6 @@
   --vx-shell-assistant-width:         420px;
 
   /* ── Foundation · Layout · Content regions ────────────────────────────── */
-  --vx-layout-console-body-max-width:   1480px;
-  --vx-layout-page-bottom-safe-space:   4.5rem;
 
   /* ── Type · Families ──────────────────────────────────────────────────── */
   --vx-font-brand:  "Funnel Display", "PingFang SC", "Hiragino Sans GB",
@@ -167,7 +146,6 @@
                     "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
   --vx-font-mono:   "Geist Mono", ui-monospace, SFMono-Regular, Menlo,
                     Monaco, Consolas, "Courier New", monospace;
-  --vx-font-number: var(--vx-font-sans);
 
   /* ── Type · Scale ─────────────────────────────────────────────────────── */
   --vx-type-body-size:    1rem;
@@ -225,7 +203,6 @@
   --fg-muted:     var(--vx-color-text-muted);
   --fg-strong:    var(--vx-color-text-strong);
 
-  --shell-border:       var(--vx-color-border);
   --border-muted: var(--vx-color-border-muted);
   --border-strong: var(--vx-color-border-strong);
 
@@ -241,5 +218,4 @@
   --font-sans:    var(--vx-font-sans);
   --font-cjk:     var(--vx-font-cjk);
   --font-mono:    var(--vx-font-mono);
-  --font-number:  var(--vx-font-number);
 }

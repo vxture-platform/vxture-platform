@@ -9,3 +9,8 @@
  * Phosphor icon font is loaded via <link> in app/layout.tsx (CSS @import would
  * violate "@import must precede all rules" once inlined after DS rules). */
 @import "../styles/console-template.css";
+
+/* console 专属外壳遗留件（应用中心 + 侧栏），2026-08-18 按 owner 原则 2 自
+ * DS shell-template 迁入自有 assets（守卫豁免层，同 admin legacy-tokens 模式）。
+ * 命运=外壳迁 DS Shell 组件时整体退役。 */
+@import "../../assets/legacy-shell/console-shell-legacy.css";
