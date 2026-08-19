@@ -368,3 +368,7 @@ CREATE TABLE admin.compliance_events (
 );
 CREATE INDEX idx_compliance_events_tenant   ON admin.compliance_events (tenant_id, status);
 CREATE INDEX idx_compliance_events_tags_gin ON admin.compliance_events USING gin (tags);
+
+-- ── FK 支撑索引(2026-08-19 全库体检 P2 补齐;audit 类 created_by/updated_by 引用有意不建,父行不删)──
+CREATE INDEX idx_compliance_events_handler ON admin.compliance_events (handler_id);
+CREATE INDEX idx_risk_records_reviewer     ON admin.risk_records (reviewer_id);

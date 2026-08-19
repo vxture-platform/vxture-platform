@@ -106,3 +106,10 @@ CREATE TABLE promotion.voucher_redemptions (
 CREATE INDEX idx_voucher_redemptions_tenant_ws ON promotion.voucher_redemptions (tenant_id, workspace_id);
 CREATE INDEX idx_voucher_redemptions_voucher   ON promotion.voucher_redemptions (voucher_id);
 CREATE INDEX idx_voucher_redemptions_user      ON promotion.voucher_redemptions (user_id);
+
+-- ── FK 支撑索引(2026-08-19 全库体检 P2 补齐;audit 类 created_by/updated_by 引用有意不建,父行不删)──
+CREATE INDEX idx_voucher_redemptions_transaction  ON promotion.voucher_redemptions (transaction_id);
+CREATE INDEX idx_voucher_redemptions_subscription ON promotion.voucher_redemptions (subscription_id);
+CREATE INDEX idx_voucher_redemptions_invoice_item ON promotion.voucher_redemptions (invoice_item_id);
+CREATE INDEX idx_voucher_redemptions_payment      ON promotion.voucher_redemptions (payment_id);
+CREATE INDEX idx_voucher_redemptions_workspace    ON promotion.voucher_redemptions (workspace_id);

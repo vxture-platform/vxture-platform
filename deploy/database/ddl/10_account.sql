@@ -29,9 +29,6 @@ CREATE TABLE account.users (
     CONSTRAINT chk_users_status  CHECK (status IN ('active','disabled','pending')),
     CONSTRAINT chk_users_level_no CHECK (level_no >= 1)
 );
-CREATE INDEX idx_users_user_no    ON account.users (user_no);
-CREATE INDEX idx_users_email      ON account.users (email);
-CREATE INDEX idx_users_phone      ON account.users (phone);
 CREATE INDEX idx_users_status     ON account.users (status);
 CREATE INDEX idx_users_level_no   ON account.users (level_no);
 CREATE INDEX idx_users_deleted_at ON account.users (deleted_at);
@@ -63,5 +60,6 @@ CREATE TABLE account.user_avatars (
     content_type  varchar(32)  NOT NULL,
     hash          varchar(64)  NOT NULL,
     source        varchar(16)  NOT NULL,                          -- upload / import
+    created_at    timestamptz  NOT NULL DEFAULT now(),
     updated_at    timestamptz  NOT NULL DEFAULT now()
 );

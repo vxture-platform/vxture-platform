@@ -34,7 +34,7 @@ CREATE TABLE metering.subscriptions (
     next_renewal_at     timestamptz,                                -- 下次续订触发（≈ end_at 提前量）；auto_renew=false/perpetual 时 NULL
     renewal_source      varchar(16),                                -- mandate / balance / manual
     payment_mandate_id  uuid,                                       -- 跨 schema→billing.payment_mandates（90），renewal_source=mandate 时
-    order_no            varchar(128),                               -- 可视码（永不作 FK 目标，铁律二）
+    order_no            varchar(128),                               -- 购买单号 ORD-{YYYYMM}-{10位随机hex}；trial/free/运营开通为 NULL（可视码，永不作 FK，铁律二）
     pay_amount          numeric(12,2),                              -- 与 plan_version.price 分离
     currency            varchar(16)   DEFAULT 'CNY',
     created_by_type     varchar(16)   NOT NULL,                     -- §0.1 actor：system/customer/operator
@@ -42,6 +42,7 @@ CREATE TABLE metering.subscriptions (
     created_at          timestamptz   NOT NULL DEFAULT now(),
     updated_at          timestamptz   NOT NULL DEFAULT now(),
     deleted_at          timestamptz,
+    CONSTRAINT uq_subscriptions_order_no         UNIQUE (order_no),
     CONSTRAINT chk_subscriptions_kind            CHECK (subscription_kind IN ('paid','trial','free')),
     CONSTRAINT chk_subscriptions_cycle_unit      CHECK (cycle_unit IN ('day','week','month','year','perpetual')),
     CONSTRAINT chk_subscriptions_cycle_count     CHECK (cycle_count >= 1),
@@ -333,3 +334,20 @@ CREATE TABLE metering.usage_gauges (
     CONSTRAINT chk_usage_gauges_value CHECK (value >= 0)
 );
 CREATE INDEX idx_usage_gauges_lookup ON metering.usage_gauges (workspace_id, metric_key);
+
+-- ── FK 支撑索引(2026-08-19 全库体检 P2 补齐;audit 类 created_by/updated_by 引用有意不建,父行不删)──
+CREATE INDEX idx_subscriptions_payment_mandate     ON metering.subscriptions (payment_mandate_id);
+CREATE INDEX idx_quota_pools_subscription          ON metering.quota_pools (subscription_id);
+CREATE INDEX idx_quota_pools_product               ON metering.quota_pools (product_id);
+CREATE INDEX idx_entitlement_caches_product        ON metering.entitlement_caches (product_id);
+CREATE INDEX idx_resource_sharing_policies_tenant  ON metering.resource_sharing_policies (tenant_id);
+CREATE INDEX idx_resource_sharing_policies_product ON metering.resource_sharing_policies (product_id);
+CREATE INDEX idx_subscription_renewals_txn         ON metering.subscription_renewals (result_transaction_id);
+CREATE INDEX idx_subscription_renewals_invoice     ON metering.subscription_renewals (result_invoice_id);
+CREATE INDEX idx_usage_events_product              ON metering.usage_events (product_id);
+CREATE INDEX idx_usage_gauges_product              ON metering.usage_gauges (product_id);
+CREATE INDEX idx_usage_summary_days_product        ON metering.usage_summary_days (product_id);
+CREATE INDEX idx_usage_summary_hours_product       ON metering.usage_summary_hours (product_id);
+CREATE INDEX idx_usage_summary_weeks_product       ON metering.usage_summary_weeks (product_id);
+CREATE INDEX idx_usage_summary_months_product      ON metering.usage_summary_months (product_id);
+CREATE INDEX idx_usage_summary_years_product       ON metering.usage_summary_years (product_id);

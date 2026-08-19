@@ -101,3 +101,7 @@ CREATE TABLE provisioning.background_jobs (
     CONSTRAINT chk_background_jobs_run_count CHECK (run_count >= 0),
     CONSTRAINT chk_background_jobs_failure_count CHECK (failure_count >= 0)
 );
+
+-- ── FK 支撑索引(2026-08-19 全库体检 P2 补齐;audit 类 created_by/updated_by 引用有意不建,父行不删)──
+CREATE INDEX idx_webhook_deliveries_tenant  ON provisioning.webhook_deliveries (tenant_id);
+CREATE INDEX idx_webhook_deliveries_product ON provisioning.webhook_deliveries (product_id);

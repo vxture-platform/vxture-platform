@@ -96,3 +96,12 @@ CREATE TABLE sharing.visible_set_refresh (
     CONSTRAINT uq_visible_set_refresh_caller UNIQUE (workspace_id, product_id)
 );
 CREATE INDEX idx_visible_set_refresh_tenant ON sharing.visible_set_refresh (tenant_id);
+
+-- ── FK 支撑索引(2026-08-19 全库体检 P2 补齐;audit 类 created_by/updated_by 引用有意不建,父行不删)──
+CREATE INDEX idx_grants_resource_workspace       ON sharing.grants (resource_workspace_id);
+CREATE INDEX idx_grants_grantee_workspace        ON sharing.grants (grantee_workspace_id);
+CREATE INDEX idx_grants_grantee_product          ON sharing.grants (grantee_product_id);
+CREATE INDEX idx_visible_set_current_product     ON sharing.visible_set_current (product_id);
+CREATE INDEX idx_visible_set_current_res_ws      ON sharing.visible_set_current (resource_workspace_id);
+CREATE INDEX idx_visible_set_current_res_product ON sharing.visible_set_current (resource_product_id);
+CREATE INDEX idx_visible_set_refresh_product     ON sharing.visible_set_refresh (product_id);

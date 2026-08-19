@@ -20,7 +20,7 @@ CREATE TABLE billing.transactions (
     id              uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id       uuid          NOT NULL,                         -- 跨 schema→tenancy.tenants（90）
     bill_id         uuid,                                           -- 关联账单，逻辑引用（跨分区/已删场景，不强制 FK）
-    transaction_no  varchar(64)   NOT NULL,                         -- 可视码 TXN-{YYYYMM}-{8位seq}
+    transaction_no  varchar(64)   NOT NULL,                         -- 可视码 TXN-{YYYYMM}-{10位随机hex}（visibleCode() 同规，唯一约束兜底）
     trade_type      varchar(32)   NOT NULL,                         -- recharge/consume/refund/grant/adjust
     source_method   varchar(24),                                   -- 充值方式（仅 recharge/grant 填），可扩展
     amount          numeric(12,2) NOT NULL,                         -- 本笔变动，正=入账负=出账
@@ -138,7 +138,7 @@ CREATE INDEX idx_payment_mandates_deleted_at    ON billing.payment_mandates (del
 CREATE TABLE billing.invoices (
     id                uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id         uuid          NOT NULL,                       -- 跨 schema→tenancy.tenants（90），结算主体
-    bill_no           varchar(64)   NOT NULL,                       -- 可视码 INV-{YYYYMM}-{6位seq}
+    bill_no           varchar(64)   NOT NULL,                       -- 可视码 INV-{YYYYMM}-{10位随机hex}（visibleCode() 同规，唯一约束兜底）
     subscription_id   uuid,                                         -- 跨 schema→metering.subscriptions（90，可空：rollup 跨多订阅）
     bill_cycle        varchar(8)    NOT NULL,                       -- 如 '202607'
     cycle_start_date  date          NOT NULL,
@@ -345,3 +345,13 @@ CREATE INDEX idx_prepaid_charges_tenant_id      ON billing.prepaid_charges (tena
 CREATE INDEX idx_prepaid_charges_transaction_id ON billing.prepaid_charges (transaction_id);
 CREATE INDEX idx_prepaid_charges_status         ON billing.prepaid_charges (status);
 CREATE INDEX idx_prepaid_charges_window         ON billing.prepaid_charges (tenant_id, window_start);
+
+-- ── FK 支撑索引(2026-08-19 全库体检 P2 补齐;audit 类 created_by/updated_by 引用有意不建,父行不删)──
+CREATE INDEX idx_invoice_items_subscription ON billing.invoice_items (subscription_id);
+CREATE INDEX idx_invoice_items_product      ON billing.invoice_items (product_id);
+CREATE INDEX idx_invoice_items_tenant       ON billing.invoice_items (tenant_id);
+CREATE INDEX idx_invoices_subscription      ON billing.invoices (subscription_id);
+CREATE INDEX idx_payments_transaction       ON billing.payments (transaction_id);
+CREATE INDEX idx_refunds_transaction        ON billing.refunds (transaction_id);
+CREATE INDEX idx_payment_mandates_user      ON billing.payment_mandates (user_id);
+CREATE INDEX idx_prepaid_charges_workspace  ON billing.prepaid_charges (workspace_id);

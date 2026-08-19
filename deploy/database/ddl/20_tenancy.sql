@@ -78,6 +78,7 @@ CREATE TABLE tenancy.tenant_logos (
     content_type  varchar(32)  NOT NULL,
     hash          varchar(64)  NOT NULL,
     source        varchar(16)  NOT NULL,
+    created_at    timestamptz  NOT NULL DEFAULT now(),
     updated_at    timestamptz  NOT NULL DEFAULT now(),
     PRIMARY KEY (tenant_id, kind),
     CHECK (kind IN ('logo', 'logo_dark', 'icon', 'favicon', 'email_logo'))
@@ -109,6 +110,7 @@ CREATE TABLE tenancy.tenant_branding (
 -- 工作空间：tenant 1:N。注册即建 1 个 default。UNIQUE(id, tenant_id) 供复合 FK 引用。
 CREATE TABLE tenancy.workspaces (
     id            uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_no  bigint       NOT NULL DEFAULT nextval('tenancy.workspace_no_seq'),  -- 可视码
     tenant_id     uuid         NOT NULL REFERENCES tenancy.tenants(id) ON DELETE CASCADE,
     name          varchar(128) NOT NULL,
     is_default    boolean      NOT NULL DEFAULT false,
@@ -118,6 +120,7 @@ CREATE TABLE tenancy.workspaces (
     created_at    timestamptz  NOT NULL DEFAULT now(),
     updated_at    timestamptz  NOT NULL DEFAULT now(),
     deleted_at    timestamptz,
+    CONSTRAINT uq_workspaces_workspace_no UNIQUE (workspace_no),
     CONSTRAINT uq_workspaces_id_tenant UNIQUE (id, tenant_id),         -- 复合 FK 目标
     CONSTRAINT chk_workspaces_status   CHECK (status IN ('active','archived','deleted'))
 );
@@ -151,7 +154,7 @@ CREATE TABLE tenancy.tenant_memberships (
         REFERENCES tenancy.workspaces (id, tenant_id)
 );
 CREATE INDEX idx_tenant_memberships_user_id ON tenancy.tenant_memberships (user_id);
-CREATE INDEX idx_tenant_memberships_role    ON tenancy.tenant_memberships (role_id);
+CREATE INDEX idx_tenant_memberships_role    ON tenancy.tenant_memberships (role_id, role_scope);  -- 复合,兼作 FK 支撑(2026-08-19)
 CREATE INDEX idx_tenant_memberships_status  ON tenancy.tenant_memberships (status);
 
 -- 工作空间成员。复合 FK 保 ws⊆tenant 且 ws-member⊆tenant-member 两不变量（域内）。
@@ -177,7 +180,7 @@ CREATE TABLE tenancy.workspace_memberships (
         REFERENCES tenancy.tenant_memberships (tenant_id, user_id) ON DELETE CASCADE
 );
 CREATE INDEX idx_workspace_memberships_user_id ON tenancy.workspace_memberships (user_id);
-CREATE INDEX idx_workspace_memberships_role    ON tenancy.workspace_memberships (role_id);
+CREATE INDEX idx_workspace_memberships_role    ON tenancy.workspace_memberships (role_id, role_scope);  -- 复合,兼作 FK 支撑(2026-08-19)
 CREATE INDEX idx_workspace_memberships_status  ON tenancy.workspace_memberships (status);
 
 -- 成员邀请（org / workspace）。role 复合→access.roles（90）。
@@ -204,3 +207,10 @@ CREATE INDEX idx_invitations_tenant_id    ON tenancy.invitations (tenant_id);
 CREATE INDEX idx_invitations_workspace_id ON tenancy.invitations (workspace_id);
 CREATE INDEX idx_invitations_status       ON tenancy.invitations (status);
 CREATE INDEX idx_invitations_expires_at   ON tenancy.invitations (expires_at);
+
+-- ── FK 支撑索引(2026-08-19 全库体检 P2 补齐;audit 类 created_by/updated_by 引用有意不建,父行不删)──
+CREATE INDEX idx_invitations_role              ON tenancy.invitations (role_id, role_scope);
+CREATE INDEX idx_tenant_contacts_user          ON tenancy.tenant_contacts (user_id);
+CREATE INDEX idx_tenant_memberships_default_ws ON tenancy.tenant_memberships (default_workspace_id, tenant_id);
+CREATE INDEX idx_workspace_memberships_tenant_user ON tenancy.workspace_memberships (tenant_id, user_id);
+CREATE INDEX idx_workspace_memberships_ws_tenant ON tenancy.workspace_memberships (workspace_id, tenant_id);
