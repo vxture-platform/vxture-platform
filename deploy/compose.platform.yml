@@ -41,10 +41,10 @@ services:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_website:${VX_IMAGE_TAG:-latest}
     container_name: vx-platform-website
     restart: unless-stopped
-    mem_limit: 192m # 实测 85MiB（worker-01，2026-08-17）
+    mem_limit: 512m # 稳态实测 85MiB;上调因 next/image 的 sharp/libvips 转换峰值——192m 下并发优化 1920w PNG 反复 OOM(RestartCount=11,dmesg libvips oom-killer,2026-08-19),/_next/image 全 502 首页图片全灭。pg/redis 上云后预算富余。
     cpus: 1.0
     pids_limit: 128
-    memswap_limit: 192m # == mem_limit: no swap, so a runaway dies at its own ceiling instead of eating host swap
+    memswap_limit: 512m # == mem_limit: no swap, so a runaway dies at its own ceiling instead of eating host swap
     networks: [vxture-prod]
     environment:
       NODE_ENV: production
