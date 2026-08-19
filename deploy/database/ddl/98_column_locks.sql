@@ -91,7 +91,7 @@ GRANT UPDATE (is_system) ON access.role_permissions TO platform_svc;
 
 -- tenancy.tenants  [anchor: id, tenant_no, created_at]
 REVOKE UPDATE ON tenancy.tenants FROM platform_svc;
-GRANT UPDATE (name, type, owner_user_id, status, verification_status, verification_type, updated_at, deleted_at) ON tenancy.tenants TO platform_svc;
+GRANT UPDATE (name, type, owner_user_id, status, verification_status, verification_type, workspace_counter, updated_at, deleted_at) ON tenancy.tenants TO platform_svc;  -- workspace_counter:95 触发器以调用者身份递增,需此授权
 
 -- tenancy.tenant_profiles  [anchor: tenant_id, created_at]
 REVOKE UPDATE ON tenancy.tenant_profiles FROM platform_svc;
@@ -109,7 +109,7 @@ GRANT UPDATE (data, content_type, hash, source, updated_at) ON tenancy.tenant_lo
 REVOKE UPDATE ON tenancy.tenant_branding FROM platform_svc;
 GRANT UPDATE (logo_url, logo_dark_url, icon_url, favicon_url, email_logo_url, brand_color, brand_color_dark, updated_by, updated_at) ON tenancy.tenant_branding TO platform_svc;
 
--- tenancy.workspaces  [anchor: id, created_at]
+-- tenancy.workspaces  [anchor: id, workspace_no, created_at]
 REVOKE UPDATE ON tenancy.workspaces FROM platform_svc;
 GRANT UPDATE (tenant_id, name, is_default, description, icon, status, updated_at, deleted_at) ON tenancy.workspaces TO platform_svc;
 

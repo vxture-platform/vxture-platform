@@ -321,3 +321,31 @@ DROP TRIGGER IF EXISTS trg_product_metrics_no_platform_shadow ON product.product
 CREATE TRIGGER trg_product_metrics_no_platform_shadow
   BEFORE INSERT OR UPDATE ON product.product_metrics
   FOR EACH ROW EXECUTE FUNCTION product.forbid_platform_metric_shadow();
+
+-- ── B9:tenancy.workspaces 可视码分配(2026-08-19 编号定版,§11)──────────────────
+-- workspace_no = 租户 9 位顺序段 ×1000 + 租户内终身序号(001-999;号不复用)。
+-- 计数器 tenants.workspace_counter 原子递增,超 999 由 chk_tenants_workspace_counter 硬拦。
+-- 显式携号插入放行(迁移/修复用)。注意:ON CONFLICT DO NOTHING 的跳过行也会烧掉一个
+-- 计数(BEFORE 触发器先于冲突判定),幂等 seed 重跑每次至多烧 1,可接受。
+CREATE OR REPLACE FUNCTION tenancy.assign_workspace_no() RETURNS trigger AS $$
+DECLARE
+  v_counter   int;
+  v_tenant_no bigint;
+BEGIN
+  IF NEW.workspace_no IS NOT NULL THEN RETURN NEW; END IF;
+  UPDATE tenancy.tenants
+     SET workspace_counter = workspace_counter + 1
+   WHERE id = NEW.tenant_id
+  RETURNING workspace_counter, tenant_no INTO v_counter, v_tenant_no;
+  IF v_counter IS NULL THEN
+    RAISE EXCEPTION 'workspace_no: tenant % not found', NEW.tenant_id;
+  END IF;
+  NEW.workspace_no := (v_tenant_no / 1000) * 1000 + v_counter;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_workspaces_assign_no ON tenancy.workspaces;
+CREATE TRIGGER trg_workspaces_assign_no
+  BEFORE INSERT ON tenancy.workspaces
+  FOR EACH ROW EXECUTE FUNCTION tenancy.assign_workspace_no();

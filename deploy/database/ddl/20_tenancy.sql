@@ -8,20 +8,22 @@
 -- 租户（personal 个人 / organization 组织）。owner_user_id 跨 schema→account.users（见 90）。
 CREATE TABLE tenancy.tenants (
     id                   uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_no            bigint       NOT NULL DEFAULT nextval('tenancy.tenant_no_seq'),  -- 可视码
+    tenant_no            bigint       NOT NULL DEFAULT (nextval('tenancy.tenant_no_seq') * 1000),  -- 可视码 12 位:9位顺序段+尾000(租户=0号空间,§11)
     name                 varchar(128) NOT NULL,
     type                 varchar(16)  NOT NULL,
     owner_user_id        uuid         NOT NULL,                    -- 跨 schema→account.users（90）
     status               varchar(32)  NOT NULL DEFAULT 'active',
     verification_status  varchar(32)  NOT NULL DEFAULT 'unverified',  -- 反规范化只读，SoT=kyc.tenant_verifications
     verification_type    varchar(32),
+    workspace_counter    int          NOT NULL DEFAULT 0,          -- 内部记账:workspace_no 终身分配数(触发器递增,不外显,不复用)
     created_at           timestamptz  NOT NULL DEFAULT now(),
     updated_at           timestamptz  NOT NULL DEFAULT now(),
     deleted_at           timestamptz,
     CONSTRAINT uq_tenants_tenant_no          UNIQUE (tenant_no),
     CONSTRAINT chk_tenants_type              CHECK (type IN ('personal','organization')),
     CONSTRAINT chk_tenants_status            CHECK (status IN ('active','suspended','deleted')),
-    CONSTRAINT chk_tenants_verification_status CHECK (verification_status IN ('unverified','pending','verified','rejected'))
+    CONSTRAINT chk_tenants_verification_status CHECK (verification_status IN ('unverified','pending','verified','rejected')),
+    CONSTRAINT chk_tenants_workspace_counter   CHECK (workspace_counter BETWEEN 0 AND 999)  -- 999=每租户终身 workspace 硬上限(编号方案,owner 定案 2026-08-19)
 );
 CREATE INDEX idx_tenants_owner_user_id ON tenancy.tenants (owner_user_id);
 CREATE INDEX idx_tenants_type          ON tenancy.tenants (type);
@@ -110,7 +112,7 @@ CREATE TABLE tenancy.tenant_branding (
 -- 工作空间：tenant 1:N。注册即建 1 个 default。UNIQUE(id, tenant_id) 供复合 FK 引用。
 CREATE TABLE tenancy.workspaces (
     id            uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_no  bigint       NOT NULL DEFAULT nextval('tenancy.workspace_no_seq'),  -- 可视码
+    workspace_no  bigint       NOT NULL,  -- 可视码 12 位:租户前9位+租户内序号001-999(95 触发器分配;§11)
     tenant_id     uuid         NOT NULL REFERENCES tenancy.tenants(id) ON DELETE CASCADE,
     name          varchar(128) NOT NULL,
     is_default    boolean      NOT NULL DEFAULT false,

@@ -34,6 +34,9 @@ CREATE SCHEMA IF NOT EXISTS sharing;      -- org 内共享授权（grants SoT / 
 
 -- ── 全局可视码序列（铁律二：外部可视码，永不做 FK 目标）──────────────────────
 -- 10 万用户规模设计（含僵尸），起点 6 位；旧 10 位方案（1000010000）已废。
-CREATE SEQUENCE IF NOT EXISTS account.user_no_seq   AS bigint START WITH 100000 INCREMENT BY 1 MINVALUE 100000;
-CREATE SEQUENCE IF NOT EXISTS tenancy.tenant_no_seq AS bigint START WITH 100000 INCREMENT BY 1 MINVALUE 100000;
-CREATE SEQUENCE IF NOT EXISTS tenancy.workspace_no_seq AS bigint START WITH 100000 INCREMENT BY 1 MINVALUE 100000;
+-- 可视码 12 位定版(2026-08-19 owner):号 = 9位顺序段(1亿起,首位恒1)×1000 + 3位尾。
+--   user_no   尾 = 随机 000-999(装饰,唯一性由顺序段独立保证);
+--   tenant_no 尾 = 恒 000(租户=0号空间,其 workspace 占用同前缀的 001-999,见 95 触发器)。
+-- 规格权威:data_identity_200_schema.md §11。
+CREATE SEQUENCE IF NOT EXISTS account.user_no_seq   AS bigint START WITH 100000001 INCREMENT BY 1 MINVALUE 100000001;
+CREATE SEQUENCE IF NOT EXISTS tenancy.tenant_no_seq AS bigint START WITH 100000001 INCREMENT BY 1 MINVALUE 100000001;

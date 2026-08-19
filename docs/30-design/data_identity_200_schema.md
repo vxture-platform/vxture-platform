@@ -24,21 +24,21 @@
 
 ### 1.1 `users`
 
-| 字段                        | 类型         | 约束                                             | 说明                                                    |
-| --------------------------- | ------------ | ------------------------------------------------ | ------------------------------------------------------- |
-| `id`                        | uuid         | PK, default `gen_random_uuid()`                  | 唯一关联键                                              |
-| `user_no`                   | bigint       | UNIQUE, default `nextval('account.user_no_seq')` | 可视码，见 §8.1                                         |
-| `account`                   | varchar(64)  | UNIQUE NOT NULL                                  | 登录句柄，可改限频，非关联键                            |
-| `email`                     | varchar(128) | UNIQUE NULL                                      | 可空                                                    |
-| `email_verified_at`         | timestamptz  | NULL                                             |                                                         |
-| `phone`                     | varchar(32)  | UNIQUE NOT NULL                                  | 强锚点                                                  |
-| `phone_verified_at`         | timestamptz  | NOT NULL                                         |                                                         |
-| `account_changed_at`        | timestamptz  | NULL                                             | 限频判据                                                |
-| `status`                    | varchar(32)  | NOT NULL DEFAULT `'active'`, CHECK               | active/disabled/pending                                 |
-| `level_no`                  | int          | NOT NULL DEFAULT 1, CHECK `>=1`                  | 反规范化只读列，SoT 在 `loyalty.level_policies`（§9.1） |
-| `source`                    | varchar(32)  | NULL                                             | 注册来源：web/invite/oidc，不可变事实                   |
-| `created_at` / `updated_at` | timestamptz  | NOT NULL DEFAULT now()                           |                                                         |
-| `deleted_at`                | timestamptz  | NULL                                             | 软删                                                    |
+| 字段                        | 类型         | 约束                                       | 说明                                                    |
+| --------------------------- | ------------ | ------------------------------------------ | ------------------------------------------------------- |
+| `id`                        | uuid         | PK, default `gen_random_uuid()`            | 唯一关联键                                              |
+| `user_no`                   | bigint       | UNIQUE, default 9位seq×1000+3位随机(12 位) | 可视码，见 §11                                          |
+| `account`                   | varchar(64)  | UNIQUE NOT NULL                            | 登录句柄，可改限频，非关联键                            |
+| `email`                     | varchar(128) | UNIQUE NULL                                | 可空                                                    |
+| `email_verified_at`         | timestamptz  | NULL                                       |                                                         |
+| `phone`                     | varchar(32)  | UNIQUE NOT NULL                            | 强锚点                                                  |
+| `phone_verified_at`         | timestamptz  | NOT NULL                                   |                                                         |
+| `account_changed_at`        | timestamptz  | NULL                                       | 限频判据                                                |
+| `status`                    | varchar(32)  | NOT NULL DEFAULT `'active'`, CHECK         | active/disabled/pending                                 |
+| `level_no`                  | int          | NOT NULL DEFAULT 1, CHECK `>=1`            | 反规范化只读列，SoT 在 `loyalty.level_policies`（§9.1） |
+| `source`                    | varchar(32)  | NULL                                       | 注册来源：web/invite/oidc，不可变事实                   |
+| `created_at` / `updated_at` | timestamptz  | NOT NULL DEFAULT now()                     |                                                         |
+| `deleted_at`                | timestamptz  | NULL                                       | 软删                                                    |
 
 索引：`idx_users_user_no`、`idx_users_email`、`idx_users_phone`、`idx_users_status`、`idx_users_deleted_at`。
 
@@ -232,7 +232,7 @@
 | 字段                        | 类型         | 约束                                                                         | 说明                                                              |
 | --------------------------- | ------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | `id`                        | uuid         | PK                                                                           |                                                                   |
-| `tenant_no`                 | bigint       | UNIQUE, default `nextval('tenancy.tenant_no_seq')`                           | 可视码，见 §8.1                                                   |
+| `tenant_no`                 | bigint       | UNIQUE, default 9位seq×1000(尾000,12 位)                                     | 可视码，见 §11                                                    |
 | `name`                      | varchar(128) | NOT NULL                                                                     |                                                                   |
 | `type`                      | varchar(16)  | NOT NULL, CHECK(personal/organization)                                       |                                                                   |
 | `owner_user_id`             | uuid         | FK→`account.users.id`                                                        |                                                                   |
@@ -278,17 +278,18 @@
 
 ### 5.4 `workspaces`
 
-| 字段                        | 类型         | 约束                                                        | 说明                                   |
-| --------------------------- | ------------ | ----------------------------------------------------------- | -------------------------------------- |
-| `id`                        | uuid         | PK                                                          |                                        |
-| `tenant_id`                 | uuid         | FK→`tenants.id` ON DELETE CASCADE                           |                                        |
-| `name`                      | varchar(128) | NOT NULL                                                    |                                        |
-| `is_default`                | boolean      | NOT NULL DEFAULT false                                      | 每 tenant 仅一 default（部分唯一索引） |
-| `description`               | text         | NULL                                                        |                                        |
-| `icon`                      | varchar(64)  | NULL                                                        |                                        |
-| `status`                    | varchar(16)  | NOT NULL DEFAULT `'active'`, CHECK(active/archived/deleted) |                                        |
-| `created_at` / `updated_at` | timestamptz  | NOT NULL DEFAULT now()                                      |                                        |
-| `deleted_at`                | timestamptz  | NULL                                                        |                                        |
+| 字段                        | 类型         | 约束                                                        | 说明                                            |
+| --------------------------- | ------------ | ----------------------------------------------------------- | ----------------------------------------------- |
+| `id`                        | uuid         | PK                                                          |                                                 |
+| `workspace_no`              | bigint       | NOT NULL, UNIQUE;95 触发器分配                              | 可视码 12 位:租户前9位+租户内序号001-999,见 §11 |
+| `tenant_id`                 | uuid         | FK→`tenants.id` ON DELETE CASCADE                           |                                                 |
+| `name`                      | varchar(128) | NOT NULL                                                    |                                                 |
+| `is_default`                | boolean      | NOT NULL DEFAULT false                                      | 每 tenant 仅一 default（部分唯一索引）          |
+| `description`               | text         | NULL                                                        |                                                 |
+| `icon`                      | varchar(64)  | NULL                                                        |                                                 |
+| `status`                    | varchar(16)  | NOT NULL DEFAULT `'active'`, CHECK(active/archived/deleted) |                                                 |
+| `created_at` / `updated_at` | timestamptz  | NOT NULL DEFAULT now()                                      |                                                 |
+| `deleted_at`                | timestamptz  | NULL                                                        |                                                 |
 
 约束：`UNIQUE(id, tenant_id)`（**新增**，`uq_workspaces_id_tenant`——为 §5.6 `workspace_memberships` 的复合 FK 提供目标，锁定"ws 成员的 tenant_id 必须是该 ws 真实所属 tenant"）。
 
@@ -732,14 +733,19 @@ ALTER TABLE tenancy.workspace_memberships
 
 ## 11. 可视码方案
 
-| 码          | 位置              | 生成                                               | 容量                                                                                   |
-| ----------- | ----------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `user_no`   | `account.users`   | `SEQUENCE account.user_no_seq START WITH 100000`   | 6 位，100000–999999（90 万，10 万用户目标 9× 余量）；超出自然进位 7 位，非关联键零重构 |
-| `tenant_no` | `tenancy.tenants` | `SEQUENCE tenancy.tenant_no_seq START WITH 100000` | 同上                                                                                   |
+**12 位定版（2026-08-19 owner 定案，取代旧 6 位方案）**：号 = 9 位顺序段（1 亿起，首位恒 1）×1000 + 3 位尾。JSON 安全（12 位 < 2^53），数值排序 = 创建顺序（顺序段独立保证唯一，尾不参与唯一性）。
+
+| 码             | 位置                 | 生成                                                                    | 尾三位语义                                         | 容量              |
+| -------------- | -------------------- | ----------------------------------------------------------------------- | -------------------------------------------------- | ----------------- |
+| `user_no`      | `account.users`      | DEFAULT `nextval(user_no_seq)×1000 + random(000-999)`，seq 起 100000001 | 随机装饰（防一眼看穿邻号，不承担唯一性）           | 顺序段 ≈9 亿      |
+| `tenant_no`    | `tenancy.tenants`    | DEFAULT `nextval(tenant_no_seq)×1000`，seq 起 100000001                 | 恒 `000` = 租户本体（"0 号空间"）                  | 同上              |
+| `workspace_no` | `tenancy.workspaces` | 95 触发器：租户前 9 位 ×1000 + `tenants.workspace_counter` 原子递增     | `001-999` 租户内终身序号，不复用；999 = 产品硬上限 | 每租户终身 999 个 |
+
+同一租户的整个 `{9位段}xxx` 号段自洽：尾 `000` 是租户，`001-999` 是它的空间——看号知类型、知归属。示例：第 1234 个租户 = `100001234000`，其第 3 个空间 = `100001234003`；第 1234 个用户 = `100001234765`（尾随机）。
 
 ```sql
-CREATE SEQUENCE account.user_no_seq START WITH 100000 INCREMENT BY 1;
-CREATE SEQUENCE tenancy.tenant_no_seq START WITH 100000 INCREMENT BY 1;
+CREATE SEQUENCE account.user_no_seq   AS bigint START WITH 100000001 INCREMENT BY 1 MINVALUE 100000001;
+CREATE SEQUENCE tenancy.tenant_no_seq AS bigint START WITH 100000001 INCREMENT BY 1 MINVALUE 100000001;
 ```
 
 内部表（membership / credential / session / loyalty 明细等）不设可视码，只用 `id uuid`。
