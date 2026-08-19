@@ -65,11 +65,11 @@ export const HERO_DATA: HeroData = {
   },
   media: {
     type: "image",
-    videoUrl: "/videos/hero/banner-hero-01.mp4",
-    url: "/images/hero/banner-hero-poster-light-01.png",
-    urlDark: "/images/hero/banner-hero-poster-dark-01.png",
-    posterImage: "/images/hero/banner-hero-poster-light-01.png",
-    posterImageDark: "/images/hero/banner-hero-poster-dark-01.png",
+    // 亮色 = 雾山实景(webp);暗色 = 程序化六边形 SVG(约4KB,替代 653KB PNG)。
+    // 视频背景 2026-08-19 起未启用,15MB mp4/webm 资产已删——重新启用时补文件并
+    // 恢复 type:"video" + videoUrl/posterImage* 字段(组件 video 分支仍在)。
+    url: "/images/hero/banner-hero-poster-light-01.webp",
+    urlDark: "/images/hero/banner-hero-dark-01.svg",
   },
   scrollIndicator: {
     enabled: true,

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <!-- 深灰蜂窝 hero 背景(程序化 SVG,替代 653KB PNG;2026-08-19) -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#43474b"/>
+      <stop offset="0.55" stop-color="#383c40"/>
+      <stop offset="1" stop-color="#2a2d31"/>
+    </linearGradient>
+    <linearGradient id="cellHi" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#565b60"/>
+      <stop offset="1" stop-color="#3d4145"/>
+    </linearGradient>
+    <linearGradient id="cellLo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2e3134"/>
+      <stop offset="1" stop-color="#232629"/>
+    </linearGradient>
+    <radialGradient id="vig" cx="0.5" cy="0.42" r="0.9">
+      <stop offset="0.55" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.38"/>
+    </radialGradient>
+    <!-- 尖顶六边形:边长 a=64,宽 √3a≈110.85,高 2a=128 -->
+    <path id="hex" d="M55.4256 0 L110.8512 32 L110.8512 96 L55.4256 128 L0 96 L0 32 Z"/>
+    <pattern id="grid" width="110.8512" height="192" patternUnits="userSpaceOnUse">
+      <use href="#hex" x="0" y="0" fill="none" stroke="#1f2225" stroke-opacity="0.55" stroke-width="2.5"/>
+      <use href="#hex" x="0" y="0" fill="none" stroke="#5a5f64" stroke-opacity="0.18" stroke-width="1" transform="translate(0,-1.5)"/>
+      <use href="#hex" x="-55.4256" y="96" fill="none" stroke="#1f2225" stroke-opacity="0.55" stroke-width="2.5"/>
+      <use href="#hex" x="-55.4256" y="96" fill="none" stroke="#5a5f64" stroke-opacity="0.18" stroke-width="1" transform="translate(0,-1.5)"/>
+      <use href="#hex" x="55.4256" y="96" fill="none" stroke="#1f2225" stroke-opacity="0.55" stroke-width="2.5"/>
+      <use href="#hex" x="55.4256" y="96" fill="none" stroke="#5a5f64" stroke-opacity="0.18" stroke-width="1" transform="translate(0,-1.5)"/>
+    </pattern>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#grid)"/>
+
+  <!-- 凸起/凹陷亮暗格,打散平铺感(位置为固定伪随机) -->
+  <g>
+    <use href="#hex" x="277.1" y="96"  fill="url(#cellHi)" opacity="0.55"/>
+    <use href="#hex" x="831.4" y="288" fill="url(#cellHi)" opacity="0.4"/>
+    <use href="#hex" x="1441.1" y="0"  fill="url(#cellHi)" opacity="0.5"/>
+    <use href="#hex" x="1163.9" y="480" fill="url(#cellHi)" opacity="0.35"/>
+    <use href="#hex" x="498.8" y="672" fill="url(#cellHi)" opacity="0.45"/>
+    <use href="#hex" x="1662.8" y="768" fill="url(#cellHi)" opacity="0.4"/>
+    <use href="#hex" x="55.4" y="864"  fill="url(#cellHi)" opacity="0.3"/>
+    <use href="#hex" x="1053.1" y="864" fill="url(#cellHi)" opacity="0.35"/>
+    <use href="#hex" x="554.3" y="192" fill="url(#cellLo)" opacity="0.6"/>
+    <use href="#hex" x="1385.6" y="288" fill="url(#cellLo)" opacity="0.5"/>
+    <use href="#hex" x="277.1" y="480" fill="url(#cellLo)" opacity="0.55"/>
+    <use href="#hex" x="1607.4" y="480" fill="url(#cellLo)" opacity="0.45"/>
+    <use href="#hex" x="720.5" y="672" fill="url(#cellLo)" opacity="0.5"/>
+    <use href="#hex" x="1274.8" y="864" fill="url(#cellLo)" opacity="0.55"/>
+    <use href="#hex" x="887.0" y="0"   fill="url(#cellLo)" opacity="0.4"/>
+  </g>
+
+  <rect width="1920" height="1080" fill="url(#vig)"/>
+</svg>

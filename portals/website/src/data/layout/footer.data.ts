@@ -131,7 +131,7 @@ export const FOOTER_DATA: FooterData = {
     {
       name: "WeChat",
       icon: "wechat",
-      href: "/images/footer/WeChatOfficialAccounts.png",
+      href: "/images/footer/WeChatOfficialAccounts.webp",
       ariaLabelKey: "social.wechat",
     },
   ],

@@ -67,7 +67,7 @@ export const HOME_CASES_DATA: HomeCasesData = {
     {
       id: "case-intro-01",
       slug: "geo-disaster-graph",
-      coverUrl: "/images/cases/case-intro-01.jpg",
+      coverUrl: "/images/cases/case-intro-01.webp",
       publishedAt: "2024-03-01",
       href: "/cases-pages/geo-disaster-graph",
       theme: "success",
@@ -77,7 +77,7 @@ export const HOME_CASES_DATA: HomeCasesData = {
     {
       id: "case-intro-02",
       slug: "intelligent-emergency",
-      coverUrl: "/images/cases/case-intro-02.jpg",
+      coverUrl: "/images/cases/case-intro-02.webp",
       publishedAt: "2024-12-01",
       href: "/cases-pages/intelligent-emergency",
       theme: "brand",
@@ -87,7 +87,7 @@ export const HOME_CASES_DATA: HomeCasesData = {
     {
       id: "case-intro-03",
       slug: "public-safety-analysis",
-      coverUrl: "/images/cases/case-intro-03.jpg",
+      coverUrl: "/images/cases/case-intro-03.webp",
       publishedAt: "2025-06-01",
       href: "/cases-pages/public-safety-analysis",
       theme: "info",

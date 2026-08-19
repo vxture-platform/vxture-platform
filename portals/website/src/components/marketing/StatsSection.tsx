@@ -278,7 +278,7 @@ export default function StatsSection() {
            * 数量改回去即可。 */}
           {Array.from({ length: 2 }).map((_, idx) => {
             const num = String(idx + 1).padStart(2, "0");
-            const src = `/images/customers/customer-logo-${num}.png`;
+            const src = `/images/customers/customer-logo-${num}.webp`;
             return (
               <div
                 key={num}
