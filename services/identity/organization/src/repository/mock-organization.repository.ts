@@ -81,7 +81,7 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     this.workspaces.set(wsId, {
       id: wsId,
       organizationId: orgId,
-      name: "workspace",
+      name: "default workspace",
       isDefault: true,
     });
     this.orgMembers.push({
@@ -135,7 +135,7 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     const workspace: WorkspaceView = {
       id: wsId,
       organizationId: orgId,
-      name: "workspace",
+      name: "default workspace",
       isDefault: true,
     };
     this.orgs.set(orgId, org);

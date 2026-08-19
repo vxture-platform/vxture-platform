@@ -8,7 +8,7 @@
 -- phone 为强制全局锚点（NOT NULL + 已验证）。瘦主体，增长信息挂属性表。
 CREATE TABLE account.users (
     id                   uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_no              bigint       NOT NULL DEFAULT (nextval('account.user_no_seq') * 1000 + floor(random()*1000)::bigint),  -- 可视码 12 位:9位顺序段+3位随机尾(§11)
+    user_no              bigint       NOT NULL DEFAULT (nextval('account.principal_no_seq') * 1000 + floor(random()*1000)::bigint),  -- 可视码 12 位:主体号(§11,与组织租户共号空间)
     account              varchar(64)  NOT NULL,                     -- 登录句柄，可改限频，非关联键
     email                varchar(128),
     email_verified_at    timestamptz,

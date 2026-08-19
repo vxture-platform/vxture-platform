@@ -95,7 +95,7 @@ export async function seedSample(client) {
   // ── 4. tenancy.workspaces (default) ─────────────────────────────────────────
   await client.query(`
     insert into tenancy.workspaces (id, tenant_id, name, is_default, status, created_at, updated_at)
-    values ($1, $2, 'Default', true, 'active', now(), now())
+    values ($1, $2, 'default workspace', true, 'active', now(), now())
     on conflict (id) do nothing
   `, [ID.sampleWorkspace, ID.sampleTenant]);
 

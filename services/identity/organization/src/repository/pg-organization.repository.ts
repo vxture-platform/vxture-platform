@@ -171,11 +171,11 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
          values ($1, $2, $3, $4, 'active', now(), now())`,
         [orgId, name, type, ownerUserId],
       );
-      // Default workspace name 'workspace' + is_default marker (owner 2026-07-06;
+      // Default workspace name 'default workspace' + is_default marker (owner 2026-08-19;
       // prefilled at creation, user-renamable afterwards).
       await client.query(
         `insert into tenancy.workspaces (id, tenant_id, name, is_default, created_at, updated_at)
-         values ($1, $2, 'workspace', true, now(), now())`,
+         values ($1, $2, 'default workspace', true, now(), now())`,
         [workspaceId, orgId],
       );
       // role → role_id + role_scope: resolve the seeded 'owner' role by (scope,code).
@@ -205,7 +205,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       workspace: {
         id: workspaceId,
         organizationId: orgId,
-        name: "workspace",
+        name: "default workspace",
         isDefault: true,
       },
     };

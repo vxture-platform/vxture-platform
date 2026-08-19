@@ -24,7 +24,7 @@
  *                                Naming rule (owner 2026-07-06):
  *                                display_name > account(username) > user_no —
  *                                resolved in-repo when no explicit name is given.
- *    8. tenancy.workspaces     — default workspace, name 'workspace',
+ *    8. tenancy.workspaces     — default workspace, name 'default workspace',
  *                                is_default=true (user-renamable later).
  *    9. tenant/workspace_memberships — owner role at both scopes (composite
  *                                FK pins role scope).

@@ -8,7 +8,7 @@
 -- 租户（personal 个人 / organization 组织）。owner_user_id 跨 schema→account.users（见 90）。
 CREATE TABLE tenancy.tenants (
     id                   uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_no            bigint       NOT NULL DEFAULT (nextval('tenancy.tenant_no_seq') * 1000),  -- 可视码 12 位:9位顺序段+尾000(租户=0号空间,§11)
+    tenant_no            bigint       NOT NULL,  -- 可视码 12 位:个人租户=owner 的 user_no(人租同号);组织租户自取主体号(95 触发器分配,§11)
     name                 varchar(128) NOT NULL,
     type                 varchar(16)  NOT NULL,
     owner_user_id        uuid         NOT NULL,                    -- 跨 schema→account.users（90）
@@ -112,7 +112,7 @@ CREATE TABLE tenancy.tenant_branding (
 -- 工作空间：tenant 1:N。注册即建 1 个 default。UNIQUE(id, tenant_id) 供复合 FK 引用。
 CREATE TABLE tenancy.workspaces (
     id            uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_no  bigint       NOT NULL,  -- 可视码 12 位:租户前9位+租户内序号001-999(95 触发器分配;§11)
+    workspace_no  bigint       NOT NULL,  -- 可视码 15 位:完整租户号(12位)+租户内序号001-999(95 触发器分配,§11)
     tenant_id     uuid         NOT NULL REFERENCES tenancy.tenants(id) ON DELETE CASCADE,
     name          varchar(128) NOT NULL,
     is_default    boolean      NOT NULL DEFAULT false,

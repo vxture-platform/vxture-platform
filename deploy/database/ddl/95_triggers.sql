@@ -322,11 +322,35 @@ CREATE TRIGGER trg_product_metrics_no_platform_shadow
   BEFORE INSERT OR UPDATE ON product.product_metrics
   FOR EACH ROW EXECUTE FUNCTION product.forbid_platform_metric_shadow();
 
--- ── B9:tenancy.workspaces 可视码分配(2026-08-19 编号定版,§11)──────────────────
--- workspace_no = 租户 9 位顺序段 ×1000 + 租户内终身序号(001-999;号不复用)。
+-- ── B9:可视码分配(2026-08-19 编号定版 v3「人租同号」,§11)────────────────────
+-- tenant_no:个人租户继承 owner 的 user_no(人租同号);组织租户自取主体号
+--   (与 user_no 共享 account.principal_no_seq,号空间统一,跨表永不撞号)。
+-- workspace_no = 完整 12 位租户号 ×1000 + 租户内终身序号(001-999;号不复用,15 位)。
 -- 计数器 tenants.workspace_counter 原子递增,超 999 由 chk_tenants_workspace_counter 硬拦。
 -- 显式携号插入放行(迁移/修复用)。注意:ON CONFLICT DO NOTHING 的跳过行也会烧掉一个
 -- 计数(BEFORE 触发器先于冲突判定),幂等 seed 重跑每次至多烧 1,可接受。
+CREATE OR REPLACE FUNCTION tenancy.assign_tenant_no() RETURNS trigger AS $$
+DECLARE
+  v_user_no bigint;
+BEGIN
+  IF NEW.tenant_no IS NOT NULL THEN RETURN NEW; END IF;
+  IF NEW.type = 'personal' THEN
+    SELECT user_no INTO v_user_no FROM account.users WHERE id = NEW.owner_user_id;
+    IF v_user_no IS NULL THEN
+      RAISE EXCEPTION 'tenant_no: owner user % not found', NEW.owner_user_id;
+    END IF;
+    NEW.tenant_no := v_user_no;
+  ELSE
+    NEW.tenant_no := nextval('account.principal_no_seq') * 1000 + floor(random()*1000)::bigint;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_tenants_assign_no ON tenancy.tenants;
+CREATE TRIGGER trg_tenants_assign_no
+  BEFORE INSERT ON tenancy.tenants
+  FOR EACH ROW EXECUTE FUNCTION tenancy.assign_tenant_no();
 CREATE OR REPLACE FUNCTION tenancy.assign_workspace_no() RETURNS trigger AS $$
 DECLARE
   v_counter   int;
@@ -340,7 +364,7 @@ BEGIN
   IF v_counter IS NULL THEN
     RAISE EXCEPTION 'workspace_no: tenant % not found', NEW.tenant_id;
   END IF;
-  NEW.workspace_no := (v_tenant_no / 1000) * 1000 + v_counter;
+  NEW.workspace_no := v_tenant_no * 1000 + v_counter;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
