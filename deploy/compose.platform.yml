@@ -34,49 +34,14 @@ services:
   #    上限之和远大于 2 是有意的——它们是天花板，不是预留。
   # 3. `pids_limit` 是 fork 炸弹护栏，按"异常"的门槛设，不是按"够用"设。
   #
-  # 有状态件（postgres/redis）刻意不设 `memswap_limit`：宁可变慢也不要被 OOM 杀掉，
-  # 库一死所有 depend_on 它的 BFF 跟着倒。无状态件则钉死无 swap（见各自注释）。
-
-  postgres:
-    # Pinned by digest to prevent upstream 18-alpine tag drift from silently
-    # recreating the stateful DB on pull. Bump tag+digest together to upgrade.
-    # 18-alpine digest resolved 2026-08-17 (18.4 -> 18.6, same major:
-    # the data directory format is unchanged, so this is a restart not a migration).
-    image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
-    # Digest-pinned and never expected to change out-of-band; skip the
-    # per-deploy manifest round-trip to docker.io (30-deploy-platform-stack.sh
-    # unconditionally `pull`s every service). Same pattern already validated
-    # varda 已迁独立仓 vxture-varda(2026-08-18),其部署自持。
-    pull_policy: missing
-    container_name: vx-platform-pg
-    restart: unless-stopped
-    # Ceiling only (steady state ~40-100MB/container; whole host ~900MB). Stateful:
-    # NOT pinned to no-swap (no memswap_limit) so it can lean on swap under pressure
-    # rather than be OOM-killed — a killed pg cascades (all BFF depend_on it).
-    # Owner: verify against `docker stats` on worker-01 before trusting this value.
-    mem_limit: 320m # 实测 43MiB（worker-01，2026-08-17）
-    cpus: 1.5
-    pids_limit: 256
-    networks: [vxture-prod]
-    environment:
-      POSTGRES_USER: vxture
-      POSTGRES_DB: platform_main
-      POSTGRES_PASSWORD_FILE: /run/secrets/platform_pg_password
-    secrets: [platform_pg_password]
-    volumes:
-      - /srv/vxture/data/platform-pg:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vxture -d platform_main"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+  # 有状态件（redis；PostgreSQL 已于 2026-08-19 迁阿里云 RDS，本 compose 不再有 pg）
+  # 刻意不设 `memswap_limit`：宁可变慢也不要被 OOM 杀掉。无状态件则钉死无 swap（见各自注释）。
 
   redis:
-    # Pinned by digest (see postgres note). 8-alpine digest resolved 2026-08-17
-    # (8.8.0 -> 8.10.0, same major).
+    # Pinned by digest to prevent tag drift from silently recreating the stateful
+    # store. 8-alpine digest resolved 2026-08-17 (8.8.0 -> 8.10.0, same major).
     image: redis:8-alpine@sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241
-    # See postgres note above — digest-pinned, skip the redundant per-deploy pull.
+    # Digest-pinned, never expected to change out-of-band — skip the per-deploy pull.
     pull_policy: missing
     container_name: vx-platform-redis
     restart: unless-stopped
@@ -251,7 +216,6 @@ services:
         /srv/vxture/runtime/.env.auth-bff,
       ]
     depends_on:
-      postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3081/healthz"]
@@ -299,7 +263,6 @@ services:
         /srv/vxture/runtime/.env.website-bff,
       ]
     depends_on:
-      postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
@@ -333,7 +296,6 @@ services:
         /srv/vxture/runtime/.env.console-bff,
       ]
     depends_on:
-      postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
@@ -363,7 +325,6 @@ services:
         /srv/vxture/runtime/.env.admin-bff,
       ]
     depends_on:
-      postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
@@ -424,7 +385,6 @@ services:
         /srv/vxture/runtime/.env.platform-api,
       ]
     depends_on:
-      postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
@@ -435,7 +395,5 @@ services:
       start_period: 15s
 
 secrets:
-  platform_pg_password:
-    file: /srv/vxture/runtime/secrets/pg-password
   platform_redis_password:
     file: /srv/vxture/runtime/secrets/redis-password

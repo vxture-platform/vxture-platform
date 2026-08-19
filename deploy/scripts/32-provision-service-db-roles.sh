@@ -1,81 +1,96 @@
 #!/usr/bin/env bash
 # deploy/scripts/32-provision-service-db-roles.sh
-# TD-018 生产切换步①：为非-owner 服务角色设置真实密码 + 生成 platform-app.env。
+# TD-018：对齐非-owner 服务角色密码 + 生成 platform-app.env（RDS 版）。
 # @package  @vxture/repo
 # @layer    Infrastructure
 # @category deployment-script
 # @author   AI-Generated
 # @date     2026-07-05
 #
-# 前提：97_service_roles.sql 已随 apply.sh 进活库（platform_svc / reporting_ro
-#   角色已存在，密码为 REPLACE_ME 占位，不可登录使用）。
-# 动作：
-#   1. 生成两个随机密码（不落日志）；
-#   2. ALTER ROLE 设置真实密码（经 owner 连接，owner=容器超级用户可 ALTER ROLE）；
-#   3. 写 /srv/vxture/runtime/secrets/platform-app.env（0600）——compose 中该文件
-#      排在 platform.env 之后，仅对 5 个服务容器覆盖 DATABASE_URL（TD-018）。
-# 幂等：platform-app.env 已存在则跳过（不轮换）；FORCE_ROTATE=yes 才重新生成
-#   密码并覆写（轮换后须 recreate 4 个服务容器）。
+# 2026-08-19 RDS 切换：角色密码的单一权威 = secrets/rds-pw-<role> 文件（32 位字母数字，
+# RDS 开通时 owner 置备）。本脚本不再自造随机密码，动作变为：
+#   1. 校验角色存在（97_service_roles.sql 已随 apply 进库——本脚本不建角色）；
+#   2. ALTER ROLE 把库侧密码对齐到 secret 文件值（幂等，跑几次都收敛）；
+#   3. 生成 secrets/platform-app.env（0600）——compose 中排在 platform.env 之后，
+#      对 5 个服务容器覆盖 DATABASE_URL / REPORTING_RO_DATABASE_URL（TD-018）。
+# 幂等：platform-app.env 已存在则跳过；FORCE_ROTATE=yes 强制重生成（密码轮换 =
+#   先更新 rds-pw-* 文件再 FORCE_ROTATE 重跑，之后 recreate 5 个服务容器）。
 # 运行：CONFIRM_PROVISION_SVC_ROLES=yes bash scripts/32-provision-service-db-roles.sh
-# 后续步②：确保 compose.platform.yml 已含 platform-app.env（本仓库同批变更），
-#   recreate 4 容器（正常走 deploy-production；或手动 compose up -d --force-recreate
-#   --no-deps auth-bff website-bff console-bff admin-bff）。
 set -euo pipefail
 
 RUNTIME_DIR="${RUNTIME_DIR:-/srv/vxture/runtime}"
 SECRETS_DIR="$RUNTIME_DIR/secrets"
 APP_ENV="$SECRETS_DIR/platform-app.env"
-PLATFORM_ENV="$SECRETS_DIR/platform.env"
-PG_CONTAINER="${PG_CONTAINER:-vx-platform-pg}"
+OWNER_ENV="$SECRETS_DIR/rds-owner.env"
+PGIMG="${PGIMG:-postgres:18-alpine}"
 
 if [ "${CONFIRM_PROVISION_SVC_ROLES:-}" != "yes" ]; then
   echo "错误：需显式确认。CONFIRM_PROVISION_SVC_ROLES=yes bash scripts/32-provision-service-db-roles.sh" >&2
   exit 1
 fi
-[ -f "$PLATFORM_ENV" ] || { echo "错误：缺少 $PLATFORM_ENV" >&2; exit 1; }
+for f in "$OWNER_ENV" "$SECRETS_DIR/rds-pw-platform_svc" "$SECRETS_DIR/rds-pw-reporting_ro"; do
+  [ -f "$f" ] || { echo "错误：缺少 $f（RDS 开通时置备，见 docs 数据库重新部署记录）" >&2; exit 1; }
+done
 
 if [ -f "$APP_ENV" ] && [ "${FORCE_ROTATE:-}" != "yes" ]; then
-  echo "  [skip] $APP_ENV 已存在（不轮换）。轮换：FORCE_ROTATE=yes 重跑（之后须 recreate 5 容器）。"
+  echo "  [skip] $APP_ENV 已存在（不轮换）。轮换：更新 rds-pw-* 后 FORCE_ROTATE=yes 重跑（之后须 recreate 5 容器）。"
   exit 0
 fi
 
-# DB 名从 owner DATABASE_URL 提取（保持与 platform.env 单一来源一致）。
-DB_NAME="$(grep -E '^DATABASE_URL=' "$PLATFORM_ENV" | tail -n1 | sed -E 's#.*/([^/?]+)(\?.*)?$#\1#')"
-DB_OWNER="$(grep -E '^DATABASE_URL=' "$PLATFORM_ENV" | tail -n1 | sed -E 's#^DATABASE_URL=postgres(ql)?://([^:]+):.*#\2#')"
-[ -n "$DB_NAME" ] && [ -n "$DB_OWNER" ] || { echo "错误：无法从 platform.env 解析 DB 名/owner" >&2; exit 1; }
+# 主机/端口/库名从 owner DATABASE_URL 提取（单一来源 = rds-owner.env）。
+OWNER_URL="$(grep -E '^DATABASE_URL=' "$OWNER_ENV" | tail -n1 | cut -d'=' -f2-)"
+DB_HOST="$(printf '%s' "$OWNER_URL" | sed -E 's#.*@([^:/]+):([0-9]+)/.*#\1#')"
+DB_PORT="$(printf '%s' "$OWNER_URL" | sed -E 's#.*@([^:/]+):([0-9]+)/.*#\2#')"
+DB_NAME="$(printf '%s' "$OWNER_URL" | sed -E 's#.*/([^/?]+)(\?.*)?$#\1#')"
+[ -n "$DB_HOST" ] && [ -n "$DB_PORT" ] && [ -n "$DB_NAME" ] || {
+  echo "错误：无法从 rds-owner.env 解析 host/port/db" >&2; exit 1; }
 
-echo "=== TD-018 provision service DB roles (db=$DB_NAME, owner=$DB_OWNER) ==="
+echo "=== TD-018 provision service DB roles (RDS $DB_HOST:$DB_PORT/$DB_NAME) ==="
 
 # 角色须已由 97_service_roles.sql 建立——本脚本只设密码，不建角色（单一权威在 DDL）。
 for r in platform_svc reporting_ro; do
-  n="$(docker exec "$PG_CONTAINER" psql -U "$DB_OWNER" -d "$DB_NAME" -tAc \
-      "select count(*) from pg_roles where rolname='$r'")"
-  [ "$n" = "1" ] || { echo "错误：角色 $r 不存在——先经 db-init 让 97_service_roles.sql 进库。" >&2; exit 1; }
+  n="$(docker run --rm --env-file "$OWNER_ENV" "$PGIMG" \
+      sh -c "psql \"\$DATABASE_URL\" -tAc \"select count(*) from pg_roles where rolname='$r'\"")"
+  [ "$n" = "1" ] || { echo "错误：角色 $r 不存在——先经 28-apply 让 97_service_roles.sql 进库。" >&2; exit 1; }
 done
 
-PW_SVC="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-PW_RO="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+PW_SVC="$(cat "$SECRETS_DIR/rds-pw-platform_svc")"
+PW_RO="$(cat "$SECRETS_DIR/rds-pw-reporting_ro")"
 
-docker exec "$PG_CONTAINER" psql -U "$DB_OWNER" -d "$DB_NAME" -q \
-  -c "ALTER ROLE platform_svc PASSWORD '$PW_SVC';" \
-  -c "ALTER ROLE reporting_ro PASSWORD '$PW_RO';"
-echo "  [ok] ALTER ROLE 密码已设置（platform_svc / reporting_ro）"
+# 密码经 stdin SQL 传递（不进 docker args，防 ps/inspect 泄露）。
+TMP_SQL="$(mktemp)"
+chmod 600 "$TMP_SQL"
+cat > "$TMP_SQL" <<SQL
+ALTER ROLE platform_svc PASSWORD '$PW_SVC';
+ALTER ROLE reporting_ro PASSWORD '$PW_RO';
+SQL
+docker run --rm -i --env-file "$OWNER_ENV" "$PGIMG" \
+  sh -c 'psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f -' < "$TMP_SQL"
+rm -f "$TMP_SQL"
+echo "  [ok] ALTER ROLE 密码已对齐 secret 文件（platform_svc / reporting_ro）"
 
 umask 177
 cat > "$APP_ENV" <<EOF
 # Generated by 32-provision-service-db-roles.sh — DO NOT COMMIT.
 # App-runtime DB credentials (TD-018): overrides DATABASE_URL for the 5 platform
-# service containers only; owner connection stays in platform.env for DDL/seed/verify.
-DATABASE_URL=postgresql://platform_svc:$PW_SVC@$PG_CONTAINER:5432/$DB_NAME
-REPORTING_RO_DATABASE_URL=postgresql://reporting_ro:$PW_RO@$PG_CONTAINER:5432/$DB_NAME
+# service containers only; owner connection stays in rds-owner.env for DDL/seed/verify.
+DATABASE_URL=postgresql://platform_svc:$PW_SVC@$DB_HOST:$DB_PORT/$DB_NAME
+REPORTING_RO_DATABASE_URL=postgresql://reporting_ro:$PW_RO@$DB_HOST:$DB_PORT/$DB_NAME
 EOF
 chmod 600 "$APP_ENV"
 echo "  [ok] $APP_ENV 写入（0600）"
 
-# 冒烟：以新凭据各连一次（能连 + 能读）。
-docker exec "$PG_CONTAINER" env PGPASSWORD="$PW_SVC" psql -U platform_svc -d "$DB_NAME" -tAc \
+# 冒烟：以新凭据各连一次（能连 + 能读）。密码经 env 文件传递。
+TMP_ENV="$(mktemp)"
+chmod 600 "$TMP_ENV"
+printf 'PGPASSWORD=%s\n' "$PW_SVC" > "$TMP_ENV"
+docker run --rm --env-file "$TMP_ENV" "$PGIMG" \
+  psql -h "$DB_HOST" -p "$DB_PORT" -U platform_svc -d "$DB_NAME" -tAc \
   "select count(*) from access.roles" >/dev/null && echo "  [ok] platform_svc 连接+读取冒烟通过"
-docker exec "$PG_CONTAINER" env PGPASSWORD="$PW_RO" psql -U reporting_ro -d "$DB_NAME" -tAc \
+printf 'PGPASSWORD=%s\n' "$PW_RO" > "$TMP_ENV"
+docker run --rm --env-file "$TMP_ENV" "$PGIMG" \
+  psql -h "$DB_HOST" -p "$DB_PORT" -U reporting_ro -d "$DB_NAME" -tAc \
   "select count(*) from access.roles" >/dev/null && echo "  [ok] reporting_ro 连接+读取冒烟通过"
+rm -f "$TMP_ENV"
 
 echo "=== done。下一步：recreate 5 个服务容器（compose 已含 platform-app.env 的版本部署时自动生效）==="

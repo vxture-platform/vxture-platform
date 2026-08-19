@@ -40,8 +40,8 @@
   - `JWT_REFRESH_SECRET`（≥32 位，且不同于 `JWT_SECRET`）
   - `AUTH_INTERNAL_TOKEN`
 - [ ] VXTURE_DEPLOY_HOST `secrets/redis-password` 已存在且非空；`.env` 和 `secrets/platform.env` 均不含 `REDIS_PASSWORD`。
-- [ ] `DATABASE_URL` 密码与 `secrets/pg-password` 一致，`REDIS_URL` 密码与 `secrets/redis-password` 一致。
-- [ ] 若 PostgreSQL 数据目录已初始化过，确认数据库内真实密码也与 `DATABASE_URL` / `secrets/pg-password` 一致；新服务器首装失败且数据无需保留时，使用 `maintenance/62-reset-platform-database.sh` 后重新部署。
+- [ ] `DATABASE_URL` 密码与 `secrets/rds-pw-platform_svc` 一致，`REDIS_URL` 密码与 `secrets/redis-password` 一致。
+- [ ] RDS 白名单已放行 VXTURE_DEPLOY_HOST 内网 IP；`secrets/rds-owner.env` 与 `secrets/rds-pw-*` 已置备（0600）。库数据无需保留的重建走 `scripts/26-reset-platform-database.sh`。
 - [ ] VXTURE_DEPLOY_HOST `secrets/platform-mail.env` 中 `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` 均已设置。
 - [ ] VXTURE_DEPLOY_HOST `.env.auth-bff` 含 tenant + operator(admin) 两套 Turnstile secret（IdP 统一校验）。
 - [ ] VXTURE*DEPLOY_HOST `.env.admin-bff` 不含任何 `CF_TURNSTILE*\*`（admin-bff 已 RP-only，不校验 Turnstile）。

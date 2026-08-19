@@ -148,7 +148,6 @@ sync_env_from_example() {
 
 # -- 1. Raw secret placeholders ------------------------------------------------
 # 原始密码文件没有 .example 对应文件，首次只写 CHANGEME，必须手动替换。
-ensure_plain_secret_file "$SECRETS_DIR/pg-password" "Postgres password"
 ensure_plain_secret_file "$SECRETS_DIR/redis-password" "Redis password"
 
 # -- 2. Env files from .example ------------------------------------------------

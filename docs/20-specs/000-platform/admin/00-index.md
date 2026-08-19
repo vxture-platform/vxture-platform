@@ -87,7 +87,7 @@ Varda 智能助手嵌入 Admin（`VardaAdminChat.tsx`），贯穿两个域提供
 
 ## 数据库依赖
 
-Admin 通过 admin-bff 访问平台主库（`vx-platform-pg`），涉及 schema：
+Admin 通过 admin-bff 访问平台主库（阿里云 RDS `vxturestudio_platform_main`），涉及 schema：
 
 | Schema     | 用途                                 |
 | ---------- | ------------------------------------ |

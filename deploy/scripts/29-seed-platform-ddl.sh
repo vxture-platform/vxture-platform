@@ -22,6 +22,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DATABASE_SEED_DIR="$COMPOSE_DIR/database/seed"
 RUNTIME_DIR="${RUNTIME_DIR:-/srv/vxture/runtime}"
+# DDL/运维连接:优先 RDS owner 连接串;无则回退 platform.env(2026-08-19 RDS 切换)。
+DB_ENV="$RUNTIME_DIR/secrets/rds-owner.env"
+[ -f "$DB_ENV" ] || DB_ENV="$RUNTIME_DIR/secrets/platform.env"
 DB_TOOL_CACHE_DIR="${DB_TOOL_CACHE_DIR:-$RUNTIME_DIR/.db-tools/pg-8.20.0}"
 DB_TOOL_INSTALL_TIMEOUT_SECONDS="${DB_TOOL_INSTALL_TIMEOUT_SECONDS:-600}"
 SEED_TIMEOUT_SECONDS="${SEED_TIMEOUT_SECONDS:-900}"
@@ -51,7 +54,7 @@ fi
 
 echo "=== Vxture Platform Database Seed — DDL (scope: $SEED_ENTRY) ==="
 check_file "$DATABASE_SEED_DIR/$SEED_ENTRY"
-check_file "$RUNTIME_DIR/secrets/platform.env"
+check_file "$DB_ENV"
 
 mkdir -p "$DB_TOOL_CACHE_DIR"
 chmod 700 "$DB_TOOL_CACHE_DIR" 2>/dev/null || true
@@ -128,7 +131,7 @@ esac
 echo "==> 执行平台初始 seed（$SEED_ENTRY）"
 docker run --rm \
   --network vxture-prod \
-  --env-file "$RUNTIME_DIR/secrets/platform.env" \
+  --env-file "$DB_ENV" \
   --env DB_TOOL_INSTALL_TIMEOUT_SECONDS="$DB_TOOL_INSTALL_TIMEOUT_SECONDS" \
   --env SEED_TIMEOUT_SECONDS="$SEED_TIMEOUT_SECONDS" \
   --env SEED_ENTRY="$SEED_ENTRY" \

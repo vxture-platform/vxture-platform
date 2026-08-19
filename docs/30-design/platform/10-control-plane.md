@@ -80,11 +80,8 @@ Business Data Plane
 生产环境：
 
 ```txt
-Container:
-  vx-platform-pg
-
 Database:
-  vxturestudio_platform_main
+  阿里云 RDS PG18 · vxturestudio_platform_main（内网 endpoint，2026-08-19 起）
 ```
 
 当前阶段：
@@ -453,7 +450,7 @@ vx-nginx (VXTURE_DEPLOY_HOST)
 ```txt
 vx-nginx, vx-website, vx-admin, vx-console
 vx-auth-bff, vx-website-bff, vx-admin-bff, vx-console-bff, vx-gateway-bff
-vx-model-platform, vx-platform-pg, vx-platform-redis
+vx-platform-redis
 ```
 
 业务容器（vx-worker-02/03/04/05 等，各自独立网络，由外部业务仓库维护）：

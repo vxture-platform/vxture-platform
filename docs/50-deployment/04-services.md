@@ -31,25 +31,6 @@ networks:
 services:
   # ── 数据层 ────────────────────────────────────────────────────────────────
 
-  postgres:
-    image: postgres:18-alpine
-    container_name: vx-platform-pg
-    restart: unless-stopped
-    networks: [vxture-prod]
-    environment:
-      POSTGRES_USER: vxture
-      POSTGRES_DB: platform_main
-      POSTGRES_PASSWORD_FILE: /run/secrets/platform_pg_password
-    secrets: [platform_pg_password]
-    volumes:
-      - /data/platform/db/postgres:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vxture -d platform_main"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    # 不暴露端口到宿主机，仅 vxture-prod 网络内访问
-
   redis:
     image: redis:8-alpine
     container_name: vx-platform-redis
@@ -157,7 +138,6 @@ services:
     env_file:
       [secrets/platform.env, secrets/platform-mail.env, .env.website-bff]
     depends_on:
-      postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
@@ -174,7 +154,6 @@ services:
     env_file:
       [secrets/platform.env, secrets/platform-mail.env, .env.console-bff]
     depends_on:
-      postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
@@ -190,7 +169,6 @@ services:
     networks: [vxture-prod]
     env_file: [secrets/platform.env, secrets/platform-mail.env, .env.admin-bff]
     depends_on:
-      postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
@@ -200,8 +178,6 @@ services:
       retries: 3
 
 secrets:
-  platform_pg_password:
-    file: ./secrets/pg-password
   platform_redis_password:
     file: ./secrets/redis-password
 ```

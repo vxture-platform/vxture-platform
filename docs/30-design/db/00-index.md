@@ -8,17 +8,17 @@
 
 ## 容器分布
 
-| 容器             | 节点               | 数据库名                     | 管理方                                   | 本仓部署 |
-| ---------------- | ------------------ | ---------------------------- | ---------------------------------------- | -------- |
-| `vx-platform-pg` | VXTURE_DEPLOY_HOST | `vxturestudio_platform_main` | `@vxture/core-database` + model-platform | 是       |
+| 容器                                            | 节点              | 数据库名                     | 管理方                  | 本仓部署     |
+| ----------------------------------------------- | ----------------- | ---------------------------- | ----------------------- | ------------ |
+| 阿里云 RDS PG18（内网 endpoint，2026-08-19 起） | aliyun cn-beijing | `vxturestudio_platform_main` | `@vxture/core-database` | 否（云托管） |
 
-`@vxture/service-model-platform` 当前部署在 VXTURE_DEPLOY_HOST，使用平台库中的 `model` / `commerce` 数据完成模型授权、配额校验和用量计量。它不是业务 worker 数据库。
+模型平台（Atlas）已迁出独立仓（2026-08），`model` schema 随之从平台库删除；平台库不再承载模型域数据。
 
 业务数据库（Varda 未来迁移、Ruyin 等外部业务）由外部业务仓库定义和部署，不在本仓容器分布表维护。
 
 ---
 
-## 平台库 Schema 分布（`vx-platform-pg`）
+## 平台库 Schema 分布（阿里云 RDS `vxturestudio_platform_main`）
 
 | Schema     | 表数 | 主要消费方                             |
 | ---------- | ---- | -------------------------------------- |

@@ -27,7 +27,6 @@ BASELINE_PNPM_VERSION="10.30.3"
 BASELINE_DOCKER_VERSION="29.5.0"
 BASELINE_COMPOSE_VERSION="5.1.0"
 BASELINE_NGINX_IMAGE="nginx:1.29-alpine"
-BASELINE_POSTGRES_IMAGE="postgres:18-alpine"
 BASELINE_REDIS_IMAGE="redis:8-alpine"
 
 HIGH_COUNT=0
@@ -182,7 +181,6 @@ check_runtime_files() {
   check_required_file "$RUNTIME_DIR/.env.gateway-bff"
   check_required_file "$RUNTIME_DIR/secrets/platform.env"
   check_required_file "$RUNTIME_DIR/secrets/platform-mail.env"
-  check_required_file "$RUNTIME_DIR/secrets/pg-password"
   check_required_file "$RUNTIME_DIR/secrets/redis-password"
   check_required_file "/srv/vxture/data/nginx/ssl/live/vxture.com/fullchain.pem"
   check_required_file "/srv/vxture/data/nginx/ssl/live/vxture.com/privkey.pem"
@@ -209,12 +207,6 @@ check_compose_images() {
     ok "Nginx 镜像符合基线：$BASELINE_NGINX_IMAGE"
   else
     high "Nginx 镜像不符合基线，要求 $BASELINE_NGINX_IMAGE"
-  fi
-
-  if grep -q "image: ${BASELINE_POSTGRES_IMAGE}" "$COMPOSE_FILE"; then
-    ok "PostgreSQL 镜像符合基线：$BASELINE_POSTGRES_IMAGE"
-  else
-    high "PostgreSQL 镜像不符合基线，要求 $BASELINE_POSTGRES_IMAGE"
   fi
 
   if grep -q "image: ${BASELINE_REDIS_IMAGE}" "$COMPOSE_FILE"; then
@@ -248,7 +240,7 @@ check_docker_runtime() {
 check_container_health() {
   local name
   for name in \
-    vx-platform-pg vx-platform-redis vx-platform-auth-bff vx-platform-website-bff \
+    vx-platform-redis vx-platform-auth-bff vx-platform-website-bff \
     vx-platform-console-bff vx-platform-admin-bff vx-platform-gateway-bff \
     vx-platform-api vx-platform-website vx-platform-console vx-platform-admin \
     vx-platform-accounts; do
@@ -322,7 +314,6 @@ check_deploy_bundle() {
   check_required_file "$COMPOSE_DIR/scripts/30-deploy-platform-stack.sh"
   check_required_file "$COMPOSE_DIR/scripts/31-regular-upgrade-platform.sh"
   check_required_file "$COMPOSE_DIR/scripts/40-verify-platform-runtime.sh"
-  check_required_file "$COMPOSE_DIR/maintenance/62-reset-platform-database.sh"
 }
 
 check_backups() {

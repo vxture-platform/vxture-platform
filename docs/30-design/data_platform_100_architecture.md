@@ -108,7 +108,7 @@ Vxture 数据库体系遵循双平面架构，与代码架构严格对应：控�
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  vx-platform-pg（平台控制面，仅 Prod 实例，强备份）             │
+│  RDS 平台主库（平台控制面，阿里云 RDS PG18，强备份）            │
 │  Database: vxturestudio_platform_main                         │
 │  ├── schema: identity   用户 / 认证 / 组织 / 空间 / 成员（含 tenant 域）│
 │  ├── schema: iam        治理 RBAC / oidc_client / 签名密钥      │

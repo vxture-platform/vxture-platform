@@ -79,19 +79,19 @@ vx-worker-02/03/04/05 等（业务执行面，不由本仓部署）
 
 ### VXTURE_DEPLOY_HOST — 平台控制面（仅 prod，无 beta）
 
-| 服务                  | 容器名              | 说明                                   |
-| --------------------- | ------------------- | -------------------------------------- |
-| Nginx                 | `vx-nginx`          | SSL 终止、所有子域名反向代理           |
-| website               | `vx-website`        | Next.js，vxture.com 官网/注册/登录     |
-| console               | `vx-console`        | Next.js，console.vxture.com 租户工作台 |
-| admin                 | `vx-admin`          | Next.js，y.vxture.com 运营后台         |
-| gateway-bff           | `vx-gateway-bff`    | 唯一公共 API 入口                      |
-| auth-bff              | `vx-auth-bff`       | JWT 唯一签发源，所有 BFF 依赖          |
-| website-bff           | `vx-website-bff`    | 注册/登录/租户初始化                   |
-| console-bff           | `vx-console-bff`    | 租户管理/成员/账单/订阅                |
-| admin-bff             | `vx-admin-bff`      | 平台运营管理                           |
-| **platform-postgres** | `vx-platform-pg`    | 平台数据库（见 Schema 表）             |
-| **platform-redis**    | `vx-platform-redis` | 会话/限流/Token 黑名单                 |
+| 服务                  | 容器名                              | 说明                                   |
+| --------------------- | ----------------------------------- | -------------------------------------- |
+| Nginx                 | `vx-nginx`                          | SSL 终止、所有子域名反向代理           |
+| website               | `vx-website`                        | Next.js，vxture.com 官网/注册/登录     |
+| console               | `vx-console`                        | Next.js，console.vxture.com 租户工作台 |
+| admin                 | `vx-admin`                          | Next.js，y.vxture.com 运营后台         |
+| gateway-bff           | `vx-gateway-bff`                    | 唯一公共 API 入口                      |
+| auth-bff              | `vx-auth-bff`                       | JWT 唯一签发源，所有 BFF 依赖          |
+| website-bff           | `vx-website-bff`                    | 注册/登录/租户初始化                   |
+| console-bff           | `vx-console-bff`                    | 租户管理/成员/账单/订阅                |
+| admin-bff             | `vx-admin-bff`                      | 平台运营管理                           |
+| **platform-postgres** | 阿里云 RDS（云托管，2026-08-19 起） | 平台数据库（见 Schema 表）             |
+| **platform-redis**    | `vx-platform-redis`                 | 会话/限流/Token 黑名单                 |
 
 **平台数据库 Schema 分布（`platform_main`，8 个 schema）：**
 

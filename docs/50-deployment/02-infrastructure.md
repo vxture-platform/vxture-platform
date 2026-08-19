@@ -97,20 +97,11 @@ server {
 
 ### PostgreSQL — platform_main
 
-VXTURE_DEPLOY_HOST 运行**一个** PostgreSQL 实例，包含所有平台 schema，仅 prod，无 beta。
-
-```bash
-docker run -d \
-  --name vx-platform-pg \
-  --restart unless-stopped \
-  --network vxture-prod \
-  -e POSTGRES_USER=vxture \
-  -e POSTGRES_PASSWORD_FILE=/run/secrets/platform_pg_password \
-  -e POSTGRES_DB=platform_main \
-  -v /data/platform/db/postgres:/var/lib/postgresql/data \
-  postgres:18-alpine
-# 不对外暴露端口，仅 vxture-prod Docker network 内访问
-```
+平台库在**阿里云 RDS PostgreSQL 18**（2026-08-19 起，本地 pg 容器退役）：内网 endpoint 仅
+VPC 内可达（白名单放行 worker-01 内网 IP），库 `vxturestudio_platform_main`，账号
+vxture_rds_default（owner，DDL/seed/verify）/ platform_svc（服务运行时）/
+reporting_ro（报表只读）。凭据在 `/srv/vxture/runtime/secrets/rds-owner.env` 与
+`rds-pw-*`（0600）。
 
 **Schema 分布：**
 
@@ -225,9 +216,9 @@ set -euo pipefail
 DATE=$(date +%Y%m%d_%H%M)
 BACKUP_DIR=/data/platform/backups
 
-# PostgreSQL full dump
-docker exec vx-platform-pg pg_dump -U vxture platform_main \
-  | gzip > "${BACKUP_DIR}/pg_${DATE}.sql.gz"
+# PostgreSQL full dump（RDS：经一次性容器直连；RDS 自动备份为主力，此为冗余）
+docker run --rm --env-file /srv/vxture/runtime/secrets/rds-owner.env postgres:18-alpine \
+  sh -c 'pg_dump "$DATABASE_URL"' | gzip > "${BACKUP_DIR}/pg_${DATE}.sql.gz"
 
 # Redis RDB snapshot
 REDIS_PASSWORD="$(cat /srv/vxture/runtime/secrets/redis-password)"

@@ -78,7 +78,7 @@ VXTURE_DEPLOY_HOST     # 服务器 Linux hostname / Tailscale hostname，用于 
 | 13   | `scripts/13-prepare-runtime-env.sh`                           | 公共准备       | 已落地 | 准备 `/srv/vxture/runtime` 目录、owner 和权限，并调用 `12-generate-env-files.sh` 同步运行参数模板；常规升级聚合脚本会调用此脚本                                                                                              | 首次部署 / 每次发布前            | 否或 sudo     |
 | 19   | `deploy-manual-init/bootstrap/19-check-bootstrap-status.sh`   | 手动初始化检查 | 已落地 | 只读检查 10 / 11 / 15 / 90 的手动配置结果：系统、用户、权限、DNS、apt、磁盘、Docker、Node、pnpm、UFW、Tailscale、目录文件                                                                                                    | 手动初始化后                     | 否或 sudo     |
 | 20   | `scripts/20-sync-nginx-config.sh`                             | 部署主链路     | 已落地 | 同步部署包 `nginx/` 配置和 `compose.nginx.yml` 到 `/srv/vxture/data/nginx/`，必要时 reload                                                                                                                                   | Nginx 配置变更                   | docker 权限   |
-| 21   | `scripts/21-prepare-platform-database.sh`                     | 部署主链路     | 已落地 | 启动 PostgreSQL、等待健康、执行 strict env audit，并验证 `DATABASE_URL` 可登录；不执行 migration / seed                                                                                                                      | 首次部署 / 每次发布前            | docker 权限   |
+| 21   | `scripts/21-prepare-platform-database.sh`                     | 部署主链路     | 已落地 | 执行 strict env audit，并验证 `DATABASE_URL` 可登录阿里云 RDS（2026-08-19 起库在 RDS，本地 pg 容器退役）；不执行 migration / seed                                                                                            | 首次部署 / 每次发布前            | docker 权限   |
 | 22   | `scripts/22-run-platform-migrations.sh`                       | 部署主链路     | 已落地 | 使用部署包 `database/prisma` 手动执行 PostgreSQL `prisma migrate deploy`，要求 `CONFIRM_MIGRATE=yes`                                                                                                                         | 首次部署 / 手动迁移              | docker 权限   |
 | 23   | `scripts/23-seed-platform-database.sh`                        | 部署主链路     | 已落地 | 手动执行平台初始 seed，要求 `CONFIRM_SEED=yes`                                                                                                                                                                               | 首次部署 / 明确补种              | docker 权限   |
 | 24   | `scripts/24-first-deploy-platform.sh`                         | 部署主链路     | 已落地 | 聚合首次部署链路：`21 -> 22 -> 23 -> 25 -> 30 -> 40`，要求 `CONFIRM_FIRST_DEPLOY=yes`                                                                                                                                        | 首次部署 / 应用层 reset 后       | docker 权限   |
@@ -93,7 +93,6 @@ VXTURE_DEPLOY_HOST     # 服务器 Linux hostname / Tailscale hostname，用于 
 | 53   | `maintenance/53-backup-deploy-params.sh`                      | 手动维护       | 已落地 | 备份 `.env*`、`secrets`、Nginx 配置、TLS 证书                                                                                                                                                                                | 重装 / 迁移前                    | 手动          |
 | 60   | `maintenance/60-restore-connection-env.sh`                    | 手动恢复       | 已落地 | 恢复连接类配置中非 Tailscale 的维护项                                                                                                                                                                                        | 迁移 / 灾备恢复                  | 手动          |
 | 61   | `maintenance/61-restore-deploy-params.sh`                     | 手动恢复       | 已落地 | 恢复 `.env*`、`secrets`、Nginx 配置、TLS 证书，要求 `CONFIRM_RESTORE=yes`                                                                                                                                                    | 新服务器恢复 / 灾备              | 手动          |
-| 62   | `maintenance/62-reset-platform-database.sh`                   | 故障恢复       | 已落地 | 受保护重置 PostgreSQL 数据目录；仅在新服务器首装失败且当前数据库数据无需保留时使用                                                                                                                                           | 新服务器首装排障                 | sudo          |
 | 90   | `deploy-manual-init/bootstrap/90-disable-windterm-osc3008.sh` | 临时工具       | 已落地 | 可选禁用 WindTerm OSC 3008 输出，便于新服务器交互排障                                                                                                                                                                        | 新服务器一次性 / 可选            | 是            |
 
 当前 部署脚本以 `scripts/` 中的正式部署链路为基线；`maintenance/` 只随部署包传送，不由 CI/CD 自动执行；`deploy-manual-init/` 只用于服务器初始化或应用层 reset 手动执行。暂不新增 `rollback` 脚本，原因是当前回滚主要依赖镜像 tag 与 GitHub Actions 产物；在镜像 tag 策略未完全固定前，写自动 rollback 容易制造误操作风险。
@@ -158,7 +157,7 @@ VXTURE_DEPLOY_HOST     # 服务器 Linux hostname / Tailscale hostname，用于 
 - 已存在的 runtime env 文件：只追加 `.example` 中新增但 runtime 缺失的 key
 - 已存在的真实值：保留，不覆盖、不清空
 - 已从 `.example` 删除但 runtime 仍存在的 key：追加明显 WARN 注释，标记“可以删除 / 已废弃待删除”
-- `secrets/pg-password` 和 `secrets/redis-password` 不生成随机值，首次只写入 `CHANGEME`，必须手动替换
+- `secrets/redis-password` 不生成随机值，首次只写入 `CHANGEME`，必须手动替换（RDS 凭据 `rds-owner.env` / `rds-pw-*` 由 owner 在 RDS 开通时置备，不由本脚本生成）
 
 禁止：
 
@@ -202,7 +201,7 @@ VXTURE_DEPLOY_HOST     # 服务器 Linux hostname / Tailscale hostname，用于 
 负责平台数据库准备：
 
 - 启动 PostgreSQL 容器并等待健康
-- 调用 `VX_ENV_AUDIT_STRICT_RUNTIME=1 node guardrails/39-audit-env.mjs`，检查 `DATABASE_URL` 与 `secrets/pg-password` 等 runtime 参数一致性
+- 调用 `VX_ENV_AUDIT_STRICT_RUNTIME=1 node guardrails/39-audit-env.mjs`，检查 `DATABASE_URL` 与 `secrets/rds-pw-platform_svc` 等 runtime 参数一致性
 - 使用 `DATABASE_URL` 验证能登录 `vx-platform-pg`
 - 作为首次部署、常规升级和手动迁移的共同数据库前置检查
 
@@ -351,28 +350,6 @@ CONFIRM_PROVISION_KEY=yes bash scripts/25-provision-signing-key.sh
 - 执行 seed
 - 修改真实 env 值
 - 重置或删除 PostgreSQL 数据目录
-
-### 62-reset-platform-database.sh
-
-负责新服务器首装失败时的 PostgreSQL 数据目录重置：
-
-- 要求 `sudo` 执行
-- 要求显式设置 `CONFIRM_RESET=yes`
-- 停止平台 compose 容器并移除 postgres 容器
-- 将旧 `/srv/vxture/data/platform-pg` 移动归档到 `/srv/vxture/backups/VXTURE_DEPLOY_HOST/platform-pg-reset/<timestamp>/`
-- 重建空的 `/srv/vxture/data/platform-pg`
-- 将新目录 owner 设置为 PostgreSQL Alpine 容器用户 `70:70`，避免 `postgres:18-alpine` 初始化 `/var/lib/postgresql/18/` 时权限失败
-
-适用条件：
-
-- 仅限新服务器首装或明确不需要保留当前 PostgreSQL 数据
-- 典型场景是 PostgreSQL 数据目录已用旧密码初始化，导致 `DATABASE_URL` / `secrets/pg-password` 与数据库真实密码不一致
-
-禁止：
-
-- 在未确认数据可丢弃时执行
-- 由 CI/CD 自动执行
-- 删除归档目录
 
 ### 39-audit-env.mjs
 
@@ -590,17 +567,9 @@ bash scripts/13-prepare-runtime-env.sh
 VX_ENV_AUDIT_STRICT_RUNTIME=1 VX_WORKER_DIR=/srv/vxture/deploy VX_RUNTIME_DIR=/srv/vxture/runtime node guardrails/39-audit-env.mjs
 ```
 
-### 新服务器数据库密码不一致时
+### 数据库无法登录时（RDS）
 
-如果 `scripts/21-prepare-platform-database.sh` 提示 `DATABASE_URL` 无法登录 `vx-platform-pg`，且确认当前 PostgreSQL 数据不需要保留：
-
-```bash
-cd /srv/vxture/deploy
-sudo CONFIRM_RESET=yes bash maintenance/62-reset-platform-database.sh
-CONFIRM_FIRST_DEPLOY=yes bash scripts/24-first-deploy-platform.sh
-```
-
-该脚本只移动归档旧数据目录并重建空目录，不自动填写 env，也不自动修改密码。
+如果 `scripts/21-prepare-platform-database.sh` 提示 `DATABASE_URL` 无法登录 RDS：先查 RDS 白名单是否放行本机内网 IP，再核对 `secrets/platform.env` 密码与 `secrets/rds-pw-platform_svc` 及 RDS 侧是否一致（密码对齐用 `CONFIRM_PROVISION_SVC_ROLES=yes bash scripts/32-provision-service-db-roles.sh`，FORCE_ROTATE=yes 强制）。确认库数据无需保留时，用 `CONFIRM_RESET_DB=yes bash scripts/26-reset-platform-database.sh` 清空重建（28 --reset + 29 seed）。
 
 ---
 

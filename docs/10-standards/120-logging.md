@@ -126,7 +126,7 @@ function maskEmail(email: string) {
 ✅ log.debug('JWT 已签发', { userId, expiresIn: '15m' })
 
 ❌ log.error('DB error', { connectionString: DATABASE_URL })
-✅ log.error('DB 连接失败', { host: 'vx-platform-pg', database: 'platform_main' })
+✅ log.error('DB 连接失败', { host: 'pgm-example.pg.rds.aliyuncs.com', database: 'vxturestudio_platform_main' })
 ```
 
 ---

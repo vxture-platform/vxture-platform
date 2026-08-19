@@ -63,7 +63,7 @@ Commerce 域**不**负责：
 
 ## 3. 数据库表概览
 
-所有 Commerce 数据存储于 `vx-platform-pg` 的 `product`（产品目录）与 `commerce`（租户交易状态）两个 Schema。表清单、列、索引、触发器与 Prisma 映射为字段级权威，见 **b（data_platform_200_schema.md）§commerce / §product**；域概览见 **a（data_platform_100_architecture.md）§3.4**。
+所有 Commerce 数据存储于平台主库（阿里云 RDS `vxturestudio_platform_main`）的 `product`（产品目录）与 `commerce`（租户交易状态）两个 Schema。表清单、列、索引、触发器与 Prisma 映射为字段级权威，见 **b（data_platform_200_schema.md）§commerce / §product**；域概览见 **a（data_platform_100_architecture.md）§3.4**。
 
 - `product.*`（产品目录）：静态配置，由运营后台（`@vxture/bff-admin`）维护，变更极少。
 - `commerce.*`（租户交易状态）：订阅/配额/用量/账单/付款/退款/账本等，多数随状态流转可更新；`tenant_usage_event` 仅追加、`tenant_transaction` 不可变（见 §9 不变量）。

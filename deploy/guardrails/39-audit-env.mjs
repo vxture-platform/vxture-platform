@@ -522,9 +522,18 @@ const ENV_FILE_RULES = [
 ];
 
 const RUNTIME_SECRET_FILE_RULES = [
+  // 2026-08-19 RDS 切换:pg-password(本地容器超户)退役,RDS 侧三件套接管。
   {
-    label: "Postgres raw password",
-    path: `${RUNTIME_DIR}/secrets/pg-password`,
+    label: "RDS owner connection env",
+    path: `${RUNTIME_DIR}/secrets/rds-owner.env`,
+  },
+  {
+    label: "RDS platform_svc raw password",
+    path: `${RUNTIME_DIR}/secrets/rds-pw-platform_svc`,
+  },
+  {
+    label: "RDS reporting_ro raw password",
+    path: `${RUNTIME_DIR}/secrets/rds-pw-reporting_ro`,
   },
   {
     label: "Redis raw password",
@@ -544,7 +553,9 @@ const DEPLOY_BUNDLE_REAL_RUNTIME_FILES = [
   "secrets/platform-mail.env",
   "secrets/platform-sms.env",
   "secrets/platform-identity.env",
-  "secrets/pg-password",
+  "secrets/rds-owner.env",
+  "secrets/rds-pw-platform_svc",
+  "secrets/rds-pw-reporting_ro",
   "secrets/redis-password",
 ];
 
@@ -1056,7 +1067,9 @@ function auditRuntimeSecretFiles() {
 
   const platformEnv = parseEnvFile(`${RUNTIME_DIR}/secrets/platform.env`);
   if (platformEnv.exists) {
-    const pgPassword = readText(`${RUNTIME_DIR}/secrets/pg-password`).trim();
+    const pgPassword = readText(
+      `${RUNTIME_DIR}/secrets/rds-pw-platform_svc`,
+    ).trim();
     const redisPassword = readText(
       `${RUNTIME_DIR}/secrets/redis-password`,
     ).trim();
@@ -1072,7 +1085,7 @@ function auditRuntimeSecretFiles() {
         diagnostic(
           "error",
           "env/derived-database-url-mismatch",
-          "DATABASE_URL password must match secrets/pg-password.",
+          "DATABASE_URL password must match secrets/rds-pw-platform_svc.",
           `${RUNTIME_DIR}/secrets/platform.env`,
         ),
       );

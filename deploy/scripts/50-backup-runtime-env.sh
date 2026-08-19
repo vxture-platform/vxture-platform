@@ -55,7 +55,10 @@ copy_if_exists "$RUNTIME_DIR/secrets/platform.env" "$BACKUP_DIR/runtime/secrets/
 copy_if_exists "$RUNTIME_DIR/secrets/platform-mail.env" "$BACKUP_DIR/runtime/secrets/platform-mail.env"
 copy_if_exists "$RUNTIME_DIR/secrets/platform-sms.env" "$BACKUP_DIR/runtime/secrets/platform-sms.env"
 copy_if_exists "$RUNTIME_DIR/secrets/platform-identity.env" "$BACKUP_DIR/runtime/secrets/platform-identity.env"
-copy_if_exists "$RUNTIME_DIR/secrets/pg-password" "$BACKUP_DIR/runtime/secrets/pg-password"
+copy_if_exists "$RUNTIME_DIR/secrets/rds-owner.env" "$BACKUP_DIR/runtime/secrets/rds-owner.env"
+copy_if_exists "$RUNTIME_DIR/secrets/rds-pw-platform_svc" "$BACKUP_DIR/runtime/secrets/rds-pw-platform_svc"
+copy_if_exists "$RUNTIME_DIR/secrets/rds-pw-reporting_ro" "$BACKUP_DIR/runtime/secrets/rds-pw-reporting_ro"
+copy_if_exists "$RUNTIME_DIR/secrets/tair-pw-default" "$BACKUP_DIR/runtime/secrets/tair-pw-default"
 copy_if_exists "$RUNTIME_DIR/secrets/redis-password" "$BACKUP_DIR/runtime/secrets/redis-password"
 echo ""
 

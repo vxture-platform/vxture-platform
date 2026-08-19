@@ -24,7 +24,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 RUNTIME_DIR="${RUNTIME_DIR:-/srv/vxture/runtime}"
-PLATFORM_ENV="$RUNTIME_DIR/secrets/platform.env"
+# DDL/运维连接:优先 RDS owner 连接串;无则回退 platform.env(2026-08-19 RDS 切换)。
+PLATFORM_ENV="$RUNTIME_DIR/secrets/rds-owner.env"
+[ -f "$PLATFORM_ENV" ] || PLATFORM_ENV="$RUNTIME_DIR/secrets/platform.env"
 PG_IMAGE="${PG_IMAGE:-postgres:18-alpine}"
 # 备份落 host（reset/apply/seed 皆不触碰此目录）；restore 读固定名 appoidc_seed.sql。
 DUMP_DIR="${APPOIDC_DUMP_DIR:-$RUNTIME_DIR/.db-tools/appoidc-restore}"

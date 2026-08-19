@@ -34,7 +34,7 @@
 ──── VXTURE_DEPLOY_HOST 内部（vxture-prod 网络）──────────────────────────
 
 [vx-website-bff / vx-console-bff / vx-admin-bff / vx-auth-bff]
-    ├──▶ vx-platform-pg    :5432  (identity/iam/tenant/commerce/product/model/ops/support schema)
+    ├──▶ 阿里云 RDS PG18（VPC 内网）:5432  (18 平台 schema，vxturestudio_platform_main)
     ├──▶ vx-platform-redis :6379  (会话/限流/Token)
     ├──▶ Atlas（外部，`vxture-atlas`，模型注册/授权/配额/计量）
     └──▶ 外部服务（SMTP / OAuth provider / 业务 SSO 调用方）

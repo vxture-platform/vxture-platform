@@ -11,17 +11,17 @@
 
 平台 env 文件按作用域分层管理：
 
-| 类别             | 文件                                                                 | 作用                                                              | 是否可重复             |
-| ---------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------- |
-| 本地运行参数     | `runtime/`                                                           | 本机开发真实 env / secrets，结构对应服务器 `/srv/vxture/runtime`  | 可以重复               |
-| 前端构建变量     | GitHub Actions Secrets / Docker build args                           | 构建 Next.js 门户镜像时注入 `NEXT_PUBLIC_*`                       | 不进入 worker `.env.*` |
-| 部署工具配置     | `/srv/vxture/runtime/.env`                                           | Docker Compose CLI 读取，用于镜像 registry / namespace / tag 插值 | 不进入容器             |
-| 基础设施原始密码 | `/srv/vxture/runtime/secrets/pg-password` / `secrets/redis-password` | 数据库和 Redis 容器启动密码                                       | 不进入 env 文件        |
-| 平台共享运行配置 | `/srv/vxture/runtime/secrets/platform.env`                           | 注入需要数据库、Redis URL、JWT、内部鉴权的服务                    | 不能复制到服务 env     |
-| 平台共享邮件配置 | `/srv/vxture/runtime/secrets/platform-mail.env`                      | 只注入实际发送邮件的 BFF                                          | 不能复制到服务 env     |
-| 平台共享短信配置 | `/srv/vxture/runtime/secrets/platform-sms.env`                       | 只注入实际发送短信验证码的 BFF（当前 `auth-bff`）                 | 不能复制到服务 env     |
-| 平台签名密钥配置 | `/srv/vxture/runtime/secrets/platform-identity.env`                  | IdP RS256 私钥 + KID，只注入 `auth-bff`                           | 不能复制到服务 env     |
-| 服务专属配置     | `/srv/vxture/runtime/.env.<service>`                                 | 只放该服务自己读取或实际需要的配置                                | 不跨服务复制           |
+| 类别             | 文件                                                                    | 作用                                                              | 是否可重复             |
+| ---------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------- |
+| 本地运行参数     | `runtime/`                                                              | 本机开发真实 env / secrets，结构对应服务器 `/srv/vxture/runtime`  | 可以重复               |
+| 前端构建变量     | GitHub Actions Secrets / Docker build args                              | 构建 Next.js 门户镜像时注入 `NEXT_PUBLIC_*`                       | 不进入 worker `.env.*` |
+| 部署工具配置     | `/srv/vxture/runtime/.env`                                              | Docker Compose CLI 读取，用于镜像 registry / namespace / tag 插值 | 不进入容器             |
+| 基础设施原始密码 | `secrets/rds-owner.env` / `secrets/rds-pw-*` / `secrets/redis-password` | RDS 连接凭据与 Redis 容器启动密码                                 | 不进入 env 文件        |
+| 平台共享运行配置 | `/srv/vxture/runtime/secrets/platform.env`                              | 注入需要数据库、Redis URL、JWT、内部鉴权的服务                    | 不能复制到服务 env     |
+| 平台共享邮件配置 | `/srv/vxture/runtime/secrets/platform-mail.env`                         | 只注入实际发送邮件的 BFF                                          | 不能复制到服务 env     |
+| 平台共享短信配置 | `/srv/vxture/runtime/secrets/platform-sms.env`                          | 只注入实际发送短信验证码的 BFF（当前 `auth-bff`）                 | 不能复制到服务 env     |
+| 平台签名密钥配置 | `/srv/vxture/runtime/secrets/platform-identity.env`                     | IdP RS256 私钥 + KID，只注入 `auth-bff`                           | 不能复制到服务 env     |
+| 服务专属配置     | `/srv/vxture/runtime/.env.<service>`                                    | 只放该服务自己读取或实际需要的配置                                | 不跨服务复制           |
 
 去重规则：
 
@@ -65,7 +65,9 @@ runtime/.env
 runtime/.env.<service>
 runtime/secrets/platform.env
 runtime/secrets/platform-mail.env
-runtime/secrets/pg-password
+runtime/secrets/rds-owner.env
+runtime/secrets/rds-pw-platform_svc
+runtime/secrets/rds-pw-reporting_ro
 runtime/secrets/redis-password
 ```
 
@@ -74,8 +76,10 @@ runtime/secrets/redis-password
 基础设施原始密码不属于上述 env 文件，统一放在 `secrets/`：
 
 ```text
-secrets/pg-password
-  -> Postgres 容器启动密码
+secrets/rds-owner.env
+  -> RDS owner 连接串（DDL/seed/verify 专用）
+secrets/rds-pw-platform_svc
+  -> RDS platform_svc 角色密码
   -> 派生 platform.env:DATABASE_URL
 
 secrets/redis-password
@@ -95,7 +99,8 @@ secrets/redis-password
 | `.env.local`                                        | 否       | 本地 dev-panel / 本地服务                  | 本地真实 all-in-one 配置                        |
 | `deploy/.env.example`                               | 是       | 人工参考 / `12-generate-env-files.sh` 对齐 | Docker Compose 插值模板                         |
 | `/srv/vxture/runtime/.env`                          | 否       | Docker Compose                             | 可选镜像源变量                                  |
-| `/srv/vxture/runtime/secrets/pg-password`           | 否       | `vx-platform-pg`                           | PostgreSQL 原始密码文件                         |
+| `/srv/vxture/runtime/secrets/rds-owner.env`         | 否       | DDL/seed/verify 脚本                       | RDS owner 连接串                                |
+| `/srv/vxture/runtime/secrets/rds-pw-platform_svc`   | 否       | 32-provision-service-db-roles              | RDS 服务角色密码                                |
 | `/srv/vxture/runtime/secrets/redis-password`        | 否       | `vx-platform-redis`                        | Redis 原始密码文件                              |
 | `deploy/secrets/platform.env.example`               | 是       | 人工参考 / `12-generate-env-files.sh` 对齐 | 平台共享密钥模板                                |
 | `/srv/vxture/runtime/secrets/platform.env`          | 否       | 多个平台容器                               | 数据库、Redis URL、JWT、内部鉴权真实密钥        |
@@ -124,7 +129,6 @@ secrets/redis-password
 
 | 服务                            | env 注入                                                                                                                              | 说明                                              |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `postgres`                      | Docker secret `platform_pg_password`                                                                                                  | PostgreSQL 密码文件 `secrets/pg-password`         |
 | `redis`                         | Docker secret `platform_redis_password`                                                                                               | Redis 密码文件 `secrets/redis-password`           |
 | `auth-bff`                      | `secrets/platform.env` + `secrets/platform-mail.env` + `secrets/platform-sms.env` + `secrets/platform-identity.env` + `.env.auth-bff` | 共享密钥 + 邮件 + 短信 + 签名密钥 + auth 专属配置 |
 | `website-bff`                   | `secrets/platform.env` + `secrets/platform-mail.env` + `.env.website-bff`                                                             | 共享密钥 + 邮件配置 + website 专属配置            |
