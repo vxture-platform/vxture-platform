@@ -10,7 +10,7 @@
 # 运行：CONFIRM_SEED=yes bash scripts/23-seed-platform-database.sh
 # 幂等：seed 使用 ON CONFLICT 保护；常规发布不自动调用。
 #
-# Seed 范围（D-AF，2026-06-22 修订）：默认 catalog + 样例用户（zhangsan）。
+# Seed 范围（D-AF，2026-06-22 修订）：默认 catalog + 样例用户（stonesmoker）。
 # 现已生产安全——样例用户密码不在仓库，经 SAMPLE_USER_PASSWORD_HASH（运行时 secret）
 # 注入；未设该 secret 时 seed-sample 自动跳过样例用户。设 SEED_SAMPLE=false 可只种 catalog。
 set -euo pipefail

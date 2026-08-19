@@ -10,7 +10,7 @@
  *   ① seed-catalog.mjs — 系统目录（RBAC、运营账号、oidc_clients、产品/套餐/模型
  *      目录）。可用于生产。**本文件不重复造产品与套餐**，只按 plan_code 引用它
  *      已经建好的已发布版本；缺哪个套餐就跳过对应租户并告警。
- *   ② seed-sample.mjs  — 单个样例身份（zhangsan + 个人租户 + 默认工作空间）。
+ *   ② seed-sample.mjs  — 单个样例身份（stonesmoker + 个人租户 + 默认工作空间）。
  *   ③ 本文件          — 多租户业务数据矩阵。
  *
  * **仅测试数据，默认拒绝在生产跑**（见 assertNotProduction）。
@@ -238,7 +238,7 @@ export async function seedDemo(client) {
 
   // ── 1. 用户 + 资料 + 积分 ──────────────────────────────────────────────────
   /* 刻意**不写 credential.user_credentials**：这些是演示账号，仓库里不该带任何
-     可登录的口令。需要真人登录时用 seed-sample 的 zhangsan（口令走运行时密钥）。 */
+     可登录的口令。需要真人登录时用 seed-sample 的 stonesmoker（口令走运行时密钥）。 */
   for (const t of TENANTS) {
     await client.query(
       `insert into account.users

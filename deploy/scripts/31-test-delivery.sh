@@ -16,14 +16,14 @@
 # 路径，不是伪造响应。
 #
 # 主体（workspace/tenant）取自 TEST_DELIVERY_ACCOUNT 的默认 workspace，默认为种子
-# 测试用户 zhangsan，不凭空造租户。
+# 测试用户 stonesmoker（seed 样例），不凭空造租户。
 #
 # DATABASE_URL 只存在于容器内（--env-file 注入），本脚本用 `sh -lc` 把 psql 调用留给
 # 容器自己的 shell 解析，宿主 bash 不直接引用 $DATABASE_URL（同 30-verify 的做法）。
 #
 # 运行：
 #   CONFIRM_TEST_DELIVERY=yes TEST_DELIVERY_PRODUCT=karda bash scripts/31-test-delivery.sh
-# 可选：TEST_DELIVERY_ACCOUNT（默认 zhangsan）、TEST_DELIVERY_EVENT
+# 可选：TEST_DELIVERY_ACCOUNT（默认 stonesmoker）、TEST_DELIVERY_EVENT
 #   （subscription_changed|grant.invalidated，默认 subscription_changed）、
 #   TEST_DELIVERY_POLL_SECONDS（轮询等待投递结果的总秒数，默认 30）。
 set -euo pipefail
@@ -37,7 +37,7 @@ PLATFORM_ENV="$RUNTIME_DIR/secrets/rds-owner.env"
 [ -f "$PLATFORM_ENV" ] || PLATFORM_ENV="$RUNTIME_DIR/secrets/platform.env"
 
 PRODUCT_CODE="${TEST_DELIVERY_PRODUCT:-}"
-ACCOUNT="${TEST_DELIVERY_ACCOUNT:-zhangsan}"
+ACCOUNT="${TEST_DELIVERY_ACCOUNT:-stonesmoker}"
 EVENT="${TEST_DELIVERY_EVENT:-subscription_changed}"
 POLL_SECONDS="${TEST_DELIVERY_POLL_SECONDS:-30}"
 

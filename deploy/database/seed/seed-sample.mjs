@@ -21,10 +21,10 @@ import { runSeed, isMain, ID } from './seed-lib.mjs';
 // its Argon2id PHC hash must be supplied via SAMPLE_USER_PASSWORD_HASH (a runtime secret)
 // so no public credential ships in the repo.
 const SAMPLE = {
-  account: 'zhangsan',
-  email: 'zhangsan@vxture.dev',
-  phone: '+8613800000000',
-  name: 'Zhang San',
+  account: 'stonesmoker',
+  email: 'yanhaoguo@gmail.com',
+  phone: '+8618092907523',
+  name: 'Stone Smoker',
   passwordHash: (process.env.SAMPLE_USER_PASSWORD_HASH || '').startsWith('$argon2')
     ? process.env.SAMPLE_USER_PASSWORD_HASH
     : null,
@@ -35,7 +35,7 @@ export async function seedSample(client) {
   // public-default account. Loud warning so misconfig is visible.
   if (!SAMPLE.passwordHash) {
     console.warn(
-      '⚠  SAMPLE_USER_PASSWORD_HASH not set — skipping sample user (zhangsan). ' +
+      '⚠  SAMPLE_USER_PASSWORD_HASH not set — skipping sample user (stonesmoker). ' +
         'Set it (Argon2id PHC hash) in the runtime secret to seed it.',
     );
     return;
@@ -47,11 +47,11 @@ export async function seedSample(client) {
       (id, account, email, email_verified_at, phone, phone_verified_at, status, created_at, updated_at)
     values ($1, $2, $3, now(), $4, now(), 'active', now(), now())
     on conflict (account) do nothing
-  `, [ID.userZhangsan, SAMPLE.account, SAMPLE.email, SAMPLE.phone]);
+  `, [ID.sampleUser, SAMPLE.account, SAMPLE.email, SAMPLE.phone]);
 
   const userRes = await client.query(
     `select id from account.users where account = $1 limit 1`, [SAMPLE.account]);
-  const userId = userRes.rows[0]?.id ?? ID.userZhangsan;
+  const userId = userRes.rows[0]?.id ?? ID.sampleUser;
 
   await client.query(`
     insert into credential.user_credentials (user_id, password_hash, created_at, updated_at)
@@ -69,7 +69,7 @@ export async function seedSample(client) {
     insert into loyalty.user_points (user_id, total_points, updated_at)
     values ($1, 0, now()) on conflict (user_id) do nothing
   `, [userId]);
-  console.log('✓  account.users + user_credentials + user_profiles + loyalty.user_points — zhangsan');
+  console.log('✓  account.users + user_credentials + user_profiles + loyalty.user_points — stonesmoker');
 
   // ── 2. governance owner roles (composite FK targets for memberships) ────────
   const tOwnerRes = await client.query(
@@ -90,14 +90,14 @@ export async function seedSample(client) {
     insert into tenancy.tenants (id, name, type, owner_user_id, status, created_at, updated_at)
     values ($1, $2, 'personal', $3, 'active', now(), now())
     on conflict (id) do nothing
-  `, [ID.tenantZhangsan, SAMPLE.name, userId]);
+  `, [ID.sampleTenant, SAMPLE.name, userId]);
 
   // ── 4. tenancy.workspaces (default) ─────────────────────────────────────────
   await client.query(`
     insert into tenancy.workspaces (id, tenant_id, name, is_default, status, created_at, updated_at)
     values ($1, $2, 'Default', true, 'active', now(), now())
     on conflict (id) do nothing
-  `, [ID.workspaceZhangsan, ID.tenantZhangsan]);
+  `, [ID.sampleWorkspace, ID.sampleTenant]);
 
   // ── 5. memberships (owner at both levels; role via composite FK) ────────────
   // tenant_membership must exist before workspace_membership (composite FK
@@ -106,12 +106,12 @@ export async function seedSample(client) {
     insert into tenancy.tenant_memberships (id, tenant_id, user_id, role_id, role_scope, status, created_at, updated_at)
     values ($1, $2, $3, $4, 'tenant', 'active', now(), now())
     on conflict (tenant_id, user_id) do nothing
-  `, [ID.tenantMemZhangsan, ID.tenantZhangsan, userId, tenantOwnerRoleId]);
+  `, [ID.sampleTenantMem, ID.sampleTenant, userId, tenantOwnerRoleId]);
   await client.query(`
     insert into tenancy.workspace_memberships (id, workspace_id, tenant_id, user_id, role_id, role_scope, status, created_at, updated_at)
     values ($1, $2, $3, $4, $5, 'workspace', 'active', now(), now())
     on conflict (workspace_id, user_id) do nothing
-  `, [ID.wsMemZhangsan, ID.workspaceZhangsan, ID.tenantZhangsan, userId, wsOwnerRoleId]);
+  `, [ID.sampleWsMem, ID.sampleWorkspace, ID.sampleTenant, userId, wsOwnerRoleId]);
   console.log('✓  tenancy.tenants(personal) + default workspace + owner memberships');
 }
 

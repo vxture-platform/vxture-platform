@@ -257,7 +257,7 @@ function sampleUser() {
     ? content.replace(re, line)
     : `${content.trimEnd()}\n${line}\n`;
   writeFileSync(file, content, "utf8");
-  console.log(`✓ sample user hash written to .env.local (login: zhangsan / ${password})`);
+  console.log(`✓ sample user hash written to .env.local (login: stonesmoker / ${password})`);
 }
 
 /**

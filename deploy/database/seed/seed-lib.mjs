@@ -100,11 +100,11 @@ export const ID = {
   oauthDingtalk:     '00000000-0000-4000-a000-000000000901',
   oauthGoogle:       '00000000-0000-4000-a000-000000000902',
   // sample: user / tenant / workspace / memberships (②)
-  userZhangsan:      '00000000-0000-4000-a000-000000000100',
-  tenantZhangsan:    '00000000-0000-4000-a000-000000000200',
-  workspaceZhangsan: '00000000-0000-4000-a000-000000000210',
-  tenantMemZhangsan: '00000000-0000-4000-a000-000000000300',
-  wsMemZhangsan:     '00000000-0000-4000-a000-000000000310',
+  sampleUser:        '00000000-0000-4000-a000-000000000100',
+  sampleTenant:      '00000000-0000-4000-a000-000000000200',
+  sampleWorkspace:   '00000000-0000-4000-a000-000000000210',
+  sampleTenantMem:   '00000000-0000-4000-a000-000000000300',
+  sampleWsMem:       '00000000-0000-4000-a000-000000000310',
 };
 
 // SYS = created_by for system-init data (the admin "systemadmin" meta account).

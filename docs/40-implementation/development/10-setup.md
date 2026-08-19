@@ -38,7 +38,7 @@ pnpm db:local:all                 # 3. 起库 + 建表 + seed + 校验（见下�
 | `pnpm db:local:status`  | 容器状态 + schema 计数                                                             |
 | `pnpm db:local:down`    | 停容器（数据留在 `deploy/dev/data/`，已 gitignore）                                |
 
-**`sample-user` 这步不能跳**：没有 `SAMPLE_USER_PASSWORD_HASH`，seed 会**整段跳过样例用户**——生产如此是对的，本地如此等于库里 0 租户 / 0 workspace / 0 用户，凡是要 workspace 的东西全都测不了：console、权益、`/usage/consume`、service-mode 换票，而且各自以各自的方式失败，没有一个会说"这里没有租户"。本地账号 = `zhangsan` / `Dev@2026`（口令是公开的、只在本地；生产那道 `NODE_ENV=production` 拒绝默认口令的门没有动）。
+**`sample-user` 这步不能跳**：没有 `SAMPLE_USER_PASSWORD_HASH`，seed 会**整段跳过样例用户**——生产如此是对的，本地如此等于库里 0 租户 / 0 workspace / 0 用户，凡是要 workspace 的东西全都测不了：console、权益、`/usage/consume`、service-mode 换票，而且各自以各自的方式失败，没有一个会说"这里没有租户"。本地账号 = `stonesmoker` / `Dev@2026`（口令是公开的、只在本地；生产那道 `NODE_ENV=production` 拒绝默认口令的门没有动）。
 
 **`signing-key` 这步也不能跳**：公钥进 `appoidc.signing_keys`（`/oidc/jwks` 就是读它），私钥只在 env。库里没有 → `/oidc/jwks` 直接 500，登录无从谈起；库里有而 env 对不上 → auth-bff 用一个 kid 签、JWKS 公布另一个 kid，RP 一律 `kid not found`，看起来像 RP 坏了。
 

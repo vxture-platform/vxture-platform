@@ -71,7 +71,7 @@ on:
       test_delivery_account:
         description: "test-delivery only: seeded account whose default workspace is the test subject"
         required: false
-        default: "zhangsan"
+        default: "stonesmoker"
       test_delivery_event:
         description: "test-delivery only: version-less event type"
         required: false
