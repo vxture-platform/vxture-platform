@@ -373,3 +373,47 @@ DROP TRIGGER IF EXISTS trg_workspaces_assign_no ON tenancy.workspaces;
 CREATE TRIGGER trg_workspaces_assign_no
   BEFORE INSERT ON tenancy.workspaces
   FOR EACH ROW EXECUTE FUNCTION tenancy.assign_workspace_no();
+
+-- ── B9b:个人转组织「号跟人」换发(A 方案,owner 定案 2026-08-19,§11)──────────
+-- 个人租户认证升级为组织时:user_no 是人的终身号,留给人;租户行换发独立主体号
+-- (组织从此有自己的号,与创始人解耦,归属查 owner_user_id)。释放的 user_no 由
+-- 之后重建的个人租户经 assign_tenant_no 自动收回。显式携号更新(type 与 tenant_no
+-- 同时改)放行不换发(迁移/修复通道)。组织→个人为未定义流程,硬拦。
+-- 注:BEFORE 触发器改 NEW 列不受 98 列锁限制(列锁只约束语句显式目标列)。
+CREATE OR REPLACE FUNCTION tenancy.reissue_tenant_no_on_conversion() RETURNS trigger AS $$
+BEGIN
+  IF OLD.type = 'personal' AND NEW.type = 'organization' AND NEW.tenant_no = OLD.tenant_no THEN
+    NEW.tenant_no := nextval('account.principal_no_seq') * 1000 + floor(random()*1000)::bigint;
+  ELSIF OLD.type = 'organization' AND NEW.type = 'personal' THEN
+    RAISE EXCEPTION 'tenant type downgrade organization -> personal is not a defined flow (tenant %)', OLD.id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_tenants_reissue_no_on_conversion ON tenancy.tenants;
+CREATE TRIGGER trg_tenants_reissue_no_on_conversion
+  BEFORE UPDATE OF type ON tenancy.tenants
+  FOR EACH ROW WHEN (OLD.type IS DISTINCT FROM NEW.type)
+  EXECUTE FUNCTION tenancy.reissue_tenant_no_on_conversion();
+
+-- ── B9c:空间号前缀跟随租户号(任何 tenant_no 变更,含换发/修复)────────────────
+-- 不变量:workspace_no 前 12 位恒等于所属租户现行 tenant_no。注意不能用 UPDATE OF
+-- tenant_no 列限定——BEFORE 触发器改写的 NEW.tenant_no 不算语句目标列,OF 会漏触发。SECURITY DEFINER:
+-- workspace_no 对 platform_svc 是列锁锚点,跟随改号是唯一合法通路,以 owner 身份执行。
+CREATE OR REPLACE FUNCTION tenancy.reprefix_workspace_nos() RETURNS trigger
+  SECURITY DEFINER SET search_path = tenancy, pg_temp AS $$
+BEGIN
+  UPDATE tenancy.workspaces
+     SET workspace_no = NEW.tenant_no * 1000 + (workspace_no % 1000),
+         updated_at = now()
+   WHERE tenant_id = NEW.id;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_tenants_reprefix_ws ON tenancy.tenants;
+CREATE TRIGGER trg_tenants_reprefix_ws
+  AFTER UPDATE ON tenancy.tenants
+  FOR EACH ROW WHEN (OLD.tenant_no IS DISTINCT FROM NEW.tenant_no)
+  EXECUTE FUNCTION tenancy.reprefix_workspace_nos();
