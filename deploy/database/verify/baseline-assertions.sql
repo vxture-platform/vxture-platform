@@ -98,8 +98,6 @@ BEGIN
       ('kyc.verification_policies',  2),  -- personal/organization
       ('loyalty.level_policies',     5),
       ('loyalty.level_thresholds',   5),
-      ('model.model_providers',      1),
-      ('model.models',               1),
       ('product.products',           1),
       ('product.plans',              1)
     ) v(tbl, floor_cnt)
@@ -135,8 +133,6 @@ BEGIN
       ('product.plans',                  'plan_name_key',   'created_by = ''00000000-0000-4000-a000-000000000010'''),
       ('product.plans',                  'description_key', 'created_by = ''00000000-0000-4000-a000-000000000010'''),
       ('product.launch_checklist_items', 'item_name_key',   'true'),
-      ('model.model_providers',          'description_key', 'created_by = ''00000000-0000-4000-a000-000000000010'''),
-      ('model.models',                   'description_key', 'created_by = ''00000000-0000-4000-a000-000000000010'''),
       ('admin.settings',                 'description_key', 'true')
     ) v(tbl, col, scope_pred)
   LOOP

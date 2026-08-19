@@ -45,8 +45,6 @@ const ID = {
   maintenance: (i) => uid(220000 + i),
   receipt: (i) => uid(230000 + i),
   transaction: (i) => uid(240000 + i),
-  grant: (i) => uid(250000 + i),
-  policy: (i) => uid(260000 + i),
   voucher: (i) => uid(270000 + i),
   redemption: (i) => uid(280000 + i),
   usageMonth: (i) => uid(290000 + i),
@@ -191,9 +189,6 @@ async function seedBulk(client) {
     await client.query(
       "select id from admin.operator_account order by created_at limit 5",
     )
-  ).rows;
-  const models = (
-    await client.query("select id from model.models order by created_at")
   ).rows;
   const subs = (
     await client.query(
@@ -483,59 +478,6 @@ async function seedBulk(client) {
       ],
     );
     bump("billing.transactions");
-  }
-
-  // ── 8. 模型授权 / 模型策略 ─────────────────────────────────────────────────
-  //
-  // **这两张上不了一百行**，是结构上限不是造得不够：
-  //   `uq_model_policies_model_tenant` 规定 (model_id, tenant_id) 唯一，
-  //   6 个模型 × 5 个租户 = 30 条封顶（外加租户为 null 的平台级策略）。
-  // 要更多只能先加模型或加租户。这里按组合铺满，`on conflict do nothing`
-  // 兜住重复，不强行凑数。
-  if (!models.length) {
-    warn.push("model.models 为空，跳过 model_grants / model_policies");
-  } else {
-    const combos = models.length * tenants.length;
-    for (let i = 1; i <= Math.min(BULK, combos); i += 1) {
-      await client.query(
-        `insert into model.model_grants
-           (id, model_id, tenant_id, application_type, priority, is_active, reason,
-            expires_at, created_at, updated_at)
-         values ($1, $2, $3, $4, $5, $6, $7, ${i % 4 === 0 ? daysFromNow(spread(i, 200)) : "null"}, now(), now())
-         on conflict do nothing`,
-        [
-          ID.grant(i),
-          models[(i - 1) % models.length].id,
-          tenants[Math.floor((i - 1) / models.length) % tenants.length].id,
-          pick(["agent", "workflow", "api_client", "internal_service"], i),
-          100 + spread(i, 400),
-          i % 5 !== 0,
-          `bulk 造数据授权 #${i}`,
-        ],
-      );
-      bump("model.model_grants");
-
-      await client.query(
-        `insert into model.model_policies
-           (id, model_id, tenant_id, name, priority, max_concurrent,
-            rate_limit_rpm, rate_limit_tpm, max_context_tokens, is_active, created_at, updated_at)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now())
-         on conflict do nothing`,
-        [
-          ID.policy(i),
-          models[(i - 1) % models.length].id,
-          tenants[Math.floor((i - 1) / models.length) % tenants.length].id,
-          `bulk 策略 #${i}`,
-          100 + spread(i, 400, 1),
-          1 + spread(i, 16, 2),
-          60 + spread(i, 600, 3),
-          10000 + spread(i, 90000, 4),
-          [8192, 16384, 32768, 128000][spread(i, 4, 5)],
-          i % 7 !== 0,
-        ],
-      );
-      bump("model.model_policies");
-    }
   }
 
   // ── 9. 优惠券 + 核销 ───────────────────────────────────────────────────────
