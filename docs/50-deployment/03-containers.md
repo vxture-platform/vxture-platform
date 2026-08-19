@@ -35,7 +35,7 @@
 
 [vx-website-bff / vx-console-bff / vx-admin-bff / vx-auth-bff]
     ├──▶ 阿里云 RDS PG18（VPC 内网）:5432  (18 平台 schema，vxturestudio_platform_main)
-    ├──▶ vx-platform-redis :6379  (会话/限流/Token)
+    ├──▶ 阿里云 Tair（VPC 内网）:6379  (会话/限流/Token)
     ├──▶ Atlas（外部，`vxture-atlas`，模型注册/授权/配额/计量）
     └──▶ 外部服务（SMTP / OAuth provider / 业务 SSO 调用方）
 ```
@@ -235,8 +235,6 @@ CMD ["node", "portals/website/server.js"]
 
 | 容器                                           | `--memory` 上限 |
 | ---------------------------------------------- | --------------- |
-| vx-platform-pg                                 | 400MB           |
-| vx-platform-redis                              | 128MB           |
 | vx-nginx                                       | 64MB            |
 | vx-website / vx-console / vx-admin             | 各 256MB        |
 | vx-website-bff / vx-console-bff / vx-admin-bff | 各 192MB        |

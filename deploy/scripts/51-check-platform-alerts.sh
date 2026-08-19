@@ -27,7 +27,6 @@ BASELINE_PNPM_VERSION="10.30.3"
 BASELINE_DOCKER_VERSION="29.5.0"
 BASELINE_COMPOSE_VERSION="5.1.0"
 BASELINE_NGINX_IMAGE="nginx:1.29-alpine"
-BASELINE_REDIS_IMAGE="redis:8-alpine"
 
 HIGH_COUNT=0
 MEDIUM_COUNT=0
@@ -181,7 +180,7 @@ check_runtime_files() {
   check_required_file "$RUNTIME_DIR/.env.gateway-bff"
   check_required_file "$RUNTIME_DIR/secrets/platform.env"
   check_required_file "$RUNTIME_DIR/secrets/platform-mail.env"
-  check_required_file "$RUNTIME_DIR/secrets/redis-password"
+  check_required_file "$RUNTIME_DIR/secrets/tair-pw-default"
   check_required_file "/srv/vxture/data/nginx/ssl/live/vxture.com/fullchain.pem"
   check_required_file "/srv/vxture/data/nginx/ssl/live/vxture.com/privkey.pem"
 }
@@ -209,11 +208,6 @@ check_compose_images() {
     high "Nginx 镜像不符合基线，要求 $BASELINE_NGINX_IMAGE"
   fi
 
-  if grep -q "image: ${BASELINE_REDIS_IMAGE}" "$COMPOSE_FILE"; then
-    ok "Redis 镜像符合基线：$BASELINE_REDIS_IMAGE"
-  else
-    high "Redis 镜像不符合基线，要求 $BASELINE_REDIS_IMAGE"
-  fi
 }
 
 check_docker_runtime() {
@@ -240,7 +234,7 @@ check_docker_runtime() {
 check_container_health() {
   local name
   for name in \
-    vx-platform-redis vx-platform-auth-bff vx-platform-website-bff \
+    vx-platform-auth-bff vx-platform-website-bff \
     vx-platform-console-bff vx-platform-admin-bff vx-platform-gateway-bff \
     vx-platform-api vx-platform-website vx-platform-console vx-platform-admin \
     vx-platform-accounts; do

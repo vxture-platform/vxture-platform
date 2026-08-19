@@ -56,7 +56,6 @@ copy_if_exists "$RUNTIME_DIR/secrets/rds-owner.env" "$BACKUP_DIR/runtime/secrets
 copy_if_exists "$RUNTIME_DIR/secrets/rds-pw-platform_svc" "$BACKUP_DIR/runtime/secrets/rds-pw-platform_svc"
 copy_if_exists "$RUNTIME_DIR/secrets/rds-pw-reporting_ro" "$BACKUP_DIR/runtime/secrets/rds-pw-reporting_ro"
 copy_if_exists "$RUNTIME_DIR/secrets/tair-pw-default" "$BACKUP_DIR/runtime/secrets/tair-pw-default"
-copy_if_exists "$RUNTIME_DIR/secrets/redis-password" "$BACKUP_DIR/runtime/secrets/redis-password"
 
 echo ""
 echo "==> Nginx platform certificate and config"

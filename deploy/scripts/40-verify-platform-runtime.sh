@@ -57,7 +57,7 @@ check_required_files() {
   check_file "$RUNTIME_DIR/.env.website-bff"
   check_file "$RUNTIME_DIR/.env.console-bff"
   check_file "$RUNTIME_DIR/.env.admin-bff"
-  check_file "$RUNTIME_DIR/secrets/redis-password"
+  check_file "$RUNTIME_DIR/secrets/tair-pw-default"
   check_file "$RUNTIME_DIR/secrets/platform.env"
   check_file "$RUNTIME_DIR/secrets/platform-mail.env"
 }

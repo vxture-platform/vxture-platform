@@ -147,8 +147,8 @@ sync_env_from_example() {
 }
 
 # -- 1. Raw secret placeholders ------------------------------------------------
-# 原始密码文件没有 .example 对应文件，首次只写 CHANGEME，必须手动替换。
-ensure_plain_secret_file "$SECRETS_DIR/redis-password" "Redis password"
+# RDS/Tair 凭据（rds-owner.env / rds-pw-* / tair-pw-default）由 owner 在云实例开通时
+# 置备（0600），不由本脚本生成——2026-08-19 起 compose 内无有状态件。
 
 # -- 2. Env files from .example ------------------------------------------------
 sync_env_from_example "$WORKER_DIR/.env.example" "$PLATFORM_DIR/.env" "compose env"

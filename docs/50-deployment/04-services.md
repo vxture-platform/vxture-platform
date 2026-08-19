@@ -31,33 +31,6 @@ networks:
 services:
   # ── 数据层 ────────────────────────────────────────────────────────────────
 
-  redis:
-    image: redis:8-alpine
-    container_name: vx-platform-redis
-    restart: unless-stopped
-    networks: [vxture-prod]
-    secrets: [platform_redis_password]
-    volumes:
-      - /data/platform/db/redis:/data
-    command:
-      [
-        "sh",
-        "-c",
-        'redis-server --appendonly yes --requirepass "$$(cat /run/secrets/platform_redis_password)"',
-      ]
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          'redis-cli -a "$$(cat /run/secrets/platform_redis_password)" ping',
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    # 不暴露端口到宿主机
-
-  # ── 门户层 ────────────────────────────────────────────────────────────────
-
   website:
     image: ghcr.io/vxture/website:latest
     container_name: vx-website
@@ -110,7 +83,6 @@ services:
       - "${PORT}:${PORT}" # 端口见端口登记表；UFW 限制仅 Tailscale 子网（100.64.0.0/10）可达
     env_file: [secrets/platform.env, secrets/platform-mail.env, .env.auth-bff]
     depends_on:
-      redis: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3090/health"]
       interval: 30s
@@ -138,7 +110,6 @@ services:
     env_file:
       [secrets/platform.env, secrets/platform-mail.env, .env.website-bff]
     depends_on:
-      redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3011/health"]
@@ -154,7 +125,6 @@ services:
     env_file:
       [secrets/platform.env, secrets/platform-mail.env, .env.console-bff]
     depends_on:
-      redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3021/health"]
@@ -169,17 +139,12 @@ services:
     networks: [vxture-prod]
     env_file: [secrets/platform.env, secrets/platform-mail.env, .env.admin-bff]
     depends_on:
-      redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3031/health"]
       interval: 30s
       timeout: 5s
       retries: 3
-
-secrets:
-  platform_redis_password:
-    file: ./secrets/redis-password
 ```
 
 Nginx 由 `deploy/compose.nginx.yml` 独立管理，平台服务通过共享网络接入 `vx-nginx`。

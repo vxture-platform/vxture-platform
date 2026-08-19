@@ -51,12 +51,12 @@
 
 平台生产镜像不使用完全漂移的裸标签。
 
-| 镜像       | 推荐写法             | 禁止或不推荐      | 原因                                       |
-| ---------- | -------------------- | ----------------- | ------------------------------------------ |
-| Node.js    | `node:24-alpine`     | `node:22-alpine`  | Node 22 是历史基线；Node 24 是当前稳定基线 |
-| Nginx      | `nginx:1.29-alpine`  | `nginx:alpine`    | 控制 Nginx 主版本，同时允许 Alpine 浮动    |
-| PostgreSQL | `postgres:18-alpine` | `postgres:alpine` | 控制数据库主版本                           |
-| Redis      | `redis:8-alpine`     | `redis:alpine`    | 控制 Redis 主版本                          |
+| 镜像       | 推荐写法             | 禁止或不推荐      | 原因                                                          |
+| ---------- | -------------------- | ----------------- | ------------------------------------------------------------- |
+| Node.js    | `node:24-alpine`     | `node:22-alpine`  | Node 22 是历史基线；Node 24 是当前稳定基线                    |
+| Nginx      | `nginx:1.29-alpine`  | `nginx:alpine`    | 控制 Nginx 主版本，同时允许 Alpine 浮动                       |
+| PostgreSQL | `postgres:18-alpine` | `postgres:alpine` | 控制数据库主版本                                              |
+| Redis      | `redis:7-alpine`     | `redis:alpine`    | 仅 CI 冒烟/一次性工具容器；生产 Redis 在阿里云 Tair（云托管） |
 
 当前策略不强制使用 digest。若进入强合规或多节点可重复部署阶段，再评估 digest pinning。
 

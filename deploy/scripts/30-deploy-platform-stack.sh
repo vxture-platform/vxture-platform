@@ -52,7 +52,7 @@ check_file "$RUNTIME_DIR/.env.admin-bff"
 check_file "$RUNTIME_DIR/.env.platform-api"
 
 echo "  密钥文件:"
-check_file "$RUNTIME_DIR/secrets/redis-password"
+check_file "$RUNTIME_DIR/secrets/tair-pw-default"
 check_file "$RUNTIME_DIR/secrets/platform.env"
 check_file "$RUNTIME_DIR/secrets/platform-mail.env"
 check_file "$COMPOSE_DIR/guardrails/39-audit-env.mjs"

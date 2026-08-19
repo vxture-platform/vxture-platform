@@ -118,17 +118,10 @@ reporting_ro（报表只读）。凭据在 `/srv/vxture/runtime/secrets/rds-owne
 
 ### Redis — platform
 
-```bash
-docker run -d \
-  --name vx-platform-redis \
-  --restart unless-stopped \
-  --network vxture-prod \
-  -v /data/platform/db/redis:/data \
-  -v /srv/vxture/runtime/secrets/redis-password:/run/secrets/platform_redis_password:ro \
-  redis:8-alpine \
-  sh -c 'redis-server --appendonly yes --requirepass "$(cat /run/secrets/platform_redis_password)"'
-# 不对外暴露端口
-```
+Redis 在**阿里云 Tair**（2026-08-19 起，本地 redis 容器退役）：内网 endpoint 仅 VPC 内可达
+（白名单放行 worker-01 内网 IP），账号 default，密码文件
+`/srv/vxture/runtime/secrets/tair-pw-default`（0600），应用经 `REDIS_URL` 连接。
+数据为 TTL 会话/限流/黑名单，云侧自动备份即可，无本地备份需求。
 
 **Platform Redis 用途：**
 
@@ -220,11 +213,7 @@ BACKUP_DIR=/data/platform/backups
 docker run --rm --env-file /srv/vxture/runtime/secrets/rds-owner.env postgres:18-alpine \
   sh -c 'pg_dump "$DATABASE_URL"' | gzip > "${BACKUP_DIR}/pg_${DATE}.sql.gz"
 
-# Redis RDB snapshot
-REDIS_PASSWORD="$(cat /srv/vxture/runtime/secrets/redis-password)"
-docker exec vx-platform-redis redis-cli -a "${REDIS_PASSWORD}" BGSAVE
-sleep 3
-cp /data/platform/db/redis/dump.rdb "${BACKUP_DIR}/redis_${DATE}.rdb"
+# Redis（Tair）为 TTL 瞬态数据，云侧自动备份，无本地快照步骤。
 
 # 保留 7 天本地备份
 find "${BACKUP_DIR}" -name "*.sql.gz" -o -name "*.rdb" | sort | head -n -14 | xargs -r rm

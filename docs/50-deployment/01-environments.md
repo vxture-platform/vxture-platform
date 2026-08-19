@@ -11,17 +11,17 @@
 
 平台 env 文件按作用域分层管理：
 
-| 类别             | 文件                                                                    | 作用                                                              | 是否可重复             |
-| ---------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------- |
-| 本地运行参数     | `runtime/`                                                              | 本机开发真实 env / secrets，结构对应服务器 `/srv/vxture/runtime`  | 可以重复               |
-| 前端构建变量     | GitHub Actions Secrets / Docker build args                              | 构建 Next.js 门户镜像时注入 `NEXT_PUBLIC_*`                       | 不进入 worker `.env.*` |
-| 部署工具配置     | `/srv/vxture/runtime/.env`                                              | Docker Compose CLI 读取，用于镜像 registry / namespace / tag 插值 | 不进入容器             |
-| 基础设施原始密码 | `secrets/rds-owner.env` / `secrets/rds-pw-*` / `secrets/redis-password` | RDS 连接凭据与 Redis 容器启动密码                                 | 不进入 env 文件        |
-| 平台共享运行配置 | `/srv/vxture/runtime/secrets/platform.env`                              | 注入需要数据库、Redis URL、JWT、内部鉴权的服务                    | 不能复制到服务 env     |
-| 平台共享邮件配置 | `/srv/vxture/runtime/secrets/platform-mail.env`                         | 只注入实际发送邮件的 BFF                                          | 不能复制到服务 env     |
-| 平台共享短信配置 | `/srv/vxture/runtime/secrets/platform-sms.env`                          | 只注入实际发送短信验证码的 BFF（当前 `auth-bff`）                 | 不能复制到服务 env     |
-| 平台签名密钥配置 | `/srv/vxture/runtime/secrets/platform-identity.env`                     | IdP RS256 私钥 + KID，只注入 `auth-bff`                           | 不能复制到服务 env     |
-| 服务专属配置     | `/srv/vxture/runtime/.env.<service>`                                    | 只放该服务自己读取或实际需要的配置                                | 不跨服务复制           |
+| 类别             | 文件                                                                     | 作用                                                              | 是否可重复             |
+| ---------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------- | ---------------------- |
+| 本地运行参数     | `runtime/`                                                               | 本机开发真实 env / secrets，结构对应服务器 `/srv/vxture/runtime`  | 可以重复               |
+| 前端构建变量     | GitHub Actions Secrets / Docker build args                               | 构建 Next.js 门户镜像时注入 `NEXT_PUBLIC_*`                       | 不进入 worker `.env.*` |
+| 部署工具配置     | `/srv/vxture/runtime/.env`                                               | Docker Compose CLI 读取，用于镜像 registry / namespace / tag 插值 | 不进入容器             |
+| 基础设施原始密码 | `secrets/rds-owner.env` / `secrets/rds-pw-*` / `secrets/tair-pw-default` | RDS 与 Tair 连接凭据                                              | 不进入 env 文件        |
+| 平台共享运行配置 | `/srv/vxture/runtime/secrets/platform.env`                               | 注入需要数据库、Redis URL、JWT、内部鉴权的服务                    | 不能复制到服务 env     |
+| 平台共享邮件配置 | `/srv/vxture/runtime/secrets/platform-mail.env`                          | 只注入实际发送邮件的 BFF                                          | 不能复制到服务 env     |
+| 平台共享短信配置 | `/srv/vxture/runtime/secrets/platform-sms.env`                           | 只注入实际发送短信验证码的 BFF（当前 `auth-bff`）                 | 不能复制到服务 env     |
+| 平台签名密钥配置 | `/srv/vxture/runtime/secrets/platform-identity.env`                      | IdP RS256 私钥 + KID，只注入 `auth-bff`                           | 不能复制到服务 env     |
+| 服务专属配置     | `/srv/vxture/runtime/.env.<service>`                                     | 只放该服务自己读取或实际需要的配置                                | 不跨服务复制           |
 
 去重规则：
 
@@ -68,7 +68,7 @@ runtime/secrets/platform-mail.env
 runtime/secrets/rds-owner.env
 runtime/secrets/rds-pw-platform_svc
 runtime/secrets/rds-pw-reporting_ro
-runtime/secrets/redis-password
+runtime/secrets/tair-pw-default
 ```
 
 `runtime/VXTURE_DEPLOY_HOST` 不提交 Git，不由 CI/CD 上传；它只用于本机开发和本机校验。
@@ -82,8 +82,8 @@ secrets/rds-pw-platform_svc
   -> RDS platform_svc 角色密码
   -> 派生 platform.env:DATABASE_URL
 
-secrets/redis-password
-  -> Redis 容器启动密码
+secrets/tair-pw-default
+  -> Tair(Redis) default 账号密码
   -> 派生 platform.env:REDIS_URL
 ```
 
@@ -101,7 +101,7 @@ secrets/redis-password
 | `/srv/vxture/runtime/.env`                          | 否       | Docker Compose                             | 可选镜像源变量                                  |
 | `/srv/vxture/runtime/secrets/rds-owner.env`         | 否       | DDL/seed/verify 脚本                       | RDS owner 连接串                                |
 | `/srv/vxture/runtime/secrets/rds-pw-platform_svc`   | 否       | 32-provision-service-db-roles              | RDS 服务角色密码                                |
-| `/srv/vxture/runtime/secrets/redis-password`        | 否       | `vx-platform-redis`                        | Redis 原始密码文件                              |
+| `/srv/vxture/runtime/secrets/tair-pw-default`       | 否       | 派生 REDIS_URL                             | Tair(Redis) 密码文件                            |
 | `deploy/secrets/platform.env.example`               | 是       | 人工参考 / `12-generate-env-files.sh` 对齐 | 平台共享密钥模板                                |
 | `/srv/vxture/runtime/secrets/platform.env`          | 否       | 多个平台容器                               | 数据库、Redis URL、JWT、内部鉴权真实密钥        |
 | `deploy/secrets/platform-mail.env.example`          | 是       | 人工参考 / `12-generate-env-files.sh` 对齐 | 平台共享邮件配置模板                            |
@@ -129,7 +129,6 @@ secrets/redis-password
 
 | 服务                            | env 注入                                                                                                                              | 说明                                              |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `redis`                         | Docker secret `platform_redis_password`                                                                                               | Redis 密码文件 `secrets/redis-password`           |
 | `auth-bff`                      | `secrets/platform.env` + `secrets/platform-mail.env` + `secrets/platform-sms.env` + `secrets/platform-identity.env` + `.env.auth-bff` | 共享密钥 + 邮件 + 短信 + 签名密钥 + auth 专属配置 |
 | `website-bff`                   | `secrets/platform.env` + `secrets/platform-mail.env` + `.env.website-bff`                                                             | 共享密钥 + 邮件配置 + website 专属配置            |
 | `console-bff`                   | `secrets/platform.env` + `secrets/platform-mail.env` + `.env.console-bff`                                                             | 共享密钥 + 邮件配置 + console 专属配置            |
@@ -155,7 +154,7 @@ secrets/redis-password
 
 这些变量是平台应用共享运行配置，不是某个 BFF 的服务专属配置。即使只有 `auth-bff` 签发 JWT，其他 BFF 仍需验证 JWT，所以统一从 `secrets/platform.env` 注入。
 
-`REDIS_PASSWORD` 不放入任何 env 文件。Redis 原始密码只属于 `/srv/vxture/runtime/secrets/redis-password`，应用容器通过包含该密码的 `REDIS_URL` 连接 Redis。
+`REDIS_PASSWORD` 不放入任何 env 文件。Tair 密码只属于 `/srv/vxture/runtime/secrets/tair-pw-default`，应用容器通过包含该密码的 `REDIS_URL` 连接阿里云 Tair（内网 endpoint）。
 
 ---
 
@@ -188,7 +187,7 @@ secrets/redis-password
 | `VX_IMAGE_NAMESPACE` | 否   | 手动部署时覆盖镜像 namespace |
 | `VX_IMAGE_TAG`       | 否   | 手动部署时覆盖镜像 tag       |
 
-`.env` 只服务 Docker Compose YAML 插值，不等同于业务服务运行环境。基础设施原始密码不放 `.env`；Redis 原始密码在 `secrets/redis-password`，并派生为 `secrets/platform.env` 中的 `REDIS_URL`。
+`.env` 只服务 Docker Compose YAML 插值，不等同于业务服务运行环境。基础设施原始密码不放 `.env`；Tair 密码在 `secrets/tair-pw-default`，并派生为 `secrets/platform.env` 中的 `REDIS_URL`。
 
 私有镜像仓库认证不进入 `.env`。手动发布前如需访问私有 registry，应先在服务器上完成人工认证；自动发布由 GitHub Actions 的部署 job 通过远程命令处理临时认证。
 
@@ -371,20 +370,20 @@ accounts surface（运营登录 UI）
 
 ## 十一、禁止重复清单
 
-| 重复项                                         | 正确位置                                                               | 错误位置                                                   |
-| ---------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `JWT_SECRET` / `JWT_REFRESH_SECRET`            | `secrets/platform.env`                                                 | 任意 `.env.<service>`                                      |
-| `DATABASE_URL` / `REDIS_URL`                   | `secrets/platform.env`                                                 | 任意 `.env.<service>`                                      |
-| `AUTH_INTERNAL_TOKEN`                          | `secrets/platform.env`                                                 | 任意 `.env.<service>`                                      |
-| `REDIS_PASSWORD`                               | `secrets/redis-password` 原始文件；`platform.env` 只放派生 `REDIS_URL` | `.env` / `secrets/platform.env` / 任意 `.env.<service>`    |
-| `SMTP_*`                                       | `secrets/platform-mail.env`                                            | `.env` / `secrets/platform.env` / 任意 `.env.<service>`    |
-| `ALIYUN_SMS_*`                                 | `secrets/platform-sms.env`                                             | `.env` / `secrets/platform.env` / 任意 `.env.<service>`    |
-| `OIDC_SIGNING_PRIVATE_KEY` / `OIDC_ACTIVE_KID` | `secrets/platform-identity.env`                                        | `secrets/platform.env` / 任意 `.env.<service>`             |
-| tenant CF secret                               | `.env.auth-bff`                                                        | `.env.website-bff` / `.env.console-bff` / `.env.admin-bff` |
-| operator/admin CF secret                       | `.env.auth-bff`                                                        | `.env.admin-bff` / `.env.website-bff` / `.env.console-bff` |
-| Turnstile site key                             | GitHub Actions Secrets / build args                                    | VXTURE_DEPLOY_HOST `.env.*`                                |
-| OAuth provider secret                          | `.env.auth-bff`                                                        | `.env.website-bff` / `.env.console-bff` / `.env.admin-bff` |
-| Provider API Key                               | 归 Atlas（外部仓，本仓不再持有）                                       | BFF env / business worker env                              |
+| 重复项                                         | 正确位置                                                                | 错误位置                                                   |
+| ---------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `JWT_SECRET` / `JWT_REFRESH_SECRET`            | `secrets/platform.env`                                                  | 任意 `.env.<service>`                                      |
+| `DATABASE_URL` / `REDIS_URL`                   | `secrets/platform.env`                                                  | 任意 `.env.<service>`                                      |
+| `AUTH_INTERNAL_TOKEN`                          | `secrets/platform.env`                                                  | 任意 `.env.<service>`                                      |
+| `REDIS_PASSWORD`                               | `secrets/tair-pw-default` 原始文件；`platform.env` 只放派生 `REDIS_URL` | `.env` / `secrets/platform.env` / 任意 `.env.<service>`    |
+| `SMTP_*`                                       | `secrets/platform-mail.env`                                             | `.env` / `secrets/platform.env` / 任意 `.env.<service>`    |
+| `ALIYUN_SMS_*`                                 | `secrets/platform-sms.env`                                              | `.env` / `secrets/platform.env` / 任意 `.env.<service>`    |
+| `OIDC_SIGNING_PRIVATE_KEY` / `OIDC_ACTIVE_KID` | `secrets/platform-identity.env`                                         | `secrets/platform.env` / 任意 `.env.<service>`             |
+| tenant CF secret                               | `.env.auth-bff`                                                         | `.env.website-bff` / `.env.console-bff` / `.env.admin-bff` |
+| operator/admin CF secret                       | `.env.auth-bff`                                                         | `.env.admin-bff` / `.env.website-bff` / `.env.console-bff` |
+| Turnstile site key                             | GitHub Actions Secrets / build args                                     | VXTURE_DEPLOY_HOST `.env.*`                                |
+| OAuth provider secret                          | `.env.auth-bff`                                                         | `.env.website-bff` / `.env.console-bff` / `.env.admin-bff` |
+| Provider API Key                               | 归 Atlas（外部仓，本仓不再持有）                                        | BFF env / business worker env                              |
 
 ---
 

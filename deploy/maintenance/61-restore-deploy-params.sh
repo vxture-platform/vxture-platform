@@ -111,8 +111,7 @@ restore_required "$BACKUP_DIR/runtime/secrets/platform-mail.env" "$RUNTIME_DIR/s
 restore_required "$BACKUP_DIR/runtime/secrets/rds-owner.env" "$RUNTIME_DIR/secrets/rds-owner.env"
 restore_required "$BACKUP_DIR/runtime/secrets/rds-pw-platform_svc" "$RUNTIME_DIR/secrets/rds-pw-platform_svc"
 restore_required "$BACKUP_DIR/runtime/secrets/rds-pw-reporting_ro" "$RUNTIME_DIR/secrets/rds-pw-reporting_ro"
-restore_optional "$BACKUP_DIR/runtime/secrets/tair-pw-default" "$RUNTIME_DIR/secrets/tair-pw-default"
-restore_required "$BACKUP_DIR/runtime/secrets/redis-password" "$RUNTIME_DIR/secrets/redis-password"
+restore_required "$BACKUP_DIR/runtime/secrets/tair-pw-default" "$RUNTIME_DIR/secrets/tair-pw-default"
 
 echo ""
 echo "==> Nginx certificate and config"

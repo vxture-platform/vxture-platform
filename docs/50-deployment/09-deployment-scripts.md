@@ -157,7 +157,7 @@ VXTURE_DEPLOY_HOST     # 服务器 Linux hostname / Tailscale hostname，用于 
 - 已存在的 runtime env 文件：只追加 `.example` 中新增但 runtime 缺失的 key
 - 已存在的真实值：保留，不覆盖、不清空
 - 已从 `.example` 删除但 runtime 仍存在的 key：追加明显 WARN 注释，标记“可以删除 / 已废弃待删除”
-- `secrets/redis-password` 不生成随机值，首次只写入 `CHANGEME`，必须手动替换（RDS 凭据 `rds-owner.env` / `rds-pw-*` 由 owner 在 RDS 开通时置备，不由本脚本生成）
+- RDS/Tair 凭据（`rds-owner.env` / `rds-pw-*` / `tair-pw-default`）由 owner 在云实例开通时置备，不由本脚本生成
 
 禁止：
 
@@ -394,8 +394,7 @@ CONFIRM_PROVISION_KEY=yes bash scripts/25-provision-signing-key.sh
 - 备份 `/srv/vxture/runtime/.env.*`
 - 备份 `/srv/vxture/runtime/secrets/platform.env`
 - 备份 `/srv/vxture/runtime/secrets/platform-mail.env`
-- 备份 `/srv/vxture/runtime/secrets/pg-password`
-- 备份 `/srv/vxture/runtime/secrets/redis-password`
+- 备份 `/srv/vxture/runtime/secrets/rds-owner.env` / `rds-pw-*` / `tair-pw-default`
 - 备份 `/srv/vxture/data/nginx/conf`
 
 备份目录建议：

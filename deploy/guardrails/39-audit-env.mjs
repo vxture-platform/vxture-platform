@@ -536,8 +536,8 @@ const RUNTIME_SECRET_FILE_RULES = [
     path: `${RUNTIME_DIR}/secrets/rds-pw-reporting_ro`,
   },
   {
-    label: "Redis raw password",
-    path: `${RUNTIME_DIR}/secrets/redis-password`,
+    label: "Tair (Redis) raw password",
+    path: `${RUNTIME_DIR}/secrets/tair-pw-default`,
   },
 ];
 
@@ -556,18 +556,10 @@ const DEPLOY_BUNDLE_REAL_RUNTIME_FILES = [
   "secrets/rds-owner.env",
   "secrets/rds-pw-platform_svc",
   "secrets/rds-pw-reporting_ro",
-  "secrets/redis-password",
+  "secrets/tair-pw-default",
 ];
 
 const COMPOSE_SNIPPETS = [
-  {
-    service: "redis",
-    snippet: "secrets: [platform_redis_password]",
-  },
-  {
-    service: "platform_redis_password",
-    snippet: "file: /srv/vxture/runtime/secrets/redis-password",
-  },
   {
     service: "auth-bff",
     snippet: "/srv/vxture/runtime/.env.auth-bff",
@@ -1071,7 +1063,7 @@ function auditRuntimeSecretFiles() {
       `${RUNTIME_DIR}/secrets/rds-pw-platform_svc`,
     ).trim();
     const redisPassword = readText(
-      `${RUNTIME_DIR}/secrets/redis-password`,
+      `${RUNTIME_DIR}/secrets/tair-pw-default`,
     ).trim();
     const databaseUrl = platformEnv.byKey.get("DATABASE_URL")?.[0]?.value;
     const redisUrl = platformEnv.byKey.get("REDIS_URL")?.[0]?.value;
@@ -1100,7 +1092,7 @@ function auditRuntimeSecretFiles() {
         diagnostic(
           "error",
           "env/derived-redis-url-mismatch",
-          "REDIS_URL password must match secrets/redis-password.",
+          "REDIS_URL password must match secrets/tair-pw-default.",
           `${RUNTIME_DIR}/secrets/platform.env`,
         ),
       );

@@ -34,46 +34,8 @@ services:
   #    上限之和远大于 2 是有意的——它们是天花板，不是预留。
   # 3. `pids_limit` 是 fork 炸弹护栏，按"异常"的门槛设，不是按"够用"设。
   #
-  # 有状态件（redis；PostgreSQL 已于 2026-08-19 迁阿里云 RDS，本 compose 不再有 pg）
-  # 刻意不设 `memswap_limit`：宁可变慢也不要被 OOM 杀掉。无状态件则钉死无 swap（见各自注释）。
-
-  redis:
-    # Pinned by digest to prevent tag drift from silently recreating the stateful
-    # store. 8-alpine digest resolved 2026-08-17 (8.8.0 -> 8.10.0, same major).
-    image: redis:8-alpine@sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241
-    # Digest-pinned, never expected to change out-of-band — skip the per-deploy pull.
-    pull_policy: missing
-    container_name: vx-platform-redis
-    restart: unless-stopped
-    # --maxmemory 96mb (below this 128m ceiling) makes redis self-evict before the
-    # cgroup OOM-kills it. volatile-lru only evicts TTL-bearing keys (all session/
-    # token/rate-limit keys have TTLs) — an evicted idle session (user re-logs in)
-    # beats redis being OOM-killed and losing every session.
-    mem_limit: 128m
-    cpus: 1.0
-    pids_limit: 64
-    networks: [vxture-prod]
-    secrets: [platform_redis_password]
-    volumes:
-      - /srv/vxture/data/platform-redis:/data
-    command:
-      [
-        "sh",
-        "-c",
-        'redis-server --appendonly yes --maxmemory 96mb --maxmemory-policy volatile-lru --requirepass "$$(cat /run/secrets/platform_redis_password)"',
-      ]
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          'redis-cli -a "$$(cat /run/secrets/platform_redis_password)" ping',
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  # ── 门户层 ──────────────────────────────────────────────────────────────────
+  # 数据态已全部上云（RDS PostgreSQL + Tair Redis，2026-08-19）：本 compose 只剩无状态
+  # 服务，全部钉死无 swap（见各自注释）。
 
   website:
     image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_website:${VX_IMAGE_TAG:-latest}
@@ -215,8 +177,6 @@ services:
         /srv/vxture/runtime/secrets/platform-identity.env,
         /srv/vxture/runtime/.env.auth-bff,
       ]
-    depends_on:
-      redis: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3081/healthz"]
       interval: 30s
@@ -263,7 +223,6 @@ services:
         /srv/vxture/runtime/.env.website-bff,
       ]
     depends_on:
-      redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3001/healthz"]
@@ -296,7 +255,6 @@ services:
         /srv/vxture/runtime/.env.console-bff,
       ]
     depends_on:
-      redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3021/healthz"]
@@ -325,7 +283,6 @@ services:
         /srv/vxture/runtime/.env.admin-bff,
       ]
     depends_on:
-      redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3031/healthz"]
@@ -354,7 +311,6 @@ services:
         /srv/vxture/runtime/.env.opera-bff,
       ]
     depends_on:
-      redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3041/healthz"]
@@ -385,7 +341,6 @@ services:
         /srv/vxture/runtime/.env.platform-api,
       ]
     depends_on:
-      redis: { condition: service_healthy }
       auth-bff: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
@@ -394,6 +349,3 @@ services:
       retries: 3
       start_period: 15s
 
-secrets:
-  platform_redis_password:
-    file: /srv/vxture/runtime/secrets/redis-password

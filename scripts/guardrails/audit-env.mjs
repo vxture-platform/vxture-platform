@@ -359,13 +359,22 @@ const ENV_FILE_RULES = [
 ];
 
 const RUNTIME_SECRET_FILE_RULES = [
+  // 2026-08-19 云切换:pg-password/redis-password 退役,RDS/Tair 凭据接管。
   {
-    label: 'Postgres raw password',
-    path: `${RUNTIME_DIR}/secrets/pg-password`,
+    label: 'RDS owner connection env',
+    path: `${RUNTIME_DIR}/secrets/rds-owner.env`,
   },
   {
-    label: 'Redis raw password',
-    path: `${RUNTIME_DIR}/secrets/redis-password`,
+    label: 'RDS platform_svc raw password',
+    path: `${RUNTIME_DIR}/secrets/rds-pw-platform_svc`,
+  },
+  {
+    label: 'RDS reporting_ro raw password',
+    path: `${RUNTIME_DIR}/secrets/rds-pw-reporting_ro`,
+  },
+  {
+    label: 'Tair (Redis) raw password',
+    path: `${RUNTIME_DIR}/secrets/tair-pw-default`,
   },
 ];
 
@@ -380,19 +389,13 @@ const DEPLOY_BUNDLE_REAL_RUNTIME_FILES = [
   'secrets/platform-mail.env',
   'secrets/platform-sms.env',
   'secrets/platform-identity.env',
-  'secrets/pg-password',
-  'secrets/redis-password',
+  'secrets/rds-owner.env',
+  'secrets/rds-pw-platform_svc',
+  'secrets/rds-pw-reporting_ro',
+  'secrets/tair-pw-default',
 ];
 
 const COMPOSE_SNIPPETS = [
-  {
-    service: 'redis',
-    snippet: 'secrets: [platform_redis_password]',
-  },
-  {
-    service: 'platform_redis_password',
-    snippet: 'file: /srv/vxture/runtime/secrets/redis-password',
-  },
   {
     service: 'auth-bff',
     snippet: '/srv/vxture/runtime/.env.auth-bff',
@@ -867,8 +870,8 @@ function auditRuntimeSecretFiles() {
 
   const platformEnv = parseEnvFile(`${RUNTIME_DIR}/secrets/platform.env`);
   if (platformEnv.exists) {
-    const pgPassword = readText(`${RUNTIME_DIR}/secrets/pg-password`).trim();
-    const redisPassword = readText(`${RUNTIME_DIR}/secrets/redis-password`).trim();
+    const pgPassword = readText(`${RUNTIME_DIR}/secrets/rds-pw-platform_svc`).trim();
+    const redisPassword = readText(`${RUNTIME_DIR}/secrets/tair-pw-default`).trim();
     const databaseUrl = platformEnv.byKey.get('DATABASE_URL')?.[0]?.value;
     const redisUrl = platformEnv.byKey.get('REDIS_URL')?.[0]?.value;
 
@@ -877,7 +880,7 @@ function auditRuntimeSecretFiles() {
         diagnostic(
           'error',
           'env/derived-database-url-mismatch',
-          'DATABASE_URL password must match secrets/pg-password.',
+          'DATABASE_URL password must match secrets/rds-pw-platform_svc.',
           `${RUNTIME_DIR}/secrets/platform.env`
         )
       );
@@ -888,7 +891,7 @@ function auditRuntimeSecretFiles() {
         diagnostic(
           'error',
           'env/derived-redis-url-mismatch',
-          'REDIS_URL password must match secrets/redis-password.',
+          'REDIS_URL password must match secrets/tair-pw-default.',
           `${RUNTIME_DIR}/secrets/platform.env`
         )
       );

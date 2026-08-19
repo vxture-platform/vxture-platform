@@ -450,7 +450,7 @@ vx-nginx (VXTURE_DEPLOY_HOST)
 ```txt
 vx-nginx, vx-website, vx-admin, vx-console
 vx-auth-bff, vx-website-bff, vx-admin-bff, vx-console-bff, vx-gateway-bff
-vx-platform-redis
+（数据态在云：RDS PostgreSQL + Tair Redis）
 ```
 
 业务容器（vx-worker-02/03/04/05 等，各自独立网络，由外部业务仓库维护）：

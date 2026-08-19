@@ -34,13 +34,13 @@
 ### 1.4 环境变量
 
 - [ ] VXTURE_DEPLOY_HOST `secrets/platform.env` 中以下共享密钥均已设置：
-  - `DATABASE_URL`（指向 `vx-platform-pg`）
-  - `REDIS_URL`（指向 `vx-platform-redis`）
+  - `DATABASE_URL`（指向阿里云 RDS 内网 endpoint）
+  - `REDIS_URL`（指向阿里云 Tair 内网 endpoint）
   - `JWT_SECRET`（≥32 位）
   - `JWT_REFRESH_SECRET`（≥32 位，且不同于 `JWT_SECRET`）
   - `AUTH_INTERNAL_TOKEN`
-- [ ] VXTURE_DEPLOY_HOST `secrets/redis-password` 已存在且非空；`.env` 和 `secrets/platform.env` 均不含 `REDIS_PASSWORD`。
-- [ ] `DATABASE_URL` 密码与 `secrets/rds-pw-platform_svc` 一致，`REDIS_URL` 密码与 `secrets/redis-password` 一致。
+- [ ] VXTURE_DEPLOY_HOST `secrets/tair-pw-default` 已存在且非空；`.env` 和 `secrets/platform.env` 均不含 `REDIS_PASSWORD`。
+- [ ] `DATABASE_URL` 密码与 `secrets/rds-pw-platform_svc` 一致，`REDIS_URL` 密码与 `secrets/tair-pw-default` 一致。
 - [ ] RDS 白名单已放行 VXTURE_DEPLOY_HOST 内网 IP；`secrets/rds-owner.env` 与 `secrets/rds-pw-*` 已置备（0600）。库数据无需保留的重建走 `scripts/26-reset-platform-database.sh`。
 - [ ] VXTURE_DEPLOY_HOST `secrets/platform-mail.env` 中 `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` 均已设置。
 - [ ] VXTURE_DEPLOY_HOST `.env.auth-bff` 含 tenant + operator(admin) 两套 Turnstile secret（IdP 统一校验）。
@@ -183,9 +183,9 @@ docker compose -f compose.platform.yml up -d --no-deps vx-website-bff:<previous-
 
 ## 五、上线后持续监控（24h）
 
-| 项目       | 检查方式                                       |
-| ---------- | ---------------------------------------------- |
-| 错误率     | `docker logs` / Sentry DSN                     |
-| 邮件发送   | 测试注册/密码重置流程                          |
-| Redis 可用 | `docker exec vx-platform-redis redis-cli ping` |
-| DB 连接池  | 检查 BFF 日志中 pg-pool 警告                   |
+| 项目       | 检查方式                                                        |
+| ---------- | --------------------------------------------------------------- |
+| 错误率     | `docker logs` / Sentry DSN                                      |
+| 邮件发送   | 测试注册/密码重置流程                                           |
+| Redis 可用 | 一次性容器对 Tair `redis-cli ping`（密码经 REDISCLI_AUTH 注入） |
+| DB 连接池  | 检查 BFF 日志中 pg-pool 警告                                    |
