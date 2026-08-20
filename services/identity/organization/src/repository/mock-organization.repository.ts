@@ -12,6 +12,8 @@ import type {
   OrgRoleCatalogEntry,
   OrgView,
   ProvisionedOrg,
+  SubmitTenantVerificationInput,
+  TenantVerificationRecord,
   WorkspaceMembershipView,
   WorkspaceView,
 } from "../types/organization.types";
@@ -60,6 +62,46 @@ function mockMemberDetail(
  */
 @Injectable()
 export class MockOrganizationRepository implements OrganizationReadRepository {
+  // ── 组织实名认证(mock:内存台账,便于 UI 联调)────────────────────────────
+  private readonly tenantVerifications = new Map<
+    string,
+    TenantVerificationRecord[]
+  >();
+
+  async getLatestTenantVerification(
+    tenantId: string,
+  ): Promise<TenantVerificationRecord | null> {
+    return this.tenantVerifications.get(tenantId)?.[0] ?? null;
+  }
+
+  async listTenantVerifications(
+    tenantId: string,
+    limit = 20,
+  ): Promise<TenantVerificationRecord[]> {
+    return (this.tenantVerifications.get(tenantId) ?? []).slice(0, limit);
+  }
+
+  async submitTenantVerification(
+    input: SubmitTenantVerificationInput,
+  ): Promise<TenantVerificationRecord> {
+    const list = this.tenantVerifications.get(input.tenantId) ?? [];
+    if (list[0]?.status === "pending") {
+      throw new Error("verification_already_pending");
+    }
+    const record: TenantVerificationRecord = {
+      id: `mock-verification-${list.length + 1}`,
+      verificationType: "enterprise",
+      businessLicenseNo: input.businessLicenseNo,
+      legalPersonName: input.legalPersonName,
+      status: "pending",
+      rejectReason: null,
+      reviewedAt: null,
+      createdAt: new Date(),
+    };
+    this.tenantVerifications.set(input.tenantId, [record, ...list]);
+    return record;
+  }
+
   private readonly orgs = new Map<string, OrgView>();
   private readonly workspaces = new Map<string, WorkspaceView>();
   private readonly orgMembers: OrgMembershipView[] = [];

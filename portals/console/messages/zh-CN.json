@@ -1218,6 +1218,55 @@
         "description": "发起、审核与变更记录。",
         "empty": "暂无认证记录。"
       }
+    },
+    "org": {
+      "title": "企业认证",
+      "description": "完成企业实名认证,解锁增值税专用发票等企业能力;一次认证长期有效",
+      "status": {
+        "unverified": "未认证",
+        "pending": "审核中",
+        "verified": "已认证",
+        "rejected": "已驳回"
+      },
+      "pendingBanner": "认证申请已提交,平台运营将在 1-2 个工作日内完成审核",
+      "rejectedBanner": "上次申请被驳回:{reason}。请核对信息后重新提交",
+      "submittedBanner": "提交成功,等待运营审核;结果会同步到组织信息页的认证徽章",
+      "submitFailed": "提交失败,请稍后重试",
+      "current": {
+        "title": "当前认证信息",
+        "description": "认证已生效;信息变更需重新提交并审核",
+        "verifiedAt": "认证通过时间"
+      },
+      "form": {
+        "title": "提交企业认证",
+        "description": "轻量认证:填写企业登记信息即可,无需上传证件影像",
+        "retitleTitle": "变更认证信息",
+        "retitleDescription": "变更后需重新审核;审核期间原认证保持有效",
+        "licenseNo": "统一社会信用代码",
+        "licenseNoPlaceholder": "18 位统一社会信用代码",
+        "legalName": "法定代表人姓名",
+        "legalNamePlaceholder": "与营业执照一致",
+        "submit": "提交认证申请",
+        "pendingLocked": "审核中,暂不可提交"
+      },
+      "history": {
+        "title": "申请历史",
+        "description": "本组织的历次认证申请与审核结果",
+        "colAt": "提交时间",
+        "colLicense": "统一社会信用代码",
+        "colStatus": "状态",
+        "colResult": "审核结果 / 时间",
+        "awaiting": "等待审核",
+        "empty": "暂无认证申请"
+      },
+      "notes": {
+        "title": "认证说明",
+        "description": "口径与生效范围",
+        "liteTitle": "轻量模式",
+        "liteBody": "本期无需上传证件影像;平台以企业登记信息核验,必要时运营会另行联系补充材料",
+        "effectTitle": "生效范围",
+        "effectBody": "认证状态挂在租户层,所有工作空间继承;开具增值税专用发票需先完成企业认证"
+      }
     }
   },
   "securityPage": {

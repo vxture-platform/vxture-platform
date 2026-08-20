@@ -15,6 +15,8 @@ import type {
   OrgRoleCatalogEntry,
   OrgView,
   ProvisionedOrg,
+  SubmitTenantVerificationInput,
+  TenantVerificationRecord,
   WorkspaceMembershipView,
   WorkspaceView,
 } from "../types/organization.types";
@@ -93,6 +95,7 @@ interface OrgRow {
   status: string;
   tenant_no?: string | null;
   created_at?: string | null;
+  verification_status?: string | null;
 }
 interface WorkspaceRow {
   id: string;
@@ -215,7 +218,8 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     const r = await this.pool.query<OrgRow>(
       `select id, name, type, owner_user_id, status,
               tenant_no::text as tenant_no,
-              created_at::text as created_at
+              created_at::text as created_at,
+              verification_status
          from tenancy.tenants
         where id = $1 and deleted_at is null
         limit 1`,
@@ -699,6 +703,81 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     }));
   }
 
+  // ── 组织实名认证(kyc.tenant_verifications;owner 2026-08-21 P0)──────────
+  // 权威在本表,tenancy.tenants.verification_status 为反规范化快查(与 admin
+  // 审核写路径同一约定)。提交 = 追加一行 pending + 同步快查列;pending 期间
+  // 拒绝重复提交;verified 后再提交 = 变更重审(spec §3.4 裁定)。
+
+  async getLatestTenantVerification(
+    tenantId: string,
+  ): Promise<TenantVerificationRecord | null> {
+    const r = await this.pool.query<TenantVerificationRow>(
+      `${TENANT_VERIFICATION_SELECT}
+        where tenant_id = $1
+        order by created_at desc
+        limit 1`,
+      [tenantId],
+    );
+    return r.rows[0] ? mapTenantVerification(r.rows[0]) : null;
+  }
+
+  async listTenantVerifications(
+    tenantId: string,
+    limit = 20,
+  ): Promise<TenantVerificationRecord[]> {
+    const r = await this.pool.query<TenantVerificationRow>(
+      `${TENANT_VERIFICATION_SELECT}
+        where tenant_id = $1
+        order by created_at desc
+        limit $2`,
+      [tenantId, limit],
+    );
+    return r.rows.map(mapTenantVerification);
+  }
+
+  async submitTenantVerification(
+    input: SubmitTenantVerificationInput,
+  ): Promise<TenantVerificationRecord> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const latest = await client.query<{ status: string }>(
+        `select status from kyc.tenant_verifications
+          where tenant_id = $1
+          order by created_at desc
+          limit 1
+          for update`,
+        [input.tenantId],
+      );
+      if (latest.rows[0]?.status === "pending") {
+        throw new Error("verification_already_pending");
+      }
+      const inserted = await client.query<TenantVerificationRow>(
+        `insert into kyc.tenant_verifications (
+           tenant_id, verification_type, business_license_no,
+           legal_person_name, status, created_at, updated_at
+         ) values ($1, 'enterprise', $2, $3, 'pending', now(), now())
+         returning id, verification_type, business_license_no,
+                   legal_person_name, status, reject_reason, reviewed_at,
+                   created_at`,
+        [input.tenantId, input.businessLicenseNo, input.legalPersonName],
+      );
+      await client.query(
+        `update tenancy.tenants
+            set verification_status = 'pending', updated_at = now()
+          where id = $1`,
+        [input.tenantId],
+      );
+      await client.query("commit");
+      return mapTenantVerification(inserted.rows[0]!);
+    } catch (err) {
+      await client.query("rollback");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   async getEffectiveOrgPermissions(
     userId: string,
     orgId: string,
@@ -801,6 +880,14 @@ function mapOrg(row?: OrgRow): OrgView | null {
   };
   if (row.tenant_no != null) view.tenantNo = row.tenant_no;
   if (row.created_at != null) view.createdAt = row.created_at;
+  if (
+    row.verification_status === "unverified" ||
+    row.verification_status === "pending" ||
+    row.verification_status === "verified" ||
+    row.verification_status === "rejected"
+  ) {
+    view.verificationStatus = row.verification_status;
+  }
   return view;
 }
 function mapWorkspace(row?: WorkspaceRow): WorkspaceView | null {
@@ -850,4 +937,36 @@ function isUniqueViolation(error: unknown): boolean {
     "code" in error &&
     (error as { code: string }).code === "23505"
   );
+}
+
+interface TenantVerificationRow {
+  id: string;
+  verification_type: string;
+  business_license_no: string | null;
+  legal_person_name: string | null;
+  status: string;
+  reject_reason: string | null;
+  reviewed_at: Date | null;
+  created_at: Date;
+}
+
+const TENANT_VERIFICATION_SELECT = `
+      select id, verification_type, business_license_no, legal_person_name,
+             status, reject_reason, reviewed_at, created_at
+        from kyc.tenant_verifications`;
+
+function mapTenantVerification(
+  row: TenantVerificationRow,
+): TenantVerificationRecord {
+  return {
+    id: row.id,
+    verificationType:
+      row.verification_type as TenantVerificationRecord["verificationType"],
+    businessLicenseNo: row.business_license_no,
+    legalPersonName: row.legal_person_name,
+    status: row.status as TenantVerificationRecord["status"],
+    rejectReason: row.reject_reason,
+    reviewedAt: row.reviewed_at,
+    createdAt: row.created_at,
+  };
 }

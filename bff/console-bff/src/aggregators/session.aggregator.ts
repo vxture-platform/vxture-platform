@@ -334,7 +334,9 @@ export class SessionAggregator {
       timezone: p?.timezone ?? null,
       language: p?.language ?? null,
       currency: p?.currency ?? null,
-      verifiedStatus: null, // KYC §3.4 deferred (skeleton only)
+      // 反规范化快查列(权威在 kyc.tenant_verifications;admin 审核/console 提交
+      // 都会同步回写)——P0 认证提交上线后本字段接真值(2026-08-21)。
+      verifiedStatus: org.verificationStatus ?? "unverified",
       updatedAt: p?.updatedAt ?? null,
     };
   }

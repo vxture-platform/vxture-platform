@@ -1218,6 +1218,55 @@
         "description": "Submission, review, and change records.",
         "empty": "No verification records yet."
       }
+    },
+    "org": {
+      "title": "Business Verification",
+      "description": "Verify your organization to unlock special VAT invoices and other business capabilities; verify once, valid long-term",
+      "status": {
+        "unverified": "Unverified",
+        "pending": "In review",
+        "verified": "Verified",
+        "rejected": "Rejected"
+      },
+      "pendingBanner": "Application submitted — platform operations will review within 1-2 business days",
+      "rejectedBanner": "Previous application rejected: {reason}. Please check the details and resubmit",
+      "submittedBanner": "Submitted — awaiting review; the result also updates the badge on the Organization page",
+      "submitFailed": "Submission failed — please try again later",
+      "current": {
+        "title": "Current verification",
+        "description": "Verification is active; changes require re-submission and review",
+        "verifiedAt": "Verified at"
+      },
+      "form": {
+        "title": "Submit business verification",
+        "description": "Lightweight: registration details only — no document images required",
+        "retitleTitle": "Update verification details",
+        "retitleDescription": "Updates require re-review; the current verification stays valid meanwhile",
+        "licenseNo": "Unified Social Credit Code",
+        "licenseNoPlaceholder": "18-character USCC",
+        "legalName": "Legal representative",
+        "legalNamePlaceholder": "As on the business license",
+        "submit": "Submit application",
+        "pendingLocked": "In review — submission locked"
+      },
+      "history": {
+        "title": "Application history",
+        "description": "All applications and review outcomes for this organization",
+        "colAt": "Submitted at",
+        "colLicense": "USCC",
+        "colStatus": "Status",
+        "colResult": "Outcome / time",
+        "awaiting": "Awaiting review",
+        "empty": "No applications yet"
+      },
+      "notes": {
+        "title": "About verification",
+        "description": "Scope and effect",
+        "liteTitle": "Lightweight mode",
+        "liteBody": "No document images this phase; the platform verifies registration details, and operations may contact you for extras when needed",
+        "effectTitle": "Scope",
+        "effectBody": "Verification attaches to the tenant; all workspaces inherit it. Special VAT invoices require completed business verification"
+      }
     }
   },
   "securityPage": {

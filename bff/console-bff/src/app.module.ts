@@ -36,6 +36,7 @@ import { SearchRouter } from "./routers/search.router";
 import { SubscriptionRouter } from "./routers/subscription.router";
 import { TenantContextRouter } from "./routers/tenant-context.router";
 import { UsageRouter } from "./routers/usage.router";
+import { VerificationRouter } from "./routers/verification.router";
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { UsageRouter } from "./routers/usage.router";
     QuotaRouter,
     PromotionRouter,
     UsageRouter,
+    VerificationRouter,
     AtlasRouter,
     SearchRouter,
   ],

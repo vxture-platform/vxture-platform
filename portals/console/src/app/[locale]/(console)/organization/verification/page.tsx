@@ -1,5 +1,5 @@
-import { VerificationSkeleton } from "@/modules/account/VerificationSkeleton";
+import { TenantVerificationPage } from "@/modules/account/TenantVerificationPage";
 
 export default function Page() {
-  return <VerificationSkeleton scope="organization" />;
+  return <TenantVerificationPage />;
 }

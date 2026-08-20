@@ -2150,3 +2150,59 @@ export interface ConsoleVoucher {
 export async function fetchVouchers(): Promise<ConsoleVoucher[]> {
   return readJson<ConsoleVoucher[]>("/api/promotion/vouchers", []);
 }
+
+// ============================================================================
+// Tenant verification (组织企业认证 — /api/verification/tenant)
+// ============================================================================
+
+export interface ConsoleVerification {
+  id: string;
+  verificationType: string;
+  businessLicenseNo: string | null;
+  legalPersonName: string | null;
+  status: "unverified" | "pending" | "verified" | "rejected";
+  rejectReason: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+}
+
+export interface ConsoleTenantVerificationState {
+  status: "unverified" | "pending" | "verified" | "rejected";
+  latest: ConsoleVerification | null;
+  history: ConsoleVerification[];
+}
+
+export async function fetchTenantVerification(): Promise<ConsoleTenantVerificationState> {
+  return readJson<ConsoleTenantVerificationState>("/api/verification/tenant", {
+    status: "unverified",
+    latest: null,
+    history: [],
+  });
+}
+
+/** 提交企业认证;409(审核中)/403(无权限)/400(校验)报文透传。 */
+export async function submitTenantVerification(input: {
+  businessLicenseNo: string;
+  legalPersonName: string;
+}): Promise<ConsoleVerification> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/verification/tenant`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+  if (!response.ok) {
+    let message = `Request failed: ${response.status}`;
+    try {
+      const body = (await response.json()) as { message?: string };
+      if (body?.message) message = body.message;
+    } catch {
+      /* keep status message */
+    }
+    throw new ConsoleBffError(message, response.status);
+  }
+  return (await response.json()) as ConsoleVerification;
+}

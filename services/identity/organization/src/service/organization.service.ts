@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { ORGANIZATION_REPOSITORY } from "../tokens";
 import type {
+  SubmitTenantVerificationInput,
   CreateInvitationInput,
   InvitationView,
   OrganizationProfileView,
@@ -53,6 +54,17 @@ export class OrganizationService {
   }
   getDefaultWorkspace(orgId: string): Promise<WorkspaceView | null> {
     return this.repo.getDefaultWorkspace(orgId);
+  }
+
+  // ── 组织实名认证(owner 2026-08-21 P0;审核在 admin 侧,本面只提交/读)────
+  getLatestTenantVerification(tenantId: string) {
+    return this.repo.getLatestTenantVerification(tenantId);
+  }
+  listTenantVerifications(tenantId: string) {
+    return this.repo.listTenantVerifications(tenantId);
+  }
+  submitTenantVerification(input: SubmitTenantVerificationInput) {
+    return this.repo.submitTenantVerification(input);
   }
 
   // ── Org profile (§3.2/3.3/3.6) ──

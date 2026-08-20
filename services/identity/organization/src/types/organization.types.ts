@@ -20,6 +20,28 @@ export interface OrgView {
   tenantNo?: string;
   /** ISO timestamp of org creation (present on getOrgById reads). */
   createdAt?: string;
+  /** tenancy.tenants.verification_status 反规范化快查(权威在 kyc.tenant_verifications)。 */
+  verificationStatus?: "unverified" | "pending" | "verified" | "rejected";
+}
+
+/** 组织实名认证申请行(kyc.tenant_verifications;审核在 admin 侧)。 */
+export interface TenantVerificationRecord {
+  id: string;
+  verificationType: "individual" | "enterprise";
+  businessLicenseNo: string | null;
+  legalPersonName: string | null;
+  status: "unverified" | "pending" | "verified" | "rejected";
+  rejectReason: string | null;
+  reviewedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface SubmitTenantVerificationInput {
+  tenantId: string;
+  /** 提交人(customer),写不进本表——审计走 support.audit_logs;这里仅做守卫上下文 */
+  userId: string;
+  businessLicenseNo: string;
+  legalPersonName: string;
 }
 
 export interface WorkspaceView {
@@ -258,6 +280,17 @@ export interface OrganizationReadRepository {
   ): Promise<OrgMemberDetail | null>;
   /** The global org-scope role catalog (owner/manager/member) with permission codes. */
   getOrgRolesCatalog(): Promise<OrgRoleCatalogEntry[]>;
+  // ── 组织实名认证(kyc.tenant_verifications,owner 2026-08-21 P0)──────────
+  getLatestTenantVerification(
+    tenantId: string,
+  ): Promise<TenantVerificationRecord | null>;
+  listTenantVerifications(
+    tenantId: string,
+    limit?: number,
+  ): Promise<TenantVerificationRecord[]>;
+  submitTenantVerification(
+    input: SubmitTenantVerificationInput,
+  ): Promise<TenantVerificationRecord>;
 }
 
 /** Org membership joined with the member's user record (for management UIs). */

@@ -37,4 +37,6 @@ export type {
   CreateInvitationInput,
   InvitationView,
   OrganizationReadRepository,
+  TenantVerificationRecord,
+  SubmitTenantVerificationInput,
 } from "./types/organization.types";
