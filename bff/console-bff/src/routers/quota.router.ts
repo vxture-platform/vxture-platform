@@ -167,6 +167,7 @@ export interface AddonOrderView {
   price: string;
   currency: string;
   status: "pending_payment" | "completed" | "cancelled";
+  validityDays: number;
   /** 已申报待运营确认 */
   paymentDeclared: boolean;
   /** 未申报待支付单的付款截止(ISO);其余为 null */
@@ -199,6 +200,7 @@ function mapAddonOrder(r: AddonPurchaseRecord): AddonOrderView {
     price: r.price,
     currency: r.currency,
     status: r.status,
+    validityDays: r.validityDays,
     paymentDeclared: r.paymentDeclared,
     expireAt,
     activatedAt: r.activatedAt ? r.activatedAt.toISOString() : null,
@@ -261,6 +263,24 @@ export class QuotaRouter {
       createdBy: req.user.id,
       paymentTtlMinutes: paymentTtlMinutesFor(req.tenant.tenantType),
     });
+    return {
+      order: mapAddonOrder(record),
+      paymentChannels: buildPaymentChannels(record.orderNo),
+    };
+  }
+
+  /** 加油包订单详情(支付页 /quotas/addon-pay/[orderNo] 数据源)。 */
+  @Get("addon-orders/:orderNo")
+  async getAddonOrder(
+    @Req() req: Request & RequestContext,
+    @Param("orderNo") orderNo: string,
+  ): Promise<{ order: AddonOrderView; paymentChannels: PaymentChannelInfo[] }> {
+    if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
+    if (!ORDER_NO_RE.test(orderNo)) throw new BadRequestException("订单号非法");
+    const record = await this.addons.getByOrderNo(orderNo);
+    if (!record || record.tenantId !== req.tenant.id) {
+      throw new BadRequestException("加油包订单不存在");
+    }
     return {
       order: mapAddonOrder(record),
       paymentChannels: buildPaymentChannels(record.orderNo),

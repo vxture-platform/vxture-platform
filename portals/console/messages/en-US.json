@@ -384,7 +384,8 @@
     "security": "Security Settings",
     "settings": "Tenant Settings",
     "tenantSettings": "Tenant Settings",
-    "usage": "Usage"
+    "usage": "Usage",
+    "addonPay": "Booster Pack Payment"
   },
   "login": {
     "hero": {
@@ -2354,7 +2355,7 @@
     },
     "addons": {
       "title": "Booster & Extension Packs",
-      "description": "Storage extensions and AI booster packs: place an order, wire the payment and declare it — once operations confirms, the grant lands in your pools automatically",
+      "description": "Storage extensions and AI booster packs: pick a card to order, then follow the full order flow — declare the payment, operations confirms, and the grant lands in your pools",
       "colPack": "Pack",
       "colContent": "Contents",
       "colValidity": "Validity",
@@ -2391,7 +2392,14 @@
       "transactionNoPlaceholder": "Bank slip reference (optional)",
       "declareLater": "Declare later",
       "declareSubmit": "Transfer done — submit declaration",
-      "declareFailed": "Declaration failed — please try again later"
+      "declareFailed": "Declaration failed — please try again later",
+      "kindStorage": "Storage",
+      "kindCredits": "AI Credits",
+      "oneOffNote": "one-off purchase",
+      "continuePay": "Pay now",
+      "orderDetail": "Order detail",
+      "orderMenu": "Order actions",
+      "cancelHint": "Only pending orders can be cancelled"
     }
   },
   "usagePage": {
@@ -2451,5 +2459,69 @@
       "colLast": "Last call",
       "empty": "No member usage in the last 30 days"
     }
+  },
+  "addonPay": {
+    "title": "Booster Pack Payment",
+    "description": "Order {orderNo}",
+    "notFound": "Order not found or not owned by this tenant",
+    "backToQuotas": "Back to Quotas",
+    "status": {
+      "pending": "Awaiting payment",
+      "declared": "Declared",
+      "completed": "Active",
+      "cancelled": "Cancelled"
+    },
+    "summary": {
+      "title": "Order summary",
+      "description": "Pack contents and amount due; the grant lands automatically once operations confirms",
+      "pack": "Pack",
+      "content": "Contents",
+      "validity": "Validity",
+      "validUntil": "Until {date}",
+      "validityDaysFromActivation": "{days} days from activation",
+      "amountDue": "Amount due",
+      "billNo": "Bill no.",
+      "createdAt": "Ordered at"
+    },
+    "pay": {
+      "title": "Offline payment & declaration",
+      "description": "Wire the payment, submit the declaration, and it activates on confirmation",
+      "deadline": "Declare within {remain} — overdue orders are cancelled automatically",
+      "channelLabel": "Channel",
+      "referenceNote": "Include order no. {orderNo} in the transfer reference for reconciliation"
+    },
+    "channels": {
+      "alipay": "Alipay",
+      "bank_transfer": "Bank transfer",
+      "wechat": "WeChat Pay",
+      "comingSoon": "coming soon",
+      "alipayQrAlt": "Alipay QR code"
+    },
+    "bank": {
+      "accountName": "Account name",
+      "bankName": "Bank",
+      "accountNo": "Account number",
+      "reference": "Transfer reference (required)",
+      "unavailable": "Receiving account not configured — contact platform operations"
+    },
+    "declare": {
+      "payerName": "Payer name",
+      "payerNamePlaceholder": "Name on the sending account",
+      "transactionNo": "Transfer reference no.",
+      "transactionNoPlaceholder": "Bank slip reference (optional)",
+      "submit": "Transfer done — submit declaration"
+    },
+    "declared": {
+      "note": "Declaration submitted — awaiting operations confirmation; this page refreshes automatically"
+    },
+    "completed": {
+      "note": "Active! The grant is in your pools, valid until {date}"
+    },
+    "cancelled": {
+      "note": "This order was cancelled; place a new one from the Quotas page"
+    },
+    "cancelOrder": "Cancel order",
+    "declareFailed": "Declaration failed — please try again later",
+    "cancelFailed": "Cancel failed — please try again later"
   }
 }

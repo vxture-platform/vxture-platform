@@ -384,7 +384,8 @@
     "security": "安全设置",
     "settings": "租户设置",
     "tenantSettings": "租户设置",
-    "usage": "用量分析"
+    "usage": "用量分析",
+    "addonPay": "加油包支付"
   },
   "login": {
     "hero": {
@@ -2354,7 +2355,7 @@
     },
     "addons": {
       "title": "加油包与扩展包",
-      "description": "存储扩展包与 AI 加油包:下单后对公转账并申报,运营确认收款即自动入池生效",
+      "description": "存储扩展包与 AI 加油包:选卡下单,走完整订单流程——付款申报、运营核销后额度自动入池生效",
       "colPack": "包",
       "colContent": "内容",
       "colValidity": "有效期",
@@ -2391,7 +2392,14 @@
       "transactionNoPlaceholder": "银行回单流水号(选填)",
       "declareLater": "稍后申报",
       "declareSubmit": "已完成转账,提交申报",
-      "declareFailed": "申报失败,请稍后重试"
+      "declareFailed": "申报失败,请稍后重试",
+      "kindStorage": "存储",
+      "kindCredits": "AI Credits",
+      "oneOffNote": "一次性买断",
+      "continuePay": "去支付",
+      "orderDetail": "订单详情",
+      "orderMenu": "订单操作",
+      "cancelHint": "仅待支付订单可取消"
     }
   },
   "usagePage": {
@@ -2451,5 +2459,69 @@
       "colLast": "最近调用",
       "empty": "近 30 天暂无成员用量"
     }
+  },
+  "addonPay": {
+    "title": "加油包订单支付",
+    "description": "订单 {orderNo}",
+    "notFound": "订单不存在或不属于当前租户",
+    "backToQuotas": "返回配额管理",
+    "status": {
+      "pending": "待支付",
+      "declared": "已申报待确认",
+      "completed": "已开通",
+      "cancelled": "已取消"
+    },
+    "summary": {
+      "title": "订单摘要",
+      "description": "加油包内容与应付金额;运营确认收款后自动入池",
+      "pack": "加油包",
+      "content": "内容",
+      "validity": "有效期",
+      "validUntil": "至 {date}",
+      "validityDaysFromActivation": "自开通之日起 {days} 天",
+      "amountDue": "应付金额",
+      "billNo": "账单号",
+      "createdAt": "下单时间"
+    },
+    "pay": {
+      "title": "线下支付与申报",
+      "description": "完成转账后提交申报,运营核销即生效",
+      "deadline": "请在 {remain} 内完成支付申报,逾期订单自动取消",
+      "channelLabel": "支付渠道",
+      "referenceNote": "请在转账附言中注明订单号 {orderNo},以便对账"
+    },
+    "channels": {
+      "alipay": "支付宝",
+      "bank_transfer": "对公转账",
+      "wechat": "微信支付",
+      "comingSoon": "即将开放",
+      "alipayQrAlt": "支付宝收款二维码"
+    },
+    "bank": {
+      "accountName": "户名",
+      "bankName": "开户行",
+      "accountNo": "账号",
+      "reference": "转账附言(必填)",
+      "unavailable": "对公收款账户暂未配置,请联系平台运营"
+    },
+    "declare": {
+      "payerName": "付款方名称",
+      "payerNamePlaceholder": "转出账户户名(便于对账)",
+      "transactionNo": "转账流水号",
+      "transactionNoPlaceholder": "银行回单流水号(选填)",
+      "submit": "已完成转账,提交申报"
+    },
+    "declared": {
+      "note": "申报已提交,等待运营确认收款;确认后额度自动入池,本页会自动刷新"
+    },
+    "completed": {
+      "note": "已开通!额度已入池,有效期至 {date};可回配额管理页查看"
+    },
+    "cancelled": {
+      "note": "订单已取消;如需购买请回配额管理页重新下单"
+    },
+    "cancelOrder": "取消订单",
+    "declareFailed": "申报失败,请稍后重试",
+    "cancelFailed": "取消失败,请稍后重试"
   }
 }

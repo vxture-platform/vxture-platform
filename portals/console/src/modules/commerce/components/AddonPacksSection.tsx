@@ -6,43 +6,43 @@
  * @layer Application
  * @category Module
  *
- * 自助购买闭环的 console 端(owner 2026-08-20):选包下单 → 弹出对公转账
- * 信息 + 转账申报(付款人/流水号)→ 运营核销后额度自动入池。订单表内闭环,
- * 不进「我的订单」订阅单列表(v1 边界,合并展示登记后置)。
- * DS 组合件拼装(Dialog/DataTable/StatusBadge/Banner),无自造样式层。
+ * 2026-08-21 owner 整改:加油包是我们的**服务**,必须卡片模式(不做表格目录),
+ * 且走完整订单流程——卡片「购买」下单 → 跳 /quotas/addon-pay/[orderNo] 支付页
+ * (四步流程条:下单→付款→收款→开通)→ 运营核销 → 额度入池生效。
+ * 本区 = 服务卡片栅格(3/行,与订阅 hub 卡同构)+ 订单记录表(序号列 +
+ * 单操作列:去支付主按钮 + ⋯ 取消,遵守表格规范)。
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
+  ActionMenu,
+  Badge,
   Banner,
   Button,
+  Card,
+  CardContent,
+  CardFooter,
   DataTable,
-  DetailList,
-  DetailRow,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   EmptyState,
-  FieldLabel,
-  Input,
+  Icon,
   StatusBadge,
 } from "@vxture/design-system";
-import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
+import type {
+  ActionMenuItem,
+  DataTableColumn,
+  IconName,
+  StatusBadgeTone,
+} from "@vxture/design-system";
 import {
   cancelAddonOrder,
   createAddonOrder,
-  declareAddonPayment,
   fetchAddonOrders,
   fetchAddonPacks,
-  fetchAddonPaymentChannels,
   type ConsoleAddonOrder,
   type ConsoleAddonPack,
-  type PaymentChannelInfo,
 } from "@/api/console-bff";
+import { useRouter } from "@/lib/i18n/navigation";
 import { PageSection } from "@/layout/shell";
 import { fmtDate, fmtTime } from "./hubModel";
 import { formatBytes } from "../QuotasPage";
@@ -53,13 +53,100 @@ const fmtCount = (v: number): string => v.toLocaleString("en-US");
 const packAmount = (metricKey: string, amount: number): string =>
   metricKey === "storage.bytes" ? formatBytes(amount) : fmtCount(amount);
 
-type DeclareTarget = {
-  orderNo: string;
-  packName: string;
-  price: string;
-  currency: string;
-  channels: PaymentChannelInfo[];
+const PACK_ICON: Record<string, IconName> = {
+  "storage.bytes": "hard-drive",
+  "ai.credit": "sparkles",
 };
+
+// ============================================================================
+// 服务卡片
+// ============================================================================
+
+function AddonPackCard({
+  pack,
+  pendingOrderNo,
+  busy,
+  onBuy,
+  onContinue,
+  formatMoney,
+}: {
+  pack: ConsoleAddonPack;
+  /** 该包已有待支付单 → 卡片主操作变「继续支付」 */
+  pendingOrderNo: string | null;
+  busy: boolean;
+  onBuy: (pack: ConsoleAddonPack) => void;
+  onContinue: (orderNo: string) => void;
+  formatMoney: (yuan: string, currency: string) => string;
+}) {
+  const t = useTranslations("quotasPage.addons");
+  return (
+    <Card surface="base" className="gap-md py-lg">
+      <CardContent className="flex flex-1 flex-col gap-md">
+        <div className="flex items-center gap-md">
+          <span className="flex size-control-md items-center justify-center rounded-md bg-accent text-foreground">
+            <Icon
+              name={PACK_ICON[pack.metricKey] ?? "lightning"}
+              size="sm"
+              fallback="lightning"
+            />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-label-md text-foreground">
+              {pack.packName}
+            </span>
+            <span className="block truncate font-mono text-body-sm text-muted-foreground">
+              {pack.packCode}
+            </span>
+          </span>
+          <Badge variant="outline">
+            {pack.metricKey === "storage.bytes"
+              ? t("kindStorage")
+              : t("kindCredits")}
+          </Badge>
+        </div>
+
+        <div className="flex items-baseline gap-xs">
+          <strong className="text-title-md text-foreground tabular-nums">
+            {packAmount(pack.metricKey, pack.amount)}
+          </strong>
+          <span className="text-body-sm text-muted-foreground">
+            {t("validityDays", { days: pack.validityDays })}
+          </span>
+        </div>
+
+        <div className="mt-auto flex items-baseline gap-xs pt-sm">
+          <strong className="text-title-sm text-foreground tabular-nums">
+            {formatMoney(pack.price, pack.currency)}
+          </strong>
+          <span className="text-body-sm text-muted-foreground">
+            {t("oneOffNote")}
+          </span>
+        </div>
+      </CardContent>
+
+      <CardFooter className="justify-end gap-md">
+        {pendingOrderNo ? (
+          <Button size="sm" onClick={() => onContinue(pendingOrderNo)}>
+            {t("continuePay")}
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => onBuy(pack)}
+          >
+            {t("buy")}
+          </Button>
+        )}
+      </CardFooter>
+    </Card>
+  );
+}
+
+// ============================================================================
+// 区块
+// ============================================================================
 
 export function AddonPacksSection({
   onSettledRefresh,
@@ -70,18 +157,13 @@ export function AddonPacksSection({
   formatMoney: (yuan: string, currency: string) => string;
 }) {
   const t = useTranslations("quotasPage.addons");
+  const router = useRouter();
 
   const [packs, setPacks] = useState<ConsoleAddonPack[]>([]);
   const [orders, setOrders] = useState<ConsoleAddonOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busyPack, setBusyPack] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [declareTarget, setDeclareTarget] = useState<DeclareTarget | null>(
-    null,
-  );
-  const [payerName, setPayerName] = useState("");
-  const [transactionNo, setTransactionNo] = useState("");
-  const [declaring, setDeclaring] = useState(false);
 
   const reload = useCallback(() => {
     return Promise.all([fetchAddonPacks(), fetchAddonOrders()]).then(
@@ -97,65 +179,25 @@ export function AddonPacksSection({
     reload().finally(() => setLoading(false));
   }, [reload]);
 
-  const hasPendingFor = (packCode: string): boolean =>
-    orders.some(
+  const pendingOrderFor = (packCode: string): string | null =>
+    orders.find(
       (o) => o.packCode === packCode && o.status === "pending_payment",
-    );
+    )?.orderNo ?? null;
+
+  const goPay = (orderNo: string) =>
+    router.push(`/quotas/addon-pay/${orderNo}`);
 
   const handleBuy = async (pack: ConsoleAddonPack) => {
     setError(null);
-    setBusyPack(pack.packCode);
+    setBusy(true);
     try {
-      const { order, paymentChannels } = await createAddonOrder(pack.packCode);
-      await reload();
-      setPayerName("");
-      setTransactionNo("");
-      setDeclareTarget({
-        orderNo: order.orderNo,
-        packName: order.packName,
-        price: order.price,
-        currency: order.currency,
-        channels: paymentChannels,
-      });
+      // 完整订单流程:下单即建单,支付/申报在订单支付页完成
+      const { order } = await createAddonOrder(pack.packCode);
+      goPay(order.orderNo);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("buyFailed"));
     } finally {
-      setBusyPack(null);
-    }
-  };
-
-  const openDeclare = async (order: ConsoleAddonOrder) => {
-    setError(null);
-    const channels = await fetchAddonPaymentChannels(order.orderNo);
-    setPayerName("");
-    setTransactionNo("");
-    setDeclareTarget({
-      orderNo: order.orderNo,
-      packName: order.packName,
-      price: order.price,
-      currency: order.currency,
-      channels,
-    });
-  };
-
-  const handleDeclare = async () => {
-    if (!declareTarget) return;
-    setDeclaring(true);
-    try {
-      const ok = await declareAddonPayment(declareTarget.orderNo, {
-        ...(payerName.trim() ? { payerName: payerName.trim() } : {}),
-        ...(transactionNo.trim()
-          ? { transactionNo: transactionNo.trim() }
-          : {}),
-      });
-      if (!ok) {
-        setError(t("declareFailed"));
-        return;
-      }
-      setDeclareTarget(null);
-      await reload();
-    } finally {
-      setDeclaring(false);
+      setBusy(false);
     }
   };
 
@@ -167,64 +209,7 @@ export function AddonPacksSection({
     onSettledRefresh();
   };
 
-  // ── 包目录表 ──────────────────────────────────────────────────────────────
-  const packColumns: DataTableColumn<ConsoleAddonPack>[] = [
-    {
-      id: "pack",
-      header: t("colPack"),
-      cell: (p) => (
-        <span className="flex flex-col">
-          <span className="text-foreground">{p.packName}</span>
-          <span className="font-mono text-body-sm text-muted-foreground">
-            {p.packCode}
-          </span>
-        </span>
-      ),
-    },
-    {
-      id: "content",
-      header: t("colContent"),
-      align: "right",
-      cell: (p) => (
-        <span className="tabular-nums">
-          {packAmount(p.metricKey, p.amount)}
-        </span>
-      ),
-    },
-    {
-      id: "validity",
-      header: t("colValidity"),
-      align: "right",
-      cell: (p) => t("validityDays", { days: p.validityDays }),
-    },
-    {
-      id: "price",
-      header: t("colPrice"),
-      align: "right",
-      cell: (p) => (
-        <span className="tabular-nums font-medium text-foreground">
-          {formatMoney(p.price, p.currency)}
-        </span>
-      ),
-    },
-    {
-      id: "buy",
-      header: "",
-      align: "right",
-      cell: (p) => (
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={busyPack !== null || hasPendingFor(p.packCode)}
-          onClick={() => void handleBuy(p)}
-        >
-          {hasPendingFor(p.packCode) ? t("pendingExists") : t("buy")}
-        </Button>
-      ),
-    },
-  ];
-
-  // ── 订单表 ────────────────────────────────────────────────────────────────
+  // ── 订单记录表(序号列 + 单操作列,遵守表格规范)──────────────────────────
   const orderStatus = (
     o: ConsoleAddonOrder,
   ): { tone: StatusBadgeTone; label: string } => {
@@ -317,31 +302,23 @@ export function AddonPacksSection({
         return "—";
       },
     },
-    {
-      id: "actions",
-      header: "",
-      align: "right",
-      cell: (o) =>
-        o.status === "pending_payment" && !o.paymentDeclared ? (
-          <span className="flex items-center justify-end gap-xs">
-            <Button size="sm" onClick={() => void openDeclare(o)}>
-              {t("declare")}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => void handleCancel(o)}
-            >
-              {t("cancel")}
-            </Button>
-          </span>
-        ) : null,
-    },
   ];
 
-  const bank = declareTarget?.channels.find(
-    (c) => c.channel === "bank_transfer" && c.enabled,
-  )?.account;
+  const orderMenuItems = (o: ConsoleAddonOrder): ActionMenuItem[] => [
+    {
+      id: "detail",
+      label: t("orderDetail"),
+      onSelect: () => goPay(o.orderNo),
+    },
+    {
+      id: "cancel",
+      label: t("cancel"),
+      disabled: o.status !== "pending_payment",
+      ...(o.status !== "pending_payment" ? { hint: t("cancelHint") } : {}),
+      danger: true,
+      onSelect: () => void handleCancel(o),
+    },
+  ];
 
   return (
     <PageSection
@@ -352,103 +329,45 @@ export function AddonPacksSection({
     >
       {error ? <Banner tone="danger" title={error} /> : null}
 
-      <DataTable<ConsoleAddonPack>
-        columns={packColumns}
-        rows={packs}
-        rowKey={(p) => p.packCode}
-        loading={loading}
-        empty={<EmptyState title={t("packsEmpty")} />}
-      />
+      {/* 服务卡片栅格(与订阅 hub 卡同构,3/行) */}
+      {packs.length > 0 ? (
+        <div className="grid gap-md md:grid-cols-2 xl:grid-cols-3">
+          {packs.map((p) => (
+            <AddonPackCard
+              key={p.packCode}
+              pack={p}
+              pendingOrderNo={pendingOrderFor(p.packCode)}
+              busy={busy}
+              onBuy={(pack) => void handleBuy(pack)}
+              onContinue={goPay}
+              formatMoney={formatMoney}
+            />
+          ))}
+        </div>
+      ) : loading ? null : (
+        <EmptyState title={t("packsEmpty")} />
+      )}
 
-      {orders.length > 0 || loading ? (
+      {orders.length > 0 ? (
         <DataTable<ConsoleAddonOrder>
           columns={orderColumns}
           rows={orders}
           rowKey={(o) => o.orderNo}
           loading={loading}
+          indexStart={1}
+          rowActions={(o) => (
+            <span className="inline-flex items-center justify-center gap-xs">
+              {o.status === "pending_payment" && !o.paymentDeclared ? (
+                <Button size="sm" onClick={() => goPay(o.orderNo)}>
+                  {t("continuePay")}
+                </Button>
+              ) : null}
+              <ActionMenu label={t("orderMenu")} items={orderMenuItems(o)} />
+            </span>
+          )}
           empty={<EmptyState title={t("ordersEmpty")} />}
         />
       ) : null}
-
-      {/* 转账申报弹窗:对公收款信息 + 付款人/流水号 */}
-      <Dialog
-        open={declareTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setDeclareTarget(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("declareTitle")}</DialogTitle>
-            <DialogDescription>
-              {declareTarget
-                ? t("declareDescription", {
-                    pack: declareTarget.packName,
-                    price: formatMoney(
-                      declareTarget.price,
-                      declareTarget.currency,
-                    ),
-                  })
-                : null}
-            </DialogDescription>
-          </DialogHeader>
-
-          {bank ? (
-            <DetailList>
-              <DetailRow label={t("bankAccountName")}>
-                {bank.accountName}
-              </DetailRow>
-              <DetailRow label={t("bankName")}>{bank.bankName}</DetailRow>
-              <DetailRow label={t("bankAccountNo")}>
-                <span className="font-mono">{bank.accountNo}</span>
-              </DetailRow>
-              <DetailRow label={t("bankReference")}>
-                <span className="font-mono">{bank.reference}</span>
-              </DetailRow>
-            </DetailList>
-          ) : (
-            <Banner tone="info" title={t("bankUnavailable")} />
-          )}
-
-          <div className="flex flex-col gap-sm">
-            <div className="flex flex-col gap-xs">
-              <FieldLabel htmlFor="addon-payer-name">
-                {t("payerName")}
-              </FieldLabel>
-              <Input
-                id="addon-payer-name"
-                value={payerName}
-                onChange={(e) => setPayerName(e.target.value)}
-                placeholder={t("payerNamePlaceholder")}
-              />
-            </div>
-            <div className="flex flex-col gap-xs">
-              <FieldLabel htmlFor="addon-transaction-no">
-                {t("transactionNo")}
-              </FieldLabel>
-              <Input
-                id="addon-transaction-no"
-                value={transactionNo}
-                onChange={(e) => setTransactionNo(e.target.value)}
-                placeholder={t("transactionNoPlaceholder")}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeclareTarget(null)}
-              disabled={declaring}
-            >
-              {t("declareLater")}
-            </Button>
-            <Button onClick={() => void handleDeclare()} disabled={declaring}>
-              {t("declareSubmit")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </PageSection>
   );
 }
