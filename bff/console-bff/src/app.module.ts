@@ -34,6 +34,7 @@ import { QuotaRouter } from "./routers/quota.router";
 import { SearchRouter } from "./routers/search.router";
 import { SubscriptionRouter } from "./routers/subscription.router";
 import { TenantContextRouter } from "./routers/tenant-context.router";
+import { UsageRouter } from "./routers/usage.router";
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { TenantContextRouter } from "./routers/tenant-context.router";
     SubscriptionRouter,
     BillingRouter,
     QuotaRouter,
+    UsageRouter,
     AtlasRouter,
     SearchRouter,
   ],

@@ -152,6 +152,13 @@ const subscriptionBillingSection: NavigationSection = {
       descriptionKey: "quotas.description",
       capability: "tenant.quota.read",
     },
+    {
+      href: "/usage",
+      labelKey: "usage.label",
+      icon: "chart-line",
+      descriptionKey: "usage.description",
+      capability: "tenant.quota.read",
+    },
   ],
 };
 

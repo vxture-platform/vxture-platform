@@ -360,6 +360,10 @@
       "systemSettings": {
         "label": "System settings",
         "description": "Platform and account system settings"
+      },
+      "usage": {
+        "label": "Usage Analytics",
+        "description": "Consumption trends, call records, and member breakdown"
       }
     }
   },
@@ -379,7 +383,8 @@
     "notifications": "Notifications",
     "security": "Security Settings",
     "settings": "Tenant Settings",
-    "tenantSettings": "Tenant Settings"
+    "tenantSettings": "Tenant Settings",
+    "usage": "Usage"
   },
   "login": {
     "hero": {
@@ -2267,6 +2272,63 @@
       "colRemaining": "Left",
       "wsShared": "Shared workspace-wide",
       "empty": "No product quotas yet — they appear once you subscribe"
+    }
+  },
+  "usagePage": {
+    "title": "Usage Analytics",
+    "description": "AI Credits consumption trends, product distribution, and task-level call records",
+    "metrics": {
+      "groupLabel": "Usage overview",
+      "last7": "Last 7 days",
+      "last30": "Last 30 days",
+      "thisYear": "This year",
+      "creditsUnit": "AI Credits"
+    },
+    "trend": {
+      "title": "Usage trend",
+      "description": "AI Credits consumption by period; dashboard figures only, never a billing basis",
+      "windowLabel": "Period",
+      "windowDay": "30 days",
+      "windowWeek": "12 weeks",
+      "windowMonth": "12 months",
+      "windowYear": "Yearly",
+      "colPeriod": "Period",
+      "colTotal": "Consumed",
+      "colByProduct": "By product",
+      "colDelta": "Change",
+      "empty": "No usage data in this period"
+    },
+    "share": {
+      "title": "By product",
+      "description": "Each product's share of consumption in the selected period",
+      "colProduct": "Product",
+      "colTotal": "Consumed",
+      "colShare": "Share",
+      "empty": "No product consumption yet"
+    },
+    "events": {
+      "title": "Call records",
+      "description": "Task-level detail: one row per call, with amount and user attribution (last 90 days)",
+      "colAt": "Time",
+      "colProduct": "Product",
+      "colMetric": "Metric",
+      "colAmount": "Amount",
+      "colUser": "User",
+      "colRequest": "Request ID",
+      "unattributed": "Unattributed",
+      "total": "{count} records in the last 90 days",
+      "prevPage": "Previous",
+      "nextPage": "Next",
+      "empty": "No call records yet"
+    },
+    "members": {
+      "title": "By member",
+      "description": "Each member's AI Credits consumption over the last 30 days (calls without user attribution fall into \"Unattributed\")",
+      "colMember": "Member",
+      "colTotal": "Consumed",
+      "colCount": "Calls",
+      "colLast": "Last call",
+      "empty": "No member usage in the last 30 days"
     }
   }
 }

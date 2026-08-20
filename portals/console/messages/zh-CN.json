@@ -360,6 +360,10 @@
       "systemSettings": {
         "label": "系统设置",
         "description": "平台与账户的系统级设置"
+      },
+      "usage": {
+        "label": "用量分析",
+        "description": "消耗趋势、调用记录与成员细分"
       }
     }
   },
@@ -379,7 +383,8 @@
     "notifications": "通知提醒",
     "security": "安全设置",
     "settings": "租户设置",
-    "tenantSettings": "租户设置"
+    "tenantSettings": "租户设置",
+    "usage": "用量分析"
   },
   "login": {
     "hero": {
@@ -2267,6 +2272,63 @@
       "colRemaining": "剩余",
       "wsShared": "全工作空间共用",
       "empty": "暂无产品配额,订阅产品后自动生成"
+    }
+  },
+  "usagePage": {
+    "title": "用量分析",
+    "description": "AI Credits 消耗的周期趋势、产品分布与任务级调用记录",
+    "metrics": {
+      "groupLabel": "用量概览",
+      "last7": "近 7 天消耗",
+      "last30": "近 30 天消耗",
+      "thisYear": "本年累计",
+      "creditsUnit": "AI Credits"
+    },
+    "trend": {
+      "title": "用量趋势",
+      "description": "按周期查看 AI Credits 消耗;统计口径为纯看板数据,不作计费依据",
+      "windowLabel": "统计周期",
+      "windowDay": "近 30 天",
+      "windowWeek": "近 12 周",
+      "windowMonth": "近 12 月",
+      "windowYear": "按年",
+      "colPeriod": "期间",
+      "colTotal": "消耗量",
+      "colByProduct": "按产品",
+      "colDelta": "环比",
+      "empty": "所选周期内暂无用量数据"
+    },
+    "share": {
+      "title": "按产品分布",
+      "description": "当前统计周期内各产品的消耗占比",
+      "colProduct": "产品",
+      "colTotal": "消耗量",
+      "colShare": "占比",
+      "empty": "暂无产品消耗数据"
+    },
+    "events": {
+      "title": "调用记录",
+      "description": "任务级明细:每次调用一行,含数量与归因用户(近 90 天)",
+      "colAt": "时间",
+      "colProduct": "产品",
+      "colMetric": "指标",
+      "colAmount": "数量",
+      "colUser": "用户",
+      "colRequest": "请求号",
+      "unattributed": "未归集",
+      "total": "近 90 天共 {count} 条",
+      "prevPage": "上一页",
+      "nextPage": "下一页",
+      "empty": "暂无调用记录"
+    },
+    "members": {
+      "title": "按成员统计",
+      "description": "近 30 天各成员的 AI Credits 消耗(产品未上报用户的调用归入「未归集」)",
+      "colMember": "成员",
+      "colTotal": "消耗量",
+      "colCount": "调用次数",
+      "colLast": "最近调用",
+      "empty": "近 30 天暂无成员用量"
     }
   }
 }

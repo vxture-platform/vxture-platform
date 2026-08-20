@@ -1791,3 +1791,59 @@ export async function fetchQuotaOverview(): Promise<ConsoleQuotaOverview> {
     EMPTY_QUOTA_OVERVIEW,
   );
 }
+
+// ============================================================================
+// Usage analytics (用量分析页 /usage — GET /api/usage/*)
+// ============================================================================
+
+export interface ConsoleUsageTrendBucket {
+  period: string;
+  total: number;
+  byProduct: { productCode: string; productName: string; total: number }[];
+}
+
+export interface ConsoleUsageTrend {
+  metric: string;
+  granularity: string;
+  buckets: ConsoleUsageTrendBucket[];
+}
+
+export interface ConsoleUsageEvent {
+  at: string;
+  productCode: string;
+  productName: string;
+  metric: string;
+  amount: number;
+  /** null = 产品未归集用户(容错桶) */
+  userName: string | null;
+  requestId: string | null;
+}
+
+export interface ConsoleUsageMember {
+  /** null = 未归集桶 */
+  userName: string | null;
+  total: number;
+  eventCount: number;
+  lastAt: string;
+}
+
+export async function fetchUsageTrend(
+  granularity: string,
+  span?: number,
+): Promise<ConsoleUsageTrend> {
+  const spanQ = span ? `&span=${span}` : "";
+  return readJson<ConsoleUsageTrend>(
+    `/api/usage/trend?granularity=${encodeURIComponent(granularity)}${spanQ}`,
+    { metric: "ai.credit", granularity, buckets: [] },
+  );
+}
+
+export async function fetchUsageEvents(): Promise<ConsoleUsageEvent[]> {
+  return readJson<ConsoleUsageEvent[]>("/api/usage/events", []);
+}
+
+export async function fetchUsageMembers(
+  days = 30,
+): Promise<ConsoleUsageMember[]> {
+  return readJson<ConsoleUsageMember[]>(`/api/usage/members?days=${days}`, []);
+}
