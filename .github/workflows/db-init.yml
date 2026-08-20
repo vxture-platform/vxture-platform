@@ -12,6 +12,8 @@ name: db-init
 #
 #   action=seed              -> 29-seed (reseed platform catalog + sample via the new DDL seed)
 #                               -> 30-verify (live baseline audit)
+#   action=migrate           -> 28d replay migrations/*.sql (idempotent, POPULATED db)
+#                               -> 28c restamp ddl baseline -> 30-verify (product_330)
 #   action=migrate-seed      -> 28-apply (clean-baseline DDL, no reset) then 29-seed -> 30-verify
 #   action=reset             -> 28b capture appoidc -> 28-apply --reset (DROP+rebuild 19 schemas)
 #                               -> 29-seed -> 28b restore appoidc (coordinated cutover, §6)
@@ -54,6 +56,7 @@ on:
         type: choice
         options:
           - seed
+          - migrate
           - migrate-seed
           - reset
           - provision-secrets
@@ -121,7 +124,7 @@ jobs:
           HEAD_SHA="$(git rev-parse HEAD)"
           if [ -z "$EXPECTED_SHA" ]; then
             case "$DB_ACTION" in
-              reset|migrate-seed|seed|provision-secrets|test-delivery|restamp-ddl-baseline)
+              reset|migrate|migrate-seed|seed|provision-secrets|test-delivery|restamp-ddl-baseline)
                 echo "::error::DB-mutating action '$DB_ACTION' requires expected_sha (ref tips move; pin the verified version). HEAD=$HEAD_SHA" >&2
                 exit 1
                 ;;
@@ -242,7 +245,7 @@ jobs:
             # unquoted/double-quoted hash into garbage). test-delivery and
             # restamp-ddl-baseline never call 29-seed, so this precondition
             # doesn't apply to either.
-            if [ "$DB_ACTION" != "verify" ] && [ "$DB_ACTION" != "test-delivery" ] && [ "$DB_ACTION" != "restamp-ddl-baseline" ]; then
+            if [ "$DB_ACTION" != "verify" ] && [ "$DB_ACTION" != "test-delivery" ] && [ "$DB_ACTION" != "restamp-ddl-baseline" ] && [ "$DB_ACTION" != "migrate" ]; then
               # [$] bracket expression = literal $ in ERE, robust across the
               # YAML->ssh->shell quoting layers (a backslashed \$ collapses to a
               # mid-pattern anchor that can never match). Single quote REQUIRED:
@@ -258,6 +261,16 @@ jobs:
               seed)
                 # Reseed platform catalog (+ sample) with the new DDL seed, then audit.
                 CONFIRM_SEED=yes bash scripts/29-seed-platform-ddl.sh
+                bash scripts/30-verify-platform-baseline.sh
+                ;;
+              migrate)
+                # Idempotent forward migrations on a POPULATED db (28d replays
+                # migrations/*.sql — applied ones no-op by convention), then
+                # restamp the DDL baseline to the repo authority and verify.
+                # This is the runway 28's create-once baseline apply can't be:
+                # small-step DDL evolution without reset (product_330).
+                CONFIRM_MIGRATE=yes bash scripts/28d-apply-migrations.sh
+                CONFIRM_RESTAMP=yes bash scripts/28c-restamp-ddl-baseline.sh
                 bash scripts/30-verify-platform-baseline.sh
                 ;;
               migrate-seed)
