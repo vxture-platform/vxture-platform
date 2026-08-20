@@ -72,3 +72,29 @@ export interface ReleaseCredential {
   discountVoucherId?: string | null;
   creditVoucherId?: string | null;
 }
+
+/**
+ * 「我的卡券」行(owner 2026-08-21 P0):全 kind、全状态的租户视角台账。
+ * 展示态由读侧派生——库里没有主动置 expired 的清扫(到期只靠谓词过滤),
+ * 所以过期必须按时间算,不能只看 status。
+ */
+export interface TenantVoucherRecord {
+  voucherId: string;
+  code: string;
+  kind: VoucherKind;
+  batchName: string;
+  /** 批次 effect 原文(kind 专属;金额一律整数分,展示端换算)。 */
+  effect: Record<string, unknown>;
+  /** 库内原始状态(assigned/reserved/redeemed/expired/revoked)。 */
+  status: string;
+  /** 展示派生态。 */
+  displayStatus: "available" | "reserved" | "redeemed" | "expired" | "revoked";
+  usedCount: number;
+  maxUses: number;
+  validFrom: Date;
+  /** 有效期至 = min(voucher.expires_at, batch.valid_until)。 */
+  expiresAt: Date;
+  redeemedAt: Date | null;
+  /** 最近一次核销的对外编号(redemptions)。 */
+  redemptionNo: string | null;
+}

@@ -5,6 +5,7 @@ import type {
   AvailableVoucher,
   FinalizeVoucherInput,
   SettlementVoucherKind,
+  TenantVoucherRecord,
   VoucherScope,
 } from "../types/promotion.types";
 import {
@@ -73,6 +74,16 @@ const mapAvailableRow = (row: AvailableRow): AvailableVoucher | null => {
 @Injectable()
 export class PgPromotionRepository {
   constructor(@Inject(COMMERCE_PG_POOL) private readonly pool: Pool) {}
+
+  /** 「我的卡券」台账(全 kind/全状态;实现见文件尾的查询/派生函数)。 */
+  async listTenantVouchers(
+    scope: VoucherScope,
+    limit = 100,
+  ): Promise<TenantVoucherRecord[]> {
+    const rows = await listTenantVouchersQuery(this.pool, scope, limit);
+    const now = new Date();
+    return rows.map((r) => mapTenantVoucherRow(r, now));
+  }
 
   /** Customer-facing voucher list for the payment page (read path, own pool). */
   async listAvailableVouchers(
@@ -205,4 +216,102 @@ export class PgPromotionRepository {
     );
     return result.rowCount === 1;
   }
+}
+
+// ── 「我的卡券」台账(owner 2026-08-21 P0)────────────────────────────────────
+// 归属谓词与 P7 同构(tenant 定向批次 ∨ 定向 user ∨ 定向 workspace,禁无主券),
+// 但不套可用性过滤——台账要看已用/已锁/过期/撤销。过期是读侧派生(库里没有
+// 置 expired 的清扫),按 min(voucher.expires_at, batch.valid_until) 判。
+
+interface TenantVoucherRow {
+  id: string;
+  code: string;
+  kind: string;
+  batch_name: string;
+  effect: Record<string, unknown>;
+  status: string;
+  used_count: number;
+  max_uses: number;
+  batch_status: string;
+  valid_from: Date;
+  valid_until: Date;
+  expires_at: Date | null;
+  redeemed_at: Date | null;
+  last_redeemed_at: Date | null;
+  redemption_no: string | null;
+}
+
+export async function listTenantVouchersQuery(
+  pool: Pool,
+  scope: VoucherScope,
+  limit: number,
+): Promise<TenantVoucherRow[]> {
+  const result = await pool.query<TenantVoucherRow>(
+    `select v.id, v.code, b.kind, b.name as batch_name, b.effect,
+            v.status, v.used_count, v.max_uses,
+            b.status as batch_status, b.valid_from, b.valid_until,
+            v.expires_at, v.redeemed_at,
+            r.redeemed_at as last_redeemed_at, r.redemption_no
+       from promotion.vouchers v
+       join promotion.voucher_batches b on b.id = v.batch_id
+       left join lateral (
+         select vr.redeemed_at, vr.redemption_no
+           from promotion.voucher_redemptions vr
+          where vr.voucher_id = v.id
+          order by vr.redeemed_at desc
+          limit 1
+       ) r on true
+      where v.status <> 'issued'
+        and (b.tenant_id is null or b.tenant_id = $1)
+        and (v.assigned_user_id is null or v.assigned_user_id = $2)
+        and (v.assigned_workspace_id is null or v.assigned_workspace_id = $3)
+        and (b.tenant_id is not null
+             or v.assigned_user_id is not null
+             or v.assigned_workspace_id is not null)
+      order by (v.status in ('assigned','reserved')) desc,
+               least(coalesce(v.expires_at, b.valid_until), b.valid_until) asc,
+               v.created_at desc
+      limit $4`,
+    [scope.tenantId, scope.userId, scope.workspaceId, limit],
+  );
+  return result.rows;
+}
+
+export function mapTenantVoucherRow(
+  r: TenantVoucherRow,
+  now: Date,
+): TenantVoucherRecord {
+  const expiresAt = new Date(
+    Math.min(
+      r.expires_at ? r.expires_at.getTime() : Number.POSITIVE_INFINITY,
+      r.valid_until.getTime(),
+    ),
+  );
+  let displayStatus: TenantVoucherRecord["displayStatus"];
+  if (r.status === "revoked") displayStatus = "revoked";
+  else if (r.status === "redeemed") displayStatus = "redeemed";
+  else if (r.status === "reserved") displayStatus = "reserved";
+  else if (
+    r.status === "expired" ||
+    now.getTime() > expiresAt.getTime() ||
+    now.getTime() < r.valid_from.getTime() ||
+    r.batch_status !== "active"
+  )
+    displayStatus = "expired";
+  else displayStatus = "available";
+  return {
+    voucherId: r.id,
+    code: r.code,
+    kind: r.kind as TenantVoucherRecord["kind"],
+    batchName: r.batch_name,
+    effect: r.effect ?? {},
+    status: r.status,
+    displayStatus,
+    usedCount: r.used_count,
+    maxUses: r.max_uses,
+    validFrom: r.valid_from,
+    expiresAt,
+    redeemedAt: r.last_redeemed_at ?? r.redeemed_at,
+    redemptionNo: r.redemption_no,
+  };
 }

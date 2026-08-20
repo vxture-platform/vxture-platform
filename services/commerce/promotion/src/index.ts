@@ -10,6 +10,7 @@ export {
   parseDiscountEffect,
   parseCreditVoucherEffect,
 } from "./money/settlement-math";
+export type { TenantVoucherRecord } from "./types/promotion.types";
 export type { SettlementInput, SettlementQuote } from "./money/settlement-math";
 export type {
   VoucherKind,

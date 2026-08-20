@@ -2125,3 +2125,28 @@ export async function setSubscriptionAutoRenew(
   }
   return true;
 }
+
+// ============================================================================
+// Vouchers (我的卡券 — GET /api/promotion/vouchers)
+// ============================================================================
+
+export interface ConsoleVoucher {
+  id: string;
+  code: string;
+  kind: string;
+  batchName: string;
+  discountType?: "percent" | "fixed";
+  discountValue?: number;
+  maxOff?: string | null;
+  amount?: string;
+  status: "available" | "reserved" | "redeemed" | "expired" | "revoked";
+  usedCount: number;
+  maxUses: number;
+  expiresAt: string;
+  redeemedAt: string | null;
+  redemptionNo: string | null;
+}
+
+export async function fetchVouchers(): Promise<ConsoleVoucher[]> {
+  return readJson<ConsoleVoucher[]>("/api/promotion/vouchers", []);
+}

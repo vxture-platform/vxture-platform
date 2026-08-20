@@ -11,6 +11,7 @@ const routeLabels = new Map<string, string>([
   ["/invitations", "invitations"],
   ["/subscription", "subscription"],
   ["/billing", "billing"],
+  ["/vouchers", "vouchers"],
   ["/quotas", "quotas"],
   ["/quotas/addon-pay", "addonPay"],
   ["/usage", "usage"],

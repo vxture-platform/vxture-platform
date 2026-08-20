@@ -364,6 +364,10 @@
       "usage": {
         "label": "Usage Analytics",
         "description": "Consumption trends, call records, and member breakdown"
+      },
+      "vouchers": {
+        "label": "Vouchers",
+        "description": "Your discount and credit vouchers, validity and usage"
       }
     }
   },
@@ -385,7 +389,8 @@
     "settings": "Tenant Settings",
     "tenantSettings": "Tenant Settings",
     "usage": "Usage",
-    "addonPay": "Booster Pack Payment"
+    "addonPay": "Booster Pack Payment",
+    "vouchers": "Vouchers"
   },
   "login": {
     "hero": {
@@ -2536,5 +2541,60 @@
     "cancelOrder": "Cancel order",
     "declareFailed": "Declaration failed — please try again later",
     "cancelFailed": "Cancel failed — please try again later"
+  },
+  "vouchersPage": {
+    "title": "My Vouchers",
+    "description": "Everything you hold at a glance: usable ones apply at checkout, used ones show where they went",
+    "metrics": {
+      "groupLabel": "Voucher overview",
+      "available": "Available",
+      "expiringSoon": "{count} expiring within 7 days",
+      "noExpiring": "None expiring soon",
+      "used": "Used",
+      "usedHint": "Total redeemed",
+      "total": "All vouchers",
+      "totalHint": "Including used / expired / revoked"
+    },
+    "kind": {
+      "discount": "Discount",
+      "credit_voucher": "Credit voucher",
+      "recharge_card": "Recharge card",
+      "redemption": "Redemption code",
+      "extension": "Extension"
+    },
+    "status": {
+      "available": "Available",
+      "reserved": "In use",
+      "redeemed": "Used",
+      "expired": "Expired",
+      "revoked": "Revoked"
+    },
+    "face": {
+      "percentOff": "{percent}% off",
+      "maxOff": " (up to {amount})",
+      "fixedOff": "{amount} off"
+    },
+    "table": {
+      "title": "Vouchers",
+      "description": "\"In use\" = locked on a pending order; cancelling that order releases it automatically",
+      "filterLabel": "Filter",
+      "filterAvailable": "Available",
+      "filterAll": "All",
+      "colCode": "Code",
+      "colKind": "Kind",
+      "colFace": "Face value",
+      "colStatus": "Status",
+      "colExpires": "Valid until",
+      "colUsedAt": "Used at / Redemption no.",
+      "empty": "No vouchers yet"
+    },
+    "notes": {
+      "title": "How it works",
+      "description": "How vouchers join settlement",
+      "useTitle": "Where to use",
+      "useBody": "Pick them on the order payment page: discounts act on the order price, credit vouchers offset the amount due; one of each can stack",
+      "sourceTitle": "Where they come from",
+      "sourceBody": "Issued by platform promotions (targeted at your tenant, workspace, or you); validity shown here is authoritative"
+    }
   }
 }

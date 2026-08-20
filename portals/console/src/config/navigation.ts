@@ -146,6 +146,13 @@ const subscriptionBillingSection: NavigationSection = {
       capability: "tenant.billing.read",
     },
     {
+      href: "/vouchers",
+      labelKey: "vouchers.label",
+      icon: "ticket",
+      descriptionKey: "vouchers.description",
+      capability: "tenant.billing.read",
+    },
+    {
       href: "/quotas",
       labelKey: "quotas.label",
       icon: "database",

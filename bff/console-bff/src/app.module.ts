@@ -30,6 +30,7 @@ import { CapabilitiesRouter } from "./routers/capabilities.router";
 import { HealthRouter } from "./routers/health.router";
 import { IamRouter } from "./routers/iam.router";
 import { MeRouter } from "./routers/me.router";
+import { PromotionRouter } from "./routers/promotion.router";
 import { QuotaRouter } from "./routers/quota.router";
 import { SearchRouter } from "./routers/search.router";
 import { SubscriptionRouter } from "./routers/subscription.router";
@@ -61,6 +62,7 @@ import { UsageRouter } from "./routers/usage.router";
     SubscriptionRouter,
     BillingRouter,
     QuotaRouter,
+    PromotionRouter,
     UsageRouter,
     AtlasRouter,
     SearchRouter,

@@ -364,6 +364,10 @@
       "usage": {
         "label": "用量分析",
         "description": "消耗趋势、调用记录与成员细分"
+      },
+      "vouchers": {
+        "label": "我的卡券",
+        "description": "折扣券与抵扣金券的持有、有效期与使用记录"
       }
     }
   },
@@ -385,7 +389,8 @@
     "settings": "租户设置",
     "tenantSettings": "租户设置",
     "usage": "用量分析",
-    "addonPay": "加油包支付"
+    "addonPay": "加油包支付",
+    "vouchers": "我的卡券"
   },
   "login": {
     "hero": {
@@ -2536,5 +2541,60 @@
     "cancelOrder": "取消订单",
     "declareFailed": "申报失败,请稍后重试",
     "cancelFailed": "取消失败,请稍后重试"
+  },
+  "vouchersPage": {
+    "title": "我的卡券",
+    "description": "持有的卡券一目了然:可用的去支付页直接抵扣,用掉的能查到去向",
+    "metrics": {
+      "groupLabel": "卡券概览",
+      "available": "可用卡券",
+      "expiringSoon": "{count} 张将于 7 天内到期",
+      "noExpiring": "近期无到期",
+      "used": "已使用",
+      "usedHint": "累计核销",
+      "total": "全部卡券",
+      "totalHint": "含已用/已过期/已撤销"
+    },
+    "kind": {
+      "discount": "折扣券",
+      "credit_voucher": "抵扣金券",
+      "recharge_card": "充值卡",
+      "redemption": "兑换码",
+      "extension": "延期券"
+    },
+    "status": {
+      "available": "可用",
+      "reserved": "使用中",
+      "redeemed": "已使用",
+      "expired": "已过期",
+      "revoked": "已撤销"
+    },
+    "face": {
+      "percentOff": "减 {percent}%",
+      "maxOff": "(封顶 {amount})",
+      "fixedOff": "立减 {amount}"
+    },
+    "table": {
+      "title": "卡券列表",
+      "description": "「使用中」= 已挂在待支付订单上锁定;取消该订单会自动释放",
+      "filterLabel": "筛选",
+      "filterAvailable": "可用",
+      "filterAll": "全部",
+      "colCode": "券码",
+      "colKind": "类型",
+      "colFace": "面值",
+      "colStatus": "状态",
+      "colExpires": "有效期至",
+      "colUsedAt": "使用时间 / 核销号",
+      "empty": "暂无卡券"
+    },
+    "notes": {
+      "title": "使用说明",
+      "description": "卡券如何参与结算",
+      "useTitle": "在哪使用",
+      "useBody": "订单支付页结算时选择:折扣券作用于订单价格,抵扣金券抵减应付金额;两类可各选一张叠加",
+      "sourceTitle": "卡券来源",
+      "sourceBody": "由平台运营活动发放(定向到租户、工作空间或个人);有效期以本页展示为准"
+    }
   }
 }

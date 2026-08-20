@@ -7,6 +7,7 @@ import {
 } from "../money/settlement-math";
 import type {
   AvailableVoucher,
+  TenantVoucherRecord,
   FinalizeVoucherInput,
   ReleaseCredential,
   ReservedVoucher,
@@ -39,6 +40,13 @@ export class PromotionService {
     scope: VoucherScope,
   ): Promise<AvailableVoucher[]> {
     return this.repo.listAvailableVouchers(scope);
+  }
+
+  /** 「我的卡券」台账(owner 2026-08-21 P0):全 kind/全状态,展示态读侧派生。 */
+  async listTenantVouchers(
+    scope: VoucherScope,
+  ): Promise<TenantVoucherRecord[]> {
+    return this.repo.listTenantVouchers(scope);
   }
 
   /**
