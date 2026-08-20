@@ -1917,6 +1917,7 @@
       "renew": "续订"
     },
     "stats": {
+      "groupLabel": "产品订阅统计",
       "products": "在订产品",
       "productsHint": "含 {free} 个免费版",
       "productsHintNoFree": "当前工作区",

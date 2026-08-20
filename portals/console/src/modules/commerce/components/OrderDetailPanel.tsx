@@ -6,23 +6,31 @@
  * @layer Application
  * @category Module
  *
- * 三卡等高（grid stretch），与内容卡同构：主内容在上，卡底一行「虚线分隔 +
- * 下对齐」——归属卡底行 = 订阅人（小头像 + 常规字重姓名 + owner 标签，无手机
- * 号）；内容卡金额三段：原价（常规）→ 抵扣总额（常规）→ 订单支付金额（加粗、
- * 贴卡底）。第三卡为订单进度时间线（完整六态叙事只在这里展开）。
+ * 严格 DS 组合件拼装（owner 2026-08-20：本页表格特殊性下允许组合、不造基础
+ * 组件）：卡体 = Card surface="soft"（veil 底纹自带）+ CardContent；卡底行 =
+ * CardFooter（自带虚线 hairline + mt-auto 下对齐）。三卡等高（grid stretch）：
+ * 归属卡底行 = 订阅人（小头像 + 常规字重姓名 + owner 标签，无手机号）；
+ * 内容卡金额三段：原价（常规）→ 抵扣总额（常规）→ 订单支付金额（加粗贴底）；
+ * 第三卡为订单进度时间线（完整六态叙事只在这里展开）。
  * 操作不进本区（去支付/取消收在行操作列），纯展示。
  */
 
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { Icon, cn } from "@vxture/design-system";
+import {
+  Badge,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  Icon,
+  cn,
+} from "@vxture/design-system";
 import { formatCurrency, type Locale } from "@vxture/shared";
 import type { MyOrder } from "@/api/console-bff";
 import { infoRow, infoRowGlyph, infoRowText } from "./sectionKit";
 import { fmtStamp, groupVisibleCode } from "./hubModel";
-
-const DASHED_TOP =
-  "border-t border-dashed border-primary/10 dark:border-primary/20";
 
 interface Step {
   key: string;
@@ -85,18 +93,29 @@ function buildSteps(order: MyOrder, countdown: string | null): Step[] {
   }
 }
 
+/** 展开区小卡：DS Card 组合（soft veil），标题走 CardHeader/CardDescription，
+ *  卡底行走 CardFooter（虚线 + 下对齐），三卡因 grid stretch 等高。 */
 function DetailCard({
   title,
   children,
+  footer,
 }: {
   title: string;
   children: ReactNode;
+  footer?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-sm rounded-lg border border-border bg-card p-md">
-      <span className="text-label-sm text-muted-foreground">{title}</span>
-      {children}
-    </div>
+    <Card surface="soft" className="h-full gap-sm py-md">
+      <CardHeader>
+        <CardDescription>{title}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-1 flex-col gap-sm">
+        {children}
+      </CardContent>
+      {footer ? (
+        <CardFooter className="text-body-sm">{footer}</CardFooter>
+      ) : null}
+    </Card>
   );
 }
 
@@ -118,8 +137,27 @@ export function OrderDetailPanel({
 
   return (
     <div className="grid items-stretch gap-sm p-sm lg:grid-cols-3">
-      {/* 卡一：订阅归属 + 订阅人（卡底行） */}
-      <DetailCard title={t("ownership")}>
+      {/* 卡一：订阅归属；卡底行 = 订阅人 */}
+      <DetailCard
+        title={t("ownership")}
+        footer={
+          <span className="flex min-w-0 items-center gap-xs text-body-md text-foreground">
+            <span className="shrink-0 text-body-sm text-muted-foreground">
+              {t("subscriber")}
+            </span>
+            <span
+              aria-hidden="true"
+              className="flex size-control-xs shrink-0 items-center justify-center rounded-full bg-primary-muted-hover text-label-sm text-primary-hover"
+            >
+              {subscriberInitials}
+            </span>
+            <span className="truncate">{order.subscriberName ?? "—"}</span>
+            {order.subscriberRole === "owner" ? (
+              <Badge variant="secondary">{t("ownerTag")}</Badge>
+            ) : null}
+          </span>
+        }
+      >
         <div className={infoRow}>
           <span
             aria-hidden="true"
@@ -141,32 +179,18 @@ export function OrderDetailPanel({
             </span>
           </span>
         </div>
-        <div
-          className={cn(
-            "mt-auto flex items-center gap-xs pt-sm text-body-md text-foreground",
-            DASHED_TOP,
-          )}
-        >
-          <span className="text-body-sm text-muted-foreground">
-            {t("subscriber")}
-          </span>
-          <span
-            aria-hidden="true"
-            className="flex size-control-xs shrink-0 items-center justify-center rounded-full bg-primary-muted-hover text-label-sm text-primary-hover"
-          >
-            {subscriberInitials}
-          </span>
-          <span className="truncate">{order.subscriberName ?? "—"}</span>
-          {order.subscriberRole === "owner" ? (
-            <span className="shrink-0 rounded-full bg-primary-muted px-sm text-label-sm text-primary-muted-foreground">
-              {t("ownerTag")}
-            </span>
-          ) : null}
-        </div>
       </DetailCard>
 
-      {/* 卡二：订单内容（金额三段，支付金额贴卡底加粗） */}
-      <DetailCard title={t("content")}>
+      {/* 卡二：订单内容；卡底行 = 支付金额（加粗） */}
+      <DetailCard
+        title={t("content")}
+        footer={
+          <span className="flex w-full items-baseline justify-between gap-md text-body-md font-semibold text-foreground">
+            <span>{t("payable")}</span>
+            <span className="tabular-nums">{money(order.amount)}</span>
+          </span>
+        }
+      >
         <div className={infoRow}>
           <span
             aria-hidden="true"
@@ -197,15 +221,6 @@ export function OrderDetailPanel({
         <div className="flex items-baseline justify-between gap-md text-body-sm text-muted-foreground">
           <span>{t("discountTotal")}</span>
           <span className="tabular-nums">−{money(order.voucherOff)}</span>
-        </div>
-        <div
-          className={cn(
-            "mt-auto flex items-baseline justify-between gap-md pt-sm text-body-md font-semibold text-foreground",
-            DASHED_TOP,
-          )}
-        >
-          <span>{t("payable")}</span>
-          <span className="tabular-nums">{money(order.amount)}</span>
         </div>
       </DetailCard>
 

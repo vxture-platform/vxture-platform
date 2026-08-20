@@ -1,30 +1,34 @@
 "use client";
 
 /**
- * hubCards.tsx — 产品订阅总览页的三类卡片（product_330 定稿）。
+ * hubCards.tsx — 产品订阅总览页的两类产品卡（product_330 定稿）。
  * @package @vxture/console
  * @layer Application
  * @category Module
  *
- * 1) HubStatCards：概览条三格——数值与小字同一行；卡面走 DS Card soft veil
- *    叠层（与 /billing 同款修饰），右上角 aside 淡图标。
- * 2) SubscriptionProductCard：「我的订阅」卡。卡内分割线一律虚线；★ = 收藏
- *    （排序优先）；操作区规则：管理常驻，free/starter 追加升级，剩余 ≤5 天
- *    或已过期追加续订（主按钮）；「最新版 vX.Y.Z」纯文本（版本页未建）——
- *    平台只有一套最新实例，版本恒为当前发布号（products.release_version），
- *    随产品更新自动跟进，展示它是为了传达「持续创新」，不随订阅冻结。
- * 3) RecommendedProductCard：「新品推荐」卡，CTA 外链 website 产品详情页，
+ * 严格 DS 组合件拼装，无自造样式层（owner 2026-08-20 评审）：
+ * 卡体 = Card（veil 底纹由 surface 档自带）；卡底行 = CardFooter
+ * （自带虚线 hairline + mt-auto 下对齐）；进度 = Progress；徽章 = Badge /
+ * StatusBadge。概览统计不在本文件——页面直接用 DS MetricGrid（同 /billing）。
+ *
+ * 1) SubscriptionProductCard：「我的订阅」卡。★ = 收藏（排序优先）；操作区
+ *    规则：管理常驻，free/starter 追加升级，剩余 ≤5 天或已过期追加续订
+ *    （主按钮）；「最新版 vX.Y.Z」纯文本——平台只有一套最新实例，版本恒为
+ *    当前发布号（products.release_version），随产品更新自动跟进，展示它是
+ *    为了传达「持续创新」，不随订阅冻结。
+ * 2) RecommendedProductCard：「新品推荐」卡，CTA 外链 website 产品详情页，
  *    订阅动作由详情页承接。
  */
 
-import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   Badge,
   Button,
   Card,
   CardContent,
+  CardFooter,
   Icon,
+  Progress,
   StatusBadge,
   cn,
 } from "@vxture/design-system";
@@ -43,10 +47,6 @@ import {
   type PlanAudience,
 } from "./hubModel";
 
-/** 卡内虚线分隔（与 DS CardFooter 的 hairline.field 同款）。 */
-const DASHED_TOP =
-  "border-t border-dashed border-primary/10 dark:border-primary/20";
-
 const AUDIENCE_ICON: Record<PlanAudience, IconName> = {
   person: "user",
   team: "users",
@@ -55,56 +55,6 @@ const AUDIENCE_ICON: Record<PlanAudience, IconName> = {
 
 /** 到期临界：剩余 ≤5 天出续订主按钮（owner 定稿）。 */
 const RENEW_THRESHOLD_DAYS = 5;
-
-// ============================================================================
-// 概览条
-// ============================================================================
-
-export interface HubStat {
-  key: string;
-  icon: IconName;
-  label: string;
-  value: string;
-  /** 数值同行的小字（可含 ReactNode，如倒计时着色段）。 */
-  hint: ReactNode;
-  /** 数值警示色（如待付订单 >0）。 */
-  warn?: boolean;
-}
-
-export function HubStatCards({ items }: { items: HubStat[] }) {
-  return (
-    <div className="grid gap-md sm:grid-cols-2 lg:grid-cols-3">
-      {items.map((item) => (
-        <Card key={item.key} surface="soft" className="gap-sm py-lg">
-          <CardContent className="relative flex flex-col gap-2xs">
-            <span
-              aria-hidden="true"
-              className="absolute right-xl top-0 text-primary opacity-55"
-            >
-              <Icon name={item.icon} size="sm" />
-            </span>
-            <span className="text-label-sm text-muted-foreground">
-              {item.label}
-            </span>
-            <span className="flex flex-wrap items-baseline gap-sm">
-              <strong
-                className={cn(
-                  "text-title-lg tabular-nums",
-                  item.warn ? "text-warning-text" : "text-foreground",
-                )}
-              >
-                {item.value}
-              </strong>
-              <span className="text-body-sm text-muted-foreground">
-                {item.hint}
-              </span>
-            </span>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-}
 
 // ============================================================================
 // 收藏 ★
@@ -141,25 +91,18 @@ function FavoriteStar({
   );
 }
 
-/** 产品字母牌（icon_url 未接入前的缺省底板）。 */
+/** 产品字母牌（icon_url 未接入前的缺省底板，规格同 CyclePicker 的 icon 底板）。 */
 function ProductGlyph({
   name,
   code,
-  size = "md",
 }: {
   name: string | null;
   code: string | null;
-  size?: "md" | "sm";
 }) {
   return (
     <span
       aria-hidden="true"
-      className={cn(
-        "flex shrink-0 items-center justify-center rounded-lg bg-primary-muted-hover font-semibold text-primary-hover",
-        size === "md"
-          ? "size-control-md text-label-sm"
-          : "size-control-sm text-label-sm",
-      )}
+      className="flex size-control-md shrink-0 items-center justify-center rounded-lg bg-primary-muted-hover text-label-sm font-semibold text-primary-hover"
     >
       {productInitials(name, code)}
     </span>
@@ -195,7 +138,7 @@ export function SubscriptionProductCard({
 
   return (
     <Card surface="base" className="gap-md py-lg">
-      <CardContent className="flex flex-col gap-md px-lg">
+      <CardContent className="flex flex-1 flex-col gap-md">
         {/* 产品名 + ★ */}
         <div className="flex items-center gap-md">
           <ProductGlyph name={item.productName} code={item.productCode} />
@@ -266,26 +209,13 @@ export function SubscriptionProductCard({
                     : ""}
             </span>
           </div>
-          <div className="h-2xs overflow-hidden rounded-full bg-muted">
-            {percent != null && !expired ? (
-              <div
-                className={cn(
-                  "h-full rounded-full",
-                  nearExpiry ? "bg-warning" : "bg-primary",
-                )}
-                style={{ width: `${percent}%` }}
-              />
-            ) : null}
-          </div>
+          {percent != null && !expired ? <Progress value={percent} /> : null}
         </div>
+      </CardContent>
 
-        {/* 卡底：虚线上方留白，下方 = 链接/版本 | 操作 */}
-        <div
-          className={cn(
-            "flex items-center gap-md pt-md text-body-sm",
-            DASHED_TOP,
-          )}
-        >
+      {/* 卡底行：DS CardFooter 自带虚线分隔 + 下对齐 */}
+      <CardFooter className="justify-between gap-md text-body-sm">
+        <span className="flex min-w-0 items-center gap-md">
           {productCode ? (
             <a
               href={buildWebsiteProductUrl(locale, productCode)}
@@ -296,34 +226,34 @@ export function SubscriptionProductCard({
               {t("card.productDetail")}
             </a>
           ) : null}
-          <span className="min-w-0 flex-1 truncate text-muted-foreground tabular-nums">
+          <span className="min-w-0 truncate text-muted-foreground tabular-nums">
             {item.releaseVersion
               ? t("card.version", { version: item.releaseVersion })
               : ""}
           </span>
-          <span className="flex shrink-0 items-center gap-xs">
+        </span>
+        <span className="flex shrink-0 items-center gap-xs">
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/subscribe?product=${productCode}`}>
+              {t("card.manage")}
+            </Link>
+          </Button>
+          {showUpgrade ? (
             <Button asChild variant="outline" size="sm">
-              <Link href={`/subscribe?product=${productCode}`}>
-                {t("card.manage")}
+              <Link href={`/subscribe?product=${productCode}&intent=upgrade`}>
+                {t("card.upgrade")}
               </Link>
             </Button>
-            {showUpgrade ? (
-              <Button asChild variant="outline" size="sm">
-                <Link href={`/subscribe?product=${productCode}&intent=upgrade`}>
-                  {t("card.upgrade")}
-                </Link>
-              </Button>
-            ) : null}
-            {showRenew ? (
-              <Button asChild size="sm">
-                <Link href={`/subscribe?product=${productCode}&intent=renew`}>
-                  {t("card.renew")}
-                </Link>
-              </Button>
-            ) : null}
-          </span>
-        </div>
-      </CardContent>
+          ) : null}
+          {showRenew ? (
+            <Button asChild size="sm">
+              <Link href={`/subscribe?product=${productCode}&intent=renew`}>
+                {t("card.renew")}
+              </Link>
+            </Button>
+          ) : null}
+        </span>
+      </CardFooter>
     </Card>
   );
 }
@@ -348,7 +278,7 @@ export function RecommendedProductCard({
 
   return (
     <Card surface="base" className="gap-md py-lg">
-      <CardContent className="flex flex-1 flex-col gap-md px-lg">
+      <CardContent className="flex flex-1 flex-col gap-md">
         <div className="flex items-center gap-md">
           <ProductGlyph name={item.productName} code={item.productCode} />
           <span className="min-w-0 flex-1">
@@ -394,39 +324,28 @@ export function RecommendedProductCard({
                   item.currency,
                 )}
           </strong>
-          {!free ? (
-            <span className="text-body-sm text-muted-foreground">
-              {t("reco.fromPerMonth")}
-            </span>
-          ) : (
-            <span className="text-body-sm text-muted-foreground">
-              {t("reco.freeNote")}
-            </span>
-          )}
-        </div>
-
-        <div
-          className={cn(
-            "flex items-center justify-between gap-md pt-md text-body-sm",
-            DASHED_TOP,
-          )}
-        >
-          <a
-            href={buildWebsiteProductUrl(locale, item.productCode)}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2xs text-primary-text hover:underline"
-          >
-            {t("reco.learnMore")}
-            <Icon name="external-link" size="xs" aria-hidden />
-          </a>
-          {item.releaseVersion ? (
-            <span className="text-muted-foreground tabular-nums">
-              {t("card.version", { version: item.releaseVersion })}
-            </span>
-          ) : null}
+          <span className="text-body-sm text-muted-foreground">
+            {free ? t("reco.freeNote") : t("reco.fromPerMonth")}
+          </span>
         </div>
       </CardContent>
+
+      <CardFooter className="justify-between gap-md text-body-sm">
+        <a
+          href={buildWebsiteProductUrl(locale, item.productCode)}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2xs text-primary-text hover:underline"
+        >
+          {t("reco.learnMore")}
+          <Icon name="external-link" size="xs" aria-hidden />
+        </a>
+        {item.releaseVersion ? (
+          <span className="text-muted-foreground tabular-nums">
+            {t("card.version", { version: item.releaseVersion })}
+          </span>
+        ) : null}
+      </CardFooter>
     </Card>
   );
 }

@@ -1917,6 +1917,7 @@
       "renew": "Renew"
     },
     "stats": {
+      "groupLabel": "Subscription metrics",
       "products": "Active products",
       "productsHint": "incl. {free} free {free, plural, one {plan} other {plans}}",
       "productsHintNoFree": "in this workspace",

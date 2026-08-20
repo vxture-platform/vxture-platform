@@ -12,8 +12,9 @@
  *   ② 我的订单——展开式表格：首列展开箭头，订单列 = 租户(主)·工作区(辅) +
  *      订单号辅行，六态投影为付费/服务两轴，操作 = 去支付(主) + ⋯ 菜单；
  *   ③ 新品推荐——未订阅产品卡，外链 website 产品详情页承接订阅。
- * 概览条：在订产品 / 待付订单(TTL 倒计时) / 即将到期，数值与小字同行，
- * 卡面为 DS soft veil（与 /billing 同款）。全页无 UUID（可视码原则）。
+ * 概览指标：在订产品 / 待付订单(TTL 倒计时) / 即将到期——DS MetricGrid，
+ * 与 /billing 完全同款；板块标题走 PageSection 原生 icon prop，全页只用
+ * DS 组合件、不自造样式层（owner 2026-08-20 评审）。全页无 UUID（可视码原则）。
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -26,12 +27,17 @@ import {
   DataTable,
   EmptyState,
   Icon,
+  MetricGrid,
   SegmentedControl,
   StatusBadge,
   ViewHeader,
   ViewLayout,
 } from "@vxture/design-system";
-import type { ActionMenuItem, DataTableColumn } from "@vxture/design-system";
+import type {
+  ActionMenuItem,
+  DataTableColumn,
+  MetricGridItem,
+} from "@vxture/design-system";
 import { formatCurrency, type Locale } from "@vxture/shared";
 import {
   cancelSubscriptionOrder,
@@ -48,13 +54,10 @@ import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { PageSection } from "@/layout/shell";
 import { buildWebsiteProductsUrl } from "@/lib/website-entry";
 import {
-  HubStatCards,
   RecommendedProductCard,
   SubscriptionProductCard,
-  type HubStat,
 } from "./components/hubCards";
 import { OrderDetailPanel } from "./components/OrderDetailPanel";
-import { SectionTitle } from "./components/sectionKit";
 import {
   PAY_AXIS,
   SVC_AXIS,
@@ -167,8 +170,8 @@ export function SubscriptionPage() {
     );
   }, [products, subFilter]);
 
-  // ── 概览条 ────────────────────────────────────────────────────────────────
-  const stats = useMemo<HubStat[]>(() => {
+  // ── 概览指标（DS MetricGrid，同 /billing 的统计卡）─────────────────────────
+  const stats = useMemo<MetricGridItem[]>(() => {
     const inService = products.filter((p) => p.status !== "expired");
     const freeCount = inService.filter(
       (p) => p.kind === "free" || p.tier === "free",
@@ -187,42 +190,35 @@ export function SubscriptionPage() {
 
     return [
       {
-        key: "products",
+        id: "products",
         icon: "package",
         label: t("stats.products"),
         value: String(inService.length),
-        hint:
+        trend:
           freeCount > 0
             ? t("stats.productsHint", { free: freeCount })
             : t("stats.productsHintNoFree"),
       },
       {
-        key: "pending",
+        id: "pending",
         icon: "receipt",
         label: t("stats.pendingOrders"),
         value: String(pending.length),
-        warn: pending.length > 0,
-        hint: (
-          <>
-            {t("stats.pendingHint", { total: orders.length })}
-            {nextDeadline ? (
-              <span className="font-medium text-warning-text tabular-nums">
-                {" "}
-                ·{" "}
-                {t("stats.pendingRemain", {
-                  time: formatRemain(nextDeadline, now),
-                })}
-              </span>
-            ) : null}
-          </>
-        ),
+        ...(pending.length > 0 ? { tone: "warning" as const } : {}),
+        trend: nextDeadline
+          ? `${t("stats.pendingHint", { total: orders.length })} · ${t(
+              "stats.pendingRemain",
+              { time: formatRemain(nextDeadline, now) },
+            )}`
+          : t("stats.pendingHint", { total: orders.length }),
+        ...(nextDeadline ? { trendTone: "warning" as const } : {}),
       },
       {
-        key: "expiring",
+        id: "expiring",
         icon: "clock",
         label: t("stats.expiring"),
         value: expiring?.endAt ? fmtDate(expiring.endAt).slice(5) : "—",
-        hint: expiring
+        trend: expiring
           ? t("stats.expiringHint", {
               product: expiring.productName ?? expiring.planName,
               cycle:
@@ -451,12 +447,17 @@ export function SubscriptionPage() {
 
       {error ? <Banner tone="danger" title={error} /> : null}
 
-      <HubStatCards items={stats} />
+      <MetricGrid
+        items={stats}
+        loading={loading}
+        aria-label={t("stats.groupLabel")}
+      />
 
       {/* ① 我的订阅 */}
       <PageSection
+        icon="package"
         level={2}
-        title={<SectionTitle icon="package">{t("subs.title")}</SectionTitle>}
+        title={t("subs.title")}
         description={t("subs.description")}
         action={
           <SegmentedControl<SubFilter>
@@ -496,8 +497,9 @@ export function SubscriptionPage() {
 
       {/* ② 我的订单 */}
       <PageSection
+        icon="receipt"
         level={2}
-        title={<SectionTitle icon="receipt">{t("orders.title")}</SectionTitle>}
+        title={t("orders.title")}
         description={t("orders.description")}
       >
         <DataTable<MyOrder>
@@ -564,8 +566,9 @@ export function SubscriptionPage() {
       {/* ③ 新品推荐 */}
       {!loading && recommended.length > 0 ? (
         <PageSection
+          icon="sparkles"
           level={2}
-          title={<SectionTitle icon="sparkles">{t("reco.title")}</SectionTitle>}
+          title={t("reco.title")}
           description={t("reco.description")}
         >
           <div className="grid gap-md md:grid-cols-2 xl:grid-cols-3">
