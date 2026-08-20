@@ -1339,6 +1339,30 @@ export async function seedCatalog(client) {
       ],
     );
   }
+  // release_version 初始化（product_330：订阅卡/推荐卡「最新版 vX.Y.Z」展示位。
+  // 平台单实例恒最新——版本随产品更新由 admin 维护；seed 只在为空时给初值，
+  // 重跑不覆盖 admin 后续改动）。
+  const PRODUCT_VERSIONS = {
+    arda: "1.4.0",
+    runos: "1.2.0",
+    karda: "0.9.0",
+    vxtpl: "1.0.0",
+    atlas: "0.1.0",
+    ruyin: "0.8.0",
+    umbra: "1.0.0",
+  };
+  for (const [code, ver] of Object.entries(PRODUCT_VERSIONS)) {
+    await client.query(
+      `update product.products
+          set release_version = $2, released_at = now(), updated_at = now()
+        where product_code = $1 and release_version is null`,
+      [code, ver],
+    );
+  }
+  console.log(
+    "✓  product.products — release_version backfill (null-only; admin owns it afterwards)",
+  );
+
   const prodRes = await client.query(
     `select id, product_code from product.products`,
   );

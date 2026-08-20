@@ -37,6 +37,9 @@ GRANT UPDATE (display_name, avatar_url, avatar_hash, gender, birthday, bio, lang
 REVOKE UPDATE ON account.user_avatars FROM platform_svc;
 GRANT UPDATE (data, content_type, hash, source, updated_at) ON account.user_avatars TO platform_svc;
 
+-- account.user_product_favorites  [anchor: user_id, product_id, created_at]（全锚：只 REVOKE）
+REVOKE UPDATE ON account.user_product_favorites FROM platform_svc;
+
 -- identity.identities  [anchor: id, created_at]
 REVOKE UPDATE ON identity.identities FROM platform_svc;
 GRANT UPDATE (user_id, provider, provider_subject, metadata, updated_at) ON identity.identities TO platform_svc;

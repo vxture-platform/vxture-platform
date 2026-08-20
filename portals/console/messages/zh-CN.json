@@ -330,8 +330,8 @@
         "description": "待接受邀请与历史邀请记录"
       },
       "subscription": {
-        "label": "服务订阅",
-        "description": "套餐详情、升级与降级入口"
+        "label": "产品订阅",
+        "description": "已订产品、订单记录与新品推荐"
       },
       "billing": {
         "label": "账单记录",
@@ -372,7 +372,7 @@
     "members": "成员",
     "roles": "角色与权限",
     "invitations": "邀请记录",
-    "subscription": "订阅",
+    "subscription": "产品订阅",
     "billing": "账单",
     "quotas": "配额",
     "atlas": "模型接入",
@@ -691,7 +691,7 @@
           "title": "安全风险"
         },
         "subscription": {
-          "title": "服务订阅"
+          "title": "产品订阅"
         },
         "billing": {
           "title": "账单与发票"
@@ -1755,7 +1755,7 @@
     "notFound": "订单不存在或无权查看。",
     "countdown": "付款剩余 {time}",
     "rejectBanner": "上次付款申报未通过：{reason} 券与折扣已释放，可重新申报或取消订单，倒计时已重置。",
-    "cycleStartNote": "订阅周期自确认收款时刻起算",
+    "cycleStartNote": "订阅周期自服务开通时刻起算",
     "status": {
       "pending_payment": "待付款",
       "paid_pending_verify": "已付款 · 待确认",
@@ -1860,6 +1860,154 @@
       "voucherOff": "券抵扣 {amount}",
       "creditsTitle": "账户余额（租户共享）",
       "creditsNote": "余额用于未来按量扣款，充值入口将随扣款业务开放。"
+    }
+  },
+  "subscriptionHub": {
+    "title": "产品订阅",
+    "description": "当前工作区订阅的全部产品、订单记录与推荐，免费版同样计入订阅。",
+    "browseMarket": "浏览产品市场",
+    "loading": "正在加载…",
+    "favorite": {
+      "add": "收藏",
+      "remove": "取消收藏",
+      "error": "收藏操作失败，请稍后重试。"
+    },
+    "tier": {
+      "free": "Free",
+      "starter": "Starter",
+      "pro": "Pro",
+      "business": "Business",
+      "enterprise": "Enterprise"
+    },
+    "audience": {
+      "person": "个人",
+      "team": "团队",
+      "private": "私有化"
+    },
+    "audienceSeats": {
+      "person": "个人 · {seats} 席位",
+      "team": "团队 · {seats} 席位",
+      "private": "私有化 · {seats} 席位"
+    },
+    "cycle": {
+      "free": "免费",
+      "month": "月付",
+      "year": "年付"
+    },
+    "subStatus": {
+      "active": "服务中",
+      "expiring": "即将到期",
+      "trialing": "试用中",
+      "overdue": "宽限期",
+      "suspended": "已暂停",
+      "expired": "已过期",
+      "cancelled": "已取消"
+    },
+    "term": {
+      "perpetual": "长期有效",
+      "expired": "已过期",
+      "daysLeft": "剩余 {days} 天",
+      "freeNote": "免费版计入订阅"
+    },
+    "card": {
+      "productDetail": "产品详情",
+      "version": "最新版 v{version}",
+      "manage": "管理",
+      "upgrade": "升级",
+      "renew": "续订"
+    },
+    "stats": {
+      "products": "在订产品",
+      "productsHint": "含 {free} 个免费版",
+      "productsHintNoFree": "当前工作区",
+      "pendingOrders": "待付订单",
+      "pendingHint": "共 {total} 单",
+      "pendingRemain": "剩余 {time}",
+      "expiring": "即将到期",
+      "expiringHint": "{product} · {cycle} · 剩 {days} 天",
+      "expiringNone": "暂无到期压力"
+    },
+    "subs": {
+      "title": "我的订阅",
+      "description": "收藏优先，按最近开通排序；未支付、未开通的订单不在此列。",
+      "filterLabel": "订阅筛选",
+      "filterActive": "服务中",
+      "filterAll": "全部",
+      "emptyTitle": "还没有生效的订阅",
+      "emptyDescription": "从产品市场挑选一个产品开始，免费版同样计入订阅。"
+    },
+    "orders": {
+      "title": "我的订单",
+      "description": "最近订单记录，展开查看归属、金额构成与进度。",
+      "colOrder": "订单",
+      "colProduct": "产品 / 套餐",
+      "colCycle": "周期",
+      "colAmount": "金额",
+      "colPayStatus": "付费状态",
+      "colSvcStatus": "服务状态",
+      "colPlaced": "下单时间",
+      "colAction": "操作",
+      "payNow": "去支付",
+      "voucherOff": "券 −{amount}",
+      "empty": "暂无订单记录。",
+      "total": "共 {count} 条",
+      "prevPage": "上一页",
+      "nextPage": "下一页",
+      "menuLabel": "更多操作",
+      "menuDetail": "订单详情",
+      "menuCancel": "取消订单",
+      "menuCancelBusy": "取消中…",
+      "menuCancelHint": "仅未付款的订单可取消",
+      "menuUnsubscribe": "退订",
+      "menuInvoice": "申请发票",
+      "menuPlannedHint": "即将上线",
+      "cancelError": "取消订单失败，请稍后重试。"
+    },
+    "payAxis": {
+      "pending": "待付款",
+      "declared": "已申报 · 核验中",
+      "received": "已收款",
+      "unpaid": "未付款",
+      "settledZero": "已结清"
+    },
+    "svcAxis": {
+      "notProvisioned": "未开通",
+      "provisioning": "开通中",
+      "active": "服务中",
+      "cancelled": "已取消",
+      "closed": "已关闭"
+    },
+    "detail": {
+      "ownership": "订阅归属",
+      "subscriber": "订阅人：",
+      "ownerTag": "owner",
+      "content": "订单内容",
+      "cycleMonth": "月付",
+      "cycleYear": "年付",
+      "periodOnActivation": "周期自服务开通时刻起算",
+      "listPrice": "原价 {amount}",
+      "discountTotal": "抵扣总额",
+      "payable": "订单支付金额",
+      "progress": "订单进度",
+      "payRemain": "剩余 {time}，超时自动关闭",
+      "step": {
+        "submitted": "提交订单",
+        "pay": "付款",
+        "declared": "付款申报",
+        "confirm": "确认收款",
+        "settleZero": "自动结清（¥0）",
+        "provision": "服务开通",
+        "cancelled": "取消订单",
+        "expiredClosed": "超时关闭"
+      }
+    },
+    "reco": {
+      "title": "新品推荐",
+      "description": "你还未订阅的产品，了解详情后可直接订阅。",
+      "free": "¥0",
+      "freeNote": "提供免费版",
+      "fromPerMonth": "起 / 月",
+      "learnMore": "了解详情"
     }
   },
   "subscribePage": {

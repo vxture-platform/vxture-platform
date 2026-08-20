@@ -588,6 +588,56 @@ export interface MyOrder {
   voucherOff: string;
   createdAt: string;
   confirmedAt: string | null;
+  // ── 订单表重构（product_330）展示投影：全部可视码/名称，无 UUID ──
+  productCode: string | null;
+  productName: string | null;
+  tenantName: string | null;
+  workspaceName: string | null;
+  workspaceNo: string | null;
+  subscriberName: string | null;
+  subscriberRole: "owner" | null;
+  /** 原价（折前，元字符串）。 */
+  listPrice: string;
+  startAt: string | null;
+  endAt: string | null;
+  declaredAt: string | null;
+  /** 服务开通时刻（completed 单；订阅周期起算锚点）。 */
+  activatedAt: string | null;
+}
+
+// ── 产品订阅总览（「我的订阅」卡 + 「新品推荐」卡，product_330）─────────────
+
+export interface SubscribedProduct {
+  subscriptionId: string;
+  productId: string | null;
+  productCode: string | null;
+  productName: string | null;
+  productNick: string | null;
+  releaseVersion: string | null;
+  planName: string;
+  tier: string | null;
+  seats: number | null;
+  kind: string;
+  cycleUnit: string;
+  status: string;
+  startAt: string | null;
+  endAt: string | null;
+  autoRenew: boolean;
+  favorite: boolean;
+}
+
+export interface RecommendedProduct {
+  productId: string;
+  productCode: string;
+  productName: string;
+  productNick: string | null;
+  description: string | null;
+  releaseVersion: string | null;
+  iconUrl: string | null;
+  tags: string[];
+  minPrice: string;
+  currency: string;
+  favorite: boolean;
 }
 
 // ── payment page (product_321 §4.1) ─────────────────────────────────────────
@@ -886,6 +936,43 @@ export async function createSubscriptionOrder(body: {
 
 export async function fetchMyOrders(): Promise<MyOrder[]> {
   return readJson<MyOrder[]>("/api/subscription/orders", []);
+}
+
+export async function fetchSubscribedProducts(): Promise<SubscribedProduct[]> {
+  return readJson<SubscribedProduct[]>(
+    "/api/subscription/subscribed-products",
+    [],
+  );
+}
+
+export async function fetchRecommendedProducts(): Promise<
+  RecommendedProduct[]
+> {
+  return readJson<RecommendedProduct[]>(
+    "/api/subscription/recommended-products",
+    [],
+  );
+}
+
+/** 收藏开关（★，幂等）。favorite=true 收藏 / false 取消。 */
+export async function setProductFavorite(
+  productCode: string,
+  favorite: boolean,
+): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/subscription/favorites/${encodeURIComponent(productCode)}`,
+    {
+      method: favorite ? "POST" : "DELETE",
+      credentials: "include",
+      cache: "no-store",
+    },
+  );
+  if (!response.ok) {
+    throw new ConsoleBffError(
+      await extractErrorMessage(response, "收藏操作失败"),
+      response.status,
+    );
+  }
 }
 
 export async function cancelSubscriptionOrder(

@@ -13,9 +13,11 @@ import {
   Body,
   ConflictException,
   Controller,
+  Delete,
   Get,
   Inject,
   Logger,
+  NotFoundException,
   Param,
   Post,
   Query,
@@ -24,6 +26,7 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
+import { FavoritesService } from "@vxture/service-account";
 import { MailService } from "@vxture/core-mail";
 import { BillingService } from "@vxture/service-billing";
 import {
@@ -239,6 +242,25 @@ interface MyOrderRecord {
   voucherOff: string;
   createdAt: string;
   confirmedAt: string | null;
+  // ── 订单表重构（product_330）追加的展示投影，全部可视码/名称，无 UUID ──
+  productCode: string | null;
+  productName: string | null;
+  tenantName: string | null;
+  workspaceName: string | null;
+  /** workspace 可视码（bigint as string），4 位分组展示由前端负责。 */
+  workspaceNo: string | null;
+  /** 下单人展示名（user_profiles.display_name，回退登录账号）。 */
+  subscriberName: string | null;
+  /** 下单人 = 租户 owner 时给 owner 标签；其余暂不标注。 */
+  subscriberRole: "owner" | null;
+  /** 原价（折前，元字符串）= invoice total + discount mirror。 */
+  listPrice: string;
+  startAt: string | null;
+  endAt: string | null;
+  /** 付款申报时刻（最近一笔非代金券支付腿的创建时间）。 */
+  declaredAt: string | null;
+  /** 服务开通时刻（completed 单 = 订阅 start_at，周期起算锚点）。 */
+  activatedAt: string | null;
 }
 
 // ── payment page contracts (product_321 §4.1) ───────────────────────────────
@@ -367,6 +389,48 @@ export interface ConsoleSubscriptionView {
   isTrial: boolean;
 }
 
+// ── 产品订阅总览（console「我的订阅」卡片，product_330 页面重构）────────────
+// 每行 = 当前 workspace 的一条订阅（free/trial 同为订阅），带产品与档位投影。
+
+export interface SubscribedProductView {
+  subscriptionId: string;
+  productId: string | null;
+  productCode: string | null;
+  productName: string | null;
+  productNick: string | null;
+  /** 产品对外发布号（products.release_version）——平台只有一套最新实例，
+   *  恒为当前最新版、随产品更新自动跟进；不存在按订阅冻结的旧版本。 */
+  releaseVersion: string | null;
+  planName: string;
+  tier: string | null;
+  /** plan_components.quota->>'member.max'；无席位口径的档为 null。 */
+  seats: number | null;
+  kind: string;
+  cycleUnit: string;
+  status: string;
+  startAt: string | null;
+  endAt: string | null;
+  autoRenew: boolean;
+  /** ★ 收藏（account.user_product_favorites）——收藏即排序优先。 */
+  favorite: boolean;
+}
+
+/** 「新品推荐」卡：租户尚未订阅过的可单独订购产品 + 起价。 */
+export interface RecommendedProductView {
+  productId: string;
+  productCode: string;
+  productName: string;
+  productNick: string | null;
+  description: string | null;
+  releaseVersion: string | null;
+  iconUrl: string | null;
+  tags: string[];
+  /** 现行锁定版本各周期最低价（元字符串）；"0.00" = 提供免费版。 */
+  minPrice: string;
+  currency: string;
+  favorite: boolean;
+}
+
 // ── workspace quota usage (header "配额 / Usage Quota" panel) ──────────────
 
 interface QuotaMetricView {
@@ -410,6 +474,8 @@ export class SubscriptionRouter {
     private readonly pool: Pool,
     @Inject(PlatformEntitlementsClient)
     private readonly entitlementsClient: PlatformEntitlementsClient,
+    @Inject(FavoritesService)
+    private readonly favoritesService: FavoritesService,
   ) {}
 
   // --------------------------------------------------------------------------
@@ -758,6 +824,203 @@ export class SubscriptionRouter {
       autoRenew: r.auto_renew,
       isTrial: r.subscription_kind === "trial",
     }));
+  }
+
+  // --------------------------------------------------------------------------
+  // GET /api/subscription/subscribed-products — 「我的订阅」产品卡（product_330）
+  //
+  // 当前租户默认工作空间的订阅 × 产品投影：档位/席位/周期/起止/版本号/收藏。
+  // free/trial 同为订阅；cancelled 不展示（从未生效或已终止的意愿态），
+  // expired 保留（页面「全部」筛选可见）。收藏失败只降级不阻断（表刚上线，
+  // 存量库未跑迁移时页面必须照常渲染）。
+  // --------------------------------------------------------------------------
+
+  @Get("subscribed-products")
+  async getSubscribedProducts(
+    @Req() req: Request & RequestContext,
+  ): Promise<SubscribedProductView[]> {
+    if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
+    if (!req.user) throw new UnauthorizedException("No active session");
+    const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
+    const favorites = await this.safeFavoriteIds(req.user.id);
+
+    const res = await this.pool.query<{
+      subscription_id: string;
+      product_id: string | null;
+      product_code: string | null;
+      product_name: string | null;
+      product_nick: string | null;
+      release_version: string | null;
+      plan_name: string;
+      tier: string | null;
+      seats: string | null;
+      subscription_kind: string;
+      cycle_unit: string;
+      status: string;
+      start_at: Date | null;
+      end_at: Date | null;
+      auto_renew: boolean;
+    }>(
+      `select ts.id as subscription_id,
+              prod.id as product_id, prod.product_code, prod.product_name,
+              prod.product_nick, prod.release_version,
+              pl.plan_name, pc.tier, pc.quota->>'member.max' as seats,
+              ts.subscription_kind, ts.cycle_unit, ts.status,
+              ts.start_at, ts.end_at, ts.auto_renew
+         from metering.subscriptions ts
+         join product.plan_versions pv on pv.id = ts.plan_version_id
+         join product.plans pl on pl.id = pv.plan_id
+         left join lateral (
+           select tier, quota, product_id from product.plan_components
+            where plan_version_id = ts.plan_version_id and component_role = 'primary'
+            limit 1
+         ) pc on true
+         left join product.products prod on prod.id = pc.product_id
+        where ts.workspace_id = $1 and ts.deleted_at is null
+          and ts.status <> 'cancelled'
+        order by coalesce(ts.start_at, ts.created_at) desc
+        limit 100`,
+      [workspaceId],
+    );
+    return res.rows.map((r) => ({
+      subscriptionId: r.subscription_id,
+      productId: r.product_id,
+      productCode: r.product_code,
+      productName: r.product_name,
+      productNick: r.product_nick,
+      releaseVersion: r.release_version,
+      planName: r.plan_name,
+      tier: r.tier,
+      seats: r.seats != null && r.seats !== "" ? Number(r.seats) : null,
+      kind: r.subscription_kind,
+      cycleUnit: r.cycle_unit,
+      status: r.status,
+      startAt: r.start_at?.toISOString() ?? null,
+      endAt: r.end_at?.toISOString() ?? null,
+      autoRenew: r.auto_renew,
+      favorite: r.product_id != null && favorites.has(r.product_id),
+    }));
+  }
+
+  // --------------------------------------------------------------------------
+  // GET /api/subscription/recommended-products — 「新品推荐」（product_330）
+  //
+  // 租户从未订阅过（任一工作空间、含 bundled 覆盖）的可单独订购产品 + 起价。
+  // 起价 = 现行锁定版本各周期最低价；免费档无价目行时按 0 处理。
+  // --------------------------------------------------------------------------
+
+  @Get("recommended-products")
+  async getRecommendedProducts(
+    @Req() req: Request & RequestContext,
+  ): Promise<RecommendedProductView[]> {
+    if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
+    if (!req.user) throw new UnauthorizedException("No active session");
+    const favorites = await this.safeFavoriteIds(req.user.id);
+
+    const res = await this.pool.query<{
+      product_id: string;
+      product_code: string;
+      product_name: string;
+      product_nick: string | null;
+      description: string | null;
+      release_version: string | null;
+      icon_url: string | null;
+      tags: string[] | null;
+      min_price: string;
+      currency: string;
+    }>(
+      `select prod.id as product_id, prod.product_code, prod.product_name,
+              prod.product_nick, prod.description, prod.release_version,
+              prod.icon_url, prod.tags,
+              to_char(coalesce(min(pp.price), 0), 'FM999999999990.00') as min_price,
+              coalesce(min(pp.currency), 'CNY') as currency
+         from product.products prod
+         join product.plan_components pc
+           on pc.product_id = prod.id and pc.component_role = 'primary'
+         join product.plan_versions pv
+           on pv.id = pc.plan_version_id and pv.is_locked = true
+         join product.plans pl
+           on pl.id = pv.plan_id and pl.current_version_id = pv.id
+          and pl.deleted_at is null and pl.status = 'active'
+          and pl.is_public = true and pl.is_customer_visible = true
+         left join product.plan_prices pp on pp.plan_version_id = pv.id
+        where prod.deleted_at is null and prod.status = 'active'
+          and prod.is_customer_visible = true
+          and prod.standalone_subscribable = true
+          and not exists (
+            select 1 from metering.subscriptions ts
+              join product.plan_components sub_pc
+                on sub_pc.plan_version_id = ts.plan_version_id
+             where ts.tenant_id = $1 and ts.deleted_at is null
+               and sub_pc.product_id = prod.id
+          )
+        group by prod.id, prod.product_code, prod.product_name, prod.product_nick,
+                 prod.description, prod.release_version, prod.icon_url, prod.tags, prod.sort
+        order by prod.sort asc, prod.product_code asc
+        limit 6`,
+      [req.tenant.id],
+    );
+    return res.rows.map((r) => ({
+      productId: r.product_id,
+      productCode: r.product_code,
+      productName: r.product_name,
+      productNick: r.product_nick,
+      description: r.description,
+      releaseVersion: r.release_version,
+      iconUrl: r.icon_url,
+      tags: r.tags ?? [],
+      minPrice: r.min_price,
+      currency: r.currency,
+      favorite: favorites.has(r.product_id),
+    }));
+  }
+
+  // --------------------------------------------------------------------------
+  // POST/DELETE /api/subscription/favorites/:productCode — 收藏开关（★）
+  // 幂等：重复收藏/取消不报错。写路径走 @vxture/service-account（BFF 池只读惯例）。
+  // --------------------------------------------------------------------------
+
+  @Post("favorites/:productCode")
+  async addFavorite(
+    @Req() req: Request & RequestContext,
+    @Param("productCode") productCode: string,
+  ): Promise<{ productCode: string; favorite: boolean }> {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    const productId = await this.resolveProductId(productCode);
+    await this.favoritesService.add(req.user.id, productId);
+    return { productCode, favorite: true };
+  }
+
+  @Delete("favorites/:productCode")
+  async removeFavorite(
+    @Req() req: Request & RequestContext,
+    @Param("productCode") productCode: string,
+  ): Promise<{ productCode: string; favorite: boolean }> {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    const productId = await this.resolveProductId(productCode);
+    await this.favoritesService.remove(req.user.id, productId);
+    return { productCode, favorite: false };
+  }
+
+  private async resolveProductId(productCode: string): Promise<string> {
+    const res = await this.pool.query<{ id: string }>(
+      `select id from product.products
+        where product_code = $1 and deleted_at is null`,
+      [productCode],
+    );
+    const row = res.rows[0];
+    if (!row) throw new NotFoundException("产品不存在");
+    return row.id;
+  }
+
+  /** 收藏集合，失败降级为空（存量库未跑迁移时页面必须照常渲染）。 */
+  private async safeFavoriteIds(userId: string): Promise<Set<string>> {
+    try {
+      return new Set(await this.favoritesService.listProductIds(userId));
+    } catch (err) {
+      this.logger.warn(`favorites unavailable, degrade to empty: ${err}`);
+      return new Set();
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -1492,6 +1755,18 @@ interface OrderRow {
   ttl_anchor: Date;
   paid_at: Date | null;
   created_at: Date;
+  start_at: Date | null;
+  end_at: Date | null;
+  tenant_name: string | null;
+  owner_user_id: string | null;
+  workspace_name: string | null;
+  workspace_no: string | null;
+  product_code: string | null;
+  product_name: string | null;
+  created_by_type: string | null;
+  created_by_id: string | null;
+  subscriber_name: string | null;
+  declared_at: Date | null;
 }
 
 // One projection for the list and the payment-page detail — the six-state
@@ -1537,14 +1812,36 @@ select
     ), sub.created_at)
   )                    as ttl_anchor,
   inv.paid_at,
-  sub.created_at
+  sub.created_at,
+  sub.start_at,
+  sub.end_at,
+  tn.name              as tenant_name,
+  tn.owner_user_id,
+  ws.name              as workspace_name,
+  ws.workspace_no::text as workspace_no,
+  prod.product_code,
+  prod.product_name,
+  sub.created_by_type,
+  sub.created_by_id,
+  coalesce(up.display_name, u.account) as subscriber_name,
+  (
+    select max(p.created_at) from billing.payments p
+     where p.bill_id = inv.id and p.pay_source <> 'voucher'
+  )                    as declared_at
 from metering.subscriptions sub
 left join product.plan_versions pv on pv.id = sub.plan_version_id
 left join product.plans plan on plan.id = pv.plan_id
 left join lateral (
-  select tier from product.plan_components
+  select tier, product_id from product.plan_components
    where plan_version_id = sub.plan_version_id and component_role = 'primary' limit 1
 ) pc on true
+left join product.products prod on prod.id = pc.product_id
+left join tenancy.tenants tn on tn.id = sub.tenant_id
+left join tenancy.workspaces ws on ws.id = sub.workspace_id
+left join account.user_profiles up
+  on sub.created_by_type = 'customer' and up.user_id = sub.created_by_id
+left join account.users u
+  on sub.created_by_type = 'customer' and u.id = sub.created_by_id
 left join lateral (
   select id, bill_no, bill_status, total_amount, paid_amount, discount_amount, paid_at
     from billing.invoices i
@@ -1677,5 +1974,24 @@ function mapMyOrderRow(r: OrderRow): MyOrderRecord {
     ),
     createdAt: r.created_at.toISOString(),
     confirmedAt: r.paid_at ? r.paid_at.toISOString() : null,
+    productCode: r.product_code,
+    productName: r.product_name,
+    tenantName: r.tenant_name,
+    workspaceName: r.workspace_name,
+    workspaceNo: r.workspace_no,
+    subscriberName: r.created_by_type === "customer" ? r.subscriber_name : null,
+    subscriberRole:
+      r.created_by_type === "customer" &&
+      r.created_by_id != null &&
+      r.created_by_id === r.owner_user_id
+        ? "owner"
+        : null,
+    listPrice: baseListPrice(r),
+    startAt: r.start_at?.toISOString() ?? null,
+    endAt: r.end_at?.toISOString() ?? null,
+    declaredAt: r.declared_at?.toISOString() ?? null,
+    // 服务开通时刻 = 订阅周期起算锚点（owner 口径：自服务开通,非确认收款）
+    activatedAt:
+      state === "completed" && r.start_at ? r.start_at.toISOString() : null,
   };
 }

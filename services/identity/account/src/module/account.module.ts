@@ -3,6 +3,7 @@ import { VxConfigModule, VxConfigService } from "@vxture/core-config";
 import { Pool } from "pg";
 import { PasswordHasher } from "../password/password-hasher";
 import { MockUserRepository, PgUserRepository } from "../repository";
+import { FavoritesService } from "../favorites/favorites.service";
 import { AccountService } from "../service/account.service";
 import { ACCOUNT_PG_POOL, USER_REPOSITORY } from "../tokens";
 
@@ -55,7 +56,8 @@ import { ACCOUNT_PG_POOL, USER_REPOSITORY } from "../tokens";
     },
     PasswordHasher,
     AccountService,
+    FavoritesService,
   ],
-  exports: [AccountService, PasswordHasher],
+  exports: [AccountService, PasswordHasher, FavoritesService],
 })
 export class AccountModule {}

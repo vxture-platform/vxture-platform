@@ -598,3 +598,7 @@ DO $$ BEGIN
   ALTER TABLE sharing.visible_set_refresh ADD CONSTRAINT fk_visible_set_refresh_product
     FOREIGN KEY (product_id) REFERENCES product.products(id);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE account.user_product_favorites ADD CONSTRAINT fk_user_product_favorites_product
+    FOREIGN KEY (product_id) REFERENCES product.products(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

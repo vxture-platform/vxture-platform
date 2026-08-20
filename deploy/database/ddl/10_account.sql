@@ -63,3 +63,12 @@ CREATE TABLE account.user_avatars (
     created_at    timestamptz  NOT NULL DEFAULT now(),
     updated_at    timestamptz  NOT NULL DEFAULT now()
 );
+
+-- 产品收藏（console「我的订阅」/产品市场的 ★，收藏即排序优先）。行存在即收藏，
+-- 取消收藏 = DELETE，全列锚点、无可写列。product_id 跨 schema→product.products（90）。
+CREATE TABLE account.user_product_favorites (
+    user_id     uuid         NOT NULL REFERENCES account.users(id) ON DELETE CASCADE,
+    product_id  uuid         NOT NULL,
+    created_at  timestamptz  NOT NULL DEFAULT now(),
+    CONSTRAINT pk_user_product_favorites PRIMARY KEY (user_id, product_id)
+);

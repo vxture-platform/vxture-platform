@@ -330,8 +330,8 @@
         "description": "Pending and historical workspace invitations"
       },
       "subscription": {
-        "label": "Service Subscription",
-        "description": "Plan details, upgrade, and downgrade entry"
+        "label": "Product Subscriptions",
+        "description": "Subscribed products, order history, and recommendations"
       },
       "billing": {
         "label": "Billing Records",
@@ -372,7 +372,7 @@
     "members": "Members",
     "roles": "Roles & Permissions",
     "invitations": "Invitation Records",
-    "subscription": "Subscription",
+    "subscription": "Product Subscriptions",
     "billing": "Billing",
     "quotas": "Quotas",
     "atlas": "Model Platform",
@@ -691,7 +691,7 @@
           "title": "Security risk"
         },
         "subscription": {
-          "title": "Subscription"
+          "title": "Product Subscriptions"
         },
         "billing": {
           "title": "Billing & invoices"
@@ -1755,7 +1755,7 @@
     "notFound": "Order not found or you have no access.",
     "countdown": "Time left {time}",
     "rejectBanner": "Your payment declaration was rejected: {reason} Vouchers were released; you can re-declare or cancel the order. The countdown has been reset.",
-    "cycleStartNote": "The subscription cycle starts when payment is confirmed",
+    "cycleStartNote": "The subscription cycle starts when the service is provisioned",
     "status": {
       "pending_payment": "Awaiting payment",
       "paid_pending_verify": "Paid · awaiting confirmation",
@@ -1860,6 +1860,154 @@
       "voucherOff": "Vouchers {amount}",
       "creditsTitle": "Account balance (tenant-wide)",
       "creditsNote": "The balance funds future usage-based charging; top-up opens with that capability."
+    }
+  },
+  "subscriptionHub": {
+    "title": "Product Subscriptions",
+    "description": "Every product this workspace subscribes to, order history, and recommendations — free plans count as subscriptions too.",
+    "browseMarket": "Browse products",
+    "loading": "Loading…",
+    "favorite": {
+      "add": "Add to favorites",
+      "remove": "Remove from favorites",
+      "error": "Favorite action failed. Please try again."
+    },
+    "tier": {
+      "free": "Free",
+      "starter": "Starter",
+      "pro": "Pro",
+      "business": "Business",
+      "enterprise": "Enterprise"
+    },
+    "audience": {
+      "person": "Personal",
+      "team": "Team",
+      "private": "Private deployment"
+    },
+    "audienceSeats": {
+      "person": "Personal · {seats} {seats, plural, one {seat} other {seats}}",
+      "team": "Team · {seats} {seats, plural, one {seat} other {seats}}",
+      "private": "Private · {seats} {seats, plural, one {seat} other {seats}}"
+    },
+    "cycle": {
+      "free": "Free",
+      "month": "Monthly",
+      "year": "Yearly"
+    },
+    "subStatus": {
+      "active": "Active",
+      "expiring": "Expiring soon",
+      "trialing": "Trialing",
+      "overdue": "Grace period",
+      "suspended": "Suspended",
+      "expired": "Expired",
+      "cancelled": "Cancelled"
+    },
+    "term": {
+      "perpetual": "No expiry",
+      "expired": "Expired",
+      "daysLeft": "{days} {days, plural, one {day} other {days}} left",
+      "freeNote": "Free plans count as subscriptions"
+    },
+    "card": {
+      "productDetail": "Product details",
+      "version": "Latest v{version}",
+      "manage": "Manage",
+      "upgrade": "Upgrade",
+      "renew": "Renew"
+    },
+    "stats": {
+      "products": "Active products",
+      "productsHint": "incl. {free} free {free, plural, one {plan} other {plans}}",
+      "productsHintNoFree": "in this workspace",
+      "pendingOrders": "Awaiting payment",
+      "pendingHint": "{total} orders total",
+      "pendingRemain": "{time} left",
+      "expiring": "Next expiry",
+      "expiringHint": "{product} · {cycle} · {days} days left",
+      "expiringNone": "Nothing expiring soon"
+    },
+    "subs": {
+      "title": "My subscriptions",
+      "description": "Favorites first, then most recently provisioned; unpaid or unprovisioned orders are not listed here.",
+      "filterLabel": "Subscription filter",
+      "filterActive": "Active",
+      "filterAll": "All",
+      "emptyTitle": "No active subscriptions yet",
+      "emptyDescription": "Pick a product from the marketplace to get started — free plans count too."
+    },
+    "orders": {
+      "title": "My orders",
+      "description": "Recent orders — expand a row for ownership, amount breakdown, and progress.",
+      "colOrder": "Order",
+      "colProduct": "Product / Plan",
+      "colCycle": "Cycle",
+      "colAmount": "Amount",
+      "colPayStatus": "Payment",
+      "colSvcStatus": "Service",
+      "colPlaced": "Placed",
+      "colAction": "Action",
+      "payNow": "Pay now",
+      "voucherOff": "voucher −{amount}",
+      "empty": "No orders yet.",
+      "total": "{count} orders",
+      "prevPage": "Previous",
+      "nextPage": "Next",
+      "menuLabel": "More actions",
+      "menuDetail": "Order details",
+      "menuCancel": "Cancel order",
+      "menuCancelBusy": "Cancelling…",
+      "menuCancelHint": "Only unpaid orders can be cancelled",
+      "menuUnsubscribe": "Unsubscribe",
+      "menuInvoice": "Request invoice",
+      "menuPlannedHint": "Coming soon",
+      "cancelError": "Failed to cancel the order. Please try again."
+    },
+    "payAxis": {
+      "pending": "Awaiting payment",
+      "declared": "Declared · verifying",
+      "received": "Payment received",
+      "unpaid": "Unpaid",
+      "settledZero": "Settled"
+    },
+    "svcAxis": {
+      "notProvisioned": "Not provisioned",
+      "provisioning": "Provisioning",
+      "active": "In service",
+      "cancelled": "Cancelled",
+      "closed": "Closed"
+    },
+    "detail": {
+      "ownership": "Ownership",
+      "subscriber": "Subscriber:",
+      "ownerTag": "owner",
+      "content": "Order contents",
+      "cycleMonth": "Monthly",
+      "cycleYear": "Yearly",
+      "periodOnActivation": "Cycle starts when the service is provisioned",
+      "listPrice": "List {amount}",
+      "discountTotal": "Total discount",
+      "payable": "Amount paid",
+      "progress": "Order progress",
+      "payRemain": "{time} left — closes automatically on timeout",
+      "step": {
+        "submitted": "Order placed",
+        "pay": "Payment",
+        "declared": "Payment declared",
+        "confirm": "Payment confirmed",
+        "settleZero": "Auto-settled (¥0)",
+        "provision": "Service provisioned",
+        "cancelled": "Order cancelled",
+        "expiredClosed": "Closed on timeout"
+      }
+    },
+    "reco": {
+      "title": "Recommended for you",
+      "description": "Products you haven't subscribed to yet — learn more and subscribe from the product page.",
+      "free": "¥0",
+      "freeNote": "Free plan available",
+      "fromPerMonth": "from / month",
+      "learnMore": "Learn more"
     }
   },
   "subscribePage": {

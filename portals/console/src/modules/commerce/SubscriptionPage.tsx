@@ -1,371 +1,330 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
-import { useTranslations } from "next-intl";
+/**
+ * SubscriptionPage.tsx — 产品订阅总览（product_330 全面重构）。
+ * @package @vxture/console
+ * @layer Application
+ * @category Module
+ *
+ * 多产品订阅中枢，三个板块（owner 2026-08-20 设计稿 v8 定稿）：
+ *   ① 我的订阅——整行铺开每行 3 卡，★ 收藏即排序优先，{服务中|全部} 筛选
+ *      （「全部」才显示已过期；未支付/未开通订单不在此板块——未生效）；
+ *   ② 我的订单——展开式表格：首列展开箭头，订单列 = 租户(主)·工作区(辅) +
+ *      订单号辅行，六态投影为付费/服务两轴，操作 = 去支付(主) + ⋯ 菜单；
+ *   ③ 新品推荐——未订阅产品卡，外链 website 产品详情页承接订阅。
+ * 概览条：在订产品 / 待付订单(TTL 倒计时) / 即将到期，数值与小字同行，
+ * 卡面为 DS soft veil（与 /billing 同款）。全页无 UUID（可视码原则）。
+ */
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
+  ActionMenu,
   Banner,
   Button,
-  Card,
-  CardContent,
-  DialogForm,
-  CardFooter,
-  CardHeader,
-  CardTitle,
   DataTable,
-  DetailList,
-  DetailRow,
   EmptyState,
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-  Input,
-  NativeSelect,
   Icon,
+  SegmentedControl,
   StatusBadge,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
   ViewHeader,
   ViewLayout,
 } from "@vxture/design-system";
-import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
+import type { ActionMenuItem, DataTableColumn } from "@vxture/design-system";
+import { formatCurrency, type Locale } from "@vxture/shared";
 import {
   cancelSubscriptionOrder,
-  executeSubscriptionAction,
-  fetchBillingInvoices,
-  fetchCredits,
-  fetchEntitlements,
   fetchMyOrders,
-  fetchMySubscriptions,
+  fetchRecommendedProducts,
+  fetchSubscribedProducts,
+  setProductFavorite,
   ConsoleBffError,
-  type ConsoleInvoice,
-  type ConsoleSubscription,
   type MyOrder,
-  type SubscriptionLifecycleAction,
-  type WorkspaceEntitlement,
+  type RecommendedProduct,
+  type SubscribedProduct,
 } from "@/api/console-bff";
-import { PlannedBadge } from "@/components/planned";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
-import { PageSection, SummaryStrip } from "@/layout/shell";
-import type { ModuleCardStat } from "@/entities/console";
+import { PageSection } from "@/layout/shell";
+import { buildWebsiteProductsUrl } from "@/lib/website-entry";
+import {
+  HubStatCards,
+  RecommendedProductCard,
+  SubscriptionProductCard,
+  type HubStat,
+} from "./components/hubCards";
+import { OrderDetailPanel } from "./components/OrderDetailPanel";
+import { SectionTitle } from "./components/sectionKit";
+import {
+  PAY_AXIS,
+  SVC_AXIS,
+  daysLeft,
+  fmtDate,
+  fmtTime,
+  formatRemain,
+} from "./components/hubModel";
 
-// ============================================================================
-// 数据格式化工具
-// ============================================================================
+const ORDERS_PAGE_SIZE = 8;
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  try {
-    return new Date(dateStr).toLocaleDateString("zh-CN", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return dateStr;
-  }
-}
-
-function formatAmount(amount: number, currency = "CNY"): string {
-  return currency === "CNY"
-    ? `¥${amount.toLocaleString()}`
-    : `${currency} ${amount.toLocaleString()}`;
-}
-
-function buildSummaryItems(
-  subscriptions: ConsoleSubscription[],
-): ModuleCardStat[] {
-  const active =
-    subscriptions.find((s) => s.status === "active") ?? subscriptions[0];
-  if (!active) {
-    return [
-      { label: "Plan", value: "—", hint: "No active subscription." },
-      { label: "Renewal", value: "—", hint: "—" },
-      { label: "Billing", value: "—", hint: "—" },
-    ];
-  }
-
-  return [
-    {
-      label: "Plan",
-      value: active.planName,
-      hint: `${formatAmount(active.price, active.currency)} / ${active.cycle}`,
-    },
-    {
-      label: "Renewal",
-      value: formatDate(active.nextBillingDate),
-      hint: active.autoRenew ? "Auto-renew enabled" : "Will not auto-renew",
-    },
-    {
-      label: "Status",
-      value: active.status.charAt(0).toUpperCase() + active.status.slice(1),
-      hint: active.isTrial ? "Trial period active" : "Paid subscription",
-    },
-  ];
-}
-
-function buildInvoiceRows(invoices: ConsoleInvoice[]): string[][] {
-  return invoices.map((inv) => [
-    inv.invoiceNumber,
-    formatDate(inv.dueDate),
-    inv.lineItems[0]?.description ?? "—",
-    inv.status.charAt(0).toUpperCase() + inv.status.slice(1),
-    formatAmount(inv.totalAmount, inv.currency),
-  ]);
-}
-
-function formatOrderAmount(amount: string, currency: string): string {
-  const n = Number.parseFloat(amount);
-  const value = Number.isFinite(n) ? n.toLocaleString() : amount;
-  return currency === "CNY" ? `¥${value}` : `${currency} ${value}`;
-}
-
-// Six-state contract (product_321 P1); labels come from the orderPay i18n
-// namespace at render time (this page's own copy stays the 320-era English
-// placeholder debt — the ORDERS tab is the one surface localized here).
-const ORDER_STATUS_TONES: Record<MyOrder["orderStatus"], StatusBadgeTone> = {
-  pending_payment: "warning",
-  paid_pending_verify: "info",
-  activating: "info",
-  completed: "success",
-  cancelled: "neutral",
-  expired: "neutral",
-};
-
-// C2 subscription-status six-value domain (@vxture/shared SUBSCRIPTION_STATUSES)
-// + null = never subscribed (product_220 §3 — absence, not a status value).
-const ENTITLEMENT_STATUS_TONES: Record<string, StatusBadgeTone> = {
-  active: "success",
-  trialing: "info",
-  overdue: "warning",
-  // A suspended entitlement is a hard stop (access is off), unlike `overdue`
-  // which is a grace period — the two read as different severities.
-  suspended: "danger",
-  expired: "neutral",
-  cancelled: "neutral",
-};
-
-/**
- * `status: null` means "no standalone (primary) subscription" — it does NOT
- * mean "no access" when `bundled` is true (product_220 §2/§3: a product can
- * carry real bundled-only coverage with no primary subscription of its own,
- * e.g. a raven-pro plan bundling arda). Labeling that combination "Not
- * subscribed" would read as an error to a workspace admin who does have
- * working access via the bundle, so the two facts are distinguished here.
- */
-function formatEntitlementStatus(
-  status: string | null,
-  bundled: boolean,
-): string {
-  if (status === null) return bundled ? "Bundled access" : "Not subscribed";
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
-function formatTier(tier: string | null): string {
-  if (tier === null) return "—";
-  return tier.charAt(0).toUpperCase() + tier.slice(1);
-}
-
-function formatLimits(limits: Record<string, number>): string {
-  const entries = Object.entries(limits);
-  if (entries.length === 0) return "—";
-  return entries
-    .map(([key, value]) => `${key}: ${value === -1 ? "unlimited" : value}`)
-    .join(" · ");
-}
-
-// ============================================================================
-// SubscriptionPage
-// ============================================================================
+type SubFilter = "active" | "all";
 
 export function SubscriptionPage() {
-  const { session } = useConsoleSession();
-  const tOrder = useTranslations("orderPay");
-  const tManage = useTranslations("manageSubscription");
+  const t = useTranslations("subscriptionHub");
+  const locale = useLocale();
+  const appLocale = locale as Locale;
   const router = useRouter();
-  const [tab, setTab] = useState<"overview" | "billing" | "orders">("overview");
-  const [subscriptions, setSubscriptions] = useState<ConsoleSubscription[]>([]);
-  const [invoices, setInvoices] = useState<ConsoleInvoice[]>([]);
-  const [orders, setOrders] = useState<MyOrder[]>([]);
-  const [credits, setCredits] = useState<{
-    balance: string;
-    currency: string;
-  } | null>(null);
-  const [entitlements, setEntitlements] = useState<WorkspaceEntitlement[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [cancelingId, setCancelingId] = useState<string | null>(null);
-  const [orderError, setOrderError] = useState<string | null>(null);
+  const { session } = useConsoleSession();
 
-  /* Subscription lifecycle dialog. `POST /api/subscription/actions` has been
-   * live all along with nothing calling it; the header button was inert. Only
-   * pause/resume/cancel land here — `upgrade` needs a planId, which is what
-   * the /subscribe ladder is for. */
-  const [manageOpen, setManageOpen] = useState(false);
-  const [manageAction, setManageAction] =
-    useState<SubscriptionLifecycleAction>("pause");
-  const [manageReason, setManageReason] = useState("");
-  const [manageBusy, setManageBusy] = useState(false);
-  const [manageError, setManageError] = useState<string | null>(null);
-  const [manageMessage, setManageMessage] = useState<string | null>(null);
+  const [products, setProducts] = useState<SubscribedProduct[]>([]);
+  const [orders, setOrders] = useState<MyOrder[]>([]);
+  const [recommended, setRecommended] = useState<RecommendedProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [subFilter, setSubFilter] = useState<SubFilter>("active");
+  const [expandedKeys, setExpandedKeys] = useState<readonly string[]>([]);
+  const [favBusy, setFavBusy] = useState<ReadonlySet<string>>(new Set());
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      fetchMySubscriptions(),
-      fetchBillingInvoices(10),
+      fetchSubscribedProducts(),
       fetchMyOrders(),
-      fetchCredits(),
-      fetchEntitlements(),
+      fetchRecommendedProducts(),
     ])
-      .then(([subs, invs, ords, creditRecord, entitlementRecords]) => {
-        setSubscriptions(subs);
-        setInvoices(invs);
+      .then(([subs, ords, recos]) => {
+        setProducts(subs);
         setOrders(ords);
-        setCredits(creditRecord);
-        setEntitlements(entitlementRecords);
+        setRecommended(recos);
       })
       .finally(() => setLoading(false));
   }, [session.tenant?.id]);
 
+  // 待付款单存在时每秒走时（表格倒计时 + 概览条 TTL）。
+  const hasPending = orders.some(
+    (o) => o.orderStatus === "pending_payment" && o.expireAt,
+  );
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!hasPending) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [hasPending]);
+
+  const money = useCallback(
+    (v: string, currency: string) =>
+      formatCurrency(Number.parseFloat(v || "0"), appLocale, currency),
+    [appLocale],
+  );
+
+  // ── 收藏开关（乐观更新，失败回滚）────────────────────────────────────────
+  const toggleFavorite = useCallback(
+    (productCode: string, next: boolean) => {
+      if (!productCode) return;
+      setError(null);
+      setFavBusy((prev) => new Set(prev).add(productCode));
+      const apply = (fav: boolean) => {
+        setProducts((list) =>
+          list.map((p) =>
+            p.productCode === productCode ? { ...p, favorite: fav } : p,
+          ),
+        );
+        setRecommended((list) =>
+          list.map((p) =>
+            p.productCode === productCode ? { ...p, favorite: fav } : p,
+          ),
+        );
+      };
+      apply(next);
+      setProductFavorite(productCode, next)
+        .catch((err) => {
+          apply(!next);
+          setError(
+            err instanceof ConsoleBffError ? err.message : t("favorite.error"),
+          );
+        })
+        .finally(() =>
+          setFavBusy((prev) => {
+            const copy = new Set(prev);
+            copy.delete(productCode);
+            return copy;
+          }),
+        );
+    },
+    [t],
+  );
+
+  // ── 我的订阅：筛选（服务中|全部）+ 收藏优先排序 ──────────────────────────
+  const visibleProducts = useMemo(() => {
+    const filtered =
+      subFilter === "all"
+        ? products
+        : products.filter((p) => p.status !== "expired");
+    // 收藏优先；组内保持服务端「最近开通」序（sort 稳定）。
+    return [...filtered].sort(
+      (a, b) => Number(b.favorite) - Number(a.favorite),
+    );
+  }, [products, subFilter]);
+
+  // ── 概览条 ────────────────────────────────────────────────────────────────
+  const stats = useMemo<HubStat[]>(() => {
+    const inService = products.filter((p) => p.status !== "expired");
+    const freeCount = inService.filter(
+      (p) => p.kind === "free" || p.tier === "free",
+    ).length;
+
+    const pending = orders.filter((o) => o.orderStatus === "pending_payment");
+    const nextDeadline = pending
+      .map((o) => o.expireAt)
+      .filter((v): v is string => Boolean(v))
+      .sort()[0];
+
+    const expiring = inService
+      .filter((p) => p.endAt)
+      .sort((a, b) => (a.endAt ?? "").localeCompare(b.endAt ?? ""))[0];
+    const expiringLeft = expiring ? daysLeft(expiring.endAt) : null;
+
+    return [
+      {
+        key: "products",
+        icon: "package",
+        label: t("stats.products"),
+        value: String(inService.length),
+        hint:
+          freeCount > 0
+            ? t("stats.productsHint", { free: freeCount })
+            : t("stats.productsHintNoFree"),
+      },
+      {
+        key: "pending",
+        icon: "receipt",
+        label: t("stats.pendingOrders"),
+        value: String(pending.length),
+        warn: pending.length > 0,
+        hint: (
+          <>
+            {t("stats.pendingHint", { total: orders.length })}
+            {nextDeadline ? (
+              <span className="font-medium text-warning-text tabular-nums">
+                {" "}
+                ·{" "}
+                {t("stats.pendingRemain", {
+                  time: formatRemain(nextDeadline, now),
+                })}
+              </span>
+            ) : null}
+          </>
+        ),
+      },
+      {
+        key: "expiring",
+        icon: "clock",
+        label: t("stats.expiring"),
+        value: expiring?.endAt ? fmtDate(expiring.endAt).slice(5) : "—",
+        hint: expiring
+          ? t("stats.expiringHint", {
+              product: expiring.productName ?? expiring.planName,
+              cycle:
+                expiring.cycleUnit === "year"
+                  ? t("cycle.year")
+                  : t("cycle.month"),
+              days: expiringLeft ?? 0,
+            })
+          : t("stats.expiringNone"),
+      },
+    ];
+  }, [products, orders, now, t]);
+
+  // ── 我的订单 ──────────────────────────────────────────────────────────────
   async function handleCancelOrder(orderId: string) {
-    setOrderError(null);
+    setError(null);
     setCancelingId(orderId);
     try {
       await cancelSubscriptionOrder(orderId);
       setOrders(await fetchMyOrders());
     } catch (err) {
-      setOrderError(
-        err instanceof ConsoleBffError
-          ? err.message
-          : "Failed to cancel order.",
+      setError(
+        err instanceof ConsoleBffError ? err.message : t("orders.cancelError"),
       );
     } finally {
       setCancelingId(null);
     }
   }
 
-  const summaryItems = buildSummaryItems(subscriptions);
-  const invoiceRows = buildInvoiceRows(invoices);
+  const pageCount = Math.max(1, Math.ceil(orders.length / ORDERS_PAGE_SIZE));
+  const pagedOrders = useMemo(
+    () => orders.slice((page - 1) * ORDERS_PAGE_SIZE, page * ORDERS_PAGE_SIZE),
+    [orders, page],
+  );
 
-  const activeSubscription =
-    subscriptions.find((s) => s.status === "active") ?? subscriptions[0];
-
-  /** Offer resume for a suspended subscription, pause for a live one. */
-  function openManage() {
-    setManageAction(
-      activeSubscription?.status === "suspended" ? "resume" : "pause",
+  const toggleExpanded = useCallback((orderId: string) => {
+    setExpandedKeys((keys) =>
+      keys.includes(orderId)
+        ? keys.filter((k) => k !== orderId)
+        : [...keys, orderId],
     );
-    setManageReason("");
-    setManageError(null);
-    setManageMessage(null);
-    setManageOpen(true);
-  }
+  }, []);
 
-  async function submitManage(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!activeSubscription) return;
-    setManageBusy(true);
-    setManageError(null);
-    try {
-      await executeSubscriptionAction({
-        subscriptionId: activeSubscription.id,
-        action: manageAction,
-        ...(manageReason.trim() ? { reason: manageReason.trim() } : {}),
-      });
-      setSubscriptions(await fetchMySubscriptions());
-      setManageOpen(false);
-      setManageMessage(
-        manageAction === "pause"
-          ? tManage("successPause")
-          : manageAction === "resume"
-            ? tManage("successResume")
-            : tManage("successCancel"),
-      );
-    } catch (err) {
-      setManageError(
-        err instanceof ConsoleBffError ? err.message : tManage("error"),
-      );
-    } finally {
-      setManageBusy(false);
-    }
-  }
-
-  const entitlementColumns: DataTableColumn<WorkspaceEntitlement>[] = [
-    { id: "product", header: "Product", cell: (e) => e.productCode },
-    { id: "tier", header: "Tier", cell: (e) => formatTier(e.tier) },
+  const orderColumns: DataTableColumn<MyOrder>[] = [
     {
-      id: "status",
-      header: "Status",
-      cell: (e) => (
-        <StatusBadge
-          tone={
-            e.status
-              ? (ENTITLEMENT_STATUS_TONES[e.status] ?? "neutral")
-              : e.bundled
-                ? "info"
-                : "neutral"
-          }
-        >
-          {formatEntitlementStatus(e.status, e.bundled)}
-        </StatusBadge>
+      id: "order",
+      header: t("orders.colOrder"),
+      cell: (o) => (
+        <span className="flex flex-col">
+          <span className="text-label-md text-foreground">
+            {o.tenantName ?? "—"}
+            {o.workspaceName ? (
+              <span className="font-normal text-muted-foreground">
+                {" "}
+                · {o.workspaceName}
+              </span>
+            ) : null}
+          </span>
+          <span className="font-mono text-body-sm text-muted-foreground">
+            {o.orderNo}
+          </span>
+        </span>
       ),
     },
     {
-      id: "bundled",
-      header: "Bundled",
-      cell: (e) => (e.bundled ? "Yes" : "—"),
-    },
-    { id: "limits", header: "Limits", cell: (e) => formatLimits(e.limits) },
-  ];
-
-  // Invoice rows stay pre-formatted `string[]` (see `buildInvoiceRows`); the
-  // columns below only carry the header copy that used to live in the hand
-  // rolled table header row, in the same order.
-  const invoiceColumns: DataTableColumn<string[]>[] = [
-    { id: "invoice", header: "Invoice", cell: (row) => row[0] ?? "—" },
-    { id: "date", header: "Date", cell: (row) => row[1] ?? "—" },
-    { id: "scope", header: "Scope", cell: (row) => row[2] ?? "—" },
-    { id: "status", header: "Status", cell: (row) => row[3] ?? "—" },
-    {
-      id: "amount",
-      header: "Amount",
-      align: "right",
-      cell: (row) => row[4] ?? "—",
-    },
-  ];
-
-  const orderColumns: DataTableColumn<MyOrder>[] = [
-    { id: "orderNo", header: "Order no.", cell: (o) => o.orderNo },
-    {
-      id: "type",
-      header: "Type",
-      cell: () => tOrder("list.typeSubscription"),
-    },
-    {
-      id: "plan",
-      header: "Plan",
-      cell: (o) => (o.tier ? `${o.planName} · ${o.tier}` : o.planName),
+      id: "product",
+      header: t("orders.colProduct"),
+      cell: (o) => (
+        <span className="flex flex-col">
+          <span className="text-label-md text-foreground">
+            {o.productName ?? o.planName}
+          </span>
+          <span className="text-body-sm text-muted-foreground">
+            {o.tier ? t(`tier.${o.tier}`) : o.planName}
+          </span>
+        </span>
+      ),
     },
     {
       id: "cycle",
-      header: "Cycle",
-      cell: (o) => (o.cycleUnit === "year" ? "Yearly" : "Monthly"),
+      header: t("orders.colCycle"),
+      width: "sm",
+      cell: (o) =>
+        Number.parseFloat(o.amount) === 0
+          ? "—"
+          : o.cycleUnit === "year"
+            ? t("cycle.year")
+            : t("cycle.month"),
     },
     {
       id: "amount",
-      header: "Amount",
+      header: t("orders.colAmount"),
       align: "right",
       cell: (o) => (
-        <span>
-          {formatOrderAmount(o.amount, o.currency)}
-          {Number(o.voucherOff) > 0 ? (
+        <span className="flex flex-col items-end tabular-nums">
+          <span className="font-semibold text-foreground">
+            {money(o.amount, o.currency)}
+          </span>
+          {Number.parseFloat(o.voucherOff) > 0 ? (
             <span className="text-body-sm text-muted-foreground">
-              {" "}
-              {tOrder("list.voucherOff", {
-                amount: formatOrderAmount(o.voucherOff, o.currency),
+              {t("orders.voucherOff", {
+                amount: money(o.voucherOff, o.currency),
               })}
             </span>
           ) : null}
@@ -373,277 +332,254 @@ export function SubscriptionPage() {
       ),
     },
     {
-      id: "status",
-      header: "Status",
+      id: "payStatus",
+      header: t("orders.colPayStatus"),
+      align: "center",
+      cell: (o) => {
+        const zeroSettled =
+          o.orderStatus === "completed" && Number.parseFloat(o.amount) === 0;
+        const axis = PAY_AXIS[o.orderStatus];
+        return (
+          <StatusBadge tone={axis.tone}>
+            {zeroSettled ? t("payAxis.settledZero") : t(`payAxis.${axis.key}`)}
+            {o.orderStatus === "pending_payment" && o.expireAt ? (
+              <span className="tabular-nums">
+                {" "}
+                {formatRemain(o.expireAt, now)}
+              </span>
+            ) : null}
+          </StatusBadge>
+        );
+      },
+    },
+    {
+      id: "svcStatus",
+      header: t("orders.colSvcStatus"),
+      align: "center",
+      cell: (o) => {
+        const axis = SVC_AXIS[o.orderStatus];
+        return (
+          <StatusBadge tone={axis.tone}>{t(`svcAxis.${axis.key}`)}</StatusBadge>
+        );
+      },
+    },
+    {
+      id: "placed",
+      header: t("orders.colPlaced"),
       cell: (o) => (
-        <StatusBadge tone={ORDER_STATUS_TONES[o.orderStatus]}>
-          {tOrder(`status.${o.orderStatus}`)}
-        </StatusBadge>
+        <span className="flex flex-col tabular-nums">
+          <span className="text-foreground">{fmtDate(o.createdAt)}</span>
+          <span className="text-body-sm text-muted-foreground">
+            {fmtTime(o.createdAt)}
+          </span>
+        </span>
       ),
     },
-    { id: "placed", header: "Placed", cell: (o) => formatDate(o.createdAt) },
     {
       id: "action",
-      header: " ",
+      header: t("orders.colAction"),
       align: "right",
       cell: (o) =>
         o.orderStatus === "pending_payment" ? (
-          <span className="flex items-center justify-end gap-2xs">
-            <Button
-              size="md"
-              onClick={() => router.push(`/subscribe/pay/${o.orderId}`)}
-            >
-              {tOrder("list.payNow")}
-            </Button>
-            <Button
-              variant="ghost"
-              size="md"
-              disabled={cancelingId === o.orderId || Number(o.paidAmount) > 0}
-              onClick={() => handleCancelOrder(o.orderId)}
-            >
-              {cancelingId === o.orderId ? "Canceling…" : "Cancel"}
-            </Button>
-          </span>
-        ) : (
           <Button
-            variant="ghost"
-            size="md"
+            size="sm"
             onClick={() => router.push(`/subscribe/pay/${o.orderId}`)}
           >
-            {tOrder("list.view")}
+            {t("orders.payNow")}
           </Button>
-        ),
+        ) : null,
     },
   ];
+
+  function orderMenuItems(o: MyOrder): ActionMenuItem[] {
+    const cancellable =
+      o.orderStatus === "pending_payment" &&
+      Number.parseFloat(o.paidAmount) === 0;
+    return [
+      {
+        id: "detail",
+        label: t("orders.menuDetail"),
+        icon: "list-checks",
+        onSelect: () => toggleExpanded(o.orderId),
+      },
+      {
+        id: "cancel",
+        label:
+          cancelingId === o.orderId
+            ? t("orders.menuCancelBusy")
+            : t("orders.menuCancel"),
+        icon: "x",
+        danger: true,
+        disabled: !cancellable || cancelingId === o.orderId,
+        hint: cancellable ? undefined : t("orders.menuCancelHint"),
+        onSelect: () => void handleCancelOrder(o.orderId),
+      },
+      {
+        id: "unsubscribe",
+        label: t("orders.menuUnsubscribe"),
+        disabled: true,
+        hint: t("orders.menuPlannedHint"),
+      },
+      {
+        id: "invoice",
+        label: t("orders.menuInvoice"),
+        disabled: true,
+        hint: t("orders.menuPlannedHint"),
+      },
+    ];
+  }
 
   return (
     <ViewLayout>
       <ViewHeader
-        icon="chart-bar"
-        title="Subscription"
-        description="Surface current plan, renewal timing, and pooled resource posture before dropping into billing records."
+        icon="package"
+        title={t("title")}
+        description={t("description")}
         action={
-          <Button
-            size="md"
-            disabled={!activeSubscription}
-            onClick={() => openManage()}
-          >
-            <Icon name="settings" size="xs" fallback="placeholder" />
-            <span>{tManage("title")}</span>
+          <Button asChild variant="outline" size="md">
+            <a
+              href={buildWebsiteProductsUrl(locale)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t("browseMarket")}
+              <Icon name="external-link" size="xs" aria-hidden />
+            </a>
           </Button>
         }
       />
 
-      {manageMessage ? <Banner tone="success" title={manageMessage} /> : null}
+      {error ? <Banner tone="danger" title={error} /> : null}
 
-      <SummaryStrip items={summaryItems} />
+      <HubStatCards items={stats} />
 
-      <Tabs
-        value={tab}
-        onValueChange={(value) => setTab(value as typeof tab)}
-        className="flex flex-col gap-lg"
+      {/* ① 我的订阅 */}
+      <PageSection
+        level={2}
+        title={<SectionTitle icon="package">{t("subs.title")}</SectionTitle>}
+        description={t("subs.description")}
+        action={
+          <SegmentedControl<SubFilter>
+            ariaLabel={t("subs.filterLabel")}
+            value={subFilter}
+            onChange={setSubFilter}
+            items={[
+              { value: "active", label: t("subs.filterActive") },
+              { value: "all", label: t("subs.filterAll") },
+            ]}
+          />
+        }
       >
-        <TabsList aria-label="Subscription tabs" className="self-start">
-          <TabsTrigger value="overview">Plan overview</TabsTrigger>
-          <TabsTrigger value="billing">Recent billing</TabsTrigger>
-          <TabsTrigger value="orders">My orders</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="flex flex-col gap-xl">
-          <PageSection
+        {loading ? (
+          <EmptyState icon="clock" title={t("loading")} />
+        ) : visibleProducts.length === 0 ? (
+          <EmptyState
             icon="package"
-            level={2}
-            title="Current package"
-            description="A modern SaaS billing page starts with the plan, not the table."
-          >
-            {loading ? (
-              <EmptyState icon="clock" title="Loading subscription…" />
-            ) : activeSubscription ? (
-              <Card surface="soft">
-                <CardHeader>
-                  <div className="flex flex-wrap items-center justify-between gap-sm">
-                    <CardTitle>{activeSubscription.planName}</CardTitle>
-                    <StatusBadge tone="success">
-                      {activeSubscription.status}
-                    </StatusBadge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <DetailList>
-                    <DetailRow label="Renewal">
-                      {formatDate(activeSubscription.nextBillingDate)}
-                    </DetailRow>
-                    <DetailRow label="Price">
-                      {formatAmount(
-                        activeSubscription.price,
-                        activeSubscription.currency,
-                      )}{" "}
-                      / {activeSubscription.cycle}
-                    </DetailRow>
-                  </DetailList>
-                </CardContent>
-                <CardFooter className="flex-wrap">
-                  {/* "Compare tiers" is just navigation — the plan ladder is
-                   * the /subscribe page, so this now goes there instead of
-                   * doing nothing. */}
-                  <Button
-                    size="md"
-                    variant="outline"
-                    onClick={() => router.push("/subscribe")}
-                  >
-                    <Icon name="chart-bar" size="xs" fallback="placeholder" />
-                    <span>{tManage("goUpgrade")}</span>
-                  </Button>
-                  {/* Renewal preview has no endpoint; kept visible so the
-                   * intent is legible, disabled so it cannot lie. */}
-                  <Button size="md" variant="outline" disabled>
-                    <Icon name="calendar" size="xs" fallback="placeholder" />
-                    <span>Preview renewal</span>
-                  </Button>
-                  <PlannedBadge />
-                </CardFooter>
-              </Card>
-            ) : (
-              <EmptyState
-                icon="package"
-                title="No active subscription found."
+            title={t("subs.emptyTitle")}
+            description={t("subs.emptyDescription")}
+          />
+        ) : (
+          <div className="grid gap-md md:grid-cols-2 xl:grid-cols-3">
+            {visibleProducts.map((item) => (
+              <SubscriptionProductCard
+                key={item.subscriptionId}
+                item={item}
+                favoriteBusy={
+                  !!item.productCode && favBusy.has(item.productCode)
+                }
+                onToggleFavorite={toggleFavorite}
               />
-            )}
-          </PageSection>
+            ))}
+          </div>
+        )}
+      </PageSection>
 
-          <PageSection
-            icon="seal-check"
-            level={2}
-            title="Current entitlements"
-            description="Per-product tier, status, and pooled-resource ceilings resolved from the platform's commercial contract (product_220 §3)."
-          >
-            <DataTable
-              columns={entitlementColumns}
-              rows={entitlements}
-              rowKey={(e) => e.productCode}
-              loading={loading}
-              empty={<EmptyState title="No product entitlements yet." />}
-            />
-          </PageSection>
-
-          <PageSection
-            icon="wallet"
-            level={2}
-            title={tOrder("list.creditsTitle")}
-            description={tOrder("list.creditsNote")}
-          >
-            {/* Dormant wallet (product_321 P6): read-only balance, no top-up. */}
-            <Card surface="soft">
-              <CardContent>
-                <strong className="text-title-lg text-foreground">
-                  {formatOrderAmount(
-                    credits?.balance ?? "0.00",
-                    credits?.currency ?? "CNY",
-                  )}
-                </strong>
-              </CardContent>
-            </Card>
-          </PageSection>
-        </TabsContent>
-
-        <TabsContent value="billing">
-          <PageSection
-            icon="receipt"
-            level={2}
-            title="Recent charges"
-            description="Invoices and overage records remain secondary to the subscription overview."
-          >
-            <DataTable
-              columns={invoiceColumns}
-              rows={invoiceRows}
-              rowKey={(row) => row[0] ?? ""}
-              loading={loading}
-              empty={<EmptyState title="No invoices found." />}
-            />
-          </PageSection>
-        </TabsContent>
-
-        <TabsContent value="orders">
-          <PageSection
-            icon="list-checks"
-            level={2}
-            title="My orders"
-            description="Offline subscription orders you placed — track the order number, transfer status, and cancel one that is still awaiting confirmation."
-          >
-            {orderError ? <Banner tone="danger" title={orderError} /> : null}
-            <DataTable
-              columns={orderColumns}
-              rows={orders}
-              rowKey={(order) => order.orderId}
-              loading={loading}
-              empty={<EmptyState title="No orders yet." />}
-            />
-          </PageSection>
-        </TabsContent>
-      </Tabs>
-
-      <DialogForm
-        open={manageOpen}
-        onOpenChange={(open) => {
-          if (!open) setManageOpen(false);
-        }}
-        title={tManage("title")}
-        description={tManage("description")}
-        submitLabel={tManage("confirm")}
-        cancelLabel={tManage("cancel")}
-        danger={manageAction === "cancel"}
-        submitting={manageBusy}
-        submitDisabled={!activeSubscription}
-        onSubmit={submitManage}
+      {/* ② 我的订单 */}
+      <PageSection
+        level={2}
+        title={<SectionTitle icon="receipt">{t("orders.title")}</SectionTitle>}
+        description={t("orders.description")}
       >
-        {manageError ? <Banner tone="danger" title={manageError} /> : null}
-
-        <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="manage-action">{tManage("title")}</FieldLabel>
-            <NativeSelect
-              id="manage-action"
-              value={manageAction}
-              onChange={(event) =>
-                setManageAction(
-                  event.target.value as SubscriptionLifecycleAction,
-                )
+        <DataTable<MyOrder>
+          columns={orderColumns}
+          rows={pagedOrders}
+          rowKey={(o) => o.orderId}
+          loading={loading}
+          indexStart={(page - 1) * ORDERS_PAGE_SIZE + 1}
+          expandedContent={(o) => (
+            <OrderDetailPanel
+              order={o}
+              countdown={
+                o.orderStatus === "pending_payment" && o.expireAt
+                  ? t("detail.payRemain", {
+                      time: formatRemain(o.expireAt, now),
+                    })
+                  : null
               }
-            >
-              {/* Resume only makes sense for a suspended subscription, pause
-               * only for a running one — the two are mutually exclusive. */}
-              {activeSubscription?.status === "suspended" ? (
-                <option value="resume">{tManage("actionResume")}</option>
-              ) : (
-                <option value="pause">{tManage("actionPause")}</option>
-              )}
-              <option value="cancel">{tManage("actionCancel")}</option>
-            </NativeSelect>
-            <FieldDescription>
-              {manageAction === "pause"
-                ? tManage("actionPauseHint")
-                : manageAction === "resume"
-                  ? tManage("actionResumeHint")
-                  : tManage("actionCancelHint")}
-            </FieldDescription>
-          </Field>
+              fmtLocale={appLocale}
+            />
+          )}
+          expandedKeys={expandedKeys}
+          onExpandedChange={setExpandedKeys}
+          rowActions={(o) => (
+            <ActionMenu
+              label={t("orders.menuLabel")}
+              items={orderMenuItems(o)}
+            />
+          )}
+          empty={<EmptyState title={t("orders.empty")} />}
+          footer={
+            <div className="flex w-full items-center justify-between gap-md text-body-sm text-muted-foreground">
+              <span className="tabular-nums">
+                {t("orders.total", { count: orders.length })}
+              </span>
+              {pageCount > 1 ? (
+                <span className="flex items-center gap-xs">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    {t("orders.prevPage")}
+                  </Button>
+                  <span className="tabular-nums">
+                    {page} / {pageCount}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={page >= pageCount}
+                    onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                  >
+                    {t("orders.nextPage")}
+                  </Button>
+                </span>
+              ) : null}
+            </div>
+          }
+        />
+      </PageSection>
 
-          {manageAction !== "resume" ? (
-            <Field>
-              <FieldLabel htmlFor="manage-reason">
-                {tManage("reasonLabel")}
-              </FieldLabel>
-              <Input
-                id="manage-reason"
-                value={manageReason}
-                onChange={(event) => setManageReason(event.target.value)}
+      {/* ③ 新品推荐 */}
+      {!loading && recommended.length > 0 ? (
+        <PageSection
+          level={2}
+          title={<SectionTitle icon="sparkles">{t("reco.title")}</SectionTitle>}
+          description={t("reco.description")}
+        >
+          <div className="grid gap-md md:grid-cols-2 xl:grid-cols-3">
+            {recommended.map((item) => (
+              <RecommendedProductCard
+                key={item.productId}
+                item={item}
+                favoriteBusy={favBusy.has(item.productCode)}
+                onToggleFavorite={toggleFavorite}
               />
-            </Field>
-          ) : null}
-
-          <FieldDescription>{tManage("upgradeHint")}</FieldDescription>
-        </FieldGroup>
-      </DialogForm>
+            ))}
+          </div>
+        </PageSection>
+      ) : null}
     </ViewLayout>
   );
 }

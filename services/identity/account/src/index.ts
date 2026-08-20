@@ -12,6 +12,7 @@ export {
 } from "./password/password-hasher";
 
 export { AccountModule } from "./module/account.module";
+export { FavoritesService } from "./favorites/favorites.service";
 export {
   AccountService,
   assertValidAccount,
