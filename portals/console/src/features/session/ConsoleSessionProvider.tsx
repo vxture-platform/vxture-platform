@@ -273,10 +273,17 @@ export function ConsoleSessionProvider({
   const switchTenant = useCallback(
     async (tenantId: string) => {
       setStatus("loading");
-      const snapshot = await switchTenantSession(tenantId);
-      writeStoredTenantId(tenantId);
-      commitSession(snapshot);
-      setStatus("ready");
+      try {
+        const snapshot = await switchTenantSession(tenantId);
+        writeStoredTenantId(tenantId);
+        commitSession(snapshot);
+        setStatus("ready");
+      } catch (error) {
+        // 切换失败会话未变：恢复可用态再上抛，让调用方呈现错误——
+        // 否则 provider 卡在 loading，整站看似在转圈。
+        setStatus("ready");
+        throw error;
+      }
     },
     [commitSession],
   );

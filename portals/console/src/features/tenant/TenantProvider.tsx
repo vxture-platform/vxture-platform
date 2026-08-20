@@ -112,7 +112,11 @@ export function TenantProvider({ children }: TenantProviderProps) {
       }
 
       await switchTenant(tenant.id);
-      router.replace(pathnameRef.current);
+      // usePathname 不含查询串：裸 replace 会把 /subscribe?product=… 之类的
+      // 深链上下文清掉，切租户后页面失去订单参数。保留 search 原样回放。
+      const search =
+        typeof window !== "undefined" ? window.location.search : "";
+      router.replace(`${pathnameRef.current}${search}`);
       router.refresh();
     },
     [tenantList, currentTenant?.id, switchTenant, router],

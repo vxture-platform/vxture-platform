@@ -1,30 +1,26 @@
 "use client";
 
 /**
- * SubscribePage — the product→console conversion deep-link landing +
- * ordering surface (product_200 §3.2; product_320 §4.4).
+ * SubscribePage — the product→console conversion deep-link landing, now the
+ * "confirm order" surface (product_200 §3.2; product_320 §4.4; 订阅链路 v5 稿).
  *
- * Entry: /subscribe?product=..&intent=subscribe|upgrade|renew|addon[&target_tier][&metric]
+ * Entry: /subscribe?product=..&intent=subscribe|upgrade|renew|addon[&target_tier][&cycle]
  * Fault-tolerance (arda_303 §2.2): unknown intent/product → degrade to the
  * subscription home. State machine (product_320):
- *  - a pending offline order exists → awaiting-confirmation panel (order no +
- *    transfer instructions + cancel);
- *  - otherwise the plan ladder with a month/year toggle: free → activate now,
- *    paid → subscribe/renew (new) or upgrade (from a live sub), enterprise
- *    (no price rows) → contact sales.
+ *  - a pending offline order exists → hand off to the payment page panel;
+ *  - otherwise the confirm-order layout: 「给谁买（租户/工作区归属）→ 买什么
+ *    （已选套餐只读卡，档位来自 target_tier，不再二次选择）→ 买多久（月/年）」
+ *    + 右栏订单摘要。free → activate now, enterprise (no price rows) → contact
+ *    sales. Vouchers stay on the payment page (they attach to an order).
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { formatCurrency, type Locale } from "@vxture/shared";
 import {
   Banner,
   Button,
-  Card,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
   DetailList,
   DetailRow,
   EmptyState,
@@ -32,6 +28,7 @@ import {
   StatusBadge,
   ViewHeader,
   ViewLayout,
+  cn,
 } from "@vxture/design-system";
 import { useRouter } from "@/lib/i18n/navigation";
 import { PageSection } from "@/layout/shell";
@@ -42,6 +39,9 @@ import {
   type SubscribePlanOption,
   type SubscribePlanPrice,
 } from "@/api/console-bff";
+import { OrderFlowStrip } from "./components/OrderFlowStrip";
+import { PlanSummaryCard } from "./components/PlanSummaryCard";
+import { WorkspacePicker } from "./components/WorkspacePicker";
 
 const STATUS_KEYS = new Set([
   "active",
@@ -55,20 +55,18 @@ const STATUS_KEYS = new Set([
 type Cycle = "month" | "year";
 const CYCLES: Cycle[] = ["month", "year"];
 
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString();
-  } catch {
-    return iso;
-  }
-}
-
-function formatMoney(amount: string, currency: string): string {
-  const n = Number.parseFloat(amount);
-  const value = Number.isFinite(n) ? n.toLocaleString() : amount;
-  const prefix = currency === "CNY" ? "¥" : `${currency} `;
-  return `${prefix}${value}`;
+/** 货币展示统一走 shared formatCurrency（110-locale-layer 指定入口）。 */
+function moneyFor(locale: Locale) {
+  return (
+    amount: string | number,
+    currency: string,
+    options?: Intl.NumberFormatOptions,
+  ): string => {
+    const n = typeof amount === "number" ? amount : Number.parseFloat(amount);
+    return Number.isFinite(n)
+      ? formatCurrency(n, locale, currency, options)
+      : String(amount);
+  };
 }
 
 function priceForCycle(
@@ -82,6 +80,7 @@ export function SubscribePage() {
   const t = useTranslations("subscribePage");
   const router = useRouter();
   const params = useSearchParams();
+  const formatMoney = moneyFor(useLocale() as Locale);
 
   const query = useMemo(
     () => ({
@@ -102,7 +101,9 @@ export function SubscribePage() {
   const [ctx, setCtx] = useState<SubscribeContext | null>(null);
   const [loading, setLoading] = useState(true);
   const [cycle, setCycle] = useState<Cycle>(initialCycle); // 深链预选，默认年付（更省）
-  const [busy, setBusy] = useState<string | null>(null); // planVersionId | "cancel"
+  // 深链 target_tier 缺席时的兜底选择（正常路径不出现二次选择）。
+  const [pickedVersionId, setPickedVersionId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -122,59 +123,65 @@ export function SubscribePage() {
     };
   }, [query, router]);
 
+  const reload = useCallback(async () => {
+    const fresh = await fetchSubscribeContext(query);
+    if (fresh) setCtx(fresh);
+  }, [query]);
+
   if (loading || !ctx) {
     return (
-      <ViewLayout>
+      <ViewLayout className="mx-auto w-full max-w-content-base-xl">
         <EmptyState title={t("loading")} />
       </ViewLayout>
     );
   }
 
-  const { intent, product, targetTier, metric, current, pendingOrder, plans } =
-    ctx;
+  const { intent, product, targetTier, current, pendingOrder, plans } = ctx;
   if (intent === null || product === null) return null;
 
-  async function reload() {
-    const fresh = await fetchSubscribeContext(query);
-    if (fresh) setCtx(fresh);
-  }
-
-  // ── 待支付订单：直接引导进付款页（product_321 §6.1，占位面板退役）──────────
+  // ── 待支付订单：直接引导进付款页（product_321 §6.1）─────────────────────────
   if (pendingOrder) {
     return (
-      <ViewLayout>
+      <ViewLayout className="mx-auto w-full max-w-content-base-xl">
         <ViewHeader
-          icon="chart-bar"
+          icon="credit-card"
           title={t("pending.title")}
           description={t("pending.awaiting")}
         />
-        <PageSection icon="clock" level={2} title={t("pending.title")}>
-          <div className="flex flex-col gap-md">
-            <DetailList>
-              <DetailRow label={t("pending.orderNo")}>
-                {pendingOrder.orderNo}
-              </DetailRow>
-              <DetailRow label={t("plansSection")}>
-                {pendingOrder.planCode}
-                {pendingOrder.tier ? ` · ${pendingOrder.tier}` : ""}
-              </DetailRow>
-              <DetailRow label={t("pending.amount")}>
-                {formatMoney(pendingOrder.amount, pendingOrder.currency)} /{" "}
-                {t(`cycle.${pendingOrder.cycleUnit}`)}
-              </DetailRow>
-            </DetailList>
-            <div className="flex flex-wrap items-center gap-sm">
-              <Button
-                onClick={() =>
-                  router.push(`/subscribe/pay/${pendingOrder.orderId}`)
-                }
-              >
-                {t("pending.goPay")}
-              </Button>
-              <Button variant="outline" onClick={() => void reload()}>
-                {t("actions.refresh")}
-              </Button>
-            </div>
+        <OrderFlowStrip
+          stage={pendingOrder.paymentState ?? "pending_payment"}
+          times={{ order: pendingOrder.createdAt }}
+        />
+        <PageSection
+          tone="raised"
+          icon="clock"
+          level={2}
+          title={t("pending.title")}
+        >
+          <DetailList>
+            <DetailRow label={t("pending.orderNo")}>
+              <span className="font-mono">{pendingOrder.orderNo}</span>
+            </DetailRow>
+            <DetailRow label={t("plansSection")}>
+              {pendingOrder.planCode}
+              {pendingOrder.tier ? ` · ${pendingOrder.tier}` : ""}
+            </DetailRow>
+            <DetailRow label={t("pending.amount")}>
+              {formatMoney(pendingOrder.amount, pendingOrder.currency)} /{" "}
+              {t(`cycle.${pendingOrder.cycleUnit}`)}
+            </DetailRow>
+          </DetailList>
+          <div className="flex flex-wrap items-center gap-sm">
+            <Button
+              onClick={() =>
+                router.push(`/subscribe/pay/${pendingOrder.orderId}`)
+              }
+            >
+              {t("pending.goPay")}
+            </Button>
+            <Button variant="outline" onClick={() => void reload()}>
+              {t("actions.refresh")}
+            </Button>
           </div>
         </PageSection>
         {error ? <Banner tone="danger" title={error} /> : null}
@@ -190,14 +197,61 @@ export function SubscribePage() {
 
   const isLive = current?.status === "active" || current?.status === "trialing";
 
-  const onSelect = async (plan: SubscribePlanOption) => {
-    setBusy(plan.planVersionId);
+  // ── 套餐解析：target_tier 直达；缺席/无匹配时兜底 ──────────────────────────
+  const currentLiveVersionId = isLive && current ? current.planVersionId : null;
+
+  // target_tier 在阶梯中无匹配（网站硬编码 tier 与后台发布不同步时会发生）：
+  // 视同未指定，进入档位选择态——绝不静默落到别的档（曾经落到 Free 一键开通）。
+  const tierMatched = targetTier
+    ? (plans.find((p) => p.tier === targetTier) ?? null)
+    : null;
+  const tierMissing = Boolean(targetTier) && tierMatched === null;
+
+  // 兜底预选不选当前套餐：同套餐"升级"是付费空操作（服务端同样拒绝）。
+  // 阶梯按 TIERS 升序，优先当前档之上的第一档；已是顶档则不预选。
+  const fallbackPlan = (() => {
+    if (!currentLiveVersionId) return plans[0] ?? null;
+    const idx = plans.findIndex(
+      (p) => p.planVersionId === currentLiveVersionId,
+    );
+    return plans[idx + 1] ?? null;
+  })();
+
+  const plan: SubscribePlanOption | null =
+    (pickedVersionId
+      ? (plans.find((p) => p.planVersionId === pickedVersionId) ?? null)
+      : null) ??
+    tierMatched ??
+    (tierMissing ? null : fallbackPlan);
+
+  const showTierFallback = (!targetTier || tierMissing) && plans.length > 1;
+  const isCurrentPlan =
+    plan !== null && plan.planVersionId === currentLiveVersionId;
+
+  const isEnterprise = plan !== null && plan.prices.length === 0;
+  const price = plan ? priceForCycle(plan, cycle) : undefined;
+  const isFree = price ? Number.parseFloat(price.price) <= 0 : false;
+
+  // 年付节省额（月价 ×12 − 年价），两个周期价都在才有意义。
+  const savings = (() => {
+    if (!plan) return null;
+    const m = priceForCycle(plan, "month");
+    const y = priceForCycle(plan, "year");
+    if (!m || !y) return null;
+    const save = Number.parseFloat(m.price) * 12 - Number.parseFloat(y.price);
+    return save > 0 ? { amount: save, currency: y.currency } : null;
+  })();
+
+  const orderIntent: "new" | "renew" | "upgrade" = !current
+    ? "new"
+    : isLive
+      ? "upgrade"
+      : "renew";
+
+  const onSubmit = async () => {
+    if (!plan || isEnterprise || !price || isCurrentPlan) return;
+    setBusy(true);
     setError(null);
-    const orderIntent: "new" | "renew" | "upgrade" = !current
-      ? "new"
-      : isLive
-        ? "upgrade"
-        : "renew";
     try {
       const result = await createSubscriptionOrder({
         productCode: product.code,
@@ -213,14 +267,14 @@ export function SubscribePage() {
         return;
       }
       if (result.orderId) {
-        // 付费订单 → 直达付款页（product_321 §6.1，不再就地渲染面板）
         router.push(`/subscribe/pay/${result.orderId}`);
         return;
       }
       await reload();
+      setBusy(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("orderFailed"));
-      setBusy(null);
+      setBusy(false);
     }
   };
 
@@ -230,163 +284,215 @@ export function SubscribePage() {
     )}`;
   };
 
-  const planButtonLabel = (isFree: boolean) =>
-    isFree
-      ? t("actions.activateFree")
-      : !current
-        ? t("actions.subscribe")
-        : isLive
-          ? t("actions.upgrade")
-          : t("actions.renew");
+  const submitLabel = isFree ? t("actions.activateFree") : t("confirm.submit");
+
+  const planNote =
+    orderIntent === "upgrade" && current
+      ? t("confirm.whatUpgradeNote", {
+          plan: current.tier ?? current.planCode,
+        })
+      : null;
 
   return (
-    <ViewLayout>
+    <ViewLayout className="mx-auto w-full max-w-content-base-xl">
       <ViewHeader
-        icon="chart-bar"
-        title={t(`title.${intent}`)}
+        icon="credit-card"
+        title={t("confirm.title")}
+        secondary={
+          <StatusBadge tone="brand">{t(`title.${intent}`)}</StatusBadge>
+        }
         description={t(`hint.${stateKey}`)}
       />
 
-      <PageSection
-        icon="package"
-        level={2}
-        title={t("currentSection")}
-        action={
-          current ? (
-            <StatusBadge tone={isLive ? "success" : "neutral"}>
-              {STATUS_KEYS.has(current.status)
-                ? t(`status.${current.status}`)
-                : current.status}
-            </StatusBadge>
-          ) : undefined
-        }
-      >
-        {current ? (
-          <div className="flex flex-col gap-md">
-            <strong className="text-title-sm text-foreground">
-              {current.planCode}
-            </strong>
-            <DetailList>
-              <DetailRow label={t("fields.tier")}>
-                {current.tier ?? "—"}
-              </DetailRow>
-              <DetailRow
-                label={
-                  current.status === "trialing"
-                    ? t("fields.trialEndsAt")
-                    : t("fields.periodEnd")
-                }
-              >
-                {formatDate(
-                  current.status === "trialing"
-                    ? current.trialEndAt
-                    : current.endAt,
-                )}
-              </DetailRow>
-              <DetailRow label={t("fields.autoRenew")}>
-                {current.autoRenew
-                  ? t("fields.autoRenewOn")
-                  : t("fields.autoRenewOff")}
-              </DetailRow>
-            </DetailList>
-          </div>
-        ) : (
-          <EmptyState title={t("noSubscription")} />
-        )}
-      </PageSection>
+      <OrderFlowStrip stage="ordering" />
 
       {intent === "addon" ? (
-        <PageSection icon="puzzle" level={2} title={t("addonSection")}>
-          <EmptyState
-            title={
-              metric ? t("addonNoticeMetric", { metric }) : t("addonNotice")
-            }
-          />
-        </PageSection>
+        <Banner tone="info" title={t("addonNotice")} />
       ) : null}
 
-      <PageSection icon="chart-bar" level={2} title={t("plansSection")}>
-        <div className="flex flex-col gap-md">
-          <SegmentedControl
-            value={cycle}
-            onChange={(next) => setCycle(next)}
-            items={CYCLES.map((c) => ({
-              value: c,
-              label: t(`cycleToggle.${c === "month" ? "monthly" : "yearly"}`),
-            }))}
-          />
+      <div className="flex flex-col gap-lg lg:flex-row lg:items-start">
+        {/* 左列：给谁买 / 买什么 / 买多久 */}
+        <div className="flex min-w-0 flex-1 flex-col gap-lg">
+          <PageSection
+            tone="raised"
+            icon="user-circle"
+            level={2}
+            title={t("confirm.who")}
+            description={t("confirm.whoHint")}
+          >
+            <WorkspacePicker onSwitched={() => void reload()} />
+            <p className="text-body-sm text-muted-foreground">
+              {t("confirm.whoNote")}
+            </p>
+          </PageSection>
 
-          {plans.length === 0 ? (
-            <EmptyState title={t("noPlans")} />
-          ) : (
-            <div className="grid gap-md sm:grid-cols-2 xl:grid-cols-3">
-              {plans.map((plan) => {
-                const isCurrent =
-                  current !== null &&
-                  plan.planVersionId === current.planVersionId;
-                const isTarget =
-                  targetTier !== null && plan.tier === targetTier;
-                const isEnterprise = plan.prices.length === 0;
-                const price = priceForCycle(plan, cycle);
-                const isFree = price
-                  ? Number.parseFloat(price.price) <= 0
-                  : false;
-                const action = isCurrent ? null : isEnterprise ? (
-                  <Button variant="outline" onClick={contactSales}>
-                    {t("actions.contactSales")}
-                  </Button>
-                ) : price ? (
+          <PageSection
+            tone="raised"
+            icon="package"
+            level={2}
+            title={t("confirm.what")}
+            description={t("confirm.whatHint")}
+          >
+            {plan ? (
+              <PlanSummaryCard
+                productName={product.name}
+                plan={plan}
+                note={planNote}
+              />
+            ) : plans.length > 0 ? (
+              <Banner tone="warning" title={t("confirm.tierUnavailable")} />
+            ) : (
+              <EmptyState title={t("noPlans")} />
+            )}
+            {showTierFallback && plans.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-sm">
+                <span className="text-body-sm text-muted-foreground">
+                  {t("confirm.pickTier")}
+                </span>
+                {plans.map((option) => (
                   <Button
-                    disabled={busy !== null}
-                    onClick={() => void onSelect(plan)}
+                    key={option.planVersionId}
+                    size="xs"
+                    variant={
+                      option.planVersionId === plan?.planVersionId
+                        ? "secondary"
+                        : "outline"
+                    }
+                    onClick={() => setPickedVersionId(option.planVersionId)}
+                    className={cn(
+                      "rounded-4xl",
+                      option.planVersionId === plan?.planVersionId &&
+                        "border-primary",
+                    )}
                   >
-                    {busy === plan.planVersionId
-                      ? t("actions.processing")
-                      : planButtonLabel(isFree)}
+                    {option.planName}
                   </Button>
-                ) : null;
-                return (
-                  <Card key={plan.planId} surface="soft">
-                    <CardHeader>
-                      <div className="flex flex-wrap items-center gap-xs">
-                        <CardTitle>{plan.planName}</CardTitle>
-                        <StatusBadge>{plan.tier}</StatusBadge>
-                        {isCurrent ? (
-                          <StatusBadge tone="info">
-                            {t("badges.current")}
-                          </StatusBadge>
-                        ) : null}
-                        {isTarget && !isCurrent ? (
-                          <StatusBadge tone="success">
-                            {t("badges.recommended")}
-                          </StatusBadge>
-                        ) : null}
-                      </div>
-                      <CardDescription>
-                        {isEnterprise
-                          ? t("actions.contactSales")
-                          : price
-                            ? `${formatMoney(price.price, price.currency)} / ${t(
-                                `cycle.${price.cycleUnit}`,
-                              )}`
-                            : t("pricePending")}
-                      </CardDescription>
-                    </CardHeader>
-                    {action ? <CardFooter>{action}</CardFooter> : null}
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-          {error ? <Banner tone="danger" title={error} /> : null}
-        </div>
-      </PageSection>
+                ))}
+              </div>
+            ) : null}
+          </PageSection>
 
-      <PageSection icon="dots-three" level={2} title={t("moreSection")}>
-        <Button variant="outline" onClick={() => router.push("/subscription")}>
+          <PageSection
+            tone="raised"
+            icon="calendar"
+            level={2}
+            title={t("confirm.howLong")}
+            description={t("confirm.howLongHint")}
+          >
+            <div className="flex flex-wrap items-center gap-md">
+              <SegmentedControl
+                value={cycle}
+                onChange={(next) => setCycle(next)}
+                items={CYCLES.map((c) => ({
+                  value: c,
+                  label: t(
+                    `cycleToggle.${c === "month" ? "monthly" : "yearly"}`,
+                  ),
+                }))}
+              />
+              {savings ? (
+                <StatusBadge tone="success">
+                  {t("confirm.yearlySave", {
+                    amount: formatMoney(savings.amount, savings.currency, {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    }),
+                  })}
+                </StatusBadge>
+              ) : null}
+            </div>
+            <p className="text-body-sm text-muted-foreground">
+              {t("confirm.startNote")}
+            </p>
+          </PageSection>
+        </div>
+
+        {/* 右栏：订单摘要 */}
+        <aside className="w-full lg:max-w-panel-sm lg:shrink-0">
+          <PageSection
+            tone="raised"
+            icon="receipt"
+            level={2}
+            title={t("confirm.summary")}
+          >
+            {plan ? (
+              <>
+                <div className="flex items-baseline justify-between gap-md text-body-md">
+                  <span className="text-muted-foreground">
+                    {plan.planName} ·{" "}
+                    {t(
+                      `cycleToggle.${cycle === "month" ? "monthly" : "yearly"}`,
+                    )}
+                  </span>
+                  <span className="font-medium text-foreground tabular-nums">
+                    {isEnterprise
+                      ? t("confirm.priceOnRequest")
+                      : price
+                        ? `${formatMoney(price.price, price.currency)} / ${t(`cycle.${price.cycleUnit}`)}`
+                        : t("pricePending")}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between gap-md border-t border-dashed border-primary/10 pt-md dark:border-primary/20">
+                  <strong className="text-label-lg text-foreground">
+                    {t("confirm.total")}
+                  </strong>
+                  <span className="text-heading-3 text-foreground tabular-nums">
+                    {isEnterprise
+                      ? "—"
+                      : price
+                        ? formatMoney(price.price, price.currency)
+                        : "—"}
+                  </span>
+                </div>
+                {isEnterprise ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      size="xl"
+                      onClick={contactSales}
+                    >
+                      {t("actions.contactSales")}
+                    </Button>
+                    <p className="text-body-sm text-content-tertiary">
+                      {t("confirm.fineEnterprise")}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      size="xl"
+                      disabled={busy || !price || isCurrentPlan}
+                      onClick={() => void onSubmit()}
+                      className="w-full border-transparent bg-linear-to-r from-gradient-brand-from to-gradient-brand-to text-primary-foreground hover:brightness-110"
+                    >
+                      {busy ? t("actions.processing") : submitLabel}
+                    </Button>
+                    <p className="text-body-sm text-content-tertiary">
+                      {isCurrentPlan
+                        ? t("confirm.alreadyCurrent")
+                        : isFree
+                          ? t("confirm.fineFree")
+                          : t("confirm.fineOffline")}
+                    </p>
+                  </>
+                )}
+              </>
+            ) : (
+              <EmptyState
+                title={plans.length > 0 ? t("confirm.pickTier") : t("noPlans")}
+              />
+            )}
+            {error ? <Banner tone="danger" title={error} /> : null}
+          </PageSection>
+        </aside>
+      </div>
+
+      <div>
+        <Button variant="ghost" onClick={() => router.push("/subscription")}>
           {t("actions.backToSubscription")}
         </Button>
-      </PageSection>
+      </div>
     </ViewLayout>
   );
 }

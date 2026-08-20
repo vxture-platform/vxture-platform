@@ -1846,8 +1846,9 @@ export async function seedCatalog(client) {
           "ai.credit": 500,
         },
       ],
-      // business seats preset = 10 (member.max / varda.credit scale with purchased
-      // seats at ops time; initial presets per biz-260 §3 "tune after real usage").
+      // business seats preset = 5 (owner 2026-08-20: seats are fixed by the plan
+      // release — aligned with the published pricing page; member.max / varda.credit
+      // scale with purchased seats at ops time).
       [
         "arda-business",
         "Arda Business",
@@ -1862,7 +1863,7 @@ export async function seedCatalog(client) {
           "governance.mdm",
         ],
         {
-          "member.max": 10,
+          "member.max": 5,
           "dataset.max": -1,
           "datasource.max": 100,
           "service_endpoint.max": -1,

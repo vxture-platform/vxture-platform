@@ -191,46 +191,92 @@
     "back": "Back to products"
   },
   "subscription": {
-    "eyebrow": "Subscription",
-    "title": "Pick the plan that fits",
-    "description": "One subscription entry for every product, plan and solution — subscribe monthly or yearly and upgrade tiers as your team grows.",
+    "unavailable": "Online subscription for this product is not open yet — contact sales for a quote.",
+    "contact": "Contact sales",
+    "back": "Back to products",
+    "subscribe": "Subscribe {plan}",
+    "freeCta": "Start for free",
+    "cycle": {
+      "monthly": "Monthly",
+      "yearly": "Yearly"
+    },
+    "audienceGroupLabel": "Audience",
+    "cycleGroupLabel": "Billing cycle",
+    "audienceToggle": {
+      "person": "Individual",
+      "all": "All plans"
+    },
+    "audience": {
+      "person": "Individual",
+      "team": "Team · Cloud",
+      "private": "Team · On-prem"
+    },
+    "price": {
+      "perMonth": "/ mo",
+      "yearlyTotal": "{amount} billed yearly",
+      "freeForever": "free forever",
+      "custom": "Custom",
+      "saveBadge": "Save {amount} ({percent}%) vs monthly"
+    },
+    "note": {
+      "free": "No payment needed — instant activation",
+      "paid": "Checkout continues in Console",
+      "enterprise": "sales@vxture.com"
+    },
+    "kindTiers": "{kind} · {count} tiers",
+    "switchProduct": "Switch product",
+    "ghost": {
+      "title": "Team tiers",
+      "viewAll": "View all →"
+    },
     "compare": {
       "title": "Compare all features",
       "feature": "Feature",
       "description": "Every feature and quota across tiers — pick what you need, upgrade anytime."
     },
-    "cycle": {
-      "monthly": "Monthly",
-      "yearly": "Yearly"
+    "faq": {
+      "title": "FAQ",
+      "description": "Subscription, payment & invoicing",
+      "items": [
+        {
+          "q": "Can I get an invoice (fapiao)?",
+          "a": "Both general and special VAT invoices are supported. Once your payment is verified, request one from the Billing page in Console — it arrives by email."
+        },
+        {
+          "q": "How are upgrades and downgrades billed?",
+          "a": "Upgrades take effect immediately: the remaining days of your current plan are prorated and credited against the new order. Downgrades apply at the end of the current cycle, with no refund."
+        },
+        {
+          "q": "Which payment methods are supported?",
+          "a": "Alipay transfer and corporate bank transfer for now — payments are typically verified and activated within 1 business day. Online WeChat Pay / Alipay checkout is coming soon."
+        },
+        {
+          "q": "How do I buy Enterprise?",
+          "a": "Enterprise offers on-prem deployment, custom quotas and dedicated support. Contact sales@vxture.com and we respond within 1 business day."
+        }
+      ]
     },
-    "per": {
-      "monthly": "per month",
-      "yearly": "per year"
-    },
-    "recommended": "Recommended",
-    "subscribe": "Subscribe",
-    "contact": "Contact sales",
-    "back": "Back to products",
-    "unavailable": "Online subscription for this product is not open yet — contact sales for a quote.",
     "products": {
       "arda": {
         "name": "Arda Data Intelligence Platform",
+        "kind": "Platform",
         "contactSubject": "Arda Enterprise inquiry",
         "plans": [
           {
             "tier": "free",
             "name": "Free",
-            "monthly": "¥0",
-            "yearly": "¥0",
+            "tagline": "Explore & evaluate",
+            "monthly": 0,
+            "yearly": 0,
             "seats": "1 seat",
             "features": ["50 datasets", "Basic governance", "1 GiB storage"]
           },
           {
             "tier": "starter",
             "name": "Starter",
-            "monthly": "¥199",
-            "yearly": "¥1,999",
-            "save": "~2 months free",
+            "tagline": "Getting started",
+            "monthly": 199,
+            "yearly": 1999,
             "seats": "1 seat",
             "features": [
               "500 datasets",
@@ -242,11 +288,11 @@
           {
             "tier": "pro",
             "name": "Pro",
-            "monthly": "¥499",
-            "yearly": "¥4,999",
-            "save": "~2 months free",
+            "tagline": "For professionals",
+            "monthly": 499,
+            "yearly": 4999,
+            "seats": "1 seat",
             "highlight": true,
-            "seats": "3 seats",
             "features": [
               "5,000 datasets",
               "Hourly sync",
@@ -257,9 +303,9 @@
           {
             "tier": "business",
             "name": "Business",
-            "monthly": "¥1,999",
-            "yearly": "¥19,999",
-            "save": "~2 months free",
+            "tagline": "For teams",
+            "monthly": 1999,
+            "yearly": 19999,
             "seats": "5 seats",
             "features": [
               "Unlimited datasets",
@@ -271,6 +317,7 @@
           {
             "tier": "enterprise",
             "name": "Enterprise",
+            "tagline": "Scale & compliance",
             "monthly": null,
             "yearly": null,
             "seats": "Unlimited seats",
@@ -288,7 +335,7 @@
               "rows": [
                 {
                   "label": "Seats",
-                  "values": ["1", "1", "3", "5", "Unlimited"]
+                  "values": ["1", "1", "1", "5", "Unlimited"]
                 },
                 {
                   "label": "Datasets",

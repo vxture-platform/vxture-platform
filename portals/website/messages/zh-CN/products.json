@@ -175,46 +175,92 @@
     "back": "返回产品总览"
   },
   "subscription": {
-    "eyebrow": "产品订阅",
-    "title": "选择适合你的套餐",
-    "description": "统一的订阅入口，覆盖全部产品、套餐与解决方案；按月或按年订阅，档位随团队规模灵活升级。",
-    "compare": {
-      "title": "对比所有功能",
-      "feature": "功能",
-      "description": "各档位的完整功能与配额一览，按需选择、随时升级。"
-    },
+    "unavailable": "该产品暂未开放线上订阅，可联系销售获取方案。",
+    "contact": "联系销售",
+    "back": "返回产品中心",
+    "subscribe": "订阅{plan}",
+    "freeCta": "免费开始",
     "cycle": {
       "monthly": "月付",
       "yearly": "年付"
     },
-    "per": {
-      "monthly": "每月",
-      "yearly": "每年"
+    "audienceGroupLabel": "适用对象",
+    "cycleGroupLabel": "计费周期",
+    "audienceToggle": {
+      "person": "个人",
+      "all": "全部"
     },
-    "recommended": "推荐",
-    "subscribe": "订阅",
-    "contact": "联系销售",
-    "back": "返回产品中心",
-    "unavailable": "该产品暂未开放线上订阅，可联系销售获取方案。",
+    "audience": {
+      "person": "个人",
+      "team": "团队 · 在线",
+      "private": "团队 · 私有化"
+    },
+    "price": {
+      "perMonth": "/ 月",
+      "yearlyTotal": "按年付 {amount}",
+      "freeForever": "永久免费",
+      "custom": "定制",
+      "saveBadge": "较月付省 {amount}（{percent}%）"
+    },
+    "note": {
+      "free": "无需付款，即时开通",
+      "paid": "跳转控制台完成下单",
+      "enterprise": "sales@vxture.com"
+    },
+    "kindTiers": "{kind} · {count} 档",
+    "switchProduct": "切换产品",
+    "ghost": {
+      "title": "团队档位",
+      "viewAll": "查看全部 →"
+    },
+    "compare": {
+      "title": "对比所有功能",
+      "feature": "功能",
+      "description": "各档位完整功能与配额一览，按需选择，随时升级。"
+    },
+    "faq": {
+      "title": "常见问题",
+      "description": "关于订阅、付款与发票",
+      "items": [
+        {
+          "q": "可以开发票吗？",
+          "a": "支持增值税普通发票与专用发票。付款核销完成后，在控制台「账单」页面填写抬头即可申请，发票随邮件送达。"
+        },
+        {
+          "q": "升级或降级如何计费？",
+          "a": "升级立即生效：当前套餐剩余周期按天折算，自动抵扣新订单金额。降级在当前周期结束后生效，不产生退款。"
+        },
+        {
+          "q": "支持哪些付款方式？",
+          "a": "当前支持支付宝转账与银行对公转账，提交付款申报后通常 1 个工作日内完成核销开通。微信 / 支付宝在线支付即将上线。"
+        },
+        {
+          "q": "企业版如何购买？",
+          "a": "企业版支持私有化部署、定制配额与专属支持，请联系 sales@vxture.com，我们会在 1 个工作日内响应。"
+        }
+      ]
+    },
     "products": {
       "arda": {
         "name": "Arda 智能数据治理平台",
+        "kind": "平台",
         "contactSubject": "Arda 企业版咨询",
         "plans": [
           {
             "tier": "free",
             "name": "免费版",
-            "monthly": "¥0",
-            "yearly": "¥0",
+            "tagline": "个人探索与评估",
+            "monthly": 0,
+            "yearly": 0,
             "seats": "1 席位",
             "features": ["50 数据集", "基础数据治理", "1 GiB 存储"]
           },
           {
             "tier": "starter",
             "name": "入门版",
-            "monthly": "¥199",
-            "yearly": "¥1,999",
-            "save": "约 8.4 折",
+            "tagline": "个人起步",
+            "monthly": 199,
+            "yearly": 1999,
             "seats": "1 席位",
             "features": [
               "500 数据集",
@@ -226,11 +272,11 @@
           {
             "tier": "pro",
             "name": "专业版",
-            "monthly": "¥499",
-            "yearly": "¥4,999",
-            "save": "约 8.3 折",
+            "tagline": "专业个人",
+            "monthly": 499,
+            "yearly": 4999,
+            "seats": "1 席位",
             "highlight": true,
-            "seats": "3 席位",
             "features": [
               "5,000 数据集",
               "hourly 同步",
@@ -241,9 +287,9 @@
           {
             "tier": "business",
             "name": "商业版",
-            "monthly": "¥1,999",
-            "yearly": "¥19,999",
-            "save": "约 8.3 折",
+            "tagline": "团队协作",
+            "monthly": 1999,
+            "yearly": 19999,
             "seats": "5 席位",
             "features": [
               "不限数据集",
@@ -255,6 +301,7 @@
           {
             "tier": "enterprise",
             "name": "企业版",
+            "tagline": "规模化与合规",
             "monthly": null,
             "yearly": null,
             "seats": "不限席位",
@@ -268,7 +315,7 @@
               "rows": [
                 {
                   "label": "席位",
-                  "values": ["1", "1", "3", "5", "不限"]
+                  "values": ["1", "1", "1", "5", "不限"]
                 },
                 {
                   "label": "数据集",

@@ -499,6 +499,8 @@ export interface SubscribePlanOption {
   planVersionId: string;
   tier: string;
   prices: SubscribePlanPrice[];
+  /** Primary component feature list (plan_components.features) — 权益 chips. */
+  features: string[];
 }
 
 export interface SubscribeCurrent {
@@ -522,6 +524,10 @@ export interface PendingOrderSummary {
   amount: string;
   currency: string;
   createdAt: string;
+  /** 付款截止（P4）；已申报/有实收时 null。 */
+  expireAt: string | null;
+  /** 恢复现场用的六态（进付款页直达对应视图）。 */
+  paymentState: OrderState;
 }
 
 export interface SubscribeContext {
@@ -820,10 +826,17 @@ export async function fetchSubscribeContext(params: {
   if (params.intent) qs.set("intent", params.intent);
   if (params.targetTier) qs.set("target_tier", params.targetTier);
   if (params.metric) qs.set("metric", params.metric);
-  return readJson<SubscribeContext | null>(
+  const ctx = await readJson<SubscribeContext | null>(
     `/api/subscription/subscribe-context?${qs.toString()}`,
     null,
   );
+  if (ctx) {
+    // 部署偏斜防护：门户先于 BFF 发布时旧响应没有 features 字段。
+    for (const plan of ctx.plans) {
+      plan.features = (plan as { features?: string[] }).features ?? [];
+    }
+  }
+  return ctx;
 }
 
 async function extractErrorMessage(

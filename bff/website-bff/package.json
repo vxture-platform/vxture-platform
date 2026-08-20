@@ -13,6 +13,7 @@
     "start": "node dist/main.cjs",
     "boot-smoke": "node ../../scripts/guardrails/boot-smoke.mjs dist/main.cjs website-bff",
     "type-check": "tsc --noEmit",
+    "test": "vitest run",
     "lint": "eslint src",
     "lint:fix": "eslint --fix src"
   },
@@ -41,7 +42,8 @@
     "@types/express": "^4.17.21",
     "@types/pg": "^8.16.0",
     "esbuild": "^0.28.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.8"
   },
   "engines": {
     "node": ">=22.0.0"

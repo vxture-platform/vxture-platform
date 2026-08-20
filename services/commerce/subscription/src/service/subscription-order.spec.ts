@@ -152,6 +152,7 @@ describe("createOfflineOrder", () => {
   });
 
   it("skips the tier-conflict guard for intent='upgrade' (a live different-tier sub is expected)", async () => {
+    m.repo.getById.mockResolvedValue(LIVE_SUB); // pv-1 ≠ pv-2 → 同套餐守卫放行
     m.repo.createOfflineOrder.mockResolvedValue({
       subscription: ORDER,
       invoiceId: "inv-1",
@@ -171,6 +172,24 @@ describe("createOfflineOrder", () => {
     });
     expect(m.repo.findTierConflicts).not.toHaveBeenCalled();
     expect(m.repo.createOfflineOrder).toHaveBeenCalled();
+  });
+
+  it("rejects an 'upgrade' order targeting the plan version the live subscription already has", async () => {
+    m.repo.getById.mockResolvedValue({ ...LIVE_SUB, planVersionId: "pv-2" });
+    await expect(
+      m.service.createOfflineOrder({
+        tenantId: "org-1",
+        workspaceId: "ws-1",
+        planVersionId: "pv-2",
+        cycleUnit: "month",
+        price: 499,
+        createdBy: "u-1",
+        intent: "upgrade",
+        upgradeOfSubscriptionId: "sub-old",
+        itemName: "Arda Pro",
+      }),
+    ).rejects.toThrow(/无需升级/);
+    expect(m.repo.createOfflineOrder).not.toHaveBeenCalled();
   });
 });
 

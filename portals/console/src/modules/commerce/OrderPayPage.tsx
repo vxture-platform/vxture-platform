@@ -1,32 +1,35 @@
 "use client";
 
 /**
- * OrderPayPage.tsx - 订单付款页（product_321 §6.1）。
+ * OrderPayPage.tsx - 订单付款页（product_321 §6.1；订阅链路 v5 稿）。
  * @package @vxture/console
  * @layer Application
  * @category Module
  *
- * 同一路由按六态切换渲染：待付款（金额分解 + 券勾选 + 支付方式 + 申报）/
- * 已付款·待确认（轮询 + 手动刷新）/ 开通处理中（轮询）/ 终态视图。
- * 勾选变化调 quote 纯试算；「我已完成付款」弹 DS Dialog 确认后 declare。
+ * 同一路由按六态切换渲染，页内统一挂四步流程条（下单→付款→收款→开通）：
+ * 待付款 = 左「选择付款方式」+ 右「订单信息」（金额 + 券勾选 + 申报）双栏；
+ * 已付款·待确认 / 开通处理中 = 轮询面板；完成 = 成功视图 + 后续入口；
+ * 取消/超时 = 终态视图。勾选变化调 quote 纯试算；「我已完成付款」弹 DS
+ * Dialog 确认后 declare。倒计时如实显示服务端 expireAt（TTL 归后端）。
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { formatCurrency, type Locale } from "@vxture/shared";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
   Banner,
   Button,
   Checkbox,
   DetailList,
-  DetailPageTemplate,
   DetailRow,
   DialogForm,
   EmptyState,
   Field,
   FieldGroup,
   FieldLabel,
+  Icon,
   Input,
   SegmentedControl,
   StatusBadge,
@@ -36,6 +39,7 @@ import {
   type StatusBadgeTone,
 } from "@vxture/design-system";
 import { PageSection } from "@/layout/shell";
+import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import {
   ConsoleBffError,
   declareOrderPayment,
@@ -48,6 +52,7 @@ import {
   type OrderVoucherOption,
   type PaymentChannelInfo,
 } from "@/api/console-bff";
+import { OrderFlowStrip } from "./components/OrderFlowStrip";
 
 const POLL_MS = 15_000;
 
@@ -66,12 +71,16 @@ const STATE_TONE: Record<OrderState, StatusBadgeTone> = {
 
 type PayChannel = "alipay" | "bank_transfer";
 
-function fmt(amount: string, currency: string): string {
-  const n = Number(amount);
-  if (!Number.isFinite(n)) return "—";
-  return `${currency === "CNY" ? "¥" : currency} ${n.toFixed(2)}`;
+/** 货币展示统一走 shared formatCurrency（110-locale-layer 指定入口）。 */
+function fmtWith(locale: Locale) {
+  return (amount: string, currency: string): string => {
+    const n = Number(amount);
+    if (!Number.isFinite(n)) return "—";
+    return formatCurrency(n, locale, currency);
+  };
 }
 
+/** 倒计时：<1h 显示 mm:ss，否则 hh:mm:ss（团队租户 48h 窗口不至于溢出）。 */
 function useCountdown(deadline: string | null): string | null {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -82,14 +91,18 @@ function useCountdown(deadline: string | null): string | null {
   if (!deadline) return null;
   const remain = new Date(deadline).getTime() - now;
   if (remain <= 0) return "00:00";
-  const m = Math.floor(remain / 60_000);
+  const h = Math.floor(remain / 3_600_000);
+  const m = Math.floor((remain % 3_600_000) / 60_000);
   const s = Math.floor((remain % 60_000) / 1_000);
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${String(h).padStart(2, "0")}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
 function voucherLabel(
   v: OrderVoucherOption,
   t: ReturnType<typeof useTranslations>,
+  fmt: (amount: string, currency: string) => string,
 ): string {
   if (v.kind === "discount") {
     const off =
@@ -101,14 +114,16 @@ function voucherLabel(
           });
     return `${v.batchName} · ${off}`;
   }
-  return `${v.batchName} · ¥${Number(v.amount ?? 0).toFixed(2)}`;
+  return `${v.batchName} · ${fmt(String(v.amount ?? 0), "CNY")}`;
 }
 
 export function OrderPayPage() {
   const t = useTranslations("orderPay");
+  const fmt = fmtWith(useLocale() as Locale);
   const router = useRouter();
   const params = useParams<{ orderId: string }>();
   const orderId = params?.orderId ?? "";
+  const { session } = useConsoleSession();
 
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -216,6 +231,19 @@ export function OrderPayPage() {
   const bestDiscount = discountVouchers[0];
   const bestCredit = creditVouchers[0];
 
+  // 归属（给谁买）来自会话——订单本就是当前租户维度的资源。
+  const ownerLabel = session.tenant
+    ? `${session.tenant.name} · ${session.tenant.workspace}`
+    : null;
+
+  // 流程条时间戳：下单 = createdAt；付款 = 最近一笔现金腿的申报时刻。
+  const declaredAt = useMemo(() => {
+    const cashLegs = detail?.legs.filter((l) => l.kind === "cash") ?? [];
+    return cashLegs.length > 0
+      ? (cashLegs[cashLegs.length - 1]?.createdAt ?? null)
+      : null;
+  }, [detail]);
+
   async function handleDeclare() {
     if (!detail) return;
     setSubmitting(true);
@@ -262,17 +290,17 @@ export function OrderPayPage() {
 
   if (loading) {
     return (
-      <ViewLayout>
-        <ViewHeader icon="table" title={t("title")} description="" />
+      <ViewLayout className="mx-auto w-full max-w-content-base-xl">
+        <ViewHeader icon="credit-card" title={t("title")} description="" />
         <Skeleton />
       </ViewLayout>
     );
   }
   if (!detail) {
     return (
-      <ViewLayout>
+      <ViewLayout className="mx-auto w-full max-w-content-base-xl">
         <ViewHeader
-          icon="table"
+          icon="credit-card"
           title={t("title")}
           description={t("notFound")}
           action={
@@ -288,256 +316,354 @@ export function OrderPayPage() {
     );
   }
 
-  const isPending = detail.orderState === "pending_payment";
+  const state = detail.orderState;
+  const isPending = state === "pending_payment";
   const fullVoucherCover = isPending && Number(cashDue) === 0;
+  const planLabel = `${detail.planName || detail.planCode}${
+    detail.tier ? ` · ${detail.tier}` : ""
+  }`;
 
-  // 右栏：支付方式 + 操作
-  const asideNode = (
-    <div className="flex flex-col gap-lg">
-      <PageSection
-        tone="raised"
-        icon="credit-card"
-        level={2}
-        title={t("channels.title")}
-      >
-        <SegmentedControl<string>
-          ariaLabel={t("channels.title")}
-          value={channel}
-          onChange={(value) => {
-            if (value === "alipay" || value === "bank_transfer")
-              setChannel(value);
-          }}
-          items={detail.paymentChannels.map((c) => ({
-            value: c.channel,
-            label: `${t(`channels.${c.channel}`)}${
-              !c.enabled ? ` · ${t("channels.comingSoon")}` : ""
-            }`,
-            disabled: !c.enabled,
-          }))}
-        />
-
-        {channel === "alipay" && activeChannel?.qrAsset ? (
-          <div className="flex justify-center rounded-lg bg-accent p-md">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={activeChannel.qrAsset}
-              alt={t("channels.alipayQrAlt")}
-              className="h-auto w-media-3xl max-w-full"
-            />
-          </div>
-        ) : null}
-
-        {channel === "bank_transfer" && activeChannel?.account ? (
-          <DetailList>
-            <DetailRow label={t("bank.accountName")}>
-              {activeChannel.account.accountName}
-            </DetailRow>
-            <DetailRow label={t("bank.bankName")}>
-              {activeChannel.account.bankName}
-            </DetailRow>
-            <DetailRow label={t("bank.accountNo")}>
-              {activeChannel.account.accountNo}
-            </DetailRow>
-          </DetailList>
-        ) : null}
-
-        <p className="text-body-sm text-muted-foreground">
-          {detail.paymentChannels.every((c) => !c.enabled)
-            ? t("channels.noneEnabled")
-            : t("referenceNote", { orderNo: detail.orderNo })}
-        </p>
-      </PageSection>
-
-      {error ? <Banner tone="danger" title={error} /> : null}
-
-      <div className="flex flex-wrap items-center gap-sm">
-        <Button
-          onClick={() => {
-            setError(null);
-            setDeclareOpen(true);
-          }}
-          disabled={submitting || !quote}
-        >
-          {fullVoucherCover
-            ? t("actions.settleInstant")
-            : t("actions.declarePaid")}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => void handleCancel()}
-          disabled={submitting || Number(detail.paidAmount) > 0}
-        >
-          {t("actions.cancelOrder")}
-        </Button>
-      </div>
-    </div>
+  const stateBadge = (
+    <StatusBadge tone={STATE_TONE[state]}>{t(`status.${state}`)}</StatusBadge>
   );
 
   return (
-    <DetailPageTemplate
-      header={
-        <>
-          <ViewHeader
-            icon="table"
-            title={t("title")}
-            description={`${detail.orderNo} · ${t(`status.${detail.orderState}`)}`}
-            action={
-              countdown ? (
-                <StatusBadge tone="warning">
-                  {t("countdown", { time: countdown })}
-                </StatusBadge>
-              ) : undefined
-            }
-          />
-          {detail.rejectReason && isPending ? (
-            <Banner
-              tone="danger"
-              title={t("rejectBanner", { reason: detail.rejectReason })}
-            />
-          ) : null}
-        </>
-      }
-      {...(isPending ? { aside: asideNode } : {})}
-    >
+    <ViewLayout className="mx-auto w-full max-w-content-base-xl">
+      <ViewHeader
+        icon="credit-card"
+        title={t("title")}
+        secondary={
+          <span className="font-mono text-body-md text-muted-foreground">
+            {detail.orderNo}
+          </span>
+        }
+        action={
+          countdown ? (
+            <StatusBadge tone="warning">
+              {t("countdown", { time: countdown })}
+            </StatusBadge>
+          ) : undefined
+        }
+      />
+      {detail.rejectReason && isPending ? (
+        <Banner
+          tone="danger"
+          title={t("rejectBanner", { reason: detail.rejectReason })}
+        />
+      ) : null}
+
+      <OrderFlowStrip
+        stage={state}
+        times={{
+          order: detail.createdAt,
+          ...(declaredAt ? { pay: declaredAt } : {}),
+        }}
+        badge={stateBadge}
+      />
+
       {isPending ? (
-        <>
-          {/* 左栏：订单 + 金额分解 */}
+        <div className="flex flex-col gap-lg lg:flex-row lg:items-stretch">
+          {/* 左栏：选择付款方式 */}
           <PageSection
             tone="raised"
-            icon="package"
+            icon="credit-card"
             level={2}
-            title={`${detail.planName || detail.planCode}${
-              detail.tier ? ` · ${detail.tier}` : ""
-            }`}
+            title={t("channels.title")}
+            className="min-w-0 flex-1"
           >
-            <p className="text-body-sm text-muted-foreground">
-              {t(`cycle.${detail.cycleUnit}` as never)} · {t("cycleStartNote")}
-            </p>
-          </PageSection>
+            <SegmentedControl<string>
+              ariaLabel={t("channels.title")}
+              value={channel}
+              onChange={(value) => {
+                if (value === "alipay" || value === "bank_transfer")
+                  setChannel(value);
+              }}
+              items={detail.paymentChannels.map((c) => ({
+                value: c.channel,
+                label: `${t(`channels.${c.channel}`)}${
+                  !c.enabled ? ` · ${t("channels.comingSoon")}` : ""
+                }`,
+                disabled: !c.enabled,
+              }))}
+            />
 
-          <PageSection
-            tone="raised"
-            icon="currency-cny"
-            level={2}
-            title={t("breakdown.title")}
-          >
-            <DetailList>
-              <DetailRow label={t("breakdown.listPrice")}>
-                {fmt(quote?.listPrice ?? detail.listPrice, detail.currency)}
-              </DetailRow>
+            {channel === "alipay" && activeChannel?.qrAsset ? (
+              <div className="flex flex-wrap items-start gap-lg">
+                <div className="flex shrink-0 justify-center rounded-lg bg-accent p-md">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={activeChannel.qrAsset}
+                    alt={t("channels.alipayQrAlt")}
+                    className="h-auto w-media-2xl max-w-full"
+                  />
+                </div>
+                <p className="min-w-0 flex-1 text-body-md text-muted-foreground">
+                  {t("referenceNote", { orderNo: detail.orderNo })}
+                </p>
+              </div>
+            ) : null}
 
-              <DetailRow
-                label={t("breakdown.discountVoucher")}
-                actions={
-                  <span className="text-body-md text-success-text">
-                    {quote && Number(quote.discountOff) > 0
-                      ? `− ${fmt(quote.discountOff, detail.currency)}`
-                      : "—"}
-                  </span>
-                }
-              >
-                {bestDiscount ? (
-                  <Field orientation="horizontal" className="w-auto">
-                    <Checkbox
-                      id="order-pay-discount"
-                      checked={Boolean(discountId)}
-                      onCheckedChange={(checked) =>
-                        setDiscountId(
-                          checked === true
-                            ? (discountVouchers[0]?.voucherId ?? null)
-                            : null,
-                        )
-                      }
-                    />
-                    <FieldLabel htmlFor="order-pay-discount">
-                      {voucherLabel(bestDiscount, t)}
-                    </FieldLabel>
-                  </Field>
-                ) : (
-                  <span className="text-muted-foreground">
-                    {t("breakdown.noDiscountVoucher")}
-                  </span>
-                )}
-              </DetailRow>
+            {channel === "bank_transfer" && activeChannel?.account ? (
+              <>
+                <DetailList>
+                  <DetailRow label={t("bank.accountName")}>
+                    {activeChannel.account.accountName}
+                  </DetailRow>
+                  <DetailRow label={t("bank.bankName")}>
+                    {activeChannel.account.bankName}
+                  </DetailRow>
+                  <DetailRow label={t("bank.accountNo")}>
+                    <span className="tabular-nums">
+                      {activeChannel.account.accountNo}
+                    </span>
+                  </DetailRow>
+                </DetailList>
+                <p className="text-body-sm text-muted-foreground">
+                  {t("referenceNote", { orderNo: detail.orderNo })}
+                </p>
+              </>
+            ) : null}
 
-              <DetailRow
-                label={t("breakdown.creditVoucher")}
-                actions={
-                  <span className="text-body-md text-success-text">
-                    {quote && Number(quote.voucherOff) > 0
-                      ? `− ${fmt(quote.voucherOff, detail.currency)}`
-                      : "—"}
-                  </span>
-                }
-              >
-                {bestCredit ? (
-                  <Field orientation="horizontal" className="w-auto">
-                    <Checkbox
-                      id="order-pay-credit"
-                      checked={Boolean(creditId)}
-                      onCheckedChange={(checked) =>
-                        setCreditId(
-                          checked === true
-                            ? (creditVouchers[0]?.voucherId ?? null)
-                            : null,
-                        )
-                      }
-                    />
-                    <FieldLabel htmlFor="order-pay-credit">
-                      {voucherLabel(bestCredit, t)}
-                    </FieldLabel>
-                  </Field>
-                ) : (
-                  <span className="text-muted-foreground">
-                    {t("breakdown.noCreditVoucher")}
-                  </span>
-                )}
-              </DetailRow>
+            {detail.paymentChannels.every((c) => !c.enabled) ? (
+              <p className="text-body-sm text-muted-foreground">
+                {t("channels.noneEnabled")}
+              </p>
+            ) : null}
 
-              {Number(detail.paidAmount) > 0 ? (
-                <DetailRow label={t("breakdown.alreadyPaid")}>
-                  <span className="text-success-text">
-                    − {fmt(detail.paidAmount, detail.currency)}
-                  </span>
-                </DetailRow>
-              ) : null}
-            </DetailList>
-
-            <div className="flex items-center justify-between gap-md border-t border-border pt-md">
-              <strong className="text-label-lg text-foreground">
-                {t("breakdown.cashDue")}
-              </strong>
-              <span className="text-heading-3 text-foreground">
-                {fmt(cashDue, detail.currency)}
-              </span>
+            <div className="mt-auto">
+              <Banner tone="info" title={t("manualNote")} />
             </div>
           </PageSection>
-        </>
-      ) : (
-        <EmptyState
-          title={
-            <span className="flex flex-col items-center gap-xs">
-              <StatusBadge tone={STATE_TONE[detail.orderState]}>
-                {t(`status.${detail.orderState}`)}
-              </StatusBadge>
-              {t(`stateTitle.${detail.orderState}`)}
-            </span>
-          }
-          description={t(`stateHint.${detail.orderState}`)}
-          action={
-            <>
-              <Button variant="outline" onClick={() => void reload()}>
-                {t("actions.refresh")}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => router.push("/subscription")}
+
+          {/* 右栏：订单信息（金额 + 券 + 申报） */}
+          <aside className="w-full lg:max-w-panel-sm lg:shrink-0">
+            <PageSection
+              tone="raised"
+              icon="receipt"
+              level={2}
+              title={t("info.title")}
+              className="h-full"
+            >
+              <div className="flex flex-col items-center gap-2xs py-sm">
+                <span className="text-body-sm text-muted-foreground">
+                  {t("amountDue")}
+                </span>
+                <strong className="text-heading-2 text-foreground tabular-nums">
+                  {fmt(cashDue, detail.currency)}
+                </strong>
+              </div>
+
+              <DetailList>
+                {ownerLabel ? (
+                  <DetailRow label={t("info.owner")}>{ownerLabel}</DetailRow>
+                ) : null}
+                <DetailRow label={t("info.plan")}>
+                  {planLabel} · {t(`cycle.${detail.cycleUnit}` as never)}
+                </DetailRow>
+                <DetailRow label={t("breakdown.listPrice")}>
+                  <span className="tabular-nums">
+                    {fmt(quote?.listPrice ?? detail.listPrice, detail.currency)}
+                  </span>
+                </DetailRow>
+
+                <DetailRow
+                  label={t("breakdown.discountVoucher")}
+                  actions={
+                    <span className="text-body-md text-success-text tabular-nums">
+                      {quote && Number(quote.discountOff) > 0
+                        ? `− ${fmt(quote.discountOff, detail.currency)}`
+                        : "—"}
+                    </span>
+                  }
+                >
+                  {bestDiscount ? (
+                    <Field orientation="horizontal" className="w-auto">
+                      <Checkbox
+                        id="order-pay-discount"
+                        checked={Boolean(discountId)}
+                        onCheckedChange={(checked) =>
+                          setDiscountId(
+                            checked === true
+                              ? (discountVouchers[0]?.voucherId ?? null)
+                              : null,
+                          )
+                        }
+                      />
+                      <FieldLabel htmlFor="order-pay-discount">
+                        {voucherLabel(bestDiscount, t, fmt)}
+                      </FieldLabel>
+                    </Field>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      {t("breakdown.noDiscountVoucher")}
+                    </span>
+                  )}
+                </DetailRow>
+
+                <DetailRow
+                  label={t("breakdown.creditVoucher")}
+                  actions={
+                    <span className="text-body-md text-success-text tabular-nums">
+                      {quote && Number(quote.voucherOff) > 0
+                        ? `− ${fmt(quote.voucherOff, detail.currency)}`
+                        : "—"}
+                    </span>
+                  }
+                >
+                  {bestCredit ? (
+                    <Field orientation="horizontal" className="w-auto">
+                      <Checkbox
+                        id="order-pay-credit"
+                        checked={Boolean(creditId)}
+                        onCheckedChange={(checked) =>
+                          setCreditId(
+                            checked === true
+                              ? (creditVouchers[0]?.voucherId ?? null)
+                              : null,
+                          )
+                        }
+                      />
+                      <FieldLabel htmlFor="order-pay-credit">
+                        {voucherLabel(bestCredit, t, fmt)}
+                      </FieldLabel>
+                    </Field>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      {t("breakdown.noCreditVoucher")}
+                    </span>
+                  )}
+                </DetailRow>
+
+                {Number(detail.paidAmount) > 0 ? (
+                  <DetailRow label={t("breakdown.alreadyPaid")}>
+                    <span className="text-success-text tabular-nums">
+                      − {fmt(detail.paidAmount, detail.currency)}
+                    </span>
+                  </DetailRow>
+                ) : null}
+              </DetailList>
+
+              {error ? <Banner tone="danger" title={error} /> : null}
+
+              <div className="mt-auto flex flex-col gap-sm">
+                <Button
+                  size="xl"
+                  onClick={() => {
+                    setError(null);
+                    setDeclareOpen(true);
+                  }}
+                  disabled={submitting || !quote}
+                  className="w-full border-transparent bg-linear-to-r from-gradient-brand-from to-gradient-brand-to text-primary-foreground hover:brightness-110"
+                >
+                  {fullVoucherCover
+                    ? t("actions.settleInstant")
+                    : t("actions.declarePaid")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full text-muted-foreground"
+                  onClick={() => void handleCancel()}
+                  disabled={submitting || Number(detail.paidAmount) > 0}
+                >
+                  {t("actions.cancelOrder")}
+                </Button>
+                <p className="text-center text-body-sm text-content-tertiary">
+                  {t("ttlFine")}
+                </p>
+              </div>
+            </PageSection>
+          </aside>
+        </div>
+      ) : state === "completed" ? (
+        <div className="flex flex-col gap-lg lg:flex-row lg:items-stretch">
+          <PageSection tone="raised" className="min-w-0 flex-1">
+            <div className="flex flex-col items-center gap-sm py-md text-center">
+              <span
+                aria-hidden="true"
+                className="flex size-control-2xl items-center justify-center rounded-full border-2 border-success-border bg-success-muted text-success-text"
               >
-                {t("actions.backToSubscription")}
-              </Button>
-            </>
-          }
-        />
+                <Icon name="check" size="lg" />
+              </span>
+              <strong className="text-title-lg text-foreground">
+                {t("stateTitle.completed")}
+              </strong>
+              <p className="text-body-md text-muted-foreground">
+                {t("stateHint.completed")}
+              </p>
+            </div>
+            <DetailList>
+              {ownerLabel ? (
+                <DetailRow label={t("info.owner")}>{ownerLabel}</DetailRow>
+              ) : null}
+              <DetailRow label={t("info.orderNo")}>
+                <span className="font-mono">{detail.orderNo}</span>
+              </DetailRow>
+              <DetailRow label={t("info.plan")}>
+                {planLabel} · {t(`cycle.${detail.cycleUnit}` as never)}
+              </DetailRow>
+              <DetailRow label={t("breakdown.alreadyPaid")}>
+                <span className="tabular-nums">
+                  {fmt(detail.paidAmount, detail.currency)}
+                </span>
+              </DetailRow>
+            </DetailList>
+          </PageSection>
+          <aside className="w-full lg:max-w-panel-sm lg:shrink-0">
+            <PageSection
+              tone="raised"
+              icon="arrow-long-right"
+              level={2}
+              title={t("completedPanel.next")}
+              className="h-full"
+            >
+              <div className="mt-auto flex flex-col gap-sm">
+                <Button
+                  size="xl"
+                  onClick={() => router.push("/subscription")}
+                  className="w-full border-transparent bg-linear-to-r from-gradient-brand-from to-gradient-brand-to text-primary-foreground hover:brightness-110"
+                >
+                  {t("completedPanel.viewSubscription")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="xl"
+                  className="w-full"
+                  onClick={() => router.push("/billing")}
+                >
+                  {t("completedPanel.viewBilling")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="xl"
+                  className="w-full"
+                  onClick={() => router.push("/quotas")}
+                >
+                  {t("completedPanel.viewQuotas")}
+                </Button>
+              </div>
+            </PageSection>
+          </aside>
+        </div>
+      ) : (
+        <PageSection tone="raised">
+          <EmptyState
+            title={t(`stateTitle.${state}`)}
+            description={t(`stateHint.${state}`)}
+            action={
+              <>
+                <Button variant="outline" onClick={() => void reload()}>
+                  {t("actions.refresh")}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => router.push("/subscription")}
+                >
+                  {t("actions.backToSubscription")}
+                </Button>
+              </>
+            }
+          />
+        </PageSection>
       )}
 
       {declareOpen && detail ? (
@@ -596,6 +722,6 @@ export function OrderPayPage() {
           {error ? <Banner tone="danger" title={error} /> : null}
         </DialogForm>
       ) : null}
-    </DetailPageTemplate>
+    </ViewLayout>
   );
 }

@@ -26,6 +26,7 @@ import { HealthRouter } from "./routers/health.router";
 import { MeRouter } from "./routers/me.router";
 import { ProductSubscriptionsRouter } from "./routers/product-subscriptions.router";
 import { ProductCatalogRouter } from "./routers/product-catalog.router";
+import { ProductPlansRouter } from "./routers/product-plans.router";
 import { websiteBffPoolProvider } from "./providers/pg-pool.provider";
 import { OidcRpModule } from "./oidc/oidc-rp.module";
 
@@ -43,6 +44,7 @@ import { OidcRpModule } from "./oidc/oidc-rp.module";
     MeRouter,
     ProductSubscriptionsRouter,
     ProductCatalogRouter,
+    ProductPlansRouter,
   ],
   providers: [WebsiteAuthService, SessionAggregator, websiteBffPoolProvider],
 })

@@ -1719,6 +1719,39 @@
       }
     }
   },
+  "orderFlow": {
+    "order": {
+      "pending": "Placing order",
+      "done": "Order placed"
+    },
+    "pay": {
+      "pending": "Awaiting payment",
+      "done": "Paid"
+    },
+    "verify": {
+      "pending": "Awaiting receipt",
+      "done": "Funds received"
+    },
+    "provision": {
+      "pending": "Awaiting activation",
+      "done": "Activated"
+    }
+  },
+  "workspacePicker": {
+    "personal": "Personal tenant",
+    "organization": "Team tenant",
+    "defaultWorkspace": "Default workspace",
+    "switchFailed": "Tenant switch failed — please retry; the order owner is unchanged"
+  },
+  "planFeatures": {
+    "governance_quality": "Data quality governance",
+    "governance_standards": "Data standards",
+    "governance_lineage": "Data lineage",
+    "governance_security": "Data security policies",
+    "governance_policies": "Governance policy center",
+    "governance_mdm": "Master data management",
+    "governance_custom": "Custom governance domains"
+  },
   "orderPay": {
     "title": "Order payment",
     "notFound": "Order not found or you have no access.",
@@ -1784,6 +1817,21 @@
       "accountNo": "Account no."
     },
     "referenceNote": "Please include order no. {orderNo} in the transfer memo so we can reconcile quickly.",
+    "amountDue": "Amount due",
+    "manualNote": "After you declare, operations verifies the funds manually (usually within 1 business day). Once online payment gateways land, this step completes automatically via the payment callback.",
+    "ttlFine": "Complete payment before the countdown ends; overdue orders close automatically.",
+    "info": {
+      "title": "Order details",
+      "owner": "Owner",
+      "plan": "Plan",
+      "orderNo": "Order no."
+    },
+    "completedPanel": {
+      "next": "Next steps",
+      "viewSubscription": "View subscription & entitlements",
+      "viewBilling": "View bills & invoices",
+      "viewQuotas": "View quota usage"
+    },
     "actions": {
       "declarePaid": "I have paid",
       "settleInstant": "Confirm and activate",
@@ -1886,6 +1934,30 @@
     "cycleToggle": {
       "monthly": "Monthly",
       "yearly": "Yearly"
+    },
+    "confirm": {
+      "title": "Confirm order",
+      "who": "Subscription owner",
+      "whoHint": "Who is this for - the subscription and quotas activate in the selected tenant's workspace",
+      "whoNote": "If you belong to multiple tenants, confirm the owner before submitting - orders cannot be moved between tenants.",
+      "what": "Plan",
+      "whatHint": "What you are buying - the tier was chosen in the previous step",
+      "whatUpgradeNote": "Currently on {plan}. Upgrades take effect immediately; the remaining period is prorated by day.",
+      "noFeatures": "See the comparison table for full entitlements.",
+      "pickTier": "Pick a tier:",
+      "tierUnavailable": "The plan tier from the link isn't available right now — pick a tier below",
+      "alreadyCurrent": "You're already on this plan — renew to extend the period instead",
+      "howLong": "Billing cycle",
+      "howLongHint": "How long - yearly saves more",
+      "yearlySave": "Save {amount} yearly",
+      "startNote": "The subscription cycle starts when payment is confirmed.",
+      "summary": "Order summary",
+      "total": "Total due",
+      "submit": "Place order",
+      "fineOffline": "After submitting you'll go to the payment page - complete payment before the countdown ends or the order closes automatically. Vouchers are applied on the payment page.",
+      "fineFree": "The free tier needs no payment - it activates instantly after submitting.",
+      "fineEnterprise": "Enterprise pricing is quoted by sales; self-serve checkout is not available.",
+      "priceOnRequest": "Price on request"
     },
     "pending": {
       "title": "Order awaiting confirmation",

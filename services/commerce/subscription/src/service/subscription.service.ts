@@ -138,6 +138,15 @@ export class SubscriptionService {
   ): Promise<OfflineOrderRecord> {
     if (input.intent !== "upgrade") {
       await this.assertNoTierConflict(input.workspaceId, input.planVersionId);
+    } else if (input.upgradeOfSubscriptionId) {
+      // 同套餐"升级"在 applyUpgradeOrder 是幂等 no-op（关单但不改档、不延期），
+      // 放行等于让客户为零变更付全款——下单前拒绝。
+      const target = await this.getSubscription(input.upgradeOfSubscriptionId);
+      if (target.planVersionId === input.planVersionId) {
+        throw new ConflictException(
+          "目标套餐与当前订阅相同，无需升级（延长周期请使用 renew）",
+        );
+      }
     }
     const order = await this.repo.createOfflineOrder(input);
     // suspended → never fires fireProvisioned; the invalidate fires
