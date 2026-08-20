@@ -41,6 +41,7 @@ import {
   confirmOrderOfflinePayment,
   fetchOrderOperations,
 } from "@/api/admin-bff";
+import { isStepUpCancelled, useStepUp } from "@/providers/StepUpProvider";
 import type {
   OrderOperationRecord,
   OrderOperationStatus,
@@ -406,6 +407,7 @@ function OrderCards({
 }
 
 export function OrdersPage() {
+  const { runWithStepUp } = useStepUp();
   const [orders, setOrders] = useState<OrderOperationRecord[]>([]);
   const [ordersTruncated, setOrdersTruncated] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -557,13 +559,19 @@ export function OrdersPage() {
     setOperationError(null);
 
     try {
-      await confirmOrderOfflinePayment(paymentTarget.id, payload);
+      // step-up gated endpoint (@RequireStepUp):必须经 runWithStepUp,否则
+      // 首次点击被 403 step_up_required 打回且不弹 TOTP(详情页早已包裹,
+      // 本列表页此前漏包——2026-08-20 修)。
+      await runWithStepUp(() =>
+        confirmOrderOfflinePayment(paymentTarget.id, payload),
+      );
       const records = await fetchOrderOperations();
       setOrders(records);
       setOrdersTruncated(isListTruncated(records));
       setOperationFeedback("线下收款已确认。");
       setPaymentTarget(null);
     } catch (error) {
+      if (isStepUpCancelled(error)) return;
       setOperationError(
         error instanceof Error
           ? error.message
