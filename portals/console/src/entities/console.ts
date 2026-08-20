@@ -157,6 +157,10 @@ export interface TenantContext {
   tenantCode?: string;
   /** Human-friendly tenant number ("可视码"), bigint as string; null when unavailable. */
   tenantNo?: string | null;
+  /** Default workspace 名称；null 表示 BFF 未解析（部署偏斜等）。UUID 禁展示。 */
+  workspaceName?: string | null;
+  /** Workspace 可视码（15 位 = 租户号 12 位 + 序号 3 位），bigint as string。 */
+  workspaceNo?: string | null;
   status?: string;
 }
 

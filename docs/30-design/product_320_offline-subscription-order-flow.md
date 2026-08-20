@@ -65,13 +65,13 @@
 
 ### O4 意图统一走订单
 
-| intent                          | 行为                                                                                                                                                                                                                                                                                                                                  |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| new                             | 新 suspended 行 + unpaid invoice                                                                                                                                                                                                                                                                                                      |
-| renew（expired/cancelled 再订） | 同 new——新行新单号，旧行不改（符合 metering "续费=新增订阅"既有注释）；确认时旧行已死不触发档位冲突                                                                                                                                                                                                                                   |
-| upgrade（active 换档）          | 新 suspended 行**落在目标 plan_version**（行自身记住升级目标）；`invoices.operate_remark` 存机读 JSON `{"intent":"upgrade","upgrade_of":"<旧订阅id>"}`；确认时对**旧行**执行 `upgradeSubscription`（in-place 换版，D12 裁定），订单行转 cancelled 留痕（从未 live → 不发 deprovision）。旧行确认前已失效 → 回落为新开通（确定性规则） |
-| free                            | 不产生订单：直接 `createSubscription(status='active', kind='free', activation_method='free', end_at=null)`，即时开通即时发 webhook；已有存活订阅则 409                                                                                                                                                                                |
-| enterprise                      | 无价格行 → 目录呈现"联系销售"，服务端统一守卫"无精确价格行即拒单"（同时覆盖误配 plan）                                                                                                                                                                                                                                                |
+| intent                          | 行为                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| new                             | 新 suspended 行 + unpaid invoice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| renew（expired/cancelled 再订） | 同 new——新行新单号，旧行不改（符合 metering "续费=新增订阅"既有注释）；确认时旧行已死不触发档位冲突                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| upgrade（active 换档）          | 新 suspended 行**落在目标 plan_version**（行自身记住升级目标）；`invoices.operate_remark` 存机读 JSON `{"intent":"upgrade","upgrade_of":"<旧订阅id>"}`；确认时对**旧行**执行 `upgradeSubscription`（in-place 换版，D12 裁定），订单行转 cancelled 留痕（从未 live → 不发 deprovision）。旧行确认前已失效 → 回落为新开通（确定性规则）                                                                                                                                                                                                                                                                                         |
+| free                            | ~~不产生订单：直接 `createSubscription(status='active', kind='free', activation_method='free', end_at=null)`，即时开通即时发 webhook；已有存活订阅则 409~~ **【修订 · owner 2026-08-20】0 元也是订单**：free 档与付费档同路走 `createOfflineOrder`（suspended 行 + ¥0 unpaid invoice + 同一重复挂单/档位冲突守卫），付款环节由 P8 申报的 cashDue=0 即时结清腿自动核销并开通（不进人工核销队列，不插 0 元 payment 行——invoice 直接转 paid，与券全额抵扣同一路径）。理由：订单口径统一——"付款不付款是付款验证环节的事，不是订单环节的事"；六态状态机与审计对全金额一致。行 kind 统一为 'paid'（'free' kind 仅存于历史直开数据） |
+| enterprise                      | 无价格行 → 目录呈现"联系销售"，服务端统一守卫"无精确价格行即拒单"（同时覆盖误配 plan）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ### O5 防护与取消
 
@@ -92,7 +92,7 @@
 website /products 卡片（未登录→登录，卡片态：可试用|已开通）
   └─ {订阅} 深链 console /subscribe?product=arda&intent=subscribe[&target_tier=…]
        └─ 选档 + 月/年周期 → POST /api/subscription/orders
-            ├─ free → 即时 active + tenant.provisioned → 完
+            ├─ free/¥0 → 同下（0 元也是订单，owner 2026-08-20；付款页申报 cashDue=0 自动结清开通）
             ├─ 409 已有待支付单 → 跳其待支付面板
             └─ 201 {orderNo, 金额, 线下汇款指引} → 待支付面板（可取消）
                  └─ 客户线下汇款（备注 orderNo）
@@ -133,7 +133,7 @@ free / beta-trial 保持 v1。既有订阅钉在 v1 不受影响；console `quer
 
 ### 4.4 console 下单（`bff/console-bff` + `portals/console`）
 
-- `POST /api/subscription/orders`（productCode / planVersionId / cycleUnit / intent / upgradeOf → 201 orderNo+金额+汇款指引；free 短路；409 DUPLICATE_PENDING_ORDER / TIER_CONFLICT / 400 NOT_PURCHASABLE）、`GET /api/subscription/orders`、`POST …/orders/:id/cancel`。workspace 服务端按 tenant 解析 default workspace（不信任 `req.tenant.workspace` 字符串）。
+- `POST /api/subscription/orders`（productCode / planVersionId / cycleUnit / intent / upgradeOf → 201 orderNo+金额+汇款指引；~~free 短路~~（修订 2026-08-20：0 元同路建单）；409 DUPLICATE_PENDING_ORDER / TIER_CONFLICT / 400 NOT_PURCHASABLE）、`GET /api/subscription/orders`、`POST …/orders/:id/cancel`。workspace 服务端按 tenant 解析 default workspace（不信任 `req.tenant.workspace` 字符串）。
 - `subscribe-context` 增 `pendingOrder`；`KNOWN_INTENTS` + `subscribe`（词表演进，合入后知会 arda 线，§8.4）。
 - SubscribePage 状态机：待支付面板 ｜ 未订阅（月/年切换 + 五档卡：free 免费开通 / paid 订阅·续费 / enterprise 联系销售）｜ active → 升级下单 ｜ SubscriptionPage/BillingPage 增"我的订单"。
 - 汇款指引（户名/开户行/账号）走平台配置，**账户信息待 owner 提供**（§8.1）。
@@ -165,7 +165,7 @@ PR3 先于 PR4：客户能下单那一刻，确认路径已能正确通知 arda�
 
 ## 7. 端到端验收
 
-官网卡片 → 深链 → 选档下单得 ORD 号 → admin 按单号检索 → step-up 确认 → 订阅 active + 池重锚 → `provisioning.webhook_deliveries` 落 `tenant.provisioned` 且派发 2xx → console 已开通 → 官网卡片翻转。另验：重复下单 409、取消、升级确认、free 即开、enterprise 无入口。
+官网卡片 → 深链 → 选档下单得 ORD 号 → admin 按单号检索 → step-up 确认 → 订阅 active + 池重锚 → `provisioning.webhook_deliveries` 落 `tenant.provisioned` 且派发 2xx → console 已开通 → 官网卡片翻转。另验：重复下单 409、取消、升级确认、¥0 订单付款页自动结清开通（修订 2026-08-20，原 free 即开）、enterprise 无入口。
 
 ## 8. 开放项
 

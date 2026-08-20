@@ -73,6 +73,12 @@ export function ConsoleAppShell({
    * 纠正，会让刷新时导航"先展开再收起"闪一下——localStorage 对服务端不可见，
    * 那个时序问题无法在客户端解决。 */
   const [navCollapsed, setNavCollapsed] = useState(initialNavCollapsed);
+  /* 订阅下单/付款流程页默认收起侧栏（owner 2026-08-20）：进入流程时收起一次，
+   * 不写偏好 cookie——流程内可手动展开，离开后原偏好不受影响。 */
+  const inSubscribeFlow = pathname?.startsWith("/subscribe") ?? false;
+  useEffect(() => {
+    if (inSubscribeFlow) setNavCollapsed(true);
+  }, [inSubscribeFlow]);
   const [drawer, setDrawer] = useState<ShellDrawerType | null>(null);
   // 真实数据：Token 用量（配额）与本月账单。无 BFF/无数据时按决策 fallback。
   const [usage, setUsage] = useState<{ used: number; total: number }>({

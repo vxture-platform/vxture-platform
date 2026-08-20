@@ -25,7 +25,8 @@ export class TenantContextRouter {
       throw new UnauthorizedException("Tenant context is required");
     }
 
-    return req.tenant;
+    // 展示端点：补 workspace 名称/可视码（中间件路径为省每请求一查不富化）。
+    return this.sessionAggregator.withWorkspaceMeta(req.tenant);
   }
 
   @Get("options")

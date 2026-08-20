@@ -5,7 +5,9 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { createHash } from "node:crypto";
+import type { Pool } from "pg";
 import { VxConfigService } from "@vxture/core-config";
+import { COMMERCE_PG_POOL } from "@vxture/service-subscription";
 import {
   AccountService,
   USERNAME_CHANGE_COOLDOWN_DAYS,
@@ -62,7 +64,34 @@ export class SessionAggregator {
     @Inject(ActiveContextService) private readonly active: ActiveContextService,
     @Inject(AccountService) private readonly account: AccountService,
     @Inject(VxConfigService) private readonly config: VxConfigService,
+    /** 直查 tenancy.workspaces 取名称+可视码（identity 服务未暴露 workspace_no；
+     * 与 subscription.router 的 resolveDefaultWorkspace 同一通道与理由）。 */
+    @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
   ) {}
+
+  /** Default-workspace 名称 + 可视码 per tenant——UUID 禁展示（owner 2026-08-20），
+   *  前端选择器只允许拿这里的 name/workspace_no。 */
+  private async defaultWorkspaceMeta(
+    tenantIds: string[],
+  ): Promise<Map<string, { name: string; workspaceNo: string | null }>> {
+    if (tenantIds.length === 0) return new Map();
+    const res = await this.pool.query<{
+      tenant_id: string;
+      name: string;
+      workspace_no: string | null;
+    }>(
+      `select tenant_id, name, workspace_no::text as workspace_no
+         from tenancy.workspaces
+        where tenant_id = any($1) and is_default and deleted_at is null`,
+      [tenantIds],
+    );
+    return new Map(
+      res.rows.map((r) => [
+        r.tenant_id,
+        { name: r.name, workspaceNo: r.workspace_no },
+      ]),
+    );
+  }
 
   /** Versioned platform avatar URL for a user, or null when no custom avatar. */
   private pictureFor(user: {
@@ -383,18 +412,38 @@ export class SessionAggregator {
         workspace: "PLATFORM",
       };
     }
+    // 不在此富化 workspace 名称/可视码：本方法被 TenantMiddleware 每请求调用，
+    // 展示字段由 withWorkspaceMeta 在展示端点按需补齐。
     return toTenantContext(resolved.orgId, resolved.org, resolved.workspace);
+  }
+
+  /** 展示端点用：补齐 workspaceName / workspaceNo（UUID 禁展示的替代物）。 */
+  async withWorkspaceMeta(tenant: TenantContext): Promise<TenantContext> {
+    if (tenant.mode !== "tenant") return tenant;
+    const meta = await this.defaultWorkspaceMeta([tenant.id]);
+    const m = meta.get(tenant.id) ?? null;
+    return {
+      ...tenant,
+      workspaceName: m?.name ?? null,
+      workspaceNo: m?.workspaceNo ?? null,
+    };
   }
 
   async getTenantContexts(userId: string): Promise<TenantContext[]> {
     const orgs = await this.active.listOrgsForSwitch(userId);
+    const meta = await this.defaultWorkspaceMeta(orgs.map((o) => o.orgId));
     return orgs.map((o) => ({
       id: o.orgId,
       name: o.name,
-      mode: "tenant",
+      mode: "tenant" as const,
       workspace: "default",
-      tenantType: o.type === "organization" ? "organization" : "personal",
+      tenantType:
+        o.type === "organization"
+          ? ("organization" as const)
+          : ("personal" as const),
       tenantCode: o.orgId,
+      workspaceName: meta.get(o.orgId)?.name ?? null,
+      workspaceNo: meta.get(o.orgId)?.workspaceNo ?? null,
       status: "active",
     }));
   }
@@ -671,15 +720,19 @@ function toTenantContext(
   orgId: string,
   org: { name: string; type: string; status: string; tenantNo?: string },
   workspace: string | null,
+  workspaceMeta: { name: string; workspaceNo: string | null } | null = null,
 ): TenantContext {
   return {
     id: orgId,
     name: org.name,
     mode: "tenant",
+    // 内部路由用途保留；展示一律用下方 workspaceName/workspaceNo（UUID 禁展示）。
     workspace: workspace ?? "default",
     tenantType: org.type === "organization" ? "organization" : "personal",
     tenantCode: orgId,
     tenantNo: org.tenantNo ?? null,
+    workspaceName: workspaceMeta?.name ?? null,
+    workspaceNo: workspaceMeta?.workspaceNo ?? null,
     status: org.status,
   };
 }

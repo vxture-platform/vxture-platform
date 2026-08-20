@@ -199,8 +199,10 @@ interface OfflinePaymentInstructions {
 }
 
 interface CreateOrderResult {
+  /** owner 2026-08-20 修订后恒为 pending_payment（0 元也是订单）；
+   *  "active" 保留在值域内仅为旧客户端兼容，服务端不再产生。 */
   status: "pending_payment" | "active";
-  /** subscription row id (= admin orderId 语义)；free 即时开通时为 null */
+  /** subscription row id (= admin orderId 语义) */
   orderId: string | null;
   orderNo: string | null;
   billNo: string | null;
@@ -209,9 +211,9 @@ interface CreateOrderResult {
   planCode: string;
   cycleUnit: string | null;
   paymentInstructions: OfflinePaymentInstructions | null;
-  /** free 即时开通时返回新订阅 id */
+  /** 历史字段（原 free 即时开通返回新订阅 id）；现恒为 null。 */
   subscriptionId: string | null;
-  /** 付款截止（P4，创建时刻 + TTL）；free 即时开通为 null */
+  /** 付款截止（P4，创建时刻 + TTL）。 */
   expireAt: string | null;
 }
 
@@ -759,9 +761,10 @@ export class SubscriptionRouter {
   }
 
   // --------------------------------------------------------------------------
-  // POST /api/subscription/orders — 下单（线下支付，product_320 §4.4）
-  //
-  // free 档即时开通（不产生订单）；付费档产生 suspended 订阅 + unpaid 账单 = 订单，
+  // POST /api/subscription/orders — 下单（线下支付，product_320 §4.4；
+  // owner 2026-08-20 修订：0 元也是订单——free 档不再即时开通，与付费档同路
+  // 产生 suspended 订阅 + unpaid（¥0）账单，付款环节 cashDue=0 走既有的
+  // 即时结清（declarePayment instant-settle）自动开通）。
   // 返回订单号 + 线下汇款指引，等 admin 人工确认收款后开通。intent = new|renew|upgrade。
   // 档位冲突/不可购买 → 409/400 语义码。
   // --------------------------------------------------------------------------
@@ -788,7 +791,7 @@ export class SubscriptionRouter {
     if (intent === "upgrade" && !upgradeOf)
       throw new BadRequestException("upgrade 需要 upgradeOfSubscriptionId");
 
-    // 价格 + 套餐名：决定 free 短路 / 拒单（无价格行 = 企业版/不可自助购买）
+    // 价格 + 套餐名：无价格行 = 企业版/不可自助购买 → 拒单（0 元有价格行，正常建单）
     const plan = await this.lookupPlanPrice(planVersionId, cycleUnit);
     if (!plan)
       throw new BadRequestException({
@@ -796,7 +799,7 @@ export class SubscriptionRouter {
         message: "该套餐/周期不可自助购买（如企业版请联系销售）",
       });
 
-    // One open order per (tenant × product) — paid AND free branch (P3/§7.3).
+    // One open order per (tenant × product)，0 元订单同样受限（P3/§7.3）。
     await this.assertNoPendingOrderForProduct(req.tenant.id, productCode);
 
     const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
@@ -811,42 +814,7 @@ export class SubscriptionRouter {
         throw new BadRequestException("升级目标订阅不存在或无权操作");
     }
 
-    // free 档：即时开通，不产生订单
-    if (Number(plan.price) <= 0) {
-      try {
-        const sub = await this.subscriptionService.createSubscription({
-          tenantId: req.tenant.id,
-          workspaceId,
-          planVersionId,
-          cycleType: cycleUnit,
-          startAt: new Date(),
-          currency: plan.currency,
-          createdBy,
-          status: "active",
-          subscriptionKind: "free",
-          activationMethod: "free",
-          createdByType: "customer",
-          autoRenew: false,
-        });
-        return {
-          status: "active",
-          orderId: null,
-          orderNo: null,
-          billNo: null,
-          amount: "0.00",
-          currency: plan.currency,
-          planCode: plan.planCode,
-          cycleUnit,
-          paymentInstructions: null,
-          subscriptionId: sub.id,
-          expireAt: null,
-        };
-      } catch (err) {
-        throw mapOrderError(err);
-      }
-    }
-
-    // 付费档：产生线下订单（suspended 订阅 + unpaid 账单）。
+    // 0 元与付费同路（owner 2026-08-20）：产生线下订单（suspended 订阅 + unpaid 账单）。
     // TTL 在此定格并随单持久化（P4 修订）：个人 30min / 组织 48h。
     const ttlMinutes = paymentTtlMinutesFor(req.tenant.tenantType);
     try {
@@ -1145,9 +1113,8 @@ export class SubscriptionRouter {
 
   /**
    * Duplicate pending-order guard (320 O1 predicate, 321-widened to include
-   * partial): one open order per (tenant × product) — both the paid and the
-   * free branch of createOrder enforce it (P3: a free activation while a paid
-   * order hangs is the known tier-conflict hang factor).
+   * partial): one open order per (tenant × product)。0 元订单与付费订单同路
+   * （owner 2026-08-20），本守卫对两者一视同仁。
    */
   private async assertNoPendingOrderForProduct(
     tenantId: string,

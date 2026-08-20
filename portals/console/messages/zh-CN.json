@@ -1738,8 +1738,6 @@
     }
   },
   "workspacePicker": {
-    "personal": "个人租户",
-    "organization": "团队租户",
     "defaultWorkspace": "默认工作区",
     "switchFailed": "切换租户失败，请重试；当前归属未变更"
   },
@@ -1925,7 +1923,6 @@
       "subscribe": "订阅",
       "renew": "续费",
       "upgrade": "升级",
-      "activateFree": "免费开通",
       "contactSales": "联系销售",
       "refresh": "刷新状态"
     },
@@ -1938,24 +1935,20 @@
     "confirm": {
       "title": "确认订单",
       "who": "订阅归属",
-      "whoHint": "给谁买——订阅与配额将开通到所选租户的工作区",
-      "whoNote": "多租户用户请在提交前确认归属，买错租户无法迁移。",
       "what": "订阅套餐",
-      "whatHint": "买什么——档位在上一步已选定",
+      "reselect": "返回订阅重选",
       "whatUpgradeNote": "当前为 {plan}，升级立即生效，剩余周期按天折算。",
       "noFeatures": "权益明细以对比表为准。",
       "pickTier": "选择档位：",
       "tierUnavailable": "链接指定的档位当前不可订购，请在下方选择档位",
       "alreadyCurrent": "已是当前套餐，无需重复订阅；延长周期请使用续费",
-      "howLong": "订阅时长",
-      "howLongHint": "买多久——年付更省",
+      "howLong": "订阅周期",
       "yearlySave": "年付省 {amount}",
-      "startNote": "订阅周期自确认收款时刻起算。",
+      "startNote": "订阅周期自服务开通时刻起算；上方起止日期按当前时刻估算。",
       "summary": "订单摘要",
       "total": "应付合计",
       "submit": "提交订单",
-      "fineOffline": "提交后进入付款页，请在倒计时内完成付款，超时订单自动关闭；优惠券在付款页勾选抵扣。",
-      "fineFree": "免费档无需付款，提交后即时开通。",
+      "fineOffline": "提交后进入付款页，请在倒计时内完成付款，超时订单自动关闭；优惠券在付款页勾选抵扣。0 元订单同样先生成订单，在付款环节自动结清开通。",
       "fineEnterprise": "企业档由销售报价，暂不支持自助下单。",
       "priceOnRequest": "价格面议"
     },

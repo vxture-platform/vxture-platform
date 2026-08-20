@@ -133,6 +133,10 @@ export interface TenantContext {
   tenantCode?: string;
   /** Human-friendly tenant number (tenancy.tenants.tenant_no "可视码"), bigint as string; null when unavailable. */
   tenantNo?: string | null;
+  /** Default workspace display name; null when unresolved. UUID 禁展示（owner 2026-08-20）——前端一律用这里的名称+可视码。 */
+  workspaceName?: string | null;
+  /** Workspace 可视码（tenancy.workspaces.workspace_no，15 位 = 租户号 12 位 + 序号 3 位），bigint as string；null when unavailable. */
+  workspaceNo?: string | null;
   status?: string;
 }
 

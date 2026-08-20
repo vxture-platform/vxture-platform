@@ -6,12 +6,14 @@
  *
  * Entry: /subscribe?product=..&intent=subscribe|upgrade|renew|addon[&target_tier][&cycle]
  * Fault-tolerance (arda_303 §2.2): unknown intent/product → degrade to the
- * subscription home. State machine (product_320):
+ * subscription home. State machine (product_320 + owner 2026-08-20 修订):
  *  - a pending offline order exists → hand off to the payment page panel;
  *  - otherwise the confirm-order layout: 「给谁买（租户/工作区归属）→ 买什么
- *    （已选套餐只读卡，档位来自 target_tier，不再二次选择）→ 买多久（月/年）」
- *    + 右栏订单摘要。free → activate now, enterprise (no price rows) → contact
- *    sales. Vouchers stay on the payment page (they attach to an order).
+ *    （已选套餐只读卡，档位来自 target_tier，不再二次选择）→ 买多久（周期）」
+ *    + 右栏订单摘要。三卡只留标题不带描述文字。
+ *  - 0 元也是订单：free 档不再即时开通，与付费档同路建单进付款页
+ *    （付款环节 cashDue=0 自动结清开通）。enterprise (no price rows) →
+ *    contact sales. Vouchers stay on the payment page (they attach to an order).
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -24,7 +26,6 @@ import {
   DetailList,
   DetailRow,
   EmptyState,
-  SegmentedControl,
   StatusBadge,
   ViewHeader,
   ViewLayout,
@@ -39,9 +40,16 @@ import {
   type SubscribePlanOption,
   type SubscribePlanPrice,
 } from "@/api/console-bff";
+import { CyclePicker } from "./components/CyclePicker";
 import { OrderFlowStrip } from "./components/OrderFlowStrip";
 import { PlanSummaryCard } from "./components/PlanSummaryCard";
 import { WorkspacePicker } from "./components/WorkspacePicker";
+
+/** 官网基址（与 OnboardingPage 同源做法）：「返回订阅重选」跳回定价页。 */
+const WEBSITE_URL = (process.env.NEXT_PUBLIC_WEBSITE_URL ?? "").replace(
+  /\/$/,
+  "",
+);
 
 const STATUS_KEYS = new Set([
   "active",
@@ -53,7 +61,6 @@ const STATUS_KEYS = new Set([
 ]);
 
 type Cycle = "month" | "year";
-const CYCLES: Cycle[] = ["month", "year"];
 
 /** 货币展示统一走 shared formatCurrency（110-locale-layer 指定入口）。 */
 function moneyFor(locale: Locale) {
@@ -230,7 +237,6 @@ export function SubscribePage() {
 
   const isEnterprise = plan !== null && plan.prices.length === 0;
   const price = plan ? priceForCycle(plan, cycle) : undefined;
-  const isFree = price ? Number.parseFloat(price.price) <= 0 : false;
 
   // 年付节省额（月价 ×12 − 年价），两个周期价都在才有意义。
   const savings = (() => {
@@ -262,10 +268,7 @@ export function SubscribePage() {
           ? { upgradeOfSubscriptionId: current.subscriptionId }
           : {}),
       });
-      if (result.status === "active") {
-        router.replace("/subscription"); // free 即时开通
-        return;
-      }
+      // 0 元也是订单（owner 2026-08-20）：一律进付款页,付款环节消化 ¥0。
       if (result.orderId) {
         router.push(`/subscribe/pay/${result.orderId}`);
         return;
@@ -283,8 +286,6 @@ export function SubscribePage() {
       `${product.name} 企业版咨询`,
     )}`;
   };
-
-  const submitLabel = isFree ? t("actions.activateFree") : t("confirm.submit");
 
   const planNote =
     orderIntent === "upgrade" && current
@@ -318,12 +319,8 @@ export function SubscribePage() {
             icon="user-circle"
             level={2}
             title={t("confirm.who")}
-            description={t("confirm.whoHint")}
           >
             <WorkspacePicker onSwitched={() => void reload()} />
-            <p className="text-body-sm text-muted-foreground">
-              {t("confirm.whoNote")}
-            </p>
           </PageSection>
 
           <PageSection
@@ -331,7 +328,13 @@ export function SubscribePage() {
             icon="package"
             level={2}
             title={t("confirm.what")}
-            description={t("confirm.whatHint")}
+            action={
+              <Button asChild variant="link" size="sm">
+                <a href={`${WEBSITE_URL}/pricing?product=${product.code}`}>
+                  {t("confirm.reselect")}
+                </a>
+              </Button>
+            }
           >
             {plan ? (
               <PlanSummaryCard
@@ -377,30 +380,27 @@ export function SubscribePage() {
             icon="calendar"
             level={2}
             title={t("confirm.howLong")}
-            description={t("confirm.howLongHint")}
           >
-            <div className="flex flex-wrap items-center gap-md">
-              <SegmentedControl
-                value={cycle}
-                onChange={(next) => setCycle(next)}
-                items={CYCLES.map((c) => ({
-                  value: c,
-                  label: t(
-                    `cycleToggle.${c === "month" ? "monthly" : "yearly"}`,
-                  ),
-                }))}
-              />
-              {savings ? (
-                <StatusBadge tone="success">
-                  {t("confirm.yearlySave", {
-                    amount: formatMoney(savings.amount, savings.currency, {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 0,
-                    }),
-                  })}
-                </StatusBadge>
-              ) : null}
-            </div>
+            <CyclePicker
+              value={cycle}
+              onChange={(next) => setCycle(next)}
+              priceOf={(c) => {
+                const p = plan ? priceForCycle(plan, c) : undefined;
+                return p
+                  ? `${formatMoney(p.price, p.currency)} / ${t(`cycle.${c}`)}`
+                  : null;
+              }}
+              yearSavings={
+                savings
+                  ? t("confirm.yearlySave", {
+                      amount: formatMoney(savings.amount, savings.currency, {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      }),
+                    })
+                  : null
+              }
+            />
             <p className="text-body-sm text-muted-foreground">
               {t("confirm.startNote")}
             </p>
@@ -466,14 +466,12 @@ export function SubscribePage() {
                       onClick={() => void onSubmit()}
                       className="w-full border-transparent bg-linear-to-r from-gradient-brand-from to-gradient-brand-to text-primary-foreground hover:brightness-110"
                     >
-                      {busy ? t("actions.processing") : submitLabel}
+                      {busy ? t("actions.processing") : t("confirm.submit")}
                     </Button>
                     <p className="text-body-sm text-content-tertiary">
                       {isCurrentPlan
                         ? t("confirm.alreadyCurrent")
-                        : isFree
-                          ? t("confirm.fineFree")
-                          : t("confirm.fineOffline")}
+                        : t("confirm.fineOffline")}
                     </p>
                   </>
                 )}
@@ -486,12 +484,6 @@ export function SubscribePage() {
             {error ? <Banner tone="danger" title={error} /> : null}
           </PageSection>
         </aside>
-      </div>
-
-      <div>
-        <Button variant="ghost" onClick={() => router.push("/subscription")}>
-          {t("actions.backToSubscription")}
-        </Button>
       </div>
     </ViewLayout>
   );

@@ -10,7 +10,8 @@
  * 归属。切换走 TenantProvider 的既有 seam（switchTenantContext），与页头的
  * 租户切换同一条路；单租户时渲染静态卡，不假装能点。
  * 工作区维度目前每租户只有 default 一个（后端尚无多工作区），所以选择粒度
- * 是租户；工作区名与可视码如实展示。
+ * 是租户。展示只有工作区名称 + workspace_no 可视码（owner 2026-08-20：
+ * UUID 任何场景不得展示；workspace_no 已暗含租户号，不再单独标租户）。
  */
 
 import { useMemo, useState } from "react";
@@ -29,7 +30,7 @@ import type { TenantContext } from "@/entities/console";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { useTenant } from "@/features/tenant";
 
-/** 可视码按 4 位分组展示（12 位租户号）。 */
+/** 可视码按 4 位分组展示（workspace_no 15 位 = 租户号 12 位 + 序号 3 位）。 */
 function formatVisibleNo(no: string | null | undefined): string | null {
   if (!no) return null;
   return no.replace(/(\d{4})(?=\d)/g, "$1 ");
@@ -56,20 +57,20 @@ function TenantLine({
   labels,
 }: {
   readonly tenant: TenantContext;
-  readonly labels: { personal: string; organization: string; ws: string };
+  readonly labels: { ws: string };
 }) {
-  const type = tenant.tenantType ?? "organization";
-  const typeLabel = type === "personal" ? labels.personal : labels.organization;
-  const no = formatVisibleNo(tenant.tenantNo);
+  // 只展示工作区名称 + workspace_no 可视码——UUID/内部 id 一律不出现。
+  const no = formatVisibleNo(tenant.workspaceNo);
   return (
     <span className="flex min-w-0 flex-1 flex-col text-left">
       <span className="truncate text-label-md text-foreground">
-        {typeLabel} · {tenant.name}
+        {tenant.workspaceName ?? labels.ws}
       </span>
-      <span className="truncate text-body-sm text-muted-foreground tabular-nums">
-        {tenant.workspace || labels.ws}
-        {no ? ` · ${no}` : ""}
-      </span>
+      {no ? (
+        <span className="truncate text-body-sm text-muted-foreground tabular-nums">
+          {no}
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -97,11 +98,7 @@ export function WorkspacePicker({ onSwitched }: WorkspacePickerProps) {
   const current = session.tenant;
   if (!current) return null;
 
-  const labels = {
-    personal: t("personal"),
-    organization: t("organization"),
-    ws: t("defaultWorkspace"),
-  };
+  const labels = { ws: t("defaultWorkspace") };
   const options = tenantList
     .map((item) => detailById.get(item.id))
     .filter((item): item is TenantContext => Boolean(item));

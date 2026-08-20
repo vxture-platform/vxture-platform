@@ -1738,8 +1738,6 @@
     }
   },
   "workspacePicker": {
-    "personal": "Personal tenant",
-    "organization": "Team tenant",
     "defaultWorkspace": "Default workspace",
     "switchFailed": "Tenant switch failed — please retry; the order owner is unchanged"
   },
@@ -1925,7 +1923,6 @@
       "subscribe": "Subscribe",
       "renew": "Renew",
       "upgrade": "Upgrade",
-      "activateFree": "Activate free",
       "contactSales": "Contact sales",
       "refresh": "Refresh"
     },
@@ -1938,24 +1935,20 @@
     "confirm": {
       "title": "Confirm order",
       "who": "Subscription owner",
-      "whoHint": "Who is this for - the subscription and quotas activate in the selected tenant's workspace",
-      "whoNote": "If you belong to multiple tenants, confirm the owner before submitting - orders cannot be moved between tenants.",
       "what": "Plan",
-      "whatHint": "What you are buying - the tier was chosen in the previous step",
+      "reselect": "Back to plan selection",
       "whatUpgradeNote": "Currently on {plan}. Upgrades take effect immediately; the remaining period is prorated by day.",
       "noFeatures": "See the comparison table for full entitlements.",
       "pickTier": "Pick a tier:",
       "tierUnavailable": "The plan tier from the link isn't available right now — pick a tier below",
       "alreadyCurrent": "You're already on this plan — renew to extend the period instead",
-      "howLong": "Billing cycle",
-      "howLongHint": "How long - yearly saves more",
+      "howLong": "Subscription period",
       "yearlySave": "Save {amount} yearly",
-      "startNote": "The subscription cycle starts when payment is confirmed.",
+      "startNote": "The subscription period starts at service activation; the dates above are estimated from the current moment.",
       "summary": "Order summary",
       "total": "Total due",
       "submit": "Place order",
-      "fineOffline": "After submitting you'll go to the payment page - complete payment before the countdown ends or the order closes automatically. Vouchers are applied on the payment page.",
-      "fineFree": "The free tier needs no payment - it activates instantly after submitting.",
+      "fineOffline": "After submitting you'll go to the payment page - complete payment before the countdown ends or the order closes automatically. Vouchers are applied on the payment page. Zero-amount orders are placed the same way and settle automatically at the payment step.",
       "fineEnterprise": "Enterprise pricing is quoted by sales; self-serve checkout is not available.",
       "priceOnRequest": "Price on request"
     },
