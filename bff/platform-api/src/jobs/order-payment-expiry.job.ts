@@ -23,7 +23,10 @@
  */
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
-import { SubscriptionService } from "@vxture/service-subscription";
+import {
+  AddonService,
+  SubscriptionService,
+} from "@vxture/service-subscription";
 import { JobHeartbeatService } from "./job-heartbeat.service";
 import { sweepIntervalMs } from "./sweep-interval.util";
 
@@ -46,6 +49,8 @@ export class OrderPaymentExpiryJob {
   constructor(
     @Inject(SubscriptionService)
     private readonly subscriptions: SubscriptionService,
+    @Inject(AddonService)
+    private readonly addons: AddonService,
     @Inject(JobHeartbeatService)
     private readonly heartbeat: JobHeartbeatService,
   ) {}
@@ -66,10 +71,18 @@ export class OrderPaymentExpiryJob {
       if (healed > 0) {
         this.logger.log(`payment reconcile: ${healed} hung order(s) activated`);
       }
+      // Addon orders share the same TTL policy (per-order persisted TTL with
+      // this env fallback); declared legs are never auto-expired.
+      const addonClosed = await this.addons.sweepExpiredOrders(ttlMinutes());
+      if (addonClosed > 0) {
+        this.logger.log(
+          `addon payment expiry sweep: ${addonClosed} order(s) closed`,
+        );
+      }
       await this.heartbeat.recordSuccess(
         JOB_NAME,
         Date.now() - startedAt,
-        closed + healed,
+        closed + healed + addonClosed,
       );
     } catch (err) {
       // Never let a pass kill the interval; the next tick retries.

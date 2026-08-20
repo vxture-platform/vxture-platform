@@ -192,7 +192,7 @@ CREATE TABLE billing.invoice_items (
     updated_at         timestamptz   NOT NULL DEFAULT now(),
     deleted_at         timestamptz,
     CONSTRAINT chk_invoice_items_item_type
-        CHECK (item_type IN ('subscription_fee','metered_overage','credit_adjustment','discount','tax'))
+        CHECK (item_type IN ('subscription_fee','metered_overage','credit_adjustment','discount','tax','addon_fee'))  -- addon_fee: 加油包/扩展包(2026-08-20 用量配额线)
 );
 CREATE INDEX idx_invoice_items_bill_id      ON billing.invoice_items (bill_id);
 CREATE INDEX idx_invoice_items_workspace_id ON billing.invoice_items (workspace_id);

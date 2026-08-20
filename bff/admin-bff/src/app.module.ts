@@ -9,6 +9,7 @@ import { VxConfigModule } from "@vxture/core-config";
 import { MailModule } from "@vxture/core-mail";
 import { AdminBffPoolsModule } from "./providers/pools.module";
 import {
+  addonServiceProvider,
   commerceServicesProvider,
   promotionServiceProvider,
 } from "./providers/commerce-services.provider";
@@ -42,6 +43,7 @@ import { TenantsRouter } from "./routers/tenants.router";
 import { AccountsRouter } from "./routers/accounts.router";
 import { BillingRouter } from "./routers/billing.router";
 import { InvoicesRouter } from "./routers/invoices.router";
+import { AddonOrdersRouter } from "./routers/addon-orders.router";
 import { OrdersRouter } from "./routers/orders.router";
 import { PaymentsRouter } from "./routers/payments.router";
 import { SubscriptionsRouter } from "./routers/subscriptions.router";
@@ -83,6 +85,7 @@ import { SearchRouter } from "./routers/search.router";
     BillingRouter,
     InvoicesRouter,
     OrdersRouter,
+    AddonOrdersRouter,
     PaymentsRouter,
     SubscriptionsRouter,
     CommercialRouter,
@@ -105,6 +108,7 @@ import { SearchRouter } from "./routers/search.router";
     OperatorAdminService,
     commerceServicesProvider,
     promotionServiceProvider,
+    addonServiceProvider,
     { provide: APP_GUARD, useClass: OperatorStepUpGuard },
   ],
 })

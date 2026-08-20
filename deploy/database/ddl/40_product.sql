@@ -112,6 +112,33 @@ CREATE TABLE product.platform_metrics (
     CONSTRAINT chk_platform_metrics_gauge_shape    CHECK (kind IS NULL OR kind <> 'gauge' OR (consume_mode IS NULL AND reset_period = 'none'))
 );
 
+-- 加油包/扩展包目录（product_220 §0/§4.2:加油包 = SKU 但不经套餐机器——购买直接生成
+-- pool grant;owner 2026-08-20 用量配额线激活 addon_purchase 登记项）。表驱动便于运营侧
+-- 后续接管定价与上下架(登记);购买时字段快照进 metering.addon_purchases(盖章拷贝,
+-- 同 plan 锁定原则:改目录不影响已售)。metric_key 松引用 platform_metrics(仅 WS 级
+-- 资源可做加油包)。created_by/updated_by 运营专属,裸值→admin.operator_accounts(边界#2)。
+CREATE TABLE product.addon_packs (
+    id            uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
+    pack_code     varchar(64)  NOT NULL,                              -- 可视码(如 addon-storage-1g,铁律二不作 FK 目标)
+    pack_name     varchar(128) NOT NULL,                              -- 展示名(中文基准,i18n 键后置)
+    metric_key    varchar(64)  NOT NULL,                              -- 松引用 product.platform_metrics(storage.bytes / ai.credit)
+    amount        bigint       NOT NULL,                              -- 授予量(bytes / credits)
+    validity_days int          NOT NULL,                              -- 自开通起效期(天)
+    price         numeric(12,2) NOT NULL,
+    currency      varchar(16)  NOT NULL DEFAULT 'CNY',
+    status        varchar(16)  NOT NULL DEFAULT 'active',             -- active | retired(下架不删,已售快照自持)
+    sort          int          NOT NULL DEFAULT 100,
+    created_by    uuid,
+    updated_by    uuid,
+    created_at    timestamptz  NOT NULL DEFAULT now(),
+    updated_at    timestamptz  NOT NULL DEFAULT now(),
+    CONSTRAINT uq_addon_packs_pack_code   UNIQUE (pack_code),
+    CONSTRAINT chk_addon_packs_status     CHECK (status IN ('active','retired')),
+    CONSTRAINT chk_addon_packs_amount     CHECK (amount > 0),
+    CONSTRAINT chk_addon_packs_validity   CHECK (validity_days >= 1),
+    CONSTRAINT chk_addon_packs_price      CHECK (price >= 0)
+);
+
 -- 产品壳/对外销售方案。current_version_id 域内 FK→plan_versions（互引用，建表后 ALTER 补）。
 -- created_by/updated_by 运营专属，裸值→admin.operator_accounts（不建 FK，边界#2）。
 CREATE TABLE product.plans (

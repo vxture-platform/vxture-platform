@@ -541,6 +541,25 @@ DO $$ BEGIN
     FOREIGN KEY (product_id) REFERENCES product.products(id);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+-- addon_purchases → tenancy / product.addon_packs / billing.invoices（加油包购买单,
+-- owner 2026-08-20 用量配额线;铁律一集中)。order_no 可视码不作 FK;created_by_id 裸值(边界#2)。
+DO $$ BEGIN
+  ALTER TABLE metering.addon_purchases ADD CONSTRAINT fk_addon_purchases_tenant
+    FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE metering.addon_purchases ADD CONSTRAINT fk_addon_purchases_workspace
+    FOREIGN KEY (workspace_id) REFERENCES tenancy.workspaces(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE metering.addon_purchases ADD CONSTRAINT fk_addon_purchases_pack
+    FOREIGN KEY (pack_id) REFERENCES product.addon_packs(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE metering.addon_purchases ADD CONSTRAINT fk_addon_purchases_invoice
+    FOREIGN KEY (invoice_id) REFERENCES billing.invoices(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 -- ═══ sharing ═══
 -- ── sharing → tenancy / product（铁律一：跨 schema FK 不内联，集中于此，幂等）─────────
 -- 依据 docs/design/data_sharing_200_schema.md §5：tenancy/product 引用均真 FK；

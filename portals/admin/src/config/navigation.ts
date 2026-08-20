@@ -194,6 +194,17 @@ const tenantOpsSections: AdminNavigationSection[] = [
         icon: "table",
       },
       {
+        id: "addonOrders",
+        code: "addon_order_record",
+        i18nKey: "menu.operation.addon_order_record",
+        status: "active",
+        href: "/addon-orders",
+        label: "加油包订单",
+        description:
+          "存储扩展包 / AI 加油包的待核销队列,确认收款即自动授予配额池。",
+        icon: "lightning",
+      },
+      {
         id: "usageMetering",
         code: "usage_billing",
         i18nKey: "menu.operation.usage_billing",

@@ -16,8 +16,8 @@
  * 样式层。中文基准,zh/en 双份 i18n(quotasPage 命名空间)。全页无 UUID。
  */
 
-import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import {
   DataTable,
   EmptyState,
@@ -39,8 +39,10 @@ import {
   type ConsoleQuotaPool,
   type ConsoleStorageSlice,
 } from "@/api/console-bff";
+import { formatCurrency, type Locale } from "@vxture/shared";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { DashboardSplit, PageSection, SignalList } from "@/layout/shell";
+import { AddonPacksSection } from "./components/AddonPacksSection";
 import { fmtDate, fmtTime } from "./components/hubModel";
 
 // ── 展示工具(格式化,非样式) ────────────────────────────────────────────────
@@ -88,17 +90,30 @@ type ProductMetricRow = ConsoleProductQuota["metrics"][number] & {
 
 export function QuotasPage() {
   const t = useTranslations("quotasPage");
+  const locale = useLocale();
   const { session } = useConsoleSession();
 
   const [overview, setOverview] = useState<ConsoleQuotaOverview | null>(null);
   const [loading, setLoading] = useState(true);
+  // 加油包核销/取消后自增,触发总览重取(额度入池立即可见)
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     setLoading(true);
     fetchQuotaOverview()
       .then(setOverview)
       .finally(() => setLoading(false));
-  }, [session.tenant?.id]);
+  }, [session.tenant?.id, reloadKey]);
+
+  const money = useCallback(
+    (yuan: string, currency: string) =>
+      formatCurrency(
+        Number.parseFloat(yuan || "0"),
+        locale as Locale,
+        currency,
+      ),
+    [locale],
+  );
 
   const metricLabel = (metric: string): string => {
     const key = METRIC_LABEL_KEYS[metric];
@@ -469,7 +484,13 @@ export function QuotasPage() {
         />
       </PageSection>
 
-      {/* ③ 各产品配额明细 */}
+      {/* ③ 加油包与扩展包(自助购买闭环) */}
+      <AddonPacksSection
+        onSettledRefresh={() => setReloadKey((k) => k + 1)}
+        formatMoney={money}
+      />
+
+      {/* ④ 各产品配额明细 */}
       <PageSection
         icon="package"
         level={2}

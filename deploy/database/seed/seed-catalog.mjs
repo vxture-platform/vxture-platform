@@ -1756,6 +1756,35 @@ export async function seedCatalog(client) {
     "✓  product — platform_metrics (L0 resource catalog: 2 active + 4 reserved)",
   );
 
+  // ── addon packs (加油包/扩展包目录,owner 2026-08-20 用量配额线) ──────────
+  // 初步预置定价(参考市场,owner 授权;运营侧接管后在 admin 调整——upsert 仅
+  // 回写目录字段,已售单持快照不受影响)。有效期一律 365 天;存储包为 WS 级
+  // gauge 额度叠加,credits 包为 counter 池(priority 200,订阅池后烧)。
+  const MIB = 1024 * 1024;
+  const ADDON_PACKS = [
+    // [pack_code, pack_name, metric_key, amount, validity_days, price, sort]
+    ["addon-storage-500m", "存储扩展包 500MB", "storage.bytes", 500 * MIB, 365, "9.90", 10],
+    ["addon-storage-1g", "存储扩展包 1GB", "storage.bytes", 1024 * MIB, 365, "16.90", 20],
+    ["addon-storage-5g", "存储扩展包 5GB", "storage.bytes", 5 * 1024 * MIB, 365, "69.00", 30],
+    ["addon-credits-100", "AI 加油包 100 Credits", "ai.credit", 100, 365, "19.90", 40],
+    ["addon-credits-500", "AI 加油包 500 Credits", "ai.credit", 500, 365, "89.00", 50],
+    ["addon-credits-2000", "AI 加油包 2000 Credits", "ai.credit", 2000, 365, "299.00", 60],
+  ];
+  for (const [code, name, metric, amount, validity, price, sort] of ADDON_PACKS) {
+    await client.query(
+      `
+      insert into product.addon_packs (pack_code, pack_name, metric_key, amount, validity_days, price, currency, status, sort, created_at, updated_at)
+      values ($1, $2, $3, $4, $5, $6, 'CNY', 'active', $7, now(), now())
+      on conflict (pack_code) do update set
+        pack_name = excluded.pack_name, metric_key = excluded.metric_key,
+        amount = excluded.amount, validity_days = excluded.validity_days,
+        price = excluded.price, sort = excluded.sort, updated_at = now()
+    `,
+      [code, name, metric, amount, validity, price, sort],
+    );
+  }
+  console.log("✓  product — addon_packs (3 storage + 3 credits, ¥ preset)");
+
   // ── arda catalog (arda-biz-260 §3 + reply-01 §6; product_310 P2.5 precondition) ──
   // Five commercial tiers + the beta public-test plan (definition.md §5.1).
   // product_metrics: 5 max-caps + 3 tiered caps (non-numeric, best-plan-wins)

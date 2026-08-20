@@ -18,15 +18,24 @@
  */
 
 import {
+  Body,
   Controller,
   BadRequestException,
   Get,
   Inject,
+  Param,
+  Post,
   Req,
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
+import { AddonService } from "@vxture/service-subscription";
+import type { AddonPurchaseRecord } from "@vxture/service-subscription";
+import {
+  buildPaymentChannels,
+  type PaymentChannelInfo,
+} from "../lib/payment-channels";
 import type { RequestContext } from "../types/console.types";
 
 // Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
@@ -123,9 +132,196 @@ interface SharingSqlRow {
 // QuotaRouter
 // ============================================================================
 
+// 付款时效(分钟):与订阅单同口径(个人 30 / 组织 2880,env 可调,product_321 P4)。
+const envMinutes = (name: string, fallback: number): number => {
+  const raw = Number(process.env[name]);
+  return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : fallback;
+};
+const paymentTtlMinutesFor = (
+  tenantType: "personal" | "organization" | undefined,
+): number =>
+  tenantType === "organization"
+    ? envMinutes("ORDER_PAYMENT_TTL_MINUTES_ORG", 2880)
+    : envMinutes("ORDER_PAYMENT_TTL_MINUTES", 30);
+
+const PACK_CODE_RE = /^[a-z][a-z0-9_-]{0,63}$/;
+const ORDER_NO_RE = /^ORD-\d{6}-[0-9A-F]{10}$/;
+
+export interface AddonPackView {
+  packCode: string;
+  packName: string;
+  metricKey: string;
+  amount: number;
+  validityDays: number;
+  price: string;
+  currency: string;
+}
+
+export interface AddonOrderView {
+  orderNo: string;
+  billNo: string | null;
+  packCode: string;
+  packName: string;
+  metricKey: string;
+  amount: number;
+  price: string;
+  currency: string;
+  status: "pending_payment" | "completed" | "cancelled";
+  /** 已申报待运营确认 */
+  paymentDeclared: boolean;
+  /** 未申报待支付单的付款截止(ISO);其余为 null */
+  expireAt: string | null;
+  activatedAt: string | null;
+  /** 权益有效期至(= 开通 + validity_days) */
+  validUntil: string | null;
+  createdAt: string;
+}
+
+function mapAddonOrder(r: AddonPurchaseRecord): AddonOrderView {
+  const expireAt =
+    r.status === "pending_payment" && !r.paymentDeclared
+      ? new Date(
+          r.createdAt.getTime() + (r.paymentTtlMinutes ?? 30) * 60_000,
+        ).toISOString()
+      : null;
+  const validUntil = r.activatedAt
+    ? new Date(
+        r.activatedAt.getTime() + r.validityDays * 86_400_000,
+      ).toISOString()
+    : null;
+  return {
+    orderNo: r.orderNo,
+    billNo: r.billNo,
+    packCode: r.packCode,
+    packName: r.packName,
+    metricKey: r.metricKey,
+    amount: Number(r.amount),
+    price: r.price,
+    currency: r.currency,
+    status: r.status,
+    paymentDeclared: r.paymentDeclared,
+    expireAt,
+    activatedAt: r.activatedAt ? r.activatedAt.toISOString() : null,
+    validUntil,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
 @Controller("api/quota")
 export class QuotaRouter {
-  constructor(@Inject(COMMERCE_PG_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
+    @Inject(AddonService) private readonly addons: AddonService,
+  ) {}
+
+  // --------------------------------------------------------------------------
+  // 加油包(自助购买闭环,owner 2026-08-20):目录 / 我的订单 / 下单 / 申报 / 取消
+  // --------------------------------------------------------------------------
+
+  @Get("addon-packs")
+  async listAddonPacks(): Promise<AddonPackView[]> {
+    const packs = await this.addons.listPacks();
+    return packs.map((p) => ({
+      packCode: p.packCode,
+      packName: p.packName,
+      metricKey: p.metricKey,
+      amount: Number(p.amount),
+      validityDays: p.validityDays,
+      price: p.price,
+      currency: p.currency,
+    }));
+  }
+
+  @Get("addon-orders")
+  async listAddonOrders(
+    @Req() req: Request & RequestContext,
+  ): Promise<AddonOrderView[]> {
+    if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
+    const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
+    const rows = await this.addons.listPurchases(workspaceId);
+    return rows.map(mapAddonOrder);
+  }
+
+  @Post("addon-orders")
+  async createAddonOrder(
+    @Req() req: Request & RequestContext,
+    @Body() body: { packCode?: unknown },
+  ): Promise<{ order: AddonOrderView; paymentChannels: PaymentChannelInfo[] }> {
+    if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
+    if (!req.user) throw new UnauthorizedException("No active session");
+    const packCode = typeof body.packCode === "string" ? body.packCode : "";
+    if (!PACK_CODE_RE.test(packCode)) {
+      throw new BadRequestException("packCode 非法");
+    }
+    const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
+    const record = await this.addons.createOrder({
+      tenantId: req.tenant.id,
+      workspaceId,
+      packCode,
+      createdBy: req.user.id,
+      paymentTtlMinutes: paymentTtlMinutesFor(req.tenant.tenantType),
+    });
+    return {
+      order: mapAddonOrder(record),
+      paymentChannels: buildPaymentChannels(record.orderNo),
+    };
+  }
+
+  /** 线下转账收款信息(渠道配置随 env;reference = 订单号,汇款附言用)。 */
+  @Get("addon-orders/:orderNo/payment-channels")
+  async getAddonPaymentChannels(
+    @Req() req: Request & RequestContext,
+    @Param("orderNo") orderNo: string,
+  ): Promise<PaymentChannelInfo[]> {
+    if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
+    if (!ORDER_NO_RE.test(orderNo)) throw new BadRequestException("订单号非法");
+    return buildPaymentChannels(orderNo);
+  }
+
+  @Post("addon-orders/:orderNo/payment-declare")
+  async declareAddonPayment(
+    @Req() req: Request & RequestContext,
+    @Param("orderNo") orderNo: string,
+    @Body()
+    body: { payerName?: unknown; transactionNo?: unknown; remark?: unknown },
+  ): Promise<{ ok: true }> {
+    if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
+    if (!req.user) throw new UnauthorizedException("No active session");
+    if (!ORDER_NO_RE.test(orderNo)) throw new BadRequestException("订单号非法");
+    const str = (v: unknown, max: number): string | undefined =>
+      typeof v === "string" && v.trim() !== ""
+        ? v.trim().slice(0, max)
+        : undefined;
+    await this.addons.declarePayment({
+      tenantId: req.tenant.id,
+      orderNo,
+      payChannel: "bank",
+      ...(str(body.payerName, 64)
+        ? { payerName: str(body.payerName, 64)! }
+        : {}),
+      ...(str(body.transactionNo, 64)
+        ? { transactionNo: str(body.transactionNo, 64)! }
+        : {}),
+      ...(str(body.remark, 256) ? { remark: str(body.remark, 256)! } : {}),
+      actorId: req.user.id,
+    });
+    return { ok: true };
+  }
+
+  @Post("addon-orders/:orderNo/cancel")
+  async cancelAddonOrder(
+    @Req() req: Request & RequestContext,
+    @Param("orderNo") orderNo: string,
+  ): Promise<{ ok: true }> {
+    if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
+    if (!ORDER_NO_RE.test(orderNo)) throw new BadRequestException("订单号非法");
+    await this.addons.cancelOrder({
+      orderNo,
+      tenantId: req.tenant.id,
+      reason: "customer cancelled",
+    });
+    return { ok: true };
+  }
 
   @Get("overview")
   async getOverview(

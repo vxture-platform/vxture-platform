@@ -1847,3 +1847,106 @@ export async function fetchUsageMembers(
 ): Promise<ConsoleUsageMember[]> {
   return readJson<ConsoleUsageMember[]>(`/api/usage/members?days=${days}`, []);
 }
+
+// ============================================================================
+// Addon packs (加油包/扩展包 — /api/quota/addon-*)
+// ============================================================================
+
+export interface ConsoleAddonPack {
+  packCode: string;
+  packName: string;
+  metricKey: string;
+  amount: number;
+  validityDays: number;
+  price: string;
+  currency: string;
+}
+
+export interface ConsoleAddonOrder {
+  orderNo: string;
+  billNo: string | null;
+  packCode: string;
+  packName: string;
+  metricKey: string;
+  amount: number;
+  price: string;
+  currency: string;
+  status: "pending_payment" | "completed" | "cancelled";
+  paymentDeclared: boolean;
+  /** 未申报待支付单的付款截止(ISO);其余为 null */
+  expireAt: string | null;
+  activatedAt: string | null;
+  validUntil: string | null;
+  createdAt: string;
+}
+
+export async function fetchAddonPacks(): Promise<ConsoleAddonPack[]> {
+  return readJson<ConsoleAddonPack[]>("/api/quota/addon-packs", []);
+}
+
+export async function fetchAddonOrders(): Promise<ConsoleAddonOrder[]> {
+  return readJson<ConsoleAddonOrder[]>("/api/quota/addon-orders", []);
+}
+
+/** 下单失败要把 409(已有待支付单)等报文透给用户 → strict,调用方 catch。 */
+export async function createAddonOrder(packCode: string): Promise<{
+  order: ConsoleAddonOrder;
+  paymentChannels: PaymentChannelInfo[];
+}> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/quota/addon-orders`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ packCode }),
+    },
+  );
+  if (!response.ok) {
+    let message = `Request failed: ${response.status}`;
+    try {
+      const body = (await response.json()) as { message?: string };
+      if (body?.message) message = body.message;
+    } catch {
+      /* keep the status message */
+    }
+    throw new ConsoleBffError(message, response.status);
+  }
+  return (await response.json()) as {
+    order: ConsoleAddonOrder;
+    paymentChannels: PaymentChannelInfo[];
+  };
+}
+
+export async function fetchAddonPaymentChannels(
+  orderNo: string,
+): Promise<PaymentChannelInfo[]> {
+  return readJson<PaymentChannelInfo[]>(
+    `/api/quota/addon-orders/${encodeURIComponent(orderNo)}/payment-channels`,
+    [],
+  );
+}
+
+export async function declareAddonPayment(
+  orderNo: string,
+  input: { payerName?: string; transactionNo?: string; remark?: string },
+): Promise<boolean> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/quota/addon-orders/${encodeURIComponent(orderNo)}/payment-declare`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+  return response.ok;
+}
+
+export async function cancelAddonOrder(orderNo: string): Promise<boolean> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/quota/addon-orders/${encodeURIComponent(orderNo)}/cancel`,
+    { method: "POST", credentials: "include" },
+  );
+  return response.ok;
+}

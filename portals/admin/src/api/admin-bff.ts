@@ -2464,3 +2464,66 @@ export async function searchAdmin(
   }
   return (await response.json()) as AdminSearchResponse;
 }
+
+// ============================================================================
+// Addon orders (加油包订单核销 — /api/addon-orders)
+// ============================================================================
+
+export interface AddonOrderOperationRecord {
+  id: string;
+  orderNo: string;
+  billNo: string | null;
+  packCode: string;
+  packName: string;
+  metricKey: string;
+  amount: number;
+  price: string;
+  currency: string;
+  status: string;
+  /** true = 客户已申报转账,等待核销 */
+  paymentDeclared: boolean;
+  tenantId: string;
+  createdAt: string;
+  activatedAt: string | null;
+}
+
+export async function fetchAddonOrders(): Promise<AddonOrderOperationRecord[]> {
+  return readJsonStrict<AddonOrderOperationRecord[]>("/api/addon-orders");
+}
+
+// step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
+// Settles an addon order (加油包核销): flips/creates the paid leg, clears the
+// one_off invoice, grants the WS-level quota pool, completes the purchase —
+// one transaction on the BFF side. Re-driving an already-settled order
+// returns { settled: false } (safe no-op).
+export async function confirmAddonOrderPayment(
+  purchaseId: string,
+  remark?: string,
+): Promise<{ settled: boolean; order: AddonOrderOperationRecord | null }> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/addon-orders/${encodeURIComponent(purchaseId)}/offline-payment-confirm`,
+    {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(remark ? { remark } : {}),
+    },
+  );
+  if (!response.ok) {
+    let message = "加油包收款确认失败";
+    try {
+      const body = (await response.json()) as { message?: string | string[] };
+      message = Array.isArray(body.message)
+        ? (body.message[0] ?? message)
+        : (body.message ?? message);
+    } catch {
+      // Keep a typed error for non-JSON proxy responses.
+    }
+    throw new AdminBffError(message, response.status);
+  }
+  return (await response.json()) as {
+    settled: boolean;
+    order: AddonOrderOperationRecord | null;
+  };
+}

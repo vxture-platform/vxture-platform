@@ -15,6 +15,8 @@
 import { Provider } from "@nestjs/common";
 import { Pool } from "pg";
 import {
+  AddonService,
+  PgAddonRepository,
   PgSubscriptionRepository,
   SubscriptionService,
 } from "@vxture/service-subscription";
@@ -30,6 +32,19 @@ import { ADMIN_BFF_RW_POOL } from "../tokens";
 
 export const ADMIN_SUBSCRIPTION_SERVICE = "ADMIN_SUBSCRIPTION_SERVICE";
 export const ADMIN_PROMOTION_SERVICE = "ADMIN_PROMOTION_SERVICE";
+export const ADMIN_ADDON_SERVICE = "ADMIN_ADDON_SERVICE";
+
+/**
+ * Standalone AddonService for the addon-orders router (加油包核销,owner
+ * 2026-08-20): settlement (leg flip + invoice clear + WS-level pool grant)
+ * lives in one repo transaction — same module-less wire as above.
+ */
+export const addonServiceProvider: Provider = {
+  provide: ADMIN_ADDON_SERVICE,
+  inject: [ADMIN_BFF_RW_POOL],
+  useFactory: (pool: Pool): AddonService =>
+    new AddonService(new PgAddonRepository(pool)),
+};
 
 /**
  * Standalone PromotionService for the orders router (product_321 PR3):

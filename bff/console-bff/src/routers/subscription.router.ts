@@ -49,6 +49,10 @@ import {
   type Tier,
 } from "@vxture/shared";
 import type { RequestContext } from "../types/console.types";
+import {
+  buildPaymentChannels,
+  type PaymentChannelInfo,
+} from "../lib/payment-channels";
 import { PlatformEntitlementsClient } from "../platform/platform-entitlements.client";
 
 // Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
@@ -264,18 +268,8 @@ interface MyOrderRecord {
 }
 
 // ── payment page contracts (product_321 §4.1) ───────────────────────────────
-
-interface PaymentChannelInfo {
-  channel: "alipay" | "wechat" | "bank_transfer";
-  enabled: boolean;
-  qrAsset?: string;
-  account?: {
-    accountName: string;
-    bankName: string;
-    accountNo: string;
-    reference: string;
-  };
-}
+// PaymentChannelInfo / buildPaymentChannels 移至 ../lib/payment-channels
+// (加油包购买共用同一套线下收款配置,2026-08-20)。
 
 interface OrderVoucherOption {
   voucherId: string;
@@ -1921,36 +1915,7 @@ function mapVoucherOption(v: AvailableVoucher): OrderVoucherOption {
   };
 }
 
-/**
- * Payment channel config, env-derived (§4.4). enabled = every env of the
- * channel is present AND non-blank after trim — a missing/blank config must
- * never ship enabled:true with empty credentials (the §1 pain-point 1 replay).
- */
-function buildPaymentChannels(orderNo: string): PaymentChannelInfo[] {
-  const trimmed = (v: string | undefined): string => (v ?? "").trim();
-  const alipayQr = trimmed(process.env.OFFLINE_PAY_ALIPAY_QR);
-  const accountName = trimmed(process.env.OFFLINE_PAY_ACCOUNT_NAME);
-  const bankName = trimmed(process.env.OFFLINE_PAY_BANK_NAME);
-  const accountNo = trimmed(process.env.OFFLINE_PAY_ACCOUNT_NO);
-  const bankEnabled = Boolean(accountName && bankName && accountNo);
-  return [
-    {
-      channel: "alipay",
-      enabled: Boolean(alipayQr),
-      ...(alipayQr ? { qrAsset: alipayQr } : {}),
-    },
-    { channel: "wechat", enabled: false },
-    {
-      channel: "bank_transfer",
-      enabled: bankEnabled,
-      ...(bankEnabled
-        ? {
-            account: { accountName, bankName, accountNo, reference: orderNo },
-          }
-        : {}),
-    },
-  ];
-}
+// buildPaymentChannels: see ../lib/payment-channels (shared with addon flow).
 
 function mapMyOrderRow(r: OrderRow): MyOrderRecord {
   const state = deriveOrderState(r);

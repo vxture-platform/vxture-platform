@@ -342,6 +342,51 @@ CREATE TABLE metering.usage_gauges (
 );
 CREATE INDEX idx_usage_gauges_lookup ON metering.usage_gauges (workspace_id, metric_key);
 
+-- 加油包购买单(owner 2026-08-20 用量配额线):自助购买闭环——下单(pending_payment)→
+-- 线下对公申报→运营核销→结算生成 WS 级 quota_pool grant(pool_source='addon_purchase',
+-- product_id NULL,priority 200 后于订阅池烧,expires_at = 开通 + validity_days)。
+-- 目录字段快照拷贝(改 product.addon_packs 不影响已售单);账单 = billing.invoices
+-- bill_type='one_off'(invoice_id 跨 schema→90)。quota_pool_id 域内 FK,结算后回填。
+-- 0 元不适用(目录 price>0);券/抵扣暂不进加油包流(登记)。
+CREATE TABLE metering.addon_purchases (
+    id                  uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id           uuid          NOT NULL,                       -- 跨 schema→tenancy.tenants（90）
+    workspace_id        uuid          NOT NULL,                       -- 跨 schema→tenancy.workspaces（90）
+    pack_id             uuid          NOT NULL,                       -- 跨 schema→product.addon_packs（90,溯源;字段以快照为准）
+    pack_code           varchar(64)   NOT NULL,                       -- 快照
+    pack_name           varchar(128)  NOT NULL,                       -- 快照
+    metric_key          varchar(64)   NOT NULL,                       -- 快照
+    amount              bigint        NOT NULL,                       -- 快照(授予量)
+    validity_days       int           NOT NULL,                       -- 快照
+    price               numeric(12,2) NOT NULL,                       -- 快照(应付)
+    currency            varchar(16)   NOT NULL DEFAULT 'CNY',
+    order_no            varchar(128)  NOT NULL,                       -- 可视码 ORD-{YYYYMM}-{10hex}(铁律二,不作 FK)
+    status              varchar(32)   NOT NULL DEFAULT 'pending_payment',
+    payment_ttl_minutes int,                                          -- 付款时效(同订阅单口径:个人 30 / 组织 2880)
+    invoice_id          uuid,                                         -- 跨 schema→billing.invoices（90）
+    quota_pool_id       uuid          REFERENCES metering.quota_pools(id),  -- 域内 FK,结算后授予的池
+    activated_at        timestamptz,
+    cancelled_at        timestamptz,
+    cancel_reason       varchar(256),
+    created_by_type     varchar(16)   NOT NULL,                       -- §0.1 actor
+    created_by_id       uuid,                                         -- 裸值(边界#2)
+    created_at          timestamptz   NOT NULL DEFAULT now(),
+    updated_at          timestamptz   NOT NULL DEFAULT now(),
+    CONSTRAINT uq_addon_purchases_order_no UNIQUE (order_no),
+    CONSTRAINT chk_addon_purchases_status CHECK (status IN ('pending_payment','completed','cancelled')),
+    CONSTRAINT chk_addon_purchases_actor  CHECK (created_by_type IN ('system','customer','operator')),
+    CONSTRAINT chk_addon_purchases_ttl    CHECK (payment_ttl_minutes IS NULL OR payment_ttl_minutes >= 1),
+    CONSTRAINT chk_addon_purchases_amount CHECK (amount > 0),
+    -- 结算完成必须已回填池与开通时刻
+    CONSTRAINT chk_addon_purchases_completed CHECK (status <> 'completed' OR (quota_pool_id IS NOT NULL AND activated_at IS NOT NULL))
+);
+CREATE INDEX idx_addon_purchases_workspace ON metering.addon_purchases (workspace_id, status);
+CREATE INDEX idx_addon_purchases_tenant    ON metering.addon_purchases (tenant_id);
+CREATE INDEX idx_addon_purchases_status    ON metering.addon_purchases (status, created_at);
+CREATE INDEX idx_addon_purchases_pack      ON metering.addon_purchases (pack_id);
+CREATE INDEX idx_addon_purchases_invoice   ON metering.addon_purchases (invoice_id);
+CREATE INDEX idx_addon_purchases_pool      ON metering.addon_purchases (quota_pool_id);
+
 -- ── FK 支撑索引(2026-08-19 全库体检 P2 补齐;audit 类 created_by/updated_by 引用有意不建,父行不删)──
 CREATE INDEX idx_subscriptions_payment_mandate     ON metering.subscriptions (payment_mandate_id);
 CREATE INDEX idx_quota_pools_subscription          ON metering.quota_pools (subscription_id);

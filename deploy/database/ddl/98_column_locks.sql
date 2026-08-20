@@ -200,6 +200,14 @@ GRANT UPDATE (product_id, metric_key, merge_strategy, consume_mode, metric_unit,
 REVOKE UPDATE ON product.platform_metrics FROM platform_svc;
 GRANT UPDATE (kind, consume_mode, metric_unit, reset_period, status) ON product.platform_metrics TO platform_svc;
 
+-- product.addon_packs  [anchor: id, created_by, created_at]
+REVOKE UPDATE ON product.addon_packs FROM platform_svc;
+GRANT UPDATE (pack_code, pack_name, metric_key, amount, validity_days, price, currency, status, sort, updated_by, updated_at) ON product.addon_packs TO platform_svc;
+
+-- metering.addon_purchases  [anchor: id, order_no, created_at]  (快照列一次写入靠写路径纪律,列锁按统一规则)
+REVOKE UPDATE ON metering.addon_purchases FROM platform_svc;
+GRANT UPDATE (tenant_id, workspace_id, pack_id, pack_code, pack_name, metric_key, amount, validity_days, price, currency, status, payment_ttl_minutes, invoice_id, quota_pool_id, activated_at, cancelled_at, cancel_reason, created_by_type, created_by_id, updated_at) ON metering.addon_purchases TO platform_svc;
+
 -- metering.resource_sharing_policies  [anchor: id, created_at]  (a policy row is add/remove, not mutate)
 REVOKE UPDATE ON metering.resource_sharing_policies FROM platform_svc;
 GRANT UPDATE (workspace_id, tenant_id, metric_key, product_id, created_by_type, created_by_id) ON metering.resource_sharing_policies TO platform_svc;
