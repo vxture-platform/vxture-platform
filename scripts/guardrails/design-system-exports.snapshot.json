@@ -120,7 +120,6 @@
       "ContextMenuSubTrigger",
       "ContextMenuTrigger",
       "DEFAULT_DENSITY",
-      "DENSITIES",
       "DENSITY_STORAGE_KEY",
       "DIALOG_WIDTHS",
       "DashboardTemplate",
@@ -302,7 +301,6 @@
       "badgeVariants",
       "buttonVariants",
       "cn",
-      "densityClass",
       "fontSizeClass",
       "iconDictionary",
       "markAppReady",
@@ -347,7 +345,8 @@
       "Z_INDEX",
       "badgeVariants",
       "densityClass",
-      "fontSizeClass"
+      "fontSizeClass",
+      "themeBootstrapScript"
     ],
     "./tokens": [
       "DENSITIES",

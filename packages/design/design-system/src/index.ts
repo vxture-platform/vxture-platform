@@ -14,8 +14,14 @@
 
 // ============================================================================
 // 组件层 —— 转发 @vxture/design-ui（组件 / 图标 / hook / 工具）
+//
+// 值 = 生成的具名清单，类型 = export type *（编译期擦除）。不能对 external 包
+// 写运行时 `export *`：index 产物带 "use client"，Next 15 flight loader 在
+// server/client 边界硬拒该组合（vxture-platform#320；生成器
+// scripts/generate-reexports.mjs 的头注释有完整论证）。
 // ============================================================================
-export * from "@vxture/design-ui";
+export type * from "@vxture/design-ui";
+export * from "./generated-reexports";
 
 // ============================================================================
 // 伞包自持组件 —— 需要运行时接线的那两个
@@ -34,5 +40,6 @@ export * from "./density";
 
 // ============================================================================
 // Tokens —— 伞包对外转发 @vxture/design-tokens
+// （值在 ./generated-reexports 里；此处只转发类型，理由同上）
 // ============================================================================
-export * from "@vxture/design-tokens";
+export type * from "@vxture/design-tokens";

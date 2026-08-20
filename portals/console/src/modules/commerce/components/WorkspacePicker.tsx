@@ -10,8 +10,9 @@
  * 归属。切换走 TenantProvider 的既有 seam（switchTenantContext），与页头的
  * 租户切换同一条路；单租户时渲染静态卡，不假装能点。
  * 工作区维度目前每租户只有 default 一个（后端尚无多工作区），所以选择粒度
- * 是租户。展示只有工作区名称 + workspace_no 可视码（owner 2026-08-20：
- * UUID 任何场景不得展示；workspace_no 已暗含租户号，不再单独标租户）。
+ * 是租户。展示结构（owner 2026-08-20）：第一行 = 租户名称（主）+ 工作区
+ * 名称（副）；第二行 = workspace_no 可视码。UUID 任何场景不得展示。
+ * 行样式统一走 sectionKit 信息行规格。
  */
 
 import { useMemo, useState } from "react";
@@ -29,6 +30,7 @@ import {
 import type { TenantContext } from "@/entities/console";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { useTenant } from "@/features/tenant";
+import { infoRow, infoRowGlyph, infoRowText } from "./sectionKit";
 
 /** 可视码按 4 位分组展示（workspace_no 15 位 = 租户号 12 位 + 序号 3 位）。 */
 function formatVisibleNo(no: string | null | undefined): string | null {
@@ -41,7 +43,7 @@ function TenantGlyph({ type }: { readonly type: "personal" | "organization" }) {
     <span
       aria-hidden="true"
       className={cn(
-        "flex size-control-md shrink-0 items-center justify-center rounded-lg",
+        infoRowGlyph,
         type === "personal"
           ? "bg-primary-muted-hover text-primary-hover"
           : "border border-success-border bg-success-muted text-success-text",
@@ -59,12 +61,18 @@ function TenantLine({
   readonly tenant: TenantContext;
   readonly labels: { ws: string };
 }) {
-  // 只展示工作区名称 + workspace_no 可视码——UUID/内部 id 一律不出现。
+  // 结构（owner 2026-08-20 条 4）：第一行 = 租户名称（主）+ 工作区名称（副）；
+  // 第二行 = workspace_no 可视码小字。UUID/内部 id 一律不出现。
   const no = formatVisibleNo(tenant.workspaceNo);
   return (
-    <span className="flex min-w-0 flex-1 flex-col text-left">
-      <span className="truncate text-label-md text-foreground">
-        {tenant.workspaceName ?? labels.ws}
+    <span className={infoRowText}>
+      <span className="flex min-w-0 items-baseline gap-xs">
+        <span className="truncate text-label-md text-foreground">
+          {tenant.name}
+        </span>
+        <span className="truncate text-body-sm text-muted-foreground">
+          {tenant.workspaceName ?? labels.ws}
+        </span>
       </span>
       {no ? (
         <span className="truncate text-body-sm text-muted-foreground tabular-nums">
@@ -112,11 +120,7 @@ export function WorkspacePicker({ onSwitched }: WorkspacePickerProps) {
   );
 
   if (!switchable) {
-    return (
-      <div className="flex w-full items-center gap-md rounded-lg border border-border bg-card px-md py-sm">
-        {triggerBody}
-      </div>
-    );
+    return <div className={infoRow}>{triggerBody}</div>;
   }
 
   return (

@@ -5,6 +5,27 @@
 
 ---
 
+## 6.1.0 — 2026-08-20
+
+发布产物修复 + 一个 server-safe 追加（#320，外部消费者 karda/yucer 双双命中）：
+
+- **修复：发布产物在 Next 15 外部消费仓无法编译。** tsup 默认把 dependencies
+  当 external，index 产物里保留 `export * from "@vxture/design-ui|design-tokens"`，
+  叠加整包注入的 `"use client"` 后被 next-flight-loader 在 server/client 边界
+  硬拒（"unsupported to use export _ in a client boundary"）。workspace 源码
+  消费不受影响，所以平台 portals 从未暴露此缺陷。修法：`noExternal` 打平内部
+  两包，export _ 展开为具名导出（index 现为 281 个具名导出、banner 恰一处）。
+  两包仍留在 dependencies（类型转发 + css 子入口）。
+- **新增：`/server` 导出 `themeBootstrapScript`。** 纯字符串、天然 server-safe，
+  唯一消费场景就是 server 布局的 <head>（首帧前同步主题）；此前只从客户端
+  barrel 导出，server 组件构造性拿不到。additive，故按 minor。
+
+消费方指引：升级后「伞包只能从 client 模块导入」的临时限制解除；server 布局
+取启动脚本请改用 `import { themeBootstrapScript } from
+"@vxture/design-system/server"`。
+
+---
+
 ## 6.0.0 — 2026-08-18
 
 DS 治理批次收口：2026-08-18 全面审查（报告存档）+ shell-template 退役战役（#288–#295

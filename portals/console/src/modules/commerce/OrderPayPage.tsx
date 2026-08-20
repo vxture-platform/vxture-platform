@@ -53,6 +53,7 @@ import {
   type PaymentChannelInfo,
 } from "@/api/console-bff";
 import { OrderFlowStrip } from "./components/OrderFlowStrip";
+import { SECTION_TIGHT, SectionTitle } from "./components/sectionKit";
 
 const POLL_MS = 15_000;
 
@@ -232,8 +233,11 @@ export function OrderPayPage() {
   const bestCredit = creditVouchers[0];
 
   // 归属（给谁买）来自会话——订单本就是当前租户维度的资源。
+  // 展示 = 租户名 · 工作区名（UUID 禁展示；workspace 字段是内部 id，不用）。
   const ownerLabel = session.tenant
-    ? `${session.tenant.name} · ${session.tenant.workspace}`
+    ? [session.tenant.name, session.tenant.workspaceName]
+        .filter(Boolean)
+        .join(" · ")
     : null;
 
   // 流程条时间戳：下单 = createdAt；付款 = 最近一笔现金腿的申报时刻。
@@ -362,14 +366,17 @@ export function OrderPayPage() {
       />
 
       {isPending ? (
-        <div className="flex flex-col gap-lg lg:flex-row lg:items-stretch">
+        <div className="flex flex-col gap-md lg:flex-row lg:items-stretch">
           {/* 左栏：选择付款方式 */}
           <PageSection
             tone="raised"
-            icon="credit-card"
             level={2}
-            title={t("channels.title")}
-            className="min-w-0 flex-1"
+            title={
+              <SectionTitle icon="credit-card">
+                {t("channels.title")}
+              </SectionTitle>
+            }
+            className={`min-w-0 flex-1 ${SECTION_TIGHT}`}
           >
             <SegmentedControl<string>
               ariaLabel={t("channels.title")}
@@ -388,7 +395,7 @@ export function OrderPayPage() {
             />
 
             {channel === "alipay" && activeChannel?.qrAsset ? (
-              <div className="flex flex-wrap items-start gap-lg">
+              <div className="flex flex-wrap items-start gap-md">
                 <div className="flex shrink-0 justify-center rounded-lg bg-accent p-md">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -439,12 +446,13 @@ export function OrderPayPage() {
           <aside className="w-full lg:max-w-panel-sm lg:shrink-0">
             <PageSection
               tone="raised"
-              icon="receipt"
               level={2}
-              title={t("info.title")}
-              className="h-full"
+              title={
+                <SectionTitle icon="receipt">{t("info.title")}</SectionTitle>
+              }
+              className={`h-full ${SECTION_TIGHT}`}
             >
-              <div className="flex flex-col items-center gap-2xs py-sm">
+              <div className="flex flex-col items-center gap-2xs py-xs">
                 <span className="text-body-sm text-muted-foreground">
                   {t("amountDue")}
                 </span>
@@ -575,9 +583,12 @@ export function OrderPayPage() {
           </aside>
         </div>
       ) : state === "completed" ? (
-        <div className="flex flex-col gap-lg lg:flex-row lg:items-stretch">
-          <PageSection tone="raised" className="min-w-0 flex-1">
-            <div className="flex flex-col items-center gap-sm py-md text-center">
+        <div className="flex flex-col gap-md lg:flex-row lg:items-stretch">
+          <PageSection
+            tone="raised"
+            className={`min-w-0 flex-1 ${SECTION_TIGHT}`}
+          >
+            <div className="flex flex-col items-center gap-sm py-sm text-center">
               <span
                 aria-hidden="true"
                 className="flex size-control-2xl items-center justify-center rounded-full border-2 border-success-border bg-success-muted text-success-text"
@@ -611,10 +622,13 @@ export function OrderPayPage() {
           <aside className="w-full lg:max-w-panel-sm lg:shrink-0">
             <PageSection
               tone="raised"
-              icon="arrow-long-right"
               level={2}
-              title={t("completedPanel.next")}
-              className="h-full"
+              title={
+                <SectionTitle icon="arrow-long-right">
+                  {t("completedPanel.next")}
+                </SectionTitle>
+              }
+              className={`h-full ${SECTION_TIGHT}`}
             >
               <div className="mt-auto flex flex-col gap-sm">
                 <Button
@@ -645,7 +659,7 @@ export function OrderPayPage() {
           </aside>
         </div>
       ) : (
-        <PageSection tone="raised">
+        <PageSection tone="raised" className={SECTION_TIGHT}>
           <EmptyState
             title={t(`stateTitle.${state}`)}
             description={t(`stateHint.${state}`)}

@@ -13,8 +13,9 @@
  */
 
 import { useTranslations } from "next-intl";
-import { Icon, StatusBadge } from "@vxture/design-system";
+import { Icon, StatusBadge, cn } from "@vxture/design-system";
 import type { SubscribePlanOption } from "@/api/console-bff";
+import { infoRowGlyph, infoRowText } from "./sectionKit";
 
 export interface PlanSummaryCardProps {
   readonly productName: string;
@@ -43,17 +44,22 @@ export function PlanSummaryCard({
   const chips = (features ?? []).slice(0, MAX_FEATURE_CHIPS);
 
   return (
-    <div className="flex flex-col gap-md rounded-xl border border-primary-muted-hover bg-linear-to-b from-gradient-card-from to-gradient-card-to p-lg">
-      <div className="flex items-center gap-md">
+    // 外框与内行对齐 sectionKit 信息行规格（rounded-lg / px-md py-sm / gap-md /
+    // control-md 图标底板），卡面保留渐变 + primary-muted 描边的套餐强调语气。
+    <div className="flex flex-col gap-sm rounded-lg border border-primary-muted-hover bg-linear-to-b from-gradient-card-from to-gradient-card-to px-md py-sm">
+      <div className="flex w-full items-center gap-md">
         <span
           aria-hidden="true"
-          className="flex size-control-lg shrink-0 items-center justify-center rounded-lg bg-primary-muted-hover text-primary-hover"
+          className={cn(
+            infoRowGlyph,
+            "bg-primary-muted-hover text-primary-hover",
+          )}
         >
-          <Icon name="package" size="md" />
+          <Icon name="package" size="sm" />
         </span>
-        <span className="flex min-w-0 flex-1 flex-col">
+        <span className={infoRowText}>
           <span className="flex flex-wrap items-center gap-sm">
-            <strong className="truncate text-title-sm text-foreground">
+            <strong className="truncate text-label-md text-foreground">
               {productName} · {plan.planName}
             </strong>
             <StatusBadge tone="brand">{plan.tier}</StatusBadge>

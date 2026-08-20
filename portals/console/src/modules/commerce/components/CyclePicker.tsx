@@ -6,22 +6,16 @@
  * @layer Application
  * @category Module
  *
- * 形态对齐 WorkspacePicker：一行 = 日历图标 + 周期名（年付时附省额徽章）+
- * 右对齐的起止日期，整行占满；点击下拉切换 月付/年付。
+ * 形态遵守 owner 2026-08-20 条 3：不是下拉，而是与归属卡同规格的三段式单行
+ * （sectionKit 信息行）：日历 icon | 月付/年付 分段切换 | 右对齐起止日期。
+ * 年付省额徽章跟在切换器旁，整行占满。
  * 起止日期按「此刻开通」估算——真实周期自服务开通时刻起算
- * （owner 2026-08-20：不是收款确认时刻，存在提前续订）。
+ * （不是收款确认时刻，存在提前续订）。
  */
 
 import { useTranslations } from "next-intl";
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  Icon,
-  StatusBadge,
-} from "@vxture/design-system";
+import { Icon, SegmentedControl, StatusBadge, cn } from "@vxture/design-system";
+import { infoRow, infoRowGlyph, infoRowRight } from "./sectionKit";
 
 export type CycleValue = "month" | "year";
 
@@ -47,8 +41,6 @@ function rangeFor(cycle: CycleValue): { start: string; end: string } {
 export interface CyclePickerProps {
   readonly value: CycleValue;
   readonly onChange: (next: CycleValue) => void;
-  /** 每周期的价格展示（如「¥4,999 / 年」）；null 时不显示。 */
-  readonly priceOf?: (cycle: CycleValue) => string | null;
   /** 年付省额徽章文案（已格式化）；null 时不显示。 */
   readonly yearSavings?: string | null;
   readonly disabled?: boolean;
@@ -57,7 +49,6 @@ export interface CyclePickerProps {
 export function CyclePicker({
   value,
   onChange,
-  priceOf,
   yearSavings,
   disabled,
 }: CyclePickerProps) {
@@ -67,69 +58,35 @@ export function CyclePicker({
   const range = rangeFor(value);
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          disabled={disabled}
-          className="h-auto w-full justify-start gap-md px-md py-sm text-left font-normal"
-        >
-          <span
-            aria-hidden="true"
-            className="flex size-control-md shrink-0 items-center justify-center rounded-lg bg-primary-muted-hover text-primary-hover"
-          >
-            <Icon name="calendar" size="sm" />
-          </span>
-          <span className="flex min-w-0 flex-1 items-center gap-sm">
-            <span className="text-label-md text-foreground">
-              {label(value)}
-            </span>
-            {value === "year" && yearSavings ? (
-              <StatusBadge tone="success">{yearSavings}</StatusBadge>
-            ) : null}
-          </span>
-          <span className="shrink-0 text-body-sm text-muted-foreground tabular-nums">
-            {range.start} → {range.end}
-          </span>
-          <span className="shrink-0 text-muted-foreground" aria-hidden="true">
-            <Icon name="chevron-down" size="sm" />
-          </span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        className="w-(--radix-dropdown-menu-trigger-width)"
+    <div className={infoRow}>
+      <span
+        aria-hidden="true"
+        className={cn(
+          infoRowGlyph,
+          "bg-primary-muted-hover text-primary-hover",
+        )}
       >
-        {CYCLE_VALUES.map((cycle) => {
-          const price = priceOf?.(cycle) ?? null;
-          return (
-            <DropdownMenuItem
-              key={cycle}
-              onSelect={() => onChange(cycle)}
-              className="gap-md py-sm"
-            >
-              <span className="flex min-w-0 flex-1 items-center gap-sm">
-                <span className="text-label-md text-foreground">
-                  {label(cycle)}
-                </span>
-                {cycle === "year" && yearSavings ? (
-                  <StatusBadge tone="success">{yearSavings}</StatusBadge>
-                ) : null}
-              </span>
-              {price ? (
-                <span className="shrink-0 text-body-sm text-muted-foreground tabular-nums">
-                  {price}
-                </span>
-              ) : null}
-              {cycle === value ? (
-                <span className="shrink-0 text-primary" aria-hidden="true">
-                  <Icon name="check" size="sm" />
-                </span>
-              ) : null}
-            </DropdownMenuItem>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+        <Icon name="calendar" size="sm" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-sm">
+        <SegmentedControl<CycleValue>
+          size="sm"
+          ariaLabel={t("confirm.howLong")}
+          value={value}
+          onChange={onChange}
+          items={CYCLE_VALUES.map((cycle) => ({
+            value: cycle,
+            label: label(cycle),
+            ...(disabled ? { disabled: true } : {}),
+          }))}
+        />
+        {value === "year" && yearSavings ? (
+          <StatusBadge tone="success">{yearSavings}</StatusBadge>
+        ) : null}
+      </span>
+      <span className={infoRowRight}>
+        {range.start} → {range.end}
+      </span>
+    </div>
   );
 }

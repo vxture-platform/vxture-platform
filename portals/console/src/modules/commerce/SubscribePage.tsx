@@ -43,6 +43,7 @@ import {
 import { CyclePicker } from "./components/CyclePicker";
 import { OrderFlowStrip } from "./components/OrderFlowStrip";
 import { PlanSummaryCard } from "./components/PlanSummaryCard";
+import { SECTION_TIGHT, SectionTitle } from "./components/sectionKit";
 import { WorkspacePicker } from "./components/WorkspacePicker";
 
 /** 官网基址（与 OnboardingPage 同源做法）：「返回订阅重选」跳回定价页。 */
@@ -161,9 +162,9 @@ export function SubscribePage() {
         />
         <PageSection
           tone="raised"
-          icon="clock"
           level={2}
-          title={t("pending.title")}
+          title={<SectionTitle icon="clock">{t("pending.title")}</SectionTitle>}
+          className={SECTION_TIGHT}
         >
           <DetailList>
             <DetailRow label={t("pending.orderNo")}>
@@ -311,23 +312,27 @@ export function SubscribePage() {
         <Banner tone="info" title={t("addonNotice")} />
       ) : null}
 
-      <div className="flex flex-col gap-lg lg:flex-row lg:items-start">
+      <div className="flex flex-col gap-md lg:flex-row lg:items-start">
         {/* 左列：给谁买 / 买什么 / 买多久 */}
-        <div className="flex min-w-0 flex-1 flex-col gap-lg">
+        <div className="flex min-w-0 flex-1 flex-col gap-md">
           <PageSection
             tone="raised"
-            icon="user-circle"
             level={2}
-            title={t("confirm.who")}
+            title={
+              <SectionTitle icon="user-circle">{t("confirm.who")}</SectionTitle>
+            }
+            className={SECTION_TIGHT}
           >
             <WorkspacePicker onSwitched={() => void reload()} />
           </PageSection>
 
           <PageSection
             tone="raised"
-            icon="package"
             level={2}
-            title={t("confirm.what")}
+            title={
+              <SectionTitle icon="package">{t("confirm.what")}</SectionTitle>
+            }
+            className={SECTION_TIGHT}
             action={
               <Button asChild variant="link" size="sm">
                 <a href={`${WEBSITE_URL}/pricing?product=${product.code}`}>
@@ -377,19 +382,17 @@ export function SubscribePage() {
 
           <PageSection
             tone="raised"
-            icon="calendar"
             level={2}
-            title={t("confirm.howLong")}
+            title={
+              <SectionTitle icon="calendar">
+                {t("confirm.howLong")}
+              </SectionTitle>
+            }
+            className={SECTION_TIGHT}
           >
             <CyclePicker
               value={cycle}
               onChange={(next) => setCycle(next)}
-              priceOf={(c) => {
-                const p = plan ? priceForCycle(plan, c) : undefined;
-                return p
-                  ? `${formatMoney(p.price, p.currency)} / ${t(`cycle.${c}`)}`
-                  : null;
-              }}
               yearSavings={
                 savings
                   ? t("confirm.yearlySave", {
@@ -411,9 +414,11 @@ export function SubscribePage() {
         <aside className="w-full lg:max-w-panel-sm lg:shrink-0">
           <PageSection
             tone="raised"
-            icon="receipt"
             level={2}
-            title={t("confirm.summary")}
+            title={
+              <SectionTitle icon="receipt">{t("confirm.summary")}</SectionTitle>
+            }
+            className={SECTION_TIGHT}
           >
             {plan ? (
               <>

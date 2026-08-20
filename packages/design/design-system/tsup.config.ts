@@ -54,6 +54,19 @@ export default defineConfig({
   },
   plugins: [useClientPlugin],
 
-  // React 和 React-DOM 不打包进产物，由消费方提供
+  // React 和 React-DOM 不打包进产物，由消费方提供。
+  //
+  // 注（vxture-platform#320，2026-08-20）：index 对 design-ui/design-tokens 的
+  // 转发必须是【具名】再导出，不能是 `export *`——两包是 external（tsup 默认
+  // externalize dependencies），`export *` 会原样留在产物里，叠加上面注入的
+  // "use client" 后被 Next 15 的 next-flight-loader 在 server/client 边界硬拒
+  // （"unsupported to use export * in a client boundary"）。workspace 源码消费
+  // 不踩（指令在各组件文件、barrel 无指令），发布产物消费必炸（karda/yucer
+  // 双双命中）。具名清单由 scripts/generate-reexports.mjs 在 build 前从两包
+  // 已构建产物生成（src/generated-reexports.ts），类型经 `export type *` 转发
+  // （编译期擦除，不产生运行时 export *）。不用 noExternal 打平：那会把
+  // design-ui 的整棵三方依赖树（radix / use-sync-external-store / cmdk …）
+  // 卷进产物——CJS interop 在 ESM 里渗漏 require()、且产生伞包未声明的幽灵
+  // 依赖，两者都比本病更重。
   external: ["react", "react-dom", "react/jsx-runtime"],
 });
