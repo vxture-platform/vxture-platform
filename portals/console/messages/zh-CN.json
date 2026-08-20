@@ -1984,7 +1984,10 @@
         "createAddress": "去创建抬头",
         "cancel": "取消",
         "submit": "提交申请"
-      }
+      },
+      "rowMenu": "账单操作",
+      "applyHintUnpaid": "账单结清后可申请",
+      "applyHintApplied": "已有开票申请"
     }
   },
   "subscriptionHub": {
@@ -2275,12 +2278,18 @@
     "description": "工作空间的存储与 AI Credits:额度构成、当前用量与剩余一目了然",
     "metrics": {
       "groupLabel": "配额概览",
-      "storage": "存储空间已用",
+      "storage": "存储空间",
       "storageHint": "总额度 {limit} · 剩余 {remaining}",
       "creditRemaining": "AI Credits 余额",
       "creditRemainingHint": "总额度 {limit}",
       "creditUsed": "本期已消耗",
-      "creditUsedHint": "AI Credits · 随订阅周期重置"
+      "creditUsedHint": "AI Credits · 随订阅周期重置",
+      "credits": "AI Credits",
+      "addons": "生效中的加油包",
+      "remainHint": "剩余 {remaining}",
+      "creditsRemainHint": "本期剩余 {remaining} · 随周期重置",
+      "addonsExpiry": "最早到期 {date}",
+      "addonsNone": "暂无生效加油包,可在下方购买"
     },
     "metric": {
       "storage": "存储空间",
@@ -2301,7 +2310,7 @@
     },
     "storage": {
       "title": "存储空间",
-      "description": "工作空间级共享资源:额度可叠加,各产品共用一个总账,按产品切片归因",
+      "description": "工作空间级共享资源:每行一个额度来源或用量主体,同产品的贡献与用量并读",
       "colSource": "来源",
       "colLimit": "额度",
       "colExpires": "有效期至",
@@ -2312,7 +2321,9 @@
       "colObserved": "上报时间",
       "totalLine": "合计额度 {limit} · 剩余 {remaining}",
       "emptySources": "暂无存储额度来源",
-      "emptySlices": "各产品尚未上报存储用量"
+      "emptySlices": "各产品尚未上报存储用量",
+      "colItem": "项目",
+      "usageOnly": "产品用量"
     },
     "credits": {
       "title": "AI Credits",
@@ -2405,7 +2416,8 @@
       "colTotal": "消耗量",
       "colByProduct": "按产品",
       "colDelta": "环比",
-      "empty": "所选周期内暂无用量数据"
+      "empty": "所选周期内暂无用量数据",
+      "windowHour": "按小时(24h)"
     },
     "share": {
       "title": "按产品分布",

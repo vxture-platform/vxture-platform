@@ -20,6 +20,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
+  BarChart,
   Button,
   DataTable,
   EmptyState,
@@ -48,13 +49,21 @@ const fmtCount = (v: number): string => v.toLocaleString("en-US");
 
 const EVENTS_PAGE_SIZE = 10;
 
-type TrendWindow = "day" | "week" | "month" | "year";
+type TrendWindow = "hour" | "day" | "week" | "month" | "year";
 
-/** 桶期间 → 展示文本(month=YYYYMM → YYYY-MM,其余原样)。 */
-const periodLabel = (granularity: string, period: string): string =>
-  granularity === "month" && period.length === 6
-    ? `${period.slice(0, 4)}-${period.slice(4)}`
-    : period;
+/** 桶期间 → 展示文本(hour 截 HH:00,month=YYYYMM → YYYY-MM,其余原样)。 */
+const periodLabel = (granularity: string, period: string): string => {
+  if (granularity === "hour" && period.length >= 16) return period.slice(11);
+  if (granularity === "month" && period.length === 6)
+    return `${period.slice(0, 4)}-${period.slice(4)}`;
+  return period;
+};
+
+/** day 档横轴标签去年份(MM-DD),柱多时更可读。 */
+const axisLabel = (granularity: string, period: string): string =>
+  granularity === "day" && period.length === 10
+    ? period.slice(5)
+    : periodLabel(granularity, period);
 
 export function UsagePage() {
   const t = useTranslations("usagePage");
@@ -392,6 +401,7 @@ export function UsagePage() {
             value={trendWindow}
             onChange={setTrendWindow}
             items={[
+              { value: "hour", label: t("trend.windowHour") },
               { value: "day", label: t("trend.windowDay") },
               { value: "week", label: t("trend.windowWeek") },
               { value: "month", label: t("trend.windowMonth") },
@@ -400,11 +410,23 @@ export function UsagePage() {
           />
         }
       >
+        {/* 上图下表(2026-08-21 owner 定):全宽柱状图逐桶展开,精确数字在表 */}
+        {(trend?.buckets.length ?? 0) > 0 ? (
+          <BarChart
+            aria-label={t("trend.title")}
+            data={(trend?.buckets ?? []).map((b) => ({
+              key: b.period,
+              label: axisLabel(trend?.granularity ?? "day", b.period),
+              value: b.total,
+            }))}
+          />
+        ) : null}
         <DataTable<TrendRow>
           columns={trendColumns}
           rows={trendRows}
           rowKey={(r) => r.period}
           loading={trendLoading}
+          indexStart={1}
           empty={<EmptyState title={t("trend.empty")} />}
         />
       </PageSection>
@@ -416,11 +438,23 @@ export function UsagePage() {
         title={t("share.title")}
         description={t("share.description")}
       >
+        {productShares.length > 0 ? (
+          <BarChart
+            aria-label={t("share.title")}
+            data={productShares.map((p) => ({
+              key: p.productCode,
+              label: p.productName,
+              value: p.total,
+            }))}
+            labelEvery={1}
+          />
+        ) : null}
         <DataTable<ProductShare>
           columns={shareColumns}
           rows={productShares}
           rowKey={(p) => p.productCode}
           loading={trendLoading}
+          indexStart={1}
           empty={<EmptyState title={t("share.empty")} />}
         />
       </PageSection>
@@ -482,11 +516,23 @@ export function UsagePage() {
           title={t("members.title")}
           description={t("members.description")}
         >
+          {members.length > 0 ? (
+            <BarChart
+              aria-label={t("members.title")}
+              data={members.map((m) => ({
+                key: m.userName ?? "__unattributed__",
+                label: m.userName ?? t("events.unattributed"),
+                value: m.total,
+              }))}
+              labelEvery={1}
+            />
+          ) : null}
           <DataTable<ConsoleUsageMember>
             columns={memberColumns}
             rows={members}
             rowKey={(m) => m.userName ?? "__unattributed__"}
             loading={loading}
+            indexStart={1}
             empty={<EmptyState title={t("members.empty")} />}
           />
         </PageSection>

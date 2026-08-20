@@ -357,6 +357,7 @@ export function InvoiceSections({
           rows={receipts}
           rowKey={(r) => r.id}
           loading={loading}
+          indexStart={1}
           empty={<EmptyState title={t("records.empty")} />}
         />
       </PageSection>
@@ -382,6 +383,7 @@ export function InvoiceSections({
           rows={addresses}
           rowKey={(a) => a.id}
           loading={loading}
+          indexStart={1}
           rowActions={(a) => (
             <ActionMenu
               label={t("addresses.rowMenu")}

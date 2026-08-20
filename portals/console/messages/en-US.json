@@ -1984,7 +1984,10 @@
         "createAddress": "Create a title",
         "cancel": "Cancel",
         "submit": "Submit"
-      }
+      },
+      "rowMenu": "Bill actions",
+      "applyHintUnpaid": "Available once the bill is settled",
+      "applyHintApplied": "An application already exists"
     }
   },
   "subscriptionHub": {
@@ -2275,12 +2278,18 @@
     "description": "Storage and AI Credits for this workspace: grant makeup, current usage, and what's left at a glance",
     "metrics": {
       "groupLabel": "Quota overview",
-      "storage": "Storage used",
+      "storage": "Storage",
       "storageHint": "Total {limit} · {remaining} left",
       "creditRemaining": "AI Credits balance",
       "creditRemainingHint": "Total {limit}",
       "creditUsed": "Used this cycle",
-      "creditUsedHint": "AI Credits · resets with the subscription cycle"
+      "creditUsedHint": "AI Credits · resets with the subscription cycle",
+      "credits": "AI Credits",
+      "addons": "Active booster packs",
+      "remainHint": "{remaining} left",
+      "creditsRemainHint": "{remaining} left this cycle · resets with the cycle",
+      "addonsExpiry": "Earliest expiry {date}",
+      "addonsNone": "No active packs — buy one below"
     },
     "metric": {
       "storage": "Storage",
@@ -2301,7 +2310,7 @@
     },
     "storage": {
       "title": "Storage",
-      "description": "A workspace-level shared resource: grants stack into one ledger, usage is attributed per product",
+      "description": "A workspace-level shared resource: one row per grant source or usage subject; a product's contribution and usage read side by side",
       "colSource": "Source",
       "colLimit": "Grant",
       "colExpires": "Valid until",
@@ -2312,7 +2321,9 @@
       "colObserved": "Reported at",
       "totalLine": "Total {limit} · {remaining} left",
       "emptySources": "No storage grants yet",
-      "emptySlices": "No product has reported storage usage yet"
+      "emptySlices": "No product has reported storage usage yet",
+      "colItem": "Item",
+      "usageOnly": "Product usage"
     },
     "credits": {
       "title": "AI Credits",
@@ -2405,7 +2416,8 @@
       "colTotal": "Consumed",
       "colByProduct": "By product",
       "colDelta": "Change",
-      "empty": "No usage data in this period"
+      "empty": "No usage data in this period",
+      "windowHour": "Hourly (24h)"
     },
     "share": {
       "title": "By product",

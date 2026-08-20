@@ -93,6 +93,7 @@ import {
   Badge,
   BADGE_VARIANTS,
   Banner,
+  BarChart,
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
@@ -1553,6 +1554,15 @@ export const ENTRIES: readonly Entry[] = [
     render: () => <DataTableDemo />,
   },
   {
+    name: "BarChart",
+    layer: "pattern",
+    group: "图案",
+    tags: ["vxture", "patterns"],
+    deviation:
+      "DS 首件数据可视化原语（上图下表布局的图位）：等宽柱铺满容器、组内最大值归一;柱体 bg-primary 与 Progress 填充同色（量的表达一种颜色）;零值留 bg-accent 基线刻度区分「没数据」与「没画」;横轴标签抽样显示,精确数字归下方配套的表;柱高运行时数据走内联 style（Progress 先例）",
+    render: () => <BarChartDemo />,
+  },
+  {
     name: "MetricGrid",
     layer: "pattern",
     group: "图案",
@@ -2995,6 +3005,21 @@ function ToastDemo() {
 }
 
 /** 五档列数各摆一次：轴上写了几档，页面就得能数出几档。 */
+function BarChartDemo() {
+  // 30 天逐日用量的典型形状：有波峰、有零值日（零值留基线刻度）。
+  const data = Array.from({ length: 30 }, (_, i) => {
+    const day = i + 1;
+    const value =
+      day % 7 === 0 ? 0 : Math.round(40 + 60 * Math.abs(Math.sin(day / 3)));
+    return {
+      key: `d${day}`,
+      label: `08-${String(day).padStart(2, "0")}`,
+      value,
+    };
+  });
+  return <BarChart aria-label="近 30 天用量" data={data} />;
+}
+
 function MetricGridDemo() {
   const items: MetricGridItem[] = [
     {

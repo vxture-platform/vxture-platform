@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
+  ActionMenu,
   Button,
   DataTable,
   EmptyState,
@@ -27,6 +28,7 @@ import {
   ViewLayout,
 } from "@vxture/design-system";
 import type {
+  ActionMenuItem,
   DataTableColumn,
   MetricGridItem,
   StatusBadgeTone,
@@ -259,26 +261,47 @@ export function BillingPage() {
       header: t("table.colInvoice"),
       align: "center",
       cell: (b) => {
-        // 开票资格 = 已结清;不限来源(直接订阅付款/预付款扣费对账单同栈)
-        if (b.billStatus !== "paid") return "—";
+        // 状态列只表状态;申请动作按表格规范归操作列(rowActions)
         const receipt = receiptByBill.get(b.id);
-        if (receipt) {
-          return (
-            <StatusBadge
-              tone={RECEIPT_STATUS_TONES[receipt.invoiceStatus] ?? "neutral"}
-            >
-              {t(`invoicing.status.${receipt.invoiceStatus}`)}
-            </StatusBadge>
-          );
-        }
+        if (!receipt) return "—";
         return (
-          <Button size="sm" variant="outline" onClick={() => setApplyBill(b)}>
-            {t("invoicing.applyAction")}
-          </Button>
+          <StatusBadge
+            tone={RECEIPT_STATUS_TONES[receipt.invoiceStatus] ?? "neutral"}
+          >
+            {t(`invoicing.status.${receipt.invoiceStatus}`)}
+          </StatusBadge>
         );
       },
     },
   ];
+
+  // ── 账单行操作(表格规范:操作归 rowActions 单列)──────────────────────────
+  const billActions = (b: ConsoleBill): ActionMenuItem[] => {
+    const receipt = receiptByBill.get(b.id);
+    return [
+      {
+        id: "apply-invoice",
+        label: t("invoicing.applyAction"),
+        // 开票资格 = 已结清;不限来源(直接订阅付款/预付款扣费对账单同栈)
+        disabled: b.billStatus !== "paid" || receipt !== undefined,
+        ...(b.billStatus !== "paid"
+          ? { hint: t("invoicing.applyHintUnpaid") }
+          : receipt
+            ? { hint: t("invoicing.applyHintApplied") }
+            : {}),
+        onSelect: () => setApplyBill(b),
+      },
+      {
+        id: "download-invoice",
+        label: t("invoicing.records.download"),
+        disabled: !receipt?.invoiceFileUrl,
+        onSelect: () => {
+          if (receipt?.invoiceFileUrl)
+            window.open(receipt.invoiceFileUrl, "_blank", "noreferrer");
+        },
+      },
+    ];
+  };
 
   return (
     <ViewLayout>
@@ -318,6 +341,9 @@ export function BillingPage() {
           rowKey={(b) => b.id}
           loading={loading}
           indexStart={(page - 1) * BILLS_PAGE_SIZE + 1}
+          rowActions={(b) => (
+            <ActionMenu label={t("invoicing.rowMenu")} items={billActions(b)} />
+          )}
           empty={<EmptyState title={t("table.empty")} />}
           footer={
             <div className="flex w-full items-center justify-between gap-md text-body-sm text-muted-foreground">

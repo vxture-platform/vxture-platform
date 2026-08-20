@@ -371,20 +371,6 @@ export function SubscriptionPage() {
         </span>
       ),
     },
-    {
-      id: "action",
-      header: t("orders.colAction"),
-      align: "right",
-      cell: (o) =>
-        o.orderStatus === "pending_payment" ? (
-          <Button
-            size="sm"
-            onClick={() => router.push(`/subscribe/pay/${o.orderId}`)}
-          >
-            {t("orders.payNow")}
-          </Button>
-        ) : null,
-    },
   ];
 
   function orderMenuItems(o: MyOrder): ActionMenuItem[] {
@@ -527,10 +513,22 @@ export function SubscriptionPage() {
           expandedKeys={expandedKeys}
           onExpandedChange={setExpandedKeys}
           rowActions={(o) => (
-            <ActionMenu
-              label={t("orders.menuLabel")}
-              items={orderMenuItems(o)}
-            />
+            // 单操作列(2026-08-21 owner 整改:此前 去支付 独占一根内容列,
+            // 与 ⋯ 菜单成了两根操作列):主操作 + 菜单同格,操作列 min 64 自适应。
+            <span className="inline-flex items-center justify-center gap-xs">
+              {o.orderStatus === "pending_payment" ? (
+                <Button
+                  size="sm"
+                  onClick={() => router.push(`/subscribe/pay/${o.orderId}`)}
+                >
+                  {t("orders.payNow")}
+                </Button>
+              ) : null}
+              <ActionMenu
+                label={t("orders.menuLabel")}
+                items={orderMenuItems(o)}
+              />
+            </span>
           )}
           empty={<EmptyState title={t("orders.empty")} />}
           footer={

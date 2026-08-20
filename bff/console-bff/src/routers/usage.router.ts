@@ -70,10 +70,11 @@ export interface UsageMemberView {
   lastAt: string;
 }
 
-const GRANULARITIES = new Set(["day", "week", "month", "year"]);
+const GRANULARITIES = new Set(["hour", "day", "week", "month", "year"]);
 
-/** 每档默认/最大跨度(桶数)。 */
+/** 每档默认/最大跨度(桶数)。hour = 近 24 小时逐时(柱状图,2026-08-21)。 */
 const SPAN_LIMITS: Record<string, { def: number; max: number }> = {
+  hour: { def: 24, max: 48 },
   day: { def: 30, max: 90 },
   week: { def: 12, max: 26 },
   month: { def: 12, max: 24 },
@@ -117,18 +118,22 @@ export class UsageRouter {
 
     // 每档一张表、一种 period 列;period 统一 text 化返回,窗口按档推算。
     const table = {
+      hour: "usage_summary_hours",
       day: "usage_summary_days",
       week: "usage_summary_weeks",
       month: "usage_summary_months",
       year: "usage_summary_years",
     }[granularity]!;
     const periodExpr = {
+      // hour 带全日期保证排序正确;展示端截取 HH:00
+      hour: "to_char(s.period_hour at time zone 'UTC', 'YYYY-MM-DD HH24:00')",
       day: "to_char(s.period_day, 'YYYY-MM-DD')",
       week: "to_char(s.period_week, 'YYYY-MM-DD')",
       month: "s.period_month",
       year: "s.period_year",
     }[granularity]!;
     const windowPred = {
+      hour: `s.period_hour >= date_trunc('hour', now()) - make_interval(hours => $3)`,
       day: `s.period_day >= (now() at time zone 'UTC')::date - make_interval(days => $3)`,
       week: `s.period_week >= date_trunc('week', (now() at time zone 'UTC')::date)::date - make_interval(weeks => $3)`,
       month: `s.period_month >= to_char((now() at time zone 'UTC')::date - make_interval(months => $3), 'YYYYMM')`,

@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
+  Badge,
   DataTable,
   EmptyState,
   MetricGrid,
@@ -37,11 +38,10 @@ import {
   type ConsoleProductQuota,
   type ConsoleQuotaOverview,
   type ConsoleQuotaPool,
-  type ConsoleStorageSlice,
 } from "@/api/console-bff";
 import { formatCurrency, type Locale } from "@vxture/shared";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
-import { DashboardSplit, PageSection, SignalList } from "@/layout/shell";
+import { PageSection, SignalList } from "@/layout/shell";
 import { AddonPacksSection } from "./components/AddonPacksSection";
 import { fmtDate, fmtTime } from "./components/hubModel";
 
@@ -121,10 +121,22 @@ export function QuotasPage() {
   };
   const metricValue = (metric: string, v: number): string =>
     metric === "storage.bytes" ? formatBytes(v) : fmtCount(v);
-  const sourceLabel = (source: string): string =>
-    KNOWN_SOURCES.has(source) ? t(`source.${source}`) : source;
+  const sourceLabel = useCallback(
+    (source: string): string =>
+      KNOWN_SOURCES.has(source) ? t(`source.${source}`) : source,
+    [t],
+  );
 
   // ── 概览指标(本页业务 3 个指标 → columns=3 铺满,列数随业务不写死)────────
+  // 两个基础权益统一口径(2026-08-21 owner 整改):关键值 = 用量 / 总量,
+  // 用量着蓝(text-info-text)、总量着黑(text-foreground),语义一眼分明。
+  const usageOverTotal = (used: string, total: string) => (
+    <span className="inline-flex items-baseline gap-xs tabular-nums">
+      <span className="text-info-text">{used}</span>
+      <span className="text-muted-foreground">/</span>
+      <span className="text-foreground">{total}</span>
+    </span>
+  );
   const metrics = useMemo<MetricGridItem[]>(() => {
     const st = overview?.storage;
     const cr = overview?.aiCredit;
@@ -133,55 +145,115 @@ export function QuotasPage() {
       st.limitBytes > 0 &&
       st.remainingBytes < st.limitBytes * 0.1;
     const creditDry = cr != null && cr.limit > 0 && cr.remaining <= 0;
+    const addonPools = [
+      ...(overview?.storage.sources ?? []),
+      ...(overview?.aiCredit.pools ?? []),
+    ].filter((p) => p.source === "addon_purchase");
+    const earliestExpiry = addonPools
+      .map((p) => p.expiresAt)
+      .filter((v): v is string => v !== null)
+      .sort()[0];
     return [
       {
         id: "storage",
         icon: "hard-drive",
         label: t("metrics.storage"),
-        value: st ? formatBytes(st.usedBytes) : "—",
+        value: st
+          ? usageOverTotal(
+              formatBytes(st.usedBytes),
+              formatBytes(st.limitBytes),
+            )
+          : "—",
         ...(storageTight ? { tone: "warning" as const } : {}),
         trend: st
-          ? t("metrics.storageHint", {
-              limit: formatBytes(st.limitBytes),
+          ? t("metrics.remainHint", {
               remaining: formatBytes(st.remainingBytes),
             })
           : "",
         ...(storageTight ? { trendTone: "warning" as const } : {}),
       },
       {
-        id: "credit-remaining",
+        id: "credits",
         icon: "sparkles",
-        label: t("metrics.creditRemaining"),
-        value: cr ? fmtCount(cr.remaining) : "—",
+        label: t("metrics.credits"),
+        value: cr ? usageOverTotal(fmtCount(cr.used), fmtCount(cr.limit)) : "—",
         ...(creditDry ? { tone: "warning" as const } : {}),
         trend: cr
-          ? t("metrics.creditRemainingHint", { limit: fmtCount(cr.limit) })
+          ? t("metrics.creditsRemainHint", {
+              remaining: fmtCount(cr.remaining),
+            })
           : "",
         ...(creditDry ? { trendTone: "warning" as const } : {}),
       },
       {
-        id: "credit-used",
-        icon: "gauge",
-        label: t("metrics.creditUsed"),
-        value: cr ? fmtCount(cr.used) : "—",
-        trend: t("metrics.creditUsedHint"),
+        id: "addons",
+        icon: "lightning",
+        label: t("metrics.addons"),
+        value: fmtCount(addonPools.length),
+        trend: earliestExpiry
+          ? t("metrics.addonsExpiry", { date: fmtDate(earliestExpiry) })
+          : t("metrics.addonsNone"),
       },
     ];
   }, [overview, t]);
 
-  // ── ① 存储:额度构成 + 产品切片 ───────────────────────────────────────────
-  const storageSourceColumns: DataTableColumn<ConsoleQuotaPool>[] = [
+  // ── ① 存储:统一行模式(2026-08-21 owner 整改:不再拆「额度构成/用量切片」
+  //    左右两表——每行一个主体,来源类别用 Badge 标注;同产品的订阅贡献与
+  //    用量切片并成一行,额度/已用两列并读)─────────────────────────────────
+  type StorageRow = {
+    key: string;
+    name: string;
+    source: string | null; // null = 纯用量切片行(该产品无额度贡献)
+    limitBytes: number | null;
+    usedBytes: number | null;
+    expiresAt: string | null;
+    observedAt: string | null;
+  };
+  const storageRows = useMemo<StorageRow[]>(() => {
+    const st = overview?.storage;
+    if (!st) return [];
+    const sliceByCode = new Map(st.slices.map((s) => [s.productCode, s]));
+    const mergedCodes = new Set<string>();
+    const rows: StorageRow[] = st.sources.map((src, i) => {
+      const slice = src.productCode
+        ? sliceByCode.get(src.productCode)
+        : undefined;
+      if (src.productCode && slice) mergedCodes.add(src.productCode);
+      return {
+        key: `src:${src.source}:${src.productCode ?? "ws"}:${i}`,
+        name: src.productName ?? sourceLabel(src.source),
+        source: src.source,
+        limitBytes: src.limit,
+        usedBytes: slice?.usedBytes ?? null,
+        expiresAt: src.expiresAt,
+        observedAt: slice?.observedAt ?? null,
+      };
+    });
+    for (const s of st.slices) {
+      if (mergedCodes.has(s.productCode)) continue;
+      rows.push({
+        key: `slice:${s.productCode}`,
+        name: s.productName,
+        source: null,
+        limitBytes: null,
+        usedBytes: s.usedBytes,
+        expiresAt: null,
+        observedAt: s.observedAt,
+      });
+    }
+    return rows;
+  }, [overview, sourceLabel]);
+
+  const storageColumns: DataTableColumn<StorageRow>[] = [
     {
-      id: "source",
-      header: t("storage.colSource"),
-      cell: (p) => (
-        <span className="flex flex-col">
-          <span className="text-foreground">{sourceLabel(p.source)}</span>
-          {p.productName ? (
-            <span className="text-body-sm text-muted-foreground">
-              {p.productName}
-            </span>
-          ) : null}
+      id: "item",
+      header: t("storage.colItem"),
+      cell: (r) => (
+        <span className="flex items-center gap-sm">
+          <span className="text-foreground">{r.name}</span>
+          <Badge>
+            {r.source ? sourceLabel(r.source) : t("storage.usageOnly")}
+          </Badge>
         </span>
       ),
     },
@@ -189,61 +261,65 @@ export function QuotasPage() {
       id: "limit",
       header: t("storage.colLimit"),
       align: "right",
-      cell: (p) => (
-        <span className="tabular-nums font-medium text-foreground">
-          {formatBytes(p.limit)}
-        </span>
-      ),
-    },
-    {
-      id: "expires",
-      header: t("storage.colExpires"),
-      align: "right",
-      cell: (p) =>
-        p.expiresAt ? (
-          <span className="tabular-nums">{fmtDate(p.expiresAt)}</span>
+      cell: (r) =>
+        r.limitBytes !== null ? (
+          <span className="tabular-nums font-medium text-foreground">
+            {formatBytes(r.limitBytes)}
+          </span>
         ) : (
-          t("storage.noExpiry")
+          "—"
         ),
-    },
-  ];
-
-  const storageSliceColumns: DataTableColumn<ConsoleStorageSlice>[] = [
-    {
-      id: "product",
-      header: t("storage.colProduct"),
-      cell: (s) => s.productName,
     },
     {
       id: "used",
       header: t("storage.colUsed"),
       align: "right",
-      cell: (s) => (
-        <span className="tabular-nums font-medium text-foreground">
-          {formatBytes(s.usedBytes)}
-        </span>
-      ),
+      cell: (r) =>
+        r.usedBytes !== null ? (
+          <span className="tabular-nums text-info-text">
+            {formatBytes(r.usedBytes)}
+          </span>
+        ) : (
+          "—"
+        ),
     },
     {
       id: "share",
       header: t("storage.colShare"),
-      width: "md",
-      cell: (s) => (
-        <Progress
-          value={percentOf(s.usedBytes, overview?.storage.limitBytes ?? 0)}
-          aria-label={t("storage.colShare")}
-        />
-      ),
+      width: "sm",
+      cell: (r) =>
+        r.usedBytes !== null ? (
+          <Progress
+            value={percentOf(r.usedBytes, overview?.storage.limitBytes ?? 0)}
+            aria-label={t("storage.colShare")}
+          />
+        ) : null,
+    },
+    {
+      id: "expires",
+      header: t("storage.colExpires"),
+      align: "right",
+      cell: (r) =>
+        r.limitBytes === null ? (
+          "—"
+        ) : r.expiresAt ? (
+          <span className="tabular-nums">{fmtDate(r.expiresAt)}</span>
+        ) : (
+          t("storage.noExpiry")
+        ),
     },
     {
       id: "observed",
       header: t("storage.colObserved"),
       align: "right",
-      cell: (s) => (
-        <span className="tabular-nums text-body-sm text-muted-foreground">
-          {fmtDate(s.observedAt)} {fmtTime(s.observedAt)}
-        </span>
-      ),
+      cell: (r) =>
+        r.observedAt ? (
+          <span className="tabular-nums text-body-sm text-muted-foreground">
+            {fmtDate(r.observedAt)} {fmtTime(r.observedAt)}
+          </span>
+        ) : (
+          "—"
+        ),
     },
   ];
 
@@ -412,39 +488,29 @@ export function QuotasPage() {
         aria-label={t("metrics.groupLabel")}
       />
 
-      {/* ① 存储空间(WS 级共享资源) */}
+      {/* ① 存储空间(WS 级共享资源,统一行模式) */}
       <PageSection
         icon="hard-drive"
         level={2}
         title={t("storage.title")}
         description={t("storage.description")}
       >
-        <DashboardSplit>
-          <DataTable<ConsoleQuotaPool>
-            columns={storageSourceColumns}
-            rows={overview?.storage.sources ?? []}
-            rowKey={(p) =>
-              `${p.source}:${p.productCode ?? "ws"}:${p.expiresAt ?? ""}`
-            }
-            loading={loading}
-            empty={<EmptyState title={t("storage.emptySources")} />}
-            footer={
-              <span className="tabular-nums text-body-sm text-muted-foreground">
-                {t("storage.totalLine", {
-                  limit: formatBytes(overview?.storage.limitBytes ?? 0),
-                  remaining: formatBytes(overview?.storage.remainingBytes ?? 0),
-                })}
-              </span>
-            }
-          />
-          <DataTable<ConsoleStorageSlice>
-            columns={storageSliceColumns}
-            rows={overview?.storage.slices ?? []}
-            rowKey={(s) => s.productCode}
-            loading={loading}
-            empty={<EmptyState title={t("storage.emptySlices")} />}
-          />
-        </DashboardSplit>
+        <DataTable<StorageRow>
+          columns={storageColumns}
+          rows={storageRows}
+          rowKey={(r) => r.key}
+          loading={loading}
+          indexStart={1}
+          empty={<EmptyState title={t("storage.emptySources")} />}
+          footer={
+            <span className="tabular-nums text-body-sm text-muted-foreground">
+              {t("storage.totalLine", {
+                limit: formatBytes(overview?.storage.limitBytes ?? 0),
+                remaining: formatBytes(overview?.storage.remainingBytes ?? 0),
+              })}
+            </span>
+          }
+        />
       </PageSection>
 
       {/* ② AI Credits */}
@@ -461,6 +527,7 @@ export function QuotasPage() {
             `${p.source}:${p.productCode ?? "ws"}:${p.expiresAt ?? ""}:${p.limit}`
           }
           loading={loading}
+          indexStart={1}
           empty={<EmptyState title={t("credits.empty")} />}
         />
         <SignalList
@@ -502,6 +569,7 @@ export function QuotasPage() {
           rows={productRows}
           rowKey={(r) => r.rowKey}
           loading={loading}
+          indexStart={1}
           empty={<EmptyState title={t("products.empty")} />}
         />
       </PageSection>

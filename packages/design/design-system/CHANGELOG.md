@@ -5,6 +5,14 @@
 
 ---
 
+## 6.2.0 — 2026-08-21
+
+跟随 design-ui 3.1.0（新增组件向上传导为伞包 minor，050 §2）。
+
+- **新增具名导出：`BarChart` / `BarChartProps` / `BarChartDatum`**（柱状图，
+  DS 首件数据可视化原语）。具名再导出清单已随生成器重生成，公开入口快照同步。
+- 转发 design-ui 3.1.0 的 DataTable 操作列 min-width 修订（无 API 变化）。
+
 ## 6.1.0 — 2026-08-20
 
 发布产物修复 + 一个 server-safe 追加（#320，外部消费者 karda/yucer 双双命中）：

@@ -33,7 +33,7 @@
  * | 主列（图标+标题+辅助信息） | 自适应 | 居左           |
  * | 状态        | 自适应          | 居中（`align:"center"`）      |
  * | 信息列      | 自适应          | 数值右、文本左                |
- * | 操作        | 64px            | 居中，单图标                  |
+ * | 操作        | min 64px        | 居中；单图标或主按钮+⋯ 菜单   |
  *
  * **表头一律居中，且是常规字重的正文字号**，与该列数据的 `align` 无关：列名是
  * 框架信息，不是展示重点，不该比它标注的数据更重、也不必跟着数据摆。序号列的
@@ -104,6 +104,13 @@ const WIDTH: Record<Exclude<DataTableColumnWidth, "auto">, string> = {
 
 /** 选择列 / 序号列 / 操作列共用：固定 64px、居中，不吃首末列零边距。 */
 const EDGE_COL = "w-control-3xl px-md text-center";
+
+/**
+ * 操作列单独一档：`min-w` 而不是定宽（2026-08-21 owner 修订：操作列 min=64px）。
+ * 选择/序号仍是定宽 64——它们的内容天然定宽；操作列允许"主操作按钮 + ⋯ 菜单"
+ * 并排（订单表先例），窄场景仍收敛回 64px 单图标，两端视觉不失衡。
+ */
+const ACTION_COL = "min-w-control-3xl px-md text-center";
 
 /**
  * `Checkbox` 自己的命中区外扩默认给的是 `after:-inset-x-lg`（表单场景够宽，
@@ -398,7 +405,7 @@ function DataTable<TRow>({
                 <th
                   scope="col"
                   className={cn(
-                    EDGE_COL,
+                    ACTION_COL,
                     "sticky right-0 whitespace-nowrap py-sm font-normal",
                     // 与下方数据格同一个可覆写遮罩色。表头当初写死 `bg-background`，
                     // 于是二级表的「操作」表头在浅色展开区里单独白一格——数据格改对了
@@ -576,7 +583,7 @@ function DataTable<TRow>({
                          与选择列 / 序号列同宽同轴。 */
                         <td
                           className={cn(
-                            EDGE_COL,
+                            ACTION_COL,
                             "sticky right-0 whitespace-nowrap align-middle",
                             // 未选中态补一层不透明底：横向滚动时业务列从它下方
                             // 经过，需要遮住。选中态的 surface-selected 本身也是
