@@ -8,7 +8,7 @@
  */
 
 export type OrgType = "personal" | "organization";
-export type OrgRole = "owner" | "manager" | "member";
+export type OrgRole = "owner" | "manager" | "member" | "readonly" | "guest";
 
 export interface OrgView {
   id: string;

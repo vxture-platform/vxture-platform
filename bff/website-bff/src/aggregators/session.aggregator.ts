@@ -25,6 +25,8 @@ const ORG_ROLE_LABELS: Record<OrgRole, string> = {
   owner: "Owner",
   manager: "Manager",
   member: "Member",
+  readonly: "Read-only",
+  guest: "Guest",
 };
 
 @Injectable()

@@ -1382,115 +1382,69 @@
     }
   },
   "rolesPage": {
-    "header": {
-      "eyebrow": "租户管理",
-      "title": "角色与权限",
-      "description": "管理当前租户的角色定义、启用状态和权限绑定。",
-      "create": "新建角色"
+    "title": "角色与权限",
+    "description": "租户治理角色的固定目录与权限矩阵;成员的角色指派在成员管理页完成",
+    "metrics": {
+      "groupLabel": "角色概览",
+      "roles": "治理角色",
+      "rolesHint": "全局固定目录(系统预置)",
+      "perms": "权限点",
+      "permsHint": "租户级 + 工作空间级治理动作",
+      "model": "授权模型",
+      "modelValue": "固定目录",
+      "modelHint": "自定义角色暂未开放"
     },
-    "toolbar": {
-      "count": "{count} 个角色",
-      "countHint": "共 {total} 个角色，启用 {active} 个，禁用 {disabled} 个，系统 {system} 个，自定义 {custom} 个",
-      "searchPlaceholder": "按角色名、编码或权限搜索",
-      "searchAriaLabel": "搜索角色",
-      "filterAriaLabel": "角色筛选"
+    "role": {
+      "owner": "拥有者",
+      "manager": "管理员",
+      "member": "成员",
+      "readonly": "只读成员",
+      "guest": "访客"
     },
-    "filters": {
-      "all": "全部角色",
-      "active": "启用",
-      "disabled": "禁用",
-      "system": "系统",
-      "custom": "自定义"
+    "roleBlurb": {
+      "owner": "全部治理权限,含商业面(订阅/账单/卡券)与租户注销",
+      "manager": "成员/角色/工作空间/设置管理;刻意不含商业面与注销",
+      "member": "正常使用产品与查看配额用量;无治理权限",
+      "readonly": "只读访问;无治理权限",
+      "guest": "受限访客;无治理权限"
     },
-    "list": {
-      "noDescription": "暂无描述",
-      "noPermissions": "未绑定权限",
-      "permissionCount": "{count} 项权限",
-      "roleTitle": "{name}，{code}，{status}，{type}，{permissions} 项权限",
-      "selectPage": "选择当前页角色",
-      "selectRole": "选择 {name}",
-      "columns": {
-        "name": "角色名称",
-        "code": "角色编码",
-        "status": "状态",
-        "type": "类型",
-        "permissions": "权限",
-        "description": "描述"
-      }
+    "perm": {
+      "tenant_member_manage": "成员管理",
+      "tenant_role_assign": "角色指派",
+      "tenant_workspace_manage": "工作空间管理",
+      "tenant_billing_manage": "商业与账务管理",
+      "tenant_settings_manage": "租户设置管理",
+      "tenant_delete": "租户注销",
+      "workspace_member_manage": "工作空间成员管理",
+      "workspace_role_assign": "工作空间角色指派",
+      "workspace_settings_manage": "工作空间设置管理"
     },
-    "type": {
-      "system": "系统角色",
-      "custom": "自定义角色",
-      "systemIcon": "系统角色",
-      "customIcon": "自定义角色"
+    "directory": {
+      "title": "角色目录",
+      "description": "系统预置的治理角色;每位成员在租户内持有其中一个",
+      "colRole": "角色",
+      "colBlurb": "定位",
+      "colPermCount": "权限数",
+      "colKind": "类别",
+      "system": "系统预置",
+      "custom": "自定义",
+      "empty": "角色目录为空"
     },
-    "actions": {
-      "menuLabel": "{name} 的角色操作",
-      "edit": "编辑角色",
-      "enable": "启用角色",
-      "disable": "禁用角色",
-      "delete": "删除角色"
+    "matrix": {
+      "title": "权限矩阵",
+      "description": "每个治理动作由哪些角色持有,一览无余",
+      "colPerm": "权限点",
+      "empty": "权限目录为空"
     },
-    "bulk": {
-      "selected": "已选择 {count} 个角色",
-      "disable": "批量禁用",
-      "enable": "批量启用",
-      "delete": "批量删除"
-    },
-    "pagination": {
-      "summary": "第 {page} / {totalPages} 页，共 {total} 个角色",
-      "previous": "上一页",
-      "next": "下一页"
-    },
-    "dialog": {
-      "createTitle": "新建角色",
-      "editTitle": "编辑角色",
-      "deleteTitle": "删除角色",
-      "deleteDescription": "确认删除 {name}？系统角色不可删除，删除自定义角色会解除其权限绑定。",
-      "bulkDeleteTitle": "批量删除角色",
-      "bulkDeleteDescription": "确认删除已选 {count} 个自定义角色？系统角色会被自动忽略。",
-      "fields": {
-        "code": "角色编码",
-        "name": "角色名称",
-        "description": "描述",
-        "status": "状态"
-      },
-      "permissionsTitle": "选择权限",
-      "permissionsDescription": "点击标签切换权限绑定。",
-      "cancel": "取消",
-      "create": "创建角色",
-      "save": "保存",
-      "delete": "确认删除"
-    },
-    "status": {
-      "active": "启用",
-      "disabled": "禁用"
-    },
-    "empty": {
-      "loadingTitle": "正在加载角色...",
-      "loadingDescription": "正在从 console BFF 读取租户角色与权限。",
-      "title": "没有符合当前筛选条件的角色。",
-      "description": "可以放宽筛选范围，或改用其他字段搜索。",
-      "resetFilters": "重置筛选"
-    },
-    "feedback": {
-      "loadError": "角色数据读取失败，请稍后重试。",
-      "createSuccess": "角色已创建。",
-      "createError": "角色创建失败，请稍后重试。",
-      "updateSuccess": "角色已更新。",
-      "updateError": "角色更新失败，请稍后重试。",
-      "enableSuccess": "角色已启用。",
-      "enableError": "角色启用失败，请稍后重试。",
-      "disableSuccess": "角色已禁用。",
-      "disableError": "角色禁用失败，请稍后重试。",
-      "deleteSuccess": "角色已删除。",
-      "deleteError": "角色删除失败，请稍后重试。",
-      "bulkDisabled": "已禁用 {count} 个角色。",
-      "bulkEnabled": "已启用 {count} 个角色。",
-      "bulkDeleted": "已删除 {count} 个自定义角色。",
-      "bulkDisableError": "批量禁用失败，请稍后重试。",
-      "bulkEnableError": "批量启用失败，请稍后重试。",
-      "bulkDeleteError": "批量删除失败，请稍后重试。"
+    "notes": {
+      "title": "治理口径",
+      "description": "本页只回答「谁能做哪些治理动作」",
+      "fixedTitle": "固定目录",
+      "fixedBody": "角色是平台全局目录,暂不支持租户自定义;需要新角色形态请联系平台运营",
+      "assignTitle": "在哪指派",
+      "assignBody": "给成员换角色在「成员管理」页操作(邀请时也可直接选角色);变更最迟一分钟内生效",
+      "scopeTitle": "治理 ≠ 业务",
+      "scopeBody": "治理角色只闸成员/角色/设置/商业面等治理动作;各产品内的功能权限由产品按订阅档位自行门控"
     }
   },
   "modelPlatformPage": {

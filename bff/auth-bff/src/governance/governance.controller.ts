@@ -29,10 +29,12 @@ import {
 import { AccessTokenGuard } from "../authn/access-token.guard";
 import { CurrentUser, type CurrentUserCtx } from "../authn/current-user";
 
-const ORG_ROLES = ["owner", "manager", "member"] as const;
+const ORG_ROLES = ["owner", "manager", "member", "readonly", "guest"] as const;
 function asOrgRole(value: unknown): OrgRole {
   if (typeof value !== "string" || !ORG_ROLES.includes(value as OrgRole)) {
-    throw new BadRequestException("role must be one of owner|manager|member");
+    throw new BadRequestException(
+      "role must be one of owner|manager|member|readonly|guest",
+    );
   }
   return value as OrgRole;
 }
@@ -77,7 +79,7 @@ export class GovernanceController {
     return { orgs: await this.active.listOrgsForSwitch(me.userId) };
   }
 
-  /** Invite a member (requires org.member.manage). Returns the invite token. */
+  /** Invite a member (requires tenant.member.manage). Returns the invite token. */
   @Post("orgs/:orgId/invitations")
   @HttpCode(HttpStatus.OK)
   async invite(
@@ -85,7 +87,7 @@ export class GovernanceController {
     @Param("orgId") orgId: string,
     @Body() body: { targetType?: string; target?: string; role?: string },
   ): Promise<{ invitationId: string; token: string }> {
-    await this.gov.assertCan(me.userId, { orgId }, "org.member.manage");
+    await this.gov.assertCan(me.userId, { orgId }, "tenant.member.manage");
     if (!body.target) throw new BadRequestException("target is required");
     const role = asOrgRole(body.role);
     const targetType = body.targetType === "phone" ? "phone" : "email";
@@ -121,7 +123,7 @@ export class GovernanceController {
     return { members: await this.org.listOrgMembers(orgId) };
   }
 
-  /** Change a member's org role (requires org.role.assign). */
+  /** Change a member's org role (requires tenant.role.assign). */
   @Patch("orgs/:orgId/members/:userId/role")
   async setRole(
     @CurrentUser() me: CurrentUserCtx,
@@ -129,7 +131,7 @@ export class GovernanceController {
     @Param("userId") userId: string,
     @Body() body: { role?: string },
   ): Promise<{ organizationId: string; userId: string; role: string }> {
-    await this.gov.assertCan(me.userId, { orgId }, "org.role.assign");
+    await this.gov.assertCan(me.userId, { orgId }, "tenant.role.assign");
     const role = asOrgRole(body.role);
     const membership = await this.org.updateOrgMemberRole(orgId, userId, role);
     if (!membership) throw new BadRequestException("member_not_found");
@@ -140,14 +142,14 @@ export class GovernanceController {
     };
   }
 
-  /** Remove a member (requires org.member.manage). */
+  /** Remove a member (requires tenant.member.manage). */
   @Delete("orgs/:orgId/members/:userId")
   async removeMember(
     @CurrentUser() me: CurrentUserCtx,
     @Param("orgId") orgId: string,
     @Param("userId") userId: string,
   ): Promise<{ removed: boolean }> {
-    await this.gov.assertCan(me.userId, { orgId }, "org.member.manage");
+    await this.gov.assertCan(me.userId, { orgId }, "tenant.member.manage");
     const removed = await this.org.removeOrgMember(orgId, userId);
     return { removed };
   }

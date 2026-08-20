@@ -1382,115 +1382,69 @@
     }
   },
   "rolesPage": {
-    "header": {
-      "eyebrow": "Tenant management",
-      "title": "Roles & permissions",
-      "description": "Manage tenant role definitions, status, and permission bindings.",
-      "create": "Create role"
+    "title": "Roles & Permissions",
+    "description": "The fixed catalog of tenant governance roles and their permission matrix; assign roles on the Members page",
+    "metrics": {
+      "groupLabel": "Roles overview",
+      "roles": "Governance roles",
+      "rolesHint": "Global fixed catalog (system preset)",
+      "perms": "Permission points",
+      "permsHint": "Tenant-level + workspace-level governance actions",
+      "model": "Authorization model",
+      "modelValue": "Fixed catalog",
+      "modelHint": "Custom roles not yet available"
     },
-    "toolbar": {
-      "count": "{count} roles",
-      "countHint": "{total} total, {active} active, {disabled} disabled, {system} system, {custom} custom",
-      "searchPlaceholder": "Search by role, code, or permission",
-      "searchAriaLabel": "Search roles",
-      "filterAriaLabel": "Role filters"
+    "role": {
+      "owner": "Owner",
+      "manager": "Manager",
+      "member": "Member",
+      "readonly": "Read-only",
+      "guest": "Guest"
     },
-    "filters": {
-      "all": "All roles",
-      "active": "Active",
-      "disabled": "Disabled",
+    "roleBlurb": {
+      "owner": "All governance permissions, incl. commerce (subscription/billing/vouchers) and tenant deletion",
+      "manager": "Member/role/workspace/settings management; deliberately excludes commerce and deletion",
+      "member": "Uses products and views quotas/usage; no governance permissions",
+      "readonly": "Read-only access; no governance permissions",
+      "guest": "Restricted guest; no governance permissions"
+    },
+    "perm": {
+      "tenant_member_manage": "Member management",
+      "tenant_role_assign": "Role assignment",
+      "tenant_workspace_manage": "Workspace management",
+      "tenant_billing_manage": "Commerce & billing management",
+      "tenant_settings_manage": "Tenant settings management",
+      "tenant_delete": "Tenant deletion",
+      "workspace_member_manage": "Workspace member management",
+      "workspace_role_assign": "Workspace role assignment",
+      "workspace_settings_manage": "Workspace settings management"
+    },
+    "directory": {
+      "title": "Role catalog",
+      "description": "System-preset governance roles; every member holds exactly one per tenant",
+      "colRole": "Role",
+      "colBlurb": "Positioning",
+      "colPermCount": "Permissions",
+      "colKind": "Kind",
       "system": "System",
-      "custom": "Custom"
+      "custom": "Custom",
+      "empty": "Role catalog is empty"
     },
-    "list": {
-      "noDescription": "No description",
-      "noPermissions": "No permissions assigned",
-      "permissionCount": "{count} permissions",
-      "roleTitle": "{name}, {code}, {status}, {type}, {permissions} permissions",
-      "selectPage": "Select roles on this page",
-      "selectRole": "Select {name}",
-      "columns": {
-        "name": "Role",
-        "code": "Role code",
-        "status": "Status",
-        "type": "Type",
-        "permissions": "Permissions",
-        "description": "Description"
-      }
+    "matrix": {
+      "title": "Permission matrix",
+      "description": "Which roles hold each governance action, at a glance",
+      "colPerm": "Permission",
+      "empty": "Permission catalog is empty"
     },
-    "type": {
-      "system": "System role",
-      "custom": "Custom role",
-      "systemIcon": "System role",
-      "customIcon": "Custom role"
-    },
-    "actions": {
-      "menuLabel": "Role actions for {name}",
-      "edit": "Edit role",
-      "enable": "Enable role",
-      "disable": "Disable role",
-      "delete": "Delete role"
-    },
-    "bulk": {
-      "selected": "{count} roles selected",
-      "disable": "Disable selected",
-      "enable": "Enable selected",
-      "delete": "Delete selected"
-    },
-    "pagination": {
-      "summary": "Page {page} / {totalPages}, {total} total",
-      "previous": "Previous",
-      "next": "Next"
-    },
-    "dialog": {
-      "createTitle": "Create role",
-      "editTitle": "Edit role",
-      "deleteTitle": "Delete role",
-      "deleteDescription": "Delete {name}? System roles cannot be deleted. Custom role permission bindings will be removed.",
-      "bulkDeleteTitle": "Delete selected roles",
-      "bulkDeleteDescription": "Delete {count} selected custom roles? System roles will be ignored.",
-      "fields": {
-        "code": "Role code",
-        "name": "Role name",
-        "description": "Description",
-        "status": "Status"
-      },
-      "permissionsTitle": "Select permissions",
-      "permissionsDescription": "Click tags to toggle permission bindings.",
-      "cancel": "Cancel",
-      "create": "Create role",
-      "save": "Save",
-      "delete": "Delete"
-    },
-    "status": {
-      "active": "Active",
-      "disabled": "Disabled"
-    },
-    "empty": {
-      "loadingTitle": "Loading roles...",
-      "loadingDescription": "Reading tenant roles and permissions from the console BFF.",
-      "title": "No roles match the current filters.",
-      "description": "Try widening the filter scope or searching by another field.",
-      "resetFilters": "Reset filters"
-    },
-    "feedback": {
-      "loadError": "Failed to load role data. Please try again later.",
-      "createSuccess": "Role created.",
-      "createError": "Role creation failed. Please try again later.",
-      "updateSuccess": "Role updated.",
-      "updateError": "Role update failed. Please try again later.",
-      "enableSuccess": "Role enabled.",
-      "enableError": "Role enable failed. Please try again later.",
-      "disableSuccess": "Role disabled.",
-      "disableError": "Role disable failed. Please try again later.",
-      "deleteSuccess": "Role deleted.",
-      "deleteError": "Role delete failed. Please try again later.",
-      "bulkDisabled": "{count} roles disabled.",
-      "bulkEnabled": "{count} roles enabled.",
-      "bulkDeleted": "{count} custom roles deleted.",
-      "bulkDisableError": "Bulk disable failed. Please try again later.",
-      "bulkEnableError": "Bulk enable failed. Please try again later.",
-      "bulkDeleteError": "Bulk delete failed. Please try again later."
+    "notes": {
+      "title": "Governance model",
+      "description": "This page answers one question: who can perform which governance actions",
+      "fixedTitle": "Fixed catalog",
+      "fixedBody": "Roles are a platform-global catalog; tenant-defined roles are not yet supported — contact platform operations for new role shapes",
+      "assignTitle": "Where to assign",
+      "assignBody": "Change a member's role on the Members page (or pick one when inviting); changes take effect within a minute",
+      "scopeTitle": "Governance ≠ business",
+      "scopeBody": "Governance roles gate member/role/settings/commerce actions only; in-product feature access is gated by each product per subscription tier"
     }
   },
   "modelPlatformPage": {

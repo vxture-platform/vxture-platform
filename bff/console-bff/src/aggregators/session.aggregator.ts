@@ -30,6 +30,7 @@ import {
   type OrgRoleCatalogEntry,
 } from "@vxture/service-organization";
 import type {
+  Capability,
   ConsoleOrganizationProfile,
   ConsoleTenantPermission,
   ConsoleTenantRole,
@@ -39,16 +40,25 @@ import type {
   TenantContext,
 } from "../types/console.types";
 
-const TENANT_CAPABILITIES = [
-  "tenant.user.manage",
-  "tenant.role.manage",
-  "tenant.subscription.read",
-  "tenant.billing.read",
-  "tenant.quota.read",
-] as const;
+/**
+ * capability 派生(owner 2026-08-21 P0 分权;取代旧「有租户全给 5 个」):
+ * - 只读运营面(配额/用量)随成员身份即给——成员用产品就该看得到额度;
+ * - 商业面(产品订阅/账单/卡券页可见性)随治理权限 tenant.billing.manage
+ *   (seed 裁定:仅 owner 持有,manager 刻意不含 billing);
+ * - 成员/角色管理面随对应治理权限(tenant.member.manage / tenant.role.assign)。
+ * 治理权限经 GovernanceService 回查(identity/040 D-6:capability 不进 token,
+ * BFF 回查为主、可缓存);每 (tenant,user) 短 TTL 内存缓存,改角色最迟一分钟生效。
+ */
+const MEMBER_BASE_CAPABILITIES: Capability[] = ["tenant.quota.read"];
+const PERM_TO_CAPABILITIES: Record<string, Capability[]> = {
+  "tenant.member.manage": ["tenant.user.manage"],
+  "tenant.role.assign": ["tenant.role.manage"],
+  "tenant.billing.manage": ["tenant.billing.read", "tenant.subscription.read"],
+};
+const CAPS_CACHE_TTL_MS = 60_000;
 
 const CUSTOM_ROLES_UNSUPPORTED =
-  "Custom roles are not supported: roles are a fixed catalog (owner/manager/member)";
+  "Custom roles are not supported: roles are a fixed catalog (owner/manager/member/readonly/guest)";
 
 /**
  * SessionAggregator (Identity Platform). Org/workspace/membership + governance
@@ -448,21 +458,44 @@ export class SessionAggregator {
     }));
   }
 
-  async getCapabilities(userId: string, orgId?: string) {
-    const resolved = await this.resolveOrg(userId, orgId);
-    return resolved ? [...TENANT_CAPABILITIES] : [];
-  }
+  /** (tenant,user) → caps 短 TTL 缓存(middleware 每请求命中内存,不打 DB)。 */
+  private readonly capsCache = new Map<
+    string,
+    { at: number; caps: Capability[] }
+  >();
 
   /**
-   * Capabilities for an already-resolved request context, with no DB round-trip.
-   * In the console middleware chain (Auth → Tenant → Permission) TenantMiddleware
-   * has already resolved the active org and 401/403-gated the request before
-   * PermissionMiddleware runs, so a present tenant means the org exists — which
-   * is the only thing async getCapabilities' ~4-query resolveOrg determines.
-   * async getCapabilities is kept for callers that must resolve the org first.
+   * 按成员实际治理权限派生 capability(P0 分权)。降级原则:回查失败给
+   * 只读保底(MEMBER_BASE),绝不放大权限。
    */
-  capabilitiesForContext(hasTenant: boolean) {
-    return hasTenant ? [...TENANT_CAPABILITIES] : [];
+  async capabilitiesFor(
+    userId: string,
+    tenantId: string,
+  ): Promise<Capability[]> {
+    const key = `${tenantId}:${userId}`;
+    const hit = this.capsCache.get(key);
+    if (hit && Date.now() - hit.at < CAPS_CACHE_TTL_MS) return [...hit.caps];
+    let caps: Capability[];
+    try {
+      const perms = await this.gov.getEffectivePermissions(userId, {
+        orgId: tenantId,
+      });
+      const derived = new Set<Capability>(MEMBER_BASE_CAPABILITIES);
+      for (const p of perms) {
+        for (const c of PERM_TO_CAPABILITIES[p] ?? []) derived.add(c);
+      }
+      caps = [...derived];
+    } catch {
+      caps = [...MEMBER_BASE_CAPABILITIES];
+    }
+    this.capsCache.set(key, { at: Date.now(), caps });
+    return [...caps];
+  }
+
+  async getCapabilities(userId: string, orgId?: string) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return [];
+    return this.capabilitiesFor(userId, resolved.orgId);
   }
 
   async getIamSummary(userId: string, orgId?: string) {
@@ -475,12 +508,15 @@ export class SessionAggregator {
         activeRoles: 0,
       };
     }
-    const members = await this.org.listOrgMembersWithUser(resolved.orgId);
+    const [members, catalog] = await Promise.all([
+      this.org.listOrgMembersWithUser(resolved.orgId),
+      this.org.getOrgRolesCatalog(),
+    ]);
     return {
       totalMembers: members.length,
       activeMembers: members.filter((m) => m.status === "active").length,
       primaryOwners: members.filter((m) => m.role === "owner").length,
-      activeRoles: 3,
+      activeRoles: catalog.length,
     };
   }
 
@@ -566,7 +602,7 @@ export class SessionAggregator {
     await this.gov.assertCan(
       userId,
       { orgId: resolved.orgId },
-      "org.member.manage",
+      "tenant.member.manage",
     );
     const role = asOrgRole(input.roleCode ?? "member");
     const { invitation } = await this.org.createInvitation({
@@ -595,7 +631,7 @@ export class SessionAggregator {
     await this.gov.assertCan(
       userId,
       { orgId: resolved.orgId },
-      "org.role.assign",
+      "tenant.role.assign",
     );
     await this.org.updateOrgMemberRole(
       resolved.orgId,
@@ -625,7 +661,7 @@ export class SessionAggregator {
     await this.gov.assertCan(
       userId,
       { orgId: resolved.orgId },
-      "org.member.manage",
+      "tenant.member.manage",
     );
     const member = await this.org.getOrgMemberDetail(
       resolved.orgId,
@@ -646,16 +682,18 @@ export class SessionAggregator {
     await this.gov.assertCan(
       userId,
       { orgId: resolved.orgId },
-      "org.member.manage",
+      "tenant.member.manage",
     );
     return this.org.removeOrgMember(resolved.orgId, memberUserId);
   }
 }
 
-const ORG_ROLES = ["owner", "manager", "member"] as const;
+const ORG_ROLES = ["owner", "manager", "member", "readonly", "guest"] as const;
 function asOrgRole(value: string): OrgRole {
   if (!ORG_ROLES.includes(value as OrgRole)) {
-    throw new BadRequestException("role must be one of owner|manager|member");
+    throw new BadRequestException(
+      "role must be one of owner|manager|member|readonly|guest",
+    );
   }
   return value as OrgRole;
 }
@@ -748,7 +786,9 @@ function toMemberRecord(d: OrgMemberDetail): MemberRecord {
     phone: d.phone,
     role: d.role,
     roleCode: d.role,
-    roleId: null,
+    // 角色目录以 code 为对外键(全局目录,UUID 禁展示)——编辑预填靠它,
+    // 此前写死 null 导致成员编辑弹窗角色下拉恒空(2026-08-21 修)。
+    roleId: d.role,
     status: d.status === "active" ? "Active" : "Suspended",
     statusCode: d.status === "active" ? "active" : "banned",
     lastActive: "—",

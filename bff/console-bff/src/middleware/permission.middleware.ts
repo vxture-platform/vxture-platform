@@ -19,14 +19,15 @@ export class PermissionMiddleware implements NestMiddleware {
 
     const context = req as Request & RequestContext;
     if (context.user) {
-      // TenantMiddleware runs before this and has already resolved the active
-      // org and 401/403-gated the request, so a present context.tenant means the
-      // org exists — the only fact async getCapabilities' ~4-query resolveOrg
-      // determines. Derive the same capabilities in-memory instead of resolving
-      // the org a second time on every /api/* request.
-      context.capabilities = this.sessionAggregator.capabilitiesForContext(
-        Boolean(context.tenant),
-      );
+      // P0 分权(2026-08-21):capability 按成员实际治理角色派生,不再「有租户
+      // 全给」。aggregator 内部有 (tenant,user) 短 TTL 缓存,常态命中内存;
+      // 回查失败降级为只读保底,绝不放大权限。
+      context.capabilities = context.tenant
+        ? await this.sessionAggregator.capabilitiesFor(
+            context.user.id,
+            context.tenant.id,
+          )
+        : [];
     }
 
     next();

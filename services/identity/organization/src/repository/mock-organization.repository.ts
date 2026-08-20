@@ -409,12 +409,12 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
 
 // Mirror of the seed §5.5 role→permission mapping (deploy seed-catalog.mjs).
 const ORG_ALL = [
-  "org.member.manage",
-  "org.role.assign",
-  "org.workspace.manage",
-  "org.billing.manage",
-  "org.settings.manage",
-  "org.delete",
+  "tenant.member.manage",
+  "tenant.role.assign",
+  "tenant.workspace.manage",
+  "tenant.billing.manage",
+  "tenant.settings.manage",
+  "tenant.delete",
 ];
 const WS_ALL = [
   "workspace.member.manage",
@@ -424,10 +424,10 @@ const WS_ALL = [
 const MOCK_ROLE_PERMS: Record<string, string[]> = {
   "org:owner": [...ORG_ALL, ...WS_ALL],
   "org:manager": [
-    "org.member.manage",
-    "org.role.assign",
-    "org.workspace.manage",
-    "org.settings.manage",
+    "tenant.member.manage",
+    "tenant.role.assign",
+    "tenant.workspace.manage",
+    "tenant.settings.manage",
   ],
   "org:member": [],
   "workspace:owner": [...WS_ALL],
