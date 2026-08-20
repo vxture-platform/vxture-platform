@@ -338,8 +338,8 @@
         "description": "Bills, payment status, and reconciliation"
       },
       "quotas": {
-        "label": "Usage Quotas",
-        "description": "Resource progress for API calls, storage, and more"
+        "label": "Quotas",
+        "description": "Storage and AI Credits grants and usage"
       },
       "atlas": {
         "label": "Model Platform",
@@ -2196,5 +2196,77 @@
   "planned": {
     "badge": "Planned",
     "sectionEmpty": "This feature is still planned — there is nothing to show yet."
+  },
+  "quotasPage": {
+    "title": "Quota Management",
+    "description": "Storage and AI Credits for this workspace: grant makeup, current usage, and what's left at a glance",
+    "metrics": {
+      "groupLabel": "Quota overview",
+      "storage": "Storage used",
+      "storageHint": "Total {limit} · {remaining} left",
+      "creditRemaining": "AI Credits balance",
+      "creditRemainingHint": "Total {limit}",
+      "creditUsed": "Used this cycle",
+      "creditUsedHint": "AI Credits · resets with the subscription cycle"
+    },
+    "metric": {
+      "storage": "Storage",
+      "aiCredit": "AI Credits",
+      "apiCall": "API calls",
+      "qualityCheck": "Quality checks"
+    },
+    "source": {
+      "ws_base": "Base grant",
+      "subscription": "Subscription",
+      "addon_purchase": "Booster pack",
+      "manual_override": "Operator grant"
+    },
+    "reset": {
+      "none": "No reset",
+      "day": "Daily reset",
+      "month": "Monthly reset"
+    },
+    "storage": {
+      "title": "Storage",
+      "description": "A workspace-level shared resource: grants stack into one ledger, usage is attributed per product",
+      "colSource": "Source",
+      "colLimit": "Grant",
+      "colExpires": "Valid until",
+      "noExpiry": "No expiry",
+      "colProduct": "Product",
+      "colUsed": "Used",
+      "colShare": "Of total",
+      "colObserved": "Reported at",
+      "totalLine": "Total {limit} · {remaining} left",
+      "emptySources": "No storage grants yet",
+      "emptySlices": "No product has reported storage usage yet"
+    },
+    "credits": {
+      "title": "AI Credits",
+      "description": "Subscription grants stack across products — own pool first, shared pools as fallback; top up with booster packs when everything runs dry",
+      "colSource": "Source",
+      "colLimit": "Grant",
+      "colUsed": "Used this cycle",
+      "colRemaining": "Left",
+      "colReset": "Reset",
+      "colExpires": "Valid until",
+      "empty": "No AI Credits yet — subscribe to a product to receive them",
+      "sharingTitle": "Cross-product sharing",
+      "sharingOn": "On by default: {products} participate — a product that runs dry can draw on the others' remainder, with every spend attributed per product",
+      "sharingOff": "No products currently share — each product's credits stay reserved",
+      "boosterTitle": "AI Credits booster packs",
+      "boosterBody": "When subscription credits run out, booster packs top you up; they burn after subscription pools and stay valid longer"
+    },
+    "products": {
+      "title": "Per-product quotas",
+      "description": "Independent per-product view: the product's own service quotas plus its platform resource contributions",
+      "colProduct": "Product",
+      "colMetric": "Metric",
+      "colLimit": "Grant",
+      "colUsed": "Used this cycle",
+      "colRemaining": "Left",
+      "wsShared": "Shared workspace-wide",
+      "empty": "No product quotas yet — they appear once you subscribe"
+    }
   }
 }

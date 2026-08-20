@@ -1716,3 +1716,78 @@ export async function searchConsole(
   }
   return (await response.json()) as GlobalSearchResponse;
 }
+
+// ============================================================================
+// Quota overview (配额管理页 /quotas — GET /api/quota/overview)
+// ============================================================================
+
+export interface ConsoleQuotaPool {
+  metric: string;
+  /** subscription / manual_override / ws_base / addon_purchase */
+  source: string;
+  productCode: string | null;
+  productName: string | null;
+  limit: number;
+  used: number;
+  remaining: number;
+  resetPeriod: string;
+  expiresAt: string | null;
+}
+
+export interface ConsoleStorageSlice {
+  productCode: string;
+  productName: string;
+  usedBytes: number;
+  observedAt: string;
+}
+
+export interface ConsoleProductQuota {
+  productCode: string;
+  productName: string;
+  metrics: {
+    metric: string;
+    limit: number;
+    used: number;
+    remaining: number;
+    resetPeriod: string;
+  }[];
+  storageUsedBytes: number | null;
+}
+
+export interface ConsoleQuotaOverview {
+  storage: {
+    limitBytes: number;
+    usedBytes: number;
+    /** 不钳制:负值 = 超冲(产品侧准入自愈,展示要能表达) */
+    remainingBytes: number;
+    sources: ConsoleQuotaPool[];
+    slices: ConsoleStorageSlice[];
+  };
+  aiCredit: {
+    limit: number;
+    used: number;
+    remaining: number;
+    pools: ConsoleQuotaPool[];
+    sharingProducts: { productCode: string; productName: string }[];
+  };
+  products: ConsoleProductQuota[];
+}
+
+const EMPTY_QUOTA_OVERVIEW: ConsoleQuotaOverview = {
+  storage: {
+    limitBytes: 0,
+    usedBytes: 0,
+    remainingBytes: 0,
+    sources: [],
+    slices: [],
+  },
+  aiCredit: { limit: 0, used: 0, remaining: 0, pools: [], sharingProducts: [] },
+  products: [],
+};
+
+export async function fetchQuotaOverview(): Promise<ConsoleQuotaOverview> {
+  return readJson<ConsoleQuotaOverview>(
+    "/api/quota/overview",
+    EMPTY_QUOTA_OVERVIEW,
+  );
+}
