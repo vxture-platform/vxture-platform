@@ -417,10 +417,11 @@ export function SubscriptionPage() {
         hint: t("orders.menuPlannedHint"),
       },
       {
+        // 申请发票已上线(owner 2026-08-21 归集账单管理):深链到账单管理页,
+        // 对已结清账单行内点「申请发票」。
         id: "invoice",
         label: t("orders.menuInvoice"),
-        disabled: true,
-        hint: t("orders.menuPlannedHint"),
+        onSelect: () => router.push("/billing"),
       },
     ];
   }

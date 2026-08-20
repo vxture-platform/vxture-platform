@@ -1894,7 +1894,8 @@
       "empty": "No bills yet.",
       "total": "{count} bills",
       "prevPage": "Previous",
-      "nextPage": "Next"
+      "nextPage": "Next",
+      "colInvoice": "Invoice"
     },
     "type": {
       "normal": "Subscription fee",
@@ -1917,6 +1918,73 @@
       "paymentBody": "Offline corporate remittance with the order number as reference; operations verify receipt manually and the bill settles. ¥0 bills settle automatically at the payment step.",
       "billingTitle": "Billing terms",
       "billingBody": "Bills are generated with subscription orders; the subscription cycle starts when the service is provisioned (early renewal supported), not when payment is confirmed."
+    },
+    "invoicing": {
+      "applyAction": "Request invoice",
+      "writeFailed": "Operation failed — please try again later",
+      "status": {
+        "applying": "Applying",
+        "approved": "Accepted",
+        "issued": "Issued",
+        "sent": "Shipped",
+        "rejected": "Rejected",
+        "voided": "Voided"
+      },
+      "type": {
+        "electronic_general": "E-invoice (general)",
+        "electronic_special": "E-invoice (special VAT)",
+        "paper_special": "Paper (special VAT)"
+      },
+      "taxType": {
+        "general": "General",
+        "special": "Special VAT"
+      },
+      "records": {
+        "title": "Invoices",
+        "description": "Invoices issued against settled bills — both direct subscription payments and prepaid deduction statements qualify; download here once issued",
+        "colNo": "Application no.",
+        "colBill": "Bill no.",
+        "colTitle": "Title / Type",
+        "colAmount": "Amount (tax incl.)",
+        "colStatus": "Status",
+        "colDelivery": "File / Shipping",
+        "download": "Download",
+        "empty": "No invoices yet — use \"Request invoice\" on a settled bill above"
+      },
+      "addresses": {
+        "title": "Invoice Titles",
+        "description": "Title details are snapshotted into each application; later edits never affect submitted requests",
+        "add": "Add title",
+        "addTitle": "Add invoice title",
+        "editTitle": "Edit invoice title",
+        "formHint": "Special VAT titles require a tax number and bank details; your first title becomes the default",
+        "colTitle": "Title",
+        "colTaxType": "Type",
+        "colTaxNo": "Tax no.",
+        "default": "Default",
+        "edit": "Edit",
+        "setDefault": "Set default",
+        "delete": "Delete",
+        "save": "Save",
+        "rowMenu": "Title actions",
+        "fieldTitle": "Title",
+        "fieldTaxNo": "Tax number",
+        "fieldBankName": "Bank",
+        "fieldBankAccount": "Bank account",
+        "fieldPhone": "Phone",
+        "fieldAddress": "Address (for paper delivery)",
+        "empty": "No invoice titles yet — add one via the button above"
+      },
+      "apply": {
+        "title": "Request invoice",
+        "description": "Bill {billNo} · {amount} (tax incl.). Platform operations will review and issue it",
+        "address": "Invoice title",
+        "type": "Invoice type",
+        "noAddress": "No invoice title yet — create one first",
+        "createAddress": "Create a title",
+        "cancel": "Cancel",
+        "submit": "Submit"
+      }
     }
   },
   "subscriptionHub": {

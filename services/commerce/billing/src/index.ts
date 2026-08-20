@@ -11,3 +11,10 @@ export type {
   CreateInvoiceItemInput,
   UpdateInvoiceStatusInput,
 } from "./types/billing.types";
+export { InvoiceReceiptService } from "./service/receipt.service";
+export type {
+  BillingAddressRecord,
+  InvoiceReceiptRecord,
+  UpsertBillingAddressInput,
+  ApplyInvoiceReceiptInput,
+} from "./types/receipt.types";

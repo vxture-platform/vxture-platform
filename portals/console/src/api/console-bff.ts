@@ -1950,3 +1950,139 @@ export async function cancelAddonOrder(orderNo: string): Promise<boolean> {
   );
   return response.ok;
 }
+
+// ============================================================================
+// Invoicing (发票 — /api/billing/addresses + /api/billing/receipts)
+// ============================================================================
+
+export interface ConsoleBillingAddress {
+  id: string;
+  invoiceTaxType: "general" | "special";
+  title: string;
+  taxNo: string | null;
+  phone: string | null;
+  address: string | null;
+  bankName: string | null;
+  bankAccount: string | null;
+  isDefault: boolean;
+}
+
+export interface ConsoleInvoiceReceipt {
+  id: string;
+  invoiceNo: string;
+  billId: string;
+  billNo: string | null;
+  invoiceType: string;
+  invoiceTaxType: string;
+  invoiceTitle: string;
+  invoiceAmount: string;
+  currency: string;
+  invoiceStatus: string;
+  statusRemark: string | null;
+  invoiceFileUrl: string | null;
+  expressCompany: string | null;
+  expressNo: string | null;
+  issuedAt: string | null;
+  sendAt: string | null;
+  createdAt: string;
+}
+
+export interface ConsoleBillingAddressInput {
+  invoiceTaxType: "general" | "special";
+  title: string;
+  taxNo?: string;
+  phone?: string;
+  address?: string;
+  bankName?: string;
+  bankAccount?: string;
+  isDefault?: boolean;
+}
+
+export async function fetchBillingAddresses(): Promise<
+  ConsoleBillingAddress[]
+> {
+  return readJson<ConsoleBillingAddress[]>("/api/billing/addresses", []);
+}
+
+export async function fetchInvoiceReceipts(): Promise<ConsoleInvoiceReceipt[]> {
+  return readJson<ConsoleInvoiceReceipt[]>("/api/billing/receipts", []);
+}
+
+/** 写路径共用:非 2xx 时把 BFF 报文透给用户(校验/冲突信息可读)。 */
+async function writeJson<T>(
+  path: string,
+  method: "POST" | "PATCH" | "DELETE",
+  body?: unknown,
+): Promise<T> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${path}`,
+    {
+      method,
+      credentials: "include",
+      ...(body !== undefined
+        ? {
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          }
+        : {}),
+    },
+  );
+  if (!response.ok) {
+    let message = `Request failed: ${response.status}`;
+    try {
+      const parsed = (await response.json()) as { message?: string };
+      if (parsed?.message) message = parsed.message;
+    } catch {
+      /* keep the status message */
+    }
+    throw new ConsoleBffError(message, response.status);
+  }
+  return (await response.json()) as T;
+}
+
+export async function createBillingAddress(
+  input: ConsoleBillingAddressInput,
+): Promise<ConsoleBillingAddress> {
+  return writeJson<ConsoleBillingAddress>(
+    "/api/billing/addresses",
+    "POST",
+    input,
+  );
+}
+
+export async function updateBillingAddress(
+  id: string,
+  input: ConsoleBillingAddressInput,
+): Promise<ConsoleBillingAddress> {
+  return writeJson<ConsoleBillingAddress>(
+    `/api/billing/addresses/${encodeURIComponent(id)}`,
+    "PATCH",
+    input,
+  );
+}
+
+export async function setDefaultBillingAddress(id: string): Promise<void> {
+  await writeJson<{ ok: true }>(
+    `/api/billing/addresses/${encodeURIComponent(id)}/default`,
+    "POST",
+  );
+}
+
+export async function deleteBillingAddress(id: string): Promise<void> {
+  await writeJson<{ ok: true }>(
+    `/api/billing/addresses/${encodeURIComponent(id)}`,
+    "DELETE",
+  );
+}
+
+export async function applyInvoiceReceipt(input: {
+  billId: string;
+  addressId: string;
+  invoiceType: string;
+}): Promise<ConsoleInvoiceReceipt> {
+  return writeJson<ConsoleInvoiceReceipt>(
+    "/api/billing/receipts",
+    "POST",
+    input,
+  );
+}

@@ -3,7 +3,9 @@ import { VxConfigModule, VxConfigService } from "@vxture/core-config";
 import { Pool } from "pg";
 import { COMMERCE_PG_POOL } from "../tokens";
 import { PgBillingRepository } from "../repository/pg-billing.repository";
+import { PgReceiptRepository } from "../repository/pg-receipt.repository";
 import { BillingService } from "../service/billing.service";
+import { InvoiceReceiptService } from "../service/receipt.service";
 
 @Module({
   imports: [VxConfigModule.register({ domains: ["database"] })],
@@ -33,7 +35,9 @@ import { BillingService } from "../service/billing.service";
     },
     PgBillingRepository,
     BillingService,
+    PgReceiptRepository,
+    InvoiceReceiptService,
   ],
-  exports: [BillingService],
+  exports: [BillingService, InvoiceReceiptService],
 })
 export class BillingModule {}

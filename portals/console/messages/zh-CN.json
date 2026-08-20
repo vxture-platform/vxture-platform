@@ -1894,7 +1894,8 @@
       "empty": "暂无账单记录。",
       "total": "共 {count} 条",
       "prevPage": "上一页",
-      "nextPage": "下一页"
+      "nextPage": "下一页",
+      "colInvoice": "发票"
     },
     "type": {
       "normal": "订阅费",
@@ -1917,6 +1918,73 @@
       "paymentBody": "线下对公汇款，备注订单号，运营人工核销后账单结清；0 元账单在收款环节自动结清。",
       "billingTitle": "计费口径",
       "billingBody": "账单随订阅订单生成；订阅周期自服务开通时刻起算（支持提前续订），不以收款确认时刻为准。"
+    },
+    "invoicing": {
+      "applyAction": "申请发票",
+      "writeFailed": "操作失败,请稍后重试",
+      "status": {
+        "applying": "申请中",
+        "approved": "已受理",
+        "issued": "已开具",
+        "sent": "已寄送",
+        "rejected": "已驳回",
+        "voided": "已作废"
+      },
+      "type": {
+        "electronic_general": "电子普票",
+        "electronic_special": "电子专票",
+        "paper_special": "纸质专票"
+      },
+      "taxType": {
+        "general": "普票抬头",
+        "special": "专票抬头"
+      },
+      "records": {
+        "title": "发票记录",
+        "description": "对已结清账单开具的发票:直接订阅付款与预付款扣费对账单均可申请,开具后此处下载",
+        "colNo": "申请号",
+        "colBill": "账单号",
+        "colTitle": "抬头 / 类型",
+        "colAmount": "价税合计",
+        "colStatus": "状态",
+        "colDelivery": "文件 / 寄送",
+        "download": "下载发票",
+        "empty": "暂无发票记录,在账单表对已结清账单点「申请发票」"
+      },
+      "addresses": {
+        "title": "开票抬头",
+        "description": "抬头信息在申请时快照进发票,后续修改不影响已提交的申请",
+        "add": "新增抬头",
+        "addTitle": "新增开票抬头",
+        "editTitle": "编辑开票抬头",
+        "formHint": "专票抬头需填写税号与开户信息;首条抬头自动设为默认",
+        "colTitle": "抬头",
+        "colTaxType": "类型",
+        "colTaxNo": "税号",
+        "default": "默认",
+        "edit": "编辑",
+        "setDefault": "设为默认",
+        "delete": "删除",
+        "save": "保存",
+        "rowMenu": "抬头操作",
+        "fieldTitle": "抬头名称",
+        "fieldTaxNo": "税号",
+        "fieldBankName": "开户行",
+        "fieldBankAccount": "开户账号",
+        "fieldPhone": "联系电话",
+        "fieldAddress": "地址(纸质票寄送用)",
+        "empty": "暂无开票抬头,点右上角新增"
+      },
+      "apply": {
+        "title": "申请发票",
+        "description": "账单 {billNo} · 价税合计 {amount}。提交后由平台运营审核开具",
+        "address": "开票抬头",
+        "type": "发票类型",
+        "noAddress": "还没有开票抬头,请先创建一条",
+        "createAddress": "去创建抬头",
+        "cancel": "取消",
+        "submit": "提交申请"
+      }
     }
   },
   "subscriptionHub": {

@@ -33,16 +33,24 @@ import type {
 } from "@vxture/design-system";
 import { formatCurrency, type Locale } from "@vxture/shared";
 import {
+  fetchBillingAddresses,
   fetchBillingSummary,
   fetchBills,
   fetchCredits,
+  fetchInvoiceReceipts,
   type ConsoleBill,
+  type ConsoleBillingAddress,
   type ConsoleBillingSummary,
+  type ConsoleInvoiceReceipt,
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { PlannedBadge } from "@/components/planned";
 import { PageSection, SignalList } from "@/layout/shell";
 import { fmtDate, fmtTime } from "./components/hubModel";
+import {
+  InvoiceSections,
+  RECEIPT_STATUS_TONES,
+} from "./components/InvoiceSections";
 
 const BILLS_PAGE_SIZE = 10;
 
@@ -76,19 +84,47 @@ export function BillingPage() {
     balance: string;
     currency: string;
   } | null>(null);
+  const [receipts, setReceipts] = useState<ConsoleInvoiceReceipt[]>([]);
+  const [addresses, setAddresses] = useState<ConsoleBillingAddress[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [applyBill, setApplyBill] = useState<ConsoleBill | null>(null);
+
+  const reloadInvoicing = useCallback(async () => {
+    const [receiptRows, addressRows] = await Promise.all([
+      fetchInvoiceReceipts(),
+      fetchBillingAddresses(),
+    ]);
+    setReceipts(receiptRows);
+    setAddresses(addressRows);
+  }, []);
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchBillingSummary(), fetchBills(), fetchCredits()])
+    Promise.all([
+      fetchBillingSummary(),
+      fetchBills(),
+      fetchCredits(),
+      reloadInvoicing(),
+    ])
       .then(([sum, rows, creditRecord]) => {
         setSummary(sum);
         setBills(rows);
         setCredits(creditRecord);
       })
       .finally(() => setLoading(false));
-  }, [session.tenant?.id]);
+  }, [session.tenant?.id, reloadInvoicing]);
+
+  // 账单 → 活跃开票申请(rejected/voided 之外均占位,防重复申请)
+  const receiptByBill = useMemo(() => {
+    const map = new Map<string, ConsoleInvoiceReceipt>();
+    for (const r of receipts) {
+      if (r.invoiceStatus === "rejected" || r.invoiceStatus === "voided")
+        continue;
+      if (!map.has(r.billId)) map.set(r.billId, r);
+    }
+    return map;
+  }, [receipts]);
 
   const money = useCallback(
     (v: string, currency: string) =>
@@ -218,6 +254,30 @@ export function BillingPage() {
           "—"
         ),
     },
+    {
+      id: "invoice",
+      header: t("table.colInvoice"),
+      align: "center",
+      cell: (b) => {
+        // 开票资格 = 已结清;不限来源(直接订阅付款/预付款扣费对账单同栈)
+        if (b.billStatus !== "paid") return "—";
+        const receipt = receiptByBill.get(b.id);
+        if (receipt) {
+          return (
+            <StatusBadge
+              tone={RECEIPT_STATUS_TONES[receipt.invoiceStatus] ?? "neutral"}
+            >
+              {t(`invoicing.status.${receipt.invoiceStatus}`)}
+            </StatusBadge>
+          );
+        }
+        return (
+          <Button size="sm" variant="outline" onClick={() => setApplyBill(b)}>
+            {t("invoicing.applyAction")}
+          </Button>
+        );
+      },
+    },
   ];
 
   return (
@@ -292,7 +352,19 @@ export function BillingPage() {
         />
       </PageSection>
 
-      {/* ② 收款与计费口径 */}
+      {/* ②③ 发票记录 + 开票抬头(owner 2026-08-21:归集账单管理,位于账单表
+          下方、收款口径上方;两个开票来源同为已结清账单不分流) */}
+      <InvoiceSections
+        receipts={receipts}
+        addresses={addresses}
+        loading={loading}
+        applyBill={applyBill}
+        onApplyClose={() => setApplyBill(null)}
+        onChanged={reloadInvoicing}
+        money={money}
+      />
+
+      {/* ④ 收款与计费口径 */}
       <PageSection
         icon="seal-check"
         level={2}
