@@ -1306,6 +1306,77 @@ export class PgSubscriptionRepository {
         where pc.plan_version_id = $3`,
       [subscriptionId, workspaceId, planVersionId],
     );
+
+    // Default ai.credit sharing participation (owner 2026-08-20): every product
+    // whose plan contributes ai.credit joins the workspace sharing policy at
+    // materialization. The engine's safe default stays all-reserved (empty
+    // policy = no cross-product flow, product_220 §4.3) — this only SEEDS
+    // policy DATA, so a tenant admin can later remove rows to opt a product
+    // out. ON CONFLICT keeps re-materialization (renew/upgrade) idempotent;
+    // note a removed row does reappear if that same product re-materializes —
+    // acceptable until the tenant policy UI lands (backlog).
+    await client.query(
+      `insert into metering.resource_sharing_policies
+         (workspace_id, tenant_id, metric_key, product_id, created_by_type, created_at)
+       select $2, s.tenant_id, 'ai.credit', pc.product_id, 'system', now()
+         from product.plan_components pc
+         join metering.subscriptions s on s.id = $1
+        where pc.plan_version_id = $3
+          and (pc.quota ? 'ai.credit')
+       on conflict (workspace_id, metric_key, product_id) do nothing`,
+      [subscriptionId, workspaceId, planVersionId],
+    );
+  }
+
+  /**
+   * WS base storage pools (product_220 §4.4 target model, owner 2026-08-20):
+   * every live workspace gets one `ws_base` storage.bytes pool — the default
+   * grant that exists independent of any product subscription. Idempotent
+   * two-step, driven by the platform-api sweep job (self-heals backfill AND
+   * new workspaces, no provisioning-time hook in the identity domain):
+   *   1. insert the pool where a workspace has NO ws_base storage pool of any
+   *      status (retired ones count — an operator retirement must stick);
+   *   2. reconcile ACTIVE base pools to the currently configured base bytes
+   *      (the grant is platform policy, not a per-workspace number — raising
+   *      the default raises everyone; per-workspace extras are addon/override
+   *      pools, never edits to the base pool).
+   * Gauge pools never enter consume, so priority is display-only here.
+   */
+  async ensureWorkspaceStorageBasePools(
+    baseBytes: string,
+  ): Promise<{ created: number; reconciled: number }> {
+    const created = await this.pool.query(
+      `insert into metering.quota_pools (
+         workspace_id, subscription_id, product_id, metric_key, quota_limit, quota_used,
+         priority, component_role, pool_source, reset_period, status,
+         grant_reason, effective_at, created_at, updated_at
+       )
+       select w.id, null, null, 'storage.bytes', $1::bigint, 0,
+              50, 'primary', 'ws_base', 'none', 'active',
+              'workspace base storage (platform default)', now(), now(), now()
+         from tenancy.workspaces w
+        where w.deleted_at is null
+          and w.status = 'active'
+          and not exists (
+                select 1 from metering.quota_pools qp
+                 where qp.workspace_id = w.id
+                   and qp.pool_source = 'ws_base'
+                   and qp.metric_key = 'storage.bytes')`,
+      [baseBytes],
+    );
+    const reconciled = await this.pool.query(
+      `update metering.quota_pools
+          set quota_limit = $1::bigint, updated_at = now()
+        where pool_source = 'ws_base'
+          and metric_key = 'storage.bytes'
+          and status = 'active'
+          and quota_limit <> $1::bigint`,
+      [baseBytes],
+    );
+    return {
+      created: created.rowCount ?? 0,
+      reconciled: reconciled.rowCount ?? 0,
+    };
   }
 
   private mapSubscription(row: SubscriptionRow): SubscriptionRecord {

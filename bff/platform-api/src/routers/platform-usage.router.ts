@@ -46,7 +46,7 @@ export class PlatformUsageRouter {
     private readonly usage: PlatformUsageService,
   ) {}
 
-  /** POST /usage/consume { workspace_id, product, metric, amount, idempotency_key } */
+  /** POST /usage/consume { workspace_id, product, metric, amount, idempotency_key, end_user_id? } */
   @Post("usage/consume")
   async consume(
     @Body()
@@ -56,6 +56,7 @@ export class PlatformUsageRouter {
       metric?: unknown;
       amount?: unknown;
       idempotency_key?: unknown;
+      end_user_id?: unknown;
     },
     @Res({ passthrough: true }) res: Response,
     @Headers("x-request-id") requestId?: string,
@@ -89,6 +90,7 @@ export class PlatformUsageRouter {
       amount: parsed.amount,
       idempotencyKey: parsed.idempotencyKey,
       ...(requestId ? { requestId } : {}),
+      ...(parsed.endUserId ? { endUserId: parsed.endUserId } : {}),
     });
 
     const pools = await this.usage.readPools(

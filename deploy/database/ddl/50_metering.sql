@@ -140,14 +140,14 @@ CREATE INDEX idx_subscription_overrides_product ON metering.subscription_entitle
 CREATE TABLE metering.quota_pools (
     id                   uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id         uuid          NOT NULL,                   -- 跨 schema→tenancy.workspaces（90）
-    subscription_id      uuid          REFERENCES metering.subscriptions(id),  -- 域内 FK，可空（manual_override）
-    product_id           uuid          NOT NULL,                   -- 跨 schema→product.products（90）
+    subscription_id      uuid          REFERENCES metering.subscriptions(id),  -- 域内 FK，可空（manual_override / WS 级池）
+    product_id           uuid,                                     -- 跨 schema→product.products（90）；NULL = WS 级池（ws_base/addon_purchase，product_220 §4.4：池属 workspace 本身、全产品可烧，不参与共享策略路由）
     metric_key           varchar(64)   NOT NULL,
     quota_limit          bigint        NOT NULL,
     quota_used           bigint        NOT NULL DEFAULT 0,         -- 禁裸读（§4.1）
     priority             int           NOT NULL DEFAULT 100,       -- 投影自 plan_component.priority，同键可重复
     component_role       varchar(16)   NOT NULL DEFAULT 'primary', -- 贡献组件的角色 primary/bundled（D6，原 billing_kind）；manual_override/加油包按 primary 记
-    pool_source          varchar(32)   NOT NULL DEFAULT 'subscription',  -- subscription / manual_override
+    pool_source          varchar(32)   NOT NULL DEFAULT 'subscription',  -- subscription / manual_override / ws_base（WS 默认底量,Job 物化,策略可配）/ addon_purchase（加油包/扩展包购买 grant,product_220 §4.2）
     reset_period         varchar(16)   NOT NULL DEFAULT 'none',    -- none/day/month（按订阅锚定推进，非日历）
     period_anchor        timestamptz,                              -- 周期锚点（= 订阅 start_at / manual_override effective_at）
     current_period_start timestamptz,                              -- = period_anchor + k×reset_period ≤ now()（锚定推进）
@@ -160,11 +160,14 @@ CREATE TABLE metering.quota_pools (
     created_at           timestamptz   NOT NULL DEFAULT now(),
     updated_at           timestamptz   NOT NULL DEFAULT now(),
     CONSTRAINT chk_quota_pools_component_role CHECK (component_role IN ('primary','bundled')),
-    CONSTRAINT chk_quota_pools_pool_source  CHECK (pool_source IN ('subscription','manual_override')),
+    -- ws_base / addon_purchase = WS 级来源（2026-08-20，用量配额线）；entitlement_grant / voucher 登记预留（product_220 §4.4），落码时再入值域
+    CONSTRAINT chk_quota_pools_pool_source  CHECK (pool_source IN ('subscription','manual_override','ws_base','addon_purchase')),
     CONSTRAINT chk_quota_pools_reset_period CHECK (reset_period IN ('none','day','month')),
     CONSTRAINT chk_quota_pools_status       CHECK (status IN ('active','retired')),
-    -- subscription 型池必须挂 subscription_id（§4）
-    CONSTRAINT chk_quota_pools_source_sub    CHECK ((pool_source = 'subscription' AND subscription_id IS NOT NULL) OR pool_source = 'manual_override'),
+    -- subscription 型池必须挂 subscription_id（§4）；其余来源可空
+    CONSTRAINT chk_quota_pools_source_sub    CHECK (pool_source <> 'subscription' OR subscription_id IS NOT NULL),
+    -- 仅 WS 级来源允许无产品归属（NULL product_id）
+    CONSTRAINT chk_quota_pools_ws_level      CHECK (product_id IS NOT NULL OR pool_source IN ('ws_base','addon_purchase')),
     -- 周期池强制非空锚点 + 当前周期起点（§4）
     CONSTRAINT chk_quota_pools_period_anchor CHECK (reset_period = 'none' OR (current_period_start IS NOT NULL AND period_anchor IS NOT NULL))
 );
@@ -193,12 +196,14 @@ CREATE TABLE metering.usage_events (
     requested_amount bigint,                                       -- 409 审计用，可空
     idempotency_key  varchar(128),
     request_id       varchar(128),
+    end_user_id      uuid,                                         -- 终端用户归因（产品侧可选上报,2026-08-20 用量配额线）；裸 UUID→account.users（边界#2 不建 FK）；NULL = 未归集用户（容错桶,产品未上报即空缺）
     created_at       timestamptz   NOT NULL DEFAULT now(),
     PRIMARY KEY (id, created_at)                                   -- 分区键必须进 PK
 ) PARTITION BY RANGE (created_at);
 CREATE INDEX idx_usage_events_route          ON metering.usage_events (workspace_id, product_id, metric_key);
 CREATE INDEX idx_usage_events_idempotency    ON metering.usage_events (idempotency_key);
 CREATE INDEX idx_usage_events_request_id     ON metering.usage_events (request_id);
+CREATE INDEX idx_usage_events_end_user       ON metering.usage_events (workspace_id, end_user_id) WHERE end_user_id IS NOT NULL;  -- 商业版按成员统计（部分索引,未归集行不占）
 
 -- ── §7 用量明细（append-only，与头同步月分区）。每命中池一行。触发器见 95。
 --   复合 FK (event_id,event_created_at)→usage_events(id,created_at)、quota_pool_id→quota_pools（均域内内联，

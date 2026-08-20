@@ -11,6 +11,13 @@ export interface ConsumeInput {
   /** global-unique idempotency key (usage_idempotency PK) */
   idempotencyKey: string;
   requestId?: string;
+  /**
+   * End user the product attributes this call to (bare UUID → account.users,
+   * 边界#2 no FK). Optional: products that don't attribute yet omit it and the
+   * event lands in the "unattributed" bucket (NULL) — tolerant by design
+   * (owner 2026-08-20, per-user usage analytics).
+   */
+  endUserId?: string;
 }
 
 export interface ConsumePoolTake {

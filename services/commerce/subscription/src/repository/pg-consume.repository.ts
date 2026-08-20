@@ -107,7 +107,7 @@ export class PgConsumeRepository {
       //    below re-sorts own-first ("自留先烧、共享兜底").
       const poolsRes = await client.query<{
         id: string;
-        product_id: string;
+        product_id: string | null; // NULL = WS-level pool (ws_base / addon_purchase)
         quota_limit: string;
         quota_used: string;
         reset_period: string;
@@ -132,7 +132,11 @@ export class PgConsumeRepository {
                     where ts.id = qp.subscription_id
                       and ts.status in ('active', 'trialing')
                       and ts.deleted_at is null))
+            -- WS-level pools (product_id NULL: ws_base / addon_purchase grants,
+            -- product_220 §4.4) belong to the workspace, not a contributor —
+            -- burnable by every product, no sharing policy involved.
             and ( qp.product_id = $2
+                  or qp.product_id is null
                   or ( $4
                        and exists (select 1 from metering.resource_sharing_policies pp
                                     where pp.workspace_id = $1 and pp.metric_key = $3
@@ -264,12 +268,38 @@ export class PgConsumeRepository {
     // its PK (and the _pool composite FK) is (id, created_at); we must NOT round-trip
     // created_at through JS (Date loses the microseconds of now() -> FK violation) —
     // the detail rows read e.created_at straight from the head insert.
+    //
+    // Zero-take events (atomic over-limit: recorded, nothing deducted) go
+    // through the head-only branch: the CTE form cross-joins the head row with
+    // an EMPTY unnest, so its RETURNING yields no rows and the event id — which
+    // exists — would be unreadable (the head insert itself still ran inside the
+    // CTE, but the statement's result set is the detail insert's).
+    if (takes.length === 0) {
+      const head = await client.query<{ id: string }>(
+        `insert into metering.usage_events
+           (workspace_id, product_id, metric_key, total_amount, requested_amount,
+            idempotency_key, request_id, end_user_id, created_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, now())
+         returning id`,
+        [
+          input.workspaceId,
+          input.productId,
+          input.metricKey,
+          consumed.toString(),
+          amount.toString(),
+          input.idempotencyKey,
+          input.requestId ?? null,
+          input.endUserId ?? null,
+        ],
+      );
+      return head.rows[0]!.id;
+    }
     const res = await client.query<{ event_id: string }>(
       `with e as (
          insert into metering.usage_events
            (workspace_id, product_id, metric_key, total_amount, requested_amount,
-            idempotency_key, request_id, created_at)
-         values ($1, $2, $3, $4, $5, $6, $7, now())
+            idempotency_key, request_id, end_user_id, created_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $10, now())
          returning id, created_at
        )
        insert into metering.usage_event_pools
@@ -287,6 +317,7 @@ export class PgConsumeRepository {
         input.requestId ?? null,
         takes.map((t) => t.poolId),
         takes.map((t) => t.took.toString()),
+        input.endUserId ?? null,
       ],
     );
     return res.rows[0]!.event_id;

@@ -2,6 +2,7 @@ export { SubscriptionModule } from "./module/subscription.module";
 export { SubscriptionService } from "./service/subscription.service";
 export { ConsumeService } from "./service/consume.service";
 export { PgSubscriptionRepository } from "./repository/pg-subscription.repository";
+export { PgUsageRollupRepository } from "./repository/pg-usage-rollup.repository";
 export { COMMERCE_PG_POOL } from "./tokens";
 export type {
   ConsumeInput,

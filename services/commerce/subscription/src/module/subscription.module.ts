@@ -7,6 +7,7 @@ import { COMMERCE_PG_POOL } from "../tokens";
 import { PgSubscriptionRepository } from "../repository/pg-subscription.repository";
 import { SubscriptionService } from "../service/subscription.service";
 import { PgConsumeRepository } from "../repository/pg-consume.repository";
+import { PgUsageRollupRepository } from "../repository/pg-usage-rollup.repository";
 import { ConsumeService } from "../service/consume.service";
 
 @Module({
@@ -49,7 +50,13 @@ import { ConsumeService } from "../service/consume.service";
     SubscriptionService,
     PgConsumeRepository,
     ConsumeService,
+    PgUsageRollupRepository,
   ],
-  exports: [COMMERCE_PG_POOL, SubscriptionService, ConsumeService],
+  exports: [
+    COMMERCE_PG_POOL,
+    SubscriptionService,
+    ConsumeService,
+    PgUsageRollupRepository,
+  ],
 })
 export class SubscriptionModule {}

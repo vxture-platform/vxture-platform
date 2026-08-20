@@ -27,6 +27,8 @@ import { OrderPaymentExpiryJob } from "./jobs/order-payment-expiry.job";
 import { ProvisioningDispatchJob } from "./jobs/provisioning-dispatch.job";
 import { SharingExpiryJob } from "./jobs/sharing-expiry.job";
 import { TrialExpiryJob } from "./jobs/trial-expiry.job";
+import { UsageRollupJob } from "./jobs/usage-rollup.job";
+import { WsBasePoolJob } from "./jobs/ws-base-pool.job";
 import { PlatformEntitlementsService } from "./platform/platform-entitlements.service";
 import { PlatformUsageService } from "./platform/platform-usage.service";
 import { HealthRouter } from "./routers/health.router";
@@ -60,6 +62,8 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     SharingExpiryJob,
     TrialExpiryJob,
     OrderPaymentExpiryJob,
+    WsBasePoolJob,
+    UsageRollupJob,
   ],
 })
 export class AppModule {}

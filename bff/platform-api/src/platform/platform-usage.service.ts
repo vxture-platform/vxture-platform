@@ -48,6 +48,8 @@ export class PlatformUsageService {
     amount: string;
     idempotencyKey: string;
     requestId?: string;
+    /** optional end-user attribution (NULL bucket when absent). */
+    endUserId?: string;
   }): Promise<EngineConsumeResult> {
     return this.consumeService.consume(input);
   }
@@ -69,13 +71,24 @@ export class PlatformUsageService {
          AND qp.metric_key = $3
          AND qp.status = 'active'
          AND (qp.expires_at IS NULL OR qp.expires_at > NOW())
+         -- D10 live-coverage gate (parity fix 2026-08-20: this read used to skip
+         -- it, so a lapsed contributor's pool inflated remaining_total here
+         -- while being invisible to both C2 and the actual deduction).
+         AND (qp.subscription_id IS NULL OR EXISTS (
+                SELECT 1 FROM metering.subscriptions ts
+                 WHERE ts.id = qp.subscription_id
+                   AND ts.status IN ('active', 'trialing')
+                   AND ts.deleted_at IS NULL))
+         -- product_id NULL = WS-level pool (ws_base / addon_purchase): open to
+         -- every product, mirrors the consume candidate set.
          AND ( qp.product_id = $2
+               OR qp.product_id IS NULL
                OR ( EXISTS (SELECT 1 FROM product.platform_metrics plm WHERE plm.metric_key = $3)
                     AND EXISTS (SELECT 1 FROM metering.resource_sharing_policies pp
                                  WHERE pp.workspace_id = $1 AND pp.metric_key = $3 AND pp.product_id = qp.product_id)
                     AND EXISTS (SELECT 1 FROM metering.resource_sharing_policies px
                                  WHERE px.workspace_id = $1 AND px.metric_key = $3 AND px.product_id = $2) ) )
-       ORDER BY (qp.product_id = $2) DESC, qp.priority ASC, (qp.component_role = 'bundled') DESC,
+       ORDER BY (qp.product_id = $2) DESC NULLS LAST, qp.priority ASC, (qp.component_role = 'bundled') DESC,
                 qp.effective_at ASC, qp.id ASC`,
       [workspaceId, productId, metricKey],
     );

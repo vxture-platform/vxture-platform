@@ -264,7 +264,7 @@ GRANT UPDATE (pool_id, period_start, used_before_reset, reset_at) ON metering.qu
 
 -- metering.usage_events  [anchor: id, created_at]
 REVOKE UPDATE ON metering.usage_events FROM platform_svc;
-GRANT UPDATE (workspace_id, product_id, metric_key, total_amount, requested_amount, idempotency_key, request_id) ON metering.usage_events TO platform_svc;
+GRANT UPDATE (workspace_id, product_id, metric_key, total_amount, requested_amount, idempotency_key, request_id, end_user_id) ON metering.usage_events TO platform_svc;
 
 -- metering.usage_event_pools  [anchor: event_id, event_created_at, quota_pool_id]
 REVOKE UPDATE ON metering.usage_event_pools FROM platform_svc;

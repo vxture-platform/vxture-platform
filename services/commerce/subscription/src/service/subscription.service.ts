@@ -800,6 +800,19 @@ export class SubscriptionService {
     return transitioned;
   }
 
+  /**
+   * WS base storage pool ensure (owner 2026-08-20, usage-quota line): create
+   * the `ws_base` storage.bytes pool for every live workspace that has none,
+   * and reconcile active base pools to the configured platform default. Thin
+   * passthrough — the idempotent SQL (and its retire-sticks semantics) lives
+   * in the repository; the platform-api sweep job is the driver.
+   */
+  async ensureWorkspaceStorageBasePools(
+    baseBytes: string,
+  ): Promise<{ created: number; reconciled: number }> {
+    return this.repo.ensureWorkspaceStorageBasePools(baseBytes);
+  }
+
   async getHistory(id: string): Promise<SubscriptionHistoryRecord[]> {
     await this.getSubscription(id);
     return this.repo.getHistory(id);

@@ -33,7 +33,8 @@ const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
 
 /** A platform-metric pool tagged with its contributing product (for policy filtering). */
 interface PlatformPoolRow extends PoolRow {
-  contributingProductCode: string;
+  /** NULL = WS-level pool (ws_base / addon_purchase): no contributor, open to all products. */
+  contributingProductCode: string | null;
   kind: string; // platform_metrics.kind
 }
 
@@ -127,6 +128,9 @@ export class PlatformEntitlementsService {
     );
     const accessibleCounterPools = (code: string): PoolRow[] =>
       counterPlatformPools.filter((p) => {
+        // WS-level pools (ws_base / addon_purchase) have no contributor and are
+        // open to every product — policy governs cross-PRODUCT flow only.
+        if (p.contributingProductCode === null) return true;
         if (p.contributingProductCode === code) return true; // own (reserved)
         const participants = policy.get(p.metricKey);
         return (
@@ -369,14 +373,17 @@ export class PlatformEntitlementsService {
     liveSubscriptionIds: string[],
   ): Promise<PlatformPoolRow[]> {
     const res = await this.pool.query<
-      PoolSqlRow & { contributing_product_code: string; kind: string }
+      PoolSqlRow & { contributing_product_code: string | null; kind: string }
     >(
+      // LEFT JOIN products: WS-level pools (product_id NULL — ws_base /
+      // addon_purchase, product_220 §4.4) have no contributing product and
+      // must still count toward the workspace's limit Σ.
       `SELECT prod.product_code AS contributing_product_code, qp.metric_key,
               qp.quota_limit, qp.quota_used, qp.priority, qp.reset_period,
               qp.current_period_start, plm.kind
        FROM metering.quota_pools qp
        JOIN product.platform_metrics plm ON plm.metric_key = qp.metric_key
-       JOIN product.products prod ON prod.id = qp.product_id
+       LEFT JOIN product.products prod ON prod.id = qp.product_id
        WHERE qp.workspace_id = $1
          AND qp.status = 'active'
          AND (qp.expires_at IS NULL OR qp.expires_at > NOW())

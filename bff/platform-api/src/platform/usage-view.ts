@@ -94,6 +94,12 @@ export interface ParsedConsumeBody {
   /** positive integer, forwarded as string (engine is bigint-valued) */
   amount: string;
   idempotencyKey: string;
+  /**
+   * Optional end-user attribution (bare UUID → account.users, 边界#2 no FK).
+   * Products that don't attribute yet simply omit it — the event lands in the
+   * NULL "unattributed" bucket (owner 2026-08-20, per-user usage analytics).
+   */
+  endUserId?: string;
 }
 
 /**
@@ -107,6 +113,7 @@ export function parseConsumeBody(body: {
   metric?: unknown;
   amount?: unknown;
   idempotency_key?: unknown;
+  end_user_id?: unknown;
 }): ParsedConsumeBody {
   const workspaceId =
     typeof body.workspace_id === "string" ? body.workspace_id.trim() : "";
@@ -139,7 +146,24 @@ export function parseConsumeBody(body: {
     throw new Error("invalid_idempotency_key");
   }
 
-  return { workspaceId, productCode, metric, amount, idempotencyKey };
+  // Absent/null/"" = unattributed (tolerant by design); PRESENT but malformed
+  // is still a 400 — a product that claims to attribute must attribute validly.
+  let endUserId: string | undefined;
+  if (body.end_user_id != null && body.end_user_id !== "") {
+    const raw =
+      typeof body.end_user_id === "string" ? body.end_user_id.trim() : "";
+    if (!UUID_RE.test(raw)) throw new Error("invalid_end_user_id");
+    endUserId = raw;
+  }
+
+  return {
+    workspaceId,
+    productCode,
+    metric,
+    amount,
+    idempotencyKey,
+    ...(endUserId ? { endUserId } : {}),
+  };
 }
 
 export interface ParsedGaugeBody {
