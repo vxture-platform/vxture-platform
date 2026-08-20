@@ -6,16 +6,17 @@
  * @layer Presentation
  * @category Marketing / Pricing
  *
- * 视觉按定稿样图（v5）：
+ * 视觉按定稿样图（v5 + 选中态修订）：
  * - 年付模式大字展示折合月价（floor(yearly/12)），小字年付总额，success 徽章省额；
  * - 受众行 = 受众标签 + 席位（图标按受众：个人/团队/私有化）；
- * - 推荐档 = 浅品牌边框 + 双层品牌光晕，不抬高、无角标，所有卡顶底齐平；
- * - 推荐档 CTA 用营销层渐变（brand→info），其余 outline。
+ * - 推荐档只在档名旁挂「最受欢迎」徽章，无其他特殊性；
+ * - 选中档 = 强调边框 + 双层品牌光晕 + 渐变 CTA；默认选中推荐档，点击任意卡切换。
  */
 
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@vxture/shared";
 import {
+  Badge,
   Button,
   Card,
   CardContent,
@@ -38,9 +39,9 @@ const AUDIENCE_ICON: Record<PlanAudience, IconName> = {
   private: "buildings",
 };
 
-/** 推荐档：浅品牌边框 + 双层品牌光晕（光晕收在 portal 语义类,引用 --primary token） */
-const RECOMMENDED_CARD =
-  "border-vx-brand-200 dark:border-vx-brand-500/40 vx-pricing-card-recommended";
+/** 选中档：强调边框 + 双层品牌光晕（光晕收在 portal 语义类，引用 --primary token） */
+const SELECTED_CARD =
+  "border-vx-brand-500 dark:border-vx-brand-400 vx-pricing-card-selected";
 
 /** 营销层渐变 CTA（与首页 hero CTA 同族） */
 const GRADIENT_CTA =
@@ -52,11 +53,15 @@ export function PricingPlanCard({
   cycle,
   productCode,
   contactSubject,
+  selected,
+  onSelect,
 }: {
   plan: PricingPlan;
   cycle: BillingCycle;
   productCode: string;
   contactSubject: string;
+  selected: boolean;
+  onSelect: () => void;
 }) {
   const t = useTranslations("products.subscription");
   const locale = useLocale();
@@ -69,18 +74,30 @@ export function PricingPlanCard({
 
   return (
     <Card
-      className={`flex flex-col rounded-2xl shadow-none ${
-        plan.highlight
-          ? RECOMMENDED_CARD
-          : "transition hover:border-vx-brand-200 dark:hover:border-vx-brand-500/30"
+      role="radio"
+      aria-checked={selected}
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        // CTA 链接/按钮上的回车不劫持（让其正常跳转）
+        if ((event.target as HTMLElement).closest("a,button")) return;
+        event.preventDefault();
+        onSelect();
+      }}
+      className={`flex cursor-pointer flex-col rounded-2xl shadow-none transition ${
+        selected
+          ? SELECTED_CARD
+          : "hover:border-vx-brand-200 dark:hover:border-vx-brand-500/30"
       }`}
     >
       <CardContent className="flex flex-1 flex-col p-6">
         {/* 档名/定位语 + 受众图标 */}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-base font-semibold text-vx-text-primary">
+            <p className="flex flex-wrap items-center gap-2 text-base font-semibold text-vx-text-primary">
               {plan.name}
+              {plan.highlight ? <Badge>{t("mostPopular")}</Badge> : null}
             </p>
             {plan.tagline ? (
               <p className="mt-0.5 text-xs text-vx-text-muted">
@@ -199,8 +216,8 @@ export function PricingPlanCard({
           ) : (
             <Button
               asChild
-              variant={plan.highlight ? "default" : "outline"}
-              className={plan.highlight ? GRADIENT_CTA : "w-full"}
+              variant={selected ? "default" : "outline"}
+              className={selected ? GRADIENT_CTA : "w-full"}
             >
               <a
                 href={buildConsoleSubscribeUrl(

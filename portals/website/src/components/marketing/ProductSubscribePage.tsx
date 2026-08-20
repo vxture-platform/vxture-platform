@@ -51,7 +51,13 @@ export default function ProductSubscribePage() {
 
   const [cycle, setCycle] = useState<BillingCycle>("yearly");
   const [audience, setAudience] = useState<AudienceView>("person");
+  const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // 切换产品回到默认选中（推荐档）
+  useEffect(() => {
+    setSelectedTier(null);
+  }, [productCode]);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   // 产品下拉：点击外部关闭
@@ -76,6 +82,10 @@ export default function ProductSubscribePage() {
   const visiblePlans =
     effectiveAudience === "person" ? personPlans : (model?.plans ?? []);
   const showGhost = effectiveAudience === "person" && teamPlans.length > 0;
+  // 选中档：用户点选优先；不在可见档里（切产品/切受众后）回落到推荐档，再回落首档。
+  const activeTier = visiblePlans.some((p) => p.tier === selectedTier)
+    ? selectedTier
+    : (visiblePlans.find((p) => p.highlight)?.tier ?? visiblePlans[0]?.tier);
   // CSS repeat() 不接受 0：分段拼接，空段直接不出现。
   const gridColumns = [
     visiblePlans.length > 0
@@ -230,9 +240,12 @@ export default function ProductSubscribePage() {
                 </div>
               </div>
 
-              {/* 档位卡：严格一行，窄屏横向滚动 */}
-              <div className="mt-10 overflow-x-auto pb-2">
+              {/* 档位卡：严格一行，窄屏横向滚动。
+                  负 margin + 等量 padding 给选中卡的光晕留出血，避免被滚动容器硬裁。 */}
+              <div className="-mx-3 mt-8 overflow-x-auto px-3 pb-10 pt-3">
                 <div
+                  role="radiogroup"
+                  aria-label={t("planGroupLabel")}
                   className="grid items-stretch gap-5"
                   style={{ gridTemplateColumns: gridColumns }}
                 >
@@ -243,6 +256,8 @@ export default function ProductSubscribePage() {
                       cycle={cycle}
                       productCode={productCode}
                       contactSubject={model.contactSubject}
+                      selected={plan.tier === activeTier}
+                      onSelect={() => setSelectedTier(plan.tier)}
                     />
                   ))}
                   {showGhost ? (

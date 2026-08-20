@@ -186,6 +186,8 @@
     },
     "audienceGroupLabel": "适用对象",
     "cycleGroupLabel": "计费周期",
+    "planGroupLabel": "选择档位",
+    "mostPopular": "最受欢迎",
     "audienceToggle": {
       "person": "个人",
       "all": "全部"

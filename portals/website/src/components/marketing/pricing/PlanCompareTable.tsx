@@ -30,24 +30,28 @@ function buildCompareColumns(
     {
       id: "feature",
       /* 宽度落在内容上而不是列上：`block w-56` 让这一列的内容撑出固定宽度。 */
+      /* 缩进层次：轮廓线占满容器宽，内容整体左收（pl-6）；
+       * 分组标题一级缩进，功能行再深一级（pl-14），读出树状层次。 */
       header: (
-        <span className="block w-56 text-xs uppercase tracking-wide text-vx-gray-500 dark:text-vx-gray-400">
+        <span className="block w-64 pl-6 text-xs uppercase tracking-wide text-vx-gray-500 dark:text-vx-gray-400">
           {featureHeader}
         </span>
       ),
       cell: (row) =>
         row.kind === "group" ? (
-          <span className="text-xs font-semibold uppercase tracking-wide text-vx-brand-600 dark:text-vx-brand-300">
+          <span className="block pl-6 text-xs font-semibold uppercase tracking-wide text-vx-brand-600 dark:text-vx-brand-300">
             {row.title}
           </span>
         ) : (
-          <span className="text-vx-gray-700 dark:text-vx-gray-200">
+          <span className="block pl-14 text-vx-gray-700 dark:text-vx-gray-200">
             {row.label}
           </span>
         ),
     },
-    ...model.plans.map(
-      (plan, planIndex): DataTableColumn<CompareTableRow> => ({
+    ...model.plans.map((plan, planIndex): DataTableColumn<CompareTableRow> => {
+      /* 尾列内容右收（pr-6），与首列 pl-6 对称，内容不顶容器边。 */
+      const trailing = planIndex === model.plans.length - 1 ? " pr-6" : "";
+      return {
         id: plan.tier,
         align: "center",
         /* 推荐列的底色画在**内容**上（headerClassName/cellClassName 已随
@@ -55,9 +59,9 @@ function buildCompareColumns(
         header: (
           <span
             className={
-              plan.highlight
+              (plan.highlight
                 ? `block ${HIGHLIGHT_COL} font-bold text-vx-brand-600 dark:text-vx-brand-300`
-                : "block text-vx-gray-900 dark:text-vx-white"
+                : "block text-vx-gray-900 dark:text-vx-white") + trailing
             }
           >
             {plan.name}
@@ -66,13 +70,15 @@ function buildCompareColumns(
         cell: (row) =>
           row.kind === "group" ? null : (
             <span
-              className={plan.highlight ? `block ${HIGHLIGHT_COL}` : undefined}
+              className={
+                (plan.highlight ? `block ${HIGHLIGHT_COL}` : "block") + trailing
+              }
             >
               <ComparisonCell value={row.values[planIndex] ?? false} />
             </span>
           ),
-      }),
-    ),
+      };
+    }),
   ];
 }
 

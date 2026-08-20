@@ -147,8 +147,8 @@
   flex-basis: var(--vx-website-footer-links-basis);
 }
 
-.vx-pricing-card-recommended {
+.vx-pricing-card-selected {
   box-shadow:
-    0 0 0 4px rgb(from var(--primary) r g b / 0.07),
-    0 10px 44px -10px rgb(from var(--primary) r g b / 0.38);
+    0 0 0 4px rgb(from var(--primary) r g b / 0.12),
+    0 10px 44px -10px rgb(from var(--primary) r g b / 0.42);
 }

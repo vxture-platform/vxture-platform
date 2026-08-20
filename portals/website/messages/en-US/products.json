@@ -202,6 +202,8 @@
     },
     "audienceGroupLabel": "Audience",
     "cycleGroupLabel": "Billing cycle",
+    "planGroupLabel": "Choose a plan",
+    "mostPopular": "Most popular",
     "audienceToggle": {
       "person": "Individual",
       "all": "All plans"
