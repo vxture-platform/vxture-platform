@@ -59,15 +59,6 @@ export interface ConsoleInvoice {
   }>;
 }
 
-export interface ConsoleBillingOverview {
-  totalInvoices: number;
-  paidInvoices: number;
-  pendingInvoices: number;
-  overdueInvoices: number;
-  totalRevenue: number;
-  activeSubscriptions: number;
-}
-
 function normalizeOrigin(value: string | undefined): string {
   const normalized = value?.trim().replace(/\/+$/, "");
   if (!normalized) {
@@ -1042,45 +1033,50 @@ export async function fetchBillingInvoices(
   return Array.isArray(raw) ? raw.map(toConsoleInvoice) : [];
 }
 
-/**
- * `GET /api/billing/overview` returns `{total, paid, pending, cancelled}` —
- * none of the six field names `ConsoleBillingOverview` declares. Without this
- * adapter every consumer read `undefined`, which rendered literally as
- * "undefined" and made `overdueInvoices > 0` false, so BillingPage claimed
- * "All paid" for any tenant. Two fields the backend does not compute yet are
- * reported honestly rather than guessed:
- *   - overdueInvoices: the backend has no overdue bucket → 0
- *   - totalRevenue / activeSubscriptions: not in this response → 0
- * Widening the backend response is the real fix; this keeps the UI truthful
- * until then.
- */
-interface BillingOverviewWire {
+// ── 账单管理页（product_331）：BFF 重写后的一手视图，不再需要 wire 适配 ──
+
+export interface ConsoleBillingSummary {
   total: number;
   paid: number;
-  pending: number;
+  /** 待收款合集：unpaid + paying + partial。 */
+  unpaid: number;
+  overdue: number;
   cancelled: number;
+  /** 累计实收（元字符串）。 */
+  paidTotal: string;
+  currency: string;
 }
 
-function toBillingOverview(
-  wire: BillingOverviewWire | null,
-): ConsoleBillingOverview | null {
-  if (!wire) return null;
-  return {
-    totalInvoices: wire.total,
-    paidInvoices: wire.paid,
-    pendingInvoices: wire.pending,
-    overdueInvoices: 0,
-    totalRevenue: 0,
-    activeSubscriptions: 0,
-  };
+/** 账单行：可视码 + 账期 + 金额三段 + 状态（日期 ISO）。 */
+export interface ConsoleBill {
+  id: string;
+  billNo: string;
+  billCycle: string;
+  cycleStartDate: string | null;
+  cycleEndDate: string | null;
+  billType: string | null;
+  totalAmount: string;
+  discountAmount: string;
+  payableAmount: string;
+  paidAmount: string;
+  currency: string;
+  billStatus: string;
+  paidAt: string | null;
+  createdAt: string;
 }
 
-export async function fetchBillingOverview(): Promise<ConsoleBillingOverview | null> {
-  const wire = await readJson<BillingOverviewWire | null>(
+export async function fetchBillingSummary(): Promise<ConsoleBillingSummary | null> {
+  return readJson<ConsoleBillingSummary | null>(
     withTenant("/api/billing/overview"),
     null,
   );
-  return toBillingOverview(wire);
+}
+
+export async function fetchBills(limit = 100): Promise<ConsoleBill[]> {
+  return readJson<ConsoleBill[]>(
+    withTenant(`/api/billing/bills?limit=${limit}`),
+    [],
+  );
 }
 
 export async function fetchUserProfile(): Promise<ConsoleUserProfile | null> {

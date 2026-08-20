@@ -447,8 +447,10 @@ export function SubscriptionPage() {
 
       {error ? <Banner tone="danger" title={error} /> : null}
 
+      {/* 本页业务 3 个指标 → columns=3 铺满一行（列数随业务定，不写死）。 */}
       <MetricGrid
         items={stats}
+        columns={3}
         loading={loading}
         aria-label={t("stats.groupLabel")}
       />

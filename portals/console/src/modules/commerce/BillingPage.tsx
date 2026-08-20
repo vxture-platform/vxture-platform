@@ -1,205 +1,315 @@
 "use client";
 
-import { useEffect, useState } from "react";
+/**
+ * BillingPage.tsx — 账单管理（product_331 重构）。
+ * @package @vxture/console
+ * @layer Application
+ * @category Module
+ *
+ * 订阅制口径的简单实现（owner 2026-08-20：产品以订阅付费为主，预付费/扣费
+ * 暂少，从简）：账单随订阅订单生成、线下对公收款人工核销、0 元订单同样出账。
+ * 严格 DS 组合件拼装（同产品订阅页整改口径）：MetricGrid（columns 按本页
+ * 指标数=3 铺满）+ PageSection 原生 icon prop + DataTable + SignalList，
+ * 无自造样式层。中文为基准，zh/en 双份 i18n（billingPage 命名空间）。
+ * 全页无 UUID：账单号 = bill_no 可视码。
+ */
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import {
   Button,
   DataTable,
   EmptyState,
   Icon,
   MetricGrid,
+  StatusBadge,
   ViewHeader,
   ViewLayout,
 } from "@vxture/design-system";
-import type { DataTableColumn } from "@vxture/design-system";
+import type {
+  DataTableColumn,
+  MetricGridItem,
+  StatusBadgeTone,
+} from "@vxture/design-system";
+import { formatCurrency, type Locale } from "@vxture/shared";
 import {
-  fetchBillingInvoices,
-  fetchBillingOverview,
-  type ConsoleBillingOverview,
-  type ConsoleInvoice,
+  fetchBillingSummary,
+  fetchBills,
+  fetchCredits,
+  type ConsoleBill,
+  type ConsoleBillingSummary,
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { PlannedBadge } from "@/components/planned";
 import { PageSection, SignalList } from "@/layout/shell";
-import type { SummaryMetric } from "@/entities/console";
+import { fmtDate, fmtTime } from "./components/hubModel";
 
-// ============================================================================
-// 数据格式化工具
-// ============================================================================
+const BILLS_PAGE_SIZE = 10;
 
-function formatAmount(amount: number, currency = "CNY"): string {
-  const n = Number(amount);
-  const value = Number.isFinite(n)
-    ? n.toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
-    : "—";
-  return currency === "CNY" ? `¥${value}` : `${currency} ${value}`;
-}
+/** bill_status 六值域（52_billing.sql CHECK）→ 徽章语气。 */
+const BILL_STATUS_TONES: Record<string, StatusBadgeTone> = {
+  unpaid: "warning",
+  paying: "info",
+  partial: "info",
+  paid: "success",
+  overdue: "warning",
+  cancelled: "neutral",
+};
 
-function formatDate(dateStr: string): string {
-  try {
-    return new Date(dateStr).toLocaleDateString("zh-CN", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return dateStr;
-  }
-}
-
-function buildBillingMetrics(
-  overview: ConsoleBillingOverview | null,
-): SummaryMetric[] {
-  if (!overview) {
-    return [
-      {
-        id: "outstanding",
-        label: "Outstanding",
-        value: "—",
-        trend: "No data",
-        tone: "neutral",
-      },
-      {
-        id: "paid-this-cycle",
-        label: "Paid this cycle",
-        value: "—",
-        trend: "—",
-        tone: "neutral",
-      },
-      {
-        id: "active-subscriptions",
-        label: "Active subscriptions",
-        value: "—",
-        trend: "—",
-        tone: "neutral",
-      },
-    ];
-  }
-
-  const overdueLabel =
-    overview.overdueInvoices > 0
-      ? `${overview.overdueInvoices} overdue`
-      : "All paid";
-
-  return [
-    {
-      id: "pending-invoices",
-      label: "Pending invoices",
-      value: String(overview.pendingInvoices),
-      trend: overdueLabel,
-      tone: overview.overdueInvoices > 0 ? "warning" : "success",
-    },
-    {
-      id: "total-paid",
-      label: "Total paid",
-      value: formatAmount(overview.totalRevenue),
-      trend: `${overview.paidInvoices} invoices paid`,
-      tone: "success",
-    },
-    {
-      id: "active-subscriptions",
-      label: "Active subscriptions",
-      value: String(overview.activeSubscriptions),
-      trend: `${overview.totalInvoices} invoices total`,
-      tone: "neutral",
-    },
-  ];
-}
-
-function buildInvoiceRows(invoices: ConsoleInvoice[]): string[][] {
-  return invoices.map((inv) => [
-    inv.invoiceNumber,
-    formatDate(inv.dueDate),
-    inv.lineItems[0]?.description ?? "—",
-    inv.status.charAt(0).toUpperCase() + inv.status.slice(1),
-    formatAmount(inv.totalAmount, inv.currency),
-  ]);
-}
-
-const invoiceColumns: DataTableColumn<string[]>[] = [
-  { id: "invoice", header: "Invoice", cell: (row) => row[0] },
-  { id: "date", header: "Date", cell: (row) => row[1] },
-  { id: "scope", header: "Scope", cell: (row) => row[2] },
-  { id: "status", header: "Status", cell: (row) => row[3] },
-  { id: "amount", header: "Amount", cell: (row) => row[4], align: "right" },
-];
-
-// ============================================================================
-// BillingPage
-// ============================================================================
+/** bill_type 值域（normal|one_off|adjustment|prepaid_statement）。 */
+const KNOWN_BILL_TYPES = new Set([
+  "normal",
+  "one_off",
+  "adjustment",
+  "prepaid_statement",
+]);
 
 export function BillingPage() {
+  const t = useTranslations("billingPage");
+  const locale = useLocale();
+  const appLocale = locale as Locale;
   const { session } = useConsoleSession();
-  const [overview, setOverview] = useState<ConsoleBillingOverview | null>(null);
-  const [invoices, setInvoices] = useState<ConsoleInvoice[]>([]);
+
+  const [summary, setSummary] = useState<ConsoleBillingSummary | null>(null);
+  const [bills, setBills] = useState<ConsoleBill[]>([]);
+  const [credits, setCredits] = useState<{
+    balance: string;
+    currency: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchBillingOverview(), fetchBillingInvoices(10)])
-      .then(([ov, invs]) => {
-        setOverview(ov);
-        setInvoices(invs);
+    Promise.all([fetchBillingSummary(), fetchBills(), fetchCredits()])
+      .then(([sum, rows, creditRecord]) => {
+        setSummary(sum);
+        setBills(rows);
+        setCredits(creditRecord);
       })
       .finally(() => setLoading(false));
   }, [session.tenant?.id]);
 
-  const billingMetrics = buildBillingMetrics(loading ? null : overview);
-  const invoiceRows = buildInvoiceRows(invoices);
+  const money = useCallback(
+    (v: string, currency: string) =>
+      formatCurrency(Number.parseFloat(v || "0"), appLocale, currency),
+    [appLocale],
+  );
 
-  const healthSignals = [
+  // ── 概览指标（本页业务 3 个指标 → columns=3 铺满，列数随业务不写死）──────
+  const metrics = useMemo<MetricGridItem[]>(() => {
+    const currency = summary?.currency ?? "CNY";
+    const unpaid = summary?.unpaid ?? 0;
+    const overdue = summary?.overdue ?? 0;
+    return [
+      {
+        id: "unpaid",
+        icon: "receipt",
+        label: t("metrics.unpaid"),
+        value: String(unpaid),
+        ...(unpaid > 0 ? { tone: "warning" as const } : {}),
+        trend:
+          overdue > 0
+            ? t("metrics.unpaidOverdue", { count: overdue })
+            : t("metrics.unpaidNone"),
+        ...(overdue > 0 ? { trendTone: "warning" as const } : {}),
+      },
+      {
+        id: "paid-total",
+        icon: "seal-check",
+        label: t("metrics.paidTotal"),
+        value: money(summary?.paidTotal ?? "0", currency),
+        trend: t("metrics.paidTotalHint", { count: summary?.paid ?? 0 }),
+      },
+      {
+        id: "credits",
+        icon: "wallet",
+        label: t("metrics.credits"),
+        value: money(credits?.balance ?? "0", credits?.currency ?? "CNY"),
+        trend: t("metrics.creditsHint"),
+      },
+    ];
+  }, [summary, credits, t, money]);
+
+  // ── 账单表 ────────────────────────────────────────────────────────────────
+  const pageCount = Math.max(1, Math.ceil(bills.length / BILLS_PAGE_SIZE));
+  const pagedBills = useMemo(
+    () => bills.slice((page - 1) * BILLS_PAGE_SIZE, page * BILLS_PAGE_SIZE),
+    [bills, page],
+  );
+
+  const billColumns: DataTableColumn<ConsoleBill>[] = [
     {
-      title: "Billing health",
-      description: loading
-        ? "Loading billing status…"
-        : overview
-          ? `${overview.paidInvoices} invoices paid, ${overview.pendingInvoices} pending, ${overview.overdueInvoices} overdue.`
-          : "No billing data available.",
+      id: "billNo",
+      header: t("table.colBillNo"),
+      cell: (b) => (
+        <span className="flex flex-col">
+          <span className="font-mono text-label-md text-foreground">
+            {b.billNo}
+          </span>
+          <span className="text-body-sm text-muted-foreground tabular-nums">
+            {fmtDate(b.createdAt)} {fmtTime(b.createdAt)}
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "cycle",
+      header: t("table.colCycle"),
+      cell: (b) =>
+        b.cycleStartDate && b.cycleEndDate ? (
+          <span className="tabular-nums">
+            {fmtDate(b.cycleStartDate)} ~ {fmtDate(b.cycleEndDate)}
+          </span>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      id: "type",
+      header: t("table.colType"),
+      width: "sm",
+      cell: (b) =>
+        b.billType && KNOWN_BILL_TYPES.has(b.billType)
+          ? t(`type.${b.billType}`)
+          : t("type.normal"),
+    },
+    {
+      id: "amount",
+      header: t("table.colAmount"),
+      align: "right",
+      cell: (b) => (
+        <span className="flex flex-col items-end tabular-nums">
+          <span className="font-semibold text-foreground">
+            {money(b.payableAmount, b.currency)}
+          </span>
+          {Number.parseFloat(b.discountAmount) > 0 ? (
+            <span className="text-body-sm text-muted-foreground">
+              {t("table.discountOff", {
+                amount: money(b.discountAmount, b.currency),
+              })}
+            </span>
+          ) : null}
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: t("table.colStatus"),
+      align: "center",
+      cell: (b) => (
+        <StatusBadge tone={BILL_STATUS_TONES[b.billStatus] ?? "neutral"}>
+          {t(`status.${b.billStatus}`)}
+        </StatusBadge>
+      ),
+    },
+    {
+      id: "paidAt",
+      header: t("table.colPaidAt"),
+      cell: (b) =>
+        b.paidAt ? (
+          <span className="flex flex-col tabular-nums">
+            <span className="text-foreground">{fmtDate(b.paidAt)}</span>
+            <span className="text-body-sm text-muted-foreground">
+              {fmtTime(b.paidAt)}
+            </span>
+          </span>
+        ) : (
+          "—"
+        ),
     },
   ];
 
   return (
     <ViewLayout>
       <ViewHeader
-        icon="calendar"
-        title="Billing"
-        description="Invoices, payment instruments, and charge visibility in a layout that feels like SaaS operations rather than ERP."
-        secondary={<PlannedBadge />}
+        icon="receipt"
+        title={t("title")}
+        description={t("description")}
         action={
-          /* No statement-export endpoint exists. Kept visible so the intent is
-           * legible, disabled so it cannot pretend to work. */
-          <Button size="md" disabled>
-            <Icon name="arrow-down" size="xs" fallback="placeholder" />
-            <span>Download statement</span>
-          </Button>
+          /* 对账单导出无端点；保持意图可见、禁用不装样。 */
+          <span className="flex items-center gap-sm">
+            <Button size="md" variant="outline" disabled>
+              <Icon name="arrow-down" size="xs" fallback="placeholder" />
+              <span>{t("exportStatement")}</span>
+            </Button>
+            <PlannedBadge />
+          </span>
         }
       />
 
-      <MetricGrid items={billingMetrics} />
+      <MetricGrid
+        items={metrics}
+        columns={3}
+        loading={loading}
+        aria-label={t("metrics.groupLabel")}
+      />
 
-      <PageSection
-        icon="gauge"
-        level={2}
-        title="Billing health"
-        description="Lead with due-state context before expanding into invoice history."
-      >
-        <SignalList items={healthSignals} />
-      </PageSection>
-
+      {/* ① 账单记录 */}
       <PageSection
         icon="receipt"
         level={2}
-        title="Recent invoices"
-        description="Keep the table focused on the most recent invoice and overage records."
+        title={t("table.title")}
+        description={t("table.description")}
       >
-        <DataTable
-          columns={invoiceColumns}
-          rows={invoiceRows}
-          rowKey={(row, index) => row[0] ?? String(index)}
+        <DataTable<ConsoleBill>
+          columns={billColumns}
+          rows={pagedBills}
+          rowKey={(b) => b.id}
           loading={loading}
-          empty={<EmptyState title="No invoices found." />}
+          indexStart={(page - 1) * BILLS_PAGE_SIZE + 1}
+          empty={<EmptyState title={t("table.empty")} />}
+          footer={
+            <div className="flex w-full items-center justify-between gap-md text-body-sm text-muted-foreground">
+              <span className="tabular-nums">
+                {t("table.total", { count: bills.length })}
+              </span>
+              {pageCount > 1 ? (
+                <span className="flex items-center gap-xs">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    {t("table.prevPage")}
+                  </Button>
+                  <span className="tabular-nums">
+                    {page} / {pageCount}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={page >= pageCount}
+                    onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                  >
+                    {t("table.nextPage")}
+                  </Button>
+                </span>
+              ) : null}
+            </div>
+          }
+        />
+      </PageSection>
+
+      {/* ② 收款与计费口径 */}
+      <PageSection
+        icon="seal-check"
+        level={2}
+        title={t("notes.title")}
+        description={t("notes.description")}
+      >
+        <SignalList
+          items={[
+            {
+              title: t("notes.paymentTitle"),
+              description: t("notes.paymentBody"),
+            },
+            {
+              title: t("notes.billingTitle"),
+              description: t("notes.billingBody"),
+            },
+          ]}
         />
       </PageSection>
     </ViewLayout>

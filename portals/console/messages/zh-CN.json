@@ -334,8 +334,8 @@
         "description": "已订产品、订单记录与新品推荐"
       },
       "billing": {
-        "label": "账单记录",
-        "description": "历史账单与发票下载"
+        "label": "账单管理",
+        "description": "账单记录、收款状态与对账"
       },
       "quotas": {
         "label": "用量配额",
@@ -373,7 +373,7 @@
     "roles": "角色与权限",
     "invitations": "邀请记录",
     "subscription": "产品订阅",
-    "billing": "账单",
+    "billing": "账单管理",
     "quotas": "配额",
     "atlas": "模型接入",
     "notifications": "通知提醒",
@@ -1860,6 +1860,58 @@
       "voucherOff": "券抵扣 {amount}",
       "creditsTitle": "账户余额（租户共享）",
       "creditsNote": "余额用于未来按量扣款，充值入口将随扣款业务开放。"
+    }
+  },
+  "billingPage": {
+    "title": "账单管理",
+    "description": "订阅订单产生的账单与收款记录，线下对公收款、人工核销。",
+    "exportStatement": "导出对账单",
+    "metrics": {
+      "groupLabel": "账单统计",
+      "unpaid": "待付账单",
+      "unpaidOverdue": "{count} 笔逾期",
+      "unpaidNone": "无逾期账单",
+      "paidTotal": "累计已付",
+      "paidTotalHint": "{count} 笔已结清",
+      "credits": "钱包余额",
+      "creditsHint": "暂不支持在线充值"
+    },
+    "table": {
+      "title": "账单记录",
+      "description": "账单随订阅订单生成，0 元订单同样出账。",
+      "colBillNo": "账单号",
+      "colCycle": "账期",
+      "colType": "类型",
+      "colAmount": "金额",
+      "colStatus": "状态",
+      "colPaidAt": "结清时间",
+      "discountOff": "优惠 −{amount}",
+      "empty": "暂无账单记录。",
+      "total": "共 {count} 条",
+      "prevPage": "上一页",
+      "nextPage": "下一页"
+    },
+    "type": {
+      "normal": "订阅费",
+      "one_off": "一次性",
+      "adjustment": "调整",
+      "prepaid_statement": "预付结算"
+    },
+    "status": {
+      "unpaid": "待付款",
+      "paying": "收款中",
+      "partial": "部分收款",
+      "paid": "已结清",
+      "overdue": "已逾期",
+      "cancelled": "已取消"
+    },
+    "notes": {
+      "title": "收款与计费口径",
+      "description": "订阅制从简：以下两条为当前唯一口径。",
+      "paymentTitle": "收款方式",
+      "paymentBody": "线下对公汇款，备注订单号，运营人工核销后账单结清；0 元账单在收款环节自动结清。",
+      "billingTitle": "计费口径",
+      "billingBody": "账单随订阅订单生成；订阅周期自服务开通时刻起算（支持提前续订），不以收款确认时刻为准。"
     }
   },
   "subscriptionHub": {
