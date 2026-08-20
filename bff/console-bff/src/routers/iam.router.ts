@@ -12,7 +12,9 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request } from "express";
+import type { Pool } from "pg";
 import { SessionAggregator } from "../aggregators/session.aggregator";
+import { auditCustomerAction } from "../audit/audit-log";
 import {
   ResetMemberPasswordDto,
   UpdateMemberDto,
@@ -32,11 +34,16 @@ function requireTenantSession(req: Request & RequestContext) {
   return { accountId: req.user.id, tenantId: req.tenant.id };
 }
 
+// Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
+const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
+
 @Controller("api/iam")
 export class IamRouter {
   constructor(
     @Inject(SessionAggregator)
     private readonly sessionAggregator: SessionAggregator,
+    /** 仅供租户审计写钩子(support.audit_logs INSERT,fire-and-forget)。 */
+    @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
   ) {}
 
   @Get("summary")
@@ -171,6 +178,13 @@ export class IamRouter {
       throw new NotFoundException("Tenant member could not be created");
     }
 
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.member.invite",
+      resourceType: "member",
+      resourceId: member.email ?? member.id,
+      after: { role: member.roleCode },
+    });
+
     return member;
   }
 
@@ -189,6 +203,13 @@ export class IamRouter {
     if (!member) {
       throw new NotFoundException("Tenant member could not be invited");
     }
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.member.invite",
+      resourceType: "member",
+      resourceId: member.email ?? member.id,
+      after: { role: member.roleCode },
+    });
 
     return member;
   }
@@ -211,6 +232,13 @@ export class IamRouter {
       throw new NotFoundException("Member not found");
     }
 
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.member.update",
+      resourceType: "member",
+      resourceId: memberId,
+      after: { role: member.roleCode, status: member.statusCode },
+    });
+
     return member;
   }
 
@@ -229,6 +257,12 @@ export class IamRouter {
     if (!member) {
       throw new NotFoundException("Member not found");
     }
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.member.disable",
+      resourceType: "member",
+      resourceId: memberId,
+    });
 
     return member;
   }
@@ -251,6 +285,12 @@ export class IamRouter {
       throw new NotFoundException("Member not found");
     }
 
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.member.reset_password",
+      resourceType: "member",
+      resourceId: memberId,
+    });
+
     return { status: "ok" as const };
   }
 
@@ -269,6 +309,12 @@ export class IamRouter {
     if (!removed) {
       throw new NotFoundException("Member not found");
     }
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.member.remove",
+      resourceType: "member",
+      resourceId: memberId,
+    });
 
     return { status: "ok" as const };
   }

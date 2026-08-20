@@ -54,6 +54,8 @@ const PERM_TO_CAPABILITIES: Record<string, Capability[]> = {
   "tenant.member.manage": ["tenant.user.manage"],
   "tenant.role.assign": ["tenant.role.manage"],
   "tenant.billing.manage": ["tenant.billing.read", "tenant.subscription.read"],
+  // 审计属租户设置治理面(owner/manager;成员不可见他人操作轨迹)
+  "tenant.settings.manage": ["tenant.audit.read"],
 };
 const CAPS_CACHE_TTL_MS = 60_000;
 

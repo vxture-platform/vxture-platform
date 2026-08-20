@@ -26,12 +26,17 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request } from "express";
+import type { Pool } from "pg";
 import {
   GovernanceService,
   OrganizationService,
 } from "@vxture/service-organization";
 import type { TenantVerificationRecord } from "@vxture/service-organization";
 import type { RequestContext } from "../types/console.types";
+import { auditCustomerAction } from "../audit/audit-log";
+
+// Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
+const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
 
 export interface ConsoleVerificationView {
   id: string;
@@ -72,6 +77,8 @@ export class VerificationRouter {
   constructor(
     @Inject(OrganizationService) private readonly org: OrganizationService,
     @Inject(GovernanceService) private readonly gov: GovernanceService,
+    /** 仅供租户审计写钩子。 */
+    @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
   ) {}
 
   @Get("tenant")
@@ -129,6 +136,11 @@ export class VerificationRouter {
         userId: req.user.id,
         businessLicenseNo: licenseNo,
         legalPersonName,
+      });
+      auditCustomerAction(this.pool, req, {
+        action: "tenant.verification.submit",
+        resourceType: "tenant_verification",
+        resourceId: licenseNo,
       });
       return mapView(record);
     } catch (err) {

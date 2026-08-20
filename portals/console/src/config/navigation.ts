@@ -185,6 +185,13 @@ const advancedSettingsSection: NavigationSection = {
       descriptionKey: "notifications.description",
     },
     {
+      href: "/audit-logs",
+      labelKey: "auditLogs.label",
+      icon: "clipboard",
+      descriptionKey: "auditLogs.description",
+      capability: "tenant.audit.read",
+    },
+    {
       href: "/security",
       labelKey: "security.label",
       icon: "shield-check",

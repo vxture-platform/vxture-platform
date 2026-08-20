@@ -2206,3 +2206,26 @@ export async function submitTenantVerification(input: {
   }
   return (await response.json()) as ConsoleVerification;
 }
+
+// ============================================================================
+// Audit logs (审计日志 — GET /api/audit/logs)
+// ============================================================================
+
+export interface ConsoleAuditLog {
+  id: string;
+  at: string;
+  actorName: string | null;
+  actorType: string;
+  action: string;
+  resourceType: string;
+  resourceId: string;
+  result: "success" | "failure" | "denied";
+  ipAddress: string | null;
+}
+
+export async function fetchAuditLogs(
+  result?: "success" | "failure",
+): Promise<ConsoleAuditLog[]> {
+  const q = result ? `?result=${result}` : "";
+  return readJson<ConsoleAuditLog[]>(`/api/audit/logs${q}`, []);
+}

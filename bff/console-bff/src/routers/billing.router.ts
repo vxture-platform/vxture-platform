@@ -37,6 +37,7 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request } from "express";
+import type { Pool } from "pg";
 import { BillingService, InvoiceReceiptService } from "@vxture/service-billing";
 import type {
   BillingAddressRecord,
@@ -45,6 +46,10 @@ import type {
   UpsertBillingAddressInput,
 } from "@vxture/service-billing";
 import type { RequestContext } from "../types/console.types";
+import { auditCustomerAction } from "../audit/audit-log";
+
+// Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
+const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
 
 // ============================================================================
 // BillingRouter
@@ -221,6 +226,8 @@ export class BillingRouter {
     private readonly billingService: BillingService,
     @Inject(InvoiceReceiptService)
     private readonly receipts: InvoiceReceiptService,
+    /** 仅供租户审计写钩子。 */
+    @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
   ) {}
 
   // ── 发票(归集在账单管理,owner 2026-08-21):抬头簿 + 申请 + 记录 ──────────
@@ -247,7 +254,13 @@ export class BillingRouter {
       tenantId: req.tenant.id,
       userId: req.user.id,
     });
-    return mapAddressView(await this.receipts.createAddress(input));
+    const created = mapAddressView(await this.receipts.createAddress(input));
+    auditCustomerAction(this.pool, req, {
+      action: "billing.address.create",
+      resourceType: "billing_address",
+      resourceId: created.title,
+    });
+    return created;
   }
 
   @Patch("addresses/:id")
@@ -263,7 +276,15 @@ export class BillingRouter {
       tenantId: req.tenant.id,
       userId: req.user.id,
     });
-    return mapAddressView(await this.receipts.updateAddress(id, input));
+    const updated = mapAddressView(
+      await this.receipts.updateAddress(id, input),
+    );
+    auditCustomerAction(this.pool, req, {
+      action: "billing.address.update",
+      resourceType: "billing_address",
+      resourceId: updated.title,
+    });
+    return updated;
   }
 
   @Post("addresses/:id/default")
@@ -287,6 +308,11 @@ export class BillingRouter {
     if (!req.user) throw new UnauthorizedException("No active session");
     if (!UUID_RE.test(id)) throw new BadRequestException("抬头 id 非法");
     await this.receipts.deleteAddress(id, req.tenant.id, req.user.id);
+    auditCustomerAction(this.pool, req, {
+      action: "billing.address.delete",
+      resourceType: "billing_address",
+      resourceId: id,
+    });
     return { ok: true };
   }
 
@@ -326,6 +352,12 @@ export class BillingRouter {
         | "electronic_general"
         | "electronic_special"
         | "paper_special",
+    });
+    auditCustomerAction(this.pool, req, {
+      action: "billing.invoice.apply",
+      resourceType: "invoice_receipt",
+      resourceId: record.invoiceNo,
+      after: { billNo: record.billNo, type: record.invoiceType },
     });
     return mapReceiptView(record);
   }

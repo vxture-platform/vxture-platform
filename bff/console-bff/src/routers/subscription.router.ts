@@ -49,6 +49,7 @@ import {
   type Tier,
 } from "@vxture/shared";
 import type { RequestContext } from "../types/console.types";
+import { auditCustomerAction } from "../audit/audit-log";
 import {
   buildPaymentChannels,
   type PaymentChannelInfo,
@@ -1596,6 +1597,13 @@ export class SubscriptionRouter {
       );
     }
 
+    auditCustomerAction(this.pool, req, {
+      action: `subscription.${action}`,
+      resourceType: "subscription",
+      resourceId: updated.orderNo ?? subscriptionId,
+      after: { status: updated.status },
+    });
+
     // ── 发送确认邮件（失败不阻断主流程）─────────────────────────────────
     void this.mailService
       .send(buildActionEmail(req.user.email, action, updated))
@@ -1634,6 +1642,14 @@ export class SubscriptionRouter {
       body.enabled,
       { actorId: req.user.id, actorType: "customer" },
     );
+    auditCustomerAction(this.pool, req, {
+      action: body.enabled
+        ? "subscription.auto_renew_on"
+        : "subscription.auto_renew_off",
+      resourceType: "subscription",
+      resourceId: updated.orderNo ?? subscriptionId,
+      after: { autoRenew: updated.autoRenew },
+    });
     return { subscriptionId, autoRenew: updated.autoRenew };
   }
 }

@@ -37,6 +37,7 @@ import {
   type PaymentChannelInfo,
 } from "../lib/payment-channels";
 import type { RequestContext } from "../types/console.types";
+import { auditCustomerAction } from "../audit/audit-log";
 
 // Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
 const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
@@ -263,6 +264,12 @@ export class QuotaRouter {
       createdBy: req.user.id,
       paymentTtlMinutes: paymentTtlMinutesFor(req.tenant.tenantType),
     });
+    auditCustomerAction(this.pool, req, {
+      action: "addon.order.create",
+      resourceType: "addon_order",
+      resourceId: record.orderNo,
+      after: { pack: record.packCode, price: record.price },
+    });
     return {
       order: mapAddonOrder(record),
       paymentChannels: buildPaymentChannels(record.orderNo),
@@ -325,6 +332,11 @@ export class QuotaRouter {
       ...(str(body.remark, 256) ? { remark: str(body.remark, 256)! } : {}),
       actorId: req.user.id,
     });
+    auditCustomerAction(this.pool, req, {
+      action: "addon.order.payment_declare",
+      resourceType: "addon_order",
+      resourceId: orderNo,
+    });
     return { ok: true };
   }
 
@@ -339,6 +351,11 @@ export class QuotaRouter {
       orderNo,
       tenantId: req.tenant.id,
       reason: "customer cancelled",
+    });
+    auditCustomerAction(this.pool, req, {
+      action: "addon.order.cancel",
+      resourceType: "addon_order",
+      resourceId: orderNo,
     });
     return { ok: true };
   }

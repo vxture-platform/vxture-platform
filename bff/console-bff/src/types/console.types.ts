@@ -11,7 +11,8 @@ export type Capability =
   | "tenant.billing.read"
   | "tenant.invoice.manage"
   | "tenant.payment.manage"
-  | "tenant.quota.read";
+  | "tenant.quota.read"
+  | "tenant.audit.read";
 
 export interface ConsoleUser {
   id: string;

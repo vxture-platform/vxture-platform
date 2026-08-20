@@ -368,6 +368,10 @@
       "vouchers": {
         "label": "Vouchers",
         "description": "Your discount and credit vouchers, validity and usage"
+      },
+      "auditLogs": {
+        "label": "Audit Logs",
+        "description": "Trail of member and commerce actions in this tenant"
       }
     }
   },
@@ -390,7 +394,8 @@
     "tenantSettings": "Tenant Settings",
     "usage": "Usage",
     "addonPay": "Booster Pack Payment",
-    "vouchers": "Vouchers"
+    "vouchers": "Vouchers",
+    "auditLogs": "Audit Logs"
   },
   "login": {
     "hero": {
@@ -2598,6 +2603,62 @@
       "useBody": "Pick them on the order payment page: discounts act on the order price, credit vouchers offset the amount due; one of each can stack",
       "sourceTitle": "Where they come from",
       "sourceBody": "Issued by platform promotions (targeted at your tenant, workspace, or you); validity shown here is authoritative"
+    }
+  },
+  "auditPage": {
+    "title": "Audit Logs",
+    "description": "Who did what, when: a trail of member management, subscription/order, and invoicing actions",
+    "actorType": {
+      "operator": "Platform ops",
+      "system": "System"
+    },
+    "result": {
+      "success": "Success",
+      "failure": "Failed",
+      "denied": "Denied"
+    },
+    "action": {
+      "tenant_member_invite": "Invite member",
+      "tenant_member_update": "Update member",
+      "tenant_member_disable": "Disable member",
+      "tenant_member_reset_password": "Reset member password",
+      "tenant_member_remove": "Remove member",
+      "tenant_verification_submit": "Submit business verification",
+      "subscription_pause": "Pause subscription",
+      "subscription_resume": "Resume subscription",
+      "subscription_cancel": "Unsubscribe",
+      "subscription_auto_renew_on": "Resume auto-renew",
+      "subscription_auto_renew_off": "Cancel at period end",
+      "addon_order_create": "Buy booster pack",
+      "addon_order_payment_declare": "Declare booster payment",
+      "addon_order_cancel": "Cancel booster order",
+      "billing_address_create": "Add invoice title",
+      "billing_address_update": "Edit invoice title",
+      "billing_address_delete": "Delete invoice title",
+      "billing_invoice_apply": "Request invoice"
+    },
+    "table": {
+      "title": "Activity",
+      "description": "Last 90 days, up to 200 entries, newest first",
+      "filterLabel": "Result",
+      "filterAll": "All",
+      "filterSuccess": "Success",
+      "filterFailure": "Failed",
+      "colAt": "Time",
+      "colActor": "Actor",
+      "colAction": "Action",
+      "colResource": "Target",
+      "colResult": "Result",
+      "colIp": "Source IP",
+      "empty": "No activity yet — key actions from now on will appear here"
+    },
+    "notes": {
+      "title": "Scope",
+      "description": "Coverage and retention",
+      "scopeTitle": "What's recorded",
+      "scopeBody": "Key console writes (members / subscriptions / orders / invoicing); platform-ops actions on this tenant and in-product business events are out of scope here",
+      "retainTitle": "Retention & immutability",
+      "retainBody": "The trail is append-only; this page shows 90 days, older entries are retained per platform compliance policy"
     }
   }
 }

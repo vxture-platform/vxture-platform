@@ -24,6 +24,7 @@ import { AuthMiddleware } from "./middleware/auth.middleware";
 import { PermissionMiddleware } from "./middleware/permission.middleware";
 import { TenantMiddleware } from "./middleware/tenant.middleware";
 import { ApplicationsRouter } from "./routers/applications.router";
+import { AuditRouter } from "./routers/audit.router";
 import { AtlasRouter } from "./routers/atlas.router";
 import { BillingRouter } from "./routers/billing.router";
 import { CapabilitiesRouter } from "./routers/capabilities.router";
@@ -66,6 +67,7 @@ import { VerificationRouter } from "./routers/verification.router";
     PromotionRouter,
     UsageRouter,
     VerificationRouter,
+    AuditRouter,
     AtlasRouter,
     SearchRouter,
   ],

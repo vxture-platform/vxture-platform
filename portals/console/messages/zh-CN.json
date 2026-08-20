@@ -368,6 +368,10 @@
       "vouchers": {
         "label": "我的卡券",
         "description": "折扣券与抵扣金券的持有、有效期与使用记录"
+      },
+      "auditLogs": {
+        "label": "审计日志",
+        "description": "租户内成员操作与商业动作的轨迹"
       }
     }
   },
@@ -390,7 +394,8 @@
     "tenantSettings": "租户设置",
     "usage": "用量分析",
     "addonPay": "加油包支付",
-    "vouchers": "我的卡券"
+    "vouchers": "我的卡券",
+    "auditLogs": "审计日志"
   },
   "login": {
     "hero": {
@@ -2598,6 +2603,62 @@
       "useBody": "订单支付页结算时选择:折扣券作用于订单价格,抵扣金券抵减应付金额;两类可各选一张叠加",
       "sourceTitle": "卡券来源",
       "sourceBody": "由平台运营活动发放(定向到租户、工作空间或个人);有效期以本页展示为准"
+    }
+  },
+  "auditPage": {
+    "title": "审计日志",
+    "description": "谁在什么时候做了什么:成员管理、订阅与订单、发票与抬头等关键动作的操作轨迹",
+    "actorType": {
+      "operator": "平台运营",
+      "system": "系统"
+    },
+    "result": {
+      "success": "成功",
+      "failure": "失败",
+      "denied": "已拒绝"
+    },
+    "action": {
+      "tenant_member_invite": "邀请成员",
+      "tenant_member_update": "变更成员",
+      "tenant_member_disable": "停用成员",
+      "tenant_member_reset_password": "重置成员密码",
+      "tenant_member_remove": "移除成员",
+      "tenant_verification_submit": "提交企业认证",
+      "subscription_pause": "暂停订阅",
+      "subscription_resume": "恢复订阅",
+      "subscription_cancel": "退订",
+      "subscription_auto_renew_on": "恢复自动续费",
+      "subscription_auto_renew_off": "到期不续",
+      "addon_order_create": "购买加油包",
+      "addon_order_payment_declare": "加油包转账申报",
+      "addon_order_cancel": "取消加油包订单",
+      "billing_address_create": "新增开票抬头",
+      "billing_address_update": "编辑开票抬头",
+      "billing_address_delete": "删除开票抬头",
+      "billing_invoice_apply": "申请发票"
+    },
+    "table": {
+      "title": "操作记录",
+      "description": "近 90 天,最多展示 200 条,时间倒序",
+      "filterLabel": "结果筛选",
+      "filterAll": "全部",
+      "filterSuccess": "成功",
+      "filterFailure": "失败",
+      "colAt": "时间",
+      "colActor": "操作人",
+      "colAction": "动作",
+      "colResource": "对象",
+      "colResult": "结果",
+      "colIp": "来源 IP",
+      "empty": "暂无操作记录;本页上线后的关键动作会陆续出现在这里"
+    },
+    "notes": {
+      "title": "口径说明",
+      "description": "记录范围与留存",
+      "scopeTitle": "记录范围",
+      "scopeBody": "覆盖 console 内的关键写操作(成员/订阅/订单/发票等);平台运营对本租户的操作与产品内业务操作不在本页范围",
+      "retainTitle": "留存与不可篡改",
+      "retainBody": "审计流水只增不改(append-only);本页展示近 90 天,更早记录由平台按合规策略留存"
     }
   }
 }
