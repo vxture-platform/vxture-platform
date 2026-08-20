@@ -2660,5 +2660,91 @@
       "retainTitle": "留存与不可篡改",
       "retainBody": "审计流水只增不改(append-only);本页展示近 90 天,更早记录由平台按合规策略留存"
     }
+  },
+  "invitationsPage": {
+    "title": "邀请管理",
+    "description": "发出的成员邀请与状态;发起新邀请在成员管理页完成",
+    "inviteAction": "去邀请成员",
+    "rowMenu": "邀请操作",
+    "revoke": "撤销邀请",
+    "revokeHint": "仅待接受的邀请可撤销",
+    "revokeFailed": "撤销失败,请稍后重试",
+    "resend": "重发邀请",
+    "resendHint": "邀请邮件通道即将开放",
+    "role": {
+      "owner": "拥有者",
+      "manager": "管理员",
+      "member": "成员",
+      "readonly": "只读成员",
+      "guest": "访客"
+    },
+    "status": {
+      "pending": "待接受",
+      "accepted": "已接受",
+      "expired": "已过期",
+      "revoked": "已撤销"
+    },
+    "table": {
+      "title": "邀请记录",
+      "description": "「已过期」按到期时间派生;撤销后原链接立即失效",
+      "colEmail": "受邀邮箱",
+      "invitedBy": "邀请人:{name}",
+      "colRole": "角色",
+      "colStatus": "状态",
+      "colCreatedAt": "发出时间",
+      "colExpiresAt": "有效期至",
+      "acceptedAt": "{date} 接受",
+      "empty": "暂无邀请记录,去成员管理页发出第一封邀请"
+    },
+    "notes": {
+      "title": "邀请说明",
+      "description": "流程与时效",
+      "flowTitle": "邀请流程",
+      "flowBody": "在成员管理页按邮箱+角色发出邀请;对方接受后自动成为租户与默认工作空间成员",
+      "expiryTitle": "时效",
+      "expiryBody": "邀请到期自动失效;撤销立即失效。同一邮箱可在失效后重新邀请"
+    }
+  },
+  "todosPage": {
+    "title": "待办事项",
+    "description": "需要你处理的事:待付订单、临期续订、配额吃紧、待处理邀请——处理完自动消失",
+    "kind": {
+      "payment": "待支付",
+      "renewal": "续订",
+      "quota": "配额",
+      "invitation": "邀请",
+      "addon": "加油包"
+    },
+    "items": {
+      "payTitle": "支付「{product}」的订阅订单",
+      "payDetail": "请在 {date} 前完成支付申报,逾期自动取消",
+      "payDetailNoTtl": "订单等待支付",
+      "payAction": "去支付",
+      "renewTitle": "「{product}」即将到期",
+      "renewDetail": "剩余 {days} 天,续订后服务无缝衔接",
+      "renewAction": "去续订",
+      "storageTitle": "存储空间余量不足 10%",
+      "storageDetail": "可购买存储扩展包,或清理产品内数据",
+      "creditsTitle": "AI Credits 本期已用尽",
+      "creditsDetail": "可购买 AI 加油包,或等待周期重置",
+      "quotaAction": "去配额管理",
+      "invitesTitle": "{count} 封成员邀请待接受",
+      "invitesDetail": "临期未接受的邀请可撤销后重新发出",
+      "invitesAction": "去邀请管理"
+    },
+    "table": {
+      "title": "待办清单",
+      "description": "由订单/订阅/配额/邀请实时派生,不需要手动勾选完成",
+      "colKind": "类型",
+      "colTitle": "事项",
+      "empty": "全部处理完毕",
+      "emptyHint": "订单、续订、配额与邀请都没有需要你操心的事"
+    },
+    "notes": {
+      "title": "口径说明",
+      "description": "待办从哪来",
+      "derivedTitle": "派生式待办",
+      "derivedBody": "本页不单独记录任务:每一项都来自真实业务状态(待付订单/临期订阅/配额水位/待接受邀请),处理源头后自动消失"
+    }
   }
 }

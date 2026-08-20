@@ -10,6 +10,7 @@ import type {
   OrgProfileUpdateInput,
   OrgRole,
   OrgRoleCatalogEntry,
+  InvitationListItem,
   OrgView,
   ProvisionedOrg,
   SubmitTenantVerificationInput,
@@ -79,6 +80,14 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     limit = 20,
   ): Promise<TenantVerificationRecord[]> {
     return (this.tenantVerifications.get(tenantId) ?? []).slice(0, limit);
+  }
+
+  async listInvitations(): Promise<InvitationListItem[]> {
+    return [];
+  }
+
+  async revokeInvitation(): Promise<boolean> {
+    return false;
   }
 
   async submitTenantVerification(

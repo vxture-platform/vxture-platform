@@ -15,6 +15,7 @@ import type {
   OrgRoleCatalogEntry,
   OrgView,
   ProvisionedOrg,
+  InvitationListItem,
   SubmitTenantVerificationInput,
   TenantVerificationRecord,
   WorkspaceMembershipView,
@@ -776,6 +777,62 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     } finally {
       client.release();
     }
+  }
+
+  // ── 邀请台账(P1;expired 读侧派生:pending ∧ expires_at 已过)────────────
+  async listInvitations(
+    tenantId: string,
+    limit = 100,
+  ): Promise<InvitationListItem[]> {
+    const res = await this.pool.query<{
+      id: string;
+      target: string;
+      role_code: string | null;
+      status: string;
+      expires_at: Date;
+      accepted_at: Date | null;
+      created_at: Date;
+      inviter_name: string | null;
+    }>(
+      `select i.id, i.target, r.role_code, i.status, i.expires_at,
+              i.accepted_at, i.created_at,
+              coalesce(up.display_name, u.account) as inviter_name
+         from tenancy.invitations i
+         left join access.roles r on r.id = i.role_id
+         left join account.users u on u.id = i.created_by
+         left join account.user_profiles up on up.user_id = i.created_by
+        where i.tenant_id = $1
+        order by i.created_at desc
+        limit $2`,
+      [tenantId, limit],
+    );
+    const now = Date.now();
+    return res.rows.map((row) => ({
+      id: row.id,
+      email: row.target,
+      roleCode: row.role_code ?? "member",
+      status:
+        row.status === "pending" && row.expires_at.getTime() < now
+          ? "expired"
+          : (row.status as InvitationListItem["status"]),
+      expiresAt: row.expires_at,
+      acceptedAt: row.accepted_at,
+      createdAt: row.created_at,
+      inviterName: row.inviter_name,
+    }));
+  }
+
+  async revokeInvitation(
+    invitationId: string,
+    tenantId: string,
+  ): Promise<boolean> {
+    const res = await this.pool.query(
+      `update tenancy.invitations
+          set status = 'revoked', updated_at = now()
+        where id = $1 and tenant_id = $2 and status = 'pending'`,
+      [invitationId, tenantId],
+    );
+    return (res.rowCount ?? 0) > 0;
   }
 
   async getEffectiveOrgPermissions(

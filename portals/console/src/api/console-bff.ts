@@ -2229,3 +2229,30 @@ export async function fetchAuditLogs(
   const q = result ? `?result=${result}` : "";
   return readJson<ConsoleAuditLog[]>(`/api/audit/logs${q}`, []);
 }
+
+// ============================================================================
+// Invitations (邀请管理 — /api/iam/invitations)
+// ============================================================================
+
+export interface ConsoleInvitation {
+  id: string;
+  email: string;
+  roleCode: string;
+  status: "pending" | "accepted" | "expired" | "revoked";
+  expiresAt: string;
+  acceptedAt: string | null;
+  createdAt: string;
+  inviterName: string | null;
+}
+
+export async function fetchInvitations(): Promise<ConsoleInvitation[]> {
+  return readJson<ConsoleInvitation[]>("/api/iam/invitations", []);
+}
+
+export async function revokeInvitation(id: string): Promise<boolean> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/iam/invitations/${encodeURIComponent(id)}/revoke`,
+    { method: "POST", credentials: "include" },
+  );
+  return response.ok;
+}

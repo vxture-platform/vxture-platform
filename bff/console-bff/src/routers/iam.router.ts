@@ -162,6 +162,36 @@ export class IamRouter {
     return { status: "ok" as const };
   }
 
+  // ── 邀请台账(P1 /invitations 落地)────────────────────────────────────────
+
+  @Get("invitations")
+  async listInvitations(@Req() req: Request & RequestContext) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    return this.sessionAggregator.listInvitations(accountId, tenantId);
+  }
+
+  @Post("invitations/:invitationId/revoke")
+  async revokeInvitation(
+    @Req() req: Request & RequestContext,
+    @Param("invitationId") invitationId: string,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const revoked = await this.sessionAggregator.revokeInvitation(
+      accountId,
+      tenantId,
+      invitationId,
+    );
+    if (!revoked) {
+      throw new NotFoundException("Invitation not found or not pending");
+    }
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.invitation.revoke",
+      resourceType: "invitation",
+      resourceId: invitationId,
+    });
+    return { status: "ok" as const };
+  }
+
   @Post("members")
   async createMember(
     @Req() req: Request & RequestContext,

@@ -123,6 +123,7 @@ const membersPermissionsSection: NavigationSection = {
       labelKey: "invitations.label",
       icon: "mail",
       descriptionKey: "invitations.description",
+      capability: "tenant.user.manage",
       tenantTypes: ["organization"],
     },
   ],

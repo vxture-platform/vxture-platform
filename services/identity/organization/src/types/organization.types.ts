@@ -36,6 +36,18 @@ export interface TenantVerificationRecord {
   createdAt: Date;
 }
 
+/** 邀请台账行(tenancy.invitations;expired 为读侧派生,库内可能仍是 pending)。 */
+export interface InvitationListItem {
+  id: string;
+  email: string;
+  roleCode: string;
+  status: "pending" | "accepted" | "expired" | "revoked";
+  expiresAt: Date;
+  acceptedAt: Date | null;
+  createdAt: Date;
+  inviterName: string | null;
+}
+
 export interface SubmitTenantVerificationInput {
   tenantId: string;
   /** 提交人(customer),写不进本表——审计走 support.audit_logs;这里仅做守卫上下文 */
@@ -291,6 +303,13 @@ export interface OrganizationReadRepository {
   submitTenantVerification(
     input: SubmitTenantVerificationInput,
   ): Promise<TenantVerificationRecord>;
+  // ── 邀请台账(P1 /invitations 落地,owner 2026-08-21)────────────────────
+  listInvitations(
+    tenantId: string,
+    limit?: number,
+  ): Promise<InvitationListItem[]>;
+  /** 撤销 pending 邀请;非 pending / 不属本租户返回 false。 */
+  revokeInvitation(invitationId: string, tenantId: string): Promise<boolean>;
 }
 
 /** Org membership joined with the member's user record (for management UIs). */

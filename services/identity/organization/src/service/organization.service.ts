@@ -56,6 +56,14 @@ export class OrganizationService {
     return this.repo.getDefaultWorkspace(orgId);
   }
 
+  // ── 邀请台账(P1 /invitations 落地)────────────────────────────────────────
+  listInvitations(tenantId: string) {
+    return this.repo.listInvitations(tenantId);
+  }
+  revokeInvitation(invitationId: string, tenantId: string) {
+    return this.repo.revokeInvitation(invitationId, tenantId);
+  }
+
   // ── 组织实名认证(owner 2026-08-21 P0;审核在 admin 侧,本面只提交/读)────
   getLatestTenantVerification(tenantId: string) {
     return this.repo.getLatestTenantVerification(tenantId);

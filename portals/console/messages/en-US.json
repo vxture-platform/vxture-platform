@@ -2660,5 +2660,91 @@
       "retainTitle": "Retention & immutability",
       "retainBody": "The trail is append-only; this page shows 90 days, older entries are retained per platform compliance policy"
     }
+  },
+  "invitationsPage": {
+    "title": "Invitations",
+    "description": "Member invitations you've sent and their status; send new ones from the Members page",
+    "inviteAction": "Invite members",
+    "rowMenu": "Invitation actions",
+    "revoke": "Revoke",
+    "revokeHint": "Only pending invitations can be revoked",
+    "revokeFailed": "Revoke failed — please try again",
+    "resend": "Resend",
+    "resendHint": "Invitation email channel coming soon",
+    "role": {
+      "owner": "Owner",
+      "manager": "Manager",
+      "member": "Member",
+      "readonly": "Read-only",
+      "guest": "Guest"
+    },
+    "status": {
+      "pending": "Pending",
+      "accepted": "Accepted",
+      "expired": "Expired",
+      "revoked": "Revoked"
+    },
+    "table": {
+      "title": "Invitation records",
+      "description": "\"Expired\" derives from the expiry time; revoking voids the link immediately",
+      "colEmail": "Invitee",
+      "invitedBy": "Invited by {name}",
+      "colRole": "Role",
+      "colStatus": "Status",
+      "colCreatedAt": "Sent at",
+      "colExpiresAt": "Valid until",
+      "acceptedAt": "Accepted {date}",
+      "empty": "No invitations yet — send the first one from the Members page"
+    },
+    "notes": {
+      "title": "How invitations work",
+      "description": "Flow and validity",
+      "flowTitle": "Flow",
+      "flowBody": "Send by email + role from the Members page; on acceptance the invitee joins the tenant and its default workspace",
+      "expiryTitle": "Validity",
+      "expiryBody": "Invitations expire automatically; revocation is immediate. The same email can be re-invited after expiry"
+    }
+  },
+  "todosPage": {
+    "title": "To-dos",
+    "description": "Things needing your attention: pending payments, expiring renewals, tight quotas, open invitations — resolved items disappear automatically",
+    "kind": {
+      "payment": "Payment",
+      "renewal": "Renewal",
+      "quota": "Quota",
+      "invitation": "Invitation",
+      "addon": "Booster"
+    },
+    "items": {
+      "payTitle": "Pay the subscription order for {product}",
+      "payDetail": "Declare payment before {date} — overdue orders auto-cancel",
+      "payDetailNoTtl": "Order awaiting payment",
+      "payAction": "Pay now",
+      "renewTitle": "{product} is expiring soon",
+      "renewDetail": "{days} days left — renew for uninterrupted service",
+      "renewAction": "Renew",
+      "storageTitle": "Storage below 10% remaining",
+      "storageDetail": "Buy a storage extension pack, or clean up in-product data",
+      "creditsTitle": "AI Credits exhausted this cycle",
+      "creditsDetail": "Buy an AI booster pack, or wait for the cycle reset",
+      "quotaAction": "Open Quotas",
+      "invitesTitle": "{count} member invitation(s) pending",
+      "invitesDetail": "Expiring unaccepted invitations can be revoked and re-sent",
+      "invitesAction": "Open Invitations"
+    },
+    "table": {
+      "title": "To-do list",
+      "description": "Derived live from orders/subscriptions/quotas/invitations — no manual check-off",
+      "colKind": "Kind",
+      "colTitle": "Item",
+      "empty": "All clear",
+      "emptyHint": "Nothing in orders, renewals, quotas, or invitations needs you right now"
+    },
+    "notes": {
+      "title": "How this works",
+      "description": "Where to-dos come from",
+      "derivedTitle": "Derived to-dos",
+      "derivedBody": "This page keeps no task records: every row reflects real business state and disappears once you resolve the source"
+    }
   }
 }

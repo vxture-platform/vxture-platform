@@ -596,6 +596,33 @@ export class SessionAggregator {
   }
 
   /** Invite a member by email (requires org.member.manage). Returns a pending record. */
+  // ── 邀请台账(P1 /invitations 落地;读写同 member.manage 门)──────────────
+  async listInvitations(userId: string, orgId?: string) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return [];
+    await this.gov.assertCan(
+      userId,
+      { orgId: resolved.orgId },
+      "tenant.member.manage",
+    );
+    return this.org.listInvitations(resolved.orgId);
+  }
+
+  async revokeInvitation(
+    userId: string,
+    orgId: string | undefined,
+    invitationId: string,
+  ) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return false;
+    await this.gov.assertCan(
+      userId,
+      { orgId: resolved.orgId },
+      "tenant.member.manage",
+    );
+    return this.org.revokeInvitation(invitationId, resolved.orgId);
+  }
+
   async inviteMember(
     userId: string,
     orgId: string | undefined,
