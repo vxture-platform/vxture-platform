@@ -46,10 +46,11 @@ wire 值域即上表六个 slug（`GET orders` 的 `orderStatus` 契约 + i18n k
 
 确认收款走 320 两段幂等编排（段 1 资金事务 + 段 2 激活独立事务 + commit 后 best-effort webhook），**收敛结果等价于原子**：任何中间态可重驱动（人工 + P8 自愈 job 双通道）。唯一已知的段 2 永久失败因子=确认前冒出的档位冲突（如挂单期用户另开了同产品 free 订阅——`findTierConflicts` 只扫 active/trialing，挂单互不可见），运营处方：取消冲突订阅→下一轮自愈自动收尾；防御前置两道：cashDue=0 分支收钱前预检（P8）、**free 即时开通分支服务端补挂单检查**（同 O5 语义：已有同产品待付款单 → 409 引导先处理订单，堵陈旧页签/直接 API 绕过）。拆两个订单状态只会制造无业务对应的中间态；悬挂窗口对用户呈现为 P1 序 1 过渡态。
 
-### P4 超时只约束"待付款"阶段，30 分钟，申报冻结时钟（采纳）
+### P4 超时只约束"待付款"阶段，TTL 按租户类型（个人 30 分钟 / 组织 48 小时），申报冻结时钟（采纳；2026-08-20 修订）
 
 - TTL 仅在"待付款"计时；申报即冻结（银行转账到账慢不受罚）。
-- **零 DDL、锚点用 append-only 历史**：`expire_at = GREATEST(sub.created_at, 本订单行最近 histories(change_type='payment_rejected').created_at) + TTL`（histories 按 `subscription_id`=订单行查，天然限定本单）——驳回自动重锚。否决用 `payments.updated_at` 做锚（无自动刷新触发器，且是通用簿记列，任何补录都会悄悄续期）。
+- 锚点用 append-only 历史：`expire_at = GREATEST(sub.created_at, 本订单行最近 histories(change_type='payment_rejected').created_at) + TTL`（histories 按 `subscription_id`=订单行查，天然限定本单）——驳回自动重锚。否决用 `payments.updated_at` 做锚（无自动刷新触发器，且是通用簿记列，任何补录都会悄悄续期）。
+- **修订（2026-08-20）——TTL 从"全局 env 常量"改为"每单定格"**：下单时 console-bff 依 `req.tenant.tenantType` 取 TTL（个人 `ORDER_PAYMENT_TTL_MINUTES` 默认 30；组织 `ORDER_PAYMENT_TTL_MINUTES_ORG` 默认 2880）并持久化到新列 `subscriptions.payment_ttl_minutes`（迁移 `2026-08-20-subscriptions-payment-ttl-minutes.sql`）。展示（console-bff `deriveExpireAt`）与关单（sweep 谓词）统一读列值，公式仅把常量 TTL 换成 `coalesce(payment_ttl_minutes, env 个人值)`——锚点/驳回重锚/申报冻结逐字不变，存量 NULL 行行为与修订前逐字一致。原"零 DDL"约束就此让位：否决"关单 sweep 现场 join tenancy 查租户类型"（跨 schema 依赖 + 三处判定各算各的漂移面），否决"持久化绝对 `payment_expire_at`"（驳回重锚要求改写该值，凭空多一条写路径且驳回处漏写即静默坏账）。
 - 超时扫描谓词（护栏完整版）：超期 **且** 无 `pending_verify` 腿 **且** `invoice.paid_amount = 0` **且** `bill_status NOT IN ('paid','partial')`——有任何实收的订单**永不**自动关单（否则撞 `cancelOfflineOrder` 的 paid_amount>0 ConflictException 活锁）。
 - 否决：`payments.pay_expire_at` 列（在线网关预留字段，挂单期尚无 payments 行）。
 
@@ -159,7 +160,7 @@ AND (expires_at IS NULL OR expires_at > now())
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 申报/驳回/超时留痕        | `subscription_histories.change_type` 开放集新值 `payment_declared` / `payment_rejected` / `order_expired`（无 CHECK，实证开放）                                                                                                                                                                                                                                                                  |
 | 结算凭据                  | 现金腿 `payments.channel_raw_data`（P10）；intent 仍在 `invoices.operate_remark`（320 既有）                                                                                                                                                                                                                                                                                                     |
-| 超时/悬挂派生             | P4 谓词（histories 锚点）+ P8 对账谓词，无新列                                                                                                                                                                                                                                                                                                                                                   |
+| 超时/悬挂派生             | P4 谓词（histories 锚点 + `payment_ttl_minutes` 每单 TTL，2026-08-20 修订前无新列）+ P8 对账谓词                                                                                                                                                                                                                                                                                                 |
 | 券占用/核销/归属          | promotion 三表既有结构 + 230 §5.2 原子规则 + P7 谓词（tenant 定向=批次级，不加列）                                                                                                                                                                                                                                                                                                               |
 | 计价回滚                  | `invoice_items.deleted_at` 软删（列已有）+ 应用层重算                                                                                                                                                                                                                                                                                                                                            |
 | 现金腿可更新              | `billing.payments` 无 append-only 触发器（`transactions` 才有），`pending_verify→paid/failed` 合法                                                                                                                                                                                                                                                                                               |
@@ -201,7 +202,7 @@ AND (expires_at IS NULL OR expires_at > now())
 
 `OrderPaymentExpiryJob`：`@Interval(sweepIntervalMs(ORDER_PAYMENT_SWEEP_INTERVAL_MS))`（默认 60s）+ 实例 `inFlight` 防重入 + try/catch 不杀 interval（trial-expiry 同款）；单 job 两职：
 
-1. **超时关单**：`SubscriptionService.sweepExpiredPaymentOrders(ttlMinutes)`（env `ORDER_PAYMENT_TTL_MINUTES` 默认 30）：谓词=P4 完整护栏版，逐单 `FOR UPDATE` CAS 关单 + P8b 释放编排 + histories `order_expired`，actor `system`。
+1. **超时关单**：`SubscriptionService.sweepExpiredPaymentOrders(fallbackTtlMinutes)`（env `ORDER_PAYMENT_TTL_MINUTES` 默认 30，仅作存量 NULL 行回退——每单 TTL 读 `subscriptions.payment_ttl_minutes`，P4 修订）：谓词=P4 完整护栏版，逐单 `FOR UPDATE` CAS 关单 + P8b 释放编排 + histories `order_expired`，actor `system`。
 2. **悬挂对账**（P8 自愈二）：`invoice paid ∧ sub suspended+offline_purchase ∧ 无 pending_verify 腿 ∧ 存续 > 2 分钟` → 按 intent 分派段 2 激活（actor=system，CAS 幂等）。
 
 **部署注记**：①首轮 sweep 会一次性关闭 320 期存量超期挂单——上线前 owner 决断：预清理存量挂单，或首日调大 TTL 放行观察。②对账扫描会激活历史上"invoice 已清但订阅未激活"的存量悬挂单（如曾被台账 verify 旁路卡住的单）——业务上正确（用户已付款），但激活即发 webhook 通知产品栈，上线前 owner 核一遍该谓词的生产存量数。

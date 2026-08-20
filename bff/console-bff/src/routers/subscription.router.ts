@@ -91,11 +91,24 @@ type OrderState =
 const DECLARE_CHANNELS = ["alipay", "bank_transfer"] as const;
 type DeclareChannel = (typeof DECLARE_CHANNELS)[number];
 
-/** Payment TTL (P4); read per call so ops can tune without redeploy. */
-const paymentTtlMinutes = (): number => {
-  const raw = Number(process.env.ORDER_PAYMENT_TTL_MINUTES);
-  return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : 30;
+/**
+ * Payment TTL (P4, rev. 2026-08-20 — per tenant type); read per call so ops
+ * can tune without redeploy. ORDER_PAYMENT_TTL_MINUTES = personal tenants
+ * (default 30min) and the fallback for legacy rows without a persisted TTL;
+ * ORDER_PAYMENT_TTL_MINUTES_ORG = organization tenants (default 2880 = 48h).
+ */
+const envMinutes = (name: string, fallback: number): number => {
+  const raw = Number(process.env[name]);
+  return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : fallback;
 };
+const paymentTtlMinutes = (): number =>
+  envMinutes("ORDER_PAYMENT_TTL_MINUTES", 30);
+const paymentTtlMinutesFor = (
+  tenantType: "personal" | "organization" | undefined,
+): number =>
+  tenantType === "organization"
+    ? envMinutes("ORDER_PAYMENT_TTL_MINUTES_ORG", 2880)
+    : paymentTtlMinutes();
 
 const PRODUCT_CODE_RE = /^[a-z][a-z0-9_-]{0,63}$/;
 
@@ -833,7 +846,9 @@ export class SubscriptionRouter {
       }
     }
 
-    // 付费档：产生线下订单（suspended 订阅 + unpaid 账单）
+    // 付费档：产生线下订单（suspended 订阅 + unpaid 账单）。
+    // TTL 在此定格并随单持久化（P4 修订）：个人 30min / 组织 48h。
+    const ttlMinutes = paymentTtlMinutesFor(req.tenant.tenantType);
     try {
       const order = await this.subscriptionService.createOfflineOrder({
         tenantId: req.tenant.id,
@@ -846,6 +861,7 @@ export class SubscriptionRouter {
         intent: intent as OrderCreateIntent,
         ...(upgradeOf ? { upgradeOfSubscriptionId: upgradeOf } : {}),
         itemName: plan.planName,
+        paymentTtlMinutes: ttlMinutes,
       });
       return {
         status: "pending_payment",
@@ -858,9 +874,7 @@ export class SubscriptionRouter {
         cycleUnit,
         paymentInstructions: buildPaymentInstructions(order.orderNo),
         subscriptionId: null,
-        expireAt: new Date(
-          Date.now() + paymentTtlMinutes() * 60_000,
-        ).toISOString(),
+        expireAt: new Date(Date.now() + ttlMinutes * 60_000).toISOString(),
       };
     } catch (err) {
       throw mapOrderError(err);
@@ -1490,6 +1504,8 @@ interface OrderRow {
   order_no: string;
   workspace_id: string;
   activation_method: string;
+  /** 每单付款时效（分钟，P4 修订）；NULL=存量单 → 回退 env */
+  payment_ttl_minutes: number | null;
   invoice_id: string | null;
   bill_no: string | null;
   plan_code: string | null;
@@ -1520,6 +1536,7 @@ select
   sub.order_no,
   sub.workspace_id,
   sub.activation_method,
+  sub.payment_ttl_minutes,
   inv.id               as invoice_id,
   inv.bill_no,
   plan.plan_code,
@@ -1589,13 +1606,17 @@ function deriveOrderState(r: OrderRow): OrderState {
   return "pending_payment";
 }
 
-/** TTL deadline (P4): only while pending payment with zero collected money. */
+/**
+ * TTL deadline (P4): only while pending payment with zero collected money.
+ * Per-order TTL from the persisted column (rev. 2026-08-20); legacy rows
+ * (NULL) fall back to the env personal default — byte-identical to the old
+ * derivation, so pre-migration orders keep their exact deadline.
+ */
 function deriveExpireAt(r: OrderRow, state: OrderState): string | null {
   if (state !== "pending_payment") return null;
   if (Number(r.paid_amount ?? 0) > 0) return null; // TTL-exempt family
-  const deadline = new Date(
-    r.ttl_anchor.getTime() + paymentTtlMinutes() * 60_000,
-  );
+  const ttl = r.payment_ttl_minutes ?? paymentTtlMinutes();
+  const deadline = new Date(r.ttl_anchor.getTime() + ttl * 60_000);
   return deadline.toISOString();
 }
 

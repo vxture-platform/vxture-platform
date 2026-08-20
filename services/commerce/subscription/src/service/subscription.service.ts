@@ -551,12 +551,19 @@ export class SubscriptionService {
    * Timeout sweep (§4.3 duty 1): close pending orders past the TTL. The
    * repo predicate carries the full P4 guard (no declared leg, zero income);
    * per-order failures log and continue — never kill the pass.
+   *
+   * TTL is per-order (subscriptions.payment_ttl_minutes, fixed at creation
+   * by tenant type — P4 rev. 2026-08-20); the parameter is only the fallback
+   * for legacy rows where the column is NULL.
    */
   async sweepExpiredPaymentOrders(
-    ttlMinutes: number,
+    fallbackTtlMinutes: number,
     limit = 100,
   ): Promise<number> {
-    const ids = await this.repo.findExpiredPaymentOrderIds(ttlMinutes, limit);
+    const ids = await this.repo.findExpiredPaymentOrderIds(
+      fallbackTtlMinutes,
+      limit,
+    );
     let closed = 0;
     for (const id of ids) {
       try {
@@ -564,7 +571,7 @@ export class SubscriptionService {
           actorType: "system",
           actorId: null,
           changeType: "order_expired",
-          remark: `payment window elapsed (${ttlMinutes}min TTL)`,
+          remark: "payment window elapsed (P4 TTL)",
         });
         closed += 1;
       } catch (err) {

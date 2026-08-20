@@ -144,6 +144,13 @@ export interface CreateOfflineOrderInput {
   upgradeOfSubscriptionId?: string;
   /** billing.invoice_items.item_name, e.g. "Arda Pro" */
   itemName: string;
+  /**
+   * Payment window in minutes, fixed at order creation by tenant type
+   * (personal 30 / organization 2880 — product_321 P4 rev. 2026-08-20).
+   * Persisted to subscriptions.payment_ttl_minutes; omitted → column NULL and
+   * every reader falls back to env ORDER_PAYMENT_TTL_MINUTES (legacy behavior).
+   */
+  paymentTtlMinutes?: number;
 }
 
 export interface OfflineOrderRecord {

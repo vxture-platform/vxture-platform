@@ -289,6 +289,10 @@ describe("sweepExpiredPaymentOrders (§4.3 duty 1)", () => {
     m.repo.findExpiredPaymentOrderIds?.mockResolvedValue(["order-1"]);
     const closed = await m.service.sweepExpiredPaymentOrders(30);
     expect(closed).toBe(1);
+    // env value reaches the repo as the LEGACY-ROW FALLBACK only — the
+    // predicate itself reads each order's persisted payment_ttl_minutes
+    // (P4 rev. 2026-08-20).
+    expect(m.repo.findExpiredPaymentOrderIds).toHaveBeenCalledWith(30, 100);
     expect(m.repo.cancelOfflineOrder).toHaveBeenCalledWith(
       "order-1",
       expect.objectContaining({

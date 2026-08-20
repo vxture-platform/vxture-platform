@@ -260,10 +260,10 @@ export class PgSubscriptionRepository {
         `insert into metering.subscriptions (
           tenant_id, workspace_id, plan_version_id, subscription_kind, cycle_unit, cycle_count,
           start_at, status, activation_method, auto_renew, order_no, pay_amount, currency,
-          created_by_type, created_by_id, created_at, updated_at
+          created_by_type, created_by_id, payment_ttl_minutes, created_at, updated_at
         ) values (
           $1, $2, $3, 'paid', $4, 1, now(), 'suspended', 'offline_purchase', false, $5, $6, $7,
-          'customer', $8, now(), now()
+          'customer', $8, $9, now(), now()
         ) returning *`,
         [
           input.tenantId,
@@ -274,6 +274,7 @@ export class PgSubscriptionRepository {
           input.price,
           currency,
           input.createdBy,
+          input.paymentTtlMinutes ?? null,
         ],
       );
       const subscription = subResult.rows[0]!;
@@ -1176,9 +1177,13 @@ export class PgSubscriptionRepository {
    * orders past the TTL — anchored at GREATEST(created_at, latest
    * payment_rejected history) — with NO declared leg and ZERO collected
    * money. Any real income exempts the order from auto-close forever.
+   *
+   * Per-order TTL (P4 rev. 2026-08-20): each order carries its own
+   * payment_ttl_minutes fixed at creation by tenant type; fallbackTtlMinutes
+   * (env) applies only to legacy rows where the column is NULL.
    */
   async findExpiredPaymentOrderIds(
-    ttlMinutes: number,
+    fallbackTtlMinutes: number,
     limit: number,
   ): Promise<string[]> {
     const res = await this.pool.query<{ id: string }>(
@@ -1205,10 +1210,10 @@ export class PgSubscriptionRepository {
                where h.subscription_id = sub.id
                  and h.change_type = 'payment_rejected'
             ), sub.created_at)
-          ) + make_interval(mins => $1) <= now()
+          ) + make_interval(mins => coalesce(sub.payment_ttl_minutes, $1)) <= now()
         order by sub.created_at asc
         limit $2`,
-      [ttlMinutes, limit],
+      [fallbackTtlMinutes, limit],
     );
     return res.rows.map((r) => r.id);
   }

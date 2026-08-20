@@ -132,6 +132,29 @@ describe("createOfflineOrder", () => {
     expect(m.provisioning.onSubscriptionActivated).not.toHaveBeenCalled();
   });
 
+  it("forwards the per-order payment TTL to the repo verbatim (P4 rev.)", async () => {
+    m.repo.createOfflineOrder.mockResolvedValue({
+      subscription: ORDER,
+      invoiceId: "inv-1",
+      billNo: "INV-202607-X",
+      orderNo: ORDER.orderNo,
+    });
+    await m.service.createOfflineOrder({
+      tenantId: "org-1",
+      workspaceId: "ws-1",
+      planVersionId: "pv-2",
+      cycleUnit: "month",
+      price: 499,
+      createdBy: "u-1",
+      intent: "new",
+      itemName: "Arda Pro",
+      paymentTtlMinutes: 2880,
+    });
+    expect(m.repo.createOfflineOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ paymentTtlMinutes: 2880 }),
+    );
+  });
+
   it("rejects a duplicate-tier 'new' order alongside a live subscription", async () => {
     m.repo.findTierConflicts.mockResolvedValue([
       { productCode: "arda", newTier: "pro", existingTier: "starter" },

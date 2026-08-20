@@ -16,7 +16,10 @@
  * races resolved by write-side row locks/CAS in the service.
  *
  * ORDER_PAYMENT_SWEEP_INTERVAL_MS tunes the cadence (default 60s);
- * ORDER_PAYMENT_TTL_MINUTES tunes the payment window (default 30).
+ * ORDER_PAYMENT_TTL_MINUTES (default 30) is only the FALLBACK window for
+ * legacy rows — since P4 rev. 2026-08-20 each order carries its own
+ * subscriptions.payment_ttl_minutes fixed at creation by tenant type
+ * (personal 30min / organization 48h) and the sweep predicate reads that.
  */
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";

@@ -35,6 +35,7 @@ CREATE TABLE metering.subscriptions (
     renewal_source      varchar(16),                                -- mandate / balance / manual
     payment_mandate_id  uuid,                                       -- 跨 schema→billing.payment_mandates（90），renewal_source=mandate 时
     order_no            varchar(128),                               -- 购买单号 ORD-{YYYYMM}-{10位随机hex}；trial/free/运营开通为 NULL（可视码，永不作 FK，铁律二）
+    payment_ttl_minutes int,                                        -- 付款时效（分钟，321 P4 修订 2026-08-20）：下单时按租户类型定格（个人 30 / 组织 2880），仅 offline_purchase 订单行有值；NULL=存量单/非订单行 → 读取端回退 env ORDER_PAYMENT_TTL_MINUTES。锚点与驳回重锚语义不变（TTL 叠加在 P4 histories 锚点上）
     pay_amount          numeric(12,2),                              -- 与 plan_version.price 分离
     currency            varchar(16)   DEFAULT 'CNY',
     created_by_type     varchar(16)   NOT NULL,                     -- §0.1 actor：system/customer/operator
@@ -51,6 +52,7 @@ CREATE TABLE metering.subscriptions (
     CONSTRAINT chk_subscriptions_activation      CHECK (activation_method IN ('online_purchase','offline_purchase','redemption','operator_grant','trial','free')),
     CONSTRAINT chk_subscriptions_renewal_source  CHECK (renewal_source IS NULL OR renewal_source IN ('mandate','balance','manual')),
     CONSTRAINT chk_subscriptions_created_by_type CHECK (created_by_type IN ('system','customer','operator')),
+    CONSTRAINT chk_subscriptions_payment_ttl     CHECK (payment_ttl_minutes IS NULL OR payment_ttl_minutes >= 1),
     -- 结构不变量（§1.1，须落 DDL CHECK）
     CONSTRAINT chk_subscriptions_perpetual_open  CHECK (cycle_unit <> 'perpetual' OR end_at IS NULL),
     CONSTRAINT chk_subscriptions_trial_no_renew  CHECK (subscription_kind <> 'trial' OR auto_renew = false)

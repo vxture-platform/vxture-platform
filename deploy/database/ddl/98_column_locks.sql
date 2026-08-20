@@ -237,7 +237,7 @@ GRANT UPDATE (is_satisfied, checked_at, checked_by, remark, updated_at) ON produ
 
 -- metering.subscriptions  [anchor: id, order_no, created_at]
 REVOKE UPDATE ON metering.subscriptions FROM platform_svc;
-GRANT UPDATE (tenant_id, workspace_id, plan_version_id, subscription_kind, cycle_unit, cycle_count, start_at, end_at, trial_end_at, had_trial_at, status, auto_renew, activation_method, next_renewal_at, renewal_source, payment_mandate_id, pay_amount, currency, created_by_type, created_by_id, updated_at, deleted_at) ON metering.subscriptions TO platform_svc;
+GRANT UPDATE (tenant_id, workspace_id, plan_version_id, subscription_kind, cycle_unit, cycle_count, start_at, end_at, trial_end_at, had_trial_at, status, auto_renew, activation_method, next_renewal_at, renewal_source, payment_mandate_id, payment_ttl_minutes, pay_amount, currency, created_by_type, created_by_id, updated_at, deleted_at) ON metering.subscriptions TO platform_svc;
 
 -- metering.subscription_histories  [anchor: id, created_at]
 REVOKE UPDATE ON metering.subscription_histories FROM platform_svc;
