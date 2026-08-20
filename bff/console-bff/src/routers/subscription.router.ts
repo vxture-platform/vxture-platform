@@ -1542,7 +1542,9 @@ export class SubscriptionRouter {
     }
 
     // ── 执行操作 ──────────────────────────────────────────────────────────
-    const changedBy = req.user.email;
+    // actor_id 是 uuid 列(边界#2 裸值解引用 account.users)——此前误传 email,
+    // 首个真实操作即 invalid uuid 500(2026-08-21 修);邮件仍用 email。
+    const changedBy = req.user.id;
     let updated!: SubscriptionRecord;
     try {
       if (action === "upgrade") {
@@ -1579,10 +1581,13 @@ export class SubscriptionRouter {
           },
         );
       } else {
+        // 自助退订 = 立即终止(服务即停、不退款,前端确认弹窗已明示);
+        // actorType=customer 让历史/审计如实记发起方。
         updated = await this.subscriptionService.cancelSubscription(
           subscriptionId,
           changedBy,
           reason,
+          "customer",
         );
       }
     } catch (err) {
@@ -1597,6 +1602,39 @@ export class SubscriptionRouter {
       .catch(() => {});
 
     return updated;
+  }
+
+  // --------------------------------------------------------------------------
+  // POST /api/subscription/subscriptions/:id/auto-renew — 到期不续 / 恢复续费
+  // (owner 2026-08-21 P0 订阅自助收尾;「到期不续」= auto_renew=false 派生态,
+  //  product_220 §3 cancel_at_period_end 口径,无独立列)
+  // --------------------------------------------------------------------------
+
+  @Post("subscriptions/:id/auto-renew")
+  async setAutoRenew(
+    @Req() req: Request & RequestContext,
+    @Param("id") subscriptionId: string,
+    @Body() body: { enabled?: unknown },
+  ): Promise<{ subscriptionId: string; autoRenew: boolean }> {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
+    if (typeof body.enabled !== "boolean") {
+      throw new BadRequestException("enabled 必须为布尔值");
+    }
+
+    const current = await this.subscriptionService
+      .getSubscription(subscriptionId)
+      .catch(() => null);
+    if (!current || current.tenantId !== req.tenant.id) {
+      throw new BadRequestException("订阅不存在或无权操作");
+    }
+
+    const updated = await this.subscriptionService.setAutoRenew(
+      subscriptionId,
+      body.enabled,
+      { actorId: req.user.id, actorType: "customer" },
+    );
+    return { subscriptionId, autoRenew: updated.autoRenew };
   }
 }
 

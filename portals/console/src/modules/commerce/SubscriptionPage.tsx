@@ -22,6 +22,14 @@ import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
   ActionMenu,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
   Banner,
   Button,
   DataTable,
@@ -41,10 +49,12 @@ import type {
 import { formatCurrency, type Locale } from "@vxture/shared";
 import {
   cancelSubscriptionOrder,
+  executeSubscriptionAction,
   fetchMyOrders,
   fetchRecommendedProducts,
   fetchSubscribedProducts,
   setProductFavorite,
+  setSubscriptionAutoRenew,
   ConsoleBffError,
   type MyOrder,
   type RecommendedProduct,
@@ -88,6 +98,20 @@ export function SubscriptionPage() {
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  // P0 订阅自助:退订确认弹窗目标 + 续费开关在途标记
+  const [unsubTarget, setUnsubTarget] = useState<SubscribedProduct | null>(
+    null,
+  );
+  const [selfServiceBusy, setSelfServiceBusy] = useState(false);
+
+  const reloadSubs = useCallback(async () => {
+    const [subs, ords] = await Promise.all([
+      fetchSubscribedProducts(),
+      fetchMyOrders(),
+    ]);
+    setProducts(subs);
+    setOrders(ords);
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -103,6 +127,49 @@ export function SubscriptionPage() {
       })
       .finally(() => setLoading(false));
   }, [session.tenant?.id]);
+
+  // ── P0 订阅自助:到期不续/恢复续费 + 立即退订 ────────────────────────────
+  const handleSetAutoRenew = useCallback(
+    async (item: SubscribedProduct, enabled: boolean) => {
+      setError(null);
+      setSelfServiceBusy(true);
+      try {
+        await setSubscriptionAutoRenew(item.subscriptionId, enabled);
+        await reloadSubs();
+      } catch (err) {
+        setError(
+          err instanceof ConsoleBffError
+            ? err.message
+            : t("subs.autoRenewError"),
+        );
+      } finally {
+        setSelfServiceBusy(false);
+      }
+    },
+    [reloadSubs, t],
+  );
+
+  const handleUnsubscribeConfirm = useCallback(async () => {
+    if (!unsubTarget) return;
+    setError(null);
+    setSelfServiceBusy(true);
+    try {
+      await executeSubscriptionAction({
+        subscriptionId: unsubTarget.subscriptionId,
+        action: "cancel",
+      });
+      setUnsubTarget(null);
+      await reloadSubs();
+    } catch (err) {
+      setError(
+        err instanceof ConsoleBffError
+          ? err.message
+          : t("subs.unsubscribeError"),
+      );
+    } finally {
+      setSelfServiceBusy(false);
+    }
+  }, [unsubTarget, reloadSubs, t]);
 
   // 待付款单存在时每秒走时（表格倒计时 + 概览条 TTL）。
   const hasPending = orders.some(
@@ -397,10 +464,23 @@ export function SubscriptionPage() {
         onSelect: () => void handleCancelOrder(o.orderId),
       },
       {
+        // 退订自助上线(P0):completed 单的 orderId 即订阅 id,弹确认后立即退订
         id: "unsubscribe",
         label: t("orders.menuUnsubscribe"),
-        disabled: true,
-        hint: t("orders.menuPlannedHint"),
+        disabled: o.orderStatus !== "completed",
+        ...(o.orderStatus !== "completed"
+          ? { hint: t("orders.menuUnsubscribeHint") }
+          : {}),
+        onSelect: () => {
+          const sub = products.find((p) => p.subscriptionId === o.orderId);
+          setUnsubTarget(
+            sub ??
+              ({
+                subscriptionId: o.orderId,
+                productName: o.productName,
+              } as SubscribedProduct),
+          );
+        },
       },
       {
         // 申请发票已上线(owner 2026-08-21 归集账单管理):深链到账单管理页,
@@ -478,6 +558,10 @@ export function SubscriptionPage() {
                   !!item.productCode && favBusy.has(item.productCode)
                 }
                 onToggleFavorite={toggleFavorite}
+                onSetAutoRenew={(target, enabled) =>
+                  void handleSetAutoRenew(target, enabled)
+                }
+                onUnsubscribe={setUnsubTarget}
               />
             ))}
           </div>
@@ -584,6 +668,40 @@ export function SubscriptionPage() {
           </div>
         </PageSection>
       ) : null}
+      {/* 退订确认(危操作:立即终止、不退款,AlertDialog 强确认) */}
+      <AlertDialog
+        open={unsubTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setUnsubTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("subs.unsubscribeTitle", {
+                product: unsubTarget?.productName ?? "",
+              })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("subs.unsubscribeBody")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={selfServiceBusy}>
+              {t("subs.unsubscribeKeep")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={selfServiceBusy}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleUnsubscribeConfirm();
+              }}
+            >
+              {t("subs.unsubscribeConfirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </ViewLayout>
   );
 }

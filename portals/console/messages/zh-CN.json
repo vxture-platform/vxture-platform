@@ -2043,7 +2043,13 @@
       "version": "最新版 v{version}",
       "manage": "管理",
       "upgrade": "升级",
-      "renew": "续订"
+      "renew": "续订",
+      "moreActions": "更多操作",
+      "autoRenewOff": "到期不续",
+      "autoRenewOn": "恢复自动续费",
+      "autoRenewNa": "免费/试用/永久订阅不适用",
+      "unsubscribe": "立即退订",
+      "optedOut": "到期不续"
     },
     "stats": {
       "groupLabel": "产品订阅统计",
@@ -2064,7 +2070,13 @@
       "filterActive": "服务中",
       "filterAll": "全部",
       "emptyTitle": "还没有生效的订阅",
-      "emptyDescription": "从产品市场挑选一个产品开始，免费版同样计入订阅。"
+      "emptyDescription": "从产品市场挑选一个产品开始，免费版同样计入订阅。",
+      "autoRenewError": "续费设置更新失败,请稍后重试",
+      "unsubscribeError": "退订失败,请稍后重试",
+      "unsubscribeTitle": "确认退订 {product}?",
+      "unsubscribeBody": "退订后服务立即终止且不退款;已用配额与数据按数据保留策略处理。若只是不想续费,请改用「到期不续」——本周期内服务不受影响。",
+      "unsubscribeKeep": "保留订阅",
+      "unsubscribeConfirm": "确认立即退订"
     },
     "orders": {
       "title": "我的订单",
@@ -2091,7 +2103,8 @@
       "menuUnsubscribe": "退订",
       "menuInvoice": "申请发票",
       "menuPlannedHint": "即将上线",
-      "cancelError": "取消订单失败，请稍后重试。"
+      "cancelError": "取消订单失败，请稍后重试。",
+      "menuUnsubscribeHint": "仅已开通订单可退订"
     },
     "payAxis": {
       "pending": "待付款",

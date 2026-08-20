@@ -2043,7 +2043,13 @@
       "version": "Latest v{version}",
       "manage": "Manage",
       "upgrade": "Upgrade",
-      "renew": "Renew"
+      "renew": "Renew",
+      "moreActions": "More actions",
+      "autoRenewOff": "Cancel at period end",
+      "autoRenewOn": "Resume auto-renew",
+      "autoRenewNa": "Not applicable to free/trial/perpetual",
+      "unsubscribe": "Unsubscribe now",
+      "optedOut": "Ends at period end"
     },
     "stats": {
       "groupLabel": "Subscription metrics",
@@ -2064,7 +2070,13 @@
       "filterActive": "Active",
       "filterAll": "All",
       "emptyTitle": "No active subscriptions yet",
-      "emptyDescription": "Pick a product from the marketplace to get started — free plans count too."
+      "emptyDescription": "Pick a product from the marketplace to get started — free plans count too.",
+      "autoRenewError": "Failed to update renewal setting — please try again",
+      "unsubscribeError": "Unsubscribe failed — please try again",
+      "unsubscribeTitle": "Unsubscribe from {product}?",
+      "unsubscribeBody": "Service stops immediately and no refund is issued; data follows the retention policy. If you only want to stop renewing, use \"Cancel at period end\" instead — service continues through the current cycle.",
+      "unsubscribeKeep": "Keep subscription",
+      "unsubscribeConfirm": "Unsubscribe now"
     },
     "orders": {
       "title": "My orders",
@@ -2091,7 +2103,8 @@
       "menuUnsubscribe": "Unsubscribe",
       "menuInvoice": "Request invoice",
       "menuPlannedHint": "Coming soon",
-      "cancelError": "Failed to cancel the order. Please try again."
+      "cancelError": "Failed to cancel the order. Please try again.",
+      "menuUnsubscribeHint": "Only provisioned orders can be unsubscribed"
     },
     "payAxis": {
       "pending": "Awaiting payment",

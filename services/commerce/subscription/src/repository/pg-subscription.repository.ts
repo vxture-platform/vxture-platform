@@ -652,6 +652,9 @@ export class PgSubscriptionRepository {
           status          = coalesce($2, status),
           end_at          = coalesce($3, end_at),
           auto_renew      = coalesce($4, auto_renew),
+          -- DDL 契约:auto_renew=false 时 next_renewal_at 必须为 NULL(50_metering
+          -- §1 注释)。该列当前无写入方,这里按契约顺手清,免留债(2026-08-21)。
+          next_renewal_at = case when $4::boolean is false then null else next_renewal_at end,
           plan_version_id = coalesce($5, plan_version_id),
           updated_at      = now()
          where id = $1 and deleted_at is null
@@ -700,7 +703,13 @@ export class PgSubscriptionRepository {
               ? "resumed"
               : input.status === "expired"
                 ? "expired"
-                : "updated";
+                : // 纯续费开关翻转要在历史里可辨(到期不续/恢复续费,2026-08-21
+                  // P0 自助线),不淹没在杂项 'updated' 里。change_type 值域开放。
+                  input.autoRenew !== undefined
+                  ? input.autoRenew
+                    ? "auto_renew_on"
+                    : "auto_renew_off"
+                  : "updated";
 
       await client.query(
         `insert into metering.subscription_histories (

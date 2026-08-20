@@ -22,6 +22,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import {
+  ActionMenu,
   Badge,
   Button,
   Card,
@@ -32,7 +33,7 @@ import {
   StatusBadge,
   cn,
 } from "@vxture/design-system";
-import type { IconName } from "@vxture/design-system";
+import type { ActionMenuItem, IconName } from "@vxture/design-system";
 import { formatCurrency, type Locale } from "@vxture/shared";
 import { Link } from "@/lib/i18n/navigation";
 import { buildWebsiteProductUrl } from "@/lib/website-entry";
@@ -117,10 +118,16 @@ export function SubscriptionProductCard({
   item,
   favoriteBusy,
   onToggleFavorite,
+  onSetAutoRenew,
+  onUnsubscribe,
 }: {
   item: SubscribedProduct;
   favoriteBusy: boolean;
   onToggleFavorite: (productCode: string, next: boolean) => void;
+  /** 到期不续 / 恢复续费(P0 自助;free/trial/永久订阅不适用由本卡判定灰) */
+  onSetAutoRenew: (item: SubscribedProduct, enabled: boolean) => void;
+  /** 立即退订(危操作,父页出确认弹窗) */
+  onUnsubscribe: (item: SubscribedProduct) => void;
 }) {
   const t = useTranslations("subscriptionHub");
   const locale = useLocale();
@@ -135,6 +142,34 @@ export function SubscriptionProductCard({
     !expired && (item.tier === "free" || item.tier === "starter");
   const showRenew = expired || nearExpiry;
   const productCode = item.productCode ?? "";
+  // 续费开关适用面:付费、有界周期、非试用、未终态
+  const renewToggleable =
+    !expired && item.kind === "paid" && item.endAt !== null;
+  const optedOut = !item.autoRenew && item.endAt !== null && !expired;
+
+  const menuItems: ActionMenuItem[] = [
+    optedOut
+      ? {
+          id: "renew-on",
+          label: t("card.autoRenewOn"),
+          disabled: !renewToggleable,
+          onSelect: () => onSetAutoRenew(item, true),
+        }
+      : {
+          id: "renew-off",
+          label: t("card.autoRenewOff"),
+          disabled: !renewToggleable,
+          ...(renewToggleable ? {} : { hint: t("card.autoRenewNa") }),
+          onSelect: () => onSetAutoRenew(item, false),
+        },
+    {
+      id: "unsubscribe",
+      label: t("card.unsubscribe"),
+      danger: true,
+      disabled: expired,
+      onSelect: () => onUnsubscribe(item),
+    },
+  ];
 
   return (
     <Card surface="base" className="gap-md py-lg">
@@ -233,6 +268,9 @@ export function SubscriptionProductCard({
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-xs">
+          {optedOut ? (
+            <StatusBadge tone="warning">{t("card.optedOut")}</StatusBadge>
+          ) : null}
           <Button asChild variant="outline" size="sm">
             <Link href={`/subscribe?product=${productCode}`}>
               {t("card.manage")}
@@ -252,6 +290,7 @@ export function SubscriptionProductCard({
               </Link>
             </Button>
           ) : null}
+          <ActionMenu label={t("card.moreActions")} items={menuItems} />
         </span>
       </CardFooter>
     </Card>

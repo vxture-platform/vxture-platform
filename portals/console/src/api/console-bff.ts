@@ -2098,3 +2098,30 @@ export async function fetchAddonOrderDetail(orderNo: string): Promise<{
     paymentChannels: PaymentChannelInfo[];
   } | null>(`/api/quota/addon-orders/${encodeURIComponent(orderNo)}`, null);
 }
+
+/** 到期不续 / 恢复续费(P0 订阅自助);失败抛 ConsoleBffError(报文透传)。 */
+export async function setSubscriptionAutoRenew(
+  subscriptionId: string,
+  enabled: boolean,
+): Promise<boolean> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/subscription/subscriptions/${encodeURIComponent(subscriptionId)}/auto-renew`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    },
+  );
+  if (!response.ok) {
+    let message = `Request failed: ${response.status}`;
+    try {
+      const body = (await response.json()) as { message?: string };
+      if (body?.message) message = body.message;
+    } catch {
+      /* keep status message */
+    }
+    throw new ConsoleBffError(message, response.status);
+  }
+  return true;
+}

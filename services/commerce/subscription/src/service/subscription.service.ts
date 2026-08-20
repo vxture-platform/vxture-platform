@@ -633,6 +633,8 @@ export class SubscriptionService {
     id: string,
     operatorId?: string,
     remark?: string,
+    /** 发起方(缺省 operator,保持既有调用不变);customer = 租户自助退订。 */
+    actorType: "operator" | "customer" | "system" = "operator",
   ): Promise<SubscriptionRecord> {
     const subscription = await this.getSubscription(id);
     if (subscription.status === "cancelled")
@@ -643,7 +645,10 @@ export class SubscriptionService {
     const result = await this.repo.update(id, subscription, {
       status: "cancelled",
       endAt: new Date(),
-      operatorType: "operator",
+      // 取消同时关自动续费(对齐 admin 侧 SQL 的既有行为;此前 service 路径
+      // 漏掉这一步,取消件仍挂 auto_renew=true 的矛盾态)。
+      autoRenew: false,
+      operatorType: actorType,
       ...(operatorId !== undefined
         ? { operatorId, updatedBy: operatorId }
         : {}),
@@ -653,6 +658,54 @@ export class SubscriptionService {
       this.fireDeprovisionIfUncovered(result!, subscription.planVersionId),
     );
     await this.safeProvisioningHook("cancel:invalidate", id, () =>
+      this.fireEntitlementInvalidate(result!, [subscription.planVersionId]),
+    );
+    return result!;
+  }
+
+  /**
+   * 到期不续 / 恢复续费(owner 2026-08-21 P0:订阅自助收尾)。
+   * 「到期不续」没有独立列——契约口径即 active ∧ 有界 ∧ auto_renew=false
+   * (product_220 §3 cancel_at_period_end 的派生定义),本方法只翻 auto_renew。
+   * 挡两类非法态:trial 禁开续费(DDL chk_subscriptions_trial_no_renew),
+   * 终态订阅(cancelled/expired)不接受翻转。
+   */
+  async setAutoRenew(
+    id: string,
+    enabled: boolean,
+    params: {
+      actorId: string | null;
+      actorType?: "operator" | "customer" | "system";
+      remark?: string;
+    },
+  ): Promise<SubscriptionRecord> {
+    const subscription = await this.getSubscription(id);
+    if (
+      subscription.status === "cancelled" ||
+      subscription.status === "expired"
+    ) {
+      throw new ConflictException("订阅已终止,无法变更续费设置");
+    }
+    if (enabled && subscription.subscriptionKind === "trial") {
+      throw new ConflictException("试用订阅不支持自动续费");
+    }
+    if (subscription.autoRenew === enabled) return subscription;
+
+    const result = await this.repo.update(id, subscription, {
+      autoRenew: enabled,
+      operatorType: params.actorType ?? "customer",
+      ...(params.actorId !== null
+        ? { operatorId: params.actorId, updatedBy: params.actorId }
+        : {}),
+      operatorRemark:
+        params.remark ??
+        (enabled
+          ? "customer resumed auto-renew"
+          : "customer opted out of renewal"),
+    });
+    // 纯路由/续费策略变化,不触发 deprovision;C2 信封的 cancel_at_period_end
+    // 派生字段随之翻转,失效一次缓存让产品侧尽快看到。
+    await this.safeProvisioningHook("auto-renew:invalidate", id, () =>
       this.fireEntitlementInvalidate(result!, [subscription.planVersionId]),
     );
     return result!;
