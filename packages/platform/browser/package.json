@@ -13,7 +13,7 @@
     "build": "rimraf dist && tsup"
   },
   "dependencies": {
-    "@vxture/design-tokens": "workspace:*",
+    "@vxture/design-tokens": "2.2.0",
     "@vxture-platform/shared": "workspace:*"
   },
   "devDependencies": {
