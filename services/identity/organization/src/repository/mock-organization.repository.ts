@@ -7,6 +7,7 @@ import type {
   OrgLogoRecord,
   OrgMemberDetail,
   OrgMembershipView,
+  TransferOwnerResult,
   OrgProfileUpdateInput,
   OrgRole,
   OrgRoleCatalogEntry,
@@ -335,6 +336,40 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     if (i < 0) return false;
     this.orgMembers.splice(i, 1);
     return true;
+  }
+
+  async transferOrgOwner(
+    orgId: string,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<TransferOwnerResult> {
+    if (fromUserId === toUserId) return { ok: false, reason: "same_user" };
+    const org = this.orgs.get(orgId);
+    if (!org) return { ok: false, reason: "tenant_not_found" };
+    if (org.type === "personal")
+      return { ok: false, reason: "personal_tenant" };
+    if (org.ownerUserId !== fromUserId)
+      return { ok: false, reason: "not_owner" };
+    const target = this.orgMembers.find(
+      (m) =>
+        m.organizationId === orgId &&
+        m.userId === toUserId &&
+        m.status === "active",
+    );
+    if (!target) return { ok: false, reason: "target_not_member" };
+
+    org.ownerUserId = toUserId;
+    target.role = "owner";
+    // 与 pg 实现同档:原 owner 降 manager,不是移除、也不是降到 member。
+    const previous = this.orgMembers.find(
+      (m) => m.organizationId === orgId && m.userId === fromUserId,
+    );
+    if (previous) previous.role = "manager";
+    return {
+      ok: true,
+      previousOwnerUserId: fromUserId,
+      newOwnerUserId: toUserId,
+    };
   }
   async addWorkspaceMember(
     workspaceId: string,

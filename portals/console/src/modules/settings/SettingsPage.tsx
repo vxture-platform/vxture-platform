@@ -1,12 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
   Banner,
   Button,
   DataTable,
+  FieldLabel,
   FormPageTemplate,
   Icon,
+  Input,
   NativeSelect,
   StatusBadge,
   Switch,
@@ -16,6 +26,9 @@ import type { DataTableColumn, IconName } from "@vxture/design-system";
 import { PageSection, SummaryStrip } from "@/layout/shell";
 import { PlannedBadge, PlannedNotice } from "@/components/planned";
 import { useTranslations } from "next-intl";
+import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { fetchMembers, transferTenantOwner } from "@/api/console-bff";
+import type { MemberRecord } from "@/entities/console";
 
 type BooleanSettingKey =
   | "inviteApproval"
@@ -131,6 +144,85 @@ export function SettingsPage() {
     setSettings(readStoredSettings());
     setHydrated(true);
   }, []);
+
+  // ── 转让所有权(owner 2026-08-21 裁定,决策 3 批一)──────────────────────────
+  const { session, refreshSession } = useConsoleSession();
+  const tenantId = session.tenant?.id ?? null;
+  const tenantName = session.tenant?.name ?? "";
+  const isOrgTenant = session.tenant?.tenantType === "organization";
+
+  const [members, setMembers] = useState<MemberRecord[]>([]);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferTarget, setTransferTarget] = useState("");
+  const [transferConfirm, setTransferConfirm] = useState("");
+  const [transferBusy, setTransferBusy] = useState(false);
+  const [transferError, setTransferError] = useState<string | null>(null);
+  const [transferDone, setTransferDone] = useState<string | null>(null);
+
+  useEffect(() => {
+    // 个人租户没有可转让的所有权,也就不必拉成员表。
+    if (!isOrgTenant || !tenantId) {
+      setMembers([]);
+      return;
+    }
+    let alive = true;
+    fetchMembers()
+      .then((rows) => {
+        if (alive) setMembers(rows);
+      })
+      .catch(() => {
+        if (alive) setMembers([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [isOrgTenant, tenantId]);
+
+  /** 我是不是当前 owner。以成员表里自己那行的角色为准,不看 roleLabel 文案。 */
+  const isOwner = useMemo(
+    () =>
+      members.some((m) => m.id === session.user?.id && m.roleCode === "owner"),
+    [members, session.user?.id],
+  );
+
+  /** 可接收人 = 在职 ∧ 非本人。挂起中的邀请(statusCode 非 active)不算——
+   *  转给一个还没接受邀请的人,后端会以 target_not_member 拒掉。 */
+  const transferCandidates = useMemo(
+    () =>
+      members.filter(
+        (m) => m.statusCode === "active" && m.id !== session.user?.id,
+      ),
+    [members, session.user?.id],
+  );
+
+  const transferReady =
+    transferTarget !== "" && transferConfirm.trim() === tenantName;
+
+  const handleTransfer = useCallback(async () => {
+    if (!transferReady) return;
+    const target = transferCandidates.find((m) => m.id === transferTarget);
+    setTransferBusy(true);
+    setTransferError(null);
+    try {
+      await transferTenantOwner(transferTarget);
+      setTransferOpen(false);
+      setTransferConfirm("");
+      setTransferTarget("");
+      setTransferDone(target?.name ?? "");
+      // 自己的能力集刚变了(owner → manager),不刷新的话 shell 仍按旧
+      // capability 渲染导航,直到下一次整页加载。
+      await refreshSession({ silent: true });
+      setMembers(await fetchMembers());
+    } catch (error) {
+      setTransferError(
+        error instanceof Error
+          ? error.message
+          : t("danger.transferOwner.action"),
+      );
+    } finally {
+      setTransferBusy(false);
+    }
+  }, [refreshSession, t, transferCandidates, transferReady, transferTarget]);
 
   useEffect(() => {
     if (!hydrated) {
@@ -345,6 +437,48 @@ export function SettingsPage() {
         title={t("danger.title")}
         description={t("danger.count")}
       >
+        {transferDone !== null ? (
+          <Banner
+            tone="success"
+            title={t("danger.transferOwner.success", { name: transferDone })}
+          />
+        ) : null}
+
+        {/* 转让所有权(owner 2026-08-21 裁定,决策 3 批一)。个人租户整行不渲染:
+            它的 owner 即本人,给一个永远点不动的按钮只是噪音。 */}
+        {isOrgTenant ? (
+          <div className="flex flex-wrap items-center gap-md">
+            <span className="min-w-0 flex-1">
+              {policyCell(
+                "user-switch",
+                t("danger.transferOwner.title"),
+                isOwner && transferCandidates.length === 0
+                  ? t("danger.transferOwner.noCandidates")
+                  : t("danger.transferOwner.hint"),
+              )}
+            </span>
+            <StatusBadge tone="warning">
+              {t("danger.confirmRequired")}
+            </StatusBadge>
+            <Button
+              size="md"
+              variant="outline"
+              disabled={!isOwner || transferCandidates.length === 0}
+              {...(!isOwner
+                ? { title: t("danger.transferOwner.notOwner") }
+                : {})}
+              onClick={() => {
+                setTransferError(null);
+                setTransferDone(null);
+                setTransferOpen(true);
+              }}
+            >
+              <Icon name="user-switch" size="xs" fallback="placeholder" />
+              <span>{t("danger.transferOwner.action")}</span>
+            </Button>
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap items-center gap-md">
           <span className="min-w-0 flex-1">
             {policyCell(
@@ -356,13 +490,92 @@ export function SettingsPage() {
           <StatusBadge tone="warning">
             {t("danger.confirmRequired")}
           </StatusBadge>
-          {/* No handler exists behind this action; keep it legible but inert. */}
+          {/* 注销仍无后端:决策 3 批二待 owner 裁定(前置条件与软删语义会销毁数据)。 */}
           <Button size="md" variant="outline" disabled>
             <Icon name="x" size="xs" fallback="placeholder" />
             <span>{t("danger.cancelTenant.action")}</span>
           </Button>
         </div>
       </PageSection>
+
+      <AlertDialog
+        open={transferOpen}
+        onOpenChange={(open) => {
+          if (!open && !transferBusy) {
+            setTransferOpen(false);
+            setTransferConfirm("");
+            setTransferError(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("danger.transferOwner.dialogTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("danger.transferOwner.dialogBody")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="flex flex-col gap-md">
+            {transferError !== null ? (
+              <Banner tone="danger" title={transferError} />
+            ) : null}
+
+            <div className="flex flex-col gap-2xs">
+              <FieldLabel htmlFor="transfer-owner-target">
+                {t("danger.transferOwner.targetLabel")}
+              </FieldLabel>
+              <NativeSelect
+                id="transfer-owner-target"
+                value={transferTarget}
+                disabled={transferBusy}
+                onChange={(event) => setTransferTarget(event.target.value)}
+              >
+                <option value="">
+                  {t("danger.transferOwner.targetPlaceholder")}
+                </option>
+                {transferCandidates.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} · {m.email}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+
+            {/* 危险两档的重档:输入租户名。选人是可撤销的,点确认不是。 */}
+            <div className="flex flex-col gap-2xs">
+              <FieldLabel htmlFor="transfer-owner-confirm">
+                {t("danger.transferOwner.confirmLabel")}
+              </FieldLabel>
+              <Input
+                id="transfer-owner-confirm"
+                value={transferConfirm}
+                placeholder={tenantName}
+                disabled={transferBusy}
+                autoComplete="off"
+                onChange={(event) => setTransferConfirm(event.target.value)}
+              />
+            </div>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={transferBusy}>
+              {t("danger.transferOwner.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!transferReady || transferBusy}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleTransfer();
+              }}
+            >
+              {t("danger.transferOwner.confirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </FormPageTemplate>
   );
 }

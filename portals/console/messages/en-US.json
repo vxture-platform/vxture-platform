@@ -635,6 +635,22 @@
         "title": "Cancel tenant",
         "confirmHint": "Requires secondary confirmation and the current tenant name before execution.",
         "action": "Cancel tenant"
+      },
+      "transferOwner": {
+        "title": "Transfer ownership",
+        "hint": "Hand the tenant owner role to another active member. You become a manager afterwards.",
+        "action": "Transfer ownership",
+        "dialogTitle": "Transfer tenant ownership",
+        "dialogBody": "After the transfer this person owns the tenant and you become a manager — still able to manage members and roles, but without owner-only capabilities. It takes effect immediately and only the new owner can transfer it back.",
+        "targetLabel": "Recipient",
+        "targetPlaceholder": "Pick an active member",
+        "confirmLabel": "Type the tenant name to confirm",
+        "cancel": "Cancel",
+        "confirm": "Transfer ownership",
+        "noCandidates": "This tenant has no other active members, so there is nobody to transfer to. Invite someone and wait for them to join.",
+        "notOwner": "Only the current owner can transfer ownership.",
+        "personalTenant": "A personal tenant has no ownership to transfer.",
+        "success": "Ownership transferred to {name}. You are now a manager."
       }
     },
     "feedback": {

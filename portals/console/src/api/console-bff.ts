@@ -403,6 +403,35 @@ export async function updateMember(
   return (await response.json()) as MemberRecord;
 }
 
+/**
+ * 转让租户所有权(owner 2026-08-21 裁定,决策 3 批一)。
+ *
+ * 失败时把后端的具体原因带出来而不是吞成一句"操作失败"——五种拒绝各自对应
+ * 一个用户能自己解决的问题(对方不是成员 / 自己已不是 owner / 个人租户…),
+ * 合并成通用文案等于让用户猜。
+ */
+export async function transferTenantOwner(memberId: string): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/members/${memberId}/transfer-owner`)}`,
+    {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+    },
+  );
+
+  if (!response.ok) {
+    let detail = "所有权转让失败";
+    try {
+      const body = (await response.json()) as { message?: string };
+      if (body?.message) detail = body.message;
+    } catch {
+      /* 非 JSON 响应(网关层错误):保留默认文案 */
+    }
+    throw new ConsoleBffError(detail, response.status);
+  }
+}
+
 export async function disableMember(memberId: string): Promise<MemberRecord> {
   const response = await fetch(
     `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/members/${memberId}/disable`)}`,

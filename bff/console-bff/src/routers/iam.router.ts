@@ -1,7 +1,9 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Inject,
   NotFoundException,
@@ -22,6 +24,7 @@ import {
 } from "../dto/member.dto";
 import { CreateRoleDto, UpdateRoleDto } from "../dto/role.dto";
 import type { RequestContext } from "../types/console.types";
+import type { TransferOwnerRejection } from "@vxture/service-organization";
 
 function requireTenantSession(req: Request & RequestContext) {
   if (!req.user) {
@@ -36,6 +39,19 @@ function requireTenantSession(req: Request & RequestContext) {
 
 // Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
 const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
+
+/**
+ * 转让所有权的拒绝原因 → HTTP 语义。分开映射而不是一律 400:
+ * `not_owner` 是权限问题(403),其余是请求本身不成立(400)。
+ */
+const TRANSFER_OWNER_ERRORS: Record<TransferOwnerRejection, () => Error> = {
+  not_owner: () => new ForbiddenException("只有当前所有者可以转让所有权"),
+  tenant_not_found: () => new NotFoundException("租户不存在"),
+  personal_tenant: () => new BadRequestException("个人租户不支持转让所有权"),
+  same_user: () => new BadRequestException("不能转让给自己"),
+  target_not_member: () =>
+    new BadRequestException("目标必须是本租户的在职成员"),
+};
 
 @Controller("api/iam")
 export class IamRouter {
@@ -344,6 +360,56 @@ export class IamRouter {
       action: "tenant.member.remove",
       resourceType: "member",
       resourceId: memberId,
+    });
+
+    return { status: "ok" as const };
+  }
+
+  /**
+   * 转让租户所有权(owner 2026-08-21 裁定,决策 3 批一)。
+   *
+   * **没有 capability 门**——门是「你就是当前 owner」,由仓储层在同一事务里
+   * 校验。所有权转让不该有任何权限授予能够替代它:一个被授予 tenant.role.assign
+   * 的 manager 若能转让所有权,那 owner 就不是 owner 了。
+   *
+   * 拒绝原因逐条映射成不同的 4xx,不合并成一句"操作失败"——转让失败时用户
+   * 最需要知道的恰恰是**哪一条**没满足(对方不是成员?自己已不是 owner?)。
+   * 无论成败都写审计:被拒的转让尝试本身就是要留痕的事。
+   */
+  @Post("members/:memberId/transfer-owner")
+  async transferOwner(
+    @Req() req: Request & RequestContext,
+    @Param("memberId") memberId: string,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+
+    const result = await this.sessionAggregator.transferTenantOwner(
+      accountId,
+      tenantId,
+      memberId,
+    );
+
+    if (!result.ok) {
+      auditCustomerAction(this.pool, req, {
+        action: "tenant.owner.transfer",
+        resourceType: "tenant",
+        resourceId: tenantId,
+        result: "denied",
+        errorCode: result.reason,
+        after: { targetUserId: memberId },
+      });
+      throw TRANSFER_OWNER_ERRORS[result.reason]();
+    }
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.owner.transfer",
+      resourceType: "tenant",
+      resourceId: tenantId,
+      before: { ownerUserId: result.previousOwnerUserId },
+      after: {
+        ownerUserId: result.newOwnerUserId,
+        previousOwnerRole: "manager",
+      },
     });
 
     return { status: "ok" as const };

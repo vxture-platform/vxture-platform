@@ -10,6 +10,22 @@
 export type OrgType = "personal" | "organization";
 export type OrgRole = "owner" | "manager" | "member" | "readonly" | "guest";
 
+/**
+ * 所有权转让的拒绝原因。每一条对应一句不同的用户可读解释,所以是枚举而非布尔。
+ * `personal_tenant`:个人租户的 owner 即本人,转让无意义(且 DDL 的
+ * `uq_tenants_one_personal_per_owner` 保证每人至多一个个人租户)。
+ */
+export type TransferOwnerRejection =
+  | "tenant_not_found"
+  | "personal_tenant"
+  | "not_owner"
+  | "same_user"
+  | "target_not_member";
+
+export type TransferOwnerResult =
+  | { ok: true; previousOwnerUserId: string; newOwnerUserId: string }
+  | { ok: false; reason: TransferOwnerRejection };
+
 export interface OrgView {
   id: string;
   name: string;
@@ -252,6 +268,22 @@ export interface OrganizationReadRepository {
     role: OrgRole,
   ): Promise<OrgMembershipView | null>;
   removeOrgMember(orgId: string, userId: string): Promise<boolean>;
+  /**
+   * 转让组织租户所有权(owner 2026-08-21 裁定,决策 3 批一)。
+   *
+   * 单事务完成四件事:改 `tenants.owner_user_id`、目标升 owner、原 owner 降
+   * **manager**(不是 member——转让是职责交接不是离场)、默认工作空间的
+   * workspace_membership 同步。四件事分开做会留下「租户 owner 是 A、
+   * membership owner 还是 B」这种没人能修的中间态。
+   *
+   * 拒绝原因用**判别式返回**而不是抛错:调用方要按原因给不同的文案,
+   * 靠 message 字符串匹配是脆的。
+   */
+  transferOrgOwner(
+    orgId: string,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<TransferOwnerResult>;
   addWorkspaceMember(
     workspaceId: string,
     userId: string,

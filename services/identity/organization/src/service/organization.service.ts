@@ -14,6 +14,7 @@ import type {
   OrgRoleCatalogEntry,
   OrgView,
   ProvisionedOrg,
+  TransferOwnerResult,
   WorkspaceMembershipView,
   WorkspaceView,
 } from "../types/organization.types";
@@ -130,6 +131,18 @@ export class OrganizationService {
   }
   removeOrgMember(orgId: string, userId: string): Promise<boolean> {
     return this.repo.removeOrgMember(orgId, userId);
+  }
+
+  /**
+   * 转让组织租户所有权。权限判定在仓储层的同一事务里做(校验调用者就是当前
+   * owner),不在这里预判——预判与写入之间的窗口正是并发转让能钻的缝。
+   */
+  transferOrgOwner(
+    orgId: string,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<TransferOwnerResult> {
+    return this.repo.transferOrgOwner(orgId, fromUserId, toUserId);
   }
   addWorkspaceMember(
     workspaceId: string,

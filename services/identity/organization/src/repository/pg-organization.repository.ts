@@ -12,6 +12,7 @@ import type {
   OrgMembershipView,
   OrgProfileUpdateInput,
   OrgRole,
+  TransferOwnerResult,
   OrgRoleCatalogEntry,
   OrgView,
   ProvisionedOrg,
@@ -546,6 +547,125 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       [orgId, userId],
     );
     return (r.rowCount ?? 0) > 0;
+  }
+
+  async transferOrgOwner(
+    orgId: string,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<TransferOwnerResult> {
+    if (fromUserId === toUserId) return { ok: false, reason: "same_user" };
+
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+
+      // `for update` 锁住租户行:两个 owner 并发转让会各自读到自己仍是 owner,
+      // 然后后写的那个赢——所有权最终归谁取决于调度顺序。锁掉即可串行化。
+      const t = await client.query<{ type: string; owner_user_id: string }>(
+        `select type, owner_user_id from tenancy.tenants
+          where id = $1 and deleted_at is null
+          for update`,
+        [orgId],
+      );
+      const tenant = t.rows[0];
+      if (!tenant) {
+        await client.query("rollback");
+        return { ok: false, reason: "tenant_not_found" };
+      }
+      if (tenant.type === "personal") {
+        await client.query("rollback");
+        return { ok: false, reason: "personal_tenant" };
+      }
+      // 权限门在这里,不在上层:所有权转让不该有任何权限授予能够替代
+      // 「你就是当前 owner」这个事实(owner 2026-08-21 裁定)。
+      if (tenant.owner_user_id !== fromUserId) {
+        await client.query("rollback");
+        return { ok: false, reason: "not_owner" };
+      }
+
+      // 目标必须是本租户的 active 成员——转给租户外的账号等于把租户交出去。
+      const m = await client.query(
+        `select 1 from tenancy.tenant_memberships
+          where tenant_id = $1 and user_id = $2 and status = 'active'`,
+        [orgId, toUserId],
+      );
+      if (m.rowCount === 0) {
+        await client.query("rollback");
+        return { ok: false, reason: "target_not_member" };
+      }
+
+      await client.query(
+        `update tenancy.tenants
+            set owner_user_id = $2, updated_at = now()
+          where id = $1`,
+        [orgId, toUserId],
+      );
+
+      // 租户级 membership:目标升 owner、原 owner 降 manager。
+      await client.query(
+        `update tenancy.tenant_memberships m
+            set role_id = r.id, role_scope = 'tenant', updated_at = now()
+           from access.roles r
+          where m.tenant_id = $1 and m.user_id = $2
+            and r.scope = 'tenant' and r.role_code = $3`,
+        [orgId, toUserId, "owner"],
+      );
+      await client.query(
+        `update tenancy.tenant_memberships m
+            set role_id = r.id, role_scope = 'tenant', updated_at = now()
+           from access.roles r
+          where m.tenant_id = $1 and m.user_id = $2
+            and r.scope = 'tenant' and r.role_code = $3`,
+        [orgId, fromUserId, "manager"],
+      );
+
+      // 默认工作空间的 membership 同步。目标可能**根本没有** workspace 行
+      // (成员只在租户级挂过),所以是 upsert 不是 update——只 update 的话
+      // 新 owner 会拿到一个自己不是成员的工作空间,而配额与用量都按工作空间记账。
+      const ws = await client.query<{ id: string }>(
+        `select id from tenancy.workspaces
+          where tenant_id = $1 and is_default and deleted_at is null
+          limit 1`,
+        [orgId],
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (workspaceId) {
+        await client.query(
+          `insert into tenancy.workspace_memberships
+             (workspace_id, tenant_id, user_id, role_id, role_scope, status, created_at, updated_at)
+           select $1, $2, $3, r.id, 'workspace', 'active', now(), now()
+             from access.roles r
+            where r.scope = 'workspace' and r.role_code = 'owner'
+           on conflict (workspace_id, user_id) do update
+              set role_id = excluded.role_id,
+                  role_scope = 'workspace',
+                  status = 'active',
+                  updated_at = now()`,
+          [workspaceId, orgId, toUserId],
+        );
+        await client.query(
+          `update tenancy.workspace_memberships wm
+              set role_id = r.id, role_scope = 'workspace', updated_at = now()
+             from access.roles r
+            where wm.workspace_id = $1 and wm.user_id = $2
+              and r.scope = 'workspace' and r.role_code = 'manager'`,
+          [workspaceId, fromUserId],
+        );
+      }
+
+      await client.query("commit");
+      return {
+        ok: true,
+        previousOwnerUserId: fromUserId,
+        newOwnerUserId: toUserId,
+      };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async addWorkspaceMember(

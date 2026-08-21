@@ -28,6 +28,7 @@ import {
   type OrgProfileUpdateInput,
   type OrgRole,
   type OrgRoleCatalogEntry,
+  type TransferOwnerResult,
 } from "@vxture/service-organization";
 import type {
   Capability,
@@ -496,6 +497,15 @@ export class SessionAggregator {
     return [...caps];
   }
 
+  /**
+   * 角色变更后立刻作废该 (tenant,user) 的 capability 缓存。
+   * 不清的话最长 60s 内前端仍按旧能力集渲染——入口还在,点下去才 403,
+   * 这在「刚被降权」这个场景里格外像 bug。
+   */
+  private invalidateCapabilities(userId: string, tenantId: string): void {
+    this.capsCache.delete(`${tenantId}:${userId}`);
+  }
+
   async getCapabilities(userId: string, orgId?: string) {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return [];
@@ -679,6 +689,33 @@ export class SessionAggregator {
   ): Promise<MemberRecord | null> {
     await this.removeMember(userId, orgId, memberUserId);
     return null;
+  }
+
+  /**
+   * 转让租户所有权(owner 2026-08-21 裁定,决策 3 批一)。
+   *
+   * **刻意不调 `gov.assertCan`**:能替代「你是 owner」的权限点是不该存在的。
+   * 判定全部下沉到仓储层的同一事务(含 `for update` 锁),这里只做租户解析。
+   */
+  async transferTenantOwner(
+    userId: string,
+    orgId: string | undefined,
+    targetUserId: string,
+  ): Promise<TransferOwnerResult> {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return { ok: false, reason: "tenant_not_found" };
+    const result = await this.org.transferOrgOwner(
+      resolved.orgId,
+      userId,
+      targetUserId,
+    );
+    // capability 是按角色派生并缓存 60s 的;转让后原 owner 的能力集立刻变了,
+    // 不清缓存的话他在最长 60s 内仍能看到 owner 专属入口(点下去才 403)。
+    if (result.ok) {
+      this.invalidateCapabilities(userId, resolved.orgId);
+      this.invalidateCapabilities(targetUserId, resolved.orgId);
+    }
+    return result;
   }
 
   async resetMemberPassword(

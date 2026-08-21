@@ -635,6 +635,22 @@
         "title": "租户注销",
         "confirmHint": "执行前需要二次确认，并输入当前租户名称。",
         "action": "注销租户"
+      },
+      "transferOwner": {
+        "title": "转让所有权",
+        "hint": "把本租户的所有者身份转给另一位在职成员。转让后你将降为管理员。",
+        "action": "转让所有权",
+        "dialogTitle": "转让租户所有权",
+        "dialogBody": "转让后，对方成为本租户所有者，你将降为管理员（仍可管理成员与角色，但不再拥有所有者专属能力）。此操作立即生效，且只能由新所有者转回。",
+        "targetLabel": "接收人",
+        "targetPlaceholder": "选择一位在职成员",
+        "confirmLabel": "输入租户名称以确认",
+        "cancel": "取消",
+        "confirm": "确认转让",
+        "noCandidates": "本租户没有其他在职成员，无法转让。先邀请成员并等其加入。",
+        "notOwner": "只有当前所有者可以转让所有权。",
+        "personalTenant": "个人租户没有可转让的所有权。",
+        "success": "所有权已转让给 {name}。你现在是管理员。"
       }
     },
     "feedback": {
