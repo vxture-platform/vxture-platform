@@ -86,6 +86,11 @@ jobs:
       - name: Verify public exports snapshot
         run: node scripts/guardrails/check-design-system-exports.mjs --strict
 
+      # 发版前守住 /server 契约（#347 的复现命令即验收命令）：6.1.0 正是漏了这一条，
+      # 把一个 react-server 下不可求值的 /server 产物发了出去。
+      - name: Verify server entry is react-server evaluable
+        run: node scripts/guardrails/check-server-entry-safety.mjs
+
       - name: Verify publish payloads
         shell: bash
         run: |

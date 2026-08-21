@@ -5,6 +5,29 @@
 
 ---
 
+## 3.1.1 — 2026-08-21
+
+修 bug（#347），属 patch（050 §2）。
+
+- **修复：`/server` 入口在 react-server 运行时求值即崩。** 复现（#347 原命令）：
+  `node --conditions react-server -e "import('@vxture/design-ui/server')"` →
+  `The requested module 'react' does not provide an export named 'createContext'`。
+- **根因**：`icons/iconRegistry.ts` 引的是 Phosphor 的**裸入口（CSR 构建）**，它在
+  模块作用域调用 `createContext`，而 react-server 运行时的 react 不导出该符号。
+  `server.ts` 的注释早就写死「不得导出任何 import ../../icons 的组件」，但导出列表
+  里有 **6 个**违反此规则：StatusBadge / EmptyState / Banner / Section / MetricCard /
+  MetricGrid（#347 只点了前两个，实测是六个）。
+- **修法**：改引 `@phosphor-icons/react/ssr`——同一套图标的无 context 版本。
+  没有采用 issue 备选的「移出 `/server` 导出列表」：那会砍掉六个最常用的
+  server-safe 组件，是把契约缩到实现能满足的范围，而不是修实现。也没有采用
+  「惰性化」：SSR 构建让 `Icon` **真正可在 RSC 渲染**，不止于可求值。
+  `weight` 等仍是普通 prop；本仓未使用 `IconContext`，无功能损失。
+- **不影响生产**：webpack 的 DCE 一直把未使用的重导出摇掉，线上从未复现；
+  炸的是 `next dev`（无 DCE、全量求值）——消费方本地开发该页面 500。
+- **配套守卫**：新增 `scripts/guardrails/check-server-entry-safety.mjs`，用
+  `--conditions react-server` 真的 import 一次产物（复现命令即验收命令），已接入
+  CI 与发布流水线。6.1.0 发版正是漏了这一条。
+
 ## 3.1.0 — 2026-08-21
 
 新增组件属 minor（050 §2）。

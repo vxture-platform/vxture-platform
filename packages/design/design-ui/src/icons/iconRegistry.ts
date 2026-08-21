@@ -2,9 +2,15 @@
  * iconRegistry.ts - 图标注册中心
  * @package @vxture/design-ui
  *
- * 功能：图标注册中心，唯一直接 import @phosphor-icons/react 的文件
+ * 功能：图标注册中心，唯一直接 import Phosphor 的文件
  *       业务层和其他模块不得直接引用 Phosphor，统一通过此文件访问
  *       新增图标：在此文件和 iconDictionary.ts 中同时添加
+ *
+ * ⚠️ 只能引 `@phosphor-icons/react/ssr`，不能引裸入口（#347）：裸入口是 CSR 构建，
+ *    在模块作用域调用 createContext，而 react-server 运行时的 react 不导出它——
+ *    任何在 RSC 里静态导入 /server 子集的消费方，next dev（无 DCE）会直接 500。
+ *    SSR 构建是同一套图标的无 context 版本，`weight` 等仍是普通 prop（本仓未用
+ *    IconContext，故无功能损失），且让 Icon 真正可在 RSC 渲染而不止于可求值。
  *
  * @copyright Vxture Team
  * @layer Infrastructure
@@ -255,8 +261,10 @@ import {
   // 系统保留（勿删）
   // ==========================================================================
   QuestionIcon,
-} from "@phosphor-icons/react";
+} from "@phosphor-icons/react/ssr";
 
+// 类型从裸入口取：`import type` 在编译期被完全擦除，不进运行时模块图，因此
+// 不会把 CSR 构建的 createContext 带回 server 图（值导入必须走 /ssr，见上）。
 import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
 import type { IconName } from "./iconDictionary";
 

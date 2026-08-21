@@ -136,6 +136,13 @@ jobs:
             pnpm --filter "@vxture/$p" build
           done
 
+      # /server 子集的契约只在 react-server 条件下求值才成立——build/type-check/
+      # 单测都跑在普通 node 条件下，一条把 createContext 拖进模块作用域的链路
+      # 三道关卡一道都不会响（#347：线上被 DCE 兜住、next dev 直接 500）。
+      - name: Server entry safety (react-server evaluable)
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:server-entry
+
       - name: Type check
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm type-check:all

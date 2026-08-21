@@ -102,7 +102,8 @@
     "// === 部署相关 ===": "",
     "prepare": "husky || true",
     "precommit": "pnpm lint:fix && pnpm type-check",
-    "prepush": "pnpm health && pnpm test"
+    "prepush": "pnpm health && pnpm test",
+    "lint:server-entry": "node scripts/guardrails/check-server-entry-safety.mjs"
   },
   "devDependencies": {
     "@swc/core": "^1.15.18",

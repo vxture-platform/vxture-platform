@@ -5,6 +5,15 @@
 
 ---
 
+## 6.3.1 — 2026-08-21
+
+跟随 design-ui 3.1.1（#347 修 bug，属 patch）。
+
+- 伞包的 `@vxture/design-system/server` 转发同样受益：此前它转发的是一条在
+  react-server 下不可求值的链路，现已通过 `--conditions react-server` 实测
+  （27 个导出全部可求值）。
+- 无 API 变化。发布流水线新增「`/server` 入口 react-server 可求值」验收关卡。
+
 ## 6.3.0 — 2026-08-21
 
 跟随 design-tokens 2.2.0（新增具名导出属 minor，050 §2）。

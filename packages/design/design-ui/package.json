@@ -1,6 +1,6 @@
 {
   "name": "@vxture/design-ui",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "Vxture 设计系统的组件层：基础组件、平台图案、图标与 hook。",
   "license": "UNLICENSED",
   "private": false,
