@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 
-import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -25,7 +31,16 @@ function adminTokenDefinitions() {
 }
 
 const ROOT = process.cwd();
-const SCAN_ROOTS = ["portals", "packages", "business"];
+// 拆仓后本守卫是**双管辖**的:一半管 DS 自身(packages/design/**),一半管消费方
+// 怎么用 DS(portals 的 globals.css、admin 的 style entry、legacy-tokens 目录)。
+// design 仓没有 portals/business,平台仓拆完之后没有 packages/design——同一份脚本
+// 要能在两边各管各的那一半,所以**跳过本仓不存在的扫描根**,而不是把缺失当违规。
+//
+// 这条不是放宽:每条规则的判据一个没动,只是不再对"本仓压根没有的目录"发难。
+// 真正该做的是把脚本拆成 DS 内规与消费方内规两份,那是拆仓收尾的独立一项。
+const SCAN_ROOTS = ["portals", "packages", "business"].filter((root) =>
+  existsSync(path.join(ROOT, root)),
+);
 const SOURCE_EXTENSIONS = new Set([
   ".css",
   ".js",
@@ -1448,6 +1463,10 @@ const staleStyleEntryRule = {
 for (const entry of IMPORT_ONLY_STYLE_ENTRIES.keys()) {
   const target = path.join(ROOT, entry);
   if (exists(target)) continue;
+  // 同 SCAN_ROOTS 的理由:入口所属的顶层目录在本仓不存在时,它不是"陈旧",
+  // 是"不归本仓管"。只有目录在、文件不在,才是真的陈旧。
+  const entryRoot = normalize(entry).split("/")[0];
+  if (!existsSync(path.join(ROOT, entryRoot))) continue;
   violations.push({
     rule: staleStyleEntryRule,
     file: entry,
