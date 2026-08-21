@@ -91,6 +91,12 @@ jobs:
       - name: Verify server entry is react-server evaluable
         run: node scripts/guardrails/check-server-entry-safety.mjs
 
+      # 这一条是发布流水线里唯一按**消费方形态**验的关卡：npm pack 出真发布集，
+      # 按 node_modules/@vxture/* 摆好，再断言 @source 目标在包里、目标里真有
+      # 工具类、/server 的类型面不宽于运行时面（#268 的三条实测缺陷）。
+      - name: Verify packed consumability (registry install shape)
+        run: pnpm lint:packed-consumability
+
       - name: Verify publish payloads
         shell: bash
         run: |

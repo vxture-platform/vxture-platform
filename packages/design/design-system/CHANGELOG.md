@@ -5,6 +5,56 @@
 
 ---
 
+## 6.4.0 - 2026-08-21
+
+### Fixed
+
+- **发布包的 `@source` 指向了不发布的目录**(vxture-platform#268 第一条)。
+  `src/styles/globals.css` 里两条 `@source` 指向 `../../../design-ui/src` 与
+  `../components`,而两个包的 `files` 只发 `dist`(design-system 另发 `src/styles`,
+  不含 `src/components`)——从 registry 装完之后两个目标都不存在。改指 `dist/`,
+  两种安装形态下都解析得到。
+
+  代价在于它**不报错**:变量注册成功、手写 CSS 层照常抵达、组件 DOM 正确,但它们
+  身上每一个工具类都不产出,页面渲染成一片灰。症状与「根本没写 `@source`」完全一致,
+  极难从现象倒推。它只在 monorepo 里通,因为工作区包是软链到完整签出的。
+
+  接入方从此不需要写任何 `@source`,也不需要在 Tailwind config 里解析包路径。
+
+### Changed (类型面收窄,消费方可能需要改 import)
+
+- **`/server` 的类型面收窄到等于运行时面**(vxture-platform#268 第三条)。
+  `src/server.ts` 里的 `export type * from "@vxture/design-ui"` 看着是安全的,
+  但 tsup 的 dts rollup 会擦掉 `type` 修饰符,产出 `export * from '@vxture/design-ui'`
+  ——282 个客户端组件名同时落进 `.d.ts` 的**值空间**,而 `server.mjs` 运行时只有 27 个。
+
+  后果是消费方能写出 `import { Button } from "@vxture/design-system/server"`:
+  tsc 零错误、构建全绿、渲染时 `Button === undefined`。**类型系统主动为错误写法背书**,
+  且只在那条渲染路径被走到时才炸,藏在条件分支里就可能一路到生产。
+
+  按 SemVer 这是类型面的移除,故走 minor 而非 patch:若你此前从 `/server` 取过
+  客户端组件的**类型**(如 `import type { ButtonProps } from "@vxture/design-system/server"`),
+  改从主入口取即可——客户端组件有哪些,本就是主入口的类型该说的事。取**值**的写法
+  在运行时一直是坏的,这次只是让它在编译期就红。
+
+### Added
+
+- `docs/07-consumption-pitfalls.md`:接入陷阱清单,只收「接上去不报错、构建全绿、
+  但结果是错的」这一类——T2 语义层无前缀导致的 token 撞名(608 个无前缀名,18 个单段短名)、
+  暗色走 `.dark` 而非 `prefers-color-scheme`、`/server` 子集边界、`@source` 现状。
+  随包发布(`files` 含 `docs`),接入方装完就能读到。#268 的报告人三轮里提了三次
+  「这几条该进升级说明」,这份文档是那个请求的落地。
+
+- 守卫 `check-packed-consumability.mjs`:按 **registry 安装形态** 验三包可消费。
+  向 `npm pack --dry-run --json` 要真实发布集(不自己解释 `files` 字段)、按
+  `node_modules/@vxture/*` 铺树并接上依赖,然后断言三件事:`@source`/`@import` 目标
+  在包里、`@source` 目标里真扫得到工具类(路径对 ≠ 内容对)、`/server` 的类型面
+  不宽于运行时面。已接入 CI 与发布流水线,并经反向验证——把上面两条缺陷分别退回去,
+  守卫确实报错(`@source` 两个目标失联;`/server` 多出 225 个幽灵值导出)。
+
+  #268 的六条全部是同一个形状:**monorepo 里永远测不出来,只有消费方会撞上**。
+  这条守卫补的就是这个盲区。
+
 ## 6.3.1 — 2026-08-21
 
 跟随 design-ui 3.1.1（#347 修 bug，属 patch）。

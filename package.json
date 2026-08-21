@@ -58,6 +58,7 @@
     "lint:design-classes": "node scripts/guardrails/check-component-classes.mjs",
     "lint:design-preview": "node scripts/guardrails/check-preview-coverage.mjs",
     "lint:design-exports": "node scripts/guardrails/check-design-system-exports.mjs",
+    "lint:packed-consumability": "node scripts/guardrails/check-packed-consumability.mjs",
     "lint:design-tokens": "node scripts/design-tokens/generate-primitive.mjs --check && node scripts/design-tokens/generate-semantic.mjs --check && node scripts/design-tokens/generate-semantic-scales.mjs --check && node scripts/design-tokens/generate-theme.mjs --check && node scripts/design-tokens/generate-token-ts.mjs --check && node scripts/design-tokens/check-utilities.mjs && node scripts/guardrails/check-mode-blocks.mjs",
     "lint:data-design": "node scripts/guardrails/check-data-architecture.mjs",
     "lint:schema-residue": "node scripts/guardrails/check-schema-residue.mjs",

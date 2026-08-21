@@ -143,6 +143,13 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:server-entry
 
+      # 发布形态与 monorepo 形态不是一回事：工作区包软链到完整签出，src/ 在、
+      # 未发布的文件也在，跨包相对路径怎么写都通；从 registry 装只有 files 列的
+      # 东西存在。#268 由消费方分三轮报了六条，全是这个形状——本仓测不出来。
+      - name: Packed consumability (registry install shape)
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:packed-consumability
+
       - name: Type check
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm type-check:all
