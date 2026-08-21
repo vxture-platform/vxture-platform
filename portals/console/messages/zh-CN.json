@@ -1110,6 +1110,10 @@
       "localization": {
         "title": "本地化配置",
         "description": "决定当前组织默认语言、时区和基础资料附件。"
+      },
+      "workspace": {
+        "title": "工作空间",
+        "description": "订阅按租户支付、用量按工作空间记账。当前阶段每个租户固定一个默认工作空间，本期不开放自建。"
       }
     },
     "fields": {
@@ -1144,7 +1148,11 @@
       "currency": "货币",
       "businessLicenseUrl": "营业执照",
       "logoUrl": "Logo 链接",
-      "updatedAt": "最近更新时间"
+      "updatedAt": "最近更新时间",
+      "workspaceName": "工作空间名称",
+      "workspaceCode": "工作空间可视码",
+      "ownerTenant": "所属租户",
+      "isDefault": "默认工作空间"
     },
     "actions": {
       "edit": "编辑",
@@ -1208,6 +1216,10 @@
       "logoFileTypeError": "请选择图片文件。",
       "logoFileSizeError": "图片文件不能超过 5MB。",
       "logoReadError": "Logo 图片读取失败，请重新选择。"
+    },
+    "workspace": {
+      "defaultYes": "是",
+      "multiWorkspaceNote": "多工作空间为后续演进方向：其商业含义（按工作空间记账、订阅归属、席位分配）尚未定案，本期先保持一租户一工作空间。"
     }
   },
   "verificationPage": {

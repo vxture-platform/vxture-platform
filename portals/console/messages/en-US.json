@@ -1110,6 +1110,10 @@
       "localization": {
         "title": "Localization",
         "description": "Controls the default language, timezone, and basic profile attachments."
+      },
+      "workspace": {
+        "title": "Workspace",
+        "description": "The tenant pays; the workspace consumes. Each tenant currently has exactly one default workspace, and creating more is not open this period."
       }
     },
     "fields": {
@@ -1144,7 +1148,11 @@
       "currency": "Currency",
       "businessLicenseUrl": "Business license",
       "logoUrl": "Logo URL",
-      "updatedAt": "Last updated"
+      "updatedAt": "Last updated",
+      "workspaceName": "Workspace name",
+      "workspaceCode": "Workspace code",
+      "ownerTenant": "Owning tenant",
+      "isDefault": "Default workspace"
     },
     "actions": {
       "edit": "Edit",
@@ -1208,6 +1216,10 @@
       "logoFileTypeError": "Choose an image file.",
       "logoFileSizeError": "Logo image must be under 5MB.",
       "logoReadError": "Could not read the logo image. Choose another file."
+    },
+    "workspace": {
+      "defaultYes": "Yes",
+      "multiWorkspaceNote": "Multiple workspaces are a future direction: the commercial semantics (per-workspace accounting, subscription ownership, seat allocation) are not settled, so one tenant keeps one workspace for now."
     }
   },
   "verificationPage": {

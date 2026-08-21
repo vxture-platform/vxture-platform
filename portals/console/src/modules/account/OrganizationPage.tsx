@@ -38,7 +38,7 @@ import {
   uploadOrgLogo,
 } from "@/api/console-bff";
 import { IdentityCard } from "@/components/detail";
-import { PageSection } from "@/layout/shell";
+import { PageSection, SignalList } from "@/layout/shell";
 import type { ConsoleOrganizationProfile } from "@/entities/console";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { formatTenantDisplay } from "@/features/tenant/tenant-display";
@@ -418,6 +418,42 @@ export function OrganizationPage() {
             displayValue(profile?.description, empty),
           )}
         </DetailList>
+      </PageSection>
+
+      {/* Workspace 只读展示(spec §4.1;owner 2026-08-21 裁定决策 2a-选项一)。
+          「弱化展示、预留入口」那一档:该露的字段露出来,但不给自建入口——
+          多 WS 的商业含义未定案,先放一个建得出来、改不回去的入口是更贵的错。
+          字段取自会话上下文,不新开端点:BFF 解析默认工作空间时已带回名称与
+          可视码,单为一个只读区再加一条链路不值当。UUID 不展示(owner 铁律)。 */}
+      <PageSection
+        icon="folder"
+        level={2}
+        title={t("sections.workspace.title")}
+        description={t("sections.workspace.description")}
+      >
+        <DetailList>
+          {readonlyRow(
+            t("fields.workspaceName"),
+            displayValue(session.tenant?.workspaceName, empty),
+          )}
+          {readonlyRow(
+            t("fields.workspaceCode"),
+            displayValue(session.tenant?.workspaceNo, empty),
+          )}
+          {readonlyRow(
+            t("fields.ownerTenant"),
+            displayValue(session.tenant?.name, empty),
+          )}
+          {readonlyRow(t("fields.isDefault"), t("workspace.defaultYes"))}
+        </DetailList>
+        <SignalList
+          items={[
+            {
+              title: t("sections.workspace.title"),
+              description: t("workspace.multiWorkspaceNote"),
+            },
+          ]}
+        />
       </PageSection>
 
       {/* Personal tenant → verification summary + jump (spec §3.4) */}
