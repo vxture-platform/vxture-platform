@@ -153,6 +153,13 @@ jobs:
           username: ${{ secrets.DEPLOY_HOST_USER || secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_HOST_SSH_KEY || secrets.DEPLOY_SSH_KEY }}
           passphrase: ${{ secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE || secrets.DEPLOY_SSH_PASSPHRASE }}
+          # 主机指纹校验（4-8，模板标准 §2.2 要求 fail-closed）。
+          # 未设 DEPLOY_KNOWN_HOSTS 时该参数为空串，action 退回「不校验主机指纹」
+          # ——**这一步在 owner 把该 secret 配上之前是不生效的**，属于有意的
+          # 「先接线、后启用」：接线本身零风险，而没接线的话配好 secret 也不会生效。
+          # 取值：在能连上 worker-01 的机器上跑
+          #   ssh-keyscan -t ed25519 <host> | ssh-keygen -lf - | awk '{print $2}'
+          fingerprint: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           source: "deploy/scripts,deploy/database,deploy/guardrails,deploy/.env.*.example,deploy/secrets/*.example"
           target: "/tmp/vxture-deploy-${{ github.run_id }}"
           rm: true
@@ -178,6 +185,13 @@ jobs:
           username: ${{ secrets.DEPLOY_HOST_USER || secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_HOST_SSH_KEY || secrets.DEPLOY_SSH_KEY }}
           passphrase: ${{ secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE || secrets.DEPLOY_SSH_PASSPHRASE }}
+          # 主机指纹校验（4-8，模板标准 §2.2 要求 fail-closed）。
+          # 未设 DEPLOY_KNOWN_HOSTS 时该参数为空串，action 退回「不校验主机指纹」
+          # ——**这一步在 owner 把该 secret 配上之前是不生效的**，属于有意的
+          # 「先接线、后启用」：接线本身零风险，而没接线的话配好 secret 也不会生效。
+          # 取值：在能连上 worker-01 的机器上跑
+          #   ssh-keyscan -t ed25519 <host> | ssh-keygen -lf - | awk '{print $2}'
+          fingerprint: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           command_timeout: 30m
           envs: DB_ACTION,DEPLOY_DIR,DEPLOY_RUNTIME_DIR,TEST_DELIVERY_PRODUCT,TEST_DELIVERY_ACCOUNT,TEST_DELIVERY_EVENT,STAGE_DIR
           script: |

@@ -9,6 +9,18 @@
 
 ## 一、设计原则
 
+> **公网域名是代码层常量，不是配置。**（2026-08-21 裁定）
+>
+> `deploy/compose.platform.yml` 里的 `https://api.vxture.com` / `https://accounts.vxture.com` /
+> `https://vxture.com`，以及 `deploy/scripts/40-verify-platform-runtime.sh`、
+> `51-check-platform-alerts.sh` 里的域名与证书路径，都是**硬编码的，且有意如此**。
+>
+> 判据两条：它们**非敏感**（公网可见），且**单环境固定**（只有一套生产）。更重要的是
+> 改域名应当走 PR 评审——那是会牵动 nginx、证书、cookie domain、Turnstile 允许列表的
+> 连锁改动，不该由谁在 GitHub 设置页里改一个变量就静默生效。
+>
+> 所以**不要把它们参数化**。写在这里是为了让下一个人知道这是选择，不是漏配。
+
 平台 env 文件按作用域分层管理：
 
 | 类别             | 文件                                                                     | 作用                                                              | 是否可重复             |
