@@ -128,24 +128,7 @@
       "name": "packages/shared",
       "path": "packages/shared/shared",
     },
-    // 设计四包，按依赖方向排：tokens ← ui ← system ← preview
-    {
-      "name": "packages/design-tokens",
-      "path": "packages/design/design-tokens",
-    },
-    {
-      "name": "packages/design-ui",
-      "path": "packages/design/design-ui",
-    },
-    {
-      "name": "packages/design-system",
-      "path": "packages/design/design-system",
-    },
-    {
-      "name": "packages/design-preview",
-      "path": "packages/design/design-preview",
-    },
-
+    // 设计四包已迁出（2026-08-21）：现在 vxture/vxture-design，本仓从 registry 消费。
     // ── 工具 ───────────────────────────────────────────────────────────
     {
       "name": "tools/dev-panel",

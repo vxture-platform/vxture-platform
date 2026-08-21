@@ -7,7 +7,6 @@
     { "path": "packages/core/config" },
     { "path": "packages/core/locale" },
     { "path": "packages/core/utils" },
-    { "path": "packages/design/design-system" },
     { "path": "services/commerce/billing" },
     { "path": "services/commerce/subscription" },
     { "path": "services/identity/iam" },

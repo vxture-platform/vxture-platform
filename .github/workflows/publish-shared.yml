@@ -55,6 +55,12 @@ jobs:
         uses: actions/checkout@v6
 
       - uses: ./.github/actions/setup-node-pnpm
+        with:
+          # 跨仓装包必须用组织级 NODE_AUTH_TOKEN，不能靠 job 的 GITHUB_TOKEN：
+          # 后者按**仓库**授权，而 @vxture/design-* 自 2026-08-21 起从
+          # vxture/vxture-design 发布，本仓的 token 读不到 → ERR_PNPM_FETCH_403
+          # （403 Forbidden 而非 401：有 token 但无权，最容易误判成「没配 token」）。
+          node-auth-token: ${{ secrets.NODE_AUTH_TOKEN }}
 
       - name: Check, lint and build
         run: |

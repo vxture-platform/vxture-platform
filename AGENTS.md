@@ -43,8 +43,9 @@ Vxture 是基于 **pnpm workspace monorepo** 的企业 SaaS 平台，TypeScript 
 | `packages/core/*`                  | `Infrastructure` | Very Slow |
 | `packages/ai/model-runtime-client` | `Infrastructure` | Medium    |
 | `packages/platform/*`              | `Infrastructure` | Low       |
-| `packages/design/*`                | `Presentation`   | Slow      |
 | `packages/shared/*`                | `Shared`         | Very Slow |
+
+> `packages/design/*` 已迁至 [`vxture/vxture-design`](https://github.com/vxture/vxture-design)（2026-08-21）：本仓从 registry 消费 `@vxture/design-*`，不再持有其源码。
 
 ### 依赖方向（违反即破坏架构，无例外）
 
@@ -133,7 +134,6 @@ portals/*
 | `packages/shared/`   | `docs/40-implementation/packages/shared/00-index.md` |
 | `packages/core/`     | `docs/40-implementation/packages/core/{包名}.md`     |
 | `packages/platform/` | `docs/40-implementation/packages/sdk/{包名}.md`      |
-| `packages/design/`   | `docs/40-implementation/packages/design/{包名}.md`   |
 | `services/*/*`       | `docs/40-implementation/packages/services/{包名}.md` |
 | `bff/*`              | `docs/40-implementation/packages/bff/{bff名}.md`     |
 | `portals/*`          | `docs/40-implementation/packages/portals/{包名}.md`  |

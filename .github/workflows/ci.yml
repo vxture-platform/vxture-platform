@@ -18,10 +18,22 @@ jobs:
   format:
     name: Format
     runs-on: ubuntu-latest
+    # .npmrc 里的 ${NODE_AUTH_TOKEN} 由 pnpm 在**每次调用**时求值——不只是 install。
+    # 不在 job 层给出，其余步骤（build / lint / type-check…）每跑一次 pnpm 就刷两行
+    #   WARN Issue while reading ".npmrc". Failed to replace env in config
+    # 一次 run 几十条，真警告会被淹掉。设在 job 层比逐步骤传更省，也更难漏。
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v6
 
       - uses: ./.github/actions/setup-node-pnpm
+        with:
+          # 跨仓装包必须用组织级 NODE_AUTH_TOKEN，不能靠 job 的 GITHUB_TOKEN：
+          # 后者按**仓库**授权，而 @vxture/design-* 自 2026-08-21 起从
+          # vxture/vxture-design 发布，本仓的 token 读不到 → ERR_PNPM_FETCH_403
+          # （403 Forbidden 而非 401：有 token 但无权，最容易误判成「没配 token」）。
+          node-auth-token: ${{ secrets.NODE_AUTH_TOKEN }}
 
       - name: Check formatting
         run: pnpm format:check
@@ -61,6 +73,12 @@ jobs:
     # 内部步骤可演进，但 job 名（quality-gate / build / test-coverage）改动须同步 ruleset。
     name: quality-gate
     runs-on: ubuntu-latest
+    # .npmrc 里的 ${NODE_AUTH_TOKEN} 由 pnpm 在**每次调用**时求值——不只是 install。
+    # 不在 job 层给出，其余步骤（build / lint / type-check…）每跑一次 pnpm 就刷两行
+    #   WARN Issue while reading ".npmrc". Failed to replace env in config
+    # 一次 run 几十条，真警告会被淹掉。设在 job 层比逐步骤传更省，也更难漏。
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
     outputs:
       docs_only: ${{ steps.changes.outputs.docs_only }}
       # 本次变更影响的镜像集（= 构建目标）；build/test 据此只处理受影响组件。
@@ -100,6 +118,12 @@ jobs:
         run: echo "::notice::Docs-only change; heavy quality gate steps skipped while keeping the required check stable."
 
       - uses: ./.github/actions/setup-node-pnpm
+        with:
+          # 跨仓装包必须用组织级 NODE_AUTH_TOKEN，不能靠 job 的 GITHUB_TOKEN：
+          # 后者按**仓库**授权，而 @vxture/design-* 自 2026-08-21 起从
+          # vxture/vxture-design 发布，本仓的 token 读不到 → ERR_PNPM_FETCH_403
+          # （403 Forbidden 而非 401：有 token 但无权，最容易误判成「没配 token」）。
+          node-auth-token: ${{ secrets.NODE_AUTH_TOKEN }}
         if: steps.changes.outputs.docs_only != 'true'
 
       - name: Build shared & core packages
@@ -122,34 +146,6 @@ jobs:
             packages/core/*/dist
           retention-days: 1
           include-hidden-files: true
-
-      # 伞包的类型引用的是 design-ui / design-tokens 的**产物**（.d.ts），不是它们的
-      # 源码；而 type-check 自己不产出声明。不先构建就必然 TS2307，且这个失败只在
-      # 干净检出上出现——本地留着上一次的 dist，看起来一直是绿的。
-      # 顺序是硬约束，见 docs/10-standards/050-design-system-release.md §3。
-      # 不用 `pnpm build:design`：那个 filter 会连带 next build 整个预览面，
-      # 而预览面是私有包，不发布不部署。
-      - name: Build design packages (tokens → ui → system)
-        if: steps.changes.outputs.docs_only != 'true'
-        run: |
-          for p in design-tokens design-ui design-system; do
-            pnpm --filter "@vxture/$p" build
-          done
-
-      # /server 子集的契约只在 react-server 条件下求值才成立——build/type-check/
-      # 单测都跑在普通 node 条件下，一条把 createContext 拖进模块作用域的链路
-      # 三道关卡一道都不会响（#347：线上被 DCE 兜住、next dev 直接 500）。
-      - name: Server entry safety (react-server evaluable)
-        if: steps.changes.outputs.docs_only != 'true'
-        run: pnpm lint:server-entry
-
-      # 发布形态与 monorepo 形态不是一回事：工作区包软链到完整签出，src/ 在、
-      # 未发布的文件也在，跨包相对路径怎么写都通；从 registry 装只有 files 列的
-      # 东西存在。#268 由消费方分三轮报了六条，全是这个形状——本仓测不出来。
-      - name: Packed consumability (registry install shape)
-        if: steps.changes.outputs.docs_only != 'true'
-        run: pnpm lint:packed-consumability
-
       - name: Type check
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm type-check:all
@@ -161,27 +157,6 @@ jobs:
       - name: Design system guardrail
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:design
-
-      - name: Design system public exports snapshot
-        if: steps.changes.outputs.docs_only != 'true'
-        run: pnpm lint:design-exports
-
-      - name: Design tokens in sync with policy source
-        if: steps.changes.outputs.docs_only != 'true'
-        run: pnpm lint:design-tokens
-
-      # 组件写的类名和 T2 注册脱节时不会报错，只会渲染成没有样式——本地 lint 不覆盖，
-      # 必须在这里实测每处类名真能生成。
-      - name: Design component classes actually generate
-        if: steps.changes.outputs.docs_only != 'true'
-        run: pnpm lint:design-classes
-
-      # 预览面是这套系统唯一的验收面。组件没有条目就等于改了也没人看得见，
-      # 而统计卡照样给出一个自洽但偏小的数字。
-      - name: Design preview covers every component
-        if: steps.changes.outputs.docs_only != 'true'
-        run: pnpm lint:design-preview
-
       - name: Env audit (deploy bundle + runtime template contract)
         if: steps.changes.outputs.docs_only != 'true'
         run: |
@@ -214,6 +189,12 @@ jobs:
   build:
     name: build
     runs-on: ubuntu-latest
+    # .npmrc 里的 ${NODE_AUTH_TOKEN} 由 pnpm 在**每次调用**时求值——不只是 install。
+    # 不在 job 层给出，其余步骤（build / lint / type-check…）每跑一次 pnpm 就刷两行
+    #   WARN Issue while reading ".npmrc". Failed to replace env in config
+    # 一次 run 几十条，真警告会被淹掉。设在 job 层比逐步骤传更省，也更难漏。
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
     needs: [check]
     # TD-024: auth-bff's RedisService.onModuleInit() awaits a real connection and
     # fails closed by design (it is the central session store) — its boot-smoke
@@ -237,6 +218,12 @@ jobs:
         if: needs.check.outputs.docs_only != 'true'
 
       - uses: ./.github/actions/setup-node-pnpm
+        with:
+          # 跨仓装包必须用组织级 NODE_AUTH_TOKEN，不能靠 job 的 GITHUB_TOKEN：
+          # 后者按**仓库**授权，而 @vxture/design-* 自 2026-08-21 起从
+          # vxture/vxture-design 发布，本仓的 token 读不到 → ERR_PNPM_FETCH_403
+          # （403 Forbidden 而非 401：有 token 但无权，最容易误判成「没配 token」）。
+          node-auth-token: ${{ secrets.NODE_AUTH_TOKEN }}
         if: needs.check.outputs.docs_only != 'true'
 
       - name: Restore backend build (deps dist + prisma clients)
@@ -278,16 +265,8 @@ jobs:
       # server layout 变成从伞包(首行 "use client")里 `THEME_CONSTANTS.X` 点进去。
       # tsc 全绿、六个 bundle 全绿、五个 PR 合完,打 v0.20.44 时 website 预渲染直接失败。
       #
-      # 设计包是门户构建的前置(伞包解析到 dist,不是源码),所以先建三包再建门户。
+      # 拆仓后（2026-08-21）设计三包从 registry 装，不再需要先在本仓构建它们。
       # 走同一份 affected_images:改一个门户只建那一个,改共享包才全建。
-      - name: Build design packages (portal prerequisite)
-        if: needs.check.outputs.docs_only != 'true'
-        run: |
-          set -euo pipefail
-          for p in design-tokens design-ui design-system; do
-            pnpm --filter "@vxture/$p" build
-          done
-
       - name: Build affected portals (next build)
         if: needs.check.outputs.docs_only != 'true'
         env:
@@ -306,6 +285,12 @@ jobs:
   test:
     name: test-coverage
     runs-on: ubuntu-latest
+    # .npmrc 里的 ${NODE_AUTH_TOKEN} 由 pnpm 在**每次调用**时求值——不只是 install。
+    # 不在 job 层给出，其余步骤（build / lint / type-check…）每跑一次 pnpm 就刷两行
+    #   WARN Issue while reading ".npmrc". Failed to replace env in config
+    # 一次 run 几十条，真警告会被淹掉。设在 job 层比逐步骤传更省，也更难漏。
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
     needs: [check]
     steps:
       - name: Docs-only test gate
@@ -318,6 +303,12 @@ jobs:
           fetch-depth: 0 # pnpm 变更过滤需要 git 历史
 
       - uses: ./.github/actions/setup-node-pnpm
+        with:
+          # 跨仓装包必须用组织级 NODE_AUTH_TOKEN，不能靠 job 的 GITHUB_TOKEN：
+          # 后者按**仓库**授权，而 @vxture/design-* 自 2026-08-21 起从
+          # vxture/vxture-design 发布，本仓的 token 读不到 → ERR_PNPM_FETCH_403
+          # （403 Forbidden 而非 401：有 token 但无权，最容易误判成「没配 token」）。
+          node-auth-token: ${{ secrets.NODE_AUTH_TOKEN }}
         if: needs.check.outputs.docs_only != 'true'
 
       - name: Restore backend build (deps dist + prisma clients)

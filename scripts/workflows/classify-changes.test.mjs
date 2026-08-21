@@ -83,8 +83,8 @@ const DEPLOYABLE_CASES = [
     deployable: "true",
   },
   {
-    name: "前端共享库 packages/design",
-    files: ["packages/design/design-system/src/x.ts"],
+    name: "前端共享库 packages/platform",
+    files: ["packages/platform/browser/src/x.ts"],
     deployable: "true",
   },
   {
@@ -106,12 +106,20 @@ for (const { name, files, deployable } of DEPLOYABLE_CASES) {
 }
 
 // ── 逐镜像构建集合（monorepo 路径→包→镜像 + 共享库扇出）────────────────────
-test("image set: packages/design → 仅前端镜像", () => {
-  assert.deepEqual(builtImages(["packages/design/design-system/src/x.ts"]), [
+// 设计三包已迁至 vxture/vxture-design（2026-08-21），本仓从 registry 消费。
+// 保留这条用例而不是删掉：它现在钉的是「这条路径不再扇出任何镜像」——如果哪天
+// 有人把设计包又拉回本仓、或误加了一条把它映射到镜像的规则，这里会红。
+// 删掉它则什么都保证不了。
+test("image set: packages/design 已迁出 → 不产生任何镜像", () => {
+  assert.deepEqual(builtImages(["packages/design/design-system/src/x.ts"]), []);
+});
+
+// 真实的前端共享库扇出改由 packages/platform 覆盖。
+test("image set: packages/platform → 仅前端镜像", () => {
+  assert.deepEqual(builtImages(["packages/platform/browser/src/x.ts"]), [
     "platform_website",
     "platform_console",
     "platform_admin",
-    "platform_opera",
     "platform_accounts",
   ]);
 });

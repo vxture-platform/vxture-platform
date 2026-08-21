@@ -7,6 +7,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import process from "node:process";
 
@@ -171,15 +172,14 @@ const DS_SHADOW_LOCKED_STYLE_PATHS = new Set([
 const IMPORT_ONLY_STYLE_ENTRIES = new Map([
   // varda 样式入口已随 vxture-varda 独立仓迁出(2026-08-18)。
   // auth.css 已删（2026-08-18）：认证样式归业务层，DS 不收业务含义的入口。
-  [
-    normalize("packages/design/design-system/src/styles/globals.css"),
-    "DS globals.css",
-  ],
   /* platform.css 聚合入口已删（2026-08-18）：八条子模块退役后它只剩空壳。 */
-  [
-    normalize("packages/design/design-tokens/src/styles/tokens.css"),
-    "DS tokens.css",
-  ],
+  //
+  // DS 自己的两个样式入口（design-system/globals.css、design-tokens/tokens.css）
+  // 已随拆仓迁出（2026-08-21，vxture/vxture-design）。**本仓不再管别人包里的文件**
+  // ——那两条约束在 design 仓仍然有效，由那边的同名守卫执行。
+  //
+  // 没有改成"路径不存在就跳过"：#363 已为缺失的**扫描根**加过一次跳过，这里再加
+  // 一层就变成用启发式掩盖边界问题。管辖边界该由清单表达，不该由存在性猜测。
   [normalize("portals/admin/src/app/globals.css"), "admin globals.css"],
   [normalize("portals/admin/src/styles/admin-base.css"), "admin base.css"],
   [
@@ -255,8 +255,64 @@ const DIRECT_UI_ENGINE_DEPENDENCIES = [
   "react-icons",
   /^@radix-ui\//,
 ];
+/**
+ * DS 的 manifest 从**已安装的 registry 包**读（2026-08-21 拆仓后）。
+ *
+ * 拆仓前它在 packages/design/design-system/ 下，是工作区成员；现在设计三包住在
+ * vxture/vxture-design，本仓只作为消费方从 registry 装。继续按老路径读会在
+ * 模块加载时就 ENOENT——而这条守卫管的是**消费方怎么用 DS**，正是拆仓后仍要留
+ * 在本仓的那一半，不能因为读不到 manifest 就整条失效。
+ *
+ * 不用 require.resolve("@vxture/design-system/package.json")：该包的 exports 不
+ * 暴露 ./package.json，深引会抛。改为解析主入口再上溯到包根。
+ */
+/** 列出目录下的子目录名；目录不存在时返回空数组。 */
+function listDirs(dir) {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name);
+}
+
+function resolveDsManifest() {
+  // 解析基点不能用仓根：根 package.json 不依赖设计包，只有门户依赖，而 pnpm 的
+  // 严格布局下根目录没有那条链。从任一声明了该依赖的门户起算。
+  const bases = [ROOT, ...listDirs(path.join(ROOT, "portals")).map((d) => path.join(ROOT, "portals", d))];
+  let cur = null;
+  for (const base of bases) {
+    const manifestPath = path.join(base, "package.json");
+    if (!existsSync(manifestPath)) continue;
+    try {
+      cur = path.dirname(createRequire(manifestPath).resolve("@vxture/design-system"));
+      break;
+    } catch {
+      /* 该基点没装，换下一个 */
+    }
+  }
+  if (!cur) {
+    throw new Error(
+      "找不到已安装的 @vxture/design-system。本守卫要读它的 manifest 才能知道" +
+        "消费方允许引用哪些子入口——先 pnpm install（需 NODE_AUTH_TOKEN）。",
+    );
+  }
+  for (let i = 0; i < 8 && cur && cur !== path.dirname(cur); i += 1) {
+    const candidate = path.join(cur, "package.json");
+    if (existsSync(candidate)) {
+      const manifest = JSON.parse(readFileSync(candidate, "utf8"));
+      if (manifest.name === "@vxture/design-system") return manifest;
+    }
+    cur = path.dirname(cur);
+  }
+  throw new Error("解析到了 @vxture/design-system 主入口，但上溯不到它的 package.json。");
+}
+/**
+ * 拆仓后本仓已无此文件，两条以它为键的规则（no-stale-package-style-exports /
+ * no-design-migration-artifacts）因此永远不匹配——它们管的是 DS 自己，已随包
+ * 迁到 vxture/vxture-design。常量保留而不删：删了要连带改两条规则的形状，而
+ * 那两条在 design 仓仍然有效，两边保持同一份脚本更省事。
+ */
 const DS_PACKAGE_JSON = normalize("packages/design/design-system/package.json");
-const DS_PACKAGE_MANIFEST = readJsonFile(DS_PACKAGE_JSON);
+const DS_PACKAGE_MANIFEST = resolveDsManifest();
 const DS_PACKAGE_VERSION = DS_PACKAGE_MANIFEST.version;
 const ALLOWED_DS_IMPORTS = readAllowedDesignSystemImports(DS_PACKAGE_MANIFEST);
 const DS_EXPORTED_STYLE_PATHS =

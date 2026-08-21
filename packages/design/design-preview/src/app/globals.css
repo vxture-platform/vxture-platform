@@ -1,5 +1,0 @@
-/* 只引 DS 的样式入口，不加一行本地 CSS——预览面的全部意义是显示 DS 自己产出
- * 什么。这里一旦贴样式，看到的就不再是 DS 了。shell-template 也不引：那是
- * 外壳的皮，会盖住组件的真实观感。 */
-@import "@vxture/design-system/styles/globals.css";
-@import "@vxture/design-system/styles/brands/vxture.css";

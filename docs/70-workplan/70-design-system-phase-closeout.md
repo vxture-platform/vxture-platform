@@ -50,7 +50,7 @@
 后两条都**经过反向验证**（把缺陷退回去，守卫确实报错），并且都跑在**发布流水线上——发布前**，不是发布后。
 
 另有随包发布的
-[`packages/design/design-system/docs/07-consumption-pitfalls.md`](../../packages/design/design-system/docs/07-consumption-pitfalls.md)：
+[`packages/design-system/docs/07-consumption-pitfalls.md`](https://github.com/vxture/vxture-design/blob/main/packages/design-system/docs/07-consumption-pitfalls.md)：
 只收「接上去不报错、构建全绿、但结果是错的」这一类，消费方装完就能读到。
 
 ---

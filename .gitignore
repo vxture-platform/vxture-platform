@@ -217,7 +217,7 @@ docs/architecture/package-architecture.html
 #   scripts/guardrails/check-public-repo-hygiene.mjs — this is the convenience
 #   layer, that is the guarantee.
 /vpn-proxy-claude-cli-baseline.md
-packages/design/design-system-gallery/
+# packages/design/* 已随拆仓迁出（2026-08-21）；gallery 忽略项随之失效。
 /workplans/mgmt-plane-contract-capability-console.md
 
 # Local dev data layer (deploy/dev/compose.dev.yml bind-mounts these)

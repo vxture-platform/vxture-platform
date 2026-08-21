@@ -5,8 +5,4 @@ packages:
   - 'packages/shared/shared'
   - 'packages/core/*'
   - 'packages/platform/*'
-  - 'packages/design/design-tokens'
-  - 'packages/design/design-ui'
-  - 'packages/design/design-system'
-  - 'packages/design/design-preview'
   - 'tools/*'
