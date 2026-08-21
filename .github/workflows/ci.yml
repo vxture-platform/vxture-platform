@@ -268,6 +268,40 @@ jobs:
           if has platform_bff-platform-api;       then smoke @vxture/bff-platform-api; fi
           echo "built affected bundles: ${AFFECTED:-[]}"
 
+      # ── 门户 next build ────────────────────────────────────────────────────
+      # 补的盲区(#356):在此之前 CI 只建六个 BFF bundle,**一个门户的 next build
+      # 都不跑**。门户构建只在 docker-build.yml 里发生,而它只在推 tag 时触发——
+      # 于是「只在 next build 阶段暴露」的缺陷(预渲染报错、RSC 边界违规、
+      # "use client" 越界)在 PR CI 里完全隐形,一路躺到发版当天才炸。
+      #
+      # 实际代价:#346 把 THEME_CONSTANTS 从 shared 迁进 design-tokens 后,三个
+      # server layout 变成从伞包(首行 "use client")里 `THEME_CONSTANTS.X` 点进去。
+      # tsc 全绿、六个 bundle 全绿、五个 PR 合完,打 v0.20.44 时 website 预渲染直接失败。
+      #
+      # 设计包是门户构建的前置(伞包解析到 dist,不是源码),所以先建三包再建门户。
+      # 走同一份 affected_images:改一个门户只建那一个,改共享包才全建。
+      - name: Build design packages (portal prerequisite)
+        if: needs.check.outputs.docs_only != 'true'
+        run: |
+          set -euo pipefail
+          for p in design-tokens design-ui design-system; do
+            pnpm --filter "@vxture/$p" build
+          done
+
+      - name: Build affected portals (next build)
+        if: needs.check.outputs.docs_only != 'true'
+        env:
+          AFFECTED: ${{ needs.check.outputs.affected_images }}
+        run: |
+          set -euo pipefail
+          has() { printf '%s' "$AFFECTED" | grep -q "\"$1\""; }
+          if has platform_website;   then pnpm --filter @vxture/website build; fi
+          if has platform_console;   then pnpm --filter @vxture/console build; fi
+          if has platform_admin;     then pnpm --filter @vxture/admin build; fi
+          if has platform_accounts;  then pnpm --filter @vxture/accounts build; fi
+          if has platform_opera;     then pnpm --filter @vxture/opera build; fi
+          echo "built affected portals: ${AFFECTED:-[]}"
+
   # ── 5. Test Coverage ───────────────────────────────────────────────────────
   test:
     name: test-coverage

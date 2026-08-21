@@ -14,14 +14,22 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { cookies } from "next/headers";
+// 常量走 `/server` 入口(vxture-platform#356)。它们的家是 @vxture/design-tokens,
+// 而伞包主入口首行是 "use client" —— 从 server component 里 `THEME_CONSTANTS.X`
+// 这样**点进去**,RSC 运行时会拦下:「You cannot dot into a client module from a
+// server component. You can only pass the imported name through.」
+// 整名传递(如 themeBootstrapScript)不受影响,所以它留在主入口那组也没错;
+// 但取值必须从 server-safe 子集拿。
 import {
   FullscreenProvider,
   BootSplash,
-  PREFERENCE_CONSTANTS,
-  THEME_CONSTANTS,
   ThemeProvider,
   themeBootstrapScript,
 } from "@vxture/design-system";
+import {
+  PREFERENCE_CONSTANTS,
+  THEME_CONSTANTS,
+} from "@vxture/design-system/server";
 import type { Density } from "@vxture/design-system";
 import { DEFAULT_LOCALE } from "@vxture/shared";
 import type { Theme } from "@vxture/shared";
