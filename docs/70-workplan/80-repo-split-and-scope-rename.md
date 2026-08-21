@@ -245,13 +245,20 @@ scope 纯属内部命名，不受 registry 约束。全量改名要动上千处�
 
 ### 批 2 — 拆仓前置：registry 鉴权（**拆仓前必须全绿**）
 
-| #   | 任务                                                                                                                                                      |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2-1 | 仓根加 `.npmrc`：`@vxture:registry=` + `//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}`                                                              |
-| 2-2 | `setup-node-pnpm` 注入 `NODE_AUTH_TOKEN`（组织层 secret）                                                                                                 |
-| 2-3 | `Dockerfile.nextjs` / `Dockerfile.nestjs` 用 `--mount=type=secret` 传 token，**禁止 ARG**                                                                 |
-| 2-4 | `docker-build.yml` 传递该 build secret                                                                                                                    |
-| 2-5 | **验证方式**：在拆仓**之前**，先把设计三包从 `workspace:*` 改成 registry 版本号跑一遍 CI + docker-build。绿了才动拆仓——这样鉴权问题与拆仓问题不会缠在一起 |
+| #   | 任务                                                                                                      |
+| --- | --------------------------------------------------------------------------------------------------------- | --------------------- |
+| 2-1 | 仓根 `.npmrc`（此前**不存在**）：`@vxture` scope → GitHub Packages，token 从 `NODE_AUTH_TOKEN` 取、不落盘 | ✅ **已做**（#364）   |
+| 2-2 | `setup-node-pnpm` 加 `node-auth-token` input，缺省用 job 的 `GITHUB_TOKEN`                                | ✅ **已做**（#364）   |
+| 2-3 | `Dockerfile.nextjs` / `.nestjs` 的 `pnpm install` 挂 BuildKit secret（**不用 ARG**）                      | ✅ **已做**（#364）   |
+| 2-4 | `docker-build.yml` 用 `secrets:` 传（主构建 + 重试各一处）                                                | ✅ **已做**（#364）   |
+| 2-5 | **验收**：设计三包从 `workspace:*` 改成 registry 版本号，跑一遍 CI + docker-build                         | ⏳ **卡在发版**，见下 |
+
+> **2-5 的前置**：三包尚未从 `vxture/vxture-design` 发过版，registry 上的
+> `@vxture/design-system@6.4.0` 仍绑在旧仓。顺序是：新仓发版 → 平台仓改依赖 →
+> 跑 CI + docker-build 验鉴权 → 绿了才动批 3。
+>
+> **批 2 刻意不动依赖形态**：鉴权先就位并验证，再改依赖。这样拆仓当天出问题时，
+> 能确定不是鉴权引起的。
 
 ### 批 3 — 拆仓执行
 
@@ -261,8 +268,9 @@ scope 纯属内部命名，不受 registry 约束。全量改名要动上千处�
 9 条 pnpm script、发布流水线、5 份规范文档）。本文不重复。
 
 | #   | 任务                                                                                                         |
-| --- | ------------------------------------------------------------------------------------------------------------ |
-| 3-1 | 旧仓瘦身为 design 仓（按上述清单保留，其余删）                                                               |
+| --- | ------------------------------------------------------------------------------------------------------------ | ----------- |
+| 3-0 | **四包迁入新建的 `vxture/vxture-design`（public）**                                                          | ✅ **已做** |
+| 3-1 | ~~旧仓瘦身为 design 仓~~ **作废**：owner 改为另开 `vxture/vxture-design`，旧仓的处置另议                     |
 | 3-2 | 新仓删除 `packages/design/*`，改为 registry 依赖                                                             |
 | 3-3 | `packages/platform/browser` 对 `@vxture/design-tokens` 的直接依赖改为 registry 依赖                          |
 | 3-4 | 旧仓的 issue 台账处置：跨仓联络 issue（atlas/runos/yucer/arda 那 20 余条）**与设计无关**，需迁到新仓或另立仓 |
