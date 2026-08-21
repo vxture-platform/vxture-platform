@@ -90,22 +90,35 @@ variable。SSH 私钥、ACR 口令、DNS API token → secret。
 | ----------------------------- | ------------------------------------------------------------------ |
 | `vars.IMAGE_PRIMARY_REGISTRY` | **仓内零引用**（全仓检索无命中）。要么删，要么说明它的消费方在哪。 |
 
-### 2.6 上移到组织层——这不是建议，是标准里**已有的裁定**
+### 2.6 组织层归位：**在 free 版 + 私有仓下不可行**（本节修正了初稿的判定）
 
-复核时发现一份我起初漏掉的权威：`docs/30-design/product_240_repo-template.md` §2.2
-（各产品仓照它建）已经规定了这套分层，且 §6#17 是**已裁定**状态：
+初稿据 `docs/30-design/product_240_repo-template.md` §6#17 的已裁结论
+（"共享凭证属 **org 级**"）判定新仓全配在仓库层是偏离、应当上移。**这个判定错了。**
 
-> **17 共享凭证层级** — 140 §3 明定 org 级（ACR / tailscale / npm token）vs arda 实践配 repo 级
-> → ✅ **已裁**：**org 级**（140 §3 强化为权威）；arda repo 级配置记 arda 线。
+owner 指出后实测：
 
-即 `ALIYUN_ACR_USERNAME` / `ALIYUN_ACR_PASSWORD` / `TAILSCALE_OAUTH_CLIENT_ID` /
-`TAILSCALE_OAUTH_CLIENT_SECRET` / `NODE_AUTH_TOKEN` / `SONAR_TOKEN`，以及
-`vars.ALIYUN_ACR_REGISTRY` / `ALIYUN_ACR_INTERNAL_HOST` / `TAILSCALE_OAUTH_CLIENT_TAG`
-**本就该在组织层**。新仓当前全配在仓库层，与 arda 是同一种偏离。
+|                                         | 可见性      | 组织计划 |
+| --------------------------------------- | ----------- | -------- |
+| `vxture/vxture-platform`（旧）          | **public**  | free     |
+| `vxture-platform/vxture-platform`（新） | **private** | free     |
 
-**已执行的一步**：`vars.TAILSCALE_OAUTH_CLIENT_TAG`（值 `tag:promotion`）已按该裁定
-建在 `vxture-platform` **组织层**（visibility=all），§2.1 的第一个阻断项因此解除。
-其余项的上移留在批 4——它们不阻断部署，且 secret **值读不出来**，必须由 owner 重建。
+**GitHub free 版的组织级 secrets / variables 只能供给公开仓。** 旧仓一直能靠组织层
+（12 secrets + 4 vars）拿到凭据，正是因为它是公开的——`vxture` 组织下除一个 demo 外
+全是公开仓。新仓是私有的，**读不到组织层的任何东西**。
+
+所以：**新仓把共享凭证配在仓库层不是偏离，是唯一可行解。**
+
+**§6#17 有一条没写出来的前置条件**：它成立于"公开仓 或 付费计划"。`vxture-arda`
+是公开仓（已核），所以标准把 arda 的 repo 级配置记为偏离是对的；但**下一个私有产品仓
+照这条做会做不到**。→ 批 4-1 由"上移"改为"给 §6#17 补上前置条件"。
+
+**本文作者在此处犯的错已回滚**：曾按初稿判定在 `vxture-platform` 组织层建了
+`vars.TAILSCALE_OAUTH_CLIENT_TAG`——私有仓根本读不到，等于建了个"看起来配好、
+实际不生效"的东西，而它恰恰是 §2.1 的阻断项。已删除；该变量由 owner 配在**仓库层**
+（`tag:promotion`，已实测取到值）。
+
+教训与本文 §0 判据三同源，但补了一条：**配置"存在"不等于"可达"——可达性由计划与
+仓库可见性决定，而两者都不在仓库代码里。** 这类错误不报错，只表现为"配了但没生效"。
 
 ### 2.7 环境密钥命名：现在有三套，需要一次收口
 
@@ -251,17 +264,17 @@ scope 纯属内部命名，不受 registry 约束。全量改名要动上千处�
 
 ### 批 4 — 分层归位与死凭据清理（不阻断，最后做）
 
-| #   | 任务                                                                                          |
-| --- | --------------------------------------------------------------------------------------------- |
-| 4-1 | 5 个 secret + 3 个 variable 从新仓仓库层上移到 `vxture-platform` 组织层                       |
-| 4-2 | 删 `vars.IMAGE_PRIMARY_REGISTRY`（零引用），或说明消费方                                      |
-| 4-3 | 删旧组织的 `TAILSCALE_AUTHKEY`；`VXTURE_NPM_REGISTRY` 接线或删                                |
-| 4-4 | 确认 `DEPLOY_WORKER02_*` 的授权仓后处置                                                       |
-| 4-5 | `deploy/README` 补一句：公网域名是代码层常量                                                  |
-| 4-6 | 结清技术债 §926                                                                               |
-| 4-7 | 回写 `product_240` §2.2 的环境密钥命名为 `DEPLOY_HOST_*`（见 §2.7），否则后续产品仓继续拿旧名 |
-| 4-8 | 补 `DEPLOY_KNOWN_HOSTS` fail-closed（见 §2.8）——标准要求，平台仓当前不校验主机指纹            |
-| 4-9 | 移除四个 workflow 里的过渡回退 `secrets.新名 或 旧名`（发版切到新仓之后）                     |
+| #   | 任务                                                                                                                     |
+| --- | ------------------------------------------------------------------------------------------------------------------------ |
+| 4-1 | ~~上移组织层~~ **作废**（free + 私有仓不可行，见 §2.6）。改为：给 `product_240` §6#17 补「公开仓 或 付费计划」的前置条件 |
+| 4-2 | 删 `vars.IMAGE_PRIMARY_REGISTRY`（零引用），或说明消费方                                                                 |
+| 4-3 | 删旧组织的 `TAILSCALE_AUTHKEY`；`VXTURE_NPM_REGISTRY` 接线或删                                                           |
+| 4-4 | 确认 `DEPLOY_WORKER02_*` 的授权仓后处置                                                                                  |
+| 4-5 | `deploy/README` 补一句：公网域名是代码层常量                                                                             |
+| 4-6 | 结清技术债 §926                                                                                                          |
+| 4-7 | 回写 `product_240` §2.2 的环境密钥命名为 `DEPLOY_HOST_*`（见 §2.7），否则后续产品仓继续拿旧名                            |
+| 4-8 | 补 `DEPLOY_KNOWN_HOSTS` fail-closed（见 §2.8）——标准要求，平台仓当前不校验主机指纹                                       |
+| 4-9 | 移除四个 workflow 里的过渡回退 `secrets.新名 或 旧名`（发版切到新仓之后）                                                |
 
 ---
 
