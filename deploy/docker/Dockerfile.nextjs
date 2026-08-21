@@ -31,7 +31,20 @@ RUN mkdir -p tools/dev-panel && echo '{"name":"@vxture/dev-panel","version":"0.0
 
 # B7: pnpm content-addressable store 走 BuildKit cache mount —— install 层即便因源码
 # 改动重跑，依赖也从持久 store 取（reused, downloaded 0），免去重复下载/解压。
+# GitHub Packages 鉴权（拆仓前置）。仓根 .npmrc 把 @vxture scope 指向
+# npm.pkg.github.com、token 从 NODE_AUTH_TOKEN 取；设计三包拆出去之后它们不再是
+# workspace:* 而是从 registry 装，**GitHub Packages 即便包公开也要求鉴权**。
+#
+# token 走 BuildKit secret，**绝不能用 ARG**：ARG 的值会留在镜像层历史里，
+# `docker history` 就能读出来——那等于把凭据发布到镜像仓库。secret 只在这一条
+# RUN 的时间窗内挂载为文件，不进任何层。
+#
+# `|| true` 是刻意的：secret 未挂载时（例如本地不带 --secret 构建）读取会失败，
+# 但那种情况下也不需要 token。真正缺 token 的场景会在紧接着的 install 里以
+# 401/404 失败，而不是被这里静默吞掉。
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    --mount=type=secret,id=node_auth_token \
+    NODE_AUTH_TOKEN="$(cat /run/secrets/node_auth_token 2>/dev/null || true)" \
     pnpm install --frozen-lockfile --store-dir /pnpm/store
 
 ARG PORTAL_PATH

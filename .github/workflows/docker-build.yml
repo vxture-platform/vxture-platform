@@ -205,6 +205,12 @@ jobs:
             GIT_SHA=${{ steps.prov.outputs.git_sha }}
             BUILD_TIME=${{ steps.prov.outputs.build_time }}
             DEPLOY_STAGE=${{ steps.prov.outputs.deploy_stage }}
+          # GitHub Packages token 走 BuildKit secret，**不用 build-arg**：build-arg 的值
+          # 会留在镜像层历史里（`docker history` 可读），等于把凭据发布到镜像仓库。
+          # 拆仓后 Dockerfile 内的 pnpm install 要从 registry 装 @vxture/design-*，
+          # 而 GitHub Packages 即便包公开也要求鉴权。
+          secrets: |
+            node_auth_token=${{ secrets.NODE_AUTH_TOKEN || github.token }}
           platforms: linux/amd64
           push: true
           # 关掉 provenance / SBOM 证明。buildx 默认把它们作为独立 manifest 一起推，
@@ -240,6 +246,12 @@ jobs:
             GIT_SHA=${{ steps.prov.outputs.git_sha }}
             BUILD_TIME=${{ steps.prov.outputs.build_time }}
             DEPLOY_STAGE=${{ steps.prov.outputs.deploy_stage }}
+          # GitHub Packages token 走 BuildKit secret，**不用 build-arg**：build-arg 的值
+          # 会留在镜像层历史里（`docker history` 可读），等于把凭据发布到镜像仓库。
+          # 拆仓后 Dockerfile 内的 pnpm install 要从 registry 装 @vxture/design-*，
+          # 而 GitHub Packages 即便包公开也要求鉴权。
+          secrets: |
+            node_auth_token=${{ secrets.NODE_AUTH_TOKEN || github.token }}
           platforms: linux/amd64
           push: true
           # 关掉 provenance / SBOM 证明。buildx 默认把它们作为独立 manifest 一起推，
