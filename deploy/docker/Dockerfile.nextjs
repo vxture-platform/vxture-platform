@@ -19,7 +19,11 @@ WORKDIR /repo
 RUN corepack enable && corepack prepare pnpm@10.30.3 --activate
 
 # 先复制 lockfile，最大化 install 缓存命中
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
+# .npmrc 必须进镜像：它是 @vxture scope → GitHub Packages 的映射与 token 引用。
+# 漏了它，pnpm 仍会按 lockfile 记录的 URL 去 npm.pkg.github.com 取，但**没有鉴权**，
+# 于是 ERR_PNPM_FETCH_401 —— 而这个失败只在 docker-build 出现（CI 的 build job
+# 不进 Docker），也就是说它只会在推 tag 发版那天暴露。
+COPY .npmrc pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
 # 完整 workspace 源码（.dockerignore 已排除 node_modules/dist/.next）
 COPY packages/ packages/
 COPY portals/ portals/

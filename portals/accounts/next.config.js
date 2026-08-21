@@ -36,10 +36,6 @@ const internalAliases = {
    * 会被改写成 `…/src/client.ts/styles/fonts.css` —— 路径里夹着一个文件名，必然
    * 解析失败。加 `$` 后只有裸包名走 alias，`/styles/*` 子路径回落到 package.json
    * exports 正常解析。（值为目录的那几条前缀匹配是对的，故不加 `$`。） */
-  "@vxture/design-system$": join(
-    __dirname,
-    "../../packages/design/design-system/src/client.ts",
-  ),
   "@vxture/platform-browser": join(
     __dirname,
     "../../packages/platform/browser/src",
@@ -47,14 +43,13 @@ const internalAliases = {
 };
 const turboAliases = {
   "@vxture-platform/shared": "../../packages/shared/shared/src",
-  "@vxture/design-system": "../../packages/design/design-system/src/client.ts",
   "@vxture/platform-browser": "../../packages/platform/browser/src",
 };
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typedRoutes: true,
-  transpilePackages: ["@vxture/design-system"],
+  transpilePackages: [],
   output: process.env.NEXT_STANDALONE === "1" ? "standalone" : undefined,
   env: {
     // Public base of the OIDC API (prod: accounts.vxture.com, same-origin;

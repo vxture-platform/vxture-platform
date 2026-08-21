@@ -39,18 +39,6 @@
       "@vxture/core-auth/*": ["./packages/core/auth/src/*"],
       "@vxture/core-utils": ["./packages/core/utils/src"],
       "@vxture/core-utils/*": ["./packages/core/utils/src/*"],
-      "@vxture/design-system": [
-        "./packages/design/design-system/src/client.ts"
-      ],
-      "@vxture/design-system/tokens": [
-        "./packages/design/design-system/src/tokens-entry.ts"
-      ],
-      "@vxture/design-system/types": [
-        "./packages/design/design-system/src/types-entry.ts"
-      ],
-      "@vxture/design-system/server": [
-        "./packages/design/design-system/src/server.ts"
-      ],
       "@vxture/service-ticket": ["./services/support/ticket/src"],
       "@vxture/service-ticket/*": ["./services/support/ticket/src/*"],
       "@vxture/service-billing": ["./services/commerce/billing/src"],
