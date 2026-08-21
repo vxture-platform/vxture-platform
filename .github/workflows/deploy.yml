@@ -142,6 +142,11 @@ jobs:
         env:
           VX_IMAGE_TAG: ${{ github.ref_name }}
           VX_ACR_ENABLED: ${{ steps.registry.outputs.acr_enabled }}
+          # 主镜像源(owner 2026-08-22 接线)。此前主源是**写死的逻辑**:ACR 可用就用
+          # ACR、否则 ghcr.io——没有任何开关能改变这个偏好。现在由 vars 给定,
+          # 另一个源自动降为兜底,两源的韧性保持不变。
+          # 取值:aliyun-acr | ghcr。未设时默认 aliyun-acr(与接线前行为一致)。
+          VX_IMAGE_PRIMARY_REGISTRY: ${{ vars.IMAGE_PRIMARY_REGISTRY }}
           # 内网优先(快/省流)、公网兜底(worker-01 内网 ACR 端点不可达时)。
           VX_IMAGE_REGISTRY_INTERNAL: ${{ steps.registry.outputs.acr_registry_internal }}
           VX_IMAGE_REGISTRY_PUBLIC: ${{ steps.registry.outputs.acr_registry_public }}
@@ -169,7 +174,7 @@ jobs:
           #   ssh-keyscan -t ed25519 <host> | ssh-keygen -lf - | awk '{print $2}'
           fingerprint: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           command_timeout: 60m
-          envs: VX_IMAGE_TAG,VX_ACR_ENABLED,VX_IMAGE_REGISTRY_INTERNAL,VX_IMAGE_REGISTRY_PUBLIC,VX_IMAGE_NAMESPACE,ALIYUN_ACR_USERNAME,ALIYUN_ACR_PASSWORD,DEPLOY_DIR,DEPLOY_RUNTIME_DIR,STAGE_DIR
+          envs: VX_IMAGE_TAG,VX_IMAGE_PRIMARY_REGISTRY,VX_ACR_ENABLED,VX_IMAGE_REGISTRY_INTERNAL,VX_IMAGE_REGISTRY_PUBLIC,VX_IMAGE_NAMESPACE,ALIYUN_ACR_USERNAME,ALIYUN_ACR_PASSWORD,DEPLOY_DIR,DEPLOY_RUNTIME_DIR,STAGE_DIR
           script: |
             set -e
 
@@ -200,26 +205,59 @@ jobs:
 
             IMAGE_NAMESPACE="${VX_IMAGE_NAMESPACE:-vxture}"
             IMAGE_TAG="${VX_IMAGE_TAG:-latest}"
-            IMAGE_REGISTRY="${VX_IMAGE_REGISTRY_PUBLIC:-ghcr.io}"
+            # ── 镜像主源选择（owner 2026-08-22 接线）──────────────────────
+            # 此前主源是**写死的偏好**：ACR 可用就用 ACR、否则 ghcr.io，没有任何
+            # 开关能改变它。现在由 vars.IMAGE_PRIMARY_REGISTRY 给定主源，另一个
+            # 源自动降为兜底——两源的韧性不变，变的只是谁先试。
+            #
+            # 取值 aliyun-acr | ghcr。未设时默认 aliyun-acr，与接线前行为一致，
+            # 所以这次接线对现网是零行为变更。
+            #
+            # **非法值直接失败退出，不静默回退**：回退会让「我明明设了 ghcr」
+            # 变成一次安静的忽略，而镜像源用错的后果是拉到旧镜像——那种错很难
+            # 从现象倒推。
+            PRIMARY="${VX_IMAGE_PRIMARY_REGISTRY:-aliyun-acr}"
+            case "$PRIMARY" in
+              aliyun-acr|ghcr) ;;
+              *)
+                echo "ERROR: IMAGE_PRIMARY_REGISTRY='$PRIMARY' 非法，只接受 aliyun-acr | ghcr" >&2
+                exit 1
+                ;;
+            esac
 
-            # registry 归一化已在 runner 端完成；host 上只做 login。ACR 内网端点(快/省流)
-            # 优先，但 worker-01 若不在同 VPC/区域会连不通(context deadline exceeded)——
-            # 那就回退公网 ACR 端点(docker-build 已把镜像推到公网路径，同一仓库)。
-            if [ "${VX_ACR_ENABLED:-false}" = "true" ]; then
-              LOGGED_IN=""
-              for CAND in "$VX_IMAGE_REGISTRY_INTERNAL" "$VX_IMAGE_REGISTRY_PUBLIC"; do
-                [ -n "$CAND" ] || continue
-                if echo "$ALIYUN_ACR_PASSWORD" | docker login "$CAND" -u "$ALIYUN_ACR_USERNAME" --password-stdin; then
-                  IMAGE_REGISTRY="$CAND"; LOGGED_IN=1
-                  echo "Using Aliyun ACR images: $IMAGE_REGISTRY/$IMAGE_NAMESPACE:$IMAGE_TAG"
-                  break
-                fi
-                echo "  ACR login failed/unreachable: $CAND — trying next endpoint"
-              done
-              [ -n "$LOGGED_IN" ] || { echo "ERROR: could not log into ACR (internal + public both failed)"; exit 1; }
+            GHCR_REGISTRY="ghcr.io"
+            IMAGE_REGISTRY=""
+
+            # 候选顺序 = 主源在前，另一源兜底。ACR 自身还分内网/公网两个端点：
+            # 内网快且省流，但 worker-01 不在同 VPC/区域时连不通（context
+            # deadline exceeded），故内网在前、公网紧随。
+            if [ "$PRIMARY" = "aliyun-acr" ]; then
+              CANDIDATES="$VX_IMAGE_REGISTRY_INTERNAL $VX_IMAGE_REGISTRY_PUBLIC $GHCR_REGISTRY"
             else
-              echo "ACR not enabled — falling back to compose default registry ($IMAGE_REGISTRY)."
+              CANDIDATES="$GHCR_REGISTRY $VX_IMAGE_REGISTRY_INTERNAL $VX_IMAGE_REGISTRY_PUBLIC"
             fi
+
+            for CAND in $CANDIDATES; do
+              [ -n "$CAND" ] || continue
+              if [ "$CAND" = "$GHCR_REGISTRY" ]; then
+                # GHCR 上的镜像是公开可拉的，compose 直接拉即可，无需 login。
+                IMAGE_REGISTRY="$CAND"
+                echo "Using GHCR images: $IMAGE_REGISTRY/$IMAGE_NAMESPACE:$IMAGE_TAG"
+                break
+              fi
+              [ "${VX_ACR_ENABLED:-false}" = "true" ] || continue
+              if echo "$ALIYUN_ACR_PASSWORD" | docker login "$CAND" -u "$ALIYUN_ACR_USERNAME" --password-stdin; then
+                IMAGE_REGISTRY="$CAND"
+                echo "Using Aliyun ACR images: $IMAGE_REGISTRY/$IMAGE_NAMESPACE:$IMAGE_TAG"
+                break
+              fi
+              echo "  ACR login failed/unreachable: $CAND — trying next endpoint"
+            done
+
+            [ -n "$IMAGE_REGISTRY" ] || {
+              echo "ERROR: 主源 $PRIMARY 与兜底源均不可用，无法确定镜像 registry" >&2
+              exit 1
+            }
 
             # ── container-name migration (product_320: vx-* → vx-platform-*) ──
             # The stack's container_names were prefixed vx-platform-* (ACR

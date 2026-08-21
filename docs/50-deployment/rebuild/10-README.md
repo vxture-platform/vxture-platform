@@ -25,11 +25,11 @@
 **org 级（共享，可见性保持 `all` —— 各仓库陆续开发，按需自然纳入，不收紧）**
 
 - 变量：`vars.ALIYUN_ACR_REGISTRY`、`vars.ALIYUN_ACR_NAMESPACE`、`vars.TAILSCALE_OAUTH_CLIENT_TAG`（=`tag:promotion`）、`vars.VXTURE_NPM_REGISTRY`
-- 密钥：`secrets.ALIYUN_ACR_USERNAME`、`secrets.ALIYUN_ACR_PASSWORD`、`secrets.ALIYUN_ACR_INTERNAL_HOST`（内网 VPC 拉取端点，可选、缺省回退公网）、`secrets.SONAR_TOKEN`、`secrets.TAILSCALE_OAUTH_CLIENT_ID`、`secrets.TAILSCALE_OAUTH_CLIENT_SECRET`、`secrets.TAILSCALE_AUTHKEY`、`secrets.NODE_AUTH_TOKEN`
+- 密钥：`secrets.ALIYUN_ACR_USERNAME`、`secrets.ALIYUN_ACR_PASSWORD`、`secrets.ALIYUN_ACR_INTERNAL_HOST`（内网 VPC 拉取端点，可选、缺省回退公网）、`secrets.SONAR_TOKEN`、`secrets.TAILSCALE_OAUTH_CLIENT_ID`、`secrets.TAILSCALE_OAUTH_CLIENT_SECRET`、`secrets.NODE_AUTH_TOKEN`（**`TAILSCALE_AUTHKEY` 已于 2026-08-22 移除**：CI 入 tailnet 早已改用 OAuth client，全组织 19 个仓零引用；主机 bootstrap 入网是人工步骤，脚本只打印提示让人手输 `--authkey=<key>`，**不读这个 secret**。两条可能用途都不经由它，留着只扩大攻击面。）
 
 **环境级（develop / beta / production 各一份）**
 
-- 密钥：`secrets.DEPLOY_HOST`、`secrets.DEPLOY_USER`、`secrets.DEPLOY_SSH_KEY`、`secrets.DEPLOY_SSH_PASSPHRASE`
+- 密钥：`secrets.DEPLOY_HOST_TAILNET_IP`、`secrets.DEPLOY_HOST_USER`、`secrets.DEPLOY_HOST_SSH_KEY`、`secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE`、`secrets.DEPLOY_HOST_PORT`、`secrets.DEPLOY_HOST_PUBLIC_IP`、`secrets.DEPLOY_HOST_PRIVATE_IP`、`secrets.DEPLOY_KNOWN_HOSTS`（命名 owner 2026-08-21 统一为 `DEPLOY_HOST_*` 前缀；旧名 DEPLOY_HOST / DEPLOY_USER / DEPLOY_SSH_KEY / DEPLOY_SSH_PASSPHRASE 已作废）
 - 变量：`vars.CF_TURNSTILE_ADMIN_SITE_KEY`、`vars.CF_TURNSTILE_TENANT_SITE_KEY`（前端 site key，公开）
 
 > `SONAR_TOKEN`、`ALIYUN_ACR_INTERNAL_HOST` 已录 org（2026-07-14，secret / visibility all）。org 共享凭证集齐。
