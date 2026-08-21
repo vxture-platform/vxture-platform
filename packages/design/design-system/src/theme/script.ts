@@ -10,7 +10,7 @@
  * @date 2026-05-16
  */
 
-import { THEME_CONSTANTS } from "@vxture/shared";
+import { THEME_CONSTANTS } from "@vxture/design-tokens";
 
 export const themeBootstrapScript = `
 (function() {

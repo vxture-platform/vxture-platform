@@ -16,3 +16,4 @@
  */
 
 export * from "./generated";
+export * from "./persistence";

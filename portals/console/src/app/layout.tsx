@@ -17,15 +17,13 @@ import { cookies } from "next/headers";
 import {
   FullscreenProvider,
   BootSplash,
+  PREFERENCE_CONSTANTS,
+  THEME_CONSTANTS,
   ThemeProvider,
   themeBootstrapScript,
 } from "@vxture/design-system";
 import type { Density } from "@vxture/design-system";
-import {
-  DEFAULT_LOCALE,
-  PREFERENCE_CONSTANTS,
-  THEME_CONSTANTS,
-} from "@vxture/shared";
+import { DEFAULT_LOCALE } from "@vxture/shared";
 import type { Theme } from "@vxture/shared";
 import "@vxture/design-system/styles/fonts.css";
 import "./globals.css";

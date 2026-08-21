@@ -25,7 +25,7 @@ import {
 } from "react";
 import type { Density } from "../density";
 import { DEFAULT_DENSITY, DENSITY_STORAGE_KEY } from "../density";
-import { THEME_CONSTANTS } from "@vxture/shared";
+import { THEME_CONSTANTS } from "@vxture/design-tokens";
 import { markAppReady } from "./boot-splash";
 import {
   readFontSizePreference,
@@ -163,7 +163,7 @@ function applyFontSizeClass(value: FontSizePreference): void {
  * 字号偏好是跨 *.vxture.com 全栈同步的契约项（vx-fontsize）。挂载后读取偏好并
  * 应用到 <html>，订阅跨标签页/跨子域名的同步实时跟随；setFontSize 经
  * ./fontSizePreference 持久化（localStorage + `.vxture.com` cookie）。持久化逻辑
- * 内置于 DS（仅依赖 @vxture/shared 契约键），使发布包保持精简、可被外部消费者安装。
+ * 内置于 DS（仅依赖 @vxture/design-tokens 契约键），使发布包保持精简、可被外部消费者安装。
  */
 function FontSizeProvider({ children }: { children: ReactNode }) {
   const [fontSize, setFontSizeState] = useState<FontSizePreference>("default");

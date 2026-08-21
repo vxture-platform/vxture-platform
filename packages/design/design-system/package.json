@@ -1,6 +1,6 @@
 {
   "name": "@vxture/design-system",
-  "version": "6.2.0",
+  "version": "6.3.0",
   "description": "Vxture platform — design tokens, UI components, theme, icons",
   "private": false,
   "type": "module",
@@ -52,8 +52,7 @@
     "@fontsource/geist-mono": "^5.3.0",
     "@fontsource/inter": "^5.3.0",
     "@vxture/design-tokens": "workspace:*",
-    "@vxture/design-ui": "workspace:*",
-    "@vxture/shared": "workspace:^"
+    "@vxture/design-ui": "workspace:*"
   },
   "peerDependencies": {
     "@phosphor-icons/react": "^2.1.10",

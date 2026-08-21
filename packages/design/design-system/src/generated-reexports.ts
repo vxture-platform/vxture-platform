@@ -249,10 +249,12 @@ export {
   useToast,
 } from "@vxture/design-ui";
 
-// ---- @vxture/design-tokens 的运行时导出（5 个，去除与 design-ui 同名项） ----
+// ---- @vxture/design-tokens 的运行时导出（7 个，去除与 design-ui 同名项） ----
 export {
   DENSITIES,
   FONT_SIZES,
+  PREFERENCE_CONSTANTS,
+  THEME_CONSTANTS,
   Z_INDEX,
   densityClass,
   fontSizeClass,

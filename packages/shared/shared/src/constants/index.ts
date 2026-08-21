@@ -17,10 +17,8 @@ export {
 } from "./locale.constants";
 
 // Theme constants
-export { THEME_CONSTANTS } from "./theme.constants";
 
 // Preference constants
-export { PREFERENCE_CONSTANTS } from "./preference.constants";
 
 // UI constants
 export { SEMANTIC_COLORS } from "./ui.constants";

@@ -3,14 +3,14 @@
  * @package @vxture/design-system
  *
  * The font-size preference (contract key `vx-fontsize`) syncs across *.vxture.com
- * via a cookie + localStorage, using the shared @vxture/shared contract keys. It
+ * via a cookie + localStorage, using the @vxture/design-tokens contract keys. It
  * lives inside the DS — with NO @vxture/platform-browser dependency — so the
  * published package stays lean and installable by external consumers. Theme /
  * density / locale stay owned by each portal's platform-browser; this manages only
  * the font-size slice and uses the same keys, so the two interoperate (each
  * preference is read from its own key, never from the cross-tab snapshot).
  */
-import { PREFERENCE_CONSTANTS } from "@vxture/shared";
+import { PREFERENCE_CONSTANTS } from "@vxture/design-tokens";
 
 export type FontSizePreference = "small" | "default" | "large";
 

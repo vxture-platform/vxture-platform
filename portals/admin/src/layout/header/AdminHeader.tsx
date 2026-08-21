@@ -296,7 +296,9 @@ export function AdminHeader({
                     large: t("fontLarge"),
                   },
                 }}
-                onLocaleChange={onLocaleChange}
+                // 设计件回吐字符串(它不再拥有平台语言目录);本门户传入的
+                // options 来自平台权威目录,边界处收窄回 Locale。
+                onLocaleChange={(next) => onLocaleChange(next as Locale)}
                 onThemeChange={onThemeChange}
                 onDensityChange={onDensityChange}
                 onFontSizeChange={setFontSize}

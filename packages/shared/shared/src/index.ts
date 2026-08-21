@@ -81,10 +81,7 @@ export {
   LOCALE_CONFIGS,
   LOCALE_DEFAULT_CURRENCY,
   LOCALE_CONSTANTS,
-  // Theme constants
-  THEME_CONSTANTS,
-  // Preference constants
-  PREFERENCE_CONSTANTS,
+  // Theme / preference 持久化键已迁入 @vxture/design-tokens（2026-08-21 归属纠正）
   // UI constants
   SEMANTIC_COLORS,
   // Catalog value domains — platform contract, SoT (product_220 §1/§2/§3)

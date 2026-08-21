@@ -8,6 +8,19 @@
 
 ---
 
+## 2.2.0 — 2026-08-21
+
+归属纠正 + 新增导出（新增属 minor，050 §2）。
+
+- **新增：`THEME_CONSTANTS` / `PREFERENCE_CONSTANTS`**（`src/persistence.ts`），
+  自 `@vxture/shared` 迁入。本包本就拥有模式轴的**取值与类名**
+  （DENSITIES / FONT_SIZES / densityClass / fontSizeClass），这两组是同一件事的
+  另一半——那些取值**存在哪、叫什么键**（localStorage / cookie / data-theme /
+  广播事件）。放在 shared 属归属错位，且使 design-system 被迫依赖 shared，
+  设计三包因此无法作为自足单元发布。零运行时依赖不变。
+- 消费方迁移：从 `@vxture/shared` 改为从 `@vxture/design-system`（伞包已具名
+  再导出）或 `@vxture/design-tokens` 取用；键值逐字未变，行为零差异。
+
 ## 2.1.0 — 2026-08-18
 
 纯增量，无删改——minor。

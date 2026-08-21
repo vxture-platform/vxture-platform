@@ -48,7 +48,8 @@ export function AuthHeader() {
             currentLocale={locale}
             buttonLabel={t("language.title")}
             panelLabel={t("language.title")}
-            onLocaleChange={(nextLocale) => {
+            onLocaleChange={(next) => {
+              const nextLocale = next as Locale;
               setGlobalLocalePreference(nextLocale);
               router.replace(pathname, { locale: nextLocale });
             }}

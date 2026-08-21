@@ -21,11 +21,12 @@
 import type { Metadata } from "next";
 import {
   BootSplash,
+  THEME_CONSTANTS,
   ThemeProvider,
   FullscreenProvider,
   themeBootstrapScript,
 } from "@vxture/design-system";
-import { DEFAULT_LOCALE, THEME_CONSTANTS } from "@vxture/shared";
+import { DEFAULT_LOCALE } from "@vxture/shared";
 import "@vxture/design-system/styles/fonts.css";
 import "./globals.css";
 

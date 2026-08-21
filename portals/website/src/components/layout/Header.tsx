@@ -138,7 +138,7 @@ function HeaderLocaleSelect() {
     <ShellLocaleSwitcher
       currentLocale={locale}
       buttonLabel={t("language.title")}
-      onLocaleChange={handleLocaleChange}
+      onLocaleChange={(next) => handleLocaleChange(next as Locale)}
     />
   );
 }
@@ -309,7 +309,7 @@ function UserMenu({
               large: t("settings.fontSize.large"),
             },
           }}
-          onLocaleChange={setLangPref}
+          onLocaleChange={(next) => setLangPref(next as Locale)}
           onThemeChange={setThemePref}
           onDensityChange={setDensityPref}
           onFontSizeChange={setFontSize}

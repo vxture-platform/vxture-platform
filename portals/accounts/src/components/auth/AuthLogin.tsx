@@ -38,7 +38,27 @@ import {
   type ReactNode,
 } from "react";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
-import { DEFAULT_LOCALE, type Locale, type Theme } from "@vxture/shared";
+import {
+  DEFAULT_LOCALE,
+  LOCALE_CONFIGS,
+  SUPPORTED_LOCALES,
+  type Locale,
+  type Theme,
+} from "@vxture/shared";
+import type { LocaleSelectOption as AuthLocaleOption } from "@vxture/design-system";
+
+/**
+ * 语言选项默认值。设计包不再内置平台语言目录(2026-08-21 解耦:设计三包脱离
+ * @vxture/shared 以便独立成仓),所以由本门户按平台权威目录构造。
+ */
+const DEFAULT_AUTH_LOCALE_OPTIONS: AuthLocaleOption[] = SUPPORTED_LOCALES.map(
+  (locale) => ({
+    locale,
+    nativeName: LOCALE_CONFIGS[locale].nativeName,
+    label: LOCALE_CONFIGS[locale].displayName,
+    flag: LOCALE_CONFIGS[locale].flag,
+  }),
+);
 import {
   Banner,
   Button,
@@ -688,7 +708,7 @@ export function AuthChromeHeader({
   brandLogoAlt = "",
   brandLabel = DEFAULT_AUTH_BRAND_LABEL,
   currentLocale = DEFAULT_LOCALE,
-  localeOptions,
+  localeOptions = DEFAULT_AUTH_LOCALE_OPTIONS,
   localeButtonLabel = "选择语言",
   localePanelLabel = "语言选择",
   currentTheme = "light",
@@ -715,7 +735,9 @@ export function AuthChromeHeader({
               options={localeOptions}
               buttonLabel={localeButtonLabel}
               panelLabel={localePanelLabel}
-              onLocaleChange={onLocaleChange}
+              // 设计件按消费方给的 options 回吐字符串;本门户的 options 来自
+              // 平台权威目录,故在边界收窄回 Locale(2026-08-21 解耦)。
+              onLocaleChange={(next) => onLocaleChange(next as Locale)}
             />
           ) : null}
 

@@ -5,6 +5,29 @@
 
 ---
 
+## 6.3.0 — 2026-08-21
+
+跟随 design-tokens 2.2.0（新增具名导出属 minor，050 §2）。
+
+- **新增具名导出：`THEME_CONSTANTS` / `PREFERENCE_CONSTANTS`**（转发自
+  design-tokens 2.2.0）。公开入口快照已同步。
+- **移除依赖：`@vxture/shared`。** 主题/偏好契约键迁入 design-tokens 后，设计
+  三包不再依赖平台通用包——**设计系统自此是自足单元**，可独立于平台仓发布，
+  外部消费者安装时也不再拖入 shared。这是本次拆仓（设计三包留 `@vxture` 作用域、
+  平台仓迁往新组织）的技术前提。
+- 无 API 行为变化：ThemeProvider / themeBootstrapScript / fontSizePreference 的
+  取值与键逐字不变，仅导入来源由 shared 改为 design-tokens。
+- **API 收窄（shell 语言切换）**：`LocaleSelectOption.locale` 与
+  `onLocaleChange` 的参数由平台的 `Locale` 联合类型放宽为 `string`——**设计包
+  不拥有平台的语言目录**，支持哪些语言是业务事实，应由消费方经 `options` /
+  `localeOptions` 给出。随之 `DEFAULT_LOCALE_OPTIONS` 缺省为空数组（原先内置
+  `SUPPORTED_LOCALES`）。
+  **消费方须在边界处收窄回自己的 Locale**，例如
+  `onLocaleChange={(next) => fn(next as Locale)}`；website / opera 本就显式传
+  options，accounts 的默认选项已改由该门户自行按平台目录构造。
+- `ShellThemePreference` 改用本包 `ThemeMode`（与原 `Theme | "system"` 取值
+  等价，行为不变）。
+
 ## 6.2.0 — 2026-08-21
 
 跟随 design-ui 3.1.0（新增组件向上传导为伞包 minor，050 §2）。

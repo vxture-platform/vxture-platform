@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { cookies } from "next/headers";
+import { LOCALE_CONSTANTS, type Locale, type Theme } from "@vxture/shared";
 import {
-  LOCALE_CONSTANTS,
+  BootSplash,
   PREFERENCE_CONSTANTS,
   THEME_CONSTANTS,
-  type Locale,
-  type Theme,
-} from "@vxture/shared";
-import { BootSplash, themeBootstrapScript } from "@vxture/design-system";
+  themeBootstrapScript,
+} from "@vxture/design-system";
 import type { Density } from "@vxture/design-system";
 import { ConsoleAppProviders } from "@/providers/ConsoleAppProviders";
 import {

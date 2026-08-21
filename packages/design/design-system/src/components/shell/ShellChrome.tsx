@@ -19,12 +19,7 @@
 
 import { useState, type ReactNode } from "react";
 import * as React from "react";
-import {
-  LOCALE_CONFIGS,
-  SUPPORTED_LOCALES,
-  type Locale,
-  type Theme,
-} from "@vxture/shared";
+import type { ThemeMode } from "../../theme/theme.types";
 import {
   Avatar,
   AvatarFallback,
@@ -54,19 +49,23 @@ import {
 } from "./ShellPanel";
 
 export type ShellFontSizePreference = "small" | "default" | "large";
-export type ShellThemePreference = Theme | "system";
+export type ShellThemePreference = ThemeMode;
 
 export interface LocaleSelectOption {
-  locale: Locale;
+  /**
+   * 语言代码（BCP-47 风格字符串）。**设计包不拥有平台的语言目录**——支持哪些
+   * 语言是平台业务事实，由消费方通过 `options` 给出（2026-08-21 解耦）。
+   */
+  locale: string;
   label?: string | undefined;
   nativeName?: string | undefined;
   flag?: string | undefined;
 }
 
 export interface LocaleSelectPanelProps {
-  activeLocale: Locale;
+  activeLocale: string;
   options?: LocaleSelectOption[];
-  onSelect: (locale: Locale) => void;
+  onSelect: (locale: string) => void;
 }
 
 export interface ShellIconButtonProps {
@@ -97,7 +96,7 @@ export interface ShellBrandProps {
 }
 
 export interface ShellLocaleSwitcherProps {
-  currentLocale: Locale;
+  currentLocale: string;
   options?: LocaleSelectOption[] | undefined;
   buttonLabel?: string | undefined;
   panelLabel?: string | undefined;
@@ -106,7 +105,7 @@ export interface ShellLocaleSwitcherProps {
   buttonClassName?: string | undefined;
   activeButtonClassName?: string | undefined;
   popoverClassName?: string | undefined;
-  onLocaleChange: (locale: Locale) => void;
+  onLocaleChange: (locale: string) => void;
 }
 
 export interface ShellThemeToggleProps {
@@ -142,7 +141,7 @@ export interface ShellPreferenceLabels {
 }
 
 export interface ShellPreferencePanelProps {
-  locale: Locale;
+  locale: string;
   localeOptions?: LocaleSelectOption[] | undefined;
   theme: ShellThemePreference;
   density?: Density | undefined;
@@ -151,7 +150,7 @@ export interface ShellPreferencePanelProps {
   showDensity?: boolean | undefined;
   showFontSize?: boolean | undefined;
   className?: string | undefined;
-  onLocaleChange: (locale: Locale) => void;
+  onLocaleChange: (locale: string) => void;
   onThemeChange: (theme: ShellThemePreference) => void;
   onDensityChange?: ((density: Density) => void) | undefined;
   onFontSizeChange?: ((fontSize: ShellFontSizePreference) => void) | undefined;
@@ -243,14 +242,12 @@ export interface ShellLegalFooterProps {
   linksClassName?: string | undefined;
 }
 
-const DEFAULT_LOCALE_OPTIONS: LocaleSelectOption[] = SUPPORTED_LOCALES.map(
-  (locale) => ({
-    locale,
-    nativeName: LOCALE_CONFIGS[locale].nativeName,
-    label: LOCALE_CONFIGS[locale].displayName,
-    flag: LOCALE_CONFIGS[locale].flag,
-  }),
-);
+/**
+ * 语言选项缺省为空：设计包不内置平台的语言目录（见 LocaleSelectOption.locale）。
+ * 需要语言切换的消费方必须显式传 `options` / `localeOptions`——website 与
+ * opera 本就如此传；accounts 的默认值改由该门户自己用 @vxture/shared 构造。
+ */
+const DEFAULT_LOCALE_OPTIONS: LocaleSelectOption[] = [];
 
 const DEFAULT_LEGAL_LINKS: ShellLegalFooterLink[] = [
   { href: "/legal/terms", label: "服务条款" },
@@ -669,7 +666,7 @@ export function ShellPreferencePanel({
         <NativeSelect
           className="h-control-md text-body-md md:text-body-sm"
           value={locale}
-          onChange={(event) => onLocaleChange(event.target.value as Locale)}
+          onChange={(event) => onLocaleChange(event.target.value)}
         >
           {localeOptions.map((option) => (
             <option key={option.locale} value={option.locale}>

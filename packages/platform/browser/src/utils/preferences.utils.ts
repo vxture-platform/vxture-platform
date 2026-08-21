@@ -6,11 +6,11 @@
 import {
   DEFAULT_LOCALE,
   LOCALE_CONSTANTS,
-  PREFERENCE_CONSTANTS,
-  THEME_CONSTANTS,
   type Locale,
   type Theme,
 } from "@vxture/shared";
+// 主题/偏好的持久化契约键归 design-tokens（2026-08-21 归属纠正）。
+import { PREFERENCE_CONSTANTS, THEME_CONSTANTS } from "@vxture/design-tokens";
 
 export type DensityPreference = "compact" | "default" | "comfortable";
 export type FontSizePreference = "small" | "default" | "large";
