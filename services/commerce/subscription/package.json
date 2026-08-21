@@ -16,7 +16,7 @@
     "@vxture/core-config": "workspace:*",
     "@vxture/service-promotion": "workspace:*",
     "@vxture/service-provisioning": "workspace:*",
-    "@vxture/shared": "workspace:*",
+    "@vxture-platform/shared": "workspace:*",
     "class-validator": "^0.14.0",
     "pg": "^8.13.3"
   },

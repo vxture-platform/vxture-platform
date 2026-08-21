@@ -11,7 +11,7 @@
  */
 
 import { apiClient, API_BASE_URL } from "./client";
-import { AUTH_CONSTANTS } from "@vxture/shared";
+import { AUTH_CONSTANTS } from "@vxture-platform/shared";
 
 /**
  * Absolute URL of the RP login entry on website-bff. It 302s to the IdP

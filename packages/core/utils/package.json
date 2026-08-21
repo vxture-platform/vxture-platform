@@ -20,7 +20,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@vxture/shared": "workspace:*",
+    "@vxture-platform/shared": "workspace:*",
     "libphonenumber-js": "^1.11.0"
   },
   "devDependencies": {

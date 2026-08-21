@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { cookies } from "next/headers";
-import { LOCALE_CONSTANTS, type Locale, type Theme } from "@vxture/shared";
+import {
+  LOCALE_CONSTANTS,
+  type Locale,
+  type Theme,
+} from "@vxture-platform/shared";
 // 常量走 `/server` 入口(vxture-platform#356)。它们的家是 @vxture/design-tokens,
 // 而伞包主入口首行是 "use client" —— 从 server component 里 `THEME_CONSTANTS.X`
 // 这样**点进去**,RSC 运行时会拦下:「You cannot dot into a client module from a

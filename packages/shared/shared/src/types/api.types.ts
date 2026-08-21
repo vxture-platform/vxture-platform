@@ -1,6 +1,6 @@
 /**
  * api.types.ts - Shared API response types
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description Standard HTTP response contracts used across BFF, frontend, and core-api. Provides a unified API response structure for consistency.
  */
 

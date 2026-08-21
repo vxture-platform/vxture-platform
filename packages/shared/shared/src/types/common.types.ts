@@ -1,6 +1,6 @@
 /**
  * common.types.ts - Shared common types
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description Cross-layer navigation and interaction primitives. Provides shared type definitions for common UI patterns used across all layers.
  */
 

@@ -1,4 +1,4 @@
-import type { SubscriptionStatus } from "@vxture/shared";
+import type { SubscriptionStatus } from "@vxture-platform/shared";
 
 export type Capability = string;
 
@@ -943,7 +943,7 @@ export interface TenantVerificationRecord {
 }
 
 /**
- * 订阅态直接采用 `@vxture/shared` 的六值，**不再自建一份**。
+ * 订阅态直接采用 `@vxture-platform/shared` 的六值，**不再自建一份**。
  *
  * 自建那份与权威差两个词，而其中一个是错译：admin 把库里的 `expired`（权益已终止）
  * 映射成 `overdue`（欠费宽限、权益仍在），两者含义正好相反；库里真正的 `overdue`

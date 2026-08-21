@@ -8,7 +8,7 @@ import {
   LOCALE_CONSTANTS,
   type Locale,
   type Theme,
-} from "@vxture/shared";
+} from "@vxture-platform/shared";
 // 主题/偏好的持久化契约键归 design-tokens（2026-08-21 归属纠正）。
 import { PREFERENCE_CONSTANTS, THEME_CONSTANTS } from "@vxture/design-tokens";
 

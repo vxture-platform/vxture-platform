@@ -5,7 +5,7 @@
  * @category Data - Theme
  */
 
-import type { Theme } from "@vxture/shared";
+import type { Theme } from "@vxture-platform/shared";
 
 export interface WebsiteThemeOption {
   value: Theme;

@@ -220,7 +220,7 @@ CREATE TABLE product.plan_components (
     sort_order          int          NOT NULL DEFAULT 0,
     created_at          timestamptz  NOT NULL DEFAULT now(),
     CONSTRAINT uq_plan_components_version_product_tier UNIQUE NULLS NOT DISTINCT (plan_version_id, product_id, tier),
-    -- 值域权威 = @vxture/shared catalog-domains (TIERS / COMPONENT_ROLES);
+    -- 值域权威 = @vxture-platform/shared catalog-domains (TIERS / COMPONENT_ROLES);
     -- lint:catalog-domains 强制 DDL 与 @shared 一致,勿在此单独增删值(改 @shared,DDL 跟随)。
     CONSTRAINT chk_plan_components_tier CHECK (tier IS NULL OR tier IN ('free','starter','pro','business','enterprise')),
     CONSTRAINT chk_plan_components_role CHECK (component_role IN ('primary','bundled')),

@@ -13,7 +13,7 @@
  * 因此固定在本文件，不进 i18n。
  */
 
-import { formatCurrency, type Locale } from "@vxture/shared";
+import { formatCurrency, type Locale } from "@vxture-platform/shared";
 
 export type PlanAudience = "person" | "team" | "private";
 
@@ -103,7 +103,7 @@ export function getPricingModel(
 }
 
 /**
- * 营销价展示：CNY 整数（¥1,999），走 @vxture/shared 的 formatCurrency
+ * 营销价展示：CNY 整数（¥1,999），走 @vxture-platform/shared 的 formatCurrency
  * （110-locale-layer 指定的唯一货币格式化入口），符号随 locale 本地化。
  */
 export function formatCny(amount: number, locale: Locale): string {

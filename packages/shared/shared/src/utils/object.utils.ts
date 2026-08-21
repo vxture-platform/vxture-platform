@@ -1,6 +1,6 @@
 /**
  * object.utils.ts - object相关工具
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description
  *   深度合并、深度克隆等对象操作工具函数
  */

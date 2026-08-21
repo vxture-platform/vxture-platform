@@ -43,7 +43,7 @@ import {
   setGlobalLocalePreference,
   setGlobalThemePreference,
 } from "@vxture/platform-browser";
-import type { Locale, Theme } from "@vxture/shared";
+import type { Locale, Theme } from "@vxture-platform/shared";
 import { useAdminSession } from "@/features/session/AdminSessionProvider";
 import { useConsoleLocale, useConsoleTranslations } from "@/lib/ConsoleIntl";
 import type { ShellView } from "../template/shell/types";

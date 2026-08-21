@@ -1,6 +1,6 @@
 /**
  * locale.constants.ts - Shared locale constants
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description Global configuration constants for language and localization, shared across all layers. Contains supported locales, default locale, and complete language configurations.
  */
 

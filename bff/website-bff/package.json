@@ -28,7 +28,7 @@
     "@vxture/service-account": "workspace:*",
     "@vxture/service-mail": "workspace:*",
     "@vxture/service-organization": "workspace:*",
-    "@vxture/shared": "workspace:*",
+    "@vxture-platform/shared": "workspace:*",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.0",
     "cookie-parser": "^1.4.7",

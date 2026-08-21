@@ -8,8 +8,8 @@
  * @date 2026-03-16
  */
 
-import type { Locale } from "@vxture/shared";
-import { SUPPORTED_LOCALES } from "@vxture/shared";
+import type { Locale } from "@vxture-platform/shared";
+import { SUPPORTED_LOCALES } from "@vxture-platform/shared";
 
 // ============================================================================
 // Accept-Language parsing

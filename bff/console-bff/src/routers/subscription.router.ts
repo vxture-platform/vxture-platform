@@ -47,7 +47,7 @@ import {
   TIERS,
   type ProductEntitlementView,
   type Tier,
-} from "@vxture/shared";
+} from "@vxture-platform/shared";
 import type { RequestContext } from "../types/console.types";
 import { auditCustomerAction } from "../audit/audit-log";
 import {
@@ -176,7 +176,7 @@ export interface SubscribeContext {
   intent: SubscribeIntent | null;
   /** null = unknown product code → client degrades to the subscription home. */
   product: { code: string; name: string } | null;
-  /** Validated against the @vxture/shared five-tier ladder; invalid → null. */
+  /** Validated against the @vxture-platform/shared five-tier ladder; invalid → null. */
   targetTier: Tier | null;
   metric: string | null;
   /** Representative subscription covering (active tenant × product), if any. */
@@ -1555,7 +1555,7 @@ export class SubscriptionRouter {
           "升级请通过下单流程完成：POST /api/subscription/orders (intent=upgrade)",
         );
       } else if (action === "pause") {
-        // 'suspended' per the @vxture/shared six-value domain — the legacy
+        // 'suspended' per the @vxture-platform/shared six-value domain — the legacy
         // 'paused' literal never existed in the DDL CHECK and threw at write
         // time; actor_type CHECK only admits system/customer/operator, so the
         // legacy 'user' literal is 'customer' here (self-service actor).

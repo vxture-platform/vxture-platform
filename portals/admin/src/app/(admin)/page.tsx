@@ -28,7 +28,7 @@ import type {
   MetricGridItem,
   StatusBadgeTone,
 } from "@vxture/design-system";
-import type { Locale } from "@vxture/shared";
+import type { Locale } from "@vxture-platform/shared";
 import {
   fetchAiModelGrants,
   fetchAiModels,

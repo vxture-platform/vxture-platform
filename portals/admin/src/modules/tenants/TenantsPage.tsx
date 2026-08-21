@@ -31,7 +31,7 @@ import type { TenantOperationRecord } from "@/entities/console";
 import { isListTruncated } from "@/lib/list-truncation";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
-import { resolveStatusTone } from "@vxture/shared";
+import { resolveStatusTone } from "@vxture-platform/shared";
 import {
   TENANT_RISK_TONE,
   TENANT_STATUS_TONE,

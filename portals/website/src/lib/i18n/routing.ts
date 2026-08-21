@@ -6,7 +6,7 @@
  */
 
 import { defineRouting } from "next-intl/routing";
-import { SUPPORTED_LOCALES, DEFAULT_LOCALE } from "@vxture/shared";
+import { SUPPORTED_LOCALES, DEFAULT_LOCALE } from "@vxture-platform/shared";
 
 export const routing = defineRouting({
   /** 支持的语言列表 */

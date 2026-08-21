@@ -30,12 +30,12 @@
  * 三档共用 `Badge variant="outline"` 拿描边，底色与文字色由 `TIER_CLASS` 叠加。
  *
  * ── 补齐 admin 缺的两档 ───────────────────────────────────────────────────
- * `@vxture/shared` 的 `TIERS` 是**五档**（product_220 §1），admin 此前只认
+ * `@vxture-platform/shared` 的 `TIERS` 是**五档**（product_220 §1），admin 此前只认
  * free / pro / enterprise，starter 与 business 一起掉进 `other` 的灰（盘点 §十一
  * 记的缺色）。`Record<Tier, …>` 保证不再漏。
  */
 
-import { TIERS, type Tier } from "@vxture/shared";
+import { TIERS, type Tier } from "@vxture-platform/shared";
 
 /** 未付费：只把文字弱化，底色不给——它是这一列里最轻的一档。 */
 const FREE_CLASS = "text-muted-foreground";

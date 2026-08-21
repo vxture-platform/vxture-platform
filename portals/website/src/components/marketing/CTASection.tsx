@@ -16,7 +16,7 @@
 
 import { Link } from "@/lib/i18n/navigation";
 import { useTranslations } from "next-intl";
-import { debugLog } from "@vxture/shared";
+import { debugLog } from "@vxture-platform/shared";
 import { Icon } from "@vxture/design-system";
 import { CTA_DATA } from "@/data/home/home.cta.data";
 

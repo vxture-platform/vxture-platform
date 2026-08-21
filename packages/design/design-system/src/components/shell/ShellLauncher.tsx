@@ -11,7 +11,7 @@
  * 放在 design-system（不是 design-ui）：要复用同目录 `ShellChrome.tsx` 里的
  * `ShellIconButton`，依赖方向是单向 design-system → design-ui，design-ui
  * 不能反过来引 design-system 的导出——跟 `ShellLocaleSwitcher` 留在这个文件
- * 的理由一致（复用同文件的部件，不是因为本身需要 `@vxture/shared`）。
+ * 的理由一致（复用同文件的部件，不是因为本身需要 `@vxture-platform/shared`）。
  */
 
 import { useState } from "react";

@@ -27,7 +27,7 @@
  *    类目没有严重度，靠文字与图标区分（判据见 `status-tone.ts` 的六档对应表）。
  */
 
-import type { StatusTone } from "@vxture/shared";
+import type { StatusTone } from "@vxture-platform/shared";
 import type {
   ProductCapabilityIntegrationStatus,
   ProductCapabilityStatus,

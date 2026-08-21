@@ -19,7 +19,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@vxture/shared": "workspace:*"
+    "@vxture-platform/shared": "workspace:*"
   },
   "devDependencies": {
     "rimraf": "^6.0.1",

@@ -29,7 +29,7 @@ import type {
   MetricGridItem,
   StatusBadgeTone,
 } from "@vxture/design-system";
-import { formatCurrency, type Locale } from "@vxture/shared";
+import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import { fetchVouchers, type ConsoleVoucher } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { PageSection, SignalList } from "@/layout/shell";

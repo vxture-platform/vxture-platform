@@ -21,7 +21,7 @@
  */
 import { Controller, Get, Inject, Logger, Param } from "@nestjs/common";
 import type { Pool } from "pg";
-import { TIERS } from "@vxture/shared";
+import { TIERS } from "@vxture-platform/shared";
 import { WEBSITE_BFF_RO_POOL } from "../providers/pg-pool.provider";
 
 /** 与 console-bff subscription.router 相同的产品码形状约束。 */

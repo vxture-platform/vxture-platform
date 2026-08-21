@@ -31,8 +31,8 @@ import {
   THEME_CONSTANTS,
 } from "@vxture/design-system/server";
 import type { Density } from "@vxture/design-system";
-import { DEFAULT_LOCALE } from "@vxture/shared";
-import type { Theme } from "@vxture/shared";
+import { DEFAULT_LOCALE } from "@vxture-platform/shared";
+import type { Theme } from "@vxture-platform/shared";
 import "@vxture/design-system/styles/fonts.css";
 import "./globals.css";
 

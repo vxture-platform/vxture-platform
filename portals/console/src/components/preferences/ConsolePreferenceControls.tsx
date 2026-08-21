@@ -12,7 +12,7 @@ import {
   setGlobalThemePreference,
   subscribeToGlobalPreferenceChanges,
 } from "@vxture/platform-browser";
-import type { Locale, Theme } from "@vxture/shared";
+import type { Locale, Theme } from "@vxture-platform/shared";
 
 const THEME_OPTIONS: readonly Theme[] = ["system", "light", "dark"];
 const DENSITY_OPTIONS: readonly Density[] = [

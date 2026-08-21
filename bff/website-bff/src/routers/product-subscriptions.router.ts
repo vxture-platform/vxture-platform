@@ -13,7 +13,7 @@
 import { Controller, Get, Inject, Req } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
-import { SUBSCRIPTION_STATUSES } from "@vxture/shared";
+import { SUBSCRIPTION_STATUSES } from "@vxture-platform/shared";
 import { WEBSITE_BFF_RO_POOL } from "../providers/pg-pool.provider";
 import type { RequestContext } from "../types/auth.types";
 

@@ -1,0 +1,117 @@
+# publish-shared.yml - @vxture-platform/shared 的发布流程。
+# @package vxture
+# @layer Presentation
+# @category ci
+#
+# ── 为什么它必须独立于 publish-design-system.yml ──
+# **GitHub Packages 要求 npm scope 等于发包组织。** shared 于 2026-08-21 由
+# `@vxture/shared` 改名为 `@vxture-platform/shared`（拆仓前置：shared 归平台，
+# 设计三包归 design 仓），于是它**再也不能从 `vxture` 组织发出**——这是硬约束，
+# 不是流程偏好。设计三包 scope 仍是 `@vxture`，继续留在那条流水线。
+#
+# ── 组织门 ──
+# 两个仓当前持有同一份代码（新仓是主力仓，旧仓将收敛为 design 仓），所以这个
+# workflow 文件在两边都存在。`repository_owner` 判定保证它**只在
+# vxture-platform 组织下真的执行**；在旧仓触发只会得到一个跳过的 job，
+# 而不是一次注定 403 的发布尝试——后者的报错信息（"scope 与 owner 不符"）
+# 远不如一行"skipped: 本仓不是发包方"来得清楚。
+
+name: publish-shared
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "只验证发布包，不推送到 GitHub Packages"
+        required: true
+        default: true
+        type: boolean
+  push:
+    tags:
+      - "shared-v*.*.*"
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-shared-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish-shared
+    runs-on: ubuntu-latest
+    # 组织门：见抬头。旧仓触发 → 跳过，不产生假失败。
+    if: github.repository_owner == 'vxture-platform'
+
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PKG_DIR: packages/shared/shared
+      PKG_NAME: "@vxture-platform/shared"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/setup-node-pnpm
+
+      - name: Check, lint and build
+        run: |
+          set -euo pipefail
+          pnpm --filter "$PKG_NAME" type-check
+          pnpm --filter "$PKG_NAME" lint
+          pnpm --filter "$PKG_NAME" build
+
+      # 值域权威守卫：shared 的 catalog-domains 与 DDL 的 CHECK 必须一致。
+      # 它是这个包最贵的契约——发出去之后消费方按它写 CHECK，错了要跨仓修。
+      - name: Catalog domains guardrail
+        run: pnpm lint:catalog-domains
+
+      - name: Verify publish payload
+        run: pnpm --filter "$PKG_NAME" pack --dry-run
+
+      - name: Configure GitHub Packages registry
+        run: |
+          echo "@vxture-platform:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> ~/.npmrc
+
+      - name: Publish
+        id: publish
+        shell: bash
+        env:
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./${PKG_DIR}/package.json').version")"
+
+          if npm view "${PKG_NAME}@${version}" version \
+               --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
+            echo "· ${PKG_NAME}@${version} 已存在，跳过"
+            summary="- ${PKG_NAME}@${version} — 已存在，跳过"
+          else
+            # dist-tag 从版本号自己推出来。publish 不带 --tag 一律打 latest，
+            # **预发布版也不例外**——漏了就等于把未完成的版本推给所有按默认范围安装的人。
+            case "${version}" in
+              *-*) id="${version#*-}"; tag="${id%%.*}" ;;
+              *)   tag="latest" ;;
+            esac
+
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "· ${PKG_NAME}@${version} 待发布（dry run，未推送）dist-tag=${tag}"
+              summary="- ${PKG_NAME}@${version} — **待发布**（dist-tag \`${tag}\`）"
+            else
+              echo "· 发布 ${PKG_NAME}@${version} dist-tag=${tag}"
+              ( cd "${PKG_DIR}" && pnpm publish --no-git-checks --tag "${tag}" )
+              summary="- ${PKG_NAME}@${version} — 已发布（dist-tag \`${tag}\`）"
+            fi
+          fi
+
+          {
+            echo "## shared 发布结果"
+            echo ""
+            [ "${DRY_RUN}" = "true" ] && echo "**dry run — 未推送任何包。**" && echo ""
+            echo "${summary}"
+            echo ""
+            echo "> 旧包 \`@vxture/shared\` 保留在 registry 不删——消费方的 lockfile 指向它。"
+          } >> "$GITHUB_STEP_SUMMARY"

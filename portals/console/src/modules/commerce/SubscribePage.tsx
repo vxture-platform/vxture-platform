@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { formatCurrency, type Locale } from "@vxture/shared";
+import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import {
   Banner,
   Button,

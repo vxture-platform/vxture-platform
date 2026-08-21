@@ -1,6 +1,6 @@
 /**
  * theme.types.ts - Shared theme types
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description Pure structural types for theme and dark/light mode, shared across all layers. Contains only structural types without runtime behavior.
  */
 

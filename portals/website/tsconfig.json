@@ -11,8 +11,8 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@vxture/shared": ["../../packages/shared/shared/src"],
-      "@vxture/shared/*": ["../../packages/shared/shared/src/*"],
+      "@vxture-platform/shared": ["../../packages/shared/shared/src"],
+      "@vxture-platform/shared/*": ["../../packages/shared/shared/src/*"],
       "@vxture/core-locale": ["../../packages/core/locale/src"],
       "@vxture/core-locale/*": ["../../packages/core/locale/src/*"],
       "@vxture/design-system": [

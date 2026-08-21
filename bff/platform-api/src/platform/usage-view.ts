@@ -17,10 +17,10 @@
  * over-limit call deducts nothing and can leave a positive balance.
  */
 import type { QuotaPoolView } from "./entitlement-view";
-// C3 consume response body now lives in @vxture/shared (single SoT); re-export
+// C3 consume response body now lives in @vxture-platform/shared (single SoT); re-export
 // so existing `from "./usage-view"` importers stay unchanged.
-import type { ConsumeResponseBody } from "@vxture/shared";
-export type { ConsumeResponseBody } from "@vxture/shared";
+import type { ConsumeResponseBody } from "@vxture-platform/shared";
+export type { ConsumeResponseBody } from "@vxture-platform/shared";
 
 /** Engine result shape (services/commerce/subscription consume.types). */
 export interface EngineConsumeResult {

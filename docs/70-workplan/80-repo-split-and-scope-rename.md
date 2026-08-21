@@ -222,18 +222,26 @@ shared 归平台、要从新组织发，scope 就必须是 `@vxture-platform`。
 
 **范围**：156 个文件引用它，其中 21 个 `package.json`。
 
+**改名强制带出的耦合（实施时才显形）**：`@vxture-platform/*` **无法从 `vxture` 组织发出**
+——GitHub Packages 要求 scope 等于发包组织。所以 shared 必须移出
+`publish-design-system.yml`，并有自己的 `publish-shared.yml`。该 workflow 带
+`github.repository_owner == 'vxture-platform'` 组织门：两仓当前同码，不加门的话在旧仓
+触发会得到一次注定 403 的发布尝试，而"scope 与 owner 不符"的报错远不如一行
+"skipped：本仓不是发包方"清楚。
+
 **不改的**：其余 36 个工作区包保持 `@vxture/*`。它们是 `private: true`，
 scope 纯属内部命名，不受 registry 约束。全量改名要动上千处引用、换取零功能收益，
 且会与拆仓同期进行——两个大改动叠在一起，出问题时分不清是谁的。
 （若将来要统一，单独立项，且必须在拆仓稳定之后。）
 
-| #   | 任务                                                                         |
-| --- | ---------------------------------------------------------------------------- |
-| 1-1 | 包自身改名 + `publishConfig` 保持 `npm.pkg.github.com`                       |
-| 1-2 | 21 个 `package.json` 的依赖键改名                                            |
-| 1-3 | 156 处 import 改名（可脚本化，但必须全量 type-check 验收）                   |
-| 1-4 | `publish-design-system.yml` 的 `RELEASE_ORDER` 与 `.npmrc` scope 行同步      |
-| 1-5 | 旧包 `@vxture/shared` 在 registry 上**保留不删**（消费方 lockfile 会指向它） |
+| #   | 任务                                                                                                       |
+| --- | ---------------------------------------------------------------------------------------------------------- | ----------- |
+| 1-1 | 包改名 `@vxture/shared` → `@vxture-platform/shared`，补 `lint` 脚本（原本只有 build / type-check）         | ✅ **已做** |
+| 1-2 | 20 个消费方 `package.json` 依赖键 + 5 个 `tsconfig.json` 路径映射                                          | ✅ **已做** |
+| 1-3 | 代码与配置 **111 文件 / 127 处**标识符 + **44 文件 / 52 处**散文引用；`pnpm-lock.yaml` 重生成（旧名 0 处） | ✅ **已做** |
+| 1-4 | shared 移出 `publish-design-system.yml`；新增 `publish-shared.yml`（带组织门）                             | ✅ **已做** |
+| 1-5 | 旧包 `@vxture/shared` 在 registry 保留不删（消费方 lockfile 指向它）                                       | ✅ 无需动作 |
+| 1-6 | 发一版 `@vxture-platform/shared@2.0.0`（须从**新仓**触发）                                                 | ⏳ 待做     |
 
 ### 批 2 — 拆仓前置：registry 鉴权（**拆仓前必须全绿**）
 

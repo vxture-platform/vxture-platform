@@ -23,7 +23,7 @@ export const TIER_AUDIENCE: Record<string, PlanAudience> = {
   enterprise: "private",
 };
 
-/** C2 订阅状态六值域（@vxture/shared SUBSCRIPTION_STATUSES）→ 徽章语气。 */
+/** C2 订阅状态六值域（@vxture-platform/shared SUBSCRIPTION_STATUSES）→ 徽章语气。 */
 export const SUB_STATUS_TONES: Record<string, StatusBadgeTone> = {
   active: "success",
   expiring: "warning",

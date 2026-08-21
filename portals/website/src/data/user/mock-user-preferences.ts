@@ -8,7 +8,7 @@
  * @date 2026-03-21
  */
 
-import type { Locale } from "@vxture/shared";
+import type { Locale } from "@vxture-platform/shared";
 import type { Density } from "@vxture/design-system";
 
 /**

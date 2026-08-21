@@ -29,7 +29,7 @@ import {
   ViewLayout,
 } from "@vxture/design-system";
 import type { StatusBadgeTone } from "@vxture/design-system";
-import { formatCurrency, type Locale } from "@vxture/shared";
+import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import {
   cancelAddonOrder,
   declareAddonPayment,

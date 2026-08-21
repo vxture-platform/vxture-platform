@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 import { ToastProvider } from "@vxture/design-system";
-import { readNavCollapsed } from "@vxture/shared";
+import { readNavCollapsed } from "@vxture-platform/shared";
 import { SessionProvider } from "@/features/session/SessionProvider";
 import { StepUpProvider } from "@/features/stepup/StepUpProvider";
 import { OperaShell } from "@/layout/OperaShell";

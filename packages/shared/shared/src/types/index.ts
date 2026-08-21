@@ -1,6 +1,6 @@
 /**
  * index.ts - Shared type exports
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description Unified export entry for all shared types, organized by functional category.
  */
 

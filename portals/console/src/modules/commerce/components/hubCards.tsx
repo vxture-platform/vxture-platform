@@ -34,7 +34,7 @@ import {
   cn,
 } from "@vxture/design-system";
 import type { ActionMenuItem, IconName } from "@vxture/design-system";
-import { formatCurrency, type Locale } from "@vxture/shared";
+import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import { Link } from "@/lib/i18n/navigation";
 import { buildWebsiteProductUrl } from "@/lib/website-entry";
 import type { RecommendedProduct, SubscribedProduct } from "@/api/console-bff";

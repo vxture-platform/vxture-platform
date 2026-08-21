@@ -30,7 +30,7 @@
     "@vxture/service-promotion": "workspace:*",
     "@vxture/service-provisioning": "workspace:*",
     "@vxture/service-subscription": "workspace:*",
-    "@vxture/shared": "workspace:*",
+    "@vxture-platform/shared": "workspace:*",
     "class-transformer": "^0.5.1",
     "cookie-parser": "^1.4.7",
     "express": "^4.22.1",

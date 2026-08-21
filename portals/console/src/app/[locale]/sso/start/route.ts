@@ -12,7 +12,10 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { decodePortalContext, type PortalNavContext } from "@vxture/shared";
+import {
+  decodePortalContext,
+  type PortalNavContext,
+} from "@vxture-platform/shared";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

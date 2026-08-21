@@ -1,6 +1,6 @@
 /**
  * index.ts - Shared utility function exports
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description Unified export entry for all shared utility functions, organized by functional category.
  */
 

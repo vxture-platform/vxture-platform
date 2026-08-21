@@ -7,7 +7,7 @@
  */
 
 import type { Metadata } from "next";
-import { SUPPORTED_LOCALES, DEFAULT_LOCALE } from "@vxture/shared";
+import { SUPPORTED_LOCALES, DEFAULT_LOCALE } from "@vxture-platform/shared";
 
 export function buildMetadata(locale: string): Metadata {
   const titles = {

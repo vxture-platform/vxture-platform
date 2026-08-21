@@ -28,7 +28,7 @@
  * 没覆盖到的值域，不另起同名表。
  */
 
-import type { StatusTone } from "@vxture/shared";
+import type { StatusTone } from "@vxture-platform/shared";
 
 import type {
   TenantOperationModelPolicy,

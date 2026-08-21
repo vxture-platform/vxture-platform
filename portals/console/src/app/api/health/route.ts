@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildHealthIdentity } from "@vxture/shared";
+import { buildHealthIdentity } from "@vxture-platform/shared";
 
 // Dependency-free liveness probe (standards 020 + 025): proves the Next.js
 // server is up and reports build identity/provenance, without touching any

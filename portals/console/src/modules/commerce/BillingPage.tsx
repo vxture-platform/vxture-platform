@@ -33,7 +33,7 @@ import type {
   MetricGridItem,
   StatusBadgeTone,
 } from "@vxture/design-system";
-import { formatCurrency, type Locale } from "@vxture/shared";
+import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import {
   fetchBillingAddresses,
   fetchBillingSummary,

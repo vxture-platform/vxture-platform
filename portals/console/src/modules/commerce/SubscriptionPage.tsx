@@ -46,7 +46,7 @@ import type {
   DataTableColumn,
   MetricGridItem,
 } from "@vxture/design-system";
-import { formatCurrency, type Locale } from "@vxture/shared";
+import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import {
   cancelSubscriptionOrder,
   executeSubscriptionAction,

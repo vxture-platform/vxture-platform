@@ -14,7 +14,7 @@
  */
 import { Inject, Injectable } from "@nestjs/common";
 import type { Pool } from "pg";
-import type { MergeStrategy } from "@vxture/shared";
+import type { MergeStrategy } from "@vxture-platform/shared";
 import {
   buildQuotaPoolView,
   buildSubscriptionFacts,

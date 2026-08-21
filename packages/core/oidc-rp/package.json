@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@vxture/core-identity-sdk": "workspace:*",
-    "@vxture/shared": "workspace:*",
+    "@vxture-platform/shared": "workspace:*",
     "ioredis": "^5.0.0"
   },
   "peerDependencies": {

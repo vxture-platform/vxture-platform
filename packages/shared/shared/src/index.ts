@@ -1,7 +1,7 @@
 /**
- * index.ts - @vxture/shared entry point
- * @package @vxture/shared
- * @description Main entry point for the @vxture/shared package, exporting all public API types, constants, and utility functions.
+ * index.ts - @vxture-platform/shared entry point
+ * @package @vxture-platform/shared
+ * @description Main entry point for the @vxture-platform/shared package, exporting all public API types, constants, and utility functions.
  */
 
 // =============================================================================

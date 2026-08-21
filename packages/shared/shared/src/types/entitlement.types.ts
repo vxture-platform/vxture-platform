@@ -1,6 +1,6 @@
 /**
  * entitlement.types.ts — the C2 entitlement + C3 consume envelope contracts.
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description Response-face types for the platform C2/C3 APIs (envelope v2 =
  * product_220 §3 / product_310 D12; merge algorithm heritage = ADR-11 §11.3).
  * These are the authoritative shapes products (and the product-repo template's

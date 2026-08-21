@@ -1,6 +1,6 @@
 /**
  * debug.utils.ts - Debug utility functions
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description Environment-aware debug logging functions with automatic detection of development/production environments.
  */
 

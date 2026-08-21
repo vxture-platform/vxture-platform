@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { cookies } from "next/headers";
-import { readNavCollapsed } from "@vxture/shared";
+import { readNavCollapsed } from "@vxture-platform/shared";
 import { AdminSessionProvider } from "@/features/session/AdminSessionProvider";
 import { AdminAppShell } from "@/layout/template/AdminAppShell";
 

@@ -16,7 +16,7 @@
 
 import { memo } from "react";
 import { useTranslations } from "next-intl";
-import { debugLog } from "@vxture/shared";
+import { debugLog } from "@vxture-platform/shared";
 import { Icon } from "@vxture/design-system";
 import { FEATURES_DATA } from "@/data/home/home.features.data";
 

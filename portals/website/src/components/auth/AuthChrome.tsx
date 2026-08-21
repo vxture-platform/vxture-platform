@@ -24,7 +24,7 @@ import {
 } from "@vxture/platform-browser";
 import { HEADER_DATA } from "@/data/layout/header.data";
 import { usePathname, useRouter } from "@/lib/i18n/navigation";
-import type { Locale, Theme } from "@vxture/shared";
+import type { Locale, Theme } from "@vxture-platform/shared";
 
 export function AuthHeader() {
   const t = useTranslations("layout.header");

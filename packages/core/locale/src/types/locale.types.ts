@@ -8,7 +8,7 @@
  * @date 2026-03-15
  */
 
-import type { Locale } from "@vxture/shared";
+import type { Locale } from "@vxture-platform/shared";
 
 /** Fetch API Headers (Next.js / Web standard) */
 type FetchHeaders = { get(name: string): string | null | undefined };

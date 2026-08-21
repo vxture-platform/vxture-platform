@@ -1,6 +1,6 @@
 /**
  * portal-context.utils.ts - 跨 Portal 导航上下文工具函数
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description 序列化 / 反序列化 PortalNavContext，用于跨 Portal URL 参数传递。
  *   使用 URLSearchParams + JSON，兼容 Node.js 18+ 和现代浏览器。
  */

@@ -59,7 +59,10 @@ loadRootEnv();
 // Webpack 用：绝对路径
 // 只保留 portal 层允许引用的包（shared / core-locale / design-system）
 const internalAliases = {
-  "@vxture/shared": join(__dirname, "../../packages/shared/shared/src"),
+  "@vxture-platform/shared": join(
+    __dirname,
+    "../../packages/shared/shared/src",
+  ),
   "@vxture/core-locale": join(__dirname, "../../packages/core/locale/src"),
   /* 键上的 `$` 表示**精确匹配**，不可省。webpack 的 alias 默认是前缀匹配，而本条的
    * 值是个文件（client.ts）而不是目录，于是 `@vxture/design-system/styles/fonts.css`
@@ -79,7 +82,7 @@ const internalAliases = {
 // Turbopack 用：相对路径（Windows 限制，不可改为绝对路径）
 // 只保留 portal 层允许引用的包（shared / core-locale / design-system）
 const turboAliases = {
-  "@vxture/shared": "../../packages/shared/shared/src",
+  "@vxture-platform/shared": "../../packages/shared/shared/src",
   "@vxture/core-locale": "../../packages/core/locale/src",
   "@vxture/design-system": "../../packages/design/design-system/src/client.ts",
   "@vxture/platform-browser": "../../packages/platform/browser/src",

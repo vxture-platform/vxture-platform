@@ -26,7 +26,7 @@
     "@vxture/service-provisioning": "workspace:*",
     "@vxture/service-sharing": "workspace:*",
     "@vxture/service-subscription": "workspace:*",
-    "@vxture/shared": "workspace:*",
+    "@vxture-platform/shared": "workspace:*",
     "class-transformer": "^0.5.1",
     "express": "^4.22.1",
     "pg": "^8.16.3",

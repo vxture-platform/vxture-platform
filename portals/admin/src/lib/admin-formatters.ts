@@ -1,4 +1,4 @@
-import type { Locale } from "@vxture/shared";
+import type { Locale } from "@vxture-platform/shared";
 
 const CURRENCY_SYMBOL_BY_CODE: Record<string, string> = {
   CNY: "¥",

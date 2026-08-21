@@ -1,4 +1,4 @@
-import type { SubscriptionStatus } from "@vxture/shared";
+import type { SubscriptionStatus } from "@vxture-platform/shared";
 
 export type Capability = string;
 
@@ -628,7 +628,7 @@ export type ProductSolutionCapabilitySource = ProductCapabilitySource;
  * subscription/entitlement tier. This is the admin/marketing "solutions"
  * packaging axis (free/pro/enterprise/custom, mapped to plan codes via
  * tierPlanCodeMap); it deliberately differs from the commercial ladder in
- * @vxture/shared `TIERS` (free/starter/pro/business/enterprise) — do NOT
+ * @vxture-platform/shared `TIERS` (free/starter/pro/business/enterprise) — do NOT
  * converge the two or type this as `Tier`. (owner ruling 2026-07-08)
  */
 export type ProductSolutionTierCode = "free" | "pro" | "enterprise" | "custom";
@@ -860,7 +860,7 @@ export interface TenantOperationRecord {
 }
 
 /**
- * 订阅态直接采用 `@vxture/shared` 的六值，**不再自建一份**。
+ * 订阅态直接采用 `@vxture-platform/shared` 的六值，**不再自建一份**。
  *
  * 自建那份与权威差两个词，而其中一个是错译：admin 把库里的 `expired`（权益已终止）
  * 映射成 `overdue`（欠费宽限、权益仍在），两者含义正好相反；库里真正的 `overdue`

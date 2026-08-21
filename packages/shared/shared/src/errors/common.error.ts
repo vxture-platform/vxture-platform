@@ -1,6 +1,6 @@
 /**
  * common.error.ts - 基础错误类和 HTTP 语义错误子类
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description
  *   基础错误类和 HTTP 语义错误子类，支持错误元数据和 toJSON 序列化
  *   无外部依赖，纯共享工具类

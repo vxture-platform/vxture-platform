@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type { Locale } from "@vxture/shared";
+import type { Locale } from "@vxture-platform/shared";
 
 type Messages = Record<string, unknown>;
 

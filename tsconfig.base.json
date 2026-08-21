@@ -27,8 +27,8 @@
 
     // ─── 路径别名（monorepo 内部包统一入口） ────────────────────────────────
     "paths": {
-      "@vxture/shared": ["./packages/shared/shared/src"],
-      "@vxture/shared/*": ["./packages/shared/shared/src/*"],
+      "@vxture-platform/shared": ["./packages/shared/shared/src"],
+      "@vxture-platform/shared/*": ["./packages/shared/shared/src/*"],
       "@vxture/core-api": ["./packages/core/api/src"],
       "@vxture/core-api/*": ["./packages/core/api/src/*"],
       "@vxture/core-config": ["./packages/core/config/src"],

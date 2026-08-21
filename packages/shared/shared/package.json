@@ -1,5 +1,5 @@
 {
-  "name": "@vxture/shared",
+  "name": "@vxture-platform/shared",
   "version": "2.0.0",
   "description": "Vxture shared utilities, types, and constants",
   "private": false,
@@ -22,7 +22,8 @@
   },
   "scripts": {
     "build": "rimraf dist && tsup",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "lint": "eslint ."
   },
   "devDependencies": {
     "rimraf": "^6.0.1",

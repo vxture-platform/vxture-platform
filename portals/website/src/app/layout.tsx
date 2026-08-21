@@ -32,7 +32,7 @@ import {
   themeBootstrapScript,
 } from "@vxture/design-system";
 import { THEME_CONSTANTS } from "@vxture/design-system/server";
-import { DEFAULT_LOCALE } from "@vxture/shared";
+import { DEFAULT_LOCALE } from "@vxture-platform/shared";
 import "@vxture/design-system/styles/fonts.css";
 import "./globals.css";
 

@@ -1,6 +1,6 @@
 /**
  * ui.types.ts - Shared UI semantic types
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description Cross-layer UI primitives consumed by design-system, BFF, and agent UIs. Provides shared UI type definitions without platform-specific implementation.
  */
 

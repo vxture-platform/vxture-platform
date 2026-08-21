@@ -1,4 +1,4 @@
-# publish-design-system.yml - 设计三包 + shared 的发布流程。
+# publish-design-system.yml - 设计三包的发布流程（shared 已移出，见 RELEASE_ORDER 处注释）。
 # @package vxture
 # @layer Presentation
 # @category ci
@@ -11,7 +11,7 @@
 # 两个。若上游那一版还没进 registry，消费方 install 直接失败——而流水线自己是绿的，
 # 因为 publish 本身不校验依赖可解析。故顺序是硬约束，不是习惯：
 #
-#   shared → design-tokens → design-ui → design-system
+#   design-tokens → design-ui → design-system
 #
 # 每包各自判断"这个版本是否已存在"，已存在就跳过。整条流水线因此是幂等的：
 # 同一个 tag 重跑不会失败，只发新版本的那些包。
@@ -46,8 +46,13 @@ jobs:
     env:
       NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # 发布顺序即依赖方向，不得调换。格式：<目录>|<包名>
+      #
+      # shared 已移出本流水线（2026-08-21，改名 @vxture/shared →
+      # @vxture-platform/shared）。**GitHub Packages 要求 npm scope 等于发包组织**，
+      # 所以 @vxture-platform/* 无法从 vxture 组织发出——这是硬约束，不是策略选择。
+      # 它由 publish-shared.yml 负责（只在 vxture-platform 组织下运行）；
+      # 设计三包留在这里，scope 仍是 @vxture。
       RELEASE_ORDER: |
-        packages/shared/shared|@vxture/shared
         packages/design/design-tokens|@vxture/design-tokens
         packages/design/design-ui|@vxture/design-ui
         packages/design/design-system|@vxture/design-system
@@ -57,9 +62,6 @@ jobs:
         uses: actions/checkout@v6
 
       - uses: ./.github/actions/setup-node-pnpm
-
-      - name: Build shared package
-        run: pnpm --filter @vxture/shared build
 
       # 三包各自 type-check 与 lint。design-system 的类型依赖 design-ui 的产物，
       # 故按依赖方向逐个构建，不用 --parallel。

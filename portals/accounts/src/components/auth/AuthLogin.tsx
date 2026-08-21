@@ -44,12 +44,12 @@ import {
   SUPPORTED_LOCALES,
   type Locale,
   type Theme,
-} from "@vxture/shared";
+} from "@vxture-platform/shared";
 import type { LocaleSelectOption as AuthLocaleOption } from "@vxture/design-system";
 
 /**
  * 语言选项默认值。设计包不再内置平台语言目录(2026-08-21 解耦:设计三包脱离
- * @vxture/shared 以便独立成仓),所以由本门户按平台权威目录构造。
+ * @vxture-platform/shared 以便独立成仓),所以由本门户按平台权威目录构造。
  */
 const DEFAULT_AUTH_LOCALE_OPTIONS: AuthLocaleOption[] = SUPPORTED_LOCALES.map(
   (locale) => ({

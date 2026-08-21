@@ -7,7 +7,7 @@
  * @date 2026-05-06
  */
 
-import { encodePortalContext } from "@vxture/shared";
+import { encodePortalContext } from "@vxture-platform/shared";
 
 // =============================================================================
 // 环境变量（构建时注入）

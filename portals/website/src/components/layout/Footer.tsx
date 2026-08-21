@@ -18,7 +18,7 @@
 import { useState, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { Button, useTheme, Icon } from "@vxture/design-system";
-import { debugLog } from "@vxture/shared";
+import { debugLog } from "@vxture-platform/shared";
 import Image from "next/image";
 import { FOOTER_DATA } from "@/data/layout/footer.data";
 import { Link } from "@/lib/i18n/navigation";

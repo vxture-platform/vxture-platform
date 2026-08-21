@@ -1,6 +1,6 @@
 /**
  * format.utils.ts - Shared format utility functions
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description Number, date, and currency formatting functions based on locale, supporting automatic or manual currency specification.
  */
 

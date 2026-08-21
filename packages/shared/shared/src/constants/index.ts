@@ -1,6 +1,6 @@
 /**
  * index.ts - Shared constant exports
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description Unified export entry for all shared constants, organized by functional category.
  */
 

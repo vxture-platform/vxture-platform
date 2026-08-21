@@ -17,7 +17,7 @@
  */
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { VxConfigService } from "@vxture/core-config";
-import type { ProductEntitlementView } from "@vxture/shared";
+import type { ProductEntitlementView } from "@vxture-platform/shared";
 
 const MAX_BATCH_PRODUCTS = 20; // mirrors entitlement-view.ts's own cap
 

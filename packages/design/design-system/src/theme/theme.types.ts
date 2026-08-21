@@ -11,7 +11,7 @@
  */
 
 /**
- * 主题模式（与 @vxture/shared 的 Theme 类型保持一致）
+ * 主题模式（与 @vxture-platform/shared 的 Theme 类型保持一致）
  * - light：亮色
  * - dark：暗色
  * - system：跟随操作系统

@@ -245,7 +245,7 @@ export interface ShellLegalFooterProps {
 /**
  * 语言选项缺省为空：设计包不内置平台的语言目录（见 LocaleSelectOption.locale）。
  * 需要语言切换的消费方必须显式传 `options` / `localeOptions`——website 与
- * opera 本就如此传；accounts 的默认值改由该门户自己用 @vxture/shared 构造。
+ * opera 本就如此传；accounts 的默认值改由该门户自己用 @vxture-platform/shared 构造。
  */
 const DEFAULT_LOCALE_OPTIONS: LocaleSelectOption[] = [];
 

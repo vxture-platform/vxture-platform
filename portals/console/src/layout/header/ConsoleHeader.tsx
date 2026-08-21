@@ -38,7 +38,7 @@ import {
   setGlobalLocalePreference,
   setGlobalThemePreference,
 } from "@vxture/platform-browser";
-import type { Locale, Theme } from "@vxture/shared";
+import type { Locale, Theme } from "@vxture-platform/shared";
 import { usePathname, useRouter } from "@/lib/i18n/navigation";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { useTenant } from "@/features/tenant";

@@ -41,8 +41,8 @@ import {
 } from "@/lib/console-entry";
 import { buildLogoutUrl, buildSwitchUserUrl } from "@/api/auth.api";
 import type { UserInfo } from "@/types/auth.types";
-import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "@vxture/shared";
-import type { Locale } from "@vxture/shared";
+import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "@vxture-platform/shared";
+import type { Locale } from "@vxture-platform/shared";
 import {
   getGuestPreferences,
   setGuestPreferences,

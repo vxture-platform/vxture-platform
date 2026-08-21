@@ -21,7 +21,7 @@ import {
   ShellSidebarNav,
   type ShellNavSection,
 } from "@vxture/design-system";
-import { writeNavCollapsed } from "@vxture/shared";
+import { writeNavCollapsed } from "@vxture-platform/shared";
 import { useAdminSession } from "@/features/session/AdminSessionProvider";
 import {
   adminWorkspaces,

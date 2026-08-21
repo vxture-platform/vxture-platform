@@ -21,7 +21,7 @@ import {
   TableTitleCell,
 } from "@vxture/design-system";
 import type { DataTableColumn } from "@vxture/design-system";
-import { resolveStatusTone } from "@vxture/shared";
+import { resolveStatusTone } from "@vxture-platform/shared";
 import {
   ORDER_STATUS_TONE,
   PAYMENT_STATUS_TONE,

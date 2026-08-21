@@ -16,7 +16,7 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import { useTranslations } from "next-intl";
-import { debugLog, debugError } from "@vxture/shared";
+import { debugLog, debugError } from "@vxture-platform/shared";
 import { useTheme, Icon } from "@vxture/design-system";
 import Image from "next/image";
 

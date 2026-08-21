@@ -5,8 +5,8 @@
  *   首次进入时从 URL 解析，会话期间通过 sessionStorage 保持，标签页关闭后自动清除。
  */
 
-import { decodePortalContext } from "@vxture/shared";
-import type { PortalNavContext } from "@vxture/shared";
+import { decodePortalContext } from "@vxture-platform/shared";
+import type { PortalNavContext } from "@vxture-platform/shared";
 
 const STORAGE_KEY = "vx-portal-entry-ctx";
 

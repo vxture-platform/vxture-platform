@@ -24,7 +24,7 @@ import {
   TableTitleCell,
 } from "@vxture/design-system";
 import type { DataTableColumn } from "@vxture/design-system";
-import { resolveStatusTone } from "@vxture/shared";
+import { resolveStatusTone } from "@vxture-platform/shared";
 import {
   BILL_STATUS_TONE,
   INVOICE_STATUS_TONE,

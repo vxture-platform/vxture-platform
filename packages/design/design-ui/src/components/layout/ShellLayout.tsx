@@ -7,7 +7,7 @@
  * 零 context、零平台依赖，纯结构组件——按 01-usage.md §4 的分工判据，这类
  * 组件属于 design-ui，不进 design-system 伞包（伞包自持只留 React context /
  * 平台依赖两类例外，`@vxture/design-system` 的 `ShellChrome` 因为要 import
- * `@vxture/shared` 才留在那边，本文件没有这个依赖）。
+ * `@vxture-platform/shared` 才留在那边，本文件没有这个依赖）。
  *
  * 与 `@vxture/design-system` 的 `ShellChrome.tsx` 部件族互补：那边是"外壳里
  * 装什么"（品牌/主题/用户菜单/…），这里是"外壳怎么摆"（尺寸、层级、显隐状态

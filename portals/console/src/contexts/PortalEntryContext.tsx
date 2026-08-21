@@ -9,7 +9,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import type { PortalNavContext } from "@vxture/shared";
+import type { PortalNavContext } from "@vxture-platform/shared";
 import {
   parsePortalEntryFromUrl,
   loadPortalEntry,

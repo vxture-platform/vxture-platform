@@ -8,8 +8,8 @@
  * @date 2026-03-15
  */
 
-import type { Locale } from "@vxture/shared";
-import { DEFAULT_LOCALE } from "@vxture/shared";
+import type { Locale } from "@vxture-platform/shared";
+import { DEFAULT_LOCALE } from "@vxture-platform/shared";
 import type { LocaleHeaders, LocaleRequest } from "../types";
 import {
   isSupportedLocale,

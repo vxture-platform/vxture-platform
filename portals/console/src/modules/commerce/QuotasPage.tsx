@@ -39,7 +39,7 @@ import {
   type ConsoleQuotaOverview,
   type ConsoleQuotaPool,
 } from "@/api/console-bff";
-import { formatCurrency, type Locale } from "@vxture/shared";
+import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { PageSection, SignalList } from "@/layout/shell";
 import { AddonPacksSection } from "./components/AddonPacksSection";

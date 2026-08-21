@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@vxture/design-tokens": "workspace:*",
-    "@vxture/shared": "workspace:*"
+    "@vxture-platform/shared": "workspace:*"
   },
   "devDependencies": {
     "rimraf": "^6.1.3",

@@ -13,7 +13,7 @@ import {
   SUPPORTED_LOCALES,
   type Locale,
   type Theme,
-} from "@vxture/shared";
+} from "@vxture-platform/shared";
 import { ConsoleIntlProvider } from "@/lib/ConsoleIntl";
 import {
   getGlobalUserPreferences,

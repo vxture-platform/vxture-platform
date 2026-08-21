@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * check-catalog-domains.mjs — enforce that the DB CHECK constraints match the
- * platform value-domain contract in @vxture/shared (catalog-domains.constants.ts).
+ * platform value-domain contract in @vxture-platform/shared (catalog-domains.constants.ts).
  * SQL cannot import TS, so this guardrail is the mechanical link: any tier / role
  * / status / strategy / mode / kind value added to the DDL but not to @shared (or
  * vice versa) fails CI. @shared is the authority — the fix is always to make the
@@ -105,7 +105,7 @@ console.log("── 汇总 ──");
 if (errors.length) {
   console.log(`error: ${errors.length}\n${errors.join("\n")}`);
   console.log(
-    "\n修复:把 DDL CHECK 改成与 @vxture/shared catalog-domains 一致(@shared 是权威)。",
+    "\n修复:把 DDL CHECK 改成与 @vxture-platform/shared catalog-domains 一致(@shared 是权威)。",
   );
   process.exit(1);
 }

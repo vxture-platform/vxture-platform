@@ -27,7 +27,7 @@ import {
   Icon,
   cn,
 } from "@vxture/design-system";
-import { formatCurrency, type Locale } from "@vxture/shared";
+import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import type { MyOrder } from "@/api/console-bff";
 import { infoRow, infoRowGlyph, infoRowText } from "./sectionKit";
 import { fmtStamp, groupVisibleCode } from "./hubModel";

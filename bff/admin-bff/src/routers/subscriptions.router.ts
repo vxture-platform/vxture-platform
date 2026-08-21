@@ -21,7 +21,7 @@
  * @category Router
  */
 
-import { SUBSCRIPTION_STATUSES } from "@vxture/shared";
+import { SUBSCRIPTION_STATUSES } from "@vxture-platform/shared";
 import {
   BadRequestException,
   Body,
@@ -36,7 +36,7 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
-import type { ComponentRole } from "@vxture/shared";
+import type { ComponentRole } from "@vxture-platform/shared";
 import { extractClientIp } from "@vxture/core-utils";
 import { assertAnyCapability } from "../auth/capability";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";

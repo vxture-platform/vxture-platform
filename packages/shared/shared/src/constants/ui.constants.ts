@@ -1,6 +1,6 @@
 /**
  * ui.constants.ts - UI constants
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description UI-related constants shared across all layers. Contains semantic color values for consistent UI styling across the platform.
  */
 

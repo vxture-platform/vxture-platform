@@ -5,8 +5,8 @@
  * @layer Presentation
  * @category Shared
  *
- * ── 为什么在 admin 而不在 @vxture/shared ──────────────────────────────────
- * `@vxture/shared` 的 `status-tone.constants.ts` 是这类映射的正确去处，它自己
+ * ── 为什么在 admin 而不在 @vxture-platform/shared ──────────────────────────────────
+ * `@vxture-platform/shared` 的 `status-tone.constants.ts` 是这类映射的正确去处，它自己
  * 划了边界：**只映射 shared 已经拥有值域的状态**，其余"先有值域契约，再谈它的
  * 展示映射，否则等于让展示层先于契约定义业务词汇"。
  *
@@ -54,7 +54,7 @@
  * 缺的三档在下面按语义补齐并各自注明——`Record` 要求全覆盖，这正好把缺口逼出来。
  */
 
-import type { StatusTone } from "@vxture/shared";
+import type { StatusTone } from "@vxture-platform/shared";
 import type {
   BillingBillStatus,
   BillingInvoiceStatus,
@@ -123,7 +123,7 @@ export const RECONCILIATION_TONE: Record<
 };
 
 /**
- * 订阅运营态。值域取自 `@vxture/shared`（七值），admin 不再自建。
+ * 订阅运营态。值域取自 `@vxture-platform/shared`（七值），admin 不再自建。
  *
  * 三处按 `@shared` 的语义纠正：`trialing` 是"进行中"不是"要留意"，落 info；
  * `overdue` 是欠费宽限、**权益仍在**，落 warning 不落 danger——用 danger 会让运营

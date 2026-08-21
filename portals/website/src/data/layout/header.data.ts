@@ -5,7 +5,7 @@
  * @category Data - Layout
  */
 
-import type { Locale } from "@vxture/shared";
+import type { Locale } from "@vxture-platform/shared";
 
 /**
  * Logo 配置

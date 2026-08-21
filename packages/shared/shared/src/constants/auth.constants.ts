@@ -1,6 +1,6 @@
 /**
  * auth.constants.ts - Authentication constants
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description Global configuration constants for authentication, shared across all layers. Contains storage keys, token configuration, and API endpoint constants.
  */
 

@@ -1,4 +1,4 @@
-import type { StatusTone } from "@vxture/shared";
+import type { StatusTone } from "@vxture-platform/shared";
 import type {
   TenantOperationAuditEvent,
   TenantOperationMember,
@@ -191,7 +191,7 @@ export function tenantSearchText(tenant: TenantOperationRecord) {
 
 // ── 展示语气映射（admin 侧）────────────────────────────────────────────────
 /**
- * 这三族状态**还没有共享值域**（`@vxture/shared` 只拥有 subscription / tier /
+ * 这三族状态**还没有共享值域**（`@vxture-platform/shared` 只拥有 subscription / tier /
  * plan-version 三族），所以映射留在这里。先有值域契约、再谈它的展示映射——反过来
  * 等于让展示层先于契约定义业务词汇。等哪天租户状态进了共享值域，这三张表就该
  * 跟着上提，与 SUBSCRIPTION_STATUS_TONE 并列。

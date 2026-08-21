@@ -1,4 +1,8 @@
-import { DEFAULT_LOCALE, SUPPORTED_LOCALES, type Locale } from "@vxture/shared";
+import {
+  DEFAULT_LOCALE,
+  SUPPORTED_LOCALES,
+  type Locale,
+} from "@vxture-platform/shared";
 import enUSMessages from "../../messages/en-US.json";
 import zhCNMessages from "../../messages/zh-CN.json";
 

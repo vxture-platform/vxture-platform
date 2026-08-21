@@ -6,7 +6,7 @@ export enum BillingCycle {
 }
 
 /**
- * Enum form of @vxture/shared SUBSCRIPTION_STATUSES (needed by class-validator
+ * Enum form of @vxture-platform/shared SUBSCRIPTION_STATUSES (needed by class-validator
  * IsEnum). Values MUST stay identical to the @shared value domain — the DB
  * CHECK enforces that set, so any drift here (like the retired "paused", which
  * the DDL never allowed) makes the DTO accept writes the DB rejects, or reject

@@ -7,8 +7,8 @@
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./src/*"],
-      "@vxture/shared": ["../../packages/shared/shared/src"],
-      "@vxture/shared/*": ["../../packages/shared/shared/src/*"],
+      "@vxture-platform/shared": ["../../packages/shared/shared/src"],
+      "@vxture-platform/shared/*": ["../../packages/shared/shared/src/*"],
       "@vxture/design-system": [
         "../../packages/design/design-system/src/client.ts"
       ],

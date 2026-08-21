@@ -18,7 +18,7 @@ import { useState, memo, useCallback } from "react";
 import Image from "next/image";
 import { Button, Icon } from "@vxture/design-system";
 import { useTranslations } from "next-intl";
-import { debugLog } from "@vxture/shared";
+import { debugLog } from "@vxture-platform/shared";
 import {
   SOLUTIONS_DATA,
   type SolutionItem,

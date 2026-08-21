@@ -1,6 +1,6 @@
 /**
  * portal-context.types.ts - 跨 Portal 导航上下文类型
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description 定义跨 Portal 跳转时携带的上下文信息，供 console 侧读取并展示来源 Portal 标题与返回入口。
  */
 

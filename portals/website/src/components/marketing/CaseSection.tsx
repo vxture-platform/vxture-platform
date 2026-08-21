@@ -17,7 +17,7 @@ import Image from "next/image";
 import { Link } from "@/lib/i18n/navigation";
 import { memo, useMemo } from "react";
 import { useTranslations } from "next-intl";
-import { debugLog } from "@vxture/shared";
+import { debugLog } from "@vxture-platform/shared";
 import { HOME_CASES_DATA } from "@/data/home/home.cases.data";
 
 // ============================================================================

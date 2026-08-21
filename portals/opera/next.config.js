@@ -5,7 +5,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const internalAliases = {
-  "@vxture/shared": join(__dirname, "../../packages/shared/shared/src"),
+  "@vxture-platform/shared": join(
+    __dirname,
+    "../../packages/shared/shared/src",
+  ),
   /* 键上的 `$` 表示**精确匹配**，不可省。webpack 的 alias 默认是前缀匹配，而本条的
    * 值是个文件（client.ts）而不是目录，于是 `@vxture/design-system/styles/fonts.css`
    * 会被改写成 `…/src/client.ts/styles/fonts.css` —— 路径里夹着一个文件名，必然
@@ -18,7 +21,7 @@ const internalAliases = {
 };
 
 const turboAliases = {
-  "@vxture/shared": "../../packages/shared/shared/src",
+  "@vxture-platform/shared": "../../packages/shared/shared/src",
   "@vxture/design-system": "../../packages/design/design-system/src/client.ts",
 };
 

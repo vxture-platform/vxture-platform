@@ -1,6 +1,6 @@
 /**
  * health.utils.ts - Service health / identity endpoint contract helper
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description Single source for the health-endpoint identity block defined by
  *   docs/10-standards/025-service-health-endpoint-contract.md. Every liveness
  *   endpoint (Next `/api/health`, NestJS `/healthz`, …) builds its response

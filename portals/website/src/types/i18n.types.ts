@@ -5,7 +5,7 @@
  * @category Types
  */
 
-import type { Locale } from "@vxture/shared";
+import type { Locale } from "@vxture-platform/shared";
 
 /**
  * 翻译命名空间类型

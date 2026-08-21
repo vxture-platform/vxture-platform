@@ -1,6 +1,6 @@
 /**
  * auth.types.ts - Shared authentication types
- * @package @vxture/shared
+ * @package @vxture-platform/shared
  * @description Pure data types for authentication and user information, shared across all layers. Contains only structural types without runtime behavior.
  */
 

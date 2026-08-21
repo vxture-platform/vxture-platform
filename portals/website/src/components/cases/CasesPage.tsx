@@ -17,7 +17,7 @@ import { useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { Link } from "@/lib/i18n/navigation";
-import { debugLog } from "@vxture/shared";
+import { debugLog } from "@vxture-platform/shared";
 import { CASES_DATA } from "@/data/cases/cases.data";
 import { Button, Input } from "@vxture/design-system";
 
