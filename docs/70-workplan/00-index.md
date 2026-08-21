@@ -11,6 +11,7 @@
 
 | [`60-console-p1-open-decisions.md`](./60-console-p1-open-decisions.md) | console P1 四份决策简报(通知中心 / 多 workspace / 危险区 / 个人实名):设计缺口或文档冲突,等 owner 裁定 | **等裁定**(2026-08-21 立项;P0 四项与 P1 两项已落地,清单见文末) |
 | [`50-release-resequencing.md`](./50-release-resequencing.md) | 发布节奏重排：生产落后 main 63 个提交，拆成四次可回滚的上线（R0 收口 → R1 基础设施 → R2 DDL → R3 应用 → R4 一致性） | **R0 进行中**（2026-08-17 立项） |
+| [`70-design-system-phase-closeout.md`](./70-design-system-phase-closeout.md) | Design System 阶段收尾:三包自足与发布现状、守卫矩阵、拆仓就绪度与要一起搬走的工装清单 | **本阶段收口**(2026-08-21):设计线 issue 清零、tokens 2.2.0 / ui 3.1.1 / system 6.4.0 已发布;拆仓技术前提已备齐,余下为配置与产品裁定 |
 
 > 设计与批次分开放：**判断**在设计文件里（`portals/opera/docs/opera-navigation-design.md`），
 > **顺序与验收**在本目录。两者冲突以设计文件为准。
