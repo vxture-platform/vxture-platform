@@ -95,8 +95,8 @@ jobs:
   db-init:
     name: worker-01 DB ${{ inputs.action }}
     runs-on: ubuntu-latest
-    # production 环境承接环境级 DEPLOY_* 秘钥（DEPLOY_HOST_TAILNET / DEPLOY_USER /
-    # DEPLOY_SSH_KEY / DEPLOY_SSH_PASSPHRASE）+ 审批门。domestic profile：runner 入
+    # production 环境承接环境级 DEPLOY_HOST_* 秘钥（DEPLOY_HOST_TAILNET_IP / DEPLOY_HOST_USER /
+    # DEPLOY_HOST_SSH_KEY / DEPLOY_HOST_SSH_KEY_PASSPHRASE）+ 审批门。domestic profile：runner 入
     # tailnet 走内网到 worker-01（与 deploy.yml 同）。
     environment: production
     steps:
@@ -149,10 +149,10 @@ jobs:
       - name: Upload DB scripts to worker-01
         uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
         with:
-          host: ${{ secrets.DEPLOY_HOST_TAILNET }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
+          host: ${{ secrets.DEPLOY_HOST_TAILNET_IP || secrets.DEPLOY_HOST_TAILNET }}
+          username: ${{ secrets.DEPLOY_HOST_USER || secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_HOST_SSH_KEY || secrets.DEPLOY_SSH_KEY }}
+          passphrase: ${{ secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE || secrets.DEPLOY_SSH_PASSPHRASE }}
           source: "deploy/scripts,deploy/database,deploy/guardrails,deploy/.env.*.example,deploy/secrets/*.example"
           target: "/tmp/vxture-deploy-${{ github.run_id }}"
           rm: true
@@ -174,10 +174,10 @@ jobs:
           # it before writing.
           STAGE_DIR: /tmp/vxture-deploy-${{ github.run_id }}
         with:
-          host: ${{ secrets.DEPLOY_HOST_TAILNET }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
+          host: ${{ secrets.DEPLOY_HOST_TAILNET_IP || secrets.DEPLOY_HOST_TAILNET }}
+          username: ${{ secrets.DEPLOY_HOST_USER || secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_HOST_SSH_KEY || secrets.DEPLOY_SSH_KEY }}
+          passphrase: ${{ secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE || secrets.DEPLOY_SSH_PASSPHRASE }}
           command_timeout: 30m
           envs: DB_ACTION,DEPLOY_DIR,DEPLOY_RUNTIME_DIR,TEST_DELIVERY_PRODUCT,TEST_DELIVERY_ACCOUNT,TEST_DELIVERY_EVENT,STAGE_DIR
           script: |

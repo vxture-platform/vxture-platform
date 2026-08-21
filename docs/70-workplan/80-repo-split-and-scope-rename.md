@@ -75,12 +75,14 @@ variable。SSH 私钥、ACR 口令、DNS API token → secret。
 | `secrets.NODE_AUTH_TOKEN`       | **保留并接线**。当前 `secrets.NODE_AUTH_TOKEN` 在 workflow 里零引用（publish 流水线用的是 `secrets.GITHUB_TOKEN`）。但**拆仓后它是必需品**：门户要从 GitHub Packages 装 `@vxture/design-*`。你提前建了是对的，缺的是 §4 的接线。 |
 | `secrets.DEPLOY_HOST_PUBLIC_IP` | **保留**。旧仓 `deploy.yml:8` 明确写着「留作手工运维兜底，CI 不用」。属于有意的零引用，应在文档里标注而不是清掉。                                                                                                                |
 
-### 2.4 需要你确认的两项
+### 2.4 已确认（owner 2026-08-21）
 
-| 项                               | 要确认什么                                                                                                                                           |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `secrets.DEPLOY_HOST_PORT`       | 当前 workflow **不传 port**，ssh action 默认 22。**如果你把 SSH 端口改了，不接线就连不上**；如果仍是 22，这一项是冗余的。→ 需要你回答端口是不是 22。 |
-| `secrets.DEPLOY_HOST_PRIVATE_IP` | 当前零引用。部署走 tailnet IP。这一项是为 VPC 内网路径预留，还是可以删？                                                                             |
+| 项                               | 结论                                                                                                                                                            |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `secrets.DEPLOY_HOST_PORT`       | **SSH 仍是 22**，ssh-action 默认即 22 → **不接线**。保留该 secret 以备改端口，已在 `deploy.yml` 抬头注明"改端口时在此处补 `port:` 并同步 db-init/cert/alerts"。 |
+| `secrets.DEPLOY_HOST_PRIVATE_IP` | **保留**——Aliyun VPC 内网地址，为后续内网路径预留。同样已在抬头注明。                                                                                           |
+| environment secret `DEPLOY_DIR`  | **owner 已清理**，保留 variable。§2.2 的裁定已执行。                                                                                                            |
+| `DEPLOY_WORKER02_*`（旧组织）    | **后置**，本轮不动。                                                                                                                                            |
 
 ### 2.5 可以删的一项
 
@@ -88,18 +90,46 @@ variable。SSH 私钥、ACR 口令、DNS API token → secret。
 | ----------------------------- | ------------------------------------------------------------------ |
 | `vars.IMAGE_PRIMARY_REGISTRY` | **仓内零引用**（全仓检索无命中）。要么删，要么说明它的消费方在哪。 |
 
-### 2.6 应当上移到组织层的五项
+### 2.6 上移到组织层——这不是建议，是标准里**已有的裁定**
 
-`ALIYUN_ACR_USERNAME` / `ALIYUN_ACR_PASSWORD` / `TAILSCALE_OAUTH_CLIENT_ID` /
-`TAILSCALE_OAUTH_CLIENT_SECRET` / `SONAR_TOKEN`，以及 variable
-`ALIYUN_ACR_REGISTRY` / `ALIYUN_ACR_INTERNAL_HOST` / `TAILSCALE_OAUTH_CLIENT_TAG`。
+复核时发现一份我起初漏掉的权威：`docs/30-design/product_240_repo-template.md` §2.2
+（各产品仓照它建）已经规定了这套分层，且 §6#17 是**已裁定**状态：
 
-理由（判据二）：这些与"哪个仓"无关，只与"哪个组织"有关。留在仓库层的代价在
-**第二个仓出现时**才显现——凭据要复制一份，轮换要记得改两处，而漏改的那一处
-不会报错，只会在某次部署时安静地失败。`vxture-platform` 组织将来至少还会有
-一个仓（若干产品仓已在规划），所以这个成本一定会到。
+> **17 共享凭证层级** — 140 §3 明定 org 级（ACR / tailscale / npm token）vs arda 实践配 repo 级
+> → ✅ **已裁**：**org 级**（140 §3 强化为权威）；arda repo 级配置记 arda 线。
 
-**这一项不阻断当前部署**，可以排在改名与拆仓之后做。
+即 `ALIYUN_ACR_USERNAME` / `ALIYUN_ACR_PASSWORD` / `TAILSCALE_OAUTH_CLIENT_ID` /
+`TAILSCALE_OAUTH_CLIENT_SECRET` / `NODE_AUTH_TOKEN` / `SONAR_TOKEN`，以及
+`vars.ALIYUN_ACR_REGISTRY` / `ALIYUN_ACR_INTERNAL_HOST` / `TAILSCALE_OAUTH_CLIENT_TAG`
+**本就该在组织层**。新仓当前全配在仓库层，与 arda 是同一种偏离。
+
+**已执行的一步**：`vars.TAILSCALE_OAUTH_CLIENT_TAG`（值 `tag:promotion`）已按该裁定
+建在 `vxture-platform` **组织层**（visibility=all），§2.1 的第一个阻断项因此解除。
+其余项的上移留在批 4——它们不阻断部署，且 secret **值读不出来**，必须由 owner 重建。
+
+### 2.7 环境密钥命名：现在有三套，需要一次收口
+
+| 来源                           | 命名                                                                                                                                                                                              |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `product_240` §2.2（模板标准） | `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_PORT` / `DEPLOY_SSH_KEY`(+`_PASSPHRASE`) / `DEPLOY_KNOWN_HOSTS` / `DEPLOY_DIR`，db-init 另有 `DEPLOY_HOST_TAILNET`                                        |
+| 平台仓原实现                   | `DEPLOY_HOST_TAILNET` / `DEPLOY_USER` / `DEPLOY_SSH_KEY` / `DEPLOY_SSH_PASSPHRASE`                                                                                                                |
+| **owner 新命名（本轮采用）**   | `DEPLOY_HOST_TAILNET_IP` / `DEPLOY_HOST_USER` / `DEPLOY_HOST_SSH_KEY` / `DEPLOY_HOST_SSH_KEY_PASSPHRASE` / `DEPLOY_HOST_PORT` / `DEPLOY_HOST_PUBLIC_IP` / `DEPLOY_HOST_PRIVATE_IP` / `DEPLOY_DIR` |
+
+新命名最成体系——**凡与主机有关的一律 `DEPLOY_HOST_*`**，把 tailnet / public / private
+三种地址并列；`SSH_KEY_PASSPHRASE` 也比 `SSH_PASSPHRASE` 准确（那是 key 的口令，不是 SSH 的）。
+`DEPLOY_DIR` 与标准 §6#1 的已裁结论一致。
+
+**裁定：以 owner 新命名为准，并回写 `product_240` §2.2**——否则后续每个照模板建的产品仓
+都会拿到旧名，而平台仓自己用另一套。回写排在批 4（不阻断）。
+
+### 2.8 顺带发现的安全缺口：SSH 未做 known_hosts 固定
+
+模板标准要求复合动作 `tailnet-ssh-connect` 带 **`DEPLOY_KNOWN_HOSTS` fail-closed**。
+平台仓 `.github/actions/` 下**只有 `setup-node-pnpm`**，deploy 直接用
+`appleboy/ssh-action` + `scp-action`，**不传 known_hosts**——即不校验主机指纹。
+
+风险等级：中。攻击面限于 tailnet 内部（SSH 本就不对公网开放），但"信任任意应答的主机"
+与标准的 fail-closed 要求相悖。**不阻断本轮**，单列为批 4 的一项。
 
 ---
 
@@ -155,16 +185,22 @@ PR 评审，而不是在 GitHub 设置页里悄悄改掉。**不建议参数化*
 
 ### 批 0 — 让新仓真的能部署（阻断项，最先做）
 
-| #   | 任务                                                                                                                                         | 类型              |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| 0-1 | 新组织补 `vars.TAILSCALE_OAUTH_CLIENT_TAG`（值同旧组织，`tag:promotion`）                                                                    | **owner 配置**    |
-| 0-2 | 改 `deploy.yml` 对齐新 secret 名（`DEPLOY_HOST_TAILNET_IP` / `DEPLOY_HOST_USER` / `DEPLOY_HOST_SSH_KEY` / `DEPLOY_HOST_SSH_KEY_PASSPHRASE`） | 代码              |
-| 0-3 | 删 production 环境里重复的 **secret** `DEPLOY_DIR`（保留 variable）                                                                          | **owner 配置**    |
-| 0-4 | 确认 SSH 端口；非 22 则 `deploy.yml` 增加 `port: ${{ secrets.DEPLOY_HOST_PORT }}`                                                            | **需 owner 回答** |
-| 0-5 | 新仓跑一次 `dev-*` tag 部署演练，验证整条链路                                                                                                | 验证              |
+| #   | 任务                                                                                                  | 状态              |
+| --- | ----------------------------------------------------------------------------------------------------- | ----------------- |
+| 0-1 | 新组织补 `vars.TAILSCALE_OAUTH_CLIENT_TAG` = `tag:promotion`（**组织层**，按 §6#17 已裁）             | ✅ **已做**       |
+| 0-2 | 四个 workflow（deploy / db-init / deploy-cert / platform-alerts）共 **28 处**引用对齐 `DEPLOY_HOST_*` | ✅ **已做**       |
+| 0-3 | 删 production 环境里重复的 **secret** `DEPLOY_DIR`（保留 variable）                                   | ✅ **owner 已做** |
+| 0-4 | SSH 端口 = 22 → 不接线；`DEPLOY_HOST_PORT` / `DEPLOY_HOST_PRIVATE_IP` 保留并在 `deploy.yml` 抬头注明  | ✅ **已做**       |
+| 0-5 | 新仓跑一次部署演练，验证整条链路                                                                      | ⏳ 待做           |
 
-> **0-2 有个陷阱**：改完之后 `deploy.yml` 在**旧仓**就跑不通了（旧仓 secret 还是旧名）。
-> 所以 0-2 与"发版从哪个仓走"必须同一批切换，不能各改各的。
+> **0-2 原本有个陷阱，已用过渡回退化解**：改完之后 `deploy.yml` 在**旧仓**会跑不通
+> （旧仓 production 环境仍是旧名），而生产目前正从旧仓发版。
+>
+> 处理方式是把引用写成 `${{ secrets.新名 || secrets.旧名 }}`——**缺失的 secret 在
+> Actions 里求值为空串（falsy）**，所以 `||` 会自动落到还在的那一个，两个仓在切换期
+> 都能部署。**移除条件**已写进 `deploy.yml` 抬头：发版通道确认切到新仓、旧仓不再承担
+> 部署之后，把 `|| secrets.DEPLOY_*` 一并删掉——留着不出错，但会让"哪个名字是权威"
+> 一直有两个答案。
 
 ### 批 1 — `@vxture/shared` → `@vxture-platform/shared`
 
@@ -215,21 +251,27 @@ scope 纯属内部命名，不受 registry 约束。全量改名要动上千处�
 
 ### 批 4 — 分层归位与死凭据清理（不阻断，最后做）
 
-| #   | 任务                                                                    |
-| --- | ----------------------------------------------------------------------- |
-| 4-1 | 5 个 secret + 3 个 variable 从新仓仓库层上移到 `vxture-platform` 组织层 |
-| 4-2 | 删 `vars.IMAGE_PRIMARY_REGISTRY`（零引用），或说明消费方                |
-| 4-3 | 删旧组织的 `TAILSCALE_AUTHKEY`；`VXTURE_NPM_REGISTRY` 接线或删          |
-| 4-4 | 确认 `DEPLOY_WORKER02_*` 的授权仓后处置                                 |
-| 4-5 | `deploy/README` 补一句：公网域名是代码层常量                            |
-| 4-6 | 结清技术债 §926                                                         |
+| #   | 任务                                                                                          |
+| --- | --------------------------------------------------------------------------------------------- |
+| 4-1 | 5 个 secret + 3 个 variable 从新仓仓库层上移到 `vxture-platform` 组织层                       |
+| 4-2 | 删 `vars.IMAGE_PRIMARY_REGISTRY`（零引用），或说明消费方                                      |
+| 4-3 | 删旧组织的 `TAILSCALE_AUTHKEY`；`VXTURE_NPM_REGISTRY` 接线或删                                |
+| 4-4 | 确认 `DEPLOY_WORKER02_*` 的授权仓后处置                                                       |
+| 4-5 | `deploy/README` 补一句：公网域名是代码层常量                                                  |
+| 4-6 | 结清技术债 §926                                                                               |
+| 4-7 | 回写 `product_240` §2.2 的环境密钥命名为 `DEPLOY_HOST_*`（见 §2.7），否则后续产品仓继续拿旧名 |
+| 4-8 | 补 `DEPLOY_KNOWN_HOSTS` fail-closed（见 §2.8）——标准要求，平台仓当前不校验主机指纹            |
+| 4-9 | 移除四个 workflow 里的过渡回退 `secrets.新名 或 旧名`（发版切到新仓之后）                     |
 
 ---
 
-## 5. 需要 owner 回答的三件
+## 5. 待 owner 的剩余项
 
-1. **SSH 端口是不是 22**（决定 0-4 做不做）
-2. **`DEPLOY_HOST_PRIVATE_IP` 是预留还是可删**
-3. **`DEPLOY_WORKER02_*` 授权给了哪些仓**（决定 4-4）
+三件已答复（见 §2.4）：SSH 端口 22、`DEPLOY_HOST_PRIVATE_IP` 保留（Aliyun 内网）、
+旧组织 `DEPLOY_WORKER02_*` 后置。**批 0 因此已完成 4/5**。
 
-另有一件需要裁定：**批 3-4 的跨仓联络 issue 往哪儿放**——迁到新仓，还是就地关闭并在新仓重开。
+仍需裁定：
+
+1. **批 3-4 的跨仓联络 issue 往哪儿放**——旧仓有 20 余条未关的 atlas / runos / yucer / arda
+   联络 issue，属平台不属设计。迁到新仓，还是就地关闭并在新仓重开？
+2. **发版通道何时切到新仓**——决定批 0-5 的演练时点，也决定批 4-9 何时移除过渡回退。
