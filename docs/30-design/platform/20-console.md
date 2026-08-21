@@ -228,6 +228,32 @@ Settings
 
 ## Workspace Switcher 设计
 
+> **术语纠偏（2026-08-21）：本节的 "workspace" 指的是 `tenancy.tenants`，不是
+> `tenancy.workspaces`。**
+>
+> 本节写作时，UI 层用 "workspace" 指代租户——它自己的类型定义就是证据
+> （`WorkspaceContextState.currentTenantId`）。平台后来引入了 `tenancy.workspaces`
+> 这个**独立子实体**（workspace 是 tenant 的下级，`workspace_no = tenant_no × 1000 + 序号`，
+> 每租户上限 999），于是同一个词在本文档里和在 DDL 里指两样东西。
+>
+> 照本节实现时的对应关系：
+>
+> | 本节的说法                  | 实际指                   | 现状                                                                |
+> | --------------------------- | ------------------------ | ------------------------------------------------------------------- |
+> | 切换 workspace              | 切换**租户**             | 已实现，见 `portals/console/src/features/tenant/TenantProvider.tsx` |
+> | 创建 organization workspace | 创建**组织租户**         | 已实现                                                              |
+> | 一个用户属于多个 workspace  | 一个用户属于多个**租户** | 成立                                                                |
+>
+> **真正的 Workspace 实体口径以
+> [`docs/20-specs/20-vxture-tenant-console-info-spec.md`](../../20-specs/20-vxture-tenant-console-info-spec.md)
+> §3.1 / §四 为准**：当前阶段 1 租户 = 1 默认 Workspace，本期弱化展示、预留入口；
+> 后续演进 1:N。**本期不开放租户自建 workspace**（裁定见
+> [`docs/70-workplan/60-console-p1-open-decisions.md`](../../70-workplan/60-console-p1-open-decisions.md)
+> 决策 2）——所以本节「创建逻辑」那段**不适用于 Workspace 实体**，它描述的是建租户。
+>
+> 本节的交互设计（面板分区、切换流程、权限差异）仍然有效，只需把 "workspace"
+> 读作 "tenant"。
+
 ### 业务规则
 
 - **命名约定：** 产品 / UI 层统一用 workspace；数据 / 权限层用 tenant，二者一对一
