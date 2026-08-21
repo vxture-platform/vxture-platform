@@ -358,15 +358,11 @@ export function SettingsPage() {
      * action bar, not floating in the page header. */
     <FormPageTemplate
       header={
-        <div className="flex flex-col gap-md">
-          <ViewHeader
-            icon="settings"
-            title={t("title")}
-            description={t("description")}
-            secondary={<PlannedBadge />}
-          />
-          <PlannedNotice variant="controls" />
-        </div>
+        <ViewHeader
+          icon="settings"
+          title={t("title")}
+          description={t("description")}
+        />
       }
       footer={
         <>
@@ -405,12 +401,17 @@ export function SettingsPage() {
         ]}
       />
 
+      {/* Planned 标记落在**策略表这一节**,不在页头(2026-08-21)。此前挂在页头,
+          而页头之下的危险区已有真能用的转让所有权——一个说「都还没做」的徽标
+          盖住一个能点的按钮,比没有徽标更误导。这九条策略仍只存 localStorage。 */}
       <PageSection
         icon="faders"
         level={2}
         title={t("general.title")}
         description={t("general.count", { count: SETTING_SECTIONS.length })}
+        action={<PlannedBadge />}
       >
+        <PlannedNotice variant="controls" />
         {SETTING_SECTIONS.map((section) => (
           <PageSection
             key={section.key}

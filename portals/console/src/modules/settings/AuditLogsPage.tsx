@@ -12,7 +12,7 @@
  * tenant.audit.read(owner/manager)。表格遵守默认结构(序号列,无操作列)。
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   Badge,
@@ -74,10 +74,16 @@ export function AuditLogsPage() {
       .finally(() => setLoading(false));
   }, [session.tenant?.id, filter]);
 
-  const actionLabel = (action: string): string =>
-    KNOWN_ACTIONS.has(action)
-      ? t(`action.${action.replace(/\./g, "_")}`)
-      : action;
+  // useCallback 而非普通函数:它被 columns 的 useMemo 引用,不稳定的话
+  // 要么进依赖数组导致每渲染重建列、要么被漏掉留一条 exhaustive-deps 警告。
+  // 它只依赖 t,包一层即可两头都对。
+  const actionLabel = useCallback(
+    (action: string): string =>
+      KNOWN_ACTIONS.has(action)
+        ? t(`action.${action.replace(/\./g, "_")}`)
+        : action,
+    [t],
+  );
 
   const columns = useMemo<DataTableColumn<ConsoleAuditLog>[]>(
     () => [
@@ -152,7 +158,7 @@ export function AuditLogsPage() {
           ),
       },
     ],
-    [t],
+    [t, actionLabel],
   );
 
   return (
