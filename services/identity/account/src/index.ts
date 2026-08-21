@@ -14,6 +14,17 @@ export {
 export { AccountModule } from "./module/account.module";
 export { FavoritesService } from "./favorites/favorites.service";
 export {
+  NotificationPreferencesService,
+  NOTIFICATION_TOPICS,
+  NOTIFICATION_CHANNELS,
+} from "./notification-preferences/notification-preferences.service";
+export type {
+  NotificationPreferences,
+  NotificationTopic,
+  NotificationChannel,
+  NotificationChannelState,
+} from "./notification-preferences/notification-preferences.service";
+export {
   AccountService,
   assertValidAccount,
   USERNAME_CHANGE_COOLDOWN_DAYS,

@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import { PasswordHasher } from "../password/password-hasher";
 import { MockUserRepository, PgUserRepository } from "../repository";
 import { FavoritesService } from "../favorites/favorites.service";
+import { NotificationPreferencesService } from "../notification-preferences/notification-preferences.service";
 import { AccountService } from "../service/account.service";
 import { ACCOUNT_PG_POOL, USER_REPOSITORY } from "../tokens";
 
@@ -57,7 +58,13 @@ import { ACCOUNT_PG_POOL, USER_REPOSITORY } from "../tokens";
     PasswordHasher,
     AccountService,
     FavoritesService,
+    NotificationPreferencesService,
   ],
-  exports: [AccountService, PasswordHasher, FavoritesService],
+  exports: [
+    AccountService,
+    PasswordHasher,
+    FavoritesService,
+    NotificationPreferencesService,
+  ],
 })
 export class AccountModule {}

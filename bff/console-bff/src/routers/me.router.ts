@@ -14,7 +14,11 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
-import { AVATAR_MAX_BYTES, sniffImageType } from "@vxture/service-account";
+import {
+  AVATAR_MAX_BYTES,
+  NotificationPreferencesService,
+  sniffImageType,
+} from "@vxture/service-account";
 import { PhoneCodeService } from "@vxture/service-sms";
 import { SubscriptionService } from "@vxture/service-subscription";
 import { SessionAggregator } from "../aggregators/session.aggregator";
@@ -85,7 +89,37 @@ export class MeRouter {
     private readonly emailChangeService: EmailChangeService,
     @Inject(PhoneCodeService)
     private readonly phoneCodeService: PhoneCodeService,
+    @Inject(NotificationPreferencesService)
+    private readonly notificationPreferences: NotificationPreferencesService,
   ) {}
+
+  /**
+   * 通知偏好(owner 2026-08-21 裁定决策 1 选项 A)。此前这页把状态存在
+   * localStorage 里、控件全 disabled——用户以为设了,换个设备就没了,
+   * 是个会骗人的界面。
+   *
+   * 服务端返回补齐后的**完整矩阵**,前端不再自带默认值:两份默认值早晚漂移,
+   * 而漂移的症状恰好是「换台设备开关不一样」,与它要修的 bug 同形。
+   */
+  @Get("notification-preferences")
+  async getNotificationPreferences(@Req() req: Request & RequestContext) {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    return this.notificationPreferences.get(req.user.id);
+  }
+
+  /**
+   * 覆盖写。body 不过 DTO 校验而是交给服务层 normalize:主题与渠道是
+   * 服务端定义的白名单,未知键一律丢弃——用 DTO 声明一遍等于把同一份白名单
+   * 抄成两份。返回规整后的实际存量,让「安全类站内信被强制打开」在界面上可见。
+   */
+  @Put("notification-preferences")
+  async putNotificationPreferences(
+    @Req() req: Request & RequestContext,
+    @Body() body: unknown,
+  ) {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    return this.notificationPreferences.replace(req.user.id, body);
+  }
 
   @Get()
   async getCurrentUser(@Req() req: Request & RequestContext) {

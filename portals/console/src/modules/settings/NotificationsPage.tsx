@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Banner,
   Button,
@@ -13,8 +13,12 @@ import {
 } from "@vxture/design-system";
 import type { DataTableColumn, IconName } from "@vxture/design-system";
 import { PageSection, SummaryStrip } from "@/layout/shell";
-import { PlannedBadge, PlannedNotice } from "@/components/planned";
 import { useTranslations } from "next-intl";
+import {
+  fetchNotificationPreferences,
+  saveNotificationPreferences,
+  type NotificationPreferences,
+} from "@/api/console-bff";
 
 type ChannelKey = "inbox" | "email" | "sms";
 type TopicKey =
@@ -42,8 +46,6 @@ type TopicPreference = {
 type NotificationState = {
   topics: TopicPreference[];
 };
-
-const STORAGE_KEY = "vxture.console.notificationPreferences.v3";
 
 const CHANNELS: ChannelMeta[] = [
   { key: "inbox", icon: "bell" },
@@ -99,62 +101,65 @@ const DEFAULT_NOTIFICATION_STATE: NotificationState = {
   ],
 };
 
-function readStoredState(): NotificationState {
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (!stored) {
-      return DEFAULT_NOTIFICATION_STATE;
-    }
-
-    const parsed = JSON.parse(stored) as Partial<NotificationState>;
-    const storedTopics = Array.isArray(parsed.topics) ? parsed.topics : [];
-
-    return {
-      topics: DEFAULT_NOTIFICATION_STATE.topics.map((topic) => {
-        const storedTopic = storedTopics.find(
-          (item) => item?.key === topic.key,
-        );
-        const storedChannels =
-          storedTopic &&
-          typeof storedTopic.channels === "object" &&
-          storedTopic.channels !== null
-            ? storedTopic.channels
-            : {};
-
-        return {
-          ...topic,
-          channels: {
-            ...topic.channels,
-            ...storedChannels,
-          },
-        };
-      }),
-    };
-  } catch {
-    return DEFAULT_NOTIFICATION_STATE;
-  }
-}
-
 export function NotificationsPage() {
   const t = useTranslations("notificationsPage");
   const [state, setState] = useState<NotificationState>(
     DEFAULT_NOTIFICATION_STATE,
   );
   const [messageKey, setMessageKey] = useState<string | null>(null);
-  const [hydrated, setHydrated] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setState(readStoredState());
-    setHydrated(true);
+  /** 服务端矩阵 → 页面结构。分组/图标是纯呈现,留在前端;开关值一律以服务端为准。 */
+  const applyPreferences = useCallback((prefs: NotificationPreferences) => {
+    setState({
+      topics: DEFAULT_NOTIFICATION_STATE.topics.map((topic) => ({
+        ...topic,
+        channels: {
+          inbox: prefs[topic.key]?.inbox ?? topic.channels.inbox,
+          email: prefs[topic.key]?.email ?? topic.channels.email,
+          sms: prefs[topic.key]?.sms ?? topic.channels.sms,
+        },
+      })),
+    });
   }, []);
 
   useEffect(() => {
-    if (!hydrated) {
-      return;
-    }
+    let alive = true;
+    fetchNotificationPreferences()
+      .then((prefs) => {
+        if (alive) applyPreferences(prefs);
+      })
+      .catch(() => {
+        if (alive) setError(t("feedback.loadFailed"));
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [applyPreferences, t]);
 
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [hydrated, state]);
+  /** 提交后按**服务端返回值**回填,而不是沿用本地状态:锁定通道会被服务端
+   *  强制打开,不回填的话界面会显示一个与库里不一致的关态。 */
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    setError(null);
+    setMessageKey(null);
+    try {
+      const payload = Object.fromEntries(
+        state.topics.map((topic) => [topic.key, { ...topic.channels }]),
+      );
+      applyPreferences(await saveNotificationPreferences(payload));
+      setMessageKey("feedback.saved");
+    } catch {
+      setError(t("feedback.saveFailed"));
+    } finally {
+      setSaving(false);
+    }
+  }, [applyPreferences, state.topics, t]);
 
   const totalTopics = state.topics.length;
   const enabledTopics = state.topics.filter((topic) =>
@@ -165,11 +170,8 @@ export function NotificationsPage() {
   ).length;
   const smsTopics = state.topics.filter((topic) => topic.channels.sms).length;
 
-  function markSaved() {
-    setMessageKey("feedback.saved");
-  }
-
   function resetDefaults() {
+    // 只回到默认值,不落库——保存仍是显式动作,避免误点即生效。
     setState(DEFAULT_NOTIFICATION_STATE);
     setMessageKey("feedback.reset");
   }
@@ -247,7 +249,7 @@ export function NotificationsPage() {
           >
             <Checkbox
               checked={topic.channels[channel.key]}
-              disabled
+              disabled={channelLocked || loading || saving}
               aria-label={t("topics.toggleLabel", {
                 topic: t(`topics.items.${topic.key}.title`),
                 channel: t(`channels.items.${channel.key}.title`),
@@ -283,18 +285,26 @@ export function NotificationsPage() {
             icon="mail"
             title={t("header.title")}
             description={t("header.description")}
-            secondary={<PlannedBadge />}
           />
-          <PlannedNotice variant="controls" />
+          {error !== null ? <Banner tone="danger" title={error} /> : null}
         </div>
       }
       footer={
         <>
-          <Button size="md" variant="outline" disabled onClick={resetDefaults}>
+          <Button
+            size="md"
+            variant="outline"
+            disabled={loading || saving}
+            onClick={resetDefaults}
+          >
             <Icon name="x" size="xs" fallback="placeholder" />
             <span>{t("actions.reset")}</span>
           </Button>
-          <Button size="md" disabled onClick={markSaved}>
+          <Button
+            size="md"
+            disabled={loading || saving}
+            onClick={() => void handleSave()}
+          >
             <Icon name="check" size="xs" fallback="placeholder" />
             <span>{t("actions.save")}</span>
           </Button>

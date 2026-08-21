@@ -403,6 +403,44 @@ export async function updateMember(
   return (await response.json()) as MemberRecord;
 }
 
+/** 通知偏好矩阵:主题 → 渠道开关。主题与渠道由服务端定义,这里不重复白名单。 */
+export type NotificationPreferences = Record<string, Record<string, boolean>>;
+
+/**
+ * 读取通知偏好(owner 2026-08-21 裁定决策 1 选项 A)。
+ * 服务端返回**补齐后的完整矩阵**,前端不带默认值——两份默认值早晚漂移。
+ */
+export async function fetchNotificationPreferences(): Promise<NotificationPreferences> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/me/notification-preferences`,
+    { credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) {
+    throw new ConsoleBffError("通知偏好读取失败", response.status);
+  }
+  return (await response.json()) as NotificationPreferences;
+}
+
+/** 覆盖写通知偏好;返回规整后的实际存量(锁定通道会被服务端强制打开)。 */
+export async function saveNotificationPreferences(
+  preferences: NotificationPreferences,
+): Promise<NotificationPreferences> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/me/notification-preferences`,
+    {
+      method: "PUT",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(preferences),
+    },
+  );
+  if (!response.ok) {
+    throw new ConsoleBffError("通知偏好保存失败", response.status);
+  }
+  return (await response.json()) as NotificationPreferences;
+}
+
 /**
  * 转让租户所有权(owner 2026-08-21 裁定,决策 3 批一)。
  *

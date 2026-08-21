@@ -743,7 +743,9 @@
     },
     "feedback": {
       "saved": "Notification preferences were saved to local frontend state and will sync to the server after backend support lands.",
-      "reset": "Notification preferences restored to defaults."
+      "reset": "Notification preferences restored to defaults.",
+      "loadFailed": "Could not load notification preferences; showing defaults.",
+      "saveFailed": "Could not save notification preferences. Try again."
     }
   },
   "profilePage": {
