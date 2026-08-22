@@ -392,5 +392,19 @@
         }
       }
     }
+  },
+  "comingSoon": {
+    "eyebrow": "Coming Soon",
+    "subtitle": "This page is being built",
+    "back": "Back to home",
+    "action": "Talk to us",
+    "workbench": {
+      "name": "Ruyin Workbench",
+      "description": "A desktop workbench for individuals and teams, pulling agents, data, and everyday work into one entry point. The product shape is being worked out; full capabilities and downloads will land here."
+    },
+    "industryScenarios": {
+      "name": "Industry Scenarios",
+      "description": "Platform capability packaged around the real working scenarios of an industry, ready to deploy. The first scenarios are in build; progress and availability will be posted here."
+    }
   }
 }

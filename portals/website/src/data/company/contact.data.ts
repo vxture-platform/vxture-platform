@@ -32,7 +32,7 @@ export interface CompanyContact {
 }
 
 /**
- * 联系板块（售前售后 / 生态合作）
+ * 联系板块（售前售后 = 客户用户 / 生态合作 = 合作伙伴）
  *
  * The accent is carried as **complete utility class strings**, not as a hue name
  * the component interpolates: Tailwind only emits rules for class names it can
@@ -42,18 +42,18 @@ export interface CompanyContact {
 export interface ContactChannel {
   /** i18n key under `company.contact.channels.*`. */
   readonly id: string;
-  /** Foreground icon on the badge. */
+  /** Foreground icon, rendered large enough to span both header lines. */
   readonly icon: IconName;
-  /** Oversized watermark tucked behind the card's top-right corner. */
+  /** Oversized watermark in the card's top-right, inset with clear margin. */
   readonly artIcon: IconName;
   /** Utility class colouring the watermark. */
   readonly artClass: string;
-  /** Utility class colouring the check marks. */
+  /** Utility class colouring the icon chip. */
+  readonly chipClass: string;
+  /** Utility class colouring the contact-line icons. */
   readonly inkClass: string;
   /** Which mailbox this panel routes to. */
   readonly email: "service" | "partner";
-  /** Whether to show the shared hotline on this panel. */
-  readonly showPhone: boolean;
 }
 
 // ============================================================================
@@ -67,40 +67,30 @@ export const COMPANY_CONTACT: CompanyContact = {
   partner_email: "partner@vxture.com",
 };
 
-/** 两个板块，顺序即左右顺序。 */
+/**
+ * 两张卡，顺序即左右顺序。
+ *
+ * 两者是**受众之分**，不是业务之分：左边是已经在用或准备用产品的客户用户，
+ * 右边是要一起为行业做事的合作伙伴。两边目前共用同一条热线（未来会分开），
+ * 所以电话重复出现是有意的，不是漏改。
+ */
 export const CONTACT_CHANNELS: readonly ContactChannel[] = [
   {
     id: "support",
     icon: "headset",
     artIcon: "chat-circle",
     artClass: "text-vx-brand-500/10",
+    chipClass: "bg-vx-brand-50 text-vx-brand-600 dark:bg-vx-brand-950/50",
     inkClass: "text-vx-brand-500",
     email: "service",
-    showPhone: true,
   },
   {
     id: "ecosystem",
     icon: "puzzle",
     artIcon: "plugs-connected",
     artClass: "text-vx-success-500/10",
+    chipClass: "bg-vx-success-50 text-vx-success-600 dark:bg-vx-success-900/40",
     inkClass: "text-vx-success-500",
     email: "partner",
-    showPhone: false,
   },
-];
-
-/**
- * 底部公司信息条的三项。
- *
- * `artIcon` is deliberately a different glyph from `icon`: the watermark reads
- * as decoration only when it is not the same shape as the chip in front of it.
- */
-export const CONTACT_FACTS: ReadonlyArray<{
-  id: string;
-  icon: IconName;
-  artIcon: IconName;
-}> = [
-  { id: "address", icon: "map-pin", artIcon: "buildings" },
-  { id: "hours", icon: "clock", artIcon: "calendar" },
-  { id: "response", icon: "timer", artIcon: "lightning" },
 ];

@@ -12,7 +12,6 @@
   },
   "productsMenu": {
     "openLabel": "展开产品中心",
-    "planned": "规划中",
     "appcenter": {
       "label": "智能体广场",
       "description": "开箱即用的智能体，按场景挑选、即刻试用"
@@ -21,13 +20,14 @@
       "label": "平台级产品",
       "description": "通用能力底座：数据、模型、编排与运营"
     },
-    "industryProducts": {
-      "label": "行业级产品",
-      "description": "面向具体行业打磨的成套产品，建设中"
-    },
     "workbench": {
       "label": "如影工作台",
-      "description": "登录后进入控制台，管理订阅、用量与团队"
+      "description": "面向个人与团队的桌面端工作台，建设中"
+    },
+    "inDevelopment": "开发中",
+    "industryScenarios": {
+      "label": "行业级场景",
+      "description": "按行业真实作业场景打包的成套产品，建设中"
     }
   },
   "actions": {
