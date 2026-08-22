@@ -311,6 +311,26 @@ required status check（发现新漏洞即 fail 拦合并）。
 
 - **用 pinned 二进制**（照 gitleaks 模式下 `osv-scanner_linux_amd64`，`OSV_SCANNER_VERSION` 单点升级），
   不用第三方 action（免 license/供应链顾虑）。**取代** npm quick-audit（端点已下线，HTTP 410 假绿）。
+
+**第三方 action 一律 SHA-pin（2026-08-22 起，回应 platform#188）**：上面那条「不用第三方
+action」用在了 osv-scanner 上——一个**不持任何凭据**的扫描器；而真正持有全部生产凭据的
+`appleboy/*`（SSH 私钥）、`docker/*`（registry 口令）、`tailscale/*`（入内网）当时却建在
+**浮动 tag** 上。风险被写下来了，却applied 到了低价值的那一侧。#188 点得对。
+
+规矩：
+
+- **凡持凭据或能触达生产的第三方 action，必须 pin 到完整 commit SHA**，并在同行注释里
+  写明它对应的语义版本（如 `# v1.2.5`），否则升级时无从判断跨了多大的版本。
+  浮动 tag 意味着「维护者今天推什么、我们明天就跑什么」——那是把 SSH 私钥交给一个
+  可变引用。
+- `actions/*`（GitHub 官方）可用 major tag，但**同一仓内不得并存两个 major**：
+  版本漂移会让「我们到底跑的哪一版」在不同 job 里有不同答案，升级与排障都要各查一遍。
+- 不取依赖始终是更强的补救（osv-scanner / gitleaks 的 pinned 二进制模式）。**能不取就不取，
+  必须取就 SHA-pin**，两者不是互斥的选项而是优先级。
+
+platform 侧现状（2026-08-22 实测）：8 个持凭据 action 全部 SHA-pin；`actions/*` 4 个各
+只剩一个 major（checkout@v6 / setup-node@v6 / upload-artifact@v7 / download-artifact@v8）。
+
 - **命令必须带 `--config=.osv-scanner.toml`**——扫 `--lockfile` 时 osv-scanner **不自动发现**根 config，
   漏了 `--config` 忽略清单不生效。
 - **整顿方法（清基线）**：先按 finding 查 OSV 修复版 vs npm latest 分类 →

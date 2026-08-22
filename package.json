@@ -64,6 +64,7 @@
     "lint:docs-numbering": "node scripts/guardrails/check-docs-numbering.mjs --strict",
     "lint:public-hygiene": "node scripts/guardrails/check-public-repo-hygiene.mjs",
     "lint:boundaries": "depcruise portals business bff services packages/core packages/shared packages/platform --config .depcruiserc.cjs",
+    "lint:action-pinning": "node scripts/guardrails/check-action-pinning.mjs",
     "lint:fix": "pnpm --recursive --if-present lint:fix",
     "type-check": "pnpm --filter @vxture/website type-check",
     "type-check:console": "pnpm --filter @vxture/console type-check",
