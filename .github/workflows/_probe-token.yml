@@ -1,0 +1,35 @@
+# 探针工作流：job 自带的 GITHUB_TOKEN 能否读到 vxture/vxture-design 发布的三个包？
+#
+# 为什么不能靠"跑一遍 CI 看绿不绿"：pnpm store 缓存会让 tarball 根本不回源
+# （日志里 reused 1165 / downloaded 0），装包成功与权限是否到位无关。
+# 这里直接问 registry，不经过 pnpm，答案没有第二种解释。
+name: _probe-token
+on: workflow_dispatch
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 用 github.token 读三个设计包的元数据
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          fail=0
+          for p in design-tokens design-ui design-system; do
+            code=$(curl -s -o /tmp/body -w '%{http_code}' \
+              -H "Authorization: Bearer $TOKEN" \
+              "https://npm.pkg.github.com/@vxture/$p")
+            case "$code" in
+              200) echo "  ✓ $p  200 可读" ;;
+              403) echo "  ✗ $p  403 有凭据无权 —— 包未授权给本仓"; fail=1 ;;
+              401) echo "  ✗ $p  401 凭据不被接受"; fail=1 ;;
+              *)   echo "  ? $p  $code"; head -c 200 /tmp/body; echo; fail=1 ;;
+            esac
+          done
+          echo "---"
+          if [ "$fail" = 0 ]; then
+            echo "结论：可弃用长期 PAT，改用 job 自带 GITHUB_TOKEN。"
+          else
+            echo "结论：还缺授权，PAT 必须留着。"
+          fi
+          exit $fail
