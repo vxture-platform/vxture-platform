@@ -5,6 +5,7 @@
  * @category Data - Layout
  */
 
+import type { IconName } from "@vxture/design-system";
 import type { Locale } from "@vxture-platform/shared";
 
 /**
@@ -18,11 +19,39 @@ export interface HeaderLogo {
 }
 
 /**
- * 导航菜单项
+ * Where a second-level nav entry points.
+ *
+ * `console` is resolved at render time because the console entry URL carries the
+ * current locale and a return-to context; it cannot be a static string here.
+ * `planned` renders a non-interactive row with a "planned" badge.
+ */
+export type HeaderNavTarget =
+  | { kind: "route"; href: string }
+  | { kind: "console" }
+  | { kind: "planned" };
+
+/**
+ * 二级导航项
+ */
+export interface HeaderNavChild {
+  key: string;
+  icon: IconName;
+  labelKey: string;
+  descriptionKey: string;
+  target: HeaderNavTarget;
+}
+
+/**
+ * 一级导航项
+ *
+ * `href: null` renders a plain label with no link — used by the platform name,
+ * which is a brand marker in the nav rather than a destination.
  */
 export interface HeaderNavItem {
-  href: string;
+  key: string;
+  href: string | null;
   labelKey: string;
+  children?: HeaderNavChild[];
 }
 
 /**
@@ -84,11 +113,45 @@ export const HEADER_DATA: HeaderData = {
     altKey: "logo.alt",
   },
   nav: [
-    { href: "/appcenter", labelKey: "nav.appcenter" },
-    { href: "/products", labelKey: "nav.products" },
-    { href: "/solutions", labelKey: "nav.solutions" },
-    { href: "/cases", labelKey: "nav.cases" },
-    { href: "/about", labelKey: "nav.about" },
+    { key: "platform", href: null, labelKey: "nav.platform" },
+    {
+      key: "products",
+      href: "/products",
+      labelKey: "nav.products",
+      children: [
+        {
+          key: "appcenter",
+          icon: "app-grid",
+          labelKey: "productsMenu.appcenter.label",
+          descriptionKey: "productsMenu.appcenter.description",
+          target: { kind: "route", href: "/appcenter" },
+        },
+        {
+          key: "platform-products",
+          icon: "cube",
+          labelKey: "productsMenu.platformProducts.label",
+          descriptionKey: "productsMenu.platformProducts.description",
+          target: { kind: "route", href: "/products" },
+        },
+        {
+          key: "industry-products",
+          icon: "buildings",
+          labelKey: "productsMenu.industryProducts.label",
+          descriptionKey: "productsMenu.industryProducts.description",
+          target: { kind: "planned" },
+        },
+        {
+          key: "workbench",
+          icon: "gauge",
+          labelKey: "productsMenu.workbench.label",
+          descriptionKey: "productsMenu.workbench.description",
+          target: { kind: "console" },
+        },
+      ],
+    },
+    { key: "solutions", href: "/solutions", labelKey: "nav.solutions" },
+    { key: "cases", href: "/cases", labelKey: "nav.cases" },
+    { key: "about", href: "/about", labelKey: "nav.about" },
   ],
   actions: [
     { href: "/signin", variant: "secondary", labelKey: "actions.signup" },

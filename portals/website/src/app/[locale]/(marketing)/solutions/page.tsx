@@ -1,5 +1,5 @@
-import { EmergencySolutionPage } from "@/components/marketing";
+import { SolutionsOverviewPage } from "@/components/marketing/solutions";
 
 export default function SolutionsPage() {
-  return <EmergencySolutionPage />;
+  return <SolutionsOverviewPage />;
 }

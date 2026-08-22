@@ -1,14 +1,34 @@
 {
   "logo": {
-    "text": "Vxture Studio",
-    "alt": "Vxture Studio"
+    "text": "Ruyin Studio",
+    "alt": "Ruyin Studio"
   },
   "nav": {
-    "appcenter": "Agent Marketplace",
+    "platform": "Ruyin Platform",
     "products": "Products",
     "solutions": "Solutions",
-    "cases": "Cases",
+    "cases": "Practices",
     "about": "Company"
+  },
+  "productsMenu": {
+    "openLabel": "Open products menu",
+    "planned": "Planned",
+    "appcenter": {
+      "label": "Agent Marketplace",
+      "description": "Ready-to-run agents, picked by scenario and tried instantly"
+    },
+    "platformProducts": {
+      "label": "Platform Products",
+      "description": "The shared foundation: data, models, orchestration, operations"
+    },
+    "industryProducts": {
+      "label": "Industry Products",
+      "description": "Packaged products tuned for a single industry — in the works"
+    },
+    "workbench": {
+      "label": "Ruyin Workbench",
+      "description": "Sign in to the console to manage subscriptions, usage and teams"
+    }
   },
   "actions": {
     "console": "Console",

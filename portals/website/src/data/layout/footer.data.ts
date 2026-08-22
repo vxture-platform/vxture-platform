@@ -188,7 +188,7 @@ export const FOOTER_DATA: FooterData = {
   copyright: {
     startYear: 2024,
     endYear: 2026,
-    companyName: "vxture.ai",
+    companyName: "Vxture Studio",
     allRightsReserved: true,
     textKey: "copyright.text",
   },
