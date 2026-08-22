@@ -7,10 +7,9 @@ description: Install pnpm, set up Node 24 with pnpm cache, and install dependenc
 inputs:
   node-auth-token:
     description: >-
-      读取 GitHub Packages 的 token。缺省用本 job 的 GITHUB_TOKEN——它对**同组织**
-      的包天然有 read:packages，且随 job 结束失效。跨组织安装（例如平台仓要装
-      vxture 组织的 @vxture/design-*）时由调用方显式传入一个有对方组织
-      read:packages 的 token。
+      读取 GitHub Packages 的 token。本仓**必须显式传入** secrets.NODE_AUTH_TOKEN，
+      不能靠 job 自带的 GITHUB_TOKEN 兜底——原因见下方 preflight 步骤的注释，那是
+      实测结论不是推断。缺省值留空只是为了让复合动作在别处仍可复用。
     required: false
     default: ""
 
@@ -23,6 +22,55 @@ runs:
       with:
         node-version: "24"
         cache: "pnpm"
+
+    # ── token preflight ────────────────────────────────────────────────────
+    # 装包前先问一句 registry：这个 token 到底读不读得到设计包？
+    #
+    # 补的是**归因**而不是能力。token 失效时 install 报的是依赖解析阶段深处的
+    # ERR_PNPM_FETCH_403，埋在上千行日志里，且 403 的字面意思是「有凭据但无权」，
+    # 看起来极像「没配 token」——而真实原因通常是 PAT 到期了。一次误判就是半天。
+    #
+    # ── 为什么不能改用 job 自带的 GITHUB_TOKEN（2026-08-22 实测）──────────
+    # 三个设计包的 repository 绑定已修好（全部指向 vxture/vxture-design），但
+    # **绑定不等于授权**：包还要显式把消费仓加进访问名单。而包属于 vxture org、
+    # 本仓在 vxture-platform org，包设置页的仓库选择器只列同 owner 的仓，跨 org
+    # 给不了。用 github.token 直接请求 registry，三个包一律 403。
+    #
+    # 所以长期 PAT 在「包保持 private + 两仓分属不同 org」下是唯一可行解，不是
+    # 偷懒。要去掉它只有两条路：把包改 public，或把两仓收进同一个 org。
+    #
+    # 附一条踩过的坑：**别用「跑一遍 CI 看绿不绿」验证这件事**。pnpm store 缓存
+    # 命中时 tarball 根本不回源（日志里 reused 1165 / downloaded 0），装包成功
+    # 与权限是否到位无关，那种绿是假的。要问就直接问 registry。
+    - name: Preflight — 确认 token 读得到 @vxture/design-*
+      shell: bash
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.node-auth-token || github.token }}
+      run: |
+        code=$(curl -s -o /dev/null -w '%{http_code}' \
+          -H "Authorization: Bearer $NODE_AUTH_TOKEN" \
+          "https://npm.pkg.github.com/@vxture/design-system")
+        [ "$code" = 200 ] && exit 0
+
+        echo "::error title=NODE_AUTH_TOKEN 读不到 @vxture/design-*::HTTP $code"
+        cat >&2 <<MSG
+
+        ── 装包必然会失败，先修 token ─────────────────────────────────────
+        registry 对 @vxture/design-system 返回 HTTP $code。
+
+          403 = 凭据被接受但无权 → **PAT 多半已过期**（最常见），或权限里
+                缺 read:packages。注意 403 不是「没配 token」，字面很误导。
+          401 = 凭据不被接受 → secret 为空或值不对。GitHub 里**缺失的 secret
+                会求值成空串而不是报错**，所以「没配」和「配错」症状一样。
+
+        修法：轮换一个带 read:packages 的 PAT，更新本仓 repo 级 secret
+        NODE_AUTH_TOKEN（私有仓 + free 版用不了组织级 secret，必须配在 repo 级）。
+
+        不要试图改用 job 自带的 GITHUB_TOKEN —— 2026-08-22 已实测三个包一律
+        403，原因见本文件注释。
+        ───────────────────────────────────────────────────────────────────
+        MSG
+        exit 1
 
     # 仓根 .npmrc 把 @vxture scope 指向 GitHub Packages，token 从 NODE_AUTH_TOKEN 取。
     # **GitHub Packages 即便包是公开的也要求鉴权**——设计三包拆仓之后没有这一步，
