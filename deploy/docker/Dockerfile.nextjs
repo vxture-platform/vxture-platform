@@ -8,7 +8,7 @@
 #   docker build -f deploy/docker/Dockerfile.nextjs \
 #     --build-arg PORTAL_PATH=portals/website \
 #     --build-arg PACKAGE_FILTER=@vxture/website \
-#     -t ghcr.io/vxture/platform_website:latest .
+#     -t ghcr.io/vxture-platform/platform_website:latest .
 
 ARG NODE_VERSION=24
 

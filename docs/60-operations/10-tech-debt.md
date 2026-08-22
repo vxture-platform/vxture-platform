@@ -888,7 +888,7 @@
 
 **描述**：需要"只重建某个/某些平台服务以重载其 env（不走全量部署）"时，在 worker-01 直接 `cd /srv/vxture/deploy && docker compose up -d <svc>` 会连踩两个陷阱，且第二个有拆容器风险：
 
-1. **registry 默认值陷阱**：`compose.platform.yml` 用 `${VX_IMAGE_REGISTRY:-ghcr.io}`，但生产实际跑阿里云 ACR（`crpi-…aliyuncs.com/vxture`），registry/namespace/tag 三变量存在 `/srv/vxture/runtime/.env`（部署脚本经 `read_compose_env` 读取），**不在 compose 目录**。裸跑 compose → 解析成 `ghcr.io/vxture/…:latest` → 私有仓 `denied` 拉取失败。
+1. **registry 默认值陷阱**：`compose.platform.yml` 用 `${VX_IMAGE_REGISTRY:-ghcr.io}`，但生产实际跑阿里云 ACR（`crpi-…aliyuncs.com/vxture`），registry/namespace/tag 三变量存在 `/srv/vxture/runtime/.env`（部署脚本经 `read_compose_env` 读取），**不在 compose 目录**。裸跑 compose → 解析成 `ghcr.io/vxture-platform/…:latest` → 私有仓 `denied` 拉取失败。
 2. **tag 注入陷阱**：`VX_IMAGE_TAG` 由晋升流水线注入具体 `sha-xxxxxxx`，`runtime/.env` 里是 `latest`，而本地并无 `:latest` 镜像 → 即便 registry 对了也拉不到；`--force-recreate` 在拉取失败前可能已停掉在跑的容器 → **单服务重建反而致其下线**。
 
 轮换时的可行绕法 = `set -a; . /srv/vxture/runtime/.env; set +a; docker compose -f compose.platform.yml up -d --pull never --no-deps <svc...>`（source 带全三变量 + `--pull never` 用本地在跑镜像 + `--no-deps` 不牵连 db/redis）。此法有效但纯口传，无脚本、无文档，下次换人必再踩。

@@ -8,7 +8,7 @@
 #   docker build -f deploy/docker/Dockerfile.nestjs \
 #     --build-arg SERVICE_PATH=bff/auth-bff \
 #     --build-arg PACKAGE_FILTER=@vxture/bff-auth \
-#     -t ghcr.io/vxture/platform_bff-auth:latest .
+#     -t ghcr.io/vxture-platform/platform_bff-auth:latest .
 
 ARG NODE_VERSION=24
 

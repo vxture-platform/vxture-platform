@@ -520,10 +520,10 @@ main / beta push
 
 目标 registry：
 
-| Registry   | 用途                     | 当前阶段 | 说明                               |
-| ---------- | ------------------------ | -------- | ---------------------------------- |
-| GHCR       | 现有镜像源、回退源、审计 | 保留     | 继续推送 `ghcr.io/vxture/*`        |
-| Aliyun ACR | 中国区/近端部署拉取      | 新增     | 部署优先拉取，解决 GHCR 拉取慢问题 |
+| Registry   | 用途                     | 当前阶段 | 说明                                 |
+| ---------- | ------------------------ | -------- | ------------------------------------ |
+| GHCR       | 现有镜像源、回退源、审计 | 保留     | 继续推送 `ghcr.io/vxture-platform/*` |
+| Aliyun ACR | 中国区/近端部署拉取      | 新增     | 部署优先拉取，解决 GHCR 拉取慢问题   |
 
 P3 采用可选启用策略：当 `ALIYUN_ACR_*` secrets 齐全时，`docker-build.yml` 在同一次 build 中同时推送 GHCR 与 Aliyun ACR；当 secrets 缺失时，workflow 只推送 GHCR，不阻断现有 beta/main 发布链路。部署同样优先使用 ACR，缺少 ACR secrets 时回退到 GHCR 默认镜像。
 
@@ -568,12 +568,12 @@ Aliyun ACR secret 命名建议：
 
 当前 `docker-build.yml` 只保留平台镜像和仍在本仓的 Varda 相关镜像。构建矩阵不等于部署边界；是否构建某个镜像不能推导出本仓可以部署 vx-worker-02。Ruyin 的实际部署与模板沉淀在 `vxture/agentstudio-ruyin`；Varda 的业务仓库迁移等待该模板验证后再规划。
 
-| 类别         | 服务                                       | GHCR 镜像名                   | ACR 镜像名                                                | Dockerfile                                 |
-| ------------ | ------------------------------------------ | ----------------------------- | --------------------------------------------------------- | ------------------------------------------ |
-| 门户         | website / console / admin                  | `ghcr.io/vxture/{name}`       | `$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_NAMESPACE/{name}`       | `Dockerfile.nextjs`                        |
-| 平台 BFF     | gateway / auth / website / console / admin | `ghcr.io/vxture/bff-{name}`   | `$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_NAMESPACE/bff-{name}`   | `Dockerfile.gateway` / `Dockerfile.nestjs` |
-| Agent BFF    | varda                                      | `ghcr.io/vxture/bff-{name}`   | `$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_NAMESPACE/bff-{name}`   | `Dockerfile.nestjs`                        |
-| Agent Server | varda                                      | `ghcr.io/vxture/agent-{name}` | `$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_NAMESPACE/agent-{name}` | `Dockerfile.nestjs-prisma`                 |
+| 类别         | 服务                                       | GHCR 镜像名                            | ACR 镜像名                                                | Dockerfile                                 |
+| ------------ | ------------------------------------------ | -------------------------------------- | --------------------------------------------------------- | ------------------------------------------ |
+| 门户         | website / console / admin                  | `ghcr.io/vxture-platform/{name}`       | `$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_NAMESPACE/{name}`       | `Dockerfile.nextjs`                        |
+| 平台 BFF     | gateway / auth / website / console / admin | `ghcr.io/vxture-platform/bff-{name}`   | `$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_NAMESPACE/bff-{name}`   | `Dockerfile.gateway` / `Dockerfile.nestjs` |
+| Agent BFF    | varda                                      | `ghcr.io/vxture-platform/bff-{name}`   | `$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_NAMESPACE/bff-{name}`   | `Dockerfile.nestjs`                        |
+| Agent Server | varda                                      | `ghcr.io/vxture-platform/agent-{name}` | `$ALIYUN_ACR_REGISTRY/$ALIYUN_ACR_NAMESPACE/agent-{name}` | `Dockerfile.nestjs-prisma`                 |
 
 P6a 起按路径影响范围跳过无关镜像；**B10（#234）进一步改为前置 `detect` job + 动态 matrix**：`detect` 调用 `scripts/workflows/classify-changes.mjs --matrix`（镜像构建配置外置 `scripts/workflows/images.mjs`，单一数据源）算出需重建的镜像集合，`build` job 用 `fromJSON(needs.detect.outputs.matrix)` 动态展开——docs/scripts-only 变更产出 **0 腿**（build job 整体跳过，不再逐腿自跳过），单包改只起受影响腿。旧的静态 11 项 `matrix.include` 与 per-leg classify 已移除。release tag 仍构建全部镜像，`package.json` / lockfile / workspace 配置 / `.dockerignore` / Dockerfile / `packages/shared` / `packages/core` 变更按全局影响处理。
 
