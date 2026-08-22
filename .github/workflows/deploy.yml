@@ -67,7 +67,7 @@ jobs:
     # ② production 触发必需审批人门控（tag 部署策略已限 v*.*.* 才能进 production）。
     environment: ${{ needs.resolve.outputs.env }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       # deploy 与 docker-build 由同一 tag 并行触发、无先后依赖。过审批门后先确保本 tag
       # 的 docker-build 已成功（镜像已推 ACR），否则 host 拉取会 image not found
