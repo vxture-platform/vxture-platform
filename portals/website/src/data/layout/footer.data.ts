@@ -5,6 +5,8 @@
  * @category Data - Layout
  */
 
+import { COMPANY_CONTACT } from "@/data/company/contact.data";
+
 /**
  * 品牌信息配置
  */
@@ -109,11 +111,8 @@ export const FOOTER_DATA: FooterData = {
     descriptionKey: "brand.description",
     addressKey: "brand.address",
   },
-  contact: {
-    contact_phone: "400-888-2345",
-    service_email: "support@vxture.com",
-    partner_email: "partner@vxture.com",
-  },
+  // 取值来自 data/company/contact.data.ts —— 页脚与联系页共用一份，不各写各的。
+  contact: COMPANY_CONTACT,
   socialEnabled: false,
   social: [
     {

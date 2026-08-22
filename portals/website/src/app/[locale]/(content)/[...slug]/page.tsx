@@ -135,7 +135,6 @@ const STUB_TITLES: Record<string, string> = {
   insights: "行业洞察",
   careers: "加入我们",
   certifications: "认证与合规",
-  contact: "联系我们",
   changelog: "更新日志",
 };
 

@@ -1,18 +1,53 @@
 {
-  "title": "Contact Us",
-  "description": "Have any questions? We are here to help",
-  "form": {
-    "name": "Name",
-    "email": "Email",
-    "subject": "Subject",
-    "message": "Message",
-    "submit": "Send",
-    "success": "Sent successfully, we will reply as soon as possible"
+  "hero": {
+    "eyebrow": "Contact Us",
+    "title": "Reaching the right person beats reaching the right form",
+    "description": "We split contact by what you actually need. Already using the product, or evaluating it? Take the support line. Want to bring your own industry capability onto Ruyin? Take the ecosystem line. Pick the wrong one and we will simply pass you to the right colleague.",
+    "patternAlt": "Decorative pattern for the contact page"
   },
-  "info": {
-    "email": "contact@vxture.ai",
-    "phone": "400-123-4567",
-    "address": "Chaoyang District, Beijing",
-    "workingHours": "Monday to Friday 9:00-18:00"
+  "channels": {
+    "support": {
+      "label": "Sales & Support",
+      "title": "What to pick, how to use it, who to call when it breaks",
+      "description": "Evaluation, trials, provisioning and billing, plus day-to-day tickets and incidents all land here. Same-day reply during business hours.",
+      "emailLabel": "Service mailbox",
+      "phoneLabel": "Service hotline",
+      "items": [
+        "Product selection and capability boundaries",
+        "Trials, quotes, and provisioning",
+        "Subscription, usage, and billing questions",
+        "Ticket intake and incident response"
+      ],
+      "action": "Email support"
+    },
+    "ecosystem": {
+      "label": "Ecosystem",
+      "title": "Bring your industry capability onto the platform",
+      "description": "Solution partners, technology and integration partners, channel and advisory partners all start here. The domain knowledge and the customer relationship stay with you; we only take the hard, generic engineering underneath.",
+      "emailLabel": "Partnership mailbox",
+      "items": [
+        "Co-built industry solutions and joint delivery",
+        "Bringing existing systems, algorithms, or hardware in",
+        "Regional channel and advisory partnerships",
+        "Joint marketing and shared case studies"
+      ],
+      "action": "Email the ecosystem team",
+      "note": "Still exploring? You do not need a finished scenario to start the conversation."
+    }
+  },
+  "facts": {
+    "title": "Company details",
+    "address": {
+      "label": "Office",
+      "value": "No.100 Keji Road, Hi-Tech Zone, Xi'an, Shaanxi, China"
+    },
+    "hours": {
+      "label": "Business hours",
+      "value": "Mon–Fri, 9:00–18:00 (GMT+8)"
+    },
+    "response": {
+      "label": "Response time",
+      "value": "Usually same day during business hours"
+    }
   }
 }

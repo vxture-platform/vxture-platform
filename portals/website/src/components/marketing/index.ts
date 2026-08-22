@@ -20,5 +20,6 @@ export { default as EmergencySolutionPage } from "./EmergencySolutionPage";
 export { default as BestPracticePage } from "./BestPracticePage";
 export { default as AgentMarketplacePage } from "./AgentMarketplacePage";
 export { default as AboutUsPage } from "./AboutUsPage";
+export { default as ContactPage } from "./ContactPage";
 export { default as ThemedHeroImage } from "./ThemedHeroImage";
 export { default as AnimatedHeroBg } from "./AnimatedHeroBg";

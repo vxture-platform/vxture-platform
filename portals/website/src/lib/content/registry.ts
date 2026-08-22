@@ -40,7 +40,9 @@ export const CONTENT_REGISTRY: Record<ContentSection, ContentSectionConfig> = {
   insights: { loader: createStubLoader("insights") },
   careers: { loader: createStubLoader("careers") },
   certifications: { loader: createStubLoader("certifications") },
-  contact: { loader: createStubLoader("contact") },
+  // contact 已于 2026-08-22 出栈：/contact 有了真实页面，落在
+  // (marketing)/contact 路由上。留在这里会和它撞路由（本 catch-all 是
+  // dynamicParams=false 的静态生成，会把 /contact 也预渲染成占位页）。
   changelog: { loader: createStubLoader("changelog") },
 };
 
