@@ -4,7 +4,9 @@
 # （日志里 reused 1165 / downloaded 0），装包成功与权限是否到位无关。
 # 这里直接问 registry，不经过 pnpm，答案没有第二种解释。
 name: _probe-token
-on: workflow_dispatch
+on:
+  push:
+    branches: [test/token-independence]
 
 jobs:
   probe:
