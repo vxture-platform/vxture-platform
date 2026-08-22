@@ -32,7 +32,7 @@ services:
   # ── 数据层 ────────────────────────────────────────────────────────────────
 
   website:
-    image: ghcr.io/vxture/website:latest
+    image: ghcr.io/vxture-platform/website:latest
     container_name: vx-website
     restart: unless-stopped
     networks: [vxture-prod]
@@ -47,7 +47,7 @@ services:
     # 不暴露端口，nginx 通过容器网络访问
 
   console:
-    image: ghcr.io/vxture/console:latest
+    image: ghcr.io/vxture-platform/console:latest
     container_name: vx-console
     restart: unless-stopped
     networks: [vxture-prod]
@@ -60,7 +60,7 @@ services:
       retries: 3
 
   admin:
-    image: ghcr.io/vxture/admin:latest
+    image: ghcr.io/vxture-platform/admin:latest
     container_name: vx-admin
     restart: unless-stopped
     networks: [vxture-prod]
@@ -75,7 +75,7 @@ services:
   # ── 平台 BFF 层 ──────────────────────────────────────────────────────────
 
   auth-bff:
-    image: ghcr.io/vxture/bff-auth:latest
+    image: ghcr.io/vxture-platform/bff-auth:latest
     container_name: vx-auth-bff
     restart: unless-stopped
     networks: [vxture-prod]
@@ -90,7 +90,7 @@ services:
       retries: 3
 
   gateway-bff:
-    image: ghcr.io/vxture/bff-gateway:latest
+    image: ghcr.io/vxture-platform/bff-gateway:latest
     container_name: vx-gateway-bff
     restart: unless-stopped
     networks: [vxture-prod]
@@ -103,7 +103,7 @@ services:
     # 不暴露端口，nginx 通过容器网络访问
 
   website-bff:
-    image: ghcr.io/vxture/bff-website:latest
+    image: ghcr.io/vxture-platform/bff-website:latest
     container_name: vx-website-bff
     restart: unless-stopped
     networks: [vxture-prod]
@@ -118,7 +118,7 @@ services:
       retries: 3
 
   console-bff:
-    image: ghcr.io/vxture/bff-console:latest
+    image: ghcr.io/vxture-platform/bff-console:latest
     container_name: vx-console-bff
     restart: unless-stopped
     networks: [vxture-prod]
@@ -133,7 +133,7 @@ services:
       retries: 3
 
   admin-bff:
-    image: ghcr.io/vxture/bff-admin:latest
+    image: ghcr.io/vxture-platform/bff-admin:latest
     container_name: vx-admin-bff
     restart: unless-stopped
     networks: [vxture-prod]

@@ -1,7 +1,7 @@
 # Dockerfile.gateway — gateway-bff 专用 Dockerfile（纯 Node.js .mjs，无构建步骤）
 # 用法（从 repo 根目录执行）：
 #   docker build -f deploy/docker/Dockerfile.gateway \
-#     -t ghcr.io/vxture/platform_bff-gateway:latest .
+#     -t ghcr.io/vxture-platform/platform_bff-gateway:latest .
 
 ARG NODE_VERSION=24
 

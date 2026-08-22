@@ -201,7 +201,12 @@ test("matrix: portals/admin → 仅 admin，且携带完整构建配置", () => 
     ["platform_admin"],
   );
   assert.equal(include[0].dockerfile, "deploy/docker/Dockerfile.nextjs");
-  assert.equal(include[0].image, "ghcr.io/vxture/platform_admin");
+  // 断言用推导出的 owner 拼接，而不是写死组织名——写死的话，下次迁仓时
+  // 测试会跟着源码一起绿，正好挡不住它本该挡的那个回归。
+  assert.equal(
+    include[0].image,
+    `ghcr.io/${process.env.GITHUB_REPOSITORY_OWNER || "vxture-platform"}/platform_admin`,
+  );
   assert.match(include[0]["build-args"], /PACKAGE_FILTER=@vxture\/admin/u);
 });
 
