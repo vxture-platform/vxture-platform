@@ -329,3 +329,151 @@
   --vx-website-footer-brand-basis: 30%;
   --vx-website-footer-links-basis: 70%;
 }
+
+/* ── 五、Solutions 行业汇总页 ─────────────────────────────────────────────
+ *
+ * Why the whole gradient/grid recipe lives here rather than in src/styles:
+ * `ds/no-app-hardcoded-scale` and `ds/no-raw-color` forbid px/rem and literal
+ * colours in application CSS, and `ds/no-app-vx-token-definitions` forbids new
+ * `--vx-*` there. `assets/` is the exempt bridge, so the values land here and
+ * src/styles only consumes them by name.
+ *
+ * Every colour is derived from a T1 ramp through color-mix, so the light/dark
+ * split below only has to restate what actually differs.
+ */
+:root {
+  /* Hero: layered mesh gradient, engineering grid, oversized right-hand mark. */
+  --vx-website-solutions-hero-bg:
+    radial-gradient(
+      70% 92% at 78% 6%,
+      color-mix(in srgb, var(--vx-color-sky-300) 62%, transparent) 0%,
+      transparent 62%
+    ),
+    radial-gradient(
+      58% 72% at 6% 94%,
+      color-mix(in srgb, var(--vx-color-brand-300) 44%, transparent) 0%,
+      transparent 66%
+    ),
+    linear-gradient(
+      152deg,
+      var(--vx-color-brand-50) 0%,
+      var(--vx-color-sky-50) 46%,
+      var(--vx-color-white) 100%
+    );
+  --vx-website-solutions-grid-line: color-mix(
+    in srgb,
+    var(--vx-color-brand-500) 10%,
+    transparent
+  );
+  --vx-website-solutions-grid-image:
+    repeating-linear-gradient(
+      0deg,
+      var(--vx-website-solutions-grid-line) 0 1px,
+      transparent 1px 64px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      var(--vx-website-solutions-grid-line) 0 1px,
+      transparent 1px 64px
+    );
+  --vx-website-solutions-grid-mask: radial-gradient(
+    120% 100% at 70% 20%,
+    var(--vx-color-black) 0%,
+    transparent 78%
+  );
+  --vx-website-solutions-pattern-color: color-mix(
+    in srgb,
+    var(--vx-color-brand-600) 30%,
+    transparent
+  );
+  --vx-website-solutions-pattern-accent: color-mix(
+    in srgb,
+    var(--vx-color-sky-500) 42%,
+    transparent
+  );
+  --vx-website-solutions-pattern-width: 58%;
+  --vx-website-solutions-pattern-offset-right: -6%;
+  --vx-website-solutions-pattern-opacity: 0.85;
+  --vx-website-solutions-hero-fade: linear-gradient(
+    180deg,
+    transparent 0%,
+    var(--vx-page-bg) 100%
+  );
+  --vx-website-solutions-hero-fade-height: 96px;
+
+  /*
+   * Industry sections: one accent hue per industry. Only the hue lives here —
+   * anything derived from it (washes, soft fills, edges) must be written at the
+   * point of use in src/styles, because a custom property declared on :root is
+   * computed on :root, where --solutions-accent does not exist yet and the whole
+   * declaration would silently resolve to nothing.
+   */
+  --vx-website-solutions-accent-sky: var(--vx-color-sky-500);
+  --vx-website-solutions-accent-red: var(--vx-color-red-500);
+  --vx-website-solutions-accent-amber: var(--vx-color-amber-500);
+  --vx-website-solutions-accent-emerald: var(--vx-color-emerald-500);
+  --vx-website-solutions-panel-bg: color-mix(
+    in srgb,
+    var(--vx-color-white) 74%,
+    transparent
+  );
+  --vx-website-solutions-panel-border: color-mix(
+    in srgb,
+    var(--vx-color-neutral-900) 8%,
+    transparent
+  );
+  --vx-website-solutions-panel-shadow: 0 18px 48px
+    color-mix(in srgb, var(--vx-color-neutral-900) 10%, transparent);
+  --vx-website-solutions-section-padding-top: 96px;
+  --vx-website-solutions-section-padding-bottom: 64px;
+  --vx-website-solutions-hero-card-min-height: 128px;
+  --vx-website-solutions-visual-min-height: 320px;
+}
+
+.dark,
+:root.dark {
+  --vx-website-solutions-hero-bg:
+    radial-gradient(
+      70% 92% at 78% 6%,
+      color-mix(in srgb, var(--vx-color-brand-500) 34%, transparent) 0%,
+      transparent 62%
+    ),
+    radial-gradient(
+      58% 72% at 6% 94%,
+      color-mix(in srgb, var(--vx-color-sky-500) 22%, transparent) 0%,
+      transparent 66%
+    ),
+    linear-gradient(
+      152deg,
+      var(--vx-color-neutral-950) 0%,
+      var(--vx-color-neutral-900) 54%,
+      var(--vx-color-neutral-800) 100%
+    );
+  --vx-website-solutions-grid-line: color-mix(
+    in srgb,
+    var(--vx-color-sky-300) 12%,
+    transparent
+  );
+  --vx-website-solutions-pattern-color: color-mix(
+    in srgb,
+    var(--vx-color-sky-300) 34%,
+    transparent
+  );
+  --vx-website-solutions-pattern-accent: color-mix(
+    in srgb,
+    var(--vx-color-brand-300) 46%,
+    transparent
+  );
+  --vx-website-solutions-panel-bg: color-mix(
+    in srgb,
+    var(--vx-color-neutral-900) 68%,
+    transparent
+  );
+  --vx-website-solutions-panel-border: color-mix(
+    in srgb,
+    var(--vx-color-white) 10%,
+    transparent
+  );
+  --vx-website-solutions-panel-shadow: 0 18px 48px
+    color-mix(in srgb, var(--vx-color-black) 40%, transparent);
+}

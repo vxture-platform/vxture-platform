@@ -39,8 +39,16 @@ type Practice = {
 
 const PRACTICE_IMAGE = "/images/cases/case-intro-03.webp";
 
+/**
+ * 应急行业详情页（/solutions/emergency）。
+ *
+ * 2026-08-22: /solutions 收敛为多行业汇总页后，本页从「解决方案」整体降为应急
+ * 这一个行业的详情，翻译随之从 `solutions.*` 移到 `solutions.emergency.*`，
+ * 转化出口统一改到 /contact（与汇总页的方案咨询同一个落点）。
+ */
 export default function EmergencySolutionPage() {
-  const t = useTranslations("solutions");
+  const t = useTranslations("solutions.emergency");
+  const tShared = useTranslations("solutions");
   const highlights = t.raw("hero.highlights") as string[];
   const pillars = t.raw("architecture.items") as Pillar[];
   const flow = t.raw("flow.steps") as FlowStep[];
@@ -54,6 +62,13 @@ export default function EmergencySolutionPage() {
         <AnimatedHeroBg />
         <div className="vx-hero-content">
           <div className="max-w-website-3xl">
+            <Link
+              href="/solutions"
+              className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-vx-brand-600 transition-colors hover:text-vx-brand-700 dark:text-vx-brand-300 dark:hover:text-vx-brand-200"
+            >
+              <Icon name="arrow-left" className="h-4 w-4" />
+              {tShared("detail.back")}
+            </Link>
             <p className="vx-website-hero-eyebrow mb-4 text-sm font-semibold uppercase text-vx-brand-600 dark:text-vx-info-200">
               {t("hero.eyebrow")}
             </p>
@@ -75,7 +90,7 @@ export default function EmergencySolutionPage() {
             </div>
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <Button asChild size="xl" className="px-5 hover:bg-vx-brand-500">
-                <Link href="/signin">{t("hero.primaryAction")}</Link>
+                <Link href="/contact">{t("hero.primaryAction")}</Link>
               </Button>
               <Button
                 asChild
@@ -327,7 +342,7 @@ export default function EmergencySolutionPage() {
             size="xl"
             className="w-max px-5 hover:bg-vx-brand-500"
           >
-            <Link href="/signin">{t("cta.action")}</Link>
+            <Link href="/contact">{t("cta.action")}</Link>
           </Button>
         </div>
       </section>

@@ -147,6 +147,130 @@
   flex-basis: var(--vx-website-footer-links-basis);
 }
 
+/* ── Solutions: industry overview page ──────────────────────────────────────
+ *
+ * Values come from assets/legacy-tokens/tokens-website.css §5; this file only
+ * assembles them. See that file for why the raw numbers cannot live here.
+ */
+
+.vx-solutions-hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--vx-website-solutions-hero-bg);
+}
+
+.vx-solutions-grid-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: var(--vx-website-solutions-grid-image);
+  mask-image: var(--vx-website-solutions-grid-mask);
+}
+
+.vx-solutions-hero-pattern {
+  position: absolute;
+  top: 50%;
+  right: var(--vx-website-solutions-pattern-offset-right);
+  width: var(--vx-website-solutions-pattern-width);
+  transform: translateY(-50%);
+  opacity: var(--vx-website-solutions-pattern-opacity);
+  pointer-events: none;
+  color: var(--vx-website-solutions-pattern-color);
+}
+
+/* Second hue inside the mark, so it does not read as a flat monochrome decal. */
+.vx-solutions-pattern-accent {
+  color: var(--vx-website-solutions-pattern-accent);
+}
+
+.vx-solutions-hero-fade {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: var(--vx-website-solutions-hero-fade-height);
+  pointer-events: none;
+  background: var(--vx-website-solutions-hero-fade);
+}
+
+.vx-solutions-hero-card {
+  min-height: var(--vx-website-solutions-hero-card-min-height);
+}
+
+.vx-solutions-industry {
+  --solutions-accent: var(--vx-website-solutions-accent-sky);
+  position: relative;
+  overflow: hidden;
+  background: var(--vx-page-bg);
+  padding-top: var(--vx-website-solutions-section-padding-top);
+  padding-bottom: var(--vx-website-solutions-section-padding-bottom);
+}
+
+/* Accent wash. Written here rather than as a token: it reads --solutions-accent,
+ * which only exists on the section, and a :root token would compute to nothing. */
+.vx-solutions-industry::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      46% 64% at 94% 4%,
+      color-mix(in srgb, var(--solutions-accent) 26%, transparent) 0%,
+      transparent 62%
+    ),
+    radial-gradient(
+      38% 52% at -2% 102%,
+      color-mix(in srgb, var(--solutions-accent) 14%, transparent) 0%,
+      transparent 68%
+    );
+}
+
+.vx-solutions-industry--sky {
+  --solutions-accent: var(--vx-website-solutions-accent-sky);
+}
+
+.vx-solutions-industry--red {
+  --solutions-accent: var(--vx-website-solutions-accent-red);
+}
+
+.vx-solutions-industry--amber {
+  --solutions-accent: var(--vx-website-solutions-accent-amber);
+}
+
+.vx-solutions-industry--emerald {
+  --solutions-accent: var(--vx-website-solutions-accent-emerald);
+}
+
+.vx-solutions-accent-text {
+  color: var(--solutions-accent);
+}
+
+.vx-solutions-accent-fill {
+  background: var(--solutions-accent);
+}
+
+.vx-solutions-accent-soft {
+  background: color-mix(in srgb, var(--solutions-accent) 16%, transparent);
+  color: var(--solutions-accent);
+}
+
+.vx-solutions-accent-edge {
+  border-color: color-mix(in srgb, var(--solutions-accent) 38%, transparent);
+  color: var(--solutions-accent);
+}
+
+.vx-solutions-panel {
+  background: var(--vx-website-solutions-panel-bg);
+  border: var(--vx-website-section-border-width) solid
+    var(--vx-website-solutions-panel-border);
+  box-shadow: var(--vx-website-solutions-panel-shadow);
+}
+
+.vx-solutions-visual {
+  min-height: var(--vx-website-solutions-visual-min-height);
+}
+
 .vx-pricing-card-selected {
   box-shadow:
     0 0 0 4px rgb(from var(--primary) r g b / 0.12),

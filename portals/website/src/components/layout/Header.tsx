@@ -15,10 +15,14 @@
  */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale as useNextIntlLocale, useTranslations } from "next-intl";
 import Image from "next/image";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+  Icon,
   ShellFullscreenToggle,
   ShellLocaleSwitcher,
   ShellPanelSlots,
@@ -33,6 +37,7 @@ import type {
   ShellThemePreference,
 } from "@vxture/design-system";
 import { HEADER_DATA } from "@/data/layout/header.data";
+import type { HeaderNavChild, HeaderNavItem } from "@/data/layout/header.data";
 import { useAuthStore } from "@/stores/auth.store";
 import { Link, usePathname, useRouter } from "@/lib/i18n/navigation";
 import {
@@ -160,6 +165,222 @@ function HeaderQuickTools() {
       <HeaderLocaleSelect />
       <HeaderFullscreenToggle />
     </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// 一级 / 二级导航
+// ----------------------------------------------------------------------------
+
+/** Shared look for every first-level nav entry, linked or not. */
+const NAV_ITEM_CLASS =
+  "flex items-center gap-1 font-medium text-vx-gray-800 transition-colors duration-300 dark:text-vx-text-secondary";
+const NAV_INTERACTIVE_CLASS = `${NAV_ITEM_CLASS} hover:text-vx-info dark:hover:text-vx-info`;
+/** Delay before a hover-opened menu closes, so the pointer can cross the gap. */
+const NAV_MENU_CLOSE_DELAY_MS = 120;
+
+/**
+ * Second-level row content. Shared by the linked and the planned states so both
+ * keep the same icon / label / description rhythm.
+ */
+function HeaderNavChildBody({ child }: { child: HeaderNavChild }) {
+  const t = useTranslations("layout.header");
+  const isPlanned = child.target.kind === "planned";
+
+  return (
+    <>
+      <span
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${
+          isPlanned
+            ? "bg-vx-gray-100 text-vx-gray-400 dark:bg-vx-gray-800 dark:text-vx-gray-500"
+            : "bg-vx-brand-50 text-vx-brand-600 dark:bg-vx-brand-950/50 dark:text-vx-brand-200"
+        }`}
+      >
+        <Icon name={child.icon} className="h-5 w-5" />
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="flex items-center gap-2">
+          <span
+            className={`text-sm font-semibold ${
+              isPlanned
+                ? "text-vx-gray-400 dark:text-vx-gray-500"
+                : "text-vx-gray-900 dark:text-vx-white"
+            }`}
+          >
+            {t(child.labelKey)}
+          </span>
+          {isPlanned ? (
+            <span className="rounded-full border border-vx-gray-200 px-2 py-0.5 text-xs font-medium text-vx-gray-400 dark:border-vx-gray-700 dark:text-vx-gray-500">
+              {t("productsMenu.planned")}
+            </span>
+          ) : null}
+        </span>
+        <span className="mt-1 text-xs leading-5 text-vx-gray-500 dark:text-vx-gray-400">
+          {t(child.descriptionKey)}
+        </span>
+      </span>
+    </>
+  );
+}
+
+const NAV_CHILD_ROW_CLASS =
+  "flex w-full items-start gap-3 rounded-lg px-3 py-3 text-left transition-colors";
+
+/** One second-level entry, routed by its target kind. */
+function HeaderNavChildRow({
+  child,
+  consoleUrl,
+}: {
+  child: HeaderNavChild;
+  consoleUrl: string;
+}) {
+  if (child.target.kind === "planned") {
+    return (
+      <span className={`${NAV_CHILD_ROW_CLASS} cursor-default`} aria-disabled>
+        <HeaderNavChildBody child={child} />
+      </span>
+    );
+  }
+
+  const hoverClass =
+    "hover:bg-vx-brand-50/70 focus-visible:bg-vx-brand-50/70 focus-visible:outline-none dark:hover:bg-vx-white/5 dark:focus-visible:bg-vx-white/5";
+
+  // The console lives on another origin, so it cannot use the locale-aware Link.
+  if (child.target.kind === "console") {
+    return (
+      <a
+        href={consoleUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`${NAV_CHILD_ROW_CLASS} ${hoverClass}`}
+      >
+        <HeaderNavChildBody child={child} />
+      </a>
+    );
+  }
+
+  return (
+    <Link
+      href={child.target.href}
+      className={`${NAV_CHILD_ROW_CLASS} ${hoverClass}`}
+    >
+      <HeaderNavChildBody child={child} />
+    </Link>
+  );
+}
+
+/**
+ * A first-level entry that owns a second level. Opens on hover (marketing
+ * convention) and on click/keyboard through the Radix trigger, so it stays
+ * reachable without a pointer.
+ */
+function HeaderNavMenu({
+  item,
+  consoleUrl,
+}: {
+  item: HeaderNavItem;
+  consoleUrl: string;
+}) {
+  const t = useTranslations("layout.header");
+  const [open, setOpen] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearCloseTimer = useCallback(() => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }, []);
+
+  const openNow = useCallback(() => {
+    clearCloseTimer();
+    setOpen(true);
+  }, [clearCloseTimer]);
+
+  const closeSoon = useCallback(() => {
+    clearCloseTimer();
+    closeTimerRef.current = setTimeout(
+      () => setOpen(false),
+      NAV_MENU_CLOSE_DELAY_MS,
+    );
+  }, [clearCloseTimer]);
+
+  useEffect(() => clearCloseTimer, [clearCloseTimer]);
+
+  return (
+    <div
+      className="relative"
+      onMouseEnter={openNow}
+      onMouseLeave={closeSoon}
+      onFocus={openNow}
+    >
+      {/* modal={false}: this is a marketing menu, it must not lock page scroll. */}
+      <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
+        <DropdownMenuTrigger
+          aria-label={t("productsMenu.openLabel")}
+          className={`${NAV_INTERACTIVE_CLASS} cursor-pointer bg-transparent`}
+        >
+          {t(item.labelKey)}
+          <Icon
+            name="chevron-down"
+            className={`h-4 w-4 transition-transform duration-200 ${
+              open ? "rotate-180" : ""
+            }`}
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          sideOffset={12}
+          className="w-96 p-2"
+          onMouseEnter={openNow}
+          onMouseLeave={closeSoon}
+        >
+          {(item.children ?? []).map((child) => (
+            <HeaderNavChildRow
+              key={child.key}
+              child={child}
+              consoleUrl={consoleUrl}
+            />
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+/** Full first-level nav. */
+function HeaderNav({ consoleUrl }: { consoleUrl: string }) {
+  const t = useTranslations("layout.header");
+
+  return (
+    <nav className="hidden items-center gap-8 md:flex">
+      {HEADER_DATA.nav.map((item) => {
+        if (item.children?.length) {
+          return (
+            <HeaderNavMenu key={item.key} item={item} consoleUrl={consoleUrl} />
+          );
+        }
+
+        // 平台名只是导航里的品牌标记，不是目的地——渲染成纯文本。
+        if (!item.href) {
+          return (
+            <span key={item.key} className={NAV_ITEM_CLASS}>
+              {t(item.labelKey)}
+            </span>
+          );
+        }
+
+        return (
+          <Link
+            key={item.key}
+            href={item.href}
+            className={NAV_INTERACTIVE_CLASS}
+          >
+            {t(item.labelKey)}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -429,17 +650,7 @@ export default function Header() {
           </Link>
 
           {/* Navigation */}
-          <nav className="hidden md:flex space-x-8">
-            {HEADER_DATA.nav.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="transition-colors duration-300 text-vx-gray-800 dark:text-vx-text-secondary font-medium hover:text-vx-info dark:hover:text-vx-info"
-              >
-                {t(item.labelKey)}
-              </Link>
-            ))}
-          </nav>
+          <HeaderNav consoleUrl={consoleUrl} />
 
           {/* 工具栏：访客设置 / CTA / 登录用户入口 */}
           <div className="flex items-center gap-4">
