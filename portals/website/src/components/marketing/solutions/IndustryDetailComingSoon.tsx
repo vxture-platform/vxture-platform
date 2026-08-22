@@ -7,6 +7,8 @@
  * detail page lands here instead of a 404, and the consult CTA still points at
  * /contact like every other one.
  *
+ * 形状由共享的 ComingSoonPage 模板给出——全站待建设页只有一种长相。
+ *
  * @package @vxture/website
  * @layer Presentation
  * @category Components - Solutions
@@ -15,8 +17,7 @@
  */
 
 import { useTranslations } from "next-intl";
-import { Button, Icon } from "@vxture/design-system";
-import { Link } from "@/lib/i18n/navigation";
+import ComingSoonPage from "../ComingSoonPage";
 import type { SolutionIndustry } from "@/data/solutions/solutions.data";
 
 export default function IndustryDetailComingSoon({
@@ -25,43 +26,17 @@ export default function IndustryDetailComingSoon({
   industry: SolutionIndustry;
 }) {
   const t = useTranslations("solutions");
-  const base = `industries.${industry.id}`;
 
   return (
-    <div className="vx-page-surface">
-      <section
-        className={`vx-solutions-industry vx-solutions-industry--${industry.accent} flex min-h-screen items-center`}
-      >
-        <div className="relative mx-auto w-full max-w-website-4xl px-6 py-24 text-center lg:px-8">
-          <span className="vx-solutions-accent-soft mx-auto flex h-14 w-14 items-center justify-center rounded-xl">
-            <Icon name={industry.icon} className="h-7 w-7" />
-          </span>
-          <p className="vx-solutions-accent-text mt-6 text-xs font-semibold uppercase tracking-widest">
-            {t("detail.comingSoon.eyebrow")}
-          </p>
-          <h1 className="font-brand mt-3 text-4xl font-bold text-vx-gray-900 dark:text-vx-white md:text-5xl">
-            {t(`${base}.name`)}
-          </h1>
-          <p className="mt-4 text-lg font-semibold text-vx-gray-700 dark:text-vx-gray-200">
-            {t("detail.comingSoon.title")}
-          </p>
-          <p className="mx-auto mt-5 max-w-website-3xl text-sm leading-7 text-vx-gray-600 dark:text-vx-gray-300">
-            {t("detail.comingSoon.description")}
-          </p>
-
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            <Button asChild size="lg" className="px-5 hover:bg-vx-brand-500">
-              <Link href="/contact">{t("detail.comingSoon.action")}</Link>
-            </Button>
-            <Button asChild variant="outline" size="lg" className="px-5">
-              <Link href="/solutions">
-                <Icon name="arrow-left" className="h-4 w-4" />
-                {t("detail.back")}
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </section>
-    </div>
+    <ComingSoonPage
+      icon={industry.icon}
+      accent={industry.accent}
+      eyebrow={t("detail.comingSoon.eyebrow")}
+      title={t(`industries.${industry.id}.name`)}
+      subtitle={t("detail.comingSoon.title")}
+      description={t("detail.comingSoon.description")}
+      primaryAction={{ href: "/contact", label: t("detail.comingSoon.action") }}
+      backAction={{ href: "/solutions", label: t("detail.back") }}
+    />
   );
 }

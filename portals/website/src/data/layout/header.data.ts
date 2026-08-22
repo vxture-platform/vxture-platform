@@ -19,37 +19,27 @@ export interface HeaderLogo {
 }
 
 /**
- * Where a second-level nav entry points.
- *
- * `console` is resolved at render time because the console entry URL carries the
- * current locale and a return-to context; it cannot be a static string here.
- * `planned` renders a non-interactive row with a "planned" badge.
- */
-export type HeaderNavTarget =
-  | { kind: "route"; href: string }
-  | { kind: "console" }
-  | { kind: "planned" };
-
-/**
  * 二级导航项
+ *
+ * 每一项都必须有真实落点：还没成稿的挂「待建设」页而不是做成不可点的行——
+ * 点了什么都不发生，比给一个说明状态的页面更糟。状态用 `badgeKey` 标出来。
  */
 export interface HeaderNavChild {
   key: string;
   icon: IconName;
   labelKey: string;
   descriptionKey: string;
-  target: HeaderNavTarget;
+  href: string;
+  /** 状态标记（如「开发中」）。不给则不渲染。 */
+  badgeKey?: string;
 }
 
 /**
  * 一级导航项
- *
- * `href: null` renders a plain label with no link — used by the platform name,
- * which is a brand marker in the nav rather than a destination.
  */
 export interface HeaderNavItem {
   key: string;
-  href: string | null;
+  href: string;
   labelKey: string;
   children?: HeaderNavChild[];
 }
@@ -113,7 +103,7 @@ export const HEADER_DATA: HeaderData = {
     altKey: "logo.alt",
   },
   nav: [
-    { key: "platform", href: null, labelKey: "nav.platform" },
+    { key: "platform", href: "/", labelKey: "nav.platform" },
     {
       key: "products",
       href: "/products",
@@ -124,28 +114,31 @@ export const HEADER_DATA: HeaderData = {
           icon: "app-grid",
           labelKey: "productsMenu.appcenter.label",
           descriptionKey: "productsMenu.appcenter.description",
-          target: { kind: "route", href: "/appcenter" },
+          href: "/appcenter",
         },
         {
           key: "platform-products",
           icon: "cube",
           labelKey: "productsMenu.platformProducts.label",
           descriptionKey: "productsMenu.platformProducts.description",
-          target: { kind: "route", href: "/products" },
+          href: "/products",
         },
         {
-          key: "industry-products",
+          key: "industry-scenarios",
           icon: "buildings",
-          labelKey: "productsMenu.industryProducts.label",
-          descriptionKey: "productsMenu.industryProducts.description",
-          target: { kind: "planned" },
+          labelKey: "productsMenu.industryScenarios.label",
+          descriptionKey: "productsMenu.industryScenarios.description",
+          href: "/industry-scenarios",
+          badgeKey: "productsMenu.inDevelopment",
         },
         {
+          // 桌面端如影工作台，不是后台管理——控制台入口在右侧工具区，与此无关。
           key: "workbench",
-          icon: "gauge",
+          icon: "desktop",
           labelKey: "productsMenu.workbench.label",
           descriptionKey: "productsMenu.workbench.description",
-          target: { kind: "console" },
+          href: "/workbench",
+          badgeKey: "productsMenu.inDevelopment",
         },
       ],
     },

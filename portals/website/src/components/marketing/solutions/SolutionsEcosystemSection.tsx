@@ -63,18 +63,8 @@ export default function SolutionsEcosystemSection() {
           ))}
         </div>
 
-        <div className="mt-10 flex flex-col gap-6 rounded-2xl border border-vx-brand-100 bg-vx-brand-50/60 p-8 dark:border-vx-brand-400/15 dark:bg-vx-brand-950/25 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-website-3xl">
-            <h3 className="font-display text-2xl font-bold text-vx-gray-900 dark:text-vx-white">
-              {t("ecosystem.contact.title")}
-            </h3>
-            <p className="mt-3 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
-              {t("ecosystem.contact.description")}
-            </p>
-            <p className="mt-3 text-xs leading-5 text-vx-gray-500 dark:text-vx-gray-400">
-              {t("ecosystem.contact.note")}
-            </p>
-          </div>
+        {/* 卡样式与结构保留，内容清空——只留转化出口这一个按钮。 */}
+        <div className="mt-10 flex items-center justify-center rounded-2xl border border-vx-brand-100 bg-vx-brand-50/60 p-8 dark:border-vx-brand-400/15 dark:bg-vx-brand-950/25">
           <Button
             asChild
             size="xl"

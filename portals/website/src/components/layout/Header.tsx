@@ -180,38 +180,24 @@ const NAV_INTERACTIVE_CLASS = `${NAV_ITEM_CLASS} hover:text-vx-info dark:hover:t
 const NAV_MENU_CLOSE_DELAY_MS = 120;
 
 /**
- * Second-level row content. Shared by the linked and the planned states so both
- * keep the same icon / label / description rhythm.
+ * Second-level row content: icon / label / optional status badge / description.
  */
 function HeaderNavChildBody({ child }: { child: HeaderNavChild }) {
   const t = useTranslations("layout.header");
-  const isPlanned = child.target.kind === "planned";
 
   return (
     <>
-      <span
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${
-          isPlanned
-            ? "bg-vx-gray-100 text-vx-gray-400 dark:bg-vx-gray-800 dark:text-vx-gray-500"
-            : "bg-vx-brand-50 text-vx-brand-600 dark:bg-vx-brand-950/50 dark:text-vx-brand-200"
-        }`}
-      >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-vx-brand-50 text-vx-brand-600 dark:bg-vx-brand-950/50 dark:text-vx-brand-200">
         <Icon name={child.icon} className="h-5 w-5" />
       </span>
       <span className="flex min-w-0 flex-col">
         <span className="flex items-center gap-2">
-          <span
-            className={`text-sm font-semibold ${
-              isPlanned
-                ? "text-vx-gray-400 dark:text-vx-gray-500"
-                : "text-vx-gray-900 dark:text-vx-white"
-            }`}
-          >
+          <span className="text-sm font-semibold text-vx-gray-900 dark:text-vx-white">
             {t(child.labelKey)}
           </span>
-          {isPlanned ? (
+          {child.badgeKey ? (
             <span className="rounded-full border border-vx-gray-200 px-2 py-0.5 text-xs font-medium text-vx-gray-400 dark:border-vx-gray-700 dark:text-vx-gray-500">
-              {t("productsMenu.planned")}
+              {t(child.badgeKey)}
             </span>
           ) : null}
         </span>
@@ -226,43 +212,12 @@ function HeaderNavChildBody({ child }: { child: HeaderNavChild }) {
 const NAV_CHILD_ROW_CLASS =
   "flex w-full items-start gap-3 rounded-lg px-3 py-3 text-left transition-colors";
 
-/** One second-level entry, routed by its target kind. */
-function HeaderNavChildRow({
-  child,
-  consoleUrl,
-}: {
-  child: HeaderNavChild;
-  consoleUrl: string;
-}) {
-  if (child.target.kind === "planned") {
-    return (
-      <span className={`${NAV_CHILD_ROW_CLASS} cursor-default`} aria-disabled>
-        <HeaderNavChildBody child={child} />
-      </span>
-    );
-  }
-
-  const hoverClass =
-    "hover:bg-vx-brand-50/70 focus-visible:bg-vx-brand-50/70 focus-visible:outline-none dark:hover:bg-vx-white/5 dark:focus-visible:bg-vx-white/5";
-
-  // The console lives on another origin, so it cannot use the locale-aware Link.
-  if (child.target.kind === "console") {
-    return (
-      <a
-        href={consoleUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`${NAV_CHILD_ROW_CLASS} ${hoverClass}`}
-      >
-        <HeaderNavChildBody child={child} />
-      </a>
-    );
-  }
-
+/** One second-level entry. Every entry has a real destination — 未成稿的挂待建设页。 */
+function HeaderNavChildRow({ child }: { child: HeaderNavChild }) {
   return (
     <Link
-      href={child.target.href}
-      className={`${NAV_CHILD_ROW_CLASS} ${hoverClass}`}
+      href={child.href}
+      className={`${NAV_CHILD_ROW_CLASS} hover:bg-vx-brand-50/70 focus-visible:bg-vx-brand-50/70 focus-visible:outline-none dark:hover:bg-vx-white/5 dark:focus-visible:bg-vx-white/5`}
     >
       <HeaderNavChildBody child={child} />
     </Link>
@@ -274,13 +229,7 @@ function HeaderNavChildRow({
  * convention) and on click/keyboard through the Radix trigger, so it stays
  * reachable without a pointer.
  */
-function HeaderNavMenu({
-  item,
-  consoleUrl,
-}: {
-  item: HeaderNavItem;
-  consoleUrl: string;
-}) {
+function HeaderNavMenu({ item }: { item: HeaderNavItem }) {
   const t = useTranslations("layout.header");
   const [open, setOpen] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -310,9 +259,8 @@ function HeaderNavMenu({
   return (
     <div
       className="relative"
-      onMouseEnter={openNow}
-      onMouseLeave={closeSoon}
-      onFocus={openNow}
+      onPointerEnter={openNow}
+      onPointerLeave={closeSoon}
     >
       {/* modal={false}: this is a marketing menu, it must not lock page scroll. */}
       <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
@@ -328,19 +276,28 @@ function HeaderNavMenu({
             }`}
           />
         </DropdownMenuTrigger>
+        {/*
+         * onCloseAutoFocus 必须挡掉。Radix 的 DropdownMenu 是**键盘菜单**语义，
+         * 关闭时会把焦点还给 trigger；hover 菜单里这一下会让 trigger 重新拿到
+         * 焦点，进而把面板二次弹开——症状正是「一次查看弹两次，必须点别处才收」。
+         *
+         * 打开侧不需要对称处理：Radix 判断出是指针触发时本就不会自动聚焦面板
+         * （实测悬停后 activeElement 仍是 body），而 onOpenAutoFocus 根本不在
+         * DropdownMenu 的 props 里——它属于 Popover / Dialog。
+         *
+         * 键盘可达性不受影响：trigger 是真 button，Enter/Space 照常开合；
+         * 面板里的项是原生 <a>，Tab 能逐个走到。
+         */}
         <DropdownMenuContent
           align="start"
           sideOffset={12}
           className="w-96 p-2"
-          onMouseEnter={openNow}
-          onMouseLeave={closeSoon}
+          onCloseAutoFocus={(event) => event.preventDefault()}
+          onPointerEnter={openNow}
+          onPointerLeave={closeSoon}
         >
           {(item.children ?? []).map((child) => (
-            <HeaderNavChildRow
-              key={child.key}
-              child={child}
-              consoleUrl={consoleUrl}
-            />
+            <HeaderNavChildRow key={child.key} child={child} />
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -349,25 +306,14 @@ function HeaderNavMenu({
 }
 
 /** Full first-level nav. */
-function HeaderNav({ consoleUrl }: { consoleUrl: string }) {
+function HeaderNav() {
   const t = useTranslations("layout.header");
 
   return (
     <nav className="hidden items-center gap-8 md:flex">
       {HEADER_DATA.nav.map((item) => {
         if (item.children?.length) {
-          return (
-            <HeaderNavMenu key={item.key} item={item} consoleUrl={consoleUrl} />
-          );
-        }
-
-        // 平台名只是导航里的品牌标记，不是目的地——渲染成纯文本。
-        if (!item.href) {
-          return (
-            <span key={item.key} className={NAV_ITEM_CLASS}>
-              {t(item.labelKey)}
-            </span>
-          );
+          return <HeaderNavMenu key={item.key} item={item} />;
         }
 
         return (
@@ -650,7 +596,7 @@ export default function Header() {
           </Link>
 
           {/* Navigation */}
-          <HeaderNav consoleUrl={consoleUrl} />
+          <HeaderNav />
 
           {/* 工具栏：访客设置 / CTA / 登录用户入口 */}
           <div className="flex items-center gap-4">

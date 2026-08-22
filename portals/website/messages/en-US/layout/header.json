@@ -12,7 +12,6 @@
   },
   "productsMenu": {
     "openLabel": "Open products menu",
-    "planned": "Planned",
     "appcenter": {
       "label": "Agent Marketplace",
       "description": "Ready-to-run agents, picked by scenario and tried instantly"
@@ -21,13 +20,14 @@
       "label": "Platform Products",
       "description": "The shared foundation: data, models, orchestration, operations"
     },
-    "industryProducts": {
-      "label": "Industry Products",
-      "description": "Packaged products tuned for a single industry — in the works"
-    },
     "workbench": {
       "label": "Ruyin Workbench",
-      "description": "Sign in to the console to manage subscriptions, usage and teams"
+      "description": "A desktop workbench for individuals and teams — in build"
+    },
+    "inDevelopment": "In development",
+    "industryScenarios": {
+      "label": "Industry Scenarios",
+      "description": "Packaged products built around an industry's real working scenarios — in build"
     }
   },
   "actions": {
