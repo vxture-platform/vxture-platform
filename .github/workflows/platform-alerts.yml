@@ -39,10 +39,10 @@ jobs:
           # 部署目录来自环境级 var（治理标准 §6），未设回落已验证默认。
           DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
         with:
-          host: ${{ secrets.DEPLOY_HOST_TAILNET_IP || secrets.DEPLOY_HOST_TAILNET }}
-          username: ${{ secrets.DEPLOY_HOST_USER || secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_HOST_SSH_KEY || secrets.DEPLOY_SSH_KEY }}
-          passphrase: ${{ secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE || secrets.DEPLOY_SSH_PASSPHRASE }}
+          host: ${{ secrets.DEPLOY_HOST_TAILNET_IP }}
+          username: ${{ secrets.DEPLOY_HOST_USER }}
+          key: ${{ secrets.DEPLOY_HOST_SSH_KEY }}
+          passphrase: ${{ secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE }}
           # 主机指纹校验（4-8，模板标准 §2.2 要求 fail-closed）。
           # 未设 DEPLOY_KNOWN_HOSTS 时该参数为空串，action 退回「不校验主机指纹」
           # ——**这一步在 owner 把该 secret 配上之前是不生效的**，属于有意的

@@ -111,10 +111,10 @@ jobs:
         if: env.deploy == 'true'
         uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
         with:
-          host: ${{ secrets.DEPLOY_HOST_TAILNET_IP || secrets.DEPLOY_HOST_TAILNET }}
-          username: ${{ secrets.DEPLOY_HOST_USER || secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_HOST_SSH_KEY || secrets.DEPLOY_SSH_KEY }}
-          passphrase: ${{ secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE || secrets.DEPLOY_SSH_PASSPHRASE }}
+          host: ${{ secrets.DEPLOY_HOST_TAILNET_IP }}
+          username: ${{ secrets.DEPLOY_HOST_USER }}
+          key: ${{ secrets.DEPLOY_HOST_SSH_KEY }}
+          passphrase: ${{ secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE }}
           # 主机指纹校验（4-8，模板标准 §2.2 要求 fail-closed）。
           # 未设 DEPLOY_KNOWN_HOSTS 时该参数为空串，action 退回「不校验主机指纹」
           # ——**这一步在 owner 把该 secret 配上之前是不生效的**，属于有意的
@@ -137,10 +137,10 @@ jobs:
           # it before writing.
           STAGE_DIR: /tmp/vxture-cert-${{ github.run_id }}
         with:
-          host: ${{ secrets.DEPLOY_HOST_TAILNET_IP || secrets.DEPLOY_HOST_TAILNET }}
-          username: ${{ secrets.DEPLOY_HOST_USER || secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_HOST_SSH_KEY || secrets.DEPLOY_SSH_KEY }}
-          passphrase: ${{ secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE || secrets.DEPLOY_SSH_PASSPHRASE }}
+          host: ${{ secrets.DEPLOY_HOST_TAILNET_IP }}
+          username: ${{ secrets.DEPLOY_HOST_USER }}
+          key: ${{ secrets.DEPLOY_HOST_SSH_KEY }}
+          passphrase: ${{ secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE }}
           # 主机指纹校验（4-8，模板标准 §2.2 要求 fail-closed）。
           # 未设 DEPLOY_KNOWN_HOSTS 时该参数为空串，action 退回「不校验主机指纹」
           # ——**这一步在 owner 把该 secret 配上之前是不生效的**，属于有意的
