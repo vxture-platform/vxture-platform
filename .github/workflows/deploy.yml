@@ -16,11 +16,9 @@ name: deploy
 #                               故不传。改端口时在此处补 `port:` 并同步 db-init/cert/alerts。
 #   · DEPLOY_HOST_PRIVATE_IP —— Aliyun VPC 内网地址，为后续内网路径预留。
 #
-# 过渡期回退 `新名 || 旧名`：新仓已按 DEPLOY_HOST_* 配好，**旧仓的 production 环境
-# 仍是旧名**，而生产目前从旧仓发版。缺失的 secret 在 Actions 里求值为空串（falsy），
-# 所以 `||` 会自动落到还在的那一个——两个仓在切换期都能部署。
-# **移除条件**：发版通道确认切到新仓、且旧仓不再承担部署之后，把 `|| secrets.DEPLOY_*`
-# 一并删掉。留着不会出错，但会让"哪个名字才是权威"这件事一直有两个答案。
+# 过渡期回退（`新名 || 旧名`）已于 2026-08-22 移除：owner 确认发版通道切到
+# vxture-platform/vxture-platform，旧仓 vxture/vxture-platform 不再推送、不再承担部署。
+# 现在只认 DEPLOY_HOST_*，「哪个名字是权威」只有一个答案。
 # umbra 是 overseas 变体（README §5）：去掉 tailscale join、镜像换 GHCR、直连公网 SSH。
 #
 # 主机侧只同步部署包（compose/scripts/database…）到 /srv/vxture/deploy；实际 .env、
@@ -120,10 +118,10 @@ jobs:
       - name: Upload deploy files to worker-01
         uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
         with:
-          host: ${{ secrets.DEPLOY_HOST_TAILNET_IP || secrets.DEPLOY_HOST_TAILNET }}
-          username: ${{ secrets.DEPLOY_HOST_USER || secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_HOST_SSH_KEY || secrets.DEPLOY_SSH_KEY }}
-          passphrase: ${{ secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE || secrets.DEPLOY_SSH_PASSPHRASE }}
+          host: ${{ secrets.DEPLOY_HOST_TAILNET_IP }}
+          username: ${{ secrets.DEPLOY_HOST_USER }}
+          key: ${{ secrets.DEPLOY_HOST_SSH_KEY }}
+          passphrase: ${{ secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE }}
           # 主机指纹校验（4-8，模板标准 §2.2 要求 fail-closed）。
           # 未设 DEPLOY_KNOWN_HOSTS 时该参数为空串，action 退回「不校验主机指纹」
           # ——**这一步在 owner 把该 secret 配上之前是不生效的**，属于有意的
@@ -162,10 +160,10 @@ jobs:
           # `rm: true` wipes it before writing.
           STAGE_DIR: /tmp/vxture-deploy-${{ github.run_id }}
         with:
-          host: ${{ secrets.DEPLOY_HOST_TAILNET_IP || secrets.DEPLOY_HOST_TAILNET }}
-          username: ${{ secrets.DEPLOY_HOST_USER || secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_HOST_SSH_KEY || secrets.DEPLOY_SSH_KEY }}
-          passphrase: ${{ secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE || secrets.DEPLOY_SSH_PASSPHRASE }}
+          host: ${{ secrets.DEPLOY_HOST_TAILNET_IP }}
+          username: ${{ secrets.DEPLOY_HOST_USER }}
+          key: ${{ secrets.DEPLOY_HOST_SSH_KEY }}
+          passphrase: ${{ secrets.DEPLOY_HOST_SSH_KEY_PASSPHRASE }}
           # 主机指纹校验（4-8，模板标准 §2.2 要求 fail-closed）。
           # 未设 DEPLOY_KNOWN_HOSTS 时该参数为空串，action 退回「不校验主机指纹」
           # ——**这一步在 owner 把该 secret 配上之前是不生效的**，属于有意的

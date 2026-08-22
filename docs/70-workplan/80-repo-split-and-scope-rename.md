@@ -292,7 +292,7 @@ scope 纯属内部命名，不受 registry 约束。全量改名要动上千处�
 | 4-6 | 结清技术债 §926                                                                                                                                                                                    | ✅ **已做**（结论与原判相反，见下）      |
 | 4-7 | 回写 `product_240` §2.2 的环境密钥命名为 `DEPLOY_HOST_*`                                                                                                                                           | ✅ **已做**                              |
 | 4-8 | `DEPLOY_KNOWN_HOSTS` —— 指纹已生成并设入两仓 production 环境，7 处 SSH/SCP 调用**已生效**                                                                                                          | ✅ **已做**                              |
-| 4-9 | 移除部署密钥的过渡回退 `新名 \|\| 旧名`                                                                                                                                                            | ❌ **暂不能做**，见下                    |
+| 4-9 | 移除部署密钥的过渡回退 —— 四个 workflow 共 **28 处**                                                                                                                                               | ✅ **已做**（2026-08-22 切换当日）       |
 
 #### 4-6 的结论推翻了技术债 §926 的原判
 
@@ -325,12 +325,14 @@ owner 提出「没有应用未必没有价值」，故不止查引用，还查�
 而 `NODE_AUTH_TOKEN` 更是在同一天因过期打断了整条 CI。原条目自己写的「有疑则保留 +
 需 owner 拍板」是对的，应作为同类清理的默认姿势。
 
-#### 4-9 为什么暂不能做
+#### 4-9 已执行（2026-08-22）
 
-过渡回退（`secrets.DEPLOY_HOST_* || secrets.DEPLOY_*`）的移除条件是**发版通道确认切到新仓**。
-现状：生产仍从 `vxture/vxture-platform` 发版，旧仓 production 环境仍是旧名。此时移除回退，
-下一次发版就会因取不到 secret 而 SSH 失败——**而缺失的 secret 在 Actions 里是空串不是报错**，
-症状会表现为「连不上主机」。等发版切到新仓、旧仓不再承担部署之后再做。
+移除条件是「发版通道确认切到新仓」。owner 于 2026-08-22 确认：**发版切到
+`vxture-platform/vxture-platform`，旧仓 `vxture/vxture-platform` 不再推送、不再更新**。
+四个 workflow 共 28 处 `新名 || 旧名` 已一并移除，现在只认 `DEPLOY_HOST_*`。
+
+切换前已核对新仓具备全部条件：production 环境 8 个 `DEPLOY_HOST_*` secret（含
+`DEPLOY_KNOWN_HOSTS`）、repo 层 7 个共享凭据、12 个 variables、production 环境存在。
 
 ---
 
