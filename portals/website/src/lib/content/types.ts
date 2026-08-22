@@ -23,7 +23,6 @@ export type ContentSection =
   | "insights"
   | "careers"
   | "certifications"
-  | "contact"
   | "changelog";
 
 export type ContentLayout = "legal" | "article" | "prose";

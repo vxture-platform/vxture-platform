@@ -412,6 +412,7 @@
   --vx-website-solutions-accent-red: var(--vx-color-red-500);
   --vx-website-solutions-accent-amber: var(--vx-color-amber-500);
   --vx-website-solutions-accent-emerald: var(--vx-color-emerald-500);
+
   --vx-website-solutions-panel-bg: color-mix(
     in srgb,
     var(--vx-color-white) 74%,
