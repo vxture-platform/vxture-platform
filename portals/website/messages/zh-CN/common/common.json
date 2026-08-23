@@ -26,5 +26,45 @@
   "success": {
     "operationCompleted": "操作成功"
   },
-  "loading": "加载中..."
+  "loading": "加载中...",
+  "comingSoon": {
+    "eyebrow": "Coming Soon",
+    "subtitle": "该页面待建设",
+    "back": "返回首页",
+    "action": "方案咨询",
+    "sections": {
+      "faq": {
+        "name": "常见问题",
+        "description": "把注册、订阅、计费、接入、配额这些被问得最多的问题集中答一遍。内容整理中，急用可以直接联系我们。"
+      },
+      "support": {
+        "name": "技术支持",
+        "description": "工单入口、响应时效、支持范围与升级路径会在这里说明。在此之前，技术问题走服务邮箱与热线同样受理。"
+      },
+      "insights": {
+        "name": "行业洞察",
+        "description": "我们在低空经济、应急管理、能源电力、工业领域积累的判断与实践观察，会在这里陆续发布。"
+      },
+      "careers": {
+        "name": "加入我们",
+        "description": "在招岗位、团队构成与用人标准会在这里公布。想提前投递的，欢迎直接来信。"
+      },
+      "certifications": {
+        "name": "资质证书",
+        "description": "公司资质、软件著作权、安全与合规认证会在这里集中展示。需要具体材料可以直接向我们索取。"
+      },
+      "changelog": {
+        "name": "更新日志",
+        "description": "平台与各产品的版本变更、新增能力和重要修复会在这里按时间线记录。"
+      },
+      "blog": {
+        "name": "博客",
+        "description": "工程实践、产品思考与技术选型的长文会在这里发布。"
+      },
+      "docs": {
+        "name": "帮助文档",
+        "description": "产品使用说明、接入指引与 API 参考会在这里集中提供。文档整理中，当前可先通过服务邮箱索取对应材料。"
+      }
+    }
+  }
 }

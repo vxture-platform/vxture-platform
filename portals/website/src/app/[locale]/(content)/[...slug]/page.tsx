@@ -10,7 +10,9 @@
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/lib/i18n/navigation";
-import { FooterPlaceholderPage } from "@/components/marketing/FooterPlaceholderPage";
+import { ComingSoonPage } from "@/components/marketing";
+import type { ComingSoonAccent } from "@/components/marketing";
+import type { IconName } from "@vxture/design-system";
 import {
   CONTENT_REGISTRY,
   isContentSection,
@@ -121,26 +123,51 @@ async function renderLegalDetail({ policyKey }: LegalDetailEntry) {
 // =============================================================================
 
 async function renderBlogIndex() {
-  return <FooterPlaceholderPage title="Blog" />;
+  return renderComingSoon("blog");
 }
 
 // =============================================================================
 // 渲染分区：Stub
 // =============================================================================
 
-// 区段标识 → 显示标题映射（占位阶段，未来迁移至 i18n）
-const STUB_TITLES: Record<string, string> = {
-  faq: "FAQ",
-  support: "支持中心",
-  insights: "行业洞察",
-  careers: "加入我们",
-  certifications: "认证与合规",
-  changelog: "更新日志",
-};
+/**
+ * 区段 → 图标与强调色。文案在 messages 的 common.comingSoon.sections.*。
+ *
+ * 全站占位页只有一种长相（owner 2026-08-23 定：不容许两套或更多），形状统一
+ * 由 ComingSoonPage 给出，这里只给区段之间的辨识度。
+ */
+const STUB_LOOK: Record<string, { icon: IconName; accent: ComingSoonAccent }> =
+  {
+    docs: { icon: "book-open", accent: "brand" },
+    faq: { icon: "help", accent: "sky" },
+    support: { icon: "headset", accent: "sky" },
+    insights: { icon: "chart-line-up", accent: "emerald" },
+    careers: { icon: "user-plus", accent: "amber" },
+    certifications: { icon: "certificate", accent: "brand" },
+    changelog: { icon: "list-checks", accent: "sky" },
+    blog: { icon: "newspaper", accent: "emerald" },
+  };
+
+async function renderComingSoon(section: string) {
+  const t = await getTranslations("comingSoon");
+  const look = STUB_LOOK[section] ?? { icon: "file-text", accent: "brand" };
+
+  return (
+    <ComingSoonPage
+      icon={look.icon}
+      accent={look.accent}
+      eyebrow={t("eyebrow")}
+      title={t(`sections.${section}.name`)}
+      subtitle={t("subtitle")}
+      description={t(`sections.${section}.description`)}
+      primaryAction={{ href: "/contact", label: t("action") }}
+      backAction={{ href: "/", label: t("back") }}
+    />
+  );
+}
 
 function renderStub({ section }: StubEntry) {
-  const title = STUB_TITLES[section] ?? section;
-  return <FooterPlaceholderPage title={title} />;
+  return renderComingSoon(section);
 }
 
 // =============================================================================

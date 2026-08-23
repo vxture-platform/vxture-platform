@@ -26,5 +26,45 @@
   "success": {
     "operationCompleted": "Operation completed successfully"
   },
-  "loading": "Loading..."
+  "loading": "Loading...",
+  "comingSoon": {
+    "eyebrow": "Coming Soon",
+    "subtitle": "This page is being built",
+    "back": "Back to home",
+    "action": "Talk to us",
+    "sections": {
+      "faq": {
+        "name": "FAQ",
+        "description": "The questions we get asked most — sign-up, subscriptions, billing, integration, quotas — answered in one place. Being written; reach out directly if you need an answer now."
+      },
+      "support": {
+        "name": "Technical Support",
+        "description": "Ticket intake, response times, scope of support, and escalation paths will be documented here. Until then, technical issues are handled through the service mailbox and hotline."
+      },
+      "insights": {
+        "name": "Industry Insights",
+        "description": "What we have learned across low-altitude economy, emergency management, energy, and industrial operations will be published here."
+      },
+      "careers": {
+        "name": "Careers",
+        "description": "Open roles, how the team is put together, and what we hire for will be posted here. Early applications are welcome by email."
+      },
+      "certifications": {
+        "name": "Certifications",
+        "description": "Company credentials, software copyrights, and security and compliance certifications will be collected here. Ask us directly if you need specific documents."
+      },
+      "changelog": {
+        "name": "Changelog",
+        "description": "Version changes, new capabilities, and notable fixes across the platform and its products, recorded on a timeline."
+      },
+      "blog": {
+        "name": "Blog",
+        "description": "Long-form writing on engineering practice, product thinking, and technical choices."
+      },
+      "docs": {
+        "name": "Documentation",
+        "description": "Product guides, integration walkthroughs, and API reference will be collected here. Being written — ask the service mailbox for specific material in the meantime."
+      }
+    }
+  }
 }

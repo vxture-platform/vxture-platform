@@ -172,7 +172,8 @@
       }
     ],
     "comingSoonHint": "该产品正在建设中，敬请期待。",
-    "back": "返回产品总览"
+    "back": "返回产品总览",
+    "consult": "方案咨询"
   },
   "subscription": {
     "unavailable": "该产品暂未开放线上订阅，可联系销售获取方案。",

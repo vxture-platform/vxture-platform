@@ -8,21 +8,27 @@
       "title": "数据图谱构建",
       "description": "数据本体构建，发现数据的隐藏价值和深层关系",
       "highlights": ["数据融合", "图谱构建", "关联挖掘"],
-      "cta": { "label": "了解更多" }
+      "cta": {
+        "label": "查看产品体系"
+      }
     },
     "feature-intro-02": {
       "icon": "sparkles",
       "title": "智能决策调度",
       "description": "时空模型引擎，实时性资源智能调度与动态规划",
       "highlights": ["智能调度", "资源配置", "动态规划"],
-      "cta": { "label": "了解更多" }
+      "cta": {
+        "label": "查看产品体系"
+      }
     },
     "feature-intro-03": {
       "icon": "cube",
       "title": "孪生仿真推演",
       "description": "复杂场景模拟，为决策提供仿真推演和预测分析",
       "highlights": ["数字孪生", "仿真推演", "智能决策"],
-      "cta": { "label": "了解更多" }
+      "cta": {
+        "label": "查看产品体系"
+      }
     }
   }
 }

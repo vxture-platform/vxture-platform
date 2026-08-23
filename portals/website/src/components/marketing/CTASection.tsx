@@ -93,6 +93,20 @@ export default function CTASection({ id, name = "CTA" }: CTASectionProps) {
               </span>
             );
 
+            // 暂不可用的入口渲染成灰掉的 span，而不是链接：按钮在但点不动，
+            // 比点了跳进一个不存在的路由清楚。
+            if (action.disabled) {
+              return (
+                <span
+                  key={action.href}
+                  aria-disabled="true"
+                  className={`vx-website-cta-action group px-8 py-4 font-semibold rounded-xl border-2 border-vx-gray-200 text-vx-gray-400 cursor-not-allowed dark:border-vx-gray-700 dark:text-vx-gray-500`}
+                >
+                  {buttonContent}
+                </span>
+              );
+            }
+
             if (isExternal) {
               return (
                 <a
