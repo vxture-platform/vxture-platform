@@ -99,6 +99,8 @@ interface ModelProviderRecord {
   health: { status: ProviderHealthStatus };
   /** 名下未删除的模型数（不论启停）——挡住删除的就是这个数。契约必有。 */
   modelCount: number;
+  /** Provider 层的自由配置，含 `config.wire` 覆盖。线协议抽屉据它判断归属。 */
+  config: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -121,6 +123,24 @@ interface AiModelRecord {
   sort: number;
   /** 上游+wire 指纹。它一变，就是有人把这个 modelCode 指到了别的地方。 */
   behaviorVersion: string;
+  /** 本模型声明的自由配置，含 `config.wire` 覆盖。**声明值，不是生效值**。 */
+  config: Record<string, unknown> | null;
+  /**
+   * 实际生效的线协议描述符（atlas 直发，纯配置合并、不发上游请求）。
+   *
+   * 与 `config` 并列不是冗余：那一份说「本层声明了什么」，这一份说「实际跑什么」。
+   * **不要在这里自己合并三层**——上游是逐键合并（headers 走 string-map 合并、
+   * authStyle 遇非法值静默回退），重实现的失败方式是安静地渲染一个从未被用过的描述符。
+   */
+  resolvedWire: {
+    schemaVersion: number;
+    chatPath: string | null;
+    authStyle: string;
+    headers: Record<string, string>;
+    streamUsage: string;
+    supports: Record<string, boolean>;
+    paramMap: Record<string, string>;
+  };
   keyReference: { source: "env"; name: string; configured: boolean } | null;
   /**
    * **三值**：`active` / `inactive` / `deprecated`。`deprecated` 仍可解析、只是不再
@@ -444,6 +464,7 @@ function ModelServiceContent() {
   const [verifyResult, setVerifyResult] = useState<ProviderProbeResult | null>(
     null,
   );
+  const [wireTarget, setWireTarget] = useState<AiModelRecord | null>(null);
   const [probeTarget, setProbeTarget] = useState<AiModelRecord | null>(null);
   const [probing, setProbing] = useState(false);
   const [probeResult, setProbeResult] = useState<ModelProbeResult | null>(null);
@@ -1114,6 +1135,15 @@ function ModelServiceContent() {
                         label: "编辑",
                         icon: "edit",
                         onSelect: () => openModelEdit(m),
+                      },
+                      /* 「线协议」排在「自检」前面是有意的：两者回答的问题相邻，
+                         而这个不花钱。此前想看生效的 wire 只能跑自检——真实调用、
+                         烧 token——于是这个问题实际上没人问。 */
+                      {
+                        id: "wire",
+                        label: "线协议（生效值）",
+                        icon: "code",
+                        onSelect: () => setWireTarget(m),
                       },
                       {
                         id: "probe",
@@ -2137,6 +2167,28 @@ function ModelServiceContent() {
         ) : null}
       </DialogForm>
 
+      {/* ── 线协议抽屉 ───────────────────────────────────────────────────── */}
+      <Drawer
+        open={wireTarget !== null}
+        onClose={() => setWireTarget(null)}
+        width="md"
+        title="线协议"
+        description={
+          wireTarget
+            ? `${wireTarget.modelName}（${wireTarget.modelCode}） · ${wireTarget.protocol}`
+            : ""
+        }
+      >
+        {wireTarget ? (
+          <WireReport
+            model={wireTarget}
+            provider={providers.find(
+              (p) => p.providerCode === wireTarget.provider,
+            )}
+          />
+        ) : null}
+      </Drawer>
+
       {/* ── 密钥抽屉 ─────────────────────────────────────────────────────── */}
       <Drawer
         open={keysProvider !== null}
@@ -2330,6 +2382,141 @@ function ModelServiceContent() {
         </FieldGroup>
       </DialogForm>
     </>
+  );
+}
+
+/**
+ * 一个 wire 键的归属：值从 atlas 的 `resolvedWire` 来，来源只按**声明层的存在性**判定。
+ *
+ * 这条边界是刻意的。判断「谁声明了这个键」只需要看原始层里有没有这个 key——纯存在性，
+ * 无歧义。而**算出生效值**要复刻 `applyOverlay` 的逐键合并语义，那是同一个事实的第二个
+ * 实现，且失败方式是安静的：渲染出一个从来没有请求用过的描述符。
+ */
+type WireOrigin = "model" | "provider" | "merged" | "default";
+
+const WIRE_ORIGIN_LABEL: Record<WireOrigin, string> = {
+  model: "本模型覆盖",
+  provider: "Provider 覆盖",
+  /**
+   * 对象类的键（`headers` / `supports` / `paramMap`）是**逐子键**合并的，所以多层
+   * 同时声明时，生效值里每个子键可能来自不同的层。
+   *
+   * 实测过一个真实例子：`supports` 的四个子键分别来自三层——`temperature` 是协议
+   * 默认、`topP` 来自 Provider、`tools`/`toolChoice` 被本模型改成 false。此时标
+   * 「本模型覆盖」会让人以为整个值由模型定，那是**这个抽屉自己在撒谎**，而它存在的
+   * 理由恰恰是消灭这种误读。
+   */
+  merged: "多层合并",
+  default: "协议默认",
+};
+
+const WIRE_ORIGIN_TONE: Record<
+  WireOrigin,
+  "info" | "warning" | "neutral" | "danger"
+> = {
+  model: "info",
+  provider: "warning",
+  merged: "info",
+  default: "neutral",
+};
+
+/** `config.wire` 里有没有这个键。不看值——值由上游合并后给出。 */
+function declaresWireKey(
+  config: Record<string, unknown> | null | undefined,
+  key: string,
+): boolean {
+  const wire = config?.["wire"];
+  if (typeof wire !== "object" || wire === null || Array.isArray(wire)) {
+    return false;
+  }
+  return key in (wire as Record<string, unknown>);
+}
+
+function wireOriginOf(
+  key: string,
+  value: unknown,
+  model: AiModelRecord,
+  provider: ModelProviderRecord | undefined,
+): WireOrigin {
+  const byModel = declaresWireKey(model.config, key);
+  const byProvider = declaresWireKey(provider?.config, key);
+
+  /* 对象类的键逐子键合并，所以两层都声明时**没有哪一层"赢了"**——生效值里不同的
+     子键来自不同的层，甚至还留着协议默认的那一份。标成任何单一来源都是误导。 */
+  if (byModel && byProvider && value !== null && typeof value === "object") {
+    return "merged";
+  }
+  /* 标量键才有"压过"这回事，顺序与上游一致：模型压 provider，provider 压协议默认。 */
+  if (byModel) return "model";
+  if (byProvider) return "provider";
+  return "default";
+}
+
+/** 值怎么显示。对象类的键（headers / supports / paramMap）平铺成一行行 `k=v`。 */
+function formatWireValue(value: unknown): string {
+  if (value === null) return "—（用适配器默认）";
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    return entries.length
+      ? entries.map(([k, v]) => `${k}=${String(v)}`).join("  ")
+      : "—（空）";
+  }
+  return String(value);
+}
+
+/**
+ * 线协议抽屉：这个模型**实际跑的**线描述符，以及每个键由哪一层定的。
+ *
+ * 存在的理由是 `behaviorVersion` 旁边的一个洞：它说「配置动了」，但想知道**动成了
+ * 什么**，此前只能跑一次自检——而自检是真实上游调用、要烧 token。便宜的信号指向一个
+ * 昂贵的答案，结果就是没人去问。atlas 2026-08-24 起直发 `resolvedWire`，这里把它接出来。
+ */
+function WireReport({
+  model,
+  provider,
+}: {
+  readonly model: AiModelRecord;
+  readonly provider: ModelProviderRecord | undefined;
+}) {
+  const wire = model.resolvedWire;
+  const rows: ReadonlyArray<{ key: string; value: unknown }> = [
+    { key: "chatPath", value: wire.chatPath },
+    { key: "auth", value: wire.authStyle },
+    { key: "streamUsage", value: wire.streamUsage },
+    { key: "headers", value: wire.headers },
+    { key: "supports", value: wire.supports },
+    { key: "paramMap", value: wire.paramMap },
+  ];
+
+  return (
+    <div className="flex flex-col gap-md">
+      <Banner
+        tone="info"
+        title="这是生效值，不是声明值"
+        description={`协议默认 ← Provider 的 config.wire ← 本模型的，三层叠加后的结果，由 Atlas 合并（wire schema v${wire.schemaVersion}）。标签指出每个键由哪一层声明——那是存在性判断；合并本身不在门户做，逐键合并的语义只有一份，在上游。`}
+      />
+      <dl className="flex flex-col gap-sm">
+        {rows.map((r) => {
+          const origin = wireOriginOf(r.key, r.value, model, provider);
+          return (
+            <div
+              key={r.key}
+              className="flex flex-col gap-2xs rounded-md border border-border p-sm"
+            >
+              <div className="flex items-center justify-between gap-sm">
+                <dt className="font-mono text-code-sm">{r.key}</dt>
+                <StatusBadge tone={WIRE_ORIGIN_TONE[origin]} dot>
+                  {WIRE_ORIGIN_LABEL[origin]}
+                </StatusBadge>
+              </div>
+              <dd className="font-mono text-code-sm break-all text-muted-foreground">
+                {formatWireValue(r.value)}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+    </div>
   );
 }
 

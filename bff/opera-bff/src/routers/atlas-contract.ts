@@ -64,6 +64,10 @@ export const ATLAS_CONTRACT = {
       "capabilities",
       "grantCount",
       "endpointRefCount",
+      /* 实际生效的线协议描述符（atlas 2026-08-24 起直发）。进清单是因为门户的
+         「线协议」抽屉整个建立在它之上——缺了它，那个抽屉会退回只显示声明层，
+         而「声明了什么」与「实际跑什么」正是这个抽屉要分开的两件事。 */
+      "resolvedWire",
     ],
   },
   "model-routes": {

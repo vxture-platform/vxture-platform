@@ -761,3 +761,111 @@ runos 三条流水**早就是 keyset 游标**（A-3 已符合）。opera 一次�
 
 单测覆盖的是契约与形状，**覆盖不到「点下去会不会真的翻页」**——那正好是这一轮改的东西。
 所以这一条不能算完。
+
+---
+
+# C10 · P1.2 / P1.3：上游发了、门户没接的两处（2026-08-24）
+
+两条都是「数据一直在线上，界面上没有」。P1.3 纯门户，P1.2 查下去发现**光改门户会撒谎**。
+
+## P1.3 · runos 调用流水的计量与配额维度
+
+上游一行有 `costAmount` / `costUnit` / `quotaCounterBefore` / `quotaLimit` /
+`bytesIn` / `bytesOut` / `matchedPolicyIds` / `degradedMode`，门户一个都没读。
+
+### 线上类型是**实测**的，不是推断的
+
+`costAmount` 是 `Decimal(18,6)`，而 `audit.repository.ts` 只把四个 BigInt 窄化成
+Number——Decimal 原样交给 `JSON.stringify`。读侧这个形状**上游一条单测都没钉**
+（写侧 fixture 是数字、usage-summaries 是字符串），正是 `latencyMs` 那条缺陷的温床。
+所以直接打了一次真实请求：
+
+```
+costAmount "1" (string) · costUnit "call" · quotaCounterBefore 0 (number)
+quotaLimit 0 · bytesIn 56 · bytesOut 312 · matchedPolicyIds [] · degradedMode false
+```
+
+### 两处会静默撒谎的地方
+
+**① `quotaLimit === 0` 是「未强制」，不是「上限为零」。** runos 的 `resolveDecision`
+原文：_"a no-op when the grant's quotaLimit is 0 (unenforced)"_，而列默认值也是 0。
+渲染成「0 / 0」会读成**配额耗尽**——真相的反面。页面显示「未强制」。
+
+**② 只显示计量数字、不显示单位，等于邀请人把 token 和页数加起来。** `costUnit` 是
+开放词表（product_251 X-3 v0.4）。这不是理论风险：实测第一屏就同时出现了
+`1 call` 与 `7 compute`——**同一列里两种单位**。
+
+### 呈现沿用本文件已立的先例
+
+延迟列早就把三段拆分挂在 `title` 上，并写明理由（「把三个数平铺在列里会把这张表挤成
+一堵数字墙」）。所以：主数据进列（计量、配额位置），次级细节挂 `title`
+（载荷字节、匹配策略），`degradedMode` 做徽标贴在裁决旁——它**限定这一行其余数字的
+可信度**，一个降级模式下的 `allow` 和一个正常 `allow` 不是同一件事。
+
+## P1.2 · atlas 的 `config` / `config.wire` 不可见
+
+计划里写的是「门户接出来即可」。查下去发现不行。
+
+### 光改门户会渲染一个从未被用过的描述符
+
+生效的 wire 是**三层叠加**：`resolveWire(协议默认, providerConfig, modelConfig)`。
+门户要自己算，就得复刻 `applyOverlay`——而它是**逐键**合并：`headers` 走
+`mergeStringMap`、`authStyle` 走 `readEnum` 且**遇到非法值静默回退到基线**
+（写这轮测试时我自己就踩了：给 `streamUsage` 填了个非法值，它安静地回退了）。
+
+复刻一遍就是同一个事实的第二个来源，失败方式是安静的。这正是这整轮工作在消灭的病。
+
+### 所以改了上游：atlas 直发 `resolvedWire`
+
+代价几乎为零——`resolveWireFor(model)` **本来就存在**，只是私有在
+`model-probe.service.ts` 里。搬到 `providers/wire.ts`（它只碰配置、不发请求，住在探测
+服务里本身就是错位），`mapModel` 加一行。
+
+这件事修的是 `behaviorVersion` 旁边的一个洞：
+
+> 指纹说「配置动了」——这是它的本职，做得也好。但想知道**动成了什么**，此前只能
+> `POST :id/probe`，而那是**真实上游调用、要烧 token**。
+> **一个便宜的信号指向了一个昂贵的答案，结果就是没人去问。**
+
+`config` 与 `resolvedWire` 并列保留：前者是「本层声明了什么」（也是密钥脱敏发生的
+地方），后者是「实际跑什么」。控制台两个都要——但**不许自己合并**。
+
+### 门户侧：归属只做存在性判断
+
+线协议抽屉里每个键标注由哪一层声明。这条边界是刻意的：
+
+- 「谁声明了这个键」= 原始层里有没有这个 key，纯存在性，无歧义 → 门户做
+- 「生效值是什么」= 逐键合并语义 → 上游做，门户只显示
+
+顺带发现 `ProbeReport` 也没渲染 `wire`——自检结果里那个字段同样没被接出来。
+
+## 验证
+
+|              | 结果                                                                                    |
+| ------------ | --------------------------------------------------------------------------------------- |
+| vxture-atlas | type-check 干净 · **971 测试**（新增 5 条钉**叠加顺序**，不是钉字段存在） · lint · docs |
+| opera-bff    | **116 测试**（新增 7 条，含 `quotaLimit` 缺失→被读成「未强制」那条反向验证）            |
+| opera 门户   | type-check + lint 干净                                                                  |
+| 实跑         | 调用流水计量/配额两列出真数据，同屏出现两种计量单位                                     |
+
+`resolvedWire` 的实跑验证待 atlas 镜像重建后补。
+
+### 实测把设计判断验成了硬证据
+
+`doubao-seed-2-0-lite-no-tools` 这一行同时踩中了两个点：
+
+```
+声明（config.wire）   supports = { tools:false, toolChoice:false }         2 个键
+生效（resolvedWire）  supports = { tools:false, toolChoice:false,
+                                   topP:true,  temperature:true }          4 个键
+```
+
+**只显示声明值**，运营看不到 `topP` / `temperature` 支不支持。**门户自己合并**，就得知道
+`supports` 是逐子键合并而非整体替换——猜错了不报错。
+
+再往下一层，这四个子键**来自三个不同的层**：`temperature` 是协议默认、`topP` 来自
+Provider、`tools`/`toolChoice` 被本模型改成 false。
+
+这条同时修掉了我自己的一处不精确：抽屉起初把 `supports` 标成「本模型覆盖」——**属实，
+但会让人以为整个值由模型定**。对象类的键改标「多层合并」。一个用来消灭误读的抽屉
+自己撒谎，是这轮里最不该出现的东西。

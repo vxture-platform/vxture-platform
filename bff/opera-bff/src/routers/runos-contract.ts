@@ -76,6 +76,18 @@ export const RUNOS_CONTRACT = {
       "decision",
       /* 这一条就是本文件存在的理由之一：门户曾经读 `latencyMs`，上游从来没有过。 */
       "latencyTotalMs",
+      /* 计量与配额维度（2026-08-24 接出）。上游列全是 NOT NULL 带默认值，所以
+         「缺了」只可能是上游改了形状，不可能是这一行恰好没有。
+         `costUnit` 与 `costAmount` 一起进清单是有意的：只有量没有单位，等于让人
+         把 token 和页数加在一起（product_251 X-3 的 `SUM()` 例子）。 */
+      "costAmount",
+      "costUnit",
+      "quotaCounterBefore",
+      "quotaLimit",
+      "bytesIn",
+      "bytesOut",
+      "matchedPolicyIds",
+      "degradedMode",
     ],
   },
   "audit-mgmt-events": {

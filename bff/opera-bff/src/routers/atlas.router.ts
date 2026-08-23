@@ -271,6 +271,26 @@ export interface ProviderPerformanceSnapshot {
  * `deleted_at` > `is_active` > `deprecated_at`，即运营明确停用的模型报 `inactive`
  * 而不是 `deprecated`（他停用它是认真的）。
  */
+/**
+ * atlas 的 `ResolvedWire`，逐字段照抄（`vxture-atlas/service/src/providers/wire.ts`）。
+ *
+ * 七个键就是 atlas 的 `KNOWN_KEYS` 全集——写入侧对未知键是**拒绝**而不是忽略，
+ * 所以这里不留 index signature：多出来的键意味着上游改了词表，那该由契约守卫报出来，
+ * 不该被一个 `[k: string]: unknown` 悄悄吞掉。
+ */
+export interface ResolvedWire {
+  schemaVersion: number;
+  /** 端点后缀；`null` 表示用适配器默认。 */
+  chatPath: string | null;
+  authStyle: string;
+  /** 附加的静态请求头（如 Anthropic 的 `anthropic-version`）。 */
+  headers: Record<string, string>;
+  streamUsage: string;
+  supports: Record<string, boolean>;
+  /** 规范参数名 → 上游线上字段名，仅记录与默认不同的。 */
+  paramMap: Record<string, string>;
+}
+
 export interface AiModelRecord {
   /** 引用该模型的未删除授权数。挡删除。 */
   grantCount: number;
@@ -325,7 +345,26 @@ export interface AiModelRecord {
    * 即运营明确停用的模型报 `inactive` 而不是 `deprecated`（他停用它是认真的）。
    */
   state: ModelState;
+  /**
+   * **这个模型自己声明的** wire 覆盖（以及其它自由配置）。不是生效值。
+   *
+   * 与 `resolvedWire` 并列不是冗余：这一份回答「哪一层设了这个键」，那一份回答
+   * 「实际跑的是什么」。上游把两份都发过来，正是为了让控制台不必自己合并。
+   */
   config: Record<string, unknown> | null;
+  /**
+   * 实际生效的线协议描述符：协议默认 ← Provider 的 `config.wire` ← 本模型的。
+   *
+   * atlas 2026-08-24 起直发（`resolveWireFor`，纯配置合并、不发上游请求）。此前
+   * 想看生效值只能跑一次自检，而自检是**真实调用、要烧 token**——于是
+   * `behaviorVersion` 这个便宜信号指向了一个昂贵的答案，实际没人去问。
+   *
+   * **不要在门户里自己合并这三层。** 上游的 `applyOverlay` 是逐键合并
+   * （`headers` 走 string-map 合并、`authStyle` 走枚举读取且遇到非法值静默回退），
+   * 重实现一遍就是同一个事实的第二个来源，而且它的失败方式是安静的：
+   * 渲染出一个从来没有任何请求用过的描述符。
+   */
+  resolvedWire: ResolvedWire;
   /** 何时弃用的——控制台要的是**何时**，不只是**是否**（atlas#236）。 */
   deprecatedAt: string | null;
   createdAt: string;
