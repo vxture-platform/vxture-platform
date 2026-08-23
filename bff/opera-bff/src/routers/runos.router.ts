@@ -285,6 +285,53 @@ export interface CapabilityCallRecord {
   /** 网关自身开销。与 total 的差值就是能力那一段。 */
   latencyGatewayMs: number | null;
   latencyCapabilityMs: number | null;
+
+  /* ── 计量与配额维度（2026-08-24 接出，此前上游一直在发、门户没读）───────── */
+
+  /**
+   * 本次调用的计量量。**字符串，不是数字**——上游是 `Decimal(18,6)`，而
+   * `audit.repository.ts` 只把四个 BigInt 窄化成 Number，Decimal 原样交给
+   * `JSON.stringify`（decimal.js 的 `toJSON` 就是 `toString`）。
+   *
+   * 实测确认过（`GET /api/runos/audit/calls?limit=1` → `costAmount: "1"`），
+   * 没有靠推断：读侧这个形状**上游一条单测都没钉**（写侧 fixture 是数字、
+   * usage-summaries 是字符串），而这正是 `latencyMs` 那条缺陷的温床。
+   *
+   * 别在前端转成 number 再算：Decimal(18,6) 的意义就是不走浮点。
+   */
+  costAmount: string | null;
+  /**
+   * 计量单位（`call` / `token` / `candidate` / `page` …）。
+   *
+   * **必须与数量同时显示**：`costUnit` 是开放词表（product_251 X-3 v0.4），
+   * 同一列里不同能力的单位不同，只显示数字等于让人把 token 和页数加在一起——
+   * 那正是 X-3 举的那个 `SUM()` 例子。
+   */
+  costUnit: string | null;
+
+  /**
+   * 准入那一刻的配额计数与上限。**`quotaLimit === 0` 表示未强制，不是「上限为零」**——
+   * runos 的 `resolveDecision` 注释原文：*"a no-op when the grant's quotaLimit is 0
+   * (unenforced)"*，而列上的默认值也是 0。渲染成「0 / 0」会读成「配额耗尽」，
+   * 恰好是真相的反面。
+   *
+   * 另：它是**准入时**的快照，不是此刻的余量。同一个授权后续还会被别的调用推进。
+   */
+  quotaCounterBefore: number | null;
+  quotaLimit: number | null;
+
+  /** 载荷大小。与延迟配着看才有意义：「慢是因为大」是排障的第二个分叉。 */
+  bytesIn: number | null;
+  bytesOut: number | null;
+
+  /** 产生这次裁决的策略。空数组是常态（默认放行路径不匹配任何策略）。 */
+  matchedPolicyIds: string[];
+  /**
+   * 网关降级模式下作出的裁决。它**限定这一行其余数字的可信度**，所以要显示在
+   * 裁决旁边而不是藏进明细——一个在降级模式下放行的调用，和一个正常放行的调用，
+   * 是两件事。
+   */
+  degradedMode: boolean;
 }
 
 /** `audit.task_outcome` 行——纯断言层（ADR-006），只喂贡献度评分。 */

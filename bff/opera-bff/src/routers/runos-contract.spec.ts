@@ -79,6 +79,45 @@ describe("反向验证：runos 侧实测到的两条漂移", () => {
     expect(String(body["message"])).toContain("remaining");
   });
 
+  /**
+   * 计量与配额维度（2026-08-24 接出）。这一组不是「以防万一」——它钉的是两条会
+   * **静默出错**的边界：
+   *
+   * - `costUnit` 缺了，计量列会只剩一个数字，而 `costUnit` 是开放词表：同一列里
+   *   `rerank` 按 candidate、`parse` 按 page。没有单位的一列数字，等于邀请人把
+   *   token 和页数加起来（product_251 X-3 举的正是这个 `SUM()` 例子）。
+   * - `quotaLimit` 缺了会被读成 0，而 0 在这里的含义是「未强制」；页面据此显示
+   *   「未强制」——于是一条**有上限**的授权被渲染成不限量。
+   */
+  it.each([
+    ["costAmount", "计量列整列消失"],
+    ["costUnit", "只剩数字，不同能力的单位被混在一列里"],
+    ["quotaLimit", "读成 0 → 有上限的授权被渲染成「未强制」"],
+    ["quotaCounterBefore", "配额位置只剩分母"],
+    ["degradedMode", "降级裁决与正常裁决长得一样"],
+    ["matchedPolicyIds", "裁决旁的策略提示变成空串"],
+  ] as const)("调用流水缺 `%s`（%s）", (field, _why) => {
+    const body = thrown(() =>
+      assertRunosContract(payloadFor("audit-calls", [field]), "audit-calls"),
+    );
+    expect(body["code"]).toBe("RUNOS_CONTRACT_FIELD_MISSING");
+    expect(body["field"]).toBe(field);
+  });
+
+  /**
+   * `costAmount` 上线是**字符串**（`Decimal(18,6)`，上游只把四个 BigInt 窄化成
+   * Number，Decimal 原样交给 `JSON.stringify`）。实测确认过，不是推断——读侧这个
+   * 形状上游一条单测都没钉，而那正是 `latencyMs` 那条缺陷的温床。
+   *
+   * 这里不断言类型（契约层只查有无），钉的是**别把它当数字用**这条约定：
+   * 一旦有人在门户里 `Number(costAmount)`，Decimal 存在的理由就没了。
+   */
+  it("`costAmount` 与 `costUnit` 是成对的必有字段，不是可选装饰", () => {
+    const fields = RUNOS_CONTRACT["audit-calls"].fields;
+    expect(fields).toContain("costAmount");
+    expect(fields).toContain("costUnit");
+  });
+
   it("一次点名所有缺的字段，不是只报第一个", () => {
     const body = thrown(() =>
       assertRunosContract([{ capabilityId: "a.b" }], "capabilities"),

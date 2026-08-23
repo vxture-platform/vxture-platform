@@ -76,6 +76,16 @@ interface CapabilityCallRecord {
   latencyTotalMs: number | null;
   latencyGatewayMs: number | null;
   latencyCapabilityMs: number | null;
+  /** `Decimal(18,6)` 上线是**字符串**（实测确认）。别转 number 再算。 */
+  costAmount: string | null;
+  /** 开放词表（`call` / `token` / `candidate` / `page` …），必须与量同时显示。 */
+  costUnit: string | null;
+  quotaCounterBefore: number | null;
+  quotaLimit: number | null;
+  bytesIn: number | null;
+  bytesOut: number | null;
+  matchedPolicyIds: string[];
+  degradedMode: boolean;
 }
 
 interface TaskOutcomeRecord {
@@ -393,11 +403,35 @@ export function RunosCallStreams() {
                 ),
             },
             {
+              /**
+               * 匹配到的策略挂在 title 上——空数组是常态（默认放行不匹配任何策略），
+               * 单独成列会是一整列的「—」。
+               *
+               * `degradedMode` 反过来必须**看得见**：它限定这一行其余数字的可信度。
+               * 一个在降级模式下放行的调用，与一个正常放行的调用，不是同一件事，
+               * 而两者的 `decision` 都是 `allow`。
+               */
               id: "decision",
               header: "裁决",
               align: "center",
               width: "xs",
-              cell: (r: CapabilityCallRecord) => r.decision ?? "—",
+              cell: (r: CapabilityCallRecord) => (
+                <span
+                  className="inline-flex items-center gap-xs"
+                  title={
+                    r.matchedPolicyIds.length
+                      ? `匹配策略：${r.matchedPolicyIds.join("、")}`
+                      : "未匹配任何策略（默认放行路径）"
+                  }
+                >
+                  {r.decision ?? "—"}
+                  {r.degradedMode ? (
+                    <StatusBadge tone="warning" dot>
+                      降级
+                    </StatusBadge>
+                  ) : null}
+                </span>
+              ),
             },
             {
               id: "outcome",
@@ -409,6 +443,72 @@ export function RunosCallStreams() {
                   {r.outcome ?? "—"}
                 </StatusBadge>
               ),
+            },
+            {
+              /**
+               * **量与单位同格**，不拆成两列也不只显示量：`costUnit` 是开放词表
+               * （product_251 X-3 v0.4），同一列里 `rerank` 按 candidate、`parse`
+               * 按 page、多数按 call。只显示数字，等于邀请人把 token 和页数加起来——
+               * 那正是 X-3 举的 `SUM()` 例子。
+               *
+               * 原样显示字符串、不做 Number 转换：上游是 `Decimal(18,6)`，
+               * 走一趟浮点就把它存在的理由丢了。
+               */
+              id: "cost",
+              header: "计量",
+              align: "right",
+              width: "xs",
+              cell: (r: CapabilityCallRecord) =>
+                r.costAmount != null ? (
+                  <span
+                    className="font-mono text-code-sm"
+                    title={`载荷 ${r.bytesIn ?? "—"} B 入 / ${r.bytesOut ?? "—"} B 出`}
+                  >
+                    {r.costAmount}
+                    <span className="text-muted-foreground">
+                      {" "}
+                      {r.costUnit ?? "?"}
+                    </span>
+                  </span>
+                ) : (
+                  "—"
+                ),
+            },
+            {
+              /**
+               * 准入那一刻的配额位置。两件事必须说清，否则这一列会撒谎：
+               *
+               * 1. **`quotaLimit === 0` 是「未强制」，不是「上限为零」。** runos 的
+               *    `resolveDecision` 原文：*"a no-op when the grant's quotaLimit is 0
+               *    (unenforced)"*，而列默认值也是 0。渲染成「0 / 0」会读成「配额耗尽」，
+               *    恰好是真相的反面。
+               * 2. 它是**准入时的快照**，不是此刻余量——同一个授权后续还会被别的调用
+               *    推进。所以标题写「配额位置」而不是「剩余配额」。
+               */
+              id: "quota",
+              header: "配额位置",
+              align: "right",
+              width: "xs",
+              cell: (r: CapabilityCallRecord) =>
+                r.quotaLimit ? (
+                  <span
+                    className="font-mono text-code-sm"
+                    title="准入那一刻的计数 / 上限，不是此刻的余量"
+                  >
+                    {(r.quotaCounterBefore ?? 0).toLocaleString("zh-CN")}
+                    <span className="text-muted-foreground">
+                      {" / "}
+                      {r.quotaLimit.toLocaleString("zh-CN")}
+                    </span>
+                  </span>
+                ) : (
+                  <span
+                    className="text-muted-foreground"
+                    title="这条授权的 quotaLimit 为 0 —— 配额未强制，不是上限为零"
+                  >
+                    未强制
+                  </span>
+                ),
             },
           ]}
           rows={callRows}
