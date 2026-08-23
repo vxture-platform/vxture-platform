@@ -54,6 +54,19 @@ export type {
   MetricKind,
 } from "./constants";
 
+// Atlas 对象状态 —— 上游契约在消费侧的镜像（product_251 M-B3）。opera 与 admin 读同一批
+// 记录，词表与「deprecated 算不算在服务」的判断只能有一份；见
+// constants/atlas-state.constants.ts 文件头。
+export type { ObjectState, ModelState, KeyState } from "./constants";
+export {
+  OBJECT_STATES,
+  MODEL_STATES,
+  KEY_STATES,
+  isEnabled,
+  isServing,
+  isInForce,
+} from "./constants";
+
 // 业务状态 → 展示语气的映射（跨门户共用；不进 DS，DS 零业务语义）
 export type { StatusTone } from "./constants";
 export {
@@ -118,6 +131,16 @@ export {
 
 // Health / identity endpoint contract types (standard 025)
 export type { ServiceIdentity, HealthLiveResponse } from "./utils";
+
+// 上游响应契约断言（机制；词表留在各消费方仓内）
+export { makeContractAssert } from "./contracts";
+export type {
+  ContractTable,
+  ContractViolation,
+  PayloadShape,
+  ResourceContract,
+  ViolationFactory,
+} from "./contracts";
 
 // Errors
 export {

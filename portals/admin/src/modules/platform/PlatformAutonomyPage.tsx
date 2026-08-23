@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { isServing, type ModelState } from "@vxture-platform/shared";
 import { useEffect, useMemo, useState } from "react";
 import {
   DashboardTemplate,
@@ -149,11 +150,19 @@ function isPrivateProvider(provider: string) {
   return ["private", "custom", "self-hosted"].includes(provider);
 }
 
+/** 模型三态的中文标签。三值压成布尔会让「已弃用」读成「已停用」，而前者仍在服务。 */
+const MODEL_STATE_LABEL: Record<ModelState, string> = {
+  active: "启用",
+  inactive: "停用",
+  deprecated: "已弃用",
+};
+
 function buildAutonomyMetrics(
   models: AiModelRecord[],
   overview: PlatformOverview | null,
 ): AutonomyMetric[] {
-  const activeModels = models.filter((model) => model.isActive).length;
+  /* 数**还能服务的**：`deprecated` 仍可解析，把它排除掉会低报平台的模型面。 */
+  const activeModels = models.filter((model) => isServing(model.state)).length;
   const o = overview;
 
   return [
@@ -234,7 +243,8 @@ function buildResourceRows(
     model: model.modelName,
     quota: `${formatNumber(model.capabilities.length)} 项能力`,
     usage: `${formatNumber(grantCountByModelId.get(model.id) ?? 0)} 条授权`,
-    status: model.isActive ? "启用" : "停用",
+    /* 三值，别压成布尔——「已弃用」不是「已停用」，前者仍在服务。 */
+    status: MODEL_STATE_LABEL[model.state],
   }));
 }
 

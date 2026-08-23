@@ -1337,7 +1337,8 @@
       "active": "Active",
       "inactive": "Inactive",
       "online": "Online",
-      "private": "Private"
+      "private": "Private",
+      "deprecated": "Deprecated"
     },
     "actions": {
       "addModel": "Add model",
@@ -1364,7 +1365,8 @@
     },
     "status": {
       "active": "Active",
-      "inactive": "Inactive"
+      "inactive": "Inactive",
+      "deprecated": "Deprecated"
     },
     "pagination": {
       "summary": "Page {page} / {totalPages}, {total} models",
@@ -1520,6 +1522,9 @@
       "actions": {
         "cancel": "Cancel",
         "save": "Save"
+      },
+      "hints": {
+        "grantStateViaRowAction": "Enable/disable is not changed here — use the row action, which records the operation as an activate/deactivate in the audit trail rather than an edit."
       }
     },
     "empty": {

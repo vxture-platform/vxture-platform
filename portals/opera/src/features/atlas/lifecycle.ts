@@ -14,6 +14,7 @@
 
 import type { StatusBadgeTone } from "@vxture/design-system";
 import { OperaApiError } from "@/lib/api";
+import { isEnabled } from "./state";
 
 /* ── 推导状态 ─────────────────────────────────────────────────────────────── */
 
@@ -80,53 +81,47 @@ export const AVAILABILITY_META: Record<
   missing: { label: "模型不存在", tone: "danger" },
 };
 
-/** 意图（isActive）与后果（resolution）**只在上游坏掉时才不一致**，而那正是唯一
- *  值得看的时刻。启用中却不在服务 = 有话要说。
+/**
+ * 意图（`state`）与后果（`resolution`）**只在上游坏掉时才不一致**，而那正是唯一
+ * 值得看的时刻。启用中却不在服务 = 有话要说。
  *
- *  上游没回 `resolution` 时（部署的 Atlas 落后于契约）返回 false：不知道不等于
- *  出事，把「读不到」渲染成告警和把它渲染成正常一样是在编。 */
+ * `resolution` 是**必填**的：Atlas 一直回它（2026-08-23 实测在产）。此前这里把它
+ * 收成可选、缺失时返回 false，那是一层降级兜底——它把「上游没给这一维」渲染成
+ * 「一切正常」，正是本轮要清掉的那类妥协。缺了就是契约破了，该由调用点报错。
+ */
 export function resolutionDivergesFromIntent(
-  isActive: boolean,
-  resolution: EndpointResolutionState | undefined,
+  state: string,
+  resolution: EndpointResolutionState,
 ): boolean {
-  return isActive && resolution !== undefined && resolution !== "serving";
+  return isEnabled(state) && resolution !== "serving";
 }
 
-/* ── 上游字段缺失 ─────────────────────────────────────────────────────────────
+/* ── 上游字段缺失：**已不在这一层处理** ───────────────────────────────────────
  *
- * Atlas 是外部主机，本仓不钉它的版本，所以「契约里有」不等于「线上这台回」。下面
- * 这些字段都是 2026-08 才加的，缺失时**一律显示成「未知」而不是 0 / 正常**。
+ * 这里曾经有三样东西：`formatDependentCount()`（计数缺失显示「—」）、
+ * `deleteDescription()`（计数缺失就换一套「这台 Atlas 会级联删除」的危险文案）、
+ * `STALE_ATLAS_HINT`（四页共用的"上游落后"说明）。2026-08-23 全部删除。
  *
- * 这不是过度防御，是同一条规则的另一面：一个显示 0 而删除回 409 的计数列，比没有
- * 这一列更糟——它教会操作者不信这个页面。把 undefined 也画成 0 就是在造那种列。 */
-
-/** 计数列的显示值。undefined = 这台 Atlas 还没回这个字段。 */
-export function formatDependentCount(count: number | undefined): string {
-  return count === undefined ? "—" : String(count);
-}
+ * 它们的共同问题是**把一个坏掉的契约渲染成一个正常的界面**：字段没了，页面不报错，
+ * 只是换一种说法继续显示。当时的理由是"Atlas 是外部主机、本仓不钉它的版本"——理由
+ * 成立，但结论错了。正确的结论不是"少了就换套说法"，而是"少了就说少了"。
+ *
+ * 现在由 opera-bff 的 `atlas-contract.ts` 在入口拦：必有字段缺失 → 502
+ * `ATLAS_CONTRACT_FIELD_MISSING`，消息里点名是哪个资源缺哪个字段。页面拿到的是一条
+ * 明确的读取失败，而不是一个自信地错着的界面。 */
 
 /**
- * 这台 Atlas 到底有没有删除前置条件——**危险文案必须问过这个再说话**。
+ * **整条端点 / 整根轴不存在**时的说明——与上面删掉的那三样**不是一回事**，这一条留着。
  *
- * 依赖计数（`modelCount` / `endpointRefCount`）和两条前置条件是同一个提交
- * （vxture-atlas#173）一起加进来的，所以「行上有没有那个计数」就是「删除会不会先
- * 拒绝」的可靠判据，不需要真去删一次来试探。
+ * 界线是「上游有没有明确说不」：
  *
- * 判错的代价是不对称的，所以默认取严：字段缺失时按**旧版级联行为**说话。反过来
- * ——在一台真会级联的 Atlas 上写着「不会级联删除任何东西」——等于用文案怂恿人点
- * 下去，而那一下会撤销租户从未同意交出的访问权。旧文案只是过时，这种是骗。
+ *   端点不存在 → 上游回 404 / 400，是它自己说的。如实转述 = 精准的错误提醒。
+ *   字段缺失   → 上游回 200 + 一个缺胳膊的对象，没人说不。此时"如实"只能靠断言，
+ *               而不是靠页面替它编一套说法。
  *
- * @param marker 该资源行上、随 #173 一起出现的那个计数字段
+ * 所以用它的地方必须是**接住了一个真实的 404/400**，并且**绝不拿别的数据顶替**
+ * （用量计量那处写得很清楚：不退回 tenant 数据冒充另一根轴）。
  */
-export function deleteDescription(
-  marker: number | undefined,
-  enforced: string,
-  legacyCascade: string,
-): string {
-  return marker === undefined ? legacyCascade : enforced;
-}
-
-/** 上游落后于契约时的通用说明——四个页面共用一句话，省得四处各写一套。 */
 export const STALE_ATLAS_HINT =
   "当前 Atlas 部署早于交付这项能力的版本（本仓不钉它的版本，它是外部主机）。升级 Atlas 后此处会自动恢复，不需要改门户。";
 

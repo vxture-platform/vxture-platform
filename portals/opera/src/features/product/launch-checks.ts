@@ -30,6 +30,7 @@
  * 才写回检查单**，否则只呈现不落库。
  */
 
+import { isEnabled } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
 
 export type CheckStatus = "pass" | "fail" | "skipped";
@@ -69,7 +70,7 @@ interface OidcClientLite {
 
 interface AtlasGrantLite {
   endpointCode: string;
-  isActive: boolean;
+  state: string;
   expiresAt: string | null;
 }
 
@@ -181,7 +182,7 @@ export async function runLaunchChecks(
   }
 
   /* ③ 模型路由授权 —— 到期在**读时**判定，所以"启用中但已过期"要算失败：
-        isActive 说它有效，网关那边不会放行。 */
+        state 说它有效，网关那边不会放行。 */
   if (atlasGrants instanceof Error) {
     results.push({
       id: "atlas-grants",
@@ -197,16 +198,19 @@ export async function runLaunchChecks(
     const now = Date.now();
     const live = atlasGrants.filter(
       (g) =>
-        g.isActive && (!g.expiresAt || new Date(g.expiresAt).getTime() > now),
+        isEnabled(g.state) &&
+        (!g.expiresAt || new Date(g.expiresAt).getTime() > now),
     );
     const expired = atlasGrants.filter(
       (g) =>
-        g.isActive && g.expiresAt && new Date(g.expiresAt).getTime() <= now,
+        isEnabled(g.state) &&
+        g.expiresAt &&
+        new Date(g.expiresAt).getTime() <= now,
     );
     results.push({
       id: "atlas-grants",
       label: "模型路由授权",
-      what: "产品至少持有一条生效中的模型路由。过期的不算——到期在读时判定，网关不会因为 isActive 还是 true 就放行。",
+      what: "产品至少持有一条生效中的模型路由。过期的不算——到期在读时判定，网关不会因为 state 还写着 active 就放行。",
       side: "ours",
       status: live.length > 0 ? "pass" : "fail",
       detail:

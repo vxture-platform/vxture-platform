@@ -20,6 +20,12 @@ import {
   useToast,
 } from "@vxture/design-system";
 import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
+import {
+  isEnabled,
+  isInForce,
+  isServing,
+  type ModelState,
+} from "@vxture-platform/shared";
 import { activeTone } from "@/modules/shared/tenant-tone";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import {
@@ -148,10 +154,30 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat("zh-CN").format(value);
 }
 
+/**
+ * 卡片底色。**弃用的不算 muted**——它仍在服务、仍在计费，灰掉会让人以为它已经停了，
+ * 而"已停用"与"仍在服务但别再往上建"要做的事完全不同。
+ */
 function modelTone(model: AiModelRecord) {
-  if (!model.isActive) return "muted";
+  if (!isServing(model.state)) return "muted";
   return isPrivateProvider(model.provider) ? "private" : "active";
 }
+
+/**
+ * 模型三态的呈现。**「已弃用」用 warning 而不是 neutral**：它仍在服务，中性色会读成
+ * 「已经关了、不用管」——而它恰恰是需要人去安排迁移的那一档。
+ */
+const MODEL_STATE_TONE: Record<ModelState, StatusBadgeTone> = {
+  active: "success",
+  inactive: "neutral",
+  deprecated: "warning",
+};
+
+const MODEL_STATE_ICON: Record<ModelState, "check" | "x" | "clock"> = {
+  active: "check",
+  inactive: "x",
+  deprecated: "clock",
+};
 
 const LINK_STATUS_TONE: Record<ModelLinkStatus, StatusBadgeTone> = {
   normal: "success",
@@ -200,6 +226,8 @@ export function ModelPlatformPage() {
    * 覆盖，而"这张表为什么是空的"必须一直可查。
    */
   const [loadFailed, setLoadFailed] = useState(false);
+  /** 配额读不回来时上游给的理由；null = 读到了。见上面 `allSettled` 那段注释。 */
+  const [quotaUnavailable, setQuotaUnavailable] = useState<string | null>(null);
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [priceRuleDialog, setPriceRuleDialog] =
     useState<PriceRuleDialogState>(null);
@@ -211,7 +239,22 @@ export function ModelPlatformPage() {
     let active = true;
     setLoading(true);
 
-    Promise.all([
+    /**
+     * **`allSettled` 而不是 `all`。**
+     *
+     * 这六个读里有一个是**上游明确不提供**的：atlas 的 `GET /capability/quotas` 是一个
+     * 故意的 501 桩（`MODEL_ADMIN_NOT_IMPLEMENTED`，原话"Bulk quota listing across
+     * tenants is not available - the platform exposes only a single-workspace
+     * entitlement read"）。它永远不会成功。
+     *
+     * 用 `Promise.all` 的后果是**这一个 501 拖垮整页**：另外五个读全部成功，页面却整片
+     * 空白，还打出「请确认 Model Platform 是否已启动」——把人指向一个根本没坏的服务。
+     * 2026-08-23 实测就是这个状态（5×200 + 1×501 → 整页读取失败）。
+     *
+     * 现在每一路各自落地：成功的照常渲染，失败的那一格自己说清为什么，并且**说的是上游
+     * 给的理由**，不是一句通用的"读取失败"。
+     */
+    Promise.allSettled([
       fetchAiModels(true),
       fetchModelProviders(true),
       fetchModelPriceRules({ includeInactive: true }),
@@ -220,15 +263,32 @@ export function ModelPlatformPage() {
       fetchTenantModelUsageSummaries(),
     ])
       .then(
-        ([
-          records,
-          providerRecords,
-          priceRuleRecords,
-          policyRecords,
-          quotaRecords,
-          usageRecords,
-        ]) => {
+        ([modelsR, providersR, priceRulesR, policiesR, quotasR, usageR]) => {
           if (!active) return;
+          /* 每一路各自落地：拿不到就空数组，让那一格自己降级，不牵连别的。 */
+          const rows = <V,>(r: PromiseSettledResult<V[]>): V[] =>
+            r.status === "fulfilled" ? r.value : [];
+          const records = rows(modelsR);
+          const providerRecords = rows(providersR);
+          const priceRuleRecords = rows(priceRulesR);
+          const policyRecords = rows(policiesR);
+          const quotaRecords = rows(quotasR);
+          /* 用量是信封不是裸数组（product_251 A-4）：轴由服务端解析，回显在信封上。
+             这一格只用行，但**不在 fetch 那层就拆掉信封**——拆掉就等于把「你看的是哪
+             根轴」这个事实丢掉，而空结果时那是唯一还剩下的信息。 */
+          const usageRecords =
+            usageR.status === "fulfilled" ? usageR.value.items : [];
+          /* 模型读不到才算这一页坏了——它是主表。其余各自降级到自己那一格。 */
+          setLoadFailed(modelsR.status === "rejected");
+          if (modelsR.status === "rejected") {
+            setFeedback({ tone: "error", key: "feedback.loadError" });
+          }
+          setQuotaUnavailable(
+            quotasR.status === "rejected"
+              ? (quotasR.reason instanceof Error && quotasR.reason.message) ||
+                  "unavailable"
+              : null,
+          );
           setModels(records);
           setProviders(providerRecords);
           setPriceRules(priceRuleRecords);
@@ -244,6 +304,7 @@ export function ModelPlatformPage() {
         },
       )
       .catch(() => {
+        /* allSettled 不会走到这里，除非 then 里自己抛。留着是纵深防御。 */
         if (active) {
           setLoadFailed(true);
           setFeedback({ tone: "error", key: "feedback.loadError" });
@@ -273,10 +334,10 @@ export function ModelPlatformPage() {
     return models.filter((model) => {
       const matchesQuery =
         !normalizedQuery || modelSearchText(model).includes(normalizedQuery);
+      /* 三档各自成立。此前只有两档、按布尔分，`deprecated` 会被归进「停用」——
+         一个仍在服务的模型被筛进"停用"里，是这次迁移最要避开的那种静默错。 */
       const matchesStatus =
-        statusFilter === "all" ||
-        (statusFilter === "active" && model.isActive) ||
-        (statusFilter === "inactive" && !model.isActive);
+        statusFilter === "all" || statusFilter === model.state;
       const matchesSource =
         sourceFilter === "all" ||
         (sourceFilter === "online" && !isPrivateProvider(model.provider)) ||
@@ -290,16 +351,23 @@ export function ModelPlatformPage() {
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStart = (safeCurrentPage - 1) * pageSize;
   const pagedModels = filteredModels.slice(pageStart, pageStart + pageSize);
-  const activeModels = models.filter((model) => model.isActive).length;
+  /* 数**还能服务的**（`deprecated` 算能）：这一格回答"现在撑着多少"，
+     少算弃用的会低报真实服务面。 */
+  const activeModels = models.filter((model) => isServing(model.state)).length;
   const inactiveModels = models.length - activeModels;
   const privateModels = models.filter((model) =>
     isPrivateProvider(model.provider),
   ).length;
   const onlineModels = models.length - privateModels;
-  const activeProviders = providers.filter((provider) => provider.isActive);
-  const activePolicies = policies.filter((policy) => policy.isActive);
-  const activePriceRules = priceRules.filter((rule) => rule.isActive);
-  const activeQuotas = quotas.filter((quota) => quota.isActive);
+  const activeProviders = providers.filter((provider) =>
+    isEnabled(provider.state),
+  );
+  const activePolicies = policies.filter((policy) => isEnabled(policy.state));
+  const activePriceRules = priceRules.filter((rule) => isEnabled(rule.state));
+  /* 配额**没有** state / isActive —— atlas 的配额生不生效完全由 effectiveAt /
+     expiresAt 这个窗口决定，读时判定。此前这里读的是一个上游从来没有过的布尔，
+     于是这一格恒为 0。 */
+  const activeQuotas = quotas.filter((quota) => isInForce(quota));
   const totalUsageTokens = usageSummaries.reduce(
     (total, summary) => total + Number(summary.totalTokens || 0),
     0,
@@ -309,6 +377,7 @@ export function ModelPlatformPage() {
     { value: "all", label: t("filters.all") },
     { value: "active", label: t("filters.active") },
     { value: "inactive", label: t("filters.inactive") },
+    { value: "deprecated", label: t("filters.deprecated") },
   ] as const;
   const sourceFilters = [
     { value: "all", label: t("filters.all") },
@@ -341,10 +410,10 @@ export function ModelPlatformPage() {
       align: "center",
       cell: (model) => (
         <StatusBadge
-          tone={model.isActive ? "success" : "neutral"}
-          icon={model.isActive ? "check" : "x"}
+          tone={MODEL_STATE_TONE[model.state]}
+          icon={MODEL_STATE_ICON[model.state]}
         >
-          {model.isActive ? t("status.active") : t("status.inactive")}
+          {t(`status.${model.state}`)}
         </StatusBadge>
       ),
     },
@@ -569,7 +638,9 @@ export function ModelPlatformPage() {
                   help: "启用中的配额条数 / 统计期内累计消耗 token。",
                   icon: "chart-bar",
                   label: "配额 / 用量",
-                  value: `${formatNumber(activeQuotas.length)} / ${formatNumber(totalUsageTokens)}`,
+                  value: quotaUnavailable
+                    ? `— / ${formatNumber(totalUsageTokens)}`
+                    : `${formatNumber(activeQuotas.length)} / ${formatNumber(totalUsageTokens)}`,
                   tags: [
                     `配额 ${formatNumber(quotas.length)}`,
                     `汇总 ${formatNumber(usageSummaries.length)}`,
@@ -712,10 +783,8 @@ export function ModelPlatformPage() {
                       <Badge variant="outline">
                         {providerLabel(model.provider)}
                       </Badge>
-                      <StatusBadge tone={activeTone(model.isActive)}>
-                        {model.isActive
-                          ? t("status.active")
-                          : t("status.inactive")}
+                      <StatusBadge tone={MODEL_STATE_TONE[model.state]}>
+                        {t(`status.${model.state}`)}
                       </StatusBadge>
                     </div>
                     <div className="vx-tenant-directory-card__metrics">
@@ -801,7 +870,7 @@ export function ModelPlatformPage() {
               {providers.map((provider) => (
                 <article
                   key={provider.id}
-                  className={`vx-tenant-directory-card vx-model-platform-card vx-model-platform-card--${provider.isActive ? "active" : "muted"}`}
+                  className={`vx-tenant-directory-card vx-model-platform-card vx-model-platform-card--${isEnabled(provider.state) ? "active" : "muted"}`}
                 >
                   <header>
                     <Icon name="settings" size={24} fallback="placeholder" />
@@ -814,8 +883,8 @@ export function ModelPlatformPage() {
                   </header>
                   <div className="vx-tenant-directory-card__badges">
                     <Badge>{provider.providerType}</Badge>
-                    <StatusBadge tone={activeTone(provider.isActive)}>
-                      {provider.isActive
+                    <StatusBadge tone={activeTone(isEnabled(provider.state))}>
+                      {isEnabled(provider.state)
                         ? t("status.active")
                         : t("status.inactive")}
                     </StatusBadge>
@@ -857,7 +926,7 @@ export function ModelPlatformPage() {
                 return (
                   <article
                     key={rule.id}
-                    className={`vx-tenant-directory-card vx-model-platform-card vx-model-platform-card--${rule.isActive ? "active" : "muted"}`}
+                    className={`vx-tenant-directory-card vx-model-platform-card vx-model-platform-card--${isEnabled(rule.state) ? "active" : "muted"}`}
                   >
                     <header>
                       <Icon name="database" size={24} fallback="placeholder" />
@@ -881,14 +950,14 @@ export function ModelPlatformPage() {
                             id: "enable",
                             label: "启用",
                             icon: "play",
-                            disabled: catalogBusy || rule.isActive,
+                            disabled: catalogBusy || isEnabled(rule.state),
                             onSelect: () => void togglePriceRule(rule, true),
                           },
                           {
                             id: "disable",
                             label: "停用",
                             icon: "stop",
-                            disabled: catalogBusy || !rule.isActive,
+                            disabled: catalogBusy || !isEnabled(rule.state),
                             onSelect: () => void togglePriceRule(rule, false),
                           },
                         ]}
@@ -896,8 +965,8 @@ export function ModelPlatformPage() {
                     </header>
                     <div className="vx-tenant-directory-card__badges">
                       <Badge>{rule.currency}</Badge>
-                      <StatusBadge tone={activeTone(rule.isActive)}>
-                        {rule.isActive
+                      <StatusBadge tone={activeTone(isEnabled(rule.state))}>
+                        {isEnabled(rule.state)
                           ? t("status.active")
                           : t("status.inactive")}
                       </StatusBadge>

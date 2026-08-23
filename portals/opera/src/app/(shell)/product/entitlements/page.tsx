@@ -71,6 +71,7 @@ import {
   type StatusBadgeTone,
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
+import { isEnabled } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
 
 interface ProductLite {
@@ -87,7 +88,7 @@ interface RouteGrant {
   endpointCode: string;
   applicationId: string | null;
   applicationType: string | null;
-  isActive: boolean;
+  state: string;
   expiresAt: string | null;
 }
 
@@ -117,14 +118,14 @@ type CapabilityRow =
     }
   | { key: string; kind: "derived"; grant: CapabilityGrant };
 
-/** Atlas endpoint。`resolution` 是**读时推导的后果**，与 `isActive`（意图）分列。 */
+/** Atlas endpoint。`resolution` 是**读时推导的后果**，与 `state`（意图）分列。 */
 interface EndpointLite {
   id: string;
   code: string;
   category: string;
   primaryModelCode: string;
   fallbackModelCode: string | null;
-  isActive: boolean;
+  state: string;
   resolution: string;
 }
 
@@ -343,7 +344,7 @@ function ProductEntitlements() {
     }
   }
 
-  /** 停用一条路由授权。Atlas 是软停用（`isActive=false`），不是删行。 */
+  /** 停用一条路由授权。Atlas 是软停用（`state="inactive"`），不是删行。 */
   async function deactivateRoute(g: RouteGrant) {
     setSubmitting(true);
     try {
@@ -619,8 +620,11 @@ function ProductEntitlements() {
                   align: "center",
                   width: "xs",
                   cell: (g: RouteGrant) => (
-                    <StatusBadge tone={g.isActive ? "success" : "neutral"} dot>
-                      {g.isActive ? "生效中" : "已停用"}
+                    <StatusBadge
+                      tone={isEnabled(g.state) ? "success" : "neutral"}
+                      dot
+                    >
+                      {isEnabled(g.state) ? "生效中" : "已停用"}
                     </StatusBadge>
                   ),
                 },
@@ -640,7 +644,7 @@ function ProductEntitlements() {
                             label: "停用",
                             icon: "pause" as const,
                             danger: true,
-                            disabled: !g.isActive,
+                            disabled: !isEnabled(g.state),
                             onSelect: () => void deactivateRoute(g),
                           },
                           {
@@ -1164,7 +1168,7 @@ function ProductEntitlements() {
         <div className="flex flex-col gap-sm">
           {visible.map((p) => {
             const routes = routesByProduct.get(p.productCode) ?? [];
-            const liveRoutes = routes.filter((g) => g.isActive).length;
+            const liveRoutes = routes.filter((g) => isEnabled(g.state)).length;
             const caps = capByProduct[p.productCode] ?? [];
             const direct = caps.filter((g) => g.grantType === "direct").length;
             const derived = caps.length - direct;

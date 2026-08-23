@@ -70,15 +70,15 @@ interface LogSummaryBucket {
 }
 
 interface LogSummary {
-  windowStart: string;
-  windowEnd: string;
+  from: string;
+  to: string;
   /**
    * **`overall.totalTokens` 恒为 0**，不是"这段时间没有 token"：它来自另一份不带
    * token 求和的聚合。靠把各组加起来倒推 = 给同一个数造第二个权威来源，所以页面
    * 上不设"总 Token"这一格，token 只在分组行里显示。
    */
   overall: LogSummaryBucket;
-  byGroup: (LogSummaryBucket & {
+  items: (LogSummaryBucket & {
     modelCode: string | null;
     providerCode: string | null;
     /**
@@ -344,7 +344,7 @@ export default function MetricsPage() {
             {
               id: "group",
               header: "模型 / Provider",
-              cell: (r: LogSummary["byGroup"][number]) => (
+              cell: (r: LogSummary["items"][number]) => (
                 <span className="text-body-sm">
                   {r.modelCode ?? "—"}
                   <span className="text-muted-foreground">
@@ -361,7 +361,7 @@ export default function MetricsPage() {
               id: "endpoint",
               header: "Endpoint",
               width: "sm",
-              cell: (r: LogSummary["byGroup"][number]) =>
+              cell: (r: LogSummary["items"][number]) =>
                 r.endpointCode ? (
                   <span className="text-code-sm">{r.endpointCode}</span>
                 ) : r.endpointCode === null ? (
@@ -378,14 +378,14 @@ export default function MetricsPage() {
               header: "请求数",
               align: "right",
               width: "xs",
-              cell: (r: LogSummary["byGroup"][number]) => r.requests,
+              cell: (r: LogSummary["items"][number]) => r.requests,
             },
             {
               id: "tokens",
               header: "Token 数",
               align: "right",
               width: "xs",
-              cell: (r: LogSummary["byGroup"][number]) =>
+              cell: (r: LogSummary["items"][number]) =>
                 r.totalTokens === undefined
                   ? "—"
                   : new Intl.NumberFormat("zh-CN").format(r.totalTokens),
@@ -395,26 +395,25 @@ export default function MetricsPage() {
               header: "错误数",
               align: "right",
               width: "xs",
-              cell: (r: LogSummary["byGroup"][number]) => r.errors,
+              cell: (r: LogSummary["items"][number]) => r.errors,
             },
             {
               id: "errorRate",
               header: "错误率",
               align: "right",
               width: "xs",
-              cell: (r: LogSummary["byGroup"][number]) =>
-                formatRate(r.errorRate),
+              cell: (r: LogSummary["items"][number]) => formatRate(r.errorRate),
             },
             {
               id: "p95",
               header: "P95 延迟",
               align: "right",
               width: "xs",
-              cell: (r: LogSummary["byGroup"][number]) =>
+              cell: (r: LogSummary["items"][number]) =>
                 formatMs(r.p95LatencyMs),
             },
           ]}
-          rows={summary?.byGroup ?? []}
+          rows={summary?.items ?? []}
           /* endpointCode 必须进 key：加上这一维之后，同一个 model/provider 会按不同
              入口拆成多行，只用前两段做 key 会撞成重复键——React 会丢行，而丢掉的正是
              这次新增的那一维。 */

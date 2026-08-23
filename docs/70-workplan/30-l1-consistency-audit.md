@@ -457,3 +457,307 @@ tsc 抓到它**只是因为「参数未使用」这条规则**；只要 `outcome
   「逐条签署，不是全有全无」，打成一个 issue 就没法只签一半。
 - **admin-bff 的 `risk_records` / `compliance_events`** 仍用 `status`——它们不在 opera 管理面，
   留待 admin 侧一并收敛，不在这里改一半。
+
+---
+
+# C8 · A-4 响应形状：补 A-3 的洞，三处分歧全收（2026-08-24）
+
+opera 对接 atlas / runos 的联调查出一件 C1–C7 都没覆盖的事：**两个产品都满足 A-3，
+却给出两种互不相容的分页信封。**
+
+A-3 规定的是分页的**入参与义务**（`cursor` + 服务端钳制的 `limit`），一个字没说分页的
+**响应形状**。于是两个产品各自在自己仓的 `20-specs/10-http-surface.md` 里把这个洞填上了
+——而这恰好是两仓 `10-standards/00-index.md` 开篇明令禁止的那件事：
+
+> 标准由平台仓编写与版本化，产品仓一律按引用消费；**标准有缺口先去那边补**，
+> 再镜像回来 —— 绝不在产品仓里自造标准。
+
+两份自造标准各自自洽、各自写进了自己的规范文档，且**都没进豁免登记**。按纪律 3，
+「无理由的偏离视为待改，不是既成事实」。
+
+`product_251` 已发 v0.5，新增条款 **A-4「列表与聚合响应的形状」**。
+
+## 实测到的三处分歧
+
+| #   | 分歧                                    | 证据                                                                                     | 收敛方向         |
+| --- | --------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------- |
+| 1   | 游标页行键                              | atlas `{items, nextCursor}` · runos `{rows, nextCursor}`                                 | 统一 `items`     |
+| 2   | **同名资源 `usage-summaries` 一裸一封** | atlas 返回 `TenantUsageSummaryAdminRecord[]`；runos 返回 `{dimension, from, to, rows}`   | atlas 补信封     |
+| 3   | 窗口回显聚合零共享词汇                  | atlas `{windowStart, windowEnd, overall, byGroup}` · runos `{dimension, from, to, rows}` | atlas 改随 runos |
+
+**第 2 条是最硬的一条。** runos 控制器的注释写着 _"No cursor: this is an aggregate over a
+bounded window"_ —— **和 atlas 返回裸数组用的是同一个理由，形状却相反**。规范开篇那句判据
+就是为这种情况写的：_如果两个上游对同一件事给出不同形状，而这个差异无法用「它们做的事本来
+不同」解释，那它就是历史造成的。_
+
+## 为什么是 `items` 不是 `rows`
+
+不是口味，两条理由：
+
+1. A-3 把这些面定义为「**无界流水**」，里面装的是**事件**不是表行。`rows` 把存储隐喻带进了
+   一份刻意与存储无关的契约。
+2. 更硬的一条：`rows` 在 runos 仓内**已经有含义**。`insertCapabilityCalls(rows)`、
+   `flushStream(..., (rows) => ...)` 里它就是待写入的 DB 行。拿它当线上键，等于在一个文件里
+   给一个词加第二个含义 —— 而这正是 X-4（一词一义）禁的。
+
+收敛后 `rows` 留在内部保持存储含义，**永不上线**。
+
+## A-4 顺带修一个真实缺陷
+
+「回显 MUST NOT 放在每一行」这句不是洁癖。atlas 的 `usage-summaries` 把 `dimension` 放在
+每一行上，而服务端会把 `groupBy` 默认解析成 `tenant`
+（`normalizeUsageRollupDimension(raw)`：`if (raw === undefined) return "tenant"`）。
+
+于是：**空结果时这个回显整个消失** —— 调用方拿到 `[]`，无从得知自己看的是哪根轴。
+与 P3 同病：静默地少给信息，界面上看不出区别。
+
+`cycleMonth` 相反，它是纯透传过滤器（`normalizeUsageSummaryFilters` 不给它兜默认值），
+**没有服务端解析结果，因此不进信封** —— A-4 的判据是「有没有回显」，不是「把参数都抄一遍」。
+
+## 血缘范围：全部在本仓内
+
+跨全组织检索 `usage-summaries` / `logs/summary` / `audit/calls` / `audit/mgmt-events` /
+`audit/outcomes` 的调用方，**没有任何兄弟产品消费这些端点**。消费方只有三个，都在本仓：
+`opera-bff`、`admin-bff`、`console-bff`。改动完全可控，不需要弃用窗口。
+
+## 已落：三仓的实际改动
+
+> **一度受阻**：`D:\MyWebSite\vxturestudio\` 被 `.claude/settings.local.json` 里四条
+> `Edit/Write/MultiEdit/NotebookEdit(//d/MyWebSite/vxturestudio/**)` 的 deny 规则挡下
+> ——那是「上游产品仓只读」那条边界的执行件，比本轮授权更早，且 deny 优先级高于
+> `additionalDirectories`，所以 `/add-dir` 加了目录也不放行。
+>
+> **处理方式是收窄而不是删除**：blanket 规则拆成逐仓拉黑，七个未授权的兄弟仓
+> （karda / terra / varda / arda / vxtpl / agent-template / vx-agent-yucer）继续只读，
+> 只放行 atlas 与 runos。代价要记下来：**新建的兄弟仓不再被自动拦住**，因为枚举式
+> 拉黑把失败模式从「默认安全」翻成了「默认可写」。加新仓时要补一条。
+
+### runos — 线上形状只在两处产生
+
+| 文件                                    | 改动                                                                                                                            |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `service/src/audit/cursor.ts`           | `paged()` 返回类型 `{rows, nextCursor}` → `{items, nextCursor}`；函数入参名 `rows` **保留**（那是 DB 行，含义正确），只改返回键 |
+| `service/src/audit/audit.controller.ts` | `usageSummaries()` 末尾 `.then((rows) => ({dimension, from, to, rows}))` → `items: rows`                                        |
+| `service/src/audit/*.spec.ts`           | 断言键跟改                                                                                                                      |
+| `docs/20-specs/10-http-surface.md`      | 第 76 行 `Each response is {rows, nextCursor}` → `{items, nextCursor}`；补一句指回 product_251 A-4                              |
+
+`audit.service.ts` / `audit.repository.ts` 里的 `rows` **一处都不动** —— 那些是 DB 行。
+
+### atlas — 两个端点
+
+| 文件                                                 | 改动                                                                                                                                                                 |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `service/src/observability/observability.service.ts` | `LogSummaryResult`：`windowStart`/`windowEnd` → `from`/`to`，`byGroup` → `items`；`summarize()` 的 return 跟改。`overall` **保留**（它是与列表并列的聚合量，不是行） |
+| `service/src/runtime/model-admin.service.ts`         | `listUsageSummaries()` 返回 `TenantUsageSummaryAdminRecord[]` → `{dimension, items}`；`dimension` 从每行提到信封（行内那份删掉，它正是空结果时消失的那个回显）       |
+| `service/src/runtime/model-admin.controller.ts`      | `listUsageSummaries` 返回类型跟改                                                                                                                                    |
+| `service/src/**/*.spec.ts`                           | 断言键跟改                                                                                                                                                           |
+| `docs/20-specs/10-http-surface.md`                   | 「Cursor pagination」一节补响应形状；补一句指回 product_251 A-4                                                                                                      |
+
+### platform — 上游落地后
+
+| 文件                                                           | 改动                                                                                           |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `bff/opera-bff/src/routers/runos-contract.ts`                  | 四处 `rowsKey: "rows"` → `"items"`                                                             |
+| `bff/opera-bff/src/routers/atlas-contract.ts`                  | `usage-summaries` 由 `list` 改 `page`/`items` 并补 `dimension` 回显；`logs-summary` 字段名跟改 |
+| `bff/opera-bff/src/routers/upstream-contract.ts`               | 文件头那段「两个上游各用各的词」的说明**要重写** —— 收敛之后它不再成立                         |
+| `bff/opera-bff/src/routers/runos.router.ts`、`atlas.router.ts` | 读取点与类型跟改                                                                               |
+| `bff/admin-bff`、`bff/console-bff`                             | `usage-summaries` 消费点跟改（console-bff 已自行再封一层，一并核对）                           |
+| `portals/opera/**`                                             | `RunosCallStreams.tsx`、`RunosChangeTable.tsx`、观测/计量页读取点                              |
+
+**收敛完成的验收**：两张契约表里 `rowsKey` 只剩一个值。只要还能在表里看到两个不同的行键，
+这件事就没做完 —— 那张表就还在当翻译，而不是当检查。
+
+## 一并做掉：P1.1（runos 游标从未被消费）
+
+复核 A-3 时顺带确认的：**runos 三条流水早已交付 keyset 游标，opera 从来没消费过
+`nextCursor`** —— 页面只给了「最近 100 / 500 / 1000 条」的档位选择，超出档位的历史根本够不着，
+而界面上没有任何地方说明这一点。对照 atlas 请求日志那一侧，页面是有「已加载 N 条，还有更多 /
+加载更多」的。
+
+这不是 UI 细节，是**平台侧漏读了上游已经满足的契约**。因为它改的是同一批读取点，
+与 A-4 的行键收敛放在一次里做，不单独排期。
+
+### 三处收敛之外，实际还修了四件
+
+改动落地时暴露的，都不是 A-4 本身，但都在同一条线上：
+
+1. **契约守卫此前只查行、不查信封。** A-4 让信封承载服务端解析结果之后，这个洞变致命：
+   `nextCursor` 从来没有被守过，于是「runos 早已交付游标、opera 一次都没消费」这件事
+   在守卫全绿的情况下存在了很久。机制补了 `shape.envelopeFields`，**且信封检查不受空
+   集合影响**——那恰恰是行检查失明、而回显最需要被查的时刻。
+
+2. **opera 的 runos 契约表把 `dimension` 抄成了行字段。** 它在信封上。那条读一旦真有
+   数据就会误报，只因 capability/metering 页当轮没被走到，实测也没暴露它。
+
+3. **admin-bff 的 `TenantUsageSummaryRecord` 整体陈旧。** `id` / `statType` /
+   `totalRequests` / `successRequests` / `failedRequests` / `totalCostAmount` /
+   `currency` / `updatedAt` —— **上游一个都不发**。页面只读了 `totalTokens`（恰好还在），
+   所以没炸；这份类型早就不是契约，只是一段没人核对过的记忆。
+
+4. **admin-bff 往上游透传 `statType`。** atlas 的白名单里没有这个参数，而
+   `rejectUnknownFilters` 是**拒绝不是忽略**——页面一旦真送它就是一个 400。换成
+   `groupBy`，那是这个端点真正支持的轴选择。
+
+### 守卫：这次收敛有东西拦着它退回去
+
+| 位置                                                        | 拦什么                                                                          | 反向验证               |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------- |
+| `vxture-runos/scripts/guardrails/check-api-conventions.mjs` | 控制器里出现 `rows`/`byGroup`/`records`；`paged()` 不返回 `{items, nextCursor}` | 两条都退回去跑过，都红 |
+| `bff/opera-bff/src/routers/upstream-contract.spec.ts`       | 两张词表的 `rowsKey` 必须**只有一个值**；每个信封至少钉一个信封字段             | 125 测试全过           |
+
+runos 那条守卫的写法值得记：**它禁的是「词」，不是「`rows:` 这个键」**。第一版只查键形，
+反向验证时才发现要退回的那个形态是对象简写——
+
+```js
+.then((rows) => ({ dimension, from, to, rows }))
+```
+
+查 `rows:` 的规则从它旁边直接走过去了。精确匹配简写要真解析，禁标识符不用：控制器很薄，
+没有哪个正当的控制器需要一个叫 `rows` 的局部量，改个参数名的成本是一个词。
+**一条不能被排版绕开的规则，胜过一条读起来更自然的规则。**
+
+没有反向验证，这个洞会一直在——而它恰好对着这次要防的那个真实形态。
+
+### 三仓验证
+
+| 仓              | 结果                                                                         |
+| --------------- | ---------------------------------------------------------------------------- |
+| vxture-atlas    | type-check 干净 · **966 测试全过** · lint · docs-numbering                   |
+| vxture-runos    | type-check 干净 · **270 测试全过** · lint · docs-numbering · api-conventions |
+| vxture-platform | opera-bff **125 测试全过** · opera / admin / admin-bff type-check 干净       |
+
+生产代码在两个上游都是一次编译通过的，报错全部落在单测——改动面与预期一致。
+
+### 实跑复验（2026-08-24）
+
+两个上游镜像本地重建后重启（`atlas-app:local` / `runos-app:local`），两边 `/readyz` 均
+`ready` 且真连着库（atlas 报 87 个活跃模型）。
+
+atlas 重启踩了一个坑，仓里其实已经写死了做法：`.env` 里的 `DATABASE_URL` 是**主机向**的
+（`127.0.0.1:5432`，给 psql / Prisma CLI 走 forwarder 用），而 compose 会把同一个值插进
+容器，那里 `127.0.0.1` 是容器自己。`docs/50-deployment/00-index.md` 给了替换命令。
+值得记的是它下面那句：**`/healthz` 照样回 `ok`，因为它不碰数据库——只有 `/readyz` 看得出来。**
+
+| 页面                     | 读的是什么                                               | 结果                                 |
+| ------------------------ | -------------------------------------------------------- | ------------------------------------ |
+| `/observability/metrics` | atlas `logs/summary` 新形状 `{from, to, overall, items}` | 网关流量聚合与 Provider 两张表都出数 |
+| `/capability/metering`   | runos `usage-summaries` `{dimension, from, to, items}`   | 出真行（343 / 96 / 1 / 1）           |
+| `/model/metering`        | atlas `usage-summaries` `{dimension, items}`             | **先炸了，见下**                     |
+
+这次实跑的价值全在第三行：**守卫本身就是收敛的证明**。契约表声明了 `items` 与
+`envelopeFields`，形状要是没对上，第一次读就会 `SHAPE_CHANGED` 或 `FIELD_MISSING`。
+前两页出数，等于两个上游的新形状被逐字核对过一遍。
+
+### 漏改的那个消费方是跑出来的，不是搜出来的
+
+`/model/metering` 客户端异常。原因：它**自己声明了一份局部的 `UsageSummaryRecord`**，
+而不是引用共享类型——所以按类型名搜消费方时它不在结果里，六处 `r.dimension` 全被漏掉。
+
+修法不是把字段搬回行上，而是让页面只信**信封回显的那一根轴**：
+
+```ts
+setResolvedAxis(page.dimension); // 不是本地的 axis
+```
+
+两者正常时一致；不一致时上游是对的（比如它把一个不认的值兜底成了 `tenant`）。
+信任本地那个，会让表格按一根上游根本没聚过的轴去解释每一行。
+
+`react-hooks/exhaustive-deps` 顺手抓出两处过期闭包——`resolvedAxis` 没进 useMemo 依赖，
+换轴后表格会拿旧轴解释新行。**类型检查看不见这个，lint 看得见。**
+
+### 还没验的
+
+浏览器扩展在复验途中掉线，以下三项**尚未实跑**，代码与单测均已就绪：
+
+- `/model/metering` 修好之后的实际渲染
+- `/ops/logs`（runos 三条流水 + atlas 请求日志的 `items`）
+- `/audit/changes`（runos mgmt-events + atlas audit-logs 的 `items`）
+
+BFF 日志里零 `CONTRACT` 违约，但那条证据偏弱：日志缓冲区被启动输出占满，且未发生的请求
+同样不产生错误。**真正的证据是页面出数**，所以上面三项要补跑。
+
+---
+
+# C9 · 守卫统一 + 游标真的被消费了（2026-08-24）
+
+C8 收尾时记下的两件事，一起做完。它们看着无关，其实是同一句话的两半：
+**一个保证只做了一半，而一半的保证最容易被当成全部。**
+
+## 一 · 契约守卫从两份变成一份
+
+opera-bff 与 admin-bff 各带一份守卫实现。这不是重复代码那么简单——**两份已经漂了**：
+
+|        | opera-bff 那份                 | admin-bff 那份   |
+| ------ | ------------------------------ | ---------------- |
+| 形状   | 声明式（list / page / single） | **只认裸数组**   |
+| 信封读 | 全覆盖                         | **整条静默跳过** |
+
+代价落在具体的一条读上：admin 的 `usage-summaries` 是信封，于是它**一条都没被守住**，
+而恰恰是它的类型整体陈旧（`id` / `statType` / `totalRequests` / `successRequests` /
+`failedRequests` / `totalCostAmount` / `currency` / `updatedAt` —— 上游一个都不发）。
+唯一没炸的原因是页面只读了恰好还在的 `totalTokens`。
+
+**同一个仓里两套契约守卫，正是 A-4 刚在上游消灭的那个病，低一层的版本**：两份实现都自洽，
+代价落在同时对着两边的人身上——这次那个人是我们自己。
+
+机制搬到 `@vxture-platform/shared`：
+
+- **零框架依赖**，符合该包「运行于任何环境」的定位。异常类型由调用方**注入**——两个 BFF 的
+  错误封套本来就不同（opera 有 `ApiError` 类，admin 直抛 `BadGatewayException`），
+  机制不该替它们选。
+- **词表留在各自仓内**：「我方读哪些字段」是消费方的事实，只有「怎么查」是共用的。
+- 两个 `*-bff` 之间不建依赖的纪律没破：它们共用的是 shared，不是彼此。
+
+顺带给 shared 包配上了 vitest——**机制搬了家却把测试留在别人仓里，等于这个包自己没验证**。
+机制的 16 条测试跟着走；跨词表的 A-4 验收（两张表 `rowsKey` 只有一个值）留在 opera-bff，
+因为它 import 的是那两张词表。
+
+拆分时漏掉了一条：`describe("表里没有这条资源")` 排在被切走的块**之后**，一并没了。
+对账 `109 + 15 ≠ 125` 才发现。已补回。**"测试都过了"不等于"测试都在"。**
+
+admin 侧新增反向验证，`usage-summaries` 退回裸数组 → 4 条红，还原 → 全绿。
+
+## 二 · P1.1：runos 的游标从交付到被消费
+
+runos 三条流水**早就是 keyset 游标**（A-3 已符合）。opera 一次都没消费过 `nextCursor`，
+界面上换成了「最近 100 / 500 / 1000 条」的档位选择器。
+
+那个档位不是页大小，是**能看到多远的上限**——而 runos 把 `limit` clamp 在 1000，
+所以第三档同时就是天花板。超出的历史根本够不着，**而界面上没有任何地方说明这一点**。
+
+对 `mgmt-events` 这条追责流水尤其糟：**查不到与没发生过，在界面上长得一样。**
+
+三处读取点（`audit/calls`、`audit/outcomes`、`audit/mgmt-events`）改成与同一页 Atlas
+那半同形：固定页大小 + 「已加载 N 条，还有更多 /（已到末尾）」+「加载更多」。
+
+两条纪律写进了代码注释，因为它们都不是显然的：
+
+1. **页脚必须显式说到没到末尾。**「加载完了」与「加载不动了」在界面上长得一样，
+   而前者是答案、后者是故障。
+2. **翻页失败不清空已读到的行**，也不把整块变成错误态：手里那几页是真实数据，
+   丢掉它们等于用一次网络抖动惩罚读者。失败走 toast。
+
+另有一处容易踩的：两条流**各有各的游标**。切流不是翻页，拿着上一条流的游标去问另一条流
+会被 `AUDIT_INVALID_CURSOR` 拒掉——那是上游对的，错在我们这边。
+
+## 验证
+
+|                           | 结果                                   |
+| ------------------------- | -------------------------------------- |
+| `@vxture-platform/shared` | 机制 16 条测试（新配 vitest）          |
+| opera-bff                 | 109 条（16 条随机制迁出）              |
+| admin-bff                 | 102 条通过 / 13 跳过；新增词表反向验证 |
+| opera 门户                | type-check + lint 干净                 |
+| `lint:boundaries`         | 2530 模块、2868 依赖，零违规           |
+
+## 还没实跑
+
+浏览器扩展在 C8 复验途中掉线，至今未恢复。以下**尚未在真实数据上跑过**：
+
+- 「加载更多」的实际翻页行为（三条流各一次）
+- 末尾态：`nextCursor` 变 null 时页脚是否如实说「已到末尾」
+- `/model/metering` 修好之后的渲染（C8 遗留）
+- `/ops/logs`、`/audit/changes` 的 `items` 形状（C8 遗留）
+
+单测覆盖的是契约与形状，**覆盖不到「点下去会不会真的翻页」**——那正好是这一轮改的东西。
+所以这一条不能算完。

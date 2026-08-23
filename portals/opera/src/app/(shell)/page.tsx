@@ -38,6 +38,7 @@ import {
   useToast,
   type StatusBadgeTone,
 } from "@vxture/design-system";
+import { isEnabled, isServing } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
 
 type ProviderHealthStatus = "healthy" | "degraded" | "down" | "unknown";
@@ -47,7 +48,7 @@ interface ModelProviderRecord {
   providerCode: string;
   providerType: string;
   providerName: string;
-  isActive: boolean;
+  state: string;
   health?: { status: ProviderHealthStatus };
 }
 
@@ -56,7 +57,8 @@ interface AiModelRecord {
   providerId: string | null;
   modelCode: string;
   modelName: string;
-  isActive: boolean;
+  /** 三值：deprecated 仍在服务。 */
+  state: string;
 }
 
 interface MaintenanceWindowItem {
@@ -102,8 +104,8 @@ type LoadState =
   | { kind: "error"; message: string }
   | { kind: "ready" };
 
-function providerTone(isActive: boolean): StatusBadgeTone {
-  return isActive ? "success" : "neutral";
+function providerTone(state: string): StatusBadgeTone {
+  return isEnabled(state) ? "success" : "neutral";
 }
 
 const HEALTH_META: Record<
@@ -201,8 +203,10 @@ export default function DashboardPage() {
     }
   };
 
-  const activeProviders = providers.filter((p) => p.isActive).length;
-  const activeModels = models.filter((m) => m.isActive).length;
+  const activeProviders = providers.filter((p) => isEnabled(p.state)).length;
+  /* 数**还能服务的**（`deprecated` 算能）：总览回答的是"现在撑着多少"，
+     把已弃用但仍在服务的模型排除掉会低报真实服务面。 */
+  const activeModels = models.filter((m) => isServing(m.state)).length;
   const failedJobs =
     jobSnapshot?.jobs.filter((j) => j.status === "failed") ?? [];
 
@@ -364,8 +368,8 @@ export default function DashboardPage() {
               align: "center",
               width: "xs",
               cell: (r: ModelProviderRecord) => (
-                <StatusBadge tone={providerTone(r.isActive)} dot>
-                  {r.isActive ? "启用" : "停用"}
+                <StatusBadge tone={providerTone(r.state)} dot>
+                  {isEnabled(r.state) ? "启用" : "停用"}
                 </StatusBadge>
               ),
             },

@@ -353,12 +353,34 @@ const PRIMITIVE_LABELS: Record<string, string> = {
   asset: "资产",
 };
 
-/** Skill 的 operations 系统强制恰好一条，不给用户编辑——见文件头。 */
+/**
+ * Skill 的 operations 系统强制恰好一条，不给用户编辑——见文件头。
+ *
+ * ── 2026-08-23：补上 `inputSchema` / `outputSchema` / `idempotent` ─────────────
+ *
+ * 少这三个字段时**注册 Skill 必然失败**：runos 的 `validation.ts` 只有一个操作校验
+ * 循环，它对**每一条** operation 都要求这三样，skill 那条 fetch 并不例外（skill 专属
+ * 的检查是在那个循环**之后**追加的，不是替换它）。所以此前提交一个 skill 会一次性
+ * 收到三条错误：`invalid_schema` × 2 + `missing_field: idempotent`。
+ *
+ * 值得记一笔的是 runos **自己的设计文档与自己的校验器在这里不一致**：
+ * `120-capability-model.md` §4.3 写着「No input/output schemas: the single `fetch`
+ * operation returns the content」，而校验器要求它们必须是 JSON Schema 对象。我们按
+ * **校验器**走（那才是会拒绝请求的那一方），并用**空 schema `{}`** 来编码——空 schema
+ * 在 JSON Schema 里的含义正是「不作任何约束」，是"没有 schema"最接近的合法表达；
+ * 编一个 `{content: string}` 的出参形状会是我们在替 runos 宣布一件它没说过的事。
+ * 这条不一致值得回给 runos（要么校验器给 skill 放行，要么文档改口）。
+ *
+ * `idempotent: true` 是事实判断：取一份内容不改变任何东西。
+ */
 const SKILL_OPERATION = {
   operation: "fetch",
   description: "分发 Skill 内容，不执行——执行永远在 agent 自己的运行时里",
   interactionMode: "sync",
   riskLevel: "read",
+  inputSchema: {},
+  outputSchema: {},
+  idempotent: true,
 } as const;
 
 const CERTIFICATION_ITEMS = [
@@ -538,6 +560,10 @@ export default function CapabilitiesPage() {
     Object.fromEntries(
       CERTIFICATION_ITEMS.map((c) => [c.key, { pass: true, note: "" }]),
     ),
+  );
+  /** 四项的复核依据都非空才能提交——runos 侧对空 note 是整批 400。 */
+  const certificationComplete = CERTIFICATION_ITEMS.every(
+    (c) => (certItems[c.key]?.note ?? "").trim() !== "",
   );
 
   const reload = useCallback(async () => {
@@ -788,12 +814,16 @@ export default function CapabilitiesPage() {
       const result = await api.post<{ outcome: "certified" | "rejected" }>(
         `/api/runos/capabilities/${encodeURIComponent(detail.capabilityId)}/certification`,
         {
+          /* `note` **必填且非空**，四项一条都不能省：runos 的 `certify()` 对每一项都
+             判 `typeof note !== "string" || note.trim() === ""` 并整批 400
+             （`REGISTRY_CHECKLIST_ITEM_INVALID`）。此前这里把空备注**整个键省掉**、
+             界面上又写着"可选"，于是默认状态提交必然失败——而失败信息说的是"item X
+             requires a boolean pass and a non-empty note"，读起来像是这一项填错了。
+             这条要求本身是合理的：一句"通过"没有复核价值，写下为什么才有。 */
           items: CERTIFICATION_ITEMS.map((c) => ({
             item: c.key,
             pass: certItems[c.key]?.pass ?? false,
-            ...(certItems[c.key]?.note.trim()
-              ? { note: certItems[c.key]?.note.trim() }
-              : {}),
+            note: certItems[c.key]?.note.trim() ?? "",
           })),
         },
       );
@@ -903,16 +933,27 @@ export default function CapabilitiesPage() {
     const { version, state } = lifecycleDialog;
     setSubmitting(true);
     try {
-      const result = await api.patch<{ droppedAlias?: string }>(
+      /* 字段名是 `droppedAliases`（**复数、数组**），不是 `droppedAlias`。写错的那半年
+         里下面这条警告一次都没触发过：撤掉一个正是 stable 的版本，界面只给一个平静的
+         绿色 toast，没有人被告知这个能力当下已经没有 stable 可解析。
+         掉的也不只有 stable——`latest` 与任何自定义别名都跟着掉，所以按实际掉的那几个
+         报，而不是预设是哪一个。 */
+      const result = await api.patch<{ droppedAliases?: string[] }>(
         `/api/runos/capabilities/${encodeURIComponent(detail.capabilityId)}/versions/${encodeURIComponent(version)}/lifecycle`,
         { state },
       );
+      const dropped = result.droppedAliases ?? [];
+      const lostStable = dropped.includes("stable");
       toast({
-        tone: result.droppedAlias ? "warning" : "success",
+        tone: dropped.length > 0 ? "warning" : "success",
         title: `${detail.capabilityId}@${version} 已置为 ${state}`,
-        ...(result.droppedAlias
+        ...(dropped.length > 0
           ? {
-              description: `它是当前的 stable，别名已被一并删除——这个能力现在没有 stable 可解析，请尽快提升另一个版本。`,
+              description:
+                `指向它的别名已被一并删除：${dropped.join("、")}。` +
+                (lostStable
+                  ? "其中 stable 是解析入口——这个能力现在**没有 stable 可解析**，请尽快提升另一个版本。"
+                  : "调用方如果按这些别名解析，现在会落空。"),
             }
           : {}),
       });
@@ -1581,10 +1622,22 @@ export default function CapabilitiesPage() {
                         }),
                     },
                     {
+                      /**
+                       * `official` 也要禁掉，不只是 `certified`。
+                       *
+                       * 准入档是**有序的**（`experimental < certified < official`），而
+                       * `certify()` 判过之后是**无条件**把 tier 置成 `certified`——对一个
+                       * 已经是 official 的能力跑这份清单，不是"再确认一次"，是**降级**，
+                       * 而按钮上写着"提交 certified 审核"，读起来像是往上走。
+                       * （2026-08-23 联调实测：first-party 注册进来是 official，跑完四项
+                       * 全过的清单之后变成 certified。）
+                       */
                       id: "certify",
                       label: "提交 certified 审核",
                       icon: "clipboard",
-                      disabled: detail.admissionTier === "certified",
+                      disabled:
+                        detail.admissionTier === "certified" ||
+                        detail.admissionTier === "official",
                       onSelect: openCertification,
                     },
                     {
@@ -1955,8 +2008,8 @@ export default function CapabilitiesPage() {
           >
             <Banner
               tone="info"
-              title="四项固定，全过才算 certified"
-              description="outcome 由 Runos 服务端计算——全部通过才把 admission_tier 置为 certified，任一不通过则 rejected。这里不接受直传 outcome。"
+              title="四项固定，全过才算 certified；每项都要写复核依据"
+              description="outcome 由 Runos 服务端计算——全部通过才把 admission_tier 置为 certified，任一不通过则 rejected。这里不接受直传 outcome。四项的复核依据都是必填的（Runos 侧硬校验）：只勾一个「通过」没有复核价值，写下为什么才有；不通过的那项更要写清卡在哪。"
             />
             <div className="flex flex-col gap-md">
               {CERTIFICATION_ITEMS.map((c) => (
@@ -1990,7 +2043,8 @@ export default function CapabilitiesPage() {
                         },
                       }))
                     }
-                    placeholder="备注（可选）"
+                    placeholder="复核依据（必填）——查了什么、结论是什么"
+                    aria-label={`${c.label} 的复核依据`}
                   />
                 </div>
               ))}
@@ -2003,7 +2057,12 @@ export default function CapabilitiesPage() {
               >
                 取消
               </Button>
-              <Button type="submit" disabled={submitting}>
+              {/* 四条复核依据缺一条就提交不了——上游是整批 400，让人填完再发比
+                  发出去挨一句看不懂的报错好。 */}
+              <Button
+                type="submit"
+                disabled={submitting || !certificationComplete}
+              >
                 提交
               </Button>
             </DialogFooter>

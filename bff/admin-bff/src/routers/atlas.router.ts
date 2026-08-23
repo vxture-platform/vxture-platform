@@ -17,6 +17,7 @@ import {
 import type { Request } from "express";
 import { VxConfigService } from "@vxture/core-config";
 import { OperatorExchangeService } from "../auth/operator-exchange.service";
+import { assertAtlasContract, type AtlasResource } from "./atlas-contract";
 
 /**
  * Path prefix for atlas's capability-plane surface (provider/model/grant
@@ -39,6 +40,42 @@ import { OperatorExchangeService } from "../auth/operator-exchange.service";
  * price-rules / policies / quotas)当模型下拉的数据源——它们创建价格规则、策略
  * 时要引用具体的 provider/model。opera-bff 那份是独立实现,不 import 这里任何
  * 东西,两个 *-bff 之间零交叉引用是明确纪律。
+ *
+ * 2026-08-23(上游路径改名 product_251 X-4,vxture-atlas#206):atlas 把三个含糊的
+ * 资源名改成了说清「授的是什么、路由的是什么」的名字。本文件用到的那个是
+ * `grants` → `tenant-model-grants`(租户 × 模型轴);另两个 `endpoints` →
+ * `model-routes`、`product-grants` → `product-endpoint-grants` 归 opera-bff,
+ * 同日一起改的。
+ *
+ * 旧名仍在服务,但带 `Deprecation: true` + `Sunset: 2026-09-16` 响应头,并计入
+ * `capability_legacy_path_requests_total{path,operator}`——**那个计数器就是删除旧名
+ * 的闸门**(`capability-route-names.ts`:日期是地板,归零才是触发条件)。继续打旧名
+ * 有两个后果:到期日那天这几条路由变 404,且在此之前**让计数器永远归不了零**,
+ * 等于我们自己把上游的清理挡住。
+ *
+ * **本层对外路径一行不动**(`/api/atlas/grants`),页面不受影响——把上游改名吸收在
+ * 适配层正是它存在的理由。审计也不受影响:atlas 的 `canonicalCapabilitySegment()`
+ * 本来就把旧名折回新名再落库,所以改之前落的行记的已经是 `tenant-model-grants`。
+ *
+ * 2026-08-23(同批,契约复核):这一侧的 atlas 契约漂得比 opera 还远,三类都修了。
+ *
+ * 1. **出站方法 PUT → PATCH。** grants / price-rules / policies 三条更新路由在 atlas 上
+ *    只注册了 `@Patch`,发 PUT **实测 404**(直连 atlas 逐方法探:PATCH 401=路由在、
+ *    PUT 404=没有)。也就是说 admin 上「编辑一条授权 / 价格规则 / 策略」此前全线是 404。
+ *    **对外仍是 `@Put`**——门户那侧的语义没变,把上游的方法差异吸收在适配层,同上一条。
+ *
+ * 2. **`isActive` → `state`,两处形状整体换代。** 六个记录全都还声明着 `isActive`,而
+ *    atlas 早已改发 `state`(product_251 M-B3);`ModelPolicyRecord` 与
+ *    `TenantQuotaRecord` 更是整个形状都是上游不再返回的旧版。类型只是注解、
+ *    `atlasRequest<T>()` 只做断言不做校验,所以这些漂移**一个都不报错**——页面读到
+ *    `undefined`,把「生效中」渲染成「停用」、把计数渲染成 0。
+ *
+ * 3. **写入侧的静默忽略。** create body 收的是 `state` 不是 `isActive`;update body
+ *    **根本没有状态字段**(启停只走具名 activate/deactivate,理由是审计要能按
+ *    `?action=deactivate` 检索得到)。此前两处都在发 `isActive`,被上游静默丢掉。
+ *
+ * 新增 `atlas-contract.ts`:列表读出口断言必有字段,缺了直接 502 并点名。它防的正是
+ * 第 2 类——**让契约漂移在入口响一声,而不是在界面上安静地错着**。
  */
 
 import type {
@@ -49,7 +86,7 @@ import type {
   ModelProviderRecord,
   RequestContext,
   TenantQuotaRecord,
-  TenantUsageSummaryRecord,
+  UsageSummaryPage,
 } from "../types/console.types";
 
 type JsonObject = Record<string, unknown>;
@@ -91,7 +128,12 @@ export class AtlasRouter {
   private async request<T>(
     req: Request & RequestContext,
     path: string,
-    options?: { method?: "GET" | "POST" | "PUT" | "DELETE"; body?: JsonObject },
+    options?: {
+      method?: "GET" | "POST" | "PATCH" | "DELETE";
+      body?: JsonObject;
+      /** 只在**列表读**上给：带上它就在出口校验必有字段。见 `atlas-contract.ts`。 */
+      contract?: AtlasResource;
+    },
   ): Promise<T> {
     const bearer = req.operatorAccessToken
       ? await this.operatorExchange.getToken(
@@ -99,11 +141,14 @@ export class AtlasRouter {
           ATLAS_AUDIENCE,
         )
       : null;
-    return atlasRequest<T>(
+    const payload = await atlasRequest<T>(
       path,
       { ...options, ...(bearer ? { bearer } : {}) },
       this.atlasApiUrl,
     );
+    return options?.contract
+      ? assertAtlasContract(payload, options.contract)
+      : payload;
   }
 
   @Get("providers")
@@ -115,6 +160,7 @@ export class AtlasRouter {
     return this.request<ModelProviderRecord[]>(
       req,
       `/capability/providers?includeInactive=${includeInactive === "false" ? "false" : "true"}`,
+      { contract: "providers" },
     );
   }
 
@@ -127,6 +173,7 @@ export class AtlasRouter {
     return this.request<AiModelRecord[]>(
       req,
       `/capability/models?includeInactive=${includeInactive === "false" ? "false" : "true"}`,
+      { contract: "models" },
     );
   }
 
@@ -148,7 +195,8 @@ export class AtlasRouter {
 
     return this.request<AiModelGrantRecord[]>(
       req,
-      `/capability/grants${params.size ? `?${params.toString()}` : ""}`,
+      `/capability/tenant-model-grants${params.size ? `?${params.toString()}` : ""}`,
+      { contract: "tenant-model-grants" },
     );
   }
 
@@ -158,10 +206,14 @@ export class AtlasRouter {
     @Body() body: JsonObject,
   ): Promise<AiModelGrantRecord> {
     assertCanManageModels(req);
-    return this.request<AiModelGrantRecord>(req, "/capability/grants", {
-      method: "POST",
-      body,
-    });
+    return this.request<AiModelGrantRecord>(
+      req,
+      "/capability/tenant-model-grants",
+      {
+        method: "POST",
+        body,
+      },
+    );
   }
 
   @Put("grants/:grantId")
@@ -173,9 +225,9 @@ export class AtlasRouter {
     assertCanManageModels(req);
     return this.request<AiModelGrantRecord>(
       req,
-      `/capability/grants/${encodeURIComponent(grantId)}`,
+      `/capability/tenant-model-grants/${encodeURIComponent(grantId)}`,
       {
-        method: "PUT",
+        method: "PATCH",
         body,
       },
     );
@@ -189,7 +241,7 @@ export class AtlasRouter {
     assertCanManageModels(req);
     return this.request<AiModelGrantRecord>(
       req,
-      `/capability/grants/${encodeURIComponent(grantId)}/activate`,
+      `/capability/tenant-model-grants/${encodeURIComponent(grantId)}/activate`,
       {
         method: "POST",
       },
@@ -204,7 +256,7 @@ export class AtlasRouter {
     assertCanManageModels(req);
     return this.request<AiModelGrantRecord>(
       req,
-      `/capability/grants/${encodeURIComponent(grantId)}`,
+      `/capability/tenant-model-grants/${encodeURIComponent(grantId)}`,
       {
         method: "DELETE",
       },
@@ -226,6 +278,7 @@ export class AtlasRouter {
     return this.request<ModelPriceRuleRecord[]>(
       req,
       `/capability/price-rules${params.size ? `?${params.toString()}` : ""}`,
+      { contract: "price-rules" },
     );
   }
 
@@ -252,7 +305,7 @@ export class AtlasRouter {
       req,
       `/capability/price-rules/${encodeURIComponent(priceRuleId)}`,
       {
-        method: "PUT",
+        method: "PATCH",
         body,
       },
     );
@@ -305,6 +358,7 @@ export class AtlasRouter {
     return this.request<ModelPolicyRecord[]>(
       req,
       `/capability/policies${params.size ? `?${params.toString()}` : ""}`,
+      { contract: "policies" },
     );
   }
 
@@ -331,7 +385,7 @@ export class AtlasRouter {
       req,
       `/capability/policies/${encodeURIComponent(policyId)}`,
       {
-        method: "PUT",
+        method: "PATCH",
         body,
       },
     );
@@ -382,6 +436,7 @@ export class AtlasRouter {
     return this.request<TenantQuotaRecord[]>(
       req,
       `/capability/quotas${params.size ? `?${params.toString()}` : ""}`,
+      { contract: "quotas" },
     );
   }
 
@@ -392,18 +447,22 @@ export class AtlasRouter {
     @Query("applicationId") applicationId?: string,
     @Query("applicationType") applicationType?: string,
     @Query("cycleMonth") cycleMonth?: string,
-    @Query("statType") statType?: string,
-  ): Promise<TenantUsageSummaryRecord[]> {
+    @Query("groupBy") groupBy?: string,
+  ): Promise<UsageSummaryPage> {
     assertCanManageModels(req);
     const params = new URLSearchParams();
     if (tenantId) params.set("tenantId", tenantId);
     if (applicationId) params.set("applicationId", applicationId);
     if (applicationType) params.set("applicationType", applicationType);
     if (cycleMonth) params.set("cycleMonth", cycleMonth);
-    if (statType) params.set("statType", statType);
-    return this.request<TenantUsageSummaryRecord[]>(
+    /* `statType` 曾在这里透传给上游——**atlas 的白名单里没有这个参数**，而 atlas 的
+       `rejectUnknownFilters` 是拒绝不是忽略，所以页面一旦真送它就是一个 400。
+       换成 `groupBy`，那是这个端点真正支持的轴选择。 */
+    if (groupBy) params.set("groupBy", groupBy);
+    return this.request<UsageSummaryPage>(
       req,
       `/capability/usage-summaries${params.size ? `?${params.toString()}` : ""}`,
+      { contract: "usage-summaries" },
     );
   }
 }
@@ -421,7 +480,13 @@ function assertCanManageModels(req: Request & RequestContext): void {
 async function atlasRequest<TResponse>(
   path: string,
   options: {
-    method?: "GET" | "POST" | "PUT" | "DELETE";
+    /**
+     * **改是 PATCH，不是 PUT。** atlas 的三条更新路由（`tenant-model-grants` /
+     * `price-rules` / `policies`）只注册了 `@Patch`，PUT **实测 404**
+     * （2026-08-23 直连 atlas 逐方法探过：PATCH 401=路由在、PUT 404=没有）。
+     * 此前这里发 PUT，于是 admin 上「编辑一条授权 / 价格规则 / 策略」全线是 404。
+     */
+    method?: "GET" | "POST" | "PATCH" | "DELETE";
     body?: JsonObject;
     /** Operator-OBO management token (product_250 M-1), forwarded verbatim. */
     bearer?: string;

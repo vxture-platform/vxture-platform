@@ -71,11 +71,13 @@ import {
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
+import { deleteFailureToast } from "@/features/atlas/lifecycle";
 import {
-  deleteDescription,
-  deleteFailureToast,
-  formatDependentCount,
-} from "@/features/atlas/lifecycle";
+  isEnabled,
+  isServing,
+  type ModelState,
+  type ObjectState,
+} from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
 
 const PROVIDER_MANAGE = "model:provider.manage";
@@ -92,22 +94,14 @@ interface ModelProviderRecord {
   homepageUrl: string | null;
   consoleUrl: string | null;
   billingUrl: string | null;
-  isActive: boolean;
-  health?: { status: ProviderHealthStatus };
-  /** 名下未删除的模型数（不论启停）——挡住删除的就是这个数。 */
-  modelCount?: number;
+  /** 两值：`active` / `inactive`。Provider 没有第三档。 */
+  state: ObjectState;
+  health: { status: ProviderHealthStatus };
+  /** 名下未删除的模型数（不论启停）——挡住删除的就是这个数。契约必有。 */
+  modelCount: number;
   createdAt: string;
   updatedAt: string;
 }
-
-/**
- * **模型的状态是三值**：`active` / `inactive` / `deprecated`。
- *
- * `deprecated` = 仍可解析、不再推荐——它的 `isActive` 仍是 true。所以这一档
- * **不能**用「启用/停用」那个布尔表达，这正是 product_251 B-3 要枚举不要布尔的原句。
- * provider / 密钥仍是两值，故本页只有模型这一处读 `state`。
- */
-type ModelState = "active" | "inactive" | "deprecated";
 
 interface AiModelRecord {
   id: string;
@@ -117,20 +111,29 @@ interface AiModelRecord {
   provider: string;
   endpointUrl: string;
   protocol: string;
+  /** 由哪一层契约服务：chat / embedding / rerank / parse。**创建后不可改**。 */
+  modelType: string;
+  description: string | null;
+  contextWindow: number | null;
+  maxOutputTokens: number | null;
   capabilities: string[];
+  supportsStreaming: boolean;
+  sort: number;
+  /** 上游+wire 指纹。它一变，就是有人把这个 modelCode 指到了别的地方。 */
+  behaviorVersion: string;
   keyReference: { source: "env"; name: string; configured: boolean } | null;
-  state: ModelState;
   /**
-   * 何时弃用的——运营要判断「还剩多久」，光知道「是否」不够。
-   * 可选：旧 atlas 根本没有这个字段（归一层只补 `state`，不编造时间）。
+   * **三值**：`active` / `inactive` / `deprecated`。`deprecated` 仍可解析、只是不再
+   * 推荐——所以这一档**不能**用「启用/停用」那个布尔表达（product_251 B-3 原句）。
+   * provider / 密钥是两值。
    */
-  deprecatedAt?: string | null;
-  /** @deprecated 布尔装不下 `deprecated`；仅存量代码在读，改完即删。 */
-  isActive: boolean;
+  state: ModelState;
+  /** 何时弃用的——运营要判断「还剩多久」，光知道「是否」不够。 */
+  deprecatedAt: string | null;
   /** 引用它的未删除授权数（旧的租户轴，管理面在 admin）。挡删除。 */
-  grantCount?: number;
+  grantCount: number;
   /** 把它挂作 primary **或 fallback** 的未删除 endpoint 数。挡删除。 */
-  endpointRefCount?: number;
+  endpointRefCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -140,7 +143,7 @@ interface ProviderKeyRecord {
   providerCode: string;
   keyAlias: string;
   keyScope: string;
-  isActive: boolean;
+  state: ObjectState;
   lastRotatedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -187,6 +190,29 @@ const PROVIDER_TYPES = [
   { value: "online", label: "在线 API" },
   { value: "private", label: "私有部署" },
   { value: "custom", label: "自定义" },
+];
+
+/**
+ * 模型由**哪一层契约**服务。四个值对应 atlas 上四个不同的 surface
+ * （`/v1/chat` · `/v1/embed` · `/v1/rerank` · `/v1/parse`），**创建后不可改**——
+ * atlas 的列锁不给 UPDATE，改它等于把模型挪到另一个面上而 modelCode 没变。
+ *
+ * 此前这一项根本不在表单里，注册载荷也不送，于是服务端一律默认 `chat`：
+ * **经 opera 注册的模型只能是 chat**。而在产库里四类都真实存在（别的途径建的）。
+ */
+const MODEL_TYPES = [
+  { value: "chat", label: "对话（chat）", hint: "走 /v1/chat，支持流式" },
+  {
+    value: "embedding",
+    label: "向量（embedding）",
+    hint: "走 /v1/embed。runos 的能力发现向量与 reembed 依赖这一类",
+  },
+  { value: "rerank", label: "重排（rerank）", hint: "走 /v1/rerank" },
+  {
+    value: "parse",
+    label: "解析（parse）",
+    hint: "走 /v1/parse，文档版面解析",
+  },
 ];
 
 const KEY_SCOPES = [
@@ -277,8 +303,24 @@ interface ModelDraft {
   providerId: string;
   endpointUrl: string;
   protocol: string;
+  /** 创建后不可改，编辑态锁死且不进载荷。 */
+  modelType: string;
+  description: string;
+  /** 原始输入，提交时才转数字——空串表示"不设"，与 0 不是一回事。 */
+  contextWindow: string;
+  maxOutputTokens: string;
+  supportsStreaming: boolean;
+  sort: string;
   capabilities: string[];
   keyReferenceName: string;
+}
+
+/** 空串 → 不送这个键（让 atlas 用它自己的默认）；有值 → 必须是非负整数。 */
+function parseOptionalInt(raw: string): number | null | undefined {
+  const trimmed = raw.trim();
+  if (trimmed === "") return undefined;
+  const n = Number(trimmed);
+  return Number.isInteger(n) && n >= 0 ? n : null;
 }
 
 function emptyModelDraft(providerId: string, protocol: string): ModelDraft {
@@ -288,6 +330,12 @@ function emptyModelDraft(providerId: string, protocol: string): ModelDraft {
     providerId,
     endpointUrl: "",
     protocol,
+    modelType: "chat",
+    description: "",
+    contextWindow: "",
+    maxOutputTokens: "",
+    supportsStreaming: true,
+    sort: "",
     capabilities: ["chat"],
     keyReferenceName: "",
   };
@@ -300,6 +348,13 @@ function modelDraftFrom(row: AiModelRecord): ModelDraft {
     providerId: row.providerId ?? "",
     endpointUrl: row.endpointUrl,
     protocol: row.protocol,
+    modelType: row.modelType,
+    description: row.description ?? "",
+    contextWindow: row.contextWindow == null ? "" : String(row.contextWindow),
+    maxOutputTokens:
+      row.maxOutputTokens == null ? "" : String(row.maxOutputTokens),
+    supportsStreaming: row.supportsStreaming,
+    sort: String(row.sort),
     capabilities: [...row.capabilities],
     keyReferenceName: row.keyReference?.name ?? "",
   };
@@ -449,7 +504,7 @@ function ModelServiceContent() {
     return providers.filter((p) => {
       if (
         statusFilter !== "all" &&
-        (statusFilter === "active" ? !p.isActive : p.isActive)
+        (statusFilter === "active" ? !isEnabled(p.state) : isEnabled(p.state))
       ) {
         return false;
       }
@@ -482,7 +537,10 @@ function ModelServiceContent() {
   }, [protocols, modelDraft.protocol]);
 
   const activeProviders = useMemo(
-    () => providers.filter((p) => p.isActive || p.id === modelDraft.providerId),
+    () =>
+      providers.filter(
+        (p) => isEnabled(p.state) || p.id === modelDraft.providerId,
+      ),
     [providers, modelDraft.providerId],
   );
 
@@ -531,13 +589,11 @@ function ModelServiceContent() {
       return;
     }
 
-    const payload = {
-      providerCode: providerDraft.providerCode.trim(),
+    /* 可改的那些。`logoUrl` 不进载荷：opera 不再录入也不再展示，而 Atlas 对**未出现**
+       的键按「不改」处理，所以老数据不会被这里的保存悄悄抹掉。 */
+    const mutable = {
       providerName: providerDraft.providerName.trim(),
-      providerType: providerDraft.providerType,
       description: providerDraft.description.trim() || null,
-      /* `logoUrl` 不进载荷：opera 不再录入也不再展示。Atlas 侧对**未出现**的键按
-         「不改」处理，所以老数据不会被这里的保存悄悄抹掉。 */
       homepageUrl: providerDraft.homepageUrl.trim() || null,
       consoleUrl: providerDraft.consoleUrl.trim() || null,
       billingUrl: providerDraft.billingUrl.trim() || null,
@@ -546,15 +602,25 @@ function ModelServiceContent() {
     setSubmitting(true);
     try {
       if (providerDialog.kind === "create") {
-        await api.post("/api/atlas/providers", payload);
+        await api.post("/api/atlas/providers", {
+          providerCode: providerDraft.providerCode.trim(),
+          providerType: providerDraft.providerType,
+          ...mutable,
+        });
         toast({
           tone: "success",
           title: `${providerDraft.providerName} 已接入`,
         });
       } else {
+        /* **只送可改的**。`providerCode` / `providerType` 上面两个输入框在编辑态是
+           disabled 的，但值照旧躺在 draft 里——此前它们跟着 PATCH 一起发出去，而
+           Atlas 对这两个键的判据是「出现即拒」（`normalizeUpdateProvider`：
+           `body.providerCode !== undefined` 就 400 `MODEL_ADMIN_VALIDATION_FAILED`，
+           不比对值），所以**编辑 Provider 保存必然失败**，且报的是一条看起来像
+           "你想改 code" 的错——而用户根本没改。禁用一个输入框不等于把它从载荷里去掉。 */
         await api.patch(
           `/api/atlas/providers/${providerDialog.row.id}`,
-          payload,
+          mutable,
         );
         toast({
           tone: "success",
@@ -575,7 +641,7 @@ function ModelServiceContent() {
   /** 从某个 provider 行发起注册时预填它——这正是合并之后最顺的一条路径。 */
   function openModelCreate(providerId?: string) {
     const fallbackProvider =
-      providerId ?? providers.find((p) => p.isActive)?.id ?? "";
+      providerId ?? providers.find((p) => isEnabled(p.state))?.id ?? "";
     setModelDraft(
       emptyModelDraft(
         fallbackProvider,
@@ -620,14 +686,49 @@ function ModelServiceContent() {
     }
 
     const provider = providerById.get(modelDraft.providerId);
-    const payload = {
-      modelCode: modelDraft.modelCode.trim(),
+    /**
+     * 可改的那些。**`modelCode` 与 `provider` 只在创建时送**：
+     *
+     *   `modelCode`  Atlas 的身份列，`98_column_locks.sql` 只给 INSERT。出现即 400
+     *                （`normalizeUpdateModel` 第一段，不比对值）——它是消费方 pin 的
+     *                版本标识，而 reqlog 按值存了它、没有外键，改名会把这个模型自己的
+     *                计量历史劈成两半。
+     *   `provider`   **根本不是列**：读的时候从所属 provider 联出来的。Atlas 同样
+     *                「出现即 400」，并指明换归属要用 `providerId`（下面送的就是它）。
+     *
+     * 两个输入框在编辑态都已经 disabled，但值照旧躺在 draft 里——此前整包 PATCH 出去，
+     * **编辑模型保存必然失败**。禁用输入框 ≠ 把字段从载荷里去掉。
+     */
+    /* 三个数值字段先校验再拼：非法值**不静默丢掉**，也不当成"不设"送出去
+       ——那两种都会让人以为自己填的生效了。 */
+    const contextWindow = parseOptionalInt(modelDraft.contextWindow);
+    const maxOutputTokens = parseOptionalInt(modelDraft.maxOutputTokens);
+    const sort = parseOptionalInt(modelDraft.sort);
+    const badField = [
+      [contextWindow, "上下文窗口"],
+      [maxOutputTokens, "最大输出"],
+      [sort, "排序权重"],
+    ].find(([v]) => v === null);
+    if (badField) {
+      toast({
+        tone: "danger",
+        title: `${badField[1]}要填非负整数`,
+        description: "留空表示不设；填了就必须是一个 atlas 收得下的整数。",
+      });
+      return;
+    }
+
+    const mutable = {
       modelName: modelDraft.modelName.trim(),
       providerId: modelDraft.providerId || null,
-      provider: provider?.providerCode ?? modelDraft.providerId,
       endpointUrl: modelDraft.endpointUrl.trim(),
       protocol: modelDraft.protocol,
+      description: modelDraft.description.trim() || null,
       capabilities: modelDraft.capabilities,
+      supportsStreaming: modelDraft.supportsStreaming,
+      ...(contextWindow !== undefined ? { contextWindow } : {}),
+      ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+      ...(sort !== undefined ? { sort } : {}),
       keyReference: modelDraft.keyReferenceName.trim()
         ? { source: "env" as const, name: modelDraft.keyReferenceName.trim() }
         : null,
@@ -636,7 +737,14 @@ function ModelServiceContent() {
     setSubmitting(true);
     try {
       if (modelDialog.kind === "create") {
-        await api.post("/api/atlas/models", payload);
+        await api.post("/api/atlas/models", {
+          modelCode: modelDraft.modelCode.trim(),
+          provider: provider?.providerCode ?? modelDraft.providerId,
+          /* `modelType` 只在创建时送——它和 modelCode 一样是身份列，
+             出现在 PATCH 里会被 atlas 直接 400。 */
+          modelType: modelDraft.modelType,
+          ...mutable,
+        });
         toast({ tone: "success", title: `${modelDraft.modelCode} 已注册` });
         /* 注册完把它所属的 provider 展开——不然新注册的东西看不见。 */
         if (modelDraft.providerId) {
@@ -647,7 +755,7 @@ function ModelServiceContent() {
           );
         }
       } else {
-        await api.patch(`/api/atlas/models/${modelDialog.row.id}`, payload);
+        await api.patch(`/api/atlas/models/${modelDialog.row.id}`, mutable);
         toast({ tone: "success", title: `${modelDraft.modelCode} 已保存` });
       }
       setModelDialog(null);
@@ -731,13 +839,13 @@ function ModelServiceContent() {
     try {
       await runWithStepUp(() =>
         api.post(
-          `/api/atlas/provider-keys/${key.id}/${key.isActive ? "deactivate" : "activate"}`,
+          `/api/atlas/provider-keys/${key.id}/${isEnabled(key.state) ? "deactivate" : "activate"}`,
           {},
         ),
       );
       toast({
         tone: "success",
-        title: `密钥「${key.keyAlias}」已${key.isActive ? "停用" : "启用"}`,
+        title: `密钥「${key.keyAlias}」已${isEnabled(key.state) ? "停用" : "启用"}`,
       });
       await loadKeys(keysProvider.providerCode);
     } catch (error) {
@@ -895,10 +1003,53 @@ function ModelServiceContent() {
             },
             {
               id: "protocol",
-              header: "协议",
+              header: "类型 / 协议",
               align: "center",
+              width: "sm",
+              cell: (m: AiModelRecord) => (
+                <span className="flex flex-col items-center gap-2xs">
+                  {/* 非 chat 的单独标出来：它们走的是 atlas 上完全不同的 surface，
+                      而列表里最容易发生的误会就是把一个 embedding 模型当对话模型挑走。 */}
+                  <Badge
+                    variant={m.modelType === "chat" ? "outline" : "default"}
+                  >
+                    {MODEL_TYPES.find((t) => t.value === m.modelType)?.value ??
+                      m.modelType}
+                  </Badge>
+                  {/* behaviorVersion 挂在这里而不是单开一列：平时没人需要读它，
+                      但「同一个 modelCode 行为变了」发生时它是唯一的证据——编码锁死
+                      不可改，而 endpointUrl / providerId / config 都可以改。 */}
+                  <span
+                    className="text-body-sm text-muted-foreground"
+                    title={`行为指纹 ${m.behaviorVersion}｜它一变，就是有人把这个编码指到了别的上游、或改了 wire`}
+                  >
+                    {m.protocol}
+                  </span>
+                </span>
+              ),
+            },
+            {
+              id: "context",
+              header: "上下文 / 输出",
+              align: "right",
               width: "xs",
-              cell: (m: AiModelRecord) => m.protocol,
+              cell: (m: AiModelRecord) => (
+                <span className="flex flex-col items-end gap-2xs text-body-sm">
+                  {/* 未声明就写「未声明」，不写 0——0 是一个会被当真的数字。 */}
+                  <span>
+                    {m.contextWindow == null ? (
+                      <span className="text-muted-foreground">未声明</span>
+                    ) : (
+                      m.contextWindow.toLocaleString("zh-CN")
+                    )}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {m.maxOutputTokens == null
+                      ? "—"
+                      : m.maxOutputTokens.toLocaleString("zh-CN")}
+                  </span>
+                </span>
+              ),
             },
             {
               /* 挡住删除的两个数。入口数可点；授权数不可点——那是旧的租户轴授权，
@@ -909,9 +1060,7 @@ function ModelServiceContent() {
               width: "sm",
               cell: (m: AiModelRecord) => (
                 <span className="flex flex-col items-end gap-2xs text-body-sm">
-                  {m.endpointRefCount === undefined ? (
-                    <span className="text-muted-foreground">入口 —</span>
-                  ) : m.endpointRefCount === 0 ? (
+                  {m.endpointRefCount === 0 ? (
                     <span className="text-muted-foreground">入口 0</span>
                   ) : (
                     <Button asChild variant="link" size="sm">
@@ -923,7 +1072,7 @@ function ModelServiceContent() {
                     </Button>
                   )}
                   <span className="text-muted-foreground">
-                    授权 {formatDependentCount(m.grantCount)}
+                    授权 {m.grantCount}
                   </span>
                 </span>
               ),
@@ -1088,7 +1237,9 @@ function ModelServiceContent() {
                   <Button
                     variant="outline"
                     onClick={() => openModelCreate()}
-                    disabled={submitting || !providers.some((p) => p.isActive)}
+                    disabled={
+                      submitting || !providers.some((p) => isEnabled(p.state))
+                    }
                   >
                     <Icon name="plus" size="sm" aria-hidden="true" />
                     注册模型
@@ -1224,7 +1375,11 @@ function ModelServiceContent() {
                 width: "xs",
                 cell: (r: ModelProviderRecord) => {
                   const owned = modelsByProvider.get(r.id) ?? [];
-                  const activeCount = owned.filter((m) => m.isActive).length;
+                  /* 数的是**还能服务的**（`deprecated` 算能）——这一格回答的是
+                     "这家现在撑着多少模型"，少算弃用的会低报真实服务面。 */
+                  const activeCount = owned.filter((m) =>
+                    isServing(m.state),
+                  ).length;
                   /* 两个来源：`modelCount` 是 Atlas 给的、也是挡住删除的那个数；
                      `owned` 是本页按 providerId 分的组，也就是展开后列出来的那些。
                      正常情况下两者相等。**不等的时候必须说**——否则这一列会和它
@@ -1275,8 +1430,11 @@ function ModelServiceContent() {
                 align: "center",
                 width: "xs",
                 cell: (r: ModelProviderRecord) => (
-                  <StatusBadge tone={r.isActive ? "success" : "neutral"} dot>
-                    {r.isActive ? "启用" : "停用"}
+                  <StatusBadge
+                    tone={isEnabled(r.state) ? "success" : "neutral"}
+                    dot
+                  >
+                    {isEnabled(r.state) ? "启用" : "停用"}
                   </StatusBadge>
                 ),
               },
@@ -1300,7 +1458,7 @@ function ModelServiceContent() {
                           id: "add-model",
                           label: "为它注册模型",
                           icon: "plus",
-                          disabled: !canManageModels || !r.isActive,
+                          disabled: !canManageModels || !isEnabled(r.state),
                           onSelect: () => openModelCreate(r.id),
                         },
                         {
@@ -1357,7 +1515,7 @@ function ModelServiceContent() {
                           icon: "target",
                           onSelect: () => setVerifyTarget(r),
                         },
-                        r.isActive
+                        isEnabled(r.state)
                           ? {
                               id: "disable",
                               label: "停用",
@@ -1581,13 +1739,7 @@ function ModelServiceContent() {
             ? `删除 ${providerDialog.row.providerName}`
             : "删除 Provider"
         }
-        description={deleteDescription(
-          providerDialog?.kind === "delete"
-            ? providerDialog.row.modelCount
-            : undefined,
-          "两条前置条件：这家必须已经停用，且名下没有未删除的模型（不论启停）。不满足会被拒绝并点名是哪些模型挡住了——不会级联删除任何模型或授权。",
-          "⚠ 这台 Atlas 还没有删除前置条件（响应里没有模型数）。在这个版本上删除 Provider 会**级联软删它名下的所有模型，以及那些模型上的每一条租户授权**——一次点击撤销租户从未同意交出的访问权，且不可撤销。先手动清空，或升级 Atlas 之后再删。",
-        )}
+        description="两条前置条件：这家必须已经停用，且名下没有未删除的模型（不论启停）。不满足会被拒绝并点名是哪些模型挡住了——不会级联删除任何模型或授权。"
         submitLabel="删除"
         submitting={submitting}
         onSubmit={submitProvider}
@@ -1651,13 +1803,37 @@ function ModelServiceContent() {
                 {activeProviders.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.providerName}
-                    {p.isActive ? "" : "（已停用）"}
+                    {isEnabled(p.state) ? "" : "（已停用）"}
                   </option>
                 ))}
               </NativeSelect>
               <FieldDescription>
                 只列启用中的 Provider——一个模型可用的前提是它**和它的 Provider
                 都启用**，数据面同样按这条判。当前已经挂着的那个即使停用了也会留在列表里。
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="model-type">类型</FieldLabel>
+              <NativeSelect
+                id="model-type"
+                value={modelDraft.modelType}
+                onChange={(e) =>
+                  setModelDraft({ ...modelDraft, modelType: e.target.value })
+                }
+                disabled={editingModel}
+              >
+                {MODEL_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </NativeSelect>
+              <FieldDescription>
+                {MODEL_TYPES.find((t) => t.value === modelDraft.modelType)
+                  ?.hint ?? ""}
+                {editingModel
+                  ? "。创建后不可改——它决定由哪一层契约服务这个模型，改它等于把模型挪到另一个面上而编码没变。要换类型只能重新注册一个。"
+                  : "。**创建后不可改**，选之前想清楚。"}
               </FieldDescription>
             </Field>
           </FieldGroup>
@@ -1745,6 +1921,97 @@ function ModelServiceContent() {
             </Field>
           </FieldGroup>
         </FieldTier>
+
+        {/* 容量与呈现：全部可留空，留空 = 用 atlas 自己的默认，不是 0。 */}
+        <FieldTier
+          tier="advanced"
+          hint="留空就用 Atlas 的默认值。这几项不影响能不能调通，影响的是调用方能不能提前知道边界。"
+        >
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="model-description">说明</FieldLabel>
+              <Textarea
+                id="model-description"
+                rows={2}
+                value={modelDraft.description}
+                onChange={(e) =>
+                  setModelDraft({ ...modelDraft, description: e.target.value })
+                }
+                placeholder="这个模型适合做什么、有什么已知限制"
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-md">
+              <Field>
+                <FieldLabel htmlFor="model-context">上下文窗口</FieldLabel>
+                <Input
+                  id="model-context"
+                  inputMode="numeric"
+                  value={modelDraft.contextWindow}
+                  onChange={(e) =>
+                    setModelDraft({
+                      ...modelDraft,
+                      contextWindow: e.target.value,
+                    })
+                  }
+                  placeholder="128000"
+                />
+                <FieldDescription>
+                  token 数。留空 = 不声明——调用方就只能自己试出来。
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="model-max-output">最大输出</FieldLabel>
+                <Input
+                  id="model-max-output"
+                  inputMode="numeric"
+                  value={modelDraft.maxOutputTokens}
+                  onChange={(e) =>
+                    setModelDraft({
+                      ...modelDraft,
+                      maxOutputTokens: e.target.value,
+                    })
+                  }
+                  placeholder="16384"
+                />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-md">
+              <Field>
+                <FieldLabel htmlFor="model-sort">排序权重</FieldLabel>
+                <Input
+                  id="model-sort"
+                  inputMode="numeric"
+                  value={modelDraft.sort}
+                  onChange={(e) =>
+                    setModelDraft({ ...modelDraft, sort: e.target.value })
+                  }
+                  placeholder="999"
+                />
+                <FieldDescription>越小越靠前，默认 999。</FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="model-streaming">流式</FieldLabel>
+                <NativeSelect
+                  id="model-streaming"
+                  value={modelDraft.supportsStreaming ? "yes" : "no"}
+                  onChange={(e) =>
+                    setModelDraft({
+                      ...modelDraft,
+                      supportsStreaming: e.target.value === "yes",
+                    })
+                  }
+                >
+                  <option value="yes">支持</option>
+                  <option value="no">不支持</option>
+                </NativeSelect>
+                <FieldDescription>
+                  声明不支持流式，调用方就不会走 stream 那条路——而那条路是 usage
+                  最容易漏计量的地方。
+                </FieldDescription>
+              </Field>
+            </div>
+          </FieldGroup>
+        </FieldTier>
       </DialogForm>
 
       <DialogForm
@@ -1759,13 +2026,7 @@ function ModelServiceContent() {
             ? `删除 ${modelDialog.row.modelCode}`
             : "删除模型"
         }
-        description={deleteDescription(
-          modelDialog?.kind === "delete"
-            ? modelDialog.row.endpointRefCount
-            : undefined,
-          "两条前置条件：这个模型必须已经下线，且没有任何入口或授权还在引用它（入口引用把 fallback 也算进去）。不满足会被拒绝并点名是什么挡住了——不会级联删除任何东西。",
-          "⚠ 这台 Atlas 还没有删除前置条件（响应里没有被引用计数）。在这个版本上删除不会检查还有谁在引用它：仍指着它的 Endpoint 会变成一条断链，正在用它的调用会开始失败。先自己确认没有引用再删，或升级 Atlas。",
-        )}
+        description="两条前置条件：这个模型必须已经下线，且没有任何入口或授权还在引用它（入口引用把 fallback 也算进去）。不满足会被拒绝并点名是什么挡住了——不会级联删除任何东西。"
         submitLabel="删除"
         submitting={submitting}
         onSubmit={submitModel}
@@ -1936,10 +2197,10 @@ function ModelServiceContent() {
                               ?.label ?? k.keyScope}
                           </Badge>
                           <StatusBadge
-                            tone={k.isActive ? "success" : "neutral"}
+                            tone={isEnabled(k.state) ? "success" : "neutral"}
                             dot
                           >
-                            {k.isActive ? "启用" : "停用"}
+                            {isEnabled(k.state) ? "启用" : "停用"}
                           </StatusBadge>
                         </div>
                         <span className="text-body-sm text-muted-foreground">
@@ -1962,8 +2223,8 @@ function ModelServiceContent() {
                             },
                             {
                               id: "toggle",
-                              label: k.isActive ? "停用" : "启用",
-                              icon: k.isActive ? "pause" : "play",
+                              label: isEnabled(k.state) ? "停用" : "启用",
+                              icon: isEnabled(k.state) ? "pause" : "play",
                               onSelect: () => void toggleKeyActive(k),
                             },
                           ]}

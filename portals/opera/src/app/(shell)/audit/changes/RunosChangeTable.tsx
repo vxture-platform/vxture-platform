@@ -13,9 +13,13 @@
  * **只读，且这不是待解除的限制**：runos 的 DB 授权只给 `runos_svc` INSERT+SELECT，
  * Prisma 侧也没有 update/delete 委托——审计的更正靠补偿事件，不靠改行。
  *
- * 无分页：runos 侧 `limit` 服务端 clamp（默认 100、上限 1000），不信调用方。需要更早
- * 的数据只能收窄过滤条件，这是刻意的——对 append-only 的无界流做无界查询，是把合规
- * 页面变成拖垮数据库的方式。
+ * **游标翻页**（product_251 A-3）：keyset 游标 + 服务端 clamp 的 `limit`，逐页前进。
+ * 此前这里写着「无分页」，界面上是「最近 100 / 500 / 1000 条」的档位——那不是页大小，
+ * 是**能看到多远的上限**，而 runos 把 `limit` clamp 在 1000，所以第三档同时是天花板。
+ * 对一条追责用的流水，够不着与没发生过在界面上长得一样，而且没有任何地方说明。
+ *
+ * 一次取一页仍然是对的（对 append-only 的无界流做无界查询会拖垮数据库）；错的是
+ * 没把「还有更多」这个事实交给读的人。页脚现在明说到没到末尾。
  *
  * 关键词打在 `objectId` 上做**精确**过滤，不做跨字段模糊搜索：审计检索要精确，
  * 「像是这个」在合规场景里没有意义。 */
@@ -32,7 +36,6 @@ import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-  NativeSelect,
   useToast,
 } from "@vxture/design-system";
 import { api, OperaApiError } from "@/lib/api";
@@ -51,11 +54,20 @@ interface MgmtEventRecord {
   objectVersionAfter: string | null;
 }
 
-/** 上游改成 keyset 游标分页（A-3）；本页暂只取第一页，`nextCursor` 先不消费。 */
+/**
+ * keyset 游标分页（A-3），集合键是 `items`（A-4，两个上游同形）。
+ *
+ * 2026-08-24 起 `nextCursor` 真的被消费了。此前只取第一页，界面上换成「最近
+ * 100 / 500 / 1000 条」的档位——**超出 1000 的变更记录够不着，而没有任何地方说明**。
+ * 对一条追责用的流水来说这尤其糟：查不到与没发生过，在界面上长得一样。
+ */
 interface MgmtEventPage {
-  rows: MgmtEventRecord[];
+  items: MgmtEventRecord[];
   nextCursor: string | null;
 }
+
+/** 固定页大小。换掉的「最近 N 条」不是页大小，是能看到多远的上限——游标之后没有上限。 */
+const PAGE_SIZE = 100;
 
 type LoadState =
   | { kind: "loading" }
@@ -74,18 +86,26 @@ export function RunosChangeTable() {
   const [rows, setRows] = useState<MgmtEventRecord[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [keyword, setKeyword] = useState("");
-  const [limit, setLimit] = useState("100");
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const query = useCallback(
+    (nextCursor?: string) => {
+      const p = new URLSearchParams({ limit: String(PAGE_SIZE) });
+      const kw = keyword.trim();
+      if (kw) p.set("objectId", kw);
+      if (nextCursor) p.set("cursor", nextCursor);
+      return `/api/runos/audit/mgmt-events?${p.toString()}`;
+    },
+    [keyword],
+  );
 
   const reload = useCallback(async () => {
     setLoad({ kind: "loading" });
-    const p = new URLSearchParams({ limit });
-    const kw = keyword.trim();
-    if (kw) p.set("objectId", kw);
     try {
-      const page = await api.get<MgmtEventPage>(
-        `/api/runos/audit/mgmt-events?${p.toString()}`,
-      );
-      setRows(page.rows);
+      const page = await api.get<MgmtEventPage>(query());
+      setRows(page.items);
+      setCursor(page.nextCursor);
       setLoad({ kind: "ready" });
     } catch (error) {
       setLoad({
@@ -94,7 +114,29 @@ export function RunosChangeTable() {
           error instanceof OperaApiError ? error.message : "读取管理事件失败",
       });
     }
-  }, [keyword, limit]);
+  }, [query]);
+
+  const loadMore = async () => {
+    if (!cursor) return;
+    setLoadingMore(true);
+    try {
+      const page = await api.get<MgmtEventPage>(query(cursor));
+      setRows((prev) => [...prev, ...page.items]);
+      setCursor(page.nextCursor);
+    } catch (error) {
+      /* 翻页失败不清空已读到的行：手里那几页是真实数据，丢掉它们等于用一次网络
+         抖动惩罚读者。 */
+      toast({
+        tone: "danger",
+        title: "加载更多失败",
+        ...(error instanceof OperaApiError && error.message
+          ? { description: error.message }
+          : {}),
+      });
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     void reload();
@@ -129,7 +171,7 @@ export function RunosChangeTable() {
     ) : (
       <EmptyState
         title="没有匹配的事件"
-        description="换个对象 ID，或该条数范围内这条流没有记录。"
+        description="换个对象 ID，或这条流还没有记录。"
       />
     );
 
@@ -161,16 +203,6 @@ export function RunosChangeTable() {
             }}
           />
         </InputGroup>
-        <NativeSelect
-          wrapperClassName="w-fit"
-          value={limit}
-          onChange={(e) => setLimit(e.target.value)}
-          aria-label="返回条数"
-        >
-          <option value="100">最近 100 条</option>
-          <option value="500">最近 500 条</option>
-          <option value="1000">最近 1000 条</option>
-        </NativeSelect>
         <Button
           variant="secondary"
           onClick={() => void reload()}
@@ -253,6 +285,25 @@ export function RunosChangeTable() {
           </Button>
         )}
         empty={emptyState}
+        footer={
+          /* 显式说到没到末尾：「加载完了」与「加载不动了」在界面上长得一样，
+             而前者是答案、后者是故障。 */
+          <div className="flex w-full items-center justify-between gap-sm">
+            <span className="text-body-sm text-muted-foreground">
+              已加载 {rows.length} 条{cursor ? "，还有更多" : "（已到末尾）"}
+            </span>
+            {cursor ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loadingMore}
+                onClick={() => void loadMore()}
+              >
+                {loadingMore ? "加载中…" : "加载更多"}
+              </Button>
+            ) : null}
+          </div>
+        }
       />
     </div>
   );

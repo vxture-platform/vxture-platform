@@ -43,5 +43,21 @@ export type {
   ConsumeMode,
   MetricKind,
 } from "./catalog-domains.constants";
+// Atlas 对象状态 —— 上游契约在消费侧的镜像（product_251 M-B3）。
+// 两个门户读同一批记录，词表与「deprecated 算不算在服务」的判断只能有一份；
+// 为什么这里连谓词也收，见该文件头（与 catalog-domains 的"零业务逻辑"不冲突）。
+export {
+  OBJECT_STATES,
+  MODEL_STATES,
+  KEY_STATES,
+  isEnabled,
+  isServing,
+  isInForce,
+} from "./atlas-state.constants";
+export type {
+  ObjectState,
+  ModelState,
+  KeyState,
+} from "./atlas-state.constants";
 export * from "./status-tone.constants";
 export * from "./nav-preference.constants";

@@ -81,6 +81,7 @@ import {
   STALE_ATLAS_HINT,
   deleteFailureToast,
 } from "@/features/atlas/lifecycle";
+import { isEnabled, type ObjectState } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
 
 /** 与 opera-bff atlas.router.ts 同名能力码——与 endpoints 同一批人管（授权的是
@@ -93,7 +94,7 @@ interface ProductGrantRecord {
   endpointCode: string;
   applicationId: string | null;
   applicationType: string | null;
-  isActive: boolean;
+  state: ObjectState;
   reason: string | null;
   expiresAt: string | null;
   createdAt: string;
@@ -108,7 +109,7 @@ interface ProductSummary {
 interface EndpointSummary {
   code: string;
   category: string;
-  isActive: boolean;
+  state: ObjectState;
 }
 
 type DialogState =
@@ -152,7 +153,7 @@ function describeError(error: unknown): { description?: string } {
 }
 
 /** 到期是读时判定的事实，不是一个会被谁翻转的开关：没有到期清扫任务。一条
- *  `isActive: true` 但已过期的授权不再放行，页面要把这件事说出来。 */
+ *  `state: "active"` 但已过期的授权不再放行，页面要把这件事说出来。 */
 function isExpired(row: ProductGrantRecord): boolean {
   return (
     row.expiresAt !== null && new Date(row.expiresAt).getTime() <= Date.now()
@@ -267,7 +268,9 @@ function ProductGrantsPageContent() {
     return rows.filter(
       (r) =>
         (statusFilter === "all" ||
-          (statusFilter === "active" ? r.isActive : !r.isActive)) &&
+          (statusFilter === "active"
+            ? isEnabled(r.state)
+            : !isEnabled(r.state))) &&
         (kw === "" ||
           r.productCode.toLowerCase().includes(kw) ||
           r.endpointCode.toLowerCase().includes(kw)),
@@ -276,9 +279,9 @@ function ProductGrantsPageContent() {
 
   const pager = useListPagination(filtered, 20);
 
-  /** 启用中却已过期的：`isActive` 说它有效，读时判定说它没有。 */
+  /** 启用中却已过期的：`state` 说它有效，读时判定说它没有。 */
   const expiredButActive = useMemo(
-    () => rows.filter((r) => r.isActive && isExpired(r)),
+    () => rows.filter((r) => isEnabled(r.state) && isExpired(r)),
     [rows],
   );
 
@@ -297,7 +300,7 @@ function ProductGrantsPageContent() {
     () =>
       endpoints.map((e) => ({
         value: e.code,
-        label: e.isActive ? e.code : `${e.code}（入口已停用）`,
+        label: isEnabled(e.state) ? e.code : `${e.code}（入口已停用）`,
       })),
     [endpoints],
   );
@@ -480,7 +483,7 @@ function ProductGrantsPageContent() {
               <Banner
                 tone="warning"
                 title={`${expiredButActive.length} 条授权仍标着启用，但已经过期`}
-                description={`过期后不再放行，而 isActive 不会有人去翻——没有到期清扫任务（定时改写会改掉它本该保全的记录）。要么续期，要么停用：${expiredButActive
+                description={`过期后不再放行，而 state 不会有人去翻——没有到期清扫任务（定时改写会改掉它本该保全的记录）。要么续期，要么停用：${expiredButActive
                   .map((r) => `${r.productCode} → ${r.endpointCode}`)
                   .join("、")}`}
               />
@@ -599,13 +602,16 @@ function ProductGrantsPageContent() {
                 align: "center",
                 width: "xs",
                 cell: (r: ProductGrantRecord) =>
-                  r.isActive && isExpired(r) ? (
+                  isEnabled(r.state) && isExpired(r) ? (
                     <StatusBadge tone="warning" dot>
                       已过期
                     </StatusBadge>
                   ) : (
-                    <StatusBadge tone={r.isActive ? "success" : "neutral"} dot>
-                      {r.isActive ? "生效中" : "已停用"}
+                    <StatusBadge
+                      tone={isEnabled(r.state) ? "success" : "neutral"}
+                      dot
+                    >
+                      {isEnabled(r.state) ? "生效中" : "已停用"}
                     </StatusBadge>
                   ),
               },
@@ -626,7 +632,7 @@ function ProductGrantsPageContent() {
                           icon: "edit",
                           onSelect: () => openEdit(r),
                         },
-                        r.isActive
+                        isEnabled(r.state)
                           ? {
                               id: "revoke",
                               label: "撤销（停用）",
@@ -765,8 +771,7 @@ function ProductGrantsPageContent() {
                 }
               />
               <FieldDescription>
-                到期在读时判定，没有清扫任务去翻
-                isActive——过期后不再放行，但这一行
+                到期在读时判定，没有清扫任务去翻 state——过期后不再放行，但这一行
                 仍会显示成启用，页面会另外提示。
               </FieldDescription>
             </Field>

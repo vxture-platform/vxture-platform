@@ -1,3 +1,4 @@
+import type { ObjectState } from "@vxture-platform/shared";
 import type {
   AccountOperationRecord,
   AnnouncementRecord,
@@ -52,7 +53,7 @@ import type {
   TenantMemberRecord,
   TenantOperationRecord,
   TenantQuotaRecord,
-  TenantUsageSummaryRecord,
+  TenantUsageSummaryPage,
   TenantVerificationRecord,
   TenantVerificationStatus,
   TicketCommentRecord,
@@ -290,15 +291,24 @@ export async function fetchTenantModelQuotas(
   );
 }
 
+/**
+ * `statType` 曾在这里被当成过滤器送上去——**atlas 的白名单里没有这个参数**，而它的
+ * `rejectUnknownFilters` 是拒绝不是忽略，所以真送就是一个 400。换成 `groupBy`，
+ * 那是这个端点真正支持的轴选择。
+ *
+ * 返回的是信封（product_251 A-4）：`groupBy` 由服务端兜底解析，轴必须回显。这里
+ * **原样返回信封、不就地拆成数组**——拆掉等于把「你看的是哪根轴」这个事实丢掉，
+ * 而那正是空结果时唯一还剩下的信息。
+ */
 export async function fetchTenantModelUsageSummaries(
   filters: {
     tenantId?: string;
     applicationId?: string;
     applicationType?: "agent" | "workflow" | "api_client" | "internal_service";
     cycleMonth?: string;
-    statType?: string;
+    groupBy?: "tenant" | "provider" | "model" | "endpoint" | "product";
   } = {},
-): Promise<TenantUsageSummaryRecord[]> {
+): Promise<TenantUsageSummaryPage> {
   const params = new URLSearchParams();
   if (filters.tenantId) params.set("tenantId", filters.tenantId);
   if (filters.applicationId) params.set("applicationId", filters.applicationId);
@@ -306,9 +316,9 @@ export async function fetchTenantModelUsageSummaries(
     params.set("applicationType", filters.applicationType);
   }
   if (filters.cycleMonth) params.set("cycleMonth", filters.cycleMonth);
-  if (filters.statType) params.set("statType", filters.statType);
+  if (filters.groupBy) params.set("groupBy", filters.groupBy);
 
-  return readJsonStrict<TenantUsageSummaryRecord[]>(
+  return readJsonStrict<TenantUsageSummaryPage>(
     `/api/atlas/usage-summaries${params.size ? `?${params.toString()}` : ""}`,
   );
 }
@@ -1216,7 +1226,8 @@ export async function createAiModelGrant(payload: {
   priority?: number | null;
   reason?: string | null;
   expiresAt?: string | null;
-  isActive?: boolean;
+  /** atlas 的 create 收 `state`，不收 `isActive`——后者是它早已不用的名字，送过去被静默忽略。 */
+  state?: ObjectState;
 }): Promise<AiModelGrantRecord> {
   const response = await fetch(
     `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/atlas/grants`,
@@ -1250,7 +1261,10 @@ export async function updateAiModelGrant(
     priority?: number | null;
     reason?: string | null;
     expiresAt?: string | null;
-    isActive?: boolean;
+    /* 这里**没有**状态字段，是刻意的：atlas 的 `UpdateAiModelGrantBody` 不含它。
+       启停只走具名动作（activate/deactivate），理由是审计——`AuditMiddleware` 从路径
+       推导 action，走 update 改状态会被记成 `action='update'`，于是按
+       `?action=deactivate` 检索的审计员一条都查不到。 */
   },
 ): Promise<AiModelGrantRecord> {
   const response = await fetch(
@@ -1310,7 +1324,8 @@ export interface ModelPriceRuleWriteInput {
   requestUnitPrice?: string | number | null;
   effectiveAt?: string | null;
   expiresAt?: string | null;
-  isActive?: boolean;
+  /** 仅 create 收；update 侧由 `Omit` 去掉（atlas 的 update body 不含状态）。 */
+  state?: ObjectState;
 }
 
 export async function createModelPriceRule(
@@ -1326,7 +1341,7 @@ export async function createModelPriceRule(
 
 export async function updateModelPriceRule(
   priceRuleId: string,
-  payload: Partial<Omit<ModelPriceRuleWriteInput, "modelId">>,
+  payload: Partial<Omit<ModelPriceRuleWriteInput, "modelId" | "state">>,
 ): Promise<ModelPriceRuleRecord> {
   return mutateJson<ModelPriceRuleRecord>(
     `/api/atlas/price-rules/${encodeURIComponent(priceRuleId)}`,

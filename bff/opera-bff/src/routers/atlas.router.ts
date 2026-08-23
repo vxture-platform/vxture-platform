@@ -98,9 +98,9 @@
  * 形状修正（旧字段全部还在，是加字段不是换字段）：
  * - providers 行多了 `modelCount`、models 行多了 `grantCount`/`endpointRefCount`
  *   ——设计稿第 2 条规则：**行上的计数就是挡住删除的那个数**，与删除前置条件同源。
- * - endpoints 行多了 `resolution` 与 `models[]`。`isActive` 是运营的意图，
+ * - endpoints 行多了 `resolution` 与 `models[]`。`state` 是运营的意图，
  *   `resolution` 是它当前实际在干什么，两者**只在上游坏掉时才不一致**——而那正是
- *   唯一值得看的时刻。设计稿这条是从「三个 isActive:true 的 endpoint 指着已下线
+ *   唯一值得看的时刻。设计稿这条是从「三个 state:active 的 endpoint 指着已下线
  *   模型、页面全绿」学来的。
  * - usage-summaries 行多了 `dimension` 与 `workspaceId` 等轴字段：这个端点从
  *   tenant 单轴扩成了五轴（`groupBy`），且**计费主体是 (tenant, workspace) 这一对**
@@ -108,6 +108,51 @@
  *
  * 三条边界没有变：price-rules / policies / quotas / 旧 tenant 轴 `grants` 仍归
  * admin（商业封装层，product_100_matrix.md 两段裁决）；opera 不在这里代理它们。
+ *
+ * ── 2026-08-23 上游路径改名（product_251 X-4，vxture-atlas#206）────────────────
+ *
+ * Atlas 把三个含糊的资源名改成了说清「授的是什么、路由的是什么」的名字：
+ *
+ *   endpoints       → model-routes
+ *   product-grants  → product-endpoint-grants
+ *   grants          → tenant-model-grants        （admin 的，不在本文件）
+ *
+ * 旧名**仍在服务**，但带 `Deprecation: true` + `Sunset: 2026-09-16` 响应头，并计入
+ * `capability_legacy_path_requests_total{path,operator}`——那个计数器就是删除旧名的
+ * 闸门（`capability-route-names.ts`：日期是地板，归零才是触发条件）。继续打旧名有两个
+ * 后果：到期日那天变成 404，且在此之前**让计数器永远归不了零**，等于我们自己把上游
+ * 的清理挡住。所以本次把出站路径全部改到新名。
+ *
+ * **本层对外的路径一行不动**（`/api/atlas/endpoints`、`/api/atlas/product-grants`）：
+ * 页面那侧的语义没变，把上游改名吸收在适配层正是它存在的理由——同 runos 那边
+ * `grants/:id` → `POST :id/revoke` 的先例。
+ *
+ * 审计不受影响：Atlas 的 `audit.middleware.ts` 用 `canonicalCapabilitySegment()`
+ * 把旧名折回新名再落库，所以改之前落的行本来就记的是 `model-routes` /
+ * `product-endpoint-grants`——变更审计页上的资源类型筛选值不会因为这次改动分叉。
+ *
+ * ── 查询参数：Atlas 现在**拒收**它不认识的过滤器 ──────────────────────────────
+ *
+ * 每个 list 端点都过一遍 `rejectUnknownFilters(all, ALLOWED, "*_UNKNOWN_FILTER")`
+ * （atlas `http-query.ts`）：多送一个键不是被忽略，是 400，且 message 会把该端点接受
+ * 的全集列出来。理由写在那个文件里——一个没被应用的过滤器会回一页**没筛过的**结果，
+ * HTTP 200、形状正常、答案完全不对，而这在审计检索上是最坏的一种失败。
+ *
+ * 对本文件的意义是：**往任何一个 params 里加键之前，先去上游确认它在 allowlist 里**。
+ * 加错了会立刻整页报错（响亮），比悄悄多回一堆行好；但那也意味着「顺手加个过滤器」
+ * 不再是一个本地决定。当前逐端点的 allowlist：
+ *   providers            includeInactive
+ *   provider-keys        providerCode
+ *   model-routes         includeInactive, modelCode
+ *   models               includeInactive, providerId
+ *   product-endpoint-grants  productCode, endpointCode, includeInactive
+ *   usage-summaries      tenantId, applicationId, applicationType, cycleMonth,
+ *                        providerCode, modelCode, productCode, groupBy
+ *   logs                 tenantId, modelCode, providerCode, endpointCode, status,
+ *                        requestId, taskId, from, to, cursor, limit
+ *   logs/summary         window, modelCode, providerCode, endpointCode
+ *   audit-logs           objectType, objectId, actorId, action, outcome, from, to,
+ *                        cursor, limit
  */
 
 import {
@@ -129,7 +174,7 @@ import type { Pool } from "pg";
 import { OperatorExchangeService } from "../auth/operator-exchange.service";
 import type { OperatorAuditEntry } from "../audit/audit-log";
 import { recordProxyWrite } from "../audit/proxy-audit";
-import { normalizeAtlasState } from "./atlas-compat";
+import { assertAtlasContract, type AtlasResource } from "./atlas-contract";
 import {
   notEntitled,
   unauthenticated,
@@ -147,6 +192,18 @@ const MODEL_MANAGE_CAPABILITY = "model:model.manage";
 
 type JsonObject = Record<string, unknown>;
 type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
+
+/**
+ * 两值资源的最小词表（atlas `object-state.ts`）。Provider / Endpoint /
+ * Product Grant / Provider Key 都是它。
+ */
+export type ObjectState = "active" | "inactive";
+
+/**
+ * 模型的三值状态。第三档 `deprecated` 正是 product_251 M-B3 立论那句话的实例：
+ * **仍可解析、不再推荐**，既不是 true 也不是 false，布尔装不下。
+ */
+export type ModelState = ObjectState | "deprecated";
 
 interface AtlasErrorBody {
   code?: string;
@@ -178,13 +235,8 @@ export interface ModelProviderRecord {
   homepageUrl: string | null;
   consoleUrl: string | null;
   billingUrl: string | null;
-  /**
-   * product_251 B-3。**上游两代都保证有它**：新 atlas 直接返回，旧 atlas 由
-   * `atlas-compat.ts` 从 `isActive` 派生——所以页面只读这个，不读 `isActive`。
-   */
-  state: string;
-  /** @deprecated 旧 atlas 的形状。atlas 部署后连同 `atlas-compat.ts` 一起删。 */
-  isActive?: boolean;
+  /** product_251 B-3 的两值词表：`active` / `inactive`。 */
+  state: ObjectState;
   config: Record<string, unknown> | null;
   health: ProviderHealth;
   createdAt: string;
@@ -232,19 +284,47 @@ export interface AiModelRecord {
   provider: string;
   endpointUrl: string;
   protocol: string;
+  /**
+   * 这一行由**哪一层契约**来服务：`chat` / `embedding` / `rerank` / `parse`。
+   *
+   * 它决定的是 atlas 上哪个 surface 认这个模型（`/v1/chat` / `/v1/embed` /
+   * `/v1/rerank` / `/v1/parse`），**且创建后不可改**——atlas 的列锁不给 UPDATE，
+   * 送过去是 400。所以注册时选错等于要重新注册一个。
+   *
+   * 2026-08-23 补：此前 opera 的注册载荷根本不送这个字段，服务端默认 `chat`——
+   * 也就是**经 opera 注册的模型只能是 chat**，而在产库里 embedding / rerank / parse
+   * 三类都真实存在（它们是别的途径建的）。这是一处实打实的联通缺口，不是打磨。
+   */
+  modelType: string;
+  description: string | null;
+  /** 上下文窗口（token）。在产库 131 个模型里 128 个有值。 */
+  contextWindow: number | null;
+  maxOutputTokens: number | null;
   capabilities: string[];
+  supportsStreaming: boolean;
+  /** 列表排序权重，越小越前；atlas 创建时默认 999。 */
+  sort: number;
+  /**
+   * 上游 + wire 的不透明指纹（atlas `model-behavior-version.ts`）。
+   *
+   * 它存在的唯一理由是让「有人把这个模型指到了别的上游」**变得可观测**——`modelCode`
+   * 锁死不可改，但 `endpointUrl` / `providerId` / `config` 都允许改，改完调用方拿到的
+   * 还是同一个 modelCode，行为却换了。这个值一变就是那件事发生了。
+   */
+  behaviorVersion: string;
   keyReference: {
     source: "env";
     name: string;
     configured: boolean;
   } | null;
   /**
-   * product_251 B-3。**上游两代都保证有它**：新 atlas 直接返回，旧 atlas 由
-   * `atlas-compat.ts` 从 `isActive` 派生——所以页面只读这个，不读 `isActive`。
+   * **模型是三值**，与 provider / grant / endpoint 的两值不同。
+   *
+   * `deprecated` = **仍可解析、不再推荐**，它的 `is_active` 仍是 true——所以「已弃用」
+   * 不是「已停用」。优先级由 atlas 定：`deleted_at` > `is_active` > `deprecated_at`，
+   * 即运营明确停用的模型报 `inactive` 而不是 `deprecated`（他停用它是认真的）。
    */
-  state: string;
-  /** @deprecated 旧 atlas 的形状。atlas 部署后连同 `atlas-compat.ts` 一起删。 */
-  isActive?: boolean;
+  state: ModelState;
   config: Record<string, unknown> | null;
   /** 何时弃用的——控制台要的是**何时**，不只是**是否**（atlas#236）。 */
   deprecatedAt: string | null;
@@ -258,13 +338,8 @@ export interface ProviderKeyRecord {
   providerCode: string;
   keyAlias: string;
   keyScope: string;
-  /**
-   * product_251 B-3。**上游两代都保证有它**：新 atlas 直接返回，旧 atlas 由
-   * `atlas-compat.ts` 从 `isActive` 派生——所以页面只读这个，不读 `isActive`。
-   */
-  state: string;
-  /** @deprecated 旧 atlas 的形状。atlas 部署后连同 `atlas-compat.ts` 一起删。 */
-  isActive?: boolean;
+  /** product_251 B-3 的两值词表：`active` / `inactive`。 */
+  state: ObjectState;
   lastRotatedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -306,14 +381,9 @@ export interface ModelEndpointRecord {
   primaryModelCode: string;
   fallbackModelCode: string | null;
   /** 运营的**意图**。父级动作永不写子级：停用一个模型不会停用指着它的 endpoint。 */
-  /**
-   * product_251 B-3。**上游两代都保证有它**：新 atlas 直接返回，旧 atlas 由
-   * `atlas-compat.ts` 从 `isActive` 派生——所以页面只读这个，不读 `isActive`。
-   */
-  state: string;
-  /** @deprecated 旧 atlas 的形状。atlas 部署后连同 `atlas-compat.ts` 一起删。 */
-  isActive?: boolean;
-  /** 意图的**后果**，读时推导。与 isActive 不一致时，就是上游出事了。 */
+  /** product_251 B-3 的两值词表：`active` / `inactive`。 */
+  state: ObjectState;
+  /** 意图的**后果**，读时推导。与 `state` 不一致时，就是上游出事了。 */
   resolution: EndpointResolutionState;
   /** primary 在前、fallback 在后，各自带「为什么能／不能服务」。 */
   models: EndpointModelRef[];
@@ -338,13 +408,8 @@ export interface ProductGrantRecord {
   endpointCode: string;
   applicationId: string | null;
   applicationType: string | null;
-  /**
-   * product_251 B-3。**上游两代都保证有它**：新 atlas 直接返回，旧 atlas 由
-   * `atlas-compat.ts` 从 `isActive` 派生——所以页面只读这个，不读 `isActive`。
-   */
-  state: string;
-  /** @deprecated 旧 atlas 的形状。atlas 部署后连同 `atlas-compat.ts` 一起删。 */
-  isActive?: boolean;
+  /** product_251 B-3 的两值词表：`active` / `inactive`。 */
+  state: ObjectState;
   reason: string | null;
   expiresAt: string | null;
   createdAt: string;
@@ -418,19 +483,25 @@ export interface GatewayApiKeyRecord {
   kind: "internal" | "external";
   owner: string | null;
   keyPrefix: string;
-  /** Atlas 侧是已 VALIDATE 的 CHECK 约束，三档到顶——**没有 `expired` 这一档**。 */
-  status: "active" | "disabled" | "revoked";
   /**
-   * 到期时间。**可选，且当前 Atlas 一定不回**——`key.gateway_api_keys` 还没有这一
-   * 列（owner 2026-08-14 决定要加，见 `docs/80-liaison/90-…-atlas-api-key-lifecycle.md`）。
-   *
-   * 先按可选字段接住：Atlas 交付那天不用改门户。在此之前值恒为 undefined，页面
-   * 显示「不限」，**不会**凭空出现一个永远不亮的「已失效」态。
-   *
-   * 到期是**读时判定**的（与 product-grant 的到期同一套判断）：没有定时清扫任务，
-   * 所以一行会同时是 `status: "active"` 且已过期——这正是要在界面上说出来的状态。
+   * 运营**设成**什么。2026-08-23 起对齐 Atlas 现行形状：字段由 `status` 改名
+   * `state`，中间那档由 `disabled` 改叫 `inactive`（product_251 M-B3 最小词表）。
+   * 库里那一列仍是 `disabled`，Atlas 在记录边界上换算、不迁数据。
    */
-  expiresAt?: string | null;
+  state: "active" | "inactive" | "revoked";
+  /**
+   * 现在**实际**是什么：把到期折进去之后的态，比 `state` 多一档 `expired`。
+   *
+   * **读时推导，从不入库**——定时任务翻旧行等于为了让排程成立而改写历史，而且在到期
+   * 发生到任务跑到之间，存着的那个值是假的（价格规则与策略的到期同一套判断）。优先级
+   * 终态优先：revoked 无论到期与否都是 revoked；inactive 读作 inactive 而不是 expired，
+   * 因为那是运营选的、可以撤回的态。
+   *
+   * 门户读这个，不要自己拿 `expiresAt` 和当前时间再算一遍。
+   */
+  effectiveState: "active" | "expired" | "inactive" | "revoked";
+  /** null = 不限期，跑到被撤销为止。create 与 rotate 都可以带这个入参。 */
+  expiresAt: string | null;
   lastUsedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -450,6 +521,13 @@ export interface GatewayApiKeyWithSecret extends GatewayApiKeyRecord {
 export interface AtlasRequestLogRecord {
   id: string;
   requestId: string;
+  /**
+   * **跨产品关联键**（product_251 X-2）。同一个 taskId 在 runos 的
+   * `audit.capability_call` 里也在——一次 agent 任务在模型面烧了什么、在能力面调了
+   * 什么，只有这一个字段能把两条流对起来。X-2 特意把它加到**读形状**上而不只是过滤
+   * 器：一个能筛却读不回来的维度，等于拿到行之后无法分组。
+   */
+  taskId: string | null;
   status: string;
   tenantId: string | null;
   workspaceId: string | null;
@@ -458,11 +536,15 @@ export interface AtlasRequestLogRecord {
   agentId: string | null;
   modelCode: string | null;
   providerCode: string | null;
+  /** S2S 令牌上的 `act.sub`，不是调用方自称的——与 usage-summaries 的 product 轴同源。 */
+  productCode: string | null;
+  endpointCode: string | null;
   inputTokens: number | null;
   outputTokens: number | null;
   totalTokens: number | null;
   latencyMs: number | null;
   usageType: string | null;
+  costUnit: string | null;
   createdAt: string;
   error: Record<string, unknown> | null;
 }
@@ -473,7 +555,7 @@ export interface AtlasRequestLogPage {
   nextCursor: string | null;
 }
 
-/** `/capability/logs/summary` —— 窗口聚合，byGroup 按 model/provider/endpoint 分组。 */
+/** `/capability/logs/summary` —— 窗口聚合，`items` 按 model/provider/endpoint 分组。 */
 export interface AtlasLogSummaryBucket {
   requests: number;
   errors: number;
@@ -483,9 +565,14 @@ export interface AtlasLogSummaryBucket {
   p95LatencyMs: number | null;
 }
 
+/**
+ * product_251 A-4 之后，窗口回显叫 `from`/`to`、集合叫 `items`——与 runos 的
+ * `/audit/usage-summaries` 同一套词。它们此前是 `windowStart`/`windowEnd`/`byGroup`：
+ * 同一个概念在两个上游有两套词，运营者读到的两份聚合含义相同、长相毫无关系。
+ */
 export interface AtlasLogSummary {
-  windowStart: string;
-  windowEnd: string;
+  from: string;
+  to: string;
   /** 注意：`overall.totalTokens` 恒为 0——它来自另一份不带 token 求和的聚合，
    *  靠把各组加起来倒推等于给同一个数造第二个权威来源。别在页面上把它当真值渲染。 */
   overall: AtlasLogSummaryBucket;
@@ -493,7 +580,7 @@ export interface AtlasLogSummary {
    *  modelCode/taskProfile（一种正当的路由方式）、以及 incr/03 之前的老行，都落在
    *  这一组。Atlas 如实上报而不是丢弃，好让各组仍能加总回 `overall`——页面把它藏
    *  起来就等于少报。 */
-  byGroup: (AtlasLogSummaryBucket & {
+  items: (AtlasLogSummaryBucket & {
     modelCode: string | null;
     providerCode: string | null;
     endpointCode: string | null;
@@ -543,18 +630,25 @@ export interface TenantUsageSummaryRecord {
  * 密钥库的第二份未加密副本，比它要堵的缺口更糟）。
  *
  * 被拒绝的尝试也记，`outcome: "failure"`——包括守卫在任何 handler 跑之前就挡掉的
- * （那种 `operatorSub` 是 `"unknown"`）：一次没有可归属操作者的写尝试，正是审计
+ * （那种 `actorId` 是 `"unknown"`）：一次没有可归属操作者的写尝试，正是审计
  * 要找的东西。读操作从不记录。
+ *
+ * 字段名走 product_251 X-3 词表（atlas#215 已部署）：`id`→`eventId`、
+ * `resourceType`→`objectType`、`resourceId`→`objectId`、`operatorSub`→`actorId`、
+ * `actorClientId`→`actorConsole`。**旧名一个都不再出现**——`atlas-compat.ts` 的
+ * `normalizeAtlasAuditRow` 已随之删除，所以这里读旧名会读到 undefined，而不是被
+ * 兼容层接住。变更审计页（`AtlasChangeTable.tsx`）读的一直是新名，本接口此前是**只有
+ * 类型没跟上**：`request<T>()` 只做断言不做校验，所以没有任何东西会报出这种漂移。
  */
 export interface AtlasChangeRecord {
-  id: string;
-  resourceType: string;
-  resourceId: string | null;
+  eventId: string;
+  objectType: string;
+  objectId: string | null;
   action: string;
   /** M-1 的 operator `sub`；守卫先挡掉的尝试记为 "unknown"。 */
-  operatorSub: string;
+  actorId: string;
   /** 来源模块（`act.sub`，即 workforce RP）。 */
-  actorClientId: string | null;
+  actorConsole: string | null;
   /** 一次写**碰过哪些字段的名字**——不带值。 */
   changedFields: string[];
   requestId: string | null;
@@ -605,10 +699,19 @@ export class AtlasRouter {
     return result;
   }
 
+  /**
+   * @param contract 只在**列表读**上给：带上它就在出口校验必有字段，缺了直接抛
+   *   `ATLAS_CONTRACT_FIELD_MISSING` 并点名。理由与"为什么不挂写响应"见
+   *   `atlas-contract.ts`。
+   */
   private async request<T>(
     req: Request & RequestContext,
     path: string,
-    options?: { method?: HttpMethod; body?: JsonObject },
+    options?: {
+      method?: HttpMethod;
+      body?: JsonObject;
+      contract?: AtlasResource;
+    },
   ): Promise<T> {
     const bearer = req.operatorAccessToken
       ? await this.operatorExchange.getToken(
@@ -621,10 +724,13 @@ export class AtlasRouter {
       { ...options, ...(bearer ? { bearer } : {}) },
       this.atlasApiUrl,
     );
-    /* atlas 已合并 B-3 与 X-3 但**尚未部署**（实测活着的容器仍回 `isActive`）。
-       在这一处归一，两代形状对页面都是同一种——**不需要与他们的部署对表**。
-       删除条件与「为什么不放在页面里」见 `atlas-compat.ts` 文件头。 */
-    return normalizeAtlasState(payload);
+    /* `atlas-compat.ts` 的 `isActive` 归一层已于 2026-08-23 删除：门户全量迁到
+       `state`，垫片自带的删除条件（"页面完成语义迁移后才能删"）已满足。取代它的是
+       下面这道**入口断言**——上一版是"上游少给就自己补一个"，这一版是"上游少给就
+       点名报错"。两者的差别就是一个坏掉的契约会不会被人看见。 */
+    return options?.contract
+      ? assertAtlasContract(payload, options.contract)
+      : payload;
   }
 
   // ── Protocols（静态词表，管理 UI 协议下拉的唯一数据源）──────────────────────
@@ -636,7 +742,9 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
   ): Promise<ProtocolCatalogResponse> {
     assertCanManageModels(req);
-    return this.request<ProtocolCatalogResponse>(req, "/capability/protocols");
+    return this.request<ProtocolCatalogResponse>(req, "/capability/protocols", {
+      contract: "protocols",
+    });
   }
 
   // ── Providers ────────────────────────────────────────────────────────────
@@ -650,6 +758,7 @@ export class AtlasRouter {
     return this.request<ModelProviderRecord[]>(
       req,
       `/capability/providers?includeInactive=${includeInactive === "false" ? "false" : "true"}`,
+      { contract: "providers" },
     );
   }
 
@@ -788,6 +897,7 @@ export class AtlasRouter {
     return this.request<ProviderPerformanceSnapshot>(
       req,
       "/capability/providers/performance",
+      { contract: "providers-performance" },
     );
   }
 
@@ -803,6 +913,7 @@ export class AtlasRouter {
     return this.request<ProviderKeyRecord[]>(
       req,
       `/capability/provider-keys${providerCode ? `?providerCode=${encodeURIComponent(providerCode)}` : ""}`,
+      { contract: "provider-keys" },
     );
   }
 
@@ -905,7 +1016,8 @@ export class AtlasRouter {
     if (modelCode) params.set("modelCode", modelCode);
     return this.request<ModelEndpointRecord[]>(
       req,
-      `/capability/endpoints?${params.toString()}`,
+      `/capability/model-routes?${params.toString()}`,
+      { contract: "model-routes" },
     );
   }
 
@@ -917,7 +1029,7 @@ export class AtlasRouter {
     assertCanManageModels(req);
     return this.writeThrough<ModelEndpointRecord>(
       req,
-      "/capability/endpoints",
+      "/capability/model-routes",
       { method: "POST", body },
       (r) => ({
         action: "atlas.endpoint.create",
@@ -937,7 +1049,7 @@ export class AtlasRouter {
     assertCanManageModels(req);
     return this.writeThrough<ModelEndpointRecord>(
       req,
-      `/capability/endpoints/${encodeURIComponent(endpointId)}`,
+      `/capability/model-routes/${encodeURIComponent(endpointId)}`,
       { method: "PATCH", body },
       (r) => ({
         action: "atlas.endpoint.update",
@@ -956,7 +1068,7 @@ export class AtlasRouter {
     assertCanManageModels(req);
     return this.writeThrough<ModelEndpointRecord>(
       req,
-      `/capability/endpoints/${encodeURIComponent(endpointId)}/activate`,
+      `/capability/model-routes/${encodeURIComponent(endpointId)}/activate`,
       { method: "POST" },
       () => ({
         action: "atlas.endpoint.activate",
@@ -974,7 +1086,7 @@ export class AtlasRouter {
     assertCanManageModels(req);
     return this.writeThrough<ModelEndpointRecord>(
       req,
-      `/capability/endpoints/${encodeURIComponent(endpointId)}/deactivate`,
+      `/capability/model-routes/${encodeURIComponent(endpointId)}/deactivate`,
       { method: "POST" },
       () => ({
         action: "atlas.endpoint.deactivate",
@@ -992,7 +1104,7 @@ export class AtlasRouter {
     assertCanManageModels(req);
     return this.writeThrough<ModelEndpointRecord>(
       req,
-      `/capability/endpoints/${encodeURIComponent(endpointId)}`,
+      `/capability/model-routes/${encodeURIComponent(endpointId)}`,
       { method: "DELETE" },
       () => ({
         action: "atlas.endpoint.delete",
@@ -1010,7 +1122,9 @@ export class AtlasRouter {
     @Req() req: Request & RequestContext,
   ): Promise<GatewayApiKeyRecord[]> {
     assertCanManageProviders(req);
-    return this.request<GatewayApiKeyRecord[]>(req, "/capability/api-keys");
+    return this.request<GatewayApiKeyRecord[]>(req, "/capability/api-keys", {
+      contract: "api-keys",
+    });
   }
 
   /* create 与 rotate 的响应带**明文 secret**（只此一次）——审计**绝不**落
@@ -1115,11 +1229,12 @@ export class AtlasRouter {
   }
 
   /**
-   * 硬删除一把网关 key（owner 2026-08-14 决定要有）。
+   * 删除一把网关 key（owner 2026-08-14 决定要有）。
    *
-   * **Atlas 侧还没有这条路由**——在它交付之前这里会原样透传 404，门户据此显示
-   * "当前部署还没有这个能力"而不是一句红色的失败。不预先在这里挡掉：挡掉就等于
-   * 门户自己判断上游有什么，那个判断一定会和真实部署漂移。
+   * **Atlas 已交付**（2026-08-23 核对 `gateway-api-key.controller.ts`），且是**软删除**
+   * 并带前置条件：key 必须先停用或撤销——「任何东西都不会从正在服务一步变成没了」，
+   * 与本平面其它资源同一条规则。门户侧比这更严，只允许删已撤销的（见 model/keys 页）。
+   * 门户那边的 404 兜底文案保留：它是给**还没升到这一版的部署**看的，不是死代码。
    *
    * 与 provider-keys 的删除不是一回事，别照抄：provider key 挂着
    * `key_rotation_logs`（FK ON DELETE CASCADE），删一把连轮换史一起没；网关 key
@@ -1164,6 +1279,7 @@ export class AtlasRouter {
     return this.request<AiModelRecord[]>(
       req,
       `/capability/models?${params.toString()}`,
+      { contract: "models" },
     );
   }
 
@@ -1363,7 +1479,8 @@ export class AtlasRouter {
     if (endpointCode) params.set("endpointCode", endpointCode);
     return this.request<ProductGrantRecord[]>(
       req,
-      `/capability/product-grants?${params.toString()}`,
+      `/capability/product-endpoint-grants?${params.toString()}`,
+      { contract: "product-endpoint-grants" },
     );
   }
 
@@ -1375,7 +1492,7 @@ export class AtlasRouter {
     assertCanManageModels(req);
     return this.writeThrough<ProductGrantRecord>(
       req,
-      "/capability/product-grants",
+      "/capability/product-endpoint-grants",
       { method: "POST", body },
       (r) => ({
         action: "atlas.product_grant.create",
@@ -1397,7 +1514,7 @@ export class AtlasRouter {
     assertCanManageModels(req);
     return this.writeThrough<ProductGrantRecord>(
       req,
-      `/capability/product-grants/${encodeURIComponent(productGrantId)}`,
+      `/capability/product-endpoint-grants/${encodeURIComponent(productGrantId)}`,
       { method: "PATCH", body },
       (r) => ({
         action: "atlas.product_grant.update",
@@ -1416,7 +1533,7 @@ export class AtlasRouter {
     assertCanManageModels(req);
     return this.writeThrough<ProductGrantRecord>(
       req,
-      `/capability/product-grants/${encodeURIComponent(productGrantId)}/activate`,
+      `/capability/product-endpoint-grants/${encodeURIComponent(productGrantId)}/activate`,
       { method: "POST" },
       () => ({
         action: "atlas.product_grant.activate",
@@ -1434,7 +1551,7 @@ export class AtlasRouter {
     assertCanManageModels(req);
     return this.writeThrough<ProductGrantRecord>(
       req,
-      `/capability/product-grants/${encodeURIComponent(productGrantId)}/deactivate`,
+      `/capability/product-endpoint-grants/${encodeURIComponent(productGrantId)}/deactivate`,
       { method: "POST" },
       () => ({
         action: "atlas.product_grant.deactivate",
@@ -1452,7 +1569,7 @@ export class AtlasRouter {
     assertCanManageModels(req);
     return this.writeThrough<ProductGrantRecord>(
       req,
-      `/capability/product-grants/${encodeURIComponent(productGrantId)}`,
+      `/capability/product-endpoint-grants/${encodeURIComponent(productGrantId)}`,
       { method: "DELETE" },
       () => ({
         action: "atlas.product_grant.delete",
@@ -1474,6 +1591,8 @@ export class AtlasRouter {
     @Query("providerCode") providerCode?: string,
     @Query("endpointCode") endpointCode?: string,
     @Query("requestId") requestId?: string,
+    /** 见 `AtlasRequestLogRecord.taskId`——与 runos `/audit/calls?taskId=` 同一个键。 */
+    @Query("taskId") taskId?: string,
     @Query("status") status?: string,
     @Query("from") from?: string,
     @Query("to") to?: string,
@@ -1487,6 +1606,7 @@ export class AtlasRouter {
     if (providerCode) params.set("providerCode", providerCode);
     if (endpointCode) params.set("endpointCode", endpointCode);
     if (requestId) params.set("requestId", requestId);
+    if (taskId) params.set("taskId", taskId);
     /* status 只接受 success|error|timeout，非法值 Atlas 回 400 —— 原样透传，
        不在这里预先过滤成"看起来正常"的空结果。 */
     if (status) params.set("status", status);
@@ -1497,6 +1617,7 @@ export class AtlasRouter {
     return this.request<AtlasRequestLogPage>(
       req,
       `/capability/logs${params.size ? `?${params.toString()}` : ""}`,
+      { contract: "logs" },
     );
   }
 
@@ -1518,6 +1639,7 @@ export class AtlasRouter {
     return this.request<AtlasLogSummary>(
       req,
       `/capability/logs/summary${params.size ? `?${params.toString()}` : ""}`,
+      { contract: "logs-summary" },
     );
   }
 
@@ -1562,6 +1684,7 @@ export class AtlasRouter {
     return this.request<AtlasChangeRecordPage>(
       req,
       `/capability/audit-logs${params.size ? `?${params.toString()}` : ""}`,
+      { contract: "audit-logs" },
     );
   }
 
@@ -1609,6 +1732,7 @@ export class AtlasRouter {
     return this.request<TenantUsageSummaryRecord[]>(
       req,
       `/capability/usage-summaries${params.size ? `?${params.toString()}` : ""}`,
+      { contract: "usage-summaries" },
     );
   }
 }

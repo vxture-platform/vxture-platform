@@ -91,7 +91,7 @@ interface UsageSummaryPage {
   dimension: UsageAxis;
   from: string;
   to: string;
-  rows: UsageSummaryRow[];
+  items: UsageSummaryRow[];
 }
 
 const AXES: {
@@ -245,7 +245,7 @@ export default function CapabilityMeteringPage() {
     void reload();
   }, [reload]);
 
-  const rows = useMemo(() => page?.rows ?? [], [page]);
+  const rows = useMemo(() => page?.items ?? [], [page]);
 
   /* 工作区一律以租户为主导显示（规则见 features/tenancy/directory.ts）。只有
      workspace 轴需要查号台——其它轴的行 workspaceId 本来就是 null。 */

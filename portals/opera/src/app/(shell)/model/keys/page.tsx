@@ -85,7 +85,11 @@ import {
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { api, OperaApiError } from "@/lib/api";
-import { KEY_STATUS_META } from "@/lib/status";
+import {
+  KEY_STATE_META,
+  type KeyEffectiveState,
+  type KeyState,
+} from "@/lib/status";
 
 /** 与 opera-bff atlas.router.ts 同名能力码——api-keys 复用 model:provider.manage
  * （和 provider-keys 一样是"vault"类操作，同样挂 StepUp）。 */
@@ -94,37 +98,38 @@ const MANAGE = "model:provider.manage";
 /** `internal` **只作为历史值出现**，签发路径上已经没有它了（见文件头）。类型里留着
  *  是为了如实渲染那批已撤销的老行，不是为了让谁再选到它。 */
 type KeyKind = "internal" | "external";
-type KeyStatus = "active" | "disabled" | "revoked";
 
+/**
+ * 2026-08-23 对齐 Atlas 现行形状（`gateway-api-key.types.ts`）。三处改动，**每一处
+ * 此前都是静默错的**：
+ *
+ *   `status` → `state`        字段整个改了名。旧名读回来是 `undefined`，于是
+ *                             `KEY_STATUS_META[r.status].tone` 直接抛异常——这一页的
+ *                             表格在当前 Atlas 上根本渲染不出来。
+ *   `disabled` → `inactive`   中间那档的词换了（M-B3 最小词表）。启停按钮据旧值判断，
+ *                             结果是"禁用"永远可点、"启用"永远不出现。
+ *   `expiresAt` 真的有了       此前注释写着"Atlas 还没有这一列"，恒为 undefined。现在
+ *                             create/rotate 都收这个入参，列里也回真值。
+ *
+ * 外加一个新字段 `effectiveState`：把到期折进去之后**现在实际是什么**。页面读它而不是
+ * 自己拿 `expiresAt` 和当前时间算——同一个判断有两个实现迟早会分叉，而它决定的是
+ * "这把钥匙现在还开不开门"。本页原来那个 `isExpired()` 就是那第二个实现，已删。
+ */
 interface GatewayApiKeyRecord {
   id: string;
   name: string;
   kind: KeyKind;
   owner: string | null;
   keyPrefix: string;
-  status: KeyStatus;
-  /** 到期时间。**可选**：Atlas 还没有这一列，交付前恒为 undefined（显示「不限」）。 */
-  expiresAt?: string | null;
+  /** 运营**设成**什么。与 `effectiveState` 只在到期那一刻分叉。 */
+  state: KeyState;
+  /** 现在**实际**是什么（读时折进到期，多一档 `expired`）。 */
+  effectiveState: KeyEffectiveState;
+  /** null = 不限期，跑到被撤销为止。 */
+  expiresAt: string | null;
   lastUsedAt: string | null;
   createdAt: string;
   updatedAt: string;
-}
-
-/**
- * 已过期 = 状态还写着「生效中」，但到期时间已经过去。
- *
- * 这一档是**读时推导**的，和 Endpoint 的 resolution、Product Grant 的到期同一套
- * 判断：没有定时清扫任务去翻 `status`（定时改写会改掉它本该保全的记录），所以
- * 「行上写着 active」与「它还能不能用」会分叉，而那正是要显示出来的时刻。
- *
- * Atlas 没回 `expiresAt` 时恒为 false——不知道不等于过期。
- */
-function isExpired(r: GatewayApiKeyRecord): boolean {
-  return (
-    r.status === "active" &&
-    !!r.expiresAt &&
-    new Date(r.expiresAt).getTime() <= Date.now()
-  );
 }
 
 interface GatewayApiKeyWithSecret extends GatewayApiKeyRecord {
@@ -149,9 +154,11 @@ interface RevealState {
 interface KeyDraft {
   name: string;
   owner: string;
+  /** `YYYY-MM-DD`（date input 的原生格式）。留空 = 不限期。 */
+  expiresAt: string;
 }
 
-const EMPTY_DRAFT: KeyDraft = { name: "", owner: "" };
+const EMPTY_DRAFT: KeyDraft = { name: "", owner: "", expiresAt: "" };
 
 function describeError(error: unknown): { description?: string } {
   return error instanceof OperaApiError && error.message
@@ -234,13 +241,13 @@ export default function KeysPage() {
   }
 
   /** 批量只做可逆动作（禁用/启用）；撤销是终态、不可回头，必须逐个走确认框。 */
-  async function setStatusBulk(status: "active" | "disabled") {
+  async function setStateBulk(state: "active" | "inactive") {
     /* 已退役档位一并排除：它们现在都是 revoked，本就被下一个条件挡住，但批量
        操作是最容易悄悄把一批东西改活的地方，这里写死不依赖状态。 */
     const targets = rows.filter(
       (r) =>
         selectedKeys.includes(r.id) &&
-        r.status !== "revoked" &&
+        r.state !== "revoked" &&
         r.kind !== "internal",
     );
     setSelectedKeys([]);
@@ -251,45 +258,45 @@ export default function KeysPage() {
         Promise.all(
           targets.map((r) =>
             api.post(
-              `/api/atlas/api-keys/${r.id}/${status === "active" ? "activate" : "deactivate"}`,
+              `/api/atlas/api-keys/${r.id}/${state === "active" ? "activate" : "deactivate"}`,
               {},
             ),
           ),
         ),
       );
       toast({
-        tone: status === "active" ? "success" : "warning",
-        title: `${targets.length} 把 Key 已${status === "active" ? "启用" : "禁用"}`,
+        tone: state === "active" ? "success" : "warning",
+        title: `${targets.length} 把 Key 已${state === "active" ? "启用" : "停用"}`,
         description: "已撤销的、以及已退役的 Internal Key 不受批量操作影响。",
       });
       await reload();
     } catch (error) {
-      reportFailure(error, status === "active" ? "启用" : "禁用");
+      reportFailure(error, state === "active" ? "启用" : "停用");
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function setStatus(row: GatewayApiKeyRecord, status: KeyStatus) {
+  async function setState(row: GatewayApiKeyRecord, state: KeyState) {
     setSubmitting(true);
     try {
       await runWithStepUp(() =>
         api.post(
-          `/api/atlas/api-keys/${row.id}/${status === "active" ? "activate" : status === "disabled" ? "deactivate" : "revoke"}`,
+          `/api/atlas/api-keys/${row.id}/${state === "active" ? "activate" : state === "inactive" ? "deactivate" : "revoke"}`,
           {},
         ),
       );
       toast({
-        tone: status === "active" ? "success" : "warning",
-        title: `${row.name} ${KEY_STATUS_META[status].label}`,
+        tone: state === "active" ? "success" : "warning",
+        title: `${row.name} ${KEY_STATE_META[state].label}`,
         description:
-          status === "revoked"
+          state === "revoked"
             ? "撤销是终态，回不去了，持有方需要重新申请。"
             : "已留痕进 Audit。",
       });
       await reload();
     } catch (error) {
-      reportFailure(error, KEY_STATUS_META[status].label);
+      reportFailure(error, KEY_STATE_META[state].label);
     } finally {
       setSubmitting(false);
     }
@@ -347,7 +354,7 @@ export default function KeysPage() {
 
     if (dialog.kind === "revoke") {
       setDialog(null);
-      await setStatus(dialog.row, "revoked");
+      await setState(dialog.row, "revoked");
       return;
     }
 
@@ -368,6 +375,11 @@ export default function KeysPage() {
             name: draft.name.trim(),
             kind: "external",
             owner: draft.owner.trim() || null,
+            /* 键不出现 = 不限期（Atlas 对缺席的 `expiresAt` 就是这个意思）。
+               送 null 也一样，但不出现更贴合"这次没设term"。 */
+            ...(draft.expiresAt
+              ? { expiresAt: `${draft.expiresAt}T23:59:59.999Z` }
+              : {}),
           }),
         );
         setReveal({
@@ -413,22 +425,22 @@ export default function KeysPage() {
             id: "rotate",
             label: "轮换",
             icon: "refresh",
-            disabled: retired || r.status !== "active",
+            disabled: retired || r.state !== "active",
             onSelect: () => setDialog({ kind: "rotate", row: r }),
           },
-          r.status === "disabled" && !retired
+          r.state === "inactive" && !retired
             ? {
                 id: "enable",
                 label: "启用",
                 icon: "play" as const,
-                onSelect: () => void setStatus(r, "active"),
+                onSelect: () => void setState(r, "active"),
               }
             : {
                 id: "disable",
-                label: "禁用",
+                label: "停用",
                 icon: "pause" as const,
-                disabled: r.status !== "active",
-                onSelect: () => void setStatus(r, "disabled"),
+                disabled: r.state !== "active",
+                onSelect: () => void setState(r, "inactive"),
               },
           {
             id: "revoke",
@@ -436,7 +448,7 @@ export default function KeysPage() {
             icon: "prohibit",
             danger: true,
             separatorBefore: true,
-            disabled: r.status === "revoked",
+            disabled: r.state === "revoked",
             onSelect: () => setDialog({ kind: "revoke", row: r }),
           },
           {
@@ -447,7 +459,9 @@ export default function KeysPage() {
             label: "删除",
             icon: "trash",
             danger: true,
-            disabled: r.status !== "revoked",
+            /* Atlas 只要求"不是 active"，这里刻意更严：只有**已撤销**的能删。停用是
+               可逆的暂停，把它和终态一起开放删除，等于让一次误点跨过那道可逆性。 */
+            disabled: r.state !== "revoked",
             onSelect: () => setDialog({ kind: "delete", row: r }),
           },
         ]}
@@ -585,14 +599,14 @@ export default function KeysPage() {
                   id: "enable",
                   label: "启用",
                   icon: "play",
-                  onSelect: () => void setStatusBulk("active"),
+                  onSelect: () => void setStateBulk("active"),
                 },
                 {
                   id: "disable",
-                  label: "禁用",
+                  label: "停用",
                   icon: "pause",
                   danger: true,
-                  onSelect: () => void setStatusBulk("disabled"),
+                  onSelect: () => void setStateBulk("inactive"),
                 },
               ]}
             />
@@ -651,11 +665,15 @@ export default function KeysPage() {
                 align: "center",
                 width: "xs",
                 cell: (r: GatewayApiKeyRecord) =>
-                  /* undefined = 这台 Atlas 还没有 expires_at 列；null = 有列但没设。
-                     两者都显示「不限」——对运营来说结论一样：没人会自动断它。 */
+                  /* null = 不限期。到期与否不在这里判——那是 `effectiveState` 的事，
+                     这一列只说日期，染色跟着它走。 */
                   r.expiresAt ? (
                     <span
-                      className={isExpired(r) ? "text-warning-foreground" : ""}
+                      className={
+                        r.effectiveState === "expired"
+                          ? "text-warning-foreground"
+                          : ""
+                      }
                     >
                       {r.expiresAt.slice(0, 10)}
                     </span>
@@ -664,22 +682,27 @@ export default function KeysPage() {
                   ),
               },
               {
-                id: "status",
+                id: "state",
                 header: "状态",
                 align: "center",
                 width: "xs",
-                cell: (r: GatewayApiKeyRecord) =>
-                  /* 已过期排在 status 之前判断：行上写着 active，但它已经不作数了
-                     ——显示 active 等于告诉运营"还在生效"，而那是假的。 */
-                  isExpired(r) ? (
-                    <StatusBadge tone="warning" dot>
-                      已失效
-                    </StatusBadge>
-                  ) : (
-                    <StatusBadge tone={KEY_STATUS_META[r.status].tone} dot>
-                      {KEY_STATUS_META[r.status].label}
-                    </StatusBadge>
-                  ),
+                cell: (r: GatewayApiKeyRecord) => (
+                  /* 读 `effectiveState` 而不是 `state`：后者是运营设成什么，前者是
+                     现在实际是什么。两者只在到期那一刻分叉——而那正是必须说出口的时刻，
+                     显示 active 等于告诉运营"还在生效"，那是假的。到期判断由 Atlas
+                     统一做，这里不再复制一份。 */
+                  <StatusBadge
+                    tone={KEY_STATE_META[r.effectiveState].tone}
+                    dot
+                    {...(r.effectiveState === "expired"
+                      ? {
+                          title: `设为「${KEY_STATE_META[r.state].label}」，但已到期`,
+                        }
+                      : {})}
+                  >
+                    {KEY_STATE_META[r.effectiveState].label}
+                  </StatusBadge>
+                ),
               },
             ]}
             rows={pager.pageRows}
@@ -737,6 +760,24 @@ export default function KeysPage() {
               key 绑到哪个
               product_code，它就是授权表里的一个产品——两条认证路径共用
               同一套授权模型。
+            </FieldDescription>
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="key-expires">到期</FieldLabel>
+            <Input
+              id="key-expires"
+              type="date"
+              value={draft.expiresAt}
+              onChange={(e) =>
+                setDraft({ ...draft, expiresAt: e.target.value })
+              }
+            />
+            <FieldDescription>
+              留空 =
+              不限期，跑到被撤销为止。设了之后**没有任何东西会去改这一行**
+              ——到期是读时判定的，状态列会显示「已过期」，但行上仍写着生效中。要
+              真正收回，仍然得有人来禁用或撤销。
             </FieldDescription>
           </Field>
         </FieldGroup>

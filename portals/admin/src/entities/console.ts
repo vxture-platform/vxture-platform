@@ -1,4 +1,8 @@
-import type { SubscriptionStatus } from "@vxture-platform/shared";
+import type {
+  ModelState,
+  ObjectState,
+  SubscriptionStatus,
+} from "@vxture-platform/shared";
 
 export type Capability = string;
 
@@ -162,13 +166,21 @@ export interface AiModelRecord {
   provider: string;
   endpointUrl: string;
   protocol: string;
+  /** 由哪一层契约服务：chat / embedding / rerank / parse。 */
+  modelType: string;
   capabilities: string[];
   keyReference: {
     source: "env";
     name: string;
     configured: boolean;
   } | null;
-  isActive: boolean;
+  /**
+   * **三值**。`deprecated` 仍可解析、只是不再推荐——admin 这侧尤其要小心：
+   * 模型下拉喂的是价格规则与策略，**弃用模型必须还能选到**，它还在服务、还在计费。
+   * 用 `isServing` 过滤，不要用 `isEnabled`。
+   */
+  state: ModelState;
+  deprecatedAt: string | null;
   config: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
@@ -218,10 +230,11 @@ export interface AiModelGrantRecord {
   applicationId: string | null;
   applicationType: ModelApplicationType | null;
   agentId: string | null;
+  taskProfile: string | null;
   priority: number;
   reason: string | null;
   expiresAt: string | null;
-  isActive: boolean;
+  state: ObjectState;
   createdAt: string;
   updatedAt: string;
 }
@@ -235,7 +248,8 @@ export interface ModelProviderRecord {
   homepageUrl: string | null;
   consoleUrl: string | null;
   billingUrl: string | null;
-  isActive: boolean;
+  /** 两值。此前声明的 `isActive` atlas 早已不发（product_251 M-B3）。 */
+  state: ObjectState;
   config: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
@@ -250,69 +264,98 @@ export interface ModelPriceRuleRecord {
   inputUnitPrice: string;
   outputUnitPrice: string;
   requestUnitPrice: string;
-  isActive: boolean;
+  state: ObjectState;
   effectiveAt: string;
   expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
+/**
+ * 限流策略。**整个形状换过一遍**——此前这里声明的是
+ * `policyCode`/`policyName`/`policyType`/`dailyTokenLimit`/`monthlyTokenLimit`/
+ * `dailyRequestLimit`/`monthlyRequestLimit`/`allowFallback`/`fallbackModelCodes`/
+ * `config`，**atlas 一个都不发**。它现在给的是下面这些：速率维度（rpm/tpm/tpd）、
+ * 并发上限、上下文上限，外加一个生效窗口。
+ */
 export interface ModelPolicyRecord {
   id: string;
+  modelId: string;
   tenantId: string | null;
-  modelId: string | null;
-  policyCode: string;
-  policyName: string;
-  policyType: string;
+  name: string | null;
   priority: number;
-  dailyTokenLimit: string | null;
-  monthlyTokenLimit: string | null;
-  dailyRequestLimit: string | null;
-  monthlyRequestLimit: string | null;
-  allowFallback: boolean;
-  fallbackModelCodes: string[];
-  config: Record<string, unknown> | null;
-  isActive: boolean;
+  maxConcurrent: number | null;
+  rateLimitRpm: number | null;
+  /** decimal，字符串——不走 JS number 免得丢精度。 */
+  rateLimitTpm: string | null;
+  rateLimitTpd: string | null;
+  maxContextTokens: number | null;
+  state: ObjectState;
+  effectiveAt: string;
+  expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
+/**
+ * 租户配额。**整个形状换过一遍**，而且有一处语义变化要特别记住：
+ * **atlas 的配额没有 `state` 也没有 `isActive`** —— 它生不生效完全由
+ * `effectiveAt`/`expiresAt` 这个窗口决定，且是**读时判定**（没有定时清扫任务，
+ * 因为定时改写会改掉它本该保全的记录）。所以问「有多少条生效中」要用
+ * `isInForce()` 算窗口，不能去读一个上游从来没有过的布尔。
+ *
+ * 此前这里声明的 `periodStart`/`periodEnd`/`maxAgents`/`maxKnowledgeBases`/
+ * `maxStorageGb`/`usedTokens`/`allowedModelIds`/`isActive`/`createdAt`/`updatedAt`
+ * 全部不存在。
+ */
 export interface TenantQuotaRecord {
   id: string;
   tenantId: string;
   subscriptionId: string | null;
+  maxUsers: number;
+  maxApiKeys: number;
+  maxWorkflows: number;
+  maxConcurrent: number;
+  rateLimitPerMinute: number;
+  periodTokens: string;
   quotaCycle: string;
-  periodStart: string | null;
-  periodEnd: string | null;
-  maxUsers: number | null;
-  maxAgents: number | null;
-  maxKnowledgeBases: number | null;
-  maxStorageGb: number | null;
-  periodTokens: string | null;
-  usedTokens: string;
-  allowedModelIds: string[];
+  allowedModels: string[];
   allowCustomModel: boolean;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
+  effectiveAt: string;
+  expiresAt: string | null;
 }
 
+/**
+ * 逐字段照 atlas `TenantUsageSummaryAdminRecord`（经 admin-bff 透传）。
+ *
+ * 2026-08-24 重写：此前这份声明整体是陈旧的——`id` / `statType` / `totalRequests` /
+ * `successRequests` / `failedRequests` / `totalCostAmount` / `currency` / `updatedAt`
+ * **上游一个都不发**。页面只读了 `totalTokens`（它恰好还在），所以没炸；换句话说
+ * 这份类型早已不是契约，只是一段没人核对过的记忆。
+ *
+ * 聚合轴不在行上，在 `TenantUsageSummaryPage.dimension` 上（product_251 A-4）。
+ */
 export interface TenantUsageSummaryRecord {
-  id: string;
-  tenantId: string;
+  cycleMonth: string;
+  tenantId: string | null;
+  workspaceId: string | null;
   applicationId: string | null;
   applicationType: ModelApplicationType | null;
-  cycleMonth: string;
-  statType: string;
-  totalRequests: string;
-  successRequests: string;
-  failedRequests: string;
-  totalInputTokens: string;
-  totalOutputTokens: string;
+  providerCode: string | null;
+  modelCode: string | null;
+  endpointCode: string | null;
+  productCode: string | null;
+  requests: string;
+  inputTokens: string;
+  outputTokens: string;
   totalTokens: string;
-  totalCostAmount: string;
-  currency: string;
-  updatedAt: string;
+  errors: string;
+}
+
+/** `/api/atlas/usage-summaries` 的信封（product_251 A-4）：轴由服务端解析，必须回显。 */
+export interface TenantUsageSummaryPage {
+  dimension: string;
+  items: TenantUsageSummaryRecord[];
 }
 
 export interface ProductAgentRecord {
