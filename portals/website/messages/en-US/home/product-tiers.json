@@ -1,0 +1,42 @@
+{
+  "title": "The Product Line",
+  "subtitle": "From ready-to-run agents to packaged industry products — four tiers, each usable on its own and stackable on the one below.",
+  "tagline": "One tier at a time",
+  "ui": {
+    "activate": "View this tier"
+  },
+  "items": {
+    "agents": {
+      "tier": "L1",
+      "name": "General Agents",
+      "summary": "Ready to run, picked by scenario",
+      "description": "Agents for everyday work — Q&A, retrieval, documents, data analysis. Sign in and try one; no platform to stand up first, no data to wire first.",
+      "keywords": ["Instant start", "Scenario templates", "No deployment"],
+      "action": "Open the marketplace"
+    },
+    "platform": {
+      "tier": "L2",
+      "name": "Platform Products",
+      "summary": "The shared foundation",
+      "description": "Data governance, knowledge engineering, model access, and agent orchestration. Everything above sits on this tier — and any single piece can be used alone.",
+      "keywords": ["Data governance", "Model access", "Orchestration"],
+      "action": "See the product matrix"
+    },
+    "industry": {
+      "tier": "L3",
+      "name": "Industry Scenarios",
+      "summary": "Packaged around how an industry works",
+      "description": "Foundation capability assembled around the real working scenarios of low-altitude economy, emergency management, energy, and industrial operations — deployable as delivered.",
+      "keywords": ["Packaged delivery", "Scenario-shaped", "Repeatable"],
+      "action": "Explore industry scenarios"
+    },
+    "workbench": {
+      "tier": "L4",
+      "name": "Ruyin Workbench",
+      "summary": "The daily entry point",
+      "description": "A desktop workbench pulling agents, data, and everyday work into one place. This is where the three tiers below actually get used.",
+      "keywords": ["Desktop", "One entry point", "Team collaboration"],
+      "action": "Learn about the workbench"
+    }
+  }
+}

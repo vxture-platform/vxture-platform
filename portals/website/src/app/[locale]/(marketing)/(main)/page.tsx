@@ -21,7 +21,7 @@
 import {
   HeroSection,
   FeaturesSection,
-  SolutionSection,
+  ProductTiersSection,
   CaseSection,
   CTASection,
 } from "@/components/marketing";
@@ -37,7 +37,7 @@ import { useWindowScrollSnap } from "@/hooks";
 const SECTIONS = [
   { id: "section-01", name: "Hero" },
   { id: "section-02", name: "Features" },
-  { id: "section-03", name: "Solutions" },
+  { id: "section-03", name: "ProductTiers" },
   { id: "section-04", name: "Cases" },
   { id: "section-05", name: "CTA" },
 ] as const;
@@ -104,8 +104,8 @@ export default function HomePage() {
       {/* Features 区块 */}
       <FeaturesSection id={SECTIONS[1].id} name={SECTIONS[1].name} />
 
-      {/* Solutions 区块 */}
-      <SolutionSection id={SECTIONS[2].id} name={SECTIONS[2].name} />
+      {/* 产品体系区块 */}
+      <ProductTiersSection id={SECTIONS[2].id} name={SECTIONS[2].name} />
 
       {/* Cases 区块 */}
       <CaseSection id={SECTIONS[3].id} name={SECTIONS[3].name} />

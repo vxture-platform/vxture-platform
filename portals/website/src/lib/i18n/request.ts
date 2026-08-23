@@ -32,7 +32,7 @@ const PAGE_NAMESPACE_MAP: Record<PageKey, NsEntry[]> = {
   home: [
     { key: "home.hero", file: "home/hero" },
     { key: "home.features", file: "home/features" },
-    { key: "home.solutions", file: "home/solutions" },
+    { key: "home.productTiers", file: "home/product-tiers" },
     { key: "home.cases", file: "home/cases" },
     { key: "home.cta", file: "home/cta" },
   ],
@@ -84,8 +84,8 @@ async function loadZhCN(file: string): Promise<Record<string, unknown>> {
     case "home/features":
       return (await import("@/../messages/zh-CN/home/features.json"))
         .default as Record<string, unknown>;
-    case "home/solutions":
-      return (await import("@/../messages/zh-CN/home/solutions.json"))
+    case "home/product-tiers":
+      return (await import("@/../messages/zh-CN/home/product-tiers.json"))
         .default as Record<string, unknown>;
     case "home/cases":
       return (await import("@/../messages/zh-CN/home/cases.json"))
@@ -156,8 +156,8 @@ async function loadEnUS(file: string): Promise<Record<string, unknown>> {
     case "home/features":
       return (await import("@/../messages/en-US/home/features.json"))
         .default as Record<string, unknown>;
-    case "home/solutions":
-      return (await import("@/../messages/en-US/home/solutions.json"))
+    case "home/product-tiers":
+      return (await import("@/../messages/en-US/home/product-tiers.json"))
         .default as Record<string, unknown>;
     case "home/cases":
       return (await import("@/../messages/en-US/home/cases.json"))
