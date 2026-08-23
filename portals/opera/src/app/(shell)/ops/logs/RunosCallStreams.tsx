@@ -143,7 +143,18 @@ function outcomeTone(outcome: string): StatusBadgeTone {
   return "neutral";
 }
 
-export function RunosCallStreams() {
+/**
+ * `taskId` 由页面持有而不是本组件——它是**两张表共用的那一根键**（product_251 X-2），
+ * 上面的 Atlas 请求日志用同一个值过滤。放在任一侧都会让另一侧变成"跟随者"，而这条
+ * 接缝的意义恰恰是两边平权：从模型面点进来，和从能力面点过去，是同一个动作。
+ */
+export function RunosCallStreams({
+  taskId,
+  onTaskIdChange,
+}: {
+  readonly taskId: string;
+  readonly onTaskIdChange: (next: string) => void;
+}) {
   const { toast } = useToast();
   const [stream, setStream] = useState<StreamKey>("calls");
   const [keyword, setKeyword] = useState("");
@@ -158,13 +169,19 @@ export function RunosCallStreams() {
   const query = useCallback(
     (nextCursor?: string) => {
       const p = new URLSearchParams({ limit: String(PAGE_SIZE) });
+      /* `taskId` 与关键词是**两根不同的轴**，同时生效：任务是"哪一次任务"，
+         关键词在调用流上是"哪个能力"。此前调用流的关键词打在 `capabilityId` 上、
+         而 `taskId` 根本没有入口——于是 Atlas 那侧写着"把值贴到两边"的注释，
+         实际贴不进来，这条接缝从来没被真的走通过。 */
+      const task = taskId.trim();
+      if (task) p.set("taskId", task);
       const kw = keyword.trim();
       if (kw) p.set(stream === "calls" ? "capabilityId" : "taskId", kw);
       if (nextCursor) p.set("cursor", nextCursor);
       const path = stream === "calls" ? "calls" : "outcomes";
       return `/api/runos/audit/${path}?${p.toString()}`;
     },
-    [stream, keyword],
+    [stream, keyword, taskId],
   );
 
   const reload = useCallback(async () => {
@@ -283,8 +300,16 @@ export function RunosCallStreams() {
       />
     ) : (
       <EmptyState
-        title="没有匹配的记录"
-        description="换个过滤条件，或该条数范围内这条流没有记录。"
+        title={taskId.trim() ? "这次任务没有能力调用" : "没有匹配的记录"}
+        description={
+          taskId.trim()
+            ? /* 串联查询下的空**是一个答案，不是一次失败**。当前能力目录里没有
+                 任何一条端点打到 Atlas（全指向 MCP 连接器与本地执行器），所以
+                 "模型面有请求、能力面没有"是预期结果而不是故障。写成通用的
+                 "没有匹配的记录"会让人去查权限和网络。 */
+              `任务 ${taskId.trim()} 在能力面没有记录。若它在上方 Atlas 请求日志里有行，说明这次任务只碰了模型面——这在当前能力目录下是正常的。`
+            : "换个过滤条件，或这条流还没有记录。"
+        }
       />
     );
 
@@ -358,7 +383,19 @@ export function RunosCallStreams() {
               cell: (r: CapabilityCallRecord) => (
                 <span className="text-body-sm text-muted-foreground">
                   {r.agentId ?? "—"}
-                  {r.taskId ? ` · ${r.taskId}` : ""}
+                  {r.taskId ? (
+                    <>
+                      {" · "}
+                      <button
+                        type="button"
+                        className="font-mono text-code-sm text-link underline-offset-2 hover:underline"
+                        title="按这个任务串联上下两张表"
+                        onClick={() => onTaskIdChange(r.taskId ?? "")}
+                      >
+                        {r.taskId}
+                      </button>
+                    </>
+                  ) : null}
                 </span>
               ),
             },
@@ -545,7 +582,14 @@ export function RunosCallStreams() {
               id: "task",
               header: "任务",
               cell: (r: TaskOutcomeRecord) => (
-                <span className="font-mono text-code-sm">{r.taskId}</span>
+                <button
+                  type="button"
+                  className="font-mono text-code-sm text-link underline-offset-2 hover:underline"
+                  title="按这个任务串联上下两张表"
+                  onClick={() => onTaskIdChange(r.taskId)}
+                >
+                  {r.taskId}
+                </button>
               ),
             },
             {
