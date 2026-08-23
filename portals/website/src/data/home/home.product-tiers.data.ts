@@ -44,7 +44,8 @@ export interface ProductTier {
 export const PRODUCT_TIERS: readonly ProductTier[] = [
   {
     id: "agents",
-    icon: "app-grid",
+    // 与 header 产品中心二级菜单同一字形——两处必须一致。
+    icon: "agent",
     href: "/appcenter",
     cover: "/images/products/product-intro-01.webp",
     chipClass:
@@ -81,7 +82,7 @@ export const PRODUCT_TIERS: readonly ProductTier[] = [
 ];
 
 /**
- * 按「与激活项的环形距离」给出槽位与宽度。
+ * 按「与激活项的环形距离」给出槽位、宽度、弱化程度与叠放层级。
  *
  * 下标 = (自身序号 − 激活序号 + 4) % 4，即环形距离：
  *   0 = 激活本身，1 = 后一个，2 = 对面那个（最远），3 = 前一个
@@ -90,13 +91,34 @@ export const PRODUCT_TIERS: readonly ProductTier[] = [
  * 过渡随之跳变；`order` 只改视觉次序，节点不动，过渡才是连续的。
  *
  * 排布结果恒为「前一个 · 激活 · 后一个 · 最远」——激活项永远落在第 2 槽，
- * 两侧各有弱化项，不会出现一侧全是未激活的堆积。宽度合计 12/12。
+ * 两侧各有弱化项，不会出现一侧全是未激活的堆积。
+ *
+ * 三张未激活卡**同宽**（都取最窄那一档，定宽 96px 而不是按比例），只用透明度
+ * 分级：宽度也跟着分级的话，「远近」会同时由两个通道表达，读起来是两套秩序在
+ * 打架。定宽而非比例，是为了把余量全部让给激活卡——这一屏要讲清楚的是被选中的
+ * 那一层，未激活的只需保留可见与可点。层级差交给 `z`——配合卡片间的负外边距，
+ * 激活卡会略微压在相邻卡上，形成叠压关系。
  */
 export const TIER_RING_LAYOUT = [
-  { order: "order-2", basis: "basis-7/12", dim: "" },
-  { order: "order-3", basis: "basis-2/12", dim: "opacity-70 grayscale" },
-  { order: "order-4", basis: "basis-1/12", dim: "opacity-40 grayscale" },
-  { order: "order-1", basis: "basis-2/12", dim: "opacity-70 grayscale" },
+  { order: "order-2", basis: "basis-9/12", dim: "", z: "z-30" },
+  {
+    order: "order-3",
+    basis: "basis-24",
+    dim: "opacity-60 grayscale",
+    z: "z-20",
+  },
+  {
+    order: "order-4",
+    basis: "basis-24",
+    dim: "opacity-30 grayscale",
+    z: "z-10",
+  },
+  {
+    order: "order-1",
+    basis: "basis-24",
+    dim: "opacity-60 grayscale",
+    z: "z-20",
+  },
 ] as const;
 
 /** 环形距离：0 自身，1 后一个，2 最远，3 前一个。 */

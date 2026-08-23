@@ -111,7 +111,9 @@ export const HEADER_DATA: HeaderData = {
       children: [
         {
           key: "appcenter",
-          icon: "app-grid",
+          // DS 的 agent 专用字形（ShellAgentButton 同款）。原先的 app-grid 是
+          // 「应用宫格」，与站内别处的用法重复，且没点出智能体这层语义。
+          icon: "agent",
           labelKey: "productsMenu.appcenter.label",
           descriptionKey: "productsMenu.appcenter.description",
           href: "/appcenter",
