@@ -39,6 +39,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActionMenu,
   Badge,
+  Banner,
   Button,
   DataTable,
   EmptyState,
@@ -71,7 +72,11 @@ interface AtlasRequestLogRecord {
    * **两条流之间唯一的接缝**（product_251 X-2）：同一个 taskId 在下面 Runos 能力调用
    * 那张表里也在。一次 agent 任务在模型面烧了多少 token、在能力面调了什么、哪一段
    * 失败的——分区呈现让"哪个系统出问题"看得清，而这个字段让"同一件事"还能被串起来。
-   * 两边的输入框都在，值可以直接对拷。
+   *
+   * **2026-08-24 之前这条接缝是半接的**：这张表没有 taskId 列（只在"复制整行"的文本
+   * 里出现），而下面的 Runos 调用流根本没有 taskId 入口——关键词打在 `capabilityId`
+   * 上。原注释写着"值可以直接对拷"，实际拷不过去。现在一个 taskId 驱动两张表，
+   * 两边的值都可以直接点。
    */
   taskId: string | null;
   status: string;
@@ -187,7 +192,13 @@ export default function LogsPage() {
   const [atlasStatus, setAtlasStatus] = useState<string>("all");
   const [modelCode, setModelCode] = useState("");
   const [providerCode, setProviderCode] = useState("");
-  const [atlasTaskId, setAtlasTaskId] = useState("");
+  /**
+   * **两张表共用的那一根键**（product_251 X-2），所以它住在页面上而不是任一张表里。
+   *
+   * 此前它叫 `atlasTaskId` 且只驱动上面那张，下面的 Runos 调用流根本没有 taskId 入口
+   * ——那条"把值贴到两边"的注释是想法，不是实现。
+   */
+  const [taskId, setTaskId] = useState("");
   const [atlasSel, setAtlasSel] = useState<readonly string[]>([]);
 
   /* ── 平台侧状态 ───────────────────────────────────────────────────────── */
@@ -207,12 +218,12 @@ export default function LogsPage() {
       if (atlasStatus !== "all") p.set("status", atlasStatus);
       if (modelCode.trim()) p.set("modelCode", modelCode.trim());
       if (providerCode.trim()) p.set("providerCode", providerCode.trim());
-      if (atlasTaskId.trim()) p.set("taskId", atlasTaskId.trim());
+      if (taskId.trim()) p.set("taskId", taskId.trim());
       p.set("limit", "50");
       if (cursor) p.set("cursor", cursor);
       return `/api/atlas/logs?${p.toString()}`;
     },
-    [atlasStatus, modelCode, providerCode, atlasTaskId],
+    [atlasStatus, modelCode, providerCode, taskId],
   );
 
   const reloadAtlas = useCallback(async () => {
@@ -350,8 +361,14 @@ export default function LogsPage() {
       />
     ) : (
       <EmptyState
-        title="没有匹配的请求"
-        description="换个筛选条件，或该时间段内网关没有流量。"
+        title={taskId.trim() ? "这次任务没有模型请求" : "没有匹配的请求"}
+        description={
+          taskId.trim()
+            ? /* 串联查询下的空**是一个答案，不是一次失败**——与下方 Runos 那侧同理。
+                 写成通用的「没有匹配的请求」会让人去查权限和网络。 */
+              `任务 ${taskId.trim()} 在模型面没有请求记录。若它在下方 Runos 能力调用里有行，说明这次任务只碰了能力面。`
+            : "换个筛选条件，或该时间段内网关没有流量。"
+        }
       />
     );
 
@@ -382,6 +399,22 @@ export default function LogsPage() {
         title="调用日志"
         description="请求级运行事实，按来源分区：Atlas 网关请求、Runos 能力调用、平台自身后台作业。追责类记录不在这里，在「安全审计 · 变更审计」。"
       />
+
+      {/* 串联态必须**说出来**。两张表同时被同一个 taskId 筛过之后，如果哪一侧空了，
+          「被筛掉了」与「本来就没有」在界面上长得一样——而这条接缝下空是常态：
+          当前能力目录里没有任何一条端点打到 Atlas。 */}
+      {taskId.trim() ? (
+        <Banner
+          tone="info"
+          title={`正在按任务 ${taskId.trim()} 串联两张表`}
+          description="Atlas 请求日志与 Runos 能力调用都已按这个 taskId 过滤——同一次任务在模型面与能力面各发生了什么，在这一屏里对齐。任一侧为空是一个答案，不是故障。"
+          action={
+            <Button variant="secondary" size="sm" onClick={() => setTaskId("")}>
+              取消串联
+            </Button>
+          }
+        />
+      ) : null}
 
       <Section
         title="Atlas 请求日志"
@@ -434,8 +467,9 @@ export default function LogsPage() {
               }}
             />
           </InputGroup>
-          {/* 精确匹配。与下方 Runos 能力调用共用同一个 taskId——把值贴到两边，
-              就能看到同一次任务在模型面与能力面各发生了什么。 */}
+          {/* 精确匹配，**同时驱动下方 Runos 能力调用**：一个值，两张表。
+              两张表里的 taskId 都可以直接点，点哪边都填到这里——接缝是双向的，
+              「从模型面查到能力面」和反过来是同一个动作。 */}
           <InputGroup className="grow basis-media-2xl max-w-panel-sm">
             <InputGroupAddon>
               <Icon name="workflow" size="sm" aria-hidden="true" />
@@ -443,8 +477,8 @@ export default function LogsPage() {
             <InputGroupInput
               placeholder="任务 ID（taskId）…"
               aria-label="按任务 ID 筛选"
-              value={atlasTaskId}
-              onChange={(e) => setAtlasTaskId(e.target.value)}
+              value={taskId}
+              onChange={(e) => setTaskId(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void reloadAtlas();
               }}
@@ -480,6 +514,37 @@ export default function LogsPage() {
               cell: (r: AtlasRequestLogRecord) => (
                 <span className="font-mono text-code-sm">{r.requestId}</span>
               ),
+            },
+            {
+              /**
+               * 与下方 Runos 调用流水共用的那一根键（product_251 X-2）。
+               *
+               * 此前这张表**没有这一列**——taskId 只出现在"复制整行"的文本里。
+               * 一个只能过滤、看不见、点不了的接缝，等于没有接缝：想跨表对一次任务，
+               * 得先复制一行、从文本里把它抠出来、再贴到另一个框里。
+               */
+              id: "task",
+              header: "任务",
+              width: "sm",
+              cell: (r: AtlasRequestLogRecord) =>
+                r.taskId ? (
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="font-mono text-code-sm"
+                    title="按这个任务串联上下两张表"
+                    onClick={() => setTaskId(r.taskId ?? "")}
+                  >
+                    {r.taskId}
+                  </Button>
+                ) : (
+                  <span
+                    className="text-muted-foreground"
+                    title="这一行没有 taskId —— 早于 X-2 落地的请求，或不是 agent 发起的"
+                  >
+                    —
+                  </span>
+                ),
             },
             {
               id: "model",
@@ -568,7 +633,7 @@ export default function LogsPage() {
         level={2}
         description="agent 实际调用了哪些能力：延迟、裁决、错误类，以及这次调用记在哪个工作区。「任务反馈」是 agent 自报的成败（纯断言层），可信度与网关记录不同，故切换而非并列。"
       >
-        <RunosCallStreams />
+        <RunosCallStreams taskId={taskId} onTaskIdChange={setTaskId} />
       </Section>
 
       <Section
