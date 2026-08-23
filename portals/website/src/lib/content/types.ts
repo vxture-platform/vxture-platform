@@ -18,6 +18,7 @@
 export type ContentSection =
   | "legal"
   | "blog"
+  | "docs"
   | "faq"
   | "support"
   | "insights"

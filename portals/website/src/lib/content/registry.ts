@@ -35,6 +35,8 @@ export const CONTENT_REGISTRY: Record<ContentSection, ContentSectionConfig> = {
     staticParams: blogStaticParams,
   },
   // ── 占位实现（原 [footerSlug] 路由收拢至此） ─────────────────────────────
+  // docs 之前只在页脚有链接、从未注册 → /docs 一直是 404（2026-08-23 审计发现）。
+  docs: { loader: createStubLoader("docs") },
   faq: { loader: createStubLoader("faq") },
   support: { loader: createStubLoader("support") },
   insights: { loader: createStubLoader("insights") },

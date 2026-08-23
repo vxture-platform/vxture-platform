@@ -12,7 +12,9 @@
         "Graph Construction",
         "Relationship Mining"
       ],
-      "cta": { "label": "Learn More" }
+      "cta": {
+        "label": "Explore the product line"
+      }
     },
     "feature-intro-02": {
       "icon": "sparkles",
@@ -23,7 +25,9 @@
         "Resource Allocation",
         "Dynamic Planning"
       ],
-      "cta": { "label": "Learn More" }
+      "cta": {
+        "label": "Explore the product line"
+      }
     },
     "feature-intro-03": {
       "icon": "cube",
@@ -34,7 +38,9 @@
         "Simulation & Deduction",
         "Intelligent Decisions"
       ],
-      "cta": { "label": "Learn More" }
+      "cta": {
+        "label": "Explore the product line"
+      }
     }
   }
 }

@@ -21,6 +21,13 @@ export interface CtaAction {
   href: string;
   variant: string;
   icon: string;
+  /**
+   * 暂不可用：渲染成灰掉的按钮而不是链接。
+   *
+   * 在线沟通要接外部 chat，接之前既不能让它 404，也不该假装可点——按钮在
+   * 但点不动，比点了跳到一个空路由清楚。
+   */
+  disabled?: boolean;
 }
 
 /**
@@ -80,9 +87,13 @@ export const CTA_DATA: CtaData = {
       icon: "calendar",
     },
     {
-      href: "/ruyin-agent",
+      // 原 /ruyin-agent 从来没有对应路由（2026-08-23 断链审计）。这个入口的
+      // 真实意图是在线沟通，名字也不该带 agent——改 /livechat，等外接 chat
+      // 落地再放开。
+      href: "/livechat",
       variant: "secondary",
       icon: "bot",
+      disabled: true,
     },
   ],
   contact: {

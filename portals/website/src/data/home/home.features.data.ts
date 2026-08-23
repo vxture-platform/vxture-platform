@@ -42,6 +42,8 @@ export interface FeaturesData {
 /**
  * Features 结构数据 - 使用 labelKey 映射翻译
  */
+// 三张卡原先各指 /features/{slug}，而那一族路由从来不存在——三条全是 404
+// （2026-08-23 断链审计）。能力介绍没有独立页面，统一收到产品体系总览。
 export const FEATURES_DATA: FeaturesData = {
   enabled: true,
   icon: "chart",
@@ -61,7 +63,7 @@ export const FEATURES_DATA: FeaturesData = {
         "items.feature-intro-01.highlights.2",
       ],
       cta: {
-        href: "/features/data-knowledge-graph",
+        href: "/products",
       },
     },
     {
@@ -76,7 +78,7 @@ export const FEATURES_DATA: FeaturesData = {
         "items.feature-intro-02.highlights.2",
       ],
       cta: {
-        href: "/features/intelligent-decision-dispatch",
+        href: "/products",
       },
     },
     {
@@ -91,7 +93,7 @@ export const FEATURES_DATA: FeaturesData = {
         "items.feature-intro-03.highlights.2",
       ],
       cta: {
-        href: "/features/digital-twin-simulation",
+        href: "/products",
       },
     },
   ],

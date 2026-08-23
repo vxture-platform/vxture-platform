@@ -16,8 +16,12 @@
     }
   },
   "actions": {
-    "0": { "label": "Book Consultation" },
-    "1": { "label": "AI Agent Live Chat" }
+    "0": {
+      "label": "Book Consultation"
+    },
+    "1": {
+      "label": "Live chat (coming soon)"
+    }
   },
   "contact": {
     "description": "Connect directly with our expert team for professional advice tailored to your business"

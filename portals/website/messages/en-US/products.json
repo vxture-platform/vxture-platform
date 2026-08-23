@@ -188,7 +188,8 @@
       }
     ],
     "comingSoonHint": "This product is under construction — stay tuned.",
-    "back": "Back to products"
+    "back": "Back to products",
+    "consult": "Talk to us"
   },
   "subscription": {
     "unavailable": "Online subscription for this product is not open yet — contact sales for a quote.",
