@@ -1337,7 +1337,8 @@
       "active": "启用",
       "inactive": "停用",
       "online": "在线",
-      "private": "自建"
+      "private": "自建",
+      "deprecated": "已弃用"
     },
     "actions": {
       "addModel": "新增模型",
@@ -1364,7 +1365,8 @@
     },
     "status": {
       "active": "启用",
-      "inactive": "停用"
+      "inactive": "停用",
+      "deprecated": "已弃用"
     },
     "pagination": {
       "summary": "第 {page} / {totalPages} 页，共 {total} 个模型",
@@ -1520,6 +1522,9 @@
       "actions": {
         "cancel": "取消",
         "save": "保存"
+      },
+      "hints": {
+        "grantStateViaRowAction": "启停不在这里改——用行操作里的「启用 / 停用」，那条路径会在审计里如实记成一次启停，而不是一次编辑。"
       }
     },
     "empty": {

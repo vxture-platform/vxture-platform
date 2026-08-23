@@ -12,17 +12,17 @@
  *
  * ── 2026-08-13 改按**推导状态**呈现（vxture-atlas 管理面设计稿第 1 条规则）──────
  *
- * 这页此前只有一个「已启用／已停用」列，而那是 `isActive`——**运营的意图**。
+ * 这页此前只有一个「已启用／已停用」列，而那是 `state`——**运营的意图**。
  * Atlas 从不把父级动作写到子级上（停用一个模型不会去停用指着它的 endpoint，那样
  * 会连带杀掉 fallback 还好好的入口、覆盖运营自己关掉某一条的决定，而且重新上线时
  * 没法分辨该把哪些再打开），后果改为**读时推导**成 `resolution`。
  *
- * 于是意图与后果会分叉，且**只在上游坏掉时才分叉**：一个 `isActive: true` 却指着
+ * 于是意图与后果会分叉，且**只在上游坏掉时才分叉**：一个 `state: "active"` 却指着
  * 已下线模型的入口，在旧页面上是一个绿色的「已启用」。这个设计规则本身就是从
  * 「三条这样的记录躺在注册表里、页面全绿」学来的，而这页当时正是那块绿色。
  *
- * 所以状态列现在读 `resolution` 而不是 `isActive`（`disabled` 一档就等价于
- * isActive=false，没有信息损失），primary/fallback 各自带上它为什么能／不能服务，
+ * 所以状态列现在读 `resolution` 而不是 `state`（`disabled` 一档就等价于
+ * state="inactive"，没有信息损失），primary/fallback 各自带上它为什么能／不能服务，
  * 并且**顶部横幅点名所有分叉的入口**——`degraded`（primary 倒了、fallback 顶着、
  * 调用仍然成功）是最容易被漏掉的一个，因为从调用方看一切正常。
  *
@@ -78,6 +78,12 @@ import {
   type EndpointModelRef,
   type EndpointResolutionState,
 } from "@/features/atlas/lifecycle";
+import {
+  isEnabled,
+  isServing,
+  type ModelState,
+  type ObjectState,
+} from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
 
 /** 与 opera-bff atlas.router.ts 同名能力码——endpoints 复用 model:model.manage
@@ -91,13 +97,13 @@ interface ModelEndpointRecord {
   category: string;
   primaryModelCode: string;
   fallbackModelCode: string | null;
-  /** 运营的意图。 */
-  isActive: boolean;
-  /** 意图的后果，读时推导。**可选**：Atlas 是外部主机、本仓不钉它的版本，落后的
-   *  部署不会回这两个字段——缺失按「未知」渲染，不退回用 isActive 假装推导过。 */
-  resolution?: EndpointResolutionState;
-  /** primary 在前、fallback 在后，各带 availability。 */
-  models?: EndpointModelRef[];
+  /** 运营的意图。两值——入口没有第三档。 */
+  state: ObjectState;
+  /** 意图的后果，读时推导。**契约必有**：缺了由 opera-bff 报
+   *  `ATLAS_CONTRACT_FIELD_MISSING`，页面不再退回显示意图来顶替。 */
+  resolution: EndpointResolutionState;
+  /** primary 在前、fallback 在后，各带 availability。契约必有。 */
+  models: EndpointModelRef[];
   createdAt: string;
   updatedAt: string;
 }
@@ -105,7 +111,7 @@ interface ModelEndpointRecord {
 interface AiModelSummary {
   id: string;
   modelCode: string;
-  isActive: boolean;
+  state: ModelState;
 }
 
 /** 只看异常 = 运营意图与实际后果分叉的那些（degraded / unresolvable）。
@@ -246,9 +252,7 @@ function EndpointsPageContent() {
   /** 启用中却没在正常服务的——意图与后果分叉，唯一值得主动看的一批。 */
   const diverging = useMemo(
     () =>
-      rows.filter((r) =>
-        resolutionDivergesFromIntent(r.isActive, r.resolution),
-      ),
+      rows.filter((r) => resolutionDivergesFromIntent(r.state, r.resolution)),
     [rows],
   );
 
@@ -259,7 +263,7 @@ function EndpointsPageContent() {
         (endpointCodeFilter === "" || r.code === endpointCodeFilter) &&
         (resolutionFilter === "all" ||
           (resolutionFilter === "diverging"
-            ? resolutionDivergesFromIntent(r.isActive, r.resolution)
+            ? resolutionDivergesFromIntent(r.state, r.resolution)
             : r.resolution === resolutionFilter)) &&
         (kw === "" ||
           r.code.toLowerCase().includes(kw) ||
@@ -280,8 +284,11 @@ function EndpointsPageContent() {
    */
   const modelItemsFor = useCallback(
     (currentValue: string) => {
+      /* 用 `isServing` 而不是 `isEnabled`：`deprecated` 的模型仍可解析，把它挂到
+         一个入口上是合法决定（"别再往上建了，它还能用"）。用 isEnabled 会把这批模型
+         从下拉里悄悄抹掉，而运营看不出它们去哪了。 */
       const items = models
-        .filter((m) => m.isActive)
+        .filter((m) => isServing(m.state))
         .map((m) => ({ value: m.modelCode, label: m.modelCode }));
       if (
         currentValue !== "" &&
@@ -414,7 +421,7 @@ function EndpointsPageContent() {
           icon: "edit",
           onSelect: () => openFrom(r, "edit"),
         },
-        r.isActive
+        isEnabled(r.state)
           ? {
               id: "disable",
               label: "停用",
@@ -714,24 +721,19 @@ function EndpointsPageContent() {
                   ),
               },
               {
-                /* 读 resolution 而不是 isActive：后者是意图，前者是它当前实际
-                   在干什么。`disabled` 一档等价于 isActive=false，没有信息损失。 */
+                /* 读 resolution 而不是 state：后者是意图，前者是它当前实际
+                   在干什么。`disabled` 一档等价于 state="inactive"，没有信息损失。
+                   没有"读不到"的分支了——resolution 是契约必有字段，缺了在 BFF 就报错，
+                   走不到这里。 */
                 id: "resolution",
                 header: "解析状态",
                 align: "center",
                 width: "xs",
-                cell: (r: ModelEndpointRecord) =>
-                  r.resolution ? (
-                    <StatusBadge tone={RESOLUTION_META[r.resolution].tone} dot>
-                      {RESOLUTION_META[r.resolution].label}
-                    </StatusBadge>
-                  ) : (
-                    /* 这台 Atlas 还没回 resolution。退回显示意图，并说明它只是
-                       意图——不假装这里推导过任何东西。 */
-                    <StatusBadge tone="neutral" dot>
-                      {r.isActive ? "已启用（未推导）" : "已停用"}
-                    </StatusBadge>
-                  ),
+                cell: (r: ModelEndpointRecord) => (
+                  <StatusBadge tone={RESOLUTION_META[r.resolution].tone} dot>
+                    {RESOLUTION_META[r.resolution].label}
+                  </StatusBadge>
+                ),
               },
             ]}
             rows={pager.pageRows}

@@ -33,8 +33,10 @@
  * 产品必须用 /status 这个路径名）。详见 20-service-monitor.md §3：
  *   health＝liveness——只证明进程在听，不代表能否对外服务。
  *   status＝readiness——依赖项是否就绪，能否真正服务；返回 `checks` 明细。
- * 025 标准把 readiness 列为可选，目前全仓零产品真正接上，所以 status 列大概率显示
- * "未实现"——这是诚实的现状，不是探测逻辑的缺陷。
+ * 025 标准把 readiness 列为可选。**atlas 与 runos 已经接上了**（两边都有 `/readyz`
+ * 与 `/healthz`，2026-08-23 读源码核对），所以这两行不该再显示"未实现"；其余产品多数
+ * 仍未实现，那一列显示"未实现"是诚实的现状，不是探测逻辑的缺陷。
+ * 自报状态的翻译见 `readinessFromBody()`——那里有一个"atlas 坏了却显示就绪"的坑。
  * 每类端点两种运行时路径约定都试（Next 前端 `/api/health`+`/api/ready`、Nest 后端
  * `/healthz`+`/readyz`），两条并发探，先拿到的非 404 响应视为命中；两条都 404 记
  * "未实现"（readiness）或"异常"（liveness——它不是可选项）；两条都连不上记"不可达"。
@@ -306,14 +308,37 @@ function readStringField(
   return typeof value === "string" ? value : null;
 }
 
-function readChecks(
+/**
+ * 逐依赖的就绪明细，拍平成「名字 → 一句话」。
+ *
+ * **025 标准里 `checks` 的值是对象**（`{status, latencyMs?, message?}`），不是字符串
+ * ——atlas 回的是 `{"database":{"status":"pass","latencyMs":2}, …}`。此前这里只收
+ * `typeof value === "string"`，于是每一项都被丢掉、`out` 空、返回 null：
+ * **服务状态页的「checks」一栏对每个真正实现了 readiness 的产品都是空的**
+ * （2026-08-23 联调实测：atlas 六项检查、runos 一项，一项都没显示出来）。
+ * 不报错，看起来就像"这个产品没给明细"。
+ *
+ * 两种形状都收：字符串原样，对象取 `status`，有延迟就带上。收窄成一行字是因为
+ * 调用方（服务状态页）把它渲染成 `名字 值 · 名字 值`，不做嵌套展开。
+ */
+export function readChecks(
   body: Record<string, unknown> | null,
 ): Record<string, string> | null {
   const raw = body?.checks;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof value === "string") out[key] = value;
+    if (typeof value === "string") {
+      out[key] = value;
+      continue;
+    }
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const v = value as Record<string, unknown>;
+      if (typeof v["status"] !== "string") continue;
+      const latency =
+        typeof v["latencyMs"] === "number" ? ` ${v["latencyMs"]}ms` : "";
+      out[key] = `${v["status"]}${latency}`;
+    }
   }
   return Object.keys(out).length > 0 ? out : null;
 }
@@ -512,6 +537,31 @@ async function probeLiveness(origin: string | null): Promise<LivenessProbe> {
   };
 }
 
+/**
+ * 把产品自报的 readiness 词翻成本页的三档。
+ *
+ * **025 标准的词表是 `ready` / `degraded` / `blocked`**，不是 `fail`——atlas 与 runos
+ * 都按标准回 `blocked`（各自 `health.service.ts` 的 `ReadinessStatus`）。此前这里只认
+ * `ready|degraded|fail`，`blocked` 落到 HTTP 状态码的兜底分支上，于是：
+ *
+ *   runos  blocked 时把响应置成 503 → 兜底判成 `fail`，凑巧对了
+ *   atlas  `/readyz` **恒回 200**（handler 不改状态码）→ 兜底判成 **`ready`**
+ *
+ * 也就是说 atlas 数据库不可用时，服务状态页会把它显示成「就绪」。这是这一版最不能留
+ * 的一种错：页面全绿而系统是坏的，比读不出来更糟。
+ *
+ * `fail` 继续认，因为它是本页对外的档位名，也可能有产品照着这个页面回；HTTP 状态码
+ * 兜底保留给不按标准回话的产品——但**只在没有可辨认的自报状态时**才用它。
+ */
+export function readinessFromBody(
+  bodyStatus: string | null,
+  httpStatus: number,
+): ReadinessStatus {
+  if (bodyStatus === "ready" || bodyStatus === "degraded") return bodyStatus;
+  if (bodyStatus === "blocked" || bodyStatus === "fail") return "fail";
+  return httpStatus >= 200 && httpStatus < 300 ? "ready" : "fail";
+}
+
 async function probeReadiness(origin: string | null): Promise<ReadinessProbe> {
   const checkedAt = NOW();
   if (!origin) {
@@ -530,15 +580,10 @@ async function probeReadiness(origin: string | null): Promise<ReadinessProbe> {
   const attempts = await raceCandidatePaths(origin, READINESS_PATHS);
   const hit = pickHit(attempts);
   if (hit) {
-    const bodyStatus = readStringField(hit.body, "status");
-    const status: ReadinessStatus =
-      bodyStatus === "ready" ||
-      bodyStatus === "degraded" ||
-      bodyStatus === "fail"
-        ? bodyStatus
-        : hit.status >= 200 && hit.status < 300
-          ? "ready"
-          : "fail";
+    const status = readinessFromBody(
+      readStringField(hit.body, "status"),
+      hit.status,
+    );
     return {
       status,
       origin,

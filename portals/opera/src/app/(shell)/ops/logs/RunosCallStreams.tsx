@@ -18,9 +18,17 @@
  *     从不参与强制执行
  * 混排会让人以为后者与前者同等可信。所以是切换而不是并列。
  *
- * 无分页：runos 侧 `limit` 服务端 clamp（默认 100、上限 1000），不信调用方。需要更早
- * 的数据只能收窄过滤条件——对 append-only 的无界流做无界查询，是把页面变成拖垮数据库
- * 的方式。关键词做**精确**过滤（`capabilityId` / `taskId`），不做跨字段模糊匹配。
+ * **游标翻页**（product_251 A-3）：runos 三条流水都是 keyset 游标 + 服务端 clamp 的
+ * `limit`。此前这里只取第一页、`nextCursor` 一次都没消费，界面上换成了「最近
+ * 100 / 500 / 1000 条」的档位选择器——**超出 1000 条的历史根本够不着，而界面没有任何
+ * 地方说明这一点**。那不是 UI 欠账，是平台侧漏读了上游已经满足的契约。
+ *
+ * 现在与同一页 Atlas 那半同形：固定页大小 + 「已加载 N 条，还有更多 / 加载更多」。
+ * 页脚**必须显式说到没到末尾**——「加载完了」与「加载不动了」在界面上长得一样，而
+ * 前者是答案、后者是故障。
+ *
+ * 关键词做**精确**过滤（`capabilityId` / `taskId`），不做跨字段模糊匹配：对
+ * append-only 的无界流做无界模糊查询，是把页面变成拖垮数据库的方式。
  *
  * 不轮询：明细流按设计文件 §7.3 归「翻页即取」一类，自动刷新会打断正在读的人。 */
 
@@ -34,7 +42,6 @@ import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-  NativeSelect,
   SegmentedControl,
   StatusBadge,
   useToast,
@@ -51,6 +58,9 @@ type StreamKey = "calls" | "outcomes";
  * **`state` 是这个对象算不算数，`outcome` 是这一次尝试怎么结束的**，调用是后者。
  */
 interface CapabilityCallRecord {
+  /** 主键。`callId` **不唯一**（上游只有非唯一索引，配 `sequenceNo`/`retryOf`
+   *  ——一次调用可以落多条事件行），所以行标识用这个。 */
+  eventId: string;
   callId: string;
   occurredAt: string;
   taskId: string | null;
@@ -61,7 +71,11 @@ interface CapabilityCallRecord {
   decision: string | null;
   errorClass: string | null;
   errorCode: string | null;
-  latencyMs: number | null;
+  /** 端到端。上游把延迟拆成 total / gateway / capability 三个，**没有 `latencyMs`**
+   *  ——本页此前读的正是那个不存在的名字，于是延迟列恒为「—」且不报错。 */
+  latencyTotalMs: number | null;
+  latencyGatewayMs: number | null;
+  latencyCapabilityMs: number | null;
 }
 
 interface TaskOutcomeRecord {
@@ -73,11 +87,20 @@ interface TaskOutcomeRecord {
   note: string | null;
 }
 
-/** 上游改成 keyset 游标分页（A-3）；本页暂只取第一页，`nextCursor` 先不消费。 */
+/** keyset 游标分页（A-3），集合键 `items`（A-4，两个上游同形）。 */
 interface AuditPage<T> {
-  rows: T[];
+  items: T[];
   nextCursor: string | null;
 }
+
+/**
+ * 固定页大小，与同一页 Atlas 请求日志那半保持同一个数量级。
+ *
+ * 换掉的是「最近 100 / 500 / 1000 条」——那不是页大小，是**能看到多远的上限**，
+ * 而 runos 把 `limit` clamp 在 1000，所以第三档同时也是天花板。有了游标之后
+ * 上限消失了，档位就没有意义了。
+ */
+const PAGE_SIZE = 100;
 
 type LoadState =
   | { kind: "loading" }
@@ -114,28 +137,37 @@ export function RunosCallStreams() {
   const { toast } = useToast();
   const [stream, setStream] = useState<StreamKey>("calls");
   const [keyword, setKeyword] = useState("");
-  const [limit, setLimit] = useState("100");
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [callRows, setCallRows] = useState<CapabilityCallRecord[]>([]);
   const [outcomeRows, setOutcomeRows] = useState<TaskOutcomeRecord[]>([]);
+  /* 两条流各有各的游标：切流不是翻页，拿着上一条流的游标去问另一条流会被
+     `AUDIT_INVALID_CURSOR` 拒掉——那是对的，但错在我们这边。 */
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const query = useCallback(
+    (nextCursor?: string) => {
+      const p = new URLSearchParams({ limit: String(PAGE_SIZE) });
+      const kw = keyword.trim();
+      if (kw) p.set(stream === "calls" ? "capabilityId" : "taskId", kw);
+      if (nextCursor) p.set("cursor", nextCursor);
+      const path = stream === "calls" ? "calls" : "outcomes";
+      return `/api/runos/audit/${path}?${p.toString()}`;
+    },
+    [stream, keyword],
+  );
 
   const reload = useCallback(async () => {
     setLoad({ kind: "loading" });
-    const p = new URLSearchParams({ limit });
-    const kw = keyword.trim();
     try {
       if (stream === "calls") {
-        if (kw) p.set("capabilityId", kw);
-        const page = await api.get<AuditPage<CapabilityCallRecord>>(
-          `/api/runos/audit/calls?${p.toString()}`,
-        );
-        setCallRows(page.rows);
+        const page = await api.get<AuditPage<CapabilityCallRecord>>(query());
+        setCallRows(page.items);
+        setCursor(page.nextCursor);
       } else {
-        if (kw) p.set("taskId", kw);
-        const page = await api.get<AuditPage<TaskOutcomeRecord>>(
-          `/api/runos/audit/outcomes?${p.toString()}`,
-        );
-        setOutcomeRows(page.rows);
+        const page = await api.get<AuditPage<TaskOutcomeRecord>>(query());
+        setOutcomeRows(page.items);
+        setCursor(page.nextCursor);
       }
       setLoad({ kind: "ready" });
     } catch (error) {
@@ -145,7 +177,37 @@ export function RunosCallStreams() {
           error instanceof OperaApiError ? error.message : "读取调用流失败",
       });
     }
-  }, [stream, keyword, limit]);
+  }, [stream, query]);
+
+  const loadMore = async () => {
+    if (!cursor) return;
+    setLoadingMore(true);
+    try {
+      if (stream === "calls") {
+        const page = await api.get<AuditPage<CapabilityCallRecord>>(
+          query(cursor),
+        );
+        setCallRows((prev) => [...prev, ...page.items]);
+        setCursor(page.nextCursor);
+      } else {
+        const page = await api.get<AuditPage<TaskOutcomeRecord>>(query(cursor));
+        setOutcomeRows((prev) => [...prev, ...page.items]);
+        setCursor(page.nextCursor);
+      }
+    } catch (error) {
+      /* 翻页失败不清空已读到的行，也不把整块变成错误态：手里那几页是真实数据，
+         丢掉它们等于用一次网络抖动惩罚读者。 */
+      toast({
+        tone: "danger",
+        title: "加载更多失败",
+        ...(error instanceof OperaApiError && error.message
+          ? { description: error.message }
+          : {}),
+      });
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     void reload();
@@ -172,6 +234,29 @@ export function RunosCallStreams() {
       });
     }
   };
+
+  /**
+   * 页脚**必须显式说到没到末尾**：「加载完了」与「加载不动了」在界面上长得一样，
+   * 而前者是答案、后者是故障。此前这里既没有游标也没有这句话，运营者看到的是一个
+   * 沉默的截断。
+   */
+  const streamFooter = (loaded: number) => (
+    <div className="flex w-full items-center justify-between gap-sm">
+      <span className="text-body-sm text-muted-foreground">
+        已加载 {loaded} 条{cursor ? "，还有更多" : "（已到末尾）"}
+      </span>
+      {cursor ? (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={loadingMore}
+          onClick={() => void loadMore()}
+        >
+          {loadingMore ? "加载中…" : "加载更多"}
+        </Button>
+      ) : null}
+    </div>
+  );
 
   const emptyState =
     load.kind === "loading" ? (
@@ -229,16 +314,6 @@ export function RunosCallStreams() {
             }}
           />
         </InputGroup>
-        <NativeSelect
-          wrapperClassName="w-fit"
-          value={limit}
-          onChange={(e) => setLimit(e.target.value)}
-          aria-label="返回条数"
-        >
-          <option value="100">最近 100 条</option>
-          <option value="500">最近 500 条</option>
-          <option value="1000">最近 1000 条</option>
-        </NativeSelect>
         <Button
           variant="secondary"
           onClick={() => void reload()}
@@ -295,12 +370,27 @@ export function RunosCallStreams() {
               ),
             },
             {
+              /* 显示端到端；网关与能力各自那段挂在 title 上——「慢在哪一段」是排障
+                 的第一个分叉，但把三个数平铺在列里会把这张表挤成一堵数字墙。 */
               id: "latency",
               header: "延迟",
               align: "right",
               width: "xs",
               cell: (r: CapabilityCallRecord) =>
-                r.latencyMs != null ? `${r.latencyMs}ms` : "—",
+                r.latencyTotalMs != null ? (
+                  <span
+                    title={
+                      r.latencyGatewayMs != null ||
+                      r.latencyCapabilityMs != null
+                        ? `网关 ${r.latencyGatewayMs ?? "—"}ms · 能力 ${r.latencyCapabilityMs ?? "—"}ms`
+                        : undefined
+                    }
+                  >
+                    {r.latencyTotalMs}ms
+                  </span>
+                ) : (
+                  "—"
+                ),
             },
             {
               id: "decision",
@@ -322,7 +412,7 @@ export function RunosCallStreams() {
             },
           ]}
           rows={callRows}
-          rowKey={(r) => r.callId}
+          rowKey={(r) => r.eventId}
           indexStart={1}
           rowActions={(r: CapabilityCallRecord) => (
             <Button
@@ -340,6 +430,7 @@ export function RunosCallStreams() {
             </Button>
           )}
           empty={emptyState}
+          footer={streamFooter(callRows.length)}
         />
       ) : (
         <DataTable
@@ -400,6 +491,7 @@ export function RunosCallStreams() {
           rowKey={(r) => `${r.taskId}:${r.occurredAt}`}
           indexStart={1}
           empty={emptyState}
+          footer={streamFooter(outcomeRows.length)}
         />
       )}
     </div>

@@ -4,8 +4,8 @@
  * @layer Presentation
  *
  * 一律用**相对路径**：生产由 nginx 在同一 vhost 上路由（真实域名不进仓），本地
- * 由 `next.config.js` 的 rewrite 代到 :3051。与 `SessionProvider` 调 `/auth/*`
- * 同一套约定。
+ * 由 `next.config.js` 的 rewrite 代到 :3041（opera-bff 的口，段内 x0=UI / x1=BFF）。
+ * 与 `SessionProvider` 调 `/auth/*` 同一套约定。
  *
  * 错误不吞：BFF 的能力门返回 403、会话失效返回 401，页面要能分辨"读失败"与
  * "本来就没有"（空态三分，见 DS 的 EmptyState 用法），所以这里抛带状态码的错，

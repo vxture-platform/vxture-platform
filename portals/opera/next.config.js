@@ -36,7 +36,15 @@ const nextConfig = {
     // /auth/* and /api/* URLs (in prod nginx routes them on the same vhost,
     // keeping the real hostname out of the repo). `next dev` proxies them to
     // the local BFF.
-    const operaBff = process.env.OPERA_BFF_DEV_URL ?? "http://localhost:3051";
+    //
+    // 端口是 **3041**，不是 3051。3051 是 2026-08-10 端口重排前的旧值，
+    // `deploy/scripts/15-migrate-runtime-ports.sh` 明写着
+    // `.env.opera-bff|OPERA_BFF_PORT=3051|OPERA_BFF_PORT=3041`，而全仓其余五处
+    // （compose、.env 样例、`main.ts` 默认值、dev-panel 注入、端口分配文档）都已经是
+    // 3041 —— 只有这一行没跟上。它平时不发作是因为 dev-panel 会显式注入
+    // `OPERA_BFF_DEV_URL`，把默认值盖掉；直接 `pnpm --filter @vxture/opera dev` 的人
+    // 才会踩到，而表现是**登录跳不动、/api/* 全部拿不到响应**，看起来像 BFF 没起。
+    const operaBff = process.env.OPERA_BFF_DEV_URL ?? "http://localhost:3041";
     return [
       { source: "/auth/:path*", destination: `${operaBff}/auth/:path*` },
       // /api/health 是 Next 自己的路由（app/api/health），不能代出去——把它排除在

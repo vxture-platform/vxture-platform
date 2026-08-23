@@ -65,6 +65,19 @@
  *   - audit：mgmt_event / capability_call / task_outcome 三条读流
  * 共同点是这些**列早就存在、只是没有路由**，补的是可达性不是新语义。
  *
+ * 2026-08-23 按 runos 生产源码逐条复核（`registry` / `commerce` / `governance` /
+ * `audit` 四个 controller + prisma schema），补一条、修两处：
+ *   - 补 `PATCH grants/:grantId`（改条款）。上游早已交付 `updateTerms`，opera 侧
+ *     一直用"撤销 + 重发"顶着——那是两次写、中间有一个没有授权的窗口，且每改一次
+ *     配额计数就归零。上游同时把"重发换条款"改成 409，旧路径连跑通都不成立了。
+ *   - `CapabilityCallRecord.latencyMs` → `latencyTotalMs`：上游从来没有前者，
+ *     调用流水的延迟列一直是空的（不报错，所以没人发现）。
+ *   - 同一条记录的行标识由 `callId` 改为 `eventId`：`call_id` 是非唯一索引。
+ * 仍**未**代理、且是有意的：`POST endpoint-instances/:id/activate|deactivate`
+ * （端点三态，二元开关表达不了，见下）；`GET capabilities/:id` 的 `versions[]` 带
+ * `embedding` 向量（上游 include 全量，是它那侧的载荷问题，不在这层裁剪——裁了就等于
+ * 我们决定哪些字段不重要）。
+ *
  * step-up：密钥类写路由（credentials 的 create/rotate/revoke）挂
  * `@RequireStepUp()`；grants / capabilities 的写**不挂**——判据在
  * `admin.operator_permission.requires_step_up`，而 `capability:runos.manage`
@@ -84,9 +97,10 @@ import {
   Post,
   Query,
   Req,
+  Res,
 } from "@nestjs/common";
 import { VxConfigService } from "@vxture/core-config";
-import type { Request } from "express";
+import type { Request, Response as ExpressResponse } from "express";
 import type { Pool } from "pg";
 import { OperatorExchangeService } from "../auth/operator-exchange.service";
 import type { OperatorAuditEntry } from "../audit/audit-log";
@@ -97,6 +111,7 @@ import {
   upstreamUnavailable,
 } from "../errors/api-error";
 import { RequireStepUp } from "../auth/step-up.decorator";
+import { assertRunosContract, type RunosResource } from "./runos-contract";
 import { OPERA_BFF_RW_POOL } from "../tokens";
 import type { RequestContext } from "../types/request-context";
 
@@ -231,12 +246,23 @@ export interface MgmtEventRecord {
  * 基数不是流的长度。
  */
 export interface AuditPage<T> {
-  rows: T[];
+  /** `items`，不是 `rows`——product_251 A-4，两个上游同形。 */
+  items: T[];
   nextCursor: string | null;
 }
 
-/** `audit.capability_call` 行——「这个 agent 实际调用了什么」。 */
+/**
+ * `audit.capability_call` 行——「这个 agent 实际调用了什么」。
+ *
+ * **`eventId` 是主键，`callId` 不是。** 上游 schema 上 `call_id` 只有一个**非唯一**
+ * 索引，与之配套的还有 `sequence_no` / `parent_call_id` / `retry_of`：一次调用可以
+ * 落多条事件行。拿 `callId` 当行标识（React key、去重、"复制调用 ID"）在重试或多段
+ * 调用出现的那一刻就会撞——而那恰好是最需要看清这张表的时候。
+ */
 export interface CapabilityCallRecord {
+  /** 主键。行标识用它。 */
+  eventId: string;
+  /** 业务意义上的一次调用；同一个值可能横跨多行（见上）。 */
   callId: string;
   occurredAt: string;
   taskId: string | null;
@@ -249,7 +275,16 @@ export interface CapabilityCallRecord {
   decision: string | null;
   errorClass: string | null;
   errorCode: string | null;
-  latencyMs: number | null;
+  /**
+   * 端到端延迟。**上游没有 `latencyMs` 这个字段**——它拆成了三个
+   * （`latencyTotalMs` / `latencyGatewayMs` / `latencyCapabilityMs`），网关自身开销
+   * 与能力执行时间分开记，因为"慢在哪一段"是排障要先答的问题。此前本接口写的是
+   * `latencyMs`，上游从不返回，页面那一列恒为「—」而不报错。
+   */
+  latencyTotalMs: number | null;
+  /** 网关自身开销。与 total 的差值就是能力那一段。 */
+  latencyGatewayMs: number | null;
+  latencyCapabilityMs: number | null;
 }
 
 /** `audit.task_outcome` 行——纯断言层（ADR-006），只喂贡献度评分。 */
@@ -295,12 +330,16 @@ export interface UsageSummaryRow {
   costAmount: string;
 }
 
-/** 上游回的是**信封**不是裸数组：窗口边界要跟着行一起回来，否则前端只能猜自己看的是哪段时间。 */
+/**
+ * 上游回的是**信封**不是裸数组，而且理由被 product_251 A-4 写死了：`groupBy` 默认
+ * `workspace`、窗口默认当月 UTC，两者都是**服务端解析出来的**，回显只能放信封上——
+ * 放在行上的话，空结果时它会整个消失，调用方拿到空集合后无从得知自己查的是哪根轴。
+ */
 export interface UsageSummaryPage {
   dimension: UsageAxis;
   from: string;
   to: string;
-  rows: UsageSummaryRow[];
+  items: UsageSummaryRow[];
 }
 
 export interface EndpointInstanceRecord {
@@ -341,7 +380,7 @@ export class RunosRouter {
   private async writeThrough<T>(
     req: Request & RequestContext,
     path: string,
-    options: { method?: HttpMethod; body?: JsonObject },
+    options: { method?: HttpMethod; body?: JsonObject; res?: ExpressResponse },
     audit: (result: T) => OperatorAuditEntry,
   ): Promise<T> {
     const result = await this.request<T>(req, path, options);
@@ -349,10 +388,36 @@ export class RunosRouter {
     return result;
   }
 
+  /**
+   * @param options.res 传了就把**上游的成功状态码**照搬到本层响应上。
+   *
+   * ── 为什么不是每条 POST 都传 ────────────────────────────────────────────
+   *
+   * Nest 对 `@Post()` 默认回 201，而上游只有**两条**路由真的用状态码承载信息
+   * （product_251 B-2「调用方不必 diff 行就能分辨新建与已存在」）：
+   *
+   *   POST /commerce/capability-grants   201 新建 · 200 已存在同条款
+   *   POST /capability/endpoint-instances 201 新建 · 200 已发布过
+   *
+   * 其余 20 多条上游只有一个成功状态，把一个恒定值"透传"一遍是仪式不是契约。
+   * 所以规则写在这里：**上游哪条路由 `res.status(created ? 201 : 200)`，本层对应
+   * 那条就传 `res`**；上游加第三条时，这里跟着加第三条。
+   *
+   * 机制上能成立是因为 Nest 在**跑 handler 之前**就 setStatus，而
+   * `RouterExecutionContext.createHandleResponseFn` 拿到的 `httpStatusCode` 是
+   * undefined（调用点只传三个参数），于是 `reply()` 里的 `if (statusCode)` 不成立、
+   * 不会覆盖 handler 里后设的值。`@Res({ passthrough: true })` 因此是有效的。
+   */
   private async request<T>(
     req: Request & RequestContext,
     path: string,
-    options?: { method?: HttpMethod; body?: JsonObject },
+    options?: {
+      method?: HttpMethod;
+      body?: JsonObject;
+      res?: ExpressResponse;
+      /** 只在**读**上给：带上它就在出口校验必有字段。见 `runos-contract.ts`。 */
+      contract?: RunosResource;
+    },
   ): Promise<T> {
     const bearer = req.operatorAccessToken
       ? await this.operatorExchange.getToken(
@@ -360,11 +425,16 @@ export class RunosRouter {
           RUNOS_AUDIENCE,
         )
       : null;
-    return runosRequest<T>(
+    const res = options?.res;
+    const payload = await runosRequest<T>(
       path,
       { ...options, ...(bearer ? { bearer } : {}) },
       this.runosApiUrl,
+      res ? (status) => res.status(status) : undefined,
     );
+    return options?.contract
+      ? assertRunosContract(payload, options.contract)
+      : payload;
   }
 
   // ── Capabilities ─────────────────────────────────────────────────────────
@@ -388,6 +458,7 @@ export class RunosRouter {
     return this.request<CapabilityRecord[]>(
       req,
       `/capability/capabilities${params.size ? `?${params.toString()}` : ""}`,
+      { contract: "capabilities" },
     );
   }
 
@@ -400,6 +471,7 @@ export class RunosRouter {
     return this.request<CapabilityDetailRecord>(
       req,
       `/capability/capabilities/${encodeURIComponent(capabilityId)}`,
+      { contract: "capability-detail" },
     );
   }
 
@@ -506,10 +578,18 @@ export class RunosRouter {
     );
   }
 
-  /** 退役半边：`deprecated`（仍可解析，只是打信号）/ `withdrawn`（从快照里掉出去）。
-   *  **到不了 `stable`**——晋升有自己的路由，runos 侧对本路由直接 400。
-   *  withdrawn 一个当前是 stable 别名的版本，会连带把 stable 别名删掉，响应里
-   *  `droppedAlias` 会说；这意味着该能力**暂时没有 stable 可解析**。 */
+  /**
+   * 退役半边：`deprecated`（仍可解析，只是打信号）/ `withdrawn`（从快照里掉出去）。
+   * **到不了 `stable`**——晋升有自己的路由，runos 侧对本路由直接 400。
+   *
+   * withdrawn 会把**指向该版本的每一个别名**一并删掉，响应里 `droppedAliases` 点名
+   * 是哪些。此前这里写的是 `droppedAlias`（单数、string）——上游从来没有这个键，
+   * 于是门户那句「这个能力现在没有 stable 可解析」的警告**一次都没有触发过**：
+   * 撤掉一个正是 stable 的版本，界面上是一个平静的绿色 toast。
+   * （2026-08-23 联调实测：撤一个版本回的是 `{"droppedAliases":["latest"]}`。）
+   *
+   * 是**数组**也重要：掉的不只有 `stable`，`latest` 与任何自定义别名都会跟着掉。
+   */
   @Patch("capabilities/:capabilityId/versions/:version/lifecycle")
   setVersionLifecycle(
     @Req() req: Request & RequestContext,
@@ -520,7 +600,7 @@ export class RunosRouter {
     capabilityId: string;
     version: string;
     state: string;
-    droppedAlias?: string;
+    droppedAliases?: string[];
   }> {
     assertCanManage(req);
     return this.writeThrough(
@@ -533,7 +613,9 @@ export class RunosRouter {
         resourceId: `${capabilityId}@${version}`,
         after: {
           state: r.state,
-          ...(r.droppedAlias ? { droppedAlias: r.droppedAlias } : {}),
+          ...(r.droppedAliases?.length
+            ? { droppedAliases: r.droppedAliases }
+            : {}),
         },
       }),
     );
@@ -585,22 +667,75 @@ export class RunosRouter {
 
   // ── Grants（opera 技术字段 + admin 商业字段合并为一次写入——见文件头）────────
 
+  /**
+   * 发一条授权。**上游对"已存在"的回答变了**（product_251 B-2）：
+   *
+   *   同一对主体+能力已有 active 的 direct 行，条款**相同** → 200，`created:false`
+   *   （不写库，但会重编闭包：能力可能新增了依赖，重发就是运营在要求把它接上）
+   *   条款**不同**                                   → **409 `GRANT_EXISTS`**
+   *   已有 derived 行                                → 就地升级为 direct
+   *   全新                                           → 201
+   *
+   * 那个 409 是本次接入要注意的一处：以前"重发一遍换个配额"是静默无效，现在是明确
+   * 报错并指向 `PATCH grants/:grantId`。**改条款走 PATCH，不要撤销重发。**
+   */
   @Post("grants")
   createGrant(
     @Req() req: Request & RequestContext,
     @Body() body: JsonObject,
+    @Res({ passthrough: true }) res: ExpressResponse,
   ): Promise<Record<string, unknown>> {
     assertCanManage(req);
     return this.writeThrough<Record<string, unknown>>(
       req,
       "/commerce/capability-grants",
-      { method: "POST", body },
+      { method: "POST", body, res },
       (r) => ({
         action: "runos.grant.write",
         resourceType: "runos_grant",
         resourceId: String(r.grantId ?? ""),
         /* grantType 值钱：同一次「新增」可能是对 derived 行的原地升级
            （upgradeToDirect），审计里能区分出来才查得清。 */
+        after: r,
+      }),
+    );
+  }
+
+  /**
+   * 改条款 —— **上游 2026-08 补的原子入口**（`CommerceController.updateGrant` →
+   * `GrantProvisioningService.updateTerms`）。
+   *
+   * 在它存在之前，改一条授权的 riskScope / quotaLimit 只能「撤销 + 重发」：两次写、
+   * 两个失败点，中间那一刻这个产品是**没有这条授权**的。门户当时那样做是对的
+   * （`grantDirect` 对已存在的 direct 行确实什么都不套用），现在不再是——上游已经
+   * 把「同一对主体+能力、不同条款」的重复 POST 改成 **409 `GRANT_EXISTS`** 并在
+   * message 里指向本路由，所以旧路径现在连"能跑通"都不成立了。
+   *
+   * 三条上游语义原样透传，不在这里代为兜底：
+   *   - **偏序更新**：没送的字段保持原值（三个都没送 → 400 `GRANT_PATCH_EMPTY`）。
+   *   - 非 `active` 的授权改不动 → 409 `GRANT_NOT_ACTIVE`（撤销过的要重新发一条，
+   *     而不是"改回来"——那会让一段被撤销的时间从历史里消失）。
+   *   - 收窄 riskScope 会连带重编派生闭包，上游在同一个调用里做完。
+   *
+   * grantId 保持不变，所以配额消耗计数**跟着这条授权继续**——这正是撤销重发做不到
+   * 的：那条路径下每改一次条款，用量就从零开始，月度配额形同虚设。
+   */
+  @Patch("grants/:grantId")
+  updateGrantTerms(
+    @Req() req: Request & RequestContext,
+    @Param("grantId") grantId: string,
+    @Body() body: JsonObject,
+  ): Promise<Record<string, unknown>> {
+    assertCanManage(req);
+    return this.writeThrough<Record<string, unknown>>(
+      req,
+      `/commerce/capability-grants/${encodeURIComponent(grantId)}`,
+      { method: "PATCH", body },
+      (r) => ({
+        action: "runos.grant.update_terms",
+        resourceType: "runos_grant",
+        resourceId: grantId,
+        /* 条款不是密钥，可以落——「改成了什么」正是这条留痕要回答的问题。 */
         after: r,
       }),
     );
@@ -635,6 +770,7 @@ export class RunosRouter {
     return this.request<AuditPage<CapabilityCallRecord>>(
       req,
       `/audit/calls${p.size ? `?${p.toString()}` : ""}`,
+      { contract: "audit-calls" },
     );
   }
 
@@ -663,6 +799,7 @@ export class RunosRouter {
     return this.request<AuditPage<MgmtEventRecord>>(
       req,
       `/audit/mgmt-events${p.size ? `?${p.toString()}` : ""}`,
+      { contract: "audit-mgmt-events" },
     );
   }
 
@@ -687,6 +824,7 @@ export class RunosRouter {
     return this.request<AuditPage<TaskOutcomeRecord>>(
       req,
       `/audit/outcomes${p.size ? `?${p.toString()}` : ""}`,
+      { contract: "audit-outcomes" },
     );
   }
 
@@ -736,6 +874,7 @@ export class RunosRouter {
     return this.request<UsageSummaryPage>(
       req,
       `/audit/usage-summaries${p.size ? `?${p.toString()}` : ""}`,
+      { contract: "usage-summaries" },
     );
   }
 
@@ -750,6 +889,7 @@ export class RunosRouter {
     return this.request<CredentialBindingRecord[]>(
       req,
       "/governance/credentials",
+      { contract: "credentials" },
     );
   }
 
@@ -941,6 +1081,7 @@ export class RunosRouter {
     return this.request<Record<string, unknown>[]>(
       req,
       `/commerce/capability-grants?capabilityId=${encodeURIComponent(capabilityId)}`,
+      { contract: "grants" },
     );
   }
 
@@ -954,6 +1095,7 @@ export class RunosRouter {
     return this.request<Record<string, unknown>>(
       req,
       `/commerce/capability-grants/${encodeURIComponent(grantId)}/quota`,
+      { contract: "grant-quota" },
     );
   }
 
@@ -996,6 +1138,7 @@ export class RunosRouter {
       req,
       `/commerce/capability-grants?subjectType=${encodeURIComponent(subjectType)}` +
         `&subjectRef=${encodeURIComponent(subjectRef)}`,
+      { contract: "grants" },
     );
   }
 
@@ -1026,16 +1169,18 @@ export class RunosRouter {
 
   // ── Endpoints（永远挂在某个 capability 下，没有独立 list-all 接口）───────────
 
+  /** 201 新建 · 200 该版本这个环境已经发布过——状态码照搬上游，见 `request()`。 */
   @Post("endpoints")
   registerEndpoint(
     @Req() req: Request & RequestContext,
     @Body() body: JsonObject,
+    @Res({ passthrough: true }) res: ExpressResponse,
   ): Promise<EndpointInstanceRecord> {
     assertCanManage(req);
     return this.writeThrough<EndpointInstanceRecord>(
       req,
       "/capability/endpoint-instances",
-      { method: "POST", body },
+      { method: "POST", body, res },
       (r) => ({
         action: "runos.endpoint.register",
         resourceType: "runos_endpoint",
@@ -1101,6 +1246,11 @@ async function runosRequest<TResponse>(
     bearer?: string;
   } = {},
   baseUrl: string = "http://localhost:3120",
+  /**
+   * 上游成功状态码的回传口。**只有真正区分 200/201 的路由才传它**，哪些算、
+   * 为什么不是全部，见 `RunosRouter.request()` 的注释。
+   */
+  onStatus?: (status: number) => void,
 ): Promise<TResponse> {
   let response: Response;
   const headers: Record<string, string> = {
@@ -1125,6 +1275,8 @@ async function runosRequest<TResponse>(
       response.status,
     );
   }
+
+  onStatus?.(response.status);
 
   if (!responseText.trim()) {
     return undefined as TResponse;

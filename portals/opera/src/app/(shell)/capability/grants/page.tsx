@@ -225,8 +225,8 @@ function RunosGrantsPageContent() {
     criticalRequiresApproval: boolean;
     keyword: string;
   } | null>(null);
-  /** 撤销并重发：runos 不支持改配额，重写是空操作，只能撤了重发。 */
-  const [reissue, setReissue] = useState<{
+  /** 改条款：一次 PATCH，grantId 与已消费计数都保持不变（见 `submitAmend`）。 */
+  const [amend, setAmend] = useState<{
     row: GrantRecord;
     riskScope: RiskScope;
     quotaLimit: string;
@@ -327,10 +327,17 @@ function RunosGrantsPageContent() {
         tone: failed.length > 0 ? "warning" : "success",
         title: `${ok} 条已授权给 ${selectedProduct}`,
         ...(failed.length > 0
-          ? { description: `${failed.length} 条失败：${failed.join("、")}` }
+          ? {
+              /* 失败最常见的一种是 409 `GRANT_EXISTS`：这个产品已经持有该能力、但
+                 条款不一样。**上游不会用这里的值覆盖它**（product_251 B-2：那样一个
+                 200 会看起来像"改成功了"），改条款要走行操作里的「改条款」。 */
+              description:
+                `${failed.length} 条失败：${failed.join("、")}。` +
+                "已持有该能力且条款不同的会被拒（改条款请用行操作「改条款」）。",
+            }
           : {
               description:
-                "已有 derived 会被升级成 direct；已有 direct 是空操作（runos 不套用新的 riskScope / quotaLimit）。",
+                "已有 derived 会被升级成 direct；已有 direct 且条款相同的是空操作。",
             }),
       });
       setGrantPicker(null);
@@ -341,50 +348,48 @@ function RunosGrantsPageContent() {
   }
 
   /**
-   * 撤销并重发 —— **改配额的唯一途径**。
+   * 改条款 —— **一次 PATCH，原子**。
    *
-   * runos 对已存在的 direct 授权重写是彻底的空操作：不套用新的 riskScope /
-   * quotaLimit，连管理事件都不发（源码原话是那会「记一次从未发生过的变更」）。
-   * 而 `findOne` 只认 `state='active'`，所以撤销之后重发会建一条新行。
+   * 这里以前是「撤销 + 重发」，理由是当时 runos 对已存在的 direct 授权重写是彻底的
+   * 空操作。**两条前提都变了**（2026-08-23 读 runos `commerce.controller.ts` /
+   * `grant-provisioning.service.ts` 核对）：
    *
-   * 两步之间失败要说清楚落在哪一步——撤成功、发失败时，产品是**少了一条授权**的状态，
-   * 沉默会让人以为什么都没发生。
+   *   1. 有了 `PATCH /commerce/capability-grants/:grantId`（`updateTerms`）——偏序更新，
+   *      三个条款字段任意子集，同一个调用里连带重编派生闭包，并发一条
+   *      `mgmt.capability_grant.update` 事件。
+   *   2. 重发换条款不再是空操作，而是 **409 `GRANT_EXISTS`**，message 里直接指向上面
+   *      那条路由。旧路径现在连"能跑通"都不成立。
+   *
+   * 换掉它还顺手去掉了两个真实代价：撤销与重发之间那一刻**这个产品是没有授权的**
+   * （两次写、两个失败点）；以及新行是新的 grantId，**已消费计数从零开始**——每改一次
+   * 配额就等于送一次免费额度，月度配额形同虚设。现在 grantId 不变，计数跟着走。
+   *
+   * 非 active 的授权改不动（409 `GRANT_NOT_ACTIVE`）：撤销过的要重新发一条，而不是
+   * "改回来"——后者会让一段被撤销的时间从历史里消失。原样透传上游的说法。
    */
-  async function submitReissue(event: FormEvent<HTMLFormElement>) {
+  async function submitAmend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!reissue || !selectedProduct) return;
-    const { row, riskScope, quotaLimit } = reissue;
+    if (!amend) return;
+    const { row, riskScope, quotaLimit } = amend;
     setSubmitting(true);
     try {
-      await api.delete(`/api/runos/grants/${encodeURIComponent(row.grantId)}`);
-      try {
-        await api.post("/api/runos/grants", {
-          subjectType: "product",
-          subjectRef: selectedProduct,
-          capabilityId: row.capabilityId,
-          riskScope,
-          ...(quotaLimit.trim() ? { quotaLimit: Number(quotaLimit) } : {}),
-        });
-        toast({
-          tone: "success",
-          title: `${row.capabilityId} 已按新配置重发`,
-          description: "旧行迁到 revoked 终态保留，历史查得到。",
-        });
-      } catch (error) {
-        toast({
-          tone: "danger",
-          title: "已撤销，但重发失败",
-          description:
-            "这个产品现在**少了这条授权**。请重新发一条——旧的已经是 revoked，不会挡住新写入。",
-          ...describeError(error),
-        });
-      }
-      setReissue(null);
+      await api.patch(`/api/runos/grants/${encodeURIComponent(row.grantId)}`, {
+        riskScope,
+        /* 空输入 = **不动配额**，不是改成 0——0 在 runos 是「不设限」，把"没填"
+           解释成"取消限额"会是一次没人下过的决定。 */
+        ...(quotaLimit.trim() ? { quotaLimit: Number(quotaLimit) } : {}),
+      });
+      toast({
+        tone: "success",
+        title: `${row.capabilityId} 的条款已更新`,
+        description: "同一条授权改的，已消费计数不受影响。",
+      });
+      setAmend(null);
       await runLookup();
     } catch (error) {
       toast({
         tone: "danger",
-        title: "撤销失败，未做任何改动",
+        title: "改条款失败，未做任何改动",
         ...describeError(error),
       });
     } finally {
@@ -478,10 +483,21 @@ function RunosGrantsPageContent() {
             "行迁到 revoked 终态，没有删除。**不是急停**：调用走快照，撤销后最多还会再放行一轮（一个刷新周期）。由它带出来的派生权益也不会跟着撤——runos 刻意不级联。",
         });
       } else {
-        const after = await api.post<QuotaConsumption>(
+        /**
+         * **重置的响应不是消费量的形状**，别往同一格缓存里塞。
+         *
+         * runos `QuotaCounterService.reset()` 回 `{grantId, used, updatedAt}`——只有
+         * 三个字段，没有 `quotaLimit` / `enforced` / `remaining`（那三个是
+         * `consumption()` 拿着授权行现算的）。此前直接把它当 `QuotaConsumption` 存
+         * 进缓存，于是 `q.enforced` 变成 undefined，用量列把一条**有配额上限**的授权
+         * 渲染成「未强制」——重置一次配额，界面就开始说这条授权不限量。
+         *
+         * 所以重置完重新读一次消费量：多一次往返，换一个不会自相矛盾的显示。
+         */
+        await api.post(
           `/api/runos/grants/${encodeURIComponent(row.grantId)}/quota/reset`,
         );
-        setQuota((prev) => ({ ...prev, [row.grantId]: after }));
+        await loadQuota([row]);
         toast({
           tone: "success",
           title: `${row.capabilityId} 的计数已归零`,
@@ -696,16 +712,16 @@ function RunosGrantsPageContent() {
                             onSelect: () => void loadQuota([r]),
                           },
                           {
-                            /* 改配额的**唯一**途径——重写是空操作（runos 不套用新的
-                               riskScope / quotaLimit，连管理事件都不发）。派生行没有
-                               这个动作：它的配置跟着锚点走。 */
-                            id: "reissue",
-                            label: "撤销并重发（改配置）",
-                            icon: "refresh" as const,
+                            /* 改条款走 PATCH（一次写、grantId 不变、计数不清零）。
+                               派生行没有这个动作：它的配置跟着锚点走。非 active 的
+                               也不给——上游会 409，那是对的，但没必要让人先点进去。 */
+                            id: "amend",
+                            label: "改条款",
+                            icon: "edit" as const,
                             disabled:
                               r.grantType === "derived" || r.state !== "active",
                             onSelect: () =>
-                              setReissue({
+                              setAmend({
                                 row: r,
                                 riskScope: (r.riskScope as RiskScope) ?? "read",
                                 quotaLimit:
@@ -1037,8 +1053,9 @@ function RunosGrantsPageContent() {
                 />
                 <FieldDescription>
                   累计计数，没有周期重置。小于等于 0
-                  表示不强制执行，不是「零调用」。 发出去之后改不了——runos
-                  对已有 direct 授权的重写是空操作，改配额只能 撤销后重发。
+                  表示不强制执行，不是「零调用」。发出去之后可以在行操作里「改条款」
+                  单独调整——但**同一批里已经持有该能力、条款又不一样的产品会被
+                  runos 拒掉**（409），不会被这里的值覆盖。
                 </FieldDescription>
               </Field>
             </FieldTier>
@@ -1046,28 +1063,28 @@ function RunosGrantsPageContent() {
         ) : null}
       </DialogForm>
 
-      {/* ── 撤销并重发：改配额的唯一途径 ─────────────────────────────────── */}
+      {/* ── 改条款：一次 PATCH，授权本体不动 ─────────────────────────────── */}
       <DialogForm
-        open={reissue !== null}
+        open={amend !== null}
         onOpenChange={(open) => {
-          if (!open) setReissue(null);
+          if (!open) setAmend(null);
         }}
-        title={reissue ? `撤销并重发 · ${reissue.row.capabilityId}` : ""}
-        description="runos 对已存在的 direct 授权重写是空操作——不套用新的 riskScope / quotaLimit，连管理事件都不发。所以改配置只能撤了重发：旧行迁到 revoked 终态保留，历史查得到。"
-        submitLabel="撤销并重发"
+        title={amend ? `改条款 · ${amend.row.capabilityId}` : ""}
+        description="改的是同一条授权：grantId 不变，已消费计数继续累计，派生闭包由 runos 在同一个调用里重编。撤销是另一个动作，不在这里发生。"
+        submitLabel="保存"
         submitting={submitting}
-        onSubmit={submitReissue}
+        onSubmit={submitAmend}
       >
-        {reissue ? (
+        {amend ? (
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="reissue-risk">Risk Scope</FieldLabel>
+              <FieldLabel htmlFor="amend-risk">Risk Scope</FieldLabel>
               <NativeSelect
-                id="reissue-risk"
-                value={reissue.riskScope}
+                id="amend-risk"
+                value={amend.riskScope}
                 onChange={(e) =>
-                  setReissue({
-                    ...reissue,
+                  setAmend({
+                    ...amend,
                     riskScope: e.target.value as RiskScope,
                   })
                 }
@@ -1076,20 +1093,25 @@ function RunosGrantsPageContent() {
                 <option value="write">write</option>
                 <option value="critical">critical</option>
               </NativeSelect>
+              <FieldDescription>
+                收窄它会同时收窄由它派生出去的那些权益——runos
+                在同一次调用里重编闭包。
+              </FieldDescription>
             </Field>
             <Field>
-              <FieldLabel htmlFor="reissue-quota">Quota Limit</FieldLabel>
+              <FieldLabel htmlFor="amend-quota">Quota Limit</FieldLabel>
               <Input
-                id="reissue-quota"
-                value={reissue.quotaLimit}
+                id="amend-quota"
+                value={amend.quotaLimit}
                 onChange={(e) =>
-                  setReissue({ ...reissue, quotaLimit: e.target.value })
+                  setAmend({ ...amend, quotaLimit: e.target.value })
                 }
-                placeholder="留空 = 不限"
+                placeholder="留空 = 不改动"
               />
               <FieldDescription>
-                重发是一条新授权，已消费计数从零开始——旧行的计数留在 revoked
-                那条上。
+                留空表示**这次不动配额**（不是改成 0——0 在 runos
+                是「不设限」）。
+                改了上限不会重置已消费计数：要清零用行操作里的「重置计数」。
               </FieldDescription>
             </Field>
           </FieldGroup>

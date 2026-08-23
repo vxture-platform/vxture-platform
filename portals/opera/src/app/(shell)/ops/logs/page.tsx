@@ -27,9 +27,13 @@
  *          与 Atlas 无关，此前是本页全部内容）。
  * 混在一张表里会让「哪个系统出问题了」这个判断变模糊。
  *
- * 分页形态不同也是刻意的：Atlas 侧是不透明游标（cursor/nextCursor），只能
- * 顺序前进，做成「加载更多」；平台侧是本地数组，沿用 useListPagination。
- * 硬把游标掰成页码需要在前端缓存所有历史游标，得不偿失。 */
+ * 分页形态不同也是刻意的：两个上游侧（Atlas 请求日志、Runos 调用流）都是不透明
+ * 游标（cursor/nextCursor），只能顺序前进，做成「加载更多」；平台侧是本地数组，
+ * 沿用 useListPagination。硬把游标掰成页码需要在前端缓存所有历史游标，得不偿失。
+ *
+ * 2026-08-24：Runos 那半此前只取第一页、游标一次都没消费，界面上是「最近 N 条」的
+ * 档位选择器——同一页两半对着同一类数据给出两种翻法，而其中一种还是个沉默的截断。
+ * 现在两半同形。 */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -63,6 +67,13 @@ import { RunosCallStreams } from "./RunosCallStreams";
 interface AtlasRequestLogRecord {
   id: string;
   requestId: string;
+  /**
+   * **两条流之间唯一的接缝**（product_251 X-2）：同一个 taskId 在下面 Runos 能力调用
+   * 那张表里也在。一次 agent 任务在模型面烧了多少 token、在能力面调了什么、哪一段
+   * 失败的——分区呈现让"哪个系统出问题"看得清，而这个字段让"同一件事"还能被串起来。
+   * 两边的输入框都在，值可以直接对拷。
+   */
+  taskId: string | null;
   status: string;
   tenantId: string | null;
   modelCode: string | null;
@@ -176,6 +187,7 @@ export default function LogsPage() {
   const [atlasStatus, setAtlasStatus] = useState<string>("all");
   const [modelCode, setModelCode] = useState("");
   const [providerCode, setProviderCode] = useState("");
+  const [atlasTaskId, setAtlasTaskId] = useState("");
   const [atlasSel, setAtlasSel] = useState<readonly string[]>([]);
 
   /* ── 平台侧状态 ───────────────────────────────────────────────────────── */
@@ -195,11 +207,12 @@ export default function LogsPage() {
       if (atlasStatus !== "all") p.set("status", atlasStatus);
       if (modelCode.trim()) p.set("modelCode", modelCode.trim());
       if (providerCode.trim()) p.set("providerCode", providerCode.trim());
+      if (atlasTaskId.trim()) p.set("taskId", atlasTaskId.trim());
       p.set("limit", "50");
       if (cursor) p.set("cursor", cursor);
       return `/api/atlas/logs?${p.toString()}`;
     },
-    [atlasStatus, modelCode, providerCode],
+    [atlasStatus, modelCode, providerCode, atlasTaskId],
   );
 
   const reloadAtlas = useCallback(async () => {
@@ -283,6 +296,8 @@ export default function LogsPage() {
     const text = [
       formatTime(r.createdAt),
       r.requestId,
+      /* 带上 taskId：复制一行最常见的下一步就是拿它去 Runos 那张表里对。 */
+      r.taskId ?? "—",
       r.status,
       r.modelCode ?? "—",
       r.providerCode ?? "—",
@@ -414,6 +429,22 @@ export default function LogsPage() {
               aria-label="按 Provider 编码筛选"
               value={providerCode}
               onChange={(e) => setProviderCode(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void reloadAtlas();
+              }}
+            />
+          </InputGroup>
+          {/* 精确匹配。与下方 Runos 能力调用共用同一个 taskId——把值贴到两边，
+              就能看到同一次任务在模型面与能力面各发生了什么。 */}
+          <InputGroup className="grow basis-media-2xl max-w-panel-sm">
+            <InputGroupAddon>
+              <Icon name="workflow" size="sm" aria-hidden="true" />
+            </InputGroupAddon>
+            <InputGroupInput
+              placeholder="任务 ID（taskId）…"
+              aria-label="按任务 ID 筛选"
+              value={atlasTaskId}
+              onChange={(e) => setAtlasTaskId(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void reloadAtlas();
               }}

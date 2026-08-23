@@ -152,6 +152,29 @@ export function upstreamUnavailable(code: string, message: string): ApiError {
 }
 
 /**
+ * 上游**答了，但答的形状不符合契约**——与"没应答"和"回了个错"都不是一回事。
+ *
+ * 这个帮手是 2026-08-23 那批缺陷的直接产物：门户此前对上游少给的字段一律做降级
+ * （缺 `resolution` 就当"未知"、缺 `modelCount` 就换一套删除文案），于是**契约破了
+ * 没有任何人知道**，只是界面悄悄换了一种说法。降级读起来像正常，而它正是那类缺陷
+ * 能活很久的原因。
+ *
+ * 现在的立场：契约里必有的字段缺了就是故障，**在这一层拦下并点名是哪个字段**，而不是
+ * 让每个页面各自编一套"没有也行"的表现。502 而不是 500：故障不在本方。
+ * `retryable: false`——同一个请求原样重发不会让上游长出那个字段来。
+ */
+export function upstreamContractViolation(
+  code: string,
+  message: string,
+  field?: string,
+): ApiError {
+  return new ApiError(HttpStatus.BAD_GATEWAY, code, message, {
+    retryable: false,
+    ...(field ? { field } : {}),
+  });
+}
+
+/**
  * 本方出了故障（不是调用方的错）。
  *
  * 值得单列一个帮手：这类点很容易被随手写成 400，而一个 400 会让运营者以为是自己

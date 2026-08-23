@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { isEnabled, isServing, type ModelState } from "@vxture-platform/shared";
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -403,7 +404,7 @@ function capabilityPolicyCoverage(
   const definedPolicies = policies.filter(
     (policy) => policy.isDefined && policy.isActive,
   ).length;
-  const activeGrants = grants.filter((grant) => grant.isActive).length;
+  const activeGrants = grants.filter((grant) => isEnabled(grant.state)).length;
   const total = policies.length + grants.length;
   const active = definedPolicies + activeGrants;
 
@@ -1340,6 +1341,13 @@ function emptyDashboardOverview(period: PeriodKey): DashboardOverviewRecord {
   };
 }
 
+/** 模型三态标签。三值压成布尔会让「已弃用」读成「已停用」，而前者仍在服务。 */
+const MODEL_STATE_LABEL: Record<ModelState, string> = {
+  active: "启用",
+  inactive: "停用",
+  deprecated: "已弃用",
+};
+
 export default function AdminOverviewPage() {
   const locale = useConsoleLocale();
   const [models, setModels] = useState<AiModelRecord[]>([]);
@@ -1558,7 +1566,8 @@ export default function AdminOverviewPage() {
     const serviceHealth = capabilityServiceHealth(services);
     const totalModelCounts = modelOwnershipCounts(models);
     const activeModelCounts = modelOwnershipCounts(
-      models.filter((model) => model.isActive),
+      /* 数还能服务的：`deprecated` 仍可解析，排除它会低报模型面。 */
+      models.filter((model) => isServing(model.state)),
     );
     const abnormalModelCounts = modelOwnershipCounts(
       models.filter(isModelAbnormal),
@@ -1651,7 +1660,7 @@ export default function AdminOverviewPage() {
       .map((model) => ({
         id: model.id,
         name: model.modelName,
-        meta: `${model.provider} · ${model.isActive ? "启用" : "停用"}`,
+        meta: `${model.provider} · ${MODEL_STATE_LABEL[model.state]}`,
         tokenCalls: modelTokenCalls(model, modelPeriod),
       }))
       .filter(

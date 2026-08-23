@@ -90,8 +90,6 @@ function downloadCsv(filename: string, rows: readonly string[][]) {
 type RollupDimension = "tenant" | "provider" | "model" | "endpoint" | "product";
 
 interface UsageSummaryRecord {
-  /** 这一行是按哪根轴聚出来的。 */
-  dimension: RollupDimension;
   cycleMonth: string;
   tenantId: string | null;
   workspaceId: string | null;
@@ -106,6 +104,18 @@ interface UsageSummaryRecord {
   outputTokens: string;
   totalTokens: string;
   errors: string;
+}
+
+/**
+ * 上游回的是信封（product_251 A-4）：`groupBy` 由服务端兜底解析（不送＝`tenant`），
+ * 所以轴是**解析出来的**，必须回显——而回显只能放在信封上。
+ *
+ * 它此前复制在每一行上。那是 A-4 点名修掉的缺陷：**空结果时这个回显整个消失**，
+ * 拿到 `[]` 的调用方无从得知自己查的是哪根轴。信封是唯一一个空结果也带得走的位置。
+ */
+interface UsageSummaryPage {
+  dimension: RollupDimension;
+  items: UsageSummaryRecord[];
 }
 
 const AXES: {
@@ -160,8 +170,11 @@ const APPLICATION_TYPE_LABELS: Record<string, string> = {
  * 一行在当前轴上的**原始身份**（id 或 code）。这是稳定键，用来拼 rowKey、导出、
  * 以及名字查不到时的兜底显示——名字会变，id 不会。
  */
-function rowIdentity(r: UsageSummaryRecord): string {
-  switch (r.dimension) {
+function rowIdentity(
+  dimension: RollupDimension,
+  r: UsageSummaryRecord,
+): string {
+  switch (dimension) {
     case "provider":
       return r.providerCode ?? "—";
     case "model":
@@ -186,15 +199,19 @@ function rowIdentity(r: UsageSummaryRecord): string {
  * 主体本来就是这一对，而且工作区名几乎全是「默认工作空间」，缺了租户那一半就没有
  * 分辨力（规则见 features/tenancy/directory.ts）。
  */
-function displayName(r: UsageSummaryRecord, dir: TenancyDirectory): string {
-  if (r.dimension !== "tenant") return rowIdentity(r);
+function displayName(
+  dimension: RollupDimension,
+  r: UsageSummaryRecord,
+  dir: TenancyDirectory,
+): string {
+  if (dimension !== "tenant") return rowIdentity(dimension, r);
   return workspaceLabel(dir, r.workspaceId);
 }
 
-function rowKey(r: UsageSummaryRecord): string {
+function rowKey(dimension: RollupDimension, r: UsageSummaryRecord): string {
   return [
-    r.dimension,
-    rowIdentity(r),
+    dimension,
+    rowIdentity(dimension, r),
     r.cycleMonth,
     r.applicationId ?? "—",
     r.applicationType ?? "—",
@@ -236,11 +253,15 @@ const CSV_HEADER = [
   "Total Token",
 ];
 
-function toCsvRow(r: UsageSummaryRecord, dir: TenancyDirectory): string[] {
+function toCsvRow(
+  dimension: RollupDimension,
+  r: UsageSummaryRecord,
+  dir: TenancyDirectory,
+): string[] {
   return [
-    r.dimension,
-    displayName(r, dir),
-    rowIdentity(r),
+    dimension,
+    displayName(dimension, r, dir),
+    rowIdentity(dimension, r),
     dir.workspaces[r.workspaceId ?? ""]?.name ?? "",
     r.cycleMonth,
     r.applicationType
@@ -258,6 +279,8 @@ function toCsvRow(r: UsageSummaryRecord, dir: TenancyDirectory): string[] {
 export default function MeteringPage() {
   const { toast } = useToast();
   const [axis, setAxis] = useState<RollupDimension>("tenant");
+  /** 上游回显的轴。见 `reload()` 里为什么不直接用 `axis`。 */
+  const [resolvedAxis, setResolvedAxis] = useState<RollupDimension>("tenant");
   const [rows, setRows] = useState<UsageSummaryRecord[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [keyword, setKeyword] = useState("");
@@ -267,10 +290,14 @@ export default function MeteringPage() {
   const reload = useCallback(async () => {
     setLoad({ kind: "loading" });
     try {
-      const data = await api.get<UsageSummaryRecord[]>(
+      const page = await api.get<UsageSummaryPage>(
         `/api/atlas/usage-summaries?groupBy=${axis}`,
       );
-      setRows(data);
+      /* 用信封回显的轴，不用本地 `axis`：两者正常时一致，不一致时**上游是对的**
+         （比如它把一个它不认的值兜底成了 tenant）。信任本地那个会让表格按一根
+         上游根本没聚过的轴去解释每一行。 */
+      setResolvedAxis(page.dimension);
+      setRows(page.items);
       setLoad({ kind: "ready" });
     } catch (error) {
       /* 轴不被上游接受时 Atlas 回 400 并说明合法取值——那不是"读取失败"，是这台
@@ -317,15 +344,15 @@ export default function MeteringPage() {
            两边都得能落地。displayName 在租户轴上已经是「租户 · 工作区」，所以
            搜租户名或工作区名都命中，不用再单独拼一条工作区条件。 */
         (kw === "" ||
-          displayName(r, tenancy).toLowerCase().includes(kw) ||
-          rowIdentity(r).toLowerCase().includes(kw)),
+          displayName(resolvedAxis, r, tenancy).toLowerCase().includes(kw) ||
+          rowIdentity(resolvedAxis, r).toLowerCase().includes(kw)),
     );
-  }, [rows, keyword, cycleMonth, tenancy]);
+  }, [rows, keyword, cycleMonth, tenancy, resolvedAxis]);
 
   const pager = useListPagination(filtered, 20);
 
   const copyRow = async (r: UsageSummaryRecord) => {
-    const text = toCsvRow(r, tenancy).filter(Boolean).join(" · ");
+    const text = toCsvRow(resolvedAxis, r, tenancy).filter(Boolean).join(" · ");
     try {
       await navigator.clipboard.writeText(text);
       toast({ tone: "success", title: "已复制该行到剪贴板" });
@@ -340,10 +367,10 @@ export default function MeteringPage() {
 
   const exportSelected = () => {
     const ids = new Set(selectedKeys);
-    const picked = filtered.filter((r) => ids.has(rowKey(r)));
+    const picked = filtered.filter((r) => ids.has(rowKey(resolvedAxis, r)));
     downloadCsv(`atlas-usage-${axis}.csv`, [
       CSV_HEADER,
-      ...picked.map((r) => toCsvRow(r, tenancy)),
+      ...picked.map((r) => toCsvRow(resolvedAxis, r, tenancy)),
     ]);
     toast({ tone: "success", title: `已导出 ${picked.length} 条记录` });
     setSelectedKeys([]);
@@ -374,12 +401,12 @@ export default function MeteringPage() {
       id: "identity",
       header: currentAxis.label,
       cell: (r: UsageSummaryRecord) =>
-        r.dimension === "tenant" ? (
+        resolvedAxis === "tenant" ? (
           /* 租户在上、工作区在下——工作区一律以租户为主导，规则集中在
              features/tenancy/directory.ts，这里不自己拼一份。 */
           <WorkspaceCell directory={tenancy} workspaceId={r.workspaceId} />
         ) : (
-          <span className="text-code-sm">{rowIdentity(r)}</span>
+          <span className="text-code-sm">{rowIdentity(resolvedAxis, r)}</span>
         ),
     };
 
@@ -453,7 +480,7 @@ export default function MeteringPage() {
       : [identity, ...numbers];
     /* tenancy 必须在依赖里：查号是异步回来的，漏了它列会一直用第一次渲染时那份空
        目录，名字到了也不会重画——表面看就是"查号台没生效"。 */
-  }, [axis, currentAxis.label, tenancy]);
+  }, [axis, currentAxis.label, tenancy, resolvedAxis]);
 
   const emptyState =
     load.kind === "loading" ? (
@@ -627,13 +654,13 @@ export default function MeteringPage() {
         <DataTable
           columns={columns}
           rows={pager.pageRows}
-          rowKey={rowKey}
+          rowKey={(r) => rowKey(resolvedAxis, r)}
           selectedKeys={selectedKeys}
           onSelectionChange={setSelectedKeys}
           indexStart={pager.indexStart}
           rowActions={(r) => (
             <ActionMenu
-              label={`${rowIdentity(r)} 操作`}
+              label={`${rowIdentity(resolvedAxis, r)} 操作`}
               items={[
                 {
                   id: "copy",

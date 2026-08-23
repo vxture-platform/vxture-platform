@@ -5,6 +5,7 @@ import {
   ActionButton,
   ActionMenu,
   Badge,
+  Banner,
   Button,
   Checkbox,
   DataTable,
@@ -22,6 +23,7 @@ import {
   ViewModeSwitch,
 } from "@vxture/design-system";
 import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
+import { isEnabled } from "@vxture-platform/shared";
 import {
   createAiModelGrant,
   fetchAiModelGrants,
@@ -417,7 +419,7 @@ export function ModelGrantsPage() {
         const model = modelById.get(grant.modelId);
         return (
           <TableTitleCell
-            icon={grant.isActive ? "play" : "stop"}
+            icon={isEnabled(grant.state) ? "play" : "stop"}
             title={model?.modelName ?? grant.modelId}
             description={model?.modelCode ?? grant.modelId}
             onTitleClick={() => openEditGrantDialog(grant)}
@@ -430,8 +432,8 @@ export function ModelGrantsPage() {
       header: t("table.columns.status"),
       align: "center",
       cell: (grant) => (
-        <StatusBadge tone={grant.isActive ? "success" : "neutral"}>
-          {grant.isActive ? t("status.active") : t("status.inactive")}
+        <StatusBadge tone={isEnabled(grant.state) ? "success" : "neutral"}>
+          {isEnabled(grant.state) ? t("status.active") : t("status.inactive")}
         </StatusBadge>
       ),
     },
@@ -497,7 +499,7 @@ export function ModelGrantsPage() {
       priority: String(grant.priority),
       reason: grant.reason ?? "",
       expiresAt: toDateInputValue(grant.expiresAt),
-      isActive: grant.isActive,
+      isActive: isEnabled(grant.state),
     });
     resetFeedback();
     setDialogMode("editGrant");
@@ -509,17 +511,28 @@ export function ModelGrantsPage() {
     resetFeedback();
 
     try {
+      /**
+       * **`agentId` 只在创建时送。**
+       *
+       * atlas 的 `normalizeUpdateGrant` 对 `agentId` / `applicationId` /
+       * `applicationType` 三个字段是**出现即拒**（400，不比对值）——租户授权的应用范围
+       * 创建后固定，库里 `atlas_svc` 在这三列上根本没有 UPDATE 权限。
+       *
+       * 2026-08-23 实测：编辑一条授权、什么都不改直接保存 → 400。禁用一个输入框不等于
+       * 把它从载荷里去掉，这与 opera 那边 Provider / 模型编辑踩的是同一个坑。
+       */
       const payload = {
-        agentId: grantForm.agentId.trim() || null,
         priority: Number.parseInt(grantForm.priority, 10) || 100,
         reason: grantForm.reason.trim() || null,
         expiresAt: grantForm.expiresAt || null,
-        isActive: grantForm.isActive,
       };
 
       if (dialogMode === "createGrant") {
         const created = await createAiModelGrant({
           ...payload,
+          agentId: grantForm.agentId.trim() || null,
+          /* 只有 create 能设初始状态；改状态走行操作里的启停（见 api 层注释）。 */
+          state: grantForm.isActive ? "active" : "inactive",
           modelId: grantForm.modelId,
           tenantId: grantForm.tenantId,
         });
@@ -544,11 +557,14 @@ export function ModelGrantsPage() {
     resetFeedback();
 
     try {
-      const updated = await setAiModelGrantActive(grant.id, !grant.isActive);
+      const updated = await setAiModelGrantActive(
+        grant.id,
+        !isEnabled(grant.state),
+      );
       await reload(updated.id);
       setFeedback({
         tone: "success",
-        key: updated.isActive
+        key: isEnabled(updated.state)
           ? "feedback.grantEnabled"
           : "feedback.grantDisabled",
       });
@@ -601,7 +617,7 @@ export function ModelGrantsPage() {
             label: t("overrides.title"),
             value: formatNumber(grants.length),
             tags: [
-              `${t("status.active")} ${formatNumber(grants.filter((grant) => grant.isActive).length)}`,
+              `${t("status.active")} ${formatNumber(grants.filter((grant) => isEnabled(grant.state)).length)}`,
               `平台主体 ${formatNumber(platformPolicyCount)}`,
             ],
             tone: "success",
@@ -866,10 +882,10 @@ export function ModelGrantsPage() {
                 },
                 {
                   id: "toggle",
-                  label: grant.isActive
+                  label: isEnabled(grant.state)
                     ? t("actions.disableGrant")
                     : t("actions.enableGrant"),
-                  icon: grant.isActive ? "x" : "check",
+                  icon: isEnabled(grant.state) ? "x" : "check",
                   disabled: submitting,
                   onSelect: () => void handleToggleGrant(grant),
                 },
@@ -936,8 +952,11 @@ export function ModelGrantsPage() {
           <div className="vx-model-dialog__grid">
             <Label>
               {t("dialogs.fields.agentId")}
+              {/* 与 模型 / 租户 同列：应用范围是身份的一部分，创建后 atlas 不接受修改。
+                  改范围 = 停用这条 + 新建一条，两个决定都留在审计里。 */}
               <NativeSelect
                 value={grantForm.agentId}
+                disabled={dialogMode === "editGrant"}
                 onChange={(event) =>
                   setGrantForm((old) => ({
                     ...old,
@@ -991,18 +1010,31 @@ export function ModelGrantsPage() {
                 }
               />
             </Label>
-            <label className="vx-model-dialog__check">
-              <Checkbox
-                checked={grantForm.isActive}
-                onCheckedChange={(checked) =>
-                  setGrantForm((old) => ({
-                    ...old,
-                    isActive: checked === true,
-                  }))
-                }
+            {/* **只在新建时出现。**
+                编辑态这个勾以前也在，但它什么都不做：atlas 的更新 body 里根本没有状态
+                字段，勾了保存，值被静默丢掉，界面还显示成功。启停只走具名动作
+                （行操作里的启用/停用），那是 atlas 有意的设计——`AuditMiddleware` 从路径
+                推导 action，用 update 改状态会被记成 `action='update'`，于是按
+                `?action=deactivate` 检索的审计员一条都查不到。 */}
+            {dialogMode === "createGrant" ? (
+              <label className="vx-model-dialog__check">
+                <Checkbox
+                  checked={grantForm.isActive}
+                  onCheckedChange={(checked) =>
+                    setGrantForm((old) => ({
+                      ...old,
+                      isActive: checked === true,
+                    }))
+                  }
+                />
+                {t("dialogs.fields.grantActive")}
+              </label>
+            ) : (
+              <Banner
+                tone="info"
+                title={t("dialogs.hints.grantStateViaRowAction")}
               />
-              {t("dialogs.fields.grantActive")}
-            </label>
+            )}
           </div>
         </DialogForm>
       ) : null}
