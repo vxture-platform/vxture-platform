@@ -528,14 +528,15 @@ export default function LogsPage() {
               width: "sm",
               cell: (r: AtlasRequestLogRecord) =>
                 r.taskId ? (
-                  <button
-                    type="button"
-                    className="font-mono text-code-sm text-link underline-offset-2 hover:underline"
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="font-mono text-code-sm"
                     title="按这个任务串联上下两张表"
                     onClick={() => setTaskId(r.taskId ?? "")}
                   >
                     {r.taskId}
-                  </button>
+                  </Button>
                 ) : (
                   <span
                     className="text-muted-foreground"

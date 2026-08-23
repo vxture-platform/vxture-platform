@@ -386,14 +386,15 @@ export function RunosCallStreams({
                   {r.taskId ? (
                     <>
                       {" · "}
-                      <button
-                        type="button"
-                        className="font-mono text-code-sm text-link underline-offset-2 hover:underline"
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="font-mono text-code-sm"
                         title="按这个任务串联上下两张表"
                         onClick={() => onTaskIdChange(r.taskId ?? "")}
                       >
                         {r.taskId}
-                      </button>
+                      </Button>
                     </>
                   ) : null}
                 </span>
@@ -582,14 +583,15 @@ export function RunosCallStreams({
               id: "task",
               header: "任务",
               cell: (r: TaskOutcomeRecord) => (
-                <button
-                  type="button"
-                  className="font-mono text-code-sm text-link underline-offset-2 hover:underline"
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="font-mono text-code-sm"
                   title="按这个任务串联上下两张表"
                   onClick={() => onTaskIdChange(r.taskId)}
                 >
                   {r.taskId}
-                </button>
+                </Button>
               ),
             },
             {
