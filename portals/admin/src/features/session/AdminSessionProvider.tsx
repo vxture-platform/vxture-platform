@@ -103,10 +103,20 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
     // "unused disable directive"，反过来卡 CI 的零警告闸——豁免随规则一起退。）
   }, []);
 
+  /**
+   * 登出 = 本地清理 + **顶层跳到 IdP 结束中央会话**。
+   *
+   * 原来这里只清了 React state：中央会话在、RP cookie 刚被 BFF 清掉，页面却留在原地，
+   * 下一次取数一跳 authorize 就静默 SSO 回来了——用户看到的是「点了退出，还是登录态」。
+   * 跳转必须是顶层导航：accounts 域的会话 cookie 是 SameSite=Lax，跨站 fetch 不带它。
+   */
   async function signOut() {
-    await logout();
+    const endSessionUrl = await logout();
     setSession(EMPTY_SESSION);
     setStatus("ready");
+    window.location.replace(
+      endSessionUrl ?? buildRpLoginUrl(window.location.origin + "/"),
+    );
   }
 
   async function refreshSession() {

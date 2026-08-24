@@ -385,18 +385,26 @@ export class OidcService {
 
   /** End the central session, revoke its refresh chain, and back-channel-logout RPs. */
   async endSession(
-    sid: string | undefined,
+    /**
+     * 要结束的会话。**接受多个**：调用方清掉了两个 realm 的 cookie，服务端就得把
+     * 两边都销毁，否则留下的是一个拿不到 cookie、也永不过期的孤儿会话。
+     */
+    sids: ReadonlyArray<string | undefined>,
     postLogoutRedirectUri?: string,
     state?: string,
   ): Promise<string | null> {
     let clientIds: string[] = [];
-    if (sid) {
+    for (const sid of sids) {
+      if (!sid) continue;
       const session = await this.redis.getOidcSession(sid);
-      clientIds = await this.redis.getOidcSessionClients(sid);
+      const sessionClients = await this.redis.getOidcSessionClients(sid);
+      /* 回跳白名单要对着**所有**被结束会话的 client 校验：从 opera 登出时，
+         允许回跳的是 opera 登记的地址，而它可能只挂在其中一个会话上。 */
+      clientIds = [...new Set([...clientIds, ...sessionClients])];
       await this.redis.deleteOidcSession(sid);
       await this.token.revokeSession(sid);
       if (session) {
-        await this.sendBackChannelLogouts(sid, session.sub, clientIds);
+        await this.sendBackChannelLogouts(sid, session.sub, sessionClients);
       }
     }
     if (!postLogoutRedirectUri) return null;
@@ -471,12 +479,17 @@ export class OidcService {
 
   async authorize(
     req: OidcAuthorizeRequest,
-    sid: string | undefined,
+    /**
+     * 两个 realm 的候选会话。**由这一层按 client 的 realm 挑**——router 不查库、
+     * 不知道 realm，所以它把两个都交上来。
+     */
+    sids: RealmSids,
   ): Promise<OidcAuthorizeResult> {
     const client = await this.clients.findEnabledByClientId(req.clientId);
     if (!client) {
       throw new BadRequestException("invalid_client");
     }
+    const sid = pickSessionForRealm(client.realm, sids);
     if (!client.redirectUris.includes(req.redirectUri)) {
       throw new BadRequestException("invalid_redirect_uri");
     }
@@ -2038,6 +2051,28 @@ export function stripSubPrefix(sub: string): string {
 }
 
 /** PKCE S256 verification. Exported for unit tests. */
+/** 两个 realm 的候选会话 cookie。两份可以同时存在于同一个浏览器。 */
+export interface RealmSids {
+  tenant?: string | undefined;
+  operator?: string | undefined;
+}
+
+/**
+ * 按 client 的 realm 选出该用哪一份会话。
+ *
+ * 之所以是一个具名函数而不是一行三元：它替换掉的是 `sids.tenant ?? sids.operator`，
+ * 而那一行**只在浏览器恰好只有一份 cookie 时是对的**。两份都在时（任何登过 console
+ * 或 website 的人再进 admin/opera 都是这个状态），运营者会话被租户会话遮蔽，
+ * authorize 找不到可复用的会话，于是强制重新登录一次——两个工作台还互相遮蔽。
+ * 没有报错、没有日志，只有"又要登一次"。
+ */
+export function pickSessionForRealm(
+  realm: string,
+  sids: RealmSids,
+): string | undefined {
+  return realm === "workforce" ? sids.operator : sids.tenant;
+}
+
 export function verifyPkceS256(verifier: string, challenge: string): boolean {
   if (!verifier || !challenge) return false;
   const computed = createHash("sha256").update(verifier).digest("base64url");

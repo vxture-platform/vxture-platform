@@ -228,16 +228,30 @@ export class OidcAuthRouter {
     return { status: "active", claims: out.claims };
   }
 
-  /** Local logout: drop the RP session + clear the cookie (does not end the IdP session). */
+  /**
+   * 登出：清掉本地 RP 会话，并交回 IdP 的 end_session 地址。
+   *
+   * 这里**不**替浏览器去调 end_session。中央会话的凭证是 accounts 域上的
+   * `vx_sid_op`（SameSite=Lax）：BFF 发起的服务端调用没有它，浏览器发起的跨站
+   * fetch 也不带它，两条路都只会让 IdP 看到一个匿名请求、什么都不结束。唯一能带上
+   * 它的是**顶层导航**，所以地址由前端拿去 `location.replace`。
+   *
+   * `id_token_hint` 取自即将销毁的会话，得在 destroy 之前读。
+   */
   @Post("logout")
   async logout(@Req() req: Request, @Res() res: Response): Promise<void> {
     const rpsid = req.cookies?.[this.cookieName] as string | undefined;
+    const session = rpsid ? await this.store.get(rpsid) : null;
     if (rpsid) await this.store.destroy(rpsid);
     res.clearCookie(this.cookieName, { path: "/" });
-    /* 登出后不要留着"没有中央会话"的备忘：IdP 那边的中央会话未必跟着结束
-     * （单点登出是另一条链路），留着会让下一次登录白白跳过一次本可成功的
-     * 静默 SSO。 */
+    /* 登出后不要留着"有/没有中央会话"的备忘：它下一轮会压制静默探测。 */
     this.clearPresence(res);
-    res.json({ status: "logged_out" });
+    res.json({
+      status: "logged_out",
+      endSessionUrl: this.client.buildEndSessionUrl({
+        ...(session ? { idTokenHint: session.idToken } : {}),
+        postLogoutRedirectUri: this.rt.defaultReturnTo,
+      }),
+    });
   }
 }

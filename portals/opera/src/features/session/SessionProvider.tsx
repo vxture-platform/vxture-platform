@@ -160,13 +160,33 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  /**
+   * 登出 = 本地清理 + **顶层跳到 IdP 结束中央会话**。
+   *
+   * 只做前半段的话，中央会话仍在，下一次 authorize 会静默 SSO 把人直接送回来——
+   * 用户看到的是「点了退出，还是登录态」。后半段必须是顶层导航：accounts 域的会话
+   * cookie 是 SameSite=Lax，跨站 fetch 不带它。
+   *
+   * 地址由 BFF 给（它知道 issuer、client、id_token）。拿不到就退回登录页——那至少
+   * 是个诚实的失败：本地会话确实没了，不会停在一个看着像登录态的界面上。
+   */
   async function signOut() {
+    let endSessionUrl: string | undefined;
     try {
-      await fetch("/auth/logout", { method: "POST", credentials: "include" });
+      const res = await fetch("/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (res.ok) {
+        const body = (await res.json()) as { endSessionUrl?: string };
+        endSessionUrl = body.endSessionUrl;
+      }
     } catch {
       /* local sign-out stays resilient if the BFF is unreachable */
     }
-    window.location.replace(buildLoginUrl(window.location.origin + "/"));
+    window.location.replace(
+      endSessionUrl ?? buildLoginUrl(window.location.origin + "/"),
+    );
   }
 
   return (

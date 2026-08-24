@@ -96,11 +96,23 @@ export class OidcRouter {
     if (!q.client_id || !q.redirect_uri || !q.scope || !q.code_challenge) {
       throw new BadRequestException("invalid_request");
     }
-    // The realm of the requested client decides which session cookie to read;
-    // resolve it cheaply by probing both cookies (client realm is enforced in
-    // the service against the session realm).
+    // The realm of the requested client decides which session cookie to read.
+    // The router cannot know that realm without a client lookup, so it hands
+    // BOTH candidates to the service and the service — which has the client —
+    // picks.
+    //
+    // This used to be `tenant ?? operator`, which only falls through when the
+    // tenant cookie is ABSENT. A browser holding both (anyone who has also
+    // signed into console or the website) therefore had its operator session
+    // shadowed: the tenant sid was looked up, its realm did not match a
+    // workforce client, and the operator was sent to a full login — with the
+    // operator cookie sitting right there. Admin and opera each forced a fresh
+    // login, MFA included, and each shadowed the other.
     const cookies = (req.cookies ?? {}) as Record<string, string | undefined>;
-    const sid = cookies[SID_COOKIE.tenant] ?? cookies[SID_COOKIE.operator];
+    const sids = {
+      tenant: cookies[SID_COOKIE.tenant],
+      operator: cookies[SID_COOKIE.operator],
+    };
 
     const result = await this.oidc.authorize(
       {
@@ -115,7 +127,7 @@ export class OidcRouter {
         prompt: q.prompt,
         tenantHint: q.tenant_hint,
       },
-      sid,
+      sids,
     );
 
     if (result.kind === "redirect") {
@@ -151,7 +163,8 @@ export class OidcRouter {
       return;
     }
     const cookies = (req.cookies ?? {}) as Record<string, string | undefined>;
-    const sid = cookies[SID_COOKIE.tenant] ?? cookies[SID_COOKIE.operator];
+    /* 同 /authorize：两个都取，由下游按 realm 挑。 */
+    const sid = cookies[SID_COOKIE.operator] ?? cookies[SID_COOKIE.tenant];
     if (!sid) {
       res.status(204).end();
       return;
@@ -220,10 +233,17 @@ export class OidcRouter {
     @Res() res: Response,
   ): Promise<void> {
     const cookies = (req.cookies ?? {}) as Record<string, string | undefined>;
-    const sid = cookies[SID_COOKIE.tenant] ?? cookies[SID_COOKIE.operator];
-
+    /**
+     * **两个 realm 的会话都结束**，不是二选一。
+     *
+     * 这个端点下面本来就把两个 realm 的 cookie 连同 hint 一起清掉——只销毁其中一个
+     * 服务端会话，等于清了浏览器的凭证却把服务端会话留成孤儿。此前的
+     * `tenant ?? operator` 更糟：浏览器同时持有两份时，它销毁租户会话、**把运营者
+     * 会话留着**，于是运营者点了登出、cookie 也清了，下一次 authorize 又被静默 SSO
+     * 送回登录态——表现就是"退不出去"。
+     */
     const redirect = await this.oidc.endSession(
-      sid,
+      [cookies[SID_COOKIE.operator], cookies[SID_COOKIE.tenant]],
       q.post_logout_redirect_uri,
       q.state,
     );
