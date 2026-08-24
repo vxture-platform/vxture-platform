@@ -15,9 +15,13 @@
  *   10-shell-mount-contract.md.
  */
 import {
+  Body,
   Controller,
   Get,
+  Header,
   Headers,
+  HttpCode,
+  HttpStatus,
   Inject,
   Post,
   Query,
@@ -44,7 +48,7 @@ import {
 } from "@vxture/core-identity-sdk";
 import type { Redis } from "ioredis";
 import { OperatorExchangeService } from "../auth/operator-exchange.service";
-import { unauthenticated } from "../errors/api-error";
+import { invalidRequest, unauthenticated } from "../errors/api-error";
 import {
   RP_AUTH_SERVICE,
   RP_OIDC_CLIENT,
@@ -99,6 +103,25 @@ export class OidcAuthRouter {
   /** __Host- in prod https; bare name over local http so the browser stores it. */
   private get cookieName(): string {
     return rpSessionCookieName(this.rt.cookieSecure, this.rt.config.clientId);
+  }
+
+  /**
+   * 登出后的落点：身份面统一的 `/logout` 屏，带上"谁发起的"和"从哪回来"。
+   *
+   * **不落回本门户首页。** 全局登出结束的是中央会话，不是本门户那一份；回首页只会
+   * 被网关立刻弹去登录，制造"登出了又要我登录"的困惑。落到身份面才对得上刚发生
+   * 的事，那一屏也能给出再次登录的入口。
+   *
+   * 白名单按 origin+path 匹配，query 不参与——所以这两个参数不影响校验。
+   */
+  private postLogoutTarget(): string {
+    const u = new URL("/logout", this.rt.config.issuer);
+    u.searchParams.set("client", this.rt.config.clientId);
+    u.searchParams.set(
+      "relogin",
+      `${this.rt.defaultReturnTo.replace(/\/$/, "")}/auth/login`,
+    );
+    return u.toString();
   }
 
   /**
@@ -323,8 +346,44 @@ export class OidcAuthRouter {
       status: "logged_out",
       endSessionUrl: this.client.buildEndSessionUrl({
         ...(session ? { idTokenHint: session.idToken } : {}),
-        postLogoutRedirectUri: this.rt.defaultReturnTo,
+        postLogoutRedirectUri: this.postLogoutTarget(),
       }),
     });
+  }
+  /**
+   * 后端通道登出接收端（OpenID Back-Channel Logout 1.0）。中央会话结束时 IdP 会
+   * 往这里 POST 一枚签名的 logout_token；验签后销毁该 sid 下的所有 RP 会话。
+   *
+   * **没有它，全局登出就只是半条链路**：中央会话结束了，本门户的 RP 会话却还活着，
+   * 而 RP 会话有自己的 TTL、从不回头问 IdP——用户看到的就是"另一个门户没跟着登出"。
+   *
+   * 幂等；no-store。见 identity-platform-access-topology.md §5。
+   */
+  @Post("backchannel-logout")
+  @HttpCode(HttpStatus.OK)
+  @Header("Cache-Control", "no-store")
+  async backchannelLogout(
+    @Body() body: { logout_token?: string },
+  ): Promise<{ status: string }> {
+    const token = body?.logout_token;
+    if (!token) {
+      throw invalidRequest(
+        "VALIDATION_REQUIRED",
+        "logout_token is required",
+        "logout_token",
+      );
+    }
+    let sid: string;
+    try {
+      ({ sid } = await this.client.verifyLogoutToken(token));
+    } catch {
+      throw invalidRequest(
+        "VALIDATION_INVALID_VALUE",
+        "logout_token failed verification",
+        "logout_token",
+      );
+    }
+    if (sid) await this.store.destroyBySid(sid);
+    return { status: "logged_out" };
   }
 }

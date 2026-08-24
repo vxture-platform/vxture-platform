@@ -7,9 +7,17 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { IDLE_MS, startIdleWatcher } from "@vxture/core-identity-sdk";
+import {
+  broadcastSignOut,
+  IDLE_MS,
+  onSignOutBroadcast,
+  signOutBroadcastKey,
+  startIdleWatcher,
+} from "@vxture/core-identity-sdk";
 import { buildRpLoginUrl, logout, restoreSession } from "@/api/admin-bff";
 import type { SessionSnapshot } from "@/entities/console";
+
+const SIGN_OUT_KEY = signOutBroadcastKey("admin");
 
 type SessionStatus = "idle" | "loading" | "ready";
 
@@ -104,6 +112,19 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /**
+   * 同源的另一个标签页登出了 → 本页也走。
+   *
+   * 服务端会话已经没了，本页却不会自己发现——它不发请求就一直停在登录后的界面上，
+   * 能点能填。这里**不复用登出流程**：会话早已结束，再 POST 一次 logout 是对着
+   * 空气打；直接回登录入口。
+   */
+  useEffect(() => {
+    return onSignOutBroadcast(SIGN_OUT_KEY, () => {
+      window.location.replace(buildRpLoginUrl(window.location.origin + "/"));
+    });
+  }, []);
+
+  /**
    * 登出 = 本地清理 + **顶层跳到 IdP 结束中央会话**。
    *
    * 原来这里只清了 React state：中央会话在、RP cookie 刚被 BFF 清掉，页面却留在原地，
@@ -112,8 +133,15 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
    */
   async function signOut() {
     const endSessionUrl = await logout();
-    setSession(EMPTY_SESSION);
-    setStatus("ready");
+    /**
+     * **不在这里 setState。**
+     *
+     * 原先这里先 `setSession(EMPTY_SESSION)` 再跳转，React 立刻按"未认证"重绘，
+     * 消费方的守卫抢在 `location.replace` 生效之前把页面跳去登录——实测从 admin
+     * 登出落在 `login?login_challenge=…` 而不是登出页。页面正在离开，那次重绘
+     * 没有任何意义，只会制造一场和自己的竞速。
+     */
+    broadcastSignOut(SIGN_OUT_KEY);
     window.location.replace(
       endSessionUrl ?? buildRpLoginUrl(window.location.origin + "/"),
     );

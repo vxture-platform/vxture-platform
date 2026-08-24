@@ -17,6 +17,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Button } from "@vxture/design-system";
 import { AccountsNotice } from "./AuthChrome";
 
 const OIDC_API_BASE =
@@ -52,20 +53,30 @@ function safeReturnUrl(raw: string | null): string | null {
   }
 }
 
+/**
+ * 自动跳转的目的地。**只有切换用户会返回非 null。**
+ *
+ * 登出不再自动跳走：登出后那一屏是"事情办完了"唯一的确认，把它一闪而过地跳成
+ * 登录表单，人就分不清三件事——我登出了？会话过期了？还是登出失败又被要求重登？
+ * 切换用户是另一回事，它的意图本来就是"马上登另一个号"，立刻跳是对的。
+ */
 function resolveDestination(
-  clientId: string,
   mode: string,
   relogin: string | null,
 ): string | null {
-  const reloginUrl = safeReturnUrl(relogin);
-  if (mode === "switch") {
-    // Switch user always returns to the re-login form (sign in as someone else).
-    return reloginUrl;
+  return mode === "switch" ? safeReturnUrl(relogin) : null;
+}
+
+/** 确认屏上那个出口按钮的去向：营销面回官网，业务应用回自己的登录入口。 */
+function resolveExit(
+  clientId: string,
+  relogin: string | null,
+): { href: string; label: string } | null {
+  if (HOME_CLIENTS.has(clientId)) {
+    return { href: WEBSITE_HOME, label: "返回首页" };
   }
-  // Sign out: website / console land on the marketing home; other business apps
-  // default back to the central accounts login form (the RP's own login entry).
-  if (HOME_CLIENTS.has(clientId)) return WEBSITE_HOME;
-  return reloginUrl;
+  const reloginUrl = safeReturnUrl(relogin);
+  return reloginUrl ? { href: reloginUrl, label: "重新登录" } : null;
 }
 
 export function PostLogout({
@@ -78,7 +89,8 @@ export function PostLogout({
   relogin?: string | null;
 }) {
   const [info, setInfo] = useState<ClientInfo | null>(null);
-  const dest = resolveDestination(clientId, mode, relogin);
+  const dest = resolveDestination(mode, relogin);
+  const exit = resolveExit(clientId, relogin);
 
   // Onward routing: if a destination resolves, leave immediately (replace so the
   // post-logout page is not kept in history); otherwise fall through to the notice.
@@ -130,6 +142,14 @@ export function PostLogout({
           ) : null}
           你已登出当前应用及所有关联应用。
         </>
+      }
+      /* 没有出口的确认屏是死胡同：告诉人"你登出了"，却不给一条回去的路。 */
+      action={
+        exit ? (
+          <Button asChild size="lg">
+            <a href={exit.href}>{exit.label}</a>
+          </Button>
+        ) : undefined
       }
     />
   );
