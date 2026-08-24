@@ -22,6 +22,13 @@ export interface OperatorIdentity {
   sub: string;
   displayName: string;
   role: string;
+  /** 运营者邮箱。与 admin 同源（`admin.operator_account.email`），经 access_token 下发。 */
+  email: string;
+  /**
+   * 邮箱认证态。**与 email 成对**——只拿得到邮箱而拿不到它的认证态，面板要么不显示、
+   * 要么写死一个字面量，admin 那边正是这么错过一轮。
+   */
+  emailVerified: boolean;
 }
 
 type SessionStatus = "loading" | "ready" | "anonymous";
@@ -59,11 +66,26 @@ export function buildLoginUrl(returnTo: string): string {
 function toIdentity(claims: Record<string, unknown>): OperatorIdentity {
   const pick = (k: string): string =>
     typeof claims[k] === "string" ? (claims[k] as string) : "";
+  const role = pick("operator_role");
   return {
     sub: pick("sub"),
-    displayName:
-      pick("name") || pick("preferred_username") || pick("sub") || "Operator",
-    role: pick("operator_role"),
+    email: pick("email"),
+    emailVerified: claims["email_verified"] === true,
+    /**
+     * **兜底不落到 `sub`。**
+     *
+     * 原来的链是 `name → preferred_username → sub → "Operator"`，而运营者的 `sub`
+     * 是 `opr_<uuid>`——于是「取不到名字」被渲染成了一串 UUID，违反本仓那条
+     * 「任何场景只展示可视码」。
+     *
+     * 更要紧的是它**掩盖了故障**：真正的原因是 `name` 只进了 id_token 而 RP 会话
+     * 解析的是 access_token（已在 auth-bff 一并修），但界面上看不出「没取到名字」，
+     * 只看到一个像是身份的字符串，于是没人去查。
+     *
+     * 落到角色名、再落到「运营者」：两者都**明显不是一个人名**，取不到就看得出来。
+     */
+    displayName: pick("name") || pick("preferred_username") || role || "运营者",
+    role,
   };
 }
 
