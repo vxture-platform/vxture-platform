@@ -32,6 +32,11 @@ export {
 } from "./decide";
 
 export { IDLE_MS, startIdleWatcher, type IdleWatcherOptions } from "./idle";
+export {
+  broadcastSignOut,
+  onSignOutBroadcast,
+  signOutBroadcastKey,
+} from "./signout-broadcast";
 
 export {
   anonymousPresenceCookie,

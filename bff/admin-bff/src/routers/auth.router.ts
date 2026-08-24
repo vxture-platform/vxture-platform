@@ -48,6 +48,25 @@ export class AuthRouter {
     return rpSessionCookieName(this.rt.cookieSecure, this.rt.config.clientId);
   }
 
+  /**
+   * 登出后的落点：身份面统一的 `/logout` 屏，带上"谁发起的"和"从哪回来"。
+   *
+   * **不落回本门户首页。** 全局登出结束的是中央会话，不是本门户那一份；回首页只会
+   * 被网关立刻弹去登录，制造"登出了又要我登录"的困惑。落到身份面才对得上刚发生
+   * 的事，那一屏也能给出再次登录的入口。
+   *
+   * 白名单按 origin+path 匹配，query 不参与——所以这两个参数不影响校验。
+   */
+  private postLogoutTarget(): string {
+    const u = new URL("/logout", this.rt.config.issuer);
+    u.searchParams.set("client", this.rt.config.clientId);
+    u.searchParams.set(
+      "relogin",
+      `${this.rt.defaultReturnTo.replace(/\/$/, "")}/auth/login`,
+    );
+    return u.toString();
+  }
+
   /** Current operator session state (req.user is populated by AuthMiddleware). */
   @Get("session")
   getSessionState(@Req() req: Request & RequestContext) {
@@ -81,7 +100,7 @@ export class AuthRouter {
       status: "logged_out",
       endSessionUrl: this.client.buildEndSessionUrl({
         ...(session ? { idTokenHint: session.idToken } : {}),
-        postLogoutRedirectUri: this.rt.defaultReturnTo,
+        postLogoutRedirectUri: this.postLogoutTarget(),
       }),
     });
   }

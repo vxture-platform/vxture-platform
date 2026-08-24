@@ -8,7 +8,13 @@
  * stays open. All URLs are same-origin relative — the real hostname never
  * enters the bundle. */
 
-import { IDLE_MS, startIdleWatcher } from "@vxture/core-identity-sdk";
+import {
+  broadcastSignOut,
+  IDLE_MS,
+  onSignOutBroadcast,
+  signOutBroadcastKey,
+  startIdleWatcher,
+} from "@vxture/core-identity-sdk";
 import {
   createContext,
   useCallback,
@@ -58,6 +64,8 @@ const SessionContext = createContext<SessionContextValue>({
   can: () => false,
   signOut: async () => undefined,
 });
+
+const SIGN_OUT_KEY = signOutBroadcastKey("opera");
 
 export function buildLoginUrl(returnTo: string): string {
   return `/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
@@ -161,6 +169,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /**
+   * 同源的另一个标签页登出了 → 本页也走。
+   *
+   * 服务端会话已经没了，本页却不会自己发现——它不发请求就一直停在登录后的界面上，
+   * 能点能填，直到某次请求撞上 401 或用户手动刷新。这里**不复用登出流程**：
+   * 会话早已结束，再 POST 一次 /auth/logout 是对着空气打；直接回登录入口。
+   */
+  useEffect(() => {
+    return onSignOutBroadcast(SIGN_OUT_KEY, () => {
+      window.location.replace(buildLoginUrl(window.location.origin + "/"));
+    });
+  }, []);
+
+  /**
    * 登出 = 本地清理 + **顶层跳到 IdP 结束中央会话**。
    *
    * 只做前半段的话，中央会话仍在，下一次 authorize 会静默 SSO 把人直接送回来——
@@ -184,6 +205,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     } catch {
       /* local sign-out stays resilient if the BFF is unreachable */
     }
+    broadcastSignOut(SIGN_OUT_KEY);
     window.location.replace(
       endSessionUrl ?? buildLoginUrl(window.location.origin + "/"),
     );

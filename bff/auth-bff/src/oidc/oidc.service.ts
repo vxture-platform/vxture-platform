@@ -606,6 +606,10 @@ export class OidcService {
       },
       OIDC_AUTH_CODE_TTL_SECONDS,
     );
+    /* 记下这个会话服务过哪个 client。end_session 要靠它决定回跳是否可信、
+       以及往谁发后端通道登出——两件事都必须覆盖静默 SSO 进来的 client，
+       而这里是交互登录与静默 SSO 唯一的共同必经点。 */
+    await this.redis.addOidcSessionClient(input.sid, input.client.clientId);
     return code;
   }
 

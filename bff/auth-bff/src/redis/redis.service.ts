@@ -675,6 +675,17 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * 这个中央会话给哪些 client 发过令牌。
+   *
+   * **与 `:org` 分开是必须的**，不是洁癖：`:org` 只在 customer realm 写入，
+   * 把它当客户端清单用，workforce 会话就永远是一份空清单——后端通道登出一次都发
+   * 不出去，回跳白名单也永远校验失败。两件事、两个 key。
+   */
+  private sessionClientsKey(sid: string): string {
+    return `${this.prefix}sess:${sid}:clients`;
+  }
+
+  /**
    * 建立中央会话。TTL 就是**总时效**——IdP 侧不再有"空闲"这个概念。
    *
    * 原先这里取 `min(idle, abs)`，而 idle 恒小于 abs，于是 abs 从未生效、会话变成
@@ -763,11 +774,32 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /** List clients with a session-scoped active_org under sid (for end_session enumeration). */
+  /**
+   * 记下这个中央会话给某个 client 发过令牌。TTL 对齐会话。
+   *
+   * 挂在发码那一刻：交互登录和静默 SSO 都必经 issueAuthCode，所以两条路进来的
+   * client 都会被记上——这正是此前缺的那一半（靠 active_org 推断的话，静默 SSO
+   * 进来的 client 一个都记不上）。
+   */
+  async addOidcSessionClient(sid: string, clientId: string): Promise<void> {
+    const client = this.requireReadyClient();
+    const key = this.sessionClientsKey(sid);
+    try {
+      await client.sadd(key, clientId);
+      const ttl = await client.ttl(this.sessionKey(sid));
+      if (ttl > 0) await client.expire(key, ttl);
+    } catch (err) {
+      /* 记不上不该挡住登录本身。代价是这个 client 收不到后端通道登出——
+         所以要留一条 error 级日志，而不是静默吞掉。 */
+      this.logger.error(`addOidcSessionClient failed: ${String(err)}`);
+    }
+  }
+
+  /** 这个中央会话发过令牌的所有 client（end_session 枚举 + 后端通道登出的收件人）。 */
   async getOidcSessionClients(sid: string): Promise<string[]> {
     const client = this.requireReadyClient();
     try {
-      return await client.hkeys(this.sessionActiveOrgKey(sid));
+      return await client.smembers(this.sessionClientsKey(sid));
     } catch (err) {
       this.logger.error(`getOidcSessionClients failed: ${String(err)}`);
       throw new ServiceUnavailableException(
@@ -780,7 +812,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   async deleteOidcSession(sid: string): Promise<void> {
     const client = this.requireReadyClient();
     try {
-      await client.del(this.sessionKey(sid), this.sessionActiveOrgKey(sid));
+      await client.del(
+        this.sessionKey(sid),
+        this.sessionActiveOrgKey(sid),
+        this.sessionClientsKey(sid),
+      );
     } catch (err) {
       this.logger.error(`deleteOidcSession failed: ${String(err)}`);
       throw new ServiceUnavailableException("OIDC session deletion failed");
