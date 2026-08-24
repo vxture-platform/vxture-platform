@@ -82,6 +82,35 @@ server {
         add_header         Cache-Control "public, max-age=31536000, immutable";
     }
 
+    # ── 数据面 /api/* → opera-bff ────────────────────────────────────────────
+    # 没有这一块时,/api/* 落进下方 `location /` 打到 Next 门户容器,而门户的
+    # next.config rewrite 是 **dev-only seam**(目标 localhost:3041,生产容器里
+    # 没有 BFF)——于是生产上所有数据请求 500,auth 却正常(/auth/ 直达 BFF),
+    # 表现为「登录好好的,页面全在报 Request failed (500)」。admin vhost 从一开始
+    # 就有同款 /api/ 块;opera 的漏了。同过 auth_request 门(零内容裸奔原则)。
+    #
+    # /api/health 是 Next 门户自身的路由(app/api/health,容器健康检查用),
+    # 精确避让到前端——与 next.config rewrite 的排除是同一条。
+    location = /api/health {
+        auth_request /__vx_auth;
+        set $upstream vx-platform-opera:3040;
+        proxy_pass         http://$upstream;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+
+    location /api/ {
+        auth_request /__vx_auth;
+        set $operabff vx-platform-opera-bff:3041;
+        proxy_pass         http://$operabff;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+
     # ── 模块挂载位（批D 启用 atlas;批F 启用 runos）──────────────────────────
     # 启用时取消注释并填 worker-02 tailnet 地址;auth_request 门铸 aud=atlas 的
     # operator-OBO 票,经 X-Operator-Token 注入 Authorization(M-1)。

@@ -49,6 +49,9 @@ check_file "$RUNTIME_DIR/.env.gateway-bff"
 check_file "$RUNTIME_DIR/.env.website-bff"
 check_file "$RUNTIME_DIR/.env.console-bff"
 check_file "$RUNTIME_DIR/.env.admin-bff"
+# opera 是后加的 RP —— 这一行此前漏了，于是 .env.opera-bff 缺失/缺键不拦截，
+# 容器带着 zod 默认值(localhost 上游)静默起来，比"缺文件即失败"更糟。
+check_file "$RUNTIME_DIR/.env.opera-bff"
 check_file "$RUNTIME_DIR/.env.platform-api"
 
 echo "  密钥文件:"
