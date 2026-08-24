@@ -192,6 +192,60 @@ function splitLines(output) {
     .filter(Boolean);
 }
 
+/**
+ * 同系列上一个 tag（v* 按版本序、dev- 与 beta- 前缀按创建时间序）。
+ *
+ * 取「排序中紧邻当前 tag 的下一个」而不是「除自己外的第一个」：重跑一个旧 tag 的
+ * 构建时（v0.24.6 重跑而 v0.25.0 已存在），后者会把**更新的** tag 当基准，diff 出一个
+ * 负向变更集。找不到（系列首发、当前 tag 不在列表）返回 null → 调用方回退全建。
+ */
+function previousSeriesTag(refName) {
+  let pattern;
+  let sort;
+  if (/^v\d/u.test(refName)) {
+    pattern = "v*.*.*";
+    sort = "-v:refname";
+  } else if (refName.startsWith("beta-")) {
+    pattern = "beta-*";
+    sort = "-creatordate";
+  } else if (refName.startsWith("dev-")) {
+    pattern = "dev-*";
+    sort = "-creatordate";
+  } else {
+    return null;
+  }
+
+  try {
+    const tags = splitLines(
+      runGit(["tag", "--list", pattern, `--sort=${sort}`]),
+    );
+    const index = tags.indexOf(refName);
+    return index >= 0 && index + 1 < tags.length ? tags[index + 1] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * reuse 候选的存在性校验：上一版的该镜像必须真在 registry 里（上一次发版可能
+ * 恰好在这个镜像上失败过）。查不到就把它挪回构建集——**fail-closed 到构建**，
+ * 宁可多建一个，不可发出一个引用不存在镜像的 tag。
+ *
+ * 需要调用环境已 `docker login`（workflow 的 detect job 负责）；本地/测试不传
+ * `--verify-reuse`，跳过。
+ */
+function imageExistsInRegistry(imageRef) {
+  try {
+    execFileSync("docker", ["buildx", "imagetools", "inspect", imageRef], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function isDocsFile(filePath) {
   return (
     filePath === "AGENTS.md" ||
@@ -211,10 +265,17 @@ function matchesRule(filePath, rule) {
   );
 }
 
-function collectReasons(changedFiles, imageName, isTagRef) {
-  if (isTagRef) {
+/**
+ * `tagFullBuild` 只在「tag 且拿不到系列基准」时为真——系列首发、或 tag 列表异常。
+ * 有基准的 tag 走与 main 完全相同的规则评估：未命中任何规则的镜像不重建，由
+ * docker-build 的 retag job 把上一版 manifest 复制到新 tag（tag 完整性不变，
+ * 「一个 tag = 一整套镜像都存在」仍然成立）。2026-08-24 前 tag 一律全建——那是
+ * 为 tag 完整性付的全价，改名复用把这笔账消掉了。
+ */
+function collectReasons(changedFiles, imageName, tagFullBuild) {
+  if (tagFullBuild) {
     // varda 已迁独立仓 vxture-varda(2026-08-18):镜像清单不再含 varda_*。
-    return ["release tag builds all images"];
+    return ["release tag without a prior series tag builds all images"];
   }
 
   const reasons = new Set();
@@ -261,12 +322,26 @@ const outputFile =
 const githubRef = process.env.GITHUB_REF ?? "";
 const githubRefType = process.env.GITHUB_REF_TYPE ?? "";
 const isTagRef = githubRefType === "tag" || githubRef.startsWith("refs/tags/");
+const refName =
+  (process.env.GITHUB_REF_NAME ?? "").trim() ||
+  githubRef.replace(/^refs\/tags\//u, "");
+// tag 的 diff 基准：同系列上一个 tag。`--base-tag <tag>` 供测试注入；
+// `--base-tag none` 模拟系列首发（强制全建）。
+const baseTagOption = options.get("base-tag") ?? "";
+const baseTag = !isTagRef
+  ? null
+  : baseTagOption === "none"
+    ? null
+    : baseTagOption || previousSeriesTag(refName);
+const tagFullBuild = isTagRef && baseTag === null;
 // `--files` 注入：直接喂逗号/换行分隔的文件清单（绕过 git diff），用于回归测试断言
 // 各分类规则对代表性路径的判定，无需真实提交。生产路径仍走 listChangedFiles。
 const filesOverride = options.get("files") ?? process.env.CHANGED_FILES ?? "";
 const changedFiles = filesOverride
   ? splitLines(filesOverride.replaceAll(",", "\n"))
-  : listChangedFiles(baseSha, headSha);
+  : isTagRef && baseTag !== null
+    ? listChangedFiles(baseTag, headSha)
+    : listChangedFiles(baseSha, headSha);
 const docsOnly = changedFiles.length > 0 && changedFiles.every(isDocsFile);
 
 if (imageName && !ALL_IMAGES.includes(imageName)) {
@@ -282,12 +357,12 @@ writeMultilineOutput("changed_files", changedFiles.join("\n"), outputFile);
 // 未影响 varda_* 就不建 varda）。tag ref 上按 docker-build 逻辑（可能全量），CI 只在
 // PR/push main（非 tag）消费此输出。
 const affectedImages = IMAGES.filter(
-  (entry) => collectReasons(changedFiles, entry.name, isTagRef).length > 0,
+  (entry) => collectReasons(changedFiles, entry.name, tagFullBuild).length > 0,
 ).map((entry) => entry.name);
 writeOutput("affected_images", JSON.stringify(affectedImages), outputFile);
 
 if (imageName) {
-  const reasons = collectReasons(changedFiles, imageName, isTagRef);
+  const reasons = collectReasons(changedFiles, imageName, tagFullBuild);
   const imageBuild = reasons.length > 0;
 
   writeOutput("image_build", String(imageBuild), outputFile);
@@ -304,7 +379,7 @@ if (imageName) {
 const aggregate = options.get("aggregate") === "true";
 if (aggregate) {
   const anyImageBuild = ALL_IMAGES.some(
-    (image) => collectReasons(changedFiles, image, isTagRef).length > 0,
+    (image) => collectReasons(changedFiles, image, tagFullBuild).length > 0,
   );
   const deployChanged = changedFiles.some(
     (filePath) =>
@@ -323,13 +398,44 @@ if (aggregate) {
 // 为空 → build job 整体跳过。
 const wantMatrix = options.get("matrix") === "true";
 if (wantMatrix) {
-  const include = IMAGES.filter(
-    (entry) => collectReasons(changedFiles, entry.name, isTagRef).length > 0,
-  ).map((entry) => ({
+  const toBuild = [];
+  const toReuse = [];
+  for (const entry of IMAGES) {
+    if (collectReasons(changedFiles, entry.name, tagFullBuild).length > 0) {
+      toBuild.push(entry);
+    } else if (isTagRef && baseTag !== null) {
+      // tag 上未命中任何规则的镜像不重建：retag job 把 `:baseTag` 的 manifest
+      // 复制到新 tag（GHCR + ACR，秒级、不传层），tag 完整性不变。
+      toReuse.push(entry);
+    }
+  }
+
+  // `--verify-reuse`（workflow 的 detect job 已 docker login）：reuse 源镜像必须
+  // 真在 GHCR。查不到就挪回构建集——fail-closed 到构建。
+  if (options.get("verify-reuse") === "true" && toReuse.length > 0) {
+    for (let index = toReuse.length - 1; index >= 0; index -= 1) {
+      const entry = toReuse[index];
+      const sourceRef = `${entry.image}:${baseTag}`;
+      if (!imageExistsInRegistry(sourceRef)) {
+        console.log(
+          `reuse source missing, falling back to build: ${sourceRef}`,
+        );
+        toReuse.splice(index, 1);
+        toBuild.push(entry);
+      }
+    }
+  }
+
+  const include = toBuild.map((entry) => ({
     name: entry.name,
     image: entry.image,
     dockerfile: entry.dockerfile,
     "build-args": entry["build-args"],
+  }));
+  const reuseInclude = toReuse.map((entry) => ({
+    name: entry.name,
+    image: entry.image,
+    prevTag: baseTag,
   }));
   const anyImageBuild = include.length > 0;
   const deployChanged = changedFiles.some(
@@ -340,5 +446,8 @@ if (wantMatrix) {
 
   writeOutput("matrix", JSON.stringify({ include }), outputFile);
   writeOutput("any", String(anyImageBuild), outputFile);
+  writeOutput("reuse", JSON.stringify({ include: reuseInclude }), outputFile);
+  writeOutput("any_reuse", String(reuseInclude.length > 0), outputFile);
+  writeOutput("base_tag", baseTag ?? "", outputFile);
   writeOutput("deployable", String(deployable), outputFile);
 }
