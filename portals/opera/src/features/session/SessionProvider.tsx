@@ -162,6 +162,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return startIdleWatcher({
       idleMs: IDLE_MS.workforce,
       storageKey: "vx:opera:last-activity",
+      /* admin/opera 共用中央会话，闲置也按同一个人算：任一工作台有活动，全体不闲。
+         否则后台开着的另一个工作台 30 分钟没动就全局登出，把正在干活的人带走。 */
+      sharedActivityCookie: "vx_wf_activity",
       onIdle: () => {
         void signOut();
       },
