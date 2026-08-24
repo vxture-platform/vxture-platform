@@ -1691,7 +1691,9 @@ function ModelServiceContent() {
         onOpenChange={(open) => {
           if (!open) setProviderDialog(null);
         }}
+        size="xl"
         title={editingProvider ? "编辑 Provider" : "接入 Provider"}
+        description="Provider＝模型的供应方（收费主体）。密钥、账单都按它归属；同一个模型由多家供应时，每家各接入一次。"
         submitLabel={editingProvider ? "保存" : "接入"}
         submitting={submitting}
         submitDisabled={!providerDraftValid}
@@ -1699,139 +1701,147 @@ function ModelServiceContent() {
       >
         {/* 三档（DS `FieldTier`）：身份 = 决定这是哪一家、创建后改不了；常规 = 运营
             真正会用到的；高级 = 填不填都行。**不平铺**——八个字段一长串时，读的人
-            无从判断哪些必须停下来想，结果要么每栏都想一遍要么一路 Tab 过去。 */}
-        <FieldTier
-          tier="identity"
-          hint="决定这是哪一家。Code 与类型创建后不可改。"
-        >
-          <Field>
-            <FieldLabel htmlFor="provider-code">Code</FieldLabel>
-            <Input
-              id="provider-code"
-              value={providerDraft.providerCode}
-              onChange={(e) =>
-                setProviderDraft({
-                  ...providerDraft,
-                  providerCode: e.target.value,
-                })
-              }
-              placeholder="openai"
-              disabled={editingProvider}
-            />
-            <FieldDescription>
-              全局唯一，模型与密钥都按它归属。
-            </FieldDescription>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="provider-name">名称</FieldLabel>
-            <Input
-              id="provider-name"
-              value={providerDraft.providerName}
-              onChange={(e) =>
-                setProviderDraft({
-                  ...providerDraft,
-                  providerName: e.target.value,
-                })
-              }
-              placeholder="OpenAI"
-            />
-            <FieldDescription>
-              列表与选择器里显示的名字，可改。
-            </FieldDescription>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="provider-type">类型</FieldLabel>
-            <NativeSelect
-              id="provider-type"
-              value={providerDraft.providerType}
-              onChange={(e) =>
-                setProviderDraft({
-                  ...providerDraft,
-                  providerType: e.target.value,
-                })
-              }
-              disabled={editingProvider}
-            >
-              {PROVIDER_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </NativeSelect>
-            <FieldDescription>创建后不可改。</FieldDescription>
-          </Field>
-        </FieldTier>
+            无从判断哪些必须停下来想，结果要么每栏都想一遍要么一路 Tab 过去。
+            `density-compact` 是 DS 的密度轴：注册面板走 xl 双栏 + 紧凑密度，
+            整表一屏可见、不出滚动条（owner 2026-08-24 定）。 */}
+        <div className="density-compact flex flex-col gap-md">
+          <FieldTier
+            tier="identity"
+            hint="决定这是哪一家。Code 与类型创建后不可改。"
+          >
+            <div className="grid grid-cols-3 gap-md">
+              <Field>
+                <FieldLabel htmlFor="provider-code">Code</FieldLabel>
+                <Input
+                  id="provider-code"
+                  value={providerDraft.providerCode}
+                  onChange={(e) =>
+                    setProviderDraft({
+                      ...providerDraft,
+                      providerCode: e.target.value,
+                    })
+                  }
+                  placeholder="openai"
+                  disabled={editingProvider}
+                />
+                <FieldDescription>
+                  全局唯一，模型与密钥都按它归属。
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="provider-name">名称</FieldLabel>
+                <Input
+                  id="provider-name"
+                  value={providerDraft.providerName}
+                  onChange={(e) =>
+                    setProviderDraft({
+                      ...providerDraft,
+                      providerName: e.target.value,
+                    })
+                  }
+                  placeholder="OpenAI"
+                />
+                <FieldDescription>
+                  列表与选择器里显示的名字，可改。
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="provider-type">类型</FieldLabel>
+                <NativeSelect
+                  id="provider-type"
+                  value={providerDraft.providerType}
+                  onChange={(e) =>
+                    setProviderDraft({
+                      ...providerDraft,
+                      providerType: e.target.value,
+                    })
+                  }
+                  disabled={editingProvider}
+                >
+                  {PROVIDER_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </NativeSelect>
+                <FieldDescription>创建后不可改。</FieldDescription>
+              </Field>
+            </div>
+          </FieldTier>
 
-        <FieldTier
-          tier="details"
-          hint="填了地址，行操作里就有对方控制台与账单的直达入口。"
-        >
-          <Field>
-            <FieldLabel htmlFor="provider-description">简介</FieldLabel>
-            <Textarea
-              id="provider-description"
-              value={providerDraft.description}
-              onChange={(e) =>
-                setProviderDraft({
-                  ...providerDraft,
-                  description: e.target.value,
-                })
-              }
-              rows={2}
-            />
-          </Field>
-          <div className="grid grid-cols-2 gap-md">
+          <FieldTier
+            tier="details"
+            hint="填了地址，行操作里就有对方控制台与账单的直达入口。"
+          >
             <Field>
-              <FieldLabel htmlFor="provider-console">控制台 URL</FieldLabel>
-              <Input
-                id="provider-console"
-                value={providerDraft.consoleUrl}
+              <FieldLabel htmlFor="provider-description">简介</FieldLabel>
+              <Textarea
+                id="provider-description"
+                value={providerDraft.description}
                 onChange={(e) =>
                   setProviderDraft({
                     ...providerDraft,
-                    consoleUrl: e.target.value,
+                    description: e.target.value,
                   })
                 }
+                rows={2}
               />
-              <FieldDescription>密钥轮换、配额调整在这里做。</FieldDescription>
             </Field>
-            <Field>
-              <FieldLabel htmlFor="provider-billing">账单 URL</FieldLabel>
-              <Input
-                id="provider-billing"
-                value={providerDraft.billingUrl}
-                onChange={(e) =>
-                  setProviderDraft({
-                    ...providerDraft,
-                    billingUrl: e.target.value,
-                  })
-                }
-              />
-              <FieldDescription>
-                实际花费以对方账单为准（Atlas 计量不计费）。
-              </FieldDescription>
-            </Field>
-          </div>
-        </FieldTier>
+            <div className="grid grid-cols-2 gap-md">
+              <Field>
+                <FieldLabel htmlFor="provider-console">控制台 URL</FieldLabel>
+                <Input
+                  id="provider-console"
+                  value={providerDraft.consoleUrl}
+                  onChange={(e) =>
+                    setProviderDraft({
+                      ...providerDraft,
+                      consoleUrl: e.target.value,
+                    })
+                  }
+                />
+                <FieldDescription>
+                  密钥轮换、配额调整在这里做。
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="provider-billing">账单 URL</FieldLabel>
+                <Input
+                  id="provider-billing"
+                  value={providerDraft.billingUrl}
+                  onChange={(e) =>
+                    setProviderDraft({
+                      ...providerDraft,
+                      billingUrl: e.target.value,
+                    })
+                  }
+                />
+                <FieldDescription>
+                  实际花费以对方账单为准（Atlas 计量不计费）。
+                </FieldDescription>
+              </Field>
+            </div>
+          </FieldTier>
 
-        <FieldTier tier="advanced" hint="填不填都不影响接入。">
-          <div className="grid grid-cols-2 gap-md">
-            <Field>
-              <FieldLabel htmlFor="provider-homepage">主页 URL</FieldLabel>
-              <Input
-                id="provider-homepage"
-                value={providerDraft.homepageUrl}
-                onChange={(e) =>
-                  setProviderDraft({
-                    ...providerDraft,
-                    homepageUrl: e.target.value,
-                  })
-                }
-              />
-              <FieldDescription>纯登记。</FieldDescription>
-            </Field>
-          </div>
-        </FieldTier>
+          <FieldTier tier="advanced" hint="填不填都不影响接入。">
+            <div className="grid grid-cols-2 gap-md">
+              <Field>
+                <FieldLabel htmlFor="provider-homepage">主页 URL</FieldLabel>
+                <Input
+                  id="provider-homepage"
+                  value={providerDraft.homepageUrl}
+                  onChange={(e) =>
+                    setProviderDraft({
+                      ...providerDraft,
+                      homepageUrl: e.target.value,
+                    })
+                  }
+                />
+                <FieldDescription>纯登记。</FieldDescription>
+              </Field>
+            </div>
+          </FieldTier>
+        </div>
       </DialogForm>
 
       <DialogForm
@@ -1858,328 +1868,366 @@ function ModelServiceContent() {
         onOpenChange={(open) => {
           if (!open) setModelDialog(null);
         }}
-        size="lg"
+        size="xl"
         title={editingModel ? "编辑模型" : "注册模型"}
-        description="编码与类型创建后不可改，其余随时可调。"
+        description="一条模型＝从某家 Provider 接入的某个模型。编码与类型创建后不可改，其余随时可调。"
         submitLabel={editingModel ? "保存" : "注册"}
         submitting={submitting}
         submitDisabled={!modelDraftValid}
         onSubmit={submitModel}
       >
-        {/* 三档（DS `FieldTier`）：身份（不可改）/ 接入参数 / 可留空的容量与呈现。 */}
-        <FieldTier tier="identity" hint="决定这是哪个模型、由谁供应。">
-          <FieldGroup>
-            <div className="grid grid-cols-2 gap-md">
-              <Field>
-                <FieldLabel htmlFor="model-code">编码</FieldLabel>
-                <Input
-                  id="model-code"
-                  value={modelDraft.modelCode}
-                  onChange={(e) =>
-                    setModelDraft({ ...modelDraft, modelCode: e.target.value })
-                  }
-                  placeholder="deepseek/deepseek-v4-flash"
-                  disabled={editingModel}
-                />
-                <FieldDescription>
-                  全局唯一。同一上游模型由多家供应时各注册一条，编码加
-                  「供应方/」前缀区分，上游真实名填「上游模型名」。
-                </FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="model-name">名称</FieldLabel>
-                <Input
-                  id="model-name"
-                  value={modelDraft.modelName}
-                  onChange={(e) =>
-                    setModelDraft({ ...modelDraft, modelName: e.target.value })
-                  }
-                  placeholder="GPT-5 Mini"
-                />
-              </Field>
-            </div>
-            <Field>
-              <FieldLabel htmlFor="model-provider">Provider</FieldLabel>
-              <NativeSelect
-                id="model-provider"
-                value={modelDraft.providerId}
-                onChange={(e) =>
-                  setModelDraft({ ...modelDraft, providerId: e.target.value })
-                }
-              >
-                {/* 孤儿模型（providerId 为空）编辑时给个占位项，不然浏览器会显示
-                    第一项的文字而值仍是空串——看着选了，其实没选。 */}
-                {modelDraft.providerId === "" ? (
-                  <option value="">— 选择 Provider —</option>
-                ) : null}
-                {activeProviders.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.providerName}
-                    {isEnabled(p.state) ? "" : "（已停用）"}
-                  </option>
-                ))}
-              </NativeSelect>
-              <FieldDescription>
-                只列启用中的（当前已挂的除外）。模型与 Provider
-                都启用才可服务；换它即换供应方与密钥来源。
-              </FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="model-type">类型</FieldLabel>
-              <NativeSelect
-                id="model-type"
-                value={modelDraft.modelType}
-                onChange={(e) =>
-                  setModelDraft({ ...modelDraft, modelType: e.target.value })
-                }
-                disabled={editingModel}
-              >
-                {MODEL_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </NativeSelect>
-              <FieldDescription>
-                {MODEL_TYPES.find((t) => t.value === modelDraft.modelType)
-                  ?.hint ?? ""}
-                {editingModel
-                  ? "。创建后不可改，要换类型只能重新注册。"
-                  : "。创建后不可改。"}
-              </FieldDescription>
-            </Field>
-          </FieldGroup>
-        </FieldTier>
-
-        <FieldTier
-          tier="details"
-          hint="接入参数：填错要到第一次真实调用才暴露。"
-        >
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="model-endpoint">Endpoint URL</FieldLabel>
-              <Input
-                id="model-endpoint"
-                value={modelDraft.endpointUrl}
-                onChange={(e) =>
-                  setModelDraft({ ...modelDraft, endpointUrl: e.target.value })
-                }
-                placeholder="https://api.openai.com/v1"
-              />
-            </Field>
-            <div className="grid grid-cols-2 gap-md">
-              <Field>
-                <FieldLabel htmlFor="model-protocol">协议</FieldLabel>
-                <NativeSelect
-                  id="model-protocol"
-                  value={modelDraft.protocol}
-                  onChange={(e) =>
-                    setModelDraft({ ...modelDraft, protocol: e.target.value })
-                  }
-                >
-                  {protocolOptions.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </NativeSelect>
-                <FieldDescription>
-                  {protocols.length > 0
-                    ? (protocols.find((p) => p.protocol === modelDraft.protocol)
-                        ?.description ?? "来自 Atlas 的协议词表。")
-                    : "协议词表读取失败，只能保留当前值。"}
-                </FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="model-upstream">上游模型名</FieldLabel>
-                <Input
-                  id="model-upstream"
-                  value={modelDraft.upstreamModel}
-                  onChange={(e) =>
-                    setModelDraft({
-                      ...modelDraft,
-                      upstreamModel: e.target.value,
-                    })
-                  }
-                  placeholder="deepseek-v4-flash / ep-2026…"
-                  className="font-mono"
-                />
-                <FieldDescription>
-                  调用上游时送的 model
-                  参数，留空＝直接用编码。编码带了供应方前缀、 或上游用接入点
-                  ID（火山引擎 ep-…）时必填。
-                </FieldDescription>
-              </Field>
-            </div>
-            <Field>
-              <FieldLabel htmlFor="model-key">密钥（vault 别名）</FieldLabel>
-              {aliasOptions === "unavailable" ? (
-                /* 列不出来（没有 provider.manage 或上游故障）就手填——照样以
-                   managed 形态提交，绝不退回已退役的 env 路径。 */
-                <>
+        {/* 三档（DS `FieldTier`）：身份（不可改）/ 接入参数 / 可留空的容量与呈现。
+            xl 双栏 + `density-compact`（DS 密度轴），整表一屏可见、不出滚动条。 */}
+        <div className="density-compact flex flex-col gap-md">
+          <FieldTier tier="identity" hint="决定这是哪个模型、由谁供应。">
+            <FieldGroup>
+              <div className="grid grid-cols-2 gap-md">
+                <Field>
+                  <FieldLabel htmlFor="model-code">编码</FieldLabel>
                   <Input
-                    id="model-key"
-                    value={modelDraft.keyAlias}
+                    id="model-code"
+                    value={modelDraft.modelCode}
                     onChange={(e) =>
-                      setModelDraft({ ...modelDraft, keyAlias: e.target.value })
+                      setModelDraft({
+                        ...modelDraft,
+                        modelCode: e.target.value,
+                      })
                     }
-                    placeholder="default"
-                    className="font-mono"
+                    placeholder="deepseek/deepseek-v4-flash"
+                    disabled={editingModel}
                   />
                   <FieldDescription>
-                    密钥清单读取失败；直接填这家 Provider 密钥库里的别名也可。
+                    全局唯一。同一上游模型由多家供应时各注册一条，编码加
+                    「供应方/」前缀区分，上游真实名填「上游模型名」。
                   </FieldDescription>
-                </>
-              ) : (
-                <>
-                  <NativeSelect
-                    id="model-key"
-                    value={modelDraft.keyAlias}
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="model-name">名称</FieldLabel>
+                  <Input
+                    id="model-name"
+                    value={modelDraft.modelName}
                     onChange={(e) =>
-                      setModelDraft({ ...modelDraft, keyAlias: e.target.value })
+                      setModelDraft({
+                        ...modelDraft,
+                        modelName: e.target.value,
+                      })
+                    }
+                    placeholder="DeepSeek V4 Flash（火山）"
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-md">
+                <Field>
+                  <FieldLabel htmlFor="model-provider">Provider</FieldLabel>
+                  <NativeSelect
+                    id="model-provider"
+                    value={modelDraft.providerId}
+                    onChange={(e) =>
+                      setModelDraft({
+                        ...modelDraft,
+                        providerId: e.target.value,
+                      })
                     }
                   >
-                    <option value="">不引用（仅私有/自定义上游可免）</option>
-                    {/* 当前值不在清单里（别名已删或清单还没到）也得显示——
-                        下拉悄悄换值等于替人改了配置。 */}
-                    {modelDraft.keyAlias !== "" &&
-                    !(aliasOptions ?? []).some(
-                      (k) => k.keyAlias === modelDraft.keyAlias,
-                    ) ? (
-                      <option value={modelDraft.keyAlias}>
-                        {modelDraft.keyAlias}（不在清单中）
-                      </option>
+                    {/* 孤儿模型（providerId 为空）编辑时给个占位项，不然浏览器会显示
+                    第一项的文字而值仍是空串——看着选了，其实没选。 */}
+                    {modelDraft.providerId === "" ? (
+                      <option value="">— 选择 Provider —</option>
                     ) : null}
-                    {(aliasOptions ?? []).map((k) => (
-                      <option key={k.id} value={k.keyAlias}>
-                        {k.keyAlias}
-                        {isEnabled(k.state) ? "" : "（已停用）"}
+                    {activeProviders.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.providerName}
+                        {isEnabled(p.state) ? "" : "（已停用）"}
                       </option>
                     ))}
                   </NativeSelect>
                   <FieldDescription>
-                    {aliasOptions !== null && aliasOptions.length === 0
-                      ? "这家还没有密钥——先在 Provider 行操作「密钥管理」里录入。"
-                      : "从这家 Provider 的密钥库里选。"}
-                    {modelDialog?.kind === "edit" &&
-                    modelDialog.row.keyReference?.source === "env"
-                      ? ` 原引用的 env 变量 ${modelDialog.row.keyReference.name} 已退役（ADR-003），运行时不再读取——请改选 vault 别名。`
-                      : ""}
+                    只列启用中的（当前已挂的除外）。模型与 Provider
+                    都启用才可服务；换它即换供应方与密钥来源。
                   </FieldDescription>
-                </>
-              )}
-            </Field>
-            <Field>
-              <FieldLabel>能力标签</FieldLabel>
-              <div className="flex flex-wrap gap-sm">
-                {CAPABILITY_OPTIONS.map((c) => {
-                  const active = modelDraft.capabilities.includes(c);
-                  return (
-                    <Button
-                      key={c}
-                      type="button"
-                      variant="ghost"
-                      onClick={() => toggleCapability(c)}
-                      /* 视觉全由里面的 Badge 给：这里只要一个可聚焦、可回车触发的
-                         按钮语义，所以把 Button 自己的尺寸与内边距归零。 */
-                      className="inline-flex h-auto w-auto p-0 hover:bg-transparent"
-                    >
-                      <Badge variant={active ? "default" : "outline"}>
-                        {c}
-                      </Badge>
-                    </Button>
-                  );
-                })}
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="model-type">类型</FieldLabel>
+                  <NativeSelect
+                    id="model-type"
+                    value={modelDraft.modelType}
+                    onChange={(e) =>
+                      setModelDraft({
+                        ...modelDraft,
+                        modelType: e.target.value,
+                      })
+                    }
+                    disabled={editingModel}
+                  >
+                    {MODEL_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                  <FieldDescription>
+                    {MODEL_TYPES.find((t) => t.value === modelDraft.modelType)
+                      ?.hint ?? ""}
+                    {editingModel
+                      ? "。创建后不可改，要换类型只能重新注册。"
+                      : "。创建后不可改。"}
+                  </FieldDescription>
+                </Field>
               </div>
-              <FieldDescription>至少选一项。</FieldDescription>
-            </Field>
-          </FieldGroup>
-        </FieldTier>
+            </FieldGroup>
+          </FieldTier>
 
-        {/* 容量与呈现：全部可留空，留空 = 用 atlas 自己的默认，不是 0。 */}
-        <FieldTier tier="advanced" hint="都可留空，留空＝用 Atlas 默认。">
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="model-description">说明</FieldLabel>
-              <Textarea
-                id="model-description"
-                rows={2}
-                value={modelDraft.description}
-                onChange={(e) =>
-                  setModelDraft({ ...modelDraft, description: e.target.value })
-                }
-                placeholder="这个模型适合做什么、有什么已知限制"
-              />
-            </Field>
-            <div className="grid grid-cols-2 gap-md">
+          <FieldTier
+            tier="details"
+            hint="接入参数：填错要到第一次真实调用才暴露。"
+          >
+            <FieldGroup>
+              <div className="grid grid-cols-2 gap-md">
+                <Field>
+                  <FieldLabel htmlFor="model-endpoint">Endpoint URL</FieldLabel>
+                  <Input
+                    id="model-endpoint"
+                    value={modelDraft.endpointUrl}
+                    onChange={(e) =>
+                      setModelDraft({
+                        ...modelDraft,
+                        endpointUrl: e.target.value,
+                      })
+                    }
+                    placeholder="https://api.openai.com/v1"
+                  />
+                  <FieldDescription>上游 API 的基地址。</FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="model-protocol">协议</FieldLabel>
+                  <NativeSelect
+                    id="model-protocol"
+                    value={modelDraft.protocol}
+                    onChange={(e) =>
+                      setModelDraft({ ...modelDraft, protocol: e.target.value })
+                    }
+                  >
+                    {protocolOptions.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                  <FieldDescription>
+                    {protocols.length > 0
+                      ? (protocols.find(
+                          (p) => p.protocol === modelDraft.protocol,
+                        )?.description ?? "来自 Atlas 的协议词表。")
+                      : "协议词表读取失败，只能保留当前值。"}
+                  </FieldDescription>
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-md">
+                <Field>
+                  <FieldLabel htmlFor="model-upstream">上游模型名</FieldLabel>
+                  <Input
+                    id="model-upstream"
+                    value={modelDraft.upstreamModel}
+                    onChange={(e) =>
+                      setModelDraft({
+                        ...modelDraft,
+                        upstreamModel: e.target.value,
+                      })
+                    }
+                    placeholder="deepseek-v4-flash / ep-2026…"
+                    className="font-mono"
+                  />
+                  <FieldDescription>
+                    调用上游时送的 model
+                    参数，留空＝直接用编码。编码带了供应方前缀、 或上游用接入点
+                    ID（火山引擎 ep-…）时必填。
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="model-key">
+                    密钥（vault 别名）
+                  </FieldLabel>
+                  {aliasOptions === "unavailable" ? (
+                    /* 列不出来（没有 provider.manage 或上游故障）就手填——照样以
+                   managed 形态提交，绝不退回已退役的 env 路径。 */
+                    <>
+                      <Input
+                        id="model-key"
+                        value={modelDraft.keyAlias}
+                        onChange={(e) =>
+                          setModelDraft({
+                            ...modelDraft,
+                            keyAlias: e.target.value,
+                          })
+                        }
+                        placeholder="default"
+                        className="font-mono"
+                      />
+                      <FieldDescription>
+                        密钥清单读取失败；直接填这家 Provider
+                        密钥库里的别名也可。
+                      </FieldDescription>
+                    </>
+                  ) : (
+                    <>
+                      <NativeSelect
+                        id="model-key"
+                        value={modelDraft.keyAlias}
+                        onChange={(e) =>
+                          setModelDraft({
+                            ...modelDraft,
+                            keyAlias: e.target.value,
+                          })
+                        }
+                      >
+                        <option value="">
+                          不引用（仅私有/自定义上游可免）
+                        </option>
+                        {/* 当前值不在清单里（别名已删或清单还没到）也得显示——
+                        下拉悄悄换值等于替人改了配置。 */}
+                        {modelDraft.keyAlias !== "" &&
+                        !(aliasOptions ?? []).some(
+                          (k) => k.keyAlias === modelDraft.keyAlias,
+                        ) ? (
+                          <option value={modelDraft.keyAlias}>
+                            {modelDraft.keyAlias}（不在清单中）
+                          </option>
+                        ) : null}
+                        {(aliasOptions ?? []).map((k) => (
+                          <option key={k.id} value={k.keyAlias}>
+                            {k.keyAlias}
+                            {isEnabled(k.state) ? "" : "（已停用）"}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                      <FieldDescription>
+                        {aliasOptions !== null && aliasOptions.length === 0
+                          ? "这家还没有密钥——先在 Provider 行操作「密钥管理」里录入。"
+                          : "从这家 Provider 的密钥库里选。"}
+                        {modelDialog?.kind === "edit" &&
+                        modelDialog.row.keyReference?.source === "env"
+                          ? ` 原引用的 env 变量 ${modelDialog.row.keyReference.name} 已退役（ADR-003），运行时不再读取——请改选 vault 别名。`
+                          : ""}
+                      </FieldDescription>
+                    </>
+                  )}
+                </Field>
+              </div>
               <Field>
-                <FieldLabel htmlFor="model-context">上下文窗口</FieldLabel>
-                <Input
-                  id="model-context"
-                  inputMode="numeric"
-                  value={modelDraft.contextWindow}
+                <FieldLabel>能力标签</FieldLabel>
+                <div className="flex flex-wrap gap-sm">
+                  {CAPABILITY_OPTIONS.map((c) => {
+                    const active = modelDraft.capabilities.includes(c);
+                    return (
+                      <Button
+                        key={c}
+                        type="button"
+                        variant="ghost"
+                        onClick={() => toggleCapability(c)}
+                        /* 视觉全由里面的 Badge 给：这里只要一个可聚焦、可回车触发的
+                         按钮语义，所以把 Button 自己的尺寸与内边距归零。 */
+                        className="inline-flex h-auto w-auto p-0 hover:bg-transparent"
+                      >
+                        <Badge variant={active ? "default" : "outline"}>
+                          {c}
+                        </Badge>
+                      </Button>
+                    );
+                  })}
+                </div>
+                <FieldDescription>至少选一项。</FieldDescription>
+              </Field>
+            </FieldGroup>
+          </FieldTier>
+
+          {/* 容量与呈现：全部可留空，留空 = 用 atlas 自己的默认，不是 0。 */}
+          <FieldTier tier="advanced" hint="都可留空，留空＝用 Atlas 默认。">
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="model-description">说明</FieldLabel>
+                <Textarea
+                  id="model-description"
+                  rows={2}
+                  value={modelDraft.description}
                   onChange={(e) =>
                     setModelDraft({
                       ...modelDraft,
-                      contextWindow: e.target.value,
+                      description: e.target.value,
                     })
                   }
-                  placeholder="128000"
-                />
-                <FieldDescription>token 数，留空＝不声明。</FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="model-max-output">最大输出</FieldLabel>
-                <Input
-                  id="model-max-output"
-                  inputMode="numeric"
-                  value={modelDraft.maxOutputTokens}
-                  onChange={(e) =>
-                    setModelDraft({
-                      ...modelDraft,
-                      maxOutputTokens: e.target.value,
-                    })
-                  }
-                  placeholder="16384"
+                  placeholder="这个模型适合做什么、有什么已知限制"
                 />
               </Field>
-            </div>
-            <div className="grid grid-cols-2 gap-md">
-              <Field>
-                <FieldLabel htmlFor="model-sort">排序权重</FieldLabel>
-                <Input
-                  id="model-sort"
-                  inputMode="numeric"
-                  value={modelDraft.sort}
-                  onChange={(e) =>
-                    setModelDraft({ ...modelDraft, sort: e.target.value })
-                  }
-                  placeholder="999"
-                />
-                <FieldDescription>越小越靠前，默认 999。</FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="model-streaming">流式</FieldLabel>
-                <NativeSelect
-                  id="model-streaming"
-                  value={modelDraft.supportsStreaming ? "yes" : "no"}
-                  onChange={(e) =>
-                    setModelDraft({
-                      ...modelDraft,
-                      supportsStreaming: e.target.value === "yes",
-                    })
-                  }
-                >
-                  <option value="yes">支持</option>
-                  <option value="no">不支持</option>
-                </NativeSelect>
-                <FieldDescription>
-                  声明不支持，调用方就不会走 stream 路径。
-                </FieldDescription>
-              </Field>
-            </div>
-          </FieldGroup>
-        </FieldTier>
+              <div className="grid grid-cols-2 gap-md">
+                <Field>
+                  <FieldLabel htmlFor="model-context">上下文窗口</FieldLabel>
+                  <Input
+                    id="model-context"
+                    inputMode="numeric"
+                    value={modelDraft.contextWindow}
+                    onChange={(e) =>
+                      setModelDraft({
+                        ...modelDraft,
+                        contextWindow: e.target.value,
+                      })
+                    }
+                    placeholder="128000"
+                  />
+                  <FieldDescription>token 数，留空＝不声明。</FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="model-max-output">最大输出</FieldLabel>
+                  <Input
+                    id="model-max-output"
+                    inputMode="numeric"
+                    value={modelDraft.maxOutputTokens}
+                    onChange={(e) =>
+                      setModelDraft({
+                        ...modelDraft,
+                        maxOutputTokens: e.target.value,
+                      })
+                    }
+                    placeholder="16384"
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-md">
+                <Field>
+                  <FieldLabel htmlFor="model-sort">排序权重</FieldLabel>
+                  <Input
+                    id="model-sort"
+                    inputMode="numeric"
+                    value={modelDraft.sort}
+                    onChange={(e) =>
+                      setModelDraft({ ...modelDraft, sort: e.target.value })
+                    }
+                    placeholder="999"
+                  />
+                  <FieldDescription>越小越靠前，默认 999。</FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="model-streaming">流式</FieldLabel>
+                  <NativeSelect
+                    id="model-streaming"
+                    value={modelDraft.supportsStreaming ? "yes" : "no"}
+                    onChange={(e) =>
+                      setModelDraft({
+                        ...modelDraft,
+                        supportsStreaming: e.target.value === "yes",
+                      })
+                    }
+                  >
+                    <option value="yes">支持</option>
+                    <option value="no">不支持</option>
+                  </NativeSelect>
+                  <FieldDescription>
+                    声明不支持，调用方就不会走 stream 路径。
+                  </FieldDescription>
+                </Field>
+              </div>
+            </FieldGroup>
+          </FieldTier>
+        </div>
       </DialogForm>
 
       <DialogForm
