@@ -53,7 +53,16 @@ import { useOperatorSession } from "@/features/session/SessionProvider";
 const LS_ASSISTANT_OPEN = "vx-opera-assistant-open";
 const LS_ASSISTANT_MODE = "vx-opera-assistant-mode";
 
-const DEV_OPERATOR = { displayName: "Dev Operator", role: "platform-admin" };
+/* 开发占位会话。字段与 `OperatorIdentity` 对齐——占位对象比真身份少字段时，
+   面板要么崩、要么走进只有开发环境才命中的分支，两者都会让开发时看到的东西
+   和生产不一样，而这个占位存在的理由恰恰是"没有边缘网关时也能看真界面"。 */
+const DEV_OPERATOR = {
+  sub: "opr_dev",
+  displayName: "Dev Operator",
+  role: "platform-admin",
+  email: "",
+  emailVerified: false,
+};
 
 type AssistantMode = "narrow" | "wide" | "full";
 
@@ -325,13 +334,27 @@ export function OperaShell({
                       onClick={() => {}}
                     />
                   </ShellIconGroup>
+                  {/* 与 admin 的用户菜单同形（同一个 DS 件、同一组槽位）。此前这里
+                      只有显示名与角色码两行，因为 opera 只读 access_token 的 claims，
+                      而 `name` / `email` 当时只进 id_token——面板不是设计成简版的，
+                      是**它手上只有这两样**。auth-bff 补齐 claims 后一并对齐。
+
+                      缺失一律给明确文案而不是留白：留白读作「没这个字段」，
+                      缺失读作「该补了」，两者含义完全不同（同 admin 的判据）。 */}
                   <ShellUserMenu
                     user={{
                       displayName: effectiveOperator.displayName,
                       uniqueLine: effectiveOperator.role || "operator",
-                      ...(operator
-                        ? {}
-                        : { meta: "开发占位会话（无边缘网关）" }),
+                      meta: operator
+                        ? effectiveOperator.email || "未设置邮箱"
+                        : "开发占位会话（无边缘网关）",
+                      ...(operator && effectiveOperator.email
+                        ? {
+                            statusTag: effectiveOperator.emailVerified
+                              ? { label: "已认证", verified: true }
+                              : { label: "未认证" },
+                          }
+                        : {}),
                     }}
                     settings={
                       <ShellPreferencePanel

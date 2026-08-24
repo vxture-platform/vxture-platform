@@ -1912,6 +1912,25 @@ export class OidcService {
         extra: {
           account_status: operator.status,
           operator_role: operator.roleCode,
+          /**
+           * 人类可读身份也进 access_token，与 `operator_role` 同一处。
+           *
+           * 此前只进 `idProfile`（id_token）。同源 BFF 的 RP 会话解析的是
+           * **access_token**（`packages/core/oidc-rp/src/rp-auth.service.ts` 的
+           * `verifyAccessToken`），所以一个只读 claims 的门户拿得到角色、却拿不到
+           * 名字——opera 的取名链 `name → preferred_username → sub` 前两档必然落空，
+           * 直接掉到 `sub`，界面上显示成 `opr_<uuid>`。
+           *
+           * 一个 RP 能读到角色却读不到姓名，是这两个字段被放在不同 token 里造成的，
+           * 不是设计意图。放在一起，任何一个 RP 拿到的身份都是完整的。
+           */
+          name: operator.username,
+          /* `email_verified` 跟着 email 一起走：一个门户拿得到邮箱却拿不到它的
+             认证态，只能要么不显示、要么写死一个字面量——admin 那边正是这么错过
+             一轮（"原实现恒显未认证，那是一个写死的字面量"）。 */
+          ...(operator.email
+            ? { email: operator.email, email_verified: true }
+            : {}),
           dataScope: "global",
           scope: input.scope,
           ...(input.amr && input.amr.length > 0 ? { amr: input.amr } : {}),
