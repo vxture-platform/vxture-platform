@@ -926,6 +926,9 @@ export async function seedCatalog(client) {
       realm: "workforce",
       redirectUris: [`${B.admin}/auth/callback`],
       scopes: ["openid", "profile", "admin"],
+      // 登出回跳白名单。缺了它 end_session 仍会销毁会话，但**不回跳**——用户停在
+      // 空页上，看起来像登出坏了。默认值只有 accounts/logout，回不到门户自己。
+      postLogoutUris: [`${B.admin}/`, postLogout],
     },
     // Capability Console shell — second workforce RP (product_250 M-4). Same
     // operator claims surface as admin; its BFF additionally runs the
@@ -937,6 +940,7 @@ export async function seedCatalog(client) {
       realm: "workforce",
       redirectUris: [`${B.opera}/auth/callback`],
       scopes: ["openid", "profile", "admin"],
+      postLogoutUris: [`${B.opera}/`, postLogout],
     },
     // umbra — the cross-domain RP at ruyin.ai (ex-`ruyin`; renamed in place by the
     // U-line migration below, product_300 §2). No beta — single prod URI only.

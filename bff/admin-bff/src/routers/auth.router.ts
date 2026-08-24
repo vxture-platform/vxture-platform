@@ -22,8 +22,14 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
-import { rpSessionCookieName, type RpSessionStore } from "@vxture/core-oidc-rp";
 import {
+  rpSessionCookieName,
+  type OidcRpClient,
+  type RpSessionStore,
+} from "@vxture/core-oidc-rp";
+import { clearPresenceCookie } from "@vxture/core-identity-sdk";
+import {
+  RP_OIDC_CLIENT,
   RP_RUNTIME,
   RP_SESSION_STORE,
   type RpRuntime,
@@ -35,6 +41,7 @@ export class AuthRouter {
   constructor(
     @Inject(RP_SESSION_STORE) private readonly store: RpSessionStore,
     @Inject(RP_RUNTIME) private readonly rt: RpRuntime,
+    @Inject(RP_OIDC_CLIENT) private readonly client: OidcRpClient,
   ) {}
 
   private get cookieName(): string {
@@ -50,13 +57,32 @@ export class AuthRouter {
     return { status: "active", userId: req.user.id };
   }
 
-  /** Local logout: drop the RP session + clear its cookie (IdP session unaffected). */
+  /**
+   * 登出。与 `/auth/logout`（OidcAuthRouter）**行为必须一致**——两个口都还有调用方
+   * （这一口是 AUTH_ROUTES.LOGOUT 的共用约定，console/website 也照它），谁少做一步，
+   * 谁那条路上的登出就是坏的。此前这一口就少做两步：不清 presence、不给 end_session
+   * 地址，而 SPA 调的恰好是它。
+   *
+   * 语义见 `/auth/logout` 的说明：本地清理在这里做完，中央会话由前端顶层跳转结束。
+   */
   @Post("logout")
   @HttpCode(HttpStatus.OK)
   async logout(@Req() req: Request, @Res() res: Response): Promise<void> {
     const rpsid = req.cookies?.[this.cookieName] as string | undefined;
+    const session = rpsid ? await this.store.get(rpsid) : null;
     if (rpsid) await this.store.destroy(rpsid);
     res.clearCookie(this.cookieName, { path: "/" });
-    res.json({ status: "logged_out" });
+    const presence = clearPresenceCookie(
+      this.rt.config.clientId,
+      this.rt.cookieSecure,
+    );
+    res.clearCookie(presence.name, presence.options);
+    res.json({
+      status: "logged_out",
+      endSessionUrl: this.client.buildEndSessionUrl({
+        ...(session ? { idTokenHint: session.idToken } : {}),
+        postLogoutRedirectUri: this.rt.defaultReturnTo,
+      }),
+    });
   }
 }

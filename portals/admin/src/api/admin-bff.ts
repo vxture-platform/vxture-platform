@@ -1524,15 +1524,24 @@ export function buildRpLoginUrl(
   return qs ? `${base}?${qs}` : base;
 }
 
-export async function logout() {
+/**
+ * 登出。返回 IdP 的 end_session 地址，**调用方必须顶层跳过去**——只清本地会话的话
+ * 中央会话还在，下一次 authorize 静默 SSO 会立刻把人送回登录态。
+ *
+ * 返回 undefined 表示 BFF 没给出地址（不可达 / 老版本），调用方按登出失败处理。
+ */
+export async function logout(): Promise<string | undefined> {
   try {
-    await fetch(`${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/auth/logout`, {
-      method: "POST",
-      credentials: "include",
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/auth/logout`,
+      { method: "POST", credentials: "include", cache: "no-store" },
+    );
+    if (!res.ok) return undefined;
+    const body = (await res.json()) as { endSessionUrl?: string };
+    return body.endSessionUrl;
   } catch {
     // Keep local sign-out resilient even if the BFF is unavailable.
+    return undefined;
   }
 }
 
