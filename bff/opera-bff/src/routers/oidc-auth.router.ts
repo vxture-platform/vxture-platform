@@ -15,7 +15,6 @@
  *   10-shell-mount-contract.md.
  */
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -49,7 +48,7 @@ import {
 } from "@vxture/core-identity-sdk";
 import type { Redis } from "ioredis";
 import { OperatorExchangeService } from "../auth/operator-exchange.service";
-import { unauthenticated } from "../errors/api-error";
+import { invalidRequest, unauthenticated } from "../errors/api-error";
 import {
   RP_AUTH_SERVICE,
   RP_OIDC_CLIENT,
@@ -367,12 +366,22 @@ export class OidcAuthRouter {
     @Body() body: { logout_token?: string },
   ): Promise<{ status: string }> {
     const token = body?.logout_token;
-    if (!token) throw new BadRequestException("missing logout_token");
+    if (!token) {
+      throw invalidRequest(
+        "VALIDATION_REQUIRED",
+        "logout_token is required",
+        "logout_token",
+      );
+    }
     let sid: string;
     try {
       ({ sid } = await this.client.verifyLogoutToken(token));
     } catch {
-      throw new BadRequestException("invalid logout_token");
+      throw invalidRequest(
+        "VALIDATION_INVALID_VALUE",
+        "logout_token failed verification",
+        "logout_token",
+      );
     }
     if (sid) await this.store.destroyBySid(sid);
     return { status: "logged_out" };
