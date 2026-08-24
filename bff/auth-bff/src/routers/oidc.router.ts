@@ -265,7 +265,23 @@ export class OidcRouter {
       res.redirect(redirect);
       return;
     }
-    res.status(HttpStatus.NO_CONTENT).end();
+    /**
+     * 没有可信任的回跳地址时，落到 IdP 自己的登出页——**不是 204**。
+     *
+     * 这个端点是用**顶层导航**到达的（accounts 域的会话 cookie 是 SameSite=Lax，
+     * 只有顶层导航带得上它）。浏览器收到 204 会停在原页一动不动：会话其实已经结束，
+     * 用户看到的却是"点了登出没反应"——和登出坏掉时一模一样。一个专门用来结束会话
+     * 的端点，最不该做的就是让成功看起来像失败。
+     *
+     * 走到这里有两种情形，都该看到同一个页面：调用方没给 post_logout_redirect_uri，
+     * 或者给的地址不在该会话任何 client 的登记里。防开放重定向的判断一点没放松——
+     * 不受信任的地址依旧不跳，只是改跳我们自己的页面。
+     */
+    const logoutUrl = new URL(
+      "/logout",
+      this.config.platform.LOGIN_UI_BASE_URL,
+    );
+    res.redirect(logoutUrl.toString());
   }
 
   /**
