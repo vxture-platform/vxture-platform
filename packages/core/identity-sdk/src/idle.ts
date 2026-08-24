@@ -170,7 +170,7 @@ export function startIdleWatcher(options: IdleWatcherOptions): () => void {
 }
 
 /**
- * 共享活动 cookie 的域：从 hostname 取末两段（opera.vxture.com → vxture.com），
+ * 共享活动 cookie 的域：从 hostname 取末两段（x.vxture.com → vxture.com，x 为门户占位主机名），
  * 让 admin / opera 互见。localhost / IP（本地开发）没有可共享的父域——返回 null，
  * cookie 落在本 host 上，跨门户共享退化为同源，与 localStorage 等价，不多不少。
  *

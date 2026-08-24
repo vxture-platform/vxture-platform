@@ -19,7 +19,7 @@ function fakeBrowser(nowRef: { t: number }) {
         storage.set(k, v);
       },
     },
-    location: { hostname: "opera.vxture.com", protocol: "https:" },
+    location: { hostname: "x.vxture.com", protocol: "https:" },
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
     setInterval: (fn: () => void) => {
@@ -61,8 +61,8 @@ const MIN = 60_000;
 
 describe("sharedActivityDomain", () => {
   it("取末两段，让 admin / opera 互见", () => {
-    expect(sharedActivityDomain("opera.vxture.com")).toBe("vxture.com");
-    expect(sharedActivityDomain("admin.vxture.com")).toBe("vxture.com");
+    expect(sharedActivityDomain("x.vxture.com")).toBe("vxture.com");
+    expect(sharedActivityDomain("y.vxture.com")).toBe("vxture.com");
   });
 
   it("localhost / IP / 单段名没有可共享的父域", () => {
