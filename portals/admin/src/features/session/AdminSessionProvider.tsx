@@ -102,6 +102,8 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
     return startIdleWatcher({
       idleMs: IDLE_MS.workforce,
       storageKey: "vx:admin:last-activity",
+      /* 同 opera：workforce 一体计闲，见 SessionProvider 同位置注释。 */
+      sharedActivityCookie: "vx_wf_activity",
       onIdle: () => {
         void signOut();
       },
