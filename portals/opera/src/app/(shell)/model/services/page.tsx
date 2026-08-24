@@ -141,7 +141,15 @@ interface AiModelRecord {
     supports: Record<string, boolean>;
     paramMap: Record<string, string>;
   };
-  keyReference: { source: "env"; name: string; configured: boolean } | null;
+  /**
+   * `managed` = 引用密钥库（vault）别名，运行时唯一认的来源；`env` 是 ADR-003
+   * 之前的遗留行——运行时已不读它，编辑时要引导改挂 vault。
+   */
+  keyReference: {
+    source: "env" | "managed";
+    name: string;
+    configured: boolean;
+  } | null;
   /**
    * **三值**：`active` / `inactive` / `deprecated`。`deprecated` 仍可解析、只是不再
    * 推荐——所以这一档**不能**用「启用/停用」那个布尔表达（product_251 B-3 原句）。
@@ -332,7 +340,13 @@ interface ModelDraft {
   supportsStreaming: boolean;
   sort: string;
   capabilities: string[];
-  keyReferenceName: string;
+  /** 密钥库（vault）别名。空串 = 不引用。env 路径已随 ADR-003 退役，不再收。 */
+  keyAlias: string;
+  /**
+   * `config.upstreamModel`：真实发给上游的 model 参数。空串 = 用编码本身。
+   * 「同一模型多家供应」的场景全靠它：编码带供应方前缀保全局唯一，这里填上游认的名。
+   */
+  upstreamModel: string;
 }
 
 /** 空串 → 不送这个键（让 atlas 用它自己的默认）；有值 → 必须是非负整数。 */
@@ -357,7 +371,8 @@ function emptyModelDraft(providerId: string, protocol: string): ModelDraft {
     supportsStreaming: true,
     sort: "",
     capabilities: ["chat"],
-    keyReferenceName: "",
+    keyAlias: "",
+    upstreamModel: "",
   };
 }
 
@@ -376,8 +391,35 @@ function modelDraftFrom(row: AiModelRecord): ModelDraft {
     supportsStreaming: row.supportsStreaming,
     sort: String(row.sort),
     capabilities: [...row.capabilities],
-    keyReferenceName: row.keyReference?.name ?? "",
+    /* env 来源的旧引用不预填：运行时已不读它，预填会让人以为它还生效。
+       表单里对这种行单独给出改挂 vault 的提示。 */
+    keyAlias:
+      row.keyReference?.source === "managed" ? row.keyReference.name : "",
+    upstreamModel:
+      typeof row.config?.["upstreamModel"] === "string"
+        ? row.config["upstreamModel"]
+        : "",
   };
+}
+
+/**
+ * 组装送给 atlas 的 `config`。
+ *
+ * atlas 的 update 只要载荷里出现 `keyReference` 或 `config`，就会**整体替换**
+ * 存量 config（`mergeModelConfig` 不与库里旧值合并）——而本表单每次保存都送
+ * keyReference。不把既有 config 一并送回去，一次普通编辑就会把 `config.wire`
+ * 覆盖与 `upstreamModel` 悄悄抹平。读回的 config 已被 atlas 剥掉密钥类键
+ * （managedKeyAlias 由它按 keyReference 自己并回去），round-trip 无损。
+ */
+function buildModelConfig(
+  existing: Record<string, unknown> | null,
+  upstreamModel: string,
+): Record<string, unknown> | null {
+  const next: Record<string, unknown> = { ...(existing ?? {}) };
+  delete next["upstreamModel"];
+  const trimmed = upstreamModel.trim();
+  if (trimmed) next["upstreamModel"] = trimmed;
+  return Object.keys(next).length > 0 ? next : null;
 }
 
 function describeError(error: unknown): { description?: string } {
@@ -442,6 +484,14 @@ function ModelServiceContent() {
   const [modelDraft, setModelDraft] = useState<ModelDraft>(
     emptyModelDraft("", "openai-compatible"),
   );
+  /**
+   * 模型表单里的密钥候选：所选 Provider 的 vault 别名清单。
+   * `"unavailable"` = 读取失败（多半是没有 model:provider.manage）——降级为手填别名，
+   * 别名照样以 `managed` 形态提交，不因为列不出来就退回已退役的 env 路径。
+   */
+  const [aliasOptions, setAliasOptions] = useState<
+    ProviderKeyRecord[] | "unavailable" | null
+  >(null);
 
   /* 密钥抽屉 */
   const [keysProvider, setKeysProvider] = useState<ModelProviderRecord | null>(
@@ -506,6 +556,33 @@ function ModelServiceContent() {
     () => new Map(providers.map((p) => [p.id, p])),
     [providers],
   );
+
+  /* 模型表单开着时，跟着所选 Provider 拉它的 vault 别名清单喂密钥下拉。 */
+  const modelFormOpen =
+    modelDialog?.kind === "create" || modelDialog?.kind === "edit";
+  const draftProviderCode =
+    providerById.get(modelDraft.providerId)?.providerCode ?? "";
+  useEffect(() => {
+    if (!modelFormOpen || draftProviderCode === "") {
+      setAliasOptions(null);
+      return;
+    }
+    let cancelled = false;
+    setAliasOptions(null);
+    void api
+      .get<ProviderKeyRecord[]>(
+        `/api/atlas/provider-keys?providerCode=${encodeURIComponent(draftProviderCode)}`,
+      )
+      .then((rows) => {
+        if (!cancelled) setAliasOptions(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setAliasOptions("unavailable");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [modelFormOpen, draftProviderCode]);
 
   /** providerId → 它名下的模型。归属在这里算一次，两层都用这一份。 */
   const modelsByProvider = useMemo(() => {
@@ -750,9 +827,17 @@ function ModelServiceContent() {
       ...(contextWindow !== undefined ? { contextWindow } : {}),
       ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
       ...(sort !== undefined ? { sort } : {}),
-      keyReference: modelDraft.keyReferenceName.trim()
-        ? { source: "env" as const, name: modelDraft.keyReferenceName.trim() }
+      /* 只送 `managed`（vault 别名）。env 形态 atlas 已「出现即 400」（ADR-003），
+         此前这里送的正是 env——填了密钥引用的注册/编辑必然失败。 */
+      keyReference: modelDraft.keyAlias.trim()
+        ? { source: "managed" as const, name: modelDraft.keyAlias.trim() }
         : null,
+      /* keyReference 在场时 atlas 整体替换 config，必须把存量 round-trip 回去，
+         见 buildModelConfig 头注。 */
+      config: buildModelConfig(
+        modelDialog.kind === "edit" ? modelDialog.row.config : null,
+        modelDraft.upstreamModel,
+      ),
     };
 
     setSubmitting(true);
@@ -1260,7 +1345,7 @@ function ModelServiceContent() {
           <ViewHeader
             icon="plugs-connected"
             title="模型服务"
-            description="供应商与它名下的模型。展开一行看归属：模型永远挂在某一家 Provider 下，两者都启用才可服务——「健康」列从真实流量派生、不做周期探活，要立刻得到结论用行操作里的「验证接入」。"
+            description="供应商与它名下的模型，展开行查看归属；两者都启用才可服务。「健康」由真实流量派生，要即时结论用行操作里的「验证接入」。"
             action={
               <div className="flex items-center gap-sm">
                 {canManageModels ? (
@@ -1617,7 +1702,7 @@ function ModelServiceContent() {
             无从判断哪些必须停下来想，结果要么每栏都想一遍要么一路 Tab 过去。 */}
         <FieldTier
           tier="identity"
-          hint="决定这是哪一家。Code 与类型创建后改不了——Atlas 的列锁只给这两列 INSERT，不给 UPDATE。"
+          hint="决定这是哪一家。Code 与类型创建后不可改。"
         >
           <Field>
             <FieldLabel htmlFor="provider-code">Code</FieldLabel>
@@ -1634,8 +1719,7 @@ function ModelServiceContent() {
               disabled={editingProvider}
             />
             <FieldDescription>
-              全局唯一，模型注册时引用它。创建后不可改：改它等于换一家供应商，而它
-              名下的模型仍指着原来那条。
+              全局唯一，模型与密钥都按它归属。
             </FieldDescription>
           </Field>
           <Field>
@@ -1674,15 +1758,13 @@ function ModelServiceContent() {
                 </option>
               ))}
             </NativeSelect>
-            <FieldDescription>
-              同样创建后不可改（与 Code 同一把列锁）。
-            </FieldDescription>
+            <FieldDescription>创建后不可改。</FieldDescription>
           </Field>
         </FieldTier>
 
         <FieldTier
           tier="details"
-          hint="运营时真正会用到的：密钥要轮换时去对方控制台，成本异常时去账单页。"
+          hint="填了地址，行操作里就有对方控制台与账单的直达入口。"
         >
           <Field>
             <FieldLabel htmlFor="provider-description">简介</FieldLabel>
@@ -1711,9 +1793,7 @@ function ModelServiceContent() {
                   })
                 }
               />
-              <FieldDescription>
-                密钥轮换、配额调整都在对方控制台做，填了就能从行上直接跳过去。
-              </FieldDescription>
+              <FieldDescription>密钥轮换、配额调整在这里做。</FieldDescription>
             </Field>
             <Field>
               <FieldLabel htmlFor="provider-billing">账单 URL</FieldLabel>
@@ -1728,8 +1808,7 @@ function ModelServiceContent() {
                 }
               />
               <FieldDescription>
-                Atlas
-                计量但不计费（ADR-004），真实花了多少钱只有对方账单页知道。
+                实际花费以对方账单为准（Atlas 计量不计费）。
               </FieldDescription>
             </Field>
           </div>
@@ -1749,9 +1828,7 @@ function ModelServiceContent() {
                   })
                 }
               />
-              <FieldDescription>
-                纯登记，运营流程上用不到——放在高级档就是这个意思。
-              </FieldDescription>
+              <FieldDescription>纯登记。</FieldDescription>
             </Field>
           </div>
         </FieldTier>
@@ -1783,18 +1860,14 @@ function ModelServiceContent() {
         }}
         size="lg"
         title={editingModel ? "编辑模型" : "注册模型"}
-        description="编码是业务侧唯一认得的标识，注册后不建议再改。"
+        description="编码与类型创建后不可改，其余随时可调。"
         submitLabel={editingModel ? "保存" : "注册"}
         submitting={submitting}
         submitDisabled={!modelDraftValid}
         onSubmit={submitModel}
       >
-        {/* 两档（DS `FieldTier`）。**没有高级档**：这七项没有一项是可留空的，
-            凑一个空高级档只是把规则抄一遍。 */}
-        <FieldTier
-          tier="identity"
-          hint="编码创建后不可改；Provider 只列启用中的——模型可用的前提是它和 Provider 都启用。"
-        >
+        {/* 三档（DS `FieldTier`）：身份（不可改）/ 接入参数 / 可留空的容量与呈现。 */}
+        <FieldTier tier="identity" hint="决定这是哪个模型、由谁供应。">
           <FieldGroup>
             <div className="grid grid-cols-2 gap-md">
               <Field>
@@ -1805,9 +1878,13 @@ function ModelServiceContent() {
                   onChange={(e) =>
                     setModelDraft({ ...modelDraft, modelCode: e.target.value })
                   }
-                  placeholder="gpt-5-mini"
+                  placeholder="deepseek/deepseek-v4-flash"
                   disabled={editingModel}
                 />
+                <FieldDescription>
+                  全局唯一。同一上游模型由多家供应时各注册一条，编码加
+                  「供应方/」前缀区分，上游真实名填「上游模型名」。
+                </FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="model-name">名称</FieldLabel>
@@ -1830,6 +1907,11 @@ function ModelServiceContent() {
                   setModelDraft({ ...modelDraft, providerId: e.target.value })
                 }
               >
+                {/* 孤儿模型（providerId 为空）编辑时给个占位项，不然浏览器会显示
+                    第一项的文字而值仍是空串——看着选了，其实没选。 */}
+                {modelDraft.providerId === "" ? (
+                  <option value="">— 选择 Provider —</option>
+                ) : null}
                 {activeProviders.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.providerName}
@@ -1838,8 +1920,8 @@ function ModelServiceContent() {
                 ))}
               </NativeSelect>
               <FieldDescription>
-                只列启用中的 Provider——一个模型可用的前提是它**和它的 Provider
-                都启用**，数据面同样按这条判。当前已经挂着的那个即使停用了也会留在列表里。
+                只列启用中的（当前已挂的除外）。模型与 Provider
+                都启用才可服务；换它即换供应方与密钥来源。
               </FieldDescription>
             </Field>
             <Field>
@@ -1862,8 +1944,8 @@ function ModelServiceContent() {
                 {MODEL_TYPES.find((t) => t.value === modelDraft.modelType)
                   ?.hint ?? ""}
                 {editingModel
-                  ? "。创建后不可改——它决定由哪一层契约服务这个模型，改它等于把模型挪到另一个面上而编码没变。要换类型只能重新注册一个。"
-                  : "。**创建后不可改**，选之前想清楚。"}
+                  ? "。创建后不可改，要换类型只能重新注册。"
+                  : "。创建后不可改。"}
               </FieldDescription>
             </Field>
           </FieldGroup>
@@ -1905,26 +1987,88 @@ function ModelServiceContent() {
                   {protocols.length > 0
                     ? (protocols.find((p) => p.protocol === modelDraft.protocol)
                         ?.description ?? "来自 Atlas 的协议词表。")
-                    : "协议词表读取失败——只能保留当前值。这里不列一份手写的候选：选到 Atlas 不认的协议，要到第一次真实调用才会暴露。"}
+                    : "协议词表读取失败，只能保留当前值。"}
                 </FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="model-key">
-                  密钥引用（env 变量名）
-                </FieldLabel>
+                <FieldLabel htmlFor="model-upstream">上游模型名</FieldLabel>
                 <Input
-                  id="model-key"
-                  value={modelDraft.keyReferenceName}
+                  id="model-upstream"
+                  value={modelDraft.upstreamModel}
                   onChange={(e) =>
                     setModelDraft({
                       ...modelDraft,
-                      keyReferenceName: e.target.value,
+                      upstreamModel: e.target.value,
                     })
                   }
-                  placeholder="OPENAI_API_KEY"
+                  placeholder="deepseek-v4-flash / ep-2026…"
+                  className="font-mono"
                 />
+                <FieldDescription>
+                  调用上游时送的 model
+                  参数，留空＝直接用编码。编码带了供应方前缀、 或上游用接入点
+                  ID（火山引擎 ep-…）时必填。
+                </FieldDescription>
               </Field>
             </div>
+            <Field>
+              <FieldLabel htmlFor="model-key">密钥（vault 别名）</FieldLabel>
+              {aliasOptions === "unavailable" ? (
+                /* 列不出来（没有 provider.manage 或上游故障）就手填——照样以
+                   managed 形态提交，绝不退回已退役的 env 路径。 */
+                <>
+                  <Input
+                    id="model-key"
+                    value={modelDraft.keyAlias}
+                    onChange={(e) =>
+                      setModelDraft({ ...modelDraft, keyAlias: e.target.value })
+                    }
+                    placeholder="default"
+                    className="font-mono"
+                  />
+                  <FieldDescription>
+                    密钥清单读取失败；直接填这家 Provider 密钥库里的别名也可。
+                  </FieldDescription>
+                </>
+              ) : (
+                <>
+                  <NativeSelect
+                    id="model-key"
+                    value={modelDraft.keyAlias}
+                    onChange={(e) =>
+                      setModelDraft({ ...modelDraft, keyAlias: e.target.value })
+                    }
+                  >
+                    <option value="">不引用（仅私有/自定义上游可免）</option>
+                    {/* 当前值不在清单里（别名已删或清单还没到）也得显示——
+                        下拉悄悄换值等于替人改了配置。 */}
+                    {modelDraft.keyAlias !== "" &&
+                    !(aliasOptions ?? []).some(
+                      (k) => k.keyAlias === modelDraft.keyAlias,
+                    ) ? (
+                      <option value={modelDraft.keyAlias}>
+                        {modelDraft.keyAlias}（不在清单中）
+                      </option>
+                    ) : null}
+                    {(aliasOptions ?? []).map((k) => (
+                      <option key={k.id} value={k.keyAlias}>
+                        {k.keyAlias}
+                        {isEnabled(k.state) ? "" : "（已停用）"}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                  <FieldDescription>
+                    {aliasOptions !== null && aliasOptions.length === 0
+                      ? "这家还没有密钥——先在 Provider 行操作「密钥管理」里录入。"
+                      : "从这家 Provider 的密钥库里选。"}
+                    {modelDialog?.kind === "edit" &&
+                    modelDialog.row.keyReference?.source === "env"
+                      ? ` 原引用的 env 变量 ${modelDialog.row.keyReference.name} 已退役（ADR-003），运行时不再读取——请改选 vault 别名。`
+                      : ""}
+                  </FieldDescription>
+                </>
+              )}
+            </Field>
             <Field>
               <FieldLabel>能力标签</FieldLabel>
               <div className="flex flex-wrap gap-sm">
@@ -1953,10 +2097,7 @@ function ModelServiceContent() {
         </FieldTier>
 
         {/* 容量与呈现：全部可留空，留空 = 用 atlas 自己的默认，不是 0。 */}
-        <FieldTier
-          tier="advanced"
-          hint="留空就用 Atlas 的默认值。这几项不影响能不能调通，影响的是调用方能不能提前知道边界。"
-        >
+        <FieldTier tier="advanced" hint="都可留空，留空＝用 Atlas 默认。">
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="model-description">说明</FieldLabel>
@@ -1985,9 +2126,7 @@ function ModelServiceContent() {
                   }
                   placeholder="128000"
                 />
-                <FieldDescription>
-                  token 数。留空 = 不声明——调用方就只能自己试出来。
-                </FieldDescription>
+                <FieldDescription>token 数，留空＝不声明。</FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="model-max-output">最大输出</FieldLabel>
@@ -2035,8 +2174,7 @@ function ModelServiceContent() {
                   <option value="no">不支持</option>
                 </NativeSelect>
                 <FieldDescription>
-                  声明不支持流式，调用方就不会走 stream 那条路——而那条路是 usage
-                  最容易漏计量的地方。
+                  声明不支持，调用方就不会走 stream 路径。
                 </FieldDescription>
               </Field>
             </div>
@@ -2135,9 +2273,8 @@ function ModelServiceContent() {
           description="Atlas 侧限制在 16 token 以内，用量记在平台哨兵账上、不扣任何租户配额。同一模型两次自检需间隔 10 秒以上。"
         />
         <p className="text-body-sm text-muted-foreground">
-          自检会验证：密钥能否解析、适配器与 wire 参数的实际生效值、chat 与
-          stream 两条路径的连通性与延迟，以及**上游有没有回传
-          usage**（决定这个模型能否被真实计量）。
+          自检会验证：密钥能否解析、wire 参数的实际生效值、chat 与 stream
+          两条路径的连通性与延迟，以及上游是否回传 usage（决定能否计量）。
         </p>
       </DialogForm>
 
