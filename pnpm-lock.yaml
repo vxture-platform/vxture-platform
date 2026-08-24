@@ -832,8 +832,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared/shared
       '@vxture/design-system':
-        specifier: 6.4.2
-        version: 6.4.2(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss-animate@1.0.7(tailwindcss@4.2.1))(tailwindcss@4.2.1)
+        specifier: 6.5.1
+        version: 6.5.1(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss-animate@1.0.7(tailwindcss@4.2.1))(tailwindcss@4.2.1)
       '@vxture/platform-browser':
         specifier: workspace:*
         version: link:../../packages/platform/browser
@@ -911,8 +911,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core/identity-sdk
       '@vxture/design-system':
-        specifier: 6.4.2
-        version: 6.4.2(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss-animate@1.0.7(tailwindcss@4.2.1))(tailwindcss@4.2.1)
+        specifier: 6.5.1
+        version: 6.5.1(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss-animate@1.0.7(tailwindcss@4.2.1))(tailwindcss@4.2.1)
       '@vxture/platform-browser':
         specifier: workspace:*
         version: link:../../packages/platform/browser
@@ -981,8 +981,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core/identity-sdk
       '@vxture/design-system':
-        specifier: 6.4.2
-        version: 6.4.2(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss-animate@1.0.7(tailwindcss@4.2.1))(tailwindcss@4.2.1)
+        specifier: 6.5.1
+        version: 6.5.1(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss-animate@1.0.7(tailwindcss@4.2.1))(tailwindcss@4.2.1)
       '@vxture/platform-browser':
         specifier: workspace:*
         version: link:../../packages/platform/browser
@@ -1054,8 +1054,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core/identity-sdk
       '@vxture/design-system':
-        specifier: 6.4.2
-        version: 6.4.2(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss-animate@1.0.7(tailwindcss@4.2.1))(tailwindcss@4.2.1)
+        specifier: 6.5.1
+        version: 6.5.1(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss-animate@1.0.7(tailwindcss@4.2.1))(tailwindcss@4.2.1)
       next:
         specifier: ^15.5.21
         version: 15.5.21(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.13.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.3)
@@ -1127,8 +1127,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core/locale
       '@vxture/design-system':
-        specifier: 6.4.2
-        version: 6.4.2(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss-animate@1.0.7(tailwindcss@4.2.1))(tailwindcss@4.2.1)
+        specifier: 6.5.1
+        version: 6.5.1(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss-animate@1.0.7(tailwindcss@4.2.1))(tailwindcss@4.2.1)
       '@vxture/platform-browser':
         specifier: workspace:*
         version: link:../../packages/platform/browser
@@ -4551,8 +4551,8 @@ packages:
   '@vitest/utils@4.1.8':
     resolution: {integrity: sha512-uOJamYALNhfJ6iolExyQM40yIQwDqYnkKtQ5VCiSe17E33H0aQ/u+1GlRuz4LZBk6Mm3sg90G9hEbmEt37C1Zg==}
 
-  '@vxture/design-system@6.4.2':
-    resolution: {integrity: sha512-5iRiTGZ/7ScXhUKGRHJZLn+ha2RZr2dxxnU//aea7HbcBgAsidENJHRFkT7rr79u+UPCmNkUTt4LkyEKv0Xm2g==, tarball: https://npm.pkg.github.com/download/@vxture/design-system/6.4.2/32220d5e5f661b41766034ee971c42047493235b}
+  '@vxture/design-system@6.5.1':
+    resolution: {integrity: sha512-6L1Xvn9LQgt7FMTRzJO0FzSaj0YpqkZPbe5K/8MpaAKk/yOlRbhKROs5DxcAI9KoqjF+4/MvDiI6GB1adhqbjA==, tarball: https://npm.pkg.github.com/download/@vxture/design-system/6.5.1/a9786fe5a493c37dae46dadf7e4ccb0dde129a1c}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       '@phosphor-icons/react': ^2.1.10
@@ -4567,8 +4567,13 @@ packages:
     peerDependencies:
       tailwindcss: ^4.0.0
 
-  '@vxture/design-ui@3.1.3':
-    resolution: {integrity: sha512-e7QY3szpC7LT5DalRjpBur81FyPFfYxdz5Ty9bot7vGFMTXjM/HBC0lJ9x6qzy/mIbzMNsvQfT1EhArjHpPLyQ==, tarball: https://npm.pkg.github.com/download/@vxture/design-ui/3.1.3/24a7901795c68fab02f0f4f20674a9403ee41515}
+  '@vxture/design-tokens@2.2.3':
+    resolution: {integrity: sha512-PUjZ6hVPrm6Af850+S5aFaKXlSLMmmVx3+xUbrV3s+8EvqviqOIGU8Jti+D1BbogLWYaptkj+u8uFDDXI9EHrA==, tarball: https://npm.pkg.github.com/download/@vxture/design-tokens/2.2.3/bb9b9aaaec1ce3e940ac4b2bf9bcf71f370787ad}
+    peerDependencies:
+      tailwindcss: ^4.0.0
+
+  '@vxture/design-ui@3.2.1':
+    resolution: {integrity: sha512-72SRscZdOtfyH2UtcdFGHfTd4jF4pDTRdBK2MgIoWSv72woOJIZYFypfQoTsUs39b4BZ50di1inrjnDvsk/ATA==, tarball: https://npm.pkg.github.com/download/@vxture/design-ui/3.2.1/a9ee73a130186e0025f45336c10ec29ab5d109e3}
     peerDependencies:
       '@phosphor-icons/react': ^2.1.10
       react: ^19.0.0
@@ -11003,14 +11008,14 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
-  '@vxture/design-system@6.4.2(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss-animate@1.0.7(tailwindcss@4.2.1))(tailwindcss@4.2.1)':
+  '@vxture/design-system@6.5.1(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(next-themes@0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss-animate@1.0.7(tailwindcss@4.2.1))(tailwindcss@4.2.1)':
     dependencies:
       '@fontsource/funnel-display': 5.3.0
       '@fontsource/geist-mono': 5.3.0
       '@fontsource/inter': 5.3.0
       '@phosphor-icons/react': 2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@vxture/design-tokens': 2.2.2(tailwindcss@4.2.1)
-      '@vxture/design-ui': 3.1.3(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss@4.2.1)
+      '@vxture/design-tokens': 2.2.3(tailwindcss@4.2.1)
+      '@vxture/design-ui': 3.2.1(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss@4.2.1)
       next-themes: 0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
@@ -11025,7 +11030,12 @@ snapshots:
       tailwindcss: 4.2.1
       tailwindcss-animate: 1.0.7(tailwindcss@4.2.1)
 
-  '@vxture/design-ui@3.1.3(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss@4.2.1)':
+  '@vxture/design-tokens@2.2.3(tailwindcss@4.2.1)':
+    dependencies:
+      tailwindcss: 4.2.1
+      tailwindcss-animate: 1.0.7(tailwindcss@4.2.1)
+
+  '@vxture/design-ui@3.2.1(@phosphor-icons/react@2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss@4.2.1)':
     dependencies:
       '@phosphor-icons/react': 2.1.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@radix-ui/react-accordion': 1.2.20(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -11052,7 +11062,7 @@ snapshots:
       '@radix-ui/react-toggle': 1.1.18(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@radix-ui/react-toggle-group': 1.1.19(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@radix-ui/react-tooltip': 1.2.8(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@vxture/design-tokens': 2.2.2(tailwindcss@4.2.1)
+      '@vxture/design-tokens': 2.2.3(tailwindcss@4.2.1)
       class-variance-authority: 0.7.1
       clsx: 2.1.1
       cmdk: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
