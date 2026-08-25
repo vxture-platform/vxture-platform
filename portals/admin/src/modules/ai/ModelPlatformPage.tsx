@@ -5,6 +5,7 @@ import {
   ActionButton,
   ActionMenu,
   Badge,
+  Banner,
   DataTable,
   DialogForm,
   EmptyState,
@@ -29,8 +30,11 @@ import {
 import { activeTone } from "@/modules/shared/tenant-tone";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import {
+  activateModelPolicy,
   activateModelPriceRule,
+  createModelPolicy,
   createModelPriceRule,
+  deactivateModelPolicy,
   deactivateModelPriceRule,
   fetchAiModels,
   fetchModelPolicies,
@@ -38,7 +42,11 @@ import {
   fetchModelProviders,
   fetchTenantModelQuotas,
   fetchTenantModelUsageSummaries,
+  fetchTenantOperations,
+  updateModelPolicy,
   updateModelPriceRule,
+  type ModelPolicyUpdateInput,
+  type ModelPolicyWriteInput,
   type ModelPriceRuleWriteInput,
 } from "@/api/admin-bff";
 import type {
@@ -46,6 +54,7 @@ import type {
   ModelPolicyRecord,
   ModelPriceRuleRecord,
   ModelProviderRecord,
+  TenantOperationRecord,
   TenantQuotaRecord,
   TenantUsageSummaryRecord,
 } from "@/entities/console";
@@ -121,6 +130,172 @@ function priceRuleFormFromRecord(rule: ModelPriceRuleRecord): PriceRuleForm {
     effectiveAt: toDateTimeLocal(rule.effectiveAt),
     expiresAt: toDateTimeLocal(rule.expiresAt),
   };
+}
+
+/* ── 模型策略 ─────────────────────────────────────────────────────────────
+ *
+ * 与上面的计价规则是**相反的两种表**，同一页上并排放着，很容易照着记错：
+ *
+ *   计价规则  追加版本化。值列不授予 UPDATE，改价 = 新建 + 给旧的设失效。
+ *   策略      就地可改。除 tenantId / effectiveAt 外每个值列都授予 UPDATE，
+ *             历史只在 `audit.change_records` 里（atlas TD-038 记着这个不对称）。
+ *
+ * ── 只选一条，不合并 ──────────────────────────────────────────────────────
+ *
+ * atlas 的 `findApplicablePolicy` 对一个 (模型, 租户) 只挑**一条**：租户专属压全局
+ * 默认；同作用域内 priority 小的压大的，并列时 effectiveAt 晚的压早的。挑中之后
+ * 就用那一条的全部字段——**不会**把全局默认里的 RPM 借给一条只设了并发的租户策略。
+ *
+ * 这是运营最容易想错的地方，也是这一段代码存在的理由：同作用域的兄弟里除了排在
+ * 最前的那条，其余永远不会对任何人生效，页面必须把它标出来，而不是让人自己在一
+ * 列 priority 里推。
+ *
+ * ── 五个限额里只有两个真的会拦请求 ────────────────────────────────────────
+ *
+ * `QuotaService.checkRateLimit` 只调 `checkRpm` 与 `acquireConcurrency`。
+ * `rateLimitTpm` / `rateLimitTpd` / `maxContextTokens` 三列 atlas 收下、存进库、
+ * 读回来给你看，**运行时一次都没读过**。表单照收（上游收，早晚会用上），但必须
+ * 说清楚，否则就是拿一个输入框假装一道闸门。 */
+
+type PolicyDialogState = {
+  mode: "create" | "edit";
+  id: string | null;
+} | null;
+
+interface PolicyForm {
+  modelId: string;
+  /** 空串 = 全局默认（`tenant_id IS NULL`）。存的是 UUID，界面上只出可视码。 */
+  tenantId: string;
+  name: string;
+  priority: string;
+  maxConcurrent: string;
+  rateLimitRpm: string;
+  rateLimitTpm: string;
+  rateLimitTpd: string;
+  maxContextTokens: string;
+  effectiveAt: string;
+  expiresAt: string;
+}
+
+function defaultPolicyForm(modelId: string): PolicyForm {
+  return {
+    modelId,
+    tenantId: "",
+    name: "",
+    /* atlas 的 `parsePriority` 对缺省就是回落到 100，这里跟它一致。 */
+    priority: "100",
+    /* 五个限额一律留空，**没有一个默认 "0"**。atlas 的语义是
+       `null` = 不限、`0` = 拦死（`acquireConcurrency` 里 `0 >= 0` 恒成立，
+       maxConcurrent 填 0 等于把这个模型对该租户整个关掉）。默认 0 会把
+       「这项我没管」写成「这项我禁了」，而且是静默写进每一条新策略。 */
+    maxConcurrent: "",
+    rateLimitRpm: "",
+    rateLimitTpm: "",
+    rateLimitTpd: "",
+    maxContextTokens: "",
+    effectiveAt: "",
+    expiresAt: "",
+  };
+}
+
+function policyFormFromRecord(policy: ModelPolicyRecord): PolicyForm {
+  const num = (value: number | null) => (value == null ? "" : String(value));
+  return {
+    modelId: policy.modelId,
+    tenantId: policy.tenantId ?? "",
+    name: policy.name ?? "",
+    priority: String(policy.priority),
+    maxConcurrent: num(policy.maxConcurrent),
+    rateLimitRpm: num(policy.rateLimitRpm),
+    rateLimitTpm: policy.rateLimitTpm ?? "",
+    rateLimitTpd: policy.rateLimitTpd ?? "",
+    maxContextTokens: num(policy.maxContextTokens),
+    effectiveAt: toDateTimeLocal(policy.effectiveAt),
+    expiresAt: toDateTimeLocal(policy.expiresAt),
+  };
+}
+
+/**
+ * 限额输入 → 载荷值。`""` → `null`（**显式发出去**，那是"取消这项限制"的唯一
+ * 说法），非法 → `undefined` 让调用方点名报错。不静默丢、不当成没填。
+ */
+function parseLimit(raw: string): number | null | undefined {
+  const text = raw.trim();
+  if (text === "") return null;
+  const n = Number(text);
+  return Number.isSafeInteger(n) && n >= 0 ? n : undefined;
+}
+
+/** TPM / TPD 是 bigint 列，量级到不了 JS number，全程走字符串。 */
+function parseBigLimit(raw: string): string | null | undefined {
+  const text = raw.trim();
+  if (text === "") return null;
+  return /^\d+$/.test(text) ? text : undefined;
+}
+
+/** 与 atlas `findApplicablePolicy` 同一判据：启用 + 已生效 + 未失效。 */
+function isPolicyInForce(policy: ModelPolicyRecord, now: number): boolean {
+  if (!isEnabled(policy.state)) return false;
+  const from = new Date(policy.effectiveAt).getTime();
+  if (Number.isFinite(from) && from > now) return false;
+  if (policy.expiresAt) {
+    const until = new Date(policy.expiresAt).getTime();
+    if (Number.isFinite(until) && until <= now) return false;
+  }
+  return true;
+}
+
+/**
+ * 每条策略此刻的处境：在不在生效窗口内，以及在不在同作用域里被别人压住。
+ *
+ * 两件事一起算是因为它们共用同一个"现在"。分两次算就会出现一条策略按一个时间戳
+ * 判成生效、按另一个判成被覆盖的窗口——小，但那正是这类判定最不该有的东西。
+ *
+ * `shadowed` 只在同一个 (模型, 作用域) 内部比较：一条全局默认**不会**因为某个
+ * 租户有专属策略就被标成被覆盖，它对其余每个租户照常生效。把那种情况也算进来
+ * 是另一种谎。
+ */
+function policyStandings(
+  policies: readonly ModelPolicyRecord[],
+  now: number,
+): { inForce: ReadonlySet<string>; shadowed: ReadonlySet<string> } {
+  const groups = new Map<string, ModelPolicyRecord[]>();
+  const inForce = new Set<string>();
+  for (const policy of policies) {
+    if (!isPolicyInForce(policy, now)) continue;
+    inForce.add(policy.id);
+    const key = `${policy.modelId}|${policy.tenantId ?? "*"}`;
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(policy);
+    else groups.set(key, [policy]);
+  }
+
+  const shadowed = new Set<string>();
+  for (const bucket of groups.values()) {
+    if (bucket.length < 2) continue;
+    /* 与上游 orderBy 同序：priority 升序，并列时 effectiveAt 降序。 */
+    const ordered = [...bucket].sort(
+      (a, b) =>
+        a.priority - b.priority ||
+        new Date(b.effectiveAt).getTime() - new Date(a.effectiveAt).getTime(),
+    );
+    for (const policy of ordered.slice(1)) shadowed.add(policy.id);
+  }
+  return { inForce, shadowed };
+}
+
+/** 这条策略当下真的会拦请求吗——只看 atlas 真正读的那两列。 */
+function hasEnforcedLimit(policy: ModelPolicyRecord): boolean {
+  return policy.rateLimitRpm != null || policy.maxConcurrent != null;
+}
+
+/** 收下了但运行时还没读的那三列。设了就得说一声，别让人以为它在拦。 */
+function hasRecordedOnlyLimit(policy: ModelPolicyRecord): boolean {
+  return (
+    policy.rateLimitTpm != null ||
+    policy.rateLimitTpd != null ||
+    policy.maxContextTokens != null
+  );
 }
 
 // 把后端 ISO 时间转成 datetime-local 输入控件的本地墙钟值，保证编辑回填后再提交
@@ -229,6 +404,21 @@ export function ModelPlatformPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(20);
   /**
+   * 计价规则与策略各自分页。
+   *
+   * 这一页同时铺三份清单，而模型表早就分了页、下面两段没有——于是种子环境里
+   * 131 个模型 + 214 条计价规则 + 133 条策略一次渲染近五百张卡，页面在浏览器里
+   * 实测卡到截图连续 30 秒超时（2026-08-25）。策略那一段是本轮新加的，等于我把
+   * 一个本来就吃紧的页面又压了一层。
+   *
+   * 三份清单三套页码而不是共用一套：它们是三张互不相干的表，共用页码会让翻计价
+   * 规则把策略也翻走——那是把「同一页上」误当成「同一个东西」。
+   */
+  const [priceRulePage, setPriceRulePage] = useState(1);
+  const [priceRulePageSize, setPriceRulePageSize] = useState<PageSize>(20);
+  const [policyPage, setPolicyPage] = useState(1);
+  const [policyPageSize, setPolicyPageSize] = useState<PageSize>(20);
+  /**
    * 上游读取是否失败。**不复用 `feedback`**：那条横幅会被后续的保存、启停操作
    * 覆盖，而"这张表为什么是空的"必须一直可查。
    */
@@ -241,6 +431,18 @@ export function ModelPlatformPage() {
   const [priceRuleForm, setPriceRuleForm] = useState<PriceRuleForm>(() =>
     defaultPriceRuleForm(""),
   );
+  const [policyDialog, setPolicyDialog] = useState<PolicyDialogState>(null);
+  const [policyForm, setPolicyForm] = useState<PolicyForm>(() =>
+    defaultPolicyForm(""),
+  );
+  /**
+   * 租户清单只为一件事：把作用域选择器做成**可视码**的下拉，而不是一个让人贴
+   * UUID 的输入框。owner 2026-08-20 定的通用原则——UUID 任何场景都不面向用户，
+   * 一律用可视码。UUID 仍然是送给 atlas 的值，只是它不出现在屏幕上。
+   *
+   * 读不回来就退成"只能建全局默认策略"并说明原因，不退回 UUID 输入框。
+   */
+  const [tenants, setTenants] = useState<TenantOperationRecord[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -268,9 +470,20 @@ export function ModelPlatformPage() {
       fetchModelPolicies({ includeInactive: true }),
       fetchTenantModelQuotas({ includeExpired: true }),
       fetchTenantModelUsageSummaries(),
+      /* 第七路。它只喂策略的作用域下拉，失败也只影响那一个下拉——所以和上面
+         六路一样各自落地，不牵连任何别的格子。 */
+      fetchTenantOperations(),
     ])
       .then(
-        ([modelsR, providersR, priceRulesR, policiesR, quotasR, usageR]) => {
+        ([
+          modelsR,
+          providersR,
+          priceRulesR,
+          policiesR,
+          quotasR,
+          usageR,
+          tenantsR,
+        ]) => {
           if (!active) return;
           /* 每一路各自落地：拿不到就空数组，让那一格自己降级，不牵连别的。 */
           const rows = <V,>(r: PromiseSettledResult<V[]>): V[] =>
@@ -300,6 +513,7 @@ export function ModelPlatformPage() {
           setProviders(providerRecords);
           setPriceRules(priceRuleRecords);
           setPolicies(policyRecords);
+          setTenants(rows(tenantsR));
           setQuotas(quotaRecords);
           setUsageSummaries(usageRecords);
           setLinkStatusByModelId(
@@ -334,6 +548,52 @@ export function ModelPlatformPage() {
     () => new Map(models.map((model) => [model.id, model])),
     [models],
   );
+
+  /* 页码钳在总页数内：删掉最后一页的最后一条之后，页码会指向一个不存在的页，
+     那时该退回最后一页而不是显示空白——与模型表 `safeCurrentPage` 同一套。 */
+  const priceRulePageCount = Math.max(
+    1,
+    Math.ceil(priceRules.length / priceRulePageSize),
+  );
+  const safePriceRulePage = Math.min(priceRulePage, priceRulePageCount);
+  const pagedPriceRules = priceRules.slice(
+    (safePriceRulePage - 1) * priceRulePageSize,
+    safePriceRulePage * priceRulePageSize,
+  );
+
+  const policyPageCount = Math.max(
+    1,
+    Math.ceil(policies.length / policyPageSize),
+  );
+  const safePolicyPage = Math.min(policyPage, policyPageCount);
+  const pagedPolicies = policies.slice(
+    (safePolicyPage - 1) * policyPageSize,
+    safePolicyPage * policyPageSize,
+  );
+
+  /** UUID → 可视码。屏幕上只出 value，UUID 只当 key 用。 */
+  const tenantCodeById = useMemo(
+    () => new Map(tenants.map((tenant) => [tenant.id, tenant.tenantCode])),
+    [tenants],
+  );
+
+  /**
+   * 每条策略此刻的处境。按数据重载的那一刻算一次。
+   *
+   * 依赖里只带 `policies` 就够：策略的生效窗口以分钟计不以秒计，为它挂一个每秒
+   * 的 tick 是拿一个真实的复杂度换一个想象中的精度。
+   */
+  const policyStanding = useMemo(
+    () => policyStandings(policies, Date.now()),
+    [policies],
+  );
+
+  /** 作用域怎么说人话。**任何分支都不吐 UUID**：查不到就只说轴，不说是谁。 */
+  function describePolicyScope(policy: ModelPolicyRecord): string {
+    if (!policy.tenantId) return "全局默认";
+    const code = tenantCodeById.get(policy.tenantId);
+    return code ? `租户 ${code}` : "租户专属";
+  }
 
   const filteredModels = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -545,6 +805,121 @@ export function ModelPlatformPage() {
       setPriceRuleDialog(null);
     } catch (error) {
       toast({ tone: "danger", title: "保存失败", ...describeError(error) });
+    } finally {
+      setCatalogBusy(false);
+    }
+  }
+
+  // ── 模型策略 ─────────────────────────────────────────────────────────────
+
+  async function reloadPolicies() {
+    setPolicies(await fetchModelPolicies({ includeInactive: true }));
+  }
+
+  function openCreatePolicyDialog() {
+    setPolicyForm(defaultPolicyForm(models[0]?.id ?? ""));
+    setPolicyDialog({ mode: "create", id: null });
+  }
+
+  function openEditPolicyDialog(policy: ModelPolicyRecord) {
+    setPolicyForm(policyFormFromRecord(policy));
+    setPolicyDialog({ mode: "edit", id: policy.id });
+  }
+
+  async function submitPolicy(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!policyDialog) return;
+
+    /* 五个限额先各自解析再拼。非法值**不静默丢掉**、也不当成"不限"送出去
+       ——那两种都会让人以为自己填的生效了，而这里填错的后果是一道没设上的闸门。 */
+    const maxConcurrent = parseLimit(policyForm.maxConcurrent);
+    const rateLimitRpm = parseLimit(policyForm.rateLimitRpm);
+    const maxContextTokens = parseLimit(policyForm.maxContextTokens);
+    const rateLimitTpm = parseBigLimit(policyForm.rateLimitTpm);
+    const rateLimitTpd = parseBigLimit(policyForm.rateLimitTpd);
+    const badLimit = (
+      [
+        [maxConcurrent, "最大并发"],
+        [rateLimitRpm, "RPM 上限"],
+        [maxContextTokens, "最大上下文"],
+        [rateLimitTpm, "TPM 上限"],
+        [rateLimitTpd, "TPD 上限"],
+      ] as const
+    ).find(([value]) => value === undefined);
+    if (badLimit) {
+      toast({
+        tone: "danger",
+        title: `${badLimit[1]}要填非负整数`,
+        description: "留空＝不限制；填 0 是一句具体的话——把这一项拦死。",
+      });
+      return;
+    }
+
+    const priority = Number(policyForm.priority);
+    if (!Number.isSafeInteger(priority) || priority < 0) {
+      toast({ tone: "danger", title: "优先级要填非负整数" });
+      return;
+    }
+
+    /* 就地可改的那些。**没有 tenantId / effectiveAt**：atlas 的
+       `normalizeUpdatePolicy` 对这两个是「出现即拒」（400，不比对值），库里也不
+       授予 UPDATE。改租户不是编辑而是另一条策略，改开始时间要新建一个窗口。
+       这与同页那个「复用 create 载荷去 PATCH」踩的是同一个坑，这里从一开始就分开。 */
+    const editable: ModelPolicyUpdateInput = {
+      name: policyForm.name.trim() || null,
+      priority,
+      maxConcurrent: maxConcurrent ?? null,
+      rateLimitRpm: rateLimitRpm ?? null,
+      rateLimitTpm: rateLimitTpm ?? null,
+      rateLimitTpd: rateLimitTpd ?? null,
+      maxContextTokens: maxContextTokens ?? null,
+      expiresAt: policyForm.expiresAt || null,
+    };
+
+    setCatalogBusy(true);
+    try {
+      if (policyDialog.mode === "create") {
+        if (!policyForm.modelId) {
+          toast({ tone: "danger", title: "请先选择模型" });
+          return;
+        }
+        const payload: ModelPolicyWriteInput = {
+          modelId: policyForm.modelId,
+          /* 空串 → null：全局默认策略。空串送过去会被 atlas 的 optionalString
+             也归成 null，但显式写出来是为了让读代码的人看见这里有两种作用域。 */
+          tenantId: policyForm.tenantId || null,
+          ...editable,
+        };
+        if (policyForm.effectiveAt)
+          payload.effectiveAt = policyForm.effectiveAt;
+        await createModelPolicy(payload);
+        toast({ tone: "success", title: "策略已创建" });
+      } else if (policyDialog.id) {
+        await updateModelPolicy(policyDialog.id, editable);
+        toast({ tone: "success", title: "策略已更新" });
+      }
+      await reloadPolicies();
+      setPolicyDialog(null);
+    } catch (error) {
+      toast({ tone: "danger", title: "保存失败", ...describeError(error) });
+    } finally {
+      setCatalogBusy(false);
+    }
+  }
+
+  async function togglePolicy(policy: ModelPolicyRecord, activate: boolean) {
+    setCatalogBusy(true);
+    try {
+      await (activate
+        ? activateModelPolicy(policy.id)
+        : deactivateModelPolicy(policy.id));
+      await reloadPolicies();
+      toast({
+        tone: "success",
+        title: activate ? "策略已启用" : "策略已停用",
+      });
+    } catch (error) {
+      toast({ tone: "danger", title: "操作失败", ...describeError(error) });
     } finally {
       setCatalogBusy(false);
     }
@@ -941,7 +1316,7 @@ export function ModelPlatformPage() {
         <section className="vx-tenant-directory" aria-label="计价规则列表">
           {priceRules.length ? (
             <div className="vx-tenant-directory-cards vx-model-platform-cards">
-              {priceRules.map((rule) => {
+              {pagedPriceRules.map((rule) => {
                 const ruleModel = modelById.get(rule.modelId);
                 return (
                   <article
@@ -1026,6 +1401,198 @@ export function ModelPlatformPage() {
             </section>
           )}
         </section>
+        {priceRules.length > 0 ? (
+          <ListPagination
+            currentPage={safePriceRulePage}
+            pageCount={priceRulePageCount}
+            countLabel={t("pagination.summary", {
+              page: safePriceRulePage,
+              totalPages: priceRulePageCount,
+              total: priceRules.length,
+            })}
+            pageSize={priceRulePageSize}
+            onPageSizeChange={(value) => {
+              setPriceRulePageSize(value);
+              setPriceRulePage(1);
+            }}
+            onPageChange={setPriceRulePage}
+          />
+        ) : null}
+      </div>
+
+      {/* ── 模型策略 ───────────────────────────────────────────────────────
+          限流与并发的闸门。与上面的计价规则同页并排，是因为运营对一个模型要问的
+          两件事就是「怎么收钱」和「怎么限流」；但两张表的可改性正好相反，所以
+          对话框里各自把话说清楚。 */}
+      <div className="vx-tenant-list-shell">
+        <section className="vx-tenant-toolbar" aria-label="模型策略管理">
+          <strong>模型策略</strong>
+          <span className="vx-tenant-view-count">
+            {formatNumber(policies.length)}
+          </span>
+          <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
+          <ActionButton
+            icon="plus"
+            disabled={models.length === 0}
+            onClick={openCreatePolicyDialog}
+          >
+            新建策略
+          </ActionButton>
+        </section>
+        <section className="vx-tenant-directory" aria-label="模型策略列表">
+          {policies.length ? (
+            <div className="vx-tenant-directory-cards vx-model-platform-cards">
+              {pagedPolicies.map((policy) => {
+                const policyModel = modelById.get(policy.modelId);
+                const inForce = policyStanding.inForce.has(policy.id);
+                const shadowed = policyStanding.shadowed.has(policy.id);
+                const enforces = hasEnforcedLimit(policy);
+                return (
+                  <article
+                    key={policy.id}
+                    className={`vx-tenant-directory-card vx-model-platform-card vx-model-platform-card--${isEnabled(policy.state) ? "active" : "muted"}`}
+                  >
+                    <header>
+                      <Icon name="shield" size={24} fallback="placeholder" />
+                      <div>
+                        <TableTitleCell
+                          title={
+                            policy.name ||
+                            policyModel?.modelName ||
+                            "未命名策略"
+                          }
+                          description={`${describePolicyScope(policy)} · ${policyModel?.modelName ?? "模型已删除"}`}
+                          onTitleClick={() => openEditPolicyDialog(policy)}
+                        />
+                      </div>
+                      <ActionMenu
+                        label={`${policy.name || policyModel?.modelName || "策略"}操作`}
+                        items={[
+                          {
+                            id: "edit",
+                            label: "编辑",
+                            icon: "edit",
+                            onSelect: () => openEditPolicyDialog(policy),
+                          },
+                          {
+                            id: "enable",
+                            label: "启用",
+                            icon: "play",
+                            disabled: catalogBusy || isEnabled(policy.state),
+                            onSelect: () => void togglePolicy(policy, true),
+                          },
+                          {
+                            id: "disable",
+                            label: "停用",
+                            icon: "stop",
+                            disabled: catalogBusy || !isEnabled(policy.state),
+                            onSelect: () => void togglePolicy(policy, false),
+                          },
+                        ]}
+                      />
+                    </header>
+                    <div className="vx-tenant-directory-card__badges">
+                      <Badge>{policy.tenantId ? "租户专属" : "全局默认"}</Badge>
+                      <StatusBadge tone={activeTone(isEnabled(policy.state))}>
+                        {isEnabled(policy.state)
+                          ? t("status.active")
+                          : t("status.inactive")}
+                      </StatusBadge>
+                      {/* 四个只在为真时出现的告警，每个都对应一种「看着配了、其实
+                          没起作用」。它们是这张卡片存在的主要理由——光看一排数字，
+                          这四种情况长得和一条正常生效的策略一模一样。
+                          互斥地判：一条还没到生效窗口的策略谈不上被谁覆盖。 */}
+                      {isEnabled(policy.state) && !inForce ? (
+                        <StatusBadge
+                          tone="warning"
+                          title="状态是启用，但当前时刻不在它的生效窗口里（生效时间还没到，或者失效时间已过）。它现在不参与任何选择。"
+                        >
+                          未在生效窗口
+                        </StatusBadge>
+                      ) : null}
+                      {inForce && shadowed ? (
+                        <StatusBadge
+                          tone="warning"
+                          title="同一模型、同一作用域下另有一条策略排在前面（优先级更小，或同优先级但生效更晚）。Atlas 只选一条，这一条永远轮不到。"
+                        >
+                          被覆盖
+                        </StatusBadge>
+                      ) : null}
+                      {inForce && !shadowed && !enforces ? (
+                        <StatusBadge
+                          tone="warning"
+                          title="RPM 与最大并发都没设——这两项是 Atlas 运行时唯一真正会拦请求的。这条策略正在生效，但不限制任何调用。"
+                        >
+                          不限制任何调用
+                        </StatusBadge>
+                      ) : null}
+                      {hasRecordedOnlyLimit(policy) ? (
+                        <StatusBadge
+                          tone="neutral"
+                          title="TPM / TPD / 最大上下文 Atlas 已收下并存库，但运行时还没有读它们——不要把它们当成已经在拦的闸门。"
+                        >
+                          含未生效项
+                        </StatusBadge>
+                      ) : null}
+                    </div>
+                    <div className="vx-tenant-directory-card__metrics">
+                      {/* 只放 atlas 真的会读的两项 + 决定谁赢的那一项。未生效的三项
+                          不混进来充数——那正是「含未生效项」徽标要说的事。 */}
+                      <span>
+                        <b>
+                          {policy.rateLimitRpm == null
+                            ? "不限"
+                            : formatNumber(policy.rateLimitRpm)}
+                        </b>
+                        <small>RPM 上限</small>
+                      </span>
+                      <span>
+                        <b>
+                          {policy.maxConcurrent == null
+                            ? "不限"
+                            : formatNumber(policy.maxConcurrent)}
+                        </b>
+                        <small>最大并发</small>
+                      </span>
+                      <span>
+                        <b>{formatNumber(policy.priority)}</b>
+                        <small>优先级（小者先）</small>
+                      </span>
+                      <span>
+                        <b>{policy.expiresAt ? "有" : "无"}</b>
+                        <small>失效时间</small>
+                      </span>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <section className="vx-tenant-empty">
+              <EmptyState
+                title="暂无模型策略"
+                description="没有策略＝不限流。点击「新建策略」为某个模型设置 RPM 与并发上限。"
+              />
+            </section>
+          )}
+        </section>
+        {policies.length > 0 ? (
+          <ListPagination
+            currentPage={safePolicyPage}
+            pageCount={policyPageCount}
+            countLabel={t("pagination.summary", {
+              page: safePolicyPage,
+              totalPages: policyPageCount,
+              total: policies.length,
+            })}
+            pageSize={policyPageSize}
+            onPageSizeChange={(value) => {
+              setPolicyPageSize(value);
+              setPolicyPage(1);
+            }}
+            onPageChange={setPolicyPage}
+          />
+        ) : null}
       </div>
 
       {priceRuleDialog ? (
@@ -1042,6 +1609,15 @@ export function ModelPlatformPage() {
           }}
           onSubmit={(event) => void submitPriceRule(event)}
         >
+          {/* 载荷只发 expiresAt 是对的（atlas 逐个按名拒绝其余字段），但表单不能
+              继续邀请那些它会丢掉的输入 —— 否则 400 只是换成了一句假的「已更新」。
+              下面的追加式字段在编辑态一律禁用，与载荷保持同一句话。 */}
+          {priceRuleDialog.mode === "edit" ? (
+            <p className="text-body-sm text-muted-foreground">
+              计价规则按追加版本化：价格与生效时间不可就地修改。要改价请新建一条规则，
+              再把这一条的失效时间设过去。
+            </p>
+          ) : null}
           <div className="vx-model-dialog__grid">
             <Label>
               模型
@@ -1066,6 +1642,7 @@ export function ModelPlatformPage() {
               计费模式
               <Input
                 value={priceRuleForm.billingMode}
+                disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
                   setPriceRuleForm((old) => ({
                     ...old,
@@ -1079,6 +1656,7 @@ export function ModelPlatformPage() {
               币种
               <Input
                 value={priceRuleForm.currency}
+                disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
                   setPriceRuleForm((old) => ({
                     ...old,
@@ -1094,6 +1672,7 @@ export function ModelPlatformPage() {
                 type="number"
                 min={1}
                 value={priceRuleForm.unitTokens}
+                disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
                   setPriceRuleForm((old) => ({
                     ...old,
@@ -1108,6 +1687,7 @@ export function ModelPlatformPage() {
               输入单价
               <Input
                 value={priceRuleForm.inputUnitPrice}
+                disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
                   setPriceRuleForm((old) => ({
                     ...old,
@@ -1121,6 +1701,7 @@ export function ModelPlatformPage() {
               输出单价
               <Input
                 value={priceRuleForm.outputUnitPrice}
+                disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
                   setPriceRuleForm((old) => ({
                     ...old,
@@ -1134,6 +1715,7 @@ export function ModelPlatformPage() {
               缓存输入单价
               <Input
                 value={priceRuleForm.cachedInputUnitPrice}
+                disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
                   setPriceRuleForm((old) => ({
                     ...old,
@@ -1147,6 +1729,7 @@ export function ModelPlatformPage() {
               请求单价
               <Input
                 value={priceRuleForm.requestUnitPrice}
+                disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
                   setPriceRuleForm((old) => ({
                     ...old,
@@ -1163,6 +1746,7 @@ export function ModelPlatformPage() {
               <Input
                 type="datetime-local"
                 value={priceRuleForm.effectiveAt}
+                disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
                   setPriceRuleForm((old) => ({
                     ...old,
@@ -1185,6 +1769,226 @@ export function ModelPlatformPage() {
               />
             </Label>
           </div>
+        </DialogForm>
+      ) : null}
+
+      {policyDialog ? (
+        <DialogForm
+          open
+          title={policyDialog.mode === "create" ? "新建策略" : "编辑策略"}
+          submitLabel={t("dialogs.actions.save")}
+          cancelLabel={t("dialogs.actions.cancel")}
+          submitting={catalogBusy}
+          onOpenChange={(open) => {
+            if (!open) setPolicyDialog(null);
+          }}
+          onSubmit={(event) => void submitPolicy(event)}
+        >
+          {/* 两条必须在动手之前就知道的事，所以放在最上面而不是挂在字段旁边。
+              第一条纠正一个非常自然的误解（「全局定个 RPM，租户策略只补并发」），
+              第二条防止把五个输入框当成五道闸门。 */}
+          <Banner
+            tone="info"
+            title="Atlas 对一个（模型，租户）只选一条策略，不合并"
+            description="租户专属压全局默认；同作用域内优先级小的压大的，并列时生效更晚的压更早的。选中之后用的是那一条的全部字段——全局默认里的 RPM 不会借给一条只设了并发的租户策略。"
+          />
+          <Banner
+            tone="warning"
+            title="五项限额里，运行时目前只拦 RPM 与最大并发"
+            description="TPM / TPD / 最大上下文 Atlas 会收下并存库，但请求路径上还没有读它们。现在填是为了不丢掉这个决定，不是因为它已经在拦。"
+          />
+          {policyDialog.mode === "edit" ? (
+            <Banner
+              tone="info"
+              title="策略是就地修改的，与同页的计价规则相反"
+              description="除作用域与生效时间外，其余每一项都可以直接改，改完立刻是新的限额。历史不在这张表里——要查某个时刻的限额是多少，去变更审计。"
+            />
+          ) : null}
+          <div className="vx-model-dialog__grid">
+            <Label>
+              模型
+              <NativeSelect
+                value={policyForm.modelId}
+                /* atlas 的 update body 里没有 modelId：一条策略属于它被创建时
+                   针对的那个模型。 */
+                disabled={policyDialog.mode === "edit"}
+                onChange={(event) =>
+                  setPolicyForm((old) => ({
+                    ...old,
+                    modelId: event.target.value,
+                  }))
+                }
+              >
+                {models.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.modelName}
+                  </option>
+                ))}
+              </NativeSelect>
+            </Label>
+            <Label>
+              作用域
+              {/* **下拉而不是 UUID 输入框**：选项上出的是租户可视码，送出去的才是
+                  UUID（owner 2026-08-20：UUID 任何场景都不面向用户）。
+                  编辑态锁死——atlas 对 update 里的 tenantId 是「出现即拒」。 */}
+              <NativeSelect
+                value={policyForm.tenantId}
+                disabled={policyDialog.mode === "edit"}
+                onChange={(event) =>
+                  setPolicyForm((old) => ({
+                    ...old,
+                    tenantId: event.target.value,
+                  }))
+                }
+              >
+                <option value="">全局默认（所有租户）</option>
+                {/* 当前值不在清单里也要显示，否则下拉会悄悄把作用域换成全局
+                    ——那是替人改了一条限流规则。仍然不吐 UUID。 */}
+                {policyForm.tenantId &&
+                !tenantCodeById.has(policyForm.tenantId) ? (
+                  <option value={policyForm.tenantId}>
+                    租户专属（不在清单中）
+                  </option>
+                ) : null}
+                {tenants.map((tenant) => (
+                  <option key={tenant.id} value={tenant.id}>
+                    {tenant.tenantCode} · {tenant.tenantName}
+                  </option>
+                ))}
+              </NativeSelect>
+            </Label>
+          </div>
+          <div className="vx-model-dialog__grid">
+            <Label>
+              名称（可留空）
+              <Input
+                value={policyForm.name}
+                onChange={(event) =>
+                  setPolicyForm((old) => ({ ...old, name: event.target.value }))
+                }
+                placeholder="如 默认限流"
+              />
+            </Label>
+            <Label>
+              优先级（小者先）
+              <Input
+                type="number"
+                min={0}
+                value={policyForm.priority}
+                onChange={(event) =>
+                  setPolicyForm((old) => ({
+                    ...old,
+                    priority: event.target.value,
+                  }))
+                }
+              />
+            </Label>
+          </div>
+          <div className="vx-model-dialog__grid">
+            <Label>
+              RPM 上限
+              <Input
+                inputMode="numeric"
+                value={policyForm.rateLimitRpm}
+                onChange={(event) =>
+                  setPolicyForm((old) => ({
+                    ...old,
+                    rateLimitRpm: event.target.value,
+                  }))
+                }
+                placeholder="留空 = 不限"
+              />
+            </Label>
+            <Label>
+              最大并发
+              <Input
+                inputMode="numeric"
+                value={policyForm.maxConcurrent}
+                onChange={(event) =>
+                  setPolicyForm((old) => ({
+                    ...old,
+                    maxConcurrent: event.target.value,
+                  }))
+                }
+                placeholder="留空 = 不限；0 = 全部拒绝"
+              />
+            </Label>
+          </div>
+          <div className="vx-model-dialog__grid">
+            <Label>
+              TPM 上限（已登记未生效）
+              <Input
+                inputMode="numeric"
+                value={policyForm.rateLimitTpm}
+                onChange={(event) =>
+                  setPolicyForm((old) => ({
+                    ...old,
+                    rateLimitTpm: event.target.value,
+                  }))
+                }
+                placeholder="留空 = 不限"
+              />
+            </Label>
+            <Label>
+              TPD 上限（已登记未生效）
+              <Input
+                inputMode="numeric"
+                value={policyForm.rateLimitTpd}
+                onChange={(event) =>
+                  setPolicyForm((old) => ({
+                    ...old,
+                    rateLimitTpd: event.target.value,
+                  }))
+                }
+                placeholder="留空 = 不限"
+              />
+            </Label>
+          </div>
+          <div className="vx-model-dialog__grid">
+            <Label>
+              最大上下文（已登记未生效）
+              <Input
+                inputMode="numeric"
+                value={policyForm.maxContextTokens}
+                onChange={(event) =>
+                  setPolicyForm((old) => ({
+                    ...old,
+                    maxContextTokens: event.target.value,
+                  }))
+                }
+                placeholder="留空 = 不限"
+              />
+            </Label>
+            <Label>
+              生效时间
+              <Input
+                type="datetime-local"
+                value={policyForm.effectiveAt}
+                /* 创建后固定。atlas 对 update 里的 effectiveAt 同样「出现即拒」，
+                   要换一个窗口就新建一条。 */
+                disabled={policyDialog.mode === "edit"}
+                onChange={(event) =>
+                  setPolicyForm((old) => ({
+                    ...old,
+                    effectiveAt: event.target.value,
+                  }))
+                }
+              />
+            </Label>
+          </div>
+          <Label>
+            失效时间（可选）
+            <Input
+              type="datetime-local"
+              value={policyForm.expiresAt}
+              onChange={(event) =>
+                setPolicyForm((old) => ({
+                  ...old,
+                  expiresAt: event.target.value,
+                }))
+              }
+            />
+          </Label>
         </DialogForm>
       ) : null}
     </>

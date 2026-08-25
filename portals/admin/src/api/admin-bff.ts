@@ -1223,6 +1223,8 @@ export async function createAiModelGrant(payload: {
     | "internal_service"
     | null;
   agentId?: string | null;
+  /** 调用方按任务画像点名路由时用的那个名字（atlas create 与 update 都收）。 */
+  taskProfile?: string | null;
   priority?: number | null;
   reason?: string | null;
   expiresAt?: string | null;
@@ -1250,21 +1252,20 @@ export async function createAiModelGrant(payload: {
 export async function updateAiModelGrant(
   grantId: string,
   payload: {
-    agentId?: string | null;
-    applicationId?: string | null;
-    applicationType?:
-      | "agent"
-      | "workflow"
-      | "api_client"
-      | "internal_service"
-      | null;
+    taskProfile?: string | null;
     priority?: number | null;
     reason?: string | null;
     expiresAt?: string | null;
     /* 这里**没有**状态字段，是刻意的：atlas 的 `UpdateAiModelGrantBody` 不含它。
        启停只走具名动作（activate/deactivate），理由是审计——`AuditMiddleware` 从路径
        推导 action，走 update 改状态会被记成 `action='update'`，于是按
-       `?action=deactivate` 检索的审计员一条都查不到。 */
+       `?action=deactivate` 检索的审计员一条都查不到。
+
+       也**没有** `agentId` / `applicationId` / `applicationType`：atlas 的
+       `normalizeUpdateGrant` 对这三个是「出现即拒」（400，不比对值），库里
+       `atlas_svc` 在这三列上根本没有 UPDATE 权限。此前它们列在这里，于是这个签名
+       在邀请调用方去踩一条必然失败的路——2026-08-23 实测过，编辑一条授权什么都不改
+       直接保存就是 400。改应用范围 = 停用这条 + 新建一条，两个决定都留在审计里。 */
   },
 ): Promise<AiModelGrantRecord> {
   const response = await fetch(
@@ -1373,6 +1374,99 @@ export async function deactivateModelPriceRule(
     "POST",
     undefined,
     "Model price rule deactivation failed",
+  );
+}
+
+// ── Model policies 写路径 ───────────────────────────────────────────────────
+//
+// 与上面的计价规则是**相反的两种表**，别照着记：
+//
+//   计价规则  追加版本化。值列一律不授予 UPDATE，改价 = 新建一条 + 给旧的设失效。
+//   策略      就地可改。除下面两个之外每个值列都授予 UPDATE，历史只在
+//             `audit.change_records` 里（atlas TD-038 记着这个不对称，未决）。
+//
+// 两个例外由 atlas 的 `normalizeUpdatePolicy` 按名拒绝（出现即 400）：
+//
+//   tenantId    策略属于它被创建时针对的那个租户。改指向不是编辑，是另一条策略——
+//               老租户正在跑的限流会静默失效，而一行改动说不出是谁的限额动了。
+//   effectiveAt 何时开始固定在创建时。要结束用 expiresAt，要新窗口新建一条。
+//
+// 所以 update 的载荷类型不是 `Partial<Create>`：那会把这两个字段一起邀请进来。
+
+export interface ModelPolicyWriteInput {
+  modelId: string;
+  /** 留空/null = 全局默认策略，对所有没有专属策略的租户生效。 */
+  tenantId?: string | null;
+  name?: string | null;
+  priority?: number | null;
+  /** 在途请求上限。**`null` = 不限，`0` = 全部拒绝**——两者不是一回事。 */
+  maxConcurrent?: number | null;
+  rateLimitRpm?: number | null;
+  /** bigint 列，走字符串——JS number 到不了它的量级。 */
+  rateLimitTpm?: string | number | null;
+  rateLimitTpd?: string | number | null;
+  maxContextTokens?: number | null;
+  effectiveAt?: string | null;
+  expiresAt?: string | null;
+  /** 仅 create 收；update 侧不含（启停走具名动作，理由同计价规则）。 */
+  state?: ObjectState;
+}
+
+/** update 收的全集——由此**排除**了 modelId / tenantId / effectiveAt / state。 */
+export type ModelPolicyUpdateInput = Pick<
+  ModelPolicyWriteInput,
+  | "name"
+  | "priority"
+  | "maxConcurrent"
+  | "rateLimitRpm"
+  | "rateLimitTpm"
+  | "rateLimitTpd"
+  | "maxContextTokens"
+  | "expiresAt"
+>;
+
+export async function createModelPolicy(
+  payload: ModelPolicyWriteInput,
+): Promise<ModelPolicyRecord> {
+  return mutateJson<ModelPolicyRecord>(
+    "/api/atlas/policies",
+    "POST",
+    payload,
+    "Model policy creation failed",
+  );
+}
+
+export async function updateModelPolicy(
+  policyId: string,
+  payload: ModelPolicyUpdateInput,
+): Promise<ModelPolicyRecord> {
+  return mutateJson<ModelPolicyRecord>(
+    `/api/atlas/policies/${encodeURIComponent(policyId)}`,
+    "PUT",
+    payload,
+    "Model policy update failed",
+  );
+}
+
+export async function activateModelPolicy(
+  policyId: string,
+): Promise<ModelPolicyRecord> {
+  return mutateJson<ModelPolicyRecord>(
+    `/api/atlas/policies/${encodeURIComponent(policyId)}/activate`,
+    "POST",
+    undefined,
+    "Model policy activation failed",
+  );
+}
+
+export async function deactivateModelPolicy(
+  policyId: string,
+): Promise<ModelPolicyRecord> {
+  return mutateJson<ModelPolicyRecord>(
+    `/api/atlas/policies/${encodeURIComponent(policyId)}/deactivate`,
+    "POST",
+    undefined,
+    "Model policy deactivation failed",
   );
 }
 

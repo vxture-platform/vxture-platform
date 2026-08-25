@@ -1514,6 +1514,7 @@
         "grantModel": "Grant model",
         "tenantId": "Tenant ID",
         "agentId": "Agent scope",
+        "taskProfile": "Task profile (optional)",
         "priority": "Priority, lower value wins",
         "reason": "Grant reason",
         "expiresAt": "Expiration date",
@@ -1524,7 +1525,8 @@
         "save": "Save"
       },
       "hints": {
-        "grantStateViaRowAction": "Enable/disable is not changed here — use the row action, which records the operation as an activate/deactivate in the audit trail rather than an edit."
+        "grantStateViaRowAction": "Enable/disable is not changed here — use the row action, which records the operation as an activate/deactivate in the audit trail rather than an edit.",
+        "taskProfilePlaceholder": "e.g. code-review; empty = any"
       }
     },
     "empty": {

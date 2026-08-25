@@ -70,6 +70,7 @@ function defaultGrantForm(modelId = "") {
     modelId,
     tenantId: "",
     agentId: "",
+    taskProfile: "",
     priority: "100",
     reason: "",
     expiresAt: "",
@@ -496,6 +497,7 @@ export function ModelGrantsPage() {
       modelId: grant.modelId,
       tenantId: grant.tenantId,
       agentId: grant.agentId ?? "",
+      taskProfile: grant.taskProfile ?? "",
       priority: String(grant.priority),
       reason: grant.reason ?? "",
       expiresAt: toDateInputValue(grant.expiresAt),
@@ -522,6 +524,9 @@ export function ModelGrantsPage() {
        * 把它从载荷里去掉，这与 opera 那边 Provider / 模型编辑踩的是同一个坑。
        */
       const payload = {
+        /* `taskProfile` 在 create 与 update 上都收，所以它在共用的那一份里
+           ——与 agentId 不同，改任务画像不需要停用重建。 */
+        taskProfile: grantForm.taskProfile.trim() || null,
         priority: Number.parseInt(grantForm.priority, 10) || 100,
         reason: grantForm.reason.trim() || null,
         expiresAt: grantForm.expiresAt || null,
@@ -987,15 +992,37 @@ export function ModelGrantsPage() {
               />
             </Label>
           </div>
-          <Label>
-            {t("dialogs.fields.reason")}
-            <Input
-              value={grantForm.reason}
-              onChange={(event) =>
-                setGrantForm((old) => ({ ...old, reason: event.target.value }))
-              }
-            />
-          </Label>
+          {/* 任务画像与授权说明同列：两个都是自由文本、两个在编辑态都照常可改
+              （与上面那行的应用范围不同——那个 atlas 创建后就不收了）。 */}
+          <div className="vx-model-dialog__grid">
+            <Label>
+              {t("dialogs.fields.taskProfile")}
+              {/* atlas 的 create 与 update 都收这个字段，而此前表单里根本没有它：
+                  于是一条按任务画像点名路由的授权，在管理面上既配不出来、也改不了。 */}
+              <Input
+                value={grantForm.taskProfile}
+                onChange={(event) =>
+                  setGrantForm((old) => ({
+                    ...old,
+                    taskProfile: event.target.value,
+                  }))
+                }
+                placeholder={t("dialogs.hints.taskProfilePlaceholder")}
+              />
+            </Label>
+            <Label>
+              {t("dialogs.fields.reason")}
+              <Input
+                value={grantForm.reason}
+                onChange={(event) =>
+                  setGrantForm((old) => ({
+                    ...old,
+                    reason: event.target.value,
+                  }))
+                }
+              />
+            </Label>
+          </div>
           <div className="vx-model-dialog__grid">
             <Label>
               {t("dialogs.fields.expiresAt")}

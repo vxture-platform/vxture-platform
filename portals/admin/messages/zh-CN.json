@@ -1514,6 +1514,7 @@
         "grantModel": "授权模型",
         "tenantId": "租户 ID",
         "agentId": "智能体范围",
+        "taskProfile": "任务画像（可留空）",
         "priority": "优先级，数值越小越优先",
         "reason": "授权说明",
         "expiresAt": "到期日期",
@@ -1524,7 +1525,8 @@
         "save": "保存"
       },
       "hints": {
-        "grantStateViaRowAction": "启停不在这里改——用行操作里的「启用 / 停用」，那条路径会在审计里如实记成一次启停，而不是一次编辑。"
+        "grantStateViaRowAction": "启停不在这里改——用行操作里的「启用 / 停用」，那条路径会在审计里如实记成一次启停，而不是一次编辑。",
+        "taskProfilePlaceholder": "如 code-review；留空＝不限"
       }
     },
     "empty": {
