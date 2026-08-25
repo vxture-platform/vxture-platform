@@ -23,17 +23,33 @@ jobs:
   # 只起受影响的腿。镜像构建配置来自 scripts/workflows/images.mjs（单一数据源）。
   # 同时产出 deployability artifact 供 deploy-production 的 gate 门控（B9）——即便 build
   # 被跳过也保证 artifact 存在，避免 gate fail-open 误部署。
+  #
+  # B11（2026-08-24）：tag 不再无脑全建。diff 基准 = 同系列上一个 tag，命中规则的
+  # 镜像照常构建，其余进 reuse 集 → retag job 把上一版 manifest 复制到新 tag
+  # （秒级，不传层）。「一个 tag = 一整套镜像都存在」的完整性不变；deploy 侧
+  # 未变更镜像逐层 "Already exists" 秒过，worker 的串行拉取策略保留。
+  # detect 先 docker login：--verify-reuse 要求 reuse 源镜像真在 GHCR，
+  # 缺了（上次发版恰在该镜像失败）就挪回构建集——fail-closed 到构建。
   detect:
     name: Detect images
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.detect.outputs.matrix }}
       any: ${{ steps.detect.outputs.any }}
+      reuse: ${{ steps.detect.outputs.reuse }}
+      any_reuse: ${{ steps.detect.outputs.any_reuse }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Log in to GHCR (reuse-source verification)
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve build matrix + deployability
         id: detect
@@ -42,7 +58,8 @@ jobs:
           HEAD_SHA: ${{ github.sha }}
           GITHUB_REF: ${{ github.ref }}
           GITHUB_REF_TYPE: ${{ github.ref_type }}
-        run: node scripts/workflows/classify-changes.mjs --matrix --base "$BASE_SHA" --head "$HEAD_SHA"
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: node scripts/workflows/classify-changes.mjs --matrix --verify-reuse true --base "$BASE_SHA" --head "$HEAD_SHA"
 
       - name: Write deployable flag
         run: echo "${{ steps.detect.outputs.deployable }}" > deployable.txt
@@ -265,3 +282,86 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,scope=${{ matrix.name }},mode=max
+
+  # B11: 未变更镜像的 tag 复用——把同系列上一个 tag 的 manifest 复制到新 tag
+  # （`imagetools create` 仓库侧改名，秒级、不重建、不传层）。deploy 等的是整个
+  # workflow 的 conclusion，本 job 失败同样挡住部署，tag 完整性 fail-closed。
+  # 语义注意：被复用的镜像沿用其构建时烙进的 APP_VERSION/GIT_SHA——health 端点
+  # 报的是「该服务内容最后变更的发布号」，不是本次 tag。核验「部署落没落」看
+  # `docker ps` 的镜像 tag（全部等于新 tag），不再拿 health version 对 tag。
+  # 不打 sha- tag：那会声称镜像出自本次 commit，而它不是；semver 别名
+  # （:X.Y.Z/:X.Y/:X）照常前移，它们本就是「系列内最新」的指针。
+  retag:
+    name: retag ${{ matrix.name }} (unchanged)
+    runs-on: ubuntu-latest
+    needs: detect
+    if: needs.detect.outputs.any_reuse == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect.outputs.reuse) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve Aliyun ACR registry
+        id: acr
+        shell: bash
+        env:
+          ALIYUN_ACR_REGISTRY: ${{ vars.ALIYUN_ACR_REGISTRY }}
+          ALIYUN_ACR_INTERNAL_HOST: ${{ vars.ALIYUN_ACR_INTERNAL_HOST }}
+          ALIYUN_ACR_NAMESPACE: ${{ vars.ALIYUN_ACR_NAMESPACE }}
+          ALIYUN_ACR_USERNAME: ${{ secrets.ALIYUN_ACR_USERNAME }}
+          ALIYUN_ACR_PASSWORD: ${{ secrets.ALIYUN_ACR_PASSWORD }}
+        run: bash scripts/workflows/resolve-acr-registry.sh
+
+      - name: Log in to Aliyun ACR
+        if: steps.acr.outputs.acr_enabled == 'true'
+        shell: bash
+        env:
+          ACR_REGISTRY: ${{ steps.acr.outputs.acr_registry_public }}
+          ALIYUN_ACR_USERNAME: ${{ secrets.ALIYUN_ACR_USERNAME }}
+          ALIYUN_ACR_PASSWORD: ${{ secrets.ALIYUN_ACR_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "$ALIYUN_ACR_PASSWORD" | docker login "$ACR_REGISTRY" -u "$ALIYUN_ACR_USERNAME" --password-stdin
+
+      - name: Retag previous manifest to release tag
+        shell: bash
+        env:
+          GHCR_IMAGE: ${{ matrix.image }}
+          PREV_TAG: ${{ matrix.prevTag }}
+          NEW_TAG: ${{ github.ref_name }}
+          ACR_ENABLED: ${{ steps.acr.outputs.acr_enabled }}
+          ACR_IMAGE: ${{ steps.acr.outputs.acr_registry_public }}/${{ steps.acr.outputs.acr_namespace }}/${{ matrix.name }}
+        run: |
+          set -euo pipefail
+
+          # semver 别名与 build 路径的 metadata-action 对齐：v1.2.3 → 1.2.3 / 1.2 / 1。
+          tags=("$NEW_TAG")
+          if [[ "$NEW_TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            tags+=("${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}")
+            tags+=("${BASH_REMATCH[1]}.${BASH_REMATCH[2]}")
+            tags+=("${BASH_REMATCH[1]}")
+          fi
+
+          for tag in "${tags[@]}"; do
+            echo "· GHCR ${GHCR_IMAGE}:${tag} ← :${PREV_TAG}"
+            docker buildx imagetools create -t "${GHCR_IMAGE}:${tag}" "${GHCR_IMAGE}:${PREV_TAG}"
+          done
+
+          if [ "$ACR_ENABLED" = "true" ]; then
+            for tag in "${tags[@]}"; do
+              # 优先 ACR→ACR（blob 同库，纯 manifest 复制）；ACR 缺上一版时从
+              # GHCR 跨库复制兜底（会补传缺失的层，仍远小于一次构建）。
+              echo "· ACR ${ACR_IMAGE}:${tag} ← :${PREV_TAG}"
+              docker buildx imagetools create -t "${ACR_IMAGE}:${tag}" "${ACR_IMAGE}:${PREV_TAG}" \
+                || docker buildx imagetools create -t "${ACR_IMAGE}:${tag}" "${GHCR_IMAGE}:${PREV_TAG}"
+            done
+          fi
