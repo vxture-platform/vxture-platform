@@ -16,8 +16,7 @@
     )
     var(--vx-admin-permission-track-5r);
   gap: var(--space-xs);
-  padding: var(--space-sm)
-    var(--space-md);
+  padding: var(--space-sm) var(--space-md);
 }
 
 .vx-admin-permission-tree-node__detail-row > span {

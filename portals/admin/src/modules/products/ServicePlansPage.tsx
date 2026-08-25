@@ -643,25 +643,23 @@ export function ServicePlansPage() {
                 ))}
               </div>
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={loading ? "正在加载服务套餐" : "没有匹配的服务套餐"}
-                  description={
-                    loading
-                      ? "正在读取业务方案和套餐版本。"
-                      : "清空筛选条件后可查看全部服务套餐。"
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={loading ? "正在加载服务套餐" : "没有匹配的服务套餐"}
+                description={
+                  loading
+                    ? "正在读取业务方案和套餐版本。"
+                    : "清空筛选条件后可查看全部服务套餐。"
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }

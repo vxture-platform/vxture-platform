@@ -615,25 +615,23 @@ export function UsageMeteringPage() {
             ) : visibleRecords.length ? (
               <UsageCards records={visibleRecords} />
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={loading ? "正在加载用量" : "没有匹配的用量记录"}
-                  description={
-                    loading
-                      ? "正在读取计量汇总数据。"
-                      : (loadError ?? "清空筛选条件后可查看全部计量记录。")
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={loading ? "正在加载用量" : "没有匹配的用量记录"}
+                description={
+                  loading
+                    ? "正在读取计量汇总数据。"
+                    : (loadError ?? "清空筛选条件后可查看全部计量记录。")
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }

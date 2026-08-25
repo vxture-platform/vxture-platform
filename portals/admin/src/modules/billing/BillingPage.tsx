@@ -992,31 +992,29 @@ export function BillingPage() {
                 onSyncInvoice={requestInvoiceSync}
               />
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={
-                    loading
-                      ? "正在加载账单"
-                      : loadError
-                        ? "账单数据读取失败"
-                        : "没有匹配的账单"
-                  }
-                  description={
-                    loading
-                      ? "正在读取账单、收款和发票登记数据。"
-                      : (loadError ?? "清空筛选条件后可查看全部账单记录。")
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={
+                  loading
+                    ? "正在加载账单"
+                    : loadError
+                      ? "账单数据读取失败"
+                      : "没有匹配的账单"
+                }
+                description={
+                  loading
+                    ? "正在读取账单、收款和发票登记数据。"
+                    : (loadError ?? "清空筛选条件后可查看全部账单记录。")
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }

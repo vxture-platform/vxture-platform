@@ -21,6 +21,7 @@ import {
   Banner,
   Button,
   Card,
+  DestructiveButton,
   EmptyState,
   Icon,
   Skeleton,
@@ -32,6 +33,7 @@ import {
   revokeOperatorPasskey,
   type OperatorPasskey,
 } from "@/api/operator-webauthn";
+import { confirmLabels } from "@/lib/destructive";
 
 function formatUsage(passkey: OperatorPasskey) {
   const added = new Date(passkey.createdAt).toLocaleDateString();
@@ -62,14 +64,20 @@ export function OperatorPasskeyManager() {
     void refresh();
   }, [refresh]);
 
-  const withBusy = async (fn: () => Promise<void>) => {
+  /* 返回成败。原来只把错误写进 `setError` 就返回，调用方无从知道成没成——
+     加确认框之后这一点变成语义的：框关不关，取决于这个 Promise 是否
+     rejected。不改成抛出是因为 `handleAdd`/`handleRename` 都是 `void` 调用，
+     抛出会变成 unhandled rejection；返回布尔让每个调用点自己决定怎么用。 */
+  const withBusy = async (fn: () => Promise<void>): Promise<boolean> => {
     setBusy(true);
     setError("");
     try {
       await fn();
       await refresh();
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "操作失败");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -83,9 +91,12 @@ export function OperatorPasskeyManager() {
     if (!trimmed) return;
     void withBusy(() => renameOperatorPasskey(id, trimmed));
   };
-  const handleRevoke = (id: string) => {
-    if (!window.confirm("确定删除此通行密钥？删除后将无法用它登录。")) return;
-    void withBusy(() => revokeOperatorPasskey(id));
+  /* 原来是 `window.confirm`：一句没有主语的「确定删除此通行密钥？」——删的是
+     哪一把、删完还剩几把、会不会把自己锁在门外，一个字都没有。而且原生
+     对话框会阻塞整个页面。改走 DS 的确认契约，落锤重新抛出，失败时框不关。 */
+  const revokePasskey = async (id: string) => {
+    const ok = await withBusy(() => revokeOperatorPasskey(id));
+    if (!ok) throw new Error("撤销通行密钥失败");
   };
 
   return (
@@ -153,14 +164,26 @@ export function OperatorPasskeyManager() {
                   >
                     重命名
                   </Button>
-                  <Button
-                    variant="destructive"
+                  <DestructiveButton
                     size="sm"
                     disabled={busy}
-                    onClick={() => handleRevoke(passkey.id)}
+                    confirm={confirmLabels({
+                      verb: "删除",
+                      target: `通行密钥「${passkey.label ?? "未命名通行密钥"}」`,
+                      /* 「这是最后一把」是这一页唯一真正要紧的事实，而它此前
+                         一个字都没写。服务端只在「该运营账号强制 webauthn」时
+                         才拒绝删最后一把，前端看不到那个开关，所以它是后果里
+                         的一句提醒，不是 precondition——precondition 是闩，写成
+                         闩会把合法的删除也挡住。 */
+                      consequence:
+                        passkeys.length === 1
+                          ? "这是账号上最后一把通行密钥，删除后将无法用指纹、面容或安全密钥登录。若该账号被要求必须使用通行密钥，服务端会拒绝这次删除。"
+                          : "删除后这把密钥立刻失效，无法用它登录；账号上其余通行密钥不受影响。已删除的密钥不能恢复，需要重新注册一把。",
+                      onConfirm: () => revokePasskey(passkey.id),
+                    })}
                   >
                     删除
-                  </Button>
+                  </DestructiveButton>
                 </div>
               </Card>
             </li>

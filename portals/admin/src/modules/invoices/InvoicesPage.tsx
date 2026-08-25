@@ -242,25 +242,42 @@ function InvoiceActionsMenu({
             onSelect: () =>
               router.push(`/tenants/${encodeURIComponent(invoice.tenantId)}`),
           },
-          // 标注返回类型：.map 会把三元推出的 icon 拓宽成 string，而
-          // ActionMenuItem.icon 现在收的是 IconName 联合。
+          /* 三支动作由同一份定义生成（`InvoiceReceiptActionDialog` 里的
+             label / 可用性 / 禁用理由三个 helper）。`red` 单独一支而不是
+             `danger: action === "red"`——DS 的判别联合要的是字面量 `true`，
+             一个算出来的 boolean 判别不了。这不是类型在找麻烦：`danger` 的分支
+             本来就要多带一样东西（confirm 或 confirmExempt），三元表达不了。 */
           ...(["update_shipping", "finish", "red"] as const).map(
-            (action): ActionMenuItem => ({
-              id: action,
-              label: invoiceReceiptActionLabel(action),
-              icon:
-                action === "red"
-                  ? "warning"
-                  : action === "finish"
-                    ? "check"
-                    : "table",
-              disabled: !canRunInvoiceReceiptAction(action, invoice),
-              hint:
-                invoiceReceiptActionDisabledReason(action, invoice) ??
-                undefined,
-              danger: action === "red",
-              onSelect: () => onReceiptAction(invoice, action),
-            }),
+            (action): ActionMenuItem =>
+              action === "red"
+                ? {
+                    id: action,
+                    label: invoiceReceiptActionLabel(action),
+                    icon: "warning",
+                    disabled: !canRunInvoiceReceiptAction(action, invoice),
+                    hint:
+                      invoiceReceiptActionDisabledReason(action, invoice) ??
+                      undefined,
+                    danger: true,
+                    /* **点这一项不会红冲。** 它打开的是红冲登记表单（收红冲
+                       原因与寄送信息），真正的落锤是那张表的提交，而那一步还
+                       包着 step-up 二次验证——两道门都在后面，这里再插一道确认
+                       框只会让人多点一次。表单里 `actionDescription("red")` 已经
+                       写明后果。 */
+                    confirmExempt:
+                      "这一项只打开红冲登记表单，不直接生效；红冲发生在表单提交时，且那一步走 step-up 二次验证",
+                    onSelect: () => onReceiptAction(invoice, action),
+                  }
+                : {
+                    id: action,
+                    label: invoiceReceiptActionLabel(action),
+                    icon: action === "finish" ? "check" : "table",
+                    disabled: !canRunInvoiceReceiptAction(action, invoice),
+                    hint:
+                      invoiceReceiptActionDisabledReason(action, invoice) ??
+                      undefined,
+                    onSelect: () => onReceiptAction(invoice, action),
+                  },
           ),
         ]}
       />
@@ -884,25 +901,23 @@ export function InvoicesPage() {
                 onReceiptAction={requestReceiptAction}
               />
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={loading ? "正在加载发票" : "没有匹配的发票"}
-                  description={
-                    loading
-                      ? "正在读取线下发票台账。"
-                      : (loadError ?? "清空筛选条件后可查看全部线下发票记录。")
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={loading ? "正在加载发票" : "没有匹配的发票"}
+                description={
+                  loading
+                    ? "正在读取线下发票台账。"
+                    : (loadError ?? "清空筛选条件后可查看全部线下发票记录。")
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }

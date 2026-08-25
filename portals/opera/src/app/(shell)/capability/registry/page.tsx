@@ -94,6 +94,7 @@ import {
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { api, OperaApiError } from "@/lib/api";
+import { confirmLabels } from "@/lib/destructive";
 import { RISK_LEVEL_META } from "@/lib/status";
 
 const MANAGE = "capability:runos.manage";
@@ -924,6 +925,46 @@ export default function CapabilitiesPage() {
       toast({ tone: "danger", title: "更新失败", ...describeError(error) });
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  /**
+   * 把一个版本置为 deprecated / withdrawn。
+   *
+   * 两个入口共用它：`deprecated` 仍走本页的提示对话框（它不是破坏性动作——仍可
+   * 解析，只是打了个退役信号），`withdrawn` 走 DS 的确认件。**失败重新抛出**，
+   * 否则确认件会把失败当成成功关掉框。
+   */
+  async function applyVersionState(
+    version: string,
+    state: "deprecated" | "withdrawn",
+  ) {
+    if (!detail) return;
+    try {
+      /* 字段名是 `droppedAliases`（**复数、数组**），不是 `droppedAlias`。 */
+      const result = await api.patch<{ droppedAliases?: string[] }>(
+        `/api/runos/capabilities/${encodeURIComponent(detail.capabilityId)}/versions/${encodeURIComponent(version)}`,
+        { state },
+      );
+      const dropped = result.droppedAliases ?? [];
+      const lostStable = dropped.includes("stable");
+      toast({
+        tone: dropped.length > 0 ? "warning" : "success",
+        title: `${detail.capabilityId}@${version} 已置为 ${state}`,
+        ...(dropped.length > 0
+          ? {
+              description:
+                `指向它的别名已被一并删除：${dropped.join("、")}。` +
+                (lostStable
+                  ? "其中 stable 是解析入口——这个能力现在**没有 stable 可解析**，请尽快提升另一个版本。"
+                  : "调用方如果按这些别名解析，现在会落空。"),
+            }
+          : {}),
+      });
+      await loadDetail(detail.capabilityId);
+    } catch (error) {
+      toast({ tone: "danger", title: "操作失败", ...describeError(error) });
+      throw error;
     }
   }
 
@@ -1775,11 +1816,17 @@ export default function CapabilitiesPage() {
                                 icon: "prohibit",
                                 danger: true,
                                 disabled: v.state === "withdrawn",
-                                onSelect: () =>
-                                  setLifecycleDialog({
-                                    version: v.version,
-                                    state: "withdrawn",
-                                  }),
+                                confirm: confirmLabels({
+                                  verb: "撤下",
+                                  target: `版本 ${v.version}`,
+                                  /* 「不是立刻」这一句必须留：撤版本与禁端点都受
+                                     快照约束，最多还有一个刷新周期按旧状态放行。
+                                     把它当急停用是这套管理面最容易犯的错。 */
+                                  consequence:
+                                    "withdrawn 会把这个版本从解析快照里去掉，此后指向它的调用会解析失败——**但不是立刻**：调用走快照，最多还有一个刷新周期的流量按旧状态放行。如果它是当前的 stable，stable 别名会被一并删除，该能力将暂时没有 stable 可解析。状态单向，撤下后没有恢复路由。",
+                                  onConfirm: () =>
+                                    applyVersionState(v.version, "withdrawn"),
+                                }),
                               },
                             ]}
                           />
@@ -2241,21 +2288,15 @@ export default function CapabilitiesPage() {
         }}
         size="sm"
         danger={lifecycleDialog?.state === "withdrawn"}
+        /* 只剩 `deprecated` 一档：`withdrawn` 是破坏性的，它的确认由 DS 的
+           `ConfirmDestructive` 接管（菜单项的 `confirm`）。 */
         title={
           lifecycleDialog
-            ? lifecycleDialog.state === "withdrawn"
-              ? `撤下版本 ${lifecycleDialog.version}`
-              : `标记版本 ${lifecycleDialog.version} 为 deprecated`
+            ? `标记版本 ${lifecycleDialog.version} 为 deprecated`
             : "版本退役"
         }
-        description={
-          lifecycleDialog?.state === "withdrawn"
-            ? "withdrawn 会把这个版本从解析快照里去掉，此后指向它的调用会解析失败。**但不是立刻**：调用走快照，最多还有一个刷新周期的流量按旧状态放行——撤版本和禁用端点都是钝器，同样受快照约束，不能当急停用。如果它是当前的 stable，stable 别名会被一并删除——该能力将暂时没有 stable 可解析，需要尽快提升另一个版本。状态是单向的，撤下后没有恢复路由。"
-            : "deprecated 仍然可以解析，只是对外打了个退役信号，给调用方留迁移窗口。要真正停用请改用 withdrawn。"
-        }
-        submitLabel={
-          lifecycleDialog?.state === "withdrawn" ? "撤下" : "标记退役"
-        }
+        description="deprecated 仍然可以解析，只是对外打了个退役信号，给调用方留迁移窗口。要真正停用请改用 withdrawn。"
+        submitLabel="标记退役"
         submitting={submitting}
         onSubmit={submitLifecycle}
       />

@@ -649,25 +649,23 @@ export function TenantsPage() {
                 onToggleStatus={handleToggleTenantStatus}
               />
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={loading ? "正在加载租户" : "没有匹配的租户"}
-                  description={
-                    loading
-                      ? "正在读取平台租户运营数据。"
-                      : (loadError ?? "清空筛选条件后可查看全部租户。")
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={loading ? "正在加载租户" : "没有匹配的租户"}
+                description={
+                  loading
+                    ? "正在读取平台租户运营数据。"
+                    : (loadError ?? "清空筛选条件后可查看全部租户。")
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }

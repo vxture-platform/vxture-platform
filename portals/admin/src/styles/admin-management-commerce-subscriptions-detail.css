@@ -19,7 +19,8 @@
   min-width: 0;
   display: grid;
   gap: 0;
-  border-top: var(--vx-admin-management-line-width-1p) dashed color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
+  border-top: var(--vx-admin-management-line-width-1p) dashed
+    color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
 }
 
 .vx-subscription-timeline__item {
@@ -29,7 +30,8 @@
   align-items: start;
   gap: var(--space-md);
   padding: var(--space-md) 0;
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
+  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+    color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
 }
 
 .vx-subscription-timeline__item:last-child {
@@ -70,17 +72,29 @@
 }
 
 .vx-subscription-timeline__item--success {
-  --subscription-timeline-bg: color-mix(in srgb, var(--success) 8%, transparent);
+  --subscription-timeline-bg: color-mix(
+    in srgb,
+    var(--success) 8%,
+    transparent
+  );
   --subscription-timeline-color: var(--tenant-green);
 }
 
 .vx-subscription-timeline__item--warning {
-  --subscription-timeline-bg: color-mix(in srgb, var(--vx-color-warning-600) 10%, transparent);
+  --subscription-timeline-bg: color-mix(
+    in srgb,
+    var(--vx-color-warning-600) 10%,
+    transparent
+  );
   --subscription-timeline-color: var(--tenant-amber);
 }
 
 .vx-subscription-timeline__item--danger {
-  --subscription-timeline-bg: color-mix(in srgb, var(--destructive) 12%, transparent);
+  --subscription-timeline-bg: color-mix(
+    in srgb,
+    var(--destructive) 12%,
+    transparent
+  );
   --subscription-timeline-color: var(--tenant-rose);
 }
 

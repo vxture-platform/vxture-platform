@@ -73,6 +73,7 @@ import {
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isEnabled } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
+import { confirmLabels } from "@/lib/destructive";
 
 interface ProductLite {
   id: string;
@@ -645,6 +646,11 @@ function ProductEntitlements() {
                             icon: "pause" as const,
                             danger: true,
                             disabled: !isEnabled(g.state),
+                            /* 单条、可逆：停用只是让这条路由不再放行，授权行与
+                               配置都在，随时可以再启用。按 owner 2026-08-25 定的
+                               线——单条可逆写明理由豁免，批量一律拦。 */
+                            confirmExempt:
+                              "停用可随时再启用，授权行与配置原样保留，不构成不可逆操作",
                             onSelect: () => void deactivateRoute(g),
                           },
                           {
@@ -843,7 +849,17 @@ function ProductEntitlements() {
                               icon: "prohibit" as const,
                               danger: true,
                               disabled: r.grant.state !== "active",
-                              onSelect: () => void revokeCapability(r.grant),
+                              confirm: confirmLabels({
+                                verb: "撤销",
+                                target: `${r.grant.capabilityId} 的授权`,
+                                /* 派生条数进后果句：撤一条锚点会连带失效 N 条，
+                                   那是这一步真正的爆炸半径，不能只说「撤销授权」。 */
+                                consequence:
+                                  r.derivedCount > 0
+                                    ? `行迁到 revoked 终态、不删除。由它带出来的 ${r.derivedCount} 条派生权益会在下一次闭包重编译时消失——runos 刻意不级联，所以那几条不会立刻不见。**不是急停**：调用走快照，撤销后最多还会再放行一轮。`
+                                    : "行迁到 revoked 终态、不删除——「谁曾经持有、什么时候被收回」要留得住。**不是急停**：调用走快照，撤销后最多还会再放行一轮。",
+                                onConfirm: () => revokeCapability(r.grant),
+                              }),
                             },
                           ]}
                         />
@@ -860,10 +876,18 @@ function ProductEntitlements() {
                               icon: "prohibit" as const,
                               danger: true,
                               disabled: !anchorGrantOf(r.grant, caps),
-                              onSelect: () => {
-                                const a = anchorGrantOf(r.grant, caps);
-                                if (a) void revokeCapability(a);
-                              },
+                              confirm: confirmLabels({
+                                verb: "撤销",
+                                /* 动的**不是**这一行，是它的锚点——target 必须说出
+                                   真正被作用的那个对象，否则确认框在骗人。 */
+                                target: `锚点 ${r.grant.anchorCapabilityId ?? ""}`,
+                                consequence: `派生行不能单独撤销。撤掉锚点之后，这一条（${r.grant.capabilityId}）会在下一次闭包重编译时自然消失——不是立刻。同一个锚点带出来的其它派生行也会一起重算。`,
+                                onConfirm: () => {
+                                  const a = anchorGrantOf(r.grant, caps);
+                                  if (!a) return;
+                                  return revokeCapability(a);
+                                },
+                              }),
                             },
                           ]}
                         />

@@ -13,6 +13,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { useConfirmLabels } from "@/lib/destructive";
 import { useTranslations } from "next-intl";
 import {
   ActionMenu,
@@ -63,6 +64,7 @@ export function InvitationsPage() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const withLabels = useConfirmLabels();
 
   const reload = useCallback(() => fetchInvitations().then(setRows), []);
 
@@ -81,6 +83,10 @@ export function InvitationsPage() {
       const ok = await revokeInvitation(inv.id);
       if (!ok) setError(t("revokeFailed"));
       await reload();
+    } catch (e) {
+      /* 重新抛出：DS 的确认件按 Promise 是否 rejected 决定关不关框。失败的理由
+         已经落在 `error` 横幅上，但框不能关——用户得看见自己按的那一下没成。 */
+      throw e;
     } finally {
       setBusyId(null);
     }
@@ -93,7 +99,13 @@ export function InvitationsPage() {
       danger: true,
       disabled: inv.status !== "pending" || busyId !== null,
       ...(inv.status !== "pending" ? { hint: t("revokeHint") } : {}),
-      onSelect: () => void handleRevoke(inv),
+      confirm: withLabels({
+        verb: t("revokeVerb"),
+        target: inv.email,
+        consequence: t("revokeConsequence"),
+        cancelLabel: t("revokeKeep"),
+        onConfirm: () => handleRevoke(inv),
+      }),
     },
     {
       id: "resend",

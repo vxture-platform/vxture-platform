@@ -98,7 +98,8 @@
   justify-content: space-between;
   gap: var(--space-lg);
   padding-bottom: var(--space-2xs);
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
+  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+    color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
 }
 
 .vx-tenant-unsaved {
@@ -112,7 +113,8 @@
   border-color: color-mix(in srgb, var(--destructive) 36%, transparent);
   background: color-mix(in srgb, var(--destructive) 10%, transparent);
   color: var(--tenant-rose);
-  box-shadow: 0 0 0 var(--vx-admin-management-effect-3p) color-mix(in srgb, var(--destructive) 8%, transparent);
+  box-shadow: 0 0 0 var(--vx-admin-management-effect-3p)
+    color-mix(in srgb, var(--destructive) 8%, transparent);
 }
 
 .vx-tenant-review-action {
@@ -122,7 +124,8 @@
   justify-content: center;
   gap: var(--space-xs);
   padding: 0 var(--space-sm);
-  border: var(--vx-admin-management-line-width-1p) solid color-mix(in srgb, var(--vx-color-warning-600) 26%, transparent);
+  border: var(--vx-admin-management-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-warning-600) 26%, transparent);
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-warning-600) 10%, transparent);
   color: var(--tenant-amber);
@@ -138,7 +141,8 @@
   gap: var(--space-md);
   padding: var(--space-md) 0;
   border-top: var(--vx-admin-management-line-width-1p) dashed var(--tenant-line);
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed var(--tenant-line);
+  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+    var(--tenant-line);
 }
 
 .vx-tenant-key-metric {

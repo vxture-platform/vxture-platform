@@ -46,6 +46,7 @@ import { useRouter } from "@/lib/i18n/navigation";
 import { PageSection } from "@/layout/shell";
 import { fmtDate, fmtTime } from "./hubModel";
 import { formatBytes } from "../QuotasPage";
+import { useConfirmLabels } from "@/lib/destructive";
 
 const fmtCount = (v: number): string => v.toLocaleString("en-US");
 
@@ -157,6 +158,7 @@ export function AddonPacksSection({
   formatMoney: (yuan: string, currency: string) => string;
 }) {
   const t = useTranslations("quotasPage.addons");
+  const withLabels = useConfirmLabels();
   const router = useRouter();
 
   const [packs, setPacks] = useState<ConsoleAddonPack[]>([]);
@@ -204,9 +206,14 @@ export function AddonPacksSection({
   const handleCancel = async (order: ConsoleAddonOrder) => {
     setError(null);
     const ok = await cancelAddonOrder(order.orderNo);
-    if (!ok) setError(t("cancelFailed"));
     await reload();
     onSettledRefresh();
+    /* 失败要抛：`cancelAddonOrder` 把异常吞成 boolean，直接返回会让 DS 的确认件
+       把一次失败的取消当成成功、把框关掉。理由仍落在 `error` 横幅上。 */
+    if (!ok) {
+      setError(t("cancelFailed"));
+      throw new Error(t("cancelFailed"));
+    }
   };
 
   // ── 订单记录表(序号列 + 单操作列,遵守表格规范)──────────────────────────
@@ -316,7 +323,12 @@ export function AddonPacksSection({
       disabled: o.status !== "pending_payment",
       ...(o.status !== "pending_payment" ? { hint: t("cancelHint") } : {}),
       danger: true,
-      onSelect: () => void handleCancel(o),
+      confirm: withLabels({
+        verb: t("cancelVerb"),
+        target: o.orderNo,
+        consequence: t("cancelConsequence"),
+        onConfirm: () => handleCancel(o),
+      }),
     },
   ];
 

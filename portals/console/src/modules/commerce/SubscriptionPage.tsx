@@ -22,14 +22,6 @@ import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
   ActionMenu,
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
   Banner,
   Button,
   DataTable,
@@ -68,6 +60,7 @@ import {
   SubscriptionProductCard,
 } from "./components/hubCards";
 import { OrderDetailPanel } from "./components/OrderDetailPanel";
+import { useConfirmLabels } from "@/lib/destructive";
 import {
   PAY_AXIS,
   SVC_AXIS,
@@ -83,6 +76,7 @@ type SubFilter = "active" | "all";
 
 export function SubscriptionPage() {
   const t = useTranslations("subscriptionHub");
+  const withLabels = useConfirmLabels();
   const locale = useLocale();
   const appLocale = locale as Locale;
   const router = useRouter();
@@ -99,10 +93,9 @@ export function SubscriptionPage() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   // P0 订阅自助:退订确认弹窗目标 + 续费开关在途标记
-  const [unsubTarget, setUnsubTarget] = useState<SubscribedProduct | null>(
-    null,
-  );
-  const [selfServiceBusy, setSelfServiceBusy] = useState(false);
+  /* 只剩 setter：忙态现在由 DS 的确认件按 Promise 自己接管（「处理中…」与
+     关闭时机都在件里），页面不再需要读它。 */
+  const [, setSelfServiceBusy] = useState(false);
 
   const reloadSubs = useCallback(async () => {
     const [subs, ords] = await Promise.all([
@@ -149,27 +142,36 @@ export function SubscriptionPage() {
     [reloadSubs, t],
   );
 
-  const handleUnsubscribeConfirm = useCallback(async () => {
-    if (!unsubTarget) return;
-    setError(null);
-    setSelfServiceBusy(true);
-    try {
-      await executeSubscriptionAction({
-        subscriptionId: unsubTarget.subscriptionId,
-        action: "cancel",
-      });
-      setUnsubTarget(null);
-      await reloadSubs();
-    } catch (err) {
-      setError(
-        err instanceof ConsoleBffError
-          ? err.message
-          : t("subs.unsubscribeError"),
-      );
-    } finally {
-      setSelfServiceBusy(false);
-    }
-  }, [unsubTarget, reloadSubs, t]);
+  /**
+   * 退订的落锤。**只负责做这件事**——"问一句"归 `hubCards` 里的菜单项
+   * （DS 的 `confirm`），本页不再持有 `unsubTarget` 与那个 AlertDialog。
+   *
+   * 失败重新抛出：确认件按 Promise 的结局决定关不关框，吞掉异常会让一次失败的
+   * 退订看起来成功了。理由仍落在 `error` 横幅上。
+   */
+  const handleUnsubscribe = useCallback(
+    async (target: SubscribedProduct) => {
+      setError(null);
+      setSelfServiceBusy(true);
+      try {
+        await executeSubscriptionAction({
+          subscriptionId: target.subscriptionId,
+          action: "cancel",
+        });
+        await reloadSubs();
+      } catch (err) {
+        setError(
+          err instanceof ConsoleBffError
+            ? err.message
+            : t("subs.unsubscribeError"),
+        );
+        throw err;
+      } finally {
+        setSelfServiceBusy(false);
+      }
+    },
+    [reloadSubs, t],
+  );
 
   // 待付款单存在时每秒走时（表格倒计时 + 概览条 TTL）。
   const hasPending = orders.some(
@@ -310,6 +312,9 @@ export function SubscriptionPage() {
       setError(
         err instanceof ConsoleBffError ? err.message : t("orders.cancelError"),
       );
+      /* 重新抛出：DS 的确认件按 rejected 决定关不关框。理由已落在 `error`
+         横幅上，但框不能关——用户得看见自己按的那一下没成。 */
+      throw err;
     } finally {
       setCancelingId(null);
     }
@@ -461,26 +466,39 @@ export function SubscriptionPage() {
         danger: true,
         disabled: !cancellable || cancelingId === o.orderId,
         hint: cancellable ? undefined : t("orders.menuCancelHint"),
-        onSelect: () => void handleCancelOrder(o.orderId),
+        confirm: withLabels({
+          verb: t("orders.cancelVerb"),
+          target: o.orderNo,
+          consequence: t("orders.cancelConsequence"),
+          onConfirm: () => handleCancelOrder(o.orderId),
+        }),
       },
       {
         // 退订自助上线(P0):completed 单的 orderId 即订阅 id,弹确认后立即退订
         id: "unsubscribe",
         label: t("orders.menuUnsubscribe"),
+        danger: true,
         disabled: o.orderStatus !== "completed",
         ...(o.orderStatus !== "completed"
           ? { hint: t("orders.menuUnsubscribeHint") }
           : {}),
-        onSelect: () => {
-          const sub = products.find((p) => p.subscriptionId === o.orderId);
-          setUnsubTarget(
-            sub ??
-              ({
-                subscriptionId: o.orderId,
-                productName: o.productName,
-              } as SubscribedProduct),
-          );
-        },
+        /* 与产品卡上的退订是同一件事、同一份后果——所以用同一份文案与同一个
+           落锤，而不是各写一遍。找不到订阅行时用订单信息兜底（completed 单的
+           orderId 即订阅 id）。 */
+        confirm: withLabels({
+          verb: t("subs.card.unsubscribeVerb"),
+          target: o.productName ?? "",
+          consequence: t("subs.card.unsubscribeConsequence"),
+          cancelLabel: t("subs.card.unsubscribeKeep"),
+          onConfirm: () =>
+            handleUnsubscribe(
+              products.find((p) => p.subscriptionId === o.orderId) ??
+                ({
+                  subscriptionId: o.orderId,
+                  productName: o.productName,
+                } as SubscribedProduct),
+            ),
+        }),
       },
       {
         // 申请发票已上线(owner 2026-08-21 归集账单管理):深链到账单管理页,
@@ -561,7 +579,7 @@ export function SubscriptionPage() {
                 onSetAutoRenew={(target, enabled) =>
                   void handleSetAutoRenew(target, enabled)
                 }
-                onUnsubscribe={setUnsubTarget}
+                onUnsubscribe={handleUnsubscribe}
               />
             ))}
           </div>
@@ -669,39 +687,6 @@ export function SubscriptionPage() {
         </PageSection>
       ) : null}
       {/* 退订确认(危操作:立即终止、不退款,AlertDialog 强确认) */}
-      <AlertDialog
-        open={unsubTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setUnsubTarget(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t("subs.unsubscribeTitle", {
-                product: unsubTarget?.productName ?? "",
-              })}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("subs.unsubscribeBody")}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={selfServiceBusy}>
-              {t("subs.unsubscribeKeep")}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={selfServiceBusy}
-              onClick={(e) => {
-                e.preventDefault();
-                void handleUnsubscribeConfirm();
-              }}
-            >
-              {t("subs.unsubscribeConfirm")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </ViewLayout>
   );
 }

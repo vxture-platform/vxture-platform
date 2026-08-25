@@ -82,6 +82,7 @@ import {
   deleteFailureToast,
 } from "@/features/atlas/lifecycle";
 import { isEnabled, type ObjectState } from "@/features/atlas/state";
+import { confirmLabels } from "@/lib/destructive";
 import { api, OperaApiError } from "@/lib/api";
 
 /** 与 opera-bff atlas.router.ts 同名能力码——与 endpoints 同一批人管（授权的是
@@ -112,10 +113,9 @@ interface EndpointSummary {
   state: ObjectState;
 }
 
-type DialogState =
-  | { kind: "edit"; row: ProductGrantRecord }
-  | { kind: "delete"; row: ProductGrantRecord }
-  | null;
+/* 没有 `delete` 档：删除的确认由 DS 的 `ConfirmDestructive` 接管（菜单项的
+   `confirm`）。留一个只为开确认框而存在的 dialog 档，是把同一件事记两遍。 */
+type DialogState = { kind: "edit"; row: ProductGrantRecord } | null;
 
 interface GrantDraft {
   productCode: string;
@@ -323,28 +323,29 @@ function ProductGrantsPageContent() {
     }
   }
 
+  /**
+   * 删除一条产品授权。落锤，由菜单项的 `confirm.onConfirm` 调用。
+   *
+   * **失败重新抛出**：DS 的确认件按 Promise 是否 rejected 决定关不关框——吞掉异常
+   * 等于让一次失败的删除看起来成功了。Toast 仍在这里出。
+   */
+  async function removeGrant(row: ProductGrantRecord) {
+    try {
+      await api.delete(`/api/atlas/product-grants/${row.id}`);
+      toast({
+        tone: "success",
+        title: `${row.productCode} → ${row.endpointCode} 已删除`,
+      });
+      await reload();
+    } catch (error) {
+      toast({ tone: "danger", ...deleteFailureToast(error, "删除失败") });
+      throw error;
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!dialog) return;
-
-    if (dialog.kind === "delete") {
-      const row = dialog.row;
-      setDialog(null);
-      setSubmitting(true);
-      try {
-        await api.delete(`/api/atlas/product-grants/${row.id}`);
-        toast({
-          tone: "success",
-          title: `${row.productCode} → ${row.endpointCode} 已删除`,
-        });
-        await reload();
-      } catch (error) {
-        toast({ tone: "danger", ...deleteFailureToast(error, "删除失败") });
-      } finally {
-        setSubmitting(false);
-      }
-      return;
-    }
 
     /* 应用范围为空 = 产品级授权（applicationId 存 NULL）。空串和 NULL 在唯一索引
        下不是一回事，所以这里必须显式送 null，不能送 ""。 */
@@ -667,7 +668,22 @@ function ProductGrantsPageContent() {
                           icon: "trash",
                           danger: true,
                           separatorBefore: true,
-                          onSelect: () => setDialog({ kind: "delete", row: r }),
+                          confirm: confirmLabels({
+                            verb: "删除",
+                            target: `${r.productCode} → ${r.endpointCode} 的授权`,
+                            consequence:
+                              "删除只是把已经停用的记录清掉，不可恢复。日常收回权限用「撤销」就够了，那一步留在变更流水里。",
+                            /* 「要先撤销才能删」此前只写在对话框描述里——那是描述，
+                               不是门闩。接成 `met` 之后，一条还在放行的授权连确认钮
+                               都按不下去。 */
+                            preconditions: [
+                              {
+                                label: "这条授权已撤销（停用）",
+                                met: !isEnabled(r.state),
+                              },
+                            ],
+                            onConfirm: () => removeGrant(r),
+                          }),
                         },
                       ]}
                     />
@@ -787,24 +803,6 @@ function ProductGrantsPageContent() {
           </div>
         </FieldGroup>
       </DialogForm>
-
-      <DialogForm
-        open={dialog?.kind === "delete"}
-        onOpenChange={(open) => {
-          if (!open) setDialog(null);
-        }}
-        size="sm"
-        danger
-        title={
-          dialog?.kind === "delete"
-            ? `删除 ${dialog.row.productCode} → ${dialog.row.endpointCode}`
-            : "删除产品授权"
-        }
-        description="要先撤销（停用）才能删除——任何东西都不会从「正在放行」一步变成「没了」。日常收回权限用「撤销」就够了，且那一步留在变更流水里；删除只是把已经停用的记录清掉。"
-        submitLabel="删除"
-        submitting={submitting}
-        onSubmit={submit}
-      />
     </>
   );
 }

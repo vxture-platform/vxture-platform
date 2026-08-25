@@ -70,6 +70,7 @@ import {
   type StatusBadgeTone,
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
+import { confirmLabels } from "@/lib/destructive";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { deleteFailureToast } from "@/features/atlas/lifecycle";
 import {
@@ -760,16 +761,17 @@ type LoadState =
   | { kind: "error"; message: string }
   | { kind: "ready" };
 
+/* 没有 `delete` 档：删除的确认由 DS 的 `ConfirmDestructive` 接管（菜单项的
+   `confirm`），落锤直接走 `deleteProvider`。留一个只用来开确认框的 dialog 档，
+   等于把同一件事记在两个地方。 */
 type ProviderDialog =
   | { kind: "create" }
   | { kind: "edit"; row: ModelProviderRecord }
-  | { kind: "delete"; row: ModelProviderRecord }
   | null;
 
 type ModelDialog =
   | { kind: "create" }
   | { kind: "edit"; row: AiModelRecord }
-  | { kind: "delete"; row: AiModelRecord }
   | null;
 
 /** `useSearchParams` 需要 Suspense 边界。 */
@@ -1027,25 +1029,27 @@ function ModelServiceContent() {
     providerDraft.paramMap.trim() !== "" ||
     providerDraft.extraBody.trim() !== "";
 
+  /**
+   * 删除一家 Provider。落锤，由菜单项的 `confirm.onConfirm` 调用。
+   *
+   * **失败要重新抛出**：DS 的确认件按 Promise 是否 rejected 决定关不关框——吞掉
+   * 异常等于让一次失败的删除看起来成功了，而那正是这轮改动要消灭的东西。Toast
+   * 仍在这里出（那是产品判断，件不该替我们发明错误 UI）。
+   */
+  async function deleteProvider(row: ModelProviderRecord) {
+    try {
+      await api.delete(`/api/atlas/providers/${row.id}`);
+      toast({ tone: "success", title: `${row.providerName} 已删除` });
+      await reload();
+    } catch (error) {
+      toast({ tone: "danger", ...deleteFailureToast(error, "删除失败") });
+      throw error;
+    }
+  }
+
   async function submitProvider(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!providerDialog) return;
-
-    if (providerDialog.kind === "delete") {
-      const row = providerDialog.row;
-      setProviderDialog(null);
-      setSubmitting(true);
-      try {
-        await api.delete(`/api/atlas/providers/${row.id}`);
-        toast({ tone: "success", title: `${row.providerName} 已删除` });
-        await reload();
-      } catch (error) {
-        toast({ tone: "danger", ...deleteFailureToast(error, "删除失败") });
-      } finally {
-        setSubmitting(false);
-      }
-      return;
-    }
 
     /* 三个开放映射先各自解析。上游确实也会拒，但要等一次往返，而三类失败
        （语法坏了 / 形状不对 / 值类型不对）的说法各不相同，在填表的当下最有用。 */
@@ -1151,25 +1155,21 @@ function ModelServiceContent() {
     }));
   }
 
+  /** 删除一个模型。失败重新抛出，理由见 `deleteProvider`。 */
+  async function deleteModel(row: AiModelRecord) {
+    try {
+      await api.delete(`/api/atlas/models/${row.id}`);
+      toast({ tone: "success", title: `${row.modelName} 已删除` });
+      await reload();
+    } catch (error) {
+      toast({ tone: "danger", ...deleteFailureToast(error, "删除失败") });
+      throw error;
+    }
+  }
+
   async function submitModel(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!modelDialog) return;
-
-    if (modelDialog.kind === "delete") {
-      const row = modelDialog.row;
-      setModelDialog(null);
-      setSubmitting(true);
-      try {
-        await api.delete(`/api/atlas/models/${row.id}`);
-        toast({ tone: "success", title: `${row.modelName} 已删除` });
-        await reload();
-      } catch (error) {
-        toast({ tone: "danger", ...deleteFailureToast(error, "删除失败") });
-      } finally {
-        setSubmitting(false);
-      }
-      return;
-    }
 
     const provider = providerById.get(modelDraft.providerId);
     /**
@@ -1702,8 +1702,33 @@ function ModelServiceContent() {
                         icon: "trash",
                         danger: true,
                         separatorBefore: true,
-                        onSelect: () =>
-                          setModelDialog({ kind: "delete", row: m }),
+                        /* 两条前置条件此前只写在对话框的描述里——那是**描述**，
+                           不是门闩：读的人得自己去别处确认这个模型下没下线、还有
+                           没有人引用它。接成 `met` 之后，不满足直接禁用确认钮并
+                           标出是哪一条。判据与 Atlas 的删除前置一致。
+
+                           「已下线」用 `!isServing()` 而不是 `!isEnabled()`：
+                           `deprecated` 的 `is_active` 仍是 true，按 isEnabled
+                           判会把一个弃用中的模型标成「已下线」，然后被 Atlas 拒。 */
+                        confirm: confirmLabels({
+                          verb: "删除",
+                          target: `模型 ${m.modelCode}`,
+                          consequence:
+                            "删除后不可恢复。不会级联删除任何东西——前置条件不满足时 Atlas 会拒绝并点名是什么挡住了。",
+                          preconditions: [
+                            {
+                              label: "模型已下线",
+                              met: !isServing(m.state),
+                            },
+                            {
+                              label:
+                                "没有入口或授权还在引用它（入口引用把 fallback 也算进去）",
+                              met:
+                                m.grantCount === 0 && m.endpointRefCount === 0,
+                            },
+                          ],
+                          onConfirm: () => deleteModel(m),
+                        }),
                       },
                     ]}
                   />
@@ -2062,8 +2087,25 @@ function ModelServiceContent() {
                           label: "删除",
                           icon: "trash",
                           danger: true,
-                          onSelect: () =>
-                            setProviderDialog({ kind: "delete", row: r }),
+                          /* Provider 是两值状态（没有 deprecated 档），所以
+                             「已停用」用 `!isEnabled()` 就够。 */
+                          confirm: confirmLabels({
+                            verb: "删除",
+                            target: `Provider ${r.providerName}`,
+                            consequence:
+                              "删除后不可恢复。不会级联删除名下的任何模型或授权——前置条件不满足时 Atlas 会拒绝并点名是哪些模型挡住了。",
+                            preconditions: [
+                              {
+                                label: "这家已停用",
+                                met: !isEnabled(r.state),
+                              },
+                              {
+                                label: "名下没有未删除的模型（不论启停）",
+                                met: r.modelCount === 0,
+                              },
+                            ],
+                            onConfirm: () => deleteProvider(r),
+                          }),
                         },
                       ]}
                     />
@@ -2423,24 +2465,6 @@ function ModelServiceContent() {
           </FieldTier>
         </div>
       </DialogForm>
-
-      <DialogForm
-        open={providerDialog?.kind === "delete"}
-        onOpenChange={(open) => {
-          if (!open) setProviderDialog(null);
-        }}
-        size="sm"
-        danger
-        title={
-          providerDialog?.kind === "delete"
-            ? `删除 ${providerDialog.row.providerName}`
-            : "删除 Provider"
-        }
-        description="两条前置条件：这家必须已经停用，且名下没有未删除的模型（不论启停）。不满足会被拒绝并点名是哪些模型挡住了——不会级联删除任何模型或授权。"
-        submitLabel="删除"
-        submitting={submitting}
-        onSubmit={submitProvider}
-      />
 
       {/* ── Model 表单 ───────────────────────────────────────────────────── */}
       <DialogForm
@@ -2845,24 +2869,6 @@ function ModelServiceContent() {
           </FieldTier>
         </div>
       </DialogForm>
-
-      <DialogForm
-        open={modelDialog?.kind === "delete"}
-        onOpenChange={(open) => {
-          if (!open) setModelDialog(null);
-        }}
-        size="sm"
-        danger
-        title={
-          modelDialog?.kind === "delete"
-            ? `删除 ${modelDialog.row.modelCode}`
-            : "删除模型"
-        }
-        description="两条前置条件：这个模型必须已经下线，且没有任何入口或授权还在引用它（入口引用把 fallback 也算进去）。不满足会被拒绝并点名是什么挡住了——不会级联删除任何东西。"
-        submitLabel="删除"
-        submitting={submitting}
-        onSubmit={submitModel}
-      />
 
       {/* ── Provider 验证接入 ────────────────────────────────────────────── */}
       <DialogForm

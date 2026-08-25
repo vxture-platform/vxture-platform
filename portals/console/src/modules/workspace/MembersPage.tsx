@@ -41,6 +41,7 @@ import {
 import type { MemberRecord, TenantRoleRecord } from "@/entities/console";
 import { useTranslations } from "next-intl";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { useConfirmLabels } from "@/lib/destructive";
 
 type MemberStatusFilter = "all" | "active" | "invited" | "suspended";
 
@@ -73,6 +74,7 @@ function memberSearchText(member: MemberRecord) {
 
 export function MembersPage() {
   const t = useTranslations("membersPage");
+  const withLabels = useConfirmLabels();
   const { session } = useConsoleSession();
   const [members, setMembers] = useState<MemberRecord[]>([]);
   const [roles, setRoles] = useState<TenantRoleRecord[]>([]);
@@ -90,7 +92,6 @@ export function MembersPage() {
   );
   const [editOpen, setEditOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
-  const [unlinkOpen, setUnlinkOpen] = useState(false);
   const [bulkUnlinkOpen, setBulkUnlinkOpen] = useState(false);
   const [memberForm, setMemberForm] = useState({
     email: "",
@@ -160,12 +161,6 @@ export function MembersPage() {
     setPasswordForm({ nextPassword: "" });
     resetFeedback();
     setResetOpen(true);
-  }
-
-  function openUnlinkDialog(member: MemberRecord) {
-    setSelectedId(member.id);
-    resetFeedback();
-    setUnlinkOpen(true);
   }
 
   async function reloadMembers(nextSelectedId?: string | null) {
@@ -305,21 +300,24 @@ export function MembersPage() {
     }
   }
 
-  async function handleUnlinkMember() {
-    if (!selected) {
-      return;
-    }
-
+  /**
+   * 解除一名成员与本工作区的关联。
+   *
+   * 收参数而不是读 `selected`：确认由菜单项承担（DS 的 `confirm`），那一项知道
+   * 自己作用在哪一行——再绕一圈全局选中态，等于给同一个事实造第二个来源。
+   * 失败重新抛出，否则确认件会把失败当成成功关掉框。
+   */
+  async function handleUnlinkMember(member: MemberRecord) {
     setSubmitting(true);
     resetFeedback();
 
     try {
-      await unlinkMember(selected.id);
+      await unlinkMember(member.id);
       await reloadMembers();
-      setUnlinkOpen(false);
       setMessage(t("feedback.unlinkSuccess"));
-    } catch {
+    } catch (e) {
       setError(t("feedback.unlinkError"));
+      throw e;
     } finally {
       setSubmitting(false);
     }
@@ -529,7 +527,12 @@ export function MembersPage() {
             icon: "user-switch",
             disabled: submitting,
             danger: true,
-            onSelect: () => openUnlinkDialog(member),
+            confirm: withLabels({
+              verb: t("dialogs.unlink.verb"),
+              target: member.name,
+              consequence: t("dialogs.unlink.consequence"),
+              onConfirm: () => handleUnlinkMember(member),
+            }),
           },
         ]}
       />
@@ -939,27 +942,6 @@ export function MembersPage() {
             />
           </Label>
         </DialogForm>
-      ) : null}
-
-      {unlinkOpen && selected ? (
-        <DialogForm
-          open
-          title={t("dialogs.unlink.title")}
-          description={t("dialogs.unlink.description", {
-            name: selected.name,
-          })}
-          submitLabel={t("dialogs.actions.unlink")}
-          danger
-          cancelLabel={t("dialogs.actions.cancel")}
-          submitting={submitting}
-          onOpenChange={(open) => {
-            if (!open) setUnlinkOpen(false);
-          }}
-          onSubmit={(event) => {
-            event.preventDefault();
-            void handleUnlinkMember();
-          }}
-        />
       ) : null}
 
       {bulkUnlinkOpen ? (

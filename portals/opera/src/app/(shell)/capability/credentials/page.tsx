@@ -57,6 +57,7 @@ import {
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { api, OperaApiError } from "@/lib/api";
+import { confirmLabels } from "@/lib/destructive";
 
 const MANAGE = "capability:runos.manage";
 
@@ -81,7 +82,7 @@ const STATE_TONE: Record<string, StatusBadgeTone> = {
 type DialogState =
   | { kind: "create" }
   | { kind: "rotate"; row: CredentialBindingRecord }
-  | { kind: "revoke"; row: CredentialBindingRecord }
+  /* 没有 `revoke` 档：吊销的确认由 DS 的 `ConfirmDestructive` 接管。 */
   | { kind: "scope"; row: CredentialBindingRecord }
   | null;
 
@@ -192,6 +193,36 @@ export default function RunosCredentialsPage() {
     setDialog({ kind: "scope", row });
   }
 
+  /**
+   * 吊销一条凭证绑定。落锤，由菜单项的 `confirm.onConfirm` 调用。
+   *
+   * 两处与共享 `submit` 不同的地方：
+   *
+   * 1. **失败一律重新抛出**——DS 的确认件按 Promise 是否 rejected 决定关不关框，
+   *    吞掉异常会让一次失败的吊销看起来成功了。
+   * 2. **取消二次验证不出 Toast，但仍然抛**：用户是从第二道门退回来的，该落回
+   *    第一道门（确认框保持打开），而不是被告知"操作失败"。
+   */
+  async function revokeBinding(row: CredentialBindingRecord) {
+    try {
+      await runWithStepUp(() =>
+        api.delete(`/api/runos/credentials/${row.bindingId}`),
+      );
+      toast({
+        tone: "warning",
+        title: `「${row.credentialClass}」已吊销`,
+        description:
+          "密文已清空，不可恢复；需要重新录入一条新绑定。凭证由网关每次调用直读、不走快照，所以这一步是立刻生效的——撤授权 / 禁端点 / 撤版本都不是。",
+      });
+      await reload();
+    } catch (error) {
+      if (!isStepUpCancelled(error)) {
+        toast({ tone: "danger", title: "吊销失败", ...describeError(error) });
+      }
+      throw error;
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!dialog) return;
@@ -223,20 +254,6 @@ export default function RunosCredentialsPage() {
           tone: "success",
           title: `「${dialog.row.credentialClass}」已轮换`,
           description: "旧密文已被替换，不保留、不可找回。",
-        });
-      } else if (dialog.kind === "revoke") {
-        await runWithStepUp(() =>
-          api.delete(`/api/runos/credentials/${dialog.row.bindingId}`),
-        );
-        toast({
-          tone: "warning",
-          title: `「${dialog.row.credentialClass}」已吊销`,
-          /* 凭证是这套管理面里**唯一即时生效**的撤销：网关每次调用都直读凭证库
-             （`gateway.service.ts`「resolved live, never cached in plaintext」），
-             不经快照。撤授权、禁端点、撤版本三个都受快照约束、会再放行一轮——所以
-             真要立刻断掉一条外部调用，动的是这里，不是那三个。 */
-          description:
-            "密文已清空，不可恢复；需要重新录入一条新绑定。凭证由网关每次调用直读、不走快照，所以这一步是立刻生效的——撤授权 / 禁端点 / 撤版本都不是。",
         });
       } else {
         const appliesTo = parseList(scopeInput);
@@ -430,7 +447,17 @@ export default function RunosCredentialsPage() {
                           danger: true,
                           separatorBefore: true,
                           disabled: r.state === "revoked",
-                          onSelect: () => setDialog({ kind: "revoke", row: r }),
+                          confirm: confirmLabels({
+                            verb: "吊销",
+                            target: `「${r.credentialClass}」的凭证绑定`,
+                            /* 凭证是这套管理面里**唯一即时生效**的撤销：网关每次
+                               调用都直读凭证库，不经快照。撤授权 / 禁端点 / 撤版本
+                               三个都受快照约束、会再放行一轮——真要立刻断掉一条外部
+                               调用，动的是这里。这一句必须留在后果里。 */
+                            consequence:
+                              "密文会被直接清空（不是打个标记），不可恢复，需要重新录入一条新绑定。凭证由网关每次调用直读、不走快照，所以这一步立刻生效——依赖它的能力调用会马上开始失败。",
+                            onConfirm: () => revokeBinding(r),
+                          }),
                         },
                       ]}
                     />
@@ -607,25 +634,6 @@ export default function RunosCredentialsPage() {
           </FieldDescription>
         </Field>
       </DialogForm>
-
-      {/* ── 吊销 ─────────────────────────────────────────────────────────── */}
-      <DialogForm
-        open={dialog?.kind === "revoke"}
-        onOpenChange={(open) => {
-          if (!open) setDialog(null);
-        }}
-        size="sm"
-        danger
-        title={
-          dialog?.kind === "revoke"
-            ? `吊销「${dialog.row.credentialClass}」`
-            : "吊销凭证"
-        }
-        description="吊销会直接清空存储的密文（不是打个标记），不可恢复。依赖这条凭证的能力调用会立即开始失败——确认上游已经换了密钥或该连接器已停用再操作。"
-        submitLabel="吊销"
-        submitting={submitting}
-        onSubmit={submit}
-      />
     </>
   );
 }

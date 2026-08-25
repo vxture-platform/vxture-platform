@@ -65,6 +65,7 @@ import {
   VERIFICATION_TONE,
   verifiedLabel,
 } from "./tenant-utils";
+import { useConfirmLabels } from "@/modules/shared/destructive";
 
 type TenantTabId =
   | "info"
@@ -94,7 +95,8 @@ type MemberActionHandlers = {
   busy: boolean;
   onChangeRole: (member: TenantMemberView) => void;
   onSuspend: (member: TenantMemberView) => void;
-  onRemove: (member: TenantMemberView) => void;
+  /** 落锤，不是开框。确认由菜单项承担；这里返回的 Promise 成败决定框关不关。 */
+  onRemove: (member: TenantMemberView) => Promise<void>;
 };
 
 function toMemberView(record: TenantMemberRecord): TenantMemberView {
@@ -526,6 +528,7 @@ function MemberActionsMenu({
   member: TenantMemberView;
   actions: MemberActionHandlers;
 }) {
+  const withLabels = useConfirmLabels();
   const isSuspended = member.status === "suspended";
 
   return (
@@ -564,7 +567,13 @@ function MemberActionsMenu({
             icon: "trash",
             disabled: actions.busy,
             danger: true,
-            onSelect: () => actions.onRemove(member),
+            confirm: withLabels({
+              verb: "移除",
+              target: `${member.name}（${member.email || member.userId}）`,
+              consequence:
+                "移除后该成员立刻失去本租户的全部访问权。账号本身不受影响，重新加入需要再发一次邀请。",
+              onConfirm: () => actions.onRemove(member),
+            }),
           },
         ]}
       />
@@ -748,10 +757,6 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
   const [roleTarget, setRoleTarget] = useState<TenantMemberView | null>(null);
   const [selectedRoleId, setSelectedRoleId] = useState("");
   const [roleError, setRoleError] = useState<string | null>(null);
-  const [removeTarget, setRemoveTarget] = useState<TenantMemberView | null>(
-    null,
-  );
-  const [removeError, setRemoveError] = useState<string | null>(null);
 
   const loadMembers = useCallback(
     async (silent = false) => {
@@ -893,36 +898,29 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
     }
   }
 
-  function openRemoveDialog(member: TenantMemberView) {
-    setRemoveTarget(member);
-    setRemoveError(null);
-  }
-
-  function closeRemoveDialog() {
+  /* 收参数而不是读 `removeTarget`：确认已经在菜单项那一层完成，那一层知道自己
+     作用在哪一行，不必再把它存成一份组件状态。失败时照抄同文件
+     `handleSuspendMember` 的收尾（toast 报错），但要重新抛出——DS 的确认件按
+     Promise 是否 rejected 决定关不关框，吞掉异常会让失败看起来像成功。 */
+  async function handleRemoveMember(member: TenantMemberView) {
     if (actionBusy) return;
-    setRemoveTarget(null);
-    setRemoveError(null);
-  }
-
-  async function submitRemove(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!removeTarget || actionBusy) return;
-
     setActionBusy(true);
-    setRemoveError(null);
     try {
-      await removeTenantMember(tenantId, removeTarget.userId);
+      await removeTenantMember(tenantId, member.userId);
       await loadMembers(true);
       toast({
         tone: "success",
         title: "已移除账号",
-        description: `${removeTarget.name} 已从该租户移除。`,
+        description: `${member.name} 已从该租户移除。`,
       });
-      setRemoveTarget(null);
     } catch (error) {
-      setRemoveError(
-        error instanceof Error ? error.message : "移除账号失败，请稍后重试。",
-      );
+      toast({
+        tone: "danger",
+        title: "移除失败",
+        description:
+          error instanceof Error ? error.message : "移除账号失败，请稍后重试。",
+      });
+      throw error;
     } finally {
       setActionBusy(false);
     }
@@ -932,7 +930,7 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
     busy: actionBusy,
     onChangeRole: openRoleDialog,
     onSuspend: handleSuspendMember,
-    onRemove: openRemoveDialog,
+    onRemove: handleRemoveMember,
   };
 
   return (
@@ -1016,23 +1014,21 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
             />
           )
         ) : (
-          <section className="vx-tenant-empty">
-            <EmptyState
-              title={loading ? "正在加载账号" : "没有匹配的账号"}
-              description={
-                loading
-                  ? "正在读取租户成员数据。"
-                  : "清空筛选条件后可查看全部账号。"
-              }
-              action={
-                loading ? undefined : (
-                  <Button variant="outline" onClick={handleReset}>
-                    清空筛选
-                  </Button>
-                )
-              }
-            />
-          </section>
+          <EmptyState
+            title={loading ? "正在加载账号" : "没有匹配的账号"}
+            description={
+              loading
+                ? "正在读取租户成员数据。"
+                : "清空筛选条件后可查看全部账号。"
+            }
+            action={
+              loading ? undefined : (
+                <Button variant="outline" onClick={handleReset}>
+                  清空筛选
+                </Button>
+              )
+            }
+          />
         )}
       </section>
 
@@ -1075,28 +1071,6 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
           {roleError ? (
             <p className="vx-tenant-member-action-error" role="alert">
               {roleError}
-            </p>
-          ) : null}
-        </DialogForm>
-      ) : null}
-
-      {removeTarget ? (
-        <DialogForm
-          open
-          title="移除成员账号"
-          description={`将把 ${removeTarget.name}（${removeTarget.email || removeTarget.userId}）从该租户移除，移除后该成员将失去本租户的访问权限。`}
-          submitLabel="确认移除"
-          danger
-          cancelLabel="取消"
-          submitting={actionBusy}
-          onOpenChange={(open) => {
-            if (!open) closeRemoveDialog();
-          }}
-          onSubmit={(event) => void submitRemove(event)}
-        >
-          {removeError ? (
-            <p className="vx-tenant-member-action-error" role="alert">
-              {removeError}
             </p>
           ) : null}
         </DialogForm>
@@ -1262,12 +1236,10 @@ function TenantRiskTab({ tenant }: { tenant: TenantOperationRecord }) {
 function TenantTicketsTab({ tenant }: { tenant: TenantOperationRecord }) {
   if (!tenant.tickets.length) {
     return (
-      <div className="vx-tenant-empty">
-        <EmptyState
-          title="暂无未结工单"
-          description="该租户当前没有需要平台运营跟进的工单。"
-        />
-      </div>
+      <EmptyState
+        title="暂无未结工单"
+        description="该租户当前没有需要平台运营跟进的工单。"
+      />
     );
   }
 
@@ -1352,16 +1324,14 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
           <Icon name="arrow-left" size="xs" fallback="placeholder" />
           返回租户列表
         </Link>
-        <section className="vx-tenant-empty">
-          <EmptyState
-            title={loading ? "正在加载租户" : "未找到租户"}
-            description={
-              loading
-                ? "正在读取租户详情。"
-                : "该租户不存在，或当前筛选数据源尚未同步。"
-            }
-          />
-        </section>
+        <EmptyState
+          title={loading ? "正在加载租户" : "未找到租户"}
+          description={
+            loading
+              ? "正在读取租户详情。"
+              : "该租户不存在，或当前筛选数据源尚未同步。"
+          }
+        />
       </ViewLayout>
     );
   }

@@ -286,12 +286,10 @@ export function CommerceOverviewPage() {
       {snapshot ? <OverviewMetricSummary metrics={snapshot.metrics} /> : null}
 
       {!snapshot && !loading ? (
-        <section className="vx-tenant-empty">
-          <EmptyState
-            title="暂未读取到商业分析数据"
-            description="请确认商业 BFF 服务和数据库连接状态。"
-          />
-        </section>
+        <EmptyState
+          title="暂未读取到商业分析数据"
+          description="请确认商业 BFF 服务和数据库连接状态。"
+        />
       ) : null}
 
       {loading && !snapshot ? (

@@ -12,7 +12,8 @@
 .vx-tenant-ticket {
   min-width: 0;
   padding-bottom: var(--space-lg);
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed var(--tenant-line);
+  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+    var(--tenant-line);
 }
 
 .vx-tenant-subscription {
@@ -127,13 +128,17 @@
 /* Tenant detail risk panel styles. */
 
 .vx-tenant-tab-grid--risk {
-  grid-template-columns: minmax(var(--vx-admin-management-track-18r-large), 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(
+      var(--vx-admin-management-track-18r-large),
+      0.8fr
+    ) minmax(0, 1.2fr);
 }
 
 .vx-tenant-risk-panel {
   align-content: start;
   padding-right: var(--space-lg);
-  border-right: var(--vx-admin-management-line-width-1p) dashed var(--tenant-line);
+  border-right: var(--vx-admin-management-line-width-1p) dashed
+    var(--tenant-line);
 }
 
 .vx-tenant-risk-panel__level strong {
@@ -168,7 +173,8 @@
   align-items: center;
   gap: var(--space-md);
   padding-bottom: var(--space-md);
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed var(--tenant-line);
+  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+    var(--tenant-line);
 }
 
 .vx-tenant-audit-list__item span {

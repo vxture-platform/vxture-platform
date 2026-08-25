@@ -48,7 +48,8 @@
 .vx-admin-permission-domain__header {
   padding-top: var(--space-lg);
   margin-bottom: var(--space-md);
-  border-top: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-brand-400) 16%, transparent);
+  border-top: var(--vx-admin-permission-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-brand-400) 16%, transparent);
 }
 
 .vx-admin-permission-domain__badges {
@@ -57,7 +58,11 @@
 
 .vx-admin-permission-domain__badges .vx-badge {
   min-height: var(--vx-admin-permission-size-175r);
-  border-color: color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--vx-color-auth-accent) 16%,
+    transparent
+  );
   background: color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
   color: var(--vx-color-auth-accent);
   font-size: var(--vx-admin-caption-size);
@@ -86,8 +91,10 @@
   display: grid;
   gap: var(--space-sm);
   padding: var(--space-md);
-  border: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-neutral-500) 14%, transparent);
-  border-top: var(--vx-admin-permission-line-width-2p) solid var(--tenant-row-tone, var(--vx-color-auth-accent));
+  border: var(--vx-admin-permission-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-neutral-500) 14%, transparent);
+  border-top: var(--vx-admin-permission-line-width-2p) solid
+    var(--tenant-row-tone, var(--vx-color-auth-accent));
   border-radius: var(--vx-admin-permission-card-radius);
   background: transparent;
 }
@@ -99,7 +106,10 @@
 .vx-admin-permission-card header {
   min-width: 0;
   display: grid;
-  grid-template-columns: var(--vx-admin-permission-track-175r) minmax(0, 1fr) auto;
+  grid-template-columns: var(--vx-admin-permission-track-175r) minmax(
+      0,
+      1fr
+    ) auto;
   align-items: start;
   gap: var(--space-sm);
 }

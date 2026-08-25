@@ -85,6 +85,7 @@ import {
   type ObjectState,
 } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
+import { confirmLabels } from "@/lib/destructive";
 
 /** 与 opera-bff atlas.router.ts 同名能力码——endpoints 复用 model:model.manage
  * （路由配置本质是模型间接层，同一批人管，admin.operator_permission 里没有
@@ -125,7 +126,7 @@ type DialogState =
   | { kind: "create" }
   | { kind: "edit"; row: ModelEndpointRecord }
   | { kind: "route"; row: ModelEndpointRecord }
-  | { kind: "delete"; row: ModelEndpointRecord }
+  /* 没有 `delete` 档：确认由 DS 的 `ConfirmDestructive` 接管（菜单项的 `confirm`）。 */
   | null;
 
 interface EndpointDraft {
@@ -328,27 +329,23 @@ function EndpointsPageContent() {
     setDialog({ kind, row });
   }
 
+  /** 删除一个入口。失败重新抛出，否则 DS 的确认件会把失败当成成功关掉框。 */
+  async function removeEndpoint(row: ModelEndpointRecord) {
+    try {
+      await api.delete(`/api/atlas/endpoints/${row.id}`);
+      toast({ tone: "success", title: `${row.code} 已删除` });
+      await reload();
+    } catch (error) {
+      /* 两条前置条件（先停用、无引用）都是有名有姓的拒绝，不是一句"删除失败"
+         ——被挡住的人需要知道接下来该动哪个东西。 */
+      toast({ tone: "danger", ...deleteFailureToast(error, "删除失败") });
+      throw error;
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!dialog) return;
-
-    if (dialog.kind === "delete") {
-      const row = dialog.row;
-      setDialog(null);
-      setSubmitting(true);
-      try {
-        await api.delete(`/api/atlas/endpoints/${row.id}`);
-        toast({ tone: "success", title: `${row.code} 已删除` });
-        await reload();
-      } catch (error) {
-        /* 两条前置条件（先停用、无引用）都是有名有姓的拒绝，不是一句"删除失败"
-           ——被挡住的人需要知道接下来该动哪个东西。 */
-        toast({ tone: "danger", ...deleteFailureToast(error, "删除失败") });
-      } finally {
-        setSubmitting(false);
-      }
-      return;
-    }
 
     const fallbackModelCode =
       draft.fallbackModelCode === NO_FALLBACK ? null : draft.fallbackModelCode;
@@ -448,7 +445,19 @@ function EndpointsPageContent() {
           icon: "trash",
           danger: true,
           separatorBefore: true,
-          onSelect: () => setDialog({ kind: "delete", row: r }),
+          /* **刻意不给 preconditions。** 本页原有的决定，迁移不推翻它：能不能删由
+             Atlas 用与推导状态同一份数据源判定，前端再算一遍就是给同一个问题造第二
+             个答案，被挡住时 409 会点名。`resolution` 缺失（旧 Atlas）时后果确实不
+             同，所以 consequence 分两句——那是事实差异，不是措辞差异。 */
+          confirm: confirmLabels({
+            verb: "删除",
+            target: `入口 ${r.code}`,
+            consequence:
+              r.resolution === undefined
+                ? "⚠ 这台 Atlas 还没有删除前置条件（响应里没有解析状态）：删除不会检查这个入口是否还在被引用，也不要求先停用。删除之后，仍写着这个 code 的业务调用会立刻收到 404。"
+                : "两条前置条件由 Atlas 判定（必须已停用、且内部没有东西还在引用它），不满足会被拒绝并告知是什么挡住了。删除之后，仍写着这个 code 的业务调用会收到 404。",
+            onConfirm: () => removeEndpoint(r),
+          }),
         },
       ]}
     />
@@ -650,29 +659,38 @@ function EndpointsPageContent() {
                   label: "停用",
                   icon: "pause",
                   danger: true,
-                  onSelect: () => {
-                    const ids = [...selectedKeys];
-                    setSelectedKeys([]);
-                    void Promise.all(
-                      ids.map((id) =>
-                        api.post(`/api/atlas/endpoints/${id}/deactivate`),
-                      ),
-                    )
-                      .then(() => {
+                  /* 停用本身可逆，但这是**批量**：一次动 N 个入口，停用期间走它们
+                     的业务调用全部 404。可撤销的是配置，不是那段时间里失败的请求
+                     ——所以批量一律拦（owner 2026-08-25 定的线）。 */
+                  confirm: confirmLabels({
+                    verb: "停用",
+                    target: `选中的 ${selectedKeys.length} 个入口`,
+                    consequence:
+                      "停用期间，仍写着这些 code 的业务调用会收到 404，直到重新启用。配置本身不丢。",
+                    onConfirm: async () => {
+                      const ids = [...selectedKeys];
+                      setSelectedKeys([]);
+                      try {
+                        await Promise.all(
+                          ids.map((id) =>
+                            api.post(`/api/atlas/endpoints/${id}/deactivate`),
+                          ),
+                        );
                         toast({
                           tone: "success",
                           title: `${ids.length} 个 Endpoint 已停用`,
                         });
-                        return reload();
-                      })
-                      .catch((error: unknown) =>
+                        await reload();
+                      } catch (error) {
                         toast({
                           tone: "danger",
                           title: "停用失败",
                           ...describeError(error),
-                        }),
-                      );
-                  },
+                        });
+                        throw error;
+                      }
+                    },
+                  }),
                 },
               ]}
             />
@@ -834,31 +852,6 @@ function EndpointsPageContent() {
           </Field>
         </FieldGroup>
       </DialogForm>
-
-      <DialogForm
-        open={dialog?.kind === "delete"}
-        onOpenChange={(open) => {
-          if (!open) setDialog(null);
-        }}
-        size="sm"
-        danger
-        title={
-          dialog?.kind === "delete"
-            ? `删除 ${dialog.row.code}`
-            : "删除 Endpoint"
-        }
-        /* 两条前置条件如实写出来，不预判：能不能删由 Atlas 用与推导状态同一份数据源
-           判定，前端再算一遍就是给同一个问题造第二个答案。被挡住时 409 会点名。
-           `resolution` 与前置条件同一个提交加进来，所以它在不在就是判据。 */
-        description={
-          dialog?.kind === "delete" && dialog.row.resolution === undefined
-            ? "⚠ 这台 Atlas 还没有删除前置条件（响应里没有解析状态）。在这个版本上删除不会检查这个入口是否还在被引用，也不要求先停用。删除之后，仍写着这个 code 的业务调用会立刻收到 404。"
-            : "两条前置条件：这个入口必须已经停用，且 Atlas 内部没有任何东西还在引用它。不满足会被拒绝并告知是什么挡住了——不会级联删除任何东西。删除之后，仍写着这个 code 的业务调用会收到 404。"
-        }
-        submitLabel="删除"
-        submitting={submitting}
-        onSubmit={submit}
-      />
     </>
   );
 }

@@ -616,25 +616,23 @@ export function ProductsPage() {
                 onOpenDetails={handleOpenDetails}
               />
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={loading ? "正在加载产品能力" : "没有匹配的产品能力"}
-                  description={
-                    loading
-                      ? "正在读取产品能力供给目录。"
-                      : "清空筛选条件后可查看全部产品能力。"
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={loading ? "正在加载产品能力" : "没有匹配的产品能力"}
+                description={
+                  loading
+                    ? "正在读取产品能力供给目录。"
+                    : "清空筛选条件后可查看全部产品能力。"
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }

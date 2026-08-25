@@ -85,6 +85,7 @@ import {
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { api, OperaApiError } from "@/lib/api";
+import { confirmLabels } from "@/lib/destructive";
 import {
   KEY_STATE_META,
   type KeyEffectiveState,
@@ -139,8 +140,8 @@ interface GatewayApiKeyWithSecret extends GatewayApiKeyRecord {
 type DialogState =
   | { kind: "issue" }
   | { kind: "rotate"; row: GatewayApiKeyRecord }
-  | { kind: "revoke"; row: GatewayApiKeyRecord }
-  | { kind: "delete"; row: GatewayApiKeyRecord }
+  /* 没有 `revoke` / `delete` 档：两者的确认都由 DS 的 `ConfirmDestructive` 接管
+     （菜单项的 `confirm`），落锤直接走 `setState` / `deleteKey`。 */
   | null;
 
 /** 明文只在内存里活到用户关掉对话框为止，不进列表、不进 state 之外的任何地方。 */
@@ -352,19 +353,6 @@ export default function KeysPage() {
     event.preventDefault();
     if (!dialog) return;
 
-    if (dialog.kind === "revoke") {
-      setDialog(null);
-      await setState(dialog.row, "revoked");
-      return;
-    }
-
-    if (dialog.kind === "delete") {
-      const row = dialog.row;
-      setDialog(null);
-      await deleteKey(row);
-      return;
-    }
-
     setSubmitting(true);
     try {
       if (dialog.kind === "issue") {
@@ -449,7 +437,13 @@ export default function KeysPage() {
             danger: true,
             separatorBefore: true,
             disabled: r.state === "revoked",
-            onSelect: () => setDialog({ kind: "revoke", row: r }),
+            confirm: confirmLabels({
+              verb: "撤销",
+              target: `密钥 ${r.name}`,
+              consequence:
+                "撤销是终态：不能再启用、不能再轮换，也没有「取消撤销」这回事。持有方只能走签发流程重新申请一把新的。只是想临时断开就用「禁用」——那个可逆。",
+              onConfirm: () => setState(r, "revoked"),
+            }),
           },
           {
             /* 只有**已撤销**的行能删。这是 Atlas 全域那条「任何东西都不会从正在服务
@@ -462,7 +456,18 @@ export default function KeysPage() {
             /* Atlas 只要求"不是 active"，这里刻意更严：只有**已撤销**的能删。停用是
                可逆的暂停，把它和终态一起开放删除，等于让一次误点跨过那道可逆性。 */
             disabled: r.state !== "revoked",
-            onSelect: () => setDialog({ kind: "delete", row: r }),
+            confirm: confirmLabels({
+              verb: "删除",
+              target: `密钥 ${r.name}`,
+              consequence:
+                "只删这一行：名称、归属、前缀、最近使用时间都会消失。签发 / 轮换 / 撤销的操作留痕不受影响——那些在 Audit 的追加表里。已撤销的 key 本来就不放行任何调用，所以删除不改变任何调用方的处境，只是清理台账。",
+              /* 菜单项已按 `disabled` 挡了一道，这里再写一次不是重复：`disabled`
+                 让人点不开，`met` 让人在框里看见**为什么**。两者判据同源。 */
+              preconditions: [
+                { label: "这把密钥已撤销", met: r.state === "revoked" },
+              ],
+              onConfirm: () => deleteKey(r),
+            }),
           },
         ]}
       />
@@ -606,7 +611,17 @@ export default function KeysPage() {
                   label: "停用",
                   icon: "pause",
                   danger: true,
-                  onSelect: () => void setStateBulk("inactive"),
+                  /* 停用可逆，但这是**批量**：停用期间持有这些 key 的调用方全部被
+                     拒。可撤销的是状态，不是那段时间里失败的调用。 */
+                  confirm: confirmLabels({
+                    verb: "停用",
+                    target: `选中的 ${selectedKeys.length} 把密钥`,
+                    consequence:
+                      "停用期间，持有这些密钥的调用方会被拒绝，直到重新启用。密钥本身不失效，随时可以再启用。",
+                    /* `setStateBulk` 内部还包着一次 step-up 仪式——确认框停在
+                       「处理中」态，二次验证压在它上面。两层模态叠加。 */
+                    onConfirm: () => setStateBulk("inactive"),
+                  }),
                 },
               ]}
             />
@@ -794,42 +809,6 @@ export default function KeysPage() {
         }
         description="旧 Key 立即失效。持有方换上新值之前，调用会全部返回 401——先约好切换窗口。"
         submitLabel="轮换"
-        submitting={submitting}
-        onSubmit={submit}
-      />
-
-      <DialogForm
-        open={dialog?.kind === "revoke"}
-        onOpenChange={(open) => {
-          if (!open) setDialog(null);
-        }}
-        size="sm"
-        danger
-        title={
-          dialog?.kind === "revoke" ? `撤销 ${dialog.row.name}` : "撤销 Key"
-        }
-        description="撤销是终态：不能再启用、不能再轮换，也没有「取消撤销」这回事。持有方只能走签发流程重新申请一把新的。只是想临时断开就用「禁用」——那个可逆。"
-        submitLabel="撤销"
-        submitting={submitting}
-        onSubmit={submit}
-      />
-
-      <DialogForm
-        open={dialog?.kind === "delete"}
-        onOpenChange={(open) => {
-          if (!open) setDialog(null);
-        }}
-        size="sm"
-        danger
-        title={
-          dialog?.kind === "delete" ? `删除 ${dialog.row.name}` : "删除 Key"
-        }
-        /* 如实讲清楚删掉的到底是什么。网关 key 与 provider key 不一样：后者挂着
-           key_rotation_logs（FK ON DELETE CASCADE），删一把连轮换史一起没；网关 key
-           没有那张附表，它的历史全在 audit.change_records 里，而那张表与 key 行没有
-           外键、服务角色也没有 DELETE 权限——所以删行动不到留痕。 */
-        description="只删这一行：名称、归属、前缀、最近使用时间都会消失，列表里不再有它。它被签发 / 轮换 / 撤销的操作留痕不受影响——那些在 Audit 的追加表里，与这一行没有外键关系。已经撤销的 key 本来就不放行任何调用，所以删除不改变任何调用方的处境，只是清理台账。"
-        submitLabel="删除"
         submitting={submitting}
         onSubmit={submit}
       />

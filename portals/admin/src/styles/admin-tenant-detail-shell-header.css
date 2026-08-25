@@ -3,7 +3,10 @@
 .vx-tenant-detail__header {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(var(--vx-admin-management-track-18r-large), 1.35fr) minmax(var(--vx-admin-management-track-12r-large), 0.85fr) minmax(
+  grid-template-columns: minmax(
+      var(--vx-admin-management-track-18r-large),
+      1.35fr
+    ) minmax(var(--vx-admin-management-track-12r-large), 0.85fr) minmax(
       var(--vx-admin-management-track-12r-large),
       0.85fr
     );
@@ -13,7 +16,8 @@
 
 .vx-tenant-detail__header > section:not(:last-child) {
   padding-right: var(--space-lg);
-  border-right: var(--vx-admin-management-line-width-1p) dashed var(--tenant-line);
+  border-right: var(--vx-admin-management-line-width-1p) dashed
+    var(--tenant-line);
 }
 
 .vx-tenant-detail__identity {

@@ -5,7 +5,8 @@
   justify-content: space-between;
   gap: var(--space-md);
   padding: var(--space-sm) 0 var(--space-md);
-  border-top: var(--vx-admin-management-line-width-1p) dashed var(--vx-color-auth-border);
+  border-top: var(--vx-admin-management-line-width-1p) dashed
+    var(--vx-color-auth-border);
   color: var(--tenant-muted);
   font-size: var(--vx-admin-meta-size);
 }
@@ -36,7 +37,8 @@
 .vx-billing-receipt-actions button {
   min-height: var(--vx-admin-management-size-175r);
   padding: 0 var(--space-xs);
-  border: var(--vx-admin-management-line-width-1p) solid color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
+  border: var(--vx-admin-management-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
   border-radius: var(--vx-radius-lg);
   background: transparent;
   color: var(--vx-color-neutral-700);
@@ -46,7 +48,11 @@
 }
 
 .vx-billing-receipt-actions button:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--vx-color-auth-accent) 30%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--vx-color-auth-accent) 30%,
+    transparent
+  );
   color: var(--tenant-blue);
 }
 

@@ -1418,7 +1418,9 @@
       },
       "unlink": {
         "title": "解除成员关联",
-        "description": "确认解除 {name} 与当前租户的关联？该操作不会删除用户账号。"
+        "description": "确认解除 {name} 与当前租户的关联？该操作不会删除用户账号。",
+        "verb": "解除关联",
+        "consequence": "该成员将不再属于本工作区，立刻失去这里的全部访问权。账号本身不受影响，重新加入需要再发一次邀请。"
       },
       "bulkUnlink": {
         "title": "批量解除成员关联",
@@ -2017,7 +2019,9 @@
         "fieldBankAccount": "开户账号",
         "fieldPhone": "联系电话",
         "fieldAddress": "地址(纸质票寄送用)",
-        "empty": "暂无开票抬头,点右上角新增"
+        "empty": "暂无开票抬头,点右上角新增",
+        "deleteVerb": "删除开票抬头",
+        "deleteConsequence": "这条抬头会被删掉，且没有回收站。已开出的发票不受影响，但下次开票要重新录入税号、开户行与地址。"
       },
       "apply": {
         "title": "申请发票",
@@ -2092,7 +2096,10 @@
       "autoRenewOn": "恢复自动续费",
       "autoRenewNa": "免费/试用/永久订阅不适用",
       "unsubscribe": "立即退订",
-      "optedOut": "到期不续"
+      "optedOut": "到期不续",
+      "unsubscribeVerb": "退订",
+      "unsubscribeConsequence": "订阅将在当前计费周期结束时终止，之后不再续费也不再计费。周期内仍可正常使用。要恢复需要重新订阅，价格以届时的挂牌价为准。",
+      "unsubscribeKeep": "保留订阅"
     },
     "stats": {
       "groupLabel": "产品订阅统计",
@@ -2147,7 +2154,9 @@
       "menuInvoice": "申请发票",
       "menuPlannedHint": "即将上线",
       "cancelError": "取消订单失败，请稍后重试。",
-      "menuUnsubscribeHint": "仅已开通订单可退订"
+      "menuUnsubscribeHint": "仅已开通订单可退订",
+      "cancelVerb": "取消订单",
+      "cancelConsequence": "订单迁到已取消终态，不可恢复。要买回来得重新下单走一遍付款。"
     },
     "payAxis": {
       "pending": "待付款",
@@ -2733,7 +2742,10 @@
       "flowBody": "在成员管理页按邮箱+角色发出邀请;对方接受后自动成为租户与默认工作空间成员",
       "expiryTitle": "时效",
       "expiryBody": "邀请到期自动失效;撤销立即失效。同一邮箱可在失效后重新邀请"
-    }
+    },
+    "revokeVerb": "撤销给",
+    "revokeConsequence": "邀请链接立刻失效，对方再打开会看到「邀请不存在」。撤销不可撤回——要让对方重新加入，需要再发一次邀请。",
+    "revokeKeep": "保留邀请"
   },
   "todosPage": {
     "title": "待办事项",
@@ -2776,5 +2788,11 @@
       "derivedTitle": "派生式待办",
       "derivedBody": "本页不单独记录任务:每一项都来自真实业务状态(待付订单/临期订阅/配额水位/待接受邀请),处理源头后自动消失"
     }
+  },
+  "destructive": {
+    "titleTemplate": "{verb}{target}？",
+    "cancel": "取消",
+    "pending": "处理中…",
+    "blocked": "前置条件未满足，先处理上面标红的那几条。"
   }
 }

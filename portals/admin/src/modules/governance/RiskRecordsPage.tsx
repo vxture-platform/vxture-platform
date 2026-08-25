@@ -32,6 +32,7 @@ import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
 import type { RiskRecordItem } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { TENANT_RISK_TONE, formatDate } from "@/modules/tenants/tenant-utils";
+import { useConfirmLabels } from "@/modules/shared/destructive";
 
 // TD-021 风险记录页。设计权威 = governance-write-paths.md §3.1/§5。
 // 「审阅」= 后端写 reviewer_id；risk_level 变更后端自动清空 reviewer_id。
@@ -172,6 +173,7 @@ const COLUMNS: readonly DataTableColumn<RiskRecordItem>[] = [
 ];
 
 export function RiskRecordsPage() {
+  const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const [items, setItems] = useState<RiskRecordItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,9 +188,6 @@ export function RiskRecordsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<RiskForm>(createDefaultForm);
   const [submitting, setSubmitting] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<RiskRecordItem | null>(
-    null,
-  );
 
   useEffect(() => {
     // 待处置视图与总览卡口径对齐（reviewed=false&riskLevel=follow_up,high）由
@@ -276,24 +275,39 @@ export function RiskRecordsPage() {
     }
   }
 
-  async function runAction(label: string, action: () => Promise<unknown>) {
+  /**
+   * 跑一个写操作并统一出 Toast。
+   *
+   * **返回成败**（2026-08-26）：此前它吞掉异常且不返回任何东西，于是调用方无从
+   * 知道成没成。接上 DS 的破坏性确认件之后这一点成了语义——件按 Promise 是否
+   * rejected 决定关不关框，一个永远 resolve 的落锤会让失败的删除看起来成功。
+   */
+  async function runAction(
+    label: string,
+    action: () => Promise<unknown>,
+  ): Promise<boolean> {
     setSubmitting(true);
     try {
       await action();
       await reload();
       toast({ tone: "success", title: label });
+      return true;
     } catch (error) {
       toast({ tone: "danger", title: `${label}失败`, ...describeError(error) });
+      return false;
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function confirmDelete() {
-    if (!pendingDelete) return;
-    const target = pendingDelete;
-    setPendingDelete(null);
-    await runAction("风险记录已删除", () => deleteRiskRecord(target.id));
+  /* 收参数而不是读 `pendingDelete`：确认由菜单项承担，那一项知道自己作用在哪
+     一行。失败重新抛出——DS 的确认件按 Promise 是否 rejected 决定关不关框，
+     `runAction` 自己吞异常，所以这里把它的成败翻译回一个 rejected。 */
+  async function confirmDelete(target: RiskRecordItem) {
+    const ok = await runAction("风险记录已删除", () =>
+      deleteRiskRecord(target.id),
+    );
+    if (ok === false) throw new Error("风险记录删除失败");
   }
 
   const pendingCount = items.filter(
@@ -447,7 +461,13 @@ export function RiskRecordsPage() {
                     danger: true,
                     disabled: submitting,
                     separatorBefore: true,
-                    onSelect: () => setPendingDelete(item),
+                    confirm: withLabels({
+                      verb: "删除",
+                      target: `「${item.tenantName ?? item.tenantId}」的风险记录`,
+                      consequence:
+                        "记录被软删并从列表隐藏，不可在界面上恢复。它在审计追加表里的痕迹不受影响。",
+                      onConfirm: () => confirmDelete(item),
+                    }),
                   },
                 ]}
               />
@@ -570,24 +590,6 @@ export function RiskRecordsPage() {
             />
           </Label>
         </DialogForm>
-      ) : null}
-
-      {pendingDelete ? (
-        <DialogForm
-          open
-          title="删除风险记录"
-          description={`确认删除「${pendingDelete.tenantName ?? pendingDelete.tenantId}」的风险记录？记录将被软删并从列表隐藏。`}
-          submitLabel="删除"
-          danger
-          submitting={submitting}
-          onOpenChange={(open) => {
-            if (!open) setPendingDelete(null);
-          }}
-          onSubmit={(event) => {
-            event.preventDefault();
-            void confirmDelete();
-          }}
-        />
       ) : null}
     </>
   );

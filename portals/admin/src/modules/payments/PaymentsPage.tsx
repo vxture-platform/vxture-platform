@@ -1017,25 +1017,23 @@ export function PaymentsPage() {
                 onReject={handleOpenReject}
               />
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={loading ? "正在加载收款记录" : "没有匹配的收款记录"}
-                  description={
-                    loading
-                      ? "正在读取收款台账和账单关联。"
-                      : (loadError ?? "清空筛选条件后可查看全部收款记录。")
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={loading ? "正在加载收款记录" : "没有匹配的收款记录"}
+                description={
+                  loading
+                    ? "正在读取收款台账和账单关联。"
+                    : (loadError ?? "清空筛选条件后可查看全部收款记录。")
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }

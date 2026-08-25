@@ -1,8 +1,10 @@
 .vx-admin-permission-tree {
   min-width: 0;
   overflow-x: auto;
-  border-top: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-neutral-500) 14%, transparent);
-  border-bottom: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-neutral-500) 14%, transparent);
+  border-top: var(--vx-admin-permission-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-neutral-500) 14%, transparent);
+  border-bottom: var(--vx-admin-permission-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-neutral-500) 14%, transparent);
   background: transparent;
 }
 
@@ -16,19 +18,29 @@
   align-items: center;
   justify-content: center;
   background: transparent;
-  box-shadow: calc(var(--vx-admin-permission-effect-1p) * -1) 0 0 color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
+  box-shadow: calc(var(--vx-admin-permission-effect-1p) * -1) 0 0
+    color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
 }
 
 .vx-admin-permission-tree__header {
   min-width: var(--vx-admin-permission-size-62r);
   min-height: var(--vx-admin-permission-size-25r);
   display: grid;
-  grid-template-columns:
-    var(--vx-admin-permission-track-325r) minmax(var(--vx-admin-permission-track-22r), 1.65fr) minmax(var(--vx-admin-permission-track-55r), 0.48fr) minmax(var(--vx-admin-permission-track-475r), 0.42fr) minmax(var(--vx-admin-permission-track-5r), 0.42fr) minmax(var(--vx-admin-permission-grid-column-2xs), 0.52fr) var(--vx-admin-permission-track-5r);
+  grid-template-columns: var(--vx-admin-permission-track-325r) minmax(
+      var(--vx-admin-permission-track-22r),
+      1.65fr
+    ) minmax(var(--vx-admin-permission-track-55r), 0.48fr) minmax(
+      var(--vx-admin-permission-track-475r),
+      0.42fr
+    ) minmax(var(--vx-admin-permission-track-5r), 0.42fr) minmax(
+      var(--vx-admin-permission-grid-column-2xs),
+      0.52fr
+    ) var(--vx-admin-permission-track-5r);
   align-items: center;
   gap: var(--space-xs);
   padding: var(--space-sm) var(--space-md);
-  border-bottom: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-neutral-500) 14%, transparent);
+  border-bottom: var(--vx-admin-permission-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-neutral-500) 14%, transparent);
   color: var(--vx-color-neutral-500);
   font-size: var(--vx-admin-caption-size);
   font-weight: 800;
@@ -46,11 +58,15 @@
 .vx-admin-permission-tree__workspace > header {
   min-width: 0;
   display: grid;
-  grid-template-columns: var(--vx-admin-permission-track-175r) minmax(0, 1fr) auto;
+  grid-template-columns: var(--vx-admin-permission-track-175r) minmax(
+      0,
+      1fr
+    ) auto;
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-md) var(--space-md) var(--space-sm);
-  border-bottom: var(--vx-admin-permission-line-width-1p) solid color-mix(in srgb, var(--vx-color-neutral-500) 11%, transparent);
+  border-bottom: var(--vx-admin-permission-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-neutral-500) 11%, transparent);
   background: transparent;
 }
 

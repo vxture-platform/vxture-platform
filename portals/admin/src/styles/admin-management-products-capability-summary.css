@@ -15,12 +15,17 @@
 .vx-product-capability-summary {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(var(--vx-admin-management-track-18r-large), 1.1fr) minmax(var(--vx-admin-management-track-22r), 1.4fr);
+  grid-template-columns: minmax(
+      var(--vx-admin-management-track-18r-large),
+      1.1fr
+    ) minmax(var(--vx-admin-management-track-22r), 1.4fr);
   align-items: stretch;
   gap: var(--space-xl);
   padding: var(--space-lg) 0 var(--space-lg);
-  border-top: var(--vx-admin-management-line-width-2p) solid color-mix(in srgb, var(--vx-color-auth-accent) 22%, transparent);
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed var(--vx-color-auth-border);
+  border-top: var(--vx-admin-management-line-width-2p) solid
+    color-mix(in srgb, var(--vx-color-auth-accent) 22%, transparent);
+  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+    var(--vx-color-auth-border);
 }
 
 /* Product capability summary identity layout styles. */

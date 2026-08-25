@@ -1418,7 +1418,9 @@
       },
       "unlink": {
         "title": "Unlink member",
-        "description": "Unlink {name} from the current tenant? This will not delete the user account."
+        "description": "Unlink {name} from the current tenant? This will not delete the user account.",
+        "verb": "Unlink",
+        "consequence": "This member leaves the workspace and loses all access to it immediately. Their account is unaffected; rejoining needs a new invitation."
       },
       "bulkUnlink": {
         "title": "Unlink selected members",
@@ -2017,7 +2019,9 @@
         "fieldBankAccount": "Bank account",
         "fieldPhone": "Phone",
         "fieldAddress": "Address (for paper delivery)",
-        "empty": "No invoice titles yet — add one via the button above"
+        "empty": "No invoice titles yet — add one via the button above",
+        "deleteVerb": "Delete billing profile",
+        "deleteConsequence": "This profile is removed and there is no undo. Invoices already issued are unaffected, but the next one needs the tax ID, bank and address entered again."
       },
       "apply": {
         "title": "Request invoice",
@@ -2092,7 +2096,10 @@
       "autoRenewOn": "Resume auto-renew",
       "autoRenewNa": "Not applicable to free/trial/perpetual",
       "unsubscribe": "Unsubscribe now",
-      "optedOut": "Ends at period end"
+      "optedOut": "Ends at period end",
+      "unsubscribeVerb": "Unsubscribe from",
+      "unsubscribeConsequence": "The subscription ends when the current billing cycle closes; it will not renew or bill again. Access continues until then. Resuming means subscribing again at the price listed at that time.",
+      "unsubscribeKeep": "Keep subscription"
     },
     "stats": {
       "groupLabel": "Subscription metrics",
@@ -2147,7 +2154,9 @@
       "menuInvoice": "Request invoice",
       "menuPlannedHint": "Coming soon",
       "cancelError": "Failed to cancel the order. Please try again.",
-      "menuUnsubscribeHint": "Only provisioned orders can be unsubscribed"
+      "menuUnsubscribeHint": "Only provisioned orders can be unsubscribed",
+      "cancelVerb": "Cancel order",
+      "cancelConsequence": "The order moves to a cancelled final state and cannot be restored. Buying it again means placing a new order."
     },
     "payAxis": {
       "pending": "Awaiting payment",
@@ -2733,7 +2742,10 @@
       "flowBody": "Send by email + role from the Members page; on acceptance the invitee joins the tenant and its default workspace",
       "expiryTitle": "Validity",
       "expiryBody": "Invitations expire automatically; revocation is immediate. The same email can be re-invited after expiry"
-    }
+    },
+    "revokeVerb": "Revoke the invitation to",
+    "revokeConsequence": "The invitation link stops working immediately and the recipient sees \"invitation not found\". This cannot be undone — re-inviting them means sending a new invitation.",
+    "revokeKeep": "Keep invitation"
   },
   "todosPage": {
     "title": "To-dos",
@@ -2776,5 +2788,11 @@
       "derivedTitle": "Derived to-dos",
       "derivedBody": "This page keeps no task records: every row reflects real business state and disappears once you resolve the source"
     }
+  },
+  "destructive": {
+    "titleTemplate": "{verb} {target}?",
+    "cancel": "Cancel",
+    "pending": "Working…",
+    "blocked": "Preconditions not met — resolve the items marked above first."
   }
 }

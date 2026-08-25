@@ -75,6 +75,7 @@ import {
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { buildAdminAtlasGrantsUrl } from "@/lib/admin-entry";
 import { api, OperaApiError } from "@/lib/api";
+import { confirmLabels } from "@/lib/destructive";
 
 const MANAGE = "platform:product.manage";
 
@@ -349,6 +350,14 @@ function ProductsPageContent() {
   }
 
   /** 生命周期动作入口：该确认的先确认，该查检查单的先查。 */
+  /**
+   * 非破坏性生命周期动作的入口。
+   *
+   * **破坏性动作不走这里**：它们的确认由 DS 的 `ConfirmDestructive` 接管（菜单项
+   * 的 `confirm`），落锤直接进 `applyLifecycle`。这里剩下两件事：上线前的检查单
+   * 门槛，以及「恢复」那一档的提醒（`advisory`——提醒不是门闩，没有条件可以不
+   * 满足）。
+   */
   function runLifecycle(product: ProductRecord, action: ProductAction) {
     if (action.requiresChecklist) {
       const items = checklistByProduct[product.id];
@@ -378,7 +387,7 @@ function ProductsPageContent() {
         return;
       }
     }
-    if (action.confirm) {
+    if (action.advisory) {
       setPendingAction({ product, action });
       return;
     }
@@ -813,15 +822,37 @@ function ProductsPageContent() {
                                 "Runos 的商业层（commerce/bundles）还没建，admin 侧没有对应页面可跳。",
                             }),
                         },
-                        ...actionsFor(r.state).map((a) => ({
-                          id: a.id,
-                          label: a.label,
-                          icon: a.icon,
-                          ...(a.danger ? { danger: true } : {}),
-                          separatorBefore:
-                            a.id === "launch" || a.id === "suspend",
-                          onSelect: () => runLifecycle(r, a),
-                        })),
+                        /* 生命周期动作由 `PRODUCT_ACTIONS` 那张表生成，破坏性
+                           与否也由表决定——所以这里按判别联合分流，而不是按 id
+                           硬分支。表里加一个 danger 动作却不写后果，编译不过。
+
+                           `target` 在这里拼而不在表里：表描述「这个动作是什么」，
+                           不描述「作用在谁身上」。 */
+                        ...actionsFor(r.state).map((a) =>
+                          a.danger
+                            ? {
+                                id: a.id,
+                                label: a.label,
+                                icon: a.icon,
+                                danger: true as const,
+                                separatorBefore:
+                                  a.id === "launch" || a.id === "suspend",
+                                confirm: confirmLabels({
+                                  verb: a.destructive.verb,
+                                  target: `产品 ${r.productName}`,
+                                  consequence: a.destructive.consequence,
+                                  onConfirm: () => applyLifecycle(r, a),
+                                }),
+                              }
+                            : {
+                                id: a.id,
+                                label: a.label,
+                                icon: a.icon,
+                                separatorBefore:
+                                  a.id === "launch" || a.id === "suspend",
+                                onSelect: () => runLifecycle(r, a),
+                              },
+                        ),
                       ]}
                     />
                   ),
@@ -1204,8 +1235,8 @@ function ProductsPageContent() {
         onOpenChange={(open) => {
           if (!open) setPendingAction(null);
         }}
-        title={pendingAction?.action.confirm?.title ?? ""}
-        description={pendingAction?.action.confirm?.description}
+        title={pendingAction?.action.advisory?.title ?? ""}
+        description={pendingAction?.action.advisory?.description}
         submitLabel={pendingAction?.action.label ?? "确认"}
         submitting={submitting}
         onSubmit={(e) => {

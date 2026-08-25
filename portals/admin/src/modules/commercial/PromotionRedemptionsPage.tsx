@@ -581,31 +581,29 @@ export function PromotionRedemptionsPage() {
             ) : visibleRecords.length ? (
               <RedemptionCards records={visibleRecords} />
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={
-                    loading
-                      ? "正在加载核销记录"
-                      : loadError
-                        ? "核销数据读取失败"
-                        : "没有匹配的核销记录"
-                  }
-                  description={
-                    loading
-                      ? "正在读取优惠核销台账。"
-                      : (loadError ?? "清空筛选条件后可查看全部核销记录。")
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={
+                  loading
+                    ? "正在加载核销记录"
+                    : loadError
+                      ? "核销数据读取失败"
+                      : "没有匹配的核销记录"
+                }
+                description={
+                  loading
+                    ? "正在读取优惠核销台账。"
+                    : (loadError ?? "清空筛选条件后可查看全部核销记录。")
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }

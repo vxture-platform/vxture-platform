@@ -114,8 +114,7 @@
 }
 
 .vx-service-plan-group__meta {
-  gap: var(--space-sm)
-    var(--space-md);
+  gap: var(--space-sm) var(--space-md);
   color: var(--tenant-muted);
   font-size: var(--vx-admin-caption-size);
   font-weight: 400;
@@ -139,7 +138,8 @@
     minmax(var(--vx-admin-management-track-12r-large), 1.1fr) minmax(
       var(--vx-admin-management-track-85r),
       0.75fr
-    ) minmax(var(--vx-admin-management-track-18r-large), 1.5fr)
+    )
+    minmax(var(--vx-admin-management-track-18r-large), 1.5fr)
     minmax(var(--vx-admin-management-track-8r), 0.7fr) var(
       --vx-admin-management-track-3r
     );

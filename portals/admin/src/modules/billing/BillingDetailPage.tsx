@@ -412,23 +412,52 @@ function BillingDetails({
                       (receipt.statusRemark ?? receipt.auditorName)
                     )}
                   </span>
+                  {/* `red` 单独一支：DS 对 `variant="destructive"` 的类型义务
+                      要求写出 `confirmExempt`，而展开传参（`{...(cond ? {} : {})}`）
+                      判别不了——那正是它想拦的写法。 */}
                   {(["update_shipping", "finish", "red"] as const).map(
-                    (action) => (
-                      <Button
-                        key={action}
-                        variant={action === "red" ? "destructive" : "outline"}
-                        size="md"
-                        className={action === "red" ? "is-danger" : undefined}
-                        disabled={!canRunInvoiceReceiptAction(action, receipt)}
-                        title={
-                          invoiceReceiptActionDisabledReason(action, receipt) ??
-                          undefined
-                        }
-                        onClick={() => onReceiptAction(receipt, action)}
-                      >
-                        {invoiceReceiptActionLabel(action)}
-                      </Button>
-                    ),
+                    (action) =>
+                      action === "red" ? (
+                        <Button
+                          key={action}
+                          variant="destructive"
+                          size="md"
+                          /* 同 InvoicesPage：这个钮打开的是红冲登记表单，不直接
+                           生效。落锤在表单提交，且那一步走 step-up。 */
+                          confirmExempt="这个按钮只打开红冲登记表单，不直接生效；红冲发生在表单提交时，且那一步走 step-up 二次验证"
+                          className="is-danger"
+                          disabled={
+                            !canRunInvoiceReceiptAction(action, receipt)
+                          }
+                          title={
+                            invoiceReceiptActionDisabledReason(
+                              action,
+                              receipt,
+                            ) ?? undefined
+                          }
+                          onClick={() => onReceiptAction(receipt, action)}
+                        >
+                          {invoiceReceiptActionLabel(action)}
+                        </Button>
+                      ) : (
+                        <Button
+                          key={action}
+                          variant="outline"
+                          size="md"
+                          disabled={
+                            !canRunInvoiceReceiptAction(action, receipt)
+                          }
+                          title={
+                            invoiceReceiptActionDisabledReason(
+                              action,
+                              receipt,
+                            ) ?? undefined
+                          }
+                          onClick={() => onReceiptAction(receipt, action)}
+                        >
+                          {invoiceReceiptActionLabel(action)}
+                        </Button>
+                      ),
                   )}
                 </p>
               </div>

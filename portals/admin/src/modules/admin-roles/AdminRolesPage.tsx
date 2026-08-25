@@ -58,6 +58,7 @@ import {
   joinClasses,
 } from "@/modules/tenants/tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
+import { useConfirmLabels } from "@/modules/shared/destructive";
 
 type ViewMode = "list" | "cards";
 type PlatformRoleStatusCode = PlatformRoleRecord["statusCode"];
@@ -244,8 +245,9 @@ function AdminRoleActionsMenu({
   onEdit: (role: PlatformRoleRecord) => void;
   onCopy: (role: PlatformRoleRecord) => void;
   onToggle: (role: PlatformRoleRecord) => void;
-  onDelete: (role: PlatformRoleRecord) => void;
+  onDelete: (role: PlatformRoleRecord) => Promise<void>;
 }) {
+  const withLabels = useConfirmLabels();
   // 系统预置角色的编辑/停用/删除受后端保护（返回 403），前端一并置灰；
   // 复制系统角色以派生自定义角色仍然允许。
   const managed = !role.isSystem;
@@ -295,7 +297,23 @@ function AdminRoleActionsMenu({
             icon: "trash",
             danger: true,
             disabled: !managed,
-            onSelect: () => onDelete(role),
+            confirm: withLabels({
+              verb: "删除",
+              target: `角色「${roleLabel}」`,
+              /* 持有人数从 `adminCount` 来，不是措辞——「还有 3 名操作员持有」
+                 比「请先确认没人在用」有用得多。后端不因有持有人而拒绝删除，
+                 所以它是后果的一部分，不是 precondition（那一栏是闩，不是提醒）。 */
+              consequence:
+                (role.adminCount > 0
+                  ? `当前有 ${role.adminCount} 名操作员持有该角色（其中 ${role.activeAdminCount} 名在用），删除后他们立刻失去它带来的全部权限。`
+                  : "当前没有操作员持有该角色。") +
+                "角色删除后不可恢复。这一步还要再过一次 step-up 二次验证。",
+              /* 内置角色不可删，此前只体现在 `disabled` 上。 */
+              preconditions: [
+                { label: "这是可管理的自定义角色", met: managed },
+              ],
+              onConfirm: () => onDelete(role),
+            }),
           },
         ]}
       />
@@ -784,7 +802,7 @@ function AdminRoleCards({
   onEdit: (role: PlatformRoleRecord) => void;
   onCopy: (role: PlatformRoleRecord) => void;
   onToggle: (role: PlatformRoleRecord) => void;
-  onDelete: (role: PlatformRoleRecord) => void;
+  onDelete: (role: PlatformRoleRecord) => Promise<void>;
 }) {
   return (
     <div
@@ -1083,9 +1101,6 @@ export function AdminRolesPage() {
   } | null>(null);
   const [copyRoleId, setCopyRoleId] = useState<string | null>(null);
   const [roleForm, setRoleForm] = useState<RoleFormState>(EMPTY_ROLE_FORM);
-  const [pendingDeleteRoleId, setPendingDeleteRoleId] = useState<string | null>(
-    null,
-  );
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -1218,9 +1233,6 @@ export function AdminRolesPage() {
 
   const copyRole = copyRoleId
     ? (roles.find((role) => role.id === copyRoleId) ?? null)
-    : null;
-  const pendingDeleteRole = pendingDeleteRoleId
-    ? (roles.find((role) => role.id === pendingDeleteRoleId) ?? null)
     : null;
 
   function reportError(fallbackTitle: string, error: unknown) {
@@ -1372,10 +1384,11 @@ export function AdminRolesPage() {
     }
   }
 
-  async function confirmDeleteRole(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!pendingDeleteRole) return;
-    const target = pendingDeleteRole;
+  /* 收参数而不是读 `pendingDeleteRole`：确认在菜单项那一层完成，那一层知道自己
+     作用在哪一个角色，不必再把它存成一份组件状态、也不必让删除的文案和落锤分居
+     四百行。失败时重新抛出——DS 的确认件按 Promise 是否 rejected 决定关不关框，
+     原来的 catch 只 `reportError` 不抛，会让失败看起来像成功。 */
+  async function handleDeleteRole(target: PlatformRoleRecord) {
     setSubmitting(true);
     try {
       await runWithStepUp(() => deleteOperatorRole(target.id));
@@ -1385,10 +1398,10 @@ export function AdminRolesPage() {
         next.delete(target.id);
         return next;
       });
-      setPendingDeleteRoleId(null);
       toast({ tone: "success", title: "角色已删除" });
     } catch (error) {
       reportError("角色删除失败", error);
+      throw error;
     } finally {
       setSubmitting(false);
     }
@@ -1561,7 +1574,7 @@ export function AdminRolesPage() {
                     onEdit={openEditRole}
                     onCopy={openCopyRole}
                     onToggle={(target) => void handleToggleRole(target)}
-                    onDelete={(target) => setPendingDeleteRoleId(target.id)}
+                    onDelete={handleDeleteRole}
                   />
                 )}
                 empty={
@@ -1597,28 +1610,26 @@ export function AdminRolesPage() {
                 onEdit={openEditRole}
                 onCopy={openCopyRole}
                 onToggle={(role) => void handleToggleRole(role)}
-                onDelete={(role) => setPendingDeleteRoleId(role.id)}
+                onDelete={handleDeleteRole}
               />
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={loading ? "正在加载平台角色" : "没有匹配的平台角色"}
-                  description={
-                    loading
-                      ? "正在从 platform.platform_role 读取平台角色。"
-                      : (loadError ?? "清空筛选条件后可查看全部平台角色。")
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={loading ? "正在加载平台角色" : "没有匹配的平台角色"}
+                description={
+                  loading
+                    ? "正在从 platform.platform_role 读取平台角色。"
+                    : (loadError ?? "清空筛选条件后可查看全部平台角色。")
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }
@@ -1687,24 +1698,6 @@ export function AdminRolesPage() {
             if (!submitting) setCopyRoleId(null);
           }}
           onSubmit={(event) => void submitCopyRole(event)}
-        />
-      ) : null}
-      {pendingDeleteRole ? (
-        <DialogForm
-          open
-          title="删除角色"
-          description={`确认删除「${
-            roleLabels.get(pendingDeleteRole.id) ??
-            pendingDeleteRole.nameEn ??
-            pendingDeleteRole.roleCode
-          }」？此操作不可撤销。`}
-          submitLabel="删除"
-          danger
-          submitting={submitting}
-          onOpenChange={(open) => {
-            if (!open && !submitting) setPendingDeleteRoleId(null);
-          }}
-          onSubmit={(event) => void confirmDeleteRole(event)}
         />
       ) : null}
     </>
