@@ -1,0 +1,142 @@
+{
+  "destructive": {
+    "titleTemplate": "{verb}{target}？",
+    "cancel": "取消",
+    "pending": "处理中…",
+    "blocked": "前置条件未满足，先处理上面标红的那几条。"
+  },
+  "preferences": {
+    "locale": {
+      "label": "语言",
+      "zh-CN": "简体中文",
+      "en-US": "English"
+    }
+  },
+  "common": {
+    "never": "从未",
+    "unlimited": "不限",
+    "close": "关闭",
+    "retry": "重试",
+    "copy": "复制",
+    "copied": "已复制到剪贴板",
+    "copyFailed": "复制失败",
+    "copyDenied": "浏览器拒绝了剪贴板访问，请手动选中复制。"
+  },
+  "status": {
+    "keyState": {
+      "active": "生效中",
+      "inactive": "已停用",
+      "revoked": "已撤销",
+      "expired": "已过期"
+    }
+  },
+  "modelKeysPage": {
+    "header": {
+      "title": "调用密钥",
+      "description": "外部合作方调用 Atlas 的入方向凭证。内部产品不走这里——它们持有 OIDC 客户端，用短时 S2S 令牌调 /v1/*。轮换与撤销全部留痕进 Audit。"
+    },
+    "notice": {
+      "externalUnwiredTitle": "External key 尚未接入任何认证路径——因为今天没有外部合作方",
+      "externalUnwiredDescription": "Atlas 网关的 /v1/* 只认 S2S OIDC token，所以签发出来的 key 现在调不动网关（TD-029）。这不是工程缺口：第三方合作方不是 vxture IdP 的 OIDC 客户端，key 是它唯一可能的认证方式，而 key 绑定 product_code 之后授权模型是现成的。它悬着的唯一原因是 Atlas 只在 tailnet 上、atlas.vxture.com 预留未绑定——等的是合作方，不是工期。",
+      "retiredTitle": "{count} 把已退役的 Internal Key（全部已撤销）",
+      "retiredDescription": "internal 档位已删除：兄弟产品用 OIDC S2S 令牌，给它们发长期共享密钥是拿更弱的换更强的。这些老行保留而不删除——撤销是一份失效凭证的终态，删掉会连同轮换历史和审计留痕一起抹掉它被签发过这件事。它们从未认证过任何东西。"
+    },
+    "load": {
+      "loadingTitle": "读取中…",
+      "loadingDescription": "正在读取 API Key 清单。",
+      "errorTitle": "读取失败",
+      "errorFallback": "读取 Key 失败"
+    },
+    "empty": {
+      "noMatchTitle": "没有匹配的 Key",
+      "noMatchDescription": "换个关键词或类型再看。",
+      "emptyTitle": "暂无 API Key",
+      "emptyDescription": "点击「签发 Key」开始。"
+    },
+    "filters": {
+      "kindLabel": "类型筛选",
+      "allKinds": "全部类型",
+      "internalRetired": "Internal（已退役）",
+      "cardsDisabledReason": "卡片视图已下线，改用列表",
+      "searchPlaceholder": "搜索名称 / 前缀…",
+      "searchAriaLabel": "搜索 Key"
+    },
+    "columns": {
+      "name": "名称",
+      "prefix": "前缀",
+      "lastUsed": "最近使用",
+      "issuedAt": "签发于",
+      "kind": "类型",
+      "expiresAt": "到期",
+      "state": "状态"
+    },
+    "table": {
+      "internalRetired": "Internal · 已退役",
+      "setButExpired": "设为「{label}」，但已到期"
+    },
+    "actions": {
+      "menuLabel": "{name} 操作",
+      "issue": "签发",
+      "rotate": "轮换",
+      "enable": "启用",
+      "disable": "停用",
+      "revoke": "撤销",
+      "delete": "删除",
+      "alreadyRevoked": "这把密钥已撤销"
+    },
+    "bulk": {
+      "unit": "把",
+      "enable": "启用",
+      "disable": "停用",
+      "selectedKeys": "选中的 {count} 把密钥",
+      "disableConsequence": "停用期间，持有这些密钥的调用方会被拒绝，直到重新启用。密钥本身不失效，随时可以再启用。",
+      "doneTitle": "{count} 把 Key 已{state}",
+      "doneDescription": "已撤销的、以及已退役的 Internal Key 不受批量操作影响。",
+      "failed": "{action}失败"
+    },
+    "revoke": {
+      "target": "密钥 {name}",
+      "consequence": "撤销是终态：不能再启用、不能再轮换，也没有「取消撤销」这回事。持有方只能走签发流程重新申请一把新的。只是想临时断开就用「禁用」——那个可逆。",
+      "doneDescription": "撤销是终态，回不去了，持有方需要重新申请。",
+      "audited": "已留痕进 Audit。"
+    },
+    "delete": {
+      "target": "密钥 {name}",
+      "consequence": "只删这一行：名称、归属、前缀、最近使用时间都会消失。签发 / 轮换 / 撤销的操作留痕不受影响——那些在 Audit 的追加表里。已撤销的 key 本来就不放行任何调用，所以删除不改变任何调用方的处境，只是清理台账。",
+      "precondition": "这把密钥已撤销",
+      "doneTitle": "{name} 已删除",
+      "doneDescription": "这一行没了；它被签发、轮换、撤销的留痕仍在 Audit 里。",
+      "failed": "删除失败",
+      "unsupportedTitle": "当前 Atlas 部署还没有删除接口",
+      "unsupportedDescription": "已撤销的 key 不会再放行任何调用，功能上不受影响；等 Atlas 交付 DELETE /capability/api-keys/:id 之后这里会自动可用。"
+    },
+    "issue": {
+      "cta": "签发 Key",
+      "title": "签发 API Key（External）",
+      "description": "明文只在签发完成的那一次展示，此后只能轮换。",
+      "submit": "签发",
+      "externalOnlyTitle": "只签 External：内部产品不用 key",
+      "externalOnlyDescription": "兄弟产品（karda / arda / varda / runos）都持有 OIDC 客户端，用 300 秒的 S2S 令牌调 /v1/*，令牌上的 act.sub 就是授权表认的产品身份。给它们发一把长期有效、两边各存一份、谁拿着谁就是的共享密钥，不会多出任何能力，只会把已经更强的东西换成更弱的。所以 internal 是删掉而不是留着不用。",
+      "nameLabel": "名称",
+      "nameDescription": "调用方在日志与计量里按它归集。",
+      "ownerLabel": "归属",
+      "ownerPlaceholder": "外部合作方名称",
+      "ownerDescription": "key 绑到哪个 product_code，它就是授权表里的一个产品——两条认证路径共用同一套授权模型。",
+      "expiresLabel": "到期",
+      "expiresDescription": "留空 = 不限期，跑到被撤销为止。设了之后没有任何东西会去改这一行——到期是读时判定的，状态列会显示「已过期」，但行上仍写着生效中。要真正收回，仍然得有人来禁用或撤销。"
+    },
+    "rotate": {
+      "title": "轮换 {name}",
+      "titleFallback": "轮换 Key",
+      "description": "旧 Key 立即失效。持有方换上新值之前，调用会全部返回 401——先约好切换窗口。",
+      "submit": "轮换"
+    },
+    "reveal": {
+      "issuedTitle": "Key 已签发",
+      "rotatedTitle": "新 Key 已生成",
+      "saved": "我已保存",
+      "onlyChanceTitle": "这是唯一一次看到明文",
+      "onlyChanceDescription": "关闭后无法再次查看。丢失只能轮换，不能找回。这个 key 目前还调不动 Atlas 网关——/v1/* 只认 S2S OIDC token，接入在等外部合作方（见上方说明），不要按「马上就能用」交付给对方。"
+    }
+  }
+}

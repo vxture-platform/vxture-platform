@@ -95,7 +95,7 @@ import {
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { api, OperaApiError } from "@/lib/api";
-import { confirmLabels } from "@/lib/destructive";
+import { useConfirmLabels } from "@/lib/destructive";
 import { RISK_LEVEL_META } from "@/lib/status";
 
 const MANAGE = "capability:runos.manage";
@@ -177,6 +177,7 @@ export default function RunosGrantsPage() {
 }
 
 function RunosGrantsPageContent() {
+  const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const canManage = can(MANAGE);
@@ -753,7 +754,7 @@ function RunosGrantsPageContent() {
                             separatorBefore: true,
                             disabled:
                               r.grantType === "derived" || r.state !== "active",
-                            confirm: confirmLabels({
+                            confirm: withLabels({
                               verb: "撤销",
                               target: `${r.capabilityId} 的授权`,
                               consequence:

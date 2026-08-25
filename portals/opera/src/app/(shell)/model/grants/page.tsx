@@ -82,7 +82,7 @@ import {
   deleteFailureToast,
 } from "@/features/atlas/lifecycle";
 import { isEnabled, type ObjectState } from "@/features/atlas/state";
-import { confirmLabels } from "@/lib/destructive";
+import { useConfirmLabels } from "@/lib/destructive";
 import { api, OperaApiError } from "@/lib/api";
 
 /** 与 opera-bff atlas.router.ts 同名能力码——与 endpoints 同一批人管（授权的是
@@ -188,6 +188,7 @@ export default function ProductGrantsPage() {
 }
 
 function ProductGrantsPageContent() {
+  const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const canManage = can(MANAGE);
@@ -668,7 +669,7 @@ function ProductGrantsPageContent() {
                           icon: "trash",
                           danger: true,
                           separatorBefore: true,
-                          confirm: confirmLabels({
+                          confirm: withLabels({
                             verb: "删除",
                             target: `${r.productCode} → ${r.endpointCode} 的授权`,
                             consequence:

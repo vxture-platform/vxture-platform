@@ -55,6 +55,7 @@
     "lint": "pnpm --recursive --if-present lint",
     "lint:design": "node scripts/guardrails/check-design-system.mjs",
     "lint:destructive": "node scripts/guardrails/check-destructive-confirmations.mjs",
+    "lint:messages": "node scripts/guardrails/check-message-catalogs.mjs",
     "lint:data-design": "node scripts/guardrails/check-data-architecture.mjs",
     "lint:schema-residue": "node scripts/guardrails/check-schema-residue.mjs",
     "lint:i18n-keys": "node scripts/guardrails/check-i18n-keys.mjs",

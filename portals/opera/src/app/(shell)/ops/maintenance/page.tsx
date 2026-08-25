@@ -49,7 +49,7 @@ import {
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { api, OperaApiError } from "@/lib/api";
-import { confirmLabels } from "@/lib/destructive";
+import { useConfirmLabels } from "@/lib/destructive";
 
 /** 写操作的能力码，与 BFF 的能力门同名（release:maintenance.manage）。 */
 const MANAGE = "release:maintenance.manage";
@@ -207,6 +207,7 @@ function describeError(error: unknown): { description?: string } {
 }
 
 export default function MaintenanceWindowsPage() {
+  const withLabels = useConfirmLabels();
   const [rows, setRows] = useState<MaintenanceWindowItem[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [keyword, setKeyword] = useState("");
@@ -558,7 +559,7 @@ export default function MaintenanceWindowsPage() {
                             submitting ||
                             (item.state !== "scheduled" &&
                               item.state !== "in_progress"),
-                          confirm: confirmLabels({
+                          confirm: withLabels({
                             verb: "取消",
                             target: `维护窗口「${item.title}」`,
                             consequence:

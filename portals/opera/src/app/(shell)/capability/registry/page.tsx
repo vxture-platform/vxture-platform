@@ -94,7 +94,7 @@ import {
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { api, OperaApiError } from "@/lib/api";
-import { confirmLabels } from "@/lib/destructive";
+import { useConfirmLabels } from "@/lib/destructive";
 import { RISK_LEVEL_META } from "@/lib/status";
 
 const MANAGE = "capability:runos.manage";
@@ -507,6 +507,7 @@ type LoadState =
   | { kind: "ready" };
 
 export default function CapabilitiesPage() {
+  const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const canManage = can(MANAGE);
@@ -1816,7 +1817,7 @@ export default function CapabilitiesPage() {
                                 icon: "prohibit",
                                 danger: true,
                                 disabled: v.state === "withdrawn",
-                                confirm: confirmLabels({
+                                confirm: withLabels({
                                   verb: "撤下",
                                   target: `版本 ${v.version}`,
                                   /* 「不是立刻」这一句必须留：撤版本与禁端点都受

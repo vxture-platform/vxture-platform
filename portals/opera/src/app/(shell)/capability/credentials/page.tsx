@@ -57,7 +57,7 @@ import {
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { api, OperaApiError } from "@/lib/api";
-import { confirmLabels } from "@/lib/destructive";
+import { useConfirmLabels } from "@/lib/destructive";
 
 const MANAGE = "capability:runos.manage";
 
@@ -127,6 +127,7 @@ type LoadState =
   | { kind: "ready" };
 
 export default function RunosCredentialsPage() {
+  const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
   /* 凭证类操作全部托管密钥材料，走 step-up 闸门。 */
@@ -447,7 +448,7 @@ export default function RunosCredentialsPage() {
                           danger: true,
                           separatorBefore: true,
                           disabled: r.state === "revoked",
-                          confirm: confirmLabels({
+                          confirm: withLabels({
                             verb: "吊销",
                             target: `「${r.credentialClass}」的凭证绑定`,
                             /* 凭证是这套管理面里**唯一即时生效**的撤销：网关每次

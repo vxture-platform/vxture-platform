@@ -85,7 +85,7 @@ import {
   type ObjectState,
 } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
-import { confirmLabels } from "@/lib/destructive";
+import { useConfirmLabels } from "@/lib/destructive";
 
 /** 与 opera-bff atlas.router.ts 同名能力码——endpoints 复用 model:model.manage
  * （路由配置本质是模型间接层，同一批人管，admin.operator_permission 里没有
@@ -200,6 +200,7 @@ export default function EndpointsPage() {
 }
 
 function EndpointsPageContent() {
+  const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const canManage = can(MANAGE);
@@ -449,7 +450,7 @@ function EndpointsPageContent() {
              Atlas 用与推导状态同一份数据源判定，前端再算一遍就是给同一个问题造第二
              个答案，被挡住时 409 会点名。`resolution` 缺失（旧 Atlas）时后果确实不
              同，所以 consequence 分两句——那是事实差异，不是措辞差异。 */
-          confirm: confirmLabels({
+          confirm: withLabels({
             verb: "删除",
             target: `入口 ${r.code}`,
             consequence:
@@ -662,7 +663,7 @@ function EndpointsPageContent() {
                   /* 停用本身可逆，但这是**批量**：一次动 N 个入口，停用期间走它们
                      的业务调用全部 404。可撤销的是配置，不是那段时间里失败的请求
                      ——所以批量一律拦（owner 2026-08-25 定的线）。 */
-                  confirm: confirmLabels({
+                  confirm: withLabels({
                     verb: "停用",
                     target: `选中的 ${selectedKeys.length} 个入口`,
                     consequence:

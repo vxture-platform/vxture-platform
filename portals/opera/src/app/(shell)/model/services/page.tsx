@@ -70,7 +70,7 @@ import {
   type StatusBadgeTone,
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
-import { confirmLabels } from "@/lib/destructive";
+import { useConfirmLabels } from "@/lib/destructive";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { deleteFailureToast } from "@/features/atlas/lifecycle";
 import {
@@ -784,6 +784,7 @@ export default function ModelServicePage() {
 }
 
 function ModelServiceContent() {
+  const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const { runWithStepUp } = useStepUp();
@@ -1710,7 +1711,7 @@ function ModelServiceContent() {
                            「已下线」用 `!isServing()` 而不是 `!isEnabled()`：
                            `deprecated` 的 `is_active` 仍是 true，按 isEnabled
                            判会把一个弃用中的模型标成「已下线」，然后被 Atlas 拒。 */
-                        confirm: confirmLabels({
+                        confirm: withLabels({
                           verb: "删除",
                           target: `模型 ${m.modelCode}`,
                           consequence:
@@ -2089,7 +2090,7 @@ function ModelServiceContent() {
                           danger: true,
                           /* Provider 是两值状态（没有 deprecated 档），所以
                              「已停用」用 `!isEnabled()` 就够。 */
-                          confirm: confirmLabels({
+                          confirm: withLabels({
                             verb: "删除",
                             target: `Provider ${r.providerName}`,
                             consequence:

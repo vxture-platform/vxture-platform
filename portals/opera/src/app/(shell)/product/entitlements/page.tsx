@@ -73,7 +73,7 @@ import {
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isEnabled } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
-import { confirmLabels } from "@/lib/destructive";
+import { useConfirmLabels } from "@/lib/destructive";
 
 interface ProductLite {
   id: string;
@@ -175,6 +175,7 @@ export default function ProductEntitlementsPage() {
 }
 
 function ProductEntitlements() {
+  const withLabels = useConfirmLabels();
   const router = useRouter();
   const params = useSearchParams();
   const selectedCode = params.get("productCode") ?? "";
@@ -849,7 +850,7 @@ function ProductEntitlements() {
                               icon: "prohibit" as const,
                               danger: true,
                               disabled: r.grant.state !== "active",
-                              confirm: confirmLabels({
+                              confirm: withLabels({
                                 verb: "撤销",
                                 target: `${r.grant.capabilityId} 的授权`,
                                 /* 派生条数进后果句：撤一条锚点会连带失效 N 条，
@@ -876,7 +877,7 @@ function ProductEntitlements() {
                               icon: "prohibit" as const,
                               danger: true,
                               disabled: !anchorGrantOf(r.grant, caps),
-                              confirm: confirmLabels({
+                              confirm: withLabels({
                                 verb: "撤销",
                                 /* 动的**不是**这一行，是它的锚点——target 必须说出
                                    真正被作用的那个对象，否则确认框在骗人。 */

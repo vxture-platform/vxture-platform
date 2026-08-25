@@ -13,13 +13,16 @@
     "clean": "rimraf .next"
   },
   "dependencies": {
-    "@vxture/core-identity-sdk": "workspace:*",
     "@fontsource/funnel-display": "^5.3.0",
     "@fontsource/geist-mono": "^5.3.0",
     "@fontsource/inter": "^5.3.0",
-    "@vxture/design-system": "9.0.0",
     "@vxture-platform/shared": "workspace:*",
+    "@vxture/core-identity-sdk": "workspace:*",
+    "@vxture/core-locale": "workspace:*",
+    "@vxture/design-system": "9.0.0",
+    "@vxture/platform-browser": "workspace:*",
     "next": "^15.5.21",
+    "next-intl": "^4.13.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

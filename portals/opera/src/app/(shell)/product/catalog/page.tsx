@@ -75,7 +75,7 @@ import {
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { buildAdminAtlasGrantsUrl } from "@/lib/admin-entry";
 import { api, OperaApiError } from "@/lib/api";
-import { confirmLabels } from "@/lib/destructive";
+import { useConfirmLabels } from "@/lib/destructive";
 
 const MANAGE = "platform:product.manage";
 
@@ -209,6 +209,7 @@ export default function ProductsPage() {
 }
 
 function ProductsPageContent() {
+  const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const router = useRouter();
   const { can } = useOperatorSession();
@@ -837,7 +838,7 @@ function ProductsPageContent() {
                                 danger: true as const,
                                 separatorBefore:
                                   a.id === "launch" || a.id === "suspend",
-                                confirm: confirmLabels({
+                                confirm: withLabels({
                                   verb: a.destructive.verb,
                                   target: `产品 ${r.productName}`,
                                   consequence: a.destructive.consequence,

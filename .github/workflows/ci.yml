@@ -164,6 +164,13 @@ jobs:
       - name: Destructive confirmation guardrail
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:destructive
+
+      # 词条中英对齐：键缺了会在英文界面渲染出键名本身（或静默回落成中文），
+      # 而把中文原样复制进 en-US.json 能骗过键检查——那是「假双语」最常见的
+      # 形态，且它在中文环境下永远不会被发现。两条一起查。
+      - name: Message catalog guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:messages
       - name: Env audit (deploy bundle + runtime template contract)
         if: steps.changes.outputs.docs_only != 'true'
         run: |
