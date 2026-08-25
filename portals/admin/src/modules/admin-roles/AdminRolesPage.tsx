@@ -49,7 +49,7 @@ import type {
   PlatformPermissionType,
   PlatformRoleRecord,
 } from "@/entities/console";
-import { useConsoleTranslations } from "@/lib/ConsoleIntl";
+import { useTranslations } from "next-intl";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import {
@@ -77,17 +77,22 @@ interface PermissionTreeNode {
 
 function roleDisplayName(
   role: PlatformRoleRecord,
-  t: ReturnType<typeof useConsoleTranslations>,
+  t: ReturnType<typeof useTranslations>,
 ) {
-  return t(role.nameI18nKey, role.nameEn || role.roleCode || EMPTY_MARK);
+  /* 键来自库里的伴生 `name_key` 列（data_platform §3.2.5，`check-i18n-keys` 在守
+     它「必须存在」），但目录表里新加的角色可能还没进 messages——所以托底是
+     真需要的，用库自己的 `name_en` 兜。`t.has()` 先问一句，缺了不抛。 */
+  const fallback = role.nameEn || role.roleCode || EMPTY_MARK;
+  return t.has(role.nameI18nKey) ? t(role.nameI18nKey) : fallback;
 }
 
 function roleDescription(
   role: PlatformRoleRecord,
-  t: ReturnType<typeof useConsoleTranslations>,
+  t: ReturnType<typeof useTranslations>,
 ) {
-  return role.descriptionI18nKey
-    ? t(role.descriptionI18nKey, role.description || "")
+  if (!role.descriptionI18nKey) return role.description || "";
+  return t.has(role.descriptionI18nKey)
+    ? t(role.descriptionI18nKey)
     : role.description || "";
 }
 
@@ -720,7 +725,7 @@ function PermissionTags({ role }: { role: PlatformRoleRecord }) {
  */
 function useAdminRoleColumns(
   roleLabels: Map<string, string>,
-  t: ReturnType<typeof useConsoleTranslations>,
+  t: ReturnType<typeof useTranslations>,
 ): DataTableColumn<PlatformRoleRecord>[] {
   const labelOf = (role: PlatformRoleRecord) =>
     roleLabels.get(role.id) ?? role.nameEn ?? role.roleCode ?? EMPTY_MARK;
@@ -796,7 +801,7 @@ function AdminRoleCards({
 }: {
   roles: PlatformRoleRecord[];
   roleLabels: Map<string, string>;
-  t: ReturnType<typeof useConsoleTranslations>;
+  t: ReturnType<typeof useTranslations>;
   onOpenPermissions: (role: PlatformRoleRecord) => void;
   onOpenAuthorization: (role: PlatformRoleRecord) => void;
   onEdit: (role: PlatformRoleRecord) => void;
@@ -1065,7 +1070,7 @@ function AdminRoleCopyDialog({
 }
 
 export function AdminRolesPage() {
-  const t = useConsoleTranslations();
+  const t = useTranslations();
   const { toast } = useToast();
   const { runWithStepUp } = useStepUp();
   const [roles, setRoles] = useState<PlatformRoleRecord[]>([]);

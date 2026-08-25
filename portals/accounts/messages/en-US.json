@@ -1,0 +1,34 @@
+{
+  "destructive": {
+    "titleTemplate": "{verb} {target}?",
+    "cancel": "Cancel",
+    "pending": "Working…",
+    "blocked": "Preconditions not met — resolve the items marked above first."
+  },
+  "metadata": {
+    "title": "Sign in · Vxture",
+    "description": "Vxture unified identity sign-in"
+  },
+  "common": {
+    "processing": "Working…",
+    "loadFailed": "Could not load",
+    "actionFailed": "Something went wrong"
+  },
+  "passkeys": {
+    "sectionTitle": "Passkeys",
+    "sectionDescription": "Use one instead of a verification code when signing in to the operations console. An account can register several, so switching devices does not mean unbinding first.",
+    "addedNeverUsed": "Added {added} · never used",
+    "addedLastUsed": "Added {added} · last used {lastUsed}",
+    "add": "Add passkey",
+    "rename": "Rename",
+    "renamePrompt": "Passkey name",
+    "delete": "Delete",
+    "unnamed": "Unnamed passkey",
+    "emptyTitle": "No passkeys yet",
+    "emptyDescription": "Add one and you can sign in to the operations console with a fingerprint, your face, or a security key.",
+    "revokeFailed": "Could not revoke the passkey",
+    "confirmTarget": "the passkey “{name}”",
+    "consequenceLast": "This is the last passkey on the account. Once it is gone you will not be able to sign in with a fingerprint, your face, or a security key. If this account is required to use passkeys, the server will refuse this deletion.",
+    "consequenceOther": "The key stops working immediately and can no longer be used to sign in; the other passkeys on the account are unaffected. A deleted key cannot be recovered — you would have to register a new one."
+  }
+}

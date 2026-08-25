@@ -1,14 +1,16 @@
 "use client";
 
-/* useLocaleSwitch.ts — 切语言。
+/* useLocaleSwitch.ts — 切语言（admin）。
+ *
+ * 与 opera 那份同形。
  *
  * ## 为什么是 refresh 而不是就地换词条
  *
- * admin 那套的做法是把**两本词条都发给客户端**，切换时换 state、不刷新，切得
+ * admin 此前的做法是把**两本词条都发给客户端**，切换时换 state、不刷新，切得
  * 是快。代价是每个访问者都下载了自己不看的那一本，而且客户端从此有了一份
  * 需要和服务端保持一致的语言状态。
  *
- * 这里改成：写 cookie → `router.refresh()` → 服务端按新 cookie 重渲染。客户端
+ * 现在改成：写 cookie → `router.refresh()` → 服务端按新 cookie 重渲染。客户端
  * 只拿一本；「谁是权威」也只有一个答案——cookie。代价是切换要等一次 RSC 往返，
  * 对一个一天切不了一次的偏好来说，这个代价买到的是少一半载荷和少一处状态。
  *

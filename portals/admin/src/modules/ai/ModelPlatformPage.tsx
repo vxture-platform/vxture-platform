@@ -58,7 +58,7 @@ import type {
   TenantQuotaRecord,
   TenantUsageSummaryRecord,
 } from "@/entities/console";
-import { useConsoleTranslations } from "@/lib/ConsoleIntl";
+import { useTranslations } from "next-intl";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 
@@ -382,7 +382,7 @@ function detectModelLinkStatus(model: AiModelRecord): ModelLinkStatus {
 }
 
 export function ModelPlatformPage() {
-  const t = useConsoleTranslations("modelPlatformPage");
+  const t = useTranslations("modelPlatformPage");
   const { toast } = useToast();
   const [models, setModels] = useState<AiModelRecord[]>([]);
   const [providers, setProviders] = useState<ModelProviderRecord[]>([]);
@@ -1234,7 +1234,7 @@ export function ModelPlatformPage() {
           <ListPagination
             currentPage={safeCurrentPage}
             pageCount={totalPages}
-            // 这一页的计数语走 i18n（本页整体已接 useConsoleTranslations），
+            // 这一页的计数语走 i18n（本页整体已接 useTranslations），
             // 不是 DS 那句固定中文。
             countLabel={t("pagination.summary", {
               page: safeCurrentPage,

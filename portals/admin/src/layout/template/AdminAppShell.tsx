@@ -28,7 +28,7 @@ import {
   getAdminNavigationItemByPath,
   getAdminWorkspaceByPath,
 } from "@/config/navigation";
-import { useConsoleTranslations } from "@/lib/ConsoleIntl";
+import { useTranslations } from "next-intl";
 import { AdminHeader, type AdminHeaderViewOption } from "../header/AdminHeader";
 import type { NavSearchEntry } from "../header/useAdminSearch";
 import type { ShellView, ShellDrawerType } from "./shell/types";
@@ -51,9 +51,9 @@ function ShellFrame({
   const { session, status, signOut } = useAdminSession();
   const router = useRouter();
   const pathname = usePathname();
-  const tNav = useConsoleTranslations("navigation");
-  const tShell = useConsoleTranslations("shell");
-  const tDrawer = useConsoleTranslations("drawer");
+  const tNav = useTranslations("navigation");
+  const tShell = useTranslations("shell");
+  const tDrawer = useTranslations("drawer");
 
   /* 初始值由服务端从 cookie 读出后传入，首帧即最终态。写死 false 再在 effect
    * 里纠正，会让刷新时导航"先展开再收起"闪一下——localStorage 对服务端不可见，
@@ -112,10 +112,18 @@ function ShellFrame({
   const navSections: ShellNavSection[] = useMemo(
     () =>
       activeWorkspace.sections.map((section) => ({
-        title: tNav(`sections.${section.id}`, section.title),
+        /* 这两处的键**由数据驱动**（工作域配置里的 section / item id），词条目录
+           不可能穷举，所以托底是真需要的——`t.has()` 先问一句，没有就用配置里
+           自带的中文名。其余 24 处静态键的托底是死代码：键全都存在，那句中文
+           永远不会渲染，留着只会让人以为「翻译还没做」。已一并摘掉。 */
+        title: tNav.has(`sections.${section.id}`)
+          ? tNav(`sections.${section.id}`)
+          : section.title,
         items: section.items.map((it) => ({
           href: it.href,
-          label: tNav(`items.${it.id}.label`, it.label),
+          label: tNav.has(`items.${it.id}.label`)
+            ? tNav(`items.${it.id}.label`)
+            : it.label,
           icon: it.icon,
         })),
       })),
@@ -146,7 +154,7 @@ function ShellFrame({
       <div className="flex items-center gap-2xs text-label-sm text-muted-foreground">
         <Icon name="gauge" size="xs" fallback="placeholder" />
         <span className="min-w-0 flex-1 truncate">
-          {tShell("metricCard.title", "平台健康度")}
+          {tShell("metricCard.title")}
         </span>
         <span className="shrink-0 tabular-nums">{healthPct}%</span>
       </div>
@@ -159,49 +167,49 @@ function ShellFrame({
     {
       level: "danger",
       icon: "ph-warning-octagon",
-      title: tDrawer("notifications.items.audit.title", "高风险操作待审批"),
-      meta: tDrawer("notifications.items.audit.meta", "审批中心 · 12 分钟前"),
+      title: tDrawer("notifications.items.audit.title"),
+      meta: tDrawer("notifications.items.audit.meta"),
       href: "/approval-center",
     },
     {
       level: "info",
       icon: "ph-ticket",
-      title: tDrawer("notifications.items.ticket.title", "新增待处理工单 6 条"),
-      meta: tDrawer("notifications.items.ticket.meta", "工单中心 · 今日"),
+      title: tDrawer("notifications.items.ticket.title"),
+      meta: tDrawer("notifications.items.ticket.meta"),
       href: "/tickets",
     },
   ];
   const settingsRows: Array<[string, string]> = [
     [
-      tDrawer("settings.rows.theme.label", "默认主题"),
-      tDrawer("settings.rows.theme.value", "跟随系统"),
+      tDrawer("settings.rows.theme.label"),
+      tDrawer("settings.rows.theme.value"),
     ],
     [
-      tDrawer("settings.rows.density.label", "界面密度"),
-      tDrawer("settings.rows.density.value", "默认"),
+      tDrawer("settings.rows.density.label"),
+      tDrawer("settings.rows.density.value"),
     ],
     [
-      tDrawer("settings.rows.sessionTimeout.label", "会话超时"),
-      tDrawer("settings.rows.sessionTimeout.value", "30 分钟"),
+      tDrawer("settings.rows.sessionTimeout.label"),
+      tDrawer("settings.rows.sessionTimeout.value"),
     ],
     [
-      tDrawer("settings.rows.auditRetention.label", "审计日志保留"),
-      tDrawer("settings.rows.auditRetention.value", "180 天"),
+      tDrawer("settings.rows.auditRetention.label"),
+      tDrawer("settings.rows.auditRetention.value"),
     ],
   ];
   const drawerLabels = {
-    notificationsTitle: tDrawer("notifications.title", "消息中心"),
-    settingsTitle: tDrawer("settings.title", "系统设置"),
-    markAllRead: tDrawer("notifications.markAllRead", "全部已读"),
-    openCenter: tDrawer("openCenter", "前往消息中心"),
-    close: tDrawer("close", "关闭"),
+    notificationsTitle: tDrawer("notifications.title"),
+    settingsTitle: tDrawer("settings.title"),
+    markAllRead: tDrawer("notifications.markAllRead"),
+    openCenter: tDrawer("openCenter"),
+    close: tDrawer("close"),
   };
 
   const sidebarLabels = {
-    expandNav: tShell("sidebar.expandNav", "展开导航"),
-    collapseNav: tShell("sidebar.collapseNav", "收起导航"),
-    expandAllGroups: tShell("sidebar.expandAllGroups", "展开全部分组"),
-    collapseAllGroups: tShell("sidebar.collapseAllGroups", "收起全部分组"),
+    expandNav: tShell("sidebar.expandNav"),
+    collapseNav: tShell("sidebar.collapseNav"),
+    expandAllGroups: tShell("sidebar.expandAllGroups"),
+    collapseAllGroups: tShell("sidebar.collapseAllGroups"),
   };
 
   const handleSignOut = async () => {
@@ -224,7 +232,7 @@ function ShellFrame({
     return (
       <ShellBootScreen
         label="Vxture Platform"
-        description={tShell("loading.label", "加载中")}
+        description={tShell("loading.label")}
       />
     );
   }
@@ -239,7 +247,7 @@ function ShellFrame({
     return (
       <ShellBootScreen
         label="Vxture Platform"
-        description={tShell("loading.unreachable", "无法连接服务，正在重试…")}
+        description={tShell("loading.unreachable")}
         delayMs={0}
       />
     );

@@ -50,7 +50,7 @@ import type {
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
-import { useConsoleTranslations } from "@/lib/ConsoleIntl";
+import { useTranslations } from "next-intl";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
 
@@ -62,9 +62,12 @@ const EMPTY_MARK = "-";
 
 function platformRoleDisplayName(
   admin: PlatformAdminRecord,
-  t: ReturnType<typeof useConsoleTranslations>,
+  t: ReturnType<typeof useTranslations>,
 ) {
-  return t(admin.roleNameI18nKey, admin.roleNameEn);
+  /* 同 AdminRolesPage：键来自库的伴生 `_key` 列，托底用库自己的英文名。 */
+  return t.has(admin.roleNameI18nKey)
+    ? t(admin.roleNameI18nKey)
+    : admin.roleNameEn;
 }
 
 function platformRoleStatusLabel(admin: PlatformAdminRecord) {
@@ -238,7 +241,7 @@ function PlatformUserActionsMenu({
  * 状态标走 `StatusBadge`，语气由 `platformAdminStatusTone` / `platformRoleStatusTone` 给。
  */
 function usePlatformUserColumns(
-  t: ReturnType<typeof useConsoleTranslations>,
+  t: ReturnType<typeof useTranslations>,
 ): DataTableColumn<PlatformAdminRecord>[] {
   return [
     {
@@ -309,7 +312,7 @@ function PlatformUsersCards({
   t,
 }: {
   admins: PlatformAdminRecord[];
-  t: ReturnType<typeof useConsoleTranslations>;
+  t: ReturnType<typeof useTranslations>;
 }) {
   return (
     <div className="vx-tenant-directory-cards" aria-label="平台用户卡片">
@@ -682,7 +685,7 @@ function PlatformUserMetadataDialog({
 }
 
 export function PlatformUsersPage() {
-  const t = useConsoleTranslations();
+  const t = useTranslations();
   const { toast } = useToast();
   const { runWithStepUp } = useStepUp();
   const [resetInfo, setResetInfo] = useState<{

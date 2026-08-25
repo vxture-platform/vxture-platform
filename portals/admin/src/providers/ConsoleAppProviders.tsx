@@ -1,6 +1,5 @@
 "use client";
 
-import { startTransition, useEffect, useState } from "react";
 import {
   FullscreenProvider,
   ThemeProvider,
@@ -8,82 +7,33 @@ import {
   TooltipProvider,
 } from "@vxture/design-system";
 import type { Density } from "@vxture/design-system";
-import {
-  DEFAULT_LOCALE,
-  SUPPORTED_LOCALES,
-  type Locale,
-  type Theme,
-} from "@vxture-platform/shared";
-import { ConsoleIntlProvider } from "@/lib/ConsoleIntl";
-import {
-  getGlobalUserPreferences,
-  subscribeToGlobalPreferenceChanges,
-} from "@vxture/platform-browser";
+import type { Theme } from "@vxture-platform/shared";
 import { StepUpProvider } from "@/providers/StepUpProvider";
 
+/* locale 与 messages 不再经过这一层：`NextIntlClientProvider` 挂在根 layout 上，
+   由服务端按 `NEXT_LOCALE` cookie 定，切换靠 `router.refresh()` 重渲染。
+   这里原来存着 locale/messages 两份 state、把**两本词条都发给客户端**、再订阅
+   偏好变更就地替换——切得快，代价是每个访问者都下载了自己不看的那一本，而且
+   客户端从此有一份需要和服务端保持一致的语言状态。 */
 type Props = {
   children: React.ReactNode;
-  initialLocale: Locale;
-  initialMessages: Record<string, unknown>;
-  initialMessageCatalog: Record<Locale, Record<string, unknown>>;
   initialTheme: Theme;
   initialDensity: Density;
 };
 
-function normalizeClientLocale(locale: string | undefined): Locale {
-  return locale && (SUPPORTED_LOCALES as readonly string[]).includes(locale)
-    ? (locale as Locale)
-    : DEFAULT_LOCALE;
-}
-
 export function ConsoleAppProviders({
   children,
-  initialLocale,
-  initialMessages,
-  initialMessageCatalog,
   initialTheme,
   initialDensity,
 }: Props) {
-  const [locale, setLocale] = useState<Locale>(initialLocale);
-  const [messages, setMessages] =
-    useState<Record<string, unknown>>(initialMessages);
-
-  useEffect(() => {
-    document.documentElement.lang = locale;
-  }, [locale]);
-
-  useEffect(() => {
-    const syncLocale = (nextLocale: Locale) => {
-      const normalized = normalizeClientLocale(nextLocale);
-      const nextMessages = initialMessageCatalog[normalized] ?? initialMessages;
-      startTransition(() => {
-        setLocale(normalized);
-        setMessages(nextMessages);
-      });
-    };
-
-    const current = getGlobalUserPreferences();
-    if (current.locale !== initialLocale) {
-      syncLocale(current.locale);
-    }
-
-    return subscribeToGlobalPreferenceChanges((preferences) => {
-      if (preferences.locale !== locale) {
-        syncLocale(preferences.locale);
-      }
-    });
-  }, [initialLocale, initialMessageCatalog, initialMessages, locale]);
-
   return (
     <ThemeProvider defaultMode={initialTheme} defaultDensity={initialDensity}>
       <FullscreenProvider defaultMode="native" defaultLockScroll={false}>
-        <ConsoleIntlProvider locale={locale} messages={messages}>
-          <ToastProvider>
-            <TooltipProvider>
-              <StepUpProvider>{children}</StepUpProvider>
-            </TooltipProvider>
-          </ToastProvider>
-        </ConsoleIntlProvider>
+        <ToastProvider>
+          <TooltipProvider>
+            <StepUpProvider>{children}</StepUpProvider>
+          </TooltipProvider>
+        </ToastProvider>
       </FullscreenProvider>
     </ThemeProvider>
   );
