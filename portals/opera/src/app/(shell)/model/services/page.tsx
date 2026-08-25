@@ -140,6 +140,8 @@ interface AiModelRecord {
     streamUsage: string;
     supports: Record<string, boolean>;
     paramMap: Record<string, string>;
+    /** 厂商私有开关（wire schema v2）。值是任意 JSON，不是 string-map。 */
+    extraBody: Record<string, unknown>;
   };
   /**
    * `managed` = 引用密钥库（vault）别名，运行时唯一认的来源；`env` 是 ADR-003
@@ -351,6 +353,13 @@ interface ModelDraft {
    * 「同一模型多家供应」的场景全靠它：编码带供应方前缀保全局唯一，这里填上游认的名。
    */
   upstreamModel: string;
+  /**
+   * `config.wire.extraBody` 的原始 JSON 文本。空串 = 不声明。
+   *
+   * 存文本而不是对象，是为了让「填错了」这件事停在表单里：半截 JSON 也要能留在
+   * 输入框里等人改完，转成对象的那一步放到提交前，失败就点名不提交。
+   */
+  extraBody: string;
 }
 
 /** 空串 → 不送这个键（让 atlas 用它自己的默认）；有值 → 必须是非负整数。 */
@@ -377,6 +386,7 @@ function emptyModelDraft(providerId: string, protocol: string): ModelDraft {
     capabilities: ["chat"],
     keyAlias: "",
     upstreamModel: "",
+    extraBody: "",
   };
 }
 
@@ -403,7 +413,91 @@ function modelDraftFrom(row: AiModelRecord): ModelDraft {
       typeof row.config?.["upstreamModel"] === "string"
         ? row.config["upstreamModel"]
         : "",
+    /* 回填的是**本模型声明的**那一份，不是 `resolvedWire.extraBody`：后者已经把
+       协议默认与 Provider 那两层合并进来了，拿它预填等于把别人层里的开关抄进本层，
+       保存一次就真的变成本模型的声明——一次编辑悄悄改变了继承关系。 */
+    extraBody: formatExtraBodyForEdit(readDeclaredExtraBody(row.config)),
   };
+}
+
+/**
+ * atlas 自己管理、`extraBody` 覆盖它们没有正当用途的请求体键
+ * （`vxture-atlas/service/src/providers/wire.ts` 的 `RESERVED_BODY_KEYS`）。
+ *
+ * 抄一份在这里不是重复校验：上游确实会拒（400），但那要等一次往返，而拒绝的理由
+ * 「model 由适配器管理」在填表的当下最有用。尤其 `model`——把它写进 extraBody 会
+ * 绕过 `upstreamModel`，让注册表里的模型名和真正发出去的不是同一个，而这件事
+ * 不会报错。
+ */
+const RESERVED_BODY_KEYS = [
+  "model",
+  "messages",
+  "stream",
+  "stream_options",
+  "system",
+] as const;
+
+/** 本层 `config.wire.extraBody` 的声明值。不是 `resolvedWire`（那是三层合并后的）。 */
+function readDeclaredExtraBody(
+  config: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  const wire = config?.["wire"];
+  if (typeof wire !== "object" || wire === null || Array.isArray(wire)) {
+    return null;
+  }
+  const extra = (wire as Record<string, unknown>)["extraBody"];
+  if (typeof extra !== "object" || extra === null || Array.isArray(extra)) {
+    return null;
+  }
+  return extra as Record<string, unknown>;
+}
+
+/** 回填进输入框的文本。空对象与"没声明"都回空串——两者对上游是同一件事。 */
+function formatExtraBodyForEdit(value: Record<string, unknown> | null): string {
+  if (!value || Object.keys(value).length === 0) return "";
+  return JSON.stringify(value, null, 2);
+}
+
+type ExtraBodyParse =
+  | { ok: true; value: Record<string, unknown> | null }
+  | { ok: false; reason: string };
+
+/**
+ * 文本 → 对象。**三种失败各有各的说法**，不合并成一句"格式错误"：填错的人需要
+ * 知道是语法坏了、还是形状不对、还是这个键根本轮不到他配。
+ */
+function parseExtraBody(raw: string): ExtraBodyParse {
+  const text = raw.trim();
+  if (text === "") return { ok: true, value: null };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { ok: false, reason: "不是合法的 JSON。" };
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return {
+      ok: false,
+      reason:
+        "要一个对象（`{ ... }`），不是数组或标量——它是并进请求体的一组键。",
+    };
+  }
+
+  const record = parsed as Record<string, unknown>;
+  const reserved = RESERVED_BODY_KEYS.filter((key) => key in record);
+  if (reserved.length > 0) {
+    return {
+      ok: false,
+      reason: `${reserved.join(" / ")} 由适配器管理，不能在这里覆盖${
+        reserved.includes("model")
+          ? "——model 写在这里会绕过「上游模型名」，让注册表里的名字和真正发出去的不是同一个"
+          : ""
+      }。`,
+    };
+  }
+
+  return { ok: true, value: Object.keys(record).length > 0 ? record : null };
 }
 
 /**
@@ -414,15 +508,44 @@ function modelDraftFrom(row: AiModelRecord): ModelDraft {
  * keyReference。不把既有 config 一并送回去，一次普通编辑就会把 `config.wire`
  * 覆盖与 `upstreamModel` 悄悄抹平。读回的 config 已被 atlas 剥掉密钥类键
  * （managedKeyAlias 由它按 keyReference 自己并回去），round-trip 无损。
+ *
+ * 同一条道理往下一层：`wire` 里除 `extraBody` 之外的键（chatPath / headers /
+ * supports / paramMap…）本表单一个都不管，但它们和 extraBody 住在同一个对象里，
+ * 所以这里逐键重建 `wire` 而不是整体覆盖。
+ *
+ * 写 extraBody 时把 `schemaVersion` 一并声明进去（取自协议词表信封里上游自报的
+ * 那个数）。理由在 atlas 的 wire.ts 头注上：一个只认识 v1 的旧服务读到带
+ * `extraBody` 的行会忽略它，版本号是让这件事出声的唯一防线——不声明就得到一个
+ * 配了却静默不生效的开关。词表没取到（`null`）时不声明：宁可少一句话，也不写
+ * 一个我们并没有观测到的版本号。
  */
 function buildModelConfig(
   existing: Record<string, unknown> | null,
   upstreamModel: string,
+  extraBody: Record<string, unknown> | null,
+  wireSchemaVersion: number | null,
 ): Record<string, unknown> | null {
   const next: Record<string, unknown> = { ...(existing ?? {}) };
   delete next["upstreamModel"];
   const trimmed = upstreamModel.trim();
   if (trimmed) next["upstreamModel"] = trimmed;
+
+  const existingWire = next["wire"];
+  const wire: Record<string, unknown> =
+    typeof existingWire === "object" &&
+    existingWire !== null &&
+    !Array.isArray(existingWire)
+      ? { ...(existingWire as Record<string, unknown>) }
+      : {};
+  delete wire["extraBody"];
+  if (extraBody) {
+    wire["extraBody"] = extraBody;
+    if (wireSchemaVersion !== null) wire["schemaVersion"] = wireSchemaVersion;
+  }
+
+  if (Object.keys(wire).length > 0) next["wire"] = wire;
+  else delete next["wire"];
+
   return Object.keys(next).length > 0 ? next : null;
 }
 
@@ -471,6 +594,11 @@ function ModelServiceContent() {
   const [providers, setProviders] = useState<ModelProviderRecord[]>([]);
   const [models, setModels] = useState<AiModelRecord[]>([]);
   const [protocols, setProtocols] = useState<ProtocolCatalogEntry[]>([]);
+  /* 上游自己声明它读得懂的 wire schema 版本。`null` = 词表没取到，此时不臆造一个
+     版本号写进注册表——宁可不声明，也不声明一个我们并没有观测到的数字。 */
+  const [wireSchemaVersion, setWireSchemaVersion] = useState<number | null>(
+    null,
+  );
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState<
@@ -548,11 +676,19 @@ function ModelServiceContent() {
     void reload();
   }, [reload]);
 
-  /* 协议词表单独取、失败不挡页面：它只喂一个下拉。 */
+  /* 协议词表单独取、失败不挡页面：它只喂一个下拉。
+     信封里的 `wireSchemaVersion` 一并留下：写 `config.wire` 时要把它声明进去，
+     见 `buildModelConfig` 头注——那是「配了却静默不生效」的唯一防线。 */
   useEffect(() => {
     void api
-      .get<{ protocols: ProtocolCatalogEntry[] }>("/api/atlas/protocols")
-      .then((r) => setProtocols(r.protocols))
+      .get<{
+        wireSchemaVersion: number;
+        protocols: ProtocolCatalogEntry[];
+      }>("/api/atlas/protocols")
+      .then((r) => {
+        setProtocols(r.protocols);
+        setWireSchemaVersion(r.wireSchemaVersion);
+      })
       .catch(() => setProtocols([]));
   }, []);
 
@@ -820,6 +956,18 @@ function ModelServiceContent() {
       return;
     }
 
+    /* 厂商开关和上面三个数值字段同一条规矩：非法值不静默丢掉、也不当成"没配"送
+       出去。上游确实也会拒，但那要等一次往返，而理由在填表的当下最有用。 */
+    const extraBody = parseExtraBody(modelDraft.extraBody);
+    if (!extraBody.ok) {
+      toast({
+        tone: "danger",
+        title: "厂商开关没通过",
+        description: extraBody.reason,
+      });
+      return;
+    }
+
     const mutable = {
       modelName: modelDraft.modelName.trim(),
       providerId: modelDraft.providerId || null,
@@ -841,6 +989,8 @@ function ModelServiceContent() {
       config: buildModelConfig(
         modelDialog.kind === "edit" ? modelDialog.row.config : null,
         modelDraft.upstreamModel,
+        extraBody.value,
+        wireSchemaVersion,
       ),
     };
 
@@ -2147,21 +2297,50 @@ function ModelServiceContent() {
           {/* 容量与呈现：全部可留空，留空 = 用 atlas 自己的默认，不是 0。 */}
           <FieldTier tier="advanced" hint="都可留空，留空＝用 Atlas 默认。">
             <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="model-description">说明</FieldLabel>
-                <Textarea
-                  id="model-description"
-                  rows={2}
-                  value={modelDraft.description}
-                  onChange={(e) =>
-                    setModelDraft({
-                      ...modelDraft,
-                      description: e.target.value,
-                    })
-                  }
-                  placeholder="这个模型适合做什么、有什么已知限制"
-                />
-              </Field>
+              {/* 说明与厂商开关并排：两个都是 rows=2 的 Textarea，占的高度和原来
+                  单栏一个说明一样——xl 双栏「一屏可见、不出滚动条」的账不变。 */}
+              <div className="grid grid-cols-2 gap-md">
+                <Field>
+                  <FieldLabel htmlFor="model-description">说明</FieldLabel>
+                  <Textarea
+                    id="model-description"
+                    rows={2}
+                    value={modelDraft.description}
+                    onChange={(e) =>
+                      setModelDraft({
+                        ...modelDraft,
+                        description: e.target.value,
+                      })
+                    }
+                    placeholder="这个模型适合做什么、有什么已知限制"
+                  />
+                </Field>
+                {/* `config.wire.extraBody`（wire schema v2）。
+                    在此之前门户没有任何地方能配它，于是「接一家上游只写注册表数据」
+                    这句话对 opera 不成立：一个默认开思考的模型（DeepSeek V4）注册完
+                    就是坏的——流式一个 token 都不交付——而唯一的修法是一条门户填不了
+                    的配置。这个输入框就是把那条路补上。 */}
+                <Field>
+                  <FieldLabel htmlFor="model-extra-body">厂商开关</FieldLabel>
+                  <Textarea
+                    id="model-extra-body"
+                    rows={2}
+                    value={modelDraft.extraBody}
+                    onChange={(e) =>
+                      setModelDraft({
+                        ...modelDraft,
+                        extraBody: e.target.value,
+                      })
+                    }
+                    placeholder={'{"thinking":{"type":"disabled"}}'}
+                    className="font-mono"
+                  />
+                  <FieldDescription>
+                    原样并进请求体的 JSON 对象，留空＝不声明。改名已有参数用
+                    paramMap，这里管的是新字段。
+                  </FieldDescription>
+                </Field>
+              </div>
               <div className="grid grid-cols-2 gap-md">
                 <Field>
                   <FieldLabel htmlFor="model-context">上下文窗口</FieldLabel>
@@ -2641,13 +2820,24 @@ function wireOriginOf(
   return "default";
 }
 
-/** 值怎么显示。对象类的键（headers / supports / paramMap）平铺成一行行 `k=v`。 */
+/**
+ * 值怎么显示。对象类的键（headers / supports / paramMap / extraBody）平铺成一行行
+ * `k=v`。
+ *
+ * 子值用 `JSON.stringify` 而不是 `String`：前七个键的子值都是标量，`extraBody`
+ * 的不是——DeepSeek 关思考的开关是 `thinking: {"type":"disabled"}`，`String()`
+ * 会把它渲染成 `thinking=[object Object]`，也就是把唯一要看的那部分吃掉。
+ */
 function formatWireValue(value: unknown): string {
   if (value === null) return "—（用适配器默认）";
   if (typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>);
     return entries.length
-      ? entries.map(([k, v]) => `${k}=${String(v)}`).join("  ")
+      ? entries
+          .map(
+            ([k, v]) => `${k}=${typeof v === "string" ? v : JSON.stringify(v)}`,
+          )
+          .join("  ")
       : "—（空）";
   }
   return String(value);
@@ -2675,6 +2865,10 @@ function WireReport({
     { key: "headers", value: wire.headers },
     { key: "supports", value: wire.supports },
     { key: "paramMap", value: wire.paramMap },
+    /* v2 加的第八个键。它此前不在这张表里，于是一个靠 `extraBody` 才跑得起来的
+       模型（关掉思考的 DeepSeek）在这个抽屉里看不到自己真正的开关——抽屉存在的
+       理由是「实际跑什么」，少一个键就是把它变回一句半真话。 */
+    { key: "extraBody", value: wire.extraBody },
   ];
 
   return (

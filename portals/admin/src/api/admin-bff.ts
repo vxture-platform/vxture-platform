@@ -1223,6 +1223,8 @@ export async function createAiModelGrant(payload: {
     | "internal_service"
     | null;
   agentId?: string | null;
+  /** 调用方按任务画像点名路由时用的那个名字（atlas create 与 update 都收）。 */
+  taskProfile?: string | null;
   priority?: number | null;
   reason?: string | null;
   expiresAt?: string | null;
@@ -1250,21 +1252,20 @@ export async function createAiModelGrant(payload: {
 export async function updateAiModelGrant(
   grantId: string,
   payload: {
-    agentId?: string | null;
-    applicationId?: string | null;
-    applicationType?:
-      | "agent"
-      | "workflow"
-      | "api_client"
-      | "internal_service"
-      | null;
+    taskProfile?: string | null;
     priority?: number | null;
     reason?: string | null;
     expiresAt?: string | null;
     /* 这里**没有**状态字段，是刻意的：atlas 的 `UpdateAiModelGrantBody` 不含它。
        启停只走具名动作（activate/deactivate），理由是审计——`AuditMiddleware` 从路径
        推导 action，走 update 改状态会被记成 `action='update'`，于是按
-       `?action=deactivate` 检索的审计员一条都查不到。 */
+       `?action=deactivate` 检索的审计员一条都查不到。
+
+       也**没有** `agentId` / `applicationId` / `applicationType`：atlas 的
+       `normalizeUpdateGrant` 对这三个是「出现即拒」（400，不比对值），库里
+       `atlas_svc` 在这三列上根本没有 UPDATE 权限。此前它们列在这里，于是这个签名
+       在邀请调用方去踩一条必然失败的路——2026-08-23 实测过，编辑一条授权什么都不改
+       直接保存就是 400。改应用范围 = 停用这条 + 新建一条，两个决定都留在审计里。 */
   },
 ): Promise<AiModelGrantRecord> {
   const response = await fetch(

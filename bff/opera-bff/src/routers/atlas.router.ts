@@ -274,9 +274,13 @@ export interface ProviderPerformanceSnapshot {
 /**
  * atlas 的 `ResolvedWire`，逐字段照抄（`vxture-atlas/service/src/providers/wire.ts`）。
  *
- * 七个键就是 atlas 的 `KNOWN_KEYS` 全集——写入侧对未知键是**拒绝**而不是忽略，
+ * 八个键就是 atlas 的 `KNOWN_KEYS` 全集——写入侧对未知键是**拒绝**而不是忽略，
  * 所以这里不留 index signature：多出来的键意味着上游改了词表，那该由契约守卫报出来，
  * 不该被一个 `[k: string]: unknown` 悄悄吞掉。
+ *
+ * 「全集」这句话本身要跟着上游动：`extraBody` 是 wire schema v2（atlas 2026-08-24）
+ * 加的第八个键，而这里此前还写着「七个」并且真的少接了它——一句一度为真、后来
+ * 没跟上的断言，比没有断言更坏。
  */
 export interface ResolvedWire {
   schemaVersion: number;
@@ -289,6 +293,15 @@ export interface ResolvedWire {
   supports: Record<string, boolean>;
   /** 规范参数名 → 上游线上字段名，仅记录与默认不同的。 */
   paramMap: Record<string, string>;
+  /**
+   * 原样并入请求体的厂商私有开关（wire schema v2）。
+   *
+   * 值是**任意 JSON**，不是 string-map：DeepSeek 关思考用的是
+   * `thinking: {"type":"disabled"}`。`paramMap` 只能给已有的规范参数改名、塞不进
+   * 新字段，而厂商开关恰恰都是新字段——这一个键就是「接一家改一次代码」与
+   * 「接一家写一行注册表数据」的分界。
+   */
+  extraBody: Record<string, unknown>;
 }
 
 export interface AiModelRecord {
