@@ -1592,5 +1592,11 @@
         }
       }
     }
+  },
+  "destructive": {
+    "titleTemplate": "{verb} {target}?",
+    "cancel": "Cancel",
+    "pending": "Working…",
+    "blocked": "Preconditions not met — resolve the items marked above first."
   }
 }

@@ -31,6 +31,8 @@ import {
 import type { AnnouncementRecord } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { formatDate } from "@/modules/tenants/tenant-utils";
+import type { DestructiveConfirm } from "@vxture/design-system";
+import { useConfirmLabels } from "@/modules/shared/destructive";
 
 // ─── 类型 ─────────────────────────────────────────────────────────────────────
 
@@ -364,11 +366,15 @@ const ANNOUNCEMENT_COLUMNS: readonly DataTableColumn<AnnouncementRecord>[] = [
 function announcementActions(
   item: AnnouncementRecord,
   busy: boolean,
+  /* 这是个普通函数不是组件，调不了 hook——所以 `withLabels` 从调用点传进来。
+     把它塞进 `handlers` 也能跑，但那袋子装的是"做什么"，不是"怎么说"。 */
+  withLabels: (confirm: DestructiveConfirm) => DestructiveConfirm,
   handlers: {
     onEdit: (item: AnnouncementRecord) => void;
     onPublish: (item: AnnouncementRecord) => void;
     onArchive: (item: AnnouncementRecord) => void;
-    onDelete: (item: AnnouncementRecord) => void;
+    /** 落锤。返回 Promise：确认由菜单项承担，成功才关框由这个结局判。 */
+    onDelete: (item: AnnouncementRecord) => Promise<void>;
   },
 ) {
   return (
@@ -404,7 +410,13 @@ function announcementActions(
           danger: true,
           disabled: busy,
           separatorBefore: true,
-          onSelect: () => handlers.onDelete(item),
+          confirm: withLabels({
+            verb: "删除",
+            target: `公告「${item.title}」`,
+            consequence:
+              "公告与它的触达记录一并从列表消失，不可撤销。已经推送出去的通知不会被收回——收件人那边看到的还在。",
+            onConfirm: () => handlers.onDelete(item),
+          }),
         },
       ]}
     />
@@ -557,6 +569,7 @@ function AnnouncementFormDialog({
 
 export function AnnouncementsPage() {
   const { toast } = useToast();
+  const withLabels = useConfirmLabels();
   const [items, setItems] = useState<AnnouncementRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -571,9 +584,6 @@ export function AnnouncementsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<AnnouncementForm>(createDefaultForm);
   const [submitting, setSubmitting] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<AnnouncementRecord | null>(
-    null,
-  );
 
   useEffect(() => {
     fetchAnnouncements()
@@ -682,10 +692,9 @@ export function AnnouncementsPage() {
     void runAction("公告已归档", () => archiveAnnouncement(item.id));
   }
 
-  async function confirmDelete() {
-    if (!pendingDelete) return;
-    const target = pendingDelete;
-    setPendingDelete(null);
+  /* 收参数而不是读 `pendingDelete`：确认由菜单项承担，那一项知道自己作用在哪
+     一行——再绕一圈全局待删态，是给同一个事实造第二个来源。 */
+  async function confirmDelete(target: AnnouncementRecord) {
     await runAction("公告已删除", () => deleteAnnouncement(target.id));
   }
 
@@ -727,11 +736,11 @@ export function AnnouncementsPage() {
               loading={loading}
               indexStart={(page - 1) * PAGE_SIZE + 1}
               rowActions={(item) =>
-                announcementActions(item, submitting, {
+                announcementActions(item, submitting, withLabels, {
                   onEdit: openEdit,
                   onPublish: handlePublish,
                   onArchive: handleArchive,
-                  onDelete: setPendingDelete,
+                  onDelete: confirmDelete,
                 })
               }
               empty={
@@ -792,24 +801,6 @@ export function AnnouncementsPage() {
           onChange={(patch) => setForm((old) => ({ ...old, ...patch }))}
           onClose={closeDialog}
           onSubmit={(event) => void submitForm(event)}
-        />
-      ) : null}
-
-      {pendingDelete ? (
-        <DialogForm
-          open
-          title="删除公告"
-          description={`确认删除「${pendingDelete.title}」？此操作不可撤销。`}
-          submitLabel="删除"
-          danger
-          submitting={submitting}
-          onOpenChange={(open) => {
-            if (!open) setPendingDelete(null);
-          }}
-          onSubmit={(event) => {
-            event.preventDefault();
-            void confirmDelete();
-          }}
         />
       ) : null}
     </>

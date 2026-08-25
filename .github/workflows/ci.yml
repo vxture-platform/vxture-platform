@@ -157,6 +157,13 @@ jobs:
       - name: Design system guardrail
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:design
+
+      # 破坏性动作的确认门（DS 9.0 的类型义务管不到的两件事）：`confirmExempt`
+      # 的数目不许悄悄变多——它一旦好写就会被当成绕过确认的捷径，而绕过在界面
+      # 上看不出来；以及 `window.confirm` 不许回潮——它没有主语、阻塞页面。
+      - name: Destructive confirmation guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:destructive
       - name: Env audit (deploy bundle + runtime template contract)
         if: steps.changes.outputs.docs_only != 'true'
         run: |

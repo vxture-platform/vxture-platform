@@ -61,6 +61,7 @@ import {
   joinClasses,
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
+import { useConfirmLabels } from "@/modules/shared/destructive";
 
 type ViewMode = "list" | "cards";
 type StatusFilter = "all" | SubscriptionOperationStatus;
@@ -152,6 +153,7 @@ function SubscriptionActionsMenu({
     action: SubscriptionOperationAction,
   ) => void;
 }) {
+  const withLabels = useConfirmLabels();
   const router = useRouter();
   const toggleAction = subscriptionToggleAction(subscription.status);
 
@@ -216,7 +218,22 @@ function SubscriptionActionsMenu({
               subscriptionActionDisabledReason("cancel", subscription) ??
               undefined,
             danger: true,
-            onSelect: () => onAction(subscription, "cancel"),
+            confirm: withLabels({
+              verb: subscriptionActionLabel("cancel"),
+              target: `${subscription.tenantName} 的「${subscription.solutionName} · ${subscription.servicePlanName}」订阅`,
+              consequence:
+                "订阅进入已取消状态，租户随即失去该产品的使用权。已产生的账单与用量记录不受影响；要恢复需要重新开通，价格以届时的挂牌价为准。",
+              /* 可用性判据此前只体现在 `disabled` 上——点不开，但说不出为什么。 */
+              preconditions: [
+                {
+                  label:
+                    subscriptionActionDisabledReason("cancel", subscription) ??
+                    "当前状态允许取消",
+                  met: canRunSubscriptionAction("cancel", subscription),
+                },
+              ],
+              onConfirm: () => onAction(subscription, "cancel"),
+            }),
           },
         ]}
       />

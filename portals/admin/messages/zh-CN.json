@@ -1592,5 +1592,11 @@
         }
       }
     }
+  },
+  "destructive": {
+    "titleTemplate": "{verb}{target}？",
+    "cancel": "取消",
+    "pending": "处理中…",
+    "blocked": "前置条件未满足，先处理上面标红的那几条。"
   }
 }
