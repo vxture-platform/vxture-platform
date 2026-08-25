@@ -404,6 +404,21 @@ export function ModelPlatformPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(20);
   /**
+   * 计价规则与策略各自分页。
+   *
+   * 这一页同时铺三份清单，而模型表早就分了页、下面两段没有——于是种子环境里
+   * 131 个模型 + 214 条计价规则 + 133 条策略一次渲染近五百张卡，页面在浏览器里
+   * 实测卡到截图连续 30 秒超时（2026-08-25）。策略那一段是本轮新加的，等于我把
+   * 一个本来就吃紧的页面又压了一层。
+   *
+   * 三份清单三套页码而不是共用一套：它们是三张互不相干的表，共用页码会让翻计价
+   * 规则把策略也翻走——那是把「同一页上」误当成「同一个东西」。
+   */
+  const [priceRulePage, setPriceRulePage] = useState(1);
+  const [priceRulePageSize, setPriceRulePageSize] = useState<PageSize>(20);
+  const [policyPage, setPolicyPage] = useState(1);
+  const [policyPageSize, setPolicyPageSize] = useState<PageSize>(20);
+  /**
    * 上游读取是否失败。**不复用 `feedback`**：那条横幅会被后续的保存、启停操作
    * 覆盖，而"这张表为什么是空的"必须一直可查。
    */
@@ -532,6 +547,28 @@ export function ModelPlatformPage() {
   const modelById = useMemo(
     () => new Map(models.map((model) => [model.id, model])),
     [models],
+  );
+
+  /* 页码钳在总页数内：删掉最后一页的最后一条之后，页码会指向一个不存在的页，
+     那时该退回最后一页而不是显示空白——与模型表 `safeCurrentPage` 同一套。 */
+  const priceRulePageCount = Math.max(
+    1,
+    Math.ceil(priceRules.length / priceRulePageSize),
+  );
+  const safePriceRulePage = Math.min(priceRulePage, priceRulePageCount);
+  const pagedPriceRules = priceRules.slice(
+    (safePriceRulePage - 1) * priceRulePageSize,
+    safePriceRulePage * priceRulePageSize,
+  );
+
+  const policyPageCount = Math.max(
+    1,
+    Math.ceil(policies.length / policyPageSize),
+  );
+  const safePolicyPage = Math.min(policyPage, policyPageCount);
+  const pagedPolicies = policies.slice(
+    (safePolicyPage - 1) * policyPageSize,
+    safePolicyPage * policyPageSize,
   );
 
   /** UUID → 可视码。屏幕上只出 value，UUID 只当 key 用。 */
@@ -1279,7 +1316,7 @@ export function ModelPlatformPage() {
         <section className="vx-tenant-directory" aria-label="计价规则列表">
           {priceRules.length ? (
             <div className="vx-tenant-directory-cards vx-model-platform-cards">
-              {priceRules.map((rule) => {
+              {pagedPriceRules.map((rule) => {
                 const ruleModel = modelById.get(rule.modelId);
                 return (
                   <article
@@ -1364,6 +1401,23 @@ export function ModelPlatformPage() {
             </section>
           )}
         </section>
+        {priceRules.length > 0 ? (
+          <ListPagination
+            currentPage={safePriceRulePage}
+            pageCount={priceRulePageCount}
+            countLabel={t("pagination.summary", {
+              page: safePriceRulePage,
+              totalPages: priceRulePageCount,
+              total: priceRules.length,
+            })}
+            pageSize={priceRulePageSize}
+            onPageSizeChange={(value) => {
+              setPriceRulePageSize(value);
+              setPriceRulePage(1);
+            }}
+            onPageChange={setPriceRulePage}
+          />
+        ) : null}
       </div>
 
       {/* ── 模型策略 ───────────────────────────────────────────────────────
@@ -1388,7 +1442,7 @@ export function ModelPlatformPage() {
         <section className="vx-tenant-directory" aria-label="模型策略列表">
           {policies.length ? (
             <div className="vx-tenant-directory-cards vx-model-platform-cards">
-              {policies.map((policy) => {
+              {pagedPolicies.map((policy) => {
                 const policyModel = modelById.get(policy.modelId);
                 const inForce = policyStanding.inForce.has(policy.id);
                 const shadowed = policyStanding.shadowed.has(policy.id);
@@ -1522,6 +1576,23 @@ export function ModelPlatformPage() {
             </section>
           )}
         </section>
+        {policies.length > 0 ? (
+          <ListPagination
+            currentPage={safePolicyPage}
+            pageCount={policyPageCount}
+            countLabel={t("pagination.summary", {
+              page: safePolicyPage,
+              totalPages: policyPageCount,
+              total: policies.length,
+            })}
+            pageSize={policyPageSize}
+            onPageSizeChange={(value) => {
+              setPolicyPageSize(value);
+              setPolicyPage(1);
+            }}
+            onPageChange={setPolicyPage}
+          />
+        ) : null}
       </div>
 
       {priceRuleDialog ? (
