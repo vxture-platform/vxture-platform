@@ -215,10 +215,10 @@ const IMPORT_ONLY_STYLE_ENTRIES = new Map([
     "admin placeholder.css",
   ],
   [normalize("portals/admin/src/styles/admin-roles.css"), "admin roles.css"],
-  [
-    normalize("portals/admin/src/styles/admin-service-health.css"),
-    "admin service health.css",
-  ],
+  // admin-service-health.css 已删（2026-08-25）：服务健康页早已改用 DataTable 与
+  // EmptyState，它下面四个子文件 30 个类**全仓零引用**。入口连同子文件一并退役。
+  // 这条守卫在删除当天就报了红——清单与文件不同步正是它要抓的，按它的提示从清单
+  // 里移除，而不是给守卫加一条"文件不存在就跳过"。
   [
     normalize("portals/admin/src/styles/admin-tenant-detail.css"),
     "admin tenant detail.css",

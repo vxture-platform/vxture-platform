@@ -836,25 +836,23 @@ export function VerificationsPage() {
                 onReject={openReject}
               />
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={loading ? "正在加载实名认证" : "没有匹配的实名认证"}
-                  description={
-                    loading
-                      ? "正在读取租户认证数据。"
-                      : "清空筛选条件后可查看全部实名认证记录。"
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={loading ? "正在加载实名认证" : "没有匹配的实名认证"}
+                description={
+                  loading
+                    ? "正在读取租户认证数据。"
+                    : "清空筛选条件后可查看全部实名认证记录。"
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }

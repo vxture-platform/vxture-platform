@@ -68,7 +68,8 @@
   align-items: center;
   flex: 0 0 auto;
   padding: var(--space-2xs);
-  border: var(--vx-admin-overview-line-width-1p) solid color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
+  border: var(--vx-admin-overview-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
   border-radius: var(--admin-overview-card-radius);
   background: color-mix(in srgb, var(--vx-color-white) 72%, transparent);
 }
@@ -135,7 +136,8 @@
   width: var(--vx-admin-overview-size-18r-large);
   display: block;
   padding: var(--space-md);
-  border: var(--vx-admin-overview-line-width-1p) solid color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
+  border: var(--vx-admin-overview-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
   border-radius: var(--admin-overview-card-radius);
   background: color-mix(in srgb, var(--vx-color-white) 98%, transparent);
   color: var(--vx-color-neutral-700);
@@ -144,7 +146,9 @@
   line-height: 1.5;
   opacity: 0;
   pointer-events: none;
-  box-shadow: 0 var(--vx-admin-overview-effect-1r) var(--vx-admin-overview-effect-2r) color-mix(in srgb, var(--vx-color-brand-800) 14%, transparent);
+  box-shadow: 0 var(--vx-admin-overview-effect-1r)
+    var(--vx-admin-overview-effect-2r)
+    color-mix(in srgb, var(--vx-color-brand-800) 14%, transparent);
   transform: translateY(calc(var(--vx-admin-overview-motion-05r) * -1));
   transition:
     opacity 160ms ease,

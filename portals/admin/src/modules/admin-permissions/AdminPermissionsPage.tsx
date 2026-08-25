@@ -1272,17 +1272,15 @@ function PermissionDomainSection({
           />
         )
       ) : (
-        <section className="vx-tenant-empty vx-admin-permission-domain__empty">
-          <EmptyState
-            title={`没有匹配的${group.title}`}
-            description="清空当前板块筛选条件后可查看该域全部权限。"
-            action={
-              <ActionButton variant="outline" icon="x" onClick={onResetFilters}>
-                清空筛选
-              </ActionButton>
-            }
-          />
-        </section>
+        <EmptyState
+          title={`没有匹配的${group.title}`}
+          description="清空当前板块筛选条件后可查看该域全部权限。"
+          action={
+            <ActionButton variant="outline" icon="x" onClick={onResetFilters}>
+              清空筛选
+            </ActionButton>
+          }
+        />
       )}
       {detailPermission ? (
         <PermissionDetailDialog
@@ -1621,22 +1619,20 @@ export function AdminPermissionsPage() {
             </div>
           </section>
         ) : (
-          <section className="vx-tenant-empty">
-            <EmptyState
-              title={
-                loading
-                  ? "正在加载平台权限"
-                  : loadError
-                    ? "平台权限读取失败"
-                    : "没有匹配的平台权限"
-              }
-              description={
-                loading
-                  ? "正在读取 platform.platform_permission。"
-                  : (loadError ?? "当前没有可展示的平台权限。")
-              }
-            />
-          </section>
+          <EmptyState
+            title={
+              loading
+                ? "正在加载平台权限"
+                : loadError
+                  ? "平台权限读取失败"
+                  : "没有匹配的平台权限"
+            }
+            description={
+              loading
+                ? "正在读取 platform.platform_permission。"
+                : (loadError ?? "当前没有可展示的平台权限。")
+            }
+          />
         )}
       </div>
 

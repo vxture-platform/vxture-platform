@@ -1600,25 +1600,23 @@ export function AdminRolesPage() {
                 onDelete={(role) => setPendingDeleteRoleId(role.id)}
               />
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={loading ? "正在加载平台角色" : "没有匹配的平台角色"}
-                  description={
-                    loading
-                      ? "正在从 platform.platform_role 读取平台角色。"
-                      : (loadError ?? "清空筛选条件后可查看全部平台角色。")
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={loading ? "正在加载平台角色" : "没有匹配的平台角色"}
+                description={
+                  loading
+                    ? "正在从 platform.platform_role 读取平台角色。"
+                    : (loadError ?? "清空筛选条件后可查看全部平台角色。")
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }

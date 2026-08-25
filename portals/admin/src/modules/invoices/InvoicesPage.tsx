@@ -884,25 +884,23 @@ export function InvoicesPage() {
                 onReceiptAction={requestReceiptAction}
               />
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={loading ? "正在加载发票" : "没有匹配的发票"}
-                  description={
-                    loading
-                      ? "正在读取线下发票台账。"
-                      : (loadError ?? "清空筛选条件后可查看全部线下发票记录。")
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={loading ? "正在加载发票" : "没有匹配的发票"}
+                description={
+                  loading
+                    ? "正在读取线下发票台账。"
+                    : (loadError ?? "清空筛选条件后可查看全部线下发票记录。")
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }

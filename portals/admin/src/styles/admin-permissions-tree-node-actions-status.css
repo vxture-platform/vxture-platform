@@ -26,7 +26,11 @@
 
 .vx-admin-permission-tree-node__title-tags
   .vx-admin-permission-layer-pill--root {
-  border-color: color-mix(in srgb, var(--vx-color-neutral-600) 20%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--vx-color-neutral-600) 20%,
+    transparent
+  );
   background: color-mix(in srgb, var(--vx-color-neutral-600) 8%, transparent);
   color: var(--vx-color-neutral-600);
 }

@@ -909,9 +909,7 @@ export function TicketsPage() {
             ) : null}
             {/* 读取失败是第三态，DataTable 只认加载/空/有数据，故留在外层。 */}
             {loadError ? (
-              <div className="vx-service-health-empty">
-                <EmptyState title="工单数据读取失败" description={loadError} />
-              </div>
+              <EmptyState title="工单数据读取失败" description={loadError} />
             ) : (
               <DataTable
                 columns={ticketColumns}

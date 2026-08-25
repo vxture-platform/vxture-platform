@@ -818,30 +818,26 @@ export function ModelGrantsPage() {
               })}
             </div>
           ) : (
-            <section className="vx-tenant-empty">
-              <EmptyState
-                title={
-                  loading ? t("empty.loadingTitle") : t("empty.policyTitle")
-                }
-                description={
-                  loading
-                    ? t("empty.loadingDescription")
-                    : t("empty.policyDescription")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={() => {
-                      setQuery("");
-                      setFilter("all");
-                    }}
-                  >
-                    {t("empty.resetFilters")}
-                  </ActionButton>
-                }
-              />
-            </section>
+            <EmptyState
+              title={loading ? t("empty.loadingTitle") : t("empty.policyTitle")}
+              description={
+                loading
+                  ? t("empty.loadingDescription")
+                  : t("empty.policyDescription")
+              }
+              action={
+                <ActionButton
+                  variant="outline"
+                  icon="x"
+                  onClick={() => {
+                    setQuery("");
+                    setFilter("all");
+                  }}
+                >
+                  {t("empty.resetFilters")}
+                </ActionButton>
+              }
+            />
           )}
 
           {/* 这一页不给用户改每页条数，用 DS Pagination 本体即可，不经 ListPagination

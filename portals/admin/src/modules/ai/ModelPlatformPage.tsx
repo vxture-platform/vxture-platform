@@ -1210,25 +1210,23 @@ export function ModelPlatformPage() {
                 ))}
               </div>
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={loading ? t("empty.loadingTitle") : t("empty.title")}
-                  description={
-                    loading
-                      ? t("empty.loadingDescription")
-                      : t("empty.description")
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      {t("empty.resetFilters")}
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={loading ? t("empty.loadingTitle") : t("empty.title")}
+                description={
+                  loading
+                    ? t("empty.loadingDescription")
+                    : t("empty.description")
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    {t("empty.resetFilters")}
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }
@@ -1288,12 +1286,10 @@ export function ModelPlatformPage() {
               ))}
             </div>
           ) : (
-            <section className="vx-tenant-empty">
-              <EmptyState
-                title="暂无厂商"
-                description="供应商的接入与管理已迁至 opera 技术运维平台。"
-              />
-            </section>
+            <EmptyState
+              title="暂无厂商"
+              description="供应商的接入与管理已迁至 opera 技术运维平台。"
+            />
           )}
         </section>
       </div>
@@ -1393,12 +1389,10 @@ export function ModelPlatformPage() {
               })}
             </div>
           ) : (
-            <section className="vx-tenant-empty">
-              <EmptyState
-                title="暂无计价规则"
-                description="点击「新建规则」为模型配置计价。"
-              />
-            </section>
+            <EmptyState
+              title="暂无计价规则"
+              description="点击「新建规则」为模型配置计价。"
+            />
           )}
         </section>
         {priceRules.length > 0 ? (

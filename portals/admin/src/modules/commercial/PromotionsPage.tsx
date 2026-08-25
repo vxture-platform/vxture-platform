@@ -646,31 +646,29 @@ export function PromotionsPage() {
             ) : visibleRecords.length ? (
               <PromotionCards records={visibleRecords} />
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={
-                    loading
-                      ? "正在加载优惠"
-                      : loadError
-                        ? "优惠数据读取失败"
-                        : "没有匹配的优惠"
-                  }
-                  description={
-                    loading
-                      ? "正在读取营销优惠台账。"
-                      : (loadError ?? "清空筛选条件后可查看全部优惠活动。")
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={
+                  loading
+                    ? "正在加载优惠"
+                    : loadError
+                      ? "优惠数据读取失败"
+                      : "没有匹配的优惠"
+                }
+                description={
+                  loading
+                    ? "正在读取营销优惠台账。"
+                    : (loadError ?? "清空筛选条件后可查看全部优惠活动。")
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }

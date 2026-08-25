@@ -670,25 +670,23 @@ export function ProductSolutionsPage() {
                 onOpenDetails={handleOpenDetails}
               />
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={loading ? "正在加载解决方案" : "没有匹配的解决方案"}
-                  description={
-                    loading
-                      ? "正在读取行业解决方案数据。"
-                      : "清空筛选条件后可查看全部解决方案。"
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={loading ? "正在加载解决方案" : "没有匹配的解决方案"}
+                description={
+                  loading
+                    ? "正在读取行业解决方案数据。"
+                    : "清空筛选条件后可查看全部解决方案。"
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }

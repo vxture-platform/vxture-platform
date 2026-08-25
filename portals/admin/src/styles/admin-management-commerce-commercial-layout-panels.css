@@ -14,7 +14,8 @@
   display: grid;
   gap: var(--space-md);
   padding-top: var(--space-lg);
-  border-top: var(--vx-admin-management-line-width-1p) dashed var(--vx-color-auth-border);
+  border-top: var(--vx-admin-management-line-width-1p) dashed
+    var(--vx-color-auth-border);
 }
 
 .vx-commerce-panel__header {

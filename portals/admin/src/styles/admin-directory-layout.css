@@ -44,8 +44,10 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--vx-admin-directory-header-gap);
-  padding: var(--vx-admin-directory-pagination-padding-top) 0 var(--vx-admin-directory-pagination-padding-bottom);
-  border-top: var(--vx-admin-directory-list-border-width) dashed var(--vx-color-auth-border);
+  padding: var(--vx-admin-directory-pagination-padding-top) 0
+    var(--vx-admin-directory-pagination-padding-bottom);
+  border-top: var(--vx-admin-directory-list-border-width) dashed
+    var(--vx-color-auth-border);
 }
 
 .vx-tenant-pagination strong {

@@ -2,8 +2,10 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--vx-admin-directory-card-grid-gap);
-  padding: var(--vx-admin-directory-card-grid-padding-top) 0 var(--vx-admin-directory-card-grid-padding-bottom);
-  border-top: var(--vx-admin-directory-list-border-width) solid color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
+  padding: var(--vx-admin-directory-card-grid-padding-top) 0
+    var(--vx-admin-directory-card-grid-padding-bottom);
+  border-top: var(--vx-admin-directory-list-border-width) solid
+    color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
 }
 
 .vx-tenant-directory-card {
@@ -11,8 +13,10 @@
   display: grid;
   gap: var(--vx-admin-directory-card-gap);
   padding: var(--vx-admin-directory-card-padding);
-  border: var(--vx-admin-directory-card-border-width) solid color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
-  border-top: var(--vx-admin-directory-card-accent-border-width) solid var(--tenant-row-tone);
+  border: var(--vx-admin-directory-card-border-width) solid
+    color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
+  border-top: var(--vx-admin-directory-card-accent-border-width) solid
+    var(--tenant-row-tone);
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-white) 58%, transparent);
   cursor: pointer;
@@ -25,7 +29,10 @@
 .vx-tenant-directory-card header {
   min-width: 0;
   display: grid;
-  grid-template-columns: var(--vx-admin-directory-card-header-track) minmax(0, 1fr) auto;
+  grid-template-columns: var(--vx-admin-directory-card-header-track) minmax(
+      0,
+      1fr
+    ) auto;
   align-items: start;
   gap: var(--vx-admin-directory-card-header-gap);
 }
@@ -85,5 +92,6 @@
   justify-content: space-between;
   gap: var(--vx-admin-directory-card-footer-gap);
   padding-top: var(--vx-admin-directory-card-footer-padding-top);
-  border-top: var(--vx-admin-directory-list-border-width) dashed var(--vx-color-auth-border);
+  border-top: var(--vx-admin-directory-list-border-width) dashed
+    var(--vx-color-auth-border);
 }

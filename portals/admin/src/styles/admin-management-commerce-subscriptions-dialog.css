@@ -16,10 +16,13 @@
   display: grid;
   gap: var(--space-md);
   padding: var(--space-md);
-  border: var(--vx-admin-management-line-width-1p) solid color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
+  border: var(--vx-admin-management-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
   border-radius: var(--tenant-card-radius);
   background: color-mix(in srgb, var(--vx-color-white) 98%, transparent);
-  box-shadow: 0 var(--vx-admin-management-effect-24p) var(--vx-admin-management-effect-64p) color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
+  box-shadow: 0 var(--vx-admin-management-effect-24p)
+    var(--vx-admin-management-effect-64p)
+    color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
 }
 
 .vx-subscription-action-dialog__panel header {
@@ -101,7 +104,8 @@
   min-height: var(--vx-admin-management-size-75r);
   resize: vertical;
   padding: var(--space-sm) var(--space-md);
-  border: var(--vx-admin-management-line-width-1p) solid color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
+  border: var(--vx-admin-management-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
   border-radius: var(--vx-radius-lg);
   background: transparent;
   color: var(--vx-color-neutral-700);
@@ -113,7 +117,8 @@
 .vx-subscription-action-dialog__field select {
   min-height: var(--vx-admin-management-size-25r);
   padding: 0 var(--space-md);
-  border: var(--vx-admin-management-line-width-1p) solid color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
+  border: var(--vx-admin-management-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
   border-radius: var(--vx-radius-lg);
   background: transparent;
   color: var(--vx-color-neutral-700);
@@ -123,9 +128,14 @@
 .vx-subscription-action-dialog__field textarea:focus,
 .vx-subscription-action-dialog__field input:focus,
 .vx-subscription-action-dialog__field select:focus {
-  outline: var(--vx-admin-management-line-width-2p) solid color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
+  outline: var(--vx-admin-management-line-width-2p) solid
+    color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
   outline-offset: 0;
-  border-color: color-mix(in srgb, var(--vx-color-auth-accent) 32%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--vx-color-auth-accent) 32%,
+    transparent
+  );
 }
 
 .vx-subscription-action-dialog__error {

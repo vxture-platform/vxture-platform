@@ -9,7 +9,8 @@
   display: grid;
   gap: var(--space-md);
   padding-top: var(--space-lg);
-  border-top: var(--vx-admin-management-line-width-1p) dashed var(--vx-color-auth-border);
+  border-top: var(--vx-admin-management-line-width-1p) dashed
+    var(--vx-color-auth-border);
 }
 
 .vx-product-capability-fields {
@@ -49,21 +50,26 @@
   min-width: 0;
   display: grid;
   gap: 0;
-  border-top: var(--vx-admin-management-line-width-1p) dashed color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
+  border-top: var(--vx-admin-management-line-width-1p) dashed
+    color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
 }
 
 .vx-product-capability-related-list article,
 .vx-product-capability-metric-rules article {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(var(--vx-admin-management-track-12r-large), 0.9fr) minmax(var(--vx-admin-management-grid-column-md), 1fr) minmax(
+  grid-template-columns: minmax(
+      var(--vx-admin-management-track-12r-large),
+      0.9fr
+    ) minmax(var(--vx-admin-management-grid-column-md), 1fr) minmax(
       var(--vx-admin-management-track-16r),
       1.2fr
     );
   align-items: center;
   gap: var(--space-md);
   padding: var(--space-md) 0;
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
+  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+    color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
 }
 
 .vx-product-capability-related-list article:last-child,

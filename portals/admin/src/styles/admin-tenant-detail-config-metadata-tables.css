@@ -18,7 +18,8 @@
   display: grid;
   gap: var(--space-xs);
   padding-bottom: var(--space-xs);
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed var(--vx-color-auth-border);
+  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+    var(--vx-color-auth-border);
 }
 
 .vx-tenant-kv-grid dt,
@@ -82,21 +83,31 @@
   align-items: center;
   gap: var(--space-md);
   padding: var(--space-md) 0;
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed var(--tenant-line);
+  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+    var(--tenant-line);
 }
 
 .vx-tenant-table--members .vx-tenant-table__header,
 .vx-tenant-table--members .vx-tenant-table__row {
   grid-template-columns:
-    minmax(var(--vx-admin-management-grid-column-md), 1.6fr) minmax(var(--vx-admin-management-track-8r), 1fr) minmax(var(--vx-admin-management-grid-column-xs), 0.7fr)
+    minmax(var(--vx-admin-management-grid-column-md), 1.6fr) minmax(
+      var(--vx-admin-management-track-8r),
+      1fr
+    ) minmax(var(--vx-admin-management-grid-column-xs), 0.7fr)
     minmax(var(--vx-admin-management-track-8r), 0.8fr);
 }
 
 .vx-tenant-table--models .vx-tenant-table__header,
 .vx-tenant-table--models .vx-tenant-table__row {
   grid-template-columns:
-    minmax(var(--vx-admin-management-track-13r), 1.2fr) minmax(var(--vx-admin-management-track-12r-large), 1fr) minmax(var(--vx-admin-management-track-16r), 1.2fr)
-    minmax(var(--vx-admin-management-track-10r), 0.9fr) minmax(var(--vx-admin-management-grid-column-xs), 0.6fr);
+    minmax(var(--vx-admin-management-track-13r), 1.2fr) minmax(
+      var(--vx-admin-management-track-12r-large),
+      1fr
+    ) minmax(var(--vx-admin-management-track-16r), 1.2fr)
+    minmax(var(--vx-admin-management-track-10r), 0.9fr) minmax(
+      var(--vx-admin-management-grid-column-xs),
+      0.6fr
+    );
 }
 
 .vx-tenant-table__header {

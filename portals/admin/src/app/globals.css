@@ -31,7 +31,6 @@
  * 于是工具类重新成为最终覆盖手段——这正是它该有的位置。页面样式之间的相互
  * 覆盖不受影响：同层内仍按特异性与顺序。 */
 @import "../styles/admin-base.css" layer(components);
-@import "../styles/admin-service-health.css" layer(components);
 @import "../styles/admin-overview.css" layer(components);
 @import "../styles/admin-management.css" layer(components);
 @import "../styles/admin-tenant-detail.css" layer(components);

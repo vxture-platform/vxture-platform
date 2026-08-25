@@ -2,7 +2,8 @@
 .vx-admin-filter-select {
   height: var(--vx-admin-operations-control-height);
   padding: 0 var(--vx-admin-operations-control-padding-x);
-  border: var(--vx-admin-operations-control-border-width) solid var(--vx-color-auth-border);
+  border: var(--vx-admin-operations-control-border-width) solid
+    var(--vx-color-auth-border);
   border-radius: var(--vx-radius-lg);
   background: transparent;
   color: var(--vx-console-text);
@@ -19,7 +20,8 @@
 .vx-admin-view-toggle {
   display: flex;
   align-items: center;
-  border: var(--vx-admin-operations-control-border-width) solid var(--vx-color-auth-border);
+  border: var(--vx-admin-operations-control-border-width) solid
+    var(--vx-color-auth-border);
   border-radius: var(--vx-radius-lg);
   overflow: hidden;
 }
@@ -53,7 +55,8 @@
   gap: var(--vx-admin-operations-action-button-gap);
   height: var(--vx-admin-operations-action-button-height);
   padding: 0 var(--vx-admin-operations-action-button-padding-x);
-  border: var(--vx-admin-operations-control-border-width) solid color-mix(in srgb, var(--vx-color-auth-accent) 20%, transparent);
+  border: var(--vx-admin-operations-control-border-width) solid
+    color-mix(in srgb, var(--vx-color-auth-accent) 20%, transparent);
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-auth-accent) 7%, transparent);
   color: var(--vx-console-brand);

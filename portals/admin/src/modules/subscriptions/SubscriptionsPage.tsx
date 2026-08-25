@@ -840,25 +840,23 @@ export function SubscriptionsPage() {
                 onAction={requestSubscriptionAction}
               />
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={loading ? "正在加载租户订阅" : "没有匹配的订阅"}
-                  description={
-                    loading
-                      ? "正在读取租户订阅运营数据。"
-                      : (loadError ?? "清空筛选条件后可查看全部订阅实例。")
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={loading ? "正在加载租户订阅" : "没有匹配的订阅"}
+                description={
+                  loading
+                    ? "正在读取租户订阅运营数据。"
+                    : (loadError ?? "清空筛选条件后可查看全部订阅实例。")
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }

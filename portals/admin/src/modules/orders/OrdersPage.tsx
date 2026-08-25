@@ -839,25 +839,23 @@ export function OrdersPage() {
                 onConfirmPayment={requestConfirmPayment}
               />
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={loading ? "正在加载订单" : "没有匹配的订单"}
-                  description={
-                    loading
-                      ? "正在读取订单、账单和支付状态。"
-                      : (loadError ?? "清空筛选条件后可查看全部订单记录。")
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={loading ? "正在加载订单" : "没有匹配的订单"}
+                description={
+                  loading
+                    ? "正在读取订单、账单和支付状态。"
+                    : (loadError ?? "清空筛选条件后可查看全部订单记录。")
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }

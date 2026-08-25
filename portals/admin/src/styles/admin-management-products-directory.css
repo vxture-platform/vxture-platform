@@ -36,8 +36,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--space-xs)
-    var(--space-sm);
+  gap: var(--space-xs) var(--space-sm);
   flex-wrap: wrap;
 }
 

@@ -457,12 +457,10 @@ export function PlatformGovernanceListPage({
         >
           {/* 读取失败是第三态，DataTable 只认加载/空/有数据，故留在外层。 */}
           {loadError ? (
-            <section className="vx-tenant-empty">
-              <EmptyState
-                title={`${config.title}数据读取失败`}
-                description={loadError}
-              />
-            </section>
+            <EmptyState
+              title={`${config.title}数据读取失败`}
+              description={loadError}
+            />
           ) : viewMode === "list" ? (
             <DataTable
               columns={columns}
@@ -550,30 +548,22 @@ export function PlatformGovernanceListPage({
                 );
               })}
             </div>
+          ) : hasActiveFilters ? (
+            <EmptyState
+              title="暂无匹配记录"
+              description="调整关键词或筛选条件后再查看。"
+              action={
+                <ActionButton variant="outline" icon="x" onClick={resetFilters}>
+                  重置筛选
+                </ActionButton>
+              }
+            />
           ) : (
-            <section className="vx-tenant-empty">
-              {hasActiveFilters ? (
-                <EmptyState
-                  title="暂无匹配记录"
-                  description="调整关键词或筛选条件后再查看。"
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={resetFilters}
-                    >
-                      重置筛选
-                    </ActionButton>
-                  }
-                />
-              ) : (
-                <EmptyState
-                  icon="list"
-                  title={`还没有${config.objectLabel}`}
-                  description={`新增后会出现在这里。`}
-                />
-              )}
-            </section>
+            <EmptyState
+              icon="list"
+              title={`还没有${config.objectLabel}`}
+              description={`新增后会出现在这里。`}
+            />
           )}
         </section>
       }

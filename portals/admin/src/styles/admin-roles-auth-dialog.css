@@ -1,6 +1,9 @@
 .vx-admin-role-auth-dialog__panel {
   width: var(--vx-admin-roles-dialog-max-width-xl);
-  max-height: min(var(--vx-admin-roles-panel-max-height-lg), calc(100vh - var(--vx-admin-roles-size-2r)));
+  max-height: min(
+    var(--vx-admin-roles-panel-max-height-lg),
+    calc(100vh - var(--vx-admin-roles-size-2r))
+  );
 }
 
 .vx-admin-role-auth-dialog__toolbar {
@@ -25,8 +28,10 @@
   overflow: auto;
   display: grid;
   gap: 0;
-  border-top: var(--vx-admin-roles-line-width-1p) solid color-mix(in srgb, var(--vx-color-neutral-500) 12%, transparent);
-  border-bottom: var(--vx-admin-roles-line-width-1p) solid color-mix(in srgb, var(--vx-color-neutral-500) 12%, transparent);
+  border-top: var(--vx-admin-roles-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-neutral-500) 12%, transparent);
+  border-bottom: var(--vx-admin-roles-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-neutral-500) 12%, transparent);
 }
 
 .vx-admin-role-auth-node,
@@ -45,8 +50,11 @@
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-sm);
-  padding-left: calc(var(--space-sm) + var(--permission-depth, 0) * var(--space-md));
-  border-bottom: var(--vx-admin-roles-line-width-1p) solid color-mix(in srgb, var(--vx-color-neutral-500) 8%, transparent);
+  padding-left: calc(
+    var(--space-sm) + var(--permission-depth, 0) * var(--space-md)
+  );
+  border-bottom: var(--vx-admin-roles-line-width-1p) solid
+    color-mix(in srgb, var(--vx-color-neutral-500) 8%, transparent);
   cursor: pointer;
 }
 

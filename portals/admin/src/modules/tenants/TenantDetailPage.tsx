@@ -1016,23 +1016,21 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
             />
           )
         ) : (
-          <section className="vx-tenant-empty">
-            <EmptyState
-              title={loading ? "正在加载账号" : "没有匹配的账号"}
-              description={
-                loading
-                  ? "正在读取租户成员数据。"
-                  : "清空筛选条件后可查看全部账号。"
-              }
-              action={
-                loading ? undefined : (
-                  <Button variant="outline" onClick={handleReset}>
-                    清空筛选
-                  </Button>
-                )
-              }
-            />
-          </section>
+          <EmptyState
+            title={loading ? "正在加载账号" : "没有匹配的账号"}
+            description={
+              loading
+                ? "正在读取租户成员数据。"
+                : "清空筛选条件后可查看全部账号。"
+            }
+            action={
+              loading ? undefined : (
+                <Button variant="outline" onClick={handleReset}>
+                  清空筛选
+                </Button>
+              )
+            }
+          />
         )}
       </section>
 
@@ -1262,12 +1260,10 @@ function TenantRiskTab({ tenant }: { tenant: TenantOperationRecord }) {
 function TenantTicketsTab({ tenant }: { tenant: TenantOperationRecord }) {
   if (!tenant.tickets.length) {
     return (
-      <div className="vx-tenant-empty">
-        <EmptyState
-          title="暂无未结工单"
-          description="该租户当前没有需要平台运营跟进的工单。"
-        />
-      </div>
+      <EmptyState
+        title="暂无未结工单"
+        description="该租户当前没有需要平台运营跟进的工单。"
+      />
     );
   }
 
@@ -1352,16 +1348,14 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
           <Icon name="arrow-left" size="xs" fallback="placeholder" />
           返回租户列表
         </Link>
-        <section className="vx-tenant-empty">
-          <EmptyState
-            title={loading ? "正在加载租户" : "未找到租户"}
-            description={
-              loading
-                ? "正在读取租户详情。"
-                : "该租户不存在，或当前筛选数据源尚未同步。"
-            }
-          />
-        </section>
+        <EmptyState
+          title={loading ? "正在加载租户" : "未找到租户"}
+          description={
+            loading
+              ? "正在读取租户详情。"
+              : "该租户不存在，或当前筛选数据源尚未同步。"
+          }
+        />
       </ViewLayout>
     );
   }

@@ -35,10 +35,13 @@
   display: grid;
   gap: var(--vx-admin-directory-actions-menu-gap);
   padding: var(--vx-admin-directory-actions-menu-padding);
-  border: var(--vx-admin-directory-actions-menu-border-width) solid color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
+  border: var(--vx-admin-directory-actions-menu-border-width) solid
+    color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
   border-radius: var(--vx-radius-lg);
   background: var(--vx-color-shell-panel-strong);
-  box-shadow: 0 var(--vx-admin-directory-actions-menu-shadow-y) var(--vx-admin-directory-actions-menu-shadow-blur) var(--vx-color-auth-border);
+  box-shadow: 0 var(--vx-admin-directory-actions-menu-shadow-y)
+    var(--vx-admin-directory-actions-menu-shadow-blur)
+    var(--vx-color-auth-border);
 }
 
 .vx-tenant-actions__menu--portal {

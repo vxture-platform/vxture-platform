@@ -37,7 +37,8 @@
   gap: var(--space-lg);
   flex-wrap: wrap;
   padding-bottom: var(--space-md);
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
+  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+    color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
 }
 
 .vx-tenant-block > header {
@@ -66,7 +67,10 @@
 
 .vx-tenant-config-row--contact {
   grid-template-columns:
-    minmax(var(--vx-admin-management-track-10r), 0.8fr) minmax(var(--vx-admin-management-grid-column-md), 1.15fr) minmax(var(--vx-admin-management-track-9r), 0.7fr)
+    minmax(var(--vx-admin-management-track-10r), 0.8fr) minmax(
+      var(--vx-admin-management-grid-column-md),
+      1.15fr
+    ) minmax(var(--vx-admin-management-track-9r), 0.7fr)
     minmax(var(--vx-admin-management-track-16r), auto);
   align-items: stretch;
 }
@@ -78,7 +82,8 @@
   align-items: center;
   gap: var(--space-sm);
   padding-bottom: var(--space-sm);
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed var(--vx-color-auth-border);
+  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+    var(--vx-color-auth-border);
 }
 
 .vx-tenant-config-item > span {

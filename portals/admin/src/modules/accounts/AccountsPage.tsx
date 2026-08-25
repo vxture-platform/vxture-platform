@@ -829,25 +829,23 @@ export function AccountsPage({
                 actions={accountActions}
               />
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={loading ? pageCopy.loadingTitle : pageCopy.emptyTitle}
-                  description={
-                    loading
-                      ? pageCopy.loadingDescription
-                      : (loadError ?? pageCopy.emptyDescription)
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={handleReset}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={loading ? pageCopy.loadingTitle : pageCopy.emptyTitle}
+                description={
+                  loading
+                    ? pageCopy.loadingDescription
+                    : (loadError ?? pageCopy.emptyDescription)
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={handleReset}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }

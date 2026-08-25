@@ -1209,31 +1209,29 @@ export function PlatformUsersPage() {
             ) : filteredAdmins.length ? (
               <PlatformUsersCards admins={visibleAdmins} t={t} />
             ) : (
-              <section className="vx-tenant-empty">
-                <EmptyState
-                  title={
-                    loading
-                      ? "正在加载平台用户"
-                      : loadError
-                        ? "平台用户读取失败"
-                        : "没有匹配的平台用户"
-                  }
-                  description={
-                    loading
-                      ? "正在读取平台用户账号。"
-                      : (loadError ?? "清空筛选条件后可查看全部平台用户。")
-                  }
-                  action={
-                    <ActionButton
-                      variant="outline"
-                      icon="x"
-                      onClick={resetFilters}
-                    >
-                      清空筛选
-                    </ActionButton>
-                  }
-                />
-              </section>
+              <EmptyState
+                title={
+                  loading
+                    ? "正在加载平台用户"
+                    : loadError
+                      ? "平台用户读取失败"
+                      : "没有匹配的平台用户"
+                }
+                description={
+                  loading
+                    ? "正在读取平台用户账号。"
+                    : (loadError ?? "清空筛选条件后可查看全部平台用户。")
+                }
+                action={
+                  <ActionButton
+                    variant="outline"
+                    icon="x"
+                    onClick={resetFilters}
+                  >
+                    清空筛选
+                  </ActionButton>
+                }
+              />
             )}
           </section>
         }
