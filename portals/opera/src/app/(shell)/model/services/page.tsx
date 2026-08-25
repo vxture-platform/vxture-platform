@@ -307,6 +307,28 @@ interface ProviderDraft {
   homepageUrl: string;
   consoleUrl: string;
   billingUrl: string;
+  /* ── config.wire 的七个可写键 ───────────────────────────────────────────
+   *
+   * 这一层是「这家上游的线格式怪癖」：同一个 protocol 下各家仍有参数级差异，
+   * 而那些差异**按设计就该是注册表数据、不是代码**（atlas 的判据一句话：线格式
+   * 不同才写代码，参数不同一律写数据）。此前门户一个都填不了，于是这条判据对
+   * opera 只成立了一半——接一家怪一点的上游，仍然要有人去改 atlas。
+   *
+   * 空串一律表示「不声明，继承协议默认」。**不是** false、不是 0：三层叠加是
+   * 逐键合并的，一个没声明的键会让下一层的值透上来，而一个声明成 false 的键会
+   * 把它压住。这两件事在界面上必须能分开说，所以布尔项用三态下拉而不是勾选框。
+   */
+  chatPath: string;
+  authStyle: string;
+  streamUsage: string;
+  supportsTools: string;
+  supportsToolChoice: string;
+  supportsTopP: string;
+  supportsTemperature: string;
+  /** 三个开放映射的原始 JSON 文本。空串 = 不声明。 */
+  headers: string;
+  paramMap: string;
+  extraBody: string;
 }
 
 const EMPTY_PROVIDER_DRAFT: ProviderDraft = {
@@ -317,9 +339,24 @@ const EMPTY_PROVIDER_DRAFT: ProviderDraft = {
   homepageUrl: "",
   consoleUrl: "",
   billingUrl: "",
+  chatPath: "",
+  authStyle: "",
+  streamUsage: "",
+  supportsTools: "",
+  supportsToolChoice: "",
+  supportsTopP: "",
+  supportsTemperature: "",
+  headers: "",
+  paramMap: "",
+  extraBody: "",
 };
 
 function providerDraftFrom(row: ModelProviderRecord): ProviderDraft {
+  /* 读的是**本层声明值**（`config.wire`），不是模型抽屉里那个 `resolvedWire`
+     ——后者已经把协议默认合并进来了，拿它预填等于把默认值抄成这一家的声明，
+     保存一次就真的变成声明，从此再也回不到「跟随默认」。 */
+  const wire = readDeclaredWire(row.config);
+  const supports = readWireSupports(wire);
   return {
     providerCode: row.providerCode,
     providerName: row.providerName,
@@ -328,6 +365,45 @@ function providerDraftFrom(row: ModelProviderRecord): ProviderDraft {
     homepageUrl: row.homepageUrl ?? "",
     consoleUrl: row.consoleUrl ?? "",
     billingUrl: row.billingUrl ?? "",
+    chatPath: typeof wire?.["chatPath"] === "string" ? wire["chatPath"] : "",
+    authStyle: readWireAuthStyle(wire),
+    streamUsage:
+      typeof wire?.["streamUsage"] === "string" ? wire["streamUsage"] : "",
+    supportsTools: supports.tools,
+    supportsToolChoice: supports.toolChoice,
+    supportsTopP: supports.topP,
+    supportsTemperature: supports.temperature,
+    headers: formatJsonForEdit(readWireRecord(wire, "headers")),
+    paramMap: formatJsonForEdit(readWireRecord(wire, "paramMap")),
+    extraBody: formatJsonForEdit(readWireRecord(wire, "extraBody")),
+  };
+}
+
+/** 鉴权样式在 wire 里是嵌套的 `auth.style`，不是平铺的 `authStyle`。 */
+function readWireAuthStyle(wire: Record<string, unknown> | null): string {
+  const auth = wire?.["auth"];
+  if (typeof auth !== "object" || auth === null || Array.isArray(auth)) {
+    return "";
+  }
+  const style = (auth as Record<string, unknown>)["style"];
+  return typeof style === "string" ? style : "";
+}
+
+/** 四个能力开关各自回填成 `""`（没声明）/ `"true"` / `"false"`。 */
+function readWireSupports(wire: Record<string, unknown> | null): {
+  tools: string;
+  toolChoice: string;
+  topP: string;
+  temperature: string;
+} {
+  const raw = readWireRecord(wire, "supports");
+  const read = (key: string): string =>
+    typeof raw?.[key] === "boolean" ? String(raw[key]) : "";
+  return {
+    tools: read("tools"),
+    toolChoice: read("toolChoice"),
+    topP: read("topP"),
+    temperature: read("temperature"),
   };
 }
 
@@ -416,7 +492,9 @@ function modelDraftFrom(row: AiModelRecord): ModelDraft {
     /* 回填的是**本模型声明的**那一份，不是 `resolvedWire.extraBody`：后者已经把
        协议默认与 Provider 那两层合并进来了，拿它预填等于把别人层里的开关抄进本层，
        保存一次就真的变成本模型的声明——一次编辑悄悄改变了继承关系。 */
-    extraBody: formatExtraBodyForEdit(readDeclaredExtraBody(row.config)),
+    extraBody: formatJsonForEdit(
+      readWireRecord(readDeclaredWire(row.config), "extraBody"),
+    ),
   };
 }
 
@@ -437,25 +515,69 @@ const RESERVED_BODY_KEYS = [
   "system",
 ] as const;
 
-/** 本层 `config.wire.extraBody` 的声明值。不是 `resolvedWire`（那是三层合并后的）。 */
-function readDeclaredExtraBody(
+/** 本层 `config.wire` 的声明值。不是 `resolvedWire`（那是三层合并后的）。 */
+function readDeclaredWire(
   config: Record<string, unknown> | null | undefined,
 ): Record<string, unknown> | null {
   const wire = config?.["wire"];
   if (typeof wire !== "object" || wire === null || Array.isArray(wire)) {
     return null;
   }
-  const extra = (wire as Record<string, unknown>)["extraBody"];
-  if (typeof extra !== "object" || extra === null || Array.isArray(extra)) {
+  return wire as Record<string, unknown>;
+}
+
+/** `wire` 下某个对象键（headers / supports / paramMap / extraBody）。 */
+function readWireRecord(
+  wire: Record<string, unknown> | null,
+  key: string,
+): Record<string, unknown> | null {
+  const value = wire?.[key];
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return null;
   }
-  return extra as Record<string, unknown>;
+  return value as Record<string, unknown>;
 }
 
 /** 回填进输入框的文本。空对象与"没声明"都回空串——两者对上游是同一件事。 */
-function formatExtraBodyForEdit(value: Record<string, unknown> | null): string {
+function formatJsonForEdit(value: Record<string, unknown> | null): string {
   if (!value || Object.keys(value).length === 0) return "";
   return JSON.stringify(value, null, 2);
+}
+
+/**
+ * 文本 → string map（`headers` / `paramMap`）。
+ *
+ * 与 `extraBody` 分开一个函数而不是加参数，是因为上游对这两类的判据本就不同：
+ * 这两个键的**值必须是字符串**（`validateStringMap`），extraBody 的值是任意
+ * JSON。合并成一个"通用 JSON 校验"就会把这条区别抹掉，于是一个
+ * `headers: {"x-timeout": 30}` 要等到 400 才知道错在哪。
+ */
+function parseStringMap(raw: string, label: string): ExtraBodyParse {
+  const text = raw.trim();
+  if (text === "") return { ok: true, value: null };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { ok: false, reason: `${label}不是合法的 JSON。` };
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return { ok: false, reason: `${label}要一个对象（\`{ ... }\`）。` };
+  }
+
+  const record = parsed as Record<string, unknown>;
+  const nonString = Object.entries(record)
+    .filter(([, value]) => typeof value !== "string")
+    .map(([key]) => key);
+  if (nonString.length > 0) {
+    return {
+      ok: false,
+      reason: `${label}的值必须都是字符串，${nonString.join(" / ")} 不是——数字与布尔要写成带引号的字面量。`,
+    };
+  }
+
+  return { ok: true, value: Object.keys(record).length > 0 ? record : null };
 }
 
 type ExtraBodyParse =
@@ -498,6 +620,84 @@ function parseExtraBody(raw: string): ExtraBodyParse {
   }
 
   return { ok: true, value: Object.keys(record).length > 0 ? record : null };
+}
+
+/** 表单直接拥有的那些 wire 键。重建时先删掉它们，不认识的键原样留着。 */
+const PROVIDER_WIRE_KEYS = [
+  "chatPath",
+  "auth",
+  "streamUsage",
+  "supports",
+  "headers",
+  "paramMap",
+  "extraBody",
+] as const;
+
+/**
+ * 组装送给 atlas 的 Provider `config`。
+ *
+ * 与模型那边同一条铁律：atlas 的 update 只要载荷里出现 `config` 就**整体替换**，
+ * 不与库里旧值合并。所以既有 config 必须原样带回去——这里 `{...existing}` 打头
+ * 就是为了这个。此前这个表单一次都没送过 config，所以这条铁律还没有咬到它；
+ * 从这一版开始它会送，于是它开始适用。
+ *
+ * 把读回来的值再写回去在这里是无损的，依据是 DDL 自己写的那句：
+ * `model_providers.config` 是「non-sensitive connection metadata; keys never
+ * live here」。密钥住在 provider-keys 密钥库里，不在这一列——所以 atlas 读时
+ * 剥掉密钥类键这件事，对这一列没有可剥的东西。
+ *
+ * `wire` 内部同理但更细一层：表单只拥有 `PROVIDER_WIRE_KEYS` 这七个，先删这七个
+ * 再按表单重建，**其余键原样保留**。atlas 写入侧对未知键是拒绝，所以库里理论上
+ * 不会有第八个键；但"理论上不会有"和"有了就被这个表单悄悄删掉"是两回事，而后者
+ * 不报错——一次普通的改名字保存就能抹掉一条别人用 API 写进去的新键。
+ *
+ * `schemaVersion` 跟着非空的 wire 一起写（取自协议词表信封里上游自报的数）：
+ * 只认识旧 schema 的服务读到新键会静默忽略，版本号是让那件事出声的唯一防线。
+ */
+function buildProviderConfig(
+  existing: Record<string, unknown> | null,
+  draft: ProviderDraft,
+  parsed: {
+    headers: Record<string, unknown> | null;
+    paramMap: Record<string, unknown> | null;
+    extraBody: Record<string, unknown> | null;
+  },
+  wireSchemaVersion: number | null,
+): Record<string, unknown> | null {
+  const next: Record<string, unknown> = { ...(existing ?? {}) };
+  const existingWire = readDeclaredWire(next);
+  const wire: Record<string, unknown> = { ...(existingWire ?? {}) };
+  for (const key of PROVIDER_WIRE_KEYS) delete wire[key];
+
+  if (draft.chatPath.trim()) wire["chatPath"] = draft.chatPath.trim();
+  if (draft.authStyle) wire["auth"] = { style: draft.authStyle };
+  if (draft.streamUsage) wire["streamUsage"] = draft.streamUsage;
+
+  /* 三态：`""` 不进对象（继承），`"true"`/`"false"` 才落一个布尔。 */
+  const supports: Record<string, boolean> = {};
+  const declare = (key: string, value: string) => {
+    if (value === "true" || value === "false") supports[key] = value === "true";
+  };
+  declare("tools", draft.supportsTools);
+  declare("toolChoice", draft.supportsToolChoice);
+  declare("topP", draft.supportsTopP);
+  declare("temperature", draft.supportsTemperature);
+  if (Object.keys(supports).length > 0) wire["supports"] = supports;
+
+  if (parsed.headers) wire["headers"] = parsed.headers;
+  if (parsed.paramMap) wire["paramMap"] = parsed.paramMap;
+  if (parsed.extraBody) wire["extraBody"] = parsed.extraBody;
+
+  /* 只剩 schemaVersion 的 wire 是一句没有内容的话，当空处理。 */
+  const declaredKeys = Object.keys(wire).filter((k) => k !== "schemaVersion");
+  if (declaredKeys.length > 0) {
+    if (wireSchemaVersion !== null) wire["schemaVersion"] = wireSchemaVersion;
+    next["wire"] = wire;
+  } else {
+    delete next["wire"];
+  }
+
+  return Object.keys(next).length > 0 ? next : null;
 }
 
 /**
@@ -807,6 +1007,26 @@ function ModelServiceContent() {
     setProviderDialog({ kind: "edit", row });
   }
 
+  /**
+   * 这家有没有声明过任何线协议怪癖。
+   *
+   * 用来决定「线协议」那一档**默认开着还是收着**：`advanced` 档缺省折叠是对的
+   * ——绝大多数 Provider 没有怪癖，收起来正好。但对已经配了的那几家，折叠等于
+   * 让人打开编辑框却看不到这家有一条自定义鉴权样式，然后照着默认去猜为什么行为
+   * 不一样。**有声明就摊开**，那一条信息比省下的两行高度值钱。
+   */
+  const providerWireDeclared =
+    providerDraft.chatPath.trim() !== "" ||
+    providerDraft.authStyle !== "" ||
+    providerDraft.streamUsage !== "" ||
+    providerDraft.supportsTools !== "" ||
+    providerDraft.supportsToolChoice !== "" ||
+    providerDraft.supportsTopP !== "" ||
+    providerDraft.supportsTemperature !== "" ||
+    providerDraft.headers.trim() !== "" ||
+    providerDraft.paramMap.trim() !== "" ||
+    providerDraft.extraBody.trim() !== "";
+
   async function submitProvider(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!providerDialog) return;
@@ -827,14 +1047,42 @@ function ModelServiceContent() {
       return;
     }
 
+    /* 三个开放映射先各自解析。上游确实也会拒，但要等一次往返，而三类失败
+       （语法坏了 / 形状不对 / 值类型不对）的说法各不相同，在填表的当下最有用。 */
+    const headers = parseStringMap(providerDraft.headers, "附加请求头");
+    const paramMap = parseStringMap(providerDraft.paramMap, "参数改名");
+    const extraBody = parseExtraBody(providerDraft.extraBody);
+    const badWire = [headers, paramMap, extraBody].find((r) => !r.ok);
+    if (badWire && !badWire.ok) {
+      toast({
+        tone: "danger",
+        title: "线协议没通过",
+        description: badWire.reason,
+      });
+      return;
+    }
+
     /* 可改的那些。`logoUrl` 不进载荷：opera 不再录入也不再展示，而 Atlas 对**未出现**
-       的键按「不改」处理，所以老数据不会被这里的保存悄悄抹掉。 */
+       的键按「不改」处理，所以老数据不会被这里的保存悄悄抹掉。
+
+       `config` 与它们相反，是**出现即整体替换**——所以它由 `buildProviderConfig`
+       把既有值一并带回去，见那里的头注。 */
     const mutable = {
       providerName: providerDraft.providerName.trim(),
       description: providerDraft.description.trim() || null,
       homepageUrl: providerDraft.homepageUrl.trim() || null,
       consoleUrl: providerDraft.consoleUrl.trim() || null,
       billingUrl: providerDraft.billingUrl.trim() || null,
+      config: buildProviderConfig(
+        providerDialog.kind === "edit" ? providerDialog.row.config : null,
+        providerDraft,
+        {
+          headers: headers.ok ? headers.value : null,
+          paramMap: paramMap.ok ? paramMap.value : null,
+          extraBody: extraBody.ok ? extraBody.value : null,
+        },
+        wireSchemaVersion,
+      ),
     };
 
     setSubmitting(true);
@@ -1972,6 +2220,184 @@ function ModelServiceContent() {
                 />
                 <FieldDescription>
                   实际花费以对方账单为准（Atlas 计量不计费）。
+                </FieldDescription>
+              </Field>
+            </div>
+          </FieldTier>
+
+          {/* ── 线协议（config.wire）─────────────────────────────────────────
+              同一个 protocol 下各家上游仍有参数级差异：端点后缀、鉴权头样式、
+              流式要不要显式 opt-in usage、支不支持 tool calling。按 Atlas 的判据
+              「线格式不同才写代码，参数不同一律写数据」，这些本就该在注册表里，
+              而此前门户一个都填不了——于是接一家怪一点的上游还是得改 Atlas。
+
+              全部留空就是「这家没有怪癖」，用协议默认。逐键合并：这里声明的会压住
+              协议默认，再被单个模型的同名键压住。 */}
+          <FieldTier
+            tier="advanced"
+            /* 覆盖档名：同一张表单里已经有一个 advanced 档（下面那个纯登记的），
+               两个都用标准名会变成两个一模一样的折叠条。分档是为了让人一眼知道
+               里面是什么，撞名正好把这件事抵消掉。 */
+            title="线协议（config.wire）"
+            defaultOpen={providerWireDeclared}
+            hint="留空＝跟随协议默认。整家生效，单个模型可以再覆盖。"
+          >
+            <div className="grid grid-cols-3 gap-md">
+              <Field>
+                <FieldLabel htmlFor="provider-chat-path">端点后缀</FieldLabel>
+                <Input
+                  id="provider-chat-path"
+                  value={providerDraft.chatPath}
+                  onChange={(e) =>
+                    setProviderDraft({
+                      ...providerDraft,
+                      chatPath: e.target.value,
+                    })
+                  }
+                  placeholder="/chat/completions"
+                  className="font-mono"
+                />
+                <FieldDescription>接在接入地址后面的那一段。</FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="provider-auth-style">鉴权样式</FieldLabel>
+                <NativeSelect
+                  id="provider-auth-style"
+                  value={providerDraft.authStyle}
+                  onChange={(e) =>
+                    setProviderDraft({
+                      ...providerDraft,
+                      authStyle: e.target.value,
+                    })
+                  }
+                >
+                  <option value="">跟随协议默认</option>
+                  <option value="bearer">bearer（Authorization）</option>
+                  <option value="x-api-key">x-api-key</option>
+                  <option value="none">none（不带凭据）</option>
+                </NativeSelect>
+                <FieldDescription>密钥放在哪个头里送。</FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="provider-stream-usage">
+                  流式 usage
+                </FieldLabel>
+                <NativeSelect
+                  id="provider-stream-usage"
+                  value={providerDraft.streamUsage}
+                  onChange={(e) =>
+                    setProviderDraft({
+                      ...providerDraft,
+                      streamUsage: e.target.value,
+                    })
+                  }
+                >
+                  <option value="">跟随协议默认</option>
+                  <option value="stream_options">
+                    stream_options（要显式要）
+                  </option>
+                  <option value="native">native（上游自己带）</option>
+                  <option value="none">none（流里不回）</option>
+                </NativeSelect>
+                {/* 这一项直接决定流式调用会不会被计量：选 none 等于承认这家的
+                    流式请求没有 usage 可记，而不是"随便填一个"。 */}
+                <FieldDescription>
+                  选 none＝这家流式不回 usage，那些调用不会被计量。
+                </FieldDescription>
+              </Field>
+            </div>
+            {/* 四个能力开关是**三态**而不是勾选框：没声明会让协议默认透上来，
+                声明成"不支持"会把它压住——这两件事不是同一个意思。 */}
+            <div className="grid grid-cols-4 gap-md">
+              {(
+                [
+                  ["provider-supports-tools", "工具调用", "supportsTools"],
+                  [
+                    "provider-supports-tool-choice",
+                    "指定工具",
+                    "supportsToolChoice",
+                  ],
+                  ["provider-supports-top-p", "top_p", "supportsTopP"],
+                  [
+                    "provider-supports-temperature",
+                    "temperature",
+                    "supportsTemperature",
+                  ],
+                ] as const
+              ).map(([id, label, key]) => (
+                <Field key={key}>
+                  <FieldLabel htmlFor={id}>{label}</FieldLabel>
+                  <NativeSelect
+                    id={id}
+                    value={providerDraft[key]}
+                    onChange={(e) =>
+                      setProviderDraft({
+                        ...providerDraft,
+                        [key]: e.target.value,
+                      })
+                    }
+                  >
+                    <option value="">跟随默认</option>
+                    <option value="true">支持</option>
+                    <option value="false">不支持</option>
+                  </NativeSelect>
+                </Field>
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-md">
+              <Field>
+                <FieldLabel htmlFor="provider-headers">附加请求头</FieldLabel>
+                <Textarea
+                  id="provider-headers"
+                  rows={2}
+                  value={providerDraft.headers}
+                  onChange={(e) =>
+                    setProviderDraft({
+                      ...providerDraft,
+                      headers: e.target.value,
+                    })
+                  }
+                  placeholder={'{"anthropic-version":"2023-06-01"}'}
+                  className="font-mono"
+                />
+                <FieldDescription>JSON 对象，值必须是字符串。</FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="provider-param-map">参数改名</FieldLabel>
+                <Textarea
+                  id="provider-param-map"
+                  rows={2}
+                  value={providerDraft.paramMap}
+                  onChange={(e) =>
+                    setProviderDraft({
+                      ...providerDraft,
+                      paramMap: e.target.value,
+                    })
+                  }
+                  placeholder={'{"maxTokens":"max_completion_tokens"}'}
+                  className="font-mono"
+                />
+                <FieldDescription>
+                  只能给已有参数换名字，塞不进新字段。
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="provider-extra-body">厂商开关</FieldLabel>
+                <Textarea
+                  id="provider-extra-body"
+                  rows={2}
+                  value={providerDraft.extraBody}
+                  onChange={(e) =>
+                    setProviderDraft({
+                      ...providerDraft,
+                      extraBody: e.target.value,
+                    })
+                  }
+                  placeholder={'{"user_id":"vxture"}'}
+                  className="font-mono"
+                />
+                <FieldDescription>
+                  整家默认的新字段。单个模型的开关在模型表单里配。
                 </FieldDescription>
               </Field>
             </div>
