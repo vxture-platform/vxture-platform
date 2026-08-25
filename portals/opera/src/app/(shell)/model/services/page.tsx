@@ -2720,8 +2720,15 @@ function ModelServiceContent() {
             </FieldGroup>
           </FieldTier>
 
-          {/* 容量与呈现：全部可留空，留空 = 用 atlas 自己的默认，不是 0。 */}
-          <FieldTier tier="advanced" hint="都可留空，留空＝用 Atlas 默认。">
+          {/* 容量与呈现：全部可留空，留空 = 用 atlas 自己的默认，不是 0。
+              厂商开关也住在这一档，所以**这个模型已经声明了开关时默认摊开**——与
+              Provider 那边同一条规矩：折叠等于让人打开编辑框却看不到这个模型有一条
+              关掉思考的开关，然后照着默认去猜为什么行为不一样。 */}
+          <FieldTier
+            tier="advanced"
+            defaultOpen={modelDraft.extraBody.trim() !== ""}
+            hint="都可留空，留空＝用 Atlas 默认。"
+          >
             <FieldGroup>
               {/* 说明与厂商开关并排：两个都是 rows=2 的 Textarea，占的高度和原来
                   单栏一个说明一样——xl 双栏「一屏可见、不出滚动条」的账不变。 */}
