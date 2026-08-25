@@ -187,7 +187,11 @@ interface ProbeCheck {
   mode: string;
   ok: boolean;
   latencyMs: number | null;
+  /** 只在 `ok === true` 时是一次观测：Atlas 的 `failedCheck()` 在失败分支上把它
+   *  写死为 false，所以失败的检查上它不携带任何关于上游的信息。 */
   usageReported: boolean;
+  /** atlas v0.3.0 新增。有没有拿到可交付的内容（正文或工具调用，思维链不算）。 */
+  contentReceived: boolean;
   totalTokens: number | null;
   error?: { code: string; message: string };
 }
@@ -2747,8 +2751,20 @@ function ProbeReport({
                 {c.totalTokens != null ? ` · ${c.totalTokens} tokens` : ""}
               </span>
             </div>
+            {/* 计量结论只在检查通过时才说得出口。失败的检查上 usageReported
+                恒为 false，把它渲染成「未回 usage（无法计量）」是在陈述一个没有
+                发生过的观测——真正的原因在下面的错误行里。
+
+                `usageReported && !contentReceived` 单独喊出来：那是回了 usage
+                却一个 token 都没交付的组合，也就是旧自检会判成绿灯的那一种。 */}
             <span className="text-body-sm">
-              {c.usageReported ? (
+              {!c.ok ? (
+                <span className="text-danger-foreground">
+                  {c.usageReported && !c.contentReceived
+                    ? "回了 usage，但没有交付任何内容"
+                    : (c.error?.code ?? "未通过")}
+                </span>
+              ) : c.usageReported ? (
                 <span className="text-muted-foreground">已回 usage</span>
               ) : (
                 <span className="text-warning-foreground">

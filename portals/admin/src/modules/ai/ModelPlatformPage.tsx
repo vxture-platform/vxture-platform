@@ -84,6 +84,8 @@ interface PriceRuleForm {
   inputUnitPrice: string;
   outputUnitPrice: string;
   requestUnitPrice: string;
+  /** 留空 = 不声明缓存价。见 `defaultPriceRuleForm` 为什么它不默认 "0"。 */
+  cachedInputUnitPrice: string;
   effectiveAt: string;
   expiresAt: string;
 }
@@ -97,6 +99,10 @@ function defaultPriceRuleForm(modelId: string): PriceRuleForm {
     inputUnitPrice: "0",
     outputUnitPrice: "0",
     requestUnitPrice: "0",
+    // 空字符串，不是 "0"。上面三个默认 0 是安全的（没配价就是不计费）；缓存价
+    // 的 0 却是一句具体的假话——「缓存输入免费」，对每一家供应商都不成立，而且
+    // 会被静默写进每一条新规则。空 = 没声明，算成本时回退到输入单价（只高估）。
+    cachedInputUnitPrice: "",
     effectiveAt: "",
     expiresAt: "",
   };
@@ -111,6 +117,7 @@ function priceRuleFormFromRecord(rule: ModelPriceRuleRecord): PriceRuleForm {
     inputUnitPrice: rule.inputUnitPrice,
     outputUnitPrice: rule.outputUnitPrice,
     requestUnitPrice: rule.requestUnitPrice,
+    cachedInputUnitPrice: rule.cachedInputUnitPrice ?? "",
     effectiveAt: toDateTimeLocal(rule.effectiveAt),
     expiresAt: toDateTimeLocal(rule.expiresAt),
   };
@@ -497,6 +504,10 @@ export function ModelPlatformPage() {
       requestUnitPrice: priceRuleForm.requestUnitPrice.trim() || "0",
       expiresAt: priceRuleForm.expiresAt || null,
     };
+    // 没填就不发这个键——不能像上面三个那样 `|| "0"` 兜底，那会把「没声明」
+    // 写成「免费」。
+    const cachedInput = priceRuleForm.cachedInputUnitPrice.trim();
+    if (cachedInput) common.cachedInputUnitPrice = cachedInput;
     const parsedUnitTokens = Number(priceRuleForm.unitTokens);
     if (Number.isFinite(parsedUnitTokens) && parsedUnitTokens > 0) {
       common.unitTokens = parsedUnitTokens;
@@ -518,7 +529,16 @@ export function ModelPlatformPage() {
         });
         toast({ tone: "success", title: "计价规则已创建" });
       } else if (priceRuleDialog.id) {
-        await updateModelPriceRule(priceRuleDialog.id, common);
+        // 计价规则是**追加版本化**的：atlas 的 PATCH 逐个按名拒绝 billingMode /
+        // currency / unitTokens / 三个单价 / cachedInputUnitPrice / effectiveAt
+        // ——数据库对这些列根本不授予 UPDATE，改价会篡改 reqlog 已经引用过的历史。
+        // 复用 `common` 会把它们全发出去，于是「编辑 → 保存」必然 400，报的还是
+        // 一串用户没动过的字段。这里只发 atlas 真正收的那一个。
+        //
+        // 要改价请新建一条规则，再把旧规则的 expiresAt 设过去。
+        await updateModelPriceRule(priceRuleDialog.id, {
+          expiresAt: priceRuleForm.expiresAt || null,
+        });
         toast({ tone: "success", title: "计价规则已更新" });
       }
       await reloadPriceRules();
@@ -981,6 +1001,14 @@ export function ModelPlatformPage() {
                         <small>输出单价</small>
                       </span>
                       <span>
+                        <b>
+                          {rule.cachedInputUnitPrice
+                            ? trimUnitPrice(rule.cachedInputUnitPrice)
+                            : "—"}
+                        </b>
+                        <small>缓存输入单价</small>
+                      </span>
+                      <span>
                         <b>{formatNumber(rule.unitTokens)}</b>
                         <small>计价单位</small>
                       </span>
@@ -1100,6 +1128,19 @@ export function ModelPlatformPage() {
                   }))
                 }
                 placeholder="0"
+              />
+            </Label>
+            <Label>
+              缓存输入单价
+              <Input
+                value={priceRuleForm.cachedInputUnitPrice}
+                onChange={(event) =>
+                  setPriceRuleForm((old) => ({
+                    ...old,
+                    cachedInputUnitPrice: event.target.value,
+                  }))
+                }
+                placeholder="留空 = 不声明"
               />
             </Label>
             <Label>

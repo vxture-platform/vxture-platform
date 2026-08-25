@@ -76,6 +76,9 @@ export const ATLAS_CONTRACT = {
       "inputUnitPrice",
       "outputUnitPrice",
       "requestUnitPrice",
+      // atlas v0.3.0 起必发（值可空，键必在）。列进来是有意的：这一列决定成本
+      // 差 30 倍，上游哪天不发了，要在入口响一声而不是在报表里安静地错。
+      "cachedInputUnitPrice",
       "state",
       "effectiveAt",
     ],

@@ -1322,6 +1322,9 @@ export interface ModelPriceRuleWriteInput {
   inputUnitPrice?: string | number | null;
   outputUnitPrice?: string | number | null;
   requestUnitPrice?: string | number | null;
+  /** 缺省 = 不声明缓存价（列留 null）。**不要为了"补齐"传 0** —— 那是在声称
+   *  缓存输入免费，对每一家供应商都是假的。 */
+  cachedInputUnitPrice?: string | number | null;
   effectiveAt?: string | null;
   expiresAt?: string | null;
   /** 仅 create 收；update 侧由 `Omit` 去掉（atlas 的 update body 不含状态）。 */

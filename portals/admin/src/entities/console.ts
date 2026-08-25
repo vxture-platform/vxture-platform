@@ -264,6 +264,10 @@ export interface ModelPriceRuleRecord {
   inputUnitPrice: string;
   outputUnitPrice: string;
   requestUnitPrice: string;
+  /** atlas v0.3.0（TD-047）。缓存命中那部分输入 token 的单价 —— DeepSeek 上是未
+   *  命中价的 1/30。**`null` 不是「免费」，是「没声明」**：算成本时回退到
+   *  `inputUnitPrice`，只会高估不会低估。 */
+  cachedInputUnitPrice: string | null;
   state: ObjectState;
   effectiveAt: string;
   expiresAt: string | null;
