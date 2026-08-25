@@ -469,7 +469,11 @@ export interface ProtocolCatalogResponse {
   protocols: ProtocolCatalogEntry[];
 }
 
-/** 模型自检：**会发起真实上游调用**（Atlas 侧上限 16 token，chat + stream 两路）。 */
+/** 模型自检：**会发起真实上游调用**（chat + stream 两路）。
+ *
+ *  上限不再是固定的 16 token：思考型模型（DeepSeek V4 默认开思考）会把整个预算
+ *  烧在思维链上、正文一个字都产不出，16 token 对它们是必然误报。Atlas 现在发
+ *  2048，并以模型自己声明的 `maxOutputTokens` 封顶（atlas v0.3.0）。 */
 export interface ModelProbeResult {
   requestId: string;
   modelId: string;
@@ -486,8 +490,17 @@ export interface ModelProbeResult {
     mode: "chat" | "stream";
     ok: boolean;
     latencyMs: number;
-    /** 上游有没有回 usage——决定这个模型的调用会不会**静默漏计量**。 */
+    /** 上游有没有回 usage——决定这个模型的调用会不会**静默漏计量**。
+     *  失败的检查上这个值恒为 false（Atlas 的 `failedCheck()` 写死），
+     *  **所以它只在 `ok === true` 时才是一次观测**，否则是渲染产物。 */
     usageReported: boolean;
+    /** 这次检查有没有拿到**可交付的内容**——正文或工具调用，思维链不算。
+     *
+     *  atlas v0.3.0 新增。它存在的理由是一个真实的假绿灯：只吐
+     *  `reasoning_content` 的思考型模型会回 HTTP 200、usage 齐全、一个 token
+     *  都没交付，而旧的自检只要不抛异常就判通过。`usageReported && !contentReceived`
+     *  是需要单独喊出来的组合。 */
+    contentReceived: boolean;
     totalTokens: number | null;
     error?: { code: string; message: string };
   }[];
