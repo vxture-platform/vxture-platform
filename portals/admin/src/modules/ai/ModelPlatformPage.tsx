@@ -1042,6 +1042,15 @@ export function ModelPlatformPage() {
           }}
           onSubmit={(event) => void submitPriceRule(event)}
         >
+          {/* 载荷只发 expiresAt 是对的（atlas 逐个按名拒绝其余字段），但表单不能
+              继续邀请那些它会丢掉的输入 —— 否则 400 只是换成了一句假的「已更新」。
+              下面的追加式字段在编辑态一律禁用，与载荷保持同一句话。 */}
+          {priceRuleDialog.mode === "edit" ? (
+            <p className="text-body-sm text-muted-foreground">
+              计价规则按追加版本化：价格与生效时间不可就地修改。要改价请新建一条规则，
+              再把这一条的失效时间设过去。
+            </p>
+          ) : null}
           <div className="vx-model-dialog__grid">
             <Label>
               模型
@@ -1066,6 +1075,7 @@ export function ModelPlatformPage() {
               计费模式
               <Input
                 value={priceRuleForm.billingMode}
+                disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
                   setPriceRuleForm((old) => ({
                     ...old,
@@ -1079,6 +1089,7 @@ export function ModelPlatformPage() {
               币种
               <Input
                 value={priceRuleForm.currency}
+                disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
                   setPriceRuleForm((old) => ({
                     ...old,
@@ -1094,6 +1105,7 @@ export function ModelPlatformPage() {
                 type="number"
                 min={1}
                 value={priceRuleForm.unitTokens}
+                disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
                   setPriceRuleForm((old) => ({
                     ...old,
@@ -1108,6 +1120,7 @@ export function ModelPlatformPage() {
               输入单价
               <Input
                 value={priceRuleForm.inputUnitPrice}
+                disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
                   setPriceRuleForm((old) => ({
                     ...old,
@@ -1121,6 +1134,7 @@ export function ModelPlatformPage() {
               输出单价
               <Input
                 value={priceRuleForm.outputUnitPrice}
+                disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
                   setPriceRuleForm((old) => ({
                     ...old,
@@ -1134,6 +1148,7 @@ export function ModelPlatformPage() {
               缓存输入单价
               <Input
                 value={priceRuleForm.cachedInputUnitPrice}
+                disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
                   setPriceRuleForm((old) => ({
                     ...old,
@@ -1147,6 +1162,7 @@ export function ModelPlatformPage() {
               请求单价
               <Input
                 value={priceRuleForm.requestUnitPrice}
+                disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
                   setPriceRuleForm((old) => ({
                     ...old,
@@ -1163,6 +1179,7 @@ export function ModelPlatformPage() {
               <Input
                 type="datetime-local"
                 value={priceRuleForm.effectiveAt}
+                disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
                   setPriceRuleForm((old) => ({
                     ...old,
