@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { ConfirmDestructiveDialog } from "@/components/ConfirmDestructiveDialog";
+import { useConfirmLabels } from "@/lib/destructive";
 import { useTranslations } from "next-intl";
 import {
   ActionMenu,
@@ -64,11 +64,7 @@ export function InvitationsPage() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /* 撤销是不可逆的（邀请链接立刻失效，被邀请人再点是一个 404），所以它先落在这里
-     等一次确认，而不是从菜单直接执行。 */
-  const [revokeTarget, setRevokeTarget] = useState<ConsoleInvitation | null>(
-    null,
-  );
+  const withLabels = useConfirmLabels();
 
   const reload = useCallback(() => fetchInvitations().then(setRows), []);
 
@@ -87,11 +83,12 @@ export function InvitationsPage() {
       const ok = await revokeInvitation(inv.id);
       if (!ok) setError(t("revokeFailed"));
       await reload();
+    } catch (e) {
+      /* 重新抛出：DS 的确认件按 Promise 是否 rejected 决定关不关框。失败的理由
+         已经落在 `error` 横幅上，但框不能关——用户得看见自己按的那一下没成。 */
+      throw e;
     } finally {
       setBusyId(null);
-      /* 成功与失败都关：失败的理由已经落在 `error` 横幅上，把确认框继续开着
-         只会让人以为还要再点一次。 */
-      setRevokeTarget(null);
     }
   };
 
@@ -102,7 +99,13 @@ export function InvitationsPage() {
       danger: true,
       disabled: inv.status !== "pending" || busyId !== null,
       ...(inv.status !== "pending" ? { hint: t("revokeHint") } : {}),
-      onSelect: () => setRevokeTarget(inv),
+      confirm: withLabels({
+        verb: t("revokeVerb"),
+        target: inv.email,
+        consequence: t("revokeConsequence"),
+        cancelLabel: t("revokeKeep"),
+        onConfirm: () => handleRevoke(inv),
+      }),
     },
     {
       id: "resend",
@@ -216,21 +219,6 @@ export function InvitationsPage() {
           ]}
         />
       </PageSection>
-
-      <ConfirmDestructiveDialog
-        open={revokeTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setRevokeTarget(null);
-        }}
-        title={t("revokeConfirmTitle", { email: revokeTarget?.email ?? "" })}
-        consequence={t("revokeConfirmBody")}
-        confirmLabel={t("revokeConfirmAction")}
-        cancelLabel={t("revokeConfirmCancel")}
-        busy={busyId !== null}
-        onConfirm={() => {
-          if (revokeTarget) void handleRevoke(revokeTarget);
-        }}
-      />
     </ViewLayout>
   );
 }

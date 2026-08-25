@@ -56,16 +56,13 @@ export const PRODUCT_STATE_META: Record<
   },
 };
 
-export interface ProductAction {
+interface ProductActionBase {
   id: string;
   label: string;
   icon: IconName;
   to: ProductState;
   /** 从哪些状态可以做这个动作。与 BFF 的 `STATE_TRANSITIONS` 互为镜像。 */
   from: readonly ProductState[];
-  /** 二次确认文案；不给则直接执行。 */
-  confirm?: { title: string; description: string };
-  danger?: boolean;
   /**
    * 需要接入检查单全部必填项已满足才可执行。
    *
@@ -76,6 +73,35 @@ export interface ProductAction {
    */
   requiresChecklist?: boolean;
 }
+
+/**
+ * 非破坏性动作。`advisory` 是**提醒**不是门闩：它拦一下让人看一眼，但没有任何
+ * 条件可以不满足——「恢复前建议重新验证」正是这一档。
+ */
+interface ProductActionPlain extends ProductActionBase {
+  danger?: false;
+  advisory?: { title: string; description: string };
+  destructive?: never;
+}
+
+/**
+ * 破坏性动作。
+ *
+ * `verb` 与 `consequence` **必填**，与 DS 的 `DestructiveConfirm` 对齐——这张表
+ * 是「这个状态能做哪些动作」的单一权威，那么「做了会怎样」属于同一件事，不该散
+ * 在调用页里。做成判别联合而不是可选字段，是为了让**加一个 danger 动作却不写后果
+ * 编译不过**：DS 在组件层用同一招，这里只是把同一条判据往上游挪了一层。
+ *
+ * `target` 不在这里：表描述「这个动作是什么」，不描述「作用在谁身上」——后者是
+ * 行数据，由调用点拼。
+ */
+interface ProductActionDestructive extends ProductActionBase {
+  danger: true;
+  destructive: { verb: string; consequence: string };
+  advisory?: never;
+}
+
+export type ProductAction = ProductActionPlain | ProductActionDestructive;
 
 export const PRODUCT_ACTIONS: readonly ProductAction[] = [
   {
@@ -99,7 +125,7 @@ export const PRODUCT_ACTIONS: readonly ProductAction[] = [
     icon: "play",
     from: ["inactive"],
     to: "active",
-    confirm: {
+    advisory: {
       title: "恢复前建议重新验证",
       description:
         "停用期间对方可能改过回调地址、轮换过密钥、或调整了自己那侧的实现。恢复本身不跑验证——它只是把产品重新置为可用。",
@@ -112,9 +138,9 @@ export const PRODUCT_ACTIONS: readonly ProductAction[] = [
     from: ["draft", "active", "inactive"],
     to: "deprecated",
     danger: true,
-    confirm: {
-      title: "退役不可逆",
-      description:
+    destructive: {
+      verb: "退役",
+      consequence:
         "退役是终态：产品行会保留（「谁曾经接入过、什么时候退的」要答得出），但不能再回到任何其它状态。要重新接入必须登记一个新的产品码。",
     },
   },

@@ -575,6 +575,11 @@ function ProductClients() {
                         icon: "pause" as const,
                         danger: true,
                         separatorBefore: true,
+                        /* 单条、可逆、且不改任何凭据：停用只是把这个 client 置为
+                           不可用，随时可以再启用，密钥与授权原样保留。按 owner
+                           2026-08-25 定的线——单条可逆动作写明理由豁免，批量一律拦。 */
+                        confirmExempt:
+                          "停用可随时再启用，client 的密钥与授权原样保留，不构成不可逆操作",
                         onSelect: () =>
                           void setClientState(c.clientId, "inactive"),
                       }

@@ -95,6 +95,7 @@ import {
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { api, OperaApiError } from "@/lib/api";
+import { confirmLabels } from "@/lib/destructive";
 import { RISK_LEVEL_META } from "@/lib/status";
 
 const MANAGE = "capability:runos.manage";
@@ -162,10 +163,9 @@ type LoadState =
   | { kind: "error"; message: string }
   | { kind: "ready" };
 
-type DialogState =
-  | { kind: "revoke"; row: GrantRecord }
-  | { kind: "quota-reset"; row: GrantRecord }
-  | null;
+/* 没有 `revoke` 档：撤销的确认由 DS 的 `ConfirmDestructive` 接管（菜单项的
+   `confirm`），落锤直接走 `revokeGrant`。 */
+type DialogState = { kind: "quota-reset"; row: GrantRecord } | null;
 
 /** `useSearchParams` 需要 Suspense 边界。 */
 export default function RunosGrantsPage() {
@@ -466,49 +466,53 @@ function RunosGrantsPageContent() {
     }
   }
 
+  /** 撤销一条能力授权。失败重新抛出，否则确认件会把失败当成成功关掉框。 */
+  async function revokeGrant(row: GrantRecord) {
+    try {
+      await api.delete(`/api/runos/grants/${encodeURIComponent(row.grantId)}`);
+      toast({
+        tone: "success",
+        title: `${row.capabilityId} 的授权已撤销`,
+        description:
+          "行迁到 revoked 终态，没有删除。**不是急停**：调用走快照，撤销后最多还会再放行一轮（一个刷新周期）。由它带出来的派生权益也不会跟着撤——runos 刻意不级联。",
+      });
+      await runLookup();
+    } catch (error) {
+      toast({ tone: "danger", title: "撤销失败", ...describeError(error) });
+      throw error;
+    }
+  }
+
   async function confirmDialog(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!dialog) return;
-    const { kind, row } = dialog;
+    const { row } = dialog;
     setSubmitting(true);
     try {
-      if (kind === "revoke") {
-        await api.delete(
-          `/api/runos/grants/${encodeURIComponent(row.grantId)}`,
-        );
-        toast({
-          tone: "success",
-          title: `${row.capabilityId} 的授权已撤销`,
-          description:
-            "行迁到 revoked 终态，没有删除。**不是急停**：调用走快照，撤销后最多还会再放行一轮（一个刷新周期）。由它带出来的派生权益也不会跟着撤——runos 刻意不级联。",
-        });
-      } else {
-        /**
-         * **重置的响应不是消费量的形状**，别往同一格缓存里塞。
-         *
-         * runos `QuotaCounterService.reset()` 回 `{grantId, used, updatedAt}`——只有
-         * 三个字段，没有 `quotaLimit` / `enforced` / `remaining`（那三个是
-         * `consumption()` 拿着授权行现算的）。此前直接把它当 `QuotaConsumption` 存
-         * 进缓存，于是 `q.enforced` 变成 undefined，用量列把一条**有配额上限**的授权
-         * 渲染成「未强制」——重置一次配额，界面就开始说这条授权不限量。
-         *
-         * 所以重置完重新读一次消费量：多一次往返，换一个不会自相矛盾的显示。
-         */
-        await api.post(
-          `/api/runos/grants/${encodeURIComponent(row.grantId)}/quota/reset`,
-        );
-        await loadQuota([row]);
-        toast({
-          tone: "success",
-          title: `${row.capabilityId} 的计数已归零`,
-        });
-      }
+      /**
+       * **重置的响应不是消费量的形状**，别往同一格缓存里塞。
+       *
+       * runos `QuotaCounterService.reset()` 回 `{grantId, used, updatedAt}`——只有
+       * 三个字段，没有 `quotaLimit` / `enforced` / `remaining`（那三个是
+       * `consumption()` 拿着授权行现算的）。此前直接把它当 `QuotaConsumption` 存
+       * 进缓存，于是 `q.enforced` 变成 undefined，用量列把一条**有配额上限**的授权
+       * 渲染成「未强制」——重置一次配额，界面就开始说这条授权不限量。
+       *
+       * 所以重置完重新读一次消费量：多一次往返，换一个不会自相矛盾的显示。
+       */
+      await api.post(
+        `/api/runos/grants/${encodeURIComponent(row.grantId)}/quota/reset`,
+      );
+      await loadQuota([row]);
+      toast({
+        tone: "success",
+        title: `${row.capabilityId} 的计数已归零`,
+      });
       setDialog(null);
-      if (kind === "revoke") await runLookup();
     } catch (error) {
       toast({
         tone: "danger",
-        title: kind === "revoke" ? "撤销失败" : "重置失败",
+        title: "重置失败",
         ...describeError(error),
       });
     } finally {
@@ -749,8 +753,25 @@ function RunosGrantsPageContent() {
                             separatorBefore: true,
                             disabled:
                               r.grantType === "derived" || r.state !== "active",
-                            onSelect: () =>
-                              setDialog({ kind: "revoke", row: r }),
+                            confirm: confirmLabels({
+                              verb: "撤销",
+                              target: `${r.capabilityId} 的授权`,
+                              consequence:
+                                "行迁到 revoked 终态，不删除——「谁曾经持有、什么时候被收回」要留得住。**不是急停**：调用走快照，撤销后最多还会再放行一轮。由它带出来的派生权益也不会跟着撤，runos 刻意不级联。",
+                              /* 两条判据此前只体现在 `disabled` 上——点不开，但说不出
+                                 为什么。接成 `met` 之后框里能看见是哪一条挡的。 */
+                              preconditions: [
+                                {
+                                  label: "不是派生行（派生行不可单独撤）",
+                                  met: r.grantType !== "derived",
+                                },
+                                {
+                                  label: "这条授权仍在生效",
+                                  met: r.state === "active",
+                                },
+                              ],
+                              onConfirm: () => revokeGrant(r),
+                            }),
                           },
                         ]}
                       />
@@ -879,25 +900,6 @@ function RunosGrantsPageContent() {
           </div>
         )}
       </Section>
-
-      {/* ── 撤销 ─────────────────────────────────────────────────────────── */}
-      <DialogForm
-        open={dialog?.kind === "revoke"}
-        onOpenChange={(open) => {
-          if (!open) setDialog(null);
-        }}
-        size="sm"
-        danger
-        title={
-          dialog?.kind === "revoke"
-            ? `撤销「${dialog.row.capabilityId}」`
-            : "撤销授权"
-        }
-        description="行迁到 revoked 终态，不删除——「谁曾经持有、什么时候被收回」要留得住。注意：runos 刻意不级联撤销由它带出来的派生行（另一个锚点可能也需要同一个依赖），那些行要等下一次写入触发闭包重编译才会重算。"
-        submitLabel="撤销"
-        submitting={submitting}
-        onSubmit={(e) => void confirmDialog(e)}
-      />
 
       {/* ── 重置配额计数 ─────────────────────────────────────────────────── */}
       <DialogForm

@@ -49,6 +49,7 @@ import {
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { api, OperaApiError } from "@/lib/api";
+import { confirmLabels } from "@/lib/destructive";
 
 /** 写操作的能力码，与 BFF 的能力门同名（release:maintenance.manage）。 */
 const MANAGE = "release:maintenance.manage";
@@ -218,8 +219,6 @@ export default function MaintenanceWindowsPage() {
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const [editing, setEditing] = useState<MaintenanceWindowItem | null>(null);
   const [form, setForm] = useState<WindowForm>(createDefaultForm);
-  const [pendingCancel, setPendingCancel] =
-    useState<MaintenanceWindowItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const { can } = useOperatorSession();
@@ -559,7 +558,18 @@ export default function MaintenanceWindowsPage() {
                             submitting ||
                             (item.state !== "scheduled" &&
                               item.state !== "in_progress"),
-                          onSelect: () => setPendingCancel(item),
+                          confirm: confirmLabels({
+                            verb: "取消",
+                            target: `维护窗口「${item.title}」`,
+                            consequence:
+                              "取消后窗口进入终态，不能再改回计划中或进行中；历史记录保留。要重新安排同一段维护，得新建一个窗口。",
+                            onConfirm: () =>
+                              runAction("维护窗口已取消", () =>
+                                api.post(
+                                  `/api/maintenance-windows/${item.id}/cancel`,
+                                ),
+                              ),
+                          }),
                         },
                       ]}
                     />
@@ -728,28 +738,6 @@ export default function MaintenanceWindowsPage() {
             </FieldGroup>
           </FieldTier>
         </DialogForm>
-      ) : null}
-
-      {pendingCancel ? (
-        <DialogForm
-          open
-          title="取消维护窗口"
-          description={`确认取消「${pendingCancel.title}」？取消后窗口进入终态，保留历史记录。`}
-          submitLabel="取消窗口"
-          danger
-          submitting={submitting}
-          onOpenChange={(open) => {
-            if (!open) setPendingCancel(null);
-          }}
-          onSubmit={(event) => {
-            event.preventDefault();
-            const target = pendingCancel;
-            setPendingCancel(null);
-            void runAction("维护窗口已取消", () =>
-              api.post(`/api/maintenance-windows/${target.id}/cancel`),
-            );
-          }}
-        />
       ) : null}
     </>
   );

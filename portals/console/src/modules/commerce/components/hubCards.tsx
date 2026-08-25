@@ -38,6 +38,7 @@ import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import { Link } from "@/lib/i18n/navigation";
 import { buildWebsiteProductUrl } from "@/lib/website-entry";
 import type { RecommendedProduct, SubscribedProduct } from "@/api/console-bff";
+import { useConfirmLabels } from "@/lib/destructive";
 import {
   SUB_STATUS_TONES,
   TIER_AUDIENCE,
@@ -127,9 +128,18 @@ export function SubscriptionProductCard({
   /** 到期不续 / 恢复续费(P0 自助;free/trial/永久订阅不适用由本卡判定灰) */
   onSetAutoRenew: (item: SubscribedProduct, enabled: boolean) => void;
   /** 立即退订(危操作,父页出确认弹窗) */
-  onUnsubscribe: (item: SubscribedProduct) => void;
+  /**
+   * 退订的落锤。**返回 Promise**：确认由本件的菜单项承担（DS 的 `confirm`），
+   * 而"成功才关框、失败不关"要靠这个 Promise 的结局来判。
+   *
+   * 契约是 2026-08-25 从 `(item) => void` 改过来的：此前确认框在父组件里，
+   * 于是"退订会怎样"这句话和触发它的菜单项分居两处。责任归位之后，父组件只
+   * 负责"做这件事"，不再负责"问一句"。
+   */
+  onUnsubscribe: (item: SubscribedProduct) => Promise<void>;
 }) {
   const t = useTranslations("subscriptionHub");
+  const withLabels = useConfirmLabels();
   const locale = useLocale();
 
   const audience = item.tier ? TIER_AUDIENCE[item.tier] : undefined;
@@ -167,7 +177,13 @@ export function SubscriptionProductCard({
       label: t("card.unsubscribe"),
       danger: true,
       disabled: expired,
-      onSelect: () => onUnsubscribe(item),
+      confirm: withLabels({
+        verb: t("card.unsubscribeVerb"),
+        target: item.productName ?? "",
+        consequence: t("card.unsubscribeConsequence"),
+        cancelLabel: t("card.unsubscribeKeep"),
+        onConfirm: () => onUnsubscribe(item),
+      }),
     },
   ];
 
