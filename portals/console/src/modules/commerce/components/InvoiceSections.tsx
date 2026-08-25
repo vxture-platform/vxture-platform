@@ -50,6 +50,7 @@ import {
   type ConsoleInvoiceReceipt,
 } from "@/api/console-bff";
 import { PageSection } from "@/layout/shell";
+import { ConfirmDestructiveDialog } from "@/components/ConfirmDestructiveDialog";
 import { fmtDate, fmtTime } from "./hubModel";
 
 /** invoice_status 六值域(52_billing.sql CHECK)→ 徽章语气。 */
@@ -115,6 +116,10 @@ export function InvoiceSections({
   const [addressForm, setAddressForm] = useState<AddressFormState | null>(null);
   const [applyAddressId, setApplyAddressId] = useState<string>("");
   const [applyType, setApplyType] = useState<string>("");
+  /* 删地址是不可逆的：这条抬头没有回收站，删了要重新录一遍（税号、开户行、
+     地址一整套）。所以它先落在这里等一次确认。 */
+  const [deleteTarget, setDeleteTarget] =
+    useState<ConsoleBillingAddress | null>(null);
 
   const statusLabel = (s: string): string =>
     KNOWN_RECEIPT_STATUSES.has(s) ? t(`status.${s}`) : s;
@@ -305,7 +310,7 @@ export function InvoiceSections({
       id: "delete",
       label: t("addresses.delete"),
       danger: true,
-      onSelect: () => void runWrite(() => deleteBillingAddress(a.id)),
+      onSelect: () => setDeleteTarget(a),
     },
   ];
 
@@ -617,6 +622,27 @@ export function InvoiceSections({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDestructiveDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title={t("addresses.deleteConfirmTitle", {
+          title: deleteTarget?.title ?? "",
+        })}
+        consequence={t("addresses.deleteConfirmBody")}
+        confirmLabel={t("addresses.deleteConfirmAction")}
+        cancelLabel={t("addresses.deleteConfirmCancel")}
+        busy={busy}
+        onConfirm={() => {
+          const target = deleteTarget;
+          if (!target) return;
+          void runWrite(() => deleteBillingAddress(target.id)).then(() =>
+            setDeleteTarget(null),
+          );
+        }}
+      />
     </>
   );
 }

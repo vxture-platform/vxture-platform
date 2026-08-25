@@ -13,6 +13,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { ConfirmDestructiveDialog } from "@/components/ConfirmDestructiveDialog";
 import { useTranslations } from "next-intl";
 import {
   ActionMenu,
@@ -63,6 +64,11 @@ export function InvitationsPage() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /* 撤销是不可逆的（邀请链接立刻失效，被邀请人再点是一个 404），所以它先落在这里
+     等一次确认，而不是从菜单直接执行。 */
+  const [revokeTarget, setRevokeTarget] = useState<ConsoleInvitation | null>(
+    null,
+  );
 
   const reload = useCallback(() => fetchInvitations().then(setRows), []);
 
@@ -83,6 +89,9 @@ export function InvitationsPage() {
       await reload();
     } finally {
       setBusyId(null);
+      /* 成功与失败都关：失败的理由已经落在 `error` 横幅上，把确认框继续开着
+         只会让人以为还要再点一次。 */
+      setRevokeTarget(null);
     }
   };
 
@@ -93,7 +102,7 @@ export function InvitationsPage() {
       danger: true,
       disabled: inv.status !== "pending" || busyId !== null,
       ...(inv.status !== "pending" ? { hint: t("revokeHint") } : {}),
-      onSelect: () => void handleRevoke(inv),
+      onSelect: () => setRevokeTarget(inv),
     },
     {
       id: "resend",
@@ -207,6 +216,21 @@ export function InvitationsPage() {
           ]}
         />
       </PageSection>
+
+      <ConfirmDestructiveDialog
+        open={revokeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRevokeTarget(null);
+        }}
+        title={t("revokeConfirmTitle", { email: revokeTarget?.email ?? "" })}
+        consequence={t("revokeConfirmBody")}
+        confirmLabel={t("revokeConfirmAction")}
+        cancelLabel={t("revokeConfirmCancel")}
+        busy={busyId !== null}
+        onConfirm={() => {
+          if (revokeTarget) void handleRevoke(revokeTarget);
+        }}
+      />
     </ViewLayout>
   );
 }

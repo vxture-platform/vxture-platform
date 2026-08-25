@@ -2017,7 +2017,11 @@
         "fieldBankAccount": "开户账号",
         "fieldPhone": "联系电话",
         "fieldAddress": "地址(纸质票寄送用)",
-        "empty": "暂无开票抬头,点右上角新增"
+        "empty": "暂无开票抬头,点右上角新增",
+        "deleteConfirmTitle": "删除开票抬头「{title}」",
+        "deleteConfirmBody": "这条抬头会被删掉，且没有回收站。已开出的发票不受影响，但下次开票要重新录入税号、开户行与地址。",
+        "deleteConfirmAction": "删除抬头",
+        "deleteConfirmCancel": "取消"
       },
       "apply": {
         "title": "申请发票",
@@ -2733,7 +2737,11 @@
       "flowBody": "在成员管理页按邮箱+角色发出邀请;对方接受后自动成为租户与默认工作空间成员",
       "expiryTitle": "时效",
       "expiryBody": "邀请到期自动失效;撤销立即失效。同一邮箱可在失效后重新邀请"
-    }
+    },
+    "revokeConfirmTitle": "撤销给 {email} 的邀请",
+    "revokeConfirmBody": "邀请链接立刻失效，对方再打开会看到「邀请不存在」。撤销不可撤回——要让对方重新加入，需要再发一次邀请。",
+    "revokeConfirmAction": "撤销邀请",
+    "revokeConfirmCancel": "保留邀请"
   },
   "todosPage": {
     "title": "待办事项",

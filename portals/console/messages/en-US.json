@@ -2017,7 +2017,11 @@
         "fieldBankAccount": "Bank account",
         "fieldPhone": "Phone",
         "fieldAddress": "Address (for paper delivery)",
-        "empty": "No invoice titles yet — add one via the button above"
+        "empty": "No invoice titles yet — add one via the button above",
+        "deleteConfirmTitle": "Delete the billing profile \"{title}\"",
+        "deleteConfirmBody": "This profile is removed and there is no undo. Invoices already issued are unaffected, but the next one needs the tax ID, bank and address entered again.",
+        "deleteConfirmAction": "Delete profile",
+        "deleteConfirmCancel": "Cancel"
       },
       "apply": {
         "title": "Request invoice",
@@ -2733,7 +2737,11 @@
       "flowBody": "Send by email + role from the Members page; on acceptance the invitee joins the tenant and its default workspace",
       "expiryTitle": "Validity",
       "expiryBody": "Invitations expire automatically; revocation is immediate. The same email can be re-invited after expiry"
-    }
+    },
+    "revokeConfirmTitle": "Revoke the invitation to {email}",
+    "revokeConfirmBody": "The invitation link stops working immediately and the recipient sees \"invitation not found\". This cannot be undone — re-inviting them means sending a new invitation.",
+    "revokeConfirmAction": "Revoke invitation",
+    "revokeConfirmCancel": "Keep invitation"
   },
   "todosPage": {
     "title": "To-dos",
