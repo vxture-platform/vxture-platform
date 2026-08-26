@@ -1606,6 +1606,7 @@
     "export": "Export",
     "exportSelected": "Export selected",
     "loading": "Loading",
+    "noPlanLinked": "No plan linked",
     "none": "None",
     "other": "Other",
     "saveFailed": "Could not save"
@@ -1803,6 +1804,11 @@
         "edit": "Handle approval",
         "audit": "Audit receipt"
       }
-    }
+    },
+    "emptyTitle": "No {object} yet",
+    "emptyDescription": "New entries will show up here.",
+    "noPending": "Nothing pending",
+    "totalHelp": "Total {object} records, regardless of state.",
+    "searchAria": "Search {object}"
   }
 }

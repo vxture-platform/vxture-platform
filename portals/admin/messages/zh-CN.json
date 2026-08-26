@@ -1606,6 +1606,7 @@
     "export": "导出",
     "exportSelected": "导出所选",
     "loading": "读取中",
+    "noPlanLinked": "未关联套餐",
     "none": "无",
     "other": "其他",
     "saveFailed": "保存失败"
@@ -1803,6 +1804,11 @@
         "edit": "审批处理",
         "audit": "审计凭证"
       }
-    }
+    },
+    "emptyTitle": "还没有{object}",
+    "emptyDescription": "新增后会出现在这里。",
+    "noPending": "无待处理",
+    "totalHelp": "当前{object}记录总数，不区分状态。",
+    "searchAria": "搜索{object}"
   }
 }

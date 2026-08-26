@@ -700,7 +700,7 @@ export function BillingDetailPage({ billId }: { billId: string }) {
           title={bill ? bill.billNo : "账单详情"}
           description={
             bill
-              ? `${bill.tenantName} · ${bill.servicePlanName ?? "未关联套餐"} · ${t(`status.invoice.${bill.invoiceStatus}`)}`
+              ? `${bill.tenantName} · ${bill.servicePlanName ?? t("common.noPlanLinked")} · ${t(`status.invoice.${bill.invoiceStatus}`)}`
               : "正在读取账单、收款和发票登记数据。"
           }
           action={
