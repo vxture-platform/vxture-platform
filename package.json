@@ -54,6 +54,7 @@
     "// === 代码质量 ===": "",
     "lint": "pnpm --recursive --if-present lint",
     "lint:design": "node scripts/guardrails/check-design-system.mjs",
+    "lint:css-traps": "node scripts/guardrails/check-css-traps.mjs",
     "lint:destructive": "node scripts/guardrails/check-destructive-confirmations.mjs",
     "lint:messages": "node scripts/guardrails/check-message-catalogs.mjs",
     "lint:i18n-coverage": "node scripts/guardrails/check-i18n-coverage.mjs",

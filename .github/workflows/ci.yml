@@ -158,6 +158,14 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:design
 
+      # 两类不报错的样式缺陷：CSS 注释提前收口（`next build` 走的
+      # Lightning CSS 会自行恢复、照常打包成功，Turbopack dev 却直接拒收），
+      # 以及被主题踩掉的关键字工具类（`max-w-none` 实际是 `max-width: 0`）。
+      # 两者都只在人打开页面时现形，而且现形的样子是布局长歪，不是报错。
+      - name: CSS trap guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:css-traps
+
       # 破坏性动作的确认门（DS 9.0 的类型义务管不到的两件事）：`confirmExempt`
       # 的数目不许悄悄变多——它一旦好写就会被当成绕过确认的捷径，而绕过在界面
       # 上看不出来；以及 `window.confirm` 不许回潮——它没有主语、阻塞页面。

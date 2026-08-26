@@ -751,9 +751,13 @@ function PermissionDetailDialog({
         if (!next) onClose();
       }}
     >
-      {/* max-w-none neutralizes DS DialogContent's default max-w-lg so the
-          existing __panel width tokens drive the surface size. */}
-      <DialogContent className="max-w-none vx-admin-role-permission-dialog__panel vx-admin-permission-detail-dialog">
+      {/* 抵消 DS DialogContent 的默认宽度，让 __panel 的宽度令牌决定面板尺寸。
+          写方括号任意值而不是 `max-w-none`：DS 注册了 `--space-none: 0px`，而
+          Tailwind v4 解 `max-w-<名>` 时先查 `--spacing-*`，那个关键字因此变成
+          `max-width: 0`，面板被夹成 34px（实测 2026-08-27，本应 896px）。方括号
+          不过主题查表，字面就是 CSS 关键字。同源的坑还有 `max-w-md`…`max-w-5xl`
+          与 `leading-none`，记在 `portals/website/assets/legacy-tokens/tokens-website.css`。 */}
+      <DialogContent className="max-w-[none] vx-admin-role-permission-dialog__panel vx-admin-permission-detail-dialog">
         <header className="vx-admin-role-permission-dialog__header">
           <div>
             <DialogTitle>{permissionDisplayName(permission)}</DialogTitle>
