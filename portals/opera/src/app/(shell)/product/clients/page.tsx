@@ -20,6 +20,7 @@
  * 「查看密钥」，只有「轮换」——丢了就只能换一把新的，这是设计不是缺陷。 */
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -131,6 +132,7 @@ export default function ProductClientsPage() {
 }
 
 function ProductClients() {
+  const tShared = useTranslations();
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const canManage = can(MANAGE);
@@ -328,14 +330,17 @@ function ProductClients() {
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取接入凭据。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取接入凭据。"
+      />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
@@ -381,7 +386,7 @@ function ProductClients() {
           <FilterBar
             view="list"
             onViewChange={() => {}}
-            cardsDisabledReason="卡片视图已下线，改用列表"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={
               visible.length === rows.length
                 ? rows.length
@@ -439,11 +444,11 @@ function ProductClients() {
                 setStateFilter(e.target.value as "all" | ClientState);
                 pager.resetPage();
               }}
-              aria-label="状态筛选"
+              aria-label={tShared("filters.stateLabel")}
             >
-              <option value="all">全部状态</option>
-              <option value="active">启用</option>
-              <option value="inactive">停用</option>
+              <option value="all">{tShared("filters.allStates")}</option>
+              <option value="active">{tShared("actions.enable")}</option>
+              <option value="inactive">{tShared("actions.disable")}</option>
             </NativeSelect>
           </FilterBar>
         }
@@ -468,7 +473,7 @@ function ProductClients() {
               },
               {
                 id: "product",
-                header: "产品",
+                header: tShared("columns.product"),
                 width: "sm",
                 cell: (c: OidcClientRecord) =>
                   c.productId ? (
@@ -542,12 +547,14 @@ function ProductClients() {
               },
               {
                 id: "state",
-                header: "状态",
+                header: tShared("columns.state"),
                 align: "center",
                 width: "xs",
                 cell: (c: OidcClientRecord) => (
                   <StatusBadge tone={CLIENT_STATE_TONE[c.state]} dot>
-                    {c.state === "active" ? "启用" : "停用"}
+                    {c.state === "active"
+                      ? tShared("actions.enable")
+                      : tShared("actions.disable")}
                   </StatusBadge>
                 ),
               },
@@ -571,7 +578,7 @@ function ProductClients() {
                   c.state === "active"
                     ? {
                         id: "deactivate",
-                        label: "停用",
+                        label: tShared("actions.disable"),
                         icon: "pause" as const,
                         danger: true,
                         separatorBefore: true,
@@ -585,7 +592,7 @@ function ProductClients() {
                       }
                     : {
                         id: "activate",
-                        label: "启用",
+                        label: tShared("actions.enable"),
                         icon: "play" as const,
                         separatorBefore: true,
                         onSelect: () =>
@@ -633,7 +640,9 @@ function ProductClients() {
         >
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="client-product">产品</FieldLabel>
+              <FieldLabel htmlFor="client-product">
+                {tShared("columns.product")}
+              </FieldLabel>
               <NativeSelect
                 id="client-product"
                 value={draft.productId}
@@ -774,7 +783,7 @@ function ProductClients() {
         }}
         title={revealSecret?.rotated ? "新密钥已生成" : "客户端已注册"}
         submitLabel="我已保存"
-        cancelLabel="关闭"
+        cancelLabel={tShared("common.close")}
         onSubmit={(e) => {
           e.preventDefault();
           setRevealSecret(null);

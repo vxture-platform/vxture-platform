@@ -47,6 +47,7 @@ import {
   type FormEvent,
 } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import {
   ActionMenu,
@@ -82,7 +83,7 @@ import {
   deleteFailureToast,
 } from "@/features/atlas/lifecycle";
 import { isEnabled, type ObjectState } from "@/features/atlas/state";
-import { confirmLabels } from "@/lib/destructive";
+import { useConfirmLabels } from "@/lib/destructive";
 import { api, OperaApiError } from "@/lib/api";
 
 /** 与 opera-bff atlas.router.ts 同名能力码——与 endpoints 同一批人管（授权的是
@@ -188,6 +189,8 @@ export default function ProductGrantsPage() {
 }
 
 function ProductGrantsPageContent() {
+  const tShared = useTranslations();
+  const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const canManage = can(MANAGE);
@@ -391,7 +394,10 @@ function ProductGrantsPageContent() {
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取产品授权。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取产品授权。"
+      />
     ) : load.kind === "unavailable" ? (
       /* 不画成红色的失败：没出错，是这台 Atlas 还没交付这条路由。写清楚要哪个提交
          才有，比让人去翻网络面板强。 */
@@ -400,24 +406,24 @@ function ProductGrantsPageContent() {
         description={`${STALE_ATLAS_HINT} 这个面由 vxture-atlas#175（product grant management API）交付；在此之前授权只有旧的租户 × 模型轴，管理面在 admin。`}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
     ) : filtered.length !== rows.length ? (
       <EmptyState
         title="没有匹配的授权"
-        description="换个关键词或筛选条件再看。"
+        description={tShared("common.noMatchHint")}
       />
     ) : (
       <EmptyState
@@ -459,7 +465,9 @@ function ProductGrantsPageContent() {
                 title={`只显示持有 ${endpointCodeFilter} 的产品`}
                 action={
                   <Button asChild variant="secondary" size="sm">
-                    <Link href="/model/grants">显示全部</Link>
+                    <Link href="/model/grants">
+                      {tShared("common.showAll")}
+                    </Link>
                   </Button>
                 }
               />
@@ -472,7 +480,9 @@ function ProductGrantsPageContent() {
                 title={`只显示 ${productCodeFilter} 的路由授权`}
                 action={
                   <Button asChild variant="secondary" size="sm">
-                    <Link href="/model/grants">显示全部</Link>
+                    <Link href="/model/grants">
+                      {tShared("common.showAll")}
+                    </Link>
                   </Button>
                 }
               />
@@ -495,7 +505,7 @@ function ProductGrantsPageContent() {
           <FilterBar
             view="list"
             onViewChange={() => {}}
-            cardsDisabledReason="卡片视图已下线，改用列表"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={
               filtered.length === rows.length
                 ? rows.length
@@ -523,11 +533,11 @@ function ProductGrantsPageContent() {
                 setStatusFilter(e.target.value as typeof statusFilter);
                 pager.resetPage();
               }}
-              aria-label="状态筛选"
+              aria-label={tShared("filters.stateLabel")}
             >
-              <option value="all">全部状态</option>
-              <option value="active">启用</option>
-              <option value="inactive">停用</option>
+              <option value="all">{tShared("filters.allStates")}</option>
+              <option value="active">{tShared("actions.enable")}</option>
+              <option value="inactive">{tShared("actions.disable")}</option>
             </NativeSelect>
           </FilterBar>
         }
@@ -536,7 +546,7 @@ function ProductGrantsPageContent() {
             columns={[
               {
                 id: "product",
-                header: "产品",
+                header: tShared("columns.product"),
                 cell: (r: ProductGrantRecord) => (
                   <TableTitleCell
                     icon="package"
@@ -599,7 +609,7 @@ function ProductGrantsPageContent() {
               },
               {
                 id: "status",
-                header: "状态",
+                header: tShared("columns.state"),
                 align: "center",
                 width: "xs",
                 cell: (r: ProductGrantRecord) =>
@@ -612,7 +622,9 @@ function ProductGrantsPageContent() {
                       tone={isEnabled(r.state) ? "success" : "neutral"}
                       dot
                     >
-                      {isEnabled(r.state) ? "生效中" : "已停用"}
+                      {isEnabled(r.state)
+                        ? "生效中"
+                        : tShared("status.generic.disabled")}
                     </StatusBadge>
                   ),
               },
@@ -629,7 +641,7 @@ function ProductGrantsPageContent() {
                       items={[
                         {
                           id: "edit",
-                          label: "编辑",
+                          label: tShared("common.edit"),
                           icon: "edit",
                           onSelect: () => openEdit(r),
                         },
@@ -664,12 +676,12 @@ function ProductGrantsPageContent() {
                             },
                         {
                           id: "delete",
-                          label: "删除",
+                          label: tShared("actions.delete"),
                           icon: "trash",
                           danger: true,
                           separatorBefore: true,
-                          confirm: confirmLabels({
-                            verb: "删除",
+                          confirm: withLabels({
+                            verb: tShared("actions.delete"),
                             target: `${r.productCode} → ${r.endpointCode} 的授权`,
                             consequence:
                               "删除只是把已经停用的记录清掉，不可恢复。日常收回权限用「撤销」就够了，那一步留在变更流水里。",
@@ -706,14 +718,14 @@ function ProductGrantsPageContent() {
         }}
         title="编辑产品授权"
         description="一个产品对一个入口、在一个应用范围上只能有一条授权。运行时按任意一条命中的有效授权放行，所以重复的那条会在你停用眼前这条之后继续放行——唯一索引堵的就是这个。"
-        submitLabel="保存"
+        submitLabel={tShared("common.save")}
         submitting={submitting}
         submitDisabled={!draftValid}
         onSubmit={submit}
       >
         <FieldGroup>
           <Field>
-            <FieldLabel>产品</FieldLabel>
+            <FieldLabel>{tShared("columns.product")}</FieldLabel>
             <Combobox
               items={productItems}
               value={draft.productCode}

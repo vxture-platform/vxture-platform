@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ActionMenu,
   Button,
@@ -117,57 +118,72 @@ interface HandlerOption {
   name: string;
 }
 
-const COLUMNS: readonly DataTableColumn<ComplianceEventItem>[] = [
-  {
-    id: "eventType",
-    header: "事件类型",
-    cell: (item) => (
-      <span className="flex min-w-0 items-center gap-xs">
-        <span className="truncate">{item.eventType}</span>
-        {item.evidenceUrl ? (
-          <a
-            href={item.evidenceUrl}
-            target="_blank"
-            rel="noreferrer"
-            title="查看证据材料"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <Icon name="arrow-long-right" size="xs" fallback="placeholder" />
-          </a>
-        ) : null}
-      </span>
-    ),
-  },
-  {
-    id: "tenant",
-    header: "租户",
-    cell: (item) =>
-      item.tenantName ?? (item.tenantId ? item.tenantId : "平台级"),
-  },
-  {
-    id: "status",
-    header: "状态",
-    align: "center",
-    cell: (item) => (
-      <StatusBadge tone={statusTone(item.status)}>
-        {STATUS_LABELS[item.status]}
-      </StatusBadge>
-    ),
-  },
-  {
-    id: "regulation",
-    header: "法规条款",
-    cell: (item) => item.regulationCode ?? "-",
-  },
-  { id: "handler", header: "处理人", cell: (item) => item.handlerName ?? "-" },
-  {
-    id: "updatedAt",
-    header: "更新时间",
-    cell: (item) => formatDate(item.updatedAt),
-  },
-];
+/* 从模块级常量改成收 `locale` 的工厂：常量在模块加载时就求值了，那一刻
+   没有任何运行时上下文，而列里的日期要按界面语言排。 */
+function columnsOf(
+  locale: string,
+): readonly DataTableColumn<ComplianceEventItem>[] {
+  return [
+    {
+      id: "eventType",
+      header: "事件类型",
+      cell: (item) => (
+        <span className="flex min-w-0 items-center gap-xs">
+          <span className="truncate">{item.eventType}</span>
+          {item.evidenceUrl ? (
+            <a
+              href={item.evidenceUrl}
+              target="_blank"
+              rel="noreferrer"
+              title="查看证据材料"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <Icon name="arrow-long-right" size="xs" fallback="placeholder" />
+            </a>
+          ) : null}
+        </span>
+      ),
+    },
+    {
+      id: "tenant",
+      header: "租户",
+      cell: (item) =>
+        item.tenantName ?? (item.tenantId ? item.tenantId : "平台级"),
+    },
+    {
+      id: "status",
+      header: "状态",
+      align: "center",
+      cell: (item) => (
+        <StatusBadge tone={statusTone(item.status)}>
+          {STATUS_LABELS[item.status]}
+        </StatusBadge>
+      ),
+    },
+    {
+      id: "regulation",
+      header: "法规条款",
+      cell: (item) => item.regulationCode ?? "-",
+    },
+    {
+      id: "handler",
+      header: "处理人",
+      cell: (item) => item.handlerName ?? "-",
+    },
+    {
+      id: "updatedAt",
+      header: "更新时间",
+      cell: (item) => formatDate(item.updatedAt, locale),
+    },
+  ];
+}
 
 export function ComplianceEventsPage() {
+  const locale = useLocale();
+  /* 钉在 locale 上：工厂每次调用都新建数组，而这套列此前是模块常量、
+     身份稳定。不 memo 等于每次渲染换一套列。 */
+  const tableColumns = useMemo(() => columnsOf(locale), [locale]);
+  const tShared = useTranslations();
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const [items, setItems] = useState<ComplianceEventItem[]>([]);
@@ -353,14 +369,14 @@ export function ComplianceEventsPage() {
                 id: "open",
                 help: "状态为待处理、尚未有人受理的合规事件。",
                 icon: "warning",
-                label: "待处理",
+                label: tShared("status.generic.pending"),
                 value: String(items.filter((i) => i.status === "open").length),
               },
               {
                 id: "in_review",
                 help: "已受理、处理中的合规事件。",
                 icon: "clock",
-                label: "处理中",
+                label: tShared("status.generic.processing"),
                 value: String(
                   items.filter((i) => i.status === "in_review").length,
                 ),
@@ -422,17 +438,21 @@ export function ComplianceEventsPage() {
                 setPage(1);
               }}
             >
-              <option value="all">全部状态</option>
-              <option value="open">待处理</option>
-              <option value="in_review">处理中</option>
+              <option value="all">{tShared("filters.allStates")}</option>
+              <option value="open">{tShared("status.generic.pending")}</option>
+              <option value="in_review">
+                {tShared("status.generic.processing")}
+              </option>
               <option value="resolved">已办结</option>
-              <option value="dismissed">已驳回</option>
+              <option value="dismissed">
+                {tShared("status.generic.rejected")}
+              </option>
             </NativeSelect>
           </FilterBar>
         }
         table={
           <DataTable
-            columns={COLUMNS}
+            columns={tableColumns}
             rows={pageItems}
             rowKey={(item) => item.id}
             loading={loading}
@@ -476,7 +496,7 @@ export function ComplianceEventsPage() {
                   },
                   {
                     id: "edit",
-                    label: "编辑",
+                    label: tShared("actions.edit"),
                     icon: "edit",
                     disabled: submitting || TERMINAL.has(item.status),
                     onSelect: () => openEdit(item),
@@ -514,7 +534,7 @@ export function ComplianceEventsPage() {
                 description={
                   loadError ??
                   (search || statusFilter !== "all"
-                    ? "尝试调整筛选条件"
+                    ? tShared("common.adjustFiltersHint")
                     : "点击「新建事件」录入第一条合规事件")
                 }
               />
@@ -539,7 +559,9 @@ export function ComplianceEventsPage() {
           open
           title={dialogMode === "create" ? "新建合规事件" : "编辑合规事件"}
           description="事件登记后经「指派处理人」进入处理，办结/驳回后只读。"
-          submitLabel={dialogMode === "create" ? "创建" : "保存修改"}
+          submitLabel={
+            dialogMode === "create" ? tShared("actions.create") : "保存修改"
+          }
           submitting={submitting}
           submitDisabled={form.eventType.trim().length === 0}
           onOpenChange={(open) => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   Badge,
@@ -26,7 +27,6 @@ import {
 import type {
   OrderOperationDetailRecord,
   OrderOperationStatus,
-  OrderPaymentStatus,
   OrderPaySource,
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
@@ -66,18 +66,6 @@ function orderStatusLabel(status: OrderOperationStatus) {
   if (status === "paid_unprovisioned") return "已付未开通";
   if (status === "partial_pending") return "部分收款·挂账";
   return "异常";
-}
-
-function paymentStatusLabel(status: OrderPaymentStatus) {
-  if (status === "not_required") return "无需支付";
-  if (status === "unpaid") return "未支付";
-  if (status === "pending") return "支付中";
-  if (status === "pending_verify") return "线下待核";
-  if (status === "paid") return "已支付";
-  if (status === "partial") return "部分支付";
-  if (status === "failed") return "支付失败";
-  if (status === "closed") return "已关闭";
-  return "退款中";
 }
 
 function paySourceLabel(source: OrderPaySource) {
@@ -127,6 +115,8 @@ function subscriptionStatusLabel(
 }
 
 function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
+  const t = useTranslations();
+  const tShared = useTranslations();
   return (
     <section className="vx-product-capability-summary">
       <div className="vx-product-capability-summary__identity">
@@ -150,7 +140,7 @@ function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
             <Badge
               className={`vx-tenant-pill vx-order-pill--payment-${order.paymentStatus}`}
             >
-              {paymentStatusLabel(order.paymentStatus)}
+              {t(`status.orderPayment.${order.paymentStatus}`)}
             </Badge>
           </div>
         </div>
@@ -167,7 +157,7 @@ function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
           {
             id: "paid",
             help: "已核销到本订单的回款金额。",
-            label: "已收金额",
+            label: tShared("columns.receivedAmount"),
             value: formatCurrency(order.paidAmount, order.currency),
             tags: [paySourceLabel(order.paySource)],
           },
@@ -192,6 +182,9 @@ function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
 }
 
 function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
+  const t = useTranslations();
+  const locale = useLocale();
+  const tShared = useTranslations();
   return (
     <section
       className="vx-product-capability-detail"
@@ -205,20 +198,20 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
             {orUnset(orderStatusLabel(order.orderStatus))}
           </DetailRow>
           <DetailRow label="支付状态">
-            {orUnset(paymentStatusLabel(order.paymentStatus))}
+            {orUnset(t(`status.orderPayment.${order.paymentStatus}`))}
           </DetailRow>
           <DetailRow label="支付来源">
             {orUnset(paySourceLabel(order.paySource))}
           </DetailRow>
           <DetailRow label="支付方式">{orUnset(order.payMethod)}</DetailRow>
           <DetailRow label="创建时间">
-            {orUnset(formatDate(order.createdAt))}
+            {orUnset(formatDate(order.createdAt, locale))}
           </DetailRow>
           <DetailRow label="确认时间">
-            {orUnset(formatDate(order.confirmedAt))}
+            {orUnset(formatDate(order.confirmedAt, locale))}
           </DetailRow>
-          <DetailRow label="更新时间">
-            {orUnset(formatDate(order.updatedAt))}
+          <DetailRow label={tShared("columns.updatedAt")}>
+            {orUnset(formatDate(order.updatedAt, locale))}
           </DetailRow>
         </DetailList>
       </section>
@@ -227,8 +220,10 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
         <DetailSectionHeading icon="buildings" title="租户与套餐" />
         <DetailList columns={3}>
           <DetailRow label="租户">{orUnset(order.tenantName)}</DetailRow>
-          <DetailRow label="租户编码">{orUnset(order.tenantCode)}</DetailRow>
-          <DetailRow label="租户类型">
+          <DetailRow label={tShared("columns.tenantCode")}>
+            {orUnset(order.tenantCode)}
+          </DetailRow>
+          <DetailRow label={tShared("columns.tenantType")}>
             {orUnset(typeLabel(order.tenantType))}
           </DetailRow>
           <DetailRow label="所属区域">{orUnset(order.region)}</DetailRow>
@@ -279,7 +274,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
           <DetailRow label="订单金额">
             {orUnset(formatCurrency(order.amount, order.currency))}
           </DetailRow>
-          <DetailRow label="已收金额">
+          <DetailRow label={tShared("columns.receivedAmount")}>
             {orUnset(formatCurrency(order.paidAmount, order.currency))}
           </DetailRow>
           <DetailRow label="剩余应收">
@@ -328,8 +323,8 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
                 </span>
                 <small>
                   {paySourceLabel(payment.paySource)} |{" "}
-                  {paymentStatusLabel(payment.paymentStatus)} |{" "}
-                  {formatDate(payment.paidAt)}
+                  {t(`status.orderPayment.${payment.paymentStatus}`)} |{" "}
+                  {formatDate(payment.paidAt, locale)}
                 </small>
                 <em>{formatCurrency(payment.paidAmount, payment.currency)}</em>
                 <p>{payment.remark ?? payment.operatorName}</p>
@@ -374,7 +369,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
                 <strong>{event.title}</strong>
                 <p>{event.description}</p>
                 <small>
-                  {event.actor} · {formatDate(event.at)}
+                  {event.actor} · {formatDate(event.at, locale)}
                 </small>
               </div>
             </article>
@@ -386,6 +381,8 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
 }
 
 export function OrderDetailPage({ orderId }: { orderId: string }) {
+  const locale = useLocale();
+  const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
   const [order, setOrder] = useState<OrderOperationDetailRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -572,7 +569,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
               <Button asChild variant="outline">
                 <Link href="/orders">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
             }
@@ -604,7 +601,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
               <Button asChild variant="outline">
                 <Link href="/orders">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
               {order ? (
@@ -735,11 +732,13 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                 </div>
                 <div>
                   <Label>申报时间</Label>
-                  <p>{formatDate(order.declaredPayment.declaredAt)}</p>
+                  <p>{formatDate(order.declaredPayment.declaredAt, locale)}</p>
                 </div>
                 <div>
                   <Label>备注</Label>
-                  <p>{order.declaredPayment.remark ?? "无"}</p>
+                  <p>
+                    {order.declaredPayment.remark ?? tShared("common.none")}
+                  </p>
                 </div>
               </div>
             </section>
@@ -749,7 +748,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
         </>
       ) : (
         <section className="vx-tenant-directory__header">
-          <span>读取中</span>
+          <span>{tShared("common.loading")}</span>
         </section>
       )}
 
@@ -779,7 +778,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             </>
           }
           submitLabel="确认驳回申报"
-          cancelLabel="取消"
+          cancelLabel={tShared("actions.cancel")}
           submitting={submittingReject}
           submitDisabled={rejectReason.trim().length < 4}
           onOpenChange={(open) => {
@@ -819,7 +818,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             </>
           }
           submitLabel="确认驳回"
-          cancelLabel="取消"
+          cancelLabel={tShared("actions.cancel")}
           submitting={submittingVoid}
           submitDisabled={voidReason.trim().length < 4}
           onOpenChange={(open) => {
@@ -859,7 +858,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             </>
           }
           submitLabel="确认恢复"
-          cancelLabel="取消"
+          cancelLabel={tShared("actions.cancel")}
           submitting={submittingRestore}
           submitDisabled={restoreReason.trim().length < 4}
           onOpenChange={(open) => {

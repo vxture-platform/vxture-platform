@@ -12,6 +12,7 @@
  * 只会在两者相接的地方还回去。admin 与 opera 写的是同一张平台级审计表。 */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ActionMenu,
   Button,
@@ -57,14 +58,20 @@ const OUTCOME_TONE: Record<string, StatusBadgeTone> = {
   failure: "danger",
 };
 
-function formatTime(iso: string): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——
+   中文 `2026/8/18 10:37`，英文 `8/18/2026, 10:37`。写死的后果不是「没翻译」，
+   是英文用户会把 8/18 读成 18 月。（数字与百分比两种语言逐字相同，所以那些
+   没跟着改，见 scripts/guardrails 旁的说明。） */
+function formatTime(iso: string, locale: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString("zh-CN", { hour12: false });
+    : d.toLocaleString(locale, { hour12: false });
 }
 
 export function PlatformChangeTable() {
+  const locale = useLocale();
+  const tShared = useTranslations();
   const { toast } = useToast();
   const [rows, setRows] = useState<AuditLogEntry[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
@@ -123,7 +130,7 @@ export function PlatformChangeTable() {
 
   const copyRow = async (r: AuditLogEntry) => {
     const text = [
-      formatTime(r.occurredAt),
+      formatTime(r.occurredAt, locale),
       r.actorName,
       r.action,
       `${r.objectType} · ${r.objectId}`,
@@ -131,26 +138,29 @@ export function PlatformChangeTable() {
     ].join(" · ");
     try {
       await navigator.clipboard.writeText(text);
-      toast({ tone: "success", title: "已复制该行到剪贴板" });
+      toast({ tone: "success", title: tShared("common.rowCopied") });
     } catch {
       toast({
         tone: "danger",
-        title: "复制失败",
-        description: "浏览器拒绝了剪贴板访问，请手动选中复制。",
+        title: tShared("common.copyFailed"),
+        description: tShared("common.copyDenied"),
       });
     }
   };
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取审计留痕。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取审计留痕。"
+      />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
@@ -170,7 +180,7 @@ export function PlatformChangeTable() {
       <FilterBar
         view="list"
         onViewChange={() => {}}
-        cardsDisabledReason="卡片视图已下线，改用列表"
+        cardsDisabledReason={tShared("common.cardsRetired")}
         count={
           visible.length === rows.length
             ? rows.length
@@ -213,7 +223,7 @@ export function PlatformChangeTable() {
           disabled={load.kind === "loading"}
         >
           <Icon name="refresh" size="sm" aria-hidden="true" />
-          刷新
+          {tShared("common.refresh")}
         </Button>
       </FilterBar>
 
@@ -221,20 +231,20 @@ export function PlatformChangeTable() {
         columns={[
           {
             id: "occurredAt",
-            header: "时间",
+            header: tShared("columns.time"),
             width: "sm",
-            cell: (r: AuditLogEntry) => formatTime(r.occurredAt),
+            cell: (r: AuditLogEntry) => formatTime(r.occurredAt, locale),
             sortable: true,
           },
           {
             id: "actor",
-            header: "操作者",
+            header: tShared("columns.actor"),
             width: "sm",
             cell: (r: AuditLogEntry) => r.actorName,
           },
           {
             id: "target",
-            header: "对象",
+            header: tShared("columns.target"),
             cell: (r: AuditLogEntry) => (
               <span className="text-label-md text-foreground">
                 {r.objectType} · {r.objectId}
@@ -243,7 +253,7 @@ export function PlatformChangeTable() {
           },
           {
             id: "action",
-            header: "动作",
+            header: tShared("columns.action"),
             align: "center",
             width: "xs",
             cell: (r: AuditLogEntry) => r.action,
@@ -273,7 +283,7 @@ export function PlatformChangeTable() {
             items={[
               {
                 id: "copy",
-                label: "复制该行",
+                label: tShared("common.copyRow"),
                 icon: "copy",
                 onSelect: () => void copyRow(r),
               },

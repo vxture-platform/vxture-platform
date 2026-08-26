@@ -62,6 +62,7 @@ import {
   useToast,
 } from "@vxture/design-system";
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   actionsFor,
@@ -75,7 +76,7 @@ import {
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { buildAdminAtlasGrantsUrl } from "@/lib/admin-entry";
 import { api, OperaApiError } from "@/lib/api";
-import { confirmLabels } from "@/lib/destructive";
+import { useConfirmLabels } from "@/lib/destructive";
 
 const MANAGE = "platform:product.manage";
 
@@ -209,6 +210,9 @@ export default function ProductsPage() {
 }
 
 function ProductsPageContent() {
+  const locale = useLocale();
+  const tShared = useTranslations();
+  const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const router = useRouter();
   const { can } = useOperatorSession();
@@ -543,21 +547,24 @@ function ProductsPageContent() {
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取产品目录。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取产品目录。"
+      />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
     ) : filtered.length !== rows.length ? (
       <EmptyState
         title="没有匹配的产品"
-        description="换个关键词或筛选条件再看。"
+        description={tShared("common.noMatchHint")}
       />
     ) : (
       <EmptyState
@@ -577,7 +584,9 @@ function ProductsPageContent() {
               description="从接入凭据或权益配置页点回来的。"
               action={
                 <Button asChild variant="secondary" size="sm">
-                  <Link href="/product/catalog">显示全部</Link>
+                  <Link href="/product/catalog">
+                    {tShared("common.showAll")}
+                  </Link>
                 </Button>
               }
             />
@@ -602,7 +611,7 @@ function ProductsPageContent() {
           <FilterBar
             view="list"
             onViewChange={() => {}}
-            cardsDisabledReason="卡片视图已下线，改用列表"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={
               filtered.length === rows.length
                 ? rows.length
@@ -644,12 +653,14 @@ function ProductsPageContent() {
                 setStateFilter(e.target.value as typeof stateFilter);
                 pager.resetPage();
               }}
-              aria-label="状态筛选"
+              aria-label={tShared("filters.stateLabel")}
             >
-              <option value="all">全部状态</option>
+              <option value="all">{tShared("filters.allStates")}</option>
               <option value="draft">草稿</option>
               <option value="active">已上线</option>
-              <option value="inactive">已停用</option>
+              <option value="inactive">
+                {tShared("status.generic.disabled")}
+              </option>
               <option value="deprecated">已退役</option>
             </NativeSelect>
           </FilterBar>
@@ -659,7 +670,7 @@ function ProductsPageContent() {
             columns={[
               {
                 id: "name",
-                header: "产品",
+                header: tShared("columns.product"),
                 cell: (r: ProductRecord) => (
                   <TableTitleCell
                     icon="package"
@@ -671,7 +682,7 @@ function ProductsPageContent() {
               },
               {
                 id: "origin",
-                header: "来源",
+                header: tShared("columns.source"),
                 width: "md",
                 cell: (r: ProductRecord) => (
                   <span className="text-body-sm">
@@ -697,7 +708,7 @@ function ProductsPageContent() {
               },
               {
                 id: "type",
-                header: "类型",
+                header: tShared("columns.kind"),
                 align: "center",
                 width: "xs",
                 cell: (r: ProductRecord) => (
@@ -747,7 +758,7 @@ function ProductsPageContent() {
                       items={[
                         {
                           id: "edit",
-                          label: "编辑",
+                          label: tShared("common.edit"),
                           icon: "edit",
                           onSelect: () => openEdit(r),
                         },
@@ -837,7 +848,7 @@ function ProductsPageContent() {
                                 danger: true as const,
                                 separatorBefore:
                                   a.id === "launch" || a.id === "suspend",
-                                confirm: confirmLabels({
+                                confirm: withLabels({
                                   verb: a.destructive.verb,
                                   target: `产品 ${r.productName}`,
                                   consequence: a.destructive.consequence,
@@ -875,7 +886,7 @@ function ProductsPageContent() {
             ? undefined
             : "新产品默认落草稿状态；确认信息无误后从操作菜单切到「启用」。"
         }
-        submitLabel={editing ? "保存" : "登记"}
+        submitLabel={editing ? tShared("common.save") : "登记"}
         submitting={submitting}
         submitDisabled={!draftValid}
         onSubmit={submit}
@@ -903,7 +914,9 @@ function ProductsPageContent() {
                 <FieldDescription>全局唯一，登记后不可改。</FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="product-type">类型</FieldLabel>
+                <FieldLabel htmlFor="product-type">
+                  {tShared("columns.kind")}
+                </FieldLabel>
                 <Input
                   id="product-type"
                   value={draft.productType}
@@ -953,7 +966,7 @@ function ProductsPageContent() {
                   setDraft({ ...draft, categoryId: e.target.value })
                 }
               >
-                <option value="">未分类</option>
+                <option value="">{tShared("common.uncategorized")}</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -976,7 +989,9 @@ function ProductsPageContent() {
 
             <div className="grid grid-cols-2 gap-md">
               <Field>
-                <FieldLabel htmlFor="product-origin">来源</FieldLabel>
+                <FieldLabel htmlFor="product-origin">
+                  {tShared("columns.source")}
+                </FieldLabel>
                 <NativeSelect
                   id="product-origin"
                   value={draft.origin}
@@ -1070,17 +1085,20 @@ function ProductsPageContent() {
             : "Webhook 登记"
         }
         description="平台向这个产品推送订阅变更与额度预警的地址。本页只登记，不发测试投递——那是对对方生产端点的真实请求，投递结果去运行监控看。"
-        submitLabel="保存"
+        submitLabel={tShared("common.save")}
         submitting={submitting}
         submitDisabled={webhookLoad.kind !== "ready"}
         onSubmit={submitWebhook}
       >
         {webhookLoad.kind === "loading" ? (
-          <EmptyState title="读取中…" description="正在读取现有登记。" />
+          <EmptyState
+            title={tShared("common.loading")}
+            description="正在读取现有登记。"
+          />
         ) : webhookLoad.kind === "error" ? (
           /* 读失败就不给填：这是 upsert，对着空框保存会把读不出来的那份覆盖成空。 */
           <EmptyState
-            title="读取失败"
+            title={tShared("common.loadFailed")}
             description={`${webhookLoad.message}。读不到不等于没配，先解决读取失败再改，否则保存会覆盖掉现有登记。`}
           />
         ) : (
@@ -1166,10 +1184,13 @@ function ProductsPageContent() {
         description={checklistProduct?.productCode}
       >
         {checklistLoad.kind === "loading" ? (
-          <EmptyState title="读取中…" description="正在读取检查单。" />
+          <EmptyState
+            title={tShared("common.loading")}
+            description="正在读取检查单。"
+          />
         ) : checklistLoad.kind === "error" ? (
           <EmptyState
-            title="读取失败"
+            title={tShared("common.loadFailed")}
             description={checklistLoad.message}
             action={
               <Button
@@ -1178,7 +1199,7 @@ function ProductsPageContent() {
                   checklistProduct && void loadChecklist(checklistProduct.id)
                 }
               >
-                重试
+                {tShared("common.retry")}
               </Button>
             }
           />
@@ -1218,7 +1239,7 @@ function ProductsPageContent() {
                     ) : null}
                     {item.checkedAt ? (
                       <span className="text-body-sm text-muted-foreground">
-                        {new Date(item.checkedAt).toLocaleString("zh-CN")} 确认
+                        {new Date(item.checkedAt).toLocaleString(locale)} 确认
                       </span>
                     ) : null}
                   </div>

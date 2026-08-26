@@ -51,7 +51,7 @@ import type {
   ProductSolutionRecord,
 } from "@/entities/console";
 import { formatAdminCompactCurrency } from "@/lib/admin-formatters";
-import { useConsoleLocale } from "@/lib/ConsoleIntl";
+import { useLocale } from "next-intl";
 
 type Tone = "blue" | "green" | "cyan" | "amber" | "rose" | "indigo";
 type PeriodKey = "recent30" | "total" | "year" | "quarter" | "month";
@@ -1349,7 +1349,7 @@ const MODEL_STATE_LABEL: Record<ModelState, string> = {
 };
 
 export default function AdminOverviewPage() {
-  const locale = useConsoleLocale();
+  const locale = useLocale();
   const [models, setModels] = useState<AiModelRecord[]>([]);
   const [modelGrants, setModelGrants] = useState<AiModelGrantRecord[]>([]);
   const [modelPolicies, setModelPolicies] = useState<

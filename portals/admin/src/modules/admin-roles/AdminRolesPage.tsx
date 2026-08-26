@@ -49,7 +49,7 @@ import type {
   PlatformPermissionType,
   PlatformRoleRecord,
 } from "@/entities/console";
-import { useConsoleTranslations } from "@/lib/ConsoleIntl";
+import { useLocale, useTranslations } from "next-intl";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import {
@@ -77,17 +77,22 @@ interface PermissionTreeNode {
 
 function roleDisplayName(
   role: PlatformRoleRecord,
-  t: ReturnType<typeof useConsoleTranslations>,
+  t: ReturnType<typeof useTranslations>,
 ) {
-  return t(role.nameI18nKey, role.nameEn || role.roleCode || EMPTY_MARK);
+  /* 键来自库里的伴生 `name_key` 列（data_platform §3.2.5，`check-i18n-keys` 在守
+     它「必须存在」），但目录表里新加的角色可能还没进 messages——所以托底是
+     真需要的，用库自己的 `name_en` 兜。`t.has()` 先问一句，缺了不抛。 */
+  const fallback = role.nameEn || role.roleCode || EMPTY_MARK;
+  return t.has(role.nameI18nKey) ? t(role.nameI18nKey) : fallback;
 }
 
 function roleDescription(
   role: PlatformRoleRecord,
-  t: ReturnType<typeof useConsoleTranslations>,
+  t: ReturnType<typeof useTranslations>,
 ) {
-  return role.descriptionI18nKey
-    ? t(role.descriptionI18nKey, role.description || "")
+  if (!role.descriptionI18nKey) return role.description || "";
+  return t.has(role.descriptionI18nKey)
+    ? t(role.descriptionI18nKey)
     : role.description || "";
 }
 
@@ -429,6 +434,7 @@ function PermissionAuthorizationNode({
   permissionById: Map<string, PlatformAdminPermissionRecord>;
   onToggle: (node: PermissionTreeNode, checked: boolean) => void;
 }) {
+  const tShared = useTranslations();
   const descendantIds = useMemo(
     () => collectDescendantPermissionIds(node),
     [node],
@@ -474,7 +480,9 @@ function PermissionAuthorizationNode({
             </Badge>
             <Badge>{node.depth === 0 ? "根权限" : `L${node.depth}`}</Badge>
             {!node.permission.status ? (
-              <StatusBadge tone="neutral">停用</StatusBadge>
+              <StatusBadge tone="neutral">
+                {tShared("actions.disable")}
+              </StatusBadge>
             ) : null}
           </span>
           <small>
@@ -518,6 +526,7 @@ function AdminRoleAuthorizationDialog({
   onClose: () => void;
   onSave: (permissionIds: string[]) => void;
 }) {
+  const tShared = useTranslations();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     () => new Set(role.permissions.map((permission) => permission.id)),
   );
@@ -684,7 +693,7 @@ function AdminRoleAuthorizationDialog({
         </div>
         <footer className="vx-admin-role-auth-dialog__footer">
           <Button variant="outline" disabled={saving} onClick={onClose}>
-            取消
+            {tShared("actions.cancel")}
           </Button>
           <ActionButton
             icon="check"
@@ -720,8 +729,10 @@ function PermissionTags({ role }: { role: PlatformRoleRecord }) {
  */
 function useAdminRoleColumns(
   roleLabels: Map<string, string>,
-  t: ReturnType<typeof useConsoleTranslations>,
+  t: ReturnType<typeof useTranslations>,
 ): DataTableColumn<PlatformRoleRecord>[] {
+  const locale = useLocale();
+  const tShared = useTranslations();
   const labelOf = (role: PlatformRoleRecord) =>
     roleLabels.get(role.id) ?? role.nameEn ?? role.roleCode ?? EMPTY_MARK;
 
@@ -743,7 +754,7 @@ function useAdminRoleColumns(
     },
     {
       id: "status",
-      header: "状态",
+      header: tShared("columns.state"),
       align: "center",
       cell: (role) => {
         const indicator = roleStatusIndicator(role);
@@ -776,7 +787,7 @@ function useAdminRoleColumns(
       cell: (role) => (
         <TableTitleCell
           title={role.createdByName || EMPTY_MARK}
-          description={formatDate(role.createdAt)}
+          description={formatDate(role.createdAt, locale)}
         />
       ),
     },
@@ -796,7 +807,7 @@ function AdminRoleCards({
 }: {
   roles: PlatformRoleRecord[];
   roleLabels: Map<string, string>;
-  t: ReturnType<typeof useConsoleTranslations>;
+  t: ReturnType<typeof useTranslations>;
   onOpenPermissions: (role: PlatformRoleRecord) => void;
   onOpenAuthorization: (role: PlatformRoleRecord) => void;
   onEdit: (role: PlatformRoleRecord) => void;
@@ -804,6 +815,8 @@ function AdminRoleCards({
   onToggle: (role: PlatformRoleRecord) => void;
   onDelete: (role: PlatformRoleRecord) => Promise<void>;
 }) {
+  const locale = useLocale();
+  const tShared = useTranslations();
   return (
     <div
       className="vx-tenant-directory-cards vx-admin-role-cards"
@@ -868,8 +881,8 @@ function AdminRoleCards({
               <small>成员</small>
             </span>
             <span>
-              <b>{formatDate(role.createdAt)}</b>
-              <small>创建</small>
+              <b>{formatDate(role.createdAt, locale)}</b>
+              <small>{tShared("actions.create")}</small>
             </span>
           </div>
           <PermissionTags role={role} />
@@ -1065,7 +1078,8 @@ function AdminRoleCopyDialog({
 }
 
 export function AdminRolesPage() {
-  const t = useConsoleTranslations();
+  const tShared = useTranslations();
+  const t = useTranslations();
   const { toast } = useToast();
   const { runWithStepUp } = useStepUp();
   const [roles, setRoles] = useState<PlatformRoleRecord[]>([]);
@@ -1467,7 +1481,7 @@ export function AdminRolesPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredRoles.length)}
             aria-label="平台角色筛选"
             search={
@@ -1501,10 +1515,10 @@ export function AdminRolesPage() {
                 }
                 aria-label="角色状态"
               >
-                <option value="all">全部状态</option>
-                <option value="active">启用</option>
-                <option value="disabled">停用</option>
-                <option value="archived">归档</option>
+                <option value="all">{tShared("filters.allStates")}</option>
+                <option value="active">{tShared("actions.enable")}</option>
+                <option value="disabled">{tShared("actions.disable")}</option>
+                <option value="archived">{tShared("actions.archive")}</option>
               </NativeSelect>
               <NativeSelect
                 className="vx-tenant-select"
@@ -1514,7 +1528,7 @@ export function AdminRolesPage() {
                 }
                 aria-label="角色类型"
               >
-                <option value="all">全部类型</option>
+                <option value="all">{tShared("filters.allKinds")}</option>
                 <option value="system">系统角色</option>
                 <option value="custom">自定义角色</option>
               </NativeSelect>
@@ -1540,7 +1554,7 @@ export function AdminRolesPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
 
@@ -1591,7 +1605,7 @@ export function AdminRolesPage() {
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -1626,7 +1640,7 @@ export function AdminRolesPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

@@ -39,7 +39,7 @@ import type {
   ProductAgentRecord,
   ProductModelPolicyRecord,
 } from "@/entities/console";
-import { useConsoleTranslations } from "@/lib/ConsoleIntl";
+import { useTranslations } from "next-intl";
 import { PageHeader } from "@/modules/shared/PageHeader";
 
 type ViewMode = "list" | "cards";
@@ -175,7 +175,7 @@ function formatTokens(
 }
 
 export function ModelGrantsPage() {
-  const t = useConsoleTranslations("modelGrantsPage");
+  const t = useTranslations("modelGrantsPage");
   const [models, setModels] = useState<AiModelRecord[]>([]);
   const [agents, setAgents] = useState<ProductAgentRecord[]>([]);
   const [policies, setPolicies] = useState<ProductModelPolicyRecord[]>([]);

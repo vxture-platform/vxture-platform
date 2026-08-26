@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ActionMenu,
   Button,
@@ -125,42 +126,53 @@ function overrideSummary(overrides: Record<string, boolean>): string {
   return n === 0 ? "无" : `${n} 个租户`;
 }
 
-const COLUMNS: readonly DataTableColumn<FeatureFlagRecord>[] = [
-  {
-    id: "key",
-    header: "开关键 / 分类",
-    cell: (item) => (
-      <TableTitleCell
-        title={item.flagKey}
-        description={`${item.category}${item.isArchived ? " · 已归档" : ""}`}
-      />
-    ),
-  },
-  { id: "environment", header: "环境", cell: (item) => item.environment },
-  {
-    id: "status",
-    header: "状态",
-    align: "center",
-    cell: (item) => (
-      <StatusBadge tone={item.isGloballyEnabled ? "success" : "neutral"}>
-        {item.isGloballyEnabled ? "已启用" : "已停用"}
-      </StatusBadge>
-    ),
-  },
-  {
-    id: "rollout",
-    header: "灰度",
-    align: "right",
-    cell: (item) => `${item.rolloutPercentage}%`,
-  },
-  {
-    id: "updatedAt",
-    header: "更新时间",
-    cell: (item) => formatDate(item.updatedAt),
-  },
-];
+/* 从模块级常量改成收 `locale` 的工厂：常量在模块加载时就求值了，那一刻
+   没有任何运行时上下文，而列里的日期要按界面语言排。 */
+function columnsOf(
+  locale: string,
+): readonly DataTableColumn<FeatureFlagRecord>[] {
+  return [
+    {
+      id: "key",
+      header: "开关键 / 分类",
+      cell: (item) => (
+        <TableTitleCell
+          title={item.flagKey}
+          description={`${item.category}${item.isArchived ? " · 已归档" : ""}`}
+        />
+      ),
+    },
+    { id: "environment", header: "环境", cell: (item) => item.environment },
+    {
+      id: "status",
+      header: "状态",
+      align: "center",
+      cell: (item) => (
+        <StatusBadge tone={item.isGloballyEnabled ? "success" : "neutral"}>
+          {item.isGloballyEnabled ? "已启用" : "已停用"}
+        </StatusBadge>
+      ),
+    },
+    {
+      id: "rollout",
+      header: "灰度",
+      align: "right",
+      cell: (item) => `${item.rolloutPercentage}%`,
+    },
+    {
+      id: "updatedAt",
+      header: "更新时间",
+      cell: (item) => formatDate(item.updatedAt, locale),
+    },
+  ];
+}
 
 export function FeatureTogglesPage() {
+  const locale = useLocale();
+  /* 钉在 locale 上：工厂每次调用都新建数组，而这套列此前是模块常量、
+     身份稳定。不 memo 等于每次渲染换一套列。 */
+  const tableColumns = useMemo(() => columnsOf(locale), [locale]);
+  const tShared = useTranslations();
   const { toast } = useToast();
   const [items, setItems] = useState<FeatureFlagRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -411,7 +423,7 @@ export function FeatureTogglesPage() {
         }
         table={
           <DataTable
-            columns={COLUMNS}
+            columns={tableColumns}
             rows={pageItems}
             rowKey={(item) => item.id}
             loading={loading}
@@ -425,7 +437,9 @@ export function FeatureTogglesPage() {
                 items={[
                   {
                     id: "toggle",
-                    label: item.isGloballyEnabled ? "停用" : "启用",
+                    label: item.isGloballyEnabled
+                      ? tShared("actions.disable")
+                      : tShared("actions.enable"),
                     icon: item.isGloballyEnabled ? "x" : "check",
                     disabled: submitting || item.isArchived,
                     onSelect: () =>
@@ -436,14 +450,16 @@ export function FeatureTogglesPage() {
                   },
                   {
                     id: "edit",
-                    label: "编辑",
+                    label: tShared("actions.edit"),
                     icon: "edit",
                     disabled: submitting || item.isArchived,
                     onSelect: () => openEdit(item),
                   },
                   {
                     id: "archive",
-                    label: item.isArchived ? "恢复" : "归档",
+                    label: item.isArchived
+                      ? "恢复"
+                      : tShared("actions.archive"),
                     icon: item.isArchived ? "clock-counter-clockwise" : "stop",
                     disabled: submitting,
                     onSelect: () =>
@@ -463,7 +479,7 @@ export function FeatureTogglesPage() {
                   categoryFilter !== "all" ||
                   environmentFilter !== "all" ||
                   archivedFilter !== "all"
-                    ? "尝试调整筛选条件"
+                    ? tShared("common.adjustFiltersHint")
                     : "点击「新建开关」创建第一个功能开关"
                 }
               />
@@ -486,7 +502,9 @@ export function FeatureTogglesPage() {
           open
           title={dialogMode === "create" ? "新建功能开关" : "编辑功能开关"}
           description="灰度百分比 0-100；逐租户覆盖命中优先于灰度。开关键创建后不可更改。"
-          submitLabel={dialogMode === "create" ? "创建" : "保存"}
+          submitLabel={
+            dialogMode === "create" ? tShared("actions.create") : "保存"
+          }
           submitting={submitting}
           submitDisabled={!formIsValid(form, dialogMode)}
           onOpenChange={(open) => {

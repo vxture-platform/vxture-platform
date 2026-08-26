@@ -22,6 +22,7 @@
  */
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -49,6 +50,12 @@ import {
 import { operaNavSections } from "@/config/navigation";
 import { writeNavCollapsed } from "@vxture-platform/shared";
 import { useOperatorSession } from "@/features/session/SessionProvider";
+import {
+  LOCALE_CONFIGS,
+  SUPPORTED_LOCALES,
+  type Locale,
+} from "@vxture-platform/shared";
+import { useLocaleSwitch } from "@/lib/useLocaleSwitch";
 
 const LS_ASSISTANT_OPEN = "vx-opera-assistant-open";
 const LS_ASSISTANT_MODE = "vx-opera-assistant-mode";
@@ -82,6 +89,7 @@ function AssistantPlaceholder({
   onToggleWide: () => void;
   onToggleFull: () => void;
 }) {
+  const tShared = useTranslations();
   return (
     <aside
       className={cn(
@@ -115,7 +123,11 @@ function AssistantPlaceholder({
             active={mode === "full"}
             onClick={onToggleFull}
           />
-          <ShellIconButton icon="x" label="关闭" onClick={onClose} />
+          <ShellIconButton
+            icon="x"
+            label={tShared("common.close")}
+            onClick={onClose}
+          />
         </div>
       </div>
       <p className="text-body-sm text-muted-foreground">
@@ -138,6 +150,7 @@ export function OperaShell({
   const [searchQuery, setSearchQuery] = useState("");
   const { theme, setTheme, density, setDensity, fontSize, setFontSize } =
     useTheme();
+  const { locale, switchLocale } = useLocaleSwitch();
   /* 初始值由服务端从 cookie 读出后传入，首帧即最终态。写死 false 再在 effect 里
    * 纠正，会让刷新时导航"先展开再收起"闪一下——localStorage 对服务端不可见，
    * 那个时序问题无法在客户端解决。 */
@@ -358,14 +371,18 @@ export function OperaShell({
                     }}
                     settings={
                       <ShellPreferencePanel
-                        locale="zh-CN"
-                        localeOptions={[
-                          { locale: "zh-CN", nativeName: "简体中文" },
-                        ]}
+                        /* 此前这三项是写死的：locale="zh-CN"、只有一个选项、
+                           onLocaleChange 是个空函数——界面上有个语言开关，
+                           拨它不会发生任何事。 */
+                        locale={locale}
+                        localeOptions={SUPPORTED_LOCALES.map((code) => ({
+                          locale: code,
+                          nativeName: LOCALE_CONFIGS[code].nativeName,
+                        }))}
                         theme={theme}
                         density={density}
                         fontSize={fontSize}
-                        onLocaleChange={() => {}}
+                        onLocaleChange={(next) => switchLocale(next as Locale)}
                         onThemeChange={setTheme}
                         onDensityChange={setDensity}
                         onFontSizeChange={setFontSize}

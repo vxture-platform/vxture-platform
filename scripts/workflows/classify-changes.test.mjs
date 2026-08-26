@@ -114,12 +114,20 @@ test("image set: packages/design 已迁出 → 不产生任何镜像", () => {
   assert.deepEqual(builtImages(["packages/design/design-system/src/x.ts"]), []);
 });
 
-// 真实的前端共享库扇出改由 packages/platform 覆盖。
+/* 真实的前端共享库扇出改由 packages/platform 覆盖。
+ *
+ * 2026-08-26 加入 opera：它接 i18n 时开始依赖 `@vxture/platform-browser`
+ * （语言切换要写跨门户偏好）。分类器是从 pnpm 工作区依赖图**派生**扇出的，
+ * 所以它自己就跟上了；这份清单是钉子，得手动跟。
+ *
+ * 这条断言的价值正在于此：加一条工作区依赖会改变发版时的构建面，而那件事
+ * 在 package.json 的 diff 里看不出来。它红一次，就是让人看见一次。 */
 test("image set: packages/platform → 仅前端镜像", () => {
   assert.deepEqual(builtImages(["packages/platform/browser/src/x.ts"]), [
     "platform_website",
     "platform_console",
     "platform_admin",
+    "platform_opera",
     "platform_accounts",
   ]);
 });

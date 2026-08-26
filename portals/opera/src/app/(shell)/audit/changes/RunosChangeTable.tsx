@@ -25,6 +25,7 @@
  * 「像是这个」在合规场景里没有意义。 */
 
 import { useCallback, useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import {
   Badge,
   Banner,
@@ -74,14 +75,20 @@ type LoadState =
   | { kind: "error"; message: string }
   | { kind: "ready" };
 
-function formatTime(iso: string): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——
+   中文 `2026/8/18 10:37`，英文 `8/18/2026, 10:37`。写死的后果不是「没翻译」，
+   是英文用户会把 8/18 读成 18 月。（数字与百分比两种语言逐字相同，所以那些
+   没跟着改，见 scripts/guardrails 旁的说明。） */
+function formatTime(iso: string, locale: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString("zh-CN", { hour12: false });
+    : d.toLocaleString(locale, { hour12: false });
 }
 
 export function RunosChangeTable() {
+  const locale = useLocale();
+  const tShared = useTranslations();
   const { toast } = useToast();
   const [rows, setRows] = useState<MgmtEventRecord[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
@@ -128,7 +135,7 @@ export function RunosChangeTable() {
          抖动惩罚读者。 */
       toast({
         tone: "danger",
-        title: "加载更多失败",
+        title: tShared("common.loadMoreFailed"),
         ...(error instanceof OperaApiError && error.message
           ? { description: error.message }
           : {}),
@@ -145,26 +152,29 @@ export function RunosChangeTable() {
   const copyRow = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      toast({ tone: "success", title: "已复制到剪贴板" });
+      toast({ tone: "success", title: tShared("common.copied") });
     } catch {
       toast({
         tone: "danger",
-        title: "复制失败",
-        description: "浏览器拒绝了剪贴板访问，请手动选中复制。",
+        title: tShared("common.copyFailed"),
+        description: tShared("common.copyDenied"),
       });
     }
   };
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取管理事件。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取管理事件。"
+      />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
@@ -186,7 +196,7 @@ export function RunosChangeTable() {
       <FilterBar
         view="list"
         onViewChange={() => {}}
-        cardsDisabledReason="卡片视图已下线，改用列表"
+        cardsDisabledReason={tShared("common.cardsRetired")}
         count={rows.length}
       >
         <InputGroup className="grow basis-media-3xl max-w-panel-sm">
@@ -209,7 +219,7 @@ export function RunosChangeTable() {
           disabled={load.kind === "loading"}
         >
           <Icon name="refresh" size="sm" aria-hidden="true" />
-          刷新
+          {tShared("common.refresh")}
         </Button>
       </FilterBar>
 
@@ -217,9 +227,9 @@ export function RunosChangeTable() {
         columns={[
           {
             id: "time",
-            header: "时间",
+            header: tShared("columns.time"),
             width: "sm",
-            cell: (r: MgmtEventRecord) => formatTime(r.occurredAt),
+            cell: (r: MgmtEventRecord) => formatTime(r.occurredAt, locale),
           },
           {
             id: "event",
@@ -230,7 +240,7 @@ export function RunosChangeTable() {
           },
           {
             id: "object",
-            header: "对象",
+            header: tShared("columns.target"),
             cell: (r: MgmtEventRecord) => (
               <span className="text-body-sm">
                 {r.objectType}
@@ -252,7 +262,7 @@ export function RunosChangeTable() {
           },
           {
             id: "actor",
-            header: "操作者",
+            header: tShared("columns.actor"),
             width: "sm",
             cell: (r: MgmtEventRecord) => (
               <span className="text-body-sm text-muted-foreground">
@@ -299,7 +309,9 @@ export function RunosChangeTable() {
                 disabled={loadingMore}
                 onClick={() => void loadMore()}
               >
-                {loadingMore ? "加载中…" : "加载更多"}
+                {loadingMore
+                  ? tShared("common.loading")
+                  : tShared("common.loadMore")}
               </Button>
             ) : null}
           </div>

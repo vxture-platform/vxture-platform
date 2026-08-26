@@ -38,6 +38,7 @@
  * opera-bff 的 `grants/summary` 吸收掉（那是个形状固定的接缝，上游补齐后只换内脏）。 */
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -73,7 +74,7 @@ import {
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isEnabled } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
-import { confirmLabels } from "@/lib/destructive";
+import { useConfirmLabels } from "@/lib/destructive";
 
 interface ProductLite {
   id: string;
@@ -154,12 +155,15 @@ function formatQuota(limit: number | null): string {
   return limit <= 0 ? "不限（未强制）" : String(limit);
 }
 
-function formatTime(iso: string | null): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——中文
+   `2026/8/18`，英文 `8/18/2026`。写死的后果不是「没翻译」，是英文用户会把
+   8/18 读成 18 月。 */
+function formatTime(iso: string | null, locale: string): string {
   if (!iso) return "—";
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleDateString("zh-CN", { hour12: false });
+    : d.toLocaleDateString(locale, { hour12: false });
 }
 
 function message(error: unknown, fallback: string): string {
@@ -175,6 +179,9 @@ export default function ProductEntitlementsPage() {
 }
 
 function ProductEntitlements() {
+  const locale = useLocale();
+  const tShared = useTranslations();
+  const withLabels = useConfirmLabels();
   const router = useRouter();
   const params = useSearchParams();
   const selectedCode = params.get("productCode") ?? "";
@@ -393,8 +400,12 @@ function ProductEntitlements() {
   /** capabilityId → 分类，清单页的分布要用。 */
   const categoryOf = useMemo(() => {
     const m = new Map(catalog.map((c) => [c.capabilityId, c.category]));
-    return (id: string) => m.get(id) ?? "未分类";
-  }, [catalog]);
+    return (id: string) => m.get(id) ?? tShared("common.uncategorized");
+    /* `tShared` 要进依赖：它是这个 memo 返回的闭包里读的。next-intl 的
+       translator 按 (命名空间, messages, locale) 记忆化，只在切语言时换身份——
+       所以这不会让 memo 每次渲染失效，反而保证了切语言时「未分类」跟着变。
+       这里没有 effect 依赖 `categoryOf`，不存在 `useCallback` 那种无限重跑。 */
+  }, [catalog, tShared]);
 
   const routesByProduct = useMemo(() => {
     const m = new Map<string, RouteGrant[]>();
@@ -527,11 +538,11 @@ function ProductEntitlements() {
       <ViewLayout>
         <ViewHeader icon="ticket" title="权益配置" />
         <EmptyState
-          title="读取失败"
+          title={tShared("common.loadFailed")}
           description={load.message}
           action={
             <Button variant="secondary" onClick={() => void reload()}>
-              重试
+              {tShared("common.retry")}
             </Button>
           }
         />
@@ -613,11 +624,11 @@ function ProductEntitlements() {
                   id: "expires",
                   header: "到期",
                   width: "sm",
-                  cell: (g: RouteGrant) => formatTime(g.expiresAt),
+                  cell: (g: RouteGrant) => formatTime(g.expiresAt, locale),
                 },
                 {
                   id: "state",
-                  header: "状态",
+                  header: tShared("columns.state"),
                   align: "center",
                   width: "xs",
                   cell: (g: RouteGrant) => (
@@ -625,7 +636,9 @@ function ProductEntitlements() {
                       tone={isEnabled(g.state) ? "success" : "neutral"}
                       dot
                     >
-                      {isEnabled(g.state) ? "生效中" : "已停用"}
+                      {isEnabled(g.state)
+                        ? "生效中"
+                        : tShared("status.generic.disabled")}
                     </StatusBadge>
                   ),
                 },
@@ -642,7 +655,7 @@ function ProductEntitlements() {
                         items={[
                           {
                             id: "deactivate",
-                            label: "停用",
+                            label: tShared("actions.disable"),
                             icon: "pause" as const,
                             danger: true,
                             disabled: !isEnabled(g.state),
@@ -786,7 +799,7 @@ function ProductEntitlements() {
                 },
                 {
                   id: "type",
-                  header: "来源",
+                  header: tShared("columns.source"),
                   align: "center",
                   width: "xs",
                   cell: (r: CapabilityRow) => (
@@ -813,7 +826,7 @@ function ProductEntitlements() {
                 },
                 {
                   id: "state",
-                  header: "状态",
+                  header: tShared("columns.state"),
                   align: "center",
                   width: "xs",
                   cell: (r: CapabilityRow) => (
@@ -849,7 +862,7 @@ function ProductEntitlements() {
                               icon: "prohibit" as const,
                               danger: true,
                               disabled: r.grant.state !== "active",
-                              confirm: confirmLabels({
+                              confirm: withLabels({
                                 verb: "撤销",
                                 target: `${r.grant.capabilityId} 的授权`,
                                 /* 派生条数进后果句：撤一条锚点会连带失效 N 条，
@@ -876,7 +889,7 @@ function ProductEntitlements() {
                               icon: "prohibit" as const,
                               danger: true,
                               disabled: !anchorGrantOf(r.grant, caps),
-                              confirm: confirmLabels({
+                              confirm: withLabels({
                                 verb: "撤销",
                                 /* 动的**不是**这一行，是它的锚点——target 必须说出
                                    真正被作用的那个对象，否则确认框在骗人。 */
@@ -1185,9 +1198,15 @@ function ProductEntitlements() {
       </InputGroup>
 
       {load.kind === "loading" ? (
-        <EmptyState title="读取中…" description="正在汇总各产品的权益。" />
+        <EmptyState
+          title={tShared("common.loading")}
+          description="正在汇总各产品的权益。"
+        />
       ) : visible.length === 0 ? (
-        <EmptyState title="没有匹配的产品" description="换个关键词再看。" />
+        <EmptyState
+          title="没有匹配的产品"
+          description={tShared("common.noMatchKeywordHint")}
+        />
       ) : (
         <div className="flex flex-col gap-sm">
           {visible.map((p) => {

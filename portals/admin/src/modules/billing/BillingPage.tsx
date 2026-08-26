@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -107,17 +108,6 @@ function billTypeLabel(type: BillingBillType) {
   return "正常账单";
 }
 
-function invoiceStatusLabel(status: BillingInvoiceStatus) {
-  if (status === "applying") return "申请中";
-  if (status === "auditing") return "审核中";
-  if (status === "issued") return "已开票";
-  if (status === "sending") return "寄送中";
-  if (status === "finished") return "已完成";
-  if (status === "rejected") return "已驳回";
-  if (status === "red") return "已红冲";
-  return "未开票";
-}
-
 /**
  * 账单上的异常标。`tone` 直接给 DS 语气档，不再走 `vx-billing-exception-pill--*`
  * 那套色名——调整单与补录单原先分蓝、紫两色，DS 没有紫档，两者同归 `brand`：
@@ -212,7 +202,11 @@ function cycleLabel(cycle: string) {
   return cycle || "未设置";
 }
 
-function billingSearchText(record: BillingRecord) {
+/* 收 `t` 往下传：搜索文本里含状态文案，那些现在从词条取。 */
+function billingSearchText(
+  record: BillingRecord,
+  t: ReturnType<typeof useTranslations>,
+) {
   return [
     record.id,
     record.billNo,
@@ -228,7 +222,7 @@ function billingSearchText(record: BillingRecord) {
     record.operationRemark,
     billTypeLabel(record.billType),
     billStatusLabel(record.billStatus),
-    invoiceStatusLabel(record.invoiceStatus),
+    t(`status.invoice.${record.invoiceStatus}`),
     record.billStatus,
     record.invoiceStatus,
   ]
@@ -237,27 +231,34 @@ function billingSearchText(record: BillingRecord) {
     .toLowerCase();
 }
 
-const billingCsvColumns: CsvColumn<BillingRecord>[] = [
-  { label: "账单编号", value: (b) => b.billNo },
-  { label: "订单编号", value: (b) => b.orderNo },
-  { label: "租户编码", value: (b) => b.tenantCode },
-  { label: "租户名称", value: (b) => b.tenantName },
-  { label: "套餐", value: (b) => b.tierName ?? "" },
-  { label: "账单类型", value: (b) => billTypeLabel(b.billType) },
-  { label: "计费周期", value: (b) => cycleLabel(b.billCycle) },
-  { label: "周期起", value: (b) => formatDate(b.cycleStartDate) },
-  { label: "周期止", value: (b) => formatDate(b.cycleEndDate) },
-  { label: "币种", value: (b) => b.currency },
-  { label: "应收金额", value: (b) => b.payableAmount },
-  { label: "原价金额", value: (b) => b.totalAmount },
-  { label: "减免金额", value: (b) => b.discountAmount },
-  { label: "已收金额", value: (b) => b.paidAmount },
-  { label: "已开票金额", value: (b) => b.invoicedAmount },
-  { label: "收款状态", value: (b) => billStatusLabel(b.billStatus) },
-  { label: "发票状态", value: (b) => invoiceStatusLabel(b.invoiceStatus) },
-  { label: "发票号", value: (b) => b.invoiceNo ?? "" },
-  { label: "经办人", value: (b) => b.operatorName },
-];
+/* 从模块级常量改成收 `locale` 的工厂：常量在模块加载时就求值了，那一刻
+   没有任何运行时上下文，而列里的日期要按界面语言排。 */
+function billingCsvColumns(
+  locale: string,
+  t: ReturnType<typeof useTranslations>,
+): CsvColumn<BillingRecord>[] {
+  return [
+    { label: "账单编号", value: (b) => b.billNo },
+    { label: "订单编号", value: (b) => b.orderNo },
+    { label: "租户编码", value: (b) => b.tenantCode },
+    { label: "租户名称", value: (b) => b.tenantName },
+    { label: "套餐", value: (b) => b.tierName ?? "" },
+    { label: "账单类型", value: (b) => billTypeLabel(b.billType) },
+    { label: "计费周期", value: (b) => cycleLabel(b.billCycle) },
+    { label: "周期起", value: (b) => formatDate(b.cycleStartDate, locale) },
+    { label: "周期止", value: (b) => formatDate(b.cycleEndDate, locale) },
+    { label: "币种", value: (b) => b.currency },
+    { label: "应收金额", value: (b) => b.payableAmount },
+    { label: "原价金额", value: (b) => b.totalAmount },
+    { label: "减免金额", value: (b) => b.discountAmount },
+    { label: "已收金额", value: (b) => b.paidAmount },
+    { label: "已开票金额", value: (b) => b.invoicedAmount },
+    { label: "收款状态", value: (b) => billStatusLabel(b.billStatus) },
+    { label: "发票状态", value: (b) => t(`status.invoice.${b.invoiceStatus}`) },
+    { label: "发票号", value: (b) => b.invoiceNo ?? "" },
+    { label: "经办人", value: (b) => b.operatorName },
+  ];
+}
 
 function BillingActionsMenu({
   bill,
@@ -266,6 +267,7 @@ function BillingActionsMenu({
   bill: BillingRecord;
   onSyncInvoice: (bill: BillingRecord) => void;
 }) {
+  const tShared = useTranslations();
   const router = useRouter();
   const invoiceDisabledReason = offlineInvoiceDisabledReason(bill) ?? undefined;
 
@@ -286,7 +288,7 @@ function BillingActionsMenu({
           },
           {
             id: "tenant",
-            label: "查看租户",
+            label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
               router.push(`/tenants/${encodeURIComponent(bill.tenantId)}`),
@@ -335,6 +337,8 @@ function BillingActionsMenu({
  * 与缺色（starter / business）一起另算。
  */
 function useBillingColumns(): DataTableColumn<BillingRecord>[] {
+  const t = useTranslations();
+  const locale = useLocale();
   const router = useRouter();
 
   return [
@@ -344,7 +348,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
       cell: (bill) => (
         <TableTitleCell
           title={bill.billNo}
-          description={`${cycleLabel(bill.billCycle)} · ${formatDate(bill.cycleStartDate)} - ${formatDate(bill.cycleEndDate)}`}
+          description={`${cycleLabel(bill.billCycle)} · ${formatDate(bill.cycleStartDate, locale)} - ${formatDate(bill.cycleEndDate, locale)}`}
           onTitleClick={() =>
             router.push(`/billing/${encodeURIComponent(bill.id)}`)
           }
@@ -449,7 +453,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
         <TableTitleCell
           title={
             <StatusBadge tone={INVOICE_STATUS_TONE[bill.invoiceStatus]}>
-              {invoiceStatusLabel(bill.invoiceStatus)}
+              {t(`status.invoice.${bill.invoiceStatus}`)}
             </StatusBadge>
           }
           description={
@@ -469,6 +473,9 @@ function BillingCards({
   bills: BillingRecord[];
   onSyncInvoice: (bill: BillingRecord) => void;
 }) {
+  const t = useTranslations();
+  const locale = useLocale();
+  const tShared = useTranslations();
   const router = useRouter();
 
   return (
@@ -490,7 +497,7 @@ function BillingCards({
                 {billStatusLabel(bill.billStatus)}
               </StatusBadge>
               <StatusBadge tone={INVOICE_STATUS_TONE[bill.invoiceStatus]}>
-                {invoiceStatusLabel(bill.invoiceStatus)}
+                {t(`status.invoice.${bill.invoiceStatus}`)}
               </StatusBadge>
               {billingExceptionTags(bill).map((tag) => (
                 <StatusBadge
@@ -513,7 +520,7 @@ function BillingCards({
             {
               key: "paid",
               value: formatCurrency(bill.paidAmount, bill.currency),
-              label: "已收金额",
+              label: tShared("columns.receivedAmount"),
             },
             {
               key: "invoiced",
@@ -524,8 +531,8 @@ function BillingCards({
           footer={
             <>
               <span className="truncate">
-                {formatDate(bill.cycleStartDate)} -{" "}
-                {formatDate(bill.cycleEndDate)}
+                {formatDate(bill.cycleStartDate, locale)} -{" "}
+                {formatDate(bill.cycleEndDate, locale)}
               </span>
               <span className="shrink-0">{bill.operatorName}</span>
             </>
@@ -537,6 +544,9 @@ function BillingCards({
 }
 
 export function BillingPage() {
+  const t = useTranslations();
+  const locale = useLocale();
+  const tShared = useTranslations();
   const [bills, setBills] = useState<BillingRecord[]>([]);
   const [billsTruncated, setBillsTruncated] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -613,11 +623,18 @@ export function BillingPage() {
       if (tierFilter !== "all" && tierFilterOf(bill.tierName) !== tierFilter)
         return false;
       if (!matchesBillingExceptionFilter(bill, exceptionFilter)) return false;
-      if (normalizedQuery && !billingSearchText(bill).includes(normalizedQuery))
+      if (
+        normalizedQuery &&
+        !billingSearchText(bill, t).includes(normalizedQuery)
+      )
         return false;
       return true;
     });
   }, [
+    /* `t` 进依赖：过滤要读状态文案（`billingSearchText` / `paymentSearchText`
+       内部用它查词条）。next-intl 的 translator 按 (命名空间, messages, locale)
+       记忆化，只在切语言时换身份，所以这不会让 memo 每次渲染失效，反而保证
+       切语言时搜索匹配的是新语言的文案。这里没有 effect 依赖它。 */
     billStatusFilter,
     billTypeFilter,
     bills,
@@ -625,6 +642,7 @@ export function BillingPage() {
     invoiceStatusFilter,
     query,
     tierFilter,
+    t,
   ]);
 
   const pageCount = Math.max(1, Math.ceil(filteredBills.length / pageSize));
@@ -688,7 +706,11 @@ export function BillingPage() {
 
   function handleExportSelected() {
     const rows = filteredBills.filter((bill) => selectedBillIds.has(bill.id));
-    exportRowsToCsv("billing-selected-export", billingCsvColumns, rows);
+    exportRowsToCsv(
+      "billing-selected-export",
+      billingCsvColumns(locale, t),
+      rows,
+    );
   }
 
   function clearBillSelection() {
@@ -761,7 +783,7 @@ export function BillingPage() {
                   id: "pending",
                   help: "未结清账单：未支付、支付中、部分支付、已逾期。",
                   icon: "clock",
-                  label: "待收款",
+                  label: tShared("status.generic.awaitingPayment"),
                   value: formatNumber(pendingCount),
                   tags: [
                     `逾期 ${formatNumber(bills.filter((item) => item.billStatus === "overdue").length)}`,
@@ -812,7 +834,7 @@ export function BillingPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredBills.length)}
             aria-label="账单筛选"
             search={
@@ -833,7 +855,7 @@ export function BillingPage() {
                   onClick={handleExportSelected}
                   disabled={selectedBillIds.size === 0}
                 >
-                  导出
+                  {tShared("common.export")}
                 </ActionButton>
               </>
             }
@@ -848,11 +870,21 @@ export function BillingPage() {
                 aria-label="账单状态"
               >
                 <option value="all">全部账单</option>
-                <option value="unpaid">待收款</option>
-                <option value="paying">支付中</option>
-                <option value="partial">部分收款</option>
-                <option value="paid">已结清</option>
-                <option value="overdue">逾期</option>
+                <option value="unpaid">
+                  {tShared("status.generic.awaitingPayment")}
+                </option>
+                <option value="paying">
+                  {tShared("status.generic.paying")}
+                </option>
+                <option value="partial">
+                  {tShared("status.generic.partiallyPaid")}
+                </option>
+                <option value="paid">
+                  {tShared("status.generic.settled")}
+                </option>
+                <option value="overdue">
+                  {tShared("status.generic.overdue")}
+                </option>
                 <option value="cancelled">已取消</option>
               </NativeSelect>
               <NativeSelect
@@ -871,8 +903,12 @@ export function BillingPage() {
                 <option value="auditing">审核中</option>
                 <option value="issued">已开票</option>
                 <option value="sending">寄送中</option>
-                <option value="finished">已完成</option>
-                <option value="rejected">已驳回</option>
+                <option value="finished">
+                  {tShared("status.generic.completed")}
+                </option>
+                <option value="rejected">
+                  {tShared("status.generic.rejected")}
+                </option>
                 <option value="red">已红冲</option>
               </NativeSelect>
               <NativeSelect
@@ -883,7 +919,7 @@ export function BillingPage() {
                 }
                 aria-label="账单类型"
               >
-                <option value="all">全部类型</option>
+                <option value="all">{tShared("filters.allKinds")}</option>
                 <option value="normal">正常账单</option>
                 <option value="adjust">调整单</option>
                 <option value="supplement">补录单</option>
@@ -905,7 +941,9 @@ export function BillingPage() {
                 <option value="discounted">应收减免</option>
                 <option value="adjust">调整单</option>
                 <option value="supplement">补录单</option>
-                <option value="cancelled">已作废</option>
+                <option value="cancelled">
+                  {tShared("status.generic.voided")}
+                </option>
                 <option value="invoice_exception">发票异常</option>
               </NativeSelect>
               <NativeSelect
@@ -935,7 +973,7 @@ export function BillingPage() {
               actions={[
                 {
                   id: "export",
-                  label: "导出所选",
+                  label: tShared("common.exportSelected"),
                   icon: "table",
                   onSelect: handleExportSelected,
                 },
@@ -949,7 +987,7 @@ export function BillingPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
 
@@ -980,7 +1018,7 @@ export function BillingPage() {
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -1011,7 +1049,7 @@ export function BillingPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

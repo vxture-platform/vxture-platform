@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   Badge,
@@ -129,6 +130,8 @@ function ProductSolutionDetails({
 }: {
   solution: ProductSolutionDetailRecord;
 }) {
+  const locale = useLocale();
+  const tShared = useTranslations();
   return (
     <section
       className="vx-product-capability-detail"
@@ -151,10 +154,10 @@ function ProductSolutionDetails({
           </DetailRow>
           <DetailRow label="负责团队">{orUnset(solution.ownerTeam)}</DetailRow>
           <DetailRow label="创建时间">
-            {orUnset(formatDate(solution.createdAt))}
+            {orUnset(formatDate(solution.createdAt, locale))}
           </DetailRow>
-          <DetailRow label="更新时间">
-            {orUnset(formatDate(solution.updatedAt))}
+          <DetailRow label={tShared("columns.updatedAt")}>
+            {orUnset(formatDate(solution.updatedAt, locale))}
           </DetailRow>
         </DetailList>
       </section>
@@ -255,6 +258,7 @@ export function ProductSolutionDetailPage({
 }: {
   solutionCode: string;
 }) {
+  const tShared = useTranslations();
   const [solution, setSolution] = useState<ProductSolutionDetailRecord | null>(
     null,
   );
@@ -291,7 +295,7 @@ export function ProductSolutionDetailPage({
               <Button asChild variant="outline">
                 <Link href="/product-solutions">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
             }
@@ -319,7 +323,7 @@ export function ProductSolutionDetailPage({
               <Button asChild variant="outline">
                 <Link href="/product-solutions">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
               <Button variant="outline" disabled>
@@ -338,7 +342,7 @@ export function ProductSolutionDetailPage({
         </>
       ) : (
         <section className="vx-tenant-directory__header">
-          <span>读取中</span>
+          <span>{tShared("common.loading")}</span>
         </section>
       )}
     </DetailPageTemplate>

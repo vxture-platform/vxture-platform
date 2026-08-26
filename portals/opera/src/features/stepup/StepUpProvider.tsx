@@ -25,6 +25,7 @@ import {
   type ReactNode,
 } from "react";
 import { DialogForm, Field, FieldLabel, Input } from "@vxture/design-system";
+import { useTranslations } from "next-intl";
 import { isStepUpRequiredError, submitOperatorStepUpTotp } from "@/lib/api";
 
 /**
@@ -61,6 +62,7 @@ export function useStepUp(): StepUpContextValue {
 }
 
 export function StepUpProvider({ children }: { children: ReactNode }) {
+  const tShared = useTranslations();
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -142,7 +144,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
           title="二次验证"
           description="该操作涉及凭证材料或不可逆变更，需要现在确认一次身份。请输入验证器 App（TOTP）中的动态验证码。"
           submitLabel="验证并继续"
-          cancelLabel="取消"
+          cancelLabel={tShared("actions.cancel")}
           submitting={submitting}
           submitDisabled={code.trim().length === 0}
           onOpenChange={(next) => {

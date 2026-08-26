@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useTranslations } from "next-intl";
 import {
   ActionMenu,
   DataTable,
@@ -72,6 +73,7 @@ const COLUMNS: readonly DataTableColumn<PlatformSettingRecord>[] = [
 ];
 
 export function SystemParametersPage() {
+  const tShared = useTranslations();
   const { toast } = useToast();
   const [items, setItems] = useState<PlatformSettingRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -231,7 +233,7 @@ export function SystemParametersPage() {
                 title="暂无配置"
                 description={
                   search || groupFilter !== "all"
-                    ? "尝试调整筛选条件"
+                    ? tShared("common.adjustFiltersHint")
                     : "数据库中没有平台配置项"
                 }
               />

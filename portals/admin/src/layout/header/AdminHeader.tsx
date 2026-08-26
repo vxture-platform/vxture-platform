@@ -40,14 +40,14 @@ import {
 } from "@vxture/design-system";
 import {
   setGlobalDensityPreference,
-  setGlobalLocalePreference,
   setGlobalThemePreference,
 } from "@vxture/platform-browser";
 import type { Locale, Theme } from "@vxture-platform/shared";
 import { useAdminSession } from "@/features/session/AdminSessionProvider";
-import { useConsoleLocale, useConsoleTranslations } from "@/lib/ConsoleIntl";
+import { useLocale, useTranslations } from "next-intl";
 import type { ShellView } from "../template/shell/types";
 import { useAdminSearch, type NavSearchEntry } from "./useAdminSearch";
+import { useLocaleSwitch } from "@/lib/useLocaleSwitch";
 
 /**
  * 展示用手机号：存储值带 E.164 国家码（+8613800000000），面板里只给号码本身。
@@ -94,9 +94,9 @@ export function AdminHeader({
   brandName,
   navEntries,
 }: AdminHeaderProps) {
-  const t = useConsoleTranslations("shell");
+  const t = useTranslations("shell");
   const { session } = useAdminSession();
-  const locale = useConsoleLocale();
+  const locale = useLocale();
   const { theme, setTheme, density, setDensity, fontSize, setFontSize } =
     useTheme();
   const search = useAdminSearch(navEntries);
@@ -112,8 +112,12 @@ export function AdminHeader({
   /* 偏好三项都要**同时**写两处：useTheme 管当前文档的即时生效，
      platform-browser 的 setGlobal* 管跨门户持久化（同一账号在 console/opera
      打开时沿用）。只写一处的话，切换在当前页有效、刷新或换门户后回退。 */
+  /* 只写偏好是不够的：`ConsoleAppProviders` 里那份「订阅偏好变更、就地换词条」
+     的客户端状态随 next-intl 迁移一起退役了，所以写完 cookie 还得让服务端重渲染，
+     否则拨了语言开关**界面一点反应都没有**，直到下一次硬刷新。 */
+  const { switchLocale } = useLocaleSwitch();
   const onLocaleChange = (next: Locale) => {
-    setGlobalLocalePreference(next);
+    switchLocale(next);
   };
   const onThemeChange = (next: Parameters<typeof setTheme>[0]) => {
     setTheme(next);

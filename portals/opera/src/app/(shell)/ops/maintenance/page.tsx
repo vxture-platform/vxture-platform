@@ -48,8 +48,9 @@ import {
   type StatusBadgeTone,
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
+import { useTranslations } from "next-intl";
 import { api, OperaApiError } from "@/lib/api";
-import { confirmLabels } from "@/lib/destructive";
+import { useConfirmLabels } from "@/lib/destructive";
 
 /** 写操作的能力码，与 BFF 的能力门同名（release:maintenance.manage）。 */
 const MANAGE = "release:maintenance.manage";
@@ -207,6 +208,8 @@ function describeError(error: unknown): { description?: string } {
 }
 
 export default function MaintenanceWindowsPage() {
+  const tShared = useTranslations();
+  const withLabels = useConfirmLabels();
   const [rows, setRows] = useState<MaintenanceWindowItem[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [keyword, setKeyword] = useState("");
@@ -336,14 +339,17 @@ export default function MaintenanceWindowsPage() {
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在取维护窗口清单。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在取维护窗口清单。"
+      />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
@@ -383,7 +389,7 @@ export default function MaintenanceWindowsPage() {
           <FilterBar
             view="list"
             onViewChange={() => {}}
-            cardsDisabledReason="卡片视图已下线，改用列表"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={
               visible.length === rows.length
                 ? rows.length
@@ -411,9 +417,9 @@ export default function MaintenanceWindowsPage() {
                 setState(e.target.value);
                 pager.resetPage();
               }}
-              aria-label="状态筛选"
+              aria-label={tShared("filters.stateLabel")}
             >
-              <option value="all">全部状态</option>
+              <option value="all">{tShared("filters.allStates")}</option>
               {(
                 Object.keys(STATE_LABELS) as MaintenanceWindowItem["state"][]
               ).map((s) => (
@@ -489,7 +495,7 @@ export default function MaintenanceWindowsPage() {
               },
               {
                 id: "state",
-                header: "状态",
+                header: tShared("columns.state"),
                 align: "center",
                 width: "xs",
                 cell: (r) => (
@@ -540,7 +546,7 @@ export default function MaintenanceWindowsPage() {
                         },
                         {
                           id: "edit",
-                          label: "编辑",
+                          label: tShared("common.edit"),
                           icon: "edit",
                           disabled:
                             submitting ||
@@ -558,8 +564,8 @@ export default function MaintenanceWindowsPage() {
                             submitting ||
                             (item.state !== "scheduled" &&
                               item.state !== "in_progress"),
-                          confirm: confirmLabels({
-                            verb: "取消",
+                          confirm: withLabels({
+                            verb: tShared("actions.cancel"),
                             target: `维护窗口「${item.title}」`,
                             consequence:
                               "取消后窗口进入终态，不能再改回计划中或进行中；历史记录保留。要重新安排同一段维护，得新建一个窗口。",

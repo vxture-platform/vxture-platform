@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Button,
   Icon,
@@ -105,6 +106,7 @@ export function OfflineInvoiceDialog({
     sendAt: string | null;
   }) => void;
 }) {
+  const tShared = useTranslations();
   const remainingAmount = remainingInvoiceAmount(bill);
   const [invoiceNo, setInvoiceNo] = useState("");
   const [invoiceType, setInvoiceType] =
@@ -381,10 +383,10 @@ export function OfflineInvoiceDialog({
         ) : null}
         <footer>
           <Button variant="ghost" onClick={onCancel} disabled={busy}>
-            放弃
+            {tShared("actions.discard")}
           </Button>
           <Button type="submit" disabled={busy || !canSubmit}>
-            {busy ? "处理中" : "同步登记"}
+            {busy ? tShared("status.generic.processing") : "同步登记"}
           </Button>
         </footer>
       </form>

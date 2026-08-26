@@ -58,7 +58,7 @@ import type {
   TenantQuotaRecord,
   TenantUsageSummaryRecord,
 } from "@/entities/console";
-import { useConsoleTranslations } from "@/lib/ConsoleIntl";
+import { useTranslations } from "next-intl";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 
@@ -382,7 +382,8 @@ function detectModelLinkStatus(model: AiModelRecord): ModelLinkStatus {
 }
 
 export function ModelPlatformPage() {
-  const t = useConsoleTranslations("modelPlatformPage");
+  const tShared = useTranslations();
+  const t = useTranslations("modelPlatformPage");
   const { toast } = useToast();
   const [models, setModels] = useState<AiModelRecord[]>([]);
   const [providers, setProviders] = useState<ModelProviderRecord[]>([]);
@@ -1050,7 +1051,7 @@ export function ModelPlatformPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredModels.length)}
             aria-label="模型状态"
             search={
@@ -1234,7 +1235,7 @@ export function ModelPlatformPage() {
           <ListPagination
             currentPage={safeCurrentPage}
             pageCount={totalPages}
-            // 这一页的计数语走 i18n（本页整体已接 useConsoleTranslations），
+            // 这一页的计数语走 i18n（本页整体已接 useTranslations），
             // 不是 DS 那句固定中文。
             countLabel={t("pagination.summary", {
               page: safeCurrentPage,
@@ -1333,20 +1334,20 @@ export function ModelPlatformPage() {
                         items={[
                           {
                             id: "edit",
-                            label: "编辑",
+                            label: tShared("actions.edit"),
                             icon: "edit",
                             onSelect: () => openEditPriceRuleDialog(rule),
                           },
                           {
                             id: "enable",
-                            label: "启用",
+                            label: tShared("actions.enable"),
                             icon: "play",
                             disabled: catalogBusy || isEnabled(rule.state),
                             onSelect: () => void togglePriceRule(rule, true),
                           },
                           {
                             id: "disable",
-                            label: "停用",
+                            label: tShared("actions.disable"),
                             icon: "stop",
                             disabled: catalogBusy || !isEnabled(rule.state),
                             onSelect: () => void togglePriceRule(rule, false),
@@ -1464,20 +1465,20 @@ export function ModelPlatformPage() {
                         items={[
                           {
                             id: "edit",
-                            label: "编辑",
+                            label: tShared("actions.edit"),
                             icon: "edit",
                             onSelect: () => openEditPolicyDialog(policy),
                           },
                           {
                             id: "enable",
-                            label: "启用",
+                            label: tShared("actions.enable"),
                             icon: "play",
                             disabled: catalogBusy || isEnabled(policy.state),
                             onSelect: () => void togglePolicy(policy, true),
                           },
                           {
                             id: "disable",
-                            label: "停用",
+                            label: tShared("actions.disable"),
                             icon: "stop",
                             disabled: catalogBusy || !isEnabled(policy.state),
                             onSelect: () => void togglePolicy(policy, false),
@@ -1553,7 +1554,9 @@ export function ModelPlatformPage() {
                         <small>优先级（小者先）</small>
                       </span>
                       <span>
-                        <b>{policy.expiresAt ? "有" : "无"}</b>
+                        <b>
+                          {policy.expiresAt ? "有" : tShared("common.none")}
+                        </b>
                         <small>失效时间</small>
                       </span>
                     </div>
@@ -1647,7 +1650,7 @@ export function ModelPlatformPage() {
               />
             </Label>
             <Label>
-              币种
+              {tShared("columns.currency")}
               <Input
                 value={priceRuleForm.currency}
                 disabled={priceRuleDialog.mode === "edit"}

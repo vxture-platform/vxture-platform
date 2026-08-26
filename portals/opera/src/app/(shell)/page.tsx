@@ -20,6 +20,7 @@
  * 一直显示 unknown，这里不把它渲染成红色。 */
 
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActionMenu,
@@ -118,14 +119,20 @@ const HEALTH_META: Record<
   unknown: { label: "无数据", tone: "neutral" },
 };
 
-function formatTime(iso: string): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——
+   中文 `2026/8/18 10:37`，英文 `8/18/2026, 10:37`。写死的后果不是「没翻译」，
+   是英文用户会把 8/18 读成 18 月。（数字与百分比两种语言逐字相同，所以那些
+   没跟着改，见 scripts/guardrails 旁的说明。） */
+function formatTime(iso: string, locale: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString("zh-CN", { hour12: false });
+    : d.toLocaleString(locale, { hour12: false });
 }
 
 export default function DashboardPage() {
+  const locale = useLocale();
+  const tShared = useTranslations();
   const { toast } = useToast();
   const [providers, setProviders] = useState<ModelProviderRecord[]>([]);
   const [models, setModels] = useState<AiModelRecord[]>([]);
@@ -185,7 +192,7 @@ export default function DashboardPage() {
 
   const copyEvent = async (r: AuditLogEntry) => {
     const text = [
-      formatTime(r.occurredAt),
+      formatTime(r.occurredAt, locale),
       r.actorName,
       r.action,
       `${r.objectType} · ${r.objectId}`,
@@ -193,12 +200,12 @@ export default function DashboardPage() {
     ].join(" · ");
     try {
       await navigator.clipboard.writeText(text);
-      toast({ tone: "success", title: "已复制该行到剪贴板" });
+      toast({ tone: "success", title: tShared("common.rowCopied") });
     } catch {
       toast({
         tone: "danger",
-        title: "复制失败",
-        description: "浏览器拒绝了剪贴板访问，请手动选中复制。",
+        title: tShared("common.copyFailed"),
+        description: tShared("common.copyDenied"),
       });
     }
   };
@@ -241,14 +248,17 @@ export default function DashboardPage() {
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取 Dashboard 数据。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取 Dashboard 数据。"
+      />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
@@ -343,14 +353,14 @@ export default function DashboardPage() {
             },
             {
               id: "type",
-              header: "类型",
+              header: tShared("columns.kind"),
               align: "center",
               width: "xs",
               cell: (r: ModelProviderRecord) => r.providerType,
             },
             {
               id: "health",
-              header: "健康",
+              header: tShared("columns.health"),
               align: "center",
               width: "xs",
               cell: (r: ModelProviderRecord) => (
@@ -364,12 +374,14 @@ export default function DashboardPage() {
             },
             {
               id: "status",
-              header: "状态",
+              header: tShared("columns.state"),
               align: "center",
               width: "xs",
               cell: (r: ModelProviderRecord) => (
                 <StatusBadge tone={providerTone(r.state)} dot>
-                  {isEnabled(r.state) ? "启用" : "停用"}
+                  {isEnabled(r.state)
+                    ? tShared("actions.enable")
+                    : tShared("actions.disable")}
                 </StatusBadge>
               ),
             },
@@ -414,24 +426,24 @@ export default function DashboardPage() {
           columns={[
             {
               id: "occurredAt",
-              header: "时间",
+              header: tShared("columns.time"),
               width: "sm",
-              cell: (r: AuditLogEntry) => formatTime(r.occurredAt),
+              cell: (r: AuditLogEntry) => formatTime(r.occurredAt, locale),
             },
             {
               id: "actor",
-              header: "操作者",
+              header: tShared("columns.actor"),
               width: "sm",
               cell: (r: AuditLogEntry) => r.actorName,
             },
             {
               id: "target",
-              header: "对象",
+              header: tShared("columns.target"),
               cell: (r: AuditLogEntry) => `${r.objectType} · ${r.objectId}`,
             },
             {
               id: "action",
-              header: "动作",
+              header: tShared("columns.action"),
               align: "center",
               width: "xs",
               cell: (r: AuditLogEntry) => r.action,
@@ -448,7 +460,7 @@ export default function DashboardPage() {
               items={[
                 {
                   id: "copy",
-                  label: "复制该行",
+                  label: tShared("common.copyRow"),
                   icon: "copy",
                   onSelect: () => void copyEvent(r),
                 },

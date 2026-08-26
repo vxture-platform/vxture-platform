@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Badge,
   Button,
@@ -49,6 +50,7 @@ function normalizePrice(raw: string | undefined): string {
 }
 
 export function PlanVersionsPage() {
+  const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
   const [plans, setPlans] = useState<ProductPlanRecord[]>([]);
   const [planId, setPlanId] = useState("");
@@ -269,7 +271,7 @@ export function PlanVersionsPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold">编辑</h3>
+            <h3 className="text-sm font-semibold">{tShared("actions.edit")}</h3>
             <p className="text-sm text-vx-gray-500">
               从左侧选择一个版本进行查看/编辑。
             </p>

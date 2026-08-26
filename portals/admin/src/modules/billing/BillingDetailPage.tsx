@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -27,7 +28,6 @@ import type {
   BillingDetailRecord,
   BillingInvoiceReceiptAction,
   BillingInvoiceReceiptRecord,
-  BillingInvoiceStatus,
   BillingInvoiceTaxType,
   BillingInvoiceType,
 } from "@/entities/console";
@@ -81,17 +81,6 @@ function billTypeLabel(type: BillingBillType) {
   return "正常账单";
 }
 
-function invoiceStatusLabel(status: BillingInvoiceStatus) {
-  if (status === "applying") return "申请中";
-  if (status === "auditing") return "审核中";
-  if (status === "issued") return "已开票";
-  if (status === "sending") return "寄送中";
-  if (status === "finished") return "已完成";
-  if (status === "rejected") return "已驳回";
-  if (status === "red") return "已红冲";
-  return "未开票";
-}
-
 function invoiceTypeLabel(type: BillingInvoiceType) {
   if (type === "special_vat") return "增值税专票";
   if (type === "normal_vat") return "增值税普票";
@@ -130,6 +119,9 @@ function paymentStatusLabel(status: string) {
 }
 
 function BillingSummary({ bill }: { bill: BillingDetailRecord }) {
+  const t = useTranslations();
+  const locale = useLocale();
+  const tShared = useTranslations();
   return (
     <section className="vx-product-capability-summary">
       <div className="vx-product-capability-summary__identity">
@@ -153,7 +145,7 @@ function BillingSummary({ bill }: { bill: BillingDetailRecord }) {
             <Badge
               className={`vx-tenant-pill vx-billing-pill--invoice-${bill.invoiceStatus}`}
             >
-              {invoiceStatusLabel(bill.invoiceStatus)}
+              {t(`status.invoice.${bill.invoiceStatus}`)}
             </Badge>
           </div>
         </div>
@@ -170,7 +162,7 @@ function BillingSummary({ bill }: { bill: BillingDetailRecord }) {
           {
             id: "paid",
             help: "已核销到本账单的回款金额。",
-            label: "已收金额",
+            label: tShared("columns.receivedAmount"),
             value: formatCurrency(bill.paidAmount, bill.currency),
             tags: [bill.paymentMethod ?? "未收款"],
           },
@@ -179,13 +171,13 @@ function BillingSummary({ bill }: { bill: BillingDetailRecord }) {
             help: "本账单已开具发票的金额，不等于已回款。",
             label: "已开票",
             value: formatCurrency(bill.invoicedAmount, bill.currency),
-            tags: [bill.invoiceNo ?? invoiceStatusLabel(bill.invoiceStatus)],
+            tags: [bill.invoiceNo ?? t(`status.invoice.${bill.invoiceStatus}`)],
           },
           {
             id: "cycle",
             help: "账单所属计费周期的起止日期。",
             label: "账期",
-            value: `${formatDate(bill.cycleStartDate)} - ${formatDate(bill.cycleEndDate)}`,
+            value: `${formatDate(bill.cycleStartDate, locale)} - ${formatDate(bill.cycleEndDate, locale)}`,
             tags: [cycleLabel(bill.billCycle)],
           },
         ]}
@@ -204,6 +196,9 @@ function BillingDetails({
     action: BillingInvoiceReceiptAction,
   ) => void;
 }) {
+  const t = useTranslations();
+  const locale = useLocale();
+  const tShared = useTranslations();
   return (
     <section
       className="vx-product-capability-detail"
@@ -223,16 +218,16 @@ function BillingDetails({
             {orUnset(cycleLabel(bill.billCycle))}
           </DetailRow>
           <DetailRow label="账期开始">
-            {orUnset(formatDate(bill.cycleStartDate))}
+            {orUnset(formatDate(bill.cycleStartDate, locale))}
           </DetailRow>
           <DetailRow label="账期结束">
-            {orUnset(formatDate(bill.cycleEndDate))}
+            {orUnset(formatDate(bill.cycleEndDate, locale))}
           </DetailRow>
           <DetailRow label="生成时间">
-            {orUnset(formatDate(bill.createdAt))}
+            {orUnset(formatDate(bill.createdAt, locale))}
           </DetailRow>
-          <DetailRow label="更新时间">
-            {orUnset(formatDate(bill.updatedAt))}
+          <DetailRow label={tShared("columns.updatedAt")}>
+            {orUnset(formatDate(bill.updatedAt, locale))}
           </DetailRow>
           <DetailRow label="经办人">{orUnset(bill.operatorName)}</DetailRow>
           <DetailRow label="运营备注">
@@ -245,8 +240,10 @@ function BillingDetails({
         <DetailSectionHeading icon="buildings" title="租户与订阅" />
         <DetailList columns={3}>
           <DetailRow label="租户">{orUnset(bill.tenantName)}</DetailRow>
-          <DetailRow label="租户编码">{orUnset(bill.tenantCode)}</DetailRow>
-          <DetailRow label="租户类型">
+          <DetailRow label={tShared("columns.tenantCode")}>
+            {orUnset(bill.tenantCode)}
+          </DetailRow>
+          <DetailRow label={tShared("columns.tenantType")}>
             {orUnset(typeLabel(bill.tenantType))}
           </DetailRow>
           <DetailRow label="所属区域">{orUnset(bill.region)}</DetailRow>
@@ -302,7 +299,7 @@ function BillingDetails({
           <DetailRow label="应收金额">
             {orUnset(formatCurrency(bill.payableAmount, bill.currency))}
           </DetailRow>
-          <DetailRow label="已收金额">
+          <DetailRow label={tShared("columns.receivedAmount")}>
             {orUnset(formatCurrency(bill.paidAmount, bill.currency))}
           </DetailRow>
           <DetailRow label="剩余应收">
@@ -314,11 +311,13 @@ function BillingDetails({
             )}
           </DetailRow>
           <DetailRow label="收款时间">
-            {orUnset(formatDate(bill.paidAt))}
+            {orUnset(formatDate(bill.paidAt, locale))}
           </DetailRow>
           <DetailRow label="支付方式">{orUnset(bill.paymentMethod)}</DetailRow>
           <DetailRow label="交易流水">{orUnset(bill.transactionNo)}</DetailRow>
-          <DetailRow label="币种">{orUnset(bill.currency)}</DetailRow>
+          <DetailRow label={tShared("columns.currency")}>
+            {orUnset(bill.currency)}
+          </DetailRow>
         </DetailList>
       </section>
 
@@ -358,7 +357,7 @@ function BillingDetails({
                 <small>
                   {paySourceLabel(payment.paySource)} |{" "}
                   {paymentStatusLabel(payment.paymentStatus)} |{" "}
-                  {formatDate(payment.paidAt)}
+                  {formatDate(payment.paidAt, locale)}
                 </small>
                 <em>{formatCurrency(payment.paidAmount, payment.currency)}</em>
                 <p>{payment.remark ?? payment.operatorName}</p>
@@ -391,7 +390,7 @@ function BillingDetails({
                 <small>
                   {invoiceTypeLabel(receipt.invoiceType)} |{" "}
                   {taxTypeLabel(receipt.invoiceTaxType)} |{" "}
-                  {invoiceStatusLabel(receipt.invoiceStatus)}
+                  {t(`status.invoice.${receipt.invoiceStatus}`)}
                 </small>
                 <em>
                   {formatCurrency(receipt.invoiceAmount, receipt.currency)}
@@ -506,7 +505,7 @@ function BillingDetails({
                 <strong>{event.title}</strong>
                 <p>{event.description}</p>
                 <small>
-                  {event.actor} · {formatDate(event.at)}
+                  {event.actor} · {formatDate(event.at, locale)}
                 </small>
               </div>
             </article>
@@ -518,6 +517,8 @@ function BillingDetails({
 }
 
 export function BillingDetailPage({ billId }: { billId: string }) {
+  const t = useTranslations();
+  const tShared = useTranslations();
   const router = useRouter();
   const { runWithStepUp } = useStepUp();
   const [bill, setBill] = useState<BillingDetailRecord | null>(null);
@@ -675,7 +676,7 @@ export function BillingDetailPage({ billId }: { billId: string }) {
               <Button asChild variant="outline">
                 <Link href="/billing">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
             }
@@ -699,7 +700,7 @@ export function BillingDetailPage({ billId }: { billId: string }) {
           title={bill ? bill.billNo : "账单详情"}
           description={
             bill
-              ? `${bill.tenantName} · ${bill.servicePlanName ?? "未关联套餐"} · ${invoiceStatusLabel(bill.invoiceStatus)}`
+              ? `${bill.tenantName} · ${bill.servicePlanName ?? "未关联套餐"} · ${t(`status.invoice.${bill.invoiceStatus}`)}`
               : "正在读取账单、收款和发票登记数据。"
           }
           action={
@@ -707,7 +708,7 @@ export function BillingDetailPage({ billId }: { billId: string }) {
               <Button asChild variant="outline">
                 <Link href="/billing">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
               {bill?.subscriptionId ? (
@@ -797,7 +798,7 @@ export function BillingDetailPage({ billId }: { billId: string }) {
         </>
       ) : (
         <section className="vx-tenant-directory__header">
-          <span>读取中</span>
+          <span>{tShared("common.loading")}</span>
         </section>
       )}
 

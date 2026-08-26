@@ -7,18 +7,6 @@
 
 import type { Tone } from "@vxture/design-system";
 
-export type ResourceStatus = "active" | "degraded" | "down" | "disabled";
-
-export const RESOURCE_STATUS_META: Record<
-  ResourceStatus,
-  { label: string; tone: Tone }
-> = {
-  active: { label: "运行中", tone: "success" },
-  degraded: { label: "降级", tone: "warning" },
-  down: { label: "不可用", tone: "danger" },
-  disabled: { label: "已停用", tone: "neutral" },
-};
-
 /**
  * 网关 API Key 的状态。
  *
@@ -45,18 +33,25 @@ export type KeyState = "active" | "inactive" | "revoked";
 /** 折进到期之后的实际态。`expired` 只可能由 `active` 演变而来（终态优先）。 */
 export type KeyEffectiveState = KeyState | "expired";
 
-export const KEY_STATE_META: Record<
-  KeyEffectiveState,
-  { label: string; tone: Tone }
-> = {
-  active: { label: "生效中", tone: "success" },
+/**
+ * **只有 tone，没有 label。**
+ *
+ * 这张表原来两样都管，而那两样的性质完全不同：`tone` 是产品对严重度的判断
+ * （下面每一条都写着理由），与语言无关，改它要过评审；`label` 是展示文案，
+ * 与语言有关，改它只是翻译。焊在一起的后果是文案没法翻译，而判断被当成文案。
+ *
+ * 拆开之后：tone 留在代码里，label 去 `messages/*.json` 的 `status.keyState.*`，
+ * 页面用 `t(\`status.keyState.${state}\`)` 取。
+ */
+export const KEY_STATE_TONE: Record<KeyEffectiveState, Tone> = {
+  active: "success",
   /* 「已停用」是可逆的暂停，neutral；「已撤销」是终态，danger——两者读起来必须
      一眼分得出轻重，否则运营会把不可逆的那个当成可逆的用。 */
-  inactive: { label: "已停用", tone: "neutral" },
-  revoked: { label: "已撤销", tone: "danger" },
+  inactive: "neutral",
+  revoked: "danger",
   /* 「已过期」用 warning：行上写着生效中、实际已经不作数了，是需要有人去处理的一档
      （续期或撤销），不是一个安稳的终态。 */
-  expired: { label: "已过期", tone: "warning" },
+  expired: "warning",
 };
 
 /**
@@ -74,6 +69,10 @@ export const KEY_STATE_META: Record<
  */
 export type RiskLevel = "read" | "write" | "critical";
 
+/* 下面两张表的 `label` **有意留在代码里**：`read`/`write`/`critical` 与
+   `INFO`/`WARN`/`ERROR` 是上游原样回来的技术标识，运维者在日志和 API 响应里
+   看到的就是这几个词。把它们「翻译」成中文会让界面和它要解释的东西对不上。
+   判据是：这个词在别处（日志、响应体、文档）是否以原文出现——是，就不译。 */
 export const RISK_LEVEL_META: Record<string, { label: string; tone: Tone }> = {
   read: { label: "read", tone: "neutral" },
   write: { label: "write", tone: "info" },

@@ -41,9 +41,13 @@ export function formatMoney(value: number) {
   }).format(value);
 }
 
-export function formatDate(value: string | null) {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——中文
+   `2026/08/18`，英文 `08/18/2026`。同一串数字，读出来是两个日期。 */
+/* 参数由调用点传，不用模块级可变状态存当前 locale：服务端并发渲染时
+   两个不同语言的请求会互相覆盖，后写的赢。 */
+export function formatDate(value: string | null, locale: string) {
   if (!value) return "未设置";
-  return new Date(value).toLocaleDateString("zh-CN", {
+  return new Date(value).toLocaleDateString(locale, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -57,9 +61,9 @@ export function formatDate(value: string | null) {
  * 同一天可能几百条，只显示日期等于没有时间戳，排序也无从验证（2026-08-07 走查
  * 看到 500 条全是 2026/08/07）。秒不是装饰——同一分钟内的先后要能分辨。
  */
-export function formatDateTime(value: string | null) {
+export function formatDateTime(value: string | null, locale: string) {
   if (!value) return "未设置";
-  return new Date(value).toLocaleString("zh-CN", {
+  return new Date(value).toLocaleString(locale, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

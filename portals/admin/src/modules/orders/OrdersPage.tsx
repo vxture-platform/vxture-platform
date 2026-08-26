@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -61,6 +62,8 @@ import {
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
 
+type TFn = ReturnType<typeof useTranslations>;
+
 type ViewMode = "list" | "cards";
 type OrderStatusFilter = "all" | OrderOperationStatus;
 type PaymentStatusFilter = "all" | OrderPaymentStatus;
@@ -112,41 +115,36 @@ function attentionRank(status: OrderOperationStatus): number {
   return ATTENTION_RANK[status] ?? 9;
 }
 
-function paymentStatusLabel(status: OrderPaymentStatus) {
-  if (status === "not_required") return "无需支付";
-  if (status === "unpaid") return "未支付";
-  if (status === "pending") return "支付中";
-  if (status === "pending_verify") return "线下待核";
-  if (status === "paid") return "已支付";
-  if (status === "partial") return "部分支付";
-  if (status === "failed") return "支付失败";
-  if (status === "closed") return "已关闭";
-  return "退款中";
-}
-
 function paySourceLabel(source: OrderPaySource) {
   if (source === "online") return "线上";
   if (source === "offline") return "线下";
   return "无";
 }
 
-const ORDER_CSV_COLUMNS: readonly CsvColumn<OrderOperationRecord>[] = [
-  { label: "订单号", value: (o) => o.orderNo },
-  { label: "账单号", value: (o) => o.billNo ?? "" },
-  { label: "租户编码", value: (o) => o.tenantCode },
-  { label: "租户名称", value: (o) => o.tenantName },
-  { label: "业务方案", value: (o) => o.solutionName },
-  { label: "套餐", value: (o) => o.servicePlanName },
-  { label: "版本", value: (o) => o.tierName },
-  { label: "计费周期", value: (o) => cycleLabel(o.cycleType) },
-  { label: "订单金额", value: (o) => o.amount },
-  { label: "已收金额", value: (o) => o.paidAmount },
-  { label: "币种", value: (o) => o.currency },
-  { label: "订单状态", value: (o) => orderStatusLabel(o.orderStatus) },
-  { label: "支付状态", value: (o) => paymentStatusLabel(o.paymentStatus) },
-  { label: "支付来源", value: (o) => paySourceLabel(o.paySource) },
-  { label: "创建时间", value: (o) => o.createdAt },
-];
+/* 从模块级常量改成收 `t` 的工厂：常量在模块加载时就求值了，那一刻
+   没有任何运行时上下文，而列里的状态文案要按界面语言取。 */
+function orderCsvColumns(t: TFn): readonly CsvColumn<OrderOperationRecord>[] {
+  return [
+    { label: "订单号", value: (o) => o.orderNo },
+    { label: "账单号", value: (o) => o.billNo ?? "" },
+    { label: "租户编码", value: (o) => o.tenantCode },
+    { label: "租户名称", value: (o) => o.tenantName },
+    { label: "业务方案", value: (o) => o.solutionName },
+    { label: "套餐", value: (o) => o.servicePlanName },
+    { label: "版本", value: (o) => o.tierName },
+    { label: "计费周期", value: (o) => cycleLabel(o.cycleType) },
+    { label: "订单金额", value: (o) => o.amount },
+    { label: "已收金额", value: (o) => o.paidAmount },
+    { label: "币种", value: (o) => o.currency },
+    { label: "订单状态", value: (o) => orderStatusLabel(o.orderStatus) },
+    {
+      label: "支付状态",
+      value: (o) => t(`status.orderPayment.${o.paymentStatus}`),
+    },
+    { label: "支付来源", value: (o) => paySourceLabel(o.paySource) },
+    { label: "创建时间", value: (o) => o.createdAt },
+  ];
+}
 
 function orderSearchText(record: OrderOperationRecord) {
   return [
@@ -178,6 +176,7 @@ function OrderActionsMenu({
   order: OrderOperationRecord;
   onConfirmPayment: (order: OrderOperationRecord) => void;
 }) {
+  const tShared = useTranslations();
   const router = useRouter();
 
   return (
@@ -197,7 +196,7 @@ function OrderActionsMenu({
           },
           {
             id: "tenant",
-            label: "查看租户",
+            label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
               router.push(`/tenants/${encodeURIComponent(order.tenantId)}`),
@@ -230,6 +229,9 @@ function OrderActionsMenu({
  * 值域着色表，整族改 Badge 归批 4，一次改动不跨两个语义面。
  */
 function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
+  const t = useTranslations();
+  const locale = useLocale();
+  const tShared = useTranslations();
   const router = useRouter();
 
   return [
@@ -239,7 +241,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
       cell: (order) => (
         <TableTitleCell
           title={order.orderNo}
-          description={`${order.billNo ?? "未生成账单"} · ${formatDate(order.createdAt)}`}
+          description={`${order.billNo ?? "未生成账单"} · ${formatDate(order.createdAt, locale)}`}
           onTitleClick={() =>
             router.push(`/orders/${encodeURIComponent(order.id)}`)
           }
@@ -314,7 +316,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
     },
     {
       id: "status",
-      header: "状态",
+      header: tShared("columns.state"),
       align: "center",
       cell: (order) => (
         <TableTitleCell
@@ -326,7 +328,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
               {orderStatusLabel(order.orderStatus)}
             </StatusBadge>
           }
-          description={`${paymentStatusLabel(order.paymentStatus)} · ${paySourceLabel(order.paySource)}`}
+          description={`${t(`status.orderPayment.${order.paymentStatus}`)} · ${paySourceLabel(order.paySource)}`}
         />
       ),
     },
@@ -340,6 +342,9 @@ function OrderCards({
   orders: OrderOperationRecord[];
   onConfirmPayment: (order: OrderOperationRecord) => void;
 }) {
+  const t = useTranslations();
+  const locale = useLocale();
+  const tShared = useTranslations();
   const router = useRouter();
 
   return (
@@ -367,7 +372,7 @@ function OrderCards({
                 {orderStatusLabel(order.orderStatus)}
               </StatusBadge>
               <StatusBadge tone={PAYMENT_STATUS_TONE[order.paymentStatus]}>
-                {paymentStatusLabel(order.paymentStatus)}
+                {t(`status.orderPayment.${order.paymentStatus}`)}
               </StatusBadge>
               <Badge className="vx-tenant-pill vx-order-pill--source">
                 {paySourceLabel(order.paySource)}
@@ -384,7 +389,7 @@ function OrderCards({
             {
               key: "paid",
               value: formatCurrency(order.paidAmount, order.currency),
-              label: "已收金额",
+              label: tShared("columns.receivedAmount"),
             },
             {
               key: "cycle",
@@ -396,7 +401,7 @@ function OrderCards({
             <>
               <span className="truncate">{order.operationHint}</span>
               <span className="shrink-0">
-                {formatDate(order.confirmedAt ?? order.updatedAt)}
+                {formatDate(order.confirmedAt ?? order.updatedAt, locale)}
               </span>
             </>
           }
@@ -407,6 +412,8 @@ function OrderCards({
 }
 
 export function OrdersPage() {
+  const t = useTranslations();
+  const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
   const [orders, setOrders] = useState<OrderOperationRecord[]>([]);
   const [ordersTruncated, setOrdersTruncated] = useState(false);
@@ -612,7 +619,7 @@ export function OrdersPage() {
                   id: "pending",
                   help: "待处理订单：待确认与待核验。",
                   icon: "clock",
-                  label: "待处理",
+                  label: tShared("status.generic.pending"),
                   value: formatNumber(pendingCount),
                   tags: [
                     `待复核 ${formatNumber(orders.filter((item) => item.orderStatus === "pending_verify").length)}`,
@@ -667,7 +674,7 @@ export function OrdersPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredOrders.length)}
             aria-label="订单筛选"
             search={
@@ -690,13 +697,13 @@ export function OrdersPage() {
                   onClick={() =>
                     exportRowsToCsv(
                       "orders-export",
-                      ORDER_CSV_COLUMNS,
+                      orderCsvColumns(t),
                       selectedOrders,
                     )
                   }
                   disabled={selectedOrderIds.size === 0}
                 >
-                  导出
+                  {tShared("common.export")}
                 </ActionButton>
                 <ActionButton icon="plus" disabled>
                   补录订单
@@ -717,8 +724,12 @@ export function OrdersPage() {
                 <option value="pending">待付款</option>
                 <option value="pending_verify">待复核</option>
                 <option value="confirmed">已确认</option>
-                <option value="overdue">逾期</option>
-                <option value="closed">已关闭</option>
+                <option value="overdue">
+                  {tShared("status.generic.overdue")}
+                </option>
+                <option value="closed">
+                  {tShared("status.generic.closed")}
+                </option>
                 <option value="abnormal">异常</option>
               </NativeSelect>
               <NativeSelect
@@ -732,12 +743,16 @@ export function OrdersPage() {
                 <option value="all">全部支付</option>
                 <option value="not_required">无需支付</option>
                 <option value="unpaid">未支付</option>
-                <option value="pending">支付中</option>
+                <option value="pending">
+                  {tShared("status.generic.paying")}
+                </option>
                 <option value="pending_verify">线下待核</option>
                 <option value="paid">已支付</option>
                 <option value="partial">部分支付</option>
                 <option value="failed">支付失败</option>
-                <option value="closed">已关闭</option>
+                <option value="closed">
+                  {tShared("status.generic.closed")}
+                </option>
                 <option value="refunding">退款中</option>
               </NativeSelect>
               <NativeSelect
@@ -751,7 +766,7 @@ export function OrdersPage() {
                 <option value="all">全部来源</option>
                 <option value="online">线上</option>
                 <option value="offline">线下</option>
-                <option value="none">无</option>
+                <option value="none">{tShared("common.none")}</option>
               </NativeSelect>
               <NativeSelect
                 className="vx-tenant-select"
@@ -778,11 +793,11 @@ export function OrdersPage() {
               actions={[
                 {
                   id: "export",
-                  label: "导出所选",
+                  label: tShared("common.exportSelected"),
                   onSelect: () =>
                     exportRowsToCsv(
                       "orders-export",
-                      ORDER_CSV_COLUMNS,
+                      orderCsvColumns(t),
                       selectedOrders,
                     ),
                 },
@@ -796,7 +811,7 @@ export function OrdersPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
 
@@ -827,7 +842,7 @@ export function OrdersPage() {
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -852,7 +867,7 @@ export function OrdersPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

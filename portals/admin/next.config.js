@@ -1,4 +1,5 @@
 import { fileURLToPath } from "url";
+import createNextIntlPlugin from "next-intl/plugin";
 import { dirname, join } from "path";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -75,4 +76,9 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+/* next-intl 的 server 配置入口。不挂这个插件，从 server component 引用 next-intl
+   会在**请求时**抛「Couldn't find next-intl config file」——而 build 是绿的，
+   因为根 layout 的 `headers()` 让所有路由变成动态、build 期不渲染。 */
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
+
+export default withNextIntl(nextConfig);

@@ -39,6 +39,7 @@
  * 悄悄决定"哪些字段不重要"。 */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ActionMenu,
   Badge,
@@ -97,11 +98,15 @@ const OUTCOME_TONE: Record<string, StatusBadgeTone> = {
   failure: "danger",
 };
 
-function formatTime(iso: string): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——
+   中文 `2026/8/18 10:37`，英文 `8/18/2026, 10:37`。写死的后果不是「没翻译」，
+   是英文用户会把 8/18 读成 18 月。（数字与百分比两种语言逐字相同，所以那些
+   没跟着改，见 scripts/guardrails 旁的说明。） */
+function formatTime(iso: string, locale: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString("zh-CN", { hour12: false });
+    : d.toLocaleString(locale, { hour12: false });
 }
 
 type LoadState =
@@ -128,6 +133,8 @@ function isRouteMissing(error: unknown): boolean {
 }
 
 export function AtlasChangeTable() {
+  const locale = useLocale();
+  const tShared = useTranslations();
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const canRead = can(MANAGE);
@@ -191,7 +198,7 @@ export function AtlasChangeTable() {
     } catch (error) {
       toast({
         tone: "danger",
-        title: "加载更多失败",
+        title: tShared("common.loadMoreFailed"),
         ...(error instanceof OperaApiError && error.message
           ? { description: error.message }
           : {}),
@@ -227,7 +234,7 @@ export function AtlasChangeTable() {
 
   const copyRow = async (r: AtlasChangeRecord) => {
     const text = [
-      formatTime(r.occurredAt),
+      formatTime(r.occurredAt, locale),
       r.actorId,
       `${r.objectType} · ${r.objectId ?? "—"}`,
       r.action,
@@ -237,12 +244,12 @@ export function AtlasChangeTable() {
     ].join(" · ");
     try {
       await navigator.clipboard.writeText(text);
-      toast({ tone: "success", title: "已复制该行到剪贴板" });
+      toast({ tone: "success", title: tShared("common.rowCopied") });
     } catch {
       toast({
         tone: "danger",
-        title: "复制失败",
-        description: "浏览器拒绝了剪贴板访问，请手动选中复制。",
+        title: tShared("common.copyFailed"),
+        description: tShared("common.copyDenied"),
       });
     }
   };
@@ -255,30 +262,33 @@ export function AtlasChangeTable() {
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取 Atlas 变更流水。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取 Atlas 变更流水。"
+      />
     ) : load.kind === "unavailable" ? (
       <EmptyState
         title="当前 Atlas 部署还没有变更流水接口"
         description="这个读端点由 vxture-atlas#159 §6 交付（应用镜像 v0.4.0）。数据库侧的 audit schema 可能已经建好，但只有部署了带这条路由的镜像，这里才读得到——写入本身不受影响：变更一直在记，只是还取不出来。"
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
     ) : visible.length !== rows.length ? (
       <EmptyState
-        title="没有匹配的记录"
+        title={tShared("common.noMatchingRecords")}
         description="关键词只在已经取回的这几页里筛——再「加载更多」几页可能会有。"
       />
     ) : (
@@ -301,7 +311,7 @@ export function AtlasChangeTable() {
       <FilterBar
         view="list"
         onViewChange={() => {}}
-        cardsDisabledReason="卡片视图已下线，改用列表"
+        cardsDisabledReason={tShared("common.cardsRetired")}
         count={
           visible.length === rows.length
             ? `${rows.length}${cursor ? "+" : ""}`
@@ -348,7 +358,7 @@ export function AtlasChangeTable() {
           disabled={load.kind === "loading"}
         >
           <Icon name="refresh" size="sm" aria-hidden="true" />
-          刷新
+          {tShared("common.refresh")}
         </Button>
       </FilterBar>
 
@@ -356,13 +366,13 @@ export function AtlasChangeTable() {
         columns={[
           {
             id: "time",
-            header: "时间",
+            header: tShared("columns.time"),
             width: "sm",
-            cell: (r: AtlasChangeRecord) => formatTime(r.occurredAt),
+            cell: (r: AtlasChangeRecord) => formatTime(r.occurredAt, locale),
           },
           {
             id: "operator",
-            header: "操作者",
+            header: tShared("columns.actor"),
             width: "sm",
             cell: (r: AtlasChangeRecord) => (
               <span className="flex flex-col gap-2xs">
@@ -383,7 +393,7 @@ export function AtlasChangeTable() {
           },
           {
             id: "target",
-            header: "对象",
+            header: tShared("columns.target"),
             cell: (r: AtlasChangeRecord) => (
               <span className="flex flex-col gap-2xs">
                 <span className="text-label-md text-foreground">
@@ -397,7 +407,7 @@ export function AtlasChangeTable() {
           },
           {
             id: "action",
-            header: "动作",
+            header: tShared("columns.action"),
             align: "center",
             width: "xs",
             cell: (r: AtlasChangeRecord) => r.action,
@@ -447,7 +457,7 @@ export function AtlasChangeTable() {
             items={[
               {
                 id: "copy",
-                label: "复制该行",
+                label: tShared("common.copyRow"),
                 icon: "copy",
                 onSelect: () => void copyRow(r),
               },
@@ -465,7 +475,9 @@ export function AtlasChangeTable() {
               onClick={() => void loadMore()}
               disabled={loadingMore}
             >
-              {loadingMore ? "加载中…" : "加载更多"}
+              {loadingMore
+                ? tShared("common.loading")
+                : tShared("common.loadMore")}
             </Button>
           ) : rows.length > 0 ? (
             <p className="text-body-sm text-muted-foreground">已经到底了。</p>

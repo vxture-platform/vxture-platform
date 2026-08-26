@@ -37,6 +37,7 @@ import {
   type FormEvent,
 } from "react";
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import {
   ActionMenu,
@@ -70,7 +71,7 @@ import {
   type StatusBadgeTone,
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
-import { confirmLabels } from "@/lib/destructive";
+import { useConfirmLabels } from "@/lib/destructive";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { deleteFailureToast } from "@/features/atlas/lifecycle";
 import {
@@ -277,11 +278,15 @@ const HEALTH_META: Record<
 };
 
 /** 与本仓其它页同一份写法（`RunosChangeTable` / 审计页）：解析失败就原样显示。 */
-function formatTime(iso: string): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——
+   中文 `2026/8/18 10:37`，英文 `8/18/2026, 10:37`。写死的后果不是「没翻译」，
+   是英文用户会把 8/18 读成 18 月。（数字与百分比两种语言逐字相同，所以那些
+   没跟着改，见 scripts/guardrails 旁的说明。） */
+function formatTime(iso: string, locale: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString("zh-CN", { hour12: false });
+    : d.toLocaleString(locale, { hour12: false });
 }
 
 /**
@@ -784,6 +789,9 @@ export default function ModelServicePage() {
 }
 
 function ModelServiceContent() {
+  const locale = useLocale();
+  const tShared = useTranslations();
+  const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const { runWithStepUp } = useStepUp();
@@ -1597,7 +1605,7 @@ function ModelServiceContent() {
                 <span
                   title={
                     m.state === "deprecated" && m.deprecatedAt
-                      ? `弃用于 ${formatTime(m.deprecatedAt)}`
+                      ? `弃用于 ${formatTime(m.deprecatedAt, locale)}`
                       : undefined
                   }
                 >
@@ -1710,7 +1718,7 @@ function ModelServiceContent() {
                            「已下线」用 `!isServing()` 而不是 `!isEnabled()`：
                            `deprecated` 的 `is_active` 仍是 true，按 isEnabled
                            判会把一个弃用中的模型标成「已下线」，然后被 Atlas 拒。 */
-                        confirm: confirmLabels({
+                        confirm: withLabels({
                           verb: "删除",
                           target: `模型 ${m.modelCode}`,
                           consequence:
@@ -1742,14 +1750,17 @@ function ModelServiceContent() {
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取 Provider 与模型。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取 Provider 与模型。"
+      />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
@@ -1824,7 +1835,7 @@ function ModelServiceContent() {
           <FilterBar
             view="list"
             onViewChange={() => {}}
-            cardsDisabledReason="卡片视图已下线，改用列表"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={
               filtered.length === providers.length
                 ? `${providers.length} 家 · ${models.length} 个模型`
@@ -1870,11 +1881,11 @@ function ModelServiceContent() {
                 setStatusFilter(e.target.value as typeof statusFilter);
                 pager.resetPage();
               }}
-              aria-label="状态筛选"
+              aria-label={tShared("filters.stateLabel")}
             >
-              <option value="all">全部状态</option>
-              <option value="active">启用</option>
-              <option value="inactive">停用</option>
+              <option value="all">{tShared("filters.allStates")}</option>
+              <option value="active">{tShared("actions.enable")}</option>
+              <option value="inactive">{tShared("actions.disable")}</option>
             </NativeSelect>
           </FilterBar>
         }
@@ -1901,7 +1912,7 @@ function ModelServiceContent() {
               },
               {
                 id: "type",
-                header: "类型",
+                header: tShared("columns.kind"),
                 align: "center",
                 width: "xs",
                 cell: (r: ModelProviderRecord) =>
@@ -1954,7 +1965,7 @@ function ModelServiceContent() {
               },
               {
                 id: "health",
-                header: "健康",
+                header: tShared("columns.health"),
                 align: "center",
                 width: "xs",
                 cell: (r: ModelProviderRecord) => (
@@ -1968,7 +1979,7 @@ function ModelServiceContent() {
               },
               {
                 id: "status",
-                header: "状态",
+                header: tShared("columns.state"),
                 align: "center",
                 width: "xs",
                 cell: (r: ModelProviderRecord) => (
@@ -1976,7 +1987,9 @@ function ModelServiceContent() {
                     tone={isEnabled(r.state) ? "success" : "neutral"}
                     dot
                   >
-                    {isEnabled(r.state) ? "启用" : "停用"}
+                    {isEnabled(r.state)
+                      ? tShared("actions.enable")
+                      : tShared("actions.disable")}
                   </StatusBadge>
                 ),
               },
@@ -2005,7 +2018,7 @@ function ModelServiceContent() {
                         },
                         {
                           id: "edit",
-                          label: "编辑",
+                          label: tShared("common.edit"),
                           icon: "edit",
                           separatorBefore: true,
                           onSelect: () => openProviderEdit(r),
@@ -2060,7 +2073,7 @@ function ModelServiceContent() {
                         isEnabled(r.state)
                           ? {
                               id: "disable",
-                              label: "停用",
+                              label: tShared("actions.disable"),
                               icon: "pause" as const,
                               separatorBefore: true,
                               onSelect: () =>
@@ -2072,7 +2085,7 @@ function ModelServiceContent() {
                             }
                           : {
                               id: "enable",
-                              label: "启用",
+                              label: tShared("actions.enable"),
                               icon: "play" as const,
                               separatorBefore: true,
                               onSelect: () =>
@@ -2084,13 +2097,13 @@ function ModelServiceContent() {
                             },
                         {
                           id: "delete",
-                          label: "删除",
+                          label: tShared("actions.delete"),
                           icon: "trash",
                           danger: true,
                           /* Provider 是两值状态（没有 deprecated 档），所以
                              「已停用」用 `!isEnabled()` 就够。 */
-                          confirm: confirmLabels({
-                            verb: "删除",
+                          confirm: withLabels({
+                            verb: tShared("actions.delete"),
                             target: `Provider ${r.providerName}`,
                             consequence:
                               "删除后不可恢复。不会级联删除名下的任何模型或授权——前置条件不满足时 Atlas 会拒绝并点名是哪些模型挡住了。",
@@ -2138,7 +2151,7 @@ function ModelServiceContent() {
         size="xl"
         title={editingProvider ? "编辑 Provider" : "接入 Provider"}
         description="Provider＝模型的供应方（收费主体）。密钥、账单都按它归属；同一个模型由多家供应时，每家各接入一次。"
-        submitLabel={editingProvider ? "保存" : "接入"}
+        submitLabel={editingProvider ? tShared("common.save") : "接入"}
         submitting={submitting}
         submitDisabled={!providerDraftValid}
         onSubmit={submitProvider}
@@ -2190,7 +2203,9 @@ function ModelServiceContent() {
                 </FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="provider-type">类型</FieldLabel>
+                <FieldLabel htmlFor="provider-type">
+                  {tShared("columns.kind")}
+                </FieldLabel>
                 <NativeSelect
                   id="provider-type"
                   value={providerDraft.providerType}
@@ -2475,7 +2490,7 @@ function ModelServiceContent() {
         size="xl"
         title={editingModel ? "编辑模型" : "注册模型"}
         description="一条模型＝从某家 Provider 接入的某个模型。编码与类型创建后不可改，其余随时可调。"
-        submitLabel={editingModel ? "保存" : "注册"}
+        submitLabel={editingModel ? tShared("common.save") : "注册"}
         submitting={submitting}
         submitDisabled={!modelDraftValid}
         onSubmit={submitModel}
@@ -2551,7 +2566,9 @@ function ModelServiceContent() {
                   </FieldDescription>
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="model-type">类型</FieldLabel>
+                  <FieldLabel htmlFor="model-type">
+                    {tShared("columns.kind")}
+                  </FieldLabel>
                   <NativeSelect
                     id="model-type"
                     value={modelDraft.modelType}
@@ -2902,7 +2919,7 @@ function ModelServiceContent() {
         title={
           verifyResult ? `验证结果 · ${verifyResult.providerCode}` : "验证结果"
         }
-        submitLabel="关闭"
+        submitLabel={tShared("common.close")}
         cancelLabel=""
         onSubmit={(e) => {
           e.preventDefault();
@@ -2954,7 +2971,7 @@ function ModelServiceContent() {
           if (!open) setProbeResult(null);
         }}
         title={probeResult ? `自检结果 · ${probeResult.modelCode}` : "自检结果"}
-        submitLabel="关闭"
+        submitLabel={tShared("common.close")}
         cancelLabel=""
         onSubmit={(e) => {
           e.preventDefault();
@@ -3020,17 +3037,20 @@ function ModelServiceContent() {
               description="密钥只在这里录入一次，之后任何读接口都不会回显——包括这个页面自己。忘记了只能轮换，不能查看。"
             />
             {keysLoad.kind === "loading" ? (
-              <EmptyState title="读取中…" description="正在读取密钥清单。" />
+              <EmptyState
+                title={tShared("common.loading")}
+                description="正在读取密钥清单。"
+              />
             ) : keysLoad.kind === "error" ? (
               <EmptyState
-                title="读取失败"
+                title={tShared("common.loadFailed")}
                 description={keysLoad.message}
                 action={
                   <Button
                     variant="secondary"
                     onClick={() => void loadKeys(keysProvider.providerCode)}
                   >
-                    重试
+                    {tShared("common.retry")}
                   </Button>
                 }
               />
@@ -3059,11 +3079,13 @@ function ModelServiceContent() {
                             tone={isEnabled(k.state) ? "success" : "neutral"}
                             dot
                           >
-                            {isEnabled(k.state) ? "启用" : "停用"}
+                            {isEnabled(k.state)
+                              ? tShared("actions.enable")
+                              : tShared("actions.disable")}
                           </StatusBadge>
                         </div>
                         <span className="text-body-sm text-muted-foreground">
-                          最近轮换：{k.lastRotatedAt ?? "从未"}
+                          最近轮换：{k.lastRotatedAt ?? tShared("common.never")}
                         </span>
                       </div>
                       {canManageProviders ? (
@@ -3082,7 +3104,9 @@ function ModelServiceContent() {
                             },
                             {
                               id: "toggle",
-                              label: isEnabled(k.state) ? "停用" : "启用",
+                              label: isEnabled(k.state)
+                                ? tShared("actions.disable")
+                                : tShared("actions.enable"),
                               icon: isEnabled(k.state) ? "pause" : "play",
                               onSelect: () => void toggleKeyActive(k),
                             },

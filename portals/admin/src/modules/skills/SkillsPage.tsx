@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import {
   Button,
   DataTable,
@@ -115,11 +116,12 @@ function SkillToolbar({
   onCategoryFilterChange: (v: string) => void;
   onViewModeChange: (v: ViewMode) => void;
 }) {
+  const tShared = useTranslations();
   return (
     <FilterBar
       view={viewMode}
       onViewChange={onViewModeChange}
-      cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+      cardsDisabledReason={tShared("common.cardsRetired")}
       count={`${total} 个技能`}
       aria-label="技能筛选"
       search={
@@ -146,10 +148,10 @@ function SkillToolbar({
         }
         aria-label="技能状态"
       >
-        <option value="all">全部状态</option>
+        <option value="all">{tShared("filters.allStates")}</option>
         <option value="active">已上线</option>
         <option value="disabled">已停用</option>
-        <option value="draft">草稿</option>
+        <option value="draft">{tShared("status.generic.draft")}</option>
       </NativeSelect>
       {categories.length > 0 ? (
         <NativeSelect
@@ -184,50 +186,54 @@ const SKILL_STATUS_TONE: Record<SkillRecord["status"], StatusBadgeTone> = {
   draft: "info",
 };
 
-const SKILL_COLUMNS: readonly DataTableColumn<SkillRecord>[] = [
-  {
-    id: "skill",
-    header: "技能",
-    cell: (skill) => (
-      <TableTitleCell title={skill.skillName} description={skill.skillCode} />
-    ),
-  },
-  { id: "category", header: "分类", cell: (skill) => skill.category },
-  { id: "version", header: "版本", cell: (skill) => skill.version },
-  {
-    id: "endpoint",
-    header: "调用端点",
-    cell: (skill) => (
-      <span title={skill.endpointUrl ?? EMPTY_MARK}>
-        {skill.endpointUrl ?? EMPTY_MARK}
-      </span>
-    ),
-  },
-  {
-    id: "invocations",
-    header: "调用次数",
-    align: "right",
-    cell: (skill) => formatNumber(skill.invocations),
-  },
-  {
-    id: "status",
-    header: "状态",
-    align: "center",
-    cell: (skill) => (
-      <span className="inline-flex flex-wrap items-center justify-center gap-2xs">
-        <StatusBadge tone={SKILL_STATUS_TONE[skill.status]}>
-          {STATUS_LABELS[skill.status]}
-        </StatusBadge>
-        {skill.isSystem ? <StatusBadge tone="info">系统</StatusBadge> : null}
-      </span>
-    ),
-  },
-  {
-    id: "updated",
-    header: "更新时间",
-    cell: (skill) => formatDate(skill.updatedAt),
-  },
-];
+/* 从模块级常量改成收 `locale` 的工厂：常量在模块加载时就求值了，那一刻
+   没有任何运行时上下文，而列里的日期要按界面语言排。 */
+function skillColumns(locale: string): readonly DataTableColumn<SkillRecord>[] {
+  return [
+    {
+      id: "skill",
+      header: "技能",
+      cell: (skill) => (
+        <TableTitleCell title={skill.skillName} description={skill.skillCode} />
+      ),
+    },
+    { id: "category", header: "分类", cell: (skill) => skill.category },
+    { id: "version", header: "版本", cell: (skill) => skill.version },
+    {
+      id: "endpoint",
+      header: "调用端点",
+      cell: (skill) => (
+        <span title={skill.endpointUrl ?? EMPTY_MARK}>
+          {skill.endpointUrl ?? EMPTY_MARK}
+        </span>
+      ),
+    },
+    {
+      id: "invocations",
+      header: "调用次数",
+      align: "right",
+      cell: (skill) => formatNumber(skill.invocations),
+    },
+    {
+      id: "status",
+      header: "状态",
+      align: "center",
+      cell: (skill) => (
+        <span className="inline-flex flex-wrap items-center justify-center gap-2xs">
+          <StatusBadge tone={SKILL_STATUS_TONE[skill.status]}>
+            {STATUS_LABELS[skill.status]}
+          </StatusBadge>
+          {skill.isSystem ? <StatusBadge tone="info">系统</StatusBadge> : null}
+        </span>
+      ),
+    },
+    {
+      id: "updated",
+      header: "更新时间",
+      cell: (skill) => formatDate(skill.updatedAt, locale),
+    },
+  ];
+}
 
 // ─── 子组件：卡片视图 ──────────────────────────────────────────────────────────
 
@@ -264,6 +270,11 @@ function SkillCards({ skills }: { skills: SkillRecord[] }) {
 // ─── 主组件 ───────────────────────────────────────────────────────────────────
 
 export function SkillsPage() {
+  const locale = useLocale();
+  /* 钉在 locale 上：工厂每次调用都新建数组，而这套列此前是模块常量、
+     身份稳定。不 memo 等于每次渲染换一套列。 */
+  const tableColumns = useMemo(() => skillColumns(locale), [locale]);
+  const tShared = useTranslations();
   const [skills, setSkills] = useState<SkillRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -344,7 +355,7 @@ export function SkillsPage() {
         table={
           viewMode === "list" ? (
             <DataTable
-              columns={SKILL_COLUMNS}
+              columns={tableColumns}
               rows={pageSkills}
               rowKey={(skill) => skill.id}
               loading={loading}
@@ -366,7 +377,7 @@ export function SkillsPage() {
                   title="暂无技能"
                   description={
                     search || statusFilter !== "all" || categoryFilter
-                      ? "尝试调整筛选条件"
+                      ? tShared("common.adjustFiltersHint")
                       : "尚未接入任何 AI 技能，请通过 API 注册技能"
                   }
                 />
@@ -403,7 +414,7 @@ export function SkillsPage() {
               title="暂无技能"
               description={
                 search || statusFilter !== "all" || categoryFilter
-                  ? "尝试调整筛选条件"
+                  ? tShared("common.adjustFiltersHint")
                   : "尚未接入任何 AI 技能，请通过 API 注册技能"
               }
             />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -163,6 +164,7 @@ function ServicePlanActionsMenu({
   item: ServicePlanTierItem;
   onViewDetails: () => void;
 }) {
+  const tShared = useTranslations();
   return (
     <div
       className="vx-tenant-actions"
@@ -173,7 +175,7 @@ function ServicePlanActionsMenu({
         items={[
           {
             id: "details",
-            label: "查看详情",
+            label: tShared("actions.viewDetail"),
             icon: "arrow-right",
             onSelect: onViewDetails,
           },
@@ -301,6 +303,7 @@ function ServicePlanGroupBlock({
     tierCode: ProductSolutionTier["tierCode"],
   ) => void;
 }) {
+  const locale = useLocale();
   const partnerProductCount = group.solution.products.filter(
     (product) => product.source === "partner",
   ).length;
@@ -333,7 +336,7 @@ function ServicePlanGroupBlock({
         <span>{formatNumber(group.tiers.length)} 套餐版本</span>
         <span>{formatNumber(group.solution.subscriptionCount)} 订阅</span>
         <span>{formatMoney(group.solution.monthlyRevenue)} / 月</span>
-        <span>{formatDate(group.solution.updatedAt)} 更新</span>
+        <span>{formatDate(group.solution.updatedAt, locale)} 更新</span>
       </div>
 
       <div
@@ -359,6 +362,7 @@ function ServicePlanGroupBlock({
 }
 
 export function ServicePlansPage() {
+  const tShared = useTranslations();
   const router = useRouter();
   const [solutions, setSolutions] = useState<ProductSolutionRecord[]>([]);
   const [plans, setPlans] = useState<ProductPlanRecord[]>([]);
@@ -544,7 +548,7 @@ export function ServicePlansPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredTierItems.length)}
             aria-label="服务套餐筛选"
             search={
@@ -574,10 +578,10 @@ export function ServicePlansPage() {
                 }
                 aria-label="套餐状态"
               >
-                <option value="all">全部状态</option>
-                <option value="active">启用</option>
-                <option value="draft">草稿</option>
-                <option value="archived">归档</option>
+                <option value="all">{tShared("filters.allStates")}</option>
+                <option value="active">{tShared("actions.enable")}</option>
+                <option value="draft">{tShared("status.generic.draft")}</option>
+                <option value="archived">{tShared("actions.archive")}</option>
               </NativeSelect>
               <NativeSelect
                 className="vx-input vx-tenant-select"
@@ -627,7 +631,7 @@ export function ServicePlansPage() {
           >
             {loading ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
 
@@ -656,7 +660,7 @@ export function ServicePlansPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

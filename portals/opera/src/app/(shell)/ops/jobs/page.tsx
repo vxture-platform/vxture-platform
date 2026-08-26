@@ -22,6 +22,7 @@
  * 就不额外设卡）。刷新节奏 30s，另留手动刷新按钮。 */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   ActionMenu,
   Badge,
@@ -186,6 +187,7 @@ async function copyRowText(
 }
 
 export default function JobSchedulerPage() {
+  const tShared = useTranslations();
   const { toast } = useToast();
   const [snapshot, setSnapshot] =
     useState<JobSchedulerSnapshot>(EMPTY_SNAPSHOT);
@@ -274,18 +276,18 @@ export default function JobSchedulerPage() {
             disabled={load.kind === "loading" || refreshing}
           >
             <Icon name="refresh" size="sm" aria-hidden="true" />
-            刷新
+            {tShared("common.refresh")}
           </Button>
         }
       />
 
       {load.kind === "error" ? (
         <EmptyState
-          title="读取失败"
+          title={tShared("common.loadFailed")}
           description={load.message}
           action={
             <Button variant="secondary" onClick={() => void reload()}>
-              重试
+              {tShared("common.retry")}
             </Button>
           }
         />
@@ -333,7 +335,7 @@ export default function JobSchedulerPage() {
             <FilterBar
               view="list"
               onViewChange={() => {}}
-              cardsDisabledReason="卡片视图已下线，改用列表"
+              cardsDisabledReason={tShared("common.cardsRetired")}
               count={
                 filteredJobs.length === jobs.length
                   ? jobs.length
@@ -425,7 +427,7 @@ export default function JobSchedulerPage() {
                 },
                 {
                   id: "status",
-                  header: "状态",
+                  header: tShared("columns.state"),
                   align: "center",
                   width: "xs",
                   cell: (r: JobHeartbeatItem) => (
@@ -446,7 +448,7 @@ export default function JobSchedulerPage() {
                   items={[
                     {
                       id: "copy",
-                      label: "复制该行",
+                      label: tShared("common.copyRow"),
                       icon: "copy",
                       onSelect: () =>
                         void copyRowText(
@@ -479,7 +481,11 @@ export default function JobSchedulerPage() {
               }
               empty={
                 <EmptyState
-                  title={load.kind === "loading" ? "读取中…" : "暂无作业心跳"}
+                  title={
+                    load.kind === "loading"
+                      ? tShared("common.loading")
+                      : "暂无作业心跳"
+                  }
                   description={
                     load.kind === "loading"
                       ? "正在读取后台作业状态。"
@@ -541,7 +547,7 @@ export default function JobSchedulerPage() {
             <FilterBar
               view="list"
               onViewChange={() => {}}
-              cardsDisabledReason="卡片视图已下线，改用列表"
+              cardsDisabledReason={tShared("common.cardsRetired")}
               count={
                 filteredIssues.length === queue.recentIssues.length
                   ? queue.recentIssues.length
@@ -626,7 +632,7 @@ export default function JobSchedulerPage() {
                 },
                 {
                   id: "status",
-                  header: "状态",
+                  header: tShared("columns.state"),
                   align: "center",
                   width: "xs",
                   cell: (r: WebhookDeliveryIssue) => (
@@ -647,7 +653,7 @@ export default function JobSchedulerPage() {
                   items={[
                     {
                       id: "copy",
-                      label: "复制该行",
+                      label: tShared("common.copyRow"),
                       icon: "copy",
                       onSelect: () =>
                         void copyRowText(
@@ -680,7 +686,9 @@ export default function JobSchedulerPage() {
               empty={
                 <EmptyState
                   title={
-                    load.kind === "loading" ? "读取中…" : "没有失败或死信投递"
+                    load.kind === "loading"
+                      ? tShared("common.loading")
+                      : "没有失败或死信投递"
                   }
                   description={
                     load.kind === "loading"

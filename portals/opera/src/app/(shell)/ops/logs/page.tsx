@@ -36,6 +36,7 @@
  * 现在两半同形。 */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ActionMenu,
   Badge,
@@ -173,15 +174,21 @@ function toPlatformRows(snapshot: JobSchedulerSnapshot): PlatformLogRow[] {
   return [...jobRows, ...webhookRows];
 }
 
-function formatTime(iso: string): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——
+   中文 `2026/8/18 10:37`，英文 `8/18/2026, 10:37`。写死的后果不是「没翻译」，
+   是英文用户会把 8/18 读成 18 月。（数字与百分比两种语言逐字相同，所以那些
+   没跟着改，见 scripts/guardrails 旁的说明。） */
+function formatTime(iso: string, locale: string): string {
   if (!iso) return "—";
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString("zh-CN", { hour12: false });
+    : d.toLocaleString(locale, { hour12: false });
 }
 
 export default function LogsPage() {
+  const locale = useLocale();
+  const tShared = useTranslations();
   const { toast } = useToast();
 
   /* ── Atlas 侧状态 ─────────────────────────────────────────────────────── */
@@ -254,7 +261,7 @@ export default function LogsPage() {
     } catch (error) {
       toast({
         tone: "danger",
-        title: "加载更多失败",
+        title: tShared("common.loadMoreFailed"),
         ...(error instanceof OperaApiError && error.message
           ? { description: error.message }
           : {}),
@@ -305,7 +312,7 @@ export default function LogsPage() {
 
   const copyAtlasRow = async (r: AtlasRequestLogRecord) => {
     const text = [
-      formatTime(r.createdAt),
+      formatTime(r.createdAt, locale),
       r.requestId,
       /* 带上 taskId：复制一行最常见的下一步就是拿它去 Runos 那张表里对。 */
       r.taskId ?? "—",
@@ -317,12 +324,12 @@ export default function LogsPage() {
     ].join(" · ");
     try {
       await navigator.clipboard.writeText(text);
-      toast({ tone: "success", title: "已复制该行到剪贴板" });
+      toast({ tone: "success", title: tShared("common.rowCopied") });
     } catch {
       toast({
         tone: "danger",
-        title: "复制失败",
-        description: "浏览器拒绝了剪贴板访问，请手动选中复制。",
+        title: tShared("common.copyFailed"),
+        description: tShared("common.copyDenied"),
       });
     }
   };
@@ -336,26 +343,29 @@ export default function LogsPage() {
     ].join(" · ");
     try {
       await navigator.clipboard.writeText(text);
-      toast({ tone: "success", title: "已复制该行到剪贴板" });
+      toast({ tone: "success", title: tShared("common.rowCopied") });
     } catch {
       toast({
         tone: "danger",
-        title: "复制失败",
-        description: "浏览器拒绝了剪贴板访问，请手动选中复制。",
+        title: tShared("common.copyFailed"),
+        description: tShared("common.copyDenied"),
       });
     }
   };
 
   const atlasEmpty =
     atlasLoad.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取 Atlas 请求日志。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取 Atlas 请求日志。"
+      />
     ) : atlasLoad.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={atlasLoad.message}
         action={
           <Button variant="secondary" onClick={() => void reloadAtlas()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
@@ -374,14 +384,17 @@ export default function LogsPage() {
 
   const platformEmpty =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取平台运行日志。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取平台运行日志。"
+      />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reloadPlatform()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
@@ -429,14 +442,14 @@ export default function LogsPage() {
             disabled={atlasLoad.kind === "loading"}
           >
             <Icon name="refresh" size="sm" aria-hidden="true" />
-            刷新
+            {tShared("common.refresh")}
           </Button>
         }
       >
         <FilterBar
           view="list"
           onViewChange={() => {}}
-          cardsDisabledReason="卡片视图已下线，改用列表"
+          cardsDisabledReason={tShared("common.cardsRetired")}
           count={atlasCursor ? `${atlasRows.length}+` : atlasRows.length}
         >
           <InputGroup className="grow basis-media-3xl max-w-panel-sm">
@@ -488,9 +501,9 @@ export default function LogsPage() {
             wrapperClassName="w-fit"
             value={atlasStatus}
             onChange={(e) => setAtlasStatus(e.target.value)}
-            aria-label="状态筛选"
+            aria-label={tShared("filters.stateLabel")}
           >
-            <option value="all">全部状态</option>
+            <option value="all">{tShared("filters.allStates")}</option>
             {ATLAS_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -503,9 +516,10 @@ export default function LogsPage() {
           columns={[
             {
               id: "time",
-              header: "时间",
+              header: tShared("columns.time"),
               width: "sm",
-              cell: (r: AtlasRequestLogRecord) => formatTime(r.createdAt),
+              cell: (r: AtlasRequestLogRecord) =>
+                formatTime(r.createdAt, locale),
             },
             {
               id: "requestId",
@@ -577,7 +591,7 @@ export default function LogsPage() {
             },
             {
               id: "status",
-              header: "状态",
+              header: tShared("columns.state"),
               align: "center",
               width: "xs",
               cell: (r: AtlasRequestLogRecord) => (
@@ -598,7 +612,7 @@ export default function LogsPage() {
               items={[
                 {
                   id: "copy",
-                  label: "复制该行",
+                  label: tShared("common.copyRow"),
                   icon: "copy",
                   onSelect: () => void copyAtlasRow(r),
                 },
@@ -619,7 +633,9 @@ export default function LogsPage() {
                   disabled={loadingMore}
                   onClick={() => void loadMoreAtlas()}
                 >
-                  {loadingMore ? "加载中…" : "加载更多"}
+                  {loadingMore
+                    ? tShared("common.loading")
+                    : tShared("common.loadMore")}
                 </Button>
               ) : null}
             </div>
@@ -645,7 +661,7 @@ export default function LogsPage() {
         <FilterBar
           view="list"
           onViewChange={() => {}}
-          cardsDisabledReason="卡片视图已下线，改用列表"
+          cardsDisabledReason={tShared("common.cardsRetired")}
           count={
             visible.length === rows.length
               ? rows.length
@@ -686,14 +702,14 @@ export default function LogsPage() {
           columns={[
             {
               id: "time",
-              header: "时间",
+              header: tShared("columns.time"),
               width: "sm",
-              cell: (r: PlatformLogRow) => formatTime(r.time),
+              cell: (r: PlatformLogRow) => formatTime(r.time, locale),
               sortable: true,
             },
             {
               id: "source",
-              header: "来源",
+              header: tShared("columns.source"),
               width: "xs",
               cell: (r: PlatformLogRow) => (
                 <Badge variant="secondary">{r.source}</Badge>
@@ -729,7 +745,7 @@ export default function LogsPage() {
               items={[
                 {
                   id: "copy",
-                  label: "复制该行",
+                  label: tShared("common.copyRow"),
                   icon: "copy",
                   onSelect: () => void copyPlatformRow(r),
                 },

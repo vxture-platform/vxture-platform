@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button, Icon, Input, Textarea } from "@vxture/design-system";
 import type {
   BillingBillAction,
@@ -132,6 +133,7 @@ export function BillingBillActionDialog({
   onCancel: () => void;
   onSubmit: (payload: BillingBillActionPayload) => void;
 }) {
+  const tShared = useTranslations();
   const [reason, setReason] = useState("");
   const [discountAmount, setDiscountAmount] = useState("");
   const [amount, setAmount] = useState("");
@@ -341,10 +343,12 @@ export function BillingBillActionDialog({
         ) : null}
         <footer>
           <Button variant="ghost" onClick={onCancel} disabled={busy}>
-            放弃
+            {tShared("actions.discard")}
           </Button>
           <Button type="submit" disabled={!canSubmit}>
-            {busy ? "处理中" : billingBillActionLabel(action)}
+            {busy
+              ? tShared("status.generic.processing")
+              : billingBillActionLabel(action)}
           </Button>
         </footer>
       </form>

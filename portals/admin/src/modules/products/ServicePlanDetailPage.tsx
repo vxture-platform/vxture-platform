@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   Button,
@@ -120,6 +121,8 @@ function ServicePlanDetails({
 }: {
   plan: ProductServicePlanDetailRecord;
 }) {
+  const locale = useLocale();
+  const tShared = useTranslations();
   return (
     <section
       className="vx-product-capability-detail"
@@ -139,8 +142,8 @@ function ServicePlanDetails({
             {plan.isPublic ? "公开" : "内部"}
           </DetailRow>
           <DetailRow label="负责团队">{orUnset(plan.ownerTeam)}</DetailRow>
-          <DetailRow label="更新时间">
-            {orUnset(formatDate(plan.updatedAt))}
+          <DetailRow label={tShared("columns.updatedAt")}>
+            {orUnset(formatDate(plan.updatedAt, locale))}
           </DetailRow>
         </DetailList>
         <div className="vx-product-capability-description">
@@ -153,7 +156,9 @@ function ServicePlanDetails({
         <DetailSectionHeading icon="chart-bar" title="配额价格" />
         <DetailList columns={3}>
           <DetailRow label="价格">{orUnset(plan.price.priceLabel)}</DetailRow>
-          <DetailRow label="币种">{orUnset(plan.price.currency)}</DetailRow>
+          <DetailRow label={tShared("columns.currency")}>
+            {orUnset(plan.price.currency)}
+          </DetailRow>
           <DetailRow label="周期">
             {plan.price.periodType === "contract"
               ? "合同约定"
@@ -240,6 +245,7 @@ export function ServicePlanDetailPage({
   solutionCode: string;
   tierCode: string;
 }) {
+  const tShared = useTranslations();
   const [plan, setPlan] = useState<ProductServicePlanDetailRecord | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -274,7 +280,7 @@ export function ServicePlanDetailPage({
               <Button asChild variant="outline">
                 <Link href="/service-plans">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
             }
@@ -304,7 +310,7 @@ export function ServicePlanDetailPage({
               <Button asChild variant="outline">
                 <Link href="/service-plans">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
               {plan ? (
@@ -333,7 +339,7 @@ export function ServicePlanDetailPage({
         </>
       ) : (
         <section className="vx-tenant-directory__header">
-          <span>读取中</span>
+          <span>{tShared("common.loading")}</span>
         </section>
       )}
     </DetailPageTemplate>

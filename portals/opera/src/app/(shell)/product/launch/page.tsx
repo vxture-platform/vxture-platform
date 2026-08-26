@@ -27,6 +27,7 @@
  *    自动停用一个正在跑的产品，是把监测信号变成破坏性动作。 */
 
 import { Suspense, useCallback, useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -93,6 +94,8 @@ export default function ProductLaunchPage() {
 }
 
 function ProductLaunch() {
+  const locale = useLocale();
+  const tShared = useTranslations();
   const { toast } = useToast();
   const router = useRouter();
   const productId = useSearchParams().get("productId") ?? "";
@@ -147,7 +150,7 @@ function ProductLaunch() {
       try {
         const results = await runLaunchChecks(p);
         setChecks(results);
-        setCheckedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
+        setCheckedAt(new Date().toLocaleString(locale, { hour12: false }));
         /* 把能映射到检查项的结果写回检查单（`checked_by` 由 BFF 填当前操作员；
            DDL 预留的"自动校验为 NULL"要等 BFF 支持自动标记时再用）。写失败不影响
            页面上的结论——结论来自刚跑完的这一次，不是来自库里那一行。 */
@@ -172,7 +175,10 @@ function ProductLaunch() {
         setRunning(false);
       }
     },
-    [],
+    /* `locale` 进依赖：回调里把检查时刻格式化成字符串存进 state。这里加依赖
+       是安全的——没有任何 effect 依赖 `runChecks`（只被 `confirmLaunch` 和一个
+       onClick 调用），不是 `reload` 那种「加进依赖就无限重跑」的形状。 */
+    [locale],
   );
 
   /** 确认上线：**先重跑**再判，不看页面上已有的结果。 */
@@ -246,11 +252,11 @@ function ProductLaunch() {
       <ViewLayout>
         <ViewHeader icon="rocket" title="产品上线" />
         <EmptyState
-          title="读取失败"
+          title={tShared("common.loadFailed")}
           description={load.kind === "error" ? load.message : "产品不存在。"}
           action={
             <Button variant="secondary" onClick={() => void reload()}>
-              重试
+              {tShared("common.retry")}
             </Button>
           }
         />
@@ -262,7 +268,10 @@ function ProductLaunch() {
     return (
       <ViewLayout>
         <ViewHeader icon="rocket" title="产品上线" />
-        <EmptyState title="读取中…" description="正在读取产品信息。" />
+        <EmptyState
+          title={tShared("common.loading")}
+          description="正在读取产品信息。"
+        />
       </ViewLayout>
     );
   }

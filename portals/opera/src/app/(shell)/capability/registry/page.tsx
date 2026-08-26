@@ -93,8 +93,9 @@ import {
   type StatusBadgeTone,
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
+import { useTranslations } from "next-intl";
 import { api, OperaApiError } from "@/lib/api";
-import { confirmLabels } from "@/lib/destructive";
+import { useConfirmLabels } from "@/lib/destructive";
 import { RISK_LEVEL_META } from "@/lib/status";
 
 const MANAGE = "capability:runos.manage";
@@ -507,6 +508,8 @@ type LoadState =
   | { kind: "ready" };
 
 export default function CapabilitiesPage() {
+  const tShared = useTranslations();
+  const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const canManage = can(MANAGE);
@@ -1075,21 +1078,24 @@ export default function CapabilitiesPage() {
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取 Capability 清单。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取 Capability 清单。"
+      />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
     ) : filtered.length !== rows.length ? (
       <EmptyState
         title="没有匹配的 Capability"
-        description="换个关键词或筛选条件再看。"
+        description={tShared("common.noMatchHint")}
       />
     ) : (
       <EmptyState
@@ -1130,7 +1136,7 @@ export default function CapabilitiesPage() {
           <FilterBar
             view="list"
             onViewChange={() => {}}
-            cardsDisabledReason="卡片视图已下线，改用列表"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={
               filtered.length === rows.length
                 ? rows.length
@@ -1259,7 +1265,9 @@ export default function CapabilitiesPage() {
                     {r.category ? (
                       <Badge variant="secondary">{r.category}</Badge>
                     ) : (
-                      <Badge variant="outline">未分类</Badge>
+                      <Badge variant="outline">
+                        {tShared("common.uncategorized")}
+                      </Badge>
                     )}
                     {r.tags && r.tags.length > 0 ? (
                       <span className="flex flex-wrap gap-2xs">
@@ -1288,7 +1296,7 @@ export default function CapabilitiesPage() {
               },
               {
                 id: "type",
-                header: "类型",
+                header: tShared("columns.kind"),
                 align: "center",
                 width: "xs",
                 cell: (r: CapabilityRecord) => (
@@ -1374,7 +1382,9 @@ export default function CapabilitiesPage() {
             </Field>
             <div className="grid grid-cols-2 gap-md">
               <Field>
-                <FieldLabel htmlFor="cap-type">类型</FieldLabel>
+                <FieldLabel htmlFor="cap-type">
+                  {tShared("columns.kind")}
+                </FieldLabel>
                 <NativeSelect
                   id="cap-type"
                   value={draft.primitiveType}
@@ -1595,17 +1605,20 @@ export default function CapabilitiesPage() {
         }
       >
         {detailLoad.kind === "loading" ? (
-          <EmptyState title="读取中…" description="正在读取详情。" />
+          <EmptyState
+            title={tShared("common.loading")}
+            description="正在读取详情。"
+          />
         ) : detailLoad.kind === "error" ? (
           <EmptyState
-            title="读取失败"
+            title={tShared("common.loadFailed")}
             description={detailLoad.message}
             action={
               <Button
                 variant="secondary"
                 onClick={() => detailId && void loadDetail(detailId)}
               >
-                重试
+                {tShared("common.retry")}
               </Button>
             }
           />
@@ -1816,7 +1829,7 @@ export default function CapabilitiesPage() {
                                 icon: "prohibit",
                                 danger: true,
                                 disabled: v.state === "withdrawn",
-                                confirm: confirmLabels({
+                                confirm: withLabels({
                                   verb: "撤下",
                                   target: `版本 ${v.version}`,
                                   /* 「不是立刻」这一句必须留：撤版本与禁端点都受
@@ -2019,7 +2032,7 @@ export default function CapabilitiesPage() {
                   variant="secondary"
                   onClick={() => setEndpointDialog(null)}
                 >
-                  取消
+                  {tShared("actions.cancel")}
                 </Button>
                 <Button
                   type="submit"
@@ -2102,7 +2115,7 @@ export default function CapabilitiesPage() {
                 variant="secondary"
                 onClick={() => setCertOpen(false)}
               >
-                取消
+                {tShared("actions.cancel")}
               </Button>
               {/* 四条复核依据缺一条就提交不了——上游是整批 400，让人填完再发比
                   发出去挨一句看不懂的报错好。 */}
@@ -2128,7 +2141,7 @@ export default function CapabilitiesPage() {
           detail ? `编辑「${detail.capabilityId}」` : "编辑 Capability 元数据"
         }
         description="能改标题、负责团队、分类与标签。capabilityId / providerId / primitiveType 是身份列，runos 侧锁死——provider 转让是另一件受治理的事，M1 没有这条路径。"
-        submitLabel="保存"
+        submitLabel={tShared("common.save")}
         submitting={submitting}
         submitDisabled={
           metaDraft == null ||

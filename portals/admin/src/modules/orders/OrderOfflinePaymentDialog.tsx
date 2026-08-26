@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Button,
   Icon,
@@ -89,6 +90,7 @@ export function OrderOfflinePaymentDialog({
     reason: string;
   }) => void;
 }) {
+  const tShared = useTranslations();
   const remainingAmount = useMemo(() => remainingOrderAmount(order), [order]);
   // Declared order (product_321 P9): the amount is LOCKED to the customer's
   // declared cash-leg amount — full-amount-or-reject, no partial acceptance.
@@ -247,10 +249,10 @@ export function OrderOfflinePaymentDialog({
         ) : null}
         <footer>
           <Button variant="ghost" onClick={onCancel} disabled={busy}>
-            放弃
+            {tShared("actions.discard")}
           </Button>
           <Button type="submit" disabled={busy || !canSubmit}>
-            {busy ? "处理中" : "确认收款"}
+            {busy ? tShared("status.generic.processing") : "确认收款"}
           </Button>
         </footer>
       </form>

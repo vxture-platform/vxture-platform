@@ -45,6 +45,7 @@
  * 刷新节奏放宽到 30s（口径见 20-service-monitor.md §4），另留一个手动刷新按钮。 */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   ActionMenu,
   Badge,
@@ -418,6 +419,7 @@ function productCsvRows(item: ProductHealthItem): string[][] {
 }
 
 export default function ServiceMonitorPage() {
+  const tShared = useTranslations();
   const { toast } = useToast();
   const [items, setItems] = useState<ProductHealthItem[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
@@ -522,8 +524,8 @@ export default function ServiceMonitorPage() {
     } catch {
       toast({
         tone: "danger",
-        title: "复制失败",
-        description: "浏览器拒绝了剪贴板访问，请手动选中复制。",
+        title: tShared("common.copyFailed"),
+        description: tShared("common.copyDenied"),
       });
     }
   };
@@ -579,23 +581,23 @@ export default function ServiceMonitorPage() {
   const emptyState =
     load.kind === "loading" ? (
       <EmptyState
-        title="读取中…"
+        title={tShared("common.loading")}
         description="正在探测各产品 stable 渠道的存活与就绪状态。"
       />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
     ) : filtered ? (
       <EmptyState
         title="没有匹配的产品"
-        description="换个关键词或筛选条件再看。"
+        description={tShared("common.noMatchHint")}
       />
     ) : (
       <EmptyState
@@ -626,7 +628,7 @@ export default function ServiceMonitorPage() {
                 disabled={load.kind === "loading" || refreshing}
               >
                 <Icon name="refresh" size="sm" aria-hidden="true" />
-                刷新
+                {tShared("common.refresh")}
               </Button>
             }
           />
@@ -674,7 +676,7 @@ export default function ServiceMonitorPage() {
           <FilterBar
             view="list"
             onViewChange={() => {}}
-            cardsDisabledReason="卡片视图已下线，改用列表"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={
               visible.length === items.length
                 ? items.length
@@ -721,7 +723,7 @@ export default function ServiceMonitorPage() {
                 setStatusFilter(e.target.value as StatusFilter);
                 pager.resetPage();
               }}
-              aria-label="状态筛选"
+              aria-label={tShared("filters.stateLabel")}
             >
               <option value="all">全部产品</option>
               <option value="attention">需要关注</option>
@@ -753,7 +755,7 @@ export default function ServiceMonitorPage() {
                 /* 折叠开关放在这一列里，不用 DataTable 的展开列——一张表两种行，
                  折叠是产品行自己的事。渠道行这一格留空，缩进即由此而来。 */
                 id: "product",
-                header: "产品",
+                header: tShared("columns.product"),
                 cell: (r: HealthRow) =>
                   r.kind === "product" ? (
                     <div className="flex items-center gap-xs">

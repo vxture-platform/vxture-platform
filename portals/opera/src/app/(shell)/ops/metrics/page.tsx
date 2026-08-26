@@ -18,6 +18,7 @@
  * 这里只展示原始快照，不在前端复刻求导数的假象。 */
 
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActionMenu,
@@ -111,12 +112,14 @@ interface ProviderPerformanceSnapshot {
   providers: ProviderPerformanceRow[];
 }
 
-function formatTime(iso: string | null): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——中文
+   `2026/8/18`，英文 `8/18/2026`。 */
+function formatTime(iso: string | null, locale: string): string {
   if (!iso) return "从未";
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString("zh-CN", { hour12: false });
+    : d.toLocaleString(locale, { hour12: false });
 }
 
 function formatMs(ms: number | null): string {
@@ -170,6 +173,8 @@ type LoadState =
   | { kind: "ready" };
 
 export default function MetricsPage() {
+  const locale = useLocale();
+  const tShared = useTranslations();
   const { toast } = useToast();
   const [snapshot, setSnapshot] = useState<JobSchedulerSnapshot | null>(null);
   const [perf, setPerf] = useState<ProviderPerformanceSnapshot | null>(null);
@@ -264,12 +269,12 @@ export default function MetricsPage() {
     ].join(" · ");
     try {
       await navigator.clipboard.writeText(text);
-      toast({ tone: "success", title: "已复制该行到剪贴板" });
+      toast({ tone: "success", title: tShared("common.rowCopied") });
     } catch {
       toast({
         tone: "danger",
-        title: "复制失败",
-        description: "浏览器拒绝了剪贴板访问，请手动选中复制。",
+        title: tShared("common.copyFailed"),
+        description: tShared("common.copyDenied"),
       });
     }
   };
@@ -423,17 +428,20 @@ export default function MetricsPage() {
           indexStart={1}
           empty={
             summaryLoad.kind === "loading" ? (
-              <EmptyState title="读取中…" description="正在读取窗口聚合。" />
+              <EmptyState
+                title={tShared("common.loading")}
+                description="正在读取窗口聚合。"
+              />
             ) : summaryLoad.kind === "error" ? (
               <EmptyState
-                title="读取失败"
+                title={tShared("common.loadFailed")}
                 description={summaryLoad.message}
                 action={
                   <Button
                     variant="secondary"
                     onClick={() => void reloadSummary(summaryWindow)}
                   >
-                    重试
+                    {tShared("common.retry")}
                   </Button>
                 }
               />
@@ -466,13 +474,13 @@ export default function MetricsPage() {
             {
               id: "process-started",
               label: "进程启动于",
-              value: perf ? formatTime(perf.processStartedAt) : "—",
+              value: perf ? formatTime(perf.processStartedAt, locale) : "—",
               icon: "clock",
             },
             {
               id: "generated-at",
               label: "本次快照时间",
-              value: perf ? formatTime(perf.generatedAt) : "—",
+              value: perf ? formatTime(perf.generatedAt, locale) : "—",
               icon: "refresh",
             },
           ]}
@@ -518,7 +526,8 @@ export default function MetricsPage() {
               id: "lastObserved",
               header: "最近观测",
               width: "sm",
-              cell: (r: ProviderPerformanceRow) => formatTime(r.lastObservedAt),
+              cell: (r: ProviderPerformanceRow) =>
+                formatTime(r.lastObservedAt, locale),
             },
           ]}
           rows={perf?.providers ?? []}
@@ -526,14 +535,17 @@ export default function MetricsPage() {
           indexStart={1}
           empty={
             perfLoad.kind === "loading" ? (
-              <EmptyState title="读取中…" description="正在读取网关性能。" />
+              <EmptyState
+                title={tShared("common.loading")}
+                description="正在读取网关性能。"
+              />
             ) : perfLoad.kind === "error" ? (
               <EmptyState
-                title="读取失败"
+                title={tShared("common.loadFailed")}
                 description={perfLoad.message}
                 action={
                   <Button variant="secondary" onClick={() => void reloadPerf()}>
-                    重试
+                    {tShared("common.retry")}
                   </Button>
                 }
               />
@@ -556,7 +568,7 @@ export default function MetricsPage() {
         <FilterBar
           view="list"
           onViewChange={() => {}}
-          cardsDisabledReason="卡片视图已下线，改用列表"
+          cardsDisabledReason={tShared("common.cardsRetired")}
           count={
             filteredJobs.length === jobs.length
               ? jobs.length
@@ -609,7 +621,7 @@ export default function MetricsPage() {
             },
             {
               id: "status",
-              header: "状态",
+              header: tShared("columns.state"),
               align: "center",
               width: "xs",
               cell: (r: JobHeartbeatItem) => (
@@ -630,7 +642,7 @@ export default function MetricsPage() {
               items={[
                 {
                   id: "copy",
-                  label: "复制该行",
+                  label: tShared("common.copyRow"),
                   icon: "copy",
                   onSelect: () => void copyRow(r),
                 },
@@ -651,14 +663,17 @@ export default function MetricsPage() {
           }
           empty={
             load.kind === "loading" ? (
-              <EmptyState title="读取中…" description="正在读取作业统计。" />
+              <EmptyState
+                title={tShared("common.loading")}
+                description="正在读取作业统计。"
+              />
             ) : load.kind === "error" ? (
               <EmptyState
-                title="读取失败"
+                title={tShared("common.loadFailed")}
                 description={load.message}
                 action={
                   <Button variant="secondary" onClick={() => void reload()}>
-                    重试
+                    {tShared("common.retry")}
                   </Button>
                 }
               />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -57,6 +58,8 @@ import {
 } from "@/modules/tenants/tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
 
+type TFn = ReturnType<typeof useTranslations>;
+
 type ViewMode = "list" | "cards";
 type PaymentStatusFilter = "all" | OrderPaymentStatus;
 type PaySourceFilter = "all" | OrderPaySource;
@@ -74,18 +77,6 @@ function formatCurrency(
     minimumFractionDigits: Math.min(2, maximumFractionDigits),
     maximumFractionDigits,
   }).format(value);
-}
-
-function paymentStatusLabel(status: OrderPaymentStatus) {
-  if (status === "not_required") return "无需支付";
-  if (status === "unpaid") return "未支付";
-  if (status === "pending") return "支付中";
-  if (status === "pending_verify") return "线下待核";
-  if (status === "paid") return "已收款";
-  if (status === "partial") return "部分收款";
-  if (status === "failed") return "支付失败";
-  if (status === "closed") return "已关闭";
-  return "退款中";
 }
 
 function paySourceLabel(source: OrderPaySource) {
@@ -135,37 +126,50 @@ function paymentStatusIcon(status: OrderPaymentStatus): IconName {
   return "clock";
 }
 
-const PAYMENT_CSV_COLUMNS: readonly CsvColumn<PaymentOperationRecord>[] = [
-  { label: "收款流水", value: (p) => p.paymentNo },
-  { label: "交易号", value: (p) => p.transactionId ?? "" },
-  { label: "关联订单", value: (p) => p.orderNo ?? "" },
-  { label: "关联账单", value: (p) => p.billNo ?? "" },
-  { label: "租户编码", value: (p) => p.tenantCode },
-  { label: "租户名称", value: (p) => p.tenantName },
-  { label: "收款金额", value: (p) => p.paidAmount },
-  {
-    label: "账单应收",
-    value: (p) => p.billPayableAmount || p.totalAmount,
-  },
-  { label: "币种", value: (p) => p.currency },
-  { label: "收款状态", value: (p) => paymentStatusLabel(p.paymentStatus) },
-  { label: "支付来源", value: (p) => paySourceLabel(p.paySource) },
-  {
-    label: "收款方式",
-    value: (p) =>
-      p.paySource === "offline"
-        ? offlineTypeLabel(p.offlinePayType)
-        : (p.payMethod ?? ""),
-  },
-  {
-    label: "对账状态",
-    value: (p) => reconciliationLabel(p.reconciliationStatus),
-  },
-  { label: "操作人", value: (p) => p.operatorName },
-  { label: "收款时间", value: (p) => p.paidAt ?? p.createdAt },
-];
+/* 从模块级常量改成收 `t` 的工厂：常量在模块加载时就求值了，那一刻
+   没有任何运行时上下文，而列里的状态文案要按界面语言取。 */
+function paymentCsvColumns(
+  t: TFn,
+): readonly CsvColumn<PaymentOperationRecord>[] {
+  return [
+    { label: "收款流水", value: (p) => p.paymentNo },
+    { label: "交易号", value: (p) => p.transactionId ?? "" },
+    { label: "关联订单", value: (p) => p.orderNo ?? "" },
+    { label: "关联账单", value: (p) => p.billNo ?? "" },
+    { label: "租户编码", value: (p) => p.tenantCode },
+    { label: "租户名称", value: (p) => p.tenantName },
+    { label: "收款金额", value: (p) => p.paidAmount },
+    {
+      label: "账单应收",
+      value: (p) => p.billPayableAmount || p.totalAmount,
+    },
+    { label: "币种", value: (p) => p.currency },
+    {
+      label: "收款状态",
+      value: (p) => t(`status.paymentLedger.${p.paymentStatus}`),
+    },
+    { label: "支付来源", value: (p) => paySourceLabel(p.paySource) },
+    {
+      label: "收款方式",
+      value: (p) =>
+        p.paySource === "offline"
+          ? offlineTypeLabel(p.offlinePayType)
+          : (p.payMethod ?? ""),
+    },
+    {
+      label: "对账状态",
+      value: (p) => reconciliationLabel(p.reconciliationStatus),
+    },
+    { label: "操作人", value: (p) => p.operatorName },
+    { label: "收款时间", value: (p) => p.paidAt ?? p.createdAt },
+  ];
+}
 
-function paymentSearchText(payment: PaymentOperationRecord) {
+/* 收 `t` 往下传：搜索文本里含状态文案，那些现在从词条取。 */
+function paymentSearchText(
+  payment: PaymentOperationRecord,
+  t: ReturnType<typeof useTranslations>,
+) {
   return [
     payment.id,
     payment.paymentNo,
@@ -184,7 +188,7 @@ function paymentSearchText(payment: PaymentOperationRecord) {
     payment.operatorName,
     payment.statusMessage,
     payment.remark,
-    paymentStatusLabel(payment.paymentStatus),
+    t(`status.paymentLedger.${payment.paymentStatus}`),
     paySourceLabel(payment.paySource),
     offlineTypeLabel(payment.offlinePayType),
     reconciliationLabel(payment.reconciliationStatus),
@@ -237,6 +241,7 @@ function PaymentRemarkDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const tShared = useTranslations();
   return (
     <DialogForm
       open
@@ -248,7 +253,7 @@ function PaymentRemarkDialog({
         </>
       }
       submitLabel="确认"
-      cancelLabel="取消"
+      cancelLabel={tShared("actions.cancel")}
       submitting={loading}
       submitDisabled={remark.trim().length < 4}
       onOpenChange={(open) => {
@@ -284,6 +289,7 @@ function PaymentActionsMenu({
   onVerify: (payment: PaymentOperationRecord) => void;
   onReject: (payment: PaymentOperationRecord) => void;
 }) {
+  const tShared = useTranslations();
   const router = useRouter();
   const isPendingVerify = payment.paymentStatus === "pending_verify";
 
@@ -337,7 +343,7 @@ function PaymentActionsMenu({
           },
           {
             id: "tenant",
-            label: "查看租户",
+            label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
               router.push(`/tenants/${encodeURIComponent(payment.tenantId)}`),
@@ -367,6 +373,8 @@ function PaymentActionsMenu({
  * 值域着色表，整族改 Badge 归批 4，一次改动不跨两个语义面。
  */
 function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
+  const t = useTranslations();
+  const locale = useLocale();
   const router = useRouter();
 
   return [
@@ -446,10 +454,10 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
               tone={PAYMENT_STATUS_TONE[payment.paymentStatus]}
               icon={paymentStatusIcon(payment.paymentStatus)}
             >
-              {paymentStatusLabel(payment.paymentStatus)}
+              {t(`status.paymentLedger.${payment.paymentStatus}`)}
             </StatusBadge>
           }
-          description={formatDate(payment.paidAt ?? payment.createdAt)}
+          description={formatDate(payment.paidAt ?? payment.createdAt, locale)}
         />
       ),
     },
@@ -483,6 +491,8 @@ function PaymentCards({
   onVerify: (payment: PaymentOperationRecord) => void;
   onReject: (payment: PaymentOperationRecord) => void;
 }) {
+  const t = useTranslations();
+  const locale = useLocale();
   const router = useRouter();
 
   return (
@@ -521,7 +531,7 @@ function PaymentCards({
           </header>
           <div className="vx-tenant-directory-card__badges">
             <StatusBadge tone={PAYMENT_STATUS_TONE[payment.paymentStatus]}>
-              {paymentStatusLabel(payment.paymentStatus)}
+              {t(`status.paymentLedger.${payment.paymentStatus}`)}
             </StatusBadge>
             <StatusBadge
               tone={RECONCILIATION_TONE[payment.reconciliationStatus]}
@@ -561,7 +571,9 @@ function PaymentCards({
           </div>
           <footer>
             <span>{payment.operatorName}</span>
-            <strong>{formatDate(payment.paidAt ?? payment.updatedAt)}</strong>
+            <strong>
+              {formatDate(payment.paidAt ?? payment.updatedAt, locale)}
+            </strong>
           </footer>
         </article>
       ))}
@@ -570,6 +582,8 @@ function PaymentCards({
 }
 
 export function PaymentsPage() {
+  const t = useTranslations();
+  const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
   const [payments, setPayments] = useState<PaymentOperationRecord[]>([]);
   const [paymentsTruncated, setPaymentsTruncated] = useState(false);
@@ -646,18 +660,23 @@ export function PaymentsPage() {
       if (!matchesOfflineTypeFilter(payment, offlineTypeFilter)) return false;
       if (
         normalizedQuery &&
-        !paymentSearchText(payment).includes(normalizedQuery)
+        !paymentSearchText(payment, t).includes(normalizedQuery)
       )
         return false;
       return true;
     });
   }, [
+    /* `t` 进依赖：过滤要读状态文案（`billingSearchText` / `paymentSearchText`
+       内部用它查词条）。next-intl 的 translator 按 (命名空间, messages, locale)
+       记忆化，只在切语言时换身份，所以这不会让 memo 每次渲染失效，反而保证
+       切语言时搜索匹配的是新语言的文案。这里没有 effect 依赖它。 */
     offlineTypeFilter,
     paymentStatusFilter,
     payments,
     paySourceFilter,
     query,
     reconciliationFilter,
+    t,
   ]);
 
   const pageCount = Math.max(1, Math.ceil(filteredPayments.length / pageSize));
@@ -799,7 +818,7 @@ export function PaymentsPage() {
                   id: "paid-amount",
                   help: "已收款记录的金额合计。",
                   icon: "chart-bar",
-                  label: "已收金额",
+                  label: tShared("columns.receivedAmount"),
                   value: formatCurrency(paidAmount, "CNY"),
                   tags: [`线下 ${formatCurrency(offlineAmount, "CNY")}`],
                   tone: "success",
@@ -838,7 +857,7 @@ export function PaymentsPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredPayments.length)}
             aria-label="收款筛选"
             search={
@@ -859,7 +878,7 @@ export function PaymentsPage() {
                   onClick={() =>
                     exportRowsToCsv(
                       "payments-export",
-                      PAYMENT_CSV_COLUMNS,
+                      paymentCsvColumns(t),
                       filteredPayments.filter((item) =>
                         selectedPaymentIds.has(item.id),
                       ),
@@ -867,7 +886,7 @@ export function PaymentsPage() {
                   }
                   disabled={selectedPaymentIds.size === 0}
                 >
-                  导出
+                  {tShared("common.export")}
                 </ActionButton>
               </>
             }
@@ -884,12 +903,18 @@ export function PaymentsPage() {
                 aria-label="收款状态"
               >
                 <option value="all">全部收款</option>
-                <option value="pending">支付中</option>
+                <option value="pending">
+                  {tShared("status.generic.paying")}
+                </option>
                 <option value="pending_verify">线下待核</option>
                 <option value="paid">已收款</option>
-                <option value="partial">部分收款</option>
+                <option value="partial">
+                  {tShared("status.generic.partiallyPaid")}
+                </option>
                 <option value="failed">支付失败</option>
-                <option value="closed">已关闭</option>
+                <option value="closed">
+                  {tShared("status.generic.closed")}
+                </option>
                 <option value="refunding">退款中</option>
               </NativeSelect>
               <NativeSelect
@@ -903,7 +928,7 @@ export function PaymentsPage() {
                 <option value="all">全部来源</option>
                 <option value="offline">线下</option>
                 <option value="online">线上</option>
-                <option value="none">无</option>
+                <option value="none">{tShared("common.none")}</option>
               </NativeSelect>
               <NativeSelect
                 className="vx-tenant-select"
@@ -919,7 +944,9 @@ export function PaymentsPage() {
                 <option value="attention">需关注</option>
                 <option value="normal">已对账</option>
                 <option value="pending_verify">待复核</option>
-                <option value="partial">部分收款</option>
+                <option value="partial">
+                  {tShared("status.generic.partiallyPaid")}
+                </option>
                 <option value="overpaid">超额收款</option>
                 <option value="bill_cancelled">账单作废</option>
                 <option value="failed">支付异常</option>
@@ -938,7 +965,7 @@ export function PaymentsPage() {
                 <option value="cash">现金</option>
                 <option value="other">其他线下</option>
                 <option value="online">线上</option>
-                <option value="none">无</option>
+                <option value="none">{tShared("common.none")}</option>
               </NativeSelect>
             </div>
           </FilterBar>
@@ -950,11 +977,11 @@ export function PaymentsPage() {
               actions={[
                 {
                   id: "export",
-                  label: "导出所选",
+                  label: tShared("common.exportSelected"),
                   onSelect: () =>
                     exportRowsToCsv(
                       "payments-export",
-                      PAYMENT_CSV_COLUMNS,
+                      paymentCsvColumns(t),
                       selectedPayments,
                     ),
                 },
@@ -968,7 +995,7 @@ export function PaymentsPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
 
@@ -1004,7 +1031,7 @@ export function PaymentsPage() {
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -1030,7 +1057,7 @@ export function PaymentsPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

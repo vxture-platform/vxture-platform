@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -153,6 +154,7 @@ function SubscriptionActionsMenu({
     action: SubscriptionOperationAction,
   ) => void;
 }) {
+  const tShared = useTranslations();
   const withLabels = useConfirmLabels();
   const router = useRouter();
   const toggleAction = subscriptionToggleAction(subscription.status);
@@ -167,7 +169,7 @@ function SubscriptionActionsMenu({
         items={[
           {
             id: "details",
-            label: "查看详情",
+            label: tShared("actions.viewDetail"),
             icon: "arrow-right",
             onSelect: () =>
               router.push(
@@ -176,7 +178,7 @@ function SubscriptionActionsMenu({
           },
           {
             id: "tenant",
-            label: "查看租户",
+            label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
               router.push(
@@ -246,6 +248,8 @@ function SubscriptionActionsMenu({
  * 业务值域着色表，整族改 Badge 归批 4，一次改动不跨两个语义面。
  */
 function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[] {
+  const locale = useLocale();
+  const tShared = useTranslations();
   const router = useRouter();
 
   return [
@@ -294,7 +298,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
     },
     {
       id: "status",
-      header: "状态",
+      header: tShared("columns.state"),
       align: "center",
       cell: (subscription) => (
         <TableTitleCell
@@ -306,7 +310,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
               {subscriptionStatusLabel(subscription.status)}
             </StatusBadge>
           }
-          description={`${formatDate(subscription.startAt)} - ${formatDate(subscription.endAt)}`}
+          description={`${formatDate(subscription.startAt, locale)} - ${formatDate(subscription.endAt, locale)}`}
         />
       ),
     },
@@ -347,6 +351,7 @@ function SubscriptionCards({
     action: SubscriptionOperationAction,
   ) => void;
 }) {
+  const locale = useLocale();
   const router = useRouter();
 
   return (
@@ -425,8 +430,8 @@ function SubscriptionCards({
           <footer>
             <span>{subscription.operationHint}</span>
             <strong>
-              {formatDate(subscription.startAt)} -{" "}
-              {formatDate(subscription.endAt)}
+              {formatDate(subscription.startAt, locale)} -{" "}
+              {formatDate(subscription.endAt, locale)}
             </strong>
           </footer>
         </article>
@@ -436,6 +441,7 @@ function SubscriptionCards({
 }
 
 export function SubscriptionsPage() {
+  const tShared = useTranslations();
   const [subscriptions, setSubscriptions] = useState<
     SubscriptionOperationRecord[]
   >([]);
@@ -701,7 +707,7 @@ export function SubscriptionsPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredSubscriptions.length)}
             aria-label="租户订阅筛选"
             search={
@@ -724,7 +730,7 @@ export function SubscriptionsPage() {
                   onClick={handleExportSelectedSubscriptions}
                   disabled={selectedSubscriptions.length === 0}
                 >
-                  导出
+                  {tShared("common.export")}
                 </ActionButton>
                 <ActionButton variant="outline" icon="plus" disabled>
                   开通订阅
@@ -741,12 +747,16 @@ export function SubscriptionsPage() {
                 }
                 aria-label="订阅状态"
               >
-                <option value="all">全部状态</option>
-                <option value="trialing">试用</option>
+                <option value="all">{tShared("filters.allStates")}</option>
+                <option value="trialing">
+                  {tShared("status.generic.trial")}
+                </option>
                 <option value="active">已生效</option>
                 <option value="expiring">即将到期</option>
-                <option value="overdue">逾期</option>
-                <option value="suspended">暂停</option>
+                <option value="overdue">
+                  {tShared("status.generic.overdue")}
+                </option>
+                <option value="suspended">{tShared("actions.pause")}</option>
                 <option value="cancelled">已取消</option>
               </NativeSelect>
               <NativeSelect
@@ -773,7 +783,9 @@ export function SubscriptionsPage() {
                 aria-label="配额风险"
               >
                 <option value="all">全部配额</option>
-                <option value="normal">正常</option>
+                <option value="normal">
+                  {tShared("status.generic.normal")}
+                </option>
                 <option value="warning">需关注</option>
                 <option value="danger">高风险</option>
               </NativeSelect>
@@ -799,7 +811,7 @@ export function SubscriptionsPage() {
               actions={[
                 {
                   id: "export",
-                  label: "导出所选",
+                  label: tShared("common.exportSelected"),
                   onSelect: handleExportSelectedSubscriptions,
                 },
               ]}
@@ -812,7 +824,7 @@ export function SubscriptionsPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
 
@@ -845,7 +857,7 @@ export function SubscriptionsPage() {
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -870,7 +882,7 @@ export function SubscriptionsPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Icon, Button, Textarea } from "@vxture/design-system";
 import type { IconName } from "@vxture/design-system";
 import type {
@@ -111,6 +112,7 @@ export function SubscriptionOperationDialog({
   onCancel: () => void;
   onSubmit: (reason: string) => void;
 }) {
+  const tShared = useTranslations();
   const [reason, setReason] = useState("");
   const trimmedReason = reason.trim();
 
@@ -168,7 +170,7 @@ export function SubscriptionOperationDialog({
         ) : null}
         <footer>
           <Button variant="ghost" onClick={onCancel} disabled={busy}>
-            放弃
+            {tShared("actions.discard")}
           </Button>
           <Button
             type="submit"
@@ -179,7 +181,9 @@ export function SubscriptionOperationDialog({
             }
             disabled={busy || !trimmedReason}
           >
-            {busy ? "处理中" : subscriptionActionLabel(action)}
+            {busy
+              ? tShared("status.generic.processing")
+              : subscriptionActionLabel(action)}
           </Button>
         </footer>
       </form>

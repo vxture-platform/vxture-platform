@@ -39,6 +39,7 @@ import {
   type FormEvent,
 } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import {
   ActionMenu,
@@ -85,7 +86,7 @@ import {
   type ObjectState,
 } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
-import { confirmLabels } from "@/lib/destructive";
+import { useConfirmLabels } from "@/lib/destructive";
 
 /** 与 opera-bff atlas.router.ts 同名能力码——endpoints 复用 model:model.manage
  * （路由配置本质是模型间接层，同一批人管，admin.operator_permission 里没有
@@ -200,6 +201,8 @@ export default function EndpointsPage() {
 }
 
 function EndpointsPageContent() {
+  const tShared = useTranslations();
+  const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const canManage = can(MANAGE);
@@ -414,14 +417,14 @@ function EndpointsPageContent() {
         },
         {
           id: "edit",
-          label: "编辑",
+          label: tShared("common.edit"),
           icon: "edit",
           onSelect: () => openFrom(r, "edit"),
         },
         isEnabled(r.state)
           ? {
               id: "disable",
-              label: "停用",
+              label: tShared("actions.disable"),
               icon: "pause" as const,
               separatorBefore: true,
               onSelect: () =>
@@ -431,7 +434,7 @@ function EndpointsPageContent() {
             }
           : {
               id: "enable",
-              label: "启用",
+              label: tShared("actions.enable"),
               icon: "play" as const,
               separatorBefore: true,
               onSelect: () =>
@@ -441,7 +444,7 @@ function EndpointsPageContent() {
             },
         {
           id: "delete",
-          label: "删除",
+          label: tShared("actions.delete"),
           icon: "trash",
           danger: true,
           separatorBefore: true,
@@ -449,8 +452,8 @@ function EndpointsPageContent() {
              Atlas 用与推导状态同一份数据源判定，前端再算一遍就是给同一个问题造第二
              个答案，被挡住时 409 会点名。`resolution` 缺失（旧 Atlas）时后果确实不
              同，所以 consequence 分两句——那是事实差异，不是措辞差异。 */
-          confirm: confirmLabels({
-            verb: "删除",
+          confirm: withLabels({
+            verb: tShared("actions.delete"),
             target: `入口 ${r.code}`,
             consequence:
               r.resolution === undefined
@@ -478,19 +481,25 @@ function EndpointsPageContent() {
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取 Endpoint 清单。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取 Endpoint 清单。"
+      />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
     ) : filtered.length !== rows.length ? (
-      <EmptyState title="没有匹配的 Endpoint" description="换个关键词再看。" />
+      <EmptyState
+        title="没有匹配的 Endpoint"
+        description={tShared("common.noMatchKeywordHint")}
+      />
     ) : (
       <EmptyState
         title="暂无 Endpoint"
@@ -526,7 +535,9 @@ function EndpointsPageContent() {
                 description="从 Model 页的「入口 N」点进来的。primary 与 fallback 都算——挡住模型删除的那个计数也是这么数的，剪断一条 failover 链和弄坏一个 primary 是同一类问题。"
                 action={
                   <Button asChild variant="secondary" size="sm">
-                    <Link href="/model/routes">显示全部</Link>
+                    <Link href="/model/routes">
+                      {tShared("common.showAll")}
+                    </Link>
                   </Button>
                 }
               />
@@ -537,7 +548,9 @@ function EndpointsPageContent() {
                 title={`只显示 ${endpointCodeFilter} 这一条路由`}
                 action={
                   <Button asChild variant="secondary" size="sm">
-                    <Link href="/model/routes">显示全部</Link>
+                    <Link href="/model/routes">
+                      {tShared("common.showAll")}
+                    </Link>
                   </Button>
                 }
               />
@@ -580,7 +593,7 @@ function EndpointsPageContent() {
           <FilterBar
             view="list"
             onViewChange={() => {}}
-            cardsDisabledReason="卡片视图已下线，改用列表"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={
               filtered.length === rows.length
                 ? rows.length
@@ -610,12 +623,14 @@ function EndpointsPageContent() {
               }}
               aria-label="解析状态筛选"
             >
-              <option value="all">全部状态</option>
+              <option value="all">{tShared("filters.allStates")}</option>
               <option value="diverging">仅异常（启用中但没在服务）</option>
               <option value="serving">服务中</option>
               <option value="degraded">降级服务</option>
               <option value="unresolvable">无法解析</option>
-              <option value="disabled">已停用</option>
+              <option value="disabled">
+                {tShared("status.generic.disabled")}
+              </option>
             </NativeSelect>
           </FilterBar>
         }
@@ -628,7 +643,7 @@ function EndpointsPageContent() {
               actions={[
                 {
                   id: "enable",
-                  label: "启用",
+                  label: tShared("actions.enable"),
                   icon: "play",
                   onSelect: () => {
                     const ids = [...selectedKeys];
@@ -656,14 +671,14 @@ function EndpointsPageContent() {
                 },
                 {
                   id: "disable",
-                  label: "停用",
+                  label: tShared("actions.disable"),
                   icon: "pause",
                   danger: true,
                   /* 停用本身可逆，但这是**批量**：一次动 N 个入口，停用期间走它们
                      的业务调用全部 404。可撤销的是配置，不是那段时间里失败的请求
                      ——所以批量一律拦（owner 2026-08-25 定的线）。 */
-                  confirm: confirmLabels({
-                    verb: "停用",
+                  confirm: withLabels({
+                    verb: tShared("actions.disable"),
                     target: `选中的 ${selectedKeys.length} 个入口`,
                     consequence:
                       "停用期间，仍写着这些 code 的业务调用会收到 404，直到重新启用。配置本身不丢。",
@@ -779,7 +794,9 @@ function EndpointsPageContent() {
               : "新建 Endpoint"
         }
         description="primary 必填；留空 fallback 即 Single 路由，设了就是 Failover——primary 失败时自动切过去。调用方带 endpointCode 走这个入口时，这条链是唯一权威：模型自己的 config.fallbackModelCodes 不再叠加。"
-        submitLabel={dialog?.kind === "create" ? "创建" : "保存"}
+        submitLabel={
+          dialog?.kind === "create" ? "创建" : tShared("common.save")
+        }
         submitting={submitting}
         submitDisabled={!draftValid}
         onSubmit={submit}

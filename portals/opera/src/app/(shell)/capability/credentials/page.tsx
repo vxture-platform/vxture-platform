@@ -55,9 +55,10 @@ import {
   type StatusBadgeTone,
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
+import { useLocale, useTranslations } from "next-intl";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { api, OperaApiError } from "@/lib/api";
-import { confirmLabels } from "@/lib/destructive";
+import { useConfirmLabels } from "@/lib/destructive";
 
 const MANAGE = "capability:runos.manage";
 
@@ -106,12 +107,14 @@ function describeError(error: unknown): { description?: string } {
     : {};
 }
 
-function formatTime(iso: string | null): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——中文
+   `2026/8/18`，英文 `8/18/2026`。 */
+function formatTime(iso: string | null, locale: string): string {
   if (!iso) return "从未";
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString("zh-CN", { hour12: false });
+    : d.toLocaleString(locale, { hour12: false });
 }
 
 function parseList(input: string): string[] {
@@ -127,6 +130,9 @@ type LoadState =
   | { kind: "ready" };
 
 export default function RunosCredentialsPage() {
+  const locale = useLocale();
+  const tShared = useTranslations();
+  const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
   /* 凭证类操作全部托管密钥材料，走 step-up 闸门。 */
@@ -289,19 +295,25 @@ export default function RunosCredentialsPage() {
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取凭证绑定。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取凭证绑定。"
+      />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
     ) : filtered.length !== rows.length ? (
-      <EmptyState title="没有匹配的凭证" description="换个关键词再看。" />
+      <EmptyState
+        title="没有匹配的凭证"
+        description={tShared("common.noMatchKeywordHint")}
+      />
     ) : (
       <EmptyState title="暂无凭证绑定" description="点击「录入凭证」开始。" />
     );
@@ -335,7 +347,7 @@ export default function RunosCredentialsPage() {
           <FilterBar
             view="list"
             onViewChange={() => {}}
-            cardsDisabledReason="卡片视图已下线，改用列表"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={
               filtered.length === rows.length
                 ? rows.length
@@ -391,7 +403,8 @@ export default function RunosCredentialsPage() {
                 id: "rotated",
                 header: "上次轮换",
                 width: "sm",
-                cell: (r: CredentialBindingRecord) => formatTime(r.rotatedAt),
+                cell: (r: CredentialBindingRecord) =>
+                  formatTime(r.rotatedAt, locale),
               },
               {
                 id: "mode",
@@ -404,7 +417,7 @@ export default function RunosCredentialsPage() {
               },
               {
                 id: "state",
-                header: "状态",
+                header: tShared("columns.state"),
                 align: "center",
                 width: "xs",
                 cell: (r: CredentialBindingRecord) => (
@@ -447,7 +460,7 @@ export default function RunosCredentialsPage() {
                           danger: true,
                           separatorBefore: true,
                           disabled: r.state === "revoked",
-                          confirm: confirmLabels({
+                          confirm: withLabels({
                             verb: "吊销",
                             target: `「${r.credentialClass}」的凭证绑定`,
                             /* 凭证是这套管理面里**唯一即时生效**的撤销：网关每次
@@ -614,7 +627,7 @@ export default function RunosCredentialsPage() {
             : "调整适用范围"
         }
         description="不需要重新提供密钥。清空等于退役——runos 会拒绝空数组，要退役请用「吊销」。"
-        submitLabel="保存"
+        submitLabel={tShared("common.save")}
         submitting={submitting}
         submitDisabled={parseList(scopeInput).length === 0}
         onSubmit={submit}

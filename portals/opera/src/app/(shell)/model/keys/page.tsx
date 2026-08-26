@@ -85,9 +85,10 @@ import {
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { api, OperaApiError } from "@/lib/api";
-import { confirmLabels } from "@/lib/destructive";
+import { useLocale, useTranslations } from "next-intl";
+import { useConfirmLabels } from "@/lib/destructive";
 import {
-  KEY_STATE_META,
+  KEY_STATE_TONE,
   type KeyEffectiveState,
   type KeyState,
 } from "@/lib/status";
@@ -167,20 +168,29 @@ function describeError(error: unknown): { description?: string } {
     : {};
 }
 
-function formatTime(iso: string | null): string {
-  if (!iso) return "从未";
+/* 收 `locale` 与 `never` 而不是自己写死：原来这里是 `toLocaleString("zh-CN")`，
+   也就是说界面即使切到英文，时间仍按中文格式排。日期格式属于语言。 */
+function formatTime(iso: string | null, locale: string, never: string): string {
+  if (!iso) return never;
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString("zh-CN", { hour12: false });
+    : d.toLocaleString(locale, { hour12: false });
 }
 
 type LoadState =
   | { kind: "loading" }
-  | { kind: "error"; message: string }
+  | { kind: "error"; message: string | null }
   | { kind: "ready" };
 
 export default function KeysPage() {
+  const withLabels = useConfirmLabels();
+  const t = useTranslations("modelKeysPage");
+  const tCommon = useTranslations("common");
+  /* 状态词表单独一个命名空间：`KEY_STATE_TONE` 只留语气，文案在这里取。
+     两者判据同源（同一个 state 值），但一个是产品判断、一个是翻译。 */
+  const tState = useTranslations("status.keyState");
+  const locale = useLocale();
   const { toast } = useToast();
   const { can } = useOperatorSession();
   /* 全部 key 写操作都在 step-up 闸门后（product_250 v0.4）。 */
@@ -203,10 +213,13 @@ export default function KeysPage() {
       setRows(data);
       setLoad({ kind: "ready" });
     } catch (error) {
+      /* 存原始错误，不存译文。两个理由：`reload` 是 `useCallback([], …)` 且被
+         `useEffect([reload])` 依赖着，把 `t` 加进依赖会让它每次渲染换身份、
+         effect 因此无限重跑；而且存进 state 的译文在切语言时不会跟着变——
+         托底文案属于渲染，不属于状态。 */
       setLoad({
         kind: "error",
-        message:
-          error instanceof OperaApiError ? error.message : "读取 Key 失败",
+        message: error instanceof OperaApiError ? error.message : null,
       });
     }
   }, []);
@@ -238,7 +251,11 @@ export default function KeysPage() {
   /** 操作者取消验证不是错误，静默收场；其余照常报错。 */
   function reportFailure(error: unknown, label: string) {
     if (isStepUpCancelled(error)) return;
-    toast({ tone: "danger", title: `${label}失败`, ...describeError(error) });
+    toast({
+      tone: "danger",
+      title: t("bulk.failed", { action: label }),
+      ...describeError(error),
+    });
   }
 
   /** 批量只做可逆动作（禁用/启用）；撤销是终态、不可回头，必须逐个走确认框。 */
@@ -267,12 +284,18 @@ export default function KeysPage() {
       );
       toast({
         tone: state === "active" ? "success" : "warning",
-        title: `${targets.length} 把 Key 已${state === "active" ? "启用" : "停用"}`,
-        description: "已撤销的、以及已退役的 Internal Key 不受批量操作影响。",
+        title: t("bulk.doneTitle", {
+          count: targets.length,
+          state: t(state === "active" ? "bulk.enable" : "bulk.disable"),
+        }),
+        description: t("bulk.doneDescription"),
       });
       await reload();
     } catch (error) {
-      reportFailure(error, state === "active" ? "启用" : "停用");
+      reportFailure(
+        error,
+        t(state === "active" ? "bulk.enable" : "bulk.disable"),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -289,15 +312,14 @@ export default function KeysPage() {
       );
       toast({
         tone: state === "active" ? "success" : "warning",
-        title: `${row.name} ${KEY_STATE_META[state].label}`,
-        description:
-          state === "revoked"
-            ? "撤销是终态，回不去了，持有方需要重新申请。"
-            : "已留痕进 Audit。",
+        title: `${row.name} ${tState(state)}`,
+        description: t(
+          state === "revoked" ? "revoke.doneDescription" : "revoke.audited",
+        ),
       });
       await reload();
     } catch (error) {
-      reportFailure(error, KEY_STATE_META[state].label);
+      reportFailure(error, tState(state));
     } finally {
       setSubmitting(false);
     }
@@ -306,12 +328,12 @@ export default function KeysPage() {
   const copySecret = async (secret: string) => {
     try {
       await navigator.clipboard.writeText(secret);
-      toast({ tone: "success", title: "已复制到剪贴板" });
+      toast({ tone: "success", title: tCommon("copied") });
     } catch {
       toast({
         tone: "danger",
-        title: "复制失败",
-        description: "浏览器拒绝了剪贴板访问，请手动选中复制。",
+        title: tCommon("copyFailed"),
+        description: tCommon("copyDenied"),
       });
     }
   };
@@ -323,8 +345,8 @@ export default function KeysPage() {
       await runWithStepUp(() => api.delete(`/api/atlas/api-keys/${row.id}`));
       toast({
         tone: "success",
-        title: `${row.name} 已删除`,
-        description: "这一行没了；它被签发、轮换、撤销的留痕仍在 Audit 里。",
+        title: t("delete.doneTitle", { name: row.name }),
+        description: t("delete.doneDescription"),
       });
       await reload();
     } catch (error) {
@@ -337,13 +359,16 @@ export default function KeysPage() {
       ) {
         toast({
           tone: "warning",
-          title: "当前 Atlas 部署还没有删除接口",
-          description:
-            "已撤销的 key 不会再放行任何调用，功能上不受影响；等 Atlas 交付 DELETE /capability/api-keys/:id 之后这里会自动可用。",
+          title: t("delete.unsupportedTitle"),
+          description: t("delete.unsupportedDescription"),
         });
         return;
       }
-      toast({ tone: "danger", title: "删除失败", ...describeError(error) });
+      toast({
+        tone: "danger",
+        title: t("delete.failed"),
+        ...describeError(error),
+      });
     } finally {
       setSubmitting(false);
     }
@@ -390,7 +415,10 @@ export default function KeysPage() {
       setDialog(null);
       await reload();
     } catch (error) {
-      reportFailure(error, dialog.kind === "issue" ? "签发" : "轮换");
+      reportFailure(
+        error,
+        t(dialog.kind === "issue" ? "actions.issue" : "actions.rotate"),
+      );
       /* 取消验证时对话框保持打开，操作者可以重试或自己关掉——不替他决定。 */
     } finally {
       setSubmitting(false);
@@ -406,12 +434,12 @@ export default function KeysPage() {
     const retired = r.kind === "internal";
     return (
       <ActionMenu
-        label={`${r.name} 操作`}
+        label={t("actions.menuLabel", { name: r.name })}
         disabled={submitting}
         items={[
           {
             id: "rotate",
-            label: "轮换",
+            label: t("actions.rotate"),
             icon: "refresh",
             disabled: retired || r.state !== "active",
             onSelect: () => setDialog({ kind: "rotate", row: r }),
@@ -419,29 +447,28 @@ export default function KeysPage() {
           r.state === "inactive" && !retired
             ? {
                 id: "enable",
-                label: "启用",
+                label: t("actions.enable"),
                 icon: "play" as const,
                 onSelect: () => void setState(r, "active"),
               }
             : {
                 id: "disable",
-                label: "停用",
+                label: t("actions.disable"),
                 icon: "pause" as const,
                 disabled: r.state !== "active",
                 onSelect: () => void setState(r, "inactive"),
               },
           {
             id: "revoke",
-            label: "撤销",
+            label: t("actions.revoke"),
             icon: "prohibit",
             danger: true,
             separatorBefore: true,
             disabled: r.state === "revoked",
-            confirm: confirmLabels({
-              verb: "撤销",
-              target: `密钥 ${r.name}`,
-              consequence:
-                "撤销是终态：不能再启用、不能再轮换，也没有「取消撤销」这回事。持有方只能走签发流程重新申请一把新的。只是想临时断开就用「禁用」——那个可逆。",
+            confirm: withLabels({
+              verb: t("actions.revoke"),
+              target: t("revoke.target", { name: r.name }),
+              consequence: t("revoke.consequence"),
               onConfirm: () => setState(r, "revoked"),
             }),
           },
@@ -450,21 +477,23 @@ export default function KeysPage() {
              一步变成没了」的规则：先撤销 → 确认没有调用方在骂 → 再清理。一步到位的
              删除会让一次误点同时完成"断掉对方"和"抹掉这行曾经存在"两件事。 */
             id: "delete",
-            label: "删除",
+            label: t("actions.delete"),
             icon: "trash",
             danger: true,
             /* Atlas 只要求"不是 active"，这里刻意更严：只有**已撤销**的能删。停用是
                可逆的暂停，把它和终态一起开放删除，等于让一次误点跨过那道可逆性。 */
             disabled: r.state !== "revoked",
-            confirm: confirmLabels({
-              verb: "删除",
-              target: `密钥 ${r.name}`,
-              consequence:
-                "只删这一行：名称、归属、前缀、最近使用时间都会消失。签发 / 轮换 / 撤销的操作留痕不受影响——那些在 Audit 的追加表里。已撤销的 key 本来就不放行任何调用，所以删除不改变任何调用方的处境，只是清理台账。",
+            confirm: withLabels({
+              verb: t("actions.delete"),
+              target: t("delete.target", { name: r.name }),
+              consequence: t("delete.consequence"),
               /* 菜单项已按 `disabled` 挡了一道，这里再写一次不是重复：`disabled`
                  让人点不开，`met` 让人在框里看见**为什么**。两者判据同源。 */
               preconditions: [
-                { label: "这把密钥已撤销", met: r.state === "revoked" },
+                {
+                  label: t("delete.precondition"),
+                  met: r.state === "revoked",
+                },
               ],
               onConfirm: () => deleteKey(r),
             }),
@@ -489,21 +518,30 @@ export default function KeysPage() {
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取 API Key 清单。" />
+      <EmptyState
+        title={t("load.loadingTitle")}
+        description={t("load.loadingDescription")}
+      />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
-        description={load.message}
+        title={t("load.errorTitle")}
+        description={load.message ?? t("load.errorFallback")}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tCommon("retry")}
           </Button>
         }
       />
     ) : filtered.length !== rows.length ? (
-      <EmptyState title="没有匹配的 Key" description="换个关键词或类型再看。" />
+      <EmptyState
+        title={t("empty.noMatchTitle")}
+        description={t("empty.noMatchDescription")}
+      />
     ) : (
-      <EmptyState title="暂无 API Key" description="点击「签发 Key」开始。" />
+      <EmptyState
+        title={t("empty.emptyTitle")}
+        description={t("empty.emptyDescription")}
+      />
     );
 
   return (
@@ -512,8 +550,8 @@ export default function KeysPage() {
         header={
           <ViewHeader
             icon="key"
-            title="调用密钥"
-            description="外部合作方调用 Atlas 的入方向凭证。内部产品不走这里——它们持有 OIDC 客户端，用短时 S2S 令牌调 /v1/*。轮换与撤销全部留痕进 Audit。"
+            title={t("header.title")}
+            description={t("header.description")}
             action={
               canManage ? (
                 <Button
@@ -524,7 +562,7 @@ export default function KeysPage() {
                   }}
                 >
                   <Icon name="plus" size="sm" />
-                  签发 Key
+                  {t("issue.cta")}
                 </Button>
               ) : null
             }
@@ -537,14 +575,14 @@ export default function KeysPage() {
                 发生。悬着的是接入，不是设计——设计是通的。 */}
             <Banner
               tone="info"
-              title="External key 尚未接入任何认证路径——因为今天没有外部合作方"
-              description="Atlas 网关的 /v1/* 只认 S2S OIDC token，所以签发出来的 key 现在调不动网关（TD-029）。这不是工程缺口：第三方合作方不是 vxture IdP 的 OIDC 客户端，key 是它唯一可能的认证方式，而 key 绑定 product_code 之后授权模型是现成的。它悬着的唯一原因是 Atlas 只在 tailnet 上、atlas.vxture.com 预留未绑定——等的是合作方，不是工期。"
+              title={t("notice.externalUnwiredTitle")}
+              description={t("notice.externalUnwiredDescription")}
             />
             {retiredCount > 0 ? (
               <Banner
                 tone="neutral"
-                title={`${retiredCount} 把已退役的 Internal Key（全部已撤销）`}
-                description="internal 档位已删除：兄弟产品用 OIDC S2S 令牌，给它们发长期共享密钥是拿更弱的换更强的。这些老行保留而不删除——撤销是一份失效凭证的终态，删掉会连同轮换历史和审计留痕一起抹掉它被签发过这件事。它们从未认证过任何东西。"
+                title={t("notice.retiredTitle", { count: retiredCount })}
+                description={t("notice.retiredDescription")}
               />
             ) : null}
           </div>
@@ -553,7 +591,7 @@ export default function KeysPage() {
           <FilterBar
             view="list"
             onViewChange={() => {}}
-            cardsDisabledReason="卡片视图已下线，改用列表"
+            cardsDisabledReason={t("filters.cardsDisabledReason")}
             count={
               filtered.length === rows.length
                 ? rows.length
@@ -565,8 +603,8 @@ export default function KeysPage() {
                 <Icon name="search" size="sm" aria-hidden="true" />
               </InputGroupAddon>
               <InputGroupInput
-                placeholder="搜索名称 / 前缀…"
-                aria-label="搜索 Key"
+                placeholder={t("filters.searchPlaceholder")}
+                aria-label={t("filters.searchAriaLabel")}
                 value={keyword}
                 onChange={(e) => {
                   setKeyword(e.target.value);
@@ -584,11 +622,13 @@ export default function KeysPage() {
                   setKindFilter(e.target.value as KeyKind | "all");
                   pager.resetPage();
                 }}
-                aria-label="类型筛选"
+                aria-label={t("filters.kindLabel")}
               >
-                <option value="all">全部类型</option>
+                <option value="all">{t("filters.allKinds")}</option>
+                {/* `External` 是上游原样回来的类型值，不译——见 lib/status.ts
+                    里同一条判据：这个词在 API 响应里就是这么写的。 */}
                 <option value="external">External</option>
-                <option value="internal">Internal（已退役）</option>
+                <option value="internal">{t("filters.internalRetired")}</option>
               </NativeSelect>
             ) : null}
           </FilterBar>
@@ -597,27 +637,28 @@ export default function KeysPage() {
           canManage ? (
             <BulkActionBar
               count={selectedKeys.length}
-              noun="把"
+              noun={t("bulk.unit")}
               onClear={() => setSelectedKeys([])}
               actions={[
                 {
                   id: "enable",
-                  label: "启用",
+                  label: t("bulk.enable"),
                   icon: "play",
                   onSelect: () => void setStateBulk("active"),
                 },
                 {
                   id: "disable",
-                  label: "停用",
+                  label: t("bulk.disable"),
                   icon: "pause",
                   danger: true,
                   /* 停用可逆，但这是**批量**：停用期间持有这些 key 的调用方全部被
                      拒。可撤销的是状态，不是那段时间里失败的调用。 */
-                  confirm: confirmLabels({
-                    verb: "停用",
-                    target: `选中的 ${selectedKeys.length} 把密钥`,
-                    consequence:
-                      "停用期间，持有这些密钥的调用方会被拒绝，直到重新启用。密钥本身不失效，随时可以再启用。",
+                  confirm: withLabels({
+                    verb: t("bulk.disable"),
+                    target: t("bulk.selectedKeys", {
+                      count: selectedKeys.length,
+                    }),
+                    consequence: t("bulk.disableConsequence"),
                     /* `setStateBulk` 内部还包着一次 step-up 仪式——确认框停在
                        「处理中」态，二次验证压在它上面。两层模态叠加。 */
                     onConfirm: () => setStateBulk("inactive"),
@@ -632,7 +673,7 @@ export default function KeysPage() {
             columns={[
               {
                 id: "name",
-                header: "名称",
+                header: t("columns.name"),
                 cell: (r: GatewayApiKeyRecord) => (
                   <TableTitleCell
                     icon="key"
@@ -643,40 +684,44 @@ export default function KeysPage() {
               },
               {
                 id: "prefix",
-                header: "前缀",
+                header: t("columns.prefix"),
                 width: "sm",
                 cell: (r: GatewayApiKeyRecord) => <Kbd>{r.keyPrefix}</Kbd>,
               },
               {
                 id: "lastUsed",
-                header: "最近使用",
+                header: t("columns.lastUsed"),
                 width: "sm",
-                cell: (r: GatewayApiKeyRecord) => formatTime(r.lastUsedAt),
+                cell: (r: GatewayApiKeyRecord) =>
+                  formatTime(r.lastUsedAt, locale, tCommon("never")),
               },
               {
                 id: "createdAt",
-                header: "签发于",
+                header: t("columns.issuedAt"),
                 width: "sm",
-                cell: (r: GatewayApiKeyRecord) => formatTime(r.createdAt),
+                cell: (r: GatewayApiKeyRecord) =>
+                  formatTime(r.createdAt, locale, tCommon("never")),
               },
               {
                 /* internal 标成「已退役」而不是原样显示：一个和 External 并排、
                    看起来平起平坐的 Internal 标，读起来就像还能再签一把。 */
                 id: "kind",
-                header: "类型",
+                header: t("columns.kind"),
                 align: "center",
                 width: "xs",
                 cell: (r: GatewayApiKeyRecord) => (
                   <Badge
                     variant={r.kind === "internal" ? "secondary" : "outline"}
                   >
-                    {r.kind === "internal" ? "Internal · 已退役" : "External"}
+                    {r.kind === "internal"
+                      ? t("table.internalRetired")
+                      : "External"}
                   </Badge>
                 ),
               },
               {
                 id: "expiresAt",
-                header: "到期",
+                header: t("columns.expiresAt"),
                 align: "center",
                 width: "xs",
                 cell: (r: GatewayApiKeyRecord) =>
@@ -693,12 +738,14 @@ export default function KeysPage() {
                       {r.expiresAt.slice(0, 10)}
                     </span>
                   ) : (
-                    <span className="text-muted-foreground">不限</span>
+                    <span className="text-muted-foreground">
+                      {tCommon("unlimited")}
+                    </span>
                   ),
               },
               {
                 id: "state",
-                header: "状态",
+                header: t("columns.state"),
                 align: "center",
                 width: "xs",
                 cell: (r: GatewayApiKeyRecord) => (
@@ -707,15 +754,17 @@ export default function KeysPage() {
                      显示 active 等于告诉运营"还在生效"，那是假的。到期判断由 Atlas
                      统一做，这里不再复制一份。 */
                   <StatusBadge
-                    tone={KEY_STATE_META[r.effectiveState].tone}
+                    tone={KEY_STATE_TONE[r.effectiveState]}
                     dot
                     {...(r.effectiveState === "expired"
                       ? {
-                          title: `设为「${KEY_STATE_META[r.state].label}」，但已到期`,
+                          title: t("table.setButExpired", {
+                            label: tState(r.state),
+                          }),
                         }
                       : {})}
                   >
-                    {KEY_STATE_META[r.effectiveState].label}
+                    {tState(r.effectiveState)}
                   </StatusBadge>
                 ),
               },
@@ -737,9 +786,9 @@ export default function KeysPage() {
         onOpenChange={(open) => {
           if (!open) setDialog(null);
         }}
-        title="签发 API Key（External）"
-        description="明文只在签发完成的那一次展示，此后只能轮换。"
-        submitLabel="签发"
+        title={t("issue.title")}
+        description={t("issue.description")}
+        submitLabel={t("issue.submit")}
         submitting={submitting}
         submitDisabled={!draftValid}
         onSubmit={submit}
@@ -748,38 +797,36 @@ export default function KeysPage() {
             下一个人只会当成漏做又给加回来。 */}
         <Banner
           tone="info"
-          title="只签 External：内部产品不用 key"
-          description="兄弟产品（karda / arda / varda / runos）都持有 OIDC 客户端，用 300 秒的 S2S 令牌调 /v1/*，令牌上的 act.sub 就是授权表认的产品身份。给它们发一把长期有效、两边各存一份、谁拿着谁就是的共享密钥，不会多出任何能力，只会把已经更强的东西换成更弱的。所以 internal 是删掉而不是留着不用。"
+          title={t("issue.externalOnlyTitle")}
+          description={t("issue.externalOnlyDescription")}
         />
         <FieldGroup>
           <Field>
-            <FieldLabel htmlFor="key-name">名称</FieldLabel>
+            <FieldLabel htmlFor="key-name">{t("issue.nameLabel")}</FieldLabel>
             <Input
               id="key-name"
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               placeholder="acme-partner"
             />
-            <FieldDescription>调用方在日志与计量里按它归集。</FieldDescription>
+            <FieldDescription>{t("issue.nameDescription")}</FieldDescription>
           </Field>
 
           <Field>
-            <FieldLabel htmlFor="key-owner">归属</FieldLabel>
+            <FieldLabel htmlFor="key-owner">{t("issue.ownerLabel")}</FieldLabel>
             <Input
               id="key-owner"
               value={draft.owner}
               onChange={(e) => setDraft({ ...draft, owner: e.target.value })}
-              placeholder="外部合作方名称"
+              placeholder={t("issue.ownerPlaceholder")}
             />
-            <FieldDescription>
-              key 绑到哪个
-              product_code，它就是授权表里的一个产品——两条认证路径共用
-              同一套授权模型。
-            </FieldDescription>
+            <FieldDescription>{t("issue.ownerDescription")}</FieldDescription>
           </Field>
 
           <Field>
-            <FieldLabel htmlFor="key-expires">到期</FieldLabel>
+            <FieldLabel htmlFor="key-expires">
+              {t("issue.expiresLabel")}
+            </FieldLabel>
             <Input
               id="key-expires"
               type="date"
@@ -788,12 +835,7 @@ export default function KeysPage() {
                 setDraft({ ...draft, expiresAt: e.target.value })
               }
             />
-            <FieldDescription>
-              留空 =
-              不限期，跑到被撤销为止。设了之后**没有任何东西会去改这一行**
-              ——到期是读时判定的，状态列会显示「已过期」，但行上仍写着生效中。要
-              真正收回，仍然得有人来禁用或撤销。
-            </FieldDescription>
+            <FieldDescription>{t("issue.expiresDescription")}</FieldDescription>
           </Field>
         </FieldGroup>
       </DialogForm>
@@ -805,10 +847,12 @@ export default function KeysPage() {
         }}
         size="sm"
         title={
-          dialog?.kind === "rotate" ? `轮换 ${dialog.row.name}` : "轮换 Key"
+          dialog?.kind === "rotate"
+            ? t("rotate.title", { name: dialog.row.name })
+            : t("rotate.titleFallback")
         }
-        description="旧 Key 立即失效。持有方换上新值之前，调用会全部返回 401——先约好切换窗口。"
-        submitLabel="轮换"
+        description={t("rotate.description")}
+        submitLabel={t("rotate.submit")}
         submitting={submitting}
         onSubmit={submit}
       />
@@ -819,9 +863,11 @@ export default function KeysPage() {
         onOpenChange={(open) => {
           if (!open) setReveal(null);
         }}
-        title={reveal?.rotated ? "新 Key 已生成" : "Key 已签发"}
-        submitLabel="我已保存"
-        cancelLabel="关闭"
+        title={t(
+          reveal?.rotated ? "reveal.rotatedTitle" : "reveal.issuedTitle",
+        )}
+        submitLabel={t("reveal.saved")}
+        cancelLabel={tCommon("close")}
         onSubmit={(e) => {
           e.preventDefault();
           setReveal(null);
@@ -829,8 +875,8 @@ export default function KeysPage() {
       >
         <Banner
           tone="warning"
-          title="这是唯一一次看到明文"
-          description="关闭后无法再次查看。丢失只能轮换，不能找回。这个 key 目前还调不动 Atlas 网关——/v1/* 只认 S2S OIDC token，接入在等外部合作方（见上方说明），不要按「马上就能用」交付给对方。"
+          title={t("reveal.onlyChanceTitle")}
+          description={t("reveal.onlyChanceDescription")}
         />
         <Field>
           <FieldLabel htmlFor="key-secret">{reveal?.name}</FieldLabel>
@@ -848,7 +894,7 @@ export default function KeysPage() {
               onClick={() => void copySecret(reveal?.secret ?? "")}
             >
               <Icon name="copy" size="sm" />
-              复制
+              {tCommon("copy")}
             </Button>
           </div>
         </Field>

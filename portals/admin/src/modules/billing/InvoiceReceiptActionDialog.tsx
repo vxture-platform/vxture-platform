@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button, Icon, Input, Textarea } from "@vxture/design-system";
 import type {
   BillingInvoiceReceiptAction,
@@ -84,6 +85,7 @@ export function InvoiceReceiptActionDialog({
     sendAt: string | null;
   }) => void;
 }) {
+  const tShared = useTranslations();
   const [expressCompany, setExpressCompany] = useState(
     receipt.expressCompany ?? "",
   );
@@ -205,10 +207,12 @@ export function InvoiceReceiptActionDialog({
         ) : null}
         <footer>
           <Button variant="ghost" onClick={onCancel} disabled={busy}>
-            放弃
+            {tShared("actions.discard")}
           </Button>
           <Button type="submit" disabled={busy || !canSubmit}>
-            {busy ? "处理中" : invoiceReceiptActionLabel(action)}
+            {busy
+              ? tShared("status.generic.processing")
+              : invoiceReceiptActionLabel(action)}
           </Button>
         </footer>
       </form>

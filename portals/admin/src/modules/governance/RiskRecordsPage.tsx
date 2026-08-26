@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ActionMenu,
   Button,
@@ -127,52 +128,61 @@ function formIsValid(form: RiskForm, mode: "create" | "edit") {
   return true;
 }
 
-const COLUMNS: readonly DataTableColumn<RiskRecordItem>[] = [
-  {
-    id: "tenant",
-    header: "租户",
-    cell: (item) => (
-      <TableTitleCell
-        title={item.tenantName ?? item.tenantId}
-        {...(item.tenantNo ? { description: `#${item.tenantNo}` } : {})}
-      />
-    ),
-  },
-  {
-    id: "level",
-    header: "等级",
-    align: "center",
-    cell: (item) => (
-      <StatusBadge tone={levelTone(item.riskLevel)}>
-        {LEVEL_LABELS[item.riskLevel]}
-      </StatusBadge>
-    ),
-  },
-  {
-    id: "score",
-    header: "评分",
-    align: "right",
-    cell: (item) => item.riskScore ?? "-",
-  },
-  { id: "scope", header: "范围", cell: (item) => item.scope ?? "-" },
-  {
-    id: "tags",
-    header: "标签",
-    cell: (item) => (item.tags.length > 0 ? item.tags.join(", ") : "-"),
-  },
-  {
-    id: "reviewer",
-    header: "审阅人",
-    cell: (item) => item.reviewerName ?? "待审阅",
-  },
-  {
-    id: "updatedAt",
-    header: "更新时间",
-    cell: (item) => formatDate(item.updatedAt),
-  },
-];
+/* 从模块级常量改成收 `locale` 的工厂：常量在模块加载时就求值了，那一刻
+   没有任何运行时上下文，而列里的日期要按界面语言排。 */
+function columnsOf(locale: string): readonly DataTableColumn<RiskRecordItem>[] {
+  return [
+    {
+      id: "tenant",
+      header: "租户",
+      cell: (item) => (
+        <TableTitleCell
+          title={item.tenantName ?? item.tenantId}
+          {...(item.tenantNo ? { description: `#${item.tenantNo}` } : {})}
+        />
+      ),
+    },
+    {
+      id: "level",
+      header: "等级",
+      align: "center",
+      cell: (item) => (
+        <StatusBadge tone={levelTone(item.riskLevel)}>
+          {LEVEL_LABELS[item.riskLevel]}
+        </StatusBadge>
+      ),
+    },
+    {
+      id: "score",
+      header: "评分",
+      align: "right",
+      cell: (item) => item.riskScore ?? "-",
+    },
+    { id: "scope", header: "范围", cell: (item) => item.scope ?? "-" },
+    {
+      id: "tags",
+      header: "标签",
+      cell: (item) => (item.tags.length > 0 ? item.tags.join(", ") : "-"),
+    },
+    {
+      id: "reviewer",
+      header: "审阅人",
+      cell: (item) => item.reviewerName ?? "待审阅",
+    },
+    {
+      id: "updatedAt",
+      header: "更新时间",
+      cell: (item) => formatDate(item.updatedAt, locale),
+    },
+  ];
+}
 
 export function RiskRecordsPage() {
+  const locale = useLocale();
+  /* 钉在 locale 上：工厂每次调用都新建数组，而这套列此前是模块常量、
+     身份稳定。不 memo 等于每次渲染换一套列。 */
+  const tableColumns = useMemo(() => columnsOf(locale), [locale]);
+  const tShared = useTranslations();
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const [items, setItems] = useState<RiskRecordItem[]>([]);
@@ -417,7 +427,7 @@ export function RiskRecordsPage() {
                 setPage(1);
               }}
             >
-              <option value="all">全部状态</option>
+              <option value="all">{tShared("filters.allStates")}</option>
               <option value="pending">待审阅</option>
               <option value="reviewed">已审阅</option>
             </NativeSelect>
@@ -425,7 +435,7 @@ export function RiskRecordsPage() {
         }
         table={
           <DataTable
-            columns={COLUMNS}
+            columns={tableColumns}
             rows={pageItems}
             rowKey={(item) => item.id}
             loading={loading}
@@ -449,7 +459,7 @@ export function RiskRecordsPage() {
                   },
                   {
                     id: "edit",
-                    label: "编辑",
+                    label: tShared("actions.edit"),
                     icon: "edit",
                     disabled: submitting,
                     onSelect: () => openEdit(item),
@@ -478,7 +488,7 @@ export function RiskRecordsPage() {
                 description={
                   loadError ??
                   (search || levelFilter !== "all" || reviewFilter !== "all"
-                    ? "尝试调整筛选条件"
+                    ? tShared("common.adjustFiltersHint")
                     : "点击「新建记录」录入第一条租户风险评估")
                 }
               />
@@ -507,7 +517,9 @@ export function RiskRecordsPage() {
               ? "录入租户风险评估。创建后可在列表中审阅处置。"
               : "调整风险等级会自动清除审阅标记（记录重新进入待处置）。"
           }
-          submitLabel={dialogMode === "create" ? "创建" : "保存修改"}
+          submitLabel={
+            dialogMode === "create" ? tShared("actions.create") : "保存修改"
+          }
           submitting={submitting}
           submitDisabled={!formIsValid(form, dialogMode)}
           onOpenChange={(open) => {

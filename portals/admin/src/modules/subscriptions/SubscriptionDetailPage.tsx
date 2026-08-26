@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   Badge,
@@ -161,6 +162,8 @@ function SubscriptionDetails({
 }: {
   subscription: SubscriptionOperationDetailRecord;
 }) {
+  const locale = useLocale();
+  const tShared = useTranslations();
   const servicePlanHref = subscription.solutionAssociation.solutionCode
     ? `/service-plans/${encodeURIComponent(subscription.solutionAssociation.solutionCode)}/${encodeURIComponent(subscription.solutionAssociation.tierCode)}`
     : null;
@@ -180,7 +183,7 @@ function SubscriptionDetails({
             {orUnset(subscription.orderNo)}
           </DetailRow>
           <DetailRow label="租户">{orUnset(subscription.tenantName)}</DetailRow>
-          <DetailRow label="租户类型">
+          <DetailRow label={tShared("columns.tenantType")}>
             {orUnset(typeLabel(subscription.tenantType))}
           </DetailRow>
           <DetailRow label="订阅状态">
@@ -196,16 +199,16 @@ function SubscriptionDetails({
             {orUnset(subscription.operatorName)}
           </DetailRow>
           <DetailRow label="开通时间">
-            {orUnset(formatDate(subscription.startAt))}
+            {orUnset(formatDate(subscription.startAt, locale))}
           </DetailRow>
           <DetailRow label="到期时间">
-            {orUnset(formatDate(subscription.endAt))}
+            {orUnset(formatDate(subscription.endAt, locale))}
           </DetailRow>
           <DetailRow label="试用结束">
-            {orUnset(formatDate(subscription.trialEndAt))}
+            {orUnset(formatDate(subscription.trialEndAt, locale))}
           </DetailRow>
-          <DetailRow label="更新时间">
-            {orUnset(formatDate(subscription.updatedAt))}
+          <DetailRow label={tShared("columns.updatedAt")}>
+            {orUnset(formatDate(subscription.updatedAt, locale))}
           </DetailRow>
         </DetailList>
       </section>
@@ -336,7 +339,7 @@ function SubscriptionDetails({
                 <strong>{event.title}</strong>
                 <p>{event.description}</p>
                 <small>
-                  {event.actor} · {formatDate(event.at)}
+                  {event.actor} · {formatDate(event.at, locale)}
                 </small>
               </div>
             </article>
@@ -352,6 +355,7 @@ export function SubscriptionDetailPage({
 }: {
   subscriptionId: string;
 }) {
+  const tShared = useTranslations();
   const [subscription, setSubscription] =
     useState<SubscriptionOperationDetailRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -426,7 +430,7 @@ export function SubscriptionDetailPage({
               <Button asChild variant="outline">
                 <Link href="/subscriptions">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
             }
@@ -461,7 +465,7 @@ export function SubscriptionDetailPage({
               <Button asChild variant="outline">
                 <Link href="/subscriptions">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
               {subscription ? (
@@ -562,7 +566,7 @@ export function SubscriptionDetailPage({
         </>
       ) : (
         <section className="vx-tenant-directory__header">
-          <span>读取中</span>
+          <span>{tShared("common.loading")}</span>
         </section>
       )}
 

@@ -30,9 +30,11 @@ import { PageSection, SummaryStrip } from "@/layout/shell";
 // 数据格式化工具
 // ============================================================================
 
-function formatDate(dateStr: string): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言。这一处用的是
+   `month: "short"`，中英差得更远——`8月18日` 对 `Aug 18, 2026`。 */
+function formatDate(dateStr: string, locale: string): string {
   try {
-    return new Date(dateStr).toLocaleDateString("zh-CN", {
+    return new Date(dateStr).toLocaleDateString(locale, {
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -53,10 +55,16 @@ function formatAmount(amount: number, currency = "CNY"): string {
   return currency === "CNY" ? `¥${value}` : `${currency} ${value}`;
 }
 
-function buildInvoiceRows(invoices: ConsoleInvoice[]): string[][] {
+/* 也收 `locale` 往下传：它自己是纯函数，但里头调的 `formatDate` 现在按语言排
+   日期。这是「模块级辅助函数拿不到运行时上下文」的标准形态——上提到调用点
+   由组件传，比在这里读一个全局状态可靠（服务端并发渲染会串）。 */
+function buildInvoiceRows(
+  invoices: ConsoleInvoice[],
+  locale: string,
+): string[][] {
   return invoices.map((inv) => [
     inv.invoiceNumber,
-    formatDate(inv.dueDate),
+    formatDate(inv.dueDate, locale),
     inv.lineItems[0]?.description ?? "—",
     inv.status.charAt(0).toUpperCase() + inv.status.slice(1),
     formatAmount(inv.totalAmount, inv.currency),
@@ -169,7 +177,7 @@ export function DashboardPage() {
     },
   ];
 
-  const invoiceRows = buildInvoiceRows(invoices);
+  const invoiceRows = buildInvoiceRows(invoices, locale);
   const invoiceTableColumns = invoiceColumns(t);
 
   return (

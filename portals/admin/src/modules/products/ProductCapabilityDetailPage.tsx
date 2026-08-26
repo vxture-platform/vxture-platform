@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   Badge,
@@ -144,6 +145,8 @@ function ProductCapabilityDetails({
 }: {
   product: ProductCapabilityRecord;
 }) {
+  const locale = useLocale();
+  const tShared = useTranslations();
   return (
     <section
       className="vx-product-capability-detail"
@@ -168,10 +171,10 @@ function ProductCapabilityDetails({
           </DetailRow>
           <DetailRow label="负责团队">{orUnset(product.ownerTeam)}</DetailRow>
           <DetailRow label="创建时间">
-            {orUnset(formatDate(product.createdAt))}
+            {orUnset(formatDate(product.createdAt, locale))}
           </DetailRow>
-          <DetailRow label="更新时间">
-            {orUnset(formatDate(product.updatedAt))}
+          <DetailRow label={tShared("columns.updatedAt")}>
+            {orUnset(formatDate(product.updatedAt, locale))}
           </DetailRow>
         </DetailList>
       </section>
@@ -237,7 +240,7 @@ function ProductCapabilityDetails({
             {orUnset(product.integration.authMode)}
           </DetailRow>
           <DetailRow label="结算方式">
-            {product.integration.settlementMode || "无"}
+            {product.integration.settlementMode || tShared("common.none")}
           </DetailRow>
           <DetailRow label="接口地址">
             {product.integration.endpoint || "内部能力，无需外部接口"}
@@ -245,7 +248,7 @@ function ProductCapabilityDetails({
           <DetailRow label="最近检测">
             {orUnset(
               product.integration.lastCheckedAt
-                ? formatDate(product.integration.lastCheckedAt)
+                ? formatDate(product.integration.lastCheckedAt, locale)
                 : "未检测",
             )}
           </DetailRow>
@@ -319,6 +322,7 @@ export function ProductCapabilityDetailPage({
 }: {
   productCode: string;
 }) {
+  const tShared = useTranslations();
   const [product, setProduct] = useState<ProductCapabilityRecord | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -353,7 +357,7 @@ export function ProductCapabilityDetailPage({
               <Button asChild variant="outline">
                 <Link href="/products">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
             }
@@ -386,7 +390,7 @@ export function ProductCapabilityDetailPage({
               <Button asChild variant="outline">
                 <Link href="/products">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
               <Button variant="outline" disabled>
@@ -405,7 +409,7 @@ export function ProductCapabilityDetailPage({
         </>
       ) : (
         <section className="vx-tenant-directory__header">
-          <span>读取中</span>
+          <span>{tShared("common.loading")}</span>
         </section>
       )}
     </DetailPageTemplate>

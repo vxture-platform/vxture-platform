@@ -50,7 +50,7 @@ import type {
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
-import { useConsoleTranslations } from "@/lib/ConsoleIntl";
+import { useLocale, useTranslations } from "next-intl";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
 
@@ -62,9 +62,12 @@ const EMPTY_MARK = "-";
 
 function platformRoleDisplayName(
   admin: PlatformAdminRecord,
-  t: ReturnType<typeof useConsoleTranslations>,
+  t: ReturnType<typeof useTranslations>,
 ) {
-  return t(admin.roleNameI18nKey, admin.roleNameEn);
+  /* 同 AdminRolesPage：键来自库的伴生 `_key` 列，托底用库自己的英文名。 */
+  return t.has(admin.roleNameI18nKey)
+    ? t(admin.roleNameI18nKey)
+    : admin.roleNameEn;
 }
 
 function platformRoleStatusLabel(admin: PlatformAdminRecord) {
@@ -162,6 +165,7 @@ function PlatformUserActionsMenu({
   onResetMfa: (admin: PlatformAdminRecord) => void;
   onResetPassword: (admin: PlatformAdminRecord) => void;
 }) {
+  const tShared = useTranslations();
   // TD-017 分级模型：canManage=false（目标 rank ≥ 自身）时管理项禁用；
   // 后端三层门控无论如何都会拒绝，这里只是显示层一致性。
   const managed = admin.canManage !== false;
@@ -175,7 +179,7 @@ function PlatformUserActionsMenu({
         items={[
           {
             id: "profile",
-            label: "查看详情",
+            label: tShared("actions.viewDetail"),
             icon: "user",
             onSelect: () => onView(admin),
           },
@@ -238,8 +242,10 @@ function PlatformUserActionsMenu({
  * 状态标走 `StatusBadge`，语气由 `platformAdminStatusTone` / `platformRoleStatusTone` 给。
  */
 function usePlatformUserColumns(
-  t: ReturnType<typeof useConsoleTranslations>,
+  t: ReturnType<typeof useTranslations>,
 ): DataTableColumn<PlatformAdminRecord>[] {
+  const locale = useLocale();
+  const tShared = useTranslations();
   return [
     {
       id: "user",
@@ -255,7 +261,7 @@ function usePlatformUserColumns(
     },
     {
       id: "status",
-      header: "状态",
+      header: tShared("columns.state"),
       align: "center",
       cell: (admin) => (
         <StatusBadge
@@ -286,7 +292,11 @@ function usePlatformUserColumns(
       header: "最后登录",
       cell: (admin) => (
         <TableTitleCell
-          title={admin.lastLoginAt ? formatDate(admin.lastLoginAt) : EMPTY_MARK}
+          title={
+            admin.lastLoginAt
+              ? formatDate(admin.lastLoginAt, locale)
+              : EMPTY_MARK
+          }
           description={admin.lastLoginIp || EMPTY_MARK}
         />
       ),
@@ -309,8 +319,9 @@ function PlatformUsersCards({
   t,
 }: {
   admins: PlatformAdminRecord[];
-  t: ReturnType<typeof useConsoleTranslations>;
+  t: ReturnType<typeof useTranslations>;
 }) {
+  const locale = useLocale();
   return (
     <div className="vx-tenant-directory-cards" aria-label="平台用户卡片">
       {admins.map((admin) => (
@@ -338,7 +349,9 @@ function PlatformUsersCards({
           <div className="vx-tenant-directory-card__metrics">
             <span>
               <b>
-                {admin.lastLoginAt ? formatDate(admin.lastLoginAt) : EMPTY_MARK}
+                {admin.lastLoginAt
+                  ? formatDate(admin.lastLoginAt, locale)
+                  : EMPTY_MARK}
               </b>
               <small>最后登录</small>
             </span>
@@ -385,6 +398,8 @@ function PlatformUserDetailDialog({
   roleLabel: string;
   onClose: () => void;
 }) {
+  const locale = useLocale();
+  const tShared = useTranslations();
   return (
     /* 这是只读详情，不是表单：DialogForm 现在固定渲染「取消 + 提交」两个按钮，
      * 原来的 `footer` 逃生口随之取消。只读浮层直接用 Dialog 原语组装。 */
@@ -415,7 +430,7 @@ function PlatformUserDetailDialog({
             <dd>{roleLabel}</dd>
           </div>
           <div>
-            <dt>状态</dt>
+            <dt>{tShared("columns.state")}</dt>
             <dd>{platformAdminStatusLabel(admin)}</dd>
           </div>
           <div>
@@ -429,7 +444,9 @@ function PlatformUserDetailDialog({
           <div>
             <dt>最后登录</dt>
             <dd>
-              {admin.lastLoginAt ? formatDate(admin.lastLoginAt) : EMPTY_MARK}
+              {admin.lastLoginAt
+                ? formatDate(admin.lastLoginAt, locale)
+                : EMPTY_MARK}
             </dd>
           </div>
           <div>
@@ -443,7 +460,9 @@ function PlatformUserDetailDialog({
           <div>
             <dt>创建时间</dt>
             <dd>
-              {admin.createdAt ? formatDate(admin.createdAt) : EMPTY_MARK}
+              {admin.createdAt
+                ? formatDate(admin.createdAt, locale)
+                : EMPTY_MARK}
             </dd>
           </div>
           <div className="vx-admin-permission-detail-dialog__wide">
@@ -534,6 +553,7 @@ function PlatformUserCreateDialog({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const tShared = useTranslations();
   const canSubmit =
     form.username.trim() &&
     form.displayName.trim() &&
@@ -544,7 +564,7 @@ function PlatformUserCreateDialog({
       open
       title="新建运营用户"
       description="创建后系统会向该邮箱发送初始设置密码邮件，运营方不接触明文密码或链接。"
-      submitLabel="创建"
+      submitLabel={tShared("actions.create")}
       submitting={submitting}
       submitDisabled={!canSubmit}
       onOpenChange={(open) => {
@@ -682,7 +702,8 @@ function PlatformUserMetadataDialog({
 }
 
 export function PlatformUsersPage() {
-  const t = useConsoleTranslations();
+  const tShared = useTranslations();
+  const t = useTranslations();
   const { toast } = useToast();
   const { runWithStepUp } = useStepUp();
   const [resetInfo, setResetInfo] = useState<{
@@ -1100,7 +1121,7 @@ export function PlatformUsersPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredAdmins.length)}
             aria-label="平台用户筛选"
             search={
@@ -1134,12 +1155,12 @@ export function PlatformUsersPage() {
                 }
                 aria-label="用户状态"
               >
-                <option value="all">全部状态</option>
-                <option value="active">启用</option>
-                <option value="disabled">停用</option>
+                <option value="all">{tShared("filters.allStates")}</option>
+                <option value="active">{tShared("actions.enable")}</option>
+                <option value="disabled">{tShared("actions.disable")}</option>
                 <option value="locked">锁定</option>
                 <option value="pending">待激活</option>
-                <option value="suspended">暂停</option>
+                <option value="suspended">{tShared("actions.pause")}</option>
               </NativeSelect>
               <NativeSelect
                 className="vx-input vx-tenant-select"
@@ -1149,7 +1170,7 @@ export function PlatformUsersPage() {
                 }
                 aria-label="用户类型"
               >
-                <option value="all">全部类型</option>
+                <option value="all">{tShared("filters.allKinds")}</option>
                 <option value="system">系统用户</option>
                 <option value="normal">普通用户</option>
               </NativeSelect>
@@ -1161,7 +1182,7 @@ export function PlatformUsersPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
 
@@ -1200,7 +1221,7 @@ export function PlatformUsersPage() {
                         icon="x"
                         onClick={resetFilters}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -1228,7 +1249,7 @@ export function PlatformUsersPage() {
                     icon="x"
                     onClick={resetFilters}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

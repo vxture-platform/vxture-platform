@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -81,32 +82,45 @@ function redemptionSearchText(record: PromotionRedemptionRecord) {
     .toLowerCase();
 }
 
-const REDEMPTION_CSV_COLUMNS: CsvColumn<PromotionRedemptionRecord>[] = [
-  { label: "核销编号", value: (record) => record.redemptionNo },
-  { label: "券码", value: (record) => record.promotionCode },
-  { label: "优惠编号", value: (record) => record.promotionCode },
-  { label: "优惠名称", value: (record) => record.promotionName },
-  { label: "租户编号", value: (record) => record.tenantCode },
-  { label: "租户名称", value: (record) => record.tenantName },
-  { label: "租户类型", value: (record) => typeLabel(record.tenantType) },
-  { label: "订单号", value: (record) => record.orderNo ?? "" },
-  { label: "账单号", value: (record) => record.billNo },
-  { label: "账单状态", value: (record) => billStatusLabel(record.billStatus) },
-  { label: "套餐", value: (record) => record.servicePlanName ?? "" },
-  { label: "货币", value: (record) => record.currency },
-  { label: "订单金额", value: (record) => record.orderAmount },
-  { label: "优惠金额", value: (record) => record.discountAmount },
-  { label: "应付金额", value: (record) => record.payableAmount },
-  { label: "操作人", value: (record) => record.operatorName },
-  { label: "核销时间", value: (record) => formatDate(record.redeemedAt) },
-  { label: "备注", value: (record) => record.remark ?? "" },
-];
+/* 从模块级常量改成收 `locale` 的工厂：常量在模块加载时就求值了，那一刻
+   没有任何运行时上下文，而列里的日期要按界面语言排。 */
+function redemptionCsvColumns(
+  locale: string,
+): CsvColumn<PromotionRedemptionRecord>[] {
+  return [
+    { label: "核销编号", value: (record) => record.redemptionNo },
+    { label: "券码", value: (record) => record.promotionCode },
+    { label: "优惠编号", value: (record) => record.promotionCode },
+    { label: "优惠名称", value: (record) => record.promotionName },
+    { label: "租户编号", value: (record) => record.tenantCode },
+    { label: "租户名称", value: (record) => record.tenantName },
+    { label: "租户类型", value: (record) => typeLabel(record.tenantType) },
+    { label: "订单号", value: (record) => record.orderNo ?? "" },
+    { label: "账单号", value: (record) => record.billNo },
+    {
+      label: "账单状态",
+      value: (record) => billStatusLabel(record.billStatus),
+    },
+    { label: "套餐", value: (record) => record.servicePlanName ?? "" },
+    { label: "货币", value: (record) => record.currency },
+    { label: "订单金额", value: (record) => record.orderAmount },
+    { label: "优惠金额", value: (record) => record.discountAmount },
+    { label: "应付金额", value: (record) => record.payableAmount },
+    { label: "操作人", value: (record) => record.operatorName },
+    {
+      label: "核销时间",
+      value: (record) => formatDate(record.redeemedAt, locale),
+    },
+    { label: "备注", value: (record) => record.remark ?? "" },
+  ];
+}
 
 function RedemptionActionsMenu({
   record,
 }: {
   record: PromotionRedemptionRecord;
 }) {
+  const tShared = useTranslations();
   const router = useRouter();
 
   return (
@@ -126,7 +140,7 @@ function RedemptionActionsMenu({
           },
           {
             id: "tenant",
-            label: "查看租户",
+            label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
               router.push(`/tenants/${encodeURIComponent(record.tenantId)}`),
@@ -151,6 +165,7 @@ function RedemptionActionsMenu({
 
 /** 这一页的标已经是 DS `Tag`，不带业务色类，与批 4 无关。 */
 function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
+  const locale = useLocale();
   const router = useRouter();
 
   return [
@@ -217,7 +232,7 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
       align: "center",
       cell: (record) => (
         <TableTitleCell
-          title={formatDate(record.redeemedAt)}
+          title={formatDate(record.redeemedAt, locale)}
           description={record.remark ?? "系统记录"}
         />
       ),
@@ -230,6 +245,7 @@ function RedemptionCards({
 }: {
   records: PromotionRedemptionRecord[];
 }) {
+  const locale = useLocale();
   const router = useRouter();
 
   return (
@@ -284,7 +300,7 @@ function RedemptionCards({
               <small>账单应付</small>
             </span>
             <span>
-              <b>{formatDate(record.redeemedAt)}</b>
+              <b>{formatDate(record.redeemedAt, locale)}</b>
               <small>{record.operatorName}</small>
             </span>
           </div>
@@ -299,6 +315,8 @@ function RedemptionCards({
 }
 
 export function PromotionRedemptionsPage() {
+  const locale = useLocale();
+  const tShared = useTranslations();
   const [records, setRecords] = useState<PromotionRedemptionRecord[]>([]);
   const [recordsTruncated, setRecordsTruncated] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -388,7 +406,7 @@ export function PromotionRedemptionsPage() {
   function handleExportSelected() {
     exportRowsToCsv(
       "promotion-redemptions-export",
-      REDEMPTION_CSV_COLUMNS,
+      redemptionCsvColumns(locale),
       selectedRecords,
     );
   }
@@ -396,7 +414,7 @@ export function PromotionRedemptionsPage() {
   function handleExportAll() {
     exportRowsToCsv(
       "promotion-redemptions-export",
-      REDEMPTION_CSV_COLUMNS,
+      redemptionCsvColumns(locale),
       filteredRecords,
     );
   }
@@ -474,7 +492,7 @@ export function PromotionRedemptionsPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredRecords.length)}
             aria-label="优惠核销筛选"
             search={
@@ -510,12 +528,24 @@ export function PromotionRedemptionsPage() {
                 aria-label="账单状态"
               >
                 <option value="all">全部账单</option>
-                <option value="unpaid">待收款</option>
-                <option value="paying">支付中</option>
-                <option value="partial">部分收款</option>
-                <option value="paid">已结清</option>
-                <option value="overdue">逾期</option>
-                <option value="cancelled">已作废</option>
+                <option value="unpaid">
+                  {tShared("status.generic.awaitingPayment")}
+                </option>
+                <option value="paying">
+                  {tShared("status.generic.paying")}
+                </option>
+                <option value="partial">
+                  {tShared("status.generic.partiallyPaid")}
+                </option>
+                <option value="paid">
+                  {tShared("status.generic.settled")}
+                </option>
+                <option value="overdue">
+                  {tShared("status.generic.overdue")}
+                </option>
+                <option value="cancelled">
+                  {tShared("status.generic.voided")}
+                </option>
               </NativeSelect>
             </div>
           </FilterBar>
@@ -527,7 +557,7 @@ export function PromotionRedemptionsPage() {
               actions={[
                 {
                   id: "export",
-                  label: "导出所选",
+                  label: tShared("common.exportSelected"),
                   icon: "arrow-down",
                   onSelect: handleExportSelected,
                 },
@@ -541,7 +571,7 @@ export function PromotionRedemptionsPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
             {viewMode === "list" ? (
@@ -572,7 +602,7 @@ export function PromotionRedemptionsPage() {
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -600,7 +630,7 @@ export function PromotionRedemptionsPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

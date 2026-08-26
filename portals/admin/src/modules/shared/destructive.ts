@@ -2,7 +2,7 @@
 
 /* destructive.ts — 破坏性确认的文案出口（admin）。
  *
- * 与 console 那份同形，只是翻译函数来自本门户的 `useConsoleTranslations` 而不是
+ * 与 console 那份同形，只是翻译函数来自本门户的 `useTranslations` 而不是
  * next-intl 的 `useTranslations`。理由见 console 版头注：DS 的托底是英文且有意
  * 如此，四处文案必须由应用传。
  *
@@ -12,7 +12,7 @@
  */
 
 import type { DestructiveConfirm } from "@vxture/design-system";
-import { useConsoleTranslations } from "@/lib/ConsoleIntl";
+import { useTranslations } from "next-intl";
 
 /**
  * 返回一个「给 confirm 补文案」的函数。
@@ -23,9 +23,14 @@ import { useConsoleTranslations } from "@/lib/ConsoleIntl";
 export function useConfirmLabels(): (
   confirm: DestructiveConfirm,
 ) => DestructiveConfirm {
-  const t = useConsoleTranslations("destructive");
+  const t = useTranslations("destructive");
   return (confirm) => ({
-    titleTemplate: t("titleTemplate"),
+    /* `t.raw` 而不是 `t`：这一条的值是「{verb}{target}？」，占位符要留给 DS 去填。
+       `t()` 会当场把它当 ICU 串求值，而 `verb`/`target` 此刻还不存在，于是抛
+       `FORMATTING_ERROR` 并回落——确认框的标题就渲染成 `destructive.titleTemplate`
+       这一串键路径。这个缺陷两道门禁一个都抓不到（类型对、词条也对），是把栈
+       跑起来点开一个删除确认框才看见的。 */
+    titleTemplate: t.raw("titleTemplate") as string,
     cancelLabel: t("cancel"),
     pendingLabel: t("pending"),
     blockedHint: t("blocked"),
