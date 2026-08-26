@@ -13,14 +13,28 @@
     }
   },
   "common": {
-    "never": "Never",
-    "unlimited": "No expiry",
+    "actionFailed": "Something went wrong",
+    "cardsRetired": "Card view has been retired; use the list",
     "close": "Close",
-    "retry": "Retry",
-    "copy": "Copy",
     "copied": "Copied to clipboard",
+    "copy": "Copy",
+    "copyDenied": "The browser denied clipboard access — select and copy manually.",
     "copyFailed": "Copy failed",
-    "copyDenied": "The browser denied clipboard access — select and copy manually."
+    "copyRow": "Copy row",
+    "edit": "Edit",
+    "loadFailed": "Could not load",
+    "loadMore": "Load more",
+    "loadMoreFailed": "Could not load more",
+    "loading": "Loading…",
+    "never": "Never",
+    "noMatchHint": "Try a different keyword or filter.",
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "rowCopied": "Row copied to clipboard",
+    "save": "Save",
+    "saveFailed": "Could not save",
+    "uncategorized": "Uncategorized",
+    "unlimited": "No expiry"
   },
   "status": {
     "keyState": {
@@ -28,6 +42,10 @@
       "inactive": "Disabled",
       "revoked": "Revoked",
       "expired": "Expired"
+    },
+    "generic": {
+      "disabled": "Disabled",
+      "degraded": "Degraded"
     }
   },
   "modelKeysPage": {
@@ -138,5 +156,22 @@
       "onlyChanceTitle": "This is the only time you will see the secret",
       "onlyChanceDescription": "Once you close this you cannot view it again. A lost secret can only be rotated, never recovered. This key cannot call the Atlas gateway yet — /v1/* accepts S2S OIDC tokens only, and wiring waits on an external partner (see the note above). Do not hand it over as if it were ready to use."
     }
+  },
+  "columns": {
+    "actor": "Actor",
+    "kind": "Type",
+    "product": "Product",
+    "source": "Source",
+    "state": "State",
+    "target": "Object",
+    "time": "Time"
+  },
+  "filters": {
+    "allStates": "All states",
+    "stateLabel": "Filter by state"
+  },
+  "actions": {
+    "disable": "Disable",
+    "enable": "Enable"
   }
 }

@@ -65,6 +65,7 @@
  *      直接禁用派生行的撤销菜单项，而不是让人点了才发现无效。 */
 
 import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -177,6 +178,7 @@ export default function RunosGrantsPage() {
 }
 
 function RunosGrantsPageContent() {
+  const tShared = useTranslations();
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
@@ -557,7 +559,7 @@ function RunosGrantsPageContent() {
     },
     {
       id: "grantType",
-      header: "来源",
+      header: tShared("columns.source"),
       width: "sm" as const,
       cell: (r: GrantRecord) =>
         r.grantType === "derived" ? (
@@ -606,7 +608,7 @@ function RunosGrantsPageContent() {
     },
     {
       id: "state",
-      header: "状态",
+      header: tShared("columns.state"),
       align: "center" as const,
       width: "xs" as const,
       cell: (r: GrantRecord) => (
@@ -661,7 +663,9 @@ function RunosGrantsPageContent() {
       >
         <div className="flex flex-wrap items-end gap-sm">
           <Field className="w-fit grow max-w-panel-sm">
-            <FieldLabel htmlFor="lookup-product">产品</FieldLabel>
+            <FieldLabel htmlFor="lookup-product">
+              {tShared("columns.product")}
+            </FieldLabel>
             {/* 选择器不是输入框：产品码是**已知集合**（平台自己的目录），让人手打
                 已知集合里的值就是在制造错字。选中即查，不用再点一次「查询」。 */}
             <NativeSelect
@@ -844,7 +848,7 @@ function RunosGrantsPageContent() {
                 },
                 {
                   id: "grantType",
-                  header: "来源",
+                  header: tShared("columns.source"),
                   width: "sm",
                   cell: (r: GrantRecord) =>
                     r.grantType === "derived" ? (
@@ -1074,7 +1078,7 @@ function RunosGrantsPageContent() {
         }}
         title={amend ? `改条款 · ${amend.row.capabilityId}` : ""}
         description="改的是同一条授权：grantId 不变，已消费计数继续累计，派生闭包由 runos 在同一个调用里重编。撤销是另一个动作，不在这里发生。"
-        submitLabel="保存"
+        submitLabel={tShared("common.save")}
         submitting={submitting}
         onSubmit={submitAmend}
       >

@@ -37,6 +37,7 @@ import {
   type FormEvent,
 } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import {
   ActionMenu,
@@ -784,6 +785,7 @@ export default function ModelServicePage() {
 }
 
 function ModelServiceContent() {
+  const tShared = useTranslations();
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
@@ -1743,14 +1745,17 @@ function ModelServiceContent() {
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取 Provider 与模型。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取 Provider 与模型。"
+      />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
@@ -1825,7 +1830,7 @@ function ModelServiceContent() {
           <FilterBar
             view="list"
             onViewChange={() => {}}
-            cardsDisabledReason="卡片视图已下线，改用列表"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={
               filtered.length === providers.length
                 ? `${providers.length} 家 · ${models.length} 个模型`
@@ -1871,11 +1876,11 @@ function ModelServiceContent() {
                 setStatusFilter(e.target.value as typeof statusFilter);
                 pager.resetPage();
               }}
-              aria-label="状态筛选"
+              aria-label={tShared("filters.stateLabel")}
             >
-              <option value="all">全部状态</option>
-              <option value="active">启用</option>
-              <option value="inactive">停用</option>
+              <option value="all">{tShared("filters.allStates")}</option>
+              <option value="active">{tShared("actions.enable")}</option>
+              <option value="inactive">{tShared("actions.disable")}</option>
             </NativeSelect>
           </FilterBar>
         }
@@ -1902,7 +1907,7 @@ function ModelServiceContent() {
               },
               {
                 id: "type",
-                header: "类型",
+                header: tShared("columns.kind"),
                 align: "center",
                 width: "xs",
                 cell: (r: ModelProviderRecord) =>
@@ -1969,7 +1974,7 @@ function ModelServiceContent() {
               },
               {
                 id: "status",
-                header: "状态",
+                header: tShared("columns.state"),
                 align: "center",
                 width: "xs",
                 cell: (r: ModelProviderRecord) => (
@@ -1977,7 +1982,9 @@ function ModelServiceContent() {
                     tone={isEnabled(r.state) ? "success" : "neutral"}
                     dot
                   >
-                    {isEnabled(r.state) ? "启用" : "停用"}
+                    {isEnabled(r.state)
+                      ? tShared("actions.enable")
+                      : tShared("actions.disable")}
                   </StatusBadge>
                 ),
               },
@@ -2006,7 +2013,7 @@ function ModelServiceContent() {
                         },
                         {
                           id: "edit",
-                          label: "编辑",
+                          label: tShared("common.edit"),
                           icon: "edit",
                           separatorBefore: true,
                           onSelect: () => openProviderEdit(r),
@@ -2061,7 +2068,7 @@ function ModelServiceContent() {
                         isEnabled(r.state)
                           ? {
                               id: "disable",
-                              label: "停用",
+                              label: tShared("actions.disable"),
                               icon: "pause" as const,
                               separatorBefore: true,
                               onSelect: () =>
@@ -2073,7 +2080,7 @@ function ModelServiceContent() {
                             }
                           : {
                               id: "enable",
-                              label: "启用",
+                              label: tShared("actions.enable"),
                               icon: "play" as const,
                               separatorBefore: true,
                               onSelect: () =>
@@ -2139,7 +2146,7 @@ function ModelServiceContent() {
         size="xl"
         title={editingProvider ? "编辑 Provider" : "接入 Provider"}
         description="Provider＝模型的供应方（收费主体）。密钥、账单都按它归属；同一个模型由多家供应时，每家各接入一次。"
-        submitLabel={editingProvider ? "保存" : "接入"}
+        submitLabel={editingProvider ? tShared("common.save") : "接入"}
         submitting={submitting}
         submitDisabled={!providerDraftValid}
         onSubmit={submitProvider}
@@ -2191,7 +2198,9 @@ function ModelServiceContent() {
                 </FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="provider-type">类型</FieldLabel>
+                <FieldLabel htmlFor="provider-type">
+                  {tShared("columns.kind")}
+                </FieldLabel>
                 <NativeSelect
                   id="provider-type"
                   value={providerDraft.providerType}
@@ -2476,7 +2485,7 @@ function ModelServiceContent() {
         size="xl"
         title={editingModel ? "编辑模型" : "注册模型"}
         description="一条模型＝从某家 Provider 接入的某个模型。编码与类型创建后不可改，其余随时可调。"
-        submitLabel={editingModel ? "保存" : "注册"}
+        submitLabel={editingModel ? tShared("common.save") : "注册"}
         submitting={submitting}
         submitDisabled={!modelDraftValid}
         onSubmit={submitModel}
@@ -2552,7 +2561,9 @@ function ModelServiceContent() {
                   </FieldDescription>
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="model-type">类型</FieldLabel>
+                  <FieldLabel htmlFor="model-type">
+                    {tShared("columns.kind")}
+                  </FieldLabel>
                   <NativeSelect
                     id="model-type"
                     value={modelDraft.modelType}
@@ -3021,17 +3032,20 @@ function ModelServiceContent() {
               description="密钥只在这里录入一次，之后任何读接口都不会回显——包括这个页面自己。忘记了只能轮换，不能查看。"
             />
             {keysLoad.kind === "loading" ? (
-              <EmptyState title="读取中…" description="正在读取密钥清单。" />
+              <EmptyState
+                title={tShared("common.loading")}
+                description="正在读取密钥清单。"
+              />
             ) : keysLoad.kind === "error" ? (
               <EmptyState
-                title="读取失败"
+                title={tShared("common.loadFailed")}
                 description={keysLoad.message}
                 action={
                   <Button
                     variant="secondary"
                     onClick={() => void loadKeys(keysProvider.providerCode)}
                   >
-                    重试
+                    {tShared("common.retry")}
                   </Button>
                 }
               />
@@ -3060,7 +3074,9 @@ function ModelServiceContent() {
                             tone={isEnabled(k.state) ? "success" : "neutral"}
                             dot
                           >
-                            {isEnabled(k.state) ? "启用" : "停用"}
+                            {isEnabled(k.state)
+                              ? tShared("actions.enable")
+                              : tShared("actions.disable")}
                           </StatusBadge>
                         </div>
                         <span className="text-body-sm text-muted-foreground">
@@ -3083,7 +3099,9 @@ function ModelServiceContent() {
                             },
                             {
                               id: "toggle",
-                              label: isEnabled(k.state) ? "停用" : "启用",
+                              label: isEnabled(k.state)
+                                ? tShared("actions.disable")
+                                : tShared("actions.enable"),
                               icon: isEnabled(k.state) ? "pause" : "play",
                               onSelect: () => void toggleKeyActive(k),
                             },

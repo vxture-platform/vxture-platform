@@ -27,6 +27,7 @@
  *    自动停用一个正在跑的产品，是把监测信号变成破坏性动作。 */
 
 import { Suspense, useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -93,6 +94,7 @@ export default function ProductLaunchPage() {
 }
 
 function ProductLaunch() {
+  const tShared = useTranslations();
   const { toast } = useToast();
   const router = useRouter();
   const productId = useSearchParams().get("productId") ?? "";
@@ -246,11 +248,11 @@ function ProductLaunch() {
       <ViewLayout>
         <ViewHeader icon="rocket" title="产品上线" />
         <EmptyState
-          title="读取失败"
+          title={tShared("common.loadFailed")}
           description={load.kind === "error" ? load.message : "产品不存在。"}
           action={
             <Button variant="secondary" onClick={() => void reload()}>
-              重试
+              {tShared("common.retry")}
             </Button>
           }
         />
@@ -262,7 +264,10 @@ function ProductLaunch() {
     return (
       <ViewLayout>
         <ViewHeader icon="rocket" title="产品上线" />
-        <EmptyState title="读取中…" description="正在读取产品信息。" />
+        <EmptyState
+          title={tShared("common.loading")}
+          description="正在读取产品信息。"
+        />
       </ViewLayout>
     );
   }

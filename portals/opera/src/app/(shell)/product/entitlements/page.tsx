@@ -38,6 +38,7 @@
  * opera-bff 的 `grants/summary` 吸收掉（那是个形状固定的接缝，上游补齐后只换内脏）。 */
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -175,6 +176,7 @@ export default function ProductEntitlementsPage() {
 }
 
 function ProductEntitlements() {
+  const tShared = useTranslations();
   const withLabels = useConfirmLabels();
   const router = useRouter();
   const params = useSearchParams();
@@ -394,8 +396,12 @@ function ProductEntitlements() {
   /** capabilityId → 分类，清单页的分布要用。 */
   const categoryOf = useMemo(() => {
     const m = new Map(catalog.map((c) => [c.capabilityId, c.category]));
-    return (id: string) => m.get(id) ?? "未分类";
-  }, [catalog]);
+    return (id: string) => m.get(id) ?? tShared("common.uncategorized");
+    /* `tShared` 要进依赖：它是这个 memo 返回的闭包里读的。next-intl 的
+       translator 按 (命名空间, messages, locale) 记忆化，只在切语言时换身份——
+       所以这不会让 memo 每次渲染失效，反而保证了切语言时「未分类」跟着变。
+       这里没有 effect 依赖 `categoryOf`，不存在 `useCallback` 那种无限重跑。 */
+  }, [catalog, tShared]);
 
   const routesByProduct = useMemo(() => {
     const m = new Map<string, RouteGrant[]>();
@@ -528,11 +534,11 @@ function ProductEntitlements() {
       <ViewLayout>
         <ViewHeader icon="ticket" title="权益配置" />
         <EmptyState
-          title="读取失败"
+          title={tShared("common.loadFailed")}
           description={load.message}
           action={
             <Button variant="secondary" onClick={() => void reload()}>
-              重试
+              {tShared("common.retry")}
             </Button>
           }
         />
@@ -618,7 +624,7 @@ function ProductEntitlements() {
                 },
                 {
                   id: "state",
-                  header: "状态",
+                  header: tShared("columns.state"),
                   align: "center",
                   width: "xs",
                   cell: (g: RouteGrant) => (
@@ -626,7 +632,9 @@ function ProductEntitlements() {
                       tone={isEnabled(g.state) ? "success" : "neutral"}
                       dot
                     >
-                      {isEnabled(g.state) ? "生效中" : "已停用"}
+                      {isEnabled(g.state)
+                        ? "生效中"
+                        : tShared("status.generic.disabled")}
                     </StatusBadge>
                   ),
                 },
@@ -643,7 +651,7 @@ function ProductEntitlements() {
                         items={[
                           {
                             id: "deactivate",
-                            label: "停用",
+                            label: tShared("actions.disable"),
                             icon: "pause" as const,
                             danger: true,
                             disabled: !isEnabled(g.state),
@@ -787,7 +795,7 @@ function ProductEntitlements() {
                 },
                 {
                   id: "type",
-                  header: "来源",
+                  header: tShared("columns.source"),
                   align: "center",
                   width: "xs",
                   cell: (r: CapabilityRow) => (
@@ -814,7 +822,7 @@ function ProductEntitlements() {
                 },
                 {
                   id: "state",
-                  header: "状态",
+                  header: tShared("columns.state"),
                   align: "center",
                   width: "xs",
                   cell: (r: CapabilityRow) => (
@@ -1186,7 +1194,10 @@ function ProductEntitlements() {
       </InputGroup>
 
       {load.kind === "loading" ? (
-        <EmptyState title="读取中…" description="正在汇总各产品的权益。" />
+        <EmptyState
+          title={tShared("common.loading")}
+          description="正在汇总各产品的权益。"
+        />
       ) : visible.length === 0 ? (
         <EmptyState title="没有匹配的产品" description="换个关键词再看。" />
       ) : (

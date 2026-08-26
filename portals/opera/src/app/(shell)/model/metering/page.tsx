@@ -40,6 +40,7 @@
  * 只读：这里记的是请求/Token 用量事实，定价是 admin 商业层（price-rules）的事。 */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   ActionMenu,
   Banner,
@@ -277,6 +278,7 @@ function toCsvRow(
 }
 
 export default function MeteringPage() {
+  const tShared = useTranslations();
   const { toast } = useToast();
   const [axis, setAxis] = useState<RollupDimension>("tenant");
   /** 上游回显的轴。见 `reload()` 里为什么不直接用 `axis`。 */
@@ -355,12 +357,12 @@ export default function MeteringPage() {
     const text = toCsvRow(resolvedAxis, r, tenancy).filter(Boolean).join(" · ");
     try {
       await navigator.clipboard.writeText(text);
-      toast({ tone: "success", title: "已复制该行到剪贴板" });
+      toast({ tone: "success", title: tShared("common.rowCopied") });
     } catch {
       toast({
         tone: "danger",
-        title: "复制失败",
-        description: "浏览器拒绝了剪贴板访问，请手动选中复制。",
+        title: tShared("common.copyFailed"),
+        description: tShared("common.copyDenied"),
       });
     }
   };
@@ -484,7 +486,10 @@ export default function MeteringPage() {
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取用量汇总。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取用量汇总。"
+      />
     ) : load.kind === "unsupported-axis" ? (
       <EmptyState
         title={`当前 Atlas 部署不支持按 ${currentAxis.label} 聚合`}
@@ -497,11 +502,11 @@ export default function MeteringPage() {
       />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
@@ -577,7 +582,7 @@ export default function MeteringPage() {
         <FilterBar
           view="list"
           onViewChange={() => {}}
-          cardsDisabledReason="卡片视图已下线，改用列表"
+          cardsDisabledReason={tShared("common.cardsRetired")}
           count={
             filtered.length === rows.length
               ? rows.length
@@ -664,7 +669,7 @@ export default function MeteringPage() {
               items={[
                 {
                   id: "copy",
-                  label: "复制该行",
+                  label: tShared("common.copyRow"),
                   icon: "copy",
                   onSelect: () => void copyRow(r),
                 },

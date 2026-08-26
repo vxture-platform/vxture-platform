@@ -36,6 +36,7 @@
  * 不轮询（设计文件 §7.3：窗口聚合类按手动刷新）——窗口本身是按月的，秒级刷新没有意义。 */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Badge,
   Banner,
@@ -207,6 +208,7 @@ function axisIdentity(row: UsageSummaryRow): string {
 }
 
 export default function CapabilityMeteringPage() {
+  const tShared = useTranslations();
   const { toast } = useToast();
   const [axis, setAxis] = useState<UsageAxis>("workspace");
   const [window_, setWindow] = useState(currentMonth);
@@ -302,14 +304,17 @@ export default function CapabilityMeteringPage() {
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取用量汇总。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取用量汇总。"
+      />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
@@ -341,7 +346,7 @@ export default function CapabilityMeteringPage() {
                 disabled={load.kind === "loading"}
               >
                 <Icon name="refresh" size="sm" aria-hidden="true" />
-                刷新
+                {tShared("common.refresh")}
               </Button>
               <Button
                 variant="outline"
@@ -412,7 +417,7 @@ export default function CapabilityMeteringPage() {
         <FilterBar
           view="list"
           onViewChange={() => {}}
-          cardsDisabledReason="卡片视图已下线，改用列表"
+          cardsDisabledReason={tShared("common.cardsRetired")}
           count={
             visible.length === rows.length
               ? rows.length

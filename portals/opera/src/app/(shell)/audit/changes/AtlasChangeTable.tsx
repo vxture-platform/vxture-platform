@@ -39,6 +39,7 @@
  * 悄悄决定"哪些字段不重要"。 */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   ActionMenu,
   Badge,
@@ -128,6 +129,7 @@ function isRouteMissing(error: unknown): boolean {
 }
 
 export function AtlasChangeTable() {
+  const tShared = useTranslations();
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const canRead = can(MANAGE);
@@ -191,7 +193,7 @@ export function AtlasChangeTable() {
     } catch (error) {
       toast({
         tone: "danger",
-        title: "加载更多失败",
+        title: tShared("common.loadMoreFailed"),
         ...(error instanceof OperaApiError && error.message
           ? { description: error.message }
           : {}),
@@ -237,12 +239,12 @@ export function AtlasChangeTable() {
     ].join(" · ");
     try {
       await navigator.clipboard.writeText(text);
-      toast({ tone: "success", title: "已复制该行到剪贴板" });
+      toast({ tone: "success", title: tShared("common.rowCopied") });
     } catch {
       toast({
         tone: "danger",
-        title: "复制失败",
-        description: "浏览器拒绝了剪贴板访问，请手动选中复制。",
+        title: tShared("common.copyFailed"),
+        description: tShared("common.copyDenied"),
       });
     }
   };
@@ -255,24 +257,27 @@ export function AtlasChangeTable() {
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取 Atlas 变更流水。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取 Atlas 变更流水。"
+      />
     ) : load.kind === "unavailable" ? (
       <EmptyState
         title="当前 Atlas 部署还没有变更流水接口"
         description="这个读端点由 vxture-atlas#159 §6 交付（应用镜像 v0.4.0）。数据库侧的 audit schema 可能已经建好，但只有部署了带这条路由的镜像，这里才读得到——写入本身不受影响：变更一直在记，只是还取不出来。"
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
@@ -301,7 +306,7 @@ export function AtlasChangeTable() {
       <FilterBar
         view="list"
         onViewChange={() => {}}
-        cardsDisabledReason="卡片视图已下线，改用列表"
+        cardsDisabledReason={tShared("common.cardsRetired")}
         count={
           visible.length === rows.length
             ? `${rows.length}${cursor ? "+" : ""}`
@@ -348,7 +353,7 @@ export function AtlasChangeTable() {
           disabled={load.kind === "loading"}
         >
           <Icon name="refresh" size="sm" aria-hidden="true" />
-          刷新
+          {tShared("common.refresh")}
         </Button>
       </FilterBar>
 
@@ -356,13 +361,13 @@ export function AtlasChangeTable() {
         columns={[
           {
             id: "time",
-            header: "时间",
+            header: tShared("columns.time"),
             width: "sm",
             cell: (r: AtlasChangeRecord) => formatTime(r.occurredAt),
           },
           {
             id: "operator",
-            header: "操作者",
+            header: tShared("columns.actor"),
             width: "sm",
             cell: (r: AtlasChangeRecord) => (
               <span className="flex flex-col gap-2xs">
@@ -383,7 +388,7 @@ export function AtlasChangeTable() {
           },
           {
             id: "target",
-            header: "对象",
+            header: tShared("columns.target"),
             cell: (r: AtlasChangeRecord) => (
               <span className="flex flex-col gap-2xs">
                 <span className="text-label-md text-foreground">
@@ -447,7 +452,7 @@ export function AtlasChangeTable() {
             items={[
               {
                 id: "copy",
-                label: "复制该行",
+                label: tShared("common.copyRow"),
                 icon: "copy",
                 onSelect: () => void copyRow(r),
               },
@@ -465,7 +470,9 @@ export function AtlasChangeTable() {
               onClick={() => void loadMore()}
               disabled={loadingMore}
             >
-              {loadingMore ? "加载中…" : "加载更多"}
+              {loadingMore
+                ? tShared("common.loading")
+                : tShared("common.loadMore")}
             </Button>
           ) : rows.length > 0 ? (
             <p className="text-body-sm text-muted-foreground">已经到底了。</p>

@@ -20,6 +20,7 @@
  * 一直显示 unknown，这里不把它渲染成红色。 */
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActionMenu,
@@ -126,6 +127,7 @@ function formatTime(iso: string): string {
 }
 
 export default function DashboardPage() {
+  const tShared = useTranslations();
   const { toast } = useToast();
   const [providers, setProviders] = useState<ModelProviderRecord[]>([]);
   const [models, setModels] = useState<AiModelRecord[]>([]);
@@ -193,12 +195,12 @@ export default function DashboardPage() {
     ].join(" · ");
     try {
       await navigator.clipboard.writeText(text);
-      toast({ tone: "success", title: "已复制该行到剪贴板" });
+      toast({ tone: "success", title: tShared("common.rowCopied") });
     } catch {
       toast({
         tone: "danger",
-        title: "复制失败",
-        description: "浏览器拒绝了剪贴板访问，请手动选中复制。",
+        title: tShared("common.copyFailed"),
+        description: tShared("common.copyDenied"),
       });
     }
   };
@@ -241,14 +243,17 @@ export default function DashboardPage() {
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取 Dashboard 数据。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取 Dashboard 数据。"
+      />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
@@ -343,7 +348,7 @@ export default function DashboardPage() {
             },
             {
               id: "type",
-              header: "类型",
+              header: tShared("columns.kind"),
               align: "center",
               width: "xs",
               cell: (r: ModelProviderRecord) => r.providerType,
@@ -364,12 +369,14 @@ export default function DashboardPage() {
             },
             {
               id: "status",
-              header: "状态",
+              header: tShared("columns.state"),
               align: "center",
               width: "xs",
               cell: (r: ModelProviderRecord) => (
                 <StatusBadge tone={providerTone(r.state)} dot>
-                  {isEnabled(r.state) ? "启用" : "停用"}
+                  {isEnabled(r.state)
+                    ? tShared("actions.enable")
+                    : tShared("actions.disable")}
                 </StatusBadge>
               ),
             },
@@ -414,19 +421,19 @@ export default function DashboardPage() {
           columns={[
             {
               id: "occurredAt",
-              header: "时间",
+              header: tShared("columns.time"),
               width: "sm",
               cell: (r: AuditLogEntry) => formatTime(r.occurredAt),
             },
             {
               id: "actor",
-              header: "操作者",
+              header: tShared("columns.actor"),
               width: "sm",
               cell: (r: AuditLogEntry) => r.actorName,
             },
             {
               id: "target",
-              header: "对象",
+              header: tShared("columns.target"),
               cell: (r: AuditLogEntry) => `${r.objectType} · ${r.objectId}`,
             },
             {
@@ -448,7 +455,7 @@ export default function DashboardPage() {
               items={[
                 {
                   id: "copy",
-                  label: "复制该行",
+                  label: tShared("common.copyRow"),
                   icon: "copy",
                   onSelect: () => void copyEvent(r),
                 },

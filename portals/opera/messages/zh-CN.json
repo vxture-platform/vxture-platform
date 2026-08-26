@@ -13,14 +13,28 @@
     }
   },
   "common": {
-    "never": "从未",
-    "unlimited": "不限",
+    "actionFailed": "操作失败",
+    "cardsRetired": "卡片视图已下线，改用列表",
     "close": "关闭",
-    "retry": "重试",
-    "copy": "复制",
     "copied": "已复制到剪贴板",
+    "copy": "复制",
+    "copyDenied": "浏览器拒绝了剪贴板访问，请手动选中复制。",
     "copyFailed": "复制失败",
-    "copyDenied": "浏览器拒绝了剪贴板访问，请手动选中复制。"
+    "copyRow": "复制该行",
+    "edit": "编辑",
+    "loadFailed": "读取失败",
+    "loadMore": "加载更多",
+    "loadMoreFailed": "加载更多失败",
+    "loading": "读取中…",
+    "never": "从未",
+    "noMatchHint": "换个关键词或筛选条件再看。",
+    "refresh": "刷新",
+    "retry": "重试",
+    "rowCopied": "已复制该行到剪贴板",
+    "save": "保存",
+    "saveFailed": "保存失败",
+    "uncategorized": "未分类",
+    "unlimited": "不限"
   },
   "status": {
     "keyState": {
@@ -28,6 +42,10 @@
       "inactive": "已停用",
       "revoked": "已撤销",
       "expired": "已过期"
+    },
+    "generic": {
+      "disabled": "已停用",
+      "degraded": "降级"
     }
   },
   "modelKeysPage": {
@@ -138,5 +156,22 @@
       "onlyChanceTitle": "这是唯一一次看到明文",
       "onlyChanceDescription": "关闭后无法再次查看。丢失只能轮换，不能找回。这个 key 目前还调不动 Atlas 网关——/v1/* 只认 S2S OIDC token，接入在等外部合作方（见上方说明），不要按「马上就能用」交付给对方。"
     }
+  },
+  "columns": {
+    "actor": "操作者",
+    "kind": "类型",
+    "product": "产品",
+    "source": "来源",
+    "state": "状态",
+    "target": "对象",
+    "time": "时间"
+  },
+  "filters": {
+    "allStates": "全部状态",
+    "stateLabel": "状态筛选"
+  },
+  "actions": {
+    "disable": "停用",
+    "enable": "启用"
   }
 }

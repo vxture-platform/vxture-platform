@@ -12,6 +12,7 @@
  * 只会在两者相接的地方还回去。admin 与 opera 写的是同一张平台级审计表。 */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   ActionMenu,
   Button,
@@ -65,6 +66,7 @@ function formatTime(iso: string): string {
 }
 
 export function PlatformChangeTable() {
+  const tShared = useTranslations();
   const { toast } = useToast();
   const [rows, setRows] = useState<AuditLogEntry[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
@@ -131,26 +133,29 @@ export function PlatformChangeTable() {
     ].join(" · ");
     try {
       await navigator.clipboard.writeText(text);
-      toast({ tone: "success", title: "已复制该行到剪贴板" });
+      toast({ tone: "success", title: tShared("common.rowCopied") });
     } catch {
       toast({
         tone: "danger",
-        title: "复制失败",
-        description: "浏览器拒绝了剪贴板访问，请手动选中复制。",
+        title: tShared("common.copyFailed"),
+        description: tShared("common.copyDenied"),
       });
     }
   };
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取审计留痕。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取审计留痕。"
+      />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
@@ -170,7 +175,7 @@ export function PlatformChangeTable() {
       <FilterBar
         view="list"
         onViewChange={() => {}}
-        cardsDisabledReason="卡片视图已下线，改用列表"
+        cardsDisabledReason={tShared("common.cardsRetired")}
         count={
           visible.length === rows.length
             ? rows.length
@@ -213,7 +218,7 @@ export function PlatformChangeTable() {
           disabled={load.kind === "loading"}
         >
           <Icon name="refresh" size="sm" aria-hidden="true" />
-          刷新
+          {tShared("common.refresh")}
         </Button>
       </FilterBar>
 
@@ -221,20 +226,20 @@ export function PlatformChangeTable() {
         columns={[
           {
             id: "occurredAt",
-            header: "时间",
+            header: tShared("columns.time"),
             width: "sm",
             cell: (r: AuditLogEntry) => formatTime(r.occurredAt),
             sortable: true,
           },
           {
             id: "actor",
-            header: "操作者",
+            header: tShared("columns.actor"),
             width: "sm",
             cell: (r: AuditLogEntry) => r.actorName,
           },
           {
             id: "target",
-            header: "对象",
+            header: tShared("columns.target"),
             cell: (r: AuditLogEntry) => (
               <span className="text-label-md text-foreground">
                 {r.objectType} · {r.objectId}
@@ -273,7 +278,7 @@ export function PlatformChangeTable() {
             items={[
               {
                 id: "copy",
-                label: "复制该行",
+                label: tShared("common.copyRow"),
                 icon: "copy",
                 onSelect: () => void copyRow(r),
               },

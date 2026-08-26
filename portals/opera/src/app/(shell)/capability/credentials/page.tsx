@@ -55,6 +55,7 @@ import {
   type StatusBadgeTone,
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
+import { useTranslations } from "next-intl";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
@@ -127,6 +128,7 @@ type LoadState =
   | { kind: "ready" };
 
 export default function RunosCredentialsPage() {
+  const tShared = useTranslations();
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
@@ -290,14 +292,17 @@ export default function RunosCredentialsPage() {
 
   const emptyState =
     load.kind === "loading" ? (
-      <EmptyState title="读取中…" description="正在读取凭证绑定。" />
+      <EmptyState
+        title={tShared("common.loading")}
+        description="正在读取凭证绑定。"
+      />
     ) : load.kind === "error" ? (
       <EmptyState
-        title="读取失败"
+        title={tShared("common.loadFailed")}
         description={load.message}
         action={
           <Button variant="secondary" onClick={() => void reload()}>
-            重试
+            {tShared("common.retry")}
           </Button>
         }
       />
@@ -336,7 +341,7 @@ export default function RunosCredentialsPage() {
           <FilterBar
             view="list"
             onViewChange={() => {}}
-            cardsDisabledReason="卡片视图已下线，改用列表"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={
               filtered.length === rows.length
                 ? rows.length
@@ -405,7 +410,7 @@ export default function RunosCredentialsPage() {
               },
               {
                 id: "state",
-                header: "状态",
+                header: tShared("columns.state"),
                 align: "center",
                 width: "xs",
                 cell: (r: CredentialBindingRecord) => (
@@ -615,7 +620,7 @@ export default function RunosCredentialsPage() {
             : "调整适用范围"
         }
         description="不需要重新提供密钥。清空等于退役——runos 会拒绝空数组，要退役请用「吊销」。"
-        submitLabel="保存"
+        submitLabel={tShared("common.save")}
         submitting={submitting}
         submitDisabled={parseList(scopeInput).length === 0}
         onSubmit={submit}
