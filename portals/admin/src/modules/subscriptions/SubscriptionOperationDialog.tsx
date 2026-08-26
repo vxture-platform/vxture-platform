@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Icon, Button, Textarea } from "@vxture/design-system";
+import { DialogForm, Icon, Label, Textarea } from "@vxture/design-system";
 import type { IconName } from "@vxture/design-system";
 import type {
   SubscriptionOperationAction,
@@ -120,73 +120,56 @@ export function SubscriptionOperationDialog({
     setReason("");
   }, [action, subscriptionName]);
 
+  /* 原来是一整套手搓的模态：自己的遮罩、面板、头部、页脚、两个按钮，外加一个
+   * 按动作染色的圆形图标。`DialogForm` 把这些全都管了——遮罩与焦点陷阱、Esc 关闭、
+   * 提交中的按钮文案、破坏性提交的语义色（`danger`）。
+   *
+   * 那个染色圆图标不再画：它的信息量与「取消订阅」这四个字重复，而破坏性由
+   * `danger` 表达；图标本身留在标题行里，不再自带一层底色。 */
   return (
-    <div
-      className="vx-subscription-action-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="subscription-action-title"
-    >
-      <form
-        className="vx-subscription-action-dialog__panel"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (trimmedReason) onSubmit(trimmedReason);
-        }}
-      >
-        <header>
-          <span
+    <DialogForm
+      open
+      title={
+        <span className="inline-flex items-center gap-sm">
+          <Icon
+            name={subscriptionActionIcon(action)}
+            size="sm"
+            fallback="placeholder"
             aria-hidden="true"
-            className={`vx-subscription-action-dialog__icon vx-subscription-action-dialog__icon--${action}`}
-          >
-            <Icon
-              name={subscriptionActionIcon(action)}
-              size="lg"
-              fallback="placeholder"
-            />
-          </span>
-          <div>
-            <h2 id="subscription-action-title">
-              {subscriptionActionLabel(action)}
-            </h2>
-            <p>{subscriptionName}</p>
-          </div>
-        </header>
-        <p className="vx-subscription-action-dialog__description">
-          {subscriptionActionDescription(action)}
-        </p>
-        <label className="vx-subscription-action-dialog__field">
-          <span>操作原因</span>
-          <Textarea
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            placeholder={subscriptionActionPlaceholder(action)}
-            maxLength={512}
-            autoFocus
           />
-        </label>
-        {error ? (
-          <p className="vx-subscription-action-dialog__error">{error}</p>
-        ) : null}
-        <footer>
-          <Button variant="ghost" onClick={onCancel} disabled={busy}>
-            {tShared("actions.discard")}
-          </Button>
-          <Button
-            type="submit"
-            className={
-              action === "cancel"
-                ? "vx-subscription-action-button--danger"
-                : undefined
-            }
-            disabled={busy || !trimmedReason}
-          >
-            {busy
-              ? tShared("status.generic.processing")
-              : subscriptionActionLabel(action)}
-          </Button>
-        </footer>
-      </form>
-    </div>
+          {subscriptionActionLabel(action)}
+        </span>
+      }
+      description={subscriptionName}
+      danger={action === "cancel"}
+      submitLabel={subscriptionActionLabel(action)}
+      cancelLabel={tShared("actions.discard")}
+      pendingLabel={tShared("status.generic.processing")}
+      submitting={busy}
+      submitDisabled={!trimmedReason}
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (trimmedReason) onSubmit(trimmedReason);
+      }}
+    >
+      <p className="m-0 text-body-sm text-muted-foreground">
+        {subscriptionActionDescription(action)}
+      </p>
+      <Label htmlFor="vx-subscription-action-reason">操作原因</Label>
+      <Textarea
+        id="vx-subscription-action-reason"
+        value={reason}
+        onChange={(event) => setReason(event.target.value)}
+        placeholder={subscriptionActionPlaceholder(action)}
+        maxLength={512}
+        autoFocus
+      />
+      {error ? (
+        <p className="m-0 text-body-sm text-destructive-text">{error}</p>
+      ) : null}
+    </DialogForm>
   );
 }

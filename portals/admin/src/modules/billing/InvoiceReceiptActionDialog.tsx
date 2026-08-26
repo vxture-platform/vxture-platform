@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Button, Icon, Input, Textarea } from "@vxture/design-system";
+import {
+  DialogForm,
+  Icon,
+  Input,
+  Label,
+  Textarea,
+} from "@vxture/design-system";
 import type {
   BillingInvoiceReceiptAction,
   BillingInvoiceReceiptRecord,
@@ -58,12 +64,6 @@ function actionDescription(action: BillingInvoiceReceiptAction) {
   return "登记线下发票红冲或作废结果；红冲后该发票金额不再计入账单已开票金额。";
 }
 
-function actionIconClass(action: BillingInvoiceReceiptAction) {
-  if (action === "red") return "vx-subscription-action-dialog__icon--cancel";
-  if (action === "finish") return "vx-subscription-action-dialog__icon--resume";
-  return "vx-subscription-action-dialog__icon--renew";
-}
-
 export function InvoiceReceiptActionDialog({
   receipt,
   action,
@@ -113,109 +113,98 @@ export function InvoiceReceiptActionDialog({
   }, [action, receipt]);
 
   return (
-    <div
-      className="vx-subscription-action-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="invoice-receipt-action-title"
-    >
-      <form
-        className="vx-subscription-action-dialog__panel vx-invoice-receipt-action-dialog__panel"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!canSubmit) return;
-
-          onSubmit({
-            action,
-            statusRemark: statusRemark.trim(),
-            expressCompany: expressCompany.trim() || null,
-            expressNo: expressNo.trim() || null,
-            sendAt: sendAt ? new Date(sendAt).toISOString() : null,
-          });
-        }}
-      >
-        <header>
-          <span
-            aria-hidden="true"
-            className={`vx-subscription-action-dialog__icon ${actionIconClass(action)}`}
-          >
-            <Icon
-              name={
-                action === "red"
-                  ? "warning"
-                  : action === "finish"
-                    ? "check"
-                    : "key"
-              }
-              size="lg"
-              fallback="placeholder"
-            />
-          </span>
-          <div>
-            <h2 id="invoice-receipt-action-title">
-              {invoiceReceiptActionLabel(action)}
-            </h2>
-            <p>
-              {receipt.invoiceNo} · {receipt.invoiceTitle}
-            </p>
-          </div>
-        </header>
-        <p className="vx-subscription-action-dialog__description">
-          {actionDescription(action)}
-        </p>
-        {showsShipping ? (
-          <div className="vx-invoice-receipt-action-dialog__grid">
-            <label className="vx-subscription-action-dialog__field">
-              <span>快递公司{requiresShipping ? "" : "（可选）"}</span>
-              <Input
-                value={expressCompany}
-                onChange={(event) => setExpressCompany(event.target.value)}
-              />
-            </label>
-            <label className="vx-subscription-action-dialog__field">
-              <span>快递单号{requiresShipping ? "" : "（可选）"}</span>
-              <Input
-                value={expressNo}
-                onChange={(event) => setExpressNo(event.target.value)}
-              />
-            </label>
-            <label className="vx-subscription-action-dialog__field">
-              <span>寄送时间{requiresShipping ? "" : "（可选）"}</span>
-              <Input
-                type="datetime-local"
-                value={sendAt}
-                onChange={(event) => setSendAt(event.target.value)}
-              />
-            </label>
-          </div>
-        ) : null}
-        <label className="vx-subscription-action-dialog__field">
-          <span>{action === "red" ? "红冲/作废说明" : "操作说明"}</span>
-          <Textarea
-            value={statusRemark}
-            onChange={(event) => setStatusRemark(event.target.value)}
-            placeholder={
+    <DialogForm
+      open
+      size="md"
+      title={
+        <span className="inline-flex items-center gap-sm">
+          <Icon
+            name={
               action === "red"
-                ? "例如：财务系统已完成红冲，按线下结果同步登记。"
-                : "例如：财务已完成线下处理，按结果同步登记。"
+                ? "warning"
+                : action === "finish"
+                  ? "check"
+                  : "key"
             }
-            maxLength={512}
+            size="sm"
+            fallback="placeholder"
+            aria-hidden="true"
           />
-        </label>
-        {error ? (
-          <p className="vx-subscription-action-dialog__error">{error}</p>
-        ) : null}
-        <footer>
-          <Button variant="ghost" onClick={onCancel} disabled={busy}>
-            {tShared("actions.discard")}
-          </Button>
-          <Button type="submit" disabled={busy || !canSubmit}>
-            {busy
-              ? tShared("status.generic.processing")
-              : invoiceReceiptActionLabel(action)}
-          </Button>
-        </footer>
-      </form>
-    </div>
+          {invoiceReceiptActionLabel(action)}
+        </span>
+      }
+      description={`${receipt.invoiceNo} · ${receipt.invoiceTitle}`}
+      danger={action === "red"}
+      submitLabel={invoiceReceiptActionLabel(action)}
+      cancelLabel={tShared("actions.discard")}
+      pendingLabel={tShared("status.generic.processing")}
+      submitting={busy}
+      submitDisabled={!canSubmit}
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!canSubmit) return;
+
+        onSubmit({
+          action,
+          statusRemark: statusRemark.trim(),
+          expressCompany: expressCompany.trim() || null,
+          expressNo: expressNo.trim() || null,
+          sendAt: sendAt ? new Date(sendAt).toISOString() : null,
+        });
+      }}
+    >
+      <p className="m-0 text-body-sm text-muted-foreground">
+        {actionDescription(action)}
+      </p>
+      {showsShipping ? (
+        <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
+          <Label htmlFor="vx-receipt-express-company">
+            快递公司{requiresShipping ? "" : "（可选）"}
+          </Label>
+          <Input
+            id="vx-receipt-express-company"
+            value={expressCompany}
+            onChange={(event) => setExpressCompany(event.target.value)}
+          />
+          <Label htmlFor="vx-receipt-express-no">
+            快递单号{requiresShipping ? "" : "（可选）"}
+          </Label>
+          <Input
+            id="vx-receipt-express-no"
+            value={expressNo}
+            onChange={(event) => setExpressNo(event.target.value)}
+          />
+          <Label htmlFor="vx-receipt-send-at">
+            寄送时间{requiresShipping ? "" : "（可选）"}
+          </Label>
+          <Input
+            id="vx-receipt-send-at"
+            type="datetime-local"
+            value={sendAt}
+            onChange={(event) => setSendAt(event.target.value)}
+          />
+        </div>
+      ) : null}
+      <Label htmlFor="vx-receipt-status-remark">
+        {action === "red" ? "红冲/作废说明" : "操作说明"}
+      </Label>
+      <Textarea
+        id="vx-receipt-status-remark"
+        value={statusRemark}
+        onChange={(event) => setStatusRemark(event.target.value)}
+        placeholder={
+          action === "red"
+            ? "例如：财务系统已完成红冲，按线下结果同步登记。"
+            : "例如：财务已完成线下处理，按结果同步登记。"
+        }
+        maxLength={512}
+      />
+      {error ? (
+        <p className="m-0 text-body-sm text-destructive-text">{error}</p>
+      ) : null}
+    </DialogForm>
   );
 }

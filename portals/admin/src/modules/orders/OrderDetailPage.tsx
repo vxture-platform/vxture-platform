@@ -699,7 +699,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
           {order.declaredPayment ? (
             <section className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
               <DetailSectionHeading icon="clock" title="客户付款申报" />
-              <p className="vx-subscription-action-dialog__description">
+              <p className="m-0 text-body-sm text-muted-foreground">
                 客户在付款页提交的申报信息，确认前请核对到账；实收不符请「驳回申报」。
               </p>
               <div className="vx-detail-grid">

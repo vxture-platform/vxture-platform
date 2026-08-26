@@ -55,6 +55,15 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  *   词条，图标与语气留在代码里（同 opera `status.ts` 的判据）。
  * 2026-08-27 admin 3668 → 3660：视觉验证时抓到的混合语言（`还没有${objectLabel}`
  *   在英文下渲染成「还没有Secret」），连同两处同形的一起抽掉。
+ * 2026-08-27 admin 3660 → 3662：同一个口径问题第三次出现。五个手搓模态换
+ *   `DialogForm` 时，两处副标题从 `<p>{bill.billNo} · 当前应收{" "}{fmt(…)}</p>`
+ *   变成了 `description` 的模板串。**串一直都在**，只是之前没被数到。
+ *
+ *   根因是本文件的盲点：`JSX_TEXT` 的 `[^<>{}
+]*` 在碰到插值时就断了，
+ *   所以「带插值的 JSX 文本节点」一律漏数。把它补上会一次性抬高五个门户的
+ *   基线，属于 i18n 那条线的活，不该搭在 CSS 改造里做——先如实记在这里。
+ *
  * 2026-08-27 admin 3661 → 3660：卡片换 `MetricListCard` 后又自己抵回来了——
  *   `__metrics` 里的 `<small>配额消耗</small>` 这类 JSX 文本节点变成了 `label`
  *   属性串，而它们本来就被 `JSX_TEXT` 数到过，一进一出刚好抵掉下面那一条。
@@ -70,7 +79,7 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
 const BASELINE = {
   console: 32,
   website: 54,
-  admin: 3660,
+  admin: 3662,
   opera: 1795,
   accounts: 263,
 };
