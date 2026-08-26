@@ -6,6 +6,12 @@
     "lib": ["DOM", "DOM.Iterable", "ES2023"],
     "plugins": [{ "name": "next" }],
     "paths": {
+      /* 这几条在 `tsconfig.base.json` 里本来就有，但**必须在这里重新声明一遍**：
+         `paths` 是整体覆盖不是合并，本文件一旦定义 `paths`，基础里那一份就全丢了。
+         少了它们，tsc 回落到包的 `types: dist/index.d.ts`——而 dist 是 gitignore 的，
+         干净检出里根本不存在。本地能过只是因为手动 build 过一次，CI 上必红。 */
+      "@vxture/core-locale": ["../../packages/core/locale/src"],
+      "@vxture/core-locale/*": ["../../packages/core/locale/src/*"],
       "@/*": ["./src/*"],
       "@vxture-platform/shared": ["../../packages/shared/shared/src"],
       "@vxture-platform/shared/*": ["../../packages/shared/shared/src/*"],
