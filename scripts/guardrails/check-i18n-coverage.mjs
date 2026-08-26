@@ -55,11 +55,18 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  *   词条，图标与语气留在代码里（同 opera `status.ts` 的判据）。
  * 2026-08-27 admin 3668 → 3660：视觉验证时抓到的混合语言（`还没有${objectLabel}`
  *   在英文下渲染成「还没有Secret」），连同两处同形的一起抽掉。
+ * 2026-08-27 admin 3660 → 3661：**计数口径变了，不是多写了一条。** CommerceOverviewPage
+ *   的「个订阅」原本是 `<small>{formatNumber(n)} 个订阅</small>`——JSX 文本节点里
+ *   带插值时 `JSX_TEXT` 的 `[^<>{}
+]*` 匆匆跑掉，一直没被数到；手搜网格换成
+ *   `TableTitleCell` 后它成了 `description` 的模板串，于是被 `LITERAL` 数到了。
+ *   这正是本文件开头说的「宁可略高估」：高估修正一次，比为了压住数字把代码写回
+ *   正则看不见的形状好。
  */
 const BASELINE = {
   console: 32,
   website: 54,
-  admin: 3660,
+  admin: 3661,
   opera: 1795,
   accounts: 263,
 };

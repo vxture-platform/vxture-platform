@@ -6,18 +6,24 @@ import Link from "next/link";
 import {
   Button,
   EmptyState,
-  Icon,
+  EntryCard,
+  LabeledValue,
   MetricGrid,
-  SectionHeader,
+  PanelItem,
+  PanelList,
+  SHELL_PANEL_HAIRLINE,
+  Section,
+  TableTitleCell,
   ViewLayout,
 } from "@vxture/design-system";
-import type { IconName } from "@vxture/design-system";
+import type { IconName, StatusBadgeTone } from "@vxture/design-system";
 import { fetchCommerceOverview } from "@/api/admin-bff";
 import type {
   CommerceOverviewMetric,
   CommerceOverviewSnapshot,
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
+import { PanelLinkItem } from "@/modules/shared/PanelLinkItem";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 import { formatCurrency } from "./CommercialUtils";
 import { toStatusTone } from "@/modules/shared/tone";
@@ -97,12 +103,23 @@ function metricTags(metric: CommerceOverviewMetric) {
     : [];
 }
 
-function riskIcon(
-  tone: CommerceOverviewSnapshot["risks"][number]["tone"],
-): IconName {
+type RiskTone = CommerceOverviewSnapshot["risks"][number]["tone"];
+
+function riskIcon(tone: RiskTone): IconName {
   if (tone === "green") return "check";
   if (tone === "amber") return "clock";
   return "warning";
+}
+
+/**
+ * 风险项的颜色此前挂在 `.vx-commerce-risk-item--{green,amber,rose}` 三个修饰类上，
+ * 各自 `color-mix` 出一份底色。改用 DS 的语气名：底色/前景/描边三件由
+ * `toneSurfaceClasses` 配好，暗色主题也已覆盖。
+ */
+function riskTone(tone: RiskTone): StatusBadgeTone {
+  if (tone === "green") return "success";
+  if (tone === "amber") return "warning";
+  return "danger";
 }
 
 function OverviewMetricSummary({
@@ -130,44 +147,32 @@ function OverviewMetricSummary({
 function RiskPanel({ snapshot }: { snapshot: CommerceOverviewSnapshot }) {
   const locale = useLocale();
   return (
-    <section
-      className="vx-commerce-panel vx-commerce-risk-panel"
+    <Section
       aria-label="商业风险"
+      className={`${SHELL_PANEL_HAIRLINE} min-w-0 pt-lg`}
+      level={2}
+      icon="warning"
+      title="风险与待办"
+      description="从账单、收款、发票和用量中抽取运营侧需要跟进的事项。"
+      action={
+        <span className="text-body-sm text-muted-foreground">
+          生成 {formatDate(snapshot.generatedAt, locale)}
+        </span>
+      }
     >
-      <SectionHeader
-        level={2}
-        icon="warning"
-        title="风险与待办"
-        description="从账单、收款、发票和用量中抽取运营侧需要跟进的事项。"
-        action={
-          <span className="text-body-sm text-muted-foreground">
-            生成 {formatDate(snapshot.generatedAt, locale)}
-          </span>
-        }
-      />
-      <div className="vx-commerce-risk-list">
+      <PanelList>
         {snapshot.risks.map((risk) => (
-          <Link
+          <PanelLinkItem
             key={risk.id}
-            className={`vx-commerce-risk-item vx-commerce-risk-item--${risk.tone}`}
             href={risk.href}
-          >
-            <span className="vx-commerce-risk-item__icon" aria-hidden="true">
-              <Icon
-                name={riskIcon(risk.tone)}
-                size="sm"
-                fallback="placeholder"
-              />
-            </span>
-            <span>
-              <strong>{risk.title}</strong>
-              <small>{risk.detail}</small>
-            </span>
-            <Icon name="arrow-right" size="xs" fallback="placeholder" />
-          </Link>
+            icon={riskIcon(risk.tone)}
+            tone={riskTone(risk.tone)}
+            title={risk.title}
+            description={risk.detail}
+          />
         ))}
-      </div>
-    </section>
+      </PanelList>
+    </Section>
   );
 }
 
@@ -177,79 +182,67 @@ function PlanRevenuePanel({
   snapshot: CommerceOverviewSnapshot;
 }) {
   return (
-    <section
-      className="vx-commerce-panel vx-commerce-plan-panel"
+    <Section
       aria-label="套餐收入"
+      className={`${SHELL_PANEL_HAIRLINE} min-w-0 pt-lg`}
+      level={2}
+      icon="chart-bar"
+      title="套餐收入"
+      description="按服务套餐汇总订阅数量与订阅应收（Σ subscriptions.pay_amount）。"
+      action={
+        <Button variant="link" size="sm" asChild>
+          <Link href="/service-plans">套餐管理</Link>
+        </Button>
+      }
     >
-      <SectionHeader
-        level={2}
-        icon="chart-bar"
-        title="套餐收入"
-        description="按服务套餐汇总订阅数量与订阅应收（Σ subscriptions.pay_amount）。"
-        action={
-          <Button variant="link" size="sm" asChild>
-            <Link href="/service-plans">套餐管理</Link>
-          </Button>
-        }
-      />
       {/* C15: tierName / paidAmount / discountAmount removed — no source (tier not
           grouped; paidAmount was a dup of revenueAmount; discount never computed). */}
-      <div className="vx-commerce-plan-list">
-        {snapshot.planRevenue.length ? (
-          snapshot.planRevenue.map((plan) => (
-            <article key={plan.planName} className="vx-commerce-plan-row">
-              <span className="vx-commerce-plan-row__main">
-                <strong>{plan.planName}</strong>
-                <span>
-                  <small>{formatNumber(plan.subscriptionCount)} 个订阅</small>
-                </span>
-              </span>
-              <span className="vx-commerce-plan-row__amounts">
-                <span>
-                  <strong>
-                    {formatCurrency(plan.revenueAmount, plan.currency)}
-                  </strong>
-                  <small>订阅应收</small>
-                </span>
-              </span>
-            </article>
-          ))
-        ) : (
-          <div className="vx-commerce-panel__empty">暂无套餐收入数据</div>
-        )}
-      </div>
-    </section>
+      <PanelList empty="暂无套餐收入数据">
+        {snapshot.planRevenue.map((plan) => (
+          <PanelItem
+            key={plan.planName}
+            main={
+              <TableTitleCell
+                title={plan.planName}
+                description={`${formatNumber(plan.subscriptionCount)} 个订阅`}
+              />
+            }
+            trail={
+              <LabeledValue
+                label="订阅应收"
+                value={formatCurrency(plan.revenueAmount, plan.currency)}
+                className="items-end"
+              />
+            }
+          />
+        ))}
+      </PanelList>
+    </Section>
   );
 }
 
 function QuickLinkPanel() {
   return (
-    <section
-      className="vx-commerce-panel vx-commerce-link-panel"
+    <Section
       aria-label="商业财务入口"
+      className={`${SHELL_PANEL_HAIRLINE} min-w-0 pt-lg`}
+      level={2}
+      icon="squares-four"
+      title="业务入口"
+      description="商业财务域的运营台账入口，保持人工处理和规则配置边界清晰。"
     >
-      <SectionHeader
-        level={2}
-        icon="squares-four"
-        title="业务入口"
-        description="商业财务域的运营台账入口，保持人工处理和规则配置边界清晰。"
-      />
-      <div className="vx-commerce-link-grid">
+      <div className="grid min-w-0 grid-cols-1 gap-md sm:grid-cols-2 xl:grid-cols-4">
         {quickLinks.map((link) => (
-          <Link
+          <EntryCard
             key={link.href}
-            className="vx-commerce-link-card"
             href={link.href}
-          >
-            <span aria-hidden="true">
-              <Icon name={link.icon} size="sm" fallback="placeholder" />
-            </span>
-            <strong>{link.label}</strong>
-            <small>{link.description}</small>
-          </Link>
+            icon={link.icon}
+            title={link.label}
+            description={link.description}
+          />
         ))}
       </div>
-    </section>
+    </Section>
   );
 }
 
@@ -277,8 +270,14 @@ export function CommerceOverviewPage() {
 
   const metricCount = useMemo(() => snapshot?.metrics.length ?? 0, [snapshot]);
 
+  /* `ViewLayout` 上不能写 `max-w-none`（旧 CSS 里那条 `max-width: none`
+     的字面对应物）：DS 注册了 `--space-none: 0px`，而 Tailwind v4 解
+     `max-w-<名>` 时先查 `--spacing-*`、后查 `--container-*`，于是这个关键字
+     变成了 `max-width: 0`——页面会塔成一字一行。坑记在
+     `portals/website/assets/legacy-tokens/tokens-website.css`，它对所有消费方都在。
+     `ViewLayout` 自己不带 max-width，所以不写就是满宽。 */
   return (
-    <ViewLayout className="vx-tenant-management-page vx-commerce-overview-page">
+    <ViewLayout className="w-full">
       <PageHeader
         icon="chart-bar"
         eyebrow="商业分析"
@@ -296,19 +295,25 @@ export function CommerceOverviewPage() {
       ) : null}
 
       {loading && !snapshot ? (
-        <div className="vx-commerce-panel__empty">正在读取商业财务快照</div>
+        <p className="py-md text-center text-body-sm text-muted-foreground">
+          正在读取商业财务快照
+        </p>
       ) : null}
 
       {snapshot ? (
         <>
-          <div className="vx-commerce-overview-layout">
+          <div className="grid min-w-0 grid-cols-1 items-start gap-xl xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
             <RiskPanel snapshot={snapshot} />
             <PlanRevenuePanel snapshot={snapshot} />
           </div>
           <QuickLinkPanel />
-          <footer className="vx-commerce-overview-footer">
+          <footer
+            className={`${SHELL_PANEL_HAIRLINE} flex min-h-icon-xl items-center justify-between gap-md pt-sm pb-md text-body-sm text-muted-foreground`}
+          >
             <span>已聚合 {formatNumber(metricCount)} 类指标</span>
-            <strong>更新时间 {formatDate(snapshot.generatedAt, locale)}</strong>
+            <strong className="font-semibold text-foreground">
+              更新时间 {formatDate(snapshot.generatedAt, locale)}
+            </strong>
           </footer>
         </>
       ) : null}

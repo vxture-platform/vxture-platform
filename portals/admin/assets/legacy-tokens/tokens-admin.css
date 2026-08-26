@@ -212,7 +212,6 @@
   --vx-admin-management-size-45r: var(--vx-admin-size-45r);
   --vx-admin-management-size-475r: var(--vx-admin-size-475r);
   --vx-admin-management-size-48r-large: var(--vx-admin-size-48r-large);
-  --vx-admin-management-size-6r: var(--vx-admin-size-6r);
   --vx-admin-management-size-75r: var(--vx-admin-size-75r);
   --vx-admin-management-size-85r: var(--vx-admin-size-85r);
   --vx-admin-management-size-8r: var(--vx-admin-size-8r);
@@ -226,7 +225,6 @@
   --vx-admin-management-track-175r: var(--vx-admin-track-175r);
   --vx-admin-management-track-17r: var(--vx-admin-track-17r);
   --vx-admin-management-track-18r-large: var(--vx-admin-track-18r-large);
-  --vx-admin-management-track-20r: var(--vx-admin-track-20r);
   --vx-admin-management-track-22r: var(--vx-admin-track-22r);
   --vx-admin-management-track-25r: var(--vx-admin-track-25r);
   --vx-admin-management-track-275r: var(--vx-admin-track-275r);
@@ -277,7 +275,6 @@
   --vx-admin-size-475r: 4.75rem;
   --vx-admin-size-48r-large: var(--container-page-md);
   --vx-admin-size-56r: 56rem;
-  --vx-admin-size-6r: 6rem;
   --vx-admin-size-75r: 7.5rem;
   --vx-admin-size-85r: 8.5rem;
   --vx-admin-size-8r: var(--container-overlay-xs);
@@ -349,7 +346,6 @@
   --vx-admin-track-175r: 1.75rem;
   --vx-admin-track-17r: 17rem;
   --vx-admin-track-18r-large: var(--container-overlay-lg);
-  --vx-admin-track-20r: 20rem;
   --vx-admin-track-22r: 22rem;
   --vx-admin-track-25r: 2.5rem;
   --vx-admin-track-275r: 2.75rem;
