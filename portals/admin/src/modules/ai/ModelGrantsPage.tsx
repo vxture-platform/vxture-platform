@@ -11,10 +11,11 @@ import {
   DataTable,
   DialogForm,
   EmptyState,
-  Icon,
   Input,
   Label,
+  ListCardGrid,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   Pagination,
   StatusBadge,
@@ -749,8 +750,7 @@ export function ModelGrantsPage() {
               }
             />
           ) : pagedPolicies.length ? (
-            <div
-              className="vx-tenant-directory-cards vx-model-strategy-cards"
+            <ListCardGrid
               aria-label={t("policyTable.toolbarTitle", {
                 count: filteredPolicies.length,
               })}
@@ -767,56 +767,50 @@ export function ModelGrantsPage() {
                   policy.modelCode ?? t("policyTable.defaultDeny");
 
                 return (
-                  <article
+                  <MetricListCard
                     key={policy.id}
-                    className={`vx-tenant-directory-card vx-model-strategy-card vx-model-strategy-card--${status}`}
-                  >
-                    <header>
-                      <Icon
-                        name="shield-check"
-                        size={24}
-                        fallback="placeholder"
-                      />
-                      <div>
-                        <strong>{policy.scopeName}</strong>
-                        <span>
-                          {policySubjectLabel(policy)} · {policy.scopeCode}
-                        </span>
-                      </div>
+                    icon="shield-check"
+                    title={policy.scopeName}
+                    description={`${policySubjectLabel(policy)} · ${policy.scopeCode}`}
+                    tone={POLICY_STATUS_TONE[status]}
+                    actions={
                       <StatusBadge tone={POLICY_STATUS_TONE[status]}>
                         {t(`status.${status}`)}
                       </StatusBadge>
-                    </header>
-                    <div className="flex flex-wrap items-center gap-xs">
-                      <Badge>{modelName}</Badge>
-                      <Badge>
-                        {formatTokens(
-                          policy.quotaTokens,
-                          policy.isUnlimited,
-                          t("policyTable.unlimited"),
-                        )}
-                      </Badge>
-                    </div>
-                    <div className="vx-tenant-directory-card__metrics">
-                      <span>
-                        <b>{policy.priority}</b>
-                        <small>{t("policyTable.columns.priority")}</small>
-                      </span>
-                      <span>
-                        <b>{policy.agentName}</b>
-                        <small>
-                          {policy.agentCode ?? t("table.allAgents")}
-                        </small>
-                      </span>
-                      <span>
-                        <b>{modelCode}</b>
-                        <small>{t("policyTable.columns.model")}</small>
-                      </span>
-                    </div>
-                  </article>
+                    }
+                    badges={
+                      <>
+                        <Badge>{modelName}</Badge>
+                        <Badge>
+                          {formatTokens(
+                            policy.quotaTokens,
+                            policy.isUnlimited,
+                            t("policyTable.unlimited"),
+                          )}
+                        </Badge>
+                      </>
+                    }
+                    metrics={[
+                      {
+                        key: "priority",
+                        value: policy.priority,
+                        label: t("policyTable.columns.priority"),
+                      },
+                      {
+                        key: "agent",
+                        value: policy.agentName,
+                        label: policy.agentCode ?? t("table.allAgents"),
+                      },
+                      {
+                        key: "model",
+                        value: modelCode,
+                        label: t("policyTable.columns.model"),
+                      },
+                    ]}
+                  />
                 );
               })}
-            </div>
+            </ListCardGrid>
           ) : (
             <EmptyState
               title={loading ? t("empty.loadingTitle") : t("empty.policyTitle")}

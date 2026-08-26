@@ -10,11 +10,12 @@ import {
   DialogForm,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
   Label,
+  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -336,14 +337,11 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat("zh-CN").format(value);
 }
 
-/**
- * 卡片底色。**弃用的不算 muted**——它仍在服务、仍在计费，灰掉会让人以为它已经停了，
- * 而"已停用"与"仍在服务但别再往上建"要做的事完全不同。
- */
-function modelTone(model: AiModelRecord) {
-  if (!isServing(model.state)) return "muted";
-  return isPrivateProvider(model.provider) ? "private" : "active";
-}
+/* 原有 `modelTone()` 随卡片换 `MetricListCard` 一同退场——它只为拼
+   `vx-model-platform-card--{tone}` 而存在。它的两个判断各自有了去处：
+   「弃用的不算 muted」归下面的 `MODEL_STATE_TONE`（deprecated → warning）；
+   「私有部署另给一色」则不再做——厂商是**类目**、没有严重度，卡上那个
+   `Badge variant="outline"` 已经在说这件事（判据同本文件内那条注释）。 */
 
 /**
  * 模型三态的呈现。**「已弃用」用 warning 而不是 neutral**：它仍在服务，中性色会读成
@@ -1146,70 +1144,61 @@ export function ModelPlatformPage() {
                 }
               />
             ) : pagedModels.length ? (
-              <div
-                className="vx-tenant-directory-cards vx-model-platform-cards"
+              <ListCardGrid
                 aria-label={t("table.toolbarTitle", {
                   count: filteredModels.length,
                 })}
               >
                 {pagedModels.map((model) => (
-                  <article
+                  <MetricListCard
                     key={model.id}
-                    className={`vx-tenant-directory-card vx-model-platform-card vx-model-platform-card--${modelTone(model)}`}
-                  >
-                    <header>
-                      <Icon
-                        name={
-                          isPrivateProvider(model.provider) ? "code" : "plug"
-                        }
-                        size={24}
-                        fallback="placeholder"
-                      />
-                      <div>
-                        <TableTitleCell
-                          title={model.modelName}
-                          description={model.modelCode}
-                        />
-                      </div>
-                    </header>
-                    <div className="flex flex-wrap items-center gap-xs">
-                      {/* 厂商是类目（在线 / 私有部署），没有严重度——不给语气色。
-                          原先的蓝/绿两档背景实测从未生效：那族 CSS 排在
-                          `.vx-tenant-pill` 基类之前，同层同特异度被基类压死。 */}
-                      <Badge variant="outline">
-                        {providerLabel(model.provider)}
-                      </Badge>
-                      <StatusBadge tone={MODEL_STATE_TONE[model.state]}>
-                        {t(`status.${model.state}`)}
-                      </StatusBadge>
-                    </div>
-                    <div className="vx-tenant-directory-card__metrics">
-                      <span>
-                        <b>{model.capabilities.length}</b>
-                        <small>{t("table.columns.capabilities")}</small>
-                      </span>
-                      <span>
-                        <b>
-                          {isPrivateProvider(model.provider)
-                            ? t("filters.private")
-                            : t("filters.online")}
-                        </b>
-                        <small>{t("table.columns.provider")}</small>
-                      </span>
-                      <span>
-                        <b>{model.protocol}</b>
-                        <small>{t("dialogs.fields.protocol")}</small>
-                      </span>
-                    </div>
-                    <footer>
-                      <span>
-                        {model.capabilities.slice(0, 2).join(", ") || "-"}
-                      </span>
-                      <strong>{model.keyReference?.name || "-"}</strong>
-                    </footer>
-                  </article>
+                    icon={isPrivateProvider(model.provider) ? "code" : "plug"}
+                    title={model.modelName}
+                    description={model.modelCode}
+                    tone={MODEL_STATE_TONE[model.state]}
+                    badges={
+                      <>
+                        {/* 厂商是类目（在线 / 私有部署），没有严重度——不给语气色。
+                            原先的蓝/绿两档背景实测从未生效：那族 CSS 排在
+                            `.vx-tenant-pill` 基类之前，同层同特异度被基类压死。 */}
+                        <Badge variant="outline">
+                          {providerLabel(model.provider)}
+                        </Badge>
+                        <StatusBadge tone={MODEL_STATE_TONE[model.state]}>
+                          {t(`status.${model.state}`)}
+                        </StatusBadge>
+                      </>
+                    }
+                    metrics={[
+                      {
+                        key: "capabilities",
+                        value: model.capabilities.length,
+                        label: t("table.columns.capabilities"),
+                      },
+                      {
+                        key: "provider",
+                        value: isPrivateProvider(model.provider)
+                          ? t("filters.private")
+                          : t("filters.online"),
+                        label: t("table.columns.provider"),
+                      },
+                      {
+                        key: "protocol",
+                        value: model.protocol,
+                        label: t("dialogs.fields.protocol"),
+                      },
+                    ]}
+                    footer={
+                      <>
+                        <span>
+                          {model.capabilities.slice(0, 2).join(", ") || "-"}
+                        </span>
+                        <strong>{model.keyReference?.name || "-"}</strong>
+                      </>
+                    }
+                  />
                 ))}
-              </div>
+              </ListCardGrid>
             ) : (
               <EmptyState
                 title={loading ? t("empty.loadingTitle") : t("empty.title")}
@@ -1263,32 +1252,27 @@ export function ModelPlatformPage() {
           aria-label="模型厂商列表"
         >
           {providers.length ? (
-            <div className="vx-tenant-directory-cards vx-model-platform-cards">
+            <ListCardGrid>
               {providers.map((provider) => (
-                <article
+                <MetricListCard
                   key={provider.id}
-                  className={`vx-tenant-directory-card vx-model-platform-card vx-model-platform-card--${isEnabled(provider.state) ? "active" : "muted"}`}
-                >
-                  <header>
-                    <Icon name="settings" size={24} fallback="placeholder" />
-                    <div>
-                      <TableTitleCell
-                        title={provider.providerName}
-                        description={provider.providerCode}
-                      />
-                    </div>
-                  </header>
-                  <div className="flex flex-wrap items-center gap-xs">
-                    <Badge>{provider.providerType}</Badge>
-                    <StatusBadge tone={activeTone(isEnabled(provider.state))}>
-                      {isEnabled(provider.state)
-                        ? t("status.active")
-                        : t("status.inactive")}
-                    </StatusBadge>
-                  </div>
-                </article>
+                  icon="settings"
+                  title={provider.providerName}
+                  description={provider.providerCode}
+                  tone={activeTone(isEnabled(provider.state))}
+                  badges={
+                    <>
+                      <Badge>{provider.providerType}</Badge>
+                      <StatusBadge tone={activeTone(isEnabled(provider.state))}>
+                        {isEnabled(provider.state)
+                          ? t("status.active")
+                          : t("status.inactive")}
+                      </StatusBadge>
+                    </>
+                  }
+                />
               ))}
-            </div>
+            </ListCardGrid>
           ) : (
             <EmptyState
               title="暂无厂商"
@@ -1318,23 +1302,18 @@ export function ModelPlatformPage() {
           aria-label="计价规则列表"
         >
           {priceRules.length ? (
-            <div className="vx-tenant-directory-cards vx-model-platform-cards">
+            <ListCardGrid>
               {pagedPriceRules.map((rule) => {
                 const ruleModel = modelById.get(rule.modelId);
                 return (
-                  <article
+                  <MetricListCard
                     key={rule.id}
-                    className={`vx-tenant-directory-card vx-model-platform-card vx-model-platform-card--${isEnabled(rule.state) ? "active" : "muted"}`}
-                  >
-                    <header>
-                      <Icon name="database" size={24} fallback="placeholder" />
-                      <div>
-                        <TableTitleCell
-                          title={ruleModel?.modelName ?? rule.modelId}
-                          description={`${rule.billingMode} · ${rule.currency}`}
-                          onTitleClick={() => openEditPriceRuleDialog(rule)}
-                        />
-                      </div>
+                    icon="database"
+                    title={ruleModel?.modelName ?? rule.modelId}
+                    description={`${rule.billingMode} · ${rule.currency}`}
+                    tone={activeTone(isEnabled(rule.state))}
+                    onClick={() => openEditPriceRuleDialog(rule)}
+                    actions={
                       <ActionMenu
                         label={`${ruleModel?.modelName ?? rule.modelId} 计价规则操作`}
                         items={[
@@ -1360,41 +1339,45 @@ export function ModelPlatformPage() {
                           },
                         ]}
                       />
-                    </header>
-                    <div className="flex flex-wrap items-center gap-xs">
-                      <Badge>{rule.currency}</Badge>
-                      <StatusBadge tone={activeTone(isEnabled(rule.state))}>
-                        {isEnabled(rule.state)
-                          ? t("status.active")
-                          : t("status.inactive")}
-                      </StatusBadge>
-                    </div>
-                    <div className="vx-tenant-directory-card__metrics">
-                      <span>
-                        <b>{trimUnitPrice(rule.inputUnitPrice)}</b>
-                        <small>输入单价</small>
-                      </span>
-                      <span>
-                        <b>{trimUnitPrice(rule.outputUnitPrice)}</b>
-                        <small>输出单价</small>
-                      </span>
-                      <span>
-                        <b>
-                          {rule.cachedInputUnitPrice
-                            ? trimUnitPrice(rule.cachedInputUnitPrice)
-                            : "—"}
-                        </b>
-                        <small>缓存输入单价</small>
-                      </span>
-                      <span>
-                        <b>{formatNumber(rule.unitTokens)}</b>
-                        <small>计价单位</small>
-                      </span>
-                    </div>
-                  </article>
+                    }
+                    badges={
+                      <>
+                        <Badge>{rule.currency}</Badge>
+                        <StatusBadge tone={activeTone(isEnabled(rule.state))}>
+                          {isEnabled(rule.state)
+                            ? t("status.active")
+                            : t("status.inactive")}
+                        </StatusBadge>
+                      </>
+                    }
+                    metrics={[
+                      {
+                        key: "input",
+                        value: trimUnitPrice(rule.inputUnitPrice),
+                        label: "输入单价",
+                      },
+                      {
+                        key: "output",
+                        value: trimUnitPrice(rule.outputUnitPrice),
+                        label: "输出单价",
+                      },
+                      {
+                        key: "cached",
+                        value: rule.cachedInputUnitPrice
+                          ? trimUnitPrice(rule.cachedInputUnitPrice)
+                          : "—",
+                        label: "缓存输入单价",
+                      },
+                      {
+                        key: "unit",
+                        value: formatNumber(rule.unitTokens),
+                        label: "计价单位",
+                      },
+                    ]}
+                  />
                 );
               })}
-            </div>
+            </ListCardGrid>
           ) : (
             <EmptyState
               title="暂无计价规则"
@@ -1445,30 +1428,23 @@ export function ModelPlatformPage() {
           aria-label="模型策略列表"
         >
           {policies.length ? (
-            <div className="vx-tenant-directory-cards vx-model-platform-cards">
+            <ListCardGrid>
               {pagedPolicies.map((policy) => {
                 const policyModel = modelById.get(policy.modelId);
                 const inForce = policyStanding.inForce.has(policy.id);
                 const shadowed = policyStanding.shadowed.has(policy.id);
                 const enforces = hasEnforcedLimit(policy);
                 return (
-                  <article
+                  <MetricListCard
                     key={policy.id}
-                    className={`vx-tenant-directory-card vx-model-platform-card vx-model-platform-card--${isEnabled(policy.state) ? "active" : "muted"}`}
-                  >
-                    <header>
-                      <Icon name="shield" size={24} fallback="placeholder" />
-                      <div>
-                        <TableTitleCell
-                          title={
-                            policy.name ||
-                            policyModel?.modelName ||
-                            "未命名策略"
-                          }
-                          description={`${describePolicyScope(policy)} · ${policyModel?.modelName ?? "模型已删除"}`}
-                          onTitleClick={() => openEditPolicyDialog(policy)}
-                        />
-                      </div>
+                    icon="shield"
+                    title={
+                      policy.name || policyModel?.modelName || "未命名策略"
+                    }
+                    description={`${describePolicyScope(policy)} · ${policyModel?.modelName ?? "模型已删除"}`}
+                    tone={activeTone(isEnabled(policy.state))}
+                    onClick={() => openEditPolicyDialog(policy)}
+                    actions={
                       <ActionMenu
                         label={`${policy.name || policyModel?.modelName || "策略"}操作`}
                         items={[
@@ -1494,85 +1470,89 @@ export function ModelPlatformPage() {
                           },
                         ]}
                       />
-                    </header>
-                    <div className="flex flex-wrap items-center gap-xs">
-                      <Badge>{policy.tenantId ? "租户专属" : "全局默认"}</Badge>
-                      <StatusBadge tone={activeTone(isEnabled(policy.state))}>
-                        {isEnabled(policy.state)
-                          ? t("status.active")
-                          : t("status.inactive")}
-                      </StatusBadge>
-                      {/* 四个只在为真时出现的告警，每个都对应一种「看着配了、其实
+                    }
+                    badges={
+                      <>
+                        <Badge>
+                          {policy.tenantId ? "租户专属" : "全局默认"}
+                        </Badge>
+                        <StatusBadge tone={activeTone(isEnabled(policy.state))}>
+                          {isEnabled(policy.state)
+                            ? t("status.active")
+                            : t("status.inactive")}
+                        </StatusBadge>
+                        {/* 四个只在为真时出现的告警，每个都对应一种「看着配了、其实
                           没起作用」。它们是这张卡片存在的主要理由——光看一排数字，
                           这四种情况长得和一条正常生效的策略一模一样。
                           互斥地判：一条还没到生效窗口的策略谈不上被谁覆盖。 */}
-                      {isEnabled(policy.state) && !inForce ? (
-                        <StatusBadge
-                          tone="warning"
-                          title="状态是启用，但当前时刻不在它的生效窗口里（生效时间还没到，或者失效时间已过）。它现在不参与任何选择。"
-                        >
-                          未在生效窗口
-                        </StatusBadge>
-                      ) : null}
-                      {inForce && shadowed ? (
-                        <StatusBadge
-                          tone="warning"
-                          title="同一模型、同一作用域下另有一条策略排在前面（优先级更小，或同优先级但生效更晚）。Atlas 只选一条，这一条永远轮不到。"
-                        >
-                          被覆盖
-                        </StatusBadge>
-                      ) : null}
-                      {inForce && !shadowed && !enforces ? (
-                        <StatusBadge
-                          tone="warning"
-                          title="RPM 与最大并发都没设——这两项是 Atlas 运行时唯一真正会拦请求的。这条策略正在生效，但不限制任何调用。"
-                        >
-                          不限制任何调用
-                        </StatusBadge>
-                      ) : null}
-                      {hasRecordedOnlyLimit(policy) ? (
-                        <StatusBadge
-                          tone="neutral"
-                          title="TPM / TPD / 最大上下文 Atlas 已收下并存库，但运行时还没有读它们——不要把它们当成已经在拦的闸门。"
-                        >
-                          含未生效项
-                        </StatusBadge>
-                      ) : null}
-                    </div>
-                    <div className="vx-tenant-directory-card__metrics">
-                      {/* 只放 atlas 真的会读的两项 + 决定谁赢的那一项。未生效的三项
-                          不混进来充数——那正是「含未生效项」徽标要说的事。 */}
-                      <span>
-                        <b>
-                          {policy.rateLimitRpm == null
+                        {isEnabled(policy.state) && !inForce ? (
+                          <StatusBadge
+                            tone="warning"
+                            title="状态是启用，但当前时刻不在它的生效窗口里（生效时间还没到，或者失效时间已过）。它现在不参与任何选择。"
+                          >
+                            未在生效窗口
+                          </StatusBadge>
+                        ) : null}
+                        {inForce && shadowed ? (
+                          <StatusBadge
+                            tone="warning"
+                            title="同一模型、同一作用域下另有一条策略排在前面（优先级更小，或同优先级但生效更晚）。Atlas 只选一条，这一条永远轮不到。"
+                          >
+                            被覆盖
+                          </StatusBadge>
+                        ) : null}
+                        {inForce && !shadowed && !enforces ? (
+                          <StatusBadge
+                            tone="warning"
+                            title="RPM 与最大并发都没设——这两项是 Atlas 运行时唯一真正会拦请求的。这条策略正在生效，但不限制任何调用。"
+                          >
+                            不限制任何调用
+                          </StatusBadge>
+                        ) : null}
+                        {hasRecordedOnlyLimit(policy) ? (
+                          <StatusBadge
+                            tone="neutral"
+                            title="TPM / TPD / 最大上下文 Atlas 已收下并存库，但运行时还没有读它们——不要把它们当成已经在拦的闸门。"
+                          >
+                            含未生效项
+                          </StatusBadge>
+                        ) : null}
+                      </>
+                    }
+                    /* 只放 atlas 真的会读的两项 + 决定谁赢的那一项。未生效的三项
+                       不混进来充数——那正是「含未生效项」徽标要说的事。 */
+                    metrics={[
+                      {
+                        key: "rpm",
+                        value:
+                          policy.rateLimitRpm == null
                             ? "不限"
-                            : formatNumber(policy.rateLimitRpm)}
-                        </b>
-                        <small>RPM 上限</small>
-                      </span>
-                      <span>
-                        <b>
-                          {policy.maxConcurrent == null
+                            : formatNumber(policy.rateLimitRpm),
+                        label: "RPM 上限",
+                      },
+                      {
+                        key: "concurrent",
+                        value:
+                          policy.maxConcurrent == null
                             ? "不限"
-                            : formatNumber(policy.maxConcurrent)}
-                        </b>
-                        <small>最大并发</small>
-                      </span>
-                      <span>
-                        <b>{formatNumber(policy.priority)}</b>
-                        <small>优先级（小者先）</small>
-                      </span>
-                      <span>
-                        <b>
-                          {policy.expiresAt ? "有" : tShared("common.none")}
-                        </b>
-                        <small>失效时间</small>
-                      </span>
-                    </div>
-                  </article>
+                            : formatNumber(policy.maxConcurrent),
+                        label: "最大并发",
+                      },
+                      {
+                        key: "priority",
+                        value: formatNumber(policy.priority),
+                        label: "优先级（小者先）",
+                      },
+                      {
+                        key: "expires",
+                        value: policy.expiresAt ? "有" : tShared("common.none"),
+                        label: "失效时间",
+                      },
+                    ]}
+                  />
                 );
               })}
-            </div>
+            </ListCardGrid>
           ) : (
             <section className="vx-tenant-empty">
               <EmptyState

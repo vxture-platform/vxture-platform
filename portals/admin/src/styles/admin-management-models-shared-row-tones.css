@@ -1,19 +1,3 @@
-.vx-tenant-directory-card--normal {
-  --tenant-row-tone: var(--vx-color-neutral-400);
-}
-.vx-tenant-directory-card--follow_up {
-  --tenant-row-tone: var(--tenant-amber);
-}
-.vx-tenant-directory-card--high {
-  --tenant-row-tone: var(--tenant-rose);
-}
-.vx-admin-role-card--active {
-  --tenant-row-tone: var(--tenant-blue);
-}
-.vx-admin-role-card--disabled {
-  --tenant-row-tone: var(--vx-color-neutral-400);
-}
-
 .vx-order-card--confirmed {
   --tenant-row-tone: var(--tenant-green);
 }
@@ -29,17 +13,5 @@
 }
 
 .vx-order-card--closed {
-  --tenant-row-tone: var(--vx-color-neutral-400);
-}
-.vx-commercial-card--normal {
-  --tenant-row-tone: var(--tenant-green);
-}
-.vx-commercial-card--warning {
-  --tenant-row-tone: var(--tenant-amber);
-}
-.vx-commercial-card--danger {
-  --tenant-row-tone: var(--tenant-rose);
-}
-.vx-commercial-card--muted {
   --tenant-row-tone: var(--vx-color-neutral-400);
 }

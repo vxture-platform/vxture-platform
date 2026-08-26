@@ -9,10 +9,11 @@ import {
   DataTable,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
+  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -493,49 +494,37 @@ export function PlatformGovernanceListPage({
               <span>正在加载自治数据</span>
             </header>
           ) : records.length ? (
-            <div
-              className="vx-tenant-directory-cards vx-platform-governance-cards"
-              aria-label={`${config.title}卡片`}
-            >
+            <ListCardGrid aria-label={`${config.title}卡片`}>
               {records.map((record) => {
                 const meta = governanceStatusMeta(kind, record.status, tShared);
                 return (
-                  <article
+                  <MetricListCard
                     key={record.id}
-                    className="vx-tenant-directory-card vx-platform-governance-card"
-                  >
-                    <header>
-                      <Icon
-                        name={config.icon}
-                        size="lg"
-                        fallback="placeholder"
-                      />
-                      <div>
-                        <strong>{record.name}</strong>
-                        <span>
-                          {record.scope} · {record.owner}
-                        </span>
-                      </div>
+                    icon={config.icon}
+                    title={record.name}
+                    description={`${record.scope} · ${record.owner}`}
+                    tone={meta.tone}
+                    actions={
                       <StatusBadge tone={meta.tone} icon={meta.icon}>
                         {meta.label}
                       </StatusBadge>
-                    </header>
-                    <p>{record.description}</p>
-                    <div className="vx-platform-governance-card__tags">
-                      {record.tags.map((tag) => (
-                        <Badge key={tag} className="vx-tenant-pill">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                    <footer>
-                      <span>{record.policy}</span>
-                      <strong>{record.updatedAt}</strong>
-                    </footer>
-                  </article>
+                    }
+                    badges={record.tags.map((tag) => (
+                      <StatusBadge key={tag} tone="brand" icon={false}>
+                        {tag}
+                      </StatusBadge>
+                    ))}
+                    note={record.description}
+                    footer={
+                      <>
+                        <span>{record.policy}</span>
+                        <strong>{record.updatedAt}</strong>
+                      </>
+                    }
+                  />
                 );
               })}
-            </div>
+            </ListCardGrid>
           ) : hasActiveFilters ? (
             <EmptyState
               title="暂无匹配记录"

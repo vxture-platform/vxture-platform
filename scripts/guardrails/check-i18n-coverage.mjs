@@ -55,7 +55,11 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  *   词条，图标与语气留在代码里（同 opera `status.ts` 的判据）。
  * 2026-08-27 admin 3668 → 3660：视觉验证时抓到的混合语言（`还没有${objectLabel}`
  *   在英文下渲染成「还没有Secret」），连同两处同形的一起抽掉。
- * 2026-08-27 admin 3660 → 3661：**计数口径变了，不是多写了一条。** CommerceOverviewPage
+ * 2026-08-27 admin 3661 → 3660：卡片换 `MetricListCard` 后又自己抵回来了——
+ *   `__metrics` 里的 `<small>配额消耗</small>` 这类 JSX 文本节点变成了 `label`
+ *   属性串，而它们本来就被 `JSX_TEXT` 数到过，一进一出刚好抵掉下面那一条。
+ *
+ * 2026-08-27 admin 3660 → 3661（已被上一条抵消）：**计数口径变了，不是多写了一条。** CommerceOverviewPage
  *   的「个订阅」原本是 `<small>{formatNumber(n)} 个订阅</small>`——JSX 文本节点里
  *   带插值时 `JSX_TEXT` 的 `[^<>{}
 ]*` 匆匆跑掉，一直没被数到；手搜网格换成
@@ -66,7 +70,7 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
 const BASELINE = {
   console: 32,
   website: 54,
-  admin: 3661,
+  admin: 3660,
   opera: 1795,
   accounts: 263,
 };

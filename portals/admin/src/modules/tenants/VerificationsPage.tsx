@@ -12,16 +12,17 @@ import { useLocale, useTranslations } from "next-intl";
 import {
   ActionButton,
   ActionMenu,
-  Banner,
   Badge,
+  Banner,
   DataTable,
   DialogForm,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
+  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -49,7 +50,6 @@ import {
   formatDate,
   formatMoney,
   formatNumber,
-  joinClasses,
   normalizeTenantRiskLevel,
   riskLabel,
   TENANT_RISK_TONE,
@@ -351,77 +351,69 @@ function VerificationCards({
   const router = useRouter();
 
   return (
-    <div
-      className="vx-tenant-directory-cards vx-verification-cards"
-      aria-label="实名认证卡片"
-    >
+    <ListCardGrid aria-label="实名认证卡片">
       {tenants.map((tenant) => {
         const riskLevel = normalizeTenantRiskLevel(tenant.riskLevel);
 
         return (
-          <article
+          <MetricListCard
             key={tenant.id}
-            className={joinClasses(
-              "vx-tenant-directory-card",
-              `vx-tenant-directory-card--${riskLevel}`,
-            )}
-            role="button"
-            tabIndex={0}
-            onClick={() =>
-              router.push(`/tenants/${encodeURIComponent(tenant.id)}`)
-            }
-            onKeyDown={(event) => {
-              if (event.key === "Enter")
-                router.push(`/tenants/${encodeURIComponent(tenant.id)}`);
-            }}
-          >
-            <header>
-              <Icon name="buildings" size="lg" fallback="placeholder" />
-              <div>
-                <strong>{tenant.displayName}</strong>
-                <span>
-                  {tenant.tenantCode} · {tenant.region}
-                </span>
-              </div>
+            icon="buildings"
+            title={tenant.displayName}
+            description={`${tenant.tenantCode} · ${tenant.region}`}
+            /* 卡的语气取风险档，与租户列表页同一判断：一屏卡片里最该先被看见的
+             * 就是高风险那几张。原来是 `vx-tenant-directory-card--{risk}`。 */
+            tone={TENANT_RISK_TONE[riskLevel]}
+            actions={
               <VerificationActionsMenu
                 tenant={tenant}
                 busy={actionBusy}
                 onApprove={onApprove}
                 onReject={onReject}
               />
-            </header>
-            <div className="flex flex-wrap items-center gap-xs">
-              <StatusBadge tone={VERIFIED_TONE[tenant.verifiedStatus]}>
-                {verifiedLabel(tenant.verifiedStatus)}
-              </StatusBadge>
-              <StatusBadge tone={TENANT_RISK_TONE[riskLevel]}>
-                {riskLabel(riskLevel)}
-              </StatusBadge>
-            </div>
-            <div className="vx-tenant-directory-card__metrics">
-              <span>
-                <b>{formatNumber(daysSince(tenant.verificationSubmittedAt))}</b>
-                <small>等待天数</small>
-              </span>
-              <span>
-                <b>{formatNumber(tenant.memberCount)}</b>
-                <small>成员</small>
-              </span>
-              <span>
-                <b>{formatMoney(tenant.monthlyRevenue)}</b>
-                <small>本月收入</small>
-              </span>
-            </div>
-            <footer>
-              <span>
-                {tenant.industry} · {tenant.scale}
-              </span>
-              <strong>{verificationTimeText(tenant, locale)}</strong>
-            </footer>
-          </article>
+            }
+            badges={
+              <>
+                <StatusBadge tone={VERIFIED_TONE[tenant.verifiedStatus]}>
+                  {verifiedLabel(tenant.verifiedStatus)}
+                </StatusBadge>
+                <StatusBadge tone={TENANT_RISK_TONE[riskLevel]}>
+                  {riskLabel(riskLevel)}
+                </StatusBadge>
+              </>
+            }
+            metrics={[
+              {
+                key: "waiting",
+                value: formatNumber(daysSince(tenant.verificationSubmittedAt)),
+                label: "等待天数",
+              },
+              {
+                key: "members",
+                value: formatNumber(tenant.memberCount),
+                label: "成员",
+              },
+              {
+                key: "revenue",
+                value: formatMoney(tenant.monthlyRevenue),
+                label: "本月收入",
+              },
+            ]}
+            footer={
+              <>
+                <span>
+                  {tenant.industry} · {tenant.scale}
+                </span>
+                <strong>{verificationTimeText(tenant, locale)}</strong>
+              </>
+            }
+            onClick={() =>
+              router.push(`/tenants/${encodeURIComponent(tenant.id)}`)
+            }
+          />
         );
       })}
-    </div>
+    </ListCardGrid>
   );
 }
 

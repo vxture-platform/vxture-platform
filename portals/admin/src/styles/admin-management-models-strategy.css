@@ -1,6 +1,5 @@
 /* Model strategy directory layout styles. */
 
-.vx-model-strategy-card header strong,
 .vx-model-strategy-overrides__header strong {
   overflow: hidden;
   color: var(--tenant-ink);

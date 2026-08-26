@@ -12,10 +12,11 @@ import {
   DataTable,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
+  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   TableTitleCell,
 } from "@vxture/design-system";
@@ -32,13 +33,13 @@ import { PageHeader } from "@/modules/shared/PageHeader";
 import {
   formatDate,
   formatNumber,
-  joinClasses,
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
 import {
-  formatPercent,
-  type PageSize,
   Tag,
+  type PageSize,
+  commercialTone,
+  formatPercent,
   type ViewMode,
 } from "./CommercialUtils";
 
@@ -242,61 +243,51 @@ function UsageCards({ records }: { records: UsageMeteringRecord[] }) {
   const router = useRouter();
 
   return (
-    <div
-      className="vx-tenant-directory-cards vx-commercial-cards"
-      aria-label="用量计费卡片"
-    >
+    <ListCardGrid aria-label="用量计费卡片">
       {records.map((record) => (
-        <article
+        <MetricListCard
           key={record.id}
-          className={joinClasses(
-            "vx-tenant-directory-card",
-            `vx-commercial-card--${riskTone(record.risk)}`,
-          )}
-          role="button"
-          tabIndex={0}
+          icon="graph"
+          title={record.tenantName}
+          description={`${record.productName} · ${record.metricName}`}
+          tone={commercialTone(riskTone(record.risk))}
+          actions={<UsageActionsMenu record={record} />}
+          badges={
+            <>
+              <Tag tone={riskTone(record.risk)}>{riskLabel(record.risk)}</Tag>
+              <Badge variant="outline">{record.productType}</Badge>
+            </>
+          }
+          note={record.servicePlanName ?? record.orderNo ?? "未关联订阅"}
+          metrics={[
+            {
+              key: "used",
+              value: formatUsageValue(record.usedValue, record.metricUnit),
+              label: "已用",
+            },
+            {
+              key: "quota",
+              value: formatUsageValue(record.quotaValue, record.metricUnit),
+              label: "配额",
+            },
+            {
+              key: "rate",
+              value: formatPercent(record.usageRate),
+              label: "使用率",
+            },
+          ]}
+          footer={
+            <>
+              <span>{record.cycleMonth}</span>
+              <strong>{formatDate(record.lastSyncedAt, locale)}</strong>
+            </>
+          }
           onClick={() =>
             router.push(`/tenants/${encodeURIComponent(record.tenantId)}`)
           }
-        >
-          <header>
-            <Icon name="graph" size="lg" fallback="placeholder" />
-            <div>
-              <strong>{record.tenantName}</strong>
-              <span>
-                {record.productName} · {record.metricName}
-              </span>
-            </div>
-            <UsageActionsMenu record={record} />
-          </header>
-          <div className="flex flex-wrap items-center gap-xs">
-            <Tag tone={riskTone(record.risk)}>{riskLabel(record.risk)}</Tag>
-            <Badge variant="outline">{record.productType}</Badge>
-          </div>
-          <p className="vx-commercial-card__description">
-            {record.servicePlanName ?? record.orderNo ?? "未关联订阅"}
-          </p>
-          <div className="vx-tenant-directory-card__metrics">
-            <span>
-              <b>{formatUsageValue(record.usedValue, record.metricUnit)}</b>
-              <small>已用</small>
-            </span>
-            <span>
-              <b>{formatUsageValue(record.quotaValue, record.metricUnit)}</b>
-              <small>配额</small>
-            </span>
-            <span>
-              <b>{formatPercent(record.usageRate)}</b>
-              <small>使用率</small>
-            </span>
-          </div>
-          <footer>
-            <span>{record.cycleMonth}</span>
-            <strong>{formatDate(record.lastSyncedAt, locale)}</strong>
-          </footer>
-        </article>
+        />
       ))}
-    </div>
+    </ListCardGrid>
   );
 }
 

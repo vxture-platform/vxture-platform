@@ -19,8 +19,10 @@ import {
   Icon,
   Input,
   Label,
+  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -52,11 +54,7 @@ import type {
 import { useLocale, useTranslations } from "next-intl";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
-import {
-  formatDate,
-  formatNumber,
-  joinClasses,
-} from "@/modules/tenants/tenant-utils";
+import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
 import { useConfirmLabels } from "@/modules/shared/destructive";
 
@@ -826,31 +824,24 @@ function AdminRoleCards({
   const locale = useLocale();
   const tShared = useTranslations();
   return (
-    <div
-      className="vx-tenant-directory-cards vx-admin-role-cards"
-      aria-label="平台角色卡片"
-    >
+    <ListCardGrid aria-label="平台角色卡片">
       {roles.map((role) => (
-        <article
+        <MetricListCard
           key={role.id}
-          className={joinClasses(
-            "vx-tenant-directory-card",
-            roleStatusCode(role) === "active"
-              ? "vx-admin-role-card--active"
-              : "vx-admin-role-card--disabled",
-          )}
-        >
-          <header>
-            <Icon name="role" size="lg" fallback="placeholder" />
-            <div title={roleDescription(role, t) || undefined}>
-              <strong>
-                {roleLabels.get(role.id) ??
-                  role.nameEn ??
-                  role.roleCode ??
-                  EMPTY_MARK}
-              </strong>
-              <span>{role.roleCode}</span>
-            </div>
+          icon="role"
+          /* 角色说明原来挂在 header 与一段重复的 `<p>` 上当 `title` 提示；那段
+             `<p>` 的正文其实就是 `roleCode`（与副标题同一件事），所以只留提示。 */
+          title={
+            <span title={roleDescription(role, t) || undefined}>
+              {roleLabels.get(role.id) ??
+                role.nameEn ??
+                role.roleCode ??
+                EMPTY_MARK}
+            </span>
+          }
+          description={role.roleCode}
+          tone={roleStatusTone(role)}
+          actions={
             <AdminRoleActionsMenu
               role={role}
               roleLabel={
@@ -866,41 +857,42 @@ function AdminRoleCards({
               onToggle={onToggle}
               onDelete={onDelete}
             />
-          </header>
-          <div className="flex flex-wrap items-center gap-xs">
-            <StatusBadge tone={roleStatusTone(role)}>
-              {roleStatusIndicator(role).label}
-            </StatusBadge>
-            {role.isSystem ? <Badge>系统</Badge> : null}
-          </div>
-          <p
-            className="vx-admin-role-card__description"
-            title={roleDescription(role, t) || undefined}
-          >
-            {role.roleCode}
-          </p>
-          <div className="vx-tenant-directory-card__metrics">
-            <span>
-              <b>{formatNumber(role.permissionCount)}</b>
-              <small>权限</small>
-            </span>
-            <span>
-              <b>{formatNumber(role.adminCount)}</b>
-              <small>成员</small>
-            </span>
-            <span>
-              <b>{formatDate(role.createdAt, locale)}</b>
-              <small>{tShared("actions.create")}</small>
-            </span>
-          </div>
-          <PermissionTags role={role} />
-          <footer>
-            <span>权限 {formatNumber(role.permissionCount)} 项</span>
-            <strong>{role.createdByName || EMPTY_MARK}</strong>
-          </footer>
-        </article>
+          }
+          badges={
+            <>
+              <StatusBadge tone={roleStatusTone(role)}>
+                {roleStatusIndicator(role).label}
+              </StatusBadge>
+              {role.isSystem ? <Badge>系统</Badge> : null}
+            </>
+          }
+          note={<PermissionTags role={role} />}
+          metrics={[
+            {
+              key: "permissions",
+              value: formatNumber(role.permissionCount),
+              label: "权限",
+            },
+            {
+              key: "members",
+              value: formatNumber(role.adminCount),
+              label: "成员",
+            },
+            {
+              key: "createdAt",
+              value: formatDate(role.createdAt, locale),
+              label: tShared("actions.create"),
+            },
+          ]}
+          footer={
+            <>
+              <span>权限 {formatNumber(role.permissionCount)} 项</span>
+              <strong>{role.createdByName || EMPTY_MARK}</strong>
+            </>
+          }
+        />
       ))}
-    </div>
+    </ListCardGrid>
   );
 }
 

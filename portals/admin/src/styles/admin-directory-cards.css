@@ -1,13 +1,3 @@
-.vx-tenant-directory-cards {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-xl);
-  padding: var(--space-md) 0
-    var(--space-lg);
-  border-top: var(--border-width-thin) solid
-    color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
-}
-
 .vx-tenant-directory-card {
   min-width: 0;
   display: grid;
@@ -68,22 +58,6 @@
   color: var(--tenant-muted);
   font-size: var(--body-sm-font-size);
   font-weight: 720;
-}
-
-.vx-tenant-directory-card__metrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-md);
-}
-
-.vx-tenant-directory-card__metrics span {
-  display: grid;
-  gap: var(--space-xs);
-}
-
-.vx-tenant-directory-card__metrics b {
-  color: var(--tenant-ink);
-  font-size: var(--title-md-font-size);
 }
 
 .vx-tenant-directory-card footer {
