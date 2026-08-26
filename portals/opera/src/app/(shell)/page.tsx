@@ -20,7 +20,7 @@
  * 一直显示 unknown，这里不把它渲染成红色。 */
 
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActionMenu,
@@ -119,14 +119,19 @@ const HEALTH_META: Record<
   unknown: { label: "无数据", tone: "neutral" },
 };
 
-function formatTime(iso: string): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——
+   中文 `2026/8/18 10:37`，英文 `8/18/2026, 10:37`。写死的后果不是「没翻译」，
+   是英文用户会把 8/18 读成 18 月。（数字与百分比两种语言逐字相同，所以那些
+   没跟着改，见 scripts/guardrails 旁的说明。） */
+function formatTime(iso: string, locale: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString("zh-CN", { hour12: false });
+    : d.toLocaleString(locale, { hour12: false });
 }
 
 export default function DashboardPage() {
+  const locale = useLocale();
   const tShared = useTranslations();
   const { toast } = useToast();
   const [providers, setProviders] = useState<ModelProviderRecord[]>([]);
@@ -187,7 +192,7 @@ export default function DashboardPage() {
 
   const copyEvent = async (r: AuditLogEntry) => {
     const text = [
-      formatTime(r.occurredAt),
+      formatTime(r.occurredAt, locale),
       r.actorName,
       r.action,
       `${r.objectType} · ${r.objectId}`,
@@ -423,7 +428,7 @@ export default function DashboardPage() {
               id: "occurredAt",
               header: tShared("columns.time"),
               width: "sm",
-              cell: (r: AuditLogEntry) => formatTime(r.occurredAt),
+              cell: (r: AuditLogEntry) => formatTime(r.occurredAt, locale),
             },
             {
               id: "actor",

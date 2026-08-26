@@ -62,7 +62,7 @@ import {
   useToast,
 } from "@vxture/design-system";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   actionsFor,
@@ -210,6 +210,7 @@ export default function ProductsPage() {
 }
 
 function ProductsPageContent() {
+  const locale = useLocale();
   const tShared = useTranslations();
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
@@ -1238,7 +1239,7 @@ function ProductsPageContent() {
                     ) : null}
                     {item.checkedAt ? (
                       <span className="text-body-sm text-muted-foreground">
-                        {new Date(item.checkedAt).toLocaleString("zh-CN")} 确认
+                        {new Date(item.checkedAt).toLocaleString(locale)} 确认
                       </span>
                     ) : null}
                   </div>

@@ -55,7 +55,7 @@ import {
   type StatusBadgeTone,
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
@@ -107,12 +107,14 @@ function describeError(error: unknown): { description?: string } {
     : {};
 }
 
-function formatTime(iso: string | null): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——中文
+   `2026/8/18`，英文 `8/18/2026`。 */
+function formatTime(iso: string | null, locale: string): string {
   if (!iso) return "从未";
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString("zh-CN", { hour12: false });
+    : d.toLocaleString(locale, { hour12: false });
 }
 
 function parseList(input: string): string[] {
@@ -128,6 +130,7 @@ type LoadState =
   | { kind: "ready" };
 
 export default function RunosCredentialsPage() {
+  const locale = useLocale();
   const tShared = useTranslations();
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
@@ -400,7 +403,8 @@ export default function RunosCredentialsPage() {
                 id: "rotated",
                 header: "上次轮换",
                 width: "sm",
-                cell: (r: CredentialBindingRecord) => formatTime(r.rotatedAt),
+                cell: (r: CredentialBindingRecord) =>
+                  formatTime(r.rotatedAt, locale),
               },
               {
                 id: "mode",

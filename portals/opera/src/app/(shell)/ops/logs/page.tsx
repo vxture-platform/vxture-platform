@@ -36,7 +36,7 @@
  * 现在两半同形。 */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ActionMenu,
   Badge,
@@ -174,15 +174,20 @@ function toPlatformRows(snapshot: JobSchedulerSnapshot): PlatformLogRow[] {
   return [...jobRows, ...webhookRows];
 }
 
-function formatTime(iso: string): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——
+   中文 `2026/8/18 10:37`，英文 `8/18/2026, 10:37`。写死的后果不是「没翻译」，
+   是英文用户会把 8/18 读成 18 月。（数字与百分比两种语言逐字相同，所以那些
+   没跟着改，见 scripts/guardrails 旁的说明。） */
+function formatTime(iso: string, locale: string): string {
   if (!iso) return "—";
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString("zh-CN", { hour12: false });
+    : d.toLocaleString(locale, { hour12: false });
 }
 
 export default function LogsPage() {
+  const locale = useLocale();
   const tShared = useTranslations();
   const { toast } = useToast();
 
@@ -307,7 +312,7 @@ export default function LogsPage() {
 
   const copyAtlasRow = async (r: AtlasRequestLogRecord) => {
     const text = [
-      formatTime(r.createdAt),
+      formatTime(r.createdAt, locale),
       r.requestId,
       /* 带上 taskId：复制一行最常见的下一步就是拿它去 Runos 那张表里对。 */
       r.taskId ?? "—",
@@ -513,7 +518,8 @@ export default function LogsPage() {
               id: "time",
               header: tShared("columns.time"),
               width: "sm",
-              cell: (r: AtlasRequestLogRecord) => formatTime(r.createdAt),
+              cell: (r: AtlasRequestLogRecord) =>
+                formatTime(r.createdAt, locale),
             },
             {
               id: "requestId",
@@ -698,7 +704,7 @@ export default function LogsPage() {
               id: "time",
               header: tShared("columns.time"),
               width: "sm",
-              cell: (r: PlatformLogRow) => formatTime(r.time),
+              cell: (r: PlatformLogRow) => formatTime(r.time, locale),
               sortable: true,
             },
             {

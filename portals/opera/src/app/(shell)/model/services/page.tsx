@@ -37,7 +37,7 @@ import {
   type FormEvent,
 } from "react";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import {
   ActionMenu,
@@ -278,11 +278,15 @@ const HEALTH_META: Record<
 };
 
 /** 与本仓其它页同一份写法（`RunosChangeTable` / 审计页）：解析失败就原样显示。 */
-function formatTime(iso: string): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——
+   中文 `2026/8/18 10:37`，英文 `8/18/2026, 10:37`。写死的后果不是「没翻译」，
+   是英文用户会把 8/18 读成 18 月。（数字与百分比两种语言逐字相同，所以那些
+   没跟着改，见 scripts/guardrails 旁的说明。） */
+function formatTime(iso: string, locale: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString("zh-CN", { hour12: false });
+    : d.toLocaleString(locale, { hour12: false });
 }
 
 /**
@@ -785,6 +789,7 @@ export default function ModelServicePage() {
 }
 
 function ModelServiceContent() {
+  const locale = useLocale();
   const tShared = useTranslations();
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
@@ -1600,7 +1605,7 @@ function ModelServiceContent() {
                 <span
                   title={
                     m.state === "deprecated" && m.deprecatedAt
-                      ? `弃用于 ${formatTime(m.deprecatedAt)}`
+                      ? `弃用于 ${formatTime(m.deprecatedAt, locale)}`
                       : undefined
                   }
                 >

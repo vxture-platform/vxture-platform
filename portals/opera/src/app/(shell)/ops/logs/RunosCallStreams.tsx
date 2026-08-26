@@ -33,7 +33,7 @@
  * 不轮询：明细流按设计文件 §7.3 归「翻页即取」一类，自动刷新会打断正在读的人。 */
 
 import { useCallback, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   Button,
   DataTable,
@@ -123,11 +123,15 @@ const STREAM_META: Record<StreamKey, { label: string; placeholder: string }> = {
   outcomes: { label: "任务反馈", placeholder: "按 taskId 精确过滤…" },
 };
 
-function formatTime(iso: string): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——
+   中文 `2026/8/18 10:37`，英文 `8/18/2026, 10:37`。写死的后果不是「没翻译」，
+   是英文用户会把 8/18 读成 18 月。（数字与百分比两种语言逐字相同，所以那些
+   没跟着改，见 scripts/guardrails 旁的说明。） */
+function formatTime(iso: string, locale: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString("zh-CN", { hour12: false });
+    : d.toLocaleString(locale, { hour12: false });
 }
 
 function callTone(outcome: string | null): StatusBadgeTone {
@@ -156,6 +160,7 @@ export function RunosCallStreams({
   readonly taskId: string;
   readonly onTaskIdChange: (next: string) => void;
 }) {
+  const locale = useLocale();
   const tShared = useTranslations();
   const { toast } = useToast();
   const [stream, setStream] = useState<StreamKey>("calls");
@@ -375,7 +380,8 @@ export function RunosCallStreams({
               id: "time",
               header: tShared("columns.time"),
               width: "sm",
-              cell: (r: CapabilityCallRecord) => formatTime(r.occurredAt),
+              cell: (r: CapabilityCallRecord) =>
+                formatTime(r.occurredAt, locale),
             },
             {
               id: "capability",
@@ -586,7 +592,7 @@ export function RunosCallStreams({
               id: "time",
               header: tShared("columns.time"),
               width: "sm",
-              cell: (r: TaskOutcomeRecord) => formatTime(r.occurredAt),
+              cell: (r: TaskOutcomeRecord) => formatTime(r.occurredAt, locale),
             },
             {
               id: "task",

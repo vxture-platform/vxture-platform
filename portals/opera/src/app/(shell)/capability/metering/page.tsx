@@ -36,7 +36,7 @@
  * 不轮询（设计文件 §7.3：窗口聚合类按手动刷新）——窗口本身是按月的，秒级刷新没有意义。 */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   Badge,
   Banner,
@@ -167,11 +167,13 @@ function currentMonth(): { from: string; to: string } {
   };
 }
 
-function formatWindow(iso: string): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——中文
+   `2026/8/18`，英文 `8/18/2026`。 */
+function formatWindow(iso: string, locale: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleDateString("zh-CN", { timeZone: "UTC" });
+    : d.toLocaleDateString(locale, { timeZone: "UTC" });
 }
 
 function downloadCsv(filename: string, rows: readonly string[][]) {
@@ -208,6 +210,7 @@ function axisIdentity(row: UsageSummaryRow): string {
 }
 
 export default function CapabilityMeteringPage() {
+  const locale = useLocale();
   const tShared = useTranslations();
   const { toast } = useToast();
   const [axis, setAxis] = useState<UsageAxis>("workspace");
@@ -406,7 +409,7 @@ export default function CapabilityMeteringPage() {
             tone="info"
             title={
               page
-                ? `窗口 ${formatWindow(page.from)} — ${formatWindow(page.to)}（UTC）· 按${currentAxis.label}聚合`
+                ? `窗口 ${formatWindow(page.from, locale)} — ${formatWindow(page.to, locale)}（UTC）· 按${currentAxis.label}聚合`
                 : "读取中"
             }
             description={`${currentAxis.answers} 历史从 runos 首次部署起，不回填；没解析出维度的行归在可见的 none 分组里，所以七根轴的总数彼此相等。`}

@@ -18,7 +18,7 @@
  * 这里只展示原始快照，不在前端复刻求导数的假象。 */
 
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActionMenu,
@@ -112,12 +112,14 @@ interface ProviderPerformanceSnapshot {
   providers: ProviderPerformanceRow[];
 }
 
-function formatTime(iso: string | null): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——中文
+   `2026/8/18`，英文 `8/18/2026`。 */
+function formatTime(iso: string | null, locale: string): string {
   if (!iso) return "从未";
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString("zh-CN", { hour12: false });
+    : d.toLocaleString(locale, { hour12: false });
 }
 
 function formatMs(ms: number | null): string {
@@ -171,6 +173,7 @@ type LoadState =
   | { kind: "ready" };
 
 export default function MetricsPage() {
+  const locale = useLocale();
   const tShared = useTranslations();
   const { toast } = useToast();
   const [snapshot, setSnapshot] = useState<JobSchedulerSnapshot | null>(null);
@@ -471,13 +474,13 @@ export default function MetricsPage() {
             {
               id: "process-started",
               label: "进程启动于",
-              value: perf ? formatTime(perf.processStartedAt) : "—",
+              value: perf ? formatTime(perf.processStartedAt, locale) : "—",
               icon: "clock",
             },
             {
               id: "generated-at",
               label: "本次快照时间",
-              value: perf ? formatTime(perf.generatedAt) : "—",
+              value: perf ? formatTime(perf.generatedAt, locale) : "—",
               icon: "refresh",
             },
           ]}
@@ -523,7 +526,8 @@ export default function MetricsPage() {
               id: "lastObserved",
               header: "最近观测",
               width: "sm",
-              cell: (r: ProviderPerformanceRow) => formatTime(r.lastObservedAt),
+              cell: (r: ProviderPerformanceRow) =>
+                formatTime(r.lastObservedAt, locale),
             },
           ]}
           rows={perf?.providers ?? []}

@@ -38,7 +38,7 @@
  * opera-bff 的 `grants/summary` 吸收掉（那是个形状固定的接缝，上游补齐后只换内脏）。 */
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -155,12 +155,15 @@ function formatQuota(limit: number | null): string {
   return limit <= 0 ? "不限（未强制）" : String(limit);
 }
 
-function formatTime(iso: string | null): string {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——中文
+   `2026/8/18`，英文 `8/18/2026`。写死的后果不是「没翻译」，是英文用户会把
+   8/18 读成 18 月。 */
+function formatTime(iso: string | null, locale: string): string {
   if (!iso) return "—";
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleDateString("zh-CN", { hour12: false });
+    : d.toLocaleDateString(locale, { hour12: false });
 }
 
 function message(error: unknown, fallback: string): string {
@@ -176,6 +179,7 @@ export default function ProductEntitlementsPage() {
 }
 
 function ProductEntitlements() {
+  const locale = useLocale();
   const tShared = useTranslations();
   const withLabels = useConfirmLabels();
   const router = useRouter();
@@ -620,7 +624,7 @@ function ProductEntitlements() {
                   id: "expires",
                   header: "到期",
                   width: "sm",
-                  cell: (g: RouteGrant) => formatTime(g.expiresAt),
+                  cell: (g: RouteGrant) => formatTime(g.expiresAt, locale),
                 },
                 {
                   id: "state",
