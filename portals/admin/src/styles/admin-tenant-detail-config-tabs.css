@@ -26,10 +26,6 @@
   gap: var(--space-lg);
 }
 
-.vx-tenant-tab-grid--two {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
 .vx-tenant-tab-grid--info {
   grid-template-columns: 1fr;
 }

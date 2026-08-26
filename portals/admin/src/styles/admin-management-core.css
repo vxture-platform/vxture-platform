@@ -24,12 +24,6 @@
   margin: 0;
 }
 
-.vx-tenant-summary {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-md);
-}
-
 .vx-platform-users-summary,
 .vx-admin-roles-summary,
 .vx-admin-permissions-summary,
@@ -37,86 +31,6 @@
 .vx-model-strategy-summary,
 .vx-platform-governance-summary {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.vx-tenant-summary__item {
-  min-width: 0;
-  min-height: var(--vx-admin-management-size-6r);
-  display: grid;
-  grid-template-columns: var(--vx-admin-management-track-25r) minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-lg);
-  border: var(--vx-admin-management-line-width-1p) solid
-    color-mix(in srgb, var(--vx-color-brand-400) 16%, transparent);
-  border-top: var(--vx-admin-management-line-width-2p) solid var(--tenant-tone);
-  border-radius: var(--tenant-card-radius);
-  background: color-mix(in srgb, var(--vx-color-white) 68%, transparent);
-}
-
-.vx-tenant-summary__item svg {
-  color: var(--tenant-tone);
-}
-
-.vx-tenant-summary__item--identity-icon svg {
-  color: var(--vx-color-neutral-400);
-}
-
-.vx-tenant-summary__item div {
-  min-width: 0;
-  display: grid;
-  gap: var(--space-xs);
-}
-
-.vx-tenant-summary__item span {
-  color: var(--tenant-muted);
-  font-size: var(--vx-admin-meta-size);
-  font-weight: 760;
-}
-
-.vx-tenant-summary__item p {
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-xs);
-}
-
-.vx-tenant-summary__item strong {
-  color: var(--tenant-ink);
-  font-size: var(--vx-admin-page-title-size);
-  font-weight: 780;
-  white-space: nowrap;
-}
-
-.vx-tenant-summary__item em {
-  min-height: var(--vx-admin-management-size-15r);
-  display: inline-flex;
-  align-items: center;
-  padding: 0 var(--space-xs);
-  border-radius: var(--tenant-card-radius);
-  background: color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
-  color: var(--tenant-tone);
-  font-size: var(--vx-admin-caption-size);
-  font-style: normal;
-  font-weight: 760;
-  white-space: nowrap;
-}
-
-.vx-tenant-tone--blue {
-  --tenant-tone: var(--tenant-blue);
-}
-
-.vx-tenant-tone--green {
-  --tenant-tone: var(--tenant-green);
-}
-
-.vx-tenant-tone--amber {
-  --tenant-tone: var(--tenant-amber);
-}
-
-.vx-tenant-tone--rose {
-  --tenant-tone: var(--tenant-rose);
 }
 
 .vx-tenant-toolbar {
