@@ -58,6 +58,8 @@ import {
 } from "@/modules/tenants/tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
 
+type TFn = ReturnType<typeof useTranslations>;
+
 type ViewMode = "list" | "cards";
 type PaymentStatusFilter = "all" | OrderPaymentStatus;
 type PaySourceFilter = "all" | OrderPaySource;
@@ -75,18 +77,6 @@ function formatCurrency(
     minimumFractionDigits: Math.min(2, maximumFractionDigits),
     maximumFractionDigits,
   }).format(value);
-}
-
-function paymentStatusLabel(status: OrderPaymentStatus) {
-  if (status === "not_required") return "无需支付";
-  if (status === "unpaid") return "未支付";
-  if (status === "pending") return "支付中";
-  if (status === "pending_verify") return "线下待核";
-  if (status === "paid") return "已收款";
-  if (status === "partial") return "部分收款";
-  if (status === "failed") return "支付失败";
-  if (status === "closed") return "已关闭";
-  return "退款中";
 }
 
 function paySourceLabel(source: OrderPaySource) {
@@ -136,37 +126,50 @@ function paymentStatusIcon(status: OrderPaymentStatus): IconName {
   return "clock";
 }
 
-const PAYMENT_CSV_COLUMNS: readonly CsvColumn<PaymentOperationRecord>[] = [
-  { label: "收款流水", value: (p) => p.paymentNo },
-  { label: "交易号", value: (p) => p.transactionId ?? "" },
-  { label: "关联订单", value: (p) => p.orderNo ?? "" },
-  { label: "关联账单", value: (p) => p.billNo ?? "" },
-  { label: "租户编码", value: (p) => p.tenantCode },
-  { label: "租户名称", value: (p) => p.tenantName },
-  { label: "收款金额", value: (p) => p.paidAmount },
-  {
-    label: "账单应收",
-    value: (p) => p.billPayableAmount || p.totalAmount,
-  },
-  { label: "币种", value: (p) => p.currency },
-  { label: "收款状态", value: (p) => paymentStatusLabel(p.paymentStatus) },
-  { label: "支付来源", value: (p) => paySourceLabel(p.paySource) },
-  {
-    label: "收款方式",
-    value: (p) =>
-      p.paySource === "offline"
-        ? offlineTypeLabel(p.offlinePayType)
-        : (p.payMethod ?? ""),
-  },
-  {
-    label: "对账状态",
-    value: (p) => reconciliationLabel(p.reconciliationStatus),
-  },
-  { label: "操作人", value: (p) => p.operatorName },
-  { label: "收款时间", value: (p) => p.paidAt ?? p.createdAt },
-];
+/* 从模块级常量改成收 `t` 的工厂：常量在模块加载时就求值了，那一刻
+   没有任何运行时上下文，而列里的状态文案要按界面语言取。 */
+function paymentCsvColumns(
+  t: TFn,
+): readonly CsvColumn<PaymentOperationRecord>[] {
+  return [
+    { label: "收款流水", value: (p) => p.paymentNo },
+    { label: "交易号", value: (p) => p.transactionId ?? "" },
+    { label: "关联订单", value: (p) => p.orderNo ?? "" },
+    { label: "关联账单", value: (p) => p.billNo ?? "" },
+    { label: "租户编码", value: (p) => p.tenantCode },
+    { label: "租户名称", value: (p) => p.tenantName },
+    { label: "收款金额", value: (p) => p.paidAmount },
+    {
+      label: "账单应收",
+      value: (p) => p.billPayableAmount || p.totalAmount,
+    },
+    { label: "币种", value: (p) => p.currency },
+    {
+      label: "收款状态",
+      value: (p) => t(`status.paymentLedger.${p.paymentStatus}`),
+    },
+    { label: "支付来源", value: (p) => paySourceLabel(p.paySource) },
+    {
+      label: "收款方式",
+      value: (p) =>
+        p.paySource === "offline"
+          ? offlineTypeLabel(p.offlinePayType)
+          : (p.payMethod ?? ""),
+    },
+    {
+      label: "对账状态",
+      value: (p) => reconciliationLabel(p.reconciliationStatus),
+    },
+    { label: "操作人", value: (p) => p.operatorName },
+    { label: "收款时间", value: (p) => p.paidAt ?? p.createdAt },
+  ];
+}
 
-function paymentSearchText(payment: PaymentOperationRecord) {
+/* 收 `t` 往下传：搜索文本里含状态文案，那些现在从词条取。 */
+function paymentSearchText(
+  payment: PaymentOperationRecord,
+  t: ReturnType<typeof useTranslations>,
+) {
   return [
     payment.id,
     payment.paymentNo,
@@ -185,7 +188,7 @@ function paymentSearchText(payment: PaymentOperationRecord) {
     payment.operatorName,
     payment.statusMessage,
     payment.remark,
-    paymentStatusLabel(payment.paymentStatus),
+    t(`status.paymentLedger.${payment.paymentStatus}`),
     paySourceLabel(payment.paySource),
     offlineTypeLabel(payment.offlinePayType),
     reconciliationLabel(payment.reconciliationStatus),
@@ -370,6 +373,7 @@ function PaymentActionsMenu({
  * 值域着色表，整族改 Badge 归批 4，一次改动不跨两个语义面。
  */
 function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
+  const t = useTranslations();
   const locale = useLocale();
   const router = useRouter();
 
@@ -450,7 +454,7 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
               tone={PAYMENT_STATUS_TONE[payment.paymentStatus]}
               icon={paymentStatusIcon(payment.paymentStatus)}
             >
-              {paymentStatusLabel(payment.paymentStatus)}
+              {t(`status.paymentLedger.${payment.paymentStatus}`)}
             </StatusBadge>
           }
           description={formatDate(payment.paidAt ?? payment.createdAt, locale)}
@@ -487,6 +491,7 @@ function PaymentCards({
   onVerify: (payment: PaymentOperationRecord) => void;
   onReject: (payment: PaymentOperationRecord) => void;
 }) {
+  const t = useTranslations();
   const locale = useLocale();
   const router = useRouter();
 
@@ -526,7 +531,7 @@ function PaymentCards({
           </header>
           <div className="vx-tenant-directory-card__badges">
             <StatusBadge tone={PAYMENT_STATUS_TONE[payment.paymentStatus]}>
-              {paymentStatusLabel(payment.paymentStatus)}
+              {t(`status.paymentLedger.${payment.paymentStatus}`)}
             </StatusBadge>
             <StatusBadge
               tone={RECONCILIATION_TONE[payment.reconciliationStatus]}
@@ -577,6 +582,7 @@ function PaymentCards({
 }
 
 export function PaymentsPage() {
+  const t = useTranslations();
   const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
   const [payments, setPayments] = useState<PaymentOperationRecord[]>([]);
@@ -654,18 +660,23 @@ export function PaymentsPage() {
       if (!matchesOfflineTypeFilter(payment, offlineTypeFilter)) return false;
       if (
         normalizedQuery &&
-        !paymentSearchText(payment).includes(normalizedQuery)
+        !paymentSearchText(payment, t).includes(normalizedQuery)
       )
         return false;
       return true;
     });
   }, [
+    /* `t` 进依赖：过滤要读状态文案（`billingSearchText` / `paymentSearchText`
+       内部用它查词条）。next-intl 的 translator 按 (命名空间, messages, locale)
+       记忆化，只在切语言时换身份，所以这不会让 memo 每次渲染失效，反而保证
+       切语言时搜索匹配的是新语言的文案。这里没有 effect 依赖它。 */
     offlineTypeFilter,
     paymentStatusFilter,
     payments,
     paySourceFilter,
     query,
     reconciliationFilter,
+    t,
   ]);
 
   const pageCount = Math.max(1, Math.ceil(filteredPayments.length / pageSize));
@@ -867,7 +878,7 @@ export function PaymentsPage() {
                   onClick={() =>
                     exportRowsToCsv(
                       "payments-export",
-                      PAYMENT_CSV_COLUMNS,
+                      paymentCsvColumns(t),
                       filteredPayments.filter((item) =>
                         selectedPaymentIds.has(item.id),
                       ),
@@ -970,7 +981,7 @@ export function PaymentsPage() {
                   onSelect: () =>
                     exportRowsToCsv(
                       "payments-export",
-                      PAYMENT_CSV_COLUMNS,
+                      paymentCsvColumns(t),
                       selectedPayments,
                     ),
                 },

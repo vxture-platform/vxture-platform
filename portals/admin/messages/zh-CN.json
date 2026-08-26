@@ -1653,6 +1653,38 @@
       "settled": "已结清",
       "partiallyPaid": "部分收款",
       "awaitingPayment": "待收款"
+    },
+    "orderPayment": {
+      "not_required": "无需支付",
+      "unpaid": "未支付",
+      "pending": "支付中",
+      "pending_verify": "线下待核",
+      "paid": "已支付",
+      "partial": "部分支付",
+      "failed": "支付失败",
+      "closed": "已关闭",
+      "refunding": "退款中"
+    },
+    "paymentLedger": {
+      "not_required": "无需支付",
+      "unpaid": "未支付",
+      "pending": "支付中",
+      "pending_verify": "线下待核",
+      "paid": "已收款",
+      "partial": "部分收款",
+      "failed": "支付失败",
+      "closed": "已关闭",
+      "refunding": "退款中"
+    },
+    "invoice": {
+      "none": "未开票",
+      "applying": "申请中",
+      "auditing": "审核中",
+      "issued": "已开票",
+      "sending": "寄送中",
+      "finished": "已完成",
+      "rejected": "已驳回",
+      "red": "已红冲"
     }
   }
 }

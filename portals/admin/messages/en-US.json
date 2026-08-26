@@ -1653,6 +1653,38 @@
       "settled": "Settled",
       "partiallyPaid": "Partially paid",
       "awaitingPayment": "Awaiting payment"
+    },
+    "orderPayment": {
+      "not_required": "Not required",
+      "unpaid": "Unpaid",
+      "pending": "Paying",
+      "pending_verify": "Awaiting offline check",
+      "paid": "Paid",
+      "partial": "Partially paid",
+      "failed": "Payment failed",
+      "closed": "Closed",
+      "refunding": "Refunding"
+    },
+    "paymentLedger": {
+      "not_required": "Not required",
+      "unpaid": "Unpaid",
+      "pending": "Paying",
+      "pending_verify": "Awaiting offline check",
+      "paid": "Received",
+      "partial": "Partially received",
+      "failed": "Payment failed",
+      "closed": "Closed",
+      "refunding": "Refunding"
+    },
+    "invoice": {
+      "none": "Not invoiced",
+      "applying": "Applying",
+      "auditing": "Under review",
+      "issued": "Issued",
+      "sending": "In transit",
+      "finished": "Completed",
+      "rejected": "Rejected",
+      "red": "Reversed"
     }
   }
 }

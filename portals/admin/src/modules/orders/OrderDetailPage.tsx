@@ -27,7 +27,6 @@ import {
 import type {
   OrderOperationDetailRecord,
   OrderOperationStatus,
-  OrderPaymentStatus,
   OrderPaySource,
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
@@ -67,18 +66,6 @@ function orderStatusLabel(status: OrderOperationStatus) {
   if (status === "paid_unprovisioned") return "已付未开通";
   if (status === "partial_pending") return "部分收款·挂账";
   return "异常";
-}
-
-function paymentStatusLabel(status: OrderPaymentStatus) {
-  if (status === "not_required") return "无需支付";
-  if (status === "unpaid") return "未支付";
-  if (status === "pending") return "支付中";
-  if (status === "pending_verify") return "线下待核";
-  if (status === "paid") return "已支付";
-  if (status === "partial") return "部分支付";
-  if (status === "failed") return "支付失败";
-  if (status === "closed") return "已关闭";
-  return "退款中";
 }
 
 function paySourceLabel(source: OrderPaySource) {
@@ -128,6 +115,7 @@ function subscriptionStatusLabel(
 }
 
 function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
+  const t = useTranslations();
   const tShared = useTranslations();
   return (
     <section className="vx-product-capability-summary">
@@ -152,7 +140,7 @@ function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
             <Badge
               className={`vx-tenant-pill vx-order-pill--payment-${order.paymentStatus}`}
             >
-              {paymentStatusLabel(order.paymentStatus)}
+              {t(`status.orderPayment.${order.paymentStatus}`)}
             </Badge>
           </div>
         </div>
@@ -194,6 +182,7 @@ function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
 }
 
 function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
+  const t = useTranslations();
   const locale = useLocale();
   const tShared = useTranslations();
   return (
@@ -209,7 +198,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
             {orUnset(orderStatusLabel(order.orderStatus))}
           </DetailRow>
           <DetailRow label="支付状态">
-            {orUnset(paymentStatusLabel(order.paymentStatus))}
+            {orUnset(t(`status.orderPayment.${order.paymentStatus}`))}
           </DetailRow>
           <DetailRow label="支付来源">
             {orUnset(paySourceLabel(order.paySource))}
@@ -334,7 +323,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
                 </span>
                 <small>
                   {paySourceLabel(payment.paySource)} |{" "}
-                  {paymentStatusLabel(payment.paymentStatus)} |{" "}
+                  {t(`status.orderPayment.${payment.paymentStatus}`)} |{" "}
                   {formatDate(payment.paidAt, locale)}
                 </small>
                 <em>{formatCurrency(payment.paidAmount, payment.currency)}</em>

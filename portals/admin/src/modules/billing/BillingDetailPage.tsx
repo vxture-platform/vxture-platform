@@ -28,7 +28,6 @@ import type {
   BillingDetailRecord,
   BillingInvoiceReceiptAction,
   BillingInvoiceReceiptRecord,
-  BillingInvoiceStatus,
   BillingInvoiceTaxType,
   BillingInvoiceType,
 } from "@/entities/console";
@@ -82,17 +81,6 @@ function billTypeLabel(type: BillingBillType) {
   return "正常账单";
 }
 
-function invoiceStatusLabel(status: BillingInvoiceStatus) {
-  if (status === "applying") return "申请中";
-  if (status === "auditing") return "审核中";
-  if (status === "issued") return "已开票";
-  if (status === "sending") return "寄送中";
-  if (status === "finished") return "已完成";
-  if (status === "rejected") return "已驳回";
-  if (status === "red") return "已红冲";
-  return "未开票";
-}
-
 function invoiceTypeLabel(type: BillingInvoiceType) {
   if (type === "special_vat") return "增值税专票";
   if (type === "normal_vat") return "增值税普票";
@@ -131,6 +119,7 @@ function paymentStatusLabel(status: string) {
 }
 
 function BillingSummary({ bill }: { bill: BillingDetailRecord }) {
+  const t = useTranslations();
   const locale = useLocale();
   const tShared = useTranslations();
   return (
@@ -156,7 +145,7 @@ function BillingSummary({ bill }: { bill: BillingDetailRecord }) {
             <Badge
               className={`vx-tenant-pill vx-billing-pill--invoice-${bill.invoiceStatus}`}
             >
-              {invoiceStatusLabel(bill.invoiceStatus)}
+              {t(`status.invoice.${bill.invoiceStatus}`)}
             </Badge>
           </div>
         </div>
@@ -182,7 +171,7 @@ function BillingSummary({ bill }: { bill: BillingDetailRecord }) {
             help: "本账单已开具发票的金额，不等于已回款。",
             label: "已开票",
             value: formatCurrency(bill.invoicedAmount, bill.currency),
-            tags: [bill.invoiceNo ?? invoiceStatusLabel(bill.invoiceStatus)],
+            tags: [bill.invoiceNo ?? t(`status.invoice.${bill.invoiceStatus}`)],
           },
           {
             id: "cycle",
@@ -207,6 +196,7 @@ function BillingDetails({
     action: BillingInvoiceReceiptAction,
   ) => void;
 }) {
+  const t = useTranslations();
   const locale = useLocale();
   const tShared = useTranslations();
   return (
@@ -400,7 +390,7 @@ function BillingDetails({
                 <small>
                   {invoiceTypeLabel(receipt.invoiceType)} |{" "}
                   {taxTypeLabel(receipt.invoiceTaxType)} |{" "}
-                  {invoiceStatusLabel(receipt.invoiceStatus)}
+                  {t(`status.invoice.${receipt.invoiceStatus}`)}
                 </small>
                 <em>
                   {formatCurrency(receipt.invoiceAmount, receipt.currency)}
@@ -527,6 +517,7 @@ function BillingDetails({
 }
 
 export function BillingDetailPage({ billId }: { billId: string }) {
+  const t = useTranslations();
   const tShared = useTranslations();
   const router = useRouter();
   const { runWithStepUp } = useStepUp();
@@ -709,7 +700,7 @@ export function BillingDetailPage({ billId }: { billId: string }) {
           title={bill ? bill.billNo : "账单详情"}
           description={
             bill
-              ? `${bill.tenantName} · ${bill.servicePlanName ?? "未关联套餐"} · ${invoiceStatusLabel(bill.invoiceStatus)}`
+              ? `${bill.tenantName} · ${bill.servicePlanName ?? "未关联套餐"} · ${t(`status.invoice.${bill.invoiceStatus}`)}`
               : "正在读取账单、收款和发票登记数据。"
           }
           action={

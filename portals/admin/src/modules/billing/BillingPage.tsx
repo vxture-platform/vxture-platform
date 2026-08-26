@@ -108,17 +108,6 @@ function billTypeLabel(type: BillingBillType) {
   return "正常账单";
 }
 
-function invoiceStatusLabel(status: BillingInvoiceStatus) {
-  if (status === "applying") return "申请中";
-  if (status === "auditing") return "审核中";
-  if (status === "issued") return "已开票";
-  if (status === "sending") return "寄送中";
-  if (status === "finished") return "已完成";
-  if (status === "rejected") return "已驳回";
-  if (status === "red") return "已红冲";
-  return "未开票";
-}
-
 /**
  * 账单上的异常标。`tone` 直接给 DS 语气档，不再走 `vx-billing-exception-pill--*`
  * 那套色名——调整单与补录单原先分蓝、紫两色，DS 没有紫档，两者同归 `brand`：
@@ -213,7 +202,11 @@ function cycleLabel(cycle: string) {
   return cycle || "未设置";
 }
 
-function billingSearchText(record: BillingRecord) {
+/* 收 `t` 往下传：搜索文本里含状态文案，那些现在从词条取。 */
+function billingSearchText(
+  record: BillingRecord,
+  t: ReturnType<typeof useTranslations>,
+) {
   return [
     record.id,
     record.billNo,
@@ -229,7 +222,7 @@ function billingSearchText(record: BillingRecord) {
     record.operationRemark,
     billTypeLabel(record.billType),
     billStatusLabel(record.billStatus),
-    invoiceStatusLabel(record.invoiceStatus),
+    t(`status.invoice.${record.invoiceStatus}`),
     record.billStatus,
     record.invoiceStatus,
   ]
@@ -240,7 +233,10 @@ function billingSearchText(record: BillingRecord) {
 
 /* 从模块级常量改成收 `locale` 的工厂：常量在模块加载时就求值了，那一刻
    没有任何运行时上下文，而列里的日期要按界面语言排。 */
-function billingCsvColumns(locale: string): CsvColumn<BillingRecord>[] {
+function billingCsvColumns(
+  locale: string,
+  t: ReturnType<typeof useTranslations>,
+): CsvColumn<BillingRecord>[] {
   return [
     { label: "账单编号", value: (b) => b.billNo },
     { label: "订单编号", value: (b) => b.orderNo },
@@ -258,7 +254,7 @@ function billingCsvColumns(locale: string): CsvColumn<BillingRecord>[] {
     { label: "已收金额", value: (b) => b.paidAmount },
     { label: "已开票金额", value: (b) => b.invoicedAmount },
     { label: "收款状态", value: (b) => billStatusLabel(b.billStatus) },
-    { label: "发票状态", value: (b) => invoiceStatusLabel(b.invoiceStatus) },
+    { label: "发票状态", value: (b) => t(`status.invoice.${b.invoiceStatus}`) },
     { label: "发票号", value: (b) => b.invoiceNo ?? "" },
     { label: "经办人", value: (b) => b.operatorName },
   ];
@@ -341,6 +337,7 @@ function BillingActionsMenu({
  * 与缺色（starter / business）一起另算。
  */
 function useBillingColumns(): DataTableColumn<BillingRecord>[] {
+  const t = useTranslations();
   const locale = useLocale();
   const router = useRouter();
 
@@ -456,7 +453,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
         <TableTitleCell
           title={
             <StatusBadge tone={INVOICE_STATUS_TONE[bill.invoiceStatus]}>
-              {invoiceStatusLabel(bill.invoiceStatus)}
+              {t(`status.invoice.${bill.invoiceStatus}`)}
             </StatusBadge>
           }
           description={
@@ -476,6 +473,7 @@ function BillingCards({
   bills: BillingRecord[];
   onSyncInvoice: (bill: BillingRecord) => void;
 }) {
+  const t = useTranslations();
   const locale = useLocale();
   const tShared = useTranslations();
   const router = useRouter();
@@ -499,7 +497,7 @@ function BillingCards({
                 {billStatusLabel(bill.billStatus)}
               </StatusBadge>
               <StatusBadge tone={INVOICE_STATUS_TONE[bill.invoiceStatus]}>
-                {invoiceStatusLabel(bill.invoiceStatus)}
+                {t(`status.invoice.${bill.invoiceStatus}`)}
               </StatusBadge>
               {billingExceptionTags(bill).map((tag) => (
                 <StatusBadge
@@ -546,6 +544,7 @@ function BillingCards({
 }
 
 export function BillingPage() {
+  const t = useTranslations();
   const locale = useLocale();
   const tShared = useTranslations();
   const [bills, setBills] = useState<BillingRecord[]>([]);
@@ -624,11 +623,18 @@ export function BillingPage() {
       if (tierFilter !== "all" && tierFilterOf(bill.tierName) !== tierFilter)
         return false;
       if (!matchesBillingExceptionFilter(bill, exceptionFilter)) return false;
-      if (normalizedQuery && !billingSearchText(bill).includes(normalizedQuery))
+      if (
+        normalizedQuery &&
+        !billingSearchText(bill, t).includes(normalizedQuery)
+      )
         return false;
       return true;
     });
   }, [
+    /* `t` 进依赖：过滤要读状态文案（`billingSearchText` / `paymentSearchText`
+       内部用它查词条）。next-intl 的 translator 按 (命名空间, messages, locale)
+       记忆化，只在切语言时换身份，所以这不会让 memo 每次渲染失效，反而保证
+       切语言时搜索匹配的是新语言的文案。这里没有 effect 依赖它。 */
     billStatusFilter,
     billTypeFilter,
     bills,
@@ -636,6 +642,7 @@ export function BillingPage() {
     invoiceStatusFilter,
     query,
     tierFilter,
+    t,
   ]);
 
   const pageCount = Math.max(1, Math.ceil(filteredBills.length / pageSize));
@@ -699,7 +706,11 @@ export function BillingPage() {
 
   function handleExportSelected() {
     const rows = filteredBills.filter((bill) => selectedBillIds.has(bill.id));
-    exportRowsToCsv("billing-selected-export", billingCsvColumns(locale), rows);
+    exportRowsToCsv(
+      "billing-selected-export",
+      billingCsvColumns(locale, t),
+      rows,
+    );
   }
 
   function clearBillSelection() {
