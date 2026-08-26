@@ -14,45 +14,7 @@
 
 /* Tenant workspace form grid styles. */
 
-.vx-tenant-form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-md);
-}
-
-.vx-tenant-form-grid--basic {
-  align-items: end;
-}
-
-.vx-tenant-form-grid label {
-  min-width: 0;
-  display: grid;
-  gap: var(--space-xs);
-}
-
-.vx-tenant-form-grid label > span {
-  color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
-  font-weight: 760;
-}
-
-.vx-tenant-form-grid select.vx-input {
-  height: var(--vx-admin-management-size-275r);
-  min-height: var(--vx-admin-management-size-275r);
-}
-
 /* Tenant workspace list layout styles. */
-
-.vx-tenant-workspace {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(
-      var(--vx-admin-management-track-18r-large),
-      var(--vx-admin-management-track-22r)
-    ) minmax(0, 1fr);
-  align-items: start;
-  gap: var(--space-xl);
-}
 
 .vx-tenant-list {
   position: sticky;
@@ -89,111 +51,12 @@
 
 /* Tenant workspace list card styles. */
 
-.vx-tenant-list-card {
-  --tenant-list-tone: var(--tenant-blue);
-  width: 100%;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: var(--vx-admin-management-track-25r) minmax(0, 1fr);
-  gap: var(--space-md);
-  padding: var(--space-md);
-  border: var(--vx-admin-management-line-width-1p) solid
-    color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
-  border-left: var(--vx-admin-management-line-width-2p) solid
-    var(--tenant-list-tone);
-  border-radius: var(--vx-radius-lg);
-  background: color-mix(in srgb, var(--vx-color-white) 58%, transparent);
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-  transition:
-    background 160ms ease,
-    border-color 160ms ease,
-    transform 160ms ease;
-}
-
 .vx-tenant-list-card:hover,
-.vx-tenant-list-card.is-active {
-  border-color: color-mix(
-    in srgb,
-    var(--vx-color-auth-accent) 24%,
-    transparent
-  );
-  background: color-mix(in srgb, var(--vx-color-brand-50) 76%, transparent);
-}
-
-.vx-tenant-list-card.is-active {
-  transform: translateX(var(--vx-admin-management-motion-05r));
-}
-
-.vx-tenant-list-card--normal {
-  --tenant-list-tone: var(--vx-color-neutral-400);
-}
-
-.vx-tenant-list-card--follow_up {
-  --tenant-list-tone: var(--tenant-amber);
-}
-
-.vx-tenant-list-card--high {
-  --tenant-list-tone: var(--tenant-rose);
-}
-
-.vx-tenant-list-card__icon {
-  width: var(--vx-admin-management-size-25r);
-  height: var(--vx-admin-management-size-25r);
-  display: inline-grid;
-  place-items: center;
-  color: var(--tenant-list-tone);
-}
 
 .vx-tenant-list-card__body,
 .vx-tenant-list-card__title,
 .vx-tenant-list-card__meta,
-.vx-tenant-list-card__metrics {
-  min-width: 0;
-}
-
-.vx-tenant-list-card__body {
-  display: grid;
-  gap: var(--space-sm);
-}
-
-.vx-tenant-list-card__title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-}
-
-.vx-tenant-list-card__title strong {
-  overflow: hidden;
-  color: var(--tenant-ink);
-  font-size: var(--vx-admin-card-title-size);
-  font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .vx-tenant-list-card__meta,
-.vx-tenant-list-card__metrics {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  flex-wrap: wrap;
-  color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
-  font-weight: 760;
-}
 
 .vx-tenant-list-card__meta small,
-.vx-tenant-list-card__metrics small {
-  min-height: var(--vx-admin-management-size-15r);
-  display: inline-flex;
-  align-items: center;
-  padding: 0 var(--space-xs);
-  border-radius: var(--vx-radius-lg);
-  background: color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
-  color: var(--vx-color-brand-600);
-  font-size: inherit;
-  font-weight: 760;
-}

@@ -2,13 +2,6 @@
 .vx-product-plan-row__price,
 .vx-product-plan-row__features,
 .vx-product-plan-row__agents,
-.vx-product-plan-row__subscriptions {
-  min-width: 0;
-  display: grid;
-  gap: var(--space-xs);
-  justify-items: start;
-  text-align: left;
-}
 .vx-admin-role-permission-tags {
   justify-content: flex-start;
 }

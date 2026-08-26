@@ -48,10 +48,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .vx-tenant-workspace {
-    grid-template-columns: 1fr;
-  }
-
   .vx-tenant-list {
     position: static;
   }
@@ -105,11 +101,6 @@
     flex-basis: auto;
   }
 
-  .vx-tenant-page-size {
-    margin-left: 0;
-    margin-right: 0;
-  }
-
   .vx-tenant-toolbar__spacer {
     display: none;
   }
@@ -118,16 +109,6 @@
     margin-right: auto;
   }
 
-  .vx-tenant-pagination {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .vx-tenant-pagination__actions {
-    width: 100%;
-    justify-content: flex-end;
-    margin-left: 0;
-  }
 }
 
 @media (max-width: 960px) {
@@ -172,10 +153,6 @@
   .vx-tenant-block > .vx-tenant-note,
   .vx-tenant-block > .vx-tenant-tags {
     margin-left: 0;
-  }
-
-  .vx-tenant-admin-row {
-    align-items: stretch;
   }
 
   .vx-tenant-config-row--contact {

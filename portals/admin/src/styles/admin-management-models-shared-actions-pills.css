@@ -1,35 +1,4 @@
-.vx-model-operation-buttons {
-  justify-self: center;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-xs);
-  min-width: 0;
-}
 
-.vx-model-operation-buttons button {
-  width: var(--vx-admin-management-size-40p);
-  height: var(--vx-admin-management-size-40p);
-  display: inline-grid;
-  place-items: center;
-  padding: 0;
-  border: var(--vx-admin-management-line-width-1p) solid
-    color-mix(in srgb, var(--vx-color-neutral-500) 12%, transparent);
-  border-radius: var(--vx-radius-lg);
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition:
-    background 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease;
-}
-
-.vx-model-batch-actions button:not(:disabled) {
-  border-color: var(--tenant-blue);
-  background: var(--tenant-blue);
-  color: var(--vx-color-white);
-}
 
 .vx-model-operation-buttons:not(.vx-model-batch-actions)
   button:hover:not(:disabled) {
@@ -42,70 +11,12 @@
   color: var(--muted-foreground);
 }
 
-.vx-model-batch-actions button:hover:not(:disabled) {
-  border-color: color-mix(
-    in srgb,
-    var(--tenant-blue) 88%,
-    var(--vx-color-black)
-  );
-  background: color-mix(in srgb, var(--tenant-blue) 88%, var(--vx-color-black));
-  color: var(--vx-color-white);
-}
-
-.vx-model-operation-buttons button:disabled {
-  border-color: color-mix(
-    in srgb,
-    var(--vx-color-neutral-500) 14%,
-    transparent
-  );
-  background: transparent;
-  cursor: default;
-  color: var(--muted-foreground);
-  opacity: 1;
-}
-
-.vx-model-operation-buttons .vx-model-operation-buttons__danger:not(:disabled) {
-  border-color: color-mix(
-    in srgb,
-    var(--vx-color-neutral-500) 12%,
-    transparent
-  );
-  background: transparent;
-  color: var(--muted-foreground);
-}
-
-.vx-model-batch-actions .vx-model-operation-buttons__danger:not(:disabled) {
-  border-color: var(--destructive);
-  background: var(--destructive);
-  color: var(--vx-color-white);
-}
-
 .vx-model-batch-actions
-  .vx-model-operation-buttons__danger:hover:not(:disabled) {
-  border-color: var(--vx-color-danger-strong);
-  background: var(--vx-color-danger-strong);
-  color: var(--vx-color-white);
-}
-
-.vx-model-batch-actions {
-  min-height: var(--vx-admin-management-size-40p);
-  padding: 0;
-}
 
 .vx-product-plan-row__status small,
 .vx-product-plan-row__price small,
 .vx-product-plan-row__features small,
 .vx-product-plan-row__agents small,
-.vx-product-plan-row__subscriptions small {
-  margin-top: 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.vx-product-plan-row__identity svg {
-  color: var(--tenant-row-tone);
-}
 
 .vx-admin-role-permission-tags {
   min-width: 0;
@@ -142,19 +53,6 @@
 }
 
 .vx-product-search {
-  width: clamp(
-    var(--vx-admin-management-size-13r),
-    16vw,
-    var(--vx-admin-management-size-20r)
-  );
-  flex-basis: clamp(
-    var(--vx-admin-management-size-13r),
-    16vw,
-    var(--vx-admin-management-size-20r)
-  );
-}
-
-.vx-product-plan-search {
   width: clamp(
     var(--vx-admin-management-size-13r),
     16vw,

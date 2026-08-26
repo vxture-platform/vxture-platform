@@ -21,9 +21,6 @@
   text-overflow: ellipsis;
 }
 .vx-product-plan-row__price strong,
-.vx-product-plan-row__subscriptions strong {
-  font-size: var(--vx-admin-body-size);
-}
 
 .vx-product-plan-card__description,
 .vx-product-solution-card__description {
