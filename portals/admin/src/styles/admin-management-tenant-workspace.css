@@ -2,12 +2,12 @@
 
 .vx-tenant-back-link {
   width: fit-content;
-  min-height: var(--vx-admin-management-size-25r);
+  min-height: var(--spacing-icon-xl);
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
   color: var(--tenant-blue);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 800;
   text-decoration: none;
 }
@@ -25,7 +25,7 @@
 }
 
 .vx-tenant-list > header {
-  min-height: var(--vx-admin-management-size-25r);
+  min-height: var(--spacing-icon-xl);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -34,13 +34,13 @@
 
 .vx-tenant-list > header strong {
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-card-title-size);
+  font-size: var(--title-md-font-size);
   font-weight: 780;
 }
 
 .vx-tenant-list > header span {
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 760;
 }
 

@@ -3,7 +3,7 @@
  */
 
 .vx-tenant-management-page {
-  --tenant-card-radius: var(--vx-admin-management-card-radius);
+  --tenant-card-radius: var(--vx-radius-lg);
   --tenant-blue: var(--vx-color-auth-accent);
   --tenant-cyan: var(--vx-color-cyan-600);
   --tenant-green: var(--success);
@@ -80,12 +80,12 @@
 }
 
 .vx-tenant-view-count {
-  min-height: var(--vx-admin-management-size-225r);
+  min-height: var(--space-control-lg);
   display: inline-flex;
   align-items: center;
   padding-left: var(--space-xs);
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-body-size);
+  font-size: var(--body-md-font-size);
   font-weight: 800;
   white-space: nowrap;
 }

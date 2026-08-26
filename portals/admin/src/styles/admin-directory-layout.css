@@ -13,7 +13,7 @@
 .vx-tenant-directory {
   min-width: 0;
   display: grid;
-  gap: var(--vx-admin-directory-gap);
+  gap: var(--space-xs);
   max-width: 100%;
   overflow: visible;
 }
@@ -23,18 +23,18 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--vx-admin-directory-header-gap);
+  gap: var(--space-sm);
 }
 
 .vx-tenant-directory__header strong {
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-card-title-size);
+  font-size: var(--title-md-font-size);
   font-weight: 800;
 }
 
 .vx-tenant-directory__header span {
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 400;
 }
 

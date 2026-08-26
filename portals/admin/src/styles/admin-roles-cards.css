@@ -2,7 +2,7 @@
 
 .vx-admin-role-card__description {
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   line-height: 1.6;
 }
 

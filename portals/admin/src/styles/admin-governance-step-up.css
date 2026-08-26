@@ -8,12 +8,12 @@
 .vx-step-up-error {
   margin: 0;
   color: var(--destructive);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 600;
 }
 
 .vx-step-up-hint {
   margin: 0;
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
 }

@@ -12,7 +12,7 @@
 
 .vx-tenant-detail-summary {
   position: relative;
-  border-top: var(--vx-admin-management-line-width-2p) solid
+  border-top: var(--border-width-medium) solid
     color-mix(in srgb, var(--vx-color-auth-accent) 32%, transparent);
 }
 

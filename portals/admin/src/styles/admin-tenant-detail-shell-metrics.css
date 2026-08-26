@@ -11,7 +11,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  min-height: var(--vx-admin-management-size-175r);
+  min-height: var(--spacing-icon-lg);
 }
 
 .vx-tenant-detail-summary .vx-tenant-key-metric > span {
@@ -41,15 +41,15 @@
 }
 
 .vx-tenant-detail-summary--collapsed .vx-tenant-detail__icon {
-  width: var(--vx-admin-management-size-175r);
-  height: var(--vx-admin-management-size-175r);
+  width: var(--spacing-icon-lg);
+  height: var(--spacing-icon-lg);
   display: inline-grid;
   flex: 0 0 auto;
 }
 
 .vx-tenant-detail-summary--collapsed .vx-tenant-detail__icon svg {
-  width: var(--vx-admin-management-size-15r);
-  height: var(--vx-admin-management-size-15r);
+  width: var(--spacing-icon-lg);
+  height: var(--spacing-icon-lg);
 }
 
 .vx-tenant-detail-summary--collapsed .vx-tenant-detail__title {
@@ -65,7 +65,7 @@
 
 .vx-tenant-detail-summary--collapsed .vx-tenant-detail__title h2 {
   min-width: 0;
-  font-size: var(--vx-admin-card-title-size);
+  font-size: var(--title-md-font-size);
 }
 
 .vx-tenant-detail-summary--collapsed .vx-tenant-detail__title > div {
@@ -98,13 +98,13 @@
   justify-content: space-between;
   gap: var(--space-lg);
   padding-bottom: var(--space-2xs);
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+  border-bottom: var(--border-width-thin) dashed
     color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
 }
 
 .vx-tenant-unsaved {
   color: var(--tenant-rose);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 820;
   white-space: nowrap;
 }
@@ -118,18 +118,18 @@
 }
 
 .vx-tenant-review-action {
-  min-height: var(--vx-admin-management-size-2r);
+  min-height: var(--spacing-icon-xl);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-xs);
   padding: 0 var(--space-sm);
-  border: var(--vx-admin-management-line-width-1p) solid
+  border: var(--border-width-thin) solid
     color-mix(in srgb, var(--vx-color-warning-600) 26%, transparent);
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-warning-600) 10%, transparent);
   color: var(--tenant-amber);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 780;
   text-decoration: none;
   white-space: nowrap;
@@ -140,8 +140,8 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-md);
   padding: var(--space-md) 0;
-  border-top: var(--vx-admin-management-line-width-1p) dashed var(--tenant-line);
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+  border-top: var(--border-width-thin) dashed var(--tenant-line);
+  border-bottom: var(--border-width-thin) dashed
     var(--tenant-line);
 }
 
@@ -161,14 +161,14 @@
 
 .vx-tenant-key-metric span {
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 760;
 }
 
 .vx-tenant-key-metric strong {
   overflow: hidden;
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-card-title-size);
+  font-size: var(--title-md-font-size);
   font-weight: 820;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -181,14 +181,14 @@
 .vx-tenant-key-metric em {
   min-width: 0;
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-style: normal;
   font-weight: 760;
   white-space: nowrap;
 }
 
 .vx-tenant-detail-summary .vx-tenant-key-metric em {
-  min-height: var(--vx-admin-management-size-1375r);
+  min-height: var(--spacing-icon-md);
   display: inline-flex;
   align-items: center;
   padding: 0 var(--space-xs);

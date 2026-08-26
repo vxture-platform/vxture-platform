@@ -5,7 +5,7 @@
 .vx-admin-permission-tree-node {
   min-width: 0;
   display: grid;
-  border-bottom: var(--vx-admin-permission-line-width-1p) solid
+  border-bottom: var(--border-width-thin) solid
     color-mix(in srgb, var(--vx-color-neutral-500) 11%, transparent);
   border-left: 0;
   background: transparent;
@@ -59,8 +59,8 @@
 }
 
 .vx-admin-permission-tree-node__toggle {
-  width: var(--vx-admin-permission-size-175r);
-  height: var(--vx-admin-permission-size-175r);
+  width: var(--spacing-icon-lg);
+  height: var(--spacing-icon-lg);
   display: inline-grid;
   place-items: center;
   border: 0;
@@ -96,7 +96,7 @@
 .vx-admin-permission-tree-node__title strong {
   color: var(--tenant-ink);
   flex: 0 1 auto;
-  font-size: var(--vx-admin-body-size);
+  font-size: var(--body-md-font-size);
   font-weight: 800;
   line-height: 1.35;
   overflow-wrap: normal;
@@ -110,7 +110,7 @@
 .vx-admin-permission-tree-node__title > em {
   color: var(--vx-color-neutral-400);
   font-family: var(--font-mono);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 620;
   font-style: normal;
 }

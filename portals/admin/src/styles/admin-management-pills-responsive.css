@@ -1,7 +1,7 @@
 /* Management responsive verification fallback styles. */
 
 .vx-verification-cards .vx-tenant-directory-card__metrics b {
-  font-size: var(--vx-admin-body-size);
+  font-size: var(--body-md-font-size);
   white-space: normal;
 }
 
@@ -132,7 +132,7 @@
     padding-right: 0;
     padding-bottom: var(--space-md);
     border-right: 0;
-    border-bottom: var(--vx-admin-management-line-width-1p) dashed
+    border-bottom: var(--border-width-thin) dashed
       var(--tenant-line);
   }
 
@@ -167,7 +167,7 @@
     padding-right: 0;
     padding-bottom: var(--space-lg);
     border-right: 0;
-    border-bottom: var(--vx-admin-management-line-width-1p) dashed
+    border-bottom: var(--border-width-thin) dashed
       var(--tenant-line);
   }
 }

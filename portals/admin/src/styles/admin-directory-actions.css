@@ -6,8 +6,8 @@
 }
 
 .vx-tenant-actions__trigger {
-  width: var(--vx-admin-directory-actions-trigger-size);
-  height: var(--vx-admin-directory-actions-trigger-size);
+  width: var(--space-control-xl);
+  height: var(--space-control-xl);
   display: inline-grid;
   place-items: center;
   padding: 0;
@@ -22,20 +22,20 @@
 }
 
 .vx-tenant-actions__trigger svg {
-  width: var(--vx-admin-directory-actions-trigger-icon-size);
-  height: var(--vx-admin-directory-actions-trigger-icon-size);
+  width: var(--spacing-icon-lg);
+  height: var(--spacing-icon-lg);
 }
 
 .vx-tenant-actions__menu {
   position: absolute;
   right: 0;
-  top: calc(100% + var(--vx-admin-directory-actions-menu-offset));
+  top: calc(100% + var(--space-2xs));
   z-index: var(--z-index-dropdown);
-  width: var(--vx-admin-directory-actions-menu-width);
+  width: var(--container-overlay-sm);
   display: grid;
-  gap: var(--vx-admin-directory-actions-menu-gap);
-  padding: var(--vx-admin-directory-actions-menu-padding);
-  border: var(--vx-admin-directory-actions-menu-border-width) solid
+  gap: var(--space-2xs);
+  padding: var(--space-xs);
+  border: var(--border-width-thin) solid
     color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
   border-radius: var(--vx-radius-lg);
   background: var(--vx-color-shell-panel-strong);
@@ -55,22 +55,22 @@
   position: absolute;
   left: 0;
   right: 0;
-  top: calc(var(--vx-admin-directory-actions-menu-gap) * -1);
-  height: var(--vx-admin-directory-actions-menu-hit-area-height);
+  top: calc(var(--space-2xs) * -1);
+  height: var(--space-2xs);
 }
 
 .vx-tenant-actions__menu button {
-  min-height: var(--vx-admin-directory-actions-menu-button-height);
+  min-height: var(--space-control-xl);
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-directory-actions-menu-button-gap);
-  padding: 0 var(--vx-admin-directory-actions-menu-button-padding-x);
+  gap: var(--space-xs);
+  padding: 0 var(--space-sm);
   border: 0;
   border-radius: var(--vx-radius-lg);
   background: transparent;
   color: var(--vx-color-neutral-700);
   cursor: pointer;
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 400;
   text-align: left;
 }

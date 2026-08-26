@@ -12,7 +12,7 @@
 .vx-tenant-ticket {
   min-width: 0;
   padding-bottom: var(--space-lg);
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+  border-bottom: var(--border-width-thin) dashed
     var(--tenant-line);
 }
 
@@ -38,7 +38,7 @@
 .vx-tenant-subscription strong {
   overflow: hidden;
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-card-title-size);
+  font-size: var(--title-md-font-size);
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -47,7 +47,7 @@
 .vx-tenant-subscription span {
   overflow: hidden;
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 720;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -92,24 +92,24 @@
 
 .vx-tenant-usage > header strong {
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-card-title-size);
+  font-size: var(--title-md-font-size);
   font-weight: 800;
 }
 
 .vx-tenant-usage > header span {
   color: var(--tenant-blue);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 780;
 }
 
 .vx-tenant-usage__numbers b {
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-page-title-size);
+  font-size: var(--title-xl-font-size);
 }
 
 .vx-tenant-usage__numbers small {
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 760;
 }
 
@@ -137,18 +137,18 @@
 .vx-tenant-risk-panel {
   align-content: start;
   padding-right: var(--space-lg);
-  border-right: var(--vx-admin-management-line-width-1p) dashed
+  border-right: var(--border-width-thin) dashed
     var(--tenant-line);
 }
 
 .vx-tenant-risk-panel__level strong {
-  font-size: var(--vx-admin-page-title-size);
+  font-size: var(--title-xl-font-size);
   font-weight: 820;
 }
 
 .vx-tenant-risk-panel p {
   color: var(--vx-color-neutral-700);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 700;
   line-height: 1.6;
 }
@@ -173,7 +173,7 @@
   align-items: center;
   gap: var(--space-md);
   padding-bottom: var(--space-md);
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+  border-bottom: var(--border-width-thin) dashed
     var(--tenant-line);
 }
 
@@ -187,7 +187,7 @@
 .vx-tenant-ticket strong {
   overflow: hidden;
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -198,7 +198,7 @@
 .vx-tenant-ticket small,
 .vx-tenant-ticket em {
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-style: normal;
   font-weight: 720;
   white-space: nowrap;

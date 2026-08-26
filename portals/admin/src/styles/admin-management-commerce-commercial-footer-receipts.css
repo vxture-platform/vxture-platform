@@ -1,19 +1,19 @@
 .vx-commerce-overview-footer {
-  min-height: var(--vx-admin-management-size-2r);
+  min-height: var(--spacing-icon-xl);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
   padding: var(--space-sm) 0 var(--space-md);
-  border-top: var(--vx-admin-management-line-width-1p) dashed
+  border-top: var(--border-width-thin) dashed
     var(--vx-color-auth-border);
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
 }
 
 .vx-commerce-overview-footer strong {
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 760;
 }
 
@@ -35,15 +35,15 @@
 }
 
 .vx-billing-receipt-actions button {
-  min-height: var(--vx-admin-management-size-175r);
+  min-height: var(--spacing-icon-lg);
   padding: 0 var(--space-xs);
-  border: var(--vx-admin-management-line-width-1p) solid
+  border: var(--border-width-thin) solid
     color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
   border-radius: var(--vx-radius-lg);
   background: transparent;
   color: var(--vx-color-neutral-700);
   cursor: pointer;
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 400;
 }
 

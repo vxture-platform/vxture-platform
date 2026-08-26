@@ -8,7 +8,7 @@
 .vx-model-strategy-overrides__header strong {
   overflow: hidden;
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-card-title-size);
+  font-size: var(--title-md-font-size);
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;

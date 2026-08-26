@@ -16,7 +16,7 @@
 
 .vx-tenant-detail__header > section:not(:last-child) {
   padding-right: var(--space-lg);
-  border-right: var(--vx-admin-management-line-width-1p) dashed
+  border-right: var(--border-width-thin) dashed
     var(--tenant-line);
 }
 
@@ -29,16 +29,16 @@
 }
 
 .vx-tenant-detail__icon {
-  width: var(--vx-admin-management-size-25r);
-  height: var(--vx-admin-management-size-25r);
+  width: var(--spacing-icon-xl);
+  height: var(--spacing-icon-xl);
   display: inline-grid;
   place-items: center;
   color: var(--tenant-blue);
 }
 
 .vx-tenant-detail__icon svg {
-  width: var(--vx-admin-management-size-25r);
-  height: var(--vx-admin-management-size-25r);
+  width: var(--spacing-icon-xl);
+  height: var(--spacing-icon-xl);
 }
 
 .vx-tenant-detail__title {
@@ -58,7 +58,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -68,7 +68,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-page-title-size);
+  font-size: var(--title-xl-font-size);
   font-weight: 740;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -77,9 +77,9 @@
 .vx-tenant-title-copy {
   flex: 0 0 auto;
   opacity: 0;
-  width: var(--vx-admin-management-size-1375r);
-  height: var(--vx-admin-management-size-1375r);
-  min-height: var(--vx-admin-management-size-1375r);
+  width: var(--spacing-icon-md);
+  height: var(--spacing-icon-md);
+  min-height: var(--spacing-icon-md);
   display: inline-grid;
   place-items: center;
   padding: 0;
@@ -88,7 +88,7 @@
   background: transparent;
   color: var(--tenant-muted);
   cursor: pointer;
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 760;
   line-height: 1;
   pointer-events: none;

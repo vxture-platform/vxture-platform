@@ -4,7 +4,7 @@
 .admin-overview {
   width: 100%;
   max-width: none;
-  --admin-overview-card-radius: var(--vx-admin-card-radius);
+  --admin-overview-card-radius: var(--vx-radius-lg);
   --admin-overview-blue: var(--vx-color-auth-accent);
   --admin-overview-green: var(--success);
   --admin-overview-cyan: var(--vx-color-cyan-600);

@@ -18,7 +18,7 @@
 .admin-overview-panel-detail {
   flex: 0 0 auto;
   color: var(--overview-tone, var(--vx-color-auth-accent));
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 780;
   text-decoration: none;
 }
@@ -31,8 +31,8 @@
 
 /* 前三名的图；第四名起由 DS 的 LevelMarker 出。 */
 .admin-overview-rank-medal {
-  width: var(--vx-admin-overview-size-235r);
-  height: var(--vx-admin-overview-size-235r);
+  width: var(--spacing-icon-xl);
+  height: var(--spacing-icon-xl);
   display: inline-grid;
   place-items: center;
   background-position: center;
@@ -68,7 +68,7 @@
   align-items: center;
   flex: 0 0 auto;
   padding: var(--space-2xs);
-  border: var(--vx-admin-overview-line-width-1p) solid
+  border: var(--border-width-thin) solid
     color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
   border-radius: var(--admin-overview-card-radius);
   background: color-mix(in srgb, var(--vx-color-white) 72%, transparent);
@@ -92,15 +92,15 @@
 .admin-overview-period__item {
   position: relative;
   z-index: 1;
-  min-width: var(--vx-admin-overview-size-3r);
-  min-height: var(--vx-admin-overview-size-15r);
+  min-width: var(--spacing-icon-2xl);
+  min-height: var(--spacing-icon-lg);
   padding: 0 var(--space-xs);
   border: 0;
   border-radius: var(--admin-overview-card-radius);
   background: transparent;
   color: var(--muted-foreground);
   cursor: pointer;
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 760;
 }
 
@@ -117,8 +117,8 @@
 }
 
 .admin-overview-tip button {
-  width: var(--vx-admin-overview-size-1r);
-  height: var(--vx-admin-overview-size-1r);
+  width: var(--spacing-icon-sm);
+  height: var(--spacing-icon-sm);
   display: inline-grid;
   place-items: center;
   padding: 0;
@@ -136,12 +136,12 @@
   width: var(--vx-admin-overview-size-18r-large);
   display: block;
   padding: var(--space-md);
-  border: var(--vx-admin-overview-line-width-1p) solid
+  border: var(--border-width-thin) solid
     color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
   border-radius: var(--admin-overview-card-radius);
   background: color-mix(in srgb, var(--vx-color-white) 98%, transparent);
   color: var(--vx-color-neutral-700);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 650;
   line-height: 1.5;
   opacity: 0;

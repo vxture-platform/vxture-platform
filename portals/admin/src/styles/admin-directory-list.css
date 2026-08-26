@@ -6,12 +6,12 @@
    它不是一个值，是"没有值"。 */
 .vx-tenant-directory-row__unset {
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-body-size);
+  font-size: var(--body-md-font-size);
   font-weight: 400;
 }
 .vx-tenant-directory-card__badges {
   display: flex;
   align-items: center;
-  gap: var(--vx-admin-directory-row-badge-gap);
+  gap: var(--space-xs);
   flex-wrap: wrap;
 }

@@ -10,8 +10,8 @@
  * 被冲淡，只有 hover 的 0.72 让它短暂变深，看起来像"选中反而变淡"
  * （2026-08-05 owner 实测）。三态的样子归 DS Checkbox 管，这里只留尺寸与指针。 */
 .vx-model-select-checkbox {
-  width: var(--vx-admin-management-size-1r);
-  height: var(--vx-admin-management-size-1r);
+  width: var(--spacing-icon-sm);
+  height: var(--spacing-icon-sm);
   margin: 0;
   cursor: pointer;
 }

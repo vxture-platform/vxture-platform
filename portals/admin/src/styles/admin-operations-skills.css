@@ -4,17 +4,17 @@
     auto-fill,
     minmax(var(--vx-admin-operations-skill-card-grid-min-width), 1fr)
   );
-  gap: var(--vx-admin-operations-skill-card-grid-gap);
+  gap: var(--space-md);
 }
 
 .vx-skill-card {
   display: flex;
   flex-direction: column;
-  gap: var(--vx-admin-operations-skill-card-gap);
-  padding: var(--vx-admin-operations-skill-card-padding);
-  border: var(--vx-admin-operations-skill-card-border-width) solid
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  border: var(--border-width-thin) solid
     var(--vx-console-border);
-  border-radius: var(--vx-admin-card-radius);
+  border-radius: var(--vx-radius-lg);
   background: var(--vx-console-surface);
   box-shadow: var(--vx-console-shadow-soft);
 }
@@ -32,20 +32,20 @@
 
 .vx-skill-card__badges {
   display: flex;
-  gap: var(--vx-admin-operations-skill-card-badges-gap);
+  gap: var(--space-2xs);
   flex-wrap: wrap;
 }
 
 .vx-skill-card__name {
   margin: 0;
-  font-size: var(--vx-admin-card-title-size);
+  font-size: var(--title-md-font-size);
   font-weight: 700;
 }
 
 .vx-skill-card__code {
   margin: 0;
   color: var(--vx-console-muted);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
 }
 
 .vx-skill-card__description {
@@ -53,17 +53,17 @@
   overflow: hidden;
   margin: 0;
   color: var(--vx-console-muted);
-  font-size: var(--vx-admin-body-size);
+  font-size: var(--body-md-font-size);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
 
 .vx-skill-card__meta {
   display: flex;
-  gap: var(--vx-admin-operations-skill-card-meta-gap);
+  gap: var(--space-md);
   margin-top: auto;
   color: var(--vx-console-muted);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
 }
 
 @media (max-width: 1200px) {

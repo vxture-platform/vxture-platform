@@ -3,7 +3,7 @@
 .vx-tenant-member-list {
   min-width: 0;
   overflow: visible;
-  border-top: var(--vx-admin-management-line-width-1p) solid
+  border-top: var(--border-width-thin) solid
     color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
   background: transparent;
 }
@@ -30,10 +30,10 @@
 
 .vx-tenant-member-list__header {
   justify-items: center;
-  border-bottom: var(--vx-admin-management-line-width-1p) solid
+  border-bottom: var(--border-width-thin) solid
     color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 820;
   text-align: center;
 }
@@ -55,11 +55,11 @@
   position: relative;
   overflow: visible;
   justify-items: start;
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+  border-bottom: var(--border-width-thin) dashed
     var(--vx-color-auth-border);
   background: transparent;
   color: var(--vx-color-neutral-700);
-  font-size: var(--vx-admin-body-size);
+  font-size: var(--body-md-font-size);
   font-weight: 720;
   text-align: left;
 }
@@ -95,20 +95,20 @@
 
 .vx-tenant-member-row strong {
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-body-size);
+  font-size: var(--body-md-font-size);
   font-weight: 800;
 }
 
 .vx-tenant-member-row small {
   margin-top: var(--space-xs);
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 520;
 }
 
 .vx-tenant-member-row__index {
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 800;
   text-align: center;
 }
@@ -145,7 +145,7 @@
 .vx-tenant-member-row__name small {
   min-width: 0;
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 520;
 }
 
@@ -190,9 +190,9 @@
   display: grid;
   gap: var(--space-md);
   padding: var(--space-md);
-  border: var(--vx-admin-management-line-width-1p) solid
+  border: var(--border-width-thin) solid
     color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
-  border-top: var(--vx-admin-management-line-width-2p) solid
+  border-top: var(--border-width-medium) solid
     var(--tenant-member-tone);
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-white) 58%, transparent);
@@ -231,13 +231,13 @@
 
 .vx-tenant-member-card strong {
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-body-size);
+  font-size: var(--body-md-font-size);
   font-weight: 800;
 }
 
 .vx-tenant-member-card small {
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 520;
 }
 
@@ -253,7 +253,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-md);
   padding-top: var(--space-md);
-  border-top: var(--vx-admin-management-line-width-1p) dashed
+  border-top: var(--border-width-thin) dashed
     var(--vx-color-auth-border);
 }
 

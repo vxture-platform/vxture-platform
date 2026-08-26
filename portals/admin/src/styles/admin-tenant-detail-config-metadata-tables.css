@@ -2,7 +2,7 @@
 .vx-tenant-risk-panel h3,
 .vx-tenant-audit-list h3 {
   color: var(--vx-color-brand-950);
-  font-size: var(--vx-admin-card-title-size);
+  font-size: var(--title-md-font-size);
   font-weight: 780;
 }
 
@@ -10,7 +10,7 @@
 
 .vx-tenant-note {
   color: var(--vx-color-neutral-700);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 700;
   line-height: 1.6;
 }
@@ -25,14 +25,14 @@
 
 .vx-tenant-tags span,
 .vx-tenant-risk-panel__level span {
-  min-height: var(--vx-admin-management-size-15r);
+  min-height: var(--spacing-icon-lg);
   display: inline-flex;
   align-items: center;
   padding: 0 var(--space-xs);
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
   color: var(--tenant-blue);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 760;
 }
 
@@ -48,7 +48,7 @@
   align-items: center;
   gap: var(--space-md);
   padding: var(--space-md) 0;
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+  border-bottom: var(--border-width-thin) dashed
     var(--tenant-line);
 }
 
@@ -70,7 +70,7 @@
 .vx-tenant-table__header {
   justify-items: center;
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 820;
   text-align: center;
 }
@@ -78,7 +78,7 @@
 .vx-tenant-table__row {
   justify-items: start;
   color: var(--vx-color-neutral-700);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 720;
   text-align: left;
 }
@@ -106,6 +106,6 @@
 .vx-tenant-table__row small {
   margin-top: var(--space-xs);
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 700;
 }

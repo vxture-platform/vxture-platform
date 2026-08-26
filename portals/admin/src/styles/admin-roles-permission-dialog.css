@@ -15,13 +15,13 @@
   width: min(100%, var(--vx-admin-roles-size-56r));
   max-height: min(
     var(--vx-admin-roles-panel-max-height-md),
-    calc(100vh - var(--vx-admin-roles-size-3r))
+    calc(100vh - var(--spacing-icon-2xl))
   );
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: var(--space-md);
   padding: var(--space-md);
-  border: var(--vx-admin-roles-line-width-1p) solid
+  border: var(--border-width-thin) solid
     color-mix(in srgb, var(--vx-color-auth-accent) 14%, transparent);
   border-radius: var(--tenant-card-radius);
   background: color-mix(in srgb, var(--vx-color-white) 98%, transparent);
@@ -40,8 +40,8 @@
 }
 
 .vx-admin-role-permission-dialog__icon {
-  width: var(--vx-admin-roles-size-275r);
-  height: var(--vx-admin-roles-size-275r);
+  width: var(--spacing-icon-2xl);
+  height: var(--spacing-icon-2xl);
   display: inline-grid;
   place-items: center;
   border-radius: 50%;
@@ -57,13 +57,13 @@
 
 .vx-admin-role-permission-dialog__panel h2 {
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-section-title-size);
+  font-size: var(--title-md-font-size);
   font-weight: 760;
 }
 
 .vx-admin-role-permission-dialog__panel header p {
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 720;
 }
 
@@ -81,7 +81,7 @@
 }
 
 .vx-admin-role-permission-dialog__close {
-  width: var(--vx-admin-roles-size-25r);
+  width: var(--spacing-icon-xl);
   display: inline-grid;
   place-items: center;
   border: 0;
@@ -111,7 +111,7 @@
 
 .vx-admin-role-permission-dialog__group h3 {
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-body-size);
+  font-size: var(--body-md-font-size);
   font-weight: 760;
 }
 
@@ -126,7 +126,7 @@
   display: grid;
   gap: var(--space-2xs);
   padding: var(--space-sm);
-  border: var(--vx-admin-roles-line-width-1p) solid
+  border: var(--border-width-thin) solid
     color-mix(in srgb, var(--vx-color-auth-accent) 10%, transparent);
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-neutral-50) 75%, transparent);
@@ -143,7 +143,7 @@
 
 .vx-admin-role-permission-dialog__list strong {
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 760;
 }
 
@@ -151,7 +151,7 @@
 .vx-admin-role-permission-dialog__list small,
 .vx-admin-role-permission-dialog__empty {
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
 }
 
 .vx-admin-role-permission-dialog__list code {

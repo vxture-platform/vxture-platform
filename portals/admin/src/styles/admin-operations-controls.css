@@ -3,15 +3,15 @@
 .vx-admin-action-btn {
   display: inline-flex;
   align-items: center;
-  gap: var(--vx-admin-operations-action-button-gap);
-  height: var(--vx-admin-operations-action-button-height);
-  padding: 0 var(--vx-admin-operations-action-button-padding-x);
-  border: var(--vx-admin-operations-control-border-width) solid
+  gap: var(--space-xs);
+  height: var(--space-control-lg);
+  padding: 0 var(--space-md);
+  border: var(--border-width-thin) solid
     color-mix(in srgb, var(--vx-color-auth-accent) 20%, transparent);
   border-radius: var(--vx-radius-lg);
   background: color-mix(in srgb, var(--vx-color-auth-accent) 7%, transparent);
   color: var(--vx-console-brand);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 640;
   cursor: pointer;
   transition: background 0.12s;

@@ -37,7 +37,7 @@
   gap: var(--space-lg);
   flex-wrap: wrap;
   padding-bottom: var(--space-md);
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+  border-bottom: var(--border-width-thin) dashed
     color-mix(in srgb, var(--vx-color-auth-accent) 16%, transparent);
 }
 
@@ -77,19 +77,19 @@
 
 .vx-tenant-config-item {
   min-width: 0;
-  min-height: var(--vx-admin-management-size-275r);
+  min-height: var(--spacing-icon-2xl);
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   padding-bottom: var(--space-sm);
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+  border-bottom: var(--border-width-thin) dashed
     var(--vx-color-auth-border);
 }
 
 .vx-tenant-config-item > span {
   flex: 0 0 var(--vx-admin-management-size-475r);
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 760;
   white-space: nowrap;
 }
@@ -109,23 +109,23 @@
   gap: var(--space-xs);
   overflow: hidden;
   color: var(--vx-color-neutral-700);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 780;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .vx-tenant-config-item .vx-input {
-  min-height: var(--vx-admin-management-size-24r);
-  height: var(--vx-admin-management-size-24r);
+  min-height: var(--space-control-xl);
+  height: var(--space-control-xl);
   border-radius: var(--vx-radius-lg);
 }
 
 .vx-tenant-config-item select.vx-input {
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 760;
 }
 
 .vx-tenant-config-item select.vx-input option {
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
 }

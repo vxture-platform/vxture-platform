@@ -13,7 +13,7 @@
 
 .vx-admin-permission-detail-dialog__grid dt {
   color: var(--vx-color-neutral-400);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 720;
 }
 
@@ -21,7 +21,7 @@
   min-width: 0;
   margin: 0;
   color: var(--vx-color-neutral-700);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 680;
   line-height: 1.45;
   overflow-wrap: anywhere;

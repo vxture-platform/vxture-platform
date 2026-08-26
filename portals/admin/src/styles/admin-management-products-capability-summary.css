@@ -22,9 +22,9 @@
   align-items: stretch;
   gap: var(--space-xl);
   padding: var(--space-lg) 0 var(--space-lg);
-  border-top: var(--vx-admin-management-line-width-2p) solid
+  border-top: var(--border-width-medium) solid
     color-mix(in srgb, var(--vx-color-auth-accent) 22%, transparent);
-  border-bottom: var(--vx-admin-management-line-width-1p) dashed
+  border-bottom: var(--border-width-thin) dashed
     var(--vx-color-auth-border);
 }
 
@@ -38,16 +38,16 @@
 }
 
 .vx-product-capability-summary__icon {
-  width: var(--vx-admin-management-size-3r);
-  height: var(--vx-admin-management-size-3r);
+  width: var(--spacing-icon-2xl);
+  height: var(--spacing-icon-2xl);
   display: inline-grid;
   place-items: center;
   color: var(--tenant-blue);
 }
 
 .vx-product-capability-summary__icon svg {
-  width: var(--vx-admin-management-size-25r);
-  height: var(--vx-admin-management-size-25r);
+  width: var(--spacing-icon-xl);
+  height: var(--spacing-icon-xl);
 }
 
 .vx-product-capability-summary__identity h2 {
@@ -55,7 +55,7 @@
   margin: 0;
   overflow: hidden;
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-page-title-size);
+  font-size: var(--title-xl-font-size);
   font-weight: 740;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -66,7 +66,7 @@
   margin: var(--space-2xs) 0 0;
   overflow: hidden;
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -104,7 +104,7 @@
 .vx-product-capability-metric span,
 .vx-product-capability-field span {
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 400;
 }
 
@@ -121,7 +121,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-body-size);
+  font-size: var(--body-md-font-size);
   font-weight: 820;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -131,7 +131,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--tenant-muted);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-style: normal;
   font-weight: 400;
   text-overflow: ellipsis;

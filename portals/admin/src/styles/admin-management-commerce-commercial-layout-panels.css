@@ -14,7 +14,7 @@
   display: grid;
   gap: var(--space-md);
   padding-top: var(--space-lg);
-  border-top: var(--vx-admin-management-line-width-1p) dashed
+  border-top: var(--border-width-thin) dashed
     var(--vx-color-auth-border);
 }
 
@@ -30,7 +30,7 @@
 .vx-commerce-panel__header > small {
   margin-top: var(--space-2xs);
   color: var(--tenant-blue);
-  font-size: var(--vx-admin-meta-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 760;
   text-decoration: none;
   white-space: nowrap;

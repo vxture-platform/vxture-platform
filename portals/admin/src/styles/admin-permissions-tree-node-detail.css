@@ -32,7 +32,7 @@
 .vx-admin-permission-tree-node__detail-row > span > span {
   min-width: 0;
   color: var(--vx-color-neutral-600);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 400;
   line-height: 1.35;
 }
@@ -41,7 +41,7 @@
   .vx-admin-permission-tree-node__title
   strong {
   color: var(--tenant-ink);
-  font-size: var(--vx-admin-body-size);
+  font-size: var(--body-md-font-size);
   font-weight: 800;
   line-height: 1.35;
 }
@@ -54,7 +54,7 @@
 
 .vx-admin-permission-tree-node__summary span {
   color: var(--vx-color-neutral-400);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 400;
 }
 
@@ -80,6 +80,6 @@
 
 .vx-admin-permission-tree-node__detail-row small {
   color: var(--vx-color-neutral-400);
-  font-size: var(--vx-admin-caption-size);
+  font-size: var(--body-sm-font-size);
   font-weight: 560;
 }
