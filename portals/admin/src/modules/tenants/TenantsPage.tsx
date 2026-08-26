@@ -553,7 +553,7 @@ export function TenantsPage() {
                 <option value="active">
                   {tShared("status.generic.normal")}
                 </option>
-                <option value="trial">试用</option>
+                <option value="trial">{tShared("status.generic.trial")}</option>
                 <option value="suspended">{tShared("actions.pause")}</option>
                 <option value="cancelled">注销</option>
               </NativeSelect>

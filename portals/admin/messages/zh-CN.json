@@ -1606,12 +1606,16 @@
     "export": "导出",
     "exportSelected": "导出所选",
     "loading": "读取中",
+    "none": "无",
+    "other": "其他",
     "saveFailed": "保存失败"
   },
   "columns": {
     "currency": "币种",
     "kind": "类型",
+    "receivedAmount": "已收金额",
     "state": "状态",
+    "tenantCode": "租户编码",
     "tenantName": "租户名称",
     "tenantType": "租户类型",
     "updatedAt": "更新时间"
@@ -1622,6 +1626,7 @@
   },
   "actions": {
     "archive": "归档",
+    "backToList": "返回列表",
     "cancel": "取消",
     "create": "创建",
     "disable": "停用",
@@ -1641,7 +1646,13 @@
       "pending": "待处理",
       "paying": "支付中",
       "rejected": "已驳回",
-      "completed": "已完成"
+      "completed": "已完成",
+      "trial": "试用",
+      "closed": "已关闭",
+      "voided": "已作废",
+      "settled": "已结清",
+      "partiallyPaid": "部分收款",
+      "awaitingPayment": "待收款"
     }
   }
 }

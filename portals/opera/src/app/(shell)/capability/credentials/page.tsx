@@ -307,7 +307,10 @@ export default function RunosCredentialsPage() {
         }
       />
     ) : filtered.length !== rows.length ? (
-      <EmptyState title="没有匹配的凭证" description="换个关键词再看。" />
+      <EmptyState
+        title="没有匹配的凭证"
+        description={tShared("common.noMatchKeywordHint")}
+      />
     ) : (
       <EmptyState title="暂无凭证绑定" description="点击「录入凭证」开始。" />
     );

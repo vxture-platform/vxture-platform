@@ -783,7 +783,7 @@ function ProductClients() {
         }}
         title={revealSecret?.rotated ? "新密钥已生成" : "客户端已注册"}
         submitLabel="我已保存"
-        cancelLabel="关闭"
+        cancelLabel={tShared("common.close")}
         onSubmit={(e) => {
           e.preventDefault();
           setRevealSecret(null);

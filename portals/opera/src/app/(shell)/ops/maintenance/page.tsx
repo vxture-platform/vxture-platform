@@ -565,7 +565,7 @@ export default function MaintenanceWindowsPage() {
                             (item.state !== "scheduled" &&
                               item.state !== "in_progress"),
                           confirm: withLabels({
-                            verb: "取消",
+                            verb: tShared("actions.cancel"),
                             target: `维护窗口「${item.title}」`,
                             consequence:
                               "取消后窗口进入终态，不能再改回计划中或进行中；历史记录保留。要重新安排同一段维护，得新建一个窗口。",

@@ -355,7 +355,7 @@ export default function DashboardPage() {
             },
             {
               id: "health",
-              header: "健康",
+              header: tShared("columns.health"),
               align: "center",
               width: "xs",
               cell: (r: ModelProviderRecord) => (
@@ -438,7 +438,7 @@ export default function DashboardPage() {
             },
             {
               id: "action",
-              header: "动作",
+              header: tShared("columns.action"),
               align: "center",
               width: "xs",
               cell: (r: AuditLogEntry) => r.action,

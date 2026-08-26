@@ -128,6 +128,7 @@ function subscriptionStatusLabel(
 }
 
 function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
+  const tShared = useTranslations();
   return (
     <section className="vx-product-capability-summary">
       <div className="vx-product-capability-summary__identity">
@@ -168,7 +169,7 @@ function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
           {
             id: "paid",
             help: "已核销到本订单的回款金额。",
-            label: "已收金额",
+            label: tShared("columns.receivedAmount"),
             value: formatCurrency(order.paidAmount, order.currency),
             tags: [paySourceLabel(order.paySource)],
           },
@@ -229,7 +230,9 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
         <DetailSectionHeading icon="buildings" title="租户与套餐" />
         <DetailList columns={3}>
           <DetailRow label="租户">{orUnset(order.tenantName)}</DetailRow>
-          <DetailRow label="租户编码">{orUnset(order.tenantCode)}</DetailRow>
+          <DetailRow label={tShared("columns.tenantCode")}>
+            {orUnset(order.tenantCode)}
+          </DetailRow>
           <DetailRow label={tShared("columns.tenantType")}>
             {orUnset(typeLabel(order.tenantType))}
           </DetailRow>
@@ -281,7 +284,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
           <DetailRow label="订单金额">
             {orUnset(formatCurrency(order.amount, order.currency))}
           </DetailRow>
-          <DetailRow label="已收金额">
+          <DetailRow label={tShared("columns.receivedAmount")}>
             {orUnset(formatCurrency(order.paidAmount, order.currency))}
           </DetailRow>
           <DetailRow label="剩余应收">
@@ -575,7 +578,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
               <Button asChild variant="outline">
                 <Link href="/orders">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
             }
@@ -607,7 +610,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
               <Button asChild variant="outline">
                 <Link href="/orders">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
               {order ? (
@@ -742,7 +745,9 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                 </div>
                 <div>
                   <Label>备注</Label>
-                  <p>{order.declaredPayment.remark ?? "无"}</p>
+                  <p>
+                    {order.declaredPayment.remark ?? tShared("common.none")}
+                  </p>
                 </div>
               </div>
             </section>

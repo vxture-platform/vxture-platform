@@ -429,7 +429,7 @@ export function SubscriptionDetailPage({
               <Button asChild variant="outline">
                 <Link href="/subscriptions">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
             }
@@ -464,7 +464,7 @@ export function SubscriptionDetailPage({
               <Button asChild variant="outline">
                 <Link href="/subscriptions">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
               {subscription ? (

@@ -746,7 +746,9 @@ export function SubscriptionsPage() {
                 aria-label="订阅状态"
               >
                 <option value="all">{tShared("filters.allStates")}</option>
-                <option value="trialing">试用</option>
+                <option value="trialing">
+                  {tShared("status.generic.trial")}
+                </option>
                 <option value="active">已生效</option>
                 <option value="expiring">即将到期</option>
                 <option value="overdue">

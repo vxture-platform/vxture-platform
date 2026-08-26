@@ -239,7 +239,7 @@ function ProductCapabilityDetails({
             {orUnset(product.integration.authMode)}
           </DetailRow>
           <DetailRow label="结算方式">
-            {product.integration.settlementMode || "无"}
+            {product.integration.settlementMode || tShared("common.none")}
           </DetailRow>
           <DetailRow label="接口地址">
             {product.integration.endpoint || "内部能力，无需外部接口"}
@@ -356,7 +356,7 @@ export function ProductCapabilityDetailPage({
               <Button asChild variant="outline">
                 <Link href="/products">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
             }
@@ -389,7 +389,7 @@ export function ProductCapabilityDetailPage({
               <Button asChild variant="outline">
                 <Link href="/products">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
               <Button variant="outline" disabled>

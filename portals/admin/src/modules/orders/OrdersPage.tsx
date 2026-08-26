@@ -343,6 +343,7 @@ function OrderCards({
   orders: OrderOperationRecord[];
   onConfirmPayment: (order: OrderOperationRecord) => void;
 }) {
+  const tShared = useTranslations();
   const router = useRouter();
 
   return (
@@ -387,7 +388,7 @@ function OrderCards({
             {
               key: "paid",
               value: formatCurrency(order.paidAmount, order.currency),
-              label: "已收金额",
+              label: tShared("columns.receivedAmount"),
             },
             {
               key: "cycle",
@@ -724,7 +725,9 @@ export function OrdersPage() {
                 <option value="overdue">
                   {tShared("status.generic.overdue")}
                 </option>
-                <option value="closed">已关闭</option>
+                <option value="closed">
+                  {tShared("status.generic.closed")}
+                </option>
                 <option value="abnormal">异常</option>
               </NativeSelect>
               <NativeSelect
@@ -745,7 +748,9 @@ export function OrdersPage() {
                 <option value="paid">已支付</option>
                 <option value="partial">部分支付</option>
                 <option value="failed">支付失败</option>
-                <option value="closed">已关闭</option>
+                <option value="closed">
+                  {tShared("status.generic.closed")}
+                </option>
                 <option value="refunding">退款中</option>
               </NativeSelect>
               <NativeSelect
@@ -759,7 +764,7 @@ export function OrdersPage() {
                 <option value="all">全部来源</option>
                 <option value="online">线上</option>
                 <option value="offline">线下</option>
-                <option value="none">无</option>
+                <option value="none">{tShared("common.none")}</option>
               </NativeSelect>
               <NativeSelect
                 className="vx-tenant-select"

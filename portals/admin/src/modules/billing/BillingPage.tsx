@@ -471,6 +471,7 @@ function BillingCards({
   bills: BillingRecord[];
   onSyncInvoice: (bill: BillingRecord) => void;
 }) {
+  const tShared = useTranslations();
   const router = useRouter();
 
   return (
@@ -515,7 +516,7 @@ function BillingCards({
             {
               key: "paid",
               value: formatCurrency(bill.paidAmount, bill.currency),
-              label: "已收金额",
+              label: tShared("columns.receivedAmount"),
             },
             {
               key: "invoiced",
@@ -764,7 +765,7 @@ export function BillingPage() {
                   id: "pending",
                   help: "未结清账单：未支付、支付中、部分支付、已逾期。",
                   icon: "clock",
-                  label: "待收款",
+                  label: tShared("status.generic.awaitingPayment"),
                   value: formatNumber(pendingCount),
                   tags: [
                     `逾期 ${formatNumber(bills.filter((item) => item.billStatus === "overdue").length)}`,
@@ -851,12 +852,18 @@ export function BillingPage() {
                 aria-label="账单状态"
               >
                 <option value="all">全部账单</option>
-                <option value="unpaid">待收款</option>
+                <option value="unpaid">
+                  {tShared("status.generic.awaitingPayment")}
+                </option>
                 <option value="paying">
                   {tShared("status.generic.paying")}
                 </option>
-                <option value="partial">部分收款</option>
-                <option value="paid">已结清</option>
+                <option value="partial">
+                  {tShared("status.generic.partiallyPaid")}
+                </option>
+                <option value="paid">
+                  {tShared("status.generic.settled")}
+                </option>
                 <option value="overdue">
                   {tShared("status.generic.overdue")}
                 </option>
@@ -916,7 +923,9 @@ export function BillingPage() {
                 <option value="discounted">应收减免</option>
                 <option value="adjust">调整单</option>
                 <option value="supplement">补录单</option>
-                <option value="cancelled">已作废</option>
+                <option value="cancelled">
+                  {tShared("status.generic.voided")}
+                </option>
                 <option value="invoice_exception">发票异常</option>
               </NativeSelect>
               <NativeSelect

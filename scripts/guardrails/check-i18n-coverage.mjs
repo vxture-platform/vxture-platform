@@ -45,12 +45,16 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  * 2026-08-26 admin 4125 → 3844：同一套共享命名空间的扫描，281 处 / 43 个文件。
  *   两个门户的 `common` / `columns` / `filters` / `actions` / `status.generic` 形状
  *   刻意一致——同一个词在两边该是同一个键。
+ * 2026-08-26 第二轮扫中低频重复：opera 1826 → 1795（31 处），admin 3844 → 3799
+ *   （45 处）。剩下的跨文件重复主要是三类，都不该机械扫：导航标签（结构归
+ *   `opera-navigation-design.md` 裁）、领域名词（要先有词表）、以及宿主不是组件
+ *   的那些（模块级常量表 / 普通函数，要先做结构改造）。
  */
 const BASELINE = {
   console: 32,
   website: 54,
-  admin: 3844,
-  opera: 1826,
+  admin: 3799,
+  opera: 1795,
   accounts: 263,
 };
 

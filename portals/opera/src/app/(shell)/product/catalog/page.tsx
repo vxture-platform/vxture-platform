@@ -583,7 +583,9 @@ function ProductsPageContent() {
               description="从接入凭据或权益配置页点回来的。"
               action={
                 <Button asChild variant="secondary" size="sm">
-                  <Link href="/product/catalog">显示全部</Link>
+                  <Link href="/product/catalog">
+                    {tShared("common.showAll")}
+                  </Link>
                 </Button>
               }
             />

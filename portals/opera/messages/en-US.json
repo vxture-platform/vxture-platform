@@ -21,6 +21,7 @@
     "copyDenied": "The browser denied clipboard access — select and copy manually.",
     "copyFailed": "Copy failed",
     "copyRow": "Copy row",
+    "deleteFailed": "Could not delete",
     "edit": "Edit",
     "loadFailed": "Could not load",
     "loadMore": "Load more",
@@ -28,11 +29,14 @@
     "loading": "Loading…",
     "never": "Never",
     "noMatchHint": "Try a different keyword or filter.",
+    "noMatchKeywordHint": "Try a different keyword.",
+    "noMatchingRecords": "No matching records",
     "refresh": "Refresh",
     "retry": "Retry",
     "rowCopied": "Row copied to clipboard",
     "save": "Save",
     "saveFailed": "Could not save",
+    "showAll": "Show all",
     "uncategorized": "Uncategorized",
     "unlimited": "No expiry"
   },
@@ -45,7 +49,8 @@
     },
     "generic": {
       "disabled": "Disabled",
-      "degraded": "Degraded"
+      "degraded": "Degraded",
+      "abnormal": "Abnormal"
     }
   },
   "modelKeysPage": {
@@ -158,7 +163,9 @@
     }
   },
   "columns": {
+    "action": "Action",
     "actor": "Actor",
+    "health": "Health",
     "kind": "Type",
     "product": "Product",
     "source": "Source",
@@ -171,6 +178,8 @@
     "stateLabel": "Filter by state"
   },
   "actions": {
+    "cancel": "Cancel",
+    "delete": "Delete",
     "disable": "Disable",
     "enable": "Enable"
   }

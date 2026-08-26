@@ -1199,7 +1199,10 @@ function ProductEntitlements() {
           description="正在汇总各产品的权益。"
         />
       ) : visible.length === 0 ? (
-        <EmptyState title="没有匹配的产品" description="换个关键词再看。" />
+        <EmptyState
+          title="没有匹配的产品"
+          description={tShared("common.noMatchKeywordHint")}
+        />
       ) : (
         <div className="flex flex-col gap-sm">
           {visible.map((p) => {

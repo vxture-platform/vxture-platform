@@ -22,6 +22,7 @@
  */
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -88,6 +89,7 @@ function AssistantPlaceholder({
   onToggleWide: () => void;
   onToggleFull: () => void;
 }) {
+  const tShared = useTranslations();
   return (
     <aside
       className={cn(
@@ -121,7 +123,11 @@ function AssistantPlaceholder({
             active={mode === "full"}
             onClick={onToggleFull}
           />
-          <ShellIconButton icon="x" label="关闭" onClick={onClose} />
+          <ShellIconButton
+            icon="x"
+            label={tShared("common.close")}
+            onClick={onClose}
+          />
         </div>
       </div>
       <p className="text-body-sm text-muted-foreground">

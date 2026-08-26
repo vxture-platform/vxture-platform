@@ -1960,7 +1960,7 @@ function ModelServiceContent() {
               },
               {
                 id: "health",
-                header: "健康",
+                header: tShared("columns.health"),
                 align: "center",
                 width: "xs",
                 cell: (r: ModelProviderRecord) => (
@@ -2092,13 +2092,13 @@ function ModelServiceContent() {
                             },
                         {
                           id: "delete",
-                          label: "删除",
+                          label: tShared("actions.delete"),
                           icon: "trash",
                           danger: true,
                           /* Provider 是两值状态（没有 deprecated 档），所以
                              「已停用」用 `!isEnabled()` 就够。 */
                           confirm: withLabels({
-                            verb: "删除",
+                            verb: tShared("actions.delete"),
                             target: `Provider ${r.providerName}`,
                             consequence:
                               "删除后不可恢复。不会级联删除名下的任何模型或授权——前置条件不满足时 Atlas 会拒绝并点名是哪些模型挡住了。",
@@ -2914,7 +2914,7 @@ function ModelServiceContent() {
         title={
           verifyResult ? `验证结果 · ${verifyResult.providerCode}` : "验证结果"
         }
-        submitLabel="关闭"
+        submitLabel={tShared("common.close")}
         cancelLabel=""
         onSubmit={(e) => {
           e.preventDefault();
@@ -2966,7 +2966,7 @@ function ModelServiceContent() {
           if (!open) setProbeResult(null);
         }}
         title={probeResult ? `自检结果 · ${probeResult.modelCode}` : "自检结果"}
-        submitLabel="关闭"
+        submitLabel={tShared("common.close")}
         cancelLabel=""
         onSubmit={(e) => {
           e.preventDefault();
@@ -3080,7 +3080,7 @@ function ModelServiceContent() {
                           </StatusBadge>
                         </div>
                         <span className="text-body-sm text-muted-foreground">
-                          最近轮换：{k.lastRotatedAt ?? "从未"}
+                          最近轮换：{k.lastRotatedAt ?? tShared("common.never")}
                         </span>
                       </div>
                       {canManageProviders ? (

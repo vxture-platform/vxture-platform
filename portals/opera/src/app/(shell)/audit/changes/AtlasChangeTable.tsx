@@ -283,7 +283,7 @@ export function AtlasChangeTable() {
       />
     ) : visible.length !== rows.length ? (
       <EmptyState
-        title="没有匹配的记录"
+        title={tShared("common.noMatchingRecords")}
         description="关键词只在已经取回的这几页里筛——再「加载更多」几页可能会有。"
       />
     ) : (
@@ -402,7 +402,7 @@ export function AtlasChangeTable() {
           },
           {
             id: "action",
-            header: "动作",
+            header: tShared("columns.action"),
             align: "center",
             width: "xs",
             cell: (r: AtlasChangeRecord) => r.action,

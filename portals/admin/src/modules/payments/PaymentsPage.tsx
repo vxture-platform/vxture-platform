@@ -803,7 +803,7 @@ export function PaymentsPage() {
                   id: "paid-amount",
                   help: "已收款记录的金额合计。",
                   icon: "chart-bar",
-                  label: "已收金额",
+                  label: tShared("columns.receivedAmount"),
                   value: formatCurrency(paidAmount, "CNY"),
                   tags: [`线下 ${formatCurrency(offlineAmount, "CNY")}`],
                   tone: "success",
@@ -893,9 +893,13 @@ export function PaymentsPage() {
                 </option>
                 <option value="pending_verify">线下待核</option>
                 <option value="paid">已收款</option>
-                <option value="partial">部分收款</option>
+                <option value="partial">
+                  {tShared("status.generic.partiallyPaid")}
+                </option>
                 <option value="failed">支付失败</option>
-                <option value="closed">已关闭</option>
+                <option value="closed">
+                  {tShared("status.generic.closed")}
+                </option>
                 <option value="refunding">退款中</option>
               </NativeSelect>
               <NativeSelect
@@ -909,7 +913,7 @@ export function PaymentsPage() {
                 <option value="all">全部来源</option>
                 <option value="offline">线下</option>
                 <option value="online">线上</option>
-                <option value="none">无</option>
+                <option value="none">{tShared("common.none")}</option>
               </NativeSelect>
               <NativeSelect
                 className="vx-tenant-select"
@@ -925,7 +929,9 @@ export function PaymentsPage() {
                 <option value="attention">需关注</option>
                 <option value="normal">已对账</option>
                 <option value="pending_verify">待复核</option>
-                <option value="partial">部分收款</option>
+                <option value="partial">
+                  {tShared("status.generic.partiallyPaid")}
+                </option>
                 <option value="overpaid">超额收款</option>
                 <option value="bill_cancelled">账单作废</option>
                 <option value="failed">支付异常</option>
@@ -944,7 +950,7 @@ export function PaymentsPage() {
                 <option value="cash">现金</option>
                 <option value="other">其他线下</option>
                 <option value="online">线上</option>
-                <option value="none">无</option>
+                <option value="none">{tShared("common.none")}</option>
               </NativeSelect>
             </div>
           </FilterBar>

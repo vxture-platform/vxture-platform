@@ -131,6 +131,7 @@ function paymentStatusLabel(status: string) {
 }
 
 function BillingSummary({ bill }: { bill: BillingDetailRecord }) {
+  const tShared = useTranslations();
   return (
     <section className="vx-product-capability-summary">
       <div className="vx-product-capability-summary__identity">
@@ -171,7 +172,7 @@ function BillingSummary({ bill }: { bill: BillingDetailRecord }) {
           {
             id: "paid",
             help: "已核销到本账单的回款金额。",
-            label: "已收金额",
+            label: tShared("columns.receivedAmount"),
             value: formatCurrency(bill.paidAmount, bill.currency),
             tags: [bill.paymentMethod ?? "未收款"],
           },
@@ -247,7 +248,9 @@ function BillingDetails({
         <DetailSectionHeading icon="buildings" title="租户与订阅" />
         <DetailList columns={3}>
           <DetailRow label="租户">{orUnset(bill.tenantName)}</DetailRow>
-          <DetailRow label="租户编码">{orUnset(bill.tenantCode)}</DetailRow>
+          <DetailRow label={tShared("columns.tenantCode")}>
+            {orUnset(bill.tenantCode)}
+          </DetailRow>
           <DetailRow label={tShared("columns.tenantType")}>
             {orUnset(typeLabel(bill.tenantType))}
           </DetailRow>
@@ -304,7 +307,7 @@ function BillingDetails({
           <DetailRow label="应收金额">
             {orUnset(formatCurrency(bill.payableAmount, bill.currency))}
           </DetailRow>
-          <DetailRow label="已收金额">
+          <DetailRow label={tShared("columns.receivedAmount")}>
             {orUnset(formatCurrency(bill.paidAmount, bill.currency))}
           </DetailRow>
           <DetailRow label="剩余应收">
@@ -680,7 +683,7 @@ export function BillingDetailPage({ billId }: { billId: string }) {
               <Button asChild variant="outline">
                 <Link href="/billing">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
             }
@@ -712,7 +715,7 @@ export function BillingDetailPage({ billId }: { billId: string }) {
               <Button asChild variant="outline">
                 <Link href="/billing">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
               {bill?.subscriptionId ? (

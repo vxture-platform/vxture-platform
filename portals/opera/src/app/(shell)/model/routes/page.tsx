@@ -444,7 +444,7 @@ function EndpointsPageContent() {
             },
         {
           id: "delete",
-          label: "删除",
+          label: tShared("actions.delete"),
           icon: "trash",
           danger: true,
           separatorBefore: true,
@@ -453,7 +453,7 @@ function EndpointsPageContent() {
              个答案，被挡住时 409 会点名。`resolution` 缺失（旧 Atlas）时后果确实不
              同，所以 consequence 分两句——那是事实差异，不是措辞差异。 */
           confirm: withLabels({
-            verb: "删除",
+            verb: tShared("actions.delete"),
             target: `入口 ${r.code}`,
             consequence:
               r.resolution === undefined
@@ -496,7 +496,10 @@ function EndpointsPageContent() {
         }
       />
     ) : filtered.length !== rows.length ? (
-      <EmptyState title="没有匹配的 Endpoint" description="换个关键词再看。" />
+      <EmptyState
+        title="没有匹配的 Endpoint"
+        description={tShared("common.noMatchKeywordHint")}
+      />
     ) : (
       <EmptyState
         title="暂无 Endpoint"
@@ -532,7 +535,9 @@ function EndpointsPageContent() {
                 description="从 Model 页的「入口 N」点进来的。primary 与 fallback 都算——挡住模型删除的那个计数也是这么数的，剪断一条 failover 链和弄坏一个 primary 是同一类问题。"
                 action={
                   <Button asChild variant="secondary" size="sm">
-                    <Link href="/model/routes">显示全部</Link>
+                    <Link href="/model/routes">
+                      {tShared("common.showAll")}
+                    </Link>
                   </Button>
                 }
               />
@@ -543,7 +548,9 @@ function EndpointsPageContent() {
                 title={`只显示 ${endpointCodeFilter} 这一条路由`}
                 action={
                   <Button asChild variant="secondary" size="sm">
-                    <Link href="/model/routes">显示全部</Link>
+                    <Link href="/model/routes">
+                      {tShared("common.showAll")}
+                    </Link>
                   </Button>
                 }
               />

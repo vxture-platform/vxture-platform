@@ -294,7 +294,7 @@ export function ProductSolutionDetailPage({
               <Button asChild variant="outline">
                 <Link href="/product-solutions">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
             }
@@ -322,7 +322,7 @@ export function ProductSolutionDetailPage({
               <Button asChild variant="outline">
                 <Link href="/product-solutions">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
-                  返回列表
+                  {tShared("actions.backToList")}
                 </Link>
               </Button>
               <Button variant="outline" disabled>

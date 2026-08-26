@@ -2032,7 +2032,7 @@ export default function CapabilitiesPage() {
                   variant="secondary"
                   onClick={() => setEndpointDialog(null)}
                 >
-                  取消
+                  {tShared("actions.cancel")}
                 </Button>
                 <Button
                   type="submit"
@@ -2115,7 +2115,7 @@ export default function CapabilitiesPage() {
                 variant="secondary"
                 onClick={() => setCertOpen(false)}
               >
-                取消
+                {tShared("actions.cancel")}
               </Button>
               {/* 四条复核依据缺一条就提交不了——上游是整批 400，让人填完再发比
                   发出去挨一句看不懂的报错好。 */}

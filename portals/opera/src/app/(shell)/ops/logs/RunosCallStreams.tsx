@@ -305,7 +305,11 @@ export function RunosCallStreams({
       />
     ) : (
       <EmptyState
-        title={taskId.trim() ? "这次任务没有能力调用" : "没有匹配的记录"}
+        title={
+          taskId.trim()
+            ? "这次任务没有能力调用"
+            : tShared("common.noMatchingRecords")
+        }
         description={
           taskId.trim()
             ? /* 串联查询下的空**是一个答案，不是一次失败**。当前能力目录里没有

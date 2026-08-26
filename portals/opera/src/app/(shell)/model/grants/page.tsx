@@ -465,7 +465,9 @@ function ProductGrantsPageContent() {
                 title={`只显示持有 ${endpointCodeFilter} 的产品`}
                 action={
                   <Button asChild variant="secondary" size="sm">
-                    <Link href="/model/grants">显示全部</Link>
+                    <Link href="/model/grants">
+                      {tShared("common.showAll")}
+                    </Link>
                   </Button>
                 }
               />
@@ -478,7 +480,9 @@ function ProductGrantsPageContent() {
                 title={`只显示 ${productCodeFilter} 的路由授权`}
                 action={
                   <Button asChild variant="secondary" size="sm">
-                    <Link href="/model/grants">显示全部</Link>
+                    <Link href="/model/grants">
+                      {tShared("common.showAll")}
+                    </Link>
                   </Button>
                 }
               />
@@ -672,12 +676,12 @@ function ProductGrantsPageContent() {
                             },
                         {
                           id: "delete",
-                          label: "删除",
+                          label: tShared("actions.delete"),
                           icon: "trash",
                           danger: true,
                           separatorBefore: true,
                           confirm: withLabels({
-                            verb: "删除",
+                            verb: tShared("actions.delete"),
                             target: `${r.productCode} → ${r.endpointCode} 的授权`,
                             consequence:
                               "删除只是把已经停用的记录清掉，不可恢复。日常收回权限用「撤销」就够了，那一步留在变更流水里。",

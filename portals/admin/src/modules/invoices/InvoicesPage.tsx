@@ -812,7 +812,7 @@ export function InvoicesPage() {
                 <option value="normal_vat">增值税普票</option>
                 <option value="electronic">电子发票</option>
                 <option value="paper">纸质发票</option>
-                <option value="other">其他</option>
+                <option value="other">{tShared("common.other")}</option>
               </NativeSelect>
               <NativeSelect
                 className="vx-input vx-tenant-select"
@@ -826,7 +826,7 @@ export function InvoicesPage() {
                 <option value="enterprise">企业</option>
                 <option value="individual">个人</option>
                 <option value="government">政府/事业单位</option>
-                <option value="other">其他</option>
+                <option value="other">{tShared("common.other")}</option>
               </NativeSelect>
               <NativeSelect
                 className="vx-input vx-tenant-select"

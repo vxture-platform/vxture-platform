@@ -1554,7 +1554,9 @@ export function ModelPlatformPage() {
                         <small>优先级（小者先）</small>
                       </span>
                       <span>
-                        <b>{policy.expiresAt ? "有" : "无"}</b>
+                        <b>
+                          {policy.expiresAt ? "有" : tShared("common.none")}
+                        </b>
                         <small>失效时间</small>
                       </span>
                     </div>

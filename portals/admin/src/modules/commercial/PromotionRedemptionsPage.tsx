@@ -513,16 +513,24 @@ export function PromotionRedemptionsPage() {
                 aria-label="账单状态"
               >
                 <option value="all">全部账单</option>
-                <option value="unpaid">待收款</option>
+                <option value="unpaid">
+                  {tShared("status.generic.awaitingPayment")}
+                </option>
                 <option value="paying">
                   {tShared("status.generic.paying")}
                 </option>
-                <option value="partial">部分收款</option>
-                <option value="paid">已结清</option>
+                <option value="partial">
+                  {tShared("status.generic.partiallyPaid")}
+                </option>
+                <option value="paid">
+                  {tShared("status.generic.settled")}
+                </option>
                 <option value="overdue">
                   {tShared("status.generic.overdue")}
                 </option>
-                <option value="cancelled">已作废</option>
+                <option value="cancelled">
+                  {tShared("status.generic.voided")}
+                </option>
               </NativeSelect>
             </div>
           </FilterBar>

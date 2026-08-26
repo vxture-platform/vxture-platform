@@ -511,7 +511,10 @@ export default function MeteringPage() {
         }
       />
     ) : filtered.length !== rows.length ? (
-      <EmptyState title="没有匹配的记录" description="换个关键词或周期再看。" />
+      <EmptyState
+        title={tShared("common.noMatchingRecords")}
+        description="换个关键词或周期再看。"
+      />
     ) : (
       <EmptyState
         title="这根轴上暂无用量"

@@ -248,7 +248,7 @@ export function PlatformChangeTable() {
           },
           {
             id: "action",
-            header: "动作",
+            header: tShared("columns.action"),
             align: "center",
             width: "xs",
             cell: (r: AuditLogEntry) => r.action,
