@@ -493,7 +493,7 @@ export function OpsTodosPage() {
             search={
               <Input
                 type="search"
-                className="vx-tenant-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 placeholder="搜索事项、租户、标签…"
                 value={query}
                 onChange={(event) => {
@@ -526,7 +526,7 @@ export function OpsTodosPage() {
           >
             <NativeSelect
               wrapperClassName="w-fit"
-              className="vx-tenant-select"
+              className="w-fit basis-media-xl"
               value={severityFilter}
               onChange={(event) => {
                 setSeverityFilter(event.target.value as TodoSeverity | "all");

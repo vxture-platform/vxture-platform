@@ -8,23 +8,6 @@
   cursor: pointer;
 }
 
-.vx-service-plan-search {
-  width: clamp(
-    var(--vx-admin-management-size-13r),
-    16vw,
-    var(--vx-admin-management-size-20r)
-  );
-  flex-basis: clamp(
-    var(--vx-admin-management-size-13r),
-    16vw,
-    var(--vx-admin-management-size-20r)
-  );
-}
-
-.vx-service-plan-select--industry {
-  width: var(--vx-admin-management-size-10r);
-}
-
 .vx-service-plan-directory {
   min-width: 0;
   display: grid;

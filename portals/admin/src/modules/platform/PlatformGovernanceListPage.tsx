@@ -391,7 +391,7 @@ export function PlatformGovernanceListPage({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={config.searchPlaceholder}
-              className="vx-tenant-search"
+              className="grow basis-media-3xl max-w-panel-sm"
               aria-label={tShared("platformGovernance.searchAria", {
                 object: config.objectLabel,
               })}
@@ -414,7 +414,7 @@ export function PlatformGovernanceListPage({
             </>
           }
         >
-          <div className="vx-tenant-filters">
+          <>
             <NativeSelect
               value={statusFilter}
               onChange={(event) =>
@@ -422,7 +422,7 @@ export function PlatformGovernanceListPage({
                   event.target.value as PlatformGovernanceStatus | "all",
                 )
               }
-              className="vx-input vx-tenant-select"
+              className="w-fit basis-media-xl"
               aria-label={`${config.objectLabel}状态`}
             >
               <option value="all">{tShared("filters.allStates")}</option>
@@ -433,12 +433,12 @@ export function PlatformGovernanceListPage({
                 {tShared("status.generic.pending")}
               </option>
             </NativeSelect>
-          </div>
+          </>
         </FilterBar>
       }
       table={
         <section
-          className="vx-tenant-directory vx-platform-governance-directory"
+          className="grid min-w-0 max-w-full gap-xs vx-platform-governance-directory"
           aria-label={`${config.title}清单`}
         >
           {/* 读取失败是第三态，DataTable 只认加载/空/有数据，故留在外层。 */}

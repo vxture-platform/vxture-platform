@@ -11,19 +11,6 @@
   white-space: nowrap;
 }
 
-.vx-commercial-search {
-  width: clamp(
-    var(--vx-admin-management-size-13r),
-    16vw,
-    var(--vx-admin-management-size-20r)
-  );
-  flex-basis: clamp(
-    var(--vx-admin-management-size-13r),
-    16vw,
-    var(--vx-admin-management-size-20r)
-  );
-}
-
 .vx-commercial-card__description {
   margin: 0;
   overflow: hidden;

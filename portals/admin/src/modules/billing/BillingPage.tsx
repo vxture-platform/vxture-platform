@@ -842,7 +842,7 @@ export function BillingPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索账单、租户、订单、发票"
-                className="vx-tenant-search vx-billing-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索账单"
               />
             }
@@ -860,9 +860,9 @@ export function BillingPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={billStatusFilter}
                 onChange={(event) =>
                   setBillStatusFilter(event.target.value as BillStatusFilter)
@@ -888,7 +888,7 @@ export function BillingPage() {
                 <option value="cancelled">已取消</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={invoiceStatusFilter}
                 onChange={(event) =>
                   setInvoiceStatusFilter(
@@ -912,7 +912,7 @@ export function BillingPage() {
                 <option value="red">已红冲</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={billTypeFilter}
                 onChange={(event) =>
                   setBillTypeFilter(event.target.value as BillTypeFilter)
@@ -926,7 +926,7 @@ export function BillingPage() {
                 <option value="prepaid">预付费</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={exceptionFilter}
                 onChange={(event) =>
                   setExceptionFilter(
@@ -947,7 +947,7 @@ export function BillingPage() {
                 <option value="invoice_exception">发票异常</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={tierFilter}
                 onChange={(event) =>
                   setTierFilter(event.target.value as TierFilter)
@@ -961,7 +961,7 @@ export function BillingPage() {
                   </option>
                 ))}
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         /* BulkActionBar 数据驱动：计数与"清除"由组件自己画，调用方只给动作清单。
@@ -983,7 +983,10 @@ export function BillingPage() {
           ) : null
         }
         table={
-          <section className="vx-tenant-directory" aria-label="账单清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="账单清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">

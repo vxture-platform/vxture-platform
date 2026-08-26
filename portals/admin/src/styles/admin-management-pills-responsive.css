@@ -30,11 +30,6 @@
     flex-wrap: wrap;
   }
 
-  .vx-tenant-filters {
-    flex: 1 1 100%;
-    justify-content: flex-end;
-  }
-
   .vx-tenant-directory-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -63,24 +58,8 @@
     align-items: stretch;
   }
 
-  .vx-tenant-filters {
-    display: grid;
-    grid-template-columns: 1fr;
-    justify-content: stretch;
-  }
-
-  .vx-tenant-search,
-  .vx-tenant-select {
-    width: 100%;
-    flex-basis: auto;
-  }
-
   .vx-tenant-toolbar__spacer {
     display: none;
-  }
-
-  .vx-tenant-view-count {
-    margin-right: auto;
   }
 
 }

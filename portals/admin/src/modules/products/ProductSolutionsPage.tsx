@@ -557,7 +557,7 @@ export function ProductSolutionsPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索方案、行业、产品能力"
-                className="vx-tenant-search vx-product-solution-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索解决方案"
               />
             }
@@ -570,9 +570,9 @@ export function ProductSolutionsPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -585,7 +585,7 @@ export function ProductSolutionsPage() {
                 <option value="archived">{tShared("actions.archive")}</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={visibilityFilter}
                 onChange={(event) =>
                   setVisibilityFilter(event.target.value as VisibilityFilter)
@@ -597,7 +597,7 @@ export function ProductSolutionsPage() {
                 <option value="internal">内部</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select vx-product-solution-select--industry"
+                className="w-fit basis-media-xl"
                 value={industryFilter}
                 onChange={(event) => setIndustryFilter(event.target.value)}
                 aria-label="行业场景"
@@ -610,7 +610,7 @@ export function ProductSolutionsPage() {
                 ))}
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={sourceFilter}
                 onChange={(event) =>
                   setSourceFilter(event.target.value as SourceFilter)
@@ -621,11 +621,14 @@ export function ProductSolutionsPage() {
                 <option value="self">自建</option>
                 <option value="partner">三方</option>
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         table={
-          <section className="vx-tenant-directory" aria-label="解决方案清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="解决方案清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">

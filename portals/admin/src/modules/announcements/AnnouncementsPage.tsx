@@ -273,7 +273,7 @@ function AnnouncementToolbar({
       aria-label="公告筛选"
       search={
         <Input
-          className="vx-tenant-search"
+          className="grow basis-media-3xl max-w-panel-sm"
           type="search"
           placeholder="搜索标题、内容…"
           value={search}
@@ -293,7 +293,7 @@ function AnnouncementToolbar({
     >
       <NativeSelect
         wrapperClassName="w-fit"
-        className="vx-tenant-select"
+        className="w-fit basis-media-xl"
         value={typeFilter}
         onChange={(e) =>
           onTypeFilterChange(e.target.value as AnnouncementTypeFilter)
@@ -308,7 +308,7 @@ function AnnouncementToolbar({
       </NativeSelect>
       <NativeSelect
         wrapperClassName="w-fit"
-        className="vx-tenant-select"
+        className="w-fit basis-media-xl"
         value={statusFilter}
         onChange={(e) =>
           onStatusFilterChange(e.target.value as AnnouncementStatusFilter)

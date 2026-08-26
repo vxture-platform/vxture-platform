@@ -126,7 +126,7 @@ function SkillToolbar({
       aria-label="技能筛选"
       search={
         <Input
-          className="vx-tenant-search"
+          className="grow basis-media-3xl max-w-panel-sm"
           type="search"
           placeholder="搜索技能名称、代码、描述…"
           value={search}
@@ -141,7 +141,7 @@ function SkillToolbar({
     >
       <NativeSelect
         wrapperClassName="w-fit"
-        className="vx-tenant-select"
+        className="w-fit basis-media-xl"
         value={statusFilter}
         onChange={(e) =>
           onStatusFilterChange(e.target.value as SkillStatusFilter)
@@ -156,7 +156,7 @@ function SkillToolbar({
       {categories.length > 0 ? (
         <NativeSelect
           wrapperClassName="w-fit"
-          className="vx-tenant-select"
+          className="w-fit basis-media-xl"
           value={categoryFilter}
           onChange={(e) => onCategoryFilterChange(e.target.value)}
           aria-label="技能分类"

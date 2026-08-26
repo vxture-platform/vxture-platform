@@ -406,7 +406,7 @@ function TenantInfoTab({
             <TenantConfigItem label={tShared("columns.tenantType")}>
               {editing ? (
                 <NativeSelect
-                  className="vx-input vx-tenant-select"
+                  className="w-fit basis-media-xl"
                   value={draft.tenantType}
                   onChange={(event) =>
                     onDraftChange(
@@ -434,7 +434,7 @@ function TenantInfoTab({
             <TenantConfigItem label="租户状态">
               {editing ? (
                 <NativeSelect
-                  className="vx-input vx-tenant-select"
+                  className="w-fit basis-media-xl"
                   value={draft.status}
                   onChange={(event) =>
                     onDraftChange(
@@ -941,7 +941,7 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
   };
 
   return (
-    <div className="vx-tenant-list-shell vx-tenant-member-shell">
+    <div className="grid min-w-0 vx-tenant-member-shell">
       <section
         className="vx-tenant-toolbar vx-tenant-member-toolbar"
         aria-label="账号筛选"
@@ -951,7 +951,7 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
           onChange={setViewMode}
           ariaLabel="账号展示方式"
         />
-        <span className="vx-tenant-view-count">
+        <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-[60rem]:mr-auto">
           {formatNumber(filteredMembers.length)}
         </span>
         <div className="vx-tenant-member-summary" aria-label="账号统计">
@@ -965,19 +965,19 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
             停用 {formatNumber(suspendedCount)}
           </StatusBadge>
         </div>
-        <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
+        <span className="flex-1 max-[60rem]:hidden" aria-hidden="true" />
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="搜索账号、账号代码、邮箱"
-          className="vx-tenant-search vx-tenant-member-search"
+          className="grow basis-media-3xl max-w-panel-sm"
           aria-label="搜索账号"
         />
         <Button variant="outline" onClick={handleReset}>
           重置
         </Button>
         <NativeSelect
-          className="vx-input vx-tenant-select vx-tenant-member-select"
+          className="w-fit basis-media-xl"
           value={statusFilter}
           onChange={(event) =>
             setStatusFilter(event.target.value as MemberStatusFilter)
@@ -990,7 +990,7 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
           <option value="suspended">{tShared("actions.disable")}</option>
         </NativeSelect>
         <NativeSelect
-          className="vx-input vx-tenant-select vx-tenant-member-select"
+          className="w-fit basis-media-xl"
           value={roleFilter}
           onChange={(event) => setRoleFilter(event.target.value)}
           aria-label="账号权限"
@@ -1005,7 +1005,7 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
       </section>
 
       <section
-        className="vx-tenant-directory vx-tenant-member-directory"
+        className="grid min-w-0 max-w-full gap-xs vx-tenant-member-directory"
         aria-label="账号清单"
       >
         {filteredMembers.length ? (
@@ -1058,7 +1058,7 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
           <label className="vx-tenant-member-role-field">
             <span>目标角色</span>
             <NativeSelect
-              className="vx-input vx-tenant-select"
+              className="w-fit basis-media-xl"
               value={selectedRoleId}
               onChange={(event) => setSelectedRoleId(event.target.value)}
               aria-label="目标角色"

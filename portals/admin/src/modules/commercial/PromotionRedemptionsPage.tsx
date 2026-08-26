@@ -500,7 +500,7 @@ export function PromotionRedemptionsPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索核销、租户、账单、套餐"
-                className="vx-tenant-search vx-commercial-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索核销"
               />
             }
@@ -518,9 +518,9 @@ export function PromotionRedemptionsPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={billStatusFilter}
                 onChange={(event) =>
                   setBillStatusFilter(event.target.value as BillStatusFilter)
@@ -547,7 +547,7 @@ export function PromotionRedemptionsPage() {
                   {tShared("status.generic.voided")}
                 </option>
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         bulkBar={
@@ -567,7 +567,10 @@ export function PromotionRedemptionsPage() {
           ) : null
         }
         table={
-          <section className="vx-tenant-directory" aria-label="优惠核销清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="优惠核销清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">

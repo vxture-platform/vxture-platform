@@ -42,49 +42,9 @@
 /* 控件外观归 DS：这里原本把 Input 重画了一遍——40px 高、自己的描边与焦点环，
    于是工具行里搜索框比按钮和下拉高出一截。基准控件高度 32px（--space-control-md），
    由 DS 的件统一出（owner 2026-08-06）。 */
-.vx-tenant-search {
-  width: clamp(
-    var(--vx-admin-management-size-11r-large),
-    14vw,
-    var(--vx-admin-management-size-17r)
-  );
-  flex: 0 0
-    clamp(
-      var(--vx-admin-management-size-11r-large),
-      14vw,
-      var(--vx-admin-management-size-17r)
-    );
-}
-
-.vx-tenant-filters {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  flex: 0 1 auto;
-}
 
 /* 只留宽度。外观、内边距、箭头都归 DS 的 NativeSelect——这里原本自绘了第二个
    箭头（data-uri 的 chevron），与件自带的那个重叠成两个（owner 2026-08-06 实测）。 */
-.vx-tenant-select {
-  width: var(--vx-admin-management-size-75r);
-  min-width: 0;
-}
-
-.vx-tenant-select option {
-  font-weight: 400;
-}
-
-.vx-tenant-view-count {
-  min-height: var(--space-control-lg);
-  display: inline-flex;
-  align-items: center;
-  padding-left: var(--space-xs);
-  color: var(--tenant-ink);
-  font-size: var(--body-md-font-size);
-  font-weight: 800;
-  white-space: nowrap;
-}
 
 .vx-tenant-toolbar__spacer {
   flex: 1 1 auto;

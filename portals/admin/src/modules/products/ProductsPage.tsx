@@ -501,7 +501,7 @@ export function ProductsPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索能力、code、方案、计量"
-                className="vx-tenant-search vx-product-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索产品能力"
               />
             }
@@ -514,9 +514,9 @@ export function ProductsPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={typeFilter}
                 onChange={(event) =>
                   setTypeFilter(event.target.value as TypeFilter)
@@ -531,7 +531,7 @@ export function ProductsPage() {
                 <option value="service">服务</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={sourceFilter}
                 onChange={(event) =>
                   setSourceFilter(event.target.value as SourceFilter)
@@ -543,7 +543,7 @@ export function ProductsPage() {
                 <option value="partner">三方接入</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -556,7 +556,7 @@ export function ProductsPage() {
                 <option value="archived">已归档</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={accessFilter}
                 onChange={(event) =>
                   setAccessFilter(event.target.value as AccessFilter)
@@ -569,11 +569,14 @@ export function ProductsPage() {
                 <option value="config_required">待配置</option>
                 <option value="not_required">无需接入</option>
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         table={
-          <section className="vx-tenant-directory" aria-label="产品能力清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="产品能力清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">

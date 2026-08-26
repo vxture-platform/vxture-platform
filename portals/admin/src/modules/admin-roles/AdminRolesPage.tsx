@@ -1497,7 +1497,7 @@ export function AdminRolesPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索角色、权限、描述"
-                className="vx-tenant-search vx-admin-role-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索平台角色"
               />
             }
@@ -1514,9 +1514,9 @@ export function AdminRolesPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -1529,7 +1529,7 @@ export function AdminRolesPage() {
                 <option value="archived">{tShared("actions.archive")}</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={roleKindFilter}
                 onChange={(event) =>
                   setRoleKindFilter(event.target.value as RoleKindFilter)
@@ -1541,7 +1541,7 @@ export function AdminRolesPage() {
                 <option value="custom">自定义角色</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={permissionFilter}
                 onChange={(event) =>
                   setPermissionFilter(event.target.value as PermissionFilter)
@@ -1554,11 +1554,14 @@ export function AdminRolesPage() {
                 <option value="api">接口</option>
                 <option value="empty">未授权</option>
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         table={
-          <section className="vx-tenant-directory" aria-label="平台角色清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="平台角色清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">

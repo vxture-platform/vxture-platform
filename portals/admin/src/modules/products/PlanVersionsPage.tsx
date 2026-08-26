@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
-  Badge,
+  StatusBadge,
   Button,
   Input,
   NativeSelect,
@@ -30,15 +30,21 @@ import type { ProductPlanRecord } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { isStepUpCancelled, useStepUp } from "@/providers/StepUpProvider";
 
+/**
+ * 这三个徽章原本挂的是 `vx-badge-positive` / `-neutral` / `-warning`——那三个类
+ * **哪儿都没定义**（admin 样式表没有，DS 也没有），所以语气色一直没生效，
+ * 三种状态渲染成同一个默认徽章。换成 `StatusBadge` 的 `tone`：语气是它的
+ * 契约，不靠调用方拼类名。
+ */
 function statusBadge(status: string, isCurrent: boolean) {
   if (status === "published") {
     return (
-      <Badge className={isCurrent ? "vx-badge-positive" : "vx-badge-neutral"}>
+      <StatusBadge tone={isCurrent ? "success" : "neutral"}>
         {isCurrent ? "已发布 · 当前" : "已发布"}
-      </Badge>
+      </StatusBadge>
     );
   }
-  return <Badge className="vx-badge-warning">草稿 · 待发布</Badge>;
+  return <StatusBadge tone="warning">草稿 · 待发布</StatusBadge>;
 }
 
 // Money-input prefill: the BFF now serializes prices at fixed 2dp, but keep

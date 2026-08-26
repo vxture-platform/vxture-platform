@@ -132,7 +132,7 @@ function AuditToolbar({
           placeholder="搜索操作员、操作类型、对象…"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="vx-tenant-search"
+          className="grow basis-media-3xl max-w-panel-sm"
           aria-label="搜索审计日志（当前结果内）"
         />
       }
@@ -166,7 +166,7 @@ function AuditToolbar({
       />
       <NativeSelect
         wrapperClassName="w-fit"
-        className="vx-tenant-select"
+        className="w-fit basis-media-xl"
         value={resultFilter}
         onChange={(e) => onResultFilterChange(e.target.value as ResultFilter)}
         aria-label="审计结果"

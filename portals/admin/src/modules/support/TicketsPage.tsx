@@ -855,10 +855,10 @@ export function TicketsPage() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="搜索工单、租户、行业、负责人"
-              className="vx-tenant-search vx-commercial-search"
+              className="grow basis-media-3xl max-w-panel-sm"
               aria-label="搜索工单"
             />
-            <div className="vx-tenant-toolbar__spacer" aria-hidden="true" />
+            <div className="flex-1 max-[60rem]:hidden" aria-hidden="true" />
             <label aria-label="状态筛选">
               <NativeSelect
                 value={status}
@@ -898,7 +898,7 @@ export function TicketsPage() {
         }
         table={
           <section
-            className="vx-tenant-directory vx-ticket-directory"
+            className="grid min-w-0 max-w-full gap-xs vx-ticket-directory"
             aria-label="工单列表"
           >
             <header className="vx-tenant-directory__header">
@@ -908,7 +908,7 @@ export function TicketsPage() {
             {selectedTickets.length ? (
               <div className="vx-tenant-toolbar" aria-label="工单批量操作">
                 <span>已选 {formatNumber(selectedTickets.length)} 条</span>
-                <div className="vx-tenant-toolbar__spacer" aria-hidden="true" />
+                <div className="flex-1 max-[60rem]:hidden" aria-hidden="true" />
                 <Button
                   variant="outline"
                   size="md"

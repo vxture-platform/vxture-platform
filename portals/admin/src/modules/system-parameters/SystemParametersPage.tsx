@@ -170,7 +170,7 @@ export function SystemParametersPage() {
             search={
               <Input
                 type="search"
-                className="vx-tenant-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 placeholder="搜索配置键、说明…"
                 value={search}
                 onChange={(e) => {
@@ -187,7 +187,7 @@ export function SystemParametersPage() {
           >
             <NativeSelect
               wrapperClassName="w-fit"
-              className="vx-tenant-select"
+              className="w-fit basis-media-xl"
               value={groupFilter}
               onChange={(e) => {
                 setGroupFilter(e.target.value);

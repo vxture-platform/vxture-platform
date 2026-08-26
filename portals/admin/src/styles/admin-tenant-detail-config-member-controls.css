@@ -14,11 +14,3 @@
   gap: var(--space-xs);
   flex-wrap: wrap;
 }
-
-.vx-tenant-member-search {
-  width: min(var(--vx-admin-management-size-22r), 100%);
-}
-
-.vx-tenant-member-select {
-  width: var(--vx-admin-management-size-8r);
-}

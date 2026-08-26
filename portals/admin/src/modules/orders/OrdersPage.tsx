@@ -682,7 +682,7 @@ export function OrdersPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索订单、租户、方案、账单"
-                className="vx-tenant-search vx-order-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索订单"
               />
             }
@@ -711,9 +711,9 @@ export function OrdersPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as OrderStatusFilter)
@@ -733,7 +733,7 @@ export function OrdersPage() {
                 <option value="abnormal">异常</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={paymentFilter}
                 onChange={(event) =>
                   setPaymentFilter(event.target.value as PaymentStatusFilter)
@@ -756,7 +756,7 @@ export function OrdersPage() {
                 <option value="refunding">退款中</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={paySourceFilter}
                 onChange={(event) =>
                   setPaySourceFilter(event.target.value as PaySourceFilter)
@@ -769,7 +769,7 @@ export function OrdersPage() {
                 <option value="none">{tShared("common.none")}</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={tierFilter}
                 onChange={(event) =>
                   setTierFilter(event.target.value as TierFilter)
@@ -783,7 +783,7 @@ export function OrdersPage() {
                   </option>
                 ))}
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         bulkBar={
@@ -807,7 +807,10 @@ export function OrdersPage() {
           ) : null
         }
         table={
-          <section className="vx-tenant-directory" aria-label="订单清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="订单清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">

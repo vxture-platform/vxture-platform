@@ -715,7 +715,7 @@ export function SubscriptionsPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索租户、方案、套餐、订单"
-                className="vx-tenant-search vx-subscription-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索租户订阅"
               />
             }
@@ -738,9 +738,9 @@ export function SubscriptionsPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -760,7 +760,7 @@ export function SubscriptionsPage() {
                 <option value="cancelled">已取消</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={tierFilter}
                 onChange={(event) =>
                   setTierFilter(event.target.value as TierFilter)
@@ -775,7 +775,7 @@ export function SubscriptionsPage() {
                 ))}
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={riskFilter}
                 onChange={(event) =>
                   setRiskFilter(event.target.value as RiskFilter)
@@ -790,7 +790,7 @@ export function SubscriptionsPage() {
                 <option value="danger">高风险</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={renewFilter}
                 onChange={(event) =>
                   setRenewFilter(event.target.value as RenewFilter)
@@ -801,7 +801,7 @@ export function SubscriptionsPage() {
                 <option value="auto">自动续期</option>
                 <option value="manual">人工跟进</option>
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         bulkBar={
@@ -820,7 +820,10 @@ export function SubscriptionsPage() {
           ) : null
         }
         table={
-          <section className="vx-tenant-directory" aria-label="租户订阅清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="租户订阅清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">

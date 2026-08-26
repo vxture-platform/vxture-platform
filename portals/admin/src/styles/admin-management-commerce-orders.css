@@ -19,19 +19,3 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-md);
 }
-
-.vx-order-search,
-.vx-billing-search,
-.vx-invoice-search,
-.vx-payment-search {
-  width: clamp(
-    var(--vx-admin-management-size-13r),
-    16vw,
-    var(--vx-admin-management-size-20r)
-  );
-  flex-basis: clamp(
-    var(--vx-admin-management-size-13r),
-    16vw,
-    var(--vx-admin-management-size-20r)
-  );
-}

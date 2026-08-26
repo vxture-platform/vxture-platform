@@ -114,18 +114,3 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.vx-tenant-config-item .vx-input {
-  min-height: var(--space-control-xl);
-  height: var(--space-control-xl);
-  border-radius: var(--vx-radius-lg);
-}
-
-.vx-tenant-config-item select.vx-input {
-  font-size: var(--body-sm-font-size);
-  font-weight: 760;
-}
-
-.vx-tenant-config-item select.vx-input option {
-  font-size: var(--body-sm-font-size);
-}

@@ -1059,15 +1059,15 @@ export function ModelPlatformPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={t("table.searchPlaceholder")}
-                className="vx-tenant-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label={t("table.searchAriaLabel")}
               />
             }
             onReset={handleReset}
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as ModelStatusFilter)
@@ -1081,7 +1081,7 @@ export function ModelPlatformPage() {
                 ))}
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={sourceFilter}
                 onChange={(event) =>
                   setSourceFilter(event.target.value as ModelSourceFilter)
@@ -1094,12 +1094,12 @@ export function ModelPlatformPage() {
                   </option>
                 ))}
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         table={
           <section
-            className="vx-tenant-directory"
+            className="grid min-w-0 max-w-full gap-xs"
             aria-label={t("table.toolbarTitle", {
               count: filteredModels.length,
             })}
@@ -1249,16 +1249,19 @@ export function ModelPlatformPage() {
         }
       />
 
-      <div className="vx-tenant-list-shell">
+      <div className="grid min-w-0">
         <section className="vx-tenant-toolbar" aria-label="模型厂商管理">
           <strong>模型厂商</strong>
-          <span className="vx-tenant-view-count">
+          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-[60rem]:mr-auto">
             {formatNumber(providers.length)}
           </span>
-          <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
+          <span className="flex-1 max-[60rem]:hidden" aria-hidden="true" />
           {/* 只读：厂商的创建/编辑/启停/删除已迁至 opera 技术运维平台。 */}
         </section>
-        <section className="vx-tenant-directory" aria-label="模型厂商列表">
+        <section
+          className="grid min-w-0 max-w-full gap-xs"
+          aria-label="模型厂商列表"
+        >
           {providers.length ? (
             <div className="vx-tenant-directory-cards vx-model-platform-cards">
               {providers.map((provider) => (
@@ -1295,13 +1298,13 @@ export function ModelPlatformPage() {
         </section>
       </div>
 
-      <div className="vx-tenant-list-shell">
+      <div className="grid min-w-0">
         <section className="vx-tenant-toolbar" aria-label="计价规则管理">
           <strong>计价规则</strong>
-          <span className="vx-tenant-view-count">
+          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-[60rem]:mr-auto">
             {formatNumber(priceRules.length)}
           </span>
-          <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
+          <span className="flex-1 max-[60rem]:hidden" aria-hidden="true" />
           <ActionButton
             icon="plus"
             disabled={models.length === 0}
@@ -1310,7 +1313,10 @@ export function ModelPlatformPage() {
             新建规则
           </ActionButton>
         </section>
-        <section className="vx-tenant-directory" aria-label="计价规则列表">
+        <section
+          className="grid min-w-0 max-w-full gap-xs"
+          aria-label="计价规则列表"
+        >
           {priceRules.length ? (
             <div className="vx-tenant-directory-cards vx-model-platform-cards">
               {pagedPriceRules.map((rule) => {
@@ -1419,13 +1425,13 @@ export function ModelPlatformPage() {
           限流与并发的闸门。与上面的计价规则同页并排，是因为运营对一个模型要问的
           两件事就是「怎么收钱」和「怎么限流」；但两张表的可改性正好相反，所以
           对话框里各自把话说清楚。 */}
-      <div className="vx-tenant-list-shell">
+      <div className="grid min-w-0">
         <section className="vx-tenant-toolbar" aria-label="模型策略管理">
           <strong>模型策略</strong>
-          <span className="vx-tenant-view-count">
+          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-[60rem]:mr-auto">
             {formatNumber(policies.length)}
           </span>
-          <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
+          <span className="flex-1 max-[60rem]:hidden" aria-hidden="true" />
           <ActionButton
             icon="plus"
             disabled={models.length === 0}
@@ -1434,7 +1440,10 @@ export function ModelPlatformPage() {
             新建策略
           </ActionButton>
         </section>
-        <section className="vx-tenant-directory" aria-label="模型策略列表">
+        <section
+          className="grid min-w-0 max-w-full gap-xs"
+          aria-label="模型策略列表"
+        >
           {policies.length ? (
             <div className="vx-tenant-directory-cards vx-model-platform-cards">
               {pagedPolicies.map((policy) => {

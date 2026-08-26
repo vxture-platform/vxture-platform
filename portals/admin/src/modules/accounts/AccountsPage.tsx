@@ -720,7 +720,7 @@ export function AccountsPage({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={pageCopy.searchPlaceholder}
-                className="vx-tenant-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label={pageCopy.searchAriaLabel}
               />
             }
@@ -733,9 +733,9 @@ export function AccountsPage({
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -752,7 +752,7 @@ export function AccountsPage({
               </NativeSelect>
               {showTenantContext ? (
                 <NativeSelect
-                  className="vx-input vx-tenant-select"
+                  className="w-fit basis-media-xl"
                   value={tenantTypeFilter}
                   onChange={(event) =>
                     setTenantTypeFilter(event.target.value as TenantTypeFilter)
@@ -766,7 +766,7 @@ export function AccountsPage({
                 </NativeSelect>
               ) : null}
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={roleFilter}
                 onChange={(event) =>
                   setRoleFilter(event.target.value as RoleFilter)
@@ -778,12 +778,12 @@ export function AccountsPage({
                 <option value="admin">Admin</option>
                 <option value="member">Member</option>
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         table={
           <section
-            className="vx-tenant-directory"
+            className="grid min-w-0 max-w-full gap-xs"
             aria-label={pageCopy.directoryAriaLabel}
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}

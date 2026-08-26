@@ -8,19 +8,6 @@
   flex-wrap: wrap;
 }
 
-.vx-verification-search {
-  width: clamp(
-    var(--vx-admin-management-size-13r),
-    16vw,
-    var(--vx-admin-management-size-20r)
-  );
-  flex-basis: clamp(
-    var(--vx-admin-management-size-13r),
-    16vw,
-    var(--vx-admin-management-size-20r)
-  );
-}
-
 .vx-admin-role-search {
   width: clamp(
     var(--vx-admin-management-size-12r-large),
@@ -32,34 +19,4 @@
     15vw,
     var(--vx-admin-management-size-18r-large)
   );
-}
-
-.vx-product-search {
-  width: clamp(
-    var(--vx-admin-management-size-13r),
-    16vw,
-    var(--vx-admin-management-size-20r)
-  );
-  flex-basis: clamp(
-    var(--vx-admin-management-size-13r),
-    16vw,
-    var(--vx-admin-management-size-20r)
-  );
-}
-
-.vx-product-solution-search {
-  width: clamp(
-    var(--vx-admin-management-size-13r),
-    16vw,
-    var(--vx-admin-management-size-20r)
-  );
-  flex-basis: clamp(
-    var(--vx-admin-management-size-13r),
-    16vw,
-    var(--vx-admin-management-size-20r)
-  );
-}
-
-.vx-product-solution-select--industry {
-  width: var(--vx-admin-management-size-10r);
 }

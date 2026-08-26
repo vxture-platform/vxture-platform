@@ -1,9 +1,5 @@
 /* Model strategy directory layout styles. */
 
-.vx-model-strategy-filter {
-  width: var(--vx-admin-management-size-95r);
-}
-
 .vx-model-strategy-card header strong,
 .vx-model-strategy-overrides__header strong {
   overflow: hidden;

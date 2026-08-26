@@ -399,7 +399,7 @@ export function ComplianceEventsPage() {
             aria-label="合规事件筛选"
             search={
               <Input
-                className="vx-tenant-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 type="search"
                 placeholder="搜索事件类型、租户、法规、处理人…"
                 value={search}
@@ -431,7 +431,7 @@ export function ComplianceEventsPage() {
           >
             <NativeSelect
               wrapperClassName="w-fit"
-              className="vx-tenant-select"
+              className="w-fit basis-media-xl"
               value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value as StatusFilter);

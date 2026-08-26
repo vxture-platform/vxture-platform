@@ -527,7 +527,7 @@ export function PromotionsPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索优惠、套餐、负责人"
-                className="vx-tenant-search vx-commercial-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索优惠"
               />
             }
@@ -574,9 +574,9 @@ export function PromotionsPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -590,7 +590,7 @@ export function PromotionsPage() {
                 <option value="expired">已结束</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={typeFilter}
                 onChange={(event) =>
                   setTypeFilter(event.target.value as TypeFilter)
@@ -602,7 +602,7 @@ export function PromotionsPage() {
                 <option value="coupon">优惠码</option>
                 <option value="campaign">活动</option>
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         bulkBar={
@@ -622,7 +622,10 @@ export function PromotionsPage() {
           ) : null
         }
         table={
-          <section className="vx-tenant-directory" aria-label="营销优惠清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="营销优惠清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">

@@ -342,7 +342,7 @@ export function FeatureTogglesPage() {
             aria-label="功能开关筛选"
             search={
               <Input
-                className="vx-tenant-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 type="search"
                 placeholder="搜索开关键、描述、分类…"
                 value={search}
@@ -376,7 +376,7 @@ export function FeatureTogglesPage() {
           >
             <NativeSelect
               wrapperClassName="w-fit"
-              className="vx-tenant-select"
+              className="w-fit basis-media-xl"
               value={categoryFilter}
               onChange={(e) => {
                 setCategoryFilter(e.target.value);
@@ -392,7 +392,7 @@ export function FeatureTogglesPage() {
             </NativeSelect>
             <NativeSelect
               wrapperClassName="w-fit"
-              className="vx-tenant-select"
+              className="w-fit basis-media-xl"
               value={environmentFilter}
               onChange={(e) => {
                 setEnvironmentFilter(e.target.value);
@@ -408,7 +408,7 @@ export function FeatureTogglesPage() {
             </NativeSelect>
             <NativeSelect
               wrapperClassName="w-fit"
-              className="vx-tenant-select"
+              className="w-fit basis-media-xl"
               value={archivedFilter}
               onChange={(e) => {
                 setArchivedFilter(e.target.value as ArchivedFilter);

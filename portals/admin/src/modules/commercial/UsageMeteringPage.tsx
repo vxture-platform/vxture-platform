@@ -498,7 +498,7 @@ export function UsageMeteringPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索租户、产品、计量项"
-                className="vx-tenant-search vx-commercial-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索用量"
               />
             }
@@ -516,9 +516,9 @@ export function UsageMeteringPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={riskFilter}
                 onChange={(event) =>
                   setRiskFilter(event.target.value as RiskFilter)
@@ -534,7 +534,7 @@ export function UsageMeteringPage() {
                 <option value="anomaly">计量异常</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={productTypeFilter}
                 onChange={(event) =>
                   setProductTypeFilter(event.target.value as ProductTypeFilter)
@@ -549,7 +549,7 @@ export function UsageMeteringPage() {
                 <option value="产品能力">产品能力</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={cycleFilter}
                 onChange={(event) => setCycleFilter(event.target.value)}
                 aria-label="计量周期"
@@ -561,7 +561,7 @@ export function UsageMeteringPage() {
                   </option>
                 ))}
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         bulkBar={
@@ -580,7 +580,10 @@ export function UsageMeteringPage() {
           ) : null
         }
         table={
-          <section className="vx-tenant-directory" aria-label="用量清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="用量清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">

@@ -639,7 +639,7 @@ export function ModelGrantsPage() {
         ]}
       />
 
-      <div className="vx-tenant-list-shell">
+      <div className="grid min-w-0">
         <section
           className="vx-tenant-toolbar"
           aria-label={t("policyTable.filterAriaLabel")}
@@ -649,15 +649,15 @@ export function ModelGrantsPage() {
             onChange={setViewMode}
             ariaLabel="模型授权展示方式"
           />
-          <span className="vx-tenant-view-count">
+          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-[60rem]:mr-auto">
             {formatNumber(filteredPolicies.length)}
           </span>
-          <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
+          <span className="flex-1 max-[60rem]:hidden" aria-hidden="true" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t("policyTable.searchPlaceholder")}
-            className="vx-tenant-search"
+            className="grow basis-media-3xl max-w-panel-sm"
             aria-label={t("policyTable.searchAriaLabel")}
           />
           <Button
@@ -669,9 +669,9 @@ export function ModelGrantsPage() {
           >
             重置
           </Button>
-          <div className="vx-tenant-filters">
+          <>
             <NativeSelect
-              className="vx-tenant-select vx-model-strategy-filter"
+              className="w-fit basis-media-xl"
               value={filter}
               onChange={(event) =>
                 setFilter(event.target.value as PolicyFilter)
@@ -684,14 +684,14 @@ export function ModelGrantsPage() {
                 </option>
               ))}
             </NativeSelect>
-          </div>
+          </>
           <ActionButton icon="plus" onClick={openCreateGrantDialog}>
             {t("actions.addGrant")}
           </ActionButton>
         </section>
 
         <section
-          className="vx-tenant-directory"
+          className="grid min-w-0 max-w-full gap-xs"
           aria-label={t("policyTable.toolbarTitle", {
             count: filteredPolicies.length,
           })}
@@ -855,7 +855,7 @@ export function ModelGrantsPage() {
         </section>
       </div>
 
-      <section className="vx-tenant-list-shell vx-model-strategy-overrides">
+      <section className="grid min-w-0 vx-model-strategy-overrides">
         <header className="vx-tenant-directory__header vx-model-strategy-overrides__header">
           <strong>{t("overrides.title")}</strong>
           <span>

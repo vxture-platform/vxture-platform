@@ -1129,7 +1129,7 @@ export function PlatformUsersPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索用户名、显示名、邮箱、手机、角色"
-                className="vx-tenant-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索平台用户"
               />
             }
@@ -1146,9 +1146,9 @@ export function PlatformUsersPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -1163,7 +1163,7 @@ export function PlatformUsersPage() {
                 <option value="suspended">{tShared("actions.pause")}</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={typeFilter}
                 onChange={(event) =>
                   setTypeFilter(event.target.value as UserTypeFilter)
@@ -1174,11 +1174,14 @@ export function PlatformUsersPage() {
                 <option value="system">系统用户</option>
                 <option value="normal">普通用户</option>
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         table={
-          <section className="vx-tenant-directory" aria-label="平台用户清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="平台用户清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">

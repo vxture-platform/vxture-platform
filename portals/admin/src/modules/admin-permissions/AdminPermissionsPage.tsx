@@ -1163,23 +1163,23 @@ function PermissionDomainSection({
           onChange={onViewModeChange}
           ariaLabel={`${group.title}展示方式`}
         />
-        <span className="vx-tenant-view-count">
+        <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-[60rem]:mr-auto">
           {formatNumber(group.matchedCount)} / {formatNumber(group.totalCount)}
         </span>
-        <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
+        <span className="flex-1 max-[60rem]:hidden" aria-hidden="true" />
         <Input
           value={filters.query}
           onChange={(event) => onFilterChange({ query: event.target.value })}
           placeholder="搜索权限 code、名称、路径、组件"
-          className="vx-tenant-search"
+          className="grow basis-media-3xl max-w-panel-sm"
           aria-label={`搜索${group.title}`}
         />
         <Button variant="outline" onClick={onResetFilters}>
           重置
         </Button>
-        <div className="vx-tenant-filters">
+        <>
           <NativeSelect
-            className="vx-input vx-tenant-select"
+            className="w-fit basis-media-xl"
             value={filters.typeFilter}
             onChange={(event) =>
               onFilterChange({
@@ -1194,7 +1194,7 @@ function PermissionDomainSection({
             <option value="api">接口权限</option>
           </NativeSelect>
           <NativeSelect
-            className="vx-input vx-tenant-select"
+            className="w-fit basis-media-xl"
             value={filters.statusFilter}
             onChange={(event) =>
               onFilterChange({
@@ -1208,7 +1208,7 @@ function PermissionDomainSection({
             <option value="disabled">{tShared("actions.disable")}</option>
           </NativeSelect>
           <NativeSelect
-            className="vx-input vx-tenant-select"
+            className="w-fit basis-media-xl"
             value={filters.sourceFilter}
             onChange={(event) =>
               onFilterChange({
@@ -1221,7 +1221,7 @@ function PermissionDomainSection({
             <option value="system">系统预置</option>
             <option value="custom">自定义</option>
           </NativeSelect>
-        </div>
+        </>
         <Button variant="outline" onClick={() => onExpand(domainPermissionIds)}>
           展开
         </Button>
@@ -1595,7 +1595,7 @@ export function AdminPermissionsPage() {
         ]}
       />
 
-      <div className="vx-tenant-list-shell">
+      <div className="grid min-w-0">
         {permissions.length ? (
           <section
             className="vx-admin-permission-structure"

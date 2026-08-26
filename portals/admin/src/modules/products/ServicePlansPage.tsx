@@ -556,7 +556,7 @@ export function ServicePlansPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索方案、套餐、配额"
-                className="vx-tenant-search vx-service-plan-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索服务套餐"
               />
             }
@@ -569,9 +569,9 @@ export function ServicePlansPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -584,7 +584,7 @@ export function ServicePlansPage() {
                 <option value="archived">{tShared("actions.archive")}</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={priceFilter}
                 onChange={(event) =>
                   setPriceFilter(event.target.value as PriceFilter)
@@ -597,7 +597,7 @@ export function ServicePlansPage() {
                 <option value="contract">合同报价</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                className="w-fit basis-media-xl"
                 value={visibilityFilter}
                 onChange={(event) =>
                   setVisibilityFilter(event.target.value as VisibilityFilter)
@@ -609,7 +609,7 @@ export function ServicePlansPage() {
                 <option value="internal">内部</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select vx-service-plan-select--industry"
+                className="w-fit basis-media-xl"
                 value={industryFilter}
                 onChange={(event) => setIndustryFilter(event.target.value)}
                 aria-label="业务方案"
@@ -621,7 +621,7 @@ export function ServicePlansPage() {
                   </option>
                 ))}
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         table={

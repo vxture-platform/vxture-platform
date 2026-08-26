@@ -110,10 +110,6 @@
   font-weight: 400;
 }
 
-.vx-tenant-actions__menu button.vx-subscription-menu-action--danger {
-  color: var(--tenant-rose);
-}
-
 .vx-tenant-actions__menu
   button.vx-subscription-menu-action--danger:hover:not(:disabled) {
   background: color-mix(in srgb, var(--destructive) 8%, transparent);
