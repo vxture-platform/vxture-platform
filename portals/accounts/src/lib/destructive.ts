@@ -31,7 +31,12 @@ export function useConfirmLabels(): (
 ) => DestructiveConfirm {
   const t = useTranslations("destructive");
   return (confirm) => ({
-    titleTemplate: t("titleTemplate"),
+    /* `t.raw` 而不是 `t`：这一条的值是「{verb}{target}？」，占位符要留给 DS 去填。
+       `t()` 会当场把它当 ICU 串求值，而 `verb`/`target` 此刻还不存在，于是抛
+       `FORMATTING_ERROR` 并回落——确认框的标题就渲染成 `destructive.titleTemplate`
+       这一串键路径。这个缺陷两道门禁一个都抓不到（类型对、词条也对），是把栈
+       跑起来点开一个删除确认框才看见的。 */
+    titleTemplate: t.raw("titleTemplate") as string,
     cancelLabel: t("cancel"),
     pendingLabel: t("pending"),
     blockedHint: t("blocked"),

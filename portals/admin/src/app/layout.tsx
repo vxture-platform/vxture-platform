@@ -16,7 +16,7 @@ import {
 import type { Density } from "@vxture/design-system";
 import { ConsoleAppProviders } from "@/providers/ConsoleAppProviders";
 import { NextIntlClientProvider } from "next-intl";
-import { adminLocale, adminMessages, adminMessageFallback } from "@/lib/intl";
+import { adminLocale, adminMessages } from "@/lib/intl";
 import "@vxture/design-system/styles/fonts.css";
 import "./globals.css";
 
@@ -71,13 +71,13 @@ export default async function RootLayout({
             html[data-app-ready]，CSS 随即把它隐藏。 */}
         <BootSplash />
         {/* provider 收的是**选中的那一本**，不是两本——客户端不该为没在看的
-            语言付带宽。缺键回落成键路径而不是抛异常，见 `adminMessageFallback`
-            的头注。 */}
-        <NextIntlClientProvider
-          locale={locale}
-          messages={messages}
-          getMessageFallback={adminMessageFallback}
-        >
+            语言付带宽。
+
+            `getMessageFallback` **不能挂在这里**：它是个函数，而这是从 server
+            component 传给 client component，跨 RSC 边界传函数会直接抛
+            「Functions cannot be passed directly to Client Components」——admin
+            的每一页都 500。它的家在 `src/i18n/request.ts`。 */}
+        <NextIntlClientProvider locale={locale} messages={messages}>
           <ConsoleAppProviders
             initialTheme={initialTheme}
             initialDensity={initialDensity}

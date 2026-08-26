@@ -22,9 +22,18 @@
 
 import { getRequestConfig } from "next-intl/server";
 import { headers } from "next/headers";
-import { adminLocale, adminMessages } from "@/lib/intl";
+import { adminLocale, adminMessages, adminMessageFallback } from "@/lib/intl";
 
 export default getRequestConfig(async () => {
   const locale = adminLocale(await headers());
-  return { locale, messages: adminMessages(locale) };
+  return {
+    locale,
+    messages: adminMessages(locale),
+    /* 缺键回落成键路径而不是抛异常，见 `adminMessageFallback` 的头注。
+       它只能挂在这里：next-intl 的 provider 会从 server component 继承
+       locale / messages / formats 这些**可序列化**的值，但函数不能跨 RSC
+       边界，挂到 provider 上会让每一页 500。所以服务端渲染按这个托底走，
+       客户端组件里的缺键走 next-intl 的默认行为（也是回落成键路径）。 */
+    getMessageFallback: adminMessageFallback,
+  };
 });
