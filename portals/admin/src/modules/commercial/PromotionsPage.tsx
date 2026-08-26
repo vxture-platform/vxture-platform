@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -86,22 +86,32 @@ function promotionSearchText(record: PromotionOperationRecord) {
     .toLowerCase();
 }
 
-const PROMOTION_CSV_COLUMNS: CsvColumn<PromotionOperationRecord>[] = [
-  { label: "优惠编号", value: (record) => record.promotionCode },
-  { label: "优惠名称", value: (record) => record.promotionName },
-  { label: "类型", value: (record) => typeLabel(record.promotionType) },
-  { label: "状态", value: (record) => statusLabel(record.status) },
-  { label: "适用范围", value: (record) => record.scopeLabel },
-  { label: "优惠", value: (record) => record.discountLabel },
-  { label: "核销次数", value: (record) => record.redemptionCount },
-  { label: "租户数", value: (record) => record.tenantCount },
-  { label: "负责人", value: (record) => record.ownerName },
-  { label: "开始时间", value: (record) => formatDate(record.startsAt) },
-  {
-    label: "结束时间",
-    value: (record) => (record.endsAt ? formatDate(record.endsAt) : "长期"),
-  },
-];
+/* 从模块级常量改成收 `locale` 的工厂：常量在模块加载时就求值了，那一刻
+   没有任何运行时上下文，而列里的日期要按界面语言排。 */
+function promotionCsvColumns(
+  locale: string,
+): CsvColumn<PromotionOperationRecord>[] {
+  return [
+    { label: "优惠编号", value: (record) => record.promotionCode },
+    { label: "优惠名称", value: (record) => record.promotionName },
+    { label: "类型", value: (record) => typeLabel(record.promotionType) },
+    { label: "状态", value: (record) => statusLabel(record.status) },
+    { label: "适用范围", value: (record) => record.scopeLabel },
+    { label: "优惠", value: (record) => record.discountLabel },
+    { label: "核销次数", value: (record) => record.redemptionCount },
+    { label: "租户数", value: (record) => record.tenantCount },
+    { label: "负责人", value: (record) => record.ownerName },
+    {
+      label: "开始时间",
+      value: (record) => formatDate(record.startsAt, locale),
+    },
+    {
+      label: "结束时间",
+      value: (record) =>
+        record.endsAt ? formatDate(record.endsAt, locale) : "长期",
+    },
+  ];
+}
 
 function PromotionActionsMenu({
   record,
@@ -138,6 +148,7 @@ function PromotionActionsMenu({
 
 /** 这一页的标已经是 DS `Tag`，不带业务色类，与批 4 无关。 */
 function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
+  const locale = useLocale();
   const tShared = useTranslations();
   const router = useRouter();
 
@@ -206,8 +217,10 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
       align: "center",
       cell: (record) => (
         <TableTitleCell
-          title={formatDate(record.startsAt)}
-          description={record.endsAt ? formatDate(record.endsAt) : "长期"}
+          title={formatDate(record.startsAt, locale)}
+          description={
+            record.endsAt ? formatDate(record.endsAt, locale) : "长期"
+          }
         />
       ),
     },
@@ -215,6 +228,7 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
 }
 
 function PromotionCards({ records }: { records: PromotionOperationRecord[] }) {
+  const locale = useLocale();
   return (
     <div
       className="vx-tenant-directory-cards vx-commercial-cards"
@@ -263,7 +277,7 @@ function PromotionCards({ records }: { records: PromotionOperationRecord[] }) {
           </div>
           <footer>
             <span>{record.ownerName}</span>
-            <strong>{formatDate(record.updatedAt)}</strong>
+            <strong>{formatDate(record.updatedAt, locale)}</strong>
           </footer>
         </article>
       ))}
@@ -272,6 +286,7 @@ function PromotionCards({ records }: { records: PromotionOperationRecord[] }) {
 }
 
 export function PromotionsPage() {
+  const locale = useLocale();
   const tShared = useTranslations();
   const [records, setRecords] = useState<PromotionOperationRecord[]>([]);
   const [recordsTruncated, setRecordsTruncated] = useState(false);
@@ -414,7 +429,7 @@ export function PromotionsPage() {
   function handleExportSelected() {
     exportRowsToCsv(
       "promotions-export",
-      PROMOTION_CSV_COLUMNS,
+      promotionCsvColumns(locale),
       selectedRecords,
     );
   }
@@ -422,7 +437,7 @@ export function PromotionsPage() {
   function handleExportAll() {
     exportRowsToCsv(
       "promotions-export",
-      PROMOTION_CSV_COLUMNS,
+      promotionCsvColumns(locale),
       filteredRecords,
     );
   }

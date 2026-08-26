@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -116,8 +116,10 @@ function ticketEventBodyText(event: TicketCommentRecord): string | null {
   return null;
 }
 
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("zh-CN", {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——中文
+   `2026/08/18`，英文 `08/18/2026`。同一串数字，读出来是两个日期。 */
+function formatDateTime(value: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -215,6 +217,7 @@ function ticketKey(ticket: SupportTicketRecord) {
  * 只有量计算样式才知道它被压掉了。判死码不能只看引用（同 §十三 的模板拼接那条）。
  */
 function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
+  const locale = useLocale();
   const tShared = useTranslations();
   const router = useRouter();
 
@@ -275,7 +278,7 @@ function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
       header: tShared("columns.updatedAt"),
       cell: (ticket) => (
         <TableTitleCell
-          title={formatDateTime(ticket.updatedAt)}
+          title={formatDateTime(ticket.updatedAt, locale)}
           description={ticket.region}
         />
       ),
@@ -458,6 +461,7 @@ function TicketDetailDrawer({
   onClose: () => void;
   onTicketUpdated: (updated: SupportTicketRecord) => void;
 }) {
+  const locale = useLocale();
   const tShared = useTranslations();
   const [detail, setDetail] = useState<SupportTicketRecord | null>(null);
   const [comments, setComments] = useState<TicketCommentRecord[]>([]);
@@ -542,7 +546,7 @@ function TicketDetailDrawer({
         { label: "地区", value: detail.region },
         {
           label: tShared("columns.updatedAt"),
-          value: formatDateTime(detail.updatedAt),
+          value: formatDateTime(detail.updatedAt, locale),
         },
       ]
     : undefined;
@@ -599,7 +603,7 @@ function TicketDetailDrawer({
                       <span>
                         <Badge>{ticketEventTypeLabel(event.eventType)}</Badge>{" "}
                         <strong>{event.actorName}</strong>{" "}
-                        <small>{formatDateTime(event.createdAt)}</small>
+                        <small>{formatDateTime(event.createdAt, locale)}</small>
                       </span>
                       {bodyText ? <p>{bodyText}</p> : null}
                     </li>

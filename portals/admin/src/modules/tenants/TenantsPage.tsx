@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -210,6 +210,7 @@ function TenantCards({
   actionBusy: boolean;
   onToggleStatus: (tenant: TenantOperationRecord) => void;
 }) {
+  const locale = useLocale();
   const router = useRouter();
 
   return (
@@ -281,7 +282,7 @@ function TenantCards({
                 <span className="truncate">{tenant.industry}</span>
                 <span className="shrink-0">
                   {tenant.ticketOpenCount} 工单 ·{" "}
-                  {formatDate(tenant.lastActiveAt)}
+                  {formatDate(tenant.lastActiveAt, locale)}
                 </span>
               </>
             }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -82,26 +82,38 @@ function redemptionSearchText(record: PromotionRedemptionRecord) {
     .toLowerCase();
 }
 
-const REDEMPTION_CSV_COLUMNS: CsvColumn<PromotionRedemptionRecord>[] = [
-  { label: "核销编号", value: (record) => record.redemptionNo },
-  { label: "券码", value: (record) => record.promotionCode },
-  { label: "优惠编号", value: (record) => record.promotionCode },
-  { label: "优惠名称", value: (record) => record.promotionName },
-  { label: "租户编号", value: (record) => record.tenantCode },
-  { label: "租户名称", value: (record) => record.tenantName },
-  { label: "租户类型", value: (record) => typeLabel(record.tenantType) },
-  { label: "订单号", value: (record) => record.orderNo ?? "" },
-  { label: "账单号", value: (record) => record.billNo },
-  { label: "账单状态", value: (record) => billStatusLabel(record.billStatus) },
-  { label: "套餐", value: (record) => record.servicePlanName ?? "" },
-  { label: "货币", value: (record) => record.currency },
-  { label: "订单金额", value: (record) => record.orderAmount },
-  { label: "优惠金额", value: (record) => record.discountAmount },
-  { label: "应付金额", value: (record) => record.payableAmount },
-  { label: "操作人", value: (record) => record.operatorName },
-  { label: "核销时间", value: (record) => formatDate(record.redeemedAt) },
-  { label: "备注", value: (record) => record.remark ?? "" },
-];
+/* 从模块级常量改成收 `locale` 的工厂：常量在模块加载时就求值了，那一刻
+   没有任何运行时上下文，而列里的日期要按界面语言排。 */
+function redemptionCsvColumns(
+  locale: string,
+): CsvColumn<PromotionRedemptionRecord>[] {
+  return [
+    { label: "核销编号", value: (record) => record.redemptionNo },
+    { label: "券码", value: (record) => record.promotionCode },
+    { label: "优惠编号", value: (record) => record.promotionCode },
+    { label: "优惠名称", value: (record) => record.promotionName },
+    { label: "租户编号", value: (record) => record.tenantCode },
+    { label: "租户名称", value: (record) => record.tenantName },
+    { label: "租户类型", value: (record) => typeLabel(record.tenantType) },
+    { label: "订单号", value: (record) => record.orderNo ?? "" },
+    { label: "账单号", value: (record) => record.billNo },
+    {
+      label: "账单状态",
+      value: (record) => billStatusLabel(record.billStatus),
+    },
+    { label: "套餐", value: (record) => record.servicePlanName ?? "" },
+    { label: "货币", value: (record) => record.currency },
+    { label: "订单金额", value: (record) => record.orderAmount },
+    { label: "优惠金额", value: (record) => record.discountAmount },
+    { label: "应付金额", value: (record) => record.payableAmount },
+    { label: "操作人", value: (record) => record.operatorName },
+    {
+      label: "核销时间",
+      value: (record) => formatDate(record.redeemedAt, locale),
+    },
+    { label: "备注", value: (record) => record.remark ?? "" },
+  ];
+}
 
 function RedemptionActionsMenu({
   record,
@@ -153,6 +165,7 @@ function RedemptionActionsMenu({
 
 /** 这一页的标已经是 DS `Tag`，不带业务色类，与批 4 无关。 */
 function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
+  const locale = useLocale();
   const router = useRouter();
 
   return [
@@ -219,7 +232,7 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
       align: "center",
       cell: (record) => (
         <TableTitleCell
-          title={formatDate(record.redeemedAt)}
+          title={formatDate(record.redeemedAt, locale)}
           description={record.remark ?? "系统记录"}
         />
       ),
@@ -232,6 +245,7 @@ function RedemptionCards({
 }: {
   records: PromotionRedemptionRecord[];
 }) {
+  const locale = useLocale();
   const router = useRouter();
 
   return (
@@ -286,7 +300,7 @@ function RedemptionCards({
               <small>账单应付</small>
             </span>
             <span>
-              <b>{formatDate(record.redeemedAt)}</b>
+              <b>{formatDate(record.redeemedAt, locale)}</b>
               <small>{record.operatorName}</small>
             </span>
           </div>
@@ -301,6 +315,7 @@ function RedemptionCards({
 }
 
 export function PromotionRedemptionsPage() {
+  const locale = useLocale();
   const tShared = useTranslations();
   const [records, setRecords] = useState<PromotionRedemptionRecord[]>([]);
   const [recordsTruncated, setRecordsTruncated] = useState(false);
@@ -391,7 +406,7 @@ export function PromotionRedemptionsPage() {
   function handleExportSelected() {
     exportRowsToCsv(
       "promotion-redemptions-export",
-      REDEMPTION_CSV_COLUMNS,
+      redemptionCsvColumns(locale),
       selectedRecords,
     );
   }
@@ -399,7 +414,7 @@ export function PromotionRedemptionsPage() {
   function handleExportAll() {
     exportRowsToCsv(
       "promotion-redemptions-export",
-      REDEMPTION_CSV_COLUMNS,
+      redemptionCsvColumns(locale),
       filteredRecords,
     );
   }

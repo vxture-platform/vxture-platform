@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useLocale } from "next-intl";
 import Link from "next/link";
 import {
   Button,
@@ -127,6 +128,7 @@ function OverviewMetricSummary({
 }
 
 function RiskPanel({ snapshot }: { snapshot: CommerceOverviewSnapshot }) {
+  const locale = useLocale();
   return (
     <section
       className="vx-commerce-panel vx-commerce-risk-panel"
@@ -139,7 +141,7 @@ function RiskPanel({ snapshot }: { snapshot: CommerceOverviewSnapshot }) {
         description="从账单、收款、发票和用量中抽取运营侧需要跟进的事项。"
         action={
           <span className="text-body-sm text-muted-foreground">
-            生成 {formatDate(snapshot.generatedAt)}
+            生成 {formatDate(snapshot.generatedAt, locale)}
           </span>
         }
       />
@@ -252,6 +254,7 @@ function QuickLinkPanel() {
 }
 
 export function CommerceOverviewPage() {
+  const locale = useLocale();
   const [snapshot, setSnapshot] = useState<CommerceOverviewSnapshot | null>(
     null,
   );
@@ -305,7 +308,7 @@ export function CommerceOverviewPage() {
           <QuickLinkPanel />
           <footer className="vx-commerce-overview-footer">
             <span>已聚合 {formatNumber(metricCount)} 类指标</span>
-            <strong>更新时间 {formatDate(snapshot.generatedAt)}</strong>
+            <strong>更新时间 {formatDate(snapshot.generatedAt, locale)}</strong>
           </footer>
         </>
       ) : null}

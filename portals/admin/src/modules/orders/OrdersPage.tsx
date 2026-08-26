@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -232,6 +232,7 @@ function OrderActionsMenu({
  * 值域着色表，整族改 Badge 归批 4，一次改动不跨两个语义面。
  */
 function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
+  const locale = useLocale();
   const tShared = useTranslations();
   const router = useRouter();
 
@@ -242,7 +243,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
       cell: (order) => (
         <TableTitleCell
           title={order.orderNo}
-          description={`${order.billNo ?? "未生成账单"} · ${formatDate(order.createdAt)}`}
+          description={`${order.billNo ?? "未生成账单"} · ${formatDate(order.createdAt, locale)}`}
           onTitleClick={() =>
             router.push(`/orders/${encodeURIComponent(order.id)}`)
           }
@@ -343,6 +344,7 @@ function OrderCards({
   orders: OrderOperationRecord[];
   onConfirmPayment: (order: OrderOperationRecord) => void;
 }) {
+  const locale = useLocale();
   const tShared = useTranslations();
   const router = useRouter();
 
@@ -400,7 +402,7 @@ function OrderCards({
             <>
               <span className="truncate">{order.operationHint}</span>
               <span className="shrink-0">
-                {formatDate(order.confirmedAt ?? order.updatedAt)}
+                {formatDate(order.confirmedAt ?? order.updatedAt, locale)}
               </span>
             </>
           }

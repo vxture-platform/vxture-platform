@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ActionButton,
   ActionMenu,
@@ -326,44 +326,52 @@ function AnnouncementToolbar({
 
 // ─── 列表列定义 ───────────────────────────────────────────────────────────────
 
-const ANNOUNCEMENT_COLUMNS: readonly DataTableColumn<AnnouncementRecord>[] = [
-  { id: "title", header: "标题", cell: (item) => item.title },
-  {
-    id: "type",
-    header: "类型",
-    align: "center",
-    cell: (item) => (
-      <StatusBadge tone={ANNOUNCEMENT_TYPE_TONE[item.type]}>
-        {TYPE_LABELS[item.type]}
-      </StatusBadge>
-    ),
-  },
-  {
-    id: "scope",
-    header: "对象范围",
-    cell: (item) => SCOPE_LABELS[item.targetScope],
-  },
-  {
-    id: "status",
-    header: "状态",
-    align: "center",
-    cell: (item) => (
-      <StatusBadge tone={ANNOUNCEMENT_STATUS_TONE[item.status]}>
-        {STATUS_LABELS[item.status]}
-      </StatusBadge>
-    ),
-  },
-  {
-    id: "published",
-    header: "发布时间",
-    cell: (item) => (item.publishedAt ? formatDate(item.publishedAt) : "-"),
-  },
-  {
-    id: "expires",
-    header: "到期时间",
-    cell: (item) => (item.expiresAt ? formatDate(item.expiresAt) : "-"),
-  },
-];
+/* 从模块级常量改成收 `locale` 的工厂：常量在模块加载时就求值了，那一刻
+   没有任何运行时上下文，而列里的日期要按界面语言排。 */
+function announcementColumns(
+  locale: string,
+): readonly DataTableColumn<AnnouncementRecord>[] {
+  return [
+    { id: "title", header: "标题", cell: (item) => item.title },
+    {
+      id: "type",
+      header: "类型",
+      align: "center",
+      cell: (item) => (
+        <StatusBadge tone={ANNOUNCEMENT_TYPE_TONE[item.type]}>
+          {TYPE_LABELS[item.type]}
+        </StatusBadge>
+      ),
+    },
+    {
+      id: "scope",
+      header: "对象范围",
+      cell: (item) => SCOPE_LABELS[item.targetScope],
+    },
+    {
+      id: "status",
+      header: "状态",
+      align: "center",
+      cell: (item) => (
+        <StatusBadge tone={ANNOUNCEMENT_STATUS_TONE[item.status]}>
+          {STATUS_LABELS[item.status]}
+        </StatusBadge>
+      ),
+    },
+    {
+      id: "published",
+      header: "发布时间",
+      cell: (item) =>
+        item.publishedAt ? formatDate(item.publishedAt, locale) : "-",
+    },
+    {
+      id: "expires",
+      header: "到期时间",
+      cell: (item) =>
+        item.expiresAt ? formatDate(item.expiresAt, locale) : "-",
+    },
+  ];
+}
 
 function announcementActions(
   item: AnnouncementRecord,
@@ -428,6 +436,7 @@ function announcementActions(
 // ─── 子组件：卡片视图 ──────────────────────────────────────────────────────────
 
 function AnnouncementCards({ items }: { items: AnnouncementRecord[] }) {
+  const locale = useLocale();
   return (
     <div className="vx-announcement-cards">
       {items.map((item) => (
@@ -444,7 +453,9 @@ function AnnouncementCards({ items }: { items: AnnouncementRecord[] }) {
           <p className="vx-announcement-card__content">{item.content}</p>
           <div className="vx-announcement-card__meta">
             <span>{SCOPE_LABELS[item.targetScope]}</span>
-            {item.publishedAt && <span>{formatDate(item.publishedAt)}</span>}
+            {item.publishedAt && (
+              <span>{formatDate(item.publishedAt, locale)}</span>
+            )}
           </div>
         </div>
       ))}
@@ -571,6 +582,10 @@ function AnnouncementFormDialog({
 // ─── 主组件 ───────────────────────────────────────────────────────────────────
 
 export function AnnouncementsPage() {
+  const locale = useLocale();
+  /* 钉在 locale 上：工厂每次调用都新建数组，而这套列此前是模块常量、
+     身份稳定。不 memo 等于每次渲染换一套列。 */
+  const tableColumns = useMemo(() => announcementColumns(locale), [locale]);
   const tShared = useTranslations();
   const { toast } = useToast();
   const withLabels = useConfirmLabels();
@@ -734,7 +749,7 @@ export function AnnouncementsPage() {
             <EmptyState title="公告读取失败" description={loadError} />
           ) : viewMode === "list" ? (
             <DataTable
-              columns={ANNOUNCEMENT_COLUMNS}
+              columns={tableColumns}
               rows={pageItems}
               rowKey={(item) => item.id}
               loading={loading}

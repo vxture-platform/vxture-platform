@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ActionButton,
   DataTable,
@@ -22,10 +22,12 @@ import type { NotificationLogRecord } from "@/entities/console";
 import { exportRowsToCsv, type CsvColumn } from "@/lib/exportCsv";
 import { PageHeader } from "@/modules/shared/PageHeader";
 
-function formatDateTime(value: string) {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——中文
+   `2026/08/18`，英文 `08/18/2026`。同一串数字，读出来是两个日期。 */
+function formatDateTime(value: string, locale: string) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleString("zh-CN", {
+  return d.toLocaleString(locale, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -84,43 +86,53 @@ const CSV_COLUMNS: readonly CsvColumn<NotificationLogRecord>[] = [
   { label: "错误", value: (item) => item.errorMessage ?? "" },
 ];
 
-const COLUMNS: readonly DataTableColumn<NotificationLogRecord>[] = [
-  {
-    id: "createdAt",
-    header: "时间",
-    cell: (item) => formatDateTime(item.createdAt),
-  },
-  {
-    id: "channel",
-    header: "渠道",
-    cell: (item) => CHANNEL_LABELS[item.channel] ?? item.channel,
-  },
-  {
-    id: "template",
-    header: "模板",
-    cell: (item) => (
-      <TableTitleCell
-        title={item.templateCode}
-        {...(item.referenceType ? { description: item.referenceType } : {})}
-      />
-    ),
-  },
-  { id: "recipient", header: "接收方", cell: (item) => item.recipient },
-  {
-    id: "status",
-    header: "状态",
-    align: "center",
-    cell: (item) => (
-      <StatusBadge tone={statusTone(item.status)}>
-        {STATUS_LABELS[item.status] ?? item.status}
-        {item.retryCount > 0 ? ` ·${item.retryCount}` : ""}
-      </StatusBadge>
-    ),
-  },
-  { id: "tenant", header: "租户", cell: (item) => item.tenantName ?? "-" },
-];
+/* 从模块级常量改成收 `locale` 的工厂：常量在模块加载时就求值了，那一刻
+   没有任何运行时上下文，而列里的日期要按界面语言排。 */
+function columnsOf(
+  locale: string,
+): readonly DataTableColumn<NotificationLogRecord>[] {
+  return [
+    {
+      id: "createdAt",
+      header: "时间",
+      cell: (item) => formatDateTime(item.createdAt, locale),
+    },
+    {
+      id: "channel",
+      header: "渠道",
+      cell: (item) => CHANNEL_LABELS[item.channel] ?? item.channel,
+    },
+    {
+      id: "template",
+      header: "模板",
+      cell: (item) => (
+        <TableTitleCell
+          title={item.templateCode}
+          {...(item.referenceType ? { description: item.referenceType } : {})}
+        />
+      ),
+    },
+    { id: "recipient", header: "接收方", cell: (item) => item.recipient },
+    {
+      id: "status",
+      header: "状态",
+      align: "center",
+      cell: (item) => (
+        <StatusBadge tone={statusTone(item.status)}>
+          {STATUS_LABELS[item.status] ?? item.status}
+          {item.retryCount > 0 ? ` ·${item.retryCount}` : ""}
+        </StatusBadge>
+      ),
+    },
+    { id: "tenant", header: "租户", cell: (item) => item.tenantName ?? "-" },
+  ];
+}
 
 export function NotificationLogsPage() {
+  const locale = useLocale();
+  /* 钉在 locale 上：工厂每次调用都新建数组，而这套列此前是模块常量、
+     身份稳定。不 memo 等于每次渲染换一套列。 */
+  const tableColumns = useMemo(() => columnsOf(locale), [locale]);
   const tShared = useTranslations();
   const { toast } = useToast();
   const [items, setItems] = useState<NotificationLogRecord[]>([]);
@@ -280,7 +292,7 @@ export function NotificationLogsPage() {
       }
       table={
         <DataTable
-          columns={COLUMNS}
+          columns={tableColumns}
           rows={pageItems}
           rowKey={(item) => item.id}
           loading={loading}

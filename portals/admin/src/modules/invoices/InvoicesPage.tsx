@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -188,26 +188,32 @@ function matchesDeliveryFilter(
   return invoice.invoiceStatus === "finished";
 }
 
-const invoiceCsvColumns: CsvColumn<BillingInvoiceLedgerRecord>[] = [
-  { label: "发票号", value: (v) => v.invoiceNo },
-  { label: "发票抬头", value: (v) => v.invoiceTitle },
-  { label: "税号", value: (v) => v.taxNo ?? "" },
-  { label: "抬头类型", value: (v) => taxTypeLabel(v.invoiceTaxType) },
-  { label: "发票类型", value: (v) => invoiceTypeLabel(v.invoiceType) },
-  { label: "租户编码", value: (v) => v.tenantCode },
-  { label: "租户名称", value: (v) => v.tenantName },
-  { label: "关联账单", value: (v) => v.billNo },
-  { label: "订单编号", value: (v) => v.orderNo ?? "" },
-  { label: "币种", value: (v) => v.currency },
-  { label: "开票金额", value: (v) => v.invoiceAmount },
-  { label: "税额", value: (v) => v.taxAmount },
-  { label: "账单应收", value: (v) => v.billPayableAmount },
-  { label: "发票状态", value: (v) => invoiceStatusLabel(v.invoiceStatus) },
-  { label: "快递公司", value: (v) => v.expressCompany ?? "" },
-  { label: "快递单号", value: (v) => v.expressNo ?? "" },
-  { label: "开票时间", value: (v) => formatDate(v.issuedAt) },
-  { label: "审核人", value: (v) => v.auditorName },
-];
+/* 从模块级常量改成收 `locale` 的工厂：常量在模块加载时就求值了，那一刻
+   没有任何运行时上下文，而列里的日期要按界面语言排。 */
+function invoiceCsvColumns(
+  locale: string,
+): CsvColumn<BillingInvoiceLedgerRecord>[] {
+  return [
+    { label: "发票号", value: (v) => v.invoiceNo },
+    { label: "发票抬头", value: (v) => v.invoiceTitle },
+    { label: "税号", value: (v) => v.taxNo ?? "" },
+    { label: "抬头类型", value: (v) => taxTypeLabel(v.invoiceTaxType) },
+    { label: "发票类型", value: (v) => invoiceTypeLabel(v.invoiceType) },
+    { label: "租户编码", value: (v) => v.tenantCode },
+    { label: "租户名称", value: (v) => v.tenantName },
+    { label: "关联账单", value: (v) => v.billNo },
+    { label: "订单编号", value: (v) => v.orderNo ?? "" },
+    { label: "币种", value: (v) => v.currency },
+    { label: "开票金额", value: (v) => v.invoiceAmount },
+    { label: "税额", value: (v) => v.taxAmount },
+    { label: "账单应收", value: (v) => v.billPayableAmount },
+    { label: "发票状态", value: (v) => invoiceStatusLabel(v.invoiceStatus) },
+    { label: "快递公司", value: (v) => v.expressCompany ?? "" },
+    { label: "快递单号", value: (v) => v.expressNo ?? "" },
+    { label: "开票时间", value: (v) => formatDate(v.issuedAt, locale) },
+    { label: "审核人", value: (v) => v.auditorName },
+  ];
+}
 
 function InvoiceActionsMenu({
   invoice,
@@ -292,6 +298,7 @@ function InvoiceActionsMenu({
  * 值域着色表，整族改 Badge 归批 4，一次改动不跨两个语义面。
  */
 function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
+  const locale = useLocale();
   const tShared = useTranslations();
   const router = useRouter();
 
@@ -385,7 +392,7 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
           description={
             invoice.expressNo ??
             invoice.invoiceFileUrl ??
-            formatDate(invoice.sendAt)
+            formatDate(invoice.sendAt, locale)
           }
         />
       ),
@@ -403,6 +410,7 @@ function InvoiceCards({
     action: BillingInvoiceReceiptAction,
   ) => void;
 }) {
+  const locale = useLocale();
   const tShared = useTranslations();
   const router = useRouter();
 
@@ -469,7 +477,7 @@ function InvoiceCards({
           footer={
             <>
               <span className="truncate">
-                {formatDate(invoice.issuedAt)} · {invoice.auditorName}
+                {formatDate(invoice.issuedAt, locale)} · {invoice.auditorName}
               </span>
               <span className="shrink-0">
                 {invoice.sourceLabel === "offline"
@@ -485,6 +493,7 @@ function InvoiceCards({
 }
 
 export function InvoicesPage() {
+  const locale = useLocale();
   const tShared = useTranslations();
   const [invoices, setInvoices] = useState<BillingInvoiceLedgerRecord[]>([]);
   const [invoicesTruncated, setInvoicesTruncated] = useState(false);
@@ -621,7 +630,7 @@ export function InvoicesPage() {
     const rows = filteredInvoices.filter((invoice) =>
       selectedInvoiceIds.has(invoice.id),
     );
-    exportRowsToCsv("invoice-selected-export", invoiceCsvColumns, rows);
+    exportRowsToCsv("invoice-selected-export", invoiceCsvColumns(locale), rows);
   }
 
   function clearInvoiceSelection() {

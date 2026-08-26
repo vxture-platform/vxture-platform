@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   Badge,
@@ -162,6 +162,7 @@ function SubscriptionDetails({
 }: {
   subscription: SubscriptionOperationDetailRecord;
 }) {
+  const locale = useLocale();
   const tShared = useTranslations();
   const servicePlanHref = subscription.solutionAssociation.solutionCode
     ? `/service-plans/${encodeURIComponent(subscription.solutionAssociation.solutionCode)}/${encodeURIComponent(subscription.solutionAssociation.tierCode)}`
@@ -198,16 +199,16 @@ function SubscriptionDetails({
             {orUnset(subscription.operatorName)}
           </DetailRow>
           <DetailRow label="开通时间">
-            {orUnset(formatDate(subscription.startAt))}
+            {orUnset(formatDate(subscription.startAt, locale))}
           </DetailRow>
           <DetailRow label="到期时间">
-            {orUnset(formatDate(subscription.endAt))}
+            {orUnset(formatDate(subscription.endAt, locale))}
           </DetailRow>
           <DetailRow label="试用结束">
-            {orUnset(formatDate(subscription.trialEndAt))}
+            {orUnset(formatDate(subscription.trialEndAt, locale))}
           </DetailRow>
           <DetailRow label={tShared("columns.updatedAt")}>
-            {orUnset(formatDate(subscription.updatedAt))}
+            {orUnset(formatDate(subscription.updatedAt, locale))}
           </DetailRow>
         </DetailList>
       </section>
@@ -338,7 +339,7 @@ function SubscriptionDetails({
                 <strong>{event.title}</strong>
                 <p>{event.description}</p>
                 <small>
-                  {event.actor} · {formatDate(event.at)}
+                  {event.actor} · {formatDate(event.at, locale)}
                 </small>
               </div>
             </article>

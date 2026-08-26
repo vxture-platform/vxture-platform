@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   Button,
@@ -121,6 +121,7 @@ function ServicePlanDetails({
 }: {
   plan: ProductServicePlanDetailRecord;
 }) {
+  const locale = useLocale();
   const tShared = useTranslations();
   return (
     <section
@@ -142,7 +143,7 @@ function ServicePlanDetails({
           </DetailRow>
           <DetailRow label="负责团队">{orUnset(plan.ownerTeam)}</DetailRow>
           <DetailRow label={tShared("columns.updatedAt")}>
-            {orUnset(formatDate(plan.updatedAt))}
+            {orUnset(formatDate(plan.updatedAt, locale))}
           </DetailRow>
         </DetailList>
         <div className="vx-product-capability-description">

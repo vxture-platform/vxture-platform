@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -158,6 +158,7 @@ function UsageActionsMenu({ record }: { record: UsageMeteringRecord }) {
 
 /** 这一页的风险标已经是 DS `Tag`，不带业务色类，与批 4 无关。 */
 function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
+  const locale = useLocale();
   const router = useRouter();
 
   return [
@@ -229,7 +230,7 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
       cell: (record) => (
         <TableTitleCell
           title={record.cycleMonth}
-          description={formatDate(record.lastSyncedAt)}
+          description={formatDate(record.lastSyncedAt, locale)}
         />
       ),
     },
@@ -237,6 +238,7 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
 }
 
 function UsageCards({ records }: { records: UsageMeteringRecord[] }) {
+  const locale = useLocale();
   const router = useRouter();
 
   return (
@@ -290,7 +292,7 @@ function UsageCards({ records }: { records: UsageMeteringRecord[] }) {
           </div>
           <footer>
             <span>{record.cycleMonth}</span>
-            <strong>{formatDate(record.lastSyncedAt)}</strong>
+            <strong>{formatDate(record.lastSyncedAt, locale)}</strong>
           </footer>
         </article>
       ))}

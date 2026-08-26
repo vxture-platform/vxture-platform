@@ -50,7 +50,7 @@ import type {
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
 
@@ -244,6 +244,7 @@ function PlatformUserActionsMenu({
 function usePlatformUserColumns(
   t: ReturnType<typeof useTranslations>,
 ): DataTableColumn<PlatformAdminRecord>[] {
+  const locale = useLocale();
   const tShared = useTranslations();
   return [
     {
@@ -291,7 +292,11 @@ function usePlatformUserColumns(
       header: "最后登录",
       cell: (admin) => (
         <TableTitleCell
-          title={admin.lastLoginAt ? formatDate(admin.lastLoginAt) : EMPTY_MARK}
+          title={
+            admin.lastLoginAt
+              ? formatDate(admin.lastLoginAt, locale)
+              : EMPTY_MARK
+          }
           description={admin.lastLoginIp || EMPTY_MARK}
         />
       ),
@@ -316,6 +321,7 @@ function PlatformUsersCards({
   admins: PlatformAdminRecord[];
   t: ReturnType<typeof useTranslations>;
 }) {
+  const locale = useLocale();
   return (
     <div className="vx-tenant-directory-cards" aria-label="平台用户卡片">
       {admins.map((admin) => (
@@ -343,7 +349,9 @@ function PlatformUsersCards({
           <div className="vx-tenant-directory-card__metrics">
             <span>
               <b>
-                {admin.lastLoginAt ? formatDate(admin.lastLoginAt) : EMPTY_MARK}
+                {admin.lastLoginAt
+                  ? formatDate(admin.lastLoginAt, locale)
+                  : EMPTY_MARK}
               </b>
               <small>最后登录</small>
             </span>
@@ -390,6 +398,7 @@ function PlatformUserDetailDialog({
   roleLabel: string;
   onClose: () => void;
 }) {
+  const locale = useLocale();
   const tShared = useTranslations();
   return (
     /* 这是只读详情，不是表单：DialogForm 现在固定渲染「取消 + 提交」两个按钮，
@@ -435,7 +444,9 @@ function PlatformUserDetailDialog({
           <div>
             <dt>最后登录</dt>
             <dd>
-              {admin.lastLoginAt ? formatDate(admin.lastLoginAt) : EMPTY_MARK}
+              {admin.lastLoginAt
+                ? formatDate(admin.lastLoginAt, locale)
+                : EMPTY_MARK}
             </dd>
           </div>
           <div>
@@ -449,7 +460,9 @@ function PlatformUserDetailDialog({
           <div>
             <dt>创建时间</dt>
             <dd>
-              {admin.createdAt ? formatDate(admin.createdAt) : EMPTY_MARK}
+              {admin.createdAt
+                ? formatDate(admin.createdAt, locale)
+                : EMPTY_MARK}
             </dd>
           </div>
           <div className="vx-admin-permission-detail-dialog__wide">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -81,8 +81,10 @@ const TODO_TYPE_ICON: Record<TodoType, IconName> = {
   subscription: "star",
 };
 
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("zh-CN", {
+/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——中文
+   `2026/08/18`，英文 `08/18/2026`。同一串数字，读出来是两个日期。 */
+function formatDateTime(value: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -267,6 +269,7 @@ const CSV_COLUMNS: readonly CsvColumn<OpsTodoItem>[] = [
 ];
 
 export function OpsTodosPage() {
+  const locale = useLocale();
   const tShared = useTranslations();
   const router = useRouter();
   const [tenants, setTenants] = useState<TenantOperationRecord[]>([]);
@@ -581,7 +584,7 @@ export function OpsTodosPage() {
                         <>
                           <span>{item.tenantName}</span>
                           <span>{TODO_TYPE_LABEL[item.type]}</span>
-                          <span>{formatDateTime(item.updatedAt)}</span>
+                          <span>{formatDateTime(item.updatedAt, locale)}</span>
                           {item.tags.slice(0, 3).map((tag) => (
                             <Badge key={tag}>{tag}</Badge>
                           ))}
@@ -652,7 +655,7 @@ export function OpsTodosPage() {
                   id: "updated",
                   header: tShared("columns.updatedAt"),
                   align: "right",
-                  cell: (item) => formatDateTime(item.updatedAt),
+                  cell: (item) => formatDateTime(item.updatedAt, locale),
                 },
               ]}
               rows={pageTodos}

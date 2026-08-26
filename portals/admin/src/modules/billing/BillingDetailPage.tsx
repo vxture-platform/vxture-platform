@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -131,6 +131,7 @@ function paymentStatusLabel(status: string) {
 }
 
 function BillingSummary({ bill }: { bill: BillingDetailRecord }) {
+  const locale = useLocale();
   const tShared = useTranslations();
   return (
     <section className="vx-product-capability-summary">
@@ -187,7 +188,7 @@ function BillingSummary({ bill }: { bill: BillingDetailRecord }) {
             id: "cycle",
             help: "账单所属计费周期的起止日期。",
             label: "账期",
-            value: `${formatDate(bill.cycleStartDate)} - ${formatDate(bill.cycleEndDate)}`,
+            value: `${formatDate(bill.cycleStartDate, locale)} - ${formatDate(bill.cycleEndDate, locale)}`,
             tags: [cycleLabel(bill.billCycle)],
           },
         ]}
@@ -206,6 +207,7 @@ function BillingDetails({
     action: BillingInvoiceReceiptAction,
   ) => void;
 }) {
+  const locale = useLocale();
   const tShared = useTranslations();
   return (
     <section
@@ -226,16 +228,16 @@ function BillingDetails({
             {orUnset(cycleLabel(bill.billCycle))}
           </DetailRow>
           <DetailRow label="账期开始">
-            {orUnset(formatDate(bill.cycleStartDate))}
+            {orUnset(formatDate(bill.cycleStartDate, locale))}
           </DetailRow>
           <DetailRow label="账期结束">
-            {orUnset(formatDate(bill.cycleEndDate))}
+            {orUnset(formatDate(bill.cycleEndDate, locale))}
           </DetailRow>
           <DetailRow label="生成时间">
-            {orUnset(formatDate(bill.createdAt))}
+            {orUnset(formatDate(bill.createdAt, locale))}
           </DetailRow>
           <DetailRow label={tShared("columns.updatedAt")}>
-            {orUnset(formatDate(bill.updatedAt))}
+            {orUnset(formatDate(bill.updatedAt, locale))}
           </DetailRow>
           <DetailRow label="经办人">{orUnset(bill.operatorName)}</DetailRow>
           <DetailRow label="运营备注">
@@ -319,7 +321,7 @@ function BillingDetails({
             )}
           </DetailRow>
           <DetailRow label="收款时间">
-            {orUnset(formatDate(bill.paidAt))}
+            {orUnset(formatDate(bill.paidAt, locale))}
           </DetailRow>
           <DetailRow label="支付方式">{orUnset(bill.paymentMethod)}</DetailRow>
           <DetailRow label="交易流水">{orUnset(bill.transactionNo)}</DetailRow>
@@ -365,7 +367,7 @@ function BillingDetails({
                 <small>
                   {paySourceLabel(payment.paySource)} |{" "}
                   {paymentStatusLabel(payment.paymentStatus)} |{" "}
-                  {formatDate(payment.paidAt)}
+                  {formatDate(payment.paidAt, locale)}
                 </small>
                 <em>{formatCurrency(payment.paidAmount, payment.currency)}</em>
                 <p>{payment.remark ?? payment.operatorName}</p>
@@ -513,7 +515,7 @@ function BillingDetails({
                 <strong>{event.title}</strong>
                 <p>{event.description}</p>
                 <small>
-                  {event.actor} · {formatDate(event.at)}
+                  {event.actor} · {formatDate(event.at, locale)}
                 </small>
               </div>
             </article>

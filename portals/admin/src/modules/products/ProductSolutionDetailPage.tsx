@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   Badge,
@@ -130,6 +130,7 @@ function ProductSolutionDetails({
 }: {
   solution: ProductSolutionDetailRecord;
 }) {
+  const locale = useLocale();
   const tShared = useTranslations();
   return (
     <section
@@ -153,10 +154,10 @@ function ProductSolutionDetails({
           </DetailRow>
           <DetailRow label="负责团队">{orUnset(solution.ownerTeam)}</DetailRow>
           <DetailRow label="创建时间">
-            {orUnset(formatDate(solution.createdAt))}
+            {orUnset(formatDate(solution.createdAt, locale))}
           </DetailRow>
           <DetailRow label={tShared("columns.updatedAt")}>
-            {orUnset(formatDate(solution.updatedAt))}
+            {orUnset(formatDate(solution.updatedAt, locale))}
           </DetailRow>
         </DetailList>
       </section>

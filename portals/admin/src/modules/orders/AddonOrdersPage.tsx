@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { useLocale } from "next-intl";
 import {
   Banner,
   Button,
@@ -36,6 +37,7 @@ function money(yuan: string, currency: string): string {
 }
 
 export function AddonOrdersPage() {
+  const locale = useLocale();
   const { runWithStepUp } = useStepUp();
   const [orders, setOrders] = useState<AddonOrderOperationRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,7 +91,7 @@ export function AddonOrdersPage() {
             {o.orderNo}
           </span>
           <span className="text-body-sm text-muted-foreground tabular-nums">
-            {formatDate(o.createdAt)}
+            {formatDate(o.createdAt, locale)}
           </span>
         </span>
       ),

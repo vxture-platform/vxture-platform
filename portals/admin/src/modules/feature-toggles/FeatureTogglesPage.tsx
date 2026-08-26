@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ActionMenu,
   Button,
@@ -126,42 +126,52 @@ function overrideSummary(overrides: Record<string, boolean>): string {
   return n === 0 ? "无" : `${n} 个租户`;
 }
 
-const COLUMNS: readonly DataTableColumn<FeatureFlagRecord>[] = [
-  {
-    id: "key",
-    header: "开关键 / 分类",
-    cell: (item) => (
-      <TableTitleCell
-        title={item.flagKey}
-        description={`${item.category}${item.isArchived ? " · 已归档" : ""}`}
-      />
-    ),
-  },
-  { id: "environment", header: "环境", cell: (item) => item.environment },
-  {
-    id: "status",
-    header: "状态",
-    align: "center",
-    cell: (item) => (
-      <StatusBadge tone={item.isGloballyEnabled ? "success" : "neutral"}>
-        {item.isGloballyEnabled ? "已启用" : "已停用"}
-      </StatusBadge>
-    ),
-  },
-  {
-    id: "rollout",
-    header: "灰度",
-    align: "right",
-    cell: (item) => `${item.rolloutPercentage}%`,
-  },
-  {
-    id: "updatedAt",
-    header: "更新时间",
-    cell: (item) => formatDate(item.updatedAt),
-  },
-];
+/* 从模块级常量改成收 `locale` 的工厂：常量在模块加载时就求值了，那一刻
+   没有任何运行时上下文，而列里的日期要按界面语言排。 */
+function columnsOf(
+  locale: string,
+): readonly DataTableColumn<FeatureFlagRecord>[] {
+  return [
+    {
+      id: "key",
+      header: "开关键 / 分类",
+      cell: (item) => (
+        <TableTitleCell
+          title={item.flagKey}
+          description={`${item.category}${item.isArchived ? " · 已归档" : ""}`}
+        />
+      ),
+    },
+    { id: "environment", header: "环境", cell: (item) => item.environment },
+    {
+      id: "status",
+      header: "状态",
+      align: "center",
+      cell: (item) => (
+        <StatusBadge tone={item.isGloballyEnabled ? "success" : "neutral"}>
+          {item.isGloballyEnabled ? "已启用" : "已停用"}
+        </StatusBadge>
+      ),
+    },
+    {
+      id: "rollout",
+      header: "灰度",
+      align: "right",
+      cell: (item) => `${item.rolloutPercentage}%`,
+    },
+    {
+      id: "updatedAt",
+      header: "更新时间",
+      cell: (item) => formatDate(item.updatedAt, locale),
+    },
+  ];
+}
 
 export function FeatureTogglesPage() {
+  const locale = useLocale();
+  /* 钉在 locale 上：工厂每次调用都新建数组，而这套列此前是模块常量、
+     身份稳定。不 memo 等于每次渲染换一套列。 */
+  const tableColumns = useMemo(() => columnsOf(locale), [locale]);
   const tShared = useTranslations();
   const { toast } = useToast();
   const [items, setItems] = useState<FeatureFlagRecord[]>([]);
@@ -413,7 +423,7 @@ export function FeatureTogglesPage() {
         }
         table={
           <DataTable
-            columns={COLUMNS}
+            columns={tableColumns}
             rows={pageItems}
             rowKey={(item) => item.id}
             loading={loading}

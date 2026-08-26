@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ActionButton,
   ActionMenu,
@@ -289,6 +289,7 @@ interface AccountRowActions {
 function useAccountColumns(
   showTenantContext: boolean,
 ): DataTableColumn<AccountOperationRecord>[] {
+  const locale = useLocale();
   const tShared = useTranslations();
   return [
     {
@@ -368,7 +369,7 @@ function useAccountColumns(
       cell: (account) => (
         <TableTitleCell
           title={<Badge>{account.lastActiveLocation}</Badge>}
-          description={`${formatDate(account.lastActiveAt)} · ${formatNumber(account.loginCount30d)} 次`}
+          description={`${formatDate(account.lastActiveAt, locale)} · ${formatNumber(account.loginCount30d)} 次`}
         />
       ),
     },
@@ -384,6 +385,7 @@ function AccountCards({
   showTenantContext: boolean;
   actions: AccountRowActions;
 }) {
+  const locale = useLocale();
   return (
     <div className="vx-tenant-directory-cards" aria-label="账号卡片">
       {accounts.map((account) => (
@@ -446,7 +448,7 @@ function AccountCards({
                 ? accountTenantSummary(account).primaryName
                 : "平台用户"}
             </span>
-            <strong>{formatDate(account.lastActiveAt)}</strong>
+            <strong>{formatDate(account.lastActiveAt, locale)}</strong>
           </footer>
         </article>
       ))}

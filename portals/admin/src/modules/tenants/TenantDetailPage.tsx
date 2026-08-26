@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { FormEvent, ReactNode } from "react";
 import Link from "next/link";
 import {
@@ -601,8 +601,9 @@ function TenantMemberIdentity({ member }: { member: TenantOperationMember }) {
 }
 
 function TenantMemberStatus({ member }: { member: TenantOperationMember }) {
+  const locale = useLocale();
   const statusTimeValue = getMemberStatusTime(member);
-  const statusTime = formatDate(statusTimeValue);
+  const statusTime = formatDate(statusTimeValue, locale);
 
   return (
     <span className="vx-tenant-member-row__status">
@@ -620,11 +621,12 @@ function TenantMemberStatus({ member }: { member: TenantOperationMember }) {
 }
 
 function TenantMemberActiveAt({ member }: { member: TenantOperationMember }) {
+  const locale = useLocale();
   const location = resolveIpLocation(member.lastActiveIp);
 
   return (
     <span>
-      <strong>{formatDate(member.lastActiveAt)}</strong>
+      <strong>{formatDate(member.lastActiveAt, locale)}</strong>
       <small
         title={
           member.lastActiveIp ? `登录 IP ${member.lastActiveIp}` : "暂无登录 IP"
@@ -685,11 +687,12 @@ function TenantMemberCards({
   members: TenantMemberView[];
   actions: MemberActionHandlers;
 }) {
+  const locale = useLocale();
   return (
     <div className="vx-tenant-member-cards" aria-label="账号卡片">
       {members.map((member) => {
         const location = resolveIpLocation(member.lastActiveIp);
-        const statusTime = formatDate(getMemberStatusTime(member));
+        const statusTime = formatDate(getMemberStatusTime(member), locale);
 
         return (
           <article
@@ -728,7 +731,7 @@ function TenantMemberCards({
                 <small title={`注册激活时间 ${statusTime}`}>注册激活</small>
               </span>
               <span>
-                <strong>{formatDate(member.lastActiveAt)}</strong>
+                <strong>{formatDate(member.lastActiveAt, locale)}</strong>
                 <small
                   title={
                     member.lastActiveIp
@@ -1088,6 +1091,7 @@ function TenantSubscriptionsTab({
 }: {
   subscriptions: TenantOperationSubscription[];
 }) {
+  const locale = useLocale();
   return (
     <div className="vx-tenant-subscriptions">
       {subscriptions.map((subscription) => (
@@ -1116,7 +1120,7 @@ function TenantSubscriptionsTab({
             />
             <TenantKeyMetric
               label="续费时间"
-              value={formatDate(subscription.renewsAt)}
+              value={formatDate(subscription.renewsAt, locale)}
             />
           </div>
         </article>
@@ -1196,6 +1200,7 @@ function TenantModelsTab({
 }
 
 function TenantRiskTab({ tenant }: { tenant: TenantOperationRecord }) {
+  const locale = useLocale();
   return (
     <div className="vx-tenant-tab-grid vx-tenant-tab-grid--risk">
       <section className="vx-tenant-risk-panel">
@@ -1227,7 +1232,7 @@ function TenantRiskTab({ tenant }: { tenant: TenantOperationRecord }) {
               <strong>{event.action}</strong>
               <small>{event.actor}</small>
             </span>
-            <em>{formatDate(event.at)}</em>
+            <em>{formatDate(event.at, locale)}</em>
             <StatusBadge tone={AUDIT_RESULT_TONE[event.result]}>
               {auditResultLabel(event.result)}
             </StatusBadge>
@@ -1239,6 +1244,7 @@ function TenantRiskTab({ tenant }: { tenant: TenantOperationRecord }) {
 }
 
 function TenantTicketsTab({ tenant }: { tenant: TenantOperationRecord }) {
+  const locale = useLocale();
   if (!tenant.tickets.length) {
     return (
       <EmptyState
@@ -1264,7 +1270,7 @@ function TenantTicketsTab({ tenant }: { tenant: TenantOperationRecord }) {
           <StatusBadge tone={TICKET_STATUS_TONE[ticket.status]}>
             {ticketStatusLabel(ticket.status)}
           </StatusBadge>
-          <em>{formatDate(ticket.updatedAt)}</em>
+          <em>{formatDate(ticket.updatedAt, locale)}</em>
         </article>
       ))}
     </div>

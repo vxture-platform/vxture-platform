@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { CSSProperties } from "react";
 import {
   ActionButton,
@@ -740,6 +740,7 @@ function PermissionDetailDialog({
   parentPermission: PlatformAdminPermissionRecord | null;
   onClose: () => void;
 }) {
+  const locale = useLocale();
   const tShared = useTranslations();
   const statusIndicator = permissionStatusIndicator(permission);
 
@@ -807,7 +808,7 @@ function PermissionDetailDialog({
             <dt>{tShared("columns.updatedAt")}</dt>
             <dd>
               {permission.updatedAt
-                ? new Date(permission.updatedAt).toLocaleString("zh-CN")
+                ? new Date(permission.updatedAt).toLocaleString(locale)
                 : EMPTY_MARK}
             </dd>
           </div>

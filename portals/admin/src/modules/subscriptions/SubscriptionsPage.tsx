@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -248,6 +248,7 @@ function SubscriptionActionsMenu({
  * 业务值域着色表，整族改 Badge 归批 4，一次改动不跨两个语义面。
  */
 function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[] {
+  const locale = useLocale();
   const tShared = useTranslations();
   const router = useRouter();
 
@@ -309,7 +310,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
               {subscriptionStatusLabel(subscription.status)}
             </StatusBadge>
           }
-          description={`${formatDate(subscription.startAt)} - ${formatDate(subscription.endAt)}`}
+          description={`${formatDate(subscription.startAt, locale)} - ${formatDate(subscription.endAt, locale)}`}
         />
       ),
     },
@@ -350,6 +351,7 @@ function SubscriptionCards({
     action: SubscriptionOperationAction,
   ) => void;
 }) {
+  const locale = useLocale();
   const router = useRouter();
 
   return (
@@ -428,8 +430,8 @@ function SubscriptionCards({
           <footer>
             <span>{subscription.operationHint}</span>
             <strong>
-              {formatDate(subscription.startAt)} -{" "}
-              {formatDate(subscription.endAt)}
+              {formatDate(subscription.startAt, locale)} -{" "}
+              {formatDate(subscription.endAt, locale)}
             </strong>
           </footer>
         </article>

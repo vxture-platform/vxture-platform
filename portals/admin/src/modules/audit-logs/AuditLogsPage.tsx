@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useLocale } from "next-intl";
 import {
   ActionButton,
   DataTable,
@@ -199,55 +200,72 @@ function localInputToIso(value: string): string | undefined {
 
 // ─── 子组件：列表 ──────────────────────────────────────────────────────────────
 
-const AUDIT_COLUMNS: readonly DataTableColumn<AuditLogRecord>[] = [
-  {
-    id: "operator",
-    header: "操作员",
-    cell: (log) => (
-      <TableTitleCell
-        title={log.operatorName}
-        description={log.operatorEmail}
-      />
-    ),
-  },
-  {
-    id: "action",
-    header: "操作",
-    // 只写一次。`actionLabel` 曾是 BFF 拿 `row.action` 原样起的别名，标题与描述
-    // 因此逐字相同（`oidc.token_exchange.issued` 上下各一行）。没有译名就不装作有。
-    cell: (log) => <TableTitleCell title={log.action} />,
-  },
-  {
-    id: "target",
-    header: "对象",
-    cell: (log) =>
-      log.targetLabel ? (
-        <TableTitleCell title={log.targetLabel} description={log.targetType} />
-      ) : (
-        <span className="text-muted-foreground">{EMPTY_MARK}</span>
+/* 从模块级常量改成收 `locale` 的工厂：常量在模块加载时就求值了，那一刻
+   没有任何运行时上下文，而列里的日期要按界面语言排。 */
+function auditColumns(
+  locale: string,
+): readonly DataTableColumn<AuditLogRecord>[] {
+  return [
+    {
+      id: "operator",
+      header: "操作员",
+      cell: (log) => (
+        <TableTitleCell
+          title={log.operatorName}
+          description={log.operatorEmail}
+        />
       ),
-  },
-  { id: "module", header: "模块", cell: (log) => log.module },
-  {
-    id: "result",
-    header: "结果",
-    align: "center",
-    cell: (log) => (
-      <StatusBadge
-        tone={log.result === "success" ? "success" : "danger"}
-        {...(log.errorMessage ? { title: log.errorMessage } : {})}
-      >
-        {resultLabel(log.result)}
-      </StatusBadge>
-    ),
-  },
-  { id: "ip", header: "IP", cell: (log) => log.ip ?? EMPTY_MARK },
-  { id: "time", header: "时间", cell: (log) => formatDateTime(log.createdAt) },
-];
+    },
+    {
+      id: "action",
+      header: "操作",
+      // 只写一次。`actionLabel` 曾是 BFF 拿 `row.action` 原样起的别名，标题与描述
+      // 因此逐字相同（`oidc.token_exchange.issued` 上下各一行）。没有译名就不装作有。
+      cell: (log) => <TableTitleCell title={log.action} />,
+    },
+    {
+      id: "target",
+      header: "对象",
+      cell: (log) =>
+        log.targetLabel ? (
+          <TableTitleCell
+            title={log.targetLabel}
+            description={log.targetType}
+          />
+        ) : (
+          <span className="text-muted-foreground">{EMPTY_MARK}</span>
+        ),
+    },
+    { id: "module", header: "模块", cell: (log) => log.module },
+    {
+      id: "result",
+      header: "结果",
+      align: "center",
+      cell: (log) => (
+        <StatusBadge
+          tone={log.result === "success" ? "success" : "danger"}
+          {...(log.errorMessage ? { title: log.errorMessage } : {})}
+        >
+          {resultLabel(log.result)}
+        </StatusBadge>
+      ),
+    },
+    { id: "ip", header: "IP", cell: (log) => log.ip ?? EMPTY_MARK },
+    {
+      id: "time",
+      header: "时间",
+      cell: (log) => formatDateTime(log.createdAt, locale),
+    },
+  ];
+}
 
 // ─── 主组件 ───────────────────────────────────────────────────────────────────
 
 export function AuditLogsPage() {
+  const locale = useLocale();
+  /* 钉在 locale 上：工厂每次调用都新建一个数组，而这套列此前是模块常量、
+     身份稳定。不 memo 等于每次渲染换一套列。 */
+  const columns = useMemo(() => auditColumns(locale), [locale]);
   const [logs, setLogs] = useState<AuditLogRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -367,7 +385,7 @@ export function AuditLogsPage() {
       }
       table={
         <DataTable
-          columns={AUDIT_COLUMNS}
+          columns={columns}
           rows={pageLogs}
           rowKey={(log) => log.id}
           loading={loading}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -370,6 +370,7 @@ function PaymentActionsMenu({
  * 值域着色表，整族改 Badge 归批 4，一次改动不跨两个语义面。
  */
 function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
+  const locale = useLocale();
   const router = useRouter();
 
   return [
@@ -452,7 +453,7 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
               {paymentStatusLabel(payment.paymentStatus)}
             </StatusBadge>
           }
-          description={formatDate(payment.paidAt ?? payment.createdAt)}
+          description={formatDate(payment.paidAt ?? payment.createdAt, locale)}
         />
       ),
     },
@@ -486,6 +487,7 @@ function PaymentCards({
   onVerify: (payment: PaymentOperationRecord) => void;
   onReject: (payment: PaymentOperationRecord) => void;
 }) {
+  const locale = useLocale();
   const router = useRouter();
 
   return (
@@ -564,7 +566,9 @@ function PaymentCards({
           </div>
           <footer>
             <span>{payment.operatorName}</span>
-            <strong>{formatDate(payment.paidAt ?? payment.updatedAt)}</strong>
+            <strong>
+              {formatDate(payment.paidAt ?? payment.updatedAt, locale)}
+            </strong>
           </footer>
         </article>
       ))}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -303,6 +303,7 @@ function ServicePlanGroupBlock({
     tierCode: ProductSolutionTier["tierCode"],
   ) => void;
 }) {
+  const locale = useLocale();
   const partnerProductCount = group.solution.products.filter(
     (product) => product.source === "partner",
   ).length;
@@ -335,7 +336,7 @@ function ServicePlanGroupBlock({
         <span>{formatNumber(group.tiers.length)} 套餐版本</span>
         <span>{formatNumber(group.solution.subscriptionCount)} 订阅</span>
         <span>{formatMoney(group.solution.monthlyRevenue)} / 月</span>
-        <span>{formatDate(group.solution.updatedAt)} 更新</span>
+        <span>{formatDate(group.solution.updatedAt, locale)} 更新</span>
       </div>
 
       <div

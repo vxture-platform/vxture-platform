@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -238,27 +238,31 @@ function billingSearchText(record: BillingRecord) {
     .toLowerCase();
 }
 
-const billingCsvColumns: CsvColumn<BillingRecord>[] = [
-  { label: "账单编号", value: (b) => b.billNo },
-  { label: "订单编号", value: (b) => b.orderNo },
-  { label: "租户编码", value: (b) => b.tenantCode },
-  { label: "租户名称", value: (b) => b.tenantName },
-  { label: "套餐", value: (b) => b.tierName ?? "" },
-  { label: "账单类型", value: (b) => billTypeLabel(b.billType) },
-  { label: "计费周期", value: (b) => cycleLabel(b.billCycle) },
-  { label: "周期起", value: (b) => formatDate(b.cycleStartDate) },
-  { label: "周期止", value: (b) => formatDate(b.cycleEndDate) },
-  { label: "币种", value: (b) => b.currency },
-  { label: "应收金额", value: (b) => b.payableAmount },
-  { label: "原价金额", value: (b) => b.totalAmount },
-  { label: "减免金额", value: (b) => b.discountAmount },
-  { label: "已收金额", value: (b) => b.paidAmount },
-  { label: "已开票金额", value: (b) => b.invoicedAmount },
-  { label: "收款状态", value: (b) => billStatusLabel(b.billStatus) },
-  { label: "发票状态", value: (b) => invoiceStatusLabel(b.invoiceStatus) },
-  { label: "发票号", value: (b) => b.invoiceNo ?? "" },
-  { label: "经办人", value: (b) => b.operatorName },
-];
+/* 从模块级常量改成收 `locale` 的工厂：常量在模块加载时就求值了，那一刻
+   没有任何运行时上下文，而列里的日期要按界面语言排。 */
+function billingCsvColumns(locale: string): CsvColumn<BillingRecord>[] {
+  return [
+    { label: "账单编号", value: (b) => b.billNo },
+    { label: "订单编号", value: (b) => b.orderNo },
+    { label: "租户编码", value: (b) => b.tenantCode },
+    { label: "租户名称", value: (b) => b.tenantName },
+    { label: "套餐", value: (b) => b.tierName ?? "" },
+    { label: "账单类型", value: (b) => billTypeLabel(b.billType) },
+    { label: "计费周期", value: (b) => cycleLabel(b.billCycle) },
+    { label: "周期起", value: (b) => formatDate(b.cycleStartDate, locale) },
+    { label: "周期止", value: (b) => formatDate(b.cycleEndDate, locale) },
+    { label: "币种", value: (b) => b.currency },
+    { label: "应收金额", value: (b) => b.payableAmount },
+    { label: "原价金额", value: (b) => b.totalAmount },
+    { label: "减免金额", value: (b) => b.discountAmount },
+    { label: "已收金额", value: (b) => b.paidAmount },
+    { label: "已开票金额", value: (b) => b.invoicedAmount },
+    { label: "收款状态", value: (b) => billStatusLabel(b.billStatus) },
+    { label: "发票状态", value: (b) => invoiceStatusLabel(b.invoiceStatus) },
+    { label: "发票号", value: (b) => b.invoiceNo ?? "" },
+    { label: "经办人", value: (b) => b.operatorName },
+  ];
+}
 
 function BillingActionsMenu({
   bill,
@@ -337,6 +341,7 @@ function BillingActionsMenu({
  * 与缺色（starter / business）一起另算。
  */
 function useBillingColumns(): DataTableColumn<BillingRecord>[] {
+  const locale = useLocale();
   const router = useRouter();
 
   return [
@@ -346,7 +351,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
       cell: (bill) => (
         <TableTitleCell
           title={bill.billNo}
-          description={`${cycleLabel(bill.billCycle)} · ${formatDate(bill.cycleStartDate)} - ${formatDate(bill.cycleEndDate)}`}
+          description={`${cycleLabel(bill.billCycle)} · ${formatDate(bill.cycleStartDate, locale)} - ${formatDate(bill.cycleEndDate, locale)}`}
           onTitleClick={() =>
             router.push(`/billing/${encodeURIComponent(bill.id)}`)
           }
@@ -471,6 +476,7 @@ function BillingCards({
   bills: BillingRecord[];
   onSyncInvoice: (bill: BillingRecord) => void;
 }) {
+  const locale = useLocale();
   const tShared = useTranslations();
   const router = useRouter();
 
@@ -527,8 +533,8 @@ function BillingCards({
           footer={
             <>
               <span className="truncate">
-                {formatDate(bill.cycleStartDate)} -{" "}
-                {formatDate(bill.cycleEndDate)}
+                {formatDate(bill.cycleStartDate, locale)} -{" "}
+                {formatDate(bill.cycleEndDate, locale)}
               </span>
               <span className="shrink-0">{bill.operatorName}</span>
             </>
@@ -540,6 +546,7 @@ function BillingCards({
 }
 
 export function BillingPage() {
+  const locale = useLocale();
   const tShared = useTranslations();
   const [bills, setBills] = useState<BillingRecord[]>([]);
   const [billsTruncated, setBillsTruncated] = useState(false);
@@ -692,7 +699,7 @@ export function BillingPage() {
 
   function handleExportSelected() {
     const rows = filteredBills.filter((bill) => selectedBillIds.has(bill.id));
-    exportRowsToCsv("billing-selected-export", billingCsvColumns, rows);
+    exportRowsToCsv("billing-selected-export", billingCsvColumns(locale), rows);
   }
 
   function clearBillSelection() {

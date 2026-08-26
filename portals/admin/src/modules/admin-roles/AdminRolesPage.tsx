@@ -49,7 +49,7 @@ import type {
   PlatformPermissionType,
   PlatformRoleRecord,
 } from "@/entities/console";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import {
@@ -731,6 +731,7 @@ function useAdminRoleColumns(
   roleLabels: Map<string, string>,
   t: ReturnType<typeof useTranslations>,
 ): DataTableColumn<PlatformRoleRecord>[] {
+  const locale = useLocale();
   const tShared = useTranslations();
   const labelOf = (role: PlatformRoleRecord) =>
     roleLabels.get(role.id) ?? role.nameEn ?? role.roleCode ?? EMPTY_MARK;
@@ -786,7 +787,7 @@ function useAdminRoleColumns(
       cell: (role) => (
         <TableTitleCell
           title={role.createdByName || EMPTY_MARK}
-          description={formatDate(role.createdAt)}
+          description={formatDate(role.createdAt, locale)}
         />
       ),
     },
@@ -814,6 +815,7 @@ function AdminRoleCards({
   onToggle: (role: PlatformRoleRecord) => void;
   onDelete: (role: PlatformRoleRecord) => Promise<void>;
 }) {
+  const locale = useLocale();
   const tShared = useTranslations();
   return (
     <div
@@ -879,7 +881,7 @@ function AdminRoleCards({
               <small>成员</small>
             </span>
             <span>
-              <b>{formatDate(role.createdAt)}</b>
+              <b>{formatDate(role.createdAt, locale)}</b>
               <small>{tShared("actions.create")}</small>
             </span>
           </div>

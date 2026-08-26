@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   Badge,
@@ -194,6 +194,7 @@ function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
 }
 
 function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
+  const locale = useLocale();
   const tShared = useTranslations();
   return (
     <section
@@ -215,13 +216,13 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
           </DetailRow>
           <DetailRow label="支付方式">{orUnset(order.payMethod)}</DetailRow>
           <DetailRow label="创建时间">
-            {orUnset(formatDate(order.createdAt))}
+            {orUnset(formatDate(order.createdAt, locale))}
           </DetailRow>
           <DetailRow label="确认时间">
-            {orUnset(formatDate(order.confirmedAt))}
+            {orUnset(formatDate(order.confirmedAt, locale))}
           </DetailRow>
           <DetailRow label={tShared("columns.updatedAt")}>
-            {orUnset(formatDate(order.updatedAt))}
+            {orUnset(formatDate(order.updatedAt, locale))}
           </DetailRow>
         </DetailList>
       </section>
@@ -334,7 +335,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
                 <small>
                   {paySourceLabel(payment.paySource)} |{" "}
                   {paymentStatusLabel(payment.paymentStatus)} |{" "}
-                  {formatDate(payment.paidAt)}
+                  {formatDate(payment.paidAt, locale)}
                 </small>
                 <em>{formatCurrency(payment.paidAmount, payment.currency)}</em>
                 <p>{payment.remark ?? payment.operatorName}</p>
@@ -379,7 +380,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
                 <strong>{event.title}</strong>
                 <p>{event.description}</p>
                 <small>
-                  {event.actor} · {formatDate(event.at)}
+                  {event.actor} · {formatDate(event.at, locale)}
                 </small>
               </div>
             </article>
@@ -391,6 +392,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
 }
 
 export function OrderDetailPage({ orderId }: { orderId: string }) {
+  const locale = useLocale();
   const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
   const [order, setOrder] = useState<OrderOperationDetailRecord | null>(null);
@@ -741,7 +743,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                 </div>
                 <div>
                   <Label>申报时间</Label>
-                  <p>{formatDate(order.declaredPayment.declaredAt)}</p>
+                  <p>{formatDate(order.declaredPayment.declaredAt, locale)}</p>
                 </div>
                 <div>
                   <Label>备注</Label>

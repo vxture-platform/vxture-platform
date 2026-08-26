@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   Badge,
@@ -145,6 +145,7 @@ function ProductCapabilityDetails({
 }: {
   product: ProductCapabilityRecord;
 }) {
+  const locale = useLocale();
   const tShared = useTranslations();
   return (
     <section
@@ -170,10 +171,10 @@ function ProductCapabilityDetails({
           </DetailRow>
           <DetailRow label="负责团队">{orUnset(product.ownerTeam)}</DetailRow>
           <DetailRow label="创建时间">
-            {orUnset(formatDate(product.createdAt))}
+            {orUnset(formatDate(product.createdAt, locale))}
           </DetailRow>
           <DetailRow label={tShared("columns.updatedAt")}>
-            {orUnset(formatDate(product.updatedAt))}
+            {orUnset(formatDate(product.updatedAt, locale))}
           </DetailRow>
         </DetailList>
       </section>
@@ -247,7 +248,7 @@ function ProductCapabilityDetails({
           <DetailRow label="最近检测">
             {orUnset(
               product.integration.lastCheckedAt
-                ? formatDate(product.integration.lastCheckedAt)
+                ? formatDate(product.integration.lastCheckedAt, locale)
                 : "未检测",
             )}
           </DetailRow>

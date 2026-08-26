@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -182,6 +182,7 @@ function CapabilityTags({
 function useProductSolutionColumns(
   onOpenDetails: (solutionCode: string) => void,
 ): DataTableColumn<ProductSolutionRecord>[] {
+  const locale = useLocale();
   return [
     {
       id: "solution",
@@ -247,7 +248,7 @@ function useProductSolutionColumns(
               ))}
             </span>
           }
-          description={`${formatNumber(solution.tiers.length)} 个版本 | ${formatDate(solution.updatedAt)} 更新`}
+          description={`${formatNumber(solution.tiers.length)} 个版本 | ${formatDate(solution.updatedAt, locale)} 更新`}
         />
       ),
     },

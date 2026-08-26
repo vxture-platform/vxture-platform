@@ -8,7 +8,7 @@ import {
   type FormEvent,
 } from "react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ActionButton,
   ActionMenu,
@@ -171,10 +171,13 @@ function verificationSearchText(tenant: TenantOperationRecord) {
     .toLowerCase();
 }
 
-function verificationTimeText(tenant: TenantOperationRecord) {
+/* 收 `locale` 往下传：它自己是纯函数，但里头调的 `formatDate` 现在按语言
+   排日期。这是「模块级辅助函数拿不到运行时上下文」的标准形态——上提到
+   调用点由组件传。 */
+function verificationTimeText(tenant: TenantOperationRecord, locale: string) {
   if (tenant.verifiedStatus === "verified")
     return tenant.verifiedAt
-      ? `通过 ${formatDate(tenant.verifiedAt)}`
+      ? `通过 ${formatDate(tenant.verifiedAt, locale)}`
       : "已通过";
   if (tenant.verifiedStatus === "pending")
     return `等待 ${formatNumber(daysSince(tenant.verificationSubmittedAt))} 天`;
@@ -251,6 +254,7 @@ const VERIFIED_TONE: Record<
 };
 
 function useVerificationColumns(): DataTableColumn<VerificationRow>[] {
+  const locale = useLocale();
   const router = useRouter();
 
   return [
@@ -322,10 +326,10 @@ function useVerificationColumns(): DataTableColumn<VerificationRow>[] {
         <TableTitleCell
           title={
             tenant.verificationSubmittedAt
-              ? formatDate(tenant.verificationSubmittedAt)
+              ? formatDate(tenant.verificationSubmittedAt, locale)
               : "未提交"
           }
-          description={verificationTimeText(tenant)}
+          description={verificationTimeText(tenant, locale)}
         />
       ),
     },
@@ -343,6 +347,7 @@ function VerificationCards({
   onApprove: (row: VerificationRow) => void;
   onReject: (row: VerificationRow) => void;
 }) {
+  const locale = useLocale();
   const router = useRouter();
 
   return (
@@ -411,7 +416,7 @@ function VerificationCards({
               <span>
                 {tenant.industry} · {tenant.scale}
               </span>
-              <strong>{verificationTimeText(tenant)}</strong>
+              <strong>{verificationTimeText(tenant, locale)}</strong>
             </footer>
           </article>
         );
