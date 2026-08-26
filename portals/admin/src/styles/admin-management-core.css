@@ -24,11 +24,6 @@
   margin: 0;
 }
 
-.vx-admin-roles-summary,
-.vx-admin-permissions-summary {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
 .vx-tenant-toolbar {
   min-width: 0;
   display: flex;
@@ -45,7 +40,3 @@
 
 /* 只留宽度。外观、内边距、箭头都归 DS 的 NativeSelect——这里原本自绘了第二个
    箭头（data-uri 的 chevron），与件自带的那个重叠成两个（owner 2026-08-06 实测）。 */
-
-.vx-tenant-toolbar__spacer {
-  flex: 1 1 auto;
-}

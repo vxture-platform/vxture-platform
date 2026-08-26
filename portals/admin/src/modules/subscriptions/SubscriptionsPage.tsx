@@ -12,10 +12,11 @@ import {
   DataTable,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
+  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -59,7 +60,6 @@ import {
   formatDate,
   formatMoney,
   formatNumber,
-  joinClasses,
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
 import { useConfirmLabels } from "@/modules/shared/destructive";
@@ -161,7 +161,7 @@ function SubscriptionActionsMenu({
 
   return (
     <div
-      className="vx-tenant-actions"
+      className="relative z-[1] inline-flex justify-self-end"
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
@@ -355,88 +355,68 @@ function SubscriptionCards({
   const router = useRouter();
 
   return (
-    <div
-      className="vx-tenant-directory-cards vx-subscription-cards"
-      aria-label="租户订阅运营卡片"
-    >
+    <ListCardGrid aria-label="租户订阅运营卡片">
       {subscriptions.map((subscription) => (
-        <article
+        <MetricListCard
           key={subscription.id}
-          className={joinClasses(
-            "vx-tenant-directory-card",
-            `vx-subscription-card--${subscription.status}`,
-          )}
-          role="button"
-          tabIndex={0}
-          onClick={() =>
-            router.push(`/subscriptions/${encodeURIComponent(subscription.id)}`)
-          }
-          onKeyDown={(event) => {
-            if (event.key === "Enter")
-              router.push(
-                `/subscriptions/${encodeURIComponent(subscription.id)}`,
-              );
-          }}
-        >
-          <header>
-            <Icon
-              name={
-                subscription.tenantType === "company" ? "buildings" : "user"
-              }
-              size="lg"
-              fallback="placeholder"
-            />
-            <div>
-              <strong>{subscription.tenantName}</strong>
-              <span>
-                {subscription.tenantCode} · {typeLabel(subscription.tenantType)}
-              </span>
-            </div>
+          icon={subscription.tenantType === "company" ? "buildings" : "user"}
+          title={subscription.tenantName}
+          description={`${subscription.tenantCode} · ${typeLabel(subscription.tenantType)}`}
+          tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
+          actions={
             <SubscriptionActionsMenu
               subscription={subscription}
               onAction={onAction}
             />
-          </header>
-          <div className="vx-tenant-directory-card__badges">
-            <StatusBadge
-              tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
-            >
-              {subscriptionStatusLabel(subscription.status)}
-            </StatusBadge>
-            <Badge className={tierBadgeClass(subscription.tierCode)}>
-              {subscription.tierName}
-            </Badge>
-            <StatusBadge tone={QUOTA_RISK_TONE[subscription.quota.risk]}>
-              {quotaRiskLabel(subscription.quota.risk)}
-            </StatusBadge>
-          </div>
-          <p className="vx-subscription-card__solution">
-            {subscription.solutionName} · {subscription.servicePlanName}
-          </p>
-          <div className="vx-tenant-directory-card__metrics">
-            <span>
-              <b>{formatNumber(subscription.quota.usageRate)}%</b>
-              <small>配额消耗</small>
-            </span>
-            <span>
-              <b>{formatNumber(subscription.quota.maxUsers)}</b>
-              <small>席位</small>
-            </span>
-            <span>
-              <b>{formatMoney(subscription.monthlyRevenue)}</b>
-              <small>月收入</small>
-            </span>
-          </div>
-          <footer>
-            <span>{subscription.operationHint}</span>
-            <strong>
-              {formatDate(subscription.startAt, locale)} -{" "}
-              {formatDate(subscription.endAt, locale)}
-            </strong>
-          </footer>
-        </article>
+          }
+          badges={
+            <>
+              <StatusBadge
+                tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
+              >
+                {subscriptionStatusLabel(subscription.status)}
+              </StatusBadge>
+              <Badge className={tierBadgeClass(subscription.tierCode)}>
+                {subscription.tierName}
+              </Badge>
+              <StatusBadge tone={QUOTA_RISK_TONE[subscription.quota.risk]}>
+                {quotaRiskLabel(subscription.quota.risk)}
+              </StatusBadge>
+            </>
+          }
+          note={`${subscription.solutionName} · ${subscription.servicePlanName}`}
+          metrics={[
+            {
+              key: "quota",
+              value: `${formatNumber(subscription.quota.usageRate)}%`,
+              label: "配额消耗",
+            },
+            {
+              key: "seats",
+              value: formatNumber(subscription.quota.maxUsers),
+              label: "席位",
+            },
+            {
+              key: "revenue",
+              value: formatMoney(subscription.monthlyRevenue),
+              label: "月收入",
+            },
+          ]}
+          footer={
+            <>
+              <span>{subscription.operationHint}</span>
+              <strong>
+                {formatDate(subscription.startAt, locale)} -{" "}
+                {formatDate(subscription.endAt, locale)}
+              </strong>
+            </>
+          }
+          onClick={() =>
+            router.push(`/subscriptions/${encodeURIComponent(subscription.id)}`)
+          }
+        />
       ))}
-    </div>
+    </ListCardGrid>
   );
 }
 
@@ -826,7 +806,7 @@ export function SubscriptionsPage() {
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
-              <header className="vx-tenant-directory__header">
+              <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
                 <span>{tShared("common.loading")}</span>
               </header>
             ) : null}

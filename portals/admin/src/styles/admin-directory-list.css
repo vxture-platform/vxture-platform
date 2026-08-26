@@ -9,9 +9,3 @@
   font-size: var(--body-md-font-size);
   font-weight: 400;
 }
-.vx-tenant-directory-card__badges {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  flex-wrap: wrap;
-}

@@ -163,7 +163,7 @@ function TicketActionsMenu({
 
   return (
     <div
-      className="vx-tenant-actions"
+      className="relative z-[1] inline-flex justify-self-end"
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
@@ -901,7 +901,7 @@ export function TicketsPage() {
             className="grid min-w-0 max-w-full gap-xs vx-ticket-directory"
             aria-label="工单列表"
           >
-            <header className="vx-tenant-directory__header">
+            <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
               <strong>工单队列</strong>
               <span>{formatNumber(visibleTickets.length)} 条匹配</span>
             </header>

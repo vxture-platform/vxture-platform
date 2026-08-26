@@ -44,20 +44,6 @@
   flex: 0 0 auto;
 }
 
-.vx-admin-permission-tree-node__title-row {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: var(--vx-admin-permission-track-175r) var(
-      --vx-admin-permission-track-175r
-    ) minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-sm) var(--space-md) var(--space-2xs);
-  padding-left: calc(
-    var(--space-md) + var(--permission-depth, 0) * var(--space-lg)
-  );
-}
-
 .vx-admin-permission-tree-node__toggle {
   width: var(--spacing-icon-lg);
   height: var(--spacing-icon-lg);
@@ -78,10 +64,6 @@
 .vx-admin-permission-tree-node__toggle:not(:disabled):hover {
   background: transparent;
   color: var(--vx-color-neutral-700);
-}
-
-.vx-admin-permission-tree-node__title-row > svg {
-  color: var(--vx-color-neutral-500);
 }
 
 .vx-admin-permission-tree-node__title {

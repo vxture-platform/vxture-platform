@@ -1,16 +1,5 @@
 /* Admin role permission dialog surface styles. */
 
-.vx-admin-role-permission-dialog {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-index-modal);
-  display: grid;
-  place-items: center;
-  padding: var(--space-lg);
-  background: color-mix(in srgb, var(--vx-color-neutral-900) 22%, transparent);
-  backdrop-filter: blur(var(--vx-admin-roles-effect-8p));
-}
-
 .vx-admin-role-permission-dialog__panel {
   width: min(100%, var(--vx-admin-roles-size-56r));
   max-height: min(
@@ -78,22 +67,6 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2xs);
-}
-
-.vx-admin-role-permission-dialog__close {
-  width: var(--spacing-icon-xl);
-  display: inline-grid;
-  place-items: center;
-  border: 0;
-  border-radius: var(--vx-radius-lg);
-  background: transparent;
-  color: var(--vx-color-neutral-500);
-  cursor: pointer;
-}
-
-.vx-admin-role-permission-dialog__close:hover {
-  background: var(--vx-color-neutral-surface);
-  color: var(--vx-color-neutral-700);
 }
 
 .vx-admin-role-permission-dialog__body {

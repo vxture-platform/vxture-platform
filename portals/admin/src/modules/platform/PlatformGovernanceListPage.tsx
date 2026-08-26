@@ -489,7 +489,7 @@ export function PlatformGovernanceListPage({
               }
             />
           ) : loading ? (
-            <header className="vx-tenant-directory__header">
+            <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
               <span>正在加载自治数据</span>
             </header>
           ) : records.length ? (

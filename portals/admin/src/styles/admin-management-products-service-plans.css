@@ -201,12 +201,6 @@
   grid-column: 1 / -1;
 }
 
-.vx-service-plan-tier-card .vx-tenant-actions {
-  position: absolute;
-  top: var(--space-sm);
-  right: 0;
-}
-
 .vx-service-plan-tier__identity {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;

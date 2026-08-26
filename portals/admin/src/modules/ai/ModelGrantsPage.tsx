@@ -787,7 +787,7 @@ export function ModelGrantsPage() {
                         {t(`status.${status}`)}
                       </StatusBadge>
                     </header>
-                    <div className="vx-tenant-directory-card__badges">
+                    <div className="flex flex-wrap items-center gap-xs">
                       <Badge>{modelName}</Badge>
                       <Badge>
                         {formatTokens(
@@ -856,7 +856,7 @@ export function ModelGrantsPage() {
       </div>
 
       <section className="grid min-w-0 vx-model-strategy-overrides">
-        <header className="vx-tenant-directory__header vx-model-strategy-overrides__header">
+        <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground vx-model-strategy-overrides__header">
           <strong>{t("overrides.title")}</strong>
           <span>
             {t("overrides.count", { count: filteredOverrides.length })}

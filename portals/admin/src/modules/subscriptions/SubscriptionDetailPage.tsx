@@ -565,7 +565,7 @@ export function SubscriptionDetailPage({
           <SubscriptionDetails subscription={subscription} />
         </>
       ) : (
-        <section className="vx-tenant-directory__header">
+        <section className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
           <span>{tShared("common.loading")}</span>
         </section>
       )}

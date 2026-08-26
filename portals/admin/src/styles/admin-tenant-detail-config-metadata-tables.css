@@ -50,9 +50,8 @@
     var(--tenant-line);
 }
 
-.vx-tenant-table--members .vx-tenant-table__header,
-
 .vx-tenant-table--models .vx-tenant-table__header,
+
 .vx-tenant-table--models .vx-tenant-table__row {
   grid-template-columns:
     minmax(var(--vx-admin-management-track-13r), 1.2fr) minmax(

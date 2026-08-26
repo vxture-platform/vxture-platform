@@ -235,7 +235,7 @@ function AccountActionsMenu({
   const isDisabled = account.status === "disabled";
   return (
     <div
-      className="vx-tenant-actions"
+      className="relative z-[1] inline-flex justify-self-end"
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
@@ -405,7 +405,7 @@ function AccountCards({
               onForceLogout={actions.onForceLogout}
             />
           </header>
-          <div className="vx-tenant-directory-card__badges">
+          <div className="flex flex-wrap items-center gap-xs">
             <StatusBadge tone={ACCOUNT_STATUS_TONE[account.status]}>
               {accountStatusLabel(account.status)}
             </StatusBadge>
@@ -788,7 +788,7 @@ export function AccountsPage({
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
-              <header className="vx-tenant-directory__header">
+              <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
                 <span>{tShared("common.loading")}</span>
               </header>
             ) : null}

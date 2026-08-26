@@ -32,24 +32,6 @@
   --tenant-row-tone: var(--vx-color-neutral-400);
 }
 
-.vx-subscription-card--active {
-  --tenant-row-tone: var(--tenant-green);
-}
-
-.vx-subscription-card--trial,
-.vx-subscription-card--expiring {
-  --tenant-row-tone: var(--tenant-amber);
-}
-
-.vx-subscription-card--overdue,
-.vx-subscription-card--suspended {
-  --tenant-row-tone: var(--tenant-rose);
-}
-
-.vx-subscription-card--cancelled {
-  --tenant-row-tone: var(--vx-color-neutral-400);
-}
-
 .vx-order-card--confirmed {
   --tenant-row-tone: var(--tenant-green);
 }

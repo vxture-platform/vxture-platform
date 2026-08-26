@@ -1,16 +1,5 @@
 /* Subscription list card styles. */
 
-.vx-subscription-card__solution {
-  margin: 0;
-  overflow: hidden;
-  color: var(--vx-color-neutral-700);
-  font-size: var(--body-sm-font-size);
-  font-weight: 400;
-  line-height: 1.55;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .vx-subscription-detail-links {
   justify-content: flex-start;
 }
@@ -108,10 +97,4 @@
   color: var(--success-text);
   font-size: var(--body-sm-font-size);
   font-weight: 400;
-}
-
-.vx-tenant-actions__menu
-  button.vx-subscription-menu-action--danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--destructive) 8%, transparent);
-  color: var(--tenant-rose);
 }

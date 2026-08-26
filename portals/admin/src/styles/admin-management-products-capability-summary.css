@@ -86,10 +86,3 @@
 }
 
 /* Product capability summary metric layout styles. */
-
-.vx-product-capability-summary__metrics {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-md) var(--space-lg);
-}

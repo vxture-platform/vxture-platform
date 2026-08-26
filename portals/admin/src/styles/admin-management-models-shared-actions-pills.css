@@ -7,16 +7,3 @@
   gap: var(--space-xs);
   flex-wrap: wrap;
 }
-
-.vx-admin-role-search {
-  width: clamp(
-    var(--vx-admin-management-size-12r-large),
-    15vw,
-    var(--vx-admin-management-size-18r-large)
-  );
-  flex-basis: clamp(
-    var(--vx-admin-management-size-12r-large),
-    15vw,
-    var(--vx-admin-management-size-18r-large)
-  );
-}

@@ -535,7 +535,7 @@ function MemberActionsMenu({
 
   return (
     <div
-      className="vx-tenant-actions vx-tenant-member-actions"
+      className="relative z-[1] inline-flex justify-self-end vx-tenant-member-actions"
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu

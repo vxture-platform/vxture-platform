@@ -173,11 +173,6 @@
   justify-self: center;
 }
 
-.vx-tenant-member-actions .vx-tenant-actions__menu {
-  top: 50%;
-  transform: translateY(-50%);
-}
-
 .vx-tenant-member-cards {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

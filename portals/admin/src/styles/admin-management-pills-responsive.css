@@ -21,11 +21,6 @@
 
 @media (max-width: 80rem) {
 
-  .vx-admin-roles-summary,
-  .vx-admin-permissions-summary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
   .vx-tenant-toolbar {
     flex-wrap: wrap;
   }
@@ -38,17 +33,10 @@
 @media (max-width: 960px) {
   .vx-tenant-directory-cards,
   .vx-tenant-directory-card__metrics,
-  .vx-tenant-detail__metrics,
   .vx-tenant-config-row--three,
   .vx-tenant-config-row--contact,
-  .vx-tenant-tab-grid--two,
   .vx-tenant-tab-grid--risk,
   .vx-tenant-subscription__metrics {
-    grid-template-columns: 1fr;
-  }
-
-  .vx-admin-roles-summary,
-  .vx-admin-permissions-summary {
     grid-template-columns: 1fr;
   }
 }
@@ -56,10 +44,6 @@
 @media (max-width: 960px) {
   .vx-tenant-toolbar {
     align-items: stretch;
-  }
-
-  .vx-tenant-toolbar__spacer {
-    display: none;
   }
 
 }
@@ -127,7 +111,6 @@
 
 @media (max-width: 960px) {
   .vx-product-capability-summary,
-  .vx-product-capability-summary__metrics,
   .vx-product-detail-list__row,
   .vx-product-detail-list--entitlements .vx-product-detail-list__row,
   .vx-offline-invoice-dialog__grid,

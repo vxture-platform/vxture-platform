@@ -58,8 +58,7 @@
   font-weight: 400;
 }
 
-.vx-admin-permission-tree-node__summary span,
-.vx-admin-permission-tree-node__code span {
+.vx-admin-permission-tree-node__summary span {
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;

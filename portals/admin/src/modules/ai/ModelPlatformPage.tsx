@@ -1106,7 +1106,7 @@ export function ModelPlatformPage() {
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
-              <header className="vx-tenant-directory__header">
+              <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
                 <span>{t("empty.loadingTitle")}</span>
               </header>
             ) : null}
@@ -1172,7 +1172,7 @@ export function ModelPlatformPage() {
                         />
                       </div>
                     </header>
-                    <div className="vx-tenant-directory-card__badges">
+                    <div className="flex flex-wrap items-center gap-xs">
                       {/* 厂商是类目（在线 / 私有部署），没有严重度——不给语气色。
                           原先的蓝/绿两档背景实测从未生效：那族 CSS 排在
                           `.vx-tenant-pill` 基类之前，同层同特异度被基类压死。 */}
@@ -1278,7 +1278,7 @@ export function ModelPlatformPage() {
                       />
                     </div>
                   </header>
-                  <div className="vx-tenant-directory-card__badges">
+                  <div className="flex flex-wrap items-center gap-xs">
                     <Badge>{provider.providerType}</Badge>
                     <StatusBadge tone={activeTone(isEnabled(provider.state))}>
                       {isEnabled(provider.state)
@@ -1361,7 +1361,7 @@ export function ModelPlatformPage() {
                         ]}
                       />
                     </header>
-                    <div className="vx-tenant-directory-card__badges">
+                    <div className="flex flex-wrap items-center gap-xs">
                       <Badge>{rule.currency}</Badge>
                       <StatusBadge tone={activeTone(isEnabled(rule.state))}>
                         {isEnabled(rule.state)
@@ -1495,7 +1495,7 @@ export function ModelPlatformPage() {
                         ]}
                       />
                     </header>
-                    <div className="vx-tenant-directory-card__badges">
+                    <div className="flex flex-wrap items-center gap-xs">
                       <Badge>{policy.tenantId ? "租户专属" : "全局默认"}</Badge>
                       <StatusBadge tone={activeTone(isEnabled(policy.state))}>
                         {isEnabled(policy.state)
