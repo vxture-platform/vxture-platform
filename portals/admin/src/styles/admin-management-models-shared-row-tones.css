@@ -13,24 +13,6 @@
 .vx-admin-role-card--disabled {
   --tenant-row-tone: var(--vx-color-neutral-400);
 }
-.vx-product-card--active {
-  --tenant-row-tone: var(--tenant-blue);
-}
-.vx-product-card--draft {
-  --tenant-row-tone: var(--tenant-amber);
-}
-.vx-product-card--archived {
-  --tenant-row-tone: var(--vx-color-neutral-400);
-}
-.vx-product-solution-card--active {
-  --tenant-row-tone: var(--tenant-blue);
-}
-.vx-product-solution-card--draft {
-  --tenant-row-tone: var(--tenant-amber);
-}
-.vx-product-solution-card--archived {
-  --tenant-row-tone: var(--vx-color-neutral-400);
-}
 
 .vx-order-card--confirmed {
   --tenant-row-tone: var(--tenant-green);
@@ -47,25 +29,6 @@
 }
 
 .vx-order-card--closed {
-  --tenant-row-tone: var(--vx-color-neutral-400);
-}
-
-.vx-payment-card--normal {
-  --tenant-row-tone: var(--tenant-green);
-}
-
-.vx-payment-card--pending_verify,
-.vx-payment-card--partial {
-  --tenant-row-tone: var(--tenant-amber);
-}
-
-.vx-payment-card--overpaid,
-.vx-payment-card--bill_cancelled,
-.vx-payment-card--failed {
-  --tenant-row-tone: var(--tenant-rose);
-}
-
-.vx-payment-card--unlinked {
   --tenant-row-tone: var(--vx-color-neutral-400);
 }
 .vx-commercial-card--normal {

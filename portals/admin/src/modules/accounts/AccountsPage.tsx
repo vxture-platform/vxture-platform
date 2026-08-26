@@ -11,11 +11,12 @@ import {
   DialogForm,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
   Label,
+  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -387,72 +388,73 @@ function AccountCards({
 }) {
   const locale = useLocale();
   return (
-    <div className="vx-tenant-directory-cards" aria-label="账号卡片">
+    <ListCardGrid aria-label="账号卡片">
       {accounts.map((account) => (
-        <article key={account.id} className="vx-tenant-directory-card">
-          <header>
-            <Icon name="user" size="lg" fallback="placeholder" />
-            <div>
-              <strong>{account.displayName}</strong>
-              <span>
-                {account.accountCode} · {account.email}
-              </span>
-            </div>
+        <MetricListCard
+          key={account.id}
+          icon="user"
+          title={account.displayName}
+          description={`${account.accountCode} · ${account.email}`}
+          tone={ACCOUNT_STATUS_TONE[account.status]}
+          actions={
             <AccountActionsMenu
               account={account}
               busy={actions.actionBusy}
               onToggleStatus={actions.onToggleStatus}
               onForceLogout={actions.onForceLogout}
             />
-          </header>
-          <div className="flex flex-wrap items-center gap-xs">
-            <StatusBadge tone={ACCOUNT_STATUS_TONE[account.status]}>
-              {accountStatusLabel(account.status)}
-            </StatusBadge>
-            {showTenantContext
-              ? accountTenantSummary(account).tags.map((tag) => (
-                  <Badge
-                    key={tag}
-                    className="vx-tenant-pill vx-account-muted-pill"
-                  >
-                    {tag}
-                  </Badge>
-                ))
-              : null}
-            <Badge>{accountHighestRoleLabel(account)}</Badge>
-          </div>
-          <div className="vx-tenant-directory-card__metrics">
-            {showTenantContext ? (
-              <span>
-                <b>{formatNumber(account.tenantCount)}</b>
-                <small>租户</small>
-              </span>
-            ) : (
-              <span>
-                <b>{accountHighestRoleLabel(account)}</b>
-                <small>平台角色</small>
-              </span>
-            )}
-            <span>
-              <b>{formatNumber(account.loginCount30d)}</b>
-              <small>30日登录</small>
-            </span>
-            <span>
-              <b>{account.lastActiveLocation}</b>
-              <small>地址</small>
-            </span>
-          </div>
-          <footer>
-            <span>
+          }
+          badges={
+            <>
+              <StatusBadge tone={ACCOUNT_STATUS_TONE[account.status]}>
+                {accountStatusLabel(account.status)}
+              </StatusBadge>
               {showTenantContext
-                ? accountTenantSummary(account).primaryName
-                : "平台用户"}
-            </span>
-            <strong>{formatDate(account.lastActiveAt, locale)}</strong>
-          </footer>
-        </article>
+                ? accountTenantSummary(account).tags.map((tag) => (
+                    <StatusBadge key={tag} tone="brand" icon={false}>
+                      {tag}
+                    </StatusBadge>
+                  ))
+                : null}
+              <Badge>{accountHighestRoleLabel(account)}</Badge>
+            </>
+          }
+          metrics={[
+            showTenantContext
+              ? {
+                  key: "tenants",
+                  value: formatNumber(account.tenantCount),
+                  label: "租户",
+                }
+              : {
+                  key: "role",
+                  value: accountHighestRoleLabel(account),
+                  label: "平台角色",
+                },
+            {
+              key: "logins",
+              value: formatNumber(account.loginCount30d),
+              label: "30日登录",
+            },
+            {
+              key: "location",
+              value: account.lastActiveLocation,
+              label: "地址",
+            },
+          ]}
+          footer={
+            <>
+              <span>
+                {showTenantContext
+                  ? accountTenantSummary(account).primaryName
+                  : "平台用户"}
+              </span>
+              <strong>{formatDate(account.lastActiveAt, locale)}</strong>
+            </>
+          }
+        />
       ))}
-    </div>
+    </ListCardGrid>
   );
 }
 

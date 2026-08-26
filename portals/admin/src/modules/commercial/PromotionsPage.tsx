@@ -12,10 +12,11 @@ import {
   DataTable,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
+  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   TableTitleCell,
 } from "@vxture/design-system";
@@ -40,12 +41,13 @@ import type {
   PromotionOperationType,
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
+import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 import {
-  formatDate,
-  formatNumber,
-  joinClasses,
-} from "@/modules/tenants/tenant-utils";
-import { type PageSize, Tag, type ViewMode } from "./CommercialUtils";
+  Tag,
+  type PageSize,
+  commercialTone,
+  type ViewMode,
+} from "./CommercialUtils";
 
 type StatusFilter = "all" | PromotionOperationStatus;
 type TypeFilter = "all" | PromotionOperationType;
@@ -230,58 +232,46 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
 function PromotionCards({ records }: { records: PromotionOperationRecord[] }) {
   const locale = useLocale();
   return (
-    <div
-      className="vx-tenant-directory-cards vx-commercial-cards"
-      aria-label="营销优惠卡片"
-    >
+    <ListCardGrid aria-label="营销优惠卡片">
       {records.map((record) => (
-        <article
+        <MetricListCard
           key={record.id}
-          className={joinClasses(
-            "vx-tenant-directory-card",
-            `vx-commercial-card--${statusTone(record.status)}`,
-          )}
-        >
-          <header>
-            <Icon name="sparkles" size="lg" fallback="placeholder" />
-            <div>
-              <strong>{record.promotionName}</strong>
-              <span>
-                {record.promotionCode} · {record.scopeLabel}
-              </span>
-            </div>
-            <PromotionActionsMenu record={record} />
-          </header>
-          <div className="flex flex-wrap items-center gap-xs">
-            <Tag tone={statusTone(record.status)}>
-              {statusLabel(record.status)}
-            </Tag>
-            <Badge variant="outline">{typeLabel(record.promotionType)}</Badge>
-          </div>
-          <p className="vx-commercial-card__description">
-            {record.description}
-          </p>
-          <div className="vx-tenant-directory-card__metrics">
-            <span>
-              <b>{record.discountLabel}</b>
-              <small>优惠</small>
-            </span>
-            <span>
-              <b>{formatNumber(record.redemptionCount)}</b>
-              <small>核销</small>
-            </span>
-            <span>
-              <b>{formatNumber(record.tenantCount)}</b>
-              <small>租户</small>
-            </span>
-          </div>
-          <footer>
-            <span>{record.ownerName}</span>
-            <strong>{formatDate(record.updatedAt, locale)}</strong>
-          </footer>
-        </article>
+          icon="sparkles"
+          title={record.promotionName}
+          description={`${record.promotionCode} · ${record.scopeLabel}`}
+          tone={commercialTone(statusTone(record.status))}
+          actions={<PromotionActionsMenu record={record} />}
+          badges={
+            <>
+              <Tag tone={statusTone(record.status)}>
+                {statusLabel(record.status)}
+              </Tag>
+              <Badge variant="outline">{typeLabel(record.promotionType)}</Badge>
+            </>
+          }
+          note={record.description}
+          metrics={[
+            { key: "discount", value: record.discountLabel, label: "优惠" },
+            {
+              key: "redemptions",
+              value: formatNumber(record.redemptionCount),
+              label: "核销",
+            },
+            {
+              key: "tenants",
+              value: formatNumber(record.tenantCount),
+              label: "租户",
+            },
+          ]}
+          footer={
+            <>
+              <span>{record.ownerName}</span>
+              <strong>{formatDate(record.updatedAt, locale)}</strong>
+            </>
+          }
+        />
       ))}
-    </div>
+    </ListCardGrid>
   );
 }
 

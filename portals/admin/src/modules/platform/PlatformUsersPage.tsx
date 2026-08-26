@@ -16,11 +16,12 @@ import {
   DialogTitle,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
   Label,
+  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -323,54 +324,59 @@ function PlatformUsersCards({
 }) {
   const locale = useLocale();
   return (
-    <div className="vx-tenant-directory-cards" aria-label="平台用户卡片">
+    <ListCardGrid aria-label="平台用户卡片">
       {admins.map((admin) => (
-        <article key={admin.id} className="vx-tenant-directory-card">
-          <header>
-            <Icon name="user" size="lg" fallback="placeholder" />
-            <div>
-              <strong>{admin.displayName || admin.username}</strong>
-              <span>{admin.username ? `@${admin.username}` : EMPTY_MARK}</span>
-            </div>
+        <MetricListCard
+          key={admin.id}
+          icon="user"
+          title={admin.displayName || admin.username}
+          description={admin.username ? `@${admin.username}` : EMPTY_MARK}
+          tone={platformAdminStatusTone(admin)}
+          actions={
             <StatusBadge
               tone={platformAdminStatusTone(admin)}
               icon={platformAdminStatusIcon(admin)}
             >
               {platformAdminStatusLabel(admin)}
             </StatusBadge>
-          </header>
-          <div className="flex flex-wrap items-center gap-xs">
-            <Badge>{platformRoleDisplayName(admin, t)}</Badge>
-            <StatusBadge tone={platformRoleStatusTone(admin)}>
-              {platformRoleStatusLabel(admin)}
-            </StatusBadge>
-            {admin.isSystem ? <Badge>系统</Badge> : null}
-          </div>
-          <div className="vx-tenant-directory-card__metrics">
-            <span>
-              <b>
-                {admin.lastLoginAt
-                  ? formatDate(admin.lastLoginAt, locale)
-                  : EMPTY_MARK}
-              </b>
-              <small>最后登录</small>
-            </span>
-            <span>
-              <b>{admin.lastLoginIp || EMPTY_MARK}</b>
-              <small>登录 IP</small>
-            </span>
-            <span>
-              <b>{admin.email || admin.phone || EMPTY_MARK}</b>
-              <small>联系方式</small>
-            </span>
-          </div>
-          <footer>
-            <span>{admin.remark || EMPTY_MARK}</span>
-            <strong>{admin.phone || EMPTY_MARK}</strong>
-          </footer>
-        </article>
+          }
+          badges={
+            <>
+              <Badge>{platformRoleDisplayName(admin, t)}</Badge>
+              <StatusBadge tone={platformRoleStatusTone(admin)}>
+                {platformRoleStatusLabel(admin)}
+              </StatusBadge>
+              {admin.isSystem ? <Badge>系统</Badge> : null}
+            </>
+          }
+          metrics={[
+            {
+              key: "lastLogin",
+              value: admin.lastLoginAt
+                ? formatDate(admin.lastLoginAt, locale)
+                : EMPTY_MARK,
+              label: "最后登录",
+            },
+            {
+              key: "loginIp",
+              value: admin.lastLoginIp || EMPTY_MARK,
+              label: "登录 IP",
+            },
+            {
+              key: "contact",
+              value: admin.email || admin.phone || EMPTY_MARK,
+              label: "联系方式",
+            },
+          ]}
+          footer={
+            <>
+              <span>{admin.remark || EMPTY_MARK}</span>
+              <strong>{admin.phone || EMPTY_MARK}</strong>
+            </>
+          }
+        />
       ))}
-    </div>
+    </ListCardGrid>
   );
 }
 

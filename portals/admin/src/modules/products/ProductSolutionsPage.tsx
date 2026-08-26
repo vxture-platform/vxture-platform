@@ -10,10 +10,11 @@ import {
   DataTable,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
+  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -41,7 +42,6 @@ import {
   formatDate,
   formatMoney,
   formatNumber,
-  joinClasses,
 } from "@/modules/tenants/tenant-utils";
 
 type ViewMode = "list" | "cards";
@@ -274,81 +274,75 @@ function ProductSolutionCards({
   onOpenDetails: (solutionCode: string) => void;
 }) {
   return (
-    <div
-      className="vx-tenant-directory-cards vx-product-solution-cards"
-      aria-label="解决方案卡片"
-    >
+    <ListCardGrid aria-label="解决方案卡片">
       {solutions.map((solution) => (
-        <article
+        <MetricListCard
           key={solution.id}
-          className={joinClasses(
-            "vx-tenant-directory-card",
-            `vx-product-solution-card--${solution.status}`,
-          )}
-          role="button"
-          tabIndex={0}
-          onClick={() => onOpenDetails(solution.solutionCode)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") onOpenDetails(solution.solutionCode);
-          }}
-        >
-          <header>
-            <Icon name="workflow" size="lg" fallback="placeholder" />
-            <div>
-              <strong>{solution.solutionName}</strong>
-              <span>
-                {solution.solutionCode} · {solution.industry}
-              </span>
-            </div>
+          icon="workflow"
+          title={solution.solutionName}
+          description={`${solution.solutionCode} · ${solution.industry}`}
+          tone={PUBLISH_STATUS_TONE[solution.status]}
+          actions={
             <ProductSolutionActionsMenu
               solution={solution}
               onViewDetails={() => onOpenDetails(solution.solutionCode)}
             />
-          </header>
-          <div className="flex flex-wrap items-center gap-xs">
-            <StatusBadge tone={PUBLISH_STATUS_TONE[solution.status]}>
-              {solutionStatusLabel(solution.status)}
-            </StatusBadge>
-            <StatusBadge tone={VISIBILITY_TONE[solution.visibility]}>
-              {solutionVisibilityLabel(solution.visibility)}
-            </StatusBadge>
-          </div>
-          <p className="vx-product-solution-card__description">
-            {solution.description}
-          </p>
-          <div className="vx-product-solution-card__capabilities">
-            {solution.products.map((product) => (
-              <span key={product.id}>
-                <Icon
-                  name={capabilityTypeIcon(product.productType)}
-                  size="xs"
-                  fallback="placeholder"
-                />
-                {product.productName}
+          }
+          badges={
+            <>
+              <StatusBadge tone={PUBLISH_STATUS_TONE[solution.status]}>
+                {solutionStatusLabel(solution.status)}
+              </StatusBadge>
+              <StatusBadge tone={VISIBILITY_TONE[solution.visibility]}>
+                {solutionVisibilityLabel(solution.visibility)}
+              </StatusBadge>
+            </>
+          }
+          note={
+            <>
+              <p className="m-0 text-body-sm text-muted-foreground">
+                {solution.description}
+              </p>
+              <span className="flex flex-wrap items-center gap-xs">
+                {solution.products.map((product) => (
+                  <StatusBadge
+                    key={product.id}
+                    tone="neutral"
+                    icon={capabilityTypeIcon(product.productType)}
+                  >
+                    {product.productName}
+                  </StatusBadge>
+                ))}
               </span>
-            ))}
-          </div>
-          <div className="vx-tenant-directory-card__metrics">
-            <span>
-              <b>{formatNumber(solution.products.length)}</b>
-              <small>产品能力</small>
-            </span>
-            <span>
-              <b>{formatNumber(solution.tiers.length)}</b>
-              <small>套餐版本</small>
-            </span>
-            <span>
-              <b>{formatNumber(solution.subscriptionCount)}</b>
-              <small>订阅</small>
-            </span>
-          </div>
-          <footer>
-            <span>{solution.customerSegment}</span>
-            <strong>{formatMoney(solution.monthlyRevenue)}</strong>
-          </footer>
-        </article>
+            </>
+          }
+          metrics={[
+            {
+              key: "products",
+              value: formatNumber(solution.products.length),
+              label: "产品能力",
+            },
+            {
+              key: "tiers",
+              value: formatNumber(solution.tiers.length),
+              label: "套餐版本",
+            },
+            {
+              key: "subscriptions",
+              value: formatNumber(solution.subscriptionCount),
+              label: "订阅",
+            },
+          ]}
+          footer={
+            <>
+              <span>{solution.customerSegment}</span>
+              <strong>{formatMoney(solution.monthlyRevenue)}</strong>
+            </>
+          }
+          onClick={() => onOpenDetails(solution.solutionCode)}
+        />
       ))}
-    </div>
+    </ListCardGrid>
   );
 }
 

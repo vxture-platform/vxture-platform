@@ -8,6 +8,17 @@ const COMMERCIAL_TAG_TONE: Record<string, StatusBadgeTone> = {
   danger: "danger",
 };
 
+/**
+ * 商业域的语气名 → DS 语气。
+ *
+ * `Tag` 内部一直在用这张表，但卡片换成 `MetricListCard` 后顶缘色条也要
+ * 同一个语气（原来是 `vx-commercial-card--{tone}` 那一类），于是把映射单独出
+ * 一个函数——两处共用一张表，不再各写一份。
+ */
+export function commercialTone(tone: string): StatusBadgeTone {
+  return COMMERCIAL_TAG_TONE[tone] ?? "neutral";
+}
+
 export type { PageSize } from "@/modules/shared/PageSizePicker";
 export type ViewMode = "list" | "cards";
 
@@ -61,7 +72,7 @@ export function Tag({
   title?: string;
 }) {
   return (
-    <StatusBadge tone={COMMERCIAL_TAG_TONE[tone] ?? "neutral"} title={title}>
+    <StatusBadge tone={commercialTone(tone)} title={title}>
       {children}
     </StatusBadge>
   );

@@ -18,8 +18,10 @@ import {
   Icon,
   Input,
   Label,
+  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -53,7 +55,6 @@ import { type PageSize } from "@/modules/shared/PageSizePicker";
 import {
   formatDate,
   formatNumber,
-  joinClasses,
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
@@ -496,88 +497,72 @@ function PaymentCards({
   const router = useRouter();
 
   return (
-    <div
-      className="vx-tenant-directory-cards vx-payment-cards"
-      aria-label="收款管理卡片"
-    >
+    <ListCardGrid aria-label="收款管理卡片">
       {payments.map((payment) => (
-        <article
+        <MetricListCard
           key={payment.id}
-          className={joinClasses(
-            "vx-tenant-directory-card",
-            `vx-payment-card--${payment.reconciliationStatus}`,
-          )}
-          role="button"
-          tabIndex={0}
-          onClick={() => router.push(paymentTargetHref(payment))}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") router.push(paymentTargetHref(payment));
-          }}
-        >
-          <header>
-            <Icon name="check" size="lg" fallback="placeholder" />
-            <div>
-              <strong>{payment.paymentNo}</strong>
-              <span>
-                {payment.tenantName} ·{" "}
-                {payment.orderNo ?? payment.billNo ?? "未关联订单"}
-              </span>
-            </div>
+          icon="check"
+          title={payment.paymentNo}
+          description={`${payment.tenantName} · ${payment.orderNo ?? payment.billNo ?? "未关联订单"}`}
+          tone={RECONCILIATION_TONE[payment.reconciliationStatus]}
+          actions={
             <PaymentActionsMenu
               payment={payment}
               onVerify={onVerify}
               onReject={onReject}
             />
-          </header>
-          <div className="flex flex-wrap items-center gap-xs">
-            <StatusBadge tone={PAYMENT_STATUS_TONE[payment.paymentStatus]}>
-              {t(`status.paymentLedger.${payment.paymentStatus}`)}
-            </StatusBadge>
-            <StatusBadge
-              tone={RECONCILIATION_TONE[payment.reconciliationStatus]}
-            >
-              {reconciliationLabel(payment.reconciliationStatus)}
-            </StatusBadge>
-            <Badge className="vx-tenant-pill vx-payment-pill--source">
-              {paySourceLabel(payment.paySource)}
-            </Badge>
-          </div>
-          <p className="vx-payment-card__bill">
-            {payment.billNo ?? "未关联账单"} ·{" "}
-            {payment.servicePlanName ?? "未关联套餐"}
-          </p>
-          <div className="vx-tenant-directory-card__metrics">
-            <span>
-              <b>{formatCurrency(payment.paidAmount, payment.currency)}</b>
-              <small>收款金额</small>
-            </span>
-            <span>
-              <b>
-                {formatCurrency(
-                  payment.billPayableAmount || payment.totalAmount,
-                  payment.currency,
-                )}
-              </b>
-              <small>账单应收</small>
-            </span>
-            <span>
-              <b>{paySourceLabel(payment.paySource)}</b>
-              <small>
-                {payment.paySource === "offline"
+          }
+          badges={
+            <>
+              <StatusBadge tone={PAYMENT_STATUS_TONE[payment.paymentStatus]}>
+                {t(`status.paymentLedger.${payment.paymentStatus}`)}
+              </StatusBadge>
+              <StatusBadge
+                tone={RECONCILIATION_TONE[payment.reconciliationStatus]}
+              >
+                {reconciliationLabel(payment.reconciliationStatus)}
+              </StatusBadge>
+              <StatusBadge tone="neutral" icon={false}>
+                {paySourceLabel(payment.paySource)}
+              </StatusBadge>
+            </>
+          }
+          note={`${payment.billNo ?? "未关联账单"} · ${payment.servicePlanName ?? "未关联套餐"}`}
+          metrics={[
+            {
+              key: "paid",
+              value: formatCurrency(payment.paidAmount, payment.currency),
+              label: "收款金额",
+            },
+            {
+              key: "payable",
+              value: formatCurrency(
+                payment.billPayableAmount || payment.totalAmount,
+                payment.currency,
+              ),
+              label: "账单应收",
+            },
+            {
+              key: "source",
+              value: paySourceLabel(payment.paySource),
+              label:
+                payment.paySource === "offline"
                   ? offlineTypeLabel(payment.offlinePayType)
-                  : (payment.payMethod ?? "支付方式")}
-              </small>
-            </span>
-          </div>
-          <footer>
-            <span>{payment.operatorName}</span>
-            <strong>
-              {formatDate(payment.paidAt ?? payment.updatedAt, locale)}
-            </strong>
-          </footer>
-        </article>
+                  : (payment.payMethod ?? "支付方式"),
+            },
+          ]}
+          footer={
+            <>
+              <span>{payment.operatorName}</span>
+              <strong>
+                {formatDate(payment.paidAt ?? payment.updatedAt, locale)}
+              </strong>
+            </>
+          }
+          onClick={() => router.push(paymentTargetHref(payment))}
+        />
       ))}
-    </div>
+    </ListCardGrid>
   );
 }
 

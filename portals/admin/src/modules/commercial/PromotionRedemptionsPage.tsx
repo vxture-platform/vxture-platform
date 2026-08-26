@@ -11,10 +11,11 @@ import {
   DataTable,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
+  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   TableTitleCell,
 } from "@vxture/design-system";
@@ -31,13 +32,13 @@ import { PageHeader } from "@/modules/shared/PageHeader";
 import {
   formatDate,
   formatNumber,
-  joinClasses,
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
 import {
-  formatCurrency,
-  type PageSize,
   Tag,
+  type PageSize,
+  commercialTone,
+  formatCurrency,
   type ViewMode,
 } from "./CommercialUtils";
 
@@ -249,68 +250,53 @@ function RedemptionCards({
   const router = useRouter();
 
   return (
-    <div
-      className="vx-tenant-directory-cards vx-commercial-cards"
-      aria-label="优惠核销卡片"
-    >
+    <ListCardGrid aria-label="优惠核销卡片">
       {records.map((record) => (
-        <article
+        <MetricListCard
           key={record.id}
-          className={joinClasses(
-            "vx-tenant-directory-card",
-            "vx-commercial-card--normal",
-          )}
-          role="button"
-          tabIndex={0}
+          icon="sparkles"
+          title={record.redemptionNo}
+          description={`${record.tenantName} · ${record.promotionName}`}
+          tone={commercialTone("normal")}
+          actions={<RedemptionActionsMenu record={record} />}
+          badges={
+            <>
+              <Tag tone="normal">已核销</Tag>
+              <Tag tone={billStatusTone(record.billStatus)}>
+                {billStatusLabel(record.billStatus)}
+              </Tag>
+            </>
+          }
+          note={`${record.billNo} · ${record.servicePlanName ?? record.orderNo ?? "未关联套餐"}`}
+          metrics={[
+            {
+              key: "discount",
+              value: formatCurrency(record.discountAmount, record.currency),
+              label: "优惠金额",
+            },
+            {
+              key: "payable",
+              value: formatCurrency(record.payableAmount, record.currency),
+              label: "账单应付",
+            },
+            {
+              key: "redeemedAt",
+              value: formatDate(record.redeemedAt, locale),
+              label: record.operatorName,
+            },
+          ]}
+          footer={
+            <>
+              <span>{record.promotionCode}</span>
+              <strong>{record.orderNo ?? "未关联订单"}</strong>
+            </>
+          }
           onClick={() =>
             router.push(`/billing/${encodeURIComponent(record.billId)}`)
           }
-          onKeyDown={(event) => {
-            if (event.key === "Enter")
-              router.push(`/billing/${encodeURIComponent(record.billId)}`);
-          }}
-        >
-          <header>
-            <Icon name="sparkles" size="lg" fallback="placeholder" />
-            <div>
-              <strong>{record.redemptionNo}</strong>
-              <span>
-                {record.tenantName} · {record.promotionName}
-              </span>
-            </div>
-            <RedemptionActionsMenu record={record} />
-          </header>
-          <div className="flex flex-wrap items-center gap-xs">
-            <Tag tone="normal">已核销</Tag>
-            <Tag tone={billStatusTone(record.billStatus)}>
-              {billStatusLabel(record.billStatus)}
-            </Tag>
-          </div>
-          <p className="vx-commercial-card__description">
-            {record.billNo} ·{" "}
-            {record.servicePlanName ?? record.orderNo ?? "未关联套餐"}
-          </p>
-          <div className="vx-tenant-directory-card__metrics">
-            <span>
-              <b>{formatCurrency(record.discountAmount, record.currency)}</b>
-              <small>优惠金额</small>
-            </span>
-            <span>
-              <b>{formatCurrency(record.payableAmount, record.currency)}</b>
-              <small>账单应付</small>
-            </span>
-            <span>
-              <b>{formatDate(record.redeemedAt, locale)}</b>
-              <small>{record.operatorName}</small>
-            </span>
-          </div>
-          <footer>
-            <span>{record.promotionCode}</span>
-            <strong>{record.orderNo ?? "未关联订单"}</strong>
-          </footer>
-        </article>
+        />
       ))}
-    </div>
+    </ListCardGrid>
   );
 }
 

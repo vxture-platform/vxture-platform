@@ -10,10 +10,11 @@ import {
   DataTable,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
+  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -35,7 +36,7 @@ import {
 } from "@/modules/shared/publish-tone";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
-import { formatNumber, joinClasses } from "@/modules/tenants/tenant-utils";
+import { formatNumber } from "@/modules/tenants/tenant-utils";
 
 type ViewMode = "list" | "cards";
 type TypeFilter = "all" | ProductCapabilityType;
@@ -252,69 +253,56 @@ function ProductCards({
   onOpenDetails: (productCode: string) => void;
 }) {
   return (
-    <div
-      className="vx-tenant-directory-cards vx-product-cards"
-      aria-label="产品能力卡片"
-    >
+    <ListCardGrid aria-label="产品能力卡片">
       {products.map((product) => (
-        <article
+        <MetricListCard
           key={product.productCode}
-          className={joinClasses(
-            "vx-tenant-directory-card",
-            `vx-product-card--${product.status}`,
-          )}
-          role="button"
-          tabIndex={0}
-          onClick={() => onOpenDetails(product.productCode)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") onOpenDetails(product.productCode);
-          }}
-        >
-          <header>
-            <Icon
-              name={productTypeIcon(product.productType)}
-              size="lg"
-              fallback="placeholder"
-            />
-            <div>
-              <strong>{product.productName}</strong>
-              <span>
-                {product.productCode} · {productRegionLabel(product.region)}
-              </span>
-            </div>
+          icon={productTypeIcon(product.productType)}
+          title={product.productName}
+          description={`${product.productCode} · ${productRegionLabel(product.region)}`}
+          tone={PUBLISH_STATUS_TONE[product.status]}
+          actions={
             <ProductActionsMenu
               product={product}
               onViewDetails={() => onOpenDetails(product.productCode)}
             />
-          </header>
-          <div className="flex flex-wrap items-center gap-xs">
-            <Badge>{productTypeLabel(product.productType)}</Badge>
-            <Badge>{productSourceLabel(product.source)}</Badge>
-            <StatusBadge tone={PUBLISH_STATUS_TONE[product.status]}>
-              {productStatusLabel(product.status)}
-            </StatusBadge>
-          </div>
-          <div className="vx-tenant-directory-card__metrics">
-            <span>
-              <b>{formatNumber(product.solutionCount)}</b>
-              <small>方案</small>
-            </span>
-            <span>
-              <b>{formatNumber(product.planCount)}</b>
-              <small>套餐</small>
-            </span>
-            <span>
-              <b>{formatNumber(product.modelPolicyCount)}</b>
-              <small>策略</small>
-            </span>
-          </div>
-          <footer>
-            <span>{product.meteringUnit}</span>
-            <strong>{productAccessLabel(product.integration.status)}</strong>
-          </footer>
-        </article>
+          }
+          badges={
+            <>
+              <Badge>{productTypeLabel(product.productType)}</Badge>
+              <Badge>{productSourceLabel(product.source)}</Badge>
+              <StatusBadge tone={PUBLISH_STATUS_TONE[product.status]}>
+                {productStatusLabel(product.status)}
+              </StatusBadge>
+            </>
+          }
+          metrics={[
+            {
+              key: "solutions",
+              value: formatNumber(product.solutionCount),
+              label: "方案",
+            },
+            {
+              key: "plans",
+              value: formatNumber(product.planCount),
+              label: "套餐",
+            },
+            {
+              key: "policies",
+              value: formatNumber(product.modelPolicyCount),
+              label: "策略",
+            },
+          ]}
+          footer={
+            <>
+              <span>{product.meteringUnit}</span>
+              <strong>{productAccessLabel(product.integration.status)}</strong>
+            </>
+          }
+          onClick={() => onOpenDetails(product.productCode)}
+        />
       ))}
-    </div>
+    </ListCardGrid>
   );
 }
 

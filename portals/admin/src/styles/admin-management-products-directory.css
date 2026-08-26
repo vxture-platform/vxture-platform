@@ -16,31 +16,3 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.vx-product-solution-card__description {
-  color: var(--tenant-muted);
-  font-size: var(--body-sm-font-size);
-  line-height: 1.6;
-}
-
-.vx-product-solution-card__capabilities {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs) var(--space-sm);
-  flex-wrap: wrap;
-}
-
-.vx-product-solution-card__capabilities span {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2xs);
-  color: var(--vx-color-neutral-700);
-  font-size: var(--body-sm-font-size);
-  font-weight: 400;
-}
-
-.vx-product-solution-card__capabilities svg {
-  flex: 0 0 auto;
-  color: var(--tenant-blue);
-}
