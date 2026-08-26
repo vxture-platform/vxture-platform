@@ -65,10 +65,3 @@
   color: var(--vx-console-muted);
   font-size: var(--body-sm-font-size);
 }
-
-@media (max-width: 1200px) {
-  .vx-audit-directory-list,
-  .vx-audit-row {
-    grid-template-columns: var(--vx-admin-operations-audit-grid-compact);
-  }
-}

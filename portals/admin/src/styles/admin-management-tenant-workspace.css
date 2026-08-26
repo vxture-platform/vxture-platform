@@ -16,39 +16,6 @@
 
 /* Tenant workspace list layout styles. */
 
-.vx-tenant-list {
-  position: sticky;
-  top: calc(var(--vx-admin-management-header-height) + var(--space-lg));
-  min-width: 0;
-  display: grid;
-  gap: var(--space-md);
-}
-
-.vx-tenant-list > header {
-  min-height: var(--spacing-icon-xl);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-}
-
-.vx-tenant-list > header strong {
-  color: var(--tenant-ink);
-  font-size: var(--title-md-font-size);
-  font-weight: 780;
-}
-
-.vx-tenant-list > header span {
-  color: var(--tenant-muted);
-  font-size: var(--body-sm-font-size);
-  font-weight: 760;
-}
-
-.vx-tenant-list > div {
-  display: grid;
-  gap: var(--space-md);
-}
-
 /* Tenant workspace list card styles. */
 
 .vx-tenant-list-card:hover,

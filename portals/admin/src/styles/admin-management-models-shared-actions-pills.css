@@ -1,23 +1,5 @@
 
 
-.vx-model-operation-buttons:not(.vx-model-batch-actions)
-  button:hover:not(:disabled) {
-  border-color: color-mix(
-    in srgb,
-    var(--vx-color-neutral-500) 18%,
-    transparent
-  );
-  background: color-mix(in srgb, var(--vx-color-neutral-500) 8%, transparent);
-  color: var(--muted-foreground);
-}
-
-.vx-model-batch-actions
-
-.vx-product-plan-row__status small,
-.vx-product-plan-row__price small,
-.vx-product-plan-row__features small,
-.vx-product-plan-row__agents small,
-
 .vx-admin-role-permission-tags {
   min-width: 0;
   display: flex;

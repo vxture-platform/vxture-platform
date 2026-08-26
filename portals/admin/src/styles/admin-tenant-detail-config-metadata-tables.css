@@ -6,8 +6,6 @@
   font-weight: 780;
 }
 
-.vx-tenant-kv-grid dt,
-
 .vx-tenant-note {
   color: var(--vx-color-neutral-700);
   font-size: var(--body-sm-font-size);

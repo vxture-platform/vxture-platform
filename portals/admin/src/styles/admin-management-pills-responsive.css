@@ -6,8 +6,6 @@
 }
 
 .vx-tenant-directory-card small,
-.vx-tenant-list-card__meta small,
-.vx-tenant-list-card__metrics small,
 .vx-tenant-table__row small,
 .vx-tenant-member-row small,
 .vx-tenant-member-row__name small,
@@ -22,16 +20,9 @@
 }
 
 @media (max-width: 80rem) {
-  .vx-tenant-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 
-  .vx-platform-users-summary,
   .vx-admin-roles-summary,
-  .vx-admin-permissions-summary,
-  .vx-model-platform-summary,
-  .vx-model-strategy-summary,
-  .vx-platform-governance-summary {
+  .vx-admin-permissions-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -47,39 +38,22 @@
   .vx-tenant-directory-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .vx-tenant-list {
-    position: static;
-  }
-
-  .vx-tenant-list > div {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 960px) {
-  .vx-tenant-summary,
   .vx-tenant-directory-cards,
   .vx-tenant-directory-card__metrics,
-  .vx-tenant-list > div,
   .vx-tenant-detail__metrics,
-  .vx-tenant-readonly-grid,
-  .vx-tenant-admin-row,
   .vx-tenant-config-row--three,
   .vx-tenant-config-row--contact,
   .vx-tenant-tab-grid--two,
   .vx-tenant-tab-grid--risk,
-  .vx-tenant-subscription__metrics,
-  .vx-tenant-form-grid {
+  .vx-tenant-subscription__metrics {
     grid-template-columns: 1fr;
   }
 
-  .vx-platform-users-summary,
   .vx-admin-roles-summary,
-  .vx-admin-permissions-summary,
-  .vx-model-platform-summary,
-  .vx-model-strategy-summary,
-  .vx-platform-governance-summary {
+  .vx-admin-permissions-summary {
     grid-template-columns: 1fr;
   }
 }
@@ -175,8 +149,6 @@
 @media (max-width: 960px) {
   .vx-product-capability-summary,
   .vx-product-capability-summary__metrics,
-  .vx-product-capability-fields,
-  .vx-product-capability-fields--compact,
   .vx-product-detail-list__row,
   .vx-product-detail-list--entitlements .vx-product-detail-list__row,
   .vx-offline-invoice-dialog__grid,

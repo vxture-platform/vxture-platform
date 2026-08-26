@@ -9,9 +9,3 @@
   border-bottom: var(--border-width-thin) dashed
     var(--vx-color-auth-border);
 }
-
-.vx-tenant-review-field,
-
-.vx-tenant-review-field > span,
-.vx-tenant-readonly-field > span,
-

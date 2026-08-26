@@ -7,7 +7,7 @@
 // 对「这个类名解析出了荒谬的值」没有意见——它只是照表查了一下。所以它们只在人
 // 打开页面时现形，而且现形的样子是「布局莫名其妙」，不是报错。
 //
-// ── 一、注释嵌套 / 提前收口 ──────────────────────────────────────────────
+// ── 一、CSS 根本解析不了 ─────────────────────────────────────────────────
 //
 // CSS 注释不能嵌套：`/* a /* b */ c */` 里第一个 `*/` 就把注释关掉了，`c */`
 // 变成垃圾声明。两种踩法都在这个仓里真实发生过（2026-08-27 同一天扫出）：
@@ -17,6 +17,10 @@
 //      `next build` 是过的，所以提交时一切看起来正常。
 //   2. 注释正文里写了 `.ac-*/.screen` 这样的选择器列举——那个 `*/` 同样收口，
 //      后半段中文说明全部变成 CSS。console 的遗留样式表里躺了很久。
+//   3. 悬空的选择器列表（`.a,` `.b > span,` 然后文件就结束了，没有 `{}`）——
+//      更早一次用正则删多选择器规则时逗号和块都没收拾干净，从断点到文件尾
+//      整段失效。这一条是换成 postcss 后才报出来的：我第一版手写的注释计数器
+//      只认得我当时想到的那一种坏法，解析器认得所有坏法。
 //
 // ── 二、被主题踩掉的关键字类 ────────────────────────────────────────────
 //
@@ -44,6 +48,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import postcss from 'postcss';
 
 const ROOT = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const SCAN = ['portals', 'packages'];
@@ -84,10 +89,35 @@ const lineOf = (s, i) => s.slice(0, i).split('\n').length;
 const problems = [];
 
 /**
- * CSS 注释配对：既报嵌套，也报多出来的收口符。
+ * 结构断裂：CSS 根本解析不了。
  *
- * （本注释里刻意不写出那两个字符。第一版写了，于是它把自己这段注释
- * 提前关掉了——正是本函数要抓的那类错。）
+ * 用 postcss，不是我手写的判据。第一版这里只有下面那个注释配对计数器，它抓到了
+ * 注释那两处，却漏了 `admin-tenant-detail-config-review-admin.css` 里一段**悬空的
+ * 选择器列表**（`.a,` `.b > span,` 然后文件就结束了，没有块）——那是更早一次用
+ * 正则删多选择器规则时留下的，逗号和块都没收拾干净。换 postcss 一次就报了出来：
+ * 手写的判据只认得我当时想到的那一种坏法，解析器认得所有坏法。
+ */
+function checkParses(src, rel) {
+  try {
+    postcss.parse(src, { from: rel });
+  } catch (e) {
+    const where = e.line ? `${rel}:${e.line}` : rel;
+    problems.push(`${where}  CSS 解析失败：${e.reason ?? e.message}`);
+  }
+}
+
+/**
+ * 注释提前收口：解析器**容忍**，但语义已经错了。
+ *
+ * 这一条不能省掉换成解析器——实测 postcss 对上面说的两种注释踩法都不报错，它跟
+ * Lightning CSS 一样会自行恢复。而 Turbopack 对第一种是直接拒收的，第二种则悄悄
+ * 吞掉一条规则。所以两个判据是互补的，不是替代关系：
+ *
+ *   checkParses    抓结构断裂（谁都解析不了）
+ *   checkComments  抓「宽松解析器放过、但含义已被改写」的
+ *
+ * （本注释里刻意不写出那个收口符。第一版写了，于是它把自己这段注释提前关掉了
+ * ——正是本函数要抓的那类错。）
  */
 function checkComments(src, rel) {
   let depth = 0;
@@ -95,13 +125,13 @@ function checkComments(src, rel) {
     const two = src.slice(i, i + 2);
     if (two === '/*') {
       if (depth > 0) {
-        problems.push(`${rel}:${lineOf(src, i)}  注释里又出现 \`/*\`——外层注释已被更早的 \`*/\` 收口`);
+        problems.push(`${rel}:${lineOf(src, i)}  注释里又出现 \`/*\`——外层注释已被更早的收口符关掉`);
       }
       depth += 1;
       i += 2;
     } else if (two === '*/') {
       if (depth === 0) {
-        problems.push(`${rel}:${lineOf(src, i)}  多出来的 \`*/\`——多半是上面某处注释正文里写了 \`*/\`（如选择器列举 \`.ac-*/\`）`);
+        problems.push(`${rel}:${lineOf(src, i)}  多出来的收口符——多半是上面某处注释正文里写了它（如选择器列举 \`.ac-*\` 后面紧跟斜杠）`);
       } else {
         depth -= 1;
       }
@@ -131,7 +161,10 @@ for (const top of SCAN) {
       continue;
     }
 
-    if (ext === '.css') checkComments(src, rel);
+    if (ext === '.css') {
+      checkParses(src, rel);
+      checkComments(src, rel);
+    }
 
     const code = blankComments(src, ext !== '.css');
     for (const [cls, better] of TRAPS) {
@@ -150,4 +183,4 @@ if (problems.length) {
   console.error('\n         这两类都不会让构建失败，只会让页面长歪。判据与来由见本文件头部注释。\n');
   process.exit(1);
 }
-console.log('✓ CSS 陷阱检查通过（注释配对正常，无踩关键字的工具类）。');
+console.log('✓ CSS 陷阱检查通过（样式表均可解析，无踩关键字的工具类）。');

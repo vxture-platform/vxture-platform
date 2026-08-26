@@ -1,5 +1,3 @@
-.vx-product-plan-feature-tags,
-.vx-product-plan-agent-tags,
 .vx-product-solution-capability-tags {
   min-width: 0;
   display: flex;
@@ -20,9 +18,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.vx-product-plan-row__price strong,
-
-.vx-product-plan-card__description,
 .vx-product-solution-card__description {
   color: var(--tenant-muted);
   font-size: var(--body-sm-font-size);
