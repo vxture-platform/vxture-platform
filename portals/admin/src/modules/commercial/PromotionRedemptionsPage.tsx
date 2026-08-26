@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -107,6 +108,7 @@ function RedemptionActionsMenu({
 }: {
   record: PromotionRedemptionRecord;
 }) {
+  const tShared = useTranslations();
   const router = useRouter();
 
   return (
@@ -126,7 +128,7 @@ function RedemptionActionsMenu({
           },
           {
             id: "tenant",
-            label: "查看租户",
+            label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
               router.push(`/tenants/${encodeURIComponent(record.tenantId)}`),
@@ -299,6 +301,7 @@ function RedemptionCards({
 }
 
 export function PromotionRedemptionsPage() {
+  const tShared = useTranslations();
   const [records, setRecords] = useState<PromotionRedemptionRecord[]>([]);
   const [recordsTruncated, setRecordsTruncated] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -474,7 +477,7 @@ export function PromotionRedemptionsPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredRecords.length)}
             aria-label="优惠核销筛选"
             search={
@@ -511,10 +514,14 @@ export function PromotionRedemptionsPage() {
               >
                 <option value="all">全部账单</option>
                 <option value="unpaid">待收款</option>
-                <option value="paying">支付中</option>
+                <option value="paying">
+                  {tShared("status.generic.paying")}
+                </option>
                 <option value="partial">部分收款</option>
                 <option value="paid">已结清</option>
-                <option value="overdue">逾期</option>
+                <option value="overdue">
+                  {tShared("status.generic.overdue")}
+                </option>
                 <option value="cancelled">已作废</option>
               </NativeSelect>
             </div>
@@ -527,7 +534,7 @@ export function PromotionRedemptionsPage() {
               actions={[
                 {
                   id: "export",
-                  label: "导出所选",
+                  label: tShared("common.exportSelected"),
                   icon: "arrow-down",
                   onSelect: handleExportSelected,
                 },
@@ -541,7 +548,7 @@ export function PromotionRedemptionsPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
             {viewMode === "list" ? (
@@ -572,7 +579,7 @@ export function PromotionRedemptionsPage() {
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -600,7 +607,7 @@ export function PromotionRedemptionsPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

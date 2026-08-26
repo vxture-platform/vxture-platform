@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -107,6 +108,7 @@ const USAGE_CSV_COLUMNS: CsvColumn<UsageMeteringRecord>[] = [
 ];
 
 function UsageActionsMenu({ record }: { record: UsageMeteringRecord }) {
+  const tShared = useTranslations();
   const router = useRouter();
 
   return (
@@ -119,7 +121,7 @@ function UsageActionsMenu({ record }: { record: UsageMeteringRecord }) {
         items={[
           {
             id: "tenant",
-            label: "查看租户",
+            label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
               router.push(`/tenants/${encodeURIComponent(record.tenantId)}`),
@@ -297,6 +299,7 @@ function UsageCards({ records }: { records: UsageMeteringRecord[] }) {
 }
 
 export function UsageMeteringPage() {
+  const tShared = useTranslations();
   const [records, setRecords] = useState<UsageMeteringRecord[]>([]);
   const [recordsTruncated, setRecordsTruncated] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -485,7 +488,7 @@ export function UsageMeteringPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredRecords.length)}
             aria-label="用量筛选"
             search={
@@ -521,7 +524,9 @@ export function UsageMeteringPage() {
                 aria-label="风险状态"
               >
                 <option value="all">全部风险</option>
-                <option value="normal">正常</option>
+                <option value="normal">
+                  {tShared("status.generic.normal")}
+                </option>
                 <option value="warning">接近上限</option>
                 <option value="danger">超额</option>
                 <option value="anomaly">计量异常</option>
@@ -564,7 +569,7 @@ export function UsageMeteringPage() {
               actions={[
                 {
                   id: "export",
-                  label: "导出所选",
+                  label: tShared("common.exportSelected"),
                   onSelect: handleExportSelected,
                 },
               ]}
@@ -577,7 +582,7 @@ export function UsageMeteringPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
             {viewMode === "list" ? (
@@ -606,7 +611,7 @@ export function UsageMeteringPage() {
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -628,7 +633,7 @@ export function UsageMeteringPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

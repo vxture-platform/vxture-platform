@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   ActionButton,
   DataTable,
@@ -120,6 +121,7 @@ const COLUMNS: readonly DataTableColumn<NotificationLogRecord>[] = [
 ];
 
 export function NotificationLogsPage() {
+  const tShared = useTranslations();
   const { toast } = useToast();
   const [items, setItems] = useState<NotificationLogRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -230,7 +232,7 @@ export function NotificationLogsPage() {
                 )
               }
             >
-              导出
+              {tShared("common.export")}
             </ActionButton>
           }
           onReset={() => {
@@ -267,7 +269,7 @@ export function NotificationLogsPage() {
             }}
             aria-label="投递状态"
           >
-            <option value="all">全部状态</option>
+            <option value="all">{tShared("filters.allStates")}</option>
             {Object.entries(STATUS_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -290,7 +292,7 @@ export function NotificationLogsPage() {
               title="暂无通知记录"
               description={
                 search || channelFilter !== "all" || statusFilter !== "all"
-                  ? "尝试调整筛选条件"
+                  ? tShared("common.adjustFiltersHint")
                   : "数据库中没有通知投递记录"
               }
             />

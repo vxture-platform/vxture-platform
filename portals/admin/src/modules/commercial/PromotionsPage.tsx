@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -137,6 +138,7 @@ function PromotionActionsMenu({
 
 /** 这一页的标已经是 DS `Tag`，不带业务色类，与批 4 无关。 */
 function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
+  const tShared = useTranslations();
   const router = useRouter();
 
   return [
@@ -185,7 +187,7 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
     },
     {
       id: "status",
-      header: "状态",
+      header: tShared("columns.state"),
       align: "center",
       cell: (record) => (
         <TableTitleCell
@@ -270,6 +272,7 @@ function PromotionCards({ records }: { records: PromotionOperationRecord[] }) {
 }
 
 export function PromotionsPage() {
+  const tShared = useTranslations();
   const [records, setRecords] = useState<PromotionOperationRecord[]>([]);
   const [recordsTruncated, setRecordsTruncated] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -501,7 +504,7 @@ export function PromotionsPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredRecords.length)}
             aria-label="营销优惠筛选"
             search={
@@ -565,7 +568,7 @@ export function PromotionsPage() {
                 }
                 aria-label="优惠状态"
               >
-                <option value="all">全部状态</option>
+                <option value="all">{tShared("filters.allStates")}</option>
                 <option value="active">生效中</option>
                 <option value="scheduled">待开始</option>
                 <option value="paused">已暂停</option>
@@ -579,7 +582,7 @@ export function PromotionsPage() {
                 }
                 aria-label="优惠类型"
               >
-                <option value="all">全部类型</option>
+                <option value="all">{tShared("filters.allKinds")}</option>
                 <option value="discount">套餐折扣</option>
                 <option value="coupon">优惠码</option>
                 <option value="campaign">活动</option>
@@ -594,7 +597,7 @@ export function PromotionsPage() {
               actions={[
                 {
                   id: "export",
-                  label: "导出所选",
+                  label: tShared("common.exportSelected"),
                   icon: "arrow-down",
                   onSelect: handleExportSelected,
                 },
@@ -608,7 +611,7 @@ export function PromotionsPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
             {viewMode === "list" ? (
@@ -637,7 +640,7 @@ export function PromotionsPage() {
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -665,7 +668,7 @@ export function PromotionsPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

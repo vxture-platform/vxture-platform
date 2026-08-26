@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -155,6 +156,7 @@ function TicketActionsMenu({
   ticket: SupportTicketRecord;
   onOpenDetail: (ticket: SupportTicketRecord) => void;
 }) {
+  const tShared = useTranslations();
   const router = useRouter();
 
   return (
@@ -173,7 +175,7 @@ function TicketActionsMenu({
           },
           {
             id: "tenant",
-            label: "查看租户",
+            label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
               router.push(`/tenants/${encodeURIComponent(ticket.tenantId)}`),
@@ -213,6 +215,7 @@ function ticketKey(ticket: SupportTicketRecord) {
  * 只有量计算样式才知道它被压掉了。判死码不能只看引用（同 §十三 的模板拼接那条）。
  */
 function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
+  const tShared = useTranslations();
   const router = useRouter();
 
   return [
@@ -242,7 +245,7 @@ function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
     },
     {
       id: "status",
-      header: "状态",
+      header: tShared("columns.state"),
       align: "center",
       cell: (ticket) => (
         <StatusBadge
@@ -269,7 +272,7 @@ function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
     },
     {
       id: "updated",
-      header: "更新时间",
+      header: tShared("columns.updatedAt"),
       cell: (ticket) => (
         <TableTitleCell
           title={formatDateTime(ticket.updatedAt)}
@@ -289,6 +292,7 @@ function TicketAssignDialog({
   onClose: () => void;
   onAssigned: (updated: SupportTicketRecord) => void;
 }) {
+  const tShared = useTranslations();
   const [assigneeId, setAssigneeId] = useState("");
   const [assigneeName, setAssigneeName] = useState("");
   const [note, setNote] = useState("");
@@ -328,7 +332,7 @@ function TicketAssignDialog({
         </>
       }
       submitLabel="确认指派"
-      cancelLabel="取消"
+      cancelLabel={tShared("actions.cancel")}
       submitting={submitting}
       submitDisabled={!canSubmit}
       onOpenChange={(open) => {
@@ -375,6 +379,7 @@ function TicketStatusDialog({
   onClose: () => void;
   onChanged: (updated: SupportTicketRecord) => void;
 }) {
+  const tShared = useTranslations();
   const [status, setStatus] = useState<TicketStatusInput>("in_progress");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -410,7 +415,7 @@ function TicketStatusDialog({
         </>
       }
       submitLabel="确认变更"
-      cancelLabel="取消"
+      cancelLabel={tShared("actions.cancel")}
       submitting={submitting}
       onOpenChange={(open) => {
         if (!open) onClose();
@@ -453,6 +458,7 @@ function TicketDetailDrawer({
   onClose: () => void;
   onTicketUpdated: (updated: SupportTicketRecord) => void;
 }) {
+  const tShared = useTranslations();
   const [detail, setDetail] = useState<SupportTicketRecord | null>(null);
   const [comments, setComments] = useState<TicketCommentRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -525,13 +531,19 @@ function TicketDetailDrawer({
   const fields = detail
     ? [
         { label: "工单编号", value: detail.id },
-        { label: "状态", value: ticketStatusLabel(detail.status) },
+        {
+          label: tShared("columns.state"),
+          value: ticketStatusLabel(detail.status),
+        },
         { label: "优先级", value: priorityLabels[detail.priority] },
         { label: "租户", value: `${detail.tenantName} / ${detail.tenantCode}` },
         { label: "负责人", value: detail.ownerName },
         { label: "行业", value: detail.industry },
         { label: "地区", value: detail.region },
-        { label: "更新时间", value: formatDateTime(detail.updatedAt) },
+        {
+          label: tShared("columns.updatedAt"),
+          value: formatDateTime(detail.updatedAt),
+        },
       ]
     : undefined;
 
@@ -651,6 +663,7 @@ function TicketDetailDrawer({
 }
 
 export function TicketsPage() {
+  const tShared = useTranslations();
   const [tickets, setTickets] = useState<SupportTicketRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -849,9 +862,13 @@ export function TicketsPage() {
                   setStatus(event.target.value as TicketStatusFilter)
                 }
               >
-                <option value="all">全部状态</option>
-                <option value="open">待处理</option>
-                <option value="processing">处理中</option>
+                <option value="all">{tShared("filters.allStates")}</option>
+                <option value="open">
+                  {tShared("status.generic.pending")}
+                </option>
+                <option value="processing">
+                  {tShared("status.generic.processing")}
+                </option>
                 <option value="blocked">搁置</option>
                 <option value="closed">完成</option>
               </NativeSelect>
@@ -960,7 +977,7 @@ export function TicketsPage() {
           title="批量变更工单状态"
           description={`将对已选 ${formatNumber(selectedTickets.length)} 条工单应用新状态。`}
           submitLabel="确认变更"
-          cancelLabel="取消"
+          cancelLabel={tShared("actions.cancel")}
           submitting={batchSubmitting}
           submitDisabled={selectedTickets.length === 0}
           onOpenChange={(open) => {

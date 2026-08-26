@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useTranslations } from "next-intl";
 import {
   ActionMenu,
   Button,
@@ -161,6 +162,7 @@ const COLUMNS: readonly DataTableColumn<FeatureFlagRecord>[] = [
 ];
 
 export function FeatureTogglesPage() {
+  const tShared = useTranslations();
   const { toast } = useToast();
   const [items, setItems] = useState<FeatureFlagRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -425,7 +427,9 @@ export function FeatureTogglesPage() {
                 items={[
                   {
                     id: "toggle",
-                    label: item.isGloballyEnabled ? "停用" : "启用",
+                    label: item.isGloballyEnabled
+                      ? tShared("actions.disable")
+                      : tShared("actions.enable"),
                     icon: item.isGloballyEnabled ? "x" : "check",
                     disabled: submitting || item.isArchived,
                     onSelect: () =>
@@ -436,14 +440,16 @@ export function FeatureTogglesPage() {
                   },
                   {
                     id: "edit",
-                    label: "编辑",
+                    label: tShared("actions.edit"),
                     icon: "edit",
                     disabled: submitting || item.isArchived,
                     onSelect: () => openEdit(item),
                   },
                   {
                     id: "archive",
-                    label: item.isArchived ? "恢复" : "归档",
+                    label: item.isArchived
+                      ? "恢复"
+                      : tShared("actions.archive"),
                     icon: item.isArchived ? "clock-counter-clockwise" : "stop",
                     disabled: submitting,
                     onSelect: () =>
@@ -463,7 +469,7 @@ export function FeatureTogglesPage() {
                   categoryFilter !== "all" ||
                   environmentFilter !== "all" ||
                   archivedFilter !== "all"
-                    ? "尝试调整筛选条件"
+                    ? tShared("common.adjustFiltersHint")
                     : "点击「新建开关」创建第一个功能开关"
                 }
               />
@@ -486,7 +492,9 @@ export function FeatureTogglesPage() {
           open
           title={dialogMode === "create" ? "新建功能开关" : "编辑功能开关"}
           description="灰度百分比 0-100；逐租户覆盖命中优先于灰度。开关键创建后不可更改。"
-          submitLabel={dialogMode === "create" ? "创建" : "保存"}
+          submitLabel={
+            dialogMode === "create" ? tShared("actions.create") : "保存"
+          }
           submitting={submitting}
           submitDisabled={!formIsValid(form, dialogMode)}
           onOpenChange={(open) => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -266,6 +267,7 @@ const CSV_COLUMNS: readonly CsvColumn<OpsTodoItem>[] = [
 ];
 
 export function OpsTodosPage() {
+  const tShared = useTranslations();
   const router = useRouter();
   const [tenants, setTenants] = useState<TenantOperationRecord[]>([]);
   const [tickets, setTickets] = useState<SupportTicketRecord[]>([]);
@@ -328,7 +330,7 @@ export function OpsTodosPage() {
         },
         {
           id: "tenant",
-          label: "查看租户",
+          label: tShared("actions.viewTenant"),
           icon: "buildings",
           onSelect: () =>
             router.push(`/tenants/${encodeURIComponent(item.tenantId)}`),
@@ -483,7 +485,7 @@ export function OpsTodosPage() {
             aria-label="待办任务筛选"
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={`${formatNumber(filteredTodos.length)} 条`}
             search={
               <Input
@@ -515,7 +517,7 @@ export function OpsTodosPage() {
                   exportRowsToCsv("ops-todos", CSV_COLUMNS, selectedTodos)
                 }
               >
-                导出
+                {tShared("common.export")}
               </ActionButton>
             }
           >
@@ -555,7 +557,7 @@ export function OpsTodosPage() {
                     ? "正在从租户、用量、订阅与工单数据库读取数据。"
                     : (tenantLoadError ??
                       (query || typeFilter !== "all" || severityFilter !== "all"
-                        ? "尝试调整筛选条件"
+                        ? tShared("common.adjustFiltersHint")
                         : (ticketLoadError ?? "数据库中没有匹配的待办任务。")))
                 }
               />
@@ -623,7 +625,7 @@ export function OpsTodosPage() {
                 },
                 {
                   id: "type",
-                  header: "类型",
+                  header: tShared("columns.kind"),
                   cell: (item) => TODO_TYPE_LABEL[item.type],
                 },
                 {
@@ -648,7 +650,7 @@ export function OpsTodosPage() {
                 },
                 {
                   id: "updated",
-                  header: "更新时间",
+                  header: tShared("columns.updatedAt"),
                   align: "right",
                   cell: (item) => formatDateTime(item.updatedAt),
                 },
@@ -665,7 +667,7 @@ export function OpsTodosPage() {
                   description={
                     tenantLoadError ??
                     (query || typeFilter !== "all" || severityFilter !== "all"
-                      ? "尝试调整筛选条件"
+                      ? tShared("common.adjustFiltersHint")
                       : (ticketLoadError ?? "数据库中没有匹配的待办任务。"))
                   }
                 />

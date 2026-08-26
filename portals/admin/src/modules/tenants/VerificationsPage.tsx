@@ -8,6 +8,7 @@ import {
   type FormEvent,
 } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   ActionButton,
   ActionMenu,
@@ -192,6 +193,7 @@ function VerificationActionsMenu({
   onApprove: (row: VerificationRow) => void;
   onReject: (row: VerificationRow) => void;
 }) {
+  const tShared = useTranslations();
   const router = useRouter();
   const isPending = tenant.verifiedStatus === "pending";
 
@@ -205,7 +207,7 @@ function VerificationActionsMenu({
         items={[
           {
             id: "review",
-            label: isPending ? "进入审核" : "查看详情",
+            label: isPending ? "进入审核" : tShared("actions.viewDetail"),
             icon: isPending ? "medal" : "arrow-right",
             onSelect: () =>
               router.push(`/tenants/${encodeURIComponent(tenant.id)}`),
@@ -419,6 +421,7 @@ function VerificationCards({
 }
 
 export function VerificationsPage() {
+  const tShared = useTranslations();
   const { toast } = useToast();
   const [tenants, setTenants] = useState<VerificationRow[]>([]);
   const [verificationsTruncated, setVerificationsTruncated] = useState(false);
@@ -713,7 +716,7 @@ export function VerificationsPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredTenants.length)}
             aria-label="实名认证筛选"
             search={
@@ -748,7 +751,9 @@ export function VerificationsPage() {
                 <option value="all">全部认证</option>
                 <option value="pending">待审核</option>
                 <option value="verified">已认证</option>
-                <option value="rejected">已驳回</option>
+                <option value="rejected">
+                  {tShared("status.generic.rejected")}
+                </option>
                 <option value="unverified">未认证</option>
               </NativeSelect>
               <NativeSelect
@@ -787,7 +792,7 @@ export function VerificationsPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
 
@@ -822,7 +827,7 @@ export function VerificationsPage() {
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -849,7 +854,7 @@ export function VerificationsPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />
@@ -877,7 +882,7 @@ export function VerificationsPage() {
           description={`将驳回 ${rejectTarget.displayName}（${rejectTarget.tenantCode}）提交的实名材料，请填写驳回原因，租户可据此补充后重新提交。`}
           submitLabel="确认驳回"
           danger
-          cancelLabel="放弃"
+          cancelLabel={tShared("actions.discard")}
           submitting={actionBusy}
           submitDisabled={!rejectReason.trim()}
           onOpenChange={(open) => {

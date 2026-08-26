@@ -12,6 +12,7 @@
  */
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { DialogForm, Input, Label, NativeSelect } from "@vxture/design-system";
 import type { PromotionOperationRecord } from "@/entities/console";
 
@@ -38,6 +39,7 @@ export function CreateVoucherBatchDialog({
   onClose: () => void;
   onSubmit: (payload: CreateBatchPayload) => void;
 }) {
+  const tShared = useTranslations();
   const [kind, setKind] = useState<"discount" | "credit_voucher">("discount");
   const [name, setName] = useState("");
   const [codePrefix, setCodePrefix] = useState("");
@@ -95,7 +97,7 @@ export function CreateVoucherBatchDialog({
       title="新建优惠批次"
       description="V1 支持折扣券（计价减免）与代金券（结算抵扣）；发放后客户在付款页可勾选使用。"
       submitLabel="创建批次"
-      cancelLabel="取消"
+      cancelLabel={tShared("actions.cancel")}
       submitting={busy}
       submitDisabled={!canSubmit}
       onOpenChange={(open) => {

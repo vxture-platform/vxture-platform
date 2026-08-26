@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -218,6 +219,7 @@ function InvoiceActionsMenu({
     action: BillingInvoiceReceiptAction,
   ) => void;
 }) {
+  const tShared = useTranslations();
   const router = useRouter();
 
   return (
@@ -237,7 +239,7 @@ function InvoiceActionsMenu({
           },
           {
             id: "tenant",
-            label: "查看租户",
+            label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
               router.push(`/tenants/${encodeURIComponent(invoice.tenantId)}`),
@@ -290,6 +292,7 @@ function InvoiceActionsMenu({
  * 值域着色表，整族改 Badge 归批 4，一次改动不跨两个语义面。
  */
 function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
+  const tShared = useTranslations();
   const router = useRouter();
 
   return [
@@ -351,7 +354,7 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
     },
     {
       id: "status",
-      header: "状态",
+      header: tShared("columns.state"),
       align: "center",
       cell: (invoice) => (
         <TableTitleCell
@@ -400,6 +403,7 @@ function InvoiceCards({
     action: BillingInvoiceReceiptAction,
   ) => void;
 }) {
+  const tShared = useTranslations();
   const router = useRouter();
 
   return (
@@ -457,8 +461,8 @@ function InvoiceCards({
               value: invoice.expressNo
                 ? "已寄送"
                 : invoice.invoiceStatus === "finished"
-                  ? "已完成"
-                  : "待处理",
+                  ? tShared("status.generic.completed")
+                  : tShared("status.generic.pending"),
               label: "交付状态",
             },
           ]}
@@ -481,6 +485,7 @@ function InvoiceCards({
 }
 
 export function InvoicesPage() {
+  const tShared = useTranslations();
   const [invoices, setInvoices] = useState<BillingInvoiceLedgerRecord[]>([]);
   const [invoicesTruncated, setInvoicesTruncated] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -746,7 +751,7 @@ export function InvoicesPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredInvoices.length)}
             aria-label="发票筛选"
             search={
@@ -767,7 +772,7 @@ export function InvoicesPage() {
                   onClick={handleExportSelected}
                   disabled={selectedInvoiceIds.size === 0}
                 >
-                  导出
+                  {tShared("common.export")}
                 </ActionButton>
               </>
             }
@@ -781,14 +786,18 @@ export function InvoicesPage() {
                 }
                 aria-label="发票状态"
               >
-                <option value="all">全部状态</option>
+                <option value="all">{tShared("filters.allStates")}</option>
                 <option value="active">待交付</option>
                 <option value="issued">已开票</option>
                 <option value="sending">寄送中</option>
-                <option value="finished">已完成</option>
+                <option value="finished">
+                  {tShared("status.generic.completed")}
+                </option>
                 <option value="exception">异常发票</option>
                 <option value="red">已红冲</option>
-                <option value="rejected">已驳回</option>
+                <option value="rejected">
+                  {tShared("status.generic.rejected")}
+                </option>
               </NativeSelect>
               <NativeSelect
                 className="vx-input vx-tenant-select"
@@ -798,7 +807,7 @@ export function InvoicesPage() {
                 }
                 aria-label="发票类型"
               >
-                <option value="all">全部类型</option>
+                <option value="all">{tShared("filters.allKinds")}</option>
                 <option value="special_vat">增值税专票</option>
                 <option value="normal_vat">增值税普票</option>
                 <option value="electronic">电子发票</option>
@@ -830,7 +839,9 @@ export function InvoicesPage() {
                 <option value="all">全部交付</option>
                 <option value="not_sent">未寄送</option>
                 <option value="sent">已寄送</option>
-                <option value="finished">已完成</option>
+                <option value="finished">
+                  {tShared("status.generic.completed")}
+                </option>
               </NativeSelect>
             </div>
           </FilterBar>
@@ -842,7 +853,7 @@ export function InvoicesPage() {
               actions={[
                 {
                   id: "export",
-                  label: "导出所选",
+                  label: tShared("common.exportSelected"),
                   icon: "table",
                   onSelect: handleExportSelected,
                 },
@@ -856,7 +867,7 @@ export function InvoicesPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
 
@@ -889,7 +900,7 @@ export function InvoicesPage() {
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -914,7 +925,7 @@ export function InvoicesPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

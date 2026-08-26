@@ -1598,5 +1598,50 @@
     "cancel": "取消",
     "pending": "处理中…",
     "blocked": "前置条件未满足，先处理上面标红的那几条。"
+  },
+  "common": {
+    "adjustFiltersHint": "尝试调整筛选条件",
+    "cardsRetired": "卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。",
+    "clearFilters": "清空筛选",
+    "export": "导出",
+    "exportSelected": "导出所选",
+    "loading": "读取中",
+    "saveFailed": "保存失败"
+  },
+  "columns": {
+    "currency": "币种",
+    "kind": "类型",
+    "state": "状态",
+    "tenantName": "租户名称",
+    "tenantType": "租户类型",
+    "updatedAt": "更新时间"
+  },
+  "filters": {
+    "allKinds": "全部类型",
+    "allStates": "全部状态"
+  },
+  "actions": {
+    "archive": "归档",
+    "cancel": "取消",
+    "create": "创建",
+    "disable": "停用",
+    "discard": "放弃",
+    "edit": "编辑",
+    "enable": "启用",
+    "pause": "暂停",
+    "viewDetail": "查看详情",
+    "viewTenant": "查看租户"
+  },
+  "status": {
+    "generic": {
+      "normal": "正常",
+      "overdue": "逾期",
+      "draft": "草稿",
+      "processing": "处理中",
+      "pending": "待处理",
+      "paying": "支付中",
+      "rejected": "已驳回",
+      "completed": "已完成"
+    }
   }
 }

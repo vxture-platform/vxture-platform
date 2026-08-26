@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { FormEvent, ReactNode } from "react";
 import Link from "next/link";
 import {
@@ -322,6 +323,7 @@ function TenantInfoTab({
   onReset: () => void;
   onSave: () => void;
 }) {
+  const tShared = useTranslations();
   return (
     <div className="vx-tenant-tab-grid vx-tenant-tab-grid--info">
       <section className="vx-tenant-block">
@@ -334,7 +336,7 @@ function TenantInfoTab({
                   <span className="vx-tenant-unsaved">有未保存修改</span>
                 ) : null}
                 <Button variant="outline" disabled={saving} onClick={onReset}>
-                  放弃
+                  {tShared("actions.discard")}
                 </Button>
                 <Button
                   className={infoDirty ? "vx-tenant-save-alert" : undefined}
@@ -374,7 +376,7 @@ function TenantInfoTab({
                 <TenantConfigValue>{draft.tenantCode}</TenantConfigValue>
               )}
             </TenantConfigItem>
-            <TenantConfigItem label="租户名称">
+            <TenantConfigItem label={tShared("columns.tenantName")}>
               {editing ? (
                 <Input
                   value={draft.tenantName}
@@ -401,7 +403,7 @@ function TenantInfoTab({
           </div>
 
           <div className="vx-tenant-config-row vx-tenant-config-row--three">
-            <TenantConfigItem label="租户类型">
+            <TenantConfigItem label={tShared("columns.tenantType")}>
               {editing ? (
                 <NativeSelect
                   className="vx-input vx-tenant-select"
@@ -641,13 +643,14 @@ function TenantMemberList({
   members: TenantMemberView[];
   actions: MemberActionHandlers;
 }) {
+  const tShared = useTranslations();
   return (
     <div className="vx-tenant-member-list" role="region" aria-label="账号列表">
       <div className="vx-tenant-member-list__header">
         <span>#</span>
         <span>账号</span>
         <span>权限</span>
-        <span>状态</span>
+        <span>{tShared("columns.state")}</span>
         <span>最近活跃</span>
         <span>操作</span>
       </div>
@@ -745,6 +748,7 @@ function TenantMemberCards({
 }
 
 function TenantMembersTab({ tenantId }: { tenantId: string }) {
+  const tShared = useTranslations();
   const { toast } = useToast();
   const [members, setMembers] = useState<TenantMemberView[]>([]);
   const [roleChoices, setRoleChoices] = useState<MemberRoleOption[]>([]);
@@ -977,10 +981,10 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
           }
           aria-label="账号状态"
         >
-          <option value="all">全部状态</option>
-          <option value="active">正常</option>
+          <option value="all">{tShared("filters.allStates")}</option>
+          <option value="active">{tShared("status.generic.normal")}</option>
           <option value="invited">邀请中</option>
-          <option value="suspended">停用</option>
+          <option value="suspended">{tShared("actions.disable")}</option>
         </NativeSelect>
         <NativeSelect
           className="vx-input vx-tenant-select vx-tenant-member-select"
@@ -1024,7 +1028,7 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
             action={
               loading ? undefined : (
                 <Button variant="outline" onClick={handleReset}>
-                  清空筛选
+                  {tShared("common.clearFilters")}
                 </Button>
               )
             }
@@ -1038,7 +1042,7 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
           title="调整成员权限"
           description={`为 ${roleTarget.name} 选择新的租户角色，保存后立即生效。`}
           submitLabel="确认调整"
-          cancelLabel="取消"
+          cancelLabel={tShared("actions.cancel")}
           submitting={actionBusy}
           submitDisabled={
             !selectedRoleId || selectedRoleId === roleTarget.roleId
@@ -1158,6 +1162,7 @@ function TenantModelsTab({
 }: {
   policies: TenantOperationModelPolicy[];
 }) {
+  const tShared = useTranslations();
   return (
     <div className="vx-tenant-table vx-tenant-table--models">
       <div className="vx-tenant-table__header">
@@ -1165,7 +1170,7 @@ function TenantModelsTab({
         <span>产品</span>
         <span>模型</span>
         <span>配额</span>
-        <span>状态</span>
+        <span>{tShared("columns.state")}</span>
       </div>
       {policies.map((policy) => (
         <div key={policy.id} className="vx-tenant-table__row">

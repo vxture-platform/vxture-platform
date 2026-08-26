@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -237,6 +238,7 @@ function PaymentRemarkDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const tShared = useTranslations();
   return (
     <DialogForm
       open
@@ -248,7 +250,7 @@ function PaymentRemarkDialog({
         </>
       }
       submitLabel="确认"
-      cancelLabel="取消"
+      cancelLabel={tShared("actions.cancel")}
       submitting={loading}
       submitDisabled={remark.trim().length < 4}
       onOpenChange={(open) => {
@@ -284,6 +286,7 @@ function PaymentActionsMenu({
   onVerify: (payment: PaymentOperationRecord) => void;
   onReject: (payment: PaymentOperationRecord) => void;
 }) {
+  const tShared = useTranslations();
   const router = useRouter();
   const isPendingVerify = payment.paymentStatus === "pending_verify";
 
@@ -337,7 +340,7 @@ function PaymentActionsMenu({
           },
           {
             id: "tenant",
-            label: "查看租户",
+            label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
               router.push(`/tenants/${encodeURIComponent(payment.tenantId)}`),
@@ -570,6 +573,7 @@ function PaymentCards({
 }
 
 export function PaymentsPage() {
+  const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
   const [payments, setPayments] = useState<PaymentOperationRecord[]>([]);
   const [paymentsTruncated, setPaymentsTruncated] = useState(false);
@@ -838,7 +842,7 @@ export function PaymentsPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredPayments.length)}
             aria-label="收款筛选"
             search={
@@ -867,7 +871,7 @@ export function PaymentsPage() {
                   }
                   disabled={selectedPaymentIds.size === 0}
                 >
-                  导出
+                  {tShared("common.export")}
                 </ActionButton>
               </>
             }
@@ -884,7 +888,9 @@ export function PaymentsPage() {
                 aria-label="收款状态"
               >
                 <option value="all">全部收款</option>
-                <option value="pending">支付中</option>
+                <option value="pending">
+                  {tShared("status.generic.paying")}
+                </option>
                 <option value="pending_verify">线下待核</option>
                 <option value="paid">已收款</option>
                 <option value="partial">部分收款</option>
@@ -950,7 +956,7 @@ export function PaymentsPage() {
               actions={[
                 {
                   id: "export",
-                  label: "导出所选",
+                  label: tShared("common.exportSelected"),
                   onSelect: () =>
                     exportRowsToCsv(
                       "payments-export",
@@ -968,7 +974,7 @@ export function PaymentsPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
 
@@ -1004,7 +1010,7 @@ export function PaymentsPage() {
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -1030,7 +1036,7 @@ export function PaymentsPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

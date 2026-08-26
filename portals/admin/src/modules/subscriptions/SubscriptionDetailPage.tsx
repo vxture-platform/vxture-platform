@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   Badge,
@@ -161,6 +162,7 @@ function SubscriptionDetails({
 }: {
   subscription: SubscriptionOperationDetailRecord;
 }) {
+  const tShared = useTranslations();
   const servicePlanHref = subscription.solutionAssociation.solutionCode
     ? `/service-plans/${encodeURIComponent(subscription.solutionAssociation.solutionCode)}/${encodeURIComponent(subscription.solutionAssociation.tierCode)}`
     : null;
@@ -180,7 +182,7 @@ function SubscriptionDetails({
             {orUnset(subscription.orderNo)}
           </DetailRow>
           <DetailRow label="租户">{orUnset(subscription.tenantName)}</DetailRow>
-          <DetailRow label="租户类型">
+          <DetailRow label={tShared("columns.tenantType")}>
             {orUnset(typeLabel(subscription.tenantType))}
           </DetailRow>
           <DetailRow label="订阅状态">
@@ -204,7 +206,7 @@ function SubscriptionDetails({
           <DetailRow label="试用结束">
             {orUnset(formatDate(subscription.trialEndAt))}
           </DetailRow>
-          <DetailRow label="更新时间">
+          <DetailRow label={tShared("columns.updatedAt")}>
             {orUnset(formatDate(subscription.updatedAt))}
           </DetailRow>
         </DetailList>
@@ -352,6 +354,7 @@ export function SubscriptionDetailPage({
 }: {
   subscriptionId: string;
 }) {
+  const tShared = useTranslations();
   const [subscription, setSubscription] =
     useState<SubscriptionOperationDetailRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -562,7 +565,7 @@ export function SubscriptionDetailPage({
         </>
       ) : (
         <section className="vx-tenant-directory__header">
-          <span>读取中</span>
+          <span>{tShared("common.loading")}</span>
         </section>
       )}
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -204,6 +205,7 @@ function BillingDetails({
     action: BillingInvoiceReceiptAction,
   ) => void;
 }) {
+  const tShared = useTranslations();
   return (
     <section
       className="vx-product-capability-detail"
@@ -231,7 +233,7 @@ function BillingDetails({
           <DetailRow label="生成时间">
             {orUnset(formatDate(bill.createdAt))}
           </DetailRow>
-          <DetailRow label="更新时间">
+          <DetailRow label={tShared("columns.updatedAt")}>
             {orUnset(formatDate(bill.updatedAt))}
           </DetailRow>
           <DetailRow label="经办人">{orUnset(bill.operatorName)}</DetailRow>
@@ -246,7 +248,7 @@ function BillingDetails({
         <DetailList columns={3}>
           <DetailRow label="租户">{orUnset(bill.tenantName)}</DetailRow>
           <DetailRow label="租户编码">{orUnset(bill.tenantCode)}</DetailRow>
-          <DetailRow label="租户类型">
+          <DetailRow label={tShared("columns.tenantType")}>
             {orUnset(typeLabel(bill.tenantType))}
           </DetailRow>
           <DetailRow label="所属区域">{orUnset(bill.region)}</DetailRow>
@@ -318,7 +320,9 @@ function BillingDetails({
           </DetailRow>
           <DetailRow label="支付方式">{orUnset(bill.paymentMethod)}</DetailRow>
           <DetailRow label="交易流水">{orUnset(bill.transactionNo)}</DetailRow>
-          <DetailRow label="币种">{orUnset(bill.currency)}</DetailRow>
+          <DetailRow label={tShared("columns.currency")}>
+            {orUnset(bill.currency)}
+          </DetailRow>
         </DetailList>
       </section>
 
@@ -518,6 +522,7 @@ function BillingDetails({
 }
 
 export function BillingDetailPage({ billId }: { billId: string }) {
+  const tShared = useTranslations();
   const router = useRouter();
   const { runWithStepUp } = useStepUp();
   const [bill, setBill] = useState<BillingDetailRecord | null>(null);
@@ -797,7 +802,7 @@ export function BillingDetailPage({ billId }: { billId: string }) {
         </>
       ) : (
         <section className="vx-tenant-directory__header">
-          <span>读取中</span>
+          <span>{tShared("common.loading")}</span>
         </section>
       )}
 

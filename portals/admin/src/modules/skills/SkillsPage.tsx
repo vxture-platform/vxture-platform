@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Button,
   DataTable,
@@ -115,11 +116,12 @@ function SkillToolbar({
   onCategoryFilterChange: (v: string) => void;
   onViewModeChange: (v: ViewMode) => void;
 }) {
+  const tShared = useTranslations();
   return (
     <FilterBar
       view={viewMode}
       onViewChange={onViewModeChange}
-      cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+      cardsDisabledReason={tShared("common.cardsRetired")}
       count={`${total} 个技能`}
       aria-label="技能筛选"
       search={
@@ -146,10 +148,10 @@ function SkillToolbar({
         }
         aria-label="技能状态"
       >
-        <option value="all">全部状态</option>
+        <option value="all">{tShared("filters.allStates")}</option>
         <option value="active">已上线</option>
         <option value="disabled">已停用</option>
-        <option value="draft">草稿</option>
+        <option value="draft">{tShared("status.generic.draft")}</option>
       </NativeSelect>
       {categories.length > 0 ? (
         <NativeSelect
@@ -264,6 +266,7 @@ function SkillCards({ skills }: { skills: SkillRecord[] }) {
 // ─── 主组件 ───────────────────────────────────────────────────────────────────
 
 export function SkillsPage() {
+  const tShared = useTranslations();
   const [skills, setSkills] = useState<SkillRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -366,7 +369,7 @@ export function SkillsPage() {
                   title="暂无技能"
                   description={
                     search || statusFilter !== "all" || categoryFilter
-                      ? "尝试调整筛选条件"
+                      ? tShared("common.adjustFiltersHint")
                       : "尚未接入任何 AI 技能，请通过 API 注册技能"
                   }
                 />
@@ -403,7 +406,7 @@ export function SkillsPage() {
               title="暂无技能"
               description={
                 search || statusFilter !== "all" || categoryFilter
-                  ? "尝试调整筛选条件"
+                  ? tShared("common.adjustFiltersHint")
                   : "尚未接入任何 AI 技能，请通过 API 注册技能"
               }
             />

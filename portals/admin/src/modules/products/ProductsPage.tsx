@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -115,6 +116,7 @@ function ProductActionsMenu({
   product: ProductCapabilityRecord;
   onViewDetails: () => void;
 }) {
+  const tShared = useTranslations();
   return (
     <div
       className="vx-tenant-actions"
@@ -125,7 +127,7 @@ function ProductActionsMenu({
         items={[
           {
             id: "details",
-            label: "查看详情",
+            label: tShared("actions.viewDetail"),
             icon: "arrow-right",
             onSelect: onViewDetails,
           },
@@ -160,6 +162,7 @@ function ProductActionsMenu({
 function useProductColumns(
   onOpenDetails: (productCode: string) => void,
 ): DataTableColumn<ProductCapabilityRecord>[] {
+  const tShared = useTranslations();
   return [
     {
       id: "product",
@@ -175,7 +178,7 @@ function useProductColumns(
     },
     {
       id: "type",
-      header: "类型",
+      header: tShared("columns.kind"),
       align: "center",
       cell: (product) => (
         <span className="inline-flex flex-wrap justify-center gap-2xs">
@@ -186,7 +189,7 @@ function useProductColumns(
     },
     {
       id: "status",
-      header: "状态",
+      header: tShared("columns.state"),
       align: "center",
       cell: (product) => (
         <TableTitleCell
@@ -316,6 +319,7 @@ function ProductCards({
 }
 
 export function ProductsPage() {
+  const tShared = useTranslations();
   const router = useRouter();
   const [products, setProducts] = useState<ProductCapabilityRecord[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -489,7 +493,7 @@ export function ProductsPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredProducts.length)}
             aria-label="产品能力筛选"
             search={
@@ -519,7 +523,7 @@ export function ProductsPage() {
                 }
                 aria-label="能力类型"
               >
-                <option value="all">全部类型</option>
+                <option value="all">{tShared("filters.allKinds")}</option>
                 <option value="platform">平台</option>
                 <option value="agent">智能体</option>
                 <option value="model">模型</option>
@@ -546,9 +550,9 @@ export function ProductsPage() {
                 }
                 aria-label="产品状态"
               >
-                <option value="all">全部状态</option>
+                <option value="all">{tShared("filters.allStates")}</option>
                 <option value="active">已上线</option>
-                <option value="draft">草稿</option>
+                <option value="draft">{tShared("status.generic.draft")}</option>
                 <option value="archived">已归档</option>
               </NativeSelect>
               <NativeSelect
@@ -573,7 +577,7 @@ export function ProductsPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
 
@@ -604,7 +608,7 @@ export function ProductsPage() {
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -629,7 +633,7 @@ export function ProductsPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

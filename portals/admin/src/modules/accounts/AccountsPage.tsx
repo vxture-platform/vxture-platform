@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useTranslations } from "next-intl";
 import {
   ActionButton,
   ActionMenu,
@@ -230,6 +231,7 @@ function AccountActionsMenu({
   onToggleStatus: (account: AccountOperationRecord) => void;
   onForceLogout: (account: AccountOperationRecord) => void;
 }) {
+  const tShared = useTranslations();
   const isDisabled = account.status === "disabled";
   return (
     <div
@@ -242,7 +244,7 @@ function AccountActionsMenu({
         items={[
           {
             id: "details",
-            label: "查看详情",
+            label: tShared("actions.viewDetail"),
             icon: "arrow-right",
             disabled: true,
           },
@@ -287,6 +289,7 @@ interface AccountRowActions {
 function useAccountColumns(
   showTenantContext: boolean,
 ): DataTableColumn<AccountOperationRecord>[] {
+  const tShared = useTranslations();
   return [
     {
       id: "account",
@@ -329,7 +332,7 @@ function useAccountColumns(
       : []),
     {
       id: "status",
-      header: "状态",
+      header: tShared("columns.state"),
       align: "center",
       cell: (account) => {
         const indicator = accountStatusIndicator(account);
@@ -460,6 +463,7 @@ export function AccountsPage({
   loadAccounts?: () => Promise<AccountOperationRecord[]>;
   showTenantContext?: boolean;
 } = {}) {
+  const tShared = useTranslations();
   const pageCopy = { ...defaultAccountsPageCopy, ...copy };
   const [accounts, setAccounts] = useState<AccountOperationRecord[]>([]);
   const [accountsTruncated, setAccountsTruncated] = useState(false);
@@ -707,7 +711,7 @@ export function AccountsPage({
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredAccounts.length)}
             search={
               <Input
@@ -736,8 +740,10 @@ export function AccountsPage({
                 }
                 aria-label={pageCopy.statusAriaLabel}
               >
-                <option value="all">全部状态</option>
-                <option value="active">正常</option>
+                <option value="all">{tShared("filters.allStates")}</option>
+                <option value="active">
+                  {tShared("status.generic.normal")}
+                </option>
                 <option value="invited">待激活</option>
                 <option value="locked">已锁定</option>
                 <option value="disabled">已停用</option>
@@ -781,7 +787,7 @@ export function AccountsPage({
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
 
@@ -816,7 +822,7 @@ export function AccountsPage({
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -842,7 +848,7 @@ export function AccountsPage({
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

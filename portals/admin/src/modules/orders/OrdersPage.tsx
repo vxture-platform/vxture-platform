@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -178,6 +179,7 @@ function OrderActionsMenu({
   order: OrderOperationRecord;
   onConfirmPayment: (order: OrderOperationRecord) => void;
 }) {
+  const tShared = useTranslations();
   const router = useRouter();
 
   return (
@@ -197,7 +199,7 @@ function OrderActionsMenu({
           },
           {
             id: "tenant",
-            label: "查看租户",
+            label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
               router.push(`/tenants/${encodeURIComponent(order.tenantId)}`),
@@ -230,6 +232,7 @@ function OrderActionsMenu({
  * 值域着色表，整族改 Badge 归批 4，一次改动不跨两个语义面。
  */
 function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
+  const tShared = useTranslations();
   const router = useRouter();
 
   return [
@@ -314,7 +317,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
     },
     {
       id: "status",
-      header: "状态",
+      header: tShared("columns.state"),
       align: "center",
       cell: (order) => (
         <TableTitleCell
@@ -407,6 +410,7 @@ function OrderCards({
 }
 
 export function OrdersPage() {
+  const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
   const [orders, setOrders] = useState<OrderOperationRecord[]>([]);
   const [ordersTruncated, setOrdersTruncated] = useState(false);
@@ -612,7 +616,7 @@ export function OrdersPage() {
                   id: "pending",
                   help: "待处理订单：待确认与待核验。",
                   icon: "clock",
-                  label: "待处理",
+                  label: tShared("status.generic.pending"),
                   value: formatNumber(pendingCount),
                   tags: [
                     `待复核 ${formatNumber(orders.filter((item) => item.orderStatus === "pending_verify").length)}`,
@@ -667,7 +671,7 @@ export function OrdersPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredOrders.length)}
             aria-label="订单筛选"
             search={
@@ -696,7 +700,7 @@ export function OrdersPage() {
                   }
                   disabled={selectedOrderIds.size === 0}
                 >
-                  导出
+                  {tShared("common.export")}
                 </ActionButton>
                 <ActionButton icon="plus" disabled>
                   补录订单
@@ -717,7 +721,9 @@ export function OrdersPage() {
                 <option value="pending">待付款</option>
                 <option value="pending_verify">待复核</option>
                 <option value="confirmed">已确认</option>
-                <option value="overdue">逾期</option>
+                <option value="overdue">
+                  {tShared("status.generic.overdue")}
+                </option>
                 <option value="closed">已关闭</option>
                 <option value="abnormal">异常</option>
               </NativeSelect>
@@ -732,7 +738,9 @@ export function OrdersPage() {
                 <option value="all">全部支付</option>
                 <option value="not_required">无需支付</option>
                 <option value="unpaid">未支付</option>
-                <option value="pending">支付中</option>
+                <option value="pending">
+                  {tShared("status.generic.paying")}
+                </option>
                 <option value="pending_verify">线下待核</option>
                 <option value="paid">已支付</option>
                 <option value="partial">部分支付</option>
@@ -778,7 +786,7 @@ export function OrdersPage() {
               actions={[
                 {
                   id: "export",
-                  label: "导出所选",
+                  label: tShared("common.exportSelected"),
                   onSelect: () =>
                     exportRowsToCsv(
                       "orders-export",
@@ -796,7 +804,7 @@ export function OrdersPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
 
@@ -827,7 +835,7 @@ export function OrdersPage() {
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -852,7 +860,7 @@ export function OrdersPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

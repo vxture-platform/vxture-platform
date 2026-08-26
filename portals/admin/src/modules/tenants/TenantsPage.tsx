@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -63,6 +64,7 @@ function TenantActionsMenu({
   busy: boolean;
   onToggleStatus: (tenant: TenantOperationRecord) => void;
 }) {
+  const tShared = useTranslations();
   const router = useRouter();
   const isSuspended = tenant.status === "suspended";
 
@@ -76,7 +78,7 @@ function TenantActionsMenu({
         items={[
           {
             id: "details",
-            label: "查看详情",
+            label: tShared("actions.viewDetail"),
             icon: "arrow-right",
             onSelect: () =>
               router.push(`/tenants/${encodeURIComponent(tenant.id)}`),
@@ -112,6 +114,7 @@ function TenantActionsMenu({
  * 是 12 个值域共用一个 CSS 前缀，见那个文件的文件头。
  */
 function useTenantColumns(): DataTableColumn<TenantOperationRecord>[] {
+  const tShared = useTranslations();
   const router = useRouter();
 
   return [
@@ -137,7 +140,7 @@ function useTenantColumns(): DataTableColumn<TenantOperationRecord>[] {
     },
     {
       id: "status",
-      header: "状态",
+      header: tShared("columns.state"),
       align: "center",
       /* 两枚标各说各的一件事：租户态、认证态。图标交给各自的语气自动配——
          此前这里借了 `tenantStatusIndicator` 的图标，而那是个**复合**信号
@@ -290,6 +293,7 @@ function TenantCards({
 }
 
 export function TenantsPage() {
+  const tShared = useTranslations();
   const { toast } = useToast();
   const { runWithStepUp } = useStepUp();
   const [tenants, setTenants] = useState<TenantOperationRecord[]>([]);
@@ -515,7 +519,7 @@ export function TenantsPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredTenants.length)}
             aria-label="租户筛选"
             search={
@@ -545,10 +549,12 @@ export function TenantsPage() {
                 }
                 aria-label="租户状态"
               >
-                <option value="all">全部状态</option>
-                <option value="active">正常</option>
+                <option value="all">{tShared("filters.allStates")}</option>
+                <option value="active">
+                  {tShared("status.generic.normal")}
+                </option>
                 <option value="trial">试用</option>
-                <option value="suspended">暂停</option>
+                <option value="suspended">{tShared("actions.pause")}</option>
                 <option value="cancelled">注销</option>
               </NativeSelect>
               <NativeSelect
@@ -557,9 +563,9 @@ export function TenantsPage() {
                 onChange={(event) =>
                   setTypeFilter(event.target.value as TypeFilter)
                 }
-                aria-label="租户类型"
+                aria-label={tShared("columns.tenantType")}
               >
-                <option value="all">全部类型</option>
+                <option value="all">{tShared("filters.allKinds")}</option>
                 <option value="company">企业租户</option>
                 <option value="individual">个人租户</option>
               </NativeSelect>
@@ -577,7 +583,9 @@ export function TenantsPage() {
                 <option value="verified">已认证</option>
                 <option value="pending">待审核</option>
                 <option value="unverified">未认证</option>
-                <option value="rejected">已驳回</option>
+                <option value="rejected">
+                  {tShared("status.generic.rejected")}
+                </option>
               </NativeSelect>
               <NativeSelect
                 className="vx-input vx-tenant-select"
@@ -602,7 +610,7 @@ export function TenantsPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
 
@@ -636,7 +644,7 @@ export function TenantsPage() {
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -662,7 +670,7 @@ export function TenantsPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

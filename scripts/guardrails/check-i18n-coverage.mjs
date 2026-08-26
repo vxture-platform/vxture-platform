@@ -42,11 +42,14 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  *   console / website 已基本抽完；admin 与 opera 是主战场；accounts 抽了一条竖切。
  * 2026-08-26 opera 2106 → 1826：抽掉跨文件重复的通用词汇（列表页外壳、通用动作、
  *   列头、状态词）一批 280 处 / 22 个文件。
+ * 2026-08-26 admin 4125 → 3844：同一套共享命名空间的扫描，281 处 / 43 个文件。
+ *   两个门户的 `common` / `columns` / `filters` / `actions` / `status.generic` 形状
+ *   刻意一致——同一个词在两边该是同一个键。
  */
 const BASELINE = {
   console: 32,
   website: 54,
-  admin: 4125,
+  admin: 3844,
   opera: 1826,
   accounts: 263,
 };

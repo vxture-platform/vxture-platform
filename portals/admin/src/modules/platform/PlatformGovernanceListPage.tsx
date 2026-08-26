@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   ActionButton,
   ActionMenu,
@@ -203,6 +204,7 @@ export function PlatformGovernanceListPage({
 }: {
   kind: PlatformGovernanceKind;
 }) {
+  const tShared = useTranslations();
   const config = governanceConfigs[kind];
   const [sourceRecords, setSourceRecords] = useState<
     PlatformGovernanceRecord[]
@@ -281,7 +283,7 @@ export function PlatformGovernanceListPage({
       },
       {
         id: "status",
-        header: "状态",
+        header: tShared("columns.state"),
         align: "center",
         cell: (record) => {
           const meta = governanceStatusMeta(kind, record.status);
@@ -316,7 +318,11 @@ export function PlatformGovernanceListPage({
         ),
       },
     ],
-    [config, kind],
+    /* `tShared` 要进依赖：列头 `columns.state` 从它取。next-intl 的 translator 按
+       (命名空间, messages, locale) 记忆化，只在切语言时换身份——所以这不会让 memo
+       每次渲染失效，反而保证切语言时列头真的跟着变。这里没有 effect 依赖
+       `columns`，不存在把 t 加进依赖会无限重跑的风险。 */
+    [config, kind, tShared],
   );
 
   function resetFilters() {
@@ -401,7 +407,7 @@ export function PlatformGovernanceListPage({
         <FilterBar
           view={viewMode}
           onViewChange={setViewMode}
-          cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+          cardsDisabledReason={tShared("common.cardsRetired")}
           count={formatNumber(records.length)}
           aria-label={`${config.title}筛选`}
           search={
@@ -441,11 +447,13 @@ export function PlatformGovernanceListPage({
               className="vx-input vx-tenant-select"
               aria-label={`${config.objectLabel}状态`}
             >
-              <option value="all">全部状态</option>
-              <option value="normal">正常</option>
+              <option value="all">{tShared("filters.allStates")}</option>
+              <option value="normal">{tShared("status.generic.normal")}</option>
               <option value="warning">关注</option>
               <option value="blocked">阻断</option>
-              <option value="pending">待处理</option>
+              <option value="pending">
+                {tShared("status.generic.pending")}
+              </option>
             </NativeSelect>
           </div>
         </FilterBar>

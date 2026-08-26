@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useTranslations } from "next-intl";
 import {
   ActionButton,
   ActionMenu,
@@ -262,11 +263,12 @@ function AnnouncementToolbar({
   onViewModeChange: (v: ViewMode) => void;
   onCreate: () => void;
 }) {
+  const tShared = useTranslations();
   return (
     <FilterBar
       view={viewMode}
       onViewChange={onViewModeChange}
-      cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+      cardsDisabledReason={tShared("common.cardsRetired")}
       count={`${total} 条`}
       aria-label="公告筛选"
       search={
@@ -298,7 +300,7 @@ function AnnouncementToolbar({
         }
         aria-label="公告类型"
       >
-        <option value="all">全部类型</option>
+        <option value="all">{tShared("filters.allKinds")}</option>
         <option value="system">系统</option>
         <option value="maintenance">维护</option>
         <option value="marketing">营销</option>
@@ -313,8 +315,8 @@ function AnnouncementToolbar({
         }
         aria-label="公告状态"
       >
-        <option value="all">全部状态</option>
-        <option value="draft">草稿</option>
+        <option value="all">{tShared("filters.allStates")}</option>
+        <option value="draft">{tShared("status.generic.draft")}</option>
         <option value="published">已发布</option>
         <option value="archived">已归档</option>
       </NativeSelect>
@@ -467,6 +469,7 @@ function AnnouncementFormDialog({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const tShared = useTranslations();
   return (
     <DialogForm
       open
@@ -482,7 +485,7 @@ function AnnouncementFormDialog({
     >
       <div className="vx-model-dialog__grid">
         <Label>
-          类型
+          {tShared("columns.kind")}
           <NativeSelect
             value={form.announcementType}
             onChange={(e) =>
@@ -568,6 +571,7 @@ function AnnouncementFormDialog({
 // ─── 主组件 ───────────────────────────────────────────────────────────────────
 
 export function AnnouncementsPage() {
+  const tShared = useTranslations();
   const { toast } = useToast();
   const withLabels = useConfirmLabels();
   const [items, setItems] = useState<AnnouncementRecord[]>([]);
@@ -748,7 +752,7 @@ export function AnnouncementsPage() {
                   title="暂无公告"
                   description={
                     search || typeFilter !== "all" || statusFilter !== "all"
-                      ? "尝试调整筛选条件"
+                      ? tShared("common.adjustFiltersHint")
                       : "点击「新建公告」发布第一条平台通知"
                   }
                 />
@@ -785,7 +789,7 @@ export function AnnouncementsPage() {
               title="暂无公告"
               description={
                 search || typeFilter !== "all" || statusFilter !== "all"
-                  ? "尝试调整筛选条件"
+                  ? tShared("common.adjustFiltersHint")
                   : "点击「新建公告」发布第一条平台通知"
               }
             />

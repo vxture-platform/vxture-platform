@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   Badge,
@@ -192,6 +193,7 @@ function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
 }
 
 function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
+  const tShared = useTranslations();
   return (
     <section
       className="vx-product-capability-detail"
@@ -217,7 +219,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
           <DetailRow label="确认时间">
             {orUnset(formatDate(order.confirmedAt))}
           </DetailRow>
-          <DetailRow label="更新时间">
+          <DetailRow label={tShared("columns.updatedAt")}>
             {orUnset(formatDate(order.updatedAt))}
           </DetailRow>
         </DetailList>
@@ -228,7 +230,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
         <DetailList columns={3}>
           <DetailRow label="租户">{orUnset(order.tenantName)}</DetailRow>
           <DetailRow label="租户编码">{orUnset(order.tenantCode)}</DetailRow>
-          <DetailRow label="租户类型">
+          <DetailRow label={tShared("columns.tenantType")}>
             {orUnset(typeLabel(order.tenantType))}
           </DetailRow>
           <DetailRow label="所属区域">{orUnset(order.region)}</DetailRow>
@@ -386,6 +388,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
 }
 
 export function OrderDetailPage({ orderId }: { orderId: string }) {
+  const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
   const [order, setOrder] = useState<OrderOperationDetailRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -749,7 +752,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
         </>
       ) : (
         <section className="vx-tenant-directory__header">
-          <span>读取中</span>
+          <span>{tShared("common.loading")}</span>
         </section>
       )}
 
@@ -779,7 +782,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             </>
           }
           submitLabel="确认驳回申报"
-          cancelLabel="取消"
+          cancelLabel={tShared("actions.cancel")}
           submitting={submittingReject}
           submitDisabled={rejectReason.trim().length < 4}
           onOpenChange={(open) => {
@@ -819,7 +822,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             </>
           }
           submitLabel="确认驳回"
-          cancelLabel="取消"
+          cancelLabel={tShared("actions.cancel")}
           submitting={submittingVoid}
           submitDisabled={voidReason.trim().length < 4}
           onOpenChange={(open) => {
@@ -859,7 +862,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             </>
           }
           submitLabel="确认恢复"
-          cancelLabel="取消"
+          cancelLabel={tShared("actions.cancel")}
           submitting={submittingRestore}
           submitDisabled={restoreReason.trim().length < 4}
           onOpenChange={(open) => {

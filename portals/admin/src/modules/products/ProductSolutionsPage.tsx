@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -110,6 +111,7 @@ function ProductSolutionActionsMenu({
   solution: ProductSolutionRecord;
   onViewDetails: () => void;
 }) {
+  const tShared = useTranslations();
   return (
     <div
       className="vx-tenant-actions"
@@ -120,7 +122,7 @@ function ProductSolutionActionsMenu({
         items={[
           {
             id: "details",
-            label: "查看详情",
+            label: tShared("actions.viewDetail"),
             icon: "arrow-right",
             onSelect: onViewDetails,
           },
@@ -350,6 +352,7 @@ function ProductSolutionCards({
 }
 
 export function ProductSolutionsPage() {
+  const tShared = useTranslations();
   const router = useRouter();
   const [solutions, setSolutions] = useState<ProductSolutionRecord[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -545,7 +548,7 @@ export function ProductSolutionsPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredSolutions.length)}
             aria-label="解决方案筛选"
             search={
@@ -575,10 +578,10 @@ export function ProductSolutionsPage() {
                 }
                 aria-label="方案状态"
               >
-                <option value="all">全部状态</option>
-                <option value="active">启用</option>
-                <option value="draft">草稿</option>
-                <option value="archived">归档</option>
+                <option value="all">{tShared("filters.allStates")}</option>
+                <option value="active">{tShared("actions.enable")}</option>
+                <option value="draft">{tShared("status.generic.draft")}</option>
+                <option value="archived">{tShared("actions.archive")}</option>
               </NativeSelect>
               <NativeSelect
                 className="vx-input vx-tenant-select"
@@ -625,7 +628,7 @@ export function ProductSolutionsPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
 
@@ -658,7 +661,7 @@ export function ProductSolutionsPage() {
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -683,7 +686,7 @@ export function ProductSolutionsPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

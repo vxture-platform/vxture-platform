@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -266,6 +267,7 @@ function BillingActionsMenu({
   bill: BillingRecord;
   onSyncInvoice: (bill: BillingRecord) => void;
 }) {
+  const tShared = useTranslations();
   const router = useRouter();
   const invoiceDisabledReason = offlineInvoiceDisabledReason(bill) ?? undefined;
 
@@ -286,7 +288,7 @@ function BillingActionsMenu({
           },
           {
             id: "tenant",
-            label: "查看租户",
+            label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
               router.push(`/tenants/${encodeURIComponent(bill.tenantId)}`),
@@ -537,6 +539,7 @@ function BillingCards({
 }
 
 export function BillingPage() {
+  const tShared = useTranslations();
   const [bills, setBills] = useState<BillingRecord[]>([]);
   const [billsTruncated, setBillsTruncated] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -812,7 +815,7 @@ export function BillingPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredBills.length)}
             aria-label="账单筛选"
             search={
@@ -833,7 +836,7 @@ export function BillingPage() {
                   onClick={handleExportSelected}
                   disabled={selectedBillIds.size === 0}
                 >
-                  导出
+                  {tShared("common.export")}
                 </ActionButton>
               </>
             }
@@ -849,10 +852,14 @@ export function BillingPage() {
               >
                 <option value="all">全部账单</option>
                 <option value="unpaid">待收款</option>
-                <option value="paying">支付中</option>
+                <option value="paying">
+                  {tShared("status.generic.paying")}
+                </option>
                 <option value="partial">部分收款</option>
                 <option value="paid">已结清</option>
-                <option value="overdue">逾期</option>
+                <option value="overdue">
+                  {tShared("status.generic.overdue")}
+                </option>
                 <option value="cancelled">已取消</option>
               </NativeSelect>
               <NativeSelect
@@ -871,8 +878,12 @@ export function BillingPage() {
                 <option value="auditing">审核中</option>
                 <option value="issued">已开票</option>
                 <option value="sending">寄送中</option>
-                <option value="finished">已完成</option>
-                <option value="rejected">已驳回</option>
+                <option value="finished">
+                  {tShared("status.generic.completed")}
+                </option>
+                <option value="rejected">
+                  {tShared("status.generic.rejected")}
+                </option>
                 <option value="red">已红冲</option>
               </NativeSelect>
               <NativeSelect
@@ -883,7 +894,7 @@ export function BillingPage() {
                 }
                 aria-label="账单类型"
               >
-                <option value="all">全部类型</option>
+                <option value="all">{tShared("filters.allKinds")}</option>
                 <option value="normal">正常账单</option>
                 <option value="adjust">调整单</option>
                 <option value="supplement">补录单</option>
@@ -935,7 +946,7 @@ export function BillingPage() {
               actions={[
                 {
                   id: "export",
-                  label: "导出所选",
+                  label: tShared("common.exportSelected"),
                   icon: "table",
                   onSelect: handleExportSelected,
                 },
@@ -949,7 +960,7 @@ export function BillingPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             {loading && viewMode === "cards" ? (
               <header className="vx-tenant-directory__header">
-                <span>读取中</span>
+                <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
 
@@ -980,7 +991,7 @@ export function BillingPage() {
                         icon="x"
                         onClick={handleReset}
                       >
-                        清空筛选
+                        {tShared("common.clearFilters")}
                       </ActionButton>
                     }
                   />
@@ -1011,7 +1022,7 @@ export function BillingPage() {
                     icon="x"
                     onClick={handleReset}
                   >
-                    清空筛选
+                    {tShared("common.clearFilters")}
                   </ActionButton>
                 }
               />

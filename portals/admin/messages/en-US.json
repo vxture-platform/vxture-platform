@@ -1598,5 +1598,50 @@
     "cancel": "Cancel",
     "pending": "Working…",
     "blocked": "Preconditions not met — resolve the items marked above first."
+  },
+  "common": {
+    "adjustFiltersHint": "Try adjusting the filters",
+    "cardsRetired": "Card view is off: the list gives you selection, sorting, pagination and cross-page bulk actions — an operations list is there to be scanned and compared.",
+    "clearFilters": "Clear filters",
+    "export": "Export",
+    "exportSelected": "Export selected",
+    "loading": "Loading",
+    "saveFailed": "Could not save"
+  },
+  "columns": {
+    "currency": "Currency",
+    "kind": "Type",
+    "state": "State",
+    "tenantName": "Tenant",
+    "tenantType": "Tenant type",
+    "updatedAt": "Updated"
+  },
+  "filters": {
+    "allKinds": "All types",
+    "allStates": "All states"
+  },
+  "actions": {
+    "archive": "Archive",
+    "cancel": "Cancel",
+    "create": "Create",
+    "disable": "Disable",
+    "discard": "Discard",
+    "edit": "Edit",
+    "enable": "Enable",
+    "pause": "Pause",
+    "viewDetail": "View details",
+    "viewTenant": "View tenant"
+  },
+  "status": {
+    "generic": {
+      "normal": "Normal",
+      "overdue": "Overdue",
+      "draft": "Draft",
+      "processing": "Processing",
+      "pending": "Pending",
+      "paying": "Paying",
+      "rejected": "Rejected",
+      "completed": "Completed"
+    }
   }
 }

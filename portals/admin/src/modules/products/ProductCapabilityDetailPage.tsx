@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   Badge,
@@ -144,6 +145,7 @@ function ProductCapabilityDetails({
 }: {
   product: ProductCapabilityRecord;
 }) {
+  const tShared = useTranslations();
   return (
     <section
       className="vx-product-capability-detail"
@@ -170,7 +172,7 @@ function ProductCapabilityDetails({
           <DetailRow label="创建时间">
             {orUnset(formatDate(product.createdAt))}
           </DetailRow>
-          <DetailRow label="更新时间">
+          <DetailRow label={tShared("columns.updatedAt")}>
             {orUnset(formatDate(product.updatedAt))}
           </DetailRow>
         </DetailList>
@@ -319,6 +321,7 @@ export function ProductCapabilityDetailPage({
 }: {
   productCode: string;
 }) {
+  const tShared = useTranslations();
   const [product, setProduct] = useState<ProductCapabilityRecord | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -405,7 +408,7 @@ export function ProductCapabilityDetailPage({
         </>
       ) : (
         <section className="vx-tenant-directory__header">
-          <span>读取中</span>
+          <span>{tShared("common.loading")}</span>
         </section>
       )}
     </DetailPageTemplate>

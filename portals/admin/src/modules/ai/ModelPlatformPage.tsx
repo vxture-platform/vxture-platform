@@ -382,6 +382,7 @@ function detectModelLinkStatus(model: AiModelRecord): ModelLinkStatus {
 }
 
 export function ModelPlatformPage() {
+  const tShared = useTranslations();
   const t = useTranslations("modelPlatformPage");
   const { toast } = useToast();
   const [models, setModels] = useState<AiModelRecord[]>([]);
@@ -1050,7 +1051,7 @@ export function ModelPlatformPage() {
           <FilterBar
             view={viewMode}
             onViewChange={setViewMode}
-            cardsDisabledReason="卡片视图已停用：列表视图提供选择、排序、分页与跨页批量，运营台的清单是拿来扫读和对比的。"
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredModels.length)}
             aria-label="模型状态"
             search={
@@ -1333,20 +1334,20 @@ export function ModelPlatformPage() {
                         items={[
                           {
                             id: "edit",
-                            label: "编辑",
+                            label: tShared("actions.edit"),
                             icon: "edit",
                             onSelect: () => openEditPriceRuleDialog(rule),
                           },
                           {
                             id: "enable",
-                            label: "启用",
+                            label: tShared("actions.enable"),
                             icon: "play",
                             disabled: catalogBusy || isEnabled(rule.state),
                             onSelect: () => void togglePriceRule(rule, true),
                           },
                           {
                             id: "disable",
-                            label: "停用",
+                            label: tShared("actions.disable"),
                             icon: "stop",
                             disabled: catalogBusy || !isEnabled(rule.state),
                             onSelect: () => void togglePriceRule(rule, false),
@@ -1464,20 +1465,20 @@ export function ModelPlatformPage() {
                         items={[
                           {
                             id: "edit",
-                            label: "编辑",
+                            label: tShared("actions.edit"),
                             icon: "edit",
                             onSelect: () => openEditPolicyDialog(policy),
                           },
                           {
                             id: "enable",
-                            label: "启用",
+                            label: tShared("actions.enable"),
                             icon: "play",
                             disabled: catalogBusy || isEnabled(policy.state),
                             onSelect: () => void togglePolicy(policy, true),
                           },
                           {
                             id: "disable",
-                            label: "停用",
+                            label: tShared("actions.disable"),
                             icon: "stop",
                             disabled: catalogBusy || !isEnabled(policy.state),
                             onSelect: () => void togglePolicy(policy, false),
@@ -1647,7 +1648,7 @@ export function ModelPlatformPage() {
               />
             </Label>
             <Label>
-              币种
+              {tShared("columns.currency")}
               <Input
                 value={priceRuleForm.currency}
                 disabled={priceRuleDialog.mode === "edit"}

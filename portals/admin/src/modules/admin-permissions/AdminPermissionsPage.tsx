@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useTranslations } from "next-intl";
 import type { CSSProperties } from "react";
 import {
   ActionButton,
@@ -739,6 +740,7 @@ function PermissionDetailDialog({
   parentPermission: PlatformAdminPermissionRecord | null;
   onClose: () => void;
 }) {
+  const tShared = useTranslations();
   const statusIndicator = permissionStatusIndicator(permission);
 
   return (
@@ -802,7 +804,7 @@ function PermissionDetailDialog({
             <dd>{formatNumber(permission.sort)}</dd>
           </div>
           <div>
-            <dt>更新时间</dt>
+            <dt>{tShared("columns.updatedAt")}</dt>
             <dd>
               {permission.updatedAt
                 ? new Date(permission.updatedAt).toLocaleString("zh-CN")
@@ -871,6 +873,7 @@ function PermissionCardGrid({
   onEdit: (permission: PlatformAdminPermissionRecord) => void;
   onToggle: (permission: PlatformAdminPermissionRecord) => void;
 }) {
+  const tShared = useTranslations();
   const flattenedNodes = flattenTreeNodes(nodes);
 
   return (
@@ -911,7 +914,7 @@ function PermissionCardGrid({
             </span>
             <dl>
               <div>
-                <dt>状态</dt>
+                <dt>{tShared("columns.state")}</dt>
                 <dd>
                   <Icon
                     name={statusIndicator.icon}
@@ -1116,6 +1119,7 @@ function PermissionDomainSection({
   onEditPermission: (permission: PlatformAdminPermissionRecord) => void;
   onTogglePermission: (permission: PlatformAdminPermissionRecord) => void;
 }) {
+  const tShared = useTranslations();
   const domainPermissionIds = useMemo(
     () => collectPermissionIds(group.nodes),
     [group.nodes],
@@ -1179,7 +1183,7 @@ function PermissionDomainSection({
             }
             aria-label={`${group.title}权限类型`}
           >
-            <option value="all">全部类型</option>
+            <option value="all">{tShared("filters.allKinds")}</option>
             <option value="menu">菜单权限</option>
             <option value="button">按钮权限</option>
             <option value="api">接口权限</option>
@@ -1194,9 +1198,9 @@ function PermissionDomainSection({
             }
             aria-label={`${group.title}权限状态`}
           >
-            <option value="all">全部状态</option>
-            <option value="active">启用</option>
-            <option value="disabled">停用</option>
+            <option value="all">{tShared("filters.allStates")}</option>
+            <option value="active">{tShared("actions.enable")}</option>
+            <option value="disabled">{tShared("actions.disable")}</option>
           </NativeSelect>
           <NativeSelect
             className="vx-input vx-tenant-select"
@@ -1240,8 +1244,8 @@ function PermissionDomainSection({
             <div className="vx-admin-permission-tree__header">
               <span>#</span>
               <span>权限名称</span>
-              <span>状态</span>
-              <span>类型</span>
+              <span>{tShared("columns.state")}</span>
+              <span>{tShared("columns.kind")}</span>
               <span>来源</span>
               <span>授权角色</span>
               <span>操作</span>
@@ -1277,7 +1281,7 @@ function PermissionDomainSection({
           description="清空当前板块筛选条件后可查看该域全部权限。"
           action={
             <ActionButton variant="outline" icon="x" onClick={onResetFilters}>
-              清空筛选
+              {tShared("common.clearFilters")}
             </ActionButton>
           }
         />
