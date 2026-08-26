@@ -176,7 +176,10 @@
  *   **被工具类用到**的 theme 变量（同 opacity-semantic.css 里记的那条坑）。当前
  *   `size-icon-lg` / `size-icon-xl` 在 DS 组件里有 19 / 22 处在用，变量必然存在；
  *   哪天这些工具类归零，这三条会静默失效。`--space-*` 不受影响——它落在普通
- *   `:root` 块里，不经 `@theme`。
+ *   `/* 2026-08-27 尺度对齐：与 DS 逐字相同的那些桥接令牌改为直接指向 DS，
+   admin 不再为同一个值维护第二份定义。值未变，13 条。
+   剩下的字面量是 DS 没有对应档的（网格轨道细档），保留。 */
+:root` 块里，不经 `@theme`。
  */
 
 :root {
@@ -259,24 +262,24 @@
   /* size —— 39 项 */
   --vx-admin-size-05r: 0.5rem;
   --vx-admin-size-0875r: 0.875rem;
-  --vx-admin-size-10r: 10rem;
+  --vx-admin-size-10r: var(--container-overlay-sm);
   --vx-admin-size-11r-large: 11rem;
   --vx-admin-size-12r-large: 12rem;
   --vx-admin-size-13r: 13rem;
   --vx-admin-size-16r: 16rem;
   --vx-admin-size-17r: 17rem;
-  --vx-admin-size-18r-large: 18rem;
+  --vx-admin-size-18r-large: var(--container-overlay-lg);
   --vx-admin-size-20r: 20rem;
   --vx-admin-size-22r: 22rem;
   --vx-admin-size-2p: 2px;
   --vx-admin-size-45r: 4.5rem;
   --vx-admin-size-475r: 4.75rem;
-  --vx-admin-size-48r-large: 48rem;
+  --vx-admin-size-48r-large: var(--container-page-md);
   --vx-admin-size-56r: 56rem;
   --vx-admin-size-6r: 6rem;
   --vx-admin-size-75r: 7.5rem;
   --vx-admin-size-85r: 8.5rem;
-  --vx-admin-size-8r: 8rem;
+  --vx-admin-size-8r: var(--container-overlay-xs);
   --vx-admin-size-95r: 9.5rem;
 
   /* governance —— 36 项 */
@@ -336,24 +339,24 @@
   --vx-admin-roles-track-275r: var(--vx-admin-track-275r);
 
   /* track —— 20 项 */
-  --vx-admin-track-10r: 10rem;
+  --vx-admin-track-10r: var(--container-overlay-sm);
   --vx-admin-track-11r-large: 11rem;
   --vx-admin-track-12r-large: 12rem;
   --vx-admin-track-13r: 13rem;
-  --vx-admin-track-15r: 1.5rem;
+  --vx-admin-track-15r: var(--spacing-icon-lg);
   --vx-admin-track-16r: 16rem;
   --vx-admin-track-175r: 1.75rem;
   --vx-admin-track-17r: 17rem;
-  --vx-admin-track-18r-large: 18rem;
+  --vx-admin-track-18r-large: var(--container-overlay-lg);
   --vx-admin-track-20r: 20rem;
   --vx-admin-track-22r: 22rem;
   --vx-admin-track-25r: 2.5rem;
   --vx-admin-track-275r: 2.75rem;
-  --vx-admin-track-2r: 2rem;
-  --vx-admin-track-3r: 3rem;
+  --vx-admin-track-2r: var(--spacing-icon-xl);
+  --vx-admin-track-3r: var(--spacing-icon-2xl);
   --vx-admin-track-5r: 5rem;
   --vx-admin-track-85r: 8.5rem;
-  --vx-admin-track-8r: 8rem;
+  --vx-admin-track-8r: var(--container-overlay-xs);
   --vx-admin-track-9r: 9rem;
 
   /* effect —— 10 项 */
@@ -366,10 +369,10 @@
   --vx-admin-effect-8p: 8px;
 
   /* text —— 10 项 */
-  --vx-admin-text-size-1r: 1rem;
+  --vx-admin-text-size-1r: var(--spacing-icon-sm);
 
   /* grid —— 5 项 */
-  --vx-admin-grid-column-md: 14rem;
+  --vx-admin-grid-column-md: var(--container-overlay-md);
   --vx-admin-grid-column-xs: 7rem;
 
   /* card —— 4 项 */
@@ -411,7 +414,7 @@
   /* page —— 1 项 */
 
   /* panel —— 1 项 */
-  --vx-admin-panel-max-height-md: 42rem;
+  --vx-admin-panel-max-height-md: var(--container-panel-lg);
 
   /* section —— 1 项 */
 }
