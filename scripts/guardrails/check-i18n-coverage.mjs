@@ -53,11 +53,13 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  *   （映射本来就是恒等，函数没有任何判断可言）。
  * 2026-08-26 admin 3756 → 3668：PlatformGovernanceListPage 的四套治理域配置搬进
  *   词条，图标与语气留在代码里（同 opera `status.ts` 的判据）。
+ * 2026-08-27 admin 3668 → 3660：视觉验证时抓到的混合语言（`还没有${objectLabel}`
+ *   在英文下渲染成「还没有Secret」），连同两处同形的一起抽掉。
  */
 const BASELINE = {
   console: 32,
   website: 54,
-  admin: 3668,
+  admin: 3660,
   opera: 1795,
   accounts: 263,
 };

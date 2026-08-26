@@ -335,7 +335,9 @@ export function PlatformGovernanceListPage({
             items={[
               {
                 id: "total",
-                help: `当前${config.objectLabel}记录总数，不区分状态。`,
+                help: tShared("platformGovernance.totalHelp", {
+                  object: config.objectLabel,
+                }),
                 icon: config.icon,
                 label: config.summary.total.label,
                 value: formatNumber(summary.total),
@@ -367,7 +369,9 @@ export function PlatformGovernanceListPage({
                         `${config.summary.pending.tag} ${formatNumber(summary.pending)}`,
                       ]
                     : []),
-                  ...(!summary.risk && !summary.pending ? ["无待处理"] : []),
+                  ...(!summary.risk && !summary.pending
+                    ? [tShared("platformGovernance.noPending")]
+                    : []),
                 ],
                 tone: "warning",
               },
@@ -388,7 +392,9 @@ export function PlatformGovernanceListPage({
               onChange={(event) => setQuery(event.target.value)}
               placeholder={config.searchPlaceholder}
               className="vx-tenant-search"
-              aria-label={`搜索${config.objectLabel}`}
+              aria-label={tShared("platformGovernance.searchAria", {
+                object: config.objectLabel,
+              })}
             />
           }
           onReset={resetFilters}
@@ -474,8 +480,10 @@ export function PlatformGovernanceListPage({
                 ) : (
                   <EmptyState
                     icon="list"
-                    title={`还没有${config.objectLabel}`}
-                    description={`新增后会出现在这里。`}
+                    title={tShared("platformGovernance.emptyTitle", {
+                      object: config.objectLabel,
+                    })}
+                    description={tShared("platformGovernance.emptyDescription")}
                   />
                 )
               }
@@ -541,8 +549,10 @@ export function PlatformGovernanceListPage({
           ) : (
             <EmptyState
               icon="list"
-              title={`还没有${config.objectLabel}`}
-              description={`新增后会出现在这里。`}
+              title={tShared("platformGovernance.emptyTitle", {
+                object: config.objectLabel,
+              })}
+              description={tShared("platformGovernance.emptyDescription")}
             />
           )}
         </section>

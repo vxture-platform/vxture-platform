@@ -43,6 +43,7 @@ import {
   setGlobalThemePreference,
 } from "@vxture/platform-browser";
 import type { Locale, Theme } from "@vxture-platform/shared";
+import { LOCALE_CONFIGS, SUPPORTED_LOCALES } from "@vxture-platform/shared";
 import { useAdminSession } from "@/features/session/AdminSessionProvider";
 import { useLocale, useTranslations } from "next-intl";
 import type { ShellView } from "../template/shell/types";
@@ -278,7 +279,14 @@ export function AdminHeader({
             ]}
             settings={
               <ShellPreferencePanel
+                /* `localeOptions` 此前**没传**，所以语言下拉一直是空的——控件在，
+                   但一个选项都没有，拨不动。与 opera 那个 `onLocaleChange={() => {}}`
+                   是同一类：界面上摆着一个不工作的开关。 */
                 locale={locale}
+                localeOptions={SUPPORTED_LOCALES.map((code) => ({
+                  locale: code,
+                  nativeName: LOCALE_CONFIGS[code].nativeName,
+                }))}
                 theme={theme}
                 density={density}
                 fontSize={fontSize as ShellFontSizePreference}
