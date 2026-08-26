@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 import {
   ActionButton,
   ActionMenu,
-  Badge,
   Banner,
   BulkActionBar,
   Button,
@@ -421,9 +420,9 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
               >
                 {billStatusLabel(payment.billStatus)}
               </StatusBadge>
-              <Badge className="vx-tenant-pill vx-payment-pill--source">
+              <StatusBadge tone="neutral" icon={false}>
                 {payment.orderNo ?? "未关联订单"}
-              </Badge>
+              </StatusBadge>
             </span>
           }
           description={payment.billNo ?? "未关联账单"}

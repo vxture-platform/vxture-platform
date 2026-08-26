@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import {
-  Badge,
   Button,
   DetailList,
   DetailPageTemplate,
@@ -12,6 +11,7 @@ import {
   EmptyState,
   Icon,
   MetricGrid,
+  StatusBadge,
 } from "@vxture/design-system";
 import { orUnset } from "@/modules/shared/display";
 import type { IconName } from "@vxture/design-system";
@@ -26,6 +26,10 @@ import type {
   SubscriptionOperationQuotaRisk,
   SubscriptionOperationStatus,
 } from "@/entities/console";
+import {
+  QUOTA_RISK_TONE,
+  SUBSCRIPTION_OPERATION_TONE,
+} from "@/modules/shared/status-tone";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import {
@@ -106,16 +110,14 @@ function SubscriptionSummary({
           </h2>
           <p>{subscription.subscriptionCode}</p>
           <div className="vx-product-capability-summary__badges">
-            <Badge
-              className={`vx-tenant-pill vx-subscription-pill--${subscription.status}`}
+            <StatusBadge
+              tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
             >
               {subscriptionStatusLabel(subscription.status)}
-            </Badge>
-            <Badge
-              className={`vx-tenant-pill vx-subscription-pill--quota-${subscription.quota.risk}`}
-            >
+            </StatusBadge>
+            <StatusBadge tone={QUOTA_RISK_TONE[subscription.quota.risk]}>
               {quotaRiskLabel(subscription.quota.risk)}
-            </Badge>
+            </StatusBadge>
           </div>
         </div>
       </div>

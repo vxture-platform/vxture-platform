@@ -316,12 +316,9 @@ function useAccountColumns(
                   title={
                     <span className="inline-flex flex-wrap gap-2xs">
                       {summary.tags.map((tag) => (
-                        <Badge
-                          key={tag}
-                          className="vx-tenant-pill vx-account-muted-pill"
-                        >
+                        <StatusBadge key={tag} tone="brand" icon={false}>
                           {tag}
-                        </Badge>
+                        </StatusBadge>
                       ))}
                     </span>
                   }

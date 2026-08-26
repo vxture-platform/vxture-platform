@@ -1,9 +1,0 @@
-.vx-product-capability-pill--mode {
-  background: color-mix(in srgb, var(--vx-color-auth-accent) 8%, transparent);
-  color: var(--tenant-blue);
-}
-
-.vx-product-capability-pill--tag {
-  background: color-mix(in srgb, var(--vx-color-neutral-500) 8%, transparent);
-  color: var(--vx-color-neutral-600);
-}

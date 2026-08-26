@@ -287,9 +287,9 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
               <Badge className={tierBadgeClass(subscription.tierCode)}>
                 {subscription.tierName}
               </Badge>
-              <Badge className="vx-tenant-pill vx-subscription-pill--cycle">
+              <StatusBadge tone="neutral" icon={false}>
                 {cycleLabel(subscription.cycleType)}
-              </Badge>
+              </StatusBadge>
             </span>
           }
           description={subscription.orderNo ?? subscription.subscriptionCode}

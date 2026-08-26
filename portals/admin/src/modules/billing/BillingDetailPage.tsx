@@ -5,7 +5,6 @@ import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Badge,
   Button,
   DetailList,
   DetailPageTemplate,
@@ -13,6 +12,7 @@ import {
   EmptyState,
   Icon,
   MetricGrid,
+  StatusBadge,
 } from "@vxture/design-system";
 import { orUnset } from "@/modules/shared/display";
 import {
@@ -31,6 +31,10 @@ import type {
   BillingInvoiceTaxType,
   BillingInvoiceType,
 } from "@/entities/console";
+import {
+  BILL_STATUS_TONE,
+  INVOICE_STATUS_TONE,
+} from "@/modules/shared/status-tone";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import {
@@ -137,16 +141,12 @@ function BillingSummary({ bill }: { bill: BillingDetailRecord }) {
             {bill.tenantName} / {bill.tierName ?? "未关联套餐"}
           </p>
           <div className="vx-product-capability-summary__badges">
-            <Badge
-              className={`vx-tenant-pill vx-billing-pill--${bill.billStatus}`}
-            >
+            <StatusBadge tone={BILL_STATUS_TONE[bill.billStatus]}>
               {billStatusLabel(bill.billStatus)}
-            </Badge>
-            <Badge
-              className={`vx-tenant-pill vx-billing-pill--invoice-${bill.invoiceStatus}`}
-            >
+            </StatusBadge>
+            <StatusBadge tone={INVOICE_STATUS_TONE[bill.invoiceStatus]}>
               {t(`status.invoice.${bill.invoiceStatus}`)}
-            </Badge>
+            </StatusBadge>
           </div>
         </div>
       </div>

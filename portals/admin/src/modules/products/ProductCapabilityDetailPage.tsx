@@ -187,20 +187,14 @@ function ProductCapabilityDetails({
         </div>
         <div className="vx-product-capability-tags">
           {product.accessModes.map((mode) => (
-            <Badge
-              key={mode}
-              className="vx-tenant-pill vx-product-capability-pill--mode"
-            >
+            <StatusBadge key={mode} tone="brand" icon={false}>
               {mode}
-            </Badge>
+            </StatusBadge>
           ))}
           {product.tags.map((tag) => (
-            <Badge
-              key={tag}
-              className="vx-tenant-pill vx-product-capability-pill--tag"
-            >
+            <StatusBadge key={tag} tone="neutral" icon={false}>
               {tag}
-            </Badge>
+            </StatusBadge>
           ))}
         </div>
         <div className="vx-product-capability-related-list">

@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import {
-  Badge,
   Button,
   DetailList,
   DetailPageTemplate,
@@ -14,6 +13,7 @@ import {
   Icon,
   Label,
   MetricGrid,
+  StatusBadge,
   Textarea,
 } from "@vxture/design-system";
 import { orUnset } from "@/modules/shared/display";
@@ -29,6 +29,10 @@ import type {
   OrderOperationStatus,
   OrderPaySource,
 } from "@/entities/console";
+import {
+  ORDER_STATUS_TONE,
+  PAYMENT_STATUS_TONE,
+} from "@/modules/shared/status-tone";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import {
@@ -132,16 +136,12 @@ function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
             {order.tenantName} / {order.tierName}
           </p>
           <div className="vx-product-capability-summary__badges">
-            <Badge
-              className={`vx-tenant-pill vx-order-pill--${order.orderStatus}`}
-            >
+            <StatusBadge tone={ORDER_STATUS_TONE[order.orderStatus]}>
               {orderStatusLabel(order.orderStatus)}
-            </Badge>
-            <Badge
-              className={`vx-tenant-pill vx-order-pill--payment-${order.paymentStatus}`}
-            >
+            </StatusBadge>
+            <StatusBadge tone={PAYMENT_STATUS_TONE[order.paymentStatus]}>
               {t(`status.orderPayment.${order.paymentStatus}`)}
-            </Badge>
+            </StatusBadge>
           </div>
         </div>
       </div>

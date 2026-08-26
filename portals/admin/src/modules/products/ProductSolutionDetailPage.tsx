@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import {
-  Badge,
   Button,
   DetailList,
   DetailPageTemplate,
@@ -179,12 +178,9 @@ function ProductSolutionDetails({
         </div>
         <div className="vx-product-capability-tags">
           {solution.tags.map((tag) => (
-            <Badge
-              key={tag}
-              className="vx-tenant-pill vx-product-capability-pill--tag"
-            >
+            <StatusBadge key={tag} tone="neutral" icon={false}>
               {tag}
-            </Badge>
+            </StatusBadge>
           ))}
         </div>
       </section>

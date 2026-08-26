@@ -58,6 +58,16 @@ import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
 import { useConfirmLabels } from "@/modules/shared/destructive";
 
+/**
+ * 权限类型 → 语气。照 `.vx-admin-role-pill--*` 实测的底色定：菜单品牌蓝、
+ * 按钮青、接口琥珀。三者是**类目**不是严重度，用色只为在一棵树里一眼分开。
+ */
+const PERM_TYPE_TONE: Record<string, StatusBadgeTone> = {
+  menu: "brand",
+  button: "info",
+  api: "warning",
+};
+
 type ViewMode = "list" | "cards";
 type PlatformRoleStatusCode = PlatformRoleRecord["statusCode"];
 type StatusFilter = "all" | PlatformRoleStatusCode;
@@ -375,15 +385,15 @@ function AdminRolePermissionDialog({
           </div>
         </header>
         <div className="vx-admin-role-permission-dialog__summary">
-          <Badge className="vx-tenant-pill vx-admin-role-pill--menu">
+          <StatusBadge tone="brand" icon={false}>
             菜单 {formatNumber(role.menuPermissionCount)}
-          </Badge>
-          <Badge className="vx-tenant-pill vx-admin-role-pill--button">
+          </StatusBadge>
+          <StatusBadge tone="info" icon={false}>
             按钮 {formatNumber(role.buttonPermissionCount)}
-          </Badge>
-          <Badge className="vx-tenant-pill vx-admin-role-pill--api">
+          </StatusBadge>
+          <StatusBadge tone="warning" icon={false}>
             接口 {formatNumber(role.apiPermissionCount)}
-          </Badge>
+          </StatusBadge>
         </div>
         <div className="vx-admin-role-permission-dialog__body">
           {(["menu", "button", "api"] as const).map((type) => (
@@ -471,15 +481,19 @@ function PermissionAuthorizationNode({
         <span className="vx-admin-role-auth-node__main">
           <strong>{permissionLabel(node.permission)}</strong>
           <span>
-            <Badge
-              className={`vx-tenant-pill vx-admin-role-pill--${node.permission.permType.toLowerCase()}`}
+            <StatusBadge
+              tone={
+                PERM_TYPE_TONE[node.permission.permType.toLowerCase()] ??
+                "neutral"
+              }
+              icon={false}
             >
               {node.permission.permType === "menu"
                 ? "菜单"
                 : node.permission.permType === "button"
                   ? "按钮"
                   : "接口"}
-            </Badge>
+            </StatusBadge>
             <Badge>{node.depth === 0 ? "根权限" : `L${node.depth}`}</Badge>
             {!node.permission.status ? (
               <StatusBadge tone="neutral">
@@ -640,15 +654,15 @@ function AdminRoleAuthorizationDialog({
           </div>
         </header>
         <div className="vx-admin-role-permission-dialog__summary">
-          <Badge className="vx-tenant-pill vx-admin-role-pill--menu">
+          <StatusBadge tone="brand" icon={false}>
             菜单 {formatNumber(selectedMenuCount)}
-          </Badge>
-          <Badge className="vx-tenant-pill vx-admin-role-pill--button">
+          </StatusBadge>
+          <StatusBadge tone="info" icon={false}>
             按钮 {formatNumber(selectedButtonCount)}
-          </Badge>
-          <Badge className="vx-tenant-pill vx-admin-role-pill--api">
+          </StatusBadge>
+          <StatusBadge tone="warning" icon={false}>
             接口 {formatNumber(selectedApiCount)}
-          </Badge>
+          </StatusBadge>
           <Badge>合计 {formatNumber(selectedIds.size)}</Badge>
         </div>
         <section
@@ -717,15 +731,15 @@ function AdminRoleAuthorizationDialog({
 function PermissionTags({ role }: { role: PlatformRoleRecord }) {
   return (
     <span className="vx-admin-role-permission-tags">
-      <Badge className="vx-tenant-pill vx-admin-role-pill--menu">
+      <StatusBadge tone="brand" icon={false}>
         菜单 {formatNumber(role.menuPermissionCount)}
-      </Badge>
-      <Badge className="vx-tenant-pill vx-admin-role-pill--button">
+      </StatusBadge>
+      <StatusBadge tone="info" icon={false}>
         按钮 {formatNumber(role.buttonPermissionCount)}
-      </Badge>
-      <Badge className="vx-tenant-pill vx-admin-role-pill--api">
+      </StatusBadge>
+      <StatusBadge tone="warning" icon={false}>
         接口 {formatNumber(role.apiPermissionCount)}
-      </Badge>
+      </StatusBadge>
     </span>
   );
 }

@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 import {
   ActionButton,
   ActionMenu,
-  Badge,
   Banner,
   BulkActionBar,
   Button,
@@ -337,11 +336,9 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
               <StatusBadge tone={BILL_STATUS_TONE[invoice.billStatus]}>
                 {billStatusLabel(invoice.billStatus)}
               </StatusBadge>
-              <Badge
-                className={`vx-tenant-pill vx-invoice-pill--bill-type-${invoice.billType}`}
-              >
+              <StatusBadge tone="neutral" icon={false}>
                 {billTypeLabel(invoice.billType)}
-              </Badge>
+              </StatusBadge>
             </span>
           }
           description={invoice.billNo}
@@ -437,16 +434,12 @@ function InvoiceCards({
               <StatusBadge tone={INVOICE_STATUS_TONE[invoice.invoiceStatus]}>
                 {invoiceStatusLabel(invoice.invoiceStatus)}
               </StatusBadge>
-              <Badge
-                className={`vx-tenant-pill vx-invoice-pill--tax-${invoice.invoiceTaxType}`}
-              >
+              <StatusBadge tone="neutral" icon={false}>
                 {taxTypeLabel(invoice.invoiceTaxType)}
-              </Badge>
-              <Badge
-                className={`vx-tenant-pill vx-invoice-pill--doc-type-${invoice.invoiceType}`}
-              >
+              </StatusBadge>
+              <StatusBadge tone="neutral" icon={false}>
                 {invoiceTypeLabel(invoice.invoiceType)}
-              </Badge>
+              </StatusBadge>
             </>
           }
           note={`${invoice.billNo} · ${invoice.servicePlanName ?? invoice.orderNo ?? "未关联订阅"}`}

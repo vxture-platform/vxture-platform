@@ -26,7 +26,11 @@ import {
   ViewLayout,
   ViewModeSwitch,
 } from "@vxture/design-system";
-import type { IconName, ViewModeSwitchValue } from "@vxture/design-system";
+import type {
+  IconName,
+  StatusBadgeTone,
+  ViewModeSwitchValue,
+} from "@vxture/design-system";
 import {
   createOperatorPermission,
   fetchPlatformPermissions,
@@ -98,11 +102,16 @@ function permissionStatusIndicator(permission: PlatformAdminPermissionRecord): {
     : { label: "停用", icon: "x" };
 }
 
-function permissionLayerPillClass(depth: number) {
-  if (depth <= 0) return "vx-admin-permission-layer-pill--root";
-  if (depth === 1) return "vx-admin-permission-layer-pill--l1";
-  if (depth === 2) return "vx-admin-permission-layer-pill--l2";
-  return "vx-admin-permission-layer-pill--l3";
+/**
+ * 权限树的层级记号 → 语气。照 `.vx-admin-permission-layer-pill--*` 实测的
+ * 底色定：根中性、L1 品牌蓝、L2 青、L3 琥珀。层级是**序**不是严重度，
+ * 用色只为在一棵深树里分出层。
+ */
+function permissionLayerTone(depth: number): StatusBadgeTone {
+  if (depth <= 0) return "neutral";
+  if (depth === 1) return "brand";
+  if (depth === 2) return "info";
+  return "warning";
 }
 
 interface PermissionTreeNode {
@@ -1026,15 +1035,9 @@ function PermissionTreeNodeView({
           >
             <strong>{permissionDisplayName(permission)}</strong>
             <span className="vx-admin-permission-tree-node__title-tags">
-              <Badge
-                className={joinClasses(
-                  "vx-tenant-pill",
-                  "vx-admin-permission-layer-pill",
-                  permissionLayerPillClass(depth),
-                )}
-              >
+              <StatusBadge tone={permissionLayerTone(depth)} icon={false}>
                 {depth === 0 ? "根权限" : `L${depth}`}
-              </Badge>
+              </StatusBadge>
               {children.length ? (
                 <Badge>{formatNumber(children.length)} 子级</Badge>
               ) : null}

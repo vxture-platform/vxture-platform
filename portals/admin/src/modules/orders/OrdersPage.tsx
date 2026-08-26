@@ -294,9 +294,9 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
                   {order.tierName}
                 </Badge>
               )}
-              <Badge className="vx-tenant-pill vx-order-pill--source">
+              <StatusBadge tone="neutral" icon={false}>
                 {cycleLabel(order.cycleType)}
-              </Badge>
+              </StatusBadge>
             </span>
           }
           description={order.servicePlanName}
@@ -374,9 +374,9 @@ function OrderCards({
               <StatusBadge tone={PAYMENT_STATUS_TONE[order.paymentStatus]}>
                 {t(`status.orderPayment.${order.paymentStatus}`)}
               </StatusBadge>
-              <Badge className="vx-tenant-pill vx-order-pill--source">
+              <StatusBadge tone="neutral" icon={false}>
                 {paySourceLabel(order.paySource)}
-              </Badge>
+              </StatusBadge>
             </>
           }
           note={`${order.solutionName} · ${order.servicePlanName}`}
