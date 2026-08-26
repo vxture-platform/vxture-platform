@@ -1686,5 +1686,123 @@
       "rejected": "已驳回",
       "red": "已红冲"
     }
+  },
+  "platformGovernance": {
+    "status": {
+      "normal": "正常",
+      "warning": "关注",
+      "blocked": "阻断",
+      "pending": "待处理"
+    },
+    "approvalStatus": {
+      "normal": "已完成",
+      "warning": "待执行",
+      "blocked": "已阻断",
+      "pending": "待审批"
+    },
+    "admins": {
+      "title": "平台用户",
+      "description": "管理平台内部管理员、运营人员和运维人员，明确岗位、角色、准入状态和最近访问。",
+      "primaryAction": "新增人员",
+      "batchAction": "批量审计",
+      "searchPlaceholder": "搜索人员、岗位、角色或职责",
+      "objectLabel": "人员",
+      "scopeLabel": "岗位",
+      "ownerLabel": "角色",
+      "policyLabel": "准入策略",
+      "summary": {
+        "totalLabel": "人员总数",
+        "totalTag": "全部账号",
+        "normalLabel": "正常可用",
+        "normalTag": "可登录",
+        "riskLabel": "风险关注",
+        "riskTag": "需核查",
+        "pendingLabel": "待处理",
+        "pendingTag": "队列"
+      },
+      "actions": {
+        "detail": "查看详情",
+        "edit": "编辑人员",
+        "audit": "审计记录"
+      }
+    },
+    "secrets": {
+      "title": "密钥管理",
+      "description": "集中管理平台级 API Key、服务凭据、轮换周期和最小可见范围。",
+      "primaryAction": "新增密钥",
+      "batchAction": "批量审计",
+      "searchPlaceholder": "搜索密钥、用途、负责人或策略",
+      "objectLabel": "密钥",
+      "scopeLabel": "作用域",
+      "ownerLabel": "负责人",
+      "policyLabel": "轮换策略",
+      "summary": {
+        "totalLabel": "密钥总数",
+        "totalTag": "全部配置",
+        "normalLabel": "正常可用",
+        "normalTag": "可使用",
+        "riskLabel": "风险关注",
+        "riskTag": "需处理",
+        "pendingLabel": "待处理",
+        "pendingTag": "队列"
+      },
+      "actions": {
+        "detail": "查看详情",
+        "edit": "编辑配置",
+        "audit": "审计记录"
+      }
+    },
+    "jobs": {
+      "title": "任务调度",
+      "description": "观察平台异步任务、重试、死信、调度状态和关键后台作业。",
+      "primaryAction": "新增任务",
+      "batchAction": "批量审计",
+      "searchPlaceholder": "搜索任务、队列、负责人或策略",
+      "objectLabel": "任务",
+      "scopeLabel": "队列",
+      "ownerLabel": "负责人",
+      "policyLabel": "调度策略",
+      "summary": {
+        "totalLabel": "任务总数",
+        "totalTag": "全部队列",
+        "normalLabel": "正常运行",
+        "normalTag": "可调度",
+        "riskLabel": "风险关注",
+        "riskTag": "需处置",
+        "pendingLabel": "待处理",
+        "pendingTag": "队列"
+      },
+      "actions": {
+        "detail": "查看详情",
+        "edit": "编辑任务",
+        "audit": "执行记录"
+      }
+    },
+    "approvals": {
+      "title": "审批中心",
+      "description": "承接高风险操作的二次确认、审批流、执行凭证和审计闭环。",
+      "primaryAction": "新增审批",
+      "batchAction": "批量复核",
+      "searchPlaceholder": "搜索审批、对象、发起人或策略",
+      "objectLabel": "审批事项",
+      "scopeLabel": "对象",
+      "ownerLabel": "发起人",
+      "policyLabel": "审批策略",
+      "summary": {
+        "totalLabel": "审批总数",
+        "totalTag": "高风险操作",
+        "normalLabel": "已完成",
+        "normalTag": "审计可查",
+        "riskLabel": "待执行",
+        "riskTag": "需跟进",
+        "pendingLabel": "待审批",
+        "pendingTag": "队列"
+      },
+      "actions": {
+        "detail": "查看详情",
+        "edit": "审批处理",
+        "audit": "审计凭证"
+      }
+    }
   }
 }

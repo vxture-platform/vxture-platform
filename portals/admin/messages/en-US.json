@@ -1686,5 +1686,123 @@
       "rejected": "Rejected",
       "red": "Reversed"
     }
+  },
+  "platformGovernance": {
+    "status": {
+      "normal": "Normal",
+      "warning": "Attention",
+      "blocked": "Blocked",
+      "pending": "Pending"
+    },
+    "approvalStatus": {
+      "normal": "Completed",
+      "warning": "Awaiting execution",
+      "blocked": "Blocked",
+      "pending": "Awaiting approval"
+    },
+    "admins": {
+      "title": "Platform users",
+      "description": "Manage the platform's own administrators, operations and SRE staff — their posts, roles, access status and last sign-in.",
+      "primaryAction": "Add person",
+      "batchAction": "Bulk audit",
+      "searchPlaceholder": "Search people, posts, roles or duties",
+      "objectLabel": "Person",
+      "scopeLabel": "Post",
+      "ownerLabel": "Role",
+      "policyLabel": "Access policy",
+      "summary": {
+        "totalLabel": "People",
+        "totalTag": "All accounts",
+        "normalLabel": "Active",
+        "normalTag": "Can sign in",
+        "riskLabel": "At risk",
+        "riskTag": "Needs review",
+        "pendingLabel": "Pending",
+        "pendingTag": "Queue"
+      },
+      "actions": {
+        "detail": "View details",
+        "edit": "Edit person",
+        "audit": "Audit trail"
+      }
+    },
+    "secrets": {
+      "title": "Secrets",
+      "description": "Central management of platform-level API keys, service credentials, rotation periods and least-visible scope.",
+      "primaryAction": "Add secret",
+      "batchAction": "Bulk audit",
+      "searchPlaceholder": "Search secrets, purpose, owner or policy",
+      "objectLabel": "Secret",
+      "scopeLabel": "Scope",
+      "ownerLabel": "Owner",
+      "policyLabel": "Rotation policy",
+      "summary": {
+        "totalLabel": "Secrets",
+        "totalTag": "All entries",
+        "normalLabel": "Active",
+        "normalTag": "Usable",
+        "riskLabel": "At risk",
+        "riskTag": "Needs action",
+        "pendingLabel": "Pending",
+        "pendingTag": "Queue"
+      },
+      "actions": {
+        "detail": "View details",
+        "edit": "Edit entry",
+        "audit": "Audit trail"
+      }
+    },
+    "jobs": {
+      "title": "Scheduled jobs",
+      "description": "Watch the platform's async jobs, retries, dead letters, scheduling state and key background work.",
+      "primaryAction": "Add job",
+      "batchAction": "Bulk audit",
+      "searchPlaceholder": "Search jobs, queues, owners or policies",
+      "objectLabel": "Job",
+      "scopeLabel": "Queue",
+      "ownerLabel": "Owner",
+      "policyLabel": "Schedule policy",
+      "summary": {
+        "totalLabel": "Jobs",
+        "totalTag": "All queues",
+        "normalLabel": "Running",
+        "normalTag": "Schedulable",
+        "riskLabel": "At risk",
+        "riskTag": "Needs handling",
+        "pendingLabel": "Pending",
+        "pendingTag": "Queue"
+      },
+      "actions": {
+        "detail": "View details",
+        "edit": "Edit job",
+        "audit": "Run history"
+      }
+    },
+    "approvals": {
+      "title": "Approvals",
+      "description": "Where high-risk actions get their second confirmation — approval flow, execution receipts and the audit loop.",
+      "primaryAction": "Add approval",
+      "batchAction": "Bulk review",
+      "searchPlaceholder": "Search approvals, objects, requesters or policies",
+      "objectLabel": "Approval",
+      "scopeLabel": "Object",
+      "ownerLabel": "Requester",
+      "policyLabel": "Approval policy",
+      "summary": {
+        "totalLabel": "Approvals",
+        "totalTag": "High-risk actions",
+        "normalLabel": "Completed",
+        "normalTag": "Auditable",
+        "riskLabel": "Awaiting execution",
+        "riskTag": "Needs follow-up",
+        "pendingLabel": "Awaiting approval",
+        "pendingTag": "Queue"
+      },
+      "actions": {
+        "detail": "View details",
+        "edit": "Handle approval",
+        "audit": "Audit receipt"
+      }
+    }
   }
 }

@@ -51,11 +51,13 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  *   的那些（模块级常量表 / 普通函数，要先做结构改造）。
  * 2026-08-26 admin 3799 → 3756：五个「状态 → 中文」的顶层函数删掉，改成词条查表
  *   （映射本来就是恒等，函数没有任何判断可言）。
+ * 2026-08-26 admin 3756 → 3668：PlatformGovernanceListPage 的四套治理域配置搬进
+ *   词条，图标与语气留在代码里（同 opera `status.ts` 的判据）。
  */
 const BASELINE = {
   console: 32,
   website: 54,
-  admin: 3756,
+  admin: 3668,
   opera: 1795,
   accounts: 263,
 };
