@@ -412,7 +412,7 @@ export function PromotionRedemptionsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-redemptions-page"
+        className="w-full vx-redemptions-page"
         header={
           <PageHeader
             icon="check"

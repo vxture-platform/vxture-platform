@@ -448,7 +448,7 @@ export function TenantsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-tenant-operations-page"
+        className="w-full vx-tenant-operations-page"
         header={
           <PageHeader
             icon="buildings"

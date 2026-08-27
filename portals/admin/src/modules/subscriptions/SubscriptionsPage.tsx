@@ -610,7 +610,7 @@ export function SubscriptionsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-subscriptions-page"
+        className="w-full vx-subscriptions-page"
         header={
           <PageHeader
             icon="star"

@@ -796,7 +796,7 @@ export function TicketsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-tickets-page"
+        className="w-full vx-tickets-page"
         header={
           <PageHeader
             icon="chat-circle"

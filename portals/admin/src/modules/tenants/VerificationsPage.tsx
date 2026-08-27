@@ -645,7 +645,7 @@ export function VerificationsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-verification-page"
+        className="w-full vx-verification-page"
         header={
           <PageHeader
             icon="medal"

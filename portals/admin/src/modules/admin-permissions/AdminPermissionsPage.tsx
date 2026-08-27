@@ -797,14 +797,14 @@ function PermissionDetailDialog({
           `max-width: 0`，面板被夹成 34px（实测 2026-08-27，本应 896px）。方括号
           不过主题查表，字面就是 CSS 关键字。同源的坑还有 `max-w-md`…`max-w-5xl`
           与 `leading-none`，记在 `portals/website/assets/legacy-tokens/tokens-website.css`。 */}
-      <DialogContent className="max-w-[none] vx-admin-role-permission-dialog__panel">
+      <DialogContent className="max-w-[none] ">
         <header className="vx-admin-role-permission-dialog__header">
           <div>
             <DialogTitle>{permissionDisplayName(permission)}</DialogTitle>
             <DialogDescription>{permission.permCode}</DialogDescription>
           </div>
         </header>
-        <div className="vx-admin-role-permission-dialog__summary">
+        <div className="flex flex-wrap items-center gap-xs ">
           <Badge>{permissionTypeMetaOf(permission.permType).label}</Badge>
           <StatusBadge tone={permission.status ? "success" : "neutral"}>
             <Icon

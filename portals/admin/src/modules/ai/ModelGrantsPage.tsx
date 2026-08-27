@@ -582,7 +582,7 @@ export function ModelGrantsPage() {
   }
 
   return (
-    <ViewLayout className="vx-tenant-management-page vx-model-strategy-page">
+    <ViewLayout className="w-full vx-model-strategy-page">
       <PageHeader
         icon="shield-check"
         eyebrow={t("header.eyebrow")}
@@ -849,8 +849,8 @@ export function ModelGrantsPage() {
         </section>
       </div>
 
-      <section className="grid min-w-0 vx-model-strategy-overrides">
-        <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground vx-model-strategy-overrides__header">
+      <section className="grid min-w-0 gap-xs ">
+        <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground flex items-center justify-between pt-sm ">
           <strong>{t("overrides.title")}</strong>
           <span>
             {t("overrides.count", { count: filteredOverrides.length })}

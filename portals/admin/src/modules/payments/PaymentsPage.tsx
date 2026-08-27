@@ -766,7 +766,7 @@ export function PaymentsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-payments-page"
+        className="w-full vx-payments-page"
         header={
           <PageHeader
             icon="check"

@@ -16,9 +16,10 @@ import {
   SHELL_PANEL_HAIRLINE,
   StatusBadge,
   TableTitleCell,
+  toneSurfaceClasses,
 } from "@vxture/design-system";
 import { orUnset } from "@/modules/shared/display";
-import type { IconName } from "@vxture/design-system";
+import type { IconName, StatusBadgeTone } from "@vxture/design-system";
 import {
   fetchSubscriptionOperation,
   submitSubscriptionOperation,
@@ -51,6 +52,14 @@ import {
   formatNumber,
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
+
+/** 时间线圆点的语气。原来是 `--subscription-timeline-bg/-color` 两个变量，
+ * 由三个 `--success/--warning/--danger` 修饰类喂进去。 */
+const TIMELINE_TONE: Record<string, StatusBadgeTone> = {
+  success: "success",
+  warning: "warning",
+  danger: "danger",
+};
 
 function subscriptionStatusLabel(status: SubscriptionOperationStatus) {
   if (status === "trialing") return "试用";
@@ -238,7 +247,7 @@ function SubscriptionDetails({
             {subscription.solutionAssociation.note}
           </p>
         </div>
-        <div className="inline-flex flex-wrap items-center justify-end gap-sm vx-subscription-detail-links">
+        <div className="inline-flex flex-wrap items-center justify-end gap-sm justify-start ">
           {subscription.solutionAssociation.solutionCode ? (
             <Button asChild variant="outline">
               <Link
@@ -333,35 +342,44 @@ function SubscriptionDetails({
 
       <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="clock" title="运营记录" />
-        <div className="vx-subscription-timeline">
+        <PanelList>
           {subscription.operationTimeline.map((event) => (
-            <article
+            <PanelItem
               key={event.id}
-              className={`vx-subscription-timeline__item vx-subscription-timeline__item--${event.tone}`}
-            >
-              <span aria-hidden="true">
-                <Icon
-                  name={
-                    event.tone === "danger"
-                      ? "warning"
-                      : event.tone === "success"
-                        ? "check"
-                        : "info"
-                  }
-                  size="xs"
-                  fallback="placeholder"
-                />
-              </span>
-              <div>
-                <strong>{event.title}</strong>
-                <p>{event.description}</p>
-                <small>
-                  {event.actor} · {formatDate(event.at, locale)}
-                </small>
-              </div>
-            </article>
+              lead={
+                <span
+                  aria-hidden="true"
+                  className={`inline-grid size-icon-md place-items-center rounded-full border ${toneSurfaceClasses[TIMELINE_TONE[event.tone] ?? "neutral"]}`}
+                >
+                  <Icon
+                    name={
+                      event.tone === "danger"
+                        ? "warning"
+                        : event.tone === "success"
+                          ? "check"
+                          : "info"
+                    }
+                    size="xs"
+                    fallback="placeholder"
+                  />
+                </span>
+              }
+              main={
+                <span className="grid min-w-0 gap-2xs">
+                  <strong className="block text-body-md font-semibold text-foreground">
+                    {event.title}
+                  </strong>
+                  <p className="m-0 text-body-sm leading-relaxed text-muted-foreground">
+                    {event.description}
+                  </p>
+                  <small className="block text-body-sm text-muted-foreground">
+                    {event.actor} · {formatDate(event.at, locale)}
+                  </small>
+                </span>
+              }
+            />
           ))}
-        </div>
+        </PanelList>
       </section>
     </section>
   );

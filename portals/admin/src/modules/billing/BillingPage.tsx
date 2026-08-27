@@ -752,7 +752,7 @@ export function BillingPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-billing-page"
+        className="w-full vx-billing-page"
         header={
           <PageHeader
             icon="key"

@@ -311,7 +311,7 @@ export function PlatformAutonomyPage() {
 
   return (
     <DashboardTemplate
-      className="platform-autonomy-page"
+      className="w-full "
       header={
         <PageHeader
           icon="shield-check"

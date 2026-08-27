@@ -643,7 +643,7 @@ export function AccountsPage({
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-account-management-page"
+        className="w-full "
         header={
           <PageHeader
             icon="user"

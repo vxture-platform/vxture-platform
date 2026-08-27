@@ -401,7 +401,7 @@ export function OpsTodosPage() {
 
   return (
     <ListPageTemplate
-      className="vx-tenant-management-page"
+      className="w-full "
       header={
         <PageHeader
           icon="table"

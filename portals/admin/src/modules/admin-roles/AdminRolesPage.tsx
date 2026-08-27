@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import type { CSSProperties } from "react";
 import {
   ActionButton,
   ActionMenu,
@@ -371,10 +370,13 @@ function AdminRolePermissionDialog({
           `max-width: 0`，面板被夹成 34px（实测 2026-08-27，本应 896px）。方括号
           不过主题查表，字面就是 CSS 关键字。同源的坑还有 `max-w-md`…`max-w-5xl`
           与 `leading-none`，记在 `portals/website/assets/legacy-tokens/tokens-website.css`。 */}
-      <DialogContent className="max-w-[none] vx-admin-role-permission-dialog__panel">
-        <header>
+      <DialogContent
+        width="xl"
+        className="grid max-h-screen grid-rows-[auto_auto_minmax(0,1fr)] gap-md"
+      >
+        <header className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-md">
           <span
-            className="vx-admin-role-permission-dialog__icon"
+            className="inline-grid size-icon-2xl place-items-center rounded-full bg-primary-muted text-primary-text"
             aria-hidden="true"
           >
             <Icon name="role" size="lg" fallback="placeholder" />
@@ -384,7 +386,7 @@ function AdminRolePermissionDialog({
             <DialogDescription>{role.roleCode}</DialogDescription>
           </div>
         </header>
-        <div className="vx-admin-role-permission-dialog__summary">
+        <div className="flex flex-wrap items-center gap-xs">
           <StatusBadge tone="brand" icon={false}>
             菜单 {formatNumber(role.menuPermissionCount)}
           </StatusBadge>
@@ -395,13 +397,10 @@ function AdminRolePermissionDialog({
             接口 {formatNumber(role.apiPermissionCount)}
           </StatusBadge>
         </div>
-        <div className="vx-admin-role-permission-dialog__body">
+        <div className="grid min-h-0 gap-md overflow-auto pr-2xs">
           {(["menu", "button", "api"] as const).map((type) => (
-            <section
-              key={type}
-              className="vx-admin-role-permission-dialog__group"
-            >
-              <h3>
+            <section key={type} className="grid gap-sm">
+              <h3 className="m-0 text-body-md font-semibold text-foreground">
                 {type === "menu"
                   ? "菜单权限"
                   : type === "button"
@@ -409,23 +408,30 @@ function AdminRolePermissionDialog({
                     : "接口权限"}
               </h3>
               {permissionsByType[type].length ? (
-                <div className="vx-admin-role-permission-dialog__list">
+                <div className="grid gap-sm sm:grid-cols-2">
                   {permissionsByType[type].map((permission) => (
-                    <article key={permission.id}>
-                      <strong>
+                    <article
+                      key={permission.id}
+                      className="grid min-w-0 gap-2xs rounded-lg border border-primary/10 p-sm"
+                    >
+                      <strong className="truncate text-body-sm font-semibold text-foreground">
                         {permissionDisplayName(
                           permission.permName || permission.permCode,
                         )}
                       </strong>
-                      <code>{permission.permCode}</code>
+                      <code className="truncate font-mono text-body-sm text-muted-foreground">
+                        {permission.permCode}
+                      </code>
                       {permission.description ? (
-                        <small>{permission.description}</small>
+                        <small className="truncate text-body-sm text-muted-foreground">
+                          {permission.description}
+                        </small>
                       ) : null}
                     </article>
                   ))}
                 </div>
               ) : (
-                <p className="vx-admin-role-permission-dialog__empty">-</p>
+                <p className="m-0 text-body-sm text-muted-foreground">-</p>
               )}
             </section>
           ))}
@@ -434,6 +440,15 @@ function AdminRolePermissionDialog({
     </Dialog>
   );
 }
+
+/** 授权树的层级缩进。判据同权限页的 `DEPTH_INDENT`。 */
+const AUTH_DEPTH_INDENT = [
+  "ps-0",
+  "ps-md",
+  "ps-lg",
+  "ps-xl",
+  "ps-2xl",
+] as const;
 
 function PermissionAuthorizationNode({
   node,
@@ -463,24 +478,26 @@ function PermissionAuthorizationNode({
     : null;
 
   return (
-    <article
-      className="vx-admin-role-auth-node"
-      // Dynamic tree depth drives the CSS indent (calc on --permission-depth);
-      // a runtime numeric value cannot be expressed as a static className.
-      style={{ "--permission-depth": node.depth } as CSSProperties}
-    >
-      <label>
+    /* 缩进走定长的深度→类名表，与权限页同一处理：内联 style 承载间距会被
+       `ds/no-inline-design-style` 拦，任意值 `ps-[Nrem]` 会被
+       `ds/no-app-tailwind-arbitrary-scale` 拦。 */
+    <article className="grid min-w-0">
+      <label
+        className={`grid grid-cols-[auto_minmax(0,1fr)] items-center gap-sm rounded-md p-xs hover:bg-accent ${AUTH_DEPTH_INDENT[Math.min(node.depth, AUTH_DEPTH_INDENT.length - 1)]}`}
+      >
         <Checkbox
-          className="vx-model-select-checkbox"
+          className="size-icon-sm m-0 cursor-pointer "
           checked={indeterminate ? "indeterminate" : checked}
           disabled={!node.permission.status}
           onCheckedChange={(nextChecked) =>
             onToggle(node, nextChecked === true)
           }
         />
-        <span className="vx-admin-role-auth-node__main">
-          <strong>{permissionLabel(node.permission)}</strong>
-          <span>
+        <span className="grid min-w-0 justify-items-start gap-2xs text-left">
+          <strong className="truncate text-body-md font-extrabold text-foreground">
+            {permissionLabel(node.permission)}
+          </strong>
+          <span className="flex min-w-0 flex-wrap items-center justify-start gap-2xs">
             <StatusBadge
               tone={
                 PERM_TYPE_TONE[node.permission.permType.toLowerCase()] ??
@@ -501,7 +518,7 @@ function PermissionAuthorizationNode({
               </StatusBadge>
             ) : null}
           </span>
-          <small>
+          <small className="truncate text-body-sm text-muted-foreground">
             {parent
               ? parent.permName || parent.permCode
               : node.permission.permCode}
@@ -509,7 +526,7 @@ function PermissionAuthorizationNode({
         </span>
       </label>
       {node.children.length ? (
-        <div className="vx-admin-role-auth-node__children">
+        <div className="grid">
           {node.children.map((child) => (
             <PermissionAuthorizationNode
               key={child.permission.id}
@@ -638,10 +655,13 @@ function AdminRoleAuthorizationDialog({
           `max-width: 0`，面板被夹成 34px（实测 2026-08-27，本应 896px）。方括号
           不过主题查表，字面就是 CSS 关键字。同源的坑还有 `max-w-md`…`max-w-5xl`
           与 `leading-none`，记在 `portals/website/assets/legacy-tokens/tokens-website.css`。 */}
-      <DialogContent className="max-w-[none] vx-admin-role-permission-dialog__panel vx-admin-role-auth-dialog__panel">
-        <header>
+      <DialogContent
+        width="xl"
+        className="grid max-h-screen grid-rows-[auto_auto_auto_minmax(0,1fr)_auto] gap-md"
+      >
+        <header className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-md">
           <span
-            className="vx-admin-role-permission-dialog__icon"
+            className="inline-grid size-icon-2xl place-items-center rounded-full bg-primary-muted text-primary-text"
             aria-hidden="true"
           >
             <Icon name="key" size="lg" fallback="placeholder" />
@@ -653,7 +673,7 @@ function AdminRoleAuthorizationDialog({
             </DialogDescription>
           </div>
         </header>
-        <div className="vx-admin-role-permission-dialog__summary">
+        <div className="flex flex-wrap items-center gap-xs ">
           <StatusBadge tone="brand" icon={false}>
             菜单 {formatNumber(selectedMenuCount)}
           </StatusBadge>
@@ -666,7 +686,7 @@ function AdminRoleAuthorizationDialog({
           <Badge>合计 {formatNumber(selectedIds.size)}</Badge>
         </div>
         <section
-          className="vx-admin-role-auth-dialog__toolbar"
+          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-sm"
           aria-label="授权筛选"
         >
           <Input
@@ -688,10 +708,12 @@ function AdminRoleAuthorizationDialog({
           </Button>
         </section>
         {error ? (
-          <p className="vx-admin-role-auth-dialog__error">{error}</p>
+          <p className="m-0 rounded-lg bg-destructive-muted p-sm text-body-sm text-destructive-text">
+            {error}
+          </p>
         ) : null}
         <div
-          className="vx-admin-role-auth-dialog__tree"
+          className="grid min-h-0 gap-0 overflow-auto border-t border-primary/10"
           role="tree"
           aria-label={`${roleLabel} 权限授权树`}
         >
@@ -706,12 +728,12 @@ function AdminRoleAuthorizationDialog({
               />
             ))
           ) : (
-            <p className="vx-admin-role-permission-dialog__empty">
+            <p className="m-0 text-body-sm text-muted-foreground">
               没有匹配的权限
             </p>
           )}
         </div>
-        <footer className="vx-admin-role-auth-dialog__footer">
+        <footer className="flex items-center justify-end gap-sm">
           <Button variant="outline" disabled={saving} onClick={onClose}>
             {tShared("actions.cancel")}
           </Button>
@@ -730,7 +752,7 @@ function AdminRoleAuthorizationDialog({
 
 function PermissionTags({ role }: { role: PlatformRoleRecord }) {
   return (
-    <span className="vx-admin-role-permission-tags">
+    <span className="flex min-w-0 flex-wrap items-center justify-start gap-xs ">
       <StatusBadge tone="brand" icon={false}>
         菜单 {formatNumber(role.menuPermissionCount)}
       </StatusBadge>
@@ -1438,7 +1460,7 @@ export function AdminRolesPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-admin-roles-page"
+        className="w-full "
         header={
           <PageHeader
             icon="role"

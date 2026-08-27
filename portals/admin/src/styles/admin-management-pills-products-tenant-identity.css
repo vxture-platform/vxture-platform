@@ -1,5 +1,0 @@
-.vx-account-management-page .vx-tenant-directory-card header > svg,
-.vx-platform-users-page .vx-tenant-directory-card header > svg,
-.vx-admin-roles-page .vx-tenant-directory-card header > svg {
-  color: var(--vx-color-neutral-400);
-}

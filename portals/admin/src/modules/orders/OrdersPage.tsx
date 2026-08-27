@@ -355,7 +355,7 @@ function OrderCards({
           icon="table"
           title={order.orderNo}
           description={`${order.tenantName} · ${order.tierName}`}
-          /* 顶缘语气取订单态。此前走 `vx-order-card--${status}` 的 CSS，
+          /* 顶缘语气取订单态。此前走 "" 的 CSS，
            * 但那条 border-top 的宽度是已退役的 --vx-admin-* 变量，整条声明失效，
            * 色条实际一直没显示出来。 */
           tone={resolveStatusTone(ORDER_STATUS_TONE, order.orderStatus)}
@@ -592,7 +592,7 @@ export function OrdersPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page "
+        className="w-full "
         header={
           <PageHeader
             icon="table"

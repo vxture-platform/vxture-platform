@@ -439,7 +439,7 @@ export function PromotionsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-promotions-page"
+        className="w-full vx-promotions-page"
         header={
           <PageHeader
             icon="sparkles"

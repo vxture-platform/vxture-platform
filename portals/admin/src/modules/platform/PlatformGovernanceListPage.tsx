@@ -316,7 +316,7 @@ export function PlatformGovernanceListPage({
   return (
     <ListPageTemplate
       className={joinClasses(
-        "vx-tenant-management-page vx-platform-governance-page",
+        "w-full vx-platform-governance-page",
         `vx-platform-governance-page--${kind}`,
       )}
       header={

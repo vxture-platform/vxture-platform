@@ -1409,7 +1409,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
 
   if (!tenant) {
     return (
-      <ViewLayout className="vx-tenant-management-page">
+      <ViewLayout className="w-full ">
         <Link
           className="inline-flex min-h-icon-xl w-fit items-center gap-xs text-body-sm font-extrabold text-primary-text no-underline"
           href="/tenants"
@@ -1509,7 +1509,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
 
   return (
     <DetailPageTemplate
-      className="vx-tenant-management-page"
+      className="w-full "
       header={
         <>
           <Link

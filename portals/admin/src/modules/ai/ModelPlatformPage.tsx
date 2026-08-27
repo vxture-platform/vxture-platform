@@ -948,7 +948,7 @@ export function ModelPlatformPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-model-platform-page"
+        className="w-full vx-model-platform-page"
         header={
           <PageHeader
             icon="code"

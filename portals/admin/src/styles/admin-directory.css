@@ -1,4 +1,0 @@
-/* Admin directory style entry. Keep concrete rules in admin-directory-* modules. */
-
-@import "./admin-directory-list.css";
-@import "./admin-directory-cards.css";

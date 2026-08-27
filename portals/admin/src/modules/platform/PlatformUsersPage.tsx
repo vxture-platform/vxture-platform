@@ -422,7 +422,7 @@ function PlatformUserDetailDialog({
             <DialogDescription>{`@${admin.username}`}</DialogDescription>
           ) : null}
         </DialogHeader>
-        <dl className="vx-admin-permission-detail-dialog__grid">
+        <dl className="grid grid-cols-1 gap-x-md gap-y-sm sm:grid-cols-2 ">
           <div>
             <dt>显示名</dt>
             <dd>{admin.displayName || EMPTY_MARK}</dd>
@@ -471,7 +471,7 @@ function PlatformUserDetailDialog({
                 : EMPTY_MARK}
             </dd>
           </div>
-          <div className="vx-admin-permission-detail-dialog__wide">
+          <div className="sm:col-span-2 ">
             <dt>备注</dt>
             <dd>{admin.remark || EMPTY_MARK}</dd>
           </div>
@@ -1061,7 +1061,7 @@ export function PlatformUsersPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-platform-users-page"
+        className="w-full "
         header={
           <PageHeader
             icon="user"

@@ -415,7 +415,7 @@ export function UsageMeteringPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-usage-page"
+        className="w-full vx-usage-page"
         header={
           <PageHeader
             icon="graph"

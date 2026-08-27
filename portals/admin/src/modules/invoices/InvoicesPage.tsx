@@ -674,7 +674,7 @@ export function InvoicesPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-invoices-page"
+        className="w-full vx-invoices-page"
         header={
           <PageHeader
             icon="key"

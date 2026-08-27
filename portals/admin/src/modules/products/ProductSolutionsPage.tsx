@@ -485,7 +485,7 @@ export function ProductSolutionsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-product-solutions-page"
+        className="w-full vx-product-solutions-page"
         header={
           <PageHeader
             icon="workflow"

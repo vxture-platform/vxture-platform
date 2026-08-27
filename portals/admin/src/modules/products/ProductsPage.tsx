@@ -420,7 +420,7 @@ export function ProductsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-product-management-page"
+        className="w-full vx-product-management-page"
         header={
           <PageHeader
             icon="database"

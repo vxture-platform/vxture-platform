@@ -143,7 +143,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
           <Label>
             动态验证码
             <Input
-              className="vx-step-up-code-input"
+              className="text-center tabular-nums "
               value={code}
               onChange={(event) => setCode(event.target.value)}
               inputMode="numeric"
@@ -154,7 +154,10 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
             />
           </Label>
           {error ? (
-            <p className="vx-step-up-error" role="alert">
+            <p
+              className="m-0 text-body-sm font-semibold text-destructive-text "
+              role="alert"
+            >
               {error}
             </p>
           ) : null}

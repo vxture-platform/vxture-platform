@@ -1,7 +1,0 @@
-/* Admin products style entry. Keep concrete rules in admin-products-* modules. */
-
-@import "./admin-products-summary-toolbar.css";
-@import "./admin-products-plans.css";
-@import "./admin-products-releases.css";
-@import "./admin-products-pricing.css";
-@import "./admin-products-responsive.css";

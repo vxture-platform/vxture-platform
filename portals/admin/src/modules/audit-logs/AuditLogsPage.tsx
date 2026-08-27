@@ -347,7 +347,7 @@ export function AuditLogsPage() {
 
   return (
     <ListPageTemplate
-      className={joinClasses("vx-tenant-management-page", "vx-audit-page")}
+      className={joinClasses("w-full ", "vx-audit-page")}
       header={
         <PageHeader
           icon="info"
