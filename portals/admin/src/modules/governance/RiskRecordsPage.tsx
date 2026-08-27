@@ -394,7 +394,6 @@ export function RiskRecordsPage() {
                 <Button
                   variant="default"
                   size="md"
-                  className="vx-admin-action-btn"
                   onClick={openCreate}
                   title="新建风险记录"
                 >
@@ -540,7 +539,7 @@ export function RiskRecordsPage() {
               />
             </Label>
           ) : null}
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               风险等级
               <NativeSelect

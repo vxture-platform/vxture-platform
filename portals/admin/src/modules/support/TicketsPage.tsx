@@ -850,7 +850,10 @@ export function TicketsPage() {
           />
         }
         filters={
-          <section className="vx-tenant-toolbar" aria-label="工单筛选">
+          <section
+            className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch"
+            aria-label="工单筛选"
+          >
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -906,7 +909,10 @@ export function TicketsPage() {
               <span>{formatNumber(visibleTickets.length)} 条匹配</span>
             </header>
             {selectedTickets.length ? (
-              <div className="vx-tenant-toolbar" aria-label="工单批量操作">
+              <div
+                className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch"
+                aria-label="工单批量操作"
+              >
                 <span>已选 {formatNumber(selectedTickets.length)} 条</span>
                 <div className="flex-1 max-lg:hidden" aria-hidden="true" />
                 <Button

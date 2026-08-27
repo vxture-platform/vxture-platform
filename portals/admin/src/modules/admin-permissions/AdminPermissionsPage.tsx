@@ -590,7 +590,7 @@ function PermissionFormDialog({
       }}
       onSubmit={onSubmit}
     >
-      <div className="vx-model-dialog__grid">
+      <div>
         <Label>
           权限编码
           <Input
@@ -610,7 +610,7 @@ function PermissionFormDialog({
           />
         </Label>
       </div>
-      <div className="vx-model-dialog__grid">
+      <div>
         <Label>
           权限类型
           <NativeSelect
@@ -641,7 +641,7 @@ function PermissionFormDialog({
           </NativeSelect>
         </Label>
       </div>
-      <div className="vx-model-dialog__grid">
+      <div>
         <Label>
           路由路径
           <Input
@@ -659,7 +659,7 @@ function PermissionFormDialog({
           />
         </Label>
       </div>
-      <div className="vx-model-dialog__grid">
+      <div>
         <Label>
           图标
           <Input
@@ -1158,7 +1158,7 @@ function PermissionDomainSection({
       />
       <PermissionDomainStats group={group} />
       <section
-        className="vx-tenant-toolbar vx-admin-permission-domain__toolbar"
+        className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch vx-admin-permission-domain__toolbar"
         aria-label={`${group.title}筛选`}
       >
         <ViewModeSwitch

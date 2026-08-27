@@ -11,9 +11,3 @@
   font-size: var(--body-sm-font-size);
   font-weight: 600;
 }
-
-.vx-step-up-hint {
-  margin: 0;
-  color: var(--tenant-muted);
-  font-size: var(--body-sm-font-size);
-}

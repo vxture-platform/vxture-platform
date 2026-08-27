@@ -642,7 +642,7 @@ export function ModelGrantsPage() {
 
       <div className="grid min-w-0">
         <section
-          className="vx-tenant-toolbar"
+          className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch"
           aria-label={t("policyTable.filterAriaLabel")}
         >
           <ViewModeSwitch
@@ -908,7 +908,7 @@ export function ModelGrantsPage() {
           }}
           onSubmit={(event) => void submitGrant(event)}
         >
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               {t("dialogs.fields.grantModel")}
               <NativeSelect
@@ -944,7 +944,7 @@ export function ModelGrantsPage() {
               />
             </Label>
           </div>
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               {t("dialogs.fields.agentId")}
               {/* 与 模型 / 租户 同列：应用范围是身份的一部分，创建后 atlas 不接受修改。
@@ -984,7 +984,7 @@ export function ModelGrantsPage() {
           </div>
           {/* 任务画像与授权说明同列：两个都是自由文本、两个在编辑态都照常可改
               （与上面那行的应用范围不同——那个 atlas 创建后就不收了）。 */}
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               {t("dialogs.fields.taskProfile")}
               {/* atlas 的 create 与 update 都收这个字段，而此前表单里根本没有它：
@@ -1013,7 +1013,7 @@ export function ModelGrantsPage() {
               />
             </Label>
           </div>
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               {t("dialogs.fields.expiresAt")}
               <Input

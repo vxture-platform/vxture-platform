@@ -4,8 +4,3 @@
 
 /* 缺失值：占主信息的位置，但按辅助信息的语气——常规字重、弱化前景。
    它不是一个值，是"没有值"。 */
-.vx-tenant-directory-row__unset {
-  color: var(--tenant-muted);
-  font-size: var(--body-md-font-size);
-  font-weight: 400;
-}

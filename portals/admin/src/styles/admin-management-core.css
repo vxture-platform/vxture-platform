@@ -23,17 +23,6 @@
 .vx-tenant-management-page p {
   margin: 0;
 }
-
-.vx-tenant-toolbar {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-md) 0 var(--space-md);
-  border: 0;
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
-  background: transparent;
-}
 /* 控件外观归 DS：这里原本把 Input 重画了一遍——40px 高、自己的描边与焦点环，
    于是工具行里搜索框比按钮和下拉高出一截。基准控件高度 32px（--space-control-md），
    由 DS 的件统一出（owner 2026-08-06）。 */

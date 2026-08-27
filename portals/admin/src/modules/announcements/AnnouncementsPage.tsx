@@ -11,8 +11,10 @@ import {
   FilterBar,
   Input,
   Label,
+  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   Pagination,
   StatusBadge,
@@ -438,28 +440,45 @@ function announcementActions(
 function AnnouncementCards({ items }: { items: AnnouncementRecord[] }) {
   const locale = useLocale();
   return (
-    <div className="vx-announcement-cards">
+    <ListCardGrid>
       {items.map((item) => (
-        <div key={item.id} className="vx-announcement-card">
-          <div className="vx-announcement-card__header">
-            <StatusBadge tone={ANNOUNCEMENT_TYPE_TONE[item.type]}>
-              {TYPE_LABELS[item.type]}
-            </StatusBadge>
-            <StatusBadge tone={ANNOUNCEMENT_STATUS_TONE[item.status]}>
-              {STATUS_LABELS[item.status]}
-            </StatusBadge>
-          </div>
-          <h3 className="vx-announcement-card__title">{item.title}</h3>
-          <p className="vx-announcement-card__content">{item.content}</p>
-          <div className="vx-announcement-card__meta">
-            <span>{SCOPE_LABELS[item.targetScope]}</span>
-            {item.publishedAt && (
-              <span>{formatDate(item.publishedAt, locale)}</span>
-            )}
-          </div>
-        </div>
+        <MetricListCard
+          key={item.id}
+          icon="megaphone"
+          title={item.title}
+          tone={ANNOUNCEMENT_STATUS_TONE[item.status]}
+          badges={
+            <>
+              <StatusBadge tone={ANNOUNCEMENT_TYPE_TONE[item.type]}>
+                {TYPE_LABELS[item.type]}
+              </StatusBadge>
+              <StatusBadge tone={ANNOUNCEMENT_STATUS_TONE[item.status]}>
+                {STATUS_LABELS[item.status]}
+              </StatusBadge>
+            </>
+          }
+          note={
+            <p className="m-0 line-clamp-2 text-body-md text-muted-foreground">
+              {item.content}
+            </p>
+          }
+          metrics={[
+            {
+              key: "scope",
+              value: SCOPE_LABELS[item.targetScope],
+              label: "发布范围",
+            },
+            {
+              key: "publishedAt",
+              value: item.publishedAt
+                ? formatDate(item.publishedAt, locale)
+                : "未发布",
+              label: "发布时间",
+            },
+          ]}
+        />
       ))}
-    </div>
+    </ListCardGrid>
   );
 }
 
@@ -494,7 +513,7 @@ function AnnouncementFormDialog({
       }}
       onSubmit={onSubmit}
     >
-      <div className="vx-model-dialog__grid">
+      <div>
         <Label>
           {tShared("columns.kind")}
           <NativeSelect
@@ -543,7 +562,7 @@ function AnnouncementFormDialog({
           required
         />
       </Label>
-      <div className="vx-model-dialog__grid">
+      <div>
         <Label>
           投放对象
           <NativeSelect
@@ -720,7 +739,6 @@ export function AnnouncementsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-announcement-page"
         header={
           <PageHeader
             icon="bell"

@@ -55,6 +55,13 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  *   词条，图标与语气留在代码里（同 opera `status.ts` 的判据）。
  * 2026-08-27 admin 3668 → 3660：视觉验证时抓到的混合语言（`还没有${objectLabel}`
  *   在英文下渲染成「还没有Secret」），连同两处同形的一起抽掉。
+ * 2026-08-27 admin 3660 → 3666：**真新增，不是口径问题。** 技能、公告、服务
+ *   套餐三页的手搓卡片换 `MetricListCard` 时，它的 `metrics` 契约要求**每个读数
+ *   带一个标签**，而原来那排 meta 是一串裸值（「分类」v1.2「123 次调用」混在
+ *   一行）。于是多出七个标签词：分类 / 版本 / 调用次数 / 发布范围 / 发布时间 /
+ *   未发布 / 基础套餐。这是真的多写了文案，基线往上调；它们该进词条，归入
+ *   i18n 那条线的待办。
+ *
  * 2026-08-27 admin 3662 → 3660：TenantDetailPage 换 DS 件时又抵回去了：多处
  *   `<small>注册激活</small>` 这类不带插值的 JSX 文本节点（本来就被数到）变成了
  *   `label` 属性串，一进一出持平；而几个重复的标题段被 DS 件合并后真的少了。
@@ -83,7 +90,7 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
 const BASELINE = {
   console: 32,
   website: 54,
-  admin: 3660,
+  admin: 3666,
   opera: 1795,
   accounts: 263,
 };

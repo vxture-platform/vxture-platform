@@ -291,7 +291,9 @@ export function SystemParametersPage() {
             )}
           </Label>
           {editing.description ? (
-            <p className="vx-step-up-hint">{editing.description}</p>
+            <p className="m-0 text-body-sm text-muted-foreground">
+              {editing.description}
+            </p>
           ) : null}
         </DialogForm>
       ) : null}

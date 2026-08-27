@@ -9,8 +9,10 @@ import {
   FilterBar,
   Icon,
   Input,
+  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   Pagination,
   StatusBadge,
@@ -239,31 +241,39 @@ function skillColumns(locale: string): readonly DataTableColumn<SkillRecord>[] {
 
 function SkillCards({ skills }: { skills: SkillRecord[] }) {
   return (
-    <div className="vx-skills-cards">
+    <ListCardGrid>
       {skills.map((skill) => (
-        <div key={skill.id} className="vx-skill-card">
-          <div className="vx-skill-card__header">
-            <span className="vx-skill-card__icon">
-              <Icon name="cube" size="md" fallback="placeholder" />
-            </span>
-            <div className="vx-skill-card__badges">
+        <MetricListCard
+          key={skill.id}
+          icon="cube"
+          title={skill.skillName}
+          description={skill.skillCode}
+          tone={SKILL_STATUS_TONE[skill.status]}
+          badges={
+            <>
               <StatusBadge tone={SKILL_STATUS_TONE[skill.status]}>
                 {STATUS_LABELS[skill.status]}
               </StatusBadge>
               {skill.isSystem && <StatusBadge tone="info">系统</StatusBadge>}
-            </div>
-          </div>
-          <h3 className="vx-skill-card__name">{skill.skillName}</h3>
-          <p className="vx-skill-card__code">{skill.skillCode}</p>
-          <p className="vx-skill-card__description">{skill.description}</p>
-          <div className="vx-skill-card__meta">
-            <span>{skill.category}</span>
-            <span>v{skill.version}</span>
-            <span>{formatNumber(skill.invocations)} 次调用</span>
-          </div>
-        </div>
+            </>
+          }
+          note={
+            <p className="m-0 line-clamp-2 text-body-md text-muted-foreground">
+              {skill.description}
+            </p>
+          }
+          metrics={[
+            { key: "category", value: skill.category, label: "分类" },
+            { key: "version", value: `v${skill.version}`, label: "版本" },
+            {
+              key: "invocations",
+              value: formatNumber(skill.invocations),
+              label: "调用次数",
+            },
+          ]}
+        />
       ))}
-    </div>
+    </ListCardGrid>
   );
 }
 
@@ -329,7 +339,6 @@ export function SkillsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-skills-page"
         header={
           <PageHeader
             icon="cube"

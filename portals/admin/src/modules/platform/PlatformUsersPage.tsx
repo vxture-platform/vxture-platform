@@ -655,7 +655,7 @@ function PlatformUserMetadataDialog({
       }}
       onSubmit={onSubmit}
     >
-      <div className="vx-model-dialog__grid">
+      <div>
         <Label>
           显示名
           <Input
@@ -675,7 +675,7 @@ function PlatformUserMetadataDialog({
           />
         </Label>
       </div>
-      <div className="vx-model-dialog__grid">
+      <div>
         <Label>
           邮箱
           <Input

@@ -267,7 +267,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
           /* 缺失值弱化：深色粗体会让"未设置"读起来跟真的方案名一样重。 */
           title={
             isUnset(order.solutionName) ? (
-              <span className="vx-tenant-directory-row__unset">
+              <span className="text-body-md text-muted-foreground">
                 {UNSET_LABEL}
               </span>
             ) : (
@@ -286,7 +286,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
           title={
             <span className="inline-flex flex-wrap gap-2xs">
               {isUnset(order.tierName) ? (
-                <span className="vx-tenant-directory-row__unset">
+                <span className="text-body-md text-muted-foreground">
                   {UNSET_LABEL}
                 </span>
               ) : (
@@ -592,7 +592,7 @@ export function OrdersPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-orders-page"
+        className="vx-tenant-management-page "
         header={
           <PageHeader
             icon="table"
@@ -656,7 +656,7 @@ export function OrdersPage() {
             />
 
             {operationFeedback ? (
-              <div className="vx-subscription-operation-feedback">
+              <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-sm text-success-text">
                 {operationFeedback}
               </div>
             ) : null}

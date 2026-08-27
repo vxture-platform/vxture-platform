@@ -1239,7 +1239,10 @@ export function ModelPlatformPage() {
       />
 
       <div className="grid min-w-0">
-        <section className="vx-tenant-toolbar" aria-label="模型厂商管理">
+        <section
+          className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch"
+          aria-label="模型厂商管理"
+        >
           <strong>模型厂商</strong>
           <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
             {formatNumber(providers.length)}
@@ -1283,7 +1286,10 @@ export function ModelPlatformPage() {
       </div>
 
       <div className="grid min-w-0">
-        <section className="vx-tenant-toolbar" aria-label="计价规则管理">
+        <section
+          className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch"
+          aria-label="计价规则管理"
+        >
           <strong>计价规则</strong>
           <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
             {formatNumber(priceRules.length)}
@@ -1409,7 +1415,10 @@ export function ModelPlatformPage() {
           两件事就是「怎么收钱」和「怎么限流」；但两张表的可改性正好相反，所以
           对话框里各自把话说清楚。 */}
       <div className="grid min-w-0">
-        <section className="vx-tenant-toolbar" aria-label="模型策略管理">
+        <section
+          className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch"
+          aria-label="模型策略管理"
+        >
           <strong>模型策略</strong>
           <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
             {formatNumber(policies.length)}
@@ -1604,7 +1613,7 @@ export function ModelPlatformPage() {
               再把这一条的失效时间设过去。
             </p>
           ) : null}
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               模型
               <NativeSelect
@@ -1668,7 +1677,7 @@ export function ModelPlatformPage() {
               />
             </Label>
           </div>
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               输入单价
               <Input
@@ -1726,7 +1735,7 @@ export function ModelPlatformPage() {
               />
             </Label>
           </div>
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               生效时间
               <Input
@@ -1790,7 +1799,7 @@ export function ModelPlatformPage() {
               description="除作用域与生效时间外，其余每一项都可以直接改，改完立刻是新的限额。历史不在这张表里——要查某个时刻的限额是多少，去变更审计。"
             />
           ) : null}
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               模型
               <NativeSelect
@@ -1844,7 +1853,7 @@ export function ModelPlatformPage() {
               </NativeSelect>
             </Label>
           </div>
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               名称（可留空）
               <Input
@@ -1870,7 +1879,7 @@ export function ModelPlatformPage() {
               />
             </Label>
           </div>
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               RPM 上限
               <Input
@@ -1900,7 +1909,7 @@ export function ModelPlatformPage() {
               />
             </Label>
           </div>
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               TPM 上限（已登记未生效）
               <Input
@@ -1930,7 +1939,7 @@ export function ModelPlatformPage() {
               />
             </Label>
           </div>
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               最大上下文（已登记未生效）
               <Input

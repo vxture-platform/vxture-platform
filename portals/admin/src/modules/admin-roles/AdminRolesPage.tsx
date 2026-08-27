@@ -972,7 +972,7 @@ function AdminRoleFormDialog({
       }}
       onSubmit={onSubmit}
     >
-      <div className="vx-model-dialog__grid">
+      <div>
         <Label>
           角色编码
           <Input
@@ -993,7 +993,7 @@ function AdminRoleFormDialog({
           />
         </Label>
       </div>
-      <div className="vx-model-dialog__grid">
+      <div>
         <Label>
           MFA 最低等级
           <NativeSelect

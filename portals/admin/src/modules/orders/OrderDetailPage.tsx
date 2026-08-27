@@ -725,7 +725,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
       }
     >
       {operationFeedback ? (
-        <div className="vx-subscription-operation-feedback">
+        <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-sm text-success-text">
           {operationFeedback}
         </div>
       ) : null}

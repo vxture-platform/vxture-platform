@@ -419,7 +419,6 @@ export function ComplianceEventsPage() {
                 <Button
                   variant="default"
                   size="md"
-                  className="vx-admin-action-btn"
                   onClick={openCreate}
                   title="新建合规事件"
                 >
@@ -569,7 +568,7 @@ export function ComplianceEventsPage() {
           }}
           onSubmit={(event) => void submitForm(event)}
         >
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               事件类型
               <Input

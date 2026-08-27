@@ -86,15 +86,3 @@
   );
   --subscription-timeline-color: var(--tenant-rose);
 }
-
-.vx-subscription-operation-feedback {
-  width: fit-content;
-  display: inline-flex;
-  align-items: center;
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--vx-radius-lg);
-  background: color-mix(in srgb, var(--success) 10%, transparent);
-  color: var(--success-text);
-  font-size: var(--body-sm-font-size);
-  font-weight: 400;
-}

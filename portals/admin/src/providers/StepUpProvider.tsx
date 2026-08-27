@@ -158,7 +158,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
               {error}
             </p>
           ) : null}
-          <p className="vx-step-up-hint">
+          <p className="m-0 text-body-sm text-muted-foreground">
             未绑定身份验证器？请先在 accounts 门户的安全设置中完成 TOTP
             绑定，再返回此处重试。
           </p>
