@@ -12,7 +12,11 @@ import {
   EmptyState,
   Icon,
   MetricGrid,
+  PanelItem,
+  PanelList,
+  SHELL_PANEL_HAIRLINE,
   StatusBadge,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { orUnset } from "@/modules/shared/display";
 import {
@@ -35,6 +39,7 @@ import {
   BILL_STATUS_TONE,
   INVOICE_STATUS_TONE,
 } from "@/modules/shared/status-tone";
+import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import {
@@ -127,62 +132,61 @@ function BillingSummary({ bill }: { bill: BillingDetailRecord }) {
   const locale = useLocale();
   const tShared = useTranslations();
   return (
-    <section className="vx-product-capability-summary">
-      <div className="vx-product-capability-summary__identity">
-        <span
-          className="vx-product-capability-summary__icon"
-          aria-hidden="true"
-        >
-          <Icon name="key" size="lg" fallback="placeholder" />
-        </span>
-        <div>
-          <h2>{bill.billNo}</h2>
-          <p>
-            {bill.tenantName} / {bill.tierName ?? "未关联套餐"}
-          </p>
-          <div className="vx-product-capability-summary__badges">
-            <StatusBadge tone={BILL_STATUS_TONE[bill.billStatus]}>
-              {billStatusLabel(bill.billStatus)}
-            </StatusBadge>
-            <StatusBadge tone={INVOICE_STATUS_TONE[bill.invoiceStatus]}>
-              {t(`status.invoice.${bill.invoiceStatus}`)}
-            </StatusBadge>
-          </div>
-        </div>
-      </div>
-      <MetricGrid
-        items={[
-          {
-            id: "payable",
-            help: "本期账单应收总额，按账单币种展示。",
-            label: "账单应收",
-            value: formatCurrency(bill.payableAmount, bill.currency),
-            tags: [billTypeLabel(bill.billType)],
-          },
-          {
-            id: "paid",
-            help: "已核销到本账单的回款金额。",
-            label: tShared("columns.receivedAmount"),
-            value: formatCurrency(bill.paidAmount, bill.currency),
-            tags: [bill.paymentMethod ?? "未收款"],
-          },
-          {
-            id: "invoiced",
-            help: "本账单已开具发票的金额，不等于已回款。",
-            label: "已开票",
-            value: formatCurrency(bill.invoicedAmount, bill.currency),
-            tags: [bill.invoiceNo ?? t(`status.invoice.${bill.invoiceStatus}`)],
-          },
-          {
-            id: "cycle",
-            help: "账单所属计费周期的起止日期。",
-            label: "账期",
-            value: `${formatDate(bill.cycleStartDate, locale)} - ${formatDate(bill.cycleEndDate, locale)}`,
-            tags: [cycleLabel(bill.billCycle)],
-          },
-        ]}
-      />
-    </section>
+    <DetailSummaryHeader
+      icon="key"
+      title={bill.billNo}
+      subtitle={
+        <>
+          {bill.tenantName} / {bill.tierName ?? "未关联套餐"}
+        </>
+      }
+      badges={
+        <>
+          <StatusBadge tone={BILL_STATUS_TONE[bill.billStatus]}>
+            {billStatusLabel(bill.billStatus)}
+          </StatusBadge>
+          <StatusBadge tone={INVOICE_STATUS_TONE[bill.invoiceStatus]}>
+            {t(`status.invoice.${bill.invoiceStatus}`)}
+          </StatusBadge>
+        </>
+      }
+      aside={
+        <MetricGrid
+          items={[
+            {
+              id: "payable",
+              help: "本期账单应收总额，按账单币种展示。",
+              label: "账单应收",
+              value: formatCurrency(bill.payableAmount, bill.currency),
+              tags: [billTypeLabel(bill.billType)],
+            },
+            {
+              id: "paid",
+              help: "已核销到本账单的回款金额。",
+              label: tShared("columns.receivedAmount"),
+              value: formatCurrency(bill.paidAmount, bill.currency),
+              tags: [bill.paymentMethod ?? "未收款"],
+            },
+            {
+              id: "invoiced",
+              help: "本账单已开具发票的金额，不等于已回款。",
+              label: "已开票",
+              value: formatCurrency(bill.invoicedAmount, bill.currency),
+              tags: [
+                bill.invoiceNo ?? t(`status.invoice.${bill.invoiceStatus}`),
+              ],
+            },
+            {
+              id: "cycle",
+              help: "账单所属计费周期的起止日期。",
+              label: "账期",
+              value: `${formatDate(bill.cycleStartDate, locale)} - ${formatDate(bill.cycleEndDate, locale)}`,
+              tags: [cycleLabel(bill.billCycle)],
+            },
+          ]}
+        />
+      }
+    />
   );
 }
 
@@ -201,10 +205,10 @@ function BillingDetails({
   const tShared = useTranslations();
   return (
     <section
-      className="vx-product-capability-detail"
+      className="grid min-w-0 gap-xl"
       aria-label={`${bill.billNo} 账单详情`}
     >
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="key" title="基础资料" />
         <DetailList columns={3}>
           <DetailRow label="账单编号">{orUnset(bill.billNo)}</DetailRow>
@@ -236,7 +240,7 @@ function BillingDetails({
         </DetailList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="buildings" title="租户与订阅" />
         <DetailList columns={3}>
           <DetailRow label="租户">{orUnset(bill.tenantName)}</DetailRow>
@@ -257,7 +261,7 @@ function BillingDetails({
             {bill.subscriptionId || "未关联"}
           </DetailRow>
         </DetailList>
-        <div className="vx-product-capability-actions vx-subscription-detail-links">
+        <div className="inline-flex flex-wrap items-center justify-end gap-sm vx-subscription-detail-links">
           <Button asChild variant="outline">
             <Link href={`/tenants/${encodeURIComponent(bill.tenantId)}`}>
               <Icon name="buildings" size="xs" fallback="placeholder" />
@@ -287,7 +291,7 @@ function BillingDetails({
         </div>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="chart-bar" title="收款信息" />
         <DetailList columns={3}>
           <DetailRow label="账单原价">
@@ -321,166 +325,217 @@ function BillingDetails({
         </DetailList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="list" title="账单明细" />
-        <div className="vx-product-detail-list vx-product-detail-list--entitlements">
+        <PanelList>
           {bill.invoiceItems.map((item) => (
-            <div key={item.id} className="vx-product-detail-list__row">
-              <span>
-                <Icon name="table" size="sm" fallback="placeholder" />
-                <strong>{item.itemName}</strong>
-              </span>
-              <small>
-                {item.itemType} | {formatQuantity(item.quantity)}{" "}
-                {item.itemUnit ?? ""}
-              </small>
-              <em>{formatCurrency(item.totalAmount, bill.currency)}</em>
-              <p>
-                {item.remark ??
-                  `单价 ${formatCurrency(item.unitPrice, bill.currency)}`}
-              </p>
-            </div>
+            <PanelItem
+              key={item.id}
+              lead={<Icon name="table" size="sm" fallback="placeholder" />}
+              main={
+                <TableTitleCell
+                  title={<>{item.itemName}</>}
+                  description={
+                    <>
+                      {item.itemType} | {formatQuantity(item.quantity)}{" "}
+                      {item.itemUnit ?? ""}
+                    </>
+                  }
+                />
+              }
+              trail={
+                <span className="grid justify-items-end gap-2xs">
+                  <span className="text-body-md font-semibold text-foreground">
+                    {formatCurrency(item.totalAmount, bill.currency)}
+                  </span>
+                  <span className="truncate text-body-sm text-muted-foreground">
+                    {item.remark ??
+                      `单价 ${formatCurrency(item.unitPrice, bill.currency)}`}
+                  </span>
+                </span>
+              }
+            />
           ))}
-        </div>
+        </PanelList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="check" title="支付记录" />
-        <div className="vx-product-detail-list vx-product-detail-list--entitlements">
+        <PanelList>
           {bill.paymentRecords.length ? (
             bill.paymentRecords.map((payment) => (
-              <div key={payment.id} className="vx-product-detail-list__row">
-                <span>
-                  <Icon name="check" size="sm" fallback="placeholder" />
-                  <strong>{payment.paymentNo}</strong>
-                </span>
-                <small>
-                  {paySourceLabel(payment.paySource)} |{" "}
-                  {paymentStatusLabel(payment.paymentStatus)} |{" "}
-                  {formatDate(payment.paidAt, locale)}
-                </small>
-                <em>{formatCurrency(payment.paidAmount, payment.currency)}</em>
-                <p>{payment.remark ?? payment.operatorName}</p>
-              </div>
+              <PanelItem
+                key={payment.id}
+                lead={<Icon name="check" size="sm" fallback="placeholder" />}
+                main={
+                  <TableTitleCell
+                    title={<>{payment.paymentNo}</>}
+                    description={
+                      <>
+                        {paySourceLabel(payment.paySource)} |{" "}
+                        {paymentStatusLabel(payment.paymentStatus)} |{" "}
+                        {formatDate(payment.paidAt, locale)}
+                      </>
+                    }
+                  />
+                }
+                trail={
+                  <span className="grid justify-items-end gap-2xs">
+                    <span className="text-body-md font-semibold text-foreground">
+                      {formatCurrency(payment.paidAmount, payment.currency)}
+                    </span>
+                    <span className="truncate text-body-sm text-muted-foreground">
+                      {payment.remark ?? payment.operatorName}
+                    </span>
+                  </span>
+                }
+              />
             ))
           ) : (
-            <div className="vx-product-detail-list__row">
-              <span>
-                <Icon name="clock" size="sm" fallback="placeholder" />
-                <strong>暂无支付记录</strong>
-              </span>
-              <small>等待线上支付或运营确认线下收款</small>
-              <em>未收款</em>
-              <p>订单侧确认线下收款后会自动写入支付记录。</p>
-            </div>
+            <PanelItem
+              lead={<Icon name="clock" size="sm" fallback="placeholder" />}
+              main={
+                <TableTitleCell
+                  title={<>暂无支付记录</>}
+                  description={<>等待线上支付或运营确认线下收款</>}
+                />
+              }
+              trail={
+                <span className="grid justify-items-end gap-2xs">
+                  <span className="text-body-md font-semibold text-foreground">
+                    未收款
+                  </span>
+                  <span className="truncate text-body-sm text-muted-foreground">
+                    订单侧确认线下收款后会自动写入支付记录。
+                  </span>
+                </span>
+              }
+            />
           )}
-        </div>
+        </PanelList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="key" title="发票登记" />
-        <div className="vx-product-detail-list vx-product-detail-list--entitlements">
+        <PanelList>
           {bill.invoiceReceipts.length ? (
             bill.invoiceReceipts.map((receipt) => (
-              <div key={receipt.id} className="vx-product-detail-list__row">
-                <span>
-                  <Icon name="key" size="sm" fallback="placeholder" />
-                  <strong>{receipt.invoiceNo}</strong>
-                </span>
-                <small>
-                  {invoiceTypeLabel(receipt.invoiceType)} |{" "}
-                  {taxTypeLabel(receipt.invoiceTaxType)} |{" "}
-                  {t(`status.invoice.${receipt.invoiceStatus}`)}
-                </small>
-                <em>
-                  {formatCurrency(receipt.invoiceAmount, receipt.currency)}
-                </em>
-                <p className="vx-billing-receipt-actions">
-                  <span>
-                    {receipt.invoiceFileUrl ? (
-                      <a
-                        href={receipt.invoiceFileUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        查看发票文件
-                      </a>
-                    ) : receipt.expressNo ? (
-                      `${receipt.expressCompany ?? "快递"} ${receipt.expressNo}`
-                    ) : (
-                      (receipt.statusRemark ?? receipt.auditorName)
-                    )}
-                  </span>
-                  {/* `red` 单独一支：DS 对 `variant="destructive"` 的类型义务
+              <PanelItem
+                key={receipt.id}
+                lead={<Icon name="key" size="sm" fallback="placeholder" />}
+                main={
+                  <TableTitleCell
+                    title={<>{receipt.invoiceNo}</>}
+                    description={
+                      <>
+                        {invoiceTypeLabel(receipt.invoiceType)} |{" "}
+                        {taxTypeLabel(receipt.invoiceTaxType)} |{" "}
+                        {t(`status.invoice.${receipt.invoiceStatus}`)}
+                      </>
+                    }
+                  />
+                }
+                trail={
+                  <span className="grid justify-items-end gap-2xs">
+                    <span className="text-body-md font-semibold text-foreground">
+                      {formatCurrency(receipt.invoiceAmount, receipt.currency)}
+                    </span>
+                    <span className="truncate text-body-sm text-muted-foreground">
+                      <span>
+                        {receipt.invoiceFileUrl ? (
+                          <a
+                            href={receipt.invoiceFileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            查看发票文件
+                          </a>
+                        ) : receipt.expressNo ? (
+                          `${receipt.expressCompany ?? "快递"} ${receipt.expressNo}`
+                        ) : (
+                          (receipt.statusRemark ?? receipt.auditorName)
+                        )}
+                      </span>
+                      {/* `red` 单独一支：DS 对 `variant="destructive"` 的类型义务
                       要求写出 `confirmExempt`，而展开传参（`{...(cond ? {} : {})}`）
                       判别不了——那正是它想拦的写法。 */}
-                  {(["update_shipping", "finish", "red"] as const).map(
-                    (action) =>
-                      action === "red" ? (
-                        <Button
-                          key={action}
-                          variant="destructive"
-                          size="md"
-                          /* 同 InvoicesPage：这个钮打开的是红冲登记表单，不直接
+                      {(["update_shipping", "finish", "red"] as const).map(
+                        (action) =>
+                          action === "red" ? (
+                            <Button
+                              key={action}
+                              variant="destructive"
+                              size="md"
+                              /* 同 InvoicesPage：这个钮打开的是红冲登记表单，不直接
                            生效。落锤在表单提交，且那一步走 step-up。 */
-                          confirmExempt="这个按钮只打开红冲登记表单，不直接生效；红冲发生在表单提交时，且那一步走 step-up 二次验证"
-                          className="is-danger"
-                          disabled={
-                            !canRunInvoiceReceiptAction(action, receipt)
-                          }
-                          title={
-                            invoiceReceiptActionDisabledReason(
-                              action,
-                              receipt,
-                            ) ?? undefined
-                          }
-                          onClick={() => onReceiptAction(receipt, action)}
-                        >
-                          {invoiceReceiptActionLabel(action)}
-                        </Button>
-                      ) : (
-                        <Button
-                          key={action}
-                          variant="outline"
-                          size="md"
-                          disabled={
-                            !canRunInvoiceReceiptAction(action, receipt)
-                          }
-                          title={
-                            invoiceReceiptActionDisabledReason(
-                              action,
-                              receipt,
-                            ) ?? undefined
-                          }
-                          onClick={() => onReceiptAction(receipt, action)}
-                        >
-                          {invoiceReceiptActionLabel(action)}
-                        </Button>
-                      ),
-                  )}
-                </p>
-              </div>
+                              confirmExempt="这个按钮只打开红冲登记表单，不直接生效；红冲发生在表单提交时，且那一步走 step-up 二次验证"
+                              className="is-danger"
+                              disabled={
+                                !canRunInvoiceReceiptAction(action, receipt)
+                              }
+                              title={
+                                invoiceReceiptActionDisabledReason(
+                                  action,
+                                  receipt,
+                                ) ?? undefined
+                              }
+                              onClick={() => onReceiptAction(receipt, action)}
+                            >
+                              {invoiceReceiptActionLabel(action)}
+                            </Button>
+                          ) : (
+                            <Button
+                              key={action}
+                              variant="outline"
+                              size="md"
+                              disabled={
+                                !canRunInvoiceReceiptAction(action, receipt)
+                              }
+                              title={
+                                invoiceReceiptActionDisabledReason(
+                                  action,
+                                  receipt,
+                                ) ?? undefined
+                              }
+                              onClick={() => onReceiptAction(receipt, action)}
+                            >
+                              {invoiceReceiptActionLabel(action)}
+                            </Button>
+                          ),
+                      )}
+                    </span>
+                  </span>
+                }
+              />
             ))
           ) : (
-            <div className="vx-product-detail-list__row">
-              <span>
-                <Icon name="clock" size="sm" fallback="placeholder" />
-                <strong>暂无发票登记</strong>
-              </span>
-              <small>当前未接入在线开票接口</small>
-              <em>
-                {formatCurrency(
-                  Math.max(0, bill.payableAmount - bill.invoicedAmount),
-                  bill.currency,
-                )}
-              </em>
-              <p>财务线下开票完成后，由运营在此手动同步登记。</p>
-            </div>
+            <PanelItem
+              lead={<Icon name="clock" size="sm" fallback="placeholder" />}
+              main={
+                <TableTitleCell
+                  title={<>暂无发票登记</>}
+                  description={<>当前未接入在线开票接口</>}
+                />
+              }
+              trail={
+                <span className="grid justify-items-end gap-2xs">
+                  <span className="text-body-md font-semibold text-foreground">
+                    {formatCurrency(
+                      Math.max(0, bill.payableAmount - bill.invoicedAmount),
+                      bill.currency,
+                    )}
+                  </span>
+                  <span className="truncate text-body-sm text-muted-foreground">
+                    财务线下开票完成后，由运营在此手动同步登记。
+                  </span>
+                </span>
+              }
+            />
           )}
-        </div>
+        </PanelList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="clock" title="运营记录" />
         <div className="vx-subscription-timeline">
           {bill.operationTimeline.map((event) => (
@@ -666,7 +721,7 @@ export function BillingDetailPage({ billId }: { billId: string }) {
   if (!loading && !bill) {
     return (
       <DetailPageTemplate
-        className="vx-product-capability-page"
+        className="min-w-0"
         header={
           <PageHeader
             icon="key"
@@ -693,7 +748,7 @@ export function BillingDetailPage({ billId }: { billId: string }) {
 
   return (
     <DetailPageTemplate
-      className="vx-product-capability-page vx-billing-detail-page"
+      className="min-w-0 vx-billing-detail-page"
       header={
         <PageHeader
           icon="key"
@@ -704,7 +759,7 @@ export function BillingDetailPage({ billId }: { billId: string }) {
               : "正在读取账单、收款和发票登记数据。"
           }
           action={
-            <div className="vx-product-capability-actions">
+            <div className="inline-flex flex-wrap items-center justify-end gap-sm">
               <Button asChild variant="outline">
                 <Link href="/billing">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />

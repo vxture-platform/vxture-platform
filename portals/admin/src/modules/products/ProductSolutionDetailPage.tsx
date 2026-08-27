@@ -11,7 +11,11 @@ import {
   EmptyState,
   Icon,
   MetricGrid,
+  PanelItem,
+  PanelList,
+  SHELL_PANEL_HAIRLINE,
   StatusBadge,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { orUnset } from "@/modules/shared/display";
 import type { IconName } from "@vxture/design-system";
@@ -27,6 +31,7 @@ import {
   VISIBILITY_TONE,
 } from "@/modules/shared/publish-tone";
 import { PageHeader } from "@/modules/shared/PageHeader";
+import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import {
   formatDate,
@@ -66,61 +71,56 @@ function ProductSolutionSummary({
   solution: ProductSolutionDetailRecord;
 }) {
   return (
-    <section className="vx-product-capability-summary">
-      <div className="vx-product-capability-summary__identity">
-        <span
-          className="vx-product-capability-summary__icon"
-          aria-hidden="true"
-        >
-          <Icon name="workflow" size="lg" fallback="placeholder" />
-        </span>
-        <div>
-          <h2>{solution.solutionName}</h2>
-          <p>{solution.solutionCode}</p>
-          <div className="vx-product-capability-summary__badges">
-            <StatusBadge tone={PUBLISH_STATUS_TONE[solution.status]}>
-              {solutionStatusLabel(solution.status)}
-            </StatusBadge>
-            <StatusBadge tone={VISIBILITY_TONE[solution.visibility]}>
-              {solution.visibility === "public" ? "公开" : "内部"}
-            </StatusBadge>
-          </div>
-        </div>
-      </div>
-      <MetricGrid
-        items={[
-          {
-            id: "products",
-            help: "本方案关联的产品能力条目数。",
-            label: "产品能力",
-            value: formatNumber(solution.products.length),
-            tags: [
-              `三方 ${formatNumber(solution.products.filter((item) => item.source === "partner").length)}`,
-            ],
-          },
-          {
-            id: "tiers",
-            help: "本方案下的服务套餐数。",
-            label: "服务套餐",
-            value: formatNumber(solution.tiers.length),
-            tags: [solution.tiers.map((tier) => tier.tierName).join(" | ")],
-          },
-          {
-            id: "subscriptions",
-            help: "订阅了本方案的订阅实例数。",
-            label: "订阅使用",
-            value: formatNumber(solution.subscriptionCount),
-            tags: [`活跃 ${formatNumber(solution.activeTenantCount)}`],
-          },
-          {
-            id: "revenue",
-            label: "月度收入",
-            value: formatMoney(solution.monthlyRevenue),
-            tags: ["方案口径"],
-          },
-        ]}
-      />
-    </section>
+    <DetailSummaryHeader
+      icon="workflow"
+      title={solution.solutionName}
+      subtitle={solution.solutionCode}
+      badges={
+        <>
+          <StatusBadge tone={PUBLISH_STATUS_TONE[solution.status]}>
+            {solutionStatusLabel(solution.status)}
+          </StatusBadge>
+          <StatusBadge tone={VISIBILITY_TONE[solution.visibility]}>
+            {solution.visibility === "public" ? "公开" : "内部"}
+          </StatusBadge>
+        </>
+      }
+      aside={
+        <MetricGrid
+          items={[
+            {
+              id: "products",
+              help: "本方案关联的产品能力条目数。",
+              label: "产品能力",
+              value: formatNumber(solution.products.length),
+              tags: [
+                `三方 ${formatNumber(solution.products.filter((item) => item.source === "partner").length)}`,
+              ],
+            },
+            {
+              id: "tiers",
+              help: "本方案下的服务套餐数。",
+              label: "服务套餐",
+              value: formatNumber(solution.tiers.length),
+              tags: [solution.tiers.map((tier) => tier.tierName).join(" | ")],
+            },
+            {
+              id: "subscriptions",
+              help: "订阅了本方案的订阅实例数。",
+              label: "订阅使用",
+              value: formatNumber(solution.subscriptionCount),
+              tags: [`活跃 ${formatNumber(solution.activeTenantCount)}`],
+            },
+            {
+              id: "revenue",
+              label: "月度收入",
+              value: formatMoney(solution.monthlyRevenue),
+              tags: ["方案口径"],
+            },
+          ]}
+        />
+      }
+    />
   );
 }
 
@@ -133,10 +133,10 @@ function ProductSolutionDetails({
   const tShared = useTranslations();
   return (
     <section
-      className="vx-product-capability-detail"
+      className="grid min-w-0 gap-xl"
       aria-label={`${solution.solutionName} 详情`}
     >
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="database" title="基础资料" />
         <DetailList columns={3}>
           <DetailRow label="方案编码">
@@ -161,7 +161,7 @@ function ProductSolutionDetails({
         </DetailList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="map-pin" title="适用行业" />
         <DetailList columns={3}>
           <DetailRow label="行业领域">{orUnset(solution.industry)}</DetailRow>
@@ -173,10 +173,12 @@ function ProductSolutionDetails({
             {orUnset(solution.deliveryMode)}
           </DetailRow>
         </DetailList>
-        <div className="vx-product-capability-description">
-          <strong>{solution.description}</strong>
+        <div className="grid min-w-0 gap-xs">
+          <strong className="text-body-md leading-relaxed font-semibold text-foreground">
+            {solution.description}
+          </strong>
         </div>
-        <div className="vx-product-capability-tags">
+        <div className="flex min-w-0 flex-wrap items-center gap-xs">
           {solution.tags.map((tag) => (
             <StatusBadge key={tag} tone="neutral" icon={false}>
               {tag}
@@ -185,65 +187,94 @@ function ProductSolutionDetails({
         </div>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="cube" title="包含产品能力" />
-        <div className="vx-product-detail-list">
+        <PanelList>
           {solution.products.map((product) => (
-            <Link
+            <PanelItem
               key={product.productCode}
-              href={`/products/${encodeURIComponent(product.productCode)}`}
-              className="vx-product-detail-list__row"
-            >
-              <span>
+              className="relative rounded-md transition-colors hover:bg-primary-muted/40"
+              lead={
                 <Icon
                   name={capabilityTypeIcon(product.productType)}
                   size="sm"
                   fallback="placeholder"
                 />
-                <strong>{product.productName}</strong>
-              </span>
-              <small>{product.productCode}</small>
-              <em>
-                {capabilityTypeLabel(product.productType)} |{" "}
-                {sourceLabel(product.source)}
-              </em>
-              <p>{product.role}</p>
-            </Link>
+              }
+              main={
+                <Link
+                  href={`/products/${encodeURIComponent(product.productCode)}`}
+                  className="no-underline after:absolute after:inset-0 after:content-['']"
+                >
+                  <TableTitleCell
+                    title={product.productName}
+                    description={product.productCode}
+                  />
+                </Link>
+              }
+              trail={
+                <span className="grid justify-items-end gap-2xs">
+                  <span className="text-body-md font-semibold text-foreground">
+                    {capabilityTypeLabel(product.productType)} |{" "}
+                    {sourceLabel(product.source)}
+                  </span>
+                  <span className="truncate text-body-sm text-muted-foreground">
+                    {product.role}
+                  </span>
+                </span>
+              }
+            />
           ))}
-        </div>
+        </PanelList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="shield-check" title="交付边界" />
-        <div className="vx-product-detail-notes">
+        <PanelList>
           {solution.deliveryBoundaries.map((item) => (
-            <article key={item}>
-              <Icon name="check" size="xs" fallback="placeholder" />
-              <span>{item}</span>
-            </article>
+            <PanelItem
+              key={item}
+              lead={<Icon name="check" size="xs" fallback="placeholder" />}
+              main={
+                <span className="text-body-sm text-foreground">{item}</span>
+              }
+            />
           ))}
-        </div>
+        </PanelList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="star" title="关联服务套餐" />
-        <div className="vx-product-detail-list">
+        <PanelList>
           {solution.relatedServicePlans.map((plan) => (
-            <Link
+            <PanelItem
               key={plan.tierCode}
-              href={`/service-plans/${encodeURIComponent(solution.solutionCode)}/${encodeURIComponent(plan.tierCode)}`}
-              className="vx-product-detail-list__row"
-            >
-              <span>
-                <Icon name="star" size="sm" fallback="placeholder" />
-                <strong>{plan.tierName}</strong>
-              </span>
-              <small>{plan.tierCode}</small>
-              <em>{plan.priceLabel}</em>
-              <p>{plan.summary}</p>
-            </Link>
+              className="relative rounded-md transition-colors hover:bg-primary-muted/40"
+              lead={<Icon name="star" size="sm" fallback="placeholder" />}
+              main={
+                <Link
+                  href={`/service-plans/${encodeURIComponent(solution.solutionCode)}/${encodeURIComponent(plan.tierCode)}`}
+                  className="no-underline after:absolute after:inset-0 after:content-['']"
+                >
+                  <TableTitleCell
+                    title={plan.tierName}
+                    description={plan.tierCode}
+                  />
+                </Link>
+              }
+              trail={
+                <span className="grid justify-items-end gap-2xs">
+                  <span className="text-body-md font-semibold text-foreground">
+                    {plan.priceLabel}
+                  </span>
+                  <span className="truncate text-body-sm text-muted-foreground">
+                    {plan.summary}
+                  </span>
+                </span>
+              }
+            />
           ))}
-        </div>
+        </PanelList>
       </section>
     </section>
   );
@@ -281,7 +312,7 @@ export function ProductSolutionDetailPage({
   if (!loading && !solution) {
     return (
       <DetailPageTemplate
-        className="vx-product-capability-page"
+        className="min-w-0"
         header={
           <PageHeader
             icon="workflow"
@@ -308,14 +339,14 @@ export function ProductSolutionDetailPage({
 
   return (
     <DetailPageTemplate
-      className="vx-product-capability-page"
+      className="min-w-0"
       header={
         <PageHeader
           icon="workflow"
           title={solution?.solutionName ?? "解决方案详情"}
           description={solution?.description ?? "正在读取解决方案详情。"}
           action={
-            <div className="vx-product-capability-actions">
+            <div className="inline-flex flex-wrap items-center justify-end gap-sm">
               <Button asChild variant="outline">
                 <Link href="/product-solutions">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />

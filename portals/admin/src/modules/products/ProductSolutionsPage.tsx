@@ -161,7 +161,7 @@ function CapabilityTags({
   const hiddenCount = Math.max(0, products.length - visibleProducts.length);
 
   return (
-    <span className="vx-product-solution-capability-tags">
+    <span className="flex min-w-0 flex-nowrap items-center gap-xs overflow-hidden">
       {visibleProducts.map((product) => (
         <Badge
           key={product.id}

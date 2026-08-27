@@ -11,8 +11,8 @@ import {
   MetricGrid,
   PanelItem,
   PanelList,
-  SHELL_PANEL_HAIRLINE,
   Section,
+  SHELL_PANEL_HAIRLINE,
   TableTitleCell,
   ViewLayout,
 } from "@vxture/design-system";

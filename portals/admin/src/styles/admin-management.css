@@ -2,6 +2,6 @@
 
 @import "./admin-management-core.css";
 @import "./admin-management-models.css";
-@import "./admin-management-commerce.css";
-@import "./admin-management-products.css";
+@import "./admin-management-commerce-subscriptions-detail.css";
+@import "./admin-management-products-service-plans.css";
 @import "./admin-management-tenant-workspace.css";

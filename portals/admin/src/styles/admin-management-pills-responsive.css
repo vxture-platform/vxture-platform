@@ -19,19 +19,11 @@
 }
 
 @media (max-width: 960px) {
-  .vx-product-capability-summary,
-  .vx-product-detail-list__row,
-  .vx-product-detail-list--entitlements .vx-product-detail-list__row,
   .vx-service-plan-tier-row,
   .vx-service-plan-tier-grid {
     grid-template-columns: 1fr;
   }
 
-  .vx-product-capability-summary {
-    gap: var(--space-md);
-  }
-
-  .vx-product-detail-list__row,
   .vx-service-plan-tier-row {
     align-items: start;
     gap: var(--space-xs);

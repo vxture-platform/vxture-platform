@@ -11,7 +11,11 @@ import {
   EmptyState,
   Icon,
   MetricGrid,
+  PanelItem,
+  PanelList,
+  SHELL_PANEL_HAIRLINE,
   StatusBadge,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { orUnset } from "@/modules/shared/display";
 import type { IconName } from "@vxture/design-system";
@@ -30,6 +34,7 @@ import {
   QUOTA_RISK_TONE,
   SUBSCRIPTION_OPERATION_TONE,
 } from "@/modules/shared/status-tone";
+import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import {
@@ -96,66 +101,61 @@ function SubscriptionSummary({
   subscription: SubscriptionOperationDetailRecord;
 }) {
   return (
-    <section className="vx-product-capability-summary">
-      <div className="vx-product-capability-summary__identity">
-        <span
-          className="vx-product-capability-summary__icon"
-          aria-hidden="true"
-        >
-          <Icon name="star" size="lg" fallback="placeholder" />
-        </span>
-        <div>
-          <h2>
-            {subscription.tenantName} / {subscription.tierName}
-          </h2>
-          <p>{subscription.subscriptionCode}</p>
-          <div className="vx-product-capability-summary__badges">
-            <StatusBadge
-              tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
-            >
-              {subscriptionStatusLabel(subscription.status)}
-            </StatusBadge>
-            <StatusBadge tone={QUOTA_RISK_TONE[subscription.quota.risk]}>
-              {quotaRiskLabel(subscription.quota.risk)}
-            </StatusBadge>
-          </div>
-        </div>
-      </div>
-      <MetricGrid
-        items={[
-          {
-            id: "solution",
-            help: "本订阅关联的业务方案。",
-            label: "业务方案",
-            value: subscription.solutionAssociation.solutionName,
-            tags: [
-              associationSourceLabel(subscription.solutionAssociation.source),
-            ],
-          },
-          {
-            id: "revenue",
-            help: "年付按 12 个月折算，一次性买断计 0，其余取周期金额。",
-            label: "月收入",
-            value: formatMoney(subscription.monthlyRevenue),
-            tags: [cycleLabel(subscription.cycleType)],
-          },
-          {
-            id: "quota",
-            help: "本周期已用配额占额度的百分比。",
-            label: "配额消耗",
-            value: `${formatNumber(subscription.quota.usageRate)}%`,
-            tags: [`${formatNumber(subscription.quota.maxUsers)} 席位`],
-          },
-          {
-            id: "operation",
-            help: "按订阅状态与自动续订设置给出的建议处理动作。",
-            label: "运营动作",
-            value: subscription.operationHint,
-            tags: [subscription.autoRenew ? "自动续期" : "人工跟进"],
-          },
-        ]}
-      />
-    </section>
+    <DetailSummaryHeader
+      icon="star"
+      title={
+        <>
+          {subscription.tenantName} / {subscription.tierName}
+        </>
+      }
+      subtitle={subscription.subscriptionCode}
+      badges={
+        <>
+          <StatusBadge tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}>
+            {subscriptionStatusLabel(subscription.status)}
+          </StatusBadge>
+          <StatusBadge tone={QUOTA_RISK_TONE[subscription.quota.risk]}>
+            {quotaRiskLabel(subscription.quota.risk)}
+          </StatusBadge>
+        </>
+      }
+      aside={
+        <MetricGrid
+          items={[
+            {
+              id: "solution",
+              help: "本订阅关联的业务方案。",
+              label: "业务方案",
+              value: subscription.solutionAssociation.solutionName,
+              tags: [
+                associationSourceLabel(subscription.solutionAssociation.source),
+              ],
+            },
+            {
+              id: "revenue",
+              help: "年付按 12 个月折算，一次性买断计 0，其余取周期金额。",
+              label: "月收入",
+              value: formatMoney(subscription.monthlyRevenue),
+              tags: [cycleLabel(subscription.cycleType)],
+            },
+            {
+              id: "quota",
+              help: "本周期已用配额占额度的百分比。",
+              label: "配额消耗",
+              value: `${formatNumber(subscription.quota.usageRate)}%`,
+              tags: [`${formatNumber(subscription.quota.maxUsers)} 席位`],
+            },
+            {
+              id: "operation",
+              help: "按订阅状态与自动续订设置给出的建议处理动作。",
+              label: "运营动作",
+              value: subscription.operationHint,
+              tags: [subscription.autoRenew ? "自动续期" : "人工跟进"],
+            },
+          ]}
+        />
+      }
+    />
   );
 }
 
@@ -172,10 +172,10 @@ function SubscriptionDetails({
 
   return (
     <section
-      className="vx-product-capability-detail"
+      className="grid min-w-0 gap-xl"
       aria-label={`${subscription.tenantName} 订阅详情`}
     >
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="database" title="基础资料" />
         <DetailList columns={3}>
           <DetailRow label="订阅编码">
@@ -215,7 +215,7 @@ function SubscriptionDetails({
         </DetailList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="workflow" title="业务方案关联" />
         <DetailList columns={3}>
           <DetailRow label="业务方案">
@@ -233,10 +233,12 @@ function SubscriptionDetails({
             )}
           </DetailRow>
         </DetailList>
-        <div className="vx-product-capability-description">
-          <p>{subscription.solutionAssociation.note}</p>
+        <div className="grid min-w-0 gap-xs">
+          <p className="m-0 text-body-sm leading-loose text-muted-foreground">
+            {subscription.solutionAssociation.note}
+          </p>
         </div>
-        <div className="vx-product-capability-actions vx-subscription-detail-links">
+        <div className="inline-flex flex-wrap items-center justify-end gap-sm vx-subscription-detail-links">
           {subscription.solutionAssociation.solutionCode ? (
             <Button asChild variant="outline">
               <Link
@@ -258,33 +260,46 @@ function SubscriptionDetails({
         </div>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="cube" title="权益快照" />
-        <div className="vx-product-detail-list vx-product-detail-list--entitlements">
+        <PanelList>
           {subscription.entitlementSnapshot.map((item) => (
-            <div key={item.productCode} className="vx-product-detail-list__row">
-              <span>
+            <PanelItem
+              key={item.productCode}
+              lead={
                 <Icon
                   name={capabilityTypeIcon(item.productType)}
                   size="sm"
                   fallback="placeholder"
                 />
-                <strong>{item.productName}</strong>
-              </span>
-              <small>
-                {capabilityTypeLabel(item.productType)} |{" "}
-                {item.source === "self" ? "自建" : "三方"}
-              </small>
-              <em className={item.included ? "is-included" : "is-excluded"}>
-                {item.included ? "包含" : "不包含"} | {item.quotaSummary}
-              </em>
-              <p>{item.note}</p>
-            </div>
+              }
+              main={
+                <TableTitleCell
+                  title={<>{item.productName}</>}
+                  description={
+                    <>
+                      {capabilityTypeLabel(item.productType)} |{" "}
+                      {item.source === "self" ? "自建" : "三方"}
+                    </>
+                  }
+                />
+              }
+              trail={
+                <span className="grid justify-items-end gap-2xs">
+                  <span className="text-body-md font-semibold text-foreground">
+                    {item.included ? "包含" : "不包含"} | {item.quotaSummary}
+                  </span>
+                  <span className="truncate text-body-sm text-muted-foreground">
+                    {item.note}
+                  </span>
+                </span>
+              }
+            />
           ))}
-        </div>
+        </PanelList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="chart-bar" title="配额快照" />
         <DetailList columns={3}>
           <DetailRow label="最大席位">
@@ -316,7 +331,7 @@ function SubscriptionDetails({
         </DetailList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="clock" title="运营记录" />
         <div className="vx-subscription-timeline">
           {subscription.operationTimeline.map((event) => (
@@ -422,7 +437,7 @@ export function SubscriptionDetailPage({
   if (!loading && !subscription) {
     return (
       <DetailPageTemplate
-        className="vx-product-capability-page"
+        className="min-w-0"
         header={
           <PageHeader
             icon="star"
@@ -449,7 +464,7 @@ export function SubscriptionDetailPage({
 
   return (
     <DetailPageTemplate
-      className="vx-product-capability-page vx-subscription-detail-page"
+      className="min-w-0 vx-subscription-detail-page"
       header={
         <PageHeader
           icon="star"
@@ -463,7 +478,7 @@ export function SubscriptionDetailPage({
             "正在读取租户订阅权益实例。"
           }
           action={
-            <div className="vx-product-capability-actions">
+            <div className="inline-flex flex-wrap items-center justify-end gap-sm">
               <Button asChild variant="outline">
                 <Link href="/subscriptions">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />

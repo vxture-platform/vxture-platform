@@ -12,7 +12,11 @@ import {
   EmptyState,
   Icon,
   MetricGrid,
+  PanelItem,
+  PanelList,
+  SHELL_PANEL_HAIRLINE,
   StatusBadge,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { orUnset } from "@/modules/shared/display";
 import type { IconName } from "@vxture/design-system";
@@ -26,6 +30,7 @@ import type {
   ProductCapabilityType,
 } from "@/entities/console";
 import { PUBLISH_STATUS_TONE } from "@/modules/shared/publish-tone";
+import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
@@ -81,62 +86,53 @@ function ProductCapabilitySummary({
   product: ProductCapabilityRecord;
 }) {
   return (
-    <section className="vx-product-capability-summary">
-      <div className="vx-product-capability-summary__identity">
-        <span
-          className="vx-product-capability-summary__icon"
-          aria-hidden="true"
-        >
-          <Icon
-            name={capabilityTypeIcon(product.productType)}
-            size="lg"
-            fallback="placeholder"
-          />
-        </span>
-        <div>
-          <h2>{product.productName}</h2>
-          <p>{product.productCode}</p>
-          <div className="vx-product-capability-summary__badges">
-            <Badge>{capabilityTypeLabel(product.productType)}</Badge>
-            <Badge>{sourceLabel(product.source)}</Badge>
-            <StatusBadge tone={PUBLISH_STATUS_TONE[product.status]}>
-              {statusLabel(product.status)}
-            </StatusBadge>
-          </div>
-        </div>
-      </div>
-      <MetricGrid
-        items={[
-          {
-            id: "solutions",
-            help: "引用了本产品能力的业务方案数。",
-            label: "业务方案",
-            value: formatNumber(product.solutionCount),
-            tags: [`${formatNumber(product.planCount)} 套餐`],
-          },
-          {
-            id: "integration",
-            help: "本能力对接平台的进度：无需接入 / 待配置 / 联调中 / 已接入。",
-            label: "接入状态",
-            value: integrationStatusLabel(product.integration.status),
-            tags: [product.integration.providerName],
-          },
-          {
-            id: "metering",
-            label: "计量单位",
-            value: product.meteringUnit,
-            tags: [product.billingMode],
-          },
-          {
-            id: "health",
-            help: "本能力当前可用状态：正常 / 需关注 / 不可用。",
-            label: "可用状态",
-            value: healthLabel(product.healthStatus),
-            tags: [`${formatNumber(product.modelPolicyCount)} 模型授权`],
-          },
-        ]}
-      />
-    </section>
+    <DetailSummaryHeader
+      icon={capabilityTypeIcon(product.productType)}
+      title={product.productName}
+      subtitle={product.productCode}
+      badges={
+        <>
+          <Badge>{capabilityTypeLabel(product.productType)}</Badge>
+          <Badge>{sourceLabel(product.source)}</Badge>
+          <StatusBadge tone={PUBLISH_STATUS_TONE[product.status]}>
+            {statusLabel(product.status)}
+          </StatusBadge>
+        </>
+      }
+      aside={
+        <MetricGrid
+          items={[
+            {
+              id: "solutions",
+              help: "引用了本产品能力的业务方案数。",
+              label: "业务方案",
+              value: formatNumber(product.solutionCount),
+              tags: [`${formatNumber(product.planCount)} 套餐`],
+            },
+            {
+              id: "integration",
+              help: "本能力对接平台的进度：无需接入 / 待配置 / 联调中 / 已接入。",
+              label: "接入状态",
+              value: integrationStatusLabel(product.integration.status),
+              tags: [product.integration.providerName],
+            },
+            {
+              id: "metering",
+              label: "计量单位",
+              value: product.meteringUnit,
+              tags: [product.billingMode],
+            },
+            {
+              id: "health",
+              help: "本能力当前可用状态：正常 / 需关注 / 不可用。",
+              label: "可用状态",
+              value: healthLabel(product.healthStatus),
+              tags: [`${formatNumber(product.modelPolicyCount)} 模型授权`],
+            },
+          ]}
+        />
+      }
+    />
   );
 }
 
@@ -149,10 +145,10 @@ function ProductCapabilityDetails({
   const tShared = useTranslations();
   return (
     <section
-      className="vx-product-capability-detail"
+      className="grid min-w-0 gap-xl"
       aria-label={`${product.productName} 产品能力详情`}
     >
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="database" title="基础资料" />
         <DetailList columns={3}>
           <DetailRow label="产品编码">{orUnset(product.productCode)}</DetailRow>
@@ -179,13 +175,17 @@ function ProductCapabilityDetails({
         </DetailList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="sparkles" title="能力属性" />
-        <div className="vx-product-capability-description">
-          <strong>{product.capabilitySummary}</strong>
-          <p>{product.description}</p>
+        <div className="grid min-w-0 gap-xs">
+          <strong className="text-body-md leading-relaxed font-semibold text-foreground">
+            {product.capabilitySummary}
+          </strong>
+          <p className="m-0 text-body-sm leading-loose text-muted-foreground">
+            {product.description}
+          </p>
         </div>
-        <div className="vx-product-capability-tags">
+        <div className="flex min-w-0 flex-wrap items-center gap-xs">
           {product.accessModes.map((mode) => (
             <StatusBadge key={mode} tone="brand" icon={false}>
               {mode}
@@ -197,25 +197,34 @@ function ProductCapabilityDetails({
             </StatusBadge>
           ))}
         </div>
-        <div className="vx-product-capability-related-list">
-          {product.relatedSolutions.length ? (
-            product.relatedSolutions.map((solution) => (
-              <article key={`${solution.solutionCode}:${solution.role}`}>
-                <strong>{solution.solutionName}</strong>
-                <span>{solution.role}</span>
-                <small>{solution.tierNames.join(" | ")}</small>
-              </article>
-            ))
-          ) : (
-            <article>
-              <strong>暂未被业务方案引用</strong>
-              <span>后续可在解决方案中配置。</span>
-            </article>
-          )}
-        </div>
+        <PanelList
+          empty={
+            <TableTitleCell
+              title="暂未被业务方案引用"
+              description="后续可在解决方案中配置。"
+            />
+          }
+        >
+          {product.relatedSolutions.map((solution) => (
+            <PanelItem
+              key={`${solution.solutionCode}:${solution.role}`}
+              main={
+                <TableTitleCell
+                  title={solution.solutionName}
+                  description={solution.role}
+                />
+              }
+              trail={
+                <span className="truncate text-body-sm text-muted-foreground">
+                  {solution.tierNames.join(" | ")}
+                </span>
+              }
+            />
+          ))}
+        </PanelList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="api" title="接入配置" />
         <DetailList columns={3}>
           <DetailRow label="供应商">
@@ -249,7 +258,7 @@ function ProductCapabilityDetails({
         </DetailList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="chart-bar" title="计量配置" />
         <DetailList columns={3}>
           <DetailRow label="默认计量单位">
@@ -260,21 +269,28 @@ function ProductCapabilityDetails({
             {orUnset(`${formatNumber(product.modelPolicyCount)} 个`)}
           </DetailRow>
         </DetailList>
-        <div className="vx-product-capability-metric-rules">
+        <PanelList>
           {product.metrics.map((metric) => (
-            <article key={metric.metricCode}>
-              <strong>{metric.metricName}</strong>
-              <span>{metric.metricCode}</span>
-              <small>
-                {metric.unit} | {metric.cycle} | {metric.quotaBase} |{" "}
-                {metric.billingMode}
-              </small>
-            </article>
+            <PanelItem
+              key={metric.metricCode}
+              main={
+                <TableTitleCell
+                  title={metric.metricName}
+                  description={metric.metricCode}
+                />
+              }
+              trail={
+                <span className="truncate text-body-sm text-muted-foreground">
+                  {metric.unit} | {metric.cycle} | {metric.quotaBase} |{" "}
+                  {metric.billingMode}
+                </span>
+              }
+            />
           ))}
-        </div>
+        </PanelList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="shield-check" title="可用状态" />
         <DetailList columns={3}>
           <DetailRow label="能力状态">
@@ -290,22 +306,31 @@ function ProductCapabilityDetails({
             {orUnset(`${formatNumber(product.solutionCount)} 个`)}
           </DetailRow>
         </DetailList>
-        <div className="vx-product-capability-related-list">
-          {product.releases.length ? (
-            product.releases.map((release) => (
-              <article key={release.releaseCode}>
-                <strong>{release.releaseName}</strong>
-                <span>{release.releaseCode}</span>
-                <small>{release.versionLabels.join(" | ")}</small>
-              </article>
-            ))
-          ) : (
-            <article>
-              <strong>暂无发布版本</strong>
-              <span>该能力当前主要通过业务方案组合使用。</span>
-            </article>
-          )}
-        </div>
+        <PanelList
+          empty={
+            <TableTitleCell
+              title="暂无发布版本"
+              description="该能力当前主要通过业务方案组合使用。"
+            />
+          }
+        >
+          {product.releases.map((release) => (
+            <PanelItem
+              key={release.releaseCode}
+              main={
+                <TableTitleCell
+                  title={release.releaseName}
+                  description={release.releaseCode}
+                />
+              }
+              trail={
+                <span className="truncate text-body-sm text-muted-foreground">
+                  {release.versionLabels.join(" | ")}
+                </span>
+              }
+            />
+          ))}
+        </PanelList>
       </section>
     </section>
   );
@@ -341,7 +366,7 @@ export function ProductCapabilityDetailPage({
   if (!loading && !product) {
     return (
       <DetailPageTemplate
-        className="vx-product-capability-page"
+        className="min-w-0"
         header={
           <PageHeader
             icon="database"
@@ -373,14 +398,14 @@ export function ProductCapabilityDetailPage({
 
   return (
     <DetailPageTemplate
-      className="vx-product-capability-page"
+      className="min-w-0"
       header={
         <PageHeader
           icon={product ? capabilityTypeIcon(product.productType) : "database"}
           title={product?.productName ?? "产品能力详情"}
           description={product?.capabilitySummary ?? "正在读取产品能力详情。"}
           action={
-            <div className="vx-product-capability-actions">
+            <div className="inline-flex flex-wrap items-center justify-end gap-sm">
               <Button asChild variant="outline">
                 <Link href="/products">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
