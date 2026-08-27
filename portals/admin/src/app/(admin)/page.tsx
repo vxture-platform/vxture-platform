@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { isEnabled, isServing, type ModelState } from "@vxture-platform/shared";
-import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
   Button,
@@ -10,15 +9,19 @@ import {
   Icon,
   LabeledValue,
   LevelMarker,
+  MetricCard,
   MetricGrid,
   PanelCard,
   PanelItem,
   PanelList,
   Section,
   SectionHeader,
-  MetricCard,
+  SegmentedControl,
   StatusBadge,
   TableTitleCell,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   ViewHeader,
   ViewLayout,
 } from "@vxture/design-system";
@@ -508,9 +511,9 @@ function ratingMetricsFor(_overview: DashboardOverviewRecord) {
   ] satisfies OverviewMetric[];
 }
 
-function metricToneClass(tone: Tone = "blue") {
-  return `admin-overview-tone admin-overview-tone--${tone}`;
-}
+/* 原有 `metricToneClass()` 随 `.admin-overview-tone--*` 一同退场：那六个类只是把
+   一个 `--overview-tone` 变量喂给「详情」链接与图表图标的颜色，而那两处现在直接
+   用 DS 语气名。卡片本身不需要这一层间接。 */
 
 const TONE_TEXT: Record<StatusBadgeTone, string> = {
   neutral: "text-muted-foreground",
@@ -533,12 +536,20 @@ function rankLevel(rank: number): Level {
  * 读起来像第一名就是待接入（owner 2026-08-06 实测）。
  */
 function RankMedal({ rank, muted }: { rank: number; muted?: boolean }) {
+  /* 三张奖牌图原来是 `background-image: url("https://raw.githubusercontent.com/…")`
+   * ——**生产样式表里挂着外部 URL**。离线、内网、CSP 收紧任一条成立，它就变成三个
+   * 空方块：背景图加载失败不报错、不留痕，只是没了。改用 emoji 字符表达同一件事，
+   * 顺带省掉三次跨域请求。 */
+  const MEDALS = ["🥇", "🥈", "🥉"] as const;
+
   if (muted) {
     return (
       <span
-        className="admin-overview-rank-medal admin-overview-rank-medal--muted"
+        className="inline-grid size-icon-xl place-items-center opacity-40 grayscale"
         aria-hidden="true"
-      />
+      >
+        {MEDALS[0]}
+      </span>
     );
   }
 
@@ -552,10 +563,12 @@ function RankMedal({ rank, muted }: { rank: number; muted?: boolean }) {
 
   return (
     <span
-      className={`admin-overview-rank-medal admin-overview-rank-medal--${rank}`}
+      className="inline-grid size-icon-xl place-items-center text-title-md"
       role="img"
       aria-label={`第 ${rank} 名`}
-    />
+    >
+      {MEDALS[rank - 1]}
+    </span>
   );
 }
 
@@ -575,7 +588,10 @@ function metricValueNode(value: string) {
 /** 面板头右端的"详情"入口，四处面板同一个写法。 */
 function DetailLink({ href }: { href: string }) {
   return (
-    <Link className="admin-overview-panel-detail" href={href}>
+    <Link
+      className="shrink-0 text-body-sm font-semibold text-primary-text no-underline hover:underline"
+      href={href}
+    >
       详情
     </Link>
   );
@@ -583,12 +599,16 @@ function DetailLink({ href }: { href: string }) {
 
 function DetailTip({ detail }: { detail: string }) {
   return (
-    <span className="admin-overview-tip">
-      <Button variant="ghost" size="icon-md" aria-label={detail} title={detail}>
-        <Icon name="help" size="xs" fallback="placeholder" />
-      </Button>
-      <span role="tooltip">{detail}</span>
-    </span>
+    /* 原来是 `:hover > span` 的绝对定位浮层，自带一套开合动画与窄屏翻边。
+     * `Tooltip` 管这些，还管键盘聚焦与 Esc。 */
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="icon-md" aria-label={detail}>
+          <Icon name="help" size="xs" fallback="placeholder" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{detail}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -604,40 +624,21 @@ function PeriodSwitch({
   const visibleOptions = periodOptions.filter((option) =>
     options.includes(option.key),
   );
-  const activeIndex = Math.max(
-    0,
-    visibleOptions.findIndex((option) => option.key === value),
-  );
-  const switchStyle = {
-    "--active-offset": `${activeIndex * 100}%`,
-    "--item-count": visibleOptions.length,
-  } as CSSProperties;
 
+  /* 原来是手搓的分段控件：`role="tablist"` 的 div 里排一串 Button，选中滑块是
+   * 一个 `::before`，位置靠两个自定义属性（`--active-offset` / `--item-count`）
+   * 现算。`SegmentedControl` 就是这件东西，滑块与键盘行为都是它的契约。 */
   return (
-    <div
-      className="admin-overview-period"
-      role="tablist"
-      aria-label="统计周期"
-      style={switchStyle}
-    >
-      {visibleOptions.map((option) => (
-        <Button
-          key={option.key}
-          variant={value === option.key ? "secondary" : "ghost"}
-          size="md"
-          role="tab"
-          aria-selected={value === option.key}
-          className={
-            value === option.key
-              ? "admin-overview-period__item admin-overview-period__item--active"
-              : "admin-overview-period__item"
-          }
-          onClick={() => onChange(option.key)}
-        >
-          {option.label}
-        </Button>
-      ))}
-    </div>
+    <SegmentedControl
+      items={visibleOptions.map((option) => ({
+        value: option.key,
+        label: option.label,
+      }))}
+      value={value}
+      onChange={onChange}
+      size="sm"
+      ariaLabel="统计周期"
+    />
   );
 }
 
@@ -1161,7 +1162,7 @@ function BusinessPanel({
       title={panel.title}
       titleSuffix={
         <Link
-          className="admin-overview-panel-chart"
+          className="inline-flex items-center leading-[1] text-muted-foreground transition-colors hover:text-primary-text focus-visible:text-primary-text"
           href={`/usage-metering?period=${panel.period}&scope=${encodeURIComponent(panel.title)}`}
           title={`${panel.title}图形化显示`}
         >
@@ -1201,7 +1202,7 @@ function ProductRankingCard({
       description={summary}
       action={<DetailLink href={href} />}
       tone={toStatusTone(tone)}
-      className={`admin-overview-product-ranking ${metricToneClass(tone)}`}
+      className="grid min-w-0 gap-sm"
     >
       <PanelList empty="数据源待建设：暂无产品供给排行数据。">
         {rows.map((item, index) => (
@@ -1255,7 +1256,7 @@ function ModelCategoryCard({
       description={summary}
       {...(href ? { action: <DetailLink href={href} /> } : {})}
       tone={toStatusTone(tone)}
-      className={`admin-overview-model-category ${metricToneClass(tone)}`}
+      className="grid min-w-0 gap-sm"
     >
       <PanelList empty="暂无数据">
         {rows.map((row, index) => (
@@ -1290,15 +1291,14 @@ function RatingStars({ value }: { value: number }) {
   const rounded = Math.round(value);
 
   return (
-    <span className="admin-overview-stars" aria-label={`${value} 星`}>
+    <span
+      className="inline-flex gap-xs text-body-md leading-[1] text-muted-foreground"
+      aria-label={`${value} 星`}
+    >
       {Array.from({ length: 5 }, (_, index) => (
         <span
           key={index}
-          className={
-            index < rounded
-              ? "admin-overview-stars__item admin-overview-stars__item--active"
-              : "admin-overview-stars__item"
-          }
+          className={index < rounded ? "text-warning" : undefined}
         >
           {index < rounded ? "★" : "☆"}
         </span>
@@ -1741,8 +1741,8 @@ export default function AdminOverviewPage() {
   );
 
   return (
-    <ViewLayout className="admin-overview">
-      <header className="admin-overview-header">
+    <ViewLayout className="w-full">
+      <header className="grid gap-md">
         <OverviewHeading
           icon="squares-four"
           title="平台总览"
@@ -1775,7 +1775,7 @@ export default function AdminOverviewPage() {
         ))}
       </section>
 
-      <section className="admin-overview-section" aria-label="经营指标">
+      <section className="grid gap-md" aria-label="经营指标">
         <OverviewHeading
           icon="chart-bar"
           title="经营指标"
@@ -1783,7 +1783,7 @@ export default function AdminOverviewPage() {
           period={businessPeriod}
           onPeriodChange={setBusinessPeriod}
         />
-        <div className="admin-overview-business-panels">
+        <div className="grid items-stretch gap-md max-lg:grid-cols-1 lg:grid-cols-3">
           {businessPanels.map((panel) => (
             <BusinessPanel
               key={panel.id}
@@ -1795,7 +1795,7 @@ export default function AdminOverviewPage() {
         </div>
       </section>
 
-      <section className="admin-overview-section" aria-label="产品供给">
+      <section className="grid gap-md" aria-label="产品供给">
         <OverviewHeading
           icon="database"
           title="产品供给"
@@ -1807,7 +1807,7 @@ export default function AdminOverviewPage() {
           aria-label="产品供给指标"
           items={metricItems(productMetrics)}
         />
-        <div className="admin-overview-product-rankings">
+        <div className="grid items-stretch gap-md max-lg:grid-cols-1 lg:grid-cols-3">
           <ProductRankingCard
             title="产品能力排行"
             summary="默认前三，观察底层产品被订阅采用的强度。"
@@ -1829,7 +1829,7 @@ export default function AdminOverviewPage() {
         </div>
       </section>
 
-      <section className="admin-overview-section" aria-label="能力与服务">
+      <section className="grid gap-md" aria-label="能力与服务">
         <OverviewHeading
           icon="cloud"
           title="模型技能"
@@ -1841,7 +1841,7 @@ export default function AdminOverviewPage() {
           aria-label="模型技能指标"
           items={metricItems(capabilityMetrics)}
         />
-        <div className="admin-overview-model-categories">
+        <div className="grid items-stretch gap-md max-lg:grid-cols-1 lg:grid-cols-4">
           {capabilityPanels.map((panel) => (
             <ModelCategoryCard
               key={panel.title}
@@ -1857,7 +1857,7 @@ export default function AdminOverviewPage() {
         </div>
       </section>
 
-      <section className="admin-overview-section" aria-label="服务与工单">
+      <section className="grid gap-md" aria-label="服务与工单">
         <OverviewHeading
           icon="chat-circle"
           title="服务与工单"
@@ -1868,7 +1868,7 @@ export default function AdminOverviewPage() {
         {/* 这两块不是面板卡：它们装的就是一排指标卡，套上卡壳会变成卡中卡
             （2026-08-05）。同段的产品供给/模型技能也是"标题 + 一排卡"，这里只是
             多一层，用 level 3 的板块标题表达层级即可。 */}
-        <div className="admin-overview-service-stack">
+        <div className="grid gap-md">
           <Section
             level={3}
             title="工单统计"

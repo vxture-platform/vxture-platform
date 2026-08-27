@@ -1,4 +1,0 @@
-/* Admin overview style entry. Keep concrete rules in admin-overview-* modules. */
-
-@import "./admin-overview-layout.css";
-@import "./admin-overview-widgets.css";

@@ -199,10 +199,6 @@ const IMPORT_ONLY_STYLE_ENTRIES = new Map([
     "admin management.css",
   ],
   [
-    normalize("portals/admin/src/styles/admin-overview.css"),
-    "admin overview.css",
-  ],
-  [
     normalize("portals/admin/src/styles/admin-permissions.css"),
     "admin permissions.css",
   ],
