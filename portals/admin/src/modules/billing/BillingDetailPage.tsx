@@ -450,8 +450,12 @@ function BillingDetails({
                     <span className="text-body-md font-semibold text-foreground">
                       {formatCurrency(receipt.invoiceAmount, receipt.currency)}
                     </span>
-                    <span className="truncate text-body-sm text-muted-foreground">
-                      <span>
+                    {/* 截断要落在里面那条文字上，不能落在这一层：这一层同时装着
+                        三个操作钮，`truncate`（overflow:hidden + nowrap）会把钮裁掉。
+                        main 上正是这么分的——容器 `overflow:visible;white-space:normal`
+                        并允许换行，只有内层 `> span` 带 ellipsis。 */}
+                    <span className="flex flex-wrap items-center gap-xs text-body-sm text-muted-foreground">
+                      <span className="min-w-0 max-w-panel-sm truncate">
                         {receipt.invoiceFileUrl ? (
                           <a
                             href={receipt.invoiceFileUrl}

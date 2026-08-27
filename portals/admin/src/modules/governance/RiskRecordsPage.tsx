@@ -404,8 +404,7 @@ export function RiskRecordsPage() {
             }
           >
             <NativeSelect
-              wrapperClassName="w-fit"
-              className="w-fit basis-media-xl"
+              wrapperClassName="w-fit basis-media-xl"
               value={levelFilter}
               onChange={(e) => {
                 setLevelFilter(e.target.value as LevelFilter);
@@ -418,8 +417,7 @@ export function RiskRecordsPage() {
               <option value="high">高风险</option>
             </NativeSelect>
             <NativeSelect
-              wrapperClassName="w-fit"
-              className="w-fit basis-media-xl"
+              wrapperClassName="w-fit basis-media-xl"
               value={reviewFilter}
               onChange={(e) => {
                 setReviewFilter(e.target.value as ReviewFilter);

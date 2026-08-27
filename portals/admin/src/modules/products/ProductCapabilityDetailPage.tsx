@@ -280,7 +280,9 @@ function ProductCapabilityDetails({
                 />
               }
               trail={
-                <span className="truncate text-body-sm text-muted-foreground">
+                /* 同 SubscriptionDetailPage：trail 槽 `shrink-0` 按内容定宽，
+                   `truncate` 要先有宽度上限才截得断。 */
+                <span className="block max-w-panel-sm truncate text-body-sm text-muted-foreground">
                   {metric.unit} | {metric.cycle} | {metric.quotaBase} |{" "}
                   {metric.billingMode}
                 </span>

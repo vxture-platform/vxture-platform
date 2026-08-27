@@ -566,7 +566,7 @@ export function PromotionsPage() {
           >
             <>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -580,7 +580,7 @@ export function PromotionsPage() {
                 <option value="expired">已结束</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={typeFilter}
                 onChange={(event) =>
                   setTypeFilter(event.target.value as TypeFilter)

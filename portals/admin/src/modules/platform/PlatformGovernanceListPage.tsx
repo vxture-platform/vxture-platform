@@ -423,7 +423,7 @@ export function PlatformGovernanceListPage({
                   event.target.value as PlatformGovernanceStatus | "all",
                 )
               }
-              className="w-fit basis-media-xl"
+              wrapperClassName="w-fit basis-media-xl"
               aria-label={`${config.objectLabel}状态`}
             >
               <option value="all">{tShared("filters.allStates")}</option>

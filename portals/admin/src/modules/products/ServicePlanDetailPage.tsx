@@ -205,11 +205,16 @@ function ServicePlanDetails({
                 </Link>
               }
               trail={
-                <span className="grid justify-items-end gap-2xs">
+                /* `PanelItem` 的 trail 槽是写死的 `shrink-0 text-right`，不肯收缩：
+                    配额摘要是不定长的（实测能到 12 项、1800px），不封顶就会把 main
+                    槽挤成 0 宽并顶出横向滚动条。main 上这里是四列 grid，每格
+                    `overflow:hidden;text-overflow:ellipsis`——封顶加截断是同一行为。 */
+                <span className="grid max-w-panel-sm gap-2xs text-right">
                   {/* 包含 / 不包含原来靠 `.is-included` / `.is-excluded` 两个
                       修饰类上色。这是一对成/不成的判定，正是语气该说的事。 */}
                   <span
-                    className={`text-body-md font-semibold ${
+                    title={item.quotaSummary}
+                    className={`truncate text-body-md font-semibold ${
                       item.included
                         ? "text-success-text"
                         : "text-destructive-text"

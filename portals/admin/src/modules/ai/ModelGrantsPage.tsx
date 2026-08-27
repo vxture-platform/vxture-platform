@@ -672,7 +672,7 @@ export function ModelGrantsPage() {
           </Button>
           <>
             <NativeSelect
-              className="w-fit basis-media-xl"
+              wrapperClassName="w-fit basis-media-xl"
               value={filter}
               onChange={(event) =>
                 setFilter(event.target.value as PolicyFilter)

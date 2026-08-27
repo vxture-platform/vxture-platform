@@ -186,8 +186,7 @@ export function SystemParametersPage() {
             }}
           >
             <NativeSelect
-              wrapperClassName="w-fit"
-              className="w-fit basis-media-xl"
+              wrapperClassName="w-fit basis-media-xl"
               value={groupFilter}
               onChange={(e) => {
                 setGroupFilter(e.target.value);

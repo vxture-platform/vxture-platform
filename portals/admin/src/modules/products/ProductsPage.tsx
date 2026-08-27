@@ -504,7 +504,7 @@ export function ProductsPage() {
           >
             <>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={typeFilter}
                 onChange={(event) =>
                   setTypeFilter(event.target.value as TypeFilter)
@@ -519,7 +519,7 @@ export function ProductsPage() {
                 <option value="service">服务</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={sourceFilter}
                 onChange={(event) =>
                   setSourceFilter(event.target.value as SourceFilter)
@@ -531,7 +531,7 @@ export function ProductsPage() {
                 <option value="partner">三方接入</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -544,7 +544,7 @@ export function ProductsPage() {
                 <option value="archived">已归档</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={accessFilter}
                 onChange={(event) =>
                   setAccessFilter(event.target.value as AccessFilter)

@@ -713,7 +713,7 @@ export function OrdersPage() {
           >
             <>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as OrderStatusFilter)
@@ -733,7 +733,7 @@ export function OrdersPage() {
                 <option value="abnormal">异常</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={paymentFilter}
                 onChange={(event) =>
                   setPaymentFilter(event.target.value as PaymentStatusFilter)
@@ -756,7 +756,7 @@ export function OrdersPage() {
                 <option value="refunding">退款中</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={paySourceFilter}
                 onChange={(event) =>
                   setPaySourceFilter(event.target.value as PaySourceFilter)
@@ -769,7 +769,7 @@ export function OrdersPage() {
                 <option value="none">{tShared("common.none")}</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={tierFilter}
                 onChange={(event) =>
                   setTierFilter(event.target.value as TierFilter)

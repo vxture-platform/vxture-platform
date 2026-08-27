@@ -142,8 +142,7 @@ function SkillToolbar({
       }}
     >
       <NativeSelect
-        wrapperClassName="w-fit"
-        className="w-fit basis-media-xl"
+        wrapperClassName="w-fit basis-media-xl"
         value={statusFilter}
         onChange={(e) =>
           onStatusFilterChange(e.target.value as SkillStatusFilter)
@@ -157,8 +156,7 @@ function SkillToolbar({
       </NativeSelect>
       {categories.length > 0 ? (
         <NativeSelect
-          wrapperClassName="w-fit"
-          className="w-fit basis-media-xl"
+          wrapperClassName="w-fit basis-media-xl"
           value={categoryFilter}
           onChange={(e) => onCategoryFilterChange(e.target.value)}
           aria-label="技能分类"

@@ -1154,7 +1154,7 @@ export function PlatformUsersPage() {
           >
             <>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -1169,7 +1169,7 @@ export function PlatformUsersPage() {
                 <option value="suspended">{tShared("actions.pause")}</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={typeFilter}
                 onChange={(event) =>
                   setTypeFilter(event.target.value as UserTypeFilter)

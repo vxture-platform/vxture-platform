@@ -566,7 +566,7 @@ export function ProductSolutionsPage() {
           >
             <>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -579,7 +579,7 @@ export function ProductSolutionsPage() {
                 <option value="archived">{tShared("actions.archive")}</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={visibilityFilter}
                 onChange={(event) =>
                   setVisibilityFilter(event.target.value as VisibilityFilter)
@@ -591,7 +591,7 @@ export function ProductSolutionsPage() {
                 <option value="internal">内部</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={industryFilter}
                 onChange={(event) => setIndustryFilter(event.target.value)}
                 aria-label="行业场景"
@@ -604,7 +604,7 @@ export function ProductSolutionsPage() {
                 ))}
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={sourceFilter}
                 onChange={(event) =>
                   setSourceFilter(event.target.value as SourceFilter)

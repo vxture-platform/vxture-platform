@@ -294,8 +294,7 @@ function AnnouncementToolbar({
       }
     >
       <NativeSelect
-        wrapperClassName="w-fit"
-        className="w-fit basis-media-xl"
+        wrapperClassName="w-fit basis-media-xl"
         value={typeFilter}
         onChange={(e) =>
           onTypeFilterChange(e.target.value as AnnouncementTypeFilter)
@@ -309,8 +308,7 @@ function AnnouncementToolbar({
         <option value="security">安全</option>
       </NativeSelect>
       <NativeSelect
-        wrapperClassName="w-fit"
-        className="w-fit basis-media-xl"
+        wrapperClassName="w-fit basis-media-xl"
         value={statusFilter}
         onChange={(e) =>
           onStatusFilterChange(e.target.value as AnnouncementStatusFilter)

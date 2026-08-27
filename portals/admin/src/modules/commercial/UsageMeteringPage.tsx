@@ -509,7 +509,7 @@ export function UsageMeteringPage() {
           >
             <>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={riskFilter}
                 onChange={(event) =>
                   setRiskFilter(event.target.value as RiskFilter)
@@ -525,7 +525,7 @@ export function UsageMeteringPage() {
                 <option value="anomaly">计量异常</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={productTypeFilter}
                 onChange={(event) =>
                   setProductTypeFilter(event.target.value as ProductTypeFilter)
@@ -540,7 +540,7 @@ export function UsageMeteringPage() {
                 <option value="产品能力">产品能力</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={cycleFilter}
                 onChange={(event) => setCycleFilter(event.target.value)}
                 aria-label="计量周期"

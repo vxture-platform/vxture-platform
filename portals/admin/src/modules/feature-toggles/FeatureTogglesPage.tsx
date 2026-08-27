@@ -374,8 +374,7 @@ export function FeatureTogglesPage() {
             }
           >
             <NativeSelect
-              wrapperClassName="w-fit"
-              className="w-fit basis-media-xl"
+              wrapperClassName="w-fit basis-media-xl"
               value={categoryFilter}
               onChange={(e) => {
                 setCategoryFilter(e.target.value);
@@ -390,8 +389,7 @@ export function FeatureTogglesPage() {
               ))}
             </NativeSelect>
             <NativeSelect
-              wrapperClassName="w-fit"
-              className="w-fit basis-media-xl"
+              wrapperClassName="w-fit basis-media-xl"
               value={environmentFilter}
               onChange={(e) => {
                 setEnvironmentFilter(e.target.value);
@@ -406,8 +404,7 @@ export function FeatureTogglesPage() {
               ))}
             </NativeSelect>
             <NativeSelect
-              wrapperClassName="w-fit"
-              className="w-fit basis-media-xl"
+              wrapperClassName="w-fit basis-media-xl"
               value={archivedFilter}
               onChange={(e) => {
                 setArchivedFilter(e.target.value as ArchivedFilter);

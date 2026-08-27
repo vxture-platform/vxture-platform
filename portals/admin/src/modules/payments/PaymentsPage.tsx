@@ -877,7 +877,7 @@ export function PaymentsPage() {
           >
             <>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={paymentStatusFilter}
                 onChange={(event) =>
                   setPaymentStatusFilter(
@@ -902,7 +902,7 @@ export function PaymentsPage() {
                 <option value="refunding">退款中</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={paySourceFilter}
                 onChange={(event) =>
                   setPaySourceFilter(event.target.value as PaySourceFilter)
@@ -915,7 +915,7 @@ export function PaymentsPage() {
                 <option value="none">{tShared("common.none")}</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={reconciliationFilter}
                 onChange={(event) =>
                   setReconciliationFilter(
@@ -937,7 +937,7 @@ export function PaymentsPage() {
                 <option value="unlinked">未关联</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={offlineTypeFilter}
                 onChange={(event) =>
                   setOfflineTypeFilter(event.target.value as OfflineTypeFilter)

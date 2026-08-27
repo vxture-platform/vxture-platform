@@ -734,7 +734,7 @@ export function AccountsPage({
           >
             <>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -751,7 +751,7 @@ export function AccountsPage({
               </NativeSelect>
               {showTenantContext ? (
                 <NativeSelect
-                  className="w-fit basis-media-xl"
+                  wrapperClassName="w-fit basis-media-xl"
                   value={tenantTypeFilter}
                   onChange={(event) =>
                     setTenantTypeFilter(event.target.value as TenantTypeFilter)
@@ -765,7 +765,7 @@ export function AccountsPage({
                 </NativeSelect>
               ) : null}
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={roleFilter}
                 onChange={(event) =>
                   setRoleFilter(event.target.value as RoleFilter)

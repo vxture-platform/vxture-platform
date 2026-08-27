@@ -736,7 +736,7 @@ export function VerificationsPage() {
           >
             <>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={verificationFilter}
                 onChange={(event) =>
                   setVerificationFilter(
@@ -754,7 +754,7 @@ export function VerificationsPage() {
                 <option value="unverified">未认证</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={riskFilter}
                 onChange={(event) =>
                   setRiskFilter(event.target.value as RiskFilter)
@@ -769,7 +769,7 @@ export function VerificationsPage() {
                 ))}
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={regionFilter}
                 onChange={(event) => setRegionFilter(event.target.value)}
                 aria-label="所属区域"

@@ -445,7 +445,7 @@ function TenantInfoTab({
             <TenantConfigItem label={tShared("columns.tenantType")}>
               {editing ? (
                 <NativeSelect
-                  className="w-fit basis-media-xl"
+                  wrapperClassName="w-fit basis-media-xl"
                   value={draft.tenantType}
                   onChange={(event) =>
                     onDraftChange(
@@ -473,7 +473,7 @@ function TenantInfoTab({
             <TenantConfigItem label="租户状态">
               {editing ? (
                 <NativeSelect
-                  className="w-fit basis-media-xl"
+                  wrapperClassName="w-fit basis-media-xl"
                   value={draft.status}
                   onChange={(event) =>
                     onDraftChange(
@@ -993,7 +993,7 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
           重置
         </Button>
         <NativeSelect
-          className="w-fit basis-media-xl"
+          wrapperClassName="w-fit basis-media-xl"
           value={statusFilter}
           onChange={(event) =>
             setStatusFilter(event.target.value as MemberStatusFilter)
@@ -1006,7 +1006,7 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
           <option value="suspended">{tShared("actions.disable")}</option>
         </NativeSelect>
         <NativeSelect
-          className="w-fit basis-media-xl"
+          wrapperClassName="w-fit basis-media-xl"
           value={roleFilter}
           onChange={(event) => setRoleFilter(event.target.value)}
           aria-label="账号权限"
@@ -1071,7 +1071,7 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
           <Label htmlFor="vx-member-role-select">目标角色</Label>
           <NativeSelect
             id="vx-member-role-select"
-            className="w-fit basis-media-xl"
+            wrapperClassName="w-fit basis-media-xl"
             value={selectedRoleId}
             onChange={(event) => setSelectedRoleId(event.target.value)}
             aria-label="目标角色"

@@ -720,7 +720,7 @@ export function SubscriptionsPage() {
           >
             <>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -740,7 +740,7 @@ export function SubscriptionsPage() {
                 <option value="cancelled">已取消</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={tierFilter}
                 onChange={(event) =>
                   setTierFilter(event.target.value as TierFilter)
@@ -755,7 +755,7 @@ export function SubscriptionsPage() {
                 ))}
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={riskFilter}
                 onChange={(event) =>
                   setRiskFilter(event.target.value as RiskFilter)
@@ -770,7 +770,7 @@ export function SubscriptionsPage() {
                 <option value="danger">高风险</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={renewFilter}
                 onChange={(event) =>
                   setRenewFilter(event.target.value as RenewFilter)

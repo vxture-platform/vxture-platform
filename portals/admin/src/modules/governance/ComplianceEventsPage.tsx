@@ -429,8 +429,7 @@ export function ComplianceEventsPage() {
             }
           >
             <NativeSelect
-              wrapperClassName="w-fit"
-              className="w-fit basis-media-xl"
+              wrapperClassName="w-fit basis-media-xl"
               value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value as StatusFilter);

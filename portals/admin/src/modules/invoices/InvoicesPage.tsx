@@ -781,7 +781,7 @@ export function InvoicesPage() {
           >
             <>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as InvoiceStatusFilter)
@@ -802,7 +802,7 @@ export function InvoicesPage() {
                 </option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={invoiceTypeFilter}
                 onChange={(event) =>
                   setInvoiceTypeFilter(event.target.value as InvoiceTypeFilter)
@@ -817,7 +817,7 @@ export function InvoicesPage() {
                 <option value="other">{tShared("common.other")}</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={taxFilter}
                 onChange={(event) =>
                   setTaxFilter(event.target.value as InvoiceTaxFilter)
@@ -831,7 +831,7 @@ export function InvoicesPage() {
                 <option value="other">{tShared("common.other")}</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={deliveryFilter}
                 onChange={(event) =>
                   setDeliveryFilter(event.target.value as DeliveryFilter)

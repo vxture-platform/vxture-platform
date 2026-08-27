@@ -263,11 +263,16 @@ function ProductSolutionDetails({
                 </Link>
               }
               trail={
-                <span className="grid justify-items-end gap-2xs">
-                  <span className="text-body-md font-semibold text-foreground">
+                /* 封顶见 SubscriptionDetailPage 的同款注释：trail 槽 `shrink-0`，
+                   `truncate` 单独写没有效果——得先有宽度上限才截得断。 */
+                <span className="grid max-w-panel-sm gap-2xs text-right">
+                  <span className="truncate text-body-md font-semibold text-foreground">
                     {plan.priceLabel}
                   </span>
-                  <span className="truncate text-body-sm text-muted-foreground">
+                  <span
+                    title={plan.summary}
+                    className="truncate text-body-sm text-muted-foreground"
+                  >
                     {plan.summary}
                   </span>
                 </span>

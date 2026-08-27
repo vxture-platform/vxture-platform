@@ -165,8 +165,7 @@ function AuditToolbar({
         title="截止时间（服务端筛选）"
       />
       <NativeSelect
-        wrapperClassName="w-fit"
-        className="w-fit basis-media-xl"
+        wrapperClassName="w-fit basis-media-xl"
         value={resultFilter}
         onChange={(e) => onResultFilterChange(e.target.value as ResultFilter)}
         aria-label="审计结果"

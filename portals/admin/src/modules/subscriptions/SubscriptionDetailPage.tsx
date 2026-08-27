@@ -294,8 +294,15 @@ function SubscriptionDetails({
                 />
               }
               trail={
-                <span className="grid justify-items-end gap-2xs">
-                  <span className="text-body-md font-semibold text-foreground">
+                /* `PanelItem` 的 trail 槽是写死的 `shrink-0 text-right`，不肯收缩：
+                    配额摘要是不定长的（实测这条 1826px、父容器只有 1440），不封顶就会
+                    把 main 槽挤成 0 宽并顶出横向滚动条。main 上这里是四列 grid，每格
+                    `overflow:hidden;text-overflow:ellipsis`——封顶加截断是同一行为。 */
+                <span className="grid max-w-panel-sm gap-2xs text-right">
+                  <span
+                    title={item.quotaSummary}
+                    className="truncate text-body-md font-semibold text-foreground"
+                  >
                     {item.included ? "包含" : "不包含"} | {item.quotaSummary}
                   </span>
                   <span className="truncate text-body-sm text-muted-foreground">

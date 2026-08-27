@@ -441,14 +441,10 @@ function AdminRolePermissionDialog({
   );
 }
 
-/** 授权树的层级缩进。判据同权限页的 `DEPTH_INDENT`。 */
-const AUTH_DEPTH_INDENT = [
-  "ps-0",
-  "ps-md",
-  "ps-lg",
-  "ps-xl",
-  "ps-2xl",
-] as const;
+/** 授权树的层级缩进。判据同权限页的 `DEPTH_INDENT`，但第 0 层留空串而不是
+ * `ps-0`：这些行本身带 `p-xs`，写 `ps-0` 会把左内边距抹掉，行首贴着面板边缘、
+ * 左右不对称（对比 main 的 `padding-left: space-sm + depth * space-md`）。 */
+const AUTH_DEPTH_INDENT = ["", "ps-md", "ps-lg", "ps-xl", "ps-2xl"] as const;
 
 function PermissionAuthorizationNode({
   node,
@@ -1544,7 +1540,7 @@ export function AdminRolesPage() {
           >
             <>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -1557,7 +1553,7 @@ export function AdminRolesPage() {
                 <option value="archived">{tShared("actions.archive")}</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={roleKindFilter}
                 onChange={(event) =>
                   setRoleKindFilter(event.target.value as RoleKindFilter)
@@ -1569,7 +1565,7 @@ export function AdminRolesPage() {
                 <option value="custom">自定义角色</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={permissionFilter}
                 onChange={(event) =>
                   setPermissionFilter(event.target.value as PermissionFilter)

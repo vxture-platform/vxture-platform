@@ -1188,7 +1188,7 @@ function PermissionDomainSection({
         </Button>
         <>
           <NativeSelect
-            className="w-fit basis-media-xl"
+            wrapperClassName="w-fit basis-media-xl"
             value={filters.typeFilter}
             onChange={(event) =>
               onFilterChange({
@@ -1203,7 +1203,7 @@ function PermissionDomainSection({
             <option value="api">接口权限</option>
           </NativeSelect>
           <NativeSelect
-            className="w-fit basis-media-xl"
+            wrapperClassName="w-fit basis-media-xl"
             value={filters.statusFilter}
             onChange={(event) =>
               onFilterChange({
@@ -1217,7 +1217,7 @@ function PermissionDomainSection({
             <option value="disabled">{tShared("actions.disable")}</option>
           </NativeSelect>
           <NativeSelect
-            className="w-fit basis-media-xl"
+            wrapperClassName="w-fit basis-media-xl"
             value={filters.sourceFilter}
             onChange={(event) =>
               onFilterChange({

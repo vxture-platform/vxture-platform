@@ -543,7 +543,7 @@ export function TenantsPage() {
           >
             <>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -559,7 +559,7 @@ export function TenantsPage() {
                 <option value="cancelled">注销</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={typeFilter}
                 onChange={(event) =>
                   setTypeFilter(event.target.value as TypeFilter)
@@ -571,7 +571,7 @@ export function TenantsPage() {
                 <option value="individual">个人租户</option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={verificationFilter}
                 onChange={(event) =>
                   setVerificationFilter(
@@ -589,7 +589,7 @@ export function TenantsPage() {
                 </option>
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={riskFilter}
                 onChange={(event) =>
                   setRiskFilter(event.target.value as RiskFilter)

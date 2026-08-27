@@ -525,8 +525,7 @@ export function OpsTodosPage() {
             }
           >
             <NativeSelect
-              wrapperClassName="w-fit"
-              className="w-fit basis-media-xl"
+              wrapperClassName="w-fit basis-media-xl"
               value={severityFilter}
               onChange={(event) => {
                 setSeverityFilter(event.target.value as TodoSeverity | "all");

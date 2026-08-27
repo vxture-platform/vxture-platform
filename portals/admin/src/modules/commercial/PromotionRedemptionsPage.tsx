@@ -506,7 +506,7 @@ export function PromotionRedemptionsPage() {
           >
             <>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={billStatusFilter}
                 onChange={(event) =>
                   setBillStatusFilter(event.target.value as BillStatusFilter)

@@ -255,8 +255,7 @@ export function NotificationLogsPage() {
           }}
         >
           <NativeSelect
-            wrapperClassName="w-fit"
-            className="w-fit basis-media-xl"
+            wrapperClassName="w-fit basis-media-xl"
             value={channelFilter}
             onChange={(e) => {
               setChannelFilter(e.target.value);
@@ -272,8 +271,7 @@ export function NotificationLogsPage() {
             ))}
           </NativeSelect>
           <NativeSelect
-            wrapperClassName="w-fit"
-            className="w-fit basis-media-xl"
+            wrapperClassName="w-fit basis-media-xl"
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value);

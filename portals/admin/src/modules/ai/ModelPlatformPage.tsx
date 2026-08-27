@@ -1065,7 +1065,7 @@ export function ModelPlatformPage() {
           >
             <>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as ModelStatusFilter)
@@ -1079,7 +1079,7 @@ export function ModelPlatformPage() {
                 ))}
               </NativeSelect>
               <NativeSelect
-                className="w-fit basis-media-xl"
+                wrapperClassName="w-fit basis-media-xl"
                 value={sourceFilter}
                 onChange={(event) =>
                   setSourceFilter(event.target.value as ModelSourceFilter)
