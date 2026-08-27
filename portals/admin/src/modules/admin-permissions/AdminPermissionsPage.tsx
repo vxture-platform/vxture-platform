@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import type { CSSProperties } from "react";
 import {
   ActionButton,
   ActionMenu,
   Badge,
   Button,
+  DataTable,
+  DetailList,
+  DetailRow,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -17,16 +19,20 @@ import {
   Icon,
   Input,
   Label,
+  ListCardGrid,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   SectionHeader,
   StatusBadge,
+  TableTitleCell,
   Textarea,
   useToast,
   ViewLayout,
   ViewModeSwitch,
 } from "@vxture/design-system";
 import type {
+  DataTableColumn,
   IconName,
   StatusBadgeTone,
   ViewModeSwitchValue,
@@ -43,7 +49,7 @@ import type {
   PlatformPermissionType,
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
-import { formatNumber, joinClasses } from "@/modules/tenants/tenant-utils";
+import { formatNumber } from "@/modules/tenants/tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
 
 type PermissionFilter = "all" | PlatformPermissionType;
@@ -61,30 +67,55 @@ const DEFAULT_DOMAIN_FILTERS: DomainFilterState = {
   sourceFilter: "all",
 };
 
+/* `tone` 取代原来的 `className`：那三个类只是把 `--tenant-row-tone` 设成蓝/青/琥珀
+   喂给图标颜色。类型是**类目**不是严重度，用色只为在一棵深树里分得开——与角色页的
+   `PERM_TYPE_TONE` 同一判断。 */
 const permissionTypeMeta = {
-  menu: {
-    label: "菜单",
-    icon: "table",
-    className: "vx-admin-permission-type--menu",
-  },
-  button: {
-    label: "按钮",
-    icon: "check",
-    className: "vx-admin-permission-type--button",
-  },
-  api: {
-    label: "接口",
-    icon: "api",
-    className: "vx-admin-permission-type--api",
-  },
+  menu: { label: "菜单", icon: "table", tone: "brand" },
+  button: { label: "按钮", icon: "check", tone: "info" },
+  api: { label: "接口", icon: "api", tone: "warning" },
 } as const;
 
 /** 查不到就退回中性档：一个没见过的类型不该让整棵权限树崩掉。 */
 const UNKNOWN_PERMISSION_TYPE = {
   label: "未知类型",
   icon: "info",
-  className: "",
+  tone: "neutral",
 } as const;
+
+/**
+ * 层级缩进：深度 → 左边距类。
+ *
+ * 定长表而不是算出来的值：内联 style 承载间距会被 `ds/no-inline-design-style` 拦
+ * （它只收动态变量与坐标），`pl-[Nrem]` 会被 `ds/no-app-tailwind-arbitrary-scale`
+ * 拦。超出表长的深度按最深一档——树再深也不该靠缩进来读，那是 L 徽章的活。
+ */
+const DEPTH_INDENT = ["ps-0", "ps-md", "ps-lg", "ps-xl", "ps-2xl"] as const;
+
+function depthIndentClass(depth: number) {
+  return DEPTH_INDENT[Math.min(Math.max(depth, 0), DEPTH_INDENT.length - 1)];
+}
+
+/**
+ * 当前展开状态下**可见**的节点，拍平成一维。
+ *
+ * 树原来是递归 DOM，展开的子节点是父节点的后代元素。拍平之后它就是一张普通表，
+ * 层级由缩进与 L 徽章表达——这样表头、粘性操作列、加载骨架与空态才能交给
+ * `DataTable`，而不是每处自己再画一遍。
+ */
+function flattenVisibleNodes(
+  nodes: readonly PermissionTreeNode[],
+  expandedIds: Set<string>,
+  out: PermissionTreeNode[] = [],
+) {
+  for (const node of nodes) {
+    out.push(node);
+    if (node.children.length && expandedIds.has(node.permission.id)) {
+      flattenVisibleNodes(node.children, expandedIds, out);
+    }
+  }
+  return out;
+}
 
 function permissionTypeMetaOf(type: string) {
   return (
@@ -766,7 +797,7 @@ function PermissionDetailDialog({
           `max-width: 0`，面板被夹成 34px（实测 2026-08-27，本应 896px）。方括号
           不过主题查表，字面就是 CSS 关键字。同源的坑还有 `max-w-md`…`max-w-5xl`
           与 `leading-none`，记在 `portals/website/assets/legacy-tokens/tokens-website.css`。 */}
-      <DialogContent className="max-w-[none] vx-admin-role-permission-dialog__panel vx-admin-permission-detail-dialog">
+      <DialogContent className="max-w-[none] vx-admin-role-permission-dialog__panel">
         <header className="vx-admin-role-permission-dialog__header">
           <div>
             <DialogTitle>{permissionDisplayName(permission)}</DialogTitle>
@@ -785,51 +816,34 @@ function PermissionDetailDialog({
           </StatusBadge>
           <Badge>{permissionSourceLabel(permission)}</Badge>
         </div>
-        <dl className="vx-admin-permission-detail-dialog__grid">
-          <div>
-            <dt>权限名称</dt>
-            <dd>{permission.permName || EMPTY_MARK}</dd>
-          </div>
-          <div>
-            <dt>权限 Code</dt>
-            <dd>{permission.permCode}</dd>
-          </div>
-          <div>
-            <dt>上级权限</dt>
-            <dd>{parentPermission ? parentPermission.permCode : EMPTY_MARK}</dd>
-          </div>
-          <div>
-            <dt>授权角色</dt>
-            <dd>
-              {formatNumber(permission.activeRoleCount)} /{" "}
-              {formatNumber(permission.roleCount)}
-            </dd>
-          </div>
-          <div>
-            <dt>路径</dt>
-            <dd>{permission.routePath || EMPTY_MARK}</dd>
-          </div>
-          <div>
-            <dt>组件</dt>
-            <dd>{permission.component || EMPTY_MARK}</dd>
-          </div>
-          <div>
-            <dt>排序</dt>
-            <dd>{formatNumber(permission.sort)}</dd>
-          </div>
-          <div>
-            <dt>{tShared("columns.updatedAt")}</dt>
-            <dd>
-              {permission.updatedAt
-                ? new Date(permission.updatedAt).toLocaleString(locale)
-                : EMPTY_MARK}
-            </dd>
-          </div>
-          <div className="vx-admin-permission-detail-dialog__wide">
-            <dt>描述</dt>
-            <dd>{permission.description || EMPTY_MARK}</dd>
-          </div>
-        </dl>
+        <DetailList columns={2}>
+          <DetailRow label="权限名称">
+            {permission.permName || EMPTY_MARK}
+          </DetailRow>
+          <DetailRow label="权限 Code">{permission.permCode}</DetailRow>
+          <DetailRow label="上级权限">
+            {parentPermission ? parentPermission.permCode : EMPTY_MARK}
+          </DetailRow>
+          <DetailRow label="授权角色">
+            {formatNumber(permission.activeRoleCount)} /{" "}
+            {formatNumber(permission.roleCount)}
+          </DetailRow>
+          <DetailRow label="路径">
+            {permission.routePath || EMPTY_MARK}
+          </DetailRow>
+          <DetailRow label="组件">
+            {permission.component || EMPTY_MARK}
+          </DetailRow>
+          <DetailRow label="排序">{formatNumber(permission.sort)}</DetailRow>
+          <DetailRow label={tShared("columns.updatedAt")}>
+            {permission.updatedAt
+              ? new Date(permission.updatedAt).toLocaleString(locale)
+              : EMPTY_MARK}
+          </DetailRow>
+          <DetailRow label="描述" className="sm:col-span-2">
+            {permission.description || EMPTY_MARK}
+          </DetailRow>
+        </DetailList>
       </DialogContent>
     </Dialog>
   );
@@ -887,213 +901,196 @@ function PermissionCardGrid({
   onEdit: (permission: PlatformAdminPermissionRecord) => void;
   onToggle: (permission: PlatformAdminPermissionRecord) => void;
 }) {
-  const tShared = useTranslations();
   const flattenedNodes = flattenTreeNodes(nodes);
 
   return (
-    <div className="vx-admin-permission-card-grid" aria-label="权限卡片清单">
+    <ListCardGrid aria-label="权限卡片清单">
       {flattenedNodes.map(({ permission, depth }) => {
         const meta = permissionTypeMetaOf(permission.permType);
         const statusIndicator = permissionStatusIndicator(permission);
 
         return (
-          <article
+          <MetricListCard
             key={permission.id}
-            className={joinClasses(
-              "vx-admin-permission-card",
-              meta.className,
-              permission.status ? "" : "vx-admin-permission-card--disabled",
-            )}
-            // Runtime tree depth feeds the CSS indent calc(--permission-depth);
-            // a dynamic numeric value cannot be a static className.
-            style={{ "--permission-depth": depth } as CSSProperties}
-          >
-            <header>
-              <span>
-                <Icon name={meta.icon} size="sm" fallback="placeholder" />
-              </span>
-              <div>
-                <strong>{permissionDisplayName(permission)}</strong>
-                <Badge>{permissionSourceLabel(permission)}</Badge>
-              </div>
+            icon={meta.icon}
+            title={permissionDisplayName(permission)}
+            description={permission.permCode}
+            tone={permission.status ? meta.tone : "neutral"}
+            /* 停用的权限整卡压暗——原来是 `.vx-admin-permission-card--disabled`
+               的 `opacity: 0.66`，判据不变。 */
+            className={permission.status ? "" : "opacity-70"}
+            actions={
               <PermissionActionsMenu
                 permission={permission}
                 onOpenDetail={onOpenDetail}
                 onEdit={onEdit}
                 onToggle={onToggle}
               />
-            </header>
-            <span className="vx-admin-permission-card__type">
-              <Badge>{meta.label}</Badge>
-            </span>
-            <dl>
-              <div>
-                <dt>{tShared("columns.state")}</dt>
-                <dd>
-                  <Icon
-                    name={statusIndicator.icon}
-                    size="xs"
-                    fallback="placeholder"
-                  />
+            }
+            badges={
+              <>
+                <StatusBadge tone={meta.tone} icon={false}>
+                  {meta.label}
+                </StatusBadge>
+                <StatusBadge
+                  tone={permission.status ? "success" : "neutral"}
+                  icon={statusIndicator.icon}
+                >
                   {statusIndicator.label}
-                </dd>
-              </div>
-              <div>
-                <dt>授权角色</dt>
-                <dd>
-                  {formatNumber(permission.activeRoleCount)} /{" "}
-                  {formatNumber(permission.roleCount)}
-                </dd>
-              </div>
-              <div>
-                <dt>层级</dt>
-                <dd>{formatNumber(depth)}</dd>
-              </div>
-              <div>
-                <dt>来源</dt>
-                <dd>{permissionSourceLabel(permission)}</dd>
-              </div>
-            </dl>
-          </article>
+                </StatusBadge>
+                <Badge>{permissionSourceLabel(permission)}</Badge>
+              </>
+            }
+            metrics={[
+              {
+                key: "roles",
+                value: `${formatNumber(permission.activeRoleCount)} / ${formatNumber(permission.roleCount)}`,
+                label: "授权角色",
+              },
+              { key: "depth", value: formatNumber(depth), label: "层级" },
+              {
+                key: "source",
+                value: permissionSourceLabel(permission),
+                label: "来源",
+              },
+            ]}
+          />
         );
       })}
-    </div>
+    </ListCardGrid>
   );
 }
 
-function PermissionTreeNodeView({
-  node,
+/**
+ * 权限树的列。
+ *
+ * 原来是一个**递归组件**：每个节点画一行 7 列 grid，展开的子节点作为它的后代
+ * DOM 继续递归，缩进靠 `padding-left: calc(var(--permission-depth) * space-md)`，
+ * 深度用内联样式喂进 CSS 变量；表头是另一个列宽相同的 grid，操作列 `position:
+ * sticky` 钉右边。
+ *
+ * 拍平成一维行之后它就是一张普通表——表头、粘性 64px 操作列、加载骨架与空态都回到
+ * `DataTable` 的契约里，不必每处再画一遍。层级由缩进 + L 徽章表达，与原来一致。
+ */
+function usePermissionTreeColumns({
   expandedIds,
   onToggle,
-  permissionById,
-  onOpenDetail,
-  onEditPermission,
-  onTogglePermission,
 }: {
-  node: PermissionTreeNode;
   expandedIds: Set<string>;
   onToggle: (id: string) => void;
-  permissionById: Map<string, PlatformAdminPermissionRecord>;
-  onOpenDetail: (permission: PlatformAdminPermissionRecord) => void;
-  onEditPermission: (permission: PlatformAdminPermissionRecord) => void;
-  onTogglePermission: (permission: PlatformAdminPermissionRecord) => void;
-}) {
-  const { permission, children, depth } = node;
-  const meta = permissionTypeMetaOf(permission.permType);
-  const expanded = expandedIds.has(permission.id);
-  const titleClassName =
-    isSectionPermission(permission) || depth === 0
-      ? "vx-admin-permission-tree-node__title--level-2"
-      : "vx-admin-permission-tree-node__title--level-3";
-  const statusIndicator = permissionStatusIndicator(permission);
+}): DataTableColumn<PermissionTreeNode>[] {
+  const tShared = useTranslations();
 
-  return (
-    <article
-      className={joinClasses(
-        "vx-admin-permission-tree-node",
-        meta.className,
-        isSectionPermission(permission)
-          ? "vx-admin-permission-tree-node--section"
-          : "",
-        permission.status ? "" : "vx-admin-permission-tree-node--disabled",
-      )}
-      // Runtime tree depth feeds the CSS indent calc(--permission-depth);
-      // a dynamic numeric value cannot be a static className.
-      style={{ "--permission-depth": depth } as CSSProperties}
-    >
-      <div className="vx-admin-permission-tree-node__detail-row">
-        <span className="vx-admin-permission-tree-node__summary">
-          <span>{node.sequence || formatNumber(permission.sort)}</span>
+  return [
+    {
+      id: "sequence",
+      header: "#",
+      align: "center",
+      cell: ({ permission, sequence }) => (
+        <span className="text-body-sm text-muted-foreground">
+          {sequence || formatNumber(permission.sort)}
         </span>
-        <span className="vx-admin-permission-tree-node__name">
-          <Button
-            variant="ghost"
-            size="icon-md"
-            className="vx-admin-permission-tree-node__toggle"
-            onClick={() => onToggle(permission.id)}
-            disabled={!children.length}
-            aria-label={expanded ? "收起权限子级" : "展开权限子级"}
-          >
-            <Icon
-              name={
-                children.length
-                  ? expanded
-                    ? "chevron-down"
-                    : "chevron-right"
-                  : "chevron-right"
-              }
-              size="xs"
-              fallback="chevron-right"
-            />
-          </Button>
-          <Icon name={meta.icon} size="sm" fallback="placeholder" />
+      ),
+    },
+    {
+      id: "name",
+      header: "权限名称",
+      cell: (node) => {
+        const { permission, children, depth } = node;
+        const meta = permissionTypeMetaOf(permission.permType);
+        const expanded = expandedIds.has(permission.id);
+        return (
           <span
-            className={joinClasses(
-              "vx-admin-permission-tree-node__title",
-              titleClassName,
-            )}
+            className={`flex min-w-0 items-center gap-sm ${depthIndentClass(depth)}`}
           >
-            <strong>{permissionDisplayName(permission)}</strong>
-            <span className="vx-admin-permission-tree-node__title-tags">
-              <StatusBadge tone={permissionLayerTone(depth)} icon={false}>
-                {depth === 0 ? "根权限" : `L${depth}`}
-              </StatusBadge>
-              {children.length ? (
-                <Badge>{formatNumber(children.length)} 子级</Badge>
-              ) : null}
-              {isSectionPermission(permission) ? <Badge>业务分组</Badge> : null}
-            </span>
-          </span>
-        </span>
-        <span className="vx-admin-permission-tree-node__status">
-          <StatusBadge tone={permission.status ? "success" : "neutral"}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="shrink-0"
+              onClick={() => onToggle(permission.id)}
+              disabled={!children.length}
+              aria-label={expanded ? "收起权限子级" : "展开权限子级"}
+            >
+              <Icon
+                name={
+                  children.length && expanded ? "chevron-down" : "chevron-right"
+                }
+                size="xs"
+                fallback="chevron-right"
+              />
+            </Button>
             <Icon
-              name={statusIndicator.icon}
-              size="xs"
+              name={meta.icon}
+              size="sm"
               fallback="placeholder"
+              className="shrink-0"
             />
-            {statusIndicator.label}
+            <TableTitleCell
+              title={permissionDisplayName(permission)}
+              titleSuffix={
+                <>
+                  <StatusBadge tone={permissionLayerTone(depth)} icon={false}>
+                    {depth === 0 ? "根权限" : `L${depth}`}
+                  </StatusBadge>
+                  {children.length ? (
+                    <Badge>{formatNumber(children.length)} 子级</Badge>
+                  ) : null}
+                  {isSectionPermission(permission) ? (
+                    <Badge>业务分组</Badge>
+                  ) : null}
+                </>
+              }
+              description={permission.permCode}
+            />
+          </span>
+        );
+      },
+    },
+    {
+      id: "status",
+      header: tShared("columns.state"),
+      align: "center",
+      cell: ({ permission }) => {
+        const indicator = permissionStatusIndicator(permission);
+        return (
+          <StatusBadge
+            tone={permission.status ? "success" : "neutral"}
+            icon={indicator.icon}
+          >
+            {indicator.label}
           </StatusBadge>
-        </span>
-        <span className="vx-admin-permission-tree-node__type">
-          <Badge>{meta.label}</Badge>
-        </span>
-        <span className="vx-admin-permission-tree-node__source">
-          <Badge>{permissionSourceLabel(permission)}</Badge>
-        </span>
-        <span className="vx-admin-permission-tree-node__roles">
-          <strong>
-            {formatNumber(permission.activeRoleCount)} /{" "}
-            {formatNumber(permission.roleCount)}
-          </strong>
-        </span>
-        <span className="vx-admin-permission-tree-node__actions">
-          <PermissionActionsMenu
-            permission={permission}
-            onOpenDetail={onOpenDetail}
-            onEdit={onEditPermission}
-            onToggle={onTogglePermission}
-          />
-        </span>
-      </div>
-      {children.length && expanded ? (
-        <div className="vx-admin-permission-tree-node__children">
-          {children.map((child) => (
-            <PermissionTreeNodeView
-              key={child.permission.id}
-              node={child}
-              expandedIds={expandedIds}
-              onToggle={onToggle}
-              permissionById={permissionById}
-              onOpenDetail={onOpenDetail}
-              onEditPermission={onEditPermission}
-              onTogglePermission={onTogglePermission}
-            />
-          ))}
-        </div>
-      ) : null}
-    </article>
-  );
+        );
+      },
+    },
+    {
+      id: "kind",
+      header: tShared("columns.kind"),
+      align: "center",
+      cell: ({ permission }) => {
+        const meta = permissionTypeMetaOf(permission.permType);
+        return (
+          <StatusBadge tone={meta.tone} icon={false}>
+            {meta.label}
+          </StatusBadge>
+        );
+      },
+    },
+    {
+      id: "source",
+      header: "来源",
+      align: "center",
+      cell: ({ permission }) => (
+        <Badge>{permissionSourceLabel(permission)}</Badge>
+      ),
+    },
+    {
+      id: "roles",
+      header: "授权角色",
+      align: "right",
+      cell: ({ permission }) =>
+        `${formatNumber(permission.activeRoleCount)} / ${formatNumber(permission.roleCount)}`,
+    },
+  ];
 }
 
 function PermissionDomainSection({
@@ -1135,6 +1132,15 @@ function PermissionDomainSection({
   const [detailPermissionId, setDetailPermissionId] = useState<string | null>(
     null,
   );
+  /* 展开状态下可见的节点，拍平成表格的行。钉在 nodes 与 expandedIds 上：
+     不 memo 的话每次渲染都是一个新数组，DataTable 白白重算一遍。 */
+  const visibleNodes = useMemo(
+    () => flattenVisibleNodes(group.nodes, expandedIds),
+    [group.nodes, expandedIds],
+  );
+  /* 行操作走 DataTable 的 `rowActions`（它管固定 64px 与列锁定），所以列工厂
+     只要展开状态这一件事。 */
+  const treeColumns = usePermissionTreeColumns({ expandedIds, onToggle });
   const detailPermission = detailPermissionId
     ? (permissionById.get(detailPermissionId) ?? null)
     : null;
@@ -1144,7 +1150,7 @@ function PermissionDomainSection({
 
   return (
     <section
-      className="vx-admin-permission-domain"
+      className="grid min-w-0"
       /* 原先靠 `aria-labelledby` 指向标题的 h2#id。SectionHeader 不保证 id 落在
        * h2 上（透传属性去的是根元素），换成 aria-label——可访问名称一样，且不再
        * 依赖别人的 DOM 内部结构。 */
@@ -1158,7 +1164,7 @@ function PermissionDomainSection({
       />
       <PermissionDomainStats group={group} />
       <section
-        className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch vx-admin-permission-domain__toolbar"
+        className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch"
         aria-label={`${group.title}筛选`}
       >
         <ViewModeSwitch
@@ -1244,35 +1250,22 @@ function PermissionDomainSection({
       </section>
       {group.nodes.length ? (
         viewMode === "list" ? (
-          <div
-            className="vx-admin-permission-tree"
-            role="treegrid"
+          <DataTable
+            columns={treeColumns}
+            rows={visibleNodes}
+            rowKey={(node) => node.permission.id}
             aria-label={group.title}
-          >
-            <div className="vx-admin-permission-tree__header">
-              <span>#</span>
-              <span>权限名称</span>
-              <span>{tShared("columns.state")}</span>
-              <span>{tShared("columns.kind")}</span>
-              <span>来源</span>
-              <span>授权角色</span>
-              <span>操作</span>
-            </div>
-            {group.nodes.map((node) => (
-              <PermissionTreeNodeView
-                key={node.permission.id}
-                node={node}
-                expandedIds={expandedIds}
-                onToggle={onToggle}
-                permissionById={permissionById}
+            rowActions={(node) => (
+              <PermissionActionsMenu
+                permission={node.permission}
                 onOpenDetail={(permission) => {
                   setDetailPermissionId(permission.id);
                 }}
-                onEditPermission={onEditPermission}
-                onTogglePermission={onTogglePermission}
+                onEdit={onEditPermission}
+                onToggle={onTogglePermission}
               />
-            ))}
-          </div>
+            )}
+          />
         ) : (
           <PermissionCardGrid
             nodes={group.nodes}
@@ -1553,7 +1546,7 @@ export function AdminPermissionsPage() {
   }
 
   return (
-    <ViewLayout className="vx-tenant-management-page vx-admin-permissions-page">
+    <ViewLayout className="w-full">
       <PageHeader
         icon="shield-check"
         title="权限策略"
@@ -1600,11 +1593,8 @@ export function AdminPermissionsPage() {
 
       <div className="grid min-w-0">
         {permissions.length ? (
-          <section
-            className="vx-admin-permission-structure"
-            aria-label="权限结构"
-          >
-            <div className="vx-admin-permission-domain-stack">
+          <section className="grid pb-md" aria-label="权限结构">
+            <div className="grid gap-xl">
               {permissionDomainGroups.map((group) => (
                 <PermissionDomainSection
                   key={group.key}
