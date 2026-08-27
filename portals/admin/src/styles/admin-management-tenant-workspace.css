@@ -1,17 +1,5 @@
 /* Tenant workspace navigation styles. */
 
-.vx-tenant-back-link {
-  width: fit-content;
-  min-height: var(--spacing-icon-xl);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  color: var(--tenant-blue);
-  font-size: var(--body-sm-font-size);
-  font-weight: 800;
-  text-decoration: none;
-}
-
 /* Tenant workspace form grid styles. */
 
 /* Tenant workspace list layout styles. */

@@ -8,18 +8,31 @@ import {
   ActionMenu,
   Badge,
   Button,
+  DataTable,
   DetailPageTemplate,
   DialogForm,
   EmptyState,
   Icon,
   Input,
+  Label,
+  ListCardGrid,
+  MetricListCard,
   NativeSelect,
+  PanelItem,
+  PanelList,
+  Progress,
+  Section,
   StatusBadge,
+  TableTitleCell,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   useToast,
   ViewLayout,
   ViewModeSwitch,
 } from "@vxture/design-system";
-import type { IconName } from "@vxture/design-system";
+import type { DataTableColumn, IconName } from "@vxture/design-system";
 import {
   changeTenantMemberRole,
   fetchTenantMembers,
@@ -169,15 +182,28 @@ function TenantKeyMetric({
 }) {
   const visibleTags = tags ?? (tag ? [tag] : []);
 
+  /* 结构照 DS `LabeledValue`（标签在上、读数与标同基线），但没有直接用它：
+   * 它的 `valueTag` 只收一个节点、且一定包成 `StatusBadge`，而这里的「订阅产品」
+   * 要并排挂两个标。所以留成页面内的小件，标本身仍是 DS 的。 */
   return (
-    <div className="vx-tenant-key-metric">
-      <span>{label}</span>
-      <p>
-        <strong className={danger ? "is-danger" : undefined}>{value}</strong>
+    <div className="flex min-w-0 flex-col gap-2xs">
+      <span className="truncate text-label-sm text-muted-foreground">
+        {label}
+      </span>
+      <span className="flex min-w-0 flex-wrap items-baseline gap-xs">
+        <span
+          className={`truncate text-title-md font-extrabold ${
+            danger ? "text-destructive-text" : "text-foreground"
+          }`}
+        >
+          {value}
+        </span>
         {visibleTags.map((item) => (
-          <em key={item}>{item}</em>
+          <StatusBadge key={item} tone="neutral" icon={false}>
+            {item}
+          </StatusBadge>
         ))}
-      </p>
+      </span>
     </div>
   );
 }
@@ -279,14 +305,15 @@ function TenantConfigItem({
 }) {
   return (
     <div
-      className={
-        className
-          ? `vx-tenant-config-item ${className}`
-          : "vx-tenant-config-item"
-      }
+      className={joinClasses(
+        "flex min-h-icon-2xl min-w-0 items-center gap-sm border-b border-dashed border-primary/10 pb-sm",
+        className,
+      )}
     >
-      <span>{label}</span>
-      <div className="vx-tenant-config-item__value">{children}</div>
+      <span className="shrink-0 basis-media-lg whitespace-nowrap text-body-sm font-semibold text-muted-foreground">
+        {label}
+      </span>
+      <div className="flex min-w-0 flex-1 items-center gap-xs">{children}</div>
     </div>
   );
 }
@@ -325,21 +352,30 @@ function TenantInfoTab({
 }) {
   const tShared = useTranslations();
   return (
-    <div className="vx-tenant-tab-grid vx-tenant-tab-grid--info">
-      <section className="vx-tenant-block">
+    <div className="grid min-w-0 grid-cols-1 gap-lg">
+      <section className="grid min-w-0 gap-lg">
         <header>
           <DetailSectionHeading icon="buildings" title="基础资料" />
-          <div className="vx-tenant-block__actions" aria-label="基础资料操作">
+          <div
+            className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-xs"
+            aria-label="基础资料操作"
+          >
             {editing ? (
               <>
                 {infoDirty ? (
-                  <span className="vx-tenant-unsaved">有未保存修改</span>
+                  <span className="whitespace-nowrap text-body-sm font-extrabold text-destructive-text">
+                    有未保存修改
+                  </span>
                 ) : null}
                 <Button variant="outline" disabled={saving} onClick={onReset}>
                   {tShared("actions.discard")}
                 </Button>
                 <Button
-                  className={infoDirty ? "vx-tenant-save-alert" : undefined}
+                  className={
+                    infoDirty
+                      ? "border-destructive-border bg-destructive-muted text-destructive-text"
+                      : undefined
+                  }
                   disabled={!infoDirty || saving}
                   onClick={onSave}
                 >
@@ -349,7 +385,10 @@ function TenantInfoTab({
             ) : (
               <>
                 {showVerificationReview ? (
-                  <Link className="vx-tenant-review-action" href={reviewHref}>
+                  <Link
+                    className="inline-flex min-h-icon-xl items-center justify-center gap-xs rounded-lg border border-warning-border bg-warning-muted px-sm text-body-sm font-semibold whitespace-nowrap text-warning-text no-underline"
+                    href={reviewHref}
+                  >
                     <Icon name="medal" size="xs" fallback="placeholder" />
                     <span>认证审核</span>
                   </Link>
@@ -362,8 +401,8 @@ function TenantInfoTab({
             )}
           </div>
         </header>
-        <div className="vx-tenant-config-stack">
-          <div className="vx-tenant-config-row vx-tenant-config-row--three">
+        <div className="grid min-w-0 gap-md lg:ml-media-lg">
+          <div className="grid min-w-0 grid-cols-1 gap-x-lg gap-y-md lg:grid-cols-3">
             <TenantConfigItem label="租户代码">
               {editing ? (
                 <Input
@@ -402,7 +441,7 @@ function TenantInfoTab({
             </TenantConfigItem>
           </div>
 
-          <div className="vx-tenant-config-row vx-tenant-config-row--three">
+          <div className="grid min-w-0 grid-cols-1 gap-x-lg gap-y-md lg:grid-cols-3">
             <TenantConfigItem label={tShared("columns.tenantType")}>
               {editing ? (
                 <NativeSelect
@@ -462,7 +501,7 @@ function TenantInfoTab({
             </TenantConfigItem>
           </div>
 
-          <div className="vx-tenant-config-row vx-tenant-config-row--three">
+          <div className="grid min-w-0 grid-cols-1 gap-x-lg gap-y-md lg:grid-cols-3">
             <TenantConfigItem label="所属区域">
               <TenantConfigValue>{tenant.region}</TenantConfigValue>
             </TenantConfigItem>
@@ -476,11 +515,11 @@ function TenantInfoTab({
         </div>
       </section>
 
-      <section className="vx-tenant-block">
+      <section className="grid min-w-0 gap-lg">
         <header>
           <DetailSectionHeading icon="user-switch" title="主管理员" />
         </header>
-        <div className="vx-tenant-config-row vx-tenant-config-row--contact">
+        <div className="grid min-w-0 grid-cols-1 items-stretch gap-x-lg gap-y-md lg:grid-cols-4">
           <TenantConfigItem label="姓名">
             <TenantConfigValue>
               {tenant.ownerName}
@@ -493,7 +532,7 @@ function TenantInfoTab({
           <TenantConfigItem label="Phone">
             <TenantConfigValue>{tenant.contactPhone}</TenantConfigValue>
           </TenantConfigItem>
-          <div className="vx-tenant-admin-actions">
+          <div className="flex min-h-icon-2xl min-w-0 items-center justify-start gap-xs border-b border-dashed border-primary/10 pb-sm">
             {/* 换 owner / 改主管理员无对应后端端点，保持 disabled（见 completion-plan）。 */}
             <Button variant="outline" size="md" disabled>
               <Icon name="user-switch" size="xs" fallback="placeholder" />
@@ -508,14 +547,18 @@ function TenantInfoTab({
         </div>
       </section>
 
-      <section className="vx-tenant-block vx-tenant-block--wide">
+      <section className="col-span-full grid min-w-0 gap-lg pt-xs">
         <header>
           <DetailSectionHeading icon="info" title="运营备注" />
         </header>
-        <p className="vx-tenant-note">{tenant.notes}</p>
-        <div className="vx-tenant-tags">
+        <p className="m-0 text-body-sm leading-relaxed font-semibold text-foreground">
+          {tenant.notes}
+        </p>
+        <div className="flex flex-wrap items-center gap-xs">
           {tenant.tags.map((tag) => (
-            <span key={tag}>{tag}</span>
+            <StatusBadge key={tag} tone="brand" icon={false}>
+              {tag}
+            </StatusBadge>
           ))}
         </div>
       </section>
@@ -535,7 +578,7 @@ function MemberActionsMenu({
 
   return (
     <div
-      className="relative z-[1] inline-flex justify-self-end vx-tenant-member-actions"
+      className="relative z-[1] inline-flex justify-self-center"
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
@@ -583,59 +626,72 @@ function MemberActionsMenu({
   );
 }
 
-function TenantMemberIdentity({ member }: { member: TenantOperationMember }) {
-  return (
-    <span className="vx-tenant-member-row__identity">
-      <Icon
-        name={member.role.toLowerCase() === "owner" ? "shield-check" : "user"}
-        size="sm"
-        fallback="placeholder"
-      />
-      <span className="vx-tenant-member-row__name">
-        <strong>{member.name}</strong>
-        <small>{getMemberAccountCode(member)}</small>
-        <small>{member.email}</small>
-      </span>
-    </span>
-  );
-}
-
-function TenantMemberStatus({ member }: { member: TenantOperationMember }) {
+/**
+ * 成员列表原来是一套手搓的 grid「表格」：一行 header + 每行一个 `display:grid`
+ * 的 div，列宽靠 `grid-template-columns` 在两个选择器里各写一遍对齐，序号列与
+ * 操作列的居中、列锁定、加载骨架、空态全部自己来。
+ *
+ * 换 `DataTable`：序号列（`indexStart`）与固定 64px 的行操作列（`rowActions`）
+ * 都是它的既有契约，admin 的列表页惯例本来就长这样。
+ */
+function useTenantMemberColumns(): DataTableColumn<TenantMemberView>[] {
   const locale = useLocale();
-  const statusTimeValue = getMemberStatusTime(member);
-  const statusTime = formatDate(statusTimeValue, locale);
+  const tShared = useTranslations();
 
-  return (
-    <span className="vx-tenant-member-row__status">
-      <StatusBadge tone={MEMBER_STATUS_TONE[member.status]}>
-        {memberStatusLabel(member.status)}
-      </StatusBadge>
-      <small
-        title={`注册激活时间 ${statusTime}`}
-        aria-label={`注册激活时间 ${statusTime}`}
-      >
-        {statusTime}
-      </small>
-    </span>
-  );
-}
-
-function TenantMemberActiveAt({ member }: { member: TenantOperationMember }) {
-  const locale = useLocale();
-  const location = resolveIpLocation(member.lastActiveIp);
-
-  return (
-    <span>
-      <strong>{formatDate(member.lastActiveAt, locale)}</strong>
-      <small
-        title={
-          member.lastActiveIp ? `登录 IP ${member.lastActiveIp}` : "暂无登录 IP"
-        }
-      >
-        {location}
-      </small>
-    </span>
-  );
+  return [
+    {
+      id: "account",
+      header: "账号",
+      cell: (member) => (
+        <TableTitleCell
+          icon={member.role.toLowerCase() === "owner" ? "shield-check" : "user"}
+          title={member.name}
+          description={`${getMemberAccountCode(member)} · ${member.email}`}
+        />
+      ),
+    },
+    {
+      id: "permission",
+      header: "权限",
+      align: "center",
+      cell: (member) => <Badge>{member.role}</Badge>,
+    },
+    {
+      id: "status",
+      header: tShared("columns.state"),
+      align: "center",
+      cell: (member) => {
+        const statusTime = formatDate(getMemberStatusTime(member), locale);
+        return (
+          <TableTitleCell
+            title={
+              <StatusBadge tone={MEMBER_STATUS_TONE[member.status]}>
+                {memberStatusLabel(member.status)}
+              </StatusBadge>
+            }
+            description={statusTime}
+            tooltip={`注册激活时间 ${statusTime}`}
+          />
+        );
+      },
+    },
+    {
+      id: "lastActive",
+      header: "最近活跃",
+      align: "center",
+      cell: (member) => (
+        <TableTitleCell
+          title={formatDate(member.lastActiveAt, locale)}
+          description={resolveIpLocation(member.lastActiveIp)}
+          tooltip={
+            member.lastActiveIp
+              ? `登录 IP ${member.lastActiveIp}`
+              : "暂无登录 IP"
+          }
+        />
+      ),
+    },
+  ];
 }
 
 function TenantMemberList({
@@ -645,38 +701,18 @@ function TenantMemberList({
   members: TenantMemberView[];
   actions: MemberActionHandlers;
 }) {
-  const tShared = useTranslations();
+  const columns = useTenantMemberColumns();
   return (
-    <div className="vx-tenant-member-list" role="region" aria-label="账号列表">
-      <div className="vx-tenant-member-list__header">
-        <span>#</span>
-        <span>账号</span>
-        <span>权限</span>
-        <span>{tShared("columns.state")}</span>
-        <span>最近活跃</span>
-        <span>操作</span>
-      </div>
-      {members.map((member, index) => (
-        <div
-          key={member.id}
-          className={joinClasses(
-            "vx-tenant-member-row",
-            `vx-tenant-member-row--${member.status}`,
-          )}
-        >
-          <span className="vx-tenant-member-row__index">
-            {formatNumber(index + 1)}
-          </span>
-          <TenantMemberIdentity member={member} />
-          <span className="vx-tenant-member-row__permission">
-            <Badge>{member.role}</Badge>
-          </span>
-          <TenantMemberStatus member={member} />
-          <TenantMemberActiveAt member={member} />
-          <MemberActionsMenu member={member} actions={actions} />
-        </div>
-      ))}
-    </div>
+    <DataTable
+      columns={columns}
+      rows={members}
+      rowKey={(member) => member.id}
+      indexStart={1}
+      rowActions={(member) => (
+        <MemberActionsMenu member={member} actions={actions} />
+      )}
+      aria-label="账号列表"
+    />
   );
 }
 
@@ -689,64 +725,41 @@ function TenantMemberCards({
 }) {
   const locale = useLocale();
   return (
-    <div className="vx-tenant-member-cards" aria-label="账号卡片">
+    <ListCardGrid aria-label="账号卡片">
       {members.map((member) => {
         const location = resolveIpLocation(member.lastActiveIp);
         const statusTime = formatDate(getMemberStatusTime(member), locale);
 
         return (
-          <article
+          <MetricListCard
             key={member.id}
-            className={joinClasses(
-              "vx-tenant-member-card",
-              `vx-tenant-member-row--${member.status}`,
-            )}
-          >
-            <header>
-              <Icon
-                name={
-                  member.role.toLowerCase() === "owner"
-                    ? "shield-check"
-                    : "user"
-                }
-                size="lg"
-                fallback="placeholder"
-              />
-              <div className="vx-tenant-member-row__name">
-                <strong>{member.name}</strong>
-                <small>{getMemberAccountCode(member)}</small>
-                <small>{member.email}</small>
-              </div>
-              <MemberActionsMenu member={member} actions={actions} />
-            </header>
-            <div className="vx-tenant-member-card__badges">
-              <Badge>{member.role}</Badge>
-              <StatusBadge tone={MEMBER_STATUS_TONE[member.status]}>
-                {memberStatusLabel(member.status)}
-              </StatusBadge>
-            </div>
-            <div className="vx-tenant-member-card__metrics">
-              <span>
-                <strong>{statusTime}</strong>
-                <small title={`注册激活时间 ${statusTime}`}>注册激活</small>
-              </span>
-              <span>
-                <strong>{formatDate(member.lastActiveAt, locale)}</strong>
-                <small
-                  title={
-                    member.lastActiveIp
-                      ? `登录 IP ${member.lastActiveIp}`
-                      : "暂无登录 IP"
-                  }
-                >
-                  {location}
-                </small>
-              </span>
-            </div>
-          </article>
+            icon={
+              member.role.toLowerCase() === "owner" ? "shield-check" : "user"
+            }
+            title={member.name}
+            description={`${getMemberAccountCode(member)} · ${member.email}`}
+            tone={MEMBER_STATUS_TONE[member.status]}
+            actions={<MemberActionsMenu member={member} actions={actions} />}
+            badges={
+              <>
+                <Badge>{member.role}</Badge>
+                <StatusBadge tone={MEMBER_STATUS_TONE[member.status]}>
+                  {memberStatusLabel(member.status)}
+                </StatusBadge>
+              </>
+            }
+            metrics={[
+              { key: "registered", value: statusTime, label: "注册激活" },
+              {
+                key: "lastActive",
+                value: formatDate(member.lastActiveAt, locale),
+                label: location,
+              },
+            ]}
+          />
         );
       })}
-    </div>
+    </ListCardGrid>
   );
 }
 
@@ -941,9 +954,9 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
   };
 
   return (
-    <div className="grid min-w-0 vx-tenant-member-shell">
+    <div className="grid min-w-0 gap-0">
       <section
-        className="vx-tenant-toolbar vx-tenant-member-toolbar"
+        className="flex min-w-0 items-center gap-md pt-0 pb-md max-xl:flex-wrap max-lg:items-stretch"
         aria-label="账号筛选"
       >
         <ViewModeSwitch
@@ -951,10 +964,13 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
           onChange={setViewMode}
           ariaLabel="账号展示方式"
         />
-        <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-[60rem]:mr-auto">
+        <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
           {formatNumber(filteredMembers.length)}
         </span>
-        <div className="vx-tenant-member-summary" aria-label="账号统计">
+        <div
+          className="flex flex-wrap items-center gap-xs"
+          aria-label="账号统计"
+        >
           <StatusBadge tone={"success"}>
             活跃 {formatNumber(activeCount)}
           </StatusBadge>
@@ -965,7 +981,7 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
             停用 {formatNumber(suspendedCount)}
           </StatusBadge>
         </div>
-        <span className="flex-1 max-[60rem]:hidden" aria-hidden="true" />
+        <span className="flex-1 max-lg:hidden" aria-hidden="true" />
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -1004,10 +1020,7 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
         </NativeSelect>
       </section>
 
-      <section
-        className="grid min-w-0 max-w-full gap-xs vx-tenant-member-directory"
-        aria-label="账号清单"
-      >
+      <section className="grid min-w-0 max-w-full gap-xs" aria-label="账号清单">
         {filteredMembers.length ? (
           viewMode === "list" ? (
             <TenantMemberList
@@ -1055,28 +1068,27 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
           }}
           onSubmit={(event) => void submitRoleChange(event)}
         >
-          <label className="vx-tenant-member-role-field">
-            <span>目标角色</span>
-            <NativeSelect
-              className="w-fit basis-media-xl"
-              value={selectedRoleId}
-              onChange={(event) => setSelectedRoleId(event.target.value)}
-              aria-label="目标角色"
-              autoFocus
-            >
-              {roleChoices.length ? (
-                roleChoices.map((choice) => (
-                  <option key={choice.roleId} value={choice.roleId}>
-                    {choice.label}
-                  </option>
-                ))
-              ) : (
-                <option value="">暂无可选角色</option>
-              )}
-            </NativeSelect>
-          </label>
+          <Label htmlFor="vx-member-role-select">目标角色</Label>
+          <NativeSelect
+            id="vx-member-role-select"
+            className="w-fit basis-media-xl"
+            value={selectedRoleId}
+            onChange={(event) => setSelectedRoleId(event.target.value)}
+            aria-label="目标角色"
+            autoFocus
+          >
+            {roleChoices.length ? (
+              roleChoices.map((choice) => (
+                <option key={choice.roleId} value={choice.roleId}>
+                  {choice.label}
+                </option>
+              ))
+            ) : (
+              <option value="">暂无可选角色</option>
+            )}
+          </NativeSelect>
           {roleError ? (
-            <p className="vx-tenant-member-action-error" role="alert">
+            <p className="m-0 text-body-sm text-destructive-text" role="alert">
               {roleError}
             </p>
           ) : null}
@@ -1093,67 +1105,95 @@ function TenantSubscriptionsTab({
 }) {
   const locale = useLocale();
   return (
-    <div className="vx-tenant-subscriptions">
+    <div className="grid min-w-0 gap-lg">
       {subscriptions.map((subscription) => (
-        <article
+        <MetricListCard
           key={subscription.id}
-          className={`vx-tenant-subscription vx-tenant-subscription--${subscription.status}`}
-        >
-          <header>
-            <div>
-              <strong>{subscription.productName}</strong>
-              <span>{subscription.releaseName}</span>
-            </div>
+          icon="star"
+          title={subscription.productName}
+          description={subscription.releaseName}
+          tone={TENANT_SUBSCRIPTION_TONE[subscription.status]}
+          badges={
             <StatusBadge tone={TENANT_SUBSCRIPTION_TONE[subscription.status]}>
               {subscriptionStatusLabel(subscription.status)}
             </StatusBadge>
-          </header>
-          <div className="vx-tenant-subscription__metrics">
-            <TenantKeyMetric label="发布版本" value={subscription.planName} />
-            <TenantKeyMetric
-              label="席位"
-              value={formatNumber(subscription.seats)}
-            />
-            <TenantKeyMetric
-              label="月收入"
-              value={formatMoney(subscription.monthlyRevenue)}
-            />
-            <TenantKeyMetric
-              label="续费时间"
-              value={formatDate(subscription.renewsAt, locale)}
-            />
-          </div>
-        </article>
+          }
+          metrics={[
+            {
+              key: "plan",
+              value: subscription.planName,
+              label: "发布版本",
+            },
+            {
+              key: "seats",
+              value: formatNumber(subscription.seats),
+              label: "席位",
+            },
+            {
+              key: "revenue",
+              value: formatMoney(subscription.monthlyRevenue),
+              label: "月收入",
+            },
+            {
+              key: "renews",
+              value: formatDate(subscription.renewsAt, locale),
+              label: "续费时间",
+            },
+          ]}
+        />
       ))}
     </div>
   );
 }
 
+/**
+ * 用量条的填充色。
+ *
+ * `Progress` 的填充写死 `bg-primary`、没有语气 prop，所以用子元素变体改它
+ * ——这正是原来 `--usage-tone` 三个修饰类在做的事，只是不再经一层自定义属性。
+ */
+const USAGE_TRACK_TONE: Record<TenantOperationUsageMetric["status"], string> = {
+  normal: "[&>*]:bg-success",
+  warning: "[&>*]:bg-warning",
+  danger: "[&>*]:bg-destructive",
+};
+
 function TenantUsageTab({ usage }: { usage: TenantOperationUsageMetric[] }) {
   return (
-    <div className="vx-tenant-usage-list">
+    <div className="grid min-w-0 gap-lg">
       {usage.map((metric) => {
         const percent = usagePercent(metric);
         return (
           <article
             key={metric.code}
-            className={`vx-tenant-usage vx-tenant-usage--${metric.status}`}
+            className="grid min-w-0 gap-md border-b border-dashed border-primary/10 pb-lg"
           >
-            <header>
-              <strong>{metric.label}</strong>
-              <span>{metric.trend}</span>
+            <header className="flex min-w-0 items-center justify-between gap-md">
+              <strong className="text-title-md font-extrabold text-foreground">
+                {metric.label}
+              </strong>
+              <span className="text-body-sm font-semibold text-primary-text">
+                {metric.trend}
+              </span>
             </header>
-            <div className="vx-tenant-usage__numbers">
-              <b>{formatNumber(metric.used)}</b>
-              <small>
+            <div className="flex min-w-0 items-baseline justify-between gap-md">
+              <b className="text-title-xl text-foreground">
+                {formatNumber(metric.used)}
+              </b>
+              <small className="text-body-sm font-semibold text-muted-foreground">
                 {metric.quota === null
                   ? "不限量"
                   : ` / ${formatNumber(metric.quota)} ${metric.unit}`}
               </small>
             </div>
-            <div className="vx-tenant-usage__bar" aria-hidden="true">
-              <span style={{ width: `${percent}%` }} />
-            </div>
+            {/* 原来是手搓的轨道 + 一个按百分比改宽度的 span，语气色靠
+                `--usage-tone` 三个修饰类给。DS `Progress` 的填充用位移不改宽度
+                （不触发布局），语气改由调用方给填充色。 */}
+            <Progress
+              value={percent}
+              aria-label={`${metric.label} 用量`}
+              className={USAGE_TRACK_TONE[metric.status]}
+            />
           </article>
         );
       })}
@@ -1167,78 +1207,113 @@ function TenantModelsTab({
   policies: TenantOperationModelPolicy[];
 }) {
   const tShared = useTranslations();
+  const columns: DataTableColumn<TenantOperationModelPolicy>[] = [
+    {
+      id: "agent",
+      header: "智能体",
+      cell: (policy) => (
+        <TableTitleCell
+          title={policy.agentName}
+          description={policySourceLabel(policy.source)}
+        />
+      ),
+    },
+    { id: "product", header: "产品", cell: (policy) => policy.productName },
+    { id: "model", header: "模型", cell: (policy) => policy.modelCode },
+    {
+      id: "quota",
+      header: "配额",
+      align: "right",
+      cell: (policy) =>
+        `${formatNumber(policy.usedTokens)} / ${formatNumber(policy.quotaTokens)}`,
+    },
+    {
+      id: "state",
+      header: tShared("columns.state"),
+      align: "center",
+      cell: (policy) => (
+        <StatusBadge tone={POLICY_STATE_TONE[policy.state]}>
+          {modelPolicyStateLabel(policy.state)}
+        </StatusBadge>
+      ),
+    },
+  ];
+
   return (
-    <div className="vx-tenant-table vx-tenant-table--models">
-      <div className="vx-tenant-table__header">
-        <span>智能体</span>
-        <span>产品</span>
-        <span>模型</span>
-        <span>配额</span>
-        <span>{tShared("columns.state")}</span>
-      </div>
-      {policies.map((policy) => (
-        <div key={policy.id} className="vx-tenant-table__row">
-          <span>
-            <strong>{policy.agentName}</strong>
-            <small>{policySourceLabel(policy.source)}</small>
-          </span>
-          <span>{policy.productName}</span>
-          <span>{policy.modelCode}</span>
-          <span>
-            {formatNumber(policy.usedTokens)} /{" "}
-            {formatNumber(policy.quotaTokens)}
-          </span>
-          <span>
-            <StatusBadge tone={POLICY_STATE_TONE[policy.state]}>
-              {modelPolicyStateLabel(policy.state)}
-            </StatusBadge>
-          </span>
-        </div>
-      ))}
-    </div>
+    <DataTable
+      columns={columns}
+      rows={policies}
+      rowKey={(policy) => policy.id}
+      aria-label="模型授权"
+    />
   );
 }
+
+/** 风险档的文字色。照 `.vx-tenant-risk-text--*` 实测的前景定。 */
+const RISK_TEXT_TONE: Record<string, string> = {
+  normal: "text-muted-foreground",
+  follow_up: "text-warning-text",
+  high: "text-destructive-text",
+};
 
 function TenantRiskTab({ tenant }: { tenant: TenantOperationRecord }) {
   const locale = useLocale();
   return (
-    <div className="vx-tenant-tab-grid vx-tenant-tab-grid--risk">
-      <section className="vx-tenant-risk-panel">
-        <header>
-          <Icon name="shield-check" size="sm" fallback="placeholder" />
-          <h3>风险状态</h3>
-        </header>
-        <div className="vx-tenant-risk-panel__level">
-          <strong className={`vx-tenant-risk-text--${tenant.riskLevel}`}>
+    <div className="grid min-w-0 grid-cols-1 gap-lg xl:grid-cols-3">
+      <Section
+        level={3}
+        icon="shield-check"
+        title="风险状态"
+        className="min-w-0 content-start border-primary/15 xl:border-r xl:border-dashed xl:pr-lg"
+      >
+        <div className="flex min-w-0 flex-wrap items-baseline gap-md">
+          <strong
+            className={`text-title-xl font-extrabold ${RISK_TEXT_TONE[normalizeTenantRiskLevel(tenant.riskLevel)]}`}
+          >
             {riskLabel(tenant.riskLevel)}
           </strong>
-          <span>{verifiedLabel(tenant.verifiedStatus)}</span>
-          <span>{tenant.ticketOpenCount} 个未结工单</span>
+          <span className="text-body-sm text-muted-foreground">
+            {verifiedLabel(tenant.verifiedStatus)}
+          </span>
+          <span className="text-body-sm text-muted-foreground">
+            {tenant.ticketOpenCount} 个未结工单
+          </span>
         </div>
-        <p>{tenant.notes}</p>
-      </section>
+        <p className="m-0 text-body-sm leading-relaxed text-foreground">
+          {tenant.notes}
+        </p>
+      </Section>
 
-      <section className="vx-tenant-audit-list">
-        <header>
-          <Icon name="table" size="sm" fallback="placeholder" />
-          <h3>审计记录</h3>
-        </header>
-        {tenant.auditEvents.map((event) => (
-          <div
-            key={event.id}
-            className={`vx-tenant-audit-list__item vx-tenant-audit-list__item--${event.result}`}
-          >
-            <span>
-              <strong>{event.action}</strong>
-              <small>{event.actor}</small>
-            </span>
-            <em>{formatDate(event.at, locale)}</em>
-            <StatusBadge tone={AUDIT_RESULT_TONE[event.result]}>
-              {auditResultLabel(event.result)}
-            </StatusBadge>
-          </div>
-        ))}
-      </section>
+      <Section
+        level={3}
+        icon="table"
+        title="审计记录"
+        className="min-w-0 xl:col-span-2"
+      >
+        <PanelList empty="暂无审计记录">
+          {tenant.auditEvents.map((event) => (
+            <PanelItem
+              key={event.id}
+              main={
+                <TableTitleCell
+                  title={event.action}
+                  description={event.actor}
+                />
+              }
+              trail={
+                <span className="flex items-center gap-md">
+                  <span className="whitespace-nowrap text-body-sm text-muted-foreground">
+                    {formatDate(event.at, locale)}
+                  </span>
+                  <StatusBadge tone={AUDIT_RESULT_TONE[event.result]}>
+                    {auditResultLabel(event.result)}
+                  </StatusBadge>
+                </span>
+              }
+            />
+          ))}
+        </PanelList>
+      </Section>
     </div>
   );
 }
@@ -1255,25 +1330,29 @@ function TenantTicketsTab({ tenant }: { tenant: TenantOperationRecord }) {
   }
 
   return (
-    <div className="vx-tenant-ticket-list">
+    <PanelList>
       {tenant.tickets.map((ticket) => (
-        <article
+        <PanelItem
           key={ticket.id}
-          className={`vx-tenant-ticket vx-tenant-ticket--${ticket.status}`}
-        >
-          <span>
-            <strong>{ticket.title}</strong>
-            <small>
-              {ticket.id} · {ticket.priority.toUpperCase()}
-            </small>
-          </span>
-          <StatusBadge tone={TICKET_STATUS_TONE[ticket.status]}>
-            {ticketStatusLabel(ticket.status)}
-          </StatusBadge>
-          <em>{formatDate(ticket.updatedAt, locale)}</em>
-        </article>
+          main={
+            <TableTitleCell
+              title={ticket.title}
+              description={`${ticket.id} · ${ticket.priority.toUpperCase()}`}
+            />
+          }
+          trail={
+            <span className="flex items-center gap-md">
+              <StatusBadge tone={TICKET_STATUS_TONE[ticket.status]}>
+                {ticketStatusLabel(ticket.status)}
+              </StatusBadge>
+              <span className="whitespace-nowrap text-body-sm text-muted-foreground">
+                {formatDate(ticket.updatedAt, locale)}
+              </span>
+            </span>
+          }
+        />
       ))}
-    </div>
+    </PanelList>
   );
 }
 
@@ -1331,7 +1410,10 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
   if (!tenant) {
     return (
       <ViewLayout className="vx-tenant-management-page">
-        <Link className="vx-tenant-back-link" href="/tenants">
+        <Link
+          className="inline-flex min-h-icon-xl w-fit items-center gap-xs text-body-sm font-extrabold text-primary-text no-underline"
+          href="/tenants"
+        >
           <Icon name="arrow-left" size="xs" fallback="placeholder" />
           返回租户列表
         </Link>
@@ -1430,21 +1512,24 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
       className="vx-tenant-management-page"
       header={
         <>
-          <Link className="vx-tenant-back-link" href="/tenants">
+          <Link
+            className="inline-flex min-h-icon-xl w-fit items-center gap-xs text-body-sm font-extrabold text-primary-text no-underline"
+            href="/tenants"
+          >
             <Icon name="arrow-left" size="xs" fallback="placeholder" />
             返回租户列表
           </Link>
 
+          {/* 概要卡：托起的面板 + 顶缘语气色条 + 右上角折叠钮。折叠态只收掉
+              留白与读数列，身份行仍在——收起后要还能看出这是谁。 */}
           <section
-            className={
-              summaryExpanded
-                ? "vx-tenant-detail-summary"
-                : "vx-tenant-detail-summary vx-tenant-detail-summary--collapsed"
-            }
+            className={`relative grid min-w-0 rounded-xl border-t-2 border-primary/30 bg-card/60 px-xl ${
+              summaryExpanded ? "gap-lg py-xl" : "gap-0 py-sm"
+            }`}
             aria-label={`${tenant.displayName} 标题概要`}
           >
             <Button
-              className="vx-tenant-detail-summary__toggle"
+              className="absolute top-sm right-sm z-[1]"
               variant="ghost"
               size="icon-md"
               aria-expanded={summaryExpanded}
@@ -1459,27 +1544,56 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
               />
             </Button>
 
-            <header className="vx-tenant-detail__header">
+            <header
+              className={
+                summaryExpanded
+                  ? "grid min-w-0 grid-cols-1 gap-xl xl:grid-cols-3 xl:[&>section:not(:last-child)]:border-r xl:[&>section:not(:last-child)]:border-dashed xl:[&>section:not(:last-child)]:border-primary/15 xl:[&>section:not(:last-child)]:pr-lg"
+                  : "grid min-w-0 grid-cols-1 pr-3xl"
+              }
+            >
               <section
-                className="vx-tenant-detail__identity"
+                className={
+                  summaryExpanded
+                    ? "flex min-w-0 items-start gap-xl"
+                    : "flex min-w-0 items-center gap-sm"
+                }
                 aria-label="租户概要"
               >
-                <span className="vx-tenant-detail__icon" aria-hidden="true">
+                <span
+                  className={`inline-grid shrink-0 place-items-center text-primary-text ${
+                    summaryExpanded ? "size-icon-xl" : "size-icon-lg"
+                  }`}
+                  aria-hidden="true"
+                >
                   <Icon
                     name={
                       tenant.tenantType === "company" ? "buildings" : "user"
                     }
-                    size="lg"
+                    size={summaryExpanded ? "lg" : "sm"}
                     fallback="placeholder"
                   />
                 </span>
-                <div className="vx-tenant-detail__title">
-                  <div className="vx-tenant-title-line vx-tenant-title-line--name">
-                    <h2>{tenant.displayName}</h2>
+                <div
+                  className={
+                    summaryExpanded
+                      ? "grid min-w-0 gap-2xs"
+                      : "flex min-w-0 items-center gap-sm"
+                  }
+                >
+                  {/* 复制钮平时隐形、悬停或聚焦时显形——`group` 挂在这一行上，
+                      不能挂到外层，否则整块任意位置悬停都会把它唤出来。 */}
+                  <div className="group flex min-w-0 items-center gap-xs">
+                    <h2
+                      className={`min-w-0 truncate font-semibold text-foreground ${
+                        summaryExpanded ? "text-title-xl" : "text-title-md"
+                      }`}
+                    >
+                      {tenant.displayName}
+                    </h2>
                     <Button
                       variant="ghost"
-                      size="icon-md"
-                      className="vx-tenant-title-copy"
+                      size="icon-sm"
+                      className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                       aria-label="复制租户名称"
                       title="复制租户名称"
                       onClick={() => void handleCopyText(tenant.displayName)}
@@ -1487,12 +1601,14 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                       <Icon name="copy" size="xs" fallback="placeholder" />
                     </Button>
                   </div>
-                  <div className="vx-tenant-title-line vx-tenant-title-line--code">
-                    <p>{tenant.tenantCode}</p>
+                  <div className="group flex min-w-0 shrink-0 items-center gap-xs">
+                    <p className="m-0 min-w-0 truncate text-body-sm font-extrabold text-muted-foreground">
+                      {tenant.tenantCode}
+                    </p>
                     <Button
                       variant="ghost"
-                      size="icon-md"
-                      className="vx-tenant-title-copy"
+                      size="icon-sm"
+                      className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                       aria-label="复制租户代码"
                       title="复制租户代码"
                       onClick={() => void handleCopyText(tenant.tenantCode)}
@@ -1500,7 +1616,11 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                       <Icon name="copy" size="xs" fallback="placeholder" />
                     </Button>
                   </div>
-                  <div>
+                  <div
+                    className={`flex items-center gap-xs ${
+                      summaryExpanded ? "flex-wrap" : "flex-nowrap"
+                    }`}
+                  >
                     <StatusBadge tone={TENANT_STATUS_TONE[tenant.status]}>
                       {statusLabel(tenant.status)}
                     </StatusBadge>
@@ -1525,7 +1645,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
               {summaryExpanded ? (
                 <>
                   <section
-                    className="vx-tenant-detail__metric-column"
+                    className="grid min-w-0 content-center gap-md"
                     aria-label="成员和订阅概要"
                   >
                     <TenantKeyMetric
@@ -1544,7 +1664,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                   </section>
 
                   <section
-                    className="vx-tenant-detail__metric-column"
+                    className="grid min-w-0 content-center gap-md"
                     aria-label="用量和收入概要"
                   >
                     <TenantKeyMetric
@@ -1566,67 +1686,64 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
       }
     >
       <section
-        className="vx-tenant-detail"
+        className="grid min-w-0"
         aria-label={`${tenant.displayName} 管理详情`}
       >
-        <div className="vx-tenant-detail__form">
-          <div className="vx-tenant-detail__toolbar">
-            <div
-              className="vx-tenant-tabs"
-              role="tablist"
-              aria-label={`${tenant.displayName} 信息分区`}
-            >
-              {tenantTabs.map((tab) => (
-                <Button
-                  key={tab.id}
-                  variant={activeTab === tab.id ? "secondary" : "ghost"}
-                  size="md"
-                  role="tab"
-                  aria-selected={activeTab === tab.id}
-                  className={activeTab === tab.id ? "is-active" : undefined}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  <Icon name={tab.icon} size="xs" fallback="placeholder" />
-                  {tab.label}
-                </Button>
-              ))}
-            </div>
-          </div>
+        {/* 原来是手搓的分区条：`role="tablist"` 的 div 里排一串 Button，选中态靠
+         * 一个 `.is-active::after` 画下划线，键盘左右键、`aria-controls`、
+         * roving tabindex 一概没有。换成 DS `Tabs`（Radix）——那些无障碍行为是
+         * 它的契约。代价是形态从下划线条变成胶囊组，这是 DS 的既定长相。 */}
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as TenantTabId)}
+          className="grid min-w-0 gap-lg"
+        >
+          <TabsList
+            className="h-auto max-w-full flex-wrap justify-start"
+            aria-label={`${tenant.displayName} 信息分区`}
+          >
+            {tenantTabs.map((tab) => (
+              <TabsTrigger key={tab.id} value={tab.id} className="flex-none">
+                <Icon name={tab.icon} size="xs" fallback="placeholder" />
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-          <section className="vx-tenant-tab-panel" role="tabpanel">
-            {activeTab === "info" ? (
-              <TenantInfoTab
-                tenant={tenant}
-                draft={visibleInfoDraft}
-                editing={infoEditing}
-                infoDirty={infoDirty}
-                saving={savingInfo}
-                showVerificationReview={showVerificationReview}
-                reviewHref={`/verifications?tenantId=${encodeURIComponent(tenant.id)}`}
-                onDraftChange={handleInfoDraftChange}
-                onEdit={handleInfoEdit}
-                onReset={handleInfoReset}
-                onSave={() => void handleInfoSave()}
-              />
-            ) : null}
-            {activeTab === "members" ? (
-              <TenantMembersTab tenantId={tenant.id} />
-            ) : null}
-            {activeTab === "subscriptions" ? (
-              <TenantSubscriptionsTab subscriptions={tenant.subscriptions} />
-            ) : null}
-            {activeTab === "usage" ? (
-              <TenantUsageTab usage={tenant.usage} />
-            ) : null}
-            {activeTab === "models" ? (
-              <TenantModelsTab policies={tenant.modelPolicies} />
-            ) : null}
-            {activeTab === "risk" ? <TenantRiskTab tenant={tenant} /> : null}
-            {activeTab === "tickets" ? (
-              <TenantTicketsTab tenant={tenant} />
-            ) : null}
-          </section>
-        </div>
+          <TabsContent value="info" className="min-w-0">
+            <TenantInfoTab
+              tenant={tenant}
+              draft={visibleInfoDraft}
+              editing={infoEditing}
+              infoDirty={infoDirty}
+              saving={savingInfo}
+              showVerificationReview={showVerificationReview}
+              reviewHref={`/verifications?tenantId=${encodeURIComponent(tenant.id)}`}
+              onDraftChange={handleInfoDraftChange}
+              onEdit={handleInfoEdit}
+              onReset={handleInfoReset}
+              onSave={() => void handleInfoSave()}
+            />
+          </TabsContent>
+          <TabsContent value="members" className="min-w-0">
+            <TenantMembersTab tenantId={tenant.id} />
+          </TabsContent>
+          <TabsContent value="subscriptions" className="min-w-0">
+            <TenantSubscriptionsTab subscriptions={tenant.subscriptions} />
+          </TabsContent>
+          <TabsContent value="usage" className="min-w-0">
+            <TenantUsageTab usage={tenant.usage} />
+          </TabsContent>
+          <TabsContent value="models" className="min-w-0">
+            <TenantModelsTab policies={tenant.modelPolicies} />
+          </TabsContent>
+          <TabsContent value="risk" className="min-w-0">
+            <TenantRiskTab tenant={tenant} />
+          </TabsContent>
+          <TabsContent value="tickets" className="min-w-0">
+            <TenantTicketsTab tenant={tenant} />
+          </TabsContent>
+        </Tabs>
       </section>
     </DetailPageTemplate>
   );

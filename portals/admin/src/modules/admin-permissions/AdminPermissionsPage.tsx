@@ -1166,10 +1166,10 @@ function PermissionDomainSection({
           onChange={onViewModeChange}
           ariaLabel={`${group.title}展示方式`}
         />
-        <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-[60rem]:mr-auto">
+        <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
           {formatNumber(group.matchedCount)} / {formatNumber(group.totalCount)}
         </span>
-        <span className="flex-1 max-[60rem]:hidden" aria-hidden="true" />
+        <span className="flex-1 max-lg:hidden" aria-hidden="true" />
         <Input
           value={filters.query}
           onChange={(event) => onFilterChange({ query: event.target.value })}

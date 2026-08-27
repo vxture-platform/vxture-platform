@@ -1241,10 +1241,10 @@ export function ModelPlatformPage() {
       <div className="grid min-w-0">
         <section className="vx-tenant-toolbar" aria-label="模型厂商管理">
           <strong>模型厂商</strong>
-          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-[60rem]:mr-auto">
+          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
             {formatNumber(providers.length)}
           </span>
-          <span className="flex-1 max-[60rem]:hidden" aria-hidden="true" />
+          <span className="flex-1 max-lg:hidden" aria-hidden="true" />
           {/* 只读：厂商的创建/编辑/启停/删除已迁至 opera 技术运维平台。 */}
         </section>
         <section
@@ -1285,10 +1285,10 @@ export function ModelPlatformPage() {
       <div className="grid min-w-0">
         <section className="vx-tenant-toolbar" aria-label="计价规则管理">
           <strong>计价规则</strong>
-          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-[60rem]:mr-auto">
+          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
             {formatNumber(priceRules.length)}
           </span>
-          <span className="flex-1 max-[60rem]:hidden" aria-hidden="true" />
+          <span className="flex-1 max-lg:hidden" aria-hidden="true" />
           <ActionButton
             icon="plus"
             disabled={models.length === 0}
@@ -1411,10 +1411,10 @@ export function ModelPlatformPage() {
       <div className="grid min-w-0">
         <section className="vx-tenant-toolbar" aria-label="模型策略管理">
           <strong>模型策略</strong>
-          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-[60rem]:mr-auto">
+          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
             {formatNumber(policies.length)}
           </span>
-          <span className="flex-1 max-[60rem]:hidden" aria-hidden="true" />
+          <span className="flex-1 max-lg:hidden" aria-hidden="true" />
           <ActionButton
             icon="plus"
             disabled={models.length === 0}

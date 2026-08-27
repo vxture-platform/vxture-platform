@@ -650,10 +650,10 @@ export function ModelGrantsPage() {
             onChange={setViewMode}
             ariaLabel="模型授权展示方式"
           />
-          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-[60rem]:mr-auto">
+          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
             {formatNumber(filteredPolicies.length)}
           </span>
-          <span className="flex-1 max-[60rem]:hidden" aria-hidden="true" />
+          <span className="flex-1 max-lg:hidden" aria-hidden="true" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}

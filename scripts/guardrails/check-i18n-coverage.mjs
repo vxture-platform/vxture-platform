@@ -55,6 +55,10 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  *   词条，图标与语气留在代码里（同 opera `status.ts` 的判据）。
  * 2026-08-27 admin 3668 → 3660：视觉验证时抓到的混合语言（`还没有${objectLabel}`
  *   在英文下渲染成「还没有Secret」），连同两处同形的一起抽掉。
+ * 2026-08-27 admin 3662 → 3660：TenantDetailPage 换 DS 件时又抵回去了：多处
+ *   `<small>注册激活</small>` 这类不带插值的 JSX 文本节点（本来就被数到）变成了
+ *   `label` 属性串，一进一出持平；而几个重复的标题段被 DS 件合并后真的少了。
+ *
  * 2026-08-27 admin 3660 → 3662：同一个口径问题第三次出现。五个手搓模态换
  *   `DialogForm` 时，两处副标题从 `<p>{bill.billNo} · 当前应收{" "}{fmt(…)}</p>`
  *   变成了 `description` 的模板串。**串一直都在**，只是之前没被数到。
@@ -79,7 +83,7 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
 const BASELINE = {
   console: 32,
   website: 54,
-  admin: 3662,
+  admin: 3660,
   opera: 1795,
   accounts: 263,
 };

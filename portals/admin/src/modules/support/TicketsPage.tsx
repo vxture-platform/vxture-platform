@@ -858,7 +858,7 @@ export function TicketsPage() {
               className="grow basis-media-3xl max-w-panel-sm"
               aria-label="搜索工单"
             />
-            <div className="flex-1 max-[60rem]:hidden" aria-hidden="true" />
+            <div className="flex-1 max-lg:hidden" aria-hidden="true" />
             <label aria-label="状态筛选">
               <NativeSelect
                 value={status}
@@ -908,7 +908,7 @@ export function TicketsPage() {
             {selectedTickets.length ? (
               <div className="vx-tenant-toolbar" aria-label="工单批量操作">
                 <span>已选 {formatNumber(selectedTickets.length)} 条</span>
-                <div className="flex-1 max-[60rem]:hidden" aria-hidden="true" />
+                <div className="flex-1 max-lg:hidden" aria-hidden="true" />
                 <Button
                   variant="outline"
                   size="md"

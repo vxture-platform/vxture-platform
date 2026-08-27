@@ -1,16 +1,6 @@
 /* Management responsive verification fallback styles. */
 
-.vx-tenant-directory-card small,
-.vx-tenant-table__row small,
-.vx-tenant-member-row small,
-.vx-tenant-member-row__name small,
-.vx-tenant-member-row__status small,
-.vx-tenant-member-card small,
-.vx-tenant-usage__numbers small,
-.vx-tenant-audit-list__item small,
-.vx-tenant-audit-list__item em,
-.vx-tenant-ticket small,
-.vx-tenant-ticket em {
+.vx-tenant-directory-card small {
   font-weight: 400;
 }
 
@@ -22,80 +12,10 @@
 }
 
 @media (max-width: 960px) {
-  .vx-tenant-config-row--three,
-  .vx-tenant-config-row--contact,
-  .vx-tenant-tab-grid--risk,
-  .vx-tenant-subscription__metrics {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 960px) {
   .vx-tenant-toolbar {
     align-items: stretch;
   }
 
-}
-
-@media (max-width: 960px) {
-  .vx-tenant-detail-summary {
-    padding: var(--space-lg);
-  }
-
-  .vx-tenant-detail {
-    padding: 0;
-  }
-
-  .vx-tenant-detail-summary--collapsed {
-    padding-block: var(--space-md);
-  }
-
-  .vx-tenant-detail__header {
-    grid-template-columns: 1fr;
-  }
-
-  .vx-tenant-detail__header > section:not(:last-child) {
-    padding-right: 0;
-    padding-bottom: var(--space-md);
-    border-right: 0;
-    border-bottom: var(--border-width-thin) dashed
-      var(--tenant-line);
-  }
-
-  .vx-tenant-block__actions {
-    justify-content: flex-end;
-  }
-
-  .vx-tenant-detail__toolbar {
-    align-items: stretch;
-    flex-direction: column;
-    gap: var(--space-sm);
-  }
-}
-
-@media (max-width: 960px) {
-  .vx-tenant-block > .vx-tenant-config-stack,
-  .vx-tenant-block > .vx-tenant-config-row,
-  .vx-tenant-block > .vx-tenant-note,
-  .vx-tenant-block > .vx-tenant-tags {
-    margin-left: 0;
-  }
-
-  .vx-tenant-config-row--contact {
-    align-items: stretch;
-  }
-
-  .vx-tenant-admin-actions {
-    justify-content: flex-start;
-  }
-
-  .vx-tenant-risk-panel {
-    padding-right: 0;
-    padding-bottom: var(--space-lg);
-    border-right: 0;
-    border-bottom: var(--border-width-thin) dashed
-      var(--tenant-line);
-  }
 }
 
 @media (max-width: 960px) {

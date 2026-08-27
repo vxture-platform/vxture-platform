@@ -33,7 +33,6 @@
 @import "../styles/admin-base.css" layer(components);
 @import "../styles/admin-overview.css" layer(components);
 @import "../styles/admin-management.css" layer(components);
-@import "../styles/admin-tenant-detail.css" layer(components);
 @import "../styles/admin-management-pills.css" layer(components);
 @import "../styles/admin-placeholder.css" layer(components);
 @import "../styles/admin-permissions.css" layer(components);
