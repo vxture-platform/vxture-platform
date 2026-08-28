@@ -7,9 +7,20 @@ description: Install pnpm, set up Node 24 with pnpm cache, and install dependenc
 inputs:
   node-auth-token:
     description: >-
-      读取 GitHub Packages 的 token。本仓**必须显式传入** secrets.NODE_AUTH_TOKEN，
-      不能靠 job 自带的 GITHUB_TOKEN 兜底——原因见下方 preflight 步骤的注释，那是
-      实测结论不是推断。缺省值留空只是为了让复合动作在别处仍可复用。
+      读取 GitHub Packages 的 token。同仓 job 传 secrets.NODE_AUTH_TOKEN；缺省留空时
+      落到 `github.token`（见下方 preflight 的 env）。
+
+      ⚠ 这句原先写的是"**必须**显式传入，不能靠 GITHUB_TOKEN 兜底"，那在当时是实测
+      结论：三个设计包是 private，且包属于 vxture org、本仓在 vxture-platform org，
+      跨 org 授权给不了，`github.token` 一律 403。
+
+      2026-08-28 前提变了：本仓转 public 后 fork PR 拿不到 secrets，为此把
+      `@vxture/design-{tokens,ui,system}` 三个包改成 public（org 的 Package creation
+      策略也一并放开 Public 档，否则包页面的选项是灰的）。当天在 Actions 里用
+      `github.token` 实测三个包全部 HTTP 200、版本号对得上，兜底路径确实通了。
+
+      所以现在两条都成立：同仓 job 用 PAT（权限更全，也覆盖将来可能再出现的私有包），
+      fork PR 自动落到 `github.token` 并能装上。改回 private 会让后者立刻失效。
     required: false
     default: ""
 
@@ -64,10 +75,14 @@ runs:
                 会求值成空串而不是报错**，所以「没配」和「配错」症状一样。
 
         修法：轮换一个带 read:packages 的 PAT，更新本仓 repo 级 secret
-        NODE_AUTH_TOKEN（私有仓 + free 版用不了组织级 secret，必须配在 repo 级）。
+        NODE_AUTH_TOKEN（本仓的共享凭据配在 repo 级）。
 
-        不要试图改用 job 自带的 GITHUB_TOKEN —— 2026-08-22 已实测三个包一律
-        403，原因见本文件注释。
+        另有一支要先排除：三个设计包 2026-08-28 起是 **public**。若此处报 401/403
+        而 PAT 看起来正常，先确认包**没有被改回 private** ——
+          curl -o /dev/null -w '%{http_code}\n' \
+            https://github.com/vxture/vxture-design/pkgs/npm/design-system
+        匿名拿到 200 才是公开；404 说明被改回私有了，fork PR 会跟着一起坏。
+        （注意匿名问 registry 本身恒为 401，公开与否都一样，别拿它当判据。）
         ───────────────────────────────────────────────────────────────────
         MSG
         exit 1
