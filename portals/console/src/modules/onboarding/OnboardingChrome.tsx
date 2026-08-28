@@ -54,7 +54,7 @@ export function OnboardingChrome({
         <Card
           surface="strong"
           aria-label="onboarding"
-          className="w-full max-w-panel-md flex-row gap-none overflow-hidden rounded-xl py-none"
+          className="w-full max-w-panel-md flex-row gap-0 overflow-hidden rounded-xl py-0"
         >
           <div className="flex min-w-0 flex-1 flex-col justify-center gap-lg p-xl">
             <div className="flex flex-col gap-2xs">

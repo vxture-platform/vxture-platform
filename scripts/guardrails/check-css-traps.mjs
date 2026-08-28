@@ -46,6 +46,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join, resolve, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postcss from 'postcss';
@@ -55,10 +56,49 @@ const SCAN = ['portals', 'packages'];
 const SKIP = new Set(['node_modules', '.next', 'dist', 'build', '.turbo', 'coverage']);
 const CODE_EXT = new Set(['.css', '.ts', '.tsx', '.js', '.jsx']);
 
+/**
+ * `none` 档是否还被注册在 spacing 命名空间里 —— 直接读**实际装着的** tokens。
+ *
+ * 这是上面第二类坑的**根因**，不是症状：字面词 `none` 一旦进了 `--spacing-*`，
+ * 凡是读 spacing 档的工具类族都会把 `X-none` 解析成 0，`max-w-none` 与
+ * `leading-none` 一起遭殃。`@vxture/design-tokens@3.0.0`（2026-08-28）把这一档
+ * 摘掉了，那两个类随之回到 CSS 原义——**禁令也就该跟着失效**，否则守卫会一直
+ * 拦着正确的写法。
+ *
+ * 所以不写死，按装着的包判：
+ *   - 装的是旧 tokens（仍注册 none）→ 两条禁令生效，且额外报一条根因提醒
+ *   - 装的是新 tokens                → 两条禁令自动解除
+ *
+ * `max-w-md`…`max-w-5xl` 与此无关，恒为陷阱：`md`/`lg`/`xl` 本来就是间距档名，
+ * `max-w-md` 永远解析成 `var(--space-md)`(16px) 而不是上游的 32rem。
+ */
+function spacingNoneRegistered() {
+  // pnpm 的严格布局下 tokens 不在顶层 node_modules，而在 design-system 的私有
+  // node_modules 里；且它的 package.json 不在 exports 白名单，只能从伞包的入口
+  // 反推目录。**解析不到就抛**——一个悄悄退回默认值的守卫是最坏的那种守卫：
+  // 它永远绿，永远什么都没查。
+  const require_ = createRequire(join(ROOT, 'portals/admin/package.json'));
+  const dsEntry = require_.resolve('@vxture/design-system');
+  const dsDir = dsEntry.slice(0, dsEntry.indexOf(`${sep}@vxture${sep}design-system${sep}`));
+  // 发布出来的样式在 `src/styles/`（包的 exports 只开了 tokens.css / tailwind.css
+  // 两个入口，theme.css 是被 tokens.css 引进去的，拿不到 export 路径），故直接
+  // 按目录取。
+  const theme = join(
+    dsDir, '@vxture', 'design-tokens', 'src', 'styles', 'theme.css',
+  );
+  return /^\s*--spacing-none\s*:/m.test(readFileSync(theme, 'utf8'));
+}
+
+const NONE_SHADOWED = spacingNoneRegistered();
+
 /** 关键字被主题踩掉的类 → 该改成什么。 */
 const TRAPS = new Map([
-  ['max-w-none', '`max-w-[none]`，或域内梯子 `max-w-page-*` / `max-w-content-*`'],
-  ['leading-none', '`leading-[1]`'],
+  ...(NONE_SHADOWED
+    ? [
+        ['max-w-none', '`max-w-[none]`，或域内梯子 `max-w-page-*` / `max-w-content-*`'],
+        ['leading-none', '`leading-[1]`'],
+      ]
+    : []),
   ['max-w-md', '域内梯子，如 `max-w-panel-sm`'],
   ['max-w-lg', '域内梯子，如 `max-w-panel-md`'],
   ['max-w-xl', '域内梯子，如 `max-w-panel-lg`'],
@@ -175,6 +215,16 @@ for (const top of SCAN) {
       }
     }
   }
+}
+
+if (NONE_SHADOWED) {
+  // 不算失败——旧 tokens 下 TRAPS 已经在拦症状了，这里只是把根因说出来，
+  // 免得后人以为「不能写 max-w-none」是个天生的规矩。
+  console.warn(
+    '\n  NOTE   装着的 @vxture/design-tokens 仍注册 `--spacing-none`，' +
+      '`max-w-none` / `leading-none` 会被解析成 0，故这两条禁令仍生效。\n' +
+      '         升到 design-tokens@3.0.0 及以上即自动解除（那一版摘掉了这一档）。\n',
+  );
 }
 
 if (problems.length) {

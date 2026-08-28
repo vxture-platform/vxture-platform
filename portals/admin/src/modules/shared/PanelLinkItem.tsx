@@ -8,7 +8,7 @@
  * 目标，"去处理这条"就是它存在的理由。所以这里在门户侧补一件，而不是改 DS。
  *
  * **为什么是拉伸链接，不是把 `PanelItem` 包进 `<Link>`。** `PanelItem` 的
- * `first:pt-none last:pb-none` 认的是「我是 `PanelList` 的第一个/最后一个孩子」；
+ * `first:pt-0 last:pb-0` 认的是「我是 `PanelList` 的第一个/最后一个孩子」；
  * 外面包一层，选择器就落到包装元素上，首尾两项会多出一截内边距。所以 `<Link>` 留
  * 在 `main` 槽里，用 `::after` 铺满整项取得整行热区——`PanelItem` 仍是 `PanelList`
  * 的直接孩子，分隔虚线与首尾裁剪都还归 DS 管。

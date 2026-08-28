@@ -518,7 +518,7 @@ export function UnifiedAuthPage({
       <main className="flex flex-1 items-center justify-center px-md py-xl">
         {/* 登录卡：veil 叠层（strong 档）+ 发丝线，无阴影（02-visual-spec.md §3）。
          *
-         * `py-none gap-none` 不是微调，是必须的。`Card` 基座把竖向节奏
+         * `py-0 gap-0` 不是微调，是必须的。`Card` 基座把竖向节奏
          * （`py-xl` + `gap-xl`）烤在自己身上，那一对值是给「页头 / 正文 / 动作条」
          * 竖排的卡准备的；这里把它改成 `flex-row` 之后，同一对值变成了左侧色块
          * 四周的一圈 32px 白边和两列之间的一道 32px 空档。分栏登录卡要的是
@@ -537,7 +537,7 @@ export function UnifiedAuthPage({
           surface="strong"
           aria-label={ariaLabel}
           className={cn(
-            "w-full flex-row gap-none overflow-hidden rounded-xl py-none",
+            "w-full flex-row gap-0 overflow-hidden rounded-xl py-0",
             single ? "max-w-panel-md" : "max-w-page-lg",
           )}
         >
