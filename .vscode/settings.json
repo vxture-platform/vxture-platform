@@ -85,8 +85,8 @@
   "yaml.validate": true,
   "typescript.tsdk": "node_modules\\typescript\\lib",
   "sonarlint.connectedMode.project": {
-    "connectionId": "vx-6b309295f6500aba6b2a71a29ee27de77fa41583",
-    "projectKey": "vxture_vxture-platform"
+    "connectionId": "vxture-platform",
+    "projectKey": "vxture-platform_vxture-platform"
   },
   "chat.mcp.serverSampling": {}
 }

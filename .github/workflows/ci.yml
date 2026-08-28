@@ -400,6 +400,10 @@ jobs:
         # `vxture_vxture-platform`），非阻塞的理由随之消失：**扫不动就应该红**，否则绿色只是
         # "没扫"的另一种写法。
         #
+        # 2026-08-28：project key 与 organization 已换成
+        # `vxture-platform_vxture-platform` / `vxture-platform`（见 sonar-project.properties）。
+        # 上面那个旧键是当时的实况记录，留着不改。
+        #
         # 本 job 不在 ruleset 的五个必需 check 里，所以红了不挡合并——要挡需要 owner 把
         # `SonarQube` 加进 required checks，那是独立决定，不在本次改动内。
         uses: SonarSource/sonarqube-scan-action@c7ee0f9df90b7aa20e8dcf9695dcfe2e7da5b4f2 # v7
