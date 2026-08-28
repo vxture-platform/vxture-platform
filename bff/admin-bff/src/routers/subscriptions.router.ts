@@ -40,6 +40,7 @@ import type { ComponentRole } from "@vxture-platform/shared";
 import { extractClientIp } from "@vxture/core-utils";
 import { assertAnyCapability } from "../auth/capability";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
+import { UUID_RE } from "./governance.shared";
 import type {
   ProductSolutionCapabilityType,
   ProductSolutionTierCode,
@@ -80,6 +81,27 @@ export class SubscriptionsRouter {
     @Inject(ADMIN_BFF_RW_POOL) private readonly rwPool: Pool,
   ) {}
 
+  /**
+   * 路由参数是**面向用户的订阅编码**（`order_no`，如 `DEMO-ORD-0004`），不是内部
+   * UUID——地址栏是可见面，UUID 不在任何场景对外展示。同时仍接受 UUID：存量
+   * 书签、审计日志里记的 id、内部工具都还在传它。
+   *
+   * 订阅与它的订单面共用一张 `metering.subscriptions`，可读码就是 `order_no`
+   *（库级唯一约束 `uq_subscriptions_order_no`）。解不出来 → 404，与「传了个
+   * 不存在的 UUID」同一个结果。
+   */
+  private async resolveSubscriptionId(value: string): Promise<string> {
+    if (UUID_RE.test(value ?? "")) return value;
+    if (!value) throw new NotFoundException("Subscription not found");
+    const { rows } = await this.pool.query<{ id: string }>(
+      `select id from metering.subscriptions where order_no = $1 and deleted_at is null limit 1`,
+      [value],
+    );
+    if (!rows[0])
+      throw new NotFoundException(`Subscription ${value} not found`);
+    return rows[0].id;
+  }
+
   @Get()
   async listSubscriptions(
     @Req() req: Request & RequestContext,
@@ -98,10 +120,11 @@ export class SubscriptionsRouter {
     @Param("id") id: string,
   ): Promise<SubscriptionOperationDetailRecord> {
     assertCanReadSubscriptions(req);
+    const subscriptionId = await this.resolveSubscriptionId(id);
 
     const { rows } = await this.pool.query<SubscriptionRow>(
       SUBSCRIPTION_DETAIL_SQL,
-      [id],
+      [subscriptionId],
     );
     const row = rows[0];
     if (!row) {
@@ -116,8 +139,8 @@ export class SubscriptionsRouter {
             row.plan_version_id,
           ])
         : Promise.resolve({ rows: [] as EntitlementRow[] }),
-      this.pool.query<HistoryRow>(SUBSCRIPTION_HISTORY_SQL, [id]),
-      this.pool.query<RenewalRow>(SUBSCRIPTION_RENEWAL_SQL, [id]),
+      this.pool.query<HistoryRow>(SUBSCRIPTION_HISTORY_SQL, [subscriptionId]),
+      this.pool.query<RenewalRow>(SUBSCRIPTION_RENEWAL_SQL, [subscriptionId]),
     ]);
 
     return {
@@ -145,6 +168,7 @@ export class SubscriptionsRouter {
     const remark = reason.length > 0 ? reason : null;
     const actorId = req.user?.id ?? null;
     const clientIp = extractClientIp(req);
+    const subscriptionId = await this.resolveSubscriptionId(id);
 
     const client = await this.rwPool.connect();
     try {
@@ -152,7 +176,7 @@ export class SubscriptionsRouter {
 
       const { rows } = await client.query<SubscriptionActionRow>(
         SUBSCRIPTION_LOCK_SQL,
-        [id],
+        [subscriptionId],
       );
       const current = rows[0];
       if (!current) {
@@ -163,14 +187,14 @@ export class SubscriptionsRouter {
       const toStatus = resolveTargetStatus(action, current);
 
       await client.query(SUBSCRIPTION_ACTION_UPDATE_SQL, [
-        id,
+        subscriptionId,
         toStatus,
         action,
       ]);
 
       await client.query(SUBSCRIPTION_HISTORY_INSERT_SQL, [
         current.tenant_id,
-        id,
+        subscriptionId,
         ACTION_CHANGE_TYPE[action],
         fromStatus,
         toStatus,
@@ -187,7 +211,7 @@ export class SubscriptionsRouter {
       client.release();
     }
 
-    return this.loadSubscriptionDetail(id);
+    return this.loadSubscriptionDetail(subscriptionId);
   }
 
   // 读回订阅详情（RO 池），映射逻辑与 getSubscription 一致；供写路径提交后回填响应。

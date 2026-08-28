@@ -293,8 +293,10 @@ function assertCanManagePromotion(req: Request & RequestContext): void {
   assertAnyCapability(req, ["promotion:campaign.manage"]);
 }
 
+// 版本位/变体位刻意不卡：判据与理由见 governance.shared.ts 的 `UUID_RE` 注释
+//（校验器不该比存储层更严；种子 id 的变体位是段值本身，如 …-4000-d000-…）。
 const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function requireOperator(req: Request & RequestContext): string {
   const id = req.user?.id;

@@ -166,7 +166,7 @@ function SubscriptionActionsMenu({
             icon: "arrow-right",
             onSelect: () =>
               router.push(
-                `/subscriptions/${encodeURIComponent(subscription.id)}`,
+                `/subscriptions/${encodeURIComponent(subscription.subscriptionCode)}`,
               ),
           },
           {
@@ -175,7 +175,7 @@ function SubscriptionActionsMenu({
             icon: "buildings",
             onSelect: () =>
               router.push(
-                `/tenants/${encodeURIComponent(subscription.tenantId)}`,
+                `/tenants/${encodeURIComponent(subscription.tenantCode)}`,
               ),
           },
           {
@@ -255,7 +255,9 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
           title={subscription.tenantName}
           description={`${subscription.tenantCode} · ${subscription.region}`}
           onTitleClick={() =>
-            router.push(`/subscriptions/${encodeURIComponent(subscription.id)}`)
+            router.push(
+              `/subscriptions/${encodeURIComponent(subscription.subscriptionCode)}`,
+            )
           }
         />
       ),

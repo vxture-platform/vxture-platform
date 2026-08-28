@@ -237,14 +237,14 @@ function InvoiceActionsMenu({
             label: "账单详情",
             icon: "arrow-right",
             onSelect: () =>
-              router.push(`/billing/${encodeURIComponent(invoice.billId)}`),
+              router.push(`/billing/${encodeURIComponent(invoice.billNo)}`),
           },
           {
             id: "tenant",
             label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
-              router.push(`/tenants/${encodeURIComponent(invoice.tenantId)}`),
+              router.push(`/tenants/${encodeURIComponent(invoice.tenantCode)}`),
           },
           /* 三支动作由同一份定义生成（`InvoiceReceiptActionDialog` 里的
              label / 可用性 / 禁用理由三个 helper）。`red` 单独一支而不是
@@ -307,7 +307,7 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
           title={invoice.invoiceNo}
           description={`${invoice.invoiceTitle} · ${taxTypeLabel(invoice.invoiceTaxType)}`}
           onTitleClick={() =>
-            router.push(`/billing/${encodeURIComponent(invoice.billId)}`)
+            router.push(`/billing/${encodeURIComponent(invoice.billNo)}`)
           }
         />
       ),

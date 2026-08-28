@@ -49,6 +49,8 @@ interface OpsTodoItem {
   title: string;
   description: string;
   tenantId: string;
+  /** 面向用户的租户编码，跳转用——地址栏不出 UUID。 */
+  tenantCode: string;
   tenantName: string;
   tenantMeta: string;
   href: string;
@@ -127,6 +129,7 @@ function buildOpsTodos(
         title: `${tenant.displayName} 认证待审核`,
         description: `当前认证状态为${verifiedLabel(tenant.verifiedStatus)}，需要核验资质材料与联系人信息。`,
         tenantId: tenant.id,
+        tenantCode: tenant.tenantCode,
         tenantName: tenant.displayName,
         tenantMeta,
         href: "/verifications",
@@ -145,6 +148,7 @@ function buildOpsTodos(
         title: `${tenant.displayName} 风险状态需复核`,
         description: tenant.notes,
         tenantId: tenant.id,
+        tenantCode: tenant.tenantCode,
         tenantName: tenant.displayName,
         tenantMeta,
         href: tenantHref,
@@ -171,6 +175,7 @@ function buildOpsTodos(
           title: `${tenant.displayName} ${usage.label} ${usage.status === "danger" ? "超限" : "预警"}`,
           description: `${usage.label} 已使用 ${formatNumber(usage.used)} ${usage.unit}，额度 ${usage.quota ? formatNumber(usage.quota) : "未配置"}，当前 ${usageRate}%。`,
           tenantId: tenant.id,
+          tenantCode: tenant.tenantCode,
           tenantName: tenant.displayName,
           tenantMeta,
           href: tenantHref,
@@ -194,6 +199,7 @@ function buildOpsTodos(
           title: `${tenant.displayName} ${subscription.status === "past_due" ? "订阅逾期" : "试用跟进"}`,
           description: `${subscription.productName} / ${subscription.planName}，月收入 ${formatNumber(subscription.monthlyRevenue)}，需要运营确认续费或转正动作。`,
           tenantId: tenant.id,
+          tenantCode: tenant.tenantCode,
           tenantName: tenant.displayName,
           tenantMeta,
           href: tenantHref,
@@ -216,6 +222,7 @@ function buildOpsTodos(
       title: `${ticket.id} ${ticket.title}`,
       description: `${ticket.tenantName} 的 ${ticket.priority.toUpperCase()} 工单处于${ticket.status === "blocked" ? "阻塞" : ticket.status === "processing" ? "处理中" : "待处理"}状态。`,
       tenantId: ticket.tenantId,
+      tenantCode: ticket.tenantCode,
       tenantName: ticket.tenantName,
       tenantMeta: `${typeLabel(ticket.tenantType)} / ${ticket.region} / ${statusLabel(ticket.tenantStatus)}`,
       href: "/tickets",
@@ -329,7 +336,7 @@ export function OpsTodosPage() {
           label: tShared("actions.viewTenant"),
           icon: "buildings",
           onSelect: () =>
-            router.push(`/tenants/${encodeURIComponent(item.tenantId)}`),
+            router.push(`/tenants/${encodeURIComponent(item.tenantCode)}`),
         },
       ]}
     />
@@ -557,7 +564,7 @@ export function OpsTodosPage() {
                     description={item.tenantMeta}
                     onTitleClick={() =>
                       router.push(
-                        `/tenants/${encodeURIComponent(item.tenantId)}`,
+                        `/tenants/${encodeURIComponent(item.tenantCode)}`,
                       )
                     }
                   />

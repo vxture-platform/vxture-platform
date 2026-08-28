@@ -208,7 +208,7 @@ function VerificationActionsMenu({
             label: isPending ? "进入审核" : tShared("actions.viewDetail"),
             icon: isPending ? "medal" : "arrow-right",
             onSelect: () =>
-              router.push(`/tenants/${encodeURIComponent(tenant.id)}`),
+              router.push(`/tenants/${encodeURIComponent(tenant.tenantCode)}`),
           },
           {
             id: "approve",
@@ -262,7 +262,7 @@ function useVerificationColumns(): DataTableColumn<VerificationRow>[] {
           title={tenant.displayName}
           description={`${tenant.tenantCode} · ${tenant.region}`}
           onTitleClick={() =>
-            router.push(`/tenants/${encodeURIComponent(tenant.id)}`)
+            router.push(`/tenants/${encodeURIComponent(tenant.tenantCode)}`)
           }
         />
       ),

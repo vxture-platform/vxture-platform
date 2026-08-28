@@ -281,14 +281,14 @@ function BillingActionsMenu({
             label: "账单详情",
             icon: "arrow-right",
             onSelect: () =>
-              router.push(`/billing/${encodeURIComponent(bill.id)}`),
+              router.push(`/billing/${encodeURIComponent(bill.billNo)}`),
           },
           {
             id: "tenant",
             label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
-              router.push(`/tenants/${encodeURIComponent(bill.tenantId)}`),
+              router.push(`/tenants/${encodeURIComponent(bill.tenantCode)}`),
           },
           {
             id: "subscription",
@@ -298,7 +298,7 @@ function BillingActionsMenu({
             onSelect: () => {
               if (!bill.subscriptionId) return;
               router.push(
-                `/subscriptions/${encodeURIComponent(bill.subscriptionId)}`,
+                `/subscriptions/${encodeURIComponent(bill.orderNo ?? bill.subscriptionId ?? "")}`,
               );
             },
           },
@@ -309,7 +309,9 @@ function BillingActionsMenu({
             disabled: !bill.subscriptionId,
             onSelect: () => {
               if (!bill.subscriptionId) return;
-              router.push(`/orders/${encodeURIComponent(bill.subscriptionId)}`);
+              router.push(
+                `/orders/${encodeURIComponent(bill.orderNo ?? bill.subscriptionId ?? "")}`,
+              );
             },
           },
           {
@@ -347,7 +349,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
           title={bill.billNo}
           description={`${cycleLabel(bill.billCycle)} · ${formatDate(bill.cycleStartDate, locale)} - ${formatDate(bill.cycleEndDate, locale)}`}
           onTitleClick={() =>
-            router.push(`/billing/${encodeURIComponent(bill.id)}`)
+            router.push(`/billing/${encodeURIComponent(bill.billNo)}`)
           }
         />
       ),

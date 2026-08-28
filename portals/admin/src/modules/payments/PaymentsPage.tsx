@@ -215,8 +215,9 @@ function matchesOfflineTypeFilter(
 }
 
 function paymentTargetHref(payment: PaymentOperationRecord) {
-  if (payment.billId) return `/billing/${encodeURIComponent(payment.billId)}`;
-  return `/tenants/${encodeURIComponent(payment.tenantId)}`;
+  if (payment.billId)
+    return `/billing/${encodeURIComponent(payment.billNo ?? payment.billId ?? "")}`;
+  return `/tenants/${encodeURIComponent(payment.tenantCode)}`;
 }
 
 function PaymentRemarkDialog({
@@ -323,7 +324,9 @@ function PaymentActionsMenu({
             disabled: !payment.billId,
             onSelect: () => {
               if (!payment.billId) return;
-              router.push(`/billing/${encodeURIComponent(payment.billId)}`);
+              router.push(
+                `/billing/${encodeURIComponent(payment.billNo ?? payment.billId ?? "")}`,
+              );
             },
           },
           {
@@ -334,7 +337,7 @@ function PaymentActionsMenu({
             onSelect: () => {
               if (!payment.subscriptionId) return;
               router.push(
-                `/orders/${encodeURIComponent(payment.subscriptionId)}`,
+                `/orders/${encodeURIComponent(payment.orderNo ?? payment.subscriptionId ?? "")}`,
               );
             },
           },
@@ -343,7 +346,7 @@ function PaymentActionsMenu({
             label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
-              router.push(`/tenants/${encodeURIComponent(payment.tenantId)}`),
+              router.push(`/tenants/${encodeURIComponent(payment.tenantCode)}`),
           },
           {
             id: "evidence",

@@ -273,7 +273,7 @@ function BillingDetails({
         </DetailList>
         <div className="inline-flex flex-wrap items-center justify-end gap-sm justify-start ">
           <Button asChild variant="outline">
-            <Link href={`/tenants/${encodeURIComponent(bill.tenantId)}`}>
+            <Link href={`/tenants/${encodeURIComponent(bill.tenantCode)}`}>
               <Icon name="buildings" size="xs" fallback="placeholder" />
               租户详情
             </Link>
@@ -282,7 +282,7 @@ function BillingDetails({
             <>
               <Button asChild variant="outline">
                 <Link
-                  href={`/subscriptions/${encodeURIComponent(bill.subscriptionId)}`}
+                  href={`/subscriptions/${encodeURIComponent(bill.orderNo ?? bill.subscriptionId ?? "")}`}
                 >
                   <Icon name="star" size="xs" fallback="placeholder" />
                   订阅详情
@@ -290,7 +290,7 @@ function BillingDetails({
               </Button>
               <Button asChild variant="outline">
                 <Link
-                  href={`/orders/${encodeURIComponent(bill.subscriptionId)}`}
+                  href={`/orders/${encodeURIComponent(bill.orderNo ?? bill.subscriptionId ?? "")}`}
                 >
                   <Icon name="table" size="xs" fallback="placeholder" />
                   订单详情
@@ -727,7 +727,7 @@ export function BillingDetailPage({ billId }: { billId: string }) {
       setBillActionTarget(null);
 
       if (updatedBill.id !== bill.id) {
-        router.replace(`/billing/${encodeURIComponent(updatedBill.id)}`);
+        router.replace(`/billing/${encodeURIComponent(updatedBill.billNo)}`);
       }
     } catch (error) {
       if (isStepUpCancelled(error)) return;
@@ -792,7 +792,7 @@ export function BillingDetailPage({ billId }: { billId: string }) {
               {bill?.subscriptionId ? (
                 <Button asChild variant="outline">
                   <Link
-                    href={`/orders/${encodeURIComponent(bill.subscriptionId)}`}
+                    href={`/orders/${encodeURIComponent(bill.orderNo ?? bill.subscriptionId ?? "")}`}
                   >
                     <Icon name="table" size="xs" fallback="placeholder" />
                     订单详情

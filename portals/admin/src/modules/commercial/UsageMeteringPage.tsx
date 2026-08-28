@@ -117,7 +117,7 @@ function UsageActionsMenu({ record }: { record: UsageMeteringRecord }) {
             label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
-              router.push(`/tenants/${encodeURIComponent(record.tenantId)}`),
+              router.push(`/tenants/${encodeURIComponent(record.tenantCode)}`),
           },
           {
             id: "subscription",
@@ -127,7 +127,7 @@ function UsageActionsMenu({ record }: { record: UsageMeteringRecord }) {
             onSelect: () => {
               if (!record.subscriptionId) return;
               router.push(
-                `/subscriptions/${encodeURIComponent(record.subscriptionId)}`,
+                `/subscriptions/${encodeURIComponent(record.orderNo ?? record.subscriptionId ?? "")}`,
               );
             },
           },
@@ -139,7 +139,7 @@ function UsageActionsMenu({ record }: { record: UsageMeteringRecord }) {
             onSelect: () => {
               if (!record.subscriptionId) return;
               router.push(
-                `/orders/${encodeURIComponent(record.subscriptionId)}`,
+                `/orders/${encodeURIComponent(record.orderNo ?? record.subscriptionId ?? "")}`,
               );
             },
           },
@@ -164,7 +164,7 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
           title={record.tenantName}
           description={`${record.tenantCode} · ${typeLabel(record.tenantType)}`}
           onTitleClick={() =>
-            router.push(`/tenants/${encodeURIComponent(record.tenantId)}`)
+            router.push(`/tenants/${encodeURIComponent(record.tenantCode)}`)
           }
         />
       ),

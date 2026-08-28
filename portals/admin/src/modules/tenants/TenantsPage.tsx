@@ -76,7 +76,7 @@ function TenantActionsMenu({
             label: tShared("actions.viewDetail"),
             icon: "arrow-right",
             onSelect: () =>
-              router.push(`/tenants/${encodeURIComponent(tenant.id)}`),
+              router.push(`/tenants/${encodeURIComponent(tenant.tenantCode)}`),
           },
           {
             id: "edit",
@@ -122,7 +122,7 @@ function useTenantColumns(): DataTableColumn<TenantOperationRecord>[] {
           title={tenant.displayName}
           description={`${tenant.tenantCode} · ${tenant.region}`}
           onTitleClick={() =>
-            router.push(`/tenants/${encodeURIComponent(tenant.id)}`)
+            router.push(`/tenants/${encodeURIComponent(tenant.tenantCode)}`)
           }
         />
       ),

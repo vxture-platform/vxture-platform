@@ -72,6 +72,27 @@ export class OrdersRouter {
     private readonly promotion: PromotionService,
   ) {}
 
+  /**
+   * 路由参数是**面向用户的订单编号**（`order_no`，如 `SO202600100`），不是内部
+   * UUID——地址栏是可见面，UUID 不在任何场景对外展示。同时仍接受 UUID：存量
+   * 书签、审计日志里记的 id、内部工具都还在传它。
+   *
+   * 订单实体键就是订阅行的 id（一张 `metering.subscriptions` 同时承载订阅与它的
+   * 订单面），可读码是同表的 `order_no`，有库级唯一约束
+   *（`uq_subscriptions_order_no`）。解不出来 → 404，与「传了个不存在的 UUID」
+   * 同一个结果。
+   */
+  private async resolveOrderId(value: string): Promise<string> {
+    if (UUID_RE.test(value ?? "")) return value;
+    if (!value) throw new NotFoundException("Order not found");
+    const { rows } = await this.pool.query<{ id: string }>(
+      `select id from metering.subscriptions where order_no = $1 and deleted_at is null limit 1`,
+      [value],
+    );
+    if (!rows[0]) throw new NotFoundException("Order not found");
+    return rows[0].id;
+  }
+
   @Get()
   async listOrders(
     @Req() req: Request & RequestContext,
@@ -93,7 +114,7 @@ export class OrdersRouter {
 
     const { rows } = await this.pool.query<OrderRow>(
       `${ORDER_BASE_SQL} and sub.id = $1 limit 1`,
-      [orderId],
+      [await this.resolveOrderId(orderId)],
     );
     const base = rows[0];
     if (!base) return null;
@@ -136,7 +157,7 @@ export class OrdersRouter {
     assertCanSettleOrderPayment(req);
 
     const actorId = requireOperatorId(req.user?.id);
-    const subscriptionId = requireUuid(orderId, "Invalid order id");
+    const subscriptionId = await this.resolveOrderId(orderId);
 
     let isPendingOrderRow = false;
     let runStage2 = false;
@@ -527,7 +548,7 @@ export class OrdersRouter {
     assertCanSettleOrderPayment(req);
 
     const actorId = requireOperatorId(req.user?.id);
-    const subscriptionId = requireUuid(orderId, "Invalid order id");
+    const subscriptionId = await this.resolveOrderId(orderId);
     const reason = normalizeVoidReason(body);
 
     const client = await this.rwPool.connect();
@@ -688,7 +709,7 @@ export class OrdersRouter {
     assertCanVoidOrder(req);
 
     const actorId = requireOperatorId(req.user?.id);
-    const subscriptionId = requireUuid(orderId, "Invalid order id");
+    const subscriptionId = await this.resolveOrderId(orderId);
     const reason = normalizeVoidReason(body);
 
     await this.subscriptions.cancelPendingOrder(subscriptionId, {
@@ -718,7 +739,7 @@ export class OrdersRouter {
     assertCanRestoreOrder(req);
 
     const actorId = requireOperatorId(req.user?.id);
-    const subscriptionId = requireUuid(orderId, "Invalid order id");
+    const subscriptionId = await this.resolveOrderId(orderId);
     const reason = normalizeVoidReason(body);
 
     await this.subscriptions.restoreOfflineOrder(subscriptionId, {
@@ -760,15 +781,10 @@ function billingCode(prefix: string): string {
   return `${prefix}-${ym}-${suffix}`;
 }
 
+// 版本位/变体位刻意不卡：判据与理由见 governance.shared.ts 的 `UUID_RE` 注释
+//（校验器不该比存储层更严；种子 id 的变体位是段值本身，如 …-4000-d000-…）。
 const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function requireUuid(value: string | undefined, message: string): string {
-  if (!value || !UUID_RE.test(value)) {
-    throw new BadRequestException(message);
-  }
-  return value;
-}
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function requireOperatorId(value: string | undefined): string {
   if (!value || !UUID_RE.test(value)) {

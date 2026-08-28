@@ -180,7 +180,7 @@ function TicketActionsMenu({
             label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
-              router.push(`/tenants/${encodeURIComponent(ticket.tenantId)}`),
+              router.push(`/tenants/${encodeURIComponent(ticket.tenantCode)}`),
           },
           {
             id: "ops-todos",
@@ -230,7 +230,7 @@ function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
           title={ticket.title}
           description={`${ticket.id} / ${ticket.ownerName}`}
           onTitleClick={() =>
-            router.push(`/tenants/${encodeURIComponent(ticket.tenantId)}`)
+            router.push(`/tenants/${encodeURIComponent(ticket.tenantCode)}`)
           }
         />
       ),

@@ -513,7 +513,7 @@ export function SubscriptionDetailPage({
               {subscription ? (
                 <Button asChild variant="outline">
                   <Link
-                    href={`/tenants/${encodeURIComponent(subscription.tenantId)}`}
+                    href={`/tenants/${encodeURIComponent(subscription.tenantCode)}`}
                   >
                     <Icon name="buildings" size="xs" fallback="placeholder" />
                     租户详情

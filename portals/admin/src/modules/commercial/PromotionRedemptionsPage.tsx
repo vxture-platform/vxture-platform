@@ -129,14 +129,14 @@ function RedemptionActionsMenu({
             label: "账单详情",
             icon: "arrow-right",
             onSelect: () =>
-              router.push(`/billing/${encodeURIComponent(record.billId)}`),
+              router.push(`/billing/${encodeURIComponent(record.billNo)}`),
           },
           {
             id: "tenant",
             label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
-              router.push(`/tenants/${encodeURIComponent(record.tenantId)}`),
+              router.push(`/tenants/${encodeURIComponent(record.tenantCode)}`),
           },
           {
             id: "orders",
@@ -170,7 +170,7 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
           title={record.redemptionNo}
           description={`${record.promotionCode} · ${record.promotionName}`}
           onTitleClick={() =>
-            router.push(`/billing/${encodeURIComponent(record.billId)}`)
+            router.push(`/billing/${encodeURIComponent(record.billNo)}`)
           }
         />
       ),

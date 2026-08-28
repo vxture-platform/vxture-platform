@@ -261,15 +261,13 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
         </DetailList>
         <div className="inline-flex flex-wrap items-center justify-end gap-sm justify-start ">
           <Button asChild variant="outline">
-            <Link
-              href={`/subscriptions/${encodeURIComponent(order.subscriptionId)}`}
-            >
+            <Link href={`/subscriptions/${encodeURIComponent(order.orderNo)}`}>
               <Icon name="star" size="xs" fallback="placeholder" />
               订阅详情
             </Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href={`/tenants/${encodeURIComponent(order.tenantId)}`}>
+            <Link href={`/tenants/${encodeURIComponent(order.tenantCode)}`}>
               <Icon name="buildings" size="xs" fallback="placeholder" />
               租户详情
             </Link>
@@ -663,7 +661,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                 <>
                   <Button asChild variant="outline">
                     <Link
-                      href={`/subscriptions/${encodeURIComponent(order.subscriptionId)}`}
+                      href={`/subscriptions/${encodeURIComponent(order.orderNo)}`}
                     >
                       <Icon name="star" size="xs" fallback="placeholder" />
                       订阅详情

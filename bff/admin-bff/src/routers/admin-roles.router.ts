@@ -663,7 +663,7 @@ function toIso(value: Date | string | null): string {
 function requireUuid(value: string | undefined, message: string) {
   if (
     !value ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
       value,
     )
   ) {
@@ -686,7 +686,7 @@ function normalizePermissionIds(value: unknown) {
   for (const item of value) {
     if (
       typeof item !== "string" ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
         item,
       )
     ) {

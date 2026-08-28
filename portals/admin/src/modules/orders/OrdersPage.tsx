@@ -186,14 +186,14 @@ function OrderActionsMenu({
             label: "订单详情",
             icon: "arrow-right",
             onSelect: () =>
-              router.push(`/orders/${encodeURIComponent(order.id)}`),
+              router.push(`/orders/${encodeURIComponent(order.orderNo)}`),
           },
           {
             id: "tenant",
             label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
-              router.push(`/tenants/${encodeURIComponent(order.tenantId)}`),
+              router.push(`/tenants/${encodeURIComponent(order.tenantCode)}`),
           },
           {
             id: "confirm-payment",
@@ -209,7 +209,7 @@ function OrderActionsMenu({
             icon: "star",
             onSelect: () =>
               router.push(
-                `/subscriptions/${encodeURIComponent(order.subscriptionId)}`,
+                `/subscriptions/${encodeURIComponent(order.orderNo)}`,
               ),
           },
         ]}
@@ -237,7 +237,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
           title={order.orderNo}
           description={`${order.billNo ?? "未生成账单"} · ${formatDate(order.createdAt, locale)}`}
           onTitleClick={() =>
-            router.push(`/orders/${encodeURIComponent(order.id)}`)
+            router.push(`/orders/${encodeURIComponent(order.orderNo)}`)
           }
         />
       ),
