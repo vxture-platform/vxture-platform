@@ -98,7 +98,7 @@
 ### M-3 管理 API 面
 
 - provider 拥有并演进自己的 admin API;结构化错误封套;版本纪律对齐 `product_210` §4.3。
-- **封套与形状的细则见 [`product_251`](./product_251_management-api-conventions.md)**(2026-08-16 补):本条原文只给了「结构化错误封套」这个槽位,没给内容——实测三方长出了三种错误码形状(atlas 带前缀大写、runos 无前缀小写、platform **没有 code**)。`product_251` 的适用范围经 owner 拍板**含 platform 自身管理面**,是对本文 §1 的实质扩张。
+- **封套与形状的细则见[产品接入通则](https://claude.ai/code/artifact/20e37039-ea59-4c5d-9fab-ba3ca3ad54f0)**(2026-08-16 补,2026-08-29 权威由 `product_251` 迁至此):本条原文只给了「结构化错误封套」这个槽位,没给内容——实测三方长出了三种错误码形状(atlas 带前缀大写、runos 无前缀小写、platform **没有 code**)。`product_251` 的适用范围经 owner 拍板**含 platform 自身管理面**,是对本文 §1 的实质扩张。
 - 响应/日志永不含密钥明文(atlas `model-admin.service.ts` 的 secret-shaped-field 剥离护栏为本条既有实现,保留不动)。
 - **密钥托管归属(2026-07-28 owner 拍板)**:provider 凭证一律存 provider 自己库的加密 vault(atlas = `key.provider_api_keys` 信封加密),**能力控制台零持有**——控制台密钥页面只是经 M-1 通道调 provider admin API 的 UI,明文仅 create/rotate 写入时过一次网,此后只见掩码元数据与轮换日志;信封加密主密钥留 provider 主机 env(owner 手动转运)。详见 [`platform/42-model-provider-registry-plan.md`](./platform/42-model-provider-registry-plan.md) §8.6。
 
