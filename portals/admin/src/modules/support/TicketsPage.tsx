@@ -163,7 +163,7 @@ function TicketActionsMenu({
 
   return (
     <div
-      className="vx-tenant-actions"
+      className="relative z-[1] inline-flex justify-self-end"
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
@@ -180,7 +180,7 @@ function TicketActionsMenu({
             label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
-              router.push(`/tenants/${encodeURIComponent(ticket.tenantId)}`),
+              router.push(`/tenants/${encodeURIComponent(ticket.tenantCode)}`),
           },
           {
             id: "ops-todos",
@@ -230,7 +230,7 @@ function useTicketColumns(): DataTableColumn<SupportTicketRecord>[] {
           title={ticket.title}
           description={`${ticket.id} / ${ticket.ownerName}`}
           onTitleClick={() =>
-            router.push(`/tenants/${encodeURIComponent(ticket.tenantId)}`)
+            router.push(`/tenants/${encodeURIComponent(ticket.tenantCode)}`)
           }
         />
       ),
@@ -796,7 +796,7 @@ export function TicketsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-tickets-page"
+        className="w-full vx-tickets-page"
         header={
           <PageHeader
             icon="chat-circle"
@@ -850,15 +850,18 @@ export function TicketsPage() {
           />
         }
         filters={
-          <section className="vx-tenant-toolbar" aria-label="工单筛选">
+          <section
+            className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch"
+            aria-label="工单筛选"
+          >
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="搜索工单、租户、行业、负责人"
-              className="vx-tenant-search vx-commercial-search"
+              className="grow basis-media-3xl max-w-panel-sm"
               aria-label="搜索工单"
             />
-            <div className="vx-tenant-toolbar__spacer" aria-hidden="true" />
+            <div className="flex-1 max-lg:hidden" aria-hidden="true" />
             <label aria-label="状态筛选">
               <NativeSelect
                 value={status}
@@ -898,17 +901,20 @@ export function TicketsPage() {
         }
         table={
           <section
-            className="vx-tenant-directory vx-ticket-directory"
+            className="grid min-w-0 max-w-full gap-xs vx-ticket-directory"
             aria-label="工单列表"
           >
-            <header className="vx-tenant-directory__header">
+            <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
               <strong>工单队列</strong>
               <span>{formatNumber(visibleTickets.length)} 条匹配</span>
             </header>
             {selectedTickets.length ? (
-              <div className="vx-tenant-toolbar" aria-label="工单批量操作">
+              <div
+                className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch"
+                aria-label="工单批量操作"
+              >
                 <span>已选 {formatNumber(selectedTickets.length)} 条</span>
-                <div className="vx-tenant-toolbar__spacer" aria-hidden="true" />
+                <div className="flex-1 max-lg:hidden" aria-hidden="true" />
                 <Button
                   variant="outline"
                   size="md"

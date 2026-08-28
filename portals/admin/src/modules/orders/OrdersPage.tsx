@@ -14,19 +14,14 @@ import {
   FilterBar,
   Input,
   ListPageTemplate,
-  ListCardGrid,
   MetricGrid,
-  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
 } from "@vxture/design-system";
 import type { DataTableColumn } from "@vxture/design-system";
-import { resolveStatusTone } from "@vxture-platform/shared";
-import {
-  ORDER_STATUS_TONE,
-  PAYMENT_STATUS_TONE,
-} from "@/modules/shared/status-tone";
+import {} from "@vxture-platform/shared";
+import { ORDER_STATUS_TONE } from "@/modules/shared/status-tone";
 import {
   TIER_FILTER_OPTIONS,
   tierBadgeClass,
@@ -64,7 +59,6 @@ import {
 
 type TFn = ReturnType<typeof useTranslations>;
 
-type ViewMode = "list" | "cards";
 type OrderStatusFilter = "all" | OrderOperationStatus;
 type PaymentStatusFilter = "all" | OrderPaymentStatus;
 type PaySourceFilter = "all" | OrderPaySource;
@@ -181,7 +175,7 @@ function OrderActionsMenu({
 
   return (
     <div
-      className="vx-tenant-actions"
+      className="relative z-[1] inline-flex justify-self-end"
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
@@ -192,14 +186,14 @@ function OrderActionsMenu({
             label: "订单详情",
             icon: "arrow-right",
             onSelect: () =>
-              router.push(`/orders/${encodeURIComponent(order.id)}`),
+              router.push(`/orders/${encodeURIComponent(order.orderNo)}`),
           },
           {
             id: "tenant",
             label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
-              router.push(`/tenants/${encodeURIComponent(order.tenantId)}`),
+              router.push(`/tenants/${encodeURIComponent(order.tenantCode)}`),
           },
           {
             id: "confirm-payment",
@@ -215,7 +209,7 @@ function OrderActionsMenu({
             icon: "star",
             onSelect: () =>
               router.push(
-                `/subscriptions/${encodeURIComponent(order.subscriptionId)}`,
+                `/subscriptions/${encodeURIComponent(order.orderNo)}`,
               ),
           },
         ]}
@@ -243,7 +237,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
           title={order.orderNo}
           description={`${order.billNo ?? "未生成账单"} · ${formatDate(order.createdAt, locale)}`}
           onTitleClick={() =>
-            router.push(`/orders/${encodeURIComponent(order.id)}`)
+            router.push(`/orders/${encodeURIComponent(order.orderNo)}`)
           }
         />
       ),
@@ -267,7 +261,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
           /* 缺失值弱化：深色粗体会让"未设置"读起来跟真的方案名一样重。 */
           title={
             isUnset(order.solutionName) ? (
-              <span className="vx-tenant-directory-row__unset">
+              <span className="text-body-md text-muted-foreground">
                 {UNSET_LABEL}
               </span>
             ) : (
@@ -286,7 +280,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
           title={
             <span className="inline-flex flex-wrap gap-2xs">
               {isUnset(order.tierName) ? (
-                <span className="vx-tenant-directory-row__unset">
+                <span className="text-body-md text-muted-foreground">
                   {UNSET_LABEL}
                 </span>
               ) : (
@@ -294,9 +288,9 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
                   {order.tierName}
                 </Badge>
               )}
-              <Badge className="vx-tenant-pill vx-order-pill--source">
+              <StatusBadge tone="neutral" icon={false}>
                 {cycleLabel(order.cycleType)}
-              </Badge>
+              </StatusBadge>
             </span>
           }
           description={order.servicePlanName}
@@ -335,89 +329,12 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
   ];
 }
 
-function OrderCards({
-  orders,
-  onConfirmPayment,
-}: {
-  orders: OrderOperationRecord[];
-  onConfirmPayment: (order: OrderOperationRecord) => void;
-}) {
-  const t = useTranslations();
-  const locale = useLocale();
-  const tShared = useTranslations();
-  const router = useRouter();
-
-  return (
-    <ListCardGrid aria-label="订单管理卡片">
-      {orders.map((order) => (
-        <MetricListCard
-          key={order.id}
-          icon="table"
-          title={order.orderNo}
-          description={`${order.tenantName} · ${order.tierName}`}
-          /* 顶缘语气取订单态。此前走 `vx-order-card--${status}` 的 CSS，
-           * 但那条 border-top 的宽度是已退役的 --vx-admin-* 变量，整条声明失效，
-           * 色条实际一直没显示出来。 */
-          tone={resolveStatusTone(ORDER_STATUS_TONE, order.orderStatus)}
-          onClick={() => router.push(`/orders/${encodeURIComponent(order.id)}`)}
-          actions={
-            <OrderActionsMenu
-              order={order}
-              onConfirmPayment={onConfirmPayment}
-            />
-          }
-          badges={
-            <>
-              <StatusBadge tone={ORDER_STATUS_TONE[order.orderStatus]}>
-                {orderStatusLabel(order.orderStatus)}
-              </StatusBadge>
-              <StatusBadge tone={PAYMENT_STATUS_TONE[order.paymentStatus]}>
-                {t(`status.orderPayment.${order.paymentStatus}`)}
-              </StatusBadge>
-              <Badge className="vx-tenant-pill vx-order-pill--source">
-                {paySourceLabel(order.paySource)}
-              </Badge>
-            </>
-          }
-          note={`${order.solutionName} · ${order.servicePlanName}`}
-          metrics={[
-            {
-              key: "amount",
-              value: formatCurrency(order.amount, order.currency),
-              label: "订单金额",
-            },
-            {
-              key: "paid",
-              value: formatCurrency(order.paidAmount, order.currency),
-              label: tShared("columns.receivedAmount"),
-            },
-            {
-              key: "cycle",
-              value: cycleLabel(order.cycleType),
-              label: "计费周期",
-            },
-          ]}
-          footer={
-            <>
-              <span className="truncate">{order.operationHint}</span>
-              <span className="shrink-0">
-                {formatDate(order.confirmedAt ?? order.updatedAt, locale)}
-              </span>
-            </>
-          }
-        />
-      ))}
-    </ListCardGrid>
-  );
-}
-
 export function OrdersPage() {
   const t = useTranslations();
   const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
   const [orders, setOrders] = useState<OrderOperationRecord[]>([]);
   const [ordersTruncated, setOrdersTruncated] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>("all");
   const [paymentFilter, setPaymentFilter] =
@@ -531,7 +448,6 @@ export function OrdersPage() {
     query,
     statusFilter,
     tierFilter,
-    viewMode,
   ]);
 
   function handleReset() {
@@ -592,7 +508,7 @@ export function OrdersPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-orders-page"
+        className="w-full "
         header={
           <PageHeader
             icon="table"
@@ -656,7 +572,7 @@ export function OrdersPage() {
             />
 
             {operationFeedback ? (
-              <div className="vx-subscription-operation-feedback">
+              <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-sm text-success-text">
                 {operationFeedback}
               </div>
             ) : null}
@@ -672,9 +588,6 @@ export function OrdersPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredOrders.length)}
             aria-label="订单筛选"
             search={
@@ -682,7 +595,7 @@ export function OrdersPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索订单、租户、方案、账单"
-                className="vx-tenant-search vx-order-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索订单"
               />
             }
@@ -711,9 +624,9 @@ export function OrdersPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as OrderStatusFilter)
@@ -733,7 +646,7 @@ export function OrdersPage() {
                 <option value="abnormal">异常</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={paymentFilter}
                 onChange={(event) =>
                   setPaymentFilter(event.target.value as PaymentStatusFilter)
@@ -756,7 +669,7 @@ export function OrdersPage() {
                 <option value="refunding">退款中</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={paySourceFilter}
                 onChange={(event) =>
                   setPaySourceFilter(event.target.value as PaySourceFilter)
@@ -769,7 +682,7 @@ export function OrdersPage() {
                 <option value="none">{tShared("common.none")}</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={tierFilter}
                 onChange={(event) =>
                   setTierFilter(event.target.value as TierFilter)
@@ -783,7 +696,7 @@ export function OrdersPage() {
                   </option>
                 ))}
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         bulkBar={
@@ -807,71 +720,44 @@ export function OrdersPage() {
           ) : null
         }
         table={
-          <section className="vx-tenant-directory" aria-label="订单清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="订单清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="vx-tenant-directory__header">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={orderColumns}
-                rows={visibleOrders}
-                rowKey={(order) => order.id}
-                loading={loading}
-                indexStart={(activePage - 1) * pageSize + 1}
-                selectedKeys={[...selectedOrderIds]}
-                onSelectionChange={(keys) => setSelectedOrderIds(new Set(keys))}
-                rowActions={(order) => (
-                  <OrderActionsMenu
-                    order={order}
-                    onConfirmPayment={requestConfirmPayment}
-                  />
-                )}
-                empty={
-                  <EmptyState
-                    title={loadError ? "订单数据读取失败" : "没有匹配的订单"}
-                    description={
-                      loadError ?? "清空筛选条件后可查看全部订单记录。"
-                    }
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleOrders.length ? (
-              <OrderCards
-                orders={visibleOrders}
-                onConfirmPayment={requestConfirmPayment}
-              />
-            ) : (
-              <EmptyState
-                title={loading ? "正在加载订单" : "没有匹配的订单"}
-                description={
-                  loading
-                    ? "正在读取订单、账单和支付状态。"
-                    : (loadError ?? "清空筛选条件后可查看全部订单记录。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={orderColumns}
+              rows={visibleOrders}
+              rowKey={(order) => order.id}
+              loading={loading}
+              indexStart={(activePage - 1) * pageSize + 1}
+              selectedKeys={[...selectedOrderIds]}
+              onSelectionChange={(keys) => setSelectedOrderIds(new Set(keys))}
+              rowActions={(order) => (
+                <OrderActionsMenu
+                  order={order}
+                  onConfirmPayment={requestConfirmPayment}
+                />
+              )}
+              empty={
+                <EmptyState
+                  title={loadError ? "订单数据读取失败" : "没有匹配的订单"}
+                  description={
+                    loadError ?? "清空筛选条件后可查看全部订单记录。"
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

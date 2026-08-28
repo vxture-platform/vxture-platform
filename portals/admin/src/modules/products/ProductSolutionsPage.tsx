@@ -10,7 +10,6 @@ import {
   DataTable,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
   ListPageTemplate,
   MetricGrid,
@@ -21,7 +20,7 @@ import {
 import type { DataTableColumn } from "@vxture/design-system";
 import { tierBadgeClass } from "@/modules/shared/tier-level";
 import { ListPagination } from "@/modules/shared/ListPagination";
-import type { IconName } from "@vxture/design-system";
+import type {} from "@vxture/design-system";
 import { fetchProductSolutions } from "@/api/admin-bff";
 import type {
   ProductSolutionCapability,
@@ -41,10 +40,8 @@ import {
   formatDate,
   formatMoney,
   formatNumber,
-  joinClasses,
 } from "@/modules/tenants/tenant-utils";
 
-type ViewMode = "list" | "cards";
 type StatusFilter = "all" | ProductSolutionStatus;
 type VisibilityFilter = "all" | ProductSolutionVisibility;
 type IndustryFilter = "all" | string;
@@ -66,14 +63,6 @@ function capabilityTypeLabel(type: ProductSolutionCapabilityType) {
   if (type === "model") return "模型";
   if (type === "data") return "数据";
   return "服务";
-}
-
-function capabilityTypeIcon(type: ProductSolutionCapabilityType): IconName {
-  if (type === "platform") return "database";
-  if (type === "agent") return "agent";
-  if (type === "model") return "cloud";
-  if (type === "data") return "table";
-  return "server";
 }
 
 function capabilitySourceLabel(source: ProductSolutionCapabilitySource) {
@@ -114,7 +103,7 @@ function ProductSolutionActionsMenu({
   const tShared = useTranslations();
   return (
     <div
-      className="vx-tenant-actions"
+      className="relative z-[1] inline-flex justify-self-end"
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
@@ -161,7 +150,7 @@ function CapabilityTags({
   const hiddenCount = Math.max(0, products.length - visibleProducts.length);
 
   return (
-    <span className="vx-product-solution-capability-tags">
+    <span className="flex min-w-0 flex-nowrap items-center gap-xs overflow-hidden">
       {visibleProducts.map((product) => (
         <Badge
           key={product.id}
@@ -266,97 +255,10 @@ function useProductSolutionColumns(
   ];
 }
 
-function ProductSolutionCards({
-  solutions,
-  onOpenDetails,
-}: {
-  solutions: ProductSolutionRecord[];
-  onOpenDetails: (solutionCode: string) => void;
-}) {
-  return (
-    <div
-      className="vx-tenant-directory-cards vx-product-solution-cards"
-      aria-label="解决方案卡片"
-    >
-      {solutions.map((solution) => (
-        <article
-          key={solution.id}
-          className={joinClasses(
-            "vx-tenant-directory-card",
-            `vx-product-solution-card--${solution.status}`,
-          )}
-          role="button"
-          tabIndex={0}
-          onClick={() => onOpenDetails(solution.solutionCode)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") onOpenDetails(solution.solutionCode);
-          }}
-        >
-          <header>
-            <Icon name="workflow" size="lg" fallback="placeholder" />
-            <div>
-              <strong>{solution.solutionName}</strong>
-              <span>
-                {solution.solutionCode} · {solution.industry}
-              </span>
-            </div>
-            <ProductSolutionActionsMenu
-              solution={solution}
-              onViewDetails={() => onOpenDetails(solution.solutionCode)}
-            />
-          </header>
-          <div className="vx-tenant-directory-card__badges">
-            <StatusBadge tone={PUBLISH_STATUS_TONE[solution.status]}>
-              {solutionStatusLabel(solution.status)}
-            </StatusBadge>
-            <StatusBadge tone={VISIBILITY_TONE[solution.visibility]}>
-              {solutionVisibilityLabel(solution.visibility)}
-            </StatusBadge>
-          </div>
-          <p className="vx-product-solution-card__description">
-            {solution.description}
-          </p>
-          <div className="vx-product-solution-card__capabilities">
-            {solution.products.map((product) => (
-              <span key={product.id}>
-                <Icon
-                  name={capabilityTypeIcon(product.productType)}
-                  size="xs"
-                  fallback="placeholder"
-                />
-                {product.productName}
-              </span>
-            ))}
-          </div>
-          <div className="vx-tenant-directory-card__metrics">
-            <span>
-              <b>{formatNumber(solution.products.length)}</b>
-              <small>产品能力</small>
-            </span>
-            <span>
-              <b>{formatNumber(solution.tiers.length)}</b>
-              <small>套餐版本</small>
-            </span>
-            <span>
-              <b>{formatNumber(solution.subscriptionCount)}</b>
-              <small>订阅</small>
-            </span>
-          </div>
-          <footer>
-            <span>{solution.customerSegment}</span>
-            <strong>{formatMoney(solution.monthlyRevenue)}</strong>
-          </footer>
-        </article>
-      ))}
-    </div>
-  );
-}
-
 export function ProductSolutionsPage() {
   const tShared = useTranslations();
   const router = useRouter();
   const [solutions, setSolutions] = useState<ProductSolutionRecord[]>([]);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedSolutionIds, setSelectedSolutionIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -473,7 +375,6 @@ export function ProductSolutionsPage() {
     sourceFilter,
     statusFilter,
     visibilityFilter,
-    viewMode,
   ]);
 
   function handleReset() {
@@ -491,7 +392,7 @@ export function ProductSolutionsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-product-solutions-page"
+        className="w-full vx-product-solutions-page"
         header={
           <PageHeader
             icon="workflow"
@@ -547,9 +448,6 @@ export function ProductSolutionsPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredSolutions.length)}
             aria-label="解决方案筛选"
             search={
@@ -557,7 +455,7 @@ export function ProductSolutionsPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索方案、行业、产品能力"
-                className="vx-tenant-search vx-product-solution-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索解决方案"
               />
             }
@@ -570,9 +468,9 @@ export function ProductSolutionsPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -585,7 +483,7 @@ export function ProductSolutionsPage() {
                 <option value="archived">{tShared("actions.archive")}</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={visibilityFilter}
                 onChange={(event) =>
                   setVisibilityFilter(event.target.value as VisibilityFilter)
@@ -597,7 +495,7 @@ export function ProductSolutionsPage() {
                 <option value="internal">内部</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select vx-product-solution-select--industry"
+                wrapperClassName="w-fit basis-media-xl"
                 value={industryFilter}
                 onChange={(event) => setIndustryFilter(event.target.value)}
                 aria-label="行业场景"
@@ -610,7 +508,7 @@ export function ProductSolutionsPage() {
                 ))}
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={sourceFilter}
                 onChange={(event) =>
                   setSourceFilter(event.target.value as SourceFilter)
@@ -621,77 +519,48 @@ export function ProductSolutionsPage() {
                 <option value="self">自建</option>
                 <option value="partner">三方</option>
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         table={
-          <section className="vx-tenant-directory" aria-label="解决方案清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="解决方案清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="vx-tenant-directory__header">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={solutionColumns}
-                rows={visibleSolutions}
-                rowKey={(solution) => solution.id}
-                loading={loading}
-                indexStart={(activePage - 1) * pageSize + 1}
-                selectedKeys={[...selectedSolutionIds]}
-                onSelectionChange={(keys) =>
-                  setSelectedSolutionIds(new Set(keys))
-                }
-                rowActions={(solution) => (
-                  <ProductSolutionActionsMenu
-                    solution={solution}
-                    onViewDetails={() =>
-                      handleOpenDetails(solution.solutionCode)
-                    }
-                  />
-                )}
-                empty={
-                  <EmptyState
-                    title="没有匹配的解决方案"
-                    description="清空筛选条件后可查看全部解决方案。"
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleSolutions.length ? (
-              <ProductSolutionCards
-                solutions={visibleSolutions}
-                onOpenDetails={handleOpenDetails}
-              />
-            ) : (
-              <EmptyState
-                title={loading ? "正在加载解决方案" : "没有匹配的解决方案"}
-                description={
-                  loading
-                    ? "正在读取行业解决方案数据。"
-                    : "清空筛选条件后可查看全部解决方案。"
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={solutionColumns}
+              rows={visibleSolutions}
+              rowKey={(solution) => solution.id}
+              loading={loading}
+              indexStart={(activePage - 1) * pageSize + 1}
+              selectedKeys={[...selectedSolutionIds]}
+              onSelectionChange={(keys) =>
+                setSelectedSolutionIds(new Set(keys))
+              }
+              rowActions={(solution) => (
+                <ProductSolutionActionsMenu
+                  solution={solution}
+                  onViewDetails={() => handleOpenDetails(solution.solutionCode)}
+                />
+              )}
+              empty={
+                <EmptyState
+                  title="没有匹配的解决方案"
+                  description="清空筛选条件后可查看全部解决方案。"
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

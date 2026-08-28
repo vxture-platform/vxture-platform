@@ -12,8 +12,6 @@ import {
   FilterBar,
   Input,
   ListPageTemplate,
-  ListCard,
-  ListCardGrid,
   MetricGrid,
   NativeSelect,
   Section,
@@ -21,11 +19,7 @@ import {
   StatusBadge,
   TableTitleCell,
 } from "@vxture/design-system";
-import type {
-  FilterBarView,
-  IconName,
-  StatusBadgeTone,
-} from "@vxture/design-system";
+import type { IconName, StatusBadgeTone } from "@vxture/design-system";
 import { exportRowsToCsv, type CsvColumn } from "@/lib/exportCsv";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import type { PageSize } from "@/modules/shared/PageSizePicker";
@@ -55,6 +49,8 @@ interface OpsTodoItem {
   title: string;
   description: string;
   tenantId: string;
+  /** 面向用户的租户编码，跳转用——地址栏不出 UUID。 */
+  tenantCode: string;
   tenantName: string;
   tenantMeta: string;
   href: string;
@@ -133,6 +129,7 @@ function buildOpsTodos(
         title: `${tenant.displayName} 认证待审核`,
         description: `当前认证状态为${verifiedLabel(tenant.verifiedStatus)}，需要核验资质材料与联系人信息。`,
         tenantId: tenant.id,
+        tenantCode: tenant.tenantCode,
         tenantName: tenant.displayName,
         tenantMeta,
         href: "/verifications",
@@ -151,6 +148,7 @@ function buildOpsTodos(
         title: `${tenant.displayName} 风险状态需复核`,
         description: tenant.notes,
         tenantId: tenant.id,
+        tenantCode: tenant.tenantCode,
         tenantName: tenant.displayName,
         tenantMeta,
         href: tenantHref,
@@ -177,6 +175,7 @@ function buildOpsTodos(
           title: `${tenant.displayName} ${usage.label} ${usage.status === "danger" ? "超限" : "预警"}`,
           description: `${usage.label} 已使用 ${formatNumber(usage.used)} ${usage.unit}，额度 ${usage.quota ? formatNumber(usage.quota) : "未配置"}，当前 ${usageRate}%。`,
           tenantId: tenant.id,
+          tenantCode: tenant.tenantCode,
           tenantName: tenant.displayName,
           tenantMeta,
           href: tenantHref,
@@ -200,6 +199,7 @@ function buildOpsTodos(
           title: `${tenant.displayName} ${subscription.status === "past_due" ? "订阅逾期" : "试用跟进"}`,
           description: `${subscription.productName} / ${subscription.planName}，月收入 ${formatNumber(subscription.monthlyRevenue)}，需要运营确认续费或转正动作。`,
           tenantId: tenant.id,
+          tenantCode: tenant.tenantCode,
           tenantName: tenant.displayName,
           tenantMeta,
           href: tenantHref,
@@ -222,6 +222,7 @@ function buildOpsTodos(
       title: `${ticket.id} ${ticket.title}`,
       description: `${ticket.tenantName} 的 ${ticket.priority.toUpperCase()} 工单处于${ticket.status === "blocked" ? "阻塞" : ticket.status === "processing" ? "处理中" : "待处理"}状态。`,
       tenantId: ticket.tenantId,
+      tenantCode: ticket.tenantCode,
       tenantName: ticket.tenantName,
       tenantMeta: `${typeLabel(ticket.tenantType)} / ${ticket.region} / ${statusLabel(ticket.tenantStatus)}`,
       href: "/tickets",
@@ -292,7 +293,6 @@ export function OpsTodosPage() {
     "all",
   );
   const [query, setQuery] = useState("");
-  const [viewMode, setViewMode] = useState<FilterBarView>("list");
   const [selectedKeys, setSelectedKeys] = useState<readonly string[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(20);
@@ -336,7 +336,7 @@ export function OpsTodosPage() {
           label: tShared("actions.viewTenant"),
           icon: "buildings",
           onSelect: () =>
-            router.push(`/tenants/${encodeURIComponent(item.tenantId)}`),
+            router.push(`/tenants/${encodeURIComponent(item.tenantCode)}`),
         },
       ]}
     />
@@ -401,7 +401,7 @@ export function OpsTodosPage() {
 
   return (
     <ListPageTemplate
-      className="vx-tenant-management-page"
+      className="w-full "
       header={
         <PageHeader
           icon="table"
@@ -486,14 +486,11 @@ export function OpsTodosPage() {
         >
           <FilterBar
             aria-label="待办任务筛选"
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={`${formatNumber(filteredTodos.length)} 条`}
             search={
               <Input
                 type="search"
-                className="vx-tenant-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 placeholder="搜索事项、租户、标签…"
                 value={query}
                 onChange={(event) => {
@@ -525,8 +522,7 @@ export function OpsTodosPage() {
             }
           >
             <NativeSelect
-              wrapperClassName="w-fit"
-              className="vx-tenant-select"
+              wrapperClassName="w-fit basis-media-xl"
               value={severityFilter}
               onChange={(event) => {
                 setSeverityFilter(event.target.value as TodoSeverity | "all");
@@ -545,140 +541,87 @@ export function OpsTodosPage() {
             </NativeSelect>
           </FilterBar>
 
-          {viewMode === "cards" ? (
-            isLoading || !pageTodos.length ? (
+          <DataTable
+            columns={[
+              {
+                id: "item",
+                header: "事项",
+                cell: (item) => (
+                  <TableTitleCell
+                    icon={item.icon}
+                    title={item.title}
+                    description={item.description}
+                    onTitleClick={() => router.push(item.href)}
+                  />
+                ),
+              },
+              {
+                id: "tenant",
+                header: "租户",
+                cell: (item) => (
+                  <TableTitleCell
+                    title={item.tenantName}
+                    description={item.tenantMeta}
+                    onTitleClick={() =>
+                      router.push(
+                        `/tenants/${encodeURIComponent(item.tenantCode)}`,
+                      )
+                    }
+                  />
+                ),
+              },
+              {
+                id: "type",
+                header: tShared("columns.kind"),
+                cell: (item) => TODO_TYPE_LABEL[item.type],
+              },
+              {
+                id: "severity",
+                header: "紧急度",
+                cell: (item) => (
+                  <StatusBadge tone={SEVERITY_TONE[item.severity]}>
+                    {SEVERITY_LABEL[item.severity]}
+                  </StatusBadge>
+                ),
+              },
+              {
+                id: "tags",
+                header: "标签",
+                cell: (item) => (
+                  <span className="flex flex-wrap gap-xs">
+                    {item.tags.slice(0, 3).map((tag) => (
+                      <Badge key={tag}>{tag}</Badge>
+                    ))}
+                  </span>
+                ),
+              },
+              {
+                id: "updated",
+                header: tShared("columns.updatedAt"),
+                align: "right",
+                cell: (item) => formatDateTime(item.updatedAt, locale),
+              },
+            ]}
+            rows={pageTodos}
+            rowKey={(item) => item.id}
+            indexStart={(activePage - 1) * pageSize + 1}
+            selectedKeys={selectedKeys}
+            onSelectionChange={setSelectedKeys}
+            loading={isLoading}
+            empty={
               <EmptyState
-                title={
-                  isLoading
-                    ? "正在加载待办"
-                    : tenantLoadError
-                      ? "待办数据读取失败"
-                      : "当前没有待办"
-                }
+                title={tenantLoadError ? "待办数据读取失败" : "当前没有待办"}
                 description={
-                  isLoading
-                    ? "正在从租户、用量、订阅与工单数据库读取数据。"
-                    : (tenantLoadError ??
-                      (query || typeFilter !== "all" || severityFilter !== "all"
-                        ? tShared("common.adjustFiltersHint")
-                        : (ticketLoadError ?? "数据库中没有匹配的待办任务。")))
+                  tenantLoadError ??
+                  (query || typeFilter !== "all" || severityFilter !== "all"
+                    ? tShared("common.adjustFiltersHint")
+                    : (ticketLoadError ?? "数据库中没有匹配的待办任务。"))
                 }
               />
-            ) : (
-              <>
-                <ListCardGrid>
-                  {pageTodos.map((item) => (
-                    <ListCard
-                      key={item.id}
-                      icon={item.icon}
-                      title={item.title}
-                      description={item.description}
-                      onTitleClick={() => router.push(item.href)}
-                      status={
-                        <StatusBadge tone={SEVERITY_TONE[item.severity]}>
-                          {SEVERITY_LABEL[item.severity]}
-                        </StatusBadge>
-                      }
-                      actions={todoActions(item)}
-                      meta={
-                        <>
-                          <span>{item.tenantName}</span>
-                          <span>{TODO_TYPE_LABEL[item.type]}</span>
-                          <span>{formatDateTime(item.updatedAt, locale)}</span>
-                          {item.tags.slice(0, 3).map((tag) => (
-                            <Badge key={tag}>{tag}</Badge>
-                          ))}
-                        </>
-                      }
-                    />
-                  ))}
-                </ListCardGrid>
-                {pagination}
-              </>
-            )
-          ) : (
-            <DataTable
-              columns={[
-                {
-                  id: "item",
-                  header: "事项",
-                  cell: (item) => (
-                    <TableTitleCell
-                      icon={item.icon}
-                      title={item.title}
-                      description={item.description}
-                      onTitleClick={() => router.push(item.href)}
-                    />
-                  ),
-                },
-                {
-                  id: "tenant",
-                  header: "租户",
-                  cell: (item) => (
-                    <TableTitleCell
-                      title={item.tenantName}
-                      description={item.tenantMeta}
-                      onTitleClick={() =>
-                        router.push(
-                          `/tenants/${encodeURIComponent(item.tenantId)}`,
-                        )
-                      }
-                    />
-                  ),
-                },
-                {
-                  id: "type",
-                  header: tShared("columns.kind"),
-                  cell: (item) => TODO_TYPE_LABEL[item.type],
-                },
-                {
-                  id: "severity",
-                  header: "紧急度",
-                  cell: (item) => (
-                    <StatusBadge tone={SEVERITY_TONE[item.severity]}>
-                      {SEVERITY_LABEL[item.severity]}
-                    </StatusBadge>
-                  ),
-                },
-                {
-                  id: "tags",
-                  header: "标签",
-                  cell: (item) => (
-                    <span className="flex flex-wrap gap-xs">
-                      {item.tags.slice(0, 3).map((tag) => (
-                        <Badge key={tag}>{tag}</Badge>
-                      ))}
-                    </span>
-                  ),
-                },
-                {
-                  id: "updated",
-                  header: tShared("columns.updatedAt"),
-                  align: "right",
-                  cell: (item) => formatDateTime(item.updatedAt, locale),
-                },
-              ]}
-              rows={pageTodos}
-              rowKey={(item) => item.id}
-              indexStart={(activePage - 1) * pageSize + 1}
-              selectedKeys={selectedKeys}
-              onSelectionChange={setSelectedKeys}
-              loading={isLoading}
-              empty={
-                <EmptyState
-                  title={tenantLoadError ? "待办数据读取失败" : "当前没有待办"}
-                  description={
-                    tenantLoadError ??
-                    (query || typeFilter !== "all" || severityFilter !== "all"
-                      ? tShared("common.adjustFiltersHint")
-                      : (ticketLoadError ?? "数据库中没有匹配的待办任务。"))
-                  }
-                />
-              }
-              footer={pagination}
-              rowActions={todoActions}
-            />
-          )}
+            }
+            footer={pagination}
+            rowActions={todoActions}
+          />
         </Section>
       }
     />

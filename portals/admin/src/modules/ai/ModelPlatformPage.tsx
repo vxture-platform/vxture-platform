@@ -10,11 +10,12 @@ import {
   DialogForm,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
   Label,
+  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -62,7 +63,6 @@ import { useTranslations } from "next-intl";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 
-type ViewMode = "list" | "cards";
 type ModelStatusFilter = "all" | "active" | "inactive";
 type ModelSourceFilter = "all" | "online" | "private";
 type Feedback = {
@@ -336,14 +336,11 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat("zh-CN").format(value);
 }
 
-/**
- * 卡片底色。**弃用的不算 muted**——它仍在服务、仍在计费，灰掉会让人以为它已经停了，
- * 而"已停用"与"仍在服务但别再往上建"要做的事完全不同。
- */
-function modelTone(model: AiModelRecord) {
-  if (!isServing(model.state)) return "muted";
-  return isPrivateProvider(model.provider) ? "private" : "active";
-}
+/* 原有 `modelTone()` 随卡片换 `MetricListCard` 一同退场——它只为拼
+   `vx-model-platform-card--{tone}` 而存在。它的两个判断各自有了去处：
+   「弃用的不算 muted」归下面的 `MODEL_STATE_TONE`（deprecated → warning）；
+   「私有部署另给一色」则不再做——厂商是**类目**、没有严重度，卡上那个
+   `Badge variant="outline"` 已经在说这件事（判据同本文件内那条注释）。 */
 
 /**
  * 模型三态的呈现。**「已弃用」用 warning 而不是 neutral**：它仍在服务，中性色会读成
@@ -398,7 +395,6 @@ export function ModelPlatformPage() {
   const [linkStatusByModelId, setLinkStatusByModelId] = useState<
     Record<string, ModelLinkStatus>
   >({});
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<ModelStatusFilter>("all");
   const [sourceFilter, setSourceFilter] = useState<ModelSourceFilter>("all");
@@ -543,7 +539,7 @@ export function ModelPlatformPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [pageSize, query, sourceFilter, statusFilter, viewMode]);
+  }, [pageSize, query, sourceFilter, statusFilter]);
 
   const modelById = useMemo(
     () => new Map(models.map((model) => [model.id, model])),
@@ -950,7 +946,7 @@ export function ModelPlatformPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-model-platform-page"
+        className="w-full vx-model-platform-page"
         header={
           <PageHeader
             icon="code"
@@ -1049,9 +1045,6 @@ export function ModelPlatformPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredModels.length)}
             aria-label="模型状态"
             search={
@@ -1059,15 +1052,15 @@ export function ModelPlatformPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={t("table.searchPlaceholder")}
-                className="vx-tenant-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label={t("table.searchAriaLabel")}
               />
             }
             onReset={handleReset}
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as ModelStatusFilter)
@@ -1081,7 +1074,7 @@ export function ModelPlatformPage() {
                 ))}
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={sourceFilter}
                 onChange={(event) =>
                   setSourceFilter(event.target.value as ModelSourceFilter)
@@ -1094,141 +1087,51 @@ export function ModelPlatformPage() {
                   </option>
                 ))}
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         table={
           <section
-            className="vx-tenant-directory"
+            className="grid min-w-0 max-w-full gap-xs"
             aria-label={t("table.toolbarTitle", {
               count: filteredModels.length,
             })}
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="vx-tenant-directory__header">
-                <span>{t("empty.loadingTitle")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={modelColumns}
-                rows={pagedModels}
-                rowKey={(model) => model.id}
-                loading={loading}
-                indexStart={pageStart + 1}
-                empty={
-                  loadFailed ? (
-                    /* 读取失败与"筛选没匹配上"是两回事。混成一种，本页就会在顶部
-                     横幅已经报出「模型数据读取失败」的同时，两行之下劝人去放宽
-                     筛选——同一屏自相矛盾（2026-08-07 走查）。 */
-                    <EmptyState
-                      icon="warning"
-                      title={t("empty.loadFailedTitle")}
-                      description={t("empty.loadFailedDescription")}
-                    />
-                  ) : (
-                    <EmptyState
-                      title={t("empty.title")}
-                      description={t("empty.description")}
-                      action={
-                        <ActionButton
-                          variant="outline"
-                          icon="x"
-                          onClick={handleReset}
-                        >
-                          {t("empty.resetFilters")}
-                        </ActionButton>
-                      }
-                    />
-                  )
-                }
-              />
-            ) : pagedModels.length ? (
-              <div
-                className="vx-tenant-directory-cards vx-model-platform-cards"
-                aria-label={t("table.toolbarTitle", {
-                  count: filteredModels.length,
-                })}
-              >
-                {pagedModels.map((model) => (
-                  <article
-                    key={model.id}
-                    className={`vx-tenant-directory-card vx-model-platform-card vx-model-platform-card--${modelTone(model)}`}
-                  >
-                    <header>
-                      <Icon
-                        name={
-                          isPrivateProvider(model.provider) ? "code" : "plug"
-                        }
-                        size={24}
-                        fallback="placeholder"
-                      />
-                      <div>
-                        <TableTitleCell
-                          title={model.modelName}
-                          description={model.modelCode}
-                        />
-                      </div>
-                    </header>
-                    <div className="vx-tenant-directory-card__badges">
-                      {/* 厂商是类目（在线 / 私有部署），没有严重度——不给语气色。
-                          原先的蓝/绿两档背景实测从未生效：那族 CSS 排在
-                          `.vx-tenant-pill` 基类之前，同层同特异度被基类压死。 */}
-                      <Badge variant="outline">
-                        {providerLabel(model.provider)}
-                      </Badge>
-                      <StatusBadge tone={MODEL_STATE_TONE[model.state]}>
-                        {t(`status.${model.state}`)}
-                      </StatusBadge>
-                    </div>
-                    <div className="vx-tenant-directory-card__metrics">
-                      <span>
-                        <b>{model.capabilities.length}</b>
-                        <small>{t("table.columns.capabilities")}</small>
-                      </span>
-                      <span>
-                        <b>
-                          {isPrivateProvider(model.provider)
-                            ? t("filters.private")
-                            : t("filters.online")}
-                        </b>
-                        <small>{t("table.columns.provider")}</small>
-                      </span>
-                      <span>
-                        <b>{model.protocol}</b>
-                        <small>{t("dialogs.fields.protocol")}</small>
-                      </span>
-                    </div>
-                    <footer>
-                      <span>
-                        {model.capabilities.slice(0, 2).join(", ") || "-"}
-                      </span>
-                      <strong>{model.keyReference?.name || "-"}</strong>
-                    </footer>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                title={loading ? t("empty.loadingTitle") : t("empty.title")}
-                description={
-                  loading
-                    ? t("empty.loadingDescription")
-                    : t("empty.description")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {t("empty.resetFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={modelColumns}
+              rows={pagedModels}
+              rowKey={(model) => model.id}
+              loading={loading}
+              indexStart={pageStart + 1}
+              empty={
+                loadFailed ? (
+                  /* 读取失败与"筛选没匹配上"是两回事。混成一种，本页就会在顶部
+                   横幅已经报出「模型数据读取失败」的同时，两行之下劝人去放宽
+                   筛选——同一屏自相矛盾（2026-08-07 走查）。 */
+                  <EmptyState
+                    icon="warning"
+                    title={t("empty.loadFailedTitle")}
+                    description={t("empty.loadFailedDescription")}
+                  />
+                ) : (
+                  <EmptyState
+                    title={t("empty.title")}
+                    description={t("empty.description")}
+                    action={
+                      <ActionButton
+                        variant="outline"
+                        icon="x"
+                        onClick={handleReset}
+                      >
+                        {t("empty.resetFilters")}
+                      </ActionButton>
+                    }
+                  />
+                )
+              }
+            />
           </section>
         }
         footer={
@@ -1249,43 +1152,44 @@ export function ModelPlatformPage() {
         }
       />
 
-      <div className="vx-tenant-list-shell">
-        <section className="vx-tenant-toolbar" aria-label="模型厂商管理">
+      <div className="grid min-w-0">
+        <section
+          className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch"
+          aria-label="模型厂商管理"
+        >
           <strong>模型厂商</strong>
-          <span className="vx-tenant-view-count">
+          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
             {formatNumber(providers.length)}
           </span>
-          <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
+          <span className="flex-1 max-lg:hidden" aria-hidden="true" />
           {/* 只读：厂商的创建/编辑/启停/删除已迁至 opera 技术运维平台。 */}
         </section>
-        <section className="vx-tenant-directory" aria-label="模型厂商列表">
+        <section
+          className="grid min-w-0 max-w-full gap-xs"
+          aria-label="模型厂商列表"
+        >
           {providers.length ? (
-            <div className="vx-tenant-directory-cards vx-model-platform-cards">
+            <ListCardGrid>
               {providers.map((provider) => (
-                <article
+                <MetricListCard
                   key={provider.id}
-                  className={`vx-tenant-directory-card vx-model-platform-card vx-model-platform-card--${isEnabled(provider.state) ? "active" : "muted"}`}
-                >
-                  <header>
-                    <Icon name="settings" size={24} fallback="placeholder" />
-                    <div>
-                      <TableTitleCell
-                        title={provider.providerName}
-                        description={provider.providerCode}
-                      />
-                    </div>
-                  </header>
-                  <div className="vx-tenant-directory-card__badges">
-                    <Badge>{provider.providerType}</Badge>
-                    <StatusBadge tone={activeTone(isEnabled(provider.state))}>
-                      {isEnabled(provider.state)
-                        ? t("status.active")
-                        : t("status.inactive")}
-                    </StatusBadge>
-                  </div>
-                </article>
+                  icon="settings"
+                  title={provider.providerName}
+                  description={provider.providerCode}
+                  tone={activeTone(isEnabled(provider.state))}
+                  badges={
+                    <>
+                      <Badge>{provider.providerType}</Badge>
+                      <StatusBadge tone={activeTone(isEnabled(provider.state))}>
+                        {isEnabled(provider.state)
+                          ? t("status.active")
+                          : t("status.inactive")}
+                      </StatusBadge>
+                    </>
+                  }
+                />
               ))}
-            </div>
+            </ListCardGrid>
           ) : (
             <EmptyState
               title="暂无厂商"
@@ -1295,13 +1199,16 @@ export function ModelPlatformPage() {
         </section>
       </div>
 
-      <div className="vx-tenant-list-shell">
-        <section className="vx-tenant-toolbar" aria-label="计价规则管理">
+      <div className="grid min-w-0">
+        <section
+          className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch"
+          aria-label="计价规则管理"
+        >
           <strong>计价规则</strong>
-          <span className="vx-tenant-view-count">
+          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
             {formatNumber(priceRules.length)}
           </span>
-          <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
+          <span className="flex-1 max-lg:hidden" aria-hidden="true" />
           <ActionButton
             icon="plus"
             disabled={models.length === 0}
@@ -1310,25 +1217,23 @@ export function ModelPlatformPage() {
             新建规则
           </ActionButton>
         </section>
-        <section className="vx-tenant-directory" aria-label="计价规则列表">
+        <section
+          className="grid min-w-0 max-w-full gap-xs"
+          aria-label="计价规则列表"
+        >
           {priceRules.length ? (
-            <div className="vx-tenant-directory-cards vx-model-platform-cards">
+            <ListCardGrid>
               {pagedPriceRules.map((rule) => {
                 const ruleModel = modelById.get(rule.modelId);
                 return (
-                  <article
+                  <MetricListCard
                     key={rule.id}
-                    className={`vx-tenant-directory-card vx-model-platform-card vx-model-platform-card--${isEnabled(rule.state) ? "active" : "muted"}`}
-                  >
-                    <header>
-                      <Icon name="database" size={24} fallback="placeholder" />
-                      <div>
-                        <TableTitleCell
-                          title={ruleModel?.modelName ?? rule.modelId}
-                          description={`${rule.billingMode} · ${rule.currency}`}
-                          onTitleClick={() => openEditPriceRuleDialog(rule)}
-                        />
-                      </div>
+                    icon="database"
+                    title={ruleModel?.modelName ?? rule.modelId}
+                    description={`${rule.billingMode} · ${rule.currency}`}
+                    tone={activeTone(isEnabled(rule.state))}
+                    onClick={() => openEditPriceRuleDialog(rule)}
+                    actions={
                       <ActionMenu
                         label={`${ruleModel?.modelName ?? rule.modelId} 计价规则操作`}
                         items={[
@@ -1354,41 +1259,45 @@ export function ModelPlatformPage() {
                           },
                         ]}
                       />
-                    </header>
-                    <div className="vx-tenant-directory-card__badges">
-                      <Badge>{rule.currency}</Badge>
-                      <StatusBadge tone={activeTone(isEnabled(rule.state))}>
-                        {isEnabled(rule.state)
-                          ? t("status.active")
-                          : t("status.inactive")}
-                      </StatusBadge>
-                    </div>
-                    <div className="vx-tenant-directory-card__metrics">
-                      <span>
-                        <b>{trimUnitPrice(rule.inputUnitPrice)}</b>
-                        <small>输入单价</small>
-                      </span>
-                      <span>
-                        <b>{trimUnitPrice(rule.outputUnitPrice)}</b>
-                        <small>输出单价</small>
-                      </span>
-                      <span>
-                        <b>
-                          {rule.cachedInputUnitPrice
-                            ? trimUnitPrice(rule.cachedInputUnitPrice)
-                            : "—"}
-                        </b>
-                        <small>缓存输入单价</small>
-                      </span>
-                      <span>
-                        <b>{formatNumber(rule.unitTokens)}</b>
-                        <small>计价单位</small>
-                      </span>
-                    </div>
-                  </article>
+                    }
+                    badges={
+                      <>
+                        <Badge>{rule.currency}</Badge>
+                        <StatusBadge tone={activeTone(isEnabled(rule.state))}>
+                          {isEnabled(rule.state)
+                            ? t("status.active")
+                            : t("status.inactive")}
+                        </StatusBadge>
+                      </>
+                    }
+                    metrics={[
+                      {
+                        key: "input",
+                        value: trimUnitPrice(rule.inputUnitPrice),
+                        label: "输入单价",
+                      },
+                      {
+                        key: "output",
+                        value: trimUnitPrice(rule.outputUnitPrice),
+                        label: "输出单价",
+                      },
+                      {
+                        key: "cached",
+                        value: rule.cachedInputUnitPrice
+                          ? trimUnitPrice(rule.cachedInputUnitPrice)
+                          : "—",
+                        label: "缓存输入单价",
+                      },
+                      {
+                        key: "unit",
+                        value: formatNumber(rule.unitTokens),
+                        label: "计价单位",
+                      },
+                    ]}
+                  />
                 );
               })}
-            </div>
+            </ListCardGrid>
           ) : (
             <EmptyState
               title="暂无计价规则"
@@ -1419,13 +1328,16 @@ export function ModelPlatformPage() {
           限流与并发的闸门。与上面的计价规则同页并排，是因为运营对一个模型要问的
           两件事就是「怎么收钱」和「怎么限流」；但两张表的可改性正好相反，所以
           对话框里各自把话说清楚。 */}
-      <div className="vx-tenant-list-shell">
-        <section className="vx-tenant-toolbar" aria-label="模型策略管理">
+      <div className="grid min-w-0">
+        <section
+          className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch"
+          aria-label="模型策略管理"
+        >
           <strong>模型策略</strong>
-          <span className="vx-tenant-view-count">
+          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
             {formatNumber(policies.length)}
           </span>
-          <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
+          <span className="flex-1 max-lg:hidden" aria-hidden="true" />
           <ActionButton
             icon="plus"
             disabled={models.length === 0}
@@ -1434,32 +1346,28 @@ export function ModelPlatformPage() {
             新建策略
           </ActionButton>
         </section>
-        <section className="vx-tenant-directory" aria-label="模型策略列表">
+        <section
+          className="grid min-w-0 max-w-full gap-xs"
+          aria-label="模型策略列表"
+        >
           {policies.length ? (
-            <div className="vx-tenant-directory-cards vx-model-platform-cards">
+            <ListCardGrid>
               {pagedPolicies.map((policy) => {
                 const policyModel = modelById.get(policy.modelId);
                 const inForce = policyStanding.inForce.has(policy.id);
                 const shadowed = policyStanding.shadowed.has(policy.id);
                 const enforces = hasEnforcedLimit(policy);
                 return (
-                  <article
+                  <MetricListCard
                     key={policy.id}
-                    className={`vx-tenant-directory-card vx-model-platform-card vx-model-platform-card--${isEnabled(policy.state) ? "active" : "muted"}`}
-                  >
-                    <header>
-                      <Icon name="shield" size={24} fallback="placeholder" />
-                      <div>
-                        <TableTitleCell
-                          title={
-                            policy.name ||
-                            policyModel?.modelName ||
-                            "未命名策略"
-                          }
-                          description={`${describePolicyScope(policy)} · ${policyModel?.modelName ?? "模型已删除"}`}
-                          onTitleClick={() => openEditPolicyDialog(policy)}
-                        />
-                      </div>
+                    icon="shield"
+                    title={
+                      policy.name || policyModel?.modelName || "未命名策略"
+                    }
+                    description={`${describePolicyScope(policy)} · ${policyModel?.modelName ?? "模型已删除"}`}
+                    tone={activeTone(isEnabled(policy.state))}
+                    onClick={() => openEditPolicyDialog(policy)}
+                    actions={
                       <ActionMenu
                         label={`${policy.name || policyModel?.modelName || "策略"}操作`}
                         items={[
@@ -1485,85 +1393,89 @@ export function ModelPlatformPage() {
                           },
                         ]}
                       />
-                    </header>
-                    <div className="vx-tenant-directory-card__badges">
-                      <Badge>{policy.tenantId ? "租户专属" : "全局默认"}</Badge>
-                      <StatusBadge tone={activeTone(isEnabled(policy.state))}>
-                        {isEnabled(policy.state)
-                          ? t("status.active")
-                          : t("status.inactive")}
-                      </StatusBadge>
-                      {/* 四个只在为真时出现的告警，每个都对应一种「看着配了、其实
+                    }
+                    badges={
+                      <>
+                        <Badge>
+                          {policy.tenantId ? "租户专属" : "全局默认"}
+                        </Badge>
+                        <StatusBadge tone={activeTone(isEnabled(policy.state))}>
+                          {isEnabled(policy.state)
+                            ? t("status.active")
+                            : t("status.inactive")}
+                        </StatusBadge>
+                        {/* 四个只在为真时出现的告警，每个都对应一种「看着配了、其实
                           没起作用」。它们是这张卡片存在的主要理由——光看一排数字，
                           这四种情况长得和一条正常生效的策略一模一样。
                           互斥地判：一条还没到生效窗口的策略谈不上被谁覆盖。 */}
-                      {isEnabled(policy.state) && !inForce ? (
-                        <StatusBadge
-                          tone="warning"
-                          title="状态是启用，但当前时刻不在它的生效窗口里（生效时间还没到，或者失效时间已过）。它现在不参与任何选择。"
-                        >
-                          未在生效窗口
-                        </StatusBadge>
-                      ) : null}
-                      {inForce && shadowed ? (
-                        <StatusBadge
-                          tone="warning"
-                          title="同一模型、同一作用域下另有一条策略排在前面（优先级更小，或同优先级但生效更晚）。Atlas 只选一条，这一条永远轮不到。"
-                        >
-                          被覆盖
-                        </StatusBadge>
-                      ) : null}
-                      {inForce && !shadowed && !enforces ? (
-                        <StatusBadge
-                          tone="warning"
-                          title="RPM 与最大并发都没设——这两项是 Atlas 运行时唯一真正会拦请求的。这条策略正在生效，但不限制任何调用。"
-                        >
-                          不限制任何调用
-                        </StatusBadge>
-                      ) : null}
-                      {hasRecordedOnlyLimit(policy) ? (
-                        <StatusBadge
-                          tone="neutral"
-                          title="TPM / TPD / 最大上下文 Atlas 已收下并存库，但运行时还没有读它们——不要把它们当成已经在拦的闸门。"
-                        >
-                          含未生效项
-                        </StatusBadge>
-                      ) : null}
-                    </div>
-                    <div className="vx-tenant-directory-card__metrics">
-                      {/* 只放 atlas 真的会读的两项 + 决定谁赢的那一项。未生效的三项
-                          不混进来充数——那正是「含未生效项」徽标要说的事。 */}
-                      <span>
-                        <b>
-                          {policy.rateLimitRpm == null
+                        {isEnabled(policy.state) && !inForce ? (
+                          <StatusBadge
+                            tone="warning"
+                            title="状态是启用，但当前时刻不在它的生效窗口里（生效时间还没到，或者失效时间已过）。它现在不参与任何选择。"
+                          >
+                            未在生效窗口
+                          </StatusBadge>
+                        ) : null}
+                        {inForce && shadowed ? (
+                          <StatusBadge
+                            tone="warning"
+                            title="同一模型、同一作用域下另有一条策略排在前面（优先级更小，或同优先级但生效更晚）。Atlas 只选一条，这一条永远轮不到。"
+                          >
+                            被覆盖
+                          </StatusBadge>
+                        ) : null}
+                        {inForce && !shadowed && !enforces ? (
+                          <StatusBadge
+                            tone="warning"
+                            title="RPM 与最大并发都没设——这两项是 Atlas 运行时唯一真正会拦请求的。这条策略正在生效，但不限制任何调用。"
+                          >
+                            不限制任何调用
+                          </StatusBadge>
+                        ) : null}
+                        {hasRecordedOnlyLimit(policy) ? (
+                          <StatusBadge
+                            tone="neutral"
+                            title="TPM / TPD / 最大上下文 Atlas 已收下并存库，但运行时还没有读它们——不要把它们当成已经在拦的闸门。"
+                          >
+                            含未生效项
+                          </StatusBadge>
+                        ) : null}
+                      </>
+                    }
+                    /* 只放 atlas 真的会读的两项 + 决定谁赢的那一项。未生效的三项
+                       不混进来充数——那正是「含未生效项」徽标要说的事。 */
+                    metrics={[
+                      {
+                        key: "rpm",
+                        value:
+                          policy.rateLimitRpm == null
                             ? "不限"
-                            : formatNumber(policy.rateLimitRpm)}
-                        </b>
-                        <small>RPM 上限</small>
-                      </span>
-                      <span>
-                        <b>
-                          {policy.maxConcurrent == null
+                            : formatNumber(policy.rateLimitRpm),
+                        label: "RPM 上限",
+                      },
+                      {
+                        key: "concurrent",
+                        value:
+                          policy.maxConcurrent == null
                             ? "不限"
-                            : formatNumber(policy.maxConcurrent)}
-                        </b>
-                        <small>最大并发</small>
-                      </span>
-                      <span>
-                        <b>{formatNumber(policy.priority)}</b>
-                        <small>优先级（小者先）</small>
-                      </span>
-                      <span>
-                        <b>
-                          {policy.expiresAt ? "有" : tShared("common.none")}
-                        </b>
-                        <small>失效时间</small>
-                      </span>
-                    </div>
-                  </article>
+                            : formatNumber(policy.maxConcurrent),
+                        label: "最大并发",
+                      },
+                      {
+                        key: "priority",
+                        value: formatNumber(policy.priority),
+                        label: "优先级（小者先）",
+                      },
+                      {
+                        key: "expires",
+                        value: policy.expiresAt ? "有" : tShared("common.none"),
+                        label: "失效时间",
+                      },
+                    ]}
+                  />
                 );
               })}
-            </div>
+            </ListCardGrid>
           ) : (
             <section className="vx-tenant-empty">
               <EmptyState
@@ -1615,7 +1527,7 @@ export function ModelPlatformPage() {
               再把这一条的失效时间设过去。
             </p>
           ) : null}
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               模型
               <NativeSelect
@@ -1679,7 +1591,7 @@ export function ModelPlatformPage() {
               />
             </Label>
           </div>
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               输入单价
               <Input
@@ -1737,7 +1649,7 @@ export function ModelPlatformPage() {
               />
             </Label>
           </div>
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               生效时间
               <Input
@@ -1801,7 +1713,7 @@ export function ModelPlatformPage() {
               description="除作用域与生效时间外，其余每一项都可以直接改，改完立刻是新的限额。历史不在这张表里——要查某个时刻的限额是多少，去变更审计。"
             />
           ) : null}
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               模型
               <NativeSelect
@@ -1855,7 +1767,7 @@ export function ModelPlatformPage() {
               </NativeSelect>
             </Label>
           </div>
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               名称（可留空）
               <Input
@@ -1881,7 +1793,7 @@ export function ModelPlatformPage() {
               />
             </Label>
           </div>
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               RPM 上限
               <Input
@@ -1911,7 +1823,7 @@ export function ModelPlatformPage() {
               />
             </Label>
           </div>
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               TPM 上限（已登记未生效）
               <Input
@@ -1941,7 +1853,7 @@ export function ModelPlatformPage() {
               />
             </Label>
           </div>
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               最大上下文（已登记未生效）
               <Input

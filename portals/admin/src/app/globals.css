@@ -1,43 +1,37 @@
+/**
+ * globals.css - admin 的样式入口。
+ * @package @vxture/admin
+ *
+ * 只剩三条 DS 导入。
+ *
+ * ── 这里曾经有什么 ──────────────────────────────────────────────────────
+ *
+ * 到 2026-08-27 为止，这个文件下面还挂着 30 个页面样式表（5059 行、302 个类）与
+ * 一层 474 行的私有取值桥（`assets/legacy-tokens/tokens-admin.css`）。它们逐批
+ * 换成了 DS 组件与 Tailwind 工具类，最后全部退场：
+ *
+ *   卡片一族      → `MetricListCard` / `ListCardGrid`
+ *   手搓表格      → `DataTable`（含权限树：递归 DOM 拍平成行）
+ *   手搓模态      → `DialogForm`
+ *   行列表        → `PanelList` / `PanelItem`
+ *   徽章与语气    → `StatusBadge` 的 `tone`
+ *   分段控件/提示 → `SegmentedControl` / `Tooltip` / `Tabs`
+ *   页面外壳与栅格 → Tailwind 工具类
+ *
+ * 门户侧只留两个组合件：`PanelLinkItem`（可点的面板项，DS 明确不做）与
+ * `DetailSummaryHeader`（六个详情页共用的身份概要）。
+ *
+ * ── 为什么不再需要 `layer(components)` ──────────────────────────────────
+ *
+ * 那些页面样式此前必须导入进 `layer(components)`：未分层规则的优先级高于所有
+ * `@layer` 内的规则、与特异性无关，而 Tailwind 的工具类在 `@layer utilities`——
+ * 于是页面样式里随便一条标签选择器就能压过 DS 组件的所有工具类。侧栏那次正是
+ * 如此：一条 `a { color: inherit }` 让每个导航项的 `text-primary-text` /
+ * `text-muted-foreground` 全部失效。
+ *
+ * 现在没有页面样式了，这个问题不复存在——它是「自己写 CSS」这件事的固有代价，
+ * 不写就没有。
+ */
 @import "@vxture/design-system/styles/globals.css";
 @import "@vxture/design-system/styles/brands/vxture.css";
 @import "@vxture/design-system/styles/workbench.css";
-/* Shared portal shell visual system — single source of truth in the design
- * system, identical to console. Loaded after the DS packs so the template's
- * .app/.vxh/.sidebar/.assistant chrome and ergonomic aliases win. The Phosphor
- * icon font is loaded via <link> in app/layout.tsx. */
-/* shell-template.css 已随批 D 整体退役——外壳全走 DS 组件与 T2 工具类。 */
-
-/* admin 页面样式的取值层，托管在 DS（token 归 DS 所有，见
- * ds/no-app-vx-token-definitions）。必须排在页面样式之前——它定义的变量正是下面
- * 那些文件在 var() 里取的值。它是 8ca6284e 抽走取值层之后补上的桥，见文件头。 */
-/* admin 取值桥（legacy token 层）：2026-08-18 由 DS assets/ 迁回 admin 自有
- * ——owner 判「产品自有的全部迁出 DS」。文件自识别 @package @vxture/admin，
- * 命运不变：逐批吸附进 T2 后缩小直至消失。路径落 assets/（非 src/styles/）
- * 以继承守卫对取值层母本的既有豁免语义。 */
-@import "../../assets/legacy-tokens/tokens-admin.css";
-
-/* 页面样式。已被 DS 组件取代、且选择器全仓零引用的那批已退出构建，存档在
- * portals/admin/styles-absorbed/（在 src 外——守卫不允许 src/styles 下存在
- * 不可达模块）。判据与名单见该目录的 README。
- *
- * **全部导入 `layer(components)`。** 此前它们是未分层规则，而未分层规则的优先级
- * 高于所有 `@layer` 内的规则、与特异性无关——Tailwind 的工具类都在
- * `@layer utilities`，于是页面样式里随便一条标签选择器就能压过 DS 组件的所有
- * 工具类。侧栏那次正是如此：一条 `a { color: inherit }` 让每个导航项的
- * `text-primary-text` / `text-muted-foreground` 全部失效（见
- * admin-base-elements.css 的说明）。
- *
- * 放 `components` 而不是新起一层：Tailwind 已有这一层且排在 `utilities` 之前，
- * 于是工具类重新成为最终覆盖手段——这正是它该有的位置。页面样式之间的相互
- * 覆盖不受影响：同层内仍按特异性与顺序。 */
-@import "../styles/admin-base.css" layer(components);
-@import "../styles/admin-overview.css" layer(components);
-@import "../styles/admin-management.css" layer(components);
-@import "../styles/admin-tenant-detail.css" layer(components);
-@import "../styles/admin-management-pills.css" layer(components);
-@import "../styles/admin-placeholder.css" layer(components);
-@import "../styles/admin-permissions.css" layer(components);
-@import "../styles/admin-roles.css" layer(components);
-@import "../styles/admin-directory.css" layer(components);
-@import "../styles/admin-governance.css" layer(components);
-@import "../styles/admin-operations.css" layer(components);

@@ -1,7 +1,0 @@
-/* Admin management page styles. Dimensions must resolve through DS management tokens. */
-
-@import "./admin-management-core.css";
-@import "./admin-management-models.css";
-@import "./admin-management-commerce.css";
-@import "./admin-management-products.css";
-@import "./admin-management-tenant-workspace.css";

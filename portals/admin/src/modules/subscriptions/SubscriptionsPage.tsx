@@ -12,7 +12,6 @@ import {
   DataTable,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
   ListPageTemplate,
   MetricGrid,
@@ -41,10 +40,7 @@ import type {
   SubscriptionOperationRecord,
   SubscriptionOperationStatus,
 } from "@/entities/console";
-import {
-  QUOTA_RISK_TONE,
-  SUBSCRIPTION_OPERATION_TONE,
-} from "@/modules/shared/status-tone";
+import { SUBSCRIPTION_OPERATION_TONE } from "@/modules/shared/status-tone";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import {
@@ -59,12 +55,9 @@ import {
   formatDate,
   formatMoney,
   formatNumber,
-  joinClasses,
-  typeLabel,
 } from "@/modules/tenants/tenant-utils";
 import { useConfirmLabels } from "@/modules/shared/destructive";
 
-type ViewMode = "list" | "cards";
 type StatusFilter = "all" | SubscriptionOperationStatus;
 type TierFilter = "all" | TierFilterValue;
 type RiskFilter = "all" | SubscriptionOperationQuotaRisk;
@@ -161,7 +154,7 @@ function SubscriptionActionsMenu({
 
   return (
     <div
-      className="vx-tenant-actions"
+      className="relative z-[1] inline-flex justify-self-end"
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
@@ -173,7 +166,7 @@ function SubscriptionActionsMenu({
             icon: "arrow-right",
             onSelect: () =>
               router.push(
-                `/subscriptions/${encodeURIComponent(subscription.id)}`,
+                `/subscriptions/${encodeURIComponent(subscription.subscriptionCode)}`,
               ),
           },
           {
@@ -182,7 +175,7 @@ function SubscriptionActionsMenu({
             icon: "buildings",
             onSelect: () =>
               router.push(
-                `/tenants/${encodeURIComponent(subscription.tenantId)}`,
+                `/tenants/${encodeURIComponent(subscription.tenantCode)}`,
               ),
           },
           {
@@ -262,7 +255,9 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
           title={subscription.tenantName}
           description={`${subscription.tenantCode} · ${subscription.region}`}
           onTitleClick={() =>
-            router.push(`/subscriptions/${encodeURIComponent(subscription.id)}`)
+            router.push(
+              `/subscriptions/${encodeURIComponent(subscription.subscriptionCode)}`,
+            )
           }
         />
       ),
@@ -287,9 +282,9 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
               <Badge className={tierBadgeClass(subscription.tierCode)}>
                 {subscription.tierName}
               </Badge>
-              <Badge className="vx-tenant-pill vx-subscription-pill--cycle">
+              <StatusBadge tone="neutral" icon={false}>
                 {cycleLabel(subscription.cycleType)}
-              </Badge>
+              </StatusBadge>
             </span>
           }
           description={subscription.orderNo ?? subscription.subscriptionCode}
@@ -341,112 +336,12 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
   ];
 }
 
-function SubscriptionCards({
-  subscriptions,
-  onAction,
-}: {
-  subscriptions: SubscriptionOperationRecord[];
-  onAction: (
-    subscription: SubscriptionOperationRecord,
-    action: SubscriptionOperationAction,
-  ) => void;
-}) {
-  const locale = useLocale();
-  const router = useRouter();
-
-  return (
-    <div
-      className="vx-tenant-directory-cards vx-subscription-cards"
-      aria-label="租户订阅运营卡片"
-    >
-      {subscriptions.map((subscription) => (
-        <article
-          key={subscription.id}
-          className={joinClasses(
-            "vx-tenant-directory-card",
-            `vx-subscription-card--${subscription.status}`,
-          )}
-          role="button"
-          tabIndex={0}
-          onClick={() =>
-            router.push(`/subscriptions/${encodeURIComponent(subscription.id)}`)
-          }
-          onKeyDown={(event) => {
-            if (event.key === "Enter")
-              router.push(
-                `/subscriptions/${encodeURIComponent(subscription.id)}`,
-              );
-          }}
-        >
-          <header>
-            <Icon
-              name={
-                subscription.tenantType === "company" ? "buildings" : "user"
-              }
-              size="lg"
-              fallback="placeholder"
-            />
-            <div>
-              <strong>{subscription.tenantName}</strong>
-              <span>
-                {subscription.tenantCode} · {typeLabel(subscription.tenantType)}
-              </span>
-            </div>
-            <SubscriptionActionsMenu
-              subscription={subscription}
-              onAction={onAction}
-            />
-          </header>
-          <div className="vx-tenant-directory-card__badges">
-            <StatusBadge
-              tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
-            >
-              {subscriptionStatusLabel(subscription.status)}
-            </StatusBadge>
-            <Badge className={tierBadgeClass(subscription.tierCode)}>
-              {subscription.tierName}
-            </Badge>
-            <StatusBadge tone={QUOTA_RISK_TONE[subscription.quota.risk]}>
-              {quotaRiskLabel(subscription.quota.risk)}
-            </StatusBadge>
-          </div>
-          <p className="vx-subscription-card__solution">
-            {subscription.solutionName} · {subscription.servicePlanName}
-          </p>
-          <div className="vx-tenant-directory-card__metrics">
-            <span>
-              <b>{formatNumber(subscription.quota.usageRate)}%</b>
-              <small>配额消耗</small>
-            </span>
-            <span>
-              <b>{formatNumber(subscription.quota.maxUsers)}</b>
-              <small>席位</small>
-            </span>
-            <span>
-              <b>{formatMoney(subscription.monthlyRevenue)}</b>
-              <small>月收入</small>
-            </span>
-          </div>
-          <footer>
-            <span>{subscription.operationHint}</span>
-            <strong>
-              {formatDate(subscription.startAt, locale)} -{" "}
-              {formatDate(subscription.endAt, locale)}
-            </strong>
-          </footer>
-        </article>
-      ))}
-    </div>
-  );
-}
-
 export function SubscriptionsPage() {
   const tShared = useTranslations();
   const [subscriptions, setSubscriptions] = useState<
     SubscriptionOperationRecord[]
   >([]);
   const [subscriptionsTruncated, setSubscriptionsTruncated] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedSubscriptionIds, setSelectedSubscriptionIds] = useState<
     Set<string>
   >(() => new Set());
@@ -557,15 +452,7 @@ export function SubscriptionsPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [
-    pageSize,
-    query,
-    renewFilter,
-    riskFilter,
-    statusFilter,
-    tierFilter,
-    viewMode,
-  ]);
+  }, [pageSize, query, renewFilter, riskFilter, statusFilter, tierFilter]);
 
   function handleReset() {
     setQuery("");
@@ -630,7 +517,7 @@ export function SubscriptionsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-subscriptions-page"
+        className="w-full vx-subscriptions-page"
         header={
           <PageHeader
             icon="star"
@@ -690,7 +577,7 @@ export function SubscriptionsPage() {
               ]}
             />
             {operationFeedback ? (
-              <div className="vx-subscription-operation-feedback">
+              <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-sm text-success-text">
                 {operationFeedback}
               </div>
             ) : null}
@@ -705,9 +592,6 @@ export function SubscriptionsPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredSubscriptions.length)}
             aria-label="租户订阅筛选"
             search={
@@ -715,7 +599,7 @@ export function SubscriptionsPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索租户、方案、套餐、订单"
-                className="vx-tenant-search vx-subscription-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索租户订阅"
               />
             }
@@ -738,9 +622,9 @@ export function SubscriptionsPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -760,7 +644,7 @@ export function SubscriptionsPage() {
                 <option value="cancelled">已取消</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={tierFilter}
                 onChange={(event) =>
                   setTierFilter(event.target.value as TierFilter)
@@ -775,7 +659,7 @@ export function SubscriptionsPage() {
                 ))}
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={riskFilter}
                 onChange={(event) =>
                   setRiskFilter(event.target.value as RiskFilter)
@@ -790,7 +674,7 @@ export function SubscriptionsPage() {
                 <option value="danger">高风险</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={renewFilter}
                 onChange={(event) =>
                   setRenewFilter(event.target.value as RenewFilter)
@@ -801,7 +685,7 @@ export function SubscriptionsPage() {
                 <option value="auto">自动续期</option>
                 <option value="manual">人工跟进</option>
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         bulkBar={
@@ -820,73 +704,46 @@ export function SubscriptionsPage() {
           ) : null
         }
         table={
-          <section className="vx-tenant-directory" aria-label="租户订阅清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="租户订阅清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="vx-tenant-directory__header">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={subscriptionColumns}
-                rows={visibleSubscriptions}
-                rowKey={(subscription) => subscription.id}
-                loading={loading}
-                indexStart={(activePage - 1) * pageSize + 1}
-                selectedKeys={[...selectedSubscriptionIds]}
-                onSelectionChange={(keys) =>
-                  setSelectedSubscriptionIds(new Set(keys))
-                }
-                rowActions={(subscription) => (
-                  <SubscriptionActionsMenu
-                    subscription={subscription}
-                    onAction={requestSubscriptionAction}
-                  />
-                )}
-                empty={
-                  <EmptyState
-                    title={loadError ? "订阅数据读取失败" : "没有匹配的订阅"}
-                    description={
-                      loadError ?? "清空筛选条件后可查看全部订阅实例。"
-                    }
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleSubscriptions.length ? (
-              <SubscriptionCards
-                subscriptions={visibleSubscriptions}
-                onAction={requestSubscriptionAction}
-              />
-            ) : (
-              <EmptyState
-                title={loading ? "正在加载租户订阅" : "没有匹配的订阅"}
-                description={
-                  loading
-                    ? "正在读取租户订阅运营数据。"
-                    : (loadError ?? "清空筛选条件后可查看全部订阅实例。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={subscriptionColumns}
+              rows={visibleSubscriptions}
+              rowKey={(subscription) => subscription.id}
+              loading={loading}
+              indexStart={(activePage - 1) * pageSize + 1}
+              selectedKeys={[...selectedSubscriptionIds]}
+              onSelectionChange={(keys) =>
+                setSelectedSubscriptionIds(new Set(keys))
+              }
+              rowActions={(subscription) => (
+                <SubscriptionActionsMenu
+                  subscription={subscription}
+                  onAction={requestSubscriptionAction}
+                />
+              )}
+              empty={
+                <EmptyState
+                  title={loadError ? "订阅数据读取失败" : "没有匹配的订阅"}
+                  description={
+                    loadError ?? "清空筛选条件后可查看全部订阅实例。"
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

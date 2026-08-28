@@ -10,7 +10,7 @@ export function AdminPlaceholderPage({
   sectionTitle: string;
 }) {
   return (
-    <ViewLayout className="admin-placeholder-page">
+    <ViewLayout className="w-full ">
       <PageHeader
         icon={item.icon}
         eyebrow={sectionTitle}
@@ -19,10 +19,13 @@ export function AdminPlaceholderPage({
       />
 
       <section
-        className="vx-page-section admin-placeholder-page__section"
+        className="vx-page-section grid min-h-media-2xl content-center justify-items-center text-center "
         aria-label={item.label}
       >
-        <span className="admin-placeholder-page__icon" aria-hidden="true">
+        <span
+          className="inline-grid size-icon-2xl place-items-center rounded-full bg-primary-muted text-primary-text "
+          aria-hidden="true"
+        >
           <Icon name={item.icon} size="lg" fallback="placeholder" />
         </span>
         <EmptyState

@@ -25,8 +25,6 @@ import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 // ─── 类型 ─────────────────────────────────────────────────────────────────────
 
 type SkillStatusFilter = SkillRecord["status"] | "all";
-type ViewMode = "list" | "cards";
-
 const PAGE_SIZE = 20;
 const EMPTY_MARK = "-";
 
@@ -98,35 +96,28 @@ function SkillToolbar({
   statusFilter,
   categoryFilter,
   categories,
-  viewMode,
   total,
   onSearchChange,
   onStatusFilterChange,
   onCategoryFilterChange,
-  onViewModeChange,
 }: {
   search: string;
   statusFilter: SkillStatusFilter;
   categoryFilter: string;
   categories: string[];
-  viewMode: ViewMode;
   total: number;
   onSearchChange: (v: string) => void;
   onStatusFilterChange: (v: SkillStatusFilter) => void;
   onCategoryFilterChange: (v: string) => void;
-  onViewModeChange: (v: ViewMode) => void;
 }) {
   const tShared = useTranslations();
   return (
     <FilterBar
-      view={viewMode}
-      onViewChange={onViewModeChange}
-      cardsDisabledReason={tShared("common.cardsRetired")}
       count={`${total} 个技能`}
       aria-label="技能筛选"
       search={
         <Input
-          className="vx-tenant-search"
+          className="grow basis-media-3xl max-w-panel-sm"
           type="search"
           placeholder="搜索技能名称、代码、描述…"
           value={search}
@@ -140,8 +131,7 @@ function SkillToolbar({
       }}
     >
       <NativeSelect
-        wrapperClassName="w-fit"
-        className="vx-tenant-select"
+        wrapperClassName="w-fit basis-media-xl"
         value={statusFilter}
         onChange={(e) =>
           onStatusFilterChange(e.target.value as SkillStatusFilter)
@@ -155,8 +145,7 @@ function SkillToolbar({
       </NativeSelect>
       {categories.length > 0 ? (
         <NativeSelect
-          wrapperClassName="w-fit"
-          className="vx-tenant-select"
+          wrapperClassName="w-fit basis-media-xl"
           value={categoryFilter}
           onChange={(e) => onCategoryFilterChange(e.target.value)}
           aria-label="技能分类"
@@ -237,36 +226,6 @@ function skillColumns(locale: string): readonly DataTableColumn<SkillRecord>[] {
 
 // ─── 子组件：卡片视图 ──────────────────────────────────────────────────────────
 
-function SkillCards({ skills }: { skills: SkillRecord[] }) {
-  return (
-    <div className="vx-skills-cards">
-      {skills.map((skill) => (
-        <div key={skill.id} className="vx-skill-card">
-          <div className="vx-skill-card__header">
-            <span className="vx-skill-card__icon">
-              <Icon name="cube" size="md" fallback="placeholder" />
-            </span>
-            <div className="vx-skill-card__badges">
-              <StatusBadge tone={SKILL_STATUS_TONE[skill.status]}>
-                {STATUS_LABELS[skill.status]}
-              </StatusBadge>
-              {skill.isSystem && <StatusBadge tone="info">系统</StatusBadge>}
-            </div>
-          </div>
-          <h3 className="vx-skill-card__name">{skill.skillName}</h3>
-          <p className="vx-skill-card__code">{skill.skillCode}</p>
-          <p className="vx-skill-card__description">{skill.description}</p>
-          <div className="vx-skill-card__meta">
-            <span>{skill.category}</span>
-            <span>v{skill.version}</span>
-            <span>{formatNumber(skill.invocations)} 次调用</span>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ─── 主组件 ───────────────────────────────────────────────────────────────────
 
 export function SkillsPage() {
@@ -280,7 +239,6 @@ export function SkillsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<SkillStatusFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -329,7 +287,6 @@ export function SkillsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-skills-page"
         header={
           <PageHeader
             icon="cube"
@@ -344,62 +301,43 @@ export function SkillsPage() {
             statusFilter={statusFilter}
             categoryFilter={categoryFilter}
             categories={categories}
-            viewMode={viewMode}
             total={filtered.length}
             onSearchChange={handleSearch}
             onStatusFilterChange={handleStatusFilter}
             onCategoryFilterChange={handleCategoryFilter}
-            onViewModeChange={setViewMode}
           />
         }
         table={
-          viewMode === "list" ? (
-            <DataTable
-              columns={tableColumns}
-              rows={pageSkills}
-              rowKey={(skill) => skill.id}
-              loading={loading}
-              indexStart={(page - 1) * PAGE_SIZE + 1}
-              rowActions={(skill) => (
-                <Button
-                  variant="ghost"
-                  size="icon-md"
-                  disabled={skill.isSystem}
-                  title={
-                    skill.isSystem ? "系统技能不可修改" : "操作（数据层待接入）"
-                  }
-                >
-                  <Icon name="more-vertical" size="lg" fallback="placeholder" />
-                </Button>
-              )}
-              empty={
-                <EmptyState
-                  title="暂无技能"
-                  description={
-                    search || statusFilter !== "all" || categoryFilter
-                      ? tShared("common.adjustFiltersHint")
-                      : "尚未接入任何 AI 技能，请通过 API 注册技能"
-                  }
-                />
-              }
-              footer={
-                pageCount > 1 ? (
-                  <Pagination
-                    page={page}
-                    pageCount={pageCount}
-                    total={filtered.length}
-                    pageSize={PAGE_SIZE}
-                    onPageChange={setPage}
-                  />
-                ) : null
-              }
-            />
-          ) : loading ? (
-            <EmptyState title="加载中…" />
-          ) : pageSkills.length ? (
-            <>
-              <SkillCards skills={pageSkills} />
-              {pageCount > 1 ? (
+          <DataTable
+            columns={tableColumns}
+            rows={pageSkills}
+            rowKey={(skill) => skill.id}
+            loading={loading}
+            indexStart={(page - 1) * PAGE_SIZE + 1}
+            rowActions={(skill) => (
+              <Button
+                variant="ghost"
+                size="icon-md"
+                disabled={skill.isSystem}
+                title={
+                  skill.isSystem ? "系统技能不可修改" : "操作（数据层待接入）"
+                }
+              >
+                <Icon name="more-vertical" size="lg" fallback="placeholder" />
+              </Button>
+            )}
+            empty={
+              <EmptyState
+                title="暂无技能"
+                description={
+                  search || statusFilter !== "all" || categoryFilter
+                    ? tShared("common.adjustFiltersHint")
+                    : "尚未接入任何 AI 技能，请通过 API 注册技能"
+                }
+              />
+            }
+            footer={
+              pageCount > 1 ? (
                 <Pagination
                   page={page}
                   pageCount={pageCount}
@@ -407,18 +345,9 @@ export function SkillsPage() {
                   pageSize={PAGE_SIZE}
                   onPageChange={setPage}
                 />
-              ) : null}
-            </>
-          ) : (
-            <EmptyState
-              title="暂无技能"
-              description={
-                search || statusFilter !== "all" || categoryFilter
-                  ? tShared("common.adjustFiltersHint")
-                  : "尚未接入任何 AI 技能，请通过 API 注册技能"
-              }
-            />
-          )
+              ) : null
+            }
+          />
         }
       />
     </>

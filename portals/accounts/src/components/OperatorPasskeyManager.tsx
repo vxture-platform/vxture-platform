@@ -150,7 +150,7 @@ export function OperatorPasskeyManager() {
           description={t("emptyDescription")}
         />
       ) : (
-        <ul className="flex list-none flex-col gap-sm p-none">
+        <ul className="flex list-none flex-col gap-sm p-0">
           {passkeys.map((passkey) => (
             <li key={passkey.id}>
               <Card

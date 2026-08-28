@@ -16,7 +16,6 @@ import {
   DialogTitle,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
   Label,
   ListPageTemplate,
@@ -54,7 +53,6 @@ import { useLocale, useTranslations } from "next-intl";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
 
-type ViewMode = "list" | "cards";
 type PlatformAdminStatusCode = PlatformAdminRecord["statusCode"];
 type StatusFilter = "all" | PlatformAdminStatusCode;
 type UserTypeFilter = "all" | "system" | "normal";
@@ -171,7 +169,7 @@ function PlatformUserActionsMenu({
   const managed = admin.canManage !== false;
   return (
     <div
-      className="vx-tenant-actions"
+      className="relative z-[1] inline-flex justify-self-end"
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
@@ -314,66 +312,6 @@ function usePlatformUserColumns(
   ];
 }
 
-function PlatformUsersCards({
-  admins,
-  t,
-}: {
-  admins: PlatformAdminRecord[];
-  t: ReturnType<typeof useTranslations>;
-}) {
-  const locale = useLocale();
-  return (
-    <div className="vx-tenant-directory-cards" aria-label="平台用户卡片">
-      {admins.map((admin) => (
-        <article key={admin.id} className="vx-tenant-directory-card">
-          <header>
-            <Icon name="user" size="lg" fallback="placeholder" />
-            <div>
-              <strong>{admin.displayName || admin.username}</strong>
-              <span>{admin.username ? `@${admin.username}` : EMPTY_MARK}</span>
-            </div>
-            <StatusBadge
-              tone={platformAdminStatusTone(admin)}
-              icon={platformAdminStatusIcon(admin)}
-            >
-              {platformAdminStatusLabel(admin)}
-            </StatusBadge>
-          </header>
-          <div className="vx-tenant-directory-card__badges">
-            <Badge>{platformRoleDisplayName(admin, t)}</Badge>
-            <StatusBadge tone={platformRoleStatusTone(admin)}>
-              {platformRoleStatusLabel(admin)}
-            </StatusBadge>
-            {admin.isSystem ? <Badge>系统</Badge> : null}
-          </div>
-          <div className="vx-tenant-directory-card__metrics">
-            <span>
-              <b>
-                {admin.lastLoginAt
-                  ? formatDate(admin.lastLoginAt, locale)
-                  : EMPTY_MARK}
-              </b>
-              <small>最后登录</small>
-            </span>
-            <span>
-              <b>{admin.lastLoginIp || EMPTY_MARK}</b>
-              <small>登录 IP</small>
-            </span>
-            <span>
-              <b>{admin.email || admin.phone || EMPTY_MARK}</b>
-              <small>联系方式</small>
-            </span>
-          </div>
-          <footer>
-            <span>{admin.remark || EMPTY_MARK}</span>
-            <strong>{admin.phone || EMPTY_MARK}</strong>
-          </footer>
-        </article>
-      ))}
-    </div>
-  );
-}
-
 interface MetadataFormState {
   displayName: string;
   email: string;
@@ -416,7 +354,7 @@ function PlatformUserDetailDialog({
             <DialogDescription>{`@${admin.username}`}</DialogDescription>
           ) : null}
         </DialogHeader>
-        <dl className="vx-admin-permission-detail-dialog__grid">
+        <dl className="grid grid-cols-1 gap-x-md gap-y-sm sm:grid-cols-2 ">
           <div>
             <dt>显示名</dt>
             <dd>{admin.displayName || EMPTY_MARK}</dd>
@@ -465,7 +403,7 @@ function PlatformUserDetailDialog({
                 : EMPTY_MARK}
             </dd>
           </div>
-          <div className="vx-admin-permission-detail-dialog__wide">
+          <div className="sm:col-span-2 ">
             <dt>备注</dt>
             <dd>{admin.remark || EMPTY_MARK}</dd>
           </div>
@@ -649,7 +587,7 @@ function PlatformUserMetadataDialog({
       }}
       onSubmit={onSubmit}
     >
-      <div className="vx-model-dialog__grid">
+      <div>
         <Label>
           显示名
           <Input
@@ -669,7 +607,7 @@ function PlatformUserMetadataDialog({
           />
         </Label>
       </div>
-      <div className="vx-model-dialog__grid">
+      <div>
         <Label>
           邮箱
           <Input
@@ -713,7 +651,6 @@ export function PlatformUsersPage() {
   const [admins, setAdmins] = useState<PlatformAdminRecord[]>([]);
   const [roles, setRoles] = useState<PlatformRoleRecord[]>([]);
   const [actorRank, setActorRank] = useState<number | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<UserTypeFilter>("all");
@@ -859,7 +796,7 @@ export function PlatformUsersPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [pageSize, query, statusFilter, typeFilter, viewMode]);
+  }, [pageSize, query, statusFilter, typeFilter]);
 
   function resetFilters() {
     setQuery("");
@@ -1055,7 +992,7 @@ export function PlatformUsersPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-platform-users-page"
+        className="w-full "
         header={
           <PageHeader
             icon="user"
@@ -1119,9 +1056,6 @@ export function PlatformUsersPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredAdmins.length)}
             aria-label="平台用户筛选"
             search={
@@ -1129,7 +1063,7 @@ export function PlatformUsersPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索用户名、显示名、邮箱、手机、角色"
-                className="vx-tenant-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索平台用户"
               />
             }
@@ -1146,9 +1080,9 @@ export function PlatformUsersPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -1163,7 +1097,7 @@ export function PlatformUsersPage() {
                 <option value="suspended">{tShared("actions.pause")}</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={typeFilter}
                 onChange={(event) =>
                   setTypeFilter(event.target.value as UserTypeFilter)
@@ -1174,86 +1108,54 @@ export function PlatformUsersPage() {
                 <option value="system">系统用户</option>
                 <option value="normal">普通用户</option>
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         table={
-          <section className="vx-tenant-directory" aria-label="平台用户清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="平台用户清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="vx-tenant-directory__header">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={platformUserColumns}
-                rows={visibleAdmins}
-                rowKey={(admin) => admin.id}
-                loading={loading}
-                indexStart={(clampedCurrentPage - 1) * pageSize + 1}
-                selectedKeys={[...selectedIds]}
-                onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
-                rowActions={(admin) => (
-                  <PlatformUserActionsMenu
-                    admin={admin}
-                    onView={(target) => setDetailAdminId(target.id)}
-                    onChangeRole={openRoleDialog}
-                    onEditMetadata={openMetadataDialog}
-                    onToggleStatus={handleToggleStatus}
-                    onForceLogout={handleForceLogout}
-                    onResetMfa={handleResetMfa}
-                    onResetPassword={handleResetPassword}
-                  />
-                )}
-                empty={
-                  <EmptyState
-                    title={
-                      loadError ? "平台用户读取失败" : "没有匹配的平台用户"
-                    }
-                    description={
-                      loadError ?? "清空筛选条件后可查看全部平台用户。"
-                    }
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={resetFilters}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : filteredAdmins.length ? (
-              <PlatformUsersCards admins={visibleAdmins} t={t} />
-            ) : (
-              <EmptyState
-                title={
-                  loading
-                    ? "正在加载平台用户"
-                    : loadError
-                      ? "平台用户读取失败"
-                      : "没有匹配的平台用户"
-                }
-                description={
-                  loading
-                    ? "正在读取平台用户账号。"
-                    : (loadError ?? "清空筛选条件后可查看全部平台用户。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={resetFilters}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={platformUserColumns}
+              rows={visibleAdmins}
+              rowKey={(admin) => admin.id}
+              loading={loading}
+              indexStart={(clampedCurrentPage - 1) * pageSize + 1}
+              selectedKeys={[...selectedIds]}
+              onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
+              rowActions={(admin) => (
+                <PlatformUserActionsMenu
+                  admin={admin}
+                  onView={(target) => setDetailAdminId(target.id)}
+                  onChangeRole={openRoleDialog}
+                  onEditMetadata={openMetadataDialog}
+                  onToggleStatus={handleToggleStatus}
+                  onForceLogout={handleForceLogout}
+                  onResetMfa={handleResetMfa}
+                  onResetPassword={handleResetPassword}
+                />
+              )}
+              empty={
+                <EmptyState
+                  title={loadError ? "平台用户读取失败" : "没有匹配的平台用户"}
+                  description={
+                    loadError ?? "清空筛选条件后可查看全部平台用户。"
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={resetFilters}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

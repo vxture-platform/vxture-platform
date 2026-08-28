@@ -132,7 +132,7 @@ function AuditToolbar({
           placeholder="搜索操作员、操作类型、对象…"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="vx-tenant-search"
+          className="grow basis-media-3xl max-w-panel-sm"
           aria-label="搜索审计日志（当前结果内）"
         />
       }
@@ -165,8 +165,7 @@ function AuditToolbar({
         title="截止时间（服务端筛选）"
       />
       <NativeSelect
-        wrapperClassName="w-fit"
-        className="vx-tenant-select"
+        wrapperClassName="w-fit basis-media-xl"
         value={resultFilter}
         onChange={(e) => onResultFilterChange(e.target.value as ResultFilter)}
         aria-label="审计结果"
@@ -347,7 +346,7 @@ export function AuditLogsPage() {
 
   return (
     <ListPageTemplate
-      className={joinClasses("vx-tenant-management-page", "vx-audit-page")}
+      className={joinClasses("w-full ", "vx-audit-page")}
       header={
         <PageHeader
           icon="info"

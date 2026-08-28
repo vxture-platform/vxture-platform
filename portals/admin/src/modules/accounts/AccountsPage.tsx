@@ -11,7 +11,6 @@ import {
   DialogForm,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
   Label,
   ListPageTemplate,
@@ -37,7 +36,6 @@ import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 
-type ViewMode = "list" | "cards";
 type StatusFilter = "all" | AccountOperationRecord["status"];
 type TenantTypeFilter = "all" | "company" | "individual" | "mixed";
 type RoleFilter = "all" | "owner" | "admin" | "member";
@@ -235,7 +233,7 @@ function AccountActionsMenu({
   const isDisabled = account.status === "disabled";
   return (
     <div
-      className="vx-tenant-actions"
+      className="relative z-[1] inline-flex justify-self-end"
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
@@ -315,12 +313,9 @@ function useAccountColumns(
                   title={
                     <span className="inline-flex flex-wrap gap-2xs">
                       {summary.tags.map((tag) => (
-                        <Badge
-                          key={tag}
-                          className="vx-tenant-pill vx-account-muted-pill"
-                        >
+                        <StatusBadge key={tag} tone="brand" icon={false}>
                           {tag}
-                        </Badge>
+                        </StatusBadge>
                       ))}
                     </span>
                   }
@@ -376,86 +371,6 @@ function useAccountColumns(
   ];
 }
 
-function AccountCards({
-  accounts,
-  showTenantContext,
-  actions,
-}: {
-  accounts: AccountOperationRecord[];
-  showTenantContext: boolean;
-  actions: AccountRowActions;
-}) {
-  const locale = useLocale();
-  return (
-    <div className="vx-tenant-directory-cards" aria-label="账号卡片">
-      {accounts.map((account) => (
-        <article key={account.id} className="vx-tenant-directory-card">
-          <header>
-            <Icon name="user" size="lg" fallback="placeholder" />
-            <div>
-              <strong>{account.displayName}</strong>
-              <span>
-                {account.accountCode} · {account.email}
-              </span>
-            </div>
-            <AccountActionsMenu
-              account={account}
-              busy={actions.actionBusy}
-              onToggleStatus={actions.onToggleStatus}
-              onForceLogout={actions.onForceLogout}
-            />
-          </header>
-          <div className="vx-tenant-directory-card__badges">
-            <StatusBadge tone={ACCOUNT_STATUS_TONE[account.status]}>
-              {accountStatusLabel(account.status)}
-            </StatusBadge>
-            {showTenantContext
-              ? accountTenantSummary(account).tags.map((tag) => (
-                  <Badge
-                    key={tag}
-                    className="vx-tenant-pill vx-account-muted-pill"
-                  >
-                    {tag}
-                  </Badge>
-                ))
-              : null}
-            <Badge>{accountHighestRoleLabel(account)}</Badge>
-          </div>
-          <div className="vx-tenant-directory-card__metrics">
-            {showTenantContext ? (
-              <span>
-                <b>{formatNumber(account.tenantCount)}</b>
-                <small>租户</small>
-              </span>
-            ) : (
-              <span>
-                <b>{accountHighestRoleLabel(account)}</b>
-                <small>平台角色</small>
-              </span>
-            )}
-            <span>
-              <b>{formatNumber(account.loginCount30d)}</b>
-              <small>30日登录</small>
-            </span>
-            <span>
-              <b>{account.lastActiveLocation}</b>
-              <small>地址</small>
-            </span>
-          </div>
-          <footer>
-            <span>
-              {showTenantContext
-                ? accountTenantSummary(account).primaryName
-                : "平台用户"}
-            </span>
-            <strong>{formatDate(account.lastActiveAt, locale)}</strong>
-          </footer>
-        </article>
-      ))}
-    </div>
-  );
-}
-
 export function AccountsPage({
   copy = defaultAccountsPageCopy,
   loadAccounts = fetchAccountOperations,
@@ -469,7 +384,6 @@ export function AccountsPage({
   const pageCopy = { ...defaultAccountsPageCopy, ...copy };
   const [accounts, setAccounts] = useState<AccountOperationRecord[]>([]);
   const [accountsTruncated, setAccountsTruncated] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -632,7 +546,7 @@ export function AccountsPage({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [pageSize, query, roleFilter, statusFilter, tenantTypeFilter, viewMode]);
+  }, [pageSize, query, roleFilter, statusFilter, tenantTypeFilter]);
 
   function handleReset() {
     setQuery("");
@@ -644,7 +558,7 @@ export function AccountsPage({
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-account-management-page"
+        className="w-full "
         header={
           <PageHeader
             icon="user"
@@ -711,16 +625,13 @@ export function AccountsPage({
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredAccounts.length)}
             search={
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={pageCopy.searchPlaceholder}
-                className="vx-tenant-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label={pageCopy.searchAriaLabel}
               />
             }
@@ -733,9 +644,9 @@ export function AccountsPage({
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -752,7 +663,7 @@ export function AccountsPage({
               </NativeSelect>
               {showTenantContext ? (
                 <NativeSelect
-                  className="vx-input vx-tenant-select"
+                  wrapperClassName="w-fit basis-media-xl"
                   value={tenantTypeFilter}
                   onChange={(event) =>
                     setTenantTypeFilter(event.target.value as TenantTypeFilter)
@@ -766,7 +677,7 @@ export function AccountsPage({
                 </NativeSelect>
               ) : null}
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={roleFilter}
                 onChange={(event) =>
                   setRoleFilter(event.target.value as RoleFilter)
@@ -778,83 +689,48 @@ export function AccountsPage({
                 <option value="admin">Admin</option>
                 <option value="member">Member</option>
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         table={
           <section
-            className="vx-tenant-directory"
+            className="grid min-w-0 max-w-full gap-xs"
             aria-label={pageCopy.directoryAriaLabel}
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="vx-tenant-directory__header">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={accountColumns}
-                rows={visibleAccounts}
-                rowKey={(account) => account.id}
-                loading={loading}
-                indexStart={
-                  (Math.min(currentPage, pageCount) - 1) * pageSize + 1
-                }
-                selectedKeys={[...selectedAccountIds]}
-                onSelectionChange={(keys) =>
-                  setSelectedAccountIds(new Set(keys))
-                }
-                rowActions={(account) => (
-                  <AccountActionsMenu
-                    account={account}
-                    busy={accountActions.actionBusy}
-                    onToggleStatus={accountActions.onToggleStatus}
-                    onForceLogout={accountActions.onForceLogout}
-                  />
-                )}
-                empty={
-                  <EmptyState
-                    title={loadError ? "账号数据读取失败" : pageCopy.emptyTitle}
-                    description={loadError ?? pageCopy.emptyDescription}
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleAccounts.length ? (
-              <AccountCards
-                accounts={visibleAccounts}
-                showTenantContext={showTenantContext}
-                actions={accountActions}
-              />
-            ) : (
-              <EmptyState
-                title={loading ? pageCopy.loadingTitle : pageCopy.emptyTitle}
-                description={
-                  loading
-                    ? pageCopy.loadingDescription
-                    : (loadError ?? pageCopy.emptyDescription)
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={accountColumns}
+              rows={visibleAccounts}
+              rowKey={(account) => account.id}
+              loading={loading}
+              indexStart={(Math.min(currentPage, pageCount) - 1) * pageSize + 1}
+              selectedKeys={[...selectedAccountIds]}
+              onSelectionChange={(keys) => setSelectedAccountIds(new Set(keys))}
+              rowActions={(account) => (
+                <AccountActionsMenu
+                  account={account}
+                  busy={accountActions.actionBusy}
+                  onToggleStatus={accountActions.onToggleStatus}
+                  onForceLogout={accountActions.onForceLogout}
+                />
+              )}
+              empty={
+                <EmptyState
+                  title={loadError ? "账号数据读取失败" : pageCopy.emptyTitle}
+                  description={loadError ?? pageCopy.emptyDescription}
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

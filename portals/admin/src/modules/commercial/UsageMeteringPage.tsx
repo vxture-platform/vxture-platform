@@ -12,7 +12,6 @@ import {
   DataTable,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
   ListPageTemplate,
   MetricGrid,
@@ -32,15 +31,9 @@ import { PageHeader } from "@/modules/shared/PageHeader";
 import {
   formatDate,
   formatNumber,
-  joinClasses,
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
-import {
-  formatPercent,
-  type PageSize,
-  Tag,
-  type ViewMode,
-} from "./CommercialUtils";
+import { Tag, type PageSize, formatPercent } from "./CommercialUtils";
 
 type RiskFilter = "all" | UsageMeteringRisk;
 type ProductTypeFilter =
@@ -113,7 +106,7 @@ function UsageActionsMenu({ record }: { record: UsageMeteringRecord }) {
 
   return (
     <div
-      className="vx-tenant-actions"
+      className="relative z-[1] inline-flex justify-self-end"
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
@@ -124,7 +117,7 @@ function UsageActionsMenu({ record }: { record: UsageMeteringRecord }) {
             label: tShared("actions.viewTenant"),
             icon: "buildings",
             onSelect: () =>
-              router.push(`/tenants/${encodeURIComponent(record.tenantId)}`),
+              router.push(`/tenants/${encodeURIComponent(record.tenantCode)}`),
           },
           {
             id: "subscription",
@@ -134,7 +127,7 @@ function UsageActionsMenu({ record }: { record: UsageMeteringRecord }) {
             onSelect: () => {
               if (!record.subscriptionId) return;
               router.push(
-                `/subscriptions/${encodeURIComponent(record.subscriptionId)}`,
+                `/subscriptions/${encodeURIComponent(record.orderNo ?? record.subscriptionId ?? "")}`,
               );
             },
           },
@@ -146,7 +139,7 @@ function UsageActionsMenu({ record }: { record: UsageMeteringRecord }) {
             onSelect: () => {
               if (!record.subscriptionId) return;
               router.push(
-                `/orders/${encodeURIComponent(record.subscriptionId)}`,
+                `/orders/${encodeURIComponent(record.orderNo ?? record.subscriptionId ?? "")}`,
               );
             },
           },
@@ -171,7 +164,7 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
           title={record.tenantName}
           description={`${record.tenantCode} · ${typeLabel(record.tenantType)}`}
           onTitleClick={() =>
-            router.push(`/tenants/${encodeURIComponent(record.tenantId)}`)
+            router.push(`/tenants/${encodeURIComponent(record.tenantCode)}`)
           }
         />
       ),
@@ -237,74 +230,10 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
   ];
 }
 
-function UsageCards({ records }: { records: UsageMeteringRecord[] }) {
-  const locale = useLocale();
-  const router = useRouter();
-
-  return (
-    <div
-      className="vx-tenant-directory-cards vx-commercial-cards"
-      aria-label="用量计费卡片"
-    >
-      {records.map((record) => (
-        <article
-          key={record.id}
-          className={joinClasses(
-            "vx-tenant-directory-card",
-            `vx-commercial-card--${riskTone(record.risk)}`,
-          )}
-          role="button"
-          tabIndex={0}
-          onClick={() =>
-            router.push(`/tenants/${encodeURIComponent(record.tenantId)}`)
-          }
-        >
-          <header>
-            <Icon name="graph" size="lg" fallback="placeholder" />
-            <div>
-              <strong>{record.tenantName}</strong>
-              <span>
-                {record.productName} · {record.metricName}
-              </span>
-            </div>
-            <UsageActionsMenu record={record} />
-          </header>
-          <div className="vx-tenant-directory-card__badges">
-            <Tag tone={riskTone(record.risk)}>{riskLabel(record.risk)}</Tag>
-            <Badge variant="outline">{record.productType}</Badge>
-          </div>
-          <p className="vx-commercial-card__description">
-            {record.servicePlanName ?? record.orderNo ?? "未关联订阅"}
-          </p>
-          <div className="vx-tenant-directory-card__metrics">
-            <span>
-              <b>{formatUsageValue(record.usedValue, record.metricUnit)}</b>
-              <small>已用</small>
-            </span>
-            <span>
-              <b>{formatUsageValue(record.quotaValue, record.metricUnit)}</b>
-              <small>配额</small>
-            </span>
-            <span>
-              <b>{formatPercent(record.usageRate)}</b>
-              <small>使用率</small>
-            </span>
-          </div>
-          <footer>
-            <span>{record.cycleMonth}</span>
-            <strong>{formatDate(record.lastSyncedAt, locale)}</strong>
-          </footer>
-        </article>
-      ))}
-    </div>
-  );
-}
-
 export function UsageMeteringPage() {
   const tShared = useTranslations();
   const [records, setRecords] = useState<UsageMeteringRecord[]>([]);
   const [recordsTruncated, setRecordsTruncated] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [query, setQuery] = useState("");
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
   const [productTypeFilter, setProductTypeFilter] =
@@ -388,7 +317,7 @@ export function UsageMeteringPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [cycleFilter, pageSize, productTypeFilter, query, riskFilter, viewMode]);
+  }, [cycleFilter, pageSize, productTypeFilter, query, riskFilter]);
 
   function handleReset() {
     setQuery("");
@@ -424,7 +353,7 @@ export function UsageMeteringPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-usage-page"
+        className="w-full vx-usage-page"
         header={
           <PageHeader
             icon="graph"
@@ -488,9 +417,6 @@ export function UsageMeteringPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredRecords.length)}
             aria-label="用量筛选"
             search={
@@ -498,7 +424,7 @@ export function UsageMeteringPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索租户、产品、计量项"
-                className="vx-tenant-search vx-commercial-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索用量"
               />
             }
@@ -516,9 +442,9 @@ export function UsageMeteringPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={riskFilter}
                 onChange={(event) =>
                   setRiskFilter(event.target.value as RiskFilter)
@@ -534,7 +460,7 @@ export function UsageMeteringPage() {
                 <option value="anomaly">计量异常</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={productTypeFilter}
                 onChange={(event) =>
                   setProductTypeFilter(event.target.value as ProductTypeFilter)
@@ -549,7 +475,7 @@ export function UsageMeteringPage() {
                 <option value="产品能力">产品能力</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={cycleFilter}
                 onChange={(event) => setCycleFilter(event.target.value)}
                 aria-label="计量周期"
@@ -561,7 +487,7 @@ export function UsageMeteringPage() {
                   </option>
                 ))}
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         bulkBar={
@@ -580,66 +506,38 @@ export function UsageMeteringPage() {
           ) : null
         }
         table={
-          <section className="vx-tenant-directory" aria-label="用量清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="用量清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="vx-tenant-directory__header">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
-            {viewMode === "list" ? (
-              <DataTable
-                columns={usageColumns}
-                rows={visibleRecords}
-                rowKey={(record) => record.id}
-                loading={loading}
-                indexStart={(activePage - 1) * pageSize + 1}
-                selectedKeys={[...selectedRecordIds]}
-                onSelectionChange={(keys) =>
-                  setSelectedRecordIds(new Set(keys))
-                }
-                rowActions={(record) => <UsageActionsMenu record={record} />}
-                empty={
-                  <EmptyState
-                    title={
-                      loadError ? "用量数据读取失败" : "没有匹配的用量记录"
-                    }
-                    description={
-                      loadError ?? "清空筛选条件后可查看全部计量记录。"
-                    }
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleRecords.length ? (
-              <UsageCards records={visibleRecords} />
-            ) : (
-              <EmptyState
-                title={loading ? "正在加载用量" : "没有匹配的用量记录"}
-                description={
-                  loading
-                    ? "正在读取计量汇总数据。"
-                    : (loadError ?? "清空筛选条件后可查看全部计量记录。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={usageColumns}
+              rows={visibleRecords}
+              rowKey={(record) => record.id}
+              loading={loading}
+              indexStart={(activePage - 1) * pageSize + 1}
+              selectedKeys={[...selectedRecordIds]}
+              onSelectionChange={(keys) => setSelectedRecordIds(new Set(keys))}
+              rowActions={(record) => <UsageActionsMenu record={record} />}
+              empty={
+                <EmptyState
+                  title={loadError ? "用量数据读取失败" : "没有匹配的用量记录"}
+                  description={
+                    loadError ?? "清空筛选条件后可查看全部计量记录。"
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

@@ -399,7 +399,7 @@ export function ComplianceEventsPage() {
             aria-label="合规事件筛选"
             search={
               <Input
-                className="vx-tenant-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 type="search"
                 placeholder="搜索事件类型、租户、法规、处理人…"
                 value={search}
@@ -419,7 +419,6 @@ export function ComplianceEventsPage() {
                 <Button
                   variant="default"
                   size="md"
-                  className="vx-admin-action-btn"
                   onClick={openCreate}
                   title="新建合规事件"
                 >
@@ -430,8 +429,7 @@ export function ComplianceEventsPage() {
             }
           >
             <NativeSelect
-              wrapperClassName="w-fit"
-              className="vx-tenant-select"
+              wrapperClassName="w-fit basis-media-xl"
               value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value as StatusFilter);
@@ -569,7 +567,7 @@ export function ComplianceEventsPage() {
           }}
           onSubmit={(event) => void submitForm(event)}
         >
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               事件类型
               <Input

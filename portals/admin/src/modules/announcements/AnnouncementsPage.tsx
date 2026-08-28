@@ -39,7 +39,6 @@ import { useConfirmLabels } from "@/modules/shared/destructive";
 
 type AnnouncementTypeFilter = AnnouncementRecord["type"] | "all";
 type AnnouncementStatusFilter = AnnouncementRecord["status"] | "all";
-type ViewMode = "list" | "cards";
 type Severity = "info" | "warning" | "critical";
 type Targeting = "all" | "personal" | "organization";
 type DialogMode = "create" | "edit" | null;
@@ -244,36 +243,29 @@ function AnnouncementToolbar({
   search,
   typeFilter,
   statusFilter,
-  viewMode,
   total,
   onSearchChange,
   onTypeFilterChange,
   onStatusFilterChange,
-  onViewModeChange,
   onCreate,
 }: {
   search: string;
   typeFilter: AnnouncementTypeFilter;
   statusFilter: AnnouncementStatusFilter;
-  viewMode: ViewMode;
   total: number;
   onSearchChange: (v: string) => void;
   onTypeFilterChange: (v: AnnouncementTypeFilter) => void;
   onStatusFilterChange: (v: AnnouncementStatusFilter) => void;
-  onViewModeChange: (v: ViewMode) => void;
   onCreate: () => void;
 }) {
   const tShared = useTranslations();
   return (
     <FilterBar
-      view={viewMode}
-      onViewChange={onViewModeChange}
-      cardsDisabledReason={tShared("common.cardsRetired")}
       count={`${total} 条`}
       aria-label="公告筛选"
       search={
         <Input
-          className="vx-tenant-search"
+          className="grow basis-media-3xl max-w-panel-sm"
           type="search"
           placeholder="搜索标题、内容…"
           value={search}
@@ -292,8 +284,7 @@ function AnnouncementToolbar({
       }
     >
       <NativeSelect
-        wrapperClassName="w-fit"
-        className="vx-tenant-select"
+        wrapperClassName="w-fit basis-media-xl"
         value={typeFilter}
         onChange={(e) =>
           onTypeFilterChange(e.target.value as AnnouncementTypeFilter)
@@ -307,8 +298,7 @@ function AnnouncementToolbar({
         <option value="security">安全</option>
       </NativeSelect>
       <NativeSelect
-        wrapperClassName="w-fit"
-        className="vx-tenant-select"
+        wrapperClassName="w-fit basis-media-xl"
         value={statusFilter}
         onChange={(e) =>
           onStatusFilterChange(e.target.value as AnnouncementStatusFilter)
@@ -435,34 +425,6 @@ function announcementActions(
 
 // ─── 子组件：卡片视图 ──────────────────────────────────────────────────────────
 
-function AnnouncementCards({ items }: { items: AnnouncementRecord[] }) {
-  const locale = useLocale();
-  return (
-    <div className="vx-announcement-cards">
-      {items.map((item) => (
-        <div key={item.id} className="vx-announcement-card">
-          <div className="vx-announcement-card__header">
-            <StatusBadge tone={ANNOUNCEMENT_TYPE_TONE[item.type]}>
-              {TYPE_LABELS[item.type]}
-            </StatusBadge>
-            <StatusBadge tone={ANNOUNCEMENT_STATUS_TONE[item.status]}>
-              {STATUS_LABELS[item.status]}
-            </StatusBadge>
-          </div>
-          <h3 className="vx-announcement-card__title">{item.title}</h3>
-          <p className="vx-announcement-card__content">{item.content}</p>
-          <div className="vx-announcement-card__meta">
-            <span>{SCOPE_LABELS[item.targetScope]}</span>
-            {item.publishedAt && (
-              <span>{formatDate(item.publishedAt, locale)}</span>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ─── 子组件：新建/编辑对话框 ───────────────────────────────────────────────────
 
 function AnnouncementFormDialog({
@@ -494,7 +456,7 @@ function AnnouncementFormDialog({
       }}
       onSubmit={onSubmit}
     >
-      <div className="vx-model-dialog__grid">
+      <div>
         <Label>
           {tShared("columns.kind")}
           <NativeSelect
@@ -543,7 +505,7 @@ function AnnouncementFormDialog({
           required
         />
       </Label>
-      <div className="vx-model-dialog__grid">
+      <div>
         <Label>
           投放对象
           <NativeSelect
@@ -596,7 +558,6 @@ export function AnnouncementsPage() {
   const [typeFilter, setTypeFilter] = useState<AnnouncementTypeFilter>("all");
   const [statusFilter, setStatusFilter] =
     useState<AnnouncementStatusFilter>("all");
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [page, setPage] = useState(1);
 
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
@@ -720,7 +681,6 @@ export function AnnouncementsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-announcement-page"
         header={
           <PageHeader
             icon="bell"
@@ -734,12 +694,10 @@ export function AnnouncementsPage() {
             search={search}
             typeFilter={typeFilter}
             statusFilter={statusFilter}
-            viewMode={viewMode}
             total={filtered.length}
             onSearchChange={handleSearch}
             onTypeFilterChange={handleTypeFilter}
             onStatusFilterChange={handleStatusFilter}
-            onViewModeChange={setViewMode}
             onCreate={openCreate}
           />
         }
@@ -747,7 +705,7 @@ export function AnnouncementsPage() {
           /* 读取失败是第三态，DataTable 只认加载/空/有数据，故留在外层。 */
           loadError ? (
             <EmptyState title="公告读取失败" description={loadError} />
-          ) : viewMode === "list" ? (
+          ) : (
             <DataTable
               columns={tableColumns}
               rows={pageItems}
@@ -782,30 +740,6 @@ export function AnnouncementsPage() {
                     onPageChange={setPage}
                   />
                 ) : null
-              }
-            />
-          ) : loading ? (
-            <EmptyState title="加载中…" />
-          ) : pageItems.length ? (
-            <>
-              <AnnouncementCards items={pageItems} />
-              {pageCount > 1 ? (
-                <Pagination
-                  page={page}
-                  pageCount={pageCount}
-                  total={filtered.length}
-                  pageSize={PAGE_SIZE}
-                  onPageChange={setPage}
-                />
-              ) : null}
-            </>
-          ) : (
-            <EmptyState
-              title="暂无公告"
-              description={
-                search || typeFilter !== "all" || statusFilter !== "all"
-                  ? tShared("common.adjustFiltersHint")
-                  : "点击「新建公告」发布第一条平台通知"
               }
             />
           )

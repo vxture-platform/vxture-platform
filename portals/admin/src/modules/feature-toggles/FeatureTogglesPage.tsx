@@ -342,7 +342,7 @@ export function FeatureTogglesPage() {
             aria-label="功能开关筛选"
             search={
               <Input
-                className="vx-tenant-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 type="search"
                 placeholder="搜索开关键、描述、分类…"
                 value={search}
@@ -364,7 +364,6 @@ export function FeatureTogglesPage() {
                 <Button
                   variant="default"
                   size="md"
-                  className="vx-admin-action-btn"
                   onClick={openCreate}
                   title="新建功能开关"
                 >
@@ -375,8 +374,7 @@ export function FeatureTogglesPage() {
             }
           >
             <NativeSelect
-              wrapperClassName="w-fit"
-              className="vx-tenant-select"
+              wrapperClassName="w-fit basis-media-xl"
               value={categoryFilter}
               onChange={(e) => {
                 setCategoryFilter(e.target.value);
@@ -391,8 +389,7 @@ export function FeatureTogglesPage() {
               ))}
             </NativeSelect>
             <NativeSelect
-              wrapperClassName="w-fit"
-              className="vx-tenant-select"
+              wrapperClassName="w-fit basis-media-xl"
               value={environmentFilter}
               onChange={(e) => {
                 setEnvironmentFilter(e.target.value);
@@ -407,8 +404,7 @@ export function FeatureTogglesPage() {
               ))}
             </NativeSelect>
             <NativeSelect
-              wrapperClassName="w-fit"
-              className="vx-tenant-select"
+              wrapperClassName="w-fit basis-media-xl"
               value={archivedFilter}
               onChange={(e) => {
                 setArchivedFilter(e.target.value as ArchivedFilter);
@@ -512,7 +508,7 @@ export function FeatureTogglesPage() {
           }}
           onSubmit={(event) => void submitForm(event)}
         >
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               开关键
               <Input
@@ -532,7 +528,7 @@ export function FeatureTogglesPage() {
               />
             </Label>
           </div>
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               环境
               <Input
@@ -577,7 +573,7 @@ export function FeatureTogglesPage() {
             />
           </Label>
           {Object.keys(form.tenantOverrides).length > 0 ? (
-            <p className="vx-step-up-hint">
+            <p className="m-0 text-body-sm text-muted-foreground">
               逐租户覆盖：{overrideSummary(form.tenantOverrides)}
               （本页保留不变，逐租户配置在专用界面维护）
             </p>

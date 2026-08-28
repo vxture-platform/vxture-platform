@@ -8,8 +8,17 @@ const COMMERCIAL_TAG_TONE: Record<string, StatusBadgeTone> = {
   danger: "danger",
 };
 
+/**
+ * 商业域的语气名 → DS 语气。
+ *
+ * 曾经导出过：卡片态的顶缘色条要跟 `Tag` 用同一个语气。卡片视图停用后那个
+ * 消费方没了，收回成文件内私有。
+ */
+function commercialTone(tone: string): StatusBadgeTone {
+  return COMMERCIAL_TAG_TONE[tone] ?? "neutral";
+}
+
 export type { PageSize } from "@/modules/shared/PageSizePicker";
-export type ViewMode = "list" | "cards";
 
 export function formatCurrency(
   value: number,
@@ -61,7 +70,7 @@ export function Tag({
   title?: string;
 }) {
   return (
-    <StatusBadge tone={COMMERCIAL_TAG_TONE[tone] ?? "neutral"} title={title}>
+    <StatusBadge tone={commercialTone(tone)} title={title}>
       {children}
     </StatusBadge>
   );

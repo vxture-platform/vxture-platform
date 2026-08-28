@@ -167,15 +167,18 @@
  * 页面侧改用 `max-w-website-*`。名字带 website 也顺带说明了这是营销页自己的栏宽，
  * 与应用内的 `max-w-page-*` / `max-w-content-*` 不是一回事。
  *
- * 同源的还有两个踩关键字的：DS 注册的 `--space-none: 0px` 把上游的 `max-w-none`
- * 变成了 `max-width: 0`、`leading-none` 变成了 `line-height: 0`（前者会让 Footer
- * 的图整个不可见）。同样只能换名，故一并在此补两个还原关键字语义的挡位。
- * 这两个坑对所有消费方都在，不只是 website。
+ * 曾经还有两个踩关键字的：`--space-none: 0px` 把 `max-w-none` 变成 `max-width: 0`、
+ * `leading-none` 变成 `line-height: 0`（前者让 Footer 的图整个不可见）。当时也只能
+ * 换名，在此补过 `--container-website-none` / `--leading-website-none` 两个还原挡位。
+ *
+ * **那两个已经删掉**：`@vxture/design-tokens@3.0.0`（2026-08-28）不再把字面词 `none`
+ * 注册进 spacing 命名空间，两个关键字自动回到 CSS 原义，逃逸挡位没有存在理由了。
+ * 判据见该包的 CHANGELOG。
+ *
+ * `md`…`5xl` 这一梯**没有跟着修好**，它是另一回事：那些是货真价实的间距档名，
+ * 不是被误收的关键字，下面这梯要留着。
  */
 @theme {
-  --container-website-none: none;
-  --leading-website-none: 1;
-
   --container-website-md: 28rem;
   --container-website-lg: 32rem;
   --container-website-xl: 36rem;

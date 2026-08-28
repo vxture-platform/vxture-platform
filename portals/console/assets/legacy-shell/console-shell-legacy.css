@@ -4,7 +4,7 @@
  * DS assets/shell-template/app.css 迁入：与 DS 体系不兼容/单门户专属的
  * 不留在共性层）
  *
- * 内容：应用中心（AppCenter，.appcenter/.ac-*/.screen）与侧栏
+ * 内容：应用中心（AppCenter，.appcenter · .ac-∗ · .screen）与侧栏
  * （.sidebar，AdminAppShell 已迁 DS 组件、仅 console 仍渲染）。
  * 规则按迁移时的**真实渲染行为**逐字保留；两处历史悬空引用如实注明，
  * 命运=console 外壳迁 DS Shell 组件（opera 路线）时随本文件整体退役，

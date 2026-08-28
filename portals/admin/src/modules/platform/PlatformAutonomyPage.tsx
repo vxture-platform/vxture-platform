@@ -200,7 +200,10 @@ function buildAutonomyMetrics(
 /** 面板头右端的入口。与总览页同一个写法。 */
 function DetailLink({ href, label }: { href: string; label: string }) {
   return (
-    <Link className="admin-overview-panel-detail" href={href}>
+    <Link
+      className="shrink-0 text-body-sm font-semibold text-primary-text no-underline hover:underline"
+      href={href}
+    >
       {label}
     </Link>
   );
@@ -308,7 +311,7 @@ export function PlatformAutonomyPage() {
 
   return (
     <DashboardTemplate
-      className="platform-autonomy-page"
+      className="w-full "
       header={
         <PageHeader
           icon="shield-check"

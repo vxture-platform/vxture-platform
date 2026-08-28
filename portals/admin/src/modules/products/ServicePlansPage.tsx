@@ -13,8 +13,11 @@ import {
   Input,
   ListPageTemplate,
   MetricGrid,
-  StatusBadge,
   NativeSelect,
+  PanelItem,
+  PanelList,
+  StatusBadge,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { fetchProductPlans, fetchProductSolutions } from "@/api/admin-bff";
@@ -28,16 +31,15 @@ import {
   PUBLISH_STATUS_TONE,
   VISIBILITY_TONE,
 } from "@/modules/shared/publish-tone";
+import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import {
   formatDate,
   formatMoney,
   formatNumber,
-  joinClasses,
 } from "@/modules/tenants/tenant-utils";
 
-type ViewMode = "list" | "cards";
 type StatusFilter = "all" | ProductSolutionStatus;
 type VisibilityFilter = "all" | "public" | "internal";
 type PriceFilter = "all" | "free" | "paid" | "contract";
@@ -167,7 +169,7 @@ function ServicePlanActionsMenu({
   const tShared = useTranslations();
   return (
     <div
-      className="vx-tenant-actions"
+      className="relative z-[1] inline-flex justify-self-end"
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
@@ -205,11 +207,9 @@ function ServicePlanActionsMenu({
 
 function ServicePlanTier({
   item,
-  viewMode,
   onViewDetails,
 }: {
   item: ServicePlanTierItem;
-  viewMode: ViewMode;
   onViewDetails: () => void;
 }) {
   const priceKind = tierPriceKind(item.tier);
@@ -218,86 +218,75 @@ function ServicePlanTier({
     0,
     item.solution.products.length - products.length,
   );
-  const className = joinClasses(
-    viewMode === "cards"
-      ? "vx-service-plan-tier-card"
-      : "vx-service-plan-tier-row",
-    `vx-service-plan-tier--${item.tier.status}`,
+  const priceNote =
+    priceKind === "free"
+      ? "试用版本"
+      : priceKind === "contract"
+        ? "专属商务"
+        : "标准定价";
+  const badges = (
+    <>
+      <StatusBadge tone={PUBLISH_STATUS_TONE[item.tier.status]}>
+        {tierStatusLabel(item.tier.status)}
+      </StatusBadge>
+      <StatusBadge tone={item.tier.isPublic ? "success" : "neutral"}>
+        {item.tier.isPublic ? "公开" : "内部"}
+      </StatusBadge>
+    </>
+  );
+  const productTags = (
+    <span className="flex min-w-0 flex-nowrap items-center gap-xs overflow-hidden">
+      {products.map((product) => (
+        <Badge key={product.id} title={product.role}>
+          {product.productName}
+        </Badge>
+      ))}
+      {hiddenProductCount ? (
+        <Badge>+{formatNumber(hiddenProductCount)}</Badge>
+      ) : null}
+    </span>
   );
 
+  /* 卡片与行原本是两套手搓 grid，四个内容块靠 `grid-column` 在两套里各摆一遍。
+     现在内容只组织一次，版式交给两个 DS 件。 */
   return (
-    <article
-      className={className}
-      role="button"
-      tabIndex={0}
-      onClick={onViewDetails}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") onViewDetails();
-      }}
-    >
-      <div className="vx-service-plan-tier__identity">
-        <Icon
-          name="star"
-          size={viewMode === "cards" ? "lg" : "sm"}
-          fallback="placeholder"
+    <PanelItem
+      className="rounded-md transition-colors hover:bg-primary-muted/40"
+      lead={<Icon name="star" size="sm" fallback="placeholder" />}
+      main={
+        /* 点击目标是标题本身（`TableTitleCell` 的 `onTitleClick` 就渲染成可点
+           标题），不是整行拉伸链接：这一行的 trail 里已经有徽章、产品标和一个
+           行操作菜单，整行热区会把它们全盖住。 */
+        <TableTitleCell
+          title={item.tier.tierName}
+          description={`${item.solution.solutionCode} · ${item.tier.tierCode}`}
+          onTitleClick={onViewDetails}
         />
-        <span>
-          <strong>{item.tier.tierName}</strong>
-          <small>
-            {item.solution.solutionCode} · {item.tier.tierCode}
-          </small>
+      }
+      trail={
+        <span className="flex items-center gap-md">
+          {badges}
+          {productTags}
+          <span className="grid justify-items-end gap-2xs">
+            <span className="text-body-md font-semibold text-foreground">
+              {tierPriceLabel(item)}
+            </span>
+            <span className="whitespace-nowrap text-body-sm text-muted-foreground">
+              {priceNote}
+            </span>
+          </span>
+          <ServicePlanActionsMenu item={item} onViewDetails={onViewDetails} />
         </span>
-      </div>
-
-      <div className="vx-service-plan-tier__status">
-        <span className="vx-service-plan-tag-line">
-          <StatusBadge tone={PUBLISH_STATUS_TONE[item.tier.status]}>
-            {tierStatusLabel(item.tier.status)}
-          </StatusBadge>
-          <StatusBadge tone={item.tier.isPublic ? "success" : "neutral"}>
-            {item.tier.isPublic ? "公开" : "内部"}
-          </StatusBadge>
-        </span>
-        <small>{item.basePlan?.planName ?? "独立配置"}</small>
-      </div>
-
-      <div className="vx-service-plan-tier__summary">
-        <p title={item.tier.summary}>{item.tier.summary}</p>
-        <span className="vx-service-plan-product-tags">
-          {products.map((product) => (
-            <Badge key={product.id} title={product.role}>
-              {product.productName}
-            </Badge>
-          ))}
-          {hiddenProductCount ? (
-            <Badge>+{formatNumber(hiddenProductCount)}</Badge>
-          ) : null}
-        </span>
-      </div>
-
-      <div className="vx-service-plan-tier__price">
-        <strong>{tierPriceLabel(item)}</strong>
-        <small>
-          {priceKind === "free"
-            ? "试用版本"
-            : priceKind === "contract"
-              ? "专属商务"
-              : "标准定价"}
-        </small>
-      </div>
-
-      <ServicePlanActionsMenu item={item} onViewDetails={onViewDetails} />
-    </article>
+      }
+    />
   );
 }
 
 function ServicePlanGroupBlock({
   group,
-  viewMode,
   onOpenDetails,
 }: {
   group: ServicePlanGroup;
-  viewMode: ViewMode;
   onOpenDetails: (
     solutionCode: string,
     tierCode: ProductSolutionTier["tierCode"],
@@ -309,28 +298,28 @@ function ServicePlanGroupBlock({
   ).length;
 
   return (
-    <section className="vx-service-plan-group">
-      <header className="vx-service-plan-group__header">
-        <div className="vx-service-plan-group__identity">
-          <Icon name="workflow" size="lg" fallback="placeholder" />
-          <div>
-            <h2>{group.solution.solutionName}</h2>
-            <p>
-              {group.solution.industry} | {group.solution.scenario}
-            </p>
+    <section className="grid min-w-0 gap-md border-b border-dashed border-primary/10 pt-md last:border-b-0">
+      <DetailSummaryHeader
+        icon="workflow"
+        title={group.solution.solutionName}
+        subtitle={
+          <>
+            {group.solution.industry} | {group.solution.scenario}
+          </>
+        }
+        aside={
+          <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-xs">
+            <StatusBadge tone={PUBLISH_STATUS_TONE[group.solution.status]}>
+              {tierStatusLabel(group.solution.status)}
+            </StatusBadge>
+            <StatusBadge tone={VISIBILITY_TONE[group.solution.visibility]}>
+              {solutionVisibilityLabel(group.solution.visibility)}
+            </StatusBadge>
           </div>
-        </div>
-        <div className="vx-service-plan-group__badges">
-          <StatusBadge tone={PUBLISH_STATUS_TONE[group.solution.status]}>
-            {tierStatusLabel(group.solution.status)}
-          </StatusBadge>
-          <StatusBadge tone={VISIBILITY_TONE[group.solution.visibility]}>
-            {solutionVisibilityLabel(group.solution.visibility)}
-          </StatusBadge>
-        </div>
-      </header>
+        }
+      />
 
-      <div className="vx-service-plan-group__meta">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-md gap-y-sm text-body-sm text-muted-foreground [&>span]:whitespace-nowrap">
         <span>{formatNumber(group.solution.products.length)} 产品能力</span>
         <span>三方 {formatNumber(partnerProductCount)}</span>
         <span>{formatNumber(group.tiers.length)} 套餐版本</span>
@@ -339,24 +328,17 @@ function ServicePlanGroupBlock({
         <span>{formatDate(group.solution.updatedAt, locale)} 更新</span>
       </div>
 
-      <div
-        className={
-          viewMode === "cards"
-            ? "vx-service-plan-tier-grid"
-            : "vx-service-plan-tier-list"
-        }
-      >
+      <PanelList>
         {group.tiers.map((item) => (
           <ServicePlanTier
             key={item.id}
             item={item}
-            viewMode={viewMode}
             onViewDetails={() =>
               onOpenDetails(item.solution.solutionCode, item.tier.tierCode)
             }
           />
         ))}
-      </div>
+      </PanelList>
     </section>
   );
 }
@@ -366,7 +348,6 @@ export function ServicePlansPage() {
   const router = useRouter();
   const [solutions, setSolutions] = useState<ProductSolutionRecord[]>([]);
   const [plans, setPlans] = useState<ProductPlanRecord[]>([]);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [visibilityFilter, setVisibilityFilter] =
@@ -467,7 +448,6 @@ export function ServicePlansPage() {
     query,
     statusFilter,
     visibilityFilter,
-    viewMode,
   ]);
 
   function handleReset() {
@@ -490,7 +470,7 @@ export function ServicePlansPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-service-plans-page"
+        className="w-full"
         header={
           <PageHeader
             icon="star"
@@ -546,9 +526,6 @@ export function ServicePlansPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredTierItems.length)}
             aria-label="服务套餐筛选"
             search={
@@ -556,7 +533,7 @@ export function ServicePlansPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索方案、套餐、配额"
-                className="vx-tenant-search vx-service-plan-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索服务套餐"
               />
             }
@@ -569,9 +546,9 @@ export function ServicePlansPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -584,7 +561,7 @@ export function ServicePlansPage() {
                 <option value="archived">{tShared("actions.archive")}</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={priceFilter}
                 onChange={(event) =>
                   setPriceFilter(event.target.value as PriceFilter)
@@ -597,7 +574,7 @@ export function ServicePlansPage() {
                 <option value="contract">合同报价</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={visibilityFilter}
                 onChange={(event) =>
                   setVisibilityFilter(event.target.value as VisibilityFilter)
@@ -609,7 +586,7 @@ export function ServicePlansPage() {
                 <option value="internal">内部</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select vx-service-plan-select--industry"
+                wrapperClassName="w-fit basis-media-xl"
                 value={industryFilter}
                 onChange={(event) => setIndustryFilter(event.target.value)}
                 aria-label="业务方案"
@@ -621,27 +598,23 @@ export function ServicePlansPage() {
                   </option>
                 ))}
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         table={
-          <section
-            className="vx-service-plan-directory"
-            aria-label="服务套餐清单"
-          >
+          <section className="grid min-w-0 gap-xs" aria-label="服务套餐清单">
             {loading ? (
-              <header className="vx-tenant-directory__header">
+              <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
                 <span>{tShared("common.loading")}</span>
               </header>
             ) : null}
 
             {visibleGroups.length ? (
-              <div className="vx-service-plan-groups">
+              <div className="grid min-w-0 gap-lg border-t border-primary/15 pt-2xs">
                 {visibleGroups.map((group) => (
                   <ServicePlanGroupBlock
                     key={group.solution.id}
                     group={group}
-                    viewMode={viewMode}
                     onOpenDetails={handleOpenDetails}
                   />
                 ))}

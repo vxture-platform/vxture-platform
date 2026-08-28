@@ -334,8 +334,353 @@ const OPERATOR_ROLES = [
   ],
 ];
 
+// ══ Operator menu tree (admin.operator_permission 的 menu 层) ═════════════════
+//
+// 这张表此前只有 59 条 perm_type='api' 的操作码，全部 parent_id = NULL——于是
+// 「权限策略」页拿不到任何层级：它按 `admin.workspace.tenant_ops` /
+// `admin.workspace.platform` 两个根锚点分域（见 AdminPermissionsPage 的
+// `resolvePermissionDomain`），两个码都不存在，59 条便全落进兜底分组
+// 「基础系统权限」，L1/L2/L3 计数恒为 0，展开钮全灰。
+//
+// 层级判据不是新发明的，就是运营台侧栏自己的信息架构
+// （`portals/admin/src/config/navigation.ts`：workspace → section → item）：
+//
+//   L0  域      运营业务域 / 平台自治域          ← 页面分域的锚点
+//   L1  板块    租户账号、订阅交易、安全审计…    ← 侧栏分组
+//   L2  页面    租户信息、交易订单…              ← 侧栏条目，带 route_path
+//   L3  操作    tenant:profile.manage…           ← 既有的 api 码
+//
+// 叶子挂在**它实际作用的那个页面**下，而不是按 perm_code 的域前缀分——
+// `tenant:risk.*` 前缀是 tenant，但风险记录页在平台自治域的「安全审计」板块下，
+// 就挂那儿。前缀是命名空间，不是归属。
+//
+// 菜单码沿用 navigation.ts 里每个 section/item 已有的 `code`，加
+// `admin.menu.` 前缀；域锚点用页面已经在找的那两个常量。没有对应操作码的页面
+// 就是叶子菜单节点，不补造操作码。
+const MENU_TREE = [
+  {
+    code: "admin.workspace.tenant_ops",
+    name: "运营业务域",
+    icon: "buildings",
+    children: [
+      {
+        code: "admin.menu.operation_overview_group",
+        name: "运营总览",
+        children: [
+          { code: "admin.menu.operation_overview", name: "运营总览", route: "/" },
+          { code: "admin.menu.operation_todo", name: "待办任务", route: "/ops-todos" },
+        ],
+      },
+      {
+        code: "admin.menu.tenant_account",
+        name: "租户账号",
+        children: [
+          {
+            code: "admin.menu.tenant_profile",
+            name: "租户信息",
+            route: "/tenants",
+            perms: [
+              "tenant:profile.read",
+              "tenant:profile.manage",
+              "tenant:quota.read",
+              "tenant:quota.manage",
+              "tenant:lifecycle.suspend",
+            ],
+          },
+          {
+            code: "admin.menu.account_system",
+            name: "账号体系",
+            route: "/accounts",
+            perms: ["user:profile.read", "user:pii.read", "user:account.manage"],
+          },
+          {
+            code: "admin.menu.identity_verification",
+            name: "实名认证",
+            route: "/verifications",
+            perms: ["tenant:verification.review"],
+          },
+        ],
+      },
+      {
+        code: "admin.menu.product_system",
+        name: "产品体系",
+        children: [
+          {
+            code: "admin.menu.product_capability",
+            name: "产品能力",
+            route: "/products",
+            perms: ["platform:product.read", "platform:product.manage"],
+          },
+          { code: "admin.menu.solution_package", name: "解决方案", route: "/product-solutions" },
+          {
+            code: "admin.menu.service_plan",
+            name: "服务套餐",
+            route: "/service-plans",
+            perms: [
+              "product:plan.read",
+              "product:plan.manage",
+              "product:price.read",
+              "product:price.manage",
+            ],
+          },
+          { code: "admin.menu.plan_version", name: "套餐版本", route: "/plan-versions" },
+          {
+            code: "admin.menu.promotion_campaign",
+            name: "营销优惠",
+            route: "/promotions",
+            perms: ["promotion:campaign.read", "promotion:campaign.manage"],
+          },
+        ],
+      },
+      {
+        code: "admin.menu.subscription_transaction",
+        name: "订阅交易",
+        children: [
+          {
+            code: "admin.menu.subscription",
+            name: "订阅管理",
+            route: "/subscriptions",
+            perms: ["commerce:subscription.read", "commerce:subscription.manage"],
+          },
+          {
+            code: "admin.menu.order_record",
+            name: "交易订单",
+            route: "/orders",
+            perms: ["commerce:order.read", "commerce:order.void", "commerce:order.restore"],
+          },
+          { code: "admin.menu.addon_order_record", name: "加油包订单", route: "/addon-orders" },
+          { code: "admin.menu.usage_billing", name: "用量计费", route: "/usage-metering" },
+          { code: "admin.menu.promotion_redeem", name: "优惠核销", route: "/promotion-redemptions" },
+        ],
+      },
+      {
+        code: "admin.menu.commercial_analysis",
+        name: "商业分析",
+        children: [
+          { code: "admin.menu.commerce_overview", name: "商业总览", route: "/commerce-overview" },
+        ],
+      },
+      {
+        code: "admin.menu.model_skill",
+        name: "模型技能",
+        children: [
+          { code: "admin.menu.model_access", name: "模型授权", route: "/model-grants" },
+          {
+            code: "admin.menu.skill_market",
+            name: "技能市场",
+            route: "/skills",
+            perms: ["capability:runos.read", "capability:runos.manage"],
+          },
+        ],
+      },
+      {
+        code: "admin.menu.finance_settlement",
+        name: "财务结算",
+        children: [
+          {
+            code: "admin.menu.billing_center",
+            name: "账单中心",
+            route: "/billing",
+            perms: [
+              "commerce:billing.read",
+              "commerce:billing.manage",
+              "commerce:billing.discount",
+            ],
+          },
+          {
+            code: "admin.menu.payment_record",
+            name: "收款管理",
+            route: "/payments",
+            perms: [
+              "commerce:payment.read",
+              "commerce:payment.manage",
+              "commerce:payment.settle",
+              "commerce:refund.execute",
+            ],
+          },
+          {
+            code: "admin.menu.invoice_record",
+            name: "发票管理",
+            route: "/invoices",
+            perms: [
+              "commerce:invoice.read",
+              "commerce:invoice.manage",
+              "commerce:invoice.void",
+            ],
+          },
+        ],
+      },
+      {
+        code: "admin.menu.customer_service",
+        name: "客户服务",
+        children: [
+          {
+            code: "admin.menu.support_ticket",
+            name: "工单中心",
+            route: "/tickets",
+            perms: ["support:ticket.read", "support:ticket.manage", "support:impersonate"],
+          },
+          {
+            code: "admin.menu.notification_message",
+            name: "消息公告",
+            route: "/announcements",
+            perms: ["content:announcement.read", "content:announcement.manage"],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    code: "admin.workspace.platform",
+    name: "平台自治域",
+    icon: "shield-check",
+    children: [
+      // 「平台总览」这个 section 只有一个同名条目，不造冗余的分组层。
+      { code: "admin.menu.platform_overview", name: "平台总览", route: "/platform" },
+      {
+        code: "admin.menu.identity_access",
+        name: "身份权限",
+        children: [
+          {
+            code: "admin.menu.platform_admin",
+            name: "平台用户",
+            route: "/platform-admins",
+            perms: ["operator:account.manage"],
+          },
+          {
+            code: "admin.menu.platform_role",
+            name: "平台角色",
+            route: "/admin-roles",
+            perms: ["operator:role.manage"],
+          },
+          { code: "admin.menu.permission_policy", name: "权限策略", route: "/admin-permissions" },
+        ],
+      },
+      {
+        code: "admin.menu.platform_resource",
+        name: "平台资源",
+        children: [
+          {
+            code: "admin.menu.model_gateway",
+            name: "模型平台",
+            route: "/atlas",
+            perms: [
+              "model:provider.read",
+              "model:provider.manage",
+              "model:model.read",
+              "model:model.manage",
+            ],
+          },
+          {
+            code: "admin.menu.secret_store",
+            name: "密钥管理",
+            route: "/platform-secrets",
+            perms: ["security:signing_key.manage", "security:oidc_client.manage"],
+          },
+        ],
+      },
+      {
+        code: "admin.menu.security_audit",
+        name: "安全审计",
+        children: [
+          { code: "admin.menu.audit_log", name: "审计日志", route: "/audit-logs", perms: ["audit:read"] },
+          { code: "admin.menu.approval_flow", name: "审批中心", route: "/approval-center" },
+          {
+            code: "admin.menu.risk_record",
+            name: "风险记录",
+            route: "/risk-records",
+            // 码前缀是 tenant:，但风险记录页在自治域的安全审计板块下。
+            perms: ["tenant:risk.read", "tenant:risk.manage"],
+          },
+          {
+            code: "admin.menu.compliance_event",
+            name: "合规事件",
+            route: "/compliance-events",
+            perms: ["compliance:event.read", "compliance:event.manage"],
+          },
+        ],
+      },
+      {
+        code: "admin.menu.system_setting",
+        name: "系统配置",
+        children: [
+          {
+            code: "admin.menu.system_setting_general",
+            name: "系统设置",
+            route: "/settings",
+            perms: [
+              "platform:setting.read",
+              "platform:setting.manage",
+              "release:maintenance.read",
+              "release:maintenance.manage",
+            ],
+          },
+          { code: "admin.menu.system_parameter", name: "参数配置", route: "/system-parameters" },
+          { code: "admin.menu.data_dictionary", name: "字典管理", route: "/data-dictionaries" },
+          {
+            code: "admin.menu.feature_toggle",
+            name: "开关控制",
+            route: "/feature-toggles",
+            perms: ["release:feature_flag.read", "release:feature_flag.manage"],
+          },
+        ],
+      },
+      {
+        code: "admin.menu.notification_center",
+        name: "通知中心",
+        children: [
+          { code: "admin.menu.notification_channel", name: "通知渠道", route: "/notification-channels" },
+          {
+            code: "admin.menu.notification_log",
+            name: "发送记录",
+            route: "/notification-logs",
+            perms: ["notification:log.read"],
+          },
+        ],
+      },
+    ],
+  },
+];
+
+/** 树拍平成 [{code, name, route, parent, sort, depth}]，sort 用同级序号。 */
+function flattenMenuTree(nodes, parent = null, out = [], depth = 0) {
+  nodes.forEach((node, i) => {
+    out.push({
+      code: node.code,
+      name: node.name,
+      route: node.route ?? null,
+      icon: node.icon ?? null,
+      parent,
+      sort: (i + 1) * 10,
+      depth,
+    });
+    if (node.children) flattenMenuTree(node.children, node.code, out, depth + 1);
+  });
+  return out;
+}
+
+const MENU_NODES = flattenMenuTree(MENU_TREE);
+
+/** 操作码 → 它所属的菜单码。树里没提到的码留在根上，seed 会报出来。 */
+const PERM_PARENT = (() => {
+  const map = {};
+  const walk = (nodes) => {
+    for (const node of nodes) {
+      for (const code of node.perms ?? []) map[code] = node.code;
+      if (node.children) walk(node.children);
+    }
+  };
+  walk(MENU_TREE);
+  return map;
+})();
+
 // Operator role → perm_code mapping (design data_admin_200 §4.3). super_admin computed = ALL.
-const OP_ALL = OPERATOR_PERMISSIONS.map((p) => p[0]);
+// 菜单节点也是 operator_permission 的行，同样要进授权面：§4.4 的全量授权不变式
+// 数的是整张表，漏掉菜单层 seed 会直接抛（实测 59/113）。
+const OP_ALL = [
+  ...OPERATOR_PERMISSIONS.map((p) => p[0]),
+  ...MENU_NODES.map((n) => n.code),
+];
 const OPERATOR_ROLE_PERMS = {
   sys_config: [],
   super_admin: [...OP_ALL], // §4.4 explicit full grant (no code bypass)
@@ -500,6 +845,34 @@ const OPERATOR_ROLE_PERMS = {
     "audit:read",
   ],
 };
+
+/**
+ * 非 super_admin 的角色按**它已有的操作码**闭包出菜单授权：一个角色能做
+ * `commerce:order.void`，就该看得见「交易订单」这个页面，以及它上面的「订阅交易」
+ * 板块和「运营业务域」。逐个角色手写菜单清单会立刻和操作码清单脱节——闭包是从
+ * 同一份事实推出来的，改了操作码授权，菜单跟着动。
+ *
+ * 纯菜单叶子（没有对应操作码的页面，如「加油包订单」）不进任何非 super_admin
+ * 角色：没有判据说谁该看见它。等这些页面有了自己的操作码再自然带出来。
+ */
+const MENU_PARENT_OF = Object.fromEntries(
+  MENU_NODES.map((n) => [n.code, n.parent]),
+);
+function withMenuClosure(permCodes) {
+  const out = new Set(permCodes);
+  for (const code of permCodes) {
+    let menu = PERM_PARENT[code];
+    while (menu) {
+      out.add(menu);
+      menu = MENU_PARENT_OF[menu];
+    }
+  }
+  return [...out];
+}
+for (const [role, codes] of Object.entries(OPERATOR_ROLE_PERMS)) {
+  if (role === "super_admin" || !codes.length) continue;
+  OPERATOR_ROLE_PERMS[role] = withMenuClosure(codes);
+}
 
 export async function seedCatalog(client) {
   // ── 0. Live column-width patch (2026-07-30) ───────────────────────────────
@@ -668,6 +1041,67 @@ export async function seedCatalog(client) {
       ],
     );
   }
+
+  // ── operator_permission 的 menu 层 + 把 api 码挂到所属页面下 ─────────────
+  //
+  // 分两趟：先按 depth 升序插菜单行（父必须先于子存在，parent_id 是自引用外键），
+  // 再一次性把操作码的 parent_id 更新到它所属的页面节点。
+  //
+  // `on conflict do update` 这里要更新 parent_id/route_path/sort：树形是**平台
+  // 持有的结构**，跟 requires_step_up 同性质——改了 MENU_TREE 却对已有库无效的话，
+  // 这段就白写了。perm_name 仍走 do-nothing 语义，不覆盖运营改过的显示名。
+  for (const node of [...MENU_NODES].sort((a, b) => a.depth - b.depth)) {
+    await client.query(
+      `
+      insert into admin.operator_permission
+        (perm_code, perm_type, perm_name, perm_name_key, parent_id, route_path, icon,
+         is_system, description, description_key, sort, created_by, updated_by, created_at, updated_at)
+      values ($1, 'menu', $2, $3,
+              (select id from admin.operator_permission where perm_code = $4),
+              $5, $6, true, $2, $7, $8, $9, $9, now(), now())
+      on conflict (perm_code) do update set
+        parent_id  = excluded.parent_id,
+        route_path = excluded.route_path,
+        perm_type  = excluded.perm_type,
+        sort       = excluded.sort,
+        updated_at = now()
+    `,
+      [
+        node.code,
+        node.name,
+        `ops.menu.${node.code.replace(/^admin\./, "")}`,
+        node.parent,
+        node.route,
+        node.icon,
+        `ops.menu.${node.code.replace(/^admin\./, "")}.desc`,
+        node.sort,
+        SYS,
+      ],
+    );
+  }
+
+  const menuIdRes = await client.query(
+    `select id, perm_code from admin.operator_permission where perm_type = 'menu'`,
+  );
+  const menuIdMap = Object.fromEntries(
+    menuIdRes.rows.map((r) => [r.perm_code, r.id]),
+  );
+  let reparented = 0;
+  for (const [permCode, menuCode] of Object.entries(PERM_PARENT)) {
+    const res = await client.query(
+      `update admin.operator_permission set parent_id = $1, updated_at = now()
+       where perm_code = $2 and perm_type = 'api'`,
+      [menuIdMap[menuCode], permCode],
+    );
+    reparented += res.rowCount;
+  }
+  const orphans = OPERATOR_PERMISSIONS.map((p) => p[0]).filter(
+    (code) => !PERM_PARENT[code],
+  );
+  console.log(
+    `✓  admin — ${MENU_NODES.length} menu 节点 + ${reparented} 个操作码已挂到所属页面` +
+      (orphans.length ? `（未归位：${orphans.join(", ")}）` : ""),
+  );
 
   // ── operator_role_permission mapping (resolve role/perm ids by natural key) ──
   const opPermRes = await client.query(

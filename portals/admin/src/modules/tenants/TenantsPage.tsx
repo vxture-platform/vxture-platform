@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -12,10 +12,8 @@ import {
   EmptyState,
   FilterBar,
   Input,
-  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
-  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -32,24 +30,21 @@ import type { TenantOperationRecord } from "@/entities/console";
 import { isListTruncated } from "@/lib/list-truncation";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
-import { resolveStatusTone } from "@vxture-platform/shared";
+import {} from "@vxture-platform/shared";
 import {
   TENANT_RISK_TONE,
   TENANT_STATUS_TONE,
   VERIFICATION_TONE,
-  formatDate,
   formatNumber,
   normalizeTenantRiskLevel,
   riskLabel,
   statusLabel,
   tenantRiskOptions,
   tenantSearchText,
-  typeLabel,
   verifiedLabel,
 } from "./tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
 
-type ViewMode = "list" | "cards";
 type StatusFilter = "all" | TenantOperationRecord["status"];
 type TypeFilter = "all" | TenantOperationRecord["tenantType"];
 type RiskFilter = "all" | TenantOperationRecord["riskLevel"];
@@ -70,7 +65,7 @@ function TenantActionsMenu({
 
   return (
     <div
-      className="vx-tenant-actions"
+      className="relative z-[1] inline-flex justify-self-end"
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
@@ -81,7 +76,7 @@ function TenantActionsMenu({
             label: tShared("actions.viewDetail"),
             icon: "arrow-right",
             onSelect: () =>
-              router.push(`/tenants/${encodeURIComponent(tenant.id)}`),
+              router.push(`/tenants/${encodeURIComponent(tenant.tenantCode)}`),
           },
           {
             id: "edit",
@@ -127,7 +122,7 @@ function useTenantColumns(): DataTableColumn<TenantOperationRecord>[] {
           title={tenant.displayName}
           description={`${tenant.tenantCode} · ${tenant.region}`}
           onTitleClick={() =>
-            router.push(`/tenants/${encodeURIComponent(tenant.id)}`)
+            router.push(`/tenants/${encodeURIComponent(tenant.tenantCode)}`)
           }
         />
       ),
@@ -201,98 +196,6 @@ function useTenantColumns(): DataTableColumn<TenantOperationRecord>[] {
   ];
 }
 
-function TenantCards({
-  tenants,
-  actionBusy,
-  onToggleStatus,
-}: {
-  tenants: TenantOperationRecord[];
-  actionBusy: boolean;
-  onToggleStatus: (tenant: TenantOperationRecord) => void;
-}) {
-  const locale = useLocale();
-  const router = useRouter();
-
-  return (
-    /* 卡片视图改用 DS 的 MetricListCard + ListCardGrid。原实现是一套手搓的
-     * `vx-tenant-directory-card` 栅格（跨 4 个业务域抄了 17 份），卡内的三列读数、
-     * 顶缘色条、截断规则各页各写一遍。样式文件保留不动——里面的结构已被提炼进
-     * DS，类名只是不再被引用。 */
-    <ListCardGrid aria-label="租户卡片">
-      {tenants.map((tenant) => {
-        const riskLevel = normalizeTenantRiskLevel(tenant.riskLevel);
-        return (
-          <MetricListCard
-            key={tenant.id}
-            icon={tenant.tenantType === "company" ? "buildings" : "user"}
-            title={tenant.displayName}
-            description={`${tenant.tenantCode} · ${typeLabel(tenant.tenantType)}`}
-            /* 卡的语气取风险档：一屏卡片里最该先被看见的就是高风险那几张。
-             * 风险档目前没有共享值域，映射留在 admin 侧（见 status-tone 的边界）。 */
-            tone={TENANT_RISK_TONE[riskLevel]}
-            onClick={() =>
-              router.push(`/tenants/${encodeURIComponent(tenant.id)}`)
-            }
-            actions={
-              <TenantActionsMenu
-                tenant={tenant}
-                busy={actionBusy}
-                onToggleStatus={onToggleStatus}
-              />
-            }
-            badges={
-              <>
-                <StatusBadge
-                  tone={resolveStatusTone(TENANT_STATUS_TONE, tenant.status)}
-                >
-                  {statusLabel(tenant.status)}
-                </StatusBadge>
-                <StatusBadge
-                  tone={resolveStatusTone(
-                    VERIFICATION_TONE,
-                    tenant.verifiedStatus,
-                  )}
-                >
-                  {verifiedLabel(tenant.verifiedStatus)}
-                </StatusBadge>
-                <StatusBadge tone={TENANT_RISK_TONE[riskLevel]}>
-                  {riskLabel(riskLevel)}
-                </StatusBadge>
-              </>
-            }
-            metrics={[
-              {
-                key: "subscriptions",
-                value: formatNumber(tenant.subscriptionCount),
-                label: "订阅",
-              },
-              {
-                key: "members",
-                value: formatNumber(tenant.memberCount),
-                label: "用户",
-              },
-              {
-                key: "tokens",
-                value: formatNumber(tenant.tokenUsed),
-                label: "Token",
-              },
-            ]}
-            footer={
-              <>
-                <span className="truncate">{tenant.industry}</span>
-                <span className="shrink-0">
-                  {tenant.ticketOpenCount} 工单 ·{" "}
-                  {formatDate(tenant.lastActiveAt, locale)}
-                </span>
-              </>
-            }
-          />
-        );
-      })}
-    </ListCardGrid>
-  );
-}
-
 export function TenantsPage() {
   const tShared = useTranslations();
   const { toast } = useToast();
@@ -300,7 +203,6 @@ export function TenantsPage() {
   const [tenants, setTenants] = useState<TenantOperationRecord[]>([]);
   const [tenantsTruncated, setTenantsTruncated] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedTenantIds, setSelectedTenantIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -434,7 +336,6 @@ export function TenantsPage() {
     statusFilter,
     typeFilter,
     verificationFilter,
-    viewMode,
   ]);
 
   function handleReset() {
@@ -448,7 +349,7 @@ export function TenantsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-tenant-operations-page"
+        className="w-full vx-tenant-operations-page"
         header={
           <PageHeader
             icon="buildings"
@@ -518,9 +419,6 @@ export function TenantsPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredTenants.length)}
             aria-label="租户筛选"
             search={
@@ -528,7 +426,7 @@ export function TenantsPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索租户、编码、联系人、产品"
-                className="vx-tenant-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索租户"
               />
             }
@@ -541,9 +439,9 @@ export function TenantsPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -559,7 +457,7 @@ export function TenantsPage() {
                 <option value="cancelled">注销</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={typeFilter}
                 onChange={(event) =>
                   setTypeFilter(event.target.value as TypeFilter)
@@ -571,7 +469,7 @@ export function TenantsPage() {
                 <option value="individual">个人租户</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={verificationFilter}
                 onChange={(event) =>
                   setVerificationFilter(
@@ -589,7 +487,7 @@ export function TenantsPage() {
                 </option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={riskFilter}
                 onChange={(event) =>
                   setRiskFilter(event.target.value as RiskFilter)
@@ -603,79 +501,47 @@ export function TenantsPage() {
                   </option>
                 ))}
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         table={
-          <section className="vx-tenant-directory" aria-label="租户清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="租户清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="vx-tenant-directory__header">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={tenantColumns}
-                rows={visibleTenants}
-                rowKey={(tenant) => tenant.id}
-                loading={loading}
-                indexStart={
-                  (Math.min(currentPage, pageCount) - 1) * pageSize + 1
-                }
-                selectedKeys={[...selectedTenantIds]}
-                onSelectionChange={(keys) =>
-                  setSelectedTenantIds(new Set(keys))
-                }
-                rowActions={(tenant) => (
-                  <TenantActionsMenu
-                    tenant={tenant}
-                    busy={actionBusy}
-                    onToggleStatus={handleToggleTenantStatus}
-                  />
-                )}
-                empty={
-                  <EmptyState
-                    title={loadError ? "租户数据读取失败" : "没有匹配的租户"}
-                    description={loadError ?? "清空筛选条件后可查看全部租户。"}
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleTenants.length ? (
-              <TenantCards
-                tenants={visibleTenants}
-                actionBusy={actionBusy}
-                onToggleStatus={handleToggleTenantStatus}
-              />
-            ) : (
-              <EmptyState
-                title={loading ? "正在加载租户" : "没有匹配的租户"}
-                description={
-                  loading
-                    ? "正在读取平台租户运营数据。"
-                    : (loadError ?? "清空筛选条件后可查看全部租户。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={tenantColumns}
+              rows={visibleTenants}
+              rowKey={(tenant) => tenant.id}
+              loading={loading}
+              indexStart={(Math.min(currentPage, pageCount) - 1) * pageSize + 1}
+              selectedKeys={[...selectedTenantIds]}
+              onSelectionChange={(keys) => setSelectedTenantIds(new Set(keys))}
+              rowActions={(tenant) => (
+                <TenantActionsMenu
+                  tenant={tenant}
+                  busy={actionBusy}
+                  onToggleStatus={handleToggleTenantStatus}
+                />
+              )}
+              empty={
+                <EmptyState
+                  title={loadError ? "租户数据读取失败" : "没有匹配的租户"}
+                  description={loadError ?? "清空筛选条件后可查看全部租户。"}
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

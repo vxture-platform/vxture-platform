@@ -10,7 +10,6 @@ import {
   DataTable,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
   ListPageTemplate,
   MetricGrid,
@@ -35,9 +34,8 @@ import {
 } from "@/modules/shared/publish-tone";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
-import { formatNumber, joinClasses } from "@/modules/tenants/tenant-utils";
+import { formatNumber } from "@/modules/tenants/tenant-utils";
 
-type ViewMode = "list" | "cards";
 type TypeFilter = "all" | ProductCapabilityType;
 type SourceFilter = "all" | ProductCapabilitySource;
 type StatusFilter = "all" | ProductCapabilityStatus;
@@ -119,7 +117,7 @@ function ProductActionsMenu({
   const tShared = useTranslations();
   return (
     <div
-      className="vx-tenant-actions"
+      className="relative z-[1] inline-flex justify-self-end"
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
@@ -244,85 +242,10 @@ function useProductColumns(
   ];
 }
 
-function ProductCards({
-  products,
-  onOpenDetails,
-}: {
-  products: ProductCapabilityRecord[];
-  onOpenDetails: (productCode: string) => void;
-}) {
-  return (
-    <div
-      className="vx-tenant-directory-cards vx-product-cards"
-      aria-label="产品能力卡片"
-    >
-      {products.map((product) => (
-        <article
-          key={product.productCode}
-          className={joinClasses(
-            "vx-tenant-directory-card",
-            `vx-product-card--${product.status}`,
-          )}
-          role="button"
-          tabIndex={0}
-          onClick={() => onOpenDetails(product.productCode)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") onOpenDetails(product.productCode);
-          }}
-        >
-          <header>
-            <Icon
-              name={productTypeIcon(product.productType)}
-              size="lg"
-              fallback="placeholder"
-            />
-            <div>
-              <strong>{product.productName}</strong>
-              <span>
-                {product.productCode} · {productRegionLabel(product.region)}
-              </span>
-            </div>
-            <ProductActionsMenu
-              product={product}
-              onViewDetails={() => onOpenDetails(product.productCode)}
-            />
-          </header>
-          <div className="vx-tenant-directory-card__badges">
-            <Badge>{productTypeLabel(product.productType)}</Badge>
-            <Badge>{productSourceLabel(product.source)}</Badge>
-            <StatusBadge tone={PUBLISH_STATUS_TONE[product.status]}>
-              {productStatusLabel(product.status)}
-            </StatusBadge>
-          </div>
-          <div className="vx-tenant-directory-card__metrics">
-            <span>
-              <b>{formatNumber(product.solutionCount)}</b>
-              <small>方案</small>
-            </span>
-            <span>
-              <b>{formatNumber(product.planCount)}</b>
-              <small>套餐</small>
-            </span>
-            <span>
-              <b>{formatNumber(product.modelPolicyCount)}</b>
-              <small>策略</small>
-            </span>
-          </div>
-          <footer>
-            <span>{product.meteringUnit}</span>
-            <strong>{productAccessLabel(product.integration.status)}</strong>
-          </footer>
-        </article>
-      ))}
-    </div>
-  );
-}
-
 export function ProductsPage() {
   const tShared = useTranslations();
   const router = useRouter();
   const [products, setProducts] = useState<ProductCapabilityRecord[]>([]);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedProductCodes, setSelectedProductCodes] = useState<Set<string>>(
     () => new Set(),
   );
@@ -407,15 +330,7 @@ export function ProductsPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [
-    accessFilter,
-    pageSize,
-    query,
-    sourceFilter,
-    statusFilter,
-    typeFilter,
-    viewMode,
-  ]);
+  }, [accessFilter, pageSize, query, sourceFilter, statusFilter, typeFilter]);
 
   function handleReset() {
     setQuery("");
@@ -432,7 +347,7 @@ export function ProductsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-product-management-page"
+        className="w-full vx-product-management-page"
         header={
           <PageHeader
             icon="database"
@@ -491,9 +406,6 @@ export function ProductsPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredProducts.length)}
             aria-label="产品能力筛选"
             search={
@@ -501,7 +413,7 @@ export function ProductsPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索能力、code、方案、计量"
-                className="vx-tenant-search vx-product-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索产品能力"
               />
             }
@@ -514,9 +426,9 @@ export function ProductsPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={typeFilter}
                 onChange={(event) =>
                   setTypeFilter(event.target.value as TypeFilter)
@@ -531,7 +443,7 @@ export function ProductsPage() {
                 <option value="service">服务</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={sourceFilter}
                 onChange={(event) =>
                   setSourceFilter(event.target.value as SourceFilter)
@@ -543,7 +455,7 @@ export function ProductsPage() {
                 <option value="partner">三方接入</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -556,7 +468,7 @@ export function ProductsPage() {
                 <option value="archived">已归档</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={accessFilter}
                 onChange={(event) =>
                   setAccessFilter(event.target.value as AccessFilter)
@@ -569,75 +481,48 @@ export function ProductsPage() {
                 <option value="config_required">待配置</option>
                 <option value="not_required">无需接入</option>
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         table={
-          <section className="vx-tenant-directory" aria-label="产品能力清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="产品能力清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="vx-tenant-directory__header">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={productColumns}
-                rows={visibleProducts}
-                rowKey={(product) => product.productCode}
-                loading={loading}
-                indexStart={(activePage - 1) * pageSize + 1}
-                selectedKeys={[...selectedProductCodes]}
-                onSelectionChange={(keys) =>
-                  setSelectedProductCodes(new Set(keys))
-                }
-                rowActions={(product) => (
-                  <ProductActionsMenu
-                    product={product}
-                    onViewDetails={() => handleOpenDetails(product.productCode)}
-                  />
-                )}
-                empty={
-                  <EmptyState
-                    title="没有匹配的产品能力"
-                    description="清空筛选条件后可查看全部产品能力。"
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleProducts.length ? (
-              <ProductCards
-                products={visibleProducts}
-                onOpenDetails={handleOpenDetails}
-              />
-            ) : (
-              <EmptyState
-                title={loading ? "正在加载产品能力" : "没有匹配的产品能力"}
-                description={
-                  loading
-                    ? "正在读取产品能力供给目录。"
-                    : "清空筛选条件后可查看全部产品能力。"
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={productColumns}
+              rows={visibleProducts}
+              rowKey={(product) => product.productCode}
+              loading={loading}
+              indexStart={(activePage - 1) * pageSize + 1}
+              selectedKeys={[...selectedProductCodes]}
+              onSelectionChange={(keys) =>
+                setSelectedProductCodes(new Set(keys))
+              }
+              rowActions={(product) => (
+                <ProductActionsMenu
+                  product={product}
+                  onViewDetails={() => handleOpenDetails(product.productCode)}
+                />
+              )}
+              empty={
+                <EmptyState
+                  title="没有匹配的产品能力"
+                  description="清空筛选条件后可查看全部产品能力。"
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

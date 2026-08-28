@@ -12,7 +12,6 @@ import {
   DataTable,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
   ListPageTemplate,
   MetricGrid,
@@ -40,12 +39,8 @@ import type {
   PromotionOperationType,
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
-import {
-  formatDate,
-  formatNumber,
-  joinClasses,
-} from "@/modules/tenants/tenant-utils";
-import { type PageSize, Tag, type ViewMode } from "./CommercialUtils";
+import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
+import { Tag, type PageSize } from "./CommercialUtils";
 
 type StatusFilter = "all" | PromotionOperationStatus;
 type TypeFilter = "all" | PromotionOperationType;
@@ -122,7 +117,7 @@ function PromotionActionsMenu({
 
   return (
     <div
-      className="vx-tenant-actions"
+      className="relative z-[1] inline-flex justify-self-end"
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
@@ -227,70 +222,11 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
   ];
 }
 
-function PromotionCards({ records }: { records: PromotionOperationRecord[] }) {
-  const locale = useLocale();
-  return (
-    <div
-      className="vx-tenant-directory-cards vx-commercial-cards"
-      aria-label="营销优惠卡片"
-    >
-      {records.map((record) => (
-        <article
-          key={record.id}
-          className={joinClasses(
-            "vx-tenant-directory-card",
-            `vx-commercial-card--${statusTone(record.status)}`,
-          )}
-        >
-          <header>
-            <Icon name="sparkles" size="lg" fallback="placeholder" />
-            <div>
-              <strong>{record.promotionName}</strong>
-              <span>
-                {record.promotionCode} · {record.scopeLabel}
-              </span>
-            </div>
-            <PromotionActionsMenu record={record} />
-          </header>
-          <div className="vx-tenant-directory-card__badges">
-            <Tag tone={statusTone(record.status)}>
-              {statusLabel(record.status)}
-            </Tag>
-            <Badge variant="outline">{typeLabel(record.promotionType)}</Badge>
-          </div>
-          <p className="vx-commercial-card__description">
-            {record.description}
-          </p>
-          <div className="vx-tenant-directory-card__metrics">
-            <span>
-              <b>{record.discountLabel}</b>
-              <small>优惠</small>
-            </span>
-            <span>
-              <b>{formatNumber(record.redemptionCount)}</b>
-              <small>核销</small>
-            </span>
-            <span>
-              <b>{formatNumber(record.tenantCount)}</b>
-              <small>租户</small>
-            </span>
-          </div>
-          <footer>
-            <span>{record.ownerName}</span>
-            <strong>{formatDate(record.updatedAt, locale)}</strong>
-          </footer>
-        </article>
-      ))}
-    </div>
-  );
-}
-
 export function PromotionsPage() {
   const locale = useLocale();
   const tShared = useTranslations();
   const [records, setRecords] = useState<PromotionOperationRecord[]>([]);
   const [recordsTruncated, setRecordsTruncated] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
@@ -414,7 +350,7 @@ export function PromotionsPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [pageSize, query, statusFilter, typeFilter, viewMode]);
+  }, [pageSize, query, statusFilter, typeFilter]);
 
   function handleReset() {
     setQuery("");
@@ -449,7 +385,7 @@ export function PromotionsPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-promotions-page"
+        className="w-full vx-promotions-page"
         header={
           <PageHeader
             icon="sparkles"
@@ -517,9 +453,6 @@ export function PromotionsPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredRecords.length)}
             aria-label="营销优惠筛选"
             search={
@@ -527,7 +460,7 @@ export function PromotionsPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索优惠、套餐、负责人"
-                className="vx-tenant-search vx-commercial-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索优惠"
               />
             }
@@ -574,9 +507,9 @@ export function PromotionsPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -590,7 +523,7 @@ export function PromotionsPage() {
                 <option value="expired">已结束</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-input vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={typeFilter}
                 onChange={(event) =>
                   setTypeFilter(event.target.value as TypeFilter)
@@ -602,7 +535,7 @@ export function PromotionsPage() {
                 <option value="coupon">优惠码</option>
                 <option value="campaign">活动</option>
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         bulkBar={
@@ -622,72 +555,38 @@ export function PromotionsPage() {
           ) : null
         }
         table={
-          <section className="vx-tenant-directory" aria-label="营销优惠清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="营销优惠清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="vx-tenant-directory__header">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
-            {viewMode === "list" ? (
-              <DataTable
-                columns={promotionColumns}
-                rows={visibleRecords}
-                rowKey={(record) => record.id}
-                loading={loading}
-                indexStart={(activePage - 1) * pageSize + 1}
-                selectedKeys={[...selectedRecordIds]}
-                onSelectionChange={(keys) =>
-                  setSelectedRecordIds(new Set(keys))
-                }
-                rowActions={(record) => (
-                  <PromotionActionsMenu record={record} />
-                )}
-                empty={
-                  <EmptyState
-                    title={loadError ? "优惠数据读取失败" : "没有匹配的优惠"}
-                    description={
-                      loadError ?? "清空筛选条件后可查看全部优惠活动。"
-                    }
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleRecords.length ? (
-              <PromotionCards records={visibleRecords} />
-            ) : (
-              <EmptyState
-                title={
-                  loading
-                    ? "正在加载优惠"
-                    : loadError
-                      ? "优惠数据读取失败"
-                      : "没有匹配的优惠"
-                }
-                description={
-                  loading
-                    ? "正在读取营销优惠台账。"
-                    : (loadError ?? "清空筛选条件后可查看全部优惠活动。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={promotionColumns}
+              rows={visibleRecords}
+              rowKey={(record) => record.id}
+              loading={loading}
+              indexStart={(activePage - 1) * pageSize + 1}
+              selectedKeys={[...selectedRecordIds]}
+              onSelectionChange={(keys) => setSelectedRecordIds(new Set(keys))}
+              rowActions={(record) => <PromotionActionsMenu record={record} />}
+              empty={
+                <EmptyState
+                  title={loadError ? "优惠数据读取失败" : "没有匹配的优惠"}
+                  description={
+                    loadError ?? "清空筛选条件后可查看全部优惠活动。"
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

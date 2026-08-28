@@ -1,5 +1,0 @@
-@media (max-width: 1320px) {
-  .vx-platform-governance-cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}

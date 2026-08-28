@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import {
-  Badge,
   Button,
   DetailList,
   DetailPageTemplate,
@@ -14,8 +13,15 @@ import {
   Icon,
   Label,
   MetricGrid,
+  PanelItem,
+  PanelList,
+  SHELL_PANEL_HAIRLINE,
+  StatusBadge,
+  TableTitleCell,
   Textarea,
+  toneSurfaceClasses,
 } from "@vxture/design-system";
+import type { StatusBadgeTone } from "@vxture/design-system";
 import { orUnset } from "@/modules/shared/display";
 import {
   confirmOrderOfflinePayment,
@@ -29,6 +35,11 @@ import type {
   OrderOperationStatus,
   OrderPaySource,
 } from "@/entities/console";
+import {
+  ORDER_STATUS_TONE,
+  PAYMENT_STATUS_TONE,
+} from "@/modules/shared/status-tone";
+import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import {
@@ -42,6 +53,14 @@ import {
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
+
+/** 时间线圆点的语气。原来是 `--subscription-timeline-bg/-color` 两个变量，
+ * 由三个 `--success/--warning/--danger` 修饰类喂进去。 */
+const TIMELINE_TONE: Record<string, StatusBadgeTone> = {
+  success: "success",
+  warning: "warning",
+  danger: "danger",
+};
 
 function formatCurrency(value: number, currency: string) {
   return new Intl.NumberFormat("zh-CN", {
@@ -118,66 +137,59 @@ function OrderSummary({ order }: { order: OrderOperationDetailRecord }) {
   const t = useTranslations();
   const tShared = useTranslations();
   return (
-    <section className="vx-product-capability-summary">
-      <div className="vx-product-capability-summary__identity">
-        <span
-          className="vx-product-capability-summary__icon"
-          aria-hidden="true"
-        >
-          <Icon name="table" size="lg" fallback="placeholder" />
-        </span>
-        <div>
-          <h2>{order.orderNo}</h2>
-          <p>
-            {order.tenantName} / {order.tierName}
-          </p>
-          <div className="vx-product-capability-summary__badges">
-            <Badge
-              className={`vx-tenant-pill vx-order-pill--${order.orderStatus}`}
-            >
-              {orderStatusLabel(order.orderStatus)}
-            </Badge>
-            <Badge
-              className={`vx-tenant-pill vx-order-pill--payment-${order.paymentStatus}`}
-            >
-              {t(`status.orderPayment.${order.paymentStatus}`)}
-            </Badge>
-          </div>
-        </div>
-      </div>
-      <MetricGrid
-        items={[
-          {
-            id: "amount",
-            help: "订单成交金额，按订单币种展示。",
-            label: "订单金额",
-            value: formatCurrency(order.amount, order.currency),
-            tags: [cycleLabel(order.cycleType)],
-          },
-          {
-            id: "paid",
-            help: "已核销到本订单的回款金额。",
-            label: tShared("columns.receivedAmount"),
-            value: formatCurrency(order.paidAmount, order.currency),
-            tags: [paySourceLabel(order.paySource)],
-          },
-          {
-            id: "solution",
-            help: "本订单开通的业务方案。",
-            label: "业务方案",
-            value: order.solutionName,
-            tags: [order.servicePlanName],
-          },
-          {
-            id: "operation",
-            help: "按当前订单状态给出的建议处理动作。",
-            label: "运营动作",
-            value: order.operationHint,
-            tags: [order.operatorName],
-          },
-        ]}
-      />
-    </section>
+    <DetailSummaryHeader
+      icon="table"
+      title={order.orderNo}
+      subtitle={
+        <>
+          {order.tenantName} / {order.tierName}
+        </>
+      }
+      badges={
+        <>
+          <StatusBadge tone={ORDER_STATUS_TONE[order.orderStatus]}>
+            {orderStatusLabel(order.orderStatus)}
+          </StatusBadge>
+          <StatusBadge tone={PAYMENT_STATUS_TONE[order.paymentStatus]}>
+            {t(`status.orderPayment.${order.paymentStatus}`)}
+          </StatusBadge>
+        </>
+      }
+      aside={
+        <MetricGrid
+          items={[
+            {
+              id: "amount",
+              help: "订单成交金额，按订单币种展示。",
+              label: "订单金额",
+              value: formatCurrency(order.amount, order.currency),
+              tags: [cycleLabel(order.cycleType)],
+            },
+            {
+              id: "paid",
+              help: "已核销到本订单的回款金额。",
+              label: tShared("columns.receivedAmount"),
+              value: formatCurrency(order.paidAmount, order.currency),
+              tags: [paySourceLabel(order.paySource)],
+            },
+            {
+              id: "solution",
+              help: "本订单开通的业务方案。",
+              label: "业务方案",
+              value: order.solutionName,
+              tags: [order.servicePlanName],
+            },
+            {
+              id: "operation",
+              help: "按当前订单状态给出的建议处理动作。",
+              label: "运营动作",
+              value: order.operationHint,
+              tags: [order.operatorName],
+            },
+          ]}
+        />
+      }
+    />
   );
 }
 
@@ -187,10 +199,10 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
   const tShared = useTranslations();
   return (
     <section
-      className="vx-product-capability-detail"
+      className="grid min-w-0 gap-xl"
       aria-label={`${order.orderNo} 订单详情`}
     >
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="table" title="基础资料" />
         <DetailList columns={3}>
           <DetailRow label="订单编号">{orUnset(order.orderNo)}</DetailRow>
@@ -216,7 +228,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
         </DetailList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="buildings" title="租户与套餐" />
         <DetailList columns={3}>
           <DetailRow label="租户">{orUnset(order.tenantName)}</DetailRow>
@@ -236,7 +248,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
         </DetailList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="star" title="关联订阅" />
         <DetailList columns={3}>
           <DetailRow label="订阅 ID">{orUnset(order.subscriptionId)}</DetailRow>
@@ -247,17 +259,15 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
             {orUnset(cycleLabel(order.cycleType))}
           </DetailRow>
         </DetailList>
-        <div className="vx-product-capability-actions vx-subscription-detail-links">
+        <div className="inline-flex flex-wrap items-center justify-end gap-sm justify-start ">
           <Button asChild variant="outline">
-            <Link
-              href={`/subscriptions/${encodeURIComponent(order.subscriptionId)}`}
-            >
+            <Link href={`/subscriptions/${encodeURIComponent(order.orderNo)}`}>
               <Icon name="star" size="xs" fallback="placeholder" />
               订阅详情
             </Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href={`/tenants/${encodeURIComponent(order.tenantId)}`}>
+            <Link href={`/tenants/${encodeURIComponent(order.tenantCode)}`}>
               <Icon name="buildings" size="xs" fallback="placeholder" />
               租户详情
             </Link>
@@ -265,7 +275,7 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
         </div>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="key" title="账单与收款" />
         <DetailList columns={3}>
           <DetailRow label="账单编号">{order.billNo || "未生成"}</DetailRow>
@@ -288,93 +298,136 @@ function OrderDetails({ order }: { order: OrderOperationDetailRecord }) {
         </DetailList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="list" title="账单明细" />
-        <div className="vx-product-detail-list vx-product-detail-list--entitlements">
+        <PanelList>
           {order.invoiceItems.map((item) => (
-            <div key={item.id} className="vx-product-detail-list__row">
-              <span>
-                <Icon name="table" size="sm" fallback="placeholder" />
-                <strong>{item.itemName}</strong>
-              </span>
-              <small>
-                {item.itemType} | {formatQuantity(item.quantity)}{" "}
-                {item.itemUnit ?? ""}
-              </small>
-              <em>{formatCurrency(item.totalAmount, order.currency)}</em>
-              <p>
-                {item.remark ??
-                  `单价 ${formatCurrency(item.unitPrice, order.currency)}`}
-              </p>
-            </div>
+            <PanelItem
+              key={item.id}
+              lead={<Icon name="table" size="sm" fallback="placeholder" />}
+              main={
+                <TableTitleCell
+                  title={<>{item.itemName}</>}
+                  description={
+                    <>
+                      {item.itemType} | {formatQuantity(item.quantity)}{" "}
+                      {item.itemUnit ?? ""}
+                    </>
+                  }
+                />
+              }
+              trail={
+                <span className="grid justify-items-end gap-2xs">
+                  <span className="text-body-md font-semibold text-foreground">
+                    {formatCurrency(item.totalAmount, order.currency)}
+                  </span>
+                  <span className="truncate text-body-sm text-muted-foreground">
+                    {item.remark ??
+                      `单价 ${formatCurrency(item.unitPrice, order.currency)}`}
+                  </span>
+                </span>
+              }
+            />
           ))}
-        </div>
+        </PanelList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="check" title="支付记录" />
-        <div className="vx-product-detail-list vx-product-detail-list--entitlements">
+        <PanelList>
           {order.paymentRecords.length ? (
             order.paymentRecords.map((payment) => (
-              <div key={payment.id} className="vx-product-detail-list__row">
-                <span>
-                  <Icon name="check" size="sm" fallback="placeholder" />
-                  <strong>{payment.paymentNo}</strong>
-                </span>
-                <small>
-                  {paySourceLabel(payment.paySource)} |{" "}
-                  {t(`status.orderPayment.${payment.paymentStatus}`)} |{" "}
-                  {formatDate(payment.paidAt, locale)}
-                </small>
-                <em>{formatCurrency(payment.paidAmount, payment.currency)}</em>
-                <p>{payment.remark ?? payment.operatorName}</p>
-              </div>
+              <PanelItem
+                key={payment.id}
+                lead={<Icon name="check" size="sm" fallback="placeholder" />}
+                main={
+                  <TableTitleCell
+                    title={<>{payment.paymentNo}</>}
+                    description={
+                      <>
+                        {paySourceLabel(payment.paySource)} |{" "}
+                        {t(`status.orderPayment.${payment.paymentStatus}`)} |{" "}
+                        {formatDate(payment.paidAt, locale)}
+                      </>
+                    }
+                  />
+                }
+                trail={
+                  <span className="grid justify-items-end gap-2xs">
+                    <span className="text-body-md font-semibold text-foreground">
+                      {formatCurrency(payment.paidAmount, payment.currency)}
+                    </span>
+                    <span className="truncate text-body-sm text-muted-foreground">
+                      {payment.remark ?? payment.operatorName}
+                    </span>
+                  </span>
+                }
+              />
             ))
           ) : (
-            <div className="vx-product-detail-list__row">
-              <span>
-                <Icon name="clock" size="sm" fallback="placeholder" />
-                <strong>暂无支付记录</strong>
-              </span>
-              <small>等待线上支付或运营确认线下收款</small>
-              <em>未收款</em>
-              <p>确认线下收款后会自动写入支付记录。</p>
-            </div>
+            <PanelItem
+              lead={<Icon name="clock" size="sm" fallback="placeholder" />}
+              main={
+                <TableTitleCell
+                  title={<>暂无支付记录</>}
+                  description={<>等待线上支付或运营确认线下收款</>}
+                />
+              }
+              trail={
+                <span className="grid justify-items-end gap-2xs">
+                  <span className="text-body-md font-semibold text-foreground">
+                    未收款
+                  </span>
+                  <span className="truncate text-body-sm text-muted-foreground">
+                    确认线下收款后会自动写入支付记录。
+                  </span>
+                </span>
+              }
+            />
           )}
-        </div>
+        </PanelList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="clock" title="运营记录" />
-        <div className="vx-subscription-timeline">
+        <PanelList>
           {order.operationTimeline.map((event) => (
-            <article
+            <PanelItem
               key={event.id}
-              className={`vx-subscription-timeline__item vx-subscription-timeline__item--${event.tone}`}
-            >
-              <span aria-hidden="true">
-                <Icon
-                  name={
-                    event.tone === "danger"
-                      ? "warning"
-                      : event.tone === "success"
-                        ? "check"
-                        : "info"
-                  }
-                  size="xs"
-                  fallback="placeholder"
-                />
-              </span>
-              <div>
-                <strong>{event.title}</strong>
-                <p>{event.description}</p>
-                <small>
-                  {event.actor} · {formatDate(event.at, locale)}
-                </small>
-              </div>
-            </article>
+              lead={
+                <span
+                  aria-hidden="true"
+                  className={`inline-grid size-icon-md place-items-center rounded-full border ${toneSurfaceClasses[TIMELINE_TONE[event.tone] ?? "neutral"]}`}
+                >
+                  <Icon
+                    name={
+                      event.tone === "danger"
+                        ? "warning"
+                        : event.tone === "success"
+                          ? "check"
+                          : "info"
+                    }
+                    size="xs"
+                    fallback="placeholder"
+                  />
+                </span>
+              }
+              main={
+                <span className="grid min-w-0 gap-2xs">
+                  <strong className="block text-body-md font-semibold text-foreground">
+                    {event.title}
+                  </strong>
+                  <p className="m-0 text-body-sm leading-relaxed text-muted-foreground">
+                    {event.description}
+                  </p>
+                  <small className="block text-body-sm text-muted-foreground">
+                    {event.actor} · {formatDate(event.at, locale)}
+                  </small>
+                </span>
+              }
+            />
           ))}
-        </div>
+        </PanelList>
       </section>
     </section>
   );
@@ -559,7 +612,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
   if (!loading && !order) {
     return (
       <DetailPageTemplate
-        className="vx-product-capability-page"
+        className="min-w-0"
         header={
           <PageHeader
             icon="table"
@@ -586,7 +639,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
 
   return (
     <DetailPageTemplate
-      className="vx-product-capability-page vx-order-detail-page"
+      className="min-w-0 vx-order-detail-page"
       header={
         <PageHeader
           icon="table"
@@ -597,7 +650,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
               : "正在读取订单、账单和支付记录。"
           }
           action={
-            <div className="vx-product-capability-actions">
+            <div className="inline-flex flex-wrap items-center justify-end gap-sm">
               <Button asChild variant="outline">
                 <Link href="/orders">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
@@ -608,7 +661,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                 <>
                   <Button asChild variant="outline">
                     <Link
-                      href={`/subscriptions/${encodeURIComponent(order.subscriptionId)}`}
+                      href={`/subscriptions/${encodeURIComponent(order.orderNo)}`}
                     >
                       <Icon name="star" size="xs" fallback="placeholder" />
                       订阅详情
@@ -689,7 +742,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
       }
     >
       {operationFeedback ? (
-        <div className="vx-subscription-operation-feedback">
+        <div className="inline-flex w-fit items-center rounded-lg bg-success-muted px-sm py-xs text-body-sm text-success-text">
           {operationFeedback}
         </div>
       ) : null}
@@ -697,9 +750,9 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
       {order ? (
         <>
           {order.declaredPayment ? (
-            <section className="vx-tenant-directory__header">
+            <section className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
               <DetailSectionHeading icon="clock" title="客户付款申报" />
-              <p className="vx-subscription-action-dialog__description">
+              <p className="m-0 text-body-sm text-muted-foreground">
                 客户在付款页提交的申报信息，确认前请核对到账；实收不符请「驳回申报」。
               </p>
               <div className="vx-detail-grid">
@@ -747,7 +800,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
           <OrderDetails order={order} />
         </>
       ) : (
-        <section className="vx-tenant-directory__header">
+        <section className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
           <span>{tShared("common.loading")}</span>
         </section>
       )}

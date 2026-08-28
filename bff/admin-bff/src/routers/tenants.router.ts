@@ -51,6 +51,33 @@ export class TenantsRouter {
     @Inject(ADMIN_BFF_RW_POOL) private readonly rwPool: Pool,
   ) {}
 
+  /**
+   * 详情路由的参数是**面向用户的租户编码**（`tenant_no`，如 `100104`），不是
+   * 内部 UUID——地址栏是可见面，UUID 不在任何场景对外展示。
+   *
+   * 同时仍接受 UUID：存量书签、审计日志里记的 id、以及内部工具都还在传它。
+   * `tenant_no` 有库级唯一约束（`uq_tenants_tenant_no`），当查找键是安全的。
+   * 解不出来就是 404，和「传了个不存在的 UUID」同一个结果，不是 400——
+   * 编码写错和格式非法是两回事。
+   *
+   * 这里只需要区分「传进来的是 id 还是编码」，形状够了，真假交给查询判。
+   */
+  private async resolveTenantId(value: string): Promise<string> {
+    if (UUID_RE.test(value ?? "")) return value;
+    // `tenant_no` 是 **bigint**（不像 bill_no / order_no 是 varchar）：把非数字的
+    // 串交给它比较，Postgres 会在转型时抛 22P02，出去是 500 而不是 404。所以先
+    // 用形状挡一道——非数字必然不是租户编码。19 位是 bigint 的量级上限。
+    if (!/^\d{1,19}$/.test(value ?? "")) {
+      throw new NotFoundException("Tenant not found");
+    }
+    const { rows } = await this.pool.query<{ id: string }>(
+      `select id from tenancy.tenants where tenant_no = $1::bigint and deleted_at is null limit 1`,
+      [value],
+    );
+    if (!rows[0]) throw new NotFoundException("Tenant not found");
+    return rows[0].id;
+  }
+
   @Get()
   async listTenants(
     @Req() req: Request & RequestContext,
@@ -128,7 +155,7 @@ export class TenantsRouter {
     @Param("id") id: string,
   ): Promise<TenantOperationRecord> {
     assertCanManageTenants(req);
-    const tenantId = requireUuid(id, "Invalid tenant id");
+    const tenantId = await this.resolveTenantId(id);
 
     const { rows } = await this.pool.query<TenantOperationRow>(
       TENANT_DETAIL_SQL,
@@ -165,7 +192,7 @@ export class TenantsRouter {
     @Body() body: UpdateTenantBody,
   ): Promise<TenantOperationRecord> {
     assertCanManageTenants(req);
-    const tenantId = requireUuid(id, "Invalid tenant id");
+    const tenantId = await this.resolveTenantId(id);
 
     const name = optionalString(body?.name, 128, "name");
     const dbStatus = mapIncomingTenantStatus(body?.status);
@@ -304,7 +331,7 @@ export class TenantsRouter {
     @Param("id") id: string,
   ): Promise<TenantOperationRecord> {
     assertCanManageTenantLifecycle(req);
-    const tenantId = requireUuid(id, "Invalid tenant id");
+    const tenantId = await this.resolveTenantId(id);
 
     const { rowCount } = await this.rwPool.query(
       `
@@ -332,7 +359,7 @@ export class TenantsRouter {
     @Param("id") id: string,
   ): Promise<TenantOperationRecord> {
     assertCanManageTenantLifecycle(req);
-    const tenantId = requireUuid(id, "Invalid tenant id");
+    const tenantId = await this.resolveTenantId(id);
 
     const { rowCount } = await this.rwPool.query(
       `
@@ -359,7 +386,7 @@ export class TenantsRouter {
     @Param("id") id: string,
   ): Promise<TenantMemberRecord[]> {
     assertCanManageTenants(req);
-    const tenantId = requireUuid(id, "Invalid tenant id");
+    const tenantId = await this.resolveTenantId(id);
 
     const { rows } = await this.pool.query<TenantMemberRow>(
       `${TENANT_MEMBER_SELECT} order by m.created_at asc`,
@@ -383,7 +410,7 @@ export class TenantsRouter {
     @Body() body: ChangeMemberRoleBody,
   ): Promise<TenantMemberRecord> {
     assertCanManageTenants(req);
-    const tenantId = requireUuid(id, "Invalid tenant id");
+    const tenantId = await this.resolveTenantId(id);
     const memberUserId = requireUuid(userId, "Invalid member user id");
     const roleId = requireUuid(body?.roleId, "Invalid role id");
 
@@ -472,7 +499,7 @@ export class TenantsRouter {
     status: "suspended" | "removed",
   ): Promise<TenantMemberRecord> {
     assertCanManageTenants(req);
-    const tenantId = requireUuid(id, "Invalid tenant id");
+    const tenantId = await this.resolveTenantId(id);
     const memberUserId = requireUuid(userId, "Invalid member user id");
 
     const { rowCount } = await this.rwPool.query(
@@ -810,8 +837,10 @@ interface TenantOperationRow {
 // B10 追加：写路径入参校验 + 成员/实名读投影 + 契约类型（append-only）。
 // ─────────────────────────────────────────────────────────────────────────────
 
+// 版本位/变体位刻意不卡：判据与理由见 governance.shared.ts 的 `UUID_RE` 注释
+//（校验器不该比存储层更严；种子 id 的变体位是段值本身，如 …-4000-d000-…）。
 const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function requireUuid(value: string | undefined, message: string): string {
   if (!value || !UUID_RE.test(value)) {

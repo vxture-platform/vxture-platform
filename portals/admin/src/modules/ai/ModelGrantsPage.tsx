@@ -11,10 +11,11 @@ import {
   DataTable,
   DialogForm,
   EmptyState,
-  Icon,
   Input,
   Label,
+  ListCardGrid,
   MetricGrid,
+  MetricListCard,
   NativeSelect,
   Pagination,
   StatusBadge,
@@ -581,7 +582,7 @@ export function ModelGrantsPage() {
   }
 
   return (
-    <ViewLayout className="vx-tenant-management-page vx-model-strategy-page">
+    <ViewLayout className="w-full vx-model-strategy-page">
       <PageHeader
         icon="shield-check"
         eyebrow={t("header.eyebrow")}
@@ -639,9 +640,9 @@ export function ModelGrantsPage() {
         ]}
       />
 
-      <div className="vx-tenant-list-shell">
+      <div className="grid min-w-0">
         <section
-          className="vx-tenant-toolbar"
+          className="flex min-w-0 items-center gap-md py-md max-xl:flex-wrap max-lg:items-stretch"
           aria-label={t("policyTable.filterAriaLabel")}
         >
           <ViewModeSwitch
@@ -649,15 +650,15 @@ export function ModelGrantsPage() {
             onChange={setViewMode}
             ariaLabel="模型授权展示方式"
           />
-          <span className="vx-tenant-view-count">
+          <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
             {formatNumber(filteredPolicies.length)}
           </span>
-          <span className="vx-tenant-toolbar__spacer" aria-hidden="true" />
+          <span className="flex-1 max-lg:hidden" aria-hidden="true" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t("policyTable.searchPlaceholder")}
-            className="vx-tenant-search"
+            className="grow basis-media-3xl max-w-panel-sm"
             aria-label={t("policyTable.searchAriaLabel")}
           />
           <Button
@@ -669,9 +670,9 @@ export function ModelGrantsPage() {
           >
             重置
           </Button>
-          <div className="vx-tenant-filters">
+          <>
             <NativeSelect
-              className="vx-tenant-select vx-model-strategy-filter"
+              wrapperClassName="w-fit basis-media-xl"
               value={filter}
               onChange={(event) =>
                 setFilter(event.target.value as PolicyFilter)
@@ -684,14 +685,14 @@ export function ModelGrantsPage() {
                 </option>
               ))}
             </NativeSelect>
-          </div>
+          </>
           <ActionButton icon="plus" onClick={openCreateGrantDialog}>
             {t("actions.addGrant")}
           </ActionButton>
         </section>
 
         <section
-          className="vx-tenant-directory"
+          className="grid min-w-0 max-w-full gap-xs"
           aria-label={t("policyTable.toolbarTitle", {
             count: filteredPolicies.length,
           })}
@@ -749,8 +750,7 @@ export function ModelGrantsPage() {
               }
             />
           ) : pagedPolicies.length ? (
-            <div
-              className="vx-tenant-directory-cards vx-model-strategy-cards"
+            <ListCardGrid
               aria-label={t("policyTable.toolbarTitle", {
                 count: filteredPolicies.length,
               })}
@@ -767,56 +767,50 @@ export function ModelGrantsPage() {
                   policy.modelCode ?? t("policyTable.defaultDeny");
 
                 return (
-                  <article
+                  <MetricListCard
                     key={policy.id}
-                    className={`vx-tenant-directory-card vx-model-strategy-card vx-model-strategy-card--${status}`}
-                  >
-                    <header>
-                      <Icon
-                        name="shield-check"
-                        size={24}
-                        fallback="placeholder"
-                      />
-                      <div>
-                        <strong>{policy.scopeName}</strong>
-                        <span>
-                          {policySubjectLabel(policy)} · {policy.scopeCode}
-                        </span>
-                      </div>
+                    icon="shield-check"
+                    title={policy.scopeName}
+                    description={`${policySubjectLabel(policy)} · ${policy.scopeCode}`}
+                    tone={POLICY_STATUS_TONE[status]}
+                    actions={
                       <StatusBadge tone={POLICY_STATUS_TONE[status]}>
                         {t(`status.${status}`)}
                       </StatusBadge>
-                    </header>
-                    <div className="vx-tenant-directory-card__badges">
-                      <Badge>{modelName}</Badge>
-                      <Badge>
-                        {formatTokens(
-                          policy.quotaTokens,
-                          policy.isUnlimited,
-                          t("policyTable.unlimited"),
-                        )}
-                      </Badge>
-                    </div>
-                    <div className="vx-tenant-directory-card__metrics">
-                      <span>
-                        <b>{policy.priority}</b>
-                        <small>{t("policyTable.columns.priority")}</small>
-                      </span>
-                      <span>
-                        <b>{policy.agentName}</b>
-                        <small>
-                          {policy.agentCode ?? t("table.allAgents")}
-                        </small>
-                      </span>
-                      <span>
-                        <b>{modelCode}</b>
-                        <small>{t("policyTable.columns.model")}</small>
-                      </span>
-                    </div>
-                  </article>
+                    }
+                    badges={
+                      <>
+                        <Badge>{modelName}</Badge>
+                        <Badge>
+                          {formatTokens(
+                            policy.quotaTokens,
+                            policy.isUnlimited,
+                            t("policyTable.unlimited"),
+                          )}
+                        </Badge>
+                      </>
+                    }
+                    metrics={[
+                      {
+                        key: "priority",
+                        value: policy.priority,
+                        label: t("policyTable.columns.priority"),
+                      },
+                      {
+                        key: "agent",
+                        value: policy.agentName,
+                        label: policy.agentCode ?? t("table.allAgents"),
+                      },
+                      {
+                        key: "model",
+                        value: modelCode,
+                        label: t("policyTable.columns.model"),
+                      },
+                    ]}
+                  />
                 );
               })}
-            </div>
+            </ListCardGrid>
           ) : (
             <EmptyState
               title={loading ? t("empty.loadingTitle") : t("empty.policyTitle")}
@@ -855,8 +849,8 @@ export function ModelGrantsPage() {
         </section>
       </div>
 
-      <section className="vx-tenant-list-shell vx-model-strategy-overrides">
-        <header className="vx-tenant-directory__header vx-model-strategy-overrides__header">
+      <section className="grid min-w-0 gap-xs ">
+        <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground flex items-center justify-between pt-sm ">
           <strong>{t("overrides.title")}</strong>
           <span>
             {t("overrides.count", { count: filteredOverrides.length })}
@@ -914,7 +908,7 @@ export function ModelGrantsPage() {
           }}
           onSubmit={(event) => void submitGrant(event)}
         >
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               {t("dialogs.fields.grantModel")}
               <NativeSelect
@@ -950,7 +944,7 @@ export function ModelGrantsPage() {
               />
             </Label>
           </div>
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               {t("dialogs.fields.agentId")}
               {/* 与 模型 / 租户 同列：应用范围是身份的一部分，创建后 atlas 不接受修改。
@@ -990,7 +984,7 @@ export function ModelGrantsPage() {
           </div>
           {/* 任务画像与授权说明同列：两个都是自由文本、两个在编辑态都照常可改
               （与上面那行的应用范围不同——那个 atlas 创建后就不收了）。 */}
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               {t("dialogs.fields.taskProfile")}
               {/* atlas 的 create 与 update 都收这个字段，而此前表单里根本没有它：
@@ -1019,7 +1013,7 @@ export function ModelGrantsPage() {
               />
             </Label>
           </div>
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               {t("dialogs.fields.expiresAt")}
               <Input

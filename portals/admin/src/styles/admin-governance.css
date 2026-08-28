@@ -1,5 +1,0 @@
-/* Admin governance style entry. Keep concrete rules in admin-governance-* modules. */
-
-@import "./admin-governance-cards.css";
-@import "./admin-governance-responsive.css";
-@import "./admin-governance-step-up.css";

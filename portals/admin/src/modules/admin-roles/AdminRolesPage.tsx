@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import type { CSSProperties } from "react";
 import {
   ActionButton,
   ActionMenu,
@@ -52,15 +51,20 @@ import type {
 import { useLocale, useTranslations } from "next-intl";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
-import {
-  formatDate,
-  formatNumber,
-  joinClasses,
-} from "@/modules/tenants/tenant-utils";
+import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
 import { useConfirmLabels } from "@/modules/shared/destructive";
 
-type ViewMode = "list" | "cards";
+/**
+ * 权限类型 → 语气。照 `.vx-admin-role-pill--*` 实测的底色定：菜单品牌蓝、
+ * 按钮青、接口琥珀。三者是**类目**不是严重度，用色只为在一棵树里一眼分开。
+ */
+const PERM_TYPE_TONE: Record<string, StatusBadgeTone> = {
+  menu: "brand",
+  button: "info",
+  api: "warning",
+};
+
 type PlatformRoleStatusCode = PlatformRoleRecord["statusCode"];
 type StatusFilter = "all" | PlatformRoleStatusCode;
 type RoleKindFilter = "all" | "system" | "custom";
@@ -258,7 +262,7 @@ function AdminRoleActionsMenu({
   const managed = !role.isSystem;
   return (
     <div
-      className="vx-tenant-actions"
+      className="relative z-[1] inline-flex justify-self-end"
       onClick={(event) => event.stopPropagation()}
     >
       <ActionMenu
@@ -357,12 +361,13 @@ function AdminRolePermissionDialog({
         if (!next) onClose();
       }}
     >
-      {/* max-w-none neutralizes DS DialogContent's default max-w-lg so the
-          existing __panel width tokens drive the surface size. */}
-      <DialogContent className="max-w-none vx-admin-role-permission-dialog__panel">
-        <header>
+      <DialogContent
+        width="xl"
+        className="grid max-h-screen grid-rows-[auto_auto_minmax(0,1fr)] gap-md"
+      >
+        <header className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-md">
           <span
-            className="vx-admin-role-permission-dialog__icon"
+            className="inline-grid size-icon-2xl place-items-center rounded-full bg-primary-muted text-primary-text"
             aria-hidden="true"
           >
             <Icon name="role" size="lg" fallback="placeholder" />
@@ -372,24 +377,21 @@ function AdminRolePermissionDialog({
             <DialogDescription>{role.roleCode}</DialogDescription>
           </div>
         </header>
-        <div className="vx-admin-role-permission-dialog__summary">
-          <Badge className="vx-tenant-pill vx-admin-role-pill--menu">
+        <div className="flex flex-wrap items-center gap-xs">
+          <StatusBadge tone="brand" icon={false}>
             菜单 {formatNumber(role.menuPermissionCount)}
-          </Badge>
-          <Badge className="vx-tenant-pill vx-admin-role-pill--button">
+          </StatusBadge>
+          <StatusBadge tone="info" icon={false}>
             按钮 {formatNumber(role.buttonPermissionCount)}
-          </Badge>
-          <Badge className="vx-tenant-pill vx-admin-role-pill--api">
+          </StatusBadge>
+          <StatusBadge tone="warning" icon={false}>
             接口 {formatNumber(role.apiPermissionCount)}
-          </Badge>
+          </StatusBadge>
         </div>
-        <div className="vx-admin-role-permission-dialog__body">
+        <div className="grid min-h-0 gap-md overflow-auto pr-2xs">
           {(["menu", "button", "api"] as const).map((type) => (
-            <section
-              key={type}
-              className="vx-admin-role-permission-dialog__group"
-            >
-              <h3>
+            <section key={type} className="grid gap-sm">
+              <h3 className="m-0 text-body-md font-semibold text-foreground">
                 {type === "menu"
                   ? "菜单权限"
                   : type === "button"
@@ -397,23 +399,30 @@ function AdminRolePermissionDialog({
                     : "接口权限"}
               </h3>
               {permissionsByType[type].length ? (
-                <div className="vx-admin-role-permission-dialog__list">
+                <div className="grid gap-sm sm:grid-cols-2">
                   {permissionsByType[type].map((permission) => (
-                    <article key={permission.id}>
-                      <strong>
+                    <article
+                      key={permission.id}
+                      className="grid min-w-0 gap-2xs rounded-lg border border-primary/10 p-sm"
+                    >
+                      <strong className="truncate text-body-sm font-semibold text-foreground">
                         {permissionDisplayName(
                           permission.permName || permission.permCode,
                         )}
                       </strong>
-                      <code>{permission.permCode}</code>
+                      <code className="truncate font-mono text-body-sm text-muted-foreground">
+                        {permission.permCode}
+                      </code>
                       {permission.description ? (
-                        <small>{permission.description}</small>
+                        <small className="truncate text-body-sm text-muted-foreground">
+                          {permission.description}
+                        </small>
                       ) : null}
                     </article>
                   ))}
                 </div>
               ) : (
-                <p className="vx-admin-role-permission-dialog__empty">-</p>
+                <p className="m-0 text-body-sm text-muted-foreground">-</p>
               )}
             </section>
           ))}
@@ -422,6 +431,11 @@ function AdminRolePermissionDialog({
     </Dialog>
   );
 }
+
+/** 授权树的层级缩进。判据同权限页的 `DEPTH_INDENT`，但第 0 层留空串而不是
+ * `ps-0`：这些行本身带 `p-xs`，写 `ps-0` 会把左内边距抹掉，行首贴着面板边缘、
+ * 左右不对称（对比 main 的 `padding-left: space-sm + depth * space-md`）。 */
+const AUTH_DEPTH_INDENT = ["", "ps-md", "ps-lg", "ps-xl", "ps-2xl"] as const;
 
 function PermissionAuthorizationNode({
   node,
@@ -451,33 +465,39 @@ function PermissionAuthorizationNode({
     : null;
 
   return (
-    <article
-      className="vx-admin-role-auth-node"
-      // Dynamic tree depth drives the CSS indent (calc on --permission-depth);
-      // a runtime numeric value cannot be expressed as a static className.
-      style={{ "--permission-depth": node.depth } as CSSProperties}
-    >
-      <label>
+    /* 缩进走定长的深度→类名表，与权限页同一处理：内联 style 承载间距会被
+       `ds/no-inline-design-style` 拦，任意值 `ps-[Nrem]` 会被
+       `ds/no-app-tailwind-arbitrary-scale` 拦。 */
+    <article className="grid min-w-0">
+      <label
+        className={`grid grid-cols-[auto_minmax(0,1fr)] items-center gap-sm rounded-md p-xs hover:bg-accent ${AUTH_DEPTH_INDENT[Math.min(node.depth, AUTH_DEPTH_INDENT.length - 1)]}`}
+      >
         <Checkbox
-          className="vx-model-select-checkbox"
+          className="size-icon-sm m-0 cursor-pointer "
           checked={indeterminate ? "indeterminate" : checked}
           disabled={!node.permission.status}
           onCheckedChange={(nextChecked) =>
             onToggle(node, nextChecked === true)
           }
         />
-        <span className="vx-admin-role-auth-node__main">
-          <strong>{permissionLabel(node.permission)}</strong>
-          <span>
-            <Badge
-              className={`vx-tenant-pill vx-admin-role-pill--${node.permission.permType.toLowerCase()}`}
+        <span className="grid min-w-0 justify-items-start gap-2xs text-left">
+          <strong className="truncate text-body-md font-extrabold text-foreground">
+            {permissionLabel(node.permission)}
+          </strong>
+          <span className="flex min-w-0 flex-wrap items-center justify-start gap-2xs">
+            <StatusBadge
+              tone={
+                PERM_TYPE_TONE[node.permission.permType.toLowerCase()] ??
+                "neutral"
+              }
+              icon={false}
             >
               {node.permission.permType === "menu"
                 ? "菜单"
                 : node.permission.permType === "button"
                   ? "按钮"
                   : "接口"}
-            </Badge>
+            </StatusBadge>
             <Badge>{node.depth === 0 ? "根权限" : `L${node.depth}`}</Badge>
             {!node.permission.status ? (
               <StatusBadge tone="neutral">
@@ -485,7 +505,7 @@ function PermissionAuthorizationNode({
               </StatusBadge>
             ) : null}
           </span>
-          <small>
+          <small className="truncate text-body-sm text-muted-foreground">
             {parent
               ? parent.permName || parent.permCode
               : node.permission.permCode}
@@ -493,7 +513,7 @@ function PermissionAuthorizationNode({
         </span>
       </label>
       {node.children.length ? (
-        <div className="vx-admin-role-auth-node__children">
+        <div className="grid">
           {node.children.map((child) => (
             <PermissionAuthorizationNode
               key={child.permission.id}
@@ -616,12 +636,13 @@ function AdminRoleAuthorizationDialog({
         if (!next && !saving) onClose();
       }}
     >
-      {/* max-w-none lets the __auth-dialog__panel width token drive the wide
-          surface; the shared __panel classes keep the original visuals. */}
-      <DialogContent className="max-w-none vx-admin-role-permission-dialog__panel vx-admin-role-auth-dialog__panel">
-        <header>
+      <DialogContent
+        width="xl"
+        className="grid max-h-screen grid-rows-[auto_auto_auto_minmax(0,1fr)_auto] gap-md"
+      >
+        <header className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-md">
           <span
-            className="vx-admin-role-permission-dialog__icon"
+            className="inline-grid size-icon-2xl place-items-center rounded-full bg-primary-muted text-primary-text"
             aria-hidden="true"
           >
             <Icon name="key" size="lg" fallback="placeholder" />
@@ -633,20 +654,20 @@ function AdminRoleAuthorizationDialog({
             </DialogDescription>
           </div>
         </header>
-        <div className="vx-admin-role-permission-dialog__summary">
-          <Badge className="vx-tenant-pill vx-admin-role-pill--menu">
+        <div className="flex flex-wrap items-center gap-xs ">
+          <StatusBadge tone="brand" icon={false}>
             菜单 {formatNumber(selectedMenuCount)}
-          </Badge>
-          <Badge className="vx-tenant-pill vx-admin-role-pill--button">
+          </StatusBadge>
+          <StatusBadge tone="info" icon={false}>
             按钮 {formatNumber(selectedButtonCount)}
-          </Badge>
-          <Badge className="vx-tenant-pill vx-admin-role-pill--api">
+          </StatusBadge>
+          <StatusBadge tone="warning" icon={false}>
             接口 {formatNumber(selectedApiCount)}
-          </Badge>
+          </StatusBadge>
           <Badge>合计 {formatNumber(selectedIds.size)}</Badge>
         </div>
         <section
-          className="vx-admin-role-auth-dialog__toolbar"
+          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-sm"
           aria-label="授权筛选"
         >
           <Input
@@ -668,10 +689,12 @@ function AdminRoleAuthorizationDialog({
           </Button>
         </section>
         {error ? (
-          <p className="vx-admin-role-auth-dialog__error">{error}</p>
+          <p className="m-0 rounded-lg bg-destructive-muted p-sm text-body-sm text-destructive-text">
+            {error}
+          </p>
         ) : null}
         <div
-          className="vx-admin-role-auth-dialog__tree"
+          className="grid min-h-0 gap-0 overflow-auto border-t border-primary/10"
           role="tree"
           aria-label={`${roleLabel} 权限授权树`}
         >
@@ -686,12 +709,12 @@ function AdminRoleAuthorizationDialog({
               />
             ))
           ) : (
-            <p className="vx-admin-role-permission-dialog__empty">
+            <p className="m-0 text-body-sm text-muted-foreground">
               没有匹配的权限
             </p>
           )}
         </div>
-        <footer className="vx-admin-role-auth-dialog__footer">
+        <footer className="flex items-center justify-end gap-sm">
           <Button variant="outline" disabled={saving} onClick={onClose}>
             {tShared("actions.cancel")}
           </Button>
@@ -710,16 +733,16 @@ function AdminRoleAuthorizationDialog({
 
 function PermissionTags({ role }: { role: PlatformRoleRecord }) {
   return (
-    <span className="vx-admin-role-permission-tags">
-      <Badge className="vx-tenant-pill vx-admin-role-pill--menu">
+    <span className="flex min-w-0 flex-wrap items-center justify-start gap-xs ">
+      <StatusBadge tone="brand" icon={false}>
         菜单 {formatNumber(role.menuPermissionCount)}
-      </Badge>
-      <Badge className="vx-tenant-pill vx-admin-role-pill--button">
+      </StatusBadge>
+      <StatusBadge tone="info" icon={false}>
         按钮 {formatNumber(role.buttonPermissionCount)}
-      </Badge>
-      <Badge className="vx-tenant-pill vx-admin-role-pill--api">
+      </StatusBadge>
+      <StatusBadge tone="warning" icon={false}>
         接口 {formatNumber(role.apiPermissionCount)}
-      </Badge>
+      </StatusBadge>
     </span>
   );
 }
@@ -794,108 +817,6 @@ function useAdminRoleColumns(
   ];
 }
 
-function AdminRoleCards({
-  roles,
-  roleLabels,
-  t,
-  onOpenPermissions,
-  onOpenAuthorization,
-  onEdit,
-  onCopy,
-  onToggle,
-  onDelete,
-}: {
-  roles: PlatformRoleRecord[];
-  roleLabels: Map<string, string>;
-  t: ReturnType<typeof useTranslations>;
-  onOpenPermissions: (role: PlatformRoleRecord) => void;
-  onOpenAuthorization: (role: PlatformRoleRecord) => void;
-  onEdit: (role: PlatformRoleRecord) => void;
-  onCopy: (role: PlatformRoleRecord) => void;
-  onToggle: (role: PlatformRoleRecord) => void;
-  onDelete: (role: PlatformRoleRecord) => Promise<void>;
-}) {
-  const locale = useLocale();
-  const tShared = useTranslations();
-  return (
-    <div
-      className="vx-tenant-directory-cards vx-admin-role-cards"
-      aria-label="平台角色卡片"
-    >
-      {roles.map((role) => (
-        <article
-          key={role.id}
-          className={joinClasses(
-            "vx-tenant-directory-card",
-            roleStatusCode(role) === "active"
-              ? "vx-admin-role-card--active"
-              : "vx-admin-role-card--disabled",
-          )}
-        >
-          <header>
-            <Icon name="role" size="lg" fallback="placeholder" />
-            <div title={roleDescription(role, t) || undefined}>
-              <strong>
-                {roleLabels.get(role.id) ??
-                  role.nameEn ??
-                  role.roleCode ??
-                  EMPTY_MARK}
-              </strong>
-              <span>{role.roleCode}</span>
-            </div>
-            <AdminRoleActionsMenu
-              role={role}
-              roleLabel={
-                roleLabels.get(role.id) ??
-                role.nameEn ??
-                role.roleCode ??
-                EMPTY_MARK
-              }
-              onOpenPermissions={onOpenPermissions}
-              onOpenAuthorization={onOpenAuthorization}
-              onEdit={onEdit}
-              onCopy={onCopy}
-              onToggle={onToggle}
-              onDelete={onDelete}
-            />
-          </header>
-          <div className="vx-tenant-directory-card__badges">
-            <StatusBadge tone={roleStatusTone(role)}>
-              {roleStatusIndicator(role).label}
-            </StatusBadge>
-            {role.isSystem ? <Badge>系统</Badge> : null}
-          </div>
-          <p
-            className="vx-admin-role-card__description"
-            title={roleDescription(role, t) || undefined}
-          >
-            {role.roleCode}
-          </p>
-          <div className="vx-tenant-directory-card__metrics">
-            <span>
-              <b>{formatNumber(role.permissionCount)}</b>
-              <small>权限</small>
-            </span>
-            <span>
-              <b>{formatNumber(role.adminCount)}</b>
-              <small>成员</small>
-            </span>
-            <span>
-              <b>{formatDate(role.createdAt, locale)}</b>
-              <small>{tShared("actions.create")}</small>
-            </span>
-          </div>
-          <PermissionTags role={role} />
-          <footer>
-            <span>权限 {formatNumber(role.permissionCount)} 项</span>
-            <strong>{role.createdByName || EMPTY_MARK}</strong>
-          </footer>
-        </article>
-      ))}
-    </div>
-  );
-}
-
 type RoleMfaLevel = "disabled" | "optional" | "required";
 
 interface RoleFormState {
@@ -958,7 +879,7 @@ function AdminRoleFormDialog({
       }}
       onSubmit={onSubmit}
     >
-      <div className="vx-model-dialog__grid">
+      <div>
         <Label>
           角色编码
           <Input
@@ -979,7 +900,7 @@ function AdminRoleFormDialog({
           />
         </Label>
       </div>
-      <div className="vx-model-dialog__grid">
+      <div>
         <Label>
           MFA 最低等级
           <NativeSelect
@@ -1086,7 +1007,6 @@ export function AdminRolesPage() {
   const [permissions, setPermissions] = useState<
     PlatformAdminPermissionRecord[]
   >([]);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedRoleIds, setSelectedRoleIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -1203,14 +1123,7 @@ export function AdminRolesPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [
-    pageSize,
-    permissionFilter,
-    query,
-    roleKindFilter,
-    statusFilter,
-    viewMode,
-  ]);
+  }, [pageSize, permissionFilter, query, roleKindFilter, statusFilter]);
 
   function handleReset() {
     setQuery("");
@@ -1424,7 +1337,7 @@ export function AdminRolesPage() {
   return (
     <>
       <ListPageTemplate
-        className="vx-tenant-management-page vx-admin-roles-page"
+        className="w-full "
         header={
           <PageHeader
             icon="role"
@@ -1479,9 +1392,6 @@ export function AdminRolesPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredRoles.length)}
             aria-label="平台角色筛选"
             search={
@@ -1489,7 +1399,7 @@ export function AdminRolesPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索角色、权限、描述"
-                className="vx-tenant-search vx-admin-role-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 aria-label="搜索平台角色"
               />
             }
@@ -1506,9 +1416,9 @@ export function AdminRolesPage() {
               </>
             }
           >
-            <div className="vx-tenant-filters">
+            <>
               <NativeSelect
-                className="vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={statusFilter}
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
@@ -1521,7 +1431,7 @@ export function AdminRolesPage() {
                 <option value="archived">{tShared("actions.archive")}</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={roleKindFilter}
                 onChange={(event) =>
                   setRoleKindFilter(event.target.value as RoleKindFilter)
@@ -1533,7 +1443,7 @@ export function AdminRolesPage() {
                 <option value="custom">自定义角色</option>
               </NativeSelect>
               <NativeSelect
-                className="vx-tenant-select"
+                wrapperClassName="w-fit basis-media-xl"
                 value={permissionFilter}
                 onChange={(event) =>
                   setPermissionFilter(event.target.value as PermissionFilter)
@@ -1546,105 +1456,64 @@ export function AdminRolesPage() {
                 <option value="api">接口</option>
                 <option value="empty">未授权</option>
               </NativeSelect>
-            </div>
+            </>
           </FilterBar>
         }
         table={
-          <section className="vx-tenant-directory" aria-label="平台角色清单">
+          <section
+            className="grid min-w-0 max-w-full gap-xs"
+            aria-label="平台角色清单"
+          >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="vx-tenant-directory__header">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={adminRoleColumns}
-                rows={visibleRoles}
-                rowKey={(role) => role.id}
-                loading={loading}
-                indexStart={
-                  (Math.min(currentPage, pageCount) - 1) * pageSize + 1
-                }
-                selectedKeys={[...selectedRoleIds]}
-                onSelectionChange={(keys) => setSelectedRoleIds(new Set(keys))}
-                rowActions={(role) => (
-                  <AdminRoleActionsMenu
-                    role={role}
-                    roleLabel={
-                      roleLabels.get(role.id) ??
-                      role.nameEn ??
-                      role.roleCode ??
-                      EMPTY_MARK
-                    }
-                    onOpenPermissions={(target) =>
-                      setPermissionDialogRoleId(target.id)
-                    }
-                    onOpenAuthorization={(target) => {
-                      setAuthorizationError(null);
-                      setAuthorizationRoleId(target.id);
-                    }}
-                    onEdit={openEditRole}
-                    onCopy={openCopyRole}
-                    onToggle={(target) => void handleToggleRole(target)}
-                    onDelete={handleDeleteRole}
-                  />
-                )}
-                empty={
-                  <EmptyState
-                    title={
-                      loadError ? "平台角色读取失败" : "没有匹配的平台角色"
-                    }
-                    description={
-                      loadError ?? "清空筛选条件后可查看全部平台角色。"
-                    }
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleRoles.length ? (
-              <AdminRoleCards
-                roles={visibleRoles}
-                roleLabels={roleLabels}
-                t={t}
-                onOpenPermissions={(role) => setPermissionDialogRoleId(role.id)}
-                onOpenAuthorization={(role) => {
-                  setAuthorizationError(null);
-                  setAuthorizationRoleId(role.id);
-                }}
-                onEdit={openEditRole}
-                onCopy={openCopyRole}
-                onToggle={(role) => void handleToggleRole(role)}
-                onDelete={handleDeleteRole}
-              />
-            ) : (
-              <EmptyState
-                title={loading ? "正在加载平台角色" : "没有匹配的平台角色"}
-                description={
-                  loading
-                    ? "正在从 platform.platform_role 读取平台角色。"
-                    : (loadError ?? "清空筛选条件后可查看全部平台角色。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={adminRoleColumns}
+              rows={visibleRoles}
+              rowKey={(role) => role.id}
+              loading={loading}
+              indexStart={(Math.min(currentPage, pageCount) - 1) * pageSize + 1}
+              selectedKeys={[...selectedRoleIds]}
+              onSelectionChange={(keys) => setSelectedRoleIds(new Set(keys))}
+              rowActions={(role) => (
+                <AdminRoleActionsMenu
+                  role={role}
+                  roleLabel={
+                    roleLabels.get(role.id) ??
+                    role.nameEn ??
+                    role.roleCode ??
+                    EMPTY_MARK
+                  }
+                  onOpenPermissions={(target) =>
+                    setPermissionDialogRoleId(target.id)
+                  }
+                  onOpenAuthorization={(target) => {
+                    setAuthorizationError(null);
+                    setAuthorizationRoleId(target.id);
+                  }}
+                  onEdit={openEditRole}
+                  onCopy={openCopyRole}
+                  onToggle={(target) => void handleToggleRole(target)}
+                  onDelete={handleDeleteRole}
+                />
+              )}
+              empty={
+                <EmptyState
+                  title={loadError ? "平台角色读取失败" : "没有匹配的平台角色"}
+                  description={
+                    loadError ?? "清空筛选条件后可查看全部平台角色。"
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

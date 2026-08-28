@@ -9,7 +9,6 @@ import {
   DataTable,
   EmptyState,
   FilterBar,
-  Icon,
   Input,
   ListPageTemplate,
   MetricGrid,
@@ -30,8 +29,6 @@ import type {
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { formatNumber, joinClasses } from "@/modules/tenants/tenant-utils";
-
-type ViewMode = "list" | "cards";
 
 interface GovernanceConfig {
   title: string;
@@ -197,7 +194,6 @@ export function PlatformGovernanceListPage({
    */
   const hasActiveFilters = query.trim() !== "" || statusFilter !== "all";
 
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
 
   const records = useMemo(() => {
@@ -315,7 +311,7 @@ export function PlatformGovernanceListPage({
   return (
     <ListPageTemplate
       className={joinClasses(
-        "vx-tenant-management-page vx-platform-governance-page",
+        "w-full vx-platform-governance-page",
         `vx-platform-governance-page--${kind}`,
       )}
       header={
@@ -381,9 +377,6 @@ export function PlatformGovernanceListPage({
       }
       filters={
         <FilterBar
-          view={viewMode}
-          onViewChange={setViewMode}
-          cardsDisabledReason={tShared("common.cardsRetired")}
           count={formatNumber(records.length)}
           aria-label={`${config.title}筛选`}
           search={
@@ -391,7 +384,7 @@ export function PlatformGovernanceListPage({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={config.searchPlaceholder}
-              className="vx-tenant-search"
+              className="grow basis-media-3xl max-w-panel-sm"
               aria-label={tShared("platformGovernance.searchAria", {
                 object: config.objectLabel,
               })}
@@ -414,7 +407,7 @@ export function PlatformGovernanceListPage({
             </>
           }
         >
-          <div className="vx-tenant-filters">
+          <>
             <NativeSelect
               value={statusFilter}
               onChange={(event) =>
@@ -422,7 +415,7 @@ export function PlatformGovernanceListPage({
                   event.target.value as PlatformGovernanceStatus | "all",
                 )
               }
-              className="vx-input vx-tenant-select"
+              wrapperClassName="w-fit basis-media-xl"
               aria-label={`${config.objectLabel}状态`}
             >
               <option value="all">{tShared("filters.allStates")}</option>
@@ -433,12 +426,12 @@ export function PlatformGovernanceListPage({
                 {tShared("status.generic.pending")}
               </option>
             </NativeSelect>
-          </div>
+          </>
         </FilterBar>
       }
       table={
         <section
-          className="vx-tenant-directory vx-platform-governance-directory"
+          className="grid min-w-0 max-w-full gap-xs vx-platform-governance-directory"
           aria-label={`${config.title}清单`}
         >
           {/* 读取失败是第三态，DataTable 只认加载/空/有数据，故留在外层。 */}
@@ -447,7 +440,7 @@ export function PlatformGovernanceListPage({
               title={`${config.title}数据读取失败`}
               description={loadError}
             />
-          ) : viewMode === "list" ? (
+          ) : (
             <DataTable
               columns={columns}
               rows={records}
@@ -487,72 +480,6 @@ export function PlatformGovernanceListPage({
                   />
                 )
               }
-            />
-          ) : loading ? (
-            <header className="vx-tenant-directory__header">
-              <span>正在加载自治数据</span>
-            </header>
-          ) : records.length ? (
-            <div
-              className="vx-tenant-directory-cards vx-platform-governance-cards"
-              aria-label={`${config.title}卡片`}
-            >
-              {records.map((record) => {
-                const meta = governanceStatusMeta(kind, record.status, tShared);
-                return (
-                  <article
-                    key={record.id}
-                    className="vx-tenant-directory-card vx-platform-governance-card"
-                  >
-                    <header>
-                      <Icon
-                        name={config.icon}
-                        size="lg"
-                        fallback="placeholder"
-                      />
-                      <div>
-                        <strong>{record.name}</strong>
-                        <span>
-                          {record.scope} · {record.owner}
-                        </span>
-                      </div>
-                      <StatusBadge tone={meta.tone} icon={meta.icon}>
-                        {meta.label}
-                      </StatusBadge>
-                    </header>
-                    <p>{record.description}</p>
-                    <div className="vx-platform-governance-card__tags">
-                      {record.tags.map((tag) => (
-                        <Badge key={tag} className="vx-tenant-pill">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                    <footer>
-                      <span>{record.policy}</span>
-                      <strong>{record.updatedAt}</strong>
-                    </footer>
-                  </article>
-                );
-              })}
-            </div>
-          ) : hasActiveFilters ? (
-            <EmptyState
-              title="暂无匹配记录"
-              description="调整关键词或筛选条件后再查看。"
-              action={
-                <ActionButton variant="outline" icon="x" onClick={resetFilters}>
-                  重置筛选
-                </ActionButton>
-              }
-            />
-          ) : (
-            <EmptyState
-              icon="list"
-              title={tShared("platformGovernance.emptyTitle", {
-                object: config.objectLabel,
-              })}
-              description={tShared("platformGovernance.emptyDescription")}
             />
           )}
         </section>

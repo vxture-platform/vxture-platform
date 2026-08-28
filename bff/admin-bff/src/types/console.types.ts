@@ -1489,6 +1489,9 @@ export interface PlatformRolePermissionRecord {
 }
 
 export interface PlatformAdminPermissionRecord extends PlatformRolePermissionRecord {
+  /** 平台预置（seed 灌入）还是运营自建。此前前端拿不到这一列，只能从
+   *  permCode 的命名空间猜；59 个三段操作码因此全被误标成「自定义」。 */
+  isSystem: boolean;
   icon: string | null;
   sort: number;
   component: string | null;

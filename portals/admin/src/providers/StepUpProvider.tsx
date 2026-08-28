@@ -143,7 +143,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
           <Label>
             动态验证码
             <Input
-              className="vx-step-up-code-input"
+              className="text-center tabular-nums "
               value={code}
               onChange={(event) => setCode(event.target.value)}
               inputMode="numeric"
@@ -154,11 +154,14 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
             />
           </Label>
           {error ? (
-            <p className="vx-step-up-error" role="alert">
+            <p
+              className="m-0 text-body-sm font-semibold text-destructive-text "
+              role="alert"
+            >
               {error}
             </p>
           ) : null}
-          <p className="vx-step-up-hint">
+          <p className="m-0 text-body-sm text-muted-foreground">
             未绑定身份验证器？请先在 accounts 门户的安全设置中完成 TOTP
             绑定，再返回此处重试。
           </p>

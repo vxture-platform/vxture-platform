@@ -11,7 +11,11 @@ import {
   EmptyState,
   Icon,
   MetricGrid,
+  PanelItem,
+  PanelList,
+  SHELL_PANEL_HAIRLINE,
   StatusBadge,
+  TableTitleCell,
 } from "@vxture/design-system";
 import type { IconName } from "@vxture/design-system";
 import { orUnset } from "@/modules/shared/display";
@@ -23,6 +27,7 @@ import type {
 } from "@/entities/console";
 import { PUBLISH_STATUS_TONE } from "@/modules/shared/publish-tone";
 import { PageHeader } from "@/modules/shared/PageHeader";
+import { DetailSummaryHeader } from "@/modules/shared/DetailSummaryHeader";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 
@@ -54,65 +59,64 @@ function ServicePlanSummary({
   plan: ProductServicePlanDetailRecord;
 }) {
   return (
-    <section className="vx-product-capability-summary">
-      <div className="vx-product-capability-summary__identity">
-        <span
-          className="vx-product-capability-summary__icon"
-          aria-hidden="true"
-        >
-          <Icon name="star" size="lg" fallback="placeholder" />
-        </span>
-        <div>
-          <h2>
-            {plan.solutionName} / {plan.tierName}
-          </h2>
-          <p>
-            {plan.solutionCode} · {plan.tierCode}
-          </p>
-          <div className="vx-product-capability-summary__badges">
-            <StatusBadge tone={PUBLISH_STATUS_TONE[plan.status]}>
-              {statusLabel(plan.status)}
-            </StatusBadge>
-            <StatusBadge tone={plan.isPublic ? "success" : "neutral"}>
-              {plan.isPublic ? "公开" : "内部"}
-            </StatusBadge>
-          </div>
-        </div>
-      </div>
-      <MetricGrid
-        items={[
-          {
-            id: "price",
-            label: "价格",
-            value: plan.price.priceLabel,
-            tags: [
-              plan.price.periodType === "contract" ? "专属商务" : "标准价格",
-            ],
-          },
-          {
-            id: "included",
-            help: "本套餐包含的产品能力数。",
-            label: "包含产品",
-            value: formatNumber(plan.includedProductCount),
-            tags: [`不含 ${formatNumber(plan.excludedProductCount)}`],
-          },
-          {
-            id: "subscriptions",
-            help: "使用本套餐的订阅实例数。",
-            label: "订阅使用",
-            value: formatNumber(plan.subscriptionCount),
-            tags: [`活跃 ${formatNumber(plan.activeTenantCount)}`],
-          },
-          {
-            id: "scope",
-            help: "本套餐适用范围条目数。",
-            label: "适用范围",
-            value: formatNumber(plan.applicableScope.length),
-            tags: [plan.industry],
-          },
-        ]}
-      />
-    </section>
+    <DetailSummaryHeader
+      icon="star"
+      title={
+        <>
+          {plan.solutionName} / {plan.tierName}
+        </>
+      }
+      subtitle={
+        <>
+          {plan.solutionCode} · {plan.tierCode}
+        </>
+      }
+      badges={
+        <>
+          <StatusBadge tone={PUBLISH_STATUS_TONE[plan.status]}>
+            {statusLabel(plan.status)}
+          </StatusBadge>
+          <StatusBadge tone={plan.isPublic ? "success" : "neutral"}>
+            {plan.isPublic ? "公开" : "内部"}
+          </StatusBadge>
+        </>
+      }
+      aside={
+        <MetricGrid
+          items={[
+            {
+              id: "price",
+              label: "价格",
+              value: plan.price.priceLabel,
+              tags: [
+                plan.price.periodType === "contract" ? "专属商务" : "标准价格",
+              ],
+            },
+            {
+              id: "included",
+              help: "本套餐包含的产品能力数。",
+              label: "包含产品",
+              value: formatNumber(plan.includedProductCount),
+              tags: [`不含 ${formatNumber(plan.excludedProductCount)}`],
+            },
+            {
+              id: "subscriptions",
+              help: "使用本套餐的订阅实例数。",
+              label: "订阅使用",
+              value: formatNumber(plan.subscriptionCount),
+              tags: [`活跃 ${formatNumber(plan.activeTenantCount)}`],
+            },
+            {
+              id: "scope",
+              help: "本套餐适用范围条目数。",
+              label: "适用范围",
+              value: formatNumber(plan.applicableScope.length),
+              tags: [plan.industry],
+            },
+          ]}
+        />
+      }
+    />
   );
 }
 
@@ -125,10 +129,10 @@ function ServicePlanDetails({
   const tShared = useTranslations();
   return (
     <section
-      className="vx-product-capability-detail"
+      className="grid min-w-0 gap-xl"
       aria-label={`${plan.solutionName} ${plan.tierName} 详情`}
     >
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="database" title="基础资料" />
         <DetailList columns={3}>
           <DetailRow label="业务方案">{orUnset(plan.solutionName)}</DetailRow>
@@ -146,13 +150,17 @@ function ServicePlanDetails({
             {orUnset(formatDate(plan.updatedAt, locale))}
           </DetailRow>
         </DetailList>
-        <div className="vx-product-capability-description">
-          <strong>{plan.summary}</strong>
-          <p>{plan.deliveryMode}</p>
+        <div className="grid min-w-0 gap-xs">
+          <strong className="text-body-md leading-relaxed font-semibold text-foreground">
+            {plan.summary}
+          </strong>
+          <p className="m-0 text-body-sm leading-loose text-muted-foreground">
+            {plan.deliveryMode}
+          </p>
         </div>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="chart-bar" title="配额价格" />
         <DetailList columns={3}>
           <DetailRow label="价格">{orUnset(plan.price.priceLabel)}</DetailRow>
@@ -171,49 +179,75 @@ function ServicePlanDetails({
         </DetailList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="cube" title="包含 / 不包含产品" />
-        <div className="vx-product-detail-list vx-product-detail-list--entitlements">
+        <PanelList>
           {plan.entitlements.map((item) => (
-            <Link
+            <PanelItem
               key={item.productCode}
-              href={`/products/${encodeURIComponent(item.productCode)}`}
-              className="vx-product-detail-list__row"
-            >
-              <span>
+              className="relative rounded-md transition-colors hover:bg-primary-muted/40"
+              lead={
                 <Icon
                   name={capabilityTypeIcon(item.productType)}
                   size="sm"
                   fallback="placeholder"
                 />
-                <strong>{item.productName}</strong>
-              </span>
-              <small>
-                {capabilityTypeLabel(item.productType)} |{" "}
-                {item.source === "self" ? "自建" : "三方"}
-              </small>
-              <em className={item.included ? "is-included" : "is-excluded"}>
-                {item.included ? "包含" : "不包含"} | {item.quotaSummary}
-              </em>
-              <p>{item.note}</p>
-            </Link>
+              }
+              main={
+                <Link
+                  href={`/products/${encodeURIComponent(item.productCode)}`}
+                  className="no-underline after:absolute after:inset-0 after:content-['']"
+                >
+                  <TableTitleCell
+                    title={item.productName}
+                    description={`${capabilityTypeLabel(item.productType)} | ${item.source === "self" ? "自建" : "三方"}`}
+                  />
+                </Link>
+              }
+              trail={
+                /* `PanelItem` 的 trail 槽是写死的 `shrink-0 text-right`，不肯收缩：
+                    配额摘要是不定长的（实测能到 12 项、1800px），不封顶就会把 main
+                    槽挤成 0 宽并顶出横向滚动条。main 上这里是四列 grid，每格
+                    `overflow:hidden;text-overflow:ellipsis`——封顶加截断是同一行为。 */
+                <span className="grid max-w-panel-sm gap-2xs text-right">
+                  {/* 包含 / 不包含原来靠 `.is-included` / `.is-excluded` 两个
+                      修饰类上色。这是一对成/不成的判定，正是语气该说的事。 */}
+                  <span
+                    title={item.quotaSummary}
+                    className={`truncate text-body-md font-semibold ${
+                      item.included
+                        ? "text-success-text"
+                        : "text-destructive-text"
+                    }`}
+                  >
+                    {item.included ? "包含" : "不包含"} | {item.quotaSummary}
+                  </span>
+                  <span className="truncate text-body-sm text-muted-foreground">
+                    {item.note}
+                  </span>
+                </span>
+              }
+            />
           ))}
-        </div>
+        </PanelList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="map-pin" title="适用范围" />
-        <div className="vx-product-detail-notes">
+        <PanelList>
           {plan.applicableScope.map((item) => (
-            <article key={item}>
-              <Icon name="check" size="xs" fallback="placeholder" />
-              <span>{item}</span>
-            </article>
+            <PanelItem
+              key={item}
+              lead={<Icon name="check" size="xs" fallback="placeholder" />}
+              main={
+                <span className="text-body-sm text-foreground">{item}</span>
+              }
+            />
           ))}
-        </div>
+        </PanelList>
       </section>
 
-      <section className="vx-product-capability-section">
+      <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="shield-check" title="售卖状态" />
         <DetailList columns={3}>
           <DetailRow label="售卖状态">
@@ -225,14 +259,17 @@ function ServicePlanDetails({
           </DetailRow>
           <DetailRow label="业务场景">{orUnset(plan.scenario)}</DetailRow>
         </DetailList>
-        <div className="vx-product-detail-notes">
+        <PanelList>
           {plan.salesNotes.map((item) => (
-            <article key={item}>
-              <Icon name="info" size="xs" fallback="placeholder" />
-              <span>{item}</span>
-            </article>
+            <PanelItem
+              key={item}
+              lead={<Icon name="info" size="xs" fallback="placeholder" />}
+              main={
+                <span className="text-body-sm text-foreground">{item}</span>
+              }
+            />
           ))}
-        </div>
+        </PanelList>
       </section>
     </section>
   );
@@ -270,7 +307,7 @@ export function ServicePlanDetailPage({
   if (!loading && !plan) {
     return (
       <DetailPageTemplate
-        className="vx-product-capability-page"
+        className="min-w-0"
         header={
           <PageHeader
             icon="star"
@@ -297,7 +334,7 @@ export function ServicePlanDetailPage({
 
   return (
     <DetailPageTemplate
-      className="vx-product-capability-page"
+      className="min-w-0"
       header={
         <PageHeader
           icon="star"
@@ -306,7 +343,7 @@ export function ServicePlanDetailPage({
           }
           description={plan?.summary ?? "正在读取服务套餐详情。"}
           action={
-            <div className="vx-product-capability-actions">
+            <div className="inline-flex flex-wrap items-center justify-end gap-sm">
               <Button asChild variant="outline">
                 <Link href="/service-plans">
                   <Icon name="arrow-left" size="xs" fallback="placeholder" />
@@ -338,7 +375,7 @@ export function ServicePlanDetailPage({
           <ServicePlanDetails plan={plan} />
         </>
       ) : (
-        <section className="vx-tenant-directory__header">
+        <section className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
           <span>{tShared("common.loading")}</span>
         </section>
       )}

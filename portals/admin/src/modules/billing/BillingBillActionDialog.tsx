@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Button, Icon, Input, Textarea } from "@vxture/design-system";
+import {
+  DialogForm,
+  Icon,
+  Input,
+  Label,
+  Textarea,
+} from "@vxture/design-system";
 import type {
   BillingBillAction,
   BillingDetailRecord,
@@ -103,14 +109,9 @@ function actionIconName(action: BillingBillAction) {
   return "plus";
 }
 
-function actionIconClass(action: BillingBillAction) {
-  if (action === "cancel") return "vx-subscription-action-dialog__icon--cancel";
-  if (action === "discount" || action === "mark_overdue")
-    return "vx-subscription-action-dialog__icon--renew";
-  if (action === "create_supplement")
-    return "vx-subscription-action-dialog__icon--resume";
-  return "";
-}
+/* 原有 `actionIconClass()` 随手搓模态一同退场——它只为给头部那个圆形图标
+   染色而存在。它区分的三档里，真正有分量的是「作废」，那一档现在由
+   `DialogForm` 的 `danger` 说；其余两档是动作分类不是严重度，不再用色。 */
 
 function defaultItemName(action: BillingBillAction) {
   if (action === "create_adjustment") return "运营调整项";
@@ -200,158 +201,133 @@ export function BillingBillActionDialog({
   }, [action, bill]);
 
   return (
-    <div
-      className="vx-subscription-action-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="billing-bill-action-title"
-    >
-      <form
-        className="vx-subscription-action-dialog__panel vx-billing-bill-action-dialog__panel"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!canSubmit) return;
-
-          onSubmit({
-            action,
-            reason: reason.trim(),
-            discountAmount: isDiscount
-              ? Math.round(normalizedDiscountAmount * 100) / 100
-              : null,
-            amount: isExceptionBill
-              ? Math.round(normalizedAmount * 100) / 100
-              : null,
-            itemName: isExceptionBill ? itemName.trim() : null,
-            cycleStartDate: isExceptionBill ? cycleStartDate : null,
-            cycleEndDate: isExceptionBill ? cycleEndDate : null,
-          });
-        }}
-      >
-        <header>
-          <span
+    <DialogForm
+      open
+      size="lg"
+      title={
+        <span className="inline-flex items-center gap-sm">
+          <Icon
+            name={actionIconName(action)}
+            size="sm"
+            fallback="placeholder"
             aria-hidden="true"
-            className={`vx-subscription-action-dialog__icon ${actionIconClass(action)}`}
-          >
-            <Icon
-              name={actionIconName(action)}
-              size="lg"
-              fallback="placeholder"
-            />
-          </span>
-          <div>
-            <h2 id="billing-bill-action-title">
-              {billingBillActionLabel(action)}
-            </h2>
-            <p>
-              {bill.billNo} · 当前应收{" "}
-              {formatCurrency(bill.payableAmount, bill.currency)}
-            </p>
-          </div>
-        </header>
-        <p className="vx-subscription-action-dialog__description">
-          {actionDescription(action)}
-        </p>
-
-        {isDiscount ? (
-          <div className="vx-billing-bill-action-dialog__grid">
-            <label className="vx-subscription-action-dialog__field">
-              <span>减免金额</span>
-              <Input
-                type="number"
-                min="0.01"
-                step="0.01"
-                max={maxDiscountAmount || undefined}
-                value={discountAmount}
-                onChange={(event) => setDiscountAmount(event.target.value)}
-                placeholder={`最高 ${formatCurrency(maxDiscountAmount, bill.currency)}`}
-              />
-            </label>
-            <label className="vx-subscription-action-dialog__field">
-              <span>减免后应收</span>
-              <Input
-                value={formatCurrency(
-                  Math.max(
-                    0,
-                    bill.payableAmount -
-                      (Number.isFinite(normalizedDiscountAmount)
-                        ? normalizedDiscountAmount
-                        : 0),
-                  ),
-                  bill.currency,
-                )}
-                readOnly
-              />
-            </label>
-          </div>
-        ) : null}
-
-        {isExceptionBill ? (
-          <div className="vx-billing-bill-action-dialog__grid">
-            <label className="vx-subscription-action-dialog__field">
-              <span>账单项目</span>
-              <Input
-                value={itemName}
-                onChange={(event) => setItemName(event.target.value)}
-                maxLength={128}
-              />
-            </label>
-            <label className="vx-subscription-action-dialog__field">
-              <span>账单金额</span>
-              <Input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={amount}
-                onChange={(event) => setAmount(event.target.value)}
-                placeholder="0.00"
-              />
-            </label>
-            <label className="vx-subscription-action-dialog__field">
-              <span>账期开始</span>
-              <Input
-                type="date"
-                value={cycleStartDate}
-                onChange={(event) => setCycleStartDate(event.target.value)}
-              />
-            </label>
-            <label className="vx-subscription-action-dialog__field">
-              <span>账期结束</span>
-              <Input
-                type="date"
-                value={cycleEndDate}
-                onChange={(event) => setCycleEndDate(event.target.value)}
-              />
-            </label>
-          </div>
-        ) : null}
-
-        <label className="vx-subscription-action-dialog__field">
-          <span>{action === "mark_overdue" ? "跟进原因" : "处理说明"}</span>
-          <Textarea
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            placeholder={
-              action === "mark_overdue"
-                ? "例如：客户预算审批延期，预计下周完成线下付款。"
-                : "请填写线下审批依据、处理原因或财务备注。"
-            }
-            maxLength={512}
           />
-        </label>
-        {error ? (
-          <p className="vx-subscription-action-dialog__error">{error}</p>
-        ) : null}
-        <footer>
-          <Button variant="ghost" onClick={onCancel} disabled={busy}>
-            {tShared("actions.discard")}
-          </Button>
-          <Button type="submit" disabled={!canSubmit}>
-            {busy
-              ? tShared("status.generic.processing")
-              : billingBillActionLabel(action)}
-          </Button>
-        </footer>
-      </form>
-    </div>
+          {billingBillActionLabel(action)}
+        </span>
+      }
+      description={`${bill.billNo} · 当前应收 ${formatCurrency(bill.payableAmount, bill.currency)}`}
+      danger={action === "cancel"}
+      submitLabel={billingBillActionLabel(action)}
+      cancelLabel={tShared("actions.discard")}
+      pendingLabel={tShared("status.generic.processing")}
+      submitting={busy}
+      submitDisabled={!canSubmit}
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!canSubmit) return;
+
+        onSubmit({
+          action,
+          reason: reason.trim(),
+          discountAmount: isDiscount
+            ? Math.round(normalizedDiscountAmount * 100) / 100
+            : null,
+          amount: isExceptionBill
+            ? Math.round(normalizedAmount * 100) / 100
+            : null,
+          itemName: isExceptionBill ? itemName.trim() : null,
+          cycleStartDate: isExceptionBill ? cycleStartDate : null,
+          cycleEndDate: isExceptionBill ? cycleEndDate : null,
+        });
+      }}
+    >
+      <p className="m-0 text-body-sm text-muted-foreground">
+        {actionDescription(action)}
+      </p>
+
+      {isDiscount ? (
+        <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
+          <Label>减免金额</Label>
+          <Input
+            type="number"
+            min="0.01"
+            step="0.01"
+            max={maxDiscountAmount || undefined}
+            value={discountAmount}
+            onChange={(event) => setDiscountAmount(event.target.value)}
+            placeholder={`最高 ${formatCurrency(maxDiscountAmount, bill.currency)}`}
+          />
+
+          <Label>减免后应收</Label>
+          <Input
+            value={formatCurrency(
+              Math.max(
+                0,
+                bill.payableAmount -
+                  (Number.isFinite(normalizedDiscountAmount)
+                    ? normalizedDiscountAmount
+                    : 0),
+              ),
+              bill.currency,
+            )}
+            readOnly
+          />
+        </div>
+      ) : null}
+
+      {isExceptionBill ? (
+        <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
+          <Label>账单项目</Label>
+          <Input
+            value={itemName}
+            onChange={(event) => setItemName(event.target.value)}
+            maxLength={128}
+          />
+
+          <Label>账单金额</Label>
+          <Input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            placeholder="0.00"
+          />
+
+          <Label>账期开始</Label>
+          <Input
+            type="date"
+            value={cycleStartDate}
+            onChange={(event) => setCycleStartDate(event.target.value)}
+          />
+
+          <Label>账期结束</Label>
+          <Input
+            type="date"
+            value={cycleEndDate}
+            onChange={(event) => setCycleEndDate(event.target.value)}
+          />
+        </div>
+      ) : null}
+
+      <Label>{action === "mark_overdue" ? "跟进原因" : "处理说明"}</Label>
+      <Textarea
+        value={reason}
+        onChange={(event) => setReason(event.target.value)}
+        placeholder={
+          action === "mark_overdue"
+            ? "例如：客户预算审批延期，预计下周完成线下付款。"
+            : "请填写线下审批依据、处理原因或财务备注。"
+        }
+        maxLength={512}
+      />
+
+      {error ? (
+        <p className="m-0 text-body-sm text-destructive-text">{error}</p>
+      ) : null}
+    </DialogForm>
   );
 }

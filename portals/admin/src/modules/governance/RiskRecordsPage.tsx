@@ -373,7 +373,7 @@ export function RiskRecordsPage() {
             aria-label="风险记录筛选"
             search={
               <Input
-                className="vx-tenant-search"
+                className="grow basis-media-3xl max-w-panel-sm"
                 type="search"
                 placeholder="搜索租户、范围、原因、标签…"
                 value={search}
@@ -394,7 +394,6 @@ export function RiskRecordsPage() {
                 <Button
                   variant="default"
                   size="md"
-                  className="vx-admin-action-btn"
                   onClick={openCreate}
                   title="新建风险记录"
                 >
@@ -405,8 +404,7 @@ export function RiskRecordsPage() {
             }
           >
             <NativeSelect
-              wrapperClassName="w-fit"
-              className="vx-tenant-select"
+              wrapperClassName="w-fit basis-media-xl"
               value={levelFilter}
               onChange={(e) => {
                 setLevelFilter(e.target.value as LevelFilter);
@@ -419,8 +417,7 @@ export function RiskRecordsPage() {
               <option value="high">高风险</option>
             </NativeSelect>
             <NativeSelect
-              wrapperClassName="w-fit"
-              className="vx-tenant-select"
+              wrapperClassName="w-fit basis-media-xl"
               value={reviewFilter}
               onChange={(e) => {
                 setReviewFilter(e.target.value as ReviewFilter);
@@ -540,7 +537,7 @@ export function RiskRecordsPage() {
               />
             </Label>
           ) : null}
-          <div className="vx-model-dialog__grid">
+          <div>
             <Label>
               风险等级
               <NativeSelect

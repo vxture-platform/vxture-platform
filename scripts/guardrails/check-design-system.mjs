@@ -181,48 +181,10 @@ const IMPORT_ONLY_STYLE_ENTRIES = new Map([
   // 没有改成"路径不存在就跳过"：#363 已为缺失的**扫描根**加过一次跳过，这里再加
   // 一层就变成用启发式掩盖边界问题。管辖边界该由清单表达，不该由存在性猜测。
   [normalize("portals/admin/src/app/globals.css"), "admin globals.css"],
-  [normalize("portals/admin/src/styles/admin-base.css"), "admin base.css"],
-  [
-    normalize("portals/admin/src/styles/admin-directory.css"),
-    "admin directory.css",
-  ],
-  [
-    normalize("portals/admin/src/styles/admin-governance.css"),
-    "admin governance.css",
-  ],
-  [
-    normalize("portals/admin/src/styles/admin-management-pills.css"),
-    "admin management pills.css",
-  ],
-  [
-    normalize("portals/admin/src/styles/admin-management.css"),
-    "admin management.css",
-  ],
-  [
-    normalize("portals/admin/src/styles/admin-operations.css"),
-    "admin operations.css",
-  ],
-  [
-    normalize("portals/admin/src/styles/admin-overview.css"),
-    "admin overview.css",
-  ],
-  [
-    normalize("portals/admin/src/styles/admin-permissions.css"),
-    "admin permissions.css",
-  ],
-  [
-    normalize("portals/admin/src/styles/admin-placeholder.css"),
-    "admin placeholder.css",
-  ],
-  [normalize("portals/admin/src/styles/admin-roles.css"), "admin roles.css"],
   // admin-service-health.css 已删（2026-08-25）：服务健康页早已改用 DataTable 与
   // EmptyState，它下面四个子文件 30 个类**全仓零引用**。入口连同子文件一并退役。
   // 这条守卫在删除当天就报了红——清单与文件不同步正是它要抓的，按它的提示从清单
   // 里移除，而不是给守卫加一条"文件不存在就跳过"。
-  [
-    normalize("portals/admin/src/styles/admin-tenant-detail.css"),
-    "admin tenant detail.css",
-  ],
   [normalize("portals/console/src/app/globals.css"), "console globals.css"],
   [
     normalize("portals/console/src/styles/console-template.css"),

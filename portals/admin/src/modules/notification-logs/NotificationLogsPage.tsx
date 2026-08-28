@@ -222,7 +222,7 @@ export function NotificationLogsPage() {
           search={
             <Input
               type="search"
-              className="vx-tenant-search"
+              className="grow basis-media-3xl max-w-panel-sm"
               placeholder="搜索接收方、模板、业务号、租户…"
               value={search}
               onChange={(e) => {
@@ -255,8 +255,7 @@ export function NotificationLogsPage() {
           }}
         >
           <NativeSelect
-            wrapperClassName="w-fit"
-            className="vx-tenant-select"
+            wrapperClassName="w-fit basis-media-xl"
             value={channelFilter}
             onChange={(e) => {
               setChannelFilter(e.target.value);
@@ -272,8 +271,7 @@ export function NotificationLogsPage() {
             ))}
           </NativeSelect>
           <NativeSelect
-            wrapperClassName="w-fit"
-            className="vx-tenant-select"
+            wrapperClassName="w-fit basis-media-xl"
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value);
