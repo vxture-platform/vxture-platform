@@ -12,8 +12,6 @@ import {
   FilterBar,
   Input,
   ListPageTemplate,
-  ListCard,
-  ListCardGrid,
   MetricGrid,
   NativeSelect,
   Section,
@@ -21,11 +19,7 @@ import {
   StatusBadge,
   TableTitleCell,
 } from "@vxture/design-system";
-import type {
-  FilterBarView,
-  IconName,
-  StatusBadgeTone,
-} from "@vxture/design-system";
+import type { IconName, StatusBadgeTone } from "@vxture/design-system";
 import { exportRowsToCsv, type CsvColumn } from "@/lib/exportCsv";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import type { PageSize } from "@/modules/shared/PageSizePicker";
@@ -292,7 +286,6 @@ export function OpsTodosPage() {
     "all",
   );
   const [query, setQuery] = useState("");
-  const [viewMode, setViewMode] = useState<FilterBarView>("list");
   const [selectedKeys, setSelectedKeys] = useState<readonly string[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(20);
@@ -486,9 +479,6 @@ export function OpsTodosPage() {
         >
           <FilterBar
             aria-label="待办任务筛选"
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={`${formatNumber(filteredTodos.length)} 条`}
             search={
               <Input
@@ -544,140 +534,87 @@ export function OpsTodosPage() {
             </NativeSelect>
           </FilterBar>
 
-          {viewMode === "cards" ? (
-            isLoading || !pageTodos.length ? (
+          <DataTable
+            columns={[
+              {
+                id: "item",
+                header: "事项",
+                cell: (item) => (
+                  <TableTitleCell
+                    icon={item.icon}
+                    title={item.title}
+                    description={item.description}
+                    onTitleClick={() => router.push(item.href)}
+                  />
+                ),
+              },
+              {
+                id: "tenant",
+                header: "租户",
+                cell: (item) => (
+                  <TableTitleCell
+                    title={item.tenantName}
+                    description={item.tenantMeta}
+                    onTitleClick={() =>
+                      router.push(
+                        `/tenants/${encodeURIComponent(item.tenantId)}`,
+                      )
+                    }
+                  />
+                ),
+              },
+              {
+                id: "type",
+                header: tShared("columns.kind"),
+                cell: (item) => TODO_TYPE_LABEL[item.type],
+              },
+              {
+                id: "severity",
+                header: "紧急度",
+                cell: (item) => (
+                  <StatusBadge tone={SEVERITY_TONE[item.severity]}>
+                    {SEVERITY_LABEL[item.severity]}
+                  </StatusBadge>
+                ),
+              },
+              {
+                id: "tags",
+                header: "标签",
+                cell: (item) => (
+                  <span className="flex flex-wrap gap-xs">
+                    {item.tags.slice(0, 3).map((tag) => (
+                      <Badge key={tag}>{tag}</Badge>
+                    ))}
+                  </span>
+                ),
+              },
+              {
+                id: "updated",
+                header: tShared("columns.updatedAt"),
+                align: "right",
+                cell: (item) => formatDateTime(item.updatedAt, locale),
+              },
+            ]}
+            rows={pageTodos}
+            rowKey={(item) => item.id}
+            indexStart={(activePage - 1) * pageSize + 1}
+            selectedKeys={selectedKeys}
+            onSelectionChange={setSelectedKeys}
+            loading={isLoading}
+            empty={
               <EmptyState
-                title={
-                  isLoading
-                    ? "正在加载待办"
-                    : tenantLoadError
-                      ? "待办数据读取失败"
-                      : "当前没有待办"
-                }
+                title={tenantLoadError ? "待办数据读取失败" : "当前没有待办"}
                 description={
-                  isLoading
-                    ? "正在从租户、用量、订阅与工单数据库读取数据。"
-                    : (tenantLoadError ??
-                      (query || typeFilter !== "all" || severityFilter !== "all"
-                        ? tShared("common.adjustFiltersHint")
-                        : (ticketLoadError ?? "数据库中没有匹配的待办任务。")))
+                  tenantLoadError ??
+                  (query || typeFilter !== "all" || severityFilter !== "all"
+                    ? tShared("common.adjustFiltersHint")
+                    : (ticketLoadError ?? "数据库中没有匹配的待办任务。"))
                 }
               />
-            ) : (
-              <>
-                <ListCardGrid>
-                  {pageTodos.map((item) => (
-                    <ListCard
-                      key={item.id}
-                      icon={item.icon}
-                      title={item.title}
-                      description={item.description}
-                      onTitleClick={() => router.push(item.href)}
-                      status={
-                        <StatusBadge tone={SEVERITY_TONE[item.severity]}>
-                          {SEVERITY_LABEL[item.severity]}
-                        </StatusBadge>
-                      }
-                      actions={todoActions(item)}
-                      meta={
-                        <>
-                          <span>{item.tenantName}</span>
-                          <span>{TODO_TYPE_LABEL[item.type]}</span>
-                          <span>{formatDateTime(item.updatedAt, locale)}</span>
-                          {item.tags.slice(0, 3).map((tag) => (
-                            <Badge key={tag}>{tag}</Badge>
-                          ))}
-                        </>
-                      }
-                    />
-                  ))}
-                </ListCardGrid>
-                {pagination}
-              </>
-            )
-          ) : (
-            <DataTable
-              columns={[
-                {
-                  id: "item",
-                  header: "事项",
-                  cell: (item) => (
-                    <TableTitleCell
-                      icon={item.icon}
-                      title={item.title}
-                      description={item.description}
-                      onTitleClick={() => router.push(item.href)}
-                    />
-                  ),
-                },
-                {
-                  id: "tenant",
-                  header: "租户",
-                  cell: (item) => (
-                    <TableTitleCell
-                      title={item.tenantName}
-                      description={item.tenantMeta}
-                      onTitleClick={() =>
-                        router.push(
-                          `/tenants/${encodeURIComponent(item.tenantId)}`,
-                        )
-                      }
-                    />
-                  ),
-                },
-                {
-                  id: "type",
-                  header: tShared("columns.kind"),
-                  cell: (item) => TODO_TYPE_LABEL[item.type],
-                },
-                {
-                  id: "severity",
-                  header: "紧急度",
-                  cell: (item) => (
-                    <StatusBadge tone={SEVERITY_TONE[item.severity]}>
-                      {SEVERITY_LABEL[item.severity]}
-                    </StatusBadge>
-                  ),
-                },
-                {
-                  id: "tags",
-                  header: "标签",
-                  cell: (item) => (
-                    <span className="flex flex-wrap gap-xs">
-                      {item.tags.slice(0, 3).map((tag) => (
-                        <Badge key={tag}>{tag}</Badge>
-                      ))}
-                    </span>
-                  ),
-                },
-                {
-                  id: "updated",
-                  header: tShared("columns.updatedAt"),
-                  align: "right",
-                  cell: (item) => formatDateTime(item.updatedAt, locale),
-                },
-              ]}
-              rows={pageTodos}
-              rowKey={(item) => item.id}
-              indexStart={(activePage - 1) * pageSize + 1}
-              selectedKeys={selectedKeys}
-              onSelectionChange={setSelectedKeys}
-              loading={isLoading}
-              empty={
-                <EmptyState
-                  title={tenantLoadError ? "待办数据读取失败" : "当前没有待办"}
-                  description={
-                    tenantLoadError ??
-                    (query || typeFilter !== "all" || severityFilter !== "all"
-                      ? tShared("common.adjustFiltersHint")
-                      : (ticketLoadError ?? "数据库中没有匹配的待办任务。"))
-                  }
-                />
-              }
-              footer={pagination}
-              rowActions={todoActions}
-            />
-          )}
+            }
+            footer={pagination}
+            rowActions={todoActions}
+          />
         </Section>
       }
     />

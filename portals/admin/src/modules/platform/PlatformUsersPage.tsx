@@ -18,10 +18,8 @@ import {
   FilterBar,
   Input,
   Label,
-  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
-  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -55,7 +53,6 @@ import { useLocale, useTranslations } from "next-intl";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
 
-type ViewMode = "list" | "cards";
 type PlatformAdminStatusCode = PlatformAdminRecord["statusCode"];
 type StatusFilter = "all" | PlatformAdminStatusCode;
 type UserTypeFilter = "all" | "system" | "normal";
@@ -313,71 +310,6 @@ function usePlatformUserColumns(
       ),
     },
   ];
-}
-
-function PlatformUsersCards({
-  admins,
-  t,
-}: {
-  admins: PlatformAdminRecord[];
-  t: ReturnType<typeof useTranslations>;
-}) {
-  const locale = useLocale();
-  return (
-    <ListCardGrid aria-label="平台用户卡片">
-      {admins.map((admin) => (
-        <MetricListCard
-          key={admin.id}
-          icon="user"
-          title={admin.displayName || admin.username}
-          description={admin.username ? `@${admin.username}` : EMPTY_MARK}
-          tone={platformAdminStatusTone(admin)}
-          actions={
-            <StatusBadge
-              tone={platformAdminStatusTone(admin)}
-              icon={platformAdminStatusIcon(admin)}
-            >
-              {platformAdminStatusLabel(admin)}
-            </StatusBadge>
-          }
-          badges={
-            <>
-              <Badge>{platformRoleDisplayName(admin, t)}</Badge>
-              <StatusBadge tone={platformRoleStatusTone(admin)}>
-                {platformRoleStatusLabel(admin)}
-              </StatusBadge>
-              {admin.isSystem ? <Badge>系统</Badge> : null}
-            </>
-          }
-          metrics={[
-            {
-              key: "lastLogin",
-              value: admin.lastLoginAt
-                ? formatDate(admin.lastLoginAt, locale)
-                : EMPTY_MARK,
-              label: "最后登录",
-            },
-            {
-              key: "loginIp",
-              value: admin.lastLoginIp || EMPTY_MARK,
-              label: "登录 IP",
-            },
-            {
-              key: "contact",
-              value: admin.email || admin.phone || EMPTY_MARK,
-              label: "联系方式",
-            },
-          ]}
-          footer={
-            <>
-              <span>{admin.remark || EMPTY_MARK}</span>
-              <strong>{admin.phone || EMPTY_MARK}</strong>
-            </>
-          }
-        />
-      ))}
-    </ListCardGrid>
-  );
 }
 
 interface MetadataFormState {
@@ -719,7 +651,6 @@ export function PlatformUsersPage() {
   const [admins, setAdmins] = useState<PlatformAdminRecord[]>([]);
   const [roles, setRoles] = useState<PlatformRoleRecord[]>([]);
   const [actorRank, setActorRank] = useState<number | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<UserTypeFilter>("all");
@@ -865,7 +796,7 @@ export function PlatformUsersPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [pageSize, query, statusFilter, typeFilter, viewMode]);
+  }, [pageSize, query, statusFilter, typeFilter]);
 
   function resetFilters() {
     setQuery("");
@@ -1125,9 +1056,6 @@ export function PlatformUsersPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredAdmins.length)}
             aria-label="平台用户筛选"
             search={
@@ -1189,80 +1117,45 @@ export function PlatformUsersPage() {
             aria-label="平台用户清单"
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={platformUserColumns}
-                rows={visibleAdmins}
-                rowKey={(admin) => admin.id}
-                loading={loading}
-                indexStart={(clampedCurrentPage - 1) * pageSize + 1}
-                selectedKeys={[...selectedIds]}
-                onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
-                rowActions={(admin) => (
-                  <PlatformUserActionsMenu
-                    admin={admin}
-                    onView={(target) => setDetailAdminId(target.id)}
-                    onChangeRole={openRoleDialog}
-                    onEditMetadata={openMetadataDialog}
-                    onToggleStatus={handleToggleStatus}
-                    onForceLogout={handleForceLogout}
-                    onResetMfa={handleResetMfa}
-                    onResetPassword={handleResetPassword}
-                  />
-                )}
-                empty={
-                  <EmptyState
-                    title={
-                      loadError ? "平台用户读取失败" : "没有匹配的平台用户"
-                    }
-                    description={
-                      loadError ?? "清空筛选条件后可查看全部平台用户。"
-                    }
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={resetFilters}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : filteredAdmins.length ? (
-              <PlatformUsersCards admins={visibleAdmins} t={t} />
-            ) : (
-              <EmptyState
-                title={
-                  loading
-                    ? "正在加载平台用户"
-                    : loadError
-                      ? "平台用户读取失败"
-                      : "没有匹配的平台用户"
-                }
-                description={
-                  loading
-                    ? "正在读取平台用户账号。"
-                    : (loadError ?? "清空筛选条件后可查看全部平台用户。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={resetFilters}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={platformUserColumns}
+              rows={visibleAdmins}
+              rowKey={(admin) => admin.id}
+              loading={loading}
+              indexStart={(clampedCurrentPage - 1) * pageSize + 1}
+              selectedKeys={[...selectedIds]}
+              onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
+              rowActions={(admin) => (
+                <PlatformUserActionsMenu
+                  admin={admin}
+                  onView={(target) => setDetailAdminId(target.id)}
+                  onChangeRole={openRoleDialog}
+                  onEditMetadata={openMetadataDialog}
+                  onToggleStatus={handleToggleStatus}
+                  onForceLogout={handleForceLogout}
+                  onResetMfa={handleResetMfa}
+                  onResetPassword={handleResetPassword}
+                />
+              )}
+              empty={
+                <EmptyState
+                  title={loadError ? "平台用户读取失败" : "没有匹配的平台用户"}
+                  description={
+                    loadError ?? "清空筛选条件后可查看全部平台用户。"
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={resetFilters}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

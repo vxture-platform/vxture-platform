@@ -11,10 +11,8 @@ import {
   EmptyState,
   FilterBar,
   Input,
-  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
-  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -38,7 +36,6 @@ import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import { formatNumber } from "@/modules/tenants/tenant-utils";
 
-type ViewMode = "list" | "cards";
 type TypeFilter = "all" | ProductCapabilityType;
 type SourceFilter = "all" | ProductCapabilitySource;
 type StatusFilter = "all" | ProductCapabilityStatus;
@@ -245,72 +242,10 @@ function useProductColumns(
   ];
 }
 
-function ProductCards({
-  products,
-  onOpenDetails,
-}: {
-  products: ProductCapabilityRecord[];
-  onOpenDetails: (productCode: string) => void;
-}) {
-  return (
-    <ListCardGrid aria-label="产品能力卡片">
-      {products.map((product) => (
-        <MetricListCard
-          key={product.productCode}
-          icon={productTypeIcon(product.productType)}
-          title={product.productName}
-          description={`${product.productCode} · ${productRegionLabel(product.region)}`}
-          tone={PUBLISH_STATUS_TONE[product.status]}
-          actions={
-            <ProductActionsMenu
-              product={product}
-              onViewDetails={() => onOpenDetails(product.productCode)}
-            />
-          }
-          badges={
-            <>
-              <Badge>{productTypeLabel(product.productType)}</Badge>
-              <Badge>{productSourceLabel(product.source)}</Badge>
-              <StatusBadge tone={PUBLISH_STATUS_TONE[product.status]}>
-                {productStatusLabel(product.status)}
-              </StatusBadge>
-            </>
-          }
-          metrics={[
-            {
-              key: "solutions",
-              value: formatNumber(product.solutionCount),
-              label: "方案",
-            },
-            {
-              key: "plans",
-              value: formatNumber(product.planCount),
-              label: "套餐",
-            },
-            {
-              key: "policies",
-              value: formatNumber(product.modelPolicyCount),
-              label: "策略",
-            },
-          ]}
-          footer={
-            <>
-              <span>{product.meteringUnit}</span>
-              <strong>{productAccessLabel(product.integration.status)}</strong>
-            </>
-          }
-          onClick={() => onOpenDetails(product.productCode)}
-        />
-      ))}
-    </ListCardGrid>
-  );
-}
-
 export function ProductsPage() {
   const tShared = useTranslations();
   const router = useRouter();
   const [products, setProducts] = useState<ProductCapabilityRecord[]>([]);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedProductCodes, setSelectedProductCodes] = useState<Set<string>>(
     () => new Set(),
   );
@@ -395,15 +330,7 @@ export function ProductsPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [
-    accessFilter,
-    pageSize,
-    query,
-    sourceFilter,
-    statusFilter,
-    typeFilter,
-    viewMode,
-  ]);
+  }, [accessFilter, pageSize, query, sourceFilter, statusFilter, typeFilter]);
 
   function handleReset() {
     setQuery("");
@@ -479,9 +406,6 @@ export function ProductsPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredProducts.length)}
             aria-label="产品能力筛选"
             search={
@@ -566,69 +490,39 @@ export function ProductsPage() {
             aria-label="产品能力清单"
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={productColumns}
-                rows={visibleProducts}
-                rowKey={(product) => product.productCode}
-                loading={loading}
-                indexStart={(activePage - 1) * pageSize + 1}
-                selectedKeys={[...selectedProductCodes]}
-                onSelectionChange={(keys) =>
-                  setSelectedProductCodes(new Set(keys))
-                }
-                rowActions={(product) => (
-                  <ProductActionsMenu
-                    product={product}
-                    onViewDetails={() => handleOpenDetails(product.productCode)}
-                  />
-                )}
-                empty={
-                  <EmptyState
-                    title="没有匹配的产品能力"
-                    description="清空筛选条件后可查看全部产品能力。"
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleProducts.length ? (
-              <ProductCards
-                products={visibleProducts}
-                onOpenDetails={handleOpenDetails}
-              />
-            ) : (
-              <EmptyState
-                title={loading ? "正在加载产品能力" : "没有匹配的产品能力"}
-                description={
-                  loading
-                    ? "正在读取产品能力供给目录。"
-                    : "清空筛选条件后可查看全部产品能力。"
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={productColumns}
+              rows={visibleProducts}
+              rowKey={(product) => product.productCode}
+              loading={loading}
+              indexStart={(activePage - 1) * pageSize + 1}
+              selectedKeys={[...selectedProductCodes]}
+              onSelectionChange={(keys) =>
+                setSelectedProductCodes(new Set(keys))
+              }
+              rowActions={(product) => (
+                <ProductActionsMenu
+                  product={product}
+                  onViewDetails={() => handleOpenDetails(product.productCode)}
+                />
+              )}
+              empty={
+                <EmptyState
+                  title="没有匹配的产品能力"
+                  description="清空筛选条件后可查看全部产品能力。"
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

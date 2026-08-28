@@ -63,7 +63,6 @@ import { useTranslations } from "next-intl";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 
-type ViewMode = "list" | "cards";
 type ModelStatusFilter = "all" | "active" | "inactive";
 type ModelSourceFilter = "all" | "online" | "private";
 type Feedback = {
@@ -396,7 +395,6 @@ export function ModelPlatformPage() {
   const [linkStatusByModelId, setLinkStatusByModelId] = useState<
     Record<string, ModelLinkStatus>
   >({});
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<ModelStatusFilter>("all");
   const [sourceFilter, setSourceFilter] = useState<ModelSourceFilter>("all");
@@ -541,7 +539,7 @@ export function ModelPlatformPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [pageSize, query, sourceFilter, statusFilter, viewMode]);
+  }, [pageSize, query, sourceFilter, statusFilter]);
 
   const modelById = useMemo(
     () => new Map(models.map((model) => [model.id, model])),
@@ -1047,9 +1045,6 @@ export function ModelPlatformPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredModels.length)}
             aria-label="模型状态"
             search={
@@ -1103,121 +1098,40 @@ export function ModelPlatformPage() {
             })}
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-                <span>{t("empty.loadingTitle")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={modelColumns}
-                rows={pagedModels}
-                rowKey={(model) => model.id}
-                loading={loading}
-                indexStart={pageStart + 1}
-                empty={
-                  loadFailed ? (
-                    /* 读取失败与"筛选没匹配上"是两回事。混成一种，本页就会在顶部
-                     横幅已经报出「模型数据读取失败」的同时，两行之下劝人去放宽
-                     筛选——同一屏自相矛盾（2026-08-07 走查）。 */
-                    <EmptyState
-                      icon="warning"
-                      title={t("empty.loadFailedTitle")}
-                      description={t("empty.loadFailedDescription")}
-                    />
-                  ) : (
-                    <EmptyState
-                      title={t("empty.title")}
-                      description={t("empty.description")}
-                      action={
-                        <ActionButton
-                          variant="outline"
-                          icon="x"
-                          onClick={handleReset}
-                        >
-                          {t("empty.resetFilters")}
-                        </ActionButton>
-                      }
-                    />
-                  )
-                }
-              />
-            ) : pagedModels.length ? (
-              <ListCardGrid
-                aria-label={t("table.toolbarTitle", {
-                  count: filteredModels.length,
-                })}
-              >
-                {pagedModels.map((model) => (
-                  <MetricListCard
-                    key={model.id}
-                    icon={isPrivateProvider(model.provider) ? "code" : "plug"}
-                    title={model.modelName}
-                    description={model.modelCode}
-                    tone={MODEL_STATE_TONE[model.state]}
-                    badges={
-                      <>
-                        {/* 厂商是类目（在线 / 私有部署），没有严重度——不给语气色。
-                            原先的蓝/绿两档背景实测从未生效：那族 CSS 排在
-                            `.vx-tenant-pill` 基类之前，同层同特异度被基类压死。 */}
-                        <Badge variant="outline">
-                          {providerLabel(model.provider)}
-                        </Badge>
-                        <StatusBadge tone={MODEL_STATE_TONE[model.state]}>
-                          {t(`status.${model.state}`)}
-                        </StatusBadge>
-                      </>
-                    }
-                    metrics={[
-                      {
-                        key: "capabilities",
-                        value: model.capabilities.length,
-                        label: t("table.columns.capabilities"),
-                      },
-                      {
-                        key: "provider",
-                        value: isPrivateProvider(model.provider)
-                          ? t("filters.private")
-                          : t("filters.online"),
-                        label: t("table.columns.provider"),
-                      },
-                      {
-                        key: "protocol",
-                        value: model.protocol,
-                        label: t("dialogs.fields.protocol"),
-                      },
-                    ]}
-                    footer={
-                      <>
-                        <span>
-                          {model.capabilities.slice(0, 2).join(", ") || "-"}
-                        </span>
-                        <strong>{model.keyReference?.name || "-"}</strong>
-                      </>
+            <DataTable
+              columns={modelColumns}
+              rows={pagedModels}
+              rowKey={(model) => model.id}
+              loading={loading}
+              indexStart={pageStart + 1}
+              empty={
+                loadFailed ? (
+                  /* 读取失败与"筛选没匹配上"是两回事。混成一种，本页就会在顶部
+                   横幅已经报出「模型数据读取失败」的同时，两行之下劝人去放宽
+                   筛选——同一屏自相矛盾（2026-08-07 走查）。 */
+                  <EmptyState
+                    icon="warning"
+                    title={t("empty.loadFailedTitle")}
+                    description={t("empty.loadFailedDescription")}
+                  />
+                ) : (
+                  <EmptyState
+                    title={t("empty.title")}
+                    description={t("empty.description")}
+                    action={
+                      <ActionButton
+                        variant="outline"
+                        icon="x"
+                        onClick={handleReset}
+                      >
+                        {t("empty.resetFilters")}
+                      </ActionButton>
                     }
                   />
-                ))}
-              </ListCardGrid>
-            ) : (
-              <EmptyState
-                title={loading ? t("empty.loadingTitle") : t("empty.title")}
-                description={
-                  loading
-                    ? t("empty.loadingDescription")
-                    : t("empty.description")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {t("empty.resetFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+                )
+              }
+            />
           </section>
         }
         footer={

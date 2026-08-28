@@ -13,10 +13,8 @@ import {
   EmptyState,
   FilterBar,
   Input,
-  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
-  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -42,10 +40,7 @@ import type {
   SubscriptionOperationRecord,
   SubscriptionOperationStatus,
 } from "@/entities/console";
-import {
-  QUOTA_RISK_TONE,
-  SUBSCRIPTION_OPERATION_TONE,
-} from "@/modules/shared/status-tone";
+import { SUBSCRIPTION_OPERATION_TONE } from "@/modules/shared/status-tone";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import {
@@ -60,11 +55,9 @@ import {
   formatDate,
   formatMoney,
   formatNumber,
-  typeLabel,
 } from "@/modules/tenants/tenant-utils";
 import { useConfirmLabels } from "@/modules/shared/destructive";
 
-type ViewMode = "list" | "cards";
 type StatusFilter = "all" | SubscriptionOperationStatus;
 type TierFilter = "all" | TierFilterValue;
 type RiskFilter = "all" | SubscriptionOperationQuotaRisk;
@@ -341,92 +334,12 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
   ];
 }
 
-function SubscriptionCards({
-  subscriptions,
-  onAction,
-}: {
-  subscriptions: SubscriptionOperationRecord[];
-  onAction: (
-    subscription: SubscriptionOperationRecord,
-    action: SubscriptionOperationAction,
-  ) => void;
-}) {
-  const locale = useLocale();
-  const router = useRouter();
-
-  return (
-    <ListCardGrid aria-label="租户订阅运营卡片">
-      {subscriptions.map((subscription) => (
-        <MetricListCard
-          key={subscription.id}
-          icon={subscription.tenantType === "company" ? "buildings" : "user"}
-          title={subscription.tenantName}
-          description={`${subscription.tenantCode} · ${typeLabel(subscription.tenantType)}`}
-          tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
-          actions={
-            <SubscriptionActionsMenu
-              subscription={subscription}
-              onAction={onAction}
-            />
-          }
-          badges={
-            <>
-              <StatusBadge
-                tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
-              >
-                {subscriptionStatusLabel(subscription.status)}
-              </StatusBadge>
-              <Badge className={tierBadgeClass(subscription.tierCode)}>
-                {subscription.tierName}
-              </Badge>
-              <StatusBadge tone={QUOTA_RISK_TONE[subscription.quota.risk]}>
-                {quotaRiskLabel(subscription.quota.risk)}
-              </StatusBadge>
-            </>
-          }
-          note={`${subscription.solutionName} · ${subscription.servicePlanName}`}
-          metrics={[
-            {
-              key: "quota",
-              value: `${formatNumber(subscription.quota.usageRate)}%`,
-              label: "配额消耗",
-            },
-            {
-              key: "seats",
-              value: formatNumber(subscription.quota.maxUsers),
-              label: "席位",
-            },
-            {
-              key: "revenue",
-              value: formatMoney(subscription.monthlyRevenue),
-              label: "月收入",
-            },
-          ]}
-          footer={
-            <>
-              <span>{subscription.operationHint}</span>
-              <strong>
-                {formatDate(subscription.startAt, locale)} -{" "}
-                {formatDate(subscription.endAt, locale)}
-              </strong>
-            </>
-          }
-          onClick={() =>
-            router.push(`/subscriptions/${encodeURIComponent(subscription.id)}`)
-          }
-        />
-      ))}
-    </ListCardGrid>
-  );
-}
-
 export function SubscriptionsPage() {
   const tShared = useTranslations();
   const [subscriptions, setSubscriptions] = useState<
     SubscriptionOperationRecord[]
   >([]);
   const [subscriptionsTruncated, setSubscriptionsTruncated] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedSubscriptionIds, setSelectedSubscriptionIds] = useState<
     Set<string>
   >(() => new Set());
@@ -537,15 +450,7 @@ export function SubscriptionsPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [
-    pageSize,
-    query,
-    renewFilter,
-    riskFilter,
-    statusFilter,
-    tierFilter,
-    viewMode,
-  ]);
+  }, [pageSize, query, renewFilter, riskFilter, statusFilter, tierFilter]);
 
   function handleReset() {
     setQuery("");
@@ -685,9 +590,6 @@ export function SubscriptionsPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredSubscriptions.length)}
             aria-label="租户订阅筛选"
             search={
@@ -805,71 +707,41 @@ export function SubscriptionsPage() {
             aria-label="租户订阅清单"
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={subscriptionColumns}
-                rows={visibleSubscriptions}
-                rowKey={(subscription) => subscription.id}
-                loading={loading}
-                indexStart={(activePage - 1) * pageSize + 1}
-                selectedKeys={[...selectedSubscriptionIds]}
-                onSelectionChange={(keys) =>
-                  setSelectedSubscriptionIds(new Set(keys))
-                }
-                rowActions={(subscription) => (
-                  <SubscriptionActionsMenu
-                    subscription={subscription}
-                    onAction={requestSubscriptionAction}
-                  />
-                )}
-                empty={
-                  <EmptyState
-                    title={loadError ? "订阅数据读取失败" : "没有匹配的订阅"}
-                    description={
-                      loadError ?? "清空筛选条件后可查看全部订阅实例。"
-                    }
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleSubscriptions.length ? (
-              <SubscriptionCards
-                subscriptions={visibleSubscriptions}
-                onAction={requestSubscriptionAction}
-              />
-            ) : (
-              <EmptyState
-                title={loading ? "正在加载租户订阅" : "没有匹配的订阅"}
-                description={
-                  loading
-                    ? "正在读取租户订阅运营数据。"
-                    : (loadError ?? "清空筛选条件后可查看全部订阅实例。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={subscriptionColumns}
+              rows={visibleSubscriptions}
+              rowKey={(subscription) => subscription.id}
+              loading={loading}
+              indexStart={(activePage - 1) * pageSize + 1}
+              selectedKeys={[...selectedSubscriptionIds]}
+              onSelectionChange={(keys) =>
+                setSelectedSubscriptionIds(new Set(keys))
+              }
+              rowActions={(subscription) => (
+                <SubscriptionActionsMenu
+                  subscription={subscription}
+                  onAction={requestSubscriptionAction}
+                />
+              )}
+              empty={
+                <EmptyState
+                  title={loadError ? "订阅数据读取失败" : "没有匹配的订阅"}
+                  description={
+                    loadError ?? "清空筛选条件后可查看全部订阅实例。"
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

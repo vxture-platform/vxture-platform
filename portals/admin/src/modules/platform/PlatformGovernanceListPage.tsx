@@ -10,10 +10,8 @@ import {
   EmptyState,
   FilterBar,
   Input,
-  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
-  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -31,8 +29,6 @@ import type {
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { formatNumber, joinClasses } from "@/modules/tenants/tenant-utils";
-
-type ViewMode = "list" | "cards";
 
 interface GovernanceConfig {
   title: string;
@@ -198,7 +194,6 @@ export function PlatformGovernanceListPage({
    */
   const hasActiveFilters = query.trim() !== "" || statusFilter !== "all";
 
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
 
   const records = useMemo(() => {
@@ -382,9 +377,6 @@ export function PlatformGovernanceListPage({
       }
       filters={
         <FilterBar
-          view={viewMode}
-          onViewChange={setViewMode}
-          cardsDisabledReason={tShared("common.cardsRetired")}
           count={formatNumber(records.length)}
           aria-label={`${config.title}筛选`}
           search={
@@ -448,7 +440,7 @@ export function PlatformGovernanceListPage({
               title={`${config.title}数据读取失败`}
               description={loadError}
             />
-          ) : viewMode === "list" ? (
+          ) : (
             <DataTable
               columns={columns}
               rows={records}
@@ -488,60 +480,6 @@ export function PlatformGovernanceListPage({
                   />
                 )
               }
-            />
-          ) : loading ? (
-            <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-              <span>正在加载自治数据</span>
-            </header>
-          ) : records.length ? (
-            <ListCardGrid aria-label={`${config.title}卡片`}>
-              {records.map((record) => {
-                const meta = governanceStatusMeta(kind, record.status, tShared);
-                return (
-                  <MetricListCard
-                    key={record.id}
-                    icon={config.icon}
-                    title={record.name}
-                    description={`${record.scope} · ${record.owner}`}
-                    tone={meta.tone}
-                    actions={
-                      <StatusBadge tone={meta.tone} icon={meta.icon}>
-                        {meta.label}
-                      </StatusBadge>
-                    }
-                    badges={record.tags.map((tag) => (
-                      <StatusBadge key={tag} tone="brand" icon={false}>
-                        {tag}
-                      </StatusBadge>
-                    ))}
-                    note={record.description}
-                    footer={
-                      <>
-                        <span>{record.policy}</span>
-                        <strong>{record.updatedAt}</strong>
-                      </>
-                    }
-                  />
-                );
-              })}
-            </ListCardGrid>
-          ) : hasActiveFilters ? (
-            <EmptyState
-              title="暂无匹配记录"
-              description="调整关键词或筛选条件后再查看。"
-              action={
-                <ActionButton variant="outline" icon="x" onClick={resetFilters}>
-                  重置筛选
-                </ActionButton>
-              }
-            />
-          ) : (
-            <EmptyState
-              icon="list"
-              title={tShared("platformGovernance.emptyTitle", {
-                object: config.objectLabel,
-              })}
-              description={tShared("platformGovernance.emptyDescription")}
             />
           )}
         </section>

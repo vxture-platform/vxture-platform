@@ -14,19 +14,14 @@ import {
   FilterBar,
   Input,
   ListPageTemplate,
-  ListCardGrid,
   MetricGrid,
-  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
 } from "@vxture/design-system";
 import type { DataTableColumn } from "@vxture/design-system";
-import { resolveStatusTone } from "@vxture-platform/shared";
-import {
-  ORDER_STATUS_TONE,
-  PAYMENT_STATUS_TONE,
-} from "@/modules/shared/status-tone";
+import {} from "@vxture-platform/shared";
+import { ORDER_STATUS_TONE } from "@/modules/shared/status-tone";
 import {
   TIER_FILTER_OPTIONS,
   tierBadgeClass,
@@ -64,7 +59,6 @@ import {
 
 type TFn = ReturnType<typeof useTranslations>;
 
-type ViewMode = "list" | "cards";
 type OrderStatusFilter = "all" | OrderOperationStatus;
 type PaymentStatusFilter = "all" | OrderPaymentStatus;
 type PaySourceFilter = "all" | OrderPaySource;
@@ -335,89 +329,12 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
   ];
 }
 
-function OrderCards({
-  orders,
-  onConfirmPayment,
-}: {
-  orders: OrderOperationRecord[];
-  onConfirmPayment: (order: OrderOperationRecord) => void;
-}) {
-  const t = useTranslations();
-  const locale = useLocale();
-  const tShared = useTranslations();
-  const router = useRouter();
-
-  return (
-    <ListCardGrid aria-label="订单管理卡片">
-      {orders.map((order) => (
-        <MetricListCard
-          key={order.id}
-          icon="table"
-          title={order.orderNo}
-          description={`${order.tenantName} · ${order.tierName}`}
-          /* 顶缘语气取订单态。此前走 "" 的 CSS，
-           * 但那条 border-top 的宽度是已退役的 --vx-admin-* 变量，整条声明失效，
-           * 色条实际一直没显示出来。 */
-          tone={resolveStatusTone(ORDER_STATUS_TONE, order.orderStatus)}
-          onClick={() => router.push(`/orders/${encodeURIComponent(order.id)}`)}
-          actions={
-            <OrderActionsMenu
-              order={order}
-              onConfirmPayment={onConfirmPayment}
-            />
-          }
-          badges={
-            <>
-              <StatusBadge tone={ORDER_STATUS_TONE[order.orderStatus]}>
-                {orderStatusLabel(order.orderStatus)}
-              </StatusBadge>
-              <StatusBadge tone={PAYMENT_STATUS_TONE[order.paymentStatus]}>
-                {t(`status.orderPayment.${order.paymentStatus}`)}
-              </StatusBadge>
-              <StatusBadge tone="neutral" icon={false}>
-                {paySourceLabel(order.paySource)}
-              </StatusBadge>
-            </>
-          }
-          note={`${order.solutionName} · ${order.servicePlanName}`}
-          metrics={[
-            {
-              key: "amount",
-              value: formatCurrency(order.amount, order.currency),
-              label: "订单金额",
-            },
-            {
-              key: "paid",
-              value: formatCurrency(order.paidAmount, order.currency),
-              label: tShared("columns.receivedAmount"),
-            },
-            {
-              key: "cycle",
-              value: cycleLabel(order.cycleType),
-              label: "计费周期",
-            },
-          ]}
-          footer={
-            <>
-              <span className="truncate">{order.operationHint}</span>
-              <span className="shrink-0">
-                {formatDate(order.confirmedAt ?? order.updatedAt, locale)}
-              </span>
-            </>
-          }
-        />
-      ))}
-    </ListCardGrid>
-  );
-}
-
 export function OrdersPage() {
   const t = useTranslations();
   const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
   const [orders, setOrders] = useState<OrderOperationRecord[]>([]);
   const [ordersTruncated, setOrdersTruncated] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>("all");
   const [paymentFilter, setPaymentFilter] =
@@ -531,7 +448,6 @@ export function OrdersPage() {
     query,
     statusFilter,
     tierFilter,
-    viewMode,
   ]);
 
   function handleReset() {
@@ -672,9 +588,6 @@ export function OrdersPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredOrders.length)}
             aria-label="订单筛选"
             search={
@@ -812,69 +725,39 @@ export function OrdersPage() {
             aria-label="订单清单"
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={orderColumns}
-                rows={visibleOrders}
-                rowKey={(order) => order.id}
-                loading={loading}
-                indexStart={(activePage - 1) * pageSize + 1}
-                selectedKeys={[...selectedOrderIds]}
-                onSelectionChange={(keys) => setSelectedOrderIds(new Set(keys))}
-                rowActions={(order) => (
-                  <OrderActionsMenu
-                    order={order}
-                    onConfirmPayment={requestConfirmPayment}
-                  />
-                )}
-                empty={
-                  <EmptyState
-                    title={loadError ? "订单数据读取失败" : "没有匹配的订单"}
-                    description={
-                      loadError ?? "清空筛选条件后可查看全部订单记录。"
-                    }
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleOrders.length ? (
-              <OrderCards
-                orders={visibleOrders}
-                onConfirmPayment={requestConfirmPayment}
-              />
-            ) : (
-              <EmptyState
-                title={loading ? "正在加载订单" : "没有匹配的订单"}
-                description={
-                  loading
-                    ? "正在读取订单、账单和支付状态。"
-                    : (loadError ?? "清空筛选条件后可查看全部订单记录。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={orderColumns}
+              rows={visibleOrders}
+              rowKey={(order) => order.id}
+              loading={loading}
+              indexStart={(activePage - 1) * pageSize + 1}
+              selectedKeys={[...selectedOrderIds]}
+              onSelectionChange={(keys) => setSelectedOrderIds(new Set(keys))}
+              rowActions={(order) => (
+                <OrderActionsMenu
+                  order={order}
+                  onConfirmPayment={requestConfirmPayment}
+                />
+              )}
+              empty={
+                <EmptyState
+                  title={loadError ? "订单数据读取失败" : "没有匹配的订单"}
+                  description={
+                    loadError ?? "清空筛选条件后可查看全部订单记录。"
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

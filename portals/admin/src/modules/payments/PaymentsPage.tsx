@@ -17,10 +17,8 @@ import {
   Icon,
   Input,
   Label,
-  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
-  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -60,7 +58,6 @@ import { useStepUp, isStepUpCancelled } from "@/providers/StepUpProvider";
 
 type TFn = ReturnType<typeof useTranslations>;
 
-type ViewMode = "list" | "cards";
 type PaymentStatusFilter = "all" | OrderPaymentStatus;
 type PaySourceFilter = "all" | OrderPaySource;
 type ReconciliationFilter = "all" | "attention" | PaymentReconciliationStatus;
@@ -482,96 +479,12 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
   ];
 }
 
-function PaymentCards({
-  payments,
-  onVerify,
-  onReject,
-}: {
-  payments: PaymentOperationRecord[];
-  onVerify: (payment: PaymentOperationRecord) => void;
-  onReject: (payment: PaymentOperationRecord) => void;
-}) {
-  const t = useTranslations();
-  const locale = useLocale();
-  const router = useRouter();
-
-  return (
-    <ListCardGrid aria-label="收款管理卡片">
-      {payments.map((payment) => (
-        <MetricListCard
-          key={payment.id}
-          icon="check"
-          title={payment.paymentNo}
-          description={`${payment.tenantName} · ${payment.orderNo ?? payment.billNo ?? "未关联订单"}`}
-          tone={RECONCILIATION_TONE[payment.reconciliationStatus]}
-          actions={
-            <PaymentActionsMenu
-              payment={payment}
-              onVerify={onVerify}
-              onReject={onReject}
-            />
-          }
-          badges={
-            <>
-              <StatusBadge tone={PAYMENT_STATUS_TONE[payment.paymentStatus]}>
-                {t(`status.paymentLedger.${payment.paymentStatus}`)}
-              </StatusBadge>
-              <StatusBadge
-                tone={RECONCILIATION_TONE[payment.reconciliationStatus]}
-              >
-                {reconciliationLabel(payment.reconciliationStatus)}
-              </StatusBadge>
-              <StatusBadge tone="neutral" icon={false}>
-                {paySourceLabel(payment.paySource)}
-              </StatusBadge>
-            </>
-          }
-          note={`${payment.billNo ?? "未关联账单"} · ${payment.servicePlanName ?? "未关联套餐"}`}
-          metrics={[
-            {
-              key: "paid",
-              value: formatCurrency(payment.paidAmount, payment.currency),
-              label: "收款金额",
-            },
-            {
-              key: "payable",
-              value: formatCurrency(
-                payment.billPayableAmount || payment.totalAmount,
-                payment.currency,
-              ),
-              label: "账单应收",
-            },
-            {
-              key: "source",
-              value: paySourceLabel(payment.paySource),
-              label:
-                payment.paySource === "offline"
-                  ? offlineTypeLabel(payment.offlinePayType)
-                  : (payment.payMethod ?? "支付方式"),
-            },
-          ]}
-          footer={
-            <>
-              <span>{payment.operatorName}</span>
-              <strong>
-                {formatDate(payment.paidAt ?? payment.updatedAt, locale)}
-              </strong>
-            </>
-          }
-          onClick={() => router.push(paymentTargetHref(payment))}
-        />
-      ))}
-    </ListCardGrid>
-  );
-}
-
 export function PaymentsPage() {
   const t = useTranslations();
   const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
   const [payments, setPayments] = useState<PaymentOperationRecord[]>([]);
   const [paymentsTruncated, setPaymentsTruncated] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [query, setQuery] = useState("");
   const [paymentStatusFilter, setPaymentStatusFilter] =
     useState<PaymentStatusFilter>("all");
@@ -696,7 +609,6 @@ export function PaymentsPage() {
     paySourceFilter,
     query,
     reconciliationFilter,
-    viewMode,
   ]);
 
   function handleReset() {
@@ -839,9 +751,6 @@ export function PaymentsPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredPayments.length)}
             aria-label="收款筛选"
             search={
@@ -980,75 +889,40 @@ export function PaymentsPage() {
             aria-label="收款清单"
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={paymentColumns}
-                rows={visiblePayments}
-                rowKey={(payment) => payment.id}
-                loading={loading}
-                indexStart={(activePage - 1) * pageSize + 1}
-                selectedKeys={[...selectedPaymentIds]}
-                onSelectionChange={(keys) =>
-                  setSelectedPaymentIds(new Set(keys))
-                }
-                rowActions={(payment) => (
-                  <PaymentActionsMenu
-                    payment={payment}
-                    onVerify={handleOpenVerify}
-                    onReject={handleOpenReject}
-                  />
-                )}
-                empty={
-                  <EmptyState
-                    title={
-                      loadError ? "收款记录读取失败" : "没有匹配的收款记录"
-                    }
-                    description={
-                      loadError ?? "清空筛选条件后可查看全部收款记录。"
-                    }
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visiblePayments.length ? (
-              <PaymentCards
-                payments={visiblePayments}
-                onVerify={handleOpenVerify}
-                onReject={handleOpenReject}
-              />
-            ) : (
-              <EmptyState
-                title={loading ? "正在加载收款记录" : "没有匹配的收款记录"}
-                description={
-                  loading
-                    ? "正在读取收款台账和账单关联。"
-                    : (loadError ?? "清空筛选条件后可查看全部收款记录。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={paymentColumns}
+              rows={visiblePayments}
+              rowKey={(payment) => payment.id}
+              loading={loading}
+              indexStart={(activePage - 1) * pageSize + 1}
+              selectedKeys={[...selectedPaymentIds]}
+              onSelectionChange={(keys) => setSelectedPaymentIds(new Set(keys))}
+              rowActions={(payment) => (
+                <PaymentActionsMenu
+                  payment={payment}
+                  onVerify={handleOpenVerify}
+                  onReject={handleOpenReject}
+                />
+              )}
+              empty={
+                <EmptyState
+                  title={loadError ? "收款记录读取失败" : "没有匹配的收款记录"}
+                  description={
+                    loadError ?? "清空筛选条件后可查看全部收款记录。"
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

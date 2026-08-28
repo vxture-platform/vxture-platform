@@ -13,10 +13,8 @@ import {
   EmptyState,
   FilterBar,
   Input,
-  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
-  MetricListCard,
   NativeSelect,
   TableTitleCell,
 } from "@vxture/design-system";
@@ -42,12 +40,7 @@ import type {
 } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
-import {
-  Tag,
-  type PageSize,
-  commercialTone,
-  type ViewMode,
-} from "./CommercialUtils";
+import { Tag, type PageSize } from "./CommercialUtils";
 
 type StatusFilter = "all" | PromotionOperationStatus;
 type TypeFilter = "all" | PromotionOperationType;
@@ -229,58 +222,11 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
   ];
 }
 
-function PromotionCards({ records }: { records: PromotionOperationRecord[] }) {
-  const locale = useLocale();
-  return (
-    <ListCardGrid aria-label="营销优惠卡片">
-      {records.map((record) => (
-        <MetricListCard
-          key={record.id}
-          icon="sparkles"
-          title={record.promotionName}
-          description={`${record.promotionCode} · ${record.scopeLabel}`}
-          tone={commercialTone(statusTone(record.status))}
-          actions={<PromotionActionsMenu record={record} />}
-          badges={
-            <>
-              <Tag tone={statusTone(record.status)}>
-                {statusLabel(record.status)}
-              </Tag>
-              <Badge variant="outline">{typeLabel(record.promotionType)}</Badge>
-            </>
-          }
-          note={record.description}
-          metrics={[
-            { key: "discount", value: record.discountLabel, label: "优惠" },
-            {
-              key: "redemptions",
-              value: formatNumber(record.redemptionCount),
-              label: "核销",
-            },
-            {
-              key: "tenants",
-              value: formatNumber(record.tenantCount),
-              label: "租户",
-            },
-          ]}
-          footer={
-            <>
-              <span>{record.ownerName}</span>
-              <strong>{formatDate(record.updatedAt, locale)}</strong>
-            </>
-          }
-        />
-      ))}
-    </ListCardGrid>
-  );
-}
-
 export function PromotionsPage() {
   const locale = useLocale();
   const tShared = useTranslations();
   const [records, setRecords] = useState<PromotionOperationRecord[]>([]);
   const [recordsTruncated, setRecordsTruncated] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
@@ -404,7 +350,7 @@ export function PromotionsPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [pageSize, query, statusFilter, typeFilter, viewMode]);
+  }, [pageSize, query, statusFilter, typeFilter]);
 
   function handleReset() {
     setQuery("");
@@ -507,9 +453,6 @@ export function PromotionsPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredRecords.length)}
             aria-label="营销优惠筛选"
             search={
@@ -617,70 +560,33 @@ export function PromotionsPage() {
             aria-label="营销优惠清单"
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
-            {viewMode === "list" ? (
-              <DataTable
-                columns={promotionColumns}
-                rows={visibleRecords}
-                rowKey={(record) => record.id}
-                loading={loading}
-                indexStart={(activePage - 1) * pageSize + 1}
-                selectedKeys={[...selectedRecordIds]}
-                onSelectionChange={(keys) =>
-                  setSelectedRecordIds(new Set(keys))
-                }
-                rowActions={(record) => (
-                  <PromotionActionsMenu record={record} />
-                )}
-                empty={
-                  <EmptyState
-                    title={loadError ? "优惠数据读取失败" : "没有匹配的优惠"}
-                    description={
-                      loadError ?? "清空筛选条件后可查看全部优惠活动。"
-                    }
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleRecords.length ? (
-              <PromotionCards records={visibleRecords} />
-            ) : (
-              <EmptyState
-                title={
-                  loading
-                    ? "正在加载优惠"
-                    : loadError
-                      ? "优惠数据读取失败"
-                      : "没有匹配的优惠"
-                }
-                description={
-                  loading
-                    ? "正在读取营销优惠台账。"
-                    : (loadError ?? "清空筛选条件后可查看全部优惠活动。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={promotionColumns}
+              rows={visibleRecords}
+              rowKey={(record) => record.id}
+              loading={loading}
+              indexStart={(activePage - 1) * pageSize + 1}
+              selectedKeys={[...selectedRecordIds]}
+              onSelectionChange={(keys) => setSelectedRecordIds(new Set(keys))}
+              rowActions={(record) => <PromotionActionsMenu record={record} />}
+              empty={
+                <EmptyState
+                  title={loadError ? "优惠数据读取失败" : "没有匹配的优惠"}
+                  description={
+                    loadError ?? "清空筛选条件后可查看全部优惠活动。"
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

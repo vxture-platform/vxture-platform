@@ -19,10 +19,8 @@ import {
   EmptyState,
   FilterBar,
   Input,
-  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
-  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -48,16 +46,13 @@ import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import {
   formatDate,
-  formatMoney,
   formatNumber,
   normalizeTenantRiskLevel,
   riskLabel,
-  TENANT_RISK_TONE,
   tenantRiskOptions,
   verifiedLabel,
 } from "./tenant-utils";
 
-type ViewMode = "list" | "cards";
 type VerificationFilter = "all" | TenantVerificationStatus;
 type RiskFilter = "all" | TenantOperationRecord["riskLevel"];
 type RegionFilter = "all" | string;
@@ -336,93 +331,11 @@ function useVerificationColumns(): DataTableColumn<VerificationRow>[] {
   ];
 }
 
-function VerificationCards({
-  tenants,
-  actionBusy,
-  onApprove,
-  onReject,
-}: {
-  tenants: VerificationRow[];
-  actionBusy: boolean;
-  onApprove: (row: VerificationRow) => void;
-  onReject: (row: VerificationRow) => void;
-}) {
-  const locale = useLocale();
-  const router = useRouter();
-
-  return (
-    <ListCardGrid aria-label="实名认证卡片">
-      {tenants.map((tenant) => {
-        const riskLevel = normalizeTenantRiskLevel(tenant.riskLevel);
-
-        return (
-          <MetricListCard
-            key={tenant.id}
-            icon="buildings"
-            title={tenant.displayName}
-            description={`${tenant.tenantCode} · ${tenant.region}`}
-            /* 卡的语气取风险档，与租户列表页同一判断：一屏卡片里最该先被看见的
-             * 就是高风险那几张。原来是 `vx-tenant-directory-card--{risk}`。 */
-            tone={TENANT_RISK_TONE[riskLevel]}
-            actions={
-              <VerificationActionsMenu
-                tenant={tenant}
-                busy={actionBusy}
-                onApprove={onApprove}
-                onReject={onReject}
-              />
-            }
-            badges={
-              <>
-                <StatusBadge tone={VERIFIED_TONE[tenant.verifiedStatus]}>
-                  {verifiedLabel(tenant.verifiedStatus)}
-                </StatusBadge>
-                <StatusBadge tone={TENANT_RISK_TONE[riskLevel]}>
-                  {riskLabel(riskLevel)}
-                </StatusBadge>
-              </>
-            }
-            metrics={[
-              {
-                key: "waiting",
-                value: formatNumber(daysSince(tenant.verificationSubmittedAt)),
-                label: "等待天数",
-              },
-              {
-                key: "members",
-                value: formatNumber(tenant.memberCount),
-                label: "成员",
-              },
-              {
-                key: "revenue",
-                value: formatMoney(tenant.monthlyRevenue),
-                label: "本月收入",
-              },
-            ]}
-            footer={
-              <>
-                <span>
-                  {tenant.industry} · {tenant.scale}
-                </span>
-                <strong>{verificationTimeText(tenant, locale)}</strong>
-              </>
-            }
-            onClick={() =>
-              router.push(`/tenants/${encodeURIComponent(tenant.id)}`)
-            }
-          />
-        );
-      })}
-    </ListCardGrid>
-  );
-}
-
 export function VerificationsPage() {
   const tShared = useTranslations();
   const { toast } = useToast();
   const [tenants, setTenants] = useState<VerificationRow[]>([]);
   const [verificationsTruncated, setVerificationsTruncated] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedTenantIds, setSelectedTenantIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -566,7 +479,7 @@ export function VerificationsPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [pageSize, query, regionFilter, riskFilter, verificationFilter, viewMode]);
+  }, [pageSize, query, regionFilter, riskFilter, verificationFilter]);
 
   function handleReset() {
     setQuery("");
@@ -711,9 +624,6 @@ export function VerificationsPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredTenants.length)}
             aria-label="实名认证筛选"
             search={
@@ -790,75 +700,39 @@ export function VerificationsPage() {
             aria-label="实名认证清单"
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={verificationColumns}
-                rows={visibleTenants}
-                rowKey={(tenant) => tenant.id}
-                loading={loading}
-                indexStart={
-                  (Math.min(currentPage, pageCount) - 1) * pageSize + 1
-                }
-                selectedKeys={[...selectedTenantIds]}
-                onSelectionChange={(keys) =>
-                  setSelectedTenantIds(new Set(keys))
-                }
-                rowActions={(tenant) => (
-                  <VerificationActionsMenu
-                    tenant={tenant}
-                    busy={actionBusy}
-                    onApprove={handleApprove}
-                    onReject={openReject}
-                  />
-                )}
-                empty={
-                  <EmptyState
-                    title="没有匹配的实名认证"
-                    description="清空筛选条件后可查看全部实名认证记录。"
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleTenants.length ? (
-              <VerificationCards
-                tenants={visibleTenants}
-                actionBusy={actionBusy}
-                onApprove={handleApprove}
-                onReject={openReject}
-              />
-            ) : (
-              <EmptyState
-                title={loading ? "正在加载实名认证" : "没有匹配的实名认证"}
-                description={
-                  loading
-                    ? "正在读取租户认证数据。"
-                    : "清空筛选条件后可查看全部实名认证记录。"
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={verificationColumns}
+              rows={visibleTenants}
+              rowKey={(tenant) => tenant.id}
+              loading={loading}
+              indexStart={(Math.min(currentPage, pageCount) - 1) * pageSize + 1}
+              selectedKeys={[...selectedTenantIds]}
+              onSelectionChange={(keys) => setSelectedTenantIds(new Set(keys))}
+              rowActions={(tenant) => (
+                <VerificationActionsMenu
+                  tenant={tenant}
+                  busy={actionBusy}
+                  onApprove={handleApprove}
+                  onReject={openReject}
+                />
+              )}
+              empty={
+                <EmptyState
+                  title="没有匹配的实名认证"
+                  description="清空筛选条件后可查看全部实名认证记录。"
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

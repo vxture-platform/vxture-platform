@@ -11,10 +11,8 @@ import {
   FilterBar,
   Icon,
   Input,
-  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
-  MetricListCard,
   NativeSelect,
   PanelItem,
   PanelList,
@@ -42,7 +40,6 @@ import {
   formatNumber,
 } from "@/modules/tenants/tenant-utils";
 
-type ViewMode = "list" | "cards";
 type StatusFilter = "all" | ProductSolutionStatus;
 type VisibilityFilter = "all" | "public" | "internal";
 type PriceFilter = "all" | "free" | "paid" | "contract";
@@ -210,11 +207,9 @@ function ServicePlanActionsMenu({
 
 function ServicePlanTier({
   item,
-  viewMode,
   onViewDetails,
 }: {
   item: ServicePlanTierItem;
-  viewMode: ViewMode;
   onViewDetails: () => void;
 }) {
   const priceKind = tierPriceKind(item.tier);
@@ -254,41 +249,6 @@ function ServicePlanTier({
 
   /* 卡片与行原本是两套手搓 grid，四个内容块靠 `grid-column` 在两套里各摆一遍。
      现在内容只组织一次，版式交给两个 DS 件。 */
-  if (viewMode === "cards") {
-    return (
-      <MetricListCard
-        icon="star"
-        title={item.tier.tierName}
-        description={`${item.solution.solutionCode} · ${item.tier.tierCode}`}
-        tone={PUBLISH_STATUS_TONE[item.tier.status]}
-        actions={
-          <ServicePlanActionsMenu item={item} onViewDetails={onViewDetails} />
-        }
-        badges={badges}
-        note={
-          <>
-            <p
-              className="m-0 truncate text-body-sm text-foreground"
-              title={item.tier.summary}
-            >
-              {item.tier.summary}
-            </p>
-            {productTags}
-          </>
-        }
-        metrics={[
-          { key: "price", value: tierPriceLabel(item), label: priceNote },
-          {
-            key: "base",
-            value: item.basePlan?.planName ?? "独立配置",
-            label: "基础套餐",
-          },
-        ]}
-        onClick={onViewDetails}
-      />
-    );
-  }
-
   return (
     <PanelItem
       className="rounded-md transition-colors hover:bg-primary-muted/40"
@@ -324,11 +284,9 @@ function ServicePlanTier({
 
 function ServicePlanGroupBlock({
   group,
-  viewMode,
   onOpenDetails,
 }: {
   group: ServicePlanGroup;
-  viewMode: ViewMode;
   onOpenDetails: (
     solutionCode: string,
     tierCode: ProductSolutionTier["tierCode"],
@@ -370,33 +328,17 @@ function ServicePlanGroupBlock({
         <span>{formatDate(group.solution.updatedAt, locale)} 更新</span>
       </div>
 
-      {viewMode === "cards" ? (
-        <ListCardGrid>
-          {group.tiers.map((item) => (
-            <ServicePlanTier
-              key={item.id}
-              item={item}
-              viewMode={viewMode}
-              onViewDetails={() =>
-                onOpenDetails(item.solution.solutionCode, item.tier.tierCode)
-              }
-            />
-          ))}
-        </ListCardGrid>
-      ) : (
-        <PanelList>
-          {group.tiers.map((item) => (
-            <ServicePlanTier
-              key={item.id}
-              item={item}
-              viewMode={viewMode}
-              onViewDetails={() =>
-                onOpenDetails(item.solution.solutionCode, item.tier.tierCode)
-              }
-            />
-          ))}
-        </PanelList>
-      )}
+      <PanelList>
+        {group.tiers.map((item) => (
+          <ServicePlanTier
+            key={item.id}
+            item={item}
+            onViewDetails={() =>
+              onOpenDetails(item.solution.solutionCode, item.tier.tierCode)
+            }
+          />
+        ))}
+      </PanelList>
     </section>
   );
 }
@@ -406,7 +348,6 @@ export function ServicePlansPage() {
   const router = useRouter();
   const [solutions, setSolutions] = useState<ProductSolutionRecord[]>([]);
   const [plans, setPlans] = useState<ProductPlanRecord[]>([]);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [visibilityFilter, setVisibilityFilter] =
@@ -507,7 +448,6 @@ export function ServicePlansPage() {
     query,
     statusFilter,
     visibilityFilter,
-    viewMode,
   ]);
 
   function handleReset() {
@@ -586,9 +526,6 @@ export function ServicePlansPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredTierItems.length)}
             aria-label="服务套餐筛选"
             search={
@@ -678,7 +615,6 @@ export function ServicePlansPage() {
                   <ServicePlanGroupBlock
                     key={group.solution.id}
                     group={group}
-                    viewMode={viewMode}
                     onOpenDetails={handleOpenDetails}
                   />
                 ))}

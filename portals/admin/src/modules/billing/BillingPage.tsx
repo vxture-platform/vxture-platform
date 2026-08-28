@@ -13,16 +13,14 @@ import {
   EmptyState,
   FilterBar,
   Input,
-  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
-  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
 } from "@vxture/design-system";
 import type { DataTableColumn } from "@vxture/design-system";
-import { resolveStatusTone, type StatusTone } from "@vxture-platform/shared";
+import { type StatusTone } from "@vxture-platform/shared";
 import {
   BILL_STATUS_TONE,
   INVOICE_STATUS_TONE,
@@ -57,7 +55,6 @@ import {
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
 
-type ViewMode = "list" | "cards";
 type BillStatusFilter = "all" | BillingBillStatus;
 type InvoiceStatusFilter = "all" | BillingInvoiceStatus;
 type BillTypeFilter = "all" | BillingBillType;
@@ -466,90 +463,12 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
   ];
 }
 
-function BillingCards({
-  bills,
-  onSyncInvoice,
-}: {
-  bills: BillingRecord[];
-  onSyncInvoice: (bill: BillingRecord) => void;
-}) {
-  const t = useTranslations();
-  const locale = useLocale();
-  const tShared = useTranslations();
-  const router = useRouter();
-
-  return (
-    <ListCardGrid aria-label="账单中心卡片">
-      {bills.map((bill) => (
-        <MetricListCard
-          key={bill.id}
-          icon="key"
-          title={bill.billNo}
-          description={`${bill.tenantName} · ${bill.tierName ?? "未关联套餐"}`}
-          tone={resolveStatusTone(BILL_STATUS_TONE, bill.billStatus)}
-          onClick={() => router.push(`/billing/${encodeURIComponent(bill.id)}`)}
-          actions={
-            <BillingActionsMenu bill={bill} onSyncInvoice={onSyncInvoice} />
-          }
-          badges={
-            <>
-              <StatusBadge tone={BILL_STATUS_TONE[bill.billStatus]}>
-                {billStatusLabel(bill.billStatus)}
-              </StatusBadge>
-              <StatusBadge tone={INVOICE_STATUS_TONE[bill.invoiceStatus]}>
-                {t(`status.invoice.${bill.invoiceStatus}`)}
-              </StatusBadge>
-              {billingExceptionTags(bill).map((tag) => (
-                <StatusBadge
-                  key={tag.key}
-                  tone={tag.tone}
-                  {...(tag.title ? { title: tag.title } : {})}
-                >
-                  {tag.label}
-                </StatusBadge>
-              ))}
-            </>
-          }
-          note={bill.servicePlanName ?? bill.orderNo ?? "未关联订阅"}
-          metrics={[
-            {
-              key: "payable",
-              value: formatCurrency(bill.payableAmount, bill.currency),
-              label: "账单应收",
-            },
-            {
-              key: "paid",
-              value: formatCurrency(bill.paidAmount, bill.currency),
-              label: tShared("columns.receivedAmount"),
-            },
-            {
-              key: "invoiced",
-              value: formatCurrency(bill.invoicedAmount, bill.currency),
-              label: "已开票",
-            },
-          ]}
-          footer={
-            <>
-              <span className="truncate">
-                {formatDate(bill.cycleStartDate, locale)} -{" "}
-                {formatDate(bill.cycleEndDate, locale)}
-              </span>
-              <span className="shrink-0">{bill.operatorName}</span>
-            </>
-          }
-        />
-      ))}
-    </ListCardGrid>
-  );
-}
-
 export function BillingPage() {
   const t = useTranslations();
   const locale = useLocale();
   const tShared = useTranslations();
   const [bills, setBills] = useState<BillingRecord[]>([]);
   const [billsTruncated, setBillsTruncated] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [query, setQuery] = useState("");
   const [billStatusFilter, setBillStatusFilter] =
     useState<BillStatusFilter>("all");
@@ -692,7 +611,6 @@ export function BillingPage() {
     pageSize,
     query,
     tierFilter,
-    viewMode,
   ]);
 
   function handleReset() {
@@ -832,9 +750,6 @@ export function BillingPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredBills.length)}
             aria-label="账单筛选"
             search={
@@ -988,75 +903,39 @@ export function BillingPage() {
             aria-label="账单清单"
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={billingColumns}
-                rows={visibleBills}
-                rowKey={(bill) => bill.id}
-                loading={loading}
-                indexStart={(activePage - 1) * pageSize + 1}
-                selectedKeys={[...selectedBillIds]}
-                onSelectionChange={(keys) => setSelectedBillIds(new Set(keys))}
-                rowActions={(bill) => (
-                  <BillingActionsMenu
-                    bill={bill}
-                    onSyncInvoice={requestInvoiceSync}
-                  />
-                )}
-                empty={
-                  <EmptyState
-                    title={loadError ? "账单数据读取失败" : "没有匹配的账单"}
-                    description={
-                      loadError ?? "清空筛选条件后可查看全部账单记录。"
-                    }
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleBills.length ? (
-              <BillingCards
-                bills={visibleBills}
-                onSyncInvoice={requestInvoiceSync}
-              />
-            ) : (
-              <EmptyState
-                title={
-                  loading
-                    ? "正在加载账单"
-                    : loadError
-                      ? "账单数据读取失败"
-                      : "没有匹配的账单"
-                }
-                description={
-                  loading
-                    ? "正在读取账单、收款和发票登记数据。"
-                    : (loadError ?? "清空筛选条件后可查看全部账单记录。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={billingColumns}
+              rows={visibleBills}
+              rowKey={(bill) => bill.id}
+              loading={loading}
+              indexStart={(activePage - 1) * pageSize + 1}
+              selectedKeys={[...selectedBillIds]}
+              onSelectionChange={(keys) => setSelectedBillIds(new Set(keys))}
+              rowActions={(bill) => (
+                <BillingActionsMenu
+                  bill={bill}
+                  onSyncInvoice={requestInvoiceSync}
+                />
+              )}
+              empty={
+                <EmptyState
+                  title={loadError ? "账单数据读取失败" : "没有匹配的账单"}
+                  description={
+                    loadError ?? "清空筛选条件后可查看全部账单记录。"
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

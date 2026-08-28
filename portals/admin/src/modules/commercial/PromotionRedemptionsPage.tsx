@@ -12,10 +12,8 @@ import {
   EmptyState,
   FilterBar,
   Input,
-  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
-  MetricListCard,
   NativeSelect,
   TableTitleCell,
 } from "@vxture/design-system";
@@ -34,13 +32,7 @@ import {
   formatNumber,
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
-import {
-  Tag,
-  type PageSize,
-  commercialTone,
-  formatCurrency,
-  type ViewMode,
-} from "./CommercialUtils";
+import { Tag, type PageSize, formatCurrency } from "./CommercialUtils";
 
 type BillStatusFilter = "all" | BillingBillStatus;
 
@@ -241,71 +233,11 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
   ];
 }
 
-function RedemptionCards({
-  records,
-}: {
-  records: PromotionRedemptionRecord[];
-}) {
-  const locale = useLocale();
-  const router = useRouter();
-
-  return (
-    <ListCardGrid aria-label="优惠核销卡片">
-      {records.map((record) => (
-        <MetricListCard
-          key={record.id}
-          icon="sparkles"
-          title={record.redemptionNo}
-          description={`${record.tenantName} · ${record.promotionName}`}
-          tone={commercialTone("normal")}
-          actions={<RedemptionActionsMenu record={record} />}
-          badges={
-            <>
-              <Tag tone="normal">已核销</Tag>
-              <Tag tone={billStatusTone(record.billStatus)}>
-                {billStatusLabel(record.billStatus)}
-              </Tag>
-            </>
-          }
-          note={`${record.billNo} · ${record.servicePlanName ?? record.orderNo ?? "未关联套餐"}`}
-          metrics={[
-            {
-              key: "discount",
-              value: formatCurrency(record.discountAmount, record.currency),
-              label: "优惠金额",
-            },
-            {
-              key: "payable",
-              value: formatCurrency(record.payableAmount, record.currency),
-              label: "账单应付",
-            },
-            {
-              key: "redeemedAt",
-              value: formatDate(record.redeemedAt, locale),
-              label: record.operatorName,
-            },
-          ]}
-          footer={
-            <>
-              <span>{record.promotionCode}</span>
-              <strong>{record.orderNo ?? "未关联订单"}</strong>
-            </>
-          }
-          onClick={() =>
-            router.push(`/billing/${encodeURIComponent(record.billId)}`)
-          }
-        />
-      ))}
-    </ListCardGrid>
-  );
-}
-
 export function PromotionRedemptionsPage() {
   const locale = useLocale();
   const tShared = useTranslations();
   const [records, setRecords] = useState<PromotionRedemptionRecord[]>([]);
   const [recordsTruncated, setRecordsTruncated] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [query, setQuery] = useState("");
   const [billStatusFilter, setBillStatusFilter] =
     useState<BillStatusFilter>("all");
@@ -378,7 +310,7 @@ export function PromotionRedemptionsPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [billStatusFilter, pageSize, query, viewMode]);
+  }, [billStatusFilter, pageSize, query]);
 
   function handleReset() {
     setQuery("");
@@ -476,9 +408,6 @@ export function PromotionRedemptionsPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredRecords.length)}
             aria-label="优惠核销筛选"
             search={
@@ -558,72 +487,33 @@ export function PromotionRedemptionsPage() {
             aria-label="优惠核销清单"
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
-            {viewMode === "list" ? (
-              <DataTable
-                columns={redemptionColumns}
-                rows={visibleRecords}
-                rowKey={(record) => record.id}
-                loading={loading}
-                indexStart={(activePage - 1) * pageSize + 1}
-                selectedKeys={[...selectedRecordIds]}
-                onSelectionChange={(keys) =>
-                  setSelectedRecordIds(new Set(keys))
-                }
-                rowActions={(record) => (
-                  <RedemptionActionsMenu record={record} />
-                )}
-                empty={
-                  <EmptyState
-                    title={
-                      loadError ? "核销数据读取失败" : "没有匹配的核销记录"
-                    }
-                    description={
-                      loadError ?? "清空筛选条件后可查看全部核销记录。"
-                    }
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleRecords.length ? (
-              <RedemptionCards records={visibleRecords} />
-            ) : (
-              <EmptyState
-                title={
-                  loading
-                    ? "正在加载核销记录"
-                    : loadError
-                      ? "核销数据读取失败"
-                      : "没有匹配的核销记录"
-                }
-                description={
-                  loading
-                    ? "正在读取优惠核销台账。"
-                    : (loadError ?? "清空筛选条件后可查看全部核销记录。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={redemptionColumns}
+              rows={visibleRecords}
+              rowKey={(record) => record.id}
+              loading={loading}
+              indexStart={(activePage - 1) * pageSize + 1}
+              selectedKeys={[...selectedRecordIds]}
+              onSelectionChange={(keys) => setSelectedRecordIds(new Set(keys))}
+              rowActions={(record) => <RedemptionActionsMenu record={record} />}
+              empty={
+                <EmptyState
+                  title={loadError ? "核销数据读取失败" : "没有匹配的核销记录"}
+                  description={
+                    loadError ?? "清空筛选条件后可查看全部核销记录。"
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

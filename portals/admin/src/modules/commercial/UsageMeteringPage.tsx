@@ -13,10 +13,8 @@ import {
   EmptyState,
   FilterBar,
   Input,
-  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
-  MetricListCard,
   NativeSelect,
   TableTitleCell,
 } from "@vxture/design-system";
@@ -35,13 +33,7 @@ import {
   formatNumber,
   typeLabel,
 } from "@/modules/tenants/tenant-utils";
-import {
-  Tag,
-  type PageSize,
-  commercialTone,
-  formatPercent,
-  type ViewMode,
-} from "./CommercialUtils";
+import { Tag, type PageSize, formatPercent } from "./CommercialUtils";
 
 type RiskFilter = "all" | UsageMeteringRisk;
 type ProductTypeFilter =
@@ -238,64 +230,10 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
   ];
 }
 
-function UsageCards({ records }: { records: UsageMeteringRecord[] }) {
-  const locale = useLocale();
-  const router = useRouter();
-
-  return (
-    <ListCardGrid aria-label="用量计费卡片">
-      {records.map((record) => (
-        <MetricListCard
-          key={record.id}
-          icon="graph"
-          title={record.tenantName}
-          description={`${record.productName} · ${record.metricName}`}
-          tone={commercialTone(riskTone(record.risk))}
-          actions={<UsageActionsMenu record={record} />}
-          badges={
-            <>
-              <Tag tone={riskTone(record.risk)}>{riskLabel(record.risk)}</Tag>
-              <Badge variant="outline">{record.productType}</Badge>
-            </>
-          }
-          note={record.servicePlanName ?? record.orderNo ?? "未关联订阅"}
-          metrics={[
-            {
-              key: "used",
-              value: formatUsageValue(record.usedValue, record.metricUnit),
-              label: "已用",
-            },
-            {
-              key: "quota",
-              value: formatUsageValue(record.quotaValue, record.metricUnit),
-              label: "配额",
-            },
-            {
-              key: "rate",
-              value: formatPercent(record.usageRate),
-              label: "使用率",
-            },
-          ]}
-          footer={
-            <>
-              <span>{record.cycleMonth}</span>
-              <strong>{formatDate(record.lastSyncedAt, locale)}</strong>
-            </>
-          }
-          onClick={() =>
-            router.push(`/tenants/${encodeURIComponent(record.tenantId)}`)
-          }
-        />
-      ))}
-    </ListCardGrid>
-  );
-}
-
 export function UsageMeteringPage() {
   const tShared = useTranslations();
   const [records, setRecords] = useState<UsageMeteringRecord[]>([]);
   const [recordsTruncated, setRecordsTruncated] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [query, setQuery] = useState("");
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
   const [productTypeFilter, setProductTypeFilter] =
@@ -379,7 +317,7 @@ export function UsageMeteringPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [cycleFilter, pageSize, productTypeFilter, query, riskFilter, viewMode]);
+  }, [cycleFilter, pageSize, productTypeFilter, query, riskFilter]);
 
   function handleReset() {
     setQuery("");
@@ -479,9 +417,6 @@ export function UsageMeteringPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredRecords.length)}
             aria-label="用量筛选"
             search={
@@ -576,64 +511,33 @@ export function UsageMeteringPage() {
             aria-label="用量清单"
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
-            {viewMode === "list" ? (
-              <DataTable
-                columns={usageColumns}
-                rows={visibleRecords}
-                rowKey={(record) => record.id}
-                loading={loading}
-                indexStart={(activePage - 1) * pageSize + 1}
-                selectedKeys={[...selectedRecordIds]}
-                onSelectionChange={(keys) =>
-                  setSelectedRecordIds(new Set(keys))
-                }
-                rowActions={(record) => <UsageActionsMenu record={record} />}
-                empty={
-                  <EmptyState
-                    title={
-                      loadError ? "用量数据读取失败" : "没有匹配的用量记录"
-                    }
-                    description={
-                      loadError ?? "清空筛选条件后可查看全部计量记录。"
-                    }
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleRecords.length ? (
-              <UsageCards records={visibleRecords} />
-            ) : (
-              <EmptyState
-                title={loading ? "正在加载用量" : "没有匹配的用量记录"}
-                description={
-                  loading
-                    ? "正在读取计量汇总数据。"
-                    : (loadError ?? "清空筛选条件后可查看全部计量记录。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={usageColumns}
+              rows={visibleRecords}
+              rowKey={(record) => record.id}
+              loading={loading}
+              indexStart={(activePage - 1) * pageSize + 1}
+              selectedKeys={[...selectedRecordIds]}
+              onSelectionChange={(keys) => setSelectedRecordIds(new Set(keys))}
+              rowActions={(record) => <UsageActionsMenu record={record} />}
+              empty={
+                <EmptyState
+                  title={loadError ? "用量数据读取失败" : "没有匹配的用量记录"}
+                  description={
+                    loadError ?? "清空筛选条件后可查看全部计量记录。"
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

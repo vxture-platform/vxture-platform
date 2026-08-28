@@ -13,10 +13,8 @@ import {
   FilterBar,
   Input,
   Label,
-  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
-  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -38,7 +36,6 @@ import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import { formatDate, formatNumber } from "@/modules/tenants/tenant-utils";
 
-type ViewMode = "list" | "cards";
 type StatusFilter = "all" | AccountOperationRecord["status"];
 type TenantTypeFilter = "all" | "company" | "individual" | "mixed";
 type RoleFilter = "all" | "owner" | "admin" | "member";
@@ -374,87 +371,6 @@ function useAccountColumns(
   ];
 }
 
-function AccountCards({
-  accounts,
-  showTenantContext,
-  actions,
-}: {
-  accounts: AccountOperationRecord[];
-  showTenantContext: boolean;
-  actions: AccountRowActions;
-}) {
-  const locale = useLocale();
-  return (
-    <ListCardGrid aria-label="账号卡片">
-      {accounts.map((account) => (
-        <MetricListCard
-          key={account.id}
-          icon="user"
-          title={account.displayName}
-          description={`${account.accountCode} · ${account.email}`}
-          tone={ACCOUNT_STATUS_TONE[account.status]}
-          actions={
-            <AccountActionsMenu
-              account={account}
-              busy={actions.actionBusy}
-              onToggleStatus={actions.onToggleStatus}
-              onForceLogout={actions.onForceLogout}
-            />
-          }
-          badges={
-            <>
-              <StatusBadge tone={ACCOUNT_STATUS_TONE[account.status]}>
-                {accountStatusLabel(account.status)}
-              </StatusBadge>
-              {showTenantContext
-                ? accountTenantSummary(account).tags.map((tag) => (
-                    <StatusBadge key={tag} tone="brand" icon={false}>
-                      {tag}
-                    </StatusBadge>
-                  ))
-                : null}
-              <Badge>{accountHighestRoleLabel(account)}</Badge>
-            </>
-          }
-          metrics={[
-            showTenantContext
-              ? {
-                  key: "tenants",
-                  value: formatNumber(account.tenantCount),
-                  label: "租户",
-                }
-              : {
-                  key: "role",
-                  value: accountHighestRoleLabel(account),
-                  label: "平台角色",
-                },
-            {
-              key: "logins",
-              value: formatNumber(account.loginCount30d),
-              label: "30日登录",
-            },
-            {
-              key: "location",
-              value: account.lastActiveLocation,
-              label: "地址",
-            },
-          ]}
-          footer={
-            <>
-              <span>
-                {showTenantContext
-                  ? accountTenantSummary(account).primaryName
-                  : "平台用户"}
-              </span>
-              <strong>{formatDate(account.lastActiveAt, locale)}</strong>
-            </>
-          }
-        />
-      ))}
-    </ListCardGrid>
-  );
-}
-
 export function AccountsPage({
   copy = defaultAccountsPageCopy,
   loadAccounts = fetchAccountOperations,
@@ -468,7 +384,6 @@ export function AccountsPage({
   const pageCopy = { ...defaultAccountsPageCopy, ...copy };
   const [accounts, setAccounts] = useState<AccountOperationRecord[]>([]);
   const [accountsTruncated, setAccountsTruncated] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -631,7 +546,7 @@ export function AccountsPage({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [pageSize, query, roleFilter, statusFilter, tenantTypeFilter, viewMode]);
+  }, [pageSize, query, roleFilter, statusFilter, tenantTypeFilter]);
 
   function handleReset() {
     setQuery("");
@@ -710,9 +625,6 @@ export function AccountsPage({
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredAccounts.length)}
             search={
               <Input
@@ -786,74 +698,39 @@ export function AccountsPage({
             aria-label={pageCopy.directoryAriaLabel}
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={accountColumns}
-                rows={visibleAccounts}
-                rowKey={(account) => account.id}
-                loading={loading}
-                indexStart={
-                  (Math.min(currentPage, pageCount) - 1) * pageSize + 1
-                }
-                selectedKeys={[...selectedAccountIds]}
-                onSelectionChange={(keys) =>
-                  setSelectedAccountIds(new Set(keys))
-                }
-                rowActions={(account) => (
-                  <AccountActionsMenu
-                    account={account}
-                    busy={accountActions.actionBusy}
-                    onToggleStatus={accountActions.onToggleStatus}
-                    onForceLogout={accountActions.onForceLogout}
-                  />
-                )}
-                empty={
-                  <EmptyState
-                    title={loadError ? "账号数据读取失败" : pageCopy.emptyTitle}
-                    description={loadError ?? pageCopy.emptyDescription}
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleAccounts.length ? (
-              <AccountCards
-                accounts={visibleAccounts}
-                showTenantContext={showTenantContext}
-                actions={accountActions}
-              />
-            ) : (
-              <EmptyState
-                title={loading ? pageCopy.loadingTitle : pageCopy.emptyTitle}
-                description={
-                  loading
-                    ? pageCopy.loadingDescription
-                    : (loadError ?? pageCopy.emptyDescription)
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={accountColumns}
+              rows={visibleAccounts}
+              rowKey={(account) => account.id}
+              loading={loading}
+              indexStart={(Math.min(currentPage, pageCount) - 1) * pageSize + 1}
+              selectedKeys={[...selectedAccountIds]}
+              onSelectionChange={(keys) => setSelectedAccountIds(new Set(keys))}
+              rowActions={(account) => (
+                <AccountActionsMenu
+                  account={account}
+                  busy={accountActions.actionBusy}
+                  onToggleStatus={accountActions.onToggleStatus}
+                  onForceLogout={accountActions.onForceLogout}
+                />
+              )}
+              empty={
+                <EmptyState
+                  title={loadError ? "账号数据读取失败" : pageCopy.emptyTitle}
+                  description={loadError ?? pageCopy.emptyDescription}
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={

@@ -18,10 +18,8 @@ import {
   Icon,
   Input,
   Label,
-  ListCardGrid,
   ListPageTemplate,
   MetricGrid,
-  MetricListCard,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
@@ -67,7 +65,6 @@ const PERM_TYPE_TONE: Record<string, StatusBadgeTone> = {
   api: "warning",
 };
 
-type ViewMode = "list" | "cards";
 type PlatformRoleStatusCode = PlatformRoleRecord["statusCode"];
 type StatusFilter = "all" | PlatformRoleStatusCode;
 type RoleKindFilter = "all" | "system" | "custom";
@@ -832,102 +829,6 @@ function useAdminRoleColumns(
   ];
 }
 
-function AdminRoleCards({
-  roles,
-  roleLabels,
-  t,
-  onOpenPermissions,
-  onOpenAuthorization,
-  onEdit,
-  onCopy,
-  onToggle,
-  onDelete,
-}: {
-  roles: PlatformRoleRecord[];
-  roleLabels: Map<string, string>;
-  t: ReturnType<typeof useTranslations>;
-  onOpenPermissions: (role: PlatformRoleRecord) => void;
-  onOpenAuthorization: (role: PlatformRoleRecord) => void;
-  onEdit: (role: PlatformRoleRecord) => void;
-  onCopy: (role: PlatformRoleRecord) => void;
-  onToggle: (role: PlatformRoleRecord) => void;
-  onDelete: (role: PlatformRoleRecord) => Promise<void>;
-}) {
-  const locale = useLocale();
-  const tShared = useTranslations();
-  return (
-    <ListCardGrid aria-label="平台角色卡片">
-      {roles.map((role) => (
-        <MetricListCard
-          key={role.id}
-          icon="role"
-          /* 角色说明原来挂在 header 与一段重复的 `<p>` 上当 `title` 提示；那段
-             `<p>` 的正文其实就是 `roleCode`（与副标题同一件事），所以只留提示。 */
-          title={
-            <span title={roleDescription(role, t) || undefined}>
-              {roleLabels.get(role.id) ??
-                role.nameEn ??
-                role.roleCode ??
-                EMPTY_MARK}
-            </span>
-          }
-          description={role.roleCode}
-          tone={roleStatusTone(role)}
-          actions={
-            <AdminRoleActionsMenu
-              role={role}
-              roleLabel={
-                roleLabels.get(role.id) ??
-                role.nameEn ??
-                role.roleCode ??
-                EMPTY_MARK
-              }
-              onOpenPermissions={onOpenPermissions}
-              onOpenAuthorization={onOpenAuthorization}
-              onEdit={onEdit}
-              onCopy={onCopy}
-              onToggle={onToggle}
-              onDelete={onDelete}
-            />
-          }
-          badges={
-            <>
-              <StatusBadge tone={roleStatusTone(role)}>
-                {roleStatusIndicator(role).label}
-              </StatusBadge>
-              {role.isSystem ? <Badge>系统</Badge> : null}
-            </>
-          }
-          note={<PermissionTags role={role} />}
-          metrics={[
-            {
-              key: "permissions",
-              value: formatNumber(role.permissionCount),
-              label: "权限",
-            },
-            {
-              key: "members",
-              value: formatNumber(role.adminCount),
-              label: "成员",
-            },
-            {
-              key: "createdAt",
-              value: formatDate(role.createdAt, locale),
-              label: tShared("actions.create"),
-            },
-          ]}
-          footer={
-            <>
-              <span>权限 {formatNumber(role.permissionCount)} 项</span>
-              <strong>{role.createdByName || EMPTY_MARK}</strong>
-            </>
-          }
-        />
-      ))}
-    </ListCardGrid>
-  );
-}
-
 type RoleMfaLevel = "disabled" | "optional" | "required";
 
 interface RoleFormState {
@@ -1118,7 +1019,6 @@ export function AdminRolesPage() {
   const [permissions, setPermissions] = useState<
     PlatformAdminPermissionRecord[]
   >([]);
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedRoleIds, setSelectedRoleIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -1235,14 +1135,7 @@ export function AdminRolesPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [
-    pageSize,
-    permissionFilter,
-    query,
-    roleKindFilter,
-    statusFilter,
-    viewMode,
-  ]);
+  }, [pageSize, permissionFilter, query, roleKindFilter, statusFilter]);
 
   function handleReset() {
     setQuery("");
@@ -1511,9 +1404,6 @@ export function AdminRolesPage() {
         }
         filters={
           <FilterBar
-            view={viewMode}
-            onViewChange={setViewMode}
-            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredRoles.length)}
             aria-label="平台角色筛选"
             search={
@@ -1587,99 +1477,55 @@ export function AdminRolesPage() {
             aria-label="平台角色清单"
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
-            {loading && viewMode === "cards" ? (
-              <header className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">
-                <span>{tShared("common.loading")}</span>
-              </header>
-            ) : null}
 
-            {viewMode === "list" ? (
-              <DataTable
-                columns={adminRoleColumns}
-                rows={visibleRoles}
-                rowKey={(role) => role.id}
-                loading={loading}
-                indexStart={
-                  (Math.min(currentPage, pageCount) - 1) * pageSize + 1
-                }
-                selectedKeys={[...selectedRoleIds]}
-                onSelectionChange={(keys) => setSelectedRoleIds(new Set(keys))}
-                rowActions={(role) => (
-                  <AdminRoleActionsMenu
-                    role={role}
-                    roleLabel={
-                      roleLabels.get(role.id) ??
-                      role.nameEn ??
-                      role.roleCode ??
-                      EMPTY_MARK
-                    }
-                    onOpenPermissions={(target) =>
-                      setPermissionDialogRoleId(target.id)
-                    }
-                    onOpenAuthorization={(target) => {
-                      setAuthorizationError(null);
-                      setAuthorizationRoleId(target.id);
-                    }}
-                    onEdit={openEditRole}
-                    onCopy={openCopyRole}
-                    onToggle={(target) => void handleToggleRole(target)}
-                    onDelete={handleDeleteRole}
-                  />
-                )}
-                empty={
-                  <EmptyState
-                    title={
-                      loadError ? "平台角色读取失败" : "没有匹配的平台角色"
-                    }
-                    description={
-                      loadError ?? "清空筛选条件后可查看全部平台角色。"
-                    }
-                    action={
-                      <ActionButton
-                        variant="outline"
-                        icon="x"
-                        onClick={handleReset}
-                      >
-                        {tShared("common.clearFilters")}
-                      </ActionButton>
-                    }
-                  />
-                }
-              />
-            ) : visibleRoles.length ? (
-              <AdminRoleCards
-                roles={visibleRoles}
-                roleLabels={roleLabels}
-                t={t}
-                onOpenPermissions={(role) => setPermissionDialogRoleId(role.id)}
-                onOpenAuthorization={(role) => {
-                  setAuthorizationError(null);
-                  setAuthorizationRoleId(role.id);
-                }}
-                onEdit={openEditRole}
-                onCopy={openCopyRole}
-                onToggle={(role) => void handleToggleRole(role)}
-                onDelete={handleDeleteRole}
-              />
-            ) : (
-              <EmptyState
-                title={loading ? "正在加载平台角色" : "没有匹配的平台角色"}
-                description={
-                  loading
-                    ? "正在从 platform.platform_role 读取平台角色。"
-                    : (loadError ?? "清空筛选条件后可查看全部平台角色。")
-                }
-                action={
-                  <ActionButton
-                    variant="outline"
-                    icon="x"
-                    onClick={handleReset}
-                  >
-                    {tShared("common.clearFilters")}
-                  </ActionButton>
-                }
-              />
-            )}
+            <DataTable
+              columns={adminRoleColumns}
+              rows={visibleRoles}
+              rowKey={(role) => role.id}
+              loading={loading}
+              indexStart={(Math.min(currentPage, pageCount) - 1) * pageSize + 1}
+              selectedKeys={[...selectedRoleIds]}
+              onSelectionChange={(keys) => setSelectedRoleIds(new Set(keys))}
+              rowActions={(role) => (
+                <AdminRoleActionsMenu
+                  role={role}
+                  roleLabel={
+                    roleLabels.get(role.id) ??
+                    role.nameEn ??
+                    role.roleCode ??
+                    EMPTY_MARK
+                  }
+                  onOpenPermissions={(target) =>
+                    setPermissionDialogRoleId(target.id)
+                  }
+                  onOpenAuthorization={(target) => {
+                    setAuthorizationError(null);
+                    setAuthorizationRoleId(target.id);
+                  }}
+                  onEdit={openEditRole}
+                  onCopy={openCopyRole}
+                  onToggle={(target) => void handleToggleRole(target)}
+                  onDelete={handleDeleteRole}
+                />
+              )}
+              empty={
+                <EmptyState
+                  title={loadError ? "平台角色读取失败" : "没有匹配的平台角色"}
+                  description={
+                    loadError ?? "清空筛选条件后可查看全部平台角色。"
+                  }
+                  action={
+                    <ActionButton
+                      variant="outline"
+                      icon="x"
+                      onClick={handleReset}
+                    >
+                      {tShared("common.clearFilters")}
+                    </ActionButton>
+                  }
+                />
+              }
+            />
           </section>
         }
         footer={
