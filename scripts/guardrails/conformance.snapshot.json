@@ -1,0 +1,53 @@
+{
+  "note": "由 check-conformance-matrix.mjs --update 生成，勿手改",
+  "surfaces": {
+    "opera-bff": {
+      "files": 35,
+      "retryable": 17,
+      "NOT_ENTITLED": 2,
+      "POLICY_DENIED": 2,
+      "APPROVAL_REQUIRED": 1,
+      "QUOTA_EXCEEDED": 1
+    },
+    "admin-bff": {
+      "files": 59,
+      "retryable": 1,
+      "NOT_ENTITLED": 0,
+      "POLICY_DENIED": 0,
+      "APPROVAL_REQUIRED": 0,
+      "QUOTA_EXCEEDED": 0
+    },
+    "console-bff": {
+      "files": 39,
+      "retryable": 0,
+      "NOT_ENTITLED": 0,
+      "POLICY_DENIED": 0,
+      "APPROVAL_REQUIRED": 0,
+      "QUOTA_EXCEEDED": 0
+    },
+    "shared": {
+      "files": 2,
+      "retryable": 0,
+      "NOT_ENTITLED": 0,
+      "POLICY_DENIED": 0,
+      "APPROVAL_REQUIRED": 0,
+      "QUOTA_EXCEEDED": 0
+    },
+    "atlas": {
+      "files": 108,
+      "retryable": 10,
+      "NOT_ENTITLED": 4,
+      "POLICY_DENIED": 0,
+      "APPROVAL_REQUIRED": 0,
+      "QUOTA_EXCEEDED": 3
+    },
+    "runos": {
+      "files": 64,
+      "retryable": 26,
+      "NOT_ENTITLED": 2,
+      "POLICY_DENIED": 2,
+      "APPROVAL_REQUIRED": 2,
+      "QUOTA_EXCEEDED": 2
+    }
+  }
+}

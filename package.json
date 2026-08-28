@@ -65,6 +65,7 @@
     "lint:column-locks": "node scripts/guardrails/check-column-locks.mjs",
     "lint:catalog-domains": "node scripts/guardrails/check-catalog-domains.mjs",
     "lint:api-conventions": "node scripts/guardrails/check-api-conventions.mjs",
+    "lint:conformance": "node scripts/guardrails/check-conformance-matrix.mjs",
     "lint:docs-numbering": "node scripts/guardrails/check-docs-numbering.mjs --strict",
     "lint:public-hygiene": "node scripts/guardrails/check-public-repo-hygiene.mjs",
     "lint:boundaries": "depcruise portals business bff services packages/core packages/shared packages/platform --config .depcruiserc.cjs",

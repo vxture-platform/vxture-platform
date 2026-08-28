@@ -236,6 +236,14 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:api-conventions
 
+      # 符合性矩阵门控：接口规范里那张「三方 × 拒绝词表 × retryable」的表，过去是手写
+      # 快照，烂了没人知道——复核时三行记载全错，人工重数还错了两次（范围划错、把注释
+      # 里的字算进代码）。现在数由脚本数，与 conformance.snapshot.json 比对，漂移即失败。
+      # 上游两仓不在 CI 里，那两行标「未测」并照原样带出旧值，不冒充复核过。
+      - name: Contract conformance matrix (product_251 D-3)
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:conformance
+
   # ── 4. Build ───────────────────────────────────────────────────────────────
   build:
     name: build
