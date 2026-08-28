@@ -144,7 +144,10 @@ const tenantOpsSections: AdminNavigationSection[] = [
       },
       {
         id: "planVersions",
-        code: "service_plan",
+        // 原本也写 `service_plan`（与上面「服务套餐」撞码），显然是复制粘贴漏改
+        // ——它自己的 i18nKey 一直是 `plan_version`。菜单码要进
+        // `admin.operator_permission.perm_code`（唯一约束），撞码建不起权限树。
+        code: "plan_version",
         i18nKey: "menu.operation.plan_version",
         status: "active",
         href: "/plan-versions",
