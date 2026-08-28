@@ -203,16 +203,19 @@ function permissionSearchText(permission: PlatformAdminPermissionRecord) {
     .toLowerCase();
 }
 
-// operator_permission 没有 is_system 列（B9-P1a），无法直接判定来源。平台预置权限
-// 一律落在保留命名空间内：`admin.*` 的工作区/分组树，以及历史 `MENU_/BTN_/API_`
-// 基础权限编码。落在这些命名空间之外的 permCode 只可能由 createOperatorPermission
-// 新建，因此归类为自定义（custom）。
+/**
+ * 来源直接读 `is_system`。
+ *
+ * 这里原先写着「operator_permission 没有 is_system 列（B9-P1a）」，于是从 permCode
+ * 的命名空间猜：`admin.*` / `MENU_` / `BTN_` / `API_` 算预置，其余算自建。但那一列
+ * **一直存在**（`deploy/database/ddl/80_admin.sql`，`NOT NULL DEFAULT true`），只是
+ * BFF 的投影没把它选出来。后果是 59 个三段操作码（`tenant:profile.read` 这类）全部
+ * 落在猜测的命名空间之外，被一律误标成「自定义」——它们其实全是 seed 灌的预置权限。
+ */
 function permissionSource(
   permission: PlatformAdminPermissionRecord,
 ): "system" | "custom" {
-  return /^(admin\.|MENU_|BTN_|API_)/.test(permission.permCode)
-    ? "system"
-    : "custom";
+  return permission.isSystem ? "system" : "custom";
 }
 
 function permissionSourceLabel(permission: PlatformAdminPermissionRecord) {

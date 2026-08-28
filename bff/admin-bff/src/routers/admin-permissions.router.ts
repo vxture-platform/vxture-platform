@@ -52,6 +52,7 @@ export class AdminPermissionsRouter {
       permCode: row.perm_code,
       permName: row.perm_name,
       permType: row.perm_type,
+      isSystem: row.is_system,
       status: row.status,
       description: row.description,
       icon: row.icon,
@@ -387,6 +388,7 @@ function mapAdminPermissionRow(
     permCode: row.perm_code,
     permName: row.perm_name,
     permType: row.perm_type,
+    isSystem: row.is_system,
     status: row.status,
     description: row.description,
     icon: row.icon,
@@ -471,6 +473,7 @@ interface PlatformAdminPermissionRow {
   perm_code: string;
   perm_name: string;
   perm_type: PlatformPermissionType;
+  is_system: boolean;
   status: boolean;
   description: string;
   icon: string | null;
@@ -490,6 +493,7 @@ const PLATFORM_PERMISSION_SQL = `
     p.perm_code,
     p.perm_name,
     p.perm_type,
+    p.is_system,
     p.is_active as status,
     p.description,
     p.icon,
@@ -519,6 +523,7 @@ const PLATFORM_PERMISSION_BY_ID_SQL = `
     p.perm_code,
     p.perm_name,
     p.perm_type,
+    p.is_system,
     p.is_active as status,
     p.description,
     p.icon,
