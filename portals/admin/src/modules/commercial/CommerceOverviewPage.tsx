@@ -270,12 +270,7 @@ export function CommerceOverviewPage() {
 
   const metricCount = useMemo(() => snapshot?.metrics.length ?? 0, [snapshot]);
 
-  /* `ViewLayout` 上不能写 `max-w-none`（旧 CSS 里那条 `max-width: none`
-     的字面对应物）：DS 注册了 `--space-none: 0px`，而 Tailwind v4 解
-     `max-w-<名>` 时先查 `--spacing-*`、后查 `--container-*`，于是这个关键字
-     变成了 `max-width: 0`——页面会塔成一字一行。坑记在
-     `portals/website/assets/legacy-tokens/tokens-website.css`，它对所有消费方都在。
-     `ViewLayout` 自己不带 max-width，所以不写就是满宽。 */
+  /* `ViewLayout` 自己不带 max-width，不写就是满宽。 */
   return (
     <ViewLayout className="w-full">
       <PageHeader

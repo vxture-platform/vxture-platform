@@ -17,7 +17,7 @@
     "@fontsource/funnel-display": "^5.3.0",
     "@fontsource/geist-mono": "^5.3.0",
     "@fontsource/inter": "^5.3.0",
-    "@vxture/design-system": "9.0.7",
+    "@vxture/design-system": "10.0.0",
     "@vxture/platform-browser": "workspace:*",
     "@vxture-platform/shared": "workspace:*",
     "next": "^15.5.21",
