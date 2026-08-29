@@ -723,6 +723,9 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(vite@7.3.6(@types/node@24.13.0)(jiti@2.6.1)(lightningcss@1.31.1)(sass@1.97.3)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))
 
   packages/core/oidc-rp:
     dependencies:
@@ -1415,6 +1418,9 @@ importers:
       '@vxture/core-config':
         specifier: workspace:*
         version: link:../../../packages/core/config
+      '@vxture/core-utils':
+        specifier: workspace:*
+        version: link:../../../packages/core/utils
       pg:
         specifier: ^8.16.3
         version: 8.20.0
@@ -1434,6 +1440,9 @@ importers:
       '@nestjs/common':
         specifier: ^11.0.0
         version: 11.1.16(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@vxture/core-utils':
+        specifier: workspace:*
+        version: link:../../../packages/core/utils
       ioredis:
         specifier: ^5.0.0
         version: 5.9.3
@@ -1447,6 +1456,9 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(vite@7.3.6(@types/node@24.13.0)(jiti@2.6.1)(lightningcss@1.31.1)(sass@1.97.3)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))
 
   services/notification/sms:
     dependencies:
