@@ -262,9 +262,9 @@ export class ProductCatalogRouter {
          LEFT JOIN product.product_launch_statuses s
            ON s.item_code = i.item_code AND s.product_id = p.id
         WHERE p.deleted_at IS NULL
-          AND i.item_code = ANY($1::text[])
+          AND i.item_code <> ALL($1::text[])
         ORDER BY p.id, i.sort ASC`,
-      [TECH_ITEM_CODES],
+      [ADMIN_OWNED_ITEM_CODES],
     );
     const byProduct: Record<string, ChecklistItemRecord[]> = {};
     for (const row of result.rows) {
@@ -439,8 +439,9 @@ export class ProductCatalogRouter {
 
   // ── 接入检查单（product_200 §7，六步技术接入）─────────────────────────────
   // 复用 product.launch_checklist_items 字典表——commerce 那两项
-  // （verification_policy/pricing_set）留给 admin 消费，这里按 TECH_ITEM_CODES
-  // 过滤，不读不写不属于 opera 的两项。
+  // （verification_policy/pricing_set）留给 admin 消费，这里按
+  // ADMIN_OWNED_ITEM_CODES **排除**它们，其余全是 opera 的；不读不写不属于
+  // opera 的两项。为什么是排除而不是正向清单，见该常量的注释。
 
   /**
    * 产品的 webhook 登记（`product.product_webhooks`，每产品至多一行）。
@@ -558,9 +559,9 @@ export class ProductCatalogRouter {
          FROM product.launch_checklist_items i
          LEFT JOIN product.product_launch_statuses s
            ON s.item_code = i.item_code AND s.product_id = $1
-        WHERE i.item_code = ANY($2::text[])
+        WHERE i.item_code <> ALL($2::text[])
         ORDER BY i.sort ASC`,
-      [id, TECH_ITEM_CODES],
+      [id, ADMIN_OWNED_ITEM_CODES],
     );
     return result.rows.map(toChecklistRecord);
   }
@@ -573,7 +574,14 @@ export class ProductCatalogRouter {
     @Body() body: { isSatisfied?: boolean; remark?: string | null },
   ): Promise<ChecklistItemRecord> {
     assertCanManage(req);
-    if (!(TECH_ITEM_CODES as readonly string[]).includes(itemCode)) {
+    /* 先查字典再写：字典里没有的码，此前被正向清单挡成 404；现在清单是反向的，
+       不查一下就会一路走到 INSERT 撞 FK 冒成 500——而真实的答案仍是 404。admin 那
+       两项字典里有、但不归 opera，对本接口同样是「没有这一项」。 */
+    const known = await this.pool.query(
+      `SELECT 1 FROM product.launch_checklist_items WHERE item_code = $1`,
+      [itemCode],
+    );
+    if (known.rowCount === 0 || !isOperaChecklistItem(itemCode)) {
       throw notFound(
         "CATALOG_CHECKLIST_ITEM_UNKNOWN",
         `Unknown checklist item: ${itemCode}`,
@@ -620,14 +628,35 @@ export class ProductCatalogRouter {
   }
 }
 
-const TECH_ITEM_CODES = [
-  "catalog_registered",
-  "c1_identity",
-  "c3_metering",
-  "c2_entitlement",
-  "data_plane",
-  "acceptance",
+/**
+ * 检查单里**不归 opera** 的检查项：商业前置两项，admin 消费（2026-08-30 改反向）。
+ *
+ * 字典表 `product.launch_checklist_items` 没有归属列——它建表时
+ * （`data_platform_200_schema.md` §7.8）只装商业前置项，product_200 §7 的六步技术
+ * 接入后来复用了同一张表（seed 里的注释）。此前这里写的是六个技术项的**正向清单**，
+ * 与 seed 里那六行一一重复：seed 加第七个技术项、这里不加，界面上就少一项，而且
+ * 没有任何东西会报错——DDL 的原话是「新增检查项 = INSERT 一行，不改表结构」，
+ * 正向清单把这句话变成了假的。
+ *
+ * 改成反向：字典表里的行**默认都是 opera 的**，只排除 admin 那两项。这两项是这张
+ * 表建表时就定下的商业前置（`verification_policy` 来自设计稿 §7.8，`pricing_set`
+ * 由 seed 加入），比技术项稳定得多；技术项新增照 DDL 的话 INSERT 即可见。当前
+ * seed 的八行经这条规则得到的正是原来那六项，顺序由 `sort` 给，行为不变（钉在
+ * `product-catalog.spec.ts`）。
+ *
+ * 这仍是一个字面量，只是从「opera 有什么」缩成「opera 没有什么」。真正的归属轴
+ * 该是表上的一列（seed 与 DDL 的改动，不在本文件的范围）；到那天把这个集合连同
+ * `isOperaChecklistItem` 一起删掉，SQL 改按列过滤。
+ */
+export const ADMIN_OWNED_ITEM_CODES = [
+  "verification_policy",
+  "pricing_set",
 ] as const;
+
+/** 字典里的一项归不归 opera（不回答「字典里有没有」——那要查库）。 */
+export function isOperaChecklistItem(itemCode: string): boolean {
+  return !(ADMIN_OWNED_ITEM_CODES as readonly string[]).includes(itemCode);
+}
 
 export interface ProductWebhookRecord {
   homeUrl: string | null;
