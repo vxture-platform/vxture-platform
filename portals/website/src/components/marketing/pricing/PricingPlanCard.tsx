@@ -9,14 +9,18 @@
  * 视觉按定稿样图（v5 + 选中态修订）：
  * - 年付模式大字展示折合月价（floor(yearly/12)），小字年付总额，success 徽章省额；
  * - 受众行 = 受众标签 + 席位（图标按受众：个人/团队/私有化）；
- * - 推荐档只在档名旁挂「最受欢迎」徽章，无其他特殊性；
- * - 选中档 = 强调边框 + 双层品牌光晕 + 渐变 CTA；默认选中推荐档，点击任意卡切换。
+ * - 选中档 = 强调边框 + 双层品牌光晕 + 渐变 CTA；点击任意卡切换。
+ *
+ * 2026-08-30 数据改读 DB 真源（GET /api/products/:code/plans）：
+ * - 价格按档位**实际挂出**的周期展示：当前周期没价时退到另一周期并明示单位，
+ *   而不是把月价当年价；两个周期都没价 = 联系销售；
+ * - 「最受欢迎」徽章随 highlight 一起去掉——没有任何数据支撑那个说法；
+ * - 功能清单是 plan_components.features 的键，文案走词典、缺词回落键名。
  */
 
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@vxture-platform/shared";
 import {
-  Badge,
   Button,
   Card,
   CardContent,
@@ -25,9 +29,12 @@ import {
 } from "@vxture/design-system";
 import type { IconName } from "@vxture/design-system";
 import { buildConsoleSubscribeUrl } from "@/lib/console-entry";
+import { usePlanLabels } from "./plan-labels";
 import {
-  formatCny,
+  displayedPrice,
+  formatPrice,
   yearlySavings,
+  UNLIMITED,
   type BillingCycle,
   type PlanAudience,
   type PricingPlan,
@@ -64,13 +71,29 @@ export function PricingPlanCard({
   onSelect: () => void;
 }) {
   const t = useTranslations("products.subscription");
+  const labels = usePlanLabels();
   const locale = useLocale();
   // 站点 locale 值域即 Locale（zh-CN | en-US），供 shared formatCurrency 使用。
   const appLocale = locale as Locale;
 
-  const isContact = plan.monthly === null || plan.yearly === null;
-  const isFree = plan.monthly === 0;
-  const isPaid = !isContact && !isFree;
+  const shown = displayedPrice(plan, cycle);
+  const isContact = shown === null;
+  const isFree = shown !== null && shown.price.amount === 0;
+  const isPaid = shown !== null && shown.price.amount > 0;
+  // 省额徽章只在「年付展示 + 两个周期都有价 + 年付真的更便宜」时出现。
+  const savings =
+    isPaid && shown.unit === "year" && plan.monthly && plan.yearly
+      ? yearlySavings(plan.monthly.amount, plan.yearly.amount)
+      : null;
+  const money = (amount: number) =>
+    formatPrice(amount, shown?.price.currency ?? "CNY", appLocale);
+
+  const seatsLabel =
+    plan.seats === null
+      ? null
+      : plan.seats === UNLIMITED
+        ? t("seats.unlimited")
+        : t("seats.count", { count: plan.seats });
 
   return (
     <Card
@@ -92,16 +115,15 @@ export function PricingPlanCard({
       }`}
     >
       <CardContent className="flex flex-1 flex-col p-6">
-        {/* 档名/定位语 + 受众图标 */}
+        {/* 档名/描述 + 受众图标 */}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="flex flex-wrap items-center gap-2 text-base font-semibold text-vx-text-primary">
+            <p className="text-base font-semibold text-vx-text-primary">
               {plan.name}
-              {plan.highlight ? <Badge>{t("mostPopular")}</Badge> : null}
             </p>
-            {plan.tagline ? (
+            {plan.description ? (
               <p className="mt-0.5 text-xs text-vx-text-muted">
-                {plan.tagline}
+                {plan.description}
               </p>
             ) : null}
           </div>
@@ -123,28 +145,26 @@ export function PricingPlanCard({
           ) : isFree ? (
             <>
               <span className="text-3xl font-semibold tabular-nums tracking-tight text-vx-text-primary">
-                {formatCny(0, appLocale)}
+                {money(0)}
               </span>
               <span className="text-xs text-vx-text-muted">
                 {t("price.freeForever")}
               </span>
             </>
-          ) : cycle === "yearly" ? (
+          ) : shown.unit === "year" ? (
             <>
               <span className="text-3xl font-semibold tabular-nums tracking-tight text-vx-text-primary">
-                {formatCny(Math.floor((plan.yearly as number) / 12), appLocale)}
+                {money(Math.floor(shown.price.amount / 12))}
               </span>
               <span className="text-xs text-vx-text-muted">
                 {t("price.perMonth")} ·{" "}
-                {t("price.yearlyTotal", {
-                  amount: formatCny(plan.yearly as number, appLocale),
-                })}
+                {t("price.yearlyTotal", { amount: money(shown.price.amount) })}
               </span>
             </>
           ) : (
             <>
               <span className="text-3xl font-semibold tabular-nums tracking-tight text-vx-text-primary">
-                {formatCny(plan.monthly as number, appLocale)}
+                {money(shown.price.amount)}
               </span>
               <span className="text-xs text-vx-text-muted">
                 {t("price.perMonth")}
@@ -155,22 +175,14 @@ export function PricingPlanCard({
 
         {/* 省额槽位固定高度，保证各卡分隔线对齐 */}
         <div className="mt-2 min-h-7">
-          {isPaid && cycle === "yearly"
-            ? (() => {
-                const { save, percent } = yearlySavings(
-                  plan.monthly as number,
-                  plan.yearly as number,
-                );
-                return (
-                  <StatusBadge tone="success">
-                    {t("price.saveBadge", {
-                      amount: formatCny(save, appLocale),
-                      percent,
-                    })}
-                  </StatusBadge>
-                );
-              })()
-            : null}
+          {savings && savings.save > 0 ? (
+            <StatusBadge tone="success">
+              {t("price.saveBadge", {
+                amount: money(savings.save),
+                percent: savings.percent,
+              })}
+            </StatusBadge>
+          ) : null}
         </div>
 
         {/* 受众 · 席位 */}
@@ -181,11 +193,12 @@ export function PricingPlanCard({
             aria-hidden
           />
           <span>
-            {t(`audience.${plan.audience}`)} · {plan.seats}
+            {t(`audience.${plan.audience}`)}
+            {seatsLabel ? ` · ${seatsLabel}` : null}
           </span>
         </div>
 
-        {/* 功能清单 */}
+        {/* 功能清单（plan_components.features） */}
         <ul className="mt-3 flex-1 space-y-2.5">
           {plan.features.map((feature) => (
             <li
@@ -196,7 +209,7 @@ export function PricingPlanCard({
                 name="check"
                 className="mt-0.5 h-4 w-4 shrink-0 text-vx-primary"
               />
-              <span>{feature}</span>
+              <span>{labels.feature(feature)}</span>
             </li>
           ))}
         </ul>
@@ -225,9 +238,9 @@ export function PricingPlanCard({
                   productCode,
                   "subscribe",
                   plan.tier,
-                  // 展示值域 monthly|yearly → wire 值域 month|year
-                  // （console 严格匹配 cycle_unit，直传必失配）
-                  cycle === "monthly" ? "month" : "year",
+                  // 传实际展示的周期（wire 值域 month|year）：console 严格匹配
+                  // plan_prices.cycle_unit，传一个该档没挂价的周期必失配。
+                  shown.unit,
                 )}
               >
                 {isFree ? t("freeCta") : t("subscribe", { plan: plan.name })}

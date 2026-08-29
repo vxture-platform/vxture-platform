@@ -121,10 +121,15 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  *   `productSolutionDetailPage` / `servicePlansPage` / `servicePlanDetailPage` 五个
  *   命名空间（zh-CN / en-US 同步）。棘轮随之收紧到实数（与上一条同日合入，数字
  *   是两处改动叠加后的实测）。
+ *
+ * 2026-08-30 website 54 → 40：官网上线前去 mock。删掉的 `StatsSection`（「10+ 企业
+ *   客户 / 98.0% 满意度 / 2000+ 用户」，硬编码且无处渲染）带走了全部 14 条；/pricing
+ *   改读 `GET /api/products/:code/plans` 后新增的三态文案与配额/功能词典全部走 `t()`，
+ *   一条没进代码。
  */
 const BASELINE = {
   console: 32,
-  website: 54,
+  website: 40,
   admin: 3266,
   opera: 1819,
   accounts: 264,

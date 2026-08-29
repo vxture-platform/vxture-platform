@@ -10,22 +10,37 @@
  *   1. 订阅区：一行 plan bar（产品名下拉 + 个人/全部 + 月付/年付）+ 档位卡
  *      —— 卡片严格一行永不换行（窄屏横向滚动），1fr 等分撑满容器；
  *      「个人」视角 = 个人档 + 团队档占位卡，「全部」= 全部档位；
- *   2. 对比区：分组功能对比表，推荐列整列淡高亮；
+ *   2. 对比区：分组功能对比表，选中列整列淡高亮；
  *   3. 答疑区：FAQ 双列卡。
  * 全局 Header/Footer 由 (marketing) layout 提供，页面不重复。
- * 数据经 getPricingModel 适配（本轮 i18n，下一步切套餐目录 API 时单点替换）。
  * 档位 CTA 深链 console /subscribe（product/intent/target_tier/cycle）。
+ *
+ * 2026-08-30 数据切到 website-bff `GET /api/products/:code/plans`（DB 真源）：
+ * 价格/周期/席位/功能键/配额全部来自已发布的套餐版本，i18n 只剩标签与文案；
+ * 产品名与类型仍取 products.catalog.items（营销文案，与 /products 同一份）。
+ * 三态：加载中 = 骨架卡；请求失败 = danger Banner + 重试；产品不可见或没有
+ * 已发布套餐 = 「暂未开放订阅」空态——不再拿 i18n 假价兜底。
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Icon } from "@vxture/design-system";
+import {
+  Banner,
+  Button,
+  EmptyState,
+  Icon,
+  Skeleton,
+} from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
 import {
-  getPricingModel,
+  fetchProductPlans,
+  type ProductPlansResponse,
+} from "@/api/product-plans.api";
+import {
+  availableCycles,
+  buildPricingModel,
   type BillingCycle,
-  type RawSubscribableProduct,
 } from "./pricing/pricing-model";
 import { PricingPlanCard } from "./pricing/PricingPlanCard";
 import { TeamTiersGhostCard } from "./pricing/TeamTiersGhostCard";
@@ -34,27 +49,76 @@ import { PricingFaq } from "./pricing/PricingFaq";
 
 type AudienceView = "person" | "all";
 
+/** products.catalog.items 里本页用到的字段（与 ProductsOverviewPage 同一份文案） */
+type CatalogItem = {
+  code: string;
+  name: string;
+  type: string;
+  status: "available" | "coming";
+};
+
+type LoadState =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; data: ProductPlansResponse };
+
 const DEFAULT_PRODUCT = "arda";
+
+/**
+ * 默认选中档。只是进入页面时的预选（让选中态有处可落），不是「推荐/最受欢迎」
+ * 的说法——那个标记没有数据支撑，2026-08-30 已随 i18n 假价一起删掉。
+ * 不在当前可见档里时回落到首档。
+ */
+const DEFAULT_SELECTED_TIER = "pro";
 
 /** 与其余营销页一致的内容容器（--vx-container-page-xl 一档，xl 放宽到 2xl 屏） */
 const CONTAINER = "mx-auto max-w-7xl px-6 lg:px-8 xl:max-w-screen-2xl";
 
 export default function ProductSubscribePage() {
   const t = useTranslations("products.subscription");
+  const tProducts = useTranslations("products");
   const searchParams = useSearchParams();
   const productCode = searchParams.get("product") ?? DEFAULT_PRODUCT;
-  const rawProducts = t.raw("products") as Record<
-    string,
-    RawSubscribableProduct
-  >;
-  const model = getPricingModel(rawProducts, productCode);
+
+  // 产品下拉只列营销目录里标 available 的产品；?product= 指到别的 code 也照常
+  // 取阶梯（有没有可售套餐由 BFF 说了算）。
+  const catalogItems = tProducts.raw("catalog.items") as CatalogItem[];
+  const pickerItems = catalogItems.filter(
+    (item) => item.status === "available",
+  );
+  const catalogItem = catalogItems.find((item) => item.code === productCode);
+
+  const [load, setLoad] = useState<LoadState>({ status: "loading" });
+  const [reloadKey, setReloadKey] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    setLoad({ status: "loading" });
+    void fetchProductPlans(productCode)
+      .then((data) => {
+        if (!cancelled) setLoad({ status: "ready", data });
+      })
+      .catch(() => {
+        if (!cancelled) setLoad({ status: "error" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [productCode, reloadKey]);
+
+  const model = useMemo(
+    () =>
+      load.status === "ready"
+        ? buildPricingModel(load.data, catalogItem?.name ?? null)
+        : null,
+    [load, catalogItem?.name],
+  );
 
   const [cycle, setCycle] = useState<BillingCycle>("yearly");
   const [audience, setAudience] = useState<AudienceView>("person");
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // 切换产品回到默认选中（推荐档）
+  // 切换产品回到默认选中
   useEffect(() => {
     setSelectedTier(null);
   }, [productCode]);
@@ -72,6 +136,13 @@ export default function ProductSubscribePage() {
     return () => document.removeEventListener("mousedown", onClick);
   }, [menuOpen]);
 
+  // 月付/年付切换只在阶梯里两种周期都有档挂价时出现；只有一种时直接落在那一种。
+  const cycles = model ? availableCycles(model.plans) : [];
+  const showCycleToggle = cycles.length > 1;
+  const effectiveCycle: BillingCycle = cycles.includes(cycle)
+    ? cycle
+    : (cycles[0] ?? "monthly");
+
   const personPlans = model?.plans.filter((p) => p.audience === "person") ?? [];
   const teamPlans = model?.plans.filter((p) => p.audience !== "person") ?? [];
   // 任一受众分组为空时「个人/全部」切换没有意义：隐藏切换,
@@ -82,10 +153,12 @@ export default function ProductSubscribePage() {
   const visiblePlans =
     effectiveAudience === "person" ? personPlans : (model?.plans ?? []);
   const showGhost = effectiveAudience === "person" && teamPlans.length > 0;
-  // 选中档：用户点选优先；不在可见档里（切产品/切受众后）回落到推荐档，再回落首档。
+  // 选中档：用户点选优先；不在可见档里（切产品/切受众后）回落到默认档，再回落首档。
   const activeTier = visiblePlans.some((p) => p.tier === selectedTier)
     ? selectedTier
-    : (visiblePlans.find((p) => p.highlight)?.tier ?? visiblePlans[0]?.tier);
+    : (visiblePlans.find((p) => p.tier === DEFAULT_SELECTED_TIER)?.tier ??
+      visiblePlans[0]?.tier ??
+      null);
   // CSS repeat() 不接受 0：分段拼接，空段直接不出现。
   const gridColumns = [
     visiblePlans.length > 0
@@ -96,31 +169,74 @@ export default function ProductSubscribePage() {
     .filter(Boolean)
     .join(" ");
 
+  const contactHref = (subject: string) =>
+    `mailto:sales@vxture.com?subject=${encodeURIComponent(subject)}`;
+
   return (
     <div className="vx-page-surface">
       {/* ── 板块一：订阅区（plan bar + 档位卡） ─────────────────────────── */}
       <section className="vx-section-odd">
         <div className={`${CONTAINER} pt-24`}>
-          {!model ? (
-            <div className="mx-auto mt-12 max-w-website-xl rounded-lg border border-vx-gray-200 bg-vx-white p-8 text-center dark:border-vx-gray-800 dark:bg-vx-gray-900">
-              <p className="text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
-                {t("unavailable")}
-              </p>
-              <div className="mt-6 flex flex-wrap justify-center gap-3">
-                <Button asChild variant="outline">
-                  <a
-                    href={`mailto:sales@vxture.com?subject=${encodeURIComponent(
-                      `${productCode} ${t("contact")}`,
-                    )}`}
-                  >
-                    {t("contact")}
-                  </a>
-                </Button>
-                <Button asChild>
-                  <Link href="/products">{t("back")}</Link>
-                </Button>
+          {load.status === "loading" ? (
+            /* 首屏占位：一行 plan bar + 三张卡的骨架，撑住版式等真数据 */
+            <div aria-busy="true">
+              <Skeleton variant="line" width="18rem" height="2rem" />
+              <div
+                className="mt-8 grid gap-5"
+                style={{
+                  gridTemplateColumns: "repeat(3, minmax(15rem, 1fr))",
+                }}
+              >
+                {[0, 1, 2].map((i) => (
+                  <Skeleton
+                    key={i}
+                    variant="rect"
+                    height="26rem"
+                    className="rounded-2xl"
+                  />
+                ))}
               </div>
             </div>
+          ) : load.status === "error" ? (
+            <Banner
+              tone="danger"
+              title={t("loadError")}
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setReloadKey((k) => k + 1)}
+                >
+                  {t("retry")}
+                </Button>
+              }
+            />
+          ) : !model ? (
+            /* 产品不可见 / 没有已发布套餐：如实说「暂未开放」，不拿静态价兜底 */
+            <EmptyState
+              icon="package"
+              title={t("unavailableTitle")}
+              description={t("unavailable")}
+              className="mx-auto mt-12 max-w-website-xl"
+              action={
+                <div className="flex flex-wrap justify-center gap-3">
+                  <Button asChild variant="outline">
+                    <a
+                      href={contactHref(
+                        t("contactSubject", {
+                          product: catalogItem?.name ?? productCode,
+                        }),
+                      )}
+                    >
+                      {t("contact")}
+                    </a>
+                  </Button>
+                  <Button asChild>
+                    <Link href="/products">{t("back")}</Link>
+                  </Button>
+                </div>
+              }
+            />
           ) : (
             <>
               {/* 一行 plan bar：产品名下拉 + 个人/全部 + 月付/年付 */}
@@ -139,10 +255,7 @@ export default function ProductSubscribePage() {
                       {model.name}
                     </h1>
                     <span className="hidden rounded-full bg-vx-brand-50 px-3 py-1 text-xs font-semibold text-vx-brand-700 sm:inline-block dark:bg-vx-brand-950/50 dark:text-vx-brand-200">
-                      {t("kindTiers", {
-                        kind: model.kind,
-                        count: model.plans.length,
-                      })}
+                      {t("tierCount", { count: model.plans.length })}
                     </span>
                     <Icon
                       name="chevron-down"
@@ -157,15 +270,13 @@ export default function ProductSubscribePage() {
                       role="menu"
                       className="absolute left-0 top-full z-40 mt-2 min-w-72 rounded-xl border border-vx-gray-200 bg-vx-white p-1.5 shadow-lg dark:border-vx-gray-700 dark:bg-vx-gray-900"
                     >
-                      {Object.keys(rawProducts).map((code) => {
-                        const option = getPricingModel(rawProducts, code);
-                        if (!option) return null;
-                        const active = code === productCode;
+                      {pickerItems.map((item) => {
+                        const active = item.code === productCode;
                         return (
                           <Link
-                            key={code}
+                            key={item.code}
                             role="menuitem"
-                            href={`/pricing?product=${code}`}
+                            href={`/pricing?product=${item.code}`}
                             onClick={() => setMenuOpen(false)}
                             className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition hover:bg-vx-brand-50/60 dark:hover:bg-vx-brand-950/40 ${
                               active
@@ -174,13 +285,10 @@ export default function ProductSubscribePage() {
                             }`}
                           >
                             <span className="min-w-0 flex-1 font-medium text-vx-text-primary">
-                              {option.name}
+                              {item.name}
                             </span>
                             <span className="shrink-0 text-xs text-vx-gray-400">
-                              {t("kindTiers", {
-                                kind: option.kind,
-                                count: option.plans.length,
-                              })}
+                              {item.type}
                             </span>
                             {active ? (
                               <Icon
@@ -220,23 +328,25 @@ export default function ProductSubscribePage() {
                     </div>
                   ) : null}
                   {/* 月付 / 年付 */}
-                  <div
-                    role="group"
-                    aria-label={t("cycleGroupLabel")}
-                    className="inline-flex items-center gap-1 rounded-full border border-vx-gray-200 bg-vx-white p-1 shadow-sm dark:border-vx-gray-700 dark:bg-vx-gray-900"
-                  >
-                    {(["monthly", "yearly"] as BillingCycle[]).map((c) => (
-                      <Button
-                        key={c}
-                        variant={cycle === c ? "default" : "ghost"}
-                        size="md"
-                        onClick={() => setCycle(c)}
-                        className="rounded-full px-5"
-                      >
-                        {t(`cycle.${c}`)}
-                      </Button>
-                    ))}
-                  </div>
+                  {showCycleToggle ? (
+                    <div
+                      role="group"
+                      aria-label={t("cycleGroupLabel")}
+                      className="inline-flex items-center gap-1 rounded-full border border-vx-gray-200 bg-vx-white p-1 shadow-sm dark:border-vx-gray-700 dark:bg-vx-gray-900"
+                    >
+                      {cycles.map((c) => (
+                        <Button
+                          key={c}
+                          variant={effectiveCycle === c ? "default" : "ghost"}
+                          size="md"
+                          onClick={() => setCycle(c)}
+                          className="rounded-full px-5"
+                        >
+                          {t(`cycle.${c}`)}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -253,9 +363,11 @@ export default function ProductSubscribePage() {
                     <PricingPlanCard
                       key={plan.tier}
                       plan={plan}
-                      cycle={cycle}
+                      cycle={effectiveCycle}
                       productCode={productCode}
-                      contactSubject={model.contactSubject}
+                      contactSubject={t("contactSubject", {
+                        product: model.name,
+                      })}
                       selected={plan.tier === activeTier}
                       onSelect={() => setSelectedTier(plan.tier)}
                     />
@@ -286,10 +398,7 @@ export default function ProductSubscribePage() {
                   {t("compare.description")}
                 </p>
               </div>
-              <PlanCompareTable
-                model={model}
-                featureHeader={t("compare.feature")}
-              />
+              <PlanCompareTable model={model} selectedTier={activeTier} />
             </div>
           </section>
 

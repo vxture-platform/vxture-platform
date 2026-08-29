@@ -176,8 +176,12 @@
     "consult": "方案咨询"
   },
   "subscription": {
+    "unavailableTitle": "暂未开放订阅",
     "unavailable": "该产品暂未开放线上订阅，可联系销售获取方案。",
+    "loadError": "套餐信息加载失败，请稍后重试。",
+    "retry": "重试",
     "contact": "联系销售",
+    "contactSubject": "{product} 企业版咨询",
     "back": "返回产品中心",
     "subscribe": "订阅{plan}",
     "freeCta": "免费开始",
@@ -188,7 +192,6 @@
     "audienceGroupLabel": "适用对象",
     "cycleGroupLabel": "计费周期",
     "planGroupLabel": "选择档位",
-    "mostPopular": "最受欢迎",
     "audienceToggle": {
       "person": "个人",
       "all": "全部"
@@ -198,6 +201,11 @@
       "team": "团队 · 在线",
       "private": "团队 · 私有化"
     },
+    "seats": {
+      "count": "{count} 席位",
+      "unlimited": "不限席位"
+    },
+    "unlimited": "不限",
     "price": {
       "perMonth": "/ 月",
       "yearlyTotal": "按年付 {amount}",
@@ -210,7 +218,7 @@
       "paid": "跳转控制台完成下单",
       "enterprise": "sales@vxture.com"
     },
-    "kindTiers": "{kind} · {count} 档",
+    "tierCount": "{count} 档",
     "switchProduct": "切换产品",
     "ghost": {
       "title": "团队档位",
@@ -219,7 +227,42 @@
     "compare": {
       "title": "对比所有功能",
       "feature": "功能",
-      "description": "各档位完整功能与配额一览，按需选择，随时升级。"
+      "description": "各档位完整功能与配额一览，按需选择，随时升级。",
+      "groups": {
+        "quota": "配额",
+        "features": "功能"
+      }
+    },
+    "quotaLabels": {
+      "member_max": "席位",
+      "dataset_max": "数据集",
+      "datasource_max": "数据源",
+      "service_endpoint_max": "服务端点",
+      "storage_bytes": "存储空间",
+      "ai_credit": "AI Credits",
+      "service_api_call": "API 调用额度",
+      "quality_check_run": "质量检查额度",
+      "retention_days": "数据保留（天）",
+      "sync_frequency": "同步频率",
+      "varda_enabled": "varda 助手",
+      "varda_readonly": "varda 助手只读"
+    },
+    "featureLabels": {
+      "governance_quality": "数据质量治理",
+      "governance_standards": "数据标准管理",
+      "governance_lineage": "数据血缘分析",
+      "governance_security": "数据安全策略",
+      "governance_policies": "治理策略中心",
+      "governance_mdm": "主数据管理",
+      "governance_custom": "自定义治理域"
+    },
+    "quotaValues": {
+      "sync_frequency": {
+        "manual": "手动",
+        "daily": "每日",
+        "hourly": "每小时",
+        "realtime": "实时"
+      }
     },
     "faq": {
       "title": "常见问题",
@@ -242,136 +285,6 @@
           "a": "企业版支持私有化部署、定制配额与专属支持，请联系 sales@vxture.com，我们会在 1 个工作日内响应。"
         }
       ]
-    },
-    "products": {
-      "arda": {
-        "name": "Arda 智能数据治理平台",
-        "kind": "平台",
-        "contactSubject": "Arda 企业版咨询",
-        "plans": [
-          {
-            "tier": "free",
-            "name": "免费版",
-            "tagline": "个人探索与评估",
-            "monthly": 0,
-            "yearly": 0,
-            "seats": "1 席位",
-            "features": ["50 数据集", "基础数据治理", "1 GiB 存储"]
-          },
-          {
-            "tier": "starter",
-            "name": "入门版",
-            "tagline": "个人起步",
-            "monthly": 199,
-            "yearly": 1999,
-            "seats": "1 席位",
-            "features": [
-              "500 数据集",
-              "varda 助手（只读）",
-              "100 AI 积分/月",
-              "10 GiB 存储"
-            ]
-          },
-          {
-            "tier": "pro",
-            "name": "专业版",
-            "tagline": "专业个人",
-            "monthly": 499,
-            "yearly": 4999,
-            "seats": "1 席位",
-            "highlight": true,
-            "features": [
-              "5,000 数据集",
-              "hourly 同步",
-              "1,000 AI 积分/月",
-              "100 GiB 存储"
-            ]
-          },
-          {
-            "tier": "business",
-            "name": "商业版",
-            "tagline": "团队协作",
-            "monthly": 1999,
-            "yearly": 19999,
-            "seats": "5 席位",
-            "features": [
-              "不限数据集",
-              "realtime 同步 + varda 可写",
-              "10,000 AI 积分/月",
-              "1 TiB 存储"
-            ]
-          },
-          {
-            "tier": "enterprise",
-            "name": "企业版",
-            "tagline": "规模化与合规",
-            "monthly": null,
-            "yearly": null,
-            "seats": "不限席位",
-            "features": ["私有化部署", "专属支持与 SLA", "定制配额"]
-          }
-        ],
-        "comparison": {
-          "groups": [
-            {
-              "title": "核心配额",
-              "rows": [
-                {
-                  "label": "席位",
-                  "values": ["1", "1", "1", "5", "不限"]
-                },
-                {
-                  "label": "数据集",
-                  "values": ["50", "500", "5,000", "不限", "定制"]
-                },
-                {
-                  "label": "存储空间",
-                  "values": ["1 GiB", "10 GiB", "100 GiB", "1 TiB", "定制"]
-                },
-                {
-                  "label": "AI 积分 / 月",
-                  "values": [false, "100", "1,000", "10,000", "定制"]
-                }
-              ]
-            },
-            {
-              "title": "数据治理与同步",
-              "rows": [
-                {
-                  "label": "基础数据治理",
-                  "values": [true, true, true, true, true]
-                },
-                {
-                  "label": "定时同步",
-                  "values": [false, false, "Hourly", "Realtime", "定制"]
-                }
-              ]
-            },
-            {
-              "title": "智能助手",
-              "rows": [
-                {
-                  "label": "varda 助手",
-                  "values": [false, "只读", "只读", "可写", "可写"]
-                }
-              ]
-            },
-            {
-              "title": "部署与支持",
-              "rows": [
-                {
-                  "label": "私有化部署",
-                  "values": [false, false, false, false, true]
-                },
-                {
-                  "label": "专属支持与 SLA",
-                  "values": [false, false, false, false, true]
-                }
-              ]
-            }
-          ]
-        }
-      }
     }
   },
   "comingSoon": {

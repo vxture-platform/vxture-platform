@@ -192,8 +192,12 @@
     "consult": "Talk to us"
   },
   "subscription": {
+    "unavailableTitle": "Subscriptions not open yet",
     "unavailable": "Online subscription for this product is not open yet — contact sales for a quote.",
+    "loadError": "Could not load plans. Please try again later.",
+    "retry": "Retry",
     "contact": "Contact sales",
+    "contactSubject": "{product} Enterprise inquiry",
     "back": "Back to products",
     "subscribe": "Subscribe {plan}",
     "freeCta": "Start for free",
@@ -204,7 +208,6 @@
     "audienceGroupLabel": "Audience",
     "cycleGroupLabel": "Billing cycle",
     "planGroupLabel": "Choose a plan",
-    "mostPopular": "Most popular",
     "audienceToggle": {
       "person": "Individual",
       "all": "All plans"
@@ -214,6 +217,11 @@
       "team": "Team · Cloud",
       "private": "Team · On-prem"
     },
+    "seats": {
+      "count": "{count, plural, one {# seat} other {# seats}}",
+      "unlimited": "Unlimited seats"
+    },
+    "unlimited": "Unlimited",
     "price": {
       "perMonth": "/ mo",
       "yearlyTotal": "{amount} billed yearly",
@@ -226,7 +234,7 @@
       "paid": "Checkout continues in Console",
       "enterprise": "sales@vxture.com"
     },
-    "kindTiers": "{kind} · {count} tiers",
+    "tierCount": "{count, plural, one {# tier} other {# tiers}}",
     "switchProduct": "Switch product",
     "ghost": {
       "title": "Team tiers",
@@ -235,7 +243,42 @@
     "compare": {
       "title": "Compare all features",
       "feature": "Feature",
-      "description": "Every feature and quota across tiers — pick what you need, upgrade anytime."
+      "description": "Every feature and quota across tiers — pick what you need, upgrade anytime.",
+      "groups": {
+        "quota": "Quotas",
+        "features": "Features"
+      }
+    },
+    "quotaLabels": {
+      "member_max": "Seats",
+      "dataset_max": "Datasets",
+      "datasource_max": "Data sources",
+      "service_endpoint_max": "Service endpoints",
+      "storage_bytes": "Storage",
+      "ai_credit": "AI Credits",
+      "service_api_call": "API call allowance",
+      "quality_check_run": "Quality check allowance",
+      "retention_days": "Data retention (days)",
+      "sync_frequency": "Sync frequency",
+      "varda_enabled": "varda assistant",
+      "varda_readonly": "varda assistant read-only"
+    },
+    "featureLabels": {
+      "governance_quality": "Data quality governance",
+      "governance_standards": "Data standards",
+      "governance_lineage": "Data lineage",
+      "governance_security": "Data security policies",
+      "governance_policies": "Governance policy center",
+      "governance_mdm": "Master data management",
+      "governance_custom": "Custom governance domains"
+    },
+    "quotaValues": {
+      "sync_frequency": {
+        "manual": "Manual",
+        "daily": "Daily",
+        "hourly": "Hourly",
+        "realtime": "Realtime"
+      }
     },
     "faq": {
       "title": "FAQ",
@@ -258,140 +301,6 @@
           "a": "Enterprise offers on-prem deployment, custom quotas and dedicated support. Contact sales@vxture.com and we respond within 1 business day."
         }
       ]
-    },
-    "products": {
-      "arda": {
-        "name": "Arda Data Intelligence Platform",
-        "kind": "Platform",
-        "contactSubject": "Arda Enterprise inquiry",
-        "plans": [
-          {
-            "tier": "free",
-            "name": "Free",
-            "tagline": "Explore & evaluate",
-            "monthly": 0,
-            "yearly": 0,
-            "seats": "1 seat",
-            "features": ["50 datasets", "Basic governance", "1 GiB storage"]
-          },
-          {
-            "tier": "starter",
-            "name": "Starter",
-            "tagline": "Getting started",
-            "monthly": 199,
-            "yearly": 1999,
-            "seats": "1 seat",
-            "features": [
-              "500 datasets",
-              "varda assistant (read-only)",
-              "100 AI credits/mo",
-              "10 GiB storage"
-            ]
-          },
-          {
-            "tier": "pro",
-            "name": "Pro",
-            "tagline": "For professionals",
-            "monthly": 499,
-            "yearly": 4999,
-            "seats": "1 seat",
-            "highlight": true,
-            "features": [
-              "5,000 datasets",
-              "Hourly sync",
-              "1,000 AI credits/mo",
-              "100 GiB storage"
-            ]
-          },
-          {
-            "tier": "business",
-            "name": "Business",
-            "tagline": "For teams",
-            "monthly": 1999,
-            "yearly": 19999,
-            "seats": "5 seats",
-            "features": [
-              "Unlimited datasets",
-              "Realtime sync + varda write",
-              "10,000 AI credits/mo",
-              "1 TiB storage"
-            ]
-          },
-          {
-            "tier": "enterprise",
-            "name": "Enterprise",
-            "tagline": "Scale & compliance",
-            "monthly": null,
-            "yearly": null,
-            "seats": "Unlimited seats",
-            "features": [
-              "On-prem deployment",
-              "Dedicated support & SLA",
-              "Custom quotas"
-            ]
-          }
-        ],
-        "comparison": {
-          "groups": [
-            {
-              "title": "Core quotas",
-              "rows": [
-                {
-                  "label": "Seats",
-                  "values": ["1", "1", "1", "5", "Unlimited"]
-                },
-                {
-                  "label": "Datasets",
-                  "values": ["50", "500", "5,000", "Unlimited", "Custom"]
-                },
-                {
-                  "label": "Storage",
-                  "values": ["1 GiB", "10 GiB", "100 GiB", "1 TiB", "Custom"]
-                },
-                {
-                  "label": "AI credits / mo",
-                  "values": [false, "100", "1,000", "10,000", "Custom"]
-                }
-              ]
-            },
-            {
-              "title": "Governance & sync",
-              "rows": [
-                {
-                  "label": "Basic governance",
-                  "values": [true, true, true, true, true]
-                },
-                {
-                  "label": "Scheduled sync",
-                  "values": [false, false, "Hourly", "Realtime", "Custom"]
-                }
-              ]
-            },
-            {
-              "title": "AI assistant",
-              "rows": [
-                {
-                  "label": "varda assistant",
-                  "values": [false, "Read-only", "Read-only", "Write", "Write"]
-                }
-              ]
-            },
-            {
-              "title": "Deployment & support",
-              "rows": [
-                {
-                  "label": "On-prem deployment",
-                  "values": [false, false, false, false, true]
-                },
-                {
-                  "label": "Dedicated support & SLA",
-                  "values": [false, false, false, false, true]
-                }
-              ]
-            }
-          ]
-        }
-      }
     }
   },
   "comingSoon": {

@@ -13,8 +13,10 @@
  * product-catalog.router 的公开目录口径）。
  *
  * 容错契约（对齐 product-catalog / console 深链降级）：产品不存在、不可见或
- * 无已发布套餐 → { product: null | …, plans: [] }，不抛 4xx/5xx；营销文案
- * （档位描述/对比表标签）仍走 i18n，此处只供权威数据（价格/周期/features/quota）。
+ * 无已发布套餐 → { product: null | …, plans: [] }，不抛 4xx/5xx；对比表的
+ * 标签文案仍走 i18n，此处只供权威数据（价格/周期/features/quota + 档位名与
+ * 描述——2026-08-30 官网定价页去掉 i18n 假价后，档位名/描述也改读 product.plans
+ * 真列，不再另写一份）。
  *
  * TODO(shared-ladder): 本查询与 console-bff queryPlanLadder 是同一口径的两份
  * SQL；若第三处出现，应抽到共享查询层（如 @vxture/service-catalog）统一维护。
@@ -41,6 +43,8 @@ export interface ProductPlanPrice {
 export interface ProductPlanOption {
   planCode: string;
   planName: string;
+  /** product.plans.description 原样透传（可空；官网档位卡副标题）。 */
+  description: string | null;
   tier: string;
   /** 该档开放功能键（plan_components.features，展示文案由前端 i18n 映射）。 */
   features: string[];
@@ -104,12 +108,13 @@ export class ProductPlansRouter {
     const ladderRes = await this.pool.query<{
       plan_code: string;
       plan_name: string;
+      description: string | null;
       tier: string;
       features: string[];
       quota: Record<string, unknown> | null;
       prices: ProductPlanPrice[];
     }>(
-      `select pl.plan_code, pl.plan_name, pc.tier, pc.features, pc.quota,
+      `select pl.plan_code, pl.plan_name, pl.description, pc.tier, pc.features, pc.quota,
               coalesce(
                 jsonb_agg(jsonb_build_object(
                   'cycleUnit', pp.cycle_unit, 'cycleCount', pp.cycle_count,
@@ -128,7 +133,7 @@ export class ProductPlansRouter {
           and pl.is_public = true and pl.is_customer_visible = true
          left join product.plan_prices pp on pp.plan_version_id = pv.id
         where prod.product_code = $1 and pc.tier is not null
-        group by pl.plan_code, pl.plan_name, pc.tier, pc.features, pc.quota`,
+        group by pl.plan_code, pl.plan_name, pl.description, pc.tier, pc.features, pc.quota`,
       [productCode],
     );
 
@@ -140,6 +145,7 @@ export class ProductPlansRouter {
       .map((r) => ({
         planCode: r.plan_code,
         planName: r.plan_name,
+        description: r.description ?? null,
         tier: r.tier,
         features: r.features ?? [],
         quota: r.quota,

@@ -10,7 +10,6 @@ export { default as CaseSection } from "./CaseSection";
 export { default as FeaturesSection } from "./FeaturesSection";
 export { default as HeroSection } from "./HeroSection";
 export { default as ProductTiersSection } from "./ProductTiersSection";
-export { default as StatsSection } from "./StatsSection";
 export { default as TestSection } from "./TestSection";
 export { default as ProductDetailPartOne } from "./ProductDetailPartOne";
 export { default as ProductsOverviewPage } from "./ProductsOverviewPage";

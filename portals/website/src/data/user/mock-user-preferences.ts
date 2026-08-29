@@ -1,9 +1,11 @@
 /**
- * mock-user-preferences.ts - 模拟用户偏好配置（临时）
+ * mock-user-preferences.ts - 未登录用户的本地偏好（localStorage）
  * @package @vxture/website
- * @description 模拟后端返回的用户偏好数据，用于开发阶段
+ * @description 偏好类型 + 游客偏好的 localStorage 读写（Header 语言/主题切换用）。
+ *   曾附带一份 MOCK_USER_PREFERENCES 假数据，2026-08-30 官网上线前删除：
+ *   无任何调用方，留着只会被误当成后端契约。文件名沿用是为了不动 Header 的 import。
  * @layer Presentation
- * @category Data - Mock
+ * @category Data - Preferences
  * @author AI-Generated
  * @date 2026-03-21
  */
@@ -40,19 +42,7 @@ export interface UserPreferences {
 }
 
 /**
- * 模拟已登录用户的偏好数据
- */
-export const MOCK_USER_PREFERENCES: UserPreferences = {
-  userId: "user-001",
-  locale: "zh-CN",
-  theme: "system",
-  density: "default",
-  fullscreenMode: "workspace",
-  updatedAt: "2026-03-21T10:30:00Z",
-};
-
-/**
- * 模拟未登录用户的临时偏好（localStorage 存储）
+ * 未登录用户的临时偏好（localStorage 存储）
  */
 export const GUEST_PREFERENCES_KEY = "vxture-guest-preferences";
 

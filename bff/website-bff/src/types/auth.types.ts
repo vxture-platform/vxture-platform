@@ -90,13 +90,14 @@ export interface RequestContext {
 }
 
 // ── 账户 Profile DTO ─────────────────────────────────────────────────────────
+// 字段与 account.users / account.user_profiles 真列一一对应。曾有的 headline
+// 于 2026-08-30 删除：账户 schema 没有这一列，之前只是恒为 null 的占位。
 
 export interface AccountProfileDto {
   id: string;
   username: string;
   displayName: string | null;
   avatarUrl: string | null;
-  headline: string | null;
   bio: string | null;
   email: string | null;
   phone: string | null;
@@ -117,10 +118,6 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   avatarUrl?: string | null;
-
-  @IsOptional()
-  @IsString()
-  headline?: string | null;
 
   @IsOptional()
   @IsString()
