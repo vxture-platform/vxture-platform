@@ -42,6 +42,14 @@ const p50 = read("deploy/database/ddl/50_metering.sql");
 // [ label, @shared value domain, DB CHECK values ]
 const pairs = [
   ["tier", tsArray(dom, "TIERS"), ddlCheckIn(p40, "chk_plan_components_tier")],
+  // solution_plans.tier (2026-08-31): a solution binds one plan per ladder step,
+  // so it carries the same five-tier domain — checked here so the two CHECKs
+  // cannot drift apart from each other or from @shared.
+  [
+    "tier (solution_plans)",
+    tsArray(dom, "TIERS"),
+    ddlCheckIn(p40, "chk_solution_plans_tier"),
+  ],
   [
     "component_role (plan_components)",
     tsArray(dom, "COMPONENT_ROLES"),

@@ -6,6 +6,7 @@
 --   一律裸 UUID 不建 FK（边界#2 / 铁律七）。触发器见 triggers_ddl（is_locked 目标态模型）。
 -- 表序 = 域内依赖序：product_categories → products → product_metrics → plans →
 --   plan_versions →（ALTER plans.current_version_id）→ plan_prices → plan_components
+--   → solutions → solution_products → solution_plans（2026-08-31，admin 解决方案）
 --   → product_webhooks → launch_checklist_items → product_launch_statuses。
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -229,6 +230,75 @@ CREATE TABLE product.plan_components (
 );
 CREATE INDEX idx_plan_components_plan_version_id ON product.plan_components (plan_version_id);
 CREATE INDEX idx_plan_components_product_id      ON product.plan_components (product_id);
+
+-- ── 解决方案（行业方案聚合，admin「产品与套餐 · 业务产品方案」；2026-08-31 TD-029 收口）──
+-- 设计权威：docs/20-specs/000-platform/admin/70-product-solutions.md。owner 2026-08-30 裁定：
+-- 上线前 admin 产品板块不得再返回内存 mock，故建表——方案是运营写出来的内容，无 seed，
+-- 空库空表即正确态。三表分工：solutions=方案本体；solution_products=方案包含哪些产品能力
+-- （M:N，role=该产品在方案里扮演的角色，纯展示）；solution_plans=方案在五档商业阶梯上各绑
+-- 一个既有 product.plans（服务套餐 = 既有 plan 绑到方案档位，价格/版本/组件都是 plan 自己
+-- 的，不另立第二套定价模型）。
+-- status 值域与 products/plans 同一套（draft/active/inactive/deprecated），状态机与
+-- product.products 同形（draft→active⇄inactive，任一→deprecated 终态），守卫在 admin-bff。
+-- is_public=对外售卖开放（admin 视作 visibility public/internal）；is_customer_visible /
+-- is_workforce_visible 展示可见性双列，与本 schema 其余表同轴（§3.2.6）。
+-- created_by/updated_by 运营专属，裸值→admin.operator_accounts（不建 FK，边界#2）。
+CREATE TABLE product.solutions (
+    id                   uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
+    solution_code        varchar(64)  NOT NULL,                       -- 可视码（kebab，如 flood-regulation；铁律二不作 FK 目标）
+    solution_name        varchar(128) NOT NULL,
+    description          text,
+    industry             varchar(128),                                -- 行业领域（水利 / 法务…；自由文本，不建字典）
+    scenario             varchar(128),                                -- 业务场景
+    customer_segment     varchar(255),                                -- 目标客户群
+    owner_team           varchar(128),                                -- 负责团队（展示）
+    tags                 text[]       NOT NULL DEFAULT '{}',          -- 自由标签（GIN）
+    delivery_mode        text,                                        -- 交付模式一句话（平台订阅 + 行业实施…）
+    delivery_boundaries  text[]       NOT NULL DEFAULT '{}',          -- 交付边界条目（含/不含什么），一条一项
+    status               varchar(32)  NOT NULL DEFAULT 'draft',       -- 新建即草稿；上线由运营显式点「启用」
+    is_public            boolean      NOT NULL DEFAULT true,          -- 对外售卖开放（≠展示可见性）
+    is_customer_visible  boolean      NOT NULL DEFAULT true,   -- 展示可见性（客户端/customer realm）——独立轴，不派生自 status/is_public
+    is_workforce_visible boolean      NOT NULL DEFAULT true,   -- 展示可见性（运营端/workforce realm）
+    sort                 int          NOT NULL DEFAULT 0,
+    created_by           uuid,                                        -- 裸值→admin.operator_accounts（不建 FK，边界#2）
+    updated_by           uuid,                                        -- 裸值→admin.operator_accounts（不建 FK，边界#2）
+    created_at           timestamptz  NOT NULL DEFAULT now(),
+    updated_at           timestamptz  NOT NULL DEFAULT now(),
+    deleted_at           timestamptz,
+    CONSTRAINT uq_solutions_solution_code UNIQUE (solution_code),
+    CONSTRAINT chk_solutions_status CHECK (status IN ('active','inactive','draft','deprecated'))
+);
+CREATE INDEX idx_solutions_status     ON product.solutions (status);
+CREATE INDEX idx_solutions_deleted_at ON product.solutions (deleted_at);
+CREATE INDEX idx_solutions_tags_gin   ON product.solutions USING gin (tags);
+
+-- 方案 × 产品能力（M:N）。solution 删则随删（CASCADE）；product 走 deleted_at 软删，读侧过滤，
+-- 故 product_id 不设 CASCADE。role 是"这个产品在方案里干什么"的展示文案，不进值域。
+-- 复合 PK 即唯一约束（一方案一产品一行）。
+CREATE TABLE product.solution_products (
+    solution_id uuid         NOT NULL REFERENCES product.solutions(id) ON DELETE CASCADE,
+    product_id  uuid         NOT NULL REFERENCES product.products(id),
+    role        varchar(128),                                         -- 该产品在方案中的角色（巡检采集 / 视频解译…）
+    sort        int          NOT NULL DEFAULT 0,
+    created_at  timestamptz  NOT NULL DEFAULT now(),
+    CONSTRAINT pk_solution_products PRIMARY KEY (solution_id, product_id)
+);
+CREATE INDEX idx_solution_products_product_id ON product.solution_products (product_id);
+
+-- 方案 × 档位 → 套餐绑定（服务套餐）。一方案一档位至多一个 plan（PK），一个 plan 至多
+-- 绑一个方案档位（UNIQUE plan_id）——套餐的订阅/收入按 plan 归到唯一方案，计数不重叠。
+-- tier 值域 = 五档商业阶梯（product_220 §1；与 chk_plan_components_tier 同源，
+-- lint:catalog-domains 强制与 @shared TIERS 一致）。此前 admin mock 用的
+-- free/pro/enterprise/custom 是演示口径，2026-08-30 随去 mock 一并废止。
+CREATE TABLE product.solution_plans (
+    solution_id uuid         NOT NULL REFERENCES product.solutions(id) ON DELETE CASCADE,
+    tier        varchar(32)  NOT NULL,
+    plan_id     uuid         NOT NULL REFERENCES product.plans(id),
+    created_at  timestamptz  NOT NULL DEFAULT now(),
+    CONSTRAINT pk_solution_plans PRIMARY KEY (solution_id, tier),
+    CONSTRAINT uq_solution_plans_plan_id UNIQUE (plan_id),
+    CONSTRAINT chk_solution_plans_tier CHECK (tier IN ('free','starter','pro','business','enterprise'))
+);
 
 -- 平台自签 HMAC 端点（平台→产品推送订阅变更/额度预警）。每产品一行（product_id 即 PK/FK）。
 -- webhook_secret_ref=平台自签验签密钥引用（非 Provider Key，正常入平台库）。
