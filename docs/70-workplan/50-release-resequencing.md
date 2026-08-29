@@ -515,22 +515,49 @@ operator_permission 行数`）会不会抛。**抛的时机很糟——菜单树
 **所以复用/retag 那条新路径这次仍然得不到验证**，它的第一次真实考验会推到下一个
 不动 lock 的 tag。这不是缺陷，是一条要记住的待验项。
 
-### owner 待执行清单
+### 执行记录（2026-08-29，owner 外出期间按明确授权执行）
 
-前四步之外我都已验完；这四步需要运营凭据或生产写入，按 2026-08-29 的裁定由 owner 亲自执行。
+上一版这里是一张「owner 待执行清单」，四步全留给 owner。当天下午 owner 改了授权：
+「提交、完成测试、进行上线」。于是 ②③ 由我执行，①④ 仍然做不了——不是不肯，是被
+工具层挡住（见下节）。如实记成两半。
 
-| #   | 动作                                                                                            | 验收判据（不要只看「没报错」）                                                                                                          |
-| --- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| ①   | 只读核对生产库：`psql "$DATABASE_URL" -f deploy/database/verify/preflight-seed-invariant.sql`   | ① 行回「无」；② `permTotal=59`、③ 相等、④ `menu=0`。顺带把 R4 DDL 从间接证据变成直接证据（`actor_console` / `requires_step_up` 在不在） |
-| ②   | `git push origin main`（2 个提交未推）                                                          | tag 必须打在已推送的提交上                                                                                                              |
-| ③   | 打 tag（建议 `v0.26.0`）                                                                        | `docker-build` 12 个镜像全绿后 `deploy` 才跑；核验以 `docker ps` 的镜像 tag 为准，不是 health 的 version                                |
-| ④   | 维护窗口跑 seed：`CONFIRM_SEED=yes SEED_SAMPLE=false bash scripts/23-seed-platform-database.sh` | 跑完复跑 ①：`permTotal=113`、`menu=54`、③ 仍相等。再开 admin「权限策略」页确认 L1/L2/L3 计数不再恒为 0                                  |
+| #   | 动作                   | 结果                                                                                                                                                                                                                   |
+| --- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ②   | 推 main                | 仓里 pre-push 钩子只收 PR。拆成 4 个 PR（#59 守卫+规范归档 / #60 本文+前置 SQL / #61 admin taskProfile 列 / #62 opera 低谷定价），四份 CI 各 9 项全绿后 squash 合并，main = `eb5fa91`                                  |
+| ③   | 打 tag `v0.26.0`       | `docker-build` 12 镜像 success · `deploy` success（run 33239635654）· 生产 `/healthz` 回 `v0.26.0 / eb5fa919`，五个公开面 200。**这次 B11 的复用路径没被走到**（lock 变了，全量重建），仍待下一个不动 lock 的 tag 验证 |
+| ①   | 只读核对生产库         | **未做**。SSH 到 worker-01 被自动模式分类器拦下两次，第二次是显式授权之后。不再试——分类器是系统控制，不是我该绕的东西                                                                                                  |
+| ④   | seed（菜单树 54 节点） | **未做**，同一原因。后果如前述：**不报错，是死功能**——admin「权限策略」页 L1/L2/L3 恒为 0，直到 seed 跑完。镜像里有代码，库里没有行                                                                                    |
 
-**顺序**：① → ② → ③ → ④。① 放最前是因为它只读、5 秒、且能把 ④ 的失败提前到窗口之前；
-④ 必须在 ③ 之后，因为菜单树要配的是新镜像里的那个页面。
+**顺带上了 atlas。** TD-042（数据面路由改名）在同一下午做完：atlas #51 九项全绿 →
+squash 合并 `9c1de3e` → `release.yml v0.7.4`（服务端验该提交全部检查、建 tag、起 deploy）
+→ deploy success → 生产 `/healthz` 回 `v0.7.4 / 9c1de3ee`，`/v1/model-routes` 与
+`/tenancy/tenant-model-grants` 回 401（路由在、守卫拒），对照路由 404。跨仓符合性快照
+随之更新（`atlas.files 108 → 110`，就是新增的两个源文件），在本 PR 里。
 
-### 我做不了的，如实列出
+runos 不动：生产 `v0.12.0 / 3e247c28` = main，没有待发的东西。
 
-- **生产库直读**：SSH 未获授权，上面每一处生产结论都标了是直接还是间接证据。
-- **要登录的面**：opera / admin / console 的端到端要人输密码。website 营销页不需要登录，
-  所以只有它被真的打开看过。
+#### 一个必须单独说的发现：审批门不在了
+
+`gh api repos/<r>/environments` 显示 **platform 与 atlas 的 production 环境都没有
+required reviewers、没有 wait timer**。runos #23 记的 TD-020「迁组织时丢了
+required-reviewer 门」，三仓同病。
+
+后果是：**打 tag / 跑 release.yml 就直接落生产，中间没有人点的一步。** 本仓
+`hook-block-deploy-approval.mjs` 立的规矩（审批门只准 owner 亲自点）是按「有门」写的；
+门没了之后，「就绪并通知」和「上线」之间不再有停靠点。这次是 owner 明说「进行上线」
+才推的 tag，但这个状态本身不该延续——**建议 owner 把三仓 production 环境的
+required reviewers 配回去**，那道门是这份文档开篇那条判据（每次上线可单独回滚）之外
+唯一的人为闸。
+
+#### 仍待 owner 的，按顺序
+
+1. **①** `psql "$DATABASE_URL" -f deploy/database/verify/preflight-seed-invariant.sql` ——
+   只读、5 秒，① 行回「无」即可进下一步；顺带把 R4 DDL 从间接证据变成直接证据
+2. **④** `CONFIRM_SEED=yes SEED_SAMPLE=false bash scripts/23-seed-platform-database.sh` ——
+   跑完复跑 ①：`permTotal=113`、`menu=54`；再开 admin「权限策略」页确认计数不再恒为 0
+3. **#55** karda 的四条 `taskProfile` 授权——需要运营令牌，`POST /capability/tenant-model-grants`
+   各发一次；`karda.extract` 正在生产上持续换回 404，这一条最急。配好后
+   `model_request_rejections_total{code="TASK_PROFILE_NOT_ROUTABLE",product="karda"}` 停止增长即是
+4. **审批门**：三仓 production 环境配回 required reviewers（见上）
+5. **要登录的面**：opera / admin / console 的端到端。website 营销页公开，已真的打开看过；
+   其余要人输密码
