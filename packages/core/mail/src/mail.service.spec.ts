@@ -21,7 +21,9 @@ import { MailService } from "./mail.service";
 const warn = vi
   .spyOn(Logger.prototype, "warn")
   .mockImplementation(() => undefined);
-const log = vi.spyOn(Logger.prototype, "log").mockImplementation(() => undefined);
+const log = vi
+  .spyOn(Logger.prototype, "log")
+  .mockImplementation(() => undefined);
 
 const payload = { to: "a@b.test", subject: "发票已开具", html: "<p>hi</p>" };
 
