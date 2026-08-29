@@ -82,10 +82,21 @@
       "openCenter": "前往消息中心"
     },
     "appcenter": {
-      "title": "智能体",
-      "desc": "控制台内各功能板块的快捷入口。",
+      "title": "应用中心",
+      "desc": "当前工作空间已订阅的产品，以及控制台各板块的入口。",
       "shortcutTag": "{count} 个入口",
-      "enter": "进入"
+      "products": {
+        "title": "已订阅产品",
+        "desc": "按当前工作空间的生效订阅（含试用）列出，点击打开产品。",
+        "empty": "当前工作空间还没有生效的产品订阅。",
+        "browse": "查看订阅",
+        "unavailable": "已订阅产品暂时读不到，请稍后刷新。",
+        "trialing": "试用中"
+      },
+      "modules": {
+        "title": "控制台板块",
+        "desc": "控制台自身的功能入口，不依赖订阅。"
+      }
     },
     "apps": {
       "workspace": {
@@ -99,10 +110,6 @@
       "billing": {
         "name": "订阅与账单",
         "desc": "套餐、账单与用量配额"
-      },
-      "assistant": {
-        "name": "Varda 智能助手",
-        "desc": "自然语言数据问答与取数"
       }
     },
     "realNameVerified": "实名认证",
@@ -135,7 +142,8 @@
     "fontLarge": "大",
     "tokenCard": {
       "title": "Token 用量",
-      "meta": "本月用量数据待接入"
+      "unavailable": "暂不可用",
+      "uncovered": "无额度池"
     },
     "monthlyCostDesc": "本月账单费用与开票状态",
     "payBillDesc": "管理支付方式与付款",
@@ -193,54 +201,8 @@
     "close": "关闭",
     "notifications": {
       "title": "消息中心",
-      "markAllRead": "全部已读",
-      "items": {
-        "billing": {
-          "title": "一张模型超额发票将在 5 天内到期",
-          "meta": "账单 · 1 小时前"
-        },
-        "invite": {
-          "title": "有两位受邀成员尚未接受访问",
-          "meta": "成员 · 今日"
-        },
-        "security": {
-          "title": "检测到一次新设备登录，待复核",
-          "meta": "安全 · 2 小时前"
-        },
-        "quota": {
-          "title": "微调 GPU 小时已接近月度上限",
-          "meta": "配额 · 今日"
-        }
-      }
-    },
-    "settings": {
-      "title": "系统设置",
-      "rows": {
-        "density": {
-          "label": "界面密度",
-          "value": "默认"
-        },
-        "theme": {
-          "label": "主题",
-          "value": "跟随系统"
-        },
-        "sessionTimeout": {
-          "label": "会话超时",
-          "value": "30 分钟"
-        },
-        "auditRetention": {
-          "label": "审计保留",
-          "value": "180 天"
-        }
-      }
+      "markAllRead": "全部已读"
     }
-  },
-  "appCenter": {
-    "title": "应用中心",
-    "description": "您已订阅的应用，点击卡片即可进入。",
-    "placeholderTitle": "应用中心即将上线",
-    "placeholderDesc": "这里将展示当前租户已订阅 / 已授权的应用。功能搭建中，可先返回控制台继续管理。",
-    "enterConsole": "进入控制台"
   },
   "preferences": {
     "title": "显示偏好",
@@ -457,19 +419,14 @@
     "createAction": "新增管理事项",
     "stats": {
       "plan": {
-        "label": "当前套餐",
-        "value": "Growth",
-        "hint": "将于 2026 年 5 月 18 日续费，使用工作区合并计费。"
+        "label": "当前套餐"
       },
       "quota": {
         "label": "配额健康度",
-        "value": "78%",
-        "hint": "推理配额仍健康，但 GPU 微调已接近预警区间。"
+        "unavailable": "读取失败"
       },
       "reminders": {
-        "label": "待处理提醒",
-        "value": "3",
-        "hint": "当前有 1 张发票、1 个邀请和 1 个配额阈值待处理。"
+        "label": "待处理提醒"
       }
     },
     "quickActions": {
@@ -1301,7 +1258,9 @@
         "liteBody": "本期无需上传证件影像;平台以企业登记信息核验,必要时运营会另行联系补充材料",
         "effectTitle": "生效范围",
         "effectBody": "认证状态挂在租户层,所有工作空间继承;开具增值税专用发票需先完成企业认证"
-      }
+      },
+      "loadFailed": "认证状态读取失败，表单已锁定；请重试或稍后再来。",
+      "retry": "重试"
     }
   },
   "securityPage": {

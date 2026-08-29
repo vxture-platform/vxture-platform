@@ -56,18 +56,29 @@ export function TenantVerificationPage() {
     null,
   );
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [licenseNo, setLicenseNo] = useState("");
   const [legalName, setLegalName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
+  /* fetchTenantVerification 是 strict 读（2026-08-30）：此前失败回落成
+   * "unverified"，页面会照常放开表单、徽章写「未认证」——把一次故障演成一个
+   * 可以重新提交的干净状态。现在读不到就锁表单、明说、给重试。 */
   const reload = () =>
-    fetchTenantVerification().then((s) => {
-      setState(s);
-      if (s.latest?.businessLicenseNo) setLicenseNo(s.latest.businessLicenseNo);
-      if (s.latest?.legalPersonName) setLegalName(s.latest.legalPersonName);
-    });
+    fetchTenantVerification()
+      .then((s) => {
+        setState(s);
+        setLoadFailed(false);
+        if (s.latest?.businessLicenseNo)
+          setLicenseNo(s.latest.businessLicenseNo);
+        if (s.latest?.legalPersonName) setLegalName(s.latest.legalPersonName);
+      })
+      .catch(() => {
+        setState(null);
+        setLoadFailed(true);
+      });
 
   useEffect(() => {
     setLoading(true);
@@ -75,7 +86,8 @@ export function TenantVerificationPage() {
   }, [session.tenant?.id]);
 
   const status = state?.status ?? "unverified";
-  const canSubmit = status !== "pending";
+  // state 为 null 的两种情况（还没读到 / 读取失败）都不放开表单。
+  const canSubmit = state !== null && status !== "pending";
 
   const handleSubmit = async () => {
     setBusy(true);
@@ -150,9 +162,11 @@ export function TenantVerificationPage() {
         title={t("title")}
         description={t("description")}
         action={
-          <StatusBadge tone={STATUS_TONES[status]}>
-            {t(`status.${status}`)}
-          </StatusBadge>
+          state ? (
+            <StatusBadge tone={STATUS_TONES[status]}>
+              {t(`status.${status}`)}
+            </StatusBadge>
+          ) : null
         }
       />
 
@@ -169,6 +183,24 @@ export function TenantVerificationPage() {
         <Banner tone="success" title={t("submittedBanner")} />
       ) : null}
       {error ? <Banner tone="danger" title={error} /> : null}
+      {loadFailed ? (
+        <Banner
+          tone="danger"
+          title={t("loadFailed")}
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setLoading(true);
+                void reload().finally(() => setLoading(false));
+              }}
+            >
+              {t("retry")}
+            </Button>
+          }
+        />
+      ) : null}
 
       {/* 当前认证信息(verified 展示) */}
       {status === "verified" && state?.latest ? (

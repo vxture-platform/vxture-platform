@@ -14,13 +14,14 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
+import type { Pool } from "pg";
 import {
   AVATAR_MAX_BYTES,
   NotificationPreferencesService,
   sniffImageType,
 } from "@vxture/service-account";
 import { PhoneCodeService } from "@vxture/service-sms";
-import { SubscriptionService } from "@vxture/service-subscription";
+import { COMMERCE_PG_POOL } from "@vxture/service-subscription";
 import { SessionAggregator } from "../aggregators/session.aggregator";
 import {
   ChangePasswordDto,
@@ -36,53 +37,21 @@ import {
   VerifyCurrentPhoneDto,
   VerifyPhoneIdentityDto,
 } from "../dto/profile.dto";
+import {
+  listHeldProductTiles,
+  type ProductAppTile,
+} from "../lib/product-app-tiles";
 import { EmailChangeService } from "../services/email-change.service";
 import { PhoneChangeService } from "../services/phone-change.service";
 import type { RequestContext } from "../types/console.types";
-
-interface AppEntry {
-  id: string;
-  icon: string;
-  tone: string;
-  target: string;
-  openVela?: boolean;
-}
-
-const APP_CATALOG: AppEntry[] = [
-  {
-    id: "workspace",
-    icon: "ph-squares-four",
-    tone: "var(--vx-color-brand-600)",
-    target: "/",
-  },
-  {
-    id: "members",
-    icon: "ph-users",
-    tone: "var(--vx-color-info-600)",
-    target: "/members",
-  },
-  {
-    id: "billing",
-    icon: "ph-receipt",
-    tone: "var(--vx-color-success-600)",
-    target: "/billing",
-  },
-  {
-    id: "assistant",
-    icon: "ph-sparkle",
-    tone: "var(--vx-color-ai)",
-    target: "/",
-    openVela: true,
-  },
-];
 
 @Controller("api/me")
 export class MeRouter {
   constructor(
     @Inject(SessionAggregator)
     private readonly sessionAggregator: SessionAggregator,
-    @Inject(SubscriptionService)
-    private readonly subscriptionService: SubscriptionService,
+    @Inject(COMMERCE_PG_POOL)
+    private readonly pool: Pool,
     @Inject(PhoneChangeService)
     private readonly phoneChangeService: PhoneChangeService,
     @Inject(EmailChangeService)
@@ -130,21 +99,21 @@ export class MeRouter {
     return this.sessionAggregator.getCurrentUser(req.user.id, req.tenant?.id);
   }
 
+  /**
+   * 应用中心磁贴 = 当前租户默认工作空间**实际持有**的产品（2026-08-30）。
+   * 此前是四块写死的目录：三块是控制台自己的板块（已挪回门户导航配置——
+   * 它们是导航不是数据），一块「助手」按 getActiveSubscription 门控，而传的
+   * 是 tenant id 不是 workspace id，那扇门从来没开过。推导见
+   * lib/product-app-tiles.ts；无租户上下文返回空而不抛——应用中心是壳层的
+   * 一个视图，不该因为还没选租户就 401。
+   */
   @Get("apps")
-  async getMyApps(@Req() req: Request & RequestContext): Promise<AppEntry[]> {
+  async getMyApps(
+    @Req() req: Request & RequestContext,
+  ): Promise<ProductAppTile[]> {
     if (!req.user) throw new UnauthorizedException("No active session");
-    if (!req.tenant) return APP_CATALOG.filter((a) => a.id !== "assistant");
-
-    try {
-      const sub = await this.subscriptionService.getActiveSubscription(
-        req.tenant.id,
-      );
-      if (!sub) return APP_CATALOG.filter((a) => a.id !== "assistant");
-    } catch {
-      return APP_CATALOG.filter((a) => a.id !== "assistant");
-    }
-
-    return APP_CATALOG;
+    if (!req.tenant) return [];
+    return listHeldProductTiles(this.pool, req.tenant.id);
   }
 
   @Get("profile")

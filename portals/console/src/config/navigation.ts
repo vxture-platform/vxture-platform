@@ -53,6 +53,23 @@ export const consoleViews: ConsoleView[] = [
   },
 ];
 
+/**
+ * 应用中心里控制台自己的板块入口。它们是**导航**，不是数据：此前由 BFF
+ * `/api/me/apps` 连同「已订阅应用」一起下发，让人以为这三块也是订阅来的
+ * （2026-08-30 拆开——产品磁贴归 BFF，板块入口归这里）。文案键在 `shell.apps.*`。
+ */
+export interface AppCenterModuleTile {
+  id: "workspace" | "members" | "billing";
+  icon: IconName;
+  href: string;
+}
+
+export const appCenterModuleTiles: AppCenterModuleTile[] = [
+  { id: "workspace", icon: "squares-four", href: "/" },
+  { id: "members", icon: "users", href: "/members" },
+  { id: "billing", icon: "receipt", href: "/billing" },
+];
+
 // ── Sections（屏幕分组）── 单独命名以便同时供 navigationSections（向后兼容）
 // 与 consoleDomains（功能域注册表）复用。
 const workspaceSection: NavigationSection = {

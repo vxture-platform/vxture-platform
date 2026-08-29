@@ -5,4 +5,6 @@
 
 export type ShellView = "appcenter" | "console";
 
-export type ShellDrawerType = "notifications" | "settings";
+/* 只剩通知一种：「系统设置」抽屉没有入口（header 的齿轮直接去 /settings），
+ * 其内容又全是编造的值，2026-08-30 连同分支一起删。 */
+export type ShellDrawerType = "notifications";

@@ -82,10 +82,21 @@
       "openCenter": "Open message center"
     },
     "appcenter": {
-      "title": "Agents Center",
-      "desc": "Shortcuts to every board in the console.",
+      "title": "App Center",
+      "desc": "Products this workspace subscribes to, plus entry points to the console's own boards.",
       "shortcutTag": "{count} entries",
-      "enter": "Enter"
+      "products": {
+        "title": "Subscribed products",
+        "desc": "Listed from this workspace's in-force subscriptions (trials included). Click to open the product.",
+        "empty": "This workspace has no in-force product subscription yet.",
+        "browse": "View subscriptions",
+        "unavailable": "Subscribed products could not be loaded. Refresh to try again.",
+        "trialing": "Trial"
+      },
+      "modules": {
+        "title": "Console boards",
+        "desc": "The console's own sections; not tied to any subscription."
+      }
     },
     "apps": {
       "workspace": {
@@ -99,10 +110,6 @@
       "billing": {
         "name": "Subscription & billing",
         "desc": "Plans, invoices and quotas"
-      },
-      "assistant": {
-        "name": "Varda assistant",
-        "desc": "Natural-language data Q&A"
       }
     },
     "realNameVerified": "Verified",
@@ -135,7 +142,8 @@
     "fontLarge": "L",
     "tokenCard": {
       "title": "Token usage",
-      "meta": "This month’s usage pending"
+      "unavailable": "Unavailable",
+      "uncovered": "No quota pool"
     },
     "monthlyCostDesc": "This month’s charges & invoicing",
     "payBillDesc": "Manage payment methods",
@@ -193,54 +201,8 @@
     "close": "Close",
     "notifications": {
       "title": "Message Center",
-      "markAllRead": "Mark all read",
-      "items": {
-        "billing": {
-          "title": "A model overage invoice is due within 5 days",
-          "meta": "Billing · 1 hour ago"
-        },
-        "invite": {
-          "title": "Two invited members have not accepted access",
-          "meta": "Members · Today"
-        },
-        "security": {
-          "title": "A new device sign-in was detected and needs review",
-          "meta": "Security · 2 hours ago"
-        },
-        "quota": {
-          "title": "Fine-tuning GPU hours are nearing the monthly cap",
-          "meta": "Quota · Today"
-        }
-      }
-    },
-    "settings": {
-      "title": "System Settings",
-      "rows": {
-        "density": {
-          "label": "Interface density",
-          "value": "Default"
-        },
-        "theme": {
-          "label": "Theme",
-          "value": "System"
-        },
-        "sessionTimeout": {
-          "label": "Session timeout",
-          "value": "30 minutes"
-        },
-        "auditRetention": {
-          "label": "Audit retention",
-          "value": "180 days"
-        }
-      }
+      "markAllRead": "Mark all read"
     }
-  },
-  "appCenter": {
-    "title": "App Center",
-    "description": "The apps you have subscribed to. Click a card to enter.",
-    "placeholderTitle": "App Center is coming soon",
-    "placeholderDesc": "This will show the apps the current tenant has subscribed to or been granted. It is under construction — return to the console to keep managing.",
-    "enterConsole": "Enter console"
   },
   "preferences": {
     "title": "Display preferences",
@@ -457,19 +419,14 @@
     "createAction": "Create management item",
     "stats": {
       "plan": {
-        "label": "Current plan",
-        "value": "Growth",
-        "hint": "Renews on May 18, 2026 with pooled workspace billing."
+        "label": "Current plan"
       },
       "quota": {
         "label": "Quota health",
-        "value": "78%",
-        "hint": "Inference remains healthy, but GPU tuning is approaching alert range."
+        "unavailable": "Unavailable"
       },
       "reminders": {
-        "label": "Open reminders",
-        "value": "3",
-        "hint": "One invoice, one invite, and one quota threshold need review."
+        "label": "Open reminders"
       }
     },
     "quickActions": {
@@ -1301,7 +1258,9 @@
         "liteBody": "No document images this phase; the platform verifies registration details, and operations may contact you for extras when needed",
         "effectTitle": "Scope",
         "effectBody": "Verification attaches to the tenant; all workspaces inherit it. Special VAT invoices require completed business verification"
-      }
+      },
+      "loadFailed": "Could not load the verification status; the form is locked. Retry or come back later.",
+      "retry": "Retry"
     }
   },
   "securityPage": {

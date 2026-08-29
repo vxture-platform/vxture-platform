@@ -47,7 +47,7 @@ import {
   buildSwitchUrl,
   type ConsoleQuotaUsage,
 } from "@/api/console-bff";
-import type { ShellView } from "../shell/types";
+import type { ShellDrawerType, ShellView } from "../shell/types";
 import { TenantPanel } from "./TenantPanel";
 import { useGlobalSearch, type NavSearchEntry } from "./useGlobalSearch";
 
@@ -73,7 +73,7 @@ export interface ConsoleHeaderProps {
   view: ShellView;
   setView: (next: ShellView) => void;
   viewOptions: ConsoleHeaderViewOption[];
-  openDrawer: (type: "notifications" | "settings") => void;
+  openDrawer: (type: ShellDrawerType) => void;
   onNavigate: (href: string) => void;
   brandName: string;
   /** 侧栏导航项（已过 i18n 与授权过滤），作为搜索的"页面"来源。 */
