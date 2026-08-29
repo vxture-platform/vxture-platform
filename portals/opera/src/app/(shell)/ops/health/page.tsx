@@ -6,7 +6,7 @@
  * admin 那份探的是本地 dev-panel（:8090），从没连过生产，它自己的 tech-debt 登记也
  * 承认这一点（TD-036 / 20-admin-platform-refinement-plan.md P4「Q6 维持 dev-only」）。
  * 这里改探接入平台的产品线（opera-bff `/api/product-health`，源头是
- * appoidc.oidc_clients 的真实登记行）。
+ * product.products 目录行 + 各自登记的 OIDC 客户端）。
  *
  * 呈现形态的口径已建档：`docs/20-specs/000-platform/opera/20-service-monitor.md`
  * §4（含探测范围 §2、端点约定 §3）——改动前先读那份，本注释只讲实现细节。
@@ -21,24 +21,25 @@
  * 的取值对齐，而不是自造一个 "Prod" 词）；展开后是 beta 与 canary 两条子行。归属关系靠
  * **列对齐**读出来（子表用 `leadingSpacer` 占住父表折叠列那一格），不是靠缩进方框。
  *
- * ── 三个渠道的来源口径（owner 2026-08-15）────────────────────────────────────
+ * ── 清单与渠道的口径（owner 2026-08-15 定渠道；2026-08-30 定清单）──────────────
  *
- * 三个渠道都以 `appoidc.oidc_clients.release_channel` 为准：
+ * **清单 = 产品目录**（`40-product-registry.md` §4）。BFF 以 `product.products` 为主表，
+ * 目录里每个未删除的产品本页都有一行——没有任何 OIDC 客户端的产品标「**未接入**」，
+ * 并带产品状态（草稿/已上线/…）。此前主表是客户端表外加一份硬编码豁免名单，本页与
+ * 「产品目录」是两份清单（目录 21、本页 12，其中 5 个目录里不存在）。
  *
- * - **stable = prod**，主行。当前全库 17 个客户端全是 stable，都有真实探测结果。
- * - **beta**：口径是 `release_channel='beta'` 的客户端。**开发环境一行都没有**，
- *   所以这里是占位行。
- * - **canary**：同理，占位行。
+ * 三个渠道都以 `appoidc.oidc_clients.release_channel` 为准，BFF 现在三个都返回：
  *
- * 后两个都要在**基础接入**时登记，登记之后才有地址可探。所以未配置是**正常态不是
- * 故障**——它们显示"未配置"而不是跑一次探测再报红。把一个从来没被探过的渠道涂成
- * 故障色，是在报告一件没有发生过的事。
+ * - **stable = prod**，主行。
+ * - **beta / canary**：`release_channel='beta'/'canary'` 的客户端，有就探、没有就是
+ *   「未配置」。这两个都要在**基础接入**时登记，登记之后才有地址可探。
  *
- * > **待改（BFF）**：`product-health.router.ts` 目前的 beta 是从 stable 客户端的
- * > **第二个 redirect_uri** 派生的（seed 期的另一种建模），不是按 `release_channel`
- * > 取的。按上面的口径，那条派生路径应当退役、改读 `release_channel='beta'` 的客户端行。
- * > 本页因此**不把派生出来的那份当作 beta 展示**：它是另一个东西，贴上 beta 的标签
- * > 就是拿一个推测冒充一个渠道。
+ * 「未接入」（产品没有任何客户端）与「未配置」（有客户端、只是这个渠道没登记）是两件
+ * 事，各用各的词；两者都是**正常态不是故障**——显示中性色而不是跑一次探测再报红。把一
+ * 个从来没被探过的渠道涂成故障色，是在报告一件没有发生过的事。
+ *
+ * "stable 客户端的第二个 redirect_uri = beta"那条 seed 期的派生路径已在 BFF 退役
+ * （2026-08-30）：回调白名单里多一个地址，不等于登记了一个渠道。
  *
  * 骨架与 opera 既有页面同构：ListPageTemplate 三槽 + FilterBar + DataTable +
  * useListPagination；不带任何 admin 遗留的 vx-* 产品 CSS 类。只读页面，无能力门。
@@ -72,6 +73,10 @@ import {
   type IconName,
   type StatusBadgeTone,
 } from "@vxture/design-system";
+import {
+  PRODUCT_STATE_META,
+  type ProductState,
+} from "@/features/product/lifecycle";
 import { api, OperaApiError } from "@/lib/api";
 import { useVisiblePolling } from "@/lib/useVisiblePolling";
 
@@ -131,18 +136,26 @@ interface ReadinessProbe {
 }
 
 interface ProductChannelHealth {
+  /** 该渠道登记的客户端；null = 这个渠道没登记，也就没有探测发生过。 */
+  clientId: string | null;
   origin: string | null;
   health: LivenessProbe;
   status: ReadinessProbe;
 }
+
+type ChannelKey = "prod" | "beta" | "canary";
 
 interface ProductHealthItem {
   productId: string;
   productCode: string;
   productName: string;
   layer: ProductLayer;
+  state: ProductState;
+  /** 至少一个渠道有活跃客户端。false = 目录里有、基础接入还没做。 */
+  onboarded: boolean;
   prod: ProductChannelHealth;
   beta: ProductChannelHealth;
+  canary: ProductChannelHealth;
 }
 
 const LAYER_LABEL: Record<ProductLayer, string> = {
@@ -206,15 +219,13 @@ function channelNeedsAttention(channel: ProductChannelHealth): boolean {
   return healthBad || statusBad;
 }
 
-/** 产品是否需要人关注：**只看 stable（prod）**。
+/** 产品是否需要人关注：**只看 stable（prod）**，且只看已接入的产品。
  *
- * 原来是 `beta || prod`。按 owner 2026-08-15 的口径，beta 要以
- * `release_channel='beta'` 为准而库里一行都没有，那份从第二个回调地址派生出来的
- * "beta" 不是 beta——拿它参与"需要关注"的判定，等于让一个推测出来的渠道去把产品
- * 标红。等 beta 客户端在基础接入时真正登记、BFF 也改读 `release_channel` 之后，
- * 这里再把它加回来。 */
+ * 未接入（目录里有、没有任何客户端）是一个待办事实，不是故障——它在表里有自己的
+ * 词和自己的统计格，不借「需要关注」这个红字。beta / canary 是辅助渠道，坏了不把
+ * 产品整行标红（owner 2026-08-15）。 */
 function productNeedsAttention(item: ProductHealthItem): boolean {
-  return channelNeedsAttention(item.prod);
+  return item.onboarded && channelNeedsAttention(item.prod);
 }
 
 const TIME_FORMAT = new Intl.DateTimeFormat("zh-CN", {
@@ -262,13 +273,6 @@ const EMPHASIS_TEXT: Record<ChannelEmphasis, string> = {
 };
 
 /**
- * 展开后的两条渠道子行。
- *
- * `probe` 为 null = **这个渠道没有数据源**（canary），与"探过了、结果是坏的"是两件
- * 完全不同的事，所以它走单独的分支，不进 `LivenessLine`——后者只会把 status 映射成
- * 颜色，而 canary 根本没有 status 可映射。
- */
-/**
  * 表里的一行。**逻辑上是一张表**，只是行之间有父子关系：产品行是对象，渠道行是它
  * 的附属明细，可折叠。
  *
@@ -284,6 +288,11 @@ type HealthRow =
       item: ProductHealthItem;
       channel: "beta" | "canary";
     };
+
+/** 一行对应的渠道读数：产品行读 stable（prod），渠道行读它自己的。 */
+function channelOf(row: HealthRow): ProductChannelHealth {
+  return row.kind === "product" ? row.item.prod : row.item[row.channel];
+}
 
 /** 探测点的默认路径约定（与 opera-bff `product-health.router.ts` 同源）。
  *  两条并发探、先拿到的非 404 视为命中；两条都 404 才记未实现。 */
@@ -380,23 +389,29 @@ const CSV_HEADER = [
  * 一个渠道就是一行，导出与复制都跟着它走——否则粘到工单里的东西与截图对不上。
  *
  * 未登记的渠道**照样出一行**：「beta / 未配置」正是要发给做基础接入的人的那句话，
- * 把它从导出里省掉，等于让最需要被传达的事实无法复制。
+ * 把它从导出里省掉，等于让最需要被传达的事实无法复制。未接入的产品同理：
+ * 「stable / 未接入」就是要发给产品方的那句话。
  */
 function toCsvRow(row: HealthRow): string[] {
   const { item } = row;
   const base = [item.productName, item.productCode, LAYER_LABEL[item.layer]];
-  if (row.kind === "product") {
-    return [
-      ...base,
-      "stable",
-      LIVENESS_LABELS[item.prod.health.status],
-      READINESS_LABELS[item.prod.status.status],
-      item.prod.health.version ?? "",
-      item.prod.origin ?? "",
-      item.prod.health.checkedAt,
-    ];
+  const channelName = row.kind === "product" ? "stable" : row.channel;
+  if (!item.onboarded) {
+    return [...base, channelName, "未接入", "未接入", "", "", ""];
   }
-  return [...base, row.channel, "未配置", "未配置", "", "", ""];
+  const channel = channelOf(row);
+  if (!channel.clientId) {
+    return [...base, channelName, "未配置", "未配置", "", "", ""];
+  }
+  return [
+    ...base,
+    channelName,
+    LIVENESS_LABELS[channel.health.status],
+    READINESS_LABELS[channel.status.status],
+    channel.health.version ?? "",
+    channel.origin ?? "",
+    channel.health.checkedAt,
+  ];
 }
 
 /** 一个产品在导出里占三行：stable + beta + canary。 */
@@ -543,15 +558,18 @@ export default function ServiceMonitorPage() {
 
   const stats = useMemo(() => {
     const attention = items.filter(productNeedsAttention).length;
-    /* 就绪只统计 stable：beta / canary 未登记，把它们计进分母会得到一个
-       "2/24 已实现" 这样的数——分母里三分之二是从来没存在过的渠道。 */
+    const onboarded = items.filter((i) => i.onboarded).length;
+    /* 就绪只统计已接入产品的 stable：beta / canary 未登记、产品未接入，把它们计进
+       分母会得到一个 "2/24 已实现" 这样的数——分母里大半是从来没存在过的渠道。 */
     const readinessImplemented = items.filter(
       (i) =>
+        i.onboarded &&
         i.prod.status.status !== "not_configured" &&
         i.prod.status.status !== "not_implemented",
     ).length;
     return {
       total: items.length,
+      onboarded,
       attention,
       readinessImplemented,
     };
@@ -601,8 +619,8 @@ export default function ServiceMonitorPage() {
       />
     ) : (
       <EmptyState
-        title="暂无接入产品"
-        description="appoidc.oidc_clients 里还没有登记可归属产品的客户端。"
+        title="产品目录为空"
+        description="本页的清单就是「产品管理 · 产品目录」。先在那里登记产品，登记后这里自动出现一行（未接入），签发接入凭据后开始探测。"
       />
     );
 
@@ -613,7 +631,7 @@ export default function ServiceMonitorPage() {
           <ViewHeader
             icon="server"
             title="服务状态"
-            description="接入平台的各产品按渠道看存活与就绪。主行是 stable（prod），展开看 beta 与 canary——后两个要在基础接入时登记 OIDC 客户端，登记之后才有地址可探。探测目标来自客户端登记，非静态清单。"
+            description="产品目录里的每个产品按渠道看存活与就绪。主行是 stable（prod），展开看 beta 与 canary——渠道要在「接入凭据」登记 OIDC 客户端，登记之后才有地址可探；没有任何客户端的产品显示「未接入」。清单来自产品目录，探测目标来自客户端登记，两者都不是静态清单。"
             secondary={
               lastFetchedAt ? (
                 <Badge>
@@ -641,9 +659,18 @@ export default function ServiceMonitorPage() {
             items={[
               {
                 id: "total",
-                label: "接入产品",
+                label: "目录产品",
                 value: String(stats.total),
                 icon: "server",
+                help: "与「产品管理 · 产品目录」同一份清单（含草稿）。",
+              },
+              {
+                /* 目录里有、但还没签发任何 OIDC 客户端的产品，差值就是「未接入」。 */
+                id: "onboarded",
+                label: "已接入",
+                value: `${stats.onboarded}/${stats.total}`,
+                icon: "circle-dashed",
+                help: "至少签发了一个活跃 OIDC 客户端的产品数；其余显示「未接入」，要在「接入凭据」登记后才有地址可探。",
               },
               {
                 id: "attention",
@@ -653,21 +680,11 @@ export default function ServiceMonitorPage() {
                 ...(stats.attention > 0 ? { tone: "danger" as const } : {}),
               },
               {
-                /* 原来是「Beta 健康 / 已配置」，读的是从第二个回调地址派生的那份，
-                 按新口径它不是 beta。改成如实报"还没登记的渠道数"——每个产品都缺
-                 beta 与 canary 两条，全部要在基础接入时配。 */
-                id: "pending-channels",
-                label: "待登记渠道",
-                value: `${stats.total * 2}`,
-                help: "beta 与 canary 每个产品各缺一条：库里没有 release_channel='beta'/'canary' 的 OIDC 客户端，要在基础接入时登记回调地址后才有得探。",
-                icon: "circle-dashed",
-              },
-              {
                 id: "readiness",
                 label: "就绪已实现",
-                value: `${stats.readinessImplemented}/${stats.total}`,
+                value: `${stats.readinessImplemented}/${stats.onboarded}`,
                 icon: "shield-check",
-                help: "已实现 readiness（/api/ready 或 /readyz）的渠道数占比",
+                help: "已接入产品里，stable 渠道实现了 readiness（/api/ready 或 /readyz）的占比",
               },
             ]}
           />
@@ -784,8 +801,17 @@ export default function ServiceMonitorPage() {
                         aria-hidden="true"
                       />
                       <div className="flex flex-col gap-2xs">
-                        <span className="text-label-md text-foreground">
+                        <span className="inline-flex items-center gap-xs text-label-md text-foreground">
                           {r.item.productName}
+                          {/* 产品状态只在不是「已上线」时显示：目录里的草稿 / 已停用 /
+                           已退役产品同样在清单里，读数旁边得说明它处在哪一步。 */}
+                          {r.item.state !== "active" ? (
+                            <StatusBadge
+                              tone={PRODUCT_STATE_META[r.item.state].tone}
+                            >
+                              {PRODUCT_STATE_META[r.item.state].label}
+                            </StatusBadge>
+                          ) : null}
                         </span>
                         <span className="text-body-sm text-muted-foreground">
                           {r.item.productCode} · {LAYER_LABEL[r.item.layer]}
@@ -807,70 +833,103 @@ export default function ServiceMonitorPage() {
                   ),
               },
               {
+                /* 三种中性态各用各的词：未接入（产品没有任何客户端）、未配置（这个
+                 渠道没登记）、以及探过之后的真实读数。前两种走同一个 Badge，不进
+                 `LivenessLine`——后者只会把 status 映射成颜色，而没有客户端就没有
+                 status 可映射。 */
                 id: "health",
                 header: "存活",
                 width: "sm",
-                cell: (r: HealthRow) =>
-                  r.kind === "product" ? (
-                    <LivenessLine probe={r.item.prod.health} emphasis="prod" />
+                cell: (r: HealthRow) => {
+                  const channel = channelOf(r);
+                  const emphasis = r.kind === "product" ? "prod" : "beta";
+                  if (!r.item.onboarded) {
+                    return (
+                      <StatusBadge tone="neutral" dot>
+                        未接入
+                      </StatusBadge>
+                    );
+                  }
+                  return channel.clientId ? (
+                    <LivenessLine probe={channel.health} emphasis={emphasis} />
                   ) : (
                     <StatusBadge tone="neutral" dot>
                       未配置
                     </StatusBadge>
-                  ),
+                  );
+                },
               },
               {
                 id: "status",
                 header: "就绪",
                 width: "sm",
-                cell: (r: HealthRow) =>
-                  r.kind === "product" ? (
-                    <ReadinessLine probe={r.item.prod.status} emphasis="prod" />
+                cell: (r: HealthRow) => {
+                  const channel = channelOf(r);
+                  const emphasis = r.kind === "product" ? "prod" : "beta";
+                  if (!r.item.onboarded) {
+                    return (
+                      <StatusBadge tone="neutral" dot>
+                        未接入
+                      </StatusBadge>
+                    );
+                  }
+                  return channel.clientId ? (
+                    <ReadinessLine probe={channel.status} emphasis={emphasis} />
                   ) : (
                     <StatusBadge tone="neutral" dot>
                       未配置
                     </StatusBadge>
-                  ),
+                  );
+                },
               },
               {
                 id: "version",
                 header: "版本",
                 width: "sm",
-                cell: (r: HealthRow) =>
-                  r.kind === "product" ? (
-                    <span className={`${EMPHASIS_TEXT.prod} truncate`}>
-                      {r.item.prod.health.version ?? "—"}
+                cell: (r: HealthRow) => {
+                  const channel = channelOf(r);
+                  const emphasis = r.kind === "product" ? "prod" : "beta";
+                  return channel.clientId ? (
+                    <span className={`${EMPHASIS_TEXT[emphasis]} truncate`}>
+                      {channel.health.version ?? "—"}
                     </span>
                   ) : (
                     <span className="text-muted-foreground">—</span>
-                  ),
+                  );
+                },
               },
               {
                 id: "buildTime",
                 header: "发布时间",
                 width: "sm",
-                cell: (r: HealthRow) =>
-                  r.kind === "product" ? (
-                    <span className={EMPHASIS_TEXT.prod}>
-                      {formatBuildTime(r.item.prod.health.buildTime)}
+                cell: (r: HealthRow) => {
+                  const channel = channelOf(r);
+                  const emphasis = r.kind === "product" ? "prod" : "beta";
+                  return channel.clientId ? (
+                    <span className={EMPHASIS_TEXT[emphasis]}>
+                      {formatBuildTime(channel.health.buildTime)}
                     </span>
                   ) : (
                     <span className="text-muted-foreground">—</span>
-                  ),
+                  );
+                },
               },
               {
                 id: "checkedAt",
                 header: "最近探测",
                 width: "sm",
-                cell: (r: HealthRow) =>
-                  r.kind === "product" ? (
-                    <span className={EMPHASIS_TEXT.prod}>
-                      {formatTime(r.item.prod.health.checkedAt)}
+                cell: (r: HealthRow) => {
+                  const channel = channelOf(r);
+                  const emphasis = r.kind === "product" ? "prod" : "beta";
+                  return channel.clientId ? (
+                    <span className={EMPHASIS_TEXT[emphasis]}>
+                      {formatTime(channel.health.checkedAt)}
                     </span>
                   ) : (
                     /* 不写"从未"也不写时间：没有地址就没有发生过探测这件事。 */
                     <span className="text-muted-foreground">—</span>
-                  ),
+                  );
+                },
               },
             ]}
             /* 没有序号列：一张表里两级行，行号会把渠道明细也编进去——12 个产品
@@ -955,8 +1014,10 @@ function ProbePoints({
 }: {
   target: { item: ProductHealthItem; channel: "stable" | "beta" | "canary" };
 }) {
-  const configured = target.channel === "stable";
-  const channel = target.item.prod;
+  const channelKey: ChannelKey =
+    target.channel === "stable" ? "prod" : target.channel;
+  const channel = target.item[channelKey];
+  const configured = channel.clientId !== null;
 
   return (
     <div className="flex flex-col gap-lg">
@@ -966,17 +1027,29 @@ function ProbePoints({
         description="origin 取自该渠道客户端 redirect_uris 去掉路径后的源。要换探测目标，去「产品管理 · 接入凭据」改回调地址——在这里另开一个覆盖字段会立刻产生两个真相。"
       />
 
-      {!configured ? (
+      {!target.item.onboarded ? (
+        <EmptyState
+          icon="target"
+          title="产品尚未接入"
+          description="这个产品在产品目录里，但还没有任何 OIDC 客户端，因此没有 origin，也就没有探测发生过。去「产品管理 · 接入凭据」为它签发 stable 渠道的客户端后，这里开始显示探测结果。"
+        />
+      ) : !configured ? (
         <EmptyState
           icon="target"
           title={`${target.channel} 尚未登记`}
-          description={`库里没有 release_channel='${target.channel}' 的 OIDC 客户端，因此没有 origin，也就没有探测发生过。基础接入时登记回调地址后，这里会显示与 stable 同样的内容。`}
+          description={`这个产品名下没有 release_channel='${target.channel}' 的活跃 OIDC 客户端，因此没有 origin，也就没有探测发生过。在「接入凭据」按该渠道登记客户端后，这里会显示与 stable 同样的内容。`}
         />
       ) : (
         <>
           <Section title="源" icon="globe" level={2}>
             <p className="font-mono text-code-sm text-foreground">
               {channel.origin ?? "—"}
+            </p>
+            <p className="text-body-sm text-muted-foreground">
+              客户端 {channel.clientId}
+              {channel.origin === null
+                ? " · 回调地址解析不出 origin，无法探测"
+                : null}
             </p>
           </Section>
 

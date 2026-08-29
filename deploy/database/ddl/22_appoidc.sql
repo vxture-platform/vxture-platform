@@ -9,14 +9,20 @@
 
 -- OIDC 出站客户端注册（应用 → 平台）。身份接入方 = oidc_client，≠ product.application ≠ agent。
 -- client_id 是 OIDC 协议客户端标识（域内关联键，见 oidc_consents），非 *_no/*_code 可视码。
--- product_id 跨 schema→product.products（真 FK，NULL=平台级客户端；见 90）。
+-- product_id 跨 schema→product.products（真 FK；见 90）。
+-- client_kind 把「这行归谁」写成显式事实，不再靠 product_id 是否为 NULL 去猜
+-- （2026-08-30，产品登记单一入口：docs/20-specs/000-platform/opera/40-product-registry.md §3）：
+--   platform = 平台自有门户（website/console/admin/opera），只由 seed 建，product_id 必为 NULL；
+--   product  = 某个已登记产品的接入凭据，product_id 必非 NULL——产品目录之外不存在产品。
+-- 两者由 chk_oidc_clients_kind_product 绑死：写不出「像产品却挂不上产品」的行。
 -- realm 客户/员工绝对隔离（铁律七）；back_channel_logout_uri 在 back_channel 参与时必填。
 CREATE TABLE appoidc.oidc_clients (
     id                        uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
     client_id                 varchar(64)  NOT NULL,                     -- OIDC 协议客户端标识，域内关联键
     client_secret_hash        varchar(255),                             -- 机密客户端；public client 可空
     realm                     varchar(16)  NOT NULL DEFAULT 'customer',
-    product_id                uuid,                                     -- 跨 schema→product.products（90），NULL=平台级
+    product_id                uuid,                                     -- 跨 schema→product.products（90）；与 client_kind 绑定
+    client_kind               varchar(16)  NOT NULL DEFAULT 'product',  -- platform / product（见文件头）
     release_channel           varchar(16)  NOT NULL DEFAULT 'stable',
     name                      varchar(96),
     display_name              varchar(128),                             -- 授权页展示名（补齐，铁律四）
@@ -35,6 +41,11 @@ CREATE TABLE appoidc.oidc_clients (
     CONSTRAINT uq_oidc_clients_client_id       UNIQUE (client_id),
     CONSTRAINT chk_oidc_clients_realm          CHECK (realm IN ('customer','workforce')),
     CONSTRAINT chk_oidc_clients_release_channel CHECK (release_channel IN ('stable','beta','canary')),
+    CONSTRAINT chk_oidc_clients_client_kind    CHECK (client_kind IN ('platform','product')),
+    -- 归属不变式：平台级 ⇔ 无产品；产品级 ⇔ 有产品。默认 kind=product 配上这条，
+    -- 意味着漏传 product_id 的插入直接失败，而不是静默变成一个"平台级"客户端。
+    CONSTRAINT chk_oidc_clients_kind_product
+        CHECK ((client_kind = 'platform') = (product_id IS NULL)),
     CONSTRAINT chk_oidc_clients_slo            CHECK (slo_participation IN ('none','back_channel','front_channel')),
     -- product_251 B-3：「算不算数」最小词表是 active / inactive。原来这里是
     -- 'disabled'——不是词表的扩展，是同一概念的第三种拼法（atlas 用布尔

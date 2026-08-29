@@ -22,18 +22,20 @@ const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
 // LEGACY exemption set; products never join it going forward, they only leave.
 // umbra keeps its tenant-level subscription-claim contract
 // (identity-platform-ruyin-contract.md) until its own retirement window.
+//
+// Membership also requires a product.products row (40-product-registry.md §4):
+// this is an exemption over the catalog, not a second catalog. 2026-08-30 the
+// codes with no catalog row were removed — nocus (retired client), and
+// ontos/raven/anlan/forge/xuanzhen (planned products, never registered; their
+// seeded OIDC clients were deleted by the 2026-08-30 migration). Behaviour is
+// unchanged: the query below joins product.products by code, so a code without
+// a row never produced a claim.
 export const APP_SCOPE_CODES = [
   // umbra = the cross-domain RP at ruyin.ai (ex-ruyin, product_300 §2); the new
   // client-side `ruyin` product stays out of the entitlement engine.
   "umbra",
   "runos",
-  "nocus",
   "atlas",
-  "ontos",
-  "raven",
-  "anlan",
-  "forge",
-  "xuanzhen",
 ] as const;
 
 export type AppScopeCode = (typeof APP_SCOPE_CODES)[number];

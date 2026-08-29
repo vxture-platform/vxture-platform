@@ -10,8 +10,13 @@
  *              + role_permissions mapping (owner/manager only; member/readonly/guest empty)
  *   loyalty  — level_policies + level_thresholds (5 levels, placeholder growth config)
  *   kyc      — verification_policies baseline (platform, per tenant_type)
- *   appoidc  — oidc_clients (platform RPs) + signing_keys (env-injected, dev placeholder skipped)
+ *   appoidc  — oidc_clients (4 platform portals + one credential per first-party product; seeded
+ *              AFTER product.products so every product client resolves its product_id inline —
+ *              chk_oidc_clients_kind_product rejects a product client without one)
+ *              + signing_keys (env-injected, dev placeholder skipped)
  *   product  — product_categories + products + launch_checklist_items + plans/versions/prices/components
+ *              (which products may be seeded at all: 40-product-registry.md §5 — code-referenced
+ *              first-party products only; planned products are registered via the opera catalog)
  *   model    — model_providers + models + model_price_rules (active models for readiness)
  *   identity — oauth_providers inbound federation broker config (feishu/dingtalk/google)
  *
@@ -1265,350 +1270,6 @@ export async function seedCatalog(client) {
     "✓  kyc — verification_policies baseline (personal/organization)",
   );
 
-  // ── 7. appoidc.oidc_clients (platform RPs; secret hash injected via env) ─────
-  // Beta URL only registered when {APP}_BETA_BASE_URL env is set.
-  function appUris(prod, betaEnv) {
-    const uris = [`${prod}/auth/callback`];
-    if (betaEnv) uris.push(`${betaEnv}/auth/callback`);
-    return uris;
-  }
-
-  // Local fallbacks are the SAME numbers as the port registry (2026-08-10):
-  // L0 faces 3000-3099 (docs/40-implementation/ai/10-port-allocation.md), L1
-  // 31xx, L2 32xx, L3 40xx (docs/50-deployment/13-infra-allocation-registry.md
-  // §3). They only apply when the env var is unset — production always sets it —
-  // but a local seed writes them into oidc_clients.redirect_uris, so a wrong
-  // fallback means a login that cannot come back. Layer-outside products get an
-  // inert 39xx placeholder: no local service exists, and 39xx belongs to no block.
-  const B = {
-    website: process.env.WEBSITE_BASE_URL || "http://localhost:3000",
-    console: process.env.CONSOLE_BASE_URL || "http://localhost:3020",
-    admin: process.env.ADMIN_BASE_URL || "http://localhost:3030",
-    // Capability Console (OSS-side operator shell, product_250 M-4). The prod
-    // hostname is repo-external by policy (hardening: placeholder-only) and
-    // arrives via OPERA_BASE_URL runtime env.
-    opera: process.env.OPERA_BASE_URL || "http://localhost:3040",
-    // ruyin = NEW client-side product surface (ruyin.vxture.com); the legacy
-    // cross-domain RP at ruyin.ai is `umbra` (product_300 §2, U line).
-    ruyin: process.env.RUYIN_BASE_URL || "http://localhost:3900",
-    umbra: process.env.UMBRA_BASE_URL || "http://localhost:3901",
-    atlas: process.env.ATLAS_BASE_URL || "http://localhost:3100",
-    ontos: process.env.ONTOS_BASE_URL || "http://localhost:3110",
-    runos: process.env.RUNOS_BASE_URL || "http://localhost:3120",
-    arda: process.env.ARDA_BASE_URL || "http://localhost:3230",
-    karda: process.env.KARDA_BASE_URL || "http://localhost:3240",
-    // vxtpl = 开发样本 / 测试智能体（原 vxture-template，名称已归一化）。owner
-    // 2026-08-13 裁定它与 agent-template 是同一个业务、智能体级，归 L3 块首
-    // 子块 4000-4009；它腾出的 L2 子块由 ontos 接手。
-    vxtpl: process.env.VXTPL_BASE_URL || "http://localhost:4000",
-    raven: process.env.RAVEN_BASE_URL || "http://localhost:4010",
-    anlan: process.env.ANLAN_BASE_URL || "http://localhost:4020",
-    forge: process.env.FORGE_BASE_URL || "http://localhost:4030",
-    xuanzhen: process.env.XUANZHEN_BASE_URL || "http://localhost:4040",
-  };
-  const betaB = {
-    ruyin: process.env.RUYIN_BETA_BASE_URL || null,
-    runos: process.env.RUNOS_BETA_BASE_URL || null,
-    atlas: process.env.ATLAS_BETA_BASE_URL || null,
-    ontos: process.env.ONTOS_BETA_BASE_URL || null,
-    vxtpl: process.env.VXTPL_BETA_BASE_URL || null,
-    raven: process.env.RAVEN_BETA_BASE_URL || null,
-    anlan: process.env.ANLAN_BETA_BASE_URL || null,
-    forge: process.env.FORGE_BETA_BASE_URL || null,
-    xuanzhen: process.env.XUANZHEN_BETA_BASE_URL || null,
-    arda: process.env.ARDA_BETA_BASE_URL || null,
-    // deferred — no beta host assigned yet (TD-001 in vxture-karda)
-    karda: process.env.KARDA_BETA_BASE_URL || null,
-  };
-
-  const accountsBase = process.env.ACCOUNTS_BASE_URL || "http://localhost:3080";
-  const postLogout = `${accountsBase}/logout`;
-
-  // U-line fail-fast (product_300 §2.4): RUYIN_BASE_URL changed meaning — it now
-  // names the NEW ruyin surface (ruyin.vxture.com); ruyin.ai belongs to
-  // UMBRA_BASE_URL. A stale ruyin.ai value here would register the new ruyin
-  // client with umbra's callback — abort instead of seeding a misbinding.
-  if (B.ruyin.includes("ruyin.ai")) {
-    throw new Error(
-      "RUYIN_BASE_URL points at ruyin.ai — that domain is umbra's (UMBRA_BASE_URL). " +
-        "Migrate .env.auth-bff per product_300 §2.3 #4 before seeding.",
-    );
-  }
-
-  const oidcClients = [
-    {
-      clientId: "website",
-      name: "Vxture Website",
-      displayName: "Vxture Website",
-      realm: "customer",
-      redirectUris: [`${B.website}/auth/callback`],
-      scopes: ["openid", "profile"],
-      postLogoutUris: [`${B.website}/`, postLogout],
-    },
-    {
-      clientId: "console",
-      name: "Vxture Console",
-      displayName: "Vxture Console",
-      realm: "customer",
-      redirectUris: [`${B.console}/auth/callback`],
-      scopes: ["openid", "profile", "console"],
-    },
-    {
-      clientId: "admin",
-      name: "Vxture Admin",
-      displayName: "Vxture Admin",
-      realm: "workforce",
-      redirectUris: [`${B.admin}/auth/callback`],
-      scopes: ["openid", "profile", "admin"],
-      // 登出回跳白名单。缺了它 end_session 仍会销毁会话，但**不回跳**——用户停在
-      // 空页上，看起来像登出坏了。默认值只有 accounts/logout，回不到门户自己。
-      postLogoutUris: [`${B.admin}/`, postLogout],
-    },
-    // Capability Console shell — second workforce RP (product_250 M-4). Same
-    // operator claims surface as admin; its BFF additionally runs the
-    // operator-OBO exchange (M-1) for mounted provider modules.
-    {
-      clientId: "opera",
-      name: "Vxture Capability Console",
-      displayName: "Vxture Capability Console",
-      realm: "workforce",
-      redirectUris: [`${B.opera}/auth/callback`],
-      scopes: ["openid", "profile", "admin"],
-      postLogoutUris: [`${B.opera}/`, postLogout],
-    },
-    // umbra — the cross-domain RP at ruyin.ai (ex-`ruyin`; renamed in place by the
-    // U-line migration below, product_300 §2). No beta — single prod URI only.
-    {
-      clientId: "umbra",
-      name: "umbra",
-      displayName: "umbra",
-      realm: "customer",
-      redirectUris: [`${B.umbra}/auth/callback`],
-      scopes: [
-        "openid",
-        "profile",
-        "email",
-        "phone",
-        "umbra",
-        "umbra:subscription",
-      ],
-      postLogoutUris: [`${B.umbra}/`, postLogout],
-    },
-    // ruyin — NEW client-side product surface on ruyin.vxture.com (mode A,
-    // same-site). No subscription scope: client products stay out of the
-    // entitlement engine (product_100 §5).
-    {
-      clientId: "ruyin",
-      name: "Ruyin",
-      displayName: "Ruyin",
-      realm: "customer",
-      redirectUris: appUris(B.ruyin, betaB.ruyin),
-      scopes: ["openid", "profile", "email"],
-    },
-    {
-      clientId: "runos",
-      name: "Runos",
-      displayName: "Runos",
-      realm: "customer",
-      redirectUris: appUris(B.runos, betaB.runos),
-      scopes: ["openid", "profile", "email", "runos:subscription"],
-    },
-    {
-      clientId: "atlas",
-      name: "Atlas",
-      displayName: "Atlas",
-      realm: "customer",
-      redirectUris: appUris(B.atlas, betaB.atlas),
-      // D12: product commercial scope retired, no {product}:subscription carried in
-      // product tokens; aligned to karda's actual 4-scope registration (product_240 §6#20).
-      scopes: ["openid", "profile", "email", "phone"],
-    },
-    {
-      clientId: "ontos",
-      name: "Ontos",
-      displayName: "Ontos",
-      realm: "customer",
-      redirectUris: appUris(B.ontos, betaB.ontos),
-      scopes: ["openid", "profile", "email", "ontos:subscription"],
-    },
-    // vxtpl — 模板演示产品（在产，vxtpl.vxture.com）。scope 取 D12 之后的四段式
-    // （同 arda/karda/atlas）：token 不携带任何商业字段，权益一律走 C2。不给
-    // `vxtpl:subscription`——那是 D12 之前的旧形态，新登记不再复制。
-    {
-      clientId: "vxtpl",
-      name: "Vxtpl",
-      displayName: "Vxtpl",
-      realm: "customer",
-      redirectUris: appUris(B.vxtpl, betaB.vxtpl),
-      scopes: ["openid", "profile", "email", "phone"],
-      postLogoutUris: [`${B.vxtpl}/`, postLogout],
-    },
-    {
-      clientId: "raven",
-      name: "Raven",
-      displayName: "Raven",
-      realm: "customer",
-      redirectUris: appUris(B.raven, betaB.raven),
-      scopes: ["openid", "profile", "email", "raven:subscription"],
-    },
-    {
-      clientId: "anlan",
-      name: "Anlan",
-      displayName: "Anlan",
-      realm: "customer",
-      redirectUris: appUris(B.anlan, betaB.anlan),
-      scopes: ["openid", "profile", "email", "anlan:subscription"],
-    },
-    {
-      clientId: "forge",
-      name: "Forge",
-      displayName: "Forge",
-      realm: "customer",
-      redirectUris: appUris(B.forge, betaB.forge),
-      scopes: ["openid", "profile", "email", "forge:subscription"],
-    },
-    {
-      clientId: "xuanzhen",
-      name: "Xuanzhen",
-      displayName: "Xuanzhen",
-      realm: "customer",
-      redirectUris: appUris(B.xuanzhen, betaB.xuanzhen),
-      scopes: ["openid", "profile", "email", "xuanzhen:subscription"],
-    },
-    {
-      clientId: "arda",
-      name: "Arda",
-      displayName: "Arda",
-      realm: "customer",
-      redirectUris: [`${B.arda}/auth/callback`],
-      // D12 (arda reply-06 §3): the `arda:subscription` scope is retired —
-      // tokens carry zero commercial fields; entitlements are C2-only.
-      scopes: ["openid", "profile", "email", "phone"],
-      postLogoutUris: [`${B.arda}/`, postLogout],
-    },
-    // arda-beta — only registered when ARDA_BETA_BASE_URL is set; release_channel=beta.
-    ...(betaB.arda
-      ? [
-          {
-            clientId: "arda-beta",
-            name: "Arda Beta",
-            displayName: "Arda (Beta)",
-            realm: "customer",
-            releaseChannel: "beta",
-            redirectUris: [`${betaB.arda}/auth/callback`],
-            // D12: `arda:subscription` retired (see the stable client above).
-            scopes: ["openid", "profile", "email", "phone"],
-            postLogoutUris: [`${betaB.arda}/`, postLogout],
-          },
-        ]
-      : []),
-    // karda — registration request A段 (docs/80-liaison/20-2607222338-karda-
-    // platform-registration-a.md §3.2). No `karda:subscription` scope — D12
-    // products are C2-only.
-    {
-      clientId: "karda",
-      name: "Karda",
-      displayName: "Karda",
-      realm: "customer",
-      redirectUris: [`${B.karda}/auth/callback`],
-      scopes: ["openid", "profile", "email", "phone"],
-      postLogoutUris: [`${B.karda}/`, postLogout],
-    },
-    // karda-beta — deferred (TD-001); only registers once KARDA_BETA_BASE_URL is set.
-    ...(betaB.karda
-      ? [
-          {
-            clientId: "karda-beta",
-            name: "Karda Beta",
-            displayName: "Karda (Beta)",
-            realm: "customer",
-            releaseChannel: "beta",
-            redirectUris: [`${betaB.karda}/auth/callback`],
-            scopes: ["openid", "profile", "email", "phone"],
-            postLogoutUris: [`${betaB.karda}/`, postLogout],
-          },
-        ]
-      : []),
-  ];
-  // U-line (product_300 §2): migrate the legacy cross-domain RP row ruyin → umbra
-  // BEFORE the upsert loop, so the fresh `ruyin` entry above can never inherit the
-  // legacy row (nor its secret hash). The legacy row is identified by its ruyin.ai
-  // redirect; both statements no-op once migrated (and on a fresh database).
-  // oidc_consents.client_id FK has no ON UPDATE CASCADE — drop legacy consents
-  // first (users re-consent under umbra), then rename the parent in place so the
-  // secret hash rides along with the row.
-  await client.query(`
-    delete from appoidc.oidc_consents oc
-     using appoidc.oidc_clients c
-     where oc.client_id = 'ruyin' and c.client_id = 'ruyin'
-       and exists (select 1 from unnest(c.redirect_uris) u where u like 'https://ruyin.ai/%')
-  `);
-  await client.query(`
-    update appoidc.oidc_clients
-       set client_id = 'umbra', updated_at = now()
-     where client_id = 'ruyin'
-       and exists (select 1 from unnest(redirect_uris) u where u like 'https://ruyin.ai/%')
-       and not exists (select 1 from appoidc.oidc_clients c2 where c2.client_id = 'umbra')
-  `);
-  console.log(
-    "✓  appoidc.oidc_clients — U-line legacy ruyin → umbra (guarded; no-op when done)",
-  );
-
-  for (const c of oidcClients) {
-    const envKey = c.clientId.toUpperCase().replace(/-/g, "_");
-    const secretHash = process.env[`OIDC_CLIENT_SECRET_HASH_${envKey}`] || null;
-    const postLogoutUris = c.postLogoutUris || [postLogout];
-    const releaseChannel = c.releaseChannel || "stable";
-    const backChannelUri = `${c.redirectUris[0].replace("/auth/callback", "")}/auth/backchannel-logout`;
-    await client.query(
-      `
-      insert into appoidc.oidc_clients
-        (client_id, name, display_name, logo_url, realm, release_channel, client_secret_hash,
-         redirect_uris, post_logout_redirect_uris, back_channel_logout_uri, allowed_scopes, status,
-         created_at, updated_at)
-      values ($1, $2, $3, null, $4, $5, $6, $7, $8, $9, $10, 'active', now(), now())
-      on conflict (client_id) do update set
-        name = excluded.name,
-        display_name = excluded.display_name,
-        logo_url = excluded.logo_url,
-        realm = excluded.realm,
-        release_channel = excluded.release_channel,
-        client_secret_hash = coalesce(excluded.client_secret_hash, appoidc.oidc_clients.client_secret_hash),
-        redirect_uris = excluded.redirect_uris,
-        post_logout_redirect_uris = excluded.post_logout_redirect_uris,
-        back_channel_logout_uri = excluded.back_channel_logout_uri,
-        allowed_scopes = excluded.allowed_scopes,
-        updated_at = now()
-    `,
-      [
-        c.clientId,
-        c.name,
-        c.displayName,
-        c.realm,
-        releaseChannel,
-        secretHash,
-        c.redirectUris,
-        postLogoutUris,
-        backChannelUri,
-        c.scopes,
-      ],
-    );
-    console.log(
-      `✓  appoidc.oidc_clients — ${c.clientId} (realm=${c.realm}, secret=${secretHash ? "set" : "unset"})`,
-    );
-  }
-
-  // M2 (product_300 §1): retire the legacy `nocus` client — the name has no slot
-  // in the final product matrix (product_100 §6#2); Karda registers a fresh
-  // client on its own onboarding instead of reusing this row.
-  await client.query(`
-    update appoidc.oidc_clients set status = 'inactive', updated_at = now()
-     where client_id = 'nocus' and status <> 'inactive'
-  `);
-  console.log(
-    "✓  appoidc.oidc_clients — nocus retired (status=inactive if present)",
-  );
-
   // ── 8. appoidc.signing_keys (RS256 JWKS public key; private key stays in secret mgr) ─
   // Only seed a key when a REAL public JWK is injected (SIGNING_KEY_PUBLIC_JWK).
   // Otherwise generate one with provision-signing-key.mjs. No fake placeholder — it
@@ -1688,6 +1349,18 @@ export async function seedCatalog(client) {
     "✓  product.products — runos identity correction (guarded; no-op when done)",
   );
 
+  // Which products a seed may create at all — 40-product-registry.md §5. A row
+  // belongs here only when (A) platform code references the code literally
+  // (token-exchange audience / opera module mount / app-scope claim), or (B) another
+  // seeded row points at it by FK (plans, webhooks, metrics, OIDC client) — and a
+  // product-level client below may exist only for a product that is in this list.
+  // Everything else is registered by an operator in opera → 产品管理 → 产品目录.
+  //   ruyin  (B: OIDC client; U-line product_300)      umbra (A: app-scope claim; B: client/plan)
+  //   runos  (A: opera /runos module, RUNOS_AUDIENCE)   arda  (B: plans/webhook/metrics/client)
+  //   karda  (B: webhook/metrics/client)                vxtpl (B: client/webhook; product_240 §7)
+  //   atlas  (A: opera /atlas module, ATLAS_AUDIENCE)
+  // `origin` is written explicitly (same shape the catalog page writes), not left to
+  // the column default — a seeded row should be indistinguishable from a registered one.
   const PRODUCTS = [
     // desc = placeholder external copy; i18n key derived product.product.{code}.desc
     {
@@ -1751,7 +1424,9 @@ export async function seedCatalog(client) {
       // and product definition are ready. C2 resolves atlas as "unsubscribed" until published.
       code: "atlas",
       type: "model_platform",
-      cat: 1,
+      // category 2 = 平台（与 runos/arda/karda 同列）；此前误填 1（智能体）。
+      // `on conflict do nothing` 意味着存量库不受影响，只有新库拿到正确分类。
+      cat: 2,
       name: "模型平台",
       nick: "Atlas",
       desc: "Unified model access, routing, quota and metering platform.",
@@ -1761,8 +1436,8 @@ export async function seedCatalog(client) {
     await client.query(
       `
       insert into product.products
-        (id, product_code, product_type, category_id, product_name, product_nick, description, description_key, status, created_by, created_at, updated_at)
-      values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, 'active', $8, now(), now())
+        (id, product_code, product_type, category_id, product_name, product_nick, description, description_key, status, origin, created_by, created_at, updated_at)
+      values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, 'active', 'self', $8, now(), now())
       on conflict (product_code) do nothing
     `,
       [
@@ -1811,22 +1486,336 @@ export async function seedCatalog(client) {
     `✓  product — ${PRODUCTS.length} products + categories (placeholder)`,
   );
 
-  // appoidc.oidc_clients.product_id backfill (T1, product_210 §2/§3): links each
-  // product-owned OIDC client back to its product row so token-exchange derives
-  // act.sub/aud from the DB (not a runtime client_id string-normalization hack).
-  // Runs after oidc_clients + product.products are both seeded. Matches by
-  // client_id minus a -beta/-canary release-channel suffix (arda-beta -> arda);
-  // platform-level clients (website/console/admin/umbra/ruyin) have no product
-  // row to match and stay product_id=NULL, per the DDL's own "NULL=平台级" contract.
-  for (const [code, id] of Object.entries(prodMap)) {
-    await client.query(
-      `update appoidc.oidc_clients set product_id = $1, updated_at = now()
-        where product_id is distinct from $1
-          and (client_id = $2 or client_id = $2 || '-beta' or client_id = $2 || '-canary')`,
-      [id, code],
+  // ── 7. appoidc.oidc_clients (platform portals + product credentials; secret hash via env) ─
+  //
+  // Runs AFTER block 9 (product.products) on purpose — 2026-08-30, product registry
+  // single-entry model (docs/20-specs/000-platform/opera/40-product-registry.md §5):
+  //   · every entry declares its ownership explicitly — `kind: "platform"` for the four
+  //     platform portals (product_id stays NULL), or `product: "<product_code>"` for a
+  //     product credential, resolved to product_id through prodMap at insert time;
+  //   · a `product:` code that is not in PRODUCTS above throws before any row is written
+  //     (the DB CHECK chk_oidc_clients_kind_product would reject it anyway — failing here
+  //     names the entry instead of a constraint);
+  //   · no client is seeded for a product that has no product row. The five planned
+  //     products (ontos/raven/anlan/forge/xuanzhen) used to be seeded here as clients
+  //     only; they are registered through the opera product catalog when their product
+  //     definition exists, not pre-created by seed.
+  //
+  // Beta URL only registered when {APP}_BETA_BASE_URL env is set.
+  function appUris(prod, betaEnv) {
+    const uris = [`${prod}/auth/callback`];
+    if (betaEnv) uris.push(`${betaEnv}/auth/callback`);
+    return uris;
+  }
+
+  // Local fallbacks are the SAME numbers as the port registry (2026-08-10):
+  // L0 faces 3000-3099 (docs/40-implementation/ai/10-port-allocation.md), L1
+  // 31xx, L2 32xx, L3 40xx (docs/50-deployment/13-infra-allocation-registry.md
+  // §3). They only apply when the env var is unset — production always sets it —
+  // but a local seed writes them into oidc_clients.redirect_uris, so a wrong
+  // fallback means a login that cannot come back. Layer-outside products get an
+  // inert 39xx placeholder: no local service exists, and 39xx belongs to no block.
+  const B = {
+    website: process.env.WEBSITE_BASE_URL || "http://localhost:3000",
+    console: process.env.CONSOLE_BASE_URL || "http://localhost:3020",
+    admin: process.env.ADMIN_BASE_URL || "http://localhost:3030",
+    // Capability Console (OSS-side operator shell, product_250 M-4). The prod
+    // hostname is repo-external by policy (hardening: placeholder-only) and
+    // arrives via OPERA_BASE_URL runtime env.
+    opera: process.env.OPERA_BASE_URL || "http://localhost:3040",
+    // ruyin = NEW client-side product surface (ruyin.vxture.com); the legacy
+    // cross-domain RP at ruyin.ai is `umbra` (product_300 §2, U line).
+    ruyin: process.env.RUYIN_BASE_URL || "http://localhost:3900",
+    umbra: process.env.UMBRA_BASE_URL || "http://localhost:3901",
+    atlas: process.env.ATLAS_BASE_URL || "http://localhost:3100",
+    runos: process.env.RUNOS_BASE_URL || "http://localhost:3120",
+    arda: process.env.ARDA_BASE_URL || "http://localhost:3230",
+    karda: process.env.KARDA_BASE_URL || "http://localhost:3240",
+    // vxtpl = 开发样本 / 测试智能体（原 vxture-template，名称已归一化）。owner
+    // 2026-08-13 裁定它与 agent-template 是同一个业务、智能体级，归 L3 块首
+    // 子块 4000-4009；它腾出的 L2 子块由 ontos 接手。
+    vxtpl: process.env.VXTPL_BASE_URL || "http://localhost:4000",
+  };
+  const betaB = {
+    ruyin: process.env.RUYIN_BETA_BASE_URL || null,
+    runos: process.env.RUNOS_BETA_BASE_URL || null,
+    atlas: process.env.ATLAS_BETA_BASE_URL || null,
+    vxtpl: process.env.VXTPL_BETA_BASE_URL || null,
+    arda: process.env.ARDA_BETA_BASE_URL || null,
+    // deferred — no beta host assigned yet (TD-001 in vxture-karda)
+    karda: process.env.KARDA_BETA_BASE_URL || null,
+  };
+
+  const accountsBase = process.env.ACCOUNTS_BASE_URL || "http://localhost:3080";
+  const postLogout = `${accountsBase}/logout`;
+
+  // U-line fail-fast (product_300 §2.4): RUYIN_BASE_URL changed meaning — it now
+  // names the NEW ruyin surface (ruyin.vxture.com); ruyin.ai belongs to
+  // UMBRA_BASE_URL. A stale ruyin.ai value here would register the new ruyin
+  // client with umbra's callback — abort instead of seeding a misbinding.
+  if (B.ruyin.includes("ruyin.ai")) {
+    throw new Error(
+      "RUYIN_BASE_URL points at ruyin.ai — that domain is umbra's (UMBRA_BASE_URL). " +
+        "Migrate .env.auth-bff per product_300 §2.3 #4 before seeding.",
     );
   }
-  console.log("✓  appoidc.oidc_clients — product_id backfill (T1)");
+
+  const oidcClients = [
+    {
+      clientId: "website",
+      kind: "platform",
+      name: "Vxture Website",
+      displayName: "Vxture Website",
+      realm: "customer",
+      redirectUris: [`${B.website}/auth/callback`],
+      scopes: ["openid", "profile"],
+      postLogoutUris: [`${B.website}/`, postLogout],
+    },
+    {
+      clientId: "console",
+      kind: "platform",
+      name: "Vxture Console",
+      displayName: "Vxture Console",
+      realm: "customer",
+      redirectUris: [`${B.console}/auth/callback`],
+      scopes: ["openid", "profile", "console"],
+    },
+    {
+      clientId: "admin",
+      kind: "platform",
+      name: "Vxture Admin",
+      displayName: "Vxture Admin",
+      realm: "workforce",
+      redirectUris: [`${B.admin}/auth/callback`],
+      scopes: ["openid", "profile", "admin"],
+      // 登出回跳白名单。缺了它 end_session 仍会销毁会话，但**不回跳**——用户停在
+      // 空页上，看起来像登出坏了。默认值只有 accounts/logout，回不到门户自己。
+      postLogoutUris: [`${B.admin}/`, postLogout],
+    },
+    // Capability Console shell — second workforce RP (product_250 M-4). Same
+    // operator claims surface as admin; its BFF additionally runs the
+    // operator-OBO exchange (M-1) for mounted provider modules.
+    {
+      clientId: "opera",
+      kind: "platform",
+      name: "Vxture Capability Console",
+      displayName: "Vxture Capability Console",
+      realm: "workforce",
+      redirectUris: [`${B.opera}/auth/callback`],
+      scopes: ["openid", "profile", "admin"],
+      postLogoutUris: [`${B.opera}/`, postLogout],
+    },
+    // umbra — the cross-domain RP at ruyin.ai (ex-`ruyin`; renamed in place by the
+    // U-line migration below, product_300 §2). No beta — single prod URI only.
+    {
+      clientId: "umbra",
+      product: "umbra",
+      name: "umbra",
+      displayName: "umbra",
+      realm: "customer",
+      redirectUris: [`${B.umbra}/auth/callback`],
+      scopes: [
+        "openid",
+        "profile",
+        "email",
+        "phone",
+        "umbra",
+        "umbra:subscription",
+      ],
+      postLogoutUris: [`${B.umbra}/`, postLogout],
+    },
+    // ruyin — NEW client-side product surface on ruyin.vxture.com (mode A,
+    // same-site). No subscription scope: client products stay out of the
+    // entitlement engine (product_100 §5).
+    {
+      clientId: "ruyin",
+      product: "ruyin",
+      name: "Ruyin",
+      displayName: "Ruyin",
+      realm: "customer",
+      redirectUris: appUris(B.ruyin, betaB.ruyin),
+      scopes: ["openid", "profile", "email"],
+    },
+    {
+      clientId: "runos",
+      product: "runos",
+      name: "Runos",
+      displayName: "Runos",
+      realm: "customer",
+      redirectUris: appUris(B.runos, betaB.runos),
+      scopes: ["openid", "profile", "email", "runos:subscription"],
+    },
+    {
+      clientId: "atlas",
+      product: "atlas",
+      name: "Atlas",
+      displayName: "Atlas",
+      realm: "customer",
+      redirectUris: appUris(B.atlas, betaB.atlas),
+      // D12: product commercial scope retired, no {product}:subscription carried in
+      // product tokens; aligned to karda's actual 4-scope registration (product_240 §6#20).
+      scopes: ["openid", "profile", "email", "phone"],
+    },
+    // vxtpl — 模板演示产品（在产，vxtpl.vxture.com）。scope 取 D12 之后的四段式
+    // （同 arda/karda/atlas）：token 不携带任何商业字段，权益一律走 C2。不给
+    // `vxtpl:subscription`——那是 D12 之前的旧形态，新登记不再复制。
+    {
+      clientId: "vxtpl",
+      product: "vxtpl",
+      name: "Vxtpl",
+      displayName: "Vxtpl",
+      realm: "customer",
+      redirectUris: appUris(B.vxtpl, betaB.vxtpl),
+      scopes: ["openid", "profile", "email", "phone"],
+      postLogoutUris: [`${B.vxtpl}/`, postLogout],
+    },
+    {
+      clientId: "arda",
+      product: "arda",
+      name: "Arda",
+      displayName: "Arda",
+      realm: "customer",
+      redirectUris: [`${B.arda}/auth/callback`],
+      // D12 (arda reply-06 §3): the `arda:subscription` scope is retired —
+      // tokens carry zero commercial fields; entitlements are C2-only.
+      scopes: ["openid", "profile", "email", "phone"],
+      postLogoutUris: [`${B.arda}/`, postLogout],
+    },
+    // arda-beta — only registered when ARDA_BETA_BASE_URL is set; release_channel=beta.
+    ...(betaB.arda
+      ? [
+          {
+            clientId: "arda-beta",
+            product: "arda",
+            name: "Arda Beta",
+            displayName: "Arda (Beta)",
+            realm: "customer",
+            releaseChannel: "beta",
+            redirectUris: [`${betaB.arda}/auth/callback`],
+            // D12: `arda:subscription` retired (see the stable client above).
+            scopes: ["openid", "profile", "email", "phone"],
+            postLogoutUris: [`${betaB.arda}/`, postLogout],
+          },
+        ]
+      : []),
+    // karda — registration request A段 (docs/80-liaison/20-2607222338-karda-
+    // platform-registration-a.md §3.2). No `karda:subscription` scope — D12
+    // products are C2-only.
+    {
+      clientId: "karda",
+      product: "karda",
+      name: "Karda",
+      displayName: "Karda",
+      realm: "customer",
+      redirectUris: [`${B.karda}/auth/callback`],
+      scopes: ["openid", "profile", "email", "phone"],
+      postLogoutUris: [`${B.karda}/`, postLogout],
+    },
+    // karda-beta — deferred (TD-001); only registers once KARDA_BETA_BASE_URL is set.
+    ...(betaB.karda
+      ? [
+          {
+            clientId: "karda-beta",
+            product: "karda",
+            name: "Karda Beta",
+            displayName: "Karda (Beta)",
+            realm: "customer",
+            releaseChannel: "beta",
+            redirectUris: [`${betaB.karda}/auth/callback`],
+            scopes: ["openid", "profile", "email", "phone"],
+            postLogoutUris: [`${betaB.karda}/`, postLogout],
+          },
+        ]
+      : []),
+  ];
+  // U-line (product_300 §2): migrate the legacy cross-domain RP row ruyin → umbra
+  // BEFORE the upsert loop, so the fresh `ruyin` entry above can never inherit the
+  // legacy row (nor its secret hash). The legacy row is identified by its ruyin.ai
+  // redirect; both statements no-op once migrated (and on a fresh database).
+  // oidc_consents.client_id FK has no ON UPDATE CASCADE — drop legacy consents
+  // first (users re-consent under umbra), then rename the parent in place so the
+  // secret hash rides along with the row.
+  await client.query(`
+    delete from appoidc.oidc_consents oc
+     using appoidc.oidc_clients c
+     where oc.client_id = 'ruyin' and c.client_id = 'ruyin'
+       and exists (select 1 from unnest(c.redirect_uris) u where u like 'https://ruyin.ai/%')
+  `);
+  await client.query(`
+    update appoidc.oidc_clients
+       set client_id = 'umbra', updated_at = now()
+     where client_id = 'ruyin'
+       and exists (select 1 from unnest(redirect_uris) u where u like 'https://ruyin.ai/%')
+       and not exists (select 1 from appoidc.oidc_clients c2 where c2.client_id = 'umbra')
+  `);
+  console.log(
+    "✓  appoidc.oidc_clients — U-line legacy ruyin → umbra (guarded; no-op when done)",
+  );
+
+  // Ownership is declared per entry and checked before any write: exactly one of
+  // `kind: "platform"` / `product: "<code>"`, and the code must resolve through
+  // prodMap (built from product.products right after block 9). The T1 backfill
+  // that used to patch product_id afterwards by client_id suffix matching is gone —
+  // product_id is written with the row, and `on conflict` re-asserts it on re-runs.
+  for (const c of oidcClients) {
+    const isPlatform = c.kind === "platform";
+    if (isPlatform === Boolean(c.product)) {
+      throw new Error(
+        `seed-catalog: oidc client "${c.clientId}" must declare exactly one of kind:"platform" or product:"<code>"`,
+      );
+    }
+    const productId = isPlatform ? null : prodMap[c.product];
+    if (!isPlatform && !productId) {
+      throw new Error(
+        `seed-catalog: oidc client "${c.clientId}" declares product "${c.product}" which has no product.products row — add it to PRODUCTS (40-product-registry §5) or drop the client`,
+      );
+    }
+    const envKey = c.clientId.toUpperCase().replace(/-/g, "_");
+    const secretHash = process.env[`OIDC_CLIENT_SECRET_HASH_${envKey}`] || null;
+    const postLogoutUris = c.postLogoutUris || [postLogout];
+    const releaseChannel = c.releaseChannel || "stable";
+    const backChannelUri = `${c.redirectUris[0].replace("/auth/callback", "")}/auth/backchannel-logout`;
+    await client.query(
+      `
+      insert into appoidc.oidc_clients
+        (client_id, name, display_name, logo_url, realm, product_id, client_kind, release_channel,
+         client_secret_hash, redirect_uris, post_logout_redirect_uris, back_channel_logout_uri,
+         allowed_scopes, status, created_at, updated_at)
+      values ($1, $2, $3, null, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active', now(), now())
+      on conflict (client_id) do update set
+        name = excluded.name,
+        display_name = excluded.display_name,
+        logo_url = excluded.logo_url,
+        realm = excluded.realm,
+        product_id = excluded.product_id,
+        client_kind = excluded.client_kind,
+        release_channel = excluded.release_channel,
+        client_secret_hash = coalesce(excluded.client_secret_hash, appoidc.oidc_clients.client_secret_hash),
+        redirect_uris = excluded.redirect_uris,
+        post_logout_redirect_uris = excluded.post_logout_redirect_uris,
+        back_channel_logout_uri = excluded.back_channel_logout_uri,
+        allowed_scopes = excluded.allowed_scopes,
+        updated_at = now()
+    `,
+      [
+        c.clientId,
+        c.name,
+        c.displayName,
+        c.realm,
+        productId,
+        isPlatform ? "platform" : "product",
+        releaseChannel,
+        secretHash,
+        c.redirectUris,
+        postLogoutUris,
+        backChannelUri,
+        c.scopes,
+      ],
+    );
+    console.log(
+      `✓  appoidc.oidc_clients — ${c.clientId} (${isPlatform ? "platform" : `product=${c.product}`}, realm=${c.realm}, secret=${secretHash ? "set" : "unset"})`,
+    );
+  }
 
   // product_webhooks — platform→product provisioning push config (product_310
   // P2.3). webhook_url follows the business-app contract path (rp-integration

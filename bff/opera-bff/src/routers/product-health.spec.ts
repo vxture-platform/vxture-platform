@@ -1,17 +1,158 @@
 /**
- * product-health.spec.ts — 就绪探测里两条**翻译**的单测。
+ * product-health.spec.ts — 服务状态页数据侧的单测。
  *
- * 这两条都不是逻辑复杂，是**词表对不齐**，而对不齐的表现是「页面绿着 / 栏目空着」，
- * 不是报错。所以钉在测试里，不靠读代码时记得。
- *
- * 两条都由 2026-08-23 的 atlas / runos 联调实测反推：
- *   - atlas `/readyz` 恒回 HTTP 200，坏了也只体现在 body 的 `status: "blocked"`
- *   - atlas 的 `checks` 值是对象（`{status,latencyMs}`），不是字符串
+ * 三组：
+ *   1. `groupProductChannels`：清单以 product.products 为主表这条口径（2026-08-30，
+ *      40-product-registry.md §4）——没有客户端的产品必须出现、渠道只认
+ *      release_channel、层级只认 product_type。这些都是"漏了不报错、只是表少一行"
+ *      的那类缺陷，所以钉在测试里。
+ *   2. `readinessFromBody`、3. `readChecks`：就绪探测里两条**翻译**。词表对不齐的表现
+ *      是「页面绿着 / 栏目空着」，不是报错。两条都由 2026-08-23 的 atlas / runos
+ *      联调实测反推：atlas `/readyz` 恒回 HTTP 200，坏了也只体现在 body 的
+ *      `status: "blocked"`；atlas 的 `checks` 值是对象（`{status,latencyMs}`）。
  */
 
 import { describe, expect, it } from "vitest";
 
-import { readChecks, readinessFromBody } from "./product-health.router";
+import {
+  groupProductChannels,
+  layerFromProductType,
+  readChecks,
+  readinessFromBody,
+  type ProductChannelRow,
+} from "./product-health.router";
+
+function row(
+  overrides: Partial<ProductChannelRow> & { product_code: string },
+): ProductChannelRow {
+  return {
+    product_id: `id-${overrides.product_code}`,
+    product_name: overrides.product_code,
+    product_type: null,
+    product_status: "active",
+    client_id: null,
+    release_channel: null,
+    redirect_uris: null,
+    ...overrides,
+  };
+}
+
+describe("groupProductChannels —— 清单以产品目录为主表", () => {
+  it("没有任何客户端的产品也在清单里，三个渠道都为空（未接入，不是不存在）", () => {
+    const groups = groupProductChannels([
+      row({ product_code: "demo-insight", product_status: "draft" }),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.state).toBe("draft");
+    expect(groups[0]?.channels).toEqual({
+      stable: null,
+      beta: null,
+      canary: null,
+    });
+  });
+
+  it("渠道只认 release_channel；origin 是回调地址去掉路径", () => {
+    const groups = groupProductChannels([
+      row({
+        product_code: "arda",
+        client_id: "arda",
+        release_channel: "stable",
+        redirect_uris: ["https://arda.vxture.com/auth/callback"],
+      }),
+      row({
+        product_code: "arda",
+        client_id: "arda-beta",
+        release_channel: "beta",
+        redirect_uris: ["https://beta-arda.vxture.com/auth/callback"],
+      }),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.channels.stable).toEqual({
+      clientId: "arda",
+      origin: "https://arda.vxture.com",
+    });
+    expect(groups[0]?.channels.beta).toEqual({
+      clientId: "arda-beta",
+      origin: "https://beta-arda.vxture.com",
+    });
+    expect(groups[0]?.channels.canary).toBeNull();
+  });
+
+  /** 派生路径已退役：回调白名单里多一个地址，不等于登记了一个渠道。 */
+  it("stable 客户端的第二个 redirect_uri 不再被读成 beta", () => {
+    const groups = groupProductChannels([
+      row({
+        product_code: "runos",
+        client_id: "runos",
+        release_channel: "stable",
+        redirect_uris: [
+          "https://runos.vxture.com/auth/callback",
+          "https://beta-runos.vxture.com/auth/callback",
+        ],
+      }),
+    ]);
+    expect(groups[0]?.channels.stable?.origin).toBe("https://runos.vxture.com");
+    expect(groups[0]?.channels.beta).toBeNull();
+  });
+
+  it("同一渠道多个客户端时取行集里先到的（SQL 已按登记时间升序）", () => {
+    const groups = groupProductChannels([
+      row({
+        product_code: "karda",
+        client_id: "karda",
+        release_channel: "stable",
+        redirect_uris: ["https://karda.vxture.com/auth/callback"],
+      }),
+      row({
+        product_code: "karda",
+        client_id: "karda-web2",
+        release_channel: "stable",
+        redirect_uris: ["https://karda2.vxture.com/auth/callback"],
+      }),
+    ]);
+    expect(groups[0]?.channels.stable?.clientId).toBe("karda");
+  });
+
+  it("回调地址解析不出 origin 时渠道保留客户端、origin 为 null（登记了但没法探）", () => {
+    const groups = groupProductChannels([
+      row({
+        product_code: "vxtpl",
+        client_id: "vxtpl",
+        release_channel: "stable",
+        redirect_uris: ["not a url"],
+      }),
+    ]);
+    expect(groups[0]?.channels.stable).toEqual({
+      clientId: "vxtpl",
+      origin: null,
+    });
+  });
+
+  it("多个产品各自成组，顺序随行集", () => {
+    const groups = groupProductChannels([
+      row({ product_code: "atlas", product_type: "model_platform" }),
+      row({ product_code: "ruyin", product_type: "client" }),
+    ]);
+    expect(groups.map((g) => g.productCode)).toEqual(["atlas", "ruyin"]);
+  });
+});
+
+describe("layerFromProductType —— 层级只由 product_type 判定", () => {
+  it("矩阵 §2 的六类各归其位，agent 是 L3", () => {
+    expect(layerFromProductType("model_platform")).toBe("L1");
+    expect(layerFromProductType("capability_platform")).toBe("L1");
+    expect(layerFromProductType("data_platform")).toBe("L2");
+    expect(layerFromProductType("knowledge_platform")).toBe("L2");
+    expect(layerFromProductType("agent")).toBe("L3");
+    expect(layerFromProductType("client")).toBe("client");
+    expect(layerFromProductType("external")).toBe("external");
+  });
+
+  it("没填或填了矩阵外的类型 → 未分类，没有按产品码的回退表", () => {
+    expect(layerFromProductType(null)).toBe("unclassified");
+    expect(layerFromProductType("something")).toBe("unclassified");
+  });
+});
 
 describe("readinessFromBody —— 产品自报的就绪词 → 本页三档", () => {
   it("认 025 标准的三个词", () => {

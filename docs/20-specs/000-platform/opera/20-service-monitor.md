@@ -13,23 +13,25 @@
 
 2026-08-11 迁入 opera 时**换了数据源和语义**：探的不是平台自己的门户/BFF，是**接入平台的产品线**。
 
-## 2. 探测范围（owner 口径 2026-08-11）
+## 2. 探测范围（owner 口径 2026-08-11；数据源口径 2026-08-30 改）
 
-- **对象 = 接入平台的产品线**，每个产品的 **prod 与 beta 两个渠道**分别探。
+- **对象 = 产品目录里的每一个产品**，按 **stable / beta / canary 三个渠道**分别探。
 - **不探平台自身**的门户/BFF（那是 dev-panel 的职责，不在本页范围）。
 
-### 数据源：单一权威，不另起清单
+### 数据源：产品目录是主表，客户端表只回答「怎么探」
 
-`appoidc.oidc_clients LEFT JOIN product.products`——origin 就是各产品登记的 OIDC 回调地址去掉路径，与 seed 侧同一份数据（`deploy/database/seed/seed-catalog.mjs` 的 `appUris()`）。
+> 2026-08-30 改口径，依据 [`40-product-registry.md`](./40-product-registry.md) §4。此前主表是 `appoidc.oidc_clients` LEFT JOIN 产品表，外加一份硬编码豁免名单和一张按产品码猜层级的表，结果本页与「产品目录」是两份清单（目录 21 个、本页 12 个，其中 5 个目录里不存在）。根因是把「谁是产品」交给了客户端表回答。
 
-**LEFT JOIN 而非 INNER JOIN**：ontos / raven / anlan / forge / xuanzhen 五个产品已注册 OIDC 客户端，但 `product.products` 还没有目录行（产品定义待建，见 `product_100_matrix.md`），INNER JOIN 会把这五个直接丢掉。缺目录行时用客户端自己的 name/display_name 顶上，分组键退化为「product_id 或裸 client_id 去 `-beta` 后缀」。
+`product.products`（`deleted_at IS NULL`，**全部状态**）LEFT JOIN 它名下 `client_kind='product'` 且 `status='active'` 的 `appoidc.oidc_clients`，按 `release_channel` 分到三个渠道：
 
-### 两种 prod/beta 建模并存（seed 历史遗留，两种都要认）
+- **清单 = 目录**：目录里有的产品本页一定有。没有任何客户端的产品显示 **未接入**（`onboarded=false`），并带产品状态（草稿/已上线/已停用/已退役）——"目录里有、监控里没有"正是运营者要看见的事实。
+- **origin** = 该渠道客户端 `redirect_uris[0]` 去掉路径；要换探测目标去改那个客户端的回调地址。
+- **层级**只由 `product.products.product_type` 判定（`product_100_matrix.md` §2：model/capability→L1，data/knowledge→L2，agent→L3，client，external）；没有按产品码的回退表，类型没填对就如实显示「未分类」。
+- **渠道的唯一口径是 `release_channel`**。"stable 客户端的第二个 `redirect_uri` = beta"这条 seed 期的派生路径已退役：回调白名单里多一个地址，不等于登记了一个渠道。同一渠道登记了多个活跃客户端时，探最早登记的那个。
 
-| 形态                        | 产品                                                             | 建模                                                                                                                    |
-| --------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| 单 client + 多 redirect_uri | runos / atlas / ontos / raven / anlan / forge / xuanzhen / ruyin | 同一 `client_id`，`redirect_uris = [prod 回调, beta 回调?]`（`appUris()` 固定序，prod 在前；beta 未配置时数组长度为 1） |
-| 双 client                   | arda / karda                                                     | 两个独立 `client_id`（如 `arda` / `arda-beta`），后者 `release_channel='beta'`                                          |
+### 空平台起步时本页的样子
+
+新部署、目录为空 → 本页为空，提示先去「产品管理 · 产品目录」登记。登记一个草稿产品 → 本页出现一行「未接入」。在「接入凭据」为它签发 stable 客户端 → 主行开始探测。签发 `release_channel='beta'` 的客户端 → beta 子行开始探测。全程没有任何一步需要改本页或 BFF 的代码。
 
 ## 3. 探什么端点
 
@@ -52,6 +54,7 @@ owner 口径「health、status」指的就是这两类，对应 UI 上的**存�
 - **渠道标注只出现一次**：prod/beta 文字只在专门的「渠道」列（紧跟「产品」列）出现，不在其余列重复。
 - **主辅对比靠字重与色阶**：prod 是主读数（`font-semibold` + 前景色），beta 是辅助参照（常规字重 + `text-muted-foreground`）。**字号全列统一**，不靠放大区分（2026-08-12 修正：此前 prod 用了大一档字号，与全站字号体系不一致）。
 - **`not_configured` 是正常态**：beta 未注册不是异常，显式区分，不与「不可达」混在一起。
+- **「未接入」是另一个正常态**（2026-08-30）：产品在目录里但没有任何客户端。它与「未配置」（有产品客户端、只是这个渠道没登记）是两件事，各用各的词；两者都不计入「需要关注」。
 - **刷新节奏 30s**（owner 口径：不用太频繁），另留手动刷新按钮。
 
 ## 5. 边界
