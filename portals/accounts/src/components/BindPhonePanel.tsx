@@ -96,8 +96,11 @@ export function BindPhonePanel({ token }: { readonly token: string }) {
       resetSignal={turnstileResetSignal}
       onToken={(t) => setTurnstileToken(t)}
       onExpire={() => setTurnstileToken("")}
-      onError={() =>
-        setErrors((c) => ({ ...c, form: "人机验证加载失败，请刷新重试" }))
+      onError={(code) =>
+        setErrors((c) => ({
+          ...c,
+          form: `人机验证加载失败（${code ?? "unknown"}），请刷新重试`,
+        }))
       }
     />
   ) : null;
