@@ -215,9 +215,14 @@ jobs:
       # 持凭据的第三方 action 必须 SHA-pin（platform#188）。浮动 tag 的含义是
       # 「维护者今天推什么、我们明天就跑什么」——对拿到 SSH 私钥的 action 而言
       # 那是把凭据交给一个可变引用，且不会报错，只会在某天悄悄换了行为。
+      # 这一步在 `check` job **内部**，`needs.check.*` 在这里不存在（那是下游 build/test
+      # 才有的引用），原来的 `if: needs.check.outputs.docs_only != 'true'` 取到空串、恒真，
+      # 于是纯文档 PR 也照跑——而 docs-only 时上面的 setup-node-pnpm 已被跳过，
+      # 结果是 `pnpm: command not found`（#64 首次撞上；#58 加这步时没有纯文档 PR 试过）。
+      # 脚本纯 node、零依赖，改成和「公开仓卫生门」同一做法：裸 node、不挂条件、永远跑。
+      # 它守的是 workflow 文件的 SHA 钉死，本来就不该因为"这次只改了文档"而不看。
       - name: Action pinning guardrail
-        if: needs.check.outputs.docs_only != 'true'
-        run: pnpm lint:action-pinning
+        run: node scripts/guardrails/check-action-pinning.mjs
 
       # SQL-DDL 单一权威门控（data_platform_320）：铁律设计检查 + 退役 schema/搬迁表残留检查。
       # 残留检查含路径② Prisma @@schema/@@map（防 model-platform 类漏网：裸串扫描无感的库映射残留）。
