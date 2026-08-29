@@ -234,18 +234,72 @@ CREATE TRIGGER trg_plan_component_priority BEFORE INSERT OR UPDATE
 
 ## 11. 跨 schema FK 速查表（本域内 + 被引用）
 
-| 从                                                                                                                               | 到                                    | 类型              | 依据                                                  |
-| -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ----------------- | ----------------------------------------------------- |
-| `product_metrics/plan_components.product_id`、`product_webhooks.product_id`、`product_launch_statuses.product_id`                | `products.id`                         | 真 FK             | 同 schema                                             |
-| `products.category_id` / `product_categories.parent_id`                                                                          | `product_categories.id`               | 真 FK             | 同 schema（smallint 代理键）                          |
-| `plan_versions.plan_id` / `plans.current_version_id`                                                                             | `plans.id` / `plan_versions.id`       | 真 FK             | 同 schema（互相引用）                                 |
-| `plan_prices.plan_version_id` / `plan_components.plan_version_id`                                                                | `plan_versions.id`                    | 真 FK             | 同 schema                                             |
-| `product_launch_statuses.item_code`                                                                                              | `launch_checklist_items.item_code`    | 真 FK             | 同 schema（code 作 PK，此处 code 即主键非可视码语义） |
-| `*.created_by`/`updated_by`/`checked_by`                                                                                         | `admin.operator_accounts.id`          | **裸值**，不建 FK | 边界#2（产品目录运营专属，realm 确定）                |
-| **被引用**：`metering.subscriptions.plan_version_id`、`promotion.*.grant_plan_version_id`、`billing.invoice_items.product_id` 等 | 本域 `plan_versions.id`/`products.id` | 真 FK             | 跨 schema（铁律一）                                   |
+| 从                                                                                                                               | 到                                                   | 类型              | 依据                                                  |
+| -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ----------------- | ----------------------------------------------------- |
+| `product_metrics/plan_components.product_id`、`product_webhooks.product_id`、`product_launch_statuses.product_id`                | `products.id`                                        | 真 FK             | 同 schema                                             |
+| `products.category_id` / `product_categories.parent_id`                                                                          | `product_categories.id`                              | 真 FK             | 同 schema（smallint 代理键）                          |
+| `plan_versions.plan_id` / `plans.current_version_id`                                                                             | `plans.id` / `plan_versions.id`                      | 真 FK             | 同 schema（互相引用）                                 |
+| `plan_prices.plan_version_id` / `plan_components.plan_version_id`                                                                | `plan_versions.id`                                   | 真 FK             | 同 schema                                             |
+| `product_launch_statuses.item_code`                                                                                              | `launch_checklist_items.item_code`                   | 真 FK             | 同 schema（code 作 PK，此处 code 即主键非可视码语义） |
+| `solution_products.solution_id` / `solution_plans.solution_id`；`solution_products.product_id`；`solution_plans.plan_id`（§13）  | `solutions.id`（CASCADE）；`products.id`；`plans.id` | 真 FK             | 同 schema（2026-08-31）                               |
+| `*.created_by`/`updated_by`/`checked_by`                                                                                         | `admin.operator_accounts.id`                         | **裸值**，不建 FK | 边界#2（产品目录运营专属，realm 确定）                |
+| **被引用**：`metering.subscriptions.plan_version_id`、`promotion.*.grant_plan_version_id`、`billing.invoice_items.product_id` 等 | 本域 `plan_versions.id`/`products.id`                | 真 FK             | 跨 schema（铁律一）                                   |
 
 ## 12. 待办 / 开放项
 
-- **规划态表**（`agent_catalog`/`skill`/`solution` 等，旧 database.md §3.4 曾列）本轮不建；未来落地走本域同构扩展。`agent_catalog` 是 model 域 scope-key 调和的跨轮前置，落地时同构补。
+- **规划态表**（`agent_catalog`/`skill` 等，旧 database.md §3.4 曾列）本轮不建；未来落地走本域同构扩展。`agent_catalog` 是 model 域 scope-key 调和的跨轮前置，落地时同构补。`solution` 已于 2026-08-31 落地（§13）。
 - `product_launch_statuses.checked_by`：若未来产品可由租户自助上架（marketplace），checked_by 需升级为 actor_type（当前平台运营专属，determinate operator）。
 - 迁移：本域空域，直接目标态重建 + reseed（无保数据负担）。
+
+## 13. `solutions` / `solution_products` / `solution_plans`（解决方案，2026-08-31 新增）
+
+admin「产品与套餐 · 业务产品方案 / 服务套餐」去 mock（TD-029 收口）落地的三表；设计权威 [`docs/20-specs/000-platform/admin/70-product-solutions.md`](../20-specs/000-platform/admin/70-product-solutions.md)。方案是运营写出来的内容，**无 seed**，空表即正确态。服务套餐 = 既有 `plans` 绑到方案的一个档位，价格 / 版本 / 组件都是 plan 自己的，**不另建定价模型**。
+
+### 13.1 `solutions`（方案本体）
+
+| 字段                                           | 类型         | 约束                                                                | 说明                                                       |
+| ---------------------------------------------- | ------------ | ------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `id`                                           | uuid         | PK                                                                  |                                                            |
+| `solution_code`                                | varchar(64)  | UNIQUE NOT NULL                                                     | 可视码（kebab，如 `flood-regulation`；铁律二不作 FK 目标） |
+| `solution_name`                                | varchar(128) | NOT NULL                                                            |                                                            |
+| `description`                                  | text         | NULL                                                                |                                                            |
+| `industry` / `scenario`                        | varchar(128) | NULL                                                                | 行业领域 / 业务场景（自由文本，不建字典）                  |
+| `customer_segment`                             | varchar(255) | NULL                                                                | 目标客户群                                                 |
+| `owner_team`                                   | varchar(128) | NULL                                                                | 负责团队（展示）                                           |
+| `tags`                                         | text[]       | NOT NULL DEFAULT `'{}'`                                             | 自由标签（GIN）                                            |
+| `delivery_mode`                                | text         | NULL                                                                | 交付模式一句话                                             |
+| `delivery_boundaries`                          | text[]       | NOT NULL DEFAULT `'{}'`                                             | 交付边界条目，一条一项                                     |
+| `status`                                       | varchar(32)  | NOT NULL DEFAULT `'draft'`, CHECK(draft/active/inactive/deprecated) | 状态机与 `products` 同形，守卫在 admin-bff                 |
+| `is_public`                                    | boolean      | NOT NULL DEFAULT true                                               | 对外售卖开放（admin 投影为 visibility）                    |
+| `is_customer_visible` / `is_workforce_visible` | boolean      | NOT NULL DEFAULT true                                               | 展示可见性双列（§3.2.6，独立轴）                           |
+| `sort`                                         | int          | NOT NULL DEFAULT 0                                                  |                                                            |
+| `created_by` / `updated_by`                    | uuid         | NULL                                                                | 运营专属裸值（边界#2）                                     |
+| `created_at` / `updated_at`                    | timestamptz  | NOT NULL DEFAULT now()                                              |                                                            |
+| `deleted_at`                                   | timestamptz  | NULL                                                                | 软删（读侧过滤）                                           |
+
+索引：`(status)`、`(deleted_at)`、`tags` GIN。
+
+### 13.2 `solution_products`（方案 × 产品能力，M:N）
+
+| 字段          | 类型         | 约束                                          | 说明                                       |
+| ------------- | ------------ | --------------------------------------------- | ------------------------------------------ |
+| `solution_id` | uuid         | NOT NULL, FK→`solutions.id` ON DELETE CASCADE |                                            |
+| `product_id`  | uuid         | NOT NULL, FK→`products.id`                    | product 走软删，读侧过滤，故不 CASCADE     |
+| `role`        | varchar(128) | NULL                                          | 该产品在方案中的角色（展示文案，不进值域） |
+| `sort`        | int          | NOT NULL DEFAULT 0                            |                                            |
+| `created_at`  | timestamptz  | NOT NULL DEFAULT now()                        |                                            |
+
+约束：`PRIMARY KEY (solution_id, product_id)`。索引：`(product_id)`。
+
+### 13.3 `solution_plans`（方案 × 档位 → 套餐绑定）
+
+| 字段          | 类型        | 约束                                                  | 说明                                                                                                                   |
+| ------------- | ----------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `solution_id` | uuid        | NOT NULL, FK→`solutions.id` ON DELETE CASCADE         |                                                                                                                        |
+| `tier`        | varchar(32) | NOT NULL, CHECK(free/starter/pro/business/enterprise) | 五档商业阶梯（product_220 §1），与 `chk_plan_components_tier` 同源，`lint:catalog-domains` 强制与 @shared `TIERS` 一致 |
+| `plan_id`     | uuid        | NOT NULL, FK→`plans.id`, **UNIQUE**                   | 一个 plan 至多绑一个方案档位——订阅 / 收入按 plan 归到唯一方案，计数不重叠                                              |
+| `created_at`  | timestamptz | NOT NULL DEFAULT now()                                |                                                                                                                        |
+
+约束：`PRIMARY KEY (solution_id, tier)`、`UNIQUE (plan_id)`。
+
+列锁（98）：三表锚点 = PK / `created_by` / `created_at`；`solution_products` 可改 `role, sort`；`solution_plans` 只可改 `plan_id`（换绑）。跨 schema FK：无。

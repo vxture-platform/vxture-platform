@@ -308,27 +308,41 @@ middleware 顺序：`auth → capabilities → router`
 // 含：planCode、planType、prices、features（配额项）、agents（可访问 Agent）
 ```
 
-**GET `/api/products/capabilities`** — 能力目录（内存聚合）
+**GET `/api/products/capabilities`** — 能力目录（读 DB：`product.products` + `product_metrics` + `product_webhooks`）
 
 **GET `/api/products/capabilities/:productCode`** — 能力详情
 
-**GET `/api/products/releases`** — 产品发布列表（内存）
+**GET `/api/products/releases`** — 产品发布列表（读 DB，2026-08-31 起 = 已发布的套餐版本：一条 = 一个 `plan_versions.status='published'`，产品取 primary 组件；见 `docs/20-specs/000-platform/admin/70-product-solutions.md` §6）
 
-**GET `/api/products/solutions`** — 业务方案列表（内存）
+**GET `/api/products/solutions`** — 解决方案列表（读 DB：`product.solutions` + `solution_products` + `solution_plans`；订阅数 / 租户数 / MRR 从 `metering.subscriptions` 按绑定 plan 归集）
 
-**GET `/api/products/solutions/:solutionCode`** — 业务方案详情
+**GET `/api/products/solutions/:solutionCode`** — 解决方案详情（+ 交付模式 / 交付边界 / 关联套餐）
 
-**GET `/api/products/service-plans/:solutionCode/:tierCode`** — 服务套餐详情
+**POST `/api/products/solutions`** — 新建方案（草稿；`solutionCode` kebab 唯一）
+
+**PUT `/api/products/solutions/:solutionCode`** — 改字段（只更新送来的键）
+
+**PATCH `/api/products/solutions/:solutionCode/state`** — 状态迁移（draft→active⇄inactive，任一→deprecated 终态；`FOR UPDATE` + 非法迁移 409）
+
+**PUT `/api/products/solutions/:solutionCode/products`** — 整体替换产品清单 `[{productId|productCode, role?, sort?}]`
+
+**PUT `/api/products/solutions/:solutionCode/plans/:tier`** — 绑定 / 换绑既有 plan 到档位（`tier ∈ TIERS`；plan 已绑别处 409）
+
+**DELETE `/api/products/solutions/:solutionCode/plans/:tier`** — 解绑
+
+> 写路径：RW 池 + 事务 + `support.audit_logs`（`product.solution.*`，resource_id = solution_code），全部返回最新 `ProductSolutionDetailRecord`。
+
+**GET `/api/products/service-plans/:solutionCode/:tierCode`** — 服务套餐详情（读 DB：方案档位上绑的 plan 的当前版本）
 
 ```typescript
-// Path：solutionCode='flood-regulation', tierCode='pro'
+// Path：solutionCode='flood-regulation', tierCode='pro'（tierCode ∈ free/starter/pro/business/enterprise）
 // Response 200：ProductServicePlanDetailRecord
-// 含：权益快照（entitlements）、定价、适用范围、销售提示
+// 含：价格（当前版本月付优先）、版本号 / 版本状态、权益快照（entitlements：组件=included、方案里有但组件里没有=excluded）、计数
 ```
 
 **GET `/api/products/agents`** — Agent 目录
 
-**GET `/api/products/model-policies`** — 模型授权策略列表
+~~**GET `/api/products/model-policies`**~~ — 已退役（2026-08-31）：模型策略是 Atlas 的，走 `GET /api/atlas/policies`
 
 ---
 

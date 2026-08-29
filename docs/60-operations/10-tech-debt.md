@@ -85,7 +85,7 @@
 | [TD-026](#td-026--admin-bff-verifications-路由被-id-遮蔽实名审核页恒-500)             | admin-bff verifications 路由被 :id 遮蔽，实名审核页恒 500             | Implementation Gap | Resolved      | 🔴 HIGH                                      |
 | [TD-027](#td-027--admin-bff-authz-未按域收口legacy-桥--finance-写码缺口)              | admin-bff authz 未按域收口，legacy 桥 + finance 写码缺口              | Security           | Resolved      | 🔴 HIGH（组内最高，见批注）                  |
 | [TD-028](#td-028--promotionusage-域无-perm-码commercial-仪表盘借-billingread)         | promotion/usage 域无 perm 码，commercial 仪表盘借 billing.read        | Security           | Open          | 🟢 LOW                                       |
-| [TD-029](#td-029--产品目录-solutionsreleasesmodel-policies-无-schema无法去-mock)      | 产品目录 solutions/releases/model-policies 无 schema，无法去 mock     | Design Pending     | Open          | 🟢 LOW                                       |
+| [TD-029](#td-029--产品目录-solutionsreleasesmodel-policies-无-schema无法去-mock)      | 产品目录 solutions/releases/model-policies 无 schema，无法去 mock     | Design Pending     | Resolved      | 🟢 LOW                                       |
 | [TD-030](#td-030--券批次金额面无展示effect-jsonb-按-kind-异构未解析)                  | 券批次金额面无展示，effect JSONB 按 kind 异构未解析                   | Design Pending     | Open          | 🟢 LOW                                       |
 | [TD-031](#td-031--c-端账号凭据重置无带外通道)                                         | C 端账号凭据重置无带外通道（社交-only/无验证邮箱语义未定）            | Design Pending     | Open          | 🟢 LOW                                       |
 | [TD-032](#td-032--高流量只读板块无服务端分页)                                         | 高流量只读板块无服务端分页，仍全量拉取                                | Implementation Gap | Open          | 🟢 LOW                                       |
@@ -726,7 +726,7 @@
 | 字段         | 内容                                                                                                  |
 | ------------ | ----------------------------------------------------------------------------------------------------- |
 | **分类**     | Design Pending                                                                                        |
-| **状态**     | Open                                                                                                  |
+| **状态**     | Resolved（2026-08-31）                                                                                |
 | **优先级**   | 🟢 LOW                                                                                                |
 | **登记日期** | 2026-07-12                                                                                            |
 | **来源**     | C14 去 mock 摸底（admin 平台完善 P3）；`bff/admin-bff/src/routers/products.router.ts` STILL MOCK 注释 |
@@ -736,6 +736,8 @@
 **影响**：admin「产品」板块的解决方案页 / 服务套餐页 / 发布信息 / 模型授权仍展示虚构 demo 数据，与真实 4 产品（ruyin/umbra/runos/arda）目录脱节；运营无法据此做真实决策。去 mock 不是代码机械问题，而是产品目录成熟度问题——无表可接。
 
 **解决方向**：先出**产品目录细化设计**定义 solutions（行业方案聚合模型）与 releases（发布/版本/定价打包模型）的 schema + seed，model-policies 随 B11 Model Platform DB infra 落地；表与 seed 就绪后按 capabilities/agents 同款方式接活库。**不投机建表**：无产品设计前不预造 solution/release 模型（起步最小化 + 先有依据才动手）。owner 2026-07-12 裁定 C14 仅接 capabilities+agents，其余登记本 TD。
+
+**处理记录（2026-08-31，销号）**：owner 2026-08-30 推翻"先不建表"——上线前 admin 产品板块不得再返回内存 mock。设计与实现同车落地，权威文档 [`docs/20-specs/000-platform/admin/70-product-solutions.md`](../20-specs/000-platform/admin/70-product-solutions.md)。要点：① **solutions** 建三表 `product.solutions` / `solution_products` / `solution_plans`（DDL `40_product.sql` + 迁移 `2026-08-31-product-solutions.sql` + 列锁），服务套餐 = 既有 `product.plans` 绑到方案的一个档位，**不另立定价模型**；档位就是五档商业阶梯（与 `plan_components.tier` 同源，`lint:catalog-domains` 新增一组校验），mock 时代的 free/pro/enterprise/custom 废止。方案是运营写出来的内容，无 seed，空表即正确态。② 读端点全部接活库，计数真：订阅数 / 租户数按绑定 plan 从 `metering.subscriptions` 归集，MRR 只计 active 订阅、按订阅所钉版本的同周期价格折月（定义见 spec §4）。③ 写端点六条（create / update / state / products / bind / unbind），RW 池 + 事务 + `support.audit_logs`，状态机与 `product.products` 同形并在 BFF 守卫。④ **releases 不建表**：重定义为"已发布的套餐版本"（一条 = 一个 `plan_versions.status='published'`，产品取 primary 组件），`productRegion` / `allowedAgents` 两字段删除。⑤ **model-policies 退役**：真实策略是 Atlas 的（`GET /api/atlas/policies`），`/model-grants` 页改读它并把"未定义策略"换成真实对账「有授权、无策略」；首页策略覆盖卡随之改口径。⑥ 门户四页重写为可写（DialogForm / 确认框 / toast），文案全部经 `t()`，`ServicePlanDetailPage` 的「适用范围」「售卖提示」两段（手写文案，无来源）删除。
 
 ### TD-030 — 券批次金额面无展示，effect JSONB 按 kind 异构未解析
 
