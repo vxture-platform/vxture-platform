@@ -41,3 +41,6 @@ export {
   isValidUrl,
   isUuid,
 } from "./type-guards.utils";
+
+export { chooseDevFallback } from "./dev-fallback.utils";
+export type { DevFallbackChoice } from "./dev-fallback.utils";

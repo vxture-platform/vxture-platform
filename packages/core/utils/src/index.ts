@@ -55,6 +55,11 @@ export {
   toE164,
   DEFAULT_PHONE_COUNTRY,
   extractClientIp,
+  chooseDevFallback,
 } from "./utils";
 
-export type { NormalizedPhone, ClientIpRequest } from "./utils";
+export type {
+  NormalizedPhone,
+  ClientIpRequest,
+  DevFallbackChoice,
+} from "./utils";

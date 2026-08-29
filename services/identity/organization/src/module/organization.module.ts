@@ -1,5 +1,6 @@
 import { Logger, Module } from "@nestjs/common";
 import { VxConfigModule, VxConfigService } from "@vxture/core-config";
+import { chooseDevFallback } from "@vxture/core-utils";
 import { Pool } from "pg";
 import {
   MockOrganizationRepository,
@@ -18,8 +19,8 @@ import { ORGANIZATION_REPOSITORY, ORG_PG_POOL } from "../tokens";
  * 组织 / 工作区 / 成员关系就全部跑在假数据上，且没有任何报错。所以生产环境缺库
  * 配置直接抛、拒绝启动；非生产保留今天的离线回退，但记一条警告。
  *
- * 判据用 NODE_ENV 而不是 config.isProduction：本模块只注册了 database 域，
- * isProduction 在这里恒为 false（同 service-account 的 resolveUserRepository）。
+ * 规则在 core-utils `chooseDevFallback`（判据 NODE_ENV，同 service-account 的
+ * resolveUserRepository 那条注释）；这里只提供接线。
  *
  * @throws {Error} 生产环境且 DATABASE_URL / DB_PASSWORD 均为空
  */
@@ -28,21 +29,18 @@ export function resolveOrganizationRepository(
   pgRepository: PgOrganizationRepository,
   mockRepository: MockOrganizationRepository,
 ): PgOrganizationRepository | MockOrganizationRepository {
-  const database = config.database;
-  const hasDatabaseConfig = Boolean(
-    database.DATABASE_URL || database.DB_PASSWORD,
-  );
-  if (hasDatabaseConfig) return pgRepository;
-
-  if (process.env["NODE_ENV"] === "production") {
-    throw new Error(
-      "[OrganizationModule] 数据库未配置（DATABASE_URL 与 DB_PASSWORD 均为空），生产环境拒绝回退到 MockOrganizationRepository",
-    );
-  }
-  new Logger("OrganizationModule").warn(
-    "数据库未配置（DATABASE_URL 与 DB_PASSWORD 均为空），使用内存 MockOrganizationRepository —— 仅限非生产",
-  );
-  return mockRepository;
+  const { DATABASE_URL, DB_PASSWORD } = config.database;
+  return chooseDevFallback<
+    PgOrganizationRepository | MockOrganizationRepository
+  >({
+    scope: "OrganizationModule",
+    configured: Boolean(DATABASE_URL || DB_PASSWORD),
+    real: pgRepository,
+    fallback: mockRepository,
+    fallbackName: "内存 MockOrganizationRepository",
+    missing: "数据库未配置（DATABASE_URL 与 DB_PASSWORD 均为空）",
+    warn: (message) => new Logger("OrganizationModule").warn(message),
+  });
 }
 
 @Module({

@@ -12,6 +12,7 @@
   "dependencies": {
     "@nestjs/common": "^11.0.0",
     "@vxture/core-config": "workspace:*",
+    "@vxture/core-utils": "workspace:*",
     "pg": "^8.16.3"
   },
   "devDependencies": {

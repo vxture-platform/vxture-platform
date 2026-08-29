@@ -1,5 +1,6 @@
 import { Logger, Module } from "@nestjs/common";
 import { VxConfigModule, VxConfigService } from "@vxture/core-config";
+import { chooseDevFallback } from "@vxture/core-utils";
 import { Pool } from "pg";
 import { PasswordHasher } from "../password/password-hasher";
 import { MockUserRepository, PgUserRepository } from "../repository";
@@ -17,10 +18,10 @@ import { ACCOUNT_PG_POOL, USER_REPOSITORY } from "../tokens";
  * 报错。所以生产环境缺库配置直接抛、拒绝启动；非生产保留今天的离线回退，但记一条
  * 警告，让「跑在假库上」在日志里可见。
  *
- * 判据用 NODE_ENV 而不是 config.isProduction：本模块只注册了 database 域，
- * VxConfigService 的 app 域在这里是空的，isProduction 恒为 false（见
- * core-config/config.service.ts:105）——拿它当门等于没有门。与 service-sms 的
- * fail-closed 判据保持一致。
+ * 规则本身在 core-utils `chooseDevFallback`（判据 NODE_ENV，不是 config.isProduction：
+ * 本模块只注册了 database 域，VxConfigService 的 app 域在这里是空的，isProduction
+ * 恒为 false，拿它当门等于没有门）。这里只提供接线：什么算"配置齐"、缺了什么、
+ * 回退到谁。
  *
  * @throws {Error} 生产环境且 DATABASE_URL / DB_PASSWORD 均为空
  */
@@ -29,21 +30,16 @@ export function resolveUserRepository(
   pgRepository: PgUserRepository,
   mockRepository: MockUserRepository,
 ): PgUserRepository | MockUserRepository {
-  const database = config.database;
-  const hasDatabaseConfig = Boolean(
-    database.DATABASE_URL || database.DB_PASSWORD,
-  );
-  if (hasDatabaseConfig) return pgRepository;
-
-  if (process.env["NODE_ENV"] === "production") {
-    throw new Error(
-      "[AccountModule] 数据库未配置（DATABASE_URL 与 DB_PASSWORD 均为空），生产环境拒绝回退到 MockUserRepository",
-    );
-  }
-  new Logger("AccountModule").warn(
-    "数据库未配置（DATABASE_URL 与 DB_PASSWORD 均为空），使用内存 MockUserRepository —— 仅限非生产",
-  );
-  return mockRepository;
+  const { DATABASE_URL, DB_PASSWORD } = config.database;
+  return chooseDevFallback<PgUserRepository | MockUserRepository>({
+    scope: "AccountModule",
+    configured: Boolean(DATABASE_URL || DB_PASSWORD),
+    real: pgRepository,
+    fallback: mockRepository,
+    fallbackName: "内存 MockUserRepository",
+    missing: "数据库未配置（DATABASE_URL 与 DB_PASSWORD 均为空）",
+    warn: (message) => new Logger("AccountModule").warn(message),
+  });
 }
 
 @Module({

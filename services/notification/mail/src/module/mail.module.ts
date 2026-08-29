@@ -17,6 +17,7 @@
  */
 
 import { Logger, Module } from "@nestjs/common";
+import { chooseDevFallback } from "@vxture/core-utils";
 import Redis from "ioredis";
 import { MAIL_PROVIDER, REDIS_CLIENT } from "../constants/tokens";
 import { ConsoleMailProvider } from "../providers/console.provider";
@@ -32,7 +33,8 @@ import type { IMailProvider } from "../types/mail.types";
  * 邮箱验证码是 IdP 登录 / 注册链路的硬依赖——线上 SMTP_PASS 漏注入时，用户看到的是
  * 「验证码已发送」而邮件永远不到，且没有任何报错；这种坏法比启动失败隐蔽得多。
  * 所以生产环境缺 SMTP_PASS 直接在工厂里抛，让部署当场失败；非生产保留控制台回退
- * 并记一条警告。判据与 service-sms 的 fail-closed 一致（NODE_ENV）。
+ * 并记一条警告。规则在 core-utils `chooseDevFallback`（判据 NODE_ENV，与 service-sms
+ * 一致）；这里只提供接线。
  *
  * @throws {Error} 生产环境且 SMTP_PASS 为空
  */
@@ -40,17 +42,15 @@ export function resolveMailProvider(
   smtp: SmtpMailProvider,
   consoleProvider: ConsoleMailProvider,
 ): IMailProvider {
-  if (process.env["SMTP_PASS"]) return smtp;
-
-  if (process.env["NODE_ENV"] === "production") {
-    throw new Error(
-      "[MailModule] SMTP 未配置（SMTP_PASS 为空），生产环境拒绝回退到 ConsoleMailProvider",
-    );
-  }
-  new Logger("MailModule").warn(
-    "SMTP 未配置（SMTP_PASS 为空），邮件只打印到控制台、不会真正发送 —— 仅限非生产",
-  );
-  return consoleProvider;
+  return chooseDevFallback<IMailProvider>({
+    scope: "MailModule",
+    configured: Boolean(process.env["SMTP_PASS"]),
+    real: smtp,
+    fallback: consoleProvider,
+    fallbackName: "ConsoleMailProvider（邮件只打印到控制台、不会真正发送）",
+    missing: "SMTP 未配置（SMTP_PASS 为空）",
+    warn: (message) => new Logger("MailModule").warn(message),
+  });
 }
 
 @Module({
