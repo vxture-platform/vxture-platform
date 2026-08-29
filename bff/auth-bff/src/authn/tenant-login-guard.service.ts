@@ -14,14 +14,17 @@
  * completion is already gated by possession of the SMS code.
  */
 
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { TurnstileVerifier } from "@vxture/core-auth";
+
+import { captchaFailureLine } from "../oidc/operator-login-guard.service";
 
 // Must match the accounts tenant login widget's action (OidcLoginForm).
 const TENANT_TURNSTILE_ACTION = "tenant_auth";
 
 @Injectable()
 export class TenantLoginGuard {
+  private readonly logger = new Logger(TenantLoginGuard.name);
   private readonly turnstile = TurnstileVerifier.fromEnv("tenant");
 
   /**
@@ -35,7 +38,10 @@ export class TenantLoginGuard {
         remoteIp: ip,
         expectedAction: TENANT_TURNSTILE_ACTION,
       });
-    } catch {
+    } catch (error) {
+      // Same discipline as the operator guard: bare 401 to the caller, the
+      // reason to the log. See `captchaFailureLine` for why.
+      this.logger.warn(captchaFailureLine("tenant", ip, error));
       throw new UnauthorizedException("human_verification_failed");
     }
   }

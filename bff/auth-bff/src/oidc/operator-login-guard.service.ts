@@ -16,9 +16,13 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from "@nestjs/common";
-import { TurnstileVerifier } from "@vxture/core-auth";
+import {
+  TurnstileVerificationError,
+  TurnstileVerifier,
+} from "@vxture/core-auth";
 
 const WINDOW_MS = 15 * 60 * 1000; // 15-minute fixed window
 const IP_LIMIT = 10; // max failures per IP per window
@@ -33,6 +37,7 @@ interface Bucket {
 
 @Injectable()
 export class OperatorLoginGuard {
+  private readonly logger = new Logger(OperatorLoginGuard.name);
   private readonly turnstile = TurnstileVerifier.fromEnv("admin");
   private readonly ipBuckets = new Map<string, Bucket>();
   private readonly accountBuckets = new Map<string, Bucket>();
@@ -68,7 +73,17 @@ export class OperatorLoginGuard {
         remoteIp: ip,
         expectedAction: OPERATOR_TURNSTILE_ACTION,
       });
-    } catch {
+    } catch (error) {
+      // The 401 body stays a bare `human_verification_failed` on purpose - the
+      // reason (hostname-mismatch / action-mismatch / Cloudflare error-codes /
+      // no token at all) is operator-config or bot-signal information, not
+      // something to hand back to the caller. But it MUST land somewhere: until
+      // 2026-08-29 it was swallowed here, so a wrong `*_ALLOWED_HOSTNAMES`, a
+      // crossed secret and a client that timed out and degraded were all one
+      // indistinguishable 401 - and a production incident was diagnosed by
+      // guesswork for hours. One warn line per failure, greppable by the stable
+      // `captcha_verification_failed` prefix, never the token.
+      this.logger.warn(captchaFailureLine("admin", ip, error));
       throw new UnauthorizedException("human_verification_failed");
     }
   }
@@ -117,4 +132,23 @@ export class OperatorLoginGuard {
       bucket.attempts += 1;
     }
   }
+}
+
+/**
+ * One structured line per captcha failure. `reason` is the verifier's own
+ * classification; `detail` carries Cloudflare's `error-codes` when there are
+ * any. `reason=missing-token` is the client-side degrade path (widget errored
+ * or hit the 12 s grace window and submitted without a token) - the one that
+ * looks like a bot rejection but is a reachability problem.
+ */
+export function captchaFailureLine(
+  surface: "admin" | "tenant",
+  ip: string,
+  error: unknown,
+): string {
+  const reason =
+    error instanceof TurnstileVerificationError ? error.reason : "unexpected";
+  const detail =
+    error instanceof Error ? error.message.replace(/\s+/g, " ") : String(error);
+  return `captcha_verification_failed surface=${surface} reason=${reason} ip=${ip} detail="${detail}"`;
 }

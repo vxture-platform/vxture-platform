@@ -103,11 +103,22 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
   // Cloudflare script is unreachable), don't hard-block login — treat it as
   // best-effort. The server still enforces when CF_TURNSTILE_ENABLED is on.
   const [turnstileFailed, setTurnstileFailed] = useState(false);
+  // WHY the widget failed - the six-digit Cloudflare code, "script-load-failed",
+  // "unsupported", or "timeout" for the grace window below. Until 2026-08-29
+  // `onError` collapsed all of them into the boolean above and the code was
+  // gone before anyone could read it; a production incident was then diagnosed
+  // by guesswork across several rounds. Shown next to the widget, sent nowhere.
+  const [turnstileErrorCode, setTurnstileErrorCode] = useState<string | null>(
+    null,
+  );
   // Fallback: if the widget yields neither a token nor an error within a grace
   // window (script blocked/hung), degrade too so login is never stuck.
   useEffect(() => {
     if (!turnstileKey || turnstileToken || turnstileFailed) return undefined;
-    const t = setTimeout(() => setTurnstileFailed(true), 12000);
+    const t = setTimeout(() => {
+      setTurnstileErrorCode("timeout");
+      setTurnstileFailed(true);
+    }, 12000);
     return () => clearTimeout(t);
   }, [turnstileKey, turnstileToken, turnstileFailed]);
   // Set when an operator first factor succeeds but a second factor is owed.
@@ -337,8 +348,27 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
       resetSignal={turnstileResetSignal}
       onToken={(token) => setTurnstileToken(token)}
       onExpire={() => setTurnstileToken("")}
-      onError={() => setTurnstileFailed(true)}
+      onError={(code) => {
+        setTurnstileErrorCode(code ?? "unknown");
+        setTurnstileFailed(true);
+      }}
     />
+  ) : null;
+  /* The degraded state used to be silent: the form let you submit and the
+     server then refused with a bare 401. Now the code is on screen, so a user
+     reporting "验证故障" can read it out instead of describing a spinner. */
+  const turnstileSlot = turnstileNode ? (
+    <>
+      {turnstileNode}
+      {turnstileFailed ? (
+        <p
+          className="text-center text-sm text-warning"
+          data-testid="turnstile-degraded"
+        >
+          {`人机验证未完成（${turnstileErrorCode ?? "unknown"}），提交可能被拒绝`}
+        </p>
+      ) : null}
+    </>
   ) : null;
 
   // Tenant realm offers code + password tabs (verification-code first, D-CA);
@@ -397,7 +427,7 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
           codeSending={sending}
           codeCountdown={countdown}
           sendCodeDisabled={countdown > 0 || sending}
-          turnstile={turnstileNode}
+          turnstile={turnstileSlot}
           social={socialNode}
           showForgot={false}
           submitLabel="登录 / 注册"
@@ -422,7 +452,7 @@ export function OidcLoginForm({ loginChallenge, realm }: OidcLoginFormProps) {
           agreementChecked={acceptedTerms}
           errors={errors}
           loading={loading}
-          turnstile={turnstileNode}
+          turnstile={turnstileSlot}
           social={socialNode}
           showForgot={!isOperator}
           primaryDisabled={!passwordCanSubmit}
