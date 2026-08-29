@@ -245,7 +245,7 @@
       },
       "skills": {
         "label": "Skill Market",
-        "description": "Register and manage callable agent skills, endpoints, publishing, and runtime status."
+        "description": "Read-only catalog of capabilities registered in Runos; registration and management live in opera."
       },
       "billing": {
         "label": "Billing Center",
@@ -1928,6 +1928,121 @@
     "boolean": {
       "yes": "Yes",
       "no": "No"
+    }
+  },
+  "skillsPage": {
+    "header": {
+      "title": "Skill Market",
+      "description": "Read-only catalog of capabilities registered in Runos: connectors, executors, and skills. Registration, promotion, retirement, and certification happen in opera's Capability Registry.",
+      "manageInOpera": "Manage in opera Capability Registry"
+    },
+    "summary": {
+      "ariaLabel": "Skill market summary",
+      "total": "Capabilities",
+      "totalHelp": "Capabilities registered in the Runos catalog, across all admission tiers.",
+      "skills": "Skills",
+      "skillsHelp": "Capabilities of type skill, callable directly by agents.",
+      "certified": "Certified / official",
+      "certifiedHelp": "Capabilities whose admission tier is certified or official.",
+      "categories": "Categories",
+      "categoriesHelp": "Distinct categories present in the catalog (Runos picks one of 15)."
+    },
+    "filters": {
+      "ariaLabel": "Capability filters",
+      "searchPlaceholder": "Search by capability ID, name, provider, owner, or tag…",
+      "count": "{count} capabilities",
+      "primitiveAria": "Capability type",
+      "allPrimitives": "All types",
+      "tierAria": "Admission tier",
+      "allTiers": "All tiers",
+      "categoryAria": "Category",
+      "allCategories": "All categories"
+    },
+    "primitive": {
+      "connector": "Connector",
+      "executor": "Executor",
+      "skill": "Skill"
+    },
+    "tier": {
+      "experimental": "Experimental",
+      "certified": "Certified",
+      "official": "Official"
+    },
+    "category": {
+      "communication": "Communication",
+      "crm": "CRM",
+      "support": "Support",
+      "devops": "DevOps",
+      "security": "Security",
+      "finance": "Finance",
+      "hr": "HR",
+      "commerce": "Commerce",
+      "marketing": "Marketing",
+      "data": "Data",
+      "documents": "Documents",
+      "productivity": "Productivity",
+      "development": "Development",
+      "legal": "Legal",
+      "other": "Other"
+    },
+    "columns": {
+      "capability": "Capability",
+      "primitive": "Type",
+      "category": "Category",
+      "tier": "Tier",
+      "provider": "Provider",
+      "owner": "Owner",
+      "tags": "Tags"
+    },
+    "actions": {
+      "menu": "Actions for {name}"
+    },
+    "empty": {
+      "title": "No capabilities in the catalog yet",
+      "description": "Runos has no registered capabilities. Register the first one in opera's Capability Registry.",
+      "filteredTitle": "No capabilities match the current filters",
+      "loadFailedTitle": "Failed to load the capability catalog",
+      "loadFailedDescription": "Could not read the catalog from Runos: {message}"
+    },
+    "detail": {
+      "title": "Capability detail",
+      "loading": "Loading capability detail",
+      "loadingDescription": "Reading versions, aliases, and endpoints from Runos.",
+      "loadFailed": "Failed to load capability detail",
+      "fields": {
+        "capabilityId": "Capability ID",
+        "title": "Operational name",
+        "displayName": "Display name ({locale})",
+        "primitive": "Type",
+        "category": "Category",
+        "tier": "Admission tier",
+        "provider": "Provider",
+        "owner": "Owner",
+        "tags": "Tags",
+        "createdAt": "Registered at"
+      },
+      "versions": {
+        "title": "Versions",
+        "count": "{count}",
+        "version": "Version",
+        "state": "State",
+        "digest": "Content digest",
+        "createdAt": "Created at",
+        "empty": "No versions yet."
+      },
+      "aliases": {
+        "title": "Aliases",
+        "empty": "No aliases — this capability has no resolvable stable version yet."
+      },
+      "endpoints": {
+        "title": "Endpoints",
+        "count": "{count}",
+        "environment": "Environment",
+        "baseUrl": "Base URL",
+        "version": "Version",
+        "state": "State",
+        "empty": "No endpoint instances yet."
+      }
     }
   },
   "drawer": {

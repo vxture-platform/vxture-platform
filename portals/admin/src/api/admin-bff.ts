@@ -47,7 +47,9 @@ import type {
   PlatformRoleRecord,
   RiskRecordItem,
   SessionSnapshot,
-  SkillRecord,
+  RunosCapabilityDetailRecord,
+  RunosCapabilityRecord,
+  RunosManagementEntry,
   SupportTicketRecord,
   SubscriptionOperationAction,
   SubscriptionOperationDetailRecord,
@@ -1665,8 +1667,50 @@ export async function fetchAnnouncements(): Promise<AnnouncementRecord[]> {
   return readJsonStrict<AnnouncementRecord[]>("/api/announcements");
 }
 
-export async function fetchSkills(): Promise<SkillRecord[]> {
-  return readJson<SkillRecord[]>("/api/skills", []);
+// ── Runos 能力目录（技能市场，只读）───────────────────────────────────────────
+// admin-bff `/api/runos/*` 透传 Runos `/capability/*`（2026-08-30 接入，替掉此前
+// 返回字面量 `[]` 的 `/api/skills` 空桩）。走 readJsonStrict：上游契约漂移是 502、
+// 无权限是 403，都该到页面上说出来，不能被 readJson 吞成空列表——空列表在这一页上
+// 恰好长得和「目录里还没有能力」一模一样。
+
+export interface RunosCapabilityFilters {
+  /** 精确匹配。 */
+  category?: string;
+  /** 可重复，全部命中（AND）——透传时 append 不是 set。 */
+  tags?: string[];
+}
+
+export async function fetchRunosCapabilities(
+  filters: RunosCapabilityFilters = {},
+): Promise<RunosCapabilityRecord[]> {
+  const search = new URLSearchParams();
+  if (filters.category) search.set("category", filters.category);
+  for (const tag of filters.tags ?? []) {
+    if (tag) search.append("tag", tag);
+  }
+  const qs = search.toString();
+  return readJsonStrict<RunosCapabilityRecord[]>(
+    `/api/runos/capabilities${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export async function fetchRunosCapability(
+  capabilityId: string,
+): Promise<RunosCapabilityDetailRecord> {
+  return readJsonStrict<RunosCapabilityDetailRecord>(
+    `/api/runos/capabilities/${encodeURIComponent(capabilityId)}`,
+  );
+}
+
+/**
+ * 「去 opera 能力注册管理」的链接。拿不到（无权限 / BFF 没配 OPERA_BASE_URL）就不
+ * 渲染那个按钮——所以这一条走 readJson 回 null，而不是抛。
+ */
+export async function fetchRunosManagementEntry(): Promise<RunosManagementEntry | null> {
+  return readJson<RunosManagementEntry | null>(
+    "/api/runos/management-entry",
+    null,
+  );
 }
 
 // ── Announcements 写路径（B8）─────────────────────────────────────────────
