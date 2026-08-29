@@ -450,6 +450,14 @@ export function ModelGrantsPage() {
       cell: (grant) => agentLabel(grant.agentId),
     },
     {
+      /* 对话框里能配、列表里看不见，等于只做了一半：atlas 的解析顺序是
+         `modelCode > endpointCode > taskProfile`,所以一条授权走不走画像路由,
+         是排查「某个画像为什么 404」时第一个要看的东西。此前只能逐条打开编辑框看。 */
+      id: "taskProfile",
+      header: t("table.columns.taskProfile"),
+      cell: (grant) => grant.taskProfile ?? t("table.anyProfile"),
+    },
+    {
       id: "priority",
       header: t("table.columns.priority"),
       align: "right",
