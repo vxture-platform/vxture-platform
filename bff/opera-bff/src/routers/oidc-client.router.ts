@@ -23,6 +23,12 @@
  * 同 product-catalog.router.ts 的直连模式。product_id 外键要求产品已经在
  * 「产品目录」（阶段一）登记过，两个页面天然串联。
  *
+ * 2026-08-30（40-product-registry.md §3）：本路由只触达 `client_kind='product'`
+ * 的行。四个平台门户（website/console/admin/opera）是 `client_kind='platform'`，
+ * 只由 seed / 27-provision 管——它们不是任何产品的凭据，出现在「接入凭据」列表里
+ * 只会诱使人从产品页去轮换 console 的密钥。创建时先确认 productId 指向一个未删除
+ * 的目录行再写库：让 FK 去报错得到的是一句 500，这里给的是字段级 400。
+ *
  * 能力码：复用 `platform:product.manage`——OIDC 客户端是产品登记的下一步，不
  * 单独开一套能力码。
  */
@@ -153,7 +159,7 @@ export class OidcClientRouter {
     @Query("productId") productId?: string,
   ): Promise<OidcClientRecord[]> {
     assertCanManage(req);
-    const clauses = ["c.realm = 'customer'"];
+    const clauses = ["c.realm = 'customer'", "c.client_kind = 'product'"];
     const params: unknown[] = [];
     if (productId) {
       params.push(productId);
@@ -175,6 +181,8 @@ export class OidcClientRouter {
   ): Promise<OidcClientRecord & { clientSecret: string }> {
     assertCanManage(req);
     validateCreate(body);
+    const productId = body.productId!.trim();
+    const productCode = await this.requireRegisteredProduct(productId);
 
     const secret = generateSecret();
     const salt = await genSalt(BCRYPT_COST);
@@ -184,16 +192,17 @@ export class OidcClientRouter {
     try {
       const result = await this.pool.query<ClientRow>(
         `INSERT INTO appoidc.oidc_clients (
-           client_id, client_secret_hash, realm, product_id, release_channel,
-           name, display_name, redirect_uris, allowed_scopes, pkce_required
-         ) VALUES ($1, $2, 'customer', $3, $4, $5, $6, $7, $8, $9)
+           client_id, client_secret_hash, realm, product_id, client_kind,
+           release_channel, name, display_name, redirect_uris, allowed_scopes,
+           pkce_required
+         ) VALUES ($1, $2, 'customer', $3, 'product', $4, $5, $6, $7, $8, $9)
          RETURNING id, client_id, product_id, release_channel, name,
                    display_name, redirect_uris, allowed_scopes, pkce_required,
                    status, created_at, updated_at`,
         [
           body.clientId!.trim(),
           secretHash,
-          body.productId,
+          productId,
           body.releaseChannel ?? "stable",
           body.name?.trim() || body.clientId!.trim(),
           body.displayName?.trim() || null,
@@ -215,7 +224,6 @@ export class OidcClientRouter {
       throw error;
     }
 
-    const productCode = await this.resolveProductCode(row.product_id);
     return {
       ...toRecord({ ...row, product_code: productCode }),
       clientSecret: secret,
@@ -234,7 +242,7 @@ export class OidcClientRouter {
     const result = await this.pool.query(
       `UPDATE appoidc.oidc_clients
           SET client_secret_hash = $1, updated_at = now()
-        WHERE client_id = $2 AND realm = 'customer'
+        WHERE client_id = $2 AND realm = 'customer' AND client_kind = 'product'
         RETURNING client_id`,
       [secretHash, clientId],
     );
@@ -276,7 +284,7 @@ export class OidcClientRouter {
     const result = await this.pool.query<ClientRow>(
       `UPDATE appoidc.oidc_clients c
           SET status = $1, updated_at = now()
-        WHERE c.client_id = $2 AND c.realm = 'customer'
+        WHERE c.client_id = $2 AND c.realm = 'customer' AND c.client_kind = 'product'
         RETURNING c.id, c.client_id, c.product_id, c.release_channel, c.name,
                   c.display_name, c.redirect_uris, c.allowed_scopes,
                   c.pkce_required, c.status, c.created_at, c.updated_at`,
@@ -301,7 +309,38 @@ export class OidcClientRouter {
     );
     return result.rows[0]?.product_code ?? null;
   }
+
+  /**
+   * 产品凭据只能挂在目录里**现存**的产品上——软删的行有 id 也不算。先在这里判、
+   * 再写库：FK 撞了是一句 500 加约束名，这里回的是 `productId` 字段级 400。
+   */
+  private async requireRegisteredProduct(productId: string): Promise<string> {
+    if (!UUID_RE.test(productId)) {
+      throw invalidRequest(
+        "VALIDATION_INVALID_VALUE",
+        "productId must be a product id from the catalog",
+        "productId",
+      );
+    }
+    const result = await this.pool.query<{ product_code: string }>(
+      `SELECT product_code FROM product.products
+        WHERE id = $1 AND deleted_at IS NULL`,
+      [productId],
+    );
+    const code = result.rows[0]?.product_code;
+    if (!code) {
+      throw invalidRequest(
+        "VALIDATION_INVALID_VALUE",
+        "productId does not reference a registered product",
+        "productId",
+      );
+    }
+    return code;
+  }
 }
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function assertCanManage(req: Request & RequestContext): void {
   if (!req.operator) {

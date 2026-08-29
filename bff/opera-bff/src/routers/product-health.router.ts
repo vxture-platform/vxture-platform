@@ -1,5 +1,5 @@
 /**
- * product-health.router.ts — 接入产品的 prod/beta 存活 + 就绪探测。
+ * product-health.router.ts — 目录产品各渠道的存活 + 就绪探测。
  * @package @vxture/bff-opera
  * @layer Application
  * @category Router
@@ -9,24 +9,27 @@
  * docs/20-specs/000-platform/admin/20-admin-platform-refinement-plan.md 把它登记在
  * P4「service-monitor 生产遥测源（Q6 维持 dev-only）」，之前两次迁移都刻意跳过它
  * （49d60f2 的原话："moving it would relocate emptiness"）。这次换了数据源和语义：
- * 探的不是平台自己的门户/BFF，是**接入平台的产品线**——每个产品的 prod 与 beta 是否
+ * 探的不是平台自己的门户/BFF，是**接入平台的产品线**——每个产品的各渠道是否
  * 存活（owner 口径 2026-08-11，已建档：
  * `docs/20-specs/000-platform/opera/20-service-monitor.md` §2）。
  *
- * 数据源单一权威 = appoidc.oidc_clients LEFT JOIN product.products，不是另起一份
- * 硬编码清单：origin 就是各产品登记的 OIDC 回调地址去掉路径，与 seed 侧同一份数据
- * （deploy/database/seed/seed-catalog.mjs 的 `appUris()`）。LEFT JOIN 而不是 JOIN——
- * ontos/raven/anlan/forge/xuanzhen 五个产品已注册 OIDC 客户端，但 product.products
- * 还没有它们的目录行（产品定义待建，见 product_100_matrix.md），INNER JOIN 会把这
- * 五个直接丢掉；这里退而求其次，用客户端自己的 name/display_name 顶上，分组键改用
- * "product_id 或裸 client_id 去 -beta 后缀"。
+ * ── 2026-08-30：清单以 product.products 为主表（40-product-registry.md §4）────────
  *
- * 两种 prod/beta 建模并存（seed 历史遗留，两种都要认）：
- *   多数产品（runos/atlas/ontos/raven/anlan/forge/xuanzhen/ruyin）——同一个 client_id，
- *   redirect_uris = [prod 回调, beta 回调?]（`appUris()` 固定序，prod 在前，beta 未
- *   配置时数组长度为 1）。
- *   arda/karda —— 两个独立 client_id（如 `arda` / `arda-beta`），后者
- *   release_channel='beta'。
+ * 此前主表是 `appoidc.oidc_clients`，LEFT JOIN 产品表，外加一份硬编码豁免名单
+ * （ontos/raven/anlan/forge/xuanzhen）和一张按产品码猜层级的表——于是本页显示的
+ * 「产品」与「产品目录」是两份清单：目录里 21 个、这里 12 个，其中 5 个目录里根本
+ * 没有。根因不是 JOIN 方向，是把「谁是产品」这个问题交给了客户端表回答。
+ *
+ * 现在：**`product.products` 是唯一权威**，本页 = 目录里每一个未删除的产品，
+ * LEFT JOIN 它名下 `client_kind='product'` 且 `status='active'` 的 OIDC 客户端，按
+ * `release_channel` 分到 stable / beta / canary 三个渠道。没有任何客户端的产品照样
+ * 出现，标为 **未接入**（`onboarded=false`）——目录里有、监控里没有，正是运营者要
+ * 看见的事实，不是该被过滤掉的噪声。层级只由 `product_type` 判定（矩阵文档 §2），
+ * 没有按产品码的回退表：目录行没填对类型，就如实显示「未分类」。
+ *
+ * 渠道的唯一口径是 `release_channel`。此前"stable 客户端的第二个 redirect_uri = beta"
+ * 那条派生路径已退役：一个回调白名单里多一个地址，不等于登记了一个渠道。同一渠道若
+ * 登记了多个活跃客户端，取最早登记的那个探（一渠道一地址，表里一行放不下两个）。
  *
  * 每个 origin 探两类端点——**划分与路径约定归 025 标准 §2**，不在这里另立规矩；
  * owner 口径说的"health、status"指的就是这两类（对应 UI 的存活/就绪两列，不是要求
@@ -64,6 +67,17 @@ export type ProductLayer =
   | "client"
   | "external"
   | "unclassified";
+
+/** 与 product.products.status 的 CHECK 词表一致（40_product.sql）。 */
+export type ProductState = "draft" | "active" | "inactive" | "deprecated";
+
+/** 与 appoidc.oidc_clients.release_channel 的 CHECK 词表一致（22_appoidc.sql）。 */
+export type ReleaseChannel = "stable" | "beta" | "canary";
+export const RELEASE_CHANNELS: readonly ReleaseChannel[] = [
+  "stable",
+  "beta",
+  "canary",
+];
 
 export type LivenessStatus =
   | "healthy"
@@ -105,6 +119,8 @@ export interface ReadinessProbe {
 }
 
 export interface ProductChannelHealth {
+  /** 该渠道登记的 OIDC 客户端；null = 这个渠道没有客户端，也就没有探测发生过。 */
+  clientId: string | null;
   origin: string | null;
   health: LivenessProbe;
   status: ReadinessProbe;
@@ -115,60 +131,60 @@ export interface ProductHealthItem {
   productCode: string;
   productName: string;
   layer: ProductLayer;
+  state: ProductState;
+  /** 至少一个渠道登记了活跃客户端。false = 目录里有、但还没做基础接入。 */
+  onboarded: boolean;
   prod: ProductChannelHealth;
   beta: ProductChannelHealth;
+  canary: ProductChannelHealth;
 }
 
-interface OidcClientRow {
-  client_id: string;
-  product_id: string | null;
-  release_channel: string;
-  redirect_uris: string[];
-  status: string;
-  name: string | null;
-  display_name: string | null;
-  product_code: string | null;
-  product_name: string | null;
+/** `PRODUCT_CHANNELS_SELECT` 的一行：一个产品 × 它的一个活跃客户端（或没有客户端时 client_* 全 null）。 */
+export interface ProductChannelRow {
+  product_id: string;
+  product_code: string;
+  product_name: string;
   product_type: string | null;
+  product_status: string;
+  client_id: string | null;
+  release_channel: string | null;
+  redirect_uris: string[] | null;
 }
 
-interface ProductGroup {
-  groupKey: string;
-  productId: string | null;
+export interface ChannelClient {
+  clientId: string;
+  origin: string | null;
+}
+
+export interface ProductChannelGroup {
+  productId: string;
   productCode: string;
   productName: string;
   productType: string | null;
-  prodOrigin: string | null;
-  betaOrigin: string | null;
+  state: ProductState;
+  channels: Record<ReleaseChannel, ChannelClient | null>;
 }
 
-// product_id 非空＝已在 product.products 建目录行的产品；ontos/raven/anlan/forge/
-// xuanzhen 五个已注册 OIDC 客户端但目录行还没建（产品定义待建，见
-// product_100_matrix.md），product_id 恒为 NULL、天然会被 "product_id is not null"
-// 挡在外面——这个允许名单就是那五个的显式豁免，跟下面 LAYER_FALLBACK_BY_CODE
-// 共用同一份 key，不是两套并行口径。哪天某个 code 有了真目录行，从这里删掉它，
-// `product_id is not null` 会自动接住，行为不变。
-const PENDING_CATALOG_CLIENT_IDS = [
-  "ontos",
-  "raven",
-  "anlan",
-  "forge",
-  "xuanzhen",
-] as const;
-
-const PRODUCT_CLIENTS_SELECT = `
-select c.client_id, c.product_id, c.release_channel, c.redirect_uris, c.status,
-       c.name, c.display_name,
-       p.product_code, p.product_name, p.product_type
-from appoidc.oidc_clients c
-left join product.products p on p.id = c.product_id
-where c.status = 'active'
-  and (p.deleted_at is null or p.id is null)
-  and (c.product_id is not null or c.client_id = any($1::varchar[]))
+/**
+ * 主表是产品目录，不是客户端表。`c.status='active'` 放在 JOIN 条件而不是 WHERE 里：
+ * 放 WHERE 会把"只有停用客户端"的产品整个筛掉，那它就从「未接入」变成了「不存在」。
+ * 排序把同一产品的客户端按登记时间排好，分组时同渠道取第一个即"最早登记的"。
+ */
+const PRODUCT_CHANNELS_SELECT = `
+select p.id as product_id, p.product_code, p.product_name, p.product_type,
+       p.status as product_status,
+       c.client_id, c.release_channel, c.redirect_uris
+  from product.products p
+  left join appoidc.oidc_clients c
+    on c.product_id = p.id
+   and c.client_kind = 'product'
+   and c.status = 'active'
+ where p.deleted_at is null
+ order by p.product_code asc, c.created_at asc nulls last, c.client_id asc
 `;
 
-// product_100_matrix.md §2 的层级判定，权威来源 = product.products.product_type。
-function layerFromProductType(productType: string | null): ProductLayer | null {
+/** product_100_matrix.md §2 的层级判定，唯一来源 = product.products.product_type。 */
+export function layerFromProductType(productType: string | null): ProductLayer {
   switch (productType) {
     case "model_platform":
     case "capability_platform":
@@ -176,24 +192,59 @@ function layerFromProductType(productType: string | null): ProductLayer | null {
     case "data_platform":
     case "knowledge_platform":
       return "L2";
+    // L3 = 行业智能体应用（矩阵 §1）；vxtpl 与 demo 智能体都是这个类型。
+    case "agent":
+      return "L3";
     case "client":
       return "client";
     case "external":
       return "external";
     default:
-      return null;
+      return "unclassified";
   }
 }
 
-// 上面 PENDING_CATALOG_CLIENT_IDS 那五个的层级，同一份 matrix 文档判定，只是数据
-// 还没落库——这里是文档到字段的临时占位，不是新开一套分类口径。
-const LAYER_FALLBACK_BY_CODE: Readonly<Record<string, ProductLayer>> = {
-  ontos: "L2",
-  raven: "L3",
-  anlan: "L3",
-  forge: "L3",
-  xuanzhen: "L3",
-};
+function isReleaseChannel(value: string | null): value is ReleaseChannel {
+  return (RELEASE_CHANNELS as readonly string[]).includes(value ?? "");
+}
+
+function toProductState(status: string): ProductState {
+  return status === "draft" ||
+    status === "active" ||
+    status === "inactive" ||
+    status === "deprecated"
+    ? status
+    : "draft";
+}
+
+/** 把「产品 × 客户端」行集折成「产品 → 三个渠道」。纯函数，单测在 product-health.spec.ts。 */
+export function groupProductChannels(
+  rows: ProductChannelRow[],
+): ProductChannelGroup[] {
+  const byProduct = new Map<string, ProductChannelGroup>();
+  for (const row of rows) {
+    let group = byProduct.get(row.product_id);
+    if (!group) {
+      group = {
+        productId: row.product_id,
+        productCode: row.product_code,
+        productName: row.product_name,
+        productType: row.product_type,
+        state: toProductState(row.product_status),
+        channels: { stable: null, beta: null, canary: null },
+      };
+      byProduct.set(row.product_id, group);
+    }
+    if (!row.client_id || !isReleaseChannel(row.release_channel)) continue;
+    // 同渠道多客户端：rows 已按登记时间升序，先到的留下，后来的不探。
+    if (group.channels[row.release_channel]) continue;
+    group.channels[row.release_channel] = {
+      clientId: row.client_id,
+      origin: originOf(row.redirect_uris?.[0]),
+    };
+  }
+  return [...byProduct.values()];
+}
 
 @Controller("api/product-health")
 export class ProductHealthRouter {
@@ -209,86 +260,34 @@ export class ProductHealthRouter {
       throw unauthenticated("AUTH_NO_SESSION", "No active session");
     }
 
-    const { rows } = await this.pool.query<OidcClientRow>(
-      PRODUCT_CLIENTS_SELECT,
-      [PENDING_CATALOG_CLIENT_IDS as unknown as string[]],
+    const { rows } = await this.pool.query<ProductChannelRow>(
+      PRODUCT_CHANNELS_SELECT,
     );
-    const groups = groupByProduct(rows).sort((a, b) =>
-      a.productCode.localeCompare(b.productCode),
-    );
+    const groups = groupProductChannels(rows);
 
     return Promise.all(
       groups.map(async (group) => {
-        const [prod, beta] = await Promise.all([
-          probeChannel(group.prodOrigin),
-          probeChannel(group.betaOrigin),
+        const [prod, beta, canary] = await Promise.all([
+          probeChannel(group.channels.stable),
+          probeChannel(group.channels.beta),
+          probeChannel(group.channels.canary),
         ]);
-        const layer =
-          layerFromProductType(group.productType) ??
-          LAYER_FALLBACK_BY_CODE[group.productCode] ??
-          "unclassified";
         return {
-          productId: group.productId ?? group.groupKey,
+          productId: group.productId,
           productCode: group.productCode,
           productName: group.productName,
-          layer,
+          layer: layerFromProductType(group.productType),
+          state: group.state,
+          onboarded: RELEASE_CHANNELS.some(
+            (channel) => group.channels[channel] !== null,
+          ),
           prod,
           beta,
+          canary,
         };
       }),
     );
   }
-}
-
-/** `arda-beta` → `arda`；已经是裸码的原样返回。 */
-function baseClientId(clientId: string): string {
-  return clientId.endsWith("-beta")
-    ? clientId.slice(0, -"-beta".length)
-    : clientId.endsWith("-canary")
-      ? clientId.slice(0, -"-canary".length)
-      : clientId;
-}
-
-function groupByProduct(rows: OidcClientRow[]): ProductGroup[] {
-  const byGroup = new Map<string, OidcClientRow[]>();
-  for (const row of rows) {
-    const key = row.product_id ?? `client:${baseClientId(row.client_id)}`;
-    const list = byGroup.get(key) ?? [];
-    list.push(row);
-    byGroup.set(key, list);
-  }
-
-  const groups: ProductGroup[] = [];
-  for (const [groupKey, clientRows] of byGroup) {
-    const betaRow = clientRows.find(
-      (r) => r.release_channel === "beta" || r.client_id.endsWith("-beta"),
-    );
-    const stableRow = clientRows.find((r) => r !== betaRow) ?? clientRows[0];
-    if (!stableRow) continue;
-
-    const prodOrigin = originOf(stableRow.redirect_uris?.[0]);
-    const betaOrigin = betaRow
-      ? originOf(betaRow.redirect_uris?.[0])
-      : originOf(stableRow.redirect_uris?.[1]);
-
-    const code = stableRow.product_code ?? baseClientId(stableRow.client_id);
-    const name =
-      stableRow.product_name ??
-      stableRow.display_name ??
-      stableRow.name ??
-      code;
-
-    groups.push({
-      groupKey,
-      productId: stableRow.product_id,
-      productCode: code,
-      productName: name,
-      productType: stableRow.product_type,
-      prodOrigin,
-      betaOrigin,
-    });
-  }
-  return groups;
 }
 
 function originOf(uri: string | undefined): string | null {
@@ -597,7 +596,7 @@ async function probeReadiness(origin: string | null): Promise<ReadinessProbe> {
   }
 
   // readiness 是可选端点（025 标准 §2）——两条约定路径都 404，最可能是这个产品
-  // 压根没实现它，不是"故障"。全仓目前零产品真正接上，所以这条大概率总是命中。
+  // 压根没实现它，不是"故障"。
   if (allNotFound(attempts)) {
     return {
       status: "not_implemented",
@@ -623,12 +622,14 @@ async function probeReadiness(origin: string | null): Promise<ReadinessProbe> {
   };
 }
 
+/** 一个渠道 = 一个客户端的 origin；没有客户端就没有探测这回事（两列都是 not_configured）。 */
 async function probeChannel(
-  origin: string | null,
+  channel: ChannelClient | null,
 ): Promise<ProductChannelHealth> {
+  const origin = channel?.origin ?? null;
   const [health, status] = await Promise.all([
     probeLiveness(origin),
     probeReadiness(origin),
   ]);
-  return { origin, health, status };
+  return { clientId: channel?.clientId ?? null, origin, health, status };
 }

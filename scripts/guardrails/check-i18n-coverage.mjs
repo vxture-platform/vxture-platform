@@ -104,12 +104,19 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  *   这一页（OidcLoginForm）本就全是硬编码中文、一条没抽，只抽这一句会造出半中英；
  *   抽要整页抽，那是 i18n 那条线的活。这句是把此前被吞掉的错误码放到用户眼前，
  *   不放就得继续靠猜。
+ *
+ * 2026-08-30 opera 1818 → 1819：`ops/health` 服务状态页清单改以 product.products
+ *   为主表（opera/40-product-registry.md），于是多出一个产品级的中性态「未接入」
+ *   （目录里有、没有任何 OIDC 客户端），以及探测点抽屉里对应的说明段。
+ *   **没有走 `t()`，是有意的**：这一页全部文案都是硬编码中文、一条没抽，只抽新加的
+ *   这几句会造出半中英（同 08-29 `model/services` 那条的判据）。同一个词四处出现的
+ *   收成一个常量（与页内既有的 `LIVENESS_LABELS` 同一做法），所以净增只有 1。
  */
 const BASELINE = {
   console: 32,
   website: 54,
   admin: 3510,
-  opera: 1818,
+  opera: 1819,
   accounts: 264,
 };
 

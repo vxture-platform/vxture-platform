@@ -130,7 +130,7 @@ GRANT UPDATE (scope, tenant_id, workspace_id, target_type, target, role_id, role
 
 -- appoidc.oidc_clients  [anchor: id, created_at]
 REVOKE UPDATE ON appoidc.oidc_clients FROM platform_svc;
-GRANT UPDATE (client_id, client_secret_hash, realm, product_id, release_channel, name, display_name, logo_url, redirect_uris, post_logout_redirect_uris, allowed_scopes, access_token_ttl, refresh_token_ttl, pkce_required, slo_participation, back_channel_logout_uri, status, updated_at) ON appoidc.oidc_clients TO platform_svc;
+GRANT UPDATE (client_id, client_secret_hash, realm, product_id, client_kind, release_channel, name, display_name, logo_url, redirect_uris, post_logout_redirect_uris, allowed_scopes, access_token_ttl, refresh_token_ttl, pkce_required, slo_participation, back_channel_logout_uri, status, updated_at) ON appoidc.oidc_clients TO platform_svc;
 
 -- appoidc.signing_keys  [anchor: kid, created_at]
 REVOKE UPDATE ON appoidc.signing_keys FROM platform_svc;

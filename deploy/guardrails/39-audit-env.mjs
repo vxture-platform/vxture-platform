@@ -126,13 +126,12 @@ const OIDC_FUTURE_APP_HASH_KEYS = new Set([
   // ruyin = NEW client-side product surface (ruyin.vxture.com); provisioned when it ships.
   "OIDC_CLIENT_SECRET_HASH_RUYIN",
   "OIDC_CLIENT_SECRET_HASH_RUNOS",
-  "OIDC_CLIENT_SECRET_HASH_NOCUS",
+  // nocus: retired client (product_300 §1), row deleted by the 2026-08-30 migration.
   "OIDC_CLIENT_SECRET_HASH_ATLAS",
-  "OIDC_CLIENT_SECRET_HASH_ONTOS",
-  "OIDC_CLIENT_SECRET_HASH_RAVEN",
-  "OIDC_CLIENT_SECRET_HASH_ANLAN",
-  "OIDC_CLIENT_SECRET_HASH_FORGE",
-  "OIDC_CLIENT_SECRET_HASH_XUANZHEN",
+  // ontos/raven/anlan/forge/xuanzhen were removed 2026-08-30: seed no longer
+  // pre-creates clients for products without a catalog row (40-product-registry
+  // §5). A client created later through opera 接入凭据 gets its secret from that
+  // flow, not from an env hash — so no key is reserved here for them either.
   // vxtpl — 2026-08-13 完全产品化。其栈**已在产**（vxtpl.vxture.com），但 OIDC
   // client 是本次首登，secret 尚未生成转运，所以先留在 FUTURE（可选）；
   // owner 转运完成后按上面 opera 那条注释的规矩迁进 OIDC_CLIENT_SECRET_HASH_KEYS。
@@ -254,13 +253,7 @@ const ENV_FILE_RULES = [
       // beta base URLs (optional until beta deployment is live)
       "RUYIN_BETA_BASE_URL",
       "RUNOS_BETA_BASE_URL",
-      "NOCUS_BETA_BASE_URL",
       "ATLAS_BETA_BASE_URL",
-      "ONTOS_BETA_BASE_URL",
-      "RAVEN_BETA_BASE_URL",
-      "ANLAN_BETA_BASE_URL",
-      "FORGE_BETA_BASE_URL",
-      "XUANZHEN_BETA_BASE_URL",
       "ARDA_BETA_BASE_URL",
       // tailnet webhook delivery target (product_230 §3.1): empty = seed falls
       // back to ARDA_BASE_URL (public edge) — never blocks deploy

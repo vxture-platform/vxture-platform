@@ -102,28 +102,49 @@ restore() {
 DROP SCHEMA IF EXISTS iam CASCADE;
 CREATE SCHEMA iam;
 \i /backup/appoidc_seed.sql
--- ③b oidc_clients：is_enabled(bool)→status(enum active/disabled)；NOT NULL 数组列 COALESCE '{}'。
+-- ③b oidc_clients：is_enabled(bool)→status(enum active/inactive)；NOT NULL 数组列 COALESCE '{}'。
 --    真实备份行 UPSERT 覆盖 seed 占位行（占位 secret 未设）；id 省略（占位行保留原 id）。
+--    status 词表是 active/inactive（22_appoidc.sql chk_oidc_clients_status，product_251 B-3）——
+--    旧写法 'disabled' 会撞 CHECK 让整次恢复失败。
+--    client_kind（2026-08-30，40-product-registry §3）：备份里没有这一列，按归属推导——
+--    四个平台门户 = platform；其余必须挂着 product_id 才是产品接入凭据。既不是平台门户
+--    又没有 product_id 的备份行（历史孤儿：ontos/raven/anlan/forge/xuanzhen/nocus）**不迁入**，
+--    因为新库的 chk_oidc_clients_kind_product 不接受它们；跳过的行在下面 RAISE NOTICE 列出。
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT client_id FROM iam.oidc_client
+     WHERE product_id IS NULL AND client_id NOT IN ('website', 'console', 'admin', 'opera')
+  LOOP
+    RAISE NOTICE '[28b] skip orphan client % (no product_id, not a platform portal)', r.client_id;
+  END LOOP;
+END $$;
 INSERT INTO appoidc.oidc_clients (
-    client_id, client_secret_hash, realm, product_id, release_channel,
+    client_id, client_secret_hash, realm, product_id, client_kind, release_channel,
     name, display_name, logo_url,
     redirect_uris, post_logout_redirect_uris, allowed_scopes,
     access_token_ttl, refresh_token_ttl, pkce_required,
     slo_participation, back_channel_logout_uri, status,
     created_at, updated_at)
-SELECT client_id, client_secret_hash, realm, product_id, release_channel,
+SELECT client_id, client_secret_hash, realm, product_id,
+       CASE WHEN product_id IS NULL THEN 'platform' ELSE 'product' END,   -- client_kind
+       release_channel,
        name, display_name, logo_url,
        COALESCE(redirect_uris, '{}'), COALESCE(post_logout_redirect_uris, '{}'),
        COALESCE(allowed_scopes, '{}'),
        access_token_ttl, refresh_token_ttl, pkce_required,
        slo_participation, back_channel_logout_uri,
-       CASE WHEN is_enabled THEN 'active' ELSE 'disabled' END,   -- is_enabled → status
+       CASE WHEN is_enabled THEN 'active' ELSE 'inactive' END,   -- is_enabled → status
        created_at, updated_at
   FROM iam.oidc_client
+ WHERE product_id IS NOT NULL
+    OR client_id IN ('website', 'console', 'admin', 'opera')
 ON CONFLICT (client_id) DO UPDATE SET
     client_secret_hash        = EXCLUDED.client_secret_hash,
     realm                     = EXCLUDED.realm,
     product_id                = EXCLUDED.product_id,
+    client_kind               = EXCLUDED.client_kind,
     release_channel           = EXCLUDED.release_channel,
     name                      = EXCLUDED.name,
     display_name              = EXCLUDED.display_name,
