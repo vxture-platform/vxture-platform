@@ -4,6 +4,17 @@ export type TurnstileSurface = "tenant" | "admin";
 
 export interface TurnstileVerifierOptions {
   enabled: boolean;
+  /**
+   * Honour Cloudflare's own `metadata.result_with_testing_key` flag: when the
+   * secret is one of the documented dummy keys, siteverify answers with
+   * `hostname: "example.com"` and NO `action`, so the hostname and action checks
+   * below can never pass. With this on, a testing-key result skips those two
+   * checks; with it off (the default) it is refused outright as `testing-key`
+   * - which is the honest failure for a production box someone pasted a dummy
+   * secret into, instead of the misleading `hostname-mismatch` it used to be.
+   * Dev-only. The production env audit refuses `CF_TURNSTILE_ALLOW_TESTING_KEYS=true`.
+   */
+  allowTestingKeys?: boolean;
   secretKey?: string;
   allowedHostnames: string[];
   siteverifyUrl?: string;
@@ -23,6 +34,8 @@ export interface TurnstileSiteverifyResponse {
   action?: string;
   cdata?: string;
   "error-codes"?: string[];
+  /** Present (and `result_with_testing_key: true`) when a dummy secret answered. */
+  metadata?: { result_with_testing_key?: boolean };
 }
 
 export class TurnstileVerificationError extends Error {
@@ -37,7 +50,8 @@ export class TurnstileVerificationError extends Error {
       | "siteverify-failed"
       | "hostname-mismatch"
       | "action-mismatch"
-      | "network-error",
+      | "network-error"
+      | "testing-key",
   ) {
     super(message);
     this.name = "TurnstileVerificationError";
@@ -73,6 +87,7 @@ export class TurnstileVerifier {
     const siteverifyUrl = env.CF_TURNSTILE_SITEVERIFY_URL?.trim();
     return new TurnstileVerifier({
       enabled: parseBoolean(env.CF_TURNSTILE_ENABLED),
+      allowTestingKeys: parseBoolean(env.CF_TURNSTILE_ALLOW_TESTING_KEYS),
       ...(secretKey ? { secretKey } : {}),
       allowedHostnames:
         surfaceHostnames.length > 0 ? surfaceHostnames : fallbackHostnames,
@@ -156,6 +171,19 @@ export class TurnstileVerifier {
       );
     }
 
+    if (result.metadata?.result_with_testing_key === true) {
+      // Cloudflare says a dummy secret answered. Measured 2026-08-29: such a
+      // response carries `hostname: "example.com"` and no `action` at all, so
+      // the two checks below cannot pass - refuse it by name, or (dev only)
+      // trust Cloudflare's own flag and skip them.
+      if (this.options.allowTestingKeys) {
+        return result;
+      }
+      throw new TurnstileVerificationError(
+        "Turnstile answered with a testing key; CF_TURNSTILE_ALLOW_TESTING_KEYS is not set",
+        "testing-key",
+      );
+    }
     if (!isAllowedHostname(result.hostname, this.options.allowedHostnames)) {
       throw new TurnstileVerificationError(
         "Turnstile hostname is not allowed",

@@ -13,81 +13,82 @@
  * @date 2026-06-02
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import path from 'node:path';
-import process from 'node:process';
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import path from "node:path";
+import process from "node:process";
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 const ROOT = process.cwd();
-const WORKER_DIR = process.env.VX_WORKER_DIR ?? 'deploy';
-const STRICT_RUNTIME = process.env.VX_ENV_AUDIT_STRICT_RUNTIME === '1';
+const WORKER_DIR = process.env.VX_WORKER_DIR ?? "deploy";
+const STRICT_RUNTIME = process.env.VX_ENV_AUDIT_STRICT_RUNTIME === "1";
 const RUNTIME_DIR =
-  process.env.VX_RUNTIME_DIR ?? (STRICT_RUNTIME ? '/srv/vxture/runtime' : WORKER_DIR);
-const SHOW_OK = process.env.VX_ENV_AUDIT_SHOW_OK === '1';
+  process.env.VX_RUNTIME_DIR ??
+  (STRICT_RUNTIME ? "/srv/vxture/runtime" : WORKER_DIR);
+const SHOW_OK = process.env.VX_ENV_AUDIT_SHOW_OK === "1";
 // CI (quality-gate) sets this to escalate deploy-bundle warnings to errors.
-const FAIL_WARNINGS = process.env.VX_ENV_AUDIT_FAIL_WARNINGS === '1';
+const FAIL_WARNINGS = process.env.VX_ENV_AUDIT_FAIL_WARNINGS === "1";
 
 const SEVERITY_ORDER = new Map([
-  ['error', 0],
-  ['warning', 1],
+  ["error", 0],
+  ["warning", 1],
 ]);
 
 const SHARED_SECRET_KEYS = new Set([
-  'DATABASE_URL',
-  'REDIS_URL',
-  'JWT_SECRET',
-  'JWT_REFRESH_SECRET',
-  'AUTH_INTERNAL_TOKEN',
+  "DATABASE_URL",
+  "REDIS_URL",
+  "JWT_SECRET",
+  "JWT_REFRESH_SECRET",
+  "AUTH_INTERNAL_TOKEN",
 ]);
 
 // Kept in step with deploy/guardrails/39-audit-env.mjs — that copy is the one the
 // host runs before a deploy, and a key allowed there but not here (or vice versa)
 // means CI and production disagree about what may sit in the compose env.
 const COMPOSE_ONLY_KEYS = new Set([
-  'VX_IMAGE_REGISTRY',
-  'VX_IMAGE_NAMESPACE',
-  'VX_IMAGE_TAG',
-  'VX_WORKER01_TAILNET_IP',
-  'VX_WORKER02_TAILNET_IP',
+  "VX_IMAGE_REGISTRY",
+  "VX_IMAGE_NAMESPACE",
+  "VX_IMAGE_TAG",
+  "VX_WORKER01_TAILNET_IP",
+  "VX_WORKER02_TAILNET_IP",
 ]);
 
 const TENANT_TURNSTILE_KEYS = new Set([
-  'CF_TURNSTILE_TENANT_SECRET_KEY',
-  'CF_TURNSTILE_TENANT_ALLOWED_HOSTNAMES',
+  "CF_TURNSTILE_TENANT_SECRET_KEY",
+  "CF_TURNSTILE_TENANT_ALLOWED_HOSTNAMES",
 ]);
 
 const ADMIN_TURNSTILE_KEYS = new Set([
-  'CF_TURNSTILE_ADMIN_SECRET_KEY',
-  'CF_TURNSTILE_ADMIN_ALLOWED_HOSTNAMES',
+  "CF_TURNSTILE_ADMIN_SECRET_KEY",
+  "CF_TURNSTILE_ADMIN_ALLOWED_HOSTNAMES",
 ]);
 
 const FRONTEND_SITE_KEYS = new Set([
-  'NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY',
-  'NEXT_PUBLIC_CF_TURNSTILE_ADMIN_SITE_ID',
+  "NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY",
+  "NEXT_PUBLIC_CF_TURNSTILE_ADMIN_SITE_ID",
 ]);
 
 const MAIL_KEYS = new Set([
-  'SMTP_HOST',
-  'SMTP_PORT',
-  'SMTP_SECURE',
-  'SMTP_USER',
-  'SMTP_PASS',
-  'SMTP_FROM',
+  "SMTP_HOST",
+  "SMTP_PORT",
+  "SMTP_SECURE",
+  "SMTP_USER",
+  "SMTP_PASS",
+  "SMTP_FROM",
 ]);
 
 const OAUTH_KEYS = new Set([
-  'GOOGLE_CLIENT_ID',
-  'GOOGLE_CLIENT_SECRET',
-  'GOOGLE_REDIRECT_URI',
-  'DINGTALK_APP_KEY',
-  'DINGTALK_APP_SECRET',
-  'DINGTALK_REDIRECT_URI',
-  'FEISHU_APP_ID',
-  'FEISHU_APP_SECRET',
-  'FEISHU_REDIRECT_URI',
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "GOOGLE_REDIRECT_URI",
+  "DINGTALK_APP_KEY",
+  "DINGTALK_APP_SECRET",
+  "DINGTALK_REDIRECT_URI",
+  "FEISHU_APP_ID",
+  "FEISHU_APP_SECRET",
+  "FEISHU_REDIRECT_URI",
 ]);
 
 // Confidential RP client-secret bcrypt hashes. They belong in .env.auth-bff (the
@@ -95,65 +96,75 @@ const OAUTH_KEYS = new Set([
 // belongs in each RP's env. Cross-placement is forbidden. Missing either side →
 // RP token exchange fails 401 invalid_client.
 const OIDC_CLIENT_SECRET_HASH_KEYS = new Set([
-  'OIDC_CLIENT_SECRET_HASH_WEBSITE',
-  'OIDC_CLIENT_SECRET_HASH_CONSOLE',
-  'OIDC_CLIENT_SECRET_HASH_ADMIN',
+  "OIDC_CLIENT_SECRET_HASH_WEBSITE",
+  "OIDC_CLIENT_SECRET_HASH_CONSOLE",
+  "OIDC_CLIENT_SECRET_HASH_ADMIN",
   // umbra = cross-domain RP at ruyin.ai (ex-ruyin, product_300 §2; worker-04);
   // hash lives in .env.auth-bff (for
   // the seed → IdP DB), plaintext is transported off-box. See app-integration-standard §11.
-  'OIDC_CLIENT_SECRET_HASH_UMBRA',
+  "OIDC_CLIENT_SECRET_HASH_UMBRA",
 ]);
 
 const LEGACY_BANNED_PATTERNS = [
   {
-    id: 'env/no-env-production-reference',
+    id: "env/no-turnstile-testing-keys-in-production",
+    pattern: /^CF_TURNSTILE_ALLOW_TESTING_KEYS\s*=\s*(?:true|1|yes|on)\s*$/imu,
+    paths: [`${WORKER_DIR}`],
+    message:
+      "CF_TURNSTILE_ALLOW_TESTING_KEYS=true makes the verifier accept Cloudflare dummy-key results (hostname=example.com, no action). Dev only; never on a production box.",
+  },
+  {
+    id: "env/no-env-production-reference",
     pattern: /\.env\.production/u,
-    paths: ['docs', `${WORKER_DIR}/scripts/12-generate-env-files.sh`],
-    message: 'Use platform.env + .env.<service>, not .env.production.',
+    paths: ["docs", `${WORKER_DIR}/scripts/12-generate-env-files.sh`],
+    message: "Use platform.env + .env.<service>, not .env.production.",
   },
   {
-    id: 'env/no-jwt-access-secret',
+    id: "env/no-jwt-access-secret",
     pattern: /JWT_ACCESS_SECRET/u,
-    paths: ['docs', '.env.example', `${WORKER_DIR}`],
-    message: 'Use JWT_SECRET and JWT_REFRESH_SECRET.',
+    paths: ["docs", ".env.example", `${WORKER_DIR}`],
+    message: "Use JWT_SECRET and JWT_REFRESH_SECRET.",
   },
   {
-    id: 'env/no-legacy-jwt-expiry',
+    id: "env/no-legacy-jwt-expiry",
     pattern: /JWT_(?:ACCESS|REFRESH)_EXPIRES=/u,
-    paths: ['docs', '.env.example', `${WORKER_DIR}`],
-    message: 'Use JWT_ACCESS_EXPIRES_IN and JWT_REFRESH_EXPIRES_IN.',
+    paths: ["docs", ".env.example", `${WORKER_DIR}`],
+    message: "Use JWT_ACCESS_EXPIRES_IN and JWT_REFRESH_EXPIRES_IN.",
   },
   {
-    id: 'env/no-dingtalk-callback-secret',
+    id: "env/no-dingtalk-callback-secret",
     pattern: /DINGTALK_CALLBACK_(?:TOKEN|AES_KEY)/u,
-    paths: ['docs', '.env.example', `${WORKER_DIR}`],
-    message: 'DingTalk event callback secrets are not part of current OAuth login env.',
+    paths: ["docs", ".env.example", `${WORKER_DIR}`],
+    message:
+      "DingTalk event callback secrets are not part of current OAuth login env.",
   },
   {
-    id: 'env/no-legacy-auth-host',
+    id: "env/no-legacy-auth-host",
     pattern: /https:\/\/auth\.vxture\.com\/oauth/u,
-    paths: ['docs', '.env.example', `${WORKER_DIR}`],
-    message: 'OAuth callbacks must use https://accounts.vxture.com/auth/oauth/<provider>/callback.',
+    paths: ["docs", ".env.example", `${WORKER_DIR}`],
+    message:
+      "OAuth callbacks must use https://accounts.vxture.com/auth/oauth/<provider>/callback.",
   },
   {
-    id: 'env/no-root-auth-api-host',
+    id: "env/no-root-auth-api-host",
     pattern: /https:\/\/vxture\.com\/auth-api/u,
-    paths: ['docs', '.env.example', `${WORKER_DIR}`],
-    message: 'OAuth callbacks must use https://accounts.vxture.com/auth/oauth/<provider>/callback.',
+    paths: ["docs", ".env.example", `${WORKER_DIR}`],
+    message:
+      "OAuth callbacks must use https://accounts.vxture.com/auth/oauth/<provider>/callback.",
   },
 ];
 
 const ENV_FILE_RULES = [
   {
-    label: 'root local env',
-    actual: '.env.local',
-    example: '.env.example',
+    label: "root local env",
+    actual: ".env.local",
+    example: ".env.example",
     requiredActual: false,
     requiredExample: true,
     strictPlaceholders: false,
   },
   {
-    label: 'worker compose env',
+    label: "worker compose env",
     actual: `${RUNTIME_DIR}/.env`,
     example: `${WORKER_DIR}/.env.example`,
     requiredActual: STRICT_RUNTIME,
@@ -162,7 +173,7 @@ const ENV_FILE_RULES = [
     exactKeyOrder: false,
   },
   {
-    label: 'worker platform shared secrets',
+    label: "worker platform shared secrets",
     actual: `${RUNTIME_DIR}/secrets/platform.env`,
     example: `${WORKER_DIR}/secrets/platform.env.example`,
     requiredActual: STRICT_RUNTIME,
@@ -171,7 +182,7 @@ const ENV_FILE_RULES = [
     requiredKeys: SHARED_SECRET_KEYS,
   },
   {
-    label: 'worker platform mail secrets',
+    label: "worker platform mail secrets",
     actual: `${RUNTIME_DIR}/secrets/platform-mail.env`,
     example: `${WORKER_DIR}/secrets/platform-mail.env.example`,
     requiredActual: STRICT_RUNTIME,
@@ -180,7 +191,7 @@ const ENV_FILE_RULES = [
     requiredKeys: MAIL_KEYS,
   },
   {
-    label: 'auth-bff env',
+    label: "auth-bff env",
     actual: `${RUNTIME_DIR}/.env.auth-bff`,
     example: `${WORKER_DIR}/.env.auth-bff.example`,
     requiredActual: STRICT_RUNTIME,
@@ -191,41 +202,41 @@ const ENV_FILE_RULES = [
     // NON-production only — production seeding requires it (23/29 gate +
     // db-init preflight, 2026-07-21).
     placeholderOptionalKeys: new Set([
-      'OPERATOR_TOTP_ENC_KEY',
-      'OPERATOR_SUPERADMIN_PASSWORD_HASH',
+      "OPERATOR_TOTP_ENC_KEY",
+      "OPERATOR_SUPERADMIN_PASSWORD_HASH",
       // superadmin contact: optional seed projection (empty = keep DB values)
-      'OPERATOR_SUPERADMIN_EMAIL',
-      'OPERATOR_SUPERADMIN_PHONE',
+      "OPERATOR_SUPERADMIN_EMAIL",
+      "OPERATOR_SUPERADMIN_PHONE",
     ]),
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
-      'REDIS_PASSWORD',
+      "REDIS_PASSWORD",
       ...FRONTEND_SITE_KEYS,
       ...MAIL_KEYS,
       // plaintext RP secret belongs in each RP's env, not the IdP's.
-      'OIDC_CLIENT_SECRET',
+      "OIDC_CLIENT_SECRET",
     ]),
     requiredKeys: new Set([
-      'NODE_ENV',
-      'AUTH_BFF_PORT',
-      'AUTH_COOKIE_DOMAIN',
-      'COOKIE_DOMAIN_PLATFORM',
+      "NODE_ENV",
+      "AUTH_BFF_PORT",
+      "AUTH_COOKIE_DOMAIN",
+      "COOKIE_DOMAIN_PLATFORM",
       // OIDC issuer + interactive login/redirect surface (both accounts.vxture.com);
       // missing/wrong → discovery, all OIDC, social redirect host + bind-phone
       // redirect all break. Previously unlisted → a stale env silently passed.
-      'OIDC_ISSUER',
-      'LOGIN_UI_BASE_URL',
+      "OIDC_ISSUER",
+      "LOGIN_UI_BASE_URL",
       // portal base URLs feed OAuth allowlists + email redirects + the seed's
       // oidc_client redirect_uris. UMBRA_BASE_URL drives umbra's redirect_uri
       // (cross-domain, ruyin.ai); RUYIN_BASE_URL now names the NEW client-side
       // surface (ruyin.vxture.com). Missing → localhost default → 400
       // invalid_redirect_uri.
-      'WEBSITE_BASE_URL',
-      'CONSOLE_BASE_URL',
-      'ADMIN_BASE_URL',
-      'UMBRA_BASE_URL',
-      'RUYIN_BASE_URL',
-      'CF_TURNSTILE_ENABLED',
+      "WEBSITE_BASE_URL",
+      "CONSOLE_BASE_URL",
+      "ADMIN_BASE_URL",
+      "UMBRA_BASE_URL",
+      "RUYIN_BASE_URL",
+      "CF_TURNSTILE_ENABLED",
       // auth-bff (IdP) verifies BOTH tenant and operator (admin-surface)
       // Turnstile via OperatorLoginGuard; admin-bff is RP-only and verifies none.
       ...TENANT_TURNSTILE_KEYS,
@@ -236,15 +247,15 @@ const ENV_FILE_RULES = [
     ]),
   },
   {
-    label: 'website-bff env',
+    label: "website-bff env",
     actual: `${RUNTIME_DIR}/.env.website-bff`,
     example: `${WORKER_DIR}/.env.website-bff.example`,
     requiredActual: STRICT_RUNTIME,
     requiredExample: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
-      'REDIS_PASSWORD',
-      'CF_TURNSTILE_ENABLED',
+      "REDIS_PASSWORD",
+      "CF_TURNSTILE_ENABLED",
       ...TENANT_TURNSTILE_KEYS,
       ...ADMIN_TURNSTILE_KEYS,
       ...FRONTEND_SITE_KEYS,
@@ -254,28 +265,28 @@ const ENV_FILE_RULES = [
       ...OIDC_CLIENT_SECRET_HASH_KEYS,
     ]),
     requiredKeys: new Set([
-      'NODE_ENV',
-      'WEBSITE_BFF_PORT',
-      'AUTH_BFF_URL',
-      'OIDC_ISSUER',
+      "NODE_ENV",
+      "WEBSITE_BFF_PORT",
+      "AUTH_BFF_URL",
+      "OIDC_ISSUER",
       // this RP's own public origin; redirect_uri is derived from it. Missing →
       // localhost schema default → IdP authorize 400 invalid_redirect_uri.
-      'WEBSITE_BASE_URL',
+      "WEBSITE_BASE_URL",
       // confidential RP secret presented at the IdP token endpoint; missing →
       // 401 invalid_client. Provisioned by scripts/27-provision-client-secrets.sh.
-      'OIDC_CLIENT_SECRET',
+      "OIDC_CLIENT_SECRET",
     ]),
   },
   {
-    label: 'console-bff env',
+    label: "console-bff env",
     actual: `${RUNTIME_DIR}/.env.console-bff`,
     example: `${WORKER_DIR}/.env.console-bff.example`,
     requiredActual: STRICT_RUNTIME,
     requiredExample: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
-      'REDIS_PASSWORD',
-      'CF_TURNSTILE_ENABLED',
+      "REDIS_PASSWORD",
+      "CF_TURNSTILE_ENABLED",
       ...TENANT_TURNSTILE_KEYS,
       ...ADMIN_TURNSTILE_KEYS,
       ...FRONTEND_SITE_KEYS,
@@ -285,30 +296,30 @@ const ENV_FILE_RULES = [
       ...OIDC_CLIENT_SECRET_HASH_KEYS,
     ]),
     requiredKeys: new Set([
-      'NODE_ENV',
-      'CONSOLE_BFF_PORT',
-      'AUTH_BFF_URL',
-      'OIDC_ISSUER',
+      "NODE_ENV",
+      "CONSOLE_BFF_PORT",
+      "AUTH_BFF_URL",
+      "OIDC_ISSUER",
       // this RP's own public origin; redirect_uri is derived from it. Missing →
       // localhost schema default → IdP authorize 400 invalid_redirect_uri.
-      'CONSOLE_BASE_URL',
+      "CONSOLE_BASE_URL",
       // confidential RP secret presented at the IdP token endpoint; missing →
       // 401 invalid_client. Provisioned by scripts/27-provision-client-secrets.sh.
-      'OIDC_CLIENT_SECRET',
+      "OIDC_CLIENT_SECRET",
     ]),
   },
   {
-    label: 'admin-bff env',
+    label: "admin-bff env",
     actual: `${RUNTIME_DIR}/.env.admin-bff`,
     example: `${WORKER_DIR}/.env.admin-bff.example`,
     requiredActual: STRICT_RUNTIME,
     requiredExample: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
-      'REDIS_PASSWORD',
+      "REDIS_PASSWORD",
       // admin-bff is RP-only (Batch 8): operator login + its Turnstile moved to
       // the IdP (auth-bff). admin-bff verifies no Turnstile.
-      'CF_TURNSTILE_ENABLED',
+      "CF_TURNSTILE_ENABLED",
       ...TENANT_TURNSTILE_KEYS,
       ...ADMIN_TURNSTILE_KEYS,
       ...FRONTEND_SITE_KEYS,
@@ -318,28 +329,28 @@ const ENV_FILE_RULES = [
       ...OIDC_CLIENT_SECRET_HASH_KEYS,
     ]),
     requiredKeys: new Set([
-      'NODE_ENV',
-      'ADMIN_BFF_PORT',
-      'AUTH_BFF_URL',
-      'OIDC_ISSUER',
+      "NODE_ENV",
+      "ADMIN_BFF_PORT",
+      "AUTH_BFF_URL",
+      "OIDC_ISSUER",
       // this RP's own public origin; redirect_uri is derived from it. Missing →
       // localhost schema default → IdP authorize 400 invalid_redirect_uri.
-      'ADMIN_BASE_URL',
+      "ADMIN_BASE_URL",
       // confidential RP secret presented at the IdP token endpoint; missing →
       // 401 invalid_client. Provisioned by scripts/27-provision-client-secrets.sh.
-      'OIDC_CLIENT_SECRET',
+      "OIDC_CLIENT_SECRET",
     ]),
   },
   {
-    label: 'gateway-bff env',
+    label: "gateway-bff env",
     actual: `${RUNTIME_DIR}/.env.gateway-bff`,
     example: `${WORKER_DIR}/.env.gateway-bff.example`,
     requiredActual: STRICT_RUNTIME,
     requiredExample: true,
     forbiddenKeys: new Set([
       ...SHARED_SECRET_KEYS,
-      'REDIS_PASSWORD',
-      'CF_TURNSTILE_ENABLED',
+      "REDIS_PASSWORD",
+      "CF_TURNSTILE_ENABLED",
       ...TENANT_TURNSTILE_KEYS,
       ...ADMIN_TURNSTILE_KEYS,
       ...FRONTEND_SITE_KEYS,
@@ -347,13 +358,13 @@ const ENV_FILE_RULES = [
       ...MAIL_KEYS,
     ]),
     requiredKeys: new Set([
-      'NODE_ENV',
-      'GATEWAY_PORT',
-      'WEBSITE_BFF_ORIGIN',
-      'CONSOLE_BFF_ORIGIN',
-      'ADMIN_BFF_ORIGIN',
-      'AUTH_BFF_ORIGIN',
-      'GATEWAY_ALLOWED_ORIGINS',
+      "NODE_ENV",
+      "GATEWAY_PORT",
+      "WEBSITE_BFF_ORIGIN",
+      "CONSOLE_BFF_ORIGIN",
+      "ADMIN_BFF_ORIGIN",
+      "AUTH_BFF_ORIGIN",
+      "GATEWAY_ALLOWED_ORIGINS",
     ]),
   },
 ];
@@ -361,86 +372,86 @@ const ENV_FILE_RULES = [
 const RUNTIME_SECRET_FILE_RULES = [
   // 2026-08-19 云切换:pg-password/redis-password 退役,RDS/Tair 凭据接管。
   {
-    label: 'RDS owner connection env',
+    label: "RDS owner connection env",
     path: `${RUNTIME_DIR}/secrets/rds-owner.env`,
   },
   {
-    label: 'RDS platform_svc raw password',
+    label: "RDS platform_svc raw password",
     path: `${RUNTIME_DIR}/secrets/rds-pw-platform_svc`,
   },
   {
-    label: 'RDS reporting_ro raw password',
+    label: "RDS reporting_ro raw password",
     path: `${RUNTIME_DIR}/secrets/rds-pw-reporting_ro`,
   },
   {
-    label: 'Tair (Redis) raw password',
+    label: "Tair (Redis) raw password",
     path: `${RUNTIME_DIR}/secrets/tair-pw-default`,
   },
 ];
 
 const DEPLOY_BUNDLE_REAL_RUNTIME_FILES = [
-  '.env',
-  '.env.auth-bff',
-  '.env.gateway-bff',
-  '.env.website-bff',
-  '.env.console-bff',
-  '.env.admin-bff',
-  'secrets/platform.env',
-  'secrets/platform-mail.env',
-  'secrets/platform-sms.env',
-  'secrets/platform-identity.env',
-  'secrets/rds-owner.env',
-  'secrets/rds-pw-platform_svc',
-  'secrets/rds-pw-reporting_ro',
-  'secrets/tair-pw-default',
+  ".env",
+  ".env.auth-bff",
+  ".env.gateway-bff",
+  ".env.website-bff",
+  ".env.console-bff",
+  ".env.admin-bff",
+  "secrets/platform.env",
+  "secrets/platform-mail.env",
+  "secrets/platform-sms.env",
+  "secrets/platform-identity.env",
+  "secrets/rds-owner.env",
+  "secrets/rds-pw-platform_svc",
+  "secrets/rds-pw-reporting_ro",
+  "secrets/tair-pw-default",
 ];
 
 const COMPOSE_SNIPPETS = [
   {
-    service: 'auth-bff',
-    snippet: '/srv/vxture/runtime/.env.auth-bff',
+    service: "auth-bff",
+    snippet: "/srv/vxture/runtime/.env.auth-bff",
   },
   {
-    service: 'website-bff',
-    snippet: '/srv/vxture/runtime/.env.website-bff',
+    service: "website-bff",
+    snippet: "/srv/vxture/runtime/.env.website-bff",
   },
   {
-    service: 'console-bff',
-    snippet: '/srv/vxture/runtime/.env.console-bff',
+    service: "console-bff",
+    snippet: "/srv/vxture/runtime/.env.console-bff",
   },
   {
-    service: 'admin-bff',
-    snippet: '/srv/vxture/runtime/.env.admin-bff',
+    service: "admin-bff",
+    snippet: "/srv/vxture/runtime/.env.admin-bff",
   },
   {
-    service: 'gateway-bff',
-    snippet: '/srv/vxture/runtime/.env.gateway-bff',
+    service: "gateway-bff",
+    snippet: "/srv/vxture/runtime/.env.gateway-bff",
   },
 ];
 
 const GENERATE_ENV_REQUIRED_GLOBAL_TOKENS = [
-  'sync_env_from_example',
-  'ensure_plain_secret_file',
-  '.env.example',
-  '.env.auth-bff.example',
-  '.env.website-bff.example',
-  '.env.console-bff.example',
-  '.env.admin-bff.example',
-  '.env.gateway-bff.example',
-  'secrets/platform.env.example',
-  'secrets/platform-mail.env',
-  'secrets/platform-sms.env',
-  'secrets/platform-identity.env',
-  'CHANGEME',
-  '已废弃待删除',
+  "sync_env_from_example",
+  "ensure_plain_secret_file",
+  ".env.example",
+  ".env.auth-bff.example",
+  ".env.website-bff.example",
+  ".env.console-bff.example",
+  ".env.admin-bff.example",
+  ".env.gateway-bff.example",
+  "secrets/platform.env.example",
+  "secrets/platform-mail.env",
+  "secrets/platform-sms.env",
+  "secrets/platform-identity.env",
+  "CHANGEME",
+  "已废弃待删除",
 ];
 
 const GENERATE_ENV_FORBIDDEN_TOKENS = [
-  'openssl rand',
-  'file_get_or_generate',
-  'env_get_or_generate',
-  'legacy_service_env_get',
-  'write_platform_env',
+  "openssl rand",
+  "file_get_or_generate",
+  "env_get_or_generate",
+  "legacy_service_env_get",
+  "write_platform_env",
   'write_env "$PLATFORM_DIR/.env.auth-bff"',
 ];
 
@@ -488,7 +499,7 @@ function absolute(relativePath) {
  */
 function readText(relativePath) {
   const filePath = absolute(relativePath);
-  return existsSync(filePath) ? readFileSync(filePath, 'utf8') : '';
+  return existsSync(filePath) ? readFileSync(filePath, "utf8") : "";
 }
 
 /**
@@ -510,11 +521,11 @@ function parseEnvFile(relativePath) {
 
   const records = [];
   const byKey = new Map();
-  const lines = readFileSync(filePath, 'utf8').split(/\r?\n/u);
+  const lines = readFileSync(filePath, "utf8").split(/\r?\n/u);
 
   for (const [index, rawLine] of lines.entries()) {
     const line = rawLine.trim();
-    if (!line || line.startsWith('#')) {
+    if (!line || line.startsWith("#")) {
       continue;
     }
 
@@ -563,15 +574,15 @@ function diagnostic(severity, ruleId, message, location) {
  * @returns {boolean} 是否为占位符。
  */
 function isPlaceholder(value) {
-  const normalized = value.trim().replace(/^["']|["']$/gu, '');
+  const normalized = value.trim().replace(/^["']|["']$/gu, "");
   return (
     normalized.length === 0 ||
-    normalized === 'CHANGE_ME' ||
-    normalized === 'CHANGEME' ||
-    normalized.startsWith('CHANGE_ME_') ||
-    normalized.startsWith('CHANGEME_') ||
-    normalized.startsWith('your-') ||
-    normalized.startsWith('change-me-')
+    normalized === "CHANGE_ME" ||
+    normalized === "CHANGEME" ||
+    normalized.startsWith("CHANGE_ME_") ||
+    normalized.startsWith("CHANGEME_") ||
+    normalized.startsWith("your-") ||
+    normalized.startsWith("change-me-")
   );
 }
 
@@ -604,21 +615,21 @@ function collectTextFiles(relativePath) {
   }
 
   const ignoredNames = new Set([
-    '.git',
-    '.next',
-    '.turbo',
-    'coverage',
-    'dist',
-    'node_modules',
-    'out',
+    ".git",
+    ".next",
+    ".turbo",
+    "coverage",
+    "dist",
+    "node_modules",
+    "out",
   ]);
   const results = [];
 
   function walk(currentFullPath, currentRelativePath) {
-    const normalizedRelativePath = currentRelativePath.replaceAll('\\', '/');
+    const normalizedRelativePath = currentRelativePath.replaceAll("\\", "/");
     if (
-      normalizedRelativePath === 'guardrails/39-audit-env.mjs' ||
-      normalizedRelativePath.endsWith('/guardrails/39-audit-env.mjs')
+      normalizedRelativePath === "guardrails/39-audit-env.mjs" ||
+      normalizedRelativePath.endsWith("/guardrails/39-audit-env.mjs")
     ) {
       return;
     }
@@ -633,7 +644,7 @@ function collectTextFiles(relativePath) {
       for (const entry of readdirSync(currentFullPath)) {
         walk(
           path.join(currentFullPath, entry),
-          path.join(currentRelativePath, entry).replaceAll('\\', '/')
+          path.join(currentRelativePath, entry).replaceAll("\\", "/"),
         );
       }
       return;
@@ -642,24 +653,24 @@ function collectTextFiles(relativePath) {
     const extension = path.extname(currentFullPath);
     if (
       [
-        '.md',
-        '.sh',
-        '.mjs',
-        '.js',
-        '.ts',
-        '.tsx',
-        '.json',
-        '.example',
-        '.env',
-        '.local',
-        '',
+        ".md",
+        ".sh",
+        ".mjs",
+        ".js",
+        ".ts",
+        ".tsx",
+        ".json",
+        ".example",
+        ".env",
+        ".local",
+        "",
       ].includes(extension)
     ) {
       results.push(normalizedRelativePath);
     }
   }
 
-  walk(fullPath, relativePath.replaceAll('\\', '/'));
+  walk(fullPath, relativePath.replaceAll("\\", "/"));
   return results;
 }
 
@@ -681,22 +692,22 @@ function auditEnvFileRule(rule) {
   if (rule.requiredExample && !example.exists) {
     results.push(
       diagnostic(
-        'error',
-        'env/missing-example',
+        "error",
+        "env/missing-example",
         `${rule.label} example file is missing.`,
-        rule.example
-      )
+        rule.example,
+      ),
     );
   }
 
   if (rule.requiredActual && !actual.exists) {
     results.push(
       diagnostic(
-        'error',
-        'env/missing-runtime',
+        "error",
+        "env/missing-runtime",
         `${rule.label} runtime file is missing in strict runtime mode.`,
-        rule.actual
-      )
+        rule.actual,
+      ),
     );
   }
 
@@ -709,11 +720,11 @@ function auditEnvFileRule(rule) {
       if (records.length > 1) {
         results.push(
           diagnostic(
-            'error',
-            'env/duplicate-key',
+            "error",
+            "env/duplicate-key",
             `${key} appears ${records.length} times.`,
-            `${envFile.relativePath}:${records.map((record) => record.line).join(',')}`
-          )
+            `${envFile.relativePath}:${records.map((record) => record.line).join(",")}`,
+          ),
         );
       }
     }
@@ -723,11 +734,11 @@ function auditEnvFileRule(rule) {
         if (!rule.allowedKeys.has(record.key)) {
           results.push(
             diagnostic(
-              'error',
-              'env/unexpected-key',
+              "error",
+              "env/unexpected-key",
               `${record.key} is not allowed in ${rule.label}.`,
-              `${envFile.relativePath}:${record.line}`
-            )
+              `${envFile.relativePath}:${record.line}`,
+            ),
           );
         }
       }
@@ -738,11 +749,11 @@ function auditEnvFileRule(rule) {
         if (rule.forbiddenKeys.has(record.key)) {
           results.push(
             diagnostic(
-              'error',
-              'env/forbidden-key',
+              "error",
+              "env/forbidden-key",
               `${record.key} belongs to another env scope.`,
-              `${envFile.relativePath}:${record.line}`
-            )
+              `${envFile.relativePath}:${record.line}`,
+            ),
           );
         }
       }
@@ -753,11 +764,11 @@ function auditEnvFileRule(rule) {
         if (!envFile.byKey.has(key)) {
           results.push(
             diagnostic(
-              'error',
-              'env/missing-key',
+              "error",
+              "env/missing-key",
               `${key} is required by ${rule.label}.`,
-              envFile.relativePath
-            )
+              envFile.relativePath,
+            ),
           );
         }
       }
@@ -775,11 +786,11 @@ function auditEnvFileRule(rule) {
         if (!actual.byKey.has(record.key)) {
           results.push(
             diagnostic(
-              'error',
-              'env/missing-example-key',
+              "error",
+              "env/missing-example-key",
               `${record.key} exists in example but is missing from runtime env.`,
-              rule.actual
-            )
+              rule.actual,
+            ),
           );
         }
       }
@@ -788,22 +799,22 @@ function auditEnvFileRule(rule) {
         if (!example.byKey.has(record.key)) {
           results.push(
             diagnostic(
-              'warning',
-              'env/deprecated-runtime-key',
+              "warning",
+              "env/deprecated-runtime-key",
               `${record.key} is not present in example; it can be deleted / is deprecated pending deletion.`,
-              `${actual.relativePath}:${record.line}`
-            )
+              `${actual.relativePath}:${record.line}`,
+            ),
           );
         }
       }
     } else {
       results.push(
         diagnostic(
-          'error',
-          'env/key-order-mismatch',
+          "error",
+          "env/key-order-mismatch",
           `${rule.actual} keys must match ${rule.example} exactly.`,
-          rule.actual
-        )
+          rule.actual,
+        ),
       );
     }
   }
@@ -818,11 +829,11 @@ function auditEnvFileRule(rule) {
       if (isPlaceholder(record.value)) {
         results.push(
           diagnostic(
-            'error',
-            'env/runtime-placeholder',
+            "error",
+            "env/runtime-placeholder",
             `${record.key} still uses an empty or placeholder value in strict runtime mode.`,
-            `${actual.relativePath}:${record.line}`
-          )
+            `${actual.relativePath}:${record.line}`,
+          ),
         );
       }
     }
@@ -847,53 +858,65 @@ function auditRuntimeSecretFiles() {
     if (!existsSync(filePath)) {
       results.push(
         diagnostic(
-          'error',
-          'env/missing-runtime-secret-file',
+          "error",
+          "env/missing-runtime-secret-file",
           `${rule.label} file is missing in strict runtime mode.`,
-          rule.path
-        )
+          rule.path,
+        ),
       );
       continue;
     }
 
-    if (readFileSync(filePath, 'utf8').trim().length === 0) {
+    if (readFileSync(filePath, "utf8").trim().length === 0) {
       results.push(
         diagnostic(
-          'error',
-          'env/empty-runtime-secret-file',
+          "error",
+          "env/empty-runtime-secret-file",
           `${rule.label} file is empty in strict runtime mode.`,
-          rule.path
-        )
+          rule.path,
+        ),
       );
     }
   }
 
   const platformEnv = parseEnvFile(`${RUNTIME_DIR}/secrets/platform.env`);
   if (platformEnv.exists) {
-    const pgPassword = readText(`${RUNTIME_DIR}/secrets/rds-pw-platform_svc`).trim();
-    const redisPassword = readText(`${RUNTIME_DIR}/secrets/tair-pw-default`).trim();
-    const databaseUrl = platformEnv.byKey.get('DATABASE_URL')?.[0]?.value;
-    const redisUrl = platformEnv.byKey.get('REDIS_URL')?.[0]?.value;
+    const pgPassword = readText(
+      `${RUNTIME_DIR}/secrets/rds-pw-platform_svc`,
+    ).trim();
+    const redisPassword = readText(
+      `${RUNTIME_DIR}/secrets/tair-pw-default`,
+    ).trim();
+    const databaseUrl = platformEnv.byKey.get("DATABASE_URL")?.[0]?.value;
+    const redisUrl = platformEnv.byKey.get("REDIS_URL")?.[0]?.value;
 
-    if (databaseUrl && pgPassword && extractUrlPassword(databaseUrl) !== pgPassword) {
+    if (
+      databaseUrl &&
+      pgPassword &&
+      extractUrlPassword(databaseUrl) !== pgPassword
+    ) {
       results.push(
         diagnostic(
-          'error',
-          'env/derived-database-url-mismatch',
-          'DATABASE_URL password must match secrets/rds-pw-platform_svc.',
-          `${RUNTIME_DIR}/secrets/platform.env`
-        )
+          "error",
+          "env/derived-database-url-mismatch",
+          "DATABASE_URL password must match secrets/rds-pw-platform_svc.",
+          `${RUNTIME_DIR}/secrets/platform.env`,
+        ),
       );
     }
 
-    if (redisUrl && redisPassword && extractUrlPassword(redisUrl) !== redisPassword) {
+    if (
+      redisUrl &&
+      redisPassword &&
+      extractUrlPassword(redisUrl) !== redisPassword
+    ) {
       results.push(
         diagnostic(
-          'error',
-          'env/derived-redis-url-mismatch',
-          'REDIS_URL password must match secrets/tair-pw-default.',
-          `${RUNTIME_DIR}/secrets/platform.env`
-        )
+          "error",
+          "env/derived-redis-url-mismatch",
+          "REDIS_URL password must match secrets/tair-pw-default.",
+          `${RUNTIME_DIR}/secrets/platform.env`,
+        ),
       );
     }
   }
@@ -914,11 +937,11 @@ function auditDeployBundleRealRuntimeFiles() {
     if (existsSync(absolute(relativePath))) {
       results.push(
         diagnostic(
-          FAIL_WARNINGS ? 'error' : 'warning',
-          'env/deploy-bundle-real-runtime-file',
-          'Deploy bundle must keep only templates; real env/secrets belong to runtime/ or /srv/vxture/runtime.',
-          relativePath
-        )
+          FAIL_WARNINGS ? "error" : "warning",
+          "env/deploy-bundle-real-runtime-file",
+          "Deploy bundle must keep only templates; real env/secrets belong to runtime/ or /srv/vxture/runtime.",
+          relativePath,
+        ),
       );
     }
   }
@@ -934,9 +957,9 @@ function auditDeployBundleRealRuntimeFiles() {
  */
 function extractUrlPassword(value) {
   try {
-    return new URL(value.trim().replace(/^["']|["']$/gu, '')).password;
+    return new URL(value.trim().replace(/^["']|["']$/gu, "")).password;
   } catch {
-    return '';
+    return "";
   }
 }
 
@@ -952,7 +975,12 @@ function auditCompose() {
 
   if (!content) {
     return [
-      diagnostic('error', 'env/missing-compose', 'compose.platform.yml is missing.', relativePath),
+      diagnostic(
+        "error",
+        "env/missing-compose",
+        "compose.platform.yml is missing.",
+        relativePath,
+      ),
     ];
   }
 
@@ -960,11 +988,11 @@ function auditCompose() {
     if (!content.includes(snippet)) {
       results.push(
         diagnostic(
-          'error',
-          'env/compose-env-file',
+          "error",
+          "env/compose-env-file",
           `${service} env_file must include: ${snippet}`,
-          relativePath
-        )
+          relativePath,
+        ),
       );
     }
   }
@@ -985,10 +1013,10 @@ function auditGenerateEnvScript() {
   if (!content) {
     return [
       diagnostic(
-        'error',
-        'env/missing-generate-env-script',
-        '12-generate-env-files.sh is missing.',
-        relativePath
+        "error",
+        "env/missing-generate-env-script",
+        "12-generate-env-files.sh is missing.",
+        relativePath,
       ),
     ];
   }
@@ -997,11 +1025,11 @@ function auditGenerateEnvScript() {
     if (!content.includes(token)) {
       results.push(
         diagnostic(
-          'error',
-          'env/generate-env-missing-global-token',
+          "error",
+          "env/generate-env-missing-global-token",
           `12-generate-env-files.sh must contain ${token}.`,
-          relativePath
-        )
+          relativePath,
+        ),
       );
     }
   }
@@ -1010,11 +1038,11 @@ function auditGenerateEnvScript() {
     if (content.includes(token)) {
       results.push(
         diagnostic(
-          'error',
-          'env/generate-env-forbidden-token',
+          "error",
+          "env/generate-env-forbidden-token",
           `12-generate-env-files.sh must not contain ${token}.`,
-          relativePath
-        )
+          relativePath,
+        ),
       );
     }
   }
@@ -1033,7 +1061,9 @@ function auditLegacyReferences() {
 
   for (const rule of LEGACY_BANNED_PATTERNS) {
     for (const scanPath of rule.paths) {
-      const files = existsSync(absolute(scanPath)) ? collectTextFiles(scanPath) : [];
+      const files = existsSync(absolute(scanPath))
+        ? collectTextFiles(scanPath)
+        : [];
 
       for (const relativePath of files) {
         const scanKey = `${rule.id}:${relativePath}`;
@@ -1047,7 +1077,12 @@ function auditLegacyReferences() {
         for (const [index, line] of lines.entries()) {
           if (rule.pattern.test(line)) {
             results.push(
-              diagnostic('error', rule.id, rule.message, `${relativePath}:${index + 1}`)
+              diagnostic(
+                "error",
+                rule.id,
+                rule.message,
+                `${relativePath}:${index + 1}`,
+              ),
             );
           }
         }
@@ -1072,12 +1107,13 @@ function audit() {
     ...auditGenerateEnvScript(),
     ...auditLegacyReferences(),
   ].sort((left, right) => {
-    const severityDelta = SEVERITY_ORDER.get(left.severity) - SEVERITY_ORDER.get(right.severity);
+    const severityDelta =
+      SEVERITY_ORDER.get(left.severity) - SEVERITY_ORDER.get(right.severity);
     if (severityDelta !== 0) {
       return severityDelta;
     }
-    return `${left.location ?? ''}${left.ruleId}`.localeCompare(
-      `${right.location ?? ''}${right.ruleId}`
+    return `${left.location ?? ""}${left.ruleId}`.localeCompare(
+      `${right.location ?? ""}${right.ruleId}`,
     );
   });
 }
@@ -1090,10 +1126,10 @@ function audit() {
  */
 function printResults(diagnostics) {
   if (diagnostics.length === 0) {
-    console.log('[env-audit] OK');
+    console.log("[env-audit] OK");
     if (SHOW_OK) {
       console.log(
-        `[env-audit] Runtime placeholder checks: ${STRICT_RUNTIME ? 'enabled' : 'disabled'}`
+        `[env-audit] Runtime placeholder checks: ${STRICT_RUNTIME ? "enabled" : "disabled"}`,
       );
     }
     return;
@@ -1101,8 +1137,10 @@ function printResults(diagnostics) {
 
   console.error(`[env-audit] Found ${diagnostics.length} issue(s):`);
   for (const item of diagnostics) {
-    const location = item.location ? ` ${item.location}` : '';
-    console.error(`- ${item.severity.toUpperCase()} ${item.ruleId}${location}: ${item.message}`);
+    const location = item.location ? ` ${item.location}` : "";
+    console.error(
+      `- ${item.severity.toUpperCase()} ${item.ruleId}${location}: ${item.message}`,
+    );
   }
 }
 
@@ -1113,5 +1151,5 @@ function printResults(diagnostics) {
 const diagnostics = audit();
 printResults(diagnostics);
 
-const hasErrors = diagnostics.some((item) => item.severity === 'error');
+const hasErrors = diagnostics.some((item) => item.severity === "error");
 process.exitCode = hasErrors ? 1 : 0;
