@@ -1,7 +1,9 @@
 import type {
   ModelState,
   ObjectState,
+  PlanVersionStatus,
   SubscriptionStatus,
+  Tier,
 } from "@vxture-platform/shared";
 
 export type Capability = string;
@@ -460,68 +462,78 @@ export interface ProductAgentRecord {
   updatedAt: string;
 }
 
-export interface ProductModelPolicyRecord {
-  id: string;
-  subjectType: "tenant" | "platform";
-  subjectId: string;
-  subjectName: string;
-  scopeType: "product" | "new_product_default" | "tenant_default";
-  scopeCode: string;
-  scopeName: string;
-  isDefined: boolean;
-  productCode: string;
-  productName: string;
-  productRegion: "domestic" | "international" | null;
-  agentId: string | null;
-  agentCode: string | null;
-  agentName: string;
-  modelCode: string | null;
-  quotaTokens: number;
-  isUnlimited: boolean;
-  priority: number;
-  isActive: boolean;
-  cycle: "monthly";
-  note: string | null;
-}
+/**
+ * 产品发布 = 「某产品的一次已发布套餐版本」（2026-08-31 去 mock 后的定义）。
+ *
+ * `product` schema 里没有 release 表，也不该有：能对客户"发布"出去的东西只有
+ * `product.plan_versions` 里 `status='published'` 的那一行——它冻结了组件、配额与
+ * 每周期价格。所以这里一条记录 = 一个已发布 plan_version，产品取该版本 `primary`
+ * 组件所指的产品。原 mock 里的 `productRegion`（无此轴）与 `allowedAgents`（无来源）
+ * 已删，不再返回。
+ */
+export type ProductReleasePeriodType =
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "yearly"
+  | "perpetual";
 
 export interface ProductReleasePrice {
   id: string;
   currency: string;
   price: number;
-  originalPrice: number;
-  periodType: "monthly" | "yearly";
+  /** plan_prices 没有划线价一列；保留字段形状，恒为 null。 */
+  originalPrice: number | null;
+  periodType: ProductReleasePeriodType;
+  /** plan_prices.cycle_count（季付 = monthly × 3）。 */
   periodValue: number;
+  /** 与 `/plans` 端点同一取法：月付优先，其次周期数最小的一条。 */
   isDefault: boolean;
+  /** 已发布版本的价格即在售价；版本未发布不会出现在 releases 里。 */
   isActive: boolean;
 }
 
 export interface ProductReleaseFeature {
+  /** 组件所指产品的 product_code。 */
   code: string;
   name: string;
+  /** quota JSON 里有数值 → quota；否则是纯功能开关。 */
   type: "quota" | "function";
+  /** quota 本身是单个数值时取它；对象形态（常态）为 null，明细看 `config`。 */
   quotaValue: number | null;
+  /** quota 里任一值为 -1（无限哨兵，product_220 §2）。 */
   isUnlimited: boolean;
+  /** 组件的 quota JSON 原样。 */
   config: Record<string, unknown> | null;
 }
 
 export interface ProductReleaseRecord {
+  /** plan_version id（内部句柄，不展示）。 */
   id: string;
   productCode: string;
   productName: string;
-  productRegion: "domestic" | "international";
-  productStatus: "active" | "draft" | "archived";
+  productStatus: ProductCapabilityStatus;
+  /** `${plan_code}@v${version_no}`——人读的版本可视码。 */
   releaseCode: string;
+  /** plan_name。 */
   releaseName: string;
   description: string;
+  /** custom ⇔ products.origin = 'third_party'（三方接入），其余 standard。 */
   releaseType: "standard" | "custom";
+  /** 该版本 primary 组件的档位（五档码）。 */
   versionLabels: string[];
+  /** 有价格行且全部为 0。无价格行 = 不可售，不算免费。 */
   isFree: boolean;
   isPublic: boolean;
+  /** 版本已发布 且 plan.status = 'active'。 */
   isActive: boolean;
+  /** 是 plans.current_version_id 指向的那一版（被更新的旧发布版为 false）。 */
+  isCurrent: boolean;
   prices: ProductReleasePrice[];
   features: ProductReleaseFeature[];
-  allowedAgents: string[];
+  /** 版本创建时间。 */
   createdAt: string;
+  /** plan.updated_at——发布动作会推它。 */
   updatedAt: string;
 }
 
@@ -653,39 +665,68 @@ export interface ProductCapabilityRecord {
   updatedAt: string;
 }
 
-export type ProductSolutionStatus = ProductCapabilityStatus;
+// ── 解决方案（product.solutions / solution_products / solution_plans）────────
+// 设计：docs/20-specs/000-platform/admin/70-product-solutions.md（2026-08-31，TD-029 收口）。
+
+/**
+ * 与 products / plans 同一套生命周期值域，状态机同 product.products：
+ * draft → active ⇄ inactive，任一 → deprecated（终态）。
+ * 此前的 active/draft/archived 三态是 mock 口径，随去 mock 废止。
+ */
+export type ProductSolutionStatus =
+  | "draft"
+  | "active"
+  | "inactive"
+  | "deprecated";
+/** 由 solutions.is_public 投影：public = 对外售卖开放，internal = 仅内部。 */
 export type ProductSolutionVisibility = ProductCapabilityVisibility;
 export type ProductSolutionCapabilityType = ProductCapabilityType;
 export type ProductSolutionCapabilitySource = ProductCapabilitySource;
 /**
- * Product-solution presentation tier — an INDEPENDENT concept, NOT the
- * subscription/entitlement tier. This is the admin/marketing "solutions"
- * packaging axis (free/pro/enterprise/custom, mapped to plan codes via
- * tierPlanCodeMap); it deliberately differs from the commercial ladder in
- * @vxture-platform/shared `TIERS` (free/starter/pro/business/enterprise) — do NOT
- * converge the two or type this as `Tier`. (owner ruling 2026-07-08)
+ * 方案档位 = 五档商业阶梯本身（@vxture-platform/shared `TIERS`，product_220 §1）。
+ *
+ * 2026-07-08 曾裁定方案档位（free/pro/enterprise/custom）与商业阶梯是两个概念、不得
+ * 合并——那是 mock 时代的展示轴。2026-08-30 owner 定案：服务套餐 = 既有 plan 绑到方案
+ * 的一个档位，`product.solution_plans.tier` 的 CHECK 与 `plan_components.tier` 同源，
+ * 两者就是同一个东西了。
  */
-export type ProductSolutionTierCode = "free" | "pro" | "enterprise" | "custom";
+export type ProductSolutionTierCode = Tier;
 
 export interface ProductSolutionCapability {
+  /** product id（内部句柄，仅作 key，不展示）。 */
   id: string;
   productCode: string;
   productName: string;
   productType: ProductSolutionCapabilityType;
   source: ProductSolutionCapabilitySource;
+  /** 该产品在方案里扮演的角色（solution_products.role，展示文案）。 */
   role: string;
-  status: ProductSolutionStatus;
+  status: ProductCapabilityStatus;
+  sort: number;
 }
 
+/** 方案的一个档位 = 绑在该档上的既有 plan 的投影。 */
 export interface ProductSolutionTier {
   tierCode: ProductSolutionTierCode;
+  /** plan_name。 */
   tierName: string;
+  /** plan.description。 */
   summary: string;
+  /** plan.status。 */
   status: ProductSolutionStatus;
+  /** plan.is_public。 */
   isPublic: boolean;
+  /** 绑定的 plan id（重绑时回送，不展示）。 */
+  planId: string;
+  planCode: string;
+  /** 当前版本月付价的展示串；无价格行 → 「合同报价」。 */
+  priceLabel: string;
+  /** free = 价格为 0；contract = 无价格行；其余 paid。筛选用，不要拿 priceLabel 去匹配。 */
+  priceKind: "free" | "paid" | "contract";
 }
 
 export interface ProductSolutionRecord {
+  /** solution id（内部句柄，不展示；地址栏走 solutionCode）。 */
   id: string;
   solutionCode: string;
   solutionName: string;
@@ -696,8 +737,11 @@ export interface ProductSolutionRecord {
   status: ProductSolutionStatus;
   visibility: ProductSolutionVisibility;
   ownerTeam: string;
+  /** 绑定 plan 的 active/trialing 订阅数（metering.subscriptions）。 */
   subscriptionCount: number;
+  /** 上述订阅去重后的租户数。 */
   activeTenantCount: number;
+  /** MRR，定义见 products.router `MRR_MONTHLY_EXPR` 注释。 */
   monthlyRevenue: number;
   tags: string[];
   products: ProductSolutionCapability[];
@@ -706,14 +750,7 @@ export interface ProductSolutionRecord {
   updatedAt: string;
 }
 
-export interface ProductSolutionServicePlanSummary {
-  tierCode: ProductSolutionTierCode;
-  tierName: string;
-  summary: string;
-  status: ProductSolutionStatus;
-  isPublic: boolean;
-  priceLabel: string;
-}
+export type ProductSolutionServicePlanSummary = ProductSolutionTier;
 
 export interface ProductSolutionDetailRecord extends ProductSolutionRecord {
   deliveryMode: string;
@@ -721,12 +758,43 @@ export interface ProductSolutionDetailRecord extends ProductSolutionRecord {
   relatedServicePlans: ProductSolutionServicePlanSummary[];
 }
 
+/** POST /solutions（solutionCode 必填）与 PUT /solutions/:code（改字段）共用。 */
+export interface ProductSolutionWriteInput {
+  solutionCode?: string;
+  solutionName?: string;
+  description?: string | null;
+  industry?: string | null;
+  scenario?: string | null;
+  customerSegment?: string | null;
+  ownerTeam?: string | null;
+  tags?: string[];
+  deliveryMode?: string | null;
+  deliveryBoundaries?: string[];
+  isPublic?: boolean;
+}
+
+/** PUT /solutions/:code/products 的一项：productCode 或 productId 二选一。 */
+export interface ProductSolutionProductInput {
+  productId?: string;
+  productCode?: string;
+  role?: string | null;
+  sort?: number;
+}
+
+/** PUT /solutions/:code/plans/:tier：planId 或 planCode 二选一。 */
+export interface ProductSolutionPlanBindInput {
+  planId?: string;
+  planCode?: string;
+}
+
 export interface ProductServicePlanPrice {
   priceLabel: string;
   price: number | null;
+  /** plan_prices 无划线价；恒 null。 */
   originalPrice: number | null;
   currency: string;
-  periodType: "monthly" | "yearly" | "contract";
+  /** cycle_unit month → monthly，year → yearly；其余周期或无价格行 → contract。 */
+  periodType: ProductReleasePeriodType | "contract";
   periodValue: number;
 }
 
@@ -735,13 +803,18 @@ export interface ProductServicePlanEntitlement {
   productName: string;
   productType: ProductSolutionCapabilityType;
   source: ProductSolutionCapabilitySource;
+  /** 方案里的角色；不在方案产品清单里的组件用 component_role。 */
   role: string;
+  /** true = 是该 plan 当前版本的组件；false = 在方案里但该套餐不含。 */
   included: boolean;
+  /** 组件 quota JSON 的紧凑渲染（`key value` 以 · 连接；-1 → 不限）。 */
   quotaSummary: string;
+  /** 组件开放的功能键（features）以 、 连接；不含时为空。 */
   note: string;
 }
 
 export interface ProductServicePlanDetailRecord {
+  /** `${solutionCode}:${tierCode}`（合成键，不展示）。 */
   id: string;
   solutionCode: string;
   solutionName: string;
@@ -751,21 +824,30 @@ export interface ProductServicePlanDetailRecord {
   ownerTeam: string;
   tierCode: ProductSolutionTierCode;
   tierName: string;
+  planCode: string;
   summary: string;
   status: ProductSolutionStatus;
   isPublic: boolean;
+  /** 取价与权益所用的版本：优先 plans.current_version_id，否则最新版。 */
+  versionNo: number | null;
+  versionStatus: PlanVersionStatus | null;
   price: ProductServicePlanPrice;
   subscriptionCount: number;
   activeTenantCount: number;
+  monthlyRevenue: number;
   deliveryMode: string;
-  applicableScope: string[];
-  salesNotes: string[];
   entitlements: ProductServicePlanEntitlement[];
   includedProductCount: number;
   excludedProductCount: number;
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * 订阅记录上的档位：绑在方案上的 plan 用五档码；plan 组件没有可识别档位
+ * （bundled 组件、越梯的 override）时为 custom——它是"谈出来的"，不在价目表上。
+ */
+export type SubscriptionTierCode = ProductSolutionTierCode | "custom";
 
 export type TenantOperationStatus =
   | "trial"
@@ -929,7 +1011,7 @@ export interface SubscriptionOperationQuotaSnapshot {
 export interface SubscriptionSolutionAssociation {
   solutionCode: string | null;
   solutionName: string;
-  tierCode: ProductSolutionTierCode;
+  tierCode: SubscriptionTierCode;
   tierName: string;
   source: SubscriptionSolutionAssociationSource;
   note: string;
@@ -970,7 +1052,7 @@ export interface SubscriptionOperationRecord {
   servicePlanCode: string;
   servicePlanName: string;
   /** 机器可读的等级码。`tierName` 是展示名（已本地化），做不了映射。 */
-  tierCode: ProductSolutionTierCode;
+  tierCode: SubscriptionTierCode;
   tierName: string;
   status: SubscriptionOperationStatus;
   rawStatus: string;

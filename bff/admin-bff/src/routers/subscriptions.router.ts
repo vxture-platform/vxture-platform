@@ -21,7 +21,7 @@
  * @category Router
  */
 
-import { SUBSCRIPTION_STATUSES } from "@vxture-platform/shared";
+import { SUBSCRIPTION_STATUSES, TIERS } from "@vxture-platform/shared";
 import {
   BadRequestException,
   Body,
@@ -43,7 +43,7 @@ import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import { UUID_RE } from "./governance.shared";
 import type {
   ProductSolutionCapabilityType,
-  ProductSolutionTierCode,
+  SubscriptionTierCode,
   RequestContext,
   SubscriptionEntitlementSnapshot,
   SubscriptionOperationCycle,
@@ -402,30 +402,27 @@ function normalizeProductType(
     : "platform";
 }
 
-// plan_components.tier standard/starter/pro/business/enterprise → 方案档位码。
-function normalizeTierCode(tier: string | null): ProductSolutionTierCode {
-  switch (tier) {
-    case "enterprise":
-    case "business":
-      return "enterprise";
-    case "pro":
-      return "pro";
-    case "standard":
-    case "starter":
-      return "free";
-    default:
-      return "custom";
-  }
+// plan_components.tier → 订阅档位码。2026-08-31 起方案档位就是五档商业阶梯本身
+// （TD-029 收口，@shared TIERS），不再把 business 折成 enterprise、starter 折成 free；
+// 组件没有可识别档位（bundled 组件 tier=NULL、越梯 override）→ custom。
+function normalizeTierCode(tier: string | null): SubscriptionTierCode {
+  return tier && (TIERS as readonly string[]).includes(tier)
+    ? (tier as SubscriptionTierCode)
+    : "custom";
 }
 
-function tierName(code: ProductSolutionTierCode): string {
+function tierName(code: SubscriptionTierCode): string {
   switch (code) {
     case "enterprise":
       return "企业版";
+    case "business":
+      return "商业版";
     case "pro":
       return "专业版";
+    case "starter":
+      return "入门版";
     case "free":
-      return "基础版";
+      return "免费版";
     default:
       return "自定义";
   }

@@ -1,7 +1,9 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   Inject,
@@ -9,13 +11,17 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Req,
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request } from "express";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
+import { TIERS, type Tier } from "@vxture-platform/shared";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import { RequireStepUp } from "../auth/step-up.decorator";
+import { insertOperatorAuditLog } from "../audit/audit-log";
+import { pgErrorCode, withTransaction } from "../db/tx";
 import type {
   ProductAgentRecord,
   ProductCapabilityIntegration,
@@ -24,529 +30,23 @@ import type {
   ProductCapabilitySource,
   ProductCapabilityStatus,
   ProductCapabilityType,
-  ProductModelPolicyRecord,
   ProductPlanRecord,
+  ProductReleaseFeature,
+  ProductReleasePeriodType,
+  ProductReleasePrice,
+  ProductReleaseRecord,
   ProductServicePlanDetailRecord,
   ProductServicePlanEntitlement,
   ProductServicePlanPrice,
   ProductSolutionDetailRecord,
-  ProductReleaseRecord,
+  ProductSolutionPlanBindInput,
+  ProductSolutionProductInput,
   ProductSolutionRecord,
-  ProductSolutionServicePlanSummary,
+  ProductSolutionStatus,
   ProductSolutionTier,
-  ProductSolutionTierCode,
+  ProductSolutionWriteInput,
   RequestContext,
 } from "../types/console.types";
-
-// Mock timestamp for the still-mock solutions/releases/model-policies endpoints
-// (no schema backing — see the note above loadProductCapabilities). Capabilities
-// and agents are now DB-backed and no longer use this.
-const NOW = "2026-04-25T00:00:00.000Z";
-const NEW_PRODUCT_DEFAULT_CODE = "__new_product_default__";
-const TENANT_DEFAULT_CODE = "__tenant_default__";
-const tierPlanCodeMap: Record<ProductSolutionTierCode, string> = {
-  free: "starter",
-  pro: "growth",
-  enterprise: "enterprise",
-  custom: "enterprise",
-};
-
-export const productSolutions: ProductSolutionRecord[] = [
-  {
-    id: "solution-flood-regulation",
-    solutionCode: "flood-regulation",
-    solutionName: "洪涝灾害监管业务",
-    description:
-      "面向水利、应急和城市治理客户的洪涝灾害监管方案，覆盖低空巡检、视频解译、调度协同、数据沉淀和报告编制。",
-    industry: "应急管理 / 水利监管",
-    scenario: "洪涝灾害监管",
-    customerSegment: "省市应急、水利部门、园区管委会",
-    status: "active",
-    visibility: "public",
-    ownerTeam: "行业解决方案组",
-    subscriptionCount: 12,
-    activeTenantCount: 10,
-    monthlyRevenue: 128000,
-    tags: ["低空巡检", "视频解译", "应急调度"],
-    products: [
-      {
-        id: "flood-drone-platform",
-        productCode: "drone-platform",
-        productName: "无人机平台",
-        productType: "platform",
-        source: "partner",
-        role: "飞行任务与设备接入",
-        status: "active",
-      },
-      {
-        id: "flood-dispatch-agent",
-        productCode: "dispatch-agent",
-        productName: "智能调度智能体",
-        productType: "agent",
-        source: "self",
-        role: "灾情研判与任务调度",
-        status: "active",
-      },
-      {
-        id: "flood-video-model",
-        productCode: "flood-video-interpretation",
-        productName: "视频解译大模型",
-        productType: "model",
-        source: "partner",
-        role: "水位、淹没区和险情识别",
-        status: "active",
-      },
-      {
-        id: "flood-data-platform",
-        productCode: "disaster-data-platform",
-        productName: "数据管理平台",
-        productType: "data",
-        source: "self",
-        role: "遥感、视频和事件数据沉淀",
-        status: "active",
-      },
-      {
-        id: "flood-report-agent",
-        productCode: "report-author-agent",
-        productName: "报告编制智能体",
-        productType: "agent",
-        source: "self",
-        role: "巡检报告与处置简报生成",
-        status: "active",
-      },
-    ],
-    tiers: [
-      {
-        tierCode: "free",
-        tierName: "Free",
-        summary: "1 台无人机，1 路视频解译，不含报告编制",
-        status: "active",
-        isPublic: true,
-      },
-      {
-        tierCode: "pro",
-        tierName: "Pro",
-        summary: "50 台无人机，50 路视频解译，报告编制 100 万字/年",
-        status: "active",
-        isPublic: true,
-      },
-      {
-        tierCode: "enterprise",
-        tierName: "Enterprise",
-        summary: "专属资源、合同约定配额和现场交付服务",
-        status: "active",
-        isPublic: true,
-      },
-    ],
-    createdAt: NOW,
-    updatedAt: "2026-04-28T00:00:00.000Z",
-  },
-  {
-    id: "solution-smart-legal",
-    solutionCode: "smart-legal",
-    solutionName: "智慧法务",
-    description:
-      "面向企业法务、园区合规和政务法制场景，组合知识库、法务智能体、合同审查和报告编制能力。",
-    industry: "企业服务 / 法务合规",
-    scenario: "智慧法务",
-    customerSegment: "集团法务、园区企业服务、政务法制部门",
-    status: "active",
-    visibility: "public",
-    ownerTeam: "企业服务方案组",
-    subscriptionCount: 18,
-    activeTenantCount: 15,
-    monthlyRevenue: 86000,
-    tags: ["知识库", "合同审查", "报告编制"],
-    products: [
-      {
-        id: "legal-kb-platform",
-        productCode: "legal-knowledge-base",
-        productName: "知识库平台",
-        productType: "platform",
-        source: "self",
-        role: "法规、合同和案例知识沉淀",
-        status: "active",
-      },
-      {
-        id: "legal-agent",
-        productCode: "digital-legal",
-        productName: "法务智能体",
-        productType: "agent",
-        source: "self",
-        role: "法律问答、合规检索和材料生成",
-        status: "active",
-      },
-      {
-        id: "legal-contract-agent",
-        productCode: "contract-review",
-        productName: "合同审核智能体",
-        productType: "agent",
-        source: "self",
-        role: "合同条款抽取与风险提示",
-        status: "active",
-      },
-      {
-        id: "legal-report-agent",
-        productCode: "report-author-agent",
-        productName: "报告编制智能体",
-        productType: "agent",
-        source: "self",
-        role: "法务报告、合规报告生成",
-        status: "active",
-      },
-      {
-        id: "legal-search-model",
-        productCode: "legal-retrieval-model",
-        productName: "法规检索模型",
-        productType: "model",
-        source: "partner",
-        role: "法规语义检索与相似案例匹配",
-        status: "active",
-      },
-    ],
-    tiers: [
-      {
-        tierCode: "free",
-        tierName: "Free",
-        summary: "100 万字报告编制，基础知识库存储空间",
-        status: "active",
-        isPublic: true,
-      },
-      {
-        tierCode: "pro",
-        tierName: "Pro",
-        summary: "1000 万字报告编制，高级合同审查和扩展存储空间",
-        status: "active",
-        isPublic: true,
-      },
-      {
-        tierCode: "enterprise",
-        tierName: "Enterprise",
-        summary: "专属知识库、私有模型接入和法务交付服务",
-        status: "active",
-        isPublic: true,
-      },
-    ],
-    createdAt: NOW,
-    updatedAt: "2026-04-27T00:00:00.000Z",
-  },
-  {
-    id: "solution-emergency-command",
-    solutionCode: "emergency-command",
-    solutionName: "应急指挥协同",
-    description:
-      "面向城市级应急指挥中心的跨部门协同方案，覆盖态势研判、资源调度、预案匹配和处置复盘。",
-    industry: "应急管理 / 城市治理",
-    scenario: "应急指挥协同",
-    customerSegment: "城市应急指挥中心、区县应急局",
-    status: "draft",
-    visibility: "internal",
-    ownerTeam: "城市治理方案组",
-    subscriptionCount: 3,
-    activeTenantCount: 1,
-    monthlyRevenue: 32000,
-    tags: ["态势研判", "预案匹配", "协同调度"],
-    products: [
-      {
-        id: "emergency-command-agent",
-        productCode: "emergency-command",
-        productName: "应急指挥智能体",
-        productType: "agent",
-        source: "self",
-        role: "预案匹配、态势研判和指挥建议",
-        status: "active",
-      },
-      {
-        id: "emergency-ops-agent",
-        productCode: "operation-analysis",
-        productName: "经营分析智能体",
-        productType: "agent",
-        source: "self",
-        role: "事件复盘和指标归因",
-        status: "active",
-      },
-      {
-        id: "emergency-data-platform",
-        productCode: "event-data-platform",
-        productName: "事件数据平台",
-        productType: "data",
-        source: "self",
-        role: "事件、资源和处置过程数据沉淀",
-        status: "draft",
-      },
-      {
-        id: "emergency-map-service",
-        productCode: "gis-service",
-        productName: "空间态势服务",
-        productType: "service",
-        source: "partner",
-        role: "地图态势和空间分析能力",
-        status: "draft",
-      },
-    ],
-    tiers: [
-      {
-        tierCode: "free",
-        tierName: "Free",
-        summary: "单部门试用，基础预案匹配和少量事件复盘",
-        status: "draft",
-        isPublic: false,
-      },
-      {
-        tierCode: "pro",
-        tierName: "Pro",
-        summary: "多部门协同、资源调度和月度处置复盘",
-        status: "draft",
-        isPublic: false,
-      },
-      {
-        tierCode: "enterprise",
-        tierName: "Enterprise",
-        summary: "城市级专属部署、联动接口和现场保障服务",
-        status: "draft",
-        isPublic: false,
-      },
-    ],
-    createdAt: NOW,
-    updatedAt: "2026-04-26T00:00:00.000Z",
-  },
-];
-
-export const productReleases: ProductReleaseRecord[] = [
-  {
-    id: "0bb203b6-7dfb-42d8-a6ad-920000000101",
-    productCode: "vxture-console-cn",
-    productName: "Vxture Console 国内版",
-    productRegion: "domestic",
-    productStatus: "active",
-    releaseCode: "console-cn-2026-q2",
-    releaseName: "2026 Q2 商业发布",
-    description:
-      "面向国内租户的 console 平台智能助手与运营能力发布，版本等级由本发布定义。",
-    releaseType: "standard",
-    versionLabels: ["基础版", "专业版", "企业版"],
-    isFree: false,
-    isPublic: true,
-    isActive: true,
-    prices: [
-      {
-        id: "c211fef4-88ef-45cc-bfe4-940000000101",
-        currency: "CNY",
-        price: 2999,
-        originalPrice: 3999,
-        periodType: "monthly",
-        periodValue: 1,
-        isDefault: true,
-        isActive: true,
-      },
-      {
-        id: "c211fef4-88ef-45cc-bfe4-940000000102",
-        currency: "CNY",
-        price: 29900,
-        originalPrice: 39990,
-        periodType: "yearly",
-        periodValue: 1,
-        isDefault: false,
-        isActive: true,
-      },
-    ],
-    features: [
-      {
-        code: "release.versions",
-        name: "发布版本",
-        type: "function",
-        quotaValue: 3,
-        isUnlimited: false,
-        config: { labels: ["基础版", "专业版", "企业版"] },
-      },
-      {
-        code: "ai.business_agents",
-        name: "智能体应用",
-        type: "function",
-        quotaValue: 1,
-        isUnlimited: false,
-        config: { includedAgents: ["console-assistant"] },
-      },
-      {
-        code: "ai.token_metering",
-        name: "租户模型用量监测",
-        type: "function",
-        quotaValue: 1,
-        isUnlimited: false,
-        config: { period: "monthly" },
-      },
-    ],
-    allowedAgents: ["Console 平台智能助手"],
-    createdAt: NOW,
-    updatedAt: NOW,
-  },
-  {
-    id: "0bb203b6-7dfb-42d8-a6ad-920000000102",
-    productCode: "ruyin-cn",
-    productName: "Ruyin 国内版",
-    productRegion: "domestic",
-    productStatus: "active",
-    releaseCode: "ruyin-cn-2026-q2",
-    releaseName: "2026 Q2 对话验证发布",
-    description: "Ruyin 国内版验证发布，先以对话智能体接入产品与模型授权链路。",
-    releaseType: "standard",
-    versionLabels: ["基础版", "高级版", "定制版"],
-    isFree: false,
-    isPublic: true,
-    isActive: true,
-    prices: [
-      {
-        id: "c211fef4-88ef-45cc-bfe4-940000000201",
-        currency: "CNY",
-        price: 1999,
-        originalPrice: 2999,
-        periodType: "monthly",
-        periodValue: 1,
-        isDefault: true,
-        isActive: true,
-      },
-      {
-        id: "c211fef4-88ef-45cc-bfe4-940000000202",
-        currency: "CNY",
-        price: 19900,
-        originalPrice: 29990,
-        periodType: "yearly",
-        periodValue: 1,
-        isDefault: false,
-        isActive: true,
-      },
-    ],
-    features: [
-      {
-        code: "release.versions",
-        name: "发布版本",
-        type: "function",
-        quotaValue: 3,
-        isUnlimited: false,
-        config: { labels: ["基础版", "高级版", "定制版"] },
-      },
-      {
-        code: "ai.business_agents",
-        name: "智能体应用",
-        type: "function",
-        quotaValue: 1,
-        isUnlimited: false,
-        config: { includedAgents: ["ruyin"] },
-      },
-      {
-        code: "ai.token_metering",
-        name: "租户模型用量监测",
-        type: "function",
-        quotaValue: 1,
-        isUnlimited: false,
-        config: { period: "monthly" },
-      },
-    ],
-    allowedAgents: ["Ruyin"],
-    createdAt: NOW,
-    updatedAt: NOW,
-  },
-  {
-    id: "0bb203b6-7dfb-42d8-a6ad-920000000103",
-    productCode: "ruyin-intl",
-    productName: "Ruyin 国际版",
-    productRegion: "international",
-    productStatus: "draft",
-    releaseCode: "ruyin-intl-2026-q2-preview",
-    releaseName: "2026 Q2 Preview",
-    description:
-      "Ruyin 国际版预览发布；产品存在但模型策略尚未定义，默认不授权。",
-    releaseType: "standard",
-    versionLabels: ["Standard", "Pro"],
-    isFree: false,
-    isPublic: false,
-    isActive: false,
-    prices: [
-      {
-        id: "c211fef4-88ef-45cc-bfe4-940000000301",
-        currency: "USD",
-        price: 399,
-        originalPrice: 499,
-        periodType: "monthly",
-        periodValue: 1,
-        isDefault: true,
-        isActive: false,
-      },
-    ],
-    features: [
-      {
-        code: "release.versions",
-        name: "发布版本",
-        type: "function",
-        quotaValue: 2,
-        isUnlimited: false,
-        config: { labels: ["Standard", "Pro"] },
-      },
-      {
-        code: "ai.business_agents",
-        name: "智能体应用",
-        type: "function",
-        quotaValue: 1,
-        isUnlimited: false,
-        config: { includedAgents: ["ruyin"] },
-      },
-    ],
-    allowedAgents: ["Ruyin"],
-    createdAt: NOW,
-    updatedAt: NOW,
-  },
-];
-
-export const explicitModelPolicies: ProductModelPolicyRecord[] = [];
-
-export const defaultModelPolicies: ProductModelPolicyRecord[] = [
-  {
-    id: "policy-default-new-product",
-    subjectType: "tenant",
-    subjectId: "*",
-    subjectName: "租户主体",
-    scopeType: "new_product_default",
-    scopeCode: NEW_PRODUCT_DEFAULT_CODE,
-    scopeName: "新产品授权策略",
-    isDefined: false,
-    productCode: NEW_PRODUCT_DEFAULT_CODE,
-    productName: "新产品默认",
-    productRegion: null,
-    agentId: null,
-    agentCode: null,
-    agentName: "全部智能体",
-    modelCode: null,
-    quotaTokens: 0,
-    isUnlimited: false,
-    priority: 999,
-    isActive: false,
-    cycle: "monthly",
-    note: "未定义时默认不授权，新产品上线前需要补充产品级策略。",
-  },
-  {
-    id: "policy-default-tenant",
-    subjectType: "tenant",
-    subjectId: "*",
-    subjectName: "租户主体",
-    scopeType: "tenant_default",
-    scopeCode: TENANT_DEFAULT_CODE,
-    scopeName: "按租户授权策略",
-    isDefined: false,
-    productCode: TENANT_DEFAULT_CODE,
-    productName: "租户默认",
-    productRegion: null,
-    agentId: null,
-    agentCode: null,
-    agentName: "全部智能体",
-    modelCode: null,
-    quotaTokens: 0,
-    isUnlimited: false,
-    priority: 1000,
-    isActive: false,
-    cycle: "monthly",
-    note: "未定义租户覆盖时回落到产品策略；产品策略也未定义时默认不授权。",
-  },
-];
 
 @Controller("api/products")
 export class ProductsRouter {
@@ -583,10 +83,16 @@ export class ProductsRouter {
     return capability;
   }
 
+  /**
+   * 产品发布 = 已发布的套餐版本（一条 = 一个 status='published' 的 plan_version，
+   * 产品取其 primary 组件）。没有 release 表，也不建：能发布出去的只有版本。
+   */
   @Get("releases")
-  listReleases(@Req() req: Request & RequestContext): ProductReleaseRecord[] {
+  async listReleases(
+    @Req() req: Request & RequestContext,
+  ): Promise<ProductReleaseRecord[]> {
     assertCanManageProducts(req);
-    return listProductReleases();
+    return loadProductReleases(this.pool);
   }
 
   @Get("plans")
@@ -638,31 +144,323 @@ export class ProductsRouter {
     });
   }
 
+  // ── 解决方案（product.solutions / solution_products / solution_plans）────────
+  // 读全部走 RO 池；写走 RW 池 + 事务 + 审计（support.audit_logs，与 plan 发布同一条
+  // 审计线）。model-policies 端点已退役（2026-08-31）：真实的模型策略是 Atlas 的，
+  // 由 atlas.router `GET /api/atlas/policies` 代理并做契约断言，这里不再造第二份。
+
   @Get("solutions")
-  listSolutions(@Req() req: Request & RequestContext): ProductSolutionRecord[] {
+  async listSolutions(
+    @Req() req: Request & RequestContext,
+  ): Promise<ProductSolutionRecord[]> {
     assertCanManageProducts(req);
-    return listProductSolutions();
+    return loadProductSolutions(this.pool);
   }
 
   @Get("solutions/:solutionCode")
-  getSolution(
+  async getSolution(
     @Req() req: Request & RequestContext,
     @Param("solutionCode") solutionCode: string,
-  ): ProductSolutionDetailRecord {
+  ): Promise<ProductSolutionDetailRecord> {
     assertCanManageProducts(req);
-    return getProductSolutionDetail(decodeURIComponent(solutionCode));
+    return loadProductSolutionDetail(
+      this.pool,
+      decodeURIComponent(solutionCode),
+    );
+  }
+
+  @Post("solutions")
+  async createSolution(
+    @Req() req: Request & RequestContext,
+    @Body() body: ProductSolutionWriteInput,
+  ): Promise<ProductSolutionDetailRecord> {
+    assertCanManageProducts(req);
+    const solutionCode = readSolutionCode(body?.solutionCode);
+    const fields = readSolutionFields(body, { requireName: true });
+    if (!fields.solution_name) {
+      throw new BadRequestException("solutionName is required");
+    }
+    try {
+      await withTransaction(this.rwPool, async (client) => {
+        await client.query(
+          `INSERT INTO product.solutions
+             (solution_code, solution_name, description, industry, scenario, customer_segment,
+              owner_team, tags, delivery_mode, delivery_boundaries, is_public, status,
+              created_by, updated_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text[], $9, $10::text[], $11, 'draft', $12, $12)`,
+          [
+            solutionCode,
+            fields.solution_name,
+            fields.description ?? null,
+            fields.industry ?? null,
+            fields.scenario ?? null,
+            fields.customer_segment ?? null,
+            fields.owner_team ?? null,
+            fields.tags ?? [],
+            fields.delivery_mode ?? null,
+            fields.delivery_boundaries ?? [],
+            fields.is_public ?? true,
+            req.user!.id,
+          ],
+        );
+        await insertOperatorAuditLog(client, req, {
+          action: "product.solution.create",
+          resourceType: "product_solution",
+          resourceId: solutionCode,
+          after: { solutionCode, ...fields },
+        });
+      });
+    } catch (error) {
+      if (pgErrorCode(error) === "23505") {
+        throw new ConflictException(
+          `Solution code ${solutionCode} already exists`,
+        );
+      }
+      throw error;
+    }
+    return loadProductSolutionDetail(this.pool, solutionCode);
+  }
+
+  @Put("solutions/:solutionCode")
+  async updateSolution(
+    @Req() req: Request & RequestContext,
+    @Param("solutionCode") solutionCode: string,
+    @Body() body: ProductSolutionWriteInput,
+  ): Promise<ProductSolutionDetailRecord> {
+    assertCanManageProducts(req);
+    const code = decodeURIComponent(solutionCode);
+    const fields = readSolutionFields(body, { requireName: false });
+    const keys = Object.keys(fields) as (keyof SolutionFields)[];
+    if (keys.length === 0) {
+      throw new BadRequestException("No editable field supplied");
+    }
+    await withTransaction(this.rwPool, async (client) => {
+      const before = await lockSolution(client, code);
+      // 只更新送来的字段：PUT 语义在这里是「替换这些字段」，没送的不动——
+      // 表单只编辑基础资料时不该把交付边界清空。
+      const sets = keys.map((key, index) => `${key} = $${index + 2}`);
+      const values: unknown[] = keys.map((key) => fields[key] ?? null);
+      await client.query(
+        `UPDATE product.solutions
+            SET ${sets.join(", ")}, updated_by = $${keys.length + 2}, updated_at = now()
+          WHERE id = $1`,
+        [before.id, ...values, req.user!.id],
+      );
+      await insertOperatorAuditLog(client, req, {
+        action: "product.solution.update",
+        resourceType: "product_solution",
+        resourceId: code,
+        before: pickSolutionAudit(before),
+        after: fields,
+      });
+    });
+    return loadProductSolutionDetail(this.pool, code);
+  }
+
+  @Patch("solutions/:solutionCode/state")
+  async setSolutionState(
+    @Req() req: Request & RequestContext,
+    @Param("solutionCode") solutionCode: string,
+    @Body() body: { state?: string },
+  ): Promise<ProductSolutionDetailRecord> {
+    assertCanManageProducts(req);
+    const code = decodeURIComponent(solutionCode);
+    const next = body?.state;
+    if (!next || !isSolutionStatus(next)) {
+      throw new BadRequestException(
+        `state must be one of ${SOLUTION_STATES.join(", ")}`,
+      );
+    }
+    await withTransaction(this.rwPool, async (client) => {
+      const current = await lockSolution(client, code);
+      const from = current.status;
+      // 幂等重放（active → active）不报错也不写库，同 opera 产品目录的做法。
+      if (from === next) return;
+      if (!SOLUTION_STATE_TRANSITIONS[from].includes(next)) {
+        const allowed = SOLUTION_STATE_TRANSITIONS[from];
+        throw new ConflictException(
+          allowed.length === 0
+            ? `${SOLUTION_STATE_LABELS[from]}是终态，不能再改成${SOLUTION_STATE_LABELS[next]}`
+            : `不允许从${SOLUTION_STATE_LABELS[from]}改成${SOLUTION_STATE_LABELS[next]}；可以改成：${allowed
+                .map((s) => SOLUTION_STATE_LABELS[s])
+                .join(" / ")}`,
+        );
+      }
+      await client.query(
+        `UPDATE product.solutions SET status = $2, updated_by = $3, updated_at = now() WHERE id = $1`,
+        [current.id, next, req.user!.id],
+      );
+      await insertOperatorAuditLog(client, req, {
+        action: "product.solution.state",
+        resourceType: "product_solution",
+        resourceId: code,
+        before: { status: from },
+        after: { status: next },
+      });
+    });
+    return loadProductSolutionDetail(this.pool, code);
+  }
+
+  /** 整体替换方案的产品清单（幂等：送什么就是什么）。 */
+  @Put("solutions/:solutionCode/products")
+  async replaceSolutionProducts(
+    @Req() req: Request & RequestContext,
+    @Param("solutionCode") solutionCode: string,
+    @Body()
+    body:
+      | ProductSolutionProductInput[]
+      | { products?: ProductSolutionProductInput[] },
+  ): Promise<ProductSolutionDetailRecord> {
+    assertCanManageProducts(req);
+    const code = decodeURIComponent(solutionCode);
+    const items = readSolutionProductInputs(body);
+    await withTransaction(this.rwPool, async (client) => {
+      const solution = await lockSolution(client, code);
+      const resolved = await resolveProducts(client, items);
+      await client.query(
+        `DELETE FROM product.solution_products WHERE solution_id = $1`,
+        [solution.id],
+      );
+      for (const item of resolved) {
+        await client.query(
+          `INSERT INTO product.solution_products (solution_id, product_id, role, sort)
+           VALUES ($1, $2, $3, $4)`,
+          [solution.id, item.productId, item.role, item.sort],
+        );
+      }
+      await client.query(
+        `UPDATE product.solutions SET updated_by = $2, updated_at = now() WHERE id = $1`,
+        [solution.id, req.user!.id],
+      );
+      await insertOperatorAuditLog(client, req, {
+        action: "product.solution.products.replace",
+        resourceType: "product_solution",
+        resourceId: code,
+        after: resolved.map((item) => ({
+          productCode: item.productCode,
+          role: item.role,
+          sort: item.sort,
+        })),
+      });
+    });
+    return loadProductSolutionDetail(this.pool, code);
+  }
+
+  /** 把一个既有 plan 绑到方案的某个档位（服务套餐）。一档一个 plan，一个 plan 只能绑一处。 */
+  @Put("solutions/:solutionCode/plans/:tier")
+  async bindSolutionPlan(
+    @Req() req: Request & RequestContext,
+    @Param("solutionCode") solutionCode: string,
+    @Param("tier") tierParam: string,
+    @Body() body: ProductSolutionPlanBindInput,
+  ): Promise<ProductSolutionDetailRecord> {
+    assertCanManageProducts(req);
+    const code = decodeURIComponent(solutionCode);
+    const tier = readTier(tierParam);
+    const planRef = readPlanRef(body);
+    try {
+      await withTransaction(this.rwPool, async (client) => {
+        const solution = await lockSolution(client, code);
+        const plan = await resolvePlan(client, planRef);
+        const bound = await client.query<{
+          solution_code: string;
+          tier: string;
+        }>(
+          `SELECT s.solution_code, sp.tier
+             FROM product.solution_plans sp
+             JOIN product.solutions s ON s.id = sp.solution_id
+            WHERE sp.plan_id = $1`,
+          [plan.id],
+        );
+        const elsewhere = bound.rows.find(
+          (row) => row.solution_code !== code || row.tier !== tier,
+        );
+        if (elsewhere) {
+          throw new ConflictException(
+            `Plan ${plan.plan_code} is already bound to ${elsewhere.solution_code}/${elsewhere.tier}`,
+          );
+        }
+        const previous = await client.query<{ plan_code: string }>(
+          `SELECT p.plan_code
+             FROM product.solution_plans sp JOIN product.plans p ON p.id = sp.plan_id
+            WHERE sp.solution_id = $1 AND sp.tier = $2`,
+          [solution.id, tier],
+        );
+        await client.query(
+          `INSERT INTO product.solution_plans (solution_id, tier, plan_id)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (solution_id, tier) DO UPDATE SET plan_id = EXCLUDED.plan_id`,
+          [solution.id, tier, plan.id],
+        );
+        await client.query(
+          `UPDATE product.solutions SET updated_by = $2, updated_at = now() WHERE id = $1`,
+          [solution.id, req.user!.id],
+        );
+        await insertOperatorAuditLog(client, req, {
+          action: "product.solution.plan.bind",
+          resourceType: "product_solution",
+          resourceId: code,
+          before: { tier, planCode: previous.rows[0]?.plan_code ?? null },
+          after: { tier, planCode: plan.plan_code },
+        });
+      });
+    } catch (error) {
+      // 并发下 UNIQUE (plan_id) 仍可能兜住第二个绑定；和上面的显式检查同一含义。
+      if (pgErrorCode(error) === "23505") {
+        throw new ConflictException("Plan is already bound to another tier");
+      }
+      throw error;
+    }
+    return loadProductSolutionDetail(this.pool, code);
+  }
+
+  @Delete("solutions/:solutionCode/plans/:tier")
+  async unbindSolutionPlan(
+    @Req() req: Request & RequestContext,
+    @Param("solutionCode") solutionCode: string,
+    @Param("tier") tierParam: string,
+  ): Promise<ProductSolutionDetailRecord> {
+    assertCanManageProducts(req);
+    const code = decodeURIComponent(solutionCode);
+    const tier = readTier(tierParam);
+    await withTransaction(this.rwPool, async (client) => {
+      const solution = await lockSolution(client, code);
+      const removed = await client.query<{ plan_code: string }>(
+        `DELETE FROM product.solution_plans sp
+          USING product.plans p
+          WHERE sp.solution_id = $1 AND sp.tier = $2 AND p.id = sp.plan_id
+          RETURNING p.plan_code`,
+        [solution.id, tier],
+      );
+      if (removed.rowCount === 0) {
+        throw new NotFoundException(`No plan bound to ${code}/${tier}`);
+      }
+      await client.query(
+        `UPDATE product.solutions SET updated_by = $2, updated_at = now() WHERE id = $1`,
+        [solution.id, req.user!.id],
+      );
+      await insertOperatorAuditLog(client, req, {
+        action: "product.solution.plan.unbind",
+        resourceType: "product_solution",
+        resourceId: code,
+        before: { tier, planCode: removed.rows[0]?.plan_code ?? null },
+        after: { tier, planCode: null },
+      });
+    });
+    return loadProductSolutionDetail(this.pool, code);
   }
 
   @Get("service-plans/:solutionCode/:tierCode")
-  getServicePlan(
+  async getServicePlan(
     @Req() req: Request & RequestContext,
     @Param("solutionCode") solutionCode: string,
-    @Param("tierCode") tierCode: ProductSolutionTierCode,
-  ): ProductServicePlanDetailRecord {
+    @Param("tierCode") tierCode: string,
+  ): Promise<ProductServicePlanDetailRecord> {
     assertCanManageProducts(req);
-    return getProductServicePlanDetail(
+    return loadProductServicePlanDetail(
+      this.pool,
       decodeURIComponent(solutionCode),
-      decodeURIComponent(tierCode) as ProductSolutionTierCode,
+      readTier(decodeURIComponent(tierCode)),
     );
   }
 
@@ -672,14 +470,6 @@ export class ProductsRouter {
   ): Promise<ProductAgentRecord[]> {
     assertCanManageProducts(req);
     return loadProductAgents(this.pool);
-  }
-
-  @Get("model-policies")
-  listModelPolicies(
-    @Req() req: Request & RequestContext,
-  ): ProductModelPolicyRecord[] {
-    assertCanManageProducts(req);
-    return listEffectiveModelPolicies();
   }
 
   // ── plan version lifecycle (product_320) — list · edit draft · publish ─────
@@ -918,9 +708,10 @@ async function loadPlanVersionDetail(
 
 // ── C14 de-mock: product catalog capabilities + agents read from the live
 //   `product` schema (product.products is the unified SoT — merged agent +
-//   application). Only these two endpoints have real backing tables; solutions /
-//   service-plans / releases / model-policies remain mock (no schema — see the
-//   注释 above listProductSolutions / listProductReleases / listEffectiveModelPolicies).
+//   application). solutions / service-plans / releases followed on 2026-08-31
+//   (TD-029 closed: product.solutions + solution_products + solution_plans, and
+//   releases redefined as published plan versions); model-policies was retired
+//   in favour of the Atlas proxy. See the solutions section at the bottom.
 
 /** Raw product.products row (+ derived plan_count / category_code) for the catalog list. */
 interface ProductCatalogRow {
@@ -1151,490 +942,11 @@ export async function loadProductAgents(
   }));
 }
 
-// STILL MOCK (no schema backing). solutions / service-plans / releases /
-// model-policies have no `product`-schema tables — the industry-solution and
-// release-packaging models are not yet defined. De-mocking these is blocked on
-// product-catalog design (owner scope 2026-07-12: C14 = capabilities + agents
-// only; the rest registered as TD, see docs tech-debt). Do NOT wire these to the
-// live DB without the tables + owner sign-off.
-export function listProductReleases(): ProductReleaseRecord[] {
-  return productReleases;
-}
-
-// STILL MOCK — see the note above listProductReleases (no product.solutions table).
-export function listProductSolutions(): ProductSolutionRecord[] {
-  return productSolutions;
-}
-
-export function getProductSolutionDetail(
-  solutionCode: string,
-): ProductSolutionDetailRecord {
-  const solution = productSolutions.find(
-    (item) => item.solutionCode === solutionCode,
-  );
-  if (!solution) {
-    throw new NotFoundException(`Product solution ${solutionCode} not found`);
-  }
-
-  return {
-    ...solution,
-    deliveryMode: deliveryModeForSolution(solution),
-    deliveryBoundaries: deliveryBoundariesForSolution(solution),
-    relatedServicePlans: solution.tiers.map(mapSolutionServicePlanSummary),
-  };
-}
-
-export function getProductServicePlanDetail(
-  solutionCode: string,
-  tierCode: ProductSolutionTierCode,
-): ProductServicePlanDetailRecord {
-  const solution = productSolutions.find(
-    (item) => item.solutionCode === solutionCode,
-  );
-  if (!solution) {
-    throw new NotFoundException(`Product solution ${solutionCode} not found`);
-  }
-
-  const tier = solution.tiers.find((item) => item.tierCode === tierCode);
-  if (!tier) {
-    throw new NotFoundException(
-      `Service plan ${solutionCode}/${tierCode} not found`,
-    );
-  }
-
-  const price = priceForTier(tier);
-  const entitlements = solution.products.map((product) =>
-    entitlementFor(solution.solutionCode, tier.tierCode, product),
-  );
-
-  return {
-    id: `${solution.id}:${tier.tierCode}`,
-    solutionCode: solution.solutionCode,
-    solutionName: solution.solutionName,
-    industry: solution.industry,
-    scenario: solution.scenario,
-    customerSegment: solution.customerSegment,
-    ownerTeam: solution.ownerTeam,
-    tierCode: tier.tierCode,
-    tierName: tier.tierName,
-    summary: tier.summary,
-    status: tier.status,
-    isPublic: tier.isPublic,
-    price,
-    subscriptionCount: Math.max(
-      0,
-      Math.round(
-        solution.subscriptionCount * subscriptionRatioForTier(tier.tierCode),
-      ),
-    ),
-    activeTenantCount: Math.max(
-      0,
-      Math.round(
-        solution.activeTenantCount * subscriptionRatioForTier(tier.tierCode),
-      ),
-    ),
-    deliveryMode: deliveryModeForSolution(solution),
-    applicableScope: applicableScopeForTier(solution, tier),
-    salesNotes: salesNotesForTier(tier),
-    entitlements,
-    includedProductCount: entitlements.filter((item) => item.included).length,
-    excludedProductCount: entitlements.filter((item) => !item.included).length,
-    createdAt: solution.createdAt,
-    updatedAt: solution.updatedAt,
-  };
-}
-
-function mapSolutionServicePlanSummary(
-  tier: ProductSolutionTier,
-): ProductSolutionServicePlanSummary {
-  return {
-    tierCode: tier.tierCode,
-    tierName: tier.tierName,
-    summary: tier.summary,
-    status: tier.status,
-    isPublic: tier.isPublic,
-    priceLabel: priceForTier(tier).priceLabel,
-  };
-}
-
-function deliveryModeForSolution(solution: ProductSolutionRecord): string {
-  if (solution.solutionCode === "flood-regulation")
-    return "平台订阅 + 三方设备/模型接入 + 行业实施服务";
-  if (solution.solutionCode === "smart-legal")
-    return "平台订阅 + 知识库初始化 + 法务场景配置";
-  if (solution.solutionCode === "emergency-command")
-    return "专属项目交付 + 多系统接口联调";
-  return "平台订阅 + 行业方案配置";
-}
-
-function deliveryBoundariesForSolution(
-  solution: ProductSolutionRecord,
-): string[] {
-  if (solution.solutionCode === "flood-regulation") {
-    return [
-      "覆盖无人机巡检任务、视频解译、灾情调度、数据管理和报告编制业务闭环。",
-      "无人机设备采购、现场飞手服务和第三方网络链路不默认包含，按合同另行约定。",
-      "视频解译模型输出作为辅助研判结果，正式处置结论需由客户业务人员确认。",
-    ];
-  }
-
-  if (solution.solutionCode === "smart-legal") {
-    return [
-      "覆盖法规知识库、合同审查、法律问答和报告编制等企业法务辅助场景。",
-      "历史文档清洗、专属法规库采购和外部律师服务不默认包含。",
-      "智能体输出不作为正式法律意见，需经客户法务或律师审核确认。",
-    ];
-  }
-
-  return [
-    "覆盖方案内产品能力的开通、配置、订阅和用量计量。",
-    "外部系统接口、现场部署和专属模型调优按合同另行确认。",
-    "方案当前处于草稿或灰度阶段时，不承诺公开售卖 SLA。",
-  ];
-}
-
-function priceForTier(tier: ProductSolutionTier): ProductServicePlanPrice {
-  if (tier.tierCode === "free") {
-    return {
-      priceLabel: "免费",
-      price: 0,
-      originalPrice: 0,
-      currency: "CNY",
-      periodType: "monthly",
-      periodValue: 1,
-    };
-  }
-
-  const plan = productPlanByCode(tierPlanCodeMap[tier.tierCode]);
-  const defaultPrice =
-    plan?.prices.find((price) => price.isDefault && price.isActive) ??
-    plan?.prices.find((price) => price.isActive) ??
-    plan?.prices[0];
-  if (defaultPrice && tier.tierCode === "pro") {
-    return {
-      priceLabel: `${formatCurrency(Number(defaultPrice.price), defaultPrice.currency)} / ${defaultPrice.periodType === "yearly" ? "年" : "月"}`,
-      price: Number(defaultPrice.price),
-      originalPrice: Number(defaultPrice.originalPrice),
-      currency: defaultPrice.currency,
-      periodType: defaultPrice.periodType,
-      periodValue: defaultPrice.periodValue,
-    };
-  }
-
-  return {
-    priceLabel: "合同报价",
-    price: null,
-    originalPrice: null,
-    currency: "CNY",
-    periodType: "contract",
-    periodValue: 1,
-  };
-}
-
-function productPlanByCode(planCode: string): ProductPlanRecord | null {
-  const fallback = planFallbacks[planCode];
-  if (!fallback) return null;
-  return fallback;
-}
-
-const planFallbacks: Record<string, ProductPlanRecord> = {
-  starter: {
-    id: "plan-fallback-starter",
-    planCode: "starter",
-    planName: "入门版",
-    description: "适合个人或小团队试用。",
-    planType: "normal",
-    level: 10,
-    isFree: true,
-    isPublic: true,
-    isActive: true,
-    subscriptionCount: 0,
-    prices: [
-      {
-        id: "price-starter",
-        currency: "CNY",
-        price: 0,
-        originalPrice: 0,
-        periodType: "monthly",
-        periodValue: 1,
-        isDefault: true,
-        isActive: true,
-      },
-    ],
-    features: [],
-    agents: [],
-    createdAt: NOW,
-    updatedAt: NOW,
-  },
-  growth: {
-    id: "plan-fallback-growth",
-    planCode: "growth",
-    planName: "专业版",
-    description: "适合组织客户使用。",
-    planType: "normal",
-    level: 20,
-    isFree: false,
-    isPublic: true,
-    isActive: true,
-    subscriptionCount: 0,
-    prices: [
-      {
-        id: "price-growth",
-        currency: "CNY",
-        price: 2999,
-        originalPrice: 3999,
-        periodType: "monthly",
-        periodValue: 1,
-        isDefault: true,
-        isActive: true,
-      },
-    ],
-    features: [],
-    agents: [],
-    createdAt: NOW,
-    updatedAt: NOW,
-  },
-  enterprise: {
-    id: "plan-fallback-enterprise",
-    planCode: "enterprise",
-    planName: "企业版",
-    description: "适合专属交付和合同方案。",
-    planType: "normal",
-    level: 30,
-    isFree: false,
-    isPublic: true,
-    isActive: true,
-    subscriptionCount: 0,
-    prices: [
-      {
-        id: "price-enterprise",
-        currency: "CNY",
-        price: 9999,
-        originalPrice: 12999,
-        periodType: "monthly",
-        periodValue: 1,
-        isDefault: true,
-        isActive: true,
-      },
-    ],
-    features: [],
-    agents: [],
-    createdAt: NOW,
-    updatedAt: NOW,
-  },
-};
-
-function formatCurrency(value: number, currency: string): string {
-  if (currency === "CNY")
-    return `¥${new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
-  return `${currency} ${new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
-}
-
-function entitlementFor(
-  solutionCode: string,
-  tierCode: ProductSolutionTierCode,
-  product: ProductSolutionRecord["products"][number],
-): ProductServicePlanEntitlement {
-  const key = `${solutionCode}:${tierCode}:${product.productCode}`;
-  const override = entitlementOverrides[key];
-  if (override) {
-    return { ...product, ...override };
-  }
-
-  if (tierCode === "enterprise" || tierCode === "custom") {
-    return {
-      ...product,
-      included: true,
-      quotaSummary: "合同约定",
-      note: "按客户规模、接口和交付范围确认。",
-    };
-  }
-
-  if (tierCode === "free") {
-    return {
-      ...product,
-      included: true,
-      quotaSummary: "基础试用额度",
-      note: "仅用于试用验证，不承诺生产 SLA。",
-    };
-  }
-
-  return {
-    ...product,
-    included: true,
-    quotaSummary: "标准专业版额度",
-    note: "适合正式生产使用，可按套餐规则扩容。",
-  };
-}
-
-const entitlementOverrides: Record<
-  string,
-  Pick<ProductServicePlanEntitlement, "included" | "quotaSummary" | "note">
-> = {
-  "flood-regulation:free:drone-platform": {
-    included: true,
-    quotaSummary: "1 台无人机",
-    note: "支持单设备试用接入。",
-  },
-  "flood-regulation:free:flood-video-interpretation": {
-    included: true,
-    quotaSummary: "1 路视频解译",
-    note: "用于单路视频验证。",
-  },
-  "flood-regulation:free:report-author-agent": {
-    included: false,
-    quotaSummary: "不包含",
-    note: "报告编制从 Pro 开始开放。",
-  },
-  "flood-regulation:pro:drone-platform": {
-    included: true,
-    quotaSummary: "50 台无人机",
-    note: "支持组织级巡检任务。",
-  },
-  "flood-regulation:pro:flood-video-interpretation": {
-    included: true,
-    quotaSummary: "50 路视频解译",
-    note: "支持多点位视频分析。",
-  },
-  "flood-regulation:pro:report-author-agent": {
-    included: true,
-    quotaSummary: "100 万字/年",
-    note: "用于巡检报告和处置简报。",
-  },
-  "smart-legal:free:report-author-agent": {
-    included: true,
-    quotaSummary: "100 万字/年",
-    note: "适合轻量报告生成。",
-  },
-  "smart-legal:free:legal-knowledge-base": {
-    included: true,
-    quotaSummary: "基础存储空间",
-    note: "适合少量法规和合同材料。",
-  },
-  "smart-legal:free:contract-review": {
-    included: false,
-    quotaSummary: "不包含",
-    note: "合同审核从 Pro 开始开放。",
-  },
-  "smart-legal:free:legal-retrieval-model": {
-    included: false,
-    quotaSummary: "不包含",
-    note: "高级法规检索从 Pro 开始开放。",
-  },
-  "smart-legal:pro:report-author-agent": {
-    included: true,
-    quotaSummary: "1000 万字/年",
-    note: "支持组织级报告编制。",
-  },
-  "smart-legal:pro:legal-knowledge-base": {
-    included: true,
-    quotaSummary: "扩展存储空间",
-    note: "支持多部门知识库。",
-  },
-  "smart-legal:pro:contract-review": {
-    included: true,
-    quotaSummary: "高级合同审查",
-    note: "支持合同条款抽取和风险提示。",
-  },
-  "smart-legal:pro:legal-retrieval-model": {
-    included: true,
-    quotaSummary: "高级检索额度",
-    note: "支持法规语义检索。",
-  },
-};
-
-function applicableScopeForTier(
-  solution: ProductSolutionRecord,
-  tier: ProductSolutionTier,
-): string[] {
-  if (tier.tierCode === "free") {
-    return ["试用客户", "POC 验证", `${solution.scenario} 单场景验证`];
-  }
-  if (tier.tierCode === "pro") {
-    return [
-      "正式订阅客户",
-      "组织级生产使用",
-      `${solution.industry} 标准业务团队`,
-    ];
-  }
-  return [
-    "大型组织客户",
-    "专属合同客户",
-    "需要私有部署、接口联调或现场交付的客户",
-  ];
-}
-
-function salesNotesForTier(tier: ProductSolutionTier): string[] {
-  if (tier.tierCode === "free")
-    return [
-      "默认公开可见。",
-      "不包含专属实施和现场服务。",
-      "可升级到 Pro 或 Enterprise。",
-    ];
-  if (tier.tierCode === "pro")
-    return [
-      "标准售卖版本。",
-      "支持套餐内配额和超额扩容。",
-      "可配置优惠活动和年度价格。",
-    ];
-  return [
-    "按合同报价。",
-    "支持专属交付边界、私有模型和接口联调。",
-    "售卖前需要运营和交付团队复核。",
-  ];
-}
-
-function subscriptionRatioForTier(tierCode: ProductSolutionTierCode): number {
-  if (tierCode === "free") return 0.35;
-  if (tierCode === "pro") return 0.5;
-  return 0.15;
-}
-
 function toIso(value: Date | string | null): string {
   if (!value) return new Date(0).toISOString();
   return value instanceof Date
     ? value.toISOString()
     : new Date(value).toISOString();
-}
-
-// STILL MOCK — model authorization policies belong to the model platform (B11,
-// deferred); this returns "undefined → default deny" placeholders. See the note
-// above listProductReleases.
-export function listEffectiveModelPolicies(): ProductModelPolicyRecord[] {
-  const rows = [...explicitModelPolicies, ...defaultModelPolicies];
-  const definedProductCodes = new Set(
-    explicitModelPolicies.map((policy) => policy.productCode),
-  );
-
-  for (const release of productReleases) {
-    if (definedProductCodes.has(release.productCode)) continue;
-
-    rows.push({
-      id: `policy-undefined-${release.productCode}`,
-      subjectType: "tenant",
-      subjectId: "*",
-      subjectName: "租户主体",
-      scopeType: "product",
-      scopeCode: release.productCode,
-      scopeName: release.productName,
-      isDefined: false,
-      productCode: release.productCode,
-      productName: release.productName,
-      productRegion: release.productRegion,
-      agentId: null,
-      agentCode: null,
-      agentName: "全部智能体",
-      modelCode: null,
-      quotaTokens: 0,
-      isUnlimited: false,
-      priority: 999,
-      isActive: false,
-      cycle: "monthly",
-      note: "产品已发布但模型策略未定义，默认不授权。",
-    });
-  }
-
-  return rows;
 }
 
 function assertCanManageProducts(req: Request & RequestContext): void {
@@ -1701,3 +1013,1014 @@ const PRODUCT_PLAN_SQL = `
   WHERE p.deleted_at IS NULL
   ORDER BY p.plan_code ASC
 `;
+
+// ── 解决方案：状态机 · 校验 · 写路径辅助（2026-08-31，TD-029 收口）──────────────
+// 设计：docs/20-specs/000-platform/admin/70-product-solutions.md。
+
+const SOLUTION_STATES = [
+  "draft",
+  "active",
+  "inactive",
+  "deprecated",
+] as const satisfies readonly ProductSolutionStatus[];
+
+/**
+ * 与 product.products 同形（opera product-catalog.router `STATE_TRANSITIONS`）：
+ * draft → active ⇄ inactive，任一 → deprecated（终态，出边为空）。
+ * 守卫立在这里而不只在界面：直连 BFF 的调用同样过不去。
+ */
+const SOLUTION_STATE_TRANSITIONS: Record<
+  ProductSolutionStatus,
+  readonly ProductSolutionStatus[]
+> = {
+  draft: ["active", "deprecated"],
+  active: ["inactive", "deprecated"],
+  inactive: ["active", "deprecated"],
+  deprecated: [],
+};
+
+const SOLUTION_STATE_LABELS: Record<ProductSolutionStatus, string> = {
+  draft: "草稿",
+  active: "启用",
+  inactive: "停用",
+  deprecated: "退役",
+};
+
+function isSolutionStatus(value: string): value is ProductSolutionStatus {
+  return (SOLUTION_STATES as readonly string[]).includes(value);
+}
+
+/** 可视码：kebab-case，进地址栏与审计 resource_id。 */
+const SOLUTION_CODE_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function readSolutionCode(raw: unknown): string {
+  const code = typeof raw === "string" ? raw.trim() : "";
+  if (!code || code.length > 64 || !SOLUTION_CODE_RE.test(code)) {
+    throw new BadRequestException(
+      "solutionCode must be kebab-case (a-z, 0-9, '-'), at most 64 chars",
+    );
+  }
+  return code;
+}
+
+function readTier(raw: string): Tier {
+  const tier = raw.trim().toLowerCase();
+  if (!(TIERS as readonly string[]).includes(tier)) {
+    throw new BadRequestException(`tier must be one of ${TIERS.join(", ")}`);
+  }
+  return tier as Tier;
+}
+
+function readOptionalText(
+  value: unknown,
+  key: string,
+  max: number,
+): string | null {
+  if (value === null) return null;
+  if (typeof value !== "string") {
+    throw new BadRequestException(`${key} must be a string`);
+  }
+  const text = value.trim();
+  if (text.length > max) {
+    throw new BadRequestException(`${key} exceeds ${max} chars`);
+  }
+  return text || null;
+}
+
+function readStringArray(value: unknown, key: string, max: number): string[] {
+  if (!Array.isArray(value) || value.some((v) => typeof v !== "string")) {
+    throw new BadRequestException(`${key} must be a string array`);
+  }
+  const items = (value as string[]).map((v) => v.trim()).filter(Boolean);
+  if (items.length > max) {
+    throw new BadRequestException(`${key} has more than ${max} items`);
+  }
+  return Array.from(new Set(items));
+}
+
+/** 列名即 product.solutions 列名——动态 SET 直接拼键，键集固定在此处。 */
+interface SolutionFields {
+  solution_name?: string;
+  description?: string | null;
+  industry?: string | null;
+  scenario?: string | null;
+  customer_segment?: string | null;
+  owner_team?: string | null;
+  tags?: string[];
+  delivery_mode?: string | null;
+  delivery_boundaries?: string[];
+  is_public?: boolean;
+}
+
+/** 只收送来的键（undefined = 不动）；create 时名称必填。 */
+function readSolutionFields(
+  body: ProductSolutionWriteInput | undefined,
+  options: { requireName: boolean },
+): SolutionFields {
+  const input = body ?? {};
+  const fields: SolutionFields = {};
+  if (input.solutionName !== undefined || options.requireName) {
+    const name = readOptionalText(
+      input.solutionName ?? "",
+      "solutionName",
+      128,
+    );
+    if (!name) throw new BadRequestException("solutionName is required");
+    fields.solution_name = name;
+  }
+  if (input.description !== undefined)
+    fields.description = readOptionalText(
+      input.description,
+      "description",
+      4000,
+    );
+  if (input.industry !== undefined)
+    fields.industry = readOptionalText(input.industry, "industry", 128);
+  if (input.scenario !== undefined)
+    fields.scenario = readOptionalText(input.scenario, "scenario", 128);
+  if (input.customerSegment !== undefined)
+    fields.customer_segment = readOptionalText(
+      input.customerSegment,
+      "customerSegment",
+      255,
+    );
+  if (input.ownerTeam !== undefined)
+    fields.owner_team = readOptionalText(input.ownerTeam, "ownerTeam", 128);
+  if (input.tags !== undefined)
+    fields.tags = readStringArray(input.tags, "tags", 32);
+  if (input.deliveryMode !== undefined)
+    fields.delivery_mode = readOptionalText(
+      input.deliveryMode,
+      "deliveryMode",
+      1000,
+    );
+  if (input.deliveryBoundaries !== undefined)
+    fields.delivery_boundaries = readStringArray(
+      input.deliveryBoundaries,
+      "deliveryBoundaries",
+      32,
+    );
+  if (input.isPublic !== undefined) {
+    if (typeof input.isPublic !== "boolean") {
+      throw new BadRequestException("isPublic must be a boolean");
+    }
+    fields.is_public = input.isPublic;
+  }
+  return fields;
+}
+
+interface SolutionProductItem {
+  productId: string | null;
+  productCode: string | null;
+  role: string | null;
+  sort: number;
+}
+
+function readSolutionProductInputs(
+  body:
+    | ProductSolutionProductInput[]
+    | { products?: ProductSolutionProductInput[] }
+    | undefined,
+): SolutionProductItem[] {
+  const list = Array.isArray(body) ? body : body?.products;
+  if (!Array.isArray(list)) {
+    throw new BadRequestException("products must be an array");
+  }
+  if (list.length > 64) {
+    throw new BadRequestException("products has more than 64 items");
+  }
+  return list.map((item, index) => {
+    const productId =
+      typeof item?.productId === "string" && item.productId.trim()
+        ? item.productId.trim()
+        : null;
+    const productCode =
+      typeof item?.productCode === "string" && item.productCode.trim()
+        ? item.productCode.trim()
+        : null;
+    if (!productId && !productCode) {
+      throw new BadRequestException(
+        `products[${index}] needs productId or productCode`,
+      );
+    }
+    const sort =
+      item?.sort === undefined ? index : Number.parseInt(String(item.sort), 10);
+    if (!Number.isInteger(sort)) {
+      throw new BadRequestException(`products[${index}].sort must be an int`);
+    }
+    return {
+      productId,
+      productCode,
+      role: readOptionalText(
+        item?.role ?? null,
+        `products[${index}].role`,
+        128,
+      ),
+      sort,
+    };
+  });
+}
+
+function readPlanRef(body: ProductSolutionPlanBindInput | undefined): {
+  planId: string | null;
+  planCode: string | null;
+} {
+  const planId =
+    typeof body?.planId === "string" && body.planId.trim()
+      ? body.planId.trim()
+      : null;
+  const planCode =
+    typeof body?.planCode === "string" && body.planCode.trim()
+      ? body.planCode.trim()
+      : null;
+  if (!planId && !planCode) {
+    throw new BadRequestException("planId or planCode is required");
+  }
+  return { planId, planCode };
+}
+
+interface LockedSolutionRow {
+  id: string;
+  solution_code: string;
+  solution_name: string;
+  description: string | null;
+  industry: string | null;
+  scenario: string | null;
+  customer_segment: string | null;
+  owner_team: string | null;
+  tags: string[];
+  delivery_mode: string | null;
+  delivery_boundaries: string[];
+  status: ProductSolutionStatus;
+  is_public: boolean;
+}
+
+/** FOR UPDATE：状态迁移与清单替换都要先锁住这一行（同 opera 产品目录）。 */
+async function lockSolution(
+  client: PoolClient,
+  solutionCode: string,
+): Promise<LockedSolutionRow> {
+  const { rows } = await client.query<LockedSolutionRow>(
+    `SELECT id, solution_code, solution_name, description, industry, scenario,
+            customer_segment, owner_team, tags, delivery_mode, delivery_boundaries,
+            status, is_public
+       FROM product.solutions
+      WHERE solution_code = $1 AND deleted_at IS NULL
+      FOR UPDATE`,
+    [solutionCode],
+  );
+  const row = rows[0];
+  if (!row) {
+    throw new NotFoundException(`Product solution ${solutionCode} not found`);
+  }
+  return row;
+}
+
+function pickSolutionAudit(row: LockedSolutionRow): SolutionFields {
+  return {
+    solution_name: row.solution_name,
+    description: row.description,
+    industry: row.industry,
+    scenario: row.scenario,
+    customer_segment: row.customer_segment,
+    owner_team: row.owner_team,
+    tags: row.tags,
+    delivery_mode: row.delivery_mode,
+    delivery_boundaries: row.delivery_boundaries,
+    is_public: row.is_public,
+  };
+}
+
+/** 把 productId / productCode 解析成目录行；任一解析不到即 400（不静默丢）。 */
+async function resolveProducts(
+  client: PoolClient,
+  items: SolutionProductItem[],
+): Promise<
+  {
+    productId: string;
+    productCode: string;
+    role: string | null;
+    sort: number;
+  }[]
+> {
+  if (items.length === 0) return [];
+  const ids = items.map((i) => i.productId).filter((v): v is string => !!v);
+  const codes = items.map((i) => i.productCode).filter((v): v is string => !!v);
+  const { rows } = await client.query<{ id: string; product_code: string }>(
+    `SELECT id, product_code FROM product.products
+      WHERE deleted_at IS NULL
+        AND (id::text = ANY($1::text[]) OR product_code = ANY($2::text[]))`,
+    [ids, codes],
+  );
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const byCode = new Map(rows.map((r) => [r.product_code, r]));
+  const seen = new Set<string>();
+  const resolved: {
+    productId: string;
+    productCode: string;
+    role: string | null;
+    sort: number;
+  }[] = [];
+  for (const item of items) {
+    const row =
+      (item.productId ? byId.get(item.productId) : undefined) ??
+      (item.productCode ? byCode.get(item.productCode) : undefined);
+    if (!row) {
+      throw new BadRequestException(
+        `Product ${item.productCode ?? item.productId} not found`,
+      );
+    }
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    resolved.push({
+      productId: row.id,
+      productCode: row.product_code,
+      role: item.role,
+      sort: item.sort,
+    });
+  }
+  return resolved;
+}
+
+async function resolvePlan(
+  client: PoolClient,
+  ref: { planId: string | null; planCode: string | null },
+): Promise<{ id: string; plan_code: string }> {
+  const { rows } = await client.query<{ id: string; plan_code: string }>(
+    `SELECT id, plan_code FROM product.plans
+      WHERE deleted_at IS NULL
+        AND (($1::text IS NOT NULL AND id::text = $1) OR ($2::text IS NOT NULL AND plan_code = $2))
+      LIMIT 1`,
+    [ref.planId, ref.planCode],
+  );
+  const row = rows[0];
+  if (!row) {
+    throw new NotFoundException(`Plan ${ref.planCode ?? ref.planId} not found`);
+  }
+  return row;
+}
+
+// ── 解决方案：SQL 与投影 ────────────────────────────────────────────────────
+
+/**
+ * MRR（月度经常性收入）的唯一定义——列表、详情、服务套餐三处共用这一段。
+ *
+ * 口径：只计 `status = 'active'` 的订阅（trialing 还没付钱，expiring/overdue 等
+ * 也不计；它们进 subscriptionCount 但不进收入）。价格取该订阅所钉版本
+ * （s.plan_version_id）上与订阅同周期（cycle_unit / cycle_count / currency）的
+ * plan_prices 行——版本冻结，所以就是它当初买时的价——再按周期折到月：
+ *   month → price / cycle_count
+ *   year  → price / (12 × cycle_count)
+ *   week  → price × 52 / (12 × cycle_count)
+ *   day   → price × 365 / (12 × cycle_count)
+ *   perpetual（一次性买断）→ 0，不是经常性收入
+ * 找不到同周期价格行 → 0（不拿别的周期凑）。按面值相加，不做币种换算
+ * （目前只有 CNY；多币种出现时这里要先分币再合）。结果保留两位小数。
+ */
+const MRR_MONTHLY_EXPR = `
+  CASE
+    WHEN s.status <> 'active' OR pp.price IS NULL THEN 0
+    WHEN s.cycle_unit = 'month' THEN pp.price / s.cycle_count
+    WHEN s.cycle_unit = 'year'  THEN pp.price / (12 * s.cycle_count)
+    WHEN s.cycle_unit = 'week'  THEN pp.price * 52 / (12 * s.cycle_count)
+    WHEN s.cycle_unit = 'day'   THEN pp.price * 365 / (12 * s.cycle_count)
+    ELSE 0
+  END`;
+
+/** 订阅 → 同周期价格行的连接条件（与 MRR 定义配套）。 */
+const SUBSCRIPTION_PRICE_JOIN = `
+  LEFT JOIN product.plan_prices pp
+    ON pp.plan_version_id = s.plan_version_id
+   AND pp.cycle_unit = s.cycle_unit
+   AND pp.cycle_count = s.cycle_count
+   AND pp.currency = COALESCE(s.currency, 'CNY')`;
+
+/** 计数三件套：active/trialing 订阅数、去重租户数、MRR。按绑定 plan 的全部版本归集。 */
+const SOLUTION_COUNTS_CTE = `
+  counts AS (
+    SELECT sp.solution_id,
+           COUNT(*) FILTER (WHERE s.status IN ('active','trialing'))::int AS subscription_count,
+           COUNT(DISTINCT s.tenant_id) FILTER (WHERE s.status IN ('active','trialing'))::int AS active_tenant_count,
+           COALESCE(SUM(${MRR_MONTHLY_EXPR}), 0)::numeric(18,2) AS monthly_revenue
+      FROM product.solution_plans sp
+      JOIN product.plan_versions pv ON pv.plan_id = sp.plan_id
+      JOIN metering.subscriptions s ON s.plan_version_id = pv.id AND s.deleted_at IS NULL
+      ${SUBSCRIPTION_PRICE_JOIN}
+     GROUP BY sp.solution_id
+  )`;
+
+/** 取价/取权益所用的版本：优先 plans.current_version_id，否则已发布的最新版，否则最新版。 */
+const PLAN_VERSION_PICK_LATERAL = `
+  LEFT JOIN LATERAL (
+    SELECT v.id, v.version_no, v.status
+      FROM product.plan_versions v
+     WHERE v.plan_id = pl.id
+     ORDER BY (v.id = pl.current_version_id) DESC, (v.status = 'published') DESC, v.version_no DESC
+     LIMIT 1
+  ) ver ON true`;
+
+/** 与 /plans 端点同一取价：月付优先，其次周期数最小。 */
+const PLAN_PRICE_PICK_LATERAL = `
+  LEFT JOIN LATERAL (
+    SELECT price, currency, cycle_unit, cycle_count
+      FROM product.plan_prices
+     WHERE plan_version_id = ver.id
+     ORDER BY CASE cycle_unit WHEN 'month' THEN 0 ELSE 1 END, cycle_count ASC
+     LIMIT 1
+  ) pr ON true`;
+
+const SOLUTION_SQL = `
+  WITH ${SOLUTION_COUNTS_CTE}
+  SELECT sol.id, sol.solution_code, sol.solution_name,
+         COALESCE(sol.description, '') AS description,
+         COALESCE(sol.industry, '') AS industry,
+         COALESCE(sol.scenario, '') AS scenario,
+         COALESCE(sol.customer_segment, '') AS customer_segment,
+         COALESCE(sol.owner_team, '') AS owner_team,
+         sol.tags, COALESCE(sol.delivery_mode, '') AS delivery_mode, sol.delivery_boundaries,
+         sol.status, sol.is_public, sol.created_at, sol.updated_at,
+         COALESCE(c.subscription_count, 0) AS subscription_count,
+         COALESCE(c.active_tenant_count, 0) AS active_tenant_count,
+         COALESCE(c.monthly_revenue, 0) AS monthly_revenue,
+         COALESCE((
+           SELECT jsonb_agg(jsonb_build_object(
+                    'id', p.id, 'productCode', p.product_code, 'productName', p.product_name,
+                    'productType', p.product_type, 'origin', p.origin, 'status', p.status,
+                    'role', sp.role, 'sort', sp.sort)
+                  ORDER BY sp.sort ASC, p.product_name ASC)
+             FROM product.solution_products sp
+             JOIN product.products p ON p.id = sp.product_id
+            WHERE sp.solution_id = sol.id AND p.deleted_at IS NULL
+         ), '[]'::jsonb) AS products,
+         COALESCE((
+           SELECT jsonb_agg(jsonb_build_object(
+                    'tier', spl.tier, 'planId', pl.id, 'planCode', pl.plan_code,
+                    'planName', pl.plan_name, 'description', COALESCE(pl.description, ''),
+                    'status', pl.status, 'isPublic', pl.is_public,
+                    'price', pr.price, 'currency', pr.currency,
+                    'cycleUnit', pr.cycle_unit, 'cycleCount', pr.cycle_count)
+                  ORDER BY array_position(ARRAY['free','starter','pro','business','enterprise'], spl.tier))
+             FROM product.solution_plans spl
+             JOIN product.plans pl ON pl.id = spl.plan_id AND pl.deleted_at IS NULL
+             ${PLAN_VERSION_PICK_LATERAL}
+             ${PLAN_PRICE_PICK_LATERAL}
+            WHERE spl.solution_id = sol.id
+         ), '[]'::jsonb) AS tiers
+    FROM product.solutions sol
+    LEFT JOIN counts c ON c.solution_id = sol.id
+   WHERE sol.deleted_at IS NULL
+     AND ($1::text IS NULL OR sol.solution_code = $1)
+   ORDER BY sol.sort ASC, sol.solution_name ASC
+`;
+
+interface SolutionProductJson {
+  id: string;
+  productCode: string;
+  productName: string;
+  productType: string;
+  origin: string;
+  status: string;
+  role: string | null;
+  sort: number;
+}
+
+interface SolutionTierJson {
+  tier: string;
+  planId: string;
+  planCode: string;
+  planName: string;
+  description: string;
+  status: string;
+  isPublic: boolean;
+  price: number | string | null;
+  currency: string | null;
+  cycleUnit: string | null;
+  cycleCount: number | null;
+}
+
+export interface SolutionRow {
+  id: string;
+  solution_code: string;
+  solution_name: string;
+  description: string;
+  industry: string;
+  scenario: string;
+  customer_segment: string;
+  owner_team: string;
+  tags: string[];
+  delivery_mode: string;
+  delivery_boundaries: string[];
+  status: string;
+  is_public: boolean;
+  created_at: Date | string;
+  updated_at: Date | string;
+  subscription_count: number | string;
+  active_tenant_count: number | string;
+  monthly_revenue: number | string | null;
+  products: SolutionProductJson[];
+  tiers: SolutionTierJson[];
+}
+
+type Reader = Pick<Pool, "query">;
+
+function mapSolutionSource(origin: string): ProductCapabilitySource {
+  return origin === "third_party" ? "partner" : "self";
+}
+
+function toSolutionStatus(status: string): ProductSolutionStatus {
+  return isSolutionStatus(status) ? status : "draft";
+}
+
+function toTier(value: string): Tier {
+  return (TIERS as readonly string[]).includes(value)
+    ? (value as Tier)
+    : "free";
+}
+
+function toMoney(value: number | string | null | undefined): number {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+}
+
+function formatCurrency(value: number, currency: string): string {
+  if (currency === "CNY")
+    return `¥${new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
+  return `${currency} ${new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
+}
+
+function cycleLabel(unit: string, count: number): string {
+  const n = count > 1 ? `${count} ` : "";
+  switch (unit) {
+    case "month":
+      return count > 1 ? `${count} 个月` : "月";
+    case "year":
+      return `${n}年`;
+    case "week":
+      return `${n}周`;
+    case "day":
+      return `${n}天`;
+    default:
+      return "一次性";
+  }
+}
+
+function periodTypeOf(cycleUnit: string): ProductReleasePeriodType {
+  switch (cycleUnit) {
+    case "day":
+      return "daily";
+    case "week":
+      return "weekly";
+    case "year":
+      return "yearly";
+    case "perpetual":
+      return "perpetual";
+    default:
+      return "monthly";
+  }
+}
+
+/** 无价格行 → 合同报价；0 → 免费；否则「¥x / 周期」。 */
+function servicePlanPrice(price: {
+  price: number | string | null;
+  currency: string | null;
+  cycleUnit: string | null;
+  cycleCount: number | null;
+}): ProductServicePlanPrice {
+  if (price.price === null || price.price === undefined || !price.cycleUnit) {
+    return {
+      priceLabel: "合同报价",
+      price: null,
+      originalPrice: null,
+      currency: price.currency ?? "CNY",
+      periodType: "contract",
+      periodValue: 1,
+    };
+  }
+  const amount = toMoney(price.price);
+  const currency = price.currency ?? "CNY";
+  const count = price.cycleCount ?? 1;
+  return {
+    priceLabel:
+      amount === 0
+        ? "免费"
+        : `${formatCurrency(amount, currency)} / ${cycleLabel(price.cycleUnit, count)}`,
+    price: amount,
+    originalPrice: null,
+    currency,
+    periodType: periodTypeOf(price.cycleUnit),
+    periodValue: count,
+  };
+}
+
+function projectSolutionTier(tier: SolutionTierJson): ProductSolutionTier {
+  const price = servicePlanPrice(tier);
+  return {
+    tierCode: toTier(tier.tier),
+    tierName: tier.planName,
+    summary: tier.description ?? "",
+    status: toSolutionStatus(tier.status),
+    isPublic: tier.isPublic,
+    planId: tier.planId,
+    planCode: tier.planCode,
+    priceLabel: price.priceLabel,
+    priceKind:
+      price.periodType === "contract"
+        ? "contract"
+        : price.price === 0
+          ? "free"
+          : "paid",
+  };
+}
+
+export function projectSolution(row: SolutionRow): ProductSolutionRecord {
+  return {
+    id: row.id,
+    solutionCode: row.solution_code,
+    solutionName: row.solution_name,
+    description: row.description ?? "",
+    industry: row.industry ?? "",
+    scenario: row.scenario ?? "",
+    customerSegment: row.customer_segment ?? "",
+    status: toSolutionStatus(row.status),
+    visibility: row.is_public ? "public" : "internal",
+    ownerTeam: row.owner_team ?? "",
+    subscriptionCount: Number(row.subscription_count) || 0,
+    activeTenantCount: Number(row.active_tenant_count) || 0,
+    monthlyRevenue: toMoney(row.monthly_revenue),
+    tags: row.tags ?? [],
+    products: (row.products ?? []).map((product) => ({
+      id: product.id,
+      productCode: product.productCode,
+      productName: product.productName,
+      productType: mapProductCapabilityType(product.productType),
+      source: mapSolutionSource(product.origin),
+      role: product.role ?? "",
+      status: mapProductCapabilityStatus(product.status),
+      sort: Number(product.sort) || 0,
+    })),
+    tiers: (row.tiers ?? []).map(projectSolutionTier),
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at),
+  };
+}
+
+export function projectSolutionDetail(
+  row: SolutionRow,
+): ProductSolutionDetailRecord {
+  const base = projectSolution(row);
+  return {
+    ...base,
+    deliveryMode: row.delivery_mode ?? "",
+    deliveryBoundaries: row.delivery_boundaries ?? [],
+    relatedServicePlans: base.tiers,
+  };
+}
+
+export async function loadProductSolutions(
+  pool: Reader,
+): Promise<ProductSolutionRecord[]> {
+  const { rows } = await pool.query<SolutionRow>(SOLUTION_SQL, [null]);
+  return rows.map(projectSolution);
+}
+
+async function loadSolutionRow(
+  pool: Reader,
+  solutionCode: string,
+): Promise<SolutionRow> {
+  const { rows } = await pool.query<SolutionRow>(SOLUTION_SQL, [solutionCode]);
+  const row = rows[0];
+  if (!row) {
+    throw new NotFoundException(`Product solution ${solutionCode} not found`);
+  }
+  return row;
+}
+
+export async function loadProductSolutionDetail(
+  pool: Reader,
+  solutionCode: string,
+): Promise<ProductSolutionDetailRecord> {
+  return projectSolutionDetail(await loadSolutionRow(pool, solutionCode));
+}
+
+// ── 服务套餐详情：方案档位上绑的 plan 的版本 · 价格 · 组件权益 · 计数 ───────────
+
+interface PlanComponentJson {
+  productCode: string;
+  productName: string;
+  productType: string;
+  origin: string;
+  tier: string | null;
+  componentRole: string;
+  features: string[];
+  quota: Record<string, unknown> | null;
+}
+
+interface PlanPriceJson {
+  id: string;
+  currency: string;
+  price: number | string;
+  cycleUnit: string;
+  cycleCount: number;
+}
+
+export interface ServicePlanRow {
+  plan_id: string;
+  plan_code: string;
+  plan_name: string;
+  description: string;
+  status: string;
+  is_public: boolean;
+  created_at: Date | string;
+  updated_at: Date | string;
+  version_no: number | null;
+  version_status: string | null;
+  price: number | string | null;
+  currency: string | null;
+  cycle_unit: string | null;
+  cycle_count: number | null;
+  components: PlanComponentJson[];
+  subscription_count: number | string;
+  active_tenant_count: number | string;
+  monthly_revenue: number | string | null;
+}
+
+const SERVICE_PLAN_SQL = `
+  SELECT pl.id AS plan_id, pl.plan_code, pl.plan_name,
+         COALESCE(pl.description, '') AS description,
+         pl.status, pl.is_public, pl.created_at, pl.updated_at,
+         ver.version_no, ver.status AS version_status,
+         pr.price, pr.currency, pr.cycle_unit, pr.cycle_count,
+         COALESCE((
+           SELECT jsonb_agg(jsonb_build_object(
+                    'productCode', cp.product_code, 'productName', cp.product_name,
+                    'productType', cp.product_type, 'origin', cp.origin,
+                    'tier', pc.tier, 'componentRole', pc.component_role,
+                    'features', pc.features, 'quota', pc.quota)
+                  ORDER BY pc.priority ASC, pc.sort_order ASC)
+             FROM product.plan_components pc
+             JOIN product.products cp ON cp.id = pc.product_id
+            WHERE pc.plan_version_id = ver.id
+         ), '[]'::jsonb) AS components,
+         COALESCE(c.subscription_count, 0) AS subscription_count,
+         COALESCE(c.active_tenant_count, 0) AS active_tenant_count,
+         COALESCE(c.monthly_revenue, 0) AS monthly_revenue
+    FROM product.plans pl
+    ${PLAN_VERSION_PICK_LATERAL}
+    ${PLAN_PRICE_PICK_LATERAL}
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*) FILTER (WHERE s.status IN ('active','trialing'))::int AS subscription_count,
+             COUNT(DISTINCT s.tenant_id) FILTER (WHERE s.status IN ('active','trialing'))::int AS active_tenant_count,
+             COALESCE(SUM(${MRR_MONTHLY_EXPR}), 0)::numeric(18,2) AS monthly_revenue
+        FROM product.plan_versions pv
+        JOIN metering.subscriptions s ON s.plan_version_id = pv.id AND s.deleted_at IS NULL
+        ${SUBSCRIPTION_PRICE_JOIN}
+       WHERE pv.plan_id = pl.id
+    ) c ON true
+   WHERE pl.id = $1 AND pl.deleted_at IS NULL
+`;
+
+/** quota JSON → 紧凑一行：`doc.words 1,000,000 · storage.max 不限`。 */
+export function quotaSummary(quota: Record<string, unknown> | null): string {
+  if (!quota || typeof quota !== "object") return "";
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(quota)) {
+    if (typeof value === "number") {
+      parts.push(
+        value === -1
+          ? `${key} 不限`
+          : `${key} ${new Intl.NumberFormat("zh-CN").format(value)}`,
+      );
+    } else if (typeof value === "boolean") {
+      if (value) parts.push(key);
+    } else if (value !== null && value !== undefined) {
+      parts.push(
+        `${key} ${typeof value === "string" ? value : JSON.stringify(value)}`,
+      );
+    }
+  }
+  return parts.join(" · ");
+}
+
+export function projectServicePlan(
+  solution: SolutionRow,
+  tier: Tier,
+  plan: ServicePlanRow,
+): ProductServicePlanDetailRecord {
+  const base = projectSolution(solution);
+  const componentByCode = new Map(
+    (plan.components ?? []).map((component) => [
+      component.productCode,
+      component,
+    ]),
+  );
+  const roleByCode = new Map(
+    base.products.map((product) => [product.productCode, product.role]),
+  );
+  const entitlements: ProductServicePlanEntitlement[] = (
+    plan.components ?? []
+  ).map((component) => ({
+    productCode: component.productCode,
+    productName: component.productName,
+    productType: mapProductCapabilityType(component.productType),
+    source: mapSolutionSource(component.origin),
+    role: roleByCode.get(component.productCode) || component.componentRole,
+    included: true,
+    quotaSummary: quotaSummary(component.quota),
+    note: (component.features ?? []).join("、"),
+  }));
+  // 方案里有、这个套餐的组件里没有的产品：如实标为不包含（不猜配额）。
+  for (const product of base.products) {
+    if (componentByCode.has(product.productCode)) continue;
+    entitlements.push({
+      productCode: product.productCode,
+      productName: product.productName,
+      productType: product.productType,
+      source: product.source,
+      role: product.role,
+      included: false,
+      quotaSummary: "",
+      note: "",
+    });
+  }
+  const included = entitlements.filter((item) => item.included).length;
+  return {
+    id: `${base.solutionCode}:${tier}`,
+    solutionCode: base.solutionCode,
+    solutionName: base.solutionName,
+    industry: base.industry,
+    scenario: base.scenario,
+    customerSegment: base.customerSegment,
+    ownerTeam: base.ownerTeam,
+    tierCode: tier,
+    tierName: plan.plan_name,
+    planCode: plan.plan_code,
+    summary: plan.description ?? "",
+    status: toSolutionStatus(plan.status),
+    isPublic: plan.is_public,
+    versionNo: plan.version_no === null ? null : Number(plan.version_no),
+    versionStatus:
+      plan.version_status === "published" || plan.version_status === "draft"
+        ? plan.version_status
+        : null,
+    price: servicePlanPrice({
+      price: plan.price,
+      currency: plan.currency,
+      cycleUnit: plan.cycle_unit,
+      cycleCount: plan.cycle_count,
+    }),
+    subscriptionCount: Number(plan.subscription_count) || 0,
+    activeTenantCount: Number(plan.active_tenant_count) || 0,
+    monthlyRevenue: toMoney(plan.monthly_revenue),
+    deliveryMode: solution.delivery_mode ?? "",
+    entitlements,
+    includedProductCount: included,
+    excludedProductCount: entitlements.length - included,
+    createdAt: toIso(plan.created_at),
+    updatedAt: toIso(plan.updated_at),
+  };
+}
+
+export async function loadProductServicePlanDetail(
+  pool: Reader,
+  solutionCode: string,
+  tier: Tier,
+): Promise<ProductServicePlanDetailRecord> {
+  const solution = await loadSolutionRow(pool, solutionCode);
+  const binding = (solution.tiers ?? []).find((item) => item.tier === tier);
+  if (!binding) {
+    throw new NotFoundException(
+      `Service plan ${solutionCode}/${tier} not found`,
+    );
+  }
+  const { rows } = await pool.query<ServicePlanRow>(SERVICE_PLAN_SQL, [
+    binding.planId,
+  ]);
+  const plan = rows[0];
+  if (!plan) {
+    throw new NotFoundException(
+      `Plan bound to ${solutionCode}/${tier} no longer exists`,
+    );
+  }
+  return projectServicePlan(solution, tier, plan);
+}
+
+// ── 产品发布 = 已发布的套餐版本 ──────────────────────────────────────────────
+// 一条 = 一个 status='published' 的 plan_version；产品 = 该版本的 primary 组件所指
+// 产品（没有 primary 组件的版本不是任何产品的发布，INNER JOIN 直接滤掉）。
+
+export interface ReleaseRow {
+  id: string;
+  version_no: number;
+  version_created_at: Date | string;
+  plan_code: string;
+  plan_name: string;
+  description: string;
+  is_public: boolean;
+  plan_status: string;
+  plan_updated_at: Date | string;
+  is_current: boolean;
+  product_code: string;
+  product_name: string;
+  product_status: string;
+  origin: string;
+  prices: PlanPriceJson[];
+  components: PlanComponentJson[];
+}
+
+const RELEASES_SQL = `
+  SELECT pv.id, pv.version_no, pv.created_at AS version_created_at,
+         p.plan_code, p.plan_name, COALESCE(p.description, '') AS description,
+         p.is_public, p.status AS plan_status, p.updated_at AS plan_updated_at,
+         (pv.id = p.current_version_id) AS is_current,
+         prod.product_code, prod.product_name, prod.status AS product_status, prod.origin,
+         COALESCE((
+           SELECT jsonb_agg(jsonb_build_object(
+                    'id', pp.id, 'currency', pp.currency, 'price', pp.price,
+                    'cycleUnit', pp.cycle_unit, 'cycleCount', pp.cycle_count)
+                  ORDER BY CASE pp.cycle_unit WHEN 'month' THEN 0 ELSE 1 END, pp.cycle_count ASC)
+             FROM product.plan_prices pp WHERE pp.plan_version_id = pv.id
+         ), '[]'::jsonb) AS prices,
+         COALESCE((
+           SELECT jsonb_agg(jsonb_build_object(
+                    'productCode', cp.product_code, 'productName', cp.product_name,
+                    'productType', cp.product_type, 'origin', cp.origin,
+                    'tier', pc.tier, 'componentRole', pc.component_role,
+                    'features', pc.features, 'quota', pc.quota)
+                  ORDER BY pc.priority ASC, pc.sort_order ASC)
+             FROM product.plan_components pc
+             JOIN product.products cp ON cp.id = pc.product_id
+            WHERE pc.plan_version_id = pv.id
+         ), '[]'::jsonb) AS components
+    FROM product.plan_versions pv
+    JOIN product.plans p ON p.id = pv.plan_id
+    JOIN LATERAL (
+      SELECT pr.product_code, pr.product_name, pr.status, pr.origin
+        FROM product.plan_components pc
+        JOIN product.products pr ON pr.id = pc.product_id
+       WHERE pc.plan_version_id = pv.id AND pc.component_role = 'primary'
+       ORDER BY pc.priority ASC, pc.sort_order ASC
+       LIMIT 1
+    ) prod ON true
+   WHERE pv.status = 'published' AND p.deleted_at IS NULL
+   ORDER BY prod.product_code ASC, p.plan_code ASC, pv.version_no DESC
+`;
+
+function projectReleaseFeature(
+  component: PlanComponentJson,
+): ProductReleaseFeature {
+  const quota = component.quota ?? null;
+  const values = quota && typeof quota === "object" ? Object.values(quota) : [];
+  const numeric = values.filter((v): v is number => typeof v === "number");
+  return {
+    code: component.productCode,
+    name: component.productName,
+    type: numeric.length > 0 ? "quota" : "function",
+    quotaValue: typeof quota === "number" ? quota : null,
+    isUnlimited: numeric.includes(-1),
+    config: quota && typeof quota === "object" ? quota : null,
+  };
+}
+
+export function projectRelease(row: ReleaseRow): ProductReleaseRecord {
+  const prices: ProductReleasePrice[] = (row.prices ?? []).map(
+    (price, index) => ({
+      id: price.id,
+      currency: price.currency,
+      price: toMoney(price.price),
+      originalPrice: null,
+      periodType: periodTypeOf(price.cycleUnit),
+      periodValue: Number(price.cycleCount) || 1,
+      isDefault: index === 0,
+      isActive: true,
+    }),
+  );
+  const components = row.components ?? [];
+  return {
+    id: row.id,
+    productCode: row.product_code,
+    productName: row.product_name,
+    productStatus: mapProductCapabilityStatus(row.product_status),
+    releaseCode: `${row.plan_code}@v${row.version_no}`,
+    releaseName: row.plan_name,
+    description: row.description ?? "",
+    releaseType: row.origin === "third_party" ? "custom" : "standard",
+    versionLabels: components
+      .filter((c) => c.componentRole === "primary" && c.tier)
+      .map((c) => c.tier as string),
+    isFree: prices.length > 0 && prices.every((price) => price.price === 0),
+    isPublic: row.is_public,
+    isActive: row.plan_status === "active",
+    isCurrent: row.is_current,
+    prices,
+    features: components.map(projectReleaseFeature),
+    createdAt: toIso(row.version_created_at),
+    updatedAt: toIso(row.plan_updated_at),
+  };
+}
+
+export async function loadProductReleases(
+  pool: Reader,
+): Promise<ProductReleaseRecord[]> {
+  const { rows } = await pool.query<ReleaseRow>(RELEASES_SQL);
+  return rows.map(projectRelease);
+}
