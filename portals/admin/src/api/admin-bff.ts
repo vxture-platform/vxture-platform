@@ -99,11 +99,6 @@ function resolveAdminApiPrefix(): string {
   return usesDirectAdminBff ? "" : "/admin-api";
 }
 
-export interface CaptchaChallenge {
-  token: string;
-  targetRatio: number;
-}
-
 export class AdminBffError extends Error {
   constructor(
     message: string,
@@ -1541,63 +1536,6 @@ export async function restoreSession(): Promise<SessionSnapshot> {
     } catch {
       return EMPTY_SESSION;
     }
-  }
-}
-
-export async function getCaptchaChallenge(): Promise<CaptchaChallenge> {
-  let response: Response;
-
-  try {
-    response = await fetch(
-      `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/auth/captcha/challenge`,
-      {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-      },
-    );
-  } catch {
-    throw new AdminBffError("Admin BFF is unavailable.", 503);
-  }
-
-  if (!response.ok) {
-    throw new AdminBffError(
-      "Failed to obtain captcha challenge.",
-      response.status,
-    );
-  }
-
-  return (await response.json()) as CaptchaChallenge;
-}
-
-export async function sendAdminPhoneCode(
-  phone: string,
-  turnstileToken?: string,
-): Promise<void> {
-  let response: Response;
-
-  try {
-    response = await fetch(
-      `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/auth/send-phone-code`,
-      {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ phone, turnstileToken }),
-      },
-    );
-  } catch {
-    throw new AdminBffError("Admin BFF is unavailable.", 503);
-  }
-
-  if (!response.ok) {
-    throw new AdminBffError(
-      await responseErrorMessage(response, "Failed to send phone code."),
-      response.status,
-    );
   }
 }
 
