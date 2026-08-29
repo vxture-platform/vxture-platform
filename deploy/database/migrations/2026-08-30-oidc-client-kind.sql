@@ -44,6 +44,18 @@ UPDATE appoidc.oidc_clients
    AND product_id IS NULL
    AND client_kind <> 'platform';
 
+-- 产品客户端的 product_id 若从未回填（取决于该库当年跑 seed 的先后：旧 seed 把
+-- 回填放在客户端与产品都建好之后，早于那一版建的库可能留着 NULL），这里按旧 seed
+-- 同一条 T1 规则补上——client_id 去掉 -beta/-canary 后缀 = product_code。只补
+-- 能对上目录行的；对不上的不猜，留给下面的删除与断言。
+UPDATE appoidc.oidc_clients c
+   SET product_id = p.id, updated_at = now()
+  FROM product.products p
+ WHERE c.product_id IS NULL
+   AND c.client_kind = 'product'
+   AND p.deleted_at IS NULL
+   AND c.client_id IN (p.product_code, p.product_code || '-beta', p.product_code || '-canary');
+
 -- 孤儿客户端：seed 曾建、从未有过产品行的五个规划产品 + 已退役的 nocus。
 -- oidc_consents 对 client_id 有 ON DELETE CASCADE，随行清掉。
 DO $$

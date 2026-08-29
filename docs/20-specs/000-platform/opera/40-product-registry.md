@@ -99,6 +99,7 @@ seed 是**平台自举**的一部分，不是登记入口的替代品。一行�
 
 1. 加列 `client_kind`（默认 `product`）。
 2. website / console / admin / opera → `platform`。
+   2b. 产品客户端若 `product_id` 从未回填（取决于该库当年跑 seed 的先后），按旧 seed 同一条 T1 规则补上（`client_id` 去掉 `-beta`/`-canary` = `product_code`）；对不上目录行的不猜。迁移因此不依赖 seed 历史。
 3. **删除**存量孤儿客户端 ontos / raven / anlan / forge / xuanzhen / nocus（`product_id IS NULL`），每行 `RAISE NOTICE` 留痕；`oidc_consents` 随 `ON DELETE CASCADE` 清掉。选择删除而不是补目录行：产品目录是唯一入口，迁移替它们预建行等于绕过入口；它们从未能完成 token-exchange（`invalid_client`），删除不改变任何在用行为。
 4. 断言库里不再有 `client_kind='product' AND product_id IS NULL` 的行，否则停下并逐条报出。
 5. 加两条 CHECK；同步 98 列锁。
