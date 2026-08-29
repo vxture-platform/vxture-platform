@@ -86,7 +86,8 @@ for (const df of readdirSync(DDL_DIR).filter((x) => /^[0-9].*\.sql$/.test(x))) {
 }
 // 规则③白名单：设计上有意未建的表（代码经 to_regclass 探测优雅空态，非残留）。
 const DESIGN_PENDING_TABLES = new Set([
-  'admin.governance_record', // admin-app Q1 决策：不投机建 schema；platform-governance.router 探测降级
+  // 2026-08-31 清空：admin.governance_record 的唯一读者 platform-governance.router
+  // 已随审批中心 / 平台密钥两页退役，不再有代码探测这张从未建过的表。
 ]);
 const reSqlRef = new RegExp(
   `\\b(?:from|join|into|update)\\s+(${[...LIVE_SCHEMAS].join('|')})\\.([a-z_][a-z0-9_]*)\\b`,

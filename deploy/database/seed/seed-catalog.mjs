@@ -173,9 +173,9 @@ const STEP_UP_REQUIRED = new Set([
   "commerce:payment.settle",
   "commerce:refund.execute",
   "promotion:campaign.manage",
-  // 身份 / 凭证材料
-  "security:signing_key.manage",
-  "security:oidc_client.manage",
+  // 身份 / 凭证材料：security:signing_key.manage / security:oidc_client.manage 两个码
+  // 2026-08-31 退役——admin 里没有任何路由检查它们，挂着它们的「密钥管理」菜单也
+  // 撤了（签名密钥归 deploy 27-provision，OIDC 客户端归 opera 接入凭据）。
   "operator:account.manage",
   "operator:role.manage",
   // 数据主体权益 / 越权视角
@@ -250,8 +250,6 @@ const OPERATOR_PERMISSIONS = [
   ["support:impersonate", "Impersonate customer (high-risk)"],
   ["compliance:event.read", "View compliance events"],
   ["compliance:event.manage", "Manage compliance events"],
-  ["security:signing_key.manage", "Manage signing keys (high-risk)"],
-  ["security:oidc_client.manage", "Manage OIDC clients (high-risk)"],
   ["operator:account.manage", "Manage operator accounts (high-risk)"],
   ["operator:role.manage", "Manage operator roles (high-risk)"],
   ["audit:read", "View audit logs"],
@@ -576,12 +574,10 @@ const MENU_TREE = [
               "model:model.manage",
             ],
           },
-          {
-            code: "admin.menu.secret_store",
-            name: "密钥管理",
-            route: "/platform-secrets",
-            perms: ["security:signing_key.manage", "security:oidc_client.manage"],
-          },
+          // 密钥管理 / 审批中心 / 字典管理 / 通知渠道四个菜单节点 2026-08-31 退役
+          // （owner 2026-08-30：上线前摘掉永远为空的菜单项，40-menu.md 1.2.0）。
+          // 存量库的行由 migrations/2026-08-31-admin-retire-empty-menus.sql 删除，
+          // 本 seed 只是不再写入。
         ],
       },
       {
@@ -589,7 +585,6 @@ const MENU_TREE = [
         name: "安全审计",
         children: [
           { code: "admin.menu.audit_log", name: "审计日志", route: "/audit-logs", perms: ["audit:read"] },
-          { code: "admin.menu.approval_flow", name: "审批中心", route: "/approval-center" },
           {
             code: "admin.menu.risk_record",
             name: "风险记录",
@@ -621,7 +616,6 @@ const MENU_TREE = [
             ],
           },
           { code: "admin.menu.system_parameter", name: "参数配置", route: "/system-parameters" },
-          { code: "admin.menu.data_dictionary", name: "字典管理", route: "/data-dictionaries" },
           {
             code: "admin.menu.feature_toggle",
             name: "开关控制",
@@ -634,7 +628,6 @@ const MENU_TREE = [
         code: "admin.menu.notification_center",
         name: "通知中心",
         children: [
-          { code: "admin.menu.notification_channel", name: "通知渠道", route: "/notification-channels" },
           {
             code: "admin.menu.notification_log",
             name: "发送记录",

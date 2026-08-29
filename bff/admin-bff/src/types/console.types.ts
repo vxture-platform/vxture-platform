@@ -117,28 +117,8 @@ export interface RequestContext {
   operatorAccessToken?: string;
 }
 
-export type PlatformGovernanceKind =
-  | "admins"
-  | "secrets"
-  | "jobs"
-  | "approvals";
-export type PlatformGovernanceStatus =
-  | "normal"
-  | "warning"
-  | "blocked"
-  | "pending";
-
-export interface PlatformGovernanceRecord {
-  id: string;
-  name: string;
-  status: PlatformGovernanceStatus;
-  scope: string;
-  owner: string;
-  policy: string;
-  updatedAt: string;
-  description: string;
-  tags: string[];
-}
+// PlatformGovernance*（审批中心 / 平台密钥）2026-08-31 随 platform-governance.router
+// 一起退役：admin.governance_record 从未建表，那两页永远为空。
 
 export interface AiModelRecord {
   id: string;
