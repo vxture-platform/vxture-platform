@@ -335,6 +335,8 @@ interface ProviderDraft {
   headers: string;
   paramMap: string;
   extraBody: string;
+  /** `config.pricing.offPeak` 的原始 JSON 文本。空串 = 不声明（＝全周期按峰价估）。 */
+  offPeakPricing: string;
 }
 
 const EMPTY_PROVIDER_DRAFT: ProviderDraft = {
@@ -355,6 +357,7 @@ const EMPTY_PROVIDER_DRAFT: ProviderDraft = {
   headers: "",
   paramMap: "",
   extraBody: "",
+  offPeakPricing: "",
 };
 
 function providerDraftFrom(row: ModelProviderRecord): ProviderDraft {
@@ -382,7 +385,31 @@ function providerDraftFrom(row: ModelProviderRecord): ProviderDraft {
     headers: formatJsonForEdit(readWireRecord(wire, "headers")),
     paramMap: formatJsonForEdit(readWireRecord(wire, "paramMap")),
     extraBody: formatJsonForEdit(readWireRecord(wire, "extraBody")),
+    offPeakPricing: formatJsonForEdit(readOffPeakPolicy(row.config)),
   };
+}
+
+/** `config.pricing.offPeak` 的声明值。与 wire 同层同性质：这是本层声明的，不是生效值。 */
+function readOffPeakPolicy(
+  config: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  const pricing = config?.["pricing"];
+  if (
+    typeof pricing !== "object" ||
+    pricing === null ||
+    Array.isArray(pricing)
+  ) {
+    return null;
+  }
+  const offPeak = (pricing as Record<string, unknown>)["offPeak"];
+  if (
+    typeof offPeak !== "object" ||
+    offPeak === null ||
+    Array.isArray(offPeak)
+  ) {
+    return null;
+  }
+  return offPeak as Record<string, unknown>;
 }
 
 /** 鉴权样式在 wire 里是嵌套的 `auth.style`，不是平铺的 `authStyle`。 */
@@ -628,6 +655,162 @@ function parseExtraBody(raw: string): ExtraBodyParse {
   return { ok: true, value: Object.keys(record).length > 0 ? record : null };
 }
 
+/* ── config.pricing.offPeak · 低谷定价策略 ────────────────────────────────
+ *
+ * 在配上之前，atlas 的成本汇总把**所有**请求按峰价估。它不会把这个错数当精确值
+ * 端出去（响应里有 `coverage.requestsWithoutPricingWindow` 说明有多少请求没有窗口），
+ * 但配上之前那个数不适合拿来做成本决策——DeepSeek 官方口径是高峰 35 小时 / 168 小时，
+ * **约 79% 的时段是半价**。
+ *
+ * 声明的是**高峰窗口**，低谷是它的补集——与供应商自己的表述一致，避免同一事实
+ * 有第二个来源。
+ *
+ * 为什么在这里就校验，而不是等 atlas 的 400：与上面三个开放映射同一条理由——
+ * 上游确实也会拒（`OBSERVABILITY_INVALID_PRICING_POLICY`），但要等一次往返，
+ * 而各类失败的说法各不相同，在填表的当下最有用。timezone 尤其：写别的时区而按
+ * UTC 求值会折错 8 小时，**而算出来的数完全像真的**。
+ *
+ * 一个要写下来的后果：这一份是**回存路径也走的**——编辑一个已有策略的 provider
+ * 时，库里那份会被读回输入框、保存时再过一遍这里。所以一份 atlas 存下了、却不合
+ * 本校验的策略，会挡住这个 provider 的其它编辑。这是有意的：本校验逐条对着 atlas
+ * 自己的规则写，能被它接受的都能过；过不了就说明库里那份本身有问题，那时候把它
+ * 拦下来并指名哪一条不合，比让人改个名字顺手把一份坏策略又存回去要好。
+ *
+ * 未知键原样保留（只校验规定的四条），所以 atlas 后续加可选键不会被这里挡掉。
+ */
+const OFF_PEAK_APPLIES_TO = [
+  "input",
+  "cachedInput",
+  "output",
+  "request",
+] as const;
+
+/** DeepSeek 的现行策略，可直接用（取自 api-docs.deepseek.com/quick_start/pricing）。 */
+const DEEPSEEK_OFF_PEAK_PRESET = JSON.stringify(
+  {
+    timezone: "UTC",
+    multiplier: "0.50000000",
+    appliesTo: ["input", "cachedInput", "output", "request"],
+    peakWindows: [
+      { days: [1, 2, 3, 4, 5], fromHour: 1, toHour: 4 },
+      { days: [1, 2, 3, 4, 5], fromHour: 6, toHour: 10 },
+    ],
+  },
+  null,
+  2,
+);
+
+function parseOffPeakPolicy(raw: string): ExtraBodyParse {
+  const text = raw.trim();
+  if (text === "") return { ok: true, value: null };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { ok: false, reason: "低谷定价不是合法的 JSON。" };
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return {
+      ok: false,
+      reason: "低谷定价要一个对象（`{ ... }`），不是数组或标量。",
+    };
+  }
+  const policy = parsed as Record<string, unknown>;
+
+  /* 分桶在 UTC 做。这一条不是挑剔——写别的时区而按 UTC 求值会折错 8 小时。 */
+  if (policy["timezone"] !== "UTC") {
+    return {
+      ok: false,
+      reason:
+        '`timezone` 只能是 "UTC"——分桶在 UTC 做，写别的时区会静默折错几小时。',
+    };
+  }
+
+  /* 金额不走 float，所以是十进制字符串而不是数字。 */
+  const multiplier = policy["multiplier"];
+  if (
+    typeof multiplier !== "string" ||
+    !/^\d+(\.\d{1,8})?$/u.test(multiplier)
+  ) {
+    return {
+      ok: false,
+      reason:
+        '`multiplier` 要一个十进制**字符串**、最多 8 位小数（如 "0.50000000"）——金额不走 float。',
+    };
+  }
+
+  /* 空不等于「全部」，那是猜。 */
+  const appliesTo = policy["appliesTo"];
+  if (!Array.isArray(appliesTo) || appliesTo.length === 0) {
+    return {
+      ok: false,
+      reason: `\`appliesTo\` 不能为空——空不当成「全部」。取值：${OFF_PEAK_APPLIES_TO.join(" / ")}。`,
+    };
+  }
+  const badApplies = appliesTo.filter(
+    (v) => typeof v !== "string" || !OFF_PEAK_APPLIES_TO.includes(v as never),
+  );
+  if (badApplies.length > 0) {
+    return {
+      ok: false,
+      reason: `\`appliesTo\` 里 ${badApplies.join(" / ")} 不是可用取值（${OFF_PEAK_APPLIES_TO.join(" / ")}）。`,
+    };
+  }
+
+  /* 空等于「没有高峰」，会凭空把整张账砍半。 */
+  const windows = policy["peakWindows"];
+  if (!Array.isArray(windows) || windows.length === 0) {
+    return {
+      ok: false,
+      reason:
+        "`peakWindows` 不能为空——声明的是高峰窗口，空等于「没有高峰」，会把整张账凭空砍半。",
+    };
+  }
+  for (const [index, entry] of windows.entries()) {
+    const at = `第 ${index + 1} 个 peakWindow`;
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      return { ok: false, reason: `${at}要一个对象。` };
+    }
+    const win = entry as Record<string, unknown>;
+    const days = win["days"];
+    if (
+      !Array.isArray(days) ||
+      days.length === 0 ||
+      days.some(
+        (d) => !Number.isInteger(d) || (d as number) < 1 || (d as number) > 7,
+      )
+    ) {
+      return {
+        ok: false,
+        reason: `${at}的 \`days\` 要非空、且都是 ISO 星期 1–7（1 = 周一）。`,
+      };
+    }
+    const from = win["fromHour"];
+    const to = win["toHour"];
+    if (!Number.isInteger(from) || !Number.isInteger(to)) {
+      return {
+        ok: false,
+        reason: `${at}的 \`fromHour\` / \`toHour\` 要整数。`,
+      };
+    }
+    if (
+      !(
+        (from as number) >= 0 &&
+        (from as number) < (to as number) &&
+        (to as number) <= 24
+      )
+    ) {
+      return {
+        ok: false,
+        reason: `${at}要满足 \`0 ≤ fromHour < toHour ≤ 24\`（左闭右开），现在是 ${String(from)} → ${String(to)}。`,
+      };
+    }
+  }
+
+  return { ok: true, value: policy };
+}
+
 /** 表单直接拥有的那些 wire 键。重建时先删掉它们，不认识的键原样留着。 */
 const PROVIDER_WIRE_KEYS = [
   "chatPath",
@@ -667,6 +850,7 @@ function buildProviderConfig(
     headers: Record<string, unknown> | null;
     paramMap: Record<string, unknown> | null;
     extraBody: Record<string, unknown> | null;
+    offPeak: Record<string, unknown> | null;
   },
   wireSchemaVersion: number | null,
 ): Record<string, unknown> | null {
@@ -701,6 +885,28 @@ function buildProviderConfig(
     next["wire"] = wire;
   } else {
     delete next["wire"];
+  }
+
+  /* `pricing` 与 `wire` 同性质：表单只拥有 `offPeak` 这一个键，其余原样保留。
+     清空输入框＝撤下策略（该 provider 回到全周期按峰价估），所以是 delete 而不是
+     留一个空对象——留空对象等于声明了一条什么都不打折的策略，两者在成本汇总里
+     不是一回事：后者不会计入 `requestsWithoutPricingWindow`。 */
+  const existingPricing = next["pricing"];
+  const pricing: Record<string, unknown> =
+    typeof existingPricing === "object" &&
+    existingPricing !== null &&
+    !Array.isArray(existingPricing)
+      ? { ...(existingPricing as Record<string, unknown>) }
+      : {};
+  if (parsed.offPeak) {
+    pricing["offPeak"] = parsed.offPeak;
+  } else {
+    delete pricing["offPeak"];
+  }
+  if (Object.keys(pricing).length > 0) {
+    next["pricing"] = pricing;
+  } else {
+    delete next["pricing"];
   }
 
   return Object.keys(next).length > 0 ? next : null;
@@ -1074,6 +1280,18 @@ function ModelServiceContent() {
       return;
     }
 
+    /* 定价策略单独一档报错，不并进「线协议没通过」——它不是线协议，
+       而且填错它的后果是成本数字悄悄偏掉，与连不上是两类事。 */
+    const offPeak = parseOffPeakPolicy(providerDraft.offPeakPricing);
+    if (!offPeak.ok) {
+      toast({
+        tone: "danger",
+        title: "低谷定价没通过",
+        description: offPeak.reason,
+      });
+      return;
+    }
+
     /* 可改的那些。`logoUrl` 不进载荷：opera 不再录入也不再展示，而 Atlas 对**未出现**
        的键按「不改」处理，所以老数据不会被这里的保存悄悄抹掉。
 
@@ -1092,6 +1310,7 @@ function ModelServiceContent() {
           headers: headers.ok ? headers.value : null,
           paramMap: paramMap.ok ? paramMap.value : null,
           extraBody: extraBody.ok ? extraBody.value : null,
+          offPeak: offPeak.value,
         },
         wireSchemaVersion,
       ),
@@ -2458,6 +2677,61 @@ function ModelServiceContent() {
                 </FieldDescription>
               </Field>
             </div>
+          </FieldTier>
+
+          {/* ── 低谷定价（config.pricing.offPeak）────────────────────────────
+              不配不是错，但**在配上之前 Atlas 的成本汇总把所有请求按峰价估**。
+              以 DeepSeek 为例，高峰只有 35 小时 / 168 小时——约 79% 的时段实际是
+              半价，而估出来的数看起来完全正常（响应里只有一个
+              `coverage.requestsWithoutPricingWindow` 计数在提示这件事）。
+
+              声明的是**高峰窗口**，低谷是它的补集：与供应商自己的表述一致，
+              避免同一事实有第二个来源。
+
+              与线协议同理，**有声明就摊开**——已经配了策略却看不见它，会让人
+              照着「没打折」去解释账单。 */}
+          <FieldTier
+            tier="advanced"
+            title="低谷定价（config.pricing.offPeak）"
+            defaultOpen={providerDraft.offPeakPricing.trim() !== ""}
+            hint="留空＝不打折，全周期按峰价估。声明的是高峰窗口，低谷是补集。"
+          >
+            <Field>
+              <FieldLabel htmlFor="provider-off-peak">低谷定价策略</FieldLabel>
+              <Textarea
+                id="provider-off-peak"
+                rows={8}
+                value={providerDraft.offPeakPricing}
+                onChange={(e) =>
+                  setProviderDraft({
+                    ...providerDraft,
+                    offPeakPricing: e.target.value,
+                  })
+                }
+                placeholder={DEEPSEEK_OFF_PEAK_PRESET}
+                className="font-mono"
+              />
+              <FieldDescription>
+                {
+                  "JSON 对象。`timezone` 只能是 UTC（分桶在 UTC 做）；`multiplier` 是十进制字符串、最多 8 位小数（金额不走 float）；`appliesTo` 与 `peakWindows` 都不能为空——空不当成「全部」，也不当成「没有高峰」。`fromHour`/`toHour` 左闭右开。"
+                }
+              </FieldDescription>
+              <div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    setProviderDraft({
+                      ...providerDraft,
+                      offPeakPricing: DEEPSEEK_OFF_PEAK_PRESET,
+                    })
+                  }
+                >
+                  填入 DeepSeek 现行策略
+                </Button>
+              </div>
+            </Field>
           </FieldTier>
 
           <FieldTier tier="advanced" hint="填不填都不影响接入。">
