@@ -224,6 +224,11 @@ jobs:
       - name: Action pinning guardrail
         run: node scripts/guardrails/check-action-pinning.mjs
 
+      # 部署脚本里唯一有分支逻辑的纯文本函数（挑可回收的平台旧镜像）。纯 bash+awk、
+      # 零依赖、秒级，与上面两步同一档：不挂 docs_only 条件，永远跑。
+      - name: Deploy script unit tests
+        run: bash deploy/scripts/lib/prune-images.test.sh
+
       # SQL-DDL 单一权威门控（data_platform_320）：铁律设计检查 + 退役 schema/搬迁表残留检查。
       # 残留检查含路径② Prisma @@schema/@@map（防 model-platform 类漏网：裸串扫描无感的库映射残留）。
       - name: Data architecture guardrail (SQL-DDL single authority)
@@ -399,7 +404,7 @@ jobs:
 
   # ── 6. SonarQube ───────────────────────────────────────────────────────────
   # Coverage generate/upload/download steps removed 2026-07-28: model-platform
-      # (旧 model-platform 服务已迁 vxture-atlas,2026-07-28)
+  # (旧 model-platform 服务已迁 vxture-atlas,2026-07-28)
   # retired with the atlas repo split. Scan runs without a coverage input
   # until a new package is wired up — the gate is already non-blocking below.
   sonar:
