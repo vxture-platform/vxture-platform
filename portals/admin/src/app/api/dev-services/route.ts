@@ -61,6 +61,17 @@ function panelServiceSnapshot(service: DevServiceSnapshot): DevServiceSnapshot {
 }
 
 export async function GET() {
+  /* 这条代理只服务本地开发面板（localhost:8090）。生产没有那个面板，之前它照样
+   * 注册、照样去连、等 5 秒超时再返回一条"不可用"快照——首页把它当"服务监控"
+   * 数据源，也就把一次必然失败的探测当成了一条监控读数。生产直接 404：没有这份
+   * 数据，就不假装去取（2026-08-30；首页那侧对 404 静默为"待建设"空态）。 */
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      { error: "dev-services is development-only" },
+      { status: 404, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   const startedAt = Date.now();
 
   try {

@@ -65,9 +65,32 @@ const verificationSortWeight: Record<TenantVerificationStatus, number> = {
   verified: 3,
 };
 
-// 复用既有 TenantOperationRecord 版式：把实名审核记录投影到列表所需字段，
-// 承载 verificationId 供审批/驳回端点调用；本读路径不覆盖的运营字段按零值占位。
-type VerificationRow = TenantOperationRecord & { verificationId: string };
+/* 只投影这一页真的读的字段，承载 verificationId 供审批/驳回端点调用。
+   原先是整个 TenantOperationRecord：读路径没有的运营字段（成员数、订阅数、
+   月收入、Token、工单数、满意度、SLA……）全按 0 / 空数组补——那是照抄 BFF 租户
+   详情投影里的占位零，在这页上是一排编出来的读数。2026-08-30 摘掉；BFF 那边的
+   投影另一包修，这里不动 tenants.router / TenantDetailPage。 */
+type VerificationRow = Pick<
+  TenantOperationRecord,
+  | "id"
+  | "tenantCode"
+  | "tenantName"
+  | "displayName"
+  | "tenantType"
+  | "verifiedStatus"
+  | "verificationSubmittedAt"
+  | "verifiedAt"
+  | "riskLevel"
+  | "region"
+  | "industry"
+  | "scale"
+  | "ownerName"
+  | "ownerEmail"
+  | "contactName"
+  | "contactPhone"
+  | "createdAt"
+  | "notes"
+> & { verificationId: string };
 
 const verificationTenantType: Record<string, TenantOperationType> = {
   organization: "company",
@@ -85,7 +108,6 @@ function mapVerificationToRow(
     tenantName: record.tenantName,
     displayName: record.tenantName,
     tenantType: verificationTenantType[record.tenantType] ?? "company",
-    status: record.tenantStatus === "suspended" ? "suspended" : "active",
     verifiedStatus: record.status,
     verificationSubmittedAt: record.createdAt,
     verifiedAt: record.reviewedAt,
@@ -99,15 +121,6 @@ function mapVerificationToRow(
     contactName,
     contactPhone: "",
     createdAt: record.createdAt,
-    lastActiveAt: record.updatedAt,
-    memberCount: 0,
-    activeMemberCount: 0,
-    adminCount: 0,
-    subscriptionCount: 0,
-    productCount: 0,
-    monthlyRevenue: 0,
-    totalRevenue: 0,
-    ticketOpenCount: 0,
     notes: record.rejectReason ?? "",
   };
 }
@@ -133,7 +146,7 @@ function verificationStatusIndicator(status: TenantVerificationStatus): {
   return { tone: "closed", label: "未认证", icon: "info" };
 }
 
-function verificationSearchText(tenant: TenantOperationRecord) {
+function verificationSearchText(tenant: VerificationRow) {
   return [
     tenant.id,
     tenant.tenantCode,
@@ -157,7 +170,7 @@ function verificationSearchText(tenant: TenantOperationRecord) {
 /* 收 `locale` 往下传：它自己是纯函数，但里头调的 `formatDate` 现在按语言
    排日期。这是「模块级辅助函数拿不到运行时上下文」的标准形态——上提到
    调用点由组件传。 */
-function verificationTimeText(tenant: TenantOperationRecord, locale: string) {
+function verificationTimeText(tenant: VerificationRow, locale: string) {
   if (tenant.verifiedStatus === "verified")
     return tenant.verifiedAt
       ? `通过 ${formatDate(tenant.verifiedAt, locale)}`

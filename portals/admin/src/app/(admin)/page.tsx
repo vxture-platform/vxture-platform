@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { isEnabled, isServing, type ModelState } from "@vxture-platform/shared";
+import { isEnabled, isServing } from "@vxture-platform/shared";
 import { useEffect, useMemo, useState } from "react";
 import {
   Button,
@@ -130,7 +130,6 @@ interface CapabilityServiceRow {
   name: string;
   meta: string;
   value: string;
-  placeholder?: boolean;
 }
 
 const periodOptions = [
@@ -141,40 +140,11 @@ const periodOptions = [
   { key: "month", label: "月度" },
 ] satisfies Array<{ key: PeriodKey; label: string }>;
 
-const periodScale = {
-  recent30: 1,
-  total: 8.4,
-  year: 6.2,
-  quarter: 2.7,
-  month: 0.92,
-} satisfies Record<PeriodKey, number>;
-
-function isRecentlyUpdated(value: string) {
-  const updatedAt = new Date(value).getTime();
-  if (!Number.isFinite(updatedAt)) return false;
-
-  const days = (Date.now() - updatedAt) / 86_400_000;
-  return days >= 0 && days <= 30;
-}
-
-function scalePeriodValue(value: number, period: PeriodKey) {
-  return Math.max(0, Math.round(value * periodScale[period]));
-}
-
-function periodReleaseUpdateCount(
-  baseCount: number,
-  totalCount: number,
-  period: PeriodKey,
-) {
-  if (period === "total") return totalCount;
-  if (period === "year")
-    return Math.min(
-      totalCount,
-      Math.max(baseCount, scalePeriodValue(baseCount, period)),
-    );
-
-  return Math.min(totalCount, scalePeriodValue(baseCount, period));
-}
+/* 2026-08-30：这里原来有一张 `periodScale = { total: 8.4, year: 6.2, quarter: 2.7,
+   month: 0.92 }`，把"近 30 天"的真实读数乘上一个凭空写的系数冒充其它周期的数
+   ——产品供给的"版本更新 N 次"与模型平台的"Token 总量"都靠它。按周期的数字只认
+   `GET /api/platform-admins/dashboard-overview?period=` 这一条真聚合；没有表撑着
+   的读数（发布更新次数、Token 用量，见 TD-036）直接不展示，不再拿系数编。 */
 
 /**
  * 三方 = `releaseType === "custom"`，它由 `product.products.origin = 'third_party'`
@@ -209,29 +179,6 @@ function productOwnershipCounts(
 
   return {
     total: scopedRecords.length,
-    owned,
-    thirdParty,
-  };
-}
-
-function scaleProductOwnershipCounts(
-  baseCounts: ReturnType<typeof productOwnershipCounts>,
-  totalCounts: ReturnType<typeof productOwnershipCounts>,
-  period: PeriodKey,
-) {
-  const owned = periodReleaseUpdateCount(
-    baseCounts.owned,
-    totalCounts.owned,
-    period,
-  );
-  const thirdParty = periodReleaseUpdateCount(
-    baseCounts.thirdParty,
-    totalCounts.thirdParty,
-    period,
-  );
-
-  return {
-    total: owned + thirdParty,
     owned,
     thirdParty,
   };
@@ -332,44 +279,10 @@ function isModelAbnormal(model: AiModelRecord) {
   );
 }
 
-function modelConfigNumber(model: AiModelRecord, keys: readonly string[]) {
-  if (!model.config) return null;
-
-  for (const key of keys) {
-    const value = model.config[key];
-
-    if (typeof value === "number" && Number.isFinite(value)) return value;
-    if (typeof value === "string") {
-      const parsed = Number(value.replace(/,/g, ""));
-      if (Number.isFinite(parsed)) return parsed;
-    }
-  }
-
-  return null;
-}
-
-// TD-036: no usage/token-tracking table exists anywhere for models (the
-// write path was never built — 该服务已迁 vxture-atlas(其 schema 注释随迁),
-// comment). model.config almost never carries these keys in practice; when
-// it doesn't, return null (no data) instead of the old deterministic-hash
-// fake number — a stable-looking number is still a fabricated one.
-function modelTokenCalls(model: AiModelRecord, period: PeriodKey) {
-  const baseValue = modelConfigNumber(model, [
-    "periodTokens",
-    "tokenCalls",
-    "tokenUsage",
-    "totalTokens",
-    "tokens",
-    "usedTokens",
-  ]);
-  if (baseValue === null) return null;
-
-  return scalePeriodValue(baseValue, period);
-}
-
-function formatTokenCount(value: number) {
-  return value.toLocaleString("en-US");
-}
+/* TD-036：模型用量/Token 没有任何落库（写路径从未建过，服务已迁 vxture-atlas）。
+   这里原来先读 `model.config` 里的 periodTokens/tokenCalls 之类的键、再乘周期
+   系数——config 里几乎从不带这些键，带了也不是用量。"Token 总量"读数与"Token
+   调用量前三"排行一并摘掉（2026-08-30），等有真表再接。 */
 
 // TD-036: fetchDevServices() proxies a local dev-tools panel
 // (localhost:8090), unreachable from a deployed admin instance — in any real
@@ -420,21 +333,6 @@ function capabilityPolicyCoverage(
     pending: Math.max(0, total - active),
     rate: Math.round((active / Math.max(1, total)) * 100),
   };
-}
-
-function fillCapabilityRows(rows: CapabilityServiceRow[], prefix: string) {
-  if (rows.length >= 3) return rows.slice(0, 3);
-
-  return [
-    ...rows,
-    ...Array.from({ length: 3 - rows.length }, (_, index) => ({
-      id: `${prefix}-placeholder-${index}`,
-      name: "待接入",
-      meta: "暂无数据",
-      value: "—",
-      placeholder: true,
-    })),
-  ];
 }
 
 function periodLabelOf(period: PeriodKey) {
@@ -535,26 +433,16 @@ function rankLevel(rank: number): Level {
 /**
  * 前三名有徽章图，之后回落到等级记号——图只有三张。
  *
- * `muted` 给占位行：形状照旧但去色。否则"待接入 / 暂无数据"这样的空行也戴着金牌，
- * 读起来像第一名就是待接入（owner 2026-08-06 实测）。
+ * 原先还有个 `muted` 态给"待接入 / 暂无数据"的补位行去色。补位行本身
+ * 2026-08-30 摘掉了（不足三条就只画有的几条，一条没有走 PanelList 的空态），
+ * 去色态随之没有存在的理由。
  */
-function RankMedal({ rank, muted }: { rank: number; muted?: boolean }) {
+function RankMedal({ rank }: { rank: number }) {
   /* 三张奖牌图原来是 `background-image: url("https://raw.githubusercontent.com/…")`
    * ——**生产样式表里挂着外部 URL**。离线、内网、CSP 收紧任一条成立，它就变成三个
    * 空方块：背景图加载失败不报错、不留痕，只是没了。改用 emoji 字符表达同一件事，
    * 顺带省掉三次跨域请求。 */
   const MEDALS = ["🥇", "🥈", "🥉"] as const;
-
-  if (muted) {
-    return (
-      <span
-        className="inline-grid size-icon-xl place-items-center opacity-40 grayscale"
-        aria-hidden="true"
-      >
-        {MEDALS[0]}
-      </span>
-    );
-  }
 
   if (rank > 3) {
     return (
@@ -656,17 +544,22 @@ function OverviewHeading({
   icon: IconName;
   title: string;
   description: string;
-  period: PeriodKey;
-  onPeriodChange: (next: PeriodKey) => void;
+  /* 周期开关只给真有按周期读数的板块。产品供给 / 模型技能两段下面全是当前快照
+     （目录计数、模型池、授权、智能体），原先那两个开关拨了只会换掉一个乘出来的
+     假数（见 periodOptions 下方说明），开关本身就在暗示"这些数字分周期"——
+     数字摘掉，开关也不留（2026-08-30）。 */
+  period?: PeriodKey;
+  onPeriodChange?: (next: PeriodKey) => void;
   level?: "page" | "section";
 }) {
-  const periodSwitch = (
-    <PeriodSwitch
-      value={period}
-      options={["recent30", "total", "year", "quarter", "month"]}
-      onChange={onPeriodChange}
-    />
-  );
+  const periodSwitch =
+    period && onPeriodChange ? (
+      <PeriodSwitch
+        value={period}
+        options={["recent30", "total", "year", "quarter", "month"]}
+        onChange={onPeriodChange}
+      />
+    ) : undefined;
 
   // 页头与板块标题是两件不同的东西，不是同一件的两个层级：ViewHeader 是一页的
   // 页头（本页仅"平台总览"一处），SectionHeader 管页内板块，从 level 2 起。
@@ -675,7 +568,7 @@ function OverviewHeading({
       icon={icon}
       title={title}
       description={description}
-      action={periodSwitch}
+      {...(periodSwitch ? { action: periodSwitch } : {})}
     />
   ) : (
     <SectionHeader
@@ -683,7 +576,7 @@ function OverviewHeading({
       icon={icon}
       title={title}
       description={description}
-      action={periodSwitch}
+      {...(periodSwitch ? { action: periodSwitch } : {})}
     />
   );
 }
@@ -1265,13 +1158,9 @@ function ModelCategoryCard({
         {rows.map((row, index) => (
           <PanelItem
             key={row.id}
-            {...(row.placeholder ? { className: "opacity-60" } : {})}
             lead={
-              rankStyle === "medal" || row.placeholder ? (
-                <RankMedal
-                  rank={index + 1}
-                  {...(row.placeholder ? { muted: true } : {})}
-                />
+              rankStyle === "medal" ? (
+                <RankMedal rank={index + 1} />
               ) : (
                 <LevelMarker
                   level={rankLevel(index + 1)}
@@ -1344,13 +1233,6 @@ function emptyDashboardOverview(period: PeriodKey): DashboardOverviewRecord {
   };
 }
 
-/** 模型三态标签。三值压成布尔会让「已弃用」读成「已停用」，而前者仍在服务。 */
-const MODEL_STATE_LABEL: Record<ModelState, string> = {
-  active: "启用",
-  inactive: "停用",
-  deprecated: "已弃用",
-};
-
 export default function AdminOverviewPage() {
   const locale = useLocale();
   const [models, setModels] = useState<AiModelRecord[]>([]);
@@ -1367,8 +1249,6 @@ export default function AdminOverviewPage() {
   const [solutions, setSolutions] = useState<ProductSolutionRecord[]>([]);
   const [globalPeriod, setGlobalPeriod] = useState<PeriodKey>("recent30");
   const [businessPeriod, setBusinessPeriod] = useState<PeriodKey>("recent30");
-  const [productPeriod, setProductPeriod] = useState<PeriodKey>("recent30");
-  const [modelPeriod, setModelPeriod] = useState<PeriodKey>("recent30");
   const [servicePeriod, setServicePeriod] = useState<PeriodKey>("recent30");
   // TD-036: pulse/business/service cards each have an independent period
   // switch, so more than one distinct period can be in view at once — a
@@ -1386,15 +1266,11 @@ export default function AdminOverviewPage() {
   const pulseMetrics = overviewPulseMetrics(globalOverview, locale);
   const businessPanels = businessPanelsFor(businessPeriod);
   const globalPeriodLabel = periodLabelOf(globalPeriod);
-  const productPeriodLabel = periodLabelOf(productPeriod);
-  const modelPeriodLabel = periodLabelOf(modelPeriod);
   const servicePeriodLabel = periodLabelOf(servicePeriod);
 
   function handleGlobalPeriodChange(next: PeriodKey) {
     setGlobalPeriod(next);
     setBusinessPeriod(next);
-    setProductPeriod(next);
-    setModelPeriod(next);
     setServicePeriod(next);
   }
 
@@ -1444,12 +1320,21 @@ export default function AdminOverviewPage() {
         return fallback;
       });
 
+    /* 开发面板代理（app/api/dev-services/route.ts）只在本地有意义，生产直接 404。
+       那不是"读取失败"，是"这个环境没有这份数据"——不能走 settle 去点亮上面的
+       降级横幅，生产也不该为一个必然 404 的请求在控制台留一条红字。空数组进
+       capabilityServiceHealth 就是"待建设"空态。 */
+    const devServices: Promise<DevServiceSnapshot[]> =
+      process.env.NODE_ENV === "production"
+        ? Promise.resolve([])
+        : fetchDevServices().catch(() => []);
+
     Promise.all([
       settle(fetchAiModels(true), []),
       settle(fetchAiModelGrants(), []),
       settle(fetchModelPolicies({ includeInactive: true }), []),
       settle(fetchProductAgents(), []),
-      settle(fetchDevServices(), [] as DevServiceSnapshot[]),
+      devServices,
       settle(fetchProductReleases(), []),
       settle(fetchProductSolutions(), []),
     ]).then(
@@ -1482,15 +1367,6 @@ export default function AdminOverviewPage() {
     const productTotalCounts = productOwnershipCounts(releases, {
       uniqueProducts: true,
     });
-    const releaseTotalCounts = productOwnershipCounts(releases);
-    const recentUpdatedCounts = productOwnershipCounts(
-      releases.filter((release) => isRecentlyUpdated(release.updatedAt)),
-    );
-    const versionUpdateCounts = scaleProductOwnershipCounts(
-      recentUpdatedCounts,
-      releaseTotalCounts,
-      productPeriod,
-    );
     const solutionCounts = productSolutionCounts(solutions);
     const tierCounts = productTierCounts(solutions);
     const activeProductCount = productActiveCount(releases, {
@@ -1502,12 +1378,12 @@ export default function AdminOverviewPage() {
       {
         label: "产品能力",
         value: String(productTotalCounts.total),
-        detail: `产品能力是平台可被方案编排的底层产品供给，累计 ${productTotalCounts.total} 个，生效 ${activeProductCount} 个，自有 ${productTotalCounts.owned} 个，三方 ${productTotalCounts.thirdParty} 个；${productPeriodLabel}版本更新 ${versionUpdateCounts.total} 次。`,
+        detail: `产品能力是平台可被方案编排的底层产品供给，累计 ${productTotalCounts.total} 个，生效 ${activeProductCount} 个，自有 ${productTotalCounts.owned} 个，三方 ${productTotalCounts.thirdParty} 个。`,
         tone: "brand",
         icon: "database",
         tags: [
           `生效 ${activeProductCount}`,
-          `更新 ${versionUpdateCounts.total}`,
+          `三方 ${productTotalCounts.thirdParty}`,
         ],
       },
       {
@@ -1541,7 +1417,7 @@ export default function AdminOverviewPage() {
         ],
       },
     ] satisfies OverviewMetric[];
-  }, [productPeriod, productPeriodLabel, releases, solutions]);
+  }, [releases, solutions]);
 
   // TD-036: the old productTop ranking was a second, independent fabrication
   // (a hardcoded productOperations array with its own made-up subscription
@@ -1572,14 +1448,6 @@ export default function AdminOverviewPage() {
     );
     const abnormalModelCounts = modelOwnershipCounts(
       models.filter(isModelAbnormal),
-    );
-    const tokenCallsPerModel = models.map((model) =>
-      modelTokenCalls(model, modelPeriod),
-    );
-    const hasTokenData = tokenCallsPerModel.some((value) => value !== null);
-    const totalTokenCalls = tokenCallsPerModel.reduce<number>(
-      (total, value) => total + (value ?? 0),
-      0,
     );
     const policyCoverage = capabilityPolicyCoverage(modelPolicies, modelGrants);
     const activeAgents = agents.filter(
@@ -1615,14 +1483,14 @@ export default function AdminOverviewPage() {
       {
         label: "模型平台",
         value: String(totalModelCounts.total),
-        detail: `${modelPeriodLabel}模型平台观察平台可调度模型资源池，模型总数 ${totalModelCounts.total} 个，生效模型 ${activeModelCounts.total} 个，接入异常 ${abnormalModelCounts.total} 个${hasTokenData ? `，Token 总量 ${formatTokenCount(totalTokenCalls)}` : "；Token 用量数据源待建设（无模型用量写路径）"}。`,
+        detail: `模型平台观察平台可调度模型资源池，模型总数 ${totalModelCounts.total} 个，生效模型 ${activeModelCounts.total} 个，接入异常 ${abnormalModelCounts.total} 个。Token 用量数据源待建设（无模型用量写路径），不展示。`,
         // 异常台数抬进整卡语气——同段的服务监控/策略覆盖/技能市场三张都是这么做的，
         // 只有这张原先写死 blue，靠标自己变色，一排四张里独一份（2026-08-05）。
         tone: abnormalModelCounts.total > 0 ? "warning" : "brand",
         icon: "cloud",
         tags: [
           `异常 ${abnormalModelCounts.total}`,
-          `Token ${hasTokenData ? formatTokenCount(totalTokenCalls) : "待建设"}`,
+          `生效 ${activeModelCounts.total}`,
         ],
       },
       {
@@ -1642,35 +1510,13 @@ export default function AdminOverviewPage() {
         tags: [`异常 ${inactiveAgents}`],
       },
     ] satisfies OverviewMetric[];
-  }, [
-    agents,
-    modelGrants,
-    modelPeriod,
-    modelPeriodLabel,
-    modelPolicies,
-    models,
-    services,
-  ]);
+  }, [agents, modelGrants, modelPolicies, models, services]);
 
   const capabilityPanels = useMemo(() => {
-    // TD-036: only rank models that actually carry a real token figure in
-    // config — models with no usage data are excluded rather than ranked
-    // by a fabricated zero; fillCapabilityRows() below pads the remainder
-    // with an honest "待接入/暂无数据" placeholder when this list is short.
-    const modelRows = models
-      .map((model) => ({
-        id: model.id,
-        name: model.modelName,
-        meta: `${model.provider} · ${MODEL_STATE_LABEL[model.state]}`,
-        tokenCalls: modelTokenCalls(model, modelPeriod),
-      }))
-      .filter(
-        (row): row is typeof row & { tokenCalls: number } =>
-          row.tokenCalls !== null,
-      )
-      .map((row) => ({ ...row, value: formatTokenCount(row.tokenCalls) }))
-      .sort((left, right) => right.tokenCalls - left.tokenCalls)
-      .slice(0, 3);
+    /* 这一排原先有三张：模型平台（Token 调用量前三）、模型授权、技能市场，
+       不足三条的都拿"待接入 / 暂无数据"补到三行。模型那张的排序键是乘出来的
+       Token 数（见文件头部说明），整张摘掉；补位行也摘掉——列表有几条画几条，
+       一条没有就是 PanelList 的空态，不再用假行把表撑满（2026-08-30）。 */
     // Atlas 策略：名字缺省用模型名（modelId 是 UUID，不上屏）；范围看 tenantId 有无。
     const policyRows = modelPolicies
       .map((policy) => ({
@@ -1699,22 +1545,13 @@ export default function AdminOverviewPage() {
 
     return [
       {
-        title: "模型平台",
-        summary: "Token 调用量前三。",
-        detail: "按 Token 调用量观察模型平台后的真实使用强度。",
-        tone: "blue",
-        href: "/atlas",
-        rankStyle: "medal",
-        rows: fillCapabilityRows(modelRows, "model"),
-      },
-      {
         title: "模型授权",
         summary: "策略、授权和配额。",
         detail: "按产品、租户和智能体观察模型授权与配额配置。",
         tone: "blue",
         href: "/model-grants",
         rankStyle: "medal",
-        rows: fillCapabilityRows(policyRows, "policy"),
+        rows: policyRows,
       },
       {
         title: "技能市场",
@@ -1723,7 +1560,7 @@ export default function AdminOverviewPage() {
         tone: "blue",
         href: "/skills",
         rankStyle: "medal",
-        rows: fillCapabilityRows(agentRows, "agent"),
+        rows: agentRows,
       },
     ] satisfies Array<{
       title: string;
@@ -1734,7 +1571,7 @@ export default function AdminOverviewPage() {
       rankStyle: "number" | "medal";
       rows: CapabilityServiceRow[];
     }>;
-  }, [agents, modelPeriod, modelPolicies, models]);
+  }, [agents, modelPolicies, models]);
 
   const serviceMetrics = useMemo(
     () => serviceMetricsFor(serviceOverview),
@@ -1804,9 +1641,7 @@ export default function AdminOverviewPage() {
         <OverviewHeading
           icon="database"
           title="产品供给"
-          description={`${productPeriodLabel}按产品能力、方案组合、套餐层级和供给异常观察平台可售卖、可交付能力。`}
-          period={productPeriod}
-          onPeriodChange={setProductPeriod}
+          description="按产品能力、方案组合、套餐层级和供给异常观察平台可售卖、可交付能力（当前快照）。"
         />
         <MetricGrid
           aria-label="产品供给指标"
@@ -1838,15 +1673,13 @@ export default function AdminOverviewPage() {
         <OverviewHeading
           icon="cloud"
           title="模型技能"
-          description={`${modelPeriodLabel}观察服务运行、模型调用、策略覆盖和技能市场，判断平台 AI 能力是否稳定、可控、可被业务调用。`}
-          period={modelPeriod}
-          onPeriodChange={setModelPeriod}
+          description="观察服务运行、模型池、策略覆盖和技能市场，判断平台 AI 能力是否稳定、可控、可被业务调用（当前快照）。"
         />
         <MetricGrid
           aria-label="模型技能指标"
           items={metricItems(capabilityMetrics)}
         />
-        <div className="grid items-stretch gap-md max-lg:grid-cols-1 lg:grid-cols-4">
+        <div className="grid items-stretch gap-md max-lg:grid-cols-1 lg:grid-cols-2">
           {capabilityPanels.map((panel) => (
             <ModelCategoryCard
               key={panel.title}
