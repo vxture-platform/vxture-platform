@@ -34,7 +34,6 @@ import { MeRouter } from "./routers/me.router";
 import { OperatorStepUpRouter } from "./routers/operator-stepup.router";
 import { PlatformAdminsRouter } from "./routers/platform-admins.router";
 import { OperatorContactRouter } from "./routers/operator-contact.router";
-import { PlatformGovernanceRouter } from "./routers/platform-governance.router";
 import { ApplicationsRouter } from "./routers/applications.router";
 import { ProductsRouter } from "./routers/products.router";
 import { SkillsRouter } from "./routers/skills.router";
@@ -97,7 +96,6 @@ import { SearchRouter } from "./routers/search.router";
     SearchRouter,
     PlatformAdminsRouter,
     OperatorContactRouter,
-    PlatformGovernanceRouter,
     OperatorStepUpRouter,
   ],
   providers: [

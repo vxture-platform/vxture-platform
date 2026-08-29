@@ -29,8 +29,6 @@ import type {
   ModelProviderRecord,
   PlatformAdminPermissionRecord,
   PlatformAdminRecord,
-  PlatformGovernanceKind,
-  PlatformGovernanceRecord,
   PromotionOperationRecord,
   PromotionRedemptionRecord,
   ProductAgentRecord,
@@ -735,14 +733,6 @@ export async function fetchCommerceOverview(): Promise<CommerceOverviewSnapshot 
   return readJson<CommerceOverviewSnapshot | null>(
     "/api/commercial/overview",
     null,
-  );
-}
-
-export async function fetchPlatformGovernanceRecords(
-  kind: PlatformGovernanceKind,
-): Promise<PlatformGovernanceRecord[]> {
-  return readJsonStrict<PlatformGovernanceRecord[]>(
-    `/api/platform-governance/${encodeURIComponent(kind)}`,
   );
 }
 

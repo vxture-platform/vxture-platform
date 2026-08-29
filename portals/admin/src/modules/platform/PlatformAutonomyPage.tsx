@@ -71,11 +71,7 @@ const autonomyDomains = [
         href: "/atlas",
         meta: "Provider、端点、链路",
       },
-      {
-        label: "密钥管理",
-        href: "/platform-secrets",
-        meta: "凭据、轮换、可见性",
-      },
+      // 密钥管理 / 审批中心两条入口 2026-08-31 随空页一起摘掉（navigation.ts 同批注释）。
     ],
   },
   // 「运行保障」域已整体撤走（2026-08-11）：维护窗口/服务监控/任务调度三项全部
@@ -88,7 +84,12 @@ const autonomyDomains = [
     icon: "info",
     links: [
       { label: "审计日志", href: "/audit-logs", meta: "操作、对象、结果" },
-      { label: "审批中心", href: "/approval-center", meta: "确认、审批、凭证" },
+      { label: "风险记录", href: "/risk-records", meta: "评估、跟进、处置" },
+      {
+        label: "合规事件",
+        href: "/compliance-events",
+        meta: "指派、办结、证据",
+      },
     ],
   },
 ] satisfies Array<{

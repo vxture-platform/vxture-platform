@@ -1,7 +1,8 @@
 # Admin 双域菜单规格
 
-> 版本：1.1.0 | 更新：2026-05-11
+> 版本：1.2.0 | 更新：2026-08-31
 > 权威来源：`src/config/navigation.ts`（代码优先，本文档为设计规格参考）
+> 1.2.0：摘掉四个上线前仍为空的菜单项——密钥管理 `/platform-secrets`、审批中心 `/approval-center`（读的 `admin.governance_record` 从未建表）、字典管理 `/data-dictionaries`、通知渠道 `/notification-channels`（占位页）。owner 2026-08-30 裁定；对应的 `admin.menu.*` 权限行与 `security:signing_key.manage` / `security:oidc_client.manage` 两个无处可达的操作码由 `deploy/database/migrations/2026-08-31-admin-retire-empty-menus.sql` 退役。有数据源之日再按本规格挂回。
 
 ---
 
@@ -18,29 +19,25 @@
 
 > 平台能力供给侧 — 管理平台自身的身份、资源、运行、安全、系统配置与通知能力
 
-| 分组     | 菜单项   | path                     | code                   | i18n                                 | 状态    |
-| -------- | -------- | ------------------------ | ---------------------- | ------------------------------------ | ------- |
-| 平台总览 | 平台总览 | `/platform`              | `platform_overview`    | `menu.platform.overview`             | active  |
-| 身份权限 | —        | —                        | `identity_access`      | `menu.platform.identity_access`      | active  |
-| 身份权限 | 平台用户 | `/platform-admins`       | `platform_admin`       | `menu.platform.admin_user`           | active  |
-| 身份权限 | 平台角色 | `/admin-roles`           | `platform_role`        | `menu.platform.admin_role`           | active  |
-| 身份权限 | 权限策略 | `/admin-permissions`     | `permission_policy`    | `menu.platform.permission_policy`    | active  |
-| 平台资源 | —        | —                        | `platform_resource`    | `menu.platform.platform_resource`    | active  |
-| 平台资源 | 模型平台 | `/model-platform`        | `model_gateway`        | `menu.platform.model_gateway`        | active  |
-| 平台资源 | 密钥管理 | `/platform-secrets`      | `secret_store`         | `menu.platform.secret_store`         | active  |
-| 运行保障 | —        | —                        | `runtime_ops`          | `menu.platform.runtime_ops`          | active  |
-| 运行保障 | 服务监控 | `/service-monitor`       | `service_monitor`      | `menu.platform.service_monitor`      | active  |
-| 运行保障 | 任务调度 | `/platform-jobs`         | `job_scheduler`        | `menu.platform.job_scheduler`        | active  |
-| 安全审计 | —        | —                        | `security_audit`       | `menu.platform.security_audit`       | active  |
-| 安全审计 | 审计日志 | `/audit-logs`            | `audit_log`            | `menu.platform.audit_log`            | active  |
-| 安全审计 | 审批中心 | `/approval-center`       | `approval_flow`        | `menu.platform.approval_flow`        | active  |
-| 系统配置 | —        | —                        | `system_setting`       | `menu.platform.system_setting`       | planned |
-| 系统配置 | 参数配置 | `/system-parameters`     | `system_parameter`     | `menu.platform.system_parameter`     | planned |
-| 系统配置 | 字典管理 | `/data-dictionaries`     | `data_dictionary`      | `menu.platform.data_dictionary`      | planned |
-| 系统配置 | 开关控制 | `/feature-toggles`       | `feature_toggle`       | `menu.platform.feature_toggle`       | planned |
-| 通知中心 | —        | —                        | `notification_hub`     | `menu.platform.notification_hub`     | planned |
-| 通知中心 | 通知渠道 | `/notification-channels` | `notification_channel` | `menu.platform.notification_channel` | planned |
-| 通知中心 | 发送记录 | `/notification-logs`     | `notification_log`     | `menu.platform.notification_log`     | planned |
+| 分组     | 菜单项   | path                 | code                | i18n                              | 状态    |
+| -------- | -------- | -------------------- | ------------------- | --------------------------------- | ------- |
+| 平台总览 | 平台总览 | `/platform`          | `platform_overview` | `menu.platform.overview`          | active  |
+| 身份权限 | —        | —                    | `identity_access`   | `menu.platform.identity_access`   | active  |
+| 身份权限 | 平台用户 | `/platform-admins`   | `platform_admin`    | `menu.platform.admin_user`        | active  |
+| 身份权限 | 平台角色 | `/admin-roles`       | `platform_role`     | `menu.platform.admin_role`        | active  |
+| 身份权限 | 权限策略 | `/admin-permissions` | `permission_policy` | `menu.platform.permission_policy` | active  |
+| 平台资源 | —        | —                    | `platform_resource` | `menu.platform.platform_resource` | active  |
+| 平台资源 | 模型平台 | `/model-platform`    | `model_gateway`     | `menu.platform.model_gateway`     | active  |
+| 运行保障 | —        | —                    | `runtime_ops`       | `menu.platform.runtime_ops`       | active  |
+| 运行保障 | 服务监控 | `/service-monitor`   | `service_monitor`   | `menu.platform.service_monitor`   | active  |
+| 运行保障 | 任务调度 | `/platform-jobs`     | `job_scheduler`     | `menu.platform.job_scheduler`     | active  |
+| 安全审计 | —        | —                    | `security_audit`    | `menu.platform.security_audit`    | active  |
+| 安全审计 | 审计日志 | `/audit-logs`        | `audit_log`         | `menu.platform.audit_log`         | active  |
+| 系统配置 | —        | —                    | `system_setting`    | `menu.platform.system_setting`    | planned |
+| 系统配置 | 参数配置 | `/system-parameters` | `system_parameter`  | `menu.platform.system_parameter`  | planned |
+| 系统配置 | 开关控制 | `/feature-toggles`   | `feature_toggle`    | `menu.platform.feature_toggle`    | planned |
+| 通知中心 | —        | —                    | `notification_hub`  | `menu.platform.notification_hub`  | planned |
+| 通知中心 | 发送记录 | `/notification-logs` | `notification_log`  | `menu.platform.notification_log`  | planned |
 
 ---
 
@@ -153,14 +150,6 @@ export const platformAutonomyMenus = [
         i18nKey: "menu.platform.model_gateway",
         status: "active",
       },
-      {
-        type: "menu",
-        name: "密钥管理",
-        code: "secret_store",
-        path: "/platform-secrets",
-        i18nKey: "menu.platform.secret_store",
-        status: "active",
-      },
     ],
   },
   {
@@ -203,14 +192,6 @@ export const platformAutonomyMenus = [
         i18nKey: "menu.platform.audit_log",
         status: "active",
       },
-      {
-        type: "menu",
-        name: "审批中心",
-        code: "approval_flow",
-        path: "/approval-center",
-        i18nKey: "menu.platform.approval_flow",
-        status: "active",
-      },
     ],
   },
   {
@@ -230,14 +211,6 @@ export const platformAutonomyMenus = [
       },
       {
         type: "menu",
-        name: "字典管理",
-        code: "data_dictionary",
-        path: "/data-dictionaries",
-        i18nKey: "menu.platform.data_dictionary",
-        status: "planned",
-      },
-      {
-        type: "menu",
         name: "开关控制",
         code: "feature_toggle",
         path: "/feature-toggles",
@@ -253,14 +226,6 @@ export const platformAutonomyMenus = [
     i18nKey: "menu.platform.notification_hub",
     status: "planned",
     children: [
-      {
-        type: "menu",
-        name: "通知渠道",
-        code: "notification_channel",
-        path: "/notification-channels",
-        i18nKey: "menu.platform.notification_channel",
-        status: "planned",
-      },
       {
         type: "menu",
         name: "发送记录",

@@ -111,11 +111,15 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  *   **没有走 `t()`，是有意的**：这一页全部文案都是硬编码中文、一条没抽，只抽新加的
  *   这几句会造出半中英（同 08-29 `model/services` 那条的判据）。同一个词四处出现的
  *   收成一个常量（与页内既有的 `LIVENESS_LABELS` 同一做法），所以净增只有 1。
+ *
+ * 2026-08-31 admin 3510 → 3488：摘掉四个永远为空的菜单项（40-menu.md 1.2.0）连带
+ *   删除审批中心 / 平台密钥两页与它们共用的治理列表页，那三个文件的硬编码中文随文件
+ *   一起消失。实测收到实数，余量不留。
  */
 const BASELINE = {
   console: 32,
   website: 54,
-  admin: 3510,
+  admin: 3488,
   opera: 1819,
   accounts: 264,
 };

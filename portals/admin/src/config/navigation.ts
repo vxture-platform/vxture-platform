@@ -430,16 +430,11 @@ const platformAutonomySections: AdminNavigationSection[] = [
           "管理大模型供应商、模型路由、调用策略、限流策略与可用性状态。",
         icon: "cloud",
       },
-      {
-        id: "platformSecrets",
-        code: "secret_store",
-        i18nKey: "menu.platform.secret_store",
-        status: "active",
-        href: "/platform-secrets",
-        label: "密钥管理",
-        description: "管理平台级密钥、访问凭证、服务令牌和敏感配置引用。",
-        icon: "key",
-      },
+      // 密钥管理（/platform-secrets）2026-08-31 摘掉：它读的 admin.governance_record
+      // 从未建表，页面永远为空；平台密钥的真实归属是 deploy 的 27-provision 与 opera
+      // 「接入凭据」。同批摘掉的还有审批中心 / 字典管理 / 通知渠道——四间空屋，上线
+      // 前一并撤（owner 2026-08-30 裁定）。菜单码与 seed 的 operator_permission 行
+      // 随本次一起退役（migrations/2026-08-31-admin-retire-empty-menus.sql）。
     ],
   },
   // runtimeOps（「运行保障」组）已整体撤走：维护窗口（2026-08-07）、服务监控
@@ -465,16 +460,6 @@ const platformAutonomySections: AdminNavigationSection[] = [
         label: "审计日志",
         description: "查询平台操作日志、登录日志、权限变更日志和安全事件日志。",
         icon: "info",
-      },
-      {
-        id: "approvalCenter",
-        code: "approval_flow",
-        i18nKey: "menu.platform.approval_flow",
-        status: "active",
-        href: "/approval-center",
-        label: "审批中心",
-        description: "处理敏感操作审批、权限申请、密钥申请和高风险变更确认。",
-        icon: "check",
       },
       {
         id: "riskRecords",
@@ -529,17 +514,6 @@ const platformAutonomySections: AdminNavigationSection[] = [
         icon: "settings",
       },
       {
-        id: "dataDictionaries",
-        code: "data_dictionary",
-        i18nKey: "menu.platform.data_dictionary",
-        status: "planned",
-        href: "/data-dictionaries",
-        label: "字典管理",
-        description:
-          "待建设模块，用于维护系统字典、枚举项、业务选项和可配置静态数据。",
-        icon: "table",
-      },
-      {
         id: "featureToggles",
         code: "feature_toggle",
         i18nKey: "menu.platform.feature_toggle",
@@ -559,17 +533,6 @@ const platformAutonomySections: AdminNavigationSection[] = [
     status: "planned",
     title: "通知中心",
     items: [
-      {
-        id: "notificationChannels",
-        code: "notification_channel",
-        i18nKey: "menu.platform.notification_channel",
-        status: "planned",
-        href: "/notification-channels",
-        label: "通知渠道",
-        description:
-          "待建设模块，用于维护平台通知能力的渠道、模板绑定和发送配置。",
-        icon: "bell",
-      },
       {
         id: "notificationLogs",
         code: "notification_log",
