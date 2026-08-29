@@ -227,7 +227,7 @@ jobs:
       # 部署脚本里唯一有分支逻辑的纯文本函数（挑可回收的平台旧镜像）。纯 bash+awk、
       # 零依赖、秒级，与上面两步同一档：不挂 docs_only 条件，永远跑。
       - name: Deploy script unit tests
-        run: bash deploy/scripts/lib/prune-images.test.sh
+        run: for t in deploy/scripts/lib/*.test.sh; do echo "== $t"; bash "$t"; done
 
       # SQL-DDL 单一权威门控（data_platform_320）：铁律设计检查 + 退役 schema/搬迁表残留检查。
       # 残留检查含路径② Prisma @@schema/@@map（防 model-platform 类漏网：裸串扫描无感的库映射残留）。

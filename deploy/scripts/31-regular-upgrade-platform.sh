@@ -17,6 +17,7 @@ COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # 空默认（会绑定全网卡）也不能缺值即炸（排障脚本正是最需要能跑的时候）。
 . "$COMPOSE_DIR/scripts/lib/compose-env.sh"
 . "$COMPOSE_DIR/scripts/lib/prune-images.sh"
+. "$COMPOSE_DIR/scripts/lib/env-values.sh"
 load_compose_env
 RUNTIME_DIR="${RUNTIME_DIR:-/srv/vxture/runtime}"
 NGINX_COMPOSE_FILE="/srv/vxture/data/nginx/compose.yml"
@@ -31,38 +32,37 @@ run_step() {
 
 check_auth_runtime_contract() {
   local auth_env="$RUNTIME_DIR/.env.auth-bff"
-  local turnstile_hosts
-
+  local turnstile_hosts raw_line
   if [ ! -f "$auth_env" ]; then
     echo "错误：缺少 runtime auth env：$auth_env" >&2
     exit 1
   fi
-
-  if ! grep -qE '^COOKIE_DOMAIN_PLATFORM=.+$' "$auth_env"; then
+  if [ -z "$(env_value "$auth_env" COOKIE_DOMAIN_PLATFORM)" ]; then
     echo "错误：$auth_env 缺少 COOKIE_DOMAIN_PLATFORM。" >&2
     echo "runtime config 由人工维护，请补齐后再部署。" >&2
     exit 1
   fi
-
-  turnstile_hosts="$(grep -E '^CF_TURNSTILE_TENANT_ALLOWED_HOSTNAMES=' "$auth_env" | tail -n 1 | cut -d= -f2- || true)"
+  # 这一条守的是"widget 在哪个页面上被解开"：Turnstile 校验拿 siteverify 回的
+  # hostname 比这张白名单。2026-08-29 核实：全仓渲染 widget 的只有 accounts
+  # （OidcLoginForm / BindPhonePanel），所以必须在的是 accounts.vxture.com；
+  # 此前这里要求 console.vxture.com，那是登录面还内嵌在 console 时的事实。
+  #
+  # 值用 env_value / csv_contains 读（lib/env-values.sh）：引号、`= ` 后的空格、
+  # 行尾 CR、逗号两侧空格都不算数。v0.26.3 的部署就死在这里——值是对的，
+  # 只是写法不合一个 `case` 模式的口味；守卫读值必须按语义读。
+  turnstile_hosts="$(env_value "$auth_env" CF_TURNSTILE_TENANT_ALLOWED_HOSTNAMES)"
   if [ -z "$turnstile_hosts" ]; then
     echo "错误：$auth_env 缺少 CF_TURNSTILE_TENANT_ALLOWED_HOSTNAMES。" >&2
     exit 1
   fi
-
-  # 这一条守的是"widget 在哪个页面上被解开"：Turnstile 校验拿 siteverify 回的
-  # hostname 比这张白名单。2026-08-29 核实：全仓渲染 widget 的只有 accounts
-  # （OidcLoginForm / BindPhonePanel），所以必须在的是 accounts.vxture.com；
-  # 此前这里要求 console.vxture.com，那是登录面还内嵌在 console 时的事实，
-  # 早已不成立——留着它只会逼人把一个从不解 widget 的域名保留在白名单里。
-  case ",$turnstile_hosts," in
-    *,accounts.vxture.com,*) ;;
-    *)
-      echo "错误：CF_TURNSTILE_TENANT_ALLOWED_HOSTNAMES 必须包含 accounts.vxture.com（登录 widget 实际渲染的页面）。" >&2
-      echo "runtime config 由人工维护，请补齐后再部署。" >&2
-      exit 1
-      ;;
-  esac
+  if ! csv_contains "$turnstile_hosts" accounts.vxture.com; then
+    raw_line="$(grep -nE '^[[:space:]]*CF_TURNSTILE_TENANT_ALLOWED_HOSTNAMES[[:space:]]*=' "$auth_env" | tail -n 1 | cat -A)"
+    echo "错误：CF_TURNSTILE_TENANT_ALLOWED_HOSTNAMES 必须包含 accounts.vxture.com（登录 widget 实际渲染的页面）。" >&2
+    echo "  读到的值：[$turnstile_hosts]" >&2
+    echo "  原始行（cat -A）：$raw_line" >&2
+    echo "runtime config 由人工维护，请补齐后再部署。" >&2
+    exit 1
+  fi
 }
 
 cd "$COMPOSE_DIR"
