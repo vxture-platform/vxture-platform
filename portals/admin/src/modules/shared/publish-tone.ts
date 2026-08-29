@@ -31,6 +31,7 @@ import type { StatusTone } from "@vxture-platform/shared";
 import type {
   ProductCapabilityIntegrationStatus,
   ProductCapabilityStatus,
+  ProductSolutionStatus,
 } from "@/entities/console";
 
 /**
@@ -44,6 +45,20 @@ export const PUBLISH_STATUS_TONE: Record<ProductCapabilityStatus, StatusTone> =
     draft: "warning",
     archived: "neutral",
   };
+
+/**
+ * 解决方案与其绑定套餐的生命周期（product.solutions.status，与 products / plans
+ * 同一套四态；2026-08-31 去 mock 后不再是 active/draft/archived 三态）。
+ *
+ * `inactive` 是可逆的停用，`deprecated` 是退役终态——都不是出了事，落 `neutral`；
+ * 两者靠文字区分，不靠颜色。`draft` 沿用发布态里的判断：工作副本，不给绿。
+ */
+export const SOLUTION_STATUS_TONE: Record<ProductSolutionStatus, StatusTone> = {
+  draft: "warning",
+  active: "success",
+  inactive: "neutral",
+  deprecated: "neutral",
+};
 
 /** 套餐版本的启用态，值域比发布态短一档。 */
 export const PLAN_ACTIVE_TONE = {

@@ -1423,26 +1423,22 @@
     "header": {
       "eyebrow": "Model Platform",
       "title": "Model Authorization",
-      "description": "Configure model authorization, cycle quota, and routing priority by product and agent; versions belong to product releases.",
-      "badge": "Product policy"
+      "description": "Read-only summary of Atlas model policies alongside tenant override grants; policies are created and edited on the Model Platform page.",
+      "badge": "Atlas policies"
     },
     "summary": {
       "ariaLabel": "Model authorization summary",
-      "policies": "Product policies",
-      "policiesValue": "{usable} / {total} usable",
-      "products": "Covered products",
-      "undefinedPolicies": "Undefined policies",
-      "policiesHelp": "Registered product-level model policies, including inactive and undefined ones.",
-      "overridesHelp": "Tenant-level override grants; overrides take precedence over product policies.",
-      "undefinedPoliciesHelp": "Policies with no model defined yet — the product currently has no model to call."
+      "policies": "Model policies",
+      "policiesHelp": "Model policies registered in Atlas (including inactive), from GET /api/atlas/policies.",
+      "overridesHelp": "Tenant-level override grants; overrides take precedence over platform policies.",
+      "uncovered": "Granted, no policy",
+      "uncoveredHelp": "Active tenant grants that no active policy (platform-wide or for that tenant, same model) constrains."
     },
     "filters": {
       "all": "All policies",
-      "product": "Product policies",
-      "defaults": "Default policies",
-      "undefined": "Undefined",
-      "usable": "With quota",
-      "zeroQuota": "Zero quota",
+      "platform": "Platform policies",
+      "tenant": "Tenant policies",
+      "active": "Active",
       "inactive": "Inactive"
     },
     "actions": {
@@ -1450,39 +1446,42 @@
       "grantMenu": "Grant actions",
       "editGrant": "Edit override",
       "enableGrant": "Enable override",
-      "disableGrant": "Disable override"
+      "disableGrant": "Disable override",
+      "managePolicies": "Manage policies on Model Platform",
+      "policyMenu": "Actions for {name}"
     },
     "policyTable": {
-      "searchPlaceholder": "Search by product, policy, agent, model, or note",
-      "searchAriaLabel": "Search model authorization",
-      "filterAriaLabel": "Policy filters",
+      "searchPlaceholder": "Search by policy name, model, or provider",
+      "searchAriaLabel": "Search model policies",
+      "filterAriaLabel": "Policy filter",
+      "viewModeAriaLabel": "Model policy view mode",
       "toolbarTitle": "{count} policies",
-      "unlimited": "Unlimited",
-      "undefinedModel": "No model defined",
-      "defaultDeny": "Default deny",
-      "region": {
-        "domestic": "Domestic",
-        "international": "International",
-        "none": "Default scope"
-      },
+      "platformScope": "Platform policy (all tenants)",
+      "tenantScope": "Tenant policy",
+      "unnamed": "Unnamed policy",
+      "unknownModel": "Model not in catalog",
+      "unknownModelHint": "The model this policy targets is not registered on the Model Platform page",
+      "noRate": "No rate limit",
       "columns": {
-        "scope": "Policy scope",
-        "agent": "Agent",
+        "scope": "Policy",
+        "status": "Status",
         "model": "Model",
-        "quota": "Cycle quota",
+        "rate": "Rate limits",
         "priority": "Priority",
-        "status": "Status"
+        "window": "Effective window"
       }
     },
     "overrides": {
-      "title": "Tenant overrides",
-      "description": "For gray release, customization, and temporary overrides. Normal traffic should use product model authorization above.",
+      "title": "Tenant override grants",
+      "description": "For canary, custom, and temporary overrides; normal traffic follows platform policies.",
       "count": "{count} overrides"
     },
     "table": {
       "allAgents": "All agents",
       "permanent": "Permanent",
       "anyProfile": "Any",
+      "covered": "Covered",
+      "uncovered": "No policy",
       "columns": {
         "model": "Model",
         "tenant": "Tenant",
@@ -1490,13 +1489,11 @@
         "taskProfile": "Task profile",
         "priority": "Priority",
         "expires": "Expires",
-        "status": "Status"
+        "status": "Status",
+        "coverage": "Policy coverage"
       }
     },
     "status": {
-      "usable": "With quota",
-      "zeroQuota": "Zero quota",
-      "undefined": "Undefined",
       "active": "Active",
       "inactive": "Inactive"
     },
@@ -1513,43 +1510,424 @@
         "title": "Edit grant"
       },
       "fields": {
-        "grantModel": "Grant model",
+        "grantModel": "Granted model",
         "tenantId": "Tenant ID",
         "agentId": "Agent scope",
         "taskProfile": "Task profile (optional)",
-        "priority": "Priority, lower value wins",
+        "priority": "Priority, lower wins",
         "reason": "Grant reason",
-        "expiresAt": "Expiration date",
-        "grantActive": "Enable override now"
+        "expiresAt": "Expiry date",
+        "grantActive": "Enable override immediately"
       },
       "actions": {
         "cancel": "Cancel",
         "save": "Save"
       },
       "hints": {
-        "grantStateViaRowAction": "Enable/disable is not changed here — use the row action, which records the operation as an activate/deactivate in the audit trail rather than an edit.",
-        "taskProfilePlaceholder": "e.g. code-review; empty = any"
+        "grantStateViaRowAction": "State is not changed here — use Enable / Disable in the row actions, which the audit trail records as a state change rather than an edit.",
+        "taskProfilePlaceholder": "e.g. code-review; blank = any"
       }
     },
     "empty": {
       "loadingTitle": "Loading policies...",
-      "loadingDescription": "Reading product model authorization and Model Platform tenant overrides.",
+      "loadingDescription": "Reading Atlas model policies and tenant override grants.",
       "policyTitle": "No policies match the current filters.",
-      "policyDescription": "Try widening the filters or checking product-level model authorization.",
-      "overrideTitle": "No tenant overrides yet.",
-      "overrideDescription": "Product model authorization is currently used directly. Add overrides for gray release or customization.",
+      "policyDescription": "Widen the filters, or add a policy on the Model Platform page.",
+      "noPoliciesTitle": "Atlas has no model policies yet.",
+      "noPoliciesDescription": "Policies are created on the Model Platform page; this page only summarizes them and reconciles them with grants.",
+      "overrideTitle": "No tenant override grants.",
+      "overrideDescription": "Only platform policies are in use; add overrides for canary or custom needs.",
       "resetFilters": "Reset filters",
-      "loadFailedTitle": "Could not load policies.",
-      "loadFailedDescription": "Admin BFF or Model Platform did not respond. Start the services and reload."
+      "loadFailedTitle": "Failed to load policy data.",
+      "loadFailedDescription": "Could not reach Admin BFF or Model Platform; confirm the services are running and reload."
     },
     "feedback": {
-      "loadError": "Failed to load policy data. Check whether Admin BFF and Model Platform are running.",
+      "loadError": "Failed to load policy data; confirm Admin BFF and Model Platform are running.",
       "grantCreated": "Tenant override created.",
       "grantUpdated": "Tenant override updated.",
       "grantEnabled": "Tenant override enabled.",
       "grantDisabled": "Tenant override disabled.",
-      "grantSaveError": "Tenant override save failed. Check tenant, model, and priority.",
-      "grantStateError": "Tenant override state update failed. Please try again later."
+      "grantSaveError": "Failed to save the tenant override; check tenant, model, and priority.",
+      "grantStateError": "Failed to update the override state; try again later."
+    }
+  },
+  "productCatalog": {
+    "status": {
+      "draft": "Draft",
+      "active": "Active",
+      "inactive": "Inactive",
+      "deprecated": "Deprecated"
+    },
+    "transition": {
+      "active": "Activate",
+      "inactive": "Deactivate",
+      "deprecated": "Deprecate"
+    },
+    "visibility": {
+      "public": "Public",
+      "internal": "Internal"
+    },
+    "capabilityType": {
+      "platform": "Platform",
+      "agent": "Agent",
+      "model": "Model",
+      "data": "Data",
+      "service": "Service"
+    },
+    "source": {
+      "self": "In-house",
+      "partner": "Partner"
+    },
+    "tier": {
+      "free": "Free",
+      "starter": "Starter",
+      "pro": "Pro",
+      "business": "Business",
+      "enterprise": "Enterprise"
+    },
+    "priceKind": {
+      "free": "Free",
+      "paid": "Standard pricing",
+      "contract": "Contract pricing"
+    }
+  },
+  "productSolutionsPage": {
+    "header": {
+      "title": "Solutions",
+      "description": "Compose product capabilities into industry scenarios, define scope and included products, and bind service plans on the five-tier ladder."
+    },
+    "summary": {
+      "ariaLabel": "Solution statistics",
+      "total": "Solutions",
+      "totalHelp": "Total solutions (excluding deleted).",
+      "activeTag": "Active {count}",
+      "products": "Product capabilities",
+      "productsHelp": "Sum of capability entries across solutions (not de-duplicated).",
+      "partnerTag": "Partner {count}",
+      "tiers": "Service plans",
+      "tiersHelp": "Sum of bound tiers across solutions.",
+      "subscriptionsTag": "Subscriptions {count}",
+      "revenue": "Monthly revenue",
+      "revenueHelp": "Sum of MRR across solutions: active subscriptions on bound plans, price normalised to a month.",
+      "industriesTag": "Industries {count}"
+    },
+    "filters": {
+      "ariaLabel": "Solution filters",
+      "searchPlaceholder": "Search solutions, industries, products, plans",
+      "searchAriaLabel": "Search solutions",
+      "status": "Solution status",
+      "visibility": "Visibility",
+      "allVisibility": "All visibility",
+      "industry": "Industry",
+      "allIndustries": "All industries",
+      "source": "Product source",
+      "allSources": "All sources"
+    },
+    "actions": {
+      "create": "New solution",
+      "menuLabel": "Actions for {name}"
+    },
+    "columns": {
+      "solution": "Solution",
+      "scenario": "Industry scenario",
+      "noScenario": "No industry or scenario yet",
+      "products": "Product capabilities",
+      "productsMeta": "{count} capabilities | partner {partner}",
+      "noProducts": "No products configured",
+      "tiers": "Service plans",
+      "tiersMeta": "{count} / {total} tiers bound | updated {updatedAt}",
+      "noTiers": "No plans bound",
+      "operation": "Operations",
+      "operationMeta": "{subscriptions} subscriptions | active tenants {tenants}"
+    },
+    "table": {
+      "ariaLabel": "Solution list"
+    },
+    "empty": {
+      "loadFailedTitle": "Failed to load solutions",
+      "noneTitle": "No solutions yet — create one",
+      "noneDescription": "Solutions are authored by operators: create one, configure its products, then bind existing plans to each tier.",
+      "filteredTitle": "No matching solutions",
+      "filteredDescription": "Clear the filters to see all solutions."
+    },
+    "dialog": {
+      "title": "New solution",
+      "description": "Created as a draft; configure products, plan bindings, and delivery boundaries on the detail page, then activate.",
+      "submit": "Create draft",
+      "fields": {
+        "solutionCode": "Solution code",
+        "solutionCodePlaceholder": "Lowercase letters, digits, hyphens, e.g. flood-regulation",
+        "solutionName": "Solution name",
+        "industry": "Industry",
+        "scenario": "Scenario",
+        "customerSegment": "Customer segment",
+        "ownerTeam": "Owner team",
+        "description": "Description"
+      }
+    },
+    "feedback": {
+      "loadError": "Failed to load solutions; confirm Admin BFF is running.",
+      "created": "Solution \"{name}\" created",
+      "createFailed": "Failed to create solution",
+      "stateChanged": "Solution \"{name}\" is now {state}",
+      "stateFailed": "Failed to update solution state"
+    },
+    "confirm": {
+      "target": "solution \"{name}\"",
+      "deprecateConsequence": "Deprecation is terminal and cannot be undone; bound plans and product links are kept for traceability, but the solution leaves the sellable list."
+    }
+  },
+  "productSolutionDetailPage": {
+    "header": {
+      "fallbackTitle": "Solution detail",
+      "notFoundDescription": "No matching solution was found.",
+      "loadingDescription": "Loading solution detail."
+    },
+    "empty": {
+      "notFoundTitle": "Solution not found",
+      "notFoundDescription": "The solution may have been deleted, or the current account has no access."
+    },
+    "actions": {
+      "edit": "Edit",
+      "stateMenu": "State actions"
+    },
+    "summary": {
+      "products": "Product capabilities",
+      "productsHelp": "Capability entries included in this solution.",
+      "partnerTag": "Partner {count}",
+      "tiers": "Service plans",
+      "tiersHelp": "Tiers on the five-step ladder with a plan bound.",
+      "noTiers": "None bound",
+      "subscriptions": "Subscriptions",
+      "subscriptionsHelp": "Active / trialing subscriptions on bound plans.",
+      "tenantsTag": "Active tenants {count}",
+      "revenue": "Monthly revenue",
+      "revenueHelp": "MRR: active subscriptions on bound plans, price normalised to a month; trials excluded.",
+      "revenueTag": "MRR"
+    },
+    "sections": {
+      "basics": "Basics",
+      "scope": "Industry scope",
+      "products": "Included product capabilities",
+      "boundaries": "Delivery boundaries",
+      "tiers": "Service plans (five tiers)"
+    },
+    "fields": {
+      "solutionCode": "Solution code",
+      "solutionName": "Solution name",
+      "status": "Status",
+      "visibility": "Visibility",
+      "ownerTeam": "Owner team",
+      "createdAt": "Created",
+      "industry": "Industry",
+      "scenario": "Scenario",
+      "customerSegment": "Customer segment",
+      "deliveryMode": "Delivery mode"
+    },
+    "products": {
+      "configure": "Configure products",
+      "noRole": "No role set",
+      "emptyTitle": "No product capabilities yet",
+      "emptyDescription": "Pick the capabilities this solution includes from the product catalog and state each one's role."
+    },
+    "boundaries": {
+      "empty": "No delivery boundaries yet — use Edit to list, one per line, what is and is not included."
+    },
+    "tiers": {
+      "description": "At most one existing plan per tier; the plan's price, quota, and versions are maintained on the Plan Versions page.",
+      "bind": "Bind plan",
+      "rebind": "Rebind plan",
+      "unbind": "Unbind",
+      "unbindTarget": "plan \"{plan}\" on the {tier} tier",
+      "unbindConsequence": "After unbinding, the tier has no sellable plan and the solution's subscription and revenue figures stop counting it; the plan itself and existing subscriptions are unaffected.",
+      "unbound": "Not bound",
+      "unboundHint": "No plan on this tier yet",
+      "menuLabel": "Actions for {tier}"
+    },
+    "feedback": {
+      "updated": "Solution saved",
+      "updateFailed": "Failed to save solution",
+      "productsSaved": "Product list saved",
+      "productsFailed": "Failed to save product list",
+      "bound": "Plan bound to {tier}",
+      "bindFailed": "Failed to bind plan",
+      "unbound": "{tier} unbound",
+      "unbindFailed": "Failed to unbind plan",
+      "stateChanged": "Solution is now {state}",
+      "stateFailed": "Failed to update solution state"
+    },
+    "confirm": {
+      "target": "solution \"{name}\"",
+      "deprecateConsequence": "Deprecation is terminal and cannot be undone; bound plans and product links are kept for traceability, but the solution leaves the sellable list."
+    },
+    "editDialog": {
+      "title": "Edit solution",
+      "description": "The solution code cannot change; state moves via the state actions in the header.",
+      "submit": "Save changes",
+      "descriptionField": "Description",
+      "tags": "Tags",
+      "tagsPlaceholder": "Comma-separated, e.g. water, emergency",
+      "deliveryModePlaceholder": "e.g. Platform subscription + partner device integration + industry implementation",
+      "boundaries": "Delivery boundaries (one per line)",
+      "boundariesPlaceholder": "Covers …\nNot included by default …",
+      "isPublic": "Open for sale (public)"
+    },
+    "productsDialog": {
+      "title": "Configure product capabilities",
+      "description": "Tick the capabilities this solution includes; tick order is display order. Saving replaces the current list.",
+      "submit": "Save list",
+      "emptyTitle": "The product catalog is empty",
+      "emptyDescription": "Register products in the opera product catalog first; there is nothing to pick from yet.",
+      "rolePlaceholder": "Role in the solution, e.g. video interpretation",
+      "roleLabel": "Role of {name}"
+    },
+    "bindDialog": {
+      "title": "Bind a plan to {tier}",
+      "description": "Pick an existing plan for this tier; a plan can be bound to only one tier of one solution.",
+      "submit": "Bind",
+      "currentHint": "Currently bound: {plan} ({code}) — saving replaces it.",
+      "plan": "Plan",
+      "planPlaceholder": "Select a plan",
+      "hint": "A plan already bound to another solution is rejected (409); unbind it there first."
+    }
+  },
+  "servicePlansPage": {
+    "header": {
+      "title": "Service plans",
+      "description": "Plans bound on the five-tier ladder, laid out per solution; price, quota, and versions belong to the plan and are maintained on the Plan Versions page."
+    },
+    "summary": {
+      "ariaLabel": "Service plan statistics",
+      "solutions": "Solutions",
+      "solutionsHelp": "Total solutions.",
+      "tiersTag": "Plans {count}",
+      "activeTiers": "Active plans",
+      "activeTiersHelp": "Bound plans whose status is active and can be subscribed.",
+      "publicTag": "Public {count}",
+      "subscriptions": "Subscriptions",
+      "subscriptionsHelp": "Sum of active / trialing subscriptions on bound plans.",
+      "industriesTag": "Industries {count}",
+      "revenue": "Monthly revenue",
+      "revenueHelp": "Sum of MRR across solutions: active subscriptions on bound plans, price normalised to a month.",
+      "revenueTag": "MRR"
+    },
+    "filters": {
+      "ariaLabel": "Service plan filters",
+      "searchPlaceholder": "Search solutions, plans, products",
+      "searchAriaLabel": "Search service plans",
+      "status": "Plan status",
+      "price": "Price type",
+      "allPrices": "All prices",
+      "visibility": "Visibility",
+      "allVisibility": "All visibility",
+      "industry": "Industry",
+      "allIndustries": "All industries"
+    },
+    "actions": {
+      "menuLabel": "Actions for {solution} {tier}",
+      "viewSolution": "View solution",
+      "goToSolutions": "Go to solutions",
+      "planVersions": "Plan versions"
+    },
+    "group": {
+      "products": "{count} capabilities",
+      "partner": "Partner {count}",
+      "tiers": "{count} plans",
+      "subscriptions": "{count} subscriptions",
+      "revenue": "{amount} / month",
+      "updatedAt": "Updated {date}"
+    },
+    "table": {
+      "ariaLabel": "Service plan list"
+    },
+    "empty": {
+      "loadFailedTitle": "Failed to load service plans",
+      "noSolutionsTitle": "No solutions yet",
+      "noSolutionsDescription": "Service plans hang off solutions: create a solution first, then bind existing plans to its tiers.",
+      "noTiersTitle": "No plans bound to any solution",
+      "noTiersDescription": "On the solution detail page, bind existing plans to tiers under \"Service plans (five tiers)\".",
+      "filteredTitle": "No matching service plans",
+      "filteredDescription": "Clear the filters to see all service plans."
+    },
+    "pagination": {
+      "summary": "{solutions} solutions, {tiers} plans"
+    },
+    "feedback": {
+      "loadError": "Failed to load service plans; confirm Admin BFF is running."
+    }
+  },
+  "servicePlanDetailPage": {
+    "header": {
+      "fallbackTitle": "Service plan detail",
+      "notFoundDescription": "No matching service plan was found.",
+      "loadingDescription": "Loading service plan detail."
+    },
+    "empty": {
+      "notFoundTitle": "Service plan not found",
+      "notFoundDescription": "This tier may have no plan bound yet, or the current account has no access."
+    },
+    "actions": {
+      "viewSolution": "Solution",
+      "planVersions": "Plan versions"
+    },
+    "summary": {
+      "price": "Price",
+      "included": "Included products",
+      "includedHelp": "Products among the plan's current version components.",
+      "excludedTag": "Excluded {count}",
+      "subscriptions": "Subscriptions",
+      "subscriptionsHelp": "Active / trialing subscriptions on this plan (all versions).",
+      "tenantsTag": "Active tenants {count}",
+      "version": "Plan version",
+      "versionHelp": "Version used for price and entitlements: the current published one, else the latest draft.",
+      "versionPublished": "Published",
+      "versionDraft": "Draft",
+      "versionNone": "No version yet"
+    },
+    "sections": {
+      "basics": "Basics",
+      "pricing": "Quota and pricing",
+      "entitlements": "Included / excluded products",
+      "sales": "Sales status"
+    },
+    "fields": {
+      "solution": "Solution",
+      "solutionCode": "Solution code",
+      "tier": "Tier",
+      "plan": "Plan",
+      "planCode": "Plan code",
+      "status": "Plan status",
+      "visibility": "Visibility",
+      "ownerTeam": "Owner team",
+      "price": "Price",
+      "period": "Period",
+      "version": "Version",
+      "subscriptions": "Subscriptions",
+      "tenants": "Active tenants",
+      "isPublic": "Sold publicly",
+      "customerSegment": "Customer segment",
+      "industry": "Industry",
+      "scenario": "Scenario"
+    },
+    "period": {
+      "daily": "Daily ({count} days)",
+      "weekly": "Weekly ({count} weeks)",
+      "monthly": "Monthly ({count} months)",
+      "yearly": "Yearly ({count} years)",
+      "perpetual": "One-off",
+      "contract": "Per contract"
+    },
+    "entitlement": {
+      "included": "Included",
+      "excluded": "Not included",
+      "noFeatures": "No feature keys",
+      "excludedNote": "In the solution, but not among this plan's components",
+      "emptyTitle": "The plan version has no components",
+      "emptyDescription": "Create a version for this plan and configure its components on the Plan Versions page."
+    },
+    "boolean": {
+      "yes": "Yes",
+      "no": "No"
     }
   },
   "drawer": {
