@@ -1,0 +1,35 @@
+/**
+ * website-scrollbar.css — 全站隐藏滚动条（滚动能力不变）
+ * @package  @vxture/website
+ * @layer    Presentation
+ * @category style
+ * @author   AI-Generated
+ * @date     2026-08-29
+ *
+ * owner 2026-08-29 裁定：官网整站不显示滚动条。只藏轨道，不动 overflow——
+ * 滚轮、触控、键盘、锚点跳转全部照旧，只是看不见那根条。
+ *
+ * 写法照抄 DS `fullscreen.css` 里 `.vx-fullscreen-active` 隐藏滚动条的那一段
+ * （Firefox 的 `scrollbar-width`、旧 Edge 的 `-ms-overflow-style`、WebKit/Blink 的
+ * `::-webkit-scrollbar`）。DS 没有把它做成通用工具类，且 fullscreen.css 不在
+ * 导出面里，所以这里自持一份——它是营销面的展示决定，不是通用能力，按
+ * 「基座一致 + 营销灵活」归 website 自有。
+ *
+ * 用通配选择器而不是只写 html/body：页面里的横向卡片列、代码块、法务页长表格
+ * 各自有 overflow 容器，漏一个就露一根条。
+ */
+
+html,
+body,
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
