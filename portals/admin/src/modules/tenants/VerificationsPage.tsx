@@ -106,21 +106,9 @@ function mapVerificationToRow(
     subscriptionCount: 0,
     productCount: 0,
     monthlyRevenue: 0,
-    monthlyCost: 0,
-    grossMarginRate: 0,
-    tokenUsed: 0,
-    tokenQuota: 0,
+    totalRevenue: 0,
     ticketOpenCount: 0,
-    satisfaction: 0,
-    sla: "",
-    tags: [],
     notes: record.rejectReason ?? "",
-    members: [],
-    subscriptions: [],
-    usage: [],
-    modelPolicies: [],
-    auditEvents: [],
-    tickets: [],
   };
 }
 

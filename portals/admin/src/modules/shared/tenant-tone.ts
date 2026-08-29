@@ -31,48 +31,29 @@
 import type { StatusTone } from "@vxture-platform/shared";
 
 import type {
-  TenantOperationModelPolicy,
-  TenantOperationSubscription,
+  TenantOperationAuditEvent,
+  TenantOperationMember,
 } from "@/entities/console";
 
-/**
- * 租户视角的订阅态。
- *
- * **它与订阅列表页不是同一个值域**：这里是 `TenantOperationSubscription.status`
- * （trial / active / **past_due** / cancelled），订阅列表页是
- * `SubscriptionOperationStatus`（trial / active / expiring / **overdue** /
- * suspended / cancelled）。同一件"欠费"，一个叫 `past_due`、一个叫 `overdue`。
- *
- * 这正是 TD #33 记的契约漂移，在这里露了头——此前两边都往 `vx-tenant-pill--*`
- * 里塞，撞不出来；按值域拆表之后类型立刻报了。**本轮只如实建表，不改值域**：
- * 改名要连 BFF 与 view-model 一起动，属 #33。
- *
- * 另：`past_due` 我先前按"CSS 类名全仓 0 引用"判成了死档——错的，它由模板拼接
- * 产生（`--${subscription.status}`），字面量搜不到。判死码必须考虑模板拼接
- * （同 admin-table-consolidation.md 记过的那条）。
+/*
+ * 租户视角的订阅态原来在这里另有一张 `TENANT_SUBSCRIPTION_TONE`（trial / past_due
+ * 那套自建值域，TD #33 记的契约漂移）。2026-08-30 租户详情的订阅投影改用
+ * `@vxture-platform/shared` 的七值后，直接用 `status-tone.ts` 的
+ * `SUBSCRIPTION_OPERATION_TONE`，这张表删除。
  */
-export const TENANT_SUBSCRIPTION_TONE: Record<
-  TenantOperationSubscription["status"],
+
+/**
+ * 成员在职态。值域照 `tenancy.tenant_memberships.status`（active / suspended；
+ * removed 读取时过滤）。原来这里还有 `invited` 一档——库里从没有过来源，受邀未加入
+ * 的人在 `tenancy.invitations`，不是成员（2026-08-30 随契约一起删）。
+ */
+export const MEMBER_STATUS_TONE: Record<
+  TenantOperationMember["status"],
   StatusTone
 > = {
   active: "success",
-  trial: "warning",
-  past_due: "danger",
-  cancelled: "neutral",
-};
-
-/**
- * 成员在职态。
- *
- * **`invited` 是这次被 `Record` 逼出来的缺口**：值域有三个值，CSS 只画了两个，
- * 已邀请未加入的成员一直是默认样式。按六档对应表它属于"新来的，等人接手"，
- * 与账号态的 `invited` 同档。
- */
-export const MEMBER_STATUS_TONE = {
-  active: "success",
-  invited: "brand",
   suspended: "danger",
-} as const satisfies Record<string, StatusTone>;
+};
 
 /** 工单态。`closed` 是正常闭环，给绿；`processing` 是流程在走，给 `info`。 */
 export const TICKET_STATUS_TONE = {
@@ -102,28 +83,24 @@ export const TICKET_PRIORITY_TONE = {
   p3: "neutral",
 } as const satisfies Record<string, StatusTone>;
 
-/**
- * 模型授权策略的生效态。
- *
- * `disabled` 是第二个被 `Record` 逼出来的缺口：值域四个值，CSS 只画了三个。
- * 它是"关掉了"不是"配错了"，取中性，与 `undefined`（没配）的红分开。
+/*
+ * 模型授权策略（`POLICY_STATE_TONE`）随 `TenantOperationModelPolicy` 一起删除
+ * （2026-08-30）：模型用量归 Atlas，平台库没有这份数据，那一页从来只渲染过空表。
  */
-export const POLICY_STATE_TONE: Record<
-  TenantOperationModelPolicy["state"],
+
+/**
+ * 审计事件结果，值域 = `support.audit_logs.result` CHECK（success / failure / denied）。
+ * failure 是坏了，danger；denied 是被拦下（鉴权挡住的尝试），要留意但系统按预期
+ * 工作，warning。
+ */
+export const AUDIT_RESULT_TONE: Record<
+  TenantOperationAuditEvent["result"],
   StatusTone
 > = {
-  effective: "success",
-  limited: "warning",
-  undefined: "danger",
-  disabled: "neutral",
-};
-
-/** 审计事件结果。值本身就是语气词，一一对应。 */
-export const AUDIT_RESULT_TONE = {
   success: "success",
-  warning: "warning",
-  danger: "danger",
-} as const satisfies Record<string, StatusTone>;
+  failure: "danger",
+  denied: "warning",
+};
 
 /** 启用 / 停用两态的布尔开关（模型、厂商、计价规则共用）。 */
 export function activeTone(isActive: boolean): StatusTone {

@@ -862,54 +862,86 @@ export type TenantVerificationStatus =
   | "rejected";
 export type TenantRiskLevel = "normal" | "follow_up" | "high";
 
+/**
+ * 租户成员（详情投影 `members[]`）。
+ *
+ * 值域照 `tenancy.tenant_memberships.status` CHECK（active/suspended/removed），
+ * `removed` 在读取时过滤；库里**没有** `invited`——受邀未加入的人在
+ * `tenancy.invitations`，不是成员，旧契约里那个档位从没有过来源（2026-08-30）。
+ * `lastActiveAt/Ip` 来自 `session.auth_sessions`（realm=customer，最近一条），
+ * 与账号页同一口径；没有会话就是 null，不用 updated_at 冒充。
+ */
 export interface TenantOperationMember {
+  /** membership id，React key 用，不展示。 */
   id: string;
+  /** 登录句柄 `account.users.account`，可视码。 */
+  accountCode: string;
   name: string;
   email: string;
   role: string;
-  status: "active" | "invited" | "suspended";
-  lastActiveAt: string;
+  roleCode: string;
+  status: "active" | "suspended";
+  joinedAt: string;
+  lastActiveAt: string | null;
+  lastActiveIp: string | null;
 }
 
+/**
+ * 租户视角的订阅（详情投影 `subscriptions[]`）。
+ *
+ * 状态值域直接用 `@vxture-platform/shared` 的七值（与订阅列表页同一份），
+ * 不再自建 `trial/past_due` 那套——TD #33 记的契约漂移在这里收口（2026-08-30）。
+ * 金额是 `subscriptions.pay_amount`（每期实付），不再折算「月收入」：折算是
+ * 派生数，且旧页面拿它乘月数造出过一个「累计收入」。
+ * `releaseName / seats` 库里没有来源，删除。
+ */
 export interface TenantOperationSubscription {
+  /** 内部 id，React key 用，不展示。 */
   id: string;
-  productName: string;
-  releaseName: string;
-  planName: string;
-  status: "trial" | "active" | "past_due" | "cancelled";
-  seats: number;
-  monthlyRevenue: number;
+  /** 购买单号（可视码）；trial/free/运营开通为 null。 */
+  orderNo: string | null;
+  /** 套餐 primary 组件的产品名，按 sort_order 排。 */
+  productNames: string[];
+  planName: string | null;
+  planVersion: number | null;
+  kind: "paid" | "trial" | "free";
+  status: SubscriptionStatus;
+  cycleUnit: "day" | "week" | "month" | "year" | "perpetual";
+  cycleCount: number;
+  payAmount: number | null;
+  currency: string;
+  autoRenew: boolean;
   startedAt: string;
-  renewsAt: string | null;
+  endsAt: string | null;
+  nextRenewalAt: string | null;
 }
 
+/**
+ * 租户当月用量（详情投影 `usage[]`），按 metric_key 跨 workspace/产品聚合。
+ *
+ * `monthUsage` 读 `metering.usage_summary_months`（当前自然月，看板口径，非计费依据）；
+ * `quotaLimit/quotaUsed` 读活跃且未过期的 `metering.quota_pools`（权益水位，按订阅
+ * 锚定周期推进），没有池就是 null。旧契约的 `label/trend/status` 没有来源
+ * （趋势是编的、语气是派生的），删除；展示层按 used/limit 自己算百分比。
+ */
 export interface TenantOperationUsageMetric {
-  code: string;
-  label: string;
-  used: number;
-  quota: number | null;
-  unit: string;
-  trend: string;
-  status: "normal" | "warning" | "danger";
+  metricKey: string;
+  unit: string | null;
+  monthUsage: number;
+  quotaLimit: number | null;
+  quotaUsed: number | null;
 }
 
-export interface TenantOperationModelPolicy {
-  id: string;
-  agentName: string;
-  productName: string;
-  modelCode: string;
-  quotaTokens: number;
-  usedTokens: number;
-  state: "effective" | "limited" | "undefined" | "disabled";
-  source: "product" | "tenant" | "default";
-}
-
+/**
+ * 租户审计事件（详情投影 `auditEvents[]`），接 `support.audit_logs`（tenant_id 维度）。
+ * `result` 直接是库的三值 CHECK（success/failure/denied），不再改写成语气词。
+ */
 export interface TenantOperationAuditEvent {
   id: string;
   action: string;
   actor: string;
   at: string;
-  result: "success" | "warning" | "danger";
+  result: "success" | "failure" | "denied";
 }
 
 export interface TenantOperationTicket {
@@ -951,27 +983,36 @@ export interface TenantOperationRecord {
   contactName: string;
   contactPhone: string;
   createdAt: string;
-  lastActiveAt: string;
+  /** 成员在 customer realm 的最近会话活动（session.auth_sessions）；没有会话为 null。 */
+  lastActiveAt: string | null;
   memberCount: number;
   activeMemberCount: number;
+  /** 活跃成员里持 tenant 作用域 owner/manager 角色的人数。 */
   adminCount: number;
+  /** 权益仍在的订阅数（active/expiring/trialing/overdue）。 */
   subscriptionCount: number;
+  /** 上述订阅套餐 primary 组件去重后的产品数。 */
   productCount: number;
+  /** 本自然月 billing.payments pay_status=paid 的实付合计（毛额，不扣退款），与首页看板同口径。 */
   monthlyRevenue: number;
-  monthlyCost: number;
-  grossMarginRate: number;
-  tokenUsed: number;
-  tokenQuota: number;
+  /** 全周期同口径实付合计。 */
+  totalRevenue: number;
+  /** support.tickets 未结（open/pending/in_progress/reopened）数。 */
   ticketOpenCount: number;
-  satisfaction: number;
-  sla: string;
-  tags: string[];
   notes: string;
+}
+
+/**
+ * 详情投影 = 列表投影 + 五段跨域明细。列表（500 行）不带这些数组：带了就得
+ * 要么每行再打五条查询、要么放空数组冒充「没有」——后者正是 2026-08-30 拆掉的
+ * 那批占位。与 SubscriptionOperationDetailRecord / OrderOperationDetailRecord 同一做法。
+ */
+export interface TenantOperationDetailRecord extends TenantOperationRecord {
   members: TenantOperationMember[];
   subscriptions: TenantOperationSubscription[];
   usage: TenantOperationUsageMetric[];
-  modelPolicies: TenantOperationModelPolicy[];
   auditEvents: TenantOperationAuditEvent[];
+  /** 未结工单（与 ticketOpenCount 同一过滤），按优先级再按更新时间。 */
   tickets: TenantOperationTicket[];
 }
 

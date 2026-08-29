@@ -135,7 +135,10 @@ function buildOpsTodos(
         href: "/verifications",
         severity: "amber",
         priority: 20,
-        updatedAt: tenant.verificationSubmittedAt ?? tenant.lastActiveAt,
+        updatedAt:
+          tenant.verificationSubmittedAt ??
+          tenant.lastActiveAt ??
+          tenant.createdAt,
         icon: TODO_TYPE_ICON.verification,
         tags: [tenant.industry, tenant.scale],
       });
@@ -157,59 +160,16 @@ function buildOpsTodos(
             ? "rose"
             : "amber",
         priority: tenant.riskLevel === "high" ? 5 : 25,
-        updatedAt: tenant.lastActiveAt,
+        updatedAt: tenant.lastActiveAt ?? tenant.createdAt,
         icon: TODO_TYPE_ICON.risk,
-        tags: [`风险 ${riskLabel(tenant.riskLevel)}`, `SLA ${tenant.sla}`],
+        // SLA 标签删了：租户投影里那个字段从来是字面量 "未设置"，没有来源（2026-08-30）。
+        tags: [`风险 ${riskLabel(tenant.riskLevel)}`],
       });
     }
 
-    tenant.usage
-      .filter((usage) => usage.status !== "normal")
-      .forEach((usage) => {
-        const usageRate = usage.quota
-          ? Math.round((usage.used / usage.quota) * 100)
-          : 0;
-        items.push({
-          id: `${tenant.id}-usage-${usage.code}`,
-          type: "usage",
-          title: `${tenant.displayName} ${usage.label} ${usage.status === "danger" ? "超限" : "预警"}`,
-          description: `${usage.label} 已使用 ${formatNumber(usage.used)} ${usage.unit}，额度 ${usage.quota ? formatNumber(usage.quota) : "未配置"}，当前 ${usageRate}%。`,
-          tenantId: tenant.id,
-          tenantCode: tenant.tenantCode,
-          tenantName: tenant.displayName,
-          tenantMeta,
-          href: tenantHref,
-          severity: usage.status === "danger" ? "rose" : "amber",
-          priority: usage.status === "danger" ? 8 : 35,
-          updatedAt: tenant.lastActiveAt,
-          icon: TODO_TYPE_ICON.usage,
-          tags: [usage.label, usage.trend],
-        });
-      });
-
-    tenant.subscriptions
-      .filter(
-        (subscription) =>
-          subscription.status === "past_due" || subscription.status === "trial",
-      )
-      .forEach((subscription) => {
-        items.push({
-          id: `${tenant.id}-subscription-${subscription.id}`,
-          type: "subscription",
-          title: `${tenant.displayName} ${subscription.status === "past_due" ? "订阅逾期" : "试用跟进"}`,
-          description: `${subscription.productName} / ${subscription.planName}，月收入 ${formatNumber(subscription.monthlyRevenue)}，需要运营确认续费或转正动作。`,
-          tenantId: tenant.id,
-          tenantCode: tenant.tenantCode,
-          tenantName: tenant.displayName,
-          tenantMeta,
-          href: tenantHref,
-          severity: subscription.status === "past_due" ? "rose" : "amber",
-          priority: subscription.status === "past_due" ? 6 : 40,
-          updatedAt: subscription.renewsAt ?? subscription.startedAt,
-          icon: TODO_TYPE_ICON.subscription,
-          tags: [subscription.productName, subscription.planName],
-        });
-      });
+    // 用量预警 / 订阅跟进两类待办原来从租户**列表**的 usage[] / subscriptions[] 派生，
+    // 而列表从没带过这两个数组（一直是空占位），所以它们一条都没生成过。2026-08-30
+    // 列表投影不再携带明细数组，这两段随之删除；要恢复得另开按租户聚合的读路径。
 
     return items;
   });
