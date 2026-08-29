@@ -47,3 +47,25 @@ csv_contains() {
   done
   return 1
 }
+
+# csv_covers_host <csv-value> <host>
+#   按 TurnstileVerifier.isAllowedHostname 的同一条规则判：某一项等于 host，或 host 以
+#   ".<项>" 结尾（apex/父域按后缀覆盖）。返回 0 = 覆盖；并把命中的那一项打到 stdout，
+#   调用方据此区分"精确命中"与"靠 apex 兜住"（后者该 warn：apex 会放开整个子域）。
+csv_covers_host() {
+  local csv="$1" host="$2" item
+  host="$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')"
+  IFS=',' read -r -a parts <<< "$csv"
+  for item in "${parts[@]}"; do
+    item="${item#"${item%%[![:space:]]*}"}"
+    item="${item%"${item##*[![:space:]]}"}"
+    item="$(printf '%s' "$item" | tr '[:upper:]' '[:lower:]')"
+    [ -n "$item" ] || continue
+    if [ "$item" = "$host" ] || [ "${host%.$item}" != "$host" ]; then
+      printf '%s' "$item"
+      return 0
+    fi
+  done
+  return 1
+}
+
