@@ -9,15 +9,15 @@ import { useTranslations } from "next-intl";
 import { Link, usePathname, useRouter } from "@/lib/i18n/navigation";
 import { writeNavCollapsed } from "@vxture-platform/shared";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
-import { consoleDomains } from "@/config/navigation";
+import { appCenterModuleTiles, consoleDomains } from "@/config/navigation";
 import {
   fetchMyApps,
   fetchMySubscriptions,
   fetchMyWorkspaces,
   fetchQuotaUsage,
   fetchTenantModelQuotas,
-  type AppEntry,
   type ConsoleQuotaUsage,
+  type ProductAppTile,
 } from "@/api/console-bff";
 import {
   findActiveDomain,
@@ -40,7 +40,7 @@ import {
 } from "../header/ConsoleHeader";
 import type { NavSearchEntry } from "../header/useGlobalSearch";
 import { TemplateDrawer, type DrawerNotif } from "./TemplateDrawer";
-import { AppCenter, type ConsoleApp } from "./AppCenter";
+import { AppCenter, type AppCenterModuleEntry } from "./AppCenter";
 
 /* 内容滚动区：原先是遗留 CSS 的 `.content-scroll`（shell-template 已随批 D
  * 整体退役）。等价 Tailwind 写法在此。`data-content-scroll` 是给路由跳转后复位滚动条用的
@@ -80,11 +80,12 @@ export function ConsoleAppShell({
     if (inSubscribeFlow) setNavCollapsed(true);
   }, [inSubscribeFlow]);
   const [drawer, setDrawer] = useState<ShellDrawerType | null>(null);
-  // 真实数据：Token 用量（配额）与本月账单。无 BFF/无数据时按决策 fallback。
-  const [usage, setUsage] = useState<{ used: number; total: number }>({
-    used: 0,
-    total: 100,
-  });
+  /* 侧栏 Token 用量。null = 还没读到；"unavailable" = 读不到（BFF/Atlas 不可达）；
+   * "uncovered" = 工作空间没有额度池。此前失败回落 0/100，故障时会画出一根像真
+   * 的空仪表——三种非数字状态各自显式呈现，不再有假读数（2026-08-30）。 */
+  const [usage, setUsage] = useState<
+    { used: number; total: number } | "unavailable" | "uncovered" | null
+  >(null);
   const [billing, setBilling] = useState<{ amount: number; currency: string }>({
     amount: 0,
     currency: "CNY",
@@ -92,7 +93,12 @@ export function ConsoleAppShell({
   // Active subscription plan name; null until it loads or when the tenant has
   // no subscription at all — the header falls back to its free-plan label then.
   const [planName, setPlanName] = useState<string | null>(null);
-  const [appEntries, setAppEntries] = useState<AppEntry[]>([]);
+  /* 应用中心的产品磁贴。null = 还没读到，productsFailed 区分「加载中」与「读取
+   * 失败」——空数组是真实的「没订阅任何产品」，不能拿它兜故障。 */
+  const [productTiles, setProductTiles] = useState<ProductAppTile[] | null>(
+    null,
+  );
+  const [productsFailed, setProductsFailed] = useState(false);
   /* 配额与当前工作空间原先由 header 自己取。上提到这里是因为它们现在同时喂
    * 「当前范围」面板与侧栏页脚——留在 header 里会让同一份数据被拉两遍。 */
   const [quotaUsage, setQuotaUsage] = useState<ConsoleQuotaUsage | null>(null);
@@ -105,12 +111,21 @@ export function ConsoleAppShell({
     const loadUsage = async () => {
       try {
         const quotas = await fetchTenantModelQuotas();
-        const pool = quotas.pools[0];
-        if (alive && pool) {
-          setUsage({ used: pool.limit - pool.remaining, total: pool.limit });
+        if (!alive) return;
+        // fetchTenantModelQuotas 自己会把失败折成 status:"unavailable"，这里必须
+        // 认这个信号——否则空的 pools 会被当成「用量为 0」画出来。
+        if (quotas.status === "unavailable") {
+          setUsage("unavailable");
+          return;
         }
+        const pool = quotas.pools[0];
+        setUsage(
+          pool
+            ? { used: pool.limit - pool.remaining, total: pool.limit }
+            : "uncovered",
+        );
       } catch {
-        /* fallback 0/100 */
+        if (alive) setUsage("unavailable");
       }
     };
 
@@ -129,10 +144,14 @@ export function ConsoleAppShell({
 
     const loadApps = async () => {
       try {
-        const entries = await fetchMyApps();
-        if (alive) setAppEntries(entries);
+        const tiles = await fetchMyApps();
+        if (!alive) return;
+        setProductTiles(tiles);
+        setProductsFailed(false);
       } catch {
-        /* fallback empty — static catalog rendered below */
+        if (!alive) return;
+        setProductTiles(null);
+        setProductsFailed(true);
       }
     };
 
@@ -153,8 +172,8 @@ export function ConsoleAppShell({
     // These reads are independent — fire them concurrently instead of chaining
     // awaits, so the shell's usage/billing/apps/quota data lands after one
     // round-trip rather than five. allSettled, not all: one failing read must
-    // not blank the other four (readJson already degrades, but fetchQuotaUsage
-    // and fetchMyWorkspaces can still reject on a network error).
+    // not blank the other four (fetchMyApps / fetchQuotaUsage are strict reads
+    // that reject on failure; the rest can still reject on a network error).
     void Promise.allSettled([
       loadUsage(),
       loadBilling(),
@@ -279,8 +298,11 @@ export function ConsoleAppShell({
     collapseAllGroups: tShell("sidebar.collapseAllGroups"),
   };
 
+  const usageNumbers = typeof usage === "object" ? usage : null;
   const usagePct =
-    usage.total > 0 ? Math.round((usage.used / usage.total) * 100) : 0;
+    usageNumbers && usageNumbers.total > 0
+      ? Math.round((usageNumbers.used / usageNumbers.total) * 100)
+      : 0;
   /* The DS nav's footer slot is a fixed 64px block, so the token-usage card is
    * rebuilt compact (one label row + a progress bar) instead of the old
    * three-row card, which would overflow it. Hidden while collapsed — there is
@@ -293,10 +315,17 @@ export function ConsoleAppShell({
           {tShell("tokenCard.title")}
         </span>
         <span className="shrink-0 tabular-nums">
-          {usage.used.toLocaleString()} / {usage.total.toLocaleString()}
+          {usageNumbers
+            ? `${usageNumbers.used.toLocaleString()} / ${usageNumbers.total.toLocaleString()}`
+            : usage === "unavailable"
+              ? tShell("tokenCard.unavailable")
+              : usage === "uncovered"
+                ? tShell("tokenCard.uncovered")
+                : "—"}
         </span>
       </div>
-      <Progress value={usagePct} />
+      {/* 只有拿到真实读数才画进度条：没有数字的状态画一根空条就是在造假。 */}
+      {usageNumbers ? <Progress value={usagePct} /> : null}
     </div>
   );
 
@@ -308,57 +337,49 @@ export function ConsoleAppShell({
   // No notification source is wired yet — render the drawer's own empty state
   // rather than invented alerts.
   const drawerNotifs: DrawerNotif[] = [];
-  const settingsRows: Array<[string, string]> = [
-    [
-      tDrawer("settings.rows.theme.label"),
-      tDrawer("settings.rows.theme.value"),
-    ],
-    [
-      tDrawer("settings.rows.density.label"),
-      tDrawer("settings.rows.density.value"),
-    ],
-    [
-      tDrawer("settings.rows.sessionTimeout.label"),
-      tDrawer("settings.rows.sessionTimeout.value"),
-    ],
-    [
-      tDrawer("settings.rows.auditRetention.label"),
-      tDrawer("settings.rows.auditRetention.value"),
-    ],
-  ];
+  /* 「系统设置」抽屉已删（2026-08-30）：它没有任何入口（header 的齿轮直接去
+   * /settings），而它的四行值全是编出来的词条——会话超时/审计保留与 /settings
+   * 的真实默认值还互相矛盾。主题/密度的真实状态在 header 的偏好面板里。 */
   const drawerLabels = {
-    notificationsTitle: tDrawer("notifications.title"),
-    settingsTitle: tDrawer("settings.title"),
+    title: tDrawer("notifications.title"),
     markAllRead: tDrawer("notifications.markAllRead"),
     openCenter: tShell("drawer.openCenter"),
     close: tDrawer("close"),
   };
 
-  // ── App Center — BFF-driven, enriched with i18n labels ──
-  const apps: ConsoleApp[] = useMemo(
+  // ── App Center：产品磁贴来自 BFF，板块入口来自导航配置 ──
+  const moduleEntries: AppCenterModuleEntry[] = useMemo(
     () =>
-      appEntries.map((entry) => ({
-        id: entry.id,
-        name: tShell(`apps.${entry.id}.name`),
-        desc: tShell(`apps.${entry.id}.desc`),
-        icon: entry.icon,
-        tone: entry.tone,
-        target: entry.target,
-        ...(entry.openVela ? { openVela: true as const } : {}),
+      appCenterModuleTiles.map((tile) => ({
+        id: tile.id,
+        icon: tile.icon,
+        href: tile.href,
+        name: tShell(`apps.${tile.id}.name`),
+        desc: tShell(`apps.${tile.id}.desc`),
       })),
-    [appEntries, tShell],
+    [tShell],
   );
   const appCenterLabels = {
     title: tShell("appcenter.title"),
     desc: tShell("appcenter.desc"),
-    shortcutTag: tShell("appcenter.shortcutTag", { count: apps.length }),
-    enter: tShell("appcenter.enter"),
+    shortcutTag: tShell("appcenter.shortcutTag", {
+      count: (productTiles?.length ?? 0) + moduleEntries.length,
+    }),
+    productsTitle: tShell("appcenter.products.title"),
+    productsDesc: tShell("appcenter.products.desc"),
+    productsEmpty: tShell("appcenter.products.empty"),
+    productsBrowse: tShell("appcenter.products.browse"),
+    productsUnavailable: tShell("appcenter.products.unavailable"),
+    trialing: tShell("appcenter.products.trialing"),
+    modulesTitle: tShell("appcenter.modules.title"),
+    modulesDesc: tShell("appcenter.modules.desc"),
   };
 
-  const openApp = (app: ConsoleApp) => {
+  /* 站内入口：切回控制台视图再路由。登记了主页的产品不经这里——AppCenter 直接
+   * 开新标签。 */
+  const openInConsole = (href: string) => {
     setView("console");
-    navigate(app.target);
-    // app.openVela:Varda 已迁独立仓,入口暂不生效(重构后恢复)。
+    navigate(href);
   };
 
   if (status === "loading") {
@@ -435,8 +456,10 @@ export function ConsoleAppShell({
           <main className={CONTENT_SCROLL} {...{ [CONTENT_SCROLL_ATTR]: "" }}>
             <ShellPageContainer>
               <AppCenter
-                apps={apps}
-                onOpen={openApp}
+                products={productTiles}
+                productsFailed={productsFailed}
+                modules={moduleEntries}
+                onNavigate={openInConsole}
                 labels={appCenterLabels}
               />
             </ShellPageContainer>
@@ -469,13 +492,11 @@ export function ConsoleAppShell({
         </div>
       )}
 
-      {drawer && (
+      {drawer === "notifications" && (
         <TemplateDrawer
-          type={drawer}
           onClose={() => setDrawer(null)}
           onNavigate={navigate}
           notifications={drawerNotifs}
-          settingsRows={settingsRows}
           labels={drawerLabels}
         />
       )}

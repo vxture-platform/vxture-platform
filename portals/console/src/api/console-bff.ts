@@ -522,16 +522,27 @@ export async function unlinkMember(memberId: string) {
   }
 }
 
-export interface AppEntry {
-  id: string;
-  icon: string;
-  tone: string;
-  target: string;
-  openVela?: boolean;
+/**
+ * 应用中心磁贴：当前工作空间实际持有的产品（BFF `GET /api/me/apps`）。
+ * 2026-08-30 起不再是写死的目录——控制台自己的板块入口归 config/navigation.ts。
+ */
+export interface ProductAppTile {
+  /** product_code——磁贴身份，产品改名不变。 */
+  code: string;
+  name: string;
+  nick: string | null;
+  iconUrl: string | null;
+  /** 产品主页（product_webhooks.home_url）；未登记为 null，此时落到 /subscription。 */
+  homeUrl: string | null;
+  status: "active" | "trialing";
+  planName: string;
+  tier: string | null;
 }
 
-export async function fetchMyApps(): Promise<AppEntry[]> {
-  return readJson<AppEntry[]>(withTenant("/api/me/apps"), []);
+/* strict：应用中心要分得清「没订阅任何产品」（空态）和「后端挂了」（故障），
+ * 两者给用户的动作完全不同；回落成空数组会把故障演成干净的空态。 */
+export async function fetchMyApps(): Promise<ProductAppTile[]> {
+  return readJsonStrict<ProductAppTile[]>(withTenant("/api/me/apps"));
 }
 
 export async function fetchMySubscriptions(): Promise<ConsoleSubscription[]> {
@@ -896,13 +907,11 @@ export interface ConsoleQuotaUsage {
   aiCredit: ConsoleQuotaMetric;
 }
 
-const EMPTY_QUOTA_METRIC: ConsoleQuotaMetric = { used: 0, limit: 0 };
-
+/* strict（2026-08-30）：原先失败回落 used:0/limit:0，在工作台与头部面板上会
+ * 渲染成一个像真的「0 / 0」，把「读不到」伪装成「没有额度」。消费方
+ * （DashboardPage / ConsoleAppShell → TenantPanel）各自呈现不可用态。 */
 export async function fetchQuotaUsage(): Promise<ConsoleQuotaUsage> {
-  return readJson<ConsoleQuotaUsage>("/api/subscription/quota-usage", {
-    storage: EMPTY_QUOTA_METRIC,
-    aiCredit: EMPTY_QUOTA_METRIC,
-  });
+  return readJsonStrict<ConsoleQuotaUsage>("/api/subscription/quota-usage");
 }
 
 /**
@@ -2239,12 +2248,12 @@ export interface ConsoleTenantVerificationState {
   history: ConsoleVerification[];
 }
 
+/* strict（2026-08-30）：原先失败回落成 "unverified"，认证页会照常放开表单、
+ * 徽章写「未认证」——把一次故障演成一个可以重新提交的干净状态。 */
 export async function fetchTenantVerification(): Promise<ConsoleTenantVerificationState> {
-  return readJson<ConsoleTenantVerificationState>("/api/verification/tenant", {
-    status: "unverified",
-    latest: null,
-    history: [],
-  });
+  return readJsonStrict<ConsoleTenantVerificationState>(
+    "/api/verification/tenant",
+  );
 }
 
 /** 提交企业认证;409(审核中)/403(无权限)/400(校验)报文透传。 */

@@ -111,6 +111,9 @@ export function DashboardPage() {
   const [invoicesLoading, setInvoicesLoading] = useState(true);
   const [subscriptions, setSubscriptions] = useState<ConsoleSubscription[]>([]);
   const [quota, setQuota] = useState<ConsoleQuotaUsage | null>(null);
+  /* fetchQuotaUsage 是 strict 读（失败即 reject，2026-08-30）：把「读不到」和
+   * 「还没读」分开——前者要在卡片上明说，不能和 0% 或 — 混在一起。 */
+  const [quotaUnavailable, setQuotaUnavailable] = useState(false);
   const [orders, setOrders] = useState<MyOrder[]>([]);
 
   useEffect(() => {
@@ -131,7 +134,13 @@ export function DashboardPage() {
       fetchMyOrders(),
     ]).then(([subs, q, ord]) => {
       if (subs.status === "fulfilled") setSubscriptions(subs.value);
-      if (q.status === "fulfilled") setQuota(q.value);
+      if (q.status === "fulfilled") {
+        setQuota(q.value);
+        setQuotaUnavailable(false);
+      } else {
+        setQuota(null);
+        setQuotaUnavailable(true);
+      }
       if (ord.status === "fulfilled") setOrders(ord.value);
     });
   }, [session.tenant?.id]);
@@ -167,7 +176,8 @@ export function DashboardPage() {
     },
     {
       label: t("stats.quota.label"),
-      value: quotaPct ?? "—",
+      value:
+        quotaPct ?? (quotaUnavailable ? t("stats.quota.unavailable") : "—"),
       aside: <Icon name="chart-bar" size="sm" fallback="info" />,
     },
     {
