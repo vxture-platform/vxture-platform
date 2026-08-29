@@ -192,6 +192,9 @@ const READINESS_LABELS: Record<ReadinessStatus, string> = {
   not_configured: "未配置",
 };
 
+/** 产品级的中性态：目录里有、没有任何客户端。与渠道级的「未配置」是两个词。 */
+const NOT_ONBOARDED_LABEL = "未接入";
+
 function livenessTone(status: LivenessStatus): StatusBadgeTone {
   if (status === "healthy") return "success";
   if (status === "not_configured") return "neutral";
@@ -397,7 +400,15 @@ function toCsvRow(row: HealthRow): string[] {
   const base = [item.productName, item.productCode, LAYER_LABEL[item.layer]];
   const channelName = row.kind === "product" ? "stable" : row.channel;
   if (!item.onboarded) {
-    return [...base, channelName, "未接入", "未接入", "", "", ""];
+    return [
+      ...base,
+      channelName,
+      NOT_ONBOARDED_LABEL,
+      NOT_ONBOARDED_LABEL,
+      "",
+      "",
+      "",
+    ];
   }
   const channel = channelOf(row);
   if (!channel.clientId) {
@@ -846,7 +857,7 @@ export default function ServiceMonitorPage() {
                   if (!r.item.onboarded) {
                     return (
                       <StatusBadge tone="neutral" dot>
-                        未接入
+                        {NOT_ONBOARDED_LABEL}
                       </StatusBadge>
                     );
                   }
@@ -869,7 +880,7 @@ export default function ServiceMonitorPage() {
                   if (!r.item.onboarded) {
                     return (
                       <StatusBadge tone="neutral" dot>
-                        未接入
+                        {NOT_ONBOARDED_LABEL}
                       </StatusBadge>
                     );
                   }
