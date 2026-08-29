@@ -13,22 +13,24 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Icon,
-  Progress,
   ShellBootScreen,
   ShellPageContainer,
   ShellSidebarFrame,
   ShellSidebarNav,
+  useTheme,
+  type Density,
   type ShellNavSection,
 } from "@vxture/design-system";
 import { writeNavCollapsed } from "@vxture-platform/shared";
 import { useAdminSession } from "@/features/session/AdminSessionProvider";
+import { fetchNotificationLogs } from "@/api/admin-bff";
+import type { NotificationLogRecord } from "@/entities/console";
 import {
   adminWorkspaces,
   getAdminNavigationItemByPath,
   getAdminWorkspaceByPath,
 } from "@/config/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AdminHeader, type AdminHeaderViewOption } from "../header/AdminHeader";
 import type { NavSearchEntry } from "../header/useAdminSearch";
 import type { ShellView, ShellDrawerType } from "./shell/types";
@@ -40,6 +42,58 @@ import { TemplateDrawer, type DrawerNotif } from "./TemplateDrawer";
  * 继续拿类名当选择器，类名以后可以随便改。与 console 同一处理。 */
 const CONTENT_SCROLL = "min-w-0 flex-1 scroll-smooth overflow-y-auto";
 const CONTENT_SCROLL_ATTR = "data-content-scroll";
+
+/* ── 通知抽屉：数据源是 support.notification_logs ──
+ * 抽屉里原先是两条写死的演示通知（"高风险操作待审批 · 12 分钟前"之类），每个页面
+ * 都能点开看见，却从未对应任何一条记录。2026-08-30 改读 GET /api/notification-logs
+ * ——平台通知的投递台账（邮件/短信/站内/Webhook，含失败与退回），最近几条；
+ * "前往消息中心"落到同一张台账的完整页。没有的时候就是空态，不补假行。 */
+const DRAWER_NOTIF_LIMIT = 8;
+const NOTIFICATION_CENTER_HREF = "/notification-logs";
+/** 投递状态 → 抽屉行语气：failed/bounced 要人管；queued 还在路上；其余是回执。 */
+const NOTIF_LEVEL: Record<string, DrawerNotif["level"]> = {
+  failed: "danger",
+  bounced: "danger",
+  queued: "warning",
+};
+/** 渠道 → Phosphor 类名。抽屉行的图标仍走字体图标，与 TemplateDrawer 同一套。 */
+const NOTIF_ICON: Record<string, string> = {
+  email: "ph-envelope",
+  sms: "ph-chat-text",
+  inapp: "ph-bell",
+  webhook: "ph-webhooks-logo",
+  push: "ph-device-mobile",
+};
+
+function formatNotifTime(value: string, locale: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString(locale, {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/* ── 设置抽屉：两行都读当前状态 ──
+ * 主题模式与密度来自 ThemeProvider（header 的偏好面板改的就是这一份，跨门户由
+ * platform-browser 持久化）。原先是四条写死的词条——"跟随系统 / 默认 / 会话超时
+ * 30 分钟 / 审计日志保留 180 天"；后两项在 admin.settings 里根本没有对应的配置行
+ * （seed 只有 operator.mfa.policy），数字是编的，2026-08-30 摘掉。 */
+const THEME_LABEL_KEY = {
+  system: "themeSystem",
+  light: "themeLight",
+  dark: "themeDark",
+} as const;
+const DENSITY_LABEL_KEY: Record<
+  Density,
+  "densityCompact" | "densityDefault" | "densityComfy"
+> = {
+  compact: "densityCompact",
+  default: "densityDefault",
+  comfortable: "densityComfy",
+};
 
 function ShellFrame({
   children,
@@ -54,12 +108,36 @@ function ShellFrame({
   const tNav = useTranslations("navigation");
   const tShell = useTranslations("shell");
   const tDrawer = useTranslations("drawer");
+  const tCommon = useTranslations("common");
+  const locale = useLocale();
+  const { mode: themeMode, density } = useTheme();
 
   /* 初始值由服务端从 cookie 读出后传入，首帧即最终态。写死 false 再在 effect
    * 里纠正，会让刷新时导航"先展开再收起"闪一下——localStorage 对服务端不可见，
    * 那个时序问题无法在客户端解决。 */
   const [navCollapsed, setNavCollapsed] = useState(initialNavCollapsed);
   const [drawer, setDrawer] = useState<ShellDrawerType | null>(null);
+  /* 只在通知抽屉打开时拉，关掉就丢：这是抽屉不是收件箱，台账没有已读态可维护。
+   * `null` = 还没回来，与"回来了但是空"分开画。没有 notification:log.read 能力的
+   * 操作员拿到 403，readJson 落回 []——对他们抽屉就是空的，不报错。 */
+  const [notifLogs, setNotifLogs] = useState<NotificationLogRecord[] | null>(
+    null,
+  );
+  const closeDrawer = () => {
+    setDrawer(null);
+    setNotifLogs(null);
+  };
+
+  useEffect(() => {
+    if (drawer !== "notifications") return;
+    let active = true;
+    void fetchNotificationLogs().then((rows) => {
+      if (active) setNotifLogs(rows.slice(0, DRAWER_NOTIF_LIMIT));
+    });
+    return () => {
+      active = false;
+    };
+  }, [drawer]);
 
   // hydrate persisted UI state (client-only, avoids SSR mismatch)
   useEffect(() => {
@@ -145,62 +223,42 @@ function ShellFrame({
     [navSections],
   );
 
-  /* 侧栏底部卡片 · 占位重点指标（待接真实平台健康度 BFF）。
-   * DS 导航的 footer 槽是固定 64px，原先的三行卡片会溢出，重建成"一行标签 +
-   * 一条进度"。收起态不渲染——轨道宽度放不下标签。 */
-  const healthPct = 99;
-  const sidebarFooter = navCollapsed ? null : (
-    <div className="flex w-full flex-col justify-center gap-2xs px-2xs">
-      <div className="flex items-center gap-2xs text-label-sm text-muted-foreground">
-        <Icon name="gauge" size="xs" fallback="placeholder" />
-        <span className="min-w-0 flex-1 truncate">
-          {tShell("metricCard.title")}
-        </span>
-        <span className="shrink-0 tabular-nums">{healthPct}%</span>
-      </div>
-      <Progress value={healthPct} />
-    </div>
-  );
+  /* 侧栏底部原先有一条"平台健康度 99%"的进度——`healthPct = 99` 写死，没有任何
+   * 健康度数据源（TD-036：平台无健康检查/事件记录表），却挂在每一页上。
+   * 2026-08-30 摘掉，footer 槽留空；有真数据源时再回来。 */
 
-  // ── Drawer 占位数据（demo，待接真实消息中心 / 系统设置）──
-  const drawerNotifs: DrawerNotif[] = [
-    {
-      level: "danger",
-      icon: "ph-warning-octagon",
-      title: tDrawer("notifications.items.audit.title"),
-      meta: tDrawer("notifications.items.audit.meta"),
-      href: "/approval-center",
-    },
-    {
-      level: "info",
-      icon: "ph-ticket",
-      title: tDrawer("notifications.items.ticket.title"),
-      meta: tDrawer("notifications.items.ticket.meta"),
-      href: "/tickets",
-    },
-  ];
+  const drawerNotifs: DrawerNotif[] = (notifLogs ?? []).map((log) => {
+    const channelKey = `notifications.channels.${log.channel}`;
+    const statusKey = `notifications.statuses.${log.status}`;
+    return {
+      id: log.id,
+      level: NOTIF_LEVEL[log.status] ?? "info",
+      icon: NOTIF_ICON[log.channel] ?? "ph-bell",
+      title: log.subject?.trim() || log.templateCode,
+      meta: [
+        tDrawer.has(channelKey) ? tDrawer(channelKey) : log.channel,
+        tDrawer.has(statusKey) ? tDrawer(statusKey) : log.status,
+        log.recipient,
+        formatNotifTime(log.createdAt, locale),
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      href: NOTIFICATION_CENTER_HREF,
+    };
+  });
   const settingsRows: Array<[string, string]> = [
-    [
-      tDrawer("settings.rows.theme.label"),
-      tDrawer("settings.rows.theme.value"),
-    ],
+    [tDrawer("settings.rows.theme.label"), tShell(THEME_LABEL_KEY[themeMode])],
     [
       tDrawer("settings.rows.density.label"),
-      tDrawer("settings.rows.density.value"),
-    ],
-    [
-      tDrawer("settings.rows.sessionTimeout.label"),
-      tDrawer("settings.rows.sessionTimeout.value"),
-    ],
-    [
-      tDrawer("settings.rows.auditRetention.label"),
-      tDrawer("settings.rows.auditRetention.value"),
+      tShell(DENSITY_LABEL_KEY[density]),
     ],
   ];
   const drawerLabels = {
     notificationsTitle: tDrawer("notifications.title"),
     settingsTitle: tDrawer("settings.title"),
-    markAllRead: tDrawer("notifications.markAllRead"),
+    loading: tCommon("loading"),
+    emptyTitle: tDrawer("notifications.empty.title"),
+    emptyDescription: tDrawer("notifications.empty.description"),
     openCenter: tDrawer("openCenter"),
     close: tDrawer("close"),
   };
@@ -296,7 +354,6 @@ function ShellFrame({
             storageKeyPrefix="vx-admin-nav"
             linkComponent={Link}
             labels={sidebarLabels}
-            footer={sidebarFooter}
           />
         </ShellSidebarFrame>
         <main className={CONTENT_SCROLL} {...{ [CONTENT_SCROLL_ATTR]: "" }}>
@@ -307,9 +364,11 @@ function ShellFrame({
       {drawer && (
         <TemplateDrawer
           type={drawer}
-          onClose={() => setDrawer(null)}
+          onClose={closeDrawer}
           onNavigate={navigate}
           notifications={drawerNotifs}
+          notificationsLoading={notifLogs === null}
+          notificationCenterHref={NOTIFICATION_CENTER_HREF}
           settingsRows={settingsRows}
           labels={drawerLabels}
         />

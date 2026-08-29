@@ -30,10 +30,6 @@
     "slotRole": "角色",
     "slotLevel": "用户等级",
     "slotLocked": "其他奖章 · 待解锁",
-    "metricCard": {
-      "title": "平台健康度",
-      "meta": "服务可用率 99.2%"
-    },
     "sidebar": {
       "expandNav": "展开导航",
       "collapseNav": "收起导航",
@@ -2050,40 +2046,34 @@
     "openCenter": "前往消息中心",
     "notifications": {
       "title": "消息中心",
-      "markAllRead": "全部已读",
-      "items": {
-        "audit": {
-          "title": "高风险操作待审批",
-          "meta": "审批中心 · 12 分钟前"
-        },
-        "service": {
-          "title": "服务可用率低于阈值",
-          "meta": "服务监控 · 1 小时前"
-        },
-        "ticket": {
-          "title": "新增待处理工单 6 条",
-          "meta": "工单中心 · 今日"
-        }
+      "empty": {
+        "title": "暂无通知",
+        "description": "最近没有通知投递记录。"
+      },
+      "channels": {
+        "email": "邮件",
+        "sms": "短信",
+        "inapp": "站内",
+        "webhook": "Webhook",
+        "push": "推送"
+      },
+      "statuses": {
+        "queued": "排队中",
+        "sent": "已发送",
+        "delivered": "已送达",
+        "opened": "已打开",
+        "failed": "失败",
+        "bounced": "退回"
       }
     },
     "settings": {
       "title": "系统设置",
       "rows": {
         "theme": {
-          "label": "默认主题",
-          "value": "跟随系统"
+          "label": "主题模式"
         },
         "density": {
-          "label": "界面密度",
-          "value": "默认"
-        },
-        "sessionTimeout": {
-          "label": "会话超时",
-          "value": "30 分钟"
-        },
-        "auditRetention": {
-          "label": "审计日志保留",
-          "value": "180 天"
+          "label": "界面密度"
         }
       }
     }

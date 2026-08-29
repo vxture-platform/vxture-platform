@@ -30,10 +30,6 @@
     "slotRole": "Role",
     "slotLevel": "Level",
     "slotLocked": "Badge · locked",
-    "metricCard": {
-      "title": "Platform health",
-      "meta": "Availability 99.2%"
-    },
     "sidebar": {
       "expandNav": "Expand navigation",
       "collapseNav": "Collapse navigation",
@@ -2050,40 +2046,34 @@
     "openCenter": "Open message center",
     "notifications": {
       "title": "Message center",
-      "markAllRead": "Mark all read",
-      "items": {
-        "audit": {
-          "title": "High-risk action awaiting approval",
-          "meta": "Approval center · 12 min ago"
-        },
-        "service": {
-          "title": "Service availability below threshold",
-          "meta": "Service monitor · 1 hour ago"
-        },
-        "ticket": {
-          "title": "6 new tickets pending",
-          "meta": "Ticket center · Today"
-        }
+      "empty": {
+        "title": "No notifications",
+        "description": "No notification deliveries recently."
+      },
+      "channels": {
+        "email": "Email",
+        "sms": "SMS",
+        "inapp": "In-app",
+        "webhook": "Webhook",
+        "push": "Push"
+      },
+      "statuses": {
+        "queued": "Queued",
+        "sent": "Sent",
+        "delivered": "Delivered",
+        "opened": "Opened",
+        "failed": "Failed",
+        "bounced": "Bounced"
       }
     },
     "settings": {
       "title": "System settings",
       "rows": {
         "theme": {
-          "label": "Default theme",
-          "value": "System"
+          "label": "Theme"
         },
         "density": {
-          "label": "Density",
-          "value": "Default"
-        },
-        "sessionTimeout": {
-          "label": "Session timeout",
-          "value": "30 min"
-        },
-        "auditRetention": {
-          "label": "Audit retention",
-          "value": "180 days"
+          "label": "Density"
         }
       }
     }

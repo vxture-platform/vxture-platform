@@ -129,11 +129,17 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  *
  * 2026-08-31 admin 3266 → 3234：技能市场页改读 Runos 能力目录时整页重写，文案抽进
  *   `skillsPage` 命名空间（zh-CN / en-US 同步），空桩时代的硬编码随页一起消失。
+ *
+ * 2026-08-31 admin 3234 → 3225（rebase 后实测；分支上原为 3510 → 3501）：首页与外壳去 mock。首页摘掉"待接入 / 暂无数据"补位行、
+ *   Token 调用量前三卡、周期系数拼出来的"版本更新 N 次"，少了几条硬编码；外壳的
+ *   通知抽屉（原先两条写死的演示通知）改读投递台账、设置抽屉改读主题/密度状态，
+ *   新增文案全走 `t()`（drawer.notifications.empty/channels/statuses），
+ *   零新增硬编码。棘轮随实数收紧。
  */
 const BASELINE = {
   console: 32,
   website: 40,
-  admin: 3234,
+  admin: 3225,
   opera: 1819,
   accounts: 264,
 };
