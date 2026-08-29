@@ -64,8 +64,9 @@ const nextConfig = {
     webpackBuildWorker: false,
   },
   env: {
-    NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY:
-      process.env.NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY ?? "",
+    // console 不渲染 Turnstile：登录与绑手机都跳到 accounts.vxture.com 上做。此前这里
+    // 透传过 NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY，源码里没有任何消费方，只会让
+    // 读配置的人以为 console 也在解 widget（2026-08-29 白名单排查时确实被误导过）。
     // 首次补齐页的法务链接指门户站（console 没有 /legal 路由）。缺省生产域：
     // compose 未注入时（本地 dev）也不至于拼出相对 404。
     NEXT_PUBLIC_WEBSITE_URL:
