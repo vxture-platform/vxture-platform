@@ -1070,10 +1070,7 @@ function TenantSubscriptionsTab({
   const tShared = useTranslations();
   if (!subscriptions.length) {
     return (
-      <EmptyState
-        title="暂无订阅"
-        description="该租户名下没有订阅记录。"
-      />
+      <EmptyState title="暂无订阅" description="该租户名下没有订阅记录。" />
     );
   }
 
@@ -1284,11 +1281,7 @@ function TenantRiskTab({ tenant }: { tenant: TenantOperationDetailRecord }) {
   );
 }
 
-function TenantTicketsTab({
-  tenant,
-}: {
-  tenant: TenantOperationDetailRecord;
-}) {
+function TenantTicketsTab({ tenant }: { tenant: TenantOperationDetailRecord }) {
   const locale = useLocale();
   if (!tenant.tickets.length) {
     return (

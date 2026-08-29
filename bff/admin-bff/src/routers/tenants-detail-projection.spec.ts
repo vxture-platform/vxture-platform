@@ -152,13 +152,21 @@ const TICKET_ROW = {
 };
 
 /** 每条 SQL 一个只属于它的锚：主投影先判，因为它的相关子查询里也提到了别的表。 */
-function route(sql: string, overrides: Partial<Record<string, unknown[]>> = {}) {
-  if (sql.includes("from tenancy.tenants t")) return overrides.base ?? [BASE_ROW];
-  if (sql.includes("as membership_id")) return overrides.members ?? [MEMBER_ROW];
-  if (sql.includes("product.plans pl")) return overrides.subscriptions ?? [SUB_ROW];
-  if (sql.includes("usage_summary_months")) return overrides.usage ?? [USAGE_ROW];
+function route(
+  sql: string,
+  overrides: Partial<Record<string, unknown[]>> = {},
+) {
+  if (sql.includes("from tenancy.tenants t"))
+    return overrides.base ?? [BASE_ROW];
+  if (sql.includes("as membership_id"))
+    return overrides.members ?? [MEMBER_ROW];
+  if (sql.includes("product.plans pl"))
+    return overrides.subscriptions ?? [SUB_ROW];
+  if (sql.includes("usage_summary_months"))
+    return overrides.usage ?? [USAGE_ROW];
   if (sql.includes("support.audit_logs")) return overrides.audit ?? [AUDIT_ROW];
-  if (sql.includes("from support.tickets k")) return overrides.tickets ?? [TICKET_ROW];
+  if (sql.includes("from support.tickets k"))
+    return overrides.tickets ?? [TICKET_ROW];
   return undefined;
 }
 
@@ -318,9 +326,9 @@ describe("GET /api/tenants/:id detail projection", () => {
       route(sql, { subscriptions: [{ ...SUB_ROW, status: "past_due" }] }),
     );
     const router = new TenantsRouter(ro.pool, noDbPool());
-    await expect(
-      router.getTenant(makeReq(MANAGE), TENANT_ID),
-    ).rejects.toThrow(/Unknown subscription status/);
+    await expect(router.getTenant(makeReq(MANAGE), TENANT_ID)).rejects.toThrow(
+      /Unknown subscription status/,
+    );
   });
 });
 

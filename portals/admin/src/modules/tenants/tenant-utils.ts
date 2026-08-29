@@ -134,7 +134,9 @@ export function subscriptionStatusLabel(
   return "已取消";
 }
 
-export function subscriptionKindLabel(kind: TenantOperationSubscription["kind"]) {
+export function subscriptionKindLabel(
+  kind: TenantOperationSubscription["kind"],
+) {
   if (kind === "trial") return "试用";
   if (kind === "free") return "免费";
   return "付费";
@@ -176,7 +178,9 @@ export function auditResultLabel(result: TenantOperationAuditEvent["result"]) {
  * 配额水位百分比。没有配额池（limit 为 null）返回 null——「不知道」不是「满了」，
  * 旧实现把它画成 100% 的实心条。
  */
-export function usagePercent(metric: TenantOperationUsageMetric): number | null {
+export function usagePercent(
+  metric: TenantOperationUsageMetric,
+): number | null {
   if (metric.quotaLimit === null) return null;
   const used = metric.quotaUsed ?? 0;
   if (metric.quotaLimit <= 0) return used > 0 ? 100 : 0;

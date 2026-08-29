@@ -606,9 +606,10 @@ export class TenantsRouter {
     const [members, subscriptions, usage, auditEvents, tickets] =
       await Promise.all([
         this.pool.query<TenantMemberRow>(TENANT_DETAIL_MEMBERS_SQL, [tenantId]),
-        this.pool.query<TenantSubscriptionRow>(TENANT_DETAIL_SUBSCRIPTIONS_SQL, [
-          tenantId,
-        ]),
+        this.pool.query<TenantSubscriptionRow>(
+          TENANT_DETAIL_SUBSCRIPTIONS_SQL,
+          [tenantId],
+        ),
         this.pool.query<TenantUsageRow>(TENANT_DETAIL_USAGE_SQL, [tenantId]),
         this.pool.query<TenantAuditRow>(TENANT_DETAIL_AUDIT_SQL, [tenantId]),
         this.pool.query<TenantTicketRow>(TENANT_DETAIL_TICKETS_SQL, [tenantId]),
@@ -827,8 +828,16 @@ function mapOperationSubscriptionRow(
     productNames: row.product_names ?? [],
     planName: row.plan_name ?? null,
     planVersion: row.version_no ?? null,
-    kind: assertDomain(row.subscription_kind, SUBSCRIPTION_KINDS, "subscription kind"),
-    status: assertDomain(row.status, SUBSCRIPTION_STATUSES, "subscription status"),
+    kind: assertDomain(
+      row.subscription_kind,
+      SUBSCRIPTION_KINDS,
+      "subscription kind",
+    ),
+    status: assertDomain(
+      row.status,
+      SUBSCRIPTION_STATUSES,
+      "subscription status",
+    ),
     cycleUnit: assertDomain(row.cycle_unit, CYCLE_UNITS, "cycle unit"),
     cycleCount: toCount(row.cycle_count) || 1,
     payAmount: row.pay_amount === null ? null : toMoney(row.pay_amount),
