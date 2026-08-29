@@ -147,6 +147,13 @@ const OIDC_FUTURE_APP_HASH_KEYS = new Set([
 
 const LEGACY_BANNED_PATTERNS = [
   {
+    id: "env/no-turnstile-testing-keys-in-production",
+    pattern: /^CF_TURNSTILE_ALLOW_TESTING_KEYS\s*=\s*(?:true|1|yes|on)\s*$/imu,
+    paths: [`${WORKER_DIR}`],
+    message:
+      "CF_TURNSTILE_ALLOW_TESTING_KEYS=true makes the verifier accept Cloudflare dummy-key results (hostname=example.com, no action). Dev only; never on a production box.",
+  },
+  {
     id: "env/no-env-production-reference",
     pattern: /\.env\.production/u,
     paths: ["docs", `${WORKER_DIR}/scripts/12-generate-env-files.sh`],
