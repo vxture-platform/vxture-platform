@@ -49,5 +49,11 @@ check csv_contains "xaccounts.vxture.com,console.vxture.com" accounts.vxture.com
 check csv_contains "Accounts.VXTURE.com" accounts.vxture.com && ok "csv_contains case-insensitive" || bad "csv_contains case"
 check csv_contains "" accounts.vxture.com && bad "empty csv should not contain" || ok "empty csv contains nothing"
 
+# csv_covers_host：与校验器 isAllowedHostname 同一条规则。
+[ "$(csv_covers_host "accounts.vxture.com,console.vxture.com" accounts.vxture.com)" = "accounts.vxture.com" ] && ok "covers_host exact hit" || bad "covers_host exact"
+[ "$(csv_covers_host "vxture.com,console.vxture.com,ruyin.ai" accounts.vxture.com)" = "vxture.com" ] && ok "covers_host apex suffix hit (reports the apex)" || bad "covers_host apex"
+check csv_covers_host "console.vxture.com,ruyin.ai" accounts.vxture.com && bad "covers_host false positive" || ok "covers_host: sibling subdomain does not cover"
+check csv_covers_host "xture.com" accounts.vxture.com && bad "covers_host suffix must be on a dot boundary" || ok "covers_host: suffix only on dot boundary"
+
 rm -f "$f"
 exit $fail
