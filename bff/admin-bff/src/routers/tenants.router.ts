@@ -3,10 +3,13 @@
  * @package @vxture/bff-admin
  *
  * Description: 平台租户运营读接口，接 tenancy.tenants（18-schema）。
- *   列表 + 详情共用同一投影：tenancy.tenants join tenant_profiles（展示 / 联系字段）、
+ *   列表 + 详情共用同一标量投影：tenancy.tenants join tenant_profiles（展示 / 联系字段）、
  *   account.users(+user_profiles) 取 owner 名 / 邮箱、tenant_memberships 聚合成员数、
- *   kyc.tenant_verifications 取实名审核时间戳。营收 / token / 订阅等跨域字段（billing/
- *   metering/product）此读路径不覆盖，按契约给零值 / 空数组占位。
+ *   kyc.tenant_verifications 取实名审核时间戳，外加按 tenant_id 相关子查询取的跨域计数
+ *   （metering.subscriptions / product.plan_components / billing.payments / support.tickets /
+ *   admin.risk_records / session.auth_sessions）。详情再挂五段明细数组（成员 / 订阅 /
+ *   当月用量 / 未结工单 / 审计事件），列表不带——2026-08-30 之前这些字段全是字面占位
+ *   （0 / "未设置" / []），混在一份库里读出来的响应里，读者分不出哪个是量出来的。
  *
  * @author AI-Generated
  * @date 2026-07-04
@@ -35,12 +38,20 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
+import { SUBSCRIPTION_STATUSES } from "@vxture-platform/shared";
 import { RequireStepUp } from "../auth/step-up.decorator";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import type {
   RequestContext,
+  TenantOperationAuditEvent,
+  TenantOperationDetailRecord,
+  TenantOperationMember,
   TenantOperationRecord,
   TenantOperationStatus,
+  TenantOperationSubscription,
+  TenantOperationTicket,
+  TenantOperationUsageMetric,
+  TenantRiskLevel,
   TenantVerificationStatus,
 } from "../types/console.types";
 
@@ -149,23 +160,19 @@ export class TenantsRouter {
     return this.reviewVerification(req, id, "rejected", reason);
   }
 
+  /**
+   * GET /api/tenants/:id
+   * 响应：TenantOperationDetailRecord = 列表投影 + members / subscriptions / usage /
+   * auditEvents / tickets 五段明细（各自的口径见对应 SQL 常量的注释）。
+   */
   @Get(":id")
   async getTenant(
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
-  ): Promise<TenantOperationRecord> {
+  ): Promise<TenantOperationDetailRecord> {
     assertCanManageTenants(req);
     const tenantId = await this.resolveTenantId(id);
-
-    const { rows } = await this.pool.query<TenantOperationRow>(
-      TENANT_DETAIL_SQL,
-      [tenantId],
-    );
-    const row = rows[0];
-    if (!row) {
-      throw new NotFoundException("Tenant not found");
-    }
-    return mapTenantRow(row);
+    return this.loadTenant(tenantId);
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -190,7 +197,7 @@ export class TenantsRouter {
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
     @Body() body: UpdateTenantBody,
-  ): Promise<TenantOperationRecord> {
+  ): Promise<TenantOperationDetailRecord> {
     assertCanManageTenants(req);
     const tenantId = await this.resolveTenantId(id);
 
@@ -329,7 +336,7 @@ export class TenantsRouter {
   async suspendTenant(
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
-  ): Promise<TenantOperationRecord> {
+  ): Promise<TenantOperationDetailRecord> {
     assertCanManageTenantLifecycle(req);
     const tenantId = await this.resolveTenantId(id);
 
@@ -357,7 +364,7 @@ export class TenantsRouter {
   async resumeTenant(
     @Req() req: Request & RequestContext,
     @Param("id") id: string,
-  ): Promise<TenantOperationRecord> {
+  ): Promise<TenantOperationDetailRecord> {
     assertCanManageTenantLifecycle(req);
     const tenantId = await this.resolveTenantId(id);
 
@@ -580,7 +587,13 @@ export class TenantsRouter {
   }
 
   // ── 读回助手（复用现有只读投影，返回操作后最新状态）───────────────────────────
-  private async loadTenant(tenantId: string): Promise<TenantOperationRecord> {
+  /**
+   * 详情 = 标量投影（与列表同一条 SQL）+ 五段明细。先拿主行判 404，再并发打五条
+   * 明细——它们互不依赖，串行只是白等；只读池，不需要同一连接。
+   */
+  private async loadTenant(
+    tenantId: string,
+  ): Promise<TenantOperationDetailRecord> {
     const { rows } = await this.pool.query<TenantOperationRow>(
       TENANT_DETAIL_SQL,
       [tenantId],
@@ -589,7 +602,27 @@ export class TenantsRouter {
     if (!row) {
       throw new NotFoundException("Tenant not found");
     }
-    return mapTenantRow(row);
+
+    const [members, subscriptions, usage, auditEvents, tickets] =
+      await Promise.all([
+        this.pool.query<TenantMemberRow>(TENANT_DETAIL_MEMBERS_SQL, [tenantId]),
+        this.pool.query<TenantSubscriptionRow>(
+          TENANT_DETAIL_SUBSCRIPTIONS_SQL,
+          [tenantId],
+        ),
+        this.pool.query<TenantUsageRow>(TENANT_DETAIL_USAGE_SQL, [tenantId]),
+        this.pool.query<TenantAuditRow>(TENANT_DETAIL_AUDIT_SQL, [tenantId]),
+        this.pool.query<TenantTicketRow>(TENANT_DETAIL_TICKETS_SQL, [tenantId]),
+      ]);
+
+    return {
+      ...mapTenantRow(row),
+      members: members.rows.map(mapOperationMemberRow),
+      subscriptions: subscriptions.rows.map(mapOperationSubscriptionRow),
+      usage: usage.rows.map(mapUsageRow),
+      auditEvents: auditEvents.rows.map(mapAuditRow),
+      tickets: tickets.rows.map(mapTicketRow),
+    };
   }
 
   private async loadTenantMember(
@@ -708,8 +741,7 @@ function mapTenantRow(row: TenantOperationRow): TenantOperationRecord {
       verifiedStatus === "verified"
         ? toIsoOrNull(row.verification_reviewed_at)
         : null,
-    // riskLevel：退役 tenant_setting 无后继，默认 normal（同 tickets 口径）。
-    riskLevel: "normal",
+    riskLevel: normalizeRiskLevel(row.risk_level),
     region,
     industry: row.industry ?? "未设置",
     scale: row.scale ?? "未设置",
@@ -718,35 +750,157 @@ function mapTenantRow(row: TenantOperationRow): TenantOperationRecord {
     contactName: row.contact_name ?? ownerName,
     contactPhone: row.contact_phone ?? "",
     createdAt: toIso(row.created_at),
-    // lastActiveAt：无活跃度事件源，用 updated_at 作近似。
-    lastActiveAt: toIso(row.updated_at),
+    lastActiveAt: toIsoOrNull(row.last_active_at),
     memberCount: toCount(row.member_count),
     activeMemberCount: toCount(row.active_member_count),
-    // 以下跨域聚合（billing/metering/product/support）此读路径不覆盖，按契约占位。
-    adminCount: 0,
-    subscriptionCount: 0,
-    productCount: 0,
-    monthlyRevenue: 0,
-    monthlyCost: 0,
-    grossMarginRate: 0,
-    tokenUsed: 0,
-    tokenQuota: 0,
-    ticketOpenCount: 0,
-    satisfaction: 0,
-    sla: "未设置",
-    tags: [],
+    adminCount: toCount(row.admin_count),
+    subscriptionCount: toCount(row.subscription_count),
+    productCount: toCount(row.product_count),
+    monthlyRevenue: toMoney(row.month_revenue),
+    totalRevenue: toMoney(row.total_revenue),
+    ticketOpenCount: toCount(row.ticket_open_count),
     notes: row.description ?? "",
-    members: [],
-    subscriptions: [],
-    usage: [],
-    modelPolicies: [],
-    auditEvents: [],
-    tickets: [],
   };
 }
 
+// 2026-08-30 之前这里写死 "normal"（退役 tenant_setting 无后继）。现在从 admin.risk_records
+// 派生：没有未复核的记录就是 normal；CHECK 只放行三个值，第四个值说明契约破了，抛出比
+// 静默降成 normal 好——后者把一次契约破裂伪装成「没有风险」。
+function normalizeRiskLevel(value: string | null): TenantRiskLevel {
+  if (value === null) return "normal";
+  if (value === "normal" || value === "follow_up" || value === "high") {
+    return value;
+  }
+  throw new Error(`Unknown risk level from DB: ${value}`);
+}
+
+// numeric(12,2) 经 pg 出来是字符串；两位小数是列定义，四舍五入只是去掉浮点尾巴。
+function toMoney(value: string | number | null): number {
+  if (value === null || value === undefined) return 0;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+}
+
+// pg 对 numeric 给字符串、对 bigint 也给字符串；null 保持 null（「没有配额池」≠「配额为 0」）。
+function toNullableNumber(value: string | number | null): number | null {
+  if (value === null || value === undefined) return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function assertDomain<T extends string>(
+  value: string,
+  domain: readonly T[],
+  what: string,
+): T {
+  const hit = domain.find((item) => item === value);
+  if (!hit) throw new Error(`Unknown ${what} from DB: ${value}`);
+  return hit;
+}
+
+const SUBSCRIPTION_KINDS = ["paid", "trial", "free"] as const;
+const CYCLE_UNITS = ["day", "week", "month", "year", "perpetual"] as const;
+const AUDIT_RESULTS = ["success", "failure", "denied"] as const;
+const TICKET_PRIORITIES = ["p0", "p1", "p2", "p3"] as const;
+
+function mapOperationMemberRow(row: TenantMemberRow): TenantOperationMember {
+  return {
+    id: row.membership_id,
+    accountCode: row.account ?? "",
+    name: row.display_name ?? row.account ?? "",
+    email: row.email ?? "",
+    role: row.role_name ?? row.role_code ?? "",
+    roleCode: row.role_code ?? "",
+    // 查询已过滤 removed；CHECK 只剩 active/suspended。
+    status: row.status === "suspended" ? "suspended" : "active",
+    joinedAt: toIso(row.created_at),
+    lastActiveAt: toIsoOrNull(row.last_active_at),
+    lastActiveIp: row.last_active_ip ?? null,
+  };
+}
+
+function mapOperationSubscriptionRow(
+  row: TenantSubscriptionRow,
+): TenantOperationSubscription {
+  return {
+    id: row.id,
+    orderNo: row.order_no ?? null,
+    productNames: row.product_names ?? [],
+    planName: row.plan_name ?? null,
+    planVersion: row.version_no ?? null,
+    kind: assertDomain(
+      row.subscription_kind,
+      SUBSCRIPTION_KINDS,
+      "subscription kind",
+    ),
+    status: assertDomain(
+      row.status,
+      SUBSCRIPTION_STATUSES,
+      "subscription status",
+    ),
+    cycleUnit: assertDomain(row.cycle_unit, CYCLE_UNITS, "cycle unit"),
+    cycleCount: toCount(row.cycle_count) || 1,
+    payAmount: row.pay_amount === null ? null : toMoney(row.pay_amount),
+    currency: row.currency ?? "CNY",
+    autoRenew: Boolean(row.auto_renew),
+    startedAt: toIso(row.start_at),
+    endsAt: toIsoOrNull(row.end_at),
+    nextRenewalAt: toIsoOrNull(row.next_renewal_at),
+  };
+}
+
+function mapUsageRow(row: TenantUsageRow): TenantOperationUsageMetric {
+  return {
+    metricKey: row.metric_key,
+    unit: row.unit ?? null,
+    monthUsage: toCount(row.month_amount),
+    quotaLimit: toNullableNumber(row.quota_limit),
+    quotaUsed: toNullableNumber(row.quota_used),
+  };
+}
+
+function mapAuditRow(row: TenantAuditRow): TenantOperationAuditEvent {
+  return {
+    id: row.id,
+    action: row.action,
+    // operator 有平台账号名；customer 有用户资料名 / 登录句柄；system / api 只剩 actor_type。
+    actor:
+      row.operator_name ??
+      row.customer_display_name ??
+      row.customer_account ??
+      row.actor_type,
+    at: toIso(row.created_at),
+    result: assertDomain(row.result, AUDIT_RESULTS, "audit result"),
+  };
+}
+
+// 只取未结工单（见 TENANT_OPEN_TICKET_STATUSES），所以只会落到 open / processing；
+// blocked / closed 两档留给 tickets.router 的全量口径。
+function mapTicketRow(row: TenantTicketRow): TenantOperationTicket {
+  return {
+    id: row.ticket_no,
+    title: row.title,
+    status:
+      row.status === "pending" || row.status === "in_progress"
+        ? "processing"
+        : "open",
+    priority: assertDomain(row.priority, TICKET_PRIORITIES, "ticket priority"),
+    updatedAt: toIso(row.updated_at),
+  };
+}
+
+// 「权益仍在」的订阅态：active / expiring（临近到期仍生效）/ trialing / overdue
+// （欠费宽限、权益仍在——语义见 @shared catalog-domains 与 status-tone.ts）。
+// suspended / expired / cancelled 三档权益已停，不进「订阅产品」计数。
+const IN_FORCE_SUBSCRIPTION_STATUSES = `('active','expiring','trialing','overdue')`;
+
+// 未结工单：support.tickets CHECK 七值里 resolved / closed / cancelled 是终态，其余四个
+// 都还有人要跟。与首页看板 ticket_in_progress + ticket_pending 的并集一致。
+const TENANT_OPEN_TICKET_STATUSES = `('open','pending','in_progress','reopened')`;
+
 // tenancy.tenants(软删 deleted_at) join tenant_profiles(1:1) + owner(account.users/user_profiles)
-// + 成员计数(tenant_memberships) + 最新实名审核(kyc.tenant_verifications)。
+// + 最新实名审核(kyc.tenant_verifications) + 一组按 tenant_id 的相关子查询（各自口径见行内注释）。
+// 列表 500 行 × 9 个相关子查询：每个都走 tenant_id 索引，运营台列表可承受；原来就有两个。
 const TENANT_SELECT = `
 select
   t.id,
@@ -776,7 +930,65 @@ select
   (
     select count(*) from tenancy.tenant_memberships m
     where m.tenant_id = t.id and m.status = 'active'
-  ) as active_member_count
+  ) as active_member_count,
+  -- 管理员 = 活跃成员里持 tenant 作用域 owner / manager 角色的人（seed-catalog ROLES：
+  -- owner / manager / member / readonly / guest，前两者是治理角色）。停用的成员不能管理，不计。
+  (
+    select count(*) from tenancy.tenant_memberships m
+    join access.roles r on r.id = m.role_id
+    where m.tenant_id = t.id and m.status = 'active'
+      and r.scope = 'tenant' and r.role_code in ('owner','manager')
+  ) as admin_count,
+  (
+    select count(*) from metering.subscriptions s
+    where s.tenant_id = t.id and s.deleted_at is null
+      and s.status in ${IN_FORCE_SUBSCRIPTION_STATUSES}
+  ) as subscription_count,
+  -- 产品数 = 上述订阅的套餐版本里 primary 组件（套餐卖的那个产品）去重；bundled 是
+  -- 随主产品搭售的配件，不单算一个「订阅产品」。
+  (
+    select count(distinct pcm.product_id)
+    from metering.subscriptions s
+    join product.plan_components pcm on pcm.plan_version_id = s.plan_version_id
+    where s.tenant_id = t.id and s.deleted_at is null
+      and s.status in ${IN_FORCE_SUBSCRIPTION_STATUSES}
+      and pcm.component_role = 'primary'
+  ) as product_count,
+  -- 本月收入 = 本自然月（库会话时区，与首页看板 dashboard-overview 同一 now()）内
+  -- billing.payments pay_status='paid' 的 paid_amount 合计。毛额：退款不冲减（看板也不冲），
+  -- refunding 态的支付不在 'paid' 里，自然不计。billing 按 tenant_id 结算，不必卷 workspace。
+  (
+    select coalesce(sum(pay.paid_amount), 0) from billing.payments pay
+    where pay.tenant_id = t.id and pay.pay_status = 'paid'
+      and pay.paid_at >= date_trunc('month', now())
+      and pay.paid_at <  date_trunc('month', now()) + interval '1 month'
+  ) as month_revenue,
+  (
+    select coalesce(sum(pay.paid_amount), 0) from billing.payments pay
+    where pay.tenant_id = t.id and pay.pay_status = 'paid'
+  ) as total_revenue,
+  (
+    select count(*) from support.tickets k
+    where k.tenant_id = t.id and k.deleted_at is null
+      and k.status in ${TENANT_OPEN_TICKET_STATUSES}
+  ) as ticket_open_count,
+  -- 风险档 = 未复核（reviewer_id is null，与风控页「待处置」同一判据）记录里最高的一档；
+  -- 没有未复核记录 → null → normal。复核过的记录视为已处置，不再抬高租户档位。
+  (
+    select rr.risk_level from admin.risk_records rr
+    where rr.tenant_id = t.id and rr.deleted_at is null and rr.reviewer_id is null
+    order by case rr.risk_level when 'high' then 0 when 'follow_up' then 1 else 2 end
+    limit 1
+  ) as risk_level,
+  -- 最近活跃 = 成员在 customer realm 的会话最近活动时刻（与账号页同源）。会话是
+  -- Redis 主存、OIDC 登录不落库，所以这里可能偏早或为 null——但它是量出来的，不再拿
+  -- updated_at 冒充。
+  (
+    select max(ses.last_active_at)
+    from session.auth_sessions ses
+    join tenancy.tenant_memberships m on m.user_id = ses.user_id
+    where m.tenant_id = t.id and m.status <> 'removed' and ses.realm = 'customer'
+  ) as last_active_at
 from tenancy.tenants t
 left join tenancy.tenant_profiles p on p.tenant_id = t.id
 left join lateral (
@@ -831,6 +1043,192 @@ interface TenantOperationRow {
   verification_reviewed_at: Date | string | null;
   member_count: string | number | null;
   active_member_count: string | number | null;
+  admin_count: string | number | null;
+  subscription_count: string | number | null;
+  product_count: string | number | null;
+  month_revenue: string | number | null;
+  total_revenue: string | number | null;
+  ticket_open_count: string | number | null;
+  risk_level: string | null;
+  last_active_at: Date | string | null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 详情五段明细（GET /:id 与写端点读回共用；列表不打这些）。$1 = tenant_id。
+// ─────────────────────────────────────────────────────────────────────────────
+
+// 成员明细 TENANT_DETAIL_MEMBERS_SQL 复用 /members 端点的 TENANT_MEMBER_SELECT，
+// 定义在那个常量之后（顶层模板串不能引用还没初始化的 const）。
+
+// 订阅：全部未软删的订阅（含已停 / 已取消，作为历史），权益仍在的排前面。
+// 产品名取套餐版本的 primary 组件（与 product_count 同口径），按 sort_order 排。
+const TENANT_DETAIL_SUBSCRIPTIONS_SQL = `
+select
+  s.id,
+  s.order_no,
+  s.status,
+  s.subscription_kind,
+  s.cycle_unit,
+  s.cycle_count,
+  s.pay_amount,
+  s.currency,
+  s.auto_renew,
+  s.start_at,
+  s.end_at,
+  s.next_renewal_at,
+  pl.plan_name,
+  pv.version_no,
+  prod.product_names
+from metering.subscriptions s
+left join product.plan_versions pv on pv.id = s.plan_version_id
+left join product.plans pl on pl.id = pv.plan_id
+left join lateral (
+  select array_agg(p.product_name order by pcm.sort_order asc, pcm.priority asc) as product_names
+  from product.plan_components pcm
+  join product.products p on p.id = pcm.product_id
+  where pcm.plan_version_id = s.plan_version_id and pcm.component_role = 'primary'
+) prod on true
+where s.tenant_id = $1 and s.deleted_at is null
+order by
+  case when s.status in ${IN_FORCE_SUBSCRIPTION_STATUSES} then 0 else 1 end,
+  s.start_at desc
+limit 100
+`;
+
+// 当月用量：按 metric_key 跨该租户所有 workspace / 产品聚合。
+//   month_amount：metering.usage_summary_months 当前自然月（YYYYMM，库会话时区）合计——
+//     看板口径，永不作计费依据（50_metering §9）；
+//   quota_limit / quota_used：活跃且未过期的 metering.quota_pools 合计（权益水位，按订阅
+//     锚定周期推进，不是自然月）。两者时间窗不同，契约里分开两个字段，不相除。
+//   unit：平台共享键查 platform_metrics，产品私有键查 product_metrics；都没有就 null。
+// 键集 = 两边的并集：有池没用量（刚开通）与有用量没池（池已退役）都要能看见。
+const TENANT_DETAIL_USAGE_SQL = `
+with ws as (
+  select w.id from tenancy.workspaces w
+  where w.tenant_id = $1 and w.deleted_at is null
+),
+month_usage as (
+  select um.metric_key, sum(um.total_amount) as month_amount
+  from metering.usage_summary_months um
+  join ws on ws.id = um.workspace_id
+  where um.period_month = to_char(now(), 'YYYYMM')
+  group by um.metric_key
+),
+pools as (
+  select qp.metric_key,
+         sum(qp.quota_limit) as quota_limit,
+         sum(qp.quota_used)  as quota_used
+  from metering.quota_pools qp
+  join ws on ws.id = qp.workspace_id
+  where qp.status = 'active'
+    and (qp.expires_at is null or qp.expires_at > now())
+  group by qp.metric_key
+),
+keys as (
+  select metric_key from month_usage
+  union
+  select metric_key from pools
+)
+select
+  k.metric_key,
+  coalesce(mu.month_amount, 0) as month_amount,
+  po.quota_limit,
+  po.quota_used,
+  coalesce(
+    pm.metric_unit,
+    (select max(x.metric_unit) from product.product_metrics x where x.metric_key = k.metric_key)
+  ) as unit
+from keys k
+left join month_usage mu on mu.metric_key = k.metric_key
+left join pools po on po.metric_key = k.metric_key
+left join product.platform_metrics pm on pm.metric_key = k.metric_key
+order by k.metric_key asc
+`;
+
+// 审计：support.audit_logs 按 tenant_id 取最近 20 条（按月分区，tenant_id+created_at 有索引）。
+// actor 解析与 audit-logs.router 同法：operator → admin.operator_account；customer 多补一层
+// account.users / user_profiles（这是租户视角，成员操作才是主角）；system / api 没有账号。
+const TENANT_DETAIL_AUDIT_SQL = `
+select
+  a.id,
+  a.action,
+  a.result,
+  a.actor_type,
+  a.created_at,
+  op.display_name  as operator_name,
+  cup.display_name as customer_display_name,
+  cu.account       as customer_account
+from support.audit_logs a
+left join admin.operator_account op
+  on op.id = a.actor_id and a.actor_type = 'operator'
+left join account.users cu
+  on cu.id = a.actor_id and a.actor_type = 'customer'
+left join account.user_profiles cup on cup.user_id = cu.id
+where a.tenant_id = $1
+order by a.created_at desc
+limit 20
+`;
+
+// 未结工单（与 ticket_open_count 同一过滤），先按优先级、再按最近更新。id 用可视码 ticket_no。
+const TENANT_DETAIL_TICKETS_SQL = `
+select
+  k.ticket_no,
+  k.title,
+  k.status,
+  k.priority,
+  k.updated_at
+from support.tickets k
+where k.tenant_id = $1 and k.deleted_at is null
+  and k.status in ${TENANT_OPEN_TICKET_STATUSES}
+order by
+  case k.priority when 'p0' then 0 when 'p1' then 1 when 'p2' then 2 else 3 end,
+  k.updated_at desc
+limit 50
+`;
+
+interface TenantSubscriptionRow {
+  id: string;
+  order_no: string | null;
+  status: string;
+  subscription_kind: string;
+  cycle_unit: string;
+  cycle_count: string | number | null;
+  pay_amount: string | number | null;
+  currency: string | null;
+  auto_renew: boolean;
+  start_at: Date | string | null;
+  end_at: Date | string | null;
+  next_renewal_at: Date | string | null;
+  plan_name: string | null;
+  version_no: number | null;
+  product_names: string[] | null;
+}
+
+interface TenantUsageRow {
+  metric_key: string;
+  month_amount: string | number | null;
+  quota_limit: string | number | null;
+  quota_used: string | number | null;
+  unit: string | null;
+}
+
+interface TenantAuditRow {
+  id: string;
+  action: string;
+  result: string;
+  actor_type: string;
+  created_at: Date | string | null;
+  operator_name: string | null;
+  customer_display_name: string | null;
+  customer_account: string | null;
+}
+
+interface TenantTicketRow {
+  ticket_no: string;
+  title: string;
+  status: string;
+  priority: string;
+  updated_at: Date | string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -924,6 +1322,8 @@ function mapMemberRow(row: TenantMemberRow): TenantMemberRecord {
     department: row.department ?? null,
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
+    lastActiveAt: toIsoOrNull(row.last_active_at),
+    lastActiveIp: row.last_active_ip ?? null,
   };
 }
 
@@ -950,7 +1350,9 @@ function mapVerificationRow(
   };
 }
 
-// tenancy.tenant_memberships join account.users(+user_profiles) + access.roles。
+// tenancy.tenant_memberships join account.users(+user_profiles) + access.roles
+// + session.auth_sessions 最近一条（customer realm；与账号页同源，2026-08-30 起——此前
+// 成员页拿 updated_at 冒充「最近活跃」）。
 // 复用 $1=tenant_id；调用方可追加 `order by …` 或 `and m.user_id = $2 …`。
 const TENANT_MEMBER_SELECT = `
 select
@@ -968,12 +1370,28 @@ select
   u.status       as user_status,
   up.display_name,
   r.role_code         as role_code,
-  r.role_name         as role_name
+  r.role_name         as role_name,
+  ls.last_active_at,
+  ls.last_active_ip
 from tenancy.tenant_memberships m
 left join account.users u on u.id = m.user_id
 left join account.user_profiles up on up.user_id = m.user_id
 left join access.roles r on r.id = m.role_id
+left join lateral (
+  select s.last_active_at, s.ip_address as last_active_ip
+  from session.auth_sessions s
+  where s.user_id = m.user_id and s.realm = 'customer'
+  order by s.last_active_at desc
+  limit 1
+) ls on true
 where m.tenant_id = $1
+`;
+
+// 详情 members[]：同一投影，过滤已移除、按加入时间排。
+const TENANT_DETAIL_MEMBERS_SQL = `${TENANT_MEMBER_SELECT}
+  and m.status <> 'removed'
+order by m.created_at asc
+limit 200
 `;
 
 // kyc.tenant_verifications join tenancy.tenants。调用方追加 where/order。
@@ -1039,6 +1457,8 @@ interface TenantMemberRow {
   display_name: string | null;
   role_code: string | null;
   role_name: string | null;
+  last_active_at: Date | string | null;
+  last_active_ip: string | null;
 }
 
 // 契约：GET /:id/members 与成员写端点的返回元素。
@@ -1058,6 +1478,9 @@ interface TenantMemberRecord {
   department: string | null;
   createdAt: string;
   updatedAt: string;
+  /** customer realm 最近会话活动；没有会话为 null（不用 updatedAt 冒充）。 */
+  lastActiveAt: string | null;
+  lastActiveIp: string | null;
 }
 
 interface TenantVerificationRow {

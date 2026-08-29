@@ -2,7 +2,6 @@ import type { StatusTone } from "@vxture-platform/shared";
 import type {
   TenantOperationAuditEvent,
   TenantOperationMember,
-  TenantOperationModelPolicy,
   TenantOperationRecord,
   TenantOperationSubscription,
   TenantOperationTicket,
@@ -119,35 +118,46 @@ export function verifiedLabel(status: TenantOperationRecord["verifiedStatus"]) {
 }
 
 export function memberStatusLabel(status: TenantOperationMember["status"]) {
-  if (status === "active") return "正常";
-  if (status === "invited") return "邀请中";
-  return "停用";
+  return status === "active" ? "正常" : "停用";
 }
 
+/** 七值与订阅列表页同一份措辞（SubscriptionsPage.subscriptionStatusLabel）。 */
 export function subscriptionStatusLabel(
   status: TenantOperationSubscription["status"],
 ) {
-  if (status === "active") return "生效";
-  if (status === "trial") return "试用";
-  if (status === "past_due") return "逾期";
-  return "取消";
+  if (status === "trialing") return "试用";
+  if (status === "active") return "已生效";
+  if (status === "expiring") return "即将到期";
+  if (status === "overdue") return "逾期";
+  if (status === "suspended") return "暂停";
+  if (status === "expired") return "已过期";
+  return "已取消";
 }
 
-export function modelPolicyStateLabel(
-  state: TenantOperationModelPolicy["state"],
+export function subscriptionKindLabel(
+  kind: TenantOperationSubscription["kind"],
 ) {
-  if (state === "effective") return "生效";
-  if (state === "limited") return "临界";
-  if (state === "disabled") return "停用";
-  return "未定义";
+  if (kind === "trial") return "试用";
+  if (kind === "free") return "免费";
+  return "付费";
 }
 
-export function policySourceLabel(
-  source: TenantOperationModelPolicy["source"],
+/** 订阅周期：`cycle_unit × cycle_count`，perpetual 没有倍数可言。 */
+export function subscriptionCycleLabel(
+  subscription: Pick<TenantOperationSubscription, "cycleUnit" | "cycleCount">,
 ) {
-  if (source === "product") return "产品策略";
-  if (source === "tenant") return "租户覆盖";
-  return "默认策略";
+  if (subscription.cycleUnit === "perpetual") return "永久";
+  const unit =
+    subscription.cycleUnit === "day"
+      ? "天"
+      : subscription.cycleUnit === "week"
+        ? "周"
+        : subscription.cycleUnit === "month"
+          ? "月"
+          : "年";
+  return subscription.cycleCount > 1
+    ? `每 ${subscription.cycleCount} ${unit}`
+    : `按${unit}`;
 }
 
 export function ticketStatusLabel(status: TenantOperationTicket["status"]) {
@@ -157,16 +167,24 @@ export function ticketStatusLabel(status: TenantOperationTicket["status"]) {
   return "完成";
 }
 
+/** 值域 = support.audit_logs.result（success / failure / denied）。 */
 export function auditResultLabel(result: TenantOperationAuditEvent["result"]) {
-  if (result === "success") return "完成";
-  if (result === "warning") return "关注";
-  return "风险";
+  if (result === "success") return "成功";
+  if (result === "failure") return "失败";
+  return "拒绝";
 }
 
-export function usagePercent(metric: TenantOperationUsageMetric) {
-  if (metric.quota === null) return 100;
-  if (metric.quota <= 0) return metric.used > 0 ? 100 : 0;
-  return Math.min(100, Math.round((metric.used / metric.quota) * 100));
+/**
+ * 配额水位百分比。没有配额池（limit 为 null）返回 null——「不知道」不是「满了」，
+ * 旧实现把它画成 100% 的实心条。
+ */
+export function usagePercent(
+  metric: TenantOperationUsageMetric,
+): number | null {
+  if (metric.quotaLimit === null) return null;
+  const used = metric.quotaUsed ?? 0;
+  if (metric.quotaLimit <= 0) return used > 0 ? 100 : 0;
+  return Math.min(100, Math.round((used / metric.quotaLimit) * 100));
 }
 
 export function tenantSearchText(tenant: TenantOperationRecord) {
@@ -184,10 +202,6 @@ export function tenantSearchText(tenant: TenantOperationRecord) {
     tenant.status,
     tenant.verifiedStatus,
     tenant.riskLevel,
-    ...tenant.tags,
-    ...tenant.subscriptions.map(
-      (item) => `${item.productName} ${item.releaseName} ${item.planName}`,
-    ),
   ]
     .join(" ")
     .toLowerCase();

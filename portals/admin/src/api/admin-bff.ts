@@ -55,6 +55,7 @@ import type {
   SubscriptionOperationDetailRecord,
   SubscriptionOperationRecord,
   TenantMemberRecord,
+  TenantOperationDetailRecord,
   TenantOperationRecord,
   TenantQuotaRecord,
   TenantUsageSummaryPage,
@@ -1863,11 +1864,25 @@ export interface UpdateTenantInput {
   postalCode?: string;
 }
 
+/**
+ * 详情投影（列表投影 + 成员 / 订阅 / 用量 / 审计 / 工单五段明细）。
+ * `tenantId` 收 id 或租户编码——BFF 两者都认。详情页此前拉整张列表再 find 一条，
+ * 明细数组只有这条路由才带（2026-08-30）。与 fetchSubscriptionOperation 同一形态。
+ */
+export async function fetchTenantOperation(
+  tenantId: string,
+): Promise<TenantOperationDetailRecord | null> {
+  return readJson<TenantOperationDetailRecord | null>(
+    `/api/tenants/${encodeURIComponent(tenantId)}`,
+    null,
+  );
+}
+
 export async function updateTenant(
   tenantId: string,
   payload: UpdateTenantInput,
-): Promise<TenantOperationRecord> {
-  return mutateJson<TenantOperationRecord>(
+): Promise<TenantOperationDetailRecord> {
+  return mutateJson<TenantOperationDetailRecord>(
     `/api/tenants/${encodeURIComponent(tenantId)}`,
     "PUT",
     payload,
@@ -1877,8 +1892,8 @@ export async function updateTenant(
 
 export async function suspendTenant(
   tenantId: string,
-): Promise<TenantOperationRecord> {
-  return mutateJson<TenantOperationRecord>(
+): Promise<TenantOperationDetailRecord> {
+  return mutateJson<TenantOperationDetailRecord>(
     `/api/tenants/${encodeURIComponent(tenantId)}/suspend`,
     "POST",
     undefined,
@@ -1888,8 +1903,8 @@ export async function suspendTenant(
 
 export async function resumeTenant(
   tenantId: string,
-): Promise<TenantOperationRecord> {
-  return mutateJson<TenantOperationRecord>(
+): Promise<TenantOperationDetailRecord> {
+  return mutateJson<TenantOperationDetailRecord>(
     `/api/tenants/${encodeURIComponent(tenantId)}/resume`,
     "POST",
     undefined,

@@ -36,7 +36,7 @@ import type { DataTableColumn, IconName } from "@vxture/design-system";
 import {
   changeTenantMemberRole,
   fetchTenantMembers,
-  fetchTenantOperations,
+  fetchTenantOperation,
   removeTenantMember,
   suspendTenantMember,
   updateTenant,
@@ -44,8 +44,8 @@ import {
 } from "@/api/admin-bff";
 import type {
   TenantMemberRecord,
+  TenantOperationDetailRecord,
   TenantOperationMember,
-  TenantOperationModelPolicy,
   TenantOperationRecord,
   TenantOperationSubscription,
   TenantOperationUsageMetric,
@@ -53,24 +53,24 @@ import type {
 import {
   AUDIT_RESULT_TONE,
   MEMBER_STATUS_TONE,
-  POLICY_STATE_TONE,
-  TENANT_SUBSCRIPTION_TONE,
   TICKET_STATUS_TONE,
 } from "@/modules/shared/tenant-tone";
+import { SUBSCRIPTION_OPERATION_TONE } from "@/modules/shared/status-tone";
 import { DetailSectionHeading } from "@/modules/shared/DetailSectionHeading";
 import { resolveIpLocation } from "@/shared/ip-location";
 import {
   auditResultLabel,
   formatDate,
+  formatDateTime,
   formatMoney,
   formatNumber,
   joinClasses,
   memberStatusLabel,
-  modelPolicyStateLabel,
   normalizeTenantRiskLevel,
-  policySourceLabel,
   riskLabel,
   statusLabel,
+  subscriptionCycleLabel,
+  subscriptionKindLabel,
   subscriptionStatusLabel,
   TENANT_RISK_TONE,
   TENANT_STATUS_TONE,
@@ -81,12 +81,13 @@ import {
 } from "./tenant-utils";
 import { useConfirmLabels } from "@/modules/shared/destructive";
 
+// 「模型授权」页签 2026-08-30 删除：模型用量归 Atlas，平台库没有这份数据，
+// 那一页从来只渲染过空表——一个永远为空的页签比没有页签更误导。
 type TenantTabId =
   | "info"
   | "members"
   | "subscriptions"
   | "usage"
-  | "models"
   | "risk"
   | "tickets";
 type MemberViewMode = "list" | "cards";
@@ -117,18 +118,19 @@ function toMemberView(record: TenantMemberRecord): TenantMemberView {
   return {
     id: record.membershipId,
     userId: record.userId,
-    ...(record.account ? { accountCode: record.account } : {}),
+    accountCode: record.account,
     name: record.name,
     email: record.email,
     role: record.roleName || record.roleCode || "成员",
+    roleCode: record.roleCode,
     roleId: record.roleId,
     // TenantMemberRecord.status = active | suspended | removed（removed 已在拉取时过滤）。
     status: record.status === "suspended" ? "suspended" : "active",
-    registeredAt: record.createdAt,
-    activatedAt: record.createdAt,
-    // 该读路径无活跃度事件源，用 updatedAt 近似「最近活跃」，无登录 IP。
-    lastActiveAt: record.updatedAt,
-    lastActiveIp: null,
+    joinedAt: record.createdAt,
+    // 2026-08-30 起 /members 带 session.auth_sessions 的最近活动；没有会话就是 null，
+    // 此前这里拿 updatedAt 冒充「最近活跃」。
+    lastActiveAt: record.lastActiveAt,
+    lastActiveIp: record.lastActiveIp,
   };
 }
 type TenantInfoDraft = {
@@ -144,7 +146,6 @@ const tenantTabs: Array<{ id: TenantTabId; label: string; icon: IconName }> = [
   { id: "members", label: "成员账号", icon: "user" },
   { id: "subscriptions", label: "订阅产品", icon: "star" },
   { id: "usage", label: "配额用量", icon: "graph" },
-  { id: "models", label: "模型授权", icon: "shield-check" },
   { id: "risk", label: "风控审计", icon: "table" },
   { id: "tickets", label: "工单备注", icon: "chat-circle" },
 ];
@@ -230,55 +231,24 @@ function isTenantInfoDirty(
   );
 }
 
-function isAgentSubscription(subscription: TenantOperationSubscription) {
-  const searchableText =
-    `${subscription.productName} ${subscription.releaseName} ${subscription.planName}`.toLowerCase();
-  return (
-    searchableText.includes("agent") ||
-    searchableText.includes("智能体") ||
-    searchableText.includes("ruyin")
-  );
-}
-
-function getTenantSubscriptionSummary(tenant: TenantOperationRecord) {
-  const knownSubscriptions =
-    tenant.subscriptions.length || tenant.subscriptionCount;
-  const agentCount = tenant.subscriptions.filter(isAgentSubscription).length;
-  const platformCount = Math.max(knownSubscriptions - agentCount, 0);
-
-  return { agentCount, platformCount };
-}
-
-function getActiveMonthCount(startedAt: string) {
-  const started = new Date(startedAt);
-  if (Number.isNaN(started.getTime())) return 1;
-
-  const now = new Date();
-  const monthCount =
-    (now.getFullYear() - started.getFullYear()) * 12 +
-    now.getMonth() -
-    started.getMonth() +
-    1;
-  return Math.max(monthCount, 1);
-}
-
-function getTenantCumulativeRevenue(tenant: TenantOperationRecord) {
-  const cumulativeRevenue = tenant.subscriptions.reduce(
-    (total, subscription) =>
-      total +
-      subscription.monthlyRevenue * getActiveMonthCount(subscription.startedAt),
-    0,
-  );
-
-  return cumulativeRevenue || tenant.monthlyRevenue;
-}
+/*
+ * 这里原来有三段派生：按产品名里有没有「agent / 智能体」猜「智能体 vs 平台」订阅数、
+ * 用「月收入 × 开通月数」造「累计收入」。2026-08-30 删掉——前者是字符串猜测，
+ * 后者是编出来的钱；累计收入现在由 BFF 从 billing.payments 实付合计给（totalRevenue）。
+ */
 
 function getMemberAccountCode(member: TenantOperationMember) {
-  return member.accountCode ?? member.email.split("@")[0] ?? "-";
+  return member.accountCode || "-";
 }
 
-function getMemberStatusTime(member: TenantOperationMember) {
-  return member.activatedAt ?? member.registeredAt ?? member.lastActiveAt;
+/** 订阅金额是每期实付；币种不是人民币时不套人民币格式。 */
+function formatSubscriptionAmount(
+  subscription: Pick<TenantOperationSubscription, "payAmount" | "currency">,
+) {
+  if (subscription.payAmount === null) return "-";
+  return subscription.currency === "CNY"
+    ? formatMoney(subscription.payAmount)
+    : `${formatNumber(subscription.payAmount)} ${subscription.currency}`;
 }
 
 function getMemberSearchText(member: TenantOperationMember) {
@@ -554,13 +524,8 @@ function TenantInfoTab({
         <p className="m-0 text-body-sm leading-relaxed font-semibold text-foreground">
           {tenant.notes}
         </p>
-        <div className="flex flex-wrap items-center gap-xs">
-          {tenant.tags.map((tag) => (
-            <StatusBadge key={tag} tone="brand" icon={false}>
-              {tag}
-            </StatusBadge>
-          ))}
-        </div>
+        {/* 原来下面挂一排 `tenant.tags`：契约里那个数组从来是空的，库里也没有
+            租户标签列（2026-08-30 随字段一起删）。 */}
       </section>
     </div>
   );
@@ -660,20 +625,17 @@ function useTenantMemberColumns(): DataTableColumn<TenantMemberView>[] {
       id: "status",
       header: tShared("columns.state"),
       align: "center",
-      cell: (member) => {
-        const statusTime = formatDate(getMemberStatusTime(member), locale);
-        return (
-          <TableTitleCell
-            title={
-              <StatusBadge tone={MEMBER_STATUS_TONE[member.status]}>
-                {memberStatusLabel(member.status)}
-              </StatusBadge>
-            }
-            description={statusTime}
-            tooltip={`注册激活时间 ${statusTime}`}
-          />
-        );
-      },
+      // 副题是加入时间（membership.created_at）；卡片视图同一读数带「加入时间」标签。
+      cell: (member) => (
+        <TableTitleCell
+          title={
+            <StatusBadge tone={MEMBER_STATUS_TONE[member.status]}>
+              {memberStatusLabel(member.status)}
+            </StatusBadge>
+          }
+          description={formatDate(member.joinedAt, locale)}
+        />
+      ),
     },
     {
       id: "lastActive",
@@ -728,7 +690,7 @@ function TenantMemberCards({
     <ListCardGrid aria-label="账号卡片">
       {members.map((member) => {
         const location = resolveIpLocation(member.lastActiveIp);
-        const statusTime = formatDate(getMemberStatusTime(member), locale);
+        const joinedAt = formatDate(member.joinedAt, locale);
 
         return (
           <MetricListCard
@@ -749,7 +711,7 @@ function TenantMemberCards({
               </>
             }
             metrics={[
-              { key: "registered", value: statusTime, label: "注册激活" },
+              { key: "joined", value: joinedAt, label: "加入时间" },
               {
                 key: "lastActive",
                 value: formatDate(member.lastActiveAt, locale),
@@ -838,9 +800,8 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
   const activeCount = members.filter(
     (member) => member.status === "active",
   ).length;
-  const invitedCount = members.filter(
-    (member) => member.status === "invited",
-  ).length;
+  // 「邀请中」计数原来也在这里：成员值域里从没有 invited（受邀未加入的人在
+  // invitations 表，不是成员），那枚标永远显示 0（2026-08-30 删）。
   const suspendedCount = members.filter(
     (member) => member.status === "suspended",
   ).length;
@@ -974,9 +935,6 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
           <StatusBadge tone={"success"}>
             活跃 {formatNumber(activeCount)}
           </StatusBadge>
-          <StatusBadge tone={"brand"}>
-            邀请 {formatNumber(invitedCount)}
-          </StatusBadge>
           <StatusBadge tone={"danger"}>
             停用 {formatNumber(suspendedCount)}
           </StatusBadge>
@@ -1002,7 +960,6 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
         >
           <option value="all">{tShared("filters.allStates")}</option>
           <option value="active">{tShared("status.generic.normal")}</option>
-          <option value="invited">邀请中</option>
           <option value="suspended">{tShared("actions.disable")}</option>
         </NativeSelect>
         <NativeSelect
@@ -1098,154 +1055,159 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
   );
 }
 
+/**
+ * 订阅页签。每张卡一条 metering.subscriptions：标题是套餐 primary 组件的产品名，
+ * 副题是购买单号（可视码；试用 / 免费 / 运营开通没有单号，退而显示开通方式）。
+ * 读数全是库里的字段——每期实付、周期、到期——不再折算「月收入」，也没有「席位」
+ * 「发布版本」（库里没有这两样，旧契约那两栏是占位）。
+ */
 function TenantSubscriptionsTab({
   subscriptions,
 }: {
   subscriptions: TenantOperationSubscription[];
 }) {
   const locale = useLocale();
+  const tShared = useTranslations();
+  if (!subscriptions.length) {
+    return (
+      <EmptyState title="暂无订阅" description="该租户名下没有订阅记录。" />
+    );
+  }
+
   return (
     <div className="grid min-w-0 gap-lg">
-      {subscriptions.map((subscription) => (
-        <MetricListCard
-          key={subscription.id}
-          icon="star"
-          title={subscription.productName}
-          description={subscription.releaseName}
-          tone={TENANT_SUBSCRIPTION_TONE[subscription.status]}
-          badges={
-            <StatusBadge tone={TENANT_SUBSCRIPTION_TONE[subscription.status]}>
-              {subscriptionStatusLabel(subscription.status)}
-            </StatusBadge>
-          }
-          metrics={[
-            {
-              key: "plan",
-              value: subscription.planName,
-              label: "发布版本",
-            },
-            {
-              key: "seats",
-              value: formatNumber(subscription.seats),
-              label: "席位",
-            },
-            {
-              key: "revenue",
-              value: formatMoney(subscription.monthlyRevenue),
-              label: "月收入",
-            },
-            {
-              key: "renews",
-              value: formatDate(subscription.renewsAt, locale),
-              label: "续费时间",
-            },
-          ]}
-        />
-      ))}
-    </div>
-  );
-}
-
-/**
- * 用量条的填充色。
- *
- * `Progress` 的填充写死 `bg-primary`、没有语气 prop，所以用子元素变体改它
- * ——这正是原来 `--usage-tone` 三个修饰类在做的事，只是不再经一层自定义属性。
- */
-const USAGE_TRACK_TONE: Record<TenantOperationUsageMetric["status"], string> = {
-  normal: "[&>*]:bg-success",
-  warning: "[&>*]:bg-warning",
-  danger: "[&>*]:bg-destructive",
-};
-
-function TenantUsageTab({ usage }: { usage: TenantOperationUsageMetric[] }) {
-  return (
-    <div className="grid min-w-0 gap-lg">
-      {usage.map((metric) => {
-        const percent = usagePercent(metric);
+      {subscriptions.map((subscription) => {
+        const planLabel = subscription.planName
+          ? `${subscription.planName}${
+              subscription.planVersion ? ` v${subscription.planVersion}` : ""
+            }`
+          : tShared("common.noPlanLinked");
         return (
-          <article
-            key={metric.code}
-            className="grid min-w-0 gap-md border-b border-dashed border-primary/10 pb-lg"
-          >
-            <header className="flex min-w-0 items-center justify-between gap-md">
-              <strong className="text-title-md font-extrabold text-foreground">
-                {metric.label}
-              </strong>
-              <span className="text-body-sm font-semibold text-primary-text">
-                {metric.trend}
-              </span>
-            </header>
-            <div className="flex min-w-0 items-baseline justify-between gap-md">
-              <b className="text-title-xl text-foreground">
-                {formatNumber(metric.used)}
-              </b>
-              <small className="text-body-sm font-semibold text-muted-foreground">
-                {metric.quota === null
-                  ? "不限量"
-                  : ` / ${formatNumber(metric.quota)} ${metric.unit}`}
-              </small>
-            </div>
-            {/* 原来是手搓的轨道 + 一个按百分比改宽度的 span，语气色靠
-                `--usage-tone` 三个修饰类给。DS `Progress` 的填充用位移不改宽度
-                （不触发布局），语气改由调用方给填充色。 */}
-            <Progress
-              value={percent}
-              aria-label={`${metric.label} 用量`}
-              className={USAGE_TRACK_TONE[metric.status]}
-            />
-          </article>
+          <MetricListCard
+            key={subscription.id}
+            icon="star"
+            title={
+              subscription.productNames.length
+                ? subscription.productNames.join(" / ")
+                : planLabel
+            }
+            description={`${subscription.orderNo ?? subscriptionKindLabel(subscription.kind)} · 开通 ${formatDate(subscription.startedAt, locale)}`}
+            tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
+            badges={
+              <>
+                <StatusBadge
+                  tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
+                >
+                  {subscriptionStatusLabel(subscription.status)}
+                </StatusBadge>
+                <Badge>{subscriptionKindLabel(subscription.kind)}</Badge>
+              </>
+            }
+            metrics={[
+              { key: "plan", value: planLabel, label: "套餐" },
+              {
+                key: "cycle",
+                value: subscriptionCycleLabel(subscription),
+                label: subscription.autoRenew ? "自动续费" : "手动续费",
+              },
+              {
+                key: "amount",
+                value: formatSubscriptionAmount(subscription),
+                label: "每期实付",
+              },
+              {
+                key: "period",
+                value: subscription.endsAt
+                  ? formatDate(subscription.endsAt, locale)
+                  : "不限期",
+                label: "到期",
+              },
+            ]}
+          />
         );
       })}
     </div>
   );
 }
 
-function TenantModelsTab({
-  policies,
-}: {
-  policies: TenantOperationModelPolicy[];
-}) {
-  const tShared = useTranslations();
-  const columns: DataTableColumn<TenantOperationModelPolicy>[] = [
-    {
-      id: "agent",
-      header: "智能体",
-      cell: (policy) => (
-        <TableTitleCell
-          title={policy.agentName}
-          description={policySourceLabel(policy.source)}
-        />
-      ),
-    },
-    { id: "product", header: "产品", cell: (policy) => policy.productName },
-    { id: "model", header: "模型", cell: (policy) => policy.modelCode },
-    {
-      id: "quota",
-      header: "配额",
-      align: "right",
-      cell: (policy) =>
-        `${formatNumber(policy.usedTokens)} / ${formatNumber(policy.quotaTokens)}`,
-    },
-    {
-      id: "state",
-      header: tShared("columns.state"),
-      align: "center",
-      cell: (policy) => (
-        <StatusBadge tone={POLICY_STATE_TONE[policy.state]}>
-          {modelPolicyStateLabel(policy.state)}
-        </StatusBadge>
-      ),
-    },
-  ];
+/**
+ * 配额水位条的填充色。
+ *
+ * `Progress` 的填充写死 `bg-primary`、没有语气 prop，所以用子元素变体改它
+ * ——这正是原来 `--usage-tone` 三个修饰类在做的事，只是不再经一层自定义属性。
+ * 语气按百分比在展示层定（≥100 满、≥80 临界）：契约里不再带一个派生的 status。
+ */
+const USAGE_TRACK_TONE = {
+  normal: "[&>*]:bg-success",
+  warning: "[&>*]:bg-warning",
+  danger: "[&>*]:bg-destructive",
+} as const;
+
+function usageTrackTone(percent: number): keyof typeof USAGE_TRACK_TONE {
+  if (percent >= 100) return "danger";
+  if (percent >= 80) return "warning";
+  return "normal";
+}
+
+/**
+ * 配额用量页签。每行一个 metric_key，两组读数来自两张表、两种时间窗，所以分开摆：
+ * 主读数是配额池水位（quota_pools，按订阅锚定周期推进），右上角是本自然月的
+ * 用量汇总（usage_summary_months）。没有池就没有水位条——「不知道」不画成满格。
+ */
+function TenantUsageTab({ usage }: { usage: TenantOperationUsageMetric[] }) {
+  if (!usage.length) {
+    return (
+      <EmptyState
+        title="暂无用量与配额"
+        description="该租户的工作空间本月没有用量汇总，也没有生效中的配额池。"
+      />
+    );
+  }
 
   return (
-    <DataTable
-      columns={columns}
-      rows={policies}
-      rowKey={(policy) => policy.id}
-      aria-label="模型授权"
-    />
+    <div className="grid min-w-0 gap-lg">
+      {usage.map((metric) => {
+        const percent = usagePercent(metric);
+        const unit = metric.unit ?? "";
+        return (
+          <article
+            key={metric.metricKey}
+            className="grid min-w-0 gap-md border-b border-dashed border-primary/10 pb-lg"
+          >
+            <header className="flex min-w-0 items-center justify-between gap-md">
+              <strong className="text-title-md font-extrabold text-foreground">
+                {metric.metricKey}
+              </strong>
+              <span className="text-body-sm font-semibold text-muted-foreground">
+                本月用量 {formatNumber(metric.monthUsage)} {unit}
+              </span>
+            </header>
+            <div className="flex min-w-0 items-baseline justify-between gap-md">
+              <b className="text-title-xl text-foreground">
+                {metric.quotaUsed === null
+                  ? "-"
+                  : formatNumber(metric.quotaUsed)}
+              </b>
+              <small className="text-body-sm font-semibold text-muted-foreground">
+                {metric.quotaLimit === null
+                  ? "未配置配额池"
+                  : ` / ${formatNumber(metric.quotaLimit)} ${unit}`}
+              </small>
+            </div>
+            {/* 原来是手搓的轨道 + 一个按百分比改宽度的 span，语气色靠
+                `--usage-tone` 三个修饰类给。DS `Progress` 的填充用位移不改宽度
+                （不触发布局），语气改由调用方给填充色。 */}
+            {percent === null ? null : (
+              <Progress
+                value={percent}
+                aria-label={`${metric.metricKey} 配额水位`}
+                className={USAGE_TRACK_TONE[usageTrackTone(percent)]}
+              />
+            )}
+          </article>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1256,7 +1218,7 @@ const RISK_TEXT_TONE: Record<string, string> = {
   high: "text-destructive-text",
 };
 
-function TenantRiskTab({ tenant }: { tenant: TenantOperationRecord }) {
+function TenantRiskTab({ tenant }: { tenant: TenantOperationDetailRecord }) {
   const locale = useLocale();
   return (
     <div className="grid min-w-0 grid-cols-1 gap-lg xl:grid-cols-3">
@@ -1302,8 +1264,9 @@ function TenantRiskTab({ tenant }: { tenant: TenantOperationRecord }) {
               }
               trail={
                 <span className="flex items-center gap-md">
+                  {/* 台账类到秒：同一天可能几十条，只显示日期分不出先后。 */}
                   <span className="whitespace-nowrap text-body-sm text-muted-foreground">
-                    {formatDate(event.at, locale)}
+                    {formatDateTime(event.at, locale)}
                   </span>
                   <StatusBadge tone={AUDIT_RESULT_TONE[event.result]}>
                     {auditResultLabel(event.result)}
@@ -1318,7 +1281,7 @@ function TenantRiskTab({ tenant }: { tenant: TenantOperationRecord }) {
   );
 }
 
-function TenantTicketsTab({ tenant }: { tenant: TenantOperationRecord }) {
+function TenantTicketsTab({ tenant }: { tenant: TenantOperationDetailRecord }) {
   const locale = useLocale();
   if (!tenant.tickets.length) {
     return (
@@ -1358,7 +1321,12 @@ function TenantTicketsTab({ tenant }: { tenant: TenantOperationRecord }) {
 
 export function TenantDetailPage({ tenantId }: { tenantId: string }) {
   const { toast } = useToast();
-  const [tenants, setTenants] = useState<TenantOperationRecord[]>([]);
+  const locale = useLocale();
+  // 详情走 GET /api/tenants/:id：明细数组（订阅 / 用量 / 审计 / 工单）只有这条路由
+  // 才带。此前这一页拉整张列表再 find 一条，列表投影里那些数组永远是空占位。
+  const [tenant, setTenant] = useState<TenantOperationDetailRecord | null>(
+    null,
+  );
   const [activeTab, setActiveTab] = useState<TenantTabId>("info");
   const [summaryExpanded, setSummaryExpanded] = useState(true);
   const [infoEditing, setInfoEditing] = useState(false);
@@ -1373,9 +1341,9 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
     let active = true;
     setLoading(true);
 
-    fetchTenantOperations()
-      .then((records) => {
-        if (active) setTenants(records);
+    fetchTenantOperation(tenantId)
+      .then((record) => {
+        if (active) setTenant(record);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -1384,15 +1352,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
     return () => {
       active = false;
     };
-  }, []);
-
-  const tenant = useMemo(
-    () =>
-      tenants.find(
-        (item) => item.id === tenantId || item.tenantCode === tenantId,
-      ),
-    [tenantId, tenants],
-  );
+  }, [tenantId]);
 
   useEffect(() => {
     if (!tenant) return;
@@ -1432,8 +1392,6 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
   const visibleInfoDraft = infoDraft ?? createTenantInfoDraft(tenant);
   const currentTenantId = tenant.id;
   const showVerificationReview = tenant.verifiedStatus !== "verified";
-  const subscriptionSummary = getTenantSubscriptionSummary(tenant);
-  const cumulativeRevenue = getTenantCumulativeRevenue(tenant);
 
   function handleInfoDraftChange<K extends keyof TenantInfoDraft>(
     field: K,
@@ -1469,11 +1427,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
     setSavingInfo(true);
     try {
       const updated = await updateTenant(currentTenantId, payload);
-      setTenants((records) =>
-        records.map((record) =>
-          record.id === currentTenantId ? updated : record,
-        ),
-      );
+      setTenant(updated);
       const nextDraft = createTenantInfoDraft(updated);
       setInfoDraft(nextDraft);
       setInfoBaseline(nextDraft);
@@ -1651,31 +1605,39 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                     <TenantKeyMetric
                       label="用户数量"
                       value={formatNumber(tenant.memberCount)}
-                      tag={`活跃 ${formatNumber(tenant.activeMemberCount)}`}
+                      tags={[
+                        `活跃 ${formatNumber(tenant.activeMemberCount)}`,
+                        `管理员 ${formatNumber(tenant.adminCount)}`,
+                      ]}
                     />
                     <TenantKeyMetric
                       label="订阅产品"
                       value={formatNumber(tenant.subscriptionCount)}
-                      tags={[
-                        `智能体${formatNumber(subscriptionSummary.agentCount)}个`,
-                        `平台${formatNumber(subscriptionSummary.platformCount)}个`,
-                      ]}
+                      tag={`产品 ${formatNumber(tenant.productCount)} 个`}
                     />
                   </section>
 
+                  {/* 「配额消耗 N token」那格 2026-08-30 拆了：token 用量在 Atlas，
+                      平台库没有，原来那格永远是 0。换成未结工单——support.tickets
+                      真有的数。 */}
                   <section
                     className="grid min-w-0 content-center gap-md"
-                    aria-label="用量和收入概要"
+                    aria-label="收入和工单概要"
                   >
-                    <TenantKeyMetric
-                      label="配额消耗"
-                      value={formatNumber(tenant.tokenUsed)}
-                      tag="token"
-                    />
                     <TenantKeyMetric
                       label="本月收入"
                       value={formatMoney(tenant.monthlyRevenue)}
-                      tag={`累计 ${formatMoney(cumulativeRevenue)}`}
+                      tag={`累计 ${formatMoney(tenant.totalRevenue)}`}
+                    />
+                    {/* 最近活跃只在真有会话记录时挂标；null 就不挂，不用占位词冒充。 */}
+                    <TenantKeyMetric
+                      label="未结工单"
+                      value={formatNumber(tenant.ticketOpenCount)}
+                      {...(tenant.lastActiveAt
+                        ? {
+                            tag: `最近活跃 ${formatDate(tenant.lastActiveAt, locale)}`,
+                          }
+                        : {})}
                     />
                   </section>
                 </>
@@ -1733,9 +1695,6 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
           </TabsContent>
           <TabsContent value="usage" className="min-w-0">
             <TenantUsageTab usage={tenant.usage} />
-          </TabsContent>
-          <TabsContent value="models" className="min-w-0">
-            <TenantModelsTab policies={tenant.modelPolicies} />
           </TabsContent>
           <TabsContent value="risk" className="min-w-0">
             <TenantRiskTab tenant={tenant} />
