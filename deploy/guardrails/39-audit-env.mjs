@@ -413,6 +413,15 @@ const ENV_FILE_RULES = [
       // confidential RP secret presented at the IdP token endpoint; missing �?
       // 401 invalid_client. Provisioned by scripts/27-provision-client-secrets.sh.
       "OIDC_CLIENT_SECRET",
+      // Runos capability catalog (admin「技能市场」read-only view, 2026-08-30).
+      // Missing → zod default localhost:3120 → every /api/runos/* answers 502
+      // RUNOS_UNAVAILABLE. Same failure mode ATLAS_API_URL once had here; that
+      // key predates this list and is caught by the example-vs-runtime diff
+      // instead. Must equal the value in .env.opera-bff.
+      "RUNOS_API_URL",
+      // opera's public origin — admin only builds the「去 opera 能力注册管理」link
+      // from it (/api/runos/management-entry). Missing → link to localhost:3040.
+      "OPERA_BASE_URL",
     ]),
   },
   {

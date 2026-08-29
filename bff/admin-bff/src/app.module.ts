@@ -25,6 +25,7 @@ import { PermissionMiddleware } from "./middleware/permission.middleware";
 import { AdminPermissionsRouter } from "./routers/admin-permissions.router";
 import { AdminRolesRouter } from "./routers/admin-roles.router";
 import { AtlasRouter } from "./routers/atlas.router";
+import { RunosRouter } from "./routers/runos.router";
 import { AnnouncementsRouter } from "./routers/announcements.router";
 import { AuditLogsRouter } from "./routers/audit-logs.router";
 import { AuthRouter } from "./routers/auth.router";
@@ -36,7 +37,6 @@ import { PlatformAdminsRouter } from "./routers/platform-admins.router";
 import { OperatorContactRouter } from "./routers/operator-contact.router";
 import { ApplicationsRouter } from "./routers/applications.router";
 import { ProductsRouter } from "./routers/products.router";
-import { SkillsRouter } from "./routers/skills.router";
 import { TicketsRouter } from "./routers/tickets.router";
 import { TenantsRouter } from "./routers/tenants.router";
 import { AccountsRouter } from "./routers/accounts.router";
@@ -71,13 +71,13 @@ import { SearchRouter } from "./routers/search.router";
     MeRouter,
     CapabilitiesRouter,
     AtlasRouter,
+    RunosRouter,
     AdminPermissionsRouter,
     AdminRolesRouter,
     AnnouncementsRouter,
     AuditLogsRouter,
     ApplicationsRouter,
     ProductsRouter,
-    SkillsRouter,
     TicketsRouter,
     TenantsRouter,
     AccountsRouter,

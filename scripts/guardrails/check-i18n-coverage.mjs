@@ -126,11 +126,14 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  *   客户 / 98.0% 满意度 / 2000+ 用户」，硬编码且无处渲染）带走了全部 14 条；/pricing
  *   改读 `GET /api/products/:code/plans` 后新增的三态文案与配额/功能词典全部走 `t()`，
  *   一条没进代码。
+ *
+ * 2026-08-31 admin 3266 → 3234：技能市场页改读 Runos 能力目录时整页重写，文案抽进
+ *   `skillsPage` 命名空间（zh-CN / en-US 同步），空桩时代的硬编码随页一起消失。
  */
 const BASELINE = {
   console: 32,
   website: 40,
-  admin: 3266,
+  admin: 3234,
   opera: 1819,
   accounts: 264,
 };

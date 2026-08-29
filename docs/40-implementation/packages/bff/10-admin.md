@@ -413,6 +413,25 @@ middleware 顺序：`auth → capabilities → router`
 
 ---
 
+### `/api/runos` — Runos 能力目录（只读）
+
+**需要能力：`capability:runos.read` 或 `capability:runos.manage`（任一即可，与 opera-bff 的 `assertCanRead` 同判据）**
+
+> admin「技能市场」（`/skills`）的数据源。所有接口透传到 Runos 的 `/capability/*` HTTP 面（`RUNOS_API_URL`，外部主机 worker-02），认证走 operator-OBO（product_250 M-1：会话 access token 换成 aud=runos 的短时管理令牌再转发，BFF 从不以自己的身份调上游）。
+> **只读**：owner 2026-08-30 裁定 admin 只看目录，注册 / 晋升 / 退役 / 认证留在 opera「能力注册」（opera-bff 自己的 `runos.router.ts`，两个 BFF 零交叉引用）。本路由刻意不留写路由骨架。
+> 每条读在出口按 `runos-contract.ts` 校验必有字段，缺了直接 502 `RUNOS_CONTRACT_FIELD_MISSING` 并点名字段（同 atlas 的 `atlas-contract.ts`）；上游业务错误按原状态码与错误体透传；上游不可达 502 `Runos is unavailable`。
+> 此前的 `/api/skills`（`skills.router.ts`）是返回字面量 `[]` 的空桩，2026-08-30 随本路由接入一并删除。
+
+**GET `/api/runos/capabilities?category=&tag=&tag=`** — 能力目录列表（`registry.capability` 整行：`capabilityId` / `primitiveType` / `providerId` / `ownerRef` / `title` / `displayName` / `admissionTier` / `category` / `tags` / `createdAt` / `updatedAt`）。`category` 精确匹配；`tag` 可重复、全部命中（AND），透传时保留重复参数。上游没有分页与关键字检索，页面在前端过滤。
+
+**GET `/api/runos/capabilities/:capabilityId`** — 单条详情，在列表字段之上多 `versions[]` / `aliases[]` / `endpoints[]` 三组关联（`versions[]` 带上游全量 include 的 `embedding`，本层不裁剪）。
+
+**GET `/api/runos/management-entry`** — `{ url }`：「去 opera 能力注册管理」的链接（`OPERA_BASE_URL` + `/capability/registry`）。不读上游，只回配置；与目录读同一道能力门。
+
+**运行时配置**：`RUNOS_API_URL`、`OPERA_BASE_URL` 两个键在 `deploy/.env.admin-bff.example` 登记，并被 `deploy/guardrails/39-audit-env.mjs` 列为 admin-bff 必填——不填则落回 zod 默认 `localhost`，前者让本路由全部 502，后者让链接指向 `localhost:3040`。
+
+---
+
 ### `/api/platform-admins` — 运营账号管理
 
 **需要能力：`platform.admin.manage`**
@@ -491,6 +510,7 @@ middleware 顺序：`auth → capabilities → router`
 | `platform.pricing.manage` | subscriptions / billing（与 tenant.manage 任一即可）                 |
 | `platform.product.manage` | products                                                             |
 | `platform.model.manage`   | model-platform                                                       |
+| `capability:runos.read`   | runos（只读目录；`capability:runos.manage` 亦可）                    |
 | `platform.admin.manage`   | platform-admins / admin-roles                                        |
 
 ---

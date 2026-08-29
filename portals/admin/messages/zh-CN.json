@@ -245,7 +245,7 @@
       },
       "skills": {
         "label": "技能市场",
-        "description": "注册和管理智能体可调用技能，配置上下线、端点和运行状态。"
+        "description": "Runos 已注册能力的只读目录；注册与管理在 opera「能力注册」。"
       },
       "billing": {
         "label": "账单中心",
@@ -1928,6 +1928,121 @@
     "boolean": {
       "yes": "是",
       "no": "否"
+    }
+  },
+  "skillsPage": {
+    "header": {
+      "title": "技能市场",
+      "description": "Runos 已注册能力的只读目录：连接器、执行器与技能。注册、晋升、退役与认证在 opera「能力注册」完成。",
+      "manageInOpera": "去 opera 能力注册管理"
+    },
+    "summary": {
+      "ariaLabel": "技能市场统计",
+      "total": "能力总数",
+      "totalHelp": "Runos 目录里已注册的能力，含所有准入档。",
+      "skills": "技能类",
+      "skillsHelp": "类型为 skill 的能力，可被智能体直接调用。",
+      "certified": "已认证 / 官方",
+      "certifiedHelp": "准入档为 certified 或 official 的能力。",
+      "categories": "分类数",
+      "categoriesHelp": "目录里实际出现的分类个数（Runos 15 选 1）。"
+    },
+    "filters": {
+      "ariaLabel": "能力筛选",
+      "searchPlaceholder": "搜索能力 ID、名称、提供方、负责人或标签…",
+      "count": "{count} 个能力",
+      "primitiveAria": "能力类型",
+      "allPrimitives": "全部类型",
+      "tierAria": "准入档",
+      "allTiers": "全部准入档",
+      "categoryAria": "分类",
+      "allCategories": "全部分类"
+    },
+    "primitive": {
+      "connector": "连接器",
+      "executor": "执行器",
+      "skill": "技能"
+    },
+    "tier": {
+      "experimental": "实验",
+      "certified": "已认证",
+      "official": "官方"
+    },
+    "category": {
+      "communication": "通信",
+      "crm": "客户关系",
+      "support": "客服支持",
+      "devops": "研发运维",
+      "security": "安全",
+      "finance": "财务",
+      "hr": "人事",
+      "commerce": "交易",
+      "marketing": "市场",
+      "data": "数据",
+      "documents": "文档",
+      "productivity": "效率",
+      "development": "开发",
+      "legal": "法务",
+      "other": "其他"
+    },
+    "columns": {
+      "capability": "能力",
+      "primitive": "类型",
+      "category": "分类",
+      "tier": "准入档",
+      "provider": "提供方",
+      "owner": "负责人",
+      "tags": "标签"
+    },
+    "actions": {
+      "menu": "{name} 的操作"
+    },
+    "empty": {
+      "title": "目录里还没有能力",
+      "description": "Runos 尚未注册任何能力。到 opera「能力注册」登记第一条。",
+      "filteredTitle": "没有符合筛选条件的能力",
+      "loadFailedTitle": "能力目录读取失败",
+      "loadFailedDescription": "未能从 Runos 读到目录：{message}"
+    },
+    "detail": {
+      "title": "能力详情",
+      "loading": "正在读取能力详情",
+      "loadingDescription": "正在从 Runos 读取版本、别名与端点。",
+      "loadFailed": "能力详情读取失败",
+      "fields": {
+        "capabilityId": "能力 ID",
+        "title": "运营名",
+        "displayName": "显示名（{locale}）",
+        "primitive": "类型",
+        "category": "分类",
+        "tier": "准入档",
+        "provider": "提供方",
+        "owner": "负责人",
+        "tags": "标签",
+        "createdAt": "注册时间"
+      },
+      "versions": {
+        "title": "版本",
+        "count": "{count} 个",
+        "version": "版本",
+        "state": "状态",
+        "digest": "内容摘要",
+        "createdAt": "创建时间",
+        "empty": "还没有版本。"
+      },
+      "aliases": {
+        "title": "别名",
+        "empty": "没有别名——这个能力还没有可解析的 stable。"
+      },
+      "endpoints": {
+        "title": "端点",
+        "count": "{count} 个",
+        "environment": "环境",
+        "baseUrl": "地址",
+        "version": "版本",
+        "state": "状态",
+        "empty": "还没有端点实例。"
+      }
     }
   },
   "drawer": {

@@ -579,19 +579,70 @@ export interface NotificationLogRecord {
   createdAt: string;
 }
 
-export interface SkillRecord {
-  id: string;
-  skillCode: string;
-  skillName: string;
-  description: string;
-  category: string;
-  endpointUrl: string | null;
-  version: string;
-  status: "active" | "disabled" | "draft";
-  invocations: number;
-  isSystem: boolean;
+/**
+ * Runos 能力目录（admin「技能市场」的数据源，只读；owner 2026-08-30 裁定管理留在
+ * opera「能力注册」）。逐字段照 runos prisma schema `registry.capability`，必有字段由
+ * admin-bff `runos-contract.ts` 在入口守——这里的可选标记只反映上游列带默认值
+ * （`displayName` 默认 `{}`、`tags` 默认 `[]`），不是"可能不发"。
+ */
+export interface RunosCapabilityRecord {
+  capabilityId: string;
+  /** `connector` / `executor` / `skill`。 */
+  primitiveType: string;
+  providerId: string;
+  ownerRef: string;
+  /** 运营名（身份）。 */
+  title: string;
+  /**
+   * 面向最终用户的名字，**按 locale 分键**（`{"zh-CN": "…", "en": "…"}`）。
+   * 是呈现不是身份：行标识、检索、审计一律认 `capabilityId`。
+   */
+  displayName?: Record<string, string>;
+  /** `experimental` / `certified` / `official`。 */
+  admissionTier: string;
+  /** 15 选 1，v0.5.0 起必填。 */
+  category?: string;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface RunosCapabilityVersionRecord {
+  capabilityId: string;
+  version: string;
+  state: string;
+  contract: Record<string, unknown>;
+  contentDigest: string;
+  createdAt: string;
+}
+
+export interface RunosCapabilityAliasRecord {
+  capabilityId: string;
+  alias: string;
+  version: string;
+  updatedAt: string;
+}
+
+export interface RunosEndpointInstanceRecord {
+  id: string;
+  capabilityId: string;
+  version: string;
+  environment: string;
+  baseUrl: string;
+  state: string;
+  createdAt: string;
+}
+
+/** 详情比列表多三组关联；列表上没有版本与端点（上游列表就是一句 `findMany`）。 */
+export interface RunosCapabilityDetailRecord extends RunosCapabilityRecord {
+  versions: RunosCapabilityVersionRecord[];
+  aliases: RunosCapabilityAliasRecord[];
+  endpoints: RunosEndpointInstanceRecord[];
+}
+
+/** 「去 opera 能力注册管理」的链接，由 admin-bff 按 `OPERA_BASE_URL` 拼。 */
+export interface RunosManagementEntry {
+  url: string;
 }
 
 export interface ProductPlanRecord {
