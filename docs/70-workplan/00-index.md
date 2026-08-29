@@ -10,8 +10,9 @@
 | [`40-entitlement-data-and-closeout.md`](./40-entitlement-data-and-closeout.md) | 权益配置的数据接入（D 系列）与关联板块收尾（E 系列）                                 | **全部完成**（2026-08-16）：D1/D2/D3-1' 与 E1–E4 已落；D2-3、D3-2、D3-3 经复核关闭（前提不成立 / 现状即正确）                            |
 
 | [`60-console-p1-open-decisions.md`](./60-console-p1-open-decisions.md) | console P1 四份决策简报(通知中心 / 多 workspace / 危险区 / 个人实名):设计缺口或文档冲突,等 owner 裁定 | **等裁定**(2026-08-21 立项;P0 四项与 P1 两项已落地,清单见文末) |
-| [`50-release-resequencing.md`](./50-release-resequencing.md) | 发布节奏重排：生产落后 main 63 个提交，拆成四次可回滚的上线（R0 收口 → R1 基础设施 → R2 DDL → R3 应用 → R4 一致性） | **五批全部走完**（2026-08-29 复核，生产在跑 `v0.25.0`）。文件已加 §5 承接下一次发布（`v0.25.0..main`，零 DDL，四步待 owner 执行）。**本格此前写「R0 进行中」，过时 12 天**——正是本表自己那条纪律 |
+| [`50-release-resequencing.md`](./50-release-resequencing.md) | 发布节奏重排：生产落后 main 63 个提交，拆成四次可回滚的上线（R0 收口 → R1 基础设施 → R2 DDL → R3 应用 → R4 一致性） | **五批全部走完；§5 的下一批也已上线**（2026-08-29：生产 `v0.26.0 / eb5fa919`，atlas `v0.7.4`）。仍待 owner：生产库只读前置 + seed（SSH 被工具层挡）、#55 四条 karda 端点授权、三仓 production 环境配回 required reviewers |
 | [`70-design-system-phase-closeout.md`](./70-design-system-phase-closeout.md) | Design System 阶段收尾:三包自足与发布现状、守卫矩阵、拆仓就绪度与要一起搬走的工装清单 | **本阶段收口**(2026-08-21):设计线 issue 清零、tokens 2.2.0 / ui 3.1.1 / system 6.4.0 已发布;拆仓技术前提已备齐,余下为配置与产品裁定 |
+| [`90-captcha-domestic-provider.md`](./90-captcha-domestic-provider.md) | 人机验证换国内可达供应商（阿里云验证码 2.0）：一般性风险、现状盲点、按面可切换的双供应商形态、接入形态、分批工作量 | **立项评估，未开工**（2026-08-29）：约 5 工程日；建议先做半天的 B0 度量，切不切租户面由一周数据定；运营面单独裁定 |
 | [`80-repo-split-and-scope-rename.md`](./80-repo-split-and-scope-rename.md) | 拆仓 + `@vxture/shared` 改名 + 新仓 secrets/environments 分层:判据、逐项裁定、五批任务 | **规划完成,待执行**(2026-08-21):批 0 有两处**阻断项**(缺 TAILSCALE_OAUTH_CLIENT_TAG、部署 secret 名不一致);三件待 owner 回答见 §5 |
 
 > 设计与批次分开放：**判断**在设计文件里（`portals/opera/docs/opera-navigation-design.md`），
