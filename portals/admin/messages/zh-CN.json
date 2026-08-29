@@ -1482,10 +1482,12 @@
     "table": {
       "allAgents": "全部智能体",
       "permanent": "长期",
+      "anyProfile": "不限",
       "columns": {
         "model": "模型",
         "tenant": "租户",
         "agent": "智能体",
+        "taskProfile": "任务画像",
         "priority": "优先级",
         "expires": "有效期",
         "status": "状态"

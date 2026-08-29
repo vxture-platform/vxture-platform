@@ -1482,10 +1482,12 @@
     "table": {
       "allAgents": "All agents",
       "permanent": "Permanent",
+      "anyProfile": "Any",
       "columns": {
         "model": "Model",
         "tenant": "Tenant",
         "agent": "Agent",
+        "taskProfile": "Task profile",
         "priority": "Priority",
         "expires": "Expires",
         "status": "Status"
