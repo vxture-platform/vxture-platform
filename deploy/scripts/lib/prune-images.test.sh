@@ -23,7 +23,7 @@ assert_eq() {
   fi
 }
 
-ACR="crpi-xxx.cn-beijing.personal.cr.aliyuncs.com/vx-platform"
+ACR="registry.example.test/vx-platform"
 GHCR="ghcr.io/vxture-platform"
 
 images="$(cat <<EOF
