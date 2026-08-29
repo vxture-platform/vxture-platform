@@ -10,15 +10,22 @@
  * （56px，阴影分区+半透明底），材质是从生产环境 admin 头部吸收进 DS 的视觉
  * 语言，不再是发丝线+纯色的旧透明模式；高度按控制台的信息密度取 56 而非 64。
  *
- * 助手（Varda）入口：header 有 AI 图标按钮，点击打开一个占位面板
- * （AssistantPlaceholder）——真实 VardaChat 接入被后端 surface 鉴权矩阵挡住
- * （varda-bff 的 surface × userType 合法组合只认 "admin"/"console"，opera
+ * 助手（Varda）入口：**只在非生产构建里存在**。header 的 AI 图标按钮打开一个
+ * 占位面板（AssistantPlaceholder）——真实 VardaChat 接入被后端 surface 鉴权矩阵
+ * 挡住（varda-bff 的 surface × userType 合法组合只认 "admin"/"console"，opera
  * 还没有对应的 userType/工具白名单/dataScope 决策，见 workplans 里的登记），
- * 本轮只把布局机制（narrow/wide/full 三态、full 态隐藏 header+sidebar）打通、
- * 占位面板可验证，真实换成 VardaChat 时布局不用再动。
+ * 占位只为验证布局机制（narrow/wide/full 三态、full 态隐藏 header+sidebar），
+ * 真实换成 VardaChat 时布局不用再动。生产构建里按钮、面板、localStorage 读写
+ * 三样都不渲染不执行：一个点开只写着「占位」的助手，在运营者面前不是功能是误导
+ * （2026-08-30）。
  *
- * 会话：生产由边缘网关兜底；开发环境无网关时用占位 operator 渲染（界面
- * 先行、功能排期），占位在用户菜单里明确标注。
+ * 会话：生产由边缘网关兜底，渲染的永远是 `/auth/session` 给的真身份，拿不到就
+ * 不渲染外壳（SessionProvider 会带去登录）。开发环境无网关时用占位 operator 渲染，
+ * 占位在用户菜单里明确标注；那个占位对象在生产构建里是 `null`（见 DEV_OPERATOR）。
+ *
+ * 两处「非生产」都直接写 `process.env.NODE_ENV !== "production"` 而不是抽一个运行时
+ * 开关：Next 在构建期把它替换成字面量，生产包里这两段成为死代码，连字符串都不进
+ * bundle——「不存在」比「不显示」硬。
  */
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -49,7 +56,10 @@ import {
 } from "@vxture/design-system";
 import { operaNavSections } from "@/config/navigation";
 import { writeNavCollapsed } from "@vxture-platform/shared";
-import { useOperatorSession } from "@/features/session/SessionProvider";
+import {
+  useOperatorSession,
+  type OperatorIdentity,
+} from "@/features/session/SessionProvider";
 import {
   LOCALE_CONFIGS,
   SUPPORTED_LOCALES,
@@ -60,22 +70,38 @@ import { useLocaleSwitch } from "@/lib/useLocaleSwitch";
 const LS_ASSISTANT_OPEN = "vx-opera-assistant-open";
 const LS_ASSISTANT_MODE = "vx-opera-assistant-mode";
 
-/* 开发占位会话。字段与 `OperatorIdentity` 对齐——占位对象比真身份少字段时，
-   面板要么崩、要么走进只有开发环境才命中的分支，两者都会让开发时看到的东西
-   和生产不一样，而这个占位存在的理由恰恰是"没有边缘网关时也能看真界面"。 */
-const DEV_OPERATOR = {
-  sub: "opr_dev",
-  displayName: "Dev Operator",
-  role: "platform-admin",
-  email: "",
-  emailVerified: false,
-};
+/* 开发占位会话。**生产构建里恒为 null**——判据是 NODE_ENV，不是"有没有拿到会话"：
+   生产环境拿不到会话该做的是去登录，不是渲染一个假运营者。
+
+   字段与 `OperatorIdentity` 对齐——占位对象比真身份少字段时，面板要么崩、要么
+   走进只有开发环境才命中的分支，两者都会让开发时看到的东西和生产不一样，而这个
+   占位存在的理由恰恰是"没有边缘网关时也能看真界面"。 */
+const DEV_OPERATOR: OperatorIdentity | null =
+  process.env.NODE_ENV !== "production"
+    ? {
+        sub: "opr_dev",
+        displayName: "Dev Operator",
+        role: "platform-admin",
+        email: "",
+        emailVerified: false,
+      }
+    : null;
+
+/* 用户菜单里给占位会话的标注。同一判据：生产构建里连这句话都不该在包里——实测
+   （2026-08-30 next build 后 grep 产物）DEV_OPERATOR 的字段全部消失，只剩这句留着。 */
+const DEV_SESSION_META =
+  process.env.NODE_ENV !== "production" ? "开发占位会话（无边缘网关）" : "";
+
+/* 占位助手只在非生产构建里存在：按钮、面板、localStorage 的读写都挂在这个判据上。
+   三处同一判据，缺一处就会出现「生产没有按钮、却因为 localStorage 残留而进了全屏
+   态」这种无路可退的状态。 */
+const ASSISTANT_PLACEHOLDER_ENABLED = process.env.NODE_ENV !== "production";
 
 type AssistantMode = "narrow" | "wide" | "full";
 
 /**
- * 占位助手面板：只验证 narrow/wide/full 三态的布局反应（宽度切换、全屏时
- * header/sidebar 隐藏），不接真实对话——真实 VardaChat 需要 opera surface
+ * 占位助手面板（仅开发构建）：只验证 narrow/wide/full 三态的布局反应（宽度切换、
+ * 全屏时 header/sidebar 隐藏），不接真实对话——真实 VardaChat 需要 opera surface
  * 后端支持后再换掉这个组件，外层 ShellViewport 的 focusMode 联动不用改。
  */
 function AssistantPlaceholder({
@@ -107,7 +133,7 @@ function AssistantPlaceholder({
     >
       <div className="flex items-center justify-between gap-sm">
         <span className="text-label-md font-medium text-foreground">
-          Varda（占位）
+          Varda（开发占位）
         </span>
         <div className="flex items-center gap-2xs">
           <ShellIconButton
@@ -131,7 +157,7 @@ function AssistantPlaceholder({
         </div>
       </div>
       <p className="text-body-sm text-muted-foreground">
-        真实助手接入待 opera surface 后端鉴权支持，当前仅演示布局三态。
+        真实助手待后端鉴权支持；此面板仅开发构建有，用来验证布局三态。
       </p>
     </aside>
   );
@@ -159,6 +185,7 @@ export function OperaShell({
   const [assistantMode, setAssistantMode] = useState<AssistantMode>("narrow");
 
   useEffect(() => {
+    if (!ASSISTANT_PLACEHOLDER_ENABLED) return;
     try {
       // 收起态不在这里读：已由服务端经 cookie 传入（见上）。
       setAssistantOpen(window.localStorage.getItem(LS_ASSISTANT_OPEN) === "1");
@@ -237,9 +264,9 @@ export function OperaShell({
       : [];
   }, [searchQuery, router]);
 
-  const isDev = process.env.NODE_ENV === "development";
-  const effectiveOperator =
-    operator ?? (isDev && status !== "loading" ? DEV_OPERATOR : null);
+  /* 生产构建里 DEV_OPERATOR 是 null，这一行退化成 `operator ?? null`：没有真会话
+     就没有外壳。 */
+  const effectiveOperator = operator ?? DEV_OPERATOR;
 
   if (status === "loading") {
     return (
@@ -257,7 +284,7 @@ export function OperaShell({
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
-  const focusMode = assistantMode === "full";
+  const focusMode = assistantOpen && assistantMode === "full";
   const sidebarMode: ShellSidebarMode = focusMode
     ? "hidden"
     : collapsed
@@ -324,12 +351,17 @@ export function OperaShell({
                 // 三个板块（助手 / 系统工具组 / 用户菜单）之间拉开 gap-md，
                 // 跟组内图标的 gap-2xs 区分开——组间是板块边界，组内是同类项。
                 <div className="flex items-center gap-md">
-                  <ShellAgentButton
-                    iconSrc="/assets/ai/ai-agent-icon-32.gif"
-                    label="Varda 助手"
-                    active={assistantOpen}
-                    onClick={toggleAssistant}
-                  />
+                  {ASSISTANT_PLACEHOLDER_ENABLED ? (
+                    <ShellAgentButton
+                      iconSrc="/assets/ai/ai-agent-icon-32.gif"
+                      label="Varda 助手（开发占位）"
+                      active={assistantOpen}
+                      onClick={toggleAssistant}
+                    />
+                  ) : null}
+                  {/* 没有「告警通知」：opera 没有任何通知源（无告警表、无订阅、无
+                      推送），一个点了什么都不发生的铃铛只会让人以为告警会到这里来。
+                      有通知源的那天再加，不先摆一个空按钮占位（2026-08-30）。 */}
                   <ShellIconGroup label="系统">
                     <ShellIconButton
                       icon="help"
@@ -337,14 +369,10 @@ export function OperaShell({
                       onClick={() => {}}
                     />
                     <ShellIconButton
-                      icon="bell"
-                      label="告警通知"
-                      onClick={() => {}}
-                    />
-                    <ShellIconButton
                       icon="settings"
                       label="系统设置"
-                      onClick={() => {}}
+                      active={isActive("/settings")}
+                      onClick={() => router.push("/settings")}
                     />
                   </ShellIconGroup>
                   {/* 与 admin 的用户菜单同形（同一个 DS 件、同一组槽位）。此前这里
@@ -360,7 +388,7 @@ export function OperaShell({
                       uniqueLine: effectiveOperator.role || "operator",
                       meta: operator
                         ? effectiveOperator.email || "未设置邮箱"
-                        : "开发占位会话（无边缘网关）",
+                        : DEV_SESSION_META,
                       ...(operator && effectiveOperator.email
                         ? {
                             statusTag: effectiveOperator.emailVerified
@@ -414,7 +442,7 @@ export function OperaShell({
             />
           }
           dock={
-            assistantOpen ? (
+            ASSISTANT_PLACEHOLDER_ENABLED && assistantOpen ? (
               <AssistantPlaceholder
                 mode={assistantMode}
                 onClose={closeAssistant}
