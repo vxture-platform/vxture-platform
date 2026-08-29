@@ -73,12 +73,12 @@ export interface AuthUserDto {
   isNewAccount?: boolean;
 }
 
+/** 与 website-bff AccountProfileDto 逐字段对应；每个字段都有真列（无 headline）。 */
 export interface AccountProfileDto {
   id: string;
   username: string;
   displayName: string | null;
   avatarUrl: string | null;
-  headline: string | null;
   bio: string | null;
   email: string | null;
   phone: string | null;
@@ -91,7 +91,6 @@ export interface UpdateProfileRequest {
   username?: string | null;
   displayName?: string | null;
   avatarUrl?: string | null;
-  headline?: string | null;
   bio?: string | null;
   timezone?: string | null;
   language?: string | null;

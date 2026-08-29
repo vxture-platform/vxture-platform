@@ -33,6 +33,7 @@ describe("ProductPlansRouter", () => {
         {
           plan_code: "arda-pro",
           plan_name: "Arda Pro",
+          description: "Arda Pro tier for Arda.",
           tier: "pro",
           features: ["sync.realtime", "varda.enabled"],
           quota: { "member.max": 1, "storage.gb": 500 },
@@ -54,6 +55,7 @@ describe("ProductPlansRouter", () => {
         {
           plan_code: "arda-free",
           plan_name: "Arda Free",
+          description: null,
           tier: "free",
           features: [],
           quota: null,
@@ -73,6 +75,10 @@ describe("ProductPlansRouter", () => {
     expect(res.plans.map((p) => p.tier)).toEqual(["free", "pro"]);
     const [free, pro] = res.plans;
     expect(pro?.planCode).toBe("arda-pro");
+    // 档位名/描述是 product.plans 真列,原样透传(官网卡片标题/副标题不再来自 i18n)。
+    expect(pro?.planName).toBe("Arda Pro");
+    expect(pro?.description).toBe("Arda Pro tier for Arda.");
+    expect(free?.description).toBeNull();
     expect(pro?.seats).toBe(1);
     expect(pro?.quota).toEqual({ "member.max": 1, "storage.gb": 500 });
     expect(pro?.prices).toHaveLength(2);

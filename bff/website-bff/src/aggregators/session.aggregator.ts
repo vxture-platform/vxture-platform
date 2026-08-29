@@ -3,18 +3,35 @@
  * @package @vxture/bff-website
  *
  * Aggregates the logged-in user's account info for the /api/me routes. Reads from
- * @vxture/service-account (identity-core User). The new minimal model has no rich
- * profile table yet (headline/bio/avatar/timezone/language) — those fields are
- * stubbed null until a profile store lands; name/email are the live editable bits.
+ * @vxture/service-account (identity-core User; its UserView already joins
+ * account.user_profiles for display_name / avatar_hash / bio / timezone /
+ * language). profileUpdatedAt is read straight off account.user_profiles
+ * .updated_at via the read-only pool because UserView does not carry it.
+ *
+ * 2026-08-30: bio / timezone / language used to be stubbed `null` on read and
+ * silently dropped on write although the columns have existed since the
+ * profile table landed (deploy/database/ddl/10_account.sql). They are live now.
+ * `headline` was removed from the API instead: no column in the account schema
+ * backs it, and a field that is always null is a lie, not a feature.
  */
 
-import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
+import {
+  Inject,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { VxConfigService } from "@vxture/core-config";
-import { AccountService } from "@vxture/service-account";
+import {
+  AccountService,
+  type UpdateProfileInput,
+} from "@vxture/service-account";
 import {
   ActiveContextService,
   type OrgRole,
 } from "@vxture/service-organization";
+import type { Pool } from "pg";
+import { WEBSITE_BFF_RO_POOL } from "../providers/pg-pool.provider";
 import type {
   AccountProfileDto,
   AuthUserDto,
@@ -31,6 +48,8 @@ const ORG_ROLE_LABELS: Record<OrgRole, string> = {
 
 @Injectable()
 export class SessionAggregator {
+  private readonly logger = new Logger(SessionAggregator.name);
+
   constructor(
     @Inject(AccountService)
     private readonly account: AccountService,
@@ -38,6 +57,8 @@ export class SessionAggregator {
     private readonly active: ActiveContextService,
     @Inject(VxConfigService)
     private readonly config: VxConfigService,
+    @Inject(WEBSITE_BFF_RO_POOL)
+    private readonly pool: Pool,
   ) {}
 
   /** Versioned platform avatar URL for a user, or null when no custom avatar. */
@@ -88,6 +109,29 @@ export class SessionAggregator {
     }
   }
 
+  /**
+   * account.user_profiles.updated_at as an ISO string; null when the user has
+   * no profile row yet. The timestamp only tells the client how fresh the
+   * editable fields are, so a read failure degrades to null instead of failing
+   * the whole profile read.
+   */
+  private async readProfileUpdatedAt(userId: string): Promise<string | null> {
+    try {
+      const res = await this.pool.query<{ updated_at: Date | string | null }>(
+        `select updated_at from account.user_profiles where user_id = $1`,
+        [userId],
+      );
+      const raw = res.rows[0]?.updated_at ?? null;
+      if (raw == null) return null;
+      return raw instanceof Date ? raw.toISOString() : String(raw);
+    } catch (error) {
+      this.logger.warn(
+        `user_profiles.updated_at read failed for ${userId}: ${String(error)}`,
+      );
+      return null;
+    }
+  }
+
   /** Basic info for GET /api/me (header menu: identity + avatar + role/tenant badges). */
   async getCurrentUser(userId: string): Promise<AuthUserDto | null> {
     const user = await this.account.getUserById(userId);
@@ -112,7 +156,7 @@ export class SessionAggregator {
     };
   }
 
-  /** Full profile for GET /api/me/profile (rich fields stubbed in the MVP model). */
+  /** Full profile for GET /api/me/profile (every field backed by a real column). */
   async getCurrentUserProfile(
     userId: string,
   ): Promise<AccountProfileDto | null> {
@@ -123,28 +167,35 @@ export class SessionAggregator {
       username: user.account,
       displayName: user.name,
       avatarUrl: this.pictureFor(user),
-      headline: null,
-      bio: null,
+      bio: user.bio ?? null,
       email: user.email,
       phone: user.phone,
-      timezone: null,
-      language: null,
-      profileUpdatedAt: null,
+      timezone: user.timezone ?? null,
+      language: user.language ?? null,
+      profileUpdatedAt: await this.readProfileUpdatedAt(userId),
     };
   }
 
   /**
-   * Update profile for PUT /api/me/profile. Only name (displayName) and email are
-   * persisted in the minimal model; other fields are accepted but ignored.
+   * Update profile for PUT /api/me/profile. Persists the fields that have a
+   * column behind them: displayName (user_profiles.display_name), email
+   * (users.email), bio / timezone / language (user_profiles). username,
+   * avatarUrl and phone have their own flows (account change / avatar upload /
+   * phone bind) and are ignored here, as before. The repository upsert treats
+   * null as "leave unchanged" (coalesce), so a field cannot be cleared to null
+   * through this route — send "" to blank it.
    */
   async updateCurrentUserProfile(
     userId: string,
     input: UpdateProfileDto,
   ): Promise<AccountProfileDto | null> {
-    const patch: { name?: string | null; email?: string | null } = {};
+    const patch: UpdateProfileInput = {};
     if (input.displayName !== undefined) patch.name = input.displayName;
     if (input.email !== undefined) patch.email = input.email;
-    if (patch.name !== undefined || patch.email !== undefined) {
+    if (input.bio !== undefined) patch.bio = input.bio;
+    if (input.timezone !== undefined) patch.timezone = input.timezone;
+    if (input.language !== undefined) patch.language = input.language;
+    if (Object.keys(patch).length > 0) {
       const updated = await this.account.updateProfile(userId, patch);
       if (!updated) return null;
     }
