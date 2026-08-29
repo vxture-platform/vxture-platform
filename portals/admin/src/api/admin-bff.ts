@@ -33,12 +33,16 @@ import type {
   PromotionRedemptionRecord,
   ProductAgentRecord,
   ProductCapabilityRecord,
-  ProductModelPolicyRecord,
   ProductPlanRecord,
   ProductReleaseRecord,
   ProductServicePlanDetailRecord,
   ProductSolutionDetailRecord,
+  ProductSolutionPlanBindInput,
+  ProductSolutionProductInput,
   ProductSolutionRecord,
+  ProductSolutionStatus,
+  ProductSolutionTierCode,
+  ProductSolutionWriteInput,
   ComplianceEventItem,
   PlatformRoleRecord,
   RiskRecordItem,
@@ -436,12 +440,78 @@ export async function fetchProductAgents(): Promise<ProductAgentRecord[]> {
   return readJson<ProductAgentRecord[]>("/api/products/agents", []);
 }
 
-export async function fetchProductModelPolicies(): Promise<
-  ProductModelPolicyRecord[]
-> {
-  return readJson<ProductModelPolicyRecord[]>(
-    "/api/products/model-policies",
-    [],
+// ── 解决方案写路径（2026-08-31，TD-029 收口）：全部返回最新详情，页面直接替换本地态。
+// `/api/products/model-policies` 已退役：模型策略是 Atlas 的，走上面的 fetchModelPolicies。
+
+export async function createProductSolution(
+  payload: ProductSolutionWriteInput,
+): Promise<ProductSolutionDetailRecord> {
+  return mutateJson<ProductSolutionDetailRecord>(
+    "/api/products/solutions",
+    "POST",
+    payload,
+    "创建方案失败",
+  );
+}
+
+export async function updateProductSolution(
+  solutionCode: string,
+  payload: ProductSolutionWriteInput,
+): Promise<ProductSolutionDetailRecord> {
+  return mutateJson<ProductSolutionDetailRecord>(
+    `/api/products/solutions/${encodeURIComponent(solutionCode)}`,
+    "PUT",
+    payload,
+    "保存方案失败",
+  );
+}
+
+export async function setProductSolutionState(
+  solutionCode: string,
+  state: ProductSolutionStatus,
+): Promise<ProductSolutionDetailRecord> {
+  return mutateJson<ProductSolutionDetailRecord>(
+    `/api/products/solutions/${encodeURIComponent(solutionCode)}/state`,
+    "PATCH",
+    { state },
+    "方案状态更新失败",
+  );
+}
+
+export async function replaceProductSolutionProducts(
+  solutionCode: string,
+  products: ProductSolutionProductInput[],
+): Promise<ProductSolutionDetailRecord> {
+  return mutateJson<ProductSolutionDetailRecord>(
+    `/api/products/solutions/${encodeURIComponent(solutionCode)}/products`,
+    "PUT",
+    { products },
+    "保存方案产品失败",
+  );
+}
+
+export async function bindProductSolutionPlan(
+  solutionCode: string,
+  tier: ProductSolutionTierCode,
+  payload: ProductSolutionPlanBindInput,
+): Promise<ProductSolutionDetailRecord> {
+  return mutateJson<ProductSolutionDetailRecord>(
+    `/api/products/solutions/${encodeURIComponent(solutionCode)}/plans/${encodeURIComponent(tier)}`,
+    "PUT",
+    payload,
+    "绑定套餐失败",
+  );
+}
+
+export async function unbindProductSolutionPlan(
+  solutionCode: string,
+  tier: ProductSolutionTierCode,
+): Promise<ProductSolutionDetailRecord> {
+  return mutateJson<ProductSolutionDetailRecord>(
+    `/api/products/solutions/${encodeURIComponent(solutionCode)}/plans/${encodeURIComponent(tier)}`,
+    "DELETE",
+    undefined,
+    "解绑套餐失败",
   );
 }
 

@@ -234,6 +234,18 @@ GRANT UPDATE (plan_version_id, cycle_unit, cycle_count, price, currency) ON prod
 REVOKE UPDATE ON product.plan_components FROM platform_svc;
 GRANT UPDATE (plan_version_id, product_id, tier, component_role, source_profile_code, priority, features, quota, sort_order) ON product.plan_components TO platform_svc;
 
+-- product.solutions  [anchor: id, created_by, created_at]（2026-08-31 admin 解决方案）
+REVOKE UPDATE ON product.solutions FROM platform_svc;
+GRANT UPDATE (solution_code, solution_name, description, industry, scenario, customer_segment, owner_team, tags, delivery_mode, delivery_boundaries, status, is_public, is_customer_visible, is_workforce_visible, sort, updated_by, updated_at, deleted_at) ON product.solutions TO platform_svc;
+
+-- product.solution_products  [anchor: solution_id, product_id, created_at]
+REVOKE UPDATE ON product.solution_products FROM platform_svc;
+GRANT UPDATE (role, sort) ON product.solution_products TO platform_svc;
+
+-- product.solution_plans  [anchor: solution_id, tier, created_at]
+REVOKE UPDATE ON product.solution_plans FROM platform_svc;
+GRANT UPDATE (plan_id) ON product.solution_plans TO platform_svc;
+
 -- product.product_webhooks  [anchor: product_id, created_at]
 REVOKE UPDATE ON product.product_webhooks FROM platform_svc;
 GRANT UPDATE (home_url, webhook_url, webhook_secret_ref, updated_at) ON product.product_webhooks TO platform_svc;

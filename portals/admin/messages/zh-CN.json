@@ -1423,26 +1423,22 @@
     "header": {
       "eyebrow": "Model Platform",
       "title": "模型授权",
-      "description": "按产品和智能体配置模型授权、周期配额和路由优先级；产品版本只由产品发布决定。",
-      "badge": "产品级策略"
+      "description": "只读汇总 Atlas 的模型策略，并列出租户覆盖授权；策略的新建与编辑在「模型接入」页。",
+      "badge": "Atlas 策略"
     },
     "summary": {
       "ariaLabel": "模型授权概览",
-      "policies": "产品策略",
-      "policiesValue": "{usable} / {total} 可用",
-      "products": "覆盖产品",
-      "undefinedPolicies": "未定义策略",
-      "policiesHelp": "已登记的产品级模型策略条数，含停用与未定义的。",
-      "overridesHelp": "租户级覆盖授权条数；覆盖优先于产品策略生效。",
-      "undefinedPoliciesHelp": "尚未定义可用模型的策略：该产品当前无模型可调用。"
+      "policies": "模型策略",
+      "policiesHelp": "Atlas 登记的模型策略条数（含停用），来源 GET /api/atlas/policies。",
+      "overridesHelp": "租户级覆盖授权条数；覆盖优先于平台策略生效。",
+      "uncovered": "有授权、无策略",
+      "uncoveredHelp": "启用中的租户授权里，没有任何一条启用策略（平台级或该租户级、同模型）约束到的条数。"
     },
     "filters": {
       "all": "全部策略",
-      "product": "产品策略",
-      "defaults": "默认策略",
-      "undefined": "未定义",
-      "usable": "有配额",
-      "zeroQuota": "零配额",
+      "platform": "平台策略",
+      "tenant": "租户策略",
+      "active": "启用",
       "inactive": "停用"
     },
     "actions": {
@@ -1450,39 +1446,42 @@
       "grantMenu": "授权操作",
       "editGrant": "编辑覆盖",
       "enableGrant": "启用覆盖",
-      "disableGrant": "停用覆盖"
+      "disableGrant": "停用覆盖",
+      "managePolicies": "去模型接入页管理策略",
+      "policyMenu": "{name} 操作"
     },
     "policyTable": {
-      "searchPlaceholder": "按产品、策略、智能体、模型或说明搜索",
-      "searchAriaLabel": "搜索模型授权",
+      "searchPlaceholder": "按策略名、模型或服务商搜索",
+      "searchAriaLabel": "搜索模型策略",
       "filterAriaLabel": "策略筛选",
+      "viewModeAriaLabel": "模型策略展示方式",
       "toolbarTitle": "{count} 条策略",
-      "unlimited": "不限量",
-      "undefinedModel": "未定义模型",
-      "defaultDeny": "默认不授权",
-      "region": {
-        "domestic": "国内版",
-        "international": "国际版",
-        "none": "默认范围"
-      },
+      "platformScope": "平台策略（全部租户）",
+      "tenantScope": "租户策略",
+      "unnamed": "未命名策略",
+      "unknownModel": "模型不在目录中",
+      "unknownModelHint": "策略指向的模型未在模型接入页登记",
+      "noRate": "不限速",
       "columns": {
-        "scope": "策略范围",
-        "agent": "智能体",
+        "scope": "策略",
+        "status": "状态",
         "model": "模型",
-        "quota": "周期配额",
+        "rate": "速率上限",
         "priority": "优先级",
-        "status": "状态"
+        "window": "生效窗口"
       }
     },
     "overrides": {
       "title": "租户覆盖授权",
-      "description": "用于灰度、定制和临时覆盖；正常业务优先走上方产品模型授权。",
+      "description": "用于灰度、定制和临时覆盖；正常业务优先走平台策略。",
       "count": "{count} 条覆盖"
     },
     "table": {
       "allAgents": "全部智能体",
       "permanent": "长期",
       "anyProfile": "不限",
+      "covered": "有策略",
+      "uncovered": "无策略",
       "columns": {
         "model": "模型",
         "tenant": "租户",
@@ -1490,13 +1489,11 @@
         "taskProfile": "任务画像",
         "priority": "优先级",
         "expires": "有效期",
-        "status": "状态"
+        "status": "状态",
+        "coverage": "策略覆盖"
       }
     },
     "status": {
-      "usable": "有配额",
-      "zeroQuota": "零配额",
-      "undefined": "未定义",
       "active": "启用",
       "inactive": "停用"
     },
@@ -1533,11 +1530,13 @@
     },
     "empty": {
       "loadingTitle": "正在加载策略...",
-      "loadingDescription": "正在读取产品模型授权和 Model Platform 覆盖授权。",
+      "loadingDescription": "正在读取 Atlas 模型策略和租户覆盖授权。",
       "policyTitle": "没有符合当前筛选条件的策略。",
-      "policyDescription": "可以放宽筛选范围，或检查产品级模型授权。",
+      "policyDescription": "可以放宽筛选范围，或到模型接入页新增策略。",
+      "noPoliciesTitle": "Atlas 还没有任何模型策略。",
+      "noPoliciesDescription": "策略在「模型接入」页新建；这里只做汇总与授权对账。",
       "overrideTitle": "暂无租户覆盖授权。",
-      "overrideDescription": "当前仅使用产品模型授权；需要灰度或定制时再新增覆盖。",
+      "overrideDescription": "当前仅使用平台策略；需要灰度或定制时再新增覆盖。",
       "resetFilters": "重置筛选",
       "loadFailedTitle": "策略数据读取失败。",
       "loadFailedDescription": "未能连到 Admin BFF 或 Model Platform，确认服务已启动后重新加载页面。"
@@ -1550,6 +1549,385 @@
       "grantDisabled": "租户覆盖已停用。",
       "grantSaveError": "租户覆盖保存失败，请检查租户、模型和优先级。",
       "grantStateError": "租户覆盖状态更新失败，请稍后重试。"
+    }
+  },
+  "productCatalog": {
+    "status": {
+      "draft": "草稿",
+      "active": "启用",
+      "inactive": "停用",
+      "deprecated": "已退役"
+    },
+    "transition": {
+      "active": "启用",
+      "inactive": "停用",
+      "deprecated": "退役"
+    },
+    "visibility": {
+      "public": "公开",
+      "internal": "内部"
+    },
+    "capabilityType": {
+      "platform": "平台",
+      "agent": "智能体",
+      "model": "模型",
+      "data": "数据",
+      "service": "服务"
+    },
+    "source": {
+      "self": "自建",
+      "partner": "三方"
+    },
+    "tier": {
+      "free": "免费版",
+      "starter": "入门版",
+      "pro": "专业版",
+      "business": "商业版",
+      "enterprise": "企业版"
+    },
+    "priceKind": {
+      "free": "免费",
+      "paid": "标准定价",
+      "contract": "合同报价"
+    }
+  },
+  "productSolutionsPage": {
+    "header": {
+      "title": "解决方案",
+      "description": "按行业业务场景组合产品能力，定义方案边界、包含产品，并在五档商业阶梯上绑定服务套餐。"
+    },
+    "summary": {
+      "ariaLabel": "解决方案统计",
+      "total": "方案总数",
+      "totalHelp": "解决方案总数（不含已删除）。",
+      "activeTag": "启用 {count}",
+      "products": "产品能力",
+      "productsHelp": "各方案关联的产品能力条目之和（跨方案不去重）。",
+      "partnerTag": "三方 {count}",
+      "tiers": "服务套餐",
+      "tiersHelp": "各方案已绑定的档位数之和。",
+      "subscriptionsTag": "订阅 {count}",
+      "revenue": "月度收入",
+      "revenueHelp": "各方案 MRR 之和：绑定套餐上启用中订阅的价格按周期折算到月。",
+      "industriesTag": "行业 {count}"
+    },
+    "filters": {
+      "ariaLabel": "解决方案筛选",
+      "searchPlaceholder": "搜索方案、行业、产品能力、套餐",
+      "searchAriaLabel": "搜索解决方案",
+      "status": "方案状态",
+      "visibility": "可见范围",
+      "allVisibility": "全部范围",
+      "industry": "行业",
+      "allIndustries": "全部行业",
+      "source": "产品来源",
+      "allSources": "全部来源"
+    },
+    "actions": {
+      "create": "新建方案",
+      "menuLabel": "{name} 操作"
+    },
+    "columns": {
+      "solution": "业务方案",
+      "scenario": "行业场景",
+      "noScenario": "未填行业与场景",
+      "products": "产品能力",
+      "productsMeta": "{count} 个产品能力 | 三方 {partner}",
+      "noProducts": "尚未配置产品",
+      "tiers": "服务套餐",
+      "tiersMeta": "已绑定 {count} / {total} 档 | {updatedAt} 更新",
+      "noTiers": "尚未绑定套餐",
+      "operation": "运营",
+      "operationMeta": "{subscriptions} 订阅 | 活跃租户 {tenants}"
+    },
+    "table": {
+      "ariaLabel": "解决方案清单"
+    },
+    "empty": {
+      "loadFailedTitle": "解决方案读取失败",
+      "noneTitle": "还没有方案，新建一个",
+      "noneDescription": "方案是运营写出来的内容：先建方案，再配产品能力，最后把既有套餐绑到各档位。",
+      "filteredTitle": "没有匹配的解决方案",
+      "filteredDescription": "清空筛选条件后可查看全部解决方案。"
+    },
+    "dialog": {
+      "title": "新建方案",
+      "description": "新建即草稿；产品能力、套餐绑定、交付边界在详情页配置，配好后再启用。",
+      "submit": "创建草稿",
+      "fields": {
+        "solutionCode": "方案编码",
+        "solutionCodePlaceholder": "小写字母、数字、连字符，如 flood-regulation",
+        "solutionName": "方案名称",
+        "industry": "行业领域",
+        "scenario": "业务场景",
+        "customerSegment": "客户群体",
+        "ownerTeam": "负责团队",
+        "description": "方案描述"
+      }
+    },
+    "feedback": {
+      "loadError": "解决方案读取失败，请确认 Admin BFF 已启动。",
+      "created": "方案「{name}」已创建",
+      "createFailed": "创建方案失败",
+      "stateChanged": "方案「{name}」已{state}",
+      "stateFailed": "方案状态更新失败"
+    },
+    "confirm": {
+      "target": "方案「{name}」",
+      "deprecateConsequence": "退役是终态，不可恢复；已绑定的套餐与产品关系保留供追溯，但方案不再出现在可售清单里。"
+    }
+  },
+  "productSolutionDetailPage": {
+    "header": {
+      "fallbackTitle": "解决方案详情",
+      "notFoundDescription": "未找到对应的解决方案。",
+      "loadingDescription": "正在读取解决方案详情。"
+    },
+    "empty": {
+      "notFoundTitle": "解决方案不存在",
+      "notFoundDescription": "该方案可能已删除，或当前账号无权访问。"
+    },
+    "actions": {
+      "edit": "修改",
+      "stateMenu": "状态操作"
+    },
+    "summary": {
+      "products": "产品能力",
+      "productsHelp": "本方案包含的产品能力条目数。",
+      "partnerTag": "三方 {count}",
+      "tiers": "服务套餐",
+      "tiersHelp": "五档商业阶梯上已绑定套餐的档位数。",
+      "noTiers": "尚未绑定",
+      "subscriptions": "订阅使用",
+      "subscriptionsHelp": "绑定套餐上启用中 / 试用中的订阅数。",
+      "tenantsTag": "活跃租户 {count}",
+      "revenue": "月度收入",
+      "revenueHelp": "MRR：绑定套餐上启用中订阅的价格按周期折算到月；试用不计。",
+      "revenueTag": "MRR"
+    },
+    "sections": {
+      "basics": "基础资料",
+      "scope": "适用行业",
+      "products": "包含产品能力",
+      "boundaries": "交付边界",
+      "tiers": "服务套餐（五档）"
+    },
+    "fields": {
+      "solutionCode": "方案编码",
+      "solutionName": "方案名称",
+      "status": "方案状态",
+      "visibility": "可见范围",
+      "ownerTeam": "负责团队",
+      "createdAt": "创建时间",
+      "industry": "行业领域",
+      "scenario": "业务场景",
+      "customerSegment": "客户群体",
+      "deliveryMode": "交付模式"
+    },
+    "products": {
+      "configure": "配置产品",
+      "noRole": "未填角色",
+      "emptyTitle": "还没有产品能力",
+      "emptyDescription": "从产品目录里勾选本方案包含的产品能力，并写明各自在方案中的角色。"
+    },
+    "boundaries": {
+      "empty": "尚未填写交付边界——在「修改」里一行一条写明含什么、不含什么。"
+    },
+    "tiers": {
+      "description": "每档至多绑一个既有套餐；套餐的价格、配额、版本在「套餐版本」页维护。",
+      "bind": "绑定套餐",
+      "rebind": "换绑套餐",
+      "unbind": "解绑",
+      "unbindTarget": "{tier}档上的套餐「{plan}」",
+      "unbindConsequence": "解绑后该档位不再有可售套餐，方案的订阅与收入统计随之不再计入这个套餐；套餐本身与既有订阅不受影响。",
+      "unbound": "未绑定",
+      "unboundHint": "这一档还没有套餐",
+      "menuLabel": "{tier} 操作"
+    },
+    "feedback": {
+      "updated": "方案已保存",
+      "updateFailed": "保存方案失败",
+      "productsSaved": "产品清单已保存",
+      "productsFailed": "保存产品清单失败",
+      "bound": "{tier}已绑定套餐",
+      "bindFailed": "绑定套餐失败",
+      "unbound": "{tier}已解绑",
+      "unbindFailed": "解绑套餐失败",
+      "stateChanged": "方案已{state}",
+      "stateFailed": "方案状态更新失败"
+    },
+    "confirm": {
+      "target": "方案「{name}」",
+      "deprecateConsequence": "退役是终态，不可恢复；已绑定的套餐与产品关系保留供追溯，但方案不再出现在可售清单里。"
+    },
+    "editDialog": {
+      "title": "修改方案",
+      "description": "方案编码不可改；状态在页头的状态操作里迁移。",
+      "submit": "保存修改",
+      "descriptionField": "方案描述",
+      "tags": "标签",
+      "tagsPlaceholder": "逗号分隔，如 水利, 应急",
+      "deliveryModePlaceholder": "如 平台订阅 + 三方设备接入 + 行业实施服务",
+      "boundaries": "交付边界（一行一条）",
+      "boundariesPlaceholder": "覆盖……\n不默认包含……",
+      "isPublic": "对外售卖开放（公开）"
+    },
+    "productsDialog": {
+      "title": "配置产品能力",
+      "description": "勾选本方案包含的产品能力；勾选顺序即展示顺序。保存会整体替换当前清单。",
+      "submit": "保存清单",
+      "emptyTitle": "产品目录为空",
+      "emptyDescription": "先在 opera 产品目录登记产品，这里才有可选项。",
+      "rolePlaceholder": "在方案中的角色，如 视频解译",
+      "roleLabel": "{name} 的角色"
+    },
+    "bindDialog": {
+      "title": "绑定{tier}套餐",
+      "description": "从既有套餐中选一个绑到这一档；一个套餐只能绑到一个方案的一个档位。",
+      "submit": "绑定",
+      "currentHint": "当前绑定：{plan}（{code}）——保存后替换。",
+      "plan": "套餐",
+      "planPlaceholder": "选择套餐",
+      "hint": "套餐已绑在别的方案上时会被拒绝（409）；先去那边解绑。"
+    }
+  },
+  "servicePlansPage": {
+    "header": {
+      "title": "服务套餐",
+      "description": "按解决方案铺开五档商业阶梯上已绑定的套餐；价格、配额、版本归套餐自己，在「套餐版本」页维护。"
+    },
+    "summary": {
+      "ariaLabel": "服务套餐统计",
+      "solutions": "业务方案",
+      "solutionsHelp": "解决方案总数。",
+      "tiersTag": "套餐 {count}",
+      "activeTiers": "启用套餐",
+      "activeTiersHelp": "绑定的套餐里状态为启用、可被订阅的条数。",
+      "publicTag": "公开 {count}",
+      "subscriptions": "订阅使用",
+      "subscriptionsHelp": "各方案绑定套餐上启用中 / 试用中的订阅数之和。",
+      "industriesTag": "行业 {count}",
+      "revenue": "月度收入",
+      "revenueHelp": "各方案 MRR 之和：绑定套餐上启用中订阅的价格按周期折算到月。",
+      "revenueTag": "MRR"
+    },
+    "filters": {
+      "ariaLabel": "服务套餐筛选",
+      "searchPlaceholder": "搜索方案、套餐、产品",
+      "searchAriaLabel": "搜索服务套餐",
+      "status": "套餐状态",
+      "price": "价格类型",
+      "allPrices": "全部价格",
+      "visibility": "适用范围",
+      "allVisibility": "全部范围",
+      "industry": "行业",
+      "allIndustries": "全部行业"
+    },
+    "actions": {
+      "menuLabel": "{solution} {tier} 操作",
+      "viewSolution": "查看方案",
+      "goToSolutions": "去解决方案",
+      "planVersions": "套餐版本"
+    },
+    "group": {
+      "products": "{count} 产品能力",
+      "partner": "三方 {count}",
+      "tiers": "{count} 个套餐",
+      "subscriptions": "{count} 订阅",
+      "revenue": "{amount} / 月",
+      "updatedAt": "{date} 更新"
+    },
+    "table": {
+      "ariaLabel": "服务套餐清单"
+    },
+    "empty": {
+      "loadFailedTitle": "服务套餐读取失败",
+      "noSolutionsTitle": "还没有方案",
+      "noSolutionsDescription": "服务套餐依附解决方案：先新建方案，再把既有套餐绑到各档位。",
+      "noTiersTitle": "方案还没有绑定套餐",
+      "noTiersDescription": "到方案详情页的「服务套餐（五档）」里，把既有套餐绑到对应档位。",
+      "filteredTitle": "没有匹配的服务套餐",
+      "filteredDescription": "清空筛选条件后可查看全部服务套餐。"
+    },
+    "pagination": {
+      "summary": "共 {solutions} 个方案，{tiers} 个套餐"
+    },
+    "feedback": {
+      "loadError": "服务套餐读取失败，请确认 Admin BFF 已启动。"
+    }
+  },
+  "servicePlanDetailPage": {
+    "header": {
+      "fallbackTitle": "服务套餐详情",
+      "notFoundDescription": "未找到对应的服务套餐。",
+      "loadingDescription": "正在读取服务套餐详情。"
+    },
+    "empty": {
+      "notFoundTitle": "服务套餐不存在",
+      "notFoundDescription": "该档位可能尚未绑定套餐，或当前账号无权访问。"
+    },
+    "actions": {
+      "viewSolution": "业务方案",
+      "planVersions": "套餐版本"
+    },
+    "summary": {
+      "price": "价格",
+      "included": "包含产品",
+      "includedHelp": "套餐当前版本组件里的产品数。",
+      "excludedTag": "不含 {count}",
+      "subscriptions": "订阅使用",
+      "subscriptionsHelp": "该套餐（全部版本）启用中 / 试用中的订阅数。",
+      "tenantsTag": "活跃租户 {count}",
+      "version": "套餐版本",
+      "versionHelp": "取价与权益所用的版本：优先当前发布版，否则最新草稿。",
+      "versionPublished": "已发布",
+      "versionDraft": "草稿",
+      "versionNone": "尚无版本"
+    },
+    "sections": {
+      "basics": "基础资料",
+      "pricing": "配额价格",
+      "entitlements": "包含 / 不包含产品",
+      "sales": "售卖状态"
+    },
+    "fields": {
+      "solution": "业务方案",
+      "solutionCode": "方案编码",
+      "tier": "档位",
+      "plan": "套餐",
+      "planCode": "套餐编码",
+      "status": "套餐状态",
+      "visibility": "可见范围",
+      "ownerTeam": "负责团队",
+      "price": "价格",
+      "period": "周期",
+      "version": "版本",
+      "subscriptions": "订阅数量",
+      "tenants": "活跃租户",
+      "isPublic": "公开售卖",
+      "customerSegment": "客户群体",
+      "industry": "行业领域",
+      "scenario": "业务场景"
+    },
+    "period": {
+      "daily": "按天（{count} 天）",
+      "weekly": "按周（{count} 周）",
+      "monthly": "月付（{count} 个月）",
+      "yearly": "年付（{count} 年）",
+      "perpetual": "一次性买断",
+      "contract": "合同约定"
+    },
+    "entitlement": {
+      "included": "包含",
+      "excluded": "不包含",
+      "noFeatures": "无功能键",
+      "excludedNote": "在方案里，但不在这个套餐的组件中",
+      "emptyTitle": "套餐版本没有组件",
+      "emptyDescription": "到「套餐版本」页为该套餐建版本并配置组件。"
+    },
+    "boolean": {
+      "yes": "是",
+      "no": "否"
     }
   },
   "drawer": {

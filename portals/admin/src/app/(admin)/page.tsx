@@ -38,8 +38,8 @@ import {
   fetchAiModels,
   fetchDashboardOverview,
   fetchDevServices,
+  fetchModelPolicies,
   fetchProductAgents,
-  fetchProductModelPolicies,
   fetchProductReleases,
   fetchProductSolutions,
 } from "@/api/admin-bff";
@@ -48,8 +48,8 @@ import type {
   AiModelGrantRecord,
   AiModelRecord,
   DevServiceSnapshot,
+  ModelPolicyRecord,
   ProductAgentRecord,
-  ProductModelPolicyRecord,
   ProductReleaseRecord,
   ProductSolutionRecord,
 } from "@/entities/console";
@@ -176,15 +176,13 @@ function periodReleaseUpdateCount(
   return Math.min(totalCount, scalePeriodValue(baseCount, period));
 }
 
+/**
+ * 三方 = `releaseType === "custom"`，它由 `product.products.origin = 'third_party'`
+ * 投影而来（2026-08-31 releases 去 mock）。此前还按产品码里含 partner/provider/
+ * third 去猜——那是 mock 数据没有来源轴时的权宜，现在来源是真的，不再猜。
+ */
 function isThirdPartyProduct(release: ProductReleaseRecord) {
-  const productCode = release.productCode.toLowerCase();
-
-  return (
-    release.releaseType === "custom" ||
-    ["partner", "provider", "third"].some((marker) =>
-      productCode.includes(marker),
-    )
-  );
+  return release.releaseType === "custom";
 }
 
 function uniqueProductReleases(records: ProductReleaseRecord[]) {
@@ -400,12 +398,17 @@ function capabilityServiceHealth(services: DevServiceSnapshot[]) {
   };
 }
 
+/**
+ * 策略 = Atlas 的模型策略（`GET /api/atlas/policies`），不再是 products.router
+ * 编出来的「未定义 → 默认不授权」占位行（2026-08-31 该端点退役）。启用与否只看
+ * `state`，没有"已定义"这一维——Atlas 里不存在未定义的策略。
+ */
 function capabilityPolicyCoverage(
-  policies: ProductModelPolicyRecord[],
+  policies: ModelPolicyRecord[],
   grants: AiModelGrantRecord[],
 ) {
-  const definedPolicies = policies.filter(
-    (policy) => policy.isDefined && policy.isActive,
+  const definedPolicies = policies.filter((policy) =>
+    isEnabled(policy.state),
   ).length;
   const activeGrants = grants.filter((grant) => isEnabled(grant.state)).length;
   const total = policies.length + grants.length;
@@ -1352,9 +1355,7 @@ export default function AdminOverviewPage() {
   const locale = useLocale();
   const [models, setModels] = useState<AiModelRecord[]>([]);
   const [modelGrants, setModelGrants] = useState<AiModelGrantRecord[]>([]);
-  const [modelPolicies, setModelPolicies] = useState<
-    ProductModelPolicyRecord[]
-  >([]);
+  const [modelPolicies, setModelPolicies] = useState<ModelPolicyRecord[]>([]);
   const [agents, setAgents] = useState<ProductAgentRecord[]>([]);
   const [services, setServices] = useState<DevServiceSnapshot[]>([]);
   /**
@@ -1446,7 +1447,7 @@ export default function AdminOverviewPage() {
     Promise.all([
       settle(fetchAiModels(true), []),
       settle(fetchAiModelGrants(), []),
-      settle(fetchProductModelPolicies(), []),
+      settle(fetchModelPolicies({ includeInactive: true }), []),
       settle(fetchProductAgents(), []),
       settle(fetchDevServices(), [] as DevServiceSnapshot[]),
       settle(fetchProductReleases(), []),
@@ -1670,12 +1671,16 @@ export default function AdminOverviewPage() {
       .map((row) => ({ ...row, value: formatTokenCount(row.tokenCalls) }))
       .sort((left, right) => right.tokenCalls - left.tokenCalls)
       .slice(0, 3);
+    // Atlas 策略：名字缺省用模型名（modelId 是 UUID，不上屏）；范围看 tenantId 有无。
     const policyRows = modelPolicies
       .map((policy) => ({
         id: policy.id,
-        name: policy.scopeName,
-        meta: policy.agentName ?? "全部智能体",
-        value: policy.isActive && policy.isDefined ? "生效" : "待配置",
+        name:
+          policy.name ??
+          models.find((model) => model.id === policy.modelId)?.modelName ??
+          "未命名策略",
+        meta: policy.tenantId === null ? "平台策略" : "租户策略",
+        value: isEnabled(policy.state) ? "生效" : "停用",
       }))
       .slice(0, 3);
     const agentRows = agents

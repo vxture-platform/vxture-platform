@@ -115,11 +115,17 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  * 2026-08-31 admin 3510 → 3488：摘掉四个永远为空的菜单项（40-menu.md 1.2.0）连带
  *   删除审批中心 / 平台密钥两页与它们共用的治理列表页，那三个文件的硬编码中文随文件
  *   一起消失。实测收到实数，余量不留。
+ *
+ * 2026-08-31 admin 3488 → 3266：产品板块去 mock（TD-029）重写了解决方案 / 服务套餐
+ *   四页与模型授权页，文案整页抽进 `productCatalog` / `productSolutionsPage` /
+ *   `productSolutionDetailPage` / `servicePlansPage` / `servicePlanDetailPage` 五个
+ *   命名空间（zh-CN / en-US 同步）。棘轮随之收紧到实数（与上一条同日合入，数字
+ *   是两处改动叠加后的实测）。
  */
 const BASELINE = {
   console: 32,
   website: 54,
-  admin: 3488,
+  admin: 3266,
   opera: 1819,
   accounts: 264,
 };

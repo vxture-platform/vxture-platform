@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ * ModelGrantsPage —— 模型策略（Atlas）只读总览 + 租户覆盖授权（可写）。
+ *
+ * 2026-08-31：`/api/products/model-policies` 退役。它返回的是一份内存里编出来的
+ * 「未定义 → 默认不授权」占位表，与任何真实策略无关。真实的模型策略是 Atlas 的
+ * `capability/policies`（admin-bff `GET /api/atlas/policies` 代理、契约断言），
+ * 新建/编辑在「模型接入」页；这里只读它，并用它和授权做一次交集：
+ * **有授权、无策略**——租户拿到了某模型的授权，却没有任何一条启用的策略（平台级
+ * 或该租户级）约束它——这才是运营需要盯的缺口，不是一张凭空生成的"未定义"清单。
+ */
+
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ActionButton,
@@ -23,36 +34,30 @@ import {
   ViewLayout,
   ViewModeSwitch,
 } from "@vxture/design-system";
-import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
+import type { DataTableColumn } from "@vxture/design-system";
 import { isEnabled } from "@vxture-platform/shared";
+import Link from "next/link";
 import {
   createAiModelGrant,
   fetchAiModelGrants,
   fetchAiModels,
+  fetchModelPolicies,
   fetchProductAgents,
-  fetchProductModelPolicies,
   setAiModelGrantActive,
   updateAiModelGrant,
 } from "@/api/admin-bff";
 import type {
   AiModelGrantRecord,
   AiModelRecord,
+  ModelPolicyRecord,
   ProductAgentRecord,
-  ProductModelPolicyRecord,
 } from "@/entities/console";
 import { useTranslations } from "next-intl";
 import { PageHeader } from "@/modules/shared/PageHeader";
 
 type ViewMode = "list" | "cards";
-type PolicyFilter =
-  | "all"
-  | "platform"
-  | "product"
-  | "defaults"
-  | "undefined"
-  | "usable";
+type PolicyFilter = "all" | "platform" | "tenant" | "active" | "inactive";
 type DialogMode = "createGrant" | "editGrant" | null;
-type PolicyStatus = "usable" | "zeroQuota" | "inactive" | "undefined";
 type Feedback = {
   tone: "success" | "error";
   key: string;
@@ -79,64 +84,20 @@ function defaultGrantForm(modelId = "") {
   };
 }
 
-function policyStatus(policy: ProductModelPolicyRecord): PolicyStatus {
-  if (!policy.isDefined) {
-    return "undefined";
-  }
-
-  if (!policy.isActive) {
-    return "inactive";
-  }
-
-  if (!policy.isUnlimited && policy.quotaTokens <= 0) {
-    return "zeroQuota";
-  }
-
-  return "usable";
-}
-
-/** 策略四态 -> DS 语气。零配额与未定义都是"配了但用不了"，同一档。 */
-const POLICY_STATUS_TONE: Record<PolicyStatus, StatusBadgeTone> = {
-  usable: "success",
-  zeroQuota: "warning",
-  undefined: "warning",
-  inactive: "neutral",
-};
-
 function policySearchText(
-  policy: ProductModelPolicyRecord,
+  policy: ModelPolicyRecord,
   model: AiModelRecord | undefined,
 ) {
   return [
-    policy.scopeCode,
-    policy.scopeName,
-    policy.subjectType,
-    policy.subjectId,
-    policy.subjectName,
-    policy.productCode,
-    policy.productName,
-    policy.productRegion,
-    policy.agentCode,
-    policy.agentName,
-    policy.modelCode,
-    policy.note,
+    policy.name,
+    policy.tenantId,
+    model?.modelCode,
     model?.modelName,
     model?.provider,
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
-}
-
-function isDefaultPolicy(policy: ProductModelPolicyRecord) {
-  return (
-    policy.scopeType === "new_product_default" ||
-    policy.scopeType === "tenant_default"
-  );
-}
-
-function policySubjectLabel(policy: ProductModelPolicyRecord) {
-  return policy.subjectType === "platform" ? "平台主体" : "租户主体";
 }
 
 function grantSearchText(
@@ -163,23 +124,37 @@ function toDateInputValue(value: string | null) {
   return value ? value.slice(0, 10) : "";
 }
 
-function formatTokens(
-  value: number,
-  unlimited: boolean,
-  unlimitedLabel: string,
-) {
-  if (unlimited) {
-    return unlimitedLabel;
-  }
+/** 速率三维：rpm / tpm / tpd；一维都没有 = 不限速。 */
+function rateSummary(policy: ModelPolicyRecord, noneLabel: string) {
+  const parts: string[] = [];
+  if (policy.rateLimitRpm !== null)
+    parts.push(`${formatNumber(policy.rateLimitRpm)} rpm`);
+  if (policy.rateLimitTpm !== null) parts.push(`${policy.rateLimitTpm} tpm`);
+  if (policy.rateLimitTpd !== null) parts.push(`${policy.rateLimitTpd} tpd`);
+  return parts.length ? parts.join(" · ") : noneLabel;
+}
 
-  return new Intl.NumberFormat("zh-CN").format(value);
+/**
+ * 一条授权是否被至少一条**启用**的策略覆盖：策略要么是平台级（tenantId 为空），
+ * 要么就是该租户的；模型必须相同。
+ */
+function isGrantCovered(
+  grant: AiModelGrantRecord,
+  policies: ModelPolicyRecord[],
+) {
+  return policies.some(
+    (policy) =>
+      policy.modelId === grant.modelId &&
+      isEnabled(policy.state) &&
+      (policy.tenantId === null || policy.tenantId === grant.tenantId),
+  );
 }
 
 export function ModelGrantsPage() {
   const t = useTranslations("modelGrantsPage");
   const [models, setModels] = useState<AiModelRecord[]>([]);
   const [agents, setAgents] = useState<ProductAgentRecord[]>([]);
-  const [policies, setPolicies] = useState<ProductModelPolicyRecord[]>([]);
+  const [policies, setPolicies] = useState<ModelPolicyRecord[]>([]);
   const [grants, setGrants] = useState<AiModelGrantRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -211,7 +186,7 @@ export function ModelGrantsPage() {
       fetchAiModels(true),
       fetchAiModelGrants(),
       fetchProductAgents(),
-      fetchProductModelPolicies(),
+      fetchModelPolicies({ includeInactive: true }),
     ])
       .then(([modelRecords, grantRecords, agentRecords, policyRecords]) => {
         if (!active) return;
@@ -250,11 +225,6 @@ export function ModelGrantsPage() {
     [models],
   );
 
-  const modelByCode = useMemo(
-    () => new Map(models.map((model) => [model.modelCode, model])),
-    [models],
-  );
-
   const agentById = useMemo(
     () => new Map(agents.map((agent) => [agent.id, agent])),
     [agents],
@@ -269,24 +239,20 @@ export function ModelGrantsPage() {
     const normalizedQuery = query.trim().toLowerCase();
 
     return policies.filter((policy) => {
-      const status = policyStatus(policy);
-      const model = policy.modelCode
-        ? modelByCode.get(policy.modelCode)
-        : undefined;
+      const model = modelById.get(policy.modelId);
       const matchesQuery =
         !normalizedQuery ||
         policySearchText(policy, model).includes(normalizedQuery);
       const matchesFilter =
         filter === "all" ||
-        (filter === "product" && policy.scopeType === "product") ||
-        (filter === "platform" && policy.subjectType === "platform") ||
-        (filter === "defaults" && isDefaultPolicy(policy)) ||
-        (filter === "undefined" && status === "undefined") ||
-        (filter === "usable" && status === "usable");
+        (filter === "platform" && policy.tenantId === null) ||
+        (filter === "tenant" && policy.tenantId !== null) ||
+        (filter === "active" && isEnabled(policy.state)) ||
+        (filter === "inactive" && !isEnabled(policy.state));
 
       return matchesQuery && matchesFilter;
     });
-  }, [filter, modelByCode, policies, query]);
+  }, [filter, modelById, policies, query]);
 
   const filteredOverrides = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -300,6 +266,19 @@ export function ModelGrantsPage() {
       );
     });
   }, [agentById, grants, modelById, query]);
+
+  /* 有授权、无策略：启用中的授权里，没有任何一条启用策略覆盖到的那些。 */
+  const uncoveredGrants = useMemo(
+    () =>
+      grants.filter(
+        (grant) => isEnabled(grant.state) && !isGrantCovered(grant, policies),
+      ),
+    [grants, policies],
+  );
+  const uncoveredGrantIds = useMemo(
+    () => new Set(uncoveredGrants.map((grant) => grant.id)),
+    [uncoveredGrants],
+  );
 
   const totalPages = Math.max(
     1,
@@ -318,41 +297,53 @@ export function ModelGrantsPage() {
   const selectedGrant = selectedGrantId
     ? (grantById.get(selectedGrantId) ?? null)
     : null;
-  const usablePolicies = policies.filter(
-    (policy) => policyStatus(policy) === "usable",
+  const activePolicies = policies.filter((policy) =>
+    isEnabled(policy.state),
   ).length;
   const platformPolicyCount = policies.filter(
-    (policy) => policy.subjectType === "platform",
-  ).length;
-  const undefinedPolicies = policies.filter(
-    (policy) => policyStatus(policy) === "undefined",
+    (policy) => policy.tenantId === null,
   ).length;
 
   const filters = [
     { value: "all", label: t("filters.all") },
-    { value: "platform", label: "平台主体" },
-    { value: "product", label: t("filters.product") },
-    { value: "defaults", label: t("filters.defaults") },
-    { value: "undefined", label: t("filters.undefined") },
-    { value: "usable", label: t("filters.usable") },
+    { value: "platform", label: t("filters.platform") },
+    { value: "tenant", label: t("filters.tenant") },
+    { value: "active", label: t("filters.active") },
+    { value: "inactive", label: t("filters.inactive") },
   ] as const;
+
+  function policyScopeLabel(policy: ModelPolicyRecord) {
+    return policy.tenantId === null
+      ? t("policyTable.platformScope")
+      : t("policyTable.tenantScope");
+  }
+
+  function policyTitle(policy: ModelPolicyRecord) {
+    return (
+      policy.name ??
+      modelById.get(policy.modelId)?.modelName ??
+      t("policyTable.unnamed")
+    );
+  }
+
+  function policyWindow(policy: ModelPolicyRecord) {
+    const from = policy.effectiveAt.slice(0, 10);
+    return policy.expiresAt
+      ? `${from} → ${policy.expiresAt.slice(0, 10)}`
+      : `${from} → ${t("table.permanent")}`;
+  }
 
   /* 列定义每次渲染重建：单元格取值依赖 t / 对话框开关等本次渲染的闭包，
      memo 起来反而要把它们全列进依赖数组。 */
-  const policyColumns: DataTableColumn<ProductModelPolicyRecord>[] = [
+  const policyColumns: DataTableColumn<ModelPolicyRecord>[] = [
     {
       id: "scope",
       header: t("policyTable.columns.scope"),
       cell: (policy) => (
         <TableTitleCell
           icon="shield-check"
-          title={policy.scopeName}
-          description={`${policySubjectLabel(policy)} · ${policy.subjectId} · ${
-            policy.scopeType === "product"
-              ? `${policy.productCode} · ${policy.productRegion ? t(`policyTable.region.${policy.productRegion}`) : t("policyTable.region.none")}`
-              : policy.scopeCode
-          }`}
-          {...(policy.note ? { tooltip: policy.note } : {})}
+          title={policyTitle(policy)}
+          description={policyScopeLabel(policy)}
         />
       ),
     },
@@ -360,56 +351,40 @@ export function ModelGrantsPage() {
       id: "status",
       header: t("policyTable.columns.status"),
       align: "center",
-      cell: (policy) => {
-        const status = policyStatus(policy);
-        return (
-          <StatusBadge tone={POLICY_STATUS_TONE[status]}>
-            {t(`status.${status}`)}
-          </StatusBadge>
-        );
-      },
+      cell: (policy) => (
+        <StatusBadge tone={isEnabled(policy.state) ? "success" : "neutral"}>
+          {isEnabled(policy.state) ? t("status.active") : t("status.inactive")}
+        </StatusBadge>
+      ),
     },
     {
       id: "model",
       header: t("policyTable.columns.model"),
-      cell: (policy) => (
-        <TableTitleCell
-          title={
-            policy.modelCode
-              ? (modelByCode.get(policy.modelCode)?.modelName ??
-                policy.modelCode)
-              : t("policyTable.undefinedModel")
-          }
-          description={policy.modelCode ?? t("policyTable.defaultDeny")}
-        />
-      ),
+      cell: (policy) => {
+        const model = modelById.get(policy.modelId);
+        return (
+          <TableTitleCell
+            title={model?.modelName ?? t("policyTable.unknownModel")}
+            description={model?.modelCode ?? t("policyTable.unknownModelHint")}
+          />
+        );
+      },
     },
     {
-      id: "agent",
-      header: t("policyTable.columns.agent"),
-      cell: (policy) => (
-        <TableTitleCell
-          title={policy.agentName}
-          description={policy.agentCode ?? t("table.allAgents")}
-        />
-      ),
-    },
-    {
-      id: "quota",
-      header: t("policyTable.columns.quota"),
-      align: "right",
-      cell: (policy) =>
-        formatTokens(
-          policy.quotaTokens,
-          policy.isUnlimited,
-          t("policyTable.unlimited"),
-        ),
+      id: "rate",
+      header: t("policyTable.columns.rate"),
+      cell: (policy) => rateSummary(policy, t("policyTable.noRate")),
     },
     {
       id: "priority",
       header: t("policyTable.columns.priority"),
       align: "right",
       cell: (policy) => policy.priority,
+    },
+    {
+      id: "window",
+      header: t("policyTable.columns.window"),
+      cell: (policy) => policyWindow(policy),
     },
   ];
 
@@ -438,6 +413,20 @@ export function ModelGrantsPage() {
           {isEnabled(grant.state) ? t("status.active") : t("status.inactive")}
         </StatusBadge>
       ),
+    },
+    {
+      /* 有授权、无策略：这一列就是上面第三张统计卡的逐行落点。 */
+      id: "coverage",
+      header: t("table.columns.coverage"),
+      align: "center",
+      cell: (grant) =>
+        uncoveredGrantIds.has(grant.id) ? (
+          <StatusBadge tone="warning">{t("table.uncovered")}</StatusBadge>
+        ) : (
+          <StatusBadge tone="neutral" icon={false}>
+            {t("table.covered")}
+          </StatusBadge>
+        ),
     },
     {
       id: "tenant",
@@ -622,7 +611,10 @@ export function ModelGrantsPage() {
             icon: "shield-check",
             label: t("summary.policies"),
             value: formatNumber(policies.length),
-            tags: [`${t("filters.usable")} ${formatNumber(usablePolicies)}`],
+            tags: [
+              `${t("status.active")} ${formatNumber(activePolicies)}`,
+              `${t("filters.platform")} ${formatNumber(platformPolicyCount)}`,
+            ],
           },
           {
             id: "overrides",
@@ -632,18 +624,17 @@ export function ModelGrantsPage() {
             value: formatNumber(grants.length),
             tags: [
               `${t("status.active")} ${formatNumber(grants.filter((grant) => isEnabled(grant.state)).length)}`,
-              `平台主体 ${formatNumber(platformPolicyCount)}`,
             ],
             tone: "success",
           },
           {
-            id: "undefined",
-            help: t("summary.undefinedPoliciesHelp"),
-            icon: "clock-counter-clockwise",
-            label: t("summary.undefinedPolicies"),
-            value: formatNumber(undefinedPolicies),
-            tags: [t("filters.undefined")],
-            tone: undefinedPolicies ? "warning" : "success",
+            id: "uncovered",
+            help: t("summary.uncoveredHelp"),
+            icon: "warning",
+            label: t("summary.uncovered"),
+            value: formatNumber(uncoveredGrants.length),
+            tags: [t("table.uncovered")],
+            tone: uncoveredGrants.length ? "warning" : "success",
           },
         ]}
       />
@@ -656,7 +647,7 @@ export function ModelGrantsPage() {
           <ViewModeSwitch
             value={viewMode}
             onChange={setViewMode}
-            ariaLabel="模型授权展示方式"
+            ariaLabel={t("policyTable.viewModeAriaLabel")}
           />
           <span className="inline-flex min-h-control-lg items-center pl-xs text-body-md font-extrabold whitespace-nowrap text-foreground max-lg:mr-auto">
             {formatNumber(filteredPolicies.length)}
@@ -676,7 +667,7 @@ export function ModelGrantsPage() {
               setFilter("all");
             }}
           >
-            重置
+            {t("empty.resetFilters")}
           </Button>
           <>
             <NativeSelect
@@ -694,6 +685,9 @@ export function ModelGrantsPage() {
               ))}
             </NativeSelect>
           </>
+          <Button asChild variant="outline">
+            <Link href="/atlas">{t("actions.managePolicies")}</Link>
+          </Button>
           <ActionButton icon="plus" onClick={openCreateGrantDialog}>
             {t("actions.addGrant")}
           </ActionButton>
@@ -716,13 +710,15 @@ export function ModelGrantsPage() {
               onSelectionChange={(keys) => setSelectedPolicyIds(new Set(keys))}
               rowActions={(policy) => (
                 <ActionMenu
-                  label={`${policy.scopeName} 操作`}
+                  label={t("actions.policyMenu", { name: policyTitle(policy) })}
                   items={[
                     {
-                      id: "readonly",
-                      label: "策略只读",
-                      icon: "shield-check",
-                      disabled: true,
+                      id: "manage",
+                      label: t("actions.managePolicies"),
+                      icon: "arrow-right",
+                      onSelect: () => {
+                        window.location.assign("/atlas");
+                      },
                     },
                   ]}
                 />
@@ -736,6 +732,16 @@ export function ModelGrantsPage() {
                     icon="warning"
                     title={t("empty.loadFailedTitle")}
                     description={t("empty.loadFailedDescription")}
+                  />
+                ) : policies.length === 0 ? (
+                  <EmptyState
+                    title={t("empty.noPoliciesTitle")}
+                    description={t("empty.noPoliciesDescription")}
+                    action={
+                      <Button asChild variant="outline">
+                        <Link href="/atlas">{t("actions.managePolicies")}</Link>
+                      </Button>
+                    }
                   />
                 ) : (
                   <EmptyState
@@ -764,37 +770,28 @@ export function ModelGrantsPage() {
               })}
             >
               {pagedPolicies.map((policy) => {
-                const model = policy.modelCode
-                  ? modelByCode.get(policy.modelCode)
-                  : undefined;
-                const status = policyStatus(policy);
-                const modelName = policy.modelCode
-                  ? (model?.modelName ?? policy.modelCode)
-                  : t("policyTable.undefinedModel");
-                const modelCode =
-                  policy.modelCode ?? t("policyTable.defaultDeny");
+                const model = modelById.get(policy.modelId);
+                const enabled = isEnabled(policy.state);
 
                 return (
                   <MetricListCard
                     key={policy.id}
                     icon="shield-check"
-                    title={policy.scopeName}
-                    description={`${policySubjectLabel(policy)} · ${policy.scopeCode}`}
-                    tone={POLICY_STATUS_TONE[status]}
+                    title={policyTitle(policy)}
+                    description={policyScopeLabel(policy)}
+                    tone={enabled ? "success" : "neutral"}
                     actions={
-                      <StatusBadge tone={POLICY_STATUS_TONE[status]}>
-                        {t(`status.${status}`)}
+                      <StatusBadge tone={enabled ? "success" : "neutral"}>
+                        {enabled ? t("status.active") : t("status.inactive")}
                       </StatusBadge>
                     }
                     badges={
                       <>
-                        <Badge>{modelName}</Badge>
                         <Badge>
-                          {formatTokens(
-                            policy.quotaTokens,
-                            policy.isUnlimited,
-                            t("policyTable.unlimited"),
-                          )}
+                          {model?.modelName ?? t("policyTable.unknownModel")}
+                        </Badge>
+                        <Badge>
+                          {rateSummary(policy, t("policyTable.noRate"))}
                         </Badge>
                       </>
                     }
@@ -805,13 +802,14 @@ export function ModelGrantsPage() {
                         label: t("policyTable.columns.priority"),
                       },
                       {
-                        key: "agent",
-                        value: policy.agentName,
-                        label: policy.agentCode ?? t("table.allAgents"),
+                        key: "window",
+                        value: policyWindow(policy),
+                        label: t("policyTable.columns.window"),
                       },
                       {
                         key: "model",
-                        value: modelCode,
+                        value:
+                          model?.modelCode ?? t("policyTable.unknownModelHint"),
                         label: t("policyTable.columns.model"),
                       },
                     ]}
