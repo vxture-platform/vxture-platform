@@ -78,6 +78,7 @@ const DETAIL_ROW = {
   status: "draft",
   is_locked: false,
   is_current: false,
+  created_at: "2026-08-31T00:00:00Z",
   plan_code: "karda-pro",
   plan_name: "Karda Pro",
   prices: [],

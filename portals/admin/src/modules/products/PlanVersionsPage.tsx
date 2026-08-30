@@ -1,50 +1,69 @@
 "use client";
 
 /**
- * PlanVersionsPage — 套餐版本生命周期管理（product_320）。
+ * PlanVersionsPage.tsx - the plan publishing desk (product × tier matrix)
+ * @package  @vxture/admin
+ * @layer    Presentation
+ * @category module
+ * @description
+ *   Full redesign of the plan publishing surface (90-plan-publishing.md).
+ *   The platform publishes plans for MANY products, each on a ladder of at
+ *   most five commercial tiers — so the entry point is a product × tier
+ *   matrix, not a plan dropdown: every sellable product is a row, every tier
+ *   a slot, and an empty slot is an explicit "nothing published here yet"
+ *   with a create action. Selecting a plan opens its full plan_version
+ *   timeline (v1…vN with status, current pointer, prices and dates); drafts
+ *   are edited and published from there, published versions stay read-only.
  *
- * 运营在此选择方案 → 查看其 plan_version（草稿/发布态）→ 编辑草稿的价格与配额 →
- * 发布（draft→published：冻结 + 设为当前版本，危操作走 step-up）。发布态版本只读。
+ * @author AI-Generated
+ * @date 2026-09-01
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
-  StatusBadge,
+  Badge,
   Button,
+  DialogForm,
   Input,
+  Label,
   NativeSelect,
   PanelItem,
   PanelList,
+  StatusBadge,
   TableTitleCell,
   Textarea,
   ViewLayout,
 } from "@vxture/design-system";
+import { TIERS } from "@vxture-platform/shared";
 import {
+  createPlanDraftVersion,
+  createProductPlan,
+  fetchPlanMatrix,
   fetchPlanVersion,
   fetchPlanVersions,
   fetchProductCapabilities,
-  fetchProductPlans,
   publishPlanVersion,
   replacePlanVersionBundledComponents,
   updateDraftPlanVersion,
+  type PlanMatrixPlan,
+  type PlanMatrixProduct,
   type PlanVersionBundledComponentInput,
   type PlanVersionComponent,
   type PlanVersionDetail,
   type PlanVersionSummary,
 } from "@/api/admin-bff";
-import type {
-  ProductCapabilityRecord,
-  ProductPlanRecord,
-} from "@/entities/console";
+import type { ProductCapabilityRecord } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
+import { tierBadgeClass, tierLabel } from "@/modules/shared/tier-level";
+import { formatDate } from "@/modules/tenants/tenant-utils";
 import { isStepUpCancelled, useStepUp } from "@/providers/StepUpProvider";
 
-/**
- * Editor row for one bundled component. Quota is edited as JSON text (same
- * control as the primary quota above it); features / priority are carried
- * through untouched so a re-save never drops what seed or an earlier edit set.
- */
+// ============================================================================
+// Local editor state
+// ============================================================================
+
+/** Editor row for one bundled component (quota edited as JSON text). */
 interface BundledDraft {
   productCode: string;
   productName: string;
@@ -65,12 +84,13 @@ function toBundledDrafts(components: PlanVersionComponent[]): BundledDraft[] {
     }));
 }
 
-/**
- * 这三个徽章原本挂的是 `vx-badge-positive` / `-neutral` / `-warning`——那三个类
- * **哪儿都没定义**（admin 样式表没有，DS 也没有），所以语气色一直没生效，
- * 三种状态渲染成同一个默认徽章。换成 `StatusBadge` 的 `tone`：语气是它的
- * 契约，不靠调用方拼类名。
- */
+/** The matrix slot an operator is creating a plan into. */
+interface CreateTarget {
+  productCode: string;
+  productName: string;
+  tier: string;
+}
+
 function statusBadge(status: string, isCurrent: boolean) {
   if (status === "published") {
     return (
@@ -82,23 +102,45 @@ function statusBadge(status: string, isCurrent: boolean) {
   return <StatusBadge tone="warning">草稿 · 待发布</StatusBadge>;
 }
 
-// Money-input prefill: the BFF now serializes prices at fixed 2dp, but keep
-// the guard so a legacy 6dp string never reaches the editor input.
+// The BFF serializes prices at fixed 2dp; the guard keeps a legacy 6dp string
+// out of the money input.
 function normalizePrice(raw: string | undefined): string {
   if (!raw) return "";
   const n = Number(raw);
   return Number.isFinite(n) ? n.toFixed(2) : "";
 }
 
+function priceLine(prices: { cycleUnit: string; price: string }[]): string {
+  if (prices.length === 0) return "未定价";
+  return prices
+    .map((p) => {
+      const cycle =
+        p.cycleUnit === "month"
+          ? "月"
+          : p.cycleUnit === "year"
+            ? "年"
+            : p.cycleUnit;
+      return `¥${Number(p.price).toFixed(2)}/${cycle}`;
+    })
+    .join(" · ");
+}
+
+// ============================================================================
+// Page
+// ============================================================================
+
 export function PlanVersionsPage() {
-  const tShared = useTranslations();
   const t = useTranslations("planVersionsPage");
+  const locale = useLocale();
   const { runWithStepUp } = useStepUp();
-  const [plans, setPlans] = useState<ProductPlanRecord[]>([]);
-  // Full catalog (every non-deleted product, active first) — bundled picks must
-  // reach infrastructure products such as atlas / runos, which have no plans.
+
+  const [matrix, setMatrix] = useState<PlanMatrixProduct[]>([]);
+  // Full catalog for bundled picks — must reach infrastructure products such
+  // as atlas / runos, which sell no plans of their own.
   const [catalog, setCatalog] = useState<ProductCapabilityRecord[]>([]);
-  const [planId, setPlanId] = useState("");
+  const [selectedPlan, setSelectedPlan] = useState<
+    (PlanMatrixPlan & { productCode: string; productName: string }) | null
+  >(null);
   const [versions, setVersions] = useState<PlanVersionSummary[]>([]);
   const [detail, setDetail] = useState<PlanVersionDetail | null>(null);
   const [priceMonth, setPriceMonth] = useState("");
@@ -108,25 +150,16 @@ export function PlanVersionsPage() {
   const [bundledPick, setBundledPick] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [createTarget, setCreateTarget] = useState<CreateTarget | null>(null);
+
+  const loadMatrix = useCallback(async () => {
+    setMatrix(await fetchPlanMatrix());
+  }, []);
 
   useEffect(() => {
-    void fetchProductPlans().then(setPlans);
+    void loadMatrix();
     void fetchProductCapabilities().then(setCatalog);
-  }, []);
-
-  const loadVersions = useCallback((id: string) => {
-    if (!id) {
-      setVersions([]);
-      return;
-    }
-    void fetchPlanVersions(id).then(setVersions);
-  }, []);
-
-  useEffect(() => {
-    setDetail(null);
-    setMessage(null);
-    loadVersions(planId);
-  }, [planId, loadVersions]);
+  }, [loadMatrix]);
 
   async function openVersion(versionId: string) {
     setMessage(null);
@@ -145,15 +178,47 @@ export function PlanVersionsPage() {
     }
   }
 
+  /** Select a plan from the matrix and land on its most actionable version. */
+  const selectPlan = useCallback(
+    async (
+      plan: PlanMatrixPlan,
+      product: Pick<PlanMatrixProduct, "productCode" | "productName">,
+    ) => {
+      setSelectedPlan({
+        ...plan,
+        productCode: product.productCode,
+        productName: product.productName,
+      });
+      setDetail(null);
+      setMessage(null);
+      const list = await fetchPlanVersions(plan.planId);
+      setVersions(list);
+      // The draft (if any) is what an operator came to work on; otherwise the
+      // current published version is the truth worth reading first.
+      const target =
+        list.find((v) => v.status === "draft" && !v.isLocked) ??
+        list.find((v) => v.isCurrent) ??
+        list[list.length - 1];
+      if (target) await openVersion(target.id);
+    },
+    [],
+  );
+
+  /** Refresh matrix + version list after a write, keeping the selection. */
+  async function refreshAfterWrite(planId: string) {
+    await loadMatrix();
+    setVersions(await fetchPlanVersions(planId));
+  }
+
   const editable = detail?.status === "draft" && !detail.isLocked;
 
-  // Products still available to bundle: not the version's own primary product
-  // and not already on the list. Catalog order (active first) is kept.
   const bundledCandidates = catalog.filter(
     (product) =>
       product.productCode !== detail?.productCode &&
       !bundled.some((item) => item.productCode === product.productCode),
   );
+
+  // ── draft editing ─────────────────────────────────────────────────────────
 
   async function saveDraft() {
     if (!detail) return;
@@ -182,7 +247,7 @@ export function PlanVersionsPage() {
       if (quota !== undefined) body.quota = quota;
       const updated = await updateDraftPlanVersion(detail.id, body);
       setDetail(updated);
-      loadVersions(planId);
+      await refreshAfterWrite(updated.planId);
       setMessage("草稿已保存。");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "保存失败。");
@@ -198,7 +263,7 @@ export function PlanVersionsPage() {
     try {
       await runWithStepUp(() => publishPlanVersion(detail.id));
       await openVersion(detail.id);
-      loadVersions(planId);
+      await refreshAfterWrite(detail.planId);
       setMessage("已发布：该版本已冻结并设为当前版本。");
     } catch (err) {
       if (isStepUpCancelled(err)) {
@@ -210,6 +275,34 @@ export function PlanVersionsPage() {
       setBusy(false);
     }
   }
+
+  async function openNextDraft() {
+    if (!selectedPlan) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const draft = await createPlanDraftVersion(selectedPlan.planId);
+      await refreshAfterWrite(selectedPlan.planId);
+      setDetail(draft);
+      setPriceMonth(
+        normalizePrice(
+          draft.prices.find((p) => p.cycleUnit === "month")?.price,
+        ),
+      );
+      setPriceYear(
+        normalizePrice(draft.prices.find((p) => p.cycleUnit === "year")?.price),
+      );
+      setQuotaText(JSON.stringify(draft.quota, null, 2));
+      setBundled(toBundledDrafts(draft.components));
+      setMessage(`已开出草稿 v${draft.versionNo}（自当前版本克隆）。`);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "开草稿失败。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // ── bundled components (unchanged contract: PUT = full replace) ───────────
 
   function addBundled() {
     const product = bundledCandidates.find(
@@ -233,16 +326,14 @@ export function PlanVersionsPage() {
     setBundled((old) => old.filter((item) => item.productCode !== productCode));
   }
 
-  function updateBundledQuota(productCode: string, quotaText: string) {
+  function updateBundledQuota(productCode: string, text: string) {
     setBundled((old) =>
       old.map((item) =>
-        item.productCode === productCode ? { ...item, quotaText } : item,
+        item.productCode === productCode ? { ...item, quotaText: text } : item,
       ),
     );
   }
 
-  // PUT = full replace: the whole list goes every time, so a removed row is
-  // simply absent from the body. Step-up gated like publish.
   async function saveBundled() {
     if (!detail) return;
     setBusy(true);
@@ -282,221 +373,459 @@ export function PlanVersionsPage() {
     }
   }
 
+  // ── render ────────────────────────────────────────────────────────────────
+
   return (
     <ViewLayout>
       <PageHeader
-        title="套餐版本"
-        description="管理 plan_version 的草稿与发布：编辑草稿的价格与配额，发布后版本冻结并成为当前版本。"
+        title="套餐发布"
+        description="平台面向多个产品发布套餐：每个产品在五档商业阶梯（free / starter / pro / business / enterprise）内各发布至多一条套餐，可少不可多。点选套餐查看完整版本史（plan_version），草稿在此编辑与发布，已发布版本冻结只读。"
       />
 
-      <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium">选择方案</label>
-        <NativeSelect
-          value={planId}
-          onChange={(e) => setPlanId(e.target.value)}
-        >
-          <option value="">— 请选择方案 —</option>
-          {plans.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.planName}（{p.planCode}）
-            </option>
-          ))}
-        </NativeSelect>
+      {message ? (
+        <p className="text-sm" role="status">
+          {message}
+        </p>
+      ) : null}
+
+      {/* ── product × tier matrix ─────────────────────────────────────────── */}
+      <div className="flex flex-col gap-6">
+        {matrix.map((product) => {
+          const publishedTiers = new Set(
+            product.plans
+              .filter((plan) => plan.currentVersion)
+              .map((plan) => plan.tier),
+          );
+          return (
+            <section key={product.productCode} className="flex flex-col gap-2">
+              <div className="flex items-baseline gap-2">
+                <h3 className="text-sm font-semibold">{product.productName}</h3>
+                <span className="text-xs text-vx-gray-500">
+                  {product.productCode}
+                </span>
+                {product.productStatus !== "active" ? (
+                  <StatusBadge tone="neutral">
+                    {product.productStatus}
+                  </StatusBadge>
+                ) : null}
+                <span className="ml-auto text-xs text-vx-gray-500">
+                  已发布 {publishedTiers.size} / {TIERS.length} 档
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-5">
+                {TIERS.map((tier) => {
+                  const plans = product.plans.filter((p) => p.tier === tier);
+                  const crowded = plans.length > 1;
+                  return (
+                    <div
+                      key={tier}
+                      className="flex min-h-24 flex-col gap-2 rounded-md border border-vx-gray-200 p-2"
+                    >
+                      <div className="flex items-center gap-1">
+                        <Badge
+                          variant="outline"
+                          className={tierBadgeClass(tier)}
+                        >
+                          {tierLabel(tier)}
+                        </Badge>
+                        {crowded ? (
+                          <StatusBadge tone="warning">同档多套餐</StatusBadge>
+                        ) : null}
+                      </div>
+                      {plans.map((plan) => {
+                        const active = selectedPlan?.planId === plan.planId;
+                        return (
+                          <button
+                            key={plan.planId}
+                            type="button"
+                            onClick={() => void selectPlan(plan, product)}
+                            className={`flex flex-col items-start gap-0.5 rounded-md border p-2 text-left text-sm transition-colors ${
+                              active
+                                ? "border-vx-primary bg-vx-primary/5"
+                                : "border-transparent hover:border-vx-gray-300"
+                            }`}
+                          >
+                            <span className="font-medium">{plan.planName}</span>
+                            <span className="text-xs text-vx-gray-500">
+                              {plan.planCode}
+                            </span>
+                            <span className="text-xs text-vx-gray-500">
+                              {plan.currentVersion
+                                ? `v${plan.currentVersion.versionNo} · ${priceLine(plan.currentVersion.prices)}`
+                                : "未发布"}
+                              {plan.draftVersion
+                                ? ` · 草稿 v${plan.draftVersion.versionNo}`
+                                : ""}
+                            </span>
+                          </button>
+                        );
+                      })}
+                      {plans.length === 0 ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCreateTarget({
+                              productCode: product.productCode,
+                              productName: product.productName,
+                              tier,
+                            })
+                          }
+                          className="flex flex-1 items-center justify-center rounded-md border border-dashed border-vx-gray-300 text-xs text-vx-gray-500 transition-colors hover:border-vx-gray-400 hover:text-vx-gray-700"
+                        >
+                          + 新建套餐
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
+        {matrix.length === 0 ? (
+          <p className="text-sm text-vx-gray-500">
+            暂无可独立订阅的产品——基础设施产品（如 atlas /
+            runos）不直接售卖套餐，只作为捆绑组件进入其他产品的版本。
+          </p>
+        ) : null}
       </div>
 
-      {message ? <p className="text-sm">{message}</p> : null}
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold">版本列表</h3>
-          {versions.length === 0 ? (
-            <p className="text-sm text-vx-gray-500">尚无版本或未选择方案。</p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {versions.map((v) => (
-                <li key={v.id}>
-                  <Button
-                    variant="outline"
-                    onClick={() => openVersion(v.id)}
-                    className="w-full justify-between"
-                  >
-                    <span className="flex items-center gap-2">
-                      <strong>v{v.versionNo}</strong>
-                      {statusBadge(v.status, v.isCurrent)}
-                    </span>
-                    <span className="text-sm text-vx-gray-500">
-                      {v.prices.length > 0
-                        ? v.prices
-                            .map(
-                              (p) =>
-                                `${p.cycleUnit} ¥${Number(p.price).toFixed(2)}`,
-                            )
-                            .join(" · ")
-                        : "无价格"}
-                    </span>
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {detail ? (
-          <div className="flex flex-col gap-4">
-            <h3 className="text-sm font-semibold">
-              编辑 v{detail.versionNo} · {detail.planName}{" "}
-              {statusBadge(detail.status, detail.isCurrent)}
-            </h3>
-            {!editable ? (
-              <p className="text-sm text-vx-gray-500">
-                已发布版本为只读（受锁保护，不可编辑）。
-              </p>
-            ) : null}
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">月付价（¥）</label>
-                <Input
-                  type="number"
-                  value={priceMonth}
-                  disabled={!editable}
-                  onChange={(e) => setPriceMonth(e.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">年付价（¥）</label>
-                <Input
-                  type="number"
-                  value={priceYear}
-                  disabled={!editable}
-                  onChange={(e) => setPriceYear(e.target.value)}
-                />
-              </div>
+      {/* ── version timeline + editor ─────────────────────────────────────── */}
+      {selectedPlan ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold">
+                {selectedPlan.planName}（{selectedPlan.planCode}）版本史
+              </h3>
+              <Badge
+                variant="outline"
+                className={tierBadgeClass(selectedPlan.tier)}
+              >
+                {tierLabel(selectedPlan.tier)}
+              </Badge>
+              <span className="text-xs text-vx-gray-500">
+                {selectedPlan.productName}
+              </span>
             </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">配额（JSON）</label>
-              <Textarea
-                value={quotaText}
-                disabled={!editable}
-                onChange={(e) => setQuotaText(e.target.value)}
-                rows={12}
-                className="font-mono"
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
+            {versions.length === 0 ? (
+              <p className="text-sm text-vx-gray-500">尚无版本。</p>
+            ) : (
+              <PanelList>
+                {[...versions].reverse().map((v) => (
+                  <PanelItem
+                    key={v.id}
+                    main={
+                      <button
+                        type="button"
+                        onClick={() => void openVersion(v.id)}
+                        className={`flex w-full items-center justify-between gap-2 rounded-md p-1 text-left ${
+                          detail?.id === v.id ? "bg-vx-primary/5" : ""
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <strong>v{v.versionNo}</strong>
+                          {statusBadge(v.status, v.isCurrent)}
+                        </span>
+                        <span className="text-xs text-vx-gray-500">
+                          {priceLine(v.prices)} ·{" "}
+                          {formatDate(v.createdAt, locale)}
+                        </span>
+                      </button>
+                    }
+                  />
+                ))}
+              </PanelList>
+            )}
+            {!versions.some((v) => v.status === "draft" && !v.isLocked) ? (
               <Button
                 variant="outline"
-                onClick={saveDraft}
-                disabled={!editable || busy}
+                onClick={openNextDraft}
+                disabled={busy}
+                className="self-start"
               >
-                保存草稿
+                开新草稿版本（自当前版本克隆）
               </Button>
-              <Button onClick={publish} disabled={!editable || busy}>
-                发布该版本
-              </Button>
-            </div>
+            ) : null}
+          </div>
 
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1">
-                <h4 className="text-sm font-semibold">{t("bundled.title")}</h4>
+          {detail ? (
+            <div className="flex flex-col gap-4">
+              <h3 className="text-sm font-semibold">
+                v{detail.versionNo} · {detail.planName}{" "}
+                {statusBadge(detail.status, detail.isCurrent)}
+              </h3>
+              {!editable ? (
                 <p className="text-sm text-vx-gray-500">
-                  {t("bundled.description")}
+                  已发布版本为只读（受锁保护）；要改动请开新草稿版本。
                 </p>
+              ) : null}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium">月付价（¥）</label>
+                  <Input
+                    type="number"
+                    value={priceMonth}
+                    disabled={!editable}
+                    onChange={(e) => setPriceMonth(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium">年付价（¥）</label>
+                  <Input
+                    type="number"
+                    value={priceYear}
+                    disabled={!editable}
+                    onChange={(e) => setPriceYear(e.target.value)}
+                  />
+                </div>
               </div>
 
-              {bundled.length === 0 ? (
-                <p className="text-sm text-vx-gray-500">{t("bundled.empty")}</p>
-              ) : (
-                <PanelList>
-                  {bundled.map((item) => (
-                    <PanelItem
-                      key={item.productCode}
-                      main={
-                        <div className="flex flex-col gap-1">
-                          <TableTitleCell
-                            title={item.productName}
-                            description={item.productCode}
-                          />
-                          <Textarea
-                            value={item.quotaText}
-                            disabled={!editable}
-                            aria-label={t("bundled.quotaLabel", {
-                              name: item.productName,
-                            })}
-                            onChange={(e) =>
-                              updateBundledQuota(
-                                item.productCode,
-                                e.target.value,
-                              )
-                            }
-                            rows={4}
-                            className="font-mono"
-                          />
-                        </div>
-                      }
-                      trail={
-                        editable ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={busy}
-                            onClick={() => removeBundled(item.productCode)}
-                          >
-                            {t("bundled.remove")}
-                          </Button>
-                        ) : null
-                      }
-                    />
-                  ))}
-                </PanelList>
-              )}
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium">配额（JSON）</label>
+                <Textarea
+                  value={quotaText}
+                  disabled={!editable}
+                  onChange={(e) => setQuotaText(e.target.value)}
+                  rows={12}
+                  className="font-mono"
+                />
+              </div>
 
-              {editable ? (
-                <div className="flex items-end gap-3">
-                  <div className="flex flex-1 flex-col gap-1">
-                    <label className="text-sm font-medium">
-                      {t("bundled.pickLabel")}
-                    </label>
-                    <NativeSelect
-                      value={bundledPick}
-                      onChange={(e) => setBundledPick(e.target.value)}
-                    >
-                      <option value="">{t("bundled.pickPlaceholder")}</option>
-                      {bundledCandidates.map((product) => (
-                        <option
-                          key={product.productCode}
-                          value={product.productCode}
-                        >
-                          {product.productName} · {product.productCode}
-                        </option>
-                      ))}
-                    </NativeSelect>
-                  </div>
-                  <Button
-                    variant="outline"
-                    onClick={addBundled}
-                    disabled={!bundledPick || busy}
-                  >
-                    {t("bundled.add")}
-                  </Button>
-                  <Button onClick={saveBundled} disabled={busy}>
-                    {t("bundled.save")}
-                  </Button>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  onClick={saveDraft}
+                  disabled={!editable || busy}
+                >
+                  保存草稿
+                </Button>
+                <Button onClick={publish} disabled={!editable || busy}>
+                  发布该版本
+                </Button>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <h4 className="text-sm font-semibold">
+                    {t("bundled.title")}
+                  </h4>
+                  <p className="text-sm text-vx-gray-500">
+                    {t("bundled.description")}
+                  </p>
                 </div>
-              ) : null}
+
+                {bundled.length === 0 ? (
+                  <p className="text-sm text-vx-gray-500">
+                    {t("bundled.empty")}
+                  </p>
+                ) : (
+                  <PanelList>
+                    {bundled.map((item) => (
+                      <PanelItem
+                        key={item.productCode}
+                        main={
+                          <div className="flex flex-col gap-1">
+                            <TableTitleCell
+                              title={item.productName}
+                              description={item.productCode}
+                            />
+                            <Textarea
+                              value={item.quotaText}
+                              disabled={!editable}
+                              aria-label={t("bundled.quotaLabel", {
+                                name: item.productName,
+                              })}
+                              onChange={(e) =>
+                                updateBundledQuota(
+                                  item.productCode,
+                                  e.target.value,
+                                )
+                              }
+                              rows={4}
+                              className="font-mono"
+                            />
+                          </div>
+                        }
+                        trail={
+                          editable ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={busy}
+                              onClick={() => removeBundled(item.productCode)}
+                            >
+                              {t("bundled.remove")}
+                            </Button>
+                          ) : null
+                        }
+                      />
+                    ))}
+                  </PanelList>
+                )}
+
+                {editable ? (
+                  <div className="flex items-end gap-3">
+                    <div className="flex flex-1 flex-col gap-1">
+                      <label className="text-sm font-medium">
+                        {t("bundled.pickLabel")}
+                      </label>
+                      <NativeSelect
+                        value={bundledPick}
+                        onChange={(e) => setBundledPick(e.target.value)}
+                      >
+                        <option value="">{t("bundled.pickPlaceholder")}</option>
+                        {bundledCandidates.map((product) => (
+                          <option
+                            key={product.productCode}
+                            value={product.productCode}
+                          >
+                            {product.productName} · {product.productCode}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={addBundled}
+                      disabled={!bundledPick || busy}
+                    >
+                      {t("bundled.add")}
+                    </Button>
+                    <Button onClick={saveBundled} disabled={busy}>
+                      {t("bundled.save")}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold">{tShared("actions.edit")}</h3>
+          ) : (
             <p className="text-sm text-vx-gray-500">
-              从左侧选择一个版本进行查看/编辑。
+              从左侧版本史选择一个版本查看或编辑。
             </p>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm text-vx-gray-500">
+          从上方矩阵点选一条套餐查看版本史，或在空档新建套餐。
+        </p>
+      )}
+
+      {createTarget ? (
+        <PlanCreateDialog
+          target={createTarget}
+          busy={busy}
+          onClose={() => setCreateTarget(null)}
+          onCreated={async (created) => {
+            setCreateTarget(null);
+            await loadMatrix();
+            setSelectedPlan({
+              planId: created.planId,
+              planCode: created.planCode,
+              planName: created.planName,
+              planStatus: "active",
+              tier: createTarget.tier,
+              currentVersion: null,
+              draftVersion: { id: created.id, versionNo: created.versionNo },
+              versionCount: 1,
+              productCode: createTarget.productCode,
+              productName: createTarget.productName,
+            });
+            setVersions(await fetchPlanVersions(created.planId));
+            await openVersion(created.id);
+            setMessage(
+              `套餐 ${created.planCode} 已创建（v1 草稿）——补上价格与配额后发布。`,
+            );
+          }}
+        />
+      ) : null}
     </ViewLayout>
+  );
+}
+
+// ============================================================================
+// Create dialog
+// ============================================================================
+
+function PlanCreateDialog({
+  target,
+  busy,
+  onClose,
+  onCreated,
+}: {
+  target: CreateTarget;
+  busy: boolean;
+  onClose: () => void;
+  onCreated: (created: PlanVersionDetail) => Promise<void>;
+}) {
+  const [planCode, setPlanCode] = useState(
+    `${target.productCode}-${target.tier}`,
+  );
+  const [planName, setPlanName] = useState("");
+  const [description, setDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const created = await createProductPlan({
+        planCode: planCode.trim(),
+        planName: planName.trim(),
+        ...(description.trim() ? { description: description.trim() } : {}),
+        productCode: target.productCode,
+        tier: target.tier,
+      });
+      await onCreated(created);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "创建失败。");
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <DialogForm
+      open
+      title={`新建套餐 · ${target.productName} · ${tierLabel(target.tier)}`}
+      description="创建套餐骨架（v1 草稿 + 主组件档位），价格与配额在草稿里补，发布前不可售。"
+      submitLabel="创建套餐"
+      submitting={submitting || busy}
+      submitDisabled={!planCode.trim() || !planName.trim()}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      onSubmit={submit}
+    >
+      {error ? <p className="text-sm text-vx-danger">{error}</p> : null}
+      <Label>
+        套餐编码
+        <Input
+          value={planCode}
+          onChange={(e) => setPlanCode(e.target.value)}
+          placeholder="如 karda-starter（小写字母 / 数字 / 连字符）"
+          required
+        />
+      </Label>
+      <Label>
+        套餐名称
+        <Input
+          value={planName}
+          onChange={(e) => setPlanName(e.target.value)}
+          placeholder="如 Karda 入门版"
+          required
+        />
+      </Label>
+      <Label>
+        描述
+        <Textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="选填：这档套餐卖给谁、含什么"
+          rows={3}
+        />
+      </Label>
+    </DialogForm>
   );
 }

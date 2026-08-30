@@ -340,6 +340,8 @@ export interface PlanVersionSummary {
   status: string;
   isLocked: boolean;
   isCurrent: boolean;
+  /** ISO timestamp — the date axis of the version timeline. */
+  createdAt: string;
   prices: PlanVersionPrice[];
 }
 
@@ -417,6 +419,67 @@ export async function publishPlanVersion(
     "POST",
     undefined,
     "Failed to publish version",
+  );
+}
+
+// ── plan publishing desk (product × tier matrix; 90-plan-publishing.md) ─────
+
+export interface PlanMatrixVersionRef {
+  id: string;
+  versionNo: number;
+}
+
+/** One plan laid on a product's tier ladder. */
+export interface PlanMatrixPlan {
+  planId: string;
+  planCode: string;
+  planName: string;
+  planStatus: string;
+  tier: string;
+  currentVersion:
+    | (PlanMatrixVersionRef & { prices: PlanVersionPrice[] })
+    | null;
+  draftVersion: PlanMatrixVersionRef | null;
+  versionCount: number;
+}
+
+/** One row of the publishing desk: a sellable product and its tier ladder. */
+export interface PlanMatrixProduct {
+  productCode: string;
+  productName: string;
+  productStatus: string;
+  plans: PlanMatrixPlan[];
+}
+
+export async function fetchPlanMatrix(): Promise<PlanMatrixProduct[]> {
+  return readJson<PlanMatrixProduct[]>("/api/products/plan-matrix", []);
+}
+
+/** Create a plan skeleton (plan + v1 draft + primary component) on a tier slot. */
+export async function createProductPlan(body: {
+  planCode: string;
+  planName: string;
+  description?: string;
+  productCode: string;
+  tier: string;
+}): Promise<PlanVersionDetail> {
+  return mutateJson<PlanVersionDetail>(
+    "/api/products/plans",
+    "POST",
+    body,
+    "Failed to create plan",
+  );
+}
+
+/** Open the next draft version, cloned from the current published version. */
+export async function createPlanDraftVersion(
+  planId: string,
+): Promise<PlanVersionDetail> {
+  return mutateJson<PlanVersionDetail>(
+    `/api/products/plans/${encodeURIComponent(planId)}/versions`,
+    "POST",
+    undefined,
+    "Failed to open a draft version",
   );
 }
 

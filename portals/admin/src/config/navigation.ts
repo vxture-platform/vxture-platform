@@ -151,9 +151,9 @@ const tenantOpsSections: AdminNavigationSection[] = [
         i18nKey: "menu.operation.plan_version",
         status: "active",
         href: "/plan-versions",
-        label: "套餐版本",
+        label: "套餐发布",
         description:
-          "管理套餐的版本生命周期：编辑草稿的价格与配额，发布后冻结并设为当前版本。",
+          "按产品 × 五档矩阵发布套餐：空档新建、草稿编辑价格与配额、发布冻结并设为当前版本，完整保留 plan_version 版本史。",
         icon: "star",
       },
       {

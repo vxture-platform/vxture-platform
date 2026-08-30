@@ -342,6 +342,14 @@ middleware 顺序：`auth → capabilities → router`
 
 **PUT `/api/products/plan-versions/:versionId/bundled-components`** — 整体替换草稿版本的 bundled 组件集 `{components: [{productCode, quota, features?, priority?}]}`（`@RequireStepUp`；已发布 / 已锁 409、产品不存在 404 带 `field`、primary 产品当捆绑件 / 同码重复 / priority ≥ primary 400；`tier = NULL`；审计 `product.plan_version.bundled.replace`，resource_id = `plan_code@vN`；返回 `PlanVersionDetail`——见 `docs/20-specs/000-platform/admin/80-plan-bundled-components.md`）
 
+**GET `/api/products/plan-matrix`** — 套餐发布矩阵读模型（`PlanMatrixProduct[]`：每个 `standalone_subscribable` 产品一行，其 plans 落在五档阶梯上；套餐轴 = 当前版本 primary 组件（未发布骨架回退最新版本），带当前发布版价格 / 在途草稿 / 版本计数——见 `docs/20-specs/000-platform/admin/90-plan-publishing.md`）
+
+**POST `/api/products/plans`** — 空档新建套餐骨架 `{planCode, planName, description?, productCode, tier}`（plan + v1 草稿 + primary 组件一个事务；tier ∈ TIERS；产品不存在 404 带 `field`、非 standalone_subscribable 400、档位被占 / plan_code 重复 409；审计 `product.plan.create`；返回 `PlanVersionDetail`）
+
+**POST `/api/products/plans/:planId/versions`** — 开下一个草稿版本（自当前发布版克隆 components + prices + trial，version_no = max+1；已有在途草稿 409——每套餐同时至多一个草稿；审计 `product.plan_version.create`，resource_id = `plan_code@vN`；返回 `PlanVersionDetail`）
+
+> `POST /plan-versions/:versionId/publish` 自 2026-09-01 起带**档位占用守卫**：同产品同档已有其他套餐的当前发布版 → 409（先退役 / 弃用旧套餐）。同套餐 v2 覆盖 v1 不受影响。
+
 **GET `/api/products/agents`** — Agent 目录
 
 ~~**GET `/api/products/model-policies`**~~ — 已退役（2026-08-31）：模型策略是 Atlas 的，走 `GET /api/atlas/policies`
