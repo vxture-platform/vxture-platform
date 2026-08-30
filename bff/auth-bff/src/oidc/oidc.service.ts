@@ -97,7 +97,8 @@ export interface OidcTokenExchangeResponse {
 
 export interface OidcClientCredentials {
   clientId: string;
-  clientSecret: string;
+  /** 机密客户端出示的 secret；公共客户端（RFC 8252）无 secret，此处缺省。 */
+  clientSecret?: string;
 }
 
 export interface OidcAuthCodeGrant {
@@ -264,6 +265,8 @@ export class OidcService {
       token_endpoint_auth_methods_supported: [
         "client_secret_basic",
         "client_secret_post",
+        // 公共客户端（RFC 8252 原生应用）：client_id + PKCE，无 secret。
+        "none",
       ],
       scopes_supported: ["openid", "profile", "email", "phone"],
       claims_supported: [
@@ -490,7 +493,7 @@ export class OidcService {
       throw new BadRequestException("invalid_client");
     }
     const sid = pickSessionForRealm(client.realm, sids);
-    if (!client.redirectUris.includes(req.redirectUri)) {
+    if (!redirectUriAllowed(client.redirectUris, req.redirectUri)) {
       throw new BadRequestException("invalid_redirect_uri");
     }
     if (req.responseType !== "code") {
@@ -1747,6 +1750,25 @@ export class OidcService {
   private async authClient(
     creds: OidcClientCredentials,
   ): Promise<OidcClientConfig> {
+    // 公共客户端（RFC 8252 原生应用，如影桌面端）凭 client_id + PKCE 认证，不持
+    // secret；机密客户端凭 secret。先载入再按 auth 方式分流，避免把「无 secret」
+    // 误判成认证失败。
+    const config = await this.clients.findEnabledByClientId(creds.clientId);
+    if (!config) {
+      throw new UnauthorizedException("invalid_client");
+    }
+    if (config.tokenEndpointAuthMethod === "none") {
+      // 公共客户端不接受 secret：收到即视为配置错误，拒绝而非忽略。PKCE 由各 grant
+      // 内按 code_verifier 校验。
+      if (creds.clientSecret) {
+        throw new UnauthorizedException("invalid_client");
+      }
+      return config;
+    }
+    // 机密客户端：校验所出示的 secret（复用仓储 bcrypt 比对）。
+    if (!creds.clientSecret) {
+      throw new UnauthorizedException("invalid_client");
+    }
     const client = await this.clients.authenticateClient(
       creds.clientId,
       creds.clientSecret,
@@ -1772,6 +1794,11 @@ export class OidcService {
       throw new BadRequestException("temporarily_unavailable");
     }
     const client = await this.authClient(creds);
+    // 公共客户端无 secret 证明身份，禁铸 S2S OBO/service 令牌——否则调用方身份与
+    // 上下文可伪造（token-exchange 的调用方上下文全部来自「调用方是谁」这一事实）。
+    if (client.tokenEndpointAuthMethod === "none") {
+      throw new UnauthorizedException("invalid_client");
+    }
     const result = await this.tokenExchangeSvc.exchange(
       { clientId: client.clientId, productCode: client.productCode },
       req,
@@ -2090,4 +2117,33 @@ function parseUrlOrNull(u: string): URL | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * redirect_uri 白名单匹配。默认精确相等；对 loopback（RFC 8252 §7.3：http +
+ * 127.0.0.1/[::1]）额外允许端口无关匹配——原生应用回调端口由 OS 动态分配、不可
+ * 预登记，故登记无端口规范值（http://127.0.0.1/oauth/callback），按 scheme+host+path
+ * 比对、忽略端口。仅 loopback + http 生效，机密客户端不受影响。
+ */
+export function redirectUriAllowed(
+  registered: string[],
+  presented: string,
+): boolean {
+  if (registered.includes(presented)) return true;
+  const p = parseUrlOrNull(presented);
+  if (!p || p.protocol !== "http:") return false;
+  const isLoopback =
+    p.hostname === "127.0.0.1" ||
+    p.hostname === "::1" ||
+    p.hostname === "[::1]";
+  if (!isLoopback) return false;
+  return registered.some((r) => {
+    const ru = parseUrlOrNull(r);
+    return (
+      ru !== null &&
+      ru.protocol === "http:" &&
+      ru.hostname === p.hostname &&
+      ru.pathname === p.pathname
+    );
+  });
 }

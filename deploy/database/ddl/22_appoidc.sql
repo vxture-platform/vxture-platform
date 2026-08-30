@@ -33,6 +33,10 @@ CREATE TABLE appoidc.oidc_clients (
     access_token_ttl          int          NOT NULL DEFAULT 900,        -- access_token 有效期(秒)（补齐，铁律四）
     refresh_token_ttl         int          NOT NULL DEFAULT 2592000,    -- refresh_token 有效期(秒)（补齐，铁律四）
     pkce_required             boolean      NOT NULL DEFAULT true,
+    -- token 端点客户端认证方式：client_secret_basic（机密客户端，默认）/ none（公共客户端）。
+    -- 公共客户端 = RFC 8252 原生应用（如影桌面端）：二进制装不下 secret，凭 PKCE 而非 secret
+    -- 在 token 端点证明自己。默认保持 client_secret_basic，存量行零影响。
+    token_endpoint_auth_method varchar(24) NOT NULL DEFAULT 'client_secret_basic',
     slo_participation         varchar(32)  NOT NULL DEFAULT 'none',     -- none/back_channel/front_channel
     back_channel_logout_uri   varchar(512),
     status                    varchar(32)  NOT NULL DEFAULT 'active',
@@ -47,6 +51,12 @@ CREATE TABLE appoidc.oidc_clients (
     CONSTRAINT chk_oidc_clients_kind_product
         CHECK ((client_kind = 'platform') = (product_id IS NULL)),
     CONSTRAINT chk_oidc_clients_slo            CHECK (slo_participation IN ('none','back_channel','front_channel')),
+    CONSTRAINT chk_oidc_clients_token_auth     CHECK (token_endpoint_auth_method IN ('client_secret_basic','none')),
+    -- 公共客户端硬不变式：token_endpoint_auth_method='none' ⟹ 强制 PKCE 且不得持有 secret。
+    -- 一个"公共却带 secret"或"公共却不强制 PKCE"的行写不进去——把 RFC 8252 的前提焊进数据层，
+    -- 而不是靠服务代码每处自觉检查。
+    CONSTRAINT chk_oidc_clients_public_pkce
+        CHECK (token_endpoint_auth_method <> 'none' OR (pkce_required AND client_secret_hash IS NULL)),
     -- product_251 B-3：「算不算数」最小词表是 active / inactive。原来这里是
     -- 'disabled'——不是词表的扩展，是同一概念的第三种拼法（atlas 用布尔
     -- isActive、runos 用 state/status/lifecycle 三个词）。列名 status 保留：

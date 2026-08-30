@@ -1617,17 +1617,35 @@ export async function seedCatalog(client) {
       ],
       postLogoutUris: [`${B.umbra}/`, postLogout],
     },
-    // ruyin — NEW client-side product surface on ruyin.vxture.com (mode A,
-    // same-site). No subscription scope: client products stay out of the
-    // entitlement engine (product_100 §5).
+    // ruyin — 桌面原生应用（RFC 8252 public client）。零机密：token 端点凭 PKCE
+    // 认证（authMethod='none'），回调是 loopback。原生应用端口由 OS 动态分配、不可
+    // 预登记，故登记无端口规范值 http://127.0.0.1/oauth/callback，authorize 按
+    // host+path 端口无关匹配（redirectUriAllowed）。No subscription scope：客户端
+    // 产品不进权益引擎（product_100 §5）。
     {
       clientId: "ruyin",
       product: "ruyin",
       name: "Ruyin",
-      displayName: "Ruyin",
+      displayName: "如影 Ruyin",
       realm: "customer",
-      redirectUris: appUris(B.ruyin, betaB.ruyin),
-      scopes: ["openid", "profile", "email"],
+      authMethod: "none",
+      redirectUris: ["http://127.0.0.1/oauth/callback"],
+      postLogoutUris: [postLogout],
+      scopes: ["openid", "profile", "email", "phone"],
+    },
+    // ruyin-beta — beta 渠道同源公共客户端（双客户端惯例，back-channel 单 URI 硬约束
+    // 使一个 client 带不了两个渠道）。桌面 beta 构建用 RUYIN_OIDC_CLIENT_ID=ruyin-beta。
+    {
+      clientId: "ruyin-beta",
+      product: "ruyin",
+      name: "Ruyin Beta",
+      displayName: "如影 Ruyin（Beta）",
+      realm: "customer",
+      releaseChannel: "beta",
+      authMethod: "none",
+      redirectUris: ["http://127.0.0.1/oauth/callback"],
+      postLogoutUris: [postLogout],
+      scopes: ["openid", "profile", "email", "phone"],
     },
     {
       clientId: "runos",
@@ -1767,14 +1785,21 @@ export async function seedCatalog(client) {
     const secretHash = process.env[`OIDC_CLIENT_SECRET_HASH_${envKey}`] || null;
     const postLogoutUris = c.postLogoutUris || [postLogout];
     const releaseChannel = c.releaseChannel || "stable";
-    const backChannelUri = `${c.redirectUris[0].replace("/auth/callback", "")}/auth/backchannel-logout`;
+    // token 端点认证方式：public（none）= RFC 8252 原生应用，零机密。默认机密。
+    const authMethod = c.authMethod === "none" ? "none" : "client_secret_basic";
+    // 公共客户端无服务端、无 back-channel（回调是 loopback，不是 /auth/callback）；
+    // 机密 web RP 才由回调基址推出 back-channel 端点。
+    const backChannelUri =
+      authMethod === "none"
+        ? null
+        : `${c.redirectUris[0].replace("/auth/callback", "")}/auth/backchannel-logout`;
     await client.query(
       `
       insert into appoidc.oidc_clients
         (client_id, name, display_name, logo_url, realm, product_id, client_kind, release_channel,
          client_secret_hash, redirect_uris, post_logout_redirect_uris, back_channel_logout_uri,
-         allowed_scopes, status, created_at, updated_at)
-      values ($1, $2, $3, null, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active', now(), now())
+         allowed_scopes, token_endpoint_auth_method, status, created_at, updated_at)
+      values ($1, $2, $3, null, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'active', now(), now())
       on conflict (client_id) do update set
         name = excluded.name,
         display_name = excluded.display_name,
@@ -1788,6 +1813,7 @@ export async function seedCatalog(client) {
         post_logout_redirect_uris = excluded.post_logout_redirect_uris,
         back_channel_logout_uri = excluded.back_channel_logout_uri,
         allowed_scopes = excluded.allowed_scopes,
+        token_endpoint_auth_method = excluded.token_endpoint_auth_method,
         updated_at = now()
     `,
       [
@@ -1803,10 +1829,11 @@ export async function seedCatalog(client) {
         postLogoutUris,
         backChannelUri,
         c.scopes,
+        authMethod,
       ],
     );
     console.log(
-      `✓  appoidc.oidc_clients — ${c.clientId} (${isPlatform ? "platform" : `product=${c.product}`}, realm=${c.realm}, secret=${secretHash ? "set" : "unset"})`,
+      `✓  appoidc.oidc_clients — ${c.clientId} (${isPlatform ? "platform" : `product=${c.product}`}, realm=${c.realm}, auth=${authMethod}, secret=${secretHash ? "set" : "unset"})`,
     );
   }
 
