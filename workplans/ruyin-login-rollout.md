@@ -3,6 +3,12 @@
 > 交接方：ruyin 线（vxture-ruyin 会话）。#85（原生 public client 支持，`014f25b`）
 > 已合并进 main，**代码已齐、生产未生效**。剩余全部是本仓的生产操作，按下面顺序执行。
 > 交接依据：owner 裁定跨仓边界——ruyin 线对本仓止于分支+提交+push，发版/生产操作归本仓工作线。
+>
+> **平台线接手时的实况（2026-08-30，同日晚）**：main 已经从 `014f25b` 推进到 `84b8d76`
+> （#86 / #87 / #88，产品唯一真源四缺口，均无 DDL）；`v0.26.10` **已经打在 `84b8d76`**
+> （含 #85 的 auth-bff 代码），deploy run 停在 production 门。因此下面 ① 的 `expected_sha`
+> 改为 main 当前 SHA、② 不再打 tag 而是批准已有的 deploy run——**顺序不变：① 成功之前
+> 不批 ②**（v0.26.10 的 auth-bff 读 `token_endpoint_auth_method` 列，缺列即报错）。
 
 ## 现状（2026-08-30 探测）
 
@@ -17,22 +23,22 @@
 ```bash
 gh workflow run db-init.yml --repo vxture-platform/vxture-platform \
   -f ref=main \
-  -f expected_sha=014f25b0e1452f9bf8889c27b4ee1d9c1051665e \
-  -f action=migrate-seed
+  -f expected_sha=84b8d764970ea49c6062168f7a9b4612bfda4844 \
+  -f action=migrate-seed \
+  -f confirm=yes
 ```
 
-等 run 结束为 success。预期日志可见：迁移 `2026-08-30-oidc-public-client.sql` 应用；
+（`expected_sha` 必须是 main **当时**的完整 SHA——工作流拿它钉住 ref 漂移；`confirm=yes`
+是必填项，交接原稿漏了。）db-init 自己也挂 production 门，owner 批准后才跑。等 run 结束为 success。预期日志可见：迁移 `2026-08-30-oidc-public-client.sql` 应用；
 seed 输出 `oidc_clients — ruyin (product=ruyin, realm=customer, auth=none, secret=unset)`
 与 `ruyin-beta` 同款一行。
 
-**② 发版 auth-bff**（生产 tag，production 环境审批门照常）：
+**② 发版 auth-bff**（production 环境审批门照常）：
 
-```bash
-git tag v0.26.10 014f25b0e1452f9bf8889c27b4ee1d9c1051665e
-git push origin v0.26.10
-```
-
-随后在 GitHub Actions 的 production 环境门上批准；等 deploy run success。
+`v0.26.10` 已由平台线打在 `84b8d76`（docker-build 已成功，auth-bff 镜像已重建），
+deploy run 停在 production 门——**不要再打 tag**，① 成功后直接在 GitHub Actions 的
+production 环境门上批准；等 deploy run success。若将来需要重发，按同一规则打下一个
+`v0.26.x` 于 main 头（tag 就是 `app_version`，`package.json` 不参与）。
 
 ## 验收探针（部署后任何人可跑，全部无需凭证）
 
@@ -51,5 +57,5 @@ curl -s -o /dev/null -w '%{http_code}\n' "https://accounts.vxture.com/oidc/autho
 ## 风险与回退
 
 - ① 幂等可重跑；只影响 `appoidc.oidc_clients`（加列 + ruyin/ruyin-beta 两行），机密客户端行为零变化。
-- ② 的代码路径对机密客户端逐字未变（#85 回归 115/50 全绿）；如需回退，重部署上一 tag（v0.26.9）即可，DB 新列可留（旧代码不读）。
+- ② 的代码路径对机密客户端逐字未变（#85 回归 115/50 全绿）；如需回退，重部署上一 tag（v0.26.9）即可，DB 新列可留（旧代码不读）。注意 v0.26.10 同时带着 #86–#88（退役闸门、官网读目录、方案表实算），回退到 v0.26.9 会一并退掉它们——它们都无 DDL，退回无残留。
 - public 客户端已被禁 token-exchange，S2S 面不受影响。
