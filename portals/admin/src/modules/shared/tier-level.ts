@@ -103,6 +103,12 @@ export const TIER_FILTER_OPTIONS = [
 
 export type TierFilterValue = (typeof TIER_FILTER_OPTIONS)[number]["value"];
 
+/** Display label for a tier code ("pro" → "Pro"); unknown codes echo as-is. */
+export function tierLabel(tierCode: string | null | undefined): string {
+  const hit = TIER_FILTER_OPTIONS.find((o) => o.value === tierCode);
+  return hit ? hit.label : (tierCode ?? "—");
+}
+
 /** 把展示用的套餐名归一到筛选档。认不出的落 `other`。 */
 export function tierFilterOf(
   tierName: string | null | undefined,

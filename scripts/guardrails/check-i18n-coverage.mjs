@@ -136,6 +136,10 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  *   新增文案全走 `t()`（drawer.notifications.empty/channels/statuses），
  *   零新增硬编码。棘轮随实数收紧。
  *
+ * 2026-09-01 admin 3226 → 3204：套餐发布台整页重建（产品 × 五档矩阵），全部文案
+ *   进 `planVersionsPage` 命名空间（zh-CN / en-US 同步）；旧「套餐版本」页的硬编码
+ *   随页一起消失，净 −22。棘轮随实数收紧。
+ *
  * 2026-08-31 admin 3225 → 3226：订阅详情的方案归属改从 product.solution_plans 实算，
  *   来源枚举多了 "solution" 一档，对应标签「方案关联」是唯一新增的一条硬编码
  *   （与同一函数里既有的两条并列，抽 t() 应当三条一起抽，留给该页整体 i18n 时做）。
@@ -174,7 +178,7 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
 const BASELINE = {
   console: 30,
   website: 40,
-  admin: 3226,
+  admin: 3204,
   opera: 1890,
   accounts: 264,
 };

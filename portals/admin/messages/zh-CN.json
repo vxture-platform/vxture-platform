@@ -1927,6 +1927,62 @@
     }
   },
   "planVersionsPage": {
+    "title": "套餐发布",
+    "pageDescription": "平台面向多个产品发布套餐：每个产品在五档商业阶梯（free / starter / pro / business / enterprise）内各发布至多一条套餐，可少不可多。点选套餐查看完整版本史（plan_version），草稿在此编辑与发布，已发布版本冻结只读。",
+    "badge": {
+      "publishedCurrent": "已发布 · 当前",
+      "published": "已发布",
+      "draft": "草稿 · 待发布"
+    },
+    "price": {
+      "none": "未定价",
+      "month": "月",
+      "year": "年"
+    },
+    "matrix": {
+      "publishedCount": "已发布 {n} / {total} 档",
+      "crowded": "同档多套餐",
+      "create": "+ 新建套餐",
+      "unpublished": "未发布",
+      "draftShort": "草稿 v{n}",
+      "empty": "暂无可独立订阅的产品——基础设施产品（如 atlas / runos）不直接售卖套餐，只作为捆绑组件进入其他产品的版本。",
+      "hint": "从上方矩阵点选一条套餐查看版本史，或在空档新建套餐。"
+    },
+    "timeline": {
+      "heading": "{name}（{code}）版本史",
+      "none": "尚无版本。",
+      "openDraft": "开新草稿版本（自当前版本克隆）",
+      "readOnly": "已发布版本为只读（受锁保护）；要改动请开新草稿版本。",
+      "pickVersion": "从左侧版本史选择一个版本查看或编辑。"
+    },
+    "editor": {
+      "versionHeading": "v{n} · {name}",
+      "priceMonth": "月付价（¥）",
+      "priceYear": "年付价（¥）",
+      "quotaJson": "配额（JSON）",
+      "quotaInvalid": "配额 JSON 格式错误，无法保存。",
+      "saveDraft": "保存草稿",
+      "publish": "发布该版本",
+      "saved": "草稿已保存。",
+      "saveFailed": "保存失败。",
+      "published": "已发布：该版本已冻结并设为当前版本。",
+      "publishFailed": "发布失败。",
+      "draftOpened": "已开出草稿 v{n}（自当前版本克隆）。",
+      "draftOpenFailed": "开草稿失败。"
+    },
+    "create": {
+      "title": "新建套餐 · {product} · {tier}",
+      "description": "创建套餐骨架（v1 草稿 + 主组件档位），价格与配额在草稿里补，发布前不可售。",
+      "codeLabel": "套餐编码",
+      "codePlaceholder": "如 karda-starter（小写字母 / 数字 / 连字符）",
+      "nameLabel": "套餐名称",
+      "namePlaceholder": "如 Karda 入门版",
+      "descLabel": "描述",
+      "descPlaceholder": "选填：这档套餐卖给谁、含什么",
+      "submit": "创建套餐",
+      "failed": "创建失败。",
+      "created": "套餐 {code} 已创建（v1 草稿）——补上价格与配额后发布。"
+    },
     "bundled": {
       "title": "捆绑组件",
       "description": "随本版本一起售出的支撑产品及其配额。基础设施产品（如 Atlas、Runos）没有自己的客户套餐，只能经此进入工作区的配额池。",

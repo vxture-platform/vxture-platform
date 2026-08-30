@@ -595,6 +595,41 @@ export class ProductsRouter {
       if (row.status === "published") {
         throw new BadRequestException("Version is already published");
       }
+      // Tier-occupancy guard (90-plan-publishing.md): a product sells at most
+      // one live plan per commercial tier — the publishing desk renders tiers
+      // as five slots, and two current-published plans in one slot would be
+      // two prices for the same shelf position. Same-plan republish (v2 over
+      // v1) is exempt: the clash query excludes the plan being published.
+      const axis = await client.query<{
+        product_id: string;
+        tier: string | null;
+      }>(
+        `SELECT pc.product_id, pc.tier
+           FROM product.plan_components pc
+          WHERE pc.plan_version_id = $1 AND pc.component_role = 'primary'
+          LIMIT 1`,
+        [versionId],
+      );
+      const primaryAxis = axis.rows[0];
+      if (primaryAxis?.tier) {
+        const clash = await client.query<{ plan_code: string }>(
+          `SELECT p2.plan_code
+             FROM product.plans p2
+             JOIN product.plan_versions cv2
+               ON cv2.id = p2.current_version_id AND cv2.status = 'published'
+             JOIN product.plan_components pc2
+               ON pc2.plan_version_id = cv2.id AND pc2.component_role = 'primary'
+            WHERE p2.id <> $3 AND p2.deleted_at IS NULL AND p2.status <> 'deprecated'
+              AND pc2.product_id = $1 AND pc2.tier = $2
+            LIMIT 1`,
+          [primaryAxis.product_id, primaryAxis.tier, row.plan_id],
+        );
+        if (clash.rows[0]) {
+          throw new ConflictException(
+            `Tier ${primaryAxis.tier} already has published plan ${clash.rows[0].plan_code} as current — retire or deprecate it first`,
+          );
+        }
+      }
       // publish: freeze the version and make it the plan's live version. A
       // prior published version stays 'published' (subscriptions pinned to it
       // keep resolving) — it just stops being current.
@@ -694,6 +729,221 @@ export class ProductsRouter {
     }
     return loadPlanVersionDetail(this.pool, versionId);
   }
+
+  // ── plan publishing desk (product × tier matrix; 90-plan-publishing.md) ───
+
+  /**
+   * The publishing desk read model: every standalone-subscribable product with
+   * its plans laid on the five-tier commercial ladder. A plan's product/tier
+   * axis comes from its current version's primary component (falling back to
+   * the newest version for never-published skeletons), so a draft-only plan is
+   * visible on the desk — /releases only ever shows published versions.
+   */
+  @Get("plan-matrix")
+  async listPlanMatrix(
+    @Req() req: Request & RequestContext,
+  ): Promise<PlanMatrixProduct[]> {
+    assertCanManageProducts(req);
+    const { rows } = await this.pool.query<PlanMatrixRow>(PLAN_MATRIX_SQL);
+    return groupPlanMatrix(rows);
+  }
+
+  /**
+   * Create a plan skeleton on an empty tier slot: the plan row, its v1 draft
+   * version and the primary component (tier axis) in one unit. Prices and
+   * quota are edited on the draft afterwards; nothing is sellable until the
+   * draft is published, so no step-up here — publish carries it.
+   */
+  @Post("plans")
+  async createPlan(
+    @Req() req: Request & RequestContext,
+    @Body() body: CreatePlanInput,
+  ): Promise<PlanVersionDetail> {
+    assertCanManageProducts(req);
+    const input = readCreatePlanInput(body);
+    let draftId = "";
+    try {
+      await withTransaction(this.rwPool, async (client) => {
+        const product = await client.query<{
+          id: string;
+          product_code: string;
+          standalone_subscribable: boolean;
+        }>(
+          `SELECT id, product_code, standalone_subscribable
+             FROM product.products
+            WHERE product_code = $1 AND deleted_at IS NULL
+            FOR UPDATE`,
+          [input.productCode],
+        );
+        const productRow = product.rows[0];
+        if (!productRow) {
+          throw new NotFoundException({
+            message: `Product ${input.productCode} not found`,
+            field: "productCode",
+          });
+        }
+        if (!productRow.standalone_subscribable) {
+          throw new BadRequestException(
+            `Product ${input.productCode} is not standalone-subscribable — it reaches customers only as a bundled component`,
+          );
+        }
+        const occupied = await client.query<{ plan_code: string }>(
+          PLAN_TIER_AXIS_OCCUPANCY_SQL,
+          [productRow.id, input.tier],
+        );
+        if (occupied.rows[0]) {
+          throw new ConflictException(
+            `Tier ${input.tier} of ${productRow.product_code} is already covered by plan ${occupied.rows[0].plan_code}`,
+          );
+        }
+        const plan = await client.query<{ id: string }>(
+          `INSERT INTO product.plans
+             (id, plan_code, plan_name, description, is_public, status, created_by, updated_by, created_at, updated_at)
+           VALUES (gen_random_uuid(), $1, $2, $3, true, 'active', $4, $4, now(), now())
+           RETURNING id`,
+          [input.planCode, input.planName, input.description, req.user!.id],
+        );
+        const version = await client.query<{ id: string }>(
+          `INSERT INTO product.plan_versions
+             (id, plan_id, version_no, status, is_locked, created_by, created_at)
+           VALUES (gen_random_uuid(), $1, 1, 'draft', false, $2, now())
+           RETURNING id`,
+          [plan.rows[0]!.id, req.user!.id],
+        );
+        draftId = version.rows[0]!.id;
+        await client.query(
+          `INSERT INTO product.plan_components
+             (id, plan_version_id, product_id, tier, component_role, priority, features, quota, sort_order, created_at)
+           VALUES (gen_random_uuid(), $1, $2, $3, 'primary', 100, '{}'::text[], '{}'::jsonb, 0, now())`,
+          [draftId, productRow.id, input.tier],
+        );
+        await insertOperatorAuditLog(client, req, {
+          action: "product.plan.create",
+          resourceType: "product_plan",
+          resourceId: input.planCode,
+          after: {
+            planCode: input.planCode,
+            planName: input.planName,
+            productCode: productRow.product_code,
+            tier: input.tier,
+          },
+        });
+      });
+    } catch (error) {
+      if (pgErrorCode(error) === "23505") {
+        throw new ConflictException(
+          `Plan code ${input.planCode} already exists`,
+        );
+      }
+      throw error;
+    }
+    return loadPlanVersionDetail(this.pool, draftId);
+  }
+
+  /**
+   * Open the next draft version of a plan, cloned from the current published
+   * version (or the newest version when nothing is published yet): components,
+   * prices and trial config all carry over, so an operator edits a delta
+   * instead of retyping the whole grant. One draft in flight per plan — a
+   * second one would make "the draft" ambiguous for every editor endpoint.
+   */
+  @Post("plans/:planId/versions")
+  async createDraftVersion(
+    @Req() req: Request & RequestContext,
+    @Param("planId") planId: string,
+  ): Promise<PlanVersionDetail> {
+    assertCanManageProducts(req);
+    let draftId = "";
+    await withTransaction(this.rwPool, async (client) => {
+      const plan = await client.query<{
+        id: string;
+        plan_code: string;
+        current_version_id: string | null;
+      }>(
+        `SELECT id, plan_code, current_version_id
+           FROM product.plans
+          WHERE id = $1 AND deleted_at IS NULL
+          FOR UPDATE`,
+        [planId],
+      );
+      const planRow = plan.rows[0];
+      if (!planRow) {
+        throw new NotFoundException(`Plan ${planId} not found`);
+      }
+      const draft = await client.query<{ version_no: number }>(
+        `SELECT version_no FROM product.plan_versions
+          WHERE plan_id = $1 AND status = 'draft' AND NOT is_locked
+          ORDER BY version_no DESC
+          LIMIT 1`,
+        [planId],
+      );
+      if (draft.rows[0]) {
+        throw new ConflictException(
+          `Plan ${planRow.plan_code} already has draft v${draft.rows[0].version_no} — edit or publish it first`,
+        );
+      }
+      const source = await client.query<{
+        id: string;
+        version_no: number;
+        trial_cycle_unit: string | null;
+        trial_cycle_count: number | null;
+        max_no: number;
+      }>(
+        `SELECT v.id, v.version_no, v.trial_cycle_unit, v.trial_cycle_count,
+                (SELECT max(version_no) FROM product.plan_versions WHERE plan_id = $1) AS max_no
+           FROM product.plan_versions v
+          WHERE v.plan_id = $1
+          ORDER BY (v.id = $2) DESC, v.version_no DESC
+          LIMIT 1`,
+        [planId, planRow.current_version_id],
+      );
+      const sourceRow = source.rows[0];
+      if (!sourceRow) {
+        throw new ConflictException(
+          `Plan ${planRow.plan_code} has no versions to clone from`,
+        );
+      }
+      const nextNo = sourceRow.max_no + 1;
+      const version = await client.query<{ id: string }>(
+        `INSERT INTO product.plan_versions
+           (id, plan_id, version_no, status, is_locked, trial_cycle_unit, trial_cycle_count, created_by, created_at)
+         VALUES (gen_random_uuid(), $1, $2, 'draft', false, $3, $4, $5, now())
+         RETURNING id`,
+        [
+          planId,
+          nextNo,
+          sourceRow.trial_cycle_unit,
+          sourceRow.trial_cycle_count,
+          req.user!.id,
+        ],
+      );
+      draftId = version.rows[0]!.id;
+      await client.query(
+        `INSERT INTO product.plan_components
+           (id, plan_version_id, product_id, tier, component_role, source_profile_code, priority, features, quota, sort_order, created_at)
+         SELECT gen_random_uuid(), $2, product_id, tier, component_role, source_profile_code, priority, features, quota, sort_order, now()
+           FROM product.plan_components
+          WHERE plan_version_id = $1`,
+        [sourceRow.id, draftId],
+      );
+      await client.query(
+        `INSERT INTO product.plan_prices
+           (id, plan_version_id, cycle_unit, cycle_count, price, currency, created_at)
+         SELECT gen_random_uuid(), $2, cycle_unit, cycle_count, price, currency, now()
+           FROM product.plan_prices
+          WHERE plan_version_id = $1`,
+        [sourceRow.id, draftId],
+      );
+      await insertOperatorAuditLog(client, req, {
+        action: "product.plan_version.create",
+        resourceType: "product_plan_version",
+        resourceId: `${planRow.plan_code}@v${nextNo}`,
+        before: { clonedFromVersionNo: sourceRow.version_no },
+        after: { planCode: planRow.plan_code, versionNo: nextNo },
+      });
+    });
+    return loadPlanVersionDetail(this.pool, draftId);
+  }
 }
 
 // ── plan version lifecycle: types · SQL · loaders (product_320) ─────────────
@@ -709,6 +959,8 @@ interface PlanVersionSummary {
   status: string;
   isLocked: boolean;
   isCurrent: boolean;
+  /** ISO timestamp — the version timeline is unreadable without a date axis. */
+  createdAt: string;
   prices: PlanVersionPrice[];
 }
 
@@ -781,11 +1033,12 @@ interface PlanVersionSummaryRow {
   status: string;
   is_locked: boolean;
   is_current: boolean;
+  created_at: Date | string;
   prices: PlanVersionPrice[];
 }
 
 const PLAN_VERSIONS_SQL = `
-  SELECT pv.id, pv.version_no, pv.status, pv.is_locked,
+  SELECT pv.id, pv.version_no, pv.status, pv.is_locked, pv.created_at,
          (pv.id = p.current_version_id) AS is_current,
          COALESCE((
            SELECT jsonb_agg(jsonb_build_object('cycleUnit', pp.cycle_unit, 'price', to_char(pp.price, 'FM999999999990.00'))
@@ -805,6 +1058,7 @@ function mapPlanVersionSummary(row: PlanVersionSummaryRow): PlanVersionSummary {
     status: row.status,
     isLocked: row.is_locked,
     isCurrent: row.is_current,
+    createdAt: new Date(row.created_at).toISOString(),
     prices: row.prices ?? [],
   };
 }
@@ -823,7 +1077,7 @@ async function loadPlanVersionDetail(
       })[];
     }
   >(
-    `SELECT pv.id, pv.plan_id, pv.version_no, pv.status, pv.is_locked,
+    `SELECT pv.id, pv.plan_id, pv.version_no, pv.status, pv.is_locked, pv.created_at,
             (pv.id = p.current_version_id) AS is_current,
             p.plan_code, p.plan_name,
             COALESCE((
@@ -2427,4 +2681,235 @@ export async function loadProductReleases(
 ): Promise<ProductReleaseRecord[]> {
   const { rows } = await pool.query<ReleaseRow>(RELEASES_SQL);
   return rows.map(projectRelease);
+}
+// ── plan publishing desk: matrix read model · create inputs ─────────────────
+
+/** A version pointer as the matrix shows it — enough to badge, not to edit. */
+export interface PlanMatrixVersionRef {
+  id: string;
+  versionNo: number;
+}
+
+/** One plan laid on a product's tier ladder. */
+export interface PlanMatrixPlan {
+  planId: string;
+  planCode: string;
+  planName: string;
+  planStatus: string;
+  tier: Tier;
+  /** The live version (plans.current_version_id, published); null = never published. */
+  currentVersion:
+    | (PlanMatrixVersionRef & { prices: PlanVersionPrice[] })
+    | null;
+  /** The editable draft in flight; null = none open. */
+  draftVersion: PlanMatrixVersionRef | null;
+  versionCount: number;
+}
+
+/** One row of the publishing desk: a sellable product and its tier ladder. */
+export interface PlanMatrixProduct {
+  productCode: string;
+  productName: string;
+  productStatus: string;
+  plans: PlanMatrixPlan[];
+}
+
+interface PlanMatrixRow {
+  product_code: string;
+  product_name: string;
+  product_status: string;
+  plan_id: string | null;
+  plan_code: string | null;
+  plan_name: string | null;
+  plan_status: string | null;
+  tier: string | null;
+  current_version_id: string | null;
+  current_version_no: number | null;
+  current_prices: PlanVersionPrice[] | null;
+  draft_version_id: string | null;
+  draft_version_no: number | null;
+  version_count: number | null;
+}
+
+/**
+ * One query, flat rows: products LEFT JOIN their plans (so a product with no
+ * plans still yields a row and shows an empty ladder). The lateral `axis`
+ * resolves each plan's product/tier from the current version's primary
+ * component, falling back to the newest version — a never-published skeleton
+ * must still land on its slot.
+ */
+const PLAN_MATRIX_SQL = `
+  SELECT pr.product_code, pr.product_name, pr.status AS product_status,
+         plan.plan_id, plan.plan_code, plan.plan_name, plan.plan_status, plan.tier,
+         plan.current_version_id, plan.current_version_no, plan.current_prices,
+         plan.draft_version_id, plan.draft_version_no, plan.version_count
+    FROM product.products pr
+    LEFT JOIN LATERAL (
+      SELECT p.id AS plan_id, p.plan_code, p.plan_name, p.status AS plan_status,
+             axis.tier,
+             cv.id AS current_version_id, cv.version_no AS current_version_no,
+             COALESCE((
+               SELECT jsonb_agg(jsonb_build_object('cycleUnit', pp.cycle_unit, 'price', to_char(pp.price, 'FM999999999990.00'))
+                                ORDER BY pp.cycle_unit)
+                 FROM product.plan_prices pp WHERE pp.plan_version_id = cv.id
+             ), '[]'::jsonb) AS current_prices,
+             d.id AS draft_version_id, d.version_no AS draft_version_no,
+             (SELECT count(*)::int FROM product.plan_versions v WHERE v.plan_id = p.id) AS version_count
+        FROM product.plans p
+        JOIN LATERAL (
+          SELECT pc.tier
+            FROM product.plan_versions pv
+            JOIN product.plan_components pc
+              ON pc.plan_version_id = pv.id AND pc.component_role = 'primary'
+           WHERE pv.plan_id = p.id AND pc.product_id = pr.id
+           ORDER BY (pv.id = p.current_version_id) DESC, pv.version_no DESC
+           LIMIT 1
+        ) axis ON true
+        LEFT JOIN product.plan_versions cv
+          ON cv.id = p.current_version_id AND cv.status = 'published'
+        LEFT JOIN LATERAL (
+          SELECT v.id, v.version_no
+            FROM product.plan_versions v
+           WHERE v.plan_id = p.id AND v.status = 'draft' AND NOT v.is_locked
+           ORDER BY v.version_no DESC
+           LIMIT 1
+        ) d ON true
+       WHERE p.deleted_at IS NULL
+    ) plan ON true
+   WHERE pr.deleted_at IS NULL AND pr.standalone_subscribable
+   ORDER BY pr.sort ASC, pr.product_name ASC, pr.product_code ASC, plan.plan_code ASC
+`;
+
+function groupPlanMatrix(rows: PlanMatrixRow[]): PlanMatrixProduct[] {
+  const byProduct = new Map<string, PlanMatrixProduct>();
+  for (const row of rows) {
+    let product = byProduct.get(row.product_code);
+    if (!product) {
+      product = {
+        productCode: row.product_code,
+        productName: row.product_name,
+        productStatus: row.product_status,
+        plans: [],
+      };
+      byProduct.set(row.product_code, product);
+    }
+    // A plan whose axis tier is somehow NULL cannot sit on the ladder; the
+    // DDL forbids primary components without a tier, so skip defensively.
+    if (!row.plan_id || !row.tier || !TIERS.includes(row.tier as Tier)) {
+      continue;
+    }
+    product.plans.push({
+      planId: row.plan_id,
+      planCode: row.plan_code ?? "",
+      planName: row.plan_name ?? "",
+      planStatus: row.plan_status ?? "active",
+      tier: row.tier as Tier,
+      currentVersion:
+        row.current_version_id && row.current_version_no !== null
+          ? {
+              id: row.current_version_id,
+              versionNo: row.current_version_no,
+              prices: row.current_prices ?? [],
+            }
+          : null,
+      draftVersion:
+        row.draft_version_id && row.draft_version_no !== null
+          ? { id: row.draft_version_id, versionNo: row.draft_version_no }
+          : null,
+      versionCount: row.version_count ?? 0,
+    });
+  }
+  return [...byProduct.values()];
+}
+
+/**
+ * Occupancy for plan CREATION: any non-deprecated plan whose tier axis (see
+ * PLAN_MATRIX_SQL) already sits on this product+tier blocks a second skeleton
+ * — a draft-only plan occupies its slot too, else two operators could open
+ * two skeletons for one shelf position. Publication has its own guard.
+ */
+const PLAN_TIER_AXIS_OCCUPANCY_SQL = `
+  SELECT p.plan_code
+    FROM product.plans p
+    JOIN LATERAL (
+      SELECT pc.tier
+        FROM product.plan_versions pv
+        JOIN product.plan_components pc
+          ON pc.plan_version_id = pv.id AND pc.component_role = 'primary'
+       WHERE pv.plan_id = p.id AND pc.product_id = $1
+       ORDER BY (pv.id = p.current_version_id) DESC, pv.version_no DESC
+       LIMIT 1
+    ) axis ON true
+   WHERE p.deleted_at IS NULL AND p.status <> 'deprecated' AND axis.tier = $2
+   LIMIT 1
+`;
+
+/** POST /plans body. */
+export interface CreatePlanInput {
+  planCode?: unknown;
+  planName?: unknown;
+  description?: unknown;
+  productCode?: unknown;
+  tier?: unknown;
+}
+
+interface ValidatedCreatePlanInput {
+  planCode: string;
+  planName: string;
+  description: string | null;
+  productCode: string;
+  tier: Tier;
+}
+
+const PLAN_CODE_PATTERN = /^[a-z0-9][a-z0-9-]{1,63}$/;
+
+/**
+ * Validate the create-plan body before any DB access (same contract as the
+ * bundled reader: shape errors are 400s that never touch a pool).
+ *
+ * @throws {BadRequestException} on any shape violation
+ */
+function readCreatePlanInput(
+  body: CreatePlanInput | undefined,
+): ValidatedCreatePlanInput {
+  const planCode =
+    typeof body?.planCode === "string" ? body.planCode.trim() : "";
+  if (!PLAN_CODE_PATTERN.test(planCode)) {
+    throw new BadRequestException(
+      "planCode must be 2-64 chars of lowercase letters, digits and hyphens",
+    );
+  }
+  const planName =
+    typeof body?.planName === "string" ? body.planName.trim() : "";
+  if (!planName || planName.length > 128) {
+    throw new BadRequestException("planName is required (max 128 chars)");
+  }
+  let description: string | null = null;
+  if (body?.description !== undefined && body?.description !== null) {
+    if (
+      typeof body.description !== "string" ||
+      body.description.length > 2000
+    ) {
+      throw new BadRequestException(
+        "description must be a string (max 2000 chars)",
+      );
+    }
+    description = body.description.trim() || null;
+  }
+  const productCode =
+    typeof body?.productCode === "string" ? body.productCode.trim() : "";
+  if (!productCode) {
+    throw new BadRequestException("productCode is required");
+  }
+  const tier = typeof body?.tier === "string" ? body.tier : "";
+  if (!TIERS.includes(tier as Tier)) {
+    throw new BadRequestException(`tier must be one of: ${TIERS.join(", ")}`);
+  }
+  return {
+    planCode,
+    planName,
+    description,
+    productCode,
+    tier: tier as Tier,
+  };
 }
