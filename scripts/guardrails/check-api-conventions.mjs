@@ -33,10 +33,15 @@ const rel = (f) => f.slice(REPO_ROOT.length + 1).replace(/\\/g, "/");
 /**
  * 代理层：形状镜像上游，不受本仓口径约束。
  * 上游各自的收敛进度见 docs/80-liaison/00-index.md（atlas#202-206 / runos#117-121）。
+ *
+ * `lib/upstream-grants.ts` 是 2026-08-31 从这两个 router 里抽出来的同一段传输底座
+ * （非 2xx 按上游状态码与响应体原样透传，码来自上游）——它就是代理层本身，
+ * 只是换了文件；豁免随代码走。
  */
 const EXEMPT = new Set([
   "bff/opera-bff/src/routers/atlas.router.ts",
   "bff/opera-bff/src/routers/runos.router.ts",
+  "bff/opera-bff/src/lib/upstream-grants.ts",
 ]);
 
 /** 拒绝词表（X-1）——三方共用，不带模块前缀。 */
