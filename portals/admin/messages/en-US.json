@@ -1926,6 +1926,22 @@
       "no": "No"
     }
   },
+  "planVersionsPage": {
+    "bundled": {
+      "title": "Bundled components",
+      "description": "Backing products sold together with this version, each with its own quota. Infrastructure products (e.g. Atlas, Runos) have no customer plans of their own; this is the only way their quota reaches a workspace pool.",
+      "empty": "No bundled component on this version yet.",
+      "quotaLabel": "{name} quota (JSON)",
+      "pickLabel": "Add component",
+      "pickPlaceholder": "— Pick a product to bundle —",
+      "add": "Add",
+      "remove": "Remove",
+      "save": "Save bundled components",
+      "saved": "Bundled components saved.",
+      "saveFailed": "Failed to save bundled components.",
+      "quotaInvalid": "Quota JSON for {name} is invalid; nothing was saved."
+    }
+  },
   "skillsPage": {
     "header": {
       "title": "Skill Market",

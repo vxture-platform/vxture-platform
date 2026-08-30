@@ -1,12 +1,10 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
 } from "@nestjs/common";
-import type { Pool, PoolClient } from "pg";
-import type { Request } from "express";
 import {
   ProductsRouter,
   loadProductReleases,
@@ -17,64 +15,19 @@ import {
   type ServicePlanRow,
   type SolutionRow,
 } from "./products.router";
-import type { RequestContext } from "../types/console.types";
+import {
+  MANAGE,
+  makeReq,
+  makeTxClient,
+  noDbPool,
+  readerOf,
+} from "../testing/pool-mocks";
 
 // 2026-08-31 TD-029 收口：solutions / service-plans / releases 接活库后的投影与
 // 写路径守卫。SQL 本身在本地库跑冒烟（见 PR 记录）；这里锁的是"行 → 记录"的
 // 形状、计数透传、价格标签口径，以及每条写路径"先鉴权再碰库、失败必回滚"。
-
-const OPERATOR_ID = "11111111-1111-4111-8111-111111111111";
-
-function makeReq(capabilities: string[]): Request & RequestContext {
-  return {
-    user: { id: OPERATOR_ID },
-    capabilities,
-    ip: "127.0.0.1",
-    headers: {},
-    socket: { remoteAddress: "127.0.0.1" },
-  } as unknown as Request & RequestContext;
-}
-
-const MANAGE = ["platform.product.manage"];
-
-function noDbPool(): { pool: Pool; connect: ReturnType<typeof vi.fn> } {
-  const connect = vi.fn(() => {
-    throw new Error("DB must not be touched");
-  });
-  const query = vi.fn(() => {
-    throw new Error("DB must not be touched");
-  });
-  return { pool: { connect, query } as unknown as Pool, connect };
-}
-
-type Responder = (sqlLower: string) => unknown[] | undefined;
-
-function makeTxClient(responder?: Responder) {
-  const calls: string[] = [];
-  const release = vi.fn();
-  const query = vi.fn(async (sql: string) => {
-    const text = String(sql);
-    calls.push(text);
-    const rows = responder?.(text.toLowerCase());
-    return { rows: rows ?? [], rowCount: rows?.length ?? 0 };
-  });
-  const client = { query, release } as unknown as PoolClient;
-  const connect = vi.fn(async () => client);
-  const pool = { connect, query: vi.fn() } as unknown as Pool;
-  const outcome = () => {
-    const norm = calls.map((c) => c.trim().toLowerCase());
-    return {
-      committed: norm.includes("commit"),
-      rolledBack: norm.includes("rollback"),
-      released: release.mock.calls.length > 0,
-    };
-  };
-  return { pool, calls, outcome };
-}
-
-function readerOf(rows: unknown[]): Pool {
-  return { query: vi.fn(async () => ({ rows })) } as unknown as Pool;
-}
+// Pool / client doubles live in ../testing/pool-mocks (shared with the bundled
+// components spec since 2026-08-31).
 
 const SOLUTION_ROW: SolutionRow = {
   id: "sol-1",
