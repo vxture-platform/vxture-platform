@@ -18,20 +18,33 @@
 
 ## 执行步骤（顺序不可反）
 
-**① 生产库迁移 + seed**（先行：加 `token_endpoint_auth_method` 列 + 写 ruyin/ruyin-beta 公共客户端行。旧代码不读新列，先跑无害；反之新代码先上会因缺列报错）：
+**① 生产库迁移，然后 seed——两次 db-init，两道门**（先行：加 `token_endpoint_auth_method` 列 + 写 ruyin/ruyin-beta 公共客户端行。旧代码不读新列，先跑无害；反之新代码先上会因缺列报错）：
 
 ```bash
+# ①a 迁移：28d 幂等重放 migrations/*.sql → 重盖 DDL 基线 → 30 验证
 gh workflow run db-init.yml --repo vxture-platform/vxture-platform \
   -f ref=main \
   -f expected_sha=84b8d764970ea49c6062168f7a9b4612bfda4844 \
-  -f action=migrate-seed \
+  -f action=migrate \
+  -f confirm=yes
+
+# ①b seed（①a success 之后再派）：29-seed → 30 验证
+gh workflow run db-init.yml --repo vxture-platform/vxture-platform \
+  -f ref=main \
+  -f expected_sha=84b8d764970ea49c6062168f7a9b4612bfda4844 \
+  -f action=seed \
   -f confirm=yes
 ```
 
+**不要用 `action=migrate-seed`**：按 db-init 的定义它是「干净基线 DDL 全量 apply（28-apply）+ seed」，
+只给空库用；对已有库会在 `10_account.sql` 撞上 `relation "users" already exists` 停下
+（2026-08-30 run 33303739380 实测，停在第一张表、没改动任何东西）。名字像「先迁移再 seed」，
+其实不是。
+
 （`expected_sha` 必须是 main **当时**的完整 SHA——工作流拿它钉住 ref 漂移；`confirm=yes`
-是必填项，交接原稿漏了。）db-init 自己也挂 production 门，owner 批准后才跑。等 run 结束为 success。预期日志可见：迁移 `2026-08-30-oidc-public-client.sql` 应用；
-seed 输出 `oidc_clients — ruyin (product=ruyin, realm=customer, auth=none, secret=unset)`
-与 `ruyin-beta` 同款一行。
+是必填项，交接原稿漏了。）db-init 自己也挂 production 门，owner 批准后才跑。等两个 run 都
+success。预期日志可见：①a 迁移 `2026-08-30-oidc-public-client.sql` 应用；①b seed 输出
+`oidc_clients — ruyin (product=ruyin, realm=customer, auth=none, secret=unset)` 与 `ruyin-beta` 同款一行。
 
 **② 发版 auth-bff**（production 环境审批门照常）：
 
