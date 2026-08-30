@@ -195,6 +195,65 @@ function describeError(error: unknown): { description?: string } {
     : {};
 }
 
+/**
+ * 退役被 BFF 挡下来的两种情况（2026-08-31 闸门，`opera/40-product-registry.md` §6）。
+ *
+ * 不塞进 toast：toast 装不下链接，而这两种情况运营者接下来要做的事都在别的页
+ * ——去权益配置把授权清掉、或者去看哪个上游没应答。做成页面顶部的 Banner，带
+ * 出口，能关掉。
+ */
+type RetireBlock =
+  | {
+      kind: "grants";
+      product: ProductRecord;
+      atlas: { count: number; endpointCodes: string[] };
+      runos: { count: number; capabilityIds: string[] };
+    }
+  | {
+      kind: "unavailable";
+      product: ProductRecord;
+      upstream: string;
+      message: string;
+    };
+
+/**
+ * 从 409 `PRODUCT_HAS_ACTIVE_GRANTS` 的结构化体里取条数与样本。样本只取**可读码**
+ * （路由码 / 能力 ID），`id` / `grantId` 是给机器的，不上屏。形状对不上就按 0 条
+ * 处理——但 Banner 照样出：拦是拦住了，只是明细没读到。
+ */
+function grantsBlockOf(
+  product: ProductRecord,
+  body: Record<string, unknown> | null,
+): RetireBlock {
+  const side = (
+    key: "atlas" | "runos",
+    codeKey: "endpointCode" | "capabilityId",
+  ): { count: number; codes: string[] } => {
+    const raw = body?.[key];
+    if (!raw || typeof raw !== "object") return { count: 0, codes: [] };
+    const rec = raw as { count?: unknown; sample?: unknown };
+    const count = typeof rec.count === "number" ? rec.count : 0;
+    const codes = Array.isArray(rec.sample)
+      ? rec.sample
+          .map((s) =>
+            s && typeof s === "object"
+              ? (s as Record<string, unknown>)[codeKey]
+              : undefined,
+          )
+          .filter((c): c is string => typeof c === "string")
+      : [];
+    return { count, codes };
+  };
+  const atlas = side("atlas", "endpointCode");
+  const runos = side("runos", "capabilityId");
+  return {
+    kind: "grants",
+    product,
+    atlas: { count: atlas.count, endpointCodes: atlas.codes },
+    runos: { count: runos.count, capabilityIds: runos.codes },
+  };
+}
+
 type LoadState =
   | { kind: "loading" }
   | { kind: "error"; message: string }
@@ -247,6 +306,8 @@ function ProductsPageContent() {
     product: ProductRecord;
     action: ProductAction;
   } | null>(null);
+  /** 最近一次被挡下来的退役。成功退役任何产品、或人手关掉，都清空。 */
+  const [retireBlock, setRetireBlock] = useState<RetireBlock | null>(null);
 
   const [checklistProduct, setChecklistProduct] =
     useState<ProductRecord | null>(null);
@@ -399,19 +460,58 @@ function ProductsPageContent() {
   }
 
   async function applyLifecycle(product: ProductRecord, action: ProductAction) {
-    await runAction(`${product.productName} · ${action.label}`, () =>
-      api.patch(`/api/products/${product.id}/state`, { state: action.to }),
-    );
-  }
-
-  async function runAction(label: string, action: () => Promise<unknown>) {
+    const label = `${product.productName} · ${action.label}`;
     setSubmitting(true);
     try {
-      await action();
+      await api.patch(`/api/products/${product.id}/state`, {
+        state: action.to,
+      });
       toast({ tone: "success", title: label });
+      if (action.to === "deprecated") setRetireBlock(null);
       await reload();
     } catch (error) {
-      toast({ tone: "danger", title: `${label}失败`, ...describeError(error) });
+      /* 退役闸门的两种拒绝（BFF `assertNoActiveUpstreamGrants`）各有各的下一步，
+         **判码不判文案**：409 = 上游还有生效授权，出口是权益配置页；502 = 上游没
+         查到，退役没有执行，出口是稍后重试。其它错误（403、非法迁移）照旧一条
+         toast。 */
+      if (
+        action.to === "deprecated" &&
+        error instanceof OperaApiError &&
+        error.code === "PRODUCT_HAS_ACTIVE_GRANTS"
+      ) {
+        setRetireBlock(grantsBlockOf(product, error.body));
+        toast({
+          tone: "danger",
+          title: `${product.productName} 未退役：上游还有生效中的授权`,
+          description: "先去权益配置把它们撤掉。条数与出口见页顶。",
+        });
+      } else if (
+        action.to === "deprecated" &&
+        error instanceof OperaApiError &&
+        error.status === 502
+      ) {
+        const upstream =
+          typeof error.body?.["upstream"] === "string"
+            ? error.body["upstream"]
+            : "上游";
+        setRetireBlock({
+          kind: "unavailable",
+          product,
+          upstream,
+          message: error.message,
+        });
+        toast({
+          tone: "danger",
+          title: `${product.productName} 未退役：上游授权检查失败`,
+          description: "查不到不等于没有——退役没有执行。",
+        });
+      } else {
+        toast({
+          tone: "danger",
+          title: `${label}失败`,
+          ...describeError(error),
+        });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -577,19 +677,57 @@ function ProductsPageContent() {
     <>
       <ListPageTemplate
         summary={
-          productIdFilter ? (
-            <Banner
-              tone="info"
-              title={`只显示 ${rows.find((r) => r.id === productIdFilter)?.productName ?? "一个产品"}`}
-              description="从接入凭据或权益配置页点回来的。"
-              action={
-                <Button asChild variant="secondary" size="sm">
-                  <Link href="/product/catalog">
-                    {tShared("common.showAll")}
-                  </Link>
-                </Button>
-              }
-            />
+          productIdFilter || retireBlock ? (
+            <div className="flex flex-col gap-sm">
+              {productIdFilter ? (
+                <Banner
+                  tone="info"
+                  title={`只显示 ${rows.find((r) => r.id === productIdFilter)?.productName ?? "一个产品"}`}
+                  description="从接入凭据或权益配置页点回来的。"
+                  action={
+                    <Button asChild variant="secondary" size="sm">
+                      <Link href="/product/catalog">
+                        {tShared("common.showAll")}
+                      </Link>
+                    </Button>
+                  }
+                />
+              ) : null}
+              {retireBlock?.kind === "grants" ? (
+                <Banner
+                  tone="danger"
+                  title={`${retireBlock.product.productName} 未退役：Atlas ${retireBlock.atlas.count} 条模型路由授权、Runos ${retireBlock.runos.count} 条能力授权仍在生效`}
+                  description={[
+                    "退役前要先把它们全部撤销——目录是唯一权威，上游按产品码挂着的授权不会随退役自动消失。",
+                    retireBlock.atlas.endpointCodes.length > 0
+                      ? `路由：${retireBlock.atlas.endpointCodes.join("、")}${retireBlock.atlas.count > retireBlock.atlas.endpointCodes.length ? " 等" : ""}`
+                      : "",
+                    retireBlock.runos.capabilityIds.length > 0
+                      ? `能力：${retireBlock.runos.capabilityIds.join("、")}${retireBlock.runos.count > retireBlock.runos.capabilityIds.length ? " 等" : ""}`
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  action={
+                    <Button asChild variant="secondary" size="sm">
+                      <Link
+                        href={`/product/entitlements?productCode=${encodeURIComponent(retireBlock.product.productCode)}`}
+                      >
+                        去权益配置撤销
+                      </Link>
+                    </Button>
+                  }
+                  onDismiss={() => setRetireBlock(null)}
+                />
+              ) : retireBlock?.kind === "unavailable" ? (
+                <Banner
+                  tone="warning"
+                  title={`${retireBlock.product.productName} 未退役：${retireBlock.upstream} 的授权没有查到`}
+                  description={`${retireBlock.message} 查不到不等于没有——退役要求先确认上游没有生效中的授权，所以这次没有执行；上游恢复后再试。`}
+                  onDismiss={() => setRetireBlock(null)}
+                />
+              ) : null}
+            </div>
           ) : undefined
         }
         header={

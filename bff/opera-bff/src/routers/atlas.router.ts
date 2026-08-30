@@ -160,7 +160,6 @@ import {
   Controller,
   Delete,
   Get,
-  HttpException,
   Inject,
   Param,
   Patch,
@@ -175,23 +174,23 @@ import { OperatorExchangeService } from "../auth/operator-exchange.service";
 import type { OperatorAuditEntry } from "../audit/audit-log";
 import { recordProxyWrite } from "../audit/proxy-audit";
 import { assertAtlasContract, type AtlasResource } from "./atlas-contract";
-import {
-  notEntitled,
-  unauthenticated,
-  upstreamUnavailable,
-} from "../errors/api-error";
+import { notEntitled, unauthenticated } from "../errors/api-error";
 import { RequireStepUp } from "../auth/step-up.decorator";
+/* 上游调用底座（fetch / 502 / 状态码透传 / operator-OBO 换票）2026-08-31 起与
+   runos.router、product-catalog.router 共用一份，见 `lib/upstream-grants.ts` 文件头。
+   本文件此前自带的 `atlasRequest` / `parseAtlasError` / `ATLAS_AUDIENCE` 随之删除，
+   行为一行不变。 */
+import {
+  operatorRequest,
+  type HttpMethod,
+  type JsonObject,
+} from "../lib/upstream-grants";
 import { OPERA_BFF_RW_POOL } from "../tokens";
 import type { RequestContext } from "../types/request-context";
 
-/** 换票时的目标 audience（对齐 product_100 的产品码）。 */
-const ATLAS_AUDIENCE = "atlas";
 /** 活库当前的三段式能力码（见文件头——不是 admin-bff 那个已退役的扁平码）。 */
 const PROVIDER_MANAGE_CAPABILITY = "model:provider.manage";
 const MODEL_MANAGE_CAPABILITY = "model:model.manage";
-
-type JsonObject = Record<string, unknown>;
-type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
 /**
  * 两值资源的最小词表（atlas `object-state.ts`）。Provider / Endpoint /
@@ -204,14 +203,6 @@ export type ObjectState = "active" | "inactive";
  * **仍可解析、不再推荐**，既不是 true 也不是 false，布尔装不下。
  */
 export type ModelState = ObjectState | "deprecated";
-
-interface AtlasErrorBody {
-  code?: string;
-  message?: string | string[];
-  error?: string;
-  statusCode?: number;
-  details?: unknown;
-}
 
 /** 从真实 chat/stream 流量派生，不是主动探活；无流量时 status="unknown"（不是 "down"）。 */
 export interface ProviderHealth {
@@ -778,16 +769,15 @@ export class AtlasRouter {
       contract?: AtlasResource;
     },
   ): Promise<T> {
-    const bearer = req.operatorAccessToken
-      ? await this.operatorExchange.getToken(
-          req.operatorAccessToken,
-          ATLAS_AUDIENCE,
-        )
-      : null;
-    const payload = await atlasRequest<T>(
+    const payload = await operatorRequest<T>(
+      { operatorExchange: this.operatorExchange, baseUrl: this.atlasApiUrl },
+      "atlas",
+      req,
       path,
-      { ...options, ...(bearer ? { bearer } : {}) },
-      this.atlasApiUrl,
+      {
+        ...(options?.method ? { method: options.method } : {}),
+        ...(options?.body ? { body: options.body } : {}),
+      },
     );
     /* `atlas-compat.ts` 的 `isActive` 归一层已于 2026-08-23 删除：门户全量迁到
        `state`，垫片自带的删除条件（"页面完成语义迁移后才能删"）已满足。取代它的是
@@ -1817,73 +1807,5 @@ function assertCanManageModels(req: Request & RequestContext): void {
   }
   if (!req.capabilities?.includes(MODEL_MANAGE_CAPABILITY)) {
     throw notEntitled(MODEL_MANAGE_CAPABILITY);
-  }
-}
-
-async function atlasRequest<TResponse>(
-  path: string,
-  options: {
-    method?: HttpMethod;
-    body?: JsonObject;
-    bearer?: string;
-  } = {},
-  baseUrl: string = "http://localhost:3100",
-): Promise<TResponse> {
-  let response: Response;
-  const headers: Record<string, string> = {
-    ...(options.body ? { "content-type": "application/json" } : {}),
-    ...(options.bearer ? { authorization: `Bearer ${options.bearer}` } : {}),
-  };
-  try {
-    response = await fetch(`${baseUrl}${path}`, {
-      method: options.method ?? "GET",
-      ...(Object.keys(headers).length > 0 ? { headers } : {}),
-      ...(options.body ? { body: JSON.stringify(options.body) } : {}),
-    });
-  } catch {
-    throw upstreamUnavailable("ATLAS_UNAVAILABLE", "Atlas is unavailable");
-  }
-
-  const responseText = await response.text();
-
-  if (!response.ok) {
-    throw new HttpException(
-      parseAtlasError(responseText, response.status),
-      response.status,
-    );
-  }
-
-  if (!responseText.trim()) {
-    return undefined as TResponse;
-  }
-
-  return JSON.parse(responseText) as TResponse;
-}
-
-function parseAtlasError(responseText: string, status: number): AtlasErrorBody {
-  if (!responseText.trim()) {
-    return {
-      code: "ATLAS_REQUEST_FAILED",
-      message: `Atlas request failed with status ${status}`,
-      statusCode: status,
-    };
-  }
-  try {
-    const parsed = JSON.parse(responseText) as AtlasErrorBody;
-    if (parsed.message !== undefined || parsed.code !== undefined) {
-      return { ...parsed, statusCode: parsed.statusCode ?? status };
-    }
-    return {
-      code: "ATLAS_REQUEST_FAILED",
-      message: `Atlas request failed with status ${status}`,
-      statusCode: status,
-      details: parsed,
-    };
-  } catch {
-    return {
-      code: "ATLAS_REQUEST_FAILED",
-      message: responseText,
-      statusCode: status,
-    };
   }
 }

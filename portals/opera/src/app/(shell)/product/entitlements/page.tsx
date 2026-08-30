@@ -61,6 +61,7 @@ import {
   InputGroupAddon,
   InputGroupInput,
   NativeSelect,
+  Section,
   StatusBadge,
   Tabs,
   TabsContent,
@@ -103,7 +104,34 @@ interface CapabilityGrant {
   riskScope: string;
   state: string;
   quotaLimit: number | null;
+  /** 主体。按产品汇总的读法里它是已知的；全量读（`grants/all`）里靠它归主体。 */
+  subjectType?: string;
+  subjectRef?: string;
 }
+
+/**
+ * `GET /api/runos/grants/all`：按能力目录扇出得到的**全量生效**能力授权（2026-08-31）。
+ * 只给「未登记产品的授权」用——runos 没有无条件的 dump，按已知产品码查永远查不到
+ * 目录里没有的主体。`failed` 是没读到的能力，那些能力下若有孤儿授权这一次看不见。
+ */
+interface AllCapabilityGrants {
+  grants: CapabilityGrant[];
+  failed: string[];
+  capabilityCount: number;
+}
+
+/**
+ * 「未登记产品的授权」一行：productCode 在目录里**根本没有**的上游授权。
+ * 草稿 / 停用 / 退役都算登记过——只有目录里找不到的码才是孤儿。
+ */
+type OrphanRow =
+  | { key: string; source: "atlas"; productCode: string; grant: RouteGrant }
+  | {
+      key: string;
+      source: "runos";
+      productCode: string;
+      grant: CapabilityGrant;
+    };
 
 /**
  * 能力 tab 里的一行。**逻辑上是一张表**，只是 direct 与它推导出的 derived 有父子关系。
@@ -192,6 +220,9 @@ function ProductEntitlements() {
     Record<string, CapabilityGrant[]>
   >({});
   const [capFailed, setCapFailed] = useState<string[]>([]);
+  /** 全量能力授权（只给孤儿报表与目录外产品码的详情兜底）。null = 没读到。 */
+  const [allCaps, setAllCaps] = useState<AllCapabilityGrants | null>(null);
+  const [allCapsError, setAllCapsError] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<CapabilityLite[]>([]);
   const [endpoints, setEndpoints] = useState<EndpointLite[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
@@ -241,19 +272,32 @@ function ProductEntitlements() {
       setEndpoints(eps);
 
       const codes = prods.map((p) => p.productCode).join(",");
-      const summary = await api
-        .get<{
-          byProduct: Record<string, CapabilityGrant[]>;
-          failed: string[];
-        }>(
-          `/api/runos/grants/summary?productCodes=${encodeURIComponent(codes)}`,
-        )
-        .catch(() => ({
-          byProduct: {} as Record<string, CapabilityGrant[]>,
-          failed: prods.map((p) => p.productCode),
-        }));
+      const [summary, all] = await Promise.all([
+        api
+          .get<{
+            byProduct: Record<string, CapabilityGrant[]>;
+            failed: string[];
+          }>(
+            `/api/runos/grants/summary?productCodes=${encodeURIComponent(codes)}`,
+          )
+          .catch(() => ({
+            byProduct: {} as Record<string, CapabilityGrant[]>,
+            failed: prods.map((p) => p.productCode),
+          })),
+        /* 全量读只给「未登记产品的授权」用。读失败不拖垮整页——但要记下来：报表那
+           一节必须说「Runos 侧没查到」，不能把没查到写成没有。 */
+        api.get<AllCapabilityGrants>("/api/runos/grants/all").then(
+          (data) => ({ data, error: null as string | null }),
+          (error: unknown) => ({
+            data: null,
+            error: message(error, "读取失败"),
+          }),
+        ),
+      ]);
       setCapByProduct(summary.byProduct);
       setCapFailed(summary.failed);
+      setAllCaps(all.data);
+      setAllCapsError(all.error);
       setLoad({ kind: "ready" });
     } catch (error) {
       setLoad({ kind: "error", message: message(error, "读取权益失败") });
@@ -418,6 +462,52 @@ function ProductEntitlements() {
   }, [routeGrants]);
 
   /**
+   * 未登记产品的授权（`opera/40-product-registry.md` §6，2026-08-31）。
+   *
+   * 「登记过」= 在 `/api/products` 里——它不按状态过滤，草稿 / 停用 / 退役都在；只
+   * 软删的行不在（所有列表都过滤 `deleted_at`，软删本来就是「当它不存在」）。所以
+   * 这里的孤儿只有一种：两个上游按 `product_code` 字符串挂着、而目录里**根本没有**
+   * 这个码的授权。典型来源是退役闸门立起来之前退役掉的产品，以及绕过 opera 直连
+   * 上游写进去的授权。
+   *
+   * Runos 那半只看 `subjectType === "product"`：别的主体类型不归产品目录管。
+   */
+  const knownCodes = useMemo(
+    () => new Set(products.map((p) => p.productCode)),
+    [products],
+  );
+  const orphanRows = useMemo<OrphanRow[]>(() => {
+    const rows: OrphanRow[] = [];
+    for (const g of routeGrants) {
+      if (!knownCodes.has(g.productCode)) {
+        rows.push({
+          key: `atlas:${g.id}`,
+          source: "atlas",
+          productCode: g.productCode,
+          grant: g,
+        });
+      }
+    }
+    for (const g of allCaps?.grants ?? []) {
+      if (g.subjectType !== "product") continue;
+      const code = g.subjectRef ?? "";
+      if (code === "" || knownCodes.has(code)) continue;
+      rows.push({
+        key: `runos:${g.grantId}`,
+        source: "runos",
+        productCode: code,
+        grant: g,
+      });
+    }
+    rows.sort(
+      (a, b) =>
+        a.productCode.localeCompare(b.productCode) ||
+        a.source.localeCompare(b.source),
+    );
+    return rows;
+  }, [routeGrants, allCaps, knownCodes]);
+
+  /**
    * direct 是父行，它推导出的 derived 挂在下面。
    *
    * **孤儿 derived 照样出行**（锚点不在这批里——理论上不该发生，因为锚点必然是同一
@@ -553,7 +643,13 @@ function ProductEntitlements() {
   /* ── 详情：按维度分 tab ──────────────────────────────────────────────── */
   if (selectedCode) {
     const routes = routesByProduct.get(selectedCode) ?? [];
-    const caps = capByProduct[selectedCode] ?? [];
+    /* 目录里没有的码（从「未登记产品的授权」点进来）：按产品汇总的那份里没有它，
+       改从全量读里按主体捞。两份都是上游 `state="active"` 的行，口径一致。 */
+    const caps =
+      capByProduct[selectedCode] ??
+      (allCaps?.grants ?? []).filter(
+        (g) => g.subjectType === "product" && g.subjectRef === selectedCode,
+      );
     return (
       <ViewLayout>
         <ViewHeader
@@ -569,6 +665,19 @@ function ProductEntitlements() {
             </Button>
           }
         />
+
+        {load.kind === "ready" && product === null ? (
+          <Banner
+            tone="warning"
+            title={`${selectedCode} 不在产品目录里`}
+            description="下面列出的是两个上游按这个产品码挂着的授权——它们的主体在目录里不存在。要么撤掉它们，要么去产品目录把这个产品登记上。"
+            action={
+              <Button asChild variant="secondary" size="sm">
+                <Link href="/product/catalog">去产品目录</Link>
+              </Button>
+            }
+          />
+        ) : null}
 
         <Tabs defaultValue="routes">
           <TabsList className="w-full justify-start">
@@ -1295,6 +1404,220 @@ function ProductEntitlements() {
           })}
         </div>
       )}
+
+      {/* ── 未登记产品的授权（2026-08-31，`opera/40-product-registry.md` §6）──────
+          退役闸门只能拦住闸门立起来**之后**的退役；之前退掉的、以及绕过 opera 直连
+          上游写进去的，都挂在一个目录里不存在的主体上，此前没有任何页面能看见它们。
+          读取失败与「没有」必须分开说——见两条 Banner 与空态的分支。 */}
+      {load.kind === "ready" ? (
+        <Section
+          title="未登记产品的授权"
+          description="产品码不在产品目录里的上游授权——草稿 / 停用 / 退役都算登记过，只有目录里根本没有的码才在这里。目录是唯一权威，这些授权挂在一个不存在的主体上：撤掉它们，或者去产品目录把那个产品登记上。"
+        >
+          {allCapsError ? (
+            <Banner
+              tone="warning"
+              title="Runos 侧没查到"
+              description={`${allCapsError}。下面只有 Atlas 的结果；Runos 那边有没有未登记产品的授权，这一次答不出来。`}
+            />
+          ) : null}
+          {allCaps && allCaps.failed.length > 0 ? (
+            <Banner
+              tone="warning"
+              title={`${allCaps.failed.length} 个能力的授权没读到`}
+              description={`${allCaps.failed.join("、")} —— 这些能力下若有未登记产品的授权，这一次看不见。`}
+            />
+          ) : null}
+          <DataTable
+            columns={[
+              {
+                id: "product",
+                header: "产品码",
+                width: "sm",
+                cell: (r: OrphanRow) => (
+                  /* 点进详情页：那里对目录外的码同样能列、能撤（见详情分支的兜底）。 */
+                  <Link
+                    href={`/product/entitlements?productCode=${encodeURIComponent(r.productCode)}`}
+                    className="font-mono text-code-sm hover:text-primary-text"
+                  >
+                    {r.productCode}
+                  </Link>
+                ),
+              },
+              {
+                id: "source",
+                header: tShared("columns.source"),
+                width: "sm",
+                cell: (r: OrphanRow) => (
+                  <Badge variant="outline">
+                    {r.source === "atlas" ? "Atlas · 模型路由" : "Runos · 能力"}
+                  </Badge>
+                ),
+              },
+              {
+                id: "object",
+                header: "授权对象",
+                cell: (r: OrphanRow) =>
+                  r.source === "atlas" ? (
+                    <span className="font-mono text-code-sm">
+                      {r.grant.endpointCode}
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-xs">
+                      <span className="font-mono text-code-sm">
+                        {r.grant.capabilityId}
+                      </span>
+                      <Badge
+                        variant={
+                          r.grant.grantType === "direct"
+                            ? "secondary"
+                            : "outline"
+                        }
+                      >
+                        {r.grant.grantType === "direct" ? "直接" : "推导"}
+                      </Badge>
+                    </span>
+                  ),
+              },
+              {
+                id: "state",
+                header: tShared("columns.state"),
+                align: "center",
+                width: "xs",
+                cell: (r: OrphanRow) =>
+                  r.source === "atlas" ? (
+                    <StatusBadge
+                      tone={isEnabled(r.grant.state) ? "success" : "neutral"}
+                      dot
+                    >
+                      {isEnabled(r.grant.state)
+                        ? "生效中"
+                        : tShared("status.generic.disabled")}
+                    </StatusBadge>
+                  ) : (
+                    <StatusBadge
+                      tone={GRANT_STATE_TONE[r.grant.state] ?? "neutral"}
+                      dot
+                    >
+                      {r.grant.state}
+                    </StatusBadge>
+                  ),
+              },
+            ]}
+            rows={orphanRows}
+            rowKey={(r: OrphanRow) => r.key}
+            indexStart={1}
+            {...(canWriteRoutes || canWriteCapabilities
+              ? {
+                  /* 动作与详情页的同一套：Atlas 软停用（可逆、豁免二次确认）、Runos
+                     撤销（迁 revoked、要确认）、派生行只能撤锚点——锚点在同一个
+                     孤儿主体的 direct 行里找，找不到就按不动并说明。 */
+                  rowActions: (r: OrphanRow) => {
+                    if (r.source === "atlas") {
+                      if (!canWriteRoutes) return null;
+                      const g = r.grant;
+                      return (
+                        <ActionMenu
+                          label={`${g.endpointCode} 操作`}
+                          disabled={submitting}
+                          items={[
+                            {
+                              id: "deactivate",
+                              label: tShared("actions.disable"),
+                              icon: "pause" as const,
+                              danger: true,
+                              disabled: !isEnabled(g.state),
+                              confirmExempt:
+                                "停用可随时再启用，授权行与配置原样保留，不构成不可逆操作",
+                              onSelect: () => void deactivateRoute(g),
+                            },
+                          ]}
+                        />
+                      );
+                    }
+                    if (!canWriteCapabilities) return null;
+                    const g = r.grant;
+                    if (g.grantType === "direct") {
+                      return (
+                        <ActionMenu
+                          label={`${g.capabilityId} 操作`}
+                          disabled={submitting}
+                          items={[
+                            {
+                              id: "revoke",
+                              label: "撤销授权",
+                              icon: "prohibit" as const,
+                              danger: true,
+                              disabled: g.state !== "active",
+                              confirm: withLabels({
+                                verb: "撤销",
+                                target: `${r.productCode} 对 ${g.capabilityId} 的授权`,
+                                consequence:
+                                  "行迁到 revoked 终态、不删除——「谁曾经持有、什么时候被收回」要留得住。由它带出来的派生权益会在下一次闭包重编译时消失。**不是急停**：调用走快照，撤销后最多还会再放行一轮。",
+                                onConfirm: () => revokeCapability(g),
+                              }),
+                            },
+                          ]}
+                        />
+                      );
+                    }
+                    const anchor =
+                      orphanRows.find(
+                        (x) =>
+                          x.source === "runos" &&
+                          x.productCode === r.productCode &&
+                          x.grant.grantType === "direct" &&
+                          x.grant.capabilityId === g.anchorCapabilityId &&
+                          x.grant.state === "active",
+                      ) ?? null;
+                    const anchorGrant =
+                      anchor && anchor.source === "runos" ? anchor.grant : null;
+                    return (
+                      <ActionMenu
+                        label={`${g.capabilityId} 操作`}
+                        disabled={submitting}
+                        items={[
+                          {
+                            id: "revoke-anchor",
+                            label: anchorGrant
+                              ? "撤销它的锚点"
+                              : "锚点已不在这个主体",
+                            icon: "prohibit" as const,
+                            danger: true,
+                            disabled: !anchorGrant,
+                            confirm: withLabels({
+                              verb: "撤销",
+                              target: `锚点 ${g.anchorCapabilityId ?? ""}`,
+                              consequence: `派生行不能单独撤销。撤掉锚点之后，这一条（${g.capabilityId}）会在下一次闭包重编译时自然消失——不是立刻。`,
+                              onConfirm: () => {
+                                if (!anchorGrant) return;
+                                return revokeCapability(anchorGrant);
+                              },
+                            }),
+                          },
+                        ]}
+                      />
+                    );
+                  },
+                }
+              : {})}
+            empty={
+              allCapsError ? (
+                /* Atlas 那半查过了、是空的；Runos 那半没查到——不能合起来说「没有」。 */
+                <EmptyState
+                  title="Atlas 侧没有未登记产品的授权"
+                  description="Runos 侧这一次没查到（见上方提示），不能说没有。"
+                />
+              ) : (
+                <EmptyState
+                  title="没有未登记产品的授权"
+                  description="两个上游的每一条授权都能在产品目录里找到主体。"
+                />
+              )
+            }
+          />
+        </Section>
+      ) : null}
     </ViewLayout>
   );
 }
