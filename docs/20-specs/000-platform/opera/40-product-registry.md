@@ -112,8 +112,14 @@ seed 是**平台自举**的一部分，不是登记入口的替代品。一行�
 
 ## 8. 已知遗留（不在本次范围）
 
-- **admin-bff `products.router.ts` 的 solutions / releases / model-policies** 仍是文件内的静态数组（无表；文件注释要求 owner 签字前不接库）。它们不是产品清单，但里面出现的产品码都是虚构的。
-- **website 营销页**硬编码了 arda / ontos / karda 的 slug（`portals/website/.../products/[slug]`）——营销内容，不是产品清单；ontos 页在产品登记前是"预告"。
-- **`services/platform/product` 的 `createProduct()`** 写 `status='active'`、不写 `origin`，无路由调用。若日后接入，必须与目录页同形（草稿落地、显式 `origin`）。
+2026-08-31 已闭合（产品唯一真源分析四缺口）：
+
+- ~~admin-bff `products.router.ts` 的 solutions / releases / model-policies 仍是静态数组~~ → solutions 落库为 `product.solutions` / `solution_products` / `solution_plans`（`admin/70-product-solutions.md`），能力目录的 `relatedSolutions` / `solutionCount` 与订阅的方案归属都从表实算；releases / model-policies 仍无表，返回空而不是编造。
+- ~~website 营销页硬编码 arda / ontos / karda 的 slug~~ → `/products`、`/appcenter`、`/products/[slug]` 逐请求读 `GET /api/products/catalog`（§4），不在目录里的 slug 是真 404；ontos / terra 不再有页。
+- ~~`services/platform/product` 的 `createProduct()`~~ → 整目录删除（无 package.json、无引用者）。登记入口只有 opera 目录页一处。
+- 退役与上游授权的闭合见 §2 / §6（退役闸门 + 未登记产品的授权报表）。
+
+仍开着：
+
 - **`dispatch.itest.spec.ts`** 用 `xuanzhen` 当测试产品码，与矩阵保留码撞名；`on conflict (id)` 挡不住 `product_code` 唯一冲突。
 - **`baseline-assertions.sql`** 的 `appoidc.oidc_clients ≥ 10`：seed 现在写 11 行（4 平台 + 7 产品），仍满足；若再减产品需同步。
