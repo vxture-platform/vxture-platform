@@ -631,5 +631,9 @@ function resolveClientCredentials(
   if (body.client_id && body.client_secret) {
     return { clientId: body.client_id, clientSecret: body.client_secret };
   }
+  // 公共客户端（RFC 8252）：仅 client_id、无 secret，凭 PKCE 证明。
+  if (body.client_id) {
+    return { clientId: body.client_id };
+  }
   throw new BadRequestException("invalid_client");
 }

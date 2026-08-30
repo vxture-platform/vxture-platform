@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { describe, it, expect } from "vitest";
 import {
   pickSessionForRealm,
+  redirectUriAllowed,
   stripSubPrefix,
   verifyPkceS256,
 } from "./oidc.service";
@@ -49,6 +50,62 @@ describe("stripSubPrefix", () => {
 
   it("only strips at the first underscore", () => {
     expect(stripSubPrefix("usr_a_b")).toBe("a_b");
+  });
+});
+
+describe("redirectUriAllowed", () => {
+  // 机密客户端：只认精确相等。
+  it("机密客户端 web 回调按精确匹配", () => {
+    const reg = ["https://ruyin.vxture.com/auth/callback"];
+    expect(
+      redirectUriAllowed(reg, "https://ruyin.vxture.com/auth/callback"),
+    ).toBe(true);
+    expect(
+      redirectUriAllowed(reg, "https://ruyin.vxture.com/auth/callback2"),
+    ).toBe(false);
+    expect(redirectUriAllowed(reg, "https://evil.example/auth/callback")).toBe(
+      false,
+    );
+  });
+
+  // 公共客户端：loopback 端口无关（RFC 8252 §7.3）。
+  const loop = ["http://127.0.0.1/oauth/callback"];
+
+  it("loopback 登记无端口，任意端口的同 host+path 命中", () => {
+    expect(
+      redirectUriAllowed(loop, "http://127.0.0.1:7420/oauth/callback"),
+    ).toBe(true);
+    expect(
+      redirectUriAllowed(loop, "http://127.0.0.1:51000/oauth/callback"),
+    ).toBe(true);
+  });
+
+  it("loopback 命中要求 path 相同", () => {
+    expect(redirectUriAllowed(loop, "http://127.0.0.1:7420/evil")).toBe(false);
+  });
+
+  it("非 loopback host 不享受端口无关，即使 path 相同", () => {
+    expect(
+      redirectUriAllowed(loop, "http://attacker.example:7420/oauth/callback"),
+    ).toBe(false);
+    // 127.0.0.1.evil.com 前缀伪装：hostname 不等，拒。
+    expect(
+      redirectUriAllowed(loop, "http://127.0.0.1.evil.com/oauth/callback"),
+    ).toBe(false);
+  });
+
+  it("loopback 只放行 http，不放行 https（也不放行畸形 URL）", () => {
+    expect(
+      redirectUriAllowed(loop, "https://127.0.0.1:7420/oauth/callback"),
+    ).toBe(false);
+    expect(redirectUriAllowed(loop, "not a url")).toBe(false);
+  });
+
+  it("[::1] loopback 同样端口无关", () => {
+    const v6 = ["http://[::1]/oauth/callback"];
+    expect(redirectUriAllowed(v6, "http://[::1]:7420/oauth/callback")).toBe(
+      true,
+    );
   });
 });
 
