@@ -21,6 +21,7 @@ import {
   loadProductServicePlanDetail,
   loadProductSolutionDetail,
   loadProductSolutions,
+  loadProductCapabilities,
 } from "./products.router";
 
 const RUN = process.env.PRODUCT_SOLUTIONS_SMOKE === "1";
@@ -75,6 +76,18 @@ describe.skipIf(!RUN)("solutions SQL smoke (live DB)", () => {
       CODE,
     ]);
     await pool.end();
+  });
+
+  // 2026-08-31: `/api/products/capabilities` 500-ed in production with
+  // `syntax error at or near "{"` — PRODUCT_SOLUTION_LINKS_SQL had a bare `{}`
+  // as the ARRAY_AGG fallback. The unit specs mock the pool, so only a live
+  // database can catch SQL that does not parse; this case runs the same loader
+  // the router calls and reads the smoke solution back through it.
+  it("capabilities catalog runs the solution-links SQL against a live DB", async () => {
+    const capabilities = await loadProductCapabilities(pool);
+    const arda = capabilities.find((c) => c.productCode === "arda");
+    expect(arda).toBeDefined();
+    expect(arda!.relatedSolutions.map((r) => r.solutionCode)).toContain(CODE);
   });
 
   it("lists the solution with real products, tiers and numeric counts", async () => {

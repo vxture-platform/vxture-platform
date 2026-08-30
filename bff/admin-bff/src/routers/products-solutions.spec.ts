@@ -14,6 +14,7 @@ import {
   type ReleaseRow,
   type ServicePlanRow,
   type SolutionRow,
+  PRODUCT_SOLUTION_LINKS_SQL,
 } from "./products.router";
 import {
   MANAGE,
@@ -555,5 +556,15 @@ describe("solution write handlers are step-up gated", () => {
       "listSolutions"
     ];
     expect(Reflect.getMetadata(REQUIRE_STEP_UP, fn as object)).toBeUndefined();
+  });
+});
+
+describe("PRODUCT_SOLUTION_LINKS_SQL", () => {
+  it("has no bare `{}` — an empty array literal must be typed (ARRAY[]::text[])", () => {
+    // Production 2026-08-31: `COALESCE(ARRAY_AGG(...), {})` is a PostgreSQL
+    // syntax error (42601); the mocked pool in these specs never parses SQL,
+    // so pin the shape here and let the live-DB smoke (itest) run the query.
+    expect(PRODUCT_SOLUTION_LINKS_SQL).not.toMatch(/(^|[^'"\w])\{\}/);
+    expect(PRODUCT_SOLUTION_LINKS_SQL).toContain("ARRAY[]::text[]");
   });
 });

@@ -1125,7 +1125,7 @@ interface ProductSolutionLinkRow {
 }
 
 /** 产品 → 所在方案（含角色、方案已绑档位的套餐名）；软删的方案 / 套餐不算。 */
-const PRODUCT_SOLUTION_LINKS_SQL = `
+export const PRODUCT_SOLUTION_LINKS_SQL = `
   SELECT sp.product_id,
          s.solution_code,
          s.solution_name,
@@ -1133,7 +1133,7 @@ const PRODUCT_SOLUTION_LINKS_SQL = `
          sp.role,
          COALESCE(
            ARRAY_AGG(pl.plan_name ORDER BY spl.tier) FILTER (WHERE pl.plan_name IS NOT NULL),
-           {}
+           ARRAY[]::text[]
          ) AS tier_names
     FROM product.solution_products sp
     JOIN product.solutions s ON s.id = sp.solution_id AND s.deleted_at IS NULL
