@@ -102,14 +102,16 @@ type LivenessStatus =
   | "healthy"
   | "unhealthy"
   | "unreachable"
-  | "not_configured";
+  | "not_configured"
+  | "not_applicable";
 type ReadinessStatus =
   | "ready"
   | "degraded"
   | "fail"
   | "not_implemented"
   | "unreachable"
-  | "not_configured";
+  | "not_configured"
+  | "not_applicable";
 
 interface LivenessProbe {
   status: LivenessStatus;
@@ -181,6 +183,7 @@ const LIVENESS_LABELS: Record<LivenessStatus, string> = {
   unhealthy: "异常",
   unreachable: "不可达",
   not_configured: "未配置",
+  not_applicable: "不适用",
 };
 
 const READINESS_LABELS: Record<ReadinessStatus, string> = {
@@ -190,21 +193,32 @@ const READINESS_LABELS: Record<ReadinessStatus, string> = {
   not_implemented: "未实现",
   unreachable: "不可达",
   not_configured: "未配置",
+  not_applicable: "不适用",
 };
+
+/** 渠道级的第三个中性态（2026-08-31）：client 型产品登记了客户端、但没有服务面可探
+ *  （回调是 loopback）。与「未配置」（渠道没登记）、「未接入」（产品没有任何客户端）
+ *  是三件事，各用各的词，都不计入「需要关注」。 */
+const NOT_APPLICABLE_DETAIL = "客户端产品，无服务面";
 
 /** 产品级的中性态：目录里有、没有任何客户端。与渠道级的「未配置」是两个词。 */
 const NOT_ONBOARDED_LABEL = "未接入";
 
 function livenessTone(status: LivenessStatus): StatusBadgeTone {
   if (status === "healthy") return "success";
-  if (status === "not_configured") return "neutral";
+  if (status === "not_configured" || status === "not_applicable")
+    return "neutral";
   return "danger";
 }
 
 function readinessTone(status: ReadinessStatus): StatusBadgeTone {
   if (status === "ready") return "success";
   if (status === "degraded") return "warning";
-  if (status === "not_configured" || status === "not_implemented")
+  if (
+    status === "not_configured" ||
+    status === "not_implemented" ||
+    status === "not_applicable"
+  )
     return "neutral";
   return "danger";
 }
@@ -319,7 +333,9 @@ function LivenessLine({
         ? (probe.error ?? "连接失败")
         : probe.status === "unhealthy"
           ? (probe.error ?? `HTTP ${probe.httpStatus ?? "?"}`)
-          : null;
+          : probe.status === "not_applicable"
+            ? NOT_APPLICABLE_DETAIL
+            : null;
 
   return (
     <span className="inline-flex items-center gap-2xs min-w-0">

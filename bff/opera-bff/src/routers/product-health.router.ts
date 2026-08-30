@@ -44,6 +44,17 @@
  * `/healthz`+`/readyz`），两条并发探，先拿到的非 404 响应视为命中；两条都 404 记
  * "未实现"（readiness）或"异常"（liveness——它不是可选项）；两条都连不上记"不可达"。
  *
+ * ── 2026-08-31：client 型产品不探测，标「不适用」──────────────────────────────
+ *
+ * 桌面 / 原生客户端产品（`product_type='client'`，如 ruyin）的 OIDC 客户端是 RFC 8252
+ * 的公共客户端，回调地址是 loopback（`http://127.0.0.1/...`）。它没有服务面可探——
+ * 按 redirect_uri 的 origin 去探，探到的是 opera-bff 自己容器的 127.0.0.1，永远
+ * 「不可达」，还会被算进「需要关注」。这不是产品故障，是探测对象不存在。所以：
+ * 层级判为 client 的产品，已登记的渠道**不发探测**，存活 / 就绪两列都记
+ * `not_applicable`（渠道本身照样列出：客户端登记是事实，只是没有东西可探）；
+ * 没登记的渠道仍是 `not_configured`（登记与否是另一个事实）。见
+ * `channelProbeMode()`。
+ *
  * 只读、零持久化：每次请求现探，不落库、不缓存趋势，前端定时轮询。未设专属能力码：
  * admin 原页面从未挂过权限码，迁移不新增门槛，只要求已登录 operator。
  */
@@ -83,14 +94,16 @@ export type LivenessStatus =
   | "healthy"
   | "unhealthy"
   | "unreachable"
-  | "not_configured";
+  | "not_configured"
+  | "not_applicable";
 export type ReadinessStatus =
   | "ready"
   | "degraded"
   | "fail"
   | "not_implemented"
   | "unreachable"
-  | "not_configured";
+  | "not_configured"
+  | "not_applicable";
 
 export interface LivenessProbe {
   status: LivenessStatus;
@@ -267,16 +280,17 @@ export class ProductHealthRouter {
 
     return Promise.all(
       groups.map(async (group) => {
+        const layer = layerFromProductType(group.productType);
         const [prod, beta, canary] = await Promise.all([
-          probeChannel(group.channels.stable),
-          probeChannel(group.channels.beta),
-          probeChannel(group.channels.canary),
+          resolveChannel(layer, group.channels.stable),
+          resolveChannel(layer, group.channels.beta),
+          resolveChannel(layer, group.channels.canary),
         ]);
         return {
           productId: group.productId,
           productCode: group.productCode,
           productName: group.productName,
-          layer: layerFromProductType(group.productType),
+          layer,
           state: group.state,
           onboarded: RELEASE_CHANNELS.some(
             (channel) => group.channels[channel] !== null,
@@ -623,6 +637,67 @@ async function probeReadiness(origin: string | null): Promise<ReadinessProbe> {
 }
 
 /** 一个渠道 = 一个客户端的 origin；没有客户端就没有探测这回事（两列都是 not_configured）。 */
+export type ChannelProbeMode = "probe" | "not_applicable";
+
+/**
+ * Whether a registered channel gets probed. Pure: unit-tested in
+ * product-health.spec.ts. Only `client` products with a registered channel are
+ * exempt — an unregistered channel stays `not_configured` regardless of layer,
+ * because "not registered" is a different fact from "nothing to probe".
+ */
+export function channelProbeMode(
+  layer: ProductLayer,
+  channel: ChannelClient | null,
+): ChannelProbeMode {
+  return channel && layer === "client" ? "not_applicable" : "probe";
+}
+
+/** A registered channel on a client product: nothing to probe, no network call. */
+export function notApplicableChannel(
+  channel: ChannelClient,
+): ProductChannelHealth {
+  const checkedAt = NOW();
+  const origin = channel.origin;
+  return {
+    clientId: channel.clientId,
+    origin,
+    health: {
+      status: "not_applicable",
+      origin,
+      path: null,
+      httpStatus: null,
+      durationMs: null,
+      service: null,
+      version: null,
+      gitSha: null,
+      stage: null,
+      buildTime: null,
+      error: null,
+      checkedAt,
+    },
+    status: {
+      status: "not_applicable",
+      origin,
+      path: null,
+      httpStatus: null,
+      durationMs: null,
+      checks: null,
+      error: null,
+      checkedAt,
+    },
+  };
+}
+
+async function resolveChannel(
+  layer: ProductLayer,
+  channel: ChannelClient | null,
+): Promise<ProductChannelHealth> {
+  if (channel && channelProbeMode(layer, channel) === "not_applicable") {
+    return notApplicableChannel(channel);
+  }
+  return probeChannel(channel);
+}
+
 async function probeChannel(
   channel: ChannelClient | null,
 ): Promise<ProductChannelHealth> {
