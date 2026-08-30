@@ -2754,6 +2754,74 @@ export async function seedCatalog(client) {
     );
   }
 
+  // ── vxtpl catalog — SKELETON ONLY (first-batch onboarding, owner decision
+  // 2026-08-30: vxtpl is the template agent that walks the whole onboarding line;
+  // product_100_matrix.md v1.3 §7) ──────────────────────────────────────────
+  // One free plan, priced 0 CNY/month, with a DRAFT, UNLOCKED, UNPUBLISHED v1 and
+  // an empty primary component. Left as draft on purpose: bundled atlas/runos
+  // components are attached in admin (80-plan-bundled-components.md) and the
+  // version is published there — that IS the path later agents copy. Never
+  // overwritten once inserted; plans.current_version_id stays unset until admin
+  // publishes.
+  const vxtplId = prodMap["vxtpl"];
+  if (vxtplId) {
+    await client.query(
+      `
+      insert into product.plans
+        (id, plan_code, plan_name, plan_name_key, description, description_key, is_public, status, created_by, created_at, updated_at)
+      values (gen_random_uuid(), $1, $2, $3, $4, $5, true, 'active', $6, now(), now())
+      on conflict (plan_code) do nothing
+    `,
+      [
+        "vxtpl-free",
+        "Vxtpl Free",
+        "product.plan.vxtpl-free",
+        "Free tier for the template agent.",
+        "product.plan.vxtpl-free.desc",
+        SYS,
+      ],
+    );
+    const vxtplPlan = await client.query(
+      `select id from product.plans where plan_code = $1 limit 1`,
+      ["vxtpl-free"],
+    );
+    const vxtplPlanId = vxtplPlan.rows[0]?.id;
+    if (vxtplPlanId) {
+      const v1Ins = await client.query(
+        `
+        insert into product.plan_versions (id, plan_id, version_no, status, is_locked, created_by, created_at)
+        values (gen_random_uuid(), $1, 1, 'draft', false, $2, now())
+        on conflict (plan_id, version_no) do nothing
+        returning id
+      `,
+        [vxtplPlanId, SYS],
+      );
+      if (v1Ins.rows.length > 0) {
+        const v1Id = v1Ins.rows[0].id;
+        await client.query(
+          `
+          insert into product.plan_components
+            (id, plan_version_id, product_id, tier, component_role, priority, features, quota, sort_order, created_at)
+          values (gen_random_uuid(), $1, $2, 'free', 'primary', 100, ARRAY[]::text[], '{}'::jsonb, 0, now())
+          on conflict (plan_version_id, product_id, tier) do nothing
+        `,
+          [v1Id, vxtplId],
+        );
+        await client.query(
+          `
+          insert into product.plan_prices (id, plan_version_id, cycle_unit, cycle_count, price, currency, created_at)
+          values (gen_random_uuid(), $1, 'month', 1, 0, 'CNY', now())
+          on conflict (plan_version_id, cycle_unit, cycle_count, currency) do nothing
+        `,
+          [v1Id],
+        );
+      }
+    }
+    console.log(
+      "✓  product — vxtpl catalog skeleton (vxtpl-free; v1 DRAFT/unlocked/unpublished, 0 CNY/month — admin attaches bundled atlas/runos and publishes)",
+    );
+  }
+
   console.log(
     "✓  product — checklist + umbra-free + arda catalog (6 plans; v1 current/locked, v2 seeded as UNPUBLISHED placeholder draft on starter/pro/business/enterprise — all quota params & prices = 1, admin sets real values + publishes; 10 product metrics + 2 L0 contributions)",
   );
