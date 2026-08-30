@@ -58,7 +58,7 @@ const ATLAS_QUOTA = { "ai.credit": 100000 };
 const RUNOS_QUOTA = { "compute.minutes": 3000 };
 
 /** Default responder: an editable draft with a karda primary and a live catalog. */
-function draftResponder(overrides?: Partial<Responder>): Responder {
+function draftResponder(overrides?: Responder): Responder {
   return (sql, params) => {
     const custom = overrides?.(sql, params);
     if (custom) return custom;
