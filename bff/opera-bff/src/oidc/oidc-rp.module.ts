@@ -121,11 +121,14 @@ const CLIENT_ID = "opera";
   // OperatorExchangeService 额外导出：AtlasRouter（opera 自己的 Atlas 技术管理面，
   // 与 admin-bff 各自独立、零交叉引用）复用同一套 operator-OBO 换票逻辑，不是从
   // admin-bff 抄一份或反过来依赖它。
+  // RP_REDIS 导出（2026-08-31）：接入信号 router 读 platform-api 写下的 C2 键，
+  // 同一个 Redis、同一条连接——不为一次 GET 再开第二条。
   exports: [
     RP_AUTH_SERVICE,
     RP_SESSION_STORE,
     RP_OIDC_CLIENT,
     RP_RUNTIME,
+    RP_REDIS,
     OperatorExchangeService,
   ],
 })

@@ -19,6 +19,7 @@ import { MaintenanceWindowsRouter } from "./routers/maintenance-windows.router";
 import { OidcClientRouter } from "./routers/oidc-client.router";
 import { ProductCatalogRouter } from "./routers/product-catalog.router";
 import { ProductHealthRouter } from "./routers/product-health.router";
+import { ProductIntegrationSignalsRouter } from "./routers/product-integration-signals.router";
 import { RunosRouter } from "./routers/runos.router";
 import { SessionRouter } from "./routers/session.router";
 import { TenancyDirectoryRouter } from "./routers/tenancy-directory.router";
@@ -34,6 +35,7 @@ import { TenancyDirectoryRouter } from "./routers/tenancy-directory.router";
     AtlasRouter,
     RunosRouter,
     ProductCatalogRouter,
+    ProductIntegrationSignalsRouter,
     OidcClientRouter,
     AuditLogViewRouter,
     OperatorStepUpRouter,

@@ -11,9 +11,12 @@
  *
  * ── 这页能回答什么、不能回答什么 ─────────────────────────────────────────────
  *
- * 能：**我方**配齐了没有（产品登记 / 接入凭据 / 两个域的授权 / webhook 登记）。
- * 不能：对方接好了没有。C2 权益接入、C3 计量上报、端到端验收三项平台从外面观测不到
- * ——它们留在接入检查单上由操作员按对方回报勾选。页面把这条边界写在明面上，不含糊。
+ * 能：**我方**配齐了没有（产品登记 / 接入凭据 / 两个域的授权 / webhook 登记），以及
+ * **对方接通了没有**的两条痕迹——C2 权益拉取、C3 用量上报都会落在平台自己的存储里
+ * （`GET /api/products/:id/integration-signals`），2026-08-31 起由平台判定，不再靠
+ * 操作员按对方回报勾。
+ * 不能：数据面就绪与端到端验收。这两项平台仍观测不到，留在接入检查单上人工确认。
+ * 页面把这条边界写在明面上，不含糊。
  *
  * 这也是「运营者代跑、报告可交付」的形态（设计 §6.6）：不给对方开 opera 账号，因为
  * **侧栏本身就是信息**——即使点进去 403，导航也已经告诉他平台有哪些能力域、接了哪些
@@ -148,7 +151,7 @@ function ProductLaunch() {
     async (p: ProductRecord): Promise<CheckResult[]> => {
       setRunning(true);
       try {
-        const results = await runLaunchChecks(p);
+        const results = await runLaunchChecks(p, { locale });
         setChecks(results);
         setCheckedAt(new Date().toLocaleString(locale, { hour12: false }));
         /* 把能映射到检查项的结果写回检查单（`checked_by` 由 BFF 填当前操作员；
@@ -175,9 +178,10 @@ function ProductLaunch() {
         setRunning(false);
       }
     },
-    /* `locale` 进依赖：回调里把检查时刻格式化成字符串存进 state。这里加依赖
-       是安全的——没有任何 effect 依赖 `runChecks`（只被 `confirmLaunch` 和一个
-       onClick 调用），不是 `reload` 那种「加进依赖就无限重跑」的形状。 */
+    /* `locale` 进依赖：回调里把检查时刻格式化成字符串存进 state，也传给检查
+       函数格式化痕迹的时间戳。这里加依赖是安全的——没有任何 effect 依赖
+       `runChecks`（只被 `confirmLaunch` 和一个 onClick 调用），不是 `reload`
+       那种「加进依赖就无限重跑」的形状。 */
     [locale],
   );
 
@@ -191,7 +195,7 @@ function ProductLaunch() {
         const failed = results.filter((r) => r.status !== "pass");
         toast({
           tone: "danger",
-          title: `${failed.length} 项平台侧检查未通过，未上线`,
+          title: `${failed.length} 项接入检查未通过，未上线`,
           description:
             "生命周期状态没有改变——验证失败不回滚草稿，也不改状态。下面的错误报告按我方 / 对方分栏列出了待办。",
         });
@@ -213,7 +217,7 @@ function ProductLaunch() {
           tone: "danger",
           title: `还有 ${pending.length} 项接入检查未完成`,
           description:
-            "平台侧五项已过，但检查单里还有必填项没勾——那几项平台观测不到，要按对方回报确认。",
+            "七项实测已过，但检查单里还有必填项没勾——数据面就绪与端到端验收平台观测不到，要按实际情况确认。",
         });
         return;
       }
@@ -279,17 +283,28 @@ function ProductLaunch() {
   const verification = verificationOf(checklist ?? []);
   const canLaunch = actionsFor(product.state).some((a) => a.id === "launch");
   const failed = (checks ?? []).filter((r) => r.status !== "pass");
+  /* 实测失败项同样按侧分：C2 / C3 归对方（通不通由对方决定），其余归我方。 */
+  const failedOurs = failed.filter((r) => r.side === "ours");
+  const failedTheirs = failed.filter((r) => r.side === "theirs");
   /* 检查单未完成项**按侧分**，不是整堆算作待对方：`data_plane`（平台按模板 provision）
      与 `acceptance`（两侧一起）都是我方的事，混进右栏会让运营者把该自己做的事发出去等。
-     划分规则在 `lifecycle.ts` 的 `THEIR_SIDE`，与验证态的推导共用同一份。 */
-  const pendingChecklist = pendingBySide(checklist ?? []);
+     划分规则在 `lifecycle.ts` 的 `THEIR_SIDE`，与验证态的推导共用同一份。
+     已被某项实测写回的检查项不再重复列——同一件事在报告里出现两行，读的人会以为是两件。 */
+  const autoWritten = new Set(
+    (checks ?? []).flatMap((r) => (r.itemCode ? [r.itemCode] : [])),
+  );
+  const pendingAll = pendingBySide(checklist ?? []);
+  const pendingChecklist = {
+    ours: pendingAll.ours.filter((i) => !autoWritten.has(i.itemCode)),
+    theirs: pendingAll.theirs.filter((i) => !autoWritten.has(i.itemCode)),
+  };
 
   return (
     <ViewLayout>
       <ViewHeader
         icon="rocket"
         title={`产品上线 · ${product.productName}`}
-        description="平台侧配置的实测 + 要交给对方的信息。这页只能回答「我方配齐了没有」——对方接没接好，平台从外面观测不到。"
+        description="平台侧配置的实测 + 对方留下的调用痕迹 + 要交给对方的信息。数据面就绪与端到端验收平台观测不到，留在检查单上人工确认。"
         action={
           <div className="flex items-center gap-sm">
             <StatusBadge tone={PRODUCT_STATE_META[product.state].tone} dot>
@@ -364,10 +379,10 @@ function ProductLaunch() {
 
       {/* ── 平台侧实测 ───────────────────────────────────────────────────── */}
       <Section
-        title="平台侧检查"
+        title="接入检查"
         icon="shield-check"
         level={2}
-        description="五项全部是读平台自己已有的状态，不向对方端点发任何请求。「webhook 能不能投递成功」这类问题要看运行监控里的投递队列，本页不发测试投递——那是对对方生产端点的真实请求。"
+        description="七项全部是读平台自己的存储——我方的配置，加上对方接通后留下的两条痕迹（权益拉取、用量上报）——不向对方端点发任何请求。「webhook 能不能投递成功」这类问题要看运行监控里的投递队列，本页不发测试投递——那是对对方生产端点的真实请求。"
         action={
           <div className="flex items-center gap-sm">
             {checkedAt ? (
@@ -392,7 +407,7 @@ function ProductLaunch() {
             title={running ? "检查中…" : "还没跑过"}
             description={
               running
-                ? "五项并发读取中。"
+                ? "七项并发读取中。"
                 : "点「开始检查」跑一遍。检查只读状态，不产生任何写入，可以随时重跑。"
             }
           />
@@ -453,7 +468,7 @@ function ProductLaunch() {
               tone="warning"
               empty="平台侧没有未完成项。"
               items={[
-                ...failed.map((f) => `${f.label}：${f.detail}`),
+                ...failedOurs.map((f) => `${f.label}：${f.detail}`),
                 ...pendingChecklist.ours.map(
                   (i) =>
                     `${i.itemName ?? i.itemCode}：检查单上尚未确认（这一项由平台侧完成）。`,
@@ -463,11 +478,14 @@ function ProductLaunch() {
             <ReportColumn
               title="待对方"
               tone="info"
-              empty="检查单里没有待对方的未完成项。"
-              items={pendingChecklist.theirs.map(
-                (i) =>
-                  `${i.itemName ?? i.itemCode}：平台从外面观测不到，需按对方回报在接入检查单上确认。`,
-              )}
+              empty="没有待对方的未完成项。"
+              items={[
+                ...failedTheirs.map((f) => `${f.label}：${f.detail}`),
+                ...pendingChecklist.theirs.map(
+                  (i) =>
+                    `${i.itemName ?? i.itemCode}：平台从外面观测不到，需按对方回报在接入检查单上确认。`,
+                ),
+              ]}
             />
           </div>
         </Section>

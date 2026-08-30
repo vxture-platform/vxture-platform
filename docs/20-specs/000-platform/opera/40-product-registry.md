@@ -17,14 +17,16 @@
 
 新部署、`db-init` 跑完 DDL + seed 之后，目录里只有 §5 列出的自有产品；其余都是空的。接入一个新产品是下面这条线，**没有任何一步需要改代码或改 seed**：
 
-| 步  | 在哪里                        | 做什么                                                                       | 之后各业务面看到什么                                                 |
-| --- | ----------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| 1   | opera · 产品管理 · 产品目录   | 登记产品：产品码、类型、来源、名称。落 `status='draft'`                      | 目录出现草稿行；服务状态出现同一行，标「未接入」；admin 产品能力可见 |
-| 2   | opera · 产品目录 · 接入检查单 | 逐项勾接入检查（B4b 上线流程在此长出自动验证）                               | —                                                                    |
-| 3   | opera · 产品管理 · 接入凭据   | 为该产品按渠道签发 OIDC 客户端（`release_channel` = stable / beta / canary） | 服务状态该渠道开始探测；auth-bff token-exchange 能解析出 `act.sub`   |
-| 4   | opera · 产品目录 · 上线       | 草稿 → 已上线（`status='active'`）                                           | console / website 目录可见；auth-bff 接受它作为 token-exchange 目标  |
-| 5   | admin · 套餐 / 版本 / 方案    | 为产品建套餐并发布                                                           | console 订阅、权益、计量按套餐工作                                   |
-| 6   | opera · 路由授权 / 能力授权   | 把模型路由、能力授给产品                                                     | 权益配置页汇总                                                       |
+| 步  | 在哪里                        | 做什么                                                                           | 之后各业务面看到什么                                                 |
+| --- | ----------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 1   | opera · 产品管理 · 产品目录   | 登记产品：产品码、类型、来源、名称。落 `status='draft'`                          | 目录出现草稿行；服务状态出现同一行，标「未接入」；admin 产品能力可见 |
+| 2   | opera · 产品目录 · 接入检查单 | 跑上线检查：八项里七项自动判定并写回，`data_plane` / `acceptance` 人工勾（见下） | —                                                                    |
+| 3   | opera · 产品管理 · 接入凭据   | 为该产品按渠道签发 OIDC 客户端（`release_channel` = stable / beta / canary）     | 服务状态该渠道开始探测；auth-bff token-exchange 能解析出 `act.sub`   |
+| 4   | opera · 产品目录 · 上线       | 草稿 → 已上线（`status='active'`）                                               | console / website 目录可见；auth-bff 接受它作为 token-exchange 目标  |
+| 5   | admin · 套餐 / 版本 / 方案    | 为产品建套餐并发布                                                               | console 订阅、权益、计量按套餐工作                                   |
+| 6   | opera · 路由授权 / 能力授权   | 把模型路由、能力授给产品                                                         | 权益配置页汇总                                                       |
+
+**步 2 的自动验证（2026-08-31）**：上线检查（`portals/opera/src/features/product/launch-checks.ts`）读平台自己的存储判七项——目录登记、OIDC 客户端、Atlas / Runos 授权、webhook 登记，以及对方接通后留下的两条痕迹：**C2** 每次成功的 `GET /platform/entitlements` 由 platform-api 在 Redis 记一个按产品码的「最近一次」键（`<REDIS_KEY_PREFIX>integration:c2:<code>`，30 天过期，每产品每分钟至多写一次，Redis 故障不影响响应），**C3** 取 `metering.usage_events` 最近 90 天内该产品的最后一行；两者经 `GET /api/products/:id/integration-signals` 读出，C2 / C3 与 `catalog_registered` 一起写回检查单。C2 是最近一次而不是台账（不答「调了多少次」）；走共享内部令牌的调用没有身份，按请求里的产品码归因；S2S 调用按 `act.sub` 归因。`c1_identity`（对方的 RP 实现）仍由操作员按回报勾；`data_plane` 与 `acceptance` 平台观测不到，保持人工。
 
 产品状态机（`portals/opera/src/features/product/lifecycle.ts`）：`draft → active ⇄ inactive`，任一 → `deprecated`（终态）。软删（`deleted_at`）只在极端情况下用，所有列表都过滤它。
 

@@ -29,6 +29,7 @@
     "@vxture-platform/shared": "workspace:*",
     "class-transformer": "^0.5.1",
     "express": "^4.22.1",
+    "ioredis": "^5.0.0",
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.0"
   },
