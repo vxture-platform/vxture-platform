@@ -85,6 +85,7 @@ function cycleLabel(cycle: SubscriptionOperationDetailRecord["cycleType"]) {
 function associationSourceLabel(
   source: SubscriptionOperationDetailRecord["solutionAssociation"]["source"],
 ) {
+  if (source === "solution") return "方案关联";
   return source === "industry_rule" ? "运营规则关联" : "历史套餐兼容";
 }
 

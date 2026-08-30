@@ -136,6 +136,10 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  *   新增文案全走 `t()`（drawer.notifications.empty/channels/statuses），
  *   零新增硬编码。棘轮随实数收紧。
  *
+ * 2026-08-31 admin 3225 → 3226：订阅详情的方案归属改从 product.solution_plans 实算，
+ *   来源枚举多了 "solution" 一档，对应标签「方案关联」是唯一新增的一条硬编码
+ *   （与同一函数里既有的两条并列，抽 t() 应当三条一起抽，留给该页整体 i18n 时做）。
+ *
  * 2026-08-30 opera 1819 → 1822：`settings` 页从一张凭空写出来的表单（五个字面量默认
  *   值、保存按钮 disabled、opera-bff 没有任何配置表与端点）改成只读的事实页：说明没有
  *   可配项，把服务状态探测（间隔 / 两类端点 / 策略）与上游模块挂载这几条由代码与规格
@@ -158,7 +162,7 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
 const BASELINE = {
   console: 30,
   website: 40,
-  admin: 3225,
+  admin: 3226,
   opera: 1868,
   accounts: 264,
 };
