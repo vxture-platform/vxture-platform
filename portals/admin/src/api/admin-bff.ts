@@ -446,6 +446,7 @@ export async function fetchProductAgents(): Promise<ProductAgentRecord[]> {
 // ── 解决方案写路径（2026-08-31，TD-029 收口）：全部返回最新详情，页面直接替换本地态。
 // `/api/products/model-policies` 已退役：模型策略是 Atlas 的，走上面的 fetchModelPolicies。
 
+// step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
 export async function createProductSolution(
   payload: ProductSolutionWriteInput,
 ): Promise<ProductSolutionDetailRecord> {
@@ -457,6 +458,7 @@ export async function createProductSolution(
   );
 }
 
+// step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
 export async function updateProductSolution(
   solutionCode: string,
   payload: ProductSolutionWriteInput,
@@ -469,6 +471,7 @@ export async function updateProductSolution(
   );
 }
 
+// step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
 export async function setProductSolutionState(
   solutionCode: string,
   state: ProductSolutionStatus,
@@ -481,6 +484,7 @@ export async function setProductSolutionState(
   );
 }
 
+// step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
 export async function replaceProductSolutionProducts(
   solutionCode: string,
   products: ProductSolutionProductInput[],
@@ -493,6 +497,7 @@ export async function replaceProductSolutionProducts(
   );
 }
 
+// step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
 export async function bindProductSolutionPlan(
   solutionCode: string,
   tier: ProductSolutionTierCode,
@@ -506,6 +511,7 @@ export async function bindProductSolutionPlan(
   );
 }
 
+// step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
 export async function unbindProductSolutionPlan(
   solutionCode: string,
   tier: ProductSolutionTierCode,

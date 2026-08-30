@@ -576,3 +576,31 @@ describe("solution write paths", () => {
     expect(detail.relatedServicePlans).toHaveLength(3);
   });
 });
+
+// ── step-up 门（owner 2026-08-31）：六个写端点都必须带 @RequireStepUp 元数据；漏一个就是
+// 一条能绕过二次验证改售卖内容的路——所以钉在测试里，不靠代码审查记得。
+import { REQUIRE_STEP_UP } from "../auth/step-up.decorator";
+
+describe("solution write handlers are step-up gated", () => {
+  it.each([
+    "createSolution",
+    "updateSolution",
+    "setSolutionState",
+    "replaceSolutionProducts",
+    "bindSolutionPlan",
+    "unbindSolutionPlan",
+  ] as const)("%s carries REQUIRE_STEP_UP metadata", (handler) => {
+    const fn = (ProductsRouter.prototype as unknown as Record<string, unknown>)[
+      handler
+    ];
+    expect(typeof fn).toBe("function");
+    expect(Reflect.getMetadata(REQUIRE_STEP_UP, fn as object)).toBe(true);
+  });
+
+  it("read handlers stay ungated", () => {
+    const fn = (ProductsRouter.prototype as unknown as Record<string, unknown>)[
+      "listSolutions"
+    ];
+    expect(Reflect.getMetadata(REQUIRE_STEP_UP, fn as object)).toBeUndefined();
+  });
+});

@@ -51,6 +51,7 @@ import {
   unbindProductSolutionPlan,
   updateProductSolution,
 } from "@/api/admin-bff";
+import { isStepUpCancelled, useStepUp } from "@/providers/StepUpProvider";
 import type {
   ProductCapabilityRecord,
   ProductPlanRecord,
@@ -558,6 +559,8 @@ export function ProductSolutionDetailPage({
   const tShared = useTranslations();
   const labels = useSolutionLabels();
   const { toast } = useToast();
+  /* 方案写操作走 step-up（与套餐版本发布同一风险级，70-product-solutions.md §7）。 */
+  const { runWithStepUp } = useStepUp();
   const withLabels = useConfirmLabels();
   const [solution, setSolution] = useState<ProductSolutionDetailRecord | null>(
     null,
@@ -656,13 +659,16 @@ export function ProductSolutionDetailPage({
     setSubmitting(true);
     setDialogError(null);
     try {
-      const updated = await updateProductSolution(
-        solution.solutionCode,
-        buildEditPayload(editForm),
+      const updated = await runWithStepUp(() =>
+        updateProductSolution(
+          solution.solutionCode,
+          buildEditPayload(editForm),
+        ),
       );
       applyUpdated(updated, t("feedback.updated"));
       closeDialog();
     } catch (error) {
+      if (isStepUpCancelled(error)) return;
       setDialogError(errorMessage(error) ?? t("feedback.updateFailed"));
     } finally {
       setSubmitting(false);
@@ -675,19 +681,22 @@ export function ProductSolutionDetailPage({
     setSubmitting(true);
     setDialogError(null);
     try {
-      const updated = await replaceProductSolutionProducts(
-        solution.solutionCode,
-        picks
-          .filter((pick) => pick.included)
-          .map((pick, index) => ({
-            productCode: pick.productCode,
-            role: pick.role.trim() || null,
-            sort: index,
-          })),
+      const updated = await runWithStepUp(() =>
+        replaceProductSolutionProducts(
+          solution.solutionCode,
+          picks
+            .filter((pick) => pick.included)
+            .map((pick, index) => ({
+              productCode: pick.productCode,
+              role: pick.role.trim() || null,
+              sort: index,
+            })),
+        ),
       );
       applyUpdated(updated, t("feedback.productsSaved"));
       closeDialog();
     } catch (error) {
+      if (isStepUpCancelled(error)) return;
       setDialogError(errorMessage(error) ?? t("feedback.productsFailed"));
     } finally {
       setSubmitting(false);
@@ -700,10 +709,10 @@ export function ProductSolutionDetailPage({
     setSubmitting(true);
     setDialogError(null);
     try {
-      const updated = await bindProductSolutionPlan(
-        solution.solutionCode,
-        dialog.tier,
-        { planId: planPick },
+      const updated = await runWithStepUp(() =>
+        bindProductSolutionPlan(solution.solutionCode, dialog.tier, {
+          planId: planPick,
+        }),
       );
       applyUpdated(
         updated,
@@ -711,6 +720,7 @@ export function ProductSolutionDetailPage({
       );
       closeDialog();
     } catch (error) {
+      if (isStepUpCancelled(error)) return;
       setDialogError(errorMessage(error) ?? t("feedback.bindFailed"));
     } finally {
       setSubmitting(false);
@@ -721,15 +731,15 @@ export function ProductSolutionDetailPage({
     if (!solution) return;
     setBusy(true);
     try {
-      const updated = await unbindProductSolutionPlan(
-        solution.solutionCode,
-        tier.tierCode,
+      const updated = await runWithStepUp(() =>
+        unbindProductSolutionPlan(solution.solutionCode, tier.tierCode),
       );
       applyUpdated(
         updated,
         t("feedback.unbound", { tier: labels.tier(tier.tierCode) }),
       );
     } catch (error) {
+      if (isStepUpCancelled(error)) return;
       toast({
         tone: "danger",
         title: t("feedback.unbindFailed"),
@@ -745,15 +755,15 @@ export function ProductSolutionDetailPage({
     if (!solution) return;
     setBusy(true);
     try {
-      const updated = await setProductSolutionState(
-        solution.solutionCode,
-        next,
+      const updated = await runWithStepUp(() =>
+        setProductSolutionState(solution.solutionCode, next),
       );
       applyUpdated(
         updated,
         t("feedback.stateChanged", { state: labels.status(updated.status) }),
       );
     } catch (error) {
+      if (isStepUpCancelled(error)) return;
       toast({
         tone: "danger",
         title: t("feedback.stateFailed"),

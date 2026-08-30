@@ -38,6 +38,7 @@ import {
   fetchProductSolutions,
   setProductSolutionState,
 } from "@/api/admin-bff";
+import { isStepUpCancelled, useStepUp } from "@/providers/StepUpProvider";
 import type {
   ProductSolutionCapability,
   ProductSolutionCapabilitySource,
@@ -177,6 +178,8 @@ export function ProductSolutionsPage() {
   const locale = useLocale();
   const router = useRouter();
   const { toast } = useToast();
+  /* 方案写操作走 step-up（与套餐版本发布同一风险级，70-product-solutions.md §7）。 */
+  const { runWithStepUp } = useStepUp();
   const withLabels = useConfirmLabels();
   const [solutions, setSolutions] = useState<ProductSolutionRecord[]>([]);
   const [selectedSolutionIds, setSelectedSolutionIds] = useState<Set<string>>(
@@ -335,7 +338,9 @@ export function ProductSolutionsPage() {
     if (!createFormIsValid(form)) return;
     setSubmitting(true);
     try {
-      const created = await createProductSolution(buildCreatePayload(form));
+      const created = await runWithStepUp(() =>
+        createProductSolution(buildCreatePayload(form)),
+      );
       toast({
         tone: "success",
         title: t("feedback.created", { name: created.solutionName }),
@@ -343,6 +348,7 @@ export function ProductSolutionsPage() {
       setDialogOpen(false);
       handleOpenDetails(created.solutionCode);
     } catch (error) {
+      if (isStepUpCancelled(error)) return;
       toast({
         tone: "danger",
         title: t("feedback.createFailed"),
@@ -360,9 +366,8 @@ export function ProductSolutionsPage() {
   ) {
     setBusyCode(solution.solutionCode);
     try {
-      const updated = await setProductSolutionState(
-        solution.solutionCode,
-        next,
+      const updated = await runWithStepUp(() =>
+        setProductSolutionState(solution.solutionCode, next),
       );
       setSolutions((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
@@ -375,6 +380,7 @@ export function ProductSolutionsPage() {
         }),
       });
     } catch (error) {
+      if (isStepUpCancelled(error)) return;
       toast({
         tone: "danger",
         title: t("feedback.stateFailed"),
