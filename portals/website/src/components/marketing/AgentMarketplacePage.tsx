@@ -1,49 +1,48 @@
 "use client";
 
-import { useMemo, useState } from "react";
+/**
+ * AgentMarketplacePage.tsx - /appcenter 智能体广场
+ *
+ * 清单 = 公开产品目录里 product_type='agent' 的产品（appcenter/page.tsx 在服务端取
+ * `GET /api/products/catalog`、按 isAgentProduct 分区后传入）。此前这一页渲染 i18n 里
+ * 12 个虚构智能体与 9 个行业筛选，看上去像一个在营业的市场；2026-08-31 起只展示目录里
+ * 真有的东西——名 / 描述 / 版本全取目录真列，目录里没有智能体就是诚实的空态，不补假卡。
+ * 筛选条随虚构的行业标签一起去掉：目录没有行业这一列，造一个就是又一份假数据。
+ * 英雄区文案、「进入工作台」深链与试用 CTA 不变。
+ *
+ * @package @vxture/website
+ * @layer Presentation
+ * @category Components - Marketing
+ * @author AI-Generated
+ * @date 2026-08-31
+ */
+
 import { useLocale, useTranslations } from "next-intl";
-import { Button, Icon } from "@vxture/design-system";
-import type { IconName } from "@vxture/design-system";
+import { Banner, Button, EmptyState, Icon } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
 import { buildConsoleEntryUrl } from "@/lib/console-entry";
+import {
+  catalogDisplayName,
+  type ProductCatalogItem,
+} from "@/api/product-catalog.api";
 import { useAuthStore } from "@/stores/auth.store";
 import AnimatedHeroBg from "./AnimatedHeroBg";
 
-type FilterItem = {
-  id: string;
-  label: string;
-};
+interface AgentMarketplacePageProps {
+  /** 目录里的智能体产品；null = 目录暂时读不到（与"目录里没有智能体"是两回事） */
+  readonly agents: ProductCatalogItem[] | null;
+}
 
-type AgentItem = {
-  name: string;
-  type: string;
-  icon: IconName;
-  industries: string[];
-  description: string;
-  value: string;
-  capabilities: string[];
-  tags: string[];
-};
-
-export default function AgentMarketplacePage() {
+export default function AgentMarketplacePage({
+  agents,
+}: AgentMarketplacePageProps) {
   const t = useTranslations("appcenter");
   const locale = useLocale();
-  const [activeIndustry, setActiveIndustry] = useState("all");
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
   const highlights = t.raw("hero.highlights") as string[];
-  const filters = t.raw("filters.items") as FilterItem[];
-  const agents = t.raw("agents.items") as AgentItem[];
   const hasTenantSession = isAuthenticated && Boolean(user);
   const consoleEntryUrl = buildConsoleEntryUrl(locale);
-
-  const visibleAgents = useMemo(() => {
-    if (activeIndustry === "all") {
-      return agents;
-    }
-
-    return agents.filter((agent) => agent.industries.includes(activeIndustry));
-  }, [activeIndustry, agents]);
 
   return (
     <div className="vx-page-surface">
@@ -106,108 +105,80 @@ export default function AgentMarketplacePage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-sm font-semibold text-vx-brand-600 dark:text-vx-brand-300">
-                {t("filters.eyebrow")}
+                {t("agents.eyebrow")}
               </p>
               <h2 className="font-display mt-2 text-3xl font-bold text-vx-gray-900 dark:text-vx-white">
-                {t("filters.title")}
+                {t("agents.title")}
               </h2>
             </div>
             <p className="max-w-website-2xl text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
-              {t("filters.description")}
+              {t("agents.description")}
             </p>
           </div>
 
-          <div className="mt-8 flex flex-wrap gap-2">
-            {filters.map((filter) => {
-              const active = activeIndustry === filter.id;
-              return (
-                <Button
-                  key={filter.id}
-                  variant={active ? "default" : "outline"}
-                  size="md"
-                  onClick={() => setActiveIndustry(filter.id)}
-                  className={`h-10 rounded-md border px-4 text-sm font-medium transition ${
-                    active
-                      ? "border-vx-brand-600 bg-vx-brand-600 text-vx-white shadow-sm shadow-vx-brand-900/20"
-                      : "border-vx-gray-200 bg-vx-white text-vx-gray-600 hover:border-vx-brand-200 hover:text-vx-brand-700 dark:border-vx-gray-700 dark:bg-vx-gray-900 dark:text-vx-gray-300 dark:hover:border-vx-brand-500/40 dark:hover:text-vx-brand-200"
-                  }`}
+          {agents === null ? (
+            <Banner
+              className="mt-10"
+              tone="danger"
+              title={t("agents.unavailable.title")}
+              description={t("agents.unavailable.description")}
+            />
+          ) : agents.length === 0 ? (
+            <EmptyState
+              icon="agent"
+              title={t("agents.empty.title")}
+              description={t("agents.empty.description")}
+              className="mx-auto mt-10 max-w-website-xl"
+            />
+          ) : (
+            <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {agents.map((agent) => (
+                <article
+                  key={agent.productCode}
+                  className="vx-agent-marketplace-card flex flex-col rounded-lg border border-vx-gray-200 bg-vx-white p-5 shadow-sm transition hover:border-vx-brand-200 hover:shadow-md dark:border-vx-gray-800 dark:bg-vx-gray-900 dark:hover:border-vx-brand-500/30"
                 >
-                  {filter.label}
-                </Button>
-              );
-            })}
-          </div>
-
-          <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {visibleAgents.map((agent) => (
-              <article
-                key={agent.name}
-                className="vx-agent-marketplace-card flex flex-col rounded-lg border border-vx-gray-200 bg-vx-white p-5 shadow-sm transition hover:border-vx-brand-200 hover:shadow-md dark:border-vx-gray-800 dark:bg-vx-gray-900 dark:hover:border-vx-brand-500/30"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-vx-brand-50 text-vx-brand-600 dark:bg-vx-brand-950/50 dark:text-vx-brand-200">
-                      <Icon name={agent.icon} className="h-5 w-5" />
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-vx-brand-50 text-vx-brand-600 dark:bg-vx-brand-950/50 dark:text-vx-brand-200">
+                        <Icon name="agent" className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-vx-brand-600 dark:text-vx-brand-300">
+                          {t("agents.type")}
+                        </p>
+                        <h3 className="mt-1 text-lg font-semibold text-vx-gray-900 dark:text-vx-white">
+                          {catalogDisplayName(agent)}
+                        </h3>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold text-vx-brand-600 dark:text-vx-brand-300">
-                        {agent.type}
-                      </p>
-                      <h3 className="mt-1 text-lg font-semibold text-vx-gray-900 dark:text-vx-white">
-                        {agent.name}
-                      </h3>
-                    </div>
-                  </div>
-                  <span className="rounded-full border border-vx-info-100 bg-vx-info-50 px-2.5 py-1 text-xs font-medium text-vx-info-700 dark:border-vx-info-400/20 dark:bg-vx-brand-950/30 dark:text-vx-info-200">
-                    {t("agents.available")}
-                  </span>
-                </div>
-
-                <p className="mt-5 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
-                  {agent.description}
-                </p>
-                <div className="mt-5 rounded-md border border-vx-brand-100 bg-vx-brand-50/50 p-4 dark:border-vx-brand-400/15 dark:bg-vx-brand-950/20">
-                  <p className="text-xs font-semibold text-vx-brand-600 dark:text-vx-brand-300">
-                    {t("agents.valueLabel")}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200">
-                    {agent.value}
-                  </p>
-                </div>
-
-                <ul className="mt-5 space-y-2">
-                  {agent.capabilities.map((capability) => (
-                    <li
-                      key={capability}
-                      className="flex gap-2 text-sm text-vx-gray-600 dark:text-vx-gray-300"
-                    >
-                      <Icon
-                        name="check"
-                        className="mt-0.5 h-4 w-4 shrink-0 text-vx-brand-500"
-                      />
-                      <span>{capability}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <div className="mt-auto pt-5">
-                  <div className="flex flex-wrap gap-2">
-                    {agent.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-full border border-vx-gray-200 bg-vx-gray-50 px-2.5 py-1 text-xs text-vx-gray-600 dark:border-vx-gray-700 dark:bg-vx-gray-900 dark:text-vx-gray-300"
-                      >
-                        {tag}
+                    {agent.releaseVersion ? (
+                      <span className="shrink-0 rounded-full border border-vx-gray-200 bg-vx-gray-50 px-2.5 py-1 text-xs font-medium text-vx-gray-500 dark:border-vx-gray-700 dark:bg-vx-gray-800/60 dark:text-vx-gray-400">
+                        {agent.releaseVersion}
                       </span>
-                    ))}
+                    ) : null}
                   </div>
-                  <Button asChild className="mt-5 w-full">
-                    <Link href="/signin">{t("agents.action")}</Link>
-                  </Button>
-                </div>
-              </article>
-            ))}
-          </div>
+
+                  {agent.description ? (
+                    <p className="mt-5 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
+                      {agent.description}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-auto pt-5">
+                    {hasTenantSession ? (
+                      <Button asChild className="w-full">
+                        <a href={consoleEntryUrl}>{t("hero.primaryAction")}</a>
+                      </Button>
+                    ) : (
+                      <Button asChild className="w-full">
+                        <Link href="/signin">{t("agents.action")}</Link>
+                      </Button>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     </div>

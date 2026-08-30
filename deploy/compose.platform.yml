@@ -50,6 +50,10 @@ services:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: https://api.vxture.com
       NODE_OPTIONS: --max-old-space-size=192
+      # 官网服务端组件（/products、/appcenter、/products/[slug]）逐请求读公开产品目录，
+      # 走内网直达 website-bff（同 console 的 CONSOLE_BFF_INTERNAL_URL 先例）；不设则退回
+      # 烘入镜像的公网基址，从容器出去绕公网 nginx 再回来——能通，但多一跳、还依赖公网可达。
+      WEBSITE_BFF_INTERNAL_URL: http://vx-platform-website-bff:3001
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/health"]
       interval: 30s

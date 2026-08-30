@@ -115,7 +115,7 @@
   "catalog": {
     "eyebrow": "Product suite",
     "title": "Full-stack intelligence, composable",
-    "description": "From model foundations to data governance, knowledge and spatial intelligence — six platform products subscribed around plans and composed on demand; the varda assistant unlocks by plan tier.",
+    "description": "From model foundations to data governance and knowledge intelligence — platform products subscribed around plans and composed on demand; the varda assistant unlocks by plan tier.",
     "pricingCta": "See pricing",
     "valueLabel": "Business value",
     "badges": {
@@ -130,6 +130,16 @@
       "demo": "Request demo",
       "detail": "Learn more",
       "coming": "Coming soon"
+    },
+    "types": {
+      "model_platform": "L1 · Model foundation",
+      "capability_platform": "L1 · Ability orchestration",
+      "data_platform": "L2 · Data intelligence",
+      "knowledge_platform": "L2 · Knowledge intelligence",
+      "agent": "L3 · Agent",
+      "client": "Client",
+      "external": "External",
+      "unknown": "Uncategorized"
     },
     "items": [
       {
@@ -151,15 +161,6 @@
         "status": "coming"
       },
       {
-        "code": "ontos",
-        "name": "Ontos Ontology Engine",
-        "type": "L1 · Semantic foundation",
-        "icon": "workflow",
-        "description": "Enterprise ontology and semantic engine: unify concepts, relations and rules into a cross-system semantic backbone.",
-        "value": "Align terms and semantics so data and intelligence collaborate in one space.",
-        "status": "coming"
-      },
-      {
         "code": "runos",
         "name": "Runos Composable Ability Platform",
         "type": "L1 · Ability orchestration",
@@ -176,20 +177,20 @@
         "description": "Enterprise knowledge intelligence platform: extract, organize and retrieve knowledge into a queryable, reasoning-capable knowledge base.",
         "value": "Turn scattered enterprise knowledge into retrievable, reasoning-ready assets.",
         "status": "coming"
-      },
-      {
-        "code": "terra",
-        "name": "Terra Physical-World Intelligence",
-        "type": "L2 · Spatial intelligence",
-        "icon": "map-pin",
-        "description": "Physical-world intelligence platform: spatial data, digital twins, simulation and geo-aware agents.",
-        "value": "Extend intelligence into the physical world for spatiotemporal analysis and digital-twin operations.",
-        "status": "coming"
       }
     ],
     "comingSoonHint": "This product is under construction — stay tuned.",
     "back": "Back to products",
-    "consult": "Talk to us"
+    "backAppcenter": "Back to agents",
+    "consult": "Talk to us",
+    "unavailable": {
+      "title": "Product catalog temporarily unavailable",
+      "description": "The product catalog could not be read. Please refresh in a moment."
+    },
+    "empty": {
+      "title": "No platform product is live yet",
+      "description": "Products appear here automatically once they go live and are visible to customers."
+    }
   },
   "subscription": {
     "unavailableTitle": "Subscriptions not open yet",

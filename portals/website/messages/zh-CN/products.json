@@ -99,7 +99,7 @@
   "catalog": {
     "eyebrow": "产品矩阵",
     "title": "全栈智能，按需组合",
-    "description": "从模型底座到数据治理、知识与空间智能，六大平台产品围绕 plan 订阅、按需组合；智能体助手 varda 随套餐档位放开。",
+    "description": "从模型底座到数据治理与知识智能，平台级产品围绕套餐订阅、按需组合；智能体助手 varda 随套餐档位放开。",
     "pricingCta": "查看套餐定价",
     "valueLabel": "业务价值",
     "badges": {
@@ -114,6 +114,16 @@
       "demo": "申请演示",
       "detail": "产品介绍",
       "coming": "敬请期待"
+    },
+    "types": {
+      "model_platform": "L1 · 模型底座",
+      "capability_platform": "L1 · 能力编排",
+      "data_platform": "L2 · 数据智能",
+      "knowledge_platform": "L2 · 知识智能",
+      "agent": "L3 · 智能体",
+      "client": "客户端",
+      "external": "外部产品",
+      "unknown": "未分类"
     },
     "items": [
       {
@@ -135,15 +145,6 @@
         "status": "coming"
       },
       {
-        "code": "ontos",
-        "name": "Ontos 企业本体引擎",
-        "type": "L1 · 语义底座",
-        "icon": "workflow",
-        "description": "企业本体与语义引擎：统一概念、关系与规则，构建跨系统的语义骨架。",
-        "value": "用本体对齐术语与语义，让数据与智能在同一语义空间协作。",
-        "status": "coming"
-      },
-      {
         "code": "runos",
         "name": "Runos 可组合能力平台",
         "type": "L1 · 能力编排",
@@ -160,20 +161,20 @@
         "description": "企业知识智能平台：知识抽取、组织与检索，构建可问答、可推理的企业知识库。",
         "value": "把散落的企业知识变成可检索、可推理的智能资产。",
         "status": "coming"
-      },
-      {
-        "code": "terra",
-        "name": "Terra 物理世界智能平台",
-        "type": "L2 · 空间智能",
-        "icon": "map-pin",
-        "description": "物理世界智能平台：空间数据、数字孪生、仿真与地理感知智能体。",
-        "value": "让智能延伸到物理世界，支撑时空分析与数字孪生运营。",
-        "status": "coming"
       }
     ],
     "comingSoonHint": "该产品正在建设中，敬请期待。",
     "back": "返回产品总览",
-    "consult": "方案咨询"
+    "backAppcenter": "返回智能体广场",
+    "consult": "方案咨询",
+    "unavailable": {
+      "title": "产品目录暂时不可用",
+      "description": "产品目录暂时读不到，请稍后刷新重试。"
+    },
+    "empty": {
+      "title": "暂无上线的平台级产品",
+      "description": "产品上线并对客户可见后会自动出现在这里。"
+    }
   },
   "subscription": {
     "unavailableTitle": "暂未开放订阅",

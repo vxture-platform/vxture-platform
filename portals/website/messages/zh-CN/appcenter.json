@@ -2,165 +2,25 @@
   "hero": {
     "eyebrow": "Agent Marketplace",
     "title": "智能体广场",
-    "description": "汇聚数字员工、专业智能体与具身智能体，通过标签化分类与行业场景筛选，帮助企业快速找到可试用、可集成与可编排的智能体能力。",
+    "description": "汇聚平台上已上线、面向客户开放的数字员工、专业智能体与具身智能体，登录即可申请试用，按套餐接入与编排。",
     "primaryAction": "进入工作台",
     "guestPrimaryAction": "申请试用",
     "secondaryAction": "浏览智能体",
-    "highlights": ["数字员工", "软件智能体", "具身智能体", "行业智能体"],
-    "metrics": [
-      { "value": "12+", "label": "首批智能体服务" },
-      { "value": "8类", "label": "行业与场景标签" },
-      { "value": "可编排", "label": "支持人机协同工作流" }
-    ],
-    "scene": {
-      "command": "协同编排",
-      "human": "人机协同",
-      "software": "软件智能体",
-      "embodied": "具身智能体",
-      "data": "智能数据"
-    }
-  },
-  "filters": {
-    "eyebrow": "Industry Filter",
-    "title": "按行业与场景筛选",
-    "description": "先以市场化卡片展示智能体能力，后续可以接入评分、试用、订阅、权限、调用量和企业私有发布流程。",
-    "items": [
-      { "id": "all", "label": "全部" },
-      { "id": "general", "label": "通用办公" },
-      { "id": "legal", "label": "法务合规" },
-      { "id": "operations", "label": "经营分析" },
-      { "id": "defense", "label": "推演仿真" },
-      { "id": "lowAltitude", "label": "低空巡检" },
-      { "id": "data", "label": "数据治理" },
-      { "id": "emergency", "label": "应急管理" },
-      { "id": "industry", "label": "工业制造" }
-    ]
+    "highlights": ["数字员工", "软件智能体", "具身智能体", "行业智能体"]
   },
   "agents": {
-    "available": "可试用",
-    "valueLabel": "业务价值",
+    "eyebrow": "Agents",
+    "title": "已上线的智能体",
+    "description": "这份清单直接来自平台产品目录：出现在这里的每一个，都是已登记、已上线并对客户可见的智能体产品。",
+    "type": "智能体",
     "action": "申请试用",
-    "items": [
-      {
-        "name": "合同审核智能体",
-        "type": "数字员工 · 通用类",
-        "icon": "shield-check",
-        "industries": ["general", "legal"],
-        "description": "面向采购、销售、法务和项目管理场景，自动识别合同条款风险、缺失条款、履约节点和审批关注点。",
-        "value": "减少人工逐条审阅成本，让业务部门在提交审批前就能得到结构化风险提示。",
-        "capabilities": ["条款风险识别", "标准模板比对", "审批意见生成"],
-        "tags": ["大模型", "知识库", "合规审查"]
-      },
-      {
-        "name": "数字法务智能体",
-        "type": "数字员工 · 通用类",
-        "icon": "building-library",
-        "industries": ["general", "legal"],
-        "description": "沉淀企业制度、法律法规、历史案件和问答知识，为员工提供法务咨询、制度检索和材料草拟支持。",
-        "value": "把常见法务咨询从人工响应转为自助问答，并保留引用来源与审核链路。",
-        "capabilities": ["法规制度问答", "函件草拟", "风险解释与引用追溯"],
-        "tags": ["大模型问答", "RAG", "企业知识"]
-      },
-      {
-        "name": "经营分析智能体",
-        "type": "数字员工 · 通用类",
-        "icon": "chart-bar",
-        "industries": ["general", "operations"],
-        "description": "连接经营指标、财务数据、客户数据和项目进度，自动生成经营日报、异常提醒和归因分析。",
-        "value": "让管理者从看报表转向问业务，快速定位收入、成本、交付和客户变化背后的原因。",
-        "capabilities": ["指标问答", "异常归因", "经营报告生成"],
-        "tags": ["智能数据", "指标体系", "BI Agent"]
-      },
-      {
-        "name": "战场推演智能体",
-        "type": "强业务类 · 推演仿真",
-        "icon": "workflow",
-        "industries": ["defense"],
-        "description": "面向复杂态势推演、资源约束评估和方案比选，构建可解释、可复盘的沙盘推演辅助能力。",
-        "value": "帮助业务团队在安全边界内进行态势模拟和方案评估，提升推演效率和复盘质量。",
-        "capabilities": ["态势要素建模", "方案比选推演", "推演过程复盘"],
-        "tags": ["数字孪生", "仿真推演", "智能体协同"]
-      },
-      {
-        "name": "无人机监测智能体",
-        "type": "强业务类 · 低空巡检",
-        "icon": "cloud",
-        "industries": ["lowAltitude", "emergency", "industry"],
-        "description": "对接无人机巡检影像、飞行任务、空间网格和告警规则，自动识别异常点并生成巡检报告。",
-        "value": "把无人机采集的数据转化为可分派的任务和可追踪的处置闭环。",
-        "capabilities": ["影像异常识别", "巡检路线摘要", "告警任务派发"],
-        "tags": ["具身智能", "视觉识别", "空间数据"]
-      },
-      {
-        "name": "数据治理智能体",
-        "type": "强业务类 · 数据治理",
-        "icon": "database",
-        "industries": ["data", "general", "industry"],
-        "description": "面向数据资产盘点、质量检查、口径解释和血缘分析，辅助企业持续建设智能数据底座。",
-        "value": "降低数据治理门槛，让业务人员也能理解数据来源、质量问题和指标口径。",
-        "capabilities": ["数据资产问答", "质量规则建议", "指标口径解释"],
-        "tags": ["智能数据", "元数据", "数据质量"]
-      },
-      {
-        "name": "应急指挥智能体",
-        "type": "强业务类 · 应急管理",
-        "icon": "warning",
-        "industries": ["emergency"],
-        "description": "围绕突发事件态势汇聚、预案匹配、资源调度和任务跟踪，为指挥中心提供连续辅助。",
-        "value": "把事件摘要、处置建议、队伍物资状态和回执统一到一条指挥链路。",
-        "capabilities": ["事件摘要", "预案匹配", "任务闭环跟踪"],
-        "tags": ["大模型研判", "调度智能体", "数字孪生"]
-      },
-      {
-        "name": "城市风险研判智能体",
-        "type": "强业务类 · 城市治理",
-        "icon": "graph",
-        "industries": ["emergency", "data"],
-        "description": "整合人口、车辆、场所、事件和风险源数据，持续发现城市公共安全和治理风险。",
-        "value": "把跨部门线索转为可解释的风险清单和空间态势，辅助提前干预。",
-        "capabilities": ["多源线索融合", "风险关联分析", "空间态势展示"],
-        "tags": ["智能数据", "知识图谱", "风险研判"]
-      },
-      {
-        "name": "工业设备巡检智能体",
-        "type": "强业务类 · 工业制造",
-        "icon": "server",
-        "industries": ["industry"],
-        "description": "连接设备传感、巡检记录、维修工单和专家知识，识别设备异常趋势并建议处置动作。",
-        "value": "帮助工厂从定期巡检走向预测性维护，减少停机和重复排查。",
-        "capabilities": ["异常趋势识别", "维修知识检索", "工单建议生成"],
-        "tags": ["工业智能体", "IoT", "预测维护"]
-      },
-      {
-        "name": "标书方案智能体",
-        "type": "数字员工 · 通用类",
-        "icon": "table",
-        "industries": ["general", "operations"],
-        "description": "基于企业知识库、产品资料和历史投标文件，辅助生成方案大纲、响应点和差异化亮点。",
-        "value": "让售前团队快速形成可编辑初稿，把时间投入到客户洞察和方案打磨上。",
-        "capabilities": ["招标文件解析", "方案大纲生成", "响应点检查"],
-        "tags": ["大模型写作", "知识库", "售前协同"]
-      },
-      {
-        "name": "供应链协同智能体",
-        "type": "强业务类 · 经营协同",
-        "icon": "api",
-        "industries": ["operations", "industry"],
-        "description": "连接采购、库存、物流、供应商和交付节点，监控异常并辅助生成协同处置建议。",
-        "value": "提前发现交付风险，把跨部门沟通变成可跟踪的任务流。",
-        "capabilities": ["供应风险预警", "库存与交付分析", "协同任务生成"],
-        "tags": ["智能数据", "流程智能体", "经营协同"]
-      },
-      {
-        "name": "低空资源调度智能体",
-        "type": "强业务类 · 低空经济",
-        "icon": "paperplane-tilt",
-        "industries": ["lowAltitude", "emergency"],
-        "description": "围绕低空巡检、应急通信、物资配送和空域资源，辅助任务编排、资源匹配和执行跟踪。",
-        "value": "让低空资源从单次任务执行升级为可调度、可复盘、可协同的业务能力。",
-        "capabilities": ["任务编排", "资源匹配", "执行状态跟踪"],
-        "tags": ["具身智能", "低空经济", "调度智能体"]
-      }
-    ]
+    "empty": {
+      "title": "更多智能体陆续上线",
+      "description": "目前还没有对外开放的智能体产品，上线后会自动出现在这里。"
+    },
+    "unavailable": {
+      "title": "智能体清单暂时不可用",
+      "description": "产品目录暂时读不到，请稍后刷新重试。"
+    }
   }
 }

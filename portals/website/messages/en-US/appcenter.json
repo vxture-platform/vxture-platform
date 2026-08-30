@@ -2,7 +2,7 @@
   "hero": {
     "eyebrow": "Agent Marketplace",
     "title": "Agent Marketplace",
-    "description": "A marketplace for industry-ready agent services, including digital employees, professional software agents, embodied agents, and industry collaboration agents. Use tags and industry filters to quickly find agents that can be trialed, integrated, and orchestrated.",
+    "description": "The agents that are live on the platform and open to customers — digital employees, professional software agents and embodied agents. Sign in to request a trial, then integrate and orchestrate them by plan.",
     "primaryAction": "Open Console",
     "guestPrimaryAction": "Request Trial",
     "secondaryAction": "Browse Agents",
@@ -11,209 +11,21 @@
       "Software Agents",
       "Embodied Agents",
       "Industry Agents"
-    ],
-    "metrics": [
-      { "value": "12+", "label": "Initial agent services" },
-      { "value": "8", "label": "Industry and scenario tags" },
-      { "value": "Composable", "label": "Human-agent workflows" }
-    ],
-    "scene": {
-      "command": "Orchestration",
-      "human": "Human Collaboration",
-      "software": "Software Agents",
-      "embodied": "Embodied Agents",
-      "data": "Intelligent Data"
-    }
-  },
-  "filters": {
-    "eyebrow": "Industry Filter",
-    "title": "Filter by industry and scenario",
-    "description": "Start with marketplace-style cards. Later this can connect to ratings, trials, subscriptions, permissions, usage metering, and private enterprise publishing.",
-    "items": [
-      { "id": "all", "label": "All" },
-      { "id": "general", "label": "General Office" },
-      { "id": "legal", "label": "Legal & Compliance" },
-      { "id": "operations", "label": "Operations" },
-      { "id": "defense", "label": "Simulation" },
-      { "id": "lowAltitude", "label": "Low-altitude" },
-      { "id": "data", "label": "Data Governance" },
-      { "id": "emergency", "label": "Emergency" },
-      { "id": "industry", "label": "Manufacturing" }
     ]
   },
   "agents": {
-    "available": "Trial",
-    "valueLabel": "Business Value",
+    "eyebrow": "Agents",
+    "title": "Agents available now",
+    "description": "This list comes straight from the platform product catalog: every entry here is a registered, live agent product that is visible to customers.",
+    "type": "Agent",
     "action": "Request Trial",
-    "items": [
-      {
-        "name": "Contract Review Agent",
-        "type": "Digital Employee · General",
-        "icon": "shield-check",
-        "industries": ["general", "legal"],
-        "description": "For procurement, sales, legal, and project management, automatically identifies contract clause risks, missing terms, obligations, and approval concerns.",
-        "value": "Reduces manual review effort and gives business teams structured risk hints before approval submission.",
-        "capabilities": [
-          "Clause risk detection",
-          "Template comparison",
-          "Approval comment drafting"
-        ],
-        "tags": ["LLM", "Knowledge Base", "Compliance Review"]
-      },
-      {
-        "name": "Digital Legal Agent",
-        "type": "Digital Employee · General",
-        "icon": "building-library",
-        "industries": ["general", "legal"],
-        "description": "Uses enterprise policies, regulations, historical cases, and Q&A knowledge to support legal consultation, policy retrieval, and document drafting.",
-        "value": "Turns common legal questions into self-service answers while keeping citations and review trails.",
-        "capabilities": [
-          "Policy Q&A",
-          "Legal letter drafting",
-          "Risk explanation with citations"
-        ],
-        "tags": ["LLM Q&A", "RAG", "Enterprise Knowledge"]
-      },
-      {
-        "name": "Business Analysis Agent",
-        "type": "Digital Employee · General",
-        "icon": "chart-bar",
-        "industries": ["general", "operations"],
-        "description": "Connects operating metrics, finance data, customer data, and project progress to generate daily briefs, anomaly alerts, and cause analysis.",
-        "value": "Helps managers move from reading dashboards to asking business questions and finding root causes faster.",
-        "capabilities": [
-          "Metric Q&A",
-          "Anomaly attribution",
-          "Business report generation"
-        ],
-        "tags": ["Intelligent Data", "Metrics", "BI Agent"]
-      },
-      {
-        "name": "Battlefield Simulation Agent",
-        "type": "Industry Agent · Simulation",
-        "icon": "workflow",
-        "industries": ["defense"],
-        "description": "Supports complex situation simulation, resource-constraint assessment, and plan comparison with explainable and reviewable tabletop assistance.",
-        "value": "Helps teams run situation simulation and plan evaluation within safety boundaries, improving simulation efficiency and review quality.",
-        "capabilities": [
-          "Situation element modeling",
-          "Plan comparison simulation",
-          "Process review"
-        ],
-        "tags": ["Digital Twin", "Simulation", "Agent Collaboration"]
-      },
-      {
-        "name": "Drone Monitoring Agent",
-        "type": "Industry Agent · Low-altitude",
-        "icon": "cloud",
-        "industries": ["lowAltitude", "emergency", "industry"],
-        "description": "Connects drone imagery, flight tasks, spatial grids, and alert rules to identify anomalies and generate inspection reports.",
-        "value": "Turns drone-collected data into assignable tasks and traceable response loops.",
-        "capabilities": [
-          "Image anomaly detection",
-          "Inspection route summary",
-          "Alert task dispatch"
-        ],
-        "tags": ["Embodied AI", "Vision", "Spatial Data"]
-      },
-      {
-        "name": "Data Governance Agent",
-        "type": "Industry Agent · Data Governance",
-        "icon": "database",
-        "industries": ["data", "general", "industry"],
-        "description": "Supports data asset inventory, quality checks, metric definition explanation, and lineage analysis for an intelligent data foundation.",
-        "value": "Lowers the barrier to data governance so business users can understand data sources, quality issues, and metric definitions.",
-        "capabilities": [
-          "Data asset Q&A",
-          "Quality rule suggestions",
-          "Metric definition explanation"
-        ],
-        "tags": ["Intelligent Data", "Metadata", "Data Quality"]
-      },
-      {
-        "name": "Emergency Command Agent",
-        "type": "Industry Agent · Emergency",
-        "icon": "warning",
-        "industries": ["emergency"],
-        "description": "Provides continuous assistance for incident situation fusion, plan matching, resource dispatch, and task tracking.",
-        "value": "Unifies event summaries, response suggestions, team and supply status, and acknowledgements into one command chain.",
-        "capabilities": [
-          "Event summary",
-          "Plan matching",
-          "Task loop tracking"
-        ],
-        "tags": ["LLM Assessment", "Dispatch Agent", "Digital Twin"]
-      },
-      {
-        "name": "Urban Risk Assessment Agent",
-        "type": "Industry Agent · Urban Governance",
-        "icon": "graph",
-        "industries": ["emergency", "data"],
-        "description": "Integrates people, vehicles, places, events, and risk-source data to continuously discover urban public safety and governance risks.",
-        "value": "Turns cross-agency clues into explainable risk lists and spatial situation views for earlier intervention.",
-        "capabilities": [
-          "Multi-source clue fusion",
-          "Risk relationship analysis",
-          "Spatial situation display"
-        ],
-        "tags": ["Intelligent Data", "Knowledge Graph", "Risk Assessment"]
-      },
-      {
-        "name": "Industrial Equipment Inspection Agent",
-        "type": "Industry Agent · Manufacturing",
-        "icon": "server",
-        "industries": ["industry"],
-        "description": "Connects equipment sensors, inspection records, repair tickets, and expert knowledge to identify abnormal trends and suggest actions.",
-        "value": "Helps factories move from scheduled inspection to predictive maintenance, reducing downtime and repeated diagnosis.",
-        "capabilities": [
-          "Abnormal trend detection",
-          "Maintenance knowledge retrieval",
-          "Work order suggestion"
-        ],
-        "tags": ["Industrial Agent", "IoT", "Predictive Maintenance"]
-      },
-      {
-        "name": "Proposal Writing Agent",
-        "type": "Digital Employee · General",
-        "icon": "table",
-        "industries": ["general", "operations"],
-        "description": "Uses enterprise knowledge, product material, and historical bids to assist with proposal outlines, response points, and differentiation.",
-        "value": "Lets presales teams create editable drafts quickly and spend more time on customer insight and solution refinement.",
-        "capabilities": [
-          "Bid document parsing",
-          "Proposal outline generation",
-          "Response point checking"
-        ],
-        "tags": ["LLM Writing", "Knowledge Base", "Presales"]
-      },
-      {
-        "name": "Supply Chain Collaboration Agent",
-        "type": "Industry Agent · Operations",
-        "icon": "api",
-        "industries": ["operations", "industry"],
-        "description": "Connects procurement, inventory, logistics, suppliers, and delivery milestones to monitor exceptions and suggest actions.",
-        "value": "Finds delivery risks earlier and turns cross-team communication into trackable task flows.",
-        "capabilities": [
-          "Supply risk warning",
-          "Inventory and delivery analysis",
-          "Collaboration task generation"
-        ],
-        "tags": ["Intelligent Data", "Workflow Agent", "Operations"]
-      },
-      {
-        "name": "Low-altitude Resource Dispatch Agent",
-        "type": "Industry Agent · Low-altitude Economy",
-        "icon": "paperplane-tilt",
-        "industries": ["lowAltitude", "emergency"],
-        "description": "Supports mission orchestration, resource matching, and execution tracking for low-altitude inspection, emergency communication, delivery, and airspace resources.",
-        "value": "Upgrades low-altitude resources from one-off task execution into schedulable, reviewable, and collaborative business capability.",
-        "capabilities": [
-          "Mission orchestration",
-          "Resource matching",
-          "Execution status tracking"
-        ],
-        "tags": ["Embodied AI", "Low-altitude Economy", "Dispatch Agent"]
-      }
-    ]
+    "empty": {
+      "title": "More agents are on the way",
+      "description": "No agent product is open to customers yet. New ones appear here automatically once they go live."
+    },
+    "unavailable": {
+      "title": "Agent list temporarily unavailable",
+      "description": "The product catalog could not be read. Please refresh in a moment."
+    }
   }
 }
