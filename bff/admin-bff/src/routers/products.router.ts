@@ -28,6 +28,7 @@ import type {
   ProductCapabilityMetricRule,
   ProductCapabilityRecord,
   ProductCapabilitySource,
+  ProductCapabilityRelatedSolution,
   ProductCapabilityStatus,
   ProductCapabilityType,
   ProductPlanRecord,
@@ -780,6 +781,43 @@ function mapProductCapabilityStatus(status: string): ProductCapabilityStatus {
   return "archived"; // inactive | deprecated
 }
 
+interface ProductSolutionLinkRow {
+  product_id: string;
+  solution_code: string;
+  solution_name: string;
+  solution_status: string;
+  role: string | null;
+  tier_names: string[] | null;
+}
+
+/** 产品 → 所在方案（含角色、方案已绑档位的套餐名）；软删的方案 / 套餐不算。 */
+const PRODUCT_SOLUTION_LINKS_SQL = `
+  SELECT sp.product_id,
+         s.solution_code,
+         s.solution_name,
+         s.status AS solution_status,
+         sp.role,
+         COALESCE(
+           ARRAY_AGG(pl.plan_name ORDER BY spl.tier) FILTER (WHERE pl.plan_name IS NOT NULL),
+           {}
+         ) AS tier_names
+    FROM product.solution_products sp
+    JOIN product.solutions s ON s.id = sp.solution_id AND s.deleted_at IS NULL
+    LEFT JOIN product.solution_plans spl ON spl.solution_id = s.id
+    LEFT JOIN product.plans pl ON pl.id = spl.plan_id AND pl.deleted_at IS NULL
+   GROUP BY sp.product_id, s.solution_code, s.solution_name, s.status, sp.role, sp.sort
+   ORDER BY sp.product_id, sp.sort ASC, s.solution_code ASC
+`;
+
+/** 方案四态收成能力目录的三态：inactive / deprecated 在这张表上都是「不再售卖」。 */
+function solutionStatusToCapabilityStatus(
+  status: string,
+): ProductCapabilityStatus {
+  if (status === "active") return "active";
+  if (status === "draft") return "draft";
+  return "archived";
+}
+
 const PRODUCT_CATALOG_SQL = `
   SELECT
     p.id,
@@ -806,14 +844,17 @@ const PRODUCT_CATALOG_SQL = `
 
 /**
  * Load the product-capability catalog from the live product schema. Fields with
- * no schema home (ownerTeam / accessModes / billingMode / relatedSolutions /
- * releases / modelPolicyCount) are returned empty rather than fabricated — the
- * rich solutions/releases model is not yet defined (C14 owner scope 2026-07-12).
+ * no schema home (ownerTeam / accessModes / billingMode / releases /
+ * modelPolicyCount) are returned empty rather than fabricated.
+ *
+ * relatedSolutions / solutionCount 自 2026-08-31 起从 product.solution_products
+ * 实算（方案模型落库后，70-product-solutions.md）：一个产品挂在哪些方案里、在方案里
+ * 扮演什么角色、方案已绑了哪些档位的套餐——此前这两个字段是 [] / 0 的占位。
  */
 export async function loadProductCapabilities(
   pool: Pool,
 ): Promise<ProductCapabilityRecord[]> {
-  const [products, metrics, webhooks] = await Promise.all([
+  const [products, metrics, webhooks, solutions] = await Promise.all([
     pool.query<ProductCatalogRow>(PRODUCT_CATALOG_SQL),
     pool.query<ProductMetricRow>(
       `SELECT product_id, metric_key, metric_unit, reset_period, merge_strategy
@@ -822,7 +863,24 @@ export async function loadProductCapabilities(
     pool.query<ProductWebhookRow>(
       `SELECT product_id, webhook_url FROM product.product_webhooks`,
     ),
+    pool.query<ProductSolutionLinkRow>(PRODUCT_SOLUTION_LINKS_SQL),
   ]);
+
+  const solutionsByProduct = new Map<
+    string,
+    ProductCapabilityRelatedSolution[]
+  >();
+  for (const link of solutions.rows) {
+    const list = solutionsByProduct.get(link.product_id) ?? [];
+    list.push({
+      solutionCode: link.solution_code,
+      solutionName: link.solution_name,
+      role: link.role ?? "",
+      status: solutionStatusToCapabilityStatus(link.solution_status),
+      tierNames: link.tier_names ?? [],
+    });
+    solutionsByProduct.set(link.product_id, list);
+  }
 
   const metricsByProduct = new Map<string, ProductCapabilityMetricRule[]>();
   for (const metric of metrics.rows) {
@@ -896,9 +954,9 @@ export async function loadProductCapabilities(
             : "disabled",
       integration,
       metrics: productMetrics,
-      relatedSolutions: [],
+      relatedSolutions: solutionsByProduct.get(row.id) ?? [],
       releases: [],
-      solutionCount: 0,
+      solutionCount: (solutionsByProduct.get(row.id) ?? []).length,
       planCount: Number(row.plan_count) || 0,
       releaseCount: 0,
       modelPolicyCount: 0,

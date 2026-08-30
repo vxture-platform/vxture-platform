@@ -1,1 +1,0 @@
-export const PRODUCT_PG_POOL = "PRODUCT_PG_POOL";

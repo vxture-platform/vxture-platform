@@ -1169,6 +1169,7 @@ export type SubscriptionOperationAction =
   | "resume"
   | "cancel";
 export type SubscriptionSolutionAssociationSource =
+  | "solution"
   | "industry_rule"
   | "legacy_plan";
 

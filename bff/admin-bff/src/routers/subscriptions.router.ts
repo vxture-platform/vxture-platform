@@ -8,8 +8,8 @@
  *   subscription_renewals 运营时间线。写路径（续订/暂停/恢复/取消）见 completion-plan。
  *
  *   18-schema 备忘：旧 commerce.subscription → metering.subscriptions；tenant.tenant → tenancy.tenants
- *   （展示字段迁 tenancy.tenant_profiles）；套餐取 product.plans。新库无 solution 表、无 province/city、
- *   无 app 归属列 → solutionCode / app 字段 / region 走空态兜底；无 subscription_code 列 → subscriptionCode 用 id。
+ *   （展示字段迁 tenancy.tenant_profiles）；套餐取 product.plans，方案归属经 product.solution_plans
+ *   （2026-08-31 起）；无 province/city、无 app 归属列 → app 字段 / region 走空态兜底；无 subscription_code 列 → subscriptionCode 用 id。
  *
  * @author AI-Generated
  * @date 2026-07-04
@@ -498,8 +498,8 @@ function mapSubscriptionRow(row: SubscriptionRow): SubscriptionOperationRecord {
     tenantStatus: normalizeTenantStatus(row.tenant_status),
     region: row.country_code ?? "未设置",
     industry: row.industry ?? "未设置",
-    solutionCode: null,
-    solutionName: planName,
+    solutionCode: row.solution_code,
+    solutionName: row.solution_name ?? planName,
     servicePlanCode: row.plan_code ?? "",
     servicePlanName: planName,
     tierCode,
@@ -529,12 +529,14 @@ function buildSolutionAssociation(
   row: SubscriptionRow,
 ): SubscriptionSolutionAssociation {
   const tierCode = normalizeTierCode(row.tier_code);
+  // 2026-08-31：套餐绑进了方案（product.solution_plans）就按方案归属；没绑的仍是
+  // 「只有套餐」的旧形态。此前 solutionCode 恒 null 是因为库里没有方案表。
   return {
-    solutionCode: null,
-    solutionName: row.plan_name ?? "未关联套餐",
+    solutionCode: row.solution_code,
+    solutionName: row.solution_name ?? row.plan_name ?? "未关联套餐",
     tierCode,
     tierName: tierName(tierCode),
-    source: "legacy_plan",
+    source: row.solution_code ? "solution" : "legacy_plan",
     note: row.plan_code ? `套餐 ${row.plan_code}` : "",
   };
 }
@@ -653,6 +655,8 @@ select
   tp.country_code,
   pl.plan_code,
   pl.plan_name,
+  sol.solution_code,
+  sol.solution_name,
   op.display_name as operator_name,
   tier.tier as tier_code,
   quota.quota_limit_sum,
@@ -662,6 +666,9 @@ join tenancy.tenants t on t.id = s.tenant_id
 left join tenancy.tenant_profiles tp on tp.tenant_id = t.id
 left join product.plan_versions pv on pv.id = s.plan_version_id
 left join product.plans pl on pl.id = pv.plan_id
+-- 套餐若被某个方案的档位绑定，这条订阅就归属该方案（solution_plans.plan_id 唯一，最多一条）
+left join product.solution_plans spl on spl.plan_id = pl.id
+left join product.solutions sol on sol.id = spl.solution_id and sol.deleted_at is null
 left join admin.operator_account op
   on op.id = s.created_by_id and s.created_by_type = 'operator'
 left join lateral (
@@ -773,6 +780,8 @@ interface SubscriptionRow {
   country_code: string | null;
   plan_code: string | null;
   plan_name: string | null;
+  solution_code: string | null;
+  solution_name: string | null;
   operator_name: string | null;
   tier_code: string | null;
   quota_limit_sum: string | null;
