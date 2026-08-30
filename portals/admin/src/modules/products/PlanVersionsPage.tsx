@@ -435,11 +435,11 @@ export function PlanVersionsPage() {
                       {plans.map((plan) => {
                         const active = selectedPlan?.planId === plan.planId;
                         return (
-                          <button
+                          <Button
                             key={plan.planId}
-                            type="button"
+                            variant="ghost"
                             onClick={() => void selectPlan(plan, product)}
-                            className={`flex flex-col items-start gap-0.5 rounded-md border p-2 text-left text-sm transition-colors ${
+                            className={`h-auto w-full flex-col items-start gap-0.5 border p-2 text-left text-sm ${
                               active
                                 ? "border-vx-primary bg-vx-primary/5"
                                 : "border-transparent hover:border-vx-gray-300"
@@ -457,12 +457,12 @@ export function PlanVersionsPage() {
                                 ? ` · 草稿 v${plan.draftVersion.versionNo}`
                                 : ""}
                             </span>
-                          </button>
+                          </Button>
                         );
                       })}
                       {plans.length === 0 ? (
-                        <button
-                          type="button"
+                        <Button
+                          variant="ghost"
                           onClick={() =>
                             setCreateTarget({
                               productCode: product.productCode,
@@ -470,10 +470,10 @@ export function PlanVersionsPage() {
                               tier,
                             })
                           }
-                          className="flex flex-1 items-center justify-center rounded-md border border-dashed border-vx-gray-300 text-xs text-vx-gray-500 transition-colors hover:border-vx-gray-400 hover:text-vx-gray-700"
+                          className="h-auto flex-1 border border-dashed border-vx-gray-300 text-xs text-vx-gray-500 hover:border-vx-gray-400 hover:text-vx-gray-700"
                         >
                           + 新建套餐
-                        </button>
+                        </Button>
                       ) : null}
                     </div>
                   );
@@ -516,10 +516,10 @@ export function PlanVersionsPage() {
                   <PanelItem
                     key={v.id}
                     main={
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
                         onClick={() => void openVersion(v.id)}
-                        className={`flex w-full items-center justify-between gap-2 rounded-md p-1 text-left ${
+                        className={`h-auto w-full justify-between gap-2 p-1 text-left ${
                           detail?.id === v.id ? "bg-vx-primary/5" : ""
                         }`}
                       >
@@ -531,7 +531,7 @@ export function PlanVersionsPage() {
                           {priceLine(v.prices)} ·{" "}
                           {formatDate(v.createdAt, locale)}
                         </span>
-                      </button>
+                      </Button>
                     }
                   />
                 ))}
