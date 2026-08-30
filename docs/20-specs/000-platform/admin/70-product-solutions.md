@@ -98,6 +98,8 @@ product.products                        product.plans ──▶ plan_versions �
 
 写路径全部返回最新的 `ProductSolutionDetailRecord`，门户直接替换本地态。resource_type 一律 `product_solution`，resource_id = `solution_code`（可视码，不是 UUID）。step-up：本轮**未**给方案写路径加 `@RequireStepUp`——它们不动价格、不动订阅，可逆或有确认框；plan 发布仍是唯一的 step-up 点。
 
+**step-up（2026-08-31，owner 裁定）**：六个写端点全部 `@RequireStepUp()`。方案 × 档位绑到哪条套餐、方案上不上线直接决定客户能买到什么，与套餐版本发布同一风险级；退役 / 解绑不可逆。能力码仍是粗粒度的 `platform:product.manage`（seed 刻意不整码标 `requires_step_up`），门挂在路由上；门户在 `runWithStepUp` 里调用，取消即静默返回。
+
 ## 8. 门户
 
 | 页                           | 读                                                         | 写                                                                                                                                    |

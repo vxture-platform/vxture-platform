@@ -169,7 +169,14 @@ export class ProductsRouter {
     );
   }
 
+  /**
+   * 方案的六个写端点全部挂 @RequireStepUp（owner 2026-08-31 裁定，70-product-solutions.md §7）。
+   * 方案 × 档位绑到哪条套餐、方案上不上线，直接决定客户能买到什么——与套餐版本发布
+   * 同一风险级；退役 / 解绑还不可逆。能力码仍是粗粒度的 platform:product.manage（seed
+   * 里刻意不整码标 requires_step_up，见 STEP_UP_REQUIRED 的注释），所以门挂在路由上。
+   */
   @Post("solutions")
+  @RequireStepUp()
   async createSolution(
     @Req() req: Request & RequestContext,
     @Body() body: ProductSolutionWriteInput,
@@ -222,6 +229,7 @@ export class ProductsRouter {
   }
 
   @Put("solutions/:solutionCode")
+  @RequireStepUp()
   async updateSolution(
     @Req() req: Request & RequestContext,
     @Param("solutionCode") solutionCode: string,
@@ -258,6 +266,7 @@ export class ProductsRouter {
   }
 
   @Patch("solutions/:solutionCode/state")
+  @RequireStepUp()
   async setSolutionState(
     @Req() req: Request & RequestContext,
     @Param("solutionCode") solutionCode: string,
@@ -303,6 +312,7 @@ export class ProductsRouter {
 
   /** 整体替换方案的产品清单（幂等：送什么就是什么）。 */
   @Put("solutions/:solutionCode/products")
+  @RequireStepUp()
   async replaceSolutionProducts(
     @Req() req: Request & RequestContext,
     @Param("solutionCode") solutionCode: string,
@@ -348,6 +358,7 @@ export class ProductsRouter {
 
   /** 把一个既有 plan 绑到方案的某个档位（服务套餐）。一档一个 plan，一个 plan 只能绑一处。 */
   @Put("solutions/:solutionCode/plans/:tier")
+  @RequireStepUp()
   async bindSolutionPlan(
     @Req() req: Request & RequestContext,
     @Param("solutionCode") solutionCode: string,
@@ -415,6 +426,7 @@ export class ProductsRouter {
   }
 
   @Delete("solutions/:solutionCode/plans/:tier")
+  @RequireStepUp()
   async unbindSolutionPlan(
     @Req() req: Request & RequestContext,
     @Param("solutionCode") solutionCode: string,
