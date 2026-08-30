@@ -1782,11 +1782,20 @@ export async function seedCatalog(client) {
       );
     }
     const envKey = c.clientId.toUpperCase().replace(/-/g, "_");
-    const secretHash = process.env[`OIDC_CLIENT_SECRET_HASH_${envKey}`] || null;
     const postLogoutUris = c.postLogoutUris || [postLogout];
     const releaseChannel = c.releaseChannel || "stable";
     // token 端点认证方式：public（none）= RFC 8252 原生应用，零机密。默认机密。
     const authMethod = c.authMethod === "none" ? "none" : "client_secret_basic";
+    // 公共客户端没有 secret——这是协议属性，不是"没配"。env 里若还留着一份 hash
+    // （U-line 之前 ruyin 曾是机密 web RP），这里不拿：拿了会撞
+    // chk_oidc_clients_public_pkce，而且拿了也没有任何东西会用它。
+    const envSecretHash = process.env[`OIDC_CLIENT_SECRET_HASH_${envKey}`] || null;
+    if (authMethod === "none" && envSecretHash) {
+      console.warn(
+        `⚠  appoidc.oidc_clients — ${c.clientId} is a public client; ignoring OIDC_CLIENT_SECRET_HASH_${envKey} (public clients carry no secret)`,
+      );
+    }
+    const secretHash = authMethod === "none" ? null : envSecretHash;
     // 公共客户端无服务端、无 back-channel（回调是 loopback，不是 /auth/callback）；
     // 机密 web RP 才由回调基址推出 back-channel 端点。
     const backChannelUri =
@@ -1808,7 +1817,19 @@ export async function seedCatalog(client) {
         product_id = excluded.product_id,
         client_kind = excluded.client_kind,
         release_channel = excluded.release_channel,
-        client_secret_hash = coalesce(excluded.client_secret_hash, appoidc.oidc_clients.client_secret_hash),
+        -- 机密客户端：seed 不带 hash 时保留库里那份（27-provision 写的真密钥不能被
+        -- 重跑的 seed 抹掉）。公共客户端：hash 必须为 NULL、PKCE 必须强制——一行从
+        -- 机密改成公共（2026-08-30 ruyin 由 web RP 转原生应用）时，旧 hash 若留着会撞
+        -- chk_oidc_clients_public_pkce；生产 seed 曾因此整体回滚。判据写在 SQL 里而不是
+        -- 靠调用方"记得传 null"，是让重跑在任何起点都能收敛到同一行。
+        client_secret_hash = case
+          when excluded.token_endpoint_auth_method = 'none' then null
+          else coalesce(excluded.client_secret_hash, appoidc.oidc_clients.client_secret_hash)
+        end,
+        pkce_required = case
+          when excluded.token_endpoint_auth_method = 'none' then true
+          else appoidc.oidc_clients.pkce_required
+        end,
         redirect_uris = excluded.redirect_uris,
         post_logout_redirect_uris = excluded.post_logout_redirect_uris,
         back_channel_logout_uri = excluded.back_channel_logout_uri,
