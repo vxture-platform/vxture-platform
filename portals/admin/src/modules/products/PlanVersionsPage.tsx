@@ -14,6 +14,7 @@
  *   with a create action. Selecting a plan opens its full plan_version
  *   timeline (v1…vN with status, current pointer, prices and dates); drafts
  *   are edited and published from there, published versions stay read-only.
+ *   All copy lives in the `planVersionsPage` message namespace (i18n ratchet).
  *
  * @author AI-Generated
  * @date 2026-09-01
@@ -63,6 +64,9 @@ import { isStepUpCancelled, useStepUp } from "@/providers/StepUpProvider";
 // Local editor state
 // ============================================================================
 
+/** next-intl translator scoped to the `planVersionsPage` namespace. */
+type Translator = ReturnType<typeof useTranslations<"planVersionsPage">>;
+
 /** Editor row for one bundled component (quota edited as JSON text). */
 interface BundledDraft {
   productCode: string;
@@ -91,15 +95,15 @@ interface CreateTarget {
   tier: string;
 }
 
-function statusBadge(status: string, isCurrent: boolean) {
+function statusBadge(t: Translator, status: string, isCurrent: boolean) {
   if (status === "published") {
     return (
       <StatusBadge tone={isCurrent ? "success" : "neutral"}>
-        {isCurrent ? "已发布 · 当前" : "已发布"}
+        {isCurrent ? t("badge.publishedCurrent") : t("badge.published")}
       </StatusBadge>
     );
   }
-  return <StatusBadge tone="warning">草稿 · 待发布</StatusBadge>;
+  return <StatusBadge tone="warning">{t("badge.draft")}</StatusBadge>;
 }
 
 // The BFF serializes prices at fixed 2dp; the guard keeps a legacy 6dp string
@@ -110,15 +114,18 @@ function normalizePrice(raw: string | undefined): string {
   return Number.isFinite(n) ? n.toFixed(2) : "";
 }
 
-function priceLine(prices: { cycleUnit: string; price: string }[]): string {
-  if (prices.length === 0) return "未定价";
+function priceLine(
+  t: Translator,
+  prices: { cycleUnit: string; price: string }[],
+): string {
+  if (prices.length === 0) return t("price.none");
   return prices
     .map((p) => {
       const cycle =
         p.cycleUnit === "month"
-          ? "月"
+          ? t("price.month")
           : p.cycleUnit === "year"
-            ? "年"
+            ? t("price.year")
             : p.cycleUnit;
       return `¥${Number(p.price).toFixed(2)}/${cycle}`;
     })
@@ -230,7 +237,7 @@ export function PlanVersionsPage() {
         try {
           quota = JSON.parse(quotaText) as Record<string, unknown>;
         } catch {
-          setMessage("配额 JSON 格式错误，无法保存。");
+          setMessage(t("editor.quotaInvalid"));
           setBusy(false);
           return;
         }
@@ -248,9 +255,9 @@ export function PlanVersionsPage() {
       const updated = await updateDraftPlanVersion(detail.id, body);
       setDetail(updated);
       await refreshAfterWrite(updated.planId);
-      setMessage("草稿已保存。");
+      setMessage(t("editor.saved"));
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "保存失败。");
+      setMessage(err instanceof Error ? err.message : t("editor.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -264,13 +271,15 @@ export function PlanVersionsPage() {
       await runWithStepUp(() => publishPlanVersion(detail.id));
       await openVersion(detail.id);
       await refreshAfterWrite(detail.planId);
-      setMessage("已发布：该版本已冻结并设为当前版本。");
+      setMessage(t("editor.published"));
     } catch (err) {
       if (isStepUpCancelled(err)) {
         setBusy(false);
         return;
       }
-      setMessage(err instanceof Error ? err.message : "发布失败。");
+      setMessage(
+        err instanceof Error ? err.message : t("editor.publishFailed"),
+      );
     } finally {
       setBusy(false);
     }
@@ -294,9 +303,11 @@ export function PlanVersionsPage() {
       );
       setQuotaText(JSON.stringify(draft.quota, null, 2));
       setBundled(toBundledDrafts(draft.components));
-      setMessage(`已开出草稿 v${draft.versionNo}（自当前版本克隆）。`);
+      setMessage(t("editor.draftOpened", { n: draft.versionNo }));
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "开草稿失败。");
+      setMessage(
+        err instanceof Error ? err.message : t("editor.draftOpenFailed"),
+      );
     } finally {
       setBusy(false);
     }
@@ -377,10 +388,7 @@ export function PlanVersionsPage() {
 
   return (
     <ViewLayout>
-      <PageHeader
-        title="套餐发布"
-        description="平台面向多个产品发布套餐：每个产品在五档商业阶梯（free / starter / pro / business / enterprise）内各发布至多一条套餐，可少不可多。点选套餐查看完整版本史（plan_version），草稿在此编辑与发布，已发布版本冻结只读。"
-      />
+      <PageHeader title={t("title")} description={t("pageDescription")} />
 
       {message ? (
         <p className="text-sm" role="status">
@@ -409,7 +417,10 @@ export function PlanVersionsPage() {
                   </StatusBadge>
                 ) : null}
                 <span className="ml-auto text-xs text-vx-gray-500">
-                  已发布 {publishedTiers.size} / {TIERS.length} 档
+                  {t("matrix.publishedCount", {
+                    n: publishedTiers.size,
+                    total: TIERS.length,
+                  })}
                 </span>
               </div>
               <div className="grid grid-cols-1 gap-2 md:grid-cols-5">
@@ -429,7 +440,9 @@ export function PlanVersionsPage() {
                           {tierLabel(tier)}
                         </Badge>
                         {crowded ? (
-                          <StatusBadge tone="warning">同档多套餐</StatusBadge>
+                          <StatusBadge tone="warning">
+                            {t("matrix.crowded")}
+                          </StatusBadge>
                         ) : null}
                       </div>
                       {plans.map((plan) => {
@@ -451,10 +464,10 @@ export function PlanVersionsPage() {
                             </span>
                             <span className="text-xs text-vx-gray-500">
                               {plan.currentVersion
-                                ? `v${plan.currentVersion.versionNo} · ${priceLine(plan.currentVersion.prices)}`
-                                : "未发布"}
+                                ? `v${plan.currentVersion.versionNo} · ${priceLine(t, plan.currentVersion.prices)}`
+                                : t("matrix.unpublished")}
                               {plan.draftVersion
-                                ? ` · 草稿 v${plan.draftVersion.versionNo}`
+                                ? ` · ${t("matrix.draftShort", { n: plan.draftVersion.versionNo })}`
                                 : ""}
                             </span>
                           </Button>
@@ -472,7 +485,7 @@ export function PlanVersionsPage() {
                           }
                           className="h-auto flex-1 border border-dashed border-vx-gray-300 text-xs text-vx-gray-500 hover:border-vx-gray-400 hover:text-vx-gray-700"
                         >
-                          + 新建套餐
+                          {t("matrix.create")}
                         </Button>
                       ) : null}
                     </div>
@@ -483,10 +496,7 @@ export function PlanVersionsPage() {
           );
         })}
         {matrix.length === 0 ? (
-          <p className="text-sm text-vx-gray-500">
-            暂无可独立订阅的产品——基础设施产品（如 atlas /
-            runos）不直接售卖套餐，只作为捆绑组件进入其他产品的版本。
-          </p>
+          <p className="text-sm text-vx-gray-500">{t("matrix.empty")}</p>
         ) : null}
       </div>
 
@@ -496,7 +506,10 @@ export function PlanVersionsPage() {
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-semibold">
-                {selectedPlan.planName}（{selectedPlan.planCode}）版本史
+                {t("timeline.heading", {
+                  name: selectedPlan.planName,
+                  code: selectedPlan.planCode,
+                })}
               </h3>
               <Badge
                 variant="outline"
@@ -509,7 +522,7 @@ export function PlanVersionsPage() {
               </span>
             </div>
             {versions.length === 0 ? (
-              <p className="text-sm text-vx-gray-500">尚无版本。</p>
+              <p className="text-sm text-vx-gray-500">{t("timeline.none")}</p>
             ) : (
               <PanelList>
                 {[...versions].reverse().map((v) => (
@@ -525,10 +538,10 @@ export function PlanVersionsPage() {
                       >
                         <span className="flex items-center gap-2">
                           <strong>v{v.versionNo}</strong>
-                          {statusBadge(v.status, v.isCurrent)}
+                          {statusBadge(t, v.status, v.isCurrent)}
                         </span>
                         <span className="text-xs text-vx-gray-500">
-                          {priceLine(v.prices)} ·{" "}
+                          {priceLine(t, v.prices)} ·{" "}
                           {formatDate(v.createdAt, locale)}
                         </span>
                       </Button>
@@ -544,7 +557,7 @@ export function PlanVersionsPage() {
                 disabled={busy}
                 className="self-start"
               >
-                开新草稿版本（自当前版本克隆）
+                {t("timeline.openDraft")}
               </Button>
             ) : null}
           </div>
@@ -552,18 +565,23 @@ export function PlanVersionsPage() {
           {detail ? (
             <div className="flex flex-col gap-4">
               <h3 className="text-sm font-semibold">
-                v{detail.versionNo} · {detail.planName}{" "}
-                {statusBadge(detail.status, detail.isCurrent)}
+                {t("editor.versionHeading", {
+                  n: detail.versionNo,
+                  name: detail.planName,
+                })}{" "}
+                {statusBadge(t, detail.status, detail.isCurrent)}
               </h3>
               {!editable ? (
                 <p className="text-sm text-vx-gray-500">
-                  已发布版本为只读（受锁保护）；要改动请开新草稿版本。
+                  {t("timeline.readOnly")}
                 </p>
               ) : null}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="text-sm font-medium">月付价（¥）</label>
+                  <label className="text-sm font-medium">
+                    {t("editor.priceMonth")}
+                  </label>
                   <Input
                     type="number"
                     value={priceMonth}
@@ -572,7 +590,9 @@ export function PlanVersionsPage() {
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-sm font-medium">年付价（¥）</label>
+                  <label className="text-sm font-medium">
+                    {t("editor.priceYear")}
+                  </label>
                   <Input
                     type="number"
                     value={priceYear}
@@ -583,7 +603,9 @@ export function PlanVersionsPage() {
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">配额（JSON）</label>
+                <label className="text-sm font-medium">
+                  {t("editor.quotaJson")}
+                </label>
                 <Textarea
                   value={quotaText}
                   disabled={!editable}
@@ -599,10 +621,10 @@ export function PlanVersionsPage() {
                   onClick={saveDraft}
                   disabled={!editable || busy}
                 >
-                  保存草稿
+                  {t("editor.saveDraft")}
                 </Button>
                 <Button onClick={publish} disabled={!editable || busy}>
-                  发布该版本
+                  {t("editor.publish")}
                 </Button>
               </div>
 
@@ -702,18 +724,17 @@ export function PlanVersionsPage() {
             </div>
           ) : (
             <p className="text-sm text-vx-gray-500">
-              从左侧版本史选择一个版本查看或编辑。
+              {t("timeline.pickVersion")}
             </p>
           )}
         </div>
       ) : (
-        <p className="text-sm text-vx-gray-500">
-          从上方矩阵点选一条套餐查看版本史，或在空档新建套餐。
-        </p>
+        <p className="text-sm text-vx-gray-500">{t("matrix.hint")}</p>
       )}
 
       {createTarget ? (
         <PlanCreateDialog
+          t={t}
           target={createTarget}
           busy={busy}
           onClose={() => setCreateTarget(null)}
@@ -734,9 +755,7 @@ export function PlanVersionsPage() {
             });
             setVersions(await fetchPlanVersions(created.planId));
             await openVersion(created.id);
-            setMessage(
-              `套餐 ${created.planCode} 已创建（v1 草稿）——补上价格与配额后发布。`,
-            );
+            setMessage(t("create.created", { code: created.planCode }));
           }}
         />
       ) : null}
@@ -749,11 +768,13 @@ export function PlanVersionsPage() {
 // ============================================================================
 
 function PlanCreateDialog({
+  t,
   target,
   busy,
   onClose,
   onCreated,
 }: {
+  t: Translator;
   target: CreateTarget;
   busy: boolean;
   onClose: () => void;
@@ -780,7 +801,7 @@ function PlanCreateDialog({
       });
       await onCreated(created);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "创建失败。");
+      setError(err instanceof Error ? err.message : t("create.failed"));
       setSubmitting(false);
     }
   }
@@ -788,9 +809,12 @@ function PlanCreateDialog({
   return (
     <DialogForm
       open
-      title={`新建套餐 · ${target.productName} · ${tierLabel(target.tier)}`}
-      description="创建套餐骨架（v1 草稿 + 主组件档位），价格与配额在草稿里补，发布前不可售。"
-      submitLabel="创建套餐"
+      title={t("create.title", {
+        product: target.productName,
+        tier: tierLabel(target.tier),
+      })}
+      description={t("create.description")}
+      submitLabel={t("create.submit")}
       submitting={submitting || busy}
       submitDisabled={!planCode.trim() || !planName.trim()}
       onOpenChange={(open) => {
@@ -800,29 +824,29 @@ function PlanCreateDialog({
     >
       {error ? <p className="text-sm text-vx-danger">{error}</p> : null}
       <Label>
-        套餐编码
+        {t("create.codeLabel")}
         <Input
           value={planCode}
           onChange={(e) => setPlanCode(e.target.value)}
-          placeholder="如 karda-starter（小写字母 / 数字 / 连字符）"
+          placeholder={t("create.codePlaceholder")}
           required
         />
       </Label>
       <Label>
-        套餐名称
+        {t("create.nameLabel")}
         <Input
           value={planName}
           onChange={(e) => setPlanName(e.target.value)}
-          placeholder="如 Karda 入门版"
+          placeholder={t("create.namePlaceholder")}
           required
         />
       </Label>
       <Label>
-        描述
+        {t("create.descLabel")}
         <Textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="选填：这档套餐卖给谁、含什么"
+          placeholder={t("create.descPlaceholder")}
           rows={3}
         />
       </Label>

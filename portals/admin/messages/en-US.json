@@ -1927,6 +1927,62 @@
     }
   },
   "planVersionsPage": {
+    "title": "Plan Publishing",
+    "pageDescription": "The platform publishes plans for multiple products: each product carries at most one plan per slot on the five-tier ladder (free / starter / pro / business / enterprise) — fewer is fine. Select a plan to browse its full plan_version history; drafts are edited and published here, published versions are frozen read-only.",
+    "badge": {
+      "publishedCurrent": "Published · current",
+      "published": "Published",
+      "draft": "Draft · unpublished"
+    },
+    "price": {
+      "none": "No price",
+      "month": "mo",
+      "year": "yr"
+    },
+    "matrix": {
+      "publishedCount": "{n} / {total} tiers published",
+      "crowded": "Multiple plans on tier",
+      "create": "+ New plan",
+      "unpublished": "Unpublished",
+      "draftShort": "draft v{n}",
+      "empty": "No standalone-subscribable products yet — infrastructure products (atlas / runos) sell no plans of their own and only enter other products' versions as bundled components.",
+      "hint": "Pick a plan in the matrix above to browse its version history, or create one on an empty slot."
+    },
+    "timeline": {
+      "heading": "{name} ({code}) version history",
+      "none": "No versions yet.",
+      "openDraft": "Open next draft (cloned from current)",
+      "readOnly": "Published versions are read-only (lock-protected); open a new draft to make changes.",
+      "pickVersion": "Select a version on the left to view or edit."
+    },
+    "editor": {
+      "versionHeading": "v{n} · {name}",
+      "priceMonth": "Monthly price (¥)",
+      "priceYear": "Yearly price (¥)",
+      "quotaJson": "Quota (JSON)",
+      "quotaInvalid": "Quota is not valid JSON; cannot save.",
+      "saveDraft": "Save draft",
+      "publish": "Publish version",
+      "saved": "Draft saved.",
+      "saveFailed": "Save failed.",
+      "published": "Published: the version is frozen and now current.",
+      "publishFailed": "Publish failed.",
+      "draftOpened": "Draft v{n} opened (cloned from current).",
+      "draftOpenFailed": "Failed to open a draft."
+    },
+    "create": {
+      "title": "New plan · {product} · {tier}",
+      "description": "Creates the plan skeleton (v1 draft + primary component on the tier). Prices and quota are filled on the draft; nothing is sellable before publish.",
+      "codeLabel": "Plan code",
+      "codePlaceholder": "e.g. karda-starter (lowercase letters / digits / hyphens)",
+      "nameLabel": "Plan name",
+      "namePlaceholder": "e.g. Karda Starter",
+      "descLabel": "Description",
+      "descPlaceholder": "Optional: who this tier is for, what it includes",
+      "submit": "Create plan",
+      "failed": "Create failed.",
+      "created": "Plan {code} created (v1 draft) — fill prices and quota, then publish."
+    },
     "bundled": {
       "title": "Bundled components",
       "description": "Backing products sold together with this version, each with its own quota. Infrastructure products (e.g. Atlas, Runos) have no customer plans of their own; this is the only way their quota reaches a workspace pool.",
