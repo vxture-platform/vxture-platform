@@ -158,12 +158,18 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  *   目录外产品码的详情兜底 Banner；`lifecycle.ts` 退役后果句加了前置说明。
  *   **没有走 `t()`，是有意的**：这两页全部文案都是硬编码中文、一条没抽（权益配置页
  *   124 条是本门户第三多的），只抽新加的这一节会造出半中英（同 08-29 / 08-30 的判据）。
+ *
+ * 2026-08-31 opera 1868 → 1871：`ops/health` 服务状态页加第三个中性态「不适用」
+ *   （`opera/20-service-monitor.md` §4）：client 型产品（回调是 loopback）不探测，
+ *   存活 / 就绪两列各一条词条，外加明细「客户端产品，无服务面」。与同页既有的
+ *   「未接入」「未配置」一样硬编码——本页词条表 `LIVENESS_LABELS` / `READINESS_LABELS`
+ *   整表都是字面量，单抽三条会造出半中英（同 08-30 的判据）。
  */
 const BASELINE = {
   console: 30,
   website: 40,
   admin: 3226,
-  opera: 1868,
+  opera: 1871,
   accounts: 264,
 };
 
