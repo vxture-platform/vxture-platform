@@ -1,25 +1,32 @@
 /**
- * 产品上线检查 —— 平台侧配置就绪度的实测。
+ * 产品上线检查 —— 平台侧配置就绪度 + 对方留下的调用痕迹，全部实测。
  *
- * ── 这五项检查**只测平台这一侧** ─────────────────────────────────────────────
+ * ── 七项检查**只读平台自己的存储** ───────────────────────────────────────────
  *
  * 每一项都是读平台自己已经拥有的状态：产品行、OIDC 客户端、两个域的授权、webhook
- * 登记。**没有任何一项会向对方的端点发请求。** 这是有意的，两个理由：
+ * 登记，以及对方接通之后在平台这边留下的两条痕迹（权益拉取的「最近一次」键、
+ * 用量事件的最近一行）。**没有任何一项会向对方的端点发请求。** 这是有意的，两个理由：
  *
  * 1. `docs/70-workplan/20-opera-ia-restructure.md` B4 的依赖写着「不新造探针」。
  * 2. 那份依赖同时写着「复用已有的 webhook test-delivery」——**这个能力全仓不存在**
  *    （`test-delivery` 零处实现）。发一次真实回调是对**对方生产端点**的外部动作，
  *    不是"复用"，所以这里退回到读登记：配没配得出来，通没通不知道。
  *
- * 因此本页能回答的是「**我方**配齐了没有」，不是「对方接好了没有」。后者平台从外面
- * 观测不到（C2 权益接入、C3 计量上报、端到端验收三项都是如此），它们留在接入检查单
- * 上由操作员按对方回报勾选——这一点在页面上写明，不含糊过去。
+ * 前五项回答「**我方**配齐了没有」。后两项（C2 / C3）此前被写成「平台从外面观测不到」，
+ * 那不对：对方只要真接通了，就会调 `GET /platform/entitlements` 与 `POST /usage/consume`，
+ * 两件事都落在平台自己的存储里（`GET /api/products/:id/integration-signals`）。它们
+ * 归「对方」那一侧——通不通由对方决定——但判定由平台做，不再靠操作员按回报勾。
+ * 仍然观测不到的只剩 `data_plane` 与 `acceptance`（端到端），留在检查单上人工确认。
  *
  * ── 检查结果写不写回检查单 ───────────────────────────────────────────────────
  *
- * 写，但**只写自动检查能完整判定的那一项**（`catalog_registered`）。
- * `product_launch_statuses.checked_by` 的 DDL 注释本来就写着「自动校验为 NULL」，
- * 这张表从一开始就预留了自动结果的位置。
+ * 写，但**只写自动检查能完整判定的那几项**（`catalog_registered`、`c2_entitlement`、
+ * `c3_metering`）。`product_launch_statuses.checked_by` 的 DDL 注释本来就写着
+ * 「自动校验为 NULL」，这张表从一开始就预留了自动结果的位置。
+ *
+ * C2 / C3 的判据是「最近一次」，不是台账：C2 键 30 天过期、只存最后一笔；C3 只看最近
+ * 90 天内有没有事件。它回答「接通了没有」，不回答「调了多少次」；一个上线后 90 天
+ * 没动静的产品复验会变红，那正是复验该做的事。
  *
  * 两个授权检查**不写**：检查单里没有对应的 item_code，硬塞进 `acceptance` 会把
  * 「端到端跑通了」这个结论替换成「授权配了」——后者远弱于前者，而勾上之后没人分得清
@@ -84,40 +91,75 @@ interface WebhookLite {
   webhookSecretRef: string | null;
 }
 
+/** `GET /api/products/:id/integration-signals` 的形状（opera-bff 定义）。 */
+interface IntegrationSignalsLite {
+  entitlement: {
+    lastSeenAt: string;
+    via: string;
+    workspaceId: string | null;
+  } | null;
+  consume: { lastEventAt: string; metricKey: string } | null;
+}
+
 function reason(error: unknown, fallback: string): string {
   return error instanceof OperaApiError ? error.message : fallback;
 }
 
+/** 时间戳上屏：与页面上「最近一次」的格式一致，不给人看 ISO 串。 */
+function formatAt(iso: string, locale: string | undefined): string {
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime())
+    ? iso
+    : at.toLocaleString(locale, { hour12: false });
+}
+
+/** 凭据的人话。`via` 来自 platform-api，词表就两个；其它值原样带出以免藏错。 */
+function describeVia(via: string): string {
+  if (via === "s2s") return "S2S 令牌";
+  if (via === "internal-auth") return "内部共享令牌";
+  return via;
+}
+
 /**
- * 跑一遍平台侧检查。
+ * 跑一遍上线检查。
  *
- * 五项**并发**发出：它们互不依赖，串行只是把五个来回排成一队。任何一项自身抛错
+ * 五次读取**并发**发出：它们互不依赖，串行只是把来回排成一队。任何一项自身抛错
  * （上游 500、鉴权失败）都记成 `fail` 并把原文带出来——**不记成通过**。读不到不等于
  * 没问题，这一点与目录页上线门槛的失败方向一致。
+ *
+ * @param product - 目录行
+ * @param opts.locale - 时间戳上屏用的区域；不给则随浏览器
  */
 export async function runLaunchChecks(
   product: ProductLike,
+  opts: { locale?: string } = {},
 ): Promise<CheckResult[]> {
-  const [clients, atlasGrants, runosGrants, webhook] = await Promise.all([
-    api
-      .get<
-        OidcClientLite[]
-      >(`/api/oidc-clients?productId=${encodeURIComponent(product.id)}`)
-      .catch((e: unknown) => e as Error),
-    api
-      .get<
-        AtlasGrantLite[]
-      >(`/api/atlas/product-grants?includeInactive=true&productCode=${encodeURIComponent(product.productCode)}`)
-      .catch((e: unknown) => e as Error),
-    api
-      .get<
-        RunosGrantLite[]
-      >(`/api/runos/grants/product/${encodeURIComponent(product.productCode)}`)
-      .catch((e: unknown) => e as Error),
-    api
-      .get<WebhookLite | null>(`/api/products/${product.id}/webhook`)
-      .catch((e: unknown) => e as Error),
-  ]);
+  const [clients, atlasGrants, runosGrants, webhook, signals] =
+    await Promise.all([
+      api
+        .get<
+          OidcClientLite[]
+        >(`/api/oidc-clients?productId=${encodeURIComponent(product.id)}`)
+        .catch((e: unknown) => e as Error),
+      api
+        .get<
+          AtlasGrantLite[]
+        >(`/api/atlas/product-grants?includeInactive=true&productCode=${encodeURIComponent(product.productCode)}`)
+        .catch((e: unknown) => e as Error),
+      api
+        .get<
+          RunosGrantLite[]
+        >(`/api/runos/grants/product/${encodeURIComponent(product.productCode)}`)
+        .catch((e: unknown) => e as Error),
+      api
+        .get<WebhookLite | null>(`/api/products/${product.id}/webhook`)
+        .catch((e: unknown) => e as Error),
+      api
+        .get<IntegrationSignalsLite>(
+          `/api/products/${product.id}/integration-signals`,
+        )
+        .catch((e: unknown) => e as Error),
+    ]);
 
   const results: CheckResult[] = [];
 
@@ -301,6 +343,69 @@ export async function runLaunchChecks(
       /* 原来指 `/ops/logs`（投递日志）——那是看结果的地方，不是配置的地方；配置入口
          2026-08-16 补在产品目录的行操作里，这里跟着指过去。 */
       href: `/product/catalog?productId=${encodeURIComponent(product.id)}`,
+    });
+  }
+
+  /* ⑥⑦ 对方留下的痕迹 —— 归「对方」侧（通不通由对方决定），但判定由平台做。
+        两项都写回检查单：判据（「最近一次」）已把这一项的全部内容覆盖了——检查单上
+        `c2_entitlement` / `c3_metering` 问的就是「接没接通」。读取失败时两项一起记
+        fail 并带原文，与前面几项的失败方向一致。 */
+  const entitlementsHref = `/product/entitlements?productCode=${encodeURIComponent(product.productCode)}`;
+  if (signals instanceof Error) {
+    const detail = reason(signals, "读取接入信号失败");
+    results.push(
+      {
+        id: "c2-entitlement",
+        label: "C2 权益拉取",
+        what: "对方调过 GET /platform/entitlements——平台记下最近一次。",
+        side: "theirs",
+        status: "fail",
+        detail,
+        remedy: "读不到不等于没接。先解决读取失败，再重跑。",
+        itemCode: "c2_entitlement",
+      },
+      {
+        id: "c3-metering",
+        label: "C3 用量上报",
+        what: "对方调过 POST /usage/consume——平台落了用量事件。",
+        side: "theirs",
+        status: "fail",
+        detail,
+        remedy: "读不到不等于没接。先解决读取失败，再重跑。",
+        itemCode: "c3_metering",
+      },
+    );
+  } else {
+    const { entitlement, consume } = signals;
+    results.push({
+      id: "c2-entitlement",
+      label: "C2 权益拉取",
+      what: "对方调过 GET /platform/entitlements。平台只记「最近一次」（30 天过期），不是台账——回答的是接没接通，不是调了多少次。",
+      side: "theirs",
+      status: entitlement ? "pass" : "fail",
+      detail: entitlement
+        ? `最近一次 ${formatAt(entitlement.lastSeenAt, opts.locale)}，经 ${describeVia(entitlement.via)}`
+        : "最近 30 天内没有以这个产品码拉过权益。",
+      remedy: entitlement
+        ? null
+        : "把交接信息（产品码、client_id）发给对方；对方以 S2S 令牌调一次权益接口后重跑。",
+      itemCode: "c2_entitlement",
+      href: entitlementsHref,
+    });
+    results.push({
+      id: "c3-metering",
+      label: "C3 用量上报",
+      what: "对方调过 POST /usage/consume。只看最近 90 天内最后一笔事件——超过 90 天没动静的产品复验会变红，那是复验该做的事。",
+      side: "theirs",
+      status: consume ? "pass" : "fail",
+      detail: consume
+        ? `最近一次 ${formatAt(consume.lastEventAt, opts.locale)}，指标 ${consume.metricKey}`
+        : "最近 90 天内没有这个产品的用量事件。",
+      remedy: consume
+        ? null
+        : "对方接通消费上报（POST /usage/consume）并真实扣一次后重跑。",
+      itemCode: "c3_metering",
+      href: entitlementsHref,
     });
   }
 

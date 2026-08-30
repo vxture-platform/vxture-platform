@@ -204,9 +204,13 @@ export interface ChecklistItem {
  *   - `data_plane` 数据面 —— 平台按模板 provision
  *   - `acceptance` 端到端验收 —— 两侧一起，卡在这一项通常意味着前面某项其实没真通
  *
- * 归到「对方」不是推卸：这三项平台**观测不到**（opera 从外面看不出对方有没有接好
- * C2/C3），勾选是操作员根据对方回报做的判断。把它们标成待对方，是让运营者知道下一
- * 步该发邮件而不是该去改配置。
+ * 归到「对方」不是推卸：这三项都要对方动手才会变绿。把它们标成待对方，是让运营者
+ * 知道下一步该发邮件而不是该去改配置。
+ *
+ * 其中 C2 / C3 自 2026-08-31 起**由平台判定**（对方接通后会在平台存储里留下痕迹，
+ * `launch-checks.ts` ⑥⑦ 读 `GET /api/products/:id/integration-signals` 并写回检查单）；
+ * 仍靠操作员按对方回报勾的只剩 `c1_identity`。侧的归属不因此改变——判定是谁做的
+ * 与该由谁去动是两回事。
  */
 const THEIR_SIDE = new Set(["c1_identity", "c2_entitlement", "c3_metering"]);
 

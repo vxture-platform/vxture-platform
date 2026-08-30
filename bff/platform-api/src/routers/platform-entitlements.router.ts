@@ -24,6 +24,7 @@ import {
 import { PlatformAuthGuard } from "../authn/platform-auth.guard";
 import { S2sCaller, type S2sCallerCtx } from "../authn/s2s-caller";
 import { scopeToS2sCaller } from "../authn/s2s-scope";
+import { IntegrationSignalService } from "../platform/integration-signal.service";
 import { PlatformEntitlementsService } from "../platform/platform-entitlements.service";
 import {
   parseEntitlementQuery,
@@ -36,6 +37,8 @@ export class PlatformEntitlementsRouter {
   constructor(
     @Inject(PlatformEntitlementsService)
     private readonly entitlements: PlatformEntitlementsService,
+    @Inject(IntegrationSignalService)
+    private readonly signals: IntegrationSignalService,
   ) {}
 
   /**
@@ -73,6 +76,21 @@ export class PlatformEntitlementsRouter {
       workspaceId,
       parsed.productCodes,
     );
+
+    // C2 last-seen signal for opera's launch checklist (integration-signal
+    // .service.ts). Fire-and-forget after the read succeeded: the recorder
+    // throttles and swallows Redis failures, so this line cannot change the
+    // response. Attribution: S2S = act.sub (already forced equal to the
+    // requested code above); shared internal header carries no identity, so
+    // each requested code is attributed as-is.
+    const via = s2sCaller ? "s2s" : "internal-auth";
+    for (const code of parsed.productCodes) {
+      this.signals.recordEntitlementRead({
+        productCode: code,
+        via,
+        workspaceId,
+      });
+    }
 
     if (parsed.single) {
       const code = parsed.productCodes[0]!;

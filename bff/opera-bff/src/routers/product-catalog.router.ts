@@ -20,7 +20,8 @@
  * self=平台自建、third_party=第三方接入、other；third_party 时
  * origin_provider 必填（DB CHECK 兜底，这里的校验只是提前给用户更好的错误）。
  *
- * 能力码：`platform:product.read` / `platform:product.manage`。
+ * 能力码：`platform:product.read` / `platform:product.manage`（门在 `product-authz.ts`，
+ * 与接入信号 router 共用一份）。
  */
 
 import {
@@ -41,22 +42,15 @@ import { VxConfigService } from "@vxture/core-config";
 import type { Request } from "express";
 import type { Pool } from "pg";
 import { OperatorExchangeService } from "../auth/operator-exchange.service";
-import {
-  conflict,
-  invalidRequest,
-  notEntitled,
-  notFound,
-  unauthenticated,
-} from "../errors/api-error";
+import { conflict, invalidRequest, notFound } from "../errors/api-error";
 import {
   fetchActiveUpstreamGrants,
   type ActiveUpstreamGrants,
 } from "../lib/upstream-grants";
 import { OPERA_BFF_RW_POOL } from "../tokens";
 import type { RequestContext } from "../types/request-context";
-
-const PRODUCT_READ = "platform:product.read";
-const PRODUCT_MANAGE = "platform:product.manage";
+// Capability gate shared with product-integration-signals.router.ts (2026-08-31).
+import { assertCanManage, assertCanRead } from "./product-authz";
 
 /**
  * 「算不算数」的字段名统一叫 `state`（product_251 B-3）——**接口层**改名，
@@ -871,27 +865,6 @@ function normalizeRef(value: string | null | undefined): string | null {
     );
   }
   return raw;
-}
-
-function assertCanRead(req: Request & RequestContext): void {
-  if (!req.operator) {
-    throw unauthenticated("AUTH_NO_SESSION", "No active session");
-  }
-  if (
-    !req.capabilities?.includes(PRODUCT_READ) &&
-    !req.capabilities?.includes(PRODUCT_MANAGE)
-  ) {
-    throw notEntitled(PRODUCT_READ);
-  }
-}
-
-function assertCanManage(req: Request & RequestContext): void {
-  if (!req.operator) {
-    throw unauthenticated("AUTH_NO_SESSION", "No active session");
-  }
-  if (!req.capabilities?.includes(PRODUCT_MANAGE)) {
-    throw notEntitled(PRODUCT_MANAGE);
-  }
 }
 
 function validateWrite(

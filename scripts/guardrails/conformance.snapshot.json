@@ -2,7 +2,7 @@
   "note": "由 check-conformance-matrix.mjs --update 生成，勿手改",
   "surfaces": {
     "opera-bff": {
-      "files": 36,
+      "files": 38,
       "retryable": 19,
       "NOT_ENTITLED": 2,
       "POLICY_DENIED": 2,

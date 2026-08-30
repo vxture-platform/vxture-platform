@@ -25,12 +25,12 @@
 // 退出码：任一门户超过基线 → 1。
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { join, resolve, extname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
+import { join, resolve, extname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const REPO_ROOT = resolve(fileURLToPath(new URL('../../', import.meta.url)));
-const PORTALS_DIR = join(REPO_ROOT, 'portals');
+const REPO_ROOT = resolve(fileURLToPath(new URL("../../", import.meta.url)));
+const PORTALS_DIR = join(REPO_ROOT, "portals");
 
 /**
  * 每个门户当前的硬编码中文串数。**这是棘轮，只许调小。**
@@ -164,48 +164,57 @@ const PORTALS_DIR = join(REPO_ROOT, 'portals');
  *   存活 / 就绪两列各一条词条，外加明细「客户端产品，无服务面」。与同页既有的
  *   「未接入」「未配置」一样硬编码——本页词条表 `LIVENESS_LABELS` / `READINESS_LABELS`
  *   整表都是字面量，单抽三条会造出半中英（同 08-30 的判据）。
+ *
+ * 2026-08-31 opera 1871 → 1890：接入检查单 C2 / C3 改为自动验证（`opera/40-product-registry.md`
+ *   §2 步 2）。`launch-checks.ts` 多出两项检查的标题、判据、通过 / 未通过的事实与下一步
+ *   （对方接通后留下的两条痕迹：权益拉取、用量上报），上线页的几处「五项 / 平台观测
+ *   不到」改口。**没有走 `t()`，是有意的**：上线页与检查函数全部文案都是硬编码中文、
+ *   一条没抽，只抽新加的两项会造出半中英（同 08-29 / 08-30 / 08-31 的判据）。
  */
 const BASELINE = {
   console: 30,
   website: 40,
   admin: 3226,
-  opera: 1871,
+  opera: 1890,
   accounts: 264,
 };
 
-const CJK = '[\u4e00-\u9fff]';
-const LITERAL = new RegExp(`"[^"\\n]*${CJK}[^"\\n]*"|\`[^\`\\n]*${CJK}[^\`\\n]*\``, 'g');
-const JSX_TEXT = new RegExp(`>\\s*[^<>{}\\n]*${CJK}[^<>{}\\n]*?\\s*<`, 'g');
+const CJK = "[\u4e00-\u9fff]";
+const LITERAL = new RegExp(
+  `"[^"\\n]*${CJK}[^"\\n]*"|\`[^\`\\n]*${CJK}[^\`\\n]*\``,
+  "g",
+);
+const JSX_TEXT = new RegExp(`>\\s*[^<>{}\\n]*${CJK}[^<>{}\\n]*?\\s*<`, "g");
 
 /** 挖空注释但保持行号——只数代码位置的中文。 */
 function stripComments(src) {
   return src
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
-    .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length));
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+    .replace(/\/\/[^\n]*/g, (m) => " ".repeat(m.length));
 }
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (['node_modules', '.next', 'dist'].includes(entry.name)) continue;
+    if (["node_modules", ".next", "dist"].includes(entry.name)) continue;
     const full = join(dir, entry.name);
     if (entry.isDirectory()) walk(full, out);
-    else if (['.ts', '.tsx'].includes(extname(entry.name))) out.push(full);
+    else if ([".ts", ".tsx"].includes(extname(entry.name))) out.push(full);
   }
   return out;
 }
 
 function countPortal(name) {
-  const src = join(PORTALS_DIR, name, 'src');
+  const src = join(PORTALS_DIR, name, "src");
   if (!existsSync(src)) return null;
   let total = 0;
   const worst = [];
   for (const file of walk(src)) {
-    const code = stripComments(readFileSync(file, 'utf8'));
+    const code = stripComments(readFileSync(file, "utf8"));
     const n =
       (code.match(LITERAL) ?? []).length + (code.match(JSX_TEXT) ?? []).length;
     if (n) {
       total += n;
-      worst.push({ n, file: file.slice(src.length + 1).replace(/\\/g, '/') });
+      worst.push({ n, file: file.slice(src.length + 1).replace(/\\/g, "/") });
     }
   }
   worst.sort((a, b) => b.n - a.n);
@@ -228,7 +237,7 @@ for (const [portal, baseline] of Object.entries(BASELINE)) {
         `         新写的界面文案要走 \`t()\`，不要直接写进代码。若这一批确实只增不减\n` +
         `         （比如整页新增且暂缓翻译），把 BASELINE.${portal} 改成 ${r.total} 并说明理由。\n` +
         `         串最多的文件：` +
-        r.worst.map((w) => `${w.file}(${w.n})`).join('、'),
+        r.worst.map((w) => `${w.file}(${w.n})`).join("、"),
     );
   }
 }
@@ -236,10 +245,10 @@ for (const [portal, baseline] of Object.entries(BASELINE)) {
 // 反向：抽完了没调数字。不报错，但要说出来——否则棘轮会松着不知道。
 const stale = rows.filter((r) => r.total < r.baseline);
 
-console.log('══ i18n 铺开棘轮（check-i18n-coverage）══');
+console.log("══ i18n 铺开棘轮（check-i18n-coverage）══");
 for (const r of rows) {
   const delta = r.total - r.baseline;
-  const mark = delta > 0 ? '✗' : delta < 0 ? '↓' : '·';
+  const mark = delta > 0 ? "✗" : delta < 0 ? "↓" : "·";
   console.log(
     `  ${mark} ${r.portal.padEnd(9)} ${String(r.total).padStart(5)} / ${String(r.baseline).padEnd(5)}` +
       `  (${r.files} 个文件)`,
@@ -247,7 +256,7 @@ for (const r of rows) {
 }
 
 if (stale.length) {
-  console.log('');
+  console.log("");
   for (const r of stale) {
     console.log(
       `  提示 ${r.portal}: 已降到 ${r.total}，基线还写着 ${r.baseline}——把 BASELINE 调下去，` +
@@ -257,13 +266,13 @@ if (stale.length) {
 }
 
 if (findings.length === 0) {
-  console.log('✓ 未发现问题（没有门户超过基线）。');
+  console.log("✓ 未发现问题（没有门户超过基线）。");
 } else {
-  console.log('');
+  console.log("");
   for (const f of findings) console.log(`  ERROR  ${f}`);
-  console.log('');
+  console.log("");
 }
 
-console.log('── 汇总 ──');
+console.log("── 汇总 ──");
 console.log(`error: ${findings.length}`);
 process.exit(findings.length > 0 ? 1 : 0);
