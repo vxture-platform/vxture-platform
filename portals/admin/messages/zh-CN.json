@@ -1926,6 +1926,22 @@
       "no": "否"
     }
   },
+  "planVersionsPage": {
+    "bundled": {
+      "title": "捆绑组件",
+      "description": "随本版本一起售出的支撑产品及其配额。基础设施产品（如 Atlas、Runos）没有自己的客户套餐，只能经此进入工作区的配额池。",
+      "empty": "本版本尚未捆绑任何组件。",
+      "quotaLabel": "{name} 配额（JSON）",
+      "pickLabel": "添加组件",
+      "pickPlaceholder": "— 选择要捆绑的产品 —",
+      "add": "添加",
+      "remove": "移除",
+      "save": "保存捆绑组件",
+      "saved": "捆绑组件已保存。",
+      "saveFailed": "捆绑组件保存失败。",
+      "quotaInvalid": "{name} 的配额 JSON 格式错误，无法保存。"
+    }
+  },
   "skillsPage": {
     "header": {
       "title": "技能市场",

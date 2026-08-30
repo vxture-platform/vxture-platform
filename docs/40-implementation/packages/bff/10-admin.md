@@ -340,6 +340,8 @@ middleware 顺序：`auth → capabilities → router`
 // 含：价格（当前版本月付优先）、版本号 / 版本状态、权益快照（entitlements：组件=included、方案里有但组件里没有=excluded）、计数
 ```
 
+**PUT `/api/products/plan-versions/:versionId/bundled-components`** — 整体替换草稿版本的 bundled 组件集 `{components: [{productCode, quota, features?, priority?}]}`（`@RequireStepUp`；已发布 / 已锁 409、产品不存在 404 带 `field`、primary 产品当捆绑件 / 同码重复 / priority ≥ primary 400；`tier = NULL`；审计 `product.plan_version.bundled.replace`，resource_id = `plan_code@vN`；返回 `PlanVersionDetail`——见 `docs/20-specs/000-platform/admin/80-plan-bundled-components.md`）
+
 **GET `/api/products/agents`** — Agent 目录
 
 ~~**GET `/api/products/model-policies`**~~ — 已退役（2026-08-31）：模型策略是 Atlas 的，走 `GET /api/atlas/policies`

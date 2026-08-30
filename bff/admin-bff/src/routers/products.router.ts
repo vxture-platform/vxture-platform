@@ -615,6 +615,85 @@ export class ProductsRouter {
     }
     return { published: true, versionId };
   }
+
+  /**
+   * Full replace of a draft version's bundled component set (PUT semantics,
+   * 30-management-api.md §1: what is sent is what remains; an empty list clears).
+   *
+   * Owner decision 2026-08-30: atlas / runos are infrastructure products with no
+   * customer plans of their own — their quota reaches a workspace ONLY as a
+   * bundled component inside a subscription product's plan version. Seed writes
+   * primary rows only, so this is the single entry point for that wiring.
+   * Step-up gated like publish: bundled quota is sold value (product_220 §2).
+   */
+  @Put("plan-versions/:versionId/bundled-components")
+  @RequireStepUp()
+  async replaceBundledComponents(
+    @Req() req: Request & RequestContext,
+    @Param("versionId") versionId: string,
+    @Body() body: ReplaceBundledComponentsInput,
+  ): Promise<PlanVersionDetail> {
+    assertCanManageProducts(req);
+    const items = readBundledComponentInputs(body);
+    try {
+      await withTransaction(this.rwPool, async (client) => {
+        const version = await lockDraftPlanVersion(client, versionId);
+        const primary = await loadPrimaryComponent(client, versionId);
+        const resolved = await resolveBundledComponents(client, items, primary);
+        const before = await client.query<BundledComponentAudit>(
+          `SELECT p.product_code AS "productCode", pc.quota, pc.features, pc.priority
+             FROM product.plan_components pc
+             JOIN product.products p ON p.id = pc.product_id
+            WHERE pc.plan_version_id = $1 AND pc.component_role = 'bundled'
+            ORDER BY pc.sort_order ASC`,
+          [versionId],
+        );
+        await client.query(
+          `DELETE FROM product.plan_components
+            WHERE plan_version_id = $1 AND component_role = 'bundled'`,
+          [versionId],
+        );
+        for (const [index, item] of resolved.entries()) {
+          await client.query(
+            `INSERT INTO product.plan_components
+               (id, plan_version_id, product_id, tier, component_role, priority, features, quota, sort_order, created_at)
+             VALUES (gen_random_uuid(), $1, $2, NULL, 'bundled', $3, $4::text[], $5::jsonb, $6, now())`,
+            [
+              versionId,
+              item.productId,
+              item.priority,
+              item.features,
+              JSON.stringify(item.quota),
+              index,
+            ],
+          );
+        }
+        await insertOperatorAuditLog(client, req, {
+          action: "product.plan_version.bundled.replace",
+          resourceType: "product_plan_version",
+          resourceId: `${version.plan_code}@v${version.version_no}`,
+          before: before.rows,
+          after: resolved.map<BundledComponentAudit>((item) => ({
+            productCode: item.productCode,
+            quota: item.quota,
+            features: item.features,
+            priority: item.priority,
+          })),
+        });
+      });
+    } catch (error) {
+      // P0001 = a §7 trigger RAISEd (lock guard / bundled-before-primary priority
+      // rule). Both are pre-checked above; if one still fires it is a concurrent
+      // publish or primary edit, i.e. a state conflict rather than bad input.
+      if (pgErrorCode(error) === "P0001") {
+        throw new ConflictException(
+          error instanceof Error ? error.message : "Plan version changed",
+        );
+      }
+      throw error;
+    }
+    return loadPlanVersionDetail(this.pool, versionId);
+  }
 }
 
 // ── plan version lifecycle: types · SQL · loaders (product_320) ─────────────
@@ -633,17 +712,68 @@ interface PlanVersionSummary {
   prices: PlanVersionPrice[];
 }
 
-interface PlanVersionDetail extends PlanVersionSummary {
+/** One plan_components row as the editor sees it (primary and bundled alike). */
+export interface PlanVersionComponent {
+  productCode: string;
+  productName: string;
+  componentRole: string;
+  /** Commercial tier — primary only; bundled rows carry null (D6). */
+  tier: string | null;
+  quota: Record<string, unknown>;
+  features: string[];
+  priority: number;
+}
+
+export interface PlanVersionDetail extends PlanVersionSummary {
   planId: string;
   planCode: string;
   planName: string;
+  /** product_code of the primary component; null when the version has none. */
+  productCode: string | null;
+  /** Primary component quota — kept flat for the existing PATCH editor. */
   quota: Record<string, unknown>;
+  /** Every component of the version, primary first, then bundled by sort_order. */
+  components: PlanVersionComponent[];
 }
 
 interface UpdateDraftVersionInput {
   prices?: { cycleUnit?: unknown; price?: unknown }[];
   quota?: Record<string, unknown>;
 }
+
+/** PUT /plan-versions/:id/bundled-components body (full replace). */
+export interface ReplaceBundledComponentsInput {
+  components?: {
+    productCode?: unknown;
+    quota?: unknown;
+    features?: unknown;
+    priority?: unknown;
+  }[];
+}
+
+/** Validated bundled component input — not yet resolved against the catalog. */
+interface BundledComponentItem {
+  productCode: string;
+  quota: Record<string, unknown>;
+  features: string[];
+  priority: number | null;
+}
+
+/** What the audit row records per bundled component (before / after). */
+interface BundledComponentAudit {
+  productCode: string;
+  quota: Record<string, unknown> | null;
+  features: string[];
+  priority: number;
+}
+
+/**
+ * Default bundled priority. §7 trigger: max(bundled priority) < min(primary
+ * priority) — bundled backing pools burn before the primary pool (product_220
+ * §4.2). Seed writes primary at 100, so 50 sits safely below it.
+ */
+const DEFAULT_BUNDLED_PRIORITY = 50;
+const MAX_BUNDLED_COMPONENTS = 64;
 
 interface PlanVersionSummaryRow {
   id: string;
@@ -688,7 +818,9 @@ async function loadPlanVersionDetail(
       plan_id: string;
       plan_code: string;
       plan_name: string;
-      quota: Record<string, unknown> | null;
+      components: (Omit<PlanVersionComponent, "quota"> & {
+        quota: Record<string, unknown> | null;
+      })[];
     }
   >(
     `SELECT pv.id, pv.plan_id, pv.version_no, pv.status, pv.is_locked,
@@ -699,8 +831,16 @@ async function loadPlanVersionDetail(
                                ORDER BY pp.cycle_unit)
                 FROM product.plan_prices pp WHERE pp.plan_version_id = pv.id
             ), '[]'::jsonb) AS prices,
-            (SELECT pc.quota FROM product.plan_components pc
-              WHERE pc.plan_version_id = pv.id AND pc.component_role = 'primary' LIMIT 1) AS quota
+            COALESCE((
+              SELECT jsonb_agg(jsonb_build_object(
+                       'productCode', cp.product_code, 'productName', cp.product_name,
+                       'componentRole', pc.component_role, 'tier', pc.tier,
+                       'quota', pc.quota, 'features', pc.features, 'priority', pc.priority)
+                     ORDER BY (pc.component_role = 'primary') DESC, pc.sort_order ASC)
+                FROM product.plan_components pc
+                JOIN product.products cp ON cp.id = pc.product_id
+               WHERE pc.plan_version_id = pv.id
+            ), '[]'::jsonb) AS components
        FROM product.plan_versions pv
        JOIN product.plans p ON p.id = pv.plan_id
       WHERE pv.id = $1`,
@@ -710,13 +850,207 @@ async function loadPlanVersionDetail(
   if (!row) {
     throw new NotFoundException(`Plan version ${versionId} not found`);
   }
+  const components = (row.components ?? []).map<PlanVersionComponent>(
+    (component) => ({
+      ...component,
+      quota: component.quota ?? {},
+      features: component.features ?? [],
+    }),
+  );
+  const primary = components.find((c) => c.componentRole === "primary");
   return {
     ...mapPlanVersionSummary(row),
     planId: row.plan_id,
     planCode: row.plan_code,
     planName: row.plan_name,
-    quota: row.quota ?? {},
+    productCode: primary?.productCode ?? null,
+    quota: primary?.quota ?? {},
+    components,
   };
+}
+
+// ── bundled components: input reading · locking · catalog resolution ────────
+
+/**
+ * Validate the PUT body shape before any DB access. Duplicate product codes
+ * are rejected here (not deduped silently — a duplicate means two different
+ * quotas were sent for one product and we cannot guess which one wins).
+ *
+ * @throws {BadRequestException} on any shape violation
+ */
+function readBundledComponentInputs(
+  body: ReplaceBundledComponentsInput | undefined,
+): BundledComponentItem[] {
+  const list = body?.components;
+  if (!Array.isArray(list)) {
+    throw new BadRequestException("components must be an array");
+  }
+  if (list.length > MAX_BUNDLED_COMPONENTS) {
+    throw new BadRequestException(
+      `components has more than ${MAX_BUNDLED_COMPONENTS} items`,
+    );
+  }
+  const seen = new Set<string>();
+  return list.map((item, index) => {
+    const key = `components[${index}]`;
+    const productCode =
+      typeof item?.productCode === "string" ? item.productCode.trim() : "";
+    if (!productCode) {
+      throw new BadRequestException(`${key}.productCode is required`);
+    }
+    if (seen.has(productCode)) {
+      throw new BadRequestException(
+        `${key}.productCode ${productCode} is listed more than once`,
+      );
+    }
+    seen.add(productCode);
+    const quota = item?.quota;
+    if (!quota || typeof quota !== "object" || Array.isArray(quota)) {
+      throw new BadRequestException(`${key}.quota must be a JSON object`);
+    }
+    const features =
+      item?.features === undefined
+        ? []
+        : readStringArray(item.features, `${key}.features`, 64);
+    let priority: number | null = null;
+    if (item?.priority !== undefined && item?.priority !== null) {
+      priority = Number(item.priority);
+      if (!Number.isInteger(priority) || priority < 0) {
+        throw new BadRequestException(
+          `${key}.priority must be a non-negative integer`,
+        );
+      }
+    }
+    return {
+      productCode,
+      quota: quota as Record<string, unknown>,
+      features,
+      priority,
+    };
+  });
+}
+
+interface LockedPlanVersionRow {
+  id: string;
+  plan_code: string;
+  version_no: number;
+  status: string;
+  is_locked: boolean;
+}
+
+/**
+ * FOR UPDATE the version row and refuse anything that is not an editable
+ * draft. Same rule as updateDraftVersion, surfaced as 409: the version exists,
+ * it is its lifecycle state that conflicts with the write (§7 lock triggers
+ * would reject the row writes anyway — this just says so before touching them).
+ *
+ * @throws {NotFoundException} unknown version
+ * @throws {ConflictException} published or locked version
+ */
+async function lockDraftPlanVersion(
+  client: PoolClient,
+  versionId: string,
+): Promise<LockedPlanVersionRow> {
+  const { rows } = await client.query<LockedPlanVersionRow>(
+    `SELECT pv.id, p.plan_code, pv.version_no, pv.status, pv.is_locked
+       FROM product.plan_versions pv
+       JOIN product.plans p ON p.id = pv.plan_id
+      WHERE pv.id = $1
+      FOR UPDATE OF pv`,
+    [versionId],
+  );
+  const row = rows[0];
+  if (!row) {
+    throw new NotFoundException(`Plan version ${versionId} not found`);
+  }
+  if (row.status !== "draft" || row.is_locked) {
+    throw new ConflictException(
+      `Plan version ${row.plan_code}@v${row.version_no} is ${
+        row.is_locked ? "locked" : row.status
+      }; its components are frozen — open a new draft version`,
+    );
+  }
+  return row;
+}
+
+interface PrimaryComponentRow {
+  product_code: string;
+  priority: number;
+}
+
+async function loadPrimaryComponent(
+  client: PoolClient,
+  versionId: string,
+): Promise<PrimaryComponentRow | null> {
+  const { rows } = await client.query<PrimaryComponentRow>(
+    `SELECT p.product_code, pc.priority
+       FROM product.plan_components pc
+       JOIN product.products p ON p.id = pc.product_id
+      WHERE pc.plan_version_id = $1 AND pc.component_role = 'primary'
+      LIMIT 1`,
+    [versionId],
+  );
+  return rows[0] ?? null;
+}
+
+interface ResolvedBundledComponent {
+  productId: string;
+  productCode: string;
+  quota: Record<string, unknown>;
+  features: string[];
+  priority: number;
+}
+
+/**
+ * Resolve product codes against the live catalog and apply the two rules that
+ * need the primary row: a version cannot bundle the product it sells, and every
+ * bundled priority must sit below the primary's (§7 trigger, checked here so the
+ * caller gets a 400 with the reason instead of a raw trigger error).
+ *
+ * @throws {BadRequestException} primary listed as bundled / priority not below primary
+ * @throws {NotFoundException} unknown or soft-deleted product (carries `field`)
+ */
+async function resolveBundledComponents(
+  client: PoolClient,
+  items: BundledComponentItem[],
+  primary: PrimaryComponentRow | null,
+): Promise<ResolvedBundledComponent[]> {
+  if (items.length === 0) return [];
+  const { rows } = await client.query<{ id: string; product_code: string }>(
+    `SELECT id, product_code FROM product.products
+      WHERE deleted_at IS NULL AND product_code = ANY($1::text[])`,
+    [items.map((item) => item.productCode)],
+  );
+  const byCode = new Map(rows.map((row) => [row.product_code, row.id]));
+  return items.map((item, index) => {
+    const field = `components[${index}].productCode`;
+    if (primary && item.productCode === primary.product_code) {
+      throw new BadRequestException(
+        `${field}: ${item.productCode} is this version's primary product and cannot be bundled into itself`,
+      );
+    }
+    const productId = byCode.get(item.productCode);
+    if (!productId) {
+      throw new NotFoundException({
+        statusCode: 404,
+        message: `Product ${item.productCode} not found`,
+        field,
+      });
+    }
+    const priority = item.priority ?? DEFAULT_BUNDLED_PRIORITY;
+    if (primary && priority >= primary.priority) {
+      throw new BadRequestException(
+        `components[${index}].priority must be below the primary component's priority (${primary.priority}) — bundled pools burn first`,
+      );
+    }
+    return {
+      productId,
+      productCode: item.productCode,
+      quota: item.quota,
+      features: item.features,
+      priority,
+    };
+  });
 }
 
 // ── C14 de-mock: product catalog capabilities + agents read from the live

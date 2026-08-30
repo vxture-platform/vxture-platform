@@ -14,21 +14,56 @@ import {
   Button,
   Input,
   NativeSelect,
+  PanelItem,
+  PanelList,
+  TableTitleCell,
   Textarea,
   ViewLayout,
 } from "@vxture/design-system";
 import {
   fetchPlanVersion,
   fetchPlanVersions,
+  fetchProductCapabilities,
   fetchProductPlans,
   publishPlanVersion,
+  replacePlanVersionBundledComponents,
   updateDraftPlanVersion,
+  type PlanVersionBundledComponentInput,
+  type PlanVersionComponent,
   type PlanVersionDetail,
   type PlanVersionSummary,
 } from "@/api/admin-bff";
-import type { ProductPlanRecord } from "@/entities/console";
+import type {
+  ProductCapabilityRecord,
+  ProductPlanRecord,
+} from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { isStepUpCancelled, useStepUp } from "@/providers/StepUpProvider";
+
+/**
+ * Editor row for one bundled component. Quota is edited as JSON text (same
+ * control as the primary quota above it); features / priority are carried
+ * through untouched so a re-save never drops what seed or an earlier edit set.
+ */
+interface BundledDraft {
+  productCode: string;
+  productName: string;
+  quotaText: string;
+  features: string[];
+  priority: number | null;
+}
+
+function toBundledDrafts(components: PlanVersionComponent[]): BundledDraft[] {
+  return components
+    .filter((component) => component.componentRole === "bundled")
+    .map((component) => ({
+      productCode: component.productCode,
+      productName: component.productName,
+      quotaText: JSON.stringify(component.quota, null, 2),
+      features: component.features,
+      priority: component.priority,
+    }));
+}
 
 /**
  * 这三个徽章原本挂的是 `vx-badge-positive` / `-neutral` / `-warning`——那三个类
@@ -57,19 +92,26 @@ function normalizePrice(raw: string | undefined): string {
 
 export function PlanVersionsPage() {
   const tShared = useTranslations();
+  const t = useTranslations("planVersionsPage");
   const { runWithStepUp } = useStepUp();
   const [plans, setPlans] = useState<ProductPlanRecord[]>([]);
+  // Full catalog (every non-deleted product, active first) — bundled picks must
+  // reach infrastructure products such as atlas / runos, which have no plans.
+  const [catalog, setCatalog] = useState<ProductCapabilityRecord[]>([]);
   const [planId, setPlanId] = useState("");
   const [versions, setVersions] = useState<PlanVersionSummary[]>([]);
   const [detail, setDetail] = useState<PlanVersionDetail | null>(null);
   const [priceMonth, setPriceMonth] = useState("");
   const [priceYear, setPriceYear] = useState("");
   const [quotaText, setQuotaText] = useState("");
+  const [bundled, setBundled] = useState<BundledDraft[]>([]);
+  const [bundledPick, setBundledPick] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     void fetchProductPlans().then(setPlans);
+    void fetchProductCapabilities().then(setCatalog);
   }, []);
 
   const loadVersions = useCallback((id: string) => {
@@ -98,10 +140,20 @@ export function PlanVersionsPage() {
         normalizePrice(d.prices.find((p) => p.cycleUnit === "year")?.price),
       );
       setQuotaText(JSON.stringify(d.quota, null, 2));
+      setBundled(toBundledDrafts(d.components));
+      setBundledPick("");
     }
   }
 
   const editable = detail?.status === "draft" && !detail.isLocked;
+
+  // Products still available to bundle: not the version's own primary product
+  // and not already on the list. Catalog order (active first) is kept.
+  const bundledCandidates = catalog.filter(
+    (product) =>
+      product.productCode !== detail?.productCode &&
+      !bundled.some((item) => item.productCode === product.productCode),
+  );
 
   async function saveDraft() {
     if (!detail) return;
@@ -154,6 +206,77 @@ export function PlanVersionsPage() {
         return;
       }
       setMessage(err instanceof Error ? err.message : "发布失败。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function addBundled() {
+    const product = bundledCandidates.find(
+      (item) => item.productCode === bundledPick,
+    );
+    if (!product) return;
+    setBundled((old) => [
+      ...old,
+      {
+        productCode: product.productCode,
+        productName: product.productName,
+        quotaText: "{}",
+        features: [],
+        priority: null,
+      },
+    ]);
+    setBundledPick("");
+  }
+
+  function removeBundled(productCode: string) {
+    setBundled((old) => old.filter((item) => item.productCode !== productCode));
+  }
+
+  function updateBundledQuota(productCode: string, quotaText: string) {
+    setBundled((old) =>
+      old.map((item) =>
+        item.productCode === productCode ? { ...item, quotaText } : item,
+      ),
+    );
+  }
+
+  // PUT = full replace: the whole list goes every time, so a removed row is
+  // simply absent from the body. Step-up gated like publish.
+  async function saveBundled() {
+    if (!detail) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const components: PlanVersionBundledComponentInput[] = [];
+      for (const item of bundled) {
+        let quota: Record<string, unknown>;
+        try {
+          quota = JSON.parse(item.quotaText || "{}") as Record<string, unknown>;
+        } catch {
+          setMessage(t("bundled.quotaInvalid", { name: item.productName }));
+          setBusy(false);
+          return;
+        }
+        components.push({
+          productCode: item.productCode,
+          quota,
+          features: item.features,
+          ...(item.priority === null ? {} : { priority: item.priority }),
+        });
+      }
+      const updated = await runWithStepUp(() =>
+        replacePlanVersionBundledComponents(detail.id, components),
+      );
+      setDetail(updated);
+      setBundled(toBundledDrafts(updated.components));
+      setMessage(t("bundled.saved"));
+    } catch (err) {
+      if (isStepUpCancelled(err)) {
+        setBusy(false);
+        return;
+      }
+      setMessage(err instanceof Error ? err.message : t("bundled.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -273,6 +396,96 @@ export function PlanVersionsPage() {
               <Button onClick={publish} disabled={!editable || busy}>
                 发布该版本
               </Button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <h4 className="text-sm font-semibold">{t("bundled.title")}</h4>
+                <p className="text-sm text-vx-gray-500">
+                  {t("bundled.description")}
+                </p>
+              </div>
+
+              {bundled.length === 0 ? (
+                <p className="text-sm text-vx-gray-500">{t("bundled.empty")}</p>
+              ) : (
+                <PanelList>
+                  {bundled.map((item) => (
+                    <PanelItem
+                      key={item.productCode}
+                      main={
+                        <div className="flex flex-col gap-1">
+                          <TableTitleCell
+                            title={item.productName}
+                            description={item.productCode}
+                          />
+                          <Textarea
+                            value={item.quotaText}
+                            disabled={!editable}
+                            aria-label={t("bundled.quotaLabel", {
+                              name: item.productName,
+                            })}
+                            onChange={(e) =>
+                              updateBundledQuota(
+                                item.productCode,
+                                e.target.value,
+                              )
+                            }
+                            rows={4}
+                            className="font-mono"
+                          />
+                        </div>
+                      }
+                      trail={
+                        editable ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => removeBundled(item.productCode)}
+                          >
+                            {t("bundled.remove")}
+                          </Button>
+                        ) : null
+                      }
+                    />
+                  ))}
+                </PanelList>
+              )}
+
+              {editable ? (
+                <div className="flex items-end gap-3">
+                  <div className="flex flex-1 flex-col gap-1">
+                    <label className="text-sm font-medium">
+                      {t("bundled.pickLabel")}
+                    </label>
+                    <NativeSelect
+                      value={bundledPick}
+                      onChange={(e) => setBundledPick(e.target.value)}
+                    >
+                      <option value="">{t("bundled.pickPlaceholder")}</option>
+                      {bundledCandidates.map((product) => (
+                        <option
+                          key={product.productCode}
+                          value={product.productCode}
+                        >
+                          {product.productName} · {product.productCode}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={addBundled}
+                    disabled={!bundledPick || busy}
+                  >
+                    {t("bundled.add")}
+                  </Button>
+                  <Button onClick={saveBundled} disabled={busy}>
+                    {t("bundled.save")}
+                  </Button>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : (

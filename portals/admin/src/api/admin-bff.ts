@@ -343,11 +343,36 @@ export interface PlanVersionSummary {
   prices: PlanVersionPrice[];
 }
 
+/** One plan_components row: the primary product or a bundled backing component. */
+export interface PlanVersionComponent {
+  productCode: string;
+  productName: string;
+  componentRole: "primary" | "bundled" | string;
+  /** Commercial tier — primary only; bundled rows carry null. */
+  tier: string | null;
+  quota: Record<string, unknown>;
+  features: string[];
+  priority: number;
+}
+
 export interface PlanVersionDetail extends PlanVersionSummary {
   planId: string;
   planCode: string;
   planName: string;
+  /** product_code of the primary component; null when the version has none. */
+  productCode: string | null;
+  /** Primary component quota (flat, for the draft editor). */
   quota: Record<string, unknown>;
+  /** Every component: primary first, then bundled in sort order. */
+  components: PlanVersionComponent[];
+}
+
+/** PUT body item for the bundled component replace (quota is the whole grant). */
+export interface PlanVersionBundledComponentInput {
+  productCode: string;
+  quota: Record<string, unknown>;
+  features?: string[];
+  priority?: number;
 }
 
 export async function fetchPlanVersions(
@@ -392,6 +417,20 @@ export async function publishPlanVersion(
     "POST",
     undefined,
     "Failed to publish version",
+  );
+}
+
+// step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
+// PUT = full replace: the list sent is the whole bundled set; [] clears it.
+export async function replacePlanVersionBundledComponents(
+  versionId: string,
+  components: PlanVersionBundledComponentInput[],
+): Promise<PlanVersionDetail> {
+  return mutateJson<PlanVersionDetail>(
+    `/api/products/plan-versions/${encodeURIComponent(versionId)}/bundled-components`,
+    "PUT",
+    { components },
+    "Failed to save bundled components",
   );
 }
 
