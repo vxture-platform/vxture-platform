@@ -90,7 +90,6 @@ import {
   Controller,
   Delete,
   Get,
-  HttpException,
   Inject,
   Param,
   Patch,
@@ -105,32 +104,24 @@ import type { Pool } from "pg";
 import { OperatorExchangeService } from "../auth/operator-exchange.service";
 import type { OperatorAuditEntry } from "../audit/audit-log";
 import { recordProxyWrite } from "../audit/proxy-audit";
-import {
-  notEntitled,
-  unauthenticated,
-  upstreamUnavailable,
-} from "../errors/api-error";
+import { notEntitled, unauthenticated } from "../errors/api-error";
 import { RequireStepUp } from "../auth/step-up.decorator";
 import { assertRunosContract, type RunosResource } from "./runos-contract";
+/* 上游调用底座（fetch / 502 / 状态码透传 / operator-OBO 换票）2026-08-31 起与
+   atlas.router、product-catalog.router 共用一份，见 `lib/upstream-grants.ts` 文件头。
+   本文件此前自带的 `runosRequest` / `parseRunosError` / `RUNOS_AUDIENCE` 随之删除，
+   行为一行不变（含 `onStatus` 回传口）。 */
+import {
+  operatorRequest,
+  type HttpMethod,
+  type JsonObject,
+} from "../lib/upstream-grants";
 import { OPERA_BFF_RW_POOL } from "../tokens";
 import type { RequestContext } from "../types/request-context";
 
-/** 换票时的目标 audience（对齐 product_100 的产品码）。 */
-const RUNOS_AUDIENCE = "runos";
 /** 活库当前的三段式能力码（见文件头）。 */
 const CAPABILITY_READ = "capability:runos.read";
 const CAPABILITY_MANAGE = "capability:runos.manage";
-
-type JsonObject = Record<string, unknown>;
-type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
-
-interface RunosErrorBody {
-  code?: string;
-  message?: string | string[];
-  error?: string;
-  statusCode?: number;
-  details?: unknown;
-}
 
 export interface CapabilityVersionRecord {
   capabilityId: string;
@@ -406,6 +397,12 @@ export interface EndpointInstanceRecord {
  */
 const RUNOS_MAX_SUBJECT_REFS = 100;
 
+/**
+ * `grants/all` 按能力扇出时的并发上限。8 是「一次报表读不把上游打成尖峰」的
+ * 量级，不是测出来的最优值——能力目录今天几十条，串行也就几秒。
+ */
+const RUNOS_FANOUT_CONCURRENCY = 8;
+
 @Controller("api/runos")
 export class RunosRouter {
   private readonly runosApiUrl: string;
@@ -466,17 +463,16 @@ export class RunosRouter {
       contract?: RunosResource;
     },
   ): Promise<T> {
-    const bearer = req.operatorAccessToken
-      ? await this.operatorExchange.getToken(
-          req.operatorAccessToken,
-          RUNOS_AUDIENCE,
-        )
-      : null;
     const res = options?.res;
-    const payload = await runosRequest<T>(
+    const payload = await operatorRequest<T>(
+      { operatorExchange: this.operatorExchange, baseUrl: this.runosApiUrl },
+      "runos",
+      req,
       path,
-      { ...options, ...(bearer ? { bearer } : {}) },
-      this.runosApiUrl,
+      {
+        ...(options?.method ? { method: options.method } : {}),
+        ...(options?.body ? { body: options.body } : {}),
+      },
       res ? (status) => res.status(status) : undefined,
     );
     return options?.contract
@@ -1115,6 +1111,76 @@ export class RunosRouter {
     return { byProduct, failed };
   }
 
+  /**
+   * 全量能力授权（跨主体）——**只给「未登记产品的授权」报表用**
+   * （2026-08-31，`opera/40-product-registry.md` §6）。
+   *
+   * runos 刻意没有无条件的 dump（product_251 A-3：表随舰队长大，集合读必须带一个
+   * 过滤器）。`?subjectRefs=` 要先知道主体是谁——而报表要找的正是**目录里没有**的
+   * 主体，按已知产品码查永远查不到它们。三个过滤轴里只有反向索引 `?capabilityId=`
+   * 不需要预先知道主体，所以这里按能力目录扇出：一个能力一次，并发上限
+   * `RUNOS_FANOUT_CONCURRENCY`，按 `grantId` 去重（一条授权只属于一个能力，去重
+   * 是防御不是必需）。上游只回 `state="active"` 的行，所以这里拿到的全是生效中的。
+   *
+   * 代价是 N 次上游读（N = 能力数）。这是一张运营者偶尔打开的报表页，不是热路径；
+   * 等 runos 给出「按 subjectType 全量」的读法时，这里只换内脏、端点形状不动
+   * （同 `grants/summary` 的做法）。
+   *
+   * 失败语义同 `grants/summary`：某个能力读失败**不拖垮整批**，进 `failed` 点名——
+   * 「这个能力下没有授权」与「这个能力没查到」在界面上必须能区分。能力目录本身
+   * 读不到则整个失败（没有目录就没有扇出的依据，回一个空集合等于谎报「没有」）。
+   */
+  @Get("grants/all")
+  async listAllGrants(@Req() req: Request & RequestContext): Promise<{
+    grants: Record<string, unknown>[];
+    failed: string[];
+    capabilityCount: number;
+  }> {
+    assertCanRead(req);
+    const capabilities = await this.request<CapabilityRecord[]>(
+      req,
+      "/capability/capabilities",
+      { contract: "capabilities" },
+    );
+    const ids = [...new Set(capabilities.map((c) => c.capabilityId))];
+    const byGrantId = new Map<string, Record<string, unknown>>();
+    const failed: string[] = [];
+
+    let cursor = 0;
+    const worker = async (): Promise<void> => {
+      while (cursor < ids.length) {
+        const capabilityId = ids[cursor++]!;
+        try {
+          const rows = await this.request<Record<string, unknown>[]>(
+            req,
+            `/commerce/capability-grants?capabilityId=${encodeURIComponent(capabilityId)}`,
+            { contract: "grants" },
+          );
+          for (const row of rows) {
+            const grantId =
+              typeof row["grantId"] === "string" ? row["grantId"] : null;
+            if (grantId !== null && !byGrantId.has(grantId)) {
+              byGrantId.set(grantId, row);
+            }
+          }
+        } catch {
+          failed.push(capabilityId);
+        }
+      }
+    };
+    await Promise.all(
+      Array.from(
+        { length: Math.min(RUNOS_FANOUT_CONCURRENCY, ids.length) },
+        () => worker(),
+      ),
+    );
+    return {
+      grants: [...byGrantId.values()],
+      failed,
+      capabilityCount: ids.length,
+    };
+  }
+
   /** 反向索引：「谁持有这个能力的授权」——撤销或审计一个能力时问的问题。 */
   @Get("grants/by-capability/:capabilityId")
   listGrantsByCapability(
@@ -1282,80 +1348,5 @@ function assertCanManage(req: Request & RequestContext): void {
   }
   if (!req.capabilities?.includes(CAPABILITY_MANAGE)) {
     throw notEntitled(CAPABILITY_MANAGE);
-  }
-}
-
-async function runosRequest<TResponse>(
-  path: string,
-  options: {
-    method?: HttpMethod;
-    body?: JsonObject;
-    bearer?: string;
-  } = {},
-  baseUrl: string = "http://localhost:3120",
-  /**
-   * 上游成功状态码的回传口。**只有真正区分 200/201 的路由才传它**，哪些算、
-   * 为什么不是全部，见 `RunosRouter.request()` 的注释。
-   */
-  onStatus?: (status: number) => void,
-): Promise<TResponse> {
-  let response: Response;
-  const headers: Record<string, string> = {
-    ...(options.body ? { "content-type": "application/json" } : {}),
-    ...(options.bearer ? { authorization: `Bearer ${options.bearer}` } : {}),
-  };
-  try {
-    response = await fetch(`${baseUrl}${path}`, {
-      method: options.method ?? "GET",
-      ...(Object.keys(headers).length > 0 ? { headers } : {}),
-      ...(options.body ? { body: JSON.stringify(options.body) } : {}),
-    });
-  } catch {
-    throw upstreamUnavailable("RUNOS_UNAVAILABLE", "Runos is unavailable");
-  }
-
-  const responseText = await response.text();
-
-  if (!response.ok) {
-    throw new HttpException(
-      parseRunosError(responseText, response.status),
-      response.status,
-    );
-  }
-
-  onStatus?.(response.status);
-
-  if (!responseText.trim()) {
-    return undefined as TResponse;
-  }
-
-  return JSON.parse(responseText) as TResponse;
-}
-
-function parseRunosError(responseText: string, status: number): RunosErrorBody {
-  if (!responseText.trim()) {
-    return {
-      code: "RUNOS_REQUEST_FAILED",
-      message: `Runos request failed with status ${status}`,
-      statusCode: status,
-    };
-  }
-  try {
-    const parsed = JSON.parse(responseText) as RunosErrorBody;
-    if (parsed.message !== undefined || parsed.code !== undefined) {
-      return { ...parsed, statusCode: parsed.statusCode ?? status };
-    }
-    return {
-      code: "RUNOS_REQUEST_FAILED",
-      message: `Runos request failed with status ${status}`,
-      statusCode: status,
-      details: parsed,
-    };
-  } catch {
-    return {
-      code: "RUNOS_REQUEST_FAILED",
-      message: responseText,
-      statusCode: status,
-    };
   }
 }

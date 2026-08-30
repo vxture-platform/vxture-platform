@@ -140,8 +140,11 @@ export const PRODUCT_ACTIONS: readonly ProductAction[] = [
     danger: true,
     destructive: {
       verb: "退役",
+      /* 后半句是 2026-08-31 加的闸门（BFF `assertNoActiveUpstreamGrants`）：Atlas 的
+         模型路由授权与 Runos 的能力授权都按产品码挂在各自的库里，退役不会替人撤。
+         先说清楚，比落锤后被 409 弹回来再去猜要少一次往返。 */
       consequence:
-        "退役是终态：产品行会保留（「谁曾经接入过、什么时候退的」要答得出），但不能再回到任何其它状态。要重新接入必须登记一个新的产品码。",
+        "退役是终态：产品行会保留（「谁曾经接入过、什么时候退的」要答得出），但不能再回到任何其它状态。要重新接入必须登记一个新的产品码。退役前必须先撤销这个产品在 Atlas 的模型路由授权与在 Runos 的能力授权——还有生效中的授权时会被拒绝。",
     },
   },
 ];

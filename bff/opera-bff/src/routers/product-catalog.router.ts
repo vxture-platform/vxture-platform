@@ -27,6 +27,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpException,
+  HttpStatus,
   Inject,
   Param,
   Patch,
@@ -35,8 +37,10 @@ import {
   Query,
   Req,
 } from "@nestjs/common";
+import { VxConfigService } from "@vxture/core-config";
 import type { Request } from "express";
 import type { Pool } from "pg";
+import { OperatorExchangeService } from "../auth/operator-exchange.service";
 import {
   conflict,
   invalidRequest,
@@ -44,6 +48,10 @@ import {
   notFound,
   unauthenticated,
 } from "../errors/api-error";
+import {
+  fetchActiveUpstreamGrants,
+  type ActiveUpstreamGrants,
+} from "../lib/upstream-grants";
 import { OPERA_BFF_RW_POOL } from "../tokens";
 import type { RequestContext } from "../types/request-context";
 
@@ -186,7 +194,29 @@ const SELECT_COLUMNS = `
 
 @Controller("api/products")
 export class ProductCatalogRouter {
-  constructor(@Inject(OPERA_BFF_RW_POOL) private readonly pool: Pool) {}
+  private readonly atlasApiUrl: string;
+  private readonly runosApiUrl: string;
+
+  /**
+   * 后两个依赖只为退役闸门（`assertNoActiveUpstreamGrants`）——目录本身是本地表，
+   * 不需要上游。注入而不是在闸门里现取，是让「产品目录会打两个上游」这件事在
+   * 构造签名上就看得见。
+   */
+  constructor(
+    @Inject(OPERA_BFF_RW_POOL) private readonly pool: Pool,
+    @Inject(VxConfigService) configService: VxConfigService,
+    @Inject(OperatorExchangeService)
+    private readonly operatorExchange: OperatorExchangeService,
+  ) {
+    this.atlasApiUrl = configService.platform.ATLAS_API_URL.trim().replace(
+      /\/+$/,
+      "",
+    );
+    this.runosApiUrl = configService.platform.RUNOS_API_URL.trim().replace(
+      /\/+$/,
+      "",
+    );
+  }
 
   @Get()
   async list(
@@ -381,6 +411,19 @@ export class ProductCatalogRouter {
     }
     const next = body.state as ProductState;
 
+    /* 退役闸门（2026-08-31，owner 优先级 #1；`opera/40-product-registry.md` §6）：
+       目标态是 deprecated 时先问两个上游「这个产品还有没有生效中的授权」——有就
+       409，查不到就 502。**只有 deprecated 这一条边挂闸门**：停用是可逆的、上线与
+       恢复不减少任何东西，它们的语义不需要上游闭合。
+
+       放在事务**之外**：网络调用不能夹在 FOR UPDATE 里，一次上游慢 30 秒就把这
+       一行锁 30 秒，连带把同一产品的所有其它写都挂住。代价是检查与写之间有一个
+       窗口（这期间新发的授权拦不住）——跨系统没有锁，这个窗口只能靠「未登记产品
+       的授权」报表事后兜住，而不是靠把网络请求塞进事务假装原子。 */
+    if (next === "deprecated") {
+      await this.assertNoActiveUpstreamGrants(req, id);
+    }
+
     /* 先读当前态再判迁移。多一次往返，但没有它就没法判"从哪来"——而这个状态机的
        全部约束（终态、无 draft→inactive）都定义在边上，不在目标态上。
        `FOR UPDATE` 锁住这一行到事务结束，否则两个并发请求会各自读到 active 然后
@@ -435,6 +478,51 @@ export class ProductCatalogRouter {
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * 退役前置：Atlas 的模型路由授权与 Runos 的能力授权都必须为零。
+   *
+   * 为什么要这道闸门：`product.products` 是「有哪些产品」的唯一权威，但两个上游
+   * 各自的库里只存 `product_code` 字符串——没有 FK，也没有任何东西在产品退役时
+   * 去动它们。此前退役一个产品，上游的授权原封不动地活着：一个目录里已经不存在
+   * 的主体仍然能换票、仍然能调路由。闭合不能靠上游（它们看不见目录），只能立在
+   * 目录这一侧、立在写终态的那条边上。
+   *
+   * 两条上游查询与 fail-closed 的理由见 `lib/upstream-grants.ts`
+   * `fetchActiveUpstreamGrants`。这里只做两件事：查产品码、把「有」翻成 409。
+   */
+  private async assertNoActiveUpstreamGrants(
+    req: Request & RequestContext,
+    id: string,
+  ): Promise<void> {
+    const current = await this.pool.query<{
+      product_code: string;
+      status: ProductState;
+    }>(
+      `SELECT product_code, status FROM product.products
+        WHERE id = $1 AND deleted_at IS NULL`,
+      [id],
+    );
+    const row = current.rows[0];
+    if (!row) {
+      throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
+    }
+    /* 已退役的产品再收一次 deprecated 是幂等重放（下面的事务里不会写库）——
+       不为一个不会发生的写去打两个上游。 */
+    if (row.status === "deprecated") return;
+
+    const grants = await fetchActiveUpstreamGrants(
+      {
+        operatorExchange: this.operatorExchange,
+        atlasApiUrl: this.atlasApiUrl,
+        runosApiUrl: this.runosApiUrl,
+      },
+      req,
+      row.product_code,
+    );
+    if (grants.atlas.count === 0 && grants.runos.count === 0) return;
+    throw productHasActiveGrants(grants);
   }
 
   // ── 接入检查单（product_200 §7，六步技术接入）─────────────────────────────
@@ -656,6 +744,42 @@ export const ADMIN_OWNED_ITEM_CODES = [
 /** 字典里的一项归不归 opera（不回答「字典里有没有」——那要查库）。 */
 export function isOperaChecklistItem(itemCode: string): boolean {
   return !(ADMIN_OWNED_ITEM_CODES as readonly string[]).includes(itemCode);
+}
+
+/**
+ * 409 `PRODUCT_HAS_ACTIVE_GRANTS`：上游还有生效中的授权，退役被拒。
+ *
+ * 响应体带结构化明细 `{ productCode, atlas: {count, sample}, runos: {count, sample} }`
+ * ——一个只被告知「你不能」的运营者只能自己去两个域页翻是哪几条；把条数与样本
+ * 带回去，门户才能直接给出「去权益配置清掉这 N 条」的出口。不走 `conflict()`
+ * 帮手：封套四件套装不下明细，而 `AllExceptionsFilter` 对自带 `code` 的响应体会
+ * 把额外字段原样带出去（它为 atlas 的 `blockedBy` 留的那条通路）。
+ *
+ * 样本里的 `id` / `grantId` 是给机器的；门户展示只用 `endpointCode` /
+ * `capabilityId`（UUID 不上屏）。
+ */
+export function productHasActiveGrants(
+  grants: ActiveUpstreamGrants,
+): HttpException {
+  const parts: string[] = [];
+  if (grants.atlas.count > 0) {
+    parts.push(`Atlas ${grants.atlas.count} 条模型路由授权`);
+  }
+  if (grants.runos.count > 0) {
+    parts.push(`Runos ${grants.runos.count} 条能力授权`);
+  }
+  return new HttpException(
+    {
+      code: "PRODUCT_HAS_ACTIVE_GRANTS",
+      message: `${grants.productCode} 在上游还有生效中的授权（${parts.join("、")}），退役前要先全部撤销——去「权益配置」清掉再来。`,
+      retryable: false,
+      statusCode: HttpStatus.CONFLICT,
+      productCode: grants.productCode,
+      atlas: grants.atlas,
+      runos: grants.runos,
+    },
+    HttpStatus.CONFLICT,
+  );
 }
 
 export interface ProductWebhookRecord {
