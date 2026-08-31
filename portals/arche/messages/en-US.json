@@ -1,0 +1,186 @@
+{
+  "destructive": {
+    "titleTemplate": "{verb} {target}?",
+    "cancel": "Cancel",
+    "pending": "Working…",
+    "blocked": "Preconditions not met — resolve the items marked above first."
+  },
+  "preferences": {
+    "locale": {
+      "label": "Language",
+      "zh-CN": "简体中文",
+      "en-US": "English"
+    }
+  },
+  "common": {
+    "actionFailed": "Something went wrong",
+    "cardsRetired": "Card view has been retired; use the list",
+    "close": "Close",
+    "copied": "Copied to clipboard",
+    "copy": "Copy",
+    "copyDenied": "The browser denied clipboard access — select and copy manually.",
+    "copyFailed": "Copy failed",
+    "copyRow": "Copy row",
+    "deleteFailed": "Could not delete",
+    "edit": "Edit",
+    "loadFailed": "Could not load",
+    "loadMore": "Load more",
+    "loadMoreFailed": "Could not load more",
+    "loading": "Loading…",
+    "never": "Never",
+    "noMatchHint": "Try a different keyword or filter.",
+    "noMatchKeywordHint": "Try a different keyword.",
+    "noMatchingRecords": "No matching records",
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "rowCopied": "Row copied to clipboard",
+    "save": "Save",
+    "saveFailed": "Could not save",
+    "showAll": "Show all",
+    "uncategorized": "Uncategorized",
+    "unlimited": "No expiry"
+  },
+  "status": {
+    "keyState": {
+      "active": "Active",
+      "inactive": "Disabled",
+      "revoked": "Revoked",
+      "expired": "Expired"
+    },
+    "generic": {
+      "disabled": "Disabled",
+      "degraded": "Degraded",
+      "abnormal": "Abnormal"
+    }
+  },
+  "modelKeysPage": {
+    "header": {
+      "title": "API keys",
+      "description": "Inbound credentials external partners use to call Atlas. Internal products do not go through here — they hold OIDC clients and call /v1/* with short-lived S2S tokens. Every rotation and revocation is recorded in Audit."
+    },
+    "notice": {
+      "externalUnwiredTitle": "External keys are not wired into any authentication path yet — because there are no external partners today",
+      "externalUnwiredDescription": "The Atlas gateway accepts S2S OIDC tokens only on /v1/*, so an issued key cannot call the gateway today (TD-029). This is not an engineering gap: a third-party partner is not an OIDC client of the vxture IdP, a key is its only possible authentication method, and once a key is bound to a product_code the authorization model is already there. The one thing holding it back is that Atlas lives on the tailnet and atlas.vxture.com is reserved but unbound — what it waits on is a partner, not a sprint.",
+      "retiredTitle": "{count, plural, one {# retired Internal key} other {# retired Internal keys}} (all revoked)",
+      "retiredDescription": "The internal kind is gone: sibling products use OIDC S2S tokens, and handing them a long-lived shared secret would trade something stronger for something weaker. These old rows are kept rather than deleted — revoked is the terminal state of a dead credential, and deleting it would erase the fact that it was ever issued, along with its rotation history and audit trail. They never authenticated anything."
+    },
+    "load": {
+      "loadingTitle": "Loading…",
+      "loadingDescription": "Fetching the API key list.",
+      "errorTitle": "Could not load",
+      "errorFallback": "Could not load API keys"
+    },
+    "empty": {
+      "noMatchTitle": "No matching keys",
+      "noMatchDescription": "Try a different keyword or type.",
+      "emptyTitle": "No API keys yet",
+      "emptyDescription": "Choose “Issue key” to create one."
+    },
+    "filters": {
+      "kindLabel": "Filter by type",
+      "allKinds": "All types",
+      "internalRetired": "Internal (retired)",
+      "cardsDisabledReason": "Card view has been retired; use the list",
+      "searchPlaceholder": "Search name or prefix…",
+      "searchAriaLabel": "Search keys"
+    },
+    "columns": {
+      "name": "Name",
+      "prefix": "Prefix",
+      "lastUsed": "Last used",
+      "issuedAt": "Issued",
+      "kind": "Type",
+      "expiresAt": "Expires",
+      "state": "State"
+    },
+    "table": {
+      "internalRetired": "Internal · retired",
+      "setButExpired": "Set to “{label}”, but already expired"
+    },
+    "actions": {
+      "menuLabel": "Actions for {name}",
+      "issue": "Issue",
+      "rotate": "Rotate",
+      "enable": "Enable",
+      "disable": "Disable",
+      "revoke": "Revoke",
+      "delete": "Delete",
+      "alreadyRevoked": "This key is already revoked"
+    },
+    "bulk": {
+      "unit": "keys",
+      "enable": "Enable",
+      "disable": "Disable",
+      "selectedKeys": "{count, plural, one {the selected key} other {the # selected keys}}",
+      "disableConsequence": "While disabled, callers holding these keys are rejected until you enable them again. The keys themselves stay valid and can be re-enabled at any time.",
+      "doneTitle": "{count, plural, one {# key} other {# keys}} {state}",
+      "doneDescription": "Revoked keys and retired Internal keys are not affected by bulk actions.",
+      "failed": "Could not {action}"
+    },
+    "revoke": {
+      "target": "the key {name}",
+      "consequence": "Revoking is final: the key cannot be enabled or rotated again, and there is no “undo revoke”. The holder has to request a new one through the issue flow. To cut access temporarily, use “Disable” instead — that one is reversible.",
+      "doneDescription": "Revoking is final; the holder has to request a new key.",
+      "audited": "Recorded in Audit."
+    },
+    "delete": {
+      "target": "the key {name}",
+      "consequence": "This removes the row only: name, owner, prefix and last-used time disappear. The issue / rotate / revoke trail is unaffected — it lives in the append-only Audit tables. A revoked key already rejects every call, so deleting it changes nothing for any caller; it only tidies the ledger.",
+      "precondition": "This key is revoked",
+      "doneTitle": "{name} deleted",
+      "doneDescription": "The row is gone; its issue, rotate and revoke trail remains in Audit.",
+      "failed": "Could not delete",
+      "unsupportedTitle": "This Atlas deployment has no delete endpoint yet",
+      "unsupportedDescription": "A revoked key already rejects every call, so nothing is functionally affected. This action becomes available once Atlas ships DELETE /capability/api-keys/:id."
+    },
+    "issue": {
+      "cta": "Issue key",
+      "title": "Issue API key (External)",
+      "description": "The secret is shown once, at issue time. After that it can only be rotated.",
+      "submit": "Issue",
+      "externalOnlyTitle": "External only: internal products do not use keys",
+      "externalOnlyDescription": "The sibling products (karda / arda / varda / runos) all hold OIDC clients and call /v1/* with 300-second S2S tokens, whose act.sub is the product identity the authorization tables recognise. Handing them a long-lived shared secret — stored on both sides, where whoever holds it is whoever it says — would add no capability at all; it would only replace something stronger with something weaker. That is why internal was removed rather than left unused.",
+      "nameLabel": "Name",
+      "nameDescription": "Calls are grouped under this name in logs and metering.",
+      "ownerLabel": "Owner",
+      "ownerPlaceholder": "External partner name",
+      "ownerDescription": "Whichever product_code the key is bound to, it becomes a product in the authorization tables — both authentication paths share one authorization model.",
+      "expiresLabel": "Expires",
+      "expiresDescription": "Leave empty for no expiry — it runs until revoked. Setting a date changes nothing about this row on its own: expiry is evaluated at read time, so the state column will read “Expired” while the row still says active. Actually withdrawing it still takes someone disabling or revoking it."
+    },
+    "rotate": {
+      "title": "Rotate {name}",
+      "titleFallback": "Rotate key",
+      "description": "The old key stops working immediately. Until the holder switches to the new value every call returns 401 — agree on a cutover window first.",
+      "submit": "Rotate"
+    },
+    "reveal": {
+      "issuedTitle": "Key issued",
+      "rotatedTitle": "New key generated",
+      "saved": "I have saved it",
+      "onlyChanceTitle": "This is the only time you will see the secret",
+      "onlyChanceDescription": "Once you close this you cannot view it again. A lost secret can only be rotated, never recovered. This key cannot call the Atlas gateway yet — /v1/* accepts S2S OIDC tokens only, and wiring waits on an external partner (see the note above). Do not hand it over as if it were ready to use."
+    }
+  },
+  "columns": {
+    "action": "Action",
+    "actor": "Actor",
+    "health": "Health",
+    "kind": "Type",
+    "product": "Product",
+    "source": "Source",
+    "state": "State",
+    "target": "Object",
+    "time": "Time"
+  },
+  "filters": {
+    "allStates": "All states",
+    "stateLabel": "Filter by state"
+  },
+  "actions": {
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "disable": "Disable",
+    "enable": "Enable"
+  }
+}

@@ -27,6 +27,13 @@ export const platformSchema = z.object({
    */
   OPERA_BASE_URL: z.string().url().default("http://localhost:3040"),
   /**
+   * Arche (platform governance plane, operator shell) base URL. Highest-trust
+   * operator surface: identity, RBAC, audit, compliance, config. The public
+   * hostname is intentionally NOT recorded in the repo (placeholder-only
+   * policy) — production injects it via runtime env.
+   */
+  ARCHE_BASE_URL: z.string().url().default("http://localhost:3050"),
+  /**
    * Login / account UI base URL — the public identity surface that renders the
    * IdP interactive login page (accounts.vxture.com in prod; same-origin with
    * the OIDC endpoints there). The IdP redirects unauthenticated /authorize here

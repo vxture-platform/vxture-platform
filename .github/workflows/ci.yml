@@ -321,6 +321,7 @@ jobs:
           if has platform_bff-console;            then smoke @vxture/bff-console; fi
           if has platform_bff-website;            then smoke @vxture/bff-website; fi
           if has platform_bff-opera;              then smoke @vxture/bff-opera; fi
+          if has platform_bff-arche;              then smoke @vxture/bff-arche; fi
           if has platform_bff-platform-api;       then smoke @vxture/bff-platform-api; fi
           echo "built affected bundles: ${AFFECTED:-[]}"
 
@@ -348,6 +349,7 @@ jobs:
           if has platform_admin;     then pnpm --filter @vxture/admin build; fi
           if has platform_accounts;  then pnpm --filter @vxture/accounts build; fi
           if has platform_opera;     then pnpm --filter @vxture/opera build; fi
+          if has platform_arche;     then pnpm --filter @vxture/arche build; fi
           echo "built affected portals: ${AFFECTED:-[]}"
 
   # ── 5. Test Coverage ───────────────────────────────────────────────────────

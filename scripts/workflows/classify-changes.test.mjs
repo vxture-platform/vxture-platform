@@ -26,6 +26,7 @@ const ALL_IMAGES = [
   "platform_console",
   "platform_admin",
   "platform_opera",
+  "platform_arche",
   "platform_accounts",
   "platform_bff-gateway",
   "platform_bff-auth",
@@ -33,6 +34,7 @@ const ALL_IMAGES = [
   "platform_bff-console",
   "platform_bff-admin",
   "platform_bff-opera",
+  "platform_bff-arche",
   "platform_bff-platform-api",
 ];
 
@@ -128,6 +130,7 @@ test("image set: packages/platform → 仅前端镜像", () => {
     "platform_console",
     "platform_admin",
     "platform_opera",
+    "platform_arche",
     "platform_accounts",
   ]);
 });

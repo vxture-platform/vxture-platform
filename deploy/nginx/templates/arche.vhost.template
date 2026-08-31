@@ -1,0 +1,120 @@
+# arche.vhost.template — 平台治理平面公网 vhost（Arche：身份/RBAC/审计/合规/配置）
+#
+# 加固决策（同 opera 一档，均为硬性项）：
+#  1. 真实域名不入仓：本文件是模板,${VX_ARCHE_HOST} 由
+#     20-sync-nginx-config.sh 从主机 /srv/vxture/runtime/.env.arche-bff
+#     的 ARCHE_BASE_URL 渲染;仓内文档一律以 g.vxture.com 指代。
+#  2. 通配符证书（*.vxture.com 既有）：单签证书会经 CT 日志即时公开主机名。
+#  3. SSO 前置零内容：除 /auth/*（登录/回调必须匿名可达）外,一切路径过
+#     auth_request 门（arche-bff /auth/check）;未认证 → 302 /auth/login,
+#     不回显任何页面/静态资源内容。治理面是最高信任层,强鉴权姿态见 arche-bff。
+#  4. default_server 兜底见 00-default.conf;限流继承 conf.d/00-hardening.conf。
+#
+# 治理平面不挂上游产品模块（不像 opera 的 /atlas/ /runos/）——它只管平台自身治理。
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${VX_ARCHE_HOST};
+    return 301 https://${VX_ARCHE_HOST}$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name ${VX_ARCHE_HOST};
+
+    ssl_certificate     /etc/nginx/ssl/live/vxture.com/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/live/vxture.com/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_session_cache   shared:SSL:10m;
+
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header X-Frame-Options           SAMEORIGIN always;
+    add_header X-Content-Type-Options    nosniff always;
+    add_header Referrer-Policy           "strict-origin-when-cross-origin" always;
+    # 治理面不需要被索引;纵深防御(未认证本就零内容)。
+    add_header X-Robots-Tag              "noindex, nofollow" always;
+
+    resolver 127.0.0.11 valid=10s ipv6=off;
+
+    # ── auth_request 门（内部子请求,arche-bff 校验 RP 会话）──
+    location = /__vx_auth {
+        internal;
+        set $archebff vx-platform-arche-bff:3051;
+        proxy_pass              http://$archebff/auth/check;
+        proxy_pass_request_body off;
+        proxy_set_header        Content-Length "";
+        proxy_set_header        X-Original-URI $request_uri;
+        proxy_set_header        Host $host;
+    }
+
+    # 未认证：302 到 RP 登录（workforce SSO）,零内容回显。
+    error_page 401 = @vx_login;
+    location @vx_login {
+        return 302 /auth/login?returnTo=$scheme://$host$request_uri;
+    }
+
+    # ── RP 登录/回调/登出 —— 唯一匿名可达面 ──
+    location /auth/ {
+        set $archebff vx-platform-arche-bff:3051;
+        proxy_pass         http://$archebff;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+
+    location /_next/static/ {
+        auth_request /__vx_auth;
+        set $upstream vx-platform-arche:3050;
+        proxy_pass         http://$upstream;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_buffering    on;
+        add_header         Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # ── 数据面 /api/* → arche-bff ────────────────────────────────────────────
+    # 必须显式在 `location /` 之前:否则 /api/* 落到 Next 门户容器,而门户的
+    # next.config rewrite 是 dev-only seam(目标 localhost:3051,生产容器里没有
+    # BFF)——生产上所有数据请求 500。opera 早期漏了这块,这里照 admin/opera 现状钉死。
+    #
+    # /api/health 是 Next 门户自身的路由(app/api/health,容器健康检查用),精确避让。
+    location = /api/health {
+        auth_request /__vx_auth;
+        set $upstream vx-platform-arche:3050;
+        proxy_pass         http://$upstream;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+
+    location /api/ {
+        auth_request /__vx_auth;
+        set $archebff vx-platform-arche-bff:3051;
+        proxy_pass         http://$archebff;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        auth_request /__vx_auth;
+        set $upstream vx-platform-arche:3050;
+        proxy_pass         http://$upstream;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Upgrade           $http_upgrade;
+        proxy_set_header   Connection        '';
+    }
+}

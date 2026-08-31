@@ -4,7 +4,7 @@
  * @layer    Infrastructure
  * @category workflow
  * @description
- *   14 个镜像的 matrix 构建配置（name / image / dockerfile / build-args）。
+ *   16 个镜像的 matrix 构建配置（name / image / dockerfile / build-args）。
  *   被 classify-changes.mjs 的 `--matrix` 模式消费，产出 docker-build 的动态 matrix：
  *   只为「本次需重建」的镜像生成 matrix 项，docs/scripts-only 时为空集 → build job
  *   整体跳过。镜像名 + 路径规则的对应在 classify-changes.mjs 的 IMAGE_RULES 维护，
@@ -68,6 +68,14 @@ export const IMAGES = [
     dockerfile: "deploy/docker/Dockerfile.nextjs",
     "build-args": "PORTAL_PATH=portals/opera\nPACKAGE_FILTER=@vxture/opera",
   },
+  // arche：平台治理平面外壳。同 opera 一律同源相对路径调 BFF,不传
+  // NEXT_PUBLIC_*_BFF_URL（真实域名按加固决策不入仓,由 nginx 同 vhost 路由）。
+  {
+    name: "platform_arche",
+    image: ghcrImage("platform_arche"),
+    dockerfile: "deploy/docker/Dockerfile.nextjs",
+    "build-args": "PORTAL_PATH=portals/arche\nPACKAGE_FILTER=@vxture/arche",
+  },
   {
     name: "platform_accounts",
     image: ghcrImage("platform_accounts"),
@@ -115,6 +123,13 @@ export const IMAGES = [
     dockerfile: "deploy/docker/Dockerfile.nestjs",
     "build-args":
       "SERVICE_PATH=bff/opera-bff\nPACKAGE_FILTER=@vxture/bff-opera",
+  },
+  {
+    name: "platform_bff-arche",
+    image: ghcrImage("platform_bff-arche"),
+    dockerfile: "deploy/docker/Dockerfile.nestjs",
+    "build-args":
+      "SERVICE_PATH=bff/arche-bff\nPACKAGE_FILTER=@vxture/bff-arche",
   },
   {
     name: "platform_bff-platform-api",
