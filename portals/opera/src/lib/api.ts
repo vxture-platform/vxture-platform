@@ -185,5 +185,12 @@ export const api = {
     request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
-  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  /* DELETE 带 body 是有意的：产品删除要求 `{ confirm: true }`（两步删除的第二步
+     显式确认），不是所有 DELETE 都带 body，故设成可选——不传 body 时不发
+     content-type，与原来的无 body 调用（如 atlas api-key 删除）行为一致。 */
+  delete: <T>(path: string, body?: unknown) =>
+    request<T>(path, {
+      method: "DELETE",
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    }),
 };
