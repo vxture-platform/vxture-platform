@@ -1621,7 +1621,8 @@
     },
     "actions": {
       "create": "新建方案",
-      "menuLabel": "{name} 操作"
+      "menuLabel": "{name} 操作",
+      "delete": "删除"
     },
     "columns": {
       "solution": "业务方案",
@@ -1668,11 +1669,14 @@
       "created": "方案「{name}」已创建",
       "createFailed": "创建方案失败",
       "stateChanged": "方案「{name}」已{state}",
-      "stateFailed": "方案状态更新失败"
+      "stateFailed": "方案状态更新失败",
+      "deleted": "方案「{name}」已删除",
+      "deleteFailed": "删除方案失败"
     },
     "confirm": {
       "target": "方案「{name}」",
-      "deprecateConsequence": "退役是终态，不可恢复；已绑定的套餐与产品关系保留供追溯，但方案不再出现在可售清单里。"
+      "deprecateConsequence": "退役是终态，不可恢复；已绑定的套餐与产品关系保留供追溯，但方案不再出现在可售清单里。",
+      "deleteConsequence": "删除后方案从目录移除，产品与套餐绑定一并解除；已有生效订阅的方案不能删除，只能退役。"
     }
   },
   "productSolutionDetailPage": {

@@ -464,6 +464,61 @@ describe("solution write paths", () => {
     );
   });
 
+  it("delete: 套餐有生效订阅 → 409 + 回滚,不软删", async () => {
+    const tx = makeTxClient((sql) =>
+      sql.includes("for update")
+        ? [SOLUTION_LOCK_ROW]
+        : sql.includes("has_subs")
+          ? [{ has_subs: true }]
+          : [],
+    );
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    await expect(
+      router.deleteSolution(makeReq(MANAGE), "flood-regulation"),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(tx.outcome()).toEqual({
+      committed: false,
+      rolledBack: true,
+      released: true,
+    });
+    expect(tx.calls.some((c) => c.includes("UPDATE product.solutions"))).toBe(
+      false,
+    );
+  });
+
+  it("delete: 无生效订阅 → 软删 + 解绑产品/套餐 + 提交", async () => {
+    const tx = makeTxClient((sql) =>
+      sql.includes("for update")
+        ? [SOLUTION_LOCK_ROW]
+        : sql.includes("has_subs")
+          ? [{ has_subs: false }]
+          : [],
+    );
+    const router = new ProductsRouter(noDbPool().pool, tx.pool);
+    const result = await router.deleteSolution(
+      makeReq(MANAGE),
+      "flood-regulation",
+    );
+    expect(result).toEqual({
+      solutionCode: "flood-regulation",
+      deleted: true,
+    });
+    expect(tx.outcome()).toEqual({
+      committed: true,
+      rolledBack: false,
+      released: true,
+    });
+    expect(
+      tx.calls.some((c) => /UPDATE product\.solutions SET deleted_at/.test(c)),
+    ).toBe(true);
+    expect(
+      tx.calls.some((c) => c.includes("DELETE FROM product.solution_plans")),
+    ).toBe(true);
+    expect(
+      tx.calls.some((c) => c.includes("DELETE FROM product.solution_products")),
+    ).toBe(true);
+  });
+
   it("404 + rollback when the solution does not exist", async () => {
     const tx = makeTxClient(() => []);
     const router = new ProductsRouter(noDbPool().pool, tx.pool);
@@ -540,6 +595,7 @@ describe("solution write handlers are step-up gated", () => {
     "createSolution",
     "updateSolution",
     "setSolutionState",
+    "deleteSolution",
     "replaceSolutionProducts",
     "bindSolutionPlan",
     "unbindSolutionPlan",

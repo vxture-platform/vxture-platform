@@ -80,6 +80,7 @@ import {
   capabilityTypeIcon,
   useSolutionLabels,
 } from "./solution-labels";
+import { SolutionField } from "./SolutionField";
 
 // ─── 表单形状 ──────────────────────────────────────────────────────────────
 
@@ -908,14 +909,14 @@ export function ProductSolutionDetailPage({
           onSubmit={(event) => void submitEdit(event)}
         >
           {dialogError ? <Banner tone="danger" title={dialogError} /> : null}
-          {/* 字段一律竖排(标签在上)——同创建页,避免 <Label> 嵌控件在窄格里
-              把中文标签逐字竖排。 */}
+          {/* Single-line text fields with live char counts; description and
+              delivery boundaries (a list) stay multi-line. Same as create. */}
           <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
-            <div className="flex flex-col gap-xs">
-              <Label>
-                {t("fields.solutionName")}
-                <span className="text-destructive-text"> *</span>
-              </Label>
+            <SolutionField
+              label={t("fields.solutionName")}
+              required
+              count={{ value: editForm.solutionName, max: 128 }}
+            >
               <Input
                 value={editForm.solutionName}
                 maxLength={128}
@@ -926,9 +927,11 @@ export function ProductSolutionDetailPage({
                 }
                 required
               />
-            </div>
-            <div className="flex flex-col gap-xs">
-              <Label>{t("fields.ownerTeam")}</Label>
+            </SolutionField>
+            <SolutionField
+              label={t("fields.ownerTeam")}
+              count={{ value: editForm.ownerTeam, max: 128 }}
+            >
               <Input
                 value={editForm.ownerTeam}
                 maxLength={128}
@@ -938,11 +941,13 @@ export function ProductSolutionDetailPage({
                   )
                 }
               />
-            </div>
+            </SolutionField>
           </div>
           <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
-            <div className="flex flex-col gap-xs">
-              <Label>{t("fields.industry")}</Label>
+            <SolutionField
+              label={t("fields.industry")}
+              count={{ value: editForm.industry, max: 128 }}
+            >
               <Input
                 value={editForm.industry}
                 maxLength={128}
@@ -952,9 +957,8 @@ export function ProductSolutionDetailPage({
                   )
                 }
               />
-            </div>
-            <div className="flex flex-col gap-xs">
-              <Label>{t("editDialog.tags")}</Label>
+            </SolutionField>
+            <SolutionField label={t("editDialog.tags")}>
               <Input
                 value={editForm.tags}
                 placeholder={t("editDialog.tagsPlaceholder")}
@@ -964,51 +968,44 @@ export function ProductSolutionDetailPage({
                   )
                 }
               />
-            </div>
+            </SolutionField>
           </div>
-          <div className="flex flex-col gap-xs">
-            <Label>{t("fields.scenario")}</Label>
-            <Textarea
-              value={editForm.scenario}
-              rows={2}
-              maxLength={128}
-              onChange={(event) =>
-                setEditForm((old) =>
-                  old ? { ...old, scenario: event.target.value } : old,
-                )
-              }
-            />
+          <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
+            <SolutionField
+              label={t("fields.scenario")}
+              count={{ value: editForm.scenario, max: 128 }}
+            >
+              <Input
+                value={editForm.scenario}
+                maxLength={128}
+                onChange={(event) =>
+                  setEditForm((old) =>
+                    old ? { ...old, scenario: event.target.value } : old,
+                  )
+                }
+              />
+            </SolutionField>
+            <SolutionField
+              label={t("fields.customerSegment")}
+              count={{ value: editForm.customerSegment, max: 255 }}
+            >
+              <Input
+                value={editForm.customerSegment}
+                maxLength={255}
+                onChange={(event) =>
+                  setEditForm((old) =>
+                    old ? { ...old, customerSegment: event.target.value } : old,
+                  )
+                }
+              />
+            </SolutionField>
           </div>
-          <div className="flex flex-col gap-xs">
-            <Label>{t("fields.customerSegment")}</Label>
-            <Textarea
-              value={editForm.customerSegment}
-              rows={2}
-              maxLength={255}
-              onChange={(event) =>
-                setEditForm((old) =>
-                  old ? { ...old, customerSegment: event.target.value } : old,
-                )
-              }
-            />
-          </div>
-          <div className="flex flex-col gap-xs">
-            <Label>{t("editDialog.descriptionField")}</Label>
-            <Textarea
-              value={editForm.description}
-              rows={3}
-              onChange={(event) =>
-                setEditForm((old) =>
-                  old ? { ...old, description: event.target.value } : old,
-                )
-              }
-            />
-          </div>
-          <div className="flex flex-col gap-xs">
-            <Label>{t("fields.deliveryMode")}</Label>
-            <Textarea
+          <SolutionField
+            label={t("fields.deliveryMode")}
+            count={{ value: editForm.deliveryMode, max: 1000 }}
+          >
+            <Input
               value={editForm.deliveryMode}
-              rows={2}
               maxLength={1000}
               placeholder={t("editDialog.deliveryModePlaceholder")}
               onChange={(event) =>
@@ -1017,9 +1014,26 @@ export function ProductSolutionDetailPage({
                 )
               }
             />
-          </div>
-          <div className="flex flex-col gap-xs">
-            <Label>{t("editDialog.boundaries")}</Label>
+          </SolutionField>
+          <SolutionField
+            label={t("editDialog.descriptionField")}
+            count={{ value: editForm.description, max: 4000 }}
+          >
+            <Textarea
+              value={editForm.description}
+              rows={3}
+              maxLength={4000}
+              onChange={(event) =>
+                setEditForm((old) =>
+                  old ? { ...old, description: event.target.value } : old,
+                )
+              }
+            />
+          </SolutionField>
+          <SolutionField
+            label={t("editDialog.boundaries")}
+            hint={t("editDialog.boundariesPlaceholder")}
+          >
             <Textarea
               value={editForm.deliveryBoundaries}
               rows={4}
@@ -1032,7 +1046,7 @@ export function ProductSolutionDetailPage({
                 )
               }
             />
-          </div>
+          </SolutionField>
           <label className="inline-flex items-center gap-xs text-body-sm text-foreground">
             <Checkbox
               checked={editForm.isPublic}
