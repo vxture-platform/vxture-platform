@@ -27,6 +27,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpException,
   HttpStatus,
@@ -40,7 +41,9 @@ import {
 } from "@nestjs/common";
 import { VxConfigService } from "@vxture/core-config";
 import type { Request } from "express";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
+import { insertOperatorAuditLog } from "../audit/audit-log";
+import { RequireStepUp } from "../auth/step-up.decorator";
 import { OperatorExchangeService } from "../auth/operator-exchange.service";
 import { conflict, invalidRequest, notFound } from "../errors/api-error";
 import {
@@ -177,6 +180,39 @@ interface ProductWriteBody {
   isWorkforceVisible?: boolean;
   origin?: ProductOrigin;
   originProvider?: string | null;
+}
+
+interface ProductDeleteBody {
+  /** 两步删除的第二步显式确认；服务端要求为 true，否则 400。 */
+  confirm?: boolean;
+}
+
+/** 客户侧足迹(直接带 product_id 的表)。任一为真 ⇒ 只能退役、不能删除。 */
+interface CustomerFootprint {
+  hasUsage: boolean;
+  hasBilling: boolean;
+  hasProvisioning: boolean;
+  hasEntitlements: boolean;
+  blocked: boolean;
+}
+
+/**
+ * 删除影响面——两步删除第一步的预览、第二步执行前复核共用。
+ * `footprint`/`upstream*` 决定能不能删；`cascade` 是删除时连带处理的运营侧配置。
+ */
+export interface ProductDeletionImpact {
+  deletable: boolean;
+  /** 挡住删除的原因码(deletable=false 时非空)，供门户直接给出去处。 */
+  blockers: string[];
+  footprint: CustomerFootprint;
+  upstreamAtlas: number;
+  upstreamRunos: number;
+  cascade: {
+    /** 会被一并软删的套餐(本产品作 primary 组件的套餐)。 */
+    plans: number;
+    /** 会被停用(status=inactive)的 product 型 OIDC 客户端——登录随之中断。 */
+    oidcClients: string[];
+  };
 }
 
 const SELECT_COLUMNS = `
@@ -475,6 +511,236 @@ export class ProductCatalogRouter {
   }
 
   /**
+   * 删除预览(两步删除第一步)——只读，回一份影响面：能不能删、被什么挡住、删了
+   * 会连带处理什么。门户据此把「有客户足迹只能退役 / 连带停用 N 个登录客户端 /
+   * 软删 M 个套餐」摊给操作者看清，再走第二步确认。读路由永不 gate step-up。
+   */
+  @Get(":id/deletion-preview")
+  async deletionPreview(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+  ): Promise<ProductDeletionImpact> {
+    assertCanManage(req);
+    const exists = await this.pool.query(
+      `SELECT 1 FROM product.products WHERE id = $1 AND deleted_at IS NULL`,
+      [id],
+    );
+    if (!exists.rows[0]) {
+      throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
+    }
+    return this.collectDeletionImpact(req, id);
+  }
+
+  /**
+   * 删除产品(两步删除第二步)——软删除 `deleted_at`，从目录里彻底消失。与退役的
+   * 分工：退役=可见的终态「已退役」(产品曾合法、现下线，老订阅照付)；删除=「本
+   * 不该在册」直接隐去(误发布产品的出口)。
+   *
+   * 判据(owner 2026-08-31)：**无客户足迹即可删**——有用量/账单/开通/权益/上游生效
+   * 授权任一者 ⇒ 409，只能退役。删除**不阻塞**于登录客户端：该产品的 `product` 型
+   * OIDC 客户端在同事务里停用(status=inactive)，接受产品登录随之中断——这是结果、
+   * 不是阻塞项(owner 明确)。
+   *
+   * 连带：本产品作 primary 组件的套餐一并软删；metrics/webhooks/launch 留库
+   * (它们对 products 是 ON DELETE CASCADE，物理清除随将来硬删)。step-up + 审计：
+   * 比退役更彻底，闸门不比退役低。
+   */
+  @Delete(":id")
+  @RequireStepUp()
+  async remove(
+    @Req() req: Request & RequestContext,
+    @Param("id") id: string,
+    @Body() body: ProductDeleteBody,
+  ): Promise<ProductRecord> {
+    assertCanManage(req);
+    /* 服务端也要求显式确认——两步删除的第二步不该被一个漏参的 DELETE 顶穿。 */
+    if (body?.confirm !== true) {
+      throw invalidRequest(
+        "DELETION_NOT_CONFIRMED",
+        "delete requires confirm=true (two-step deletion)",
+        "confirm",
+      );
+    }
+    /* 上游授权检查放事务外(网络调用不进 FOR UPDATE，理由同退役)。有则 409。
+       删除对已退役产品也写库，故强制查上游(不吃 deprecated 短路)。 */
+    await this.assertNoActiveUpstreamGrants(req, id, {
+      skipDeprecatedShortCircuit: true,
+    });
+
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const current = await client.query<ProductRow>(
+        `SELECT ${SELECT_COLUMNS} FROM product.products
+          WHERE id = $1 AND deleted_at IS NULL
+          FOR UPDATE`,
+        [id],
+      );
+      const row = current.rows[0];
+      if (!row) {
+        await client.query("ROLLBACK");
+        throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
+      }
+      /* 客户足迹复核(事务内、直接 product_id 的表)——防 TOCTOU：预览与执行之间
+         新产生的足迹要挡住。上游授权已在事务外查过。 */
+      const footprint = await this.readCustomerFootprint(client, id);
+      if (footprint.blocked) {
+        await client.query("ROLLBACK");
+        throw productHasCustomerFootprint(row.product_code, footprint);
+      }
+
+      const operatorId = req.operator?.id ?? null;
+      const deleted = await client.query<ProductRow>(
+        `UPDATE product.products
+            SET deleted_at = now(), updated_by = $2, updated_at = now()
+          WHERE id = $1 AND deleted_at IS NULL
+          RETURNING ${SELECT_COLUMNS}`,
+        [id, operatorId],
+      );
+      /* 连带软删本产品作 primary 组件的套餐(plans 无 product_id 列，归属经
+         plan_components.component_role='primary' 反查)。 */
+      const plans = await client.query<{ plan_code: string }>(
+        `UPDATE product.plans
+            SET deleted_at = now(), updated_by = $2, updated_at = now()
+          WHERE deleted_at IS NULL
+            AND id IN (
+              SELECT pv.plan_id FROM product.plan_versions pv
+                JOIN product.plan_components pc ON pc.plan_version_id = pv.id
+               WHERE pc.component_role = 'primary' AND pc.product_id = $1
+            )
+          RETURNING plan_code`,
+        [id, operatorId],
+      );
+      /* 停用该产品的 product 型 OIDC 客户端——登录中断(已接受、不阻塞)。行不删：
+         product_id 仍指向(已软删的)产品行，chk_oidc_clients_kind_product 不破。 */
+      const clients = await client.query<{ client_id: string }>(
+        `UPDATE appoidc.oidc_clients
+            SET status = 'inactive', updated_at = now()
+          WHERE product_id = $1 AND status = 'active'
+          RETURNING client_id`,
+        [id],
+      );
+      await insertOperatorAuditLog(client, req, {
+        action: "catalog.product.delete",
+        resourceType: "product",
+        resourceId: id,
+        before: { productCode: row.product_code, status: row.status },
+        after: {
+          deleted: true,
+          disabledClients: clients.rows.map((r) => r.client_id),
+          softDeletedPlans: plans.rows.map((r) => r.plan_code),
+        },
+      });
+      await client.query("COMMIT");
+      return toRecord(deleted.rows[0]!);
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 删除影响面(预览与执行前复核共用的只读汇总)。客户足迹走库、上游授权打两个
+   * 上游(与退役同一 `fetchActiveUpstreamGrants`，fail-closed)、连带项查套餐与客户端。
+   */
+  private async collectDeletionImpact(
+    req: Request & RequestContext,
+    id: string,
+  ): Promise<ProductDeletionImpact> {
+    const codeRes = await this.pool.query<{ product_code: string }>(
+      `SELECT product_code FROM product.products WHERE id = $1 AND deleted_at IS NULL`,
+      [id],
+    );
+    const productCode = codeRes.rows[0]?.product_code;
+    if (!productCode) {
+      throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
+    }
+    const footprint = await this.readCustomerFootprint(this.pool, id);
+    const grants = await fetchActiveUpstreamGrants(
+      {
+        operatorExchange: this.operatorExchange,
+        atlasApiUrl: this.atlasApiUrl,
+        runosApiUrl: this.runosApiUrl,
+      },
+      req,
+      productCode,
+    );
+    const plansRes = await this.pool.query<{ cnt: number }>(
+      `SELECT count(*)::int AS cnt FROM product.plans
+        WHERE deleted_at IS NULL
+          AND id IN (
+            SELECT pv.plan_id FROM product.plan_versions pv
+              JOIN product.plan_components pc ON pc.plan_version_id = pv.id
+             WHERE pc.component_role = 'primary' AND pc.product_id = $1
+          )`,
+      [id],
+    );
+    const clientsRes = await this.pool.query<{ client_id: string }>(
+      `SELECT client_id FROM appoidc.oidc_clients
+        WHERE product_id = $1 AND status = 'active' ORDER BY client_id`,
+      [id],
+    );
+    const blockers: string[] = [];
+    if (footprint.hasUsage) blockers.push("HAS_USAGE");
+    if (footprint.hasBilling) blockers.push("HAS_BILLING");
+    if (footprint.hasProvisioning) blockers.push("HAS_PROVISIONING");
+    if (footprint.hasEntitlements) blockers.push("HAS_ENTITLEMENTS");
+    if (grants.atlas.count > 0) blockers.push("HAS_UPSTREAM_ATLAS");
+    if (grants.runos.count > 0) blockers.push("HAS_UPSTREAM_RUNOS");
+    return {
+      deletable: blockers.length === 0,
+      blockers,
+      footprint,
+      upstreamAtlas: grants.atlas.count,
+      upstreamRunos: grants.runos.count,
+      cascade: {
+        plans: plansRes.rows[0]?.cnt ?? 0,
+        oidcClients: clientsRes.rows.map((r) => r.client_id),
+      },
+    };
+  }
+
+  /**
+   * 客户侧足迹——只查直接带 `product_id` 的表(套餐无 product_id，订阅经套餐间接
+   * 归属，其效应已由 entitlement_caches/quota_pools 落到直接列上)。一次往返多个
+   * EXISTS，够判「删还是只能退役」。
+   */
+  private async readCustomerFootprint(
+    db: Pool | PoolClient,
+    id: string,
+  ): Promise<CustomerFootprint> {
+    const res = await db.query<{
+      has_usage: boolean;
+      has_billing: boolean;
+      has_provisioning: boolean;
+      has_entitlements: boolean;
+    }>(
+      `SELECT
+         EXISTS(SELECT 1 FROM metering.usage_events        WHERE product_id = $1) AS has_usage,
+         EXISTS(SELECT 1 FROM billing.invoice_items        WHERE product_id = $1) AS has_billing,
+         EXISTS(SELECT 1 FROM provisioning.provisionings   WHERE product_id = $1) AS has_provisioning,
+         (EXISTS(SELECT 1 FROM metering.entitlement_caches WHERE product_id = $1)
+          OR EXISTS(SELECT 1 FROM metering.quota_pools     WHERE product_id = $1)
+          OR EXISTS(SELECT 1 FROM metering.subscription_entitlement_overrides WHERE product_id = $1)) AS has_entitlements`,
+      [id],
+    );
+    const r = res.rows[0]!;
+    return {
+      hasUsage: r.has_usage,
+      hasBilling: r.has_billing,
+      hasProvisioning: r.has_provisioning,
+      hasEntitlements: r.has_entitlements,
+      blocked:
+        r.has_usage ||
+        r.has_billing ||
+        r.has_provisioning ||
+        r.has_entitlements,
+    };
+  }
+
+  /**
    * 退役前置：Atlas 的模型路由授权与 Runos 的能力授权都必须为零。
    *
    * 为什么要这道闸门：`product.products` 是「有哪些产品」的唯一权威，但两个上游
@@ -489,6 +755,7 @@ export class ProductCatalogRouter {
   private async assertNoActiveUpstreamGrants(
     req: Request & RequestContext,
     id: string,
+    opts?: { skipDeprecatedShortCircuit?: boolean },
   ): Promise<void> {
     const current = await this.pool.query<{
       product_code: string;
@@ -503,8 +770,11 @@ export class ProductCatalogRouter {
       throw notFound("CATALOG_PRODUCT_NOT_FOUND", "Product not found");
     }
     /* 已退役的产品再收一次 deprecated 是幂等重放（下面的事务里不会写库）——
-       不为一个不会发生的写去打两个上游。 */
-    if (row.status === "deprecated") return;
+       不为一个不会发生的写去打两个上游。删除路径例外（skipDeprecatedShortCircuit）：
+       删除对已退役产品**也写库**（软删 + 停用客户端），跳过检查会把上游授权变孤儿，
+       与预览无条件查上游的口径也不一致。 */
+    if (!opts?.skipDeprecatedShortCircuit && row.status === "deprecated")
+      return;
 
     const grants = await fetchActiveUpstreamGrants(
       {
@@ -771,6 +1041,40 @@ export function productHasActiveGrants(
       productCode: grants.productCode,
       atlas: grants.atlas,
       runos: grants.runos,
+    },
+    HttpStatus.CONFLICT,
+  );
+}
+
+/**
+ * 409 `PRODUCT_HAS_CUSTOMER_FOOTPRINT`：产品已有客户使用记录，删除被拒——只能退役。
+ *
+ * 与 `productHasActiveGrants` 同套形状(自带 `code` 的响应体，`AllExceptionsFilter`
+ * 把额外字段原样带出)：门户拿到明细就能给出「有客户在用，改走退役」的准确文案，
+ * 而不是只被告知「你不能」。
+ */
+export function productHasCustomerFootprint(
+  productCode: string,
+  footprint: {
+    hasUsage: boolean;
+    hasBilling: boolean;
+    hasProvisioning: boolean;
+    hasEntitlements: boolean;
+  },
+): HttpException {
+  const parts: string[] = [];
+  if (footprint.hasUsage) parts.push("用量记录");
+  if (footprint.hasBilling) parts.push("账单");
+  if (footprint.hasProvisioning) parts.push("开通记录");
+  if (footprint.hasEntitlements) parts.push("生效权益");
+  return new HttpException(
+    {
+      code: "PRODUCT_HAS_CUSTOMER_FOOTPRINT",
+      message: `${productCode} 已有客户使用记录（${parts.join("、")}），不能删除——请改用退役。`,
+      retryable: false,
+      statusCode: HttpStatus.CONFLICT,
+      productCode,
+      footprint,
     },
     HttpStatus.CONFLICT,
   );

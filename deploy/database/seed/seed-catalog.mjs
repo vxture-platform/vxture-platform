@@ -1348,22 +1348,18 @@ export async function seedCatalog(client) {
   // seeded row points at it by FK (plans, webhooks, metrics, OIDC client) — and a
   // product-level client below may exist only for a product that is in this list.
   // Everything else is registered by an operator in opera → 产品管理 → 产品目录.
-  //   ruyin  (B: OIDC client; U-line product_300)      umbra (A: app-scope claim; B: client/plan)
-  //   runos  (A: opera /runos module, RUNOS_AUDIENCE)   arda  (B: plans/webhook/metrics/client)
-  //   karda  (B: webhook/metrics/client)                vxtpl (B: client/webhook; product_240 §7)
-  //   atlas  (A: opera /atlas module, ATLAS_AUDIENCE)
+  //   umbra  (A: app-scope claim; B: client/plan)       arda  (B: plans/webhook/metrics/client)
+  //   runos  (A: opera /runos module, RUNOS_AUDIENCE)   karda (B: webhook/metrics/client)
+  //   atlas  (A: opera /atlas module, ATLAS_AUDIENCE)   vxtpl (B: client/webhook; product_240 §7)
+  // ruyin 不在此列(owner 2026-08-31)：它是平台级 first-party 桌面客户端(与 website/
+  // console 同类，customer-realm 的 platform 级客户端)，不是目录产品——其 OIDC 客户端
+  // 在下方以 kind:"platform" 声明，无需也不得建 product.products 行。存量库由迁移
+  // 2026-08-31-ruyin-declassify.sql 把旧的 product 级客户端与产品行一并降级/软删。
   // `origin` is written explicitly (same shape the catalog page writes), not left to
   // the column default — a seeded row should be indistinguishable from a registered one.
   const PRODUCTS = [
     // desc = placeholder external copy; i18n key derived product.product.{code}.desc
-    {
-      code: "ruyin",
-      type: "client",
-      cat: 1,
-      name: "如影",
-      nick: "Ruyin",
-      desc: "Client-side (desktop) product.",
-    },
+    // ruyin 不在此(见上)——平台级桌面客户端，不建产品行。
     {
       code: "umbra",
       type: "external",
@@ -1454,7 +1450,6 @@ export async function seedCatalog(client) {
     karda: "0.9.0",
     vxtpl: "1.0.0",
     atlas: "0.1.0",
-    ruyin: "0.8.0",
     umbra: "1.0.0",
   };
   for (const [code, ver] of Object.entries(PRODUCT_VERSIONS)) {
@@ -1622,9 +1617,12 @@ export async function seedCatalog(client) {
     // 预登记，故登记无端口规范值 http://127.0.0.1/oauth/callback，authorize 按
     // host+path 端口无关匹配（redirectUriAllowed）。No subscription scope：客户端
     // 产品不进权益引擎（product_100 §5）。
+    // kind:"platform"(owner 2026-08-31)——ruyin 是平台级 first-party 桌面客户端，不是
+    // 目录产品，与 website/console 同为 customer-realm 的 platform 级客户端。登录机制
+    // (loopback+PKCE)不变；只是不再挂 product.products 行。
     {
       clientId: "ruyin",
-      product: "ruyin",
+      kind: "platform",
       name: "Ruyin",
       displayName: "如影 Ruyin",
       realm: "customer",
@@ -1637,7 +1635,7 @@ export async function seedCatalog(client) {
     // 使一个 client 带不了两个渠道）。桌面 beta 构建用 RUYIN_OIDC_CLIENT_ID=ruyin-beta。
     {
       clientId: "ruyin-beta",
-      product: "ruyin",
+      kind: "platform",
       name: "Ruyin Beta",
       displayName: "如影 Ruyin（Beta）",
       realm: "customer",

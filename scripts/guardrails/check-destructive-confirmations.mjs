@@ -34,15 +34,17 @@ const rel = (f) => f.slice(REPO_ROOT.length + 1).split('\\').join('/');
 /**
  * 豁免基线。**改这个数字之前先回答一句：这处动作真的可逆吗？**
  *
- * 当前五处，全部是「停用 / 只打开表单」这类可撤回的动作：
+ * 当前六处，全部是「停用 / 只打开表单」这类可撤回的动作：
  *   · opera product/clients      —— 停用 client，密钥与授权原样保留
  *   · opera product/entitlements —— 停用授权路由，授权行与配置原样保留
  *   · opera product/entitlements —— 同一个动作的第二个入口（2026-08-31「未登记产品的
  *                                    授权」报表里的 Atlas 行）：同样是软停用、可再启用
  *   · admin invoices             —— 只打开红冲登记表单，红冲发生在提交时（那一步走 step-up）
  *   · admin billing/detail       —— 同上，同一个表单的另一个入口
+ *   · opera product/catalog      —— 「删除」菜单项只打开两步删除的预览对话框；删除发生在
+ *                                    对话框确认时，那一步走 step-up + 二次确认（2026-08-31）
  */
-const EXEMPT_BASELINE = 5;
+const EXEMPT_BASELINE = 6;
 
 /** 原生对话框：不是「不推荐」，是这个仓里不许有。 */
 const NATIVE_DIALOG = /\bwindow\.(?:confirm|alert)\s*\(/;

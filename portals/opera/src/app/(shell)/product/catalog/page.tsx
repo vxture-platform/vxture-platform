@@ -74,6 +74,7 @@ import {
   type ProductState,
 } from "@/features/product/lifecycle";
 import { useOperatorSession } from "@/features/session/SessionProvider";
+import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { buildAdminAtlasGrantsUrl } from "@/lib/admin-entry";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
@@ -124,6 +125,36 @@ const ORIGIN_LABELS: Record<ProductOrigin, string> = {
   self: "平台自建",
   third_party: "第三方接入",
   other: "其他",
+};
+
+/**
+ * 删除影响面（`GET /api/products/:id/deletion-preview`）。两步删除第一步取回它，
+ * 第二步照 `deletable` 决定放不放行。判据是「无客户足迹即可删」——`blockers`
+ * 非空即只能退役。`cascade` 是删除会连带处理的东西，摊给操作者看清再落锤。
+ */
+interface ProductDeletionImpact {
+  deletable: boolean;
+  blockers: string[];
+  footprint: {
+    hasUsage: boolean;
+    hasBilling: boolean;
+    hasProvisioning: boolean;
+    hasEntitlements: boolean;
+    blocked: boolean;
+  };
+  upstreamAtlas: number;
+  upstreamRunos: number;
+  cascade: { plans: number; oidcClients: string[] };
+}
+
+/** 把 BFF 的原因码翻成一句人话——判码不判文案（product_251 X-1）。 */
+const BLOCKER_LABELS: Record<string, string> = {
+  HAS_USAGE: "用量记录",
+  HAS_BILLING: "账单",
+  HAS_PROVISIONING: "开通记录",
+  HAS_ENTITLEMENTS: "生效权益",
+  HAS_UPSTREAM_ATLAS: "Atlas 模型路由授权",
+  HAS_UPSTREAM_RUNOS: "Runos 能力授权",
 };
 
 type DialogState =
@@ -275,6 +306,9 @@ function ProductsPageContent() {
   const { toast } = useToast();
   const router = useRouter();
   const { can } = useOperatorSession();
+  /* 删除是高危写路由（BFF 挂 `@RequireStepUp()`）——命中闸门弹 TOTP、换 300s 凭证、
+     重试，与 model/keys 那批同一套。 */
+  const { runWithStepUp } = useStepUp();
   const canManage = can(MANAGE);
 
   /* 接入凭据页与权益配置页都会带产品 id 点回来（「在产品目录里查看」）。 */
@@ -308,6 +342,13 @@ function ProductsPageContent() {
   } | null>(null);
   /** 最近一次被挡下来的退役。成功退役任何产品、或人手关掉，都清空。 */
   const [retireBlock, setRetireBlock] = useState<RetireBlock | null>(null);
+  /* 两步删除：菜单点「删除」先拉影响面预览（impact=null 即加载中），看清能不能删、
+     连带处理什么，再在对话框里落锤。loadError 记预览读取失败。 */
+  const [deletion, setDeletion] = useState<{
+    product: ProductRecord;
+    impact: ProductDeletionImpact | null;
+    loadError: string | null;
+  } | null>(null);
 
   const [checklistProduct, setChecklistProduct] =
     useState<ProductRecord | null>(null);
@@ -509,6 +550,95 @@ function ProductsPageContent() {
         toast({
           tone: "danger",
           title: `${label}失败`,
+          ...describeError(error),
+        });
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  /**
+   * 删除入口（两步删除第一步）。先拉影响面预览再开对话框——不预览就打开等于让操作者
+   * 对着一个「不知道会连带删掉什么、也不知道能不能删」的确认框落锤。预览读失败时
+   * 对话框照开，但显示错误、禁掉删除按钮：读不到影响面不能删。
+   */
+  async function openDeletion(product: ProductRecord) {
+    setDeletion({ product, impact: null, loadError: null });
+    try {
+      const impact = await api.get<ProductDeletionImpact>(
+        `/api/products/${encodeURIComponent(product.id)}/deletion-preview`,
+      );
+      /* 期间没被换成删别的产品才落库——两步之间用户可能关掉又开另一个。 */
+      setDeletion((cur) =>
+        cur && cur.product.id === product.id
+          ? { product, impact, loadError: null }
+          : cur,
+      );
+    } catch (error) {
+      setDeletion((cur) =>
+        cur && cur.product.id === product.id
+          ? {
+              product,
+              impact: null,
+              loadError:
+                describeError(error).description ?? "读取删除影响面失败",
+            }
+          : cur,
+      );
+    }
+  }
+
+  /**
+   * 删除落锤（两步删除第二步）。走 step-up；BFF 会再复核一次判据，所以预览之后到
+   * 这里之间新长出的客户足迹/上游授权仍会被 409 挡下——那时收起对话框，把出口
+   * （去权益配置撤销 / 改用退役）给到位。
+   */
+  async function confirmDeletion() {
+    if (!deletion?.impact?.deletable) return;
+    const product = deletion.product;
+    setSubmitting(true);
+    try {
+      await runWithStepUp(() =>
+        api.delete(`/api/products/${product.id}`, { confirm: true }),
+      );
+      toast({
+        tone: "success",
+        title: `${product.productName} 已删除`,
+        description: "已从产品目录移除（软删除）。",
+      });
+      setDeletion(null);
+      await reload();
+    } catch (error) {
+      if (isStepUpCancelled(error)) return;
+      /* 判码不判文案（product_251 X-1）。两种 409 各有各的出口，和退役闸门共用
+         同一套 Banner/toast 呈现：都是「删不成，去做另一件事」。 */
+      if (
+        error instanceof OperaApiError &&
+        error.code === "PRODUCT_HAS_ACTIVE_GRANTS"
+      ) {
+        setDeletion(null);
+        setRetireBlock(grantsBlockOf(product, error.body));
+        toast({
+          tone: "danger",
+          title: `${product.productName} 未删除：上游还有生效中的授权`,
+          description: "先去权益配置把它们撤掉。条数与出口见页顶。",
+        });
+      } else if (
+        error instanceof OperaApiError &&
+        error.code === "PRODUCT_HAS_CUSTOMER_FOOTPRINT"
+      ) {
+        setDeletion(null);
+        toast({
+          tone: "danger",
+          title: `${product.productName} 未删除：已有客户使用记录`,
+          description:
+            "有用量 / 账单 / 开通 / 权益记录的产品不能删除，只能退役。",
+        });
+      } else {
+        toast({
+          tone: "danger",
+          title: `删除 ${product.productName} 失败`,
           ...describeError(error),
         });
       }
@@ -1002,6 +1132,22 @@ function ProductsPageContent() {
                                 onSelect: () => runLifecycle(r, a),
                               },
                         ),
+                        {
+                          /* 删除（两步）。红色、与退役之间加分隔线：退役是可见的终态
+                             「已退役」，删除是从目录彻底移除（软删）——两者不该挨在
+                             一起像同一档。走 `confirmExempt` 而不是 DS 的一次性
+                             `confirm`：删除的确认由专用对话框接管（先拉影响面预览再
+                             落锤，比一次性确认更重），confirmExempt 的必填理由把这层
+                             判断显式写下来（见 ActionMenuItemExempt）。 */
+                          id: "delete",
+                          label: "删除",
+                          icon: "trash" as const,
+                          danger: true as const,
+                          separatorBefore: true,
+                          confirmExempt:
+                            "两步删除自带确认：先拉影响面预览，再在专用对话框里落锤",
+                          onSelect: () => void openDeletion(r),
+                        },
                       ]}
                     />
                   ),
@@ -1412,6 +1558,76 @@ function ProductsPageContent() {
           </span>
           ）
         </p>
+      </DialogForm>
+
+      {/* 删除确认（两步删除第二步）。先看影响面：能删就摊开连带处理，不能删就说清
+          为什么、禁掉按钮、指向退役。删除按钮走 DialogForm 的 danger（红）。 */}
+      <DialogForm
+        open={deletion !== null}
+        danger
+        onOpenChange={(open) => {
+          if (!open) setDeletion(null);
+        }}
+        title={
+          deletion ? `删除产品 · ${deletion.product.productName}` : "删除产品"
+        }
+        description="删除把产品从目录彻底移除（软删除），区别于退役——退役是可见的终态「已退役」、老订阅照付。仅当没有任何客户使用记录时可删。"
+        submitLabel="确认删除"
+        submitting={submitting}
+        submitDisabled={!deletion?.impact?.deletable}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void confirmDeletion();
+        }}
+      >
+        {deletion?.loadError ? (
+          /* 读不到影响面不能删——同 webhook 那条判据：读失败时放行等于蒙着眼动手。 */
+          <EmptyState
+            title={tShared("common.loadFailed")}
+            description={`${deletion.loadError}。读不到影响面不能删，先解决读取失败。`}
+          />
+        ) : !deletion?.impact ? (
+          <EmptyState
+            title={tShared("common.loading")}
+            description="正在核对客户足迹与连带处理项。"
+          />
+        ) : (
+          <div className="flex flex-col gap-md">
+            <p className="text-body-sm text-muted-foreground">
+              对象：{deletion.product.productName}（
+              <span className="font-mono text-code-sm">
+                {deletion.product.productCode}
+              </span>
+              ）
+            </p>
+            {deletion.impact.deletable ? (
+              <Banner
+                tone="warning"
+                title="确认后将从产品目录移除（软删除）"
+                description={[
+                  deletion.impact.cascade.plans > 0
+                    ? `连带软删 ${deletion.impact.cascade.plans} 个套餐。`
+                    : "",
+                  deletion.impact.cascade.oidcClients.length > 0
+                    ? `停用登录客户端 ${deletion.impact.cascade.oidcClients.join("、")}——该产品登录会中断。`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              />
+            ) : (
+              <Banner
+                tone="danger"
+                title={`${deletion.product.productName} 不能删除，只能退役`}
+                description={`已有${deletion.impact.blockers
+                  .map((b) => BLOCKER_LABELS[b] ?? b)
+                  .join(
+                    "、",
+                  )}——有客户使用记录或上游生效授权的产品不能删除。改用操作菜单里的「退役」。`}
+              />
+            )}
+          </div>
+        )}
       </DialogForm>
     </>
   );
