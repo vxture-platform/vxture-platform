@@ -416,7 +416,10 @@ export function ProductSolutionsPage() {
   async function remove(solution: ProductSolutionRecord) {
     setBusyCode(solution.solutionCode);
     try {
-      await runWithStepUp(() => deleteProductSolution(solution.solutionCode));
+      await runWithStepUp(() => deleteProductSolution(solution.solutionCode), {
+        danger: true,
+        submitLabel: t("confirm.deleteStepUp"),
+      });
       setSolutions((current) =>
         current.filter((item) => item.id !== solution.id),
       );

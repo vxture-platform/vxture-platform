@@ -1676,7 +1676,8 @@
     "confirm": {
       "target": "solution \"{name}\"",
       "deprecateConsequence": "Deprecation is terminal and cannot be undone; bound plans and product links are kept for traceability, but the solution leaves the sellable list.",
-      "deleteConsequence": "Deleting removes the solution from the catalog and unbinds its products and plans; a solution with active subscriptions cannot be deleted—deprecate it instead."
+      "deleteConsequence": "Deleting removes the solution from the catalog and unbinds its products and plans; a solution with active subscriptions cannot be deleted—deprecate it instead.",
+      "deleteStepUp": "Confirm delete"
     }
   },
   "productSolutionDetailPage": {
