@@ -3,7 +3,7 @@
   "surfaces": {
     "opera-bff": {
       "files": 38,
-      "retryable": 19,
+      "retryable": 20,
       "NOT_ENTITLED": 2,
       "POLICY_DENIED": 2,
       "APPROVAL_REQUIRED": 1,
