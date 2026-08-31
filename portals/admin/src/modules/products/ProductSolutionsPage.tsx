@@ -101,6 +101,19 @@ function createFormIsValid(form: CreateForm) {
   );
 }
 
+/**
+ * 归一化方案编码——把从文档/编辑器粘来的"假连字符"(U+2010–2015 各类连字符、
+ * U+2212 减号、全角 U+FF0D)与空格都收成 ASCII `-`,并转小写。owner 2026-08-31
+ * 粘的 `solution‑drone‑…` 全是 U+2011 不换行连字符,看着对却过不了 kebab 正则,
+ * 又无提示。归一化让"看着像 kebab"就真能用,静默失败从源头消除。
+ */
+function normalizeSolutionCode(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/[‐-―−－]/g, "-")
+    .replace(/\s+/g, "-");
+}
+
 function buildCreatePayload(form: CreateForm): ProductSolutionWriteInput {
   return {
     solutionCode: form.solutionCode.trim(),
@@ -769,7 +782,7 @@ export function ProductSolutionsPage() {
       {dialogOpen ? (
         <DialogForm
           open
-          size="lg"
+          size="xl"
           title={t("dialog.title")}
           description={t("dialog.description")}
           submitLabel={t("dialog.submit")}
@@ -781,10 +794,14 @@ export function ProductSolutionsPage() {
           }}
           onSubmit={(event) => void submitCreate(event)}
         >
+          {/* 字段一律「标签在上、控件在下」竖排——DS 的 <Label> 嵌控件会横排,
+              放进窄网格格子会把中文标签逐字竖排(owner 2026-08-31 报「item 名称换行」)。 */}
           <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
-            <Label>
-              {t("dialog.fields.solutionCode")}
-              <span className="text-destructive-text"> *</span>
+            <div className="flex flex-col gap-xs">
+              <Label>
+                {t("dialog.fields.solutionCode")}
+                <span className="text-destructive-text"> *</span>
+              </Label>
               <Input
                 value={form.solutionCode}
                 maxLength={64}
@@ -792,14 +809,14 @@ export function ProductSolutionsPage() {
                 onChange={(event) =>
                   setForm((old) => ({
                     ...old,
-                    solutionCode: event.target.value,
+                    solutionCode: normalizeSolutionCode(event.target.value),
                   }))
                 }
                 required
               />
               <span
                 className={cn(
-                  "block text-body-sm",
+                  "text-body-sm",
                   codeInvalid
                     ? "text-destructive-text"
                     : "text-muted-foreground",
@@ -809,10 +826,12 @@ export function ProductSolutionsPage() {
                   ? t("dialog.fields.solutionCodeInvalid")
                   : t("dialog.fields.solutionCodeHint")}
               </span>
-            </Label>
-            <Label>
-              {t("dialog.fields.solutionName")}
-              <span className="text-destructive-text"> *</span>
+            </div>
+            <div className="flex flex-col gap-xs">
+              <Label>
+                {t("dialog.fields.solutionName")}
+                <span className="text-destructive-text"> *</span>
+              </Label>
               <Input
                 value={form.solutionName}
                 maxLength={128}
@@ -824,11 +843,11 @@ export function ProductSolutionsPage() {
                 }
                 required
               />
-            </Label>
+            </div>
           </div>
           <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
-            <Label>
-              {t("dialog.fields.industry")}
+            <div className="flex flex-col gap-xs">
+              <Label>{t("dialog.fields.industry")}</Label>
               <Input
                 value={form.industry}
                 maxLength={128}
@@ -836,34 +855,9 @@ export function ProductSolutionsPage() {
                   setForm((old) => ({ ...old, industry: event.target.value }))
                 }
               />
-            </Label>
-            <Label>
-              {t("dialog.fields.scenario")}
-              <Input
-                value={form.scenario}
-                maxLength={128}
-                onChange={(event) =>
-                  setForm((old) => ({ ...old, scenario: event.target.value }))
-                }
-              />
-            </Label>
-          </div>
-          <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
-            <Label>
-              {t("dialog.fields.customerSegment")}
-              <Input
-                value={form.customerSegment}
-                maxLength={255}
-                onChange={(event) =>
-                  setForm((old) => ({
-                    ...old,
-                    customerSegment: event.target.value,
-                  }))
-                }
-              />
-            </Label>
-            <Label>
-              {t("dialog.fields.ownerTeam")}
+            </div>
+            <div className="flex flex-col gap-xs">
+              <Label>{t("dialog.fields.ownerTeam")}</Label>
               <Input
                 value={form.ownerTeam}
                 maxLength={128}
@@ -871,10 +865,36 @@ export function ProductSolutionsPage() {
                   setForm((old) => ({ ...old, ownerTeam: event.target.value }))
                 }
               />
-            </Label>
+            </div>
           </div>
-          <Label>
-            {t("dialog.fields.description")}
+          {/* 业务场景 / 客户群体是长逗号清单,单行输入放不下——改多行文本框。 */}
+          <div className="flex flex-col gap-xs">
+            <Label>{t("dialog.fields.scenario")}</Label>
+            <Textarea
+              value={form.scenario}
+              rows={2}
+              maxLength={128}
+              onChange={(event) =>
+                setForm((old) => ({ ...old, scenario: event.target.value }))
+              }
+            />
+          </div>
+          <div className="flex flex-col gap-xs">
+            <Label>{t("dialog.fields.customerSegment")}</Label>
+            <Textarea
+              value={form.customerSegment}
+              rows={2}
+              maxLength={255}
+              onChange={(event) =>
+                setForm((old) => ({
+                  ...old,
+                  customerSegment: event.target.value,
+                }))
+              }
+            />
+          </div>
+          <div className="flex flex-col gap-xs">
+            <Label>{t("dialog.fields.description")}</Label>
             <Textarea
               value={form.description}
               rows={4}
@@ -882,7 +902,7 @@ export function ProductSolutionsPage() {
                 setForm((old) => ({ ...old, description: event.target.value }))
               }
             />
-          </Label>
+          </div>
         </DialogForm>
       ) : null}
     </>

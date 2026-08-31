@@ -895,7 +895,7 @@ export function ProductSolutionDetailPage({
       {dialog?.kind === "edit" && editForm ? (
         <DialogForm
           open
-          size="lg"
+          size="xl"
           title={t("editDialog.title")}
           description={t("editDialog.description")}
           submitLabel={t("editDialog.submit")}
@@ -908,10 +908,14 @@ export function ProductSolutionDetailPage({
           onSubmit={(event) => void submitEdit(event)}
         >
           {dialogError ? <Banner tone="danger" title={dialogError} /> : null}
+          {/* 字段一律竖排(标签在上)——同创建页,避免 <Label> 嵌控件在窄格里
+              把中文标签逐字竖排。 */}
           <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
-            <Label>
-              {t("fields.solutionName")}
-              <span className="text-destructive-text"> *</span>
+            <div className="flex flex-col gap-xs">
+              <Label>
+                {t("fields.solutionName")}
+                <span className="text-destructive-text"> *</span>
+              </Label>
               <Input
                 value={editForm.solutionName}
                 maxLength={128}
@@ -922,9 +926,9 @@ export function ProductSolutionDetailPage({
                 }
                 required
               />
-            </Label>
-            <Label>
-              {t("fields.ownerTeam")}
+            </div>
+            <div className="flex flex-col gap-xs">
+              <Label>{t("fields.ownerTeam")}</Label>
               <Input
                 value={editForm.ownerTeam}
                 maxLength={128}
@@ -934,11 +938,11 @@ export function ProductSolutionDetailPage({
                   )
                 }
               />
-            </Label>
+            </div>
           </div>
           <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
-            <Label>
-              {t("fields.industry")}
+            <div className="flex flex-col gap-xs">
+              <Label>{t("fields.industry")}</Label>
               <Input
                 value={editForm.industry}
                 maxLength={128}
@@ -948,35 +952,9 @@ export function ProductSolutionDetailPage({
                   )
                 }
               />
-            </Label>
-            <Label>
-              {t("fields.scenario")}
-              <Input
-                value={editForm.scenario}
-                maxLength={128}
-                onChange={(event) =>
-                  setEditForm((old) =>
-                    old ? { ...old, scenario: event.target.value } : old,
-                  )
-                }
-              />
-            </Label>
-          </div>
-          <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
-            <Label>
-              {t("fields.customerSegment")}
-              <Input
-                value={editForm.customerSegment}
-                maxLength={255}
-                onChange={(event) =>
-                  setEditForm((old) =>
-                    old ? { ...old, customerSegment: event.target.value } : old,
-                  )
-                }
-              />
-            </Label>
-            <Label>
-              {t("editDialog.tags")}
+            </div>
+            <div className="flex flex-col gap-xs">
+              <Label>{t("editDialog.tags")}</Label>
               <Input
                 value={editForm.tags}
                 placeholder={t("editDialog.tagsPlaceholder")}
@@ -986,10 +964,36 @@ export function ProductSolutionDetailPage({
                   )
                 }
               />
-            </Label>
+            </div>
           </div>
-          <Label>
-            {t("editDialog.descriptionField")}
+          <div className="flex flex-col gap-xs">
+            <Label>{t("fields.scenario")}</Label>
+            <Textarea
+              value={editForm.scenario}
+              rows={2}
+              maxLength={128}
+              onChange={(event) =>
+                setEditForm((old) =>
+                  old ? { ...old, scenario: event.target.value } : old,
+                )
+              }
+            />
+          </div>
+          <div className="flex flex-col gap-xs">
+            <Label>{t("fields.customerSegment")}</Label>
+            <Textarea
+              value={editForm.customerSegment}
+              rows={2}
+              maxLength={255}
+              onChange={(event) =>
+                setEditForm((old) =>
+                  old ? { ...old, customerSegment: event.target.value } : old,
+                )
+              }
+            />
+          </div>
+          <div className="flex flex-col gap-xs">
+            <Label>{t("editDialog.descriptionField")}</Label>
             <Textarea
               value={editForm.description}
               rows={3}
@@ -999,11 +1003,12 @@ export function ProductSolutionDetailPage({
                 )
               }
             />
-          </Label>
-          <Label>
-            {t("fields.deliveryMode")}
-            <Input
+          </div>
+          <div className="flex flex-col gap-xs">
+            <Label>{t("fields.deliveryMode")}</Label>
+            <Textarea
               value={editForm.deliveryMode}
+              rows={2}
               maxLength={1000}
               placeholder={t("editDialog.deliveryModePlaceholder")}
               onChange={(event) =>
@@ -1012,9 +1017,9 @@ export function ProductSolutionDetailPage({
                 )
               }
             />
-          </Label>
-          <Label>
-            {t("editDialog.boundaries")}
+          </div>
+          <div className="flex flex-col gap-xs">
+            <Label>{t("editDialog.boundaries")}</Label>
             <Textarea
               value={editForm.deliveryBoundaries}
               rows={4}
@@ -1027,7 +1032,7 @@ export function ProductSolutionDetailPage({
                 )
               }
             />
-          </Label>
+          </div>
           <label className="inline-flex items-center gap-xs text-body-sm text-foreground">
             <Checkbox
               checked={editForm.isPublic}
