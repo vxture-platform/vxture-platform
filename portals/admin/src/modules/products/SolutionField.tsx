@@ -28,7 +28,7 @@ export function SolutionField({
   /** 字段下方左侧的说明/错误文案。 */
   hint?: ReactNode;
   hintTone?: "muted" | "danger";
-  /** 右侧常态字符计数;`value.length` 与 HTML maxLength 同按 UTF-16 计,和后端上限对齐。 */
+  /** 右侧常态字符计数;value.length 与 HTML maxLength 同按 UTF-16 计,和后端上限对齐。 */
   count?: { value: string; max: number };
   children: ReactNode;
 }) {

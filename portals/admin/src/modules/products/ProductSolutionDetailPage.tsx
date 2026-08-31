@@ -909,7 +909,8 @@ export function ProductSolutionDetailPage({
           onSubmit={(event) => void submitEdit(event)}
         >
           {dialogError ? <Banner tone="danger" title={dialogError} /> : null}
-          {/* 文本字段单行 + 常态字符计数;描述与交付边界(列表)保持多行。同创建页口径。 */}
+          {/* Single-line text fields with live char counts; description and
+              delivery boundaries (a list) stay multi-line. Same as create. */}
           <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
             <SolutionField
               label={t("fields.solutionName")}

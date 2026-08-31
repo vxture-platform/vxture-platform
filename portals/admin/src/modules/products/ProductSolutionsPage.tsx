@@ -833,8 +833,10 @@ export function ProductSolutionsPage() {
           }}
           onSubmit={(event) => void submitCreate(event)}
         >
-          {/* 单行为主,只描述多行——控制对话框高度不出滚动条(owner 2026-08-31);
-              每框常态显示 已用/上限 计数(上限 = 后端 readSolutionFields)。 */}
+          {/* Single-line inputs (only description is multi-line) keep the dialog
+              short enough to avoid a scrollbar; each field shows a live char
+              count whose max matches the backend readSolutionFields limit
+              (owner 2026-08-31). */}
           <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
             <SolutionField
               label={t("dialog.fields.solutionCode")}
