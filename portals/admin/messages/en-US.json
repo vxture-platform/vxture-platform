@@ -1621,7 +1621,8 @@
     },
     "actions": {
       "create": "New solution",
-      "menuLabel": "Actions for {name}"
+      "menuLabel": "Actions for {name}",
+      "delete": "Delete"
     },
     "columns": {
       "solution": "Solution",
@@ -1668,11 +1669,14 @@
       "created": "Solution \"{name}\" created",
       "createFailed": "Failed to create solution",
       "stateChanged": "Solution \"{name}\" is now {state}",
-      "stateFailed": "Failed to update solution state"
+      "stateFailed": "Failed to update solution state",
+      "deleted": "Solution “{name}” deleted",
+      "deleteFailed": "Failed to delete solution"
     },
     "confirm": {
       "target": "solution \"{name}\"",
-      "deprecateConsequence": "Deprecation is terminal and cannot be undone; bound plans and product links are kept for traceability, but the solution leaves the sellable list."
+      "deprecateConsequence": "Deprecation is terminal and cannot be undone; bound plans and product links are kept for traceability, but the solution leaves the sellable list.",
+      "deleteConsequence": "Deleting removes the solution from the catalog and unbinds its products and plans; a solution with active subscriptions cannot be deleted—deprecate it instead."
     }
   },
   "productSolutionDetailPage": {

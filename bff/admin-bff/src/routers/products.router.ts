@@ -311,6 +311,65 @@ export class ProductsRouter {
     return loadProductSolutionDetail(this.pool, code);
   }
 
+  /**
+   * 删除方案（软删 deleted_at）——与退役并列的另一出口(owner 2026-08-31,同产品目录
+   * 口径):退役=可见终态,删除=「本不该在册」直接从目录消失,给误建方案用。
+   *
+   * 判据「无客户足迹即可删」:方案所绑套餐上有 active/trialing 订阅 → 409 只能退役
+   * (删除会解绑,但订阅活在 plan 上,删方案不影响它们,只是收入归属断链——所以有
+   * 订阅就不许删)。放行时软删方案行 + 解绑 solution_products / solution_plans(释放
+   * uq_solution_plans_plan_id,那些 plan 可再绑别处)。step-up + 审计。
+   */
+  @Delete("solutions/:solutionCode")
+  @RequireStepUp()
+  async deleteSolution(
+    @Req() req: Request & RequestContext,
+    @Param("solutionCode") solutionCode: string,
+  ): Promise<{ solutionCode: string; deleted: true }> {
+    assertCanManageProducts(req);
+    const code = decodeURIComponent(solutionCode);
+    await withTransaction(this.rwPool, async (client) => {
+      const solution = await lockSolution(client, code);
+      const { rows } = await client.query<{ has_subs: boolean }>(
+        `SELECT EXISTS(
+           SELECT 1
+             FROM product.solution_plans sp
+             JOIN product.plan_versions pv ON pv.plan_id = sp.plan_id
+             JOIN metering.subscriptions s ON s.plan_version_id = pv.id
+            WHERE sp.solution_id = $1
+              AND s.status IN ('active', 'trialing')
+              AND s.deleted_at IS NULL
+         ) AS has_subs`,
+        [solution.id],
+      );
+      if (rows[0]?.has_subs) {
+        throw new ConflictException(
+          `方案 ${code} 的套餐已有生效订阅，不能删除——请改用退役。`,
+        );
+      }
+      await client.query(
+        `DELETE FROM product.solution_plans WHERE solution_id = $1`,
+        [solution.id],
+      );
+      await client.query(
+        `DELETE FROM product.solution_products WHERE solution_id = $1`,
+        [solution.id],
+      );
+      await client.query(
+        `UPDATE product.solutions SET deleted_at = now(), updated_by = $2, updated_at = now() WHERE id = $1`,
+        [solution.id, req.user!.id],
+      );
+      await insertOperatorAuditLog(client, req, {
+        action: "product.solution.delete",
+        resourceType: "product_solution",
+        resourceId: code,
+        before: { status: solution.status, ...pickSolutionAudit(solution) },
+        after: { deleted: true },
+      });
+    });
+    return { solutionCode: code, deleted: true };
+  }
+
   /** 整体替换方案的产品清单（幂等：送什么就是什么）。 */
   @Put("solutions/:solutionCode/products")
   @RequireStepUp()

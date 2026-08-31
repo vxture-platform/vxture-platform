@@ -626,6 +626,19 @@ export async function unbindProductSolutionPlan(
   );
 }
 
+// step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
+// 删除方案(软删):有生效订阅时后端 409,前端提示改走退役。
+export async function deleteProductSolution(
+  solutionCode: string,
+): Promise<{ solutionCode: string; deleted: true }> {
+  return mutateJson<{ solutionCode: string; deleted: true }>(
+    `/api/products/solutions/${encodeURIComponent(solutionCode)}`,
+    "DELETE",
+    undefined,
+    "删除方案失败",
+  );
+}
+
 export async function fetchPlatformAdmins(): Promise<PlatformAdminRecord[]> {
   return readJsonStrict<PlatformAdminRecord[]>("/api/platform-admins");
 }

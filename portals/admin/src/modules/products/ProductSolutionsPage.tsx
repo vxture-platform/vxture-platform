@@ -20,14 +20,12 @@ import {
   EmptyState,
   FilterBar,
   Input,
-  Label,
   ListPageTemplate,
   MetricGrid,
   NativeSelect,
   StatusBadge,
   TableTitleCell,
   Textarea,
-  cn,
   useToast,
 } from "@vxture/design-system";
 import type { ActionMenuItem, DataTableColumn } from "@vxture/design-system";
@@ -36,6 +34,7 @@ import { tierBadgeClass } from "@/modules/shared/tier-level";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import {
   createProductSolution,
+  deleteProductSolution,
   fetchProductSolutions,
   setProductSolutionState,
 } from "@/api/admin-bff";
@@ -66,6 +65,7 @@ import {
   SOLUTION_STATUSES,
   useSolutionLabels,
 } from "./solution-labels";
+import { SolutionField } from "./SolutionField";
 
 type StatusFilter = "all" | ProductSolutionStatus;
 type VisibilityFilter = "all" | ProductSolutionVisibility;
@@ -412,6 +412,30 @@ export function ProductSolutionsPage() {
     }
   }
 
+  /** 删除方案(软删)：有生效订阅时后端 409,提示改走退役。 */
+  async function remove(solution: ProductSolutionRecord) {
+    setBusyCode(solution.solutionCode);
+    try {
+      await runWithStepUp(() => deleteProductSolution(solution.solutionCode));
+      setSolutions((current) =>
+        current.filter((item) => item.id !== solution.id),
+      );
+      toast({
+        tone: "success",
+        title: t("feedback.deleted", { name: solution.solutionName }),
+      });
+    } catch (error) {
+      if (isStepUpCancelled(error)) return;
+      toast({
+        tone: "danger",
+        title: t("feedback.deleteFailed"),
+        ...describeError(error),
+      });
+    } finally {
+      setBusyCode(null);
+    }
+  }
+
   function rowActions(solution: ProductSolutionRecord): ActionMenuItem[] {
     const busy = busyCode === solution.solutionCode;
     const items: ActionMenuItem[] = [
@@ -448,6 +472,21 @@ export function ProductSolutionsPage() {
         });
       }
     }
+    // 删除:与退役并列的出口(误建方案)。有生效订阅后端 409,提示改退役。
+    items.push({
+      id: "delete",
+      label: t("actions.delete"),
+      icon: "trash",
+      danger: true,
+      disabled: busy,
+      separatorBefore: true,
+      confirm: withLabels({
+        verb: t("actions.delete"),
+        target: t("confirm.target", { name: solution.solutionName }),
+        consequence: t("confirm.deleteConsequence"),
+        onConfirm: () => remove(solution),
+      }),
+    });
     return items;
   }
 
@@ -794,14 +833,20 @@ export function ProductSolutionsPage() {
           }}
           onSubmit={(event) => void submitCreate(event)}
         >
-          {/* 字段一律「标签在上、控件在下」竖排——DS 的 <Label> 嵌控件会横排,
-              放进窄网格格子会把中文标签逐字竖排(owner 2026-08-31 报「item 名称换行」)。 */}
+          {/* 单行为主,只描述多行——控制对话框高度不出滚动条(owner 2026-08-31);
+              每框常态显示 已用/上限 计数(上限 = 后端 readSolutionFields)。 */}
           <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
-            <div className="flex flex-col gap-xs">
-              <Label>
-                {t("dialog.fields.solutionCode")}
-                <span className="text-destructive-text"> *</span>
-              </Label>
+            <SolutionField
+              label={t("dialog.fields.solutionCode")}
+              required
+              hint={
+                codeInvalid
+                  ? t("dialog.fields.solutionCodeInvalid")
+                  : t("dialog.fields.solutionCodeHint")
+              }
+              hintTone={codeInvalid ? "danger" : "muted"}
+              count={{ value: form.solutionCode, max: 64 }}
+            >
               <Input
                 value={form.solutionCode}
                 maxLength={64}
@@ -814,24 +859,12 @@ export function ProductSolutionsPage() {
                 }
                 required
               />
-              <span
-                className={cn(
-                  "text-body-sm",
-                  codeInvalid
-                    ? "text-destructive-text"
-                    : "text-muted-foreground",
-                )}
-              >
-                {codeInvalid
-                  ? t("dialog.fields.solutionCodeInvalid")
-                  : t("dialog.fields.solutionCodeHint")}
-              </span>
-            </div>
-            <div className="flex flex-col gap-xs">
-              <Label>
-                {t("dialog.fields.solutionName")}
-                <span className="text-destructive-text"> *</span>
-              </Label>
+            </SolutionField>
+            <SolutionField
+              label={t("dialog.fields.solutionName")}
+              required
+              count={{ value: form.solutionName, max: 128 }}
+            >
               <Input
                 value={form.solutionName}
                 maxLength={128}
@@ -843,11 +876,13 @@ export function ProductSolutionsPage() {
                 }
                 required
               />
-            </div>
+            </SolutionField>
           </div>
           <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
-            <div className="flex flex-col gap-xs">
-              <Label>{t("dialog.fields.industry")}</Label>
+            <SolutionField
+              label={t("dialog.fields.industry")}
+              count={{ value: form.industry, max: 128 }}
+            >
               <Input
                 value={form.industry}
                 maxLength={128}
@@ -855,9 +890,11 @@ export function ProductSolutionsPage() {
                   setForm((old) => ({ ...old, industry: event.target.value }))
                 }
               />
-            </div>
-            <div className="flex flex-col gap-xs">
-              <Label>{t("dialog.fields.ownerTeam")}</Label>
+            </SolutionField>
+            <SolutionField
+              label={t("dialog.fields.ownerTeam")}
+              count={{ value: form.ownerTeam, max: 128 }}
+            >
               <Input
                 value={form.ownerTeam}
                 maxLength={128}
@@ -865,44 +902,50 @@ export function ProductSolutionsPage() {
                   setForm((old) => ({ ...old, ownerTeam: event.target.value }))
                 }
               />
-            </div>
+            </SolutionField>
           </div>
-          {/* 业务场景 / 客户群体是长逗号清单,单行输入放不下——改多行文本框。 */}
-          <div className="flex flex-col gap-xs">
-            <Label>{t("dialog.fields.scenario")}</Label>
-            <Textarea
-              value={form.scenario}
-              rows={2}
-              maxLength={128}
-              onChange={(event) =>
-                setForm((old) => ({ ...old, scenario: event.target.value }))
-              }
-            />
+          <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
+            <SolutionField
+              label={t("dialog.fields.scenario")}
+              count={{ value: form.scenario, max: 128 }}
+            >
+              <Input
+                value={form.scenario}
+                maxLength={128}
+                onChange={(event) =>
+                  setForm((old) => ({ ...old, scenario: event.target.value }))
+                }
+              />
+            </SolutionField>
+            <SolutionField
+              label={t("dialog.fields.customerSegment")}
+              count={{ value: form.customerSegment, max: 255 }}
+            >
+              <Input
+                value={form.customerSegment}
+                maxLength={255}
+                onChange={(event) =>
+                  setForm((old) => ({
+                    ...old,
+                    customerSegment: event.target.value,
+                  }))
+                }
+              />
+            </SolutionField>
           </div>
-          <div className="flex flex-col gap-xs">
-            <Label>{t("dialog.fields.customerSegment")}</Label>
-            <Textarea
-              value={form.customerSegment}
-              rows={2}
-              maxLength={255}
-              onChange={(event) =>
-                setForm((old) => ({
-                  ...old,
-                  customerSegment: event.target.value,
-                }))
-              }
-            />
-          </div>
-          <div className="flex flex-col gap-xs">
-            <Label>{t("dialog.fields.description")}</Label>
+          <SolutionField
+            label={t("dialog.fields.description")}
+            count={{ value: form.description, max: 4000 }}
+          >
             <Textarea
               value={form.description}
               rows={4}
+              maxLength={4000}
               onChange={(event) =>
                 setForm((old) => ({ ...old, description: event.target.value }))
               }
             />
-          </div>
+          </SolutionField>
         </DialogForm>
       ) : null}
     </>
