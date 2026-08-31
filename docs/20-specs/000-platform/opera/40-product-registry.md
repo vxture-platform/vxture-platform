@@ -28,7 +28,9 @@
 
 **步 2 的自动验证（2026-08-31）**：上线检查（`portals/opera/src/features/product/launch-checks.ts`）读平台自己的存储判七项——目录登记、OIDC 客户端、Atlas / Runos 授权、webhook 登记，以及对方接通后留下的两条痕迹：**C2** 每次成功的 `GET /platform/entitlements` 由 platform-api 在 Redis 记一个按产品码的「最近一次」键（`<REDIS_KEY_PREFIX>integration:c2:<code>`，30 天过期，每产品每分钟至多写一次，Redis 故障不影响响应），**C3** 取 `metering.usage_events` 最近 90 天内该产品的最后一行；两者经 `GET /api/products/:id/integration-signals` 读出，C2 / C3 与 `catalog_registered` 一起写回检查单。C2 是最近一次而不是台账（不答「调了多少次」）；走共享内部令牌的调用没有身份，按请求里的产品码归因；S2S 调用按 `act.sub` 归因。`c1_identity`（对方的 RP 实现）仍由操作员按回报勾；`data_plane` 与 `acceptance` 平台观测不到，保持人工。
 
-产品状态机（`portals/opera/src/features/product/lifecycle.ts`）：`draft → active ⇄ inactive`，任一 → `deprecated`（终态）。软删（`deleted_at`）只在极端情况下用，所有列表都过滤它。
+产品状态机（`portals/opera/src/features/product/lifecycle.ts`）：`draft → active ⇄ inactive`，任一 → `deprecated`（终态）。
+
+**退役 vs 删除（2026-08-31）**：两条不同的出口，别混。**退役**（`deprecated`）是可见的终态——产品曾合法、现下线，老订阅照付、历史留档。**删除**（软删 `deleted_at`，所有列表都过滤它）是「本不该在册」的出口，产品从目录彻底消失，给误发布的产品用。删除是两步（`GET /api/products/:id/deletion-preview` 预览影响面 → `DELETE /api/products/:id` 带 `confirm:true`，`@RequireStepUp` + 审计 `support.audit_logs`），判据是**无客户足迹即可删**：有用量（`metering.usage_events`）/ 账单（`billing.invoice_items`）/ 开通（`provisioning.provisionings`）/ 权益（`entitlement_caches` · `quota_pools` · `subscription_entitlement_overrides`）/ 上游生效授权任一者 → 409 `PRODUCT_HAS_CUSTOMER_FOOTPRINT`（或 `PRODUCT_HAS_ACTIVE_GRANTS`），只能退役。删除**不阻塞**于登录客户端：同事务把该产品 `product` 型 OIDC 客户端停用（登录中断，是结果不是阻塞项），并连带软删其 primary 套餐。列锁（`98_column_locks.sql`）已放行 `platform_svc` 写 `products.deleted_at` / `plans.deleted_at` / `oidc_clients.status`。
 
 **退役有前置（2026-08-31）**：写 `deprecated` 要求这个产品在 Atlas 的模型路由授权（`product_endpoint_grants`）与在 Runos 的能力授权（`capability_grant`）都为零。两个上游按 `product_code` 字符串挂授权、没有 FK，目录退役不会替人撤——此前退役一个产品，上游的授权原封不动地活着，一个目录里已不存在的主体仍然能换票、能调路由。闭合立在目录这一侧、立在写终态的那条边上（§6）。其它跃迁（上线 / 停用 / 恢复）不受影响：它们不减少任何东西。
 
@@ -75,7 +77,7 @@ seed 是**平台自举**的一部分，不是登记入口的替代品。一行�
 | 条件 | 内容                                                                                                                              | 当前命中                                                                              |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | A    | **代码依赖**：平台代码以字面量引用该 `product_code`——token-exchange 的 audience、opera 的模块挂载前缀、app-scope 豁免集           | `atlas`（opera `/atlas` 模块、`ATLAS_AUDIENCE`）、`runos`（同）、`umbra`（app-scope） |
-| B    | **seed 内 FK 依赖**：同一 seed 里别的行以 FK 指向它（套餐、webhook、计量指标、OIDC 客户端、KYC 策略）                             | `arda`、`karda`、`vxtpl`、`ruyin`、`umbra`                                            |
+| B    | **seed 内 FK 依赖**：同一 seed 里别的行以 FK 指向它（套餐、webhook、计量指标、OIDC 客户端、KYC 策略）                             | `arda`、`karda`、`vxtpl`、`umbra`（`ruyin` 已移出——见本节末）                         |
 | C    | **形状一致**：与目录页写出的行同形——`status`、`origin` 显式写，不靠列默认值；`product_type` 取矩阵词表；`created_by` = 系统操作员 | 全部                                                                                  |
 
 禁止项：
@@ -84,7 +86,15 @@ seed 是**平台自举**的一部分，不是登记入口的替代品。一行�
 - **D2** 预建规划中的产品。`product_100_matrix.md` 里 ontos / terra / raven / anlan / forge / xuanzhen 是规划产品，产品定义空白，**不进 seed**——定义完成后由运营者在产品目录登记。它们此前被 seed 预建的客户端已由 2026-08-30 迁移删除，相关 env 键（`*_BASE_URL` / `OIDC_CLIENT_SECRET_HASH_*`）同批从 example 与 env 审计里移除。
 - **D3** 用 seed 改已登记产品的登记字段。`PRODUCTS` 的插入是 `on conflict do nothing`；产品的名字、状态、来源一旦登记，归目录页管。
 
-平台级客户端（`kind: "platform"`）只有 website / console / admin / opera 四个，它们不是产品，不受 A/B 约束；新增一个平台门户是平台代码的事，随代码一起进 seed。
+平台级客户端（`kind: "platform"`，`product_id` 必为 NULL，不是产品、不受 A/B 约束）有两类：**平台自有门户** website / console / admin / opera（`platform` 级并不绑 realm——website / console 本就是 customer realm），以及 **first-party 客户端应用**——目前是 `ruyin` / `ruyin-beta`。新增一个平台门户或 first-party 应用是平台代码的事，随代码一起进 seed。
+
+### ⚠️ ruyin 不是目录产品，别把它加回 `PRODUCTS`（owner 2026-08-31）
+
+`ruyin`（如影）是与平台侧平级的**桌面原生端**：一个 OAuth 公共客户端（RFC 8252，loopback 回调 + PKCE，`auth=none`），和 Claude Code 之于 Anthropic 同构——**桌面 app 是登录客户端，不是可订阅 / 退役 / 挂套餐的目录 SKU**（客户端产品本就不进权益引擎，`product_100 §5`）。
+
+它此前被同时建成了 OIDC 客户端**和** `product.products` 里一行 SaaS 商品，这正是「ruyin 退役不掉、删不掉」的根源：`product` 级客户端经 `fk_oidc_clients_product`（RESTRICT）把产品行钉住，且不变式「产品目录之外不存在产品」要求它必须挂着一行。2026-08-31 迁移 `deploy/database/migrations/2026-08-31-ruyin-declassify.sql` 把 `ruyin` / `ruyin-beta` 由 `product` 级降为 `platform` 级、`product_id` 置空，产品行软删；`seed-catalog.mjs` 同步（`ruyin` 移出 `PRODUCTS`、两个客户端条目改 `kind: "platform"`）。**登录机制一字未改**：realm 仍是 `customer`、`auth=none`、loopback 回调不变，如影桌面登录照旧。
+
+**若你正想「补一行 ruyin 产品」，或把它的客户端改回 `product` 级 / 加回 `PRODUCTS`：停。** 它是客户端不是产品。真要给如影卖订阅，那是**另立一个 SaaS 产品**的事（在目录页登记一行新产品码），不是把这个桌面客户端塞回目录。迁移与 seed 必须成对——只改一边，一次 reseed 就会用旧 seed 把产品行和 `product` 级客户端重建、抵消迁移。
 
 测试数据 seed（`seed-demo` / `seed-bulk` / `seed-bulk-core`）不受本节约束，但它们**拒跑生产**（各自的 `assertNotProduction()`），并且从不写 `appoidc`——`demo-*` 产品在服务状态页显示「未接入」是对的：它们是没有服务的演示行。
 
@@ -112,6 +122,8 @@ seed 是**平台自举**的一部分，不是登记入口的替代品。一行�
 
 `28b-restore-appoidc.sh`（reset 通道的备份恢复）同批改：按归属推导 `client_kind`，备份里既非平台门户又无 `product_id` 的行跳过并 NOTICE；顺带把恢复语句里早已不合 CHECK 的 `'disabled'` 改回 `'inactive'`。
 
+**ruyin 降级（2026-08-31）**：`deploy/database/migrations/2026-08-31-ruyin-declassify.sql`，同一 `28d` 通道、幂等，与新版 seed 成对（理由见 §5 的 ⚠️ 段）。把 `ruyin` / `ruyin-beta` 由 `product` 级改判 `platform` 级、`product_id` 置空，ruyin 产品行软删；内建断言：跑完这两个客户端必须是 `platform` 且 `product_id IS NULL`，否则 `RAISE EXCEPTION`。已于 2026-08-31 应用到生产并过 30-verify（`client ruyin/ruyin-beta → platform-kind`、`soft-deleted 1 ruyin product row`）。
+
 ## 8. 已知遗留（不在本次范围）
 
 2026-08-31 已闭合（产品唯一真源分析四缺口）：
@@ -124,4 +136,4 @@ seed 是**平台自举**的一部分，不是登记入口的替代品。一行�
 仍开着：
 
 - **`dispatch.itest.spec.ts`** 用 `xuanzhen` 当测试产品码，与矩阵保留码撞名；`on conflict (id)` 挡不住 `product_code` 唯一冲突。
-- **`baseline-assertions.sql`** 的 `appoidc.oidc_clients ≥ 10`：seed 现在写 11 行（4 平台 + 7 产品），仍满足；若再减产品需同步。
+- **`baseline-assertions.sql`** 的 `appoidc.oidc_clients ≥ 10`：seed 现在写 11 行（2026-08-31 后为 6 平台 = website / console / admin / opera / ruyin / ruyin-beta + 5 产品；ruyin 降级只改归类不减行数），仍满足；若再减产品需同步。
