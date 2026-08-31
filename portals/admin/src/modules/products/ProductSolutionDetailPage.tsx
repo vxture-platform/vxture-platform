@@ -895,9 +895,11 @@ export function ProductSolutionDetailPage({
       {dialog?.kind === "edit" && editForm ? (
         <DialogForm
           open
+          size="lg"
           title={t("editDialog.title")}
           description={t("editDialog.description")}
           submitLabel={t("editDialog.submit")}
+          cancelLabel={tShared("actions.cancel")}
           submitting={submitting}
           submitDisabled={!editForm.solutionName.trim()}
           onOpenChange={(open) => {
@@ -906,9 +908,10 @@ export function ProductSolutionDetailPage({
           onSubmit={(event) => void submitEdit(event)}
         >
           {dialogError ? <Banner tone="danger" title={dialogError} /> : null}
-          <div>
+          <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
             <Label>
               {t("fields.solutionName")}
+              <span className="text-destructive-text"> *</span>
               <Input
                 value={editForm.solutionName}
                 maxLength={128}
@@ -933,7 +936,7 @@ export function ProductSolutionDetailPage({
               />
             </Label>
           </div>
-          <div>
+          <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
             <Label>
               {t("fields.industry")}
               <Input
@@ -959,7 +962,7 @@ export function ProductSolutionDetailPage({
               />
             </Label>
           </div>
-          <div>
+          <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
             <Label>
               {t("fields.customerSegment")}
               <Input
@@ -1045,6 +1048,7 @@ export function ProductSolutionDetailPage({
           title={t("productsDialog.title")}
           description={t("productsDialog.description")}
           submitLabel={t("productsDialog.submit")}
+          cancelLabel={tShared("actions.cancel")}
           submitting={submitting}
           submitDisabled={catalog === null}
           onOpenChange={(open) => {
@@ -1127,6 +1131,7 @@ export function ProductSolutionDetailPage({
           title={t("bindDialog.title", { tier: labels.tier(dialog.tier) })}
           description={t("bindDialog.description")}
           submitLabel={t("bindDialog.submit")}
+          cancelLabel={tShared("actions.cancel")}
           submitting={submitting}
           submitDisabled={!planPick || plans === null}
           onOpenChange={(open) => {
@@ -1146,6 +1151,7 @@ export function ProductSolutionDetailPage({
           ) : null}
           <Label>
             {t("bindDialog.plan")}
+            <span className="text-destructive-text"> *</span>
             <NativeSelect
               value={planPick}
               disabled={plans === null}

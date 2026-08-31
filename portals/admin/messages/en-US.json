@@ -1653,6 +1653,8 @@
       "fields": {
         "solutionCode": "Solution code",
         "solutionCodePlaceholder": "Lowercase letters, digits, hyphens, e.g. flood-regulation",
+        "solutionCodeHint": "Lowercase letters, digits, hyphens, e.g. flood-regulation",
+        "solutionCodeInvalid": "Invalid code: use lowercase letters, digits, and hyphens only (e.g. flood-regulation)",
         "solutionName": "Solution name",
         "industry": "Industry",
         "scenario": "Scenario",
