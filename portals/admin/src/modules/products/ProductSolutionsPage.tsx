@@ -27,6 +27,7 @@ import {
   StatusBadge,
   TableTitleCell,
   Textarea,
+  cn,
   useToast,
 } from "@vxture/design-system";
 import type { ActionMenuItem, DataTableColumn } from "@vxture/design-system";
@@ -327,6 +328,12 @@ export function ProductSolutionsPage() {
   function handleOpenDetails(solutionCode: string) {
     router.push(`/product-solutions/${encodeURIComponent(solutionCode)}`);
   }
+
+  /* 编码非空但不合 kebab —— 用来把「创建」灰按钮变得可解释（此前无任何提示，
+     用户填了中文/大写就点不动也不知为何，2026-08-31 owner 报「灰色点不动」）。 */
+  const codeInvalid =
+    form.solutionCode.trim().length > 0 &&
+    !SOLUTION_CODE_RE.test(form.solutionCode.trim());
 
   function openCreate() {
     setForm(emptyCreateForm());
@@ -762,9 +769,11 @@ export function ProductSolutionsPage() {
       {dialogOpen ? (
         <DialogForm
           open
+          size="lg"
           title={t("dialog.title")}
           description={t("dialog.description")}
           submitLabel={t("dialog.submit")}
+          cancelLabel={tShared("actions.cancel")}
           submitting={submitting}
           submitDisabled={!createFormIsValid(form)}
           onOpenChange={(open) => {
@@ -772,9 +781,10 @@ export function ProductSolutionsPage() {
           }}
           onSubmit={(event) => void submitCreate(event)}
         >
-          <div>
+          <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
             <Label>
               {t("dialog.fields.solutionCode")}
+              <span className="text-destructive-text"> *</span>
               <Input
                 value={form.solutionCode}
                 maxLength={64}
@@ -787,9 +797,22 @@ export function ProductSolutionsPage() {
                 }
                 required
               />
+              <span
+                className={cn(
+                  "block text-body-sm",
+                  codeInvalid
+                    ? "text-destructive-text"
+                    : "text-muted-foreground",
+                )}
+              >
+                {codeInvalid
+                  ? t("dialog.fields.solutionCodeInvalid")
+                  : t("dialog.fields.solutionCodeHint")}
+              </span>
             </Label>
             <Label>
               {t("dialog.fields.solutionName")}
+              <span className="text-destructive-text"> *</span>
               <Input
                 value={form.solutionName}
                 maxLength={128}
@@ -803,7 +826,7 @@ export function ProductSolutionsPage() {
               />
             </Label>
           </div>
-          <div>
+          <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
             <Label>
               {t("dialog.fields.industry")}
               <Input
@@ -825,7 +848,7 @@ export function ProductSolutionsPage() {
               />
             </Label>
           </div>
-          <div>
+          <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
             <Label>
               {t("dialog.fields.customerSegment")}
               <Input
