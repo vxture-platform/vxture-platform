@@ -1,6 +1,10 @@
 import type { IconName } from "@vxture/design-system";
 
-export type AdminWorkspaceId = "tenant-ops" | "platform-autonomy";
+// 三平面拆分 cutover（2026-09-02）：治理面（身份权限/安全审计/系统配置/通知基座）
+// 整体迁往 arche 治理平面，admin 只保留「运营业务域」这一个工作域。原
+// `platform-autonomy` 自治域已撤，其中 /atlas（模型平台）作为商业/平台资源留在
+// 运营域「模型技能」分组，/settings（操作员自助账户设置）保留为 Header 齿轮入口。
+export type AdminWorkspaceId = "tenant-ops";
 
 export interface AdminNavigationItem {
   id: string;
@@ -258,6 +262,22 @@ const tenantOpsSections: AdminNavigationSection[] = [
     title: "模型技能",
     items: [
       {
+        // /atlas 模型平台：三平面拆分后从原「平台自治域」迁入。它是商业/平台资源
+        // （模型供应/路由/策略），非治理，故留在 admin 运营域而不随治理面去 arche；
+        // opera 产品目录的 buildAdminAtlasGrantsUrl() 深链仍指向这里。菜单码
+        // model_gateway / i18nKey menu.platform.model_gateway 保持不变——seed 权限
+        // 码不动（arche 与 admin 共用同一套 admin.operator_permission.perm_code）。
+        id: "atlas",
+        code: "model_gateway",
+        i18nKey: "menu.platform.model_gateway",
+        status: "active",
+        href: "/atlas",
+        label: "模型平台",
+        description:
+          "管理大模型供应商、模型路由、调用策略、限流策略与可用性状态。",
+        icon: "cloud",
+      },
+      {
         id: "modelGrants",
         code: "model_access",
         i18nKey: "menu.operation.model_access",
@@ -351,202 +371,13 @@ const tenantOpsSections: AdminNavigationSection[] = [
   },
 ];
 
-const platformAutonomySections: AdminNavigationSection[] = [
-  {
-    id: "autonomyOverview",
-    code: "platform_overview",
-    i18nKey: "menu.platform.overview",
-    status: "active",
-    title: "平台总览",
-    items: [
-      {
-        id: "platformAutonomy",
-        code: "platform_overview",
-        i18nKey: "menu.platform.overview",
-        status: "active",
-        href: "/platform",
-        label: "平台总览",
-        description:
-          "平台自治域首页，展示平台运行状态、关键指标、风险提醒与治理入口。",
-        icon: "squares-four",
-      },
-    ],
-  },
-  {
-    id: "identityAccess",
-    code: "identity_access",
-    i18nKey: "menu.platform.identity_access",
-    status: "active",
-    title: "身份权限",
-    items: [
-      {
-        id: "platformAdmins",
-        code: "platform_admin",
-        i18nKey: "menu.platform.admin_user",
-        status: "active",
-        href: "/platform-admins",
-        label: "平台用户",
-        description: "管理平台自治域内部用户，不面向租户最终用户。",
-        icon: "user",
-      },
-      {
-        id: "adminRoles",
-        code: "platform_role",
-        i18nKey: "menu.platform.admin_role",
-        status: "active",
-        href: "/admin-roles",
-        label: "平台角色",
-        description:
-          "管理平台内部角色，包括预置角色、自定义角色、角色状态与角色授权。",
-        icon: "role",
-      },
-      {
-        id: "adminPermissions",
-        code: "permission_policy",
-        i18nKey: "menu.platform.permission_policy",
-        status: "active",
-        href: "/admin-permissions",
-        label: "权限策略",
-        description: "管理平台自治域权限点、权限分组、策略绑定与授权范围。",
-        icon: "shield-check",
-      },
-    ],
-  },
-  {
-    id: "platformResources",
-    code: "platform_resource",
-    i18nKey: "menu.platform.platform_resource",
-    status: "active",
-    title: "平台资源",
-    items: [
-      {
-        id: "atlas",
-        code: "model_gateway",
-        i18nKey: "menu.platform.model_gateway",
-        status: "active",
-        href: "/atlas",
-        label: "模型平台",
-        description:
-          "管理大模型供应商、模型路由、调用策略、限流策略与可用性状态。",
-        icon: "cloud",
-      },
-      // 密钥管理（/platform-secrets）2026-08-31 摘掉：它读的 admin.governance_record
-      // 从未建表，页面永远为空；平台密钥的真实归属是 deploy 的 27-provision 与 opera
-      // 「接入凭据」。同批摘掉的还有审批中心 / 字典管理 / 通知渠道——四间空屋，上线
-      // 前一并撤（owner 2026-08-30 裁定）。菜单码与 seed 的 operator_permission 行
-      // 随本次一起退役（migrations/2026-08-31-admin-retire-empty-menus.sql）。
-    ],
-  },
-  // runtimeOps（「运行保障」组）已整体撤走：维护窗口（2026-08-07）、服务监控
-  // （2026-08-11）、任务调度（2026-08-11）先后迁往 opera，三项都是基础设施运维，
-  // 归控制平面而不是运营后台。任务调度在 opera 侧换了数据源——admin 这份读的
-  // admin.governance_record 从未建过表（设计已弃用，见
-  // docs/30-design/data_admin_200_schema.md），opera 那份改成
-  // provisioning.webhook_deliveries（真实的 webhook 投递队列，此前无任何观测面）
-  // 的观测视图，不是同一份代码搬家。菜单码/i18n key 随组一并撤走。
-  {
-    id: "securityAudit",
-    code: "security_audit",
-    i18nKey: "menu.platform.security_audit",
-    status: "active",
-    title: "安全审计",
-    items: [
-      {
-        id: "auditLogs",
-        code: "audit_log",
-        i18nKey: "menu.platform.audit_log",
-        status: "active",
-        href: "/audit-logs",
-        label: "审计日志",
-        description: "查询平台操作日志、登录日志、权限变更日志和安全事件日志。",
-        icon: "info",
-      },
-      {
-        id: "riskRecords",
-        code: "risk_record",
-        i18nKey: "menu.platform.risk_record",
-        status: "active",
-        href: "/risk-records",
-        label: "风险记录",
-        description: "管理租户风险评估记录：录入、跟进、审阅处置与标签归类。",
-        icon: "warning",
-      },
-      {
-        id: "complianceEvents",
-        code: "compliance_event",
-        i18nKey: "menu.platform.compliance_event",
-        status: "active",
-        href: "/compliance-events",
-        label: "合规事件",
-        description:
-          "跟踪平台与租户合规事件：指派处理人、办结与驳回、证据留存。",
-        icon: "shield-check",
-      },
-    ],
-  },
-  {
-    id: "systemSetting",
-    code: "system_setting",
-    i18nKey: "menu.platform.system_setting",
-    status: "planned",
-    title: "系统配置",
-    items: [
-      {
-        id: "systemSettings",
-        code: "system_setting_general",
-        i18nKey: "menu.platform.system_setting_general",
-        status: "active",
-        href: "/settings",
-        label: "系统设置",
-        description:
-          "平台级系统设置入口，集中管理通用偏好、运行参数与全局策略。Header 齿轮为其快捷入口。",
-        icon: "settings",
-      },
-      {
-        id: "systemParameters",
-        code: "system_parameter",
-        i18nKey: "menu.platform.system_parameter",
-        status: "planned",
-        href: "/system-parameters",
-        label: "参数配置",
-        description:
-          "待建设模块，用于维护平台级参数、默认值、运行参数和全局策略参数。",
-        icon: "settings",
-      },
-      {
-        id: "featureToggles",
-        code: "feature_toggle",
-        i18nKey: "menu.platform.feature_toggle",
-        status: "planned",
-        href: "/feature-toggles",
-        label: "开关控制",
-        description:
-          "待建设模块，用于控制平台功能开关、灰度开关、实验开关和风险隔离开关。",
-        icon: "trigger",
-      },
-    ],
-  },
-  {
-    id: "notificationCenter",
-    code: "notification_center",
-    i18nKey: "menu.platform.notification_center",
-    status: "planned",
-    title: "通知中心",
-    items: [
-      {
-        id: "notificationLogs",
-        code: "notification_log",
-        i18nKey: "menu.platform.notification_log",
-        status: "planned",
-        href: "/notification-logs",
-        label: "发送记录",
-        description:
-          "待建设模块，用于追踪平台通知能力的发送记录、回执和失败重试。",
-        icon: "table",
-      },
-    ],
-  },
-];
+// 原 platformAutonomySections（平台自治域）已整体撤走 —— 三平面拆分 cutover
+// （2026-09-02）：身份权限（平台用户/角色/权限策略）、安全审计（审计日志/风险记录/
+// 合规事件）、系统配置（参数配置/开关控制）、通知基座（发送记录）九页迁往 arche
+// 治理平面（arche.vxture.com，独立门户 + arche-bff，读写同一套 admin.* 表）。
+// 保留在 admin 运营域的两项已就地安置：/atlas（模型平台）并入上方「模型技能」分组；
+// /settings（操作员自助账户设置）不再进侧栏，走 Header 齿轮入口（AdminHeader）。
+// 平台总览（/platform）撤销，其职能由 arche 的「治理总览」承接。
 
 export const adminWorkspaces: AdminNavigationWorkspace[] = [
   {
@@ -557,15 +388,6 @@ export const adminWorkspaces: AdminNavigationWorkspace[] = [
     homeHref: "/",
     icon: "buildings",
     sections: tenantOpsSections,
-  },
-  {
-    id: "platform-autonomy",
-    label: "平台自治域",
-    shortLabel: "自治域",
-    description: "面向内部用户、平台资源、运行可靠性、安全审计和治理能力。",
-    homeHref: "/platform",
-    icon: "shield-check",
-    sections: platformAutonomySections,
   },
 ];
 

@@ -189,11 +189,15 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  * 2026-09-01 admin 3204 → 3230(+26):产品目录(原产品能力)新增营销内容编辑框
  *   ProductContentEditDialog(成熟度/上站/双语营销字段)+ 改名文案,沿用产品模块既有的
  *   硬编码中文风格(productTypeLabel 等本就直返「平台/智能体」),整批暂缓 t() 化。
+ *
+ * 2026-09-02 admin 3230 → 2486(−744):三平面拆分 cutover —— 平台自治域治理页(身份权限/
+ *   安全审计/系统配置/通知基座 10 页 + 模块)整体迁往 arche 治理平面,admin 侧删除,硬编码
+ *   中文随文件一并撤走。棘轮同步下探到新水位。
  */
 const BASELINE = {
   console: 30,
   website: 40,
-  admin: 3230,
+  admin: 2486,
   opera: 1916,
   accounts: 264,
 };
