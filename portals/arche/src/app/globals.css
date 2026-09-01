@@ -1,0 +1,10 @@
+@import "@vxture/design-system/styles/globals.css";
+@import "@vxture/design-system/styles/brands/vxture.css";
+@import "@vxture/design-system/styles/workbench.css";
+
+/* Mostly DS-only wiring, same as design-preview — shell-template.css is
+ * retired here, the Opera shell is rebuilt on DS components + T2 utilities
+ * (transparent mode), no legacy chrome classes.
+ *
+ * 工作台底色不再在本文件里就地覆盖，改引 DS 的 workbench.css——admin / console /
+ * accounts 与本应用同用一份，见那个文件的说明。 */

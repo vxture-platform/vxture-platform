@@ -1,0 +1,46 @@
+{
+  "name": "@vxture/arche",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Arche — Vxture platform governance plane (operator surface: identity, RBAC, audit, compliance, config)",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --turbo -p 3050",
+    "build": "next build",
+    "start": "next start -p 3050",
+    "lint": "eslint .",
+    "type-check": "tsc --noEmit",
+    "clean": "rimraf .next"
+  },
+  "dependencies": {
+    "@fontsource/funnel-display": "^5.3.0",
+    "@fontsource/geist-mono": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
+    "@vxture-platform/shared": "workspace:*",
+    "@vxture/core-identity-sdk": "workspace:*",
+    "@vxture/core-locale": "workspace:*",
+    "@vxture/design-system": "10.0.0",
+    "@vxture/platform-browser": "workspace:*",
+    "next": "^15.5.21",
+    "next-intl": "^4.13.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
+    "@eslint/js": "^9.39.3",
+    "@tailwindcss/postcss": "^4.2.1",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.39.3",
+    "eslint-config-next": "^15.5.6",
+    "postcss": "^8.5.19",
+    "rimraf": "^6.0.1",
+    "tailwindcss": "^4.2.1",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

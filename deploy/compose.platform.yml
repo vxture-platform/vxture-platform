@@ -130,6 +130,28 @@ services:
       retries: 3
       start_period: 20s
 
+  # 平台治理平面外壳（Arche：身份/RBAC/审计/合规/配置,最高信任层）。公网 vhost
+  # 域名按加固决策不入仓：nginx 模板渲染时从主机 env 注入（20-sync-nginx-config.sh）。
+  arche:
+    image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_arche:${VX_IMAGE_TAG:-latest}
+    container_name: vx-platform-arche
+    restart: unless-stopped
+    mem_limit: 160m
+    cpus: 1.0
+    pids_limit: 128
+    memswap_limit: 160m
+    networks: [vxture-prod]
+    environment:
+      NODE_ENV: production
+      PORT: "3050"
+      NODE_OPTIONS: --max-old-space-size=144
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3050/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
   # 中立身份门面（OIDC 登录 UI）。nginx accounts.vxture.com 把 /oidc/* + /.well-known/*
   # 反代到 vx-platform-auth-bff（内部），其余到本前端。见 docs/design/identity-sso-login-surface.md。
   accounts:
@@ -318,6 +340,34 @@ services:
       auth-bff: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3041/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # 平台治理平面 BFF（workforce RP + auth_request 门 + operator-OBO 换票）。
+  # 不连库（RP 会话在 Redis）；.env.arche-bff 携带真实 ARCHE_BASE_URL。
+  arche-bff:
+    image: ${VX_IMAGE_REGISTRY:-ghcr.io}/${VX_IMAGE_NAMESPACE:-vxture}/platform_bff-arche:${VX_IMAGE_TAG:-latest}
+    container_name: vx-platform-arche-bff
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: 1.0
+    pids_limit: 128
+    memswap_limit: 128m
+    networks: [vxture-prod]
+    environment:
+      NODE_OPTIONS: --max-old-space-size=120
+      ARCHE_BFF_PORT: "3051"
+    env_file:
+      [
+        /srv/vxture/runtime/secrets/platform.env,
+        /srv/vxture/runtime/.env.arche-bff,
+      ]
+    depends_on:
+      auth-bff: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3051/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3

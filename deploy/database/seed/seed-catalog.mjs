@@ -1511,6 +1511,9 @@ export async function seedCatalog(client) {
     // hostname is repo-external by policy (hardening: placeholder-only) and
     // arrives via OPERA_BASE_URL runtime env.
     opera: process.env.OPERA_BASE_URL || "http://localhost:3040",
+    // Governance plane (operator shell, highest trust). Prod hostname is
+    // repo-external by policy; arrives via ARCHE_BASE_URL runtime env.
+    arche: process.env.ARCHE_BASE_URL || "http://localhost:3050",
     // ruyin = NEW client-side product surface (ruyin.vxture.com); the legacy
     // cross-domain RP at ruyin.ai is `umbra` (product_300 §2, U line).
     ruyin: process.env.RUYIN_BASE_URL || "http://localhost:3900",
@@ -1592,6 +1595,20 @@ export async function seedCatalog(client) {
       redirectUris: [`${B.opera}/auth/callback`],
       scopes: ["openid", "profile", "admin"],
       postLogoutUris: [`${B.opera}/`, postLogout],
+    },
+    // arche — platform governance plane RP (workforce realm, operator surface).
+    // Client secret is provisioned by scripts/27-provision-client-secrets.sh
+    // (writes OIDC_CLIENT_SECRET to .env.arche-bff + the bcrypt hash to
+    // .env.auth-bff as OIDC_CLIENT_SECRET_HASH_ARCHE).
+    {
+      clientId: "arche",
+      kind: "platform",
+      name: "Vxture Governance Console",
+      displayName: "Vxture Governance Console",
+      realm: "workforce",
+      redirectUris: [`${B.arche}/auth/callback`],
+      scopes: ["openid", "profile", "admin"],
+      postLogoutUris: [`${B.arche}/`, postLogout],
     },
     // umbra — the cross-domain RP at ruyin.ai (ex-`ruyin`; renamed in place by the
     // U-line migration below, product_300 §2). No beta — single prod URI only.

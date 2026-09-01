@@ -1,0 +1,77 @@
+import { fileURLToPath } from "url";
+import createNextIntlPlugin from "next-intl/plugin";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const internalAliases = {
+  "@vxture-platform/shared": join(
+    __dirname,
+    "../../packages/shared/shared/src",
+  ),
+  /* 键上的 `$` 表示**精确匹配**，不可省。webpack 的 alias 默认是前缀匹配，而本条的
+   * 值是个文件（client.ts）而不是目录，于是 `@vxture/design-system/styles/fonts.css`
+   * 会被改写成 `…/src/client.ts/styles/fonts.css` —— 路径里夹着一个文件名，必然
+   * 解析失败。加 `$` 后只有裸包名走 alias，`/styles/*` 子路径回落到 package.json
+   * exports 正常解析。（值为目录的那几条前缀匹配是对的，故不加 `$`。） */
+
+  /* 2026-08-26：接语言切换时加的。少了这一条，platform-browser 走的是它的 CJS
+     `dist/index.js`，而那份 dist 里 `require("@vxture-platform/shared")` 又被上面那
+     条 alias 改指到 TS 源码——两种模块形态在同一条依赖链上对接，webpack 报
+     `Attempted import error: 'setGlobalLocalePreference' is not exported`，**但 build
+     退出码仍是 0**，type-check 也过（它读的是 dist 的 .d.ts，导出确实在里面）。
+     也就是说：只看两道门禁，这个「切语言」按钮会带着一个 undefined 上线。
+     admin 早就有这一条，opera 此前不依赖这个包所以没有。 */
+  "@vxture/platform-browser": join(
+    __dirname,
+    "../../packages/platform/browser/src",
+  ),
+};
+
+const turboAliases = {
+  "@vxture-platform/shared": "../../packages/shared/shared/src",
+  "@vxture/platform-browser": "../../packages/platform/browser/src",
+};
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+  output: process.env.NEXT_STANDALONE === "1" ? "standalone" : undefined,
+  experimental: {
+    webpackBuildWorker: false,
+  },
+  transpilePackages: [],
+  turbopack: {
+    resolveAlias: turboAliases,
+  },
+  async rewrites() {
+    // Dev-only same-origin seam: the shell always calls its BFF with relative
+    // /auth/* and /api/* URLs (in prod nginx routes them on the same vhost,
+    // keeping the real hostname out of the repo). `next dev` proxies them to
+    // the local BFF. arche 门户 3050 / arche-bff 3051（平台 3000–3099 段内
+    // 唯一空的偶+1 对，见端口分配）。dev-panel 会显式注入 ARCHE_BFF_DEV_URL 覆盖
+    // 默认值；直接 `pnpm --filter @vxture/arche dev` 才吃这个默认。
+    const archeBff = process.env.ARCHE_BFF_DEV_URL ?? "http://localhost:3051";
+    return [
+      { source: "/auth/:path*", destination: `${archeBff}/auth/:path*` },
+      // /api/health 是 Next 自己的路由（app/api/health），不能代出去——把它排除在
+      // 外，其余 /api/* 才交给 BFF。
+      {
+        source: "/api/:path((?!health$).*)",
+        destination: `${archeBff}/api/:path*`,
+      },
+    ];
+  },
+  webpack: (config) => {
+    Object.assign(config.resolve.alias, internalAliases);
+    return config;
+  },
+};
+
+/* next-intl 的 server 配置入口。不挂这个插件，从 server component 引用 next-intl
+   会在**请求时**抛「Couldn't find next-intl config file」——而 build 是绿的，
+   因为根 layout 的 `headers()` 让所有路由变成动态、build 期不渲染。 */
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
+
+export default withNextIntl(nextConfig);

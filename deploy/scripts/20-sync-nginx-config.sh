@@ -107,6 +107,24 @@ if [ -f "$OPERA_TEMPLATE" ]; then
   fi
 fi
 
+# ── 模板渲染：平台治理平面 vhost（Arche）────────────────────────────────────
+# 真实域名不入仓（加固决策）：从主机 runtime env 的 ARCHE_BASE_URL 取主机名渲染。
+# env 缺失或仍是占位符时跳过（该 vhost 未启用），不影响其余站点同步。
+ARCHE_ENV_FILE="${ARCHE_ENV_FILE:-/srv/vxture/runtime/.env.arche-bff}"
+ARCHE_TEMPLATE="$SRC/templates/arche.vhost.template"
+if [ -f "$ARCHE_TEMPLATE" ]; then
+  ar_base="$(grep -E '^ARCHE_BASE_URL=' "$ARCHE_ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+  ar_host="${ar_base#https://}"; ar_host="${ar_host#http://}"; ar_host="${ar_host%%/*}"
+  if [ -n "$ar_host" ] && [ "$ar_host" != "g.vxture.com" ]; then
+    VX_ARCHE_HOST="$ar_host" envsubst '${VX_ARCHE_HOST} ${VX_WORKER01_TAILNET_IP} ${VX_WORKER02_TAILNET_IP}' \
+      <"$ARCHE_TEMPLATE" >"$DST/sites-enabled/arche.conf"
+    echo "==> 已渲染平台治理平面 vhost → $DST/sites-enabled/arche.conf"
+  else
+    rm -f "$DST/sites-enabled/arche.conf"
+    echo "  提示：未在 $ARCHE_ENV_FILE 找到有效 ARCHE_BASE_URL，跳过平台治理平面 vhost"
+  fi
+fi
+
 echo ""
 echo "同步完成，目录内容："
 find "$DST" -type f | sort
