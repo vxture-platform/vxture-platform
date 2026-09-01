@@ -2,11 +2,11 @@
 
 /* 治理总览 — Arche 平台治理平面首页。
  *
- * PR① 阶段:本页只立信息架构与入口。真实治理仪表(账号/角色/审计/合规的当前态与
- * 待办)在 PR② 随各页从 admin 平台自治域迁入后接入。此处不接假数据——一个显示
- * 虚构数字的治理台在运营者面前是误导不是功能。 */
+ * 各治理页(身份权限/安全审计/系统配置/通知审计)已从 admin 平台自治域迁入并上线
+ * (三平面拆分 cutover,2026-09-02);本页为入口聚合。真实治理仪表(当前态与待办)
+ * 待有真数据源再接——此处不接假数据,一个显示虚构数字的治理台是误导不是功能。 */
 
-import { Banner, EntryCard, ViewHeader } from "@vxture/design-system";
+import { EntryCard, ViewHeader } from "@vxture/design-system";
 
 export default function GovernanceOverviewPage() {
   return (
@@ -15,11 +15,6 @@ export default function GovernanceOverviewPage() {
         icon="squares-four"
         title="治理总览"
         description="平台身份权限、安全审计、风控合规与系统配置的入口。最高信任层,与商业(admin)、运维(opera)两面分立。"
-      />
-      <Banner
-        tone="info"
-        title="脚手架阶段"
-        description="治理各页将于 PR② 从 admin 平台自治域迁入(页面与 arche-bff router 一并搬入)。当前为占位入口。"
       />
       <div className="grid gap-md sm:grid-cols-2 xl:grid-cols-3">
         <EntryCard
