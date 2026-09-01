@@ -13,13 +13,21 @@ import { OidcRpModule } from "./oidc/oidc-rp.module";
 import { ArcheBffPoolsModule } from "./providers/pools.module";
 import { HealthRouter } from "./routers/health.router";
 import { SessionRouter } from "./routers/session.router";
+import { AuditLogsRouter } from "./routers/audit-logs.router";
+import { NotificationLogsRouter } from "./routers/notification-logs.router";
 
-/* PR① 脚手架:arche-bff 只保留登录会话 / 健康 / step-up 三条通用面。
- * 治理业务 router(账号 / 角色 / 权限 / 审计 / 合规 / 配置)于 PR② 从 admin-bff
- * 迁入并在此注册。 */
+/* 通用面:登录会话 / 健康 / step-up。治理业务 router 分批从 admin-bff 迁入:
+ * PR②(Batch 1)审计日志 / 通知投递台账两条只读面已在此注册;账号 / 角色 /
+ * 权限 / 风控 / 合规 / 配置等后续批次陆续迁入。 */
 @Module({
   imports: [OidcRpModule, ArcheBffPoolsModule],
-  controllers: [HealthRouter, SessionRouter, OperatorStepUpRouter],
+  controllers: [
+    HealthRouter,
+    SessionRouter,
+    OperatorStepUpRouter,
+    AuditLogsRouter,
+    NotificationLogsRouter,
+  ],
   providers: [
     OperatorAuthzService,
     OperatorAuthMiddleware,
