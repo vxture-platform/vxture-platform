@@ -63,7 +63,7 @@ import {
 } from "@vxture/design-system";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { PRODUCT_TYPE_DEFS } from "@vxture/core-utils";
+import { PRODUCT_TYPE_DEFS, isValidProductType } from "@vxture/core-utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   actionsFor,
@@ -981,7 +981,15 @@ function ProductsPageContent() {
                 align: "center",
                 width: "xs",
                 cell: (r: ProductRecord) => (
-                  <span className="text-code-sm">{r.productType}</span>
+                  // 受管枚举外的历史/非法 product_type 标「非合规」,便于 owner 上线后订正。
+                  <span className="inline-flex items-center justify-center gap-1.5">
+                    <span className="text-code-sm">{r.productType}</span>
+                    {isValidProductType(r.productType) ? null : (
+                      <StatusBadge tone="warning" dot>
+                        {tShared("common.nonCompliant")}
+                      </StatusBadge>
+                    )}
+                  </span>
                 ),
               },
               {
