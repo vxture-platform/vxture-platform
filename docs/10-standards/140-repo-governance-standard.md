@@ -35,7 +35,7 @@ PR 评审比对项，不设新机检）。实例教训：vxtpl 在 `@vxture/shar
   push 前需 PR、禁 force-push、线性历史；单人仓 `required_approving_review_count=0`（靠 checks 把关），
   多人仓改 `1`；**`bypass_actors` 清空（2026-07-28 起）**，含仓库 admin 在内一律不得绕过，PR + required checks
   是唯一入 `main` 通道。
-  - **必需 checks 集合权威 = `main-ruleset.json` 的五项**：`quality-gate` / `build` / `test-coverage` /
+  - **必需 checks 的五项是下限，不是上限**（措辞更正 2026-09-01，见下条）。权威集合 = `main-ruleset.json` 的五项：`quality-gate` / `build` / `test-coverage` /
     `audit` / `gitleaks`（CI job 名必须精确产出这五个 context，改 job 名 = 分支保护失效）。**无单测的产品仓仍须提供
     一个恒绿的 `test-coverage` job**（占住该 context，零测试即通过）——不得从 required 里删该项。
     （`vxture-arda` 现行只有四项、缺 `test-coverage`，属偏差，见其仓整改线。）
@@ -46,6 +46,28 @@ PR 评审比对项，不设新机检）。实例教训：vxtpl 在 `@vxture/shar
     再加一个 `needs: [portal-build]` 的空壳作业叫 `build` 承载该 context。任一腿失败时聚合作业被 skip，
     ruleset 视 skip 为未通过，**门禁强度不变**——这与 `quality-gate` 已在用的形状同源。
     参照实现见 `vxture-umbra` `.github/workflows/ci.yml`。
+  - **分发型仓库应加一项「装出来的东西能不能跑」（2026-09-01 起，回应 `vxture-ruyin` 桌面分发剖面
+    L1，函见该仓 `docs/80-liaison/10-2607241430`）**：产出物要装到最终用户机器上的仓库
+    （桌面安装包、CLI 二进制），在五项之上另加一项 required check —— **把打包产物真的启动
+    一遍**。
+
+    理由不是求全：**其余五项全绿，仍然可能产出一个装不上的包**，而这类缺陷只有把它跑
+    起来才看得见。已经实际发生过的三类：
+    - 依赖在部署树里丢了（pnpm 的 isolated 布局 + electron-builder 解引用符号链接 →
+      打包后缺包，而构建、类型、测试全绿）
+    - 原生模块按宿主 ABI 装，打包后跑在另一个 ABI 上
+    - **原生模块解析不到时静默降级** —— `vxture-ruyin` 实测：`@primno/dpapi` 取不到的样子
+      和「这台机器没有 DPAPI」一模一样，后果是每个新装用户拿到一把**明文主密钥**，
+      而没有任何一处会报错
+
+    **这一项必须总会上报**：不得是 matrix 腿、不得被 skip（理由同上条聚合作业）。
+    参照实现见 `vxture-ruyin` `.github/workflows/ci.yml` 的 `packaged-smoke`
+    （windows-latest → `pack.mjs --dir` → 启动打包后的应用 → 真排一份 PDF →
+    断言主密钥保护方式）。
+
+    **不动五项的地位**：它们仍是每个仓的必需下限；本条只允许分发型仓库在其上**加**，
+    不允许任何仓从中**减**。
+
 - **落地时机（关键顺序）**：空仓先 `git init`→`main`→首推建立 `main`→跑一次 CI 让 required checks
   至少产生一次→**此时**再 apply ruleset（先加限制性 ruleset 会挡住首次代码导入）。
 
