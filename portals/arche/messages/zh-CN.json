@@ -14,6 +14,7 @@
   },
   "common": {
     "actionFailed": "操作失败",
+    "adjustFiltersHint": "尝试调整筛选条件",
     "cardsRetired": "卡片视图已下线，改用列表",
     "close": "关闭",
     "copied": "已复制到剪贴板",
@@ -23,6 +24,7 @@
     "copyRow": "复制该行",
     "deleteFailed": "删除失败",
     "edit": "编辑",
+    "export": "导出",
     "loadFailed": "读取失败",
     "loadMore": "加载更多",
     "loadMoreFailed": "加载更多失败",
