@@ -15,10 +15,15 @@ import { HealthRouter } from "./routers/health.router";
 import { SessionRouter } from "./routers/session.router";
 import { AuditLogsRouter } from "./routers/audit-logs.router";
 import { NotificationLogsRouter } from "./routers/notification-logs.router";
+import { RiskRecordsRouter } from "./routers/risk-records.router";
+import { ComplianceEventsRouter } from "./routers/compliance-events.router";
+import { SystemParametersRouter } from "./routers/system-parameters.router";
+import { FeatureTogglesRouter } from "./routers/feature-toggles.router";
 
 /* 通用面:登录会话 / 健康 / step-up。治理业务 router 分批从 admin-bff 迁入:
- * PR②(Batch 1)审计日志 / 通知投递台账两条只读面已在此注册;账号 / 角色 /
- * 权限 / 风控 / 合规 / 配置等后续批次陆续迁入。 */
+ * PR②(Batch 1)审计日志 / 通知投递台账两条只读面;(Batch 2)风险记录 / 合规
+ * 事件 / 系统参数 / 功能开关四条写面(无 step-up)。账号 / 角色 / 权限等 RBAC
+ * 写口(带 step-up)由后续批次迁入。 */
 @Module({
   imports: [OidcRpModule, ArcheBffPoolsModule],
   controllers: [
@@ -27,6 +32,10 @@ import { NotificationLogsRouter } from "./routers/notification-logs.router";
     OperatorStepUpRouter,
     AuditLogsRouter,
     NotificationLogsRouter,
+    RiskRecordsRouter,
+    ComplianceEventsRouter,
+    SystemParametersRouter,
+    FeatureTogglesRouter,
   ],
   providers: [
     OperatorAuthzService,

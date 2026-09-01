@@ -52,7 +52,10 @@
     "generic": {
       "disabled": "Disabled",
       "degraded": "Degraded",
-      "abnormal": "Abnormal"
+      "abnormal": "Abnormal",
+      "pending": "Pending",
+      "processing": "Processing",
+      "rejected": "Rejected"
     }
   },
   "modelKeysPage": {
@@ -183,6 +186,9 @@
     "cancel": "Cancel",
     "delete": "Delete",
     "disable": "Disable",
-    "enable": "Enable"
+    "enable": "Enable",
+    "create": "Create",
+    "edit": "Edit",
+    "archive": "Archive"
   }
 }

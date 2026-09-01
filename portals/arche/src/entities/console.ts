@@ -45,3 +45,83 @@ export interface NotificationLogRecord {
   openedAt: string | null;
   createdAt: string;
 }
+
+// ── 治理写页(风险 / 合规 / 参数 / 开关)—— 与 arche-bff governance.types 同形 ──
+
+export interface RiskRecordItem {
+  id: string;
+  tenantId: string;
+  tenantName: string | null;
+  tenantNo: string | null;
+  riskLevel: "normal" | "follow_up" | "high";
+  riskScore: number | null;
+  scope: string | null;
+  reason: string;
+  reviewerId: string | null;
+  reviewerName: string | null;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ComplianceEventItem {
+  id: string;
+  /** null = 平台级事件。 */
+  tenantId: string | null;
+  tenantName: string | null;
+  eventType: string;
+  status: "open" | "in_review" | "resolved" | "dismissed";
+  regulationCode: string | null;
+  evidenceUrl: string | null;
+  handlerId: string | null;
+  handlerName: string | null;
+  detail: unknown;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlatformSettingRecord {
+  id: string;
+  configGroup: string;
+  configKey: string;
+  valueType: "string" | "int" | "bool" | "json";
+  /** 敏感/加密时脱敏为 '••••••'。 */
+  configValue: string;
+  isSensitive: boolean;
+  isEncrypted: boolean;
+  isReadonly: boolean;
+  isMasked: boolean;
+  isEditable: boolean;
+  validationRule: string | null;
+  description: string | null;
+  updatedAt: string;
+}
+
+export interface FeatureFlagRecord {
+  id: string;
+  flagKey: string;
+  category: string;
+  environment: string;
+  description: string | null;
+  isGloballyEnabled: boolean;
+  isArchived: boolean;
+  rolloutPercentage: number;
+  /** {tenancy.tenants.id: boolean} — 逐租户覆盖,优先于 rollout。 */
+  tenantOverrides: Record<string, boolean>;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * 运营账号记录 —— 合规事件页的"指派处理人"下拉需要它列活跃运营者。
+ * 完整的平台用户管理面(RBAC 写口)在 PR③(Batch 3)从 admin 迁入;此处只保留
+ * 处理人选择器用到的字段形状。
+ */
+export interface PlatformAdminRecord {
+  id: string;
+  username: string;
+  displayName: string;
+  statusCode: "active" | "disabled" | "locked" | "pending" | "suspended";
+}

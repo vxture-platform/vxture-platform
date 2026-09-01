@@ -52,7 +52,10 @@
     "generic": {
       "disabled": "已停用",
       "degraded": "降级",
-      "abnormal": "异常"
+      "abnormal": "异常",
+      "pending": "待处理",
+      "processing": "处理中",
+      "rejected": "已驳回"
     }
   },
   "modelKeysPage": {
@@ -183,6 +186,9 @@
     "cancel": "取消",
     "delete": "删除",
     "disable": "停用",
-    "enable": "启用"
+    "enable": "启用",
+    "create": "创建",
+    "edit": "编辑",
+    "archive": "归档"
   }
 }
