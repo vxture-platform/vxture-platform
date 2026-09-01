@@ -30,10 +30,10 @@ export const RequireStepUp = () => SetMetadata(REQUIRE_STEP_UP, true);
 
 /**
  * host-only step-up 凭证 cookie。**与 admin 的刻意不同名**
- * （admin 是 `vx_op_stepup`）：两个门户的凭证 `aud` 不同（`opera` vs `admin`），
+ * （admin 是 `vx_op_stepup`、opera 是 `vx_opera_stepup`）：两个门户的凭证 `aud` 不同（`arche` vs `admin`/`opera`），
  * 同名会让浏览器在同一父域下互相覆盖，表现为"在 admin 验过之后 opera 也放行"
  * ——那等于把两个门户的高危闸门连成一个。
  */
 export function stepUpCookieName(secure: boolean): string {
-  return secure ? "__Host-vx_opera_stepup" : "vx_opera_stepup";
+  return secure ? "__Host-vx_arche_stepup" : "vx_arche_stepup";
 }

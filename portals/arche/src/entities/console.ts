@@ -114,14 +114,82 @@ export interface FeatureFlagRecord {
   updatedAt: string;
 }
 
-/**
- * 运营账号记录 —— 合规事件页的"指派处理人"下拉需要它列活跃运营者。
- * 完整的平台用户管理面(RBAC 写口)在 PR③(Batch 3)从 admin 迁入;此处只保留
- * 处理人选择器用到的字段形状。
- */
+// ── RBAC 域(Batch 3:平台用户/角色/权限)前端类型 ───────────────────────
+// 与 bff/arche-bff governance.types 同形。合规事件页的"指派处理人"下拉用
+// PlatformAdminRecord 的 id/username/displayName/statusCode 子集(此处为超集,兼容)。
+
+// 前端用小写(与 admin 前端 entities 一致;后端 governance.types 用大写,同 admin
+// 的前后端分裂——两侧各自独立,运行时值以后端返回为准)。
+export type PlatformPermissionType = "menu" | "button" | "api";
+
 export interface PlatformAdminRecord {
   id: string;
+  sort: number;
   username: string;
   displayName: string;
+  phone: string | null;
+  email: string | null;
+  roleId: string;
+  roleCode: string;
+  roleNameI18nKey: string;
+  roleNameEn: string;
+  roleRank: number;
+  canManage?: boolean;
+  roleStatusCode: "active" | "disabled" | "archived";
+  roleStatus: boolean;
   statusCode: "active" | "disabled" | "locked" | "pending" | "suspended";
+  status: boolean;
+  isSystem: boolean;
+  lastLoginAt: string | null;
+  lastLoginIp: string | null;
+  remark: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlatformRolePermissionRecord {
+  id: string;
+  parentId: string | null;
+  permCode: string;
+  permName: string;
+  permType: PlatformPermissionType;
+  status: boolean;
+  description: string;
+  routePath: string | null;
+}
+
+export interface PlatformRoleRecord {
+  id: string;
+  roleCode: string;
+  rank: number;
+  nameI18nKey: string;
+  nameEn: string;
+  descriptionI18nKey: string | null;
+  description: string;
+  isSystem: boolean;
+  statusCode: "active" | "disabled" | "archived";
+  status: boolean;
+  sort: number;
+  adminCount: number;
+  activeAdminCount: number;
+  permissionCount: number;
+  menuPermissionCount: number;
+  buttonPermissionCount: number;
+  apiPermissionCount: number;
+  createdBy: string | null;
+  createdByName: string | null;
+  createdAt: string;
+  updatedAt: string;
+  permissions: PlatformRolePermissionRecord[];
+}
+
+export interface PlatformAdminPermissionRecord extends PlatformRolePermissionRecord {
+  isSystem: boolean;
+  icon: string | null;
+  sort: number;
+  component: string | null;
+  roleCount: number;
+  activeRoleCount: number;
+  createdAt: string;
+  updatedAt: string;
 }

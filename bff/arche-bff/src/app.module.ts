@@ -4,6 +4,7 @@ import {
   type NestModule,
 } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
+import { OperatorAdminService } from "./auth/operator-admin.service";
 import { OperatorAuthzService } from "./auth/operator-authz.service";
 import { OperatorStepUpService } from "./auth/operator-stepup.service";
 import { OperatorStepUpGuard } from "./auth/step-up.guard";
@@ -19,11 +20,14 @@ import { RiskRecordsRouter } from "./routers/risk-records.router";
 import { ComplianceEventsRouter } from "./routers/compliance-events.router";
 import { SystemParametersRouter } from "./routers/system-parameters.router";
 import { FeatureTogglesRouter } from "./routers/feature-toggles.router";
+import { PlatformAdminsRouter } from "./routers/platform-admins.router";
+import { AdminRolesRouter } from "./routers/admin-roles.router";
+import { AdminPermissionsRouter } from "./routers/admin-permissions.router";
 
 /* 通用面:登录会话 / 健康 / step-up。治理业务 router 分批从 admin-bff 迁入:
  * PR②(Batch 1)审计日志 / 通知投递台账两条只读面;(Batch 2)风险记录 / 合规
- * 事件 / 系统参数 / 功能开关四条写面(无 step-up)。账号 / 角色 / 权限等 RBAC
- * 写口(带 step-up)由后续批次迁入。 */
+ * 事件 / 系统参数 / 功能开关四条写面(无 step-up);(Batch 3)平台用户 / 角色 /
+ * 权限三条 RBAC 写面(带 step-up,最高危写口)。 */
 @Module({
   imports: [OidcRpModule, ArcheBffPoolsModule],
   controllers: [
@@ -36,8 +40,12 @@ import { FeatureTogglesRouter } from "./routers/feature-toggles.router";
     ComplianceEventsRouter,
     SystemParametersRouter,
     FeatureTogglesRouter,
+    PlatformAdminsRouter,
+    AdminRolesRouter,
+    AdminPermissionsRouter,
   ],
   providers: [
+    OperatorAdminService,
     OperatorAuthzService,
     OperatorAuthMiddleware,
     OperatorStepUpService,

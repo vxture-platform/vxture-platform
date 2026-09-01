@@ -14,7 +14,9 @@ import type {
   ComplianceEventItem,
   FeatureFlagRecord,
   NotificationLogRecord,
+  PlatformAdminPermissionRecord,
   PlatformAdminRecord,
+  PlatformRoleRecord,
   PlatformSettingRecord,
   RiskRecordItem,
 } from "@/entities/console";
@@ -429,4 +431,305 @@ export async function updatePlatformSetting(
 
 export async function fetchPlatformAdmins(): Promise<PlatformAdminRecord[]> {
   return readJsonStrict<PlatformAdminRecord[]>("/api/platform-admins");
+}
+
+// ── RBAC 域(Batch 3:平台用户/角色/权限)──────────────────────────────────
+// 从 admin-bff api-client 切片。写函数走 mutateJson(同源相对路径),读走
+// readJsonStrict。isStepUpRequiredError 认 ArcheBffError;replacePlatformRolePermissions
+// 从 admin 的裸 fetch(带 admin base)改写成 mutateJson。
+
+/** 403 且 message 含 step_up ⇒ 需二次验证,调用方走 useStepUp 重试。 */
+export function isStepUpRequiredError(error: unknown): boolean {
+  return (
+    error instanceof ArcheBffError &&
+    error.status === 403 &&
+    error.message.toLowerCase().includes("step_up")
+  );
+}
+
+/** 当前操作者(仅取 RBAC 面用到的 roleRank;身份+能力码出自 /api/session)。 */
+export async function fetchCurrentUser(): Promise<{
+  roleRank: number | null;
+} | null> {
+  const session = await readJsonStrict<{
+    operator: { roleRank: number | null };
+  } | null>("/api/session");
+  return session ? { roleRank: session.operator.roleRank } : null;
+}
+
+// —— 平台角色 ——
+export async function fetchPlatformRoles(): Promise<PlatformRoleRecord[]> {
+  return readJsonStrict<PlatformRoleRecord[]>("/api/admin-roles");
+}
+
+export async function replacePlatformRolePermissions(
+  roleId: string,
+  permissionIds: string[],
+): Promise<PlatformRoleRecord> {
+  return mutateJson<PlatformRoleRecord>(
+    `/api/admin-roles/${encodeURIComponent(roleId)}/permissions`,
+    "PUT",
+    { permissionIds },
+    "Role authorization update failed",
+  );
+}
+
+export interface OperatorRoleCreateInput {
+  roleCode: string;
+  nameEn: string;
+  nameI18nKey?: string;
+  description?: string;
+  mfaMinLevel?: "disabled" | "optional" | "required";
+  sort?: number;
+}
+
+export interface OperatorRoleUpdateInput {
+  nameEn?: string;
+  nameI18nKey?: string;
+  description?: string;
+  mfaMinLevel?: "disabled" | "optional" | "required";
+  sort?: number;
+}
+
+export interface OperatorRoleCopyInput {
+  roleCode: string;
+  nameEn?: string;
+  nameI18nKey?: string;
+  description?: string;
+}
+
+export async function createOperatorRole(
+  payload: OperatorRoleCreateInput,
+): Promise<PlatformRoleRecord> {
+  return mutateJson<PlatformRoleRecord>(
+    "/api/admin-roles",
+    "POST",
+    payload,
+    "Operator role creation failed",
+  );
+}
+
+export async function updateOperatorRole(
+  roleId: string,
+  payload: OperatorRoleUpdateInput,
+): Promise<PlatformRoleRecord> {
+  return mutateJson<PlatformRoleRecord>(
+    `/api/admin-roles/${encodeURIComponent(roleId)}`,
+    "PUT",
+    payload,
+    "Operator role update failed",
+  );
+}
+
+export async function copyOperatorRole(
+  roleId: string,
+  payload: OperatorRoleCopyInput,
+): Promise<PlatformRoleRecord> {
+  return mutateJson<PlatformRoleRecord>(
+    `/api/admin-roles/${encodeURIComponent(roleId)}/copy`,
+    "POST",
+    payload,
+    "Operator role copy failed",
+  );
+}
+
+export async function toggleOperatorRoleStatus(
+  roleId: string,
+): Promise<PlatformRoleRecord> {
+  return mutateJson<PlatformRoleRecord>(
+    `/api/admin-roles/${encodeURIComponent(roleId)}/toggle-status`,
+    "POST",
+    undefined,
+    "Operator role status toggle failed",
+  );
+}
+
+export async function deleteOperatorRole(
+  roleId: string,
+): Promise<{ id: string; status: "deleted" }> {
+  return mutateJson<{ id: string; status: "deleted" }>(
+    `/api/admin-roles/${encodeURIComponent(roleId)}`,
+    "DELETE",
+    undefined,
+    "Operator role deletion failed",
+  );
+}
+
+// —— 权限策略 ——
+export async function fetchPlatformPermissions(): Promise<
+  PlatformAdminPermissionRecord[]
+> {
+  return readJsonStrict<PlatformAdminPermissionRecord[]>(
+    "/api/admin-permissions",
+  );
+}
+
+export interface OperatorPermissionCreateInput {
+  permCode: string;
+  permType: string;
+  permName: string;
+  parentId?: string | null;
+  routePath?: string | null;
+  component?: string | null;
+  icon?: string | null;
+  description?: string;
+  sort?: number;
+}
+
+export interface OperatorPermissionUpdateInput {
+  permCode?: string;
+  permType?: string;
+  permName?: string;
+  parentId?: string | null;
+  routePath?: string | null;
+  component?: string | null;
+  icon?: string | null;
+  description?: string;
+  sort?: number;
+}
+
+export async function createOperatorPermission(
+  payload: OperatorPermissionCreateInput,
+): Promise<PlatformAdminPermissionRecord> {
+  return mutateJson<PlatformAdminPermissionRecord>(
+    "/api/admin-permissions",
+    "POST",
+    payload,
+    "Operator permission creation failed",
+  );
+}
+
+export async function updateOperatorPermission(
+  permissionId: string,
+  payload: OperatorPermissionUpdateInput,
+): Promise<PlatformAdminPermissionRecord> {
+  return mutateJson<PlatformAdminPermissionRecord>(
+    `/api/admin-permissions/${encodeURIComponent(permissionId)}`,
+    "PUT",
+    payload,
+    "Operator permission update failed",
+  );
+}
+
+export async function toggleOperatorPermission(
+  permissionId: string,
+): Promise<PlatformAdminPermissionRecord> {
+  return mutateJson<PlatformAdminPermissionRecord>(
+    `/api/admin-permissions/${encodeURIComponent(permissionId)}/toggle`,
+    "POST",
+    undefined,
+    "Operator permission toggle failed",
+  );
+}
+
+// —— 平台用户 ——
+export interface PlatformAdminMetadataInput {
+  displayName?: string;
+  email?: string;
+  phone?: string;
+  remark?: string;
+  sort?: number;
+}
+
+export interface CreatePlatformAdminInput {
+  username: string;
+  displayName: string;
+  email: string;
+  phone?: string;
+  roleId: string;
+}
+
+export async function createPlatformAdmin(
+  input: CreatePlatformAdminInput,
+): Promise<{ record: PlatformAdminRecord; deliveredTo: string }> {
+  return mutateJson<{ record: PlatformAdminRecord; deliveredTo: string }>(
+    "/api/platform-admins",
+    "POST",
+    input,
+    "Platform admin creation failed",
+  );
+}
+
+export async function changePlatformAdminRole(
+  adminId: string,
+  roleId: string,
+): Promise<PlatformAdminRecord> {
+  return mutateJson<PlatformAdminRecord>(
+    `/api/platform-admins/${encodeURIComponent(adminId)}/role`,
+    "POST",
+    { roleId },
+    "Platform admin role change failed",
+  );
+}
+
+export async function updatePlatformAdmin(
+  adminId: string,
+  payload: PlatformAdminMetadataInput,
+): Promise<PlatformAdminRecord> {
+  return mutateJson<PlatformAdminRecord>(
+    `/api/platform-admins/${encodeURIComponent(adminId)}`,
+    "PUT",
+    payload,
+    "Platform admin update failed",
+  );
+}
+
+export async function disablePlatformAdmin(
+  adminId: string,
+  reason?: string,
+): Promise<PlatformAdminRecord> {
+  return mutateJson<PlatformAdminRecord>(
+    `/api/platform-admins/${encodeURIComponent(adminId)}/disable`,
+    "POST",
+    reason ? { reason } : {},
+    "Platform admin disable failed",
+  );
+}
+
+export async function enablePlatformAdmin(
+  adminId: string,
+  reason?: string,
+): Promise<PlatformAdminRecord> {
+  return mutateJson<PlatformAdminRecord>(
+    `/api/platform-admins/${encodeURIComponent(adminId)}/enable`,
+    "POST",
+    reason ? { reason } : {},
+    "Platform admin enable failed",
+  );
+}
+
+export async function forcePlatformAdminLogout(
+  adminId: string,
+  reason?: string,
+): Promise<{ ok: true; revoked: number }> {
+  return mutateJson<{ ok: true; revoked: number }>(
+    `/api/platform-admins/${encodeURIComponent(adminId)}/force-logout`,
+    "POST",
+    reason ? { reason } : {},
+    "Platform admin force-logout failed",
+  );
+}
+
+export async function resetPlatformAdminMfa(
+  adminId: string,
+  reason?: string,
+): Promise<{ ok: true; revoked: number }> {
+  return mutateJson<{ ok: true; revoked: number }>(
+    `/api/platform-admins/${encodeURIComponent(adminId)}/mfa/reset`,
+    "POST",
+    reason ? { reason } : {},
+    "Platform admin MFA reset failed",
+  );
+}
+
+export async function resetPlatformAdminPassword(
+  adminId: string,
+  reason?: string,
+): Promise<{ ok: true; deliveredTo: string; expiresIn: number }> {
+  return mutateJson<{ ok: true; deliveredTo: string; expiresIn: number }>(
+    `/api/platform-admins/${encodeURIComponent(adminId)}/reset-password`,
+    "POST",
+    reason ? { reason } : {},
+    "Platform admin password reset failed",
+  );
 }
