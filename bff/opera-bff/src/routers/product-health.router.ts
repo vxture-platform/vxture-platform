@@ -202,16 +202,22 @@ export function layerFromProductType(productType: string | null): ProductLayer {
     case "model_platform":
     case "capability_platform":
       return "L1";
+    // 受管枚举(@vxture/core-utils):平台族(general/industry)+历史应用平台 = L2。
+    case "general_platform":
+    case "industry_platform":
     case "data_platform":
     case "knowledge_platform":
       return "L2";
-    // L3 = 行业智能体应用（矩阵 §1）；vxtpl 与 demo 智能体都是这个类型。
+    // L3 = 智能体应用；受管枚举拆通用/行业,历史裸 agent 一并归此。
     case "agent":
+    case "general_agent":
+    case "industry_agent":
       return "L3";
     case "client":
       return "client";
     case "external":
       return "external";
+    // undefined(未定义)与其它未登记值。
     default:
       return "unclassified";
   }

@@ -1377,7 +1377,8 @@ async function resolveBundledComponents(
 interface ProductCatalogRow {
   id: string;
   product_code: string;
-  product_type: string; // client | external | agent | data_platform | platform | …
+  product_type: string; // 受管枚举 @vxture/core-utils: general_platform|industry_platform|general_agent|industry_agent|undefined
+  origin: string; // 来源轴 self|third_party|other —— source 从这里判，不再从 product_type='external' 反推
   product_name: string;
   description: string | null;
   status: string; // active | inactive | draft | deprecated
@@ -1406,16 +1407,25 @@ interface ProductWebhookRow {
 /** Map the open-ended product_type kind onto the capability presentation type. */
 function mapProductCapabilityType(productType: string): ProductCapabilityType {
   switch (productType) {
+    // 受管枚举(@vxture/core-utils):智能体族。
     case "agent":
+    case "general_agent":
+    case "industry_agent":
       return "agent";
     case "model":
+    case "model_platform":
       return "model";
     case "data_platform":
     case "data":
       return "data";
+    // 受管枚举:平台族(general/industry)+历史平台型都归 platform。
     case "platform":
+    case "general_platform":
+    case "industry_platform":
+    case "capability_platform":
+    case "knowledge_platform":
       return "platform";
-    // client / external / anything else present as an integrated service.
+    // undefined / client / external / 其它一律作为集成服务呈现。
     default:
       return "service";
   }
@@ -1470,6 +1480,7 @@ const PRODUCT_CATALOG_SQL = `
     p.id,
     p.product_code,
     p.product_type,
+    p.origin,
     p.product_name,
     p.description,
     p.status,
@@ -1551,8 +1562,9 @@ export async function loadProductCapabilities(
   return products.rows.map((row) => {
     const productType = mapProductCapabilityType(row.product_type);
     const status = mapProductCapabilityStatus(row.status);
-    const source: ProductCapabilitySource =
-      row.product_type === "external" ? "partner" : "self";
+    // 来源判 origin(self/third_party/other),不再从 product_type='external' 反推
+    // ——external 已回归为来源而非类型。复用与方案侧同一口径 mapSolutionSource。
+    const source: ProductCapabilitySource = mapSolutionSource(row.origin);
     const productMetrics = metricsByProduct.get(row.id) ?? [];
     const webhook = webhookByProduct.get(row.id);
     const integration: ProductCapabilityIntegration = webhook
@@ -1613,7 +1625,7 @@ export async function loadProductCapabilities(
   });
 }
 
-/** Agent-kind products from the live catalog (product_type = 'agent'). */
+/** Agent-kind products from the live catalog (受管枚举的智能体族 + 历史裸 agent)。 */
 export async function loadProductAgents(
   pool: Pool,
 ): Promise<ProductAgentRecord[]> {
@@ -1634,7 +1646,8 @@ export async function loadProductAgents(
     `SELECT id, product_code, product_name, description, status,
             is_customer_visible, is_workforce_visible, created_at, updated_at
        FROM product.products
-      WHERE deleted_at IS NULL AND product_type = 'agent'
+      WHERE deleted_at IS NULL
+        AND product_type IN ('agent', 'general_agent', 'industry_agent')
       ORDER BY product_name ASC`,
   );
 

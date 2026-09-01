@@ -17,6 +17,7 @@ import type { IconName } from "@vxture/design-system";
 
 export type ProductTypeKey =
   | "general_platform"
+  | "industry_platform"
   | "external_platform"
   | "model_platform"
   | "capability_platform"
@@ -35,6 +36,7 @@ export type ProductTypeKey =
  */
 const TYPE_ICONS: Record<ProductTypeKey, IconName> = {
   general_platform: "cube",
+  industry_platform: "buildings",
   external_platform: "plugs-connected",
   model_platform: "cube",
   capability_platform: "sparkles",

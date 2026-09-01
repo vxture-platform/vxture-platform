@@ -63,6 +63,7 @@ import {
 } from "@vxture/design-system";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
+import { PRODUCT_TYPE_DEFS } from "@vxture/core-utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   actionsFor,
@@ -1201,14 +1202,22 @@ function ProductsPageContent() {
                 <FieldLabel htmlFor="product-type">
                   {tShared("columns.kind")}
                 </FieldLabel>
-                <Input
+                <NativeSelect
                   id="product-type"
                   value={draft.productType}
                   onChange={(e) =>
                     setDraft({ ...draft, productType: e.target.value })
                   }
-                  placeholder="knowledge_platform"
-                />
+                >
+                  <option value="" disabled>
+                    {tShared("common.pleaseSelect")}
+                  </option>
+                  {PRODUCT_TYPE_DEFS.map((d) => (
+                    <option key={d.value} value={d.value}>
+                      {locale.startsWith("en") ? d.labelEn : d.labelZh}
+                    </option>
+                  ))}
+                </NativeSelect>
               </Field>
             </div>
 

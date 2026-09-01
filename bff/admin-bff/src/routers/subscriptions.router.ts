@@ -386,7 +386,7 @@ function normalizeTenantStatus(status: string): TenantOperationStatus {
   return "active";
 }
 
-// products.product_type 自由 varchar → 能力型枚举（未知归 platform）。
+// products.product_type（受管枚举 @vxture/core-utils）→ 能力型枚举。
 const CAPABILITY_TYPES: ReadonlySet<ProductSolutionCapabilityType> = new Set([
   "platform",
   "agent",
@@ -397,9 +397,15 @@ const CAPABILITY_TYPES: ReadonlySet<ProductSolutionCapabilityType> = new Set([
 function normalizeProductType(
   type: string | null,
 ): ProductSolutionCapabilityType {
-  return type && CAPABILITY_TYPES.has(type as ProductSolutionCapabilityType)
-    ? (type as ProductSolutionCapabilityType)
-    : "platform";
+  if (!type) return "platform";
+  // 历史能力型精确值直接透传。
+  if (CAPABILITY_TYPES.has(type as ProductSolutionCapabilityType)) {
+    return type as ProductSolutionCapabilityType;
+  }
+  // 新旧 product_type 按 family 后缀归族：_agent→agent、_platform→platform、其余→service。
+  if (type === "agent" || type.endsWith("_agent")) return "agent";
+  if (type.endsWith("_platform")) return "platform";
+  return "service";
 }
 
 // plan_components.tier → 订阅档位码。2026-08-31 起方案档位就是五档商业阶梯本身
