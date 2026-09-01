@@ -26,7 +26,14 @@ import {
 } from "react";
 import { DialogForm, Field, FieldLabel, Input } from "@vxture/design-system";
 import { useTranslations } from "next-intl";
-import { isStepUpRequiredError, submitOperatorStepUpTotp } from "@/lib/api";
+import {
+  isStepUpRequiredError as isStepUpRequiredLib,
+  submitOperatorStepUpTotp,
+} from "@/lib/api";
+// RBAC 写操作走 @/api/arche-bff,抛的是 ArcheBffError;而 @/lib/api 的检测器只认
+// ArcheApiError。两套客户端两套错误类,若只认一种,runWithStepUp 就识别不到闸门、
+// 不弹框(症状:高危操作只弹"需二次验证"toast、没有输入面板)。两个都认才不漏。
+import { isStepUpRequiredError as isStepUpRequiredBff } from "@/api/arche-bff";
 
 /**
  * 操作者主动关掉了验证框（而不是验证失败）。调用方应当**静默处理**——
@@ -99,7 +106,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
       try {
         return await action();
       } catch (err) {
-        if (!isStepUpRequiredError(err)) throw err;
+        if (!isStepUpRequiredBff(err) && !isStepUpRequiredLib(err)) throw err;
         await openCeremony();
         // cookie 已种；重试一次。再被拒就正常抛出去。
         return action();
