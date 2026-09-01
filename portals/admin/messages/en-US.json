@@ -232,15 +232,15 @@
         "description": "Review response time, error rate, availability, and alert rules."
       },
       "modelPlatform": {
-        "label": "Model Platform",
-        "description": "Maintain LLM providers, API keys, rate limits, timeouts, and endpoints."
+        "label": "Model Pricing & Policy",
+        "description": "Configure model pricing rules and rate-limit policies; providers/models are read-only, with lifecycle management in Operations."
       },
       "modelGrants": {
         "label": "Model Authorization",
         "description": "Configure model access, quotas, and routing priority by product, tenant, and plan."
       },
       "skills": {
-        "label": "Skill Market",
+        "label": "Capability Catalog",
         "description": "Read-only catalog of capabilities registered in Runos; registration and management live in opera."
       },
       "billing": {
@@ -440,7 +440,7 @@
     "subscription": "Subscription",
     "billing": "Billing",
     "quotas": "Quotas",
-    "modelPlatform": "Model Platform",
+    "modelPlatform": "Model Pricing & Policy",
     "notifications": "Notifications",
     "security": "Security Settings",
     "settings": "Tenant Settings",
@@ -1308,8 +1308,8 @@
   "modelPlatformPage": {
     "header": {
       "eyebrow": "Model Platform",
-      "title": "Model Platform",
-      "description": "Manage online models, private models, endpoints, protocols, capability tags, and non-sensitive configuration.",
+      "title": "Model Pricing & Policy",
+      "description": "Configure model pricing rules and rate-limit policies; providers and models are read-only here, with lifecycle management in Operations.",
       "badge": "Production keys pending"
     },
     "summary": {
@@ -2007,7 +2007,7 @@
   },
   "skillsPage": {
     "header": {
-      "title": "Skill Market",
+      "title": "Capability Catalog",
       "description": "Read-only catalog of capabilities registered in Runos: connectors, executors, and skills. Registration, promotion, retirement, and certification happen in opera's Capability Registry.",
       "manageInOpera": "Manage in opera Capability Registry"
     },

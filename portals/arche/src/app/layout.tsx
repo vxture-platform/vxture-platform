@@ -14,7 +14,7 @@ import { archeLocale, archeMessages } from "@/lib/intl";
 export const metadata: Metadata = {
   title: "Arche · Vxture 平台治理平面",
   description:
-    "平台身份权限、安全审计、风控合规、系统配置与通知基座。最高信任层，与商业/运维面分离。",
+    "平台身份权限、安全审计、风控合规、系统配置与通知审计。最高信任层，与商业/运维面分离。",
 };
 
 /* `headers()` 让这一层变成动态渲染。opera 全站在登录闸门后，本来就没有一个页面

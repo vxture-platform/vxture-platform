@@ -75,7 +75,7 @@ export default function GovernanceOverviewPage() {
           href="/notification-logs"
           icon="terminal"
           title="发送记录"
-          meta="通知基座"
+          meta="通知审计"
           description="系统通知的投递流水与状态"
         />
       </div>
