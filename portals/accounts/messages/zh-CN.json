@@ -25,12 +25,27 @@
       "sentHint": "验证码已发送至 {target}，输入以完成验证。",
       "updated": "邮箱已更新并验证。"
     },
+    "phone": {
+      "change": "更改并验证",
+      "newLabel": "新手机号",
+      "updated": "手机号已更新并验证。"
+    },
+    "password": {
+      "title": "密码",
+      "current": "当前密码",
+      "new": "新密码",
+      "confirm": "确认新密码",
+      "change": "修改密码",
+      "hint": "至少 12 位。修改后其他设备需重新登录。",
+      "mismatch": "两次输入的新密码不一致。",
+      "updated": "密码已修改。"
+    },
     "security": {
       "title": "安全",
       "passkeys": "通行密钥",
       "passkeysHint": "用设备生物识别或安全密钥登录，替代密码。",
       "passkeysManage": "管理",
-      "pending": "手机、密码与多因子认证的自助更改即将开放。"
+      "pending": "多因子认证（MFA）的自助更改即将开放。"
     }
   },
   "destructive": {

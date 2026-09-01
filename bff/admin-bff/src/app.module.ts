@@ -34,7 +34,6 @@ import { HealthRouter } from "./routers/health.router";
 import { MeRouter } from "./routers/me.router";
 import { OperatorStepUpRouter } from "./routers/operator-stepup.router";
 import { PlatformAdminsRouter } from "./routers/platform-admins.router";
-import { OperatorContactRouter } from "./routers/operator-contact.router";
 import { ApplicationsRouter } from "./routers/applications.router";
 import { ProductsRouter } from "./routers/products.router";
 import { TicketsRouter } from "./routers/tickets.router";
@@ -95,7 +94,6 @@ import { SearchRouter } from "./routers/search.router";
     NotificationLogsRouter,
     SearchRouter,
     PlatformAdminsRouter,
-    OperatorContactRouter,
     OperatorStepUpRouter,
   ],
   providers: [

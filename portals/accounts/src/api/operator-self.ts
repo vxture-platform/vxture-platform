@@ -93,3 +93,81 @@ export async function verifyOperatorEmailChange(
   }
   return (await res.json()) as { email: string };
 }
+
+/** Phone change step 1: send an SMS code to the new number. Returns the masked target. */
+export async function startOperatorPhoneChange(
+  newPhone: string,
+): Promise<{ sentTo: string }> {
+  let res: Response;
+  try {
+    res = await fetch(`${OIDC_API_BASE}/oidc/operator/self/phone/start`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ newPhone }),
+    });
+  } catch {
+    throw new Error("网络异常，请稍后重试");
+  }
+  if (!res.ok) {
+    if (res.status === 401) throw new OperatorUnauthenticatedError();
+    if (res.status === 400) throw new Error("手机号格式不正确");
+    throw new Error("发送验证码失败，请重试");
+  }
+  return (await res.json()) as { sentTo: string };
+}
+
+/** Phone change step 2: submit the code sent to the new number. Returns the new phone. */
+export async function verifyOperatorPhoneChange(
+  newPhone: string,
+  code: string,
+): Promise<{ phone: string }> {
+  let res: Response;
+  try {
+    res = await fetch(`${OIDC_API_BASE}/oidc/operator/self/phone/verify`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ newPhone, code }),
+    });
+  } catch {
+    throw new Error("网络异常，请稍后重试");
+  }
+  if (!res.ok) {
+    if (res.status === 401) throw new OperatorUnauthenticatedError();
+    if (res.status === 409) throw new Error("该手机号已被占用");
+    if (res.status === 400) throw new Error("验证码错误或已过期");
+    throw new Error("验证失败，请重试");
+  }
+  return (await res.json()) as { phone: string };
+}
+
+/** Change password: verify current, set new (min 12). Other sessions are revoked. */
+export async function changeOperatorPassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${OIDC_API_BASE}/oidc/operator/self/password`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  } catch {
+    throw new Error("网络异常，请稍后重试");
+  }
+  if (!res.ok) {
+    if (res.status === 401) throw new OperatorUnauthenticatedError();
+    if (res.status === 400) {
+      const data = (await res.json().catch(() => ({}))) as { message?: string };
+      const m = data.message ?? "";
+      if (m.includes("invalid_current_password"))
+        throw new Error("当前密码不正确");
+      if (m.includes("weak_password")) throw new Error("新密码至少 12 位");
+      throw new Error("修改失败，请检查输入");
+    }
+    throw new Error("修改密码失败，请重试");
+  }
+}

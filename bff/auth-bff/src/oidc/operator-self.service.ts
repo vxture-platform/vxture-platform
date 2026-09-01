@@ -22,19 +22,32 @@ import {
 import { randomInt } from "node:crypto";
 import { PgOperatorRepository } from "@vxture/service-iam";
 import { MailService } from "@vxture/service-mail";
+import { PhoneCodeService } from "@vxture/service-sms";
 import { RedisService } from "../redis/redis.service";
+import { OperatorRefreshTokenRepository } from "../token/operator-refresh-token.repository";
 
 /** operator central-session `sub` prefix (workforce realm). Mirrors webauthn service. */
 const OPERATOR_SUB_PREFIX = "opr_";
 /** pending contact-change TTL — matches operator-admin-internal.router. */
 const OPERATOR_CONTACT_TTL_SECONDS = 10 * 60;
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+/** 国内裸 11 位手机号(与租户侧同口径)。 */
+const PHONE_RE = /^1\d{10}$/;
+/** operator 密码下限,与 operator-public.router 的重置口径一致(12)。 */
+const OPERATOR_PASSWORD_MIN = 12;
 
 /** Mask an email for API responses: b***@example.com. */
 function maskEmail(email: string): string {
   const [local, domain] = email.split("@");
   const head = local?.slice(0, 1) ?? "";
   return `${head}***@${domain ?? ""}`;
+}
+
+/** Mask a phone for API responses: 138****8000. */
+function maskPhone(phone: string): string {
+  return phone.length >= 7
+    ? `${phone.slice(0, 3)}****${phone.slice(-4)}`
+    : phone;
 }
 
 export interface OperatorSelfView {
@@ -54,6 +67,9 @@ export class OperatorSelfService {
     private readonly operators: PgOperatorRepository,
     @Inject(RedisService) private readonly redis: RedisService,
     @Inject(MailService) private readonly mail: MailService,
+    @Inject(PhoneCodeService) private readonly phoneCode: PhoneCodeService,
+    @Inject(OperatorRefreshTokenRepository)
+    private readonly refreshTokens: OperatorRefreshTokenRepository,
   ) {}
 
   /**
@@ -149,5 +165,89 @@ export class OperatorSelfService {
       throw err;
     }
     return { ok: true, email: newEmail };
+  }
+
+  /**
+   * Self-service phone change — step 1: send an SMS code to the NEW number.
+   * PhoneCodeService(阿里云)拥有验证码的生成/有效期/频控;此处不自管码。绑定关系由
+   * verify 步骤的 verifyCode(newPhone, code) 保证(码只对发到的号有效),故 newPhone 由
+   * 客户端在两步都带上是安全的。
+   */
+  async startPhoneChange(
+    sid: string | undefined,
+    newPhoneRaw: string | undefined,
+  ): Promise<{ ok: true; sentTo: string }> {
+    await this.resolveOperatorId(sid);
+    const newPhone = (newPhoneRaw ?? "").trim();
+    if (!PHONE_RE.test(newPhone)) {
+      throw new BadRequestException("invalid_phone");
+    }
+    await this.phoneCode.sendCode(newPhone);
+    return { ok: true, sentTo: maskPhone(newPhone) };
+  }
+
+  /**
+   * Self-service phone change — step 2: submit the code sent to the new number.
+   * On a valid code, writes the new phone + phone_verified=true. Unique collision
+   * → 409; bad code → 400.
+   */
+  async verifyPhoneChange(
+    sid: string | undefined,
+    newPhoneRaw: string | undefined,
+    codeRaw: string | undefined,
+  ): Promise<{ ok: true; phone: string }> {
+    const operatorId = await this.resolveOperatorId(sid);
+    const newPhone = (newPhoneRaw ?? "").trim();
+    const code = (codeRaw ?? "").trim();
+    if (!PHONE_RE.test(newPhone) || !code) {
+      throw new BadRequestException("invalid_request");
+    }
+    const ok = await this.phoneCode.verifyCode(newPhone, code);
+    if (!ok) throw new BadRequestException("invalid_or_expired_code");
+    try {
+      const written = await this.operators.setOperatorContactVerified(
+        operatorId,
+        "phone",
+        newPhone,
+      );
+      if (!written)
+        throw new UnauthorizedException("operator_session_required");
+    } catch (err) {
+      if ((err as { code?: string })?.code === "23505") {
+        throw new ConflictException("phone_in_use");
+      }
+      throw err;
+    }
+    return { ok: true, phone: newPhone };
+  }
+
+  /**
+   * Self-service password change: verify the CURRENT password (re-auth, no
+   * last-login side effect), set the new one (Argon2id, min 12), and revoke all
+   * refresh tokens so other sessions must re-login. 当前浏览器会话 cookie 仍有效至
+   * 到期(RP 会话独立),用户体验上不会把自己踢下线。
+   */
+  async changePassword(
+    sid: string | undefined,
+    currentPassword: string | undefined,
+    newPassword: string | undefined,
+  ): Promise<{ ok: true }> {
+    const operatorId = await this.resolveOperatorId(sid);
+    const current = currentPassword ?? "";
+    const next = newPassword ?? "";
+    if (next.length < OPERATOR_PASSWORD_MIN) {
+      throw new BadRequestException("weak_password");
+    }
+    const verified = await this.operators.verifyOperatorPassword(
+      operatorId,
+      current,
+    );
+    if (!verified) throw new BadRequestException("invalid_current_password");
+    const ok = await this.operators.setOperatorPassword(operatorId, next, {
+      forceChange: false,
+    });
+    if (!ok) throw new UnauthorizedException("operator_session_required");
+    await this.refreshTokens.revokeAllForOperator(operatorId);
+    return { ok: true };
   }
 }

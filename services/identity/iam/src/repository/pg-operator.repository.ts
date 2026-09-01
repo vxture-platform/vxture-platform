@@ -167,6 +167,28 @@ export class PgOperatorRepository {
     return toView(row);
   }
 
+  /**
+   * Verify an operator's CURRENT password by id (self-service password change,
+   * Phase B.2). Unlike authenticateOperator it does NOT record a last-login — this
+   * is a re-auth check, not a login. Returns false for unknown / passwordless /
+   * mismatch.
+   */
+  async verifyOperatorPassword(
+    operatorId: string,
+    password: string,
+  ): Promise<boolean> {
+    if (!operatorId.trim() || !password) return false;
+    const result = await this.pool.query<OperatorRow>(
+      `${SELECT_OPERATOR}
+         and a.id = $1
+       limit 1`,
+      [operatorId],
+    );
+    const row = result.rows[0];
+    if (!row?.password_hash) return false;
+    return argon2Verify({ password, hash: row.password_hash });
+  }
+
   /** Read an active operator by id (for token re-issuance / refresh). */
   async findById(operatorId: string): Promise<OperatorView | null> {
     const result = await this.pool.query<OperatorRow>(
