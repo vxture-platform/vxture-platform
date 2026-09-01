@@ -1,4 +1,38 @@
 {
+  "operatorAccount": {
+    "title": "个人信息",
+    "subtitle": "你的运营者账户信息与安全设置。",
+    "back": "返回控制台",
+    "loginRequired": "请先登录运营账号后查看。",
+    "loadFailed": "无法加载账户信息，请重试。",
+    "section": { "account": "账户" },
+    "field": {
+      "username": "用户名",
+      "email": "邮箱",
+      "phone": "手机",
+      "role": "角色"
+    },
+    "notSet": "未设置",
+    "verified": "已验证",
+    "unverified": "未验证",
+    "email": {
+      "change": "更改并验证邮箱",
+      "newLabel": "新邮箱",
+      "sendCode": "发送验证码",
+      "codeLabel": "验证码",
+      "verify": "验证并保存",
+      "cancel": "取消",
+      "sentHint": "验证码已发送至 {target}，输入以完成验证。",
+      "updated": "邮箱已更新并验证。"
+    },
+    "security": {
+      "title": "安全",
+      "passkeys": "通行密钥",
+      "passkeysHint": "用设备生物识别或安全密钥登录，替代密码。",
+      "passkeysManage": "管理",
+      "pending": "手机、密码与多因子认证的自助更改即将开放。"
+    }
+  },
   "destructive": {
     "titleTemplate": "{verb}{target}？",
     "cancel": "取消",

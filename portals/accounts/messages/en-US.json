@@ -1,4 +1,38 @@
 {
+  "operatorAccount": {
+    "title": "Personal info",
+    "subtitle": "Your operator account details and security settings.",
+    "back": "Back to console",
+    "loginRequired": "Please sign in to your operator account first.",
+    "loadFailed": "Could not load account info. Please try again.",
+    "section": { "account": "Account" },
+    "field": {
+      "username": "Username",
+      "email": "Email",
+      "phone": "Phone",
+      "role": "Role"
+    },
+    "notSet": "Not set",
+    "verified": "Verified",
+    "unverified": "Unverified",
+    "email": {
+      "change": "Change & verify email",
+      "newLabel": "New email",
+      "sendCode": "Send code",
+      "codeLabel": "Code",
+      "verify": "Verify & save",
+      "cancel": "Cancel",
+      "sentHint": "A code was sent to {target}. Enter it to finish verification.",
+      "updated": "Email updated and verified."
+    },
+    "security": {
+      "title": "Security",
+      "passkeys": "Passkeys",
+      "passkeysHint": "Sign in with device biometrics or a security key instead of a password.",
+      "passkeysManage": "Manage",
+      "pending": "Self-service for phone, password, and MFA is coming soon."
+    }
+  },
   "destructive": {
     "titleTemplate": "{verb} {target}?",
     "cancel": "Cancel",

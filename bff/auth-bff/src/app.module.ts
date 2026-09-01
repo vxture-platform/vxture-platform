@@ -32,8 +32,10 @@ import { OperatorLoginGuard } from "./oidc/operator-login-guard.service";
 import { OperatorMfaService } from "./oidc/operator-mfa.service";
 import { OperatorWebauthnService } from "./oidc/operator-webauthn.service";
 import { OperatorAnomalyService } from "./oidc/operator-anomaly.service";
+import { OperatorSelfService } from "./oidc/operator-self.service";
 import { OidcRouter } from "./routers/oidc.router";
 import { OperatorWebauthnRouter } from "./routers/operator-webauthn.router";
+import { OperatorSelfRouter } from "./routers/operator-self.router";
 import { OperatorStepUpRouter } from "./routers/operator-stepup.router";
 import { OperatorAdminInternalRouter } from "./routers/operator-admin-internal.router";
 import { AccountAdminInternalRouter } from "./routers/account-admin-internal.router";
@@ -70,6 +72,7 @@ import { HealthRouter } from "./routers/health.router";
     GovernanceController,
     OidcRouter,
     OperatorWebauthnRouter,
+    OperatorSelfRouter,
     OperatorStepUpRouter,
     OperatorAdminInternalRouter,
     AccountAdminInternalRouter,
@@ -87,6 +90,7 @@ import { HealthRouter } from "./routers/health.router";
     OperatorMfaService,
     OperatorWebauthnService,
     OperatorAnomalyService,
+    OperatorSelfService,
     InternalAuthGuard,
     TenantLoginGuard,
     AccessTokenGuard,
