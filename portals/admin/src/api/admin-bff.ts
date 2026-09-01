@@ -2416,29 +2416,9 @@ export async function resetPlatformAdminPassword(
   );
 }
 
-/** Operator self-service email change — step 1: send a code to the NEW email (TD-017 §③). */
-export async function startOperatorEmailChange(
-  newEmail: string,
-): Promise<{ ok: true; sentTo: string }> {
-  return mutateJson<{ ok: true; sentTo: string }>(
-    "/api/operator/contact/email/start",
-    "POST",
-    { newEmail },
-    "Failed to send verification code",
-  );
-}
-
-/** Operator self-service email change — step 2: submit the code → new email + verified. */
-export async function verifyOperatorEmailChange(
-  code: string,
-): Promise<{ ok: true; email: string }> {
-  return mutateJson<{ ok: true; email: string }>(
-    "/api/operator/contact/email/verify",
-    "POST",
-    { code },
-    "Email verification failed",
-  );
-}
+// 运营者本人自助改邮箱（原 startOperatorEmailChange / verifyOperatorEmailChange，
+// 走 admin-bff /api/operator/contact/email/*）已随 Phase B.2 收敛到身份层 accounts
+// 账户中心（auth-bff cookie 版 oidc/operator/self/email/*），admin 侧客户端方法退役。
 
 // ── TD-021 governance（risk / compliance / maintenance）──────────────────────
 // 设计权威 = docs/product/platform/admin/governance-write-paths.md §4/§5。

@@ -25,12 +25,27 @@
       "sentHint": "A code was sent to {target}. Enter it to finish verification.",
       "updated": "Email updated and verified."
     },
+    "phone": {
+      "change": "Change & verify",
+      "newLabel": "New phone",
+      "updated": "Phone updated and verified."
+    },
+    "password": {
+      "title": "Password",
+      "current": "Current password",
+      "new": "New password",
+      "confirm": "Confirm new password",
+      "change": "Change password",
+      "hint": "At least 12 characters. Other devices must sign in again after the change.",
+      "mismatch": "The new passwords do not match.",
+      "updated": "Password changed."
+    },
     "security": {
       "title": "Security",
       "passkeys": "Passkeys",
       "passkeysHint": "Sign in with device biometrics or a security key instead of a password.",
       "passkeysManage": "Manage",
-      "pending": "Self-service for phone, password, and MFA is coming soon."
+      "pending": "Self-service for MFA is coming soon."
     }
   },
   "destructive": {

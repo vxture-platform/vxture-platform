@@ -3,14 +3,20 @@
  * @package @vxture/accounts
  *
  * 运营者本人账户自助中心,身份层单点(收敛 admin/opera/arche 各自的入口)。同源
- * `vx_sid_op` 鉴权读身份(fetchOperatorSelf),内联两步流改邮箱,并给出通行密钥管理入口。
- * 未登录 → 显示登录提示(与 passkeys 页同口径)。B.1 仅覆盖读身份 + 改邮箱;手机/密码/
- * MFA 自助为 B.2。`?returnTo=` 为可选的回控制台入口(安全来源由服务端校验的登录流负责,
- * 此处只做同源相对/白名单前缀的展示,不接受任意跳转)。
+ * `vx_sid_op` 鉴权读身份(fetchOperatorSelf);内联两步流改邮箱/手机(email 走邮件码、
+ * phone 走短信码),改密码(验旧+设新),并给出通行密钥管理入口。未登录 → 显示登录提示
+ * (与 passkeys 页同口径)。B.1 邮箱、B.2 手机/密码;MFA 自助为 B.2c。
+ * `?returnTo=` 为可选的回控制台入口(白名单由 page 服务端把关,不接受任意跳转)。
  */
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import {
   Banner,
   Button,
@@ -26,6 +32,9 @@ import {
   fetchOperatorSelf,
   startOperatorEmailChange,
   verifyOperatorEmailChange,
+  startOperatorPhoneChange,
+  verifyOperatorPhoneChange,
+  changeOperatorPassword,
   OperatorUnauthenticatedError,
   type OperatorSelf,
 } from "@/api/operator-self";
@@ -35,8 +44,6 @@ type Load =
   | { state: "unauth" }
   | { state: "error"; message: string }
   | { state: "ready"; self: OperatorSelf };
-
-type EmailStep = "idle" | "enter-email" | "enter-code";
 
 export function OperatorAccountCenter({ returnTo }: { returnTo?: string }) {
   const t = useTranslations("operatorAccount");
@@ -88,64 +95,68 @@ export function OperatorAccountCenter({ returnTo }: { returnTo?: string }) {
           description={load.message}
         />
       ) : (
-        <ReadyView self={load.self} onEmailUpdated={refresh} />
+        <ReadyView self={load.self} onChanged={refresh} />
       )}
     </main>
   );
 }
 
+/** null = no flow open; otherwise the two-step contact-change flow for email|phone. */
+type ContactFlow = {
+  kind: "email" | "phone";
+  step: "input" | "code";
+  value: string;
+  sentTo: string;
+  code: string;
+};
+
 function ReadyView({
   self,
-  onEmailUpdated,
+  onChanged,
 }: {
   self: OperatorSelf;
-  onEmailUpdated: () => void;
+  onChanged: () => void;
 }) {
   const t = useTranslations("operatorAccount");
-  const [step, setStep] = useState<EmailStep>("idle");
-  const [newEmail, setNewEmail] = useState("");
-  const [sentTo, setSentTo] = useState("");
-  const [code, setCode] = useState("");
+  const [flow, setFlow] = useState<ContactFlow | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  function reset() {
-    setStep("idle");
-    setNewEmail("");
-    setSentTo("");
-    setCode("");
+  function open(kind: "email" | "phone") {
+    setError(null);
+    setFlow({ kind, step: "input", value: "", sentTo: "", code: "" });
+  }
+  function cancel() {
+    setFlow(null);
     setError(null);
   }
 
-  async function onSend(e: FormEvent) {
+  async function onSubmitContact(e: FormEvent) {
     e.preventDefault();
-    const email = newEmail.trim().toLowerCase();
-    if (!email) return;
+    if (!flow) return;
     setBusy(true);
     setError(null);
     try {
-      const res = await startOperatorEmailChange(email);
-      setSentTo(res.sentTo);
-      setStep("enter-code");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onVerify(e: FormEvent) {
-    e.preventDefault();
-    const c = code.trim();
-    if (!c) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await verifyOperatorEmailChange(c);
-      setNotice(t("email.updated"));
-      reset();
-      onEmailUpdated();
+      if (flow.step === "input") {
+        const value = flow.value.trim();
+        if (!value) return;
+        const res =
+          flow.kind === "email"
+            ? await startOperatorEmailChange(value.toLowerCase())
+            : await startOperatorPhoneChange(value);
+        setFlow({ ...flow, step: "code", sentTo: res.sentTo });
+      } else {
+        const code = flow.code.trim();
+        if (!code) return;
+        if (flow.kind === "email") await verifyOperatorEmailChange(code);
+        else await verifyOperatorPhoneChange(flow.value.trim(), code);
+        setNotice(
+          flow.kind === "email" ? t("email.updated") : t("phone.updated"),
+        );
+        setFlow(null);
+        onChanged();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "");
     } finally {
@@ -162,64 +173,66 @@ function ReadyView({
         <dl className="flex flex-col gap-sm">
           <Row label={t("field.username")}>{self.username}</Row>
           <Row label={t("field.email")}>
-            <span className="inline-flex items-center gap-xs">
-              {self.email ?? t("notSet")}
-              {self.email ? (
-                <StatusBadge tone={self.emailVerified ? "success" : "warning"}>
-                  {self.emailVerified ? t("verified") : t("unverified")}
-                </StatusBadge>
-              ) : null}
-            </span>
+            <ContactValue
+              value={self.email}
+              verified={self.emailVerified}
+              notSet={t("notSet")}
+              verifiedLabel={t("verified")}
+              unverifiedLabel={t("unverified")}
+              onChange={() => open("email")}
+              changeLabel={t("email.change")}
+              disabled={flow !== null}
+            />
           </Row>
           <Row label={t("field.phone")}>
-            <span className="inline-flex items-center gap-xs">
-              {self.phone ?? t("notSet")}
-              {self.phone ? (
-                <StatusBadge tone={self.phoneVerified ? "success" : "warning"}>
-                  {self.phoneVerified ? t("verified") : t("unverified")}
-                </StatusBadge>
-              ) : null}
-            </span>
+            <ContactValue
+              value={self.phone}
+              verified={self.phoneVerified}
+              notSet={t("notSet")}
+              verifiedLabel={t("verified")}
+              unverifiedLabel={t("unverified")}
+              onChange={() => open("phone")}
+              changeLabel={t("phone.change")}
+              disabled={flow !== null}
+            />
           </Row>
           <Row label={t("field.role")}>{self.role}</Row>
         </dl>
 
-        {step === "idle" ? (
-          <div>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setStep("enter-email")}
-            >
-              {t("email.change")}
-            </Button>
-          </div>
-        ) : (
+        {flow ? (
           <form
             className="flex flex-col gap-sm border-t border-border pt-md"
-            onSubmit={step === "enter-email" ? onSend : onVerify}
+            onSubmit={onSubmitContact}
           >
-            {step === "enter-email" ? (
+            {flow.step === "input" ? (
               <Label>
-                {t("email.newLabel")}
+                {flow.kind === "email"
+                  ? t("email.newLabel")
+                  : t("phone.newLabel")}
                 <Input
-                  type="email"
-                  value={newEmail}
-                  onChange={(ev) => setNewEmail(ev.target.value)}
-                  placeholder="you@example.com"
-                  autoComplete="email"
+                  type={flow.kind === "email" ? "email" : "tel"}
+                  value={flow.value}
+                  onChange={(ev) =>
+                    setFlow({ ...flow, value: ev.target.value })
+                  }
+                  placeholder={
+                    flow.kind === "email" ? "you@example.com" : "13800000000"
+                  }
+                  autoComplete={flow.kind === "email" ? "email" : "tel"}
                 />
               </Label>
             ) : (
               <>
                 <p className="text-body-sm text-muted-foreground">
-                  {t("email.sentHint", { target: sentTo })}
+                  {t("email.sentHint", { target: flow.sentTo })}
                 </p>
                 <Label>
                   {t("email.codeLabel")}
                   <Input
-                    value={code}
-                    onChange={(ev) => setCode(ev.target.value)}
+                    value={flow.code}
+                    onChange={(ev) =>
+                      setFlow({ ...flow, code: ev.target.value })
+                    }
                     inputMode="numeric"
                     autoComplete="one-time-code"
                   />
@@ -235,10 +248,12 @@ function ReadyView({
                 size="sm"
                 disabled={
                   busy ||
-                  (step === "enter-email" ? !newEmail.trim() : !code.trim())
+                  (flow.step === "input"
+                    ? !flow.value.trim()
+                    : !flow.code.trim())
                 }
               >
-                {step === "enter-email"
+                {flow.step === "input"
                   ? t("email.sendCode")
                   : t("email.verify")}
               </Button>
@@ -246,15 +261,17 @@ function ReadyView({
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={reset}
+                onClick={cancel}
                 disabled={busy}
               >
                 {t("email.cancel")}
               </Button>
             </div>
           </form>
-        )}
+        ) : null}
       </Card>
+
+      <PasswordCard onDone={() => setNotice(t("password.updated"))} />
 
       <Card className="flex flex-col gap-md p-lg">
         <h2 className="text-title-sm font-semibold">{t("security.title")}</h2>
@@ -277,13 +294,145 @@ function ReadyView({
   );
 }
 
-function Row({
-  label,
-  children,
+function ContactValue({
+  value,
+  verified,
+  notSet,
+  verifiedLabel,
+  unverifiedLabel,
+  onChange,
+  changeLabel,
+  disabled,
 }: {
-  label: string;
-  children: React.ReactNode;
+  value: string | null;
+  verified: boolean;
+  notSet: string;
+  verifiedLabel: string;
+  unverifiedLabel: string;
+  onChange: () => void;
+  changeLabel: string;
+  disabled: boolean;
 }) {
+  return (
+    <span className="inline-flex items-center gap-sm">
+      <span className="inline-flex items-center gap-xs">
+        {value ?? notSet}
+        {value ? (
+          <StatusBadge tone={verified ? "success" : "warning"}>
+            {verified ? verifiedLabel : unverifiedLabel}
+          </StatusBadge>
+        ) : null}
+      </span>
+      <Button variant="link" size="sm" onClick={onChange} disabled={disabled}>
+        {changeLabel}
+      </Button>
+    </span>
+  );
+}
+
+function PasswordCard({ onDone }: { onDone: () => void }) {
+  const t = useTranslations("operatorAccount");
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function reset() {
+    setOpen(false);
+    setCurrent("");
+    setNext("");
+    setConfirm("");
+    setError(null);
+  }
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (next !== confirm) {
+      setError(t("password.mismatch"));
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await changeOperatorPassword(current, next);
+      reset();
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="flex flex-col gap-md p-lg">
+      <h2 className="text-title-sm font-semibold">{t("password.title")}</h2>
+      {open ? (
+        <form className="flex flex-col gap-sm" onSubmit={onSubmit}>
+          <Label>
+            {t("password.current")}
+            <Input
+              type="password"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+              autoComplete="current-password"
+            />
+          </Label>
+          <Label>
+            {t("password.new")}
+            <Input
+              type="password"
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
+              autoComplete="new-password"
+            />
+          </Label>
+          <Label>
+            {t("password.confirm")}
+            <Input
+              type="password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
+            />
+          </Label>
+          <p className="text-body-sm text-muted-foreground">
+            {t("password.hint")}
+          </p>
+          {error ? <Banner tone="danger" title={error} /> : null}
+          <div className="flex gap-xs">
+            <Button
+              type="submit"
+              size="sm"
+              disabled={busy || !current || !next || !confirm}
+            >
+              {t("password.change")}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={reset}
+              disabled={busy}
+            >
+              {t("email.cancel")}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <div>
+          <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+            {t("password.change")}
+          </Button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex items-baseline gap-md">
       <dt className="w-24 shrink-0 text-body-sm text-muted-foreground">

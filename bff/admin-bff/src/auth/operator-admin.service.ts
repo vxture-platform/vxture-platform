@@ -185,35 +185,9 @@ export class OperatorAdminService {
     );
   }
 
-  /**
-   * Self-service email change (TD-017 §③) — the operator changes their OWN email;
-   * a code is sent to the NEW address (step 1). operatorId is the acting operator
-   * (self); the IdP enforces id === actor.
-   */
-  startEmailChange(
-    operatorId: string,
-    newEmail: string,
-  ): Promise<{ ok: true; sentTo: string }> {
-    return this.delegate<{ ok: true; sentTo: string }>(
-      `/internal/operator/accounts/${encodeURIComponent(operatorId)}/contact/email/start`,
-      operatorId,
-      undefined,
-      { newEmail },
-    );
-  }
-
-  /** Self-service email change — step 2: submit the code → new email + verified. */
-  verifyEmailChange(
-    operatorId: string,
-    code: string,
-  ): Promise<{ ok: true; email: string }> {
-    return this.delegate<{ ok: true; email: string }>(
-      `/internal/operator/accounts/${encodeURIComponent(operatorId)}/contact/email/verify`,
-      operatorId,
-      undefined,
-      { code },
-    );
-  }
+  // 运营者本人自助改邮箱（原 startEmailChange / verifyEmailChange）已随 Phase B.2
+  // 收敛到身份层 auth-bff 的 cookie 版 `oidc/operator/self/email/*`，此处的 RP 会话代理
+  // 退役（2026-09-02）。本服务仅保留 admin 对**他人**的委托操作（禁用/启停/角色/重置等）。
 
   /**
    * Admin-initiated password reset — the IdP mails the single-use link to the

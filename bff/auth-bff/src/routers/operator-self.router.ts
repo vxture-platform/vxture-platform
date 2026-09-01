@@ -56,6 +56,44 @@ export class OperatorSelfRouter {
   ): Promise<{ ok: true; email: string }> {
     return this.self.verifyEmailChange(operatorSid(req), body.code);
   }
+
+  /** Phone change — step 1: send an SMS code to the new number. */
+  @Post("oidc/operator/self/phone/start")
+  @HttpCode(HttpStatus.OK)
+  async startPhone(
+    @Body() body: { newPhone?: string },
+    @Req() req: Request,
+  ): Promise<{ ok: true; sentTo: string }> {
+    return this.self.startPhoneChange(operatorSid(req), body.newPhone);
+  }
+
+  /** Phone change — step 2: verify the code, write the new phone. */
+  @Post("oidc/operator/self/phone/verify")
+  @HttpCode(HttpStatus.OK)
+  async verifyPhone(
+    @Body() body: { newPhone?: string; code?: string },
+    @Req() req: Request,
+  ): Promise<{ ok: true; phone: string }> {
+    return this.self.verifyPhoneChange(
+      operatorSid(req),
+      body.newPhone,
+      body.code,
+    );
+  }
+
+  /** Password change: verify current, set new, revoke other sessions. */
+  @Post("oidc/operator/self/password")
+  @HttpCode(HttpStatus.OK)
+  async changePassword(
+    @Body() body: { currentPassword?: string; newPassword?: string },
+    @Req() req: Request,
+  ): Promise<{ ok: true }> {
+    return this.self.changePassword(
+      operatorSid(req),
+      body.currentPassword,
+      body.newPassword,
+    );
+  }
 }
 
 /** Read the operator central-session cookie from the request. */

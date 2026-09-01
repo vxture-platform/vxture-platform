@@ -205,13 +205,17 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  *   - accounts 264 → 273(+9):新增 api/operator-self.ts 的接口层错误文案,沿用同门户
  *     api/operator-webauthn.ts / api/oidc.ts 既有的「API 层硬编码中文」惯例(组件层走 t());
  *     账户中心组件 OperatorAccountCenter 全走 operatorAccount 命名空间的 t(),不进计数。
+ *
+ * 2026-09-02 Phase B.2 accounts 273 → 285(+12):api/operator-self.ts 补改手机/改密码的接口层
+ *   错误文案(手机格式/占用/验证码、当前密码不正确/新密码太弱等),同 API 层硬编码惯例;
+ *   组件仍全走 t()。admin 侧退役 operator-contact 客户端方法只删英文串,CJK 计数不变。
  */
 const BASELINE = {
   console: 30,
   website: 40,
   admin: 2469,
   opera: 1933,
-  accounts: 273,
+  accounts: 285,
 };
 
 const CJK = "[\u4e00-\u9fff]";
