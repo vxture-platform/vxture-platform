@@ -3,19 +3,22 @@
 /**
  * AgentMarketplacePage.tsx - /appcenter 智能体广场（营销页）
  *
- * 清单 = 公开产品目录里 product_type='agent' 的产品（appcenter/page.tsx 在服务端取
- * `GET /api/products/catalog`、按 isAgentProduct 分区后传入，不按可售态过滤 → 上线的和
- * 开发中的都在）。营销页要展示完整阵容：名 / 描述 / 版本取目录真列，是否已可售（available /
- * coming）按 product_code 到 appcenter.json `agents.items` 里找营销文案，找不到就退回目录
- * 里的名与描述、按「开发中」呈现。
+ * 清单 = 两个来源拼起来的完整阵容：
+ *   A. 已发布（正式版）：公开产品目录里 product_type='agent' 的产品（appcenter/page.tsx
+ *      在服务端取 `GET /api/products/catalog`、按 isAgentProduct 分区后传入）。目录闸门本身
+ *      就是 is_customer_visible=true AND status='active' → 能回来的都是已登记、已上线、对客户
+ *      可见的产品，因此**一律按正式版（available）呈现，状态从库里得，不再受任何文案开关闸住**。
+ *      名 / 描述 / 版本 / 图标取目录真列；appcenter.json `agents.items` 只做可选文案覆盖
+ *      （name/icon/description/value 高亮框），缺省全部退回目录。
+ *   B. 开发中：库里还没有的规划智能体，在 appcenter.json `agents.developing` 里**页面写死**
+ *      （key/name/icon/description，双语各一份）→ 灰徽标「开发中」+ 禁用「敬请期待」。真上线后
+ *      从 developing 挪走、登记进目录，即自动转正式版。
  *
  * 2026-09-01：卡片对齐 /products 平台级产品卡（ProductsOverviewPage）的全谱三态 ——
- *   1. developing（copy status ≠ available）：灰徽标「开发中」+ 禁用的「敬请期待」按钮；
- *   2. available 未订阅：右上角徽标「正式版 / Stable」+ 底部「订阅」（直接下单 free 档，
- *      去掉了「试用」概念）；
- *   3. available 已订阅：徽标「已开通」+ 档位 + 底部「升级 / 进入工作台」。
- * available / developing 与 /products 同源、同判据（不是 DB 字段，是营销文案 status），
- * 随真实上线把对应 item 的 status 从 coming 翻成 available 即可逐个转正。
+ *   1. developing（B 类，写死）：灰徽标「开发中」+ 禁用的「敬请期待」按钮；
+ *   2. available 未订阅（A 类）：右上角徽标「正式版 / Stable」+ 底部「订阅」（直接下单 free
+ *      档，去掉了「试用」概念）；
+ *   3. available 已订阅（A 类）：徽标「已开通」+ 档位 + 底部「升级 / 进入工作台」。
  * 订阅态读 website-bff 的 product-subscriptions；未登录一律按未订阅呈现。
  *
  * 所有指向 console（独立站）的链接都 target=_blank + rel=noopener noreferrer，不让营销页
@@ -49,20 +52,35 @@ import { productTypeIcon } from "./product-catalog-view";
 import { useAuthStore } from "@/stores/auth.store";
 import AnimatedHeroBg from "./AnimatedHeroBg";
 
-/** appcenter.json `agents.items` 里一条营销文案：按 code 挂到目录智能体上，字段全部可缺。 */
+/**
+ * appcenter.json `agents.items` 里一条**可选**营销文案：按 code 挂到目录智能体上做覆盖，
+ * 字段全部可缺（缺省退回目录）。注意——不再有 status：已在目录里 = 已发布 = 正式版。
+ */
 type MarketingCopy = {
   code: string;
   name?: string;
   icon?: IconName;
   description?: string;
   value?: string;
-  /** available = 已上线可售（正式版）；缺省按 coming（开发中）呈现 */
-  status?: "available" | "coming";
+};
+
+/** appcenter.json `agents.developing` 里一条**页面写死**的开发中智能体（库里还没有的规划项）。 */
+type DevelopingCopy = {
+  key: string;
+  name: string;
+  /** 类型标签，如「数字员工 · 通用类」；缺省退回通用「智能体」。 */
+  type?: string;
+  icon?: IconName;
+  description?: string;
+  value?: string;
 };
 
 type AgentCard = {
+  /** 正式版取目录 productCode；开发中取写死项的 key（仅作 React key，不拼 console/详情链接）。 */
   code: string;
   name: string;
+  /** per-agent 类型标签覆盖；null = 用通用「智能体」。 */
+  type: string | null;
   icon: IconName;
   description: string;
   value: string | null;
@@ -84,15 +102,17 @@ export default function AgentMarketplacePage({
   const user = useAuthStore((state) => state.user);
   const highlights = t.raw("hero.highlights") as string[];
   const copyItems = t.raw("agents.items") as MarketingCopy[];
+  const developingItems = t.raw("agents.developing") as DevelopingCopy[];
   const hasTenantSession = isAuthenticated && Boolean(user);
   const consoleEntryUrl = buildConsoleEntryUrl(locale);
 
-  // 目录智能体 × 营销文案 → 卡片；vxtpl 置顶（首个上线的智能体），其余保持目录顺序。
-  // 目录是清单唯一来源，文案只是按 code 挂上去的装饰（含是否可售）。
+  // 完整阵容 = 目录里已发布的正式版（A，状态从库里得）+ 页面写死的开发中（B）。
+  // A：目录闸门已保证「已登记+上线+可见」，一律 available；文案只做可选覆盖，不定状态。
+  // B：库里没有的规划项，从 agents.developing 写死。vxtpl 置顶，正式版永远排在开发中之前。
   const cards = useMemo<AgentCard[] | null>(() => {
     if (agents === null) return null;
     const copyByCode = new Map(copyItems.map((item) => [item.code, item]));
-    return [...agents]
+    const live: AgentCard[] = [...agents]
       .sort(
         (a, b) =>
           (a.productCode === "vxtpl" ? -1 : 0) -
@@ -103,14 +123,27 @@ export default function AgentMarketplacePage({
         return {
           code: agent.productCode,
           name: copy?.name ?? catalogDisplayName(agent),
+          type: null,
           icon: copy?.icon ?? productTypeIcon(agent.productType),
           description: copy?.description ?? agent.description ?? "",
           value: copy?.value ?? null,
-          status: copy?.status ?? "coming",
+          // 在目录里 = 已发布 = 正式版；状态从库里得，不受文案开关影响。
+          status: "available" as const,
           version: agent.releaseVersion,
         };
       });
-  }, [agents, copyItems]);
+    const developing: AgentCard[] = developingItems.map((item) => ({
+      code: item.key,
+      name: item.name,
+      type: item.type ?? null,
+      icon: item.icon ?? "agent",
+      description: item.description ?? "",
+      value: item.value ?? null,
+      status: "coming" as const,
+      version: null,
+    }));
+    return [...live, ...developing];
+  }, [agents, copyItems, developingItems]);
 
   // 登录租户各产品订阅态（code → state）；未登录为空 → 卡片按未订阅呈现。与 /products 同源。
   const [subs, setSubs] = useState<Map<string, ProductSubscriptionState>>(
@@ -251,7 +284,7 @@ export default function AgentMarketplacePage({
                         </div>
                         <div>
                           <p className="text-xs font-semibold text-vx-brand-600 dark:text-vx-brand-300">
-                            {t("agents.type")}
+                            {agent.type ?? t("agents.type")}
                           </p>
                           <h3 className="mt-1 text-lg font-semibold text-vx-gray-900 dark:text-vx-white">
                             {agent.name}
@@ -303,14 +336,17 @@ export default function AgentMarketplacePage({
                             {agent.version}
                           </span>
                         ) : null}
-                        <Link
-                          href={`/products/${agent.code}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex h-10 items-center text-xs font-normal text-vx-gray-400 underline-offset-4 transition hover:text-vx-gray-600 hover:underline dark:text-vx-gray-500 dark:hover:text-vx-gray-300"
-                        >
-                          {t("agents.actions.detail")}
-                        </Link>
+                        {/* 详情页只对已发布的目录产品有意义；开发中项没有 /products 页 */}
+                        {available ? (
+                          <Link
+                            href={`/products/${agent.code}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex h-10 items-center text-xs font-normal text-vx-gray-400 underline-offset-4 transition hover:text-vx-gray-600 hover:underline dark:text-vx-gray-500 dark:hover:text-vx-gray-300"
+                          >
+                            {t("agents.actions.detail")}
+                          </Link>
+                        ) : null}
                       </div>
                       <div className="flex items-center gap-2">
                         {!available ? (
