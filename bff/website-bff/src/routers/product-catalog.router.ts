@@ -19,16 +19,35 @@ import { Controller, Get, Inject } from "@nestjs/common";
 import type { Pool } from "pg";
 import { WEBSITE_BFF_RO_POOL } from "../providers/pg-pool.provider";
 
+/** marketing jsonb 的单语部分（营销文案富字段,全部可缺）。 */
+export interface MarketingLocale {
+  tagline?: string;
+  value?: string;
+  highlights?: string[];
+  tags?: string[];
+  industries?: string[];
+  detail?: string;
+}
+/** product.products.marketing jsonb：双语营销内容,官网据此渲染。 */
+export interface MarketingContent {
+  zh?: MarketingLocale;
+  en?: MarketingLocale;
+}
+
 export interface ProductCatalogItem {
   productCode: string;
   /** 主名/品牌名（product_name） */
   productName: string;
   /** 译名/副名（product_nick），目录里没填就是 null */
   productNick: string | null;
-  /** 扩展型 kind（model_platform / capability_platform / data_platform / knowledge_platform / agent / client / external …） */
+  /** 受管枚举 product_type：{general,industry}_{platform,agent} / undefined（历史值仍可能出现） */
   productType: string;
   description: string | null;
   releaseVersion: string | null;
+  /** 成熟度轴：ga=正式版 / beta=公测版 / developing=开发中。官网据此判徽标与订阅按钮。 */
+  releaseStage: string;
+  /** 营销内容（DB 权威源,替代官网写死）；未录入为 null。 */
+  marketing: MarketingContent | null;
 }
 
 interface ProductCatalogRow {
@@ -38,6 +57,8 @@ interface ProductCatalogRow {
   product_type: string;
   description: string | null;
   release_version: string | null;
+  release_stage: string;
+  marketing: MarketingContent | null;
 }
 
 @Controller("api/products")
@@ -48,7 +69,7 @@ export class ProductCatalogRouter {
   async getCatalog(): Promise<ProductCatalogItem[]> {
     const res = await this.pool.query<ProductCatalogRow>(
       `select product_code, product_name, product_nick, product_type,
-              description, release_version
+              description, release_version, release_stage, marketing
          from product.products
         where is_customer_visible = true
           and status = 'active'
@@ -62,6 +83,8 @@ export class ProductCatalogRouter {
       productType: r.product_type,
       description: r.description,
       releaseVersion: r.release_version,
+      releaseStage: r.release_stage,
+      marketing: r.marketing,
     }));
   }
 }

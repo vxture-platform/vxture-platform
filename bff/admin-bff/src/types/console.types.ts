@@ -644,6 +644,10 @@ export interface ProductCapabilityRecord {
   productType: ProductCapabilityType;
   source: ProductCapabilitySource;
   status: ProductCapabilityStatus;
+  /** 成熟度轴 ga|beta|developing（产品目录录入,官网据此判三态）。 */
+  releaseStage: string;
+  /** 营销内容（双语富结构 jsonb）；未录入为 null。 */
+  marketing: ProductMarketingContent | null;
   visibility: ProductCapabilityVisibility;
   region: ProductCapabilityRegion;
   ownerTeam: string;
@@ -759,6 +763,27 @@ export interface ProductSolutionDetailRecord extends ProductSolutionRecord {
 }
 
 /** POST /solutions（solutionCode 必填）与 PUT /solutions/:code（改字段）共用。 */
+/** product.products.marketing jsonb 的单语部分(营销富字段,全部可缺)。 */
+export interface ProductMarketingLocale {
+  tagline?: string;
+  value?: string;
+  highlights?: string[];
+  tags?: string[];
+  industries?: string[];
+  detail?: string;
+}
+/** 双语营销内容,官网据此渲染。 */
+export interface ProductMarketingContent {
+  zh?: ProductMarketingLocale;
+  en?: ProductMarketingLocale;
+}
+/** admin 产品目录:产品营销内容与呈现的写入体(业务字段,技术注册在 opera)。 */
+export interface ProductContentWriteInput {
+  marketing?: ProductMarketingContent | null;
+  releaseStage?: string;
+  isCustomerVisible?: boolean;
+}
+
 export interface ProductSolutionWriteInput {
   solutionCode?: string;
   solutionName?: string;
