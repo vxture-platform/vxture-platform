@@ -63,3 +63,20 @@ export type {
   ClientIpRequest,
   DevFallbackChoice,
 } from "./utils";
+
+// ============================================
+// Product Taxonomy (product_type 单一权威源)
+// ============================================
+
+export {
+  PRODUCT_TYPES,
+  PRODUCT_TYPE_DEFS,
+  isValidProductType,
+  productTypeFamily,
+  productTypeLabel,
+} from "./product-taxonomy";
+export type {
+  ProductType,
+  ProductTypeFamily,
+  ProductTypeDef,
+} from "./product-taxonomy";

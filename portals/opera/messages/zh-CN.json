@@ -37,6 +37,8 @@
     "save": "保存",
     "saveFailed": "保存失败",
     "showAll": "显示全部",
+    "pleaseSelect": "请选择",
+    "nonCompliant": "非合规",
     "uncategorized": "未分类",
     "unlimited": "不限"
   },

@@ -1312,7 +1312,8 @@ export async function seedCatalog(client) {
   // re-run can never rename it.
   await client.query(`
     update product.products
-       set product_code = 'umbra', product_type = 'external', category_id = null,
+       set product_code = 'umbra', product_type = 'general_platform',
+           origin = 'third_party', origin_provider = 'ruyin.ai', category_id = null,
            product_name = 'umbra', product_nick = 'umbra',
            description = 'Boundary VPN product (ruyin.ai).',
            description_key = 'product.product.umbra.desc', updated_at = now()
@@ -1332,7 +1333,7 @@ export async function seedCatalog(client) {
   // pins the old row, so a re-run after the fix is a no-op.
   await client.query(`
     update product.products
-       set product_type = 'capability_platform', category_id = 2,
+       set product_type = 'general_platform', category_id = 2,
            product_name = '鲁诺斯', product_nick = 'Runos',
            description = 'Commercial capability plane: the single gate for a business-scenario agent''s non-model capabilities.',
            updated_at = now()
@@ -1361,8 +1362,12 @@ export async function seedCatalog(client) {
     // desc = placeholder external copy; i18n key derived product.product.{code}.desc
     // ruyin 不在此(见上)——平台级桌面客户端，不建产品行。
     {
+      // external 已回归为「来源」而非类型:umbra 是外部平台(供方 ruyin.ai)→
+      // type=general_platform + origin=third_party + origin_provider(受管枚举 @vxture/core-utils)。
       code: "umbra",
-      type: "external",
+      type: "general_platform",
+      origin: "third_party",
+      originProvider: "ruyin.ai",
       cat: null,
       name: "umbra",
       nick: "umbra",
@@ -1370,7 +1375,7 @@ export async function seedCatalog(client) {
     },
     {
       code: "runos",
-      type: "capability_platform",
+      type: "general_platform",
       cat: 2,
       name: "鲁诺斯",
       nick: "Runos",
@@ -1378,7 +1383,7 @@ export async function seedCatalog(client) {
     },
     {
       code: "arda",
-      type: "data_platform",
+      type: "general_platform",
       cat: 2,
       name: "数据平台",
       nick: "Arda",
@@ -1386,7 +1391,7 @@ export async function seedCatalog(client) {
     },
     {
       code: "karda",
-      type: "knowledge_platform",
+      type: "general_platform",
       cat: 2,
       name: "知识平台",
       nick: "Karda",
@@ -1400,7 +1405,7 @@ export async function seedCatalog(client) {
       // ⚠️ product_name 待 owner 确认：其余平台产品的中文主名均由 owner 亲自定
       // （runos 的 鲁诺斯 是先例），此处先按定位直译，不代表已拍板。
       code: "vxtpl",
-      type: "agent",
+      type: "general_agent",
       cat: 1,
       name: "模板智能体",
       nick: "Vxtpl",
@@ -1412,7 +1417,7 @@ export async function seedCatalog(client) {
       // catalog row + OIDC client land now, plan tiers stay empty until Atlas's own repo
       // and product definition are ready. C2 resolves atlas as "unsubscribed" until published.
       code: "atlas",
-      type: "model_platform",
+      type: "general_platform",
       // category 2 = 平台（与 runos/arda/karda 同列）；此前误填 1（智能体）。
       // `on conflict do nothing` 意味着存量库不受影响，只有新库拿到正确分类。
       cat: 2,
@@ -1425,8 +1430,8 @@ export async function seedCatalog(client) {
     await client.query(
       `
       insert into product.products
-        (id, product_code, product_type, category_id, product_name, product_nick, description, description_key, status, origin, created_by, created_at, updated_at)
-      values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, 'active', 'self', $8, now(), now())
+        (id, product_code, product_type, category_id, product_name, product_nick, description, description_key, status, origin, origin_provider, created_by, created_at, updated_at)
+      values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, 'active', $8, $9, $10, now(), now())
       on conflict (product_code) do nothing
     `,
       [
@@ -1437,6 +1442,8 @@ export async function seedCatalog(client) {
         p.nick,
         p.desc,
         `product.product.${p.code}.desc`,
+        p.origin ?? "self",
+        p.originProvider ?? null,
         SYS,
       ],
     );

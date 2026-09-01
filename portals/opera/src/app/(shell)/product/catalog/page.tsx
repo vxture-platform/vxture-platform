@@ -63,6 +63,7 @@ import {
 } from "@vxture/design-system";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
+import { PRODUCT_TYPE_DEFS, isValidProductType } from "@vxture/core-utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   actionsFor,
@@ -980,7 +981,15 @@ function ProductsPageContent() {
                 align: "center",
                 width: "xs",
                 cell: (r: ProductRecord) => (
-                  <span className="text-code-sm">{r.productType}</span>
+                  // 受管枚举外的历史/非法 product_type 标「非合规」,便于 owner 上线后订正。
+                  <span className="inline-flex items-center justify-center gap-1.5">
+                    <span className="text-code-sm">{r.productType}</span>
+                    {isValidProductType(r.productType) ? null : (
+                      <StatusBadge tone="warning" dot>
+                        {tShared("common.nonCompliant")}
+                      </StatusBadge>
+                    )}
+                  </span>
                 ),
               },
               {
@@ -1201,14 +1210,22 @@ function ProductsPageContent() {
                 <FieldLabel htmlFor="product-type">
                   {tShared("columns.kind")}
                 </FieldLabel>
-                <Input
+                <NativeSelect
                   id="product-type"
                   value={draft.productType}
                   onChange={(e) =>
                     setDraft({ ...draft, productType: e.target.value })
                   }
-                  placeholder="knowledge_platform"
-                />
+                >
+                  <option value="" disabled>
+                    {tShared("common.pleaseSelect")}
+                  </option>
+                  {PRODUCT_TYPE_DEFS.map((d) => (
+                    <option key={d.value} value={d.value}>
+                      {locale.startsWith("en") ? d.labelEn : d.labelZh}
+                    </option>
+                  ))}
+                </NativeSelect>
               </Field>
             </div>
 

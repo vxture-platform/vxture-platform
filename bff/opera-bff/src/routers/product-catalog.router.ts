@@ -40,6 +40,7 @@ import {
   Req,
 } from "@nestjs/common";
 import { VxConfigService } from "@vxture/core-config";
+import { isValidProductType, PRODUCT_TYPES } from "@vxture/core-utils";
 import type { Request } from "express";
 import type { Pool, PoolClient } from "pg";
 import { insertOperatorAuditLog } from "../audit/audit-log";
@@ -1197,6 +1198,15 @@ function validateWrite(
         "productName",
       );
     }
+  }
+  // product_type 走受管枚举(@vxture/core-utils 单一权威源),不再自由输入。
+  // create/update 只要带了 productType 就校验;历史遗留值经此写入面一律被挡下、需改成枚举值。
+  if (body.productType && !isValidProductType(body.productType.trim())) {
+    throw invalidRequest(
+      "VALIDATION_INVALID_VALUE",
+      `productType must be one of ${PRODUCT_TYPES.join(", ")}`,
+      "productType",
+    );
   }
   if (body.origin && !(ORIGINS as readonly string[]).includes(body.origin)) {
     throw invalidRequest(
