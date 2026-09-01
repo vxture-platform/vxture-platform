@@ -185,11 +185,15 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  * 2026-08-31 admin 净零(3204 不变)：解决方案补删除给 `api/admin-bff.ts` 加了一条兜底
  *   错误文案「删除方案失败」(+1,与同文件既有错误串并列),同时 StepUpProvider 的验证码
  *   输入换成 InputOTP、去掉了硬编码 placeholder「6 位验证码」(−1),一进一出净零。
+ *
+ * 2026-09-01 admin 3204 → 3230(+26):产品目录(原产品能力)新增营销内容编辑框
+ *   ProductContentEditDialog(成熟度/上站/双语营销字段)+ 改名文案,沿用产品模块既有的
+ *   硬编码中文风格(productTypeLabel 等本就直返「平台/智能体」),整批暂缓 t() 化。
  */
 const BASELINE = {
   console: 30,
   website: 40,
-  admin: 3204,
+  admin: 3230,
   opera: 1916,
   accounts: 264,
 };

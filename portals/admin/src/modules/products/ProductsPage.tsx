@@ -164,7 +164,7 @@ function useProductColumns(
   return [
     {
       id: "product",
-      header: "产品能力",
+      header: "产品",
       cell: (product) => (
         <TableTitleCell
           icon={productTypeIcon(product.productType)}
@@ -351,8 +351,8 @@ export function ProductsPage() {
         header={
           <PageHeader
             icon="database"
-            title="产品能力"
-            description="统一管理可组合、可授权、可计量的基础产品能力，作为解决方案、服务套餐和模型授权的供给目录。"
+            title="产品目录"
+            description="维护产品目录:成熟度、上站可见性与营销内容，供官网渲染;并作为解决方案、服务套餐和模型授权的供给目录。技术注册在运维台。"
           />
         }
         summary={
@@ -360,11 +360,11 @@ export function ProductsPage() {
             {" "}
             <MetricGrid
               loading={loading}
-              aria-label="产品能力管理统计"
+              aria-label="产品管理统计"
               items={[
                 {
                   id: "total",
-                  help: "产品能力总数。",
+                  help: "产品总数。",
                   icon: "database",
                   label: "能力总数",
                   value: formatNumber(products.length),
@@ -407,14 +407,14 @@ export function ProductsPage() {
         filters={
           <FilterBar
             count={formatNumber(filteredProducts.length)}
-            aria-label="产品能力筛选"
+            aria-label="产品筛选"
             search={
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索能力、code、方案、计量"
                 className="grow basis-media-3xl max-w-panel-sm"
-                aria-label="搜索产品能力"
+                aria-label="搜索产品"
               />
             }
             onReset={handleReset}
@@ -487,7 +487,7 @@ export function ProductsPage() {
         table={
           <section
             className="grid min-w-0 max-w-full gap-xs"
-            aria-label="产品能力清单"
+            aria-label="产品清单"
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
 
@@ -509,8 +509,8 @@ export function ProductsPage() {
               )}
               empty={
                 <EmptyState
-                  title="没有匹配的产品能力"
-                  description="清空筛选条件后可查看全部产品能力。"
+                  title="没有匹配的产品"
+                  description="清空筛选条件后可查看全部产品。"
                   action={
                     <ActionButton
                       variant="outline"
