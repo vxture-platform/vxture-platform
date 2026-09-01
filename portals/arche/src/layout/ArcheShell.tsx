@@ -397,6 +397,16 @@ export function ArcheShell({
                           }
                         : {}),
                     }}
+                    links={[
+                      // 个人信息 = 运营者本人自助（只读自视,写侧待身份层补齐）。
+                      // 与本台 /admins「管理他人账号」不同，这是本人账户。
+                      {
+                        key: "profile",
+                        label: "个人信息",
+                        href: "/me",
+                        icon: "user",
+                      },
+                    ]}
                     settings={
                       <ShellPreferencePanel
                         /* 此前这三项是写死的：locale="zh-CN"、只有一个选项、

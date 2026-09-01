@@ -193,12 +193,16 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  * 2026-09-02 admin 3230 → 2486(−744):三平面拆分 cutover —— 平台自治域治理页(身份权限/
  *   安全审计/系统配置/通知基座 10 页 + 模块)整体迁往 arche 治理平面,admin 侧删除,硬编码
  *   中文随文件一并撤走。棘轮同步下探到新水位。
+ *
+ * 2026-09-02 opera 1916 → 1930(+14):新增运营者「个人信息」自助页 app/(shell)/me/page.tsx
+ *   (只读自视,入口在用户弹出面板)。opera 现仍是单语硬编码规制(i18n 铺开尚早),整页
+ *   暂缓 t() 化,沿用既有风格;棘轮上探到新水位。
  */
 const BASELINE = {
   console: 30,
   website: 40,
   admin: 2486,
-  opera: 1916,
+  opera: 1930,
   accounts: 264,
 };
 
