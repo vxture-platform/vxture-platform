@@ -190,7 +190,7 @@ GRANT UPDATE (parent_id, code, name, sort, name_key, is_customer_visible, is_wor
 
 -- product.products  [anchor: id, created_by, created_at]
 REVOKE UPDATE ON product.products FROM platform_svc;
-GRANT UPDATE (product_code, product_type, category_id, product_name, product_nick, description, capability_keys, tags, standalone_subscribable, icon_url, sort, config, release_version, build_number, released_at, status, updated_by, description_key, is_customer_visible, is_workforce_visible, origin, origin_provider, updated_at, deleted_at) ON product.products TO platform_svc;
+GRANT UPDATE (product_code, product_type, category_id, product_name, product_nick, description, capability_keys, tags, standalone_subscribable, icon_url, sort, config, release_version, build_number, released_at, status, updated_by, description_key, is_customer_visible, is_workforce_visible, origin, origin_provider, release_stage, marketing, updated_at, deleted_at) ON product.products TO platform_svc;
 
 -- product.product_metrics  [anchor: id, created_at]
 REVOKE UPDATE ON product.product_metrics FROM platform_svc;

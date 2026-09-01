@@ -115,9 +115,9 @@ const tenantOpsSections: AdminNavigationSection[] = [
         i18nKey: "menu.operation.product_capability",
         status: "active",
         href: "/products",
-        label: "产品能力",
+        label: "产品目录",
         description:
-          "管理可组合、可授权、可计量的基础产品能力，包括平台、智能体、大模型和三方接入能力。",
+          "维护产品目录:成熟度（正式版/公测版/开发中）、上站可见性与营销内容（业务价值、能力亮点、行业等），供官网渲染。技术注册在运维台。",
         icon: "database",
       },
       {

@@ -130,44 +130,6 @@
       "external": "外部产品",
       "unknown": "未分类"
     },
-    "items": [
-      {
-        "code": "arda",
-        "name": "Arda 智能数据治理平台",
-        "type": "L2 · 数据智能",
-        "icon": "database",
-        "description": "面向企业的数据智能底座：数据集、数据源、服务端点统一治理，内置质量、标准、血缘、安全与主数据能力。",
-        "value": "让数据可治理、可信赖、可复用，为上层智能应用提供高质量数据供给。",
-        "status": "available"
-      },
-      {
-        "code": "atlas",
-        "name": "Atlas 企业模型平台",
-        "type": "L1 · 模型底座",
-        "icon": "cube",
-        "description": "企业级 AI 模型平台：多模型接入、编排与调度，统一模型服务与算力管理。",
-        "value": "把大模型能力沉淀为企业可控、可复用的模型服务底座。",
-        "status": "coming"
-      },
-      {
-        "code": "runos",
-        "name": "Runos 可组合能力平台",
-        "type": "L1 · 能力编排",
-        "icon": "sparkles",
-        "description": "可组合 AI 能力平台：将模型、工具、工作流封装为可复用能力单元并编排成应用。",
-        "value": "以搭积木的方式快速组装 AI 应用，缩短从能力到业务的路径。",
-        "status": "coming"
-      },
-      {
-        "code": "karda",
-        "name": "Karda 企业知识智能平台",
-        "type": "L2 · 知识智能",
-        "icon": "server",
-        "description": "企业知识智能平台：知识抽取、组织与检索，构建可问答、可推理的企业知识库。",
-        "value": "把散落的企业知识变成可检索、可推理的智能资产。",
-        "status": "coming"
-      }
-    ],
     "comingSoonHint": "该产品正在建设中，敬请期待。",
     "back": "返回产品总览",
     "backAppcenter": "返回智能体广场",
@@ -179,7 +141,8 @@
     "empty": {
       "title": "暂无上线的平台级产品",
       "description": "产品上线并对客户可见后会自动出现在这里。"
-    }
+    },
+    "items": []
   },
   "subscription": {
     "unavailableTitle": "暂未开放订阅",

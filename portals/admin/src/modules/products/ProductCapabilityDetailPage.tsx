@@ -21,6 +21,7 @@ import {
 import { orUnset } from "@/modules/shared/display";
 import type { IconName } from "@vxture/design-system";
 import { fetchProductCapability } from "@/api/admin-bff";
+import { ProductContentEditDialog } from "./ProductContentEditDialog";
 import type {
   ProductCapabilityHealthStatus,
   ProductCapabilityIntegrationStatus,
@@ -104,7 +105,7 @@ function ProductCapabilitySummary({
           items={[
             {
               id: "solutions",
-              help: "引用了本产品能力的业务方案数。",
+              help: "引用了本产品的业务方案数。",
               label: "业务方案",
               value: formatNumber(product.solutionCount),
               tags: [`${formatNumber(product.planCount)} 套餐`],
@@ -146,7 +147,7 @@ function ProductCapabilityDetails({
   return (
     <section
       className="grid min-w-0 gap-xl"
-      aria-label={`${product.productName} 产品能力详情`}
+      aria-label={`${product.productName} 产品详情`}
     >
       <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="database" title="基础资料" />
@@ -346,6 +347,7 @@ export function ProductCapabilityDetailPage({
   const tShared = useTranslations();
   const [product, setProduct] = useState<ProductCapabilityRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -372,8 +374,8 @@ export function ProductCapabilityDetailPage({
         header={
           <PageHeader
             icon="database"
-            title="产品能力详情"
-            description="未找到对应的产品能力。"
+            title="产品详情"
+            description="未找到对应的产品。"
             action={
               <Button asChild variant="outline">
                 <Link href="/products">
@@ -386,11 +388,11 @@ export function ProductCapabilityDetailPage({
         }
       >
         <EmptyState
-          title="产品能力不存在"
-          description="该产品能力可能已下线，或当前账号无权访问。"
+          title="产品不存在"
+          description="该产品可能已下线，或当前账号无权访问。"
           action={
             <Button asChild variant="outline">
-              <Link href="/products">返回产品能力管理</Link>
+              <Link href="/products">返回产品管理</Link>
             </Button>
           }
         />
@@ -404,8 +406,8 @@ export function ProductCapabilityDetailPage({
       header={
         <PageHeader
           icon={product ? capabilityTypeIcon(product.productType) : "database"}
-          title={product?.productName ?? "产品能力详情"}
-          description={product?.capabilitySummary ?? "正在读取产品能力详情。"}
+          title={product?.productName ?? "产品详情"}
+          description={product?.capabilitySummary ?? "正在读取产品详情。"}
           action={
             <div className="inline-flex flex-wrap items-center justify-end gap-sm">
               <Button asChild variant="outline">
@@ -414,9 +416,13 @@ export function ProductCapabilityDetailPage({
                   {tShared("actions.backToList")}
                 </Link>
               </Button>
-              <Button variant="outline" disabled>
+              <Button
+                variant="outline"
+                disabled={!product}
+                onClick={() => setEditing(true)}
+              >
                 <Icon name="edit" size="xs" fallback="placeholder" />
-                修改
+                编辑营销
               </Button>
             </div>
           }
@@ -427,6 +433,12 @@ export function ProductCapabilityDetailPage({
         <>
           <ProductCapabilitySummary product={product} />
           <ProductCapabilityDetails product={product} />
+          <ProductContentEditDialog
+            product={product}
+            open={editing}
+            onOpenChange={setEditing}
+            onSaved={setProduct}
+          />
         </>
       ) : (
         <section className="flex min-h-0 items-center justify-end gap-sm text-body-sm font-normal text-muted-foreground">

@@ -21,6 +21,7 @@ import { TIERS, type Tier } from "@vxture-platform/shared";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import { RequireStepUp } from "../auth/step-up.decorator";
 import { insertOperatorAuditLog } from "../audit/audit-log";
+import { isValidReleaseStage, RELEASE_STAGES } from "@vxture/core-utils";
 import { pgErrorCode, withTransaction } from "../db/tx";
 import type {
   ProductAgentRecord,
@@ -45,6 +46,7 @@ import type {
   ProductSolutionRecord,
   ProductSolutionStatus,
   ProductSolutionTier,
+  ProductContentWriteInput,
   ProductSolutionWriteInput,
   RequestContext,
 } from "../types/console.types";
@@ -82,6 +84,98 @@ export class ProductsRouter {
     }
 
     return capability;
+  }
+
+  /**
+   * 更新产品**营销内容与呈现**:marketing(营销富字段 jsonb)/ release_stage(成熟度轴)/
+   * is_customer_visible(是否上站)。这些是**业务/运营字段**,归 admin 产品目录录入;
+   * 技术注册(code/type/origin/OIDC)仍在 opera。PATCH 语义:只改送来的字段,没送的不动。
+   */
+  @Patch("capabilities/:productCode/content")
+  @RequireStepUp()
+  async updateProductContent(
+    @Req() req: Request & RequestContext,
+    @Param("productCode") productCode: string,
+    @Body() body: ProductContentWriteInput,
+  ): Promise<ProductCapabilityRecord> {
+    assertCanManageProducts(req);
+    const code = decodeURIComponent(productCode);
+
+    if (
+      body.releaseStage !== undefined &&
+      !isValidReleaseStage(body.releaseStage)
+    ) {
+      throw new BadRequestException(
+        `releaseStage must be one of ${RELEASE_STAGES.join(", ")}`,
+      );
+    }
+
+    await withTransaction(this.rwPool, async (client) => {
+      const before = await client.query<{
+        id: string;
+        release_stage: string;
+        is_customer_visible: boolean;
+        marketing: unknown;
+      }>(
+        `SELECT id, release_stage, is_customer_visible, marketing
+           FROM product.products
+          WHERE product_code = $1 AND deleted_at IS NULL
+          FOR UPDATE`,
+        [code],
+      );
+      const row = before.rows[0];
+      if (!row) {
+        throw new NotFoundException(`Product ${code} not found`);
+      }
+
+      const sets: string[] = [];
+      const values: unknown[] = [];
+      if (body.marketing !== undefined) {
+        values.push(JSON.stringify(body.marketing));
+        sets.push(`marketing = $${values.length + 1}::jsonb`);
+      }
+      if (body.releaseStage !== undefined) {
+        values.push(body.releaseStage);
+        sets.push(`release_stage = $${values.length + 1}`);
+      }
+      if (body.isCustomerVisible !== undefined) {
+        values.push(body.isCustomerVisible);
+        sets.push(`is_customer_visible = $${values.length + 1}`);
+      }
+      if (sets.length === 0) {
+        throw new BadRequestException("No editable field supplied");
+      }
+
+      await client.query(
+        `UPDATE product.products
+            SET ${sets.join(", ")}, updated_by = $${values.length + 2}, updated_at = now()
+          WHERE id = $1`,
+        [row.id, ...values, req.user!.id],
+      );
+      await insertOperatorAuditLog(client, req, {
+        action: "product.content.update",
+        resourceType: "product",
+        resourceId: code,
+        before: {
+          release_stage: row.release_stage,
+          is_customer_visible: row.is_customer_visible,
+          marketing: row.marketing,
+        },
+        after: {
+          releaseStage: body.releaseStage,
+          isCustomerVisible: body.isCustomerVisible,
+          marketing: body.marketing,
+        },
+      });
+    });
+
+    const updated = (await loadProductCapabilities(this.pool)).find(
+      (item) => item.productCode === code,
+    );
+    if (!updated) {
+      throw new NotFoundException(`Product ${code} not found`);
+    }
+    return updated;
   }
 
   /**
@@ -1379,6 +1473,8 @@ interface ProductCatalogRow {
   product_code: string;
   product_type: string; // 受管枚举 @vxture/core-utils: general_platform|industry_platform|general_agent|industry_agent|undefined
   origin: string; // 来源轴 self|third_party|other —— source 从这里判，不再从 product_type='external' 反推
+  release_stage: string; // 成熟度轴 ga|beta|developing
+  marketing: unknown | null; // 营销内容 jsonb(双语富结构)
   product_name: string;
   description: string | null;
   status: string; // active | inactive | draft | deprecated
@@ -1481,6 +1577,8 @@ const PRODUCT_CATALOG_SQL = `
     p.product_code,
     p.product_type,
     p.origin,
+    p.release_stage,
+    p.marketing,
     p.product_name,
     p.description,
     p.status,
@@ -1597,6 +1695,9 @@ export async function loadProductCapabilities(
       productType,
       source,
       status,
+      // 成熟度轴与营销内容(产品目录录入的业务字段,原样透传给前端表单回填)。
+      releaseStage: row.release_stage,
+      marketing: row.marketing ?? null,
       visibility: row.is_customer_visible ? "public" : "internal",
       region: "global",
       ownerTeam: "",

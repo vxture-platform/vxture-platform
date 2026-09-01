@@ -1430,8 +1430,8 @@ export async function seedCatalog(client) {
     await client.query(
       `
       insert into product.products
-        (id, product_code, product_type, category_id, product_name, product_nick, description, description_key, status, origin, origin_provider, created_by, created_at, updated_at)
-      values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, 'active', $8, $9, $10, now(), now())
+        (id, product_code, product_type, category_id, product_name, product_nick, description, description_key, status, release_stage, origin, origin_provider, created_by, created_at, updated_at)
+      values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, 'active', 'ga', $8, $9, $10, now(), now())
       on conflict (product_code) do nothing
     `,
       [

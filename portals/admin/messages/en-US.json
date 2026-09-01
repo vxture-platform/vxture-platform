@@ -200,8 +200,8 @@
         "description": "Compose capabilities into industry scenarios and define solution boundaries."
       },
       "products": {
-        "label": "Product Capabilities",
-        "description": "Manage composable, grantable, and metered platform, agent, model, and integration capabilities."
+        "label": "Product Catalog",
+        "description": "Maintain the product catalog: maturity, on-site visibility and marketing content (value, highlights, industries) for the website. Technical registration lives in Ops."
       },
       "promotions": {
         "label": "Marketing Offers",

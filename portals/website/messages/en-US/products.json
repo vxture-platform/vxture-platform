@@ -146,44 +146,6 @@
       "external": "External",
       "unknown": "Uncategorized"
     },
-    "items": [
-      {
-        "code": "arda",
-        "name": "Arda Data Intelligence Platform",
-        "type": "L2 · Data intelligence",
-        "icon": "database",
-        "description": "The enterprise data intelligence fabric: unified governance of datasets, sources and service endpoints, with built-in quality, standards, lineage, security and MDM.",
-        "value": "Make data governable, trustworthy and reusable — high-quality supply for every intelligent app above.",
-        "status": "available"
-      },
-      {
-        "code": "atlas",
-        "name": "Atlas AI Model Platform",
-        "type": "L1 · Model foundation",
-        "icon": "cube",
-        "description": "Enterprise AI model platform: multi-model access, orchestration and scheduling with unified model serving and compute management.",
-        "value": "Turn large-model capability into a controllable, reusable model foundation.",
-        "status": "coming"
-      },
-      {
-        "code": "runos",
-        "name": "Runos Composable Ability Platform",
-        "type": "L1 · Ability orchestration",
-        "icon": "sparkles",
-        "description": "Composable AI ability platform: wrap models, tools and workflows into reusable ability units and orchestrate them into apps.",
-        "value": "Assemble AI apps like building blocks — shorten the path from capability to business.",
-        "status": "coming"
-      },
-      {
-        "code": "karda",
-        "name": "Karda Knowledge Intelligence Platform",
-        "type": "L2 · Knowledge intelligence",
-        "icon": "server",
-        "description": "Enterprise knowledge intelligence platform: extract, organize and retrieve knowledge into a queryable, reasoning-capable knowledge base.",
-        "value": "Turn scattered enterprise knowledge into retrievable, reasoning-ready assets.",
-        "status": "coming"
-      }
-    ],
     "comingSoonHint": "This product is under construction — stay tuned.",
     "back": "Back to products",
     "backAppcenter": "Back to agents",
@@ -195,7 +157,8 @@
     "empty": {
       "title": "No platform product is live yet",
       "description": "Products appear here automatically once they go live and are visible to customers."
-    }
+    },
+    "items": []
   },
   "subscription": {
     "unavailableTitle": "Subscriptions not open yet",

@@ -18,23 +18,15 @@
  * @date 2026-08-23
  */
 
-import { useTranslations } from "next-intl";
-import type { IconName } from "@vxture/design-system";
+import { useLocale, useTranslations } from "next-intl";
 import {
   catalogDisplayName,
   isAgentProduct,
+  marketingForLocale,
   type ProductCatalogItem,
 } from "@/api/product-catalog.api";
 import ComingSoonPage from "./ComingSoonPage";
 import { productTypeIcon, productTypeKey } from "./product-catalog-view";
-
-/** products.json `catalog.items` 里本页用到的字段，全部可缺。 */
-type MarketingCopy = {
-  code: string;
-  name?: string;
-  description?: string;
-  icon?: IconName;
-};
 
 interface ProductComingSoonProps {
   readonly product: ProductCatalogItem;
@@ -42,8 +34,8 @@ interface ProductComingSoonProps {
 
 export default function ProductComingSoon({ product }: ProductComingSoonProps) {
   const t = useTranslations("products");
-  const items = t.raw("catalog.items") as MarketingCopy[];
-  const copy = items.find((item) => item.code === product.productCode);
+  const locale = useLocale();
+  const m = marketingForLocale(product.marketing, locale);
   // 智能体回智能体广场，其余回产品矩阵——按目录类型分流，与两张清单页的口径一致。
   const backAction = isAgentProduct(product)
     ? { href: "/appcenter", label: t("catalog.backAppcenter") }
@@ -51,12 +43,14 @@ export default function ProductComingSoon({ product }: ProductComingSoonProps) {
 
   return (
     <ComingSoonPage
-      icon={copy?.icon ?? productTypeIcon(product.productType)}
+      icon={productTypeIcon(product.productType)}
       accent="brand"
-      eyebrow={t(`catalog.types.${productTypeKey(product.productType)}`)}
-      title={copy?.name ?? catalogDisplayName(product)}
+      eyebrow={
+        m?.tagline ?? t(`catalog.types.${productTypeKey(product.productType)}`)
+      }
+      title={catalogDisplayName(product)}
       subtitle={t("catalog.comingSoonHint")}
-      description={copy?.description ?? product.description ?? ""}
+      description={m?.value ?? product.description ?? ""}
       primaryAction={{ href: "/contact", label: t("catalog.consult") }}
       backAction={backAction}
     />

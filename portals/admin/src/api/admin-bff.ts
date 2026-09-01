@@ -33,6 +33,7 @@ import type {
   PromotionRedemptionRecord,
   ProductAgentRecord,
   ProductCapabilityRecord,
+  ProductContentWriteInput,
   ProductPlanRecord,
   ProductReleaseRecord,
   ProductServicePlanDetailRecord,
@@ -509,6 +510,20 @@ export async function fetchProductCapability(
   return readJson<ProductCapabilityRecord | null>(
     `/api/products/capabilities/${encodeURIComponent(productCode)}`,
     null,
+  );
+}
+
+// step-up gated (@RequireStepUp) — wrap the call in runWithStepUp at the UI.
+// 产品目录:更新营销内容 marketing / 成熟度 releaseStage / 上站 isCustomerVisible。
+export async function updateProductContent(
+  productCode: string,
+  body: ProductContentWriteInput,
+): Promise<ProductCapabilityRecord> {
+  return mutateJson<ProductCapabilityRecord>(
+    `/api/products/capabilities/${encodeURIComponent(productCode)}/content`,
+    "PATCH",
+    body,
+    "Failed to update product content",
   );
 }
 
