@@ -36,8 +36,17 @@ export interface ProductCatalogItem {
   releaseVersion: string | null;
 }
 
-/** 目录 `product_type` 里属于「平台级产品」（L1/L2）的四型——/products 的读取口径。 */
+/**
+ * /products 的读取口径：目录里**平台级产品家族**（L1/L2）。
+ *
+ * 与 agent 家族同理，平台型也是 `<限定>_platform` 的分层 taxonomy：`general_platform`
+ * （通用平台）、`external_platform`（外部平台），历史上还有 model/capability/data/
+ * knowledge_platform。**按后缀 `_platform` 归族**，新增子型无需改这里。保留常量供别处
+ * 引用历史四型，但判定不再靠它点名。
+ */
 export const PLATFORM_PRODUCT_TYPES: readonly string[] = [
+  "general_platform",
+  "external_platform",
   "model_platform",
   "capability_platform",
   "data_platform",
@@ -45,12 +54,18 @@ export const PLATFORM_PRODUCT_TYPES: readonly string[] = [
 ];
 
 export function isPlatformProduct(item: ProductCatalogItem): boolean {
-  return PLATFORM_PRODUCT_TYPES.includes(item.productType);
+  return item.productType.endsWith("_platform");
 }
 
-/** /appcenter 的读取口径：目录里 product_type='agent' 的产品。 */
+/**
+ * /appcenter 的读取口径：目录里**智能体家族**的产品。
+ *
+ * agent 类型是分层 taxonomy：`general_agent`（通用智能体）、`industry_agent`（行业智能体），
+ * 后续可能有 software/embodied 等子型。product_type 是自由文本(DDL 无 CHECK),因此按
+ * **后缀 `_agent`** 归族(外加历史裸 `agent`),而不是点名单个串——新增子型无需改这里。
+ */
 export function isAgentProduct(item: ProductCatalogItem): boolean {
-  return item.productType === "agent";
+  return item.productType === "agent" || item.productType.endsWith("_agent");
 }
 
 /** 展示名：副名（通常是品牌/英文名）优先，退回主名——与 /pricing 的 pricing-model 同判。 */

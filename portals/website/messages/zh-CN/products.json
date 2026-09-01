@@ -116,11 +116,15 @@
       "coming": "敬请期待"
     },
     "types": {
+      "general_platform": "通用平台",
+      "external_platform": "外部平台",
       "model_platform": "L1 · 模型底座",
       "capability_platform": "L1 · 能力编排",
       "data_platform": "L2 · 数据智能",
       "knowledge_platform": "L2 · 知识智能",
       "agent": "L3 · 智能体",
+      "general_agent": "L3 · 通用智能体",
+      "industry_agent": "L3 · 行业智能体",
       "client": "客户端",
       "external": "外部产品",
       "unknown": "未分类"

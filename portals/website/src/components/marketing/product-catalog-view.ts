@@ -16,11 +16,15 @@
 import type { IconName } from "@vxture/design-system";
 
 export type ProductTypeKey =
+  | "general_platform"
+  | "external_platform"
   | "model_platform"
   | "capability_platform"
   | "data_platform"
   | "knowledge_platform"
   | "agent"
+  | "general_agent"
+  | "industry_agent"
   | "client"
   | "external"
   | "unknown";
@@ -30,20 +34,28 @@ export type ProductTypeKey =
  * 源码里可静态看见，拼出来的键既查不到也不报错。
  */
 const TYPE_ICONS: Record<ProductTypeKey, IconName> = {
+  general_platform: "cube",
+  external_platform: "plugs-connected",
   model_platform: "cube",
   capability_platform: "sparkles",
   data_platform: "database",
   knowledge_platform: "server",
   agent: "agent",
+  general_agent: "agent",
+  industry_agent: "buildings",
   client: "desktop",
   external: "api",
   unknown: "package",
 };
 
 export function productTypeKey(productType: string): ProductTypeKey {
-  return Object.prototype.hasOwnProperty.call(TYPE_ICONS, productType)
-    ? (productType as ProductTypeKey)
-    : "unknown";
+  if (Object.prototype.hasOwnProperty.call(TYPE_ICONS, productType)) {
+    return productType as ProductTypeKey;
+  }
+  // 未登记的子型仍按 family 后缀归族，不落 unknown（否则显示未分类 + package 图标）。
+  if (productType.endsWith("_agent")) return "agent";
+  if (productType.endsWith("_platform")) return "general_platform";
+  return "unknown";
 }
 
 export function productTypeIcon(productType: string): IconName {

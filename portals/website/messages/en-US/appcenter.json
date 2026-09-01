@@ -18,6 +18,10 @@
     "title": "The agent lineup",
     "description": "This list comes straight from the platform product catalog: live agents show a Stable badge and can be subscribed to directly, while those still in the works show In development — each flips to subscribable as it truly ships.",
     "type": "Agent",
+    "kinds": {
+      "general_agent": "General Agent",
+      "industry_agent": "Industry Agent"
+    },
     "valueLabel": "Value",
     "items": [],
     "developing": [

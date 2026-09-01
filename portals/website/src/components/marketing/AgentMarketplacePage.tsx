@@ -103,6 +103,8 @@ export default function AgentMarketplacePage({
   const highlights = t.raw("hero.highlights") as string[];
   const copyItems = t.raw("agents.items") as MarketingCopy[];
   const developingItems = t.raw("agents.developing") as DevelopingCopy[];
+  // product_type → 类型标签（通用智能体 / 行业智能体）；未登记的子型退回通用「智能体」。
+  const agentKinds = t.raw("agents.kinds") as Record<string, string>;
   const hasTenantSession = isAuthenticated && Boolean(user);
   const consoleEntryUrl = buildConsoleEntryUrl(locale);
 
@@ -123,7 +125,7 @@ export default function AgentMarketplacePage({
         return {
           code: agent.productCode,
           name: copy?.name ?? catalogDisplayName(agent),
-          type: null,
+          type: agentKinds[agent.productType] ?? null,
           icon: copy?.icon ?? productTypeIcon(agent.productType),
           description: copy?.description ?? agent.description ?? "",
           value: copy?.value ?? null,
@@ -143,7 +145,7 @@ export default function AgentMarketplacePage({
       version: null,
     }));
     return [...live, ...developing];
-  }, [agents, copyItems, developingItems]);
+  }, [agents, copyItems, developingItems, agentKinds]);
 
   // 登录租户各产品订阅态（code → state）；未登录为空 → 卡片按未订阅呈现。与 /products 同源。
   const [subs, setSubs] = useState<Map<string, ProductSubscriptionState>>(
