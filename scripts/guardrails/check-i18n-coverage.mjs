@@ -197,13 +197,21 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  * 2026-09-02 opera 1916 → 1930(+14):新增运营者「个人信息」自助页 app/(shell)/me/page.tsx
  *   (只读自视,入口在用户弹出面板)。opera 现仍是单语硬编码规制(i18n 铺开尚早),整页
  *   暂缓 t() 化,沿用既有风格;棘轮上探到新水位。
+ *
+ * 2026-09-02 Phase B(运营者写侧自助收敛到身份层):
+ *   - admin 2486 → 2469(−17):退役内嵌邮箱自助 OperatorAccountSettings(硬编码中文随文件
+ *     删除),/settings 改为账户中心跳转桥 AccountCenterBridge(新增少量硬编码),净减。
+ *   - opera 1930 → 1933(+3):/me 加「前往账户中心」跳转区(单语硬编码规制,沿用既有风格)。
+ *   - accounts 264 → 273(+9):新增 api/operator-self.ts 的接口层错误文案,沿用同门户
+ *     api/operator-webauthn.ts / api/oidc.ts 既有的「API 层硬编码中文」惯例(组件层走 t());
+ *     账户中心组件 OperatorAccountCenter 全走 operatorAccount 命名空间的 t(),不进计数。
  */
 const BASELINE = {
   console: 30,
   website: 40,
-  admin: 2486,
-  opera: 1930,
-  accounts: 264,
+  admin: 2469,
+  opera: 1933,
+  accounts: 273,
 };
 
 const CJK = "[\u4e00-\u9fff]";

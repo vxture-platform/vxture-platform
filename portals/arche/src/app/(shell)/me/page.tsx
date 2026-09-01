@@ -1,26 +1,29 @@
 "use client";
 
-/* 个人信息 —— 运营者本人账户自助（三平面拆分 2026-09-02）。
+/* 个人信息 —— 运营者本人账户（三平面拆分 2026-09-02 / Phase B 收敛 2026-09-02）。
  *
- * 入口在用户弹出面板的「个人信息」。arche 侧目前是**只读自视**：显示会话里下发的
- * 身份（显示名 / 邮箱 + 认证态 / 角色），字段与 admin `OperatorAccountSettings` 同源
- * （`admin.operator_account`，经 access_token claims 下发）。
- *
- * arche-bff 尚无运营者自助的写端点（改邮箱/手机/密码/MFA），故本页不放会 404 的写
- * 表单——一张能改、保存不连的表单比只读更误导。写侧自助补齐（统一到身份层的
- * operator-self 端点）后再开表单。注意:arche 的 `/admins` 管的是**他人**账号（治理），
- * 与本页「本人自助」不是一回事。 */
+ * 入口在用户弹出面板的「个人信息」。本页给**只读自视**（会话下发的身份：显示名 /
+ * 邮箱 + 认证态 / 角色），写侧自助（改邮箱/通行密钥/…）统一收敛到身份层的**账户中心**
+ * （accounts 门户 /account，同源 vx_sid_op 鉴权）——arche 只出跳转入口。注意:arche 的
+ * `/admins` 管的是**他人**账号（治理），与本页「本人自助」不是一回事。 */
 
 import {
   Banner,
+  Button,
   DetailList,
   DetailRow,
+  Icon,
   Section,
   StatusBadge,
   ViewHeader,
   ViewLayout,
 } from "@vxture/design-system";
 import { useOperatorSession } from "@/features/session/SessionProvider";
+import { operatorAccountCenterUrl } from "@/lib/account-center";
+
+function openAccountCenter(): void {
+  window.open(operatorAccountCenterUrl(), "_blank", "noopener,noreferrer");
+}
 
 export default function PersonalInfoPage() {
   const { operator } = useOperatorSession();
@@ -30,7 +33,7 @@ export default function PersonalInfoPage() {
       <ViewHeader
         icon="user"
         title="个人信息"
-        description="你的运营者账户信息，与运营台同源。"
+        description="你的运营者账户信息，与运营台同源。更改邮箱、管理通行密钥等在账户中心完成。"
       />
 
       {operator ? (
@@ -39,7 +42,7 @@ export default function PersonalInfoPage() {
             <Banner
               tone="warning"
               title="邮箱未验证"
-              description="未验证的邮箱无法用于密码找回。邮箱更改与验证请在运营台（admin）的账户设置中完成。"
+              description="未验证的邮箱无法用于密码找回。请在账户中心更改并验证邮箱。"
             />
           ) : null}
 
@@ -58,6 +61,20 @@ export default function PersonalInfoPage() {
               </DetailRow>
               <DetailRow label="角色">{operator.role || "—"}</DetailRow>
             </DetailList>
+          </Section>
+
+          <Section title="账户中心" icon="external-link" level={2}>
+            <div className="flex flex-col gap-sm">
+              <p className="text-body-sm text-muted-foreground">
+                更改邮箱、管理通行密钥等账户与安全设置，统一在账户中心完成（新标签打开）。
+              </p>
+              <div>
+                <Button variant="secondary" onClick={openAccountCenter}>
+                  <Icon name="external-link" size="sm" aria-hidden="true" />
+                  前往账户中心
+                </Button>
+              </div>
+            </div>
           </Section>
         </>
       ) : (
