@@ -19,6 +19,11 @@ export interface OperatorPrincipal {
   id: string;
   /** 展示用，落审计日志时不使用。 */
   displayName: string | null;
+  /**
+   * 操作者角色的安全等级(admin.operator_role.rank;TD-017 分级模型)。RBAC 面用它
+   * 做客户端可授予范围的预筛(只能授出 rank 严格低于自己的角色);后端各写口仍强制。
+   */
+  roleRank: number | null;
 }
 
 export interface RequestContext {

@@ -116,3 +116,85 @@ export interface FeatureFlagRecord {
   createdAt: string;
   updatedAt: string;
 }
+
+// ── RBAC 域(Batch 3:平台用户/角色/权限)─────────────────────────────────
+// 读写 admin.operator_account / operator_role / operator_permission /
+// operator_role_permission——治理台最高危写口。从 admin-bff console.types 切片。
+
+export type PlatformPermissionType = "MENU" | "BUTTON" | "API";
+
+export interface PlatformAdminRecord {
+  id: string;
+  sort: number;
+  username: string;
+  displayName: string;
+  phone: string | null;
+  email: string | null;
+  roleId: string;
+  roleCode: string;
+  roleNameI18nKey: string;
+  roleNameEn: string;
+  /** Role security tier (admin.operator_role.rank; TD-017 graded model). */
+  roleRank: number;
+  /** 当前操作者能否管理此运营(actor.rank 严格大于 roleRank);后端仍强制。 */
+  canManage?: boolean;
+  roleStatusCode: "active" | "disabled" | "archived";
+  roleStatus: boolean;
+  statusCode: "active" | "disabled" | "locked" | "pending" | "suspended";
+  status: boolean;
+  isSystem: boolean;
+  lastLoginAt: string | null;
+  lastLoginIp: string | null;
+  remark: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlatformRolePermissionRecord {
+  id: string;
+  parentId: string | null;
+  permCode: string;
+  permName: string;
+  permType: PlatformPermissionType;
+  status: boolean;
+  description: string;
+  routePath: string | null;
+}
+
+export interface PlatformRoleRecord {
+  id: string;
+  roleCode: string;
+  /** Role security tier (admin.operator_role.rank; TD-017). */
+  rank: number;
+  nameI18nKey: string;
+  nameEn: string;
+  descriptionI18nKey: string | null;
+  description: string;
+  isSystem: boolean;
+  statusCode: "active" | "disabled" | "archived";
+  status: boolean;
+  sort: number;
+  adminCount: number;
+  activeAdminCount: number;
+  permissionCount: number;
+  menuPermissionCount: number;
+  buttonPermissionCount: number;
+  apiPermissionCount: number;
+  createdBy: string | null;
+  createdByName: string | null;
+  createdAt: string;
+  updatedAt: string;
+  permissions: PlatformRolePermissionRecord[];
+}
+
+export interface PlatformAdminPermissionRecord extends PlatformRolePermissionRecord {
+  /** 平台预置(seed)还是运营自建。 */
+  isSystem: boolean;
+  icon: string | null;
+  sort: number;
+  component: string | null;
+  roleCount: number;
+  activeRoleCount: number;
+  createdAt: string;
+  updatedAt: string;
+}

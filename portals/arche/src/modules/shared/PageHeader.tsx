@@ -19,6 +19,8 @@ interface ArchePageHeaderProps {
   description: string;
   action?: ReactNode;
   secondary?: ReactNode;
+  /** 死参数:ViewHeader 定稿只有标题+描述两行。收下不渲染,仅为兼容迁入页(同 admin)。 */
+  eyebrow?: string;
 }
 
 export function PageHeader({

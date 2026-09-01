@@ -28,3 +28,12 @@ export async function withTransaction<T>(
     client.release();
   }
 }
+
+/** Postgres 错误码(如唯一约束 23505),用于把 DB 冲突映射成 HTTP 4xx。 */
+export function pgErrorCode(error: unknown): string | undefined {
+  if (error && typeof error === "object" && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    return typeof code === "string" ? code : undefined;
+  }
+  return undefined;
+}

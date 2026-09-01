@@ -18,6 +18,7 @@ import type { Capability, OperatorPrincipal } from "../types/request-context";
 interface OperatorRow {
   id: string;
   display_name: string | null;
+  role_rank: number | null;
   permissions: string[] | null;
 }
 
@@ -36,6 +37,7 @@ const OPERATOR_AUTHZ_SQL = `
 select
   a.id,
   a.display_name,
+  r.rank as role_rank,
   coalesce(array_remove(array_agg(distinct p.perm_code), null), array[]::varchar[]) as permissions
 from admin.operator_account a
 join admin.operator_role r
@@ -49,7 +51,7 @@ left join admin.operator_permission p
 where a.deleted_at is null
   and a.status = 'active'
   and a.id = $1
-group by a.id, a.display_name
+group by a.id, a.display_name, r.rank
 limit 1
 `;
 
@@ -69,7 +71,11 @@ export class OperatorAuthzService {
     if (!row) return null;
 
     return {
-      operator: { id: row.id, displayName: row.display_name },
+      operator: {
+        id: row.id,
+        displayName: row.display_name,
+        roleRank: row.role_rank,
+      },
       capabilities: row.permissions ?? [],
     };
   }
