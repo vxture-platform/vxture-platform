@@ -287,8 +287,13 @@ jobs:
   # （`imagetools create` 仓库侧改名，秒级、不重建、不传层）。deploy 等的是整个
   # workflow 的 conclusion，本 job 失败同样挡住部署，tag 完整性 fail-closed。
   # 语义注意：被复用的镜像沿用其构建时烙进的 APP_VERSION/GIT_SHA——health 端点
-  # 报的是「该服务内容最后变更的发布号」，不是本次 tag。核验「部署落没落」看
-  # `docker ps` 的镜像 tag（全部等于新 tag），不再拿 health version 对 tag。
+  # 报的是「该服务内容最后变更的发布号」，不是本次 tag。
+  # ⚠ 「核验部署落没落看 docker ps 的镜像 tag 全等新 tag」这条不变式**已作废**：
+  # imagetools create 把单 manifest 重包成新 index → 顶层引用 digest 每版必变，于是
+  # compose 会把 14 个服务全判成「变了」→ 全量重建（2026-09-01 在 2C2G 上压垮机器）。
+  # 30-deploy 因此改为把每个服务钉到 amd64 内容 digest（compose.pinned.yml），docker ps
+  # 现在显示 `@sha256:...` 而非 tag。核验改看内容 digest / health version，本次发布号
+  # 落在 /srv/vxture/runtime/.last-deploy-tag。详见 deploy/scripts/lib/pin-image-digests.sh。
   # 不打 sha- tag：那会声称镜像出自本次 commit，而它不是；semver 别名
   # （:X.Y.Z/:X.Y/:X）照常前移，它们本就是「系列内最新」的指针。
   retag:
