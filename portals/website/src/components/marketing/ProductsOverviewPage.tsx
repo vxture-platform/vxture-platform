@@ -84,7 +84,7 @@ export default function ProductsOverviewPage({
       const m = marketingForLocale(product.marketing, locale);
       return {
         code: product.productCode,
-        name: catalogDisplayName(product),
+        name: catalogDisplayName(product, locale),
         typeLabel: t(`catalog.types.${productTypeKey(product.productType)}`),
         icon: productTypeIcon(product.productType),
         description: product.description ?? "",

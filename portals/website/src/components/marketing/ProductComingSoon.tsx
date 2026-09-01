@@ -48,7 +48,7 @@ export default function ProductComingSoon({ product }: ProductComingSoonProps) {
       eyebrow={
         m?.tagline ?? t(`catalog.types.${productTypeKey(product.productType)}`)
       }
-      title={catalogDisplayName(product)}
+      title={catalogDisplayName(product, locale)}
       subtitle={t("catalog.comingSoonHint")}
       description={m?.value ?? product.description ?? ""}
       primaryAction={{ href: "/contact", label: t("catalog.consult") }}
