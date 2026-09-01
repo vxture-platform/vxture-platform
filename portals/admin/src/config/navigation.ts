@@ -272,9 +272,12 @@ const tenantOpsSections: AdminNavigationSection[] = [
         i18nKey: "menu.platform.model_gateway",
         status: "active",
         href: "/atlas",
-        label: "模型平台",
+        // 名实归位(2026-09-02):admin 侧只写商业封装(计价规则+限流策略),供应商/模型
+        // 是只读镜像;真正的模型平台(供应生命周期/密钥/路由)在 opera /model/services。
+        // 故正名为「模型计价与策略」,不再借"模型平台"这个基础设施名。
+        label: "模型计价与策略",
         description:
-          "管理大模型供应商、模型路由、调用策略、限流策略与可用性状态。",
+          "配置模型计价规则与限流策略；供应商/模型为只读，其生命周期管理在运维台。",
         icon: "cloud",
       },
       {
@@ -293,8 +296,11 @@ const tenantOpsSections: AdminNavigationSection[] = [
         i18nKey: "menu.operation.skill_market",
         status: "active",
         href: "/skills",
-        label: "技能市场",
-        description: "注册和管理智能体可调用技能，配置上下线、端点和运行状态。",
+        // 名实归位(2026-09-02):本页是 Runos 能力注册表的**只读**镜像,注册与管理在
+        // opera「能力注册」。"技能市场"暗示可交易/可管理,与只读实质不符 → 正名「能力目录」。
+        label: "能力目录",
+        description:
+          "Runos 已注册能力的只读目录；注册与管理在运维台「能力注册」。",
         icon: "cube",
       },
     ],

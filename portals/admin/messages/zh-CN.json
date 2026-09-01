@@ -232,15 +232,15 @@
         "description": "查看服务运行详情、响应时间、错误率、可用性指标和告警规则。"
       },
       "modelPlatform": {
-        "label": "模型平台",
-        "description": "维护大模型供应商、模型路由、限流、超时和调用端点。"
+        "label": "模型计价与策略",
+        "description": "配置模型计价规则与限流策略；供应商/模型只读，生命周期管理在运维台。"
       },
       "modelGrants": {
         "label": "模型授权",
         "description": "按产品、租户和套餐配置模型访问权限、配额和路由优先级。"
       },
       "skills": {
-        "label": "技能市场",
+        "label": "能力目录",
         "description": "Runos 已注册能力的只读目录；注册与管理在 opera「能力注册」。"
       },
       "billing": {
@@ -440,7 +440,7 @@
     "subscription": "订阅",
     "billing": "账单",
     "quotas": "配额",
-    "modelPlatform": "模型平台",
+    "modelPlatform": "模型计价与策略",
     "notifications": "通知提醒",
     "security": "安全设置",
     "settings": "租户设置",
@@ -1308,8 +1308,8 @@
   "modelPlatformPage": {
     "header": {
       "eyebrow": "Model Platform",
-      "title": "模型平台管理",
-      "description": "统一管理在线模型、自建模型、调用端点、协议、能力标签和非敏感配置。",
+      "title": "模型计价与策略",
+      "description": "配置模型计价规则与限流策略；供应商与模型在此为只读，其生命周期管理在运维台。",
       "badge": "待接入生产密钥"
     },
     "summary": {
@@ -2007,7 +2007,7 @@
   },
   "skillsPage": {
     "header": {
-      "title": "技能市场",
+      "title": "能力目录",
       "description": "Runos 已注册能力的只读目录：连接器、执行器与技能。注册、晋升、退役与认证在 opera「能力注册」完成。",
       "manageInOpera": "去 opera 能力注册管理"
     },
