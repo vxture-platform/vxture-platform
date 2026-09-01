@@ -100,9 +100,20 @@ export function isAgentProduct(item: ProductCatalogItem): boolean {
 }
 
 /** 展示名：副名（通常是品牌/英文名）优先，退回主名——与 /pricing 的 pricing-model 同判。 */
-export function catalogDisplayName(item: ProductCatalogItem): string {
+/**
+ * 展示名按 locale 取:中文页用主名 product_name(如「专注训练智能体」),英文页用副名
+ * product_nick(品牌/英文名);各自缺省时互相退回,再退回 code。避免中文页显英文名的混排。
+ */
+export function catalogDisplayName(
+  item: ProductCatalogItem,
+  locale?: string,
+): string {
+  const name = item.productName?.trim();
   const nick = item.productNick?.trim();
-  return nick ? nick : item.productName;
+  if (locale?.toLowerCase().startsWith("en")) {
+    return nick || name || item.productCode;
+  }
+  return name || nick || item.productCode;
 }
 
 function resolveServerBffBaseUrl(): string {

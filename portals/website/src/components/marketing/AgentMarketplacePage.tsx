@@ -93,7 +93,7 @@ export default function AgentMarketplacePage({
         const m = marketingForLocale(agent.marketing, locale);
         return {
           code: agent.productCode,
-          name: catalogDisplayName(agent),
+          name: catalogDisplayName(agent, locale),
           type: m?.tagline ?? agentKinds[agent.productType] ?? null,
           icon: productTypeIcon(agent.productType),
           description: agent.description ?? "",
