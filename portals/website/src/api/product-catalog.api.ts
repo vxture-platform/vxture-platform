@@ -36,8 +36,17 @@ export interface ProductCatalogItem {
   releaseVersion: string | null;
 }
 
-/** 目录 `product_type` 里属于「平台级产品」（L1/L2）的四型——/products 的读取口径。 */
+/**
+ * /products 的读取口径：目录里**平台级产品家族**（L1/L2）。
+ *
+ * 与 agent 家族同理，平台型也是 `<限定>_platform` 的分层 taxonomy：`general_platform`
+ * （通用平台）、`external_platform`（外部平台），历史上还有 model/capability/data/
+ * knowledge_platform。**按后缀 `_platform` 归族**，新增子型无需改这里。保留常量供别处
+ * 引用历史四型，但判定不再靠它点名。
+ */
 export const PLATFORM_PRODUCT_TYPES: readonly string[] = [
+  "general_platform",
+  "external_platform",
   "model_platform",
   "capability_platform",
   "data_platform",
@@ -45,7 +54,7 @@ export const PLATFORM_PRODUCT_TYPES: readonly string[] = [
 ];
 
 export function isPlatformProduct(item: ProductCatalogItem): boolean {
-  return PLATFORM_PRODUCT_TYPES.includes(item.productType);
+  return item.productType.endsWith("_platform");
 }
 
 /**

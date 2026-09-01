@@ -132,11 +132,15 @@
       "coming": "Coming soon"
     },
     "types": {
+      "general_platform": "General Platform",
+      "external_platform": "External Platform",
       "model_platform": "L1 · Model foundation",
       "capability_platform": "L1 · Ability orchestration",
       "data_platform": "L2 · Data intelligence",
       "knowledge_platform": "L2 · Knowledge intelligence",
       "agent": "L3 · Agent",
+      "general_agent": "L3 · General Agent",
+      "industry_agent": "L3 · Industry Agent",
       "client": "Client",
       "external": "External",
       "unknown": "Uncategorized"

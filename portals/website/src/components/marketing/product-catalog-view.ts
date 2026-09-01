@@ -16,6 +16,8 @@
 import type { IconName } from "@vxture/design-system";
 
 export type ProductTypeKey =
+  | "general_platform"
+  | "external_platform"
   | "model_platform"
   | "capability_platform"
   | "data_platform"
@@ -32,6 +34,8 @@ export type ProductTypeKey =
  * 源码里可静态看见，拼出来的键既查不到也不报错。
  */
 const TYPE_ICONS: Record<ProductTypeKey, IconName> = {
+  general_platform: "cube",
+  external_platform: "plugs-connected",
   model_platform: "cube",
   capability_platform: "sparkles",
   data_platform: "database",
@@ -48,8 +52,9 @@ export function productTypeKey(productType: string): ProductTypeKey {
   if (Object.prototype.hasOwnProperty.call(TYPE_ICONS, productType)) {
     return productType as ProductTypeKey;
   }
-  // 未登记的智能体子型（software_agent / embodied_agent…）仍归 agent 图标族，不落 unknown。
+  // 未登记的子型仍按 family 后缀归族，不落 unknown（否则显示未分类 + package 图标）。
   if (productType.endsWith("_agent")) return "agent";
+  if (productType.endsWith("_platform")) return "general_platform";
   return "unknown";
 }
 
