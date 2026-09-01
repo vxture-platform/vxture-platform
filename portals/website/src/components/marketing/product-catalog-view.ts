@@ -21,6 +21,8 @@ export type ProductTypeKey =
   | "data_platform"
   | "knowledge_platform"
   | "agent"
+  | "general_agent"
+  | "industry_agent"
   | "client"
   | "external"
   | "unknown";
@@ -35,15 +37,20 @@ const TYPE_ICONS: Record<ProductTypeKey, IconName> = {
   data_platform: "database",
   knowledge_platform: "server",
   agent: "agent",
+  general_agent: "agent",
+  industry_agent: "buildings",
   client: "desktop",
   external: "api",
   unknown: "package",
 };
 
 export function productTypeKey(productType: string): ProductTypeKey {
-  return Object.prototype.hasOwnProperty.call(TYPE_ICONS, productType)
-    ? (productType as ProductTypeKey)
-    : "unknown";
+  if (Object.prototype.hasOwnProperty.call(TYPE_ICONS, productType)) {
+    return productType as ProductTypeKey;
+  }
+  // 未登记的智能体子型（software_agent / embodied_agent…）仍归 agent 图标族，不落 unknown。
+  if (productType.endsWith("_agent")) return "agent";
+  return "unknown";
 }
 
 export function productTypeIcon(productType: string): IconName {

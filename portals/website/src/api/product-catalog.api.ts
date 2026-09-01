@@ -48,9 +48,15 @@ export function isPlatformProduct(item: ProductCatalogItem): boolean {
   return PLATFORM_PRODUCT_TYPES.includes(item.productType);
 }
 
-/** /appcenter 的读取口径：目录里 product_type='agent' 的产品。 */
+/**
+ * /appcenter 的读取口径：目录里**智能体家族**的产品。
+ *
+ * agent 类型是分层 taxonomy：`general_agent`（通用智能体）、`industry_agent`（行业智能体），
+ * 后续可能有 software/embodied 等子型。product_type 是自由文本(DDL 无 CHECK),因此按
+ * **后缀 `_agent`** 归族(外加历史裸 `agent`),而不是点名单个串——新增子型无需改这里。
+ */
 export function isAgentProduct(item: ProductCatalogItem): boolean {
-  return item.productType === "agent";
+  return item.productType === "agent" || item.productType.endsWith("_agent");
 }
 
 /** 展示名：副名（通常是品牌/英文名）优先，退回主名——与 /pricing 的 pricing-model 同判。 */

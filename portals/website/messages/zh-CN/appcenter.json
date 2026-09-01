@@ -13,6 +13,10 @@
     "title": "智能体阵容",
     "description": "这份清单直接来自平台产品目录：已上线的显示「正式版」并可直接订阅，仍在打磨的显示「开发中」，随真实上线逐个转为可订阅。",
     "type": "智能体",
+    "kinds": {
+      "general_agent": "通用智能体",
+      "industry_agent": "行业智能体"
+    },
     "valueLabel": "业务价值",
     "items": [],
     "developing": [
