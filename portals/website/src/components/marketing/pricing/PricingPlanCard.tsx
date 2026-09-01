@@ -242,6 +242,8 @@ export function PricingPlanCard({
                   // plan_prices.cycle_unit，传一个该档没挂价的周期必失配。
                   shown.unit,
                 )}
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 {isFree ? t("freeCta") : t("subscribe", { plan: plan.name })}
               </a>
