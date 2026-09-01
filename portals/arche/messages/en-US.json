@@ -14,6 +14,7 @@
   },
   "common": {
     "actionFailed": "Something went wrong",
+    "adjustFiltersHint": "Try adjusting the filters",
     "cardsRetired": "Card view has been retired; use the list",
     "close": "Close",
     "copied": "Copied to clipboard",
@@ -23,6 +24,7 @@
     "copyRow": "Copy row",
     "deleteFailed": "Could not delete",
     "edit": "Edit",
+    "export": "Export",
     "loadFailed": "Could not load",
     "loadMore": "Load more",
     "loadMoreFailed": "Could not load more",
