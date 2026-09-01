@@ -37,8 +37,11 @@ const DEFAULT_ARCHE_BASE_URL =
     ? "https://g.vxture.com"
     : "http://localhost:3050";
 
+// 用 `|| ` 而非 `?? `：构建期若 vars.ARCHE_BASE_URL 未设，build-arg 会烘入**空串**（不是
+// undefined），`?? ` 收不住空串会让 URL 塌成相对路径 `/roles`（死链）。`|| ` 把空串也当未设，
+// 回落到占位默认，至少是个绝对地址而非破链。
 const ARCHE_BASE_URL = normalizeBaseUrl(
-  process.env.NEXT_PUBLIC_ARCHE_URL ?? DEFAULT_ARCHE_BASE_URL,
+  process.env.NEXT_PUBLIC_ARCHE_URL?.trim() || DEFAULT_ARCHE_BASE_URL,
 );
 
 /** admin 的 Atlas 商业页（grants / price-rules / policies / quotas）。 */

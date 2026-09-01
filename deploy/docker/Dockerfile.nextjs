@@ -71,6 +71,10 @@ ARG NEXT_PUBLIC_WEBSITE_BFF_URL
 # cookie). Without it the portal falls back to NEXT_PUBLIC_API_URL (api.vxture.com)
 # and the __Host- RP cookie set on y.vxture.com is never sent → login loops.
 ARG NEXT_PUBLIC_ADMIN_BFF_URL
+# opera portal: 治理平面 arche 的公开来源，用于 RBAC 跳转（角色/权限策略）。三平面
+# 拆分后 opera 的鉴权管理入口指向 arche。arche 真名不入仓（占位 g.vxture.com），故必须
+# 在构建期由 vars.ARCHE_BASE_URL 注入烘入浏览器包；未注入则回落 g.vxture.com 占位（死链）。
+ARG NEXT_PUBLIC_ARCHE_URL
 
 ENV NEXT_STANDALONE=1
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -83,6 +87,7 @@ ENV NEXT_PUBLIC_WEBSITE_URL=${NEXT_PUBLIC_WEBSITE_URL}
 ENV NEXT_PUBLIC_CONSOLE_BFF_URL=${NEXT_PUBLIC_CONSOLE_BFF_URL}
 ENV NEXT_PUBLIC_WEBSITE_BFF_URL=${NEXT_PUBLIC_WEBSITE_BFF_URL}
 ENV NEXT_PUBLIC_ADMIN_BFF_URL=${NEXT_PUBLIC_ADMIN_BFF_URL}
+ENV NEXT_PUBLIC_ARCHE_URL=${NEXT_PUBLIC_ARCHE_URL}
 
 # Build only the workspace packages that this portal actually depends on.
 #
