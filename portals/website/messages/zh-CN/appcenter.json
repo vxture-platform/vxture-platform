@@ -2,18 +2,31 @@
   "hero": {
     "eyebrow": "Agent Marketplace",
     "title": "智能体广场",
-    "description": "汇聚平台上已上线、面向客户开放的数字员工、专业智能体与具身智能体，登录即可申请试用，按套餐接入与编排。",
+    "description": "汇聚平台上已上线、面向客户开放的数字员工、专业智能体与具身智能体，登录即可免费订阅，按套餐接入与编排。",
     "primaryAction": "进入工作台",
-    "guestPrimaryAction": "申请试用",
+    "guestPrimaryAction": "免费开始",
     "secondaryAction": "浏览智能体",
     "highlights": ["数字员工", "软件智能体", "具身智能体", "行业智能体"]
   },
   "agents": {
     "eyebrow": "Agents",
-    "title": "已上线的智能体",
-    "description": "这份清单直接来自平台产品目录：出现在这里的每一个，都是已登记、已上线并对客户可见的智能体产品。",
+    "title": "智能体阵容",
+    "description": "这份清单直接来自平台产品目录：已上线的显示「正式版」并可直接订阅，仍在打磨的显示「开发中」，随真实上线逐个转为可订阅。",
     "type": "智能体",
-    "action": "申请试用",
+    "valueLabel": "业务价值",
+    "items": [{ "code": "vxtpl", "status": "available" }],
+    "badges": {
+      "stable": "正式版",
+      "active": "已开通",
+      "developing": "开发中"
+    },
+    "actions": {
+      "subscribe": "订阅",
+      "upgrade": "升级",
+      "enter": "进入工作台",
+      "detail": "产品介绍",
+      "coming": "敬请期待"
+    },
     "empty": {
       "title": "更多智能体陆续上线",
       "description": "目前还没有对外开放的智能体产品，上线后会自动出现在这里。"

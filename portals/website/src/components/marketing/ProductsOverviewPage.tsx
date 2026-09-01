@@ -275,12 +275,18 @@ export default function ProductsOverviewPage({
                                   product.code,
                                   "upgrade",
                                 )}
+                                target="_blank"
+                                rel="noopener noreferrer"
                               >
                                 {t("catalog.actions.upgrade")}
                               </a>
                             </Button>
                             <Button asChild>
-                              <a href={consoleEntryUrl}>
+                              <a
+                                href={consoleEntryUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
                                 {t("catalog.actions.enter")}
                               </a>
                             </Button>

@@ -608,6 +608,8 @@ export default function Header() {
                 <a
                   href={consoleUrl}
                   title={consoleLabel}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="text-sm font-medium text-vx-gray-700 transition-colors duration-200 hover:text-vx-primary focus-visible:outline-none dark:text-vx-text-secondary dark:hover:text-vx-brand-300"
                 >
                   {consoleLabel}

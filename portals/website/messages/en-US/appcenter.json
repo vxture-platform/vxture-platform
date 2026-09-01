@@ -2,9 +2,9 @@
   "hero": {
     "eyebrow": "Agent Marketplace",
     "title": "Agent Marketplace",
-    "description": "The agents that are live on the platform and open to customers — digital employees, professional software agents and embodied agents. Sign in to request a trial, then integrate and orchestrate them by plan.",
+    "description": "The agents that are live on the platform and open to customers — digital employees, professional software agents and embodied agents. Sign in to subscribe for free, then integrate and orchestrate them by plan.",
     "primaryAction": "Open Console",
-    "guestPrimaryAction": "Request Trial",
+    "guestPrimaryAction": "Get started free",
     "secondaryAction": "Browse Agents",
     "highlights": [
       "Digital Employees",
@@ -15,10 +15,23 @@
   },
   "agents": {
     "eyebrow": "Agents",
-    "title": "Agents available now",
-    "description": "This list comes straight from the platform product catalog: every entry here is a registered, live agent product that is visible to customers.",
+    "title": "The agent lineup",
+    "description": "This list comes straight from the platform product catalog: live agents show a Stable badge and can be subscribed to directly, while those still in the works show In development — each flips to subscribable as it truly ships.",
     "type": "Agent",
-    "action": "Request Trial",
+    "valueLabel": "Value",
+    "items": [{ "code": "vxtpl", "status": "available" }],
+    "badges": {
+      "stable": "Stable",
+      "active": "Active",
+      "developing": "In development"
+    },
+    "actions": {
+      "subscribe": "Subscribe",
+      "upgrade": "Upgrade",
+      "enter": "Enter workspace",
+      "detail": "Product details",
+      "coming": "Coming soon"
+    },
     "empty": {
       "title": "More agents are on the way",
       "description": "No agent product is open to customers yet. New ones appear here automatically once they go live."
