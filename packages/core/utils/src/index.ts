@@ -80,3 +80,16 @@ export type {
   ProductTypeFamily,
   ProductTypeDef,
 } from "./product-taxonomy";
+
+// ============================================
+// Release Stage (product 成熟度轴单一权威源)
+// ============================================
+
+export {
+  RELEASE_STAGES,
+  RELEASE_STAGE_DEFS,
+  isValidReleaseStage,
+  releaseStageLabel,
+  isReleaseStageSubscribable,
+} from "./release-stage";
+export type { ReleaseStage, ReleaseStageDef } from "./release-stage";

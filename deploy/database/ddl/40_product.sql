@@ -44,10 +44,13 @@ CREATE TABLE product.products (
     icon_url                 varchar(512),
     sort                     int          NOT NULL DEFAULT 0,
     config                   jsonb,                                   -- 合并 agent.config_json + application.metadata
+    marketing                jsonb,                                   -- 营销内容(双语富结构 {zh|en:{tagline,value,highlights[],tags[],industries[],detail}});admin 产品目录录入,官网据此渲染
     release_version          varchar(64),                            -- 对外发布号
     build_number             varchar(64),                            -- 内部构建号
     released_at              timestamptz,
     status                   varchar(32)  NOT NULL DEFAULT 'active',
+    release_stage            varchar(16)  NOT NULL DEFAULT 'developing', -- 成熟度轴:ga=正式版/beta=公测版/developing=开发中。与 status(生命周期)、visibility(可见)正交;新产品默认开发中
+
     is_customer_visible  boolean      NOT NULL DEFAULT true,   -- 展示可见性（客户端/customer realm）——独立轴，不派生自 status/is_active/is_public/is_enabled
     is_workforce_visible boolean      NOT NULL DEFAULT true,   -- 展示可见性（运营端/workforce realm）
     origin                   varchar(16)  NOT NULL DEFAULT 'self',    -- 来源轴：self=自建/third_party=三方接入/other；产品发布管理 2026-08-12 引入
@@ -59,11 +62,13 @@ CREATE TABLE product.products (
     deleted_at               timestamptz,
     CONSTRAINT uq_products_product_code UNIQUE (product_code),
     CONSTRAINT chk_products_status CHECK (status IN ('active','inactive','draft','deprecated')),
+    CONSTRAINT chk_products_release_stage CHECK (release_stage IN ('ga','beta','developing')),
     CONSTRAINT chk_products_origin CHECK (origin IN ('self','third_party','other')),
     CONSTRAINT chk_products_origin_provider CHECK (origin <> 'third_party' OR origin_provider IS NOT NULL)
 );
 CREATE INDEX idx_products_category_id ON product.products (category_id);
 CREATE INDEX idx_products_status      ON product.products (status);
+CREATE INDEX idx_products_release_stage ON product.products (release_stage);
 CREATE INDEX idx_products_origin      ON product.products (origin);
 CREATE INDEX idx_products_deleted_at  ON product.products (deleted_at);
 CREATE INDEX idx_products_tags_gin    ON product.products USING gin (tags);
