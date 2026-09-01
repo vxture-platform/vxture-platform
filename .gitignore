@@ -223,4 +223,7 @@ docs/architecture/package-architecture.html
 # Local dev data layer (deploy/dev/compose.dev.yml bind-mounts these)
 deploy/dev/data/
 
+# Generated at deploy time by 30-deploy-platform-stack.sh (content-digest pin overlay).
+deploy/compose.pinned.yml
+
 # End of additional ignores

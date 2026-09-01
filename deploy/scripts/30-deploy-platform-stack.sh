@@ -89,25 +89,76 @@ else
 fi
 echo "  如 registry 需要认证，请先在服务器上完成人工认证；本脚本不读取或保存 registry credential。"
 
-# ── 拉取最新镜像 ──────────────────────────────────────────────────────────────
+# ── 生成 content-digest pin 覆盖 ─────────────────────────────────────────────
+# 根治「每次发版全量重建」（2026-09-01 事故 + 坐实，详见 lib/pin-image-digests.sh）：
+# 14 个服务共用一个全局 ${VX_IMAGE_TAG}，未变更镜像的 B11 retag 把单 manifest 重包成
+# 新 index → 顶层引用 digest 每版必变 → compose 认成「配置变了」→ 全 14 个重建，在
+# 2C2G 上一次齐重建把机器压垮。这里把每个服务钉到它 **amd64 内容 digest**：内容没变
+# → digest 不变 → compose 不重建；内容变了 → 只那个重建。fail-closed：任一镜像解析
+# 不到 digest 即中止（此刻尚未拉取/替换，安全）。
+cd "$COMPOSE_DIR"
+echo ""
+echo "==> [3/4] 生成 content-digest pin 覆盖（compose.pinned.yml）"
+. "$COMPOSE_DIR/scripts/lib/pin-image-digests.sh"
+PINNED_FILE="$COMPOSE_DIR/compose.pinned.yml"
+svc_images_json="$(docker compose -f "$COMPOSE_FILE" config --format json)" || {
+  echo "错误：docker compose config 失败，无法生成 pin 覆盖。" >&2
+  exit 1
+}
+{
+  echo "# 自动生成（30-deploy-platform-stack.sh）——请勿手改、勿提交。"
+  echo "# 把每个服务钉到 amd64 内容 digest，未变更服务因此不会被误重建。"
+  echo "# 每次部署按当前 VX_IMAGE_TAG（=$VX_IMAGE_TAG）重新生成。"
+  echo "services:"
+} > "$PINNED_FILE"
+while IFS=$'\t' read -r svc image; do
+  [ -n "$svc" ] || continue
+  case "$image" in
+    *@sha256:*) pinned="$image" ;;                    # 已是 digest，原样
+    */*:*)
+      pinned="$(pin_image_ref "$image")" || {
+        echo "错误：服务 $svc（$image）解析 amd64 digest 失败，中止部署。" >&2
+        exit 1
+      }
+      ;;
+    *) pinned="$image" ;;                             # 无 tag/非仓库镜像，原样（不应出现）
+  esac
+  printf '  %s:\n    image: %s\n' "$svc" "$pinned" >> "$PINNED_FILE"
+  echo "  -- $svc -> $pinned"
+done < <(printf '%s' "$svc_images_json" | node -e '
+  let s = "";
+  process.stdin.on("data", d => (s += d));
+  process.stdin.on("end", () => {
+    const c = JSON.parse(s);
+    for (const [k, v] of Object.entries(c.services || {})) {
+      if (v && v.image) process.stdout.write(k + "\t" + v.image + "\n");
+    }
+  });')
+
+# 此后所有 compose 调用都叠加 pin 覆盖：base 定义 + digest 钉死。
+COMPOSE_FILES=(-f "$COMPOSE_FILE" -f "$PINNED_FILE")
 
 # ── 拉取 + 替换（逐服务，2C2G 省内存）─────────────────────────────────────────
 # worker-01 = 2C2G。整栈一次性 `pull`（并行解压）+ `up -d`（尤其容器改名会全量重建）
 # 会把内存打爆、拖垮 tailnet（2026-07-15 事故）。改为**逐服务**：一次拉一个、起一个，
-# 停旧起新内存 1:1，全程稳。变更少时也只有受影响的服务真正重建。
+# 停旧起新内存 1:1，全程稳。配合上面的 content-digest pin，未变更服务的 image 引用不变
+# → compose 直接跳过，真正做到「只有受影响的服务重建」。
 echo ""
-echo "==> [3/4]+[4/4] 逐服务拉取并替换（memory-safe）"
-cd "$COMPOSE_DIR"
+echo "==> [4/4] 逐服务拉取并替换（memory-safe）"
 # VX_IMAGE_* 与 VX_WORKER0x_TAILNET_IP 已由 load_compose_env 导出，此处不再重复。
-SERVICES="$(docker compose -f compose.platform.yml config --services)"
+SERVICES="$(docker compose "${COMPOSE_FILES[@]}" config --services)"
 for svc in $SERVICES; do
   echo "  -- $svc: pull"
-  docker compose -f compose.platform.yml pull "$svc" 2>&1 | grep -iE "Pulled|already|error|warn" | tail -1 || true
+  docker compose "${COMPOSE_FILES[@]}" pull "$svc" 2>&1 | grep -iE "Pulled|already|error|warn" | tail -1 || true
   echo "  -- $svc: up -d"
-  docker compose -f compose.platform.yml up -d --no-deps "$svc"
+  docker compose "${COMPOSE_FILES[@]}" up -d --no-deps "$svc"
 done
 # 收尾：移除改名/退役后的孤儿容器（已在跑的服务不重建）。
-docker compose -f compose.platform.yml up -d --remove-orphans
+docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans
+
+# 发布 tag 落 marker 供追溯：docker ps 现在显示 @sha256 而非 tag，核验「部署落没落」
+# 改看内容 digest / health version，这里额外记下本次发布号。
+printf '%s\n' "$VX_IMAGE_TAG" > "$RUNTIME_DIR/.last-deploy-tag" 2>/dev/null || true
 
 # ── 等待就绪 ──────────────────────────────────────────────────────────────────
 
@@ -120,7 +171,7 @@ echo "==> 等待容器就绪（最多 ${VX_READINESS_TIMEOUT:-90}s）"
 deadline=$(( $(date +%s) + ${VX_READINESS_TIMEOUT:-90} ))
 while :; do
   # state 非 running，或 health 仍为 starting/unhealthy 的容器视为未就绪；无 healthcheck 的 running 容器视为就绪。
-  pending="$(docker compose -f compose.platform.yml ps --format '{{.Name}} {{.State}} {{.Health}}' \
+  pending="$(docker compose "${COMPOSE_FILES[@]}" ps --format '{{.Name}} {{.State}} {{.Health}}' \
     | awk '$2 != "running" || $3 == "starting" || $3 == "unhealthy" { print $1 "(" $2 "/" $3 ")" }')"
   if [ -z "$pending" ]; then
     echo "  所有容器就绪。"
@@ -128,13 +179,13 @@ while :; do
   fi
   if [ "$(date +%s)" -ge "$deadline" ]; then
     echo "  !! 超时仍未就绪：$pending" >&2
-    docker compose -f compose.platform.yml ps
+    docker compose "${COMPOSE_FILES[@]}" ps
     exit 1
   fi
   sleep 3
 done
 
 echo ""
-docker compose -f compose.platform.yml ps --format "table {{.Name}}\t{{.Status}}"
+docker compose "${COMPOSE_FILES[@]}" ps --format "table {{.Name}}\t{{.Status}}"
 echo ""
 echo "平台栈已启动。下一步：bash scripts/40-verify-platform-runtime.sh"
