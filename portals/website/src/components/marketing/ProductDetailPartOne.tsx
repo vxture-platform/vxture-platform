@@ -55,7 +55,9 @@ export default function ProductDetailPartOne() {
             </div>
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <Button asChild size="xl" className="px-5 hover:bg-vx-brand-500">
-                <Link href="/signin">{t("hero.primaryAction")}</Link>
+                <Link href="/pricing?product=arda">
+                  {t("hero.primaryAction")}
+                </Link>
               </Button>
               <Button
                 asChild
@@ -206,7 +208,7 @@ export default function ProductDetailPartOne() {
             size="xl"
             className="w-max px-5 hover:bg-vx-brand-500"
           >
-            <Link href="/signin">{t("cta.action")}</Link>
+            <Link href="/pricing?product=arda">{t("cta.action")}</Link>
           </Button>
         </div>
       </section>

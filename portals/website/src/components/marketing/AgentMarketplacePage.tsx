@@ -3,22 +3,15 @@
 /**
  * AgentMarketplacePage.tsx - /appcenter 智能体广场（营销页）
  *
- * 清单 = 两个来源拼起来的完整阵容：
- *   A. 已发布（正式版）：公开产品目录里 product_type='agent' 的产品（appcenter/page.tsx
- *      在服务端取 `GET /api/products/catalog`、按 isAgentProduct 分区后传入）。目录闸门本身
- *      就是 is_customer_visible=true AND status='active' → 能回来的都是已登记、已上线、对客户
- *      可见的产品，因此**一律按正式版（available）呈现，状态从库里得，不再受任何文案开关闸住**。
- *      名 / 描述 / 版本 / 图标取目录真列；appcenter.json `agents.items` 只做可选文案覆盖
- *      （name/icon/description/value 高亮框），缺省全部退回目录。
- *   B. 开发中：库里还没有的规划智能体，在 appcenter.json `agents.developing` 里**页面写死**
- *      （key/name/icon/description，双语各一份）→ 灰徽标「开发中」+ 禁用「敬请期待」。真上线后
- *      从 developing 挪走、登记进目录，即自动转正式版。
+ * 清单**全部来自 DB**：公开产品目录里 product_type ∈ 智能体家族的产品（appcenter/page.tsx
+ * 服务端取 `GET /api/products/catalog`、按 isAgentProduct 分区后传入）。含开发中的——12 个
+ * 开发中智能体已是真产品行（release_stage=developing）。名/描述/版本/图标取目录真列，
+ * 营销内容（业务价值/能力亮点/类型标签）取目录 `marketing` jsonb（DB 权威源，官网不再写死）。
  *
- * 2026-09-01：卡片对齐 /products 平台级产品卡（ProductsOverviewPage）的全谱三态 ——
- *   1. developing（B 类，写死）：灰徽标「开发中」+ 禁用的「敬请期待」按钮；
- *   2. available 未订阅（A 类）：右上角徽标「正式版 / Stable」+ 底部「订阅」（直接下单 free
- *      档，去掉了「试用」概念）；
- *   3. available 已订阅（A 类）：徽标「已开通」+ 档位 + 底部「升级 / 进入工作台」。
+ * 三态徽标 + 订阅按钮由 DB `release_stage` 驱动：
+ *   - developing（开发中）：灰徽标 + 禁用「敬请期待」，不可订；
+ *   - ga（正式版 / Stable）/ beta（公测版 / Beta）：可订——未订「订阅」、已订「已开通 + 档位 +
+ *     升级 / 进入工作台」。
  * 订阅态读 website-bff 的 product-subscriptions；未登录一律按未订阅呈现。
  *
  * 所有指向 console（独立站）的链接都 target=_blank + rel=noopener noreferrer，不让营销页
@@ -46,45 +39,26 @@ import {
 } from "@/api/subscription.api";
 import {
   catalogDisplayName,
+  marketingForLocale,
   type ProductCatalogItem,
 } from "@/api/product-catalog.api";
 import { productTypeIcon } from "./product-catalog-view";
 import { useAuthStore } from "@/stores/auth.store";
 import AnimatedHeroBg from "./AnimatedHeroBg";
 
-/**
- * appcenter.json `agents.items` 里一条**可选**营销文案：按 code 挂到目录智能体上做覆盖，
- * 字段全部可缺（缺省退回目录）。注意——不再有 status：已在目录里 = 已发布 = 正式版。
- */
-type MarketingCopy = {
-  code: string;
-  name?: string;
-  icon?: IconName;
-  description?: string;
-  value?: string;
-};
-
-/** appcenter.json `agents.developing` 里一条**页面写死**的开发中智能体（库里还没有的规划项）。 */
-type DevelopingCopy = {
-  key: string;
-  name: string;
-  /** 类型标签，如「数字员工 · 通用类」；缺省退回通用「智能体」。 */
-  type?: string;
-  icon?: IconName;
-  description?: string;
-  value?: string;
-};
-
 type AgentCard = {
-  /** 正式版取目录 productCode；开发中取写死项的 key（仅作 React key，不拼 console/详情链接）。 */
   code: string;
   name: string;
-  /** per-agent 类型标签覆盖；null = 用通用「智能体」。 */
+  /** per-agent 类型标签（marketing.tagline，缺省退回 kinds 映射）；null = 用通用「智能体」。 */
   type: string | null;
   icon: IconName;
   description: string;
+  /** 业务价值（marketing.value）；无则不画。 */
   value: string | null;
-  status: "available" | "coming";
+  /** 能力亮点（marketing.highlights）。 */
+  highlights: string[];
+  /** 成熟度轴：ga=正式版 / beta=公测版 / developing=开发中。 */
+  releaseStage: string;
   version: string | null;
 };
 
@@ -101,51 +75,35 @@ export default function AgentMarketplacePage({
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
   const highlights = t.raw("hero.highlights") as string[];
-  const copyItems = t.raw("agents.items") as MarketingCopy[];
-  const developingItems = t.raw("agents.developing") as DevelopingCopy[];
-  // product_type → 类型标签（通用智能体 / 行业智能体）；未登记的子型退回通用「智能体」。
+  // product_type → 类型标签（通用智能体 / 行业智能体）；无 marketing.tagline 时退回它。
   const agentKinds = t.raw("agents.kinds") as Record<string, string>;
   const hasTenantSession = isAuthenticated && Boolean(user);
   const consoleEntryUrl = buildConsoleEntryUrl(locale);
 
-  // 完整阵容 = 目录里已发布的正式版（A，状态从库里得）+ 页面写死的开发中（B）。
-  // A：目录闸门已保证「已登记+上线+可见」，一律 available；文案只做可选覆盖，不定状态。
-  // B：库里没有的规划项，从 agents.developing 写死。vxtpl 置顶，正式版永远排在开发中之前。
+  // 完整阵容全部来自 DB 目录；营销内容取 marketing jsonb。vxtpl 置顶，其余保持目录顺序。
   const cards = useMemo<AgentCard[] | null>(() => {
     if (agents === null) return null;
-    const copyByCode = new Map(copyItems.map((item) => [item.code, item]));
-    const live: AgentCard[] = [...agents]
+    return [...agents]
       .sort(
         (a, b) =>
           (a.productCode === "vxtpl" ? -1 : 0) -
           (b.productCode === "vxtpl" ? -1 : 0),
       )
       .map((agent) => {
-        const copy = copyByCode.get(agent.productCode);
+        const m = marketingForLocale(agent.marketing, locale);
         return {
           code: agent.productCode,
-          name: copy?.name ?? catalogDisplayName(agent),
-          type: agentKinds[agent.productType] ?? null,
-          icon: copy?.icon ?? productTypeIcon(agent.productType),
-          description: copy?.description ?? agent.description ?? "",
-          value: copy?.value ?? null,
-          // 在目录里 = 已发布 = 正式版；状态从库里得，不受文案开关影响。
-          status: "available" as const,
+          name: catalogDisplayName(agent),
+          type: m?.tagline ?? agentKinds[agent.productType] ?? null,
+          icon: productTypeIcon(agent.productType),
+          description: agent.description ?? "",
+          value: m?.value ?? null,
+          highlights: m?.highlights ?? [],
+          releaseStage: agent.releaseStage,
           version: agent.releaseVersion,
         };
       });
-    const developing: AgentCard[] = developingItems.map((item) => ({
-      code: item.key,
-      name: item.name,
-      type: item.type ?? null,
-      icon: item.icon ?? "agent",
-      description: item.description ?? "",
-      value: item.value ?? null,
-      status: "coming" as const,
-      version: null,
-    }));
-    return [...live, ...developing];
-  }, [agents, copyItems, developingItems, agentKinds]);
+  }, [agents, agentKinds, locale]);
 
   // 登录租户各产品订阅态（code → state）；未登录为空 → 卡片按未订阅呈现。与 /products 同源。
   const [subs, setSubs] = useState<Map<string, ProductSubscriptionState>>(
@@ -266,14 +224,20 @@ export default function AgentMarketplacePage({
           ) : (
             <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {cards.map((agent) => {
-                const available = agent.status === "available";
+                // 成熟度轴驱动三态:developing 不可订,ga/beta 可订。
+                const developing = agent.releaseStage === "developing";
                 const subState = subs.get(agent.code);
-                const subscribed = available && subState?.subscribed === true;
+                const subscribed = !developing && subState?.subscribed === true;
                 const tierLabel =
                   subscribed && subState?.tier
                     ? subState.tier.charAt(0).toUpperCase() +
                       subState.tier.slice(1)
                     : null;
+                const stageBadge = subscribed
+                  ? t("agents.badges.active")
+                  : agent.releaseStage === "beta"
+                    ? t("agents.badges.beta")
+                    : t("agents.badges.stable");
                 return (
                   <article
                     key={agent.code}
@@ -293,12 +257,14 @@ export default function AgentMarketplacePage({
                           </h3>
                         </div>
                       </div>
-                      {available ? (
+                      {developing ? (
+                        <span className="shrink-0 rounded-full border border-vx-gray-200 bg-vx-gray-50 px-2.5 py-1 text-xs font-medium text-vx-gray-500 dark:border-vx-gray-700 dark:bg-vx-gray-800/60 dark:text-vx-gray-400">
+                          {t("agents.badges.developing")}
+                        </span>
+                      ) : (
                         <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                           <span className="rounded-full border border-vx-info-100 bg-vx-info-50 px-2.5 py-1 text-xs font-medium text-vx-info-700 dark:border-vx-info-400/20 dark:bg-vx-brand-950/30 dark:text-vx-info-200">
-                            {subscribed
-                              ? t("agents.badges.active")
-                              : t("agents.badges.stable")}
+                            {stageBadge}
                           </span>
                           {tierLabel ? (
                             <span className="rounded-full border border-vx-brand-200 bg-vx-brand-50 px-2.5 py-1 text-xs font-semibold text-vx-brand-700 dark:border-vx-brand-400/30 dark:bg-vx-brand-950/40 dark:text-vx-brand-200">
@@ -306,10 +272,6 @@ export default function AgentMarketplacePage({
                             </span>
                           ) : null}
                         </div>
-                      ) : (
-                        <span className="shrink-0 rounded-full border border-vx-gray-200 bg-vx-gray-50 px-2.5 py-1 text-xs font-medium text-vx-gray-500 dark:border-vx-gray-700 dark:bg-vx-gray-800/60 dark:text-vx-gray-400">
-                          {t("agents.badges.developing")}
-                        </span>
                       )}
                     </div>
 
@@ -318,7 +280,7 @@ export default function AgentMarketplacePage({
                         {agent.description}
                       </p>
                     ) : null}
-                    {/* 业务价值只有营销文案才有；目录里的智能体没有这一段就不画空框 */}
+                    {/* 业务价值来自 DB marketing；没录入就不画空框 */}
                     {agent.value ? (
                       <div className="mt-5 rounded-md border border-vx-brand-100 bg-vx-brand-50/50 p-4 dark:border-vx-brand-400/15 dark:bg-vx-brand-950/20">
                         <p className="text-xs font-semibold text-vx-brand-600 dark:text-vx-brand-300">
@@ -327,6 +289,19 @@ export default function AgentMarketplacePage({
                         <p className="mt-2 text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200">
                           {agent.value}
                         </p>
+                      </div>
+                    ) : null}
+                    {/* 能力亮点（marketing.highlights）——有就以标签排布 */}
+                    {agent.highlights.length > 0 ? (
+                      <div className="mt-4 flex flex-wrap gap-1.5">
+                        {agent.highlights.map((h) => (
+                          <span
+                            key={h}
+                            className="rounded-full bg-vx-gray-100 px-2.5 py-0.5 text-xs font-normal text-vx-gray-600 dark:bg-vx-gray-800 dark:text-vx-gray-300"
+                          >
+                            {h}
+                          </span>
+                        ))}
                       </div>
                     ) : null}
 
@@ -338,20 +313,17 @@ export default function AgentMarketplacePage({
                             {agent.version}
                           </span>
                         ) : null}
-                        {/* 详情页只对已发布的目录产品有意义；开发中项没有 /products 页 */}
-                        {available ? (
-                          <Link
-                            href={`/products/${agent.code}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex h-10 items-center text-xs font-normal text-vx-gray-400 underline-offset-4 transition hover:text-vx-gray-600 hover:underline dark:text-vx-gray-500 dark:hover:text-vx-gray-300"
-                          >
-                            {t("agents.actions.detail")}
-                          </Link>
-                        ) : null}
+                        <Link
+                          href={`/products/${agent.code}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex h-10 items-center text-xs font-normal text-vx-gray-400 underline-offset-4 transition hover:text-vx-gray-600 hover:underline dark:text-vx-gray-500 dark:hover:text-vx-gray-300"
+                        >
+                          {t("agents.actions.detail")}
+                        </Link>
                       </div>
                       <div className="flex items-center gap-2">
-                        {!available ? (
+                        {developing ? (
                           <Button
                             variant="outline"
                             size="md"
@@ -386,18 +358,14 @@ export default function AgentMarketplacePage({
                             </Button>
                           </>
                         ) : (
+                          // 未订阅:先去官网定价页看价格+功能,登录后置(与平台级产品一致)。
                           <Button asChild>
-                            <a
-                              href={buildConsoleSubscribeUrl(
-                                locale,
-                                agent.code,
-                                "subscribe",
-                              )}
+                            <Link
+                              href={`/pricing?product=${agent.code}`}
                               target="_blank"
-                              rel="noopener noreferrer"
                             >
                               {t("agents.actions.subscribe")}
-                            </a>
+                            </Link>
                           </Button>
                         )}
                       </div>

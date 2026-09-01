@@ -33,27 +33,12 @@ import {
 } from "@/api/subscription.api";
 import {
   catalogDisplayName,
+  marketingForLocale,
   type ProductCatalogItem,
 } from "@/api/product-catalog.api";
 import { useAuthStore } from "@/stores/auth.store";
 import AnimatedHeroBg from "./AnimatedHeroBg";
 import { productTypeIcon, productTypeKey } from "./product-catalog-view";
-
-/** products.json `catalog.items` 里一条营销文案：按 code 挂到目录产品上，字段全部可缺。 */
-type MarketingCopy = {
-  code: string;
-  name?: string;
-  icon?: IconName;
-  description?: string;
-  value?: string;
-  /** available = 官网已有可售内容（详情 / 套餐）；缺省按 coming 呈现 */
-  status?: "available" | "coming";
-  /**
-   * 未登录时是否可见（可配置，默认 true=可见）。false → 未登录隐藏该卡；
-   * 登录后一律可见。per-card 配置在 products.json 的对应 item 上设置。
-   */
-  loggedOutVisible?: boolean;
-};
 
 type ProductCard = {
   code: string;
@@ -61,9 +46,12 @@ type ProductCard = {
   typeLabel: string;
   icon: IconName;
   description: string;
+  /** 业务价值（marketing.value）；无则不画。 */
   value: string | null;
-  status: "available" | "coming";
-  loggedOutVisible: boolean;
+  /** 能力亮点（marketing.highlights）。 */
+  highlights: string[];
+  /** 成熟度轴：ga=正式版 / beta=公测版 / developing=开发中。 */
+  releaseStage: string;
   version: string | null;
 };
 
@@ -89,26 +77,24 @@ export default function ProductsOverviewPage({
   const user = useAuthStore((state) => state.user);
   const hasSession = isAuthenticated && Boolean(user);
   const consoleEntryUrl = buildConsoleEntryUrl(locale);
-  const copyItems = t.raw("catalog.items") as MarketingCopy[];
 
-  // 目录产品 × 营销文案 → 卡片。目录是清单的唯一来源，文案只是按 code 挂上去的装饰。
+  // 卡片全部来自 DB 目录;名/描述/版本取真列,营销内容取 marketing jsonb,三态由 release_stage 得。
   const cards = useMemo<ProductCard[]>(() => {
-    const copyByCode = new Map(copyItems.map((item) => [item.code, item]));
     return (products ?? []).map((product) => {
-      const copy = copyByCode.get(product.productCode);
+      const m = marketingForLocale(product.marketing, locale);
       return {
         code: product.productCode,
-        name: copy?.name ?? catalogDisplayName(product),
+        name: catalogDisplayName(product),
         typeLabel: t(`catalog.types.${productTypeKey(product.productType)}`),
-        icon: copy?.icon ?? productTypeIcon(product.productType),
-        description: copy?.description ?? product.description ?? "",
-        value: copy?.value ?? null,
-        status: copy?.status ?? "coming",
-        loggedOutVisible: copy?.loggedOutVisible !== false,
+        icon: productTypeIcon(product.productType),
+        description: product.description ?? "",
+        value: m?.value ?? null,
+        highlights: m?.highlights ?? [],
+        releaseStage: product.releaseStage,
         version: product.releaseVersion,
       };
     });
-  }, [copyItems, products, t]);
+  }, [products, locale, t]);
 
   // 登录租户各产品订阅态（code → state）；未登录为空 → 卡片按未登录/未订阅呈现。
   const [subs, setSubs] = useState<Map<string, ProductSubscriptionState>>(
@@ -176,9 +162,8 @@ export default function ProductsOverviewPage({
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {cards.map((product) => {
-                const available = product.status === "available";
-                // 未登录 + 配置为不可见 → 隐藏该卡（登录后一律可见）。
-                if (!hasSession && !product.loggedOutVisible) return null;
+                // 成熟度轴驱动:developing→开发中(敬请期待),ga/beta→可售(试用/订阅流程)。
+                const available = product.releaseStage !== "developing";
                 const subState = subs.get(product.code);
                 const subscribed = available && subState?.subscribed === true;
                 const tierLabel =
@@ -237,6 +222,19 @@ export default function ProductsOverviewPage({
                         <p className="mt-2 text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200">
                           {product.value}
                         </p>
+                      </div>
+                    ) : null}
+                    {/* 能力亮点（marketing.highlights）——有就以标签排布 */}
+                    {product.highlights.length > 0 ? (
+                      <div className="mt-4 flex flex-wrap gap-1.5">
+                        {product.highlights.map((h) => (
+                          <span
+                            key={h}
+                            className="rounded-full bg-vx-gray-100 px-2.5 py-0.5 text-xs font-normal text-vx-gray-600 dark:bg-vx-gray-800 dark:text-vx-gray-300"
+                          >
+                            {h}
+                          </span>
+                        ))}
                       </div>
                     ) : null}
 

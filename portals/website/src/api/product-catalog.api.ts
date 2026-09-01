@@ -24,16 +24,47 @@
 
 import { API_BASE_URL } from "./client";
 
+/** marketing jsonb 的单语部分（营销文案富字段,全部可缺）。镜像 website-bff。 */
+export interface MarketingLocale {
+  tagline?: string;
+  value?: string;
+  highlights?: string[];
+  tags?: string[];
+  industries?: string[];
+  detail?: string;
+}
+/** product.products.marketing jsonb：双语营销内容,官网据此渲染。 */
+export interface MarketingContent {
+  zh?: MarketingLocale;
+  en?: MarketingLocale;
+}
+
 export interface ProductCatalogItem {
   productCode: string;
   /** 主名/品牌名（product_name） */
   productName: string;
   /** 译名/副名（product_nick），目录里没填就是 null */
   productNick: string | null;
-  /** 目录真列 product_type：model_platform / capability_platform / data_platform / knowledge_platform / agent / client / external … */
+  /** 受管枚举 product_type：{general,industry}_{platform,agent} / undefined（历史值仍可能出现） */
   productType: string;
   description: string | null;
   releaseVersion: string | null;
+  /** 成熟度轴：ga=正式版 / beta=公测版 / developing=开发中。官网据此判徽标与订阅按钮。 */
+  releaseStage: string;
+  /** 营销内容（DB 权威源,替代官网写死）；未录入为 null。 */
+  marketing: MarketingContent | null;
+}
+
+/** 取当前 locale 的营销单语块（zh-* → zh,其余 → en,缺则回退另一语）。 */
+export function marketingForLocale(
+  marketing: MarketingContent | null | undefined,
+  locale: string,
+): MarketingLocale | null {
+  if (!marketing) return null;
+  const primary = locale.toLowerCase().startsWith("zh")
+    ? marketing.zh
+    : marketing.en;
+  return primary ?? marketing.zh ?? marketing.en ?? null;
 }
 
 /**
