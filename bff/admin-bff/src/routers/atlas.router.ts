@@ -2,7 +2,6 @@ import {
   BadGatewayException,
   Body,
   Controller,
-  Delete,
   ForbiddenException,
   Get,
   HttpException,
@@ -200,68 +199,10 @@ export class AtlasRouter {
     );
   }
 
-  @Post("grants")
-  createGrant(
-    @Req() req: Request & RequestContext,
-    @Body() body: JsonObject,
-  ): Promise<AiModelGrantRecord> {
-    assertCanManageModels(req);
-    return this.request<AiModelGrantRecord>(
-      req,
-      "/capability/tenant-model-grants",
-      {
-        method: "POST",
-        body,
-      },
-    );
-  }
-
-  @Put("grants/:grantId")
-  updateGrant(
-    @Req() req: Request & RequestContext,
-    @Param("grantId") grantId: string,
-    @Body() body: JsonObject,
-  ): Promise<AiModelGrantRecord> {
-    assertCanManageModels(req);
-    return this.request<AiModelGrantRecord>(
-      req,
-      `/capability/tenant-model-grants/${encodeURIComponent(grantId)}`,
-      {
-        method: "PATCH",
-        body,
-      },
-    );
-  }
-
-  @Post("grants/:grantId/activate")
-  activateGrant(
-    @Req() req: Request & RequestContext,
-    @Param("grantId") grantId: string,
-  ): Promise<AiModelGrantRecord> {
-    assertCanManageModels(req);
-    return this.request<AiModelGrantRecord>(
-      req,
-      `/capability/tenant-model-grants/${encodeURIComponent(grantId)}/activate`,
-      {
-        method: "POST",
-      },
-    );
-  }
-
-  @Delete("grants/:grantId")
-  deactivateGrant(
-    @Req() req: Request & RequestContext,
-    @Param("grantId") grantId: string,
-  ): Promise<AiModelGrantRecord> {
-    assertCanManageModels(req);
-    return this.request<AiModelGrantRecord>(
-      req,
-      `/capability/tenant-model-grants/${encodeURIComponent(grantId)}`,
-      {
-        method: "DELETE",
-      },
-    );
-  }
+  // tenant↔model 授权的**写口**(create/update/activate/deactivate)已退役
+  // (2026-09-02,owner 授权):该轴 Atlas 标注"不应存在",admin 不再创建/管理手工授权。
+  // 仅保留上面的 GET listGrants 供运营总览只读观测存量(过渡期,随 Atlas 退轴自然归零);
+  // 不碰 Atlas 存量授权与执行,正确的 product↔endpoint 授权在 opera。
 
   @Get("price-rules")
   listPriceRules(

@@ -212,11 +212,15 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  *
  * 2026-09-02 Phase B.2c accounts 285 → 290(+5):api/operator-self.ts 补 MFA(TOTP 重注册)接口层
  *   错误文案,同 API 层硬编码惯例;账户中心 MfaCard 全走 operatorAccount.mfa.* 的 t()。
+ *
+ * 2026-09-02 admin 2469 → 2467(−2):退役 admin「模型授权」(tenant↔model legacy,owner 授权)——
+ *   删 /model-grants 页+ModelGrantsPage+nav 项,首页卡从「模型授权」改指 /atlas 正名「模型策略」;
+ *   硬编码中文随之净减 2。
  */
 const BASELINE = {
   console: 30,
   website: 40,
-  admin: 2469,
+  admin: 2467,
   opera: 1933,
   accounts: 290,
 };

@@ -280,16 +280,9 @@ const tenantOpsSections: AdminNavigationSection[] = [
           "配置模型计价规则与限流策略；供应商/模型为只读，其生命周期管理在运维台。",
         icon: "cloud",
       },
-      {
-        id: "modelGrants",
-        code: "model_access",
-        i18nKey: "menu.operation.model_access",
-        status: "active",
-        href: "/model-grants",
-        label: "模型授权",
-        description: "按产品、租户和套餐配置模型访问权限、配额和路由优先级。",
-        icon: "shield-check",
-      },
+      // /model-grants「模型授权」(tenant↔model 轴) 已退役(2026-09-02,owner 授权):
+      // Atlas 自身文档标注该轴"不应存在",访问应从订阅(tenant↔product)+ 产品↔端点
+      // 绑定(opera /model/grants)派生。删 admin 的管理面,不碰 Atlas 存量授权与执行。
       {
         id: "skills",
         code: "skill_market",
