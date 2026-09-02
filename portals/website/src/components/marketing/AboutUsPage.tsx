@@ -3,14 +3,15 @@
 /**
  * AboutUsPage.tsx - /about 关于我们（三屏，无 hero，吸附滚动）
  *
- * 2026-09-02 owner：去掉 hero，内容简化为三个主题、三个满屏分节、全页吸附。三个视角：
- *   01 定位 · 我们是谁     —— 关注真正发生在业务现场的问题（三根支柱）
- *   02 方法 · 我们怎么做   —— 从场景到智能体的落地路径（四步）+ 三条原则
- *   03 能力 · 我们能交付什么 —— 四项核心能力 + 从一个业务痛点开始共创（预约演示）
- * 即 Why（为什么是我们）→ How（怎么做）→ What（交付什么）的叙事顺序，序号承载真实次序。
+ * 2026-09-02 owner：去掉 hero，三个满屏分节、全页吸附；文案要「高度」——不是网站说明书、
+ * 不与产品 / 方案 / 案例页重复，写的是判断与主张（重写所有行业、服务所有企业）：
+ *   01 定位 · 我们是谁     —— 每一个行业都将被智能重写（三个判断）
+ *   02 方法 · 我们怎么做   —— 让智能长进业务的骨骼（四条方法论，序号承载真实次序）+ 三条承诺
+ *   03 能力 · 我们能交付什么 —— 一套完整的行业智能体系（四层）+ CTA
+ * 结构固定为 标题 + 描述 + 3~4 卡；卡片走 website-about.css 的科技感修饰（.vx-about-card）。
  *
- * 视觉复用 /solutions 的分节体系（.vx-solutions-industry--{accent} / .vx-solutions-panel），
- * 吸附复用首页 `.snap-section` 契约；第一屏顶部留出 fixed header 的高度。
+ * 分节视觉复用 /solutions 的 .vx-solutions-industry--{accent}（提供 --solutions-accent），
+ * 吸附复用首页 `.snap-section` 契约（顶部留 header 高度由 .snap-section 统一给）。
  *
  * @package @vxture/website
  * @layer Presentation
@@ -53,14 +54,14 @@ function SectionHeading({
   return (
     <div className="flex flex-col justify-center">
       <div className="flex items-center gap-3">
-        <span className="vx-solutions-accent-soft flex h-11 w-11 items-center justify-center rounded-lg">
-          <Icon name={icon} className="h-6 w-6" />
+        <span className="vx-about-card-icon">
+          <Icon name={icon} className="h-5 w-5" />
         </span>
         <p className="vx-solutions-accent-text text-xs font-semibold uppercase tracking-widest">
           {eyebrow}
         </p>
         <span
-          className="ml-auto text-4xl font-bold text-vx-gray-200 dark:text-vx-gray-700"
+          className="ml-auto font-mono text-4xl font-bold text-vx-gray-200 dark:text-vx-gray-700"
           aria-hidden="true"
         >
           {String(index + 1).padStart(2, "0")}
@@ -74,6 +75,11 @@ function SectionHeading({
       </p>
     </div>
   );
+}
+
+/** 右下 L 形角标：每张卡都有，纯装饰。 */
+function CardCorner() {
+  return <span className="vx-about-card-corner" aria-hidden="true" />;
 }
 
 export default function AboutUsPage() {
@@ -98,7 +104,7 @@ export default function AboutUsPage() {
         data-name="About-Positioning"
         className={`vx-solutions-industry vx-solutions-industry--${SECTIONS[0].accent} snap-section flex min-h-screen items-center`}
       >
-        <div className="relative mx-auto grid w-full max-w-7xl gap-10 px-4 pt-20 sm:px-6 lg:grid-cols-2 lg:gap-14 lg:px-8 xl:max-w-screen-2xl">
+        <div className="relative mx-auto grid w-full max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-2 lg:gap-14 lg:px-8 xl:max-w-screen-2xl">
           <SectionHeading
             index={0}
             icon="buildings"
@@ -108,14 +114,11 @@ export default function AboutUsPage() {
           />
           <div className="vx-solutions-visual flex flex-col justify-center gap-4">
             {pillars.map((item) => (
-              <article
-                key={item.title}
-                className="vx-solutions-panel flex gap-4 rounded-2xl p-5"
-              >
-                <span className="vx-solutions-accent-soft flex h-10 w-10 shrink-0 items-center justify-center rounded-md">
+              <article key={item.title} className="vx-about-card flex gap-4">
+                <span className="vx-about-card-icon shrink-0">
                   <Icon name={item.icon} className="h-5 w-5" />
                 </span>
-                <div>
+                <div className="pr-6">
                   <h3 className="text-base font-semibold text-vx-gray-900 dark:text-vx-white">
                     {item.title}
                   </h3>
@@ -123,6 +126,7 @@ export default function AboutUsPage() {
                     {item.description}
                   </p>
                 </div>
+                <CardCorner />
               </article>
             ))}
           </div>
@@ -144,34 +148,32 @@ export default function AboutUsPage() {
               title={t("method.title")}
               description={t("method.description")}
             />
-            <div className="vx-solutions-panel rounded-2xl p-6">
+            <div className="vx-about-card">
               <p className="text-sm font-semibold text-vx-gray-900 dark:text-vx-white">
                 {t("method.principlesTitle")}
               </p>
-              <ul className="mt-4 space-y-3">
+              <ul className="mt-4 flex flex-wrap gap-x-8 gap-y-3">
                 {principles.map((principle) => (
                   <li
                     key={principle}
-                    className="flex gap-3 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300"
+                    className="flex items-center gap-2 text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200"
                   >
                     <Icon
                       name="check"
-                      className="vx-solutions-accent-text mt-1 h-4 w-4 shrink-0"
+                      className="vx-solutions-accent-text h-4 w-4 shrink-0"
                     />
                     <span>{principle}</span>
                   </li>
                 ))}
               </ul>
+              <CardCorner />
             </div>
           </div>
           {/* 四步是真实的先后次序：序号承载信息，不是装饰。 */}
           <ol className="vx-solutions-visual grid content-center gap-4 sm:grid-cols-2">
             {steps.map((step, index) => (
-              <li
-                key={step.title}
-                className="vx-solutions-panel rounded-2xl p-5"
-              >
-                <p className="vx-solutions-accent-text text-xs font-semibold">
+              <li key={step.title} className="vx-about-card">
+                <p className="vx-about-card-index font-mono text-xs font-semibold">
                   {String(index + 1).padStart(2, "0")}
                 </p>
                 <h3 className="mt-3 text-base font-semibold text-vx-gray-900 dark:text-vx-white">
@@ -180,6 +182,7 @@ export default function AboutUsPage() {
                 <p className="mt-2 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
                   {step.description}
                 </p>
+                <CardCorner />
               </li>
             ))}
           </ol>
@@ -201,7 +204,7 @@ export default function AboutUsPage() {
               title={t("capabilities.title")}
               description={t("capabilities.description")}
             />
-            <div className="vx-solutions-panel rounded-2xl p-6">
+            <div className="vx-about-card">
               <p className="text-base font-semibold text-vx-gray-900 dark:text-vx-white">
                 {t("capabilities.cta.title")}
               </p>
@@ -230,15 +233,13 @@ export default function AboutUsPage() {
                   </Link>
                 </Button>
               </div>
+              <CardCorner />
             </div>
           </div>
           <div className="vx-solutions-visual grid content-center gap-4 sm:grid-cols-2">
             {capabilities.map((item) => (
-              <article
-                key={item.title}
-                className="vx-solutions-panel rounded-2xl p-5"
-              >
-                <span className="vx-solutions-accent-soft flex h-10 w-10 items-center justify-center rounded-md">
+              <article key={item.title} className="vx-about-card">
+                <span className="vx-about-card-icon">
                   <Icon name={item.icon} className="h-5 w-5" />
                 </span>
                 <h3 className="mt-4 text-base font-semibold text-vx-gray-900 dark:text-vx-white">
@@ -247,6 +248,7 @@ export default function AboutUsPage() {
                 <p className="mt-2 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
                   {item.description}
                 </p>
+                <CardCorner />
               </article>
             ))}
           </div>
