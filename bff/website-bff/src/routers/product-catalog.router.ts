@@ -34,6 +34,8 @@ export interface MarketingContent {
   en?: MarketingLocale;
   /** 推荐度 0–3（语言无关）：未订阅产品卡右上角按数量画奖章；0/缺省不画。 */
   recommend?: number;
+  /** 预期发布日期（YYYY-MM-DD，语言无关）：开发中的产品卡片底部「预期发布：日期」；上线后忽略。 */
+  expectedReleaseAt?: string;
 }
 
 export interface ProductCatalogItem {
@@ -46,6 +48,8 @@ export interface ProductCatalogItem {
   productType: string;
   description: string | null;
   releaseVersion: string | null;
+  /** 对外发布时间（released_at，ISO 字符串）；未填为 null。卡片底部「v x.y.z at 日期」用。 */
+  releasedAt: string | null;
   /** 成熟度轴：ga=正式版 / beta=公测版 / developing=开发中。官网据此判徽标与订阅按钮。 */
   releaseStage: string;
   /** 营销内容（DB 权威源,替代官网写死）；未录入为 null。 */
@@ -59,6 +63,7 @@ interface ProductCatalogRow {
   product_type: string;
   description: string | null;
   release_version: string | null;
+  released_at: Date | string | null;
   release_stage: string;
   marketing: MarketingContent | null;
 }
@@ -71,7 +76,7 @@ export class ProductCatalogRouter {
   async getCatalog(): Promise<ProductCatalogItem[]> {
     const res = await this.pool.query<ProductCatalogRow>(
       `select product_code, product_name, product_nick, product_type,
-              description, release_version, release_stage, marketing
+              description, release_version, released_at, release_stage, marketing
          from product.products
         where is_customer_visible = true
           and status = 'active'
@@ -85,6 +90,10 @@ export class ProductCatalogRouter {
       productType: r.product_type,
       description: r.description,
       releaseVersion: r.release_version,
+      releasedAt:
+        r.released_at instanceof Date
+          ? r.released_at.toISOString()
+          : (r.released_at ?? null),
       releaseStage: r.release_stage,
       marketing: r.marketing,
     }));

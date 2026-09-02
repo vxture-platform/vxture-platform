@@ -232,7 +232,7 @@ export default function ProductSubscribePage() {
       {/* ── 板块一：订阅区（撑满一屏：plan bar + 档位卡 + 底部滚动指示） ── */}
       <section className="vx-section-odd relative flex min-h-screen flex-col">
         <div
-          className={`${CONTAINER} flex w-full flex-1 flex-col justify-center pb-24 pt-24`}
+          className={`${CONTAINER} flex w-full flex-1 flex-col justify-center pb-20 pt-20`}
         >
           {load.status === "loading" ? (
             /* 首屏占位：一行 plan bar + 三张卡的骨架，撑住版式等真数据 */
@@ -355,7 +355,8 @@ export default function ProductSubscribePage() {
 
               {/* 档位卡：三槽位排布，严格一行，窄屏横向滚动。
                   负 margin + 等量 padding 给选中卡的光晕留出血，避免被滚动容器硬裁。 */}
-              <div className="-mx-3 mt-8 overflow-x-auto px-3 pb-4 pt-3">
+              {/* 上下内边距 + 这里的 mt 按 889px 视口量过：首屏内容 ≤ 一屏（2026-09-03 线上实测 957 → 收到 885）。 */}
+              <div className="-mx-3 mt-6 overflow-x-auto px-3 pb-4 pt-3">
                 <div
                   role="radiogroup"
                   aria-label={t("planGroupLabel")}

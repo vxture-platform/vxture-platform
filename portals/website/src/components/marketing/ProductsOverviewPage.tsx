@@ -28,6 +28,7 @@ import {
 import {
   catalogDisplayName,
   marketingForLocale,
+  marketingExpectedReleaseAt,
   marketingRecommend,
   type ProductCatalogItem,
 } from "@/api/product-catalog.api";
@@ -70,6 +71,8 @@ export default function ProductsOverviewPage({
     () => ({
       valueLabel: t("catalog.valueLabel"),
       recommended: t("catalog.recommended"),
+      versionAt: t("catalog.versionAt"),
+      expectedRelease: t("catalog.expectedRelease"),
       badges: {
         stable: t("catalog.badges.stable"),
         beta: t("catalog.badges.beta"),
@@ -102,7 +105,9 @@ export default function ProductsOverviewPage({
         highlights: m?.highlights ?? [],
         releaseStage: product.releaseStage,
         version: product.releaseVersion,
+        releasedAt: product.releasedAt,
         recommend: marketingRecommend(product.marketing),
+        expectedReleaseAt: marketingExpectedReleaseAt(product.marketing),
       };
     });
   }, [products, locale, t]);

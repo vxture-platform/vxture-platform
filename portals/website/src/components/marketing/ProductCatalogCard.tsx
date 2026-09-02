@@ -29,6 +29,7 @@
  * @category Components - Marketing
  */
 
+import { useLocale } from "next-intl";
 import { Button, Icon } from "@vxture/design-system";
 import type { IconName } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
@@ -49,6 +50,10 @@ export interface ProductCatalogCardModel {
   /** 成熟度轴：ga / beta / developing。 */
   releaseStage: string;
   version: string | null;
+  /** 对外发布时间（ISO）；底部「v x.y.z at 日期」用，无则只显示版本。 */
+  releasedAt: string | null;
+  /** 预期发布日期（marketing.expectedReleaseAt，运营手填）；开发中的卡底部「预期发布：日期」。 */
+  expectedReleaseAt: string | null;
   /** 推荐度 0–3（marketing.recommend）：未订阅时右上角按数量画奖章。 */
   recommend: number;
 }
@@ -64,6 +69,10 @@ export interface ProductCatalogCardLabels {
   };
   /** 推荐度奖章的无障碍名（{count} 枚）。 */
   recommended: string;
+  /** 底部版本行「v {version} at {date}」。 */
+  versionAt: string;
+  /** 开发中的底部行「预期发布：{date}」。 */
+  expectedRelease: string;
   actions: {
     subscribe: string;
     upgrade: string;
@@ -98,6 +107,31 @@ export function ProductCatalogCard({
   const pricingHref = `/pricing?product=${product.code}`;
   // 推荐度奖章只给「可订、未订阅」的产品——已开通的不用再推，开发中的还不能订。
   const medals = !developing && !subscribed ? product.recommend : 0;
+  // 底部左侧一行（owner 2026-09-03）：
+  //   上线（ga/beta）→ 「v 1.2.3 at 2026/9/12」，版本与发布时间取目录真列，自动；
+  //   开发中           → 「预期发布：2026/9/30」，日期由运营在营销内容里手填（marketing.expectedReleaseAt）。
+  // 日期按 locale 数字格式（zh 不补零：2026/9/12）。
+  const locale = useLocale();
+  const formatDate = (iso: string) =>
+    new Intl.DateTimeFormat(locale, {
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+    }).format(new Date(iso));
+  const versionLine = developing
+    ? product.expectedReleaseAt
+      ? labels.expectedRelease.replace(
+          "{date}",
+          formatDate(product.expectedReleaseAt),
+        )
+      : null
+    : product.version
+      ? product.releasedAt
+        ? labels.versionAt
+            .replace("{version}", product.version)
+            .replace("{date}", formatDate(product.releasedAt))
+        : `v ${product.version}`
+      : null;
 
   return (
     <article className="vx-agent-marketplace-card flex flex-col rounded-lg border border-vx-gray-200 bg-vx-white p-5 shadow-sm transition hover:border-vx-brand-200 hover:shadow-md dark:border-vx-gray-800 dark:bg-vx-gray-900 dark:hover:border-vx-brand-500/30">
@@ -189,24 +223,21 @@ export function ProductCatalogCard({
         </div>
       ) : null}
 
-      {/* 底部操作区：左=版本 + 产品介绍，右=动作对；justify-between 留白分隔 */}
+      {/* 底部一行（owner 2026-09-03）：左 = 「v 1.2.3 at 2026/9/12」；
+          右 = 产品介绍 · {订阅 | 升级} · 进入，按订阅态显示。 */}
       <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-5">
+        <span className="text-xs font-normal tabular-nums text-vx-gray-400 dark:text-vx-gray-500">
+          {versionLine}
+        </span>
         <div className="flex items-center gap-2">
-          {product.version ? (
-            <span className="text-xs font-normal text-vx-gray-400 dark:text-vx-gray-500">
-              {product.version}
-            </span>
-          ) : null}
           <Link
             href={`/products/${product.code}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex h-10 items-center text-xs font-normal text-vx-gray-400 underline-offset-4 transition hover:text-vx-gray-600 hover:underline dark:text-vx-gray-500 dark:hover:text-vx-gray-300"
+            className="inline-flex h-10 items-center px-1 text-xs font-normal text-vx-gray-400 underline-offset-4 transition hover:text-vx-gray-600 hover:underline dark:text-vx-gray-500 dark:hover:text-vx-gray-300"
           >
             {labels.actions.detail}
           </Link>
-        </div>
-        <div className="flex items-center gap-2">
           {developing ? (
             <Button variant="outline" size="md" disabled className="h-10">
               {labels.actions.coming}

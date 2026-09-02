@@ -104,6 +104,11 @@ export function ProductContentEditDialog({
       ),
     ),
   );
+  // 预期发布日期(顶层,语言无关):开发中的产品官网卡底部显示「预期发布:日期」;上线后官网
+  // 自动改用 released_at,此字段不再展示(owner 2026-09-03:开发中手填,上线的自动获取)。
+  const [expectedReleaseAt, setExpectedReleaseAt] = useState(
+    product.marketing?.expectedReleaseAt ?? "",
+  );
   const [zh, setZh] = useState<LocaleForm>(() =>
     toLocaleForm(product.marketing?.zh),
   );
@@ -124,6 +129,7 @@ export function ProductContentEditDialog({
       zh: toLocale(zh),
       en: toLocale(en),
       recommend: Number(recommend),
+      ...(expectedReleaseAt ? { expectedReleaseAt } : {}),
     };
     const body: ProductContentWriteInput = {
       marketing,
@@ -197,6 +203,21 @@ export function ProductContentEditDialog({
             <option value="2">2 枚奖章</option>
             <option value="3">3 枚奖章(最高)</option>
           </NativeSelect>
+        </SolutionField>
+        <SolutionField
+          label="预期发布日期"
+          hint={
+            releaseStage === "developing"
+              ? "开发中的产品官网卡片底部显示「预期发布:日期」。"
+              : "仅开发中的产品展示;上线后官网自动显示版本与发布时间。"
+          }
+        >
+          <Input
+            type="date"
+            value={expectedReleaseAt}
+            disabled={releaseStage !== "developing"}
+            onChange={(e) => setExpectedReleaseAt(e.target.value)}
+          />
         </SolutionField>
       </div>
 
