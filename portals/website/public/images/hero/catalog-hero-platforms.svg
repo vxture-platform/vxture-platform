@@ -1,125 +1,200 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" fill="none" role="img" aria-labelledby="t">
-  <title id="t">产品矩阵 — 平台级分层底座</title>
-  <!-- 产品矩阵 hero 插画（程序化 SVG，透明底；页面侧再叠一层向左渐隐的遮罩）。
-       构图：右侧一组等轴测叠层——底座（模型/数据）、中层（能力编排）、顶层（应用面），
-       层间竖直连接柱表示数据与能力上下贯通；旁边一只数据库圆柱与一块 API 面板。
-       语义 = 平台级产品是分层、可组合的底座，与智能体广场的"网络/协同"形成区分。 -->
+  <title id="t">产品矩阵 — 分层的平台底座</title>
+  <!-- 产品矩阵 hero 插画（程序化 SVG，透明底；页面侧再叠一层向左渐隐的遮罩）。第二版：
+       等轴测"玻璃六棱柱"主体（半透明面 + 内部发光核心 + 三圈分层光环 = L1/L2/L3），
+       周围三块悬浮全息面板（柱状图 / 折线 / 矩阵）以光束接入主体，地面电路环与数据粒子。
+       与 catalog-hero-agents.svg 同一等轴测语言（同角度、同六棱柱、同调色），但更硬、更"底座"。 -->
   <defs>
-    <linearGradient id="slabTop" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#bfdbfe"/>
-      <stop offset="1" stop-color="#60a5fa"/>
+    <linearGradient id="glassTop" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#dbeafe" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#93c5fd" stop-opacity="0.85"/>
     </linearGradient>
-    <linearGradient id="slabLeft" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#3b82f6"/>
-      <stop offset="1" stop-color="#1e40af"/>
+    <linearGradient id="glassL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#60a5fa" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#1e3a8a" stop-opacity="0.75"/>
     </linearGradient>
-    <linearGradient id="slabRight" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2563eb"/>
-      <stop offset="1" stop-color="#1e3a8a"/>
+    <linearGradient id="glassR" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b82f6" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#172554" stop-opacity="0.8"/>
     </linearGradient>
-    <linearGradient id="slabTopIndigo" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#c7d2fe"/>
-      <stop offset="1" stop-color="#818cf8"/>
+    <linearGradient id="coreBeam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.35" stop-color="#bfdbfe" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#60a5fa" stop-opacity="0.2"/>
     </linearGradient>
-    <linearGradient id="slabLeftIndigo" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#6366f1"/>
-      <stop offset="1" stop-color="#3730a3"/>
+    <linearGradient id="tier" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6366f1" stop-opacity="0.05"/>
+      <stop offset="0.5" stop-color="#93c5fd" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#6366f1" stop-opacity="0.05"/>
     </linearGradient>
-    <linearGradient id="slabRightIndigo" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#4f46e5"/>
-      <stop offset="1" stop-color="#312e81"/>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.92"/>
+      <stop offset="1" stop-color="#e0ecff" stop-opacity="0.88"/>
     </linearGradient>
-    <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#93c5fd" stop-opacity="0.9"/>
-      <stop offset="1" stop-color="#93c5fd" stop-opacity="0"/>
+    <linearGradient id="panelEdge" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#93c5fd"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#60a5fa"/>
+      <stop offset="1" stop-color="#4f46e5"/>
+    </linearGradient>
+    <linearGradient id="floorRing" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3b82f6" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#3b82f6" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#6366f1" stop-opacity="0"/>
     </linearGradient>
     <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#3b82f6" stop-opacity="0.35"/>
+      <stop offset="0" stop-color="#3b82f6" stop-opacity="0.42"/>
       <stop offset="1" stop-color="#3b82f6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="floorGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#93c5fd" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#93c5fd" stop-opacity="0"/>
     </radialGradient>
     <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
       <feGaussianBlur stdDeviation="18"/>
     </filter>
-    <!-- 等轴测方板：顶面 / 左面 / 右面，原点在顶面中心 -->
-    <symbol id="slab" viewBox="-160 -80 320 200">
-      <path d="M0-80 160 0 0 80-160 0z" fill="url(#slabTop)"/>
-      <path d="M-160 0 0 80v40l-160-80z" fill="url(#slabLeft)"/>
-      <path d="M160 0 0 80v40l160-80z" fill="url(#slabRight)"/>
-      <path d="M0-80 160 0 0 80-160 0z" fill="none" stroke="#ffffff" stroke-opacity="0.35"/>
-    </symbol>
-    <symbol id="slabIndigo" viewBox="-160 -80 320 200">
-      <path d="M0-80 160 0 0 80-160 0z" fill="url(#slabTopIndigo)"/>
-      <path d="M-160 0 0 80v40l-160-80z" fill="url(#slabLeftIndigo)"/>
-      <path d="M160 0 0 80v40l160-80z" fill="url(#slabRightIndigo)"/>
-      <path d="M0-80 160 0 0 80-160 0z" fill="none" stroke="#ffffff" stroke-opacity="0.35"/>
-    </symbol>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#1e3a8a" flood-opacity="0.18"/>
+    </filter>
   </defs>
 
-  <!-- 背景光晕 -->
-  <circle cx="860" cy="400" r="330" fill="url(#halo)" filter="url(#soft)"/>
+  <!-- 环境光晕 -->
+  <circle cx="860" cy="380" r="330" fill="url(#halo)" filter="url(#soft)"/>
 
-  <!-- 三层叠板（自下而上：底座 / 编排 / 应用），错位堆叠留出层间空气 -->
-  <use href="#slab" x="660" y="420" width="400" height="250"/>
-  <!-- 底座上的网格纹理 -->
-  <g stroke="#ffffff" stroke-opacity="0.35" stroke-width="1">
-    <path d="M760 470 860 520M800 450 900 500M840 430 940 480M880 410 980 460"/>
-    <path d="M860 420 760 470M900 440 800 490M940 460 840 510M980 480 880 530"/>
+  <!-- 地面：电路环（等轴测椭圆）+ 放射线 + 落地光 -->
+  <ellipse cx="860" cy="540" rx="300" ry="150" fill="url(#floorGlow)" filter="url(#soft)"/>
+  <g stroke="url(#floorRing)" stroke-width="1.5" fill="none">
+    <ellipse cx="860" cy="540" rx="320" ry="160"/>
+    <ellipse cx="860" cy="540" rx="230" ry="115"/>
+    <ellipse cx="860" cy="540" rx="140" ry="70"/>
+  </g>
+  <g stroke="#6366f1" stroke-opacity="0.18" stroke-width="1" stroke-dasharray="3 9" fill="none">
+    <ellipse cx="860" cy="540" rx="275" ry="137"/>
+    <ellipse cx="860" cy="540" rx="185" ry="92"/>
+  </g>
+  <g stroke="#3b82f6" stroke-opacity="0.14" stroke-width="1">
+    <path d="M540 540H1180M860 380v320"/>
+    <path d="M600 410 1120 670M600 670 1120 410"/>
+  </g>
+  <!-- 地面电路折线 + 节点 -->
+  <g stroke="#93c5fd" stroke-opacity="0.7" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M620 560h60l30-15h50"/>
+    <path d="M1100 560h-60l-30 15h-50"/>
+    <path d="M700 640l40-20h60"/>
+    <path d="M1020 640l-40-20h-60"/>
+  </g>
+  <g fill="#bfdbfe">
+    <circle cx="620" cy="560" r="3.5"/><circle cx="760" cy="545" r="3.5"/>
+    <circle cx="1100" cy="560" r="3.5"/><circle cx="960" cy="575" r="3.5"/>
+    <circle cx="700" cy="640" r="3.5"/><circle cx="1020" cy="640" r="3.5"/>
   </g>
 
-  <use href="#slabIndigo" x="660" y="300" width="400" height="250"/>
-  <!-- 中层：几块"能力模块"小板 -->
-  <g>
-    <path d="M800 370 840 350 880 370 840 390z" fill="#ffffff" fill-opacity="0.85"/>
-    <path d="M860 400 900 380 940 400 900 420z" fill="#ffffff" fill-opacity="0.7"/>
-    <path d="M760 400 800 380 840 400 800 420z" fill="#ffffff" fill-opacity="0.55"/>
+  <!-- 玻璃六棱柱：顶面中心 (860,250)，半径 110/55，高 220。先画后面的分层光环 -->
+  <!-- 分层光环（三圈，L1 底座 / L2 编排 / L3 应用），比柱体宽一圈，半透明玻璃板 -->
+  <g stroke="url(#tier)" stroke-width="2" fill="#93c5fd" fill-opacity="0.08">
+    <path d="M860 396l138 40-138 40-138-40z"/>
+    <path d="M860 336l138 40-138 40-138-40z"/>
+    <path d="M860 276l138 40-138 40-138-40z"/>
   </g>
 
-  <use href="#slab" x="660" y="180" width="400" height="250"/>
-  <!-- 顶层：应用窗口 -->
-  <g>
-    <path d="M790 250 900 195 990 240 880 295z" fill="#ffffff" fill-opacity="0.92"/>
-    <path d="M800 252 900 202 980 242 880 292z" fill="#dbeafe"/>
-    <path d="M812 258 852 238" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/>
-    <path d="M830 272 900 237" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" stroke-opacity="0.7"/>
-    <path d="M848 286 908 256" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" stroke-opacity="0.45"/>
+  <!-- 柱体三面（半透明玻璃） -->
+  <g filter="url(#shadow)">
+    <path d="M765 222v220l95 27V249z" fill="url(#glassL)"/>
+    <path d="M955 222v220l-95 27V249z" fill="url(#glassR)"/>
+    <path d="M860 195l95 27-95 27-95-27z" fill="url(#glassTop)"/>
+    <!-- 后侧两面透出来的棱 -->
+    <path d="M860 195l95 27v220l-95 27-95-27V222z" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="1.2"/>
+    <path d="M860 249v220" stroke="#ffffff" stroke-opacity="0.35" stroke-width="1"/>
   </g>
 
-  <!-- 层间贯通光柱（数据/能力向上流动） -->
-  <g fill="url(#beam)">
-    <rect x="852" y="100" width="16" height="130" rx="8"/>
-    <rect x="852" y="235" width="16" height="110" rx="8" opacity="0.8"/>
-    <rect x="852" y="360" width="16" height="110" rx="8" opacity="0.6"/>
+  <!-- 内部发光核心（贯穿柱体，向上冲出成光柱） -->
+  <rect x="852" y="120" width="16" height="360" rx="8" fill="url(#coreBeam)"/>
+  <rect x="856" y="60" width="8" height="120" rx="4" fill="#bfdbfe" fill-opacity="0.45"/>
+  <ellipse cx="860" cy="222" rx="26" ry="10" fill="#ffffff" fill-opacity="0.9" filter="url(#glow)"/>
+  <ellipse cx="860" cy="222" rx="12" ry="5" fill="#ffffff"/>
+
+  <!-- 柱体上的数据刻度（层高标记） -->
+  <g stroke="#ffffff" stroke-opacity="0.7" stroke-width="1.5" stroke-linecap="round">
+    <path d="M775 300h20M775 360h20M775 420h20"/>
+    <path d="M925 300h20M925 360h20M925 420h20"/>
+  </g>
+  <g fill="#ffffff" fill-opacity="0.85">
+    <circle cx="806" cy="300" r="2"/><circle cx="806" cy="360" r="2"/><circle cx="806" cy="420" r="2"/>
+    <circle cx="914" cy="300" r="2"/><circle cx="914" cy="360" r="2"/><circle cx="914" cy="420" r="2"/>
   </g>
 
-  <!-- 数据库圆柱（左下） -->
-  <g transform="translate(560 480)">
-    <ellipse cx="0" cy="0" rx="58" ry="22" fill="#60a5fa"/>
-    <path d="M-58 0v70c0 12 26 22 58 22s58-10 58-22V0" fill="#2563eb"/>
-    <ellipse cx="0" cy="0" rx="58" ry="22" fill="#bfdbfe"/>
-    <path d="M-58 24c0 12 26 22 58 22s58-10 58-22" stroke="#93c5fd" stroke-width="2" fill="none"/>
-    <path d="M-58 48c0 12 26 22 58 22s58-10 58-22" stroke="#93c5fd" stroke-width="2" fill="none"/>
+  <!-- 全息面板 ① 左：柱状图 -->
+  <g transform="translate(600 200) skewY(14)" filter="url(#shadow)">
+    <rect x="0" y="0" width="176" height="112" rx="12" fill="url(#panel)" stroke="url(#panelEdge)" stroke-width="1.5"/>
+    <rect x="0" y="0" width="176" height="7" rx="3.5" fill="url(#panelEdge)"/>
+    <g fill="url(#bar)">
+      <rect x="20" y="70" width="14" height="28" rx="3"/>
+      <rect x="44" y="52" width="14" height="46" rx="3"/>
+      <rect x="68" y="60" width="14" height="38" rx="3"/>
+      <rect x="92" y="34" width="14" height="64" rx="3"/>
+      <rect x="116" y="46" width="14" height="52" rx="3"/>
+      <rect x="140" y="24" width="14" height="74" rx="3"/>
+    </g>
+    <path d="M20 98h134" stroke="#93c5fd" stroke-width="1.5"/>
   </g>
-  <!-- 数据库 → 底座 连线 -->
-  <path d="M618 500 700 470" stroke="#93c5fd" stroke-width="2" stroke-dasharray="6 8"/>
 
-  <!-- API 面板（右上） -->
-  <g transform="translate(1010 120)">
-    <rect x="0" y="0" width="150" height="96" rx="12" fill="#ffffff" fill-opacity="0.92"/>
-    <rect x="14" y="16" width="52" height="8" rx="4" fill="#2563eb"/>
-    <rect x="14" y="34" width="110" height="6" rx="3" fill="#93c5fd"/>
-    <rect x="14" y="48" width="86" height="6" rx="3" fill="#93c5fd" opacity="0.8"/>
-    <rect x="14" y="62" width="120" height="6" rx="3" fill="#93c5fd" opacity="0.6"/>
-    <circle cx="132" cy="20" r="6" fill="#22c55e"/>
+  <!-- 全息面板 ② 右上：折线 -->
+  <g transform="translate(1000 140) skewY(-14)" filter="url(#shadow)">
+    <rect x="0" y="0" width="176" height="112" rx="12" fill="url(#panel)" stroke="url(#panelEdge)" stroke-width="1.5"/>
+    <rect x="0" y="0" width="176" height="7" rx="3.5" fill="url(#panelEdge)"/>
+    <g stroke="#dbeafe" stroke-width="1"><path d="M20 40h136M20 62h136M20 84h136"/></g>
+    <path d="M20 88 52 70 84 76 116 48 148 54 158 30" stroke="#4f46e5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M20 88 52 70 84 76 116 48 148 54 158 30V100H20z" fill="#6366f1" fill-opacity="0.12"/>
+    <circle cx="158" cy="30" r="4" fill="#ffffff" stroke="#4f46e5" stroke-width="2"/>
   </g>
-  <!-- API 面板 → 顶层 连线 -->
-  <path d="M1010 190 960 225" stroke="#93c5fd" stroke-width="2" stroke-dasharray="6 8"/>
 
-  <!-- 粒子 -->
-  <g fill="#93c5fd">
-    <circle cx="640" cy="200" r="3" fill-opacity="0.8"/>
-    <circle cx="1120" cy="330" r="2.5" fill-opacity="0.7"/>
-    <circle cx="1000" cy="600" r="3" fill-opacity="0.6"/>
-    <circle cx="720" cy="120" r="2" fill-opacity="0.7"/>
-    <circle cx="1160" cy="520" r="2" fill-opacity="0.5"/>
+  <!-- 全息面板 ③ 右下：矩阵点阵（能力矩阵） -->
+  <g transform="translate(1020 400) skewY(-14)" filter="url(#shadow)">
+    <rect x="0" y="0" width="150" height="104" rx="12" fill="url(#panel)" stroke="url(#panelEdge)" stroke-width="1.5"/>
+    <rect x="0" y="0" width="150" height="7" rx="3.5" fill="url(#panelEdge)"/>
+    <g fill="#3b82f6">
+      <circle cx="30" cy="34" r="6"/><circle cx="58" cy="34" r="6" fill-opacity="0.35"/><circle cx="86" cy="34" r="6"/><circle cx="114" cy="34" r="6" fill-opacity="0.35"/>
+      <circle cx="30" cy="60" r="6" fill-opacity="0.35"/><circle cx="58" cy="60" r="6"/><circle cx="86" cy="60" r="6"/><circle cx="114" cy="60" r="6"/>
+      <circle cx="30" cy="86" r="6"/><circle cx="58" cy="86" r="6"/><circle cx="86" cy="86" r="6" fill-opacity="0.35"/><circle cx="114" cy="86" r="6"/>
+    </g>
+  </g>
+
+  <!-- 面板 ↔ 柱体 光束（实线渐变 + 流动虚线 + 数据包） -->
+  <g stroke="url(#tier)" stroke-width="2" fill="none" stroke-linecap="round">
+    <path d="M776 290C800 300 810 310 826 316"/>
+    <path d="M1000 240C970 250 950 262 936 280"/>
+    <path d="M1020 452C990 445 970 438 950 428"/>
+  </g>
+  <g stroke="#ffffff" stroke-opacity="0.9" stroke-width="2" fill="none" stroke-linecap="round" stroke-dasharray="2 12">
+    <path d="M776 290C800 300 810 310 826 316"/>
+    <path d="M1000 240C970 250 950 262 936 280"/>
+    <path d="M1020 452C990 445 970 438 950 428"/>
+  </g>
+  <g fill="#ffffff" filter="url(#glow)">
+    <circle cx="806" cy="306" r="3.5"/>
+    <circle cx="962" cy="256" r="3.5"/>
+    <circle cx="984" cy="443" r="3.5"/>
+  </g>
+
+  <!-- 上升数据粒子 -->
+  <g fill="#bfdbfe">
+    <circle cx="840" cy="170" r="2.5" fill-opacity="0.9"/>
+    <circle cx="880" cy="140" r="2" fill-opacity="0.8"/>
+    <circle cx="866" cy="96" r="2.5" fill-opacity="0.7"/>
+    <circle cx="848" cy="80" r="1.8" fill-opacity="0.6"/>
+    <circle cx="640" cy="130" r="3" fill-opacity="0.8"/>
+    <circle cx="1160" cy="330" r="2.5" fill-opacity="0.7"/>
+    <circle cx="560" cy="440" r="2" fill-opacity="0.6"/>
+    <circle cx="1170" cy="600" r="3" fill-opacity="0.6"/>
+    <circle cx="720" cy="100" r="2" fill-opacity="0.5"/>
+  </g>
+  <g stroke="#a5b4fc" stroke-width="2" stroke-linecap="round" stroke-opacity="0.85">
+    <path d="M1120 110v14M1113 117h14"/>
+    <path d="M600 660v12M594 666h12"/>
   </g>
 </svg>
