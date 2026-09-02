@@ -472,6 +472,8 @@
   );
   --vx-website-about-pattern-center-width: 34%;
   --vx-website-about-pattern-center-opacity: 0.32;
+  --vx-website-about-pattern-corner-width: 22%;
+  --vx-website-about-pattern-corner-offset: 4%;
 }
 
 .dark,

@@ -24,7 +24,7 @@ import { Button, Icon } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
 import { useWindowScrollSnap } from "@/hooks";
 import ScrollToButton from "./ScrollToButton";
-import SolutionsHeroPattern from "./solutions/SolutionsHeroPattern";
+import { PathPattern, RadarPattern, StackPattern } from "./about/AboutPatterns";
 
 type Point = { title: string; description: string };
 
@@ -111,11 +111,12 @@ export default function AboutUsPage() {
         className="vx-solutions-hero vx-solutions-industry--sky snap-section flex min-h-screen items-center"
       >
         <div className="vx-solutions-grid-layer" aria-hidden="true" />
+        {/* 01 图案：雷达（同心圆 + 刻度 + 扫描扇面 + 汇聚节点），与解决方案页的球体不同 */}
         <div
           className="vx-solutions-hero-pattern hidden lg:block"
           aria-hidden="true"
         >
-          <SolutionsHeroPattern />
+          <RadarPattern />
         </div>
 
         <div className="relative mx-auto w-full max-w-7xl px-4 pb-16 pt-12 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
@@ -147,6 +148,13 @@ export default function AboutUsPage() {
           className="vx-solutions-grid-layer vx-solutions-grid-layer--left"
           aria-hidden="true"
         />
+        {/* 02 图案：点阵上的阶梯路径（四个落点），落在右下角留白处 */}
+        <div
+          className="vx-about-pattern-corner hidden lg:block"
+          aria-hidden="true"
+        >
+          <PathPattern />
+        </div>
         <div className="relative mx-auto grid w-full max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-12 lg:gap-16 lg:px-8 xl:max-w-screen-2xl">
           {/* 四步是真实的先后次序：大号数字承载信息，不是装饰 */}
           <ol className="order-2 lg:order-1 lg:col-span-6">
@@ -207,11 +215,12 @@ export default function AboutUsPage() {
           className="vx-solutions-grid-layer vx-solutions-grid-layer--full"
           aria-hidden="true"
         />
+        {/* 03 图案：四层等轴测叠板，居中垫在四项能力后面 */}
         <div
           className="vx-about-pattern-center hidden lg:block"
           aria-hidden="true"
         >
-          <SolutionsHeroPattern />
+          <StackPattern />
         </div>
 
         <div className="relative mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">

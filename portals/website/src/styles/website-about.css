@@ -18,7 +18,18 @@
   mask-image: var(--vx-website-solutions-grid-mask-full);
 }
 
-/* 03 屏：球体缩小、居中，垫在四层阵列后面。 */
+/* 02 屏：路径图案落在右下角（文案在右列，图案垫在其下方留白处，不压文字）。 */
+.vx-about-pattern-corner {
+  position: absolute;
+  right: var(--vx-website-about-pattern-corner-offset);
+  bottom: var(--vx-website-about-pattern-corner-offset);
+  width: var(--vx-website-about-pattern-corner-width);
+  opacity: var(--vx-website-solutions-pattern-opacity);
+  pointer-events: none;
+  color: var(--vx-website-solutions-pattern-color);
+}
+
+/* 03 屏：叠板图案缩小、居中，垫在四层阵列后面。 */
 .vx-about-pattern-center {
   position: absolute;
   top: 50%;
