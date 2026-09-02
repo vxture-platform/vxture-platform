@@ -1,84 +1,78 @@
 {
   "positioning": {
     "eyebrow": "Positioning · Who we are",
-    "title": "We believe every industry will be rewritten by intelligence",
-    "description": "Steam rewrote manufacturing, electricity rewrote cities, the internet rewrote connection. This time it is intelligence: no longer a tool, but a new member of the organization that thinks, judges, and acts. Vxture exists for this — to bring intelligence into the core of every industry and stand beside every enterprise.",
+    "title": "We believe",
+    "titleHighlight": "every industry will be rewritten by intelligence",
+    "description": "Intelligence is no longer a tool but a new member of the organization that thinks, judges, and acts. Vxture brings it into the core of every industry and stands beside every enterprise.",
     "items": [
       {
-        "icon": "sparkles",
         "title": "Intelligence is the new productivity",
-        "description": "Not a tool upgrade, but a new way of producing work. When judgment, coordination, and execution are carried by intelligence, industry boundaries are redrawn."
+        "description": "A new way of producing work, not a tool upgrade."
       },
       {
-        "icon": "buildings",
-        "title": "Industry is where intelligence is won",
-        "description": "General capability will converge; the knowledge, data, and workflows deep inside an industry are the moat. That is where we take frontier models."
+        "title": "Industry is the main arena",
+        "description": "The moat is the knowledge, data, and workflows deep inside."
       },
       {
-        "icon": "users",
-        "title": "Enterprises are our fellow travelers",
-        "description": "Every enterprise deserves intelligence of its own. We are not a vendor on the sidelines, but a building partner for the long run."
+        "title": "Enterprises are fellow travelers",
+        "description": "Every enterprise deserves intelligence of its own."
       }
     ]
   },
   "method": {
     "eyebrow": "Method · How we work",
-    "title": "Grow intelligence into the bones of the business, not on its surface",
-    "description": "Everything starts from real business: industry knowledge, enterprise data, frontier models, and people in one closed loop, so intelligence takes responsibility, is tested, and earns trust inside the workflow.",
+    "title": "Grow intelligence into the bones of the business,",
+    "titleHighlight": "not on its surface",
+    "description": "Start from real business: knowledge, data, models, and people in one closed loop, so intelligence takes responsibility and earns trust inside the workflow.",
     "steps": [
       {
         "title": "Define intelligence by scenario",
-        "description": "Fix the responsibility and how results are measured before the technology. Intelligence without a clear goal is an expensive demo."
+        "description": "Responsibility and results first, technology second."
       },
       {
         "title": "Build on data and knowledge",
-        "description": "Govern definitions, distill knowledge, so every judgment is grounded and traceable."
+        "description": "Every judgment is grounded."
       },
       {
         "title": "Orchestrate instead of pile up",
-        "description": "Models, retrieval, rules, tools, and people each play their part, each replaceable. Reliability comes from structure, not a single point."
+        "description": "Reliability comes from structure, not a single point."
       },
       {
         "title": "Measure by real results",
-        "description": "Start with a small loop, validate in the real workflow, let results speak, then expand to more roles and industries."
+        "description": "Start with a small loop; let results speak."
       }
     ],
-    "principlesTitle": "Our commitments",
     "principles": [
-      "No floating demos.",
-      "No parallel systems.",
-      "No stopping at delivery."
+      "No floating demos",
+      "No parallel systems",
+      "No stopping at delivery"
     ]
   },
   "capabilities": {
     "eyebrow": "Capabilities · What we deliver",
-    "title": "A complete industry intelligence system, delivered to every enterprise",
-    "description": "From the foundation that carries intelligence, to agents that take up roles, to packaged industry solutions, to the entry that puts it in everyone's hands: four layers that stack or stand alone.",
+    "title": "A complete industry intelligence system,",
+    "titleHighlight": "delivered to every enterprise",
+    "description": "Four layers that stack or stand alone: start with one role, or land the whole system.",
     "items": [
       {
-        "icon": "database",
         "title": "Platform foundation",
-        "description": "Data governance, knowledge service, model access, and orchestration — trusted data, knowledge, and models for every agent."
+        "description": "Data, knowledge, models, and orchestration."
       },
       {
-        "icon": "agent",
         "title": "Business agents",
-        "description": "Digital employees from shared roles to business-critical scenarios: reading data, calling tools, judging, working with people."
+        "description": "Digital employees that take up roles and responsibility."
       },
       {
-        "icon": "workflow",
         "title": "Industry solutions",
-        "description": "Packaged scenarios and deployed practice for specific industries, organizing point capabilities into a replicable whole."
+        "description": "Packaged scenarios and deployed practice."
       },
       {
-        "icon": "desktop",
         "title": "Intelligence for everyone",
-        "description": "Agents, data, and daily work flow into one entry, so everyone in the organization works with intelligence directly."
+        "description": "Everyone works with intelligence directly."
       }
     ],
     "cta": {
       "title": "Build your industry intelligence with us",
-      "description": "Start from one role, one scenario — bring intelligence into your core business and let it keep growing.",
       "action": "Book a demo",
       "secondary": "See case studies"
     }
