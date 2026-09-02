@@ -1,78 +1,78 @@
 {
   "positioning": {
     "eyebrow": "Positioning · Who we are",
-    "title": "We believe",
-    "titleHighlight": "every industry will be rewritten by intelligence",
-    "description": "Intelligence is no longer a tool but a new member of the organization that thinks, judges, and acts. Vxture brings it into the core of every industry and stands beside every enterprise.",
+    "title": "Industry LLMs and business agents,",
+    "titleHighlight": "focused on problems that happen in real operations",
+    "description": "Many AI projects fail to land not because models are weak, but because they never enter the details of workflows, data definitions, and collaboration. We start from concrete scenarios and turn capabilities into reusable business agents that keep improving.",
     "items": [
       {
-        "title": "Intelligence is the new productivity",
-        "description": "A new way of producing work, not a tool upgrade."
+        "title": "Go deep into industry scenarios",
+        "description": "Understand goals, roles, and process bottlenecks first, then decide which steps an agent should take."
       },
       {
-        "title": "Industry is the main arena",
-        "description": "The moat is the knowledge, data, and workflows deep inside."
+        "title": "Build super business agents",
+        "description": "Around one clear responsibility: read data, call tools, work with people, and keep producing results in the workflow."
       },
       {
-        "title": "Enterprises are fellow travelers",
-        "description": "Every enterprise deserves intelligence of its own."
+        "title": "Co-create closely with customers",
+        "description": "Clarify requirements, validate prototypes, connect systems, and improve from usage feedback together."
       }
     ]
   },
   "method": {
     "eyebrow": "Method · How we work",
-    "title": "Grow intelligence into the bones of the business,",
-    "titleHighlight": "not on its surface",
-    "description": "Start from real business: knowledge, data, models, and people in one closed loop, so intelligence takes responsibility and earns trust inside the workflow.",
+    "title": "From scenario to agent,",
+    "titleHighlight": "a verifiable path to production",
+    "description": "Start from one clear pain point, build a small verifiable loop first, then expand to more roles and workflows.",
     "steps": [
       {
-        "title": "Define intelligence by scenario",
-        "description": "Responsibility and results first, technology second."
+        "title": "Identify business pain points",
+        "description": "High-frequency tasks, collaboration gaps, decision pressure — define the agent's responsibility boundary."
       },
       {
-        "title": "Build on data and knowledge",
-        "description": "Every judgment is grounded."
+        "title": "Prepare data and knowledge",
+        "description": "Connect systems, documents, metrics, and past cases into a traceable, governable data foundation."
       },
       {
-        "title": "Orchestrate instead of pile up",
-        "description": "Reliability comes from structure, not a single point."
+        "title": "Design the model and tool chain",
+        "description": "Combine LLMs, retrieval, rules, and business tools so the agent completes tasks, not only answers."
       },
       {
-        "title": "Measure by real results",
-        "description": "Start with a small loop; let results speak."
+        "title": "Iterate into production",
+        "description": "Pilot, evaluate, feed back, operate — embed in real workflows instead of staying in a demo."
       }
     ],
     "principles": [
-      "No floating demos",
-      "No parallel systems",
-      "No stopping at delivery"
+      "No over-promising: validate value first, then expand",
+      "Stay inside customer systems and existing workflows",
+      "Deliver more than pages: data, knowledge, permissions, operations"
     ]
   },
   "capabilities": {
     "eyebrow": "Capabilities · What we deliver",
-    "title": "A complete industry intelligence system,",
-    "titleHighlight": "delivered to every enterprise",
-    "description": "Four layers that stack or stand alone: start with one role, or land the whole system.",
+    "title": "Not just a tool or a generic model,",
+    "titleHighlight": "AI landed in specific roles, workflows, and scenarios",
+    "description": "Industry knowledge, intelligent data, model engineering, and agent orchestration combined — with equal attention to technical implementation, business usability, and ongoing operation.",
     "items": [
       {
-        "title": "Platform foundation",
-        "description": "Data, knowledge, models, and orchestration."
+        "title": "Industry LLM applications",
+        "description": "Domain corpus, knowledge bases, and business rules for professional Q&A, assessment, generation, and explanation."
       },
       {
-        "title": "Business agents",
-        "description": "Digital employees that take up roles and responsibility."
+        "title": "Agent orchestration",
+        "description": "Task breakdown, tool calling, access control, human confirmation, and result tracking."
       },
       {
-        "title": "Industry solutions",
-        "description": "Packaged scenarios and deployed practice."
+        "title": "Intelligent data foundation",
+        "description": "Data assets, knowledge structures, metric definitions, and quality rules as trusted context for models."
       },
       {
-        "title": "Intelligence for everyone",
-        "description": "Everyone works with intelligence directly."
+        "title": "Digital twin and simulation",
+        "description": "Space, equipment, resource, and event simulation for situational awareness and decision support."
       }
     ],
     "cta": {
-      "title": "Build your industry intelligence with us",
+      "title": "Start co-creation from one business pain point",
       "action": "Book a demo",
       "secondary": "See case studies"
     }
