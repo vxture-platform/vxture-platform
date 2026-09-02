@@ -328,11 +328,42 @@ export function formatPrice(
   amount: number,
   currency: string,
   locale: Locale,
+  fractionDigits: PriceFractionDigits = 2,
 ): string {
   return formatCurrency(amount, locale, currency, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
   });
+}
+
+/** 页面级小数位：0 = 全页整数，2 = 全页两位小数。 */
+export type PriceFractionDigits = 0 | 2;
+
+/**
+ * 整页统一的小数位（owner 2026-09-03）：页面上任何一个会展示出来的金额带小数，
+ * 全页所有金额都显示两位（¥1,999.00 / ¥166.58 / ¥0.01）；一个都没有，全页都不带
+ * 小数（¥1,999 / ¥166）。不允许同一页里 ¥0.1 与 ¥1,999 混排，也不允许一位小数。
+ *
+ * 「会展示出来的金额」= 每档月价、年价、年付折合月价、年付省额（徽章）——不看
+ * 当前切到哪个周期，切换周期时小数位不能来回跳。
+ */
+export function priceFractionDigits(plans: PricingPlan[]): PriceFractionDigits {
+  const amounts: number[] = [];
+  for (const plan of plans) {
+    if (plan.monthly) amounts.push(plan.monthly.amount);
+    if (plan.yearly) {
+      amounts.push(plan.yearly.amount, monthlyEquivalent(plan.yearly.amount));
+    }
+    if (plan.monthly && plan.yearly) {
+      amounts.push(yearlySavings(plan.monthly.amount, plan.yearly.amount).save);
+    }
+  }
+  return amounts.some((amount) => !Number.isInteger(round2(amount))) ? 2 : 0;
+}
+
+/** 到分（避免 0.1 + 0.2 之类的浮点尾巴把整数误判成小数）。 */
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 /**

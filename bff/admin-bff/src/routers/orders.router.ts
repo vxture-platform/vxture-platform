@@ -810,10 +810,15 @@ function normalizeOfflinePaymentBody(
     throw new BadRequestException("Request body is required");
   }
 
-  const paidAmount = round2(Number(body.paidAmount));
-  if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+  const rawPaidAmount = Number(body.paidAmount);
+  if (!Number.isFinite(rawPaidAmount) || rawPaidAmount <= 0) {
     throw new BadRequestException("paidAmount must be a positive number");
   }
+  // 资金类有且只有两位小数（owner 2026-09-03）：不再 round2 静默改数，多出来的小数直接拒绝。
+  if (round2(rawPaidAmount) !== rawPaidAmount) {
+    throw new BadRequestException("paidAmount 最多两位小数");
+  }
+  const paidAmount = rawPaidAmount;
 
   const offlinePayType = body.offlinePayType;
   if (!OFFLINE_PAY_TYPES.has(offlinePayType)) {

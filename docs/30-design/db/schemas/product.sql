@@ -140,8 +140,8 @@ DROP TABLE IF EXISTS "product"."plan_price";
 CREATE TABLE "product"."plan_price" (
   "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "plan_id" uuid NOT NULL,
-  "price" numeric(18,6) NOT NULL,
-  "original_price" numeric(18,6),
+  "price" numeric(12,2) NOT NULL,
+  "original_price" numeric(12,2),
   "currency" varchar(10) COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'CNY'::character varying,
   "period_type" varchar(20) COLLATE "pg_catalog"."default" NOT NULL,
   "period_value" int4 NOT NULL,

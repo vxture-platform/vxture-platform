@@ -195,7 +195,9 @@
       "enterprise": "sales@vxture.com"
     },
     "tierCount": "{count} 档",
-    "switchProduct": "切换产品",
+    "showMore": "展开其余 {count} 档",
+    "showLess": "收起",
+    "scrollHint": "更多权益，查看详情",
     "ghost": {
       "title": "团队档位",
       "viewAll": "查看全部 →"

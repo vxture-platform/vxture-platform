@@ -39,6 +39,7 @@ import {
   UNLIMITED,
   type BillingCycle,
   type PlanAudience,
+  type PriceFractionDigits,
   type PricingPlan,
 } from "./pricing-model";
 
@@ -65,6 +66,7 @@ export function PricingPlanCard({
   selected,
   onSelect,
   currentTier = null,
+  fractionDigits = 2,
 }: {
   plan: PricingPlan;
   cycle: BillingCycle;
@@ -72,6 +74,8 @@ export function PricingPlanCard({
   contactSubject: string;
   selected: boolean;
   onSelect: () => void;
+  /** 整页统一的小数位（priceFractionDigits），所有金额一起 0 位或一起 2 位。 */
+  fractionDigits?: PriceFractionDigits;
   /**
    * 登录租户在该产品上的当前档（product-subscriptions）；null = 未登录 / 未订阅。
    * 有值时：当前档 CTA 禁用「当前套餐」，低档禁用「低于当前套餐」，高档 CTA 变
@@ -107,7 +111,12 @@ export function PricingPlanCard({
       ? yearlySavings(plan.monthly.amount, plan.yearly.amount)
       : null;
   const money = (amount: number) =>
-    formatPrice(amount, shown?.price.currency ?? "CNY", appLocale);
+    formatPrice(
+      amount,
+      shown?.price.currency ?? "CNY",
+      appLocale,
+      fractionDigits,
+    );
 
   const seatsLabel =
     plan.seats === null

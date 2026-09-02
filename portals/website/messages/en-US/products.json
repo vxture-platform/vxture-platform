@@ -211,7 +211,9 @@
       "enterprise": "sales@vxture.com"
     },
     "tierCount": "{count, plural, one {# tier} other {# tiers}}",
-    "switchProduct": "Switch product",
+    "showMore": "Show {count, plural, one {# more tier} other {# more tiers}}",
+    "showLess": "Show less",
+    "scrollHint": "More benefits, see details",
     "ghost": {
       "title": "Team tiers",
       "viewAll": "View all →"

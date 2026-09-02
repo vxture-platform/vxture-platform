@@ -122,15 +122,15 @@
 
 一个 `plan_version` 挂 **N 个周期价**（月/季/年/永久…各自价格），`metering.subscriptions.cycle_unit/cycle_count` 订阅时从中选定一条。
 
-| 字段              | 类型          | 约束                                           | 说明                            |
-| ----------------- | ------------- | ---------------------------------------------- | ------------------------------- |
-| `id`              | uuid          | PK                                             |                                 |
-| `plan_version_id` | uuid          | NOT NULL, FK→`plan_versions.id`                |                                 |
-| `cycle_unit`      | varchar(16)   | NOT NULL, CHECK(day/week/month/year/perpetual) | 对齐 `subscriptions.cycle_unit` |
-| `cycle_count`     | int           | NOT NULL DEFAULT 1                             | 季度=month×3、年=year×1…        |
-| `price`           | numeric(18,6) | NOT NULL                                       | 标价（高精度，§3.2）；free 档=0 |
-| `currency`        | varchar(16)   | NOT NULL DEFAULT `'CNY'`                       |                                 |
-| `created_at`      | timestamptz   | NOT NULL DEFAULT now()                         |                                 |
+| 字段              | 类型          | 约束                                           | 说明                                                              |
+| ----------------- | ------------- | ---------------------------------------------- | ----------------------------------------------------------------- |
+| `id`              | uuid          | PK                                             |                                                                   |
+| `plan_version_id` | uuid          | NOT NULL, FK→`plan_versions.id`                |                                                                   |
+| `cycle_unit`      | varchar(16)   | NOT NULL, CHECK(day/week/month/year/perpetual) | 对齐 `subscriptions.cycle_unit`                                   |
+| `cycle_count`     | int           | NOT NULL DEFAULT 1                             | 季度=month×3、年=year×1…                                          |
+| `price`           | numeric(12,2) | NOT NULL                                       | 标价，到分（资金类一律两位小数，§3.2 修订 2026-09-03）；free 档=0 |
+| `currency`        | varchar(16)   | NOT NULL DEFAULT `'CNY'`                       |                                                                   |
+| `created_at`      | timestamptz   | NOT NULL DEFAULT now()                         |                                                                   |
 
 约束：`UNIQUE(plan_version_id, cycle_unit, cycle_count, currency)`。索引：`(plan_version_id)`。
 

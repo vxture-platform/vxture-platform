@@ -1270,17 +1270,27 @@ function requireText(
   return text;
 }
 
+/**
+ * 资金类输入：有且只有两位小数（owner 2026-09-03）。多出来的小数不再静默
+ * Math.round 到分——那等于改了运营录入的数、库里存的和界面填的不是同一个金额；
+ * 直接 400 让录入方改。列本身已是 numeric(12,2)。
+ */
 function requireAmount(value: unknown, field: string): number {
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n))
     throw new BadRequestException(`${field} must be a number`);
-  return Math.round(n * 100) / 100;
+  if (Math.round(n * 100) !== n * 100)
+    throw new BadRequestException(`${field} 最多两位小数`);
+  return n;
 }
 
 function optionalAmount(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
   const n = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+  if (!Number.isFinite(n)) return null;
+  if (Math.round(n * 100) !== n * 100)
+    throw new BadRequestException("金额最多两位小数");
+  return n;
 }
 
 function requireIso(value: string | null | undefined, field: string): string {

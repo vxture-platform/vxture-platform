@@ -700,6 +700,13 @@ export class ProductsRouter {
           if (!Number.isFinite(price) || price < 0) {
             throw new BadRequestException(`Invalid price for ${cycle}`);
           }
+          // 资金类有且只有两位小数（owner 2026-09-03）：列已是 numeric(12,2)，
+          // 但多出来的小数由 PG 静默四舍五入等于改了运营录入的数——写侧直接拒绝。
+          if (Math.round(price * 100) !== price * 100) {
+            throw new BadRequestException(
+              `价格最多两位小数（${cycle}：${String(p.price)}）`,
+            );
+          }
           await client.query(
             `INSERT INTO product.plan_prices
                (id, plan_version_id, cycle_unit, cycle_count, price, currency, created_at)
