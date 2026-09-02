@@ -1,7 +1,7 @@
 {
   "hero": {
-    "eyebrow": "Agent Marketplace",
-    "title": "Agent Marketplace",
+    "eyebrow": "General & industry agents",
+    "title": "Agent Marketplace — ready to use, orchestrate on demand",
     "description": "The agents that are live on the platform and open to customers — digital employees, professional software agents and embodied agents. Sign in to subscribe for free, then integrate and orchestrate them by plan.",
     "primaryAction": "Book a demo",
     "secondaryAction": "Business inquiry"
@@ -28,7 +28,6 @@
       "upgrade": "Upgrade",
       "enter": "Enter",
       "noEntry": "Entry coming soon",
-      "contact": "Contact us",
       "detail": "Product details",
       "coming": "Coming soon"
     },

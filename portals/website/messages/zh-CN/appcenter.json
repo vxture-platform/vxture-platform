@@ -1,7 +1,7 @@
 {
   "hero": {
-    "eyebrow": "Agent Marketplace",
-    "title": "智能体广场",
+    "eyebrow": "通用与行业智能体",
+    "title": "智能体广场，开箱即用、按需编排",
     "description": "汇聚平台上已上线、面向客户开放的数字员工、专业智能体与具身智能体，登录即可免费订阅，按套餐接入与编排。",
     "primaryAction": "预约演示",
     "secondaryAction": "业务咨询"
@@ -28,7 +28,6 @@
       "upgrade": "升级",
       "enter": "进入",
       "noEntry": "入口即将开放",
-      "contact": "联系我们",
       "detail": "产品介绍",
       "coming": "敬请期待"
     },
