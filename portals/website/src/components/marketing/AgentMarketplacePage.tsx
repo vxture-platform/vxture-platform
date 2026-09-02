@@ -36,6 +36,7 @@ import {
 import {
   catalogDisplayName,
   marketingForLocale,
+  marketingRecommend,
   type ProductCatalogItem,
 } from "@/api/product-catalog.api";
 import { productTypeIcon } from "./product-catalog-view";
@@ -72,6 +73,7 @@ export default function AgentMarketplacePage({
   const cardLabels = useMemo<ProductCatalogCardLabels>(
     () => ({
       valueLabel: t("agents.valueLabel"),
+      recommended: t("agents.recommended"),
       badges: {
         stable: t("agents.badges.stable"),
         beta: t("agents.badges.beta"),
@@ -83,7 +85,7 @@ export default function AgentMarketplacePage({
         upgrade: t("agents.actions.upgrade"),
         enter: t("agents.actions.enter"),
         noEntry: t("agents.actions.noEntry"),
-        demo: t("agents.actions.demo"),
+        contact: t("agents.actions.contact"),
         detail: t("agents.actions.detail"),
         coming: t("agents.actions.coming"),
       },
@@ -114,6 +116,7 @@ export default function AgentMarketplacePage({
           highlights: m?.highlights ?? [],
           releaseStage: agent.releaseStage,
           version: agent.releaseVersion,
+          recommend: marketingRecommend(agent.marketing),
         };
       });
   }, [agents, agentKinds, locale, t]);
@@ -243,7 +246,6 @@ export default function AgentMarketplacePage({
                   product={agent}
                   subscription={subs.get(agent.code)}
                   labels={cardLabels}
-                  demoSubject={`${agent.name} ${t("agents.actions.demo")}`}
                 />
               ))}
             </div>

@@ -29,6 +29,7 @@ import {
 import {
   catalogDisplayName,
   marketingForLocale,
+  marketingRecommend,
   type ProductCatalogItem,
 } from "@/api/product-catalog.api";
 import { useAuthStore } from "@/stores/auth.store";
@@ -69,6 +70,7 @@ export default function ProductsOverviewPage({
   const cardLabels = useMemo<ProductCatalogCardLabels>(
     () => ({
       valueLabel: t("catalog.valueLabel"),
+      recommended: t("catalog.recommended"),
       badges: {
         stable: t("catalog.badges.stable"),
         beta: t("catalog.badges.beta"),
@@ -80,7 +82,7 @@ export default function ProductsOverviewPage({
         upgrade: t("catalog.actions.upgrade"),
         enter: t("catalog.actions.enter"),
         noEntry: t("catalog.actions.noEntry"),
-        demo: t("catalog.actions.demo"),
+        contact: t("catalog.actions.contact"),
         detail: t("catalog.actions.detail"),
         coming: t("catalog.actions.coming"),
       },
@@ -102,6 +104,7 @@ export default function ProductsOverviewPage({
         highlights: m?.highlights ?? [],
         releaseStage: product.releaseStage,
         version: product.releaseVersion,
+        recommend: marketingRecommend(product.marketing),
       };
     });
   }, [products, locale, t]);
@@ -178,7 +181,6 @@ export default function ProductsOverviewPage({
                   product={product}
                   subscription={subs.get(product.code)}
                   labels={cardLabels}
-                  demoSubject={`${product.name} ${t("catalog.actions.demo")}`}
                 />
               ))}
             </div>

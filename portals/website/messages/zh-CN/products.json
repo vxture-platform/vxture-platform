@@ -102,6 +102,7 @@
     "description": "从模型底座到数据治理与知识智能，平台级产品围绕套餐订阅、按需组合；智能体助手 varda 随套餐档位放开。",
     "pricingCta": "查看套餐定价",
     "valueLabel": "业务价值",
+    "recommended": "推荐度 {count} 枚奖章",
     "badges": {
       "stable": "正式版",
       "beta": "公测版",
@@ -113,7 +114,7 @@
       "upgrade": "升级",
       "enter": "进入",
       "noEntry": "入口即将开放",
-      "demo": "申请演示",
+      "contact": "联系我们",
       "detail": "产品介绍",
       "coming": "敬请期待"
     },

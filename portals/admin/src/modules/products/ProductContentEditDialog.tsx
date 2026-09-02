@@ -95,6 +95,15 @@ export function ProductContentEditDialog({
 
   const [releaseStage, setReleaseStage] = useState(product.releaseStage);
   const [visible, setVisible] = useState(product.visibility === "public");
+  // 推荐度 0–3(语言无关,顶层字段):官网未订阅产品卡右上角按数量画奖章。
+  const [recommend, setRecommend] = useState(
+    String(
+      Math.max(
+        0,
+        Math.min(3, Math.round(Number(product.marketing?.recommend ?? 0)) || 0),
+      ),
+    ),
+  );
   const [zh, setZh] = useState<LocaleForm>(() =>
     toLocaleForm(product.marketing?.zh),
   );
@@ -114,6 +123,7 @@ export function ProductContentEditDialog({
     const marketing: ProductMarketingContent = {
       zh: toLocale(zh),
       en: toLocale(en),
+      recommend: Number(recommend),
     };
     const body: ProductContentWriteInput = {
       marketing,
@@ -172,6 +182,20 @@ export function ProductContentEditDialog({
           >
             <option value="on">上站(展示)</option>
             <option value="off">下站(隐藏)</option>
+          </NativeSelect>
+        </SolutionField>
+        <SolutionField
+          label="推荐度"
+          hint="官网未订阅产品卡右上角显示 1–3 枚奖章;0 不显示。"
+        >
+          <NativeSelect
+            value={recommend}
+            onChange={(e) => setRecommend(e.target.value)}
+          >
+            <option value="0">不推荐(不显示)</option>
+            <option value="1">1 枚奖章</option>
+            <option value="2">2 枚奖章</option>
+            <option value="3">3 枚奖章(最高)</option>
           </NativeSelect>
         </SolutionField>
       </div>

@@ -776,6 +776,8 @@ export interface ProductMarketingLocale {
 export interface ProductMarketingContent {
   zh?: ProductMarketingLocale;
   en?: ProductMarketingLocale;
+  /** 推荐度 0–3(语言无关):官网未订阅产品卡右上角按数量画奖章;0/缺省不画。 */
+  recommend?: number;
 }
 /** admin 产品目录:产品营销内容与呈现的写入体(业务字段,技术注册在 opera)。 */
 export interface ProductContentWriteInput {

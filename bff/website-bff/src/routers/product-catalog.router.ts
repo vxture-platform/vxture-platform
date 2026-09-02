@@ -32,6 +32,8 @@ export interface MarketingLocale {
 export interface MarketingContent {
   zh?: MarketingLocale;
   en?: MarketingLocale;
+  /** 推荐度 0–3（语言无关）：未订阅产品卡右上角按数量画奖章；0/缺省不画。 */
+  recommend?: number;
 }
 
 export interface ProductCatalogItem {

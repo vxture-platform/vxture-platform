@@ -10,7 +10,8 @@
  *
  * 动作区裁定（按成熟度 × 订阅态）：
  *   developing            → 「敬请期待」禁用；
- *   未登录 / 未订阅        → 「申请演示」（mailto）+ 「订阅」（官网 /pricing?product=，先看价再登录）；
+ *   未登录 / 未订阅        → 「联系我们」（站内 /contact）+ 「订阅」（官网 /pricing?product=，先看价再登录）；
+ *                           右上角按 marketing.recommend 画 1–3 枚推荐奖章（最靠外的位置，其余徽标前移让位）；
  *   已订阅                → 「升级」（同一个 /pricing：登录后该页会标出当前档、只放行更高档；
  *                           只在 canUpgrade 时出现）+ 「进入」。
  *
@@ -47,6 +48,8 @@ export interface ProductCatalogCardModel {
   /** 成熟度轴：ga / beta / developing。 */
   releaseStage: string;
   version: string | null;
+  /** 推荐度 0–3（marketing.recommend）：未订阅时右上角按数量画奖章。 */
+  recommend: number;
 }
 
 /** 卡片文案——两页各自的命名空间里键名相同，形状在这里定死。 */
@@ -58,6 +61,8 @@ export interface ProductCatalogCardLabels {
     active: string;
     developing: string;
   };
+  /** 推荐度奖章的无障碍名（{count} 枚）。 */
+  recommended: string;
   actions: {
     subscribe: string;
     upgrade: string;
@@ -65,7 +70,8 @@ export interface ProductCatalogCardLabels {
     enter: string;
     /** 产品未登记入口时的禁用态文案。 */
     noEntry: string;
-    demo: string;
+    /** 「联系我们」→ 站内 /contact。 */
+    contact: string;
     detail: string;
     coming: string;
   };
@@ -75,14 +81,11 @@ export function ProductCatalogCard({
   product,
   subscription,
   labels,
-  demoSubject,
 }: {
   product: ProductCatalogCardModel;
   /** 登录租户在该产品上的代表订阅态；未登录 / 未订阅为 undefined。 */
   subscription: ProductSubscriptionState | undefined;
   labels: ProductCatalogCardLabels;
-  /** 「申请演示」邮件主题。 */
-  demoSubject: string;
 }) {
   const developing = product.releaseStage === "developing";
   const subscribed = !developing && subscription?.subscribed === true;
@@ -94,6 +97,8 @@ export function ProductCatalogCard({
     product.releaseStage === "beta" ? labels.badges.beta : labels.badges.stable;
   const productHomeUrl = subscription?.homeUrl ?? null;
   const pricingHref = `/pricing?product=${product.code}`;
+  // 推荐度奖章只给「可订、未订阅」的产品——已开通的不用再推，开发中的还不能订。
+  const medals = !developing && !subscribed ? product.recommend : 0;
 
   return (
     <article className="vx-agent-marketplace-card flex flex-col rounded-lg border border-vx-gray-200 bg-vx-white p-5 shadow-sm transition hover:border-vx-brand-200 hover:shadow-md dark:border-vx-gray-800 dark:bg-vx-gray-900 dark:hover:border-vx-brand-500/30">
@@ -128,6 +133,27 @@ export function ProductCatalogCard({
             {tierLabel ? (
               <span className="rounded-full border border-vx-brand-200 bg-vx-brand-50 px-2.5 py-1 text-xs font-semibold text-vx-brand-700 dark:border-vx-brand-400/30 dark:bg-vx-brand-950/40 dark:text-vx-brand-200">
                 {tierLabel}
+              </span>
+            ) : null}
+            {/* 推荐度奖章：右上角最靠外（最优位），其余徽标整体前移让位。 */}
+            {medals > 0 ? (
+              <span
+                role="img"
+                aria-label={labels.recommended.replace(
+                  "{count}",
+                  String(medals),
+                )}
+                title={labels.recommended.replace("{count}", String(medals))}
+                className="inline-flex items-center gap-0.5 rounded-full border border-vx-warning-200 bg-vx-warning-50 px-2 py-1 text-vx-warning-600 dark:border-vx-warning-300/30 dark:bg-vx-warning-900/30 dark:text-vx-warning-300"
+              >
+                {Array.from({ length: medals }, (_, i) => (
+                  <Icon
+                    key={i}
+                    name="medal"
+                    className="h-3.5 w-3.5"
+                    aria-hidden
+                  />
+                ))}
               </span>
             ) : null}
           </div>
@@ -213,12 +239,9 @@ export function ProductCatalogCard({
             </>
           ) : (
             <>
+              {/* 「联系我们」走站内联系页（不再 mailto）。 */}
               <Button asChild variant="outline">
-                <a
-                  href={`mailto:sales@vxture.com?subject=${encodeURIComponent(demoSubject)}`}
-                >
-                  {labels.actions.demo}
-                </a>
+                <Link href="/contact">{labels.actions.contact}</Link>
               </Button>
               {/* 未订阅：先去官网定价页看价格 + 功能，登录后置。 */}
               <Button asChild>

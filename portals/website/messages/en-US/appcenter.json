@@ -23,6 +23,7 @@
       "industry_agent": "Industry Agent"
     },
     "valueLabel": "Value",
+    "recommended": "Recommended · {count} medals",
     "badges": {
       "stable": "Stable",
       "beta": "Beta",
@@ -34,7 +35,7 @@
       "upgrade": "Upgrade",
       "enter": "Enter",
       "noEntry": "Entry coming soon",
-      "demo": "Request demo",
+      "contact": "Contact us",
       "detail": "Product details",
       "coming": "Coming soon"
     },
