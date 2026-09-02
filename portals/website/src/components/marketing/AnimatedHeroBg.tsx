@@ -30,10 +30,35 @@ function readHeroCanvasPalette() {
 
 // ─── 组件 ─────────────────────────────────────────────────────────────────────
 
+export interface AnimatedHeroBgProps {
+  /**
+   * 节点密度：每多少 px² 一个节点（越大越稀疏）。默认 8500 = 各营销页原样；
+   * 目录页 hero 用 ~24000（owner 2026-09-02：点线太密，要稀疏）。
+   */
+  density?: number;
+  /** 运动速度倍率（1 = 原速）。目录页用 0.45。 */
+  speed?: number;
+  /** 点/线透明度倍率（1 = 原样）。目录页用 0.5（颜色淡化）。 */
+  intensity?: number;
+  /** 连线距离（px），默认 150。 */
+  linkDistance?: number;
+  /**
+   * 是否渲染自带的三层（渐变底色 / 网格 / 底部渐隐）。目录页 hero 自己铺
+   * 底色与渐隐，只借用点线 canvas → false。
+   */
+  layers?: boolean;
+}
+
 /**
  * 全屏自适应动态背景，放在 Hero section 内 absolute inset-0 容器即可
  */
-export default function AnimatedHeroBg() {
+export default function AnimatedHeroBg({
+  density = 8500,
+  speed = 1,
+  intensity = 1,
+  linkDistance = 150,
+  layers = true,
+}: AnimatedHeroBgProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mouseRef = useRef({ x: -999, y: -999 });
   const { theme } = useTheme();
@@ -75,20 +100,23 @@ export default function AnimatedHeroBg() {
       canvas.width = Math.max(1, Math.floor(width * dpr));
       canvas.height = Math.max(1, Math.floor(height * dpr));
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const count = Math.max(32, Math.floor((width * height) / 8500));
+      const count = Math.max(
+        density > 8500 ? 12 : 32,
+        Math.floor((width * height) / density),
+      );
       nodes = Array.from({ length: count }, () => ({
         x: Math.random() * width,
         y: Math.random() * height,
-        vx: (Math.random() - 0.5) * 0.3,
-        vy: (Math.random() - 0.5) * 0.3,
+        vx: (Math.random() - 0.5) * 0.3 * speed,
+        vy: (Math.random() - 0.5) * 0.3 * speed,
         r: Math.random() * 1.8 + 0.6,
         phase: Math.random() * Math.PI * 2,
       }));
     };
 
-    const LINK_DIST = 150;
+    const LINK_DIST = linkDistance;
     const LINK_DIST_SQ = LINK_DIST * LINK_DIST;
-    const SCAN_SPEED = 0.5;
+    const SCAN_SPEED = 0.5 * speed;
 
     const renderFrame = () => {
       ctx.clearRect(0, 0, width, height);
@@ -96,7 +124,7 @@ export default function AnimatedHeroBg() {
 
       // 更新节点位置（含鼠标排斥）
       for (const n of nodes) {
-        n.phase += 0.012;
+        n.phase += 0.012 * speed;
         n.x += n.vx;
         n.y += n.vy;
         if (n.x < 0 || n.x > width) n.vx *= -1;
@@ -123,7 +151,9 @@ export default function AnimatedHeroBg() {
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
             ctx.lineTo(b.x, b.y);
-            ctx.strokeStyle = palette.line((1 - d / LINK_DIST) * 0.28);
+            ctx.strokeStyle = palette.line(
+              (1 - d / LINK_DIST) * 0.28 * intensity,
+            );
             ctx.lineWidth = 0.6;
             ctx.stroke();
           }
@@ -135,18 +165,20 @@ export default function AnimatedHeroBg() {
         const pulse = Math.sin(n.phase) * 0.5 + 0.5;
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.r * (1 + pulse * 0.35), 0, Math.PI * 2);
-        ctx.fillStyle = palette.node(0.4 + pulse * 0.4);
+        ctx.fillStyle = palette.node((0.4 + pulse * 0.4) * intensity);
         ctx.fill();
       }
 
-      // 绘制下降横向扫描线
-      scanY = (scanY + SCAN_SPEED) % height;
-      const scanGrad = ctx.createLinearGradient(0, 0, width, 0);
-      scanGrad.addColorStop(0, "transparent");
-      scanGrad.addColorStop(0.5, palette.scanColor);
-      scanGrad.addColorStop(1, "transparent");
-      ctx.fillStyle = scanGrad;
-      ctx.fillRect(0, scanY, width, 1.5);
+      // 绘制下降横向扫描线（淡化模式下不画：稀疏点线上再扫一条线会显得突兀）
+      if (intensity >= 1) {
+        scanY = (scanY + SCAN_SPEED) % height;
+        const scanGrad = ctx.createLinearGradient(0, 0, width, 0);
+        scanGrad.addColorStop(0, "transparent");
+        scanGrad.addColorStop(0.5, palette.scanColor);
+        scanGrad.addColorStop(1, "transparent");
+        ctx.fillStyle = scanGrad;
+        ctx.fillRect(0, scanY, width, 1.5);
+      }
     };
 
     const loop = () => {
@@ -201,7 +233,7 @@ export default function AnimatedHeroBg() {
       window.removeEventListener("resize", resize);
       canvas.removeEventListener("pointermove", onMove);
     };
-  }, [isDark]);
+  }, [isDark, density, speed, intensity, linkDistance]);
 
   // ─── 渲染 ─────────────────────────────────────────────────────────────────
 
@@ -211,16 +243,18 @@ export default function AnimatedHeroBg() {
       aria-hidden="true"
     >
       {/* 渐变底色 */}
-      <div className="vx-hero-bg-layer absolute inset-0" />
+      {layers ? <div className="vx-hero-bg-layer absolute inset-0" /> : null}
 
       {/* 节点连线动画层 */}
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
 
       {/* 网格叠层 */}
-      <div className="vx-hero-grid-layer absolute inset-0" />
+      {layers ? <div className="vx-hero-grid-layer absolute inset-0" /> : null}
 
       {/* 底部向下渐隐，与页面内容区平滑过渡 */}
-      <div className="vx-hero-fade-layer absolute bottom-0 left-0 right-0 h-28" />
+      {layers ? (
+        <div className="vx-hero-fade-layer absolute bottom-0 left-0 right-0 h-28" />
+      ) : null}
     </div>
   );
 }

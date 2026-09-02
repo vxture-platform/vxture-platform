@@ -3,14 +3,15 @@
 /**
  * CatalogHero.tsx - 目录页 Hero（/products 产品矩阵 与 /appcenter 智能体广场共用）
  *
- * 2026-09-02 owner：两页 hero 原是动态点线 canvas 背景 + 各自一套按钮（appcenter 还有一排
- * 标签），改为「背景色 + 右侧整体渐变透明的大插画，左侧文字」，两页布局一致、插画按
- * 定位区分（智能体 = 协作网络；平台级 = 分层底座），底部按钮统一为
- * 「预约演示」（主）+「业务咨询」（辅），都落到 /contact 的对应板块。
+ * 2026-09-02 owner 两轮裁定：
+ *   · 第一轮：两页 hero 布局一致，底部按钮统一为「预约演示」（主）+「业务咨询」（辅），
+ *     appcenter 的标签行与旧按钮、products 的「查看套餐定价」全部移除。
+ *   · 第二轮：右侧插画撤掉（不好看），**动态点线背景加回来**，但要淡、要疏、要慢；
+ *     背景色不能太白（加一点蓝）；hero 压矮，四行文字（眉题 / 标题 / 描述 / 按钮）
+ *     左对齐、靠上排（紧贴 header 下方开始）合理铺开，不再贴底。两页同一组件 → 高度天然一致。
  *
- * 插画是程序化 SVG（public/images/hero/catalog-hero-*.svg，透明底，各 ~5KB），用
- * CSS mask 向左渐隐，与背景色和文字自然融合；亮/暗色下都成立（插画只用品牌蓝/靛，
- * 背景层分别取浅蓝/深灰渐变）。
+ * 点线走 AnimatedHeroBg 的淡化参数（density / speed / intensity），底色与底部渐隐
+ * 由本组件铺；高度与内边距是 tokens-website.css 的 catalog-hero 令牌。
  *
  * @package @vxture/website
  * @layer Presentation
@@ -19,68 +20,55 @@
 
 import { Button } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
-
-export type CatalogHeroIllustration = "agents" | "platforms";
-
-const ILLUSTRATION_SRC: Record<CatalogHeroIllustration, string> = {
-  agents: "/images/hero/catalog-hero-agents.svg",
-  platforms: "/images/hero/catalog-hero-platforms.svg",
-};
+import AnimatedHeroBg from "./AnimatedHeroBg";
 
 export function CatalogHero({
   eyebrow,
   title,
   description,
-  illustration,
   primaryAction,
   secondaryAction,
 }: {
   eyebrow: string;
   title: string;
   description: string;
-  illustration: CatalogHeroIllustration;
   /** 「预约演示」（主）。 */
   primaryAction: string;
   /** 「业务咨询」（辅）。 */
   secondaryAction: string;
 }) {
   return (
-    <section className="vx-hero-section">
-      {/* 背景：浅蓝→白渐变（暗色：深灰渐变），替代原动态点线 canvas。 */}
+    <section className="vx-catalog-hero">
+      {/* 底色：比原 hero 更蓝一档（brand-100 → brand-50 → info-100；暗色深灰渐变）。 */}
       <div
-        className="pointer-events-none absolute inset-0 bg-linear-to-br from-vx-brand-50 via-vx-white to-vx-info-50 dark:from-vx-gray-900 dark:via-vx-gray-900 dark:to-vx-gray-800"
+        className="pointer-events-none absolute inset-0 bg-linear-to-br from-vx-brand-100 via-vx-brand-50 to-vx-info-100 dark:from-vx-gray-900 dark:via-vx-gray-900 dark:to-vx-gray-800"
         aria-hidden="true"
       />
-      {/* 右侧整体插画：向左渐隐（mask），窄屏时淡化为衬底不抢文字。
-          大屏右侧留 4–6rem 空白，不贴边（owner 2026-09-02：两张图都太靠右）。 */}
-      <div
-        className="vx-catalog-hero-art pointer-events-none absolute inset-y-0 right-0 w-full lg:right-16 lg:w-3/5 xl:right-24"
-        aria-hidden="true"
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element -- 程序化 SVG 静态资源，不走 next/image 优化 */}
-        <img
-          src={ILLUSTRATION_SRC[illustration]}
-          alt=""
-          className="h-full w-full object-contain object-right-bottom opacity-40 lg:opacity-100"
-          loading="eager"
-          decoding="async"
-        />
-      </div>
+      {/* 动态点线：稀疏（每 24000px² 一个节点）、慢（0.45×）、淡（0.5×），不画扫描线。 */}
+      <AnimatedHeroBg
+        density={24000}
+        speed={0.45}
+        intensity={0.5}
+        linkDistance={170}
+        layers={false}
+      />
       {/* 底部向下渐隐，与内容区平滑过渡。 */}
       <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-linear-to-b from-transparent to-[var(--vx-page-bg)]"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-linear-to-b from-transparent to-[var(--vx-page-bg)]"
         aria-hidden="true"
       />
 
-      <div className="vx-hero-content">
-        <div className="max-w-website-3xl lg:max-w-1/2">
-          <p className="vx-website-hero-eyebrow mb-3 text-sm font-semibold uppercase text-vx-brand-600 dark:text-vx-info-200">
+      {/* 左对齐、靠上排；顶部留白大（padding 由令牌给），四行之间松散（mb-4 / mt-6 / mt-8），
+          描述行加宽到 5xl（64rem）尽量一行显示（owner 2026-09-02）。 */}
+      <div className="vx-catalog-hero-content">
+        <div className="max-w-website-5xl">
+          <p className="vx-website-hero-eyebrow mb-4 text-sm font-semibold uppercase text-vx-brand-600 dark:text-vx-info-200">
             {eyebrow}
           </p>
-          <h1 className="font-brand text-4xl font-bold leading-tight text-vx-gray-900 dark:text-vx-white md:text-6xl">
+          <h1 className="font-brand text-4xl font-bold leading-tight text-vx-gray-900 dark:text-vx-white md:text-5xl">
             {title}
           </h1>
-          <p className="mt-5 max-w-website-2xl text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200">
+          <p className="mt-6 max-w-website-5xl text-base leading-7 text-vx-gray-700 dark:text-vx-gray-200">
             {description}
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-4">

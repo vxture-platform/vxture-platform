@@ -305,13 +305,10 @@
   --vx-website-hero-content-max-width-xl: 1536px;
   --vx-website-hero-eyebrow-tracking: 0.16em;
   --vx-website-hero-eyebrow-tracking-wide: 0.18em;
-  /* 目录页 hero 右侧插画的向左渐隐遮罩（mask 只取 alpha，颜色本身无意义） */
-  --vx-website-catalog-hero-art-mask: linear-gradient(
-    to right,
-    transparent 0%,
-    color-mix(in srgb, var(--vx-color-black) 35%, transparent) 28%,
-    var(--vx-color-black) 60%
-  );
+  /* 目录页 hero（/products、/appcenter）：比通用 hero 矮一档；文字左对齐靠上排，但顶部
+     要盖住 fixed header（约 72px）之后再留一大段呼吸（松散感），底部略收。 */
+  --vx-website-catalog-hero-min-height: 440px;
+  --vx-website-catalog-hero-content-padding: 144px 24px 48px;
 
   /* 营销页：分节 */
   --vx-website-section-padding-y: 64px;
@@ -386,10 +383,12 @@
       var(--vx-website-solutions-grid-line) 0 1px,
       transparent 1px 64px
     );
-  --vx-website-solutions-grid-mask: radial-gradient(
-    120% 100% at 70% 20%,
-    var(--vx-color-black) 0%,
-    transparent 78%
+  /* 网格铺满右半屏（左侧文案区渐隐），不再只是右上一团（owner 2026-09-02）。 */
+  --vx-website-solutions-grid-mask: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 26%,
+    var(--vx-color-black) 52%
   );
   --vx-website-solutions-pattern-color: color-mix(
     in srgb,
@@ -401,8 +400,9 @@
     var(--vx-color-sky-500) 42%,
     transparent
   );
-  --vx-website-solutions-pattern-width: 58%;
-  --vx-website-solutions-pattern-offset-right: -6%;
+  /* 球缩小、离右边留白（原 58% / -6% 顶到边外，owner 2026-09-02：太大）。 */
+  --vx-website-solutions-pattern-width: 38%;
+  --vx-website-solutions-pattern-offset-right: 6%;
   --vx-website-solutions-pattern-opacity: 0.85;
   --vx-website-solutions-hero-fade: linear-gradient(
     180deg,
