@@ -26,9 +26,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Banner, Button, EmptyState } from "@vxture/design-system";
-import { Link } from "@/lib/i18n/navigation";
-import { buildConsoleEntryUrl } from "@/lib/console-entry";
+import { Banner, EmptyState } from "@vxture/design-system";
 import {
   fetchProductSubscriptions,
   type ProductSubscriptionState,
@@ -41,7 +39,7 @@ import {
 } from "@/api/product-catalog.api";
 import { productTypeIcon } from "./product-catalog-view";
 import { useAuthStore } from "@/stores/auth.store";
-import AnimatedHeroBg from "./AnimatedHeroBg";
+import { CatalogHero } from "./CatalogHero";
 import {
   ProductCatalogCard,
   type ProductCatalogCardLabels,
@@ -63,11 +61,9 @@ export default function AgentMarketplacePage({
   const locale = useLocale();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
-  const highlights = t.raw("hero.highlights") as string[];
   // product_type → 类型标签（通用智能体 / 行业智能体）；无 marketing.tagline 时退回它。
   const agentKinds = t.raw("agents.kinds") as Record<string, string>;
   const hasTenantSession = isAuthenticated && Boolean(user);
-  const consoleEntryUrl = buildConsoleEntryUrl(locale);
 
   // 卡片文案：键名与 /products 的 products.catalog.* 一一对应（两页同一形状）。
   const cardLabels = useMemo<ProductCatalogCardLabels>(
@@ -147,65 +143,15 @@ export default function AgentMarketplacePage({
 
   return (
     <div className="vx-page-surface">
-      <section className="vx-hero-section">
-        <AnimatedHeroBg />
-        <div className="vx-hero-content">
-          <div className="max-w-website-3xl">
-            <p className="vx-website-hero-eyebrow mb-3 text-sm font-semibold uppercase text-vx-brand-600 dark:text-vx-info-200">
-              {t("hero.eyebrow")}
-            </p>
-            <h1 className="font-brand text-4xl font-bold leading-tight text-vx-gray-900 dark:text-vx-white md:text-6xl">
-              {t("hero.title")}
-            </h1>
-            <p className="mt-5 max-w-website-2xl text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200">
-              {t("hero.description")}
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              {highlights.map((item) => (
-                <span
-                  key={item}
-                  className="rounded-full border border-vx-brand-100 bg-vx-white/70 px-3 py-1 text-sm font-medium text-vx-brand-700 shadow-sm shadow-vx-brand-900/5 backdrop-blur dark:border-vx-white/20 dark:bg-vx-white/10 dark:text-vx-gray-100"
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
-            <div className="mt-8 flex flex-wrap items-center gap-4">
-              {hasTenantSession ? (
-                <Button
-                  asChild
-                  size="xl"
-                  className="px-5 hover:bg-vx-brand-500"
-                >
-                  <a
-                    href={consoleEntryUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {t("hero.primaryAction")}
-                  </a>
-                </Button>
-              ) : (
-                <Button
-                  asChild
-                  size="xl"
-                  className="px-5 hover:bg-vx-brand-500"
-                >
-                  <Link href="/signin">{t("hero.guestPrimaryAction")}</Link>
-                </Button>
-              )}
-              <Button
-                asChild
-                variant="ghost"
-                size="xl"
-                className="border border-vx-brand-200 bg-vx-white/60 px-5 text-vx-brand-700 hover:border-vx-brand-300 hover:bg-vx-white dark:border-vx-white/35 dark:bg-transparent dark:text-vx-white dark:hover:border-vx-white dark:hover:bg-vx-white/10"
-              >
-                <a href="#agent-marketplace">{t("hero.secondaryAction")}</a>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* hero 与 /products 同一组件：背景色 + 右侧渐隐插画（智能体定位）+ 预约演示 / 业务咨询。 */}
+      <CatalogHero
+        eyebrow={t("hero.eyebrow")}
+        title={t("hero.title")}
+        description={t("hero.description")}
+        illustration="agents"
+        primaryAction={t("hero.primaryAction")}
+        secondaryAction={t("hero.secondaryAction")}
+      />
 
       <section id="agent-marketplace" className="vx-section-odd">
         <div className="mx-auto max-w-7xl px-6 lg:px-8 xl:max-w-screen-2xl">

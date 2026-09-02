@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" fill="none" role="img" aria-labelledby="t">
+  <title id="t">智能体广场 — 协作中的智能体网络</title>
+  <!-- 智能体广场 hero 插画（程序化 SVG，透明底；页面侧再叠一层向左渐隐的遮罩）。
+       构图：右侧一个大轨道系统，三圈轨道上分布"智能体"节点（圆角方块 + 天线/对话气泡），
+       节点之间以细线连成协作网；中心是核心引擎光球。语义 = 多个智能体围绕一个核心协同。 -->
+  <defs>
+    <radialGradient id="core" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#93c5fd" stop-opacity="0.95"/>
+      <stop offset="0.55" stop-color="#3b82f6" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#1d4ed8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="agent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#60a5fa"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="agentSoft" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a5b4fc"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3b82f6" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#3b82f6" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#6366f1" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+    <!-- 智能体节点：圆角方块 + 顶部天线 + 两只"眼" -->
+    <symbol id="bot" viewBox="0 0 64 64">
+      <rect x="10" y="18" width="44" height="36" rx="12" fill="url(#agent)"/>
+      <rect x="10" y="18" width="44" height="36" rx="12" fill="#ffffff" fill-opacity="0.08"/>
+      <line x1="32" y1="8" x2="32" y2="18" stroke="#93c5fd" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="32" cy="7" r="3.5" fill="#bfdbfe"/>
+      <circle cx="24" cy="36" r="4" fill="#ffffff" fill-opacity="0.92"/>
+      <circle cx="40" cy="36" r="4" fill="#ffffff" fill-opacity="0.92"/>
+      <rect x="24" y="45" width="16" height="3" rx="1.5" fill="#ffffff" fill-opacity="0.6"/>
+    </symbol>
+    <!-- 对话气泡 -->
+    <symbol id="bubble" viewBox="0 0 48 40">
+      <path d="M6 4h36a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H20l-9 8v-8H6a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4z" fill="#ffffff" fill-opacity="0.9"/>
+      <circle cx="16" cy="17" r="2.6" fill="#3b82f6"/>
+      <circle cx="24" cy="17" r="2.6" fill="#3b82f6"/>
+      <circle cx="32" cy="17" r="2.6" fill="#3b82f6"/>
+    </symbol>
+  </defs>
+
+  <!-- 核心光球 -->
+  <circle cx="820" cy="360" r="170" fill="url(#core)" filter="url(#glow)"/>
+  <circle cx="820" cy="360" r="58" fill="url(#agent)"/>
+  <circle cx="820" cy="360" r="58" fill="#ffffff" fill-opacity="0.12"/>
+  <path d="M820 322l10 26 26 10-26 10-10 26-10-26-26-10 26-10z" fill="#ffffff" fill-opacity="0.95"/>
+
+  <!-- 三圈轨道 -->
+  <g stroke="url(#ring)" stroke-width="1.5" fill="none">
+    <ellipse cx="820" cy="360" rx="150" ry="150"/>
+    <ellipse cx="820" cy="360" rx="260" ry="245" transform="rotate(-12 820 360)"/>
+    <ellipse cx="820" cy="360" rx="380" ry="330" transform="rotate(8 820 360)"/>
+  </g>
+  <!-- 轨道虚线（次级） -->
+  <g stroke="#6366f1" stroke-opacity="0.22" stroke-width="1" stroke-dasharray="4 10" fill="none">
+    <ellipse cx="820" cy="360" rx="205" ry="200" transform="rotate(20 820 360)"/>
+    <ellipse cx="820" cy="360" rx="320" ry="290" transform="rotate(-25 820 360)"/>
+  </g>
+
+  <!-- 协作连线（智能体 ↔ 核心 / 智能体 ↔ 智能体） -->
+  <g stroke="#3b82f6" stroke-opacity="0.35" stroke-width="1.5" stroke-linecap="round">
+    <line x1="820" y1="360" x2="668" y2="252"/>
+    <line x1="820" y1="360" x2="980" y2="228"/>
+    <line x1="820" y1="360" x2="1052" y2="420"/>
+    <line x1="820" y1="360" x2="700" y2="500"/>
+    <line x1="820" y1="360" x2="900" y2="560"/>
+    <line x1="668" y1="252" x2="980" y2="228" stroke-dasharray="6 8"/>
+    <line x1="1052" y1="420" x2="900" y2="560" stroke-dasharray="6 8"/>
+    <line x1="700" y1="500" x2="560" y2="380" stroke-dasharray="6 8"/>
+    <line x1="1140" y1="250" x2="980" y2="228" stroke-dasharray="6 8"/>
+  </g>
+
+  <!-- 智能体节点（按轨道分布，尺寸远近有别） -->
+  <use href="#bot" x="636" y="220" width="64" height="64"/>
+  <use href="#bot" x="944" y="192" width="72" height="72"/>
+  <use href="#bot" x="1016" y="384" width="72" height="72"/>
+  <use href="#bot" x="664" y="466" width="70" height="70"/>
+  <use href="#bot" x="868" y="530" width="62" height="62"/>
+  <use href="#bot" x="532" y="352" width="54" height="54" opacity="0.85"/>
+  <use href="#bot" x="1112" y="222" width="52" height="52" opacity="0.8"/>
+  <use href="#bot" x="1060" y="580" width="48" height="48" opacity="0.7"/>
+
+  <!-- 对话气泡：正在协作的信号 -->
+  <use href="#bubble" x="700" y="188" width="48" height="40"/>
+  <use href="#bubble" x="1010" y="336" width="44" height="36"/>
+  <use href="#bubble" x="928" y="500" width="40" height="34"/>
+
+  <!-- 星点/粒子 -->
+  <g fill="#93c5fd">
+    <circle cx="590" cy="200" r="3" fill-opacity="0.9"/>
+    <circle cx="1150" cy="330" r="2.5" fill-opacity="0.8"/>
+    <circle cx="740" cy="600" r="2.5" fill-opacity="0.7"/>
+    <circle cx="1000" cy="120" r="2" fill-opacity="0.8"/>
+    <circle cx="640" cy="120" r="2" fill-opacity="0.6"/>
+    <circle cx="1120" cy="500" r="3" fill-opacity="0.7"/>
+    <circle cx="480" cy="470" r="2" fill-opacity="0.5"/>
+  </g>
+  <!-- 小十字光斑 -->
+  <g stroke="#a5b4fc" stroke-width="2" stroke-linecap="round" stroke-opacity="0.8">
+    <path d="M1080 150v14M1073 157h14"/>
+    <path d="M600 560v12M594 566h12"/>
+  </g>
+</svg>
