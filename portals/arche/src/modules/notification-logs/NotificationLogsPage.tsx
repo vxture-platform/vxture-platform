@@ -217,6 +217,9 @@ export function NotificationLogsPage() {
       }
       filters={
         <FilterBar
+          view="list"
+          onViewChange={() => {}}
+          cardsDisabledReason="卡片视图已下线，改用列表"
           count={`${filtered.length} 条`}
           aria-label="通知记录筛选"
           search={

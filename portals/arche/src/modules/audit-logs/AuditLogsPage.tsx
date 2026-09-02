@@ -125,6 +125,9 @@ function AuditToolbar({
 }) {
   return (
     <FilterBar
+      view="list"
+      onViewChange={() => {}}
+      cardsDisabledReason="卡片视图已下线，改用列表"
       count={total}
       aria-label="审计日志筛选"
       search={

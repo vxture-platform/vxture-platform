@@ -625,6 +625,9 @@ export function AccountsPage({
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredAccounts.length)}
             search={
               <Input

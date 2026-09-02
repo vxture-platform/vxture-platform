@@ -257,8 +257,12 @@ function CapabilityToolbar({
   onCategoryFilterChange: (v: string) => void;
 }) {
   const t = useTranslations("skillsPage");
+  const tShared = useTranslations();
   return (
     <FilterBar
+      view="list"
+      onViewChange={() => {}}
+      cardsDisabledReason={tShared("common.cardsRetired")}
       count={t("filters.count", { count: total })}
       aria-label={t("filters.ariaLabel")}
       search={

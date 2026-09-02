@@ -699,6 +699,9 @@ export function ProductSolutionsPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredSolutions.length)}
             aria-label={t("filters.ariaLabel")}
             search={

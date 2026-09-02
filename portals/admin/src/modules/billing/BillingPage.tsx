@@ -752,6 +752,9 @@ export function BillingPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredBills.length)}
             aria-label="账单筛选"
             search={

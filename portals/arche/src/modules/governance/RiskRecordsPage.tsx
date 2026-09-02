@@ -369,6 +369,9 @@ export function RiskRecordsPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason="卡片视图已下线，改用列表"
             count={`${filtered.length}条`}
             aria-label="风险记录筛选"
             search={

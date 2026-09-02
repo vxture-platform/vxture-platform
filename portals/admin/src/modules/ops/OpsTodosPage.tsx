@@ -445,6 +445,9 @@ export function OpsTodosPage() {
           }
         >
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={tShared("common.cardsRetired")}
             aria-label="待办任务筛选"
             count={`${formatNumber(filteredTodos.length)} 条`}
             search={

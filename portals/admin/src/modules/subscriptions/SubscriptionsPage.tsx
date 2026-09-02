@@ -592,6 +592,9 @@ export function SubscriptionsPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredSubscriptions.length)}
             aria-label="租户订阅筛选"
             search={

@@ -526,6 +526,9 @@ export function ServicePlansPage() {
       }
       filters={
         <FilterBar
+          view="list"
+          onViewChange={() => {}}
+          cardsDisabledReason={tShared("common.cardsRetired")}
           count={formatNumber(filteredTierItems.length)}
           aria-label={t("filters.ariaLabel")}
           search={

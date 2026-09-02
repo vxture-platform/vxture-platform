@@ -414,6 +414,9 @@ export function TenantsPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredTenants.length)}
             aria-label="租户筛选"
             search={

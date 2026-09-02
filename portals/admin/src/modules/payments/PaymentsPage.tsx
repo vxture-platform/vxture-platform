@@ -754,6 +754,9 @@ export function PaymentsPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredPayments.length)}
             aria-label="收款筛选"
             search={

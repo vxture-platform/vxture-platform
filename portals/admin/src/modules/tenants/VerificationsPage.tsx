@@ -625,6 +625,9 @@ export function VerificationsPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredTenants.length)}
             aria-label="实名认证筛选"
             search={

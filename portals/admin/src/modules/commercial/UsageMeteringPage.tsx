@@ -417,6 +417,9 @@ export function UsageMeteringPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredRecords.length)}
             aria-label="用量筛选"
             search={

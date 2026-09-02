@@ -1045,6 +1045,9 @@ export function ModelPlatformPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredModels.length)}
             aria-label="模型状态"
             search={

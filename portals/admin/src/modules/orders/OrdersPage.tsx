@@ -588,6 +588,9 @@ export function OrdersPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredOrders.length)}
             aria-label="订单筛选"
             search={
