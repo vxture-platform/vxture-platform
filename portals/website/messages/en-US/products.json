@@ -201,8 +201,8 @@
     "unlimited": "Unlimited",
     "price": {
       "perMonth": "/ mo",
-      "yearlyTotal": "{amount} billed yearly",
-      "freeForever": "free forever",
+      "perYear": "/ yr",
+      "monthlyApprox": "≈ {amount} / mo",
       "custom": "Custom",
       "saveBadge": "Save {amount} ({percent}%) vs monthly"
     },
@@ -212,7 +212,7 @@
       "enterprise": "sales@vxture.com"
     },
     "tierCount": "{count, plural, one {# tier} other {# tiers}}",
-    "scrollHint": "More benefits, see details",
+    "scrollHint": "More details",
     "ghost": {
       "title": "Team tiers",
       "viewAll": "View all →"

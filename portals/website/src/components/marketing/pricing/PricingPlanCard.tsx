@@ -7,7 +7,8 @@
  * @category Marketing / Pricing
  *
  * 视觉按定稿样图（v5 + 选中态修订）：
- * - 年付模式大字展示折合月价（floor(yearly/12)），小字年付总额，success 徽章省额；
+ * - 年付模式大字展示**年付总额「/ 年」**（要支付的数），小字「约 xx / 月」作比较参考，success 徽章省额
+ *   （2026-09-03 改：此前大字是折合月价，会被当成按月付的数）；¥0 档同样按周期标「/ 月」「/ 年」，不写「永久免费」；
  * - 受众行 = 受众标签 + 席位（图标按受众：个人/团队/私有化）；
  * - 选中档 = 强调边框 + 双层品牌光晕 + 渐变 CTA；点击任意卡切换。
  *
@@ -144,7 +145,8 @@ export function PricingPlanCard({
           : "hover:border-vx-brand-200 dark:hover:border-vx-brand-500/30"
       }`}
     >
-      <CardContent className="flex flex-1 flex-col p-6">
+      {/* 卡内上下留白收一档（owner 2026-09-03：权益多把卡撑高、页面超一屏） */}
+      <CardContent className="flex flex-1 flex-col px-5 py-4">
         {/* 档名/描述 + 受众图标 */}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -166,29 +168,36 @@ export function PricingPlanCard({
           </span>
         </div>
 
-        {/* 价格 */}
-        <div className="mt-5 flex flex-wrap items-baseline gap-1.5">
+        {/* 价格。年付：主数字 = 年付总额「/ 年」（真正要支付的数），小字「约 xx / 月」只是
+            比较参考——此前主数字是折合月价，会让人误以为按月付这个数（owner 2026-09-03）。 */}
+        <div className="mt-4 flex flex-wrap items-baseline gap-1.5">
           {isContact ? (
             <span className="text-3xl font-semibold tracking-tight text-vx-text-primary">
               {t("price.custom")}
             </span>
           ) : isFree ? (
             <>
+              {/* ¥0 也是按周期订阅、会到期的档，标「/ 月」「/ 年」，不写「永久免费」
+                  （owner 2026-09-03：不要超出批准做商业承诺）。 */}
               <span className="text-3xl font-semibold tabular-nums tracking-tight text-vx-text-primary">
                 {money(0)}
               </span>
               <span className="text-xs text-vx-text-muted">
-                {t("price.freeForever")}
+                {shown.unit === "year"
+                  ? t("price.perYear")
+                  : t("price.perMonth")}
               </span>
             </>
           ) : shown.unit === "year" ? (
             <>
               <span className="text-3xl font-semibold tabular-nums tracking-tight text-vx-text-primary">
-                {money(monthlyEquivalent(shown.price.amount))}
+                {money(shown.price.amount)}
               </span>
               <span className="text-xs text-vx-text-muted">
-                {t("price.perMonth")} ·{" "}
-                {t("price.yearlyTotal", { amount: money(shown.price.amount) })}
+                {t("price.perYear")} ·{" "}
+                {t("price.monthlyApprox", {
+                  amount: money(monthlyEquivalent(shown.price.amount)),
+                })}
               </span>
             </>
           ) : (
@@ -204,7 +213,7 @@ export function PricingPlanCard({
         </div>
 
         {/* 省额槽位固定高度，保证各卡分隔线对齐 */}
-        <div className="mt-2 min-h-7">
+        <div className="mt-1.5 min-h-6">
           {savings && savings.save > 0 ? (
             <StatusBadge tone="success">
               {t("price.saveBadge", {
@@ -216,7 +225,7 @@ export function PricingPlanCard({
         </div>
 
         {/* 受众 · 席位 */}
-        <div className="mt-4 flex items-center gap-2 border-t border-vx-border pt-4 text-sm text-vx-text-muted">
+        <div className="mt-3 flex items-center gap-2 border-t border-vx-border pt-3 text-sm text-vx-text-muted">
           <Icon
             name={AUDIENCE_ICON[plan.audience]}
             className="h-4 w-4 shrink-0 text-vx-primary"
@@ -229,7 +238,7 @@ export function PricingPlanCard({
         </div>
 
         {/* 功能清单（plan_components.features） */}
-        <ul className="mt-3 flex-1 space-y-2.5">
+        <ul className="mt-2.5 flex-1 space-y-2">
           {plan.features.map((feature) => (
             <li
               key={feature}
@@ -245,7 +254,7 @@ export function PricingPlanCard({
         </ul>
 
         {/* CTA + 脚注 */}
-        <div className="mt-6">
+        <div className="mt-4">
           {isContact ? (
             <Button asChild variant="outline" className="w-full">
               <a
@@ -288,7 +297,7 @@ export function PricingPlanCard({
             </Button>
           )}
         </div>
-        <p className="mt-2.5 text-center text-xs text-vx-gray-400 dark:text-vx-gray-500">
+        <p className="mt-2 text-center text-xs text-vx-gray-400 dark:text-vx-gray-500">
           {isContact
             ? t("note.enterprise")
             : isFree

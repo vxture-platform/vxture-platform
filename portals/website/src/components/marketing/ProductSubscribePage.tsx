@@ -232,7 +232,7 @@ export default function ProductSubscribePage() {
       {/* ── 板块一：订阅区（撑满一屏：plan bar + 档位卡 + 底部滚动指示） ── */}
       <section className="vx-section-odd relative flex min-h-screen flex-col">
         <div
-          className={`${CONTAINER} flex w-full flex-1 flex-col justify-center pb-20 pt-20`}
+          className={`${CONTAINER} flex w-full flex-1 flex-col justify-center pb-16 pt-18`}
         >
           {load.status === "loading" ? (
             /* 首屏占位：一行 plan bar + 三张卡的骨架，撑住版式等真数据 */
@@ -355,8 +355,9 @@ export default function ProductSubscribePage() {
 
               {/* 档位卡：三槽位排布，严格一行，窄屏横向滚动。
                   负 margin + 等量 padding 给选中卡的光晕留出血，避免被滚动容器硬裁。 */}
-              {/* 上下内边距 + 这里的 mt 按 889px 视口量过：首屏内容 ≤ 一屏（2026-09-03 线上实测 957 → 收到 885）。 */}
-              <div className="-mx-3 mt-6 overflow-x-auto px-3 pb-4 pt-3">
+              {/* 内容区上下留白压缩（顶部 pt-18 = 72px，仍盖过 64px 的常驻 header）；
+                  卡片自身留白见 PricingPlanCard（owner 2026-09-03：权益多把卡撑高、超出一屏）。 */}
+              <div className="-mx-3 mt-5 overflow-x-auto px-3 pb-3 pt-3">
                 <div
                   role="radiogroup"
                   aria-label={t("planGroupLabel")}
@@ -410,18 +411,21 @@ export default function ProductSubscribePage() {
           )}
         </div>
 
-        {/* 底部滚动指示（参考首页 hero）：更多权益，查看详情 → 对比区 */}
+        {/* 底部滚动指示：与首页 hero 同一写法（小块 animate-bounce，幅度按块高 25%，
+            之前套在 Button 上块更高、跳得像要飞起来——owner 2026-09-03）。「更多详情」→ 对比区。 */}
         {model ? (
           <div className="absolute inset-x-0 bottom-8 z-10 flex justify-center">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={scrollToCompare}
-              className="flex h-auto animate-bounce flex-col items-center gap-1 px-4 py-2 font-normal text-vx-gray-500 hover:bg-transparent hover:text-vx-brand-600 dark:text-vx-gray-300 dark:hover:text-vx-brand-200"
+            <a
+              href={`#${COMPARE_SECTION_ID}`}
+              onClick={(event) => {
+                event.preventDefault();
+                scrollToCompare();
+              }}
+              className="flex animate-bounce flex-col items-center px-4 py-2 text-vx-gray-500 transition-colors hover:text-vx-brand-600 dark:text-vx-gray-300 dark:hover:text-vx-brand-200"
             >
-              <span className="text-sm">{t("scrollHint")}</span>
               <Icon name="arrow-down" className="h-6 w-6" aria-hidden />
-            </Button>
+              <span className="text-sm">{t("scrollHint")}</span>
+            </a>
           </div>
         ) : null}
       </section>
