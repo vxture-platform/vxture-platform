@@ -192,6 +192,7 @@
   },
   "filters": {
     "allStates": "全部状态",
+    "allKinds": "全部类型",
     "stateLabel": "状态筛选"
   },
   "actions": {

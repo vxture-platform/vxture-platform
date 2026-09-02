@@ -192,6 +192,7 @@
   },
   "filters": {
     "allStates": "All states",
+    "allKinds": "All types",
     "stateLabel": "Filter by state"
   },
   "actions": {
