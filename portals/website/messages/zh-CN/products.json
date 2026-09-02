@@ -185,8 +185,8 @@
     "unlimited": "不限",
     "price": {
       "perMonth": "/ 月",
-      "yearlyTotal": "按年付 {amount}",
-      "freeForever": "永久免费",
+      "perYear": "/ 年",
+      "monthlyApprox": "约 {amount} / 月",
       "custom": "定制",
       "saveBadge": "较月付省 {amount}（{percent}%）"
     },
@@ -196,7 +196,7 @@
       "enterprise": "sales@vxture.com"
     },
     "tierCount": "{count} 档",
-    "scrollHint": "更多权益，查看详情",
+    "scrollHint": "更多详情",
     "ghost": {
       "title": "团队档位",
       "viewAll": "查看全部 →"
