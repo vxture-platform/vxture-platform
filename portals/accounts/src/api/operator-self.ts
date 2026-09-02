@@ -18,6 +18,7 @@ export interface OperatorSelf {
   phone: string | null;
   phoneVerified: boolean;
   role: string;
+  mfaTotpEnabled: boolean;
 }
 
 /** A 401 from these endpoints means "no operator session" — callers show a login prompt. */
@@ -170,4 +171,48 @@ export async function changeOperatorPassword(
     }
     throw new Error("修改密码失败，请重试");
   }
+}
+
+/** TOTP (re-)enroll step 1: stage a new secret. Returns base32 secret + otpauth URI (QR). */
+export async function startOperatorMfaTotp(): Promise<{
+  secret: string;
+  otpauthUri: string;
+}> {
+  let res: Response;
+  try {
+    res = await fetch(`${OIDC_API_BASE}/oidc/operator/self/mfa/totp/start`, {
+      method: "POST",
+      credentials: "include",
+    });
+  } catch {
+    throw new Error("网络异常，请稍后重试");
+  }
+  if (!res.ok) {
+    if (res.status === 401) throw new OperatorUnauthenticatedError();
+    throw new Error("无法发起二次验证设置，请重试");
+  }
+  return (await res.json()) as { secret: string; otpauthUri: string };
+}
+
+/** TOTP (re-)enroll step 2: confirm the code → enable + one-time recovery codes. */
+export async function confirmOperatorMfaTotp(
+  code: string,
+): Promise<{ recoveryCodes: string[] }> {
+  let res: Response;
+  try {
+    res = await fetch(`${OIDC_API_BASE}/oidc/operator/self/mfa/totp/confirm`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ code }),
+    });
+  } catch {
+    throw new Error("网络异常，请稍后重试");
+  }
+  if (!res.ok) {
+    if (res.status === 401) throw new OperatorUnauthenticatedError();
+    if (res.status === 400) throw new Error("验证码错误或已过期");
+    throw new Error("设置失败，请重试");
+  }
+  return (await res.json()) as { recoveryCodes: string[] };
 }

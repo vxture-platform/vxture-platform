@@ -40,6 +40,22 @@
       "mismatch": "The new passwords do not match.",
       "updated": "Password changed."
     },
+    "mfa": {
+      "title": "Two-factor authentication",
+      "enabled": "Enabled",
+      "disabled": "Not set",
+      "hint": "Use an authenticator app (e.g. Google Authenticator) to generate a rotating code as a second factor at sign-in.",
+      "setup": "Set up 2FA",
+      "reenroll": "Re-enroll",
+      "scanHint": "Scan the QR with your authenticator app, or enter the secret manually, then type the generated 6-digit code.",
+      "secretLabel": "Secret",
+      "codeLabel": "Code",
+      "confirm": "Confirm & enable",
+      "recoveryTitle": "Two-factor authentication enabled",
+      "recoveryHint": "Save these recovery codes now (shown only once). Use one to sign in if your authenticator is unavailable.",
+      "done": "Done",
+      "updated": "Two-factor authentication updated."
+    },
     "security": {
       "title": "Security",
       "passkeys": "Passkeys",

@@ -25,6 +25,7 @@ import { MailService } from "@vxture/service-mail";
 import { PhoneCodeService } from "@vxture/service-sms";
 import { RedisService } from "../redis/redis.service";
 import { OperatorRefreshTokenRepository } from "../token/operator-refresh-token.repository";
+import { OperatorMfaService } from "./operator-mfa.service";
 
 /** operator central-session `sub` prefix (workforce realm). Mirrors webauthn service. */
 const OPERATOR_SUB_PREFIX = "opr_";
@@ -58,6 +59,8 @@ export interface OperatorSelfView {
   phoneVerified: boolean;
   /** 角色码(role_code);展示用,不做鉴权。 */
   role: string;
+  /** 是否已启用 TOTP 二次验证(展示用,决定 UI 是"设置"还是"重新设置")。 */
+  mfaTotpEnabled: boolean;
 }
 
 @Injectable()
@@ -70,6 +73,7 @@ export class OperatorSelfService {
     @Inject(PhoneCodeService) private readonly phoneCode: PhoneCodeService,
     @Inject(OperatorRefreshTokenRepository)
     private readonly refreshTokens: OperatorRefreshTokenRepository,
+    @Inject(OperatorMfaService) private readonly mfa: OperatorMfaService,
   ) {}
 
   /**
@@ -93,7 +97,10 @@ export class OperatorSelfService {
   /** Read the authenticated operator's own account view (no secret material). */
   async getSelf(sid: string | undefined): Promise<OperatorSelfView> {
     const operatorId = await this.resolveOperatorId(sid);
-    const view = await this.operators.getOperatorAdminView(operatorId);
+    const [view, mfaCtx] = await Promise.all([
+      this.operators.getOperatorAdminView(operatorId),
+      this.operators.getMfaContext(operatorId),
+    ]);
     if (!view) throw new UnauthorizedException("operator_session_required");
     return {
       username: view.username,
@@ -102,6 +109,7 @@ export class OperatorSelfService {
       phone: view.phone,
       phoneVerified: view.phoneVerified,
       role: view.roleCode,
+      mfaTotpEnabled: mfaCtx?.totpEnabled === true,
     };
   }
 
@@ -249,5 +257,34 @@ export class OperatorSelfService {
     if (!ok) throw new UnauthorizedException("operator_session_required");
     await this.refreshTokens.revokeAllForOperator(operatorId);
     return { ok: true };
+  }
+
+  /**
+   * Self-service TOTP (re-)enrollment — step 1: stage a fresh secret, return the
+   * base32 secret + otpauth URI for the QR. **防锁死**:只暂存待确认的新密钥,旧的
+   * TOTP 在 confirm 前仍有效,中途放弃不会把自己锁在外面(复用登录时的 enroll ceremony)。
+   */
+  async startMfaTotp(
+    sid: string | undefined,
+  ): Promise<{ secret: string; otpauthUri: string }> {
+    const operatorId = await this.resolveOperatorId(sid);
+    return this.mfa.beginTotpEnrollment(operatorId);
+  }
+
+  /**
+   * Self-service TOTP (re-)enrollment — step 2: confirm with the first valid code.
+   * On success enables the new secret + issues a fresh batch of recovery codes
+   * (returned ONCE for display). Wrong/expired code → 400.
+   */
+  async confirmMfaTotp(
+    sid: string | undefined,
+    codeRaw: string | undefined,
+  ): Promise<{ ok: true; recoveryCodes: string[] }> {
+    const operatorId = await this.resolveOperatorId(sid);
+    const code = (codeRaw ?? "").trim();
+    if (!code) throw new BadRequestException("invalid_or_expired_code");
+    const result = await this.mfa.confirmTotpEnrollment(operatorId, code);
+    if (!result.ok) throw new BadRequestException("invalid_or_expired_code");
+    return { ok: true, recoveryCodes: result.recoveryCodes };
   }
 }

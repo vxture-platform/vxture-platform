@@ -94,6 +94,25 @@ export class OperatorSelfRouter {
       body.newPassword,
     );
   }
+
+  /** TOTP (re-)enroll — step 1: stage a new secret, return secret + otpauth URI. */
+  @Post("oidc/operator/self/mfa/totp/start")
+  @HttpCode(HttpStatus.OK)
+  async startMfaTotp(
+    @Req() req: Request,
+  ): Promise<{ secret: string; otpauthUri: string }> {
+    return this.self.startMfaTotp(operatorSid(req));
+  }
+
+  /** TOTP (re-)enroll — step 2: confirm the code, enable + return recovery codes. */
+  @Post("oidc/operator/self/mfa/totp/confirm")
+  @HttpCode(HttpStatus.OK)
+  async confirmMfaTotp(
+    @Body() body: { code?: string },
+    @Req() req: Request,
+  ): Promise<{ ok: true; recoveryCodes: string[] }> {
+    return this.self.confirmMfaTotp(operatorSid(req), body.code);
+  }
 }
 
 /** Read the operator central-session cookie from the request. */

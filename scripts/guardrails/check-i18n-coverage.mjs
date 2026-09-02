@@ -209,13 +209,16 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  * 2026-09-02 Phase B.2 accounts 273 → 285(+12):api/operator-self.ts 补改手机/改密码的接口层
  *   错误文案(手机格式/占用/验证码、当前密码不正确/新密码太弱等),同 API 层硬编码惯例;
  *   组件仍全走 t()。admin 侧退役 operator-contact 客户端方法只删英文串,CJK 计数不变。
+ *
+ * 2026-09-02 Phase B.2c accounts 285 → 290(+5):api/operator-self.ts 补 MFA(TOTP 重注册)接口层
+ *   错误文案,同 API 层硬编码惯例;账户中心 MfaCard 全走 operatorAccount.mfa.* 的 t()。
  */
 const BASELINE = {
   console: 30,
   website: 40,
   admin: 2469,
   opera: 1933,
-  accounts: 285,
+  accounts: 290,
 };
 
 const CJK = "[\u4e00-\u9fff]";
