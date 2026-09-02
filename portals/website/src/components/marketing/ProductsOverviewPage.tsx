@@ -20,13 +20,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Banner, Button, EmptyState, Icon } from "@vxture/design-system";
-import type { IconName } from "@vxture/design-system";
+import { Banner, Button, EmptyState } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
-import {
-  buildConsoleEntryUrl,
-  buildConsoleSubscribeUrl,
-} from "@/lib/console-entry";
 import {
   fetchProductSubscriptions,
   type ProductSubscriptionState,
@@ -38,22 +33,15 @@ import {
 } from "@/api/product-catalog.api";
 import { useAuthStore } from "@/stores/auth.store";
 import AnimatedHeroBg from "./AnimatedHeroBg";
+import {
+  ProductCatalogCard,
+  type ProductCatalogCardLabels,
+  type ProductCatalogCardModel,
+} from "./ProductCatalogCard";
 import { productTypeIcon, productTypeKey } from "./product-catalog-view";
 
-type ProductCard = {
-  code: string;
-  name: string;
-  typeLabel: string;
-  icon: IconName;
-  description: string;
-  /** 业务价值（marketing.value）；无则不画。 */
-  value: string | null;
-  /** 能力亮点（marketing.highlights）。 */
-  highlights: string[];
-  /** 成熟度轴：ga=正式版 / beta=公测版 / developing=开发中。 */
-  releaseStage: string;
-  version: string | null;
-};
+/** 卡片数据形状与智能体广场同源（ProductCatalogCardModel）。 */
+type ProductCard = ProductCatalogCardModel;
 
 interface ProductsOverviewPageProps {
   /** 目录里的平台级产品；null = 目录暂时读不到（与"目录为空"是两回事） */
@@ -76,7 +64,29 @@ export default function ProductsOverviewPage({
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
   const hasSession = isAuthenticated && Boolean(user);
-  const consoleEntryUrl = buildConsoleEntryUrl(locale);
+
+  // 卡片文案：键名与智能体广场的 appcenter.agents.* 一一对应（两页同一形状）。
+  const cardLabels = useMemo<ProductCatalogCardLabels>(
+    () => ({
+      valueLabel: t("catalog.valueLabel"),
+      badges: {
+        stable: t("catalog.badges.stable"),
+        beta: t("catalog.badges.beta"),
+        active: t("catalog.badges.active"),
+        developing: t("catalog.badges.developing"),
+      },
+      actions: {
+        subscribe: t("catalog.actions.subscribe"),
+        upgrade: t("catalog.actions.upgrade"),
+        enter: t("catalog.actions.enter"),
+        noEntry: t("catalog.actions.noEntry"),
+        demo: t("catalog.actions.demo"),
+        detail: t("catalog.actions.detail"),
+        coming: t("catalog.actions.coming"),
+      },
+    }),
+    [t],
+  );
 
   // 卡片全部来自 DB 目录;名/描述/版本取真列,营销内容取 marketing jsonb,三态由 release_stage 得。
   const cards = useMemo<ProductCard[]>(() => {
@@ -161,160 +171,16 @@ export default function ProductsOverviewPage({
             />
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {cards.map((product) => {
-                // 成熟度轴驱动:developing→开发中(敬请期待),ga/beta→可售(试用/订阅流程)。
-                const available = product.releaseStage !== "developing";
-                const subState = subs.get(product.code);
-                const subscribed = available && subState?.subscribed === true;
-                const tierLabel =
-                  subscribed && subState?.tier
-                    ? subState.tier.charAt(0).toUpperCase() +
-                      subState.tier.slice(1)
-                    : null;
-                return (
-                  <article
-                    key={product.code}
-                    className="vx-agent-marketplace-card flex flex-col rounded-lg border border-vx-gray-200 bg-vx-white p-5 shadow-sm transition hover:border-vx-brand-200 hover:shadow-md dark:border-vx-gray-800 dark:bg-vx-gray-900 dark:hover:border-vx-brand-500/30"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-4">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-vx-brand-50 text-vx-brand-600 dark:bg-vx-brand-950/50 dark:text-vx-brand-200">
-                          <Icon name={product.icon} className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold text-vx-brand-600 dark:text-vx-brand-300">
-                            {product.typeLabel}
-                          </p>
-                          <h3 className="mt-1 text-lg font-semibold text-vx-gray-900 dark:text-vx-white">
-                            {product.name}
-                          </h3>
-                        </div>
-                      </div>
-                      {available ? (
-                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-                          <span className="rounded-full border border-vx-info-100 bg-vx-info-50 px-2.5 py-1 text-xs font-medium text-vx-info-700 dark:border-vx-info-400/20 dark:bg-vx-brand-950/30 dark:text-vx-info-200">
-                            {subscribed
-                              ? t("catalog.badges.active")
-                              : t("catalog.badges.trial")}
-                          </span>
-                          {tierLabel ? (
-                            <span className="rounded-full border border-vx-brand-200 bg-vx-brand-50 px-2.5 py-1 text-xs font-semibold text-vx-brand-700 dark:border-vx-brand-400/30 dark:bg-vx-brand-950/40 dark:text-vx-brand-200">
-                              {tierLabel}
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <span className="shrink-0 rounded-full border border-vx-gray-200 bg-vx-gray-50 px-2.5 py-1 text-xs font-medium text-vx-gray-500 dark:border-vx-gray-700 dark:bg-vx-gray-800/60 dark:text-vx-gray-400">
-                          {t("catalog.badges.developing")}
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="mt-5 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
-                      {product.description}
-                    </p>
-                    {/* 业务价值只有营销文案才有；目录里的产品没有这一段就不画空框 */}
-                    {product.value ? (
-                      <div className="mt-5 rounded-md border border-vx-brand-100 bg-vx-brand-50/50 p-4 dark:border-vx-brand-400/15 dark:bg-vx-brand-950/20">
-                        <p className="text-xs font-semibold text-vx-brand-600 dark:text-vx-brand-300">
-                          {t("catalog.valueLabel")}
-                        </p>
-                        <p className="mt-2 text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200">
-                          {product.value}
-                        </p>
-                      </div>
-                    ) : null}
-                    {/* 能力亮点（marketing.highlights）——有就以标签排布 */}
-                    {product.highlights.length > 0 ? (
-                      <div className="mt-4 flex flex-wrap gap-1.5">
-                        {product.highlights.map((h) => (
-                          <span
-                            key={h}
-                            className="rounded-full bg-vx-gray-100 px-2.5 py-0.5 text-xs font-normal text-vx-gray-600 dark:bg-vx-gray-800 dark:text-vx-gray-300"
-                          >
-                            {h}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    {/* 底部操作区：左=产品介绍，右=动作对；justify-between 留白分隔 */}
-                    <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-5">
-                      <div className="flex items-center gap-2">
-                        {product.version ? (
-                          <span className="text-xs font-normal text-vx-gray-400 dark:text-vx-gray-500">
-                            {product.version}
-                          </span>
-                        ) : null}
-                        <Link
-                          href={`/products/${product.code}`}
-                          target="_blank"
-                          className="inline-flex h-10 items-center text-xs font-normal text-vx-gray-400 underline-offset-4 transition hover:text-vx-gray-600 hover:underline dark:text-vx-gray-500 dark:hover:text-vx-gray-300"
-                        >
-                          {t("catalog.actions.detail")}
-                        </Link>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {!available ? (
-                          <Button
-                            variant="outline"
-                            size="md"
-                            disabled
-                            className="h-10"
-                          >
-                            {t("catalog.actions.coming")}
-                          </Button>
-                        ) : subscribed ? (
-                          <>
-                            <Button asChild variant="outline">
-                              <a
-                                href={buildConsoleSubscribeUrl(
-                                  locale,
-                                  product.code,
-                                  "upgrade",
-                                )}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                {t("catalog.actions.upgrade")}
-                              </a>
-                            </Button>
-                            <Button asChild>
-                              <a
-                                href={consoleEntryUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                {t("catalog.actions.enter")}
-                              </a>
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            <Button asChild variant="outline">
-                              <a
-                                href={`mailto:sales@vxture.com?subject=${encodeURIComponent(
-                                  `${product.name} ${t("catalog.actions.demo")}`,
-                                )}`}
-                              >
-                                {t("catalog.actions.demo")}
-                              </a>
-                            </Button>
-                            <Button asChild>
-                              <Link
-                                href={`/pricing?product=${product.code}`}
-                                target="_blank"
-                              >
-                                {t("catalog.actions.subscribe")}
-                              </Link>
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
+              {/* 卡片本体与智能体广场共用 ProductCatalogCard：布局 / 徽标 / 动作 / 跳转一处定。 */}
+              {cards.map((product) => (
+                <ProductCatalogCard
+                  key={product.code}
+                  product={product}
+                  subscription={subs.get(product.code)}
+                  labels={cardLabels}
+                  demoSubject={`${product.name} ${t("catalog.actions.demo")}`}
+                />
+              ))}
             </div>
           )}
         </div>

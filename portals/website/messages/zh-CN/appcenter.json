@@ -27,7 +27,9 @@
     "actions": {
       "subscribe": "订阅",
       "upgrade": "升级",
-      "enter": "进入工作台",
+      "enter": "进入",
+      "noEntry": "入口即将开放",
+      "demo": "申请演示",
       "detail": "产品介绍",
       "coming": "敬请期待"
     },

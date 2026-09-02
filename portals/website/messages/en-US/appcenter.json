@@ -32,7 +32,9 @@
     "actions": {
       "subscribe": "Subscribe",
       "upgrade": "Upgrade",
-      "enter": "Enter workspace",
+      "enter": "Enter",
+      "noEntry": "Entry coming soon",
+      "demo": "Request demo",
       "detail": "Product details",
       "coming": "Coming soon"
     },

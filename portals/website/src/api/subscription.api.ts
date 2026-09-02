@@ -15,6 +15,10 @@ export interface ProductSubscriptionState {
   subscribed: boolean;
   tier: string | null;
   status: string;
+  /** 产品自己的工作台入口（product_webhooks.home_url）；未登记为 null → 退回 console 应用中心。 */
+  homeUrl: string | null;
+  /** 当前档之上还有可售档位才给「升级」。 */
+  canUpgrade: boolean;
 }
 
 export async function fetchProductSubscriptions(): Promise<
