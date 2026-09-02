@@ -1,133 +1,81 @@
-/* Website about-page card system — its own leaf (ds/no-large-extracted-style-leaf: 8KB cap).
+/* Website about-page assembly — its own leaf (ds/no-large-extracted-style-leaf: 8KB cap).
  * Geometry comes from assets/legacy-tokens/tokens-website.css §6; this file only assembles it.
- * Every colour derives from --solutions-accent, which is set on the enclosing
- * .vx-solutions-industry section (a :root token would compute to nothing there).
+ * Every colour derives from --solutions-accent, which is set on the enclosing section by
+ * .vx-solutions-industry--{accent} (a :root token would compute to nothing there).
  *
- * owner 2026-09-02：card 的修饰要好好设计、要有科技感 —— 顶部发光细线、右上点阵、
- * 右下 L 形角标、图标外发光、悬停抬升 + accent 描边加亮。 */
+ * owner 2026-09-02：三个主题要醒目，无 icon、不套模板；每屏一句话亮点 + 几条一短句的
+ * 辅助点。01 借解决方案 hero 的思路，02 / 03 左右与结构各异。 */
 
-.vx-about-card {
-  position: relative;
-  overflow: hidden;
-  border-radius: var(--vx-website-about-card-radius);
-  padding: var(--vx-website-about-card-padding);
-  background: var(--vx-website-solutions-panel-bg);
-  border: var(--vx-website-section-border-width) solid
-    color-mix(
-      in srgb,
-      var(--solutions-accent) 22%,
-      var(--vx-website-solutions-panel-border)
-    );
-  box-shadow: var(--vx-website-solutions-panel-shadow);
-  backdrop-filter: blur(var(--vx-website-about-card-blur));
-  transition:
-    transform var(--vx-website-about-card-transition),
-    border-color var(--vx-website-about-card-transition),
-    box-shadow var(--vx-website-about-card-transition);
+/* ── 分节背景变体 ──────────────────────────────────────────────────────── */
+
+/* 02 屏：网格铺左半屏（解决方案 hero 是右半屏）。 */
+.vx-solutions-grid-layer--left {
+  mask-image: var(--vx-website-solutions-grid-mask-left);
 }
 
-/* 顶部一道 accent 发光细线，从左往右渐隐。 */
-.vx-about-card::before {
-  content: "";
+/* 03 屏：网格通铺，上下渐隐。 */
+.vx-solutions-grid-layer--full {
+  mask-image: var(--vx-website-solutions-grid-mask-full);
+}
+
+/* 03 屏：球体缩小、居中，垫在四层阵列后面。 */
+.vx-about-pattern-center {
   position: absolute;
-  inset: 0 0 auto 0;
-  height: var(--vx-website-about-card-line-height);
+  top: 50%;
+  left: 50%;
+  width: var(--vx-website-about-pattern-center-width);
+  transform: translate(-50%, -50%);
+  opacity: var(--vx-website-about-pattern-center-opacity);
   pointer-events: none;
-  background: linear-gradient(
-    90deg,
-    var(--solutions-accent) 0%,
-    color-mix(in srgb, var(--solutions-accent) 30%, transparent) 60%,
-    transparent 100%
-  );
+  color: var(--vx-website-solutions-pattern-color);
 }
 
-/* 右上角点阵，向左下渐隐。 */
-.vx-about-card::after {
+/* ── 辅助点：一段短 accent 横线 + 一句话 + 一行小字（无卡片、无 icon）──────── */
+
+.vx-about-point::before {
+  content: "";
+  display: block;
+  width: var(--vx-website-about-point-rule-width);
+  height: var(--vx-website-about-point-rule-height);
+  background: var(--solutions-accent);
+  transition: width var(--vx-website-about-transition);
+}
+
+.vx-about-point:hover::before {
+  width: 100%;
+}
+
+/* ── 02 屏：步骤阶梯（大号数字 + 顶部细线 + 悬停左侧 accent 竖轨）────────── */
+
+.vx-about-step {
+  position: relative;
+  border-top: var(--vx-website-section-border-width) solid
+    color-mix(in srgb, var(--solutions-accent) 28%, transparent);
+}
+
+.vx-about-step::before {
   content: "";
   position: absolute;
   top: 0;
-  right: 0;
-  width: var(--vx-website-about-card-dots-size);
-  height: var(--vx-website-about-card-dots-size);
-  pointer-events: none;
-  opacity: var(--vx-website-about-card-dots-opacity);
-  background-image: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--solutions-accent) 55%, transparent)
-      var(--vx-website-about-card-dot-radius),
-    transparent 0
-  );
-  background-size: var(--vx-website-about-card-dot-gap)
-    var(--vx-website-about-card-dot-gap);
-  mask-image: radial-gradient(
-    circle at top right,
-    var(--vx-color-black) 0%,
-    transparent 72%
-  );
+  left: 0;
+  width: var(--vx-website-about-step-rail-width);
+  height: 0;
+  background: var(--solutions-accent);
+  transition: height var(--vx-website-about-transition);
 }
 
-.vx-about-card:hover {
-  transform: translateY(var(--vx-website-about-card-hover-lift));
-  border-color: color-mix(in srgb, var(--solutions-accent) 55%, transparent);
-  box-shadow:
-    var(--vx-website-about-card-hover-shadow-geom)
-      color-mix(in srgb, var(--solutions-accent) 22%, transparent),
-    var(--vx-website-solutions-panel-shadow);
+.vx-about-step:hover::before {
+  height: 100%;
 }
 
-/* 右下 L 形角标。 */
-.vx-about-card-corner {
-  position: absolute;
-  right: var(--vx-website-about-card-corner-inset);
-  bottom: var(--vx-website-about-card-corner-inset);
-  width: var(--vx-website-about-card-corner-size);
-  height: var(--vx-website-about-card-corner-size);
-  pointer-events: none;
-  border-right: var(--vx-website-section-border-width) solid
-    color-mix(in srgb, var(--solutions-accent) 60%, transparent);
-  border-bottom: var(--vx-website-section-border-width) solid
-    color-mix(in srgb, var(--solutions-accent) 60%, transparent);
-}
-
-/* 图标底座：accent 软底 + 内描边 + 外发光。 */
-.vx-about-card-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--vx-website-about-card-icon-size);
-  height: var(--vx-website-about-card-icon-size);
-  border-radius: var(--vx-website-about-card-icon-radius);
-  background: color-mix(in srgb, var(--solutions-accent) 14%, transparent);
-  color: var(--solutions-accent);
-  box-shadow:
-    inset 0 0 0 var(--vx-website-section-border-width)
-      color-mix(in srgb, var(--solutions-accent) 35%, transparent),
-    var(--vx-website-about-card-icon-glow-geom)
-      color-mix(in srgb, var(--solutions-accent) 28%, transparent);
-}
-
-/* 序号：短横线 + 等宽数字（步骤卡）。 */
-.vx-about-card-index {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--vx-website-about-card-index-gap);
-  color: var(--solutions-accent);
-  letter-spacing: var(--vx-website-hero-eyebrow-tracking);
-}
-
-.vx-about-card-index::before {
-  content: "";
-  width: var(--vx-website-about-card-index-dash);
-  height: var(--vx-website-section-border-width);
-  background: currentColor;
+.vx-about-step-numeral {
+  color: color-mix(in srgb, var(--solutions-accent) 55%, transparent);
+  font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .vx-about-card {
+  .vx-about-point::before,
+  .vx-about-step::before {
     transition: none;
-  }
-
-  .vx-about-card:hover {
-    transform: none;
   }
 }
