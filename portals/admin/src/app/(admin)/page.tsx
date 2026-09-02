@@ -1545,11 +1545,13 @@ export default function AdminOverviewPage() {
 
     return [
       {
-        title: "模型授权",
-        summary: "策略、授权和配额。",
-        detail: "按产品、租户和智能体观察模型授权与配额配置。",
+        // 原「模型授权」卡:/model-grants 退役后改指 /atlas「模型计价与策略」,展示的
+        // 本就是策略行(policyRows),正名为「模型策略」。
+        title: "模型策略",
+        summary: "计价与限流策略。",
+        detail: "观察模型计价规则与限流策略的启用情况。",
         tone: "blue",
-        href: "/model-grants",
+        href: "/atlas",
         rankStyle: "medal",
         rows: policyRows,
       },
