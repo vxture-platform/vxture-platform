@@ -13,7 +13,7 @@
 import { Controller, Get, Inject, Req } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
-import { SUBSCRIPTION_STATUSES } from "@vxture-platform/shared";
+import { SUBSCRIPTION_STATUSES, TIERS } from "@vxture-platform/shared";
 import { WEBSITE_BFF_RO_POOL } from "../providers/pg-pool.provider";
 import type { RequestContext } from "../types/auth.types";
 
@@ -25,6 +25,17 @@ export interface ProductSubscriptionState {
   subscribed: boolean;
   tier: string | null;
   status: string;
+  /**
+   * 产品自己的工作台入口（product.product_webhooks.home_url）；未登记为 null。
+   * 官网卡片「进入工作台」直达它——此前一律跳 console 首页，客户还得再找一次
+   * （owner 2026-09-02）。
+   */
+  homeUrl: string | null;
+  /**
+   * 当前档之上还有可售（已发布 current 版本）的档位。没有就不该给「升级」按钮——
+   * 顶档也显示「升级」是此前的问题之一。
+   */
+  canUpgrade: boolean;
 }
 
 @Controller("api/me")
@@ -41,9 +52,11 @@ export class ProductSubscriptionsRouter {
       product_code: string;
       status: string;
       tier: string | null;
+      home_url: string | null;
+      can_upgrade: boolean;
     }>(
       `with ranked as (
-         select prod.product_code, ts.status, pc.tier,
+         select prod.id as product_id, prod.product_code, ts.status, pc.tier,
                 row_number() over (
                   partition by prod.product_code
                   order by array_position($2::text[], ts.status) asc,
@@ -63,15 +76,38 @@ export class ProductSubscriptionsRouter {
             and not (ts.subscription_kind = 'trial'
                      and ts.status in ('expired', 'cancelled'))
        )
-       select product_code, status, tier from ranked where rn = 1`,
-      [req.tenantId, [...SUBSCRIPTION_STATUSES]],
+       select r.product_code, r.status, r.tier,
+              pw.home_url,
+              -- 当前档之上是否还有可售档：同产品、current 已发布版本、primary 组件的
+              -- tier 在五档阶梯（$3）里排在当前档之后。当前档为空（越梯/自定义）→ false。
+              exists (
+                select 1
+                  from product.plans p2
+                  join product.plan_versions cv
+                    on cv.id = p2.current_version_id and cv.status = 'published'
+                  join product.plan_components pc2
+                    on pc2.plan_version_id = cv.id and pc2.component_role = 'primary'
+                 where pc2.product_id = r.product_id
+                   and p2.deleted_at is null and p2.status = 'active'
+                   and r.tier is not null
+                   and array_position($3::text[], pc2.tier) > array_position($3::text[], r.tier)
+              ) as can_upgrade
+         from ranked r
+         left join product.product_webhooks pw on pw.product_id = r.product_id
+        where r.rn = 1`,
+      [req.tenantId, [...SUBSCRIPTION_STATUSES], [...TIERS]],
     );
 
-    return res.rows.map((r) => ({
-      productCode: r.product_code,
-      subscribed: LIVE_STATUSES.has(r.status),
-      tier: r.tier,
-      status: r.status,
-    }));
+    return res.rows.map((r) => {
+      const subscribed = LIVE_STATUSES.has(r.status);
+      return {
+        productCode: r.product_code,
+        subscribed,
+        tier: r.tier,
+        status: r.status,
+        homeUrl: r.home_url,
+        canUpgrade: subscribed && r.can_upgrade,
+      };
+    });
   }
 }

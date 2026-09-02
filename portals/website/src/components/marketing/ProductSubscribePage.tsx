@@ -37,6 +37,8 @@ import {
   fetchProductPlans,
   type ProductPlansResponse,
 } from "@/api/product-plans.api";
+import { fetchProductSubscriptions } from "@/api/subscription.api";
+import { useAuthStore } from "@/stores/auth.store";
 import {
   availableCycles,
   buildPricingModel,
@@ -113,6 +115,32 @@ export default function ProductSubscribePage() {
         : null,
     [load, catalogItem?.name, locale],
   );
+
+  // 登录租户在本产品上的当前档：定价页据此标出「当前套餐」、禁用低档、高档走升级。
+  // 产品卡片的「升级」就落到这里——先看清档位与价格，再进 console 下单。
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const user = useAuthStore((state) => state.user);
+  const hasSession = isAuthenticated && Boolean(user);
+  const [currentTier, setCurrentTier] = useState<string | null>(null);
+  useEffect(() => {
+    if (!hasSession) {
+      setCurrentTier(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchProductSubscriptions()
+      .then((list) => {
+        if (cancelled) return;
+        const mine = list.find((s) => s.productCode === productCode);
+        setCurrentTier(mine?.subscribed ? mine.tier : null);
+      })
+      .catch(() => {
+        if (!cancelled) setCurrentTier(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hasSession, productCode]);
 
   const [cycle, setCycle] = useState<BillingCycle>("yearly");
   const [audience, setAudience] = useState<AudienceView>("person");
@@ -371,6 +399,7 @@ export default function ProductSubscribePage() {
                       })}
                       selected={plan.tier === activeTier}
                       onSelect={() => setSelectedTier(plan.tier)}
+                      currentTier={currentTier}
                     />
                   ))}
                   {showGhost ? (

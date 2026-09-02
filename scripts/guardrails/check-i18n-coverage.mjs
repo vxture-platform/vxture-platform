@@ -231,11 +231,14 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  *
  * 2026-09-02 admin 2491 → 2493(+2):确认收款弹窗给必填项加红星(aria-label「必填」)与
  *   原因字段「最少 4 字」提示——提交钮灰着却不说缺哪项(owner 报)。同上,整页硬编码,不单抽。
+ *
+ * 2026-09-02 admin 2493 → 2499(+6):产品营销内容编辑框加「推荐度」下拉(0–3 枚奖章,官网未订阅
+ *   产品卡右上角按数量画奖章,owner 要求)。该弹窗整页硬编码(与产品模块既有风格一致),不单抽。
  */
 const BASELINE = {
   console: 30,
   website: 40,
-  admin: 2493,
+  admin: 2499,
   opera: 1931, // 2026-09-02: layout metadata 的写死中文标题/描述搬进 messages.meta（head 三平面统一），-2
   accounts: 290,
 };

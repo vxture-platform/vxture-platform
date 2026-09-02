@@ -26,13 +26,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Banner, Button, EmptyState, Icon } from "@vxture/design-system";
-import type { IconName } from "@vxture/design-system";
+import { Banner, Button, EmptyState } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
-import {
-  buildConsoleEntryUrl,
-  buildConsoleSubscribeUrl,
-} from "@/lib/console-entry";
+import { buildConsoleEntryUrl } from "@/lib/console-entry";
 import {
   fetchProductSubscriptions,
   type ProductSubscriptionState,
@@ -40,27 +36,20 @@ import {
 import {
   catalogDisplayName,
   marketingForLocale,
+  marketingRecommend,
   type ProductCatalogItem,
 } from "@/api/product-catalog.api";
 import { productTypeIcon } from "./product-catalog-view";
 import { useAuthStore } from "@/stores/auth.store";
 import AnimatedHeroBg from "./AnimatedHeroBg";
+import {
+  ProductCatalogCard,
+  type ProductCatalogCardLabels,
+  type ProductCatalogCardModel,
+} from "./ProductCatalogCard";
 
-type AgentCard = {
-  code: string;
-  name: string;
-  /** per-agent 类型标签（marketing.tagline，缺省退回 kinds 映射）；null = 用通用「智能体」。 */
-  type: string | null;
-  icon: IconName;
-  description: string;
-  /** 业务价值（marketing.value）；无则不画。 */
-  value: string | null;
-  /** 能力亮点（marketing.highlights）。 */
-  highlights: string[];
-  /** 成熟度轴：ga=正式版 / beta=公测版 / developing=开发中。 */
-  releaseStage: string;
-  version: string | null;
-};
+/** 卡片数据形状与 /products 产品矩阵同源（ProductCatalogCardModel）。 */
+type AgentCard = ProductCatalogCardModel;
 
 interface AgentMarketplacePageProps {
   /** 目录里的智能体产品；null = 目录暂时读不到（与"目录里没有智能体"是两回事） */
@@ -80,6 +69,30 @@ export default function AgentMarketplacePage({
   const hasTenantSession = isAuthenticated && Boolean(user);
   const consoleEntryUrl = buildConsoleEntryUrl(locale);
 
+  // 卡片文案：键名与 /products 的 products.catalog.* 一一对应（两页同一形状）。
+  const cardLabels = useMemo<ProductCatalogCardLabels>(
+    () => ({
+      valueLabel: t("agents.valueLabel"),
+      recommended: t("agents.recommended"),
+      badges: {
+        stable: t("agents.badges.stable"),
+        beta: t("agents.badges.beta"),
+        active: t("agents.badges.active"),
+        developing: t("agents.badges.developing"),
+      },
+      actions: {
+        subscribe: t("agents.actions.subscribe"),
+        upgrade: t("agents.actions.upgrade"),
+        enter: t("agents.actions.enter"),
+        noEntry: t("agents.actions.noEntry"),
+        contact: t("agents.actions.contact"),
+        detail: t("agents.actions.detail"),
+        coming: t("agents.actions.coming"),
+      },
+    }),
+    [t],
+  );
+
   // 完整阵容全部来自 DB 目录；营销内容取 marketing jsonb。vxtpl 置顶，其余保持目录顺序。
   const cards = useMemo<AgentCard[] | null>(() => {
     if (agents === null) return null;
@@ -94,16 +107,19 @@ export default function AgentMarketplacePage({
         return {
           code: agent.productCode,
           name: catalogDisplayName(agent, locale),
-          type: m?.tagline ?? agentKinds[agent.productType] ?? null,
+          // per-agent 类型标签（marketing.tagline），缺省退回 kinds 映射，再退回通用「智能体」。
+          typeLabel:
+            m?.tagline ?? agentKinds[agent.productType] ?? t("agents.type"),
           icon: productTypeIcon(agent.productType),
           description: agent.description ?? "",
           value: m?.value ?? null,
           highlights: m?.highlights ?? [],
           releaseStage: agent.releaseStage,
           version: agent.releaseVersion,
+          recommend: marketingRecommend(agent.marketing),
         };
       });
-  }, [agents, agentKinds, locale]);
+  }, [agents, agentKinds, locale, t]);
 
   // 登录租户各产品订阅态（code → state）；未登录为空 → 卡片按未订阅呈现。与 /products 同源。
   const [subs, setSubs] = useState<Map<string, ProductSubscriptionState>>(
@@ -223,156 +239,15 @@ export default function AgentMarketplacePage({
             />
           ) : (
             <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {cards.map((agent) => {
-                // 成熟度轴驱动三态:developing 不可订,ga/beta 可订。
-                const developing = agent.releaseStage === "developing";
-                const subState = subs.get(agent.code);
-                const subscribed = !developing && subState?.subscribed === true;
-                const tierLabel =
-                  subscribed && subState?.tier
-                    ? subState.tier.charAt(0).toUpperCase() +
-                      subState.tier.slice(1)
-                    : null;
-                const stageBadge = subscribed
-                  ? t("agents.badges.active")
-                  : agent.releaseStage === "beta"
-                    ? t("agents.badges.beta")
-                    : t("agents.badges.stable");
-                return (
-                  <article
-                    key={agent.code}
-                    className="vx-agent-marketplace-card flex flex-col rounded-lg border border-vx-gray-200 bg-vx-white p-5 shadow-sm transition hover:border-vx-brand-200 hover:shadow-md dark:border-vx-gray-800 dark:bg-vx-gray-900 dark:hover:border-vx-brand-500/30"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-4">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-vx-brand-50 text-vx-brand-600 dark:bg-vx-brand-950/50 dark:text-vx-brand-200">
-                          <Icon name={agent.icon} className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold text-vx-brand-600 dark:text-vx-brand-300">
-                            {agent.type ?? t("agents.type")}
-                          </p>
-                          <h3 className="mt-1 text-lg font-semibold text-vx-gray-900 dark:text-vx-white">
-                            {agent.name}
-                          </h3>
-                        </div>
-                      </div>
-                      {developing ? (
-                        <span className="shrink-0 rounded-full border border-vx-gray-200 bg-vx-gray-50 px-2.5 py-1 text-xs font-medium text-vx-gray-500 dark:border-vx-gray-700 dark:bg-vx-gray-800/60 dark:text-vx-gray-400">
-                          {t("agents.badges.developing")}
-                        </span>
-                      ) : (
-                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-                          <span className="rounded-full border border-vx-info-100 bg-vx-info-50 px-2.5 py-1 text-xs font-medium text-vx-info-700 dark:border-vx-info-400/20 dark:bg-vx-brand-950/30 dark:text-vx-info-200">
-                            {stageBadge}
-                          </span>
-                          {tierLabel ? (
-                            <span className="rounded-full border border-vx-brand-200 bg-vx-brand-50 px-2.5 py-1 text-xs font-semibold text-vx-brand-700 dark:border-vx-brand-400/30 dark:bg-vx-brand-950/40 dark:text-vx-brand-200">
-                              {tierLabel}
-                            </span>
-                          ) : null}
-                        </div>
-                      )}
-                    </div>
-
-                    {agent.description ? (
-                      <p className="mt-5 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
-                        {agent.description}
-                      </p>
-                    ) : null}
-                    {/* 业务价值来自 DB marketing；没录入就不画空框 */}
-                    {agent.value ? (
-                      <div className="mt-5 rounded-md border border-vx-brand-100 bg-vx-brand-50/50 p-4 dark:border-vx-brand-400/15 dark:bg-vx-brand-950/20">
-                        <p className="text-xs font-semibold text-vx-brand-600 dark:text-vx-brand-300">
-                          {t("agents.valueLabel")}
-                        </p>
-                        <p className="mt-2 text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200">
-                          {agent.value}
-                        </p>
-                      </div>
-                    ) : null}
-                    {/* 能力亮点（marketing.highlights）——有就以标签排布 */}
-                    {agent.highlights.length > 0 ? (
-                      <div className="mt-4 flex flex-wrap gap-1.5">
-                        {agent.highlights.map((h) => (
-                          <span
-                            key={h}
-                            className="rounded-full bg-vx-gray-100 px-2.5 py-0.5 text-xs font-normal text-vx-gray-600 dark:bg-vx-gray-800 dark:text-vx-gray-300"
-                          >
-                            {h}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    {/* 底部操作区：左=版本 + 产品介绍，右=动作对；justify-between 留白分隔 */}
-                    <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-5">
-                      <div className="flex items-center gap-2">
-                        {agent.version ? (
-                          <span className="text-xs font-normal text-vx-gray-400 dark:text-vx-gray-500">
-                            {agent.version}
-                          </span>
-                        ) : null}
-                        <Link
-                          href={`/products/${agent.code}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex h-10 items-center text-xs font-normal text-vx-gray-400 underline-offset-4 transition hover:text-vx-gray-600 hover:underline dark:text-vx-gray-500 dark:hover:text-vx-gray-300"
-                        >
-                          {t("agents.actions.detail")}
-                        </Link>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {developing ? (
-                          <Button
-                            variant="outline"
-                            size="md"
-                            disabled
-                            className="h-10"
-                          >
-                            {t("agents.actions.coming")}
-                          </Button>
-                        ) : subscribed ? (
-                          <>
-                            <Button asChild variant="outline">
-                              <a
-                                href={buildConsoleSubscribeUrl(
-                                  locale,
-                                  agent.code,
-                                  "upgrade",
-                                )}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                {t("agents.actions.upgrade")}
-                              </a>
-                            </Button>
-                            <Button asChild>
-                              <a
-                                href={consoleEntryUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                {t("agents.actions.enter")}
-                              </a>
-                            </Button>
-                          </>
-                        ) : (
-                          // 未订阅:先去官网定价页看价格+功能,登录后置(与平台级产品一致)。
-                          <Button asChild>
-                            <Link
-                              href={`/pricing?product=${agent.code}`}
-                              target="_blank"
-                            >
-                              {t("agents.actions.subscribe")}
-                            </Link>
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
+              {/* 卡片本体与 /products 产品矩阵共用 ProductCatalogCard：布局 / 徽标 / 动作 / 跳转一处定。 */}
+              {cards.map((agent) => (
+                <ProductCatalogCard
+                  key={agent.code}
+                  product={agent}
+                  subscription={subs.get(agent.code)}
+                  labels={cardLabels}
+                />
+              ))}
             </div>
           )}
         </div>

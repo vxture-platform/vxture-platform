@@ -28,6 +28,7 @@ import {
   StatusBadge,
 } from "@vxture/design-system";
 import type { IconName } from "@vxture/design-system";
+import { TIERS } from "@vxture-platform/shared";
 import { buildConsoleSubscribeUrl } from "@/lib/console-entry";
 import { usePlanLabels } from "./plan-labels";
 import {
@@ -63,6 +64,7 @@ export function PricingPlanCard({
   contactSubject,
   selected,
   onSelect,
+  currentTier = null,
 }: {
   plan: PricingPlan;
   cycle: BillingCycle;
@@ -70,6 +72,13 @@ export function PricingPlanCard({
   contactSubject: string;
   selected: boolean;
   onSelect: () => void;
+  /**
+   * 登录租户在该产品上的当前档（product-subscriptions）；null = 未登录 / 未订阅。
+   * 有值时：当前档 CTA 禁用「当前套餐」，低档禁用「低于当前套餐」，高档 CTA 变
+   * 「升级到 X」并以 intent=upgrade 进 console——「升级」从此在定价页看清档位与价格
+   * 再下单，而不是被系统替客户挑一档直接结账。
+   */
+  currentTier?: string | null;
 }) {
   const t = useTranslations("products.subscription");
   const labels = usePlanLabels();
@@ -81,6 +90,17 @@ export function PricingPlanCard({
   const isContact = shown === null;
   const isFree = shown !== null && shown.price.amount === 0;
   const isPaid = shown !== null && shown.price.amount > 0;
+  // 与当前档的相对位置（五档阶梯 @shared TIERS）；当前档未知或不在阶梯里 → 一律按未订阅。
+  const tierRank = (tier: string | null) =>
+    tier ? (TIERS as readonly string[]).indexOf(tier) : -1;
+  const relation: "none" | "current" | "lower" | "higher" =
+    currentTier === null || tierRank(currentTier) < 0 || tierRank(plan.tier) < 0
+      ? "none"
+      : plan.tier === currentTier
+        ? "current"
+        : tierRank(plan.tier) < tierRank(currentTier)
+          ? "lower"
+          : "higher";
   // 省额徽章只在「年付展示 + 两个周期都有价 + 年付真的更便宜」时出现。
   const savings =
     isPaid && shown.unit === "year" && plan.monthly && plan.yearly
@@ -227,6 +247,10 @@ export function PricingPlanCard({
                 {t("contact")}
               </a>
             </Button>
+          ) : relation === "current" || relation === "lower" ? (
+            <Button variant="outline" className="w-full" disabled>
+              {relation === "current" ? t("currentPlan") : t("lowerPlan")}
+            </Button>
           ) : (
             <Button
               asChild
@@ -237,7 +261,7 @@ export function PricingPlanCard({
                 href={buildConsoleSubscribeUrl(
                   locale,
                   productCode,
-                  "subscribe",
+                  relation === "higher" ? "upgrade" : "subscribe",
                   plan.tier,
                   // 传实际展示的周期（wire 值域 month|year）：console 严格匹配
                   // plan_prices.cycle_unit，传一个该档没挂价的周期必失配。
@@ -246,7 +270,11 @@ export function PricingPlanCard({
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                {isFree ? t("freeCta") : t("subscribe", { plan: plan.name })}
+                {relation === "higher"
+                  ? t("upgradeTo", { plan: plan.name })
+                  : isFree
+                    ? t("freeCta")
+                    : t("subscribe", { plan: plan.name })}
               </a>
             </Button>
           )}

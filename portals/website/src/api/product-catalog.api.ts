@@ -37,6 +37,17 @@ export interface MarketingLocale {
 export interface MarketingContent {
   zh?: MarketingLocale;
   en?: MarketingLocale;
+  /** 推荐度 0–3（语言无关）：未订阅产品卡右上角按数量画奖章；0/缺省不画。 */
+  recommend?: number;
+}
+
+/** 推荐度归一：非整数 / 越界一律夹到 0–3。 */
+export function marketingRecommend(
+  marketing: MarketingContent | null | undefined,
+): number {
+  const raw = Number(marketing?.recommend ?? 0);
+  if (!Number.isFinite(raw)) return 0;
+  return Math.max(0, Math.min(3, Math.round(raw)));
 }
 
 export interface ProductCatalogItem {

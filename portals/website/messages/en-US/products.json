@@ -118,16 +118,19 @@
     "description": "From model foundations to data governance and knowledge intelligence — platform products subscribed around plans and composed on demand; the varda assistant unlocks by plan tier.",
     "pricingCta": "See pricing",
     "valueLabel": "Business value",
+    "recommended": "Recommended · {count} medals",
     "badges": {
-      "trial": "Free trial",
+      "stable": "Stable",
+      "beta": "Beta",
       "active": "Active",
       "developing": "In development"
     },
     "actions": {
       "subscribe": "Subscribe",
       "upgrade": "Upgrade",
-      "enter": "Enter console",
-      "demo": "Request demo",
+      "enter": "Enter",
+      "noEntry": "Entry coming soon",
+      "contact": "Contact us",
       "detail": "Learn more",
       "coming": "Coming soon"
     },
@@ -170,6 +173,9 @@
     "back": "Back to products",
     "subscribe": "Subscribe {plan}",
     "freeCta": "Start for free",
+    "currentPlan": "Current plan",
+    "lowerPlan": "Below current plan",
+    "upgradeTo": "Upgrade to {plan}",
     "cycle": {
       "monthly": "Monthly",
       "yearly": "Yearly"
