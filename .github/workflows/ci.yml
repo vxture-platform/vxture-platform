@@ -195,6 +195,13 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:messages
 
+      # 代码里 tShared("a.b") 用到的键必须在门户目录里存在——否则 next-intl 缺键
+      # fallback 会把键路径当文案渲染出来(2026-09-02 arche 5 处、筛选下拉直接显示
+      # 「filters.allKinds」实测)。catalog 守卫只对齐 zh/en,管不到「两本都没有」。
+      - name: Message usage guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:message-usage
+
       # i18n 铺开是跨多次会话的长跑，最典型的失败方式不是「做得慢」，是一边抽
       # 一边加——这周抽掉两百条，下周新页面又写进去三百条，总数没动而每个人都
       # 觉得自己在推进。棘轮只管一件事：硬编码中文串不许变多。
