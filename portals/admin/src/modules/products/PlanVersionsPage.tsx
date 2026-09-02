@@ -626,6 +626,8 @@ export function PlanVersionsPage() {
                   </label>
                   <Input
                     type="number"
+                    min="0"
+                    step="0.01"
                     value={priceMonth}
                     disabled={!editable}
                     onChange={(e) => setPriceMonth(e.target.value)}
@@ -637,6 +639,8 @@ export function PlanVersionsPage() {
                   </label>
                   <Input
                     type="number"
+                    min="0"
+                    step="0.01"
                     value={priceYear}
                     disabled={!editable}
                     onChange={(e) => setPriceYear(e.target.value)}

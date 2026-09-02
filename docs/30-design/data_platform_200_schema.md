@@ -876,7 +876,7 @@ CREATE TABLE product.plan_version (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     plan_id     uuid NOT NULL REFERENCES product.plan(id),
     version_no  integer NOT NULL,             -- 同 plan 下从 1 递增
-    price       numeric(18,6) NOT NULL,       -- 标价（高精度，§3.2）
+    price       numeric(12,2) NOT NULL,       -- 标价，到分（§3.2 修订 2026-09-03：资金类一律两位小数）
     currency    varchar(16) NOT NULL DEFAULT 'CNY',
     is_locked   boolean NOT NULL DEFAULT false, -- 一旦被任意订阅引用即置 true → 版本及其 plan_component 全冻结
     created_by  uuid,
@@ -1181,7 +1181,7 @@ commerce.quota_pool_reset (id uuid PK, pool_id uuid, period_start timestamptz,
 > 吸收：v1.1 §5（仅"方案A=三表分离指向 tenant"，**未落字段级**）＋ deploy 现状 9 张账务表 ＋ ADR-11 §11.1/§11.8④/MVP-3（**org=结算账户 / workspace=成本中心**）＋ database.md §3.5/§11（不可变账本铁律 + "支付不能双份·账本不可变"）＋ `commerce.md` §7/§9（状态机与不变量）。
 > 本章首次把账务域落到**字段级**，并把 v1.1 仅"保留三表"深化为完整账务闭环，按 **org 结算 vs workspace 成本** 重构（rank 20）。
 > ⚠️ **支付网关尚未接入**（`commerce.md` §10：🚧 微信支付/支付宝/银行回调流程规划中）。本章 `channel_*` / `pay_expire_at` / 回调类字段为目标态占位，真实接入前为空；线下转账路径（`offline_*` + 凭证）可先行，不依赖网关。
-> **建表策略**：commerce 为空域 → 按 runbook §0.3「空域重建 + reseed」，本章直接给目标态 `CREATE TABLE`（非 ALTER），逐表标注相对 deploy 的字段去留。金额一律 `NUMERIC(12,2)`、单价（标价类）`NUMERIC(18,6)`、Token/配额 `BIGINT`（§3.2）。
+> **建表策略**：commerce 为空域 → 按 runbook §0.3「空域重建 + reseed」，本章直接给目标态 `CREATE TABLE`（非 ALTER），逐表标注相对 deploy 的字段去留。金额与单价（标价类）一律 `NUMERIC(12,2)`（§3.2 修订 2026-09-03：资金类有且只有两位小数，原标价类 `NUMERIC(18,6)` 已收口）、Token/配额 `BIGINT`（§3.2）。
 
 ### 9.1 账务域定位：「资金 vs 成本」分离拓扑（rank 20）
 
@@ -1254,7 +1254,7 @@ CREATE TABLE commerce.tenant_invoice_item (
   item_type       varchar(32)  NOT NULL,           -- subscription_fee | metered_overage | credit_adjustment | discount | tax
   item_unit       varchar(64),                     -- 月 | 万字 | 千次 ...
   quantity        numeric(12,4) DEFAULT 1,         -- 沿用 deploy 精度
-  unit_price      numeric(18,6) DEFAULT 0,         -- 【修订】对齐 §3.2 标价精度（deploy 为 12,4），可承接 plan_version.price
+  unit_price      numeric(12,2) DEFAULT 0,         -- 【修订 2026-09-03】资金类一律两位小数（§3.2），承接 plan_prices.price
   total_amount    numeric(12,2) NOT NULL DEFAULT 0,-- 行小计（应用层 round 到分），并入头表 total
   usage_summary_ref uuid,                           -- 【修订】原 usage_record_id；重指向 §8.7 周期对账/出账批次，不再指退役 usage_meter
   remark          varchar(512),

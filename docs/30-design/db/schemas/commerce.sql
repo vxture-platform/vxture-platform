@@ -64,7 +64,7 @@ CREATE TABLE "commerce"."tenant_invoice_item" (
   "item_type" varchar(32) COLLATE "pg_catalog"."default" NOT NULL,
   "item_unit" varchar(64) COLLATE "pg_catalog"."default",
   "quantity" numeric(12,4) DEFAULT 1.0,
-  "unit_price" numeric(12,4) DEFAULT 0.0,
+  "unit_price" numeric(12,2) DEFAULT 0.0,
   "total_amount" numeric(12,2) NOT NULL DEFAULT 0.0,
   "usage_record_id" uuid,
   "remark" varchar(512) COLLATE "pg_catalog"."default",

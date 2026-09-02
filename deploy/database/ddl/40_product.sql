@@ -195,13 +195,15 @@ ALTER TABLE product.plans
 
 -- 每周期定价（闭合订阅周期模型）：一个 plan_version 挂 N 个周期价（月/季/年/永久…各自价）。
 -- commerce.subscriptions.cycle_unit/cycle_count 从中选一。随版本 is_locked 冻结（§7 触发器覆盖本表）。
--- plan_version_id 域内 FK→plan_versions（CASCADE）。单价高精度 numeric(18,6)；free 档=0。
+-- plan_version_id 域内 FK→plan_versions（CASCADE）。价格 numeric(12,2)——资金类有且只有两位小数
+-- （owner 2026-09-03：不能显示时四舍五入、存储却一长串小数；原 numeric(18,6) 经
+-- migrations/2026-09-03-money-two-decimals.sql 收口）；free 档=0。
 CREATE TABLE product.plan_prices (
     id              uuid           PRIMARY KEY DEFAULT gen_random_uuid(),
     plan_version_id uuid           NOT NULL REFERENCES product.plan_versions(id) ON DELETE CASCADE,
     cycle_unit      varchar(16)    NOT NULL,                          -- 对齐 subscriptions.cycle_unit
     cycle_count     int            NOT NULL DEFAULT 1,                -- 季=month×3、年=year×1…
-    price           numeric(18,6)  NOT NULL,                          -- 标价（高精度）；free=0
+    price           numeric(12,2)  NOT NULL,                          -- 标价，到分；free=0
     currency        varchar(16)    NOT NULL DEFAULT 'CNY',
     created_at      timestamptz    NOT NULL DEFAULT now(),
     CONSTRAINT uq_plan_prices_version_cycle_currency UNIQUE (plan_version_id, cycle_unit, cycle_count, currency),

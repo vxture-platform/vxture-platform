@@ -183,7 +183,7 @@ CREATE TABLE billing.invoice_items (
     item_type          varchar(32)   NOT NULL,
     item_unit          varchar(64),
     quantity           numeric(12,4) DEFAULT 1,
-    unit_price         numeric(18,6) DEFAULT 0,                     -- 标价精度
+    unit_price         numeric(12,2) DEFAULT 0,                     -- 单价，到分（资金类一律两位小数；原 18,6 经 2026-09-03 迁移收口）
     total_amount       numeric(12,2) NOT NULL DEFAULT 0,           -- 行小计，并入头表 total
     usage_cycle_start  timestamptz,                                 -- 计量超额行结算窗口（订阅锚定周期），供复算追溯
     usage_cycle_end    timestamptz,
