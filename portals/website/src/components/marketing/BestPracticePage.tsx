@@ -76,7 +76,7 @@ export default function BestPracticePage() {
         />
         <div className="vx-solutions-grid-layer" aria-hidden="true" />
 
-        <div className="relative mx-auto w-full max-w-7xl px-4 pb-16 pt-28 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
+        <div className="relative mx-auto w-full max-w-7xl px-4 pb-16 pt-12 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
           <div className="max-w-website-4xl">
             <p className="vx-website-hero-eyebrow text-sm font-semibold uppercase text-vx-brand-600 dark:text-vx-info-200">
               {t("page.hero.eyebrow")}

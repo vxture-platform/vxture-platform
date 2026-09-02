@@ -1,179 +1,250 @@
 "use client";
 
+/**
+ * AboutUsPage.tsx - /about 关于我们（三屏，无 hero，吸附滚动）
+ *
+ * 2026-09-02 owner：去掉 hero，内容简化为三个主题、三个满屏分节、全页吸附。三个视角：
+ *   01 定位 · 我们是谁     —— 关注真正发生在业务现场的问题（三根支柱）
+ *   02 方法 · 我们怎么做   —— 从场景到智能体的落地路径（四步）+ 三条原则
+ *   03 能力 · 我们能交付什么 —— 四项核心能力 + 从一个业务痛点开始共创（预约演示）
+ * 即 Why（为什么是我们）→ How（怎么做）→ What（交付什么）的叙事顺序，序号承载真实次序。
+ *
+ * 视觉复用 /solutions 的分节体系（.vx-solutions-industry--{accent} / .vx-solutions-panel），
+ * 吸附复用首页 `.snap-section` 契约；第一屏顶部留出 fixed header 的高度。
+ *
+ * @package @vxture/website
+ * @layer Presentation
+ * @category Components - Marketing
+ */
+
 import { useTranslations } from "next-intl";
 import { Button, Icon } from "@vxture/design-system";
 import type { IconName } from "@vxture/design-system";
 import { Link } from "@/lib/i18n/navigation";
-import AnimatedHeroBg from "./AnimatedHeroBg";
+import { useWindowScrollSnap } from "@/hooks";
+import ScrollToButton from "./ScrollToButton";
 
-type Pillar = {
+type Pillar = { icon: IconName; title: string; description: string };
+type Step = { title: string; description: string };
+type Capability = { icon: IconName; title: string; description: string };
+
+const SECTIONS = [
+  { id: "about-section-positioning", key: "positioning", accent: "sky" },
+  { id: "about-section-method", key: "method", accent: "emerald" },
+  { id: "about-section-capabilities", key: "capabilities", accent: "amber" },
+] as const;
+
+/** Same tuning as the home / solutions pages — sections are viewport-height. */
+const SNAP_THRESHOLD = 280;
+
+function SectionHeading({
+  index,
+  eyebrow,
+  title,
+  description,
+  icon,
+}: {
+  index: number;
+  eyebrow: string;
+  title: string;
+  description: string;
   icon: IconName;
-  title: string;
-  description: string;
-};
-
-type Step = {
-  title: string;
-  description: string;
-};
-
-type Capability = {
-  icon: IconName;
-  title: string;
-  description: string;
-};
+}) {
+  return (
+    <div className="flex flex-col justify-center">
+      <div className="flex items-center gap-3">
+        <span className="vx-solutions-accent-soft flex h-11 w-11 items-center justify-center rounded-lg">
+          <Icon name={icon} className="h-6 w-6" />
+        </span>
+        <p className="vx-solutions-accent-text text-xs font-semibold uppercase tracking-widest">
+          {eyebrow}
+        </p>
+        <span
+          className="ml-auto text-4xl font-bold text-vx-gray-200 dark:text-vx-gray-700"
+          aria-hidden="true"
+        >
+          {String(index + 1).padStart(2, "0")}
+        </span>
+      </div>
+      <h2 className="font-display mt-8 text-3xl font-bold leading-tight text-vx-gray-900 dark:text-vx-white lg:text-4xl">
+        {title}
+      </h2>
+      <p className="mt-5 max-w-website-3xl text-sm leading-7 text-vx-gray-600 dark:text-vx-gray-300">
+        {description}
+      </p>
+    </div>
+  );
+}
 
 export default function AboutUsPage() {
   const t = useTranslations("company.about");
-  const highlights = t.raw("hero.highlights") as string[];
   const pillars = t.raw("positioning.items") as Pillar[];
   const steps = t.raw("method.steps") as Step[];
+  const principles = t.raw("method.principles") as string[];
   const capabilities = t.raw("capabilities.items") as Capability[];
-  const principles = t.raw("principles.items") as string[];
+  const { snapToTarget } = useWindowScrollSnap({
+    debugFlag: false,
+    targetSelector: ".snap-section",
+    targetAlignTo: "top",
+    snapThreshold: SNAP_THRESHOLD,
+    enabledDirections: ["up", "down"],
+  });
 
   return (
-    <div className="vx-page-surface">
-      <section className="vx-hero-section">
-        <AnimatedHeroBg />
-
-        <div className="vx-hero-content">
-          <div className="max-w-website-3xl">
-            <p className="vx-website-hero-eyebrow mb-4 text-sm font-semibold uppercase text-vx-brand-600 dark:text-vx-info-200">
-              {t("hero.eyebrow")}
-            </p>
-            <h1 className="font-brand text-4xl font-bold leading-tight text-vx-gray-900 dark:text-vx-white md:text-6xl">
-              {t("hero.title")}
-            </h1>
-            <p className="mt-5 max-w-website-2xl text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200">
-              {t("hero.description")}
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              {highlights.map((item) => (
-                <span
-                  key={item}
-                  className="rounded-full border border-vx-brand-100 bg-vx-white/70 px-3 py-1 text-sm font-medium text-vx-brand-700 shadow-sm shadow-vx-brand-900/5 backdrop-blur dark:border-vx-white/15 dark:bg-vx-white/10 dark:text-vx-gray-100"
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
-            <div className="mt-8 flex flex-wrap items-center gap-4">
-              <Button asChild size="xl" className="px-5 hover:bg-vx-brand-500">
-                <Link href="/signin">{t("hero.primaryAction")}</Link>
-              </Button>
-              <Button
-                asChild
-                variant="ghost"
-                size="xl"
-                className="border border-vx-brand-200 bg-vx-white/60 px-5 text-vx-brand-700 hover:border-vx-brand-300 hover:bg-vx-white dark:border-vx-white/25 dark:bg-vx-white/10 dark:text-vx-white dark:hover:bg-vx-white/15"
-              >
-                <a href="#about-positioning">{t("hero.secondaryAction")}</a>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="about-positioning" className="vx-section-odd">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8 xl:max-w-screen-2xl">
-          <div className="max-w-website-3xl">
-            <p className="text-sm font-semibold text-vx-brand-600 dark:text-vx-brand-300">
-              {t("positioning.eyebrow")}
-            </p>
-            <h2 className="font-display mt-2 text-3xl font-bold text-vx-gray-900 dark:text-vx-white">
-              {t("positioning.title")}
-            </h2>
-            <p className="mt-4 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
-              {t("positioning.description")}
-            </p>
-          </div>
-
-          <div className="mt-10 grid gap-4 md:grid-cols-3">
+    <div className="vx-page-surface relative">
+      {/* 01 定位 · 我们是谁 */}
+      <section
+        id={SECTIONS[0].id}
+        data-name="About-Positioning"
+        className={`vx-solutions-industry vx-solutions-industry--${SECTIONS[0].accent} snap-section flex min-h-screen items-center`}
+      >
+        <div className="relative mx-auto grid w-full max-w-7xl gap-10 px-4 pt-20 sm:px-6 lg:grid-cols-2 lg:gap-14 lg:px-8 xl:max-w-screen-2xl">
+          <SectionHeading
+            index={0}
+            icon="buildings"
+            eyebrow={t("positioning.eyebrow")}
+            title={t("positioning.title")}
+            description={t("positioning.description")}
+          />
+          <div className="vx-solutions-visual flex flex-col justify-center gap-4">
             {pillars.map((item) => (
               <article
                 key={item.title}
-                className="rounded-lg border border-vx-gray-200 bg-vx-gray-50 p-5 dark:border-vx-gray-800 dark:bg-vx-gray-900"
+                className="vx-solutions-panel flex gap-4 rounded-2xl p-5"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-vx-brand-50 text-vx-brand-600 dark:bg-vx-brand-950/50 dark:text-vx-brand-200">
+                <span className="vx-solutions-accent-soft flex h-10 w-10 shrink-0 items-center justify-center rounded-md">
                   <Icon name={item.icon} className="h-5 w-5" />
+                </span>
+                <div>
+                  <h3 className="text-base font-semibold text-vx-gray-900 dark:text-vx-white">
+                    {item.title}
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
+                    {item.description}
+                  </p>
                 </div>
-                <h3 className="mt-5 text-base font-semibold text-vx-gray-900 dark:text-vx-white">
-                  {item.title}
-                </h3>
-                <p className="mt-3 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
-                  {item.description}
-                </p>
               </article>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="vx-section-even">
-        <div className="vx-website-split-grid vx-website-split-grid--34 mx-auto grid max-w-7xl gap-10 px-6 lg:px-8 xl:max-w-screen-2xl">
-          <div>
-            <p className="text-sm font-semibold text-vx-brand-600 dark:text-vx-brand-300">
-              {t("method.eyebrow")}
-            </p>
-            <h2 className="font-display mt-2 text-3xl font-bold text-vx-gray-900 dark:text-vx-white">
-              {t("method.title")}
-            </h2>
-            <p className="mt-4 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
-              {t("method.description")}
-            </p>
+      {/* 02 方法 · 我们怎么做 */}
+      <section
+        id={SECTIONS[1].id}
+        data-name="About-Method"
+        className={`vx-solutions-industry vx-solutions-industry--${SECTIONS[1].accent} snap-section flex min-h-screen items-center`}
+      >
+        <div className="relative mx-auto grid w-full max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-2 lg:gap-14 lg:px-8 xl:max-w-screen-2xl">
+          <div className="flex flex-col justify-center gap-8">
+            <SectionHeading
+              index={1}
+              icon="workflow"
+              eyebrow={t("method.eyebrow")}
+              title={t("method.title")}
+              description={t("method.description")}
+            />
+            <div className="vx-solutions-panel rounded-2xl p-6">
+              <p className="text-sm font-semibold text-vx-gray-900 dark:text-vx-white">
+                {t("method.principlesTitle")}
+              </p>
+              <ul className="mt-4 space-y-3">
+                {principles.map((principle) => (
+                  <li
+                    key={principle}
+                    className="flex gap-3 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300"
+                  >
+                    <Icon
+                      name="check"
+                      className="vx-solutions-accent-text mt-1 h-4 w-4 shrink-0"
+                    />
+                    <span>{principle}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
+          {/* 四步是真实的先后次序：序号承载信息，不是装饰。 */}
+          <ol className="vx-solutions-visual grid content-center gap-4 sm:grid-cols-2">
             {steps.map((step, index) => (
-              <article
+              <li
                 key={step.title}
-                className="rounded-lg border border-vx-brand-100 bg-vx-white p-5 shadow-sm dark:border-vx-gray-800 dark:bg-vx-gray-900"
+                className="vx-solutions-panel rounded-2xl p-5"
               >
-                <p className="text-xs font-semibold text-vx-brand-600 dark:text-vx-brand-300">
+                <p className="vx-solutions-accent-text text-xs font-semibold">
                   {String(index + 1).padStart(2, "0")}
                 </p>
                 <h3 className="mt-3 text-base font-semibold text-vx-gray-900 dark:text-vx-white">
                   {step.title}
                 </h3>
-                <p className="mt-3 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
+                <p className="mt-2 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
                   {step.description}
                 </p>
-              </article>
+              </li>
             ))}
-          </div>
+          </ol>
         </div>
       </section>
 
-      <section className="vx-section-odd">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8 xl:max-w-screen-2xl">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-vx-brand-600 dark:text-vx-brand-300">
-                {t("capabilities.eyebrow")}
+      {/* 03 能力 · 我们能交付什么 */}
+      <section
+        id={SECTIONS[2].id}
+        data-name="About-Capabilities"
+        className={`vx-solutions-industry vx-solutions-industry--${SECTIONS[2].accent} snap-section flex min-h-screen items-center`}
+      >
+        <div className="relative mx-auto grid w-full max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-2 lg:gap-14 lg:px-8 xl:max-w-screen-2xl">
+          <div className="flex flex-col justify-center gap-8">
+            <SectionHeading
+              index={2}
+              icon="sparkles"
+              eyebrow={t("capabilities.eyebrow")}
+              title={t("capabilities.title")}
+              description={t("capabilities.description")}
+            />
+            <div className="vx-solutions-panel rounded-2xl p-6">
+              <p className="text-base font-semibold text-vx-gray-900 dark:text-vx-white">
+                {t("capabilities.cta.title")}
               </p>
-              <h2 className="font-display mt-2 text-3xl font-bold text-vx-gray-900 dark:text-vx-white">
-                {t("capabilities.title")}
-              </h2>
+              <p className="mt-2 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
+                {t("capabilities.cta.description")}
+              </p>
+              <div className="mt-5 flex flex-wrap items-center gap-4">
+                <Button
+                  asChild
+                  size="lg"
+                  className="px-5 hover:bg-vx-brand-500"
+                >
+                  <Link href="/contact#support">
+                    {t("capabilities.cta.action")}
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  size="lg"
+                  className="vx-solutions-accent-edge px-5"
+                >
+                  <Link href="/cases">
+                    {t("capabilities.cta.secondary")}
+                    <Icon name="arrow-right" className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
             </div>
-            <p className="max-w-website-2xl text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
-              {t("capabilities.description")}
-            </p>
           </div>
-
-          <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="vx-solutions-visual grid content-center gap-4 sm:grid-cols-2">
             {capabilities.map((item) => (
               <article
                 key={item.title}
-                className="rounded-lg border border-vx-gray-200 bg-vx-gray-50 p-5 dark:border-vx-gray-800 dark:bg-vx-gray-900"
+                className="vx-solutions-panel rounded-2xl p-5"
               >
-                <Icon
-                  name={item.icon}
-                  className="h-5 w-5 text-vx-brand-600 dark:text-vx-brand-300"
-                />
+                <span className="vx-solutions-accent-soft flex h-10 w-10 items-center justify-center rounded-md">
+                  <Icon name={item.icon} className="h-5 w-5" />
+                </span>
                 <h3 className="mt-4 text-base font-semibold text-vx-gray-900 dark:text-vx-white">
                   {item.title}
                 </h3>
-                <p className="mt-3 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
+                <p className="mt-2 text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
                   {item.description}
                 </p>
               </article>
@@ -182,48 +253,7 @@ export default function AboutUsPage() {
         </div>
       </section>
 
-      <section className="vx-section-even">
-        <div className="vx-website-split-grid vx-website-split-grid--34 mx-auto grid max-w-7xl gap-8 px-6 lg:px-8 xl:max-w-screen-2xl">
-          <div>
-            <p className="text-sm font-semibold text-vx-brand-600 dark:text-vx-brand-300">
-              {t("principles.eyebrow")}
-            </p>
-            <h2 className="font-display mt-2 text-3xl font-bold text-vx-gray-900 dark:text-vx-white">
-              {t("principles.title")}
-            </h2>
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            {principles.map((item) => (
-              <div
-                key={item}
-                className="rounded-lg border border-vx-gray-200 bg-vx-white p-4 text-sm leading-6 text-vx-gray-600 dark:border-vx-gray-800 dark:bg-vx-gray-900 dark:text-vx-gray-300"
-              >
-                {item}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="vx-section-odd">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 xl:max-w-screen-2xl">
-          <div>
-            <h2 className="font-display text-2xl font-bold text-vx-gray-900 dark:text-vx-white">
-              {t("cta.title")}
-            </h2>
-            <p className="mt-3 max-w-website-2xl text-sm leading-6 text-vx-gray-600 dark:text-vx-gray-300">
-              {t("cta.description")}
-            </p>
-          </div>
-          <Button
-            asChild
-            size="xl"
-            className="w-max px-5 hover:bg-vx-brand-500"
-          >
-            <Link href="/signin">{t("cta.action")}</Link>
-          </Button>
-        </div>
-      </section>
+      <ScrollToButton snapToTarget={snapToTarget} />
     </div>
   );
 }

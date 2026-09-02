@@ -1,104 +1,86 @@
 {
-  "hero": {
-    "eyebrow": "About Vxture",
-    "title": "About Us",
-    "description": "We focus on building industry LLMs and business agents. Around each customer's real workflows, data conditions, and collaboration patterns, we provide close consulting, design, development, and delivery services to co-create business agents that solve concrete operational pain points.",
-    "imageAlt": "Light blue technology collaboration background",
-    "primaryAction": "Open Console",
-    "secondaryAction": "View Positioning",
-    "panelTitle": "Current Positioning",
-    "panelDescription": "Vxture is not only a tool provider or a generic model provider. We combine industry knowledge, intelligent data, model engineering, and agent orchestration to help organizations bring AI into specific roles, workflows, and scenarios.",
-    "highlights": [
-      "Industry LLMs",
-      "Business Agents",
-      "Close Service",
-      "Customer Co-creation"
-    ]
-  },
   "positioning": {
-    "eyebrow": "Positioning",
-    "title": "We focus on problems that happen in real business operations",
-    "description": "Many AI projects struggle to land not because models are weak, but because they do not enter the details of business workflows, data definitions, and organizational collaboration. We start from concrete scenarios and turn capabilities into reusable business agents that can keep improving.",
+    "eyebrow": "Positioning · Who we are",
+    "title": "Industry knowledge, data, and models — turned into business agents that live inside workflows",
+    "description": "Vxture is a platform company for industry LLMs and business agents. We do not sell generic models, and we do not stop at tools: a platform-level foundation carries the agents, industry scenarios package them by the way work is actually done, and the Ruyin workbench puts them in the hands of every role.",
     "items": [
       {
-        "icon": "building-library",
-        "title": "Go deep into industry scenarios",
-        "description": "We first understand goals, roles, process bottlenecks, and risk constraints, then identify where models and agents can assist."
-      },
-      {
         "icon": "agent",
-        "title": "Build super business agents",
-        "description": "Each agent is designed around a clear business responsibility so it can read data, call tools, collaborate with people, and produce results in the workflow."
+        "title": "Two dimensions: general × industry",
+        "description": "General agents work out of the box — proposal writing, business analysis, contract review, digital legal. Industry agents are packaged by how the work is done — low-altitude, emergency, energy and power, industrial. One catalog, pick by scenario, no platform build-out first."
       },
       {
-        "icon": "users",
-        "title": "Co-create with customer teams",
-        "description": "We work with customer teams to clarify requirements, validate prototypes, connect systems, train knowledge, and improve continuously from usage feedback."
+        "icon": "database",
+        "title": "Two layers: agents × platform",
+        "description": "Agents grow on a platform-level foundation: intelligent data governance (ARDA), enterprise knowledge service (KARDA), with model access and capability orchestration provided as infrastructure. Each layer works alone and stacks upward."
+      },
+      {
+        "icon": "desktop",
+        "title": "One entry: the Ruyin workbench",
+        "description": "A desktop workbench that brings agents, data, and daily work into one place where individuals and teams collaborate — everything above is ultimately used from here."
       }
     ]
   },
   "method": {
-    "eyebrow": "How We Work",
-    "title": "A practical path from scenario to agent",
-    "description": "We prefer starting with one clear pain point, building a small verifiable loop first, then expanding to more roles and processes.",
+    "eyebrow": "Method · How we work",
+    "title": "Standard capabilities by subscription, industry scenarios by co-creation",
+    "description": "Two paths, one foundation. Standard capabilities are subscribed: see pricing on the site, order in the console, use on activation, with quota by tier and top-up packs when needed. Industry scenarios are co-created: start from one clear pain point, build a small verifiable loop, then expand to more roles. The four steps are sequential — each takes the previous step's output as input.",
     "steps": [
       {
-        "title": "Identify business pain points",
-        "description": "Map high-frequency tasks, collaboration gaps, information search cost, and decision pressure to define the agent's responsibility boundary."
+        "title": "Pick one scenario",
+        "description": "Choose the closest agent or scenario from the catalog or an industry solution, and define its responsibility boundary first — not the model."
       },
       {
-        "title": "Prepare data and knowledge",
-        "description": "Connect business systems, documents, metrics, knowledge bases, and historical cases to create traceable intelligent data context."
+        "title": "Connect data and knowledge",
+        "description": "Govern data definitions and quality with ARDA; turn documents, policies, and cases into searchable, reasonable knowledge with KARDA — trusted context for the agent."
       },
       {
-        "title": "Design the model and tool chain",
-        "description": "Combine LLMs, retrieval, rules, workflows, and business tools so the agent can complete tasks, not only answer questions."
+        "title": "Orchestrate the agent",
+        "description": "On the foundation, combine models, retrieval, rules, business tools, and human confirmation so the agent completes tasks instead of only answering."
       },
       {
-        "title": "Iterate into production",
-        "description": "Through pilots, evaluation, feedback, and operation, we embed agents into real workflows rather than keeping them in demo environments."
+        "title": "Launch and operate",
+        "description": "After a pilot and evaluation, enter the real workflow; watch usage, quota, and billing in the console, upgrade the tier or add packs as needed, and iterate on feedback."
       }
+    ],
+    "principlesTitle": "Three principles we keep",
+    "principles": [
+      "No over-promising: validate real value first, then expand scope.",
+      "Stay inside customer systems: bring agents into existing workflows rather than building another one.",
+      "Deliver more than pages: data, knowledge, permissions, and operations ship together."
     ]
   },
   "capabilities": {
-    "eyebrow": "Core Capabilities",
-    "title": "What we provide",
-    "description": "Our capabilities focus on industry LLMs and agent delivery, covering both technical implementation and business usability.",
+    "eyebrow": "Capabilities · What we deliver",
+    "title": "A four-layer product system — each layer delivered on its own",
+    "description": "From out-of-the-box agents, to scenarios packaged by industry, to the platform foundation that carries them — subscribe to one, or land the whole set. Three delivery modes: online subscription, private deployment, close co-creation.",
     "items": [
       {
-        "icon": "sparkles",
-        "title": "Industry LLM applications",
-        "description": "Build professional Q&A, assessment, generation, and explanation capabilities using domain corpus, knowledge bases, and business rules."
+        "icon": "agent",
+        "title": "General agents · Digital employees",
+        "description": "Proposal writing, business analysis, contract review, digital legal — for pre-sales, management, legal, and administrative roles; subscribe on sign-in, pick by scenario."
       },
       {
-        "icon": "workflow",
-        "title": "Agent orchestration",
-        "description": "Design task breakdown, tool calling, access control, human confirmation, and result tracking so agents can enter real workflows."
+        "icon": "buildings",
+        "title": "Industry agents · Business-critical",
+        "description": "Low-altitude dispatch and drone monitoring, emergency command, industrial equipment inspection, supply chain collaboration, urban risk assessment, data governance, battlefield simulation — packaged by how each industry works."
       },
       {
         "icon": "database",
-        "title": "Intelligent data foundation",
-        "description": "Organize data assets, knowledge structures, metric definitions, and quality rules to provide trusted context for models and agents."
+        "title": "Platform products · Foundation",
+        "description": "Intelligent Data Governance Platform ARDA, Enterprise Knowledge Service Platform KARDA, Enterprise Password Service Platform UMBRA; model access and capability orchestration provided as infrastructure."
       },
       {
-        "icon": "cube",
-        "title": "Digital twin and simulation",
-        "description": "For scenarios involving space, equipment, resources, and event simulation, combine digital twins with clearer situation and decision support."
+        "icon": "workflow",
+        "title": "Industry solutions · Full-set delivery",
+        "description": "Packaged scenarios for low-altitude economy, emergency management, energy and power, and industrial operations, backed by deployed case studies — usable on delivery."
       }
-    ]
-  },
-  "principles": {
-    "eyebrow": "Principles",
-    "title": "Our basic principles",
-    "items": [
-      "Avoid over-promising. Validate real value first, then expand scope.",
-      "Stay close to customer systems and bring agents into existing workflows where possible.",
-      "Deliver more than pages: data, knowledge, permissions, and operations matter."
-    ]
-  },
-  "cta": {
-    "title": "Start co-creation from one business pain point",
-    "description": "Choose one scenario such as contract review, business analysis, emergency command, data governance, or an industry-specific workflow, then build the first usable, measurable, and iterative business agent.",
-    "action": "Open Console"
+    ],
+    "cta": {
+      "title": "Start co-creation from one business pain point",
+      "description": "Pick one scenario — contract review, business analysis, emergency command, data governance, or one from your industry — and build the first usable, measurable, iterative business agent.",
+      "action": "Book a demo",
+      "secondary": "See case studies"
+    }
   }
 }

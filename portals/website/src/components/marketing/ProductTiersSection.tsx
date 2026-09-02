@@ -199,8 +199,9 @@ export default function ProductTiersSection({
       {/* 栏宽与首页其余 section 一致。曾试过放宽到满幅，激活卡会占到视口 87%，
        * 过头了——现在靠压窄未激活卡（定宽 96px）把余量让给激活卡，而不是靠撑破
        * 整页栏宽。 */}
-      <div className="mx-auto flex h-full min-h-screen w-full max-w-7xl flex-col px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
-        <div className="pt-28 text-center">
+      {/* flex-1 填满分节（分节顶部已由 .snap-section 留出 header 高度），不再自带 min-h-screen 撑破一屏。 */}
+      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 sm:px-6 lg:px-8 xl:max-w-screen-2xl">
+        <div className="pt-12 text-center">
           <h2 className="font-display mb-4 text-3xl font-bold text-vx-brand-700 dark:text-vx-brand-200 lg:text-4xl">
             {t("title")}
           </h2>

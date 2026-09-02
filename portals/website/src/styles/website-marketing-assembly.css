@@ -99,9 +99,17 @@
   padding-bottom: var(--vx-website-section-padding-y);
 }
 
+/* header 常驻（fixed，64px）：吸附分节对齐到视口顶部时会钻进 header 下面，所以每个吸附
+ * 分节统一在顶部留出 header 高度，内容在其余空间里居中（owner 2026-09-02，全站）。
+ * 分节内部原先为 header 补的 pt-28 已相应减到 pt-12，视觉位置不变。
+ * .vx-solutions-industry 自带的 96px 顶部内边距在 website-solutions.css（后加载）里覆盖本值，≥ 64px。 */
+.snap-section {
+  padding-top: var(--vx-website-header-height);
+}
+
 .snap-section.vx-section-odd,
 .snap-section.vx-section-even {
-  padding-top: 0;
+  padding-top: var(--vx-website-header-height);
   padding-bottom: 0;
 }
 
