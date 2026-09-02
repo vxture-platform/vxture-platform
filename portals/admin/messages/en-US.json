@@ -1,4 +1,12 @@
 {
+  "pagination": {
+    "total": "{total} records",
+    "previous": "Previous page",
+    "next": "Next page",
+    "pageSizeLabel": "Rows per page",
+    "pageSizeOption": "{size} per page",
+    "pageSizeAuto": "Fit rows to height"
+  },
   "shell": {
     "loading": {
       "label": "Loading",
