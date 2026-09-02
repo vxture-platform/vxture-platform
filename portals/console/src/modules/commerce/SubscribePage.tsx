@@ -171,7 +171,11 @@ export function SubscribePage() {
               <span className="font-mono">{pendingOrder.orderNo}</span>
             </DetailRow>
             <DetailRow label={t("plansSection")}>
-              {pendingOrder.planCode}
+              {/* 展示名，不是编码：产品主名 · 套餐名（此前渲染 plan_code，客户看到的是
+                  「vxtpl-starter」这种机器码）。 */}
+              {[pendingOrder.productName, pendingOrder.planName]
+                .filter(Boolean)
+                .join(" · ") || pendingOrder.planCode}
               {pendingOrder.tier ? ` · ${pendingOrder.tier}` : ""}
             </DetailRow>
             <DetailRow label={t("pending.amount")}>
@@ -396,9 +400,10 @@ export function SubscribePage() {
               yearSavings={
                 savings
                   ? t("confirm.yearlySave", {
+                      // 整数省额不带小数，非整数保留到分——不把 ¥0.11 抹成 ¥0。
                       amount: formatMoney(savings.amount, savings.currency, {
                         minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
+                        maximumFractionDigits: 2,
                       }),
                     })
                   : null

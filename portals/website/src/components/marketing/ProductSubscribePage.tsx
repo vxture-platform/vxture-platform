@@ -24,7 +24,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   Banner,
   Button,
@@ -77,6 +77,7 @@ const CONTAINER = "mx-auto max-w-7xl px-6 lg:px-8 xl:max-w-screen-2xl";
 export default function ProductSubscribePage() {
   const t = useTranslations("products.subscription");
   const tProducts = useTranslations("products");
+  const locale = useLocale();
   const searchParams = useSearchParams();
   const productCode = searchParams.get("product") ?? DEFAULT_PRODUCT;
 
@@ -108,9 +109,9 @@ export default function ProductSubscribePage() {
   const model = useMemo(
     () =>
       load.status === "ready"
-        ? buildPricingModel(load.data, catalogItem?.name ?? null)
+        ? buildPricingModel(load.data, catalogItem?.name ?? null, locale)
         : null,
-    [load, catalogItem?.name],
+    [load, catalogItem?.name, locale],
   );
 
   const [cycle, setCycle] = useState<BillingCycle>("yearly");

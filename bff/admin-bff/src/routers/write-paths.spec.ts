@@ -158,6 +158,70 @@ describe("subscriptions runSubscriptionAction", () => {
     },
   );
 
+  // 待收款订单壳（suspended + offline_purchase + 最新账单 unpaid/partial）：四个动作
+  // 全部 409。2026-09-02 实测的缺陷：renew 把一条没收钱的订单翻成 active 并延周期，
+  // 账单/付款腿纹丝不动，两端状态彻底对不上。收款只能走 orders 的 offline-payment-confirm。
+  it.each(["renew", "suspend", "resume", "cancel"])(
+    "409 + rollback + release on %s against a pending offline order",
+    async (action) => {
+      const tx = makeTxClient((s) =>
+        s.includes("for update")
+          ? [
+              {
+                status: "suspended",
+                activation_method: "offline_purchase",
+                latest_bill_status: "unpaid",
+                tenant_id: UUID_A,
+                end_at: null,
+              },
+            ]
+          : undefined,
+      );
+      const router = new SubscriptionsRouter(dummyRoPool(), tx.pool);
+      await expect(
+        router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
+          action: action as never,
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      const o = tx.outcome();
+      expect(o.committed).toBe(false);
+      expect(o.rolledBack).toBe(true);
+      expect(o.released).toBe(true);
+      // 没有任何 update 落库：守卫在 UPDATE 之前。
+      expect(
+        tx.calls.some((c) => /update metering\.subscriptions/i.test(c)),
+      ).toBe(false);
+    },
+  );
+
+  it("a post-activation suspended offline subscription (invoice paid) is NOT a pending order — resume commits", async () => {
+    const tx = makeTxClient((s) =>
+      s.includes("for update")
+        ? [
+            {
+              status: "suspended",
+              activation_method: "offline_purchase",
+              latest_bill_status: "paid",
+              tenant_id: UUID_A,
+              end_at: null,
+            },
+          ]
+        : undefined,
+    );
+    const router = new SubscriptionsRouter(dummyRoPool(), tx.pool);
+    (
+      router as unknown as { loadSubscriptionDetail: unknown }
+    ).loadSubscriptionDetail = vi.fn().mockResolvedValue({ id: UUID_A });
+
+    await router.runSubscriptionAction(makeReq(MANAGE), UUID_A, {
+      action: "resume",
+    });
+    const o = tx.outcome();
+    expect(o.committed).toBe(true);
+    expect(o.rolledBack).toBe(false);
+    expect(o.released).toBe(true);
+  });
+
   it("commits + releases on a valid suspend (active → suspended)", async () => {
     const tx = makeTxClient((s) =>
       s.includes("for update")

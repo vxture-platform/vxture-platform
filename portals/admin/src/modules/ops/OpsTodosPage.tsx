@@ -24,10 +24,12 @@ import { exportRowsToCsv, type CsvColumn } from "@/lib/exportCsv";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import type { PageSize } from "@/modules/shared/PageSizePicker";
 import {
+  fetchOrderOperations,
   fetchSupportTicketsStrict,
   fetchTenantOperationsStrict,
 } from "@/api/admin-bff";
 import type {
+  OrderOperationRecord,
   SupportTicketRecord,
   TenantOperationRecord,
 } from "@/entities/console";
@@ -41,7 +43,14 @@ import {
 } from "@/modules/tenants/tenant-utils";
 
 type TodoSeverity = "rose" | "amber" | "blue" | "green";
-type TodoType = "verification" | "risk" | "ticket" | "usage" | "subscription";
+/**
+ * `payment`（收款确认）2026-09-02 加入：客户已申报付款 / 钱到了没开通 / 收了一半的
+ * 订单，是全平台最紧急的人工事项，此前只在订单列表的状态筛选里，总览待办看不到
+ * （owner：「这种需要紧急处理的确认付款事项，应该推送到待办事项中」）。
+ * `usage` / `subscription` 两档自 2026-08-30 起从未产生过一条（见 buildOpsTodos），
+ * 随本次一并摘掉，不再占分类栏。
+ */
+type TodoType = "payment" | "verification" | "risk" | "ticket";
 
 interface OpsTodoItem {
   id: string;
@@ -62,19 +71,54 @@ interface OpsTodoItem {
 }
 
 const TODO_TYPE_LABEL: Record<TodoType, string> = {
+  payment: "收款确认",
   verification: "认证审核",
   risk: "风险复核",
   ticket: "工单处理",
-  usage: "用量异常",
-  subscription: "订阅跟进",
 };
 
 const TODO_TYPE_ICON: Record<TodoType, IconName> = {
+  payment: "credit-card",
   verification: "medal",
   risk: "warning",
   ticket: "chat-circle",
-  usage: "database",
-  subscription: "star",
+};
+
+/**
+ * 需要运营动手的订单态 → 待办。与订单列表的 ATTENTION_RANK（product_321 §4.2）同一
+ * 口径：钱在途（客户已申报，等核对到账）最急；钱到了没开通（段 2 未落）其次；
+ * 收了一半挂账再次。`pending`（客户还没付）不是待办——那是客户的事，TTL 自动关。
+ */
+const ORDER_TODO: Partial<
+  Record<
+    OrderOperationRecord["orderStatus"],
+    {
+      title: string;
+      description: string;
+      severity: TodoSeverity;
+      priority: number;
+    }
+  >
+> = {
+  pending_verify: {
+    title: "客户已申报付款，待确认收款",
+    description:
+      "客户已完成支付并申报，请核对到账后在订单里确认收款（自动开通）或驳回申报。",
+    severity: "rose",
+    priority: 2,
+  },
+  paid_unprovisioned: {
+    title: "已收款但权益未开通",
+    description: "账单已结清，开通没有落地，请在订单里重试开通。",
+    severity: "rose",
+    priority: 3,
+  },
+  partial_pending: {
+    title: "部分收款，尾款挂账",
+    description: "已收到部分款项但未结清，请跟进尾款并在订单里确认收款。",
+    severity: "amber",
+    priority: 15,
+  },
 };
 
 /* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——中文
@@ -116,7 +160,32 @@ function ticketPriority(ticket: SupportTicketRecord) {
 function buildOpsTodos(
   tenants: TenantOperationRecord[],
   tickets: SupportTicketRecord[],
+  orders: OrderOperationRecord[],
 ): OpsTodoItem[] {
+  const orderTodos = orders.flatMap((order) => {
+    const spec = ORDER_TODO[order.orderStatus];
+    if (!spec) return [];
+    return [
+      {
+        id: `${order.tenantId}-order-${order.id}`,
+        type: "payment" as const,
+        title: `${order.orderNo} ${spec.title}`,
+        description: `${order.tenantName} · ${order.solutionName} · ${order.servicePlanName}，金额 ${order.currency} ${order.amount.toFixed(2)}。${spec.description}`,
+        tenantId: order.tenantId,
+        tenantCode: order.tenantCode,
+        tenantName: order.tenantName,
+        tenantMeta: `${typeLabel(order.tenantType)} / ${order.region}`,
+        // 直达订单详情（可读码 order_no），「确认收款」按钮就在那一页。
+        href: `/orders/${encodeURIComponent(order.orderNo)}`,
+        severity: spec.severity,
+        priority: spec.priority,
+        updatedAt: order.updatedAt,
+        icon: TODO_TYPE_ICON.payment,
+        tags: [TODO_TYPE_LABEL.payment, order.tierName],
+      },
+    ];
+  });
+
   const tenantTodos = tenants.flatMap((tenant) => {
     const items: OpsTodoItem[] = [];
     const tenantMeta = buildTenantMeta(tenant);
@@ -169,7 +238,8 @@ function buildOpsTodos(
 
     // 用量预警 / 订阅跟进两类待办原来从租户**列表**的 usage[] / subscriptions[] 派生，
     // 而列表从没带过这两个数组（一直是空占位），所以它们一条都没生成过。2026-08-30
-    // 列表投影不再携带明细数组，这两段随之删除；要恢复得另开按租户聚合的读路径。
+    // 列表投影不再携带明细数组，这两段随之删除；订阅侧真正要人动手的是收款，
+    // 2026-09-02 起由上面的 orderTodos 按订单态派生。
 
     return items;
   });
@@ -193,7 +263,7 @@ function buildOpsTodos(
       tags: [ticket.priority.toUpperCase(), TODO_TYPE_LABEL.ticket],
     }));
 
-  return [...tenantTodos, ...ticketTodos].sort((left, right) => {
+  return [...orderTodos, ...tenantTodos, ...ticketTodos].sort((left, right) => {
     const severityDiff =
       severityOrder(left.severity) - severityOrder(right.severity);
     if (severityDiff !== 0) return severityDiff;
@@ -235,14 +305,17 @@ export function OpsTodosPage() {
   const router = useRouter();
   const [tenants, setTenants] = useState<TenantOperationRecord[]>([]);
   const [tickets, setTickets] = useState<SupportTicketRecord[]>([]);
+  const [orders, setOrders] = useState<OrderOperationRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [tenantLoadError, setTenantLoadError] = useState<string | null>(null);
   const [ticketLoadError, setTicketLoadError] = useState<string | null>(null);
+  const [orderLoadError, setOrderLoadError] = useState<string | null>(null);
   const todos = useMemo(
-    () => buildOpsTodos(tenants, tickets),
-    [tenants, tickets],
+    () => buildOpsTodos(tenants, tickets, orders),
+    [tenants, tickets, orders],
   );
   const urgentTodos = todos.filter((todo) => todo.severity === "rose");
+  const paymentTodos = todos.filter((todo) => todo.type === "payment");
   const verificationTodos = todos.filter(
     (todo) => todo.type === "verification",
   );
@@ -321,6 +394,7 @@ export function OpsTodosPage() {
     setIsLoading(true);
     setTenantLoadError(null);
     setTicketLoadError(null);
+    setOrderLoadError(null);
 
     Promise.all([
       fetchTenantOperationsStrict(),
@@ -332,17 +406,28 @@ export function OpsTodosPage() {
         }
         return [];
       }),
+      // 订单读取失败不拖垮整页（同工单的降级方式）：没有订单权限的运营仍能看其余待办。
+      fetchOrderOperations().catch((error) => {
+        if (!cancelled) {
+          setOrderLoadError(
+            error instanceof Error ? error.message : "订单数据读取失败",
+          );
+        }
+        return [];
+      }),
     ])
-      .then(([tenantRecords, ticketRecords]) => {
+      .then(([tenantRecords, ticketRecords, orderRecords]) => {
         if (!cancelled) {
           setTenants(tenantRecords);
           setTickets(ticketRecords);
+          setOrders(orderRecords);
         }
       })
       .catch((error) => {
         if (!cancelled) {
           setTenants([]);
           setTickets([]);
+          setOrders([]);
           setTenantLoadError(
             error instanceof Error ? error.message : "租户运营数据读取失败",
           );
@@ -366,7 +451,7 @@ export function OpsTodosPage() {
         <PageHeader
           icon="table"
           title="待办任务"
-          description="聚合认证审核、风险租户、工单、用量和订阅异常，帮助运营按优先级推进人工处理。"
+          description="聚合待确认收款的订单、认证审核、风险租户与工单，帮助运营按优先级推进人工处理。"
           secondary={<Badge>只读聚合</Badge>}
         />
       }
@@ -383,6 +468,15 @@ export function OpsTodosPage() {
               value: formatNumber(urgentTodos.length),
               tags: [`影响租户 ${formatNumber(affectedTenants)}`],
               tone: urgentTodos.length ? "danger" : "success",
+            },
+            {
+              id: "payment",
+              help: "客户已申报付款待确认、已收款未开通、部分收款挂账的订单。",
+              icon: "credit-card",
+              label: "待确认收款",
+              value: formatNumber(paymentTodos.length),
+              tags: [orderLoadError ? "订单未接入" : "订单侧确认"],
+              tone: paymentTodos.length ? "danger" : "success",
             },
             {
               id: "verification",
@@ -421,7 +515,7 @@ export function OpsTodosPage() {
           // 图标跟随当前分类，"全部"档退回队列自身图标。
           icon={typeFilter === "all" ? "table" : TODO_TYPE_ICON[typeFilter]}
           level={2}
-          description={`按紧急度与优先级排序，共 ${formatNumber(todos.length)} 条${ticketLoadError ? "（工单未接入）" : ""}。`}
+          description={`按紧急度与优先级排序，共 ${formatNumber(todos.length)} 条${ticketLoadError ? "（工单未接入）" : ""}${orderLoadError ? "（订单未接入）" : ""}。`}
           action={
             <SegmentedControl
               ariaLabel="待办分类"

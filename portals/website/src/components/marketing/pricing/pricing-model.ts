@@ -146,12 +146,23 @@ const QUOTA_KEY_ORDER = [
 export function buildPricingModel(
   data: ProductPlansResponse,
   displayName: string | null,
+  locale?: string,
 ): PricingModel | null {
   if (!data.product || data.plans.length === 0) return null;
   const plans = data.plans.map(toPricingPlan);
+  // 标题按 locale 取名，与 /products 的 catalogDisplayName 同判：中文页用产品主名
+  // product_name（「专注训练智能体」），英文页用副名 nick（品牌/英文名）。此前无条件
+  // nick 优先——vxtpl 的 nick 就是 "Vxtpl"，中文页标题成了机器码
+  // （owner 2026-09-02 报「显示的是 vxtpl，看不懂是啥」）。营销目录里有专门的
+  // 营销名时仍优先它。
+  const name = data.product.name.trim();
+  const nick = data.product.nick?.trim();
+  const catalogName = locale?.toLowerCase().startsWith("en")
+    ? nick || name
+    : name || nick;
   return {
     code: data.product.code,
-    name: displayName ?? data.product.nick ?? data.product.name,
+    name: displayName ?? catalogName ?? data.product.code,
     plans,
     comparison: buildComparison(plans),
   };
@@ -304,8 +315,14 @@ export function displayedPrice(
 }
 
 /**
- * 营销价展示：整数（¥1,999），走 @vxture-platform/shared 的 formatCurrency
- * （110-locale-layer 指定的唯一货币格式化入口），符号随 locale 与币种本地化。
+ * 营销价展示：走 @vxture-platform/shared 的 formatCurrency（110-locale-layer 指定的
+ * 唯一货币格式化入口），符号随 locale 与币种本地化。
+ *
+ * 整价不带小数（¥1,999），非整价保留到分（¥0.01 / ¥166.58）。此前一律
+ * `maximumFractionDigits: 0`：运营把套餐定价 0.01 做真实支付链路验证，官网把它
+ * 四舍五入成「¥0」——一个明明要收钱的档位显示成免费，而 `isFree` 又按 `amount === 0`
+ * 判，于是出现「¥0 但不是免费」的自相矛盾（owner 2026-09-02 报）。价格是钱，
+ * 不能被展示层改数。
  */
 export function formatPrice(
   amount: number,
@@ -314,8 +331,13 @@ export function formatPrice(
 ): string {
   return formatCurrency(amount, locale, currency, {
     minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 2,
   });
+}
+
+/** 年付折合月价：向下取到分（不再向下取到整元——0.01/年 曾被取成 0）。 */
+export function monthlyEquivalent(yearlyAmount: number): number {
+  return Math.floor((yearlyAmount / 12) * 100) / 100;
 }
 
 /** 年付相对月付的节省额与比例（仅当两个周期都有价才有意义） */

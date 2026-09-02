@@ -150,6 +150,14 @@ AND (expires_at IS NULL OR expires_at > now())
 - 全额券覆盖单无现金腿：declare 资金事务内直接 finalize，凭据无需持久化（redemption 行即终态凭据）。
 - **否决 `invoices.operate_remark` 追加 settlement**（v1.0 方案，校审否）：该列被 admin billing 三条运营 SQL（作废/标逾期/应收减免）当自由文本**无条件整体覆写**，settlement 与 320 既有 intent 都会丢（升级单被错激活成第二订阅、券卡死）。intent 仍留 operate_remark（320 既有不动），保护 = P5 的挂单账单三操作 409 封堵。
 
+### P11 订阅侧对待收款订单壳**只读**；收款事项进总览待办（采纳，2026-09-02 owner 实测后补）
+
+- **缺陷**：一条待收款订单在 `metering.subscriptions` 里是 `suspended + offline_purchase`，admin「订阅管理」把它当一条暂停的订阅展示，四个动作（续期确认/暂停/恢复/取消）照常可点，而「确认收款」只在「订单管理」。owner 付了 0.01 并申报后在订阅页找不到收款入口，点了「续期确认」：`subscriptions.router` 的 renew 只看 status 不看 `billing.*`，把订单壳翻成 `active` 并延一个周期，账单仍 `unpaid`、现金腿仍 `pending_verify`、段 2 一步没跑——运营台「已生效」、客户端「待付款」，两端对不上。
+- **裁定**：订单壳（product_320 O1 谓词：`suspended ∧ offline_purchase ∧ 最新账单 unpaid/partial`）对订阅侧四个动作**一律 409**（`resolveTargetStatus` 前置守卫；锁行 SQL 带 `activation_method` + 最新账单态）。理由：renew/resume 会不收钱就开通；cancel 写 `end_at=now()` 会把订单侧「恢复订单」（要求 `end_at IS NULL`）封死；suspend 本就幂等拒绝。钱的正反面只在订单侧：`offline-payment-confirm`（段 1 记账 + 段 2 激活 + provisioning）/ `payment-reject` / `void`。
+- **admin 呈现**：订阅列表/详情对订单壳显示「待收款」（不再显示「暂停」），行菜单与详情头部给唯一出口「确认收款」→ `/orders/:order_no`；四个动作禁用并写明理由；状态筛选加「待收款」档，`expired` 正名「已到期」（此前落到「已取消」）。「续期确认」描述明确写「本动作不记账」。
+- **待办**：`ops-todos` 新增「收款确认」一类，按订单态派生：`pending_verify`（客户已申报，最急）/ `paid_unprovisioned`（钱到没开通）/ `partial_pending`（尾款挂账），直达订单详情。`pending`（客户还没付）不是待办。
+- **存量修复**：迁移 `2026-09-02-repair-pending-orders-flipped-by-renew.sql` 把被误翻的行翻回订单壳（`suspended` / `end_at NULL` / 留痕 `pending_order_repaired`），之后订单侧确认收款走正常 `isPendingOrderRow` 分支。
+
 ## 3. 数据层落点
 
 **DDL 变更（唯一一条）**：`chk_payments_pay_source` CHECK 扩值 `('online','offline')` → `('online','offline','voucher')`。走 320-C 同路径：DDL 文件改 + seed 内嵌幂等 `ALTER TABLE ... DROP CONSTRAINT IF EXISTS / ADD CONSTRAINT`（活库自足），生产经 db-init owner 审批门。

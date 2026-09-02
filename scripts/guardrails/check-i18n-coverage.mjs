@@ -221,11 +221,18 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  *   命名空间喂入 DS 的全部文案(计数/上下页/每页条数)——DS 是 labels-props 契约,i18n 归消费方,
  *   此前 admin 一个 label 都没传故整条分页显英文。计数语走 t(),不再硬编码,admin CJK 净变 0
  *   (先前一版曾短暂 +1 的硬编码兜底已撤)。
+ *
+ * 2026-09-02 admin 2467 → 2491(+24):订阅流程打通(owner 五条报告)。订阅管理列表/详情
+ *   加「待收款」态、「确认收款」出口与待收款横幅、四动作禁用理由、`expired`→「已到期」
+ *   (此前落到「已取消」);待办任务加「收款确认」一类(三种订单态的标题/说明)与统计卡。
+ *   **没有走 `t()`,是有意的**:订阅管理与待办任务两页全部文案硬编码中文、一条没抽
+ *   (SubscriptionOperationDialog 的禁用理由/描述/占位整表都是字面量),只抽新加的这
+ *   几句会造出半中英(同 08-29 / 08-30 / 08-31 的判据)。棘轮上探到新水位。
  */
 const BASELINE = {
   console: 30,
   website: 40,
-  admin: 2467,
+  admin: 2491,
   opera: 1931, // 2026-09-02: layout metadata 的写死中文标题/描述搬进 messages.meta（head 三平面统一），-2
   accounts: 290,
 };

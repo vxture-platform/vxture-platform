@@ -33,6 +33,7 @@ import { usePlanLabels } from "./plan-labels";
 import {
   displayedPrice,
   formatPrice,
+  monthlyEquivalent,
   yearlySavings,
   UNLIMITED,
   type BillingCycle,
@@ -154,7 +155,7 @@ export function PricingPlanCard({
           ) : shown.unit === "year" ? (
             <>
               <span className="text-3xl font-semibold tabular-nums tracking-tight text-vx-text-primary">
-                {money(Math.floor(shown.price.amount / 12))}
+                {money(monthlyEquivalent(shown.price.amount))}
               </span>
               <span className="text-xs text-vx-text-muted">
                 {t("price.perMonth")} ·{" "}

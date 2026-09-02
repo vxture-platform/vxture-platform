@@ -160,6 +160,10 @@ export interface PendingOrderSummary {
   orderNo: string;
   billNo: string | null;
   planCode: string;
+  /** 展示名：套餐名 + 产品主名。此前只带 plan_code，页面把「vxtpl-starter」当名字给客户看。 */
+  planName: string;
+  productCode: string | null;
+  productName: string | null;
   tier: string | null;
   cycleUnit: string;
   amount: string;
@@ -301,6 +305,9 @@ interface OrderDetailResult {
   billNo: string | null;
   planCode: string;
   planName: string;
+  /** 产品主名/编码：付款页标题要写「产品 · 套餐」，此前投影漏了它（SQL 早就选了）。 */
+  productCode: string | null;
+  productName: string | null;
   tier: string | null;
   cycleUnit: string;
   currency: string;
@@ -1181,6 +1188,8 @@ export class SubscriptionRouter {
       billNo: row.bill_no,
       planCode: row.plan_code ?? "",
       planName: row.plan_name ?? "",
+      productCode: row.product_code,
+      productName: row.product_name,
       tier: row.tier,
       cycleUnit: row.cycle_unit,
       currency: row.currency ?? "CNY",
@@ -1441,6 +1450,9 @@ export class SubscriptionRouter {
       orderNo: r.order_no,
       billNo: r.bill_no,
       planCode: r.plan_code ?? "",
+      planName: r.plan_name ?? "",
+      productCode: r.product_code,
+      productName: r.product_name,
       tier: r.tier,
       cycleUnit: r.cycle_unit,
       amount: r.pay_amount ?? "0",

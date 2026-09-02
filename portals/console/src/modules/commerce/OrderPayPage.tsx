@@ -323,9 +323,11 @@ export function OrderPayPage() {
   const state = detail.orderState;
   const isPending = state === "pending_payment";
   const fullVoucherCover = isPending && Number(cashDue) === 0;
-  const planLabel = `${detail.planName || detail.planCode}${
-    detail.tier ? ` · ${detail.tier}` : ""
-  }`;
+  // 「产品主名 · 套餐名」——付款页是客户最后一次确认「我在为什么付钱」的地方，
+  // 只写套餐名（入门版）看不出是哪个产品的入门版；编码只作最后兜底。
+  const planLabel = `${[detail.productName, detail.planName || detail.planCode]
+    .filter(Boolean)
+    .join(" · ")}${detail.tier ? ` · ${detail.tier}` : ""}`;
 
   const stateBadge = (
     <StatusBadge tone={STATE_TONE[state]}>{t(`status.${state}`)}</StatusBadge>
