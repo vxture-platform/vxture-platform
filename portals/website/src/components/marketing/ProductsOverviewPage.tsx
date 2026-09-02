@@ -20,8 +20,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Banner, Button, EmptyState } from "@vxture/design-system";
-import { Link } from "@/lib/i18n/navigation";
+import { Banner, EmptyState } from "@vxture/design-system";
 import {
   fetchProductSubscriptions,
   type ProductSubscriptionState,
@@ -33,7 +32,7 @@ import {
   type ProductCatalogItem,
 } from "@/api/product-catalog.api";
 import { useAuthStore } from "@/stores/auth.store";
-import AnimatedHeroBg from "./AnimatedHeroBg";
+import { CatalogHero } from "./CatalogHero";
 import {
   ProductCatalogCard,
   type ProductCatalogCardLabels,
@@ -135,27 +134,15 @@ export default function ProductsOverviewPage({
 
   return (
     <div className="vx-page-surface">
-      <section className="vx-hero-section">
-        <AnimatedHeroBg />
-        <div className="vx-hero-content">
-          <div className="max-w-website-3xl">
-            <p className="vx-website-hero-eyebrow mb-3 text-sm font-semibold uppercase text-vx-brand-600 dark:text-vx-info-200">
-              {t("catalog.eyebrow")}
-            </p>
-            <h1 className="font-brand text-4xl font-bold leading-tight text-vx-gray-900 dark:text-vx-white md:text-6xl">
-              {t("catalog.title")}
-            </h1>
-            <p className="mt-5 max-w-website-2xl text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200">
-              {t("catalog.description")}
-            </p>
-            <div className="mt-8 flex flex-wrap items-center gap-4">
-              <Button asChild size="xl" className="px-5">
-                <Link href="/pricing">{t("catalog.pricingCta")}</Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* hero 与 /appcenter 同一组件：背景色 + 右侧渐隐插画（平台级定位）+ 预约演示 / 业务咨询。 */}
+      <CatalogHero
+        eyebrow={t("catalog.eyebrow")}
+        title={t("catalog.title")}
+        description={t("catalog.description")}
+        illustration="platforms"
+        primaryAction={t("catalog.demoCta")}
+        secondaryAction={t("catalog.consultCta")}
+      />
 
       <section id="products" className="vx-section-odd">
         <div className="mx-auto max-w-7xl px-6 lg:px-8 xl:max-w-screen-2xl">

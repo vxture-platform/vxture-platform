@@ -116,7 +116,8 @@
     "eyebrow": "Product suite",
     "title": "Full-stack intelligence, composable",
     "description": "From model foundations to data governance and knowledge intelligence — platform products subscribed around plans and composed on demand; the varda assistant unlocks by plan tier.",
-    "pricingCta": "See pricing",
+    "demoCta": "Book a demo",
+    "consultCta": "Business inquiry",
     "valueLabel": "Business value",
     "recommended": "Recommended · {count} medals",
     "badges": {

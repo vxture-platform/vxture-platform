@@ -71,8 +71,10 @@ function ContactChannelCard({ channel }: { channel: ContactChannel }) {
 
   return (
     <Card
+      // 锚点：目录页 hero「预约演示」→ #support、「业务咨询」→ #ecosystem 直达对应板块。
+      id={channel.id}
       surface="strong"
-      className="relative flex h-full flex-col overflow-hidden p-10 lg:p-12"
+      className="relative flex h-full scroll-mt-32 flex-col overflow-hidden p-10 lg:p-12"
     >
       {/* 角落水印：往里收，四周留白，不贴边裁切。 */}
       <span

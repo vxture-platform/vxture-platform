@@ -38,6 +38,13 @@
   letter-spacing: var(--vx-website-hero-eyebrow-tracking-wide);
 }
 
+/* 目录页 hero（/products、/appcenter）右侧插画：向左整体渐隐，与左侧文字和背景色融合。
+ * 渐变本体在 tokens-website.css §hero（同 solutions grid mask 的做法）。 */
+.vx-catalog-hero-art {
+  -webkit-mask-image: var(--vx-website-catalog-hero-art-mask);
+  mask-image: var(--vx-website-catalog-hero-art-mask);
+}
+
 /* --foreground 自身跟随明暗模式，故两块都不再需要各自的 .dark 覆盖。 */
 .vx-page-surface {
   min-height: 100vh;
@@ -59,8 +66,10 @@
 
 .vx-section-even {
   background: var(--vx-section-even-bg);
-  border-top: var(--vx-website-section-border-width) solid var(--vx-section-border);
-  border-bottom: var(--vx-website-section-border-width) solid var(--vx-section-border);
+  border-top: var(--vx-website-section-border-width) solid
+    var(--vx-section-border);
+  border-bottom: var(--vx-website-section-border-width) solid
+    var(--vx-section-border);
   padding-top: var(--vx-website-section-padding-y);
   padding-bottom: var(--vx-website-section-padding-y);
 }

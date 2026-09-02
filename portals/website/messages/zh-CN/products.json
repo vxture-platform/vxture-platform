@@ -100,7 +100,8 @@
     "eyebrow": "产品矩阵",
     "title": "全栈智能，按需组合",
     "description": "从模型底座到数据治理与知识智能，平台级产品围绕套餐订阅、按需组合；智能体助手 varda 随套餐档位放开。",
-    "pricingCta": "查看套餐定价",
+    "demoCta": "预约演示",
+    "consultCta": "业务咨询",
     "valueLabel": "业务价值",
     "recommended": "推荐度 {count} 枚奖章",
     "badges": {

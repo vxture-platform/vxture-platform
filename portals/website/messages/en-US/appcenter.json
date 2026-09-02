@@ -3,15 +3,8 @@
     "eyebrow": "Agent Marketplace",
     "title": "Agent Marketplace",
     "description": "The agents that are live on the platform and open to customers — digital employees, professional software agents and embodied agents. Sign in to subscribe for free, then integrate and orchestrate them by plan.",
-    "primaryAction": "Open Console",
-    "guestPrimaryAction": "Get started free",
-    "secondaryAction": "Browse Agents",
-    "highlights": [
-      "Digital Employees",
-      "Software Agents",
-      "Embodied Agents",
-      "Industry Agents"
-    ]
+    "primaryAction": "Book a demo",
+    "secondaryAction": "Business inquiry"
   },
   "agents": {
     "eyebrow": "Agents",

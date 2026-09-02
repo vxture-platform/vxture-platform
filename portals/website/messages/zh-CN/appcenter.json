@@ -3,10 +3,8 @@
     "eyebrow": "Agent Marketplace",
     "title": "智能体广场",
     "description": "汇聚平台上已上线、面向客户开放的数字员工、专业智能体与具身智能体，登录即可免费订阅，按套餐接入与编排。",
-    "primaryAction": "进入工作台",
-    "guestPrimaryAction": "免费开始",
-    "secondaryAction": "浏览智能体",
-    "highlights": ["数字员工", "软件智能体", "具身智能体", "行业智能体"]
+    "primaryAction": "预约演示",
+    "secondaryAction": "业务咨询"
   },
   "agents": {
     "eyebrow": "Agents",
