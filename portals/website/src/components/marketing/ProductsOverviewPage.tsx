@@ -134,12 +134,11 @@ export default function ProductsOverviewPage({
 
   return (
     <div className="vx-page-surface">
-      {/* hero 与 /appcenter 同一组件：背景色 + 右侧渐隐插画（平台级定位）+ 预约演示 / 业务咨询。 */}
+      {/* hero 与 /appcenter 同一组件：淡化点线背景 + 预约演示 / 业务咨询，两页同高。 */}
       <CatalogHero
         eyebrow={t("catalog.eyebrow")}
         title={t("catalog.title")}
         description={t("catalog.description")}
-        illustration="platforms"
         primaryAction={t("catalog.demoCta")}
         secondaryAction={t("catalog.consultCta")}
       />

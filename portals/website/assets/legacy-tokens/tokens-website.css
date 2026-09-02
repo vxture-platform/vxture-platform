@@ -305,13 +305,10 @@
   --vx-website-hero-content-max-width-xl: 1536px;
   --vx-website-hero-eyebrow-tracking: 0.16em;
   --vx-website-hero-eyebrow-tracking-wide: 0.18em;
-  /* 目录页 hero 右侧插画的向左渐隐遮罩（mask 只取 alpha，颜色本身无意义） */
-  --vx-website-catalog-hero-art-mask: linear-gradient(
-    to right,
-    transparent 0%,
-    color-mix(in srgb, var(--vx-color-black) 35%, transparent) 28%,
-    var(--vx-color-black) 60%
-  );
+  /* 目录页 hero（/products、/appcenter）：比通用 hero 矮一档；顶部内边距要盖住
+     fixed header（约 72px）再留呼吸，底部略收，四行文字在 min-height 内垂直居中。 */
+  --vx-website-catalog-hero-min-height: 380px;
+  --vx-website-catalog-hero-content-padding: 104px 24px 40px;
 
   /* 营销页：分节 */
   --vx-website-section-padding-y: 64px;

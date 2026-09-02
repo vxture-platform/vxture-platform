@@ -38,11 +38,36 @@
   letter-spacing: var(--vx-website-hero-eyebrow-tracking-wide);
 }
 
-/* 目录页 hero（/products、/appcenter）右侧插画：向左整体渐隐，与左侧文字和背景色融合。
- * 渐变本体在 tokens-website.css §hero（同 solutions grid mask 的做法）。 */
-.vx-catalog-hero-art {
-  -webkit-mask-image: var(--vx-website-catalog-hero-art-mask);
-  mask-image: var(--vx-website-catalog-hero-art-mask);
+/* 目录页 hero（/products、/appcenter）：比通用 .vx-hero-section 矮；文字左对齐、靠上排
+ * （紧贴 fixed header 下方开始），不再贴底也不垂直居中（owner 2026-09-02：文字太低、
+ * 整体高度再减、靠上对齐）。尺寸在 tokens-website.css §hero。 */
+.vx-catalog-hero {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  overflow: hidden;
+  min-height: var(--vx-website-catalog-hero-min-height);
+}
+
+.vx-catalog-hero-content {
+  position: relative;
+  width: 100%;
+  max-width: var(--vx-website-hero-content-max-width);
+  margin: 0 auto;
+  padding: var(--vx-website-catalog-hero-content-padding);
+}
+
+@media (min-width: 64rem) {
+  .vx-catalog-hero-content {
+    padding-left: var(--vx-website-hero-content-padding-x-lg);
+    padding-right: var(--vx-website-hero-content-padding-x-lg);
+  }
+}
+
+@media (min-width: 80rem) {
+  .vx-catalog-hero-content {
+    max-width: var(--vx-website-hero-content-max-width-xl);
+  }
 }
 
 /* --foreground 自身跟随明暗模式，故两块都不再需要各自的 .dark 覆盖。 */

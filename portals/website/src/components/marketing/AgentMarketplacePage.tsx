@@ -143,12 +143,11 @@ export default function AgentMarketplacePage({
 
   return (
     <div className="vx-page-surface">
-      {/* hero 与 /products 同一组件：背景色 + 右侧渐隐插画（智能体定位）+ 预约演示 / 业务咨询。 */}
+      {/* hero 与 /products 同一组件：淡化点线背景 + 预约演示 / 业务咨询，两页同高。 */}
       <CatalogHero
         eyebrow={t("hero.eyebrow")}
         title={t("hero.title")}
         description={t("hero.description")}
-        illustration="agents"
         primaryAction={t("hero.primaryAction")}
         secondaryAction={t("hero.secondaryAction")}
       />
