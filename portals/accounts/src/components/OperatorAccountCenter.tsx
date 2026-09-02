@@ -35,9 +35,12 @@ import {
   startOperatorPhoneChange,
   verifyOperatorPhoneChange,
   changeOperatorPassword,
+  startOperatorMfaTotp,
+  confirmOperatorMfaTotp,
   OperatorUnauthenticatedError,
   type OperatorSelf,
 } from "@/api/operator-self";
+import { TotpQrCode } from "@/components/TotpQrCode";
 
 type Load =
   | { state: "loading" }
@@ -273,6 +276,14 @@ function ReadyView({
 
       <PasswordCard onDone={() => setNotice(t("password.updated"))} />
 
+      <MfaCard
+        enabled={self.mfaTotpEnabled}
+        onDone={() => {
+          setNotice(t("mfa.updated"));
+          onChanged();
+        }}
+      />
+
       <Card className="flex flex-col gap-md p-lg">
         <h2 className="text-title-sm font-semibold">{t("security.title")}</h2>
         <div className="flex items-center justify-between gap-md">
@@ -286,11 +297,145 @@ function ReadyView({
             <a href="/security/passkeys">{t("security.passkeysManage")}</a>
           </Button>
         </div>
-        <p className="text-body-sm text-muted-foreground">
-          {t("security.pending")}
-        </p>
       </Card>
     </div>
+  );
+}
+
+/** TOTP two-factor (re-)enrollment: stage secret → scan QR → confirm code → recovery codes. */
+function MfaCard({
+  enabled,
+  onDone,
+}: {
+  enabled: boolean;
+  onDone: () => void;
+}) {
+  const t = useTranslations("operatorAccount");
+  const [phase, setPhase] = useState<"idle" | "enroll" | "done">("idle");
+  const [otpauthUri, setOtpauthUri] = useState("");
+  const [secret, setSecret] = useState("");
+  const [code, setCode] = useState("");
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function begin() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await startOperatorMfaTotp();
+      setOtpauthUri(res.otpauthUri);
+      setSecret(res.secret);
+      setPhase("enroll");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirm(e: FormEvent) {
+    e.preventDefault();
+    const c = code.trim();
+    if (!c) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await confirmOperatorMfaTotp(c);
+      setRecoveryCodes(res.recoveryCodes);
+      setPhase("done");
+      setCode("");
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function reset() {
+    setPhase("idle");
+    setOtpauthUri("");
+    setSecret("");
+    setCode("");
+    setRecoveryCodes([]);
+    setError(null);
+  }
+
+  return (
+    <Card className="flex flex-col gap-md p-lg">
+      <div className="flex items-center gap-sm">
+        <h2 className="text-title-sm font-semibold">{t("mfa.title")}</h2>
+        <StatusBadge tone={enabled ? "success" : "warning"}>
+          {enabled ? t("mfa.enabled") : t("mfa.disabled")}
+        </StatusBadge>
+      </div>
+      <p className="text-body-sm text-muted-foreground">{t("mfa.hint")}</p>
+
+      {phase === "idle" ? (
+        <div>
+          <Button variant="secondary" size="sm" disabled={busy} onClick={begin}>
+            {enabled ? t("mfa.reenroll") : t("mfa.setup")}
+          </Button>
+        </div>
+      ) : phase === "enroll" ? (
+        <form className="flex flex-col gap-sm" onSubmit={confirm}>
+          <p className="text-body-sm text-muted-foreground">
+            {t("mfa.scanHint")}
+          </p>
+          {otpauthUri ? <TotpQrCode value={otpauthUri} /> : null}
+          <p className="text-body-sm">
+            {t("mfa.secretLabel")}：
+            <code className="rounded bg-muted px-xs py-3xs font-mono">
+              {secret}
+            </code>
+          </p>
+          <Label>
+            {t("mfa.codeLabel")}
+            <Input
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+            />
+          </Label>
+          {error ? <Banner tone="danger" title={error} /> : null}
+          <div className="flex gap-xs">
+            <Button type="submit" size="sm" disabled={busy || !code.trim()}>
+              {t("mfa.confirm")}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={reset}
+              disabled={busy}
+            >
+              {t("email.cancel")}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <div className="flex flex-col gap-sm">
+          <Banner tone="success" title={t("mfa.recoveryTitle")} />
+          <p className="text-body-sm text-muted-foreground">
+            {t("mfa.recoveryHint")}
+          </p>
+          <ul className="grid grid-cols-2 gap-xs font-mono text-body-sm">
+            {recoveryCodes.map((rc) => (
+              <li key={rc} className="rounded bg-muted px-sm py-2xs">
+                {rc}
+              </li>
+            ))}
+          </ul>
+          <div>
+            <Button variant="secondary" size="sm" onClick={reset}>
+              {t("mfa.done")}
+            </Button>
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }
 

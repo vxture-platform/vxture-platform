@@ -40,6 +40,22 @@
       "mismatch": "两次输入的新密码不一致。",
       "updated": "密码已修改。"
     },
+    "mfa": {
+      "title": "二次验证",
+      "enabled": "已启用",
+      "disabled": "未设置",
+      "hint": "用验证器 App（如 Google Authenticator）生成动态验证码，登录时作为第二重身份验证。",
+      "setup": "设置二次验证",
+      "reenroll": "重新设置",
+      "scanHint": "用验证器 App 扫描二维码，或手动输入密钥，然后填入生成的 6 位验证码。",
+      "secretLabel": "密钥",
+      "codeLabel": "验证码",
+      "confirm": "确认启用",
+      "recoveryTitle": "二次验证已启用",
+      "recoveryHint": "请妥善保存以下恢复码（仅此一次显示），验证器不可用时可用它登录。",
+      "done": "完成",
+      "updated": "二次验证已更新。"
+    },
     "security": {
       "title": "安全",
       "passkeys": "通行密钥",
