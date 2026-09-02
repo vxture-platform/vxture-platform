@@ -277,6 +277,23 @@ function resolveTargetStatus(
   current: SubscriptionActionRow,
 ): string {
   const status = current.status;
+  // 待收款订单壳：钱没到、权益没开过。四个动作对它全不成立——
+  //   renew/resume 会把一条没收钱的单直接翻成 active 并延一个周期（2026-09-02 实测：
+  //   运营在订阅页点「续期确认」，订单翻成已生效，账单仍 unpaid、付款腿仍 pending_verify，
+  //   客户端订单流程照样待付款，两边彻底对不上）；cancel 会写 end_at=now()，把订单侧
+  //   「恢复订单」（要求 end_at IS NULL）也一并封死。收款走 orders 的
+  //   offline-payment-confirm（段 1 记账 + 段 2 激活 + provisioning），驳回走 void。
+  if (
+    isPendingOrderRow(
+      status,
+      current.activation_method,
+      current.latest_bill_status,
+    )
+  ) {
+    throw new ConflictException(
+      "该订阅是待收款订单，尚未确认收款：请在「订单管理」里确认收款或驳回订单，订阅侧不能续期 / 暂停 / 恢复 / 取消",
+    );
+  }
   switch (action) {
     case "renew":
       if (status === "cancelled") {
@@ -460,10 +477,30 @@ function buildQuota(
   };
 }
 
+/**
+ * 待收款订单壳（product_320 §2 O1 谓词，与 orders.router `isPendingOrderRow` +
+ * console-bff `queryPendingOrder` 同一口径）：客户下了单、钱还没确认到账、权益
+ * 从未开通。这一行在 metering.subscriptions 里长得像一条「暂停」的订阅，但它不是
+ * 订阅——它是订单。订阅侧的四个动作对它都不成立（见 resolveTargetStatus）。
+ */
+function isPendingOrderRow(
+  status: string,
+  activationMethod: string,
+  latestBillStatus: string | null,
+): boolean {
+  return (
+    status === "suspended" &&
+    activationMethod === "offline_purchase" &&
+    (latestBillStatus === "unpaid" || latestBillStatus === "partial")
+  );
+}
+
 function operationHint(
   status: SubscriptionOperationStatus,
   autoRenew: boolean,
+  pendingOrder: boolean,
 ): string {
+  if (pendingOrder) return "待收款订单，请在订单管理确认收款或驳回";
   switch (status) {
     case "overdue":
       return "存在逾期，需跟进催款";
@@ -492,6 +529,11 @@ function mapSubscriptionRow(row: SubscriptionRow): SubscriptionOperationRecord {
   const planName = row.plan_name ?? "未关联套餐";
   const operatorName =
     row.operator_name ?? (row.created_by_type === "system" ? "系统" : "—");
+  const pendingOrder = isPendingOrderRow(
+    row.raw_status,
+    row.activation_method,
+    row.latest_bill_status,
+  );
 
   return {
     id: row.id,
@@ -512,6 +554,7 @@ function mapSubscriptionRow(row: SubscriptionRow): SubscriptionOperationRecord {
     tierName: tierName(tierCode),
     status,
     rawStatus: row.raw_status,
+    pendingOrder,
     cycleType: cycle,
     autoRenew: row.auto_renew,
     currency: row.currency ?? "CNY",
@@ -522,7 +565,7 @@ function mapSubscriptionRow(row: SubscriptionRow): SubscriptionOperationRecord {
     appName: null,
     appNameZh: null,
     operatorName,
-    operationHint: operationHint(status, row.auto_renew),
+    operationHint: operationHint(status, row.auto_renew, pendingOrder),
     startAt: toIso(row.start_at),
     endAt: toIsoNullable(row.end_at),
     trialEndAt: toIsoNullable(row.trial_end_at),
@@ -643,6 +686,8 @@ select
   s.cycle_unit,
   s.cycle_count,
   s.status as raw_status,
+  s.activation_method,
+  inv.bill_status as latest_bill_status,
   s.auto_renew,
   s.currency,
   s.pay_amount,
@@ -698,6 +743,15 @@ left join lateral (
   from metering.quota_pools qp
   where qp.subscription_id = s.id and qp.status = 'active'
 ) quota on true
+-- 最新账单态：与 orders.router / console-bff 同一口径（每单最新一张未删账单），
+-- 用来判「待收款订单壳」（product_320 O1 谓词）。
+left join lateral (
+  select i.bill_status
+  from billing.invoices i
+  where i.subscription_id = s.id and i.deleted_at is null
+  order by i.created_at desc
+  limit 1
+) inv on true
 `;
 
 const SUBSCRIPTION_LIST_SQL = `
@@ -768,6 +822,8 @@ interface SubscriptionRow {
   cycle_unit: string;
   cycle_count: number;
   raw_status: string;
+  activation_method: string;
+  latest_bill_status: string | null;
   auto_renew: boolean;
   currency: string | null;
   pay_amount: string | null;
@@ -828,17 +884,25 @@ interface RenewalRow {
 
 const SUBSCRIPTION_LOCK_SQL = `
 select
-  id,
-  tenant_id,
-  status,
-  auto_renew,
-  cycle_unit,
-  cycle_count,
-  end_at,
-  subscription_kind
-from metering.subscriptions
-where id = $1 and deleted_at is null
-for update
+  s.id,
+  s.tenant_id,
+  s.status,
+  s.activation_method,
+  s.auto_renew,
+  s.cycle_unit,
+  s.cycle_count,
+  s.end_at,
+  s.subscription_kind,
+  (
+    select i.bill_status
+    from billing.invoices i
+    where i.subscription_id = s.id and i.deleted_at is null
+    order by i.created_at desc
+    limit 1
+  ) as latest_bill_status
+from metering.subscriptions s
+where s.id = $1 and s.deleted_at is null
+for update of s
 `;
 
 // $1 id / $2 target status / $3 action。
@@ -895,6 +959,8 @@ interface SubscriptionActionRow {
   id: string;
   tenant_id: string;
   status: string;
+  activation_method: string;
+  latest_bill_status: string | null;
   auto_renew: boolean;
   cycle_unit: string;
   cycle_count: number;

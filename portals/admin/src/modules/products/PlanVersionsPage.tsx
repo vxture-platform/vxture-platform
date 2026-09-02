@@ -227,31 +227,68 @@ export function PlanVersionsPage() {
 
   // ── draft editing ─────────────────────────────────────────────────────────
 
+  /**
+   * Read the price/quota form into a PATCH body. Returns null (and surfaces
+   * the message) when the quota JSON does not parse — the caller must stop.
+   */
+  function readDraftBody(): {
+    prices: { cycleUnit: string; price: number }[];
+    quota?: Record<string, unknown>;
+  } | null {
+    let quota: Record<string, unknown> | undefined;
+    if (quotaText.trim()) {
+      try {
+        quota = JSON.parse(quotaText) as Record<string, unknown>;
+      } catch {
+        setMessage(t("editor.quotaInvalid"));
+        return null;
+      }
+    }
+    const prices: { cycleUnit: string; price: number }[] = [];
+    if (priceMonth !== "")
+      prices.push({ cycleUnit: "month", price: Number(priceMonth) });
+    if (priceYear !== "")
+      prices.push({ cycleUnit: "year", price: Number(priceYear) });
+    return quota === undefined ? { prices } : { prices, quota };
+  }
+
+  /** Read the bundled editor rows into the PUT payload; null on bad JSON. */
+  function readBundledComponents(): PlanVersionBundledComponentInput[] | null {
+    const components: PlanVersionBundledComponentInput[] = [];
+    for (const item of bundled) {
+      let quota: Record<string, unknown>;
+      try {
+        quota = JSON.parse(item.quotaText || "{}") as Record<string, unknown>;
+      } catch {
+        setMessage(t("bundled.quotaInvalid", { name: item.productName }));
+        return null;
+      }
+      components.push({
+        productCode: item.productCode,
+        quota,
+        features: item.features,
+        ...(item.priority === null ? {} : { priority: item.priority }),
+      });
+    }
+    return components;
+  }
+
+  /** True when the bundled editor differs from what the server last returned. */
+  function bundledIsDirty(): boolean {
+    if (!detail) return false;
+    return (
+      JSON.stringify(bundled) !==
+      JSON.stringify(toBundledDrafts(detail.components))
+    );
+  }
+
   async function saveDraft() {
     if (!detail) return;
     setBusy(true);
     setMessage(null);
     try {
-      let quota: Record<string, unknown> | undefined;
-      if (quotaText.trim()) {
-        try {
-          quota = JSON.parse(quotaText) as Record<string, unknown>;
-        } catch {
-          setMessage(t("editor.quotaInvalid"));
-          setBusy(false);
-          return;
-        }
-      }
-      const prices: { cycleUnit: string; price: number }[] = [];
-      if (priceMonth !== "")
-        prices.push({ cycleUnit: "month", price: Number(priceMonth) });
-      if (priceYear !== "")
-        prices.push({ cycleUnit: "year", price: Number(priceYear) });
-      const body: {
-        prices?: { cycleUnit: string; price: number }[];
-        quota?: Record<string, unknown>;
-      } = { prices };
-      if (quota !== undefined) body.quota = quota;
+      const body = readDraftBody();
+      if (!body) return;
       const updated = await updateDraftPlanVersion(detail.id, body);
       setDetail(updated);
       await refreshAfterWrite(updated.planId);
@@ -263,11 +300,31 @@ export function PlanVersionsPage() {
     }
   }
 
+  /**
+   * Publish = persist what is on the form, THEN freeze the version. Publishing
+   * only the server-side draft silently dropped unsaved price / quota / bundled
+   * edits unless the operator happened to press "save draft" first (owner
+   * report 2026-09-02) — the published version then carried stale values with
+   * no error. Prices/quota are always re-sent (idempotent upsert); bundled
+   * components only when the editor differs from the loaded version, since
+   * that PUT is a full replace behind its own step-up gate.
+   */
   async function publish() {
     if (!detail) return;
     setBusy(true);
     setMessage(null);
     try {
+      const body = readDraftBody();
+      if (!body) return;
+      const dirty = bundledIsDirty();
+      const components = dirty ? readBundledComponents() : null;
+      if (dirty && !components) return;
+      await updateDraftPlanVersion(detail.id, body);
+      if (components) {
+        await runWithStepUp(() =>
+          replacePlanVersionBundledComponents(detail.id, components),
+        );
+      }
       await runWithStepUp(() => publishPlanVersion(detail.id));
       await openVersion(detail.id);
       await refreshAfterWrite(detail.planId);
@@ -350,23 +407,8 @@ export function PlanVersionsPage() {
     setBusy(true);
     setMessage(null);
     try {
-      const components: PlanVersionBundledComponentInput[] = [];
-      for (const item of bundled) {
-        let quota: Record<string, unknown>;
-        try {
-          quota = JSON.parse(item.quotaText || "{}") as Record<string, unknown>;
-        } catch {
-          setMessage(t("bundled.quotaInvalid", { name: item.productName }));
-          setBusy(false);
-          return;
-        }
-        components.push({
-          productCode: item.productCode,
-          quota,
-          features: item.features,
-          ...(item.priority === null ? {} : { priority: item.priority }),
-        });
-      }
+      const components = readBundledComponents();
+      if (!components) return;
       const updated = await runWithStepUp(() =>
         replacePlanVersionBundledComponents(detail.id, components),
       );

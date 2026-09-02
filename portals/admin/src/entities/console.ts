@@ -1257,6 +1257,11 @@ export interface SubscriptionOperationRecord {
   tierName: string;
   status: SubscriptionOperationStatus;
   rawStatus: string;
+  /**
+   * 待收款订单壳（suspended + offline_purchase + 最新账单未结清）。true 表示钱还没到、
+   * 权益从未开通——订阅侧四个动作全部不适用，收款与驳回在订单管理。
+   */
+  pendingOrder: boolean;
   cycleType: SubscriptionOperationCycle;
   autoRenew: boolean;
   currency: string;

@@ -588,6 +588,9 @@ export interface PendingOrderSummary {
   orderNo: string;
   billNo: string | null;
   planCode: string;
+  planName: string;
+  productCode: string | null;
+  productName: string | null;
   tier: string | null;
   cycleUnit: string;
   amount: string;
@@ -750,6 +753,8 @@ export interface OrderDetail {
   billNo: string | null;
   planCode: string;
   planName: string;
+  productCode: string | null;
+  productName: string | null;
   tier: string | null;
   cycleUnit: string;
   currency: string;
