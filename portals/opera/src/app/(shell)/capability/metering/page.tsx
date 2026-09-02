@@ -52,13 +52,13 @@ import {
   ListPageTemplate,
   MetricGrid,
   NativeSelect,
-  Pagination,
   SegmentedControl,
   type IconName,
   useListPagination,
   useToast,
   ViewHeader,
 } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import { useTenancyDirectory } from "@/features/tenancy/directory";
 import { WorkspaceCell } from "@/features/tenancy/WorkspaceCell";
 import { api, OperaApiError } from "@/lib/api";
@@ -571,9 +571,9 @@ export default function CapabilityMeteringPage() {
           onSelectionChange={setSelected}
           indexStart={pager.indexStart}
           footer={
-            <Pagination
+            <ListPagination
               className="w-full"
-              page={pager.page}
+              currentPage={pager.page}
               pageCount={pager.pageCount}
               total={rows.length}
               filteredTotal={visible.length}

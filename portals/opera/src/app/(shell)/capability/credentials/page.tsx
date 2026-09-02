@@ -46,7 +46,6 @@ import {
   InputGroupAddon,
   InputGroupInput,
   ListPageTemplate,
-  Pagination,
   StatusBadge,
   TableTitleCell,
   ViewHeader,
@@ -54,6 +53,7 @@ import {
   useToast,
   type StatusBadgeTone,
 } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { useLocale, useTranslations } from "next-intl";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
@@ -478,9 +478,9 @@ export default function RunosCredentialsPage() {
                 }
               : {})}
             footer={
-              <Pagination
+              <ListPagination
                 className="w-full"
-                page={pager.page}
+                currentPage={pager.page}
                 pageCount={pager.pageCount}
                 total={rows.length}
                 filteredTotal={filtered.length}

@@ -24,13 +24,13 @@ import {
   InputGroupAddon,
   InputGroupInput,
   NativeSelect,
-  Pagination,
   StatusBadge,
   type DataTableSort,
   type StatusBadgeTone,
   useListPagination,
   useToast,
 } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import { api, OperaApiError } from "@/lib/api";
 
 /** 字段名对齐 product_251 X-3 的统一审计记录（见 opera-bff 同名接口）。 */
@@ -291,9 +291,9 @@ export function PlatformChangeTable() {
           />
         )}
         footer={
-          <Pagination
+          <ListPagination
             className="w-full"
-            page={pager.page}
+            currentPage={pager.page}
             pageCount={pager.pageCount}
             total={rows.length}
             filteredTotal={visible.length}

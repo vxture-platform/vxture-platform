@@ -52,7 +52,6 @@ import {
   InputGroupInput,
   ListPageTemplate,
   NativeSelect,
-  Pagination,
   StatusBadge,
   Switch,
   TableTitleCell,
@@ -61,6 +60,7 @@ import {
   useListPagination,
   useToast,
 } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { PRODUCT_TYPE_DEFS, isValidProductType } from "@vxture/core-utils";
@@ -764,9 +764,9 @@ function ProductsPageContent() {
   const editing = dialog?.kind === "edit";
 
   const pagination = (
-    <Pagination
+    <ListPagination
       className="w-full"
-      page={pager.page}
+      currentPage={pager.page}
       pageCount={pager.pageCount}
       total={rows.length}
       filteredTotal={filtered.length}

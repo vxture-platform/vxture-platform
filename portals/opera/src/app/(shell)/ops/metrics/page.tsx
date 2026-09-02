@@ -33,7 +33,6 @@ import {
   InputGroupInput,
   MetricGrid,
   NativeSelect,
-  Pagination,
   Section,
   StatusBadge,
   ViewHeader,
@@ -42,6 +41,7 @@ import {
   useToast,
   type StatusBadgeTone,
 } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import { api, OperaApiError } from "@/lib/api";
 
 /**
@@ -650,9 +650,9 @@ export default function MetricsPage() {
             />
           )}
           footer={
-            <Pagination
+            <ListPagination
               className="w-full"
-              page={pager.page}
+              currentPage={pager.page}
               pageCount={pager.pageCount}
               total={jobs.length}
               filteredTotal={filteredJobs.length}

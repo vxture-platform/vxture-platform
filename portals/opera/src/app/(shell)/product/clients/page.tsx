@@ -45,7 +45,6 @@ import {
   InputGroupInput,
   ListPageTemplate,
   NativeSelect,
-  Pagination,
   StatusBadge,
   Switch,
   Textarea,
@@ -54,6 +53,7 @@ import {
   useToast,
   type StatusBadgeTone,
 } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { api, OperaApiError } from "@/lib/api";
 
@@ -602,9 +602,9 @@ function ProductClients() {
               />
             )}
             footer={
-              <Pagination
+              <ListPagination
                 className="w-full"
-                page={pager.page}
+                currentPage={pager.page}
                 pageCount={pager.pageCount}
                 total={rows.length}
                 filteredTotal={visible.length}

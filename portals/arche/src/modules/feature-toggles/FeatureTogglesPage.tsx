@@ -15,7 +15,6 @@ import {
   ListPageTemplate,
   MetricGrid,
   NativeSelect,
-  Pagination,
   StatusBadge,
   TableTitleCell,
   Textarea,
@@ -32,6 +31,8 @@ import {
 import type { DataTableColumn } from "@vxture/design-system";
 import type { FeatureFlagRecord } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
+import { ListPagination } from "@/modules/shared/ListPagination";
+import { type PageSize } from "@/modules/shared/PageSizePicker";
 import { formatDate } from "@/lib/format";
 
 // P2 占位板块建设：功能开关（admin.feature_flags）。全局开关 + 灰度百分比 +
@@ -51,8 +52,6 @@ interface FlagForm {
   // Carried verbatim so an edit does not wipe per-tenant overrides set elsewhere.
   tenantOverrides: Record<string, boolean>;
 }
-
-const PAGE_SIZE = 20;
 
 function toLocalInputValue(date: Date) {
   const offset = date.getTimezoneOffset() * 60_000;
@@ -182,6 +181,7 @@ export function FeatureTogglesPage() {
   const [archivedFilter, setArchivedFilter] =
     useState<ArchivedFilter>("active");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(20);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
@@ -234,10 +234,10 @@ export function FeatureTogglesPage() {
   }, [items, search, categoryFilter, environmentFilter, archivedFilter]);
 
   const pageItems = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, page]);
-  const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+  const pageCount = Math.ceil(filtered.length / pageSize);
 
   function openCreate() {
     setEditingId(null);
@@ -423,7 +423,7 @@ export function FeatureTogglesPage() {
             rows={pageItems}
             rowKey={(item) => item.id}
             loading={loading}
-            indexStart={(page - 1) * PAGE_SIZE + 1}
+            indexStart={(page - 1) * pageSize + 1}
             selectedKeys={[...selectedIds]}
             onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
             rowActions={(item) => (
@@ -481,13 +481,17 @@ export function FeatureTogglesPage() {
               />
             }
             footer={
-              pageCount > 1 ? (
-                <Pagination
-                  page={page}
-                  pageCount={pageCount}
-                  onPageChange={setPage}
-                />
-              ) : null
+              <ListPagination
+                currentPage={page}
+                pageCount={pageCount}
+                total={filtered.length}
+                pageSize={pageSize}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setPage(1);
+                }}
+                onPageChange={setPage}
+              />
             }
           />
         }

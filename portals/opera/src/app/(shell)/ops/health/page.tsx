@@ -64,7 +64,6 @@ import {
   ListPageTemplate,
   MetricGrid,
   NativeSelect,
-  Pagination,
   Section,
   StatusBadge,
   ViewHeader,
@@ -73,6 +72,7 @@ import {
   type IconName,
   type StatusBadgeTone,
 } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import {
   PRODUCT_STATE_META,
   type ProductState,
@@ -611,9 +611,9 @@ export default function ServiceMonitorPage() {
      **列对齐**读出来，而不是靠一个缩进的方框。列宽与父表逐列对齐，所以「存活」
      在上下两级是同一条竖线。 */
   const pagination = (
-    <Pagination
+    <ListPagination
       className="w-full"
-      page={pager.page}
+      currentPage={pager.page}
       pageCount={pager.pageCount}
       total={items.length}
       filteredTotal={visible.length}

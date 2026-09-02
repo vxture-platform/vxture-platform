@@ -11,7 +11,6 @@ import {
   ListPageTemplate,
   MetricGrid,
   NativeSelect,
-  Pagination,
   StatusBadge,
   TableTitleCell,
   useToast,
@@ -21,6 +20,8 @@ import { fetchNotificationLogs } from "@/api/arche-bff";
 import type { NotificationLogRecord } from "@/entities/console";
 import { exportRowsToCsv, type CsvColumn } from "@/lib/exportCsv";
 import { PageHeader } from "@/modules/shared/PageHeader";
+import { ListPagination } from "@/modules/shared/ListPagination";
+import { type PageSize } from "@/modules/shared/PageSizePicker";
 
 /* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——中文
    `2026/08/18`，英文 `08/18/2026`。同一串数字，读出来是两个日期。 */
@@ -38,8 +39,6 @@ function formatDateTime(value: string, locale: string) {
 
 // P2 占位板块建设：通知投递台账（support.notification_logs，只读）。
 // 守卫 notification:log.read（seed §4.3）。回执字段由投递 webhook 回写。
-
-const PAGE_SIZE = 20;
 
 const CHANNEL_LABELS: Record<string, string> = {
   email: "邮件",
@@ -141,6 +140,7 @@ export function NotificationLogsPage() {
   const [channelFilter, setChannelFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(20);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -172,10 +172,10 @@ export function NotificationLogsPage() {
   }, [items, search, channelFilter, statusFilter]);
 
   const pageItems = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, page]);
-  const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+  const pageCount = Math.ceil(filtered.length / pageSize);
 
   const failedCount = items.filter(
     (i) => i.status === "failed" || i.status === "bounced",
@@ -294,7 +294,7 @@ export function NotificationLogsPage() {
           rows={pageItems}
           rowKey={(item) => item.id}
           loading={loading}
-          indexStart={(page - 1) * PAGE_SIZE + 1}
+          indexStart={(page - 1) * pageSize + 1}
           selectedKeys={[...selectedIds]}
           onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
           empty={
@@ -308,13 +308,17 @@ export function NotificationLogsPage() {
             />
           }
           footer={
-            pageCount > 1 ? (
-              <Pagination
-                page={page}
-                pageCount={pageCount}
-                onPageChange={setPage}
-              />
-            ) : null
+            <ListPagination
+              currentPage={page}
+              pageCount={pageCount}
+              total={filtered.length}
+              pageSize={pageSize}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setPage(1);
+              }}
+              onPageChange={setPage}
+            />
           }
         />
       }

@@ -35,7 +35,6 @@ import {
   InputGroupAddon,
   InputGroupInput,
   MetricGrid,
-  Pagination,
   Section,
   StatusBadge,
   ViewHeader,
@@ -44,6 +43,7 @@ import {
   useToast,
   type StatusBadgeTone,
 } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import { api, OperaApiError } from "@/lib/api";
 import { useVisiblePolling } from "@/lib/useVisiblePolling";
 
@@ -468,9 +468,9 @@ export default function JobSchedulerPage() {
                 />
               )}
               footer={
-                <Pagination
+                <ListPagination
                   className="w-full"
-                  page={jobPager.page}
+                  currentPage={jobPager.page}
                   pageCount={jobPager.pageCount}
                   total={jobs.length}
                   filteredTotal={filteredJobs.length}
@@ -672,9 +672,9 @@ export default function JobSchedulerPage() {
                 />
               )}
               footer={
-                <Pagination
+                <ListPagination
                   className="w-full"
-                  page={issuePager.page}
+                  currentPage={issuePager.page}
                   pageCount={issuePager.pageCount}
                   total={queue.recentIssues.length}
                   filteredTotal={filteredIssues.length}

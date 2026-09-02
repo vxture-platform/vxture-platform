@@ -50,7 +50,6 @@ import {
   InputGroupAddon,
   InputGroupInput,
   NativeSelect,
-  Pagination,
   Section,
   StatusBadge,
   ViewHeader,
@@ -60,6 +59,7 @@ import {
   type DataTableSort,
   type StatusBadgeTone,
 } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import { api, OperaApiError } from "@/lib/api";
 import { LOG_LEVEL_META, type LogLevel } from "@/lib/status";
 import { RunosCallStreams } from "./RunosCallStreams";
@@ -753,9 +753,9 @@ export default function LogsPage() {
             />
           )}
           footer={
-            <Pagination
+            <ListPagination
               className="w-full"
-              page={pager.page}
+              currentPage={pager.page}
               pageCount={pager.pageCount}
               total={rows.length}
               filteredTotal={visible.length}
