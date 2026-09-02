@@ -26,6 +26,7 @@
   },
   "common": {
     "actionFailed": "操作失败",
+    "clearFilters": "清空筛选",
     "adjustFiltersHint": "尝试调整筛选条件",
     "cardsRetired": "卡片视图已下线，改用列表",
     "close": "关闭",
@@ -188,10 +189,12 @@
     "source": "来源",
     "state": "状态",
     "target": "对象",
-    "time": "时间"
+    "time": "时间",
+    "updatedAt": "更新时间"
   },
   "filters": {
     "allStates": "全部状态",
+    "allKinds": "全部类型",
     "stateLabel": "状态筛选"
   },
   "actions": {
@@ -199,6 +202,8 @@
     "delete": "删除",
     "disable": "停用",
     "enable": "启用",
+    "pause": "暂停",
+    "viewDetail": "查看详情",
     "create": "创建",
     "edit": "编辑",
     "archive": "归档"

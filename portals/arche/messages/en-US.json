@@ -26,6 +26,7 @@
   },
   "common": {
     "actionFailed": "Something went wrong",
+    "clearFilters": "Clear filters",
     "adjustFiltersHint": "Try adjusting the filters",
     "cardsRetired": "Card view has been retired; use the list",
     "close": "Close",
@@ -188,10 +189,12 @@
     "source": "Source",
     "state": "State",
     "target": "Object",
-    "time": "Time"
+    "time": "Time",
+    "updatedAt": "Updated"
   },
   "filters": {
     "allStates": "All states",
+    "allKinds": "All types",
     "stateLabel": "Filter by state"
   },
   "actions": {
@@ -199,6 +202,8 @@
     "delete": "Delete",
     "disable": "Disable",
     "enable": "Enable",
+    "pause": "Pause",
+    "viewDetail": "View details",
     "create": "Create",
     "edit": "Edit",
     "archive": "Archive"
