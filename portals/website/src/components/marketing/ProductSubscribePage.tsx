@@ -10,8 +10,9 @@
  *   1. 订阅区（**撑满一屏**，owner 2026-09-03）：一行 plan bar（产品名 + 个人/全部 + 月付/年付，
  *      两组切换常驻）+ 档位卡 + 底部「更多权益，查看详情」向下滚动指示；
  *      —— 档位卡按**三槽位**排：1 档 = 左右浅色占位、中间档位；2 档 = 前两位档位、第三位占位；
- *         3 档正好；4 档全显；≥5 档默认只显示前三档，可点击展开其余；
- *      —— 「个人」视角 = 个人档 + （有占位槽时）团队档提示，「全部」= 全部档位；
+ *         3 档正好；4 档及以上全显；
+ *      —— 「个人」视角 = 个人档 + 右侧团队档窄卡（点击切「全部」），「全部」= 全部档位；
+ *         五档产品的「收起 / 展开」就是这一对切换，不另做机制（owner 2026-09-03）；
  *   2. 对比区：分组功能对比表，选中列整列淡高亮（id=plan-compare，滚动指示的落点）；
  *   3. 答疑区：FAQ 双列卡。
  * 全局 Header/Footer 由 (marketing) layout 提供，页面不重复。
@@ -51,7 +52,7 @@ import {
   type BillingCycle,
 } from "./pricing/pricing-model";
 import { PricingPlanCard } from "./pricing/PricingPlanCard";
-import { TeamTiersGhostCard } from "./pricing/TeamTiersGhostCard";
+import { TiersSideCard } from "./pricing/TeamTiersGhostCard";
 import { PlanCompareTable } from "./pricing/PlanCompareTable";
 import { PricingFaq } from "./pricing/PricingFaq";
 
@@ -81,9 +82,6 @@ const DEFAULT_SELECTED_TIER = "pro";
 
 /** 三槽位基线：不足三档用浅色占位补到三列。 */
 const BASE_SLOTS = 3;
-/** 档位数达到这个值时默认收起，只显示前 COLLAPSED_VISIBLE 档。 */
-const COLLAPSE_FROM = 5;
-const COLLAPSED_VISIBLE = 3;
 
 /** 对比区锚点：底部滚动指示的落点。 */
 const COMPARE_SECTION_ID = "plan-compare";
@@ -175,12 +173,10 @@ export default function ProductSubscribePage() {
   const [cycle, setCycle] = useState<BillingCycle>("yearly");
   const [audience, setAudience] = useState<AudienceView>("person");
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(false);
 
-  // 切换产品回到默认选中与收起态
+  // 切换产品回到默认选中
   useEffect(() => {
     setSelectedTier(null);
-    setExpanded(false);
   }, [productCode]);
 
   // 月付/年付两个按钮常驻；阶梯里没挂价的周期禁用。当前周期没价时落到有价的那种。
@@ -204,24 +200,23 @@ export default function ProductSubscribePage() {
       null);
 
   // 三槽位排布（owner 2026-09-03）：
-  //   1 档 → [占位, 档, 占位]；2 档 → [档, 档, 占位]；3 档正好；4 档全显；
-  //   ≥5 档默认收起只显示前三档，展开后全显。
-  const collapsible = visiblePlans.length >= COLLAPSE_FROM;
-  const shownPlans =
-    collapsible && !expanded
-      ? visiblePlans.slice(0, COLLAPSED_VISIBLE)
-      : visiblePlans;
+  //   1 档 → [占位, 档, 占位]；2 档 → [档, 档, 占位]；3 档正好；4 档及以上全显。
+  //   五档产品：「个人」= 3 个人档 + 右侧团队档窄卡，「全部」= 5 档——收起 / 展开就是这对切换。
+  const shownPlans = visiblePlans;
   const placeholderCount = Math.max(0, BASE_SLOTS - shownPlans.length);
   const leadingPlaceholders = shownPlans.length === 1 ? 1 : 0;
   const trailingPlaceholders = placeholderCount - leadingPlaceholders;
-  const columns = shownPlans.length + placeholderCount;
-  // 「个人」视角下还有团队档时，把团队档提示放进最后一个占位槽（没有占位槽就不提示，
-  // 用「全部」切换即可）。
-  const teamHintInPlaceholder =
-    effectiveAudience === "person" &&
-    teamPlans.length > 0 &&
-    trailingPlaceholders > 0;
-  const hiddenCount = visiblePlans.length - shownPlans.length;
+  // 右侧团队档窄卡：「个人」视角下有团队档时出现；有占位槽时放进最后一个占位槽，不另占列。
+  const teamHint = effectiveAudience === "person" && teamPlans.length > 0;
+  const teamHintInPlaceholder = teamHint && trailingPlaceholders > 0;
+  const showSideCard = teamHint && !teamHintInPlaceholder;
+  // CSS repeat() 不接受 0：分段拼接，空段直接不出现。
+  const gridColumns = [
+    `repeat(${shownPlans.length + placeholderCount}, minmax(15rem, 1fr))`,
+    showSideCard ? "minmax(8.5rem, 10rem)" : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const contactHref = (subject: string) =>
     `mailto:sales@vxture.com?subject=${encodeURIComponent(subject)}`;
@@ -328,10 +323,7 @@ export default function ProductSubscribePage() {
                         size="md"
                         aria-pressed={effectiveAudience === view}
                         disabled={view === "person" && personPlans.length === 0}
-                        onClick={() => {
-                          setAudience(view);
-                          setExpanded(false);
-                        }}
+                        onClick={() => setAudience(view)}
                         className="rounded-full px-5"
                       >
                         {t(`audienceToggle.${view}`)}
@@ -368,9 +360,7 @@ export default function ProductSubscribePage() {
                   role="radiogroup"
                   aria-label={t("planGroupLabel")}
                   className="grid items-stretch gap-5"
-                  style={{
-                    gridTemplateColumns: `repeat(${columns}, minmax(15rem, 1fr))`,
-                  }}
+                  style={{ gridTemplateColumns: gridColumns }}
                 >
                   {Array.from({ length: leadingPlaceholders }, (_, i) => (
                     <PlanPlaceholderCard key={`lead-${i}`} />
@@ -392,41 +382,29 @@ export default function ProductSubscribePage() {
                   ))}
                   {Array.from({ length: trailingPlaceholders }, (_, i) =>
                     teamHintInPlaceholder && i === trailingPlaceholders - 1 ? (
-                      <TeamTiersGhostCard
+                      <TiersSideCard
                         key={`trail-${i}`}
-                        teamPlans={teamPlans}
-                        onViewAll={() => setAudience("all")}
+                        icon="users"
+                        title={t("ghost.title")}
+                        subtitle={teamPlans.map((p) => p.name).join(" · ")}
+                        action={t("ghost.viewAll")}
+                        onClick={() => setAudience("all")}
                       />
                     ) : (
                       <PlanPlaceholderCard key={`trail-${i}`} />
                     ),
                   )}
+                  {showSideCard ? (
+                    <TiersSideCard
+                      icon="users"
+                      title={t("ghost.title")}
+                      subtitle={teamPlans.map((p) => p.name).join(" · ")}
+                      action={t("ghost.viewAll")}
+                      onClick={() => setAudience("all")}
+                    />
+                  ) : null}
                 </div>
               </div>
-
-              {/* ≥5 档：展开 / 收起其余档位 */}
-              {collapsible ? (
-                <div className="mt-2 flex justify-center">
-                  <Button
-                    variant="ghost"
-                    size="md"
-                    aria-expanded={expanded}
-                    onClick={() => setExpanded((open) => !open)}
-                    className="gap-2 rounded-full px-5 text-vx-brand-700 dark:text-vx-brand-200"
-                  >
-                    {expanded
-                      ? t("showLess")
-                      : t("showMore", { count: hiddenCount })}
-                    <Icon
-                      name="chevron-down"
-                      className={`h-4 w-4 transition-transform ${
-                        expanded ? "rotate-180" : ""
-                      }`}
-                      aria-hidden
-                    />
-                  </Button>
-                </div>
-              ) : null}
             </>
           )}
         </div>
