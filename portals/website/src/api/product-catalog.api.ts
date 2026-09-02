@@ -39,6 +39,17 @@ export interface MarketingContent {
   en?: MarketingLocale;
   /** 推荐度 0–3（语言无关）：未订阅产品卡右上角按数量画奖章；0/缺省不画。 */
   recommend?: number;
+  /** 预期发布日期（YYYY-MM-DD，语言无关）：开发中的产品卡片底部「预期发布：日期」；上线后忽略。 */
+  expectedReleaseAt?: string;
+}
+
+/** 预期发布日期：只认能解析成日期的字符串，其余按未填。 */
+export function marketingExpectedReleaseAt(
+  marketing: MarketingContent | null | undefined,
+): string | null {
+  const raw = marketing?.expectedReleaseAt;
+  if (typeof raw !== "string" || raw.trim() === "") return null;
+  return Number.isNaN(new Date(raw).getTime()) ? null : raw;
 }
 
 /** 推荐度归一：非整数 / 越界一律夹到 0–3。 */
@@ -60,6 +71,8 @@ export interface ProductCatalogItem {
   productType: string;
   description: string | null;
   releaseVersion: string | null;
+  /** 对外发布时间（ISO 字符串）；未填为 null。 */
+  releasedAt: string | null;
   /** 成熟度轴：ga=正式版 / beta=公测版 / developing=开发中。官网据此判徽标与订阅按钮。 */
   releaseStage: string;
   /** 营销内容（DB 权威源,替代官网写死）；未录入为 null。 */

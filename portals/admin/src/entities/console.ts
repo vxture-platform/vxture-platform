@@ -764,6 +764,11 @@ export interface ProductMarketingContent {
   en?: ProductMarketingLocale;
   /** 推荐度 0–3(语言无关):官网未订阅产品卡右上角按数量画奖章;0/缺省不画。 */
   recommend?: number;
+  /**
+   * 预期发布日期(YYYY-MM-DD,语言无关):开发中的产品官网卡片底部显示「预期发布:日期」,
+   * 运营手填;上线(ga/beta)后官网改用 products.released_at 自动显示,此字段忽略。
+   */
+  expectedReleaseAt?: string;
 }
 /** 产品目录:产品营销内容与呈现的写入体（业务字段,技术注册在 opera）。 */
 export interface ProductContentWriteInput {

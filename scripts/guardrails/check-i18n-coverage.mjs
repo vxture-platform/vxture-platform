@@ -234,11 +234,14 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  *
  * 2026-09-02 admin 2493 → 2499(+6):产品营销内容编辑框加「推荐度」下拉(0–3 枚奖章,官网未订阅
  *   产品卡右上角按数量画奖章,owner 要求)。该弹窗整页硬编码(与产品模块既有风格一致),不单抽。
+ *
+ * 2026-09-03 admin 2499 → 2502(+3):同一编辑框加「预期发布日期」(开发中的产品官网卡底部显示
+ *   「预期发布:日期」,运营手填;上线后自动改用 released_at,owner 要求)。同上,整页硬编码,不单抽。
  */
 const BASELINE = {
   console: 30,
   website: 40,
-  admin: 2499,
+  admin: 2502,
   opera: 1931, // 2026-09-02: layout metadata 的写死中文标题/描述搬进 messages.meta（head 三平面统一），-2
   accounts: 290,
 };

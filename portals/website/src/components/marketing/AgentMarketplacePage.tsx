@@ -34,6 +34,7 @@ import {
 import {
   catalogDisplayName,
   marketingForLocale,
+  marketingExpectedReleaseAt,
   marketingRecommend,
   type ProductCatalogItem,
 } from "@/api/product-catalog.api";
@@ -70,6 +71,8 @@ export default function AgentMarketplacePage({
     () => ({
       valueLabel: t("agents.valueLabel"),
       recommended: t("agents.recommended"),
+      versionAt: t("agents.versionAt"),
+      expectedRelease: t("agents.expectedRelease"),
       badges: {
         stable: t("agents.badges.stable"),
         beta: t("agents.badges.beta"),
@@ -111,7 +114,9 @@ export default function AgentMarketplacePage({
           highlights: m?.highlights ?? [],
           releaseStage: agent.releaseStage,
           version: agent.releaseVersion,
+          releasedAt: agent.releasedAt,
           recommend: marketingRecommend(agent.marketing),
+          expectedReleaseAt: marketingExpectedReleaseAt(agent.marketing),
         };
       });
   }, [agents, agentKinds, locale, t]);

@@ -25,6 +25,7 @@ describe("ProductCatalogRouter", () => {
         product_type: "data_platform",
         description: "Enterprise data platform.",
         release_version: "1.4.0",
+        released_at: new Date("2026-09-12T00:00:00.000Z"),
       },
       {
         product_code: "vxtpl",
@@ -33,6 +34,7 @@ describe("ProductCatalogRouter", () => {
         product_type: "agent",
         description: null,
         release_version: null,
+        released_at: null,
       },
     ]);
 
@@ -46,6 +48,8 @@ describe("ProductCatalogRouter", () => {
         productType: "data_platform",
         description: "Enterprise data platform.",
         releaseVersion: "1.4.0",
+        // pg 把 timestamptz 交成 Date；对外一律 ISO 字符串
+        releasedAt: "2026-09-12T00:00:00.000Z",
       },
       {
         productCode: "vxtpl",
@@ -54,6 +58,7 @@ describe("ProductCatalogRouter", () => {
         productType: "agent",
         description: null,
         releaseVersion: null,
+        releasedAt: null,
       },
     ]);
   });

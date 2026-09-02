@@ -17,6 +17,8 @@
     },
     "valueLabel": "Value",
     "recommended": "Recommended · {count} medals",
+    "versionAt": "v {version} at {date}",
+    "expectedRelease": "Expected release: {date}",
     "badges": {
       "stable": "Stable",
       "beta": "Beta",
