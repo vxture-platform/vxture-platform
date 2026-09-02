@@ -160,9 +160,10 @@ const FeaturesSection = memo(function FeaturesSection({
       data-name={name}
       className="vx-section-odd relative snap-section min-h-screen flex flex-col"
     >
-      <div className="w-full max-w-7xl xl:max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col h-full min-h-screen">
+      {/* flex-1 填满分节（分节顶部已由 .snap-section 留出 header 高度），不再自带 min-h-screen 撑破一屏。 */}
+      <div className="w-full max-w-7xl xl:max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col flex-1">
         {/* 1. 标题区 */}
-        <div className="text-center pt-28">
+        <div className="text-center pt-12">
           <h2 className="font-display text-3xl lg:text-4xl font-bold text-vx-brand-700 dark:text-vx-brand-200 mb-4">
             {t("title")}
           </h2>

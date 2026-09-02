@@ -134,7 +134,7 @@ function ContactChannelCard({ channel }: { channel: ContactChannel }) {
 export default function ContactPage() {
   return (
     <div className="vx-page-surface">
-      {/* pt-16 让内容避开 fixed header；min-h-screen 使本节顶到顶撑满一屏。 */}
+      {/* pt-32（128px ≥ 常驻 header 64px）让内容避开 fixed header；min-h-screen 使本节顶到顶撑满一屏。 */}
       <section className="flex min-h-screen items-center px-4 pb-20 pt-32 sm:px-6 lg:px-8">
         <div className="mx-auto grid w-full max-w-7xl gap-6 lg:grid-cols-2 xl:max-w-screen-2xl">
           {CONTACT_CHANNELS.map((channel) => (

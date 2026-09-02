@@ -293,8 +293,14 @@
 
   /* 法务页：窄屏 */
   --vx-website-legal-container-width-mobile: min(100% - 28px, 1120px);
-  --vx-website-legal-container-padding-mobile: 56px 0 72px;
+  /* 顶部 80px ≥ 常驻 header 64px（原 56px 会被 header 盖住 8px）。 */
+  --vx-website-legal-container-padding-mobile: 80px 0 72px;
   --vx-website-legal-card-min-height-mobile: 180px;
+
+  /* 全站常驻 header（Header.tsx：fixed top-0 + h-16 = 64px）。所有首屏 / 吸附分节
+     的顶部留白都以它为基准（owner 2026-09-02：header 常驻，每页都要留出 header 高度）；
+     改 header 高度只改这一处。 */
+  --vx-website-header-height: 64px;
 
   /* 营销页：Hero */
   --vx-website-hero-section-min-height: 540px;
@@ -306,7 +312,7 @@
   --vx-website-hero-eyebrow-tracking: 0.16em;
   --vx-website-hero-eyebrow-tracking-wide: 0.18em;
   /* 目录页 hero（/products、/appcenter）：比通用 hero 矮一档；文字左对齐靠上排，但顶部
-     要盖住 fixed header（约 72px）之后再留一大段呼吸（松散感），底部略收。 */
+     要盖住 fixed header（--vx-website-header-height，64px）之后再留一大段呼吸（松散感），底部略收。 */
   --vx-website-catalog-hero-min-height: 440px;
   --vx-website-catalog-hero-content-padding: 144px 24px 48px;
 
