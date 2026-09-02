@@ -426,6 +426,11 @@ export class OrdersRouter {
 
         // ⑤ 回写账单：累加实收（现金 + 券腿），足额转 paid（并落 paid_at）。
         // 恒等校验下必然足额；条件保留为防御。
+        //
+        // 不写 invoices.transaction_no：它是 `_no` 锚点列（98_column_locks 规则②），
+        // platform_svc 对它没有 UPDATE 权限——2026-09-02 生产实测整条确认收款事务因
+        // 此 42501 回滚（开发库以 owner 连库，列锁对 owner 无效，从没炸过）。流水与
+        // 账单的关联本就在 transactions.bill_id 上，账单侧读时按它派生（billing.router）。
         const newPaid = round2(alreadyPaid + input.paidAmount + voucherOff);
         const fullySettled = newPaid >= payable;
         await client.query(
@@ -434,10 +439,9 @@ export class OrdersRouter {
                bill_status = case when $3 then 'paid' else 'partial' end,
                paid_at = case when $3 then $4 else paid_at end,
                payment_method = 'offline',
-               transaction_no = $5,
                updated_at = now()
            where id = $1`,
-          [invoice.id, newPaid, fullySettled, input.paidAt, transactionNo],
+          [invoice.id, newPaid, fullySettled, input.paidAt],
         );
 
         if (!fullySettled) {

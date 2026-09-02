@@ -13,6 +13,15 @@
 --   ④ `created_by`（创建者，一次写入不变；后续变更走 updated_by，非本列）；
 --   ⑤ 显式标注的安全语义列：目前仅 `admin.operator_role.rank`（见 80_admin.sql
 --      列注释"锚点列：不可经 API 改写"）。
+--   ②' 规则②的例外——"晚绑定 `_no`"：INSERT 之后才有值、那一次写是 UPDATE 的单号
+--      （发票快递单号/电子发票号、网关单号）。清单在
+--      scripts/guardrails/column-locks.shared.mjs LATE_BOUND_WRITABLE，两个守卫共用。
+--      2026-09-02 生产实测：把它们当锚点会让整条业务动作 42501（确认收款事务因
+--      invoices.transaction_no 整体回滚——那一列不列入例外，写侧改为不回写、读侧派生）。
+--
+-- ⚠ 列锁只对非-owner 角色生效：开发/CI 若以 owner 连库，锁在那里是摆设，代码里碰
+--   锚点列的 UPDATE 只会在生产（platform_svc）炸。所以还有第二个守卫
+--   scripts/guardrails/check-anchor-writes.mjs 静态扫应用代码里的 UPDATE 语句。
 -- append-only 表（billing.transactions/support.audit_logs/safety.moderation_logs
 -- 等）已有 95_triggers.sql 的 BEFORE UPDATE/DELETE 硬阻断（对 owner 也生效，触发
 -- 器与 GRANT 机制正交）；本文件仍按统一规则加列锁，双重防御、不特例化。
@@ -326,9 +335,10 @@ GRANT UPDATE (tenant_id, bill_id, trade_type, source_method, amount, currency, b
 REVOKE UPDATE ON billing.credits FROM platform_svc;
 GRANT UPDATE (tenant_id, billing_mode, currency, balance, total_granted, total_consumed, version, updated_at) ON billing.credits TO platform_svc;
 
--- billing.billing_addresses  [anchor: id, tax_no, created_by, created_at]
+-- billing.billing_addresses  [anchor: id, created_by, created_at]
+-- tax_no 是客户可编辑的抬头资料（纳税人识别号），不是系统签发的码——规则②' 例外，可写。
 REVOKE UPDATE ON billing.billing_addresses FROM platform_svc;
-GRANT UPDATE (tenant_id, invoice_tax_type, title, phone, address, bank_name, bank_account, is_default, updated_by, updated_at, deleted_at) ON billing.billing_addresses TO platform_svc;
+GRANT UPDATE (tenant_id, invoice_tax_type, title, tax_no, phone, address, bank_name, bank_account, is_default, updated_by, updated_at, deleted_at) ON billing.billing_addresses TO platform_svc;
 
 -- billing.payment_methods  [anchor: id, created_by, created_at]
 REVOKE UPDATE ON billing.payment_methods FROM platform_svc;
@@ -346,13 +356,16 @@ GRANT UPDATE (tenant_id, subscription_id, bill_cycle, cycle_start_date, cycle_en
 REVOKE UPDATE ON billing.invoice_items FROM platform_svc;
 GRANT UPDATE (bill_id, tenant_id, workspace_id, subscription_id, product_id, metric_key, item_name, item_type, item_unit, quantity, unit_price, total_amount, usage_cycle_start, usage_cycle_end, remark, updated_at, deleted_at) ON billing.invoice_items TO platform_svc;
 
--- billing.invoice_receipts  [anchor: id, invoice_no, tax_no, invoice_electronic_no, express_no, created_at]
+-- billing.invoice_receipts  [anchor: id, invoice_no, tax_no, created_at]
+-- invoice_electronic_no / express_no 是晚绑定 `_no`（开具 / 寄出时才有值，那一次写是
+-- UPDATE）——列入 scripts/guardrails/column-locks.shared.mjs LATE_BOUND_WRITABLE，可写。
 REVOKE UPDATE ON billing.invoice_receipts FROM platform_svc;
-GRANT UPDATE (tenant_id, bill_id, invoice_type, invoice_tax_type, invoice_title, company_info, bank_info, address_info, invoice_amount, tax_amount, currency, invoice_status, status_remark, invoice_code, invoice_file_url, issued_at, express_company, send_at, created_by_type, created_by_id, auditor_id, audit_at, updated_at, deleted_at) ON billing.invoice_receipts TO platform_svc;
+GRANT UPDATE (tenant_id, bill_id, invoice_type, invoice_tax_type, invoice_title, company_info, bank_info, address_info, invoice_amount, tax_amount, currency, invoice_status, status_remark, invoice_code, invoice_electronic_no, invoice_file_url, issued_at, express_company, express_no, send_at, created_by_type, created_by_id, auditor_id, audit_at, updated_at, deleted_at) ON billing.invoice_receipts TO platform_svc;
 
--- billing.payments  [anchor: id, pay_order_no, channel_order_no, channel_transaction_no, created_at]
+-- billing.payments  [anchor: id, pay_order_no, created_at]
+-- channel_order_no / channel_transaction_no 是晚绑定 `_no`（网关回调时才有值），同上可写。
 REVOKE UPDATE ON billing.payments FROM platform_svc;
-GRANT UPDATE (tenant_id, bill_id, transaction_id, pay_source, pay_channel, pay_method, offline_pay_type, offline_payer_name, offline_pay_time, offline_evidence_url, total_amount, paid_amount, currency, pay_status, status_msg, channel_raw_data, pay_expire_at, paid_at, closed_at, actor_type, actor_id, operate_remark, updated_at) ON billing.payments TO platform_svc;
+GRANT UPDATE (tenant_id, bill_id, transaction_id, pay_source, pay_channel, pay_method, offline_pay_type, offline_payer_name, offline_pay_time, offline_evidence_url, total_amount, paid_amount, currency, pay_status, status_msg, channel_order_no, channel_transaction_no, channel_raw_data, pay_expire_at, paid_at, closed_at, actor_type, actor_id, operate_remark, updated_at) ON billing.payments TO platform_svc;
 
 -- billing.refunds  [anchor: id, refund_no, channel_refund_no, created_at]
 REVOKE UPDATE ON billing.refunds FROM platform_svc;
