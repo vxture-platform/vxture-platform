@@ -305,10 +305,10 @@
   --vx-website-hero-content-max-width-xl: 1536px;
   --vx-website-hero-eyebrow-tracking: 0.16em;
   --vx-website-hero-eyebrow-tracking-wide: 0.18em;
-  /* 目录页 hero（/products、/appcenter）：比通用 hero 矮一档；顶部内边距要盖住
-     fixed header（约 72px）再留呼吸，底部略收，四行文字在 min-height 内垂直居中。 */
-  --vx-website-catalog-hero-min-height: 380px;
-  --vx-website-catalog-hero-content-padding: 104px 24px 40px;
+  /* 目录页 hero（/products、/appcenter）：比通用 hero 矮一档；文字左对齐靠上排，但顶部
+     要盖住 fixed header（约 72px）之后再留一大段呼吸（松散感），底部略收。 */
+  --vx-website-catalog-hero-min-height: 440px;
+  --vx-website-catalog-hero-content-padding: 144px 24px 48px;
 
   /* 营销页：分节 */
   --vx-website-section-padding-y: 64px;

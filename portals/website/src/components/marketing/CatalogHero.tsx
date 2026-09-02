@@ -58,18 +58,20 @@ export function CatalogHero({
         aria-hidden="true"
       />
 
+      {/* 左对齐、靠上排；顶部留白大（padding 由令牌给），四行之间松散（mb-4 / mt-6 / mt-8），
+          描述行加宽到 5xl（64rem）尽量一行显示（owner 2026-09-02）。 */}
       <div className="vx-catalog-hero-content">
-        <div className="max-w-website-3xl">
-          <p className="vx-website-hero-eyebrow mb-3 text-sm font-semibold uppercase text-vx-brand-600 dark:text-vx-info-200">
+        <div className="max-w-website-5xl">
+          <p className="vx-website-hero-eyebrow mb-4 text-sm font-semibold uppercase text-vx-brand-600 dark:text-vx-info-200">
             {eyebrow}
           </p>
           <h1 className="font-brand text-4xl font-bold leading-tight text-vx-gray-900 dark:text-vx-white md:text-5xl">
             {title}
           </h1>
-          <p className="mt-4 max-w-website-2xl text-sm leading-6 text-vx-gray-700 dark:text-vx-gray-200">
+          <p className="mt-6 max-w-website-5xl text-base leading-7 text-vx-gray-700 dark:text-vx-gray-200">
             {description}
           </p>
-          <div className="mt-6 flex flex-wrap items-center gap-4">
+          <div className="mt-8 flex flex-wrap items-center gap-4">
             <Button asChild size="xl" className="px-5 hover:bg-vx-brand-500">
               <Link href="/contact#support">{primaryAction}</Link>
             </Button>
