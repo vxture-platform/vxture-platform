@@ -216,11 +216,14 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  * 2026-09-02 admin 2469 → 2467(−2):退役 admin「模型授权」(tenant↔model legacy,owner 授权)——
  *   删 /model-grants 页+ModelGrantsPage+nav 项,首页卡从「模型授权」改指 /atlas 正名「模型策略」;
  *   硬编码中文随之净减 2。
+ *
+ * 2026-09-02 admin 2467 → 2468(+1):表格体系统一 P1 —— ListPagination 兜底中文计数语
+ *   「共 N 条」(DS 装机默认是英文 "records",缺陷),+1 硬编码模板串。DS 默认改中文后(P2)可撤。
  */
 const BASELINE = {
   console: 30,
   website: 40,
-  admin: 2467,
+  admin: 2468,
   opera: 1933,
   accounts: 290,
 };

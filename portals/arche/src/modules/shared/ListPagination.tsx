@@ -31,8 +31,13 @@ import {
   type PageSize,
 } from "@/modules/shared/PageSizePicker";
 
-/** admin 的档位集：DS 默认档带 "auto"，定长分页用不上。 */
+/** 档位集：DS 默认档带 "auto"，定长分页用不上。 */
 const OPTIONS: readonly PageSizeChoice[] = PAGE_SIZE_OPTIONS;
+
+/** 三平面统一计数语「共 N 条」。 */
+export function totalCountLabel(total: number): string {
+  return `共 ${total} 条`;
+}
 
 export interface ListPaginationProps {
   readonly currentPage: number;
@@ -58,6 +63,10 @@ export function ListPagination({
   onPageChange,
   countLabel,
 }: ListPaginationProps) {
+  // 计数语兜底为中文「共 N 条」——DS 装机默认是英文 "records"（缺陷）。
+  const resolvedCountLabel =
+    countLabel ?? (total !== undefined ? totalCountLabel(total) : undefined);
+
   return (
     <Pagination
       page={currentPage}
@@ -65,10 +74,11 @@ export function ListPagination({
       {...(total !== undefined ? { total } : {})}
       pageSize={pageSize}
       pageSizeOptions={OPTIONS}
-      // DS 的档位含 "auto"；这里的档位集里没有，收窄回 admin 的 PageSize。
       onPageSizeChange={(value) => onPageSizeChange(value as PageSize)}
       onPageChange={onPageChange}
-      {...(countLabel !== undefined ? { countLabel } : {})}
+      {...(resolvedCountLabel !== undefined
+        ? { countLabel: resolvedCountLabel }
+        : {})}
     />
   );
 }
