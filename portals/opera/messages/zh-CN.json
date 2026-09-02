@@ -1,4 +1,16 @@
 {
+  "meta": {
+    "plane": "平台运维平面",
+    "description": "平台技术资源、运行、计量、发布、可观测与安全管理。不承担商业运营职责。"
+  },
+  "pagination": {
+    "total": "共 {total} 条",
+    "previous": "上一页",
+    "next": "下一页",
+    "pageSizeLabel": "每页条数",
+    "pageSizeOption": "每页 {size} 条",
+    "pageSizeAuto": "自适应"
+  },
   "destructive": {
     "titleTemplate": "{verb}{target}？",
     "cancel": "取消",

@@ -55,7 +55,6 @@ import {
   InputGroupInput,
   MetricGrid,
   NativeSelect,
-  Pagination,
   Section,
   SegmentedControl,
   ViewHeader,
@@ -65,6 +64,7 @@ import {
   type DataTableColumn,
   type IconName,
 } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import { STALE_ATLAS_HINT } from "@/features/atlas/lifecycle";
 import {
   useTenancyDirectory,
@@ -681,9 +681,9 @@ export default function MeteringPage() {
           )}
           empty={emptyState}
           footer={
-            <Pagination
+            <ListPagination
               className="w-full"
-              page={pager.page}
+              currentPage={pager.page}
               pageCount={pager.pageCount}
               total={rows.length}
               filteredTotal={filtered.length}

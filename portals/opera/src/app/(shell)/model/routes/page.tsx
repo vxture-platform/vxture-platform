@@ -63,13 +63,13 @@ import {
   InputGroupInput,
   ListPageTemplate,
   NativeSelect,
-  Pagination,
   StatusBadge,
   TableTitleCell,
   ViewHeader,
   useToast,
   useListPagination,
 } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import {
   AVAILABILITY_META,
@@ -467,9 +467,9 @@ function EndpointsPageContent() {
   );
 
   const pagination = (
-    <Pagination
+    <ListPagination
       className="w-full"
-      page={pager.page}
+      currentPage={pager.page}
       pageCount={pager.pageCount}
       total={rows.length}
       filteredTotal={filtered.length}

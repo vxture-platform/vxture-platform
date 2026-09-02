@@ -82,7 +82,6 @@ import {
   InputGroupInput,
   ListPageTemplate,
   NativeSelect,
-  Pagination,
   Section,
   StatusBadge,
   TableTitleCell,
@@ -92,6 +91,7 @@ import {
   useToast,
   type StatusBadgeTone,
 } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { useTranslations } from "next-intl";
 import { api, OperaApiError } from "@/lib/api";
@@ -1064,9 +1064,9 @@ export default function CapabilitiesPage() {
     draft.category !== "";
 
   const pagination = (
-    <Pagination
+    <ListPagination
       className="w-full"
-      page={pager.page}
+      currentPage={pager.page}
       pageCount={pager.pageCount}
       total={rows.length}
       filteredTotal={filtered.length}

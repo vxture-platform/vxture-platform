@@ -61,7 +61,6 @@ import {
   InputGroupInput,
   ListPageTemplate,
   NativeSelect,
-  Pagination,
   StatusBadge,
   TableTitleCell,
   Textarea,
@@ -70,6 +69,7 @@ import {
   useToast,
   type StatusBadgeTone,
 } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { useConfirmLabels } from "@/lib/destructive";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
@@ -2345,9 +2345,9 @@ function ModelServiceContent() {
                 }
               : {})}
             footer={
-              <Pagination
+              <ListPagination
                 className="w-full"
-                page={pager.page}
+                currentPage={pager.page}
                 pageCount={pager.pageCount}
                 total={providers.length}
                 filteredTotal={filtered.length}

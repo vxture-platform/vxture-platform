@@ -261,6 +261,9 @@ function AnnouncementToolbar({
   const tShared = useTranslations();
   return (
     <FilterBar
+      view="list"
+      onViewChange={() => {}}
+      cardsDisabledReason={tShared("common.cardsRetired")}
       count={`${total} 条`}
       aria-label="公告筛选"
       search={

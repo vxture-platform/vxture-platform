@@ -406,6 +406,9 @@ export function ProductsPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredProducts.length)}
             aria-label="产品筛选"
             search={

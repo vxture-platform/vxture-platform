@@ -453,6 +453,9 @@ export function PromotionsPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredRecords.length)}
             aria-label="营销优惠筛选"
             search={

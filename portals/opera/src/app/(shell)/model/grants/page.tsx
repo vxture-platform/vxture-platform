@@ -70,13 +70,13 @@ import {
   InputGroupInput,
   ListPageTemplate,
   NativeSelect,
-  Pagination,
   StatusBadge,
   TableTitleCell,
   ViewHeader,
   useListPagination,
   useToast,
 } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import {
   STALE_ATLAS_HINT,
@@ -380,9 +380,9 @@ function ProductGrantsPageContent() {
     draft.productCode.trim() !== "" && draft.endpointCode.trim() !== "";
 
   const pagination = (
-    <Pagination
+    <ListPagination
       className="w-full"
-      page={pager.page}
+      currentPage={pager.page}
       pageCount={pager.pageCount}
       total={rows.length}
       filteredTotal={filtered.length}

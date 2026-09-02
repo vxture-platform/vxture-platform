@@ -11,7 +11,6 @@ import {
   ListPageTemplate,
   MetricGrid,
   NativeSelect,
-  Pagination,
   StatusBadge,
   TableTitleCell,
 } from "@vxture/design-system";
@@ -19,12 +18,13 @@ import { fetchAuditLogs, type AuditLogFilters } from "@/api/arche-bff";
 import type { DataTableColumn } from "@vxture/design-system";
 import type { AuditLogRecord } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
+import { ListPagination } from "@/modules/shared/ListPagination";
+import { type PageSize } from "@/modules/shared/PageSizePicker";
 import { formatDateTime, joinClasses } from "@/lib/format";
 import { exportRowsToCsv, type CsvColumn } from "@/lib/exportCsv";
 
 // ─── 辅助函数 ──────────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 50;
 const EMPTY_MARK = "-";
 
 function resultLabel(result: AuditLogRecord["result"]) {
@@ -125,6 +125,9 @@ function AuditToolbar({
 }) {
   return (
     <FilterBar
+      view="list"
+      onViewChange={() => {}}
+      cardsDisabledReason="卡片视图已下线，改用列表"
       count={total}
       aria-label="审计日志筛选"
       search={
@@ -274,6 +277,7 @@ export function AuditLogsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(50);
 
   // Server-side filters (date range + result) drive the fetch; free-text search
   // stays client-side over the returned set (the BFF has no text search).
@@ -315,10 +319,10 @@ export function AuditLogsPage() {
   }, [logs, search]);
 
   const pageLogs = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, page]);
-  const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+  const pageCount = Math.ceil(filtered.length / pageSize);
 
   const handleSearch = (v: string) => {
     setSearch(v);
@@ -388,7 +392,7 @@ export function AuditLogsPage() {
           rows={pageLogs}
           rowKey={(log) => log.id}
           loading={loading}
-          indexStart={(page - 1) * PAGE_SIZE + 1}
+          indexStart={(page - 1) * pageSize + 1}
           selectedKeys={[...selectedIds]}
           onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
           empty={
@@ -412,15 +416,17 @@ export function AuditLogsPage() {
             />
           }
           footer={
-            pageCount > 1 ? (
-              <Pagination
-                page={page}
-                pageCount={pageCount}
-                total={filtered.length}
-                pageSize={PAGE_SIZE}
-                onPageChange={setPage}
-              />
-            ) : null
+            <ListPagination
+              currentPage={page}
+              pageCount={pageCount}
+              total={filtered.length}
+              pageSize={pageSize}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setPage(1);
+              }}
+              onPageChange={setPage}
+            />
           }
         />
       }

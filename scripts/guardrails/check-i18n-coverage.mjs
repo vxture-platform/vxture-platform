@@ -216,12 +216,17 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  * 2026-09-02 admin 2469 → 2467(−2):退役 admin「模型授权」(tenant↔model legacy,owner 授权)——
  *   删 /model-grants 页+ModelGrantsPage+nav 项,首页卡从「模型授权」改指 /atlas 正名「模型策略」;
  *   硬编码中文随之净减 2。
+ *
+ * 2026-09-02 表格体系统一:admin/arche 的 ListPagination 改为从 next-intl 的 `pagination`
+ *   命名空间喂入 DS 的全部文案(计数/上下页/每页条数)——DS 是 labels-props 契约,i18n 归消费方,
+ *   此前 admin 一个 label 都没传故整条分页显英文。计数语走 t(),不再硬编码,admin CJK 净变 0
+ *   (先前一版曾短暂 +1 的硬编码兜底已撤)。
  */
 const BASELINE = {
   console: 30,
   website: 40,
   admin: 2467,
-  opera: 1933,
+  opera: 1931, // 2026-09-02: layout metadata 的写死中文标题/描述搬进 messages.meta（head 三平面统一），-2
   accounts: 290,
 };
 

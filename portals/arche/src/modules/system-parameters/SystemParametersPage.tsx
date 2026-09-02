@@ -12,7 +12,6 @@ import {
   Label,
   ListPageTemplate,
   NativeSelect,
-  Pagination,
   StatusBadge,
   TableTitleCell,
   Textarea,
@@ -22,11 +21,11 @@ import { fetchPlatformSettings, updatePlatformSetting } from "@/api/arche-bff";
 import type { DataTableColumn } from "@vxture/design-system";
 import type { PlatformSettingRecord } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
+import { ListPagination } from "@/modules/shared/ListPagination";
+import { type PageSize } from "@/modules/shared/PageSizePicker";
 
 // P2 占位板块建设：平台配置（admin.settings）。读 is_sensitive/is_encrypted 脱敏；
 // 编辑仅非敏感/非加密/非只读行（守卫 platform:setting.read|.manage，seed §4.3）。
-
-const PAGE_SIZE = 20;
 
 function describeError(error: unknown): { description?: string } {
   return error instanceof Error && error.message
@@ -80,6 +79,7 @@ export function SystemParametersPage() {
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(20);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [editing, setEditing] = useState<PlatformSettingRecord | null>(null);
@@ -121,10 +121,10 @@ export function SystemParametersPage() {
   }, [items, search, groupFilter]);
 
   const pageItems = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, page]);
-  const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+  const pageCount = Math.ceil(filtered.length / pageSize);
 
   function openEdit(item: PlatformSettingRecord) {
     setEditing(item);
@@ -165,6 +165,9 @@ export function SystemParametersPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason="卡片视图已下线，改用列表"
             count={`${filtered.length} 条`}
             aria-label="系统参数筛选"
             search={
@@ -209,7 +212,7 @@ export function SystemParametersPage() {
             rows={pageItems}
             rowKey={(item) => item.id}
             loading={loading}
-            indexStart={(page - 1) * PAGE_SIZE + 1}
+            indexStart={(page - 1) * pageSize + 1}
             selectedKeys={[...selectedIds]}
             onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
             rowActions={(item) => (
@@ -238,13 +241,17 @@ export function SystemParametersPage() {
               />
             }
             footer={
-              pageCount > 1 ? (
-                <Pagination
-                  page={page}
-                  pageCount={pageCount}
-                  onPageChange={setPage}
-                />
-              ) : null
+              <ListPagination
+                currentPage={page}
+                pageCount={pageCount}
+                total={filtered.length}
+                pageSize={pageSize}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setPage(1);
+                }}
+                onPageChange={setPage}
+              />
             }
           />
         }

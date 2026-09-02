@@ -15,7 +15,6 @@ import {
   ListPageTemplate,
   MetricGrid,
   NativeSelect,
-  Pagination,
   StatusBadge,
   TableTitleCell,
   Textarea,
@@ -32,6 +31,8 @@ import {
 import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
 import type { RiskRecordItem } from "@/entities/console";
 import { PageHeader } from "@/modules/shared/PageHeader";
+import { ListPagination } from "@/modules/shared/ListPagination";
+import { type PageSize } from "@/modules/shared/PageSizePicker";
 import { TENANT_RISK_TONE, formatDate } from "@/lib/format";
 import { useConfirmLabels } from "@/modules/shared/destructive";
 
@@ -50,8 +51,6 @@ interface RiskForm {
   reason: string;
   tags: string;
 }
-
-const PAGE_SIZE = 20;
 
 const LEVEL_LABELS: Record<RiskRecordItem["riskLevel"], string> = {
   normal: "常规",
@@ -192,6 +191,7 @@ export function RiskRecordsPage() {
   const [levelFilter, setLevelFilter] = useState<LevelFilter>("all");
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(20);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
@@ -238,10 +238,10 @@ export function RiskRecordsPage() {
   }, [items, search, levelFilter, reviewFilter]);
 
   const pageItems = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, page]);
-  const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+  const pageCount = Math.ceil(filtered.length / pageSize);
 
   async function reload() {
     setItems(await fetchRiskRecords());
@@ -369,6 +369,9 @@ export function RiskRecordsPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason="卡片视图已下线，改用列表"
             count={`${filtered.length}条`}
             aria-label="风险记录筛选"
             search={
@@ -436,7 +439,7 @@ export function RiskRecordsPage() {
             rows={pageItems}
             rowKey={(item) => item.id}
             loading={loading}
-            indexStart={(page - 1) * PAGE_SIZE + 1}
+            indexStart={(page - 1) * pageSize + 1}
             selectedKeys={[...selectedIds]}
             onSelectionChange={(keys) => setSelectedIds(new Set(keys))}
             rowActions={(item) => (
@@ -491,15 +494,17 @@ export function RiskRecordsPage() {
               />
             }
             footer={
-              pageCount > 1 ? (
-                <Pagination
-                  page={page}
-                  pageCount={pageCount}
-                  total={filtered.length}
-                  pageSize={PAGE_SIZE}
-                  onPageChange={setPage}
-                />
-              ) : null
+              <ListPagination
+                currentPage={page}
+                pageCount={pageCount}
+                total={filtered.length}
+                pageSize={pageSize}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setPage(1);
+                }}
+                onPageChange={setPage}
+              />
             }
           />
         }

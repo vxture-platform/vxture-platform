@@ -1392,6 +1392,9 @@ export function AdminRolesPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason="卡片视图已下线，改用列表"
             count={formatNumber(filteredRoles.length)}
             aria-label="平台角色筛选"
             search={

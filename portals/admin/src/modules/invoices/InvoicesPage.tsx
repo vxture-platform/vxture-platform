@@ -658,6 +658,9 @@ export function InvoicesPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredInvoices.length)}
             aria-label="发票筛选"
             search={

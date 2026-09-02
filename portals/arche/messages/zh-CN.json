@@ -1,4 +1,16 @@
 {
+  "meta": {
+    "plane": "平台治理平面",
+    "description": "平台身份权限、安全审计、风控合规、系统配置与通知审计。最高信任层，与商业/运维面分离。"
+  },
+  "pagination": {
+    "total": "共 {total} 条",
+    "previous": "上一页",
+    "next": "下一页",
+    "pageSizeLabel": "每页条数",
+    "pageSizeOption": "每页 {size} 条",
+    "pageSizeAuto": "自适应"
+  },
   "destructive": {
     "titleTemplate": "{verb}{target}？",
     "cancel": "取消",

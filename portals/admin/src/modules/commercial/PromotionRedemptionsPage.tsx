@@ -408,6 +408,9 @@ export function PromotionRedemptionsPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={tShared("common.cardsRetired")}
             count={formatNumber(filteredRecords.length)}
             aria-label="优惠核销筛选"
             search={

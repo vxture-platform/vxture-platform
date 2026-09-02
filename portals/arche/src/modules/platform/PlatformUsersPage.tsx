@@ -1056,6 +1056,9 @@ export function PlatformUsersPage() {
         }
         filters={
           <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason="卡片视图已下线，改用列表"
             count={formatNumber(filteredAdmins.length)}
             aria-label="平台用户筛选"
             search={

@@ -75,13 +75,13 @@ import {
   Kbd,
   ListPageTemplate,
   NativeSelect,
-  Pagination,
   StatusBadge,
   TableTitleCell,
   ViewHeader,
   useToast,
   useListPagination,
 } from "@vxture/design-system";
+import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { api, OperaApiError } from "@/lib/api";
@@ -504,9 +504,9 @@ export default function KeysPage() {
   };
 
   const pagination = (
-    <Pagination
+    <ListPagination
       className="w-full"
-      page={pager.page}
+      currentPage={pager.page}
       pageCount={pager.pageCount}
       total={rows.length}
       filteredTotal={filtered.length}

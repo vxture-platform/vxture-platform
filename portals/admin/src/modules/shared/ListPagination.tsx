@@ -19,12 +19,14 @@
  * 2. **类型窄化**：DS 的 `PageSizeChoice` 是 `number | "auto"`，admin 的 `PageSize`
  *    是那四个字面量。窄化写在这里一次，好过十三个调用点各写一次断言。
  *
- * 计数语交回 DS 默认的「共 N 条记录」。此前五个页面各自写着"条订单记录"/"条账单
- * 记录"这类业务词——人在订单页看"共 N 条记录"不会误解，那点差别不值得为它开口子。
- * 真说不了的是服务套餐页（要数方案与套餐两样东西），那处用 `countLabel`。
+ * 计数语：三平面统一为「共 N 条」（2026-09-02 表格体系统一）。DS `Pagination` 的**装机默认
+ * 是英文 "records"**（design-ui@7.0.0 实测,与本件早先注释设想的中文默认不符,是 DS 缺陷),
+ * 故本件在此把中文计数语兜底传给 DS,保证 admin/opera/arche 三面一字不差。DS 默认改成中文
+ * 后（P2 发版）本兜底可撤。真说不了的（服务套餐页要数方案+套餐两样）仍用 `countLabel` 覆盖。
  */
 
 import type { ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { Pagination, type PageSizeChoice } from "@vxture/design-system";
 import {
   PAGE_SIZE_OPTIONS,
@@ -58,6 +60,14 @@ export function ListPagination({
   onPageChange,
   countLabel,
 }: ListPaginationProps) {
+  // DS Pagination 的所有面向用户的文案都是英文装机默认（"records" / "Previous page" /
+  // "{size} per page" …），i18n 由消费方传入（DS 的 labels-props 契约）。此前 admin 一个
+  // 都没传,整条分页显英文。这里统一从 next-intl 的 `pagination` 命名空间喂入,三平面一致。
+  // 计数语默认「共 N 条」（total）；给了 countLabel（如服务套餐页两个数）以调用方为准。
+  const t = useTranslations("pagination");
+  const resolvedCountLabel =
+    countLabel ?? (total !== undefined ? t("total", { total }) : undefined);
+
   return (
     <Pagination
       page={currentPage}
@@ -68,7 +78,14 @@ export function ListPagination({
       // DS 的档位含 "auto"；这里的档位集里没有，收窄回 admin 的 PageSize。
       onPageSizeChange={(value) => onPageSizeChange(value as PageSize)}
       onPageChange={onPageChange}
-      {...(countLabel !== undefined ? { countLabel } : {})}
+      previousLabel={t("previous")}
+      nextLabel={t("next")}
+      pageSizeLabel={t("pageSizeLabel")}
+      pageSizeOptionTemplate={t("pageSizeOption")}
+      pageSizeAutoLabel={t("pageSizeAuto")}
+      {...(resolvedCountLabel !== undefined
+        ? { countLabel: resolvedCountLabel }
+        : {})}
     />
   );
 }
