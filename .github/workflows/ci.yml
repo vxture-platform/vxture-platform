@@ -202,6 +202,15 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:message-usage
 
+      # 列级锁只对非-owner 角色生效,开发/CI 以 owner 连库时锁是摆设:代码里一条碰锚点列
+      # 的 UPDATE 到生产(platform_svc)才 42501 整条回滚(2026-09-02 确认收款实测)。
+      # 静态扫 bff/ services/ 的 UPDATE 语句对照 98_column_locks 白名单。
+      - name: Anchor-column write guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: |
+          pnpm lint:column-locks
+          pnpm lint:anchor-writes
+
       # i18n 铺开是跨多次会话的长跑，最典型的失败方式不是「做得慢」，是一边抽
       # 一边加——这周抽掉两百条，下周新页面又写进去三百条，总数没动而每个人都
       # 觉得自己在推进。棘轮只管一件事：硬编码中文串不许变多。

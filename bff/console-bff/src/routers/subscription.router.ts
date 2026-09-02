@@ -880,6 +880,19 @@ export class SubscriptionRouter {
          left join product.products prod on prod.id = pc.product_id
         where ts.workspace_id = $1 and ts.deleted_at is null
           and ts.status <> 'cancelled'
+          -- 待收款订单壳（product_320 O1 谓词）不是订阅：钱没到、权益没开过，它在
+          -- 「我的订单」里是「已申报·核验中 / 未开通」，不能同时在「我的订阅」里以
+          -- 「已暂停 · 长期有效」出现（页头本就写着「未支付、未开通的订单不在此列」，
+          -- 2026-09-02 上线实测与之相反）。
+          and not (
+            ts.status = 'suspended'
+            and ts.activation_method = 'offline_purchase'
+            and coalesce((
+              select i.bill_status from billing.invoices i
+               where i.subscription_id = ts.id and i.deleted_at is null
+               order by i.created_at desc limit 1
+            ), 'unpaid') in ('unpaid', 'partial')
+          )
         order by coalesce(ts.start_at, ts.created_at) desc
         limit 100`,
       [workspaceId],

@@ -335,9 +335,14 @@ export function formatPrice(
   });
 }
 
-/** 年付折合月价：向下取到分（不再向下取到整元——0.01/年 曾被取成 0）。 */
+/**
+ * 年付折合月价：四舍五入到分（不再向下取到整元——0.01/年 曾被取成 0）。
+ * 用 round 不用 floor：¥0.1/年 折月 0.0083，floor 到分仍是「¥0」，与年付价 ¥0.1
+ * 并排等于告诉客户「月付 0、年付 0.1」；round 到 ¥0.01 才是最接近的真实读数
+ * （2026-09-02 上线实测）。正常价位（1999/12=166.58）两种取法无差。
+ */
 export function monthlyEquivalent(yearlyAmount: number): number {
-  return Math.floor((yearlyAmount / 12) * 100) / 100;
+  return Math.round((yearlyAmount / 12) * 100) / 100;
 }
 
 /** 年付相对月付的节省额与比例（仅当两个周期都有价才有意义） */

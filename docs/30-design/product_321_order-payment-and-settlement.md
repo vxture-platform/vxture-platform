@@ -157,6 +157,7 @@ AND (expires_at IS NULL OR expires_at > now())
 - **admin 呈现**：订阅列表/详情对订单壳显示「待收款」（不再显示「暂停」），行菜单与详情头部给唯一出口「确认收款」→ `/orders/:order_no`；四个动作禁用并写明理由；状态筛选加「待收款」档，`expired` 正名「已到期」（此前落到「已取消」）。「续期确认」描述明确写「本动作不记账」。
 - **待办**：`ops-todos` 新增「收款确认」一类，按订单态派生：`pending_verify`（客户已申报，最急）/ `paid_unprovisioned`（钱到没开通）/ `partial_pending`（尾款挂账），直达订单详情。`pending`（客户还没付）不是待办。
 - **存量修复**：迁移 `2026-09-02-repair-pending-orders-flipped-by-renew.sql` 把被误翻的行翻回订单壳（`suspended` / `end_at NULL` / 留痕 `pending_order_repaired`），之后订单侧确认收款走正常 `isPendingOrderRow` 分支。
+- **确认收款本身在生产 500（同日第二发现）**：段 1 对 `billing.invoices` 的 UPDATE 列了 `transaction_no`——`_no` 锚点列，`platform_svc` 无 UPDATE 权限（98_column_locks 规则②），Postgres 42501 整条回滚；开发库以 owner 连库列锁无效，从未炸过。处置：写侧不再回写 `invoices.transaction_no`（流水↔账单关联在 `transactions.bill_id`，admin 账单读侧派生）；真需要 UPDATE 写一次的单号（发票快递单号/电子发票号、网关单号、抬头税号）列为规则②' 例外（`column-locks.shared.mjs LATE_BOUND_WRITABLE`），98 GRANT + 迁移 `2026-09-02-column-locks-late-bound-no.sql`；新增守卫 `check-anchor-writes`（静态扫 bff/services 的 UPDATE 对照 98 白名单）进 CI，与 `check-column-locks` 同源。
 
 ## 3. 数据层落点
 

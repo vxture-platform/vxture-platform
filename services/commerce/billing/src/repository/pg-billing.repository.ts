@@ -230,14 +230,17 @@ export class PgBillingRepository {
     id: string,
     input: UpdateInvoiceStatusInput,
   ): Promise<InvoiceRecord | null> {
+    // transaction_no 不在 SET 列表里：它是 `_no` 锚点列（98_column_locks 规则②），
+    // 应用角色 platform_svc 对它没有 UPDATE 权限——列级权限按 SET 列表判，哪怕值是
+    // NULL/coalesce 也会整条 42501。流水↔账单的关联在 transactions.bill_id 上，
+    // 读侧按它派生；input.transactionNo 仅用于流水行，不再回写账单。
     const result = await this.pool.query<InvoiceRow>(
       `update billing.invoices set
         bill_status   = $2,
         paid_at       = coalesce($3, paid_at),
         payment_method = coalesce($4, payment_method),
-        transaction_no = coalesce($5, transaction_no),
-        operate_remark = coalesce($6, operate_remark),
-        paid_amount   = coalesce($7, paid_amount),
+        operate_remark = coalesce($5, operate_remark),
+        paid_amount   = coalesce($6, paid_amount),
         updated_at    = now()
        where id = $1 and deleted_at is null
        returning *`,
@@ -246,7 +249,6 @@ export class PgBillingRepository {
         input.billStatus,
         input.paidAt ?? null,
         input.paymentMethod ?? null,
-        input.transactionNo ?? null,
         input.operateRemark ?? null,
         input.paidAmount ?? null,
       ],

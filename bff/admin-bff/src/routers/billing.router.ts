@@ -874,7 +874,9 @@ const BILLING_SELECT = `
   i.bill_status,
   i.bill_type,
   i.payment_method,
-  i.transaction_no,
+  -- 流水号按 transactions.bill_id 派生（最近一笔成功流水）；invoices.transaction_no
+  -- 是 _no 锚点列，写侧 2026-09-02 起不再回写它，coalesce 只为兼容存量行。
+  coalesce(i.transaction_no, tx.transaction_no) as transaction_no,
   i.operate_remark,
   i.paid_at,
   i.created_at,
@@ -898,6 +900,13 @@ left join lateral (
   order by r.created_at desc
   limit 1
 ) lr on true
+left join lateral (
+  select x.transaction_no
+  from billing.transactions x
+  where x.bill_id = i.id and x.trade_status = 'success'
+  order by x.created_at desc
+  limit 1
+) tx on true
 `;
 
 const BILLING_LIST_SQL = `

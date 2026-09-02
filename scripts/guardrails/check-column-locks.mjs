@@ -23,14 +23,14 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { EXTRA_ANCHOR, LATE_BOUND_WRITABLE } from './column-locks.shared.mjs';
 
 const REPO_ROOT = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const DDL_DIR = join(REPO_ROOT, 'deploy', 'database', 'ddl');
 const LOCKS_FILE = join(DDL_DIR, '98_column_locks.sql');
 const rel = (f) => f.slice(REPO_ROOT.length + 1).replace(/\\/g, '/');
 
-// 显式安全语义锚点列白名单（schema.table.column）——见 98_column_locks.sql 规则⑤。
-const EXTRA_ANCHOR = new Set(['admin.operator_role.rank']);
+// 规则⑤显式锚点 + 规则②的晚绑定例外，两个守卫共用一份（column-locks.shared.mjs）。
 
 // 表定义所在文件（排除跨 schema FK / 触发器 / 分区 / 本检测器目标文件本身）。
 const TABLE_FILES = readdirSync(DDL_DIR)
@@ -73,7 +73,8 @@ function expectedAnchors(key, def) {
   const anchors = new Set();
   for (const c of def.columns) {
     if (def.pk.has(c)) anchors.add(c);
-    if (/_no$/.test(c)) anchors.add(c);
+    // 规则②：`_no` 锚点，减去晚绑定例外（INSERT 之后才有值的单号，见 shared）。
+    if (/_no$/.test(c) && !LATE_BOUND_WRITABLE.has(`${key}.${c}`)) anchors.add(c);
     if (c === 'created_at') anchors.add(c);
     if (c === 'created_by') anchors.add(c);
     if (EXTRA_ANCHOR.has(`${key}.${c}`)) anchors.add(c);

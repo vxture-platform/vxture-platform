@@ -228,11 +228,14 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
  *   **没有走 `t()`,是有意的**:订阅管理与待办任务两页全部文案硬编码中文、一条没抽
  *   (SubscriptionOperationDialog 的禁用理由/描述/占位整表都是字面量),只抽新加的这
  *   几句会造出半中英(同 08-29 / 08-30 / 08-31 的判据)。棘轮上探到新水位。
+ *
+ * 2026-09-02 admin 2491 → 2493(+2):确认收款弹窗给必填项加红星(aria-label「必填」)与
+ *   原因字段「最少 4 字」提示——提交钮灰着却不说缺哪项(owner 报)。同上,整页硬编码,不单抽。
  */
 const BASELINE = {
   console: 30,
   website: 40,
-  admin: 2491,
+  admin: 2493,
   opera: 1931, // 2026-09-02: layout metadata 的写死中文标题/描述搬进 messages.meta（head 三平面统一），-2
   accounts: 290,
 };

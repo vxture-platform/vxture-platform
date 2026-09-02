@@ -70,6 +70,15 @@ function offlinePaymentTypeLabel(type: OrderOfflinePaymentType) {
   return "其他";
 }
 
+/** 必填星号（与 products/SolutionField 同一写法：DS Label 不带 required 语义，由调用方内联）。 */
+function RequiredMark() {
+  return (
+    <span className="text-destructive-text" aria-label="必填">
+      *
+    </span>
+  );
+}
+
 export function OrderOfflinePaymentDialog({
   order,
   busy,
@@ -182,14 +191,22 @@ export function OrderOfflinePaymentDialog({
           : "仅用于运营人员确认银行转账、现金或其他线下回款。确认金额须等于剩余应收（全额确认）。"}
       </p>
       <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
-        <Label>确认金额{declared ? "（申报锁定）" : ""}</Label>
+        {/* 必填项带红星（同 SolutionField 的约定）：提交钮灰着却不说缺哪项，运营
+            看不出该补什么（owner 2026-09-02）。 */}
+        <Label>
+          确认金额{declared ? "（申报锁定）" : ""}
+          <RequiredMark />
+        </Label>
         <Input
           value={paidAmount}
           onChange={(event) => setPaidAmount(event.target.value)}
           inputMode="decimal"
           readOnly={Boolean(declared)}
         />
-        <Label>收款方式</Label>
+        <Label>
+          收款方式
+          <RequiredMark />
+        </Label>
         <NativeSelect
           value={offlinePayType}
           onChange={(event) =>
@@ -202,12 +219,18 @@ export function OrderOfflinePaymentDialog({
             </option>
           ))}
         </NativeSelect>
-        <Label>付款方</Label>
+        <Label>
+          付款方
+          <RequiredMark />
+        </Label>
         <Input
           value={payerName}
           onChange={(event) => setPayerName(event.target.value)}
         />
-        <Label>收款时间</Label>
+        <Label>
+          收款时间
+          <RequiredMark />
+        </Label>
         <Input
           type="datetime-local"
           value={paidAt}
@@ -226,7 +249,13 @@ export function OrderOfflinePaymentDialog({
           placeholder="可选"
         />
       </div>
-      <Label>确认原因</Label>
+      <Label>
+        确认原因
+        <RequiredMark />
+        <small className="font-normal text-muted-foreground">
+          （最少 4 字）
+        </small>
+      </Label>
       <Textarea
         value={reason}
         onChange={(event) => setReason(event.target.value)}
