@@ -51,9 +51,10 @@ export function CatalogHero({
         className="pointer-events-none absolute inset-0 bg-linear-to-br from-vx-brand-50 via-vx-white to-vx-info-50 dark:from-vx-gray-900 dark:via-vx-gray-900 dark:to-vx-gray-800"
         aria-hidden="true"
       />
-      {/* 右侧整体插画：向左渐隐（mask），窄屏时淡化为衬底不抢文字。 */}
+      {/* 右侧整体插画：向左渐隐（mask），窄屏时淡化为衬底不抢文字。
+          大屏右侧留 4–6rem 空白，不贴边（owner 2026-09-02：两张图都太靠右）。 */}
       <div
-        className="vx-catalog-hero-art pointer-events-none absolute inset-y-0 right-0 w-full lg:w-3/5"
+        className="vx-catalog-hero-art pointer-events-none absolute inset-y-0 right-0 w-full lg:right-16 lg:w-3/5 xl:right-24"
         aria-hidden="true"
       >
         {/* eslint-disable-next-line @next/next/no-img-element -- 程序化 SVG 静态资源，不走 next/image 优化 */}
