@@ -97,8 +97,8 @@
     "action": "进入工作台"
   },
   "catalog": {
-    "eyebrow": "产品矩阵",
-    "title": "全栈智能，按需组合",
+    "eyebrow": "平台级产品",
+    "title": "产品矩阵，全栈智能、按需组合",
     "description": "从模型底座到数据治理与知识智能，平台级产品围绕套餐订阅、按需组合；智能体助手 varda 随套餐档位放开。",
     "demoCta": "预约演示",
     "consultCta": "业务咨询",
@@ -115,7 +115,6 @@
       "upgrade": "升级",
       "enter": "进入",
       "noEntry": "入口即将开放",
-      "contact": "联系我们",
       "detail": "产品介绍",
       "coming": "敬请期待"
     },

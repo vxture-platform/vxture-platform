@@ -10,7 +10,8 @@
  *
  * 动作区裁定（按成熟度 × 订阅态）：
  *   developing            → 「敬请期待」禁用；
- *   未登录 / 未订阅        → 「联系我们」（站内 /contact）+ 「订阅」（官网 /pricing?product=，先看价再登录）；
+ *   未登录 / 未订阅        → 「订阅」（官网 /pricing?product=，先看价再登录）；「联系我们」已从卡上去掉，
+ *                           hero 统一给「预约演示 / 业务咨询」（owner 2026-09-03）；
  *                           右上角按 marketing.recommend 画 1–3 枚推荐奖章（最靠外的位置，其余徽标前移让位）；
  *   已订阅                → 「升级」（同一个 /pricing：登录后该页会标出当前档、只放行更高档；
  *                           只在 canUpgrade 时出现）+ 「进入」。
@@ -70,8 +71,6 @@ export interface ProductCatalogCardLabels {
     enter: string;
     /** 产品未登记入口时的禁用态文案。 */
     noEntry: string;
-    /** 「联系我们」→ 站内 /contact。 */
-    contact: string;
     detail: string;
     coming: string;
   };
@@ -239,11 +238,8 @@ export function ProductCatalogCard({
             </>
           ) : (
             <>
-              {/* 「联系我们」走站内联系页（不再 mailto）。 */}
-              <Button asChild variant="outline">
-                <Link href="/contact">{labels.actions.contact}</Link>
-              </Button>
-              {/* 未订阅：先去官网定价页看价格 + 功能，登录后置。 */}
+              {/* 未订阅：先去官网定价页看价格 + 功能，登录后置。
+                  「联系我们」不再放卡上——hero 已统一给「预约演示 / 业务咨询」（owner 2026-09-03）。 */}
               <Button asChild>
                 <Link href={pricingHref} target="_blank">
                   {labels.actions.subscribe}

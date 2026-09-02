@@ -81,7 +81,6 @@ export default function AgentMarketplacePage({
         upgrade: t("agents.actions.upgrade"),
         enter: t("agents.actions.enter"),
         noEntry: t("agents.actions.noEntry"),
-        contact: t("agents.actions.contact"),
         detail: t("agents.actions.detail"),
         coming: t("agents.actions.coming"),
       },

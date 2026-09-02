@@ -81,7 +81,6 @@ export default function ProductsOverviewPage({
         upgrade: t("catalog.actions.upgrade"),
         enter: t("catalog.actions.enter"),
         noEntry: t("catalog.actions.noEntry"),
-        contact: t("catalog.actions.contact"),
         detail: t("catalog.actions.detail"),
         coming: t("catalog.actions.coming"),
       },

@@ -113,8 +113,8 @@
     "action": "Open console"
   },
   "catalog": {
-    "eyebrow": "Product suite",
-    "title": "Full-stack intelligence, composable",
+    "eyebrow": "Platform products",
+    "title": "Product Suite — full-stack intelligence, composable on demand",
     "description": "From model foundations to data governance and knowledge intelligence — platform products subscribed around plans and composed on demand; the varda assistant unlocks by plan tier.",
     "demoCta": "Book a demo",
     "consultCta": "Business inquiry",
@@ -131,7 +131,6 @@
       "upgrade": "Upgrade",
       "enter": "Enter",
       "noEntry": "Entry coming soon",
-      "contact": "Contact us",
       "detail": "Learn more",
       "coming": "Coming soon"
     },
