@@ -445,6 +445,30 @@
   --vx-website-solutions-section-padding-bottom: 64px;
   --vx-website-solutions-hero-card-min-height: 128px;
   --vx-website-solutions-visual-min-height: 320px;
+
+  /*
+   * §6 关于我们（/about）卡片体系：科技感修饰（顶部发光细线、右上点阵、右下角标、
+   * 图标外发光、悬停抬升）。这里只放几何量；一切颜色都从分节的 --solutions-accent
+   * 派生，必须写在 src/styles/website-about.css 的使用点（同 §5 的原因）。
+   */
+  --vx-website-about-card-radius: 16px;
+  --vx-website-about-card-padding: 24px;
+  --vx-website-about-card-blur: 12px;
+  --vx-website-about-card-line-height: 2px;
+  --vx-website-about-card-dots-size: 120px;
+  --vx-website-about-card-dot-radius: 1px;
+  --vx-website-about-card-dot-gap: 12px;
+  --vx-website-about-card-dots-opacity: 0.7;
+  --vx-website-about-card-hover-lift: -3px;
+  --vx-website-about-card-hover-shadow-geom: 0 16px 40px;
+  --vx-website-about-card-corner-inset: 12px;
+  --vx-website-about-card-corner-size: 14px;
+  --vx-website-about-card-icon-size: 40px;
+  --vx-website-about-card-icon-radius: 10px;
+  --vx-website-about-card-icon-glow-geom: 0 8px 24px;
+  --vx-website-about-card-index-gap: 8px;
+  --vx-website-about-card-index-dash: 16px;
+  --vx-website-about-card-transition: 200ms ease;
 }
 
 .dark,

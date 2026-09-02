@@ -1,84 +1,84 @@
 {
   "positioning": {
     "eyebrow": "Positioning · Who we are",
-    "title": "Industry knowledge, data, and models — turned into business agents that live inside workflows",
-    "description": "Vxture is a platform company for industry LLMs and business agents. We do not sell generic models, and we do not stop at tools: a platform-level foundation carries the agents, industry scenarios package them by the way work is actually done, and the Ruyin workbench puts them in the hands of every role.",
+    "title": "We believe every industry will be rewritten by intelligence",
+    "description": "Steam rewrote manufacturing, electricity rewrote cities, the internet rewrote connection. This time it is intelligence: no longer a tool, but a new member of the organization that thinks, judges, and acts. Vxture exists for this — to bring intelligence into the core of every industry and stand beside every enterprise.",
     "items": [
       {
-        "icon": "agent",
-        "title": "Two dimensions: general × industry",
-        "description": "General agents work out of the box — proposal writing, business analysis, contract review, digital legal. Industry agents are packaged by how the work is done — low-altitude, emergency, energy and power, industrial. One catalog, pick by scenario, no platform build-out first."
+        "icon": "sparkles",
+        "title": "Intelligence is the new productivity",
+        "description": "Not a tool upgrade, but a new way of producing work. When judgment, coordination, and execution are carried by intelligence, industry boundaries are redrawn."
       },
       {
-        "icon": "database",
-        "title": "Two layers: agents × platform",
-        "description": "Agents grow on a platform-level foundation: intelligent data governance (ARDA), enterprise knowledge service (KARDA), with model access and capability orchestration provided as infrastructure. Each layer works alone and stacks upward."
+        "icon": "buildings",
+        "title": "Industry is where intelligence is won",
+        "description": "General capability will converge; the knowledge, data, and workflows deep inside an industry are the moat. That is where we take frontier models."
       },
       {
-        "icon": "desktop",
-        "title": "One entry: the Ruyin workbench",
-        "description": "A desktop workbench that brings agents, data, and daily work into one place where individuals and teams collaborate — everything above is ultimately used from here."
+        "icon": "users",
+        "title": "Enterprises are our fellow travelers",
+        "description": "Every enterprise deserves intelligence of its own. We are not a vendor on the sidelines, but a building partner for the long run."
       }
     ]
   },
   "method": {
     "eyebrow": "Method · How we work",
-    "title": "Standard capabilities by subscription, industry scenarios by co-creation",
-    "description": "Two paths, one foundation. Standard capabilities are subscribed: see pricing on the site, order in the console, use on activation, with quota by tier and top-up packs when needed. Industry scenarios are co-created: start from one clear pain point, build a small verifiable loop, then expand to more roles. The four steps are sequential — each takes the previous step's output as input.",
+    "title": "Grow intelligence into the bones of the business, not on its surface",
+    "description": "Everything starts from real business: industry knowledge, enterprise data, frontier models, and people in one closed loop, so intelligence takes responsibility, is tested, and earns trust inside the workflow.",
     "steps": [
       {
-        "title": "Pick one scenario",
-        "description": "Choose the closest agent or scenario from the catalog or an industry solution, and define its responsibility boundary first — not the model."
+        "title": "Define intelligence by scenario",
+        "description": "Fix the responsibility and how results are measured before the technology. Intelligence without a clear goal is an expensive demo."
       },
       {
-        "title": "Connect data and knowledge",
-        "description": "Govern data definitions and quality with ARDA; turn documents, policies, and cases into searchable, reasonable knowledge with KARDA — trusted context for the agent."
+        "title": "Build on data and knowledge",
+        "description": "Govern definitions, distill knowledge, so every judgment is grounded and traceable."
       },
       {
-        "title": "Orchestrate the agent",
-        "description": "On the foundation, combine models, retrieval, rules, business tools, and human confirmation so the agent completes tasks instead of only answering."
+        "title": "Orchestrate instead of pile up",
+        "description": "Models, retrieval, rules, tools, and people each play their part, each replaceable. Reliability comes from structure, not a single point."
       },
       {
-        "title": "Launch and operate",
-        "description": "After a pilot and evaluation, enter the real workflow; watch usage, quota, and billing in the console, upgrade the tier or add packs as needed, and iterate on feedback."
+        "title": "Measure by real results",
+        "description": "Start with a small loop, validate in the real workflow, let results speak, then expand to more roles and industries."
       }
     ],
-    "principlesTitle": "Three principles we keep",
+    "principlesTitle": "Our commitments",
     "principles": [
-      "No over-promising: validate real value first, then expand scope.",
-      "Stay inside customer systems: bring agents into existing workflows rather than building another one.",
-      "Deliver more than pages: data, knowledge, permissions, and operations ship together."
+      "No floating demos.",
+      "No parallel systems.",
+      "No stopping at delivery."
     ]
   },
   "capabilities": {
     "eyebrow": "Capabilities · What we deliver",
-    "title": "A four-layer product system — each layer delivered on its own",
-    "description": "From out-of-the-box agents, to scenarios packaged by industry, to the platform foundation that carries them — subscribe to one, or land the whole set. Three delivery modes: online subscription, private deployment, close co-creation.",
+    "title": "A complete industry intelligence system, delivered to every enterprise",
+    "description": "From the foundation that carries intelligence, to agents that take up roles, to packaged industry solutions, to the entry that puts it in everyone's hands: four layers that stack or stand alone.",
     "items": [
       {
-        "icon": "agent",
-        "title": "General agents · Digital employees",
-        "description": "Proposal writing, business analysis, contract review, digital legal — for pre-sales, management, legal, and administrative roles; subscribe on sign-in, pick by scenario."
-      },
-      {
-        "icon": "buildings",
-        "title": "Industry agents · Business-critical",
-        "description": "Low-altitude dispatch and drone monitoring, emergency command, industrial equipment inspection, supply chain collaboration, urban risk assessment, data governance, battlefield simulation — packaged by how each industry works."
-      },
-      {
         "icon": "database",
-        "title": "Platform products · Foundation",
-        "description": "Intelligent Data Governance Platform ARDA, Enterprise Knowledge Service Platform KARDA, Enterprise Password Service Platform UMBRA; model access and capability orchestration provided as infrastructure."
+        "title": "Platform foundation",
+        "description": "Data governance, knowledge service, model access, and orchestration — trusted data, knowledge, and models for every agent."
+      },
+      {
+        "icon": "agent",
+        "title": "Business agents",
+        "description": "Digital employees from shared roles to business-critical scenarios: reading data, calling tools, judging, working with people."
       },
       {
         "icon": "workflow",
-        "title": "Industry solutions · Full-set delivery",
-        "description": "Packaged scenarios for low-altitude economy, emergency management, energy and power, and industrial operations, backed by deployed case studies — usable on delivery."
+        "title": "Industry solutions",
+        "description": "Packaged scenarios and deployed practice for specific industries, organizing point capabilities into a replicable whole."
+      },
+      {
+        "icon": "desktop",
+        "title": "Intelligence for everyone",
+        "description": "Agents, data, and daily work flow into one entry, so everyone in the organization works with intelligence directly."
       }
     ],
     "cta": {
-      "title": "Start co-creation from one business pain point",
-      "description": "Pick one scenario — contract review, business analysis, emergency command, data governance, or one from your industry — and build the first usable, measurable, iterative business agent.",
+      "title": "Build your industry intelligence with us",
+      "description": "Start from one role, one scenario — bring intelligence into your core business and let it keep growing.",
       "action": "Book a demo",
       "secondary": "See case studies"
     }
