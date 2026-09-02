@@ -82,83 +82,22 @@
   "page": {
     "hero": {
       "eyebrow": "Best Practices",
-      "title": "Best Practices",
+      "title": "Case Studies",
       "description": "Present repeatable delivery patterns from real industry scenarios across business needs, technical architecture, and customer feedback. Every practice is built on LLMs, agents, intelligent data, and digital twins to move complex operations from visualization to closed-loop intelligence.",
-      "imageAlt": "Public safety intelligence analysis platform",
-      "primaryAction": "Open Console",
-      "secondaryAction": "View Practices",
-      "panelTitle": "Practice Assets",
-      "highlights": [
-        "Business Needs",
-        "Technical Architecture",
-        "Customer Feedback",
-        "Repeatable Delivery"
-      ],
-      "metrics": [
-        { "value": "4", "label": "Core intelligent technologies" },
-        { "value": "3", "label": "Representative industry practices" },
-        { "value": "Loop", "label": "Value validation from need to feedback" }
-      ]
-    },
-    "capabilities": {
-      "eyebrow": "Technology Foundation",
-      "title": "Unified technology foundation",
-      "description": "These practices go beyond single-point systems. Intelligent data governance, LLM reasoning, multi-agent collaboration, and digital twin simulation turn industry experience into reusable capabilities.",
-      "items": [
-        {
-          "icon": "sparkles",
-          "title": "LLMs",
-          "description": "Enable natural-language retrieval, event summaries, plan generation, report drafting, and assisted assessment for business users."
-        },
-        {
-          "icon": "agent",
-          "title": "Agents",
-          "description": "Break monitoring, assessment, dispatch, notification, review, and post-event analysis into cooperating task agents."
-        },
-        {
-          "icon": "database",
-          "title": "Intelligent Data",
-          "description": "Integrate heterogeneous data, build ontologies, connect knowledge, govern quality, and serve trusted indicators."
-        },
-        {
-          "icon": "cube",
-          "title": "Digital Twins",
-          "description": "Map objects, spaces, devices, events, and resources into interactive scenes for awareness, simulation, and forward-looking decisions."
-        }
-      ]
-    },
-    "dimensions": {
-      "eyebrow": "Description Framework",
-      "title": "Describe each practice in three dimensions",
-      "description": "Each case is organized around business pull, technical delivery, and customer validation, making it easy to enrich with real project material later.",
-      "items": [
-        {
-          "icon": "building-library",
-          "title": "Business Needs",
-          "description": "Clarify the management pain points, collaboration challenges, response pressure, and value targets."
-        },
-        {
-          "icon": "workflow",
-          "title": "Technical Architecture",
-          "description": "Explain how LLMs, agents, intelligent data, and digital twins combine into a deployable system."
-        },
-        {
-          "icon": "chat-circle",
-          "title": "Customer Feedback",
-          "description": "Summarize efficiency gains, better decisions, and organizational changes from the customer viewpoint."
-        }
-      ]
+      "primaryAction": "Book a demo",
+      "secondaryAction": "View cases",
+      "casesLabel": "Representative practices"
     },
     "practices": {
-      "eyebrow": "Representative Cases",
-      "title": "Representative best practices",
-      "description": "Start with three practice templates aligned with the existing case summaries and the intelligent technology stack, then expand them into detail pages later.",
+      "eyebrow": "Case study",
       "demandLabel": "Business Needs",
       "architectureLabel": "Technical Architecture",
       "evaluationLabel": "Customer Feedback",
+      "demoAction": "Book a demo",
+      "solutionsAction": "See solutions",
       "items": [
         {
-          "image": "/images/casessection/case-intro-02.jpg",
+          "image": "/images/cases/case-intro-02.webp",
           "imageAlt": "Emergency command and dispatch platform",
           "customer": "Provincial Emergency Department",
           "title": "Emergency Command and Dispatch Platform",
@@ -174,7 +113,7 @@
           ]
         },
         {
-          "image": "/images/casessection/case-intro-03.jpg",
+          "image": "/images/cases/case-intro-03.webp",
           "imageAlt": "Public safety intelligence analysis",
           "customer": "Municipal Public Security Bureau",
           "title": "Public Safety Intelligence Analysis",
@@ -190,7 +129,7 @@
           ]
         },
         {
-          "image": "/images/casessection/case-intro-01.jpg",
+          "image": "/images/cases/case-intro-01.webp",
           "imageAlt": "Geological disaster management platform",
           "customer": "Provincial Department of Natural Resources",
           "title": "Geological Disaster Management Platform",
@@ -208,9 +147,9 @@
       ]
     },
     "cta": {
-      "title": "Turn best practices into industry templates",
-      "description": "Each practice can later become a detail page with project background, delivery process, system screenshots, key metrics, and customer voice, forming complete case assets for external presentation.",
-      "action": "Open Console"
+      "title": "Start from the case closest to yours",
+      "description": "All three cases started from one clear pain point, built a small verifiable loop first, then expanded. Tell us your scenario and we will lay out a deployable path the same way.",
+      "action": "Book a demo"
     }
   }
 }

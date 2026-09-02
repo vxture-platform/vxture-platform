@@ -74,78 +74,22 @@
   "page": {
     "hero": {
       "eyebrow": "Best Practices",
-      "title": "最佳实践",
+      "title": "实践案例",
       "description": "围绕真实行业场景沉淀可复用的落地路径，从业务需求、技术架构与客户评价三个维度呈现项目价值，技术底座统一为大模型、智能体、智能数据与数字孪生。",
-      "imageAlt": "公共安全情报分析平台",
-      "primaryAction": "进入工作台",
-      "secondaryAction": "查看实践案例",
-      "panelTitle": "实践沉淀",
-      "highlights": ["业务需求", "技术架构", "客户评价", "可复制落地"],
-      "metrics": [
-        { "value": "4类", "label": "统一智能技术底座" },
-        { "value": "3个", "label": "代表性行业实践案例" },
-        { "value": "闭环", "label": "需求到评价的价值验证" }
-      ]
-    },
-    "capabilities": {
-      "eyebrow": "Technology Foundation",
-      "title": "统一技术底座",
-      "description": "所有最佳实践都不再停留于单点系统建设，而是通过智能数据治理、大模型推理、多智能体协同和数字孪生推演，把行业经验沉淀为可复用能力。",
-      "items": [
-        {
-          "icon": "sparkles",
-          "title": "大模型",
-          "description": "面向业务人员提供自然语言检索、事件摘要、预案生成、报告撰写和复杂问题辅助研判。"
-        },
-        {
-          "icon": "agent",
-          "title": "智能体",
-          "description": "将监测、研判、调度、通知、审核和复盘拆解为可协同执行的任务智能体。"
-        },
-        {
-          "icon": "database",
-          "title": "智能数据",
-          "description": "整合多源异构数据，构建数据本体、知识关联、质量治理和指标服务，形成可信数据底座。"
-        },
-        {
-          "icon": "cube",
-          "title": "数字孪生",
-          "description": "把对象、空间、设备、事件和资源映射到可交互场景，支持态势感知、仿真推演和前瞻决策。"
-        }
-      ]
-    },
-    "dimensions": {
-      "eyebrow": "Description Framework",
-      "title": "三维度描述每个实践",
-      "description": "每个案例都围绕业务牵引、技术落地和客户验证展开，方便后续继续补充真实项目材料。",
-      "items": [
-        {
-          "icon": "building-library",
-          "title": "业务需求",
-          "description": "说明客户要解决的管理痛点、协同难点、响应压力和价值目标。"
-        },
-        {
-          "icon": "workflow",
-          "title": "技术架构",
-          "description": "说明大模型、智能体、智能数据和数字孪生如何组合成可落地系统。"
-        },
-        {
-          "icon": "chat-circle",
-          "title": "客户评价",
-          "description": "用客户视角总结项目带来的效率提升、决策改善和组织协同变化。"
-        }
-      ]
+      "primaryAction": "预约演示",
+      "secondaryAction": "查看案例",
+      "casesLabel": "代表性实践"
     },
     "practices": {
-      "eyebrow": "Representative Cases",
-      "title": "代表性最佳实践",
-      "description": "先选择三个与现有案例概要一致、且能体现智能化技术栈的实践样板，后续可继续扩展为详情页。",
+      "eyebrow": "实践案例",
       "demandLabel": "业务需求",
       "architectureLabel": "技术架构",
       "evaluationLabel": "客户评价",
+      "demoAction": "预约演示",
+      "solutionsAction": "看解决方案",
       "items": [
         {
-          "image": "/images/casessection/case-intro-02.jpg",
+          "image": "/images/cases/case-intro-02.webp",
           "imageAlt": "应急指挥调度平台",
           "customer": "某省应急厅",
           "title": "应急指挥调度平台",
@@ -161,7 +105,7 @@
           ]
         },
         {
-          "image": "/images/casessection/case-intro-03.jpg",
+          "image": "/images/cases/case-intro-03.webp",
           "imageAlt": "公共安全情报分析",
           "customer": "某市公安局",
           "title": "公共安全情报分析",
@@ -177,7 +121,7 @@
           ]
         },
         {
-          "image": "/images/casessection/case-intro-01.jpg",
+          "image": "/images/cases/case-intro-01.webp",
           "imageAlt": "地质灾害管理平台",
           "customer": "某省资规厅",
           "title": "地质灾害管理平台",
@@ -195,9 +139,9 @@
       ]
     },
     "cta": {
-      "title": "把最佳实践继续沉淀成行业样板",
-      "description": "后续可以把每个实践扩展为详情页，补充项目背景、实施过程、系统截图、关键指标和客户原声，形成可对外展示的完整案例资产。",
-      "action": "进入工作台"
+      "title": "从一个与你最接近的案例开始",
+      "description": "三个案例都从一个明确痛点切入，先做小范围可验证闭环再扩展。告诉我们你的场景，我们按同样的路径给出可落地的方案。",
+      "action": "预约演示"
     }
   }
 }

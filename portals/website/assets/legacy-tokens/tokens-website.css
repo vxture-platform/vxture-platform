@@ -383,10 +383,12 @@
       var(--vx-website-solutions-grid-line) 0 1px,
       transparent 1px 64px
     );
-  --vx-website-solutions-grid-mask: radial-gradient(
-    120% 100% at 70% 20%,
-    var(--vx-color-black) 0%,
-    transparent 78%
+  /* 网格铺满右半屏（左侧文案区渐隐），不再只是右上一团（owner 2026-09-02）。 */
+  --vx-website-solutions-grid-mask: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 26%,
+    var(--vx-color-black) 52%
   );
   --vx-website-solutions-pattern-color: color-mix(
     in srgb,
@@ -398,8 +400,9 @@
     var(--vx-color-sky-500) 42%,
     transparent
   );
-  --vx-website-solutions-pattern-width: 58%;
-  --vx-website-solutions-pattern-offset-right: -6%;
+  /* 球缩小、离右边留白（原 58% / -6% 顶到边外，owner 2026-09-02：太大）。 */
+  --vx-website-solutions-pattern-width: 38%;
+  --vx-website-solutions-pattern-offset-right: 6%;
   --vx-website-solutions-pattern-opacity: 0.85;
   --vx-website-solutions-hero-fade: linear-gradient(
     180deg,

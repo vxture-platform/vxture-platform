@@ -1,4 +1,6 @@
 @import "./website-marketing-assembly.css";
+/* 解决方案 / 实践案例的分节体系：从 assembly 拆出（单叶子 8KB 上限）。 */
+@import "./website-solutions.css";
 /* 全站隐藏滚动条（owner 2026-08-29），滚动能力不变；规则在该文件头部说明。
  * 挂在这个入口而不是 globals：globals 只准 import 注册过的稳定入口。 */
 @import "./website-scrollbar.css";

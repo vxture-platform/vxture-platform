@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" fill="none" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+  <!-- 实践案例 hero 背景（程序化 SVG，透明底，约 3KB）。简洁 / 科技感 / 高级感：
+       一大一小两团柔光 + 右上一组同心薄弧 + 极淡的点阵 + 三条斜向光线 + 少量光点。
+       只用品牌蓝与靛，半透明，亮 / 暗底都成立；页面侧用 CSS 铺满并被左侧渐变压底。 -->
+  <defs>
+    <radialGradient id="g1" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#3b82f6" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#3b82f6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="g2" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#6366f1" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#6366f1" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ray" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#93c5fd" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#93c5fd" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#93c5fd" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="arc" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#60a5fa" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#60a5fa" stop-opacity="0.05"/>
+    </linearGradient>
+    <pattern id="dots" width="48" height="48" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.5" fill="#3b82f6" fill-opacity="0.16"/>
+    </pattern>
+    <radialGradient id="dotsMask" cx="0.78" cy="0.3" r="0.6">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset="1" stop-color="#000"/>
+    </radialGradient>
+    <mask id="dotsFade">
+      <rect width="1920" height="1080" fill="url(#dotsMask)"/>
+    </mask>
+  </defs>
+
+  <!-- 柔光 -->
+  <ellipse cx="1420" cy="300" rx="620" ry="420" fill="url(#g1)"/>
+  <ellipse cx="1180" cy="820" rx="480" ry="300" fill="url(#g2)"/>
+
+  <!-- 点阵：只在右上区域显现 -->
+  <rect width="1920" height="1080" fill="url(#dots)" mask="url(#dotsFade)"/>
+
+  <!-- 同心薄弧（右上，圆心在画外） -->
+  <g stroke="url(#arc)" stroke-width="1.5" fill="none">
+    <circle cx="1720" cy="120" r="360"/>
+    <circle cx="1720" cy="120" r="520"/>
+    <circle cx="1720" cy="120" r="700"/>
+  </g>
+  <g stroke="#6366f1" stroke-opacity="0.18" stroke-width="1" fill="none" stroke-dasharray="3 12">
+    <circle cx="1720" cy="120" r="440"/>
+    <circle cx="1720" cy="120" r="610"/>
+  </g>
+
+  <!-- 三条斜向光线 -->
+  <g stroke="url(#ray)" stroke-width="1.5" stroke-linecap="round">
+    <path d="M980 1000 1700 380"/>
+    <path d="M1160 1060 1880 440" opacity="0.7"/>
+    <path d="M820 900 1420 380" opacity="0.5"/>
+  </g>
+
+  <!-- 弧线上的节点与少量光点 -->
+  <g fill="#bfdbfe">
+    <circle cx="1400" cy="332" r="4" fill-opacity="0.95"/>
+    <circle cx="1246" cy="380" r="3" fill-opacity="0.8"/>
+    <circle cx="1090" cy="520" r="3.5" fill-opacity="0.7"/>
+    <circle cx="1560" cy="640" r="2.5" fill-opacity="0.7"/>
+    <circle cx="1760" cy="820" r="3" fill-opacity="0.6"/>
+    <circle cx="880" cy="260" r="2" fill-opacity="0.5"/>
+  </g>
+  <g stroke="#a5b4fc" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7">
+    <path d="M1640 500v14M1633 507h14"/>
+    <path d="M1020 700v12M1014 706h12"/>
+  </g>
+</svg>
