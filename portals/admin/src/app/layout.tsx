@@ -20,11 +20,17 @@ import { adminLocale, adminMessages } from "@/lib/intl";
 import "@vxture/design-system/styles/fonts.css";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "Vxture Control Center",
-  description:
-    "Platform operations portal for Vxture supply-side capabilities.",
-};
+/* 三平面 tab 名/head 统一(2026-09-02):默认标题=「<平面名> · Vxture」,子页标题走
+   template「%s · <平面名>」。平面名 i18n(meta.plane),中英一致,与 opera/arche 同形。
+   locale 判定链复用 layout 用的 adminLocale(headers)。 */
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = adminLocale(await headers());
+  const { plane, description } = adminMessages(locale).meta;
+  return {
+    title: { default: `${plane} · Vxture`, template: `%s · ${plane}` },
+    description,
+  };
+}
 
 export default async function RootLayout({
   children,

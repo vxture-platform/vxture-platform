@@ -226,7 +226,7 @@ const BASELINE = {
   console: 30,
   website: 40,
   admin: 2467,
-  opera: 1933,
+  opera: 1931, // 2026-09-02: layout metadata 的写死中文标题/描述搬进 messages.meta（head 三平面统一），-2
   accounts: 290,
 };
 

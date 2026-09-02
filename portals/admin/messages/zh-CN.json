@@ -1,4 +1,8 @@
 {
+  "meta": {
+    "plane": "平台运营平面",
+    "description": "平台商业运营：租户、订单、计费、产品目录与运营台账。"
+  },
   "pagination": {
     "total": "共 {total} 条",
     "previous": "上一页",

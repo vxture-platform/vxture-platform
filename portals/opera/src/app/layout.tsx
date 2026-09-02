@@ -11,11 +11,16 @@ import "@vxture/design-system/styles/fonts.css";
 import "./globals.css";
 import { operaLocale, operaMessages } from "@/lib/intl";
 
-export const metadata: Metadata = {
-  title: "Opera · Vxture 基础设施控制平面",
-  description:
-    "平台技术资源、运行、计量、发布、可观测与安全管理。不承担商业运营职责。",
-};
+/* 三平面 tab 名/head 统一(2026-09-02):默认标题=「<平面名> · Vxture」,子页标题走
+   template「%s · <平面名>」。平面名 i18n(meta.plane),中英一致,与 admin/arche 同形。 */
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = operaLocale(await headers());
+  const { plane, description } = operaMessages(locale).meta;
+  return {
+    title: { default: `${plane} · Vxture`, template: `%s · ${plane}` },
+    description,
+  };
+}
 
 /* `headers()` 让这一层变成动态渲染。opera 全站在登录闸门后，本来就没有一个页面
    是可静态化的，所以这不损失什么；换来的是语言由请求决定，而不是编译期写死。 */
