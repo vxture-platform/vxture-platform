@@ -1,5 +1,6 @@
 # arda 订阅商业闭环：线下订单全链路（product_320）
 
+> ⚠️ **已被 [product_330](./product_330_order-entity-split.md) 取代（2026-09-03）**：订单不再记在订阅行上（本文 §2 的「suspended + offline_purchase + 未付」订单壳谓词、`subscriptions.order_no` / `payment_ttl_minutes` 均已退役，见 330 §7 P2-d），订单实体在 `billing.orders`。本文保留作业务口径与历史依据；机制以 330 为准。
 > 版本：**v1.0** · 状态：设计定稿，分批实施中（PR0–PR6，见 §6）
 > 定位：以 arda（智能数据治理平台 = arda 平台 + varda 智能体助手）为首发产品，打通「官网产品卡片 → console 订阅下单 → 线下付款 → admin 人工确认收款 → 立即开通 + provisioning webhook 通知产品栈」的完整商业闭环。**支付网关未接入（payment plane pending），本期为线下收款 + 人工核销形态；在线支付接入时本文订单模型不变，仅替换"人工确认"为网关回调。**
 > 上游：[`product_220`](./product_220_catalog-resource-model.md)（目录·权益·资源模型）、[`product_310`](./product_310_arda-integration.md)（arda 对接，D10/D12 决策）、[`data_commerce_200`](./data_commerce_200_metering.md)（metering）、[`data_commerce_210`](./data_commerce_210_billing.md)（billing）、[`data_commerce_220`](./data_commerce_220_provisioning.md)（provisioning）、`@vxture/shared` 值域（六值订阅状态契约，**本设计不新增状态值**）。

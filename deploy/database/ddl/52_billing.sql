@@ -137,7 +137,7 @@ CREATE INDEX idx_payment_mandates_deleted_at    ON billing.payment_mandates (del
 -- 状态机：pending_payment → pending_verify → paid → fulfilled → refunded；旁路 cancelled（仅未付）/ expired（TTL）。
 -- tenant_id/workspace_id→tenancy、product_id/plan_version_id→product、from_subscription_id/subscription_id→metering（均见 90）。
 -- created_by_id 裸值（按 created_by_type 解引用，边界#2）。金融例外：无 deleted_at（作废走 status）。
--- 2026-09-03 起 metering.subscriptions.order_no / payment_ttl_minutes / 账单备注里的 intent JSON 停写（P2 退役）。
+-- 2026-09-03 起 metering.subscriptions.order_no / payment_ttl_minutes / 账单备注里的 intent JSON 停写；2026-09-05 起代码停读（P2-d，可视码只认 subscriptions.current_order_id → orders.order_no），下一版删列。
 CREATE TABLE billing.orders (
     id                    uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
     order_no              varchar(64)   NOT NULL,                   -- 可视码 ORD-{YYYYMM}-{10位随机hex}（沿用 visibleCode）

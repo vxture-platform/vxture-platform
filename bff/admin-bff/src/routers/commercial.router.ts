@@ -518,7 +518,7 @@ select
   q.quota_limit,
   q.quota_used,
   q.subscription_id,
-  sub.order_no,
+  cur.order_no,
   pl.plan_name,
   m.updated_at
 from metering.usage_summary_months m
@@ -541,6 +541,8 @@ left join lateral (
     and qp.status = 'active'
 ) q on true
 left join metering.subscriptions sub on sub.id = q.subscription_id
+-- 订阅可读码 = 最近一次履约它的订单号（product_330；旧列 sub.order_no 停写待删）
+left join billing.orders cur on cur.id = sub.current_order_id
 left join product.plan_versions pv on pv.id = sub.plan_version_id
 left join product.plans pl on pl.id = pv.plan_id
 where t.deleted_at is null
@@ -770,7 +772,7 @@ select
   t.tenant_no::text                as tenant_code,
   t.name                           as tenant_name,
   t.type                           as tenant_type,
-  sub.order_no,
+  cur.order_no,
   inv.id                           as bill_id,
   inv.bill_no,
   inv.bill_status,
@@ -786,6 +788,8 @@ left join tenancy.tenants t on t.id = rd.tenant_id
 left join billing.invoice_items ii on ii.id = rd.invoice_item_id
 left join billing.invoices inv on inv.id = ii.bill_id
 left join metering.subscriptions sub on sub.id = rd.subscription_id
+-- 订阅可读码 = 最近一次履约它的订单号（product_330；旧列 sub.order_no 停写待删）
+left join billing.orders cur on cur.id = sub.current_order_id
 left join product.plan_versions pv on pv.id = sub.plan_version_id
 left join product.plans pl on pl.id = pv.plan_id
 order by rd.redeemed_at desc

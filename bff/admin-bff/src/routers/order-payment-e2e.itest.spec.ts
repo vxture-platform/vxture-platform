@@ -214,11 +214,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     );
     promotion = new PromotionService(new PgPromotionRepository(pool));
     const subRepo = new PgSubscriptionRepository(pool);
-    const subscriptions = new SubscriptionService(
-      subRepo,
-      provisioning,
-      promotion,
-    );
+    const subscriptions = new SubscriptionService(subRepo, provisioning);
     subscriptionsService = subscriptions;
     orderService = new OrderService(
       new PgOrderRepository(pool),

@@ -487,7 +487,6 @@ describe("OrderService.fulfill", () => {
         status: "active",
         subscriptionKind: "paid",
         activationMethod: "offline_purchase",
-        orderNo: "ORD-202609-AAAAAAAAAA",
         payAmount: 100,
       }),
     );

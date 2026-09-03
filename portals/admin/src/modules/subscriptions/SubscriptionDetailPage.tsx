@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import {
-  Banner,
   Button,
   DetailList,
   DetailPageTemplate,
@@ -62,12 +61,7 @@ const TIMELINE_TONE: Record<string, StatusBadgeTone> = {
   danger: "danger",
 };
 
-/** 待收款订单壳在库里是 suspended，对运营它是「待收款」不是「暂停」（与列表页同判）。 */
-function subscriptionStatusLabel(
-  record: Pick<SubscriptionOperationDetailRecord, "status" | "pendingOrder">,
-) {
-  if (record.pendingOrder) return "待收款";
-  const status: SubscriptionOperationStatus = record.status;
+function subscriptionStatusLabel(status: SubscriptionOperationStatus) {
   if (status === "trialing") return "试用";
   if (status === "active") return "已生效";
   if (status === "expiring") return "即将到期";
@@ -128,14 +122,8 @@ function SubscriptionSummary({
       subtitle={subscription.subscriptionCode}
       badges={
         <>
-          <StatusBadge
-            tone={
-              subscription.pendingOrder
-                ? "warning"
-                : SUBSCRIPTION_OPERATION_TONE[subscription.status]
-            }
-          >
-            {subscriptionStatusLabel(subscription)}
+          <StatusBadge tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}>
+            {subscriptionStatusLabel(subscription.status)}
           </StatusBadge>
           <StatusBadge tone={QUOTA_RISK_TONE[subscription.quota.risk]}>
             {quotaRiskLabel(subscription.quota.risk)}
@@ -198,25 +186,6 @@ function SubscriptionDetails({
       className="grid min-w-0 gap-xl"
       aria-label={`${subscription.tenantName} 订阅详情`}
     >
-      {subscription.pendingOrder ? (
-        <Banner
-          tone="warning"
-          title="这是一笔待收款订单，权益尚未开通"
-          description="客户已下单、款项还没确认到账。续期 / 暂停 / 恢复 / 取消对它都不适用：请在订单管理里「确认收款」（记账并自动开通）或「驳回订单」。"
-          action={
-            subscription.orderNo ? (
-              <Button asChild size="sm">
-                <Link
-                  href={`/orders/${encodeURIComponent(subscription.orderNo)}`}
-                >
-                  <Icon name="credit-card" size="xs" fallback="placeholder" />
-                  去订单确认收款
-                </Link>
-              </Button>
-            ) : undefined
-          }
-        />
-      ) : null}
       <section className={`${SHELL_PANEL_HAIRLINE} grid min-w-0 gap-md pt-lg`}>
         <DetailSectionHeading icon="database" title="基础资料" />
         <DetailList columns={3}>
@@ -231,7 +200,7 @@ function SubscriptionDetails({
             {orUnset(typeLabel(subscription.tenantType))}
           </DetailRow>
           <DetailRow label="订阅状态">
-            {orUnset(subscriptionStatusLabel(subscription))}
+            {orUnset(subscriptionStatusLabel(subscription.status))}
           </DetailRow>
           <DetailRow label="计费周期">
             {orUnset(cycleLabel(subscription.cycleType))}
@@ -550,18 +519,6 @@ export function SubscriptionDetailPage({
                   >
                     <Icon name="buildings" size="xs" fallback="placeholder" />
                     租户详情
-                  </Link>
-                </Button>
-              ) : null}
-              {subscription?.pendingOrder && subscription.orderNo ? (
-                /* 待收款订单壳：钱的动作在订单侧，这里给唯一出口；下面四个订阅动作
-                   随 pendingOrder 一律禁用（title 里写明原因）。 */
-                <Button asChild>
-                  <Link
-                    href={`/orders/${encodeURIComponent(subscription.orderNo)}`}
-                  >
-                    <Icon name="credit-card" size="xs" fallback="placeholder" />
-                    确认收款
                   </Link>
                 </Button>
               ) : null}

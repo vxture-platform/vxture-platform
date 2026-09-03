@@ -95,14 +95,11 @@ export const commerceServicesProvider: Provider = {
       { resolve: () => null },
       { deliveryFailed: () => {} },
     );
-    // PromotionService is a REQUIRED third dependency (product_321 §5.1) —
-    // never optional: an optional param here would silently strip the P8b
-    // voucher-release hooks from admin void / cancel paths (the repo-wide
-    // esbuild-DI lesson, applied to manual construction).
+    // 订单侧动作（作废 / 驳回释放券）已整体迁到 OrderService（product_330 P2 退役旧
+    // 订单方法），SubscriptionService 只剩权益动作，不再依赖 PromotionService。
     return new SubscriptionService(
       new PgSubscriptionRepository(pool),
       provisioning,
-      new PromotionService(new PgPromotionRepository(pool)),
     );
   },
 };

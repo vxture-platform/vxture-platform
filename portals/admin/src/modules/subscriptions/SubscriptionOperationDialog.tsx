@@ -19,11 +19,8 @@ import type {
  *   驳回申报  → 退回客户的付款申报   暂停 / 恢复 → 冻结 / 解冻权益
  *   驳回订单  → 作废未付款的订单     取消      → 终态归档
  *
- * 一条「待收款订单」在 metering.subscriptions 里长得像一条暂停的订阅，但它的钱
- * 还没到、权益从未开通：它是订单不是订阅。订阅侧四个动作对它全部不成立——
- * 续期/恢复会把没收钱的单翻成已生效，取消会封死订单侧的「恢复订单」。所以
- * `pendingOrder` 为 true 时四个动作一律禁用，唯一的出口是去订单侧确认收款
- * （服务端 resolveTargetStatus 同样 409 兜底）。
+ * 钱的一侧不在 metering.subscriptions：下单只建 billing.orders（product_330），
+ * 订阅行只在履约后才存在，所以这里的每一条都是权益实例，四个动作只看订阅态本身。
  */
 type SubscriptionActionTarget =
   | SubscriptionOperationStatus
@@ -31,12 +28,7 @@ type SubscriptionActionTarget =
       status: SubscriptionOperationStatus;
       endAt: string | null;
       cycleType?: SubscriptionOperationCycle;
-      pendingOrder?: boolean;
     };
-
-/** 待收款订单壳上任何订阅动作的统一禁用理由。 */
-export const PENDING_ORDER_REASON =
-  "待收款订单尚未确认收款，请在订单管理确认收款或驳回订单。";
 
 export function subscriptionActionLabel(action: SubscriptionOperationAction) {
   if (action === "renew") return "续期确认";
@@ -66,10 +58,6 @@ export function subscriptionActionDisabledReason(
 ): string | null {
   const status = typeof target === "string" ? target : target.status;
   const endAt = typeof target === "string" ? null : target.endAt;
-  const pendingOrder =
-    typeof target === "string" ? false : Boolean(target.pendingOrder);
-
-  if (pendingOrder) return PENDING_ORDER_REASON;
 
   if (action === "renew") {
     return status === "cancelled" ? "已取消订阅为终态，不能续期确认。" : null;

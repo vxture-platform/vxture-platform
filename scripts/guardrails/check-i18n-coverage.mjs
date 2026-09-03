@@ -241,7 +241,7 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
 const BASELINE = {
   console: 30,
   website: 40,
-  admin: 2522, // 2026-09-03: P2-b 退款审核/执行对话框（OrderDetailPage）随 admin 既有全中文写死体例落地，+20；admin 整页 i18n 化另开专项
+  admin: 2512, // 2026-09-05: product_330 P2 退役「待收款订单壳」谓词，订阅页 / 详情 / 动作对话框删掉待收款筛选、横幅、去确认收款按钮与禁用理由，-10
   opera: 1931, // 2026-09-02: layout metadata 的写死中文标题/描述搬进 messages.meta（head 三平面统一），-2
   accounts: 290,
 };

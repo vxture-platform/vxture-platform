@@ -84,8 +84,6 @@ describe.runIf(RUN)("trial expiry sweep + D10 null semantics (live DB)", () => {
     service = new SubscriptionService(
       new PgSubscriptionRepository(pool),
       provisioning,
-      // Voucher-less suite: promotion is out of scope here (declare specs own it).
-      { reserveForOrder: async () => [] } as never,
     );
 
     await pool.query(

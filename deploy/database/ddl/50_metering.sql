@@ -36,8 +36,8 @@ CREATE TABLE metering.subscriptions (
     next_renewal_at     timestamptz,                                -- 下次续订触发（≈ end_at 提前量）；auto_renew=false/perpetual 时 NULL
     renewal_source      varchar(16),                                -- mandate / balance / manual
     payment_mandate_id  uuid,                                       -- 跨 schema→billing.payment_mandates（90），renewal_source=mandate 时
-    order_no            varchar(128),                               -- 购买单号 ORD-{YYYYMM}-{10位随机hex}；trial/free/运营开通为 NULL（可视码，永不作 FK，铁律二）
-    payment_ttl_minutes int,                                        -- 付款时效（分钟，321 P4 修订 2026-08-20）：下单时按租户类型定格（个人 30 / 组织 2880），仅 offline_purchase 订单行有值；NULL=存量单/非订单行 → 读取端回退 env ORDER_PAYMENT_TTL_MINUTES。锚点与驳回重锚语义不变（TTL 叠加在 P4 histories 锚点上）
+    order_no            varchar(128),                               -- 【退役中，product_330 P2-d】旧模型的购买单号；2026-09-03 停写、2026-09-05 起代码停读（可视码只认 current_order_id → billing.orders.order_no）；下一版删列
+    payment_ttl_minutes int,                                        -- 【退役中，product_330 P2-d】旧模型订单行的付款时效；已移到 billing.orders.payment_ttl_minutes；停写停读，下一版删列
     pay_amount          numeric(12,2),                              -- 与 plan_version.price 分离
     product_id          uuid,                                       -- 主组件产品（冗余；BEFORE INSERT/UPDATE 触发器自 plan_components 填，95；跨 schema→product.products，90）product_330
     paid_amount         numeric(12,2),                              -- 本周期实付（升级折抵输入 P_old；product_330 §4.1）
