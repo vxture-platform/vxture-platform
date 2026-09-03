@@ -49,6 +49,39 @@ interface HistoryRow {
   created_at: Date;
 }
 
+/** 通知展示行（P2-g）：租户 / 到期 / 产品名 / 套餐名，两个查询共用一段 SELECT。 */
+interface NotifyDisplayRow {
+  id: string;
+  tenant_id: string;
+  end_at: Date | null;
+  product_name: string | null;
+  plan_name: string | null;
+}
+
+export interface NotifyDisplay {
+  id: string;
+  tenantId: string;
+  endAt: Date | null;
+  productName: string;
+  planName: string;
+}
+
+const NOTIFY_DISPLAY_SELECT = `select s.id, s.tenant_id, s.end_at, pl.plan_name, pr.product_name
+         from metering.subscriptions s
+         join product.plan_versions pv on pv.id = s.plan_version_id
+         join product.plans pl on pl.id = pv.plan_id
+         left join product.products pr on pr.id = s.product_id`;
+
+function toNotifyDisplay(r: NotifyDisplayRow): NotifyDisplay {
+  return {
+    id: r.id,
+    tenantId: r.tenant_id,
+    endAt: r.end_at,
+    productName: r.product_name ?? "—",
+    planName: r.plan_name ?? "—",
+  };
+}
+
 @Injectable()
 export class PgSubscriptionRepository {
   constructor(@Inject(COMMERCE_PG_POOL) private readonly pool: Pool) {}
@@ -449,6 +482,52 @@ export class PgSubscriptionRepository {
       [limit],
     );
     return result.rows;
+  }
+
+  /**
+   * 到期前提醒候选（P2-g）：自动续费关着、在用非试用、end_at 落在 (now, now + leadDays] 的订阅，
+   * 带展示名。去重不在这里（dispatcher 按订阅 × 到期日唯一），所以窗口内每趟都会返回同一批行。
+   */
+  async findExpiringSoon(
+    leadDays: number,
+    limit: number,
+  ): Promise<
+    {
+      id: string;
+      tenantId: string;
+      endAt: Date;
+      productName: string;
+      planName: string;
+    }[]
+  > {
+    const result = await this.pool.query<NotifyDisplayRow>(
+      `${NOTIFY_DISPLAY_SELECT}
+        where s.auto_renew = false
+          and s.deleted_at is null
+          and s.subscription_kind <> 'trial'
+          and s.status in ('active', 'expiring', 'overdue')
+          and s.cycle_unit <> 'perpetual'
+          and s.end_at is not null
+          and s.end_at > now()
+          and s.end_at <= now() + make_interval(days => $1)
+        order by s.end_at asc
+        limit $2`,
+      [leadDays, limit],
+    );
+    return result.rows.map((r) => ({
+      ...toNotifyDisplay(r),
+      endAt: r.end_at ?? new Date(),
+    }));
+  }
+
+  /** 通知展示用：订阅的租户 / 产品名 / 套餐名 / 到期（P2-g）。 */
+  async getNotifyDisplay(id: string): Promise<NotifyDisplay | null> {
+    const result = await this.pool.query<NotifyDisplayRow>(
+      `${NOTIFY_DISPLAY_SELECT} where s.id = $1`,
+      [id],
+    );
+    const r = result.rows[0];
+    return r ? toNotifyDisplay(r) : null;
   }
 
   async findLapsedTrialIds(limit: number): Promise<string[]> {

@@ -19,6 +19,7 @@ import { S2sExchangeService } from "./auth/s2s-exchange.service";
 import { SessionAggregator } from "./aggregators/session.aggregator";
 import { PhoneChangeService } from "./services/phone-change.service";
 import { EmailChangeService } from "./services/email-change.service";
+import { customerNotificationsProvider } from "./services/customer-notifications.wiring";
 import { PlatformEntitlementsClient } from "./platform/platform-entitlements.client";
 import { AuthMiddleware } from "./middleware/auth.middleware";
 import { PermissionMiddleware } from "./middleware/permission.middleware";
@@ -30,6 +31,7 @@ import { BillingRouter } from "./routers/billing.router";
 import { CapabilitiesRouter } from "./routers/capabilities.router";
 import { HealthRouter } from "./routers/health.router";
 import { IamRouter } from "./routers/iam.router";
+import { InboxRouter } from "./routers/inbox.router";
 import { MeRouter } from "./routers/me.router";
 import { PromotionRouter } from "./routers/promotion.router";
 import { QuotaRouter } from "./routers/quota.router";
@@ -58,6 +60,7 @@ import { VerificationRouter } from "./routers/verification.router";
     ApplicationsRouter,
     HealthRouter,
     MeRouter,
+    InboxRouter,
     CapabilitiesRouter,
     TenantContextRouter,
     IamRouter,
@@ -76,6 +79,8 @@ import { VerificationRouter } from "./routers/verification.router";
     SessionAggregator,
     PhoneChangeService,
     EmailChangeService,
+    // P2-g：客户通知（站内 + 邮件）挂到 OrderService / SubscriptionService
+    customerNotificationsProvider,
     PlatformEntitlementsClient,
     S2sExchangeService,
   ],

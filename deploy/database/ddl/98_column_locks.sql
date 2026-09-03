@@ -435,6 +435,10 @@ GRANT UPDATE (actor_type, actor_id, actor_console, tenant_id, action, result, re
 REVOKE UPDATE ON support.notification_logs FROM platform_svc;
 GRANT UPDATE (tenant_id, account_id, channel, template_code, status, reference_type, reference_id, recipient, subject, provider, provider_message_id, error_message, retry_count, delivered_at, opened_at) ON support.notification_logs TO platform_svc;
 
+-- support.inbox_messages  [anchor: id, created_at]
+REVOKE UPDATE ON support.inbox_messages FROM platform_svc;
+GRANT UPDATE (tenant_id, account_id, template_code, title, body, link, reference_type, reference_id, read_at) ON support.inbox_messages TO platform_svc;
+
 -- admin.operator_role  [anchor: id, rank, created_by, created_at]
 REVOKE UPDATE ON admin.operator_role FROM platform_svc;
 GRANT UPDATE (role_code, status, role_name, role_name_key, description, description_key, is_system, sort, mfa_min_level, updated_by, is_customer_visible, is_workforce_visible, updated_at) ON admin.operator_role TO platform_svc;

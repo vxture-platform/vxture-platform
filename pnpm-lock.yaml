@@ -114,6 +114,12 @@ importers:
       '@vxture/core-utils':
         specifier: workspace:*
         version: link:../../packages/core/utils
+      '@vxture/service-account':
+        specifier: workspace:*
+        version: link:../../services/identity/account
+      '@vxture/service-notification':
+        specifier: workspace:*
+        version: link:../../services/notification/dispatch
       '@vxture/service-promotion':
         specifier: workspace:*
         version: link:../../services/commerce/promotion
@@ -363,6 +369,9 @@ importers:
       '@vxture/service-iam':
         specifier: workspace:*
         version: link:../../services/identity/iam
+      '@vxture/service-notification':
+        specifier: workspace:*
+        version: link:../../services/notification/dispatch
       '@vxture/service-organization':
         specifier: workspace:*
         version: link:../../services/identity/organization
@@ -505,6 +514,15 @@ importers:
       '@vxture/core-config':
         specifier: workspace:*
         version: link:../../packages/core/config
+      '@vxture/core-mail':
+        specifier: workspace:*
+        version: link:../../packages/core/mail
+      '@vxture/service-account':
+        specifier: workspace:*
+        version: link:../../services/identity/account
+      '@vxture/service-notification':
+        specifier: workspace:*
+        version: link:../../services/notification/dispatch
       '@vxture/service-provisioning':
         specifier: workspace:*
         version: link:../../services/commerce/provisioning
@@ -1581,6 +1599,22 @@ importers:
     devDependencies:
       '@types/pg':
         specifier: ^8.15.6
+        version: 8.20.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(vite@7.3.6(@types/node@24.13.0)(jiti@2.6.1)(lightningcss@1.31.1)(sass@1.97.3)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))
+
+  services/notification/dispatch:
+    dependencies:
+      pg:
+        specifier: ^8.13.3
+        version: 8.20.0
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.11.11
         version: 8.20.0
       typescript:
         specifier: ^5.9.3

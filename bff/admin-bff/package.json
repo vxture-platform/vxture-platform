@@ -25,6 +25,8 @@
     "@vxture/core-config": "workspace:*",
     "@vxture/core-identity-sdk": "workspace:*",
     "@vxture/core-mail": "workspace:*",
+    "@vxture/service-notification": "workspace:*",
+    "@vxture/service-account": "workspace:*",
     "@vxture/core-oidc-rp": "workspace:*",
     "@vxture/core-utils": "workspace:*",
     "@vxture/service-promotion": "workspace:*",

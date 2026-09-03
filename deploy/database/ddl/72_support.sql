@@ -150,3 +150,29 @@ CREATE INDEX idx_notification_logs_status         ON support.notification_logs (
 CREATE INDEX idx_notification_logs_channel        ON support.notification_logs (channel);
 CREATE INDEX idx_notification_logs_provider_msg   ON support.notification_logs (provider_message_id) WHERE provider_message_id IS NOT NULL;
 CREATE INDEX idx_notification_logs_reference      ON support.notification_logs (reference_type, reference_id) WHERE reference_type IS NOT NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 5. inbox_messages（站内消息，收件人视角；product_330 P2-g，owner 2026-09-03「通知先做站内 + 邮件」）
+-- 与 notification_logs 的分工：logs 是**发送账本**（每次投递一行，治理台审计），本表是**收件箱**
+-- （每个收件人一行，可读/未读）。同一条业务通知：先落本表（去重键），再按偏好发邮件并记 logs。
+-- tenant_id 跨 schema→tenancy.tenants（真 FK，90）；account_id 裸值→account.users（边界#3，同 logs）。
+-- 去重：(account_id, template_code, reference_type, reference_id) 唯一——扫描作业每分钟重跑，
+-- 同一到期 / 同一订单 / 同一退款阶段只通知一次。可变（read_at）；留存与 logs 同策略。
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE support.inbox_messages (
+    id              uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       uuid          NOT NULL,                             -- 跨 schema→tenancy.tenants（真 FK，90）
+    account_id      uuid          NOT NULL,                             -- 收件人，裸值→account.users（边界#3）
+    template_code   varchar(64)   NOT NULL,                             -- 与 notification_logs.template_code 同一套键（subscription.* / order.* / refund.*）
+    title           varchar(256)  NOT NULL,
+    body            text          NOT NULL,
+    link            varchar(512),                                       -- console 内相对路径（点开去哪）
+    reference_type  varchar(64)   NOT NULL,                             -- subscription / order / refund
+    reference_id    varchar(128)  NOT NULL,                             -- 去重键：同一业务对象 + 阶段只发一次
+    read_at         timestamptz,
+    created_at      timestamptz   NOT NULL DEFAULT now(),
+    CONSTRAINT uq_inbox_messages_dedupe UNIQUE (account_id, template_code, reference_type, reference_id)
+);
+CREATE INDEX idx_inbox_messages_account_created ON support.inbox_messages (account_id, created_at DESC);
+CREATE INDEX idx_inbox_messages_account_unread  ON support.inbox_messages (account_id) WHERE read_at IS NULL;
+CREATE INDEX idx_inbox_messages_tenant          ON support.inbox_messages (tenant_id);

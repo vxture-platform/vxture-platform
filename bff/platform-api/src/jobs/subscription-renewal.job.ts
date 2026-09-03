@@ -78,6 +78,13 @@ export class SubscriptionRenewalJob {
     if (expired > 0) {
       this.logger.log(`expiry sweep: ${expired} subscription(s) → expired`);
     }
-    return renewal.created + expired;
+    // 3. 到期前提醒（P2-g）：自动续费关着、leadDays 内到期的订阅——站内 + 邮件，按订阅 × 到期日去重。
+    const reminded = await this.subscriptions.notifyExpiringSoon(
+      envDays("SUBSCRIPTION_RENEW_LEAD_DAYS", 3),
+    );
+    if (reminded > 0) {
+      this.logger.log(`expiry reminders: ${reminded} subscription(s) notified`);
+    }
+    return renewal.created + expired + reminded;
   }
 }
