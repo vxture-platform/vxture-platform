@@ -739,18 +739,42 @@ export class OrderService {
       userId: input.userId,
       clientIp: input.clientIp ?? null,
     });
-    await this.emit(`refund_requested ${created.refundNo}`, async () => ({
+    await this.emit(`refund_requested ${created.refundNo}`, async () =>
+      this.refundNotice("refund.requested", created, order, "requested", {
+        recipients: [input.userId],
+      }),
+    );
+    return created;
+  }
+
+  /**
+   * 退款四阶段通知的共同形状：引用 = 退款单 × 阶段（去重键），金额 = 退款额，
+   * 收件人缺省 = 租户 owner + 订单下单人。
+   */
+  private refundNotice(
+    templateCode: CustomerNotifyInput["templateCode"],
+    refund: Pick<RefundRecordView, "id" | "amount" | "currency">,
+    order: OrderRecord,
+    stage: string,
+    extra: {
+      params?: Record<string, string | number>;
+      recipients?: string[];
+    } = {},
+  ): CustomerNotifyInput {
+    return {
       tenantId: order.tenantId,
-      templateCode: "refund.requested",
-      reference: { type: "refund", id: `${created.id}:requested` },
+      templateCode,
+      reference: { type: "refund", id: `${refund.id}:${stage}` },
       params: {
         orderNo: order.orderNo,
-        amount: formatNotifyMoney(created.amount, created.currency),
+        amount: formatNotifyMoney(refund.amount, refund.currency),
+        ...(extra.params ?? {}),
       },
-      recipients: [input.userId],
+      recipients:
+        extra.recipients ??
+        customerRecipients(order.createdByType, order.createdById),
       link: `/subscribe/pay/${order.id}`,
-    }));
-    return created;
+    };
   }
 
   async auditRefund(
@@ -769,21 +793,14 @@ export class OrderService {
     }
     const order = await this.getOrder(refund.orderId);
     const audited = await this.orders.auditRefund({ refund, order, ...input });
-    await this.emit(
-      `refund_${input.decision} ${refund.refundNo}`,
-      async () => ({
-        tenantId: order.tenantId,
-        templateCode:
-          input.decision === "approved" ? "refund.approved" : "refund.rejected",
-        reference: { type: "refund", id: `${refund.id}:${input.decision}` },
-        params: {
-          orderNo: order.orderNo,
-          amount: formatNotifyMoney(refund.amount, refund.currency),
-          reason: input.remark,
-        },
-        recipients: customerRecipients(order.createdByType, order.createdById),
-        link: `/subscribe/pay/${order.id}`,
-      }),
+    await this.emit(`refund_${input.decision} ${refund.refundNo}`, async () =>
+      this.refundNotice(
+        input.decision === "approved" ? "refund.approved" : "refund.rejected",
+        refund,
+        order,
+        input.decision,
+        { params: { reason: input.remark } },
+      ),
     );
     return audited;
   }
@@ -827,17 +844,9 @@ export class OrderService {
         );
       }
     }
-    await this.emit(`refund_completed ${refund.refundNo}`, async () => ({
-      tenantId: order.tenantId,
-      templateCode: "refund.completed",
-      reference: { type: "refund", id: `${refund.id}:completed` },
-      params: {
-        orderNo: order.orderNo,
-        amount: formatNotifyMoney(refund.amount, refund.currency),
-      },
-      recipients: customerRecipients(order.createdByType, order.createdById),
-      link: `/subscribe/pay/${order.id}`,
-    }));
+    await this.emit(`refund_completed ${refund.refundNo}`, async () =>
+      this.refundNotice("refund.completed", refund, order, "completed"),
+    );
     return done;
   }
 

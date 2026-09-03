@@ -83,24 +83,41 @@ export class SubscriptionService {
         0,
         Math.ceil((r.endAt.getTime() - Date.now()) / 86_400_000),
       );
-      const ok = await this.emit(`expiring_soon ${r.id}`, async () => ({
-        tenantId: r.tenantId,
-        templateCode: "subscription.expiring_soon",
-        reference: {
-          type: "subscription",
-          id: `${r.id}:${r.endAt.toISOString().slice(0, 10)}`,
-        },
-        params: {
-          productName: r.productName,
-          planName: r.planName,
-          endAt: formatNotifyDate(r.endAt),
-          days,
-        },
-        link: "/subscription",
-      }));
+      const ok = await this.emit(`expiring_soon ${r.id}`, async () =>
+        this.subscriptionNotice("subscription.expiring_soon", r, { days }),
+      );
       if (ok) sent += 1;
     }
     return sent;
+  }
+
+  /** 订阅生命周期通知的共同形状：引用 = 订阅 × 到期日（去重键），链接去「我的订阅」。 */
+  private subscriptionNotice(
+    templateCode: CustomerNotifyInput["templateCode"],
+    d: {
+      id: string;
+      tenantId: string;
+      endAt: Date | null;
+      productName: string;
+      planName: string;
+    },
+    extraParams: Record<string, string | number> = {},
+  ): CustomerNotifyInput {
+    return {
+      tenantId: d.tenantId,
+      templateCode,
+      reference: {
+        type: "subscription",
+        id: `${d.id}:${(d.endAt ?? new Date()).toISOString().slice(0, 10)}`,
+      },
+      params: {
+        productName: d.productName,
+        planName: d.planName,
+        endAt: formatNotifyDate(d.endAt),
+        ...extraParams,
+      },
+      link: "/subscription",
+    };
   }
 
   async listSubscriptions(
@@ -399,21 +416,7 @@ export class SubscriptionService {
     for (const id of expired) {
       await this.emit(`expired ${id}`, async () => {
         const d = await this.repo.getNotifyDisplay(id);
-        if (!d) return null;
-        return {
-          tenantId: d.tenantId,
-          templateCode: "subscription.expired",
-          reference: {
-            type: "subscription",
-            id: `${id}:${(d.endAt ?? new Date()).toISOString().slice(0, 10)}`,
-          },
-          params: {
-            productName: d.productName,
-            planName: d.planName,
-            endAt: formatNotifyDate(d.endAt),
-          },
-          link: "/subscription",
-        };
+        return d ? this.subscriptionNotice("subscription.expired", d) : null;
       });
     }
     return expired.length;

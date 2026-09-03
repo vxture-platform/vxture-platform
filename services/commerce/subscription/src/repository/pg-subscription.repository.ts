@@ -49,6 +49,39 @@ interface HistoryRow {
   created_at: Date;
 }
 
+/** 通知展示行（P2-g）：租户 / 到期 / 产品名 / 套餐名，两个查询共用一段 SELECT。 */
+interface NotifyDisplayRow {
+  id: string;
+  tenant_id: string;
+  end_at: Date | null;
+  product_name: string | null;
+  plan_name: string | null;
+}
+
+export interface NotifyDisplay {
+  id: string;
+  tenantId: string;
+  endAt: Date | null;
+  productName: string;
+  planName: string;
+}
+
+const NOTIFY_DISPLAY_SELECT = `select s.id, s.tenant_id, s.end_at, pl.plan_name, pr.product_name
+         from metering.subscriptions s
+         join product.plan_versions pv on pv.id = s.plan_version_id
+         join product.plans pl on pl.id = pv.plan_id
+         left join product.products pr on pr.id = s.product_id`;
+
+function toNotifyDisplay(r: NotifyDisplayRow): NotifyDisplay {
+  return {
+    id: r.id,
+    tenantId: r.tenant_id,
+    endAt: r.end_at,
+    productName: r.product_name ?? "—",
+    planName: r.plan_name ?? "—",
+  };
+}
+
 @Injectable()
 export class PgSubscriptionRepository {
   constructor(@Inject(COMMERCE_PG_POOL) private readonly pool: Pool) {}
@@ -467,18 +500,8 @@ export class PgSubscriptionRepository {
       planName: string;
     }[]
   > {
-    const result = await this.pool.query<{
-      id: string;
-      tenant_id: string;
-      end_at: Date;
-      product_name: string | null;
-      plan_name: string | null;
-    }>(
-      `select s.id, s.tenant_id, s.end_at, pl.plan_name, pr.product_name
-         from metering.subscriptions s
-         join product.plan_versions pv on pv.id = s.plan_version_id
-         join product.plans pl on pl.id = pv.plan_id
-         left join product.products pr on pr.id = s.product_id
+    const result = await this.pool.query<NotifyDisplayRow>(
+      `${NOTIFY_DISPLAY_SELECT}
         where s.auto_renew = false
           and s.deleted_at is null
           and s.subscription_kind <> 'trial'
@@ -492,43 +515,19 @@ export class PgSubscriptionRepository {
       [leadDays, limit],
     );
     return result.rows.map((r) => ({
-      id: r.id,
-      tenantId: r.tenant_id,
-      endAt: r.end_at,
-      productName: r.product_name ?? "—",
-      planName: r.plan_name ?? "—",
+      ...toNotifyDisplay(r),
+      endAt: r.end_at ?? new Date(),
     }));
   }
 
   /** 通知展示用：订阅的租户 / 产品名 / 套餐名 / 到期（P2-g）。 */
-  async getNotifyDisplay(id: string): Promise<{
-    tenantId: string;
-    endAt: Date | null;
-    productName: string;
-    planName: string;
-  } | null> {
-    const result = await this.pool.query<{
-      tenant_id: string;
-      end_at: Date | null;
-      product_name: string | null;
-      plan_name: string | null;
-    }>(
-      `select s.tenant_id, s.end_at, pl.plan_name, pr.product_name
-         from metering.subscriptions s
-         join product.plan_versions pv on pv.id = s.plan_version_id
-         join product.plans pl on pl.id = pv.plan_id
-         left join product.products pr on pr.id = s.product_id
-        where s.id = $1`,
+  async getNotifyDisplay(id: string): Promise<NotifyDisplay | null> {
+    const result = await this.pool.query<NotifyDisplayRow>(
+      `${NOTIFY_DISPLAY_SELECT} where s.id = $1`,
       [id],
     );
     const r = result.rows[0];
-    if (!r) return null;
-    return {
-      tenantId: r.tenant_id,
-      endAt: r.end_at,
-      productName: r.product_name ?? "—",
-      planName: r.plan_name ?? "—",
-    };
+    return r ? toNotifyDisplay(r) : null;
   }
 
   async findLapsedTrialIds(limit: number): Promise<string[]> {

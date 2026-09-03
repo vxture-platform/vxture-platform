@@ -157,6 +157,7 @@ export class NotificationDispatcher {
         if (!(await this.allows(accountId, topic, "email"))) continue;
         const email = await this.lookupEmail(accountId);
         if (!email) continue;
+        let errorMessage: string | undefined;
         try {
           await this.mail.send({
             to: email,
@@ -165,38 +166,28 @@ export class NotificationDispatcher {
             text: rendered.text,
           });
           result.emailsSent += 1;
-          await this.log({
-            tenantId: input.tenantId,
-            accountId,
-            channel: "email",
-            status: "sent",
-            templateCode: input.templateCode,
-            reference: input.reference,
-            recipient: email,
-            subject: rendered.subject,
-            provider: this.provider,
-          });
         } catch (err) {
           result.emailsFailed += 1;
-          const message = String(
-            err instanceof Error ? err.message : err,
-          ).slice(0, 2000);
-          this.logger.warn(
-            `${input.templateCode} → ${email}: email failed — ${message}`,
+          errorMessage = String(err instanceof Error ? err.message : err).slice(
+            0,
+            2000,
           );
-          await this.log({
-            tenantId: input.tenantId,
-            accountId,
-            channel: "email",
-            status: "failed",
-            templateCode: input.templateCode,
-            reference: input.reference,
-            recipient: email,
-            subject: rendered.subject,
-            provider: this.provider,
-            errorMessage: message,
-          });
+          this.logger.warn(
+            `${input.templateCode} → ${email}: email failed — ${errorMessage}`,
+          );
         }
+        await this.log({
+          tenantId: input.tenantId,
+          accountId,
+          channel: "email",
+          status: errorMessage === undefined ? "sent" : "failed",
+          templateCode: input.templateCode,
+          reference: input.reference,
+          recipient: email,
+          subject: rendered.subject,
+          provider: this.provider,
+          ...(errorMessage === undefined ? {} : { errorMessage }),
+        });
       } catch (err) {
         result.skipped += 1;
         this.logger.warn(
