@@ -34,6 +34,7 @@ import type { Request } from "express";
 import type { Pool } from "pg";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import type {
+  AnnouncementBroadcast,
   AnnouncementRecord,
   RequestContext,
 } from "../types/console.types";
@@ -209,12 +210,30 @@ select
   target_tenant_types,
   publish_at,
   expires_at,
+  meta,
   created_at,
   updated_at
 from admin.announcements
 where deleted_at is null
 order by publish_at desc
 `;
+
+/** meta.broadcast_at / meta.broadcast（P2-h 推送作业写入）→ 展示结构；没推过 = null。 */
+function toBroadcast(
+  meta: Record<string, unknown> | null | undefined,
+): AnnouncementBroadcast | null {
+  const at = meta?.broadcast_at;
+  if (typeof at !== "string") return null;
+  const b = (meta?.broadcast ?? {}) as Record<string, unknown>;
+  const n = (v: unknown) => (typeof v === "number" ? v : Number(v ?? 0) || 0);
+  return {
+    at,
+    tenants: n(b.tenants),
+    inbox: n(b.inbox),
+    emails: n(b.emails),
+    skipped: typeof b.skipped === "string" ? b.skipped : null,
+  };
+}
 
 const ANNOUNCEMENT_TYPES: ReadonlySet<AnnouncementRecord["type"]> = new Set([
   "system",
@@ -257,12 +276,14 @@ function mapAnnouncementRow(row: AnnouncementRow): AnnouncementRecord {
     publishAt: toIso(row.publish_at),
     publishedAt: row.status === "published" ? toIso(row.publish_at) : null,
     expiresAt: row.expires_at ? toIso(row.expires_at) : null,
+    broadcast: toBroadcast(row.meta),
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
   };
 }
 
 interface AnnouncementRow {
+  meta?: Record<string, unknown> | null;
   id: string;
   announcement_type: string;
   severity: string | null;
@@ -290,6 +311,7 @@ const ANNOUNCEMENT_RETURNING = `
   target_tenant_types,
   publish_at,
   expires_at,
+  meta,
   created_at,
   updated_at
 `;

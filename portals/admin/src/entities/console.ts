@@ -489,6 +489,14 @@ export interface AnnouncementRecord {
   publishAt: string;
   publishedAt: string | null;
   expiresAt: string | null;
+  /** 推送结果（P2-h：发布到点后作业推给目标租户 owner）；null = 还没推。 */
+  broadcast: {
+    at: string;
+    tenants: number;
+    inbox: number;
+    emails: number;
+    skipped: string | null;
+  } | null;
   createdAt: string;
   updatedAt: string;
 }

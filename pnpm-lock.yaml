@@ -593,9 +593,6 @@ importers:
       '@vxture/service-account':
         specifier: workspace:*
         version: link:../../services/identity/account
-      '@vxture/service-mail':
-        specifier: workspace:*
-        version: link:../../services/notification/mail
       '@vxture/service-organization':
         specifier: workspace:*
         version: link:../../services/identity/organization

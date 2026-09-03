@@ -35,16 +35,16 @@ WEBSITE_BASE_URL=https://vxture.com
 
 **All integration points completed:**
 
-- [x] `requestPasswordReset` integrated with `MailService.sendPasswordReset` (`bff/website-bff/src/auth/auth.service.ts:81`)
+- [x] `requestPasswordReset` integrated with `MailService.sendPasswordReset` (`bff/auth-bff/src/authn/authn.service.ts`，website-bff 的旧入口已随 authn 收拢删除)
 - [x] `console-bff` subscription change notifications (upgrade / pause / resume / cancel) → recipient `req.user.email`
-- [x] `admin-bff` offline payment settlement confirmation / rejection notification → recipient `org.contact_email`
+- [x] 订阅 / 订单 / 退款客户通知（站内 + 邮件，product_330 P2-g，2026-09-03）：`@vxture/service-notification` `NotificationDispatcher`，三个 BFF 装配，投递记 `support.notification_logs`；旧的 admin-bff 结算邮件路径已不存在
 
 **Code entry points:**
 
 - `services/notification/mail/src/` — core service
-- `bff/website-bff/src/routers/verifycode.router.ts` — verification code API route
-- `bff/console-bff/src/routers/subscription.router.ts:117` — subscription change email (fire-and-forget)
-- `bff/admin-bff/src/routers/payments.router.ts:134` — payment settlement/rejection email (fire-and-forget)
+- `bff/auth-bff/src/authn/authn.controller.ts` — send-email-code / send-phone-code（website-bff 的 verifycode 路由已删除）
+- `services/notification/dispatch/src/` — 客户通知分发（站内 + 邮件 + 公告推送）
+- `bff/console-bff/src/routers/subscription.router.ts` — 订阅动作邮件（fire-and-forget，`buildActionEmail`）
 
 ---
 

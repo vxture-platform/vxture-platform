@@ -181,8 +181,19 @@ export interface AnnouncementRecord {
   publishAt: string;
   publishedAt: string | null;
   expiresAt: string | null;
+  /** 推送结果（P2-h AnnouncementBroadcastJob 写在 meta.broadcast）；null = 还没推（未发布 / 未到点 / 作业未跑）。 */
+  broadcast: AnnouncementBroadcast | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AnnouncementBroadcast {
+  at: string;
+  tenants: number;
+  inbox: number;
+  emails: number;
+  /** 上线前存量公告被迁移标成已广播（不推），值 'pre-P2-h'。 */
+  skipped: string | null;
 }
 
 // ── Feature flags (admin.feature_flags) — P2 placeholder board build ──
