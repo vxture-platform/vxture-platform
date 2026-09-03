@@ -547,12 +547,7 @@ export class PgOrderRepository {
             `${terms.cycleCount} ${terms.cycleUnit}`,
           ],
         );
-        await client.query(
-          `update metering.quota_pools
-              set period_anchor = now(), current_period_start = now(), updated_at = now()
-            where subscription_id = $1 and status = 'active' and reset_period <> 'none'`,
-          [subscriptionId],
-        );
+        await this.reanchorPeriodicPoolsTx(client, subscriptionId);
       } else if (terms.mode === "renew") {
         await client.query(
           `update metering.subscriptions
@@ -586,12 +581,7 @@ export class PgOrderRepository {
               and pool_source = 'subscription' and reset_period = 'none' and quota_used > 0`,
           [subscriptionId],
         );
-        await client.query(
-          `update metering.quota_pools
-              set period_anchor = now(), current_period_start = now(), updated_at = now()
-            where subscription_id = $1 and status = 'active' and reset_period <> 'none'`,
-          [subscriptionId],
-        );
+        await this.reanchorPeriodicPoolsTx(client, subscriptionId);
       } else {
         await client.query(
           `update metering.subscriptions
@@ -876,6 +866,19 @@ export class PgOrderRepository {
       [orderId],
     );
     return res.rows[0]?.remark ?? null;
+  }
+
+  /** 新周期起点：周期池（day/month）锚点与当前期起点都拨到 now（升级 / 续订共用）。 */
+  private async reanchorPeriodicPoolsTx(
+    client: PoolClient,
+    subscriptionId: string,
+  ): Promise<void> {
+    await client.query(
+      `update metering.quota_pools
+          set period_anchor = now(), current_period_start = now(), updated_at = now()
+        where subscription_id = $1 and status = 'active' and reset_period <> 'none'`,
+      [subscriptionId],
+    );
   }
 
   private mapOrder(row: OrderRow): OrderRecord {

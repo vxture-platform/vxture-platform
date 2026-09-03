@@ -126,6 +126,25 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     return { batchId, voucherId: row.rows[0]!.id };
   }
 
+  /** 无券申报（支付宝）。 */
+  async function declare(orderId: string) {
+    return orderService.declarePayment({
+      orderId,
+      tenantId,
+      userId,
+      payChannel: "alipay",
+    });
+  }
+
+  /** 运营足额确认收款。 */
+  async function confirm(orderId: string, amount: number) {
+    return orders.confirmOfflinePayment(
+      req(CAPS_SETTLE),
+      orderId,
+      CONFIRM(amount),
+    );
+  }
+
   async function orderFacts(orderId: string) {
     const ord = await pool.query<{
       status: string;
@@ -504,12 +523,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
 
   it("§8.7 取消边界：已申报订单 cancel 409；恢复过期单回到待付款", async () => {
     const orderId = await mkOrder(300);
-    await orderService.declarePayment({
-      orderId,
-      tenantId,
-      userId,
-      payChannel: "alipay",
-    });
+    await declare(orderId);
     await expect(
       orderService.cancel(orderId, {
         actorType: "customer",
@@ -728,12 +742,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
 
   it("§8.14 台账封堵：在途订单腿 verify/reject 均 409 引导订单侧", async () => {
     const orderId = await mkOrder(700);
-    await orderService.declarePayment({
-      orderId,
-      tenantId,
-      userId,
-      payChannel: "alipay",
-    });
+    await declare(orderId);
     const leg = await pool.query<{ id: string }>(
       `select p.id from billing.payments p
         join billing.invoices i on i.id = p.bill_id
@@ -834,17 +843,8 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
 
   it("§8.16 付费到期：续订单挂待付款、到期扫描翻 expired、付款履约复活", async () => {
     const orderId = await mkOrder(1200);
-    await orderService.declarePayment({
-      orderId,
-      tenantId,
-      userId,
-      payChannel: "alipay",
-    });
-    await orders.confirmOfflinePayment(
-      req(CAPS_SETTLE),
-      orderId,
-      CONFIRM(1200),
-    );
+    await declare(orderId);
+    await confirm(orderId, 1200);
     const subId = (await orderFacts(orderId)).subscriptionId!;
     // 到期不续（auto_renew 关）：到期扫描翻 expired，权益按 DEACTIVATED 走钩子
     await pool.query(
