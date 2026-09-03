@@ -47,8 +47,10 @@ import {
   type SubscribePlanOption,
   type SubscribePlanPrice,
 } from "@/api/console-bff";
+import { LoadFailedBanner } from "@/components/load/LoadFailed";
 import { CyclePicker } from "./components/CyclePicker";
 import { OrderFlowStrip } from "./components/OrderFlowStrip";
+import { useCountdown } from "./components/pay/useCountdown";
 import { PlanSummaryCard } from "./components/PlanSummaryCard";
 import { SECTION_TIGHT, SectionTitle } from "./components/sectionKit";
 import { WorkspacePicker } from "./components/WorkspacePicker";
@@ -104,23 +106,50 @@ function UpgradeQuoteSummary({
   const t = useTranslations("subscribePage");
   const formatMoney = moneyFor(useLocale() as Locale);
   const [quote, setQuote] = useState<UpgradeQuote | null>(null);
+  /* 三态(批 1c):试算中 / 失败(说出来 + 重试)/ 成功。此前失败静默回 null,页面把
+   * 「没算出来」显示成「没折抵」的原价。 */
+  const [quoteState, setQuoteState] = useState<"loading" | "failed" | "ready">(
+    "loading",
+  );
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let alive = true;
     setQuote(null);
-    void fetchUpgradeQuote({
+    setQuoteState("loading");
+    fetchUpgradeQuote({
       subscriptionId,
       planVersionId,
       cycleUnit: cycle,
-    }).then((q) => {
-      if (alive) setQuote(q);
-    });
+    })
+      .then((q) => {
+        if (!alive) return;
+        setQuote(q);
+        setQuoteState("ready");
+      })
+      .catch(() => {
+        if (alive) setQuoteState("failed");
+      });
     return () => {
       alive = false;
     };
-  }, [subscriptionId, planVersionId, cycle]);
+  }, [subscriptionId, planVersionId, cycle, attempt]);
 
   return (
     <>
+      {quoteState === "failed" ? (
+        <div className="flex flex-wrap items-center justify-between gap-sm">
+          <span className="text-body-sm text-warning-text">
+            {t("confirm.creditFailed")}
+          </span>
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() => setAttempt((n) => n + 1)}
+          >
+            {t("confirm.creditRetry")}
+          </Button>
+        </div>
+      ) : null}
       {quote && Number(quote.credit) > 0 ? (
         <div className="flex flex-col gap-2xs">
           <div className="flex items-baseline justify-between gap-md text-body-md">
@@ -142,7 +171,11 @@ function UpgradeQuoteSummary({
           {t("confirm.total")}
         </strong>
         <span className="text-heading-3 text-foreground tabular-nums">
-          {quote ? formatMoney(quote.payable, quote.currency) : fallbackTotal}
+          {quote
+            ? formatMoney(quote.payable, quote.currency)
+            : quoteState === "loading"
+              ? t("confirm.creditPending")
+              : fallbackTotal}
         </span>
       </div>
       {quote && Number(quote.leftover) > 0 ? (
@@ -158,6 +191,7 @@ function UpgradeQuoteSummary({
 
 export function SubscribePage() {
   const t = useTranslations("subscribePage");
+  const tLoad = useTranslations("loadState");
   const router = useRouter();
   const params = useSearchParams();
   const formatMoney = moneyFor(useLocale() as Locale);
@@ -180,7 +214,15 @@ export function SubscribePage() {
 
   const [ctx, setCtx] = useState<SubscribeContext | null>(null);
   const [loading, setLoading] = useState(true);
+  /* 读失败显影(批 1c):读上下文失败 = 横幅 + 重试;未知产品 / 意图 = 跳回总览
+   * (带说明)。此前两者都静默 replace 到 /subscription。 */
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [cycle, setCycle] = useState<Cycle>(initialCycle); // 深链预选，默认年付（更省）
+  // 深链 cycle 变了(同页换参)也要跟着变;此前只在挂载时取一次。
+  useEffect(() => {
+    setCycle(initialCycle);
+  }, [initialCycle]);
   // 深链 target_tier 缺席时的兜底选择（正常路径不出现二次选择）。
   const [pickedVersionId, setPickedVersionId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -191,30 +233,64 @@ export function SubscribePage() {
 
   useEffect(() => {
     let cancelled = false;
-    void fetchSubscribeContext(query).then((result) => {
-      if (cancelled) return;
-      // Degrade (arda_303 §2.2 #1): unknown intent/product/failed fetch → home.
-      if (!result || result.intent === null || result.product === null) {
-        router.replace("/subscription");
-        return;
-      }
-      setCtx(result);
-      setAutoRenew(result.current?.autoRenew ?? false);
-      setLoading(false);
-    });
+    setLoading(true);
+    setLoadFailed(false);
+    fetchSubscribeContext(query)
+      .then((result) => {
+        if (cancelled) return;
+        // 加油包不走套餐下单:目录与订单在配额管理页,直接送过去(此前只弹一条横幅
+        // 然后照套餐下单)。
+        if (result.intent === "addon") {
+          router.replace("/quotas");
+          return;
+        }
+        // Degrade (arda_303 §2.2 #1): unknown intent/product → home, with a reason.
+        if (result.intent === null || result.product === null) {
+          router.replace("/subscription?notice=unknown-link");
+          return;
+        }
+        setCtx(result);
+        setAutoRenew(result.current?.autoRenew ?? false);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLoadFailed(true);
+        setLoading(false);
+      });
     return () => {
       cancelled = true;
     };
-  }, [query, router]);
+  }, [query, router, reloadKey]);
 
   const reload = useCallback(async () => {
-    const fresh = await fetchSubscribeContext(query);
-    if (fresh) {
+    try {
+      const fresh = await fetchSubscribeContext(query);
       setCtx(fresh);
       // 换了工作区就换了 current，预填随之重算。
       setAutoRenew(fresh.current?.autoRenew ?? false);
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : tLoad("title"));
     }
-  }, [query]);
+  }, [query, tLoad]);
+
+  // 待支付面板的倒计时:到点重取,让超时关闭显影。
+  const pendingCountdown = useCountdown(
+    ctx?.pendingOrder?.expireAt ?? null,
+    () => void reload(),
+  );
+
+  if (loadFailed) {
+    return (
+      <ViewLayout className="mx-auto w-full max-w-content-base-xl">
+        <ViewHeader icon="credit-card" title={t("confirm.title")} />
+        <LoadFailedBanner
+          onRetry={() => setReloadKey((k) => k + 1)}
+          retrying={loading}
+        />
+      </ViewLayout>
+    );
+  }
 
   if (loading || !ctx) {
     return (
@@ -235,7 +311,17 @@ export function SubscribePage() {
           icon="credit-card"
           title={t("pending.title")}
           description={t("pending.awaiting")}
+          action={
+            pendingCountdown ? (
+              <StatusBadge tone="warning">
+                {t("pending.countdown", { time: pendingCountdown })}
+              </StatusBadge>
+            ) : undefined
+          }
         />
+        {pendingCountdown === "00:00" ? (
+          <Banner tone="warning" title={t("pending.expired")} />
+        ) : null}
         <OrderFlowStrip
           stage={pendingOrder.paymentState ?? "pending_payment"}
           times={{ order: pendingOrder.createdAt }}
@@ -367,7 +453,7 @@ export function SubscribePage() {
       await reload();
       setBusy(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("orderFailed"));
+      setError(e instanceof Error && e.message ? e.message : t("orderFailed"));
       setBusy(false);
     }
   };
@@ -397,10 +483,6 @@ export function SubscribePage() {
       />
 
       <OrderFlowStrip stage="ordering" />
-
-      {intent === "addon" ? (
-        <Banner tone="info" title={t("addonNotice")} />
-      ) : null}
 
       <div className="flex flex-col gap-md lg:flex-row lg:items-start">
         {/* 左列：给谁买 / 买什么 / 买多久 */}
@@ -479,6 +561,12 @@ export function SubscribePage() {
             <CyclePicker
               value={cycle}
               onChange={(next) => setCycle(next)}
+              // 续订接在当前订阅到期之后;新订 / 升级从此刻起算(升级立即生效)。
+              startAt={
+                orderIntent === "renew" && isLive
+                  ? (current?.endAt ?? null)
+                  : null
+              }
               yearSavings={
                 savings
                   ? t("confirm.yearlySave", {
@@ -492,7 +580,9 @@ export function SubscribePage() {
               }
             />
             <p className="text-body-sm text-muted-foreground">
-              {t("confirm.startNote")}
+              {orderIntent === "renew" && isLive
+                ? t("confirm.startNoteRenew")
+                : t("confirm.startNote")}
             </p>
           </PageSection>
         </div>

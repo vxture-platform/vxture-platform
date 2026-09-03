@@ -1071,21 +1071,20 @@ export async function fetchSubscribeContext(params: {
   intent?: string | undefined;
   targetTier?: string | undefined;
   metric?: string | undefined;
-}): Promise<SubscribeContext | null> {
+}): Promise<SubscribeContext> {
   const qs = new URLSearchParams();
   if (params.product) qs.set("product", params.product);
   if (params.intent) qs.set("intent", params.intent);
   if (params.targetTier) qs.set("target_tier", params.targetTier);
   if (params.metric) qs.set("metric", params.metric);
-  const ctx = await readJson<SubscribeContext | null>(
+  // strict(批 1c):读失败抛 ConsoleBffError,页面画「读取失败 + 重试」;此前一律回 null,
+  // 与「未知产品 / 意图」一样被静默跳回订阅总览,用户看不到任何理由。
+  const ctx = await readJsonStrict<SubscribeContext>(
     `/api/subscription/subscribe-context?${qs.toString()}`,
-    null,
   );
-  if (ctx) {
-    // 部署偏斜防护：门户先于 BFF 发布时旧响应没有 features 字段。
-    for (const plan of ctx.plans) {
-      plan.features = (plan as { features?: string[] }).features ?? [];
-    }
+  // 部署偏斜防护：门户先于 BFF 发布时旧响应没有 features 字段。
+  for (const plan of ctx.plans) {
+    plan.features = (plan as { features?: string[] }).features ?? [];
   }
   return ctx;
 }
@@ -1125,16 +1124,16 @@ export interface UpgradeQuote {
   consumableShare: number;
 }
 
-/** 零副作用：确认页展示折抵；下单时服务端用同一函数再算一次落库。 */
+/** 零副作用：确认页展示折抵；下单时服务端用同一函数再算一次落库。strict(批 1c):
+ *  失败抛出,确认页要把「没算出来」说出来,不能静默按原价显示成「没折抵」。 */
 export async function fetchUpgradeQuote(params: {
   subscriptionId: string;
   planVersionId: string;
   cycleUnit: "month" | "year";
-}): Promise<UpgradeQuote | null> {
+}): Promise<UpgradeQuote> {
   const qs = new URLSearchParams(params);
-  return readJson<UpgradeQuote | null>(
+  return readJsonStrict<UpgradeQuote>(
     `/api/subscription/upgrade-quote?${qs.toString()}`,
-    null,
   );
 }
 
