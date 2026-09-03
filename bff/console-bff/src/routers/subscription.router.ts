@@ -1089,16 +1089,38 @@ export class SubscriptionRouter {
     // 库级部分唯一索引 uidx_orders_open_per_product 兜底并发。
     await this.assertNoPendingOrderForProduct(workspaceId, productCode);
 
-    // 原订阅：upgrade 由客户端指定；renew 未指定时取本产品的代表订阅（续订即延长它）。
+    // 原订阅：upgrade / renew 由客户端指定；renew 未指定时取本产品的代表订阅（续订即延长它）。
+    let effectiveIntent = intent as OrderCreateIntent;
     let fromSubscriptionId = upgradeOf;
-    if (intent === "renew" && !fromSubscriptionId) {
+    if (effectiveIntent === "renew") {
       const current = await this.queryCurrentForProduct(
         req.tenant.id,
         productCode,
       );
-      if (!current)
-        throw new BadRequestException("没有可续订的订阅，请直接订阅");
-      fromSubscriptionId = current.subscriptionId;
+      if (!fromSubscriptionId) {
+        if (!current)
+          throw new BadRequestException("没有可续订的订阅，请直接订阅");
+        fromSubscriptionId = current.subscriptionId;
+      }
+      // 续订只延长"同一套餐、可续"的订阅（在用 / 到期族）；已取消的、或到期后换档的，
+      // 都不是续订——按 new 建新订阅（原订阅已不在用，档位守卫放行）。
+      const from =
+        current && current.subscriptionId === fromSubscriptionId
+          ? current
+          : null;
+      const live = from && ["active", "trialing"].includes(from.status);
+      const lapsed =
+        from && ["expiring", "overdue", "expired"].includes(from.status);
+      if (
+        from &&
+        !(
+          (live && from.planVersionId === planVersionId) ||
+          (lapsed && from.planVersionId === planVersionId)
+        )
+      ) {
+        effectiveIntent = live ? "upgrade" : "new";
+        if (effectiveIntent === "new") fromSubscriptionId = undefined;
+      }
     }
     // 归属校验：原订阅须属本租户（服务层再校 workspace / 状态 / 套餐）
     if (fromSubscriptionId) {
@@ -1121,7 +1143,7 @@ export class SubscriptionRouter {
         price: Number(plan.price),
         currency: plan.currency,
         createdBy,
-        intent: intent as OrderCreateIntent,
+        intent: effectiveIntent,
         ...(fromSubscriptionId ? { fromSubscriptionId } : {}),
         itemName: plan.planName,
         paymentTtlMinutes: ttlMinutes,

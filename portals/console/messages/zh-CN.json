@@ -2242,7 +2242,7 @@
       "noFeatures": "权益明细以对比表为准。",
       "pickTier": "选择档位：",
       "tierUnavailable": "链接指定的档位当前不可订购，请在下方选择档位",
-      "alreadyCurrent": "已是当前套餐，无需重复订阅；延长周期请使用续费",
+      "renewCurrent": "已是当前套餐：本单为续订，付款后到期日顺延一个周期",
       "howLong": "订阅周期",
       "yearlySave": "年付省 {amount}",
       "startNote": "订阅周期自服务开通时刻起算；上方起止日期按当前时刻估算。",

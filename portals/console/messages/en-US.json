@@ -2242,7 +2242,7 @@
       "noFeatures": "See the comparison table for full entitlements.",
       "pickTier": "Pick a tier:",
       "tierUnavailable": "The plan tier from the link isn't available right now — pick a tier below",
-      "alreadyCurrent": "You're already on this plan — renew to extend the period instead",
+      "renewCurrent": "You're on this plan — this order renews it and extends the end date by one period",
       "howLong": "Subscription period",
       "yearlySave": "Save {amount} yearly",
       "startNote": "The subscription period starts at service activation; the dates above are estimated from the current moment.",
