@@ -374,7 +374,7 @@ export function SubscribePage() {
 
   const contactSales = () => {
     window.location.href = `mailto:sales@vxture.com?subject=${encodeURIComponent(
-      `${product.name} 企业版咨询`,
+      t("contactSalesSubject", { product: product.name }),
     )}`;
   };
 

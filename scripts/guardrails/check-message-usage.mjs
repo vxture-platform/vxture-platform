@@ -84,6 +84,38 @@ for (const portal of fs.readdirSync(PORTALS_DIR)) {
       if (!missing.has(key)) missing.set(key, new Set());
       missing.get(key).add(path.relative(process.cwd(), f));
     }
+
+    // ── 命名空间译器(2026-09-04 补的第二个盲区)──
+    // `const t = useTranslations("ns")` 后 `t("a.b")`:真键 = "ns.a.b"。这一层此前
+    // 刻意不查(相对键无法静态还原),但 console 订阅页 `t("subs.card.unsubscribeVerb")`
+    // (真键在 `subscriptionHub.card.*`)这类**带点的相对键**一路进了生产——退订确认框
+    // 渲染出键名。带点的相对键其实可以静态还原:同一文件里该变量只声明过一个命名空间
+    // 时,拼上前缀比对即可。判定范围收敛到「不歧义」的情形:
+    //   - 只看 `const <v> = useTranslations("ns")` 声明的变量(无参根译器归上面 tShared);
+    //   - 同一变量名在文件里声明了两个不同命名空间(多个组件各有各的 t)→ 该变量跳过;
+    //   - 只查带点的静态键(无点短键留给 next-intl 自己,误报率高、真键缺的少)。
+    const nsByVar = new Map();
+    const ambiguous = new Set();
+    for (const d of src.matchAll(
+      /const\s+(t[A-Za-z0-9_]*)\s*=\s*useTranslations\(\s*"([^"]+)"\s*\)/g,
+    )) {
+      const [, v, vns] = d;
+      if (nsByVar.has(v) && nsByVar.get(v) !== vns) ambiguous.add(v);
+      nsByVar.set(v, vns);
+    }
+    for (const [v, vns] of nsByVar) {
+      if (v === "tShared" || ambiguous.has(v)) continue;
+      const callRe = new RegExp(`\\b${v}\\(\\s*"([^"]+)"`, "g");
+      let c;
+      while ((c = callRe.exec(src))) {
+        const rel = c[1];
+        if (/[{$*]/.test(rel) || !rel.includes(".")) continue;
+        const key = `${vns}.${rel}`;
+        if (keys.has(key)) continue;
+        if (!missing.has(key)) missing.set(key, new Set());
+        missing.get(key).add(path.relative(process.cwd(), f));
+      }
+    }
   }
 
   for (const [key, fset] of [...missing].sort()) {

@@ -511,7 +511,7 @@ export function ConsoleAppShell({
         openDrawer={(type) => setDrawer(type)}
         unreadCount={unreadCount}
         onNavigate={navigate}
-        brandName="Workspace Console"
+        brandName={tShell("brandName")}
         navEntries={navEntries}
         quotaUsage={quotaUsage}
         workspaceName={workspaceName}

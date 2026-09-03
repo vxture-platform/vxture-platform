@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { buildRpLoginUrl } from "@/api/console-bff";
 
 /**
@@ -14,6 +15,7 @@ import { buildRpLoginUrl } from "@/api/console-bff";
  */
 export default function SignInPage() {
   const params = useSearchParams();
+  const t = useTranslations("login");
 
   useEffect(() => {
     const next = params.get("next") || "/";
@@ -23,7 +25,7 @@ export default function SignInPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center">
-      <p>正在跳转到登录…</p>
+      <p>{t("redirecting")}</p>
     </main>
   );
 }

@@ -520,10 +520,10 @@ export function SubscriptionPage() {
            落锤，而不是各写一遍。找不到订阅行时用订单信息兜底（completed 单的
            orderId 即订阅 id）。 */
               confirm: withLabels({
-                verb: t("subs.card.unsubscribeVerb"),
+                verb: t("card.unsubscribeVerb"),
                 target: o.productName ?? "",
-                consequence: t("subs.card.unsubscribeConsequence"),
-                cancelLabel: t("subs.card.unsubscribeKeep"),
+                consequence: t("card.unsubscribeConsequence"),
+                cancelLabel: t("card.unsubscribeKeep"),
                 onConfirm: () =>
                   handleUnsubscribe(
                     products.find((p) => p.subscriptionId === o.orderId) ??

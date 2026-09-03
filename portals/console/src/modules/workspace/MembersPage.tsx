@@ -664,7 +664,7 @@ export function MembersPage() {
           memberActionVisibility.bulk ? (
             <BulkActionBar
               count={selectedCount}
-              noun="人"
+              noun={t("bulk.noun")}
               onClear={() => setSelectedIds(new Set())}
               actions={[
                 /* Both disabled for the same reason as the per-row toggle:
