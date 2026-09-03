@@ -6,6 +6,8 @@ import { Pool } from "pg";
 import { COMMERCE_PG_POOL } from "../tokens";
 import { PgSubscriptionRepository } from "../repository/pg-subscription.repository";
 import { SubscriptionService } from "../service/subscription.service";
+import { PgOrderRepository } from "../repository/pg-order.repository";
+import { OrderService } from "../service/order.service";
 import { PgAddonRepository } from "../repository/pg-addon.repository";
 import { PgConsumeRepository } from "../repository/pg-consume.repository";
 import { PgUsageRollupRepository } from "../repository/pg-usage-rollup.repository";
@@ -50,6 +52,9 @@ import { ConsumeService } from "../service/consume.service";
     },
     PgSubscriptionRepository,
     SubscriptionService,
+    // product_330 P1-b2：订单实体（billing.orders）的数据访问与编排
+    PgOrderRepository,
+    OrderService,
     PgConsumeRepository,
     ConsumeService,
     PgUsageRollupRepository,
@@ -59,6 +64,7 @@ import { ConsumeService } from "../service/consume.service";
   exports: [
     COMMERCE_PG_POOL,
     SubscriptionService,
+    OrderService,
     ConsumeService,
     PgUsageRollupRepository,
     AddonService,

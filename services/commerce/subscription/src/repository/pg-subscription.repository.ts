@@ -1192,7 +1192,8 @@ export class PgSubscriptionRepository {
       invoiceId: string;
       tenantId: string;
       workspaceId: string;
-      subscriptionId: string;
+      /** P1-b2：订单阶段没有订阅行 → null（invoice_items.subscription_id 可空）。 */
+      subscriptionId: string | null;
       itemName: string;
       /** Negative NUMERIC(12,2) yuan string, e.g. "-240.00". */
       amountYuan: string;

@@ -37,7 +37,10 @@ import {
   type AvailableVoucher,
   type DiscountEffect,
 } from "@vxture/service-promotion";
-import { SubscriptionService } from "@vxture/service-subscription";
+import {
+  OrderService,
+  SubscriptionService,
+} from "@vxture/service-subscription";
 import type {
   DeclarePaymentResult,
   SubscriptionRecord,
@@ -150,10 +153,10 @@ interface SubscribeCurrent {
 }
 
 /**
- * A pending offline order for (tenant × product) — the tenant's suspended
- * offline_purchase subscription row with an unpaid invoice (product_320 §2 O1).
- * Its presence means the client shows the awaiting-confirmation panel instead
- * of the plan ladder.
+ * A pending order for (tenant × product) — an open billing.orders row
+ * (pending_payment / pending_verify / paid，product_330 P1-b2). Its presence
+ * means the client shows the awaiting-confirmation panel instead of the plan
+ * ladder.
  */
 export interface PendingOrderSummary {
   orderId: string;
@@ -214,7 +217,7 @@ interface CreateOrderResult {
   /** owner 2026-08-20 修订后恒为 pending_payment（0 元也是订单）；
    *  "active" 保留在值域内仅为旧客户端兼容，服务端不再产生。 */
   status: "pending_payment" | "active";
-  /** subscription row id (= admin orderId 语义) */
+  /** billing.orders.id（product_330 P1-b2 起；此前是 suspended 订阅行 id） */
   orderId: string | null;
   orderNo: string | null;
   billNo: string | null;
@@ -466,6 +469,9 @@ export class SubscriptionRouter {
   constructor(
     @Inject(SubscriptionService)
     private readonly subscriptionService: SubscriptionService,
+    // product_330 P1-b2：订单阶段（下单 / 申报 / 取消）全走订单实体编排
+    @Inject(OrderService)
+    private readonly orderService: OrderService,
     @Inject(PromotionService)
     private readonly promotionService: PromotionService,
     @Inject(BillingService)
@@ -880,10 +886,8 @@ export class SubscriptionRouter {
          left join product.products prod on prod.id = pc.product_id
         where ts.workspace_id = $1 and ts.deleted_at is null
           and ts.status <> 'cancelled'
-          -- 待收款订单壳（product_320 O1 谓词）不是订阅：钱没到、权益没开过，它在
-          -- 「我的订单」里是「已申报·核验中 / 未开通」，不能同时在「我的订阅」里以
-          -- 「已暂停 · 长期有效」出现（页头本就写着「未支付、未开通的订单不在此列」，
-          -- 2026-09-02 上线实测与之相反）。
+          -- 旧模型（product_330 P1-b2 之前）的待收款订单壳不是订阅：钱没到、权益没开过。
+          -- 新模型下单不再建订阅行，此谓词只挡存量壳（页头写着「未支付、未开通的订单不在此列」）。
           and not (
             ts.status = 'suspended'
             and ts.activation_method = 'offline_purchase'
@@ -1041,8 +1045,9 @@ export class SubscriptionRouter {
   // --------------------------------------------------------------------------
   // POST /api/subscription/orders — 下单（线下支付，product_320 §4.4；
   // owner 2026-08-20 修订：0 元也是订单——free 档不再即时开通，与付费档同路
-  // 产生 suspended 订阅 + unpaid（¥0）账单，付款环节 cashDue=0 走既有的
-  // 即时结清（declarePayment instant-settle）自动开通）。
+  // 产生待付款订单 + unpaid（¥0）账单，付款环节 cashDue=0 走既有的
+  // 即时结清（declarePayment instant-settle）自动履约）。
+  // product_330 P1-b2：下单只建 billing.orders，不再建 suspended 订阅行；履约时才建/改订阅。
   // 返回订单号 + 线下汇款指引，等 admin 人工确认收款后开通。intent = new|renew|upgrade。
   // 档位冲突/不可购买 → 409/400 语义码。
   // --------------------------------------------------------------------------
@@ -1077,26 +1082,38 @@ export class SubscriptionRouter {
         message: "该套餐/周期不可自助购买（如企业版请联系销售）",
       });
 
-    // One open order per (tenant × product)，0 元订单同样受限（P3/§7.3）。
-    await this.assertNoPendingOrderForProduct(req.tenant.id, productCode);
-
     const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
     const createdBy = req.user.id;
 
-    // upgrade 归属校验：目标订阅须属本租户
-    if (intent === "upgrade" && upgradeOf) {
+    // One open order per (workspace × product)，0 元订单同样受限（P3/§7.3）；
+    // 库级部分唯一索引 uidx_orders_open_per_product 兜底并发。
+    await this.assertNoPendingOrderForProduct(workspaceId, productCode);
+
+    // 原订阅：upgrade 由客户端指定；renew 未指定时取本产品的代表订阅（续订即延长它）。
+    let fromSubscriptionId = upgradeOf;
+    if (intent === "renew" && !fromSubscriptionId) {
+      const current = await this.queryCurrentForProduct(
+        req.tenant.id,
+        productCode,
+      );
+      if (!current)
+        throw new BadRequestException("没有可续订的订阅，请直接订阅");
+      fromSubscriptionId = current.subscriptionId;
+    }
+    // 归属校验：原订阅须属本租户（服务层再校 workspace / 状态 / 套餐）
+    if (fromSubscriptionId) {
       const target = await this.subscriptionService
-        .getSubscription(upgradeOf)
+        .getSubscription(fromSubscriptionId)
         .catch(() => null);
       if (!target || target.tenantId !== req.tenant.id)
-        throw new BadRequestException("升级目标订阅不存在或无权操作");
+        throw new BadRequestException("目标订阅不存在或无权操作");
     }
 
-    // 0 元与付费同路（owner 2026-08-20）：产生线下订单（suspended 订阅 + unpaid 账单）。
+    // 0 元与付费同路（owner 2026-08-20）：产生待付款订单（billing.orders + unpaid 账单）。
     // TTL 在此定格并随单持久化（P4 修订）：个人 30min / 组织 48h。
     const ttlMinutes = paymentTtlMinutesFor(req.tenant.tenantType);
     try {
-      const order = await this.subscriptionService.createOfflineOrder({
+      const { order, billNo } = await this.orderService.createOrder({
         tenantId: req.tenant.id,
         workspaceId,
         planVersionId,
@@ -1105,15 +1122,15 @@ export class SubscriptionRouter {
         currency: plan.currency,
         createdBy,
         intent: intent as OrderCreateIntent,
-        ...(upgradeOf ? { upgradeOfSubscriptionId: upgradeOf } : {}),
+        ...(fromSubscriptionId ? { fromSubscriptionId } : {}),
         itemName: plan.planName,
         paymentTtlMinutes: ttlMinutes,
       });
       return {
         status: "pending_payment",
-        orderId: order.subscription.id,
+        orderId: order.id,
         orderNo: order.orderNo,
-        billNo: order.billNo,
+        billNo,
         amount: Number(plan.price).toFixed(2),
         currency: plan.currency,
         planCode: plan.planCode,
@@ -1148,15 +1165,12 @@ export class SubscriptionRouter {
     const id = orderId?.trim();
     if (!id) throw new BadRequestException("orderId 不能为空");
 
-    // 归属校验
-    const sub = await this.subscriptionService
-      .getSubscription(id)
-      .catch(() => null);
-    if (!sub || sub.tenantId !== req.tenant.id)
-      throw new BadRequestException("订单不存在或无权操作");
+    // 归属校验（tenant scope）
+    const row = await this.loadOrderRow(req.tenant.id, id);
+    if (!row) throw new BadRequestException("订单不存在或无权操作");
 
     try {
-      const updated = await this.subscriptionService.cancelPendingOrder(id, {
+      const updated = await this.orderService.cancel(row.order_id, {
         actorType: "customer",
         actorId: req.user.id,
         ...(body?.reason ? { remark: body.reason } : {}),
@@ -1303,15 +1317,12 @@ export class SubscriptionRouter {
       throw new BadRequestException("该支付渠道未开放，请选择其它渠道");
 
     // Ownership (tenant scope), same assertion as cancel.
-    const sub = await this.subscriptionService
-      .getSubscription(id)
-      .catch(() => null);
-    if (!sub || sub.tenantId !== req.tenant.id)
-      throw new BadRequestException("订单不存在或无权操作");
+    const row = await this.loadOrderRow(req.tenant.id, id);
+    if (!row) throw new BadRequestException("订单不存在或无权操作");
 
     try {
-      return await this.subscriptionService.declarePayment({
-        orderId: id,
+      return await this.orderService.declarePayment({
+        orderId: row.order_id,
         tenantId: req.tenant.id,
         userId: req.user.id,
         payChannel: payChannel as DeclareChannel,
@@ -1336,10 +1347,10 @@ export class SubscriptionRouter {
     orderId: string | undefined,
   ): Promise<OrderRow | null> {
     if (!orderId) return null;
+    if (!UUID_RE.test(orderId)) return null;
     const res = await this.pool.query<OrderRow>(
       `${ORDER_ROW_SELECT}
-        where sub.tenant_id = $1 and sub.id = $2
-          and sub.order_no is not null and sub.deleted_at is null
+        where o.tenant_id = $1 and o.id = $2
         limit 1`,
       [tenantId, orderId],
     );
@@ -1378,13 +1389,13 @@ export class SubscriptionRouter {
     }));
   }
 
-  /** Latest reject reason (P2 banner) from the payment_rejected history. */
+  /** Latest reject reason (P2 banner) from the payment_rejected order event. */
   private async loadLatestRejectReason(
     orderId: string,
   ): Promise<string | null> {
     const res = await this.pool.query<{ remark: string | null }>(
-      `select remark from metering.subscription_histories
-        where subscription_id = $1 and change_type = 'payment_rejected'
+      `select remark from billing.order_events
+        where order_id = $1 and event_type = 'payment_rejected'
         order by created_at desc limit 1`,
       [orderId],
     );
@@ -1392,66 +1403,40 @@ export class SubscriptionRouter {
   }
 
   /**
-   * Duplicate pending-order guard (320 O1 predicate, 321-widened to include
-   * partial): one open order per (tenant × product)。0 元订单与付费订单同路
+   * Duplicate pending-order guard: one open order per (workspace × product)
+   * （product_330 P1-b2：billing.orders 未终态即在途）。0 元订单与付费订单同路
    * （owner 2026-08-20），本守卫对两者一视同仁。
    */
   private async assertNoPendingOrderForProduct(
-    tenantId: string,
+    workspaceId: string,
     productCode: string,
   ): Promise<void> {
-    const res = await this.pool.query<{ order_no: string }>(
-      `select sub.order_no
-         from metering.subscriptions sub
-         join product.plan_components pc
-           on pc.plan_version_id = sub.plan_version_id and pc.component_role = 'primary'
-         join product.products prod on prod.id = pc.product_id
-         join lateral (
-           select bill_status from billing.invoices i
-            where i.subscription_id = sub.id and i.deleted_at is null
-            order by i.created_at desc limit 1
-         ) inv on true
-        where sub.tenant_id = $1 and prod.product_code = $2
-          and sub.status = 'suspended'
-          and sub.activation_method = 'offline_purchase'
-          and inv.bill_status in ('unpaid', 'partial')
-          and sub.deleted_at is null
-        limit 1`,
-      [tenantId, productCode],
+    const open = await this.orderService.findOpenOrderForProduct(
+      workspaceId,
+      productCode,
     );
-    if (res.rows[0]) {
+    if (open) {
       throw new ConflictException({
         code: "PENDING_ORDER_EXISTS",
-        message: `已有待付款订单（${res.rows[0].order_no}），请先完成付款或取消该订单`,
+        message: `已有待付款订单（${open.orderNo}），请先完成付款或取消该订单`,
       });
     }
   }
 
   /**
-   * Pending offline order for (tenant × product): suspended + offline_purchase
-   * subscription with an unpaid invoice (product_320 §2 O1 判定谓词).
+   * Pending order for (tenant × product): an open billing.orders row
+   * （pending_payment / pending_verify / paid，product_330 P1-b2）。
    */
   private async queryPendingOrder(
     tenantId: string,
     productCode: string,
   ): Promise<PendingOrderSummary | null> {
-    // 320 O1 predicate, 321-widened: 'unpaid' alone misses legacy partial
-    // orders (bill_status IN ('unpaid','partial') — product_321 P1).
     const res = await this.pool.query<OrderRow>(
       `${ORDER_ROW_SELECT}
-        where sub.tenant_id = $1
-          and exists (
-            select 1 from product.plan_components pcx
-            join product.products prodx on prodx.id = pcx.product_id
-            where pcx.plan_version_id = sub.plan_version_id
-              and pcx.component_role = 'primary'
-              and prodx.product_code = $2
-          )
-          and sub.status = 'suspended'
-          and sub.activation_method = 'offline_purchase'
-          and inv.bill_status in ('unpaid', 'partial')
-          and sub.deleted_at is null
-        order by sub.created_at desc
+        where o.tenant_id = $1
+          and prod.product_code = $2
+          and o.status in ('pending_payment', 'pending_verify', 'paid')
+        order by o.created_at desc
         limit 1`,
       [tenantId, productCode],
     );
@@ -1468,7 +1453,7 @@ export class SubscriptionRouter {
       productName: r.product_name,
       tier: r.tier,
       cycleUnit: r.cycle_unit,
-      amount: r.pay_amount ?? "0",
+      amount: r.payable_amount,
       currency: r.currency ?? "CNY",
       createdAt: r.created_at.toISOString(),
       expireAt: deriveExpireAt(r, state),
@@ -1802,11 +1787,16 @@ function aggregateWorkspaceQuota(
 
 const EMPTY_QUOTA_METRIC: QuotaMetricView = { used: 0, limit: 0 };
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** billing.orders 投影（product_330 P1-b2）：订单是主体，订阅只在履约后经 subscription_id 挂上。 */
 interface OrderRow {
   order_id: string;
   order_no: string;
   workspace_id: string;
-  activation_method: string;
+  /** billing.orders.status（订单实体状态机） */
+  order_status: string;
   /** 每单付款时效（分钟，P4 修订）；NULL=存量单 → 回退 env */
   payment_ttl_minutes: number | null;
   invoice_id: string | null;
@@ -1815,19 +1805,18 @@ interface OrderRow {
   plan_name: string | null;
   tier: string | null;
   cycle_unit: string;
-  pay_amount: string | null;
+  /** 订单应付（NUMERIC(12,2) 字符串） */
+  payable_amount: string;
   currency: string | null;
-  sub_status: string;
   bill_status: string | null;
   total_amount: string | null;
   paid_amount: string | null;
   discount_amount: string | null;
   voucher_paid: string | null;
-  has_pending_leg: boolean;
-  has_expired_history: boolean;
   ttl_anchor: Date;
   paid_at: Date | null;
   created_at: Date;
+  /** 履约订阅的周期（new 新建 / upgrade、renew 原订阅）；未履约 null */
   start_at: Date | null;
   end_at: Date | null;
   tenant_name: string | null;
@@ -1840,32 +1829,26 @@ interface OrderRow {
   created_by_id: string | null;
   subscriber_name: string | null;
   declared_at: Date | null;
-  // product_330 P1-b1：订单实体（billing.orders）投影——有则以它为准
-  order_entity_status: string | null;
-  order_payable_amount: string | null;
-  target_start_at: Date | null;
-  target_end_at: Date | null;
 }
 
-// One projection for the list and the payment-page detail — the six-state
-// inputs (bill status, declared leg, expiry history, TTL anchor) come from the
-// same SQL so the two faces can never derive different states for one order.
+// One projection for the list, the payment-page detail and the subscribe-context
+// pending panel — state comes from billing.orders.status alone, so the faces can
+// never derive different states for one order.
 const ORDER_ROW_SELECT = `
 select
-  sub.id               as order_id,
-  sub.order_no,
-  sub.workspace_id,
-  sub.activation_method,
-  sub.payment_ttl_minutes,
+  o.id                 as order_id,
+  o.order_no,
+  o.workspace_id,
+  o.status             as order_status,
+  o.payment_ttl_minutes,
   inv.id               as invoice_id,
   inv.bill_no,
   plan.plan_code,
   plan.plan_name,
   pc.tier,
-  sub.cycle_unit,
-  sub.pay_amount,
-  sub.currency,
-  sub.status           as sub_status,
+  o.cycle_unit,
+  o.payable_amount,
+  o.currency,
   inv.bill_status,
   inv.total_amount,
   inv.paid_amount,
@@ -1874,23 +1857,15 @@ select
     select sum(p.paid_amount) from billing.payments p
      where p.bill_id = inv.id and p.pay_status = 'paid' and p.pay_source = 'voucher'
   ), 0)                as voucher_paid,
-  exists(
-    select 1 from billing.payments p
-     where p.bill_id = inv.id and p.pay_status = 'pending_verify'
-  )                    as has_pending_leg,
-  exists(
-    select 1 from metering.subscription_histories h
-     where h.subscription_id = sub.id and h.change_type = 'order_expired'
-  )                    as has_expired_history,
   greatest(
-    sub.created_at,
+    o.created_at,
     coalesce((
-      select max(h2.created_at) from metering.subscription_histories h2
-       where h2.subscription_id = sub.id and h2.change_type = 'payment_rejected'
-    ), sub.created_at)
+      select max(e.created_at) from billing.order_events e
+       where e.order_id = o.id and e.event_type = 'payment_rejected'
+    ), o.created_at)
   )                    as ttl_anchor,
   inv.paid_at,
-  sub.created_at,
+  o.created_at,
   sub.start_at,
   sub.end_at,
   tn.name              as tenant_name,
@@ -1899,53 +1874,44 @@ select
   ws.workspace_no::text as workspace_no,
   prod.product_code,
   prod.product_name,
-  sub.created_by_type,
-  sub.created_by_id,
+  o.created_by_type,
+  o.created_by_id,
   coalesce(up.display_name, u.account) as subscriber_name,
-  (
+  coalesce(o.declared_at, (
     select max(p.created_at) from billing.payments p
      where p.bill_id = inv.id and p.pay_source <> 'voucher'
-  )                    as declared_at,
-  ord.status           as order_entity_status,
-  ord.payable_amount   as order_payable_amount,
-  tsub.start_at        as target_start_at,
-  tsub.end_at          as target_end_at
-from metering.subscriptions sub
--- product_330 P1-b1：订单实体（权威态）；升级单履约后 subscription_id 指向被升级的订阅
-left join billing.orders ord on ord.order_no = sub.order_no
-left join metering.subscriptions tsub on tsub.id = ord.subscription_id and tsub.id <> sub.id
-left join product.plan_versions pv on pv.id = sub.plan_version_id
+  ))                   as declared_at
+from billing.orders o
+left join metering.subscriptions sub on sub.id = o.subscription_id
+left join product.plan_versions pv on pv.id = o.plan_version_id
 left join product.plans plan on plan.id = pv.plan_id
 left join lateral (
-  select tier, product_id from product.plan_components
-   where plan_version_id = sub.plan_version_id and component_role = 'primary' limit 1
+  select tier from product.plan_components
+   where plan_version_id = o.plan_version_id and component_role = 'primary' limit 1
 ) pc on true
-left join product.products prod on prod.id = pc.product_id
-left join tenancy.tenants tn on tn.id = sub.tenant_id
-left join tenancy.workspaces ws on ws.id = sub.workspace_id
+left join product.products prod on prod.id = o.product_id
+left join tenancy.tenants tn on tn.id = o.tenant_id
+left join tenancy.workspaces ws on ws.id = o.workspace_id
 left join account.user_profiles up
-  on sub.created_by_type = 'customer' and up.user_id = sub.created_by_id
+  on o.created_by_type = 'customer' and up.user_id = o.created_by_id
 left join account.users u
-  on sub.created_by_type = 'customer' and u.id = sub.created_by_id
+  on o.created_by_type = 'customer' and u.id = o.created_by_id
 left join lateral (
   select id, bill_no, bill_status, total_amount, paid_amount, discount_amount, paid_at
     from billing.invoices i
-   where i.subscription_id = sub.id and i.deleted_at is null
+   where i.order_id = o.id and i.deleted_at is null
    order by i.created_at desc limit 1
 ) inv on true`;
 
 const MY_ORDERS_SQL = `${ORDER_ROW_SELECT}
-where sub.tenant_id = $1 and sub.order_no is not null and sub.deleted_at is null
-order by sub.created_at desc
+where o.tenant_id = $1
+order by o.created_at desc
 limit 100
 `;
 
-/** Six-state ordered derivation (product_321 P1 — first hit wins). */
+/** 订单实体状态 → 付款页六态（product_321 P1 wire contract）。 */
 function deriveOrderState(r: OrderRow): OrderState {
-  // product_330 P1-b1：订单实体在就以它为准（P1-a 回填 + 双写）；极旧行退回旧派生。
-  switch (r.order_entity_status) {
-    case "pending_payment":
-      return "pending_payment";
+  switch (r.order_status) {
     case "pending_verify":
       return "paid_pending_verify";
     case "paid":
@@ -1957,20 +1923,10 @@ function deriveOrderState(r: OrderRow): OrderState {
       return "cancelled";
     case "expired":
       return "expired";
+    case "pending_payment":
     default:
-      break;
+      return "pending_payment";
   }
-  if (r.bill_status === "paid") {
-    // Upgrade orders close as cancelled with a paid invoice — still completed.
-    return r.sub_status === "suspended" &&
-      r.activation_method === "offline_purchase"
-      ? "activating"
-      : "completed";
-  }
-  if (r.has_pending_leg) return "paid_pending_verify";
-  if (r.sub_status === "cancelled")
-    return r.has_expired_history ? "expired" : "cancelled";
-  return "pending_payment";
 }
 
 /**
@@ -1993,7 +1949,7 @@ function deriveExpireAt(r: OrderRow, state: OrderState): string | null {
  * total = order amount. No invoice → order amount.
  */
 function baseListPrice(r: OrderRow): string {
-  if (r.total_amount == null) return r.pay_amount ?? "0";
+  if (r.total_amount == null) return r.payable_amount;
   return centsToYuan(
     yuanToCents(r.total_amount) + yuanToCents(r.discount_amount ?? "0"),
   );
@@ -2036,8 +1992,8 @@ function mapMyOrderRow(r: OrderRow): MyOrderRecord {
     planName: r.plan_name ?? "",
     tier: r.tier,
     cycleUnit: r.cycle_unit,
-    // 订单金额 = 订单实体应付（product_330）；订阅行 pay_amount 升级履约后会被改写。
-    amount: r.order_payable_amount ?? r.pay_amount ?? "0",
+    // 订单金额 = 订单实体应付（product_330）；不看订阅行 pay_amount（履约后会被改写）。
+    amount: r.payable_amount,
     currency: r.currency ?? "CNY",
     orderStatus: state,
     orderType: "subscription",
@@ -2062,14 +2018,12 @@ function mapMyOrderRow(r: OrderRow): MyOrderRecord {
         ? "owner"
         : null,
     listPrice: baseListPrice(r),
-    // 升级单履约到另一条订阅：周期看被升级的那条（product_330 P1-b1）
-    startAt: (r.target_start_at ?? r.start_at)?.toISOString() ?? null,
-    endAt: (r.target_end_at ?? r.end_at)?.toISOString() ?? null,
+    // 周期 = 履约订阅的周期（new 新建 / upgrade、renew 原订阅），未履约为空
+    startAt: r.start_at?.toISOString() ?? null,
+    endAt: r.end_at?.toISOString() ?? null,
     declaredAt: r.declared_at?.toISOString() ?? null,
     // 服务开通时刻 = 订阅周期起算锚点（owner 口径：自服务开通,非确认收款）
     activatedAt:
-      state === "completed" && (r.target_start_at ?? r.start_at)
-        ? (r.target_start_at ?? r.start_at)!.toISOString()
-        : null,
+      state === "completed" && r.start_at ? r.start_at.toISOString() : null,
   };
 }

@@ -187,6 +187,24 @@ CREATE INDEX idx_orders_subscription   ON billing.orders (subscription_id);
 CREATE UNIQUE INDEX uidx_orders_open_per_product ON billing.orders (workspace_id, product_id)
   WHERE status IN ('pending_payment','pending_verify','paid');
 
+-- 订单事件（append-only 审计，product_330 P1-b2）：订单阶段（下单 / 申报 / 驳回 / 收款 / 履约 / 取消 /
+-- 过期 / 恢复）的时间线。此前这些事件记在 metering.subscription_histories 上——订单不再有订阅行可挂，
+-- 且 TTL 重锚（payment_rejected）、付款页驳回横幅都读这里。order_id 域内 FK；actor_id 裸值（边界#2）。
+CREATE TABLE billing.order_events (
+    id            uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id      uuid          NOT NULL REFERENCES billing.orders(id) ON DELETE RESTRICT,  -- 域内真 FK
+    event_type    varchar(32)   NOT NULL,                   -- created / payment_declared / payment_rejected / payment_confirmed / fulfilled / cancelled / order_expired / restored（开放）
+    from_status   varchar(24),
+    to_status     varchar(24),
+    actor_type    varchar(16)   NOT NULL,                   -- §0.1 system/customer/operator
+    actor_id      uuid,                                     -- 裸值，按 type 解引用（边界#2）
+    remark        text,
+    client_ip     varchar(64),
+    created_at    timestamptz   NOT NULL DEFAULT now(),
+    CONSTRAINT chk_order_events_actor_type CHECK (actor_type IN ('system','customer','operator'))
+);
+CREATE INDEX idx_order_events_order_created ON billing.order_events (order_id, created_at DESC);
+
 -- 账单头（org/tenant 级 rollup，月末归集落点）。total_amount 已含折扣/税净额；payable_amount=total_amount
 -- （不再减 discount_amount，消除双减）。tenant_id→tenancy、subscription_id→metering（90）。
 -- created_by_id 裸值（按 created_by_type 解引用 account.users / operator，边界#2）。

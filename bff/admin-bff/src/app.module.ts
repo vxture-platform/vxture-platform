@@ -11,6 +11,7 @@ import { AdminBffPoolsModule } from "./providers/pools.module";
 import {
   addonServiceProvider,
   commerceServicesProvider,
+  orderServiceProvider,
   promotionServiceProvider,
 } from "./providers/commerce-services.provider";
 import { OidcRpModule } from "./oidc/oidc-rp.module";
@@ -103,6 +104,7 @@ import { SearchRouter } from "./routers/search.router";
     OperatorStepUpService,
     OperatorAdminService,
     commerceServicesProvider,
+    orderServiceProvider,
     promotionServiceProvider,
     addonServiceProvider,
     { provide: APP_GUARD, useClass: OperatorStepUpGuard },

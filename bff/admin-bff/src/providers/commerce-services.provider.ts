@@ -16,7 +16,9 @@ import { Provider } from "@nestjs/common";
 import { Pool } from "pg";
 import {
   AddonService,
+  OrderService,
   PgAddonRepository,
+  PgOrderRepository,
   PgSubscriptionRepository,
   SubscriptionService,
 } from "@vxture/service-subscription";
@@ -31,8 +33,25 @@ import {
 import { ADMIN_BFF_RW_POOL } from "../tokens";
 
 export const ADMIN_SUBSCRIPTION_SERVICE = "ADMIN_SUBSCRIPTION_SERVICE";
+export const ADMIN_ORDER_SERVICE = "ADMIN_ORDER_SERVICE";
 export const ADMIN_PROMOTION_SERVICE = "ADMIN_PROMOTION_SERVICE";
 export const ADMIN_ADDON_SERVICE = "ADMIN_ADDON_SERVICE";
+
+/**
+ * 订单实体编排（product_330 P1-b2）：orders.router 的履约 / 作废 / 恢复走它。
+ * 与 ADMIN_SUBSCRIPTION_SERVICE 同一套 module-less 装配（同一个 pool，独立实例）。
+ */
+export const orderServiceProvider: Provider = {
+  provide: ADMIN_ORDER_SERVICE,
+  inject: [ADMIN_BFF_RW_POOL, ADMIN_SUBSCRIPTION_SERVICE],
+  useFactory: (pool: Pool, subscriptions: SubscriptionService): OrderService =>
+    new OrderService(
+      new PgOrderRepository(pool),
+      new PgSubscriptionRepository(pool),
+      subscriptions,
+      new PromotionService(new PgPromotionRepository(pool)),
+    ),
+};
 
 /**
  * Standalone AddonService for the addon-orders router (加油包核销,owner

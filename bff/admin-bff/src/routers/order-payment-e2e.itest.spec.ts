@@ -1,5 +1,5 @@
 /**
- * order-payment-e2e.itest.spec.ts - product_321 §8 验收走查（活库集成）。
+ * order-payment-e2e.itest.spec.ts - product_321 §8 验收走查（活库集成，product_330 P1-b2 订单实体版）。
  * @package @vxture/bff-admin
  *
  * Run:  ORDER_PAYMENT_E2E=1 DATABASE_URL=postgresql://... pnpm test
@@ -8,12 +8,17 @@
  * 真 Postgres、真事务、真行锁——服务与路由按 module-less 方式装配（与
  * commerce-services.provider / orders-write-paths.spec 同款），跳过 HTTP 层的
  * session/step-up 仪式（那两项 + webhook 送达 arda + 浏览器动线 = 生产走查项）。
+ *
+ * P1-b2 起：下单只建 billing.orders（不建订阅行），履约（fulfill）才建订阅；
+ * 订单态看 billing.orders.status，订单事件看 billing.order_events。
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { BadRequestException, ConflictException } from "@nestjs/common";
 import { Pool } from "pg";
 import type { Request } from "express";
 import {
+  OrderService,
+  PgOrderRepository,
   PgSubscriptionRepository,
   SubscriptionService,
 } from "@vxture/service-subscription";
@@ -52,7 +57,7 @@ const CAPS_PROMO = ["promotion:campaign.manage"];
 
 describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
   let pool: Pool;
-  let subscriptions: SubscriptionService;
+  let orderService: OrderService;
   let promotion: PromotionService;
   let orders: OrdersRouter;
   let payments: PaymentsRouter;
@@ -60,7 +65,6 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
 
   let userId: string;
   let tenantId: string;
-  let workspaceId: string;
   let planVersionId: string;
 
   const CONFIRM = (paidAmount: number) => ({
@@ -71,10 +75,20 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     reason: "e2e walkthrough settle",
   });
 
+  /** 每单独立工作空间：一个 (workspace × product) 只允许一张在途单。 */
+  async function mkWorkspace(): Promise<string> {
+    const ws = await pool.query<{ id: string }>(
+      `insert into tenancy.workspaces (tenant_id, name, is_default)
+       values ($1, $2, false) returning id`,
+      [tenantId, `e2e-${Date.now()}-${Math.random().toFixed(6)}`],
+    );
+    return ws.rows[0]!.id;
+  }
+
   async function mkOrder(price = 1200): Promise<string> {
-    const order = await subscriptions.createOfflineOrder({
+    const { order } = await orderService.createOrder({
       tenantId,
-      workspaceId,
+      workspaceId: await mkWorkspace(),
       planVersionId,
       cycleUnit: "month",
       price,
@@ -82,7 +96,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       intent: "new",
       itemName: "Arda Pro (e2e)",
     });
-    return order.subscription.id;
+    return order.id;
   }
 
   async function mkVoucher(
@@ -112,8 +126,15 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
   }
 
   async function orderFacts(orderId: string) {
-    const sub = await pool.query<{ status: string }>(
-      `select status from metering.subscriptions where id = $1`,
+    const ord = await pool.query<{
+      status: string;
+      subscription_id: string | null;
+      sub_status: string | null;
+    }>(
+      `select o.status, o.subscription_id, s.status as sub_status
+         from billing.orders o
+         left join metering.subscriptions s on s.id = o.subscription_id
+        where o.id = $1`,
       [orderId],
     );
     const inv = await pool.query<{
@@ -125,7 +146,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       discount_amount: string;
     }>(
       `select id, bill_status, total_amount, payable_amount, paid_amount, discount_amount
-         from billing.invoices where subscription_id = $1
+         from billing.invoices where order_id = $1
         order by created_at desc limit 1`,
       [orderId],
     );
@@ -140,10 +161,20 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       [inv.rows[0]?.id],
     );
     return {
-      subStatus: sub.rows[0]?.status,
+      orderStatus: ord.rows[0]?.status,
+      subscriptionId: ord.rows[0]?.subscription_id ?? null,
+      subStatus: ord.rows[0]?.sub_status ?? null,
       invoice: inv.rows[0],
       legs: legs.rows,
     };
+  }
+
+  async function orderEvents(orderId: string, type: string) {
+    return pool.query<{ actor_type: string; remark: string | null }>(
+      `select actor_type, remark from billing.order_events
+        where order_id = $1 and event_type = $2 order by created_at asc`,
+      [orderId, type],
+    );
   }
 
   beforeAll(async () => {
@@ -162,12 +193,19 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       { deliveryFailed: () => {} },
     );
     promotion = new PromotionService(new PgPromotionRepository(pool));
-    subscriptions = new SubscriptionService(
-      new PgSubscriptionRepository(pool),
+    const subRepo = new PgSubscriptionRepository(pool);
+    const subscriptions = new SubscriptionService(
+      subRepo,
       provisioning,
       promotion,
     );
-    orders = new OrdersRouter(pool, pool, subscriptions, promotion);
+    orderService = new OrderService(
+      new PgOrderRepository(pool),
+      subRepo,
+      subscriptions,
+      promotion,
+    );
+    orders = new OrdersRouter(pool, pool, orderService, promotion);
     payments = new PaymentsRouter(pool, pool);
     commercial = new CommercialRouter(pool, pool);
 
@@ -186,12 +224,12 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       [userId],
     );
     tenantId = tenant.rows[0]!.id;
-    const ws = await pool.query<{ id: string }>(
+    // default workspace（租户不变式）；订单各用独立工作空间（mkWorkspace）
+    await pool.query(
       `insert into tenancy.workspaces (tenant_id, name, is_default)
-       values ($1, 'default', true) returning id`,
+       values ($1, 'default', true)`,
       [tenantId],
     );
-    workspaceId = ws.rows[0]!.id;
     const pv = await pool.query<{ id: string }>(
       `select pv.id from product.plan_versions pv
          join product.plans pl on pl.current_version_id = pv.id
@@ -204,9 +242,13 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     await pool?.end();
   });
 
-  it("§8.1 无券整单：下单 → 申报 → 足额确认 → 订阅生效 + webhook 入队", async () => {
+  it("§8.1 无券整单：下单 → 申报 → 足额确认 → 订单履约 + 订阅生效 + webhook 入队", async () => {
     const orderId = await mkOrder();
-    const declared = await subscriptions.declarePayment({
+    const before = await orderFacts(orderId);
+    expect(before.orderStatus).toBe("pending_payment");
+    expect(before.subscriptionId).toBeNull(); // P1-b2：下单不建订阅行
+
+    const declared = await orderService.declarePayment({
       orderId,
       tenantId,
       userId,
@@ -214,6 +256,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     });
     expect(declared.outcome).toBe("declared");
     expect(declared.cashDue).toBe("1200.00");
+    expect((await orderFacts(orderId)).orderStatus).toBe("pending_verify");
 
     const detail = await orders.confirmOfflinePayment(
       req(CAPS_SETTLE),
@@ -222,13 +265,15 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     );
     expect(detail.orderStatus).toBe("confirmed");
     const facts = await orderFacts(orderId);
+    expect(facts.orderStatus).toBe("fulfilled");
     expect(facts.subStatus).toBe("active");
     expect(facts.invoice?.bill_status).toBe("paid");
     // provisioning enqueue landed (delivery to arda = production item)
     const events = await pool.query(
-      `select 1 from provisioning.webhook_deliveries
-        where workspace_id = $1 limit 1`,
-      [workspaceId],
+      `select 1 from provisioning.webhook_deliveries d
+        join metering.subscriptions s on s.workspace_id = d.workspace_id
+       where s.id = $1 limit 1`,
+      [facts.subscriptionId],
     );
     expect(events.rows.length).toBeGreaterThan(0);
   }, 30_000);
@@ -241,7 +286,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     });
     const credit = await mkVoucher("credit_voucher", { amount_cents: 10000 });
 
-    const declared = await subscriptions.declarePayment({
+    const declared = await orderService.declarePayment({
       orderId,
       tenantId,
       userId,
@@ -254,6 +299,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
 
     await orders.confirmOfflinePayment(req(CAPS_SETTLE), orderId, CONFIRM(860));
     const facts = await orderFacts(orderId);
+    expect(facts.orderStatus).toBe("fulfilled");
     expect(facts.subStatus).toBe("active");
     expect(Number(facts.invoice?.payable_amount)).toBe(960);
     expect(Number(facts.invoice?.paid_amount)).toBe(960);
@@ -283,10 +329,10 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     expect(cred?.payment_id).toBeTruthy();
   }, 30_000);
 
-  it("§8.3 全额代金券：申报即生效（actor=customer），已清账单重复申报幂等", async () => {
+  it("§8.3 全额代金券：申报即履约（actor=customer），已清账单重复申报幂等", async () => {
     const orderId = await mkOrder(100);
     const credit = await mkVoucher("credit_voucher", { amount_cents: 10000 });
-    const declared = await subscriptions.declarePayment({
+    const declared = await orderService.declarePayment({
       orderId,
       tenantId,
       userId,
@@ -295,17 +341,14 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     });
     expect(declared.outcome).toBe("activated");
     const facts = await orderFacts(orderId);
+    expect(facts.orderStatus).toBe("fulfilled");
     expect(facts.subStatus).toBe("active");
     expect(facts.invoice?.bill_status).toBe("paid");
-    const history = await pool.query<{ actor_type: string }>(
-      `select actor_type from metering.subscription_histories
-        where subscription_id = $1 and change_type = 'offline_payment_confirmed'`,
-      [orderId],
-    );
-    expect(history.rows[0]?.actor_type).toBe("customer");
+    const confirmed = await orderEvents(orderId, "payment_confirmed");
+    expect(confirmed.rows[0]?.actor_type).toBe("customer");
 
     // Hang-window re-submit: cleared invoice → already_settled, no double spend.
-    const again = await subscriptions.declarePayment({
+    const again = await orderService.declarePayment({
       orderId,
       tenantId,
       userId,
@@ -314,23 +357,23 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     expect(again.outcome).toBe("already_settled");
   }, 30_000);
 
-  it("§8.3b 悬挂对账：段1已清、段2未跑 → reconcile 自愈激活", async () => {
+  it("§8.3b 悬挂对账：段1已清（orders=paid）、段2未跑 → reconcile 自愈履约", async () => {
     const orderId = await mkOrder(50);
-    // Simulate the crash window: stage 1 landed (invoice paid), stage 2 never ran.
+    // Simulate the crash window: stage 1 landed (invoice paid, order paid), stage 2 never ran.
     await pool.query(
       `update billing.invoices set bill_status='paid', paid_amount=payable_amount,
-              paid_at=now() where subscription_id=$1`,
+              paid_at=now() where order_id=$1`,
       [orderId],
     );
     await pool.query(
-      `insert into metering.subscription_histories
-         (tenant_id, subscription_id, change_type, from_status, to_status, actor_type, actor_id, created_at)
-       values ($1, $2, 'payment_declared', 'suspended', 'suspended', 'customer', $3, now() - interval '10 minutes')`,
-      [tenantId, orderId, userId],
+      `update billing.orders set status='paid', paid_at=now() - interval '10 minutes',
+              updated_at=now() - interval '10 minutes' where id=$1`,
+      [orderId],
     );
-    const healed = await subscriptions.reconcileHungPaidOrders(2, 50);
+    const healed = await orderService.reconcileHungPaid(2, 50);
     expect(healed).toBeGreaterThan(0);
     const facts = await orderFacts(orderId);
+    expect(facts.orderStatus).toBe("fulfilled");
     expect(facts.subStatus).toBe("active");
   }, 30_000);
 
@@ -340,7 +383,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       discount_type: "percent",
       value: 20,
     });
-    await subscriptions.declarePayment({
+    await orderService.declarePayment({
       orderId,
       tenantId,
       userId,
@@ -355,6 +398,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     });
     facts = await orderFacts(orderId);
     // Pricing rollback: payable restored, discount mirror zeroed, leg failed.
+    expect(facts.orderStatus).toBe("pending_payment");
     expect(Number(facts.invoice?.payable_amount)).toBe(1200);
     expect(Number(facts.invoice?.discount_amount)).toBe(0);
     expect(facts.legs.some((l) => l.pay_status === "failed")).toBe(true);
@@ -363,19 +407,16 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       [v1.voucherId],
     );
     expect(voucher.rows[0]).toEqual({ status: "assigned", used_count: 0 });
-    const rejected = await pool.query(
-      `select 1 from metering.subscription_histories
-        where subscription_id = $1 and change_type = 'payment_rejected'`,
-      [orderId],
-    );
+    const rejected = await orderEvents(orderId, "payment_rejected");
     expect(rejected.rows.length).toBe(1);
+    expect(rejected.rows[0]?.remark).toBe("未查到对应转账记录（e2e）");
 
     // Re-declare with a DIFFERENT voucher: exactly one live discount row.
     const v2 = await mkVoucher("discount", {
       discount_type: "fixed",
       value: 30000,
     });
-    const redeclared = await subscriptions.declarePayment({
+    const redeclared = await orderService.declarePayment({
       orderId,
       tenantId,
       userId,
@@ -397,7 +438,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       discount_type: "percent",
       value: 10,
     });
-    await subscriptions.declarePayment({
+    await orderService.declarePayment({
       orderId: orderA,
       tenantId,
       userId,
@@ -409,7 +450,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     });
     // Voucher now reserved by order B.
     const orderB = await mkOrder(500);
-    await subscriptions.declarePayment({
+    await orderService.declarePayment({
       orderId: orderB,
       tenantId,
       userId,
@@ -417,7 +458,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       discountVoucherId: v.voucherId,
     });
     // Closing order A (stale credential on its failed leg) must NOT free B's hold.
-    await subscriptions.cancelPendingOrder(orderA, {
+    await orderService.cancel(orderA, {
       actorType: "customer",
       actorId: userId,
     });
@@ -428,55 +469,80 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     expect(voucher.rows[0]?.status).toBe("reserved");
   }, 30_000);
 
-  it("§8.6 超时：无申报超期关单（order_expired），有申报/实收豁免", async () => {
+  it("§8.6 超时：无申报超期关单（expired），有申报/实收豁免", async () => {
     const stale = await mkOrder(200);
     await pool.query(
-      `update metering.subscriptions set created_at = now() - interval '2 hours'
+      `update billing.orders set created_at = now() - interval '2 hours'
         where id = $1`,
       [stale],
     );
     const declaredButStale = await mkOrder(200);
     await pool.query(
-      `update metering.subscriptions set created_at = now() - interval '2 hours'
+      `update billing.orders set created_at = now() - interval '2 hours'
         where id = $1`,
       [declaredButStale],
     );
-    await subscriptions.declarePayment({
+    await orderService.declarePayment({
       orderId: declaredButStale,
       tenantId,
       userId,
       payChannel: "alipay",
     });
 
-    await subscriptions.sweepExpiredPaymentOrders(30, 100);
+    await orderService.sweepExpired(30, 100);
 
     const closed = await orderFacts(stale);
-    expect(closed.subStatus).toBe("cancelled");
-    const expiredHistory = await pool.query(
-      `select 1 from metering.subscription_histories
-        where subscription_id = $1 and change_type = 'order_expired'`,
-      [stale],
-    );
-    expect(expiredHistory.rows.length).toBe(1);
+    expect(closed.orderStatus).toBe("expired");
+    const expiredEvents = await orderEvents(stale, "order_expired");
+    expect(expiredEvents.rows.length).toBe(1);
 
     const exempt = await orderFacts(declaredButStale);
-    expect(exempt.subStatus).toBe("suspended"); // declared → clock frozen
+    expect(exempt.orderStatus).toBe("pending_verify"); // declared → clock frozen
   }, 30_000);
 
-  it("§8.7 取消边界：已申报订单 cancel 409", async () => {
+  it("§8.7 取消边界：已申报订单 cancel 409；恢复过期单回到待付款", async () => {
     const orderId = await mkOrder(300);
-    await subscriptions.declarePayment({
+    await orderService.declarePayment({
       orderId,
       tenantId,
       userId,
       payChannel: "alipay",
     });
     await expect(
-      subscriptions.cancelPendingOrder(orderId, {
+      orderService.cancel(orderId, {
         actorType: "customer",
         actorId: userId,
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+
+    const other = await mkOrder(300);
+    await orderService.cancel(other, {
+      actorType: "customer",
+      actorId: userId,
+    });
+    expect((await orderFacts(other)).orderStatus).toBe("cancelled");
+    await orderService.restore(other, {
+      actorType: "operator",
+      actorId: OPERATOR,
+    });
+    expect((await orderFacts(other)).orderStatus).toBe("pending_payment");
+  }, 30_000);
+
+  it("§8.8 在途唯一：同工作空间同产品第二张单 409（PENDING_ORDER_EXISTS）", async () => {
+    const ws = await mkWorkspace();
+    const mk = () =>
+      orderService.createOrder({
+        tenantId,
+        workspaceId: ws,
+        planVersionId,
+        cycleUnit: "month",
+        price: 100,
+        createdBy: userId,
+        intent: "new",
+        itemName: "Arda Pro (e2e dup)",
+      });
+    await mk();
+    await expect(mk()).rejects.toBeInstanceOf(ConflictException);
   }, 30_000);
 
   it("§8.9 并发：同一张券两个订单同时 declare，恰一成功", async () => {
@@ -484,14 +550,14 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     const orderA = await mkOrder(400);
     const orderB = await mkOrder(400);
     const results = await Promise.allSettled([
-      subscriptions.declarePayment({
+      orderService.declarePayment({
         orderId: orderA,
         tenantId,
         userId,
         payChannel: "alipay",
         creditVoucherId: v.voucherId,
       }),
-      subscriptions.declarePayment({
+      orderService.declarePayment({
         orderId: orderB,
         tenantId,
         userId,
@@ -507,7 +573,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
 
   it("§8.10 金额不符：确认金额≠申报额被拒；无腿路径恒等校验", async () => {
     const orderId = await mkOrder(860);
-    await subscriptions.declarePayment({
+    await orderService.declarePayment({
       orderId,
       tenantId,
       userId,
@@ -536,16 +602,96 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     const orderId = await mkOrder(1000);
     await pool.query(
       `update billing.invoices set paid_amount = 400, bill_status = 'partial'
-        where subscription_id = $1`,
+        where order_id = $1`,
       [orderId],
     );
-    const declared = await subscriptions.declarePayment({
+    const declared = await orderService.declarePayment({
       orderId,
       tenantId,
       userId,
       payChannel: "alipay",
     });
     expect(declared.cashDue).toBe("600.00");
+  }, 30_000);
+
+  it("§8.12 升级单履约：原订阅换版本、周期重锚、订单指向原订阅", async () => {
+    // free → pro on one workspace: first a ¥0 'new' order fulfilled by instant settle.
+    const ws = await mkWorkspace();
+    const freePv = await pool.query<{ id: string }>(
+      `select pv.id from product.plan_versions pv
+         join product.plans pl on pl.current_version_id = pv.id
+        where pl.plan_code = 'arda-free' limit 1`,
+    );
+    const freeVersion = freePv.rows[0]?.id;
+    if (!freeVersion) return; // seed without a free tier: skip silently
+    const free = await orderService.createOrder({
+      tenantId,
+      workspaceId: ws,
+      planVersionId: freeVersion,
+      cycleUnit: "month",
+      price: 0,
+      createdBy: userId,
+      intent: "new",
+      itemName: "Arda Free (e2e)",
+    });
+    const freeDeclared = await orderService.declarePayment({
+      orderId: free.order.id,
+      tenantId,
+      userId,
+      payChannel: "alipay",
+    });
+    expect(freeDeclared.outcome).toBe("activated");
+    const freeFacts = await orderFacts(free.order.id);
+    expect(freeFacts.subStatus).toBe("active");
+
+    const up = await orderService.createOrder({
+      tenantId,
+      workspaceId: ws,
+      planVersionId,
+      cycleUnit: "year",
+      price: 9600,
+      createdBy: userId,
+      intent: "upgrade",
+      fromSubscriptionId: freeFacts.subscriptionId!,
+      itemName: "Arda Pro (e2e upgrade)",
+    });
+    await orderService.declarePayment({
+      orderId: up.order.id,
+      tenantId,
+      userId,
+      payChannel: "bank_transfer",
+    });
+    await orders.confirmOfflinePayment(
+      req(CAPS_SETTLE),
+      up.order.id,
+      CONFIRM(9600),
+    );
+    const upFacts = await orderFacts(up.order.id);
+    expect(upFacts.orderStatus).toBe("fulfilled");
+    expect(upFacts.subscriptionId).toBe(freeFacts.subscriptionId);
+    const subRow = await pool.query<{
+      plan_version_id: string;
+      cycle_unit: string;
+      paid_amount: string;
+      current_order_id: string | null;
+    }>(
+      `select plan_version_id, cycle_unit, paid_amount, current_order_id
+         from metering.subscriptions where id = $1`,
+      [freeFacts.subscriptionId],
+    );
+    expect(subRow.rows[0]).toMatchObject({
+      plan_version_id: planVersionId,
+      cycle_unit: "year",
+      current_order_id: up.order.id,
+    });
+    expect(Number(subRow.rows[0]?.paid_amount)).toBe(9600);
+    // 同产品只有一条在用订阅（没有第二条镜像行）
+    const live = await pool.query(
+      `select 1 from metering.subscriptions
+        where workspace_id = $1 and status = 'active' and deleted_at is null`,
+      [ws],
+    );
+    expect(live.rows.length).toBe(1);
   }, 30_000);
 
   it("§8.13 发券边界：超发 409、per_user_limit 409、门槛字段拒绝", async () => {
@@ -580,7 +726,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
 
   it("§8.14 台账封堵：在途订单腿 verify/reject 均 409 引导订单侧", async () => {
     const orderId = await mkOrder(700);
-    await subscriptions.declarePayment({
+    await orderService.declarePayment({
       orderId,
       tenantId,
       userId,
@@ -589,7 +735,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     const leg = await pool.query<{ id: string }>(
       `select p.id from billing.payments p
         join billing.invoices i on i.id = p.bill_id
-        where i.subscription_id = $1 and p.pay_status = 'pending_verify'`,
+        where i.order_id = $1 and p.pay_status = 'pending_verify'`,
       [orderId],
     );
     const legId = leg.rows[0]!.id;
