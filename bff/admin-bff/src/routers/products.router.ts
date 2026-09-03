@@ -718,6 +718,7 @@ export class ProductsRouter {
         }
       }
       if (body.quota && typeof body.quota === "object") {
+        assertConsumableShare(body.quota);
         await client.query(
           `UPDATE product.plan_components SET quota = $2::jsonb
             WHERE plan_version_id = $1 AND component_role = 'primary'`,
@@ -1150,7 +1151,32 @@ export interface PlanVersionDetail extends PlanVersionSummary {
 
 interface UpdateDraftVersionInput {
   prices?: { cycleUnit?: unknown; price?: unknown }[];
+  /** 主组件 quota jsonb 整体替换；`_pricing.consumable_share`（α，product_330 §4.1）随其中。 */
   quota?: Record<string, unknown>;
+}
+
+/**
+ * product_330 §4.1：`quota._pricing.consumable_share` 是升级折抵的 α，
+ * 折抵引擎按 [0,1] 加权——越界值会把折抵算成负数或超额，写侧直接拒。
+ */
+function assertConsumableShare(quota: Record<string, unknown>): void {
+  const pricing = quota._pricing;
+  if (pricing === undefined || pricing === null) return;
+  if (typeof pricing !== "object" || Array.isArray(pricing)) {
+    throw new BadRequestException("quota._pricing must be an object");
+  }
+  const share = (pricing as Record<string, unknown>).consumable_share;
+  if (share === undefined || share === null) return;
+  if (
+    typeof share !== "number" ||
+    !Number.isFinite(share) ||
+    share < 0 ||
+    share > 1
+  ) {
+    throw new BadRequestException(
+      "quota._pricing.consumable_share must be a number between 0 and 1",
+    );
+  }
 }
 
 /** PUT /plan-versions/:id/bundled-components body (full replace). */
