@@ -36,6 +36,7 @@ function order(over: Partial<OrderRecord> = {}): OrderRecord {
     proration: null,
     status: "paid",
     paymentTtlMinutes: 30,
+    autoRenew: false,
     declaredAt: null,
     paidAt: new Date(),
     fulfilledAt: null,
@@ -58,6 +59,7 @@ function sub(over: Record<string, unknown> = {}) {
     planVersionId: PV_FREE,
     status: "active",
     endAt: null,
+    autoRenew: false,
     ...over,
   };
 }
@@ -150,6 +152,10 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
     ),
     updateSubscription: vi.fn(
       async (_id: string, _input: Record<string, unknown>) => sub(),
+    ),
+    setAutoRenew: vi.fn(
+      async (_id: string, enabled: boolean, _p: Record<string, unknown>) =>
+        sub({ autoRenew: enabled }),
     ),
   };
   const service = new OrderService(
@@ -516,6 +522,50 @@ describe("OrderService.fulfill", () => {
     expect(subscriptions.createSubscription).toHaveBeenCalledWith(
       expect.objectContaining({ subscriptionKind: "free", payAmount: 0 }),
     );
+  });
+
+  it("new: the order's auto-renew choice is written to the subscription (default off, opt-in on)", async () => {
+    const off = build(order(), null);
+    await off.service.fulfill("ord-1", {
+      actorType: "customer",
+      actorId: "u-1",
+    });
+    expect(off.subscriptions.createSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({ autoRenew: false }),
+    );
+    const on = build(order({ autoRenew: true }), null);
+    await on.service.fulfill("ord-1", {
+      actorType: "customer",
+      actorId: "u-1",
+    });
+    expect(on.subscriptions.createSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({ autoRenew: true }),
+    );
+  });
+
+  it("renew: a differing auto-renew choice is written back via setAutoRenew; an equal one is not", async () => {
+    const changed = build(
+      order({ intent: "renew", fromSubscriptionId: "sub-1", autoRenew: true }),
+      sub({ planVersionId: PV_PRO, autoRenew: false }),
+    );
+    await changed.service.fulfill("ord-1", {
+      actorType: "customer",
+      actorId: "u-1",
+    });
+    expect(changed.subscriptions.setAutoRenew).toHaveBeenCalledWith(
+      "sub-1",
+      true,
+      expect.objectContaining({ actorType: "customer", actorId: "u-1" }),
+    );
+    const same = build(
+      order({ intent: "renew", fromSubscriptionId: "sub-1", autoRenew: false }),
+      sub({ planVersionId: PV_PRO, autoRenew: false }),
+    );
+    await same.service.fulfill("ord-1", {
+      actorType: "customer",
+      actorId: "u-1",
+    });
+    expect(same.subscriptions.setAutoRenew).not.toHaveBeenCalled();
   });
 
   it("upgrade on a live source: switches the plan version and re-anchors terms on THAT subscription", async () => {

@@ -31,7 +31,7 @@ CREATE TABLE metering.subscriptions (
     trial_end_at        timestamptz,                                -- kind=trial 试用到期（仅人工延期）
     had_trial_at        timestamptz,                                -- 曾试用标记（防重复领）
     status              varchar(32)   NOT NULL DEFAULT 'active',
-    auto_renew          boolean       NOT NULL DEFAULT true,
+    auto_renew          boolean       NOT NULL DEFAULT false,       -- owner 2026-09-03：默认关，客户在订单确认页显式开启（orders.auto_renew 履约时写入）
     activation_method   varchar(24)   NOT NULL DEFAULT 'online_purchase',  -- 开通方式（可追溯来源）
     next_renewal_at     timestamptz,                                -- 下次续订触发（≈ end_at 提前量）；auto_renew=false/perpetual 时 NULL
     renewal_source      varchar(16),                                -- mandate / balance / manual

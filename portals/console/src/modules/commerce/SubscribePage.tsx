@@ -26,7 +26,12 @@ import {
   DetailList,
   DetailRow,
   EmptyState,
+  Icon,
   StatusBadge,
+  Switch,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   ViewHeader,
   ViewLayout,
   cn,
@@ -180,6 +185,9 @@ export function SubscribePage() {
   const [pickedVersionId, setPickedVersionId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 自动续费 opt-in（owner 2026-09-03）：新订默认关；续订/升级按客户现有设置预填
+  // （有 current 即非 new，见下方 orderIntent 推导）。
+  const [autoRenew, setAutoRenew] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -191,6 +199,7 @@ export function SubscribePage() {
         return;
       }
       setCtx(result);
+      setAutoRenew(result.current?.autoRenew ?? false);
       setLoading(false);
     });
     return () => {
@@ -200,7 +209,11 @@ export function SubscribePage() {
 
   const reload = useCallback(async () => {
     const fresh = await fetchSubscribeContext(query);
-    if (fresh) setCtx(fresh);
+    if (fresh) {
+      setCtx(fresh);
+      // 换了工作区就换了 current，预填随之重算。
+      setAutoRenew(fresh.current?.autoRenew ?? false);
+    }
   }, [query]);
 
   if (loading || !ctx) {
@@ -341,6 +354,7 @@ export function SubscribePage() {
         planVersionId: plan.planVersionId,
         cycleUnit: cycle,
         intent: orderIntent,
+        autoRenew,
         ...(orderIntent !== "new" && current
           ? { upgradeOfSubscriptionId: current.subscriptionId }
           : {}),
@@ -548,6 +562,36 @@ export function SubscribePage() {
                   </>
                 ) : (
                   <>
+                    {/* 自动续费 opt-in：合计之下、提交之上；说明只进 tooltip 不铺在页面上
+                        （owner 2026-09-03）。企业档不走这里。 */}
+                    <div className="flex items-center justify-between gap-md text-body-md">
+                      <span className="flex items-center gap-2xs text-muted-foreground">
+                        {t("confirm.autoRenew")}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              aria-label={t("confirm.autoRenewTip")}
+                            >
+                              <Icon
+                                name="info"
+                                size="xs"
+                                fallback="placeholder"
+                              />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {t("confirm.autoRenewTip")}
+                          </TooltipContent>
+                        </Tooltip>
+                      </span>
+                      <Switch
+                        checked={autoRenew}
+                        onCheckedChange={setAutoRenew}
+                        aria-label={t("confirm.autoRenew")}
+                      />
+                    </div>
                     <Button
                       size="xl"
                       disabled={busy || !price}

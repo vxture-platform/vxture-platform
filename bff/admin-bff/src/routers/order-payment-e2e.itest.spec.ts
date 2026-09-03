@@ -86,7 +86,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     return ws.rows[0]!.id;
   }
 
-  async function mkOrder(price = 1200): Promise<string> {
+  async function mkOrder(price = 1200, autoRenew?: boolean): Promise<string> {
     const { order } = await orderService.createOrder({
       tenantId,
       workspaceId: await mkWorkspace(),
@@ -96,6 +96,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       createdBy: userId,
       intent: "new",
       itemName: "Arda Pro (e2e)",
+      ...(autoRenew === undefined ? {} : { autoRenew }),
     });
     return order.id;
   }
@@ -852,6 +853,65 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     expect(e.eligible).toBe(false);
     expect(e.reasons).toContain("window_elapsed");
   }, 30_000);
+
+  it("§8.19 自动续费默认关、随单留痕（owner 2026-09-03）：不带 → 订阅关；确认页开 → 订阅开；续费单可改回关", async () => {
+    // 默认：下单不带 autoRenew → 订单 false → 履约后订阅 auto_renew=false
+    const plain = await mkOrder(100);
+    const plainOrder = await orderService.getOrder(plain);
+    expect(plainOrder.autoRenew).toBe(false);
+    await declare(plain);
+    await confirm(plain, 100);
+    const plainSub = (await orderFacts(plain)).subscriptionId!;
+    const r1 = await pool.query<{ auto_renew: boolean }>(
+      `select auto_renew from metering.subscriptions where id = $1`,
+      [plainSub],
+    );
+    expect(r1.rows[0]!.auto_renew).toBe(false);
+
+    // 确认页开启 → 订单 true → 履约后订阅开
+    const optIn = await mkOrder(100, true);
+    expect((await orderService.getOrder(optIn)).autoRenew).toBe(true);
+    await declare(optIn);
+    await confirm(optIn, 100);
+    const optInSub = (await orderFacts(optIn)).subscriptionId!;
+    const r2 = await pool.query<{ auto_renew: boolean }>(
+      `select auto_renew from metering.subscriptions where id = $1`,
+      [optInSub],
+    );
+    expect(r2.rows[0]!.auto_renew).toBe(true);
+
+    // 续费单（客户手动续，确认页关掉）→ 履约后订阅改回关，并留 auto_renew_off 历史
+    const { order: renew } = await orderService.createOrder({
+      tenantId,
+      workspaceId: (
+        await pool.query<{ workspace_id: string }>(
+          `select workspace_id from metering.subscriptions where id = $1`,
+          [optInSub],
+        )
+      ).rows[0]!.workspace_id,
+      planVersionId,
+      cycleUnit: "month",
+      price: 100,
+      createdBy: userId,
+      intent: "renew",
+      fromSubscriptionId: optInSub,
+      itemName: "Arda Pro (e2e)",
+      autoRenew: false,
+    });
+    await declare(renew.id);
+    await confirm(renew.id, 100);
+    const r3 = await pool.query<{ auto_renew: boolean }>(
+      `select auto_renew from metering.subscriptions where id = $1`,
+      [optInSub],
+    );
+    expect(r3.rows[0]!.auto_renew).toBe(false);
+    const hist = await pool.query(
+      `select 1 from metering.subscription_histories
+        where subscription_id = $1 and change_type = 'auto_renew_off'`,
+      [optInSub],
+    );
+    expect(hist.rows.length).toBe(1);
+  }, 60_000);
 
   it("§8.13 发券边界：超发 409、per_user_limit 409、门槛字段拒绝", async () => {
     const { batchId } = await mkVoucher("discount", {
