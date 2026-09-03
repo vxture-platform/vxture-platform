@@ -346,16 +346,16 @@ export async function seedDemo(client) {
     await client.query(
       `insert into metering.subscriptions
          (id, tenant_id, workspace_id, plan_version_id, subscription_kind, cycle_unit, cycle_count,
-          start_at, end_at, status, auto_renew, activation_method, order_no, pay_amount, currency,
+          start_at, end_at, status, auto_renew, activation_method, pay_amount, currency,
           created_by_type, created_by_id, created_at, updated_at)
        values ($1, $2, $3, $4, $5, $6, $7,
-               ${monthsFromNow(-s.startMonthsAgo)}, ${endExpr}, $8, $9, $10, $11, $12, 'CNY',
-               $13, $14, ${monthsFromNow(-s.startMonthsAgo)}, now())
+               ${monthsFromNow(-s.startMonthsAgo)}, ${endExpr}, $8, $9, $10, $11, 'CNY',
+               $12, $13, ${monthsFromNow(-s.startMonthsAgo)}, now())
        on conflict (id) do nothing`,
       [
         ID.subscription(t.i), ID.tenant(t.i), ID.workspace(t.i), planVersionId,
         s.kind, s.cycleUnit, s.cycleCount, s.status, s.autoRenew, s.activation,
-        `DEMO-ORD-${String(t.i).padStart(4, '0')}`, s.amount,
+        s.amount,
         s.activation === 'offline_purchase' ? 'operator' : 'customer',
         s.activation === 'offline_purchase' ? null : ID.user(t.i),
       ],

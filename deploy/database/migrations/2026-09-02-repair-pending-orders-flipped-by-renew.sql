@@ -1,3 +1,7 @@
+-- [product_330 P2-e] 旧列 metering.subscriptions.order_no 已删（2026-09-06）；本文件只在旧列仍在时重放，否则整体跳过（psql \if）。
+SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'metering' AND table_name = 'subscriptions' AND column_name = 'order_no') AS has_legacy_order_no \gset
+\if :has_legacy_order_no
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 数据修复 — 被订阅侧「续期确认」误翻成 active 的待收款订单，翻回订单壳
 --
@@ -116,3 +120,5 @@ BEGIN
 END $$;
 
 COMMIT;
+
+\endif

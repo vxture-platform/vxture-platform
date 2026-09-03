@@ -24,10 +24,13 @@ DELETE FROM billing.order_events e
    AND e.remark LIKE 'upgrade applied to %';
 
 -- ③ 自动续费默认开（未显式关闭过的在用订阅）
+-- 试用行除外：chk_subscriptions_trial_no_renew 禁止 trial 自动续费——2026-09-06 空库 DDL +
+-- 全量重放 + seed 的消费方形态跑出来的（db-init 每次重放，库里只要有一条试用就整跑失败）。
 UPDATE metering.subscriptions s
    SET auto_renew = true, updated_at = now()
  WHERE s.deleted_at IS NULL
-   AND s.status IN ('active', 'trialing', 'expiring')
+   AND s.status IN ('active', 'expiring')
+   AND s.subscription_kind <> 'trial'
    AND s.auto_renew = false
    AND NOT EXISTS (
      SELECT 1 FROM metering.subscription_histories h
@@ -40,7 +43,7 @@ BEGIN
   SELECT count(*) INTO n_dup FROM metering.subscription_histories
    WHERE change_type = 'operator_adjusted' AND remark LIKE 'product_330 repair:%';
   SELECT count(*) INTO n_off FROM metering.subscriptions
-   WHERE deleted_at IS NULL AND status IN ('active','trialing','expiring') AND auto_renew = false;
+   WHERE deleted_at IS NULL AND status IN ('active','expiring') AND subscription_kind <> 'trial' AND auto_renew = false;
   RAISE NOTICE '[order-data-repair] repair audit rows=% (append-only, duplicates stay), live subscriptions still auto_renew=false=%', n_dup, n_off;
 END $$;
 

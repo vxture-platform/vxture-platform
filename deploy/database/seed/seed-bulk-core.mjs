@@ -308,10 +308,10 @@ export async function seedBulkCore(c) {
         `insert into metering.subscriptions
            (id, tenant_id, workspace_id, plan_version_id, subscription_kind,
             cycle_unit, cycle_count, start_at, end_at, trial_end_at, status,
-            auto_renew, activation_method, next_renewal_at, order_no,
+            auto_renew, activation_method, next_renewal_at,
             pay_amount, currency, created_by_type, created_at)
          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                 $15, $16, 'CNY', $17, $18)
+                 $15, 'CNY', $16, $17)
          on conflict do nothing`,
         [
           ID("subscription", i),
@@ -335,7 +335,6 @@ export async function seedBulkCore(c) {
                   i,
                 ),
           status === "active" && !perpetual ? day(i + 365) : null,
-          `SO${String(202600000 + i)}`,
           kind === "paid" ? (i % 12) * 500 + 1999 : 0,
           pick(["customer", "customer", "operator", "system"], i),
           day(i),

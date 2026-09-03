@@ -36,8 +36,6 @@ CREATE TABLE metering.subscriptions (
     next_renewal_at     timestamptz,                                -- 下次续订触发（≈ end_at 提前量）；auto_renew=false/perpetual 时 NULL
     renewal_source      varchar(16),                                -- mandate / balance / manual
     payment_mandate_id  uuid,                                       -- 跨 schema→billing.payment_mandates（90），renewal_source=mandate 时
-    order_no            varchar(128),                               -- 【退役中，product_330 P2-d】旧模型的购买单号；2026-09-03 停写、2026-09-05 起代码停读（可视码只认 current_order_id → billing.orders.order_no）；下一版删列
-    payment_ttl_minutes int,                                        -- 【退役中，product_330 P2-d】旧模型订单行的付款时效；已移到 billing.orders.payment_ttl_minutes；停写停读，下一版删列
     pay_amount          numeric(12,2),                              -- 与 plan_version.price 分离
     product_id          uuid,                                       -- 主组件产品（冗余；BEFORE INSERT/UPDATE 触发器自 plan_components 填，95；跨 schema→product.products，90）product_330
     paid_amount         numeric(12,2),                              -- 本周期实付（升级折抵输入 P_old；product_330 §4.1）
@@ -48,7 +46,6 @@ CREATE TABLE metering.subscriptions (
     created_at          timestamptz   NOT NULL DEFAULT now(),
     updated_at          timestamptz   NOT NULL DEFAULT now(),
     deleted_at          timestamptz,
-    CONSTRAINT uq_subscriptions_order_no         UNIQUE (order_no),
     CONSTRAINT chk_subscriptions_kind            CHECK (subscription_kind IN ('paid','trial','free')),
     CONSTRAINT chk_subscriptions_cycle_unit      CHECK (cycle_unit IN ('day','week','month','year','perpetual')),
     CONSTRAINT chk_subscriptions_cycle_count     CHECK (cycle_count >= 1),
@@ -57,7 +54,6 @@ CREATE TABLE metering.subscriptions (
     CONSTRAINT chk_subscriptions_activation      CHECK (activation_method IN ('online_purchase','offline_purchase','redemption','operator_grant','trial','free')),
     CONSTRAINT chk_subscriptions_renewal_source  CHECK (renewal_source IS NULL OR renewal_source IN ('mandate','balance','manual')),
     CONSTRAINT chk_subscriptions_created_by_type CHECK (created_by_type IN ('system','customer','operator')),
-    CONSTRAINT chk_subscriptions_payment_ttl     CHECK (payment_ttl_minutes IS NULL OR payment_ttl_minutes >= 1),
     -- 结构不变量（§1.1，须落 DDL CHECK）
     CONSTRAINT chk_subscriptions_perpetual_open  CHECK (cycle_unit <> 'perpetual' OR end_at IS NULL),
     CONSTRAINT chk_subscriptions_trial_no_renew  CHECK (subscription_kind <> 'trial' OR auto_renew = false)
