@@ -101,7 +101,11 @@ export function TenantVerificationPage() {
       setSubmitted(true);
       await reload();
     } catch (e) {
-      setError(e instanceof ConsoleBffError ? e.message : t("submitFailed"));
+      setError(
+        e instanceof ConsoleBffError && e.message
+          ? e.message
+          : t("submitFailed"),
+      );
     } finally {
       setBusy(false);
     }

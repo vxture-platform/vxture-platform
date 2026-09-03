@@ -215,9 +215,9 @@ export function SettingsPage() {
       setMembers(await fetchMembers());
     } catch (error) {
       setTransferError(
-        error instanceof Error
+        error instanceof Error && error.message
           ? error.message
-          : t("danger.transferOwner.action"),
+          : t("danger.transferOwner.failed"),
       );
     } finally {
       setTransferBusy(false);

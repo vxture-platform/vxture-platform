@@ -35,6 +35,7 @@ import type {
   StatusBadgeTone,
 } from "@vxture/design-system";
 import {
+  ConsoleBffError,
   cancelAddonOrder,
   createAddonOrder,
   fetchAddonOrders,
@@ -211,15 +212,20 @@ export function AddonPacksSection({
 
   const handleCancel = async (order: ConsoleAddonOrder) => {
     setError(null);
-    const ok = await cancelAddonOrder(order.orderNo);
+    try {
+      await cancelAddonOrder(order.orderNo);
+    } catch (err) {
+      /* 失败要抛:DS 的确认件按 rejected 决定关不关框。理由(BFF 报文优先)落在
+         `error` 横幅上。 */
+      setError(
+        err instanceof ConsoleBffError && err.message
+          ? err.message
+          : t("cancelFailed"),
+      );
+      throw err;
+    }
     await reload();
     onSettledRefresh();
-    /* 失败要抛：`cancelAddonOrder` 把异常吞成 boolean，直接返回会让 DS 的确认件
-       把一次失败的取消当成成功、把框关掉。理由仍落在 `error` 横幅上。 */
-    if (!ok) {
-      setError(t("cancelFailed"));
-      throw new Error(t("cancelFailed"));
-    }
   };
 
   // ── 订单记录表(序号列 + 单操作列,遵守表格规范)──────────────────────────

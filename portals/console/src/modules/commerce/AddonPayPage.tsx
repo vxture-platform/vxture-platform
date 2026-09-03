@@ -8,22 +8,29 @@
  *
  * 加油包走完整订单流程(2026-08-21 owner 定):卡片下单 → 本页付款申报 →
  * 运营核销 → 额度入池生效。结构与订阅单支付页(OrderPayPage)同构:
- * 四步流程条 + 订单摘要 + 支付渠道(支付宝二维码/对公转账,同一套 env 配置)
- * + 转账申报表单;已申报轮询等核销,完成态回配额管理。
+ * 四步流程条 + 订单摘要 + 支付渠道 + 转账申报;已申报轮询等核销,完成态回配额管理。
  * 状态映射:pending未申报→pending_payment / 已申报→paid_pending_verify /
  * completed→completed / cancelled→cancelled(过期由清扫转 cancelled)。
+ *
+ * 批 1:渠道面板 / 轮询 / 倒计时与订阅付款页共用(components/pay/*),补回此前
+ * 这页缺的五项——加载骨架、in-flight 去重与焦点刷新、申报二次确认、取消的破坏性
+ * 确认、BFF 报文透传;订单不存在与读取失败分开呈现。
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   Banner,
   Button,
+  DestructiveButton,
   DetailList,
   DetailRow,
+  DialogForm,
+  Field,
+  FieldGroup,
   FieldLabel,
   Input,
-  SegmentedControl,
+  Skeleton,
   StatusBadge,
   ViewHeader,
   ViewLayout,
@@ -31,6 +38,7 @@ import {
 import type { StatusBadgeTone } from "@vxture/design-system";
 import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import {
+  ConsoleBffError,
   cancelAddonOrder,
   declareAddonPayment,
   fetchAddonOrderDetail,
@@ -38,17 +46,24 @@ import {
   type PaymentChannelInfo,
 } from "@/api/console-bff";
 import { useRouter } from "@/lib/i18n/navigation";
+import { useConfirmLabels } from "@/lib/destructive";
+import { LoadFailedBanner } from "@/components/load/LoadFailed";
 import { PageSection } from "@/layout/shell";
 import {
   OrderFlowStrip,
   type OrderFlowStage,
 } from "./components/OrderFlowStrip";
-import { fmtDate, fmtTime, formatRemain } from "./components/hubModel";
+import { fmtDate, fmtTime } from "./components/hubModel";
+import {
+  PayChannelPanel,
+  defaultPayChannel,
+  type PayChannel,
+} from "./components/pay/PayChannelPanel";
+import { useCountdown } from "./components/pay/useCountdown";
+import { useOrderPolling } from "./components/pay/useOrderPolling";
 import { formatBytes } from "./QuotasPage";
 
 const POLL_MS = 30_000;
-
-type PayChannel = "alipay" | "bank_transfer";
 
 const stageOf = (o: ConsoleAddonOrder): OrderFlowStage => {
   if (o.status === "completed") return "completed";
@@ -65,6 +80,8 @@ const STATUS_TONE: Record<string, StatusBadgeTone> = {
 
 export function AddonPayPage({ orderNo }: { orderNo: string }) {
   const t = useTranslations("addonPay");
+  const tChannels = useTranslations("payChannels");
+  const withLabels = useConfirmLabels();
   const locale = useLocale();
   const router = useRouter();
 
@@ -72,12 +89,15 @@ export function AddonPayPage({ orderNo }: { orderNo: string }) {
   const [channels, setChannels] = useState<PaymentChannelInfo[]>([]);
   const [channel, setChannel] = useState<PayChannel>("bank_transfer");
   const [loading, setLoading] = useState(true);
-  const [missing, setMissing] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [payerName, setPayerName] = useState("");
   const [transactionNo, setTransactionNo] = useState("");
-  const [now, setNow] = useState(() => Date.now());
+  const [declareOpen, setDeclareOpen] = useState(false);
+  const inFlight = useRef(false);
+  const defaultsApplied = useRef(false);
 
   const money = useCallback(
     (yuan: string, currency: string) =>
@@ -90,105 +110,135 @@ export function AddonPayPage({ orderNo }: { orderNo: string }) {
   );
 
   const load = useCallback(async () => {
-    const detail = await fetchAddonOrderDetail(orderNo);
-    if (!detail) {
-      setMissing(true);
-      return;
+    if (inFlight.current) return;
+    inFlight.current = true;
+    try {
+      const detail = await fetchAddonOrderDetail(orderNo);
+      setOrder(detail.order);
+      setChannels(detail.paymentChannels);
+      setNotFound(false);
+      setLoadFailed(false);
+      if (!defaultsApplied.current) {
+        defaultsApplied.current = true;
+        setChannel(defaultPayChannel(detail.paymentChannels));
+      }
+    } catch (err) {
+      const status = err instanceof ConsoleBffError ? err.status : undefined;
+      if (status === 400 || status === 403 || status === 404) setNotFound(true);
+      else setLoadFailed(true);
+    } finally {
+      inFlight.current = false;
+      setLoading(false);
     }
-    setOrder(detail.order);
-    setChannels(detail.paymentChannels);
-    const bank = detail.paymentChannels.find(
-      (c) => c.channel === "bank_transfer" && c.enabled,
-    );
-    const alipay = detail.paymentChannels.find(
-      (c) => c.channel === "alipay" && c.enabled,
-    );
-    if (!bank && alipay) setChannel("alipay");
   }, [orderNo]);
 
   useEffect(() => {
-    setLoading(true);
-    load().finally(() => setLoading(false));
+    void load();
   }, [load]);
 
   // 已申报 → 轮询等运营核销;完成/取消即停
-  useEffect(() => {
-    if (!order || order.status !== "pending_payment" || !order.paymentDeclared)
-      return;
-    const timer = window.setInterval(() => void load(), POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [order, load]);
+  const awaitingVerify =
+    order?.status === "pending_payment" && order.paymentDeclared;
+  useOrderPolling(Boolean(awaitingVerify), load, POLL_MS);
 
-  // 付款截止倒计时(未申报待支付单)
-  useEffect(() => {
-    if (!order?.expireAt) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
-  }, [order?.expireAt]);
+  // 付款截止倒计时(未申报待支付单);到点重取,让服务端的取消态显影
+  const countdown = useCountdown(
+    order?.status === "pending_payment" && !order.paymentDeclared
+      ? order.expireAt
+      : null,
+    () => void load(),
+  );
+  const countdownExpired = countdown === "00:00";
 
   const handleDeclare = async () => {
     setBusy(true);
     setError(null);
     try {
-      const ok = await declareAddonPayment(orderNo, {
+      await declareAddonPayment(orderNo, {
         ...(payerName.trim() ? { payerName: payerName.trim() } : {}),
         ...(transactionNo.trim()
           ? { transactionNo: transactionNo.trim() }
           : {}),
       });
-      if (!ok) {
-        setError(t("declareFailed"));
-        return;
-      }
+      setDeclareOpen(false);
       await load();
+    } catch (err) {
+      setError(
+        err instanceof ConsoleBffError && err.message
+          ? err.message
+          : t("declareFailed"),
+      );
     } finally {
       setBusy(false);
     }
   };
 
+  /** 取消:由 DestructiveButton 的确认件落锤;失败抛出让框不关。 */
   const handleCancel = async () => {
     setBusy(true);
     setError(null);
     try {
-      const ok = await cancelAddonOrder(orderNo);
-      if (!ok) {
-        setError(t("cancelFailed"));
-        return;
-      }
-      router.push("/quotas");
+      await cancelAddonOrder(orderNo);
+      await load();
+    } catch (err) {
+      setError(
+        err instanceof ConsoleBffError && err.message
+          ? err.message
+          : t("cancelFailed"),
+      );
+      throw err;
     } finally {
       setBusy(false);
     }
   };
 
-  if (missing) {
+  const backButton = (
+    <Button variant="outline" onClick={() => router.push("/quotas")}>
+      {t("backToQuotas")}
+    </Button>
+  );
+
+  if (loading && !order) {
     return (
       <ViewLayout>
         <ViewHeader icon="lightning" title={t("title")} description={orderNo} />
-        <Banner tone="danger" title={t("notFound")} />
-        <div>
-          <Button variant="outline" onClick={() => router.push("/quotas")}>
-            {t("backToQuotas")}
-          </Button>
-        </div>
+        <Skeleton className="h-media-lg w-full" />
+        <Skeleton className="h-media-lg w-full" />
       </ViewLayout>
     );
   }
 
-  const stage = order ? stageOf(order) : "pending_payment";
-  const statusKey = !order
-    ? "pending"
-    : order.status === "completed"
+  if (notFound) {
+    return (
+      <ViewLayout>
+        <ViewHeader icon="lightning" title={t("title")} description={orderNo} />
+        <Banner tone="danger" title={t("notFound")} />
+        <div>{backButton}</div>
+      </ViewLayout>
+    );
+  }
+
+  if (!order) {
+    return (
+      <ViewLayout>
+        <ViewHeader icon="lightning" title={t("title")} description={orderNo} />
+        <LoadFailedBanner onRetry={() => void load()} retrying={loading} />
+        <div>{backButton}</div>
+      </ViewLayout>
+    );
+  }
+
+  const stage = stageOf(order);
+  const statusKey =
+    order.status === "completed"
       ? "completed"
       : order.status === "cancelled"
         ? "cancelled"
         : order.paymentDeclared
           ? "declared"
           : "pending";
-  const activeChannel = channels.find((c) => c.channel === channel);
-  const bankAccount = channels.find(
-    (c) => c.channel === "bank_transfer" && c.enabled,
-  )?.account;
+  const canDeclare =
+    order.status === "pending_payment" && !order.paymentDeclared;
 
   return (
     <ViewLayout>
@@ -206,12 +256,18 @@ export function AddonPayPage({ orderNo }: { orderNo: string }) {
       <OrderFlowStrip
         stage={stage}
         times={{
-          order: order?.createdAt ?? null,
-          provision: order?.activatedAt ?? null,
+          order: order.createdAt,
+          provision: order.activatedAt,
         }}
       />
 
+      {loadFailed ? (
+        <LoadFailedBanner onRetry={() => void load()} retrying={loading} />
+      ) : null}
       {error ? <Banner tone="danger" title={error} /> : null}
+      {canDeclare && countdownExpired ? (
+        <Banner tone="warning" title={t("expiredNotice")} />
+      ) : null}
 
       {/* 订单摘要 */}
       <PageSection
@@ -221,113 +277,58 @@ export function AddonPayPage({ orderNo }: { orderNo: string }) {
         description={t("summary.description")}
       >
         <DetailList>
-          <DetailRow label={t("summary.pack")}>
-            {order ? order.packName : "—"}
-          </DetailRow>
+          <DetailRow label={t("summary.pack")}>{order.packName}</DetailRow>
           <DetailRow label={t("summary.content")}>
-            {order
-              ? order.metricKey === "storage.bytes"
-                ? formatBytes(order.amount)
-                : order.amount.toLocaleString("en-US")
-              : "—"}
+            {order.metricKey === "storage.bytes"
+              ? formatBytes(order.amount)
+              : order.amount.toLocaleString(locale)}
           </DetailRow>
           <DetailRow label={t("summary.validity")}>
-            {order
-              ? order.validUntil
-                ? t("summary.validUntil", { date: fmtDate(order.validUntil) })
-                : t("summary.validityDaysFromActivation", {
-                    days: order.validityDays,
-                  })
-              : "—"}
+            {order.validUntil
+              ? t("summary.validUntil", { date: fmtDate(order.validUntil) })
+              : t("summary.validityDaysFromActivation", {
+                  days: order.validityDays,
+                })}
           </DetailRow>
           <DetailRow label={t("summary.amountDue")}>
             <strong className="tabular-nums">
-              {order ? money(order.price, order.currency) : "—"}
+              {money(order.price, order.currency)}
             </strong>
           </DetailRow>
           <DetailRow label={t("summary.billNo")}>
-            {order?.billNo ? (
+            {order.billNo ? (
               <span className="font-mono">{order.billNo}</span>
             ) : (
               "—"
             )}
           </DetailRow>
           <DetailRow label={t("summary.createdAt")}>
-            {order
-              ? `${fmtDate(order.createdAt)} ${fmtTime(order.createdAt)}`
-              : "—"}
+            {`${fmtDate(order.createdAt)} ${fmtTime(order.createdAt)}`}
           </DetailRow>
         </DetailList>
       </PageSection>
 
       {/* 支付与申报(仅未申报的待支付单) */}
-      {order && order.status === "pending_payment" && !order.paymentDeclared ? (
+      {canDeclare ? (
         <PageSection
           icon="credit-card"
           level={2}
           title={t("pay.title")}
           description={
-            order.expireAt
-              ? t("pay.deadline", {
-                  remain: formatRemain(order.expireAt, now),
-                })
+            countdown
+              ? t("pay.deadline", { remain: countdown })
               : t("pay.description")
           }
         >
-          <SegmentedControl<PayChannel>
-            ariaLabel={t("pay.channelLabel")}
+          <PayChannelPanel
+            channels={channels}
             value={channel}
             onChange={setChannel}
-            items={channels
-              .filter((c) => c.channel !== "wechat")
-              .map((c) => ({
-                value: c.channel as PayChannel,
-                label: `${t(`channels.${c.channel}`)}${
-                  c.enabled ? "" : ` · ${t("channels.comingSoon")}`
-                }`,
-                disabled: !c.enabled,
-              }))}
+            orderNo={orderNo}
           />
 
-          {channel === "alipay" && activeChannel?.qrAsset ? (
-            <div className="flex flex-wrap items-start gap-md">
-              <div className="flex shrink-0 justify-center rounded-lg bg-accent p-md">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={activeChannel.qrAsset}
-                  alt={t("channels.alipayQrAlt")}
-                  className="h-auto w-media-2xl max-w-full"
-                />
-              </div>
-              <p className="min-w-0 flex-1 text-body-md text-muted-foreground">
-                {t("pay.referenceNote", { orderNo })}
-              </p>
-            </div>
-          ) : null}
-
-          {channel === "bank_transfer" ? (
-            bankAccount ? (
-              <DetailList>
-                <DetailRow label={t("bank.accountName")}>
-                  {bankAccount.accountName}
-                </DetailRow>
-                <DetailRow label={t("bank.bankName")}>
-                  {bankAccount.bankName}
-                </DetailRow>
-                <DetailRow label={t("bank.accountNo")}>
-                  <span className="font-mono">{bankAccount.accountNo}</span>
-                </DetailRow>
-                <DetailRow label={t("bank.reference")}>
-                  <span className="font-mono">{bankAccount.reference}</span>
-                </DetailRow>
-              </DetailList>
-            ) : (
-              <Banner tone="info" title={t("bank.unavailable")} />
-            )
-          ) : null}
-
-          <div className="flex flex-col gap-sm">
-            <div className="flex flex-col gap-xs">
+          <FieldGroup>
+            <Field>
               <FieldLabel htmlFor="addon-pay-payer">
                 {t("declare.payerName")}
               </FieldLabel>
@@ -337,8 +338,8 @@ export function AddonPayPage({ orderNo }: { orderNo: string }) {
                 onChange={(e) => setPayerName(e.target.value)}
                 placeholder={t("declare.payerNamePlaceholder")}
               />
-            </div>
-            <div className="flex flex-col gap-xs">
+            </Field>
+            <Field>
               <FieldLabel htmlFor="addon-pay-txn">
                 {t("declare.transactionNo")}
               </FieldLabel>
@@ -348,18 +349,29 @@ export function AddonPayPage({ orderNo }: { orderNo: string }) {
                 onChange={(e) => setTransactionNo(e.target.value)}
                 placeholder={t("declare.transactionNoPlaceholder")}
               />
-            </div>
-          </div>
+            </Field>
+          </FieldGroup>
 
           <div className="flex items-center justify-end gap-sm">
-            <Button
-              variant="ghost"
+            <DestructiveButton
+              size="md"
               disabled={busy}
-              onClick={() => void handleCancel()}
+              confirm={withLabels({
+                verb: t("cancelConfirm.verb"),
+                target: orderNo,
+                consequence: t("cancelConfirm.consequence"),
+                onConfirm: handleCancel,
+              })}
             >
               {t("cancelOrder")}
-            </Button>
-            <Button disabled={busy} onClick={() => void handleDeclare()}>
+            </DestructiveButton>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                setError(null);
+                setDeclareOpen(true);
+              }}
+            >
               {t("declare.submit")}
             </Button>
           </div>
@@ -367,12 +379,12 @@ export function AddonPayPage({ orderNo }: { orderNo: string }) {
       ) : null}
 
       {/* 已申报待核销 */}
-      {order && order.status === "pending_payment" && order.paymentDeclared ? (
+      {awaitingVerify ? (
         <Banner tone="info" title={t("declared.note")} />
       ) : null}
 
       {/* 完成 / 取消态 */}
-      {order?.status === "completed" ? (
+      {order.status === "completed" ? (
         <Banner
           tone="success"
           title={t("completed.note", {
@@ -380,16 +392,35 @@ export function AddonPayPage({ orderNo }: { orderNo: string }) {
           })}
         />
       ) : null}
-      {order?.status === "cancelled" ? (
+      {order.status === "cancelled" ? (
         <Banner tone="warning" title={t("cancelled.note")} />
       ) : null}
 
-      {!loading ? (
-        <div>
-          <Button variant="outline" onClick={() => router.push("/quotas")}>
-            {t("backToQuotas")}
-          </Button>
-        </div>
+      <div>{backButton}</div>
+
+      {declareOpen ? (
+        <DialogForm
+          open
+          title={t("declareDialog.title")}
+          description={t("declareDialog.description", {
+            amount: money(order.price, order.currency),
+            channel: tChannels(`channel.${channel}`),
+          })}
+          submitLabel={t("declareDialog.confirm")}
+          cancelLabel={t("declareDialog.cancel")}
+          submitting={busy}
+          onOpenChange={(open: boolean) => {
+            if (!open && !busy) setDeclareOpen(false);
+          }}
+          onSubmit={(event: React.FormEvent) => {
+            event.preventDefault();
+            void handleDeclare();
+          }}
+        >
+          <p className="text-body-sm text-muted-foreground">
+            {t("pay.referenceNote", { orderNo })}
+          </p>
+        </DialogForm>
       ) : null}
     </ViewLayout>
   );

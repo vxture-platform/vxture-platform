@@ -416,7 +416,7 @@ export async function fetchNotificationPreferences(): Promise<NotificationPrefer
     { credentials: "include", cache: "no-store" },
   );
   if (!response.ok) {
-    throw new ConsoleBffError("通知偏好读取失败", response.status);
+    throw new ConsoleBffError("", response.status);
   }
   return (await response.json()) as NotificationPreferences;
 }
@@ -436,7 +436,7 @@ export async function saveNotificationPreferences(
     },
   );
   if (!response.ok) {
-    throw new ConsoleBffError("通知偏好保存失败", response.status);
+    throw new ConsoleBffError("", response.status);
   }
   return (await response.json()) as NotificationPreferences;
 }
@@ -531,7 +531,7 @@ export async function transferTenantOwner(memberId: string): Promise<void> {
   );
 
   if (!response.ok) {
-    let detail = "所有权转让失败";
+    let detail = "";
     try {
       const body = (await response.json()) as { message?: string };
       if (body?.message) detail = body.message;
@@ -747,6 +747,8 @@ export interface MyOrder {
   declaredAt: string | null;
   /** 服务开通时刻（completed 单；订阅周期起算锚点）。 */
   activatedAt: string | null;
+  /** 履约后挂上的订阅 id；未履约 null。订单菜单「退订」对它落锤。 */
+  subscriptionId: string | null;
 }
 
 // ── 产品订阅总览（「我的订阅」卡 + 「新品推荐」卡，product_330）─────────────
@@ -922,12 +924,10 @@ export interface DeclareResult {
   paymentId: string | null;
 }
 
-export async function fetchOrderDetail(
-  orderId: string,
-): Promise<OrderDetail | null> {
-  return readJson<OrderDetail | null>(
+/** strict(批 1):400/404 由页面画「订单不存在」,其余错误画「读取失败 + 重试」。 */
+export async function fetchOrderDetail(orderId: string): Promise<OrderDetail> {
+  return readJsonStrict<OrderDetail>(
     `/api/subscription/orders/${encodeURIComponent(orderId)}`,
-    null,
   );
 }
 
@@ -947,7 +947,7 @@ export async function quoteOrder(
   );
   if (!response.ok) {
     throw new ConsoleBffError(
-      await extractErrorMessage(response, "试算失败"),
+      await extractErrorMessage(response, ""),
       response.status,
     );
   }
@@ -977,7 +977,7 @@ export async function declareOrderPayment(
   );
   if (!response.ok) {
     throw new ConsoleBffError(
-      await extractErrorMessage(response, "付款申报失败"),
+      await extractErrorMessage(response, ""),
       response.status,
     );
   }
@@ -1159,7 +1159,7 @@ export async function createSubscriptionOrder(body: {
   );
   if (!response.ok) {
     throw new ConsoleBffError(
-      await extractErrorMessage(response, "下单失败"),
+      await extractErrorMessage(response, ""),
       response.status,
     );
   }
@@ -1199,7 +1199,7 @@ export async function setProductFavorite(
   );
   if (!response.ok) {
     throw new ConsoleBffError(
-      await extractErrorMessage(response, "收藏操作失败"),
+      await extractErrorMessage(response, ""),
       response.status,
     );
   }
@@ -1221,7 +1221,7 @@ export async function cancelSubscriptionOrder(
   );
   if (!response.ok) {
     throw new ConsoleBffError(
-      await extractErrorMessage(response, "取消订单失败"),
+      await extractErrorMessage(response, ""),
       response.status,
     );
   }
@@ -2159,7 +2159,7 @@ export async function fetchAddonPaymentChannels(
 export async function declareAddonPayment(
   orderNo: string,
   input: { payerName?: string; transactionNo?: string; remark?: string },
-): Promise<boolean> {
+): Promise<void> {
   const response = await fetch(
     `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/quota/addon-orders/${encodeURIComponent(orderNo)}/payment-declare`,
     {
@@ -2169,15 +2169,26 @@ export async function declareAddonPayment(
       body: JSON.stringify(input),
     },
   );
-  return response.ok;
+  if (!response.ok) {
+    throw new ConsoleBffError(
+      await extractErrorMessage(response, ""),
+      response.status,
+    );
+  }
 }
 
-export async function cancelAddonOrder(orderNo: string): Promise<boolean> {
+/** 取消加油包订单;失败抛 ConsoleBffError(报文透传)。 */
+export async function cancelAddonOrder(orderNo: string): Promise<void> {
   const response = await fetch(
     `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/quota/addon-orders/${encodeURIComponent(orderNo)}/cancel`,
     { method: "POST", credentials: "include" },
   );
-  return response.ok;
+  if (!response.ok) {
+    throw new ConsoleBffError(
+      await extractErrorMessage(response, ""),
+      response.status,
+    );
+  }
 }
 
 // ============================================================================
@@ -2316,15 +2327,15 @@ export async function applyInvoiceReceipt(input: {
   );
 }
 
-/** 加油包订单详情(支付页数据源);404/权限错回 null,页面渲染缺省态。 */
+/** 加油包订单详情(支付页数据源);strict(批 1):400/404 = 不存在,其余 = 读取失败。 */
 export async function fetchAddonOrderDetail(orderNo: string): Promise<{
   order: ConsoleAddonOrder;
   paymentChannels: PaymentChannelInfo[];
-} | null> {
-  return readJson<{
+}> {
+  return readJsonStrict<{
     order: ConsoleAddonOrder;
     paymentChannels: PaymentChannelInfo[];
-  } | null>(`/api/quota/addon-orders/${encodeURIComponent(orderNo)}`, null);
+  }>(`/api/quota/addon-orders/${encodeURIComponent(orderNo)}`);
 }
 
 /** 到期不续 / 恢复续费(P0 订阅自助);失败抛 ConsoleBffError(报文透传)。 */

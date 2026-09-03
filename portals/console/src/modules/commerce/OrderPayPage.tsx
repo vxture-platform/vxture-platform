@@ -22,6 +22,7 @@ import {
   Banner,
   Button,
   Checkbox,
+  DestructiveButton,
   DetailList,
   DetailRow,
   DialogForm,
@@ -31,7 +32,7 @@ import {
   FieldLabel,
   Icon,
   Input,
-  SegmentedControl,
+  NativeSelect,
   StatusBadge,
   ViewHeader,
   ViewLayout,
@@ -41,6 +42,15 @@ import {
 import { PageSection } from "@/layout/shell";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
+import { LoadFailedBanner } from "@/components/load/LoadFailed";
+import { useConfirmLabels } from "@/lib/destructive";
+import {
+  PayChannelPanel,
+  defaultPayChannel,
+  type PayChannel,
+} from "./components/pay/PayChannelPanel";
+import { useCountdown } from "./components/pay/useCountdown";
+import { useOrderPolling } from "./components/pay/useOrderPolling";
 import {
   ConsoleBffError,
   declareOrderPayment,
@@ -54,7 +64,6 @@ import {
   type OrderQuote,
   type OrderState,
   type OrderVoucherOption,
-  type PaymentChannelInfo,
 } from "@/api/console-bff";
 import { OrderFlowStrip } from "./components/OrderFlowStrip";
 import { SECTION_TIGHT, SectionTitle } from "./components/sectionKit";
@@ -75,8 +84,6 @@ const STATE_TONE: Record<OrderState, StatusBadgeTone> = {
   expired: "danger",
 };
 
-type PayChannel = "alipay" | "bank_transfer";
-
 /** 货币展示统一走 shared formatCurrency（110-locale-layer 指定入口）。 */
 function fmtWith(locale: Locale) {
   return (amount: string, currency: string): string => {
@@ -84,25 +91,6 @@ function fmtWith(locale: Locale) {
     if (!Number.isFinite(n)) return "—";
     return formatCurrency(n, locale, currency);
   };
-}
-
-/** 倒计时：<1h 显示 mm:ss，否则 hh:mm:ss（团队租户 48h 窗口不至于溢出）。 */
-function useCountdown(deadline: string | null): string | null {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!deadline) return;
-    const t = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(t);
-  }, [deadline]);
-  if (!deadline) return null;
-  const remain = new Date(deadline).getTime() - now;
-  if (remain <= 0) return "00:00";
-  const h = Math.floor(remain / 3_600_000);
-  const m = Math.floor((remain % 3_600_000) / 60_000);
-  const s = Math.floor((remain % 60_000) / 1_000);
-  const mm = String(m).padStart(2, "0");
-  const ss = String(s).padStart(2, "0");
-  return h > 0 ? `${String(h).padStart(2, "0")}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
 function voucherLabel(
@@ -114,18 +102,73 @@ function voucherLabel(
     const off =
       v.discountType === "percent"
         ? t("voucher.percentOff", { value: v.discountValue ?? 0 })
-        : // fixed effect value is integer cents (230 §4) — display in yuan
+        : // fixed 面值服务端已换算成元(与卡券页同口径,批 1)
           t("voucher.fixedOff", {
-            value: ((v.discountValue ?? 0) / 100).toFixed(2),
+            value: (v.discountValue ?? 0).toFixed(2),
           });
     return `${v.batchName} · ${off}`;
   }
   return `${v.batchName} · ${fmt(String(v.amount ?? 0), "CNY")}`;
 }
 
+/**
+ * 券选择:一张 = 勾选框;多张 = 下拉(含「不使用」)。此前只画第一张,其余券在
+ * detail.vouchers 里是死数据,客户手里有两张折扣券也只能用服务端排在前面的那张。
+ */
+function VoucherChoice({
+  id,
+  options,
+  value,
+  onChange,
+  label,
+  t,
+  fmt,
+}: {
+  id: string;
+  options: OrderVoucherOption[];
+  value: string | null;
+  onChange: (next: string | null) => void;
+  label: string;
+  t: ReturnType<typeof useTranslations>;
+  fmt: (amount: string, currency: string) => string;
+}) {
+  if (options.length === 1) {
+    const only = options[0]!;
+    return (
+      <Field orientation="horizontal" className="w-auto">
+        <Checkbox
+          id={id}
+          checked={value === only.voucherId}
+          onCheckedChange={(checked) =>
+            onChange(checked === true ? only.voucherId : null)
+          }
+        />
+        <FieldLabel htmlFor={id}>{voucherLabel(only, t, fmt)}</FieldLabel>
+      </Field>
+    );
+  }
+  return (
+    <NativeSelect
+      id={id}
+      aria-label={label}
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value || null)}
+    >
+      <option value="">{t("breakdown.noneOption")}</option>
+      {options.map((v) => (
+        <option key={v.voucherId} value={v.voucherId}>
+          {voucherLabel(v, t, fmt)}
+        </option>
+      ))}
+    </NativeSelect>
+  );
+}
+
 export function OrderPayPage() {
   const t = useTranslations("orderPay");
   const fmt = fmtWith(useLocale() as Locale);
+  const withLabels = useConfirmLabels();
+  const tChannels = useTranslations("payChannels");
   const router = useRouter();
   const params = useParams<{ orderId: string }>();
   const orderId = params?.orderId ?? "";
@@ -164,6 +207,10 @@ export function OrderPayPage() {
     };
   }, [detail]);
   const [loading, setLoading] = useState(true);
+  /* 读失败显影(批 1):400/404 = 订单不存在;其余 = 读取失败 + 重试。此前两者
+   * 一律回 null 画成「订单不存在」。 */
+  const [notFound, setNotFound] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [quote, setQuote] = useState<OrderQuote | null>(null);
   const [discountId, setDiscountId] = useState<string | null>(null);
   const [creditId, setCreditId] = useState<string | null>(null);
@@ -182,6 +229,12 @@ export function OrderPayPage() {
     try {
       const next = await fetchOrderDetail(orderId);
       setDetail(next);
+      setNotFound(false);
+      setLoadFailed(false);
+    } catch (err) {
+      const status = err instanceof ConsoleBffError ? err.status : undefined;
+      if (status === 400 || status === 403 || status === 404) setNotFound(true);
+      else setLoadFailed(true);
     } finally {
       inFlight.current = false;
       setLoading(false);
@@ -197,11 +250,7 @@ export function OrderPayPage() {
   useEffect(() => {
     if (!detail || defaultsApplied.current) return;
     defaultsApplied.current = true;
-    const firstEnabled = detail.paymentChannels.find(
-      (c): c is PaymentChannelInfo & { channel: PayChannel } =>
-        c.enabled && (c.channel === "alipay" || c.channel === "bank_transfer"),
-    );
-    if (firstEnabled) setChannel(firstEnabled.channel);
+    setChannel(defaultPayChannel(detail.paymentChannels));
     const bestDiscount = detail.vouchers.find((v) => v.kind === "discount");
     if (bestDiscount) setDiscountId(bestDiscount.voucherId);
   }, [detail]);
@@ -222,7 +271,11 @@ export function OrderPayPage() {
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : t("errors.quote"));
+          setError(
+            err instanceof Error && err.message
+              ? err.message
+              : t("errors.quote"),
+          );
         }
       });
     return () => {
@@ -230,27 +283,19 @@ export function OrderPayPage() {
     };
   }, [detail, discountId, creditId, t]);
 
-  // Poll while awaiting confirmation / activation (ConsoleSessionProvider
-  // pattern: interval + focus/visibility triggers + in-flight dedupe).
+  // Poll while awaiting confirmation / activation (shared hook: interval +
+  // focus/visibility triggers; in-flight dedupe lives in reload).
   const polling =
     detail?.orderState === "paid_pending_verify" ||
     detail?.orderState === "activating";
-  useEffect(() => {
-    if (!polling) return;
-    const tick = () => void reload();
-    const timer = window.setInterval(tick, POLL_MS);
-    window.addEventListener("focus", tick);
-    document.addEventListener("visibilitychange", tick);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("focus", tick);
-      document.removeEventListener("visibilitychange", tick);
-    };
-  }, [polling, reload]);
+  useOrderPolling(polling, reload, POLL_MS);
 
+  // 倒计时到点:重取订单,让服务端的 expired 态显影(此前停在「00:00」还能点申报)。
   const countdown = useCountdown(
     detail?.orderState === "pending_payment" ? detail.expireAt : null,
+    () => void reload(),
   );
+  const countdownExpired = countdown === "00:00";
 
   const discountVouchers = useMemo(
     () => detail?.vouchers.filter((v) => v.kind === "discount") ?? [],
@@ -260,13 +305,8 @@ export function OrderPayPage() {
     () => detail?.vouchers.filter((v) => v.kind === "credit_voucher") ?? [],
     [detail],
   );
-  const activeChannel = detail?.paymentChannels.find(
-    (c) => c.channel === channel,
-  );
-  const cashDue = quote?.cashDue ?? detail?.listPrice ?? "0";
-  // Hoisted so the checkbox rows can narrow the optional element once.
-  const bestDiscount = discountVouchers[0];
-  const bestCredit = creditVouchers[0];
+  // 应付 = 试算结果;报价未到就是「试算中」,不拿原价冒充(原价不含券与已付)。
+  const cashDue = quote?.cashDue ?? null;
 
   // 归属（给谁买）来自会话——订单本就是当前租户维度的资源。
   // 展示 = 租户名 · 工作区名（UUID 禁展示；workspace 字段是内部 id，不用）。
@@ -299,31 +339,37 @@ export function OrderPayPage() {
           : {}),
       });
       setDeclareOpen(false);
-      if (result.outcome === "activated") {
-        router.replace("/subscription");
-        return;
-      }
+      // activated(0 元 / 券全额覆盖即时结清)也留在本页:重取后进入完成视图,
+      // 成功页与 24h 退款入口才看得到——此前直接跳走,两样都不可达。
+      void result;
       await reload();
     } catch (err) {
       setError(
-        err instanceof ConsoleBffError ? err.message : t("errors.declare"),
+        err instanceof ConsoleBffError && err.message
+          ? err.message
+          : t("errors.declare"),
       );
     } finally {
       setSubmitting(false);
     }
   }
 
+  /** 取消订单:由 DestructiveButton 的确认件落锤;失败抛出让框不关。 */
   async function handleCancel() {
     if (!detail) return;
     setSubmitting(true);
     setError(null);
     try {
       await cancelSubscriptionOrder(detail.orderId);
-      router.replace("/subscription");
+      await reload();
     } catch (err) {
       setError(
-        err instanceof ConsoleBffError ? err.message : t("errors.cancel"),
+        err instanceof ConsoleBffError && err.message
+          ? err.message
+          : t("errors.cancel"),
       );
+      throw err;
+    } finally {
       setSubmitting(false);
     }
   }
@@ -336,7 +382,7 @@ export function OrderPayPage() {
       </ViewLayout>
     );
   }
-  if (!detail) {
+  if (notFound || (!detail && !loadFailed)) {
     return (
       <ViewLayout className="mx-auto w-full max-w-content-base-xl">
         <ViewHeader
@@ -355,8 +401,19 @@ export function OrderPayPage() {
       </ViewLayout>
     );
   }
+  if (!detail) {
+    return (
+      <ViewLayout className="mx-auto w-full max-w-content-base-xl">
+        <ViewHeader icon="credit-card" title={t("title")} description="" />
+        <LoadFailedBanner onRetry={() => void reload()} retrying={loading} />
+      </ViewLayout>
+    );
+  }
 
   const state = detail.orderState;
+  const isPending = state === "pending_payment";
+  const fullVoucherCover =
+    isPending && cashDue !== null && Number(cashDue) === 0;
 
   const submitRefundRequest = async () => {
     if (!detail) return;
@@ -378,8 +435,6 @@ export function OrderPayPage() {
       setSubmittingRefund(false);
     }
   };
-  const isPending = state === "pending_payment";
-  const fullVoucherCover = isPending && Number(cashDue) === 0;
   // 「产品主名 · 套餐名」——付款页是客户最后一次确认「我在为什么付钱」的地方，
   // 只写套餐名（入门版）看不出是哪个产品的入门版；编码只作最后兜底。
   const planLabel = `${[detail.productName, detail.planName || detail.planCode]
@@ -408,11 +463,17 @@ export function OrderPayPage() {
           ) : undefined
         }
       />
+      {loadFailed ? (
+        <LoadFailedBanner onRetry={() => void reload()} retrying={loading} />
+      ) : null}
       {detail.rejectReason && isPending ? (
         <Banner
           tone="danger"
           title={t("rejectBanner", { reason: detail.rejectReason })}
         />
+      ) : null}
+      {isPending && countdownExpired ? (
+        <Banner tone="warning" title={t("expiredNotice")} />
       ) : null}
 
       <OrderFlowStrip
@@ -437,64 +498,12 @@ export function OrderPayPage() {
             }
             className={`min-w-0 flex-1 ${SECTION_TIGHT}`}
           >
-            <SegmentedControl<string>
-              ariaLabel={t("channels.title")}
+            <PayChannelPanel
+              channels={detail.paymentChannels}
               value={channel}
-              onChange={(value) => {
-                if (value === "alipay" || value === "bank_transfer")
-                  setChannel(value);
-              }}
-              items={detail.paymentChannels.map((c) => ({
-                value: c.channel,
-                label: `${t(`channels.${c.channel}`)}${
-                  !c.enabled ? ` · ${t("channels.comingSoon")}` : ""
-                }`,
-                disabled: !c.enabled,
-              }))}
+              onChange={setChannel}
+              orderNo={detail.orderNo}
             />
-
-            {channel === "alipay" && activeChannel?.qrAsset ? (
-              <div className="flex flex-wrap items-start gap-md">
-                <div className="flex shrink-0 justify-center rounded-lg bg-accent p-md">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={activeChannel.qrAsset}
-                    alt={t("channels.alipayQrAlt")}
-                    className="h-auto w-media-2xl max-w-full"
-                  />
-                </div>
-                <p className="min-w-0 flex-1 text-body-md text-muted-foreground">
-                  {t("referenceNote", { orderNo: detail.orderNo })}
-                </p>
-              </div>
-            ) : null}
-
-            {channel === "bank_transfer" && activeChannel?.account ? (
-              <>
-                <DetailList>
-                  <DetailRow label={t("bank.accountName")}>
-                    {activeChannel.account.accountName}
-                  </DetailRow>
-                  <DetailRow label={t("bank.bankName")}>
-                    {activeChannel.account.bankName}
-                  </DetailRow>
-                  <DetailRow label={t("bank.accountNo")}>
-                    <span className="tabular-nums">
-                      {activeChannel.account.accountNo}
-                    </span>
-                  </DetailRow>
-                </DetailList>
-                <p className="text-body-sm text-muted-foreground">
-                  {t("referenceNote", { orderNo: detail.orderNo })}
-                </p>
-              </>
-            ) : null}
-
-            {detail.paymentChannels.every((c) => !c.enabled) ? (
-              <p className="text-body-sm text-muted-foreground">
-                {t("channels.noneEnabled")}
-              </p>
-            ) : null}
 
             <div className="mt-auto">
               <Banner tone="info" title={t("manualNote")} />
@@ -516,7 +525,9 @@ export function OrderPayPage() {
                   {t("amountDue")}
                 </span>
                 <strong className="text-heading-2 text-foreground tabular-nums">
-                  {fmt(cashDue, detail.currency)}
+                  {cashDue !== null
+                    ? fmt(cashDue, detail.currency)
+                    : t("amountPending")}
                 </strong>
               </div>
 
@@ -543,23 +554,16 @@ export function OrderPayPage() {
                     </span>
                   }
                 >
-                  {bestDiscount ? (
-                    <Field orientation="horizontal" className="w-auto">
-                      <Checkbox
-                        id="order-pay-discount"
-                        checked={Boolean(discountId)}
-                        onCheckedChange={(checked) =>
-                          setDiscountId(
-                            checked === true
-                              ? (discountVouchers[0]?.voucherId ?? null)
-                              : null,
-                          )
-                        }
-                      />
-                      <FieldLabel htmlFor="order-pay-discount">
-                        {voucherLabel(bestDiscount, t, fmt)}
-                      </FieldLabel>
-                    </Field>
+                  {discountVouchers.length > 0 ? (
+                    <VoucherChoice
+                      id="order-pay-discount"
+                      options={discountVouchers}
+                      value={discountId}
+                      onChange={setDiscountId}
+                      label={t("breakdown.pickDiscount")}
+                      t={t}
+                      fmt={fmt}
+                    />
                   ) : (
                     <span className="text-muted-foreground">
                       {t("breakdown.noDiscountVoucher")}
@@ -577,23 +581,16 @@ export function OrderPayPage() {
                     </span>
                   }
                 >
-                  {bestCredit ? (
-                    <Field orientation="horizontal" className="w-auto">
-                      <Checkbox
-                        id="order-pay-credit"
-                        checked={Boolean(creditId)}
-                        onCheckedChange={(checked) =>
-                          setCreditId(
-                            checked === true
-                              ? (creditVouchers[0]?.voucherId ?? null)
-                              : null,
-                          )
-                        }
-                      />
-                      <FieldLabel htmlFor="order-pay-credit">
-                        {voucherLabel(bestCredit, t, fmt)}
-                      </FieldLabel>
-                    </Field>
+                  {creditVouchers.length > 0 ? (
+                    <VoucherChoice
+                      id="order-pay-credit"
+                      options={creditVouchers}
+                      value={creditId}
+                      onChange={setCreditId}
+                      label={t("breakdown.pickCredit")}
+                      t={t}
+                      fmt={fmt}
+                    />
                   ) : (
                     <span className="text-muted-foreground">
                       {t("breakdown.noCreditVoucher")}
@@ -626,18 +623,24 @@ export function OrderPayPage() {
                     ? t("actions.settleInstant")
                     : t("actions.declarePaid")}
                 </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full text-muted-foreground"
-                  onClick={() => void handleCancel()}
+                {/* 取消是不可逆动作:走 DS 破坏性确认(此前单击即取消并跳走)。 */}
+                <DestructiveButton
+                  size="lg"
+                  className="w-full"
                   disabled={
                     submitting ||
                     Number(detail.paidAmount) > 0 ||
                     !canManageBilling
                   }
+                  confirm={withLabels({
+                    verb: t("cancelConfirm.verb"),
+                    target: detail.orderNo,
+                    consequence: t("cancelConfirm.consequence"),
+                    onConfirm: handleCancel,
+                  })}
                 >
                   {t("actions.cancelOrder")}
-                </Button>
+                </DestructiveButton>
                 <p className="text-center text-body-sm text-content-tertiary">
                   {t("ttlFine")}
                 </p>
@@ -860,8 +863,8 @@ export function OrderPayPage() {
               : t("declareDialog.title")
           }
           description={t("declareDialog.description", {
-            amount: fmt(cashDue, detail.currency),
-            channel: t(`channels.${channel}`),
+            amount: fmt(cashDue ?? "0", detail.currency),
+            channel: tChannels(`channel.${channel}`),
           })}
           submitLabel={
             fullVoucherCover

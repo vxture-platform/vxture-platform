@@ -292,6 +292,8 @@ interface MyOrderRecord {
   declaredAt: string | null;
   /** 服务开通时刻（completed 单 = 订阅 start_at，周期起算锚点）。 */
   activatedAt: string | null;
+  /** 履约后挂上的订阅 id（订单菜单「退订」要对它落锤，不能拿 orderId 冒充）；未履约 null。 */
+  subscriptionId: string | null;
 }
 
 // ── payment page contracts (product_321 §4.1) ───────────────────────────────
@@ -2002,6 +2004,8 @@ interface OrderRow {
   order_id: string;
   order_no: string;
   workspace_id: string;
+  /** 履约后挂上的订阅；未履约 null */
+  subscription_id: string | null;
   /** billing.orders.status（订单实体状态机） */
   order_status: string;
   /** 每单付款时效（分钟，P4 修订）；NULL=存量单 → 回退 env */
@@ -2046,6 +2050,7 @@ select
   o.id                 as order_id,
   o.order_no,
   o.workspace_id,
+  o.subscription_id,
   o.status             as order_status,
   o.payment_ttl_minutes,
   inv.id               as invoice_id,
@@ -2171,7 +2176,10 @@ function mapVoucherOption(v: AvailableVoucher): OrderVoucherOption {
       kind: v.kind,
       batchName: v.batchName,
       discountType: e.discountType,
-      discountValue: e.value,
+      // fixed 的 effect.value 是整数分;对外一律用元(与 promotion.router 的卡券页
+      // 同口径——此前这里给分、卡券页给元,付款页只好自己 /100,两处随时会打架)。
+      discountValue:
+        e.discountType === "fixed" ? Number(centsToYuan(e.value)) : e.value,
       maxOff: e.maxOffCents != null ? centsToYuan(e.maxOffCents) : null,
       expiresAt: v.expiresAt.toISOString(),
     };
@@ -2229,6 +2237,7 @@ function mapMyOrderRow(r: OrderRow): MyOrderRecord {
     startAt: r.start_at?.toISOString() ?? null,
     endAt: r.end_at?.toISOString() ?? null,
     declaredAt: r.declared_at?.toISOString() ?? null,
+    subscriptionId: r.subscription_id,
     // 服务开通时刻 = 订阅周期起算锚点（owner 口径：自服务开通,非确认收款）
     activatedAt:
       state === "completed" && r.start_at ? r.start_at.toISOString() : null,
