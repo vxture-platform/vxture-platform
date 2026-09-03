@@ -26,7 +26,6 @@
     "@vxture/core-identity-sdk": "workspace:*",
     "@vxture/core-oidc-rp": "workspace:*",
     "@vxture/service-account": "workspace:*",
-    "@vxture/service-mail": "workspace:*",
     "@vxture/service-organization": "workspace:*",
     "@vxture-platform/shared": "workspace:*",
     "class-transformer": "^0.5.1",

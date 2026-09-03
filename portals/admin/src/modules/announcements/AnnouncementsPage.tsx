@@ -363,6 +363,17 @@ function announcementColumns(
       cell: (item) =>
         item.expiresAt ? formatDate(item.expiresAt, locale) : "-",
     },
+    {
+      // P2-h：发布到点后作业推给目标租户 owner（站内 + 按偏好邮件）；这里给运营看推没推、推了多少。
+      id: "broadcast",
+      header: "推送",
+      cell: (item) => {
+        const b = item.broadcast;
+        if (!b) return item.status === "published" ? "待推送" : "-";
+        if (b.skipped) return "存量未推";
+        return `${b.tenants} 租户 · 站内 ${b.inbox} · 邮件 ${b.emails}`;
+      },
+    },
   ];
 }
 

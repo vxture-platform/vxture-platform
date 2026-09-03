@@ -74,17 +74,19 @@ const DEFAULT_NOTIFICATION_STATE: NotificationState = {
       channels: { inbox: true, email: false, sms: false },
       lockedChannels: ["inbox"],
     },
+    // 订阅 / 账务是事务性通知（到期提醒、续费单待付、退款进度，owner 2026-09-03）：邮件默认开、可关。
+    // 与服务端 NotificationPreferencesService 的 TOPIC_DEFAULT_OVERRIDES 同源——「恢复默认」用的是这份。
     {
       key: "subscription",
       group: "commerce",
       icon: "chart-bar",
-      channels: { inbox: true, email: false, sms: false },
+      channels: { inbox: true, email: true, sms: false },
     },
     {
       key: "billing",
       group: "commerce",
       icon: "calendar",
-      channels: { inbox: true, email: false, sms: false },
+      channels: { inbox: true, email: true, sms: false },
     },
     {
       key: "usage",
