@@ -232,6 +232,21 @@ interface CreateOrderResult {
   expireAt: string | null;
 }
 
+/** 升级折抵报价（product_330 §4.1）：金额两位小数字符串，比率 [0,1]。 */
+export interface UpgradeQuoteResult {
+  listPrice: string;
+  credit: string;
+  creditTime: string;
+  creditUsage: string;
+  payable: string;
+  leftover: string;
+  currency: string;
+  daysLeft: number;
+  daysTotal: number;
+  usageRemainingRatio: number;
+  consumableShare: number;
+}
+
 interface MyOrderRecord {
   orderId: string;
   orderNo: string;
@@ -1164,6 +1179,57 @@ export class SubscriptionRouter {
     } catch (err) {
       throw mapOrderError(err);
     }
+  }
+
+  // GET /api/subscription/upgrade-quote — 升级折抵报价（product_330 §4.1，零副作用）
+  // 与下单时落库的是同一函数；确认页拿它显示「套餐价 / 升级折抵 / 应付」。
+  @Get("upgrade-quote")
+  async getUpgradeQuote(
+    @Req() req: Request & RequestContext,
+    @Query()
+    query: {
+      subscriptionId?: string;
+      planVersionId?: string;
+      cycleUnit?: string;
+    },
+  ): Promise<UpgradeQuoteResult> {
+    if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
+    const subscriptionId = query.subscriptionId?.trim() ?? "";
+    const planVersionId = query.planVersionId?.trim() ?? "";
+    const cycleUnit = query.cycleUnit?.trim() ?? "";
+    if (!UUID_RE.test(subscriptionId))
+      throw new BadRequestException("subscriptionId 非法");
+    if (!planVersionId) throw new BadRequestException("planVersionId 不能为空");
+    if (!(CYCLE_UNITS as readonly string[]).includes(cycleUnit))
+      throw new BadRequestException("cycleUnit 必须是 month 或 year");
+    const target = await this.subscriptionService
+      .getSubscription(subscriptionId)
+      .catch(() => null);
+    if (!target || target.tenantId !== req.tenant.id)
+      throw new BadRequestException("订阅不存在或无权操作");
+    const plan = await this.lookupPlanPrice(planVersionId, cycleUnit);
+    if (!plan)
+      throw new BadRequestException({
+        code: "NOT_PURCHASABLE",
+        message: "该套餐/周期不可自助购买（如企业版请联系销售）",
+      });
+    const q = await this.orderService.quoteUpgrade(
+      subscriptionId,
+      Number(plan.price),
+    );
+    return {
+      listPrice: q.pNew.toFixed(2),
+      credit: q.credit.toFixed(2),
+      creditTime: q.creditTime.toFixed(2),
+      creditUsage: q.creditUsage.toFixed(2),
+      payable: q.payable.toFixed(2),
+      leftover: q.leftover.toFixed(2),
+      currency: plan.currency,
+      daysLeft: q.daysLeft,
+      daysTotal: q.daysTotal,
+      usageRemainingRatio: q.u,
+      consumableShare: q.alpha,
+    };
   }
 
   // GET /api/subscription/orders — 我的订单（租户维度合成视图）

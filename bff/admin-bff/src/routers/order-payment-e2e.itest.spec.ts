@@ -710,6 +710,88 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     expect(live.rows.length).toBe(1);
   }, 30_000);
 
+  it("§8.17 升级折抵（P2-a）：付费→付费，折抵随单落库、账单负行、履约后订阅换档实付=应付", async () => {
+    const versionOf = async (code: string) =>
+      (
+        await pool.query<{ id: string }>(
+          `select pv.id from product.plan_versions pv
+             join product.plans pl on pl.current_version_id = pv.id
+            where pl.plan_code = $1 limit 1`,
+          [code],
+        )
+      ).rows[0]?.id;
+    const starter = await versionOf("arda-starter");
+    const business = await versionOf("arda-business");
+    if (!starter || !business) return; // seed without the ladder: skip silently
+
+    const ws = await mkWorkspace();
+    const first = await orderService.createOrder({
+      tenantId,
+      workspaceId: ws,
+      planVersionId: starter,
+      cycleUnit: "month",
+      price: 1200,
+      createdBy: userId,
+      intent: "new",
+      itemName: "Arda Starter (e2e)",
+    });
+    await declare(first.order.id);
+    await confirm(first.order.id, 1200);
+    const subId = (await orderFacts(first.order.id)).subscriptionId!;
+
+    // 报价与下单同一函数：刚开通 → r≈1，未消耗 → u=1（若有消耗性池），credit ≈ P_old
+    const quote = await orderService.quoteUpgrade(subId, 3000);
+    expect(quote.credit).toBeGreaterThan(1100);
+    expect(quote.credit).toBeLessThanOrEqual(1200);
+    expect(quote.payable).toBeCloseTo(3000 - quote.credit, 2);
+
+    const up = await orderService.createOrder({
+      tenantId,
+      workspaceId: ws,
+      planVersionId: business,
+      cycleUnit: "month",
+      price: 3000,
+      createdBy: userId,
+      intent: "upgrade",
+      fromSubscriptionId: subId,
+      itemName: "Arda Business (e2e upgrade)",
+    });
+    expect(Number(up.order.listAmount)).toBe(3000);
+    expect(Number(up.order.creditAmount)).toBeCloseTo(quote.credit, 0);
+    expect(Number(up.order.payableAmount)).toBeCloseTo(quote.payable, 0);
+    expect(up.order.proration).toMatchObject({ pOld: 1200, pNew: 3000 });
+    const items = await pool.query<{ item_type: string; total_amount: string }>(
+      `select item_type, total_amount from billing.invoice_items
+        where bill_id = $1 and deleted_at is null order by item_type`,
+      [up.invoiceId],
+    );
+    expect(items.rows.map((i) => i.item_type)).toEqual([
+      "credit_adjustment",
+      "subscription_fee",
+    ]);
+    expect(Number(items.rows[0]!.total_amount)).toBeCloseTo(-quote.credit, 0);
+    const inv = (await orderFacts(up.order.id)).invoice!;
+    expect(Number(inv.payable_amount)).toBeCloseTo(quote.payable, 0);
+
+    // 付应付额 → 履约：换档到 business，实付 = 应付（折抵后），周期重锚
+    const payable = Number(up.order.payableAmount);
+    await declare(up.order.id);
+    await confirm(up.order.id, payable);
+    const after = await pool.query<{
+      plan_version_id: string;
+      paid_amount: string;
+      status: string;
+    }>(
+      `select plan_version_id, paid_amount, status from metering.subscriptions where id = $1`,
+      [subId],
+    );
+    expect(after.rows[0]).toMatchObject({
+      plan_version_id: business,
+      status: "active",
+    });
+    expect(Number(after.rows[0]!.paid_amount)).toBeCloseTo(payable, 2);
+  }, 30_000);
+
   it("§8.13 发券边界：超发 409、per_user_limit 409、门槛字段拒绝", async () => {
     const { batchId } = await mkVoucher("discount", {
       discount_type: "percent",

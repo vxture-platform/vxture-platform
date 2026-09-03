@@ -5,7 +5,17 @@ export type { FulfillResult } from "./service/order.service";
 export { ConsumeService } from "./service/consume.service";
 export { PgSubscriptionRepository } from "./repository/pg-subscription.repository";
 export { PgOrderRepository } from "./repository/pg-order.repository";
-export type { AutoRenewCandidate } from "./repository/pg-order.repository";
+export type {
+  AutoRenewCandidate,
+  ProrationBasis,
+} from "./repository/pg-order.repository";
+export {
+  computeProration,
+  cycleDays,
+  daysLeftOf,
+  DEFAULT_CONSUMABLE_SHARE,
+} from "./money/proration";
+export type { ProrationInput, ProrationResult } from "./money/proration";
 export type {
   OrderRecord,
   OrderStatus,

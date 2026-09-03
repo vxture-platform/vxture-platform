@@ -980,6 +980,35 @@ async function extractErrorMessage(
  * (status="active"); paid tiers create a pending offline order (status=
  * "pending_payment") returning the order no + bank-transfer instructions.
  */
+/** 升级折抵报价（product_330 §4.1）：金额两位小数字符串。 */
+export interface UpgradeQuote {
+  listPrice: string;
+  credit: string;
+  creditTime: string;
+  creditUsage: string;
+  payable: string;
+  leftover: string;
+  currency: string;
+  daysLeft: number;
+  daysTotal: number;
+  /** 剩余消耗性配额比 [0,1] */
+  usageRemainingRatio: number;
+  consumableShare: number;
+}
+
+/** 零副作用：确认页展示折抵；下单时服务端用同一函数再算一次落库。 */
+export async function fetchUpgradeQuote(params: {
+  subscriptionId: string;
+  planVersionId: string;
+  cycleUnit: "month" | "year";
+}): Promise<UpgradeQuote | null> {
+  const qs = new URLSearchParams(params);
+  return readJson<UpgradeQuote | null>(
+    `/api/subscription/upgrade-quote?${qs.toString()}`,
+    null,
+  );
+}
+
 export async function createSubscriptionOrder(body: {
   productCode: string;
   planVersionId: string;
