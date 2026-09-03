@@ -881,6 +881,42 @@ export class SubscriptionService {
   }
 
   /**
+   * 付费/免费订阅到期扫描（product_330 P2-c）：end_at 已过的在用订阅 → expired，走与
+   * updateSubscription 相同的写完成尾（deprovision-if-uncovered + C2 invalidate）。
+   * CAS：expectedStatus = 读到的当前状态，与并发的续订履约（updateSubscription 延长
+   * end_at / 复活）互不清 clobber——输了的一方 0 行 no-op。
+   */
+  async sweepExpiredSubscriptions(limit = 100): Promise<number> {
+    const rows = await this.repo.findExpiredSubscriptionIds(limit);
+    let transitioned = 0;
+    for (const { id, status } of rows) {
+      try {
+        const before = await this.getSubscription(id);
+        if (before.status !== status) continue; // moved since the scan
+        const result = await this.repo.update(id, before, {
+          status: "expired",
+          operatorType: "system",
+          operatorRemark: "cycle ended without renewal (expiry sweep)",
+          expectedStatus: status,
+        });
+        if (!result) {
+          this.logger.debug(
+            `expiry sweep: subscription ${id} changed under us, skipped (lost race)`,
+          );
+          continue;
+        }
+        await this.applyTransitionHooks(`expire:${id}`, id, before, result);
+        transitioned += 1;
+      } catch (err) {
+        this.logger.error(
+          `expiry sweep: subscription ${id} failed to transition — ${String(err)}`,
+        );
+      }
+    }
+    return transitioned;
+  }
+
+  /**
    * WS base storage pool ensure (owner 2026-08-20, usage-quota line): create
    * the `ws_base` storage.bytes pool for every live workspace that has none,
    * and reconcile active base pools to the configured platform default. Thin

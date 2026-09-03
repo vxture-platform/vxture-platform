@@ -1072,6 +1072,28 @@ export class PgSubscriptionRepository {
    * engine, not this sweep. Ordered oldest-first so a bounded pass drains
    * the backlog deterministically.
    */
+  /**
+   * 到期扫描候选（product_330 P2-c）：非试用、在用族（active/expiring/overdue）、end_at 已过。
+   * 返回当前状态供 CAS（expectedStatus）。自动续费在同一作业里先跑：续上的行 end_at 已后移，
+   * 自然不在此列；没续上的（付费单未付 / 无价目）到期即 expired，付款后履约再复活。
+   */
+  async findExpiredSubscriptionIds(
+    limit: number,
+  ): Promise<{ id: string; status: string }[]> {
+    const result = await this.pool.query<{ id: string; status: string }>(
+      `select id, status from metering.subscriptions
+        where subscription_kind <> 'trial'
+          and status in ('active', 'expiring', 'overdue')
+          and end_at is not null
+          and end_at <= now()
+          and deleted_at is null
+        order by end_at asc
+        limit $1`,
+      [limit],
+    );
+    return result.rows;
+  }
+
   async findLapsedTrialIds(limit: number): Promise<string[]> {
     const result = await this.pool.query<{ id: string }>(
       `select id from metering.subscriptions

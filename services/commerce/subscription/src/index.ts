@@ -5,6 +5,7 @@ export type { FulfillResult } from "./service/order.service";
 export { ConsumeService } from "./service/consume.service";
 export { PgSubscriptionRepository } from "./repository/pg-subscription.repository";
 export { PgOrderRepository } from "./repository/pg-order.repository";
+export type { AutoRenewCandidate } from "./repository/pg-order.repository";
 export type {
   OrderRecord,
   OrderStatus,

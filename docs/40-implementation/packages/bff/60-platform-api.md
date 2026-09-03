@@ -46,4 +46,5 @@
 
 - env：`/srv/vxture/runtime/.env.platform-api`（example 登记 + 39-audit-env 规则）；共享五键经 `secrets/platform.env`；DB 走 `platform_svc`（platform-app.env 覆盖层，TD-018 模式）；
 - `ARDA_PROVISION_WEBHOOK_SECRET` 随派发作业自 .env.admin-bff 迁入本 env（placeholder-optional，不阻塞部署）；
-- 作业节奏：`PROVISION_DISPATCH_INTERVAL_MS`（默认 10s）/ `SHARING_EXPIRY_SWEEP_INTERVAL_MS` / `TRIAL_EXPIRY_SWEEP_INTERVAL_MS`（默认 60s）。
+- 作业节奏：`PROVISION_DISPATCH_INTERVAL_MS`（默认 10s）/ `SHARING_EXPIRY_SWEEP_INTERVAL_MS` / `TRIAL_EXPIRY_SWEEP_INTERVAL_MS` / `ORDER_PAYMENT_SWEEP_INTERVAL_MS` / `SUBSCRIPTION_RENEWAL_SWEEP_INTERVAL_MS`（默认 60s）；
+- 续费引擎（product_330 P2-c，`SubscriptionRenewalJob`）：`SUBSCRIPTION_RENEW_LEAD_DAYS`（默认 7，到期前多少天开续订单）/ `SUBSCRIPTION_RENEW_GRACE_DAYS`（默认 3，续订单付款宽限）。
