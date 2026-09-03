@@ -41,6 +41,8 @@ const PopCore = require("@alicloud/pop-core") as new (config: {
 
 const DYPNS_ENDPOINT = "https://dypnsapi.aliyuncs.com";
 const DYPNS_API_VERSION = "2017-05-25";
+/** 短信服务（业务通知，SendSms）：与号码认证服务同一 apiVersion，不同 endpoint。 */
+const DYSMS_ENDPOINT = "https://dysmsapi.aliyuncs.com";
 
 /** 验证码位数；须与前端校验位数一致（前端要求 6 位）。可被 env 覆盖。 */
 const DEFAULT_CODE_LENGTH = 6;
@@ -63,6 +65,13 @@ interface DypnsResponse {
     BizId?: string;
     OutId?: string;
   };
+}
+
+interface DysmsResponse {
+  Code: string;
+  Message?: string;
+  RequestId?: string;
+  BizId?: string;
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -156,13 +165,65 @@ export class SmsService {
     return response.Code === "OK" && response.Model?.VerifyResult === "PASS";
   }
 
+  /**
+   * 业务通知短信（product_330 P2-i）：阿里云「短信服务」Dysmsapi SendSms，走已报备的通知类模板。
+   * 与验证码路径（号码认证服务 Dypnsapi 预置模板）不同：通知模板须在短信服务控制台按条报备，
+   * 签名用 ALIYUN_SMS_NOTIFY_SIGN_NAME（未设回落 ALIYUN_SMS_SIGN_NAME）。同一把 AccessKey 须有
+   * Dysmsapi 权限（AliyunDysmsFullAccess）。
+   * 未配置凭据：生产抛错（fail-closed），非生产只打印。
+   * @returns 阿里云 BizId（notification_logs.provider_message_id）
+   */
+  async sendTemplate(input: {
+    phone: string;
+    templateCode: string;
+    params: Record<string, string>;
+    outId?: string;
+  }): Promise<string | null> {
+    const signName =
+      process.env["ALIYUN_SMS_NOTIFY_SIGN_NAME"] ||
+      process.env["ALIYUN_SMS_SIGN_NAME"];
+    if (
+      !process.env["ALIYUN_SMS_ACCESS_KEY_ID"] ||
+      !process.env["ALIYUN_SMS_ACCESS_KEY_SECRET"] ||
+      !signName
+    ) {
+      if (process.env["NODE_ENV"] === "production") {
+        throw new Error(
+          "短信服务未配置（ALIYUN_SMS_*），生产环境拒绝发送通知短信",
+        );
+      }
+      console.log(
+        `[SMS Dev] notify phone=${input.phone} template=${input.templateCode} params=${JSON.stringify(input.params)}`,
+      );
+      return null;
+    }
+    const params: Record<string, unknown> = {
+      PhoneNumbers: input.phone,
+      SignName: signName,
+      TemplateCode: input.templateCode,
+      TemplateParam: JSON.stringify(input.params),
+    };
+    if (input.outId) params["OutId"] = input.outId;
+    const response = (await this.client(DYSMS_ENDPOINT).request(
+      "SendSms",
+      params,
+      { method: "POST" },
+    )) as DysmsResponse;
+    if (response.Code !== "OK") {
+      throw new Error(
+        `通知短信发送失败：${response.Message ?? ""}（${response.Code}）`,
+      );
+    }
+    return response.BizId ?? null;
+  }
+
   // ─── 私有方法 ─────────────────────────────────────────────────────────────
 
-  private client() {
+  private client(endpoint: string = DYPNS_ENDPOINT) {
     return new PopCore({
       accessKeyId: process.env["ALIYUN_SMS_ACCESS_KEY_ID"]!,
       accessKeySecret: process.env["ALIYUN_SMS_ACCESS_KEY_SECRET"]!,
-      endpoint: DYPNS_ENDPOINT,
+      endpoint,
       apiVersion: DYPNS_API_VERSION,
     });
   }

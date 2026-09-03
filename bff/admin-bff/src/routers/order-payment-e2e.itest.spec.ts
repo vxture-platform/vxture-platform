@@ -231,6 +231,9 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     // P2-g：客户通知（站内；邮件 sender 不注入 → 只落 inbox + inapp 账本）
     const notifier = new NotificationDispatcher(pool, {
       mail: null,
+      // P2-i：短信走假 sender + 一个模板码，验证账本落 sms 行（真阿里云在生产由 env 决定）
+      sms: { sendTemplate: async () => "BIZ-e2e" },
+      smsTemplates: { "order.fulfilled": "SMS_E2E" },
       logger: { warn: () => {} },
     });
     orderService.setCustomerNotifier(notifier);
@@ -942,12 +945,19 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     expect(inbox.rows.map((r) => r.template_code)).toEqual(["order.fulfilled"]);
     expect(inbox.rows[0]!.link).toBe(`/subscribe/pay/${orderId}`);
     expect(inbox.rows[0]!.read_at).toBeNull();
-    const logs = await pool.query<{ channel: string; status: string }>(
-      `select channel, status from support.notification_logs
-        where reference_type = 'order' and reference_id = $1`,
+    const logs = await pool.query<{
+      channel: string;
+      status: string;
+      provider_message_id: string | null;
+    }>(
+      `select channel, status, provider_message_id from support.notification_logs
+        where reference_type = 'order' and reference_id = $1 order by channel`,
       [orderId],
     );
-    expect(logs.rows).toEqual([{ channel: "inapp", status: "delivered" }]);
+    expect(logs.rows).toEqual([
+      { channel: "inapp", status: "delivered", provider_message_id: null },
+      { channel: "sms", status: "sent", provider_message_id: "BIZ-e2e" },
+    ]);
 
     // 幂等履约（已 fulfilled 直接返回）不再通知
     await orderService.fulfill(orderId, { actorType: "system", actorId: null });

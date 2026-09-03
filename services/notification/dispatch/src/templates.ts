@@ -153,6 +153,73 @@ export const NOTIFICATION_TEMPLATES: Record<
 
 export type TemplateParams = Record<string, string | number>;
 
+/**
+ * 短信模板变量（P2-i）。阿里云通知类模板变量有长度上限（20 字），这里统一截断；金额去掉货币符号
+ * （模板里写死「元」）。键名 = 报备模板里的 ${var}，见 deploy/secrets/platform-sms.env.example。
+ */
+export function smsParams(
+  code: NotificationTemplateCode,
+  params: TemplateParams,
+): Record<string, string> {
+  const s = (v: unknown, n = 20) => String(v ?? "").slice(0, n);
+  const money = (v: unknown) => s(String(v ?? "").replace(/[^0-9.]/g, ""));
+  const product = s(params.productName);
+  const plan = s(params.planName);
+  const order = s(params.orderNo);
+  switch (code) {
+    case "subscription.expiring_soon":
+      return { product, plan, date: s(params.endAt), days: s(params.days) };
+    case "subscription.expired":
+      return { product, plan, date: s(params.endAt) };
+    case "subscription.renewed":
+      return {
+        product,
+        plan,
+        date: s(params.endAt),
+        amount: money(params.amount),
+      };
+    case "order.fulfilled":
+      return {
+        product,
+        plan,
+        order,
+        date: s(params.endAt),
+        amount: money(params.amount),
+      };
+    case "order.renewal_created":
+      return {
+        product,
+        plan,
+        order,
+        amount: money(params.amount),
+        date: s(params.payBy),
+      };
+    case "refund.rejected":
+      return { order, reason: s(params.reason) };
+    case "refund.requested":
+    case "refund.approved":
+    case "refund.completed":
+      return { order, amount: money(params.amount) };
+    case "announcement.published":
+      return { title: s(params.title) };
+    default:
+      return {};
+  }
+}
+
+/** 环境变量 `ALIYUN_SMS_TPL_<模板键大写下划线>` → 阿里云模板码；没配的模板不发短信。 */
+export function smsTemplatesFromEnv(
+  env: Record<string, string | undefined> = process.env,
+): Partial<Record<NotificationTemplateCode, string>> {
+  const out: Partial<Record<NotificationTemplateCode, string>> = {};
+  for (const code of Object.keys(TITLES_ZH) as NotificationTemplateCode[]) {
+    const key = `ALIYUN_SMS_TPL_${code.toUpperCase().replace(/[.\-]/g, "_")}`;
+    const v = env[key]?.trim();
+    if (v) out[code] = v;
+  }
+  return out;
+}
+
 /** `{{name}}` 插值；缺参留空串（不抛：通知不因一个参数缺失而丢）。 */
 export function interpolate(template: string, params: TemplateParams): string {
   return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, key: string) => {

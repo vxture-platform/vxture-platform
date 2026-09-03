@@ -12,7 +12,11 @@ import { Logger, type Provider } from "@nestjs/common";
 import type { Pool } from "pg";
 import { MailService } from "@vxture/core-mail";
 import { NotificationPreferencesService } from "@vxture/service-account";
-import { NotificationDispatcher } from "@vxture/service-notification";
+import {
+  NotificationDispatcher,
+  smsTemplatesFromEnv,
+} from "@vxture/service-notification";
+import { SmsService } from "@vxture/service-sms";
 import {
   COMMERCE_PG_POOL,
   OrderService,
@@ -26,6 +30,7 @@ export const customerNotificationsProvider: Provider = {
   inject: [
     COMMERCE_PG_POOL,
     MailService,
+    SmsService,
     NotificationPreferencesService,
     OrderService,
     SubscriptionService,
@@ -33,12 +38,15 @@ export const customerNotificationsProvider: Provider = {
   useFactory: (
     pool: Pool,
     mail: MailService,
+    sms: SmsService,
     prefs: NotificationPreferencesService,
     orders: OrderService,
     subscriptions: SubscriptionService,
   ): NotificationDispatcher => {
     const dispatcher = new NotificationDispatcher(pool, {
       mail,
+      sms,
+      smsTemplates: smsTemplatesFromEnv(),
       prefs,
       consoleBaseUrl: process.env.CONSOLE_BASE_URL?.replace(/\/$/, ""),
       logger: new Logger("CustomerNotifications"),
