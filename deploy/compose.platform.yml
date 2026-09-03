@@ -306,6 +306,7 @@ services:
         /srv/vxture/runtime/secrets/platform.env,
         /srv/vxture/runtime/secrets/platform-app.env,
         /srv/vxture/runtime/secrets/platform-mail.env,
+        /srv/vxture/runtime/secrets/platform-sms.env, # P2-i：运营动作（履约 / 退款）触发的通知短信
         /srv/vxture/runtime/.env.admin-bff,
       ]
     depends_on:
@@ -393,6 +394,7 @@ services:
         /srv/vxture/runtime/secrets/platform.env,
         /srv/vxture/runtime/secrets/platform-app.env,
         /srv/vxture/runtime/secrets/platform-mail.env, # P2-g：作业发客户邮件（到期提醒 / 续费单 / 退款进度），同 console-bff 的 SMTP_*
+        /srv/vxture/runtime/secrets/platform-sms.env, # P2-i：通知短信（阿里云短信服务 SendSms，模板码见 platform-sms.env.example）
         /srv/vxture/runtime/.env.platform-api,
       ]
     depends_on:

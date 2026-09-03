@@ -126,6 +126,9 @@ importers:
       '@vxture/service-provisioning':
         specifier: workspace:*
         version: link:../../services/commerce/provisioning
+      '@vxture/service-sms':
+        specifier: workspace:*
+        version: link:../../services/notification/sms
       '@vxture/service-subscription':
         specifier: workspace:*
         version: link:../../services/commerce/subscription
@@ -529,6 +532,9 @@ importers:
       '@vxture/service-sharing':
         specifier: workspace:*
         version: link:../../services/platform/sharing
+      '@vxture/service-sms':
+        specifier: workspace:*
+        version: link:../../services/notification/sms
       '@vxture/service-subscription':
         specifier: workspace:*
         version: link:../../services/commerce/subscription

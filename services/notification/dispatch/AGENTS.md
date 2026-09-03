@@ -21,4 +21,5 @@
 - **收件人** = 调用方给的 ∪ 租户 owner。
 - 不引 Nest、不引邮件实现：sender / 偏好都是接口，由 BFF 装配处注入（platform-api / console-bff / admin-bff 各一个 wiring）。
 - 模板在代码里（`templates.ts`），键稳定（治理台「通知审计」按 `template_code` 搜）；文案只写机制不写承诺；zh-CN / en-US 两张平表按收件人 `user_profiles.language` 选（别写成同形对象字面量，Sonar 会判重复）。
+- 短信是第三通道（`SmsSender.sendTemplate`，阿里云短信服务 SendSms）：只在「模板配了 `ALIYUN_SMS_TPL_*` 模板码 + 用户开了 sms 偏好（默认关）+ 有手机号」时发；变量由 `smsParams` 截 20 字、金额去币符；账本 channel=sms、provider_message_id=BizId。验证码走的是另一条路（号码认证服务），别混。
 - 公告推送（`announcements.ts`）：行级 `meta.broadcast_at` + 收件人级唯一键两层幂等；公告自带语言与正文，`announcement.published` 模板只是 `{{title}}` / `{{content}}` 透传。

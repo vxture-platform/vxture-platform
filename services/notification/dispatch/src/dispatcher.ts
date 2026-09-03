@@ -15,6 +15,7 @@ import type { Pool } from "pg";
 import {
   localeOf,
   render,
+  smsParams,
   topicOf,
   type NotificationLocale,
   type NotificationReferenceType,
@@ -44,11 +45,21 @@ export interface MailSender {
   }): Promise<unknown>;
 }
 
+/** 短信发送方（P2-i）：阿里云短信服务 SendSms，模板码 + 变量；返回回执 id（BizId）。 */
+export interface SmsSender {
+  sendTemplate(input: {
+    phone: string;
+    templateCode: string;
+    params: Record<string, string>;
+    outId?: string;
+  }): Promise<string | null>;
+}
+
 export interface PreferenceGate {
   allows(
     userId: string,
     topic: NotificationTopic,
-    channel: "inbox" | "email",
+    channel: "inbox" | "email" | "sms",
   ): Promise<boolean>;
 }
 
@@ -59,6 +70,9 @@ export interface NotifyLogger {
 
 export interface NotificationDispatcherOptions {
   mail?: MailSender | null | undefined;
+  /** 短信：sender + 模板键 → 阿里云模板码（缺模板码的通知不发短信）。 */
+  sms?: SmsSender | null | undefined;
+  smsTemplates?: Partial<Record<NotificationTemplateCode, string>> | undefined;
   prefs?: PreferenceGate | null | undefined;
   /** 写进 notification_logs.provider；默认 "smtp"。 */
   provider?: string | undefined;
@@ -71,11 +85,17 @@ export interface NotifyResult {
   inboxCreated: number;
   emailsSent: number;
   emailsFailed: number;
+  smsSent: number;
+  smsFailed: number;
   skipped: number;
 }
 
 export class NotificationDispatcher {
   private readonly mail: MailSender | null;
+  private readonly sms: SmsSender | null;
+  private readonly smsTemplates: Partial<
+    Record<NotificationTemplateCode, string>
+  >;
   private readonly prefs: PreferenceGate | null;
   private readonly provider: string;
   private readonly consoleBaseUrl: string | null;
@@ -86,6 +106,8 @@ export class NotificationDispatcher {
     options: NotificationDispatcherOptions = {},
   ) {
     this.mail = options.mail ?? null;
+    this.sms = options.sms ?? null;
+    this.smsTemplates = options.smsTemplates ?? {};
     this.prefs = options.prefs ?? null;
     this.provider = options.provider ?? "smtp";
     this.consoleBaseUrl = options.consoleBaseUrl?.replace(/\/$/, "") ?? null;
@@ -99,6 +121,8 @@ export class NotificationDispatcher {
       inboxCreated: 0,
       emailsSent: 0,
       emailsFailed: 0,
+      smsSent: 0,
+      smsFailed: 0,
       skipped: 0,
     };
     const recipients = await this.resolveRecipients(input);
@@ -160,41 +184,22 @@ export class NotificationDispatcher {
           delivered: true,
         });
 
-        if (!this.mail) continue;
-        if (!(await this.allows(accountId, topic, "email"))) continue;
-        const email = recipient.email;
-        if (!email) continue;
-        let errorMessage: string | undefined;
-        try {
-          await this.mail.send({
-            to: email,
-            subject: rendered.subject,
-            html: rendered.html,
-            text: rendered.text,
-          });
-          result.emailsSent += 1;
-        } catch (err) {
-          result.emailsFailed += 1;
-          errorMessage = String(err instanceof Error ? err.message : err).slice(
-            0,
-            2000,
-          );
-          this.logger.warn(
-            `${input.templateCode} → ${email}: email failed — ${errorMessage}`,
-          );
-        }
-        await this.log({
-          tenantId: input.tenantId,
+        await this.sendEmail(
+          input,
           accountId,
-          channel: "email",
-          status: errorMessage === undefined ? "sent" : "failed",
-          templateCode: input.templateCode,
-          reference: input.reference,
-          recipient: email,
-          subject: rendered.subject,
-          provider: this.provider,
-          ...(errorMessage === undefined ? {} : { errorMessage }),
-        });
+          topic,
+          recipient.email,
+          rendered,
+          result,
+        );
+        await this.sendSms(
+          input,
+          accountId,
+          topic,
+          recipient.phone,
+          rendered,
+          result,
+        );
       } catch (err) {
         result.skipped += 1;
         this.logger.warn(
@@ -203,6 +208,98 @@ export class NotificationDispatcher {
       }
     }
     return result;
+  }
+
+  /** 邮件：有 sender、偏好允许、有邮箱才发；成功 / 失败各记一行账本，不抛。 */
+  private async sendEmail(
+    input: NotifyInput,
+    accountId: string,
+    topic: NotificationTopic,
+    email: string | null,
+    rendered: { subject: string; html: string; text: string },
+    result: NotifyResult,
+  ): Promise<void> {
+    if (!this.mail || !email) return;
+    if (!(await this.allows(accountId, topic, "email"))) return;
+    const outcome = await this.attempt(
+      () =>
+        this.mail!.send({
+          to: email,
+          subject: rendered.subject,
+          html: rendered.html,
+          text: rendered.text,
+        }),
+      `${input.templateCode} → ${email}: email failed`,
+    );
+    if (outcome.ok) result.emailsSent += 1;
+    else result.emailsFailed += 1;
+    await this.log({
+      tenantId: input.tenantId,
+      accountId,
+      channel: "email",
+      status: outcome.ok ? "sent" : "failed",
+      templateCode: input.templateCode,
+      reference: input.reference,
+      recipient: email,
+      subject: rendered.subject,
+      provider: this.provider,
+      ...(outcome.ok ? {} : { errorMessage: outcome.error }),
+    });
+  }
+
+  /** 短信（P2-i）：有 sender、该模板配了阿里云模板码、偏好允许（默认关）、有手机号才发。 */
+  private async sendSms(
+    input: NotifyInput,
+    accountId: string,
+    topic: NotificationTopic,
+    phone: string | null,
+    rendered: { title: string },
+    result: NotifyResult,
+  ): Promise<void> {
+    const templateCode = this.smsTemplates[input.templateCode];
+    if (!this.sms || !templateCode || !phone) return;
+    if (!(await this.allows(accountId, topic, "sms"))) return;
+    let bizId: string | null = null;
+    const outcome = await this.attempt(async () => {
+      bizId = await this.sms!.sendTemplate({
+        phone,
+        templateCode,
+        params: smsParams(input.templateCode, input.params),
+        outId: `${input.reference.type}:${input.reference.id}`.slice(0, 64),
+      });
+    }, `${input.templateCode} → ${phone}: sms failed`);
+    if (outcome.ok) result.smsSent += 1;
+    else result.smsFailed += 1;
+    await this.log({
+      tenantId: input.tenantId,
+      accountId,
+      channel: "sms",
+      status: outcome.ok ? "sent" : "failed",
+      templateCode: input.templateCode,
+      reference: input.reference,
+      recipient: phone,
+      subject: rendered.title,
+      provider: "aliyun",
+      providerMessageId: bizId,
+      ...(outcome.ok ? {} : { errorMessage: outcome.error }),
+    });
+  }
+
+  private async attempt(
+    fn: () => Promise<unknown>,
+    label: string,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    try {
+      await fn();
+      return { ok: true };
+    } catch (err) {
+      const error = String(err instanceof Error ? err.message : err).slice(
+        0,
+        2000,
+      );
+      this.logger.warn(`${label} — ${error}`);
+      return { ok: false, error };
+    }
   }
 
   /** 相对路径拼 console 前缀；已是绝对 URL（公告 CTA）原样进邮件；没前缀的相对路径不进邮件。 */
@@ -229,7 +326,7 @@ export class NotificationDispatcher {
   private async allows(
     userId: string,
     topic: NotificationTopic,
-    channel: "inbox" | "email",
+    channel: "inbox" | "email" | "sms",
   ): Promise<boolean> {
     if (!this.prefs) return true;
     try {
@@ -241,15 +338,18 @@ export class NotificationDispatcher {
     }
   }
 
-  /** 收件人邮箱 + 语言（一次查询）；查不到按 zh-CN、无邮箱。 */
-  private async lookupRecipient(
-    accountId: string,
-  ): Promise<{ email: string | null; locale: NotificationLocale }> {
+  /** 收件人邮箱 + 手机号 + 语言（一次查询）；查不到按 zh-CN、无邮箱无手机。 */
+  private async lookupRecipient(accountId: string): Promise<{
+    email: string | null;
+    phone: string | null;
+    locale: NotificationLocale;
+  }> {
     const res = await this.pool.query<{
       email: string | null;
+      phone: string | null;
       language: string | null;
     }>(
-      `select u.email, p.language
+      `select u.email, u.phone, p.language
          from account.users u
          left join account.user_profiles p on p.user_id = u.id
         where u.id = $1 and u.deleted_at is null`,
@@ -257,19 +357,25 @@ export class NotificationDispatcher {
     );
     const row = res.rows[0];
     const email = row?.email?.trim();
-    return { email: email ? email : null, locale: localeOf(row?.language) };
+    const phone = row?.phone?.trim();
+    return {
+      email: email ? email : null,
+      phone: phone ? phone : null,
+      locale: localeOf(row?.language),
+    };
   }
 
   private async log(row: {
     tenantId: string;
     accountId: string;
-    channel: "inapp" | "email";
+    channel: "inapp" | "email" | "sms";
     status: "sent" | "delivered" | "failed";
     templateCode: NotificationTemplateCode;
     reference: { type: NotificationReferenceType; id: string };
     recipient: string;
     subject: string;
     provider: string;
+    providerMessageId?: string | null;
     errorMessage?: string;
     delivered?: boolean;
   }): Promise<void> {
@@ -277,8 +383,8 @@ export class NotificationDispatcher {
       await this.pool.query(
         `insert into support.notification_logs
            (tenant_id, account_id, channel, template_code, status, reference_type, reference_id,
-            recipient, subject, provider, error_message, delivered_at)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, case when $12::boolean then now() end)`,
+            recipient, subject, provider, provider_message_id, error_message, delivered_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, case when $13::boolean then now() end)`,
         [
           row.tenantId,
           row.accountId,
@@ -290,6 +396,7 @@ export class NotificationDispatcher {
           row.recipient.slice(0, 256),
           row.subject.slice(0, 256),
           row.provider,
+          row.providerMessageId ?? null,
           row.errorMessage ?? null,
           row.delivered ?? false,
         ],

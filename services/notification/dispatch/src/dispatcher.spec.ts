@@ -35,14 +35,20 @@ function fakePool(
         channel: params[2],
         status: params[4],
         recipient: params[7],
-        error: params[10],
+        providerMessageId: params[10],
+        error: params[11],
       });
       return { rows: [], rowCount: 1 };
     }
     if (sql.includes("from account.users")) {
       const email = opts.emails?.[String(params[0])] ?? null;
       const language = opts.languages?.[String(params[0])] ?? null;
-      return { rows: [{ email, language }], rowCount: 1 };
+      return {
+        rows: [
+          { email, language, phone: `1390000${String(params[0]).length}` },
+        ],
+        rowCount: 1,
+      };
     }
     throw new Error(`unexpected sql: ${sql}`);
   });
@@ -86,7 +92,7 @@ describe("NotificationDispatcher", () => {
     const f = fakePool();
     const d = new NotificationDispatcher(f.pool);
     const out = await d.notify(input);
-    expect(out).toEqual({
+    expect(out).toMatchObject({
       inboxCreated: 1,
       emailsSent: 0,
       emailsFailed: 0,
@@ -98,6 +104,7 @@ describe("NotificationDispatcher", () => {
         channel: "inapp",
         status: "delivered",
         recipient: "owner-1",
+        providerMessageId: null,
         error: null,
       },
     ]);
@@ -109,7 +116,7 @@ describe("NotificationDispatcher", () => {
     const d = new NotificationDispatcher(f.pool, { mail });
     await d.notify(input);
     const again = await d.notify(input);
-    expect(again).toEqual({
+    expect(again).toMatchObject({
       inboxCreated: 0,
       emailsSent: 0,
       emailsFailed: 0,
@@ -148,7 +155,7 @@ describe("NotificationDispatcher", () => {
     };
     const d = new NotificationDispatcher(f.pool, { mail, prefs });
     const out = await d.notify(input);
-    expect(out).toEqual({
+    expect(out).toMatchObject({
       inboxCreated: 1,
       emailsSent: 0,
       emailsFailed: 0,
@@ -162,7 +169,7 @@ describe("NotificationDispatcher", () => {
       prefs: { allows: async () => false },
     });
     const out2 = await d2.notify(input);
-    expect(out2).toEqual({
+    expect(out2).toMatchObject({
       inboxCreated: 0,
       emailsSent: 0,
       emailsFailed: 0,
@@ -183,7 +190,7 @@ describe("NotificationDispatcher", () => {
       logger: { warn: () => {} },
     });
     const out = await d.notify(input);
-    expect(out).toEqual({
+    expect(out).toMatchObject({
       inboxCreated: 1,
       emailsSent: 0,
       emailsFailed: 1,
@@ -230,6 +237,60 @@ describe("NotificationDispatcher", () => {
     expect(sent.subject).toBe("[Vxture] 维护通知");
     expect(sent.text).toContain("周六 02:00 升级。");
     expect(sent.text).toContain("https://vxture.com/status");
+  });
+
+  it("sms: sent only when a template code is configured and the sms preference allows; logged with BizId", async () => {
+    const f = fakePool();
+    const sms = { sendTemplate: vi.fn(async () => "BIZ-1") };
+    const prefs = {
+      allows: vi.fn(
+        async (_u: string, _t: string, ch: string) => ch !== "email",
+      ),
+    };
+    // no template code for this notification → no sms
+    const silent = new NotificationDispatcher(f.pool, { sms, prefs });
+    const out0 = await silent.notify(input);
+    expect(out0.smsSent).toBe(0);
+    expect(sms.sendTemplate).not.toHaveBeenCalled();
+
+    const f2 = fakePool();
+    const d = new NotificationDispatcher(f2.pool, {
+      sms,
+      prefs,
+      smsTemplates: { "subscription.expiring_soon": "SMS_123" },
+    });
+    const out = await d.notify(input);
+    expect(out.smsSent).toBe(1);
+    const call = (
+      sms.sendTemplate.mock.calls as unknown as unknown[][]
+    )[0]![0] as {
+      phone: string;
+      templateCode: string;
+      params: Record<string, string>;
+      outId?: string;
+    };
+    expect(call.templateCode).toBe("SMS_123");
+    expect(call.params).toEqual({
+      product: "Arda",
+      plan: "Pro",
+      date: "2026-09-10",
+      days: "3",
+    });
+    expect(call.outId).toBe("subscription:sub-1:2026-09-10");
+    expect(f2.logs.map((l) => `${l.channel}:${l.status}`)).toEqual([
+      "inapp:delivered",
+      "sms:sent",
+    ]);
+
+    // sms preference off → not sent
+    const f3 = fakePool();
+    const d3 = new NotificationDispatcher(f3.pool, {
+      sms,
+      prefs: { allows: async (_u, _t, ch) => ch === "inbox" },
+      smsTemplates: { "subscription.expiring_soon": "SMS_123" },
+    });
+    const out3 = await d3.notify(input);
+    expect(out3.smsSent).toBe(0);
   });
 
   it("no owner and no explicit recipient → skipped, nothing written", async () => {

@@ -6,6 +6,7 @@ export {
   type NotifyLogger,
   type NotifyResult,
   type PreferenceGate,
+  type SmsSender,
 } from "./dispatcher";
 export {
   NOTIFICATION_TEMPLATES,
@@ -13,6 +14,8 @@ export {
   interpolate,
   localeOf,
   render,
+  smsParams,
+  smsTemplatesFromEnv,
   topicOf,
   type NotificationLocale,
   type NotificationReferenceType,

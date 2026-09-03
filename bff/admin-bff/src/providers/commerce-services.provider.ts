@@ -16,7 +16,11 @@ import { Logger, Provider } from "@nestjs/common";
 import { Pool } from "pg";
 import { MailService } from "@vxture/core-mail";
 import { NotificationPreferencesService } from "@vxture/service-account";
-import { NotificationDispatcher } from "@vxture/service-notification";
+import {
+  NotificationDispatcher,
+  smsTemplatesFromEnv,
+} from "@vxture/service-notification";
+import { SmsService } from "@vxture/service-sms";
 import {
   AddonService,
   OrderService,
@@ -56,6 +60,9 @@ function customerNotifier(
 ): NotificationDispatcher {
   return new NotificationDispatcher(pool, {
     mail,
+    // P2-i：通知短信（阿里云短信服务）；模板码 ALIYUN_SMS_TPL_*，没配的模板不发
+    sms: new SmsService(),
+    smsTemplates: smsTemplatesFromEnv(),
     prefs: new NotificationPreferencesService(pool),
     consoleBaseUrl: process.env.CONSOLE_BASE_URL?.replace(/\/$/, ""),
     logger: new Logger("CustomerNotifications"),
