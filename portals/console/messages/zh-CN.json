@@ -2485,7 +2485,8 @@
       "orderDetail": "订单详情",
       "orderMenu": "订单操作",
       "cancelHint": "仅待支付订单可取消",
-      "buyNoPermission": "你的角色没有付款权限,购买加油包请联系租户所有者"
+      "buyNoPermission": "你的角色没有付款权限,购买加油包请联系租户所有者",
+      "loadFailed": "加油包目录与订单读取失败，请重试"
     }
   },
   "usagePage": {
@@ -2808,12 +2809,19 @@
       "description": "待办从哪来",
       "derivedTitle": "派生式待办",
       "derivedBody": "本页不单独记录任务:每一项都来自真实业务状态(待付订单/临期订阅/配额水位/待接受邀请),处理源头后自动消失"
-    }
+    },
+    "loadFailed": "部分待办来源读取失败，列表可能不完整"
   },
   "destructive": {
     "titleTemplate": "{verb}{target}？",
     "cancel": "取消",
     "pending": "处理中…",
     "blocked": "前置条件未满足，先处理上面标红的那几条。"
+  },
+  "loadState": {
+    "title": "数据读取失败",
+    "description": "当前页面上的数字与列表不是真实数据，请重试；若持续失败请稍后再来。",
+    "retry": "重试",
+    "empty": "读取失败，暂时无法显示"
   }
 }

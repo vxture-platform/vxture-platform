@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   Badge,
+  Banner,
   Button,
   DataTable,
   EmptyState,
@@ -69,22 +70,44 @@ export function TodosPage() {
   const [quota, setQuota] = useState<ConsoleQuotaOverview | null>(null);
   const [pendingInvites, setPendingInvites] = useState(0);
   const [loading, setLoading] = useState(true);
+  /* 派生待办的来源是 strict 读(批 0b):一路失败只丢它自己那一类,但要告诉用户
+   * 「列表可能不完整」——沉默地少一条待办比报错更坏。 */
+  const [partialFailed, setPartialFailed] = useState(false);
 
   useEffect(() => {
+    let active = true;
     setLoading(true);
-    Promise.all([
+    setPartialFailed(false);
+    Promise.allSettled([
       canSeeCommerce ? fetchMyOrders() : Promise.resolve([]),
       canSeeCommerce ? fetchSubscribedProducts() : Promise.resolve([]),
       fetchQuotaOverview(),
       canManageMembers ? fetchInvitations() : Promise.resolve([]),
     ])
       .then(([ords, products, quotaOverview, invites]) => {
-        setOrders(ords);
-        setSubs(products);
-        setQuota(quotaOverview);
-        setPendingInvites(invites.filter((i) => i.status === "pending").length);
+        if (!active) return;
+        setOrders(ords.status === "fulfilled" ? ords.value : []);
+        setSubs(products.status === "fulfilled" ? products.value : []);
+        setQuota(
+          quotaOverview.status === "fulfilled" ? quotaOverview.value : null,
+        );
+        setPendingInvites(
+          invites.status === "fulfilled"
+            ? invites.value.filter((i) => i.status === "pending").length
+            : 0,
+        );
+        setPartialFailed(
+          [ords, products, quotaOverview, invites].some(
+            (r) => r.status === "rejected",
+          ),
+        );
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [session.tenant?.id, canManageMembers, canSeeCommerce]);
 
   const todos = useMemo<TodoRow[]>(() => {
@@ -185,6 +208,8 @@ export function TodosPage() {
         title={t("title")}
         description={t("description")}
       />
+
+      {partialFailed ? <Banner tone="warning" title={t("loadFailed")} /> : null}
 
       <PageSection
         icon="list-checks"

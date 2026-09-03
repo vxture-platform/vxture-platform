@@ -32,6 +32,10 @@ import type {
 import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import { fetchVouchers, type ConsoleVoucher } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import {
+  LoadFailedBanner,
+  LoadFailedEmpty,
+} from "@/components/load/LoadFailed";
 import { PageSection, SignalList } from "@/layout/shell";
 import { fmtDate, fmtTime } from "./components/hubModel";
 
@@ -61,13 +65,31 @@ export function VouchersPage() {
   const [vouchers, setVouchers] = useState<ConsoleVoucher[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<VoucherFilter>("available");
+  /* 读失败显影(批 0b):strict 读,失败置 loadFailed——指标画「—」、表格画「读取
+   * 失败」,不再把回落的 [] 画成「没有卡券」。 */
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    let active = true;
     setLoading(true);
+    setLoadFailed(false);
     fetchVouchers()
-      .then(setVouchers)
-      .finally(() => setLoading(false));
-  }, [session.tenant?.id]);
+      .then((rows) => {
+        if (active) setVouchers(rows);
+      })
+      .catch(() => {
+        if (!active) return;
+        setVouchers([]);
+        setLoadFailed(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [session.tenant?.id, reloadKey]);
 
   const kindLabel = (kind: string): string =>
     KNOWN_KINDS.has(kind) ? t(`kind.${kind}`) : kind;
@@ -117,14 +139,17 @@ export function VouchersPage() {
       (v) => new Date(v.expiresAt).getTime() - Date.now() < 7 * 86_400_000,
     ).length;
     const used = vouchers.filter((v) => v.status === "redeemed").length;
+    // 没读到就是「—」:读失败时的 0 不是没有券,是没有数据。
+    const count = (n: number) => (loadFailed ? "—" : String(n));
     return [
       {
         id: "available",
         icon: "ticket",
         label: t("metrics.available"),
-        value: String(available.length),
-        trend:
-          soon > 0
+        value: count(available.length),
+        trend: loadFailed
+          ? ""
+          : soon > 0
             ? t("metrics.expiringSoon", { count: soon })
             : t("metrics.noExpiring"),
         ...(soon > 0 ? { trendTone: "warning" as const } : {}),
@@ -133,18 +158,18 @@ export function VouchersPage() {
         id: "used",
         icon: "seal-check",
         label: t("metrics.used"),
-        value: String(used),
-        trend: t("metrics.usedHint"),
+        value: count(used),
+        trend: loadFailed ? "" : t("metrics.usedHint"),
       },
       {
         id: "total",
         icon: "stack",
         label: t("metrics.total"),
-        value: String(vouchers.length),
-        trend: t("metrics.totalHint"),
+        value: count(vouchers.length),
+        trend: loadFailed ? "" : t("metrics.totalHint"),
       },
     ];
-  }, [vouchers, t]);
+  }, [vouchers, t, loadFailed]);
 
   const columns: DataTableColumn<ConsoleVoucher>[] = [
     {
@@ -222,6 +247,13 @@ export function VouchersPage() {
         description={t("description")}
       />
 
+      {loadFailed ? (
+        <LoadFailedBanner
+          onRetry={() => setReloadKey((k) => k + 1)}
+          retrying={loading}
+        />
+      ) : null}
+
       <MetricGrid
         items={metrics}
         columns={3}
@@ -252,7 +284,13 @@ export function VouchersPage() {
           rowKey={(v) => v.id}
           loading={loading}
           indexStart={1}
-          empty={<EmptyState title={t("table.empty")} />}
+          empty={
+            loadFailed ? (
+              <LoadFailedEmpty />
+            ) : (
+              <EmptyState title={t("table.empty")} />
+            )
+          }
         />
       </PageSection>
 
