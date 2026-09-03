@@ -55,6 +55,41 @@ interface OrderRow {
   updated_at: Date;
 }
 
+interface AutoRenewCandidateRow {
+  id: string;
+  tenant_id: string;
+  workspace_id: string;
+  product_id: string;
+  plan_version_id: string;
+  cycle_unit: string;
+  cycle_count: number;
+  end_at: Date;
+  status: string;
+  subscription_kind: string;
+  created_by_id: string | null;
+  currency: string | null;
+  plan_name: string;
+  price: string | null;
+}
+
+export interface AutoRenewCandidate {
+  subscriptionId: string;
+  tenantId: string;
+  workspaceId: string;
+  productId: string;
+  planVersionId: string;
+  cycleUnit: string;
+  cycleCount: number;
+  endAt: Date;
+  status: string;
+  kind: string;
+  createdById: string | null;
+  currency: string;
+  planName: string;
+  /** 同周期价目（NUMERIC 字符串）；null = 无价目，不能自动续 */
+  price: string | null;
+}
+
 interface InvoiceRow {
   id: string;
   bill_no: string;
@@ -143,6 +178,7 @@ export class PgOrderRepository {
       const orderNo = visibleCode("ORD");
       const billNo = visibleCode("INV");
       const currency = input.currency ?? "CNY";
+      const createdByType: OrderActorType = input.createdByType ?? "customer";
 
       let orderRow: OrderRow;
       try {
@@ -159,7 +195,7 @@ export class PgOrderRepository {
                order by pc.priority asc, pc.sort_order asc limit 1),
              $4, $5, $6, 1, $7,
              $8, 0, $8, 0, $9,
-             'pending_payment', $10, 'customer', $11, now(), now()
+             'pending_payment', $10, $12, $11, now(), now()
            ) returning *`,
           [
             orderNo,
@@ -173,6 +209,7 @@ export class PgOrderRepository {
             currency,
             input.paymentTtlMinutes ?? null,
             input.createdBy,
+            createdByType,
           ],
         );
         orderRow = res.rows[0]!;
@@ -201,7 +238,7 @@ export class PgOrderRepository {
            $1, $2, $3, $4, to_char(now(), 'YYYYMM'),
            now()::date, (now() + ('1 ' || $5)::interval)::date,
            $6, $6, 0, $7,
-           'unpaid', 'normal', 'customer', $8, $9,
+           'unpaid', 'normal', $10, $8, $9,
            now(), now()
          ) returning id`,
         [
@@ -214,6 +251,7 @@ export class PgOrderRepository {
           currency,
           input.createdBy,
           JSON.stringify({ intent: input.intent, order_no: orderNo }),
+          createdByType,
         ],
       );
       const invoiceId = invoice.rows[0]!.id;
@@ -238,7 +276,7 @@ export class PgOrderRepository {
         eventType: "created",
         fromStatus: null,
         toStatus: "pending_payment",
-        actorType: "customer",
+        actorType: createdByType,
         actorId: input.createdBy,
         remark: JSON.stringify({ intent: input.intent, price: input.price }),
       });
@@ -384,6 +422,94 @@ export class PgOrderRepository {
   }
 
   /**
+   * 自动续费候选（product_330 P2-c）：auto_renew 开、在用族、非试用、end_at 落在 leadDays 内，
+   * 同产品没有在途订单，且 leadDays 窗口内没为它开过续订单（避免关单后反复重开）。
+   * 带同周期价目（缺价目 = 自定义/企业档 → 调用方跳过并记日志）与套餐名。
+   */
+  async findAutoRenewCandidates(
+    leadDays: number,
+    limit: number,
+  ): Promise<AutoRenewCandidate[]> {
+    const res = await this.pool.query<AutoRenewCandidateRow>(
+      `select s.id, s.tenant_id, s.workspace_id, s.product_id, s.plan_version_id,
+              s.cycle_unit, s.cycle_count, s.end_at, s.status, s.subscription_kind,
+              s.created_by_id, s.currency,
+              pl.plan_name,
+              pp.price::text as price
+         from metering.subscriptions s
+         join product.plan_versions pv on pv.id = s.plan_version_id
+         join product.plans pl on pl.id = pv.plan_id
+         left join product.plan_prices pp
+           on pp.plan_version_id = s.plan_version_id
+          and pp.cycle_unit = s.cycle_unit and pp.cycle_count = s.cycle_count
+          and pp.currency = coalesce(s.currency, 'CNY')
+        where s.auto_renew = true
+          and s.deleted_at is null
+          and s.subscription_kind <> 'trial'
+          and s.status in ('active', 'expiring', 'overdue')
+          and s.cycle_unit <> 'perpetual'
+          and s.end_at is not null
+          and s.end_at <= now() + make_interval(days => $1)
+          and s.product_id is not null
+          and not exists (
+            select 1 from billing.orders o
+             where o.workspace_id = s.workspace_id and o.product_id = s.product_id
+               and o.status in ('pending_payment', 'pending_verify', 'paid')
+          )
+          and not exists (
+            select 1 from billing.orders o
+             where o.from_subscription_id = s.id and o.intent = 'renew'
+               and o.created_at > now() - make_interval(days => $1)
+          )
+        order by s.end_at asc
+        limit $2`,
+      [leadDays, limit],
+    );
+    return res.rows.map((r) => ({
+      subscriptionId: r.id,
+      tenantId: r.tenant_id,
+      workspaceId: r.workspace_id,
+      productId: r.product_id,
+      planVersionId: r.plan_version_id,
+      cycleUnit: r.cycle_unit,
+      cycleCount: r.cycle_count,
+      endAt: r.end_at,
+      status: r.status,
+      kind: r.subscription_kind,
+      createdById: r.created_by_id,
+      currency: r.currency ?? "CNY",
+      planName: r.plan_name,
+      price: r.price,
+    }));
+  }
+
+  /** 已收款（¥0 即时结清）：在订单事务内把账单记 paid、订单翻 paid。 */
+  async settleZeroOrderTx(
+    client: PoolClient,
+    order: OrderRecord,
+    invoiceId: string,
+    actor: OrderActor,
+  ): Promise<void> {
+    await client.query(
+      `update billing.invoices
+          set bill_status = 'paid', paid_at = now(), payment_method = 'voucher', updated_at = now()
+        where id = $1 and bill_status in ('unpaid', 'partial')`,
+      [invoiceId],
+    );
+    await this.markPaidTx(client, order.id);
+    await this.insertEventTx(client, {
+      orderId: order.id,
+      eventType: "payment_confirmed",
+      fromStatus: order.status,
+      toStatus: "paid",
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+      remark: actor.remark ?? "zero-amount order settled",
+      clientIp: actor.clientIp ?? null,
+    });
+  }
+
+  /**
    * 履约条款落到订阅（product_330 §4）：
    *  - new     ：paid_amount / current_order_id（行本身由 SubscriptionService.createSubscription 建）
    *  - upgrade ：cycle 取订单、start=now、end=now+周期、pay/paid_amount=订单实付、current_order_id；周期池重锚
@@ -421,12 +547,7 @@ export class PgOrderRepository {
             `${terms.cycleCount} ${terms.cycleUnit}`,
           ],
         );
-        await client.query(
-          `update metering.quota_pools
-              set period_anchor = now(), current_period_start = now(), updated_at = now()
-            where subscription_id = $1 and status = 'active' and reset_period <> 'none'`,
-          [subscriptionId],
-        );
+        await this.reanchorPeriodicPoolsTx(client, subscriptionId);
       } else if (terms.mode === "renew") {
         await client.query(
           `update metering.subscriptions
@@ -442,6 +563,25 @@ export class PgOrderRepository {
             terms.orderId,
           ],
         );
+        // 续订 = 新周期（product_330 P2-c）：按周期发放的消耗性池（reset_period='none'、
+        // pool_source='subscription'）归零重发——归零走 quota_pool_resets 审计（与月度归零同款，
+        // 保 quota_used 可重建）；周期池（day/month）重锚到 now。
+        await client.query(
+          `insert into metering.quota_pool_resets (pool_id, period_start, used_before_reset, reset_at)
+           select id, coalesce(current_period_start, period_anchor, effective_at), quota_used, now()
+             from metering.quota_pools
+            where subscription_id = $1 and status = 'active'
+              and pool_source = 'subscription' and reset_period = 'none' and quota_used > 0`,
+          [subscriptionId],
+        );
+        await client.query(
+          `update metering.quota_pools
+              set quota_used = 0, effective_at = now(), updated_at = now()
+            where subscription_id = $1 and status = 'active'
+              and pool_source = 'subscription' and reset_period = 'none' and quota_used > 0`,
+          [subscriptionId],
+        );
+        await this.reanchorPeriodicPoolsTx(client, subscriptionId);
       } else {
         await client.query(
           `update metering.subscriptions
@@ -726,6 +866,19 @@ export class PgOrderRepository {
       [orderId],
     );
     return res.rows[0]?.remark ?? null;
+  }
+
+  /** 新周期起点：周期池（day/month）锚点与当前期起点都拨到 now（升级 / 续订共用）。 */
+  private async reanchorPeriodicPoolsTx(
+    client: PoolClient,
+    subscriptionId: string,
+  ): Promise<void> {
+    await client.query(
+      `update metering.quota_pools
+          set period_anchor = now(), current_period_start = now(), updated_at = now()
+        where subscription_id = $1 and status = 'active' and reset_period <> 'none'`,
+      [subscriptionId],
+    );
   }
 
   private mapOrder(row: OrderRow): OrderRecord {

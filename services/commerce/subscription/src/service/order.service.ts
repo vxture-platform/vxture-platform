@@ -452,6 +452,87 @@ export class OrderService {
     return { order: fresh, subscription };
   }
 
+  /**
+   * 自动续费引擎（product_330 P2-c，线下收款世界）：到期前 leadDays 内、auto_renew 开的订阅
+   *  - ¥0（free）：开 renew 单 → 同事务结清 → 立即履约（end_at 顺延一个周期，池重发）
+   *  - 付费：开 renew 单（system 下单，TTL = 到期 + graceDays），客户在「我的订单」付款；
+   *    到期未付 → 到期扫描翻 expired，付款履约再复活；TTL 到 → 单关闭
+   *  - 无同周期价目（自定义/企业档）：跳过并记日志（运营手工续）
+   * 每单独立事务、失败只记日志；重复保护在候选查询里（在途单 / lead 窗口内已开过）。
+   */
+  async runAutoRenewalPass(options: {
+    leadDays: number;
+    graceDays: number;
+    limit?: number;
+  }): Promise<{ created: number; fulfilled: number; skipped: number }> {
+    const candidates = await this.orders.findAutoRenewCandidates(
+      options.leadDays,
+      options.limit ?? 100,
+    );
+    let created = 0;
+    let fulfilled = 0;
+    let skipped = 0;
+    for (const c of candidates) {
+      if (c.price === null) {
+        skipped += 1;
+        this.logger.warn(
+          `auto-renew: subscription ${c.subscriptionId} has no ${c.cycleCount} ${c.cycleUnit} price row — skipped (manual renewal)`,
+        );
+        continue;
+      }
+      try {
+        const ttlMinutes = Math.max(
+          60,
+          Math.ceil(
+            (c.endAt.getTime() + options.graceDays * 86_400_000 - Date.now()) /
+              60_000,
+          ),
+        );
+        const { order, invoiceId } = await this.orders.createOrder({
+          tenantId: c.tenantId,
+          workspaceId: c.workspaceId,
+          planVersionId: c.planVersionId,
+          cycleUnit: c.cycleUnit,
+          price: Number(c.price),
+          currency: c.currency,
+          createdBy: null,
+          createdByType: "system",
+          intent: "renew",
+          fromSubscriptionId: c.subscriptionId,
+          itemName: c.planName,
+          paymentTtlMinutes: ttlMinutes,
+        });
+        created += 1;
+        if (Number(c.price) > 0) continue;
+
+        const actor: OrderActor = {
+          actorType: "system",
+          actorId: null,
+          remark: "auto-renew (¥0)",
+        };
+        await this.orders.withOrderTx(
+          order.id,
+          async ({ client, order: locked }) => {
+            if (locked.status !== "pending_payment") return;
+            await this.orders.settleZeroOrderTx(
+              client,
+              locked,
+              invoiceId,
+              actor,
+            );
+          },
+        );
+        await this.fulfill(order.id, actor);
+        fulfilled += 1;
+      } catch (err) {
+        this.logger.error(
+          `auto-renew: subscription ${c.subscriptionId} failed — ${String(err)}`,
+        );
+      }
+    }
+    return { created, fulfilled, skipped };
+  }
+
   async cancel(
     orderId: string,
     actor: OrderActor,

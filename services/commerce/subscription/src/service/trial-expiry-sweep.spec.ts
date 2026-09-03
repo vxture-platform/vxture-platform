@@ -1,37 +1,24 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SubscriptionService } from "./subscription.service";
-import type { PgSubscriptionRepository } from "../repository/pg-subscription.repository";
-import type { ProvisioningService } from "@vxture/service-provisioning";
-import type { SubscriptionRecord } from "../types/subscription.types";
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  buildSweepMocks,
+  subscriptionFixture,
+  type SweepMocks,
+} from "./sweep-spec.helpers";
 
 // Trial-expiry sweep unit tests (product_310 D10): repo + provisioning are
 // mocked; the subject is the sweep loop — each lapsed trial goes through
 // updateSubscription (so the status-transition wiring fires) and a per-row
 // failure never aborts the pass.
 
-const trialSub = (id: string, status = "trialing"): SubscriptionRecord => ({
-  id,
-  tenantId: "org-1",
-  workspaceId: "ws-1",
-  planVersionId: "pv-1",
-  cycleType: "monthly",
-  cycleCount: 1,
-  startAt: new Date("2026-06-01T00:00:00Z"),
-  endAt: null,
-  trialEndAt: new Date("2026-07-01T00:00:00Z"),
-  status,
-  subscriptionKind: "trial",
-  activationMethod: "trial",
-  autoRenew: false,
-  orderNo: null,
-  payAmount: null,
-  currency: "CNY",
-  createdBy: "u-1",
-  updatedBy: null,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  deletedAt: null,
-});
+const trialSub = (id: string, status = "trialing") =>
+  subscriptionFixture({
+    id,
+    status,
+    trialEndAt: new Date("2026-07-01T00:00:00Z"),
+    subscriptionKind: "trial",
+    activationMethod: "trial",
+    autoRenew: false,
+  });
 
 const ARDA = {
   productId: "prod-arda",
@@ -39,51 +26,9 @@ const ARDA = {
   planCode: "arda-beta-trial",
 };
 
-interface Mocks {
-  repo: {
-    update: ReturnType<typeof vi.fn>;
-    getById: ReturnType<typeof vi.fn>;
-    findLapsedTrialIds: ReturnType<typeof vi.fn>;
-    listVersionProducts: ReturnType<typeof vi.fn>;
-    hasOtherActiveCoverage: ReturnType<typeof vi.fn>;
-  };
-  provisioning: {
-    onSubscriptionActivated: ReturnType<typeof vi.fn>;
-    onSubscriptionDeactivated: ReturnType<typeof vi.fn>;
-    enqueueEvent: ReturnType<typeof vi.fn>;
-  };
-  service: SubscriptionService;
-}
-
-const build = (): Mocks => {
-  const repo = {
-    update: vi.fn(),
-    getById: vi.fn(),
-    findLapsedTrialIds: vi.fn().mockResolvedValue([]),
-    listVersionProducts: vi.fn().mockResolvedValue([ARDA]),
-    hasOtherActiveCoverage: vi.fn().mockResolvedValue(false),
-  };
-  const provisioning = {
-    onSubscriptionActivated: vi
-      .fn()
-      .mockResolvedValue({ deliveryId: "d", seq: 1 }),
-    onSubscriptionDeactivated: vi
-      .fn()
-      .mockResolvedValue({ deliveryId: "d", seq: 2 }),
-    enqueueEvent: vi.fn().mockResolvedValue("d-evt"),
-  };
-  const service = new SubscriptionService(
-    repo as unknown as PgSubscriptionRepository,
-    provisioning as unknown as ProvisioningService,
-    // Voucher-less suite: promotion is out of scope here (declare specs own it).
-    { reserveForOrder: async () => [] } as never,
-  );
-  return { repo, provisioning, service };
-};
-
 describe("sweepLapsedTrials", () => {
-  let m: Mocks;
-  beforeEach(() => (m = build()));
+  let m: SweepMocks;
+  beforeEach(() => (m = buildSweepMocks(ARDA)));
 
   it("no lapsed trials → no writes, returns 0", async () => {
     await expect(m.service.sweepLapsedTrials()).resolves.toBe(0);

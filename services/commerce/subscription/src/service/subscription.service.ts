@@ -853,19 +853,36 @@ export class SubscriptionService {
    */
   async sweepLapsedTrials(limit = 100): Promise<number> {
     const ids = await this.repo.findLapsedTrialIds(limit);
+    return this.sweepToExpired(
+      ids.map((id) => ({ id, status: "trialing" })),
+      "trial expiry sweep",
+      "trial ended without conversion (expiry sweep)",
+    );
+  }
+
+  /**
+   * 共享的"→ expired"扫描循环（trial 与付费/免费到期共用）：每行 CAS 到读到的当前状态，
+   * 输了竞态的行 0 行 no-op 静默跳过；单行失败只记日志，趟不中断。
+   */
+  private async sweepToExpired(
+    rows: { id: string; status: string }[],
+    label: string,
+    remark: string,
+  ): Promise<number> {
     let transitioned = 0;
-    for (const id of ids) {
+    for (const { id, status } of rows) {
       try {
         const before = await this.getSubscription(id);
+        if (before.status !== status) continue; // moved since the scan
         const result = await this.repo.update(id, before, {
           status: "expired",
           operatorType: "system",
-          operatorRemark: "trial ended without conversion (expiry sweep)",
-          expectedStatus: "trialing",
+          operatorRemark: remark,
+          expectedStatus: status,
         });
         if (!result) {
           this.logger.debug(
-            `trial expiry sweep: subscription ${id} no longer trialing, skipped (lost race)`,
+            `${label}: subscription ${id} changed under us, skipped (lost race)`,
           );
           continue;
         }
@@ -873,11 +890,26 @@ export class SubscriptionService {
         transitioned += 1;
       } catch (err) {
         this.logger.error(
-          `trial expiry sweep: subscription ${id} failed to transition — ${String(err)}`,
+          `${label}: subscription ${id} failed to transition — ${String(err)}`,
         );
       }
     }
     return transitioned;
+  }
+
+  /**
+   * 付费/免费订阅到期扫描（product_330 P2-c）：end_at 已过的在用订阅 → expired，走与
+   * updateSubscription 相同的写完成尾（deprovision-if-uncovered + C2 invalidate）。
+   * CAS：expectedStatus = 读到的当前状态，与并发的续订履约（updateSubscription 延长
+   * end_at / 复活）互不清 clobber——输了的一方 0 行 no-op。
+   */
+  async sweepExpiredSubscriptions(limit = 100): Promise<number> {
+    const rows = await this.repo.findExpiredSubscriptionIds(limit);
+    return this.sweepToExpired(
+      rows,
+      "expiry sweep",
+      "cycle ended without renewal (expiry sweep)",
+    );
   }
 
   /**

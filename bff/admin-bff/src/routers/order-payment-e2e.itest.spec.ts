@@ -58,6 +58,7 @@ const CAPS_PROMO = ["promotion:campaign.manage"];
 describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
   let pool: Pool;
   let orderService: OrderService;
+  let subscriptionsService: SubscriptionService;
   let promotion: PromotionService;
   let orders: OrdersRouter;
   let payments: PaymentsRouter;
@@ -123,6 +124,25 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       [batchId],
     );
     return { batchId, voucherId: row.rows[0]!.id };
+  }
+
+  /** 无券申报（支付宝）。 */
+  async function declare(orderId: string) {
+    return orderService.declarePayment({
+      orderId,
+      tenantId,
+      userId,
+      payChannel: "alipay",
+    });
+  }
+
+  /** 运营足额确认收款。 */
+  async function confirm(orderId: string, amount: number) {
+    return orders.confirmOfflinePayment(
+      req(CAPS_SETTLE),
+      orderId,
+      CONFIRM(amount),
+    );
   }
 
   async function orderFacts(orderId: string) {
@@ -199,6 +219,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       provisioning,
       promotion,
     );
+    subscriptionsService = subscriptions;
     orderService = new OrderService(
       new PgOrderRepository(pool),
       subRepo,
@@ -502,12 +523,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
 
   it("§8.7 取消边界：已申报订单 cancel 409；恢复过期单回到待付款", async () => {
     const orderId = await mkOrder(300);
-    await orderService.declarePayment({
-      orderId,
-      tenantId,
-      userId,
-      payChannel: "alipay",
-    });
+    await declare(orderId);
     await expect(
       orderService.cancel(orderId, {
         actorType: "customer",
@@ -726,12 +742,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
 
   it("§8.14 台账封堵：在途订单腿 verify/reject 均 409 引导订单侧", async () => {
     const orderId = await mkOrder(700);
-    await orderService.declarePayment({
-      orderId,
-      tenantId,
-      userId,
-      payChannel: "alipay",
-    });
+    await declare(orderId);
     const leg = await pool.query<{ id: string }>(
       `select p.id from billing.payments p
         join billing.invoices i on i.id = p.bill_id
@@ -750,5 +761,152 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     await expect(
       payments.rejectPayment(req(ledgerCaps), legId, { remark: "e2e-reject" }),
     ).rejects.toBeInstanceOf(ConflictException);
+  }, 30_000);
+
+  it("§8.15 自动续费（¥0）：到期前 lead 窗口内系统开单、结清、履约，到期日顺延一个周期", async () => {
+    const freePv = await pool.query<{ id: string }>(
+      `select pv.id from product.plan_versions pv
+         join product.plans pl on pl.current_version_id = pv.id
+        where pl.plan_code = 'arda-free' limit 1`,
+    );
+    const freeVersion = freePv.rows[0]?.id;
+    if (!freeVersion) return; // seed without a free tier: skip silently
+    const ws = await mkWorkspace();
+    const free = await orderService.createOrder({
+      tenantId,
+      workspaceId: ws,
+      planVersionId: freeVersion,
+      cycleUnit: "month",
+      price: 0,
+      createdBy: userId,
+      intent: "new",
+      itemName: "Arda Free (e2e auto-renew)",
+    });
+    await orderService.declarePayment({
+      orderId: free.order.id,
+      tenantId,
+      userId,
+      payChannel: "alipay",
+    });
+    const subId = (await orderFacts(free.order.id)).subscriptionId!;
+    // 把到期日拉到 1 天后（lead 7 天内），保证 auto_renew 开
+    const soon = new Date(Date.now() + 86_400_000);
+    await pool.query(
+      `update metering.subscriptions set end_at = $2, auto_renew = true where id = $1`,
+      [subId, soon],
+    );
+    const pass = await orderService.runAutoRenewalPass({
+      leadDays: 7,
+      graceDays: 3,
+    });
+    expect(pass.fulfilled).toBeGreaterThanOrEqual(1);
+
+    const after = await pool.query<{
+      end_at: Date;
+      status: string;
+      current_order_id: string | null;
+    }>(
+      `select end_at, status, current_order_id from metering.subscriptions where id = $1`,
+      [subId],
+    );
+    // 顺延：新 end ≈ 旧 end + 1 month（以旧 end 为基，不是 now）
+    expect(after.rows[0]!.status).toBe("active");
+    expect(after.rows[0]!.end_at.getTime()).toBeGreaterThan(
+      soon.getTime() + 27 * 86_400_000,
+    );
+    const renewOrder = await pool.query<{
+      status: string;
+      intent: string;
+      created_by_type: string;
+    }>(
+      `select status, intent, created_by_type from billing.orders where id = $1`,
+      [after.rows[0]!.current_order_id],
+    );
+    expect(renewOrder.rows[0]).toEqual({
+      status: "fulfilled",
+      intent: "renew",
+      created_by_type: "system",
+    });
+
+    // 幂等：同一 lead 窗口内再跑不重复开单
+    const again = await orderService.runAutoRenewalPass({
+      leadDays: 7,
+      graceDays: 3,
+    });
+    const dup = await pool.query(
+      `select 1 from billing.orders where from_subscription_id = $1 and intent = 'renew'`,
+      [subId],
+    );
+    expect(dup.rows.length).toBe(1);
+    expect(again.created).toBe(0);
+  }, 30_000);
+
+  it("§8.16 付费到期：续订单挂待付款、到期扫描翻 expired、付款履约复活", async () => {
+    const orderId = await mkOrder(1200);
+    await declare(orderId);
+    await confirm(orderId, 1200);
+    const subId = (await orderFacts(orderId)).subscriptionId!;
+    // 到期不续（auto_renew 关）：到期扫描翻 expired，权益按 DEACTIVATED 走钩子
+    await pool.query(
+      `update metering.subscriptions set end_at = now() - interval '1 hour', auto_renew = false
+        where id = $1`,
+      [subId],
+    );
+    const expired = await subscriptionsService.sweepExpiredSubscriptions(500);
+    expect(expired).toBeGreaterThanOrEqual(1);
+    const st = await pool.query<{ status: string }>(
+      `select status from metering.subscriptions where id = $1`,
+      [subId],
+    );
+    expect(st.rows[0]!.status).toBe("expired");
+
+    // 过期后客户手动续订同档 → 付款履约 = 复活（从 now 起算一个周期）
+    const renew = await orderService.createOrder({
+      tenantId,
+      workspaceId: (
+        await pool.query<{ workspace_id: string }>(
+          `select workspace_id from metering.subscriptions where id = $1`,
+          [subId],
+        )
+      ).rows[0]!.workspace_id,
+      planVersionId,
+      cycleUnit: "month",
+      price: 1200,
+      createdBy: userId,
+      intent: "renew",
+      fromSubscriptionId: subId,
+      itemName: "Arda Pro (e2e renew)",
+    });
+    await orderService.declarePayment({
+      orderId: renew.order.id,
+      tenantId,
+      userId,
+      payChannel: "alipay",
+    });
+    await orders.confirmOfflinePayment(
+      req(CAPS_SETTLE),
+      renew.order.id,
+      CONFIRM(1200),
+    );
+    const revived = await pool.query<{
+      status: string;
+      end_at: Date;
+      current_order_id: string | null;
+    }>(
+      `select status, end_at, current_order_id from metering.subscriptions where id = $1`,
+      [subId],
+    );
+    expect(revived.rows[0]!.status).toBe("active");
+    expect(revived.rows[0]!.end_at.getTime()).toBeGreaterThan(
+      Date.now() + 27 * 86_400_000,
+    );
+    expect(revived.rows[0]!.current_order_id).toBe(renew.order.id);
+    // 到期扫描不会把刚复活的行再扫掉
+    await subscriptionsService.sweepExpiredSubscriptions(500);
+    const still = await pool.query<{ status: string }>(
+      `select status from metering.subscriptions where id = $1`,
+      [subId],
+    );
+    expect(still.rows[0]!.status).toBe("active");
   }, 30_000);
 });

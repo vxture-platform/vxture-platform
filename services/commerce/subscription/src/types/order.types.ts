@@ -68,7 +68,10 @@ export interface CreateOrderInput {
   cycleUnit: string;
   price: number;
   currency?: string;
-  createdBy: string;
+  /** 下单人；系统自动续费单为 null（created_by_type='system'）。 */
+  createdBy: string | null;
+  /** 默认 customer；自动续费引擎传 system。 */
+  createdByType?: OrderActorType;
   intent: OrderIntent;
   /** required when intent = upgrade | renew：原订阅 */
   fromSubscriptionId?: string;

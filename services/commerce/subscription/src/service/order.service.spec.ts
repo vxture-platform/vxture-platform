@@ -336,6 +336,108 @@ describe("OrderService.fulfill", () => {
   });
 });
 
+describe("OrderService.runAutoRenewalPass (P2-c)", () => {
+  const candidate = (over: Record<string, unknown> = {}) => ({
+    subscriptionId: "sub-1",
+    tenantId: "t-1",
+    workspaceId: WS,
+    productId: "prod-1",
+    planVersionId: PV_PRO,
+    cycleUnit: "month",
+    cycleCount: 1,
+    endAt: new Date(Date.now() + 2 * 86_400_000),
+    status: "active",
+    kind: "paid",
+    createdById: "u-1",
+    currency: "CNY",
+    planName: "Pro",
+    price: "100.00",
+    ...over,
+  });
+
+  function buildRenewal(cands: Record<string, unknown>[]) {
+    const base = build(
+      order({ intent: "renew", fromSubscriptionId: "sub-1" }),
+      sub({ planVersionId: PV_PRO, endAt: new Date() }),
+    );
+    const orders = base.orders as typeof base.orders & {
+      findAutoRenewCandidates: ReturnType<typeof vi.fn>;
+      withOrderTx: ReturnType<typeof vi.fn>;
+      settleZeroOrderTx: ReturnType<typeof vi.fn>;
+    };
+    orders.findAutoRenewCandidates = vi.fn(async () => cands);
+    orders.withOrderTx = vi.fn(
+      async (_id: string, fn: (ctx: unknown) => Promise<unknown>) =>
+        fn({
+          client: {},
+          order: order({ status: "pending_payment" }),
+          invoice: null,
+        }),
+    );
+    orders.settleZeroOrderTx = vi.fn(async () => undefined);
+    orders.getById.mockImplementation(async () =>
+      order({ intent: "renew", fromSubscriptionId: "sub-1", status: "paid" }),
+    );
+    return { ...base, orders };
+  }
+
+  it("paid plan: creates a system renew order with a grace TTL and leaves it pending", async () => {
+    const { service, orders, subscriptions } = buildRenewal([candidate()]);
+    const out = await service.runAutoRenewalPass({ leadDays: 7, graceDays: 3 });
+    expect(out).toEqual({ created: 1, fulfilled: 0, skipped: 0 });
+    expect(orders.createOrder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        intent: "renew",
+        fromSubscriptionId: "sub-1",
+        createdBy: null,
+        createdByType: "system",
+        price: 100,
+      }),
+    );
+    const input = (
+      orders.createOrder as unknown as { mock: { calls: unknown[][] } }
+    ).mock.calls[0]![0] as { paymentTtlMinutes: number };
+    // end in 2 days + 3 days grace ≈ 5 days, well above the 60-minute floor
+    expect(input.paymentTtlMinutes).toBeGreaterThan(4 * 24 * 60);
+    expect(orders.settleZeroOrderTx).not.toHaveBeenCalled();
+    expect(subscriptions.updateSubscription).not.toHaveBeenCalled();
+  });
+
+  it("free plan: settles the ¥0 order in-tx and fulfils immediately (end date extended)", async () => {
+    const { service, orders, subscriptions } = buildRenewal([
+      candidate({ kind: "free", price: "0.00" }),
+    ]);
+    const out = await service.runAutoRenewalPass({ leadDays: 7, graceDays: 3 });
+    expect(out).toEqual({ created: 1, fulfilled: 1, skipped: 0 });
+    expect(orders.settleZeroOrderTx).toHaveBeenCalledTimes(1);
+    expect(subscriptions.updateSubscription).toHaveBeenCalledWith(
+      "sub-1",
+      expect.objectContaining({ endAt: expect.any(Date) }),
+    );
+    expect(orders.applySubscriptionTerms).toHaveBeenCalledWith(
+      "sub-1",
+      expect.objectContaining({ mode: "renew" }),
+    );
+  });
+
+  it("no price row for the cycle: skipped with a log, no order", async () => {
+    const { service, orders } = buildRenewal([candidate({ price: null })]);
+    const out = await service.runAutoRenewalPass({ leadDays: 7, graceDays: 3 });
+    expect(out).toEqual({ created: 0, fulfilled: 0, skipped: 1 });
+    expect(orders.createOrder).not.toHaveBeenCalled();
+  });
+
+  it("one failing candidate does not stop the pass", async () => {
+    const { service, orders } = buildRenewal([
+      candidate({ subscriptionId: "bad" }),
+      candidate(),
+    ]);
+    orders.createOrder.mockRejectedValueOnce(new ConflictException("dup"));
+    const out = await service.runAutoRenewalPass({ leadDays: 7, graceDays: 3 });
+    expect(out.created).toBe(1);
+  });
+});
+
 describe("OrderService sweeps", () => {
   it("sweepExpired closes each candidate as expired by the system actor", async () => {
     const { service, orders } = build(

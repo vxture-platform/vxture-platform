@@ -26,6 +26,7 @@ import { JobHeartbeatService } from "./jobs/job-heartbeat.service";
 import { OrderPaymentExpiryJob } from "./jobs/order-payment-expiry.job";
 import { ProvisioningDispatchJob } from "./jobs/provisioning-dispatch.job";
 import { SharingExpiryJob } from "./jobs/sharing-expiry.job";
+import { SubscriptionRenewalJob } from "./jobs/subscription-renewal.job";
 import { TrialExpiryJob } from "./jobs/trial-expiry.job";
 import { UsageRollupJob } from "./jobs/usage-rollup.job";
 import { WsBasePoolJob } from "./jobs/ws-base-pool.job";
@@ -64,6 +65,7 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     SharingExpiryJob,
     TrialExpiryJob,
     OrderPaymentExpiryJob,
+    SubscriptionRenewalJob,
     WsBasePoolJob,
     UsageRollupJob,
   ],
