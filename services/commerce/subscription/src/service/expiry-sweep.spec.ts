@@ -1,73 +1,36 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SubscriptionService } from "./subscription.service";
-import type { PgSubscriptionRepository } from "../repository/pg-subscription.repository";
-import type { ProvisioningService } from "@vxture/service-provisioning";
-import type { SubscriptionRecord } from "../types/subscription.types";
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  buildSweepMocks,
+  subscriptionFixture,
+  type SweepMocks,
+} from "./sweep-spec.helpers";
 
-// Paid/free subscription expiry sweep (product_330 P2-c): repo + provisioning
-// are mocked; the subject is the loop — every lapsed live subscription goes
-// expired through the same transition tail as updateSubscription (deprovision
-// + C2 invalidate), a CAS loser is skipped silently, a failing row never
-// aborts the pass.
+// Paid/free subscription expiry sweep (product_330 P2-c): every lapsed live
+// subscription goes expired through the same transition tail as
+// updateSubscription (deprovision + C2 invalidate); a CAS loser is skipped
+// silently; a failing row never aborts the pass.
 
-const paidSub = (id: string, status = "active"): SubscriptionRecord => ({
-  id,
-  tenantId: "org-1",
-  workspaceId: "ws-1",
-  planVersionId: "pv-1",
-  cycleType: "year",
-  cycleCount: 1,
-  startAt: new Date("2025-09-01T00:00:00Z"),
-  endAt: new Date("2026-09-01T00:00:00Z"),
-  trialEndAt: null,
-  status,
-  subscriptionKind: "paid",
-  activationMethod: "offline_purchase",
-  autoRenew: true,
-  orderNo: "ORD-1",
-  payAmount: "0.10",
-  currency: "CNY",
-  createdBy: "u-1",
-  updatedBy: null,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  deletedAt: null,
-});
-
-const VXTPL = {
-  productId: "prod-vxtpl",
-  productCode: "vxtpl",
-  planCode: "vxtpl-starter",
-};
-
-const build = () => {
-  const repo = {
-    update: vi.fn(),
-    getById: vi.fn(),
-    findExpiredSubscriptionIds: vi.fn().mockResolvedValue([]),
-    listVersionProducts: vi.fn().mockResolvedValue([VXTPL]),
-    hasOtherActiveCoverage: vi.fn().mockResolvedValue(false),
-  };
-  const provisioning = {
-    onSubscriptionActivated: vi
-      .fn()
-      .mockResolvedValue({ deliveryId: "d", seq: 1 }),
-    onSubscriptionDeactivated: vi
-      .fn()
-      .mockResolvedValue({ deliveryId: "d", seq: 2 }),
-    enqueueEvent: vi.fn().mockResolvedValue("d-evt"),
-  };
-  const service = new SubscriptionService(
-    repo as unknown as PgSubscriptionRepository,
-    provisioning as unknown as ProvisioningService,
-    { reserveForOrder: async () => [] } as never,
-  );
-  return { repo, provisioning, service };
-};
+const paidSub = (id: string, status = "active") =>
+  subscriptionFixture({
+    id,
+    status,
+    cycleType: "year",
+    startAt: new Date("2025-09-01T00:00:00Z"),
+    endAt: new Date("2026-09-01T00:00:00Z"),
+    orderNo: "ORD-1",
+    payAmount: "0.10",
+  });
 
 describe("sweepExpiredSubscriptions", () => {
-  let m: ReturnType<typeof build>;
-  beforeEach(() => (m = build()));
+  let m: SweepMocks;
+  beforeEach(
+    () =>
+      (m = buildSweepMocks({
+        productId: "prod-vxtpl",
+        productCode: "vxtpl",
+        planCode: "vxtpl-starter",
+      })),
+  );
 
   it("nothing lapsed → no writes, returns 0", async () => {
     await expect(m.service.sweepExpiredSubscriptions()).resolves.toBe(0);
@@ -106,11 +69,19 @@ describe("sweepExpiredSubscriptions", () => {
     m.repo.findExpiredSubscriptionIds.mockResolvedValue([
       { id: "s-1", status: "active" },
     ]);
-    // renewal fulfilled meanwhile: still active but end_at moved — CAS no-op
     m.repo.getById.mockResolvedValueOnce(paidSub("s-1"));
     m.repo.update.mockResolvedValueOnce(null);
     await expect(m.service.sweepExpiredSubscriptions()).resolves.toBe(0);
     expect(m.provisioning.onSubscriptionDeactivated).not.toHaveBeenCalled();
+  });
+
+  it("a row whose status already differs from the scan is skipped before any write", async () => {
+    m.repo.findExpiredSubscriptionIds.mockResolvedValue([
+      { id: "s-1", status: "active" },
+    ]);
+    m.repo.getById.mockResolvedValueOnce(paidSub("s-1", "cancelled"));
+    await expect(m.service.sweepExpiredSubscriptions()).resolves.toBe(0);
+    expect(m.repo.update).not.toHaveBeenCalled();
   });
 
   it("a failing row is logged and skipped; the pass continues", async () => {

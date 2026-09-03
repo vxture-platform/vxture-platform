@@ -7,7 +7,7 @@
  *  2. 到期扫描：end_at 已过、仍在用的非试用订阅 → expired（provisioning 钩子照常），付款后履约再复活。
  * 先续后扫，¥0 续上的行 end_at 已后移不会被扫到。
  *
- * 与 trial-expiry / order-payment-expiry 同一宿主模式：类定义时读一次 env、实例 inFlight 防重入、
+ * 宿主模式同其它 sweep 作业（runHeartbeatTick：心跳 + 失败不杀 interval）；实例 inFlight 防重入，
  * 跨实例竞态由服务层 CAS / 行锁解决。SUBSCRIPTION_RENEWAL_SWEEP_INTERVAL_MS 调节频率（默认 60s）。
  */
 import { Inject, Injectable, Logger } from "@nestjs/common";
@@ -17,12 +17,11 @@ import {
   SubscriptionService,
 } from "@vxture/service-subscription";
 import { JobHeartbeatService } from "./job-heartbeat.service";
-import { sweepIntervalMs } from "./sweep-interval.util";
-
-const envDays = (name: string, fallback: number): number => {
-  const raw = Number(process.env[name]);
-  return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : fallback;
-};
+import {
+  envDays,
+  runHeartbeatTick,
+  sweepIntervalMs,
+} from "./sweep-interval.util";
 
 /** provisioning.background_jobs 主键，opera「任务调度」用它认作业。 */
 export const JOB_NAME = "subscription-renewal";
@@ -48,37 +47,37 @@ export class SubscriptionRenewalJob {
   async tick(): Promise<void> {
     if (this.inFlight) return;
     this.inFlight = true;
-    const startedAt = Date.now();
-    await this.heartbeat.recordStart(JOB_NAME, this.intervalMs);
     try {
-      const renewal = await this.orders.runAutoRenewalPass({
-        leadDays: envDays("SUBSCRIPTION_RENEW_LEAD_DAYS", 7),
-        graceDays: envDays("SUBSCRIPTION_RENEW_GRACE_DAYS", 3),
-      });
-      if (renewal.created > 0 || renewal.skipped > 0) {
-        this.logger.log(
-          `auto-renew: ${renewal.created} order(s) created, ${renewal.fulfilled} ¥0 fulfilled, ${renewal.skipped} skipped (no price)`,
-        );
-      }
-      const expired = await this.subscriptions.sweepExpiredSubscriptions();
-      if (expired > 0) {
-        this.logger.log(`expiry sweep: ${expired} subscription(s) → expired`);
-      }
-      await this.heartbeat.recordSuccess(
-        JOB_NAME,
-        Date.now() - startedAt,
-        renewal.created + expired,
-      );
-    } catch (err) {
-      // Never let a pass kill the interval; the next tick retries.
-      this.logger.error(`subscription renewal pass failed: ${String(err)}`);
-      await this.heartbeat.recordFailure(
-        JOB_NAME,
-        Date.now() - startedAt,
-        String(err),
+      await runHeartbeatTick(
+        {
+          heartbeat: this.heartbeat,
+          jobName: JOB_NAME,
+          intervalMs: this.intervalMs,
+          logger: this.logger,
+          label: "subscription renewal pass",
+        },
+        () => this.pass(),
       );
     } finally {
       this.inFlight = false;
     }
+  }
+
+  /** 先续后扫；返回本 tick 处理的条目数（心跳 items）。 */
+  private async pass(): Promise<number> {
+    const renewal = await this.orders.runAutoRenewalPass({
+      leadDays: envDays("SUBSCRIPTION_RENEW_LEAD_DAYS", 7),
+      graceDays: envDays("SUBSCRIPTION_RENEW_GRACE_DAYS", 3),
+    });
+    if (renewal.created > 0 || renewal.skipped > 0) {
+      this.logger.log(
+        `auto-renew: ${renewal.created} order(s) created, ${renewal.fulfilled} ¥0 fulfilled, ${renewal.skipped} skipped (no price)`,
+      );
+    }
+    const expired = await this.subscriptions.sweepExpiredSubscriptions();
+    if (expired > 0) {
+      this.logger.log(`expiry sweep: ${expired} subscription(s) → expired`);
+    }
+    return renewal.created + expired;
   }
 }

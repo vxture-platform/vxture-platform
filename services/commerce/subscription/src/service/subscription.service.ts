@@ -853,19 +853,36 @@ export class SubscriptionService {
    */
   async sweepLapsedTrials(limit = 100): Promise<number> {
     const ids = await this.repo.findLapsedTrialIds(limit);
+    return this.sweepToExpired(
+      ids.map((id) => ({ id, status: "trialing" })),
+      "trial expiry sweep",
+      "trial ended without conversion (expiry sweep)",
+    );
+  }
+
+  /**
+   * 共享的"→ expired"扫描循环（trial 与付费/免费到期共用）：每行 CAS 到读到的当前状态，
+   * 输了竞态的行 0 行 no-op 静默跳过；单行失败只记日志，趟不中断。
+   */
+  private async sweepToExpired(
+    rows: { id: string; status: string }[],
+    label: string,
+    remark: string,
+  ): Promise<number> {
     let transitioned = 0;
-    for (const id of ids) {
+    for (const { id, status } of rows) {
       try {
         const before = await this.getSubscription(id);
+        if (before.status !== status) continue; // moved since the scan
         const result = await this.repo.update(id, before, {
           status: "expired",
           operatorType: "system",
-          operatorRemark: "trial ended without conversion (expiry sweep)",
-          expectedStatus: "trialing",
+          operatorRemark: remark,
+          expectedStatus: status,
         });
         if (!result) {
           this.logger.debug(
-            `trial expiry sweep: subscription ${id} no longer trialing, skipped (lost race)`,
+            `${label}: subscription ${id} changed under us, skipped (lost race)`,
           );
           continue;
         }
@@ -873,7 +890,7 @@ export class SubscriptionService {
         transitioned += 1;
       } catch (err) {
         this.logger.error(
-          `trial expiry sweep: subscription ${id} failed to transition — ${String(err)}`,
+          `${label}: subscription ${id} failed to transition — ${String(err)}`,
         );
       }
     }
@@ -888,32 +905,11 @@ export class SubscriptionService {
    */
   async sweepExpiredSubscriptions(limit = 100): Promise<number> {
     const rows = await this.repo.findExpiredSubscriptionIds(limit);
-    let transitioned = 0;
-    for (const { id, status } of rows) {
-      try {
-        const before = await this.getSubscription(id);
-        if (before.status !== status) continue; // moved since the scan
-        const result = await this.repo.update(id, before, {
-          status: "expired",
-          operatorType: "system",
-          operatorRemark: "cycle ended without renewal (expiry sweep)",
-          expectedStatus: status,
-        });
-        if (!result) {
-          this.logger.debug(
-            `expiry sweep: subscription ${id} changed under us, skipped (lost race)`,
-          );
-          continue;
-        }
-        await this.applyTransitionHooks(`expire:${id}`, id, before, result);
-        transitioned += 1;
-      } catch (err) {
-        this.logger.error(
-          `expiry sweep: subscription ${id} failed to transition — ${String(err)}`,
-        );
-      }
-    }
-    return transitioned;
+    return this.sweepToExpired(
+      rows,
+      "expiry sweep",
+      "cycle ended without renewal (expiry sweep)",
+    );
   }
 
   /**
