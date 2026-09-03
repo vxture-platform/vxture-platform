@@ -10,6 +10,7 @@ import type { Request } from "express";
 import { BillingService } from "@vxture/service-billing";
 import { SessionAggregator } from "../aggregators/session.aggregator";
 import type { RequestContext } from "../types/console.types";
+import { SelfScope, holdsAnyCapability } from "../auth/capability";
 
 /**
  * 全局搜索：header ⌘K 面板的数据来源。
@@ -60,6 +61,7 @@ function matches(
   return haystack.some((value) => value?.toLowerCase().includes(needle));
 }
 
+@SelfScope()
 @Controller("api/search")
 export class SearchRouter {
   constructor(
@@ -86,14 +88,24 @@ export class SearchRouter {
 
     // 两个数据源互不依赖，并发取；任一失败只丢自己那一类，不整体 500——
     // 搜索是辅助入口，半份结果远好过一个错误弹窗。
+    // 每一类只对持有对应读权限的人检索:搜索不能成为绕过页面权限门的侧门。
+    const canSeeMembers = holdsAnyCapability(req, ["tenant.member.read"]);
+    const canManageMembers = holdsAnyCapability(req, ["tenant.member.manage"]);
+    const canSeeInvoices = holdsAnyCapability(req, ["tenant.billing.read"]);
     const [members, invoices] = await Promise.all([
-      this.sessionAggregator
-        .listMembers(req.user.id, req.tenant.id)
-        .catch(() => []),
-      this.billingService
-        .listInvoices({ tenantId: req.tenant.id, pageSize: SCAN_LIMIT })
-        .then((result) => result.items)
-        .catch(() => []),
+      canSeeMembers
+        ? this.sessionAggregator
+            .listMembers(req.user.id, req.tenant.id, {
+              includeContacts: canManageMembers,
+            })
+            .catch(() => [])
+        : Promise.resolve([]),
+      canSeeInvoices
+        ? this.billingService
+            .listInvoices({ tenantId: req.tenant.id, pageSize: SCAN_LIMIT })
+            .then((result) => result.items)
+            .catch(() => [])
+        : Promise.resolve([]),
     ]);
 
     const memberHits: SearchResultItem[] = members

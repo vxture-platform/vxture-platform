@@ -13,7 +13,9 @@
 
 import { Controller, Get } from "@nestjs/common";
 import { buildHealthIdentity } from "@vxture-platform/shared";
+import { Public } from "../auth/capability";
 
+@Public()
 @Controller()
 export class HealthRouter {
   /**

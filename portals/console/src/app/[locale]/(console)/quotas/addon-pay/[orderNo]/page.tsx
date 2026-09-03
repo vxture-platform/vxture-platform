@@ -1,3 +1,4 @@
+import { CapabilityGate } from "@/features/permissions/CapabilityGate";
 import { AddonPayPage } from "@/modules/commerce/AddonPayPage";
 
 export default async function Page({
@@ -6,5 +7,9 @@ export default async function Page({
   params: Promise<{ orderNo: string }>;
 }) {
   const { orderNo } = await params;
-  return <AddonPayPage orderNo={orderNo} />;
+  return (
+    <CapabilityGate capability="tenant.payment.manage">
+      <AddonPayPage orderNo={orderNo} />
+    </CapabilityGate>
+  );
 }

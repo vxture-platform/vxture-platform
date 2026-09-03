@@ -1,18 +1,12 @@
 import type { JwtAccessPayload } from "@vxture/core-auth";
+import type { GovernancePermissionCode } from "@vxture/core-utils";
 
-export type Capability =
-  | "platform.tenant.manage"
-  | "platform.product.manage"
-  | "platform.pricing.manage"
-  | "platform.model.manage"
-  | "tenant.user.manage"
-  | "tenant.role.manage"
-  | "tenant.subscription.read"
-  | "tenant.billing.read"
-  | "tenant.invoice.manage"
-  | "tenant.payment.manage"
-  | "tenant.quota.read"
-  | "tenant.audit.read";
+/**
+ * 能力 = 成员在当前租户的有效治理权限码(access.permissions),GovernanceService
+ * 回查所得,原样下发前端;码表权威在 @vxture/core-utils(tenant-permissions)。
+ * 2026-09-04 起不再有 BFF 私有的「capability 词汇」与手写映射表。
+ */
+export type Capability = GovernancePermissionCode;
 
 export interface ConsoleUser {
   id: string;
@@ -102,8 +96,15 @@ export interface ConsoleTenantPermission {
   id: string;
   permissionCode: string;
   permissionName: string;
-  permissionType: string | null;
+  /** menu = 板块/页面节点;api = 操作码。 */
+  permissionType: "menu" | "api";
   description: string | null;
+  /** 父节点码(板块 → 页面 → 操作);根节点 null。 */
+  parentCode: string | null;
+  /** 页面节点的路由;板块与操作码为 null。 */
+  routePath: string | null;
+  category: string | null;
+  sort: number;
 }
 
 export interface MemberRecord {

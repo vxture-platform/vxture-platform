@@ -25,6 +25,7 @@ import type { Pool } from "pg";
 import { PromotionService, centsToYuan } from "@vxture/service-promotion";
 import type { TenantVoucherRecord } from "@vxture/service-promotion";
 import type { RequestContext } from "../types/console.types";
+import { RequireCapability } from "../auth/capability";
 
 // Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
 const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
@@ -79,6 +80,7 @@ function mapVoucher(r: TenantVoucherRecord): ConsoleVoucherView {
   return view;
 }
 
+@RequireCapability("tenant.billing.read")
 @Controller("api/promotion")
 export class PromotionRouter {
   constructor(

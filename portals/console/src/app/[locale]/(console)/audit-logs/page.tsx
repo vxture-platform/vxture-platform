@@ -1,5 +1,10 @@
+import { CapabilityGate } from "@/features/permissions/CapabilityGate";
 import { AuditLogsPage } from "@/modules/settings/AuditLogsPage";
 
 export default function Page() {
-  return <AuditLogsPage />;
+  return (
+    <CapabilityGate capability={"tenant.audit.read"}>
+      <AuditLogsPage />
+    </CapabilityGate>
+  );
 }

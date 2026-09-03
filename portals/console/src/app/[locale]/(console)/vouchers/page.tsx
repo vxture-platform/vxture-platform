@@ -1,5 +1,10 @@
+import { CapabilityGate } from "@/features/permissions/CapabilityGate";
 import { VouchersPage } from "@/modules/commerce/VouchersPage";
 
 export default function Page() {
-  return <VouchersPage />;
+  return (
+    <CapabilityGate capability={"tenant.billing.read"}>
+      <VouchersPage />
+    </CapabilityGate>
+  );
 }

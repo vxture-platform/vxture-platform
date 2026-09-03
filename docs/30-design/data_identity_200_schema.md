@@ -510,19 +510,30 @@ ALTER TABLE tenancy.workspace_memberships
 
 > **两 scope 同构**：`tenant` 与 `workspace` 各持这 5 个 code（`(scope, code)` 唯一）。`readonly` vs `guest` 的分野（SaaS 标准）：**readonly=内部人、能看全但不能写；guest=外部人、只能看被分享的那一小块**——二者不冗余。
 >
-> **治理映射只区分 owner/manager**（忠于 §6 铁律"治理 RBAC ≠ 业务授权"）：`member`/`readonly`/`guest` 的**治理**权限集**皆为空**——它们的差异**不**由治理 RBAC 承载，而由**业务授权层（各业务域 OUT）** + 角色身份本身表达。治理 RBAC 只闸"能否管理组织/空间/计费/成员/角色"这类治理动作，不闸产品功能。故三者治理 perm 相同（空）是设计使然，非遗漏。
+> **治理映射的"写侧"只区分 owner/manager**（忠于 §6 铁律"治理 RBAC ≠ 业务授权"）：治理 RBAC 只闸"能否管理组织/空间/计费/成员/角色"这类治理动作，不闸产品功能。
+>
+> **2026-09-04 修订（console 权限配置体系，identity/070）**：目录补入**读侧码**（`*.read`）与商业面细分码（`payment.manage` / `invoice.manage`），`member` / `readonly` / `guest` 的治理码**不再皆空**——三者在 console 里"能看哪一类租户数据"由读侧码表达（readonly = 全部 `.read`；member = 成员目录 + 配额用量；guest = 空）。这仍在治理边界内：读侧码回答的是"能否看租户的成员/账单/审计"，不是产品功能。`access.permissions` 的 menu 层（`tenant.menu.*`，parent_id / route_path / perm_type）随之灌满，与 console 侧栏同构；菜单行只承载层级，不进 `role_permissions`。
 
-**治理权限目录（category ∈ billing/member/security/settings）与映射：**
+**治理权限目录（category ∈ billing/member/security/settings/quota/audit/model）与映射（tenant scope）：**
 
-| perm code                                      | category | owner | manager |
-| ---------------------------------------------- | -------- | ----- | ------- |
-| `{scope}.member.manage`                        | member   | ✔     | ✔       |
-| `{scope}.role.assign`                          | security | ✔     | ✔       |
-| `tenant.workspace.manage`（仅 tenant scope）   | settings | ✔     | ✔       |
-| `{scope}.settings.manage`                      | settings | ✔     | ✔       |
-| `tenant.billing.manage`（仅 tenant scope，危） | billing  | ✔     | —       |
+| perm code                                      | category | owner | manager | member | readonly | guest |
+| ---------------------------------------------- | -------- | :---: | :-----: | :----: | :------: | :---: |
+| `tenant.member.read`                           | member   |   ✔   |    ✔    |   ✔    |    ✔     |   —   |
+| `{scope}.member.manage`                        | member   |   ✔   |    ✔    |   —    |    —     |   —   |
+| `{scope}.role.assign`                          | security |   ✔   |    ✔    |   —    |    —     |   —   |
+| `tenant.workspace.manage`（仅 tenant scope）   | settings |   ✔   |    ✔    |   —    |    —     |   —   |
+| `{scope}.settings.manage`                      | settings |   ✔   |    ✔    |   —    |    —     |   —   |
+| `tenant.delete`                                | security |   ✔   |    —    |   —    |    —     |   —   |
+| `tenant.billing.read`                          | billing  |   ✔   |    ✔    |   —    |    ✔     |   —   |
+| `tenant.billing.manage`（仅 tenant scope，危） | billing  |   ✔   |    —    |   —    |    —     |   —   |
+| `tenant.payment.manage`（危）                  | billing  |   ✔   |    —    |   —    |    —     |   —   |
+| `tenant.invoice.manage`                        | billing  |   ✔   |    —    |   —    |    —     |   —   |
+| `tenant.quota.read`                            | quota    |   ✔   |    ✔    |   ✔    |    ✔     |   —   |
+| `tenant.audit.read`                            | audit    |   ✔   |    ✔    |   —    |    ✔     |   —   |
+| `tenant.model.read`                            | model    |   —   |    —    |   —    |    —     |   —   |
 
-> `tenant:owner` 额外并入其下所有 `workspace.*` 治理权（承租户对旗下空间的全权，照现 seed `TENANT_ALL ∪ WS_ALL`）。perm code 现用 `{scope}.{resource}.{action}` 点分隔；与运营 realm 的 `{domain}:{resource}.{action}` 冒号约定的**统一（点→冒号）列为后续待办**，本轮不改（避免牵动 console 治理授权代码，守边界）。
+> `.manage` 蕴含同资源的 `.read`（`@vxture/core-utils` `capabilitySatisfies`，BFF 守卫与前端门共用）。`tenant.model.read` 暂不授予任何角色（`/atlas` 页整改前不对客户开放）。
+> `tenant:owner` 额外并入其下所有 `workspace.*` 治理权（承租户对旗下空间的全权，照现 seed `TENANT_ALL ∪ WS_ALL`）。perm code 现用 `{scope}.{resource}.{action}` 点分隔；与运营 realm 的 `{domain}:{resource}.{action}` 冒号约定的**统一（点→冒号）列为后续待办**，本轮不改（避免牵动 console 治理授权代码，守边界）。存量库由 `deploy/database/migrations/2026-09-10-access-console-permission-catalog.sql` 补齐；seed / core-utils / console 导航 / 迁移四处由 `check-tenant-permission-catalog` 守卫逐码比对。
 
 ---
 

@@ -34,6 +34,7 @@ export type {
   OrgSwitchOption,
   OrgMemberDetail,
   OrgRoleCatalogEntry,
+  PermissionCatalogEntry,
   CreateInvitationInput,
   InvitationView,
   OrganizationReadRepository,

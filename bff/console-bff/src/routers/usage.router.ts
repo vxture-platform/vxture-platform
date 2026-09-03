@@ -29,6 +29,7 @@ import {
 import type { Request } from "express";
 import type { Pool } from "pg";
 import type { RequestContext } from "../types/console.types";
+import { RequireCapability } from "../auth/capability";
 
 // Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
 const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
@@ -85,6 +86,7 @@ const SPAN_LIMITS: Record<string, { def: number; max: number }> = {
 // UsageRouter
 // ============================================================================
 
+@RequireCapability("tenant.quota.read")
 @Controller("api/usage")
 export class UsageRouter {
   constructor(@Inject(COMMERCE_PG_POOL) private readonly pool: Pool) {}

@@ -324,6 +324,8 @@ export interface OrganizationReadRepository {
   ): Promise<OrgMemberDetail | null>;
   /** The global org-scope role catalog (owner/manager/member) with permission codes. */
   getOrgRolesCatalog(): Promise<OrgRoleCatalogEntry[]>;
+  /** 客户可见的 tenant 治理权限目录(菜单节点 + 操作码),按 sort 升序。 */
+  listPermissionCatalog(): Promise<PermissionCatalogEntry[]>;
   // ── 组织实名认证(kyc.tenant_verifications,owner 2026-08-21 P0)──────────
   getLatestTenantVerification(
     tenantId: string,
@@ -361,4 +363,19 @@ export interface OrgRoleCatalogEntry {
   code: string;
   name: string;
   permissions: string[];
+}
+
+/**
+ * 权限目录一行(access.permissions,控制台菜单树模式):菜单节点与操作码同表,
+ * 靠 type 区分,parentCode 表达层级。console 角色页按它画「板块 → 页面 → 操作」。
+ */
+export interface PermissionCatalogEntry {
+  code: string;
+  name: string;
+  /** menu / api(历史行为 null 的按 api 处理)。 */
+  type: "menu" | "api";
+  parentCode: string | null;
+  routePath: string | null;
+  category: string | null;
+  sort: number;
 }

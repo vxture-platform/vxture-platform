@@ -44,7 +44,9 @@ import {
 import { EmailChangeService } from "../services/email-change.service";
 import { PhoneChangeService } from "../services/phone-change.service";
 import type { RequestContext } from "../types/console.types";
+import { RequireCapability, SelfScope } from "../auth/capability";
 
+@SelfScope()
 @Controller("api/me")
 export class MeRouter {
   constructor(
@@ -209,6 +211,7 @@ export class MeRouter {
     return profile;
   }
 
+  @RequireCapability("tenant.settings.manage")
   @Put("organization")
   async updateOrganization(
     @Req() req: Request & RequestContext,
@@ -226,6 +229,7 @@ export class MeRouter {
     return profile;
   }
 
+  @RequireCapability("tenant.settings.manage")
   @Put("organization/logo")
   async uploadOrgLogo(@Req() req: Request & RequestContext) {
     if (!req.user) throw new UnauthorizedException("No active session");
@@ -267,6 +271,7 @@ export class MeRouter {
     res.end(logo.data);
   }
 
+  @RequireCapability("tenant.settings.manage")
   @Delete("organization/logo")
   async removeOrgLogo(@Req() req: Request & RequestContext) {
     if (!req.user) throw new UnauthorizedException("No active session");

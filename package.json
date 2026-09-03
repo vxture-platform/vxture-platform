@@ -66,6 +66,8 @@
     "lint:column-locks": "node scripts/guardrails/check-column-locks.mjs",
     "lint:anchor-writes": "node scripts/guardrails/check-anchor-writes.mjs",
     "lint:catalog-domains": "node scripts/guardrails/check-catalog-domains.mjs",
+    "lint:permission-catalog": "node scripts/guardrails/check-tenant-permission-catalog.mjs",
+    "lint:route-policies": "node scripts/guardrails/check-bff-route-policies.mjs",
     "lint:api-conventions": "node scripts/guardrails/check-api-conventions.mjs",
     "lint:conformance": "node scripts/guardrails/check-conformance-matrix.mjs",
     "lint:docs-numbering": "node scripts/guardrails/check-docs-numbering.mjs --strict",

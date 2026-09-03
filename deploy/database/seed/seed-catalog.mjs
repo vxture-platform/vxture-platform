@@ -30,17 +30,238 @@ import { runSeed, isMain, ID, SYS } from "./seed-lib.mjs";
 // NOTE (org→tenant rename): the retired 'org' scope became 'tenant' (access.roles CHECK is
 // tenant/workspace), so the old `org.*` permission codes were renamed to `tenant.*` to stay
 // consistent with the scope. Role↔permission is now by uuid (role_id/permission_id).
+// 2026-09-04 console 权限配置体系(批 0a):补 `.read` 读侧码与商业面细分码,让
+// member / readonly / guest 三个角色在 console 里真正可区分(此前三者治理码皆空,
+// console 把「能看哪页」全靠 BFF 里一张手写映射表推出来)。`.manage` 蕴含同资源的
+// `.read`(守卫与前端门统一按 @vxture/core-utils `capabilitySatisfies` 判)。
+// 代码侧镜像 = packages/core/utils/src/tenant-permissions.ts,两处由
+// scripts/guardrails/check-tenant-permission-catalog.mjs 逐码比对。
 const PERMISSIONS = [
+  ["tenant.member.read", "member", "View tenant members"],
   ["tenant.member.manage", "member", "Manage tenant members"],
   ["tenant.role.assign", "security", "Assign tenant roles"],
   ["tenant.workspace.manage", "settings", "Manage workspaces in the tenant"],
-  ["tenant.billing.manage", "billing", "Manage tenant billing & subscriptions"],
   ["tenant.settings.manage", "settings", "Manage tenant settings"],
   ["tenant.delete", "security", "Delete the tenant"],
+  ["tenant.billing.read", "billing", "View subscriptions, orders and bills"],
+  ["tenant.billing.manage", "billing", "Manage tenant billing & subscriptions"],
+  ["tenant.payment.manage", "billing", "Declare payments and buy add-on packs"],
+  [
+    "tenant.invoice.manage",
+    "billing",
+    "Request invoices and manage billing addresses",
+  ],
+  ["tenant.quota.read", "quota", "View quotas and usage"],
+  ["tenant.audit.read", "audit", "View the tenant audit log"],
+  ["tenant.model.read", "model", "View model access for the tenant"],
   ["workspace.member.manage", "member", "Manage workspace members"],
   ["workspace.role.assign", "security", "Assign workspace roles"],
   ["workspace.settings.manage", "settings", "Manage workspace settings"],
 ];
+
+// ── Tenant console menu tree (access.permissions 的 menu 层) ─────────────────
+// 与 admin 的 MENU_TREE 同一套做法(见下方「Operator menu tree」注释):层级判据就是
+// console 侧栏自己的信息架构(portals/console/src/config/navigation.ts:section →
+// item),菜单码 = `tenant.menu.` + 那里的键;操作码挂在它实际作用的那一页下。
+// 没有操作码的页面是纯菜单叶子(总览 / 个人信息 / 收件箱…),任何成员可见。
+// 与 admin 的一处刻意不同:console 前端按**操作码**(如 tenant.billing.read)门控
+// 页面,不按菜单码——菜单行只承载层级(角色页的权限树、未来的策略页),不进
+// role_permissions。
+const TENANT_MENU_TREE = [
+  {
+    code: "tenant.menu.workspace",
+    name: "工作空间",
+    icon: "squares-four",
+    children: [
+      {
+        code: "tenant.menu.overview",
+        name: "数据总览",
+        route: "/",
+        icon: "home",
+      },
+      {
+        code: "tenant.menu.todos",
+        name: "待办事项",
+        route: "/todos",
+        icon: "calendar",
+      },
+    ],
+  },
+  {
+    code: "tenant.menu.account_tenant",
+    name: "账户与租户",
+    icon: "building-library",
+    children: [
+      {
+        code: "tenant.menu.profile",
+        name: "个人信息",
+        route: "/profile",
+        icon: "user",
+      },
+      {
+        code: "tenant.menu.personal_tenant",
+        name: "租户信息",
+        route: "/personal-tenant",
+        icon: "buildings",
+      },
+      {
+        code: "tenant.menu.organization",
+        name: "组织信息",
+        route: "/organization",
+        icon: "building-library",
+        perms: ["tenant.settings.manage"],
+      },
+    ],
+  },
+  {
+    code: "tenant.menu.members_permissions",
+    name: "成员与权限",
+    icon: "users",
+    children: [
+      {
+        code: "tenant.menu.members",
+        name: "成员管理",
+        route: "/members",
+        icon: "users",
+        perms: [
+          "tenant.member.read",
+          "tenant.member.manage",
+          "tenant.role.assign",
+        ],
+      },
+      {
+        code: "tenant.menu.roles",
+        name: "角色管理",
+        route: "/roles",
+        icon: "shield-check",
+      },
+      {
+        code: "tenant.menu.invitations",
+        name: "邀请记录",
+        route: "/invitations",
+        icon: "mail",
+      },
+    ],
+  },
+  {
+    code: "tenant.menu.subscription_billing",
+    name: "订阅与计费",
+    icon: "chart-bar",
+    children: [
+      {
+        code: "tenant.menu.subscription",
+        name: "产品订阅",
+        route: "/subscription",
+        icon: "chart-bar",
+        perms: [
+          "tenant.billing.read",
+          "tenant.billing.manage",
+          "tenant.payment.manage",
+        ],
+      },
+      {
+        code: "tenant.menu.billing",
+        name: "账单管理",
+        route: "/billing",
+        icon: "calendar",
+        perms: ["tenant.invoice.manage"],
+      },
+      {
+        code: "tenant.menu.vouchers",
+        name: "我的卡券",
+        route: "/vouchers",
+        icon: "ticket",
+      },
+      {
+        code: "tenant.menu.quotas",
+        name: "配额管理",
+        route: "/quotas",
+        icon: "database",
+        perms: ["tenant.quota.read"],
+      },
+      {
+        code: "tenant.menu.usage",
+        name: "用量分析",
+        route: "/usage",
+        icon: "chart-line",
+      },
+    ],
+  },
+  {
+    code: "tenant.menu.advanced_settings",
+    name: "高级设置",
+    icon: "settings",
+    children: [
+      {
+        code: "tenant.menu.settings",
+        name: "系统设置",
+        route: "/settings",
+        icon: "settings",
+        perms: ["tenant.workspace.manage", "tenant.delete"],
+      },
+      {
+        code: "tenant.menu.inbox",
+        name: "站内消息",
+        route: "/inbox",
+        icon: "bell",
+      },
+      {
+        code: "tenant.menu.notifications",
+        name: "通知提醒",
+        route: "/notifications",
+        icon: "mail",
+      },
+      {
+        code: "tenant.menu.audit_logs",
+        name: "审计日志",
+        route: "/audit-logs",
+        icon: "clipboard",
+        perms: ["tenant.audit.read"],
+      },
+      {
+        code: "tenant.menu.security",
+        name: "安全设置",
+        route: "/security",
+        icon: "shield-check",
+      },
+    ],
+  },
+  {
+    code: "tenant.menu.platform",
+    name: "平台能力",
+    icon: "database",
+    children: [
+      {
+        code: "tenant.menu.atlas",
+        name: "模型接入",
+        route: "/atlas",
+        icon: "database",
+        perms: ["tenant.model.read"],
+      },
+    ],
+  },
+];
+// flattenMenuTree 是下方的函数声明(提升),与 admin 树共用同一套拍平/挂靠逻辑。
+const TENANT_MENU_NODES = flattenMenuTree(TENANT_MENU_TREE);
+/** 操作码 → 所属页面菜单码。树里没提到的码留在根上,seed 会报出来。 */
+const TENANT_PERM_PARENT = (() => {
+  const map = {};
+  const walk = (nodes) => {
+    for (const node of nodes) {
+      for (const code of node.perms ?? []) {
+        if (map[code]) {
+          throw new Error(
+            `tenant permission ${code} hangs under two pages: ${map[code]} / ${node.code}`,
+          );
+        }
+        map[code] = node.code;
+      }
+      if (node.children) walk(node.children);
+    }
+  };
+  walk(TENANT_MENU_TREE);
+  return map;
+})();
 
 // ── Role catalog: two-level, scope tenant/workspace (access.roles) ─────────────
 // [scope, code, name]. All is_system=true (predefined, is_system-guarded, not deletable).
@@ -120,16 +341,34 @@ const TENANT_ALL = PERMISSIONS.filter((p) => p[0].startsWith("tenant.")).map(
 const WS_ALL = PERMISSIONS.filter((p) => p[0].startsWith("workspace.")).map(
   (p) => p[0],
 );
+// 2026-09-04 起 member / readonly / guest 不再皆空:读侧码让三者在 console 里可区分
+// (data_identity_200 §6.4 矩阵)。readonly = 内部全域只读(所有 .read);member =
+// 用产品的人(看成员目录 + 配额用量);guest = 外部受限,只有自助页。
+// `tenant.model.read` 暂不授予任何角色:/atlas 页面整改(批 7)前不对客户开放,
+// 但守卫已按它把 URL 直达封死。
+const TENANT_MODEL_READ = "tenant.model.read";
 const ROLE_PERMS = {
-  "tenant:owner": [...TENANT_ALL, ...WS_ALL],
+  "tenant:owner": [
+    ...TENANT_ALL.filter((c) => c !== TENANT_MODEL_READ),
+    ...WS_ALL,
+  ],
   "tenant:manager": [
+    "tenant.member.read",
     "tenant.member.manage",
     "tenant.role.assign",
     "tenant.workspace.manage",
     "tenant.settings.manage",
+    "tenant.billing.read",
+    "tenant.quota.read",
+    "tenant.audit.read",
   ],
-  "tenant:member": [],
-  "tenant:readonly": [],
+  "tenant:member": ["tenant.member.read", "tenant.quota.read"],
+  "tenant:readonly": [
+    "tenant.member.read",
+    "tenant.billing.read",
+    "tenant.quota.read",
+    "tenant.audit.read",
+  ],
   "tenant:guest": [],
   "workspace:owner": [...WS_ALL],
   "workspace:manager": ["workspace.member.manage", "workspace.settings.manage"],
@@ -1254,13 +1493,13 @@ export async function seedCatalog(client) {
   );
 
   // ── 2. access.permissions (governance catalog; unified fields, console-mode) ─
-  // perm_name = human label; render fields (perm_type/route/component/icon) left null,
-  // wired when tenant console menu is built (铁律四). is_system=true, created_by=SYS.
+  // perm_name = human label; is_system=true, created_by=SYS. 操作码行 do-nothing
+  // (不覆盖运营改过的显示名);parent_id / perm_type 在下面按菜单树统一回写。
   for (const [code, category, description] of PERMISSIONS) {
     await client.query(
       `
-      insert into access.permissions (perm_code, perm_name, perm_name_key, category, description, description_key, is_system, created_by, created_at, updated_at)
-      values ($1, $2, $3, $4, $2, $5, true, $6, now(), now()) on conflict (perm_code) do nothing
+      insert into access.permissions (perm_code, perm_type, perm_name, perm_name_key, category, description, description_key, is_system, created_by, created_at, updated_at)
+      values ($1, 'api', $2, $3, $4, $2, $5, true, $6, now(), now()) on conflict (perm_code) do nothing
     `,
       [
         code,
@@ -1272,6 +1511,65 @@ export async function seedCatalog(client) {
       ],
     );
   }
+
+  // ── access.permissions 的 menu 层 + 把操作码挂到所属页面下(与 admin 同一套做法)─
+  // 先按 depth 升序插菜单行(parent_id 自引用,父必须先在),结构列 do-update:树形
+  // 是平台持有的结构,改了 TENANT_MENU_TREE 必须对已有库生效;perm_name 保持
+  // do-nothing 语义。再把操作码的 parent_id / perm_type 回写到所属页面。
+  for (const node of [...TENANT_MENU_NODES].sort((a, b) => a.depth - b.depth)) {
+    await client.query(
+      `
+      insert into access.permissions
+        (perm_code, perm_type, perm_name, perm_name_key, parent_id, route_path, icon,
+         is_system, description, description_key, sort, created_by, updated_by, created_at, updated_at)
+      values ($1, 'menu', $2, $3,
+              (select id from access.permissions where perm_code = $4),
+              $5, $6, true, $2, $7, $8, $9, $9, now(), now())
+      on conflict (perm_code) do update set
+        parent_id  = excluded.parent_id,
+        route_path = excluded.route_path,
+        perm_type  = excluded.perm_type,
+        icon       = excluded.icon,
+        sort       = excluded.sort,
+        updated_at = now()
+    `,
+      [
+        node.code,
+        node.name,
+        `access.menu.${node.code.replace(/^tenant\.menu\./, "")}`,
+        node.parent,
+        node.route,
+        node.icon,
+        `access.menu.${node.code.replace(/^tenant\.menu\./, "")}.desc`,
+        node.sort,
+        SYS,
+      ],
+    );
+  }
+  let tenantReparented = 0;
+  for (const [permCode, menuCode] of Object.entries(TENANT_PERM_PARENT)) {
+    const res = await client.query(
+      `update access.permissions
+          set parent_id = (select id from access.permissions where perm_code = $1),
+              perm_type = 'api',
+              updated_at = now()
+        where perm_code = $2`,
+      [menuCode, permCode],
+    );
+    tenantReparented += res.rowCount;
+  }
+  // 树里没提到的操作码(workspace.* 暂无 console 页面)留在根上,但 perm_type 仍归 api。
+  await client.query(
+    `update access.permissions set perm_type = 'api', updated_at = now()
+      where perm_type is null and perm_code not like 'tenant.menu.%'`,
+  );
+  const tenantOrphans = PERMISSIONS.map((p) => p[0]).filter(
+    (code) => !TENANT_PERM_PARENT[code],
+  );
+  console.log(
+    `✓  access — ${TENANT_MENU_NODES.length} menu 节点 + ${tenantReparented} 个操作码已挂到所属页面` +
+      (tenantOrphans.length ? `(留在根上:${tenantOrphans.join(", ")})` : ""),
+  );
 
   // ── 3. access.roles (two-level; scope tenant/workspace; is_system) ──────────
   for (const [scope, code, name, description] of ROLES) {

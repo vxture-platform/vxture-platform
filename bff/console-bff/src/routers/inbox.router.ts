@@ -20,6 +20,7 @@ import type { Request } from "express";
 import type { Pool } from "pg";
 import { COMMERCE_PG_POOL } from "@vxture/service-subscription";
 import type { RequestContext } from "../types/console.types";
+import { SelfScope } from "../auth/capability";
 
 export interface InboxMessage {
   id: string;
@@ -64,6 +65,7 @@ function mapRow(r: InboxRow): InboxMessage {
   };
 }
 
+@SelfScope()
 @Controller("api/me/inbox")
 export class InboxRouter {
   constructor(@Inject(COMMERCE_PG_POOL) private readonly pool: Pool) {}

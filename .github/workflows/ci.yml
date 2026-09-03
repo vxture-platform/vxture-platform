@@ -255,6 +255,15 @@ jobs:
           pnpm lint:seed
           pnpm lint:catalog-domains
 
+      # 租户权限配置体系门控(批 0a):权限目录在 seed / core-utils / console 导航 / 迁移
+      # 四处必须逐码一致;console-bff 每条路由必须声明 @Public / @SelfScope /
+      # @RequireCapability——漏标运行时是 403,这里在 lint 期就报出来。
+      - name: Tenant permission catalog guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: |
+          pnpm lint:permission-catalog
+          pnpm lint:route-policies
+
       # 管理面 API 口径门控（product_251 D-3）：规范自己写着「能自动校验的条款就不要
       # 靠人记」。裸 Nest 异常、错误码大小写、审计字段名、`status`/`state` 都是纯文本
       # 模式可判的；动词语义与写入结果可分辨判不了，那两条靠评审。

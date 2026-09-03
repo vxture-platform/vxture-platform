@@ -34,6 +34,7 @@ import {
 import type { TenantVerificationRecord } from "@vxture/service-organization";
 import type { RequestContext } from "../types/console.types";
 import { auditCustomerAction } from "../audit/audit-log";
+import { RequireCapability, SelfScope } from "../auth/capability";
 
 // Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
 const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
@@ -72,6 +73,7 @@ function mapView(r: TenantVerificationRecord): ConsoleVerificationView {
   };
 }
 
+@SelfScope()
 @Controller("api/verification")
 export class VerificationRouter {
   constructor(
@@ -95,6 +97,7 @@ export class VerificationRouter {
     };
   }
 
+  @RequireCapability("tenant.settings.manage")
   @Post("tenant")
   async submitTenantVerification(
     @Req() req: Request & RequestContext,
