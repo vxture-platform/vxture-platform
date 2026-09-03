@@ -158,6 +158,12 @@ export interface OfflineOrderRecord {
   invoiceId: string;
   billNo: string;
   orderNo: string;
+  /**
+   * billing.orders.id（product_330 P1-b1 双写）。订单实体从 2026-09-03 起与旧的
+   * "suspended 订阅行"并行存在：写路径两边都写，读路径以 orders 为准；旧行在
+   * P2 退役。当前对外的 orderId 仍是 subscription.id（URL / 权限校验未换轨）。
+   */
+  orderId: string;
 }
 
 export interface ActivateOrderInput {

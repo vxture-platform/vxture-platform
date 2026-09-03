@@ -77,6 +77,10 @@ const build = (invoice = INVOICE, order = ORDER): Mocks => {
       .fn()
       .mockResolvedValue({ voucherLegId: "pay-voucher" }),
     insertHistoryTx: vi.fn().mockResolvedValue(undefined),
+    // product_330 P1-b1：订单实体状态同步（申报 → pending_verify；结清 → paid）
+    markOrderDeclaredTx: vi.fn().mockResolvedValue(undefined),
+    markOrderPaidTx: vi.fn().mockResolvedValue(undefined),
+    applyOrderTermsOnUpgrade: vi.fn().mockResolvedValue(null),
     activateOrder: vi.fn().mockResolvedValue({ ...order, status: "active" }),
     cancelOfflineOrder: vi
       .fn()

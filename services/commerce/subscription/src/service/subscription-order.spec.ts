@@ -60,6 +60,7 @@ interface Mocks {
     activateOrder: ReturnType<typeof vi.fn>;
     cancelOfflineOrder: ReturnType<typeof vi.fn>;
     restoreOfflineOrder: ReturnType<typeof vi.fn>;
+    applyOrderTermsOnUpgrade: ReturnType<typeof vi.fn>;
   };
   provisioning: {
     onSubscriptionActivated: ReturnType<typeof vi.fn>;
@@ -81,6 +82,8 @@ const build = (): Mocks => {
     activateOrder: vi.fn(),
     cancelOfflineOrder: vi.fn(),
     restoreOfflineOrder: vi.fn(),
+    // product_330 P1-b1：升级履约搬订单条款（周期/到期/实付）到目标订阅
+    applyOrderTermsOnUpgrade: vi.fn().mockResolvedValue(null),
   };
   const provisioning = {
     onSubscriptionActivated: vi
@@ -289,6 +292,13 @@ describe("applyUpgradeOrder", () => {
     });
     // old row upgraded in place to the order's target version
     expect(result?.planVersionId).toBe("pv-2");
+    // product_330 P1-b1：订单条款（周期 / 到期 / 实付）必须一并搬到目标订阅——
+    // 只换版本是 caimc 案的根因。
+    expect(m.repo.applyOrderTermsOnUpgrade).toHaveBeenCalledWith(
+      "sub-old",
+      "order-1",
+      expect.objectContaining({ actorType: "operator", actorId: "op-1" }),
+    );
     // order row closed via a plain status update (never live → zero webhooks for it)
     expect(m.repo.update).toHaveBeenCalledWith(
       "order-1",

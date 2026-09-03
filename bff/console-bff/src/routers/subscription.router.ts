@@ -1840,6 +1840,10 @@ interface OrderRow {
   created_by_id: string | null;
   subscriber_name: string | null;
   declared_at: Date | null;
+  // product_330 P1-b1：订单实体（billing.orders）投影——有则以它为准
+  order_entity_status: string | null;
+  target_start_at: Date | null;
+  target_end_at: Date | null;
 }
 
 // One projection for the list and the payment-page detail — the six-state
@@ -1900,8 +1904,14 @@ select
   (
     select max(p.created_at) from billing.payments p
      where p.bill_id = inv.id and p.pay_source <> 'voucher'
-  )                    as declared_at
+  )                    as declared_at,
+  ord.status           as order_entity_status,
+  tsub.start_at        as target_start_at,
+  tsub.end_at          as target_end_at
 from metering.subscriptions sub
+-- product_330 P1-b1：订单实体（权威态）；升级单履约后 subscription_id 指向被升级的订阅
+left join billing.orders ord on ord.order_no = sub.order_no
+left join metering.subscriptions tsub on tsub.id = ord.subscription_id and tsub.id <> sub.id
 left join product.plan_versions pv on pv.id = sub.plan_version_id
 left join product.plans plan on plan.id = pv.plan_id
 left join lateral (
@@ -1930,6 +1940,24 @@ limit 100
 
 /** Six-state ordered derivation (product_321 P1 — first hit wins). */
 function deriveOrderState(r: OrderRow): OrderState {
+  // product_330 P1-b1：订单实体在就以它为准（P1-a 回填 + 双写）；极旧行退回旧派生。
+  switch (r.order_entity_status) {
+    case "pending_payment":
+      return "pending_payment";
+    case "pending_verify":
+      return "paid_pending_verify";
+    case "paid":
+      return "activating";
+    case "fulfilled":
+      return "completed";
+    case "cancelled":
+    case "refunded":
+      return "cancelled";
+    case "expired":
+      return "expired";
+    default:
+      break;
+  }
   if (r.bill_status === "paid") {
     // Upgrade orders close as cancelled with a paid invoice — still completed.
     return r.sub_status === "suspended" &&
@@ -2031,11 +2059,14 @@ function mapMyOrderRow(r: OrderRow): MyOrderRecord {
         ? "owner"
         : null,
     listPrice: baseListPrice(r),
-    startAt: r.start_at?.toISOString() ?? null,
-    endAt: r.end_at?.toISOString() ?? null,
+    // 升级单履约到另一条订阅：周期看被升级的那条（product_330 P1-b1）
+    startAt: (r.target_start_at ?? r.start_at)?.toISOString() ?? null,
+    endAt: (r.target_end_at ?? r.end_at)?.toISOString() ?? null,
     declaredAt: r.declared_at?.toISOString() ?? null,
     // 服务开通时刻 = 订阅周期起算锚点（owner 口径：自服务开通,非确认收款）
     activatedAt:
-      state === "completed" && r.start_at ? r.start_at.toISOString() : null,
+      state === "completed" && (r.target_start_at ?? r.start_at)
+        ? (r.target_start_at ?? r.start_at)!.toISOString()
+        : null,
   };
 }

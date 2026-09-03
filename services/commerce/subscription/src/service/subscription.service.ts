@@ -235,13 +235,23 @@ export class SubscriptionService {
       target.status === "active" &&
       target.planVersionId === order.planVersionId
     ) {
+      // 版本已切过（崩溃窗口重驱动）：只补订单条款（幂等）+ 关旧行。
+      const settled = await this.repo.applyOrderTermsOnUpgrade(
+        upgradeOfSubscriptionId,
+        orderId,
+        {
+          actorType: params.actorType ?? "operator",
+          actorId: params.operatorId,
+          remark: "upgrade re-drive: order terms applied",
+        },
+      );
       await this.updateSubscription(orderId, {
         status: "cancelled",
         operatorType: params.actorType ?? "operator",
         ...(params.operatorId ? { operatorId: params.operatorId } : {}),
         operatorRemark: `upgrade already applied to ${upgradeOfSubscriptionId} (re-drive close)`,
       });
-      return target;
+      return settled ?? target;
     }
     if (target.status === "active") {
       const upgraded = await this.upgradeSubscription(
@@ -250,13 +260,26 @@ export class SubscriptionService {
         params.operatorId ?? undefined,
         params.remark,
       );
+      // product_330 P1-b1：把订单条款搬过去（周期 / 到期 / 实付 / current_order_id），
+      // 订单实体 → fulfilled 指向目标。此前只换版本，周期与金额原样——caimc 案根因。
+      const settled = await this.repo.applyOrderTermsOnUpgrade(
+        upgradeOfSubscriptionId,
+        orderId,
+        {
+          actorType: params.actorType ?? "operator",
+          actorId: params.operatorId,
+          ...(params.remark ? { remark: params.remark } : {}),
+        },
+      );
+      // 旧模型的订单镜像行（suspended 订阅行）关掉：它从未 live，零 webhook；
+      // 读侧（admin 订阅列表 / console 我的订阅）按 orders.subscription_id <> 本行 过滤掉。
       await this.updateSubscription(orderId, {
         status: "cancelled",
         operatorType: params.actorType ?? "operator",
         ...(params.operatorId ? { operatorId: params.operatorId } : {}),
         operatorRemark: `upgrade applied to ${upgradeOfSubscriptionId}`,
       });
-      return upgraded;
+      return settled ?? upgraded;
     }
     return this.activatePendingOrder(orderId, params);
   }
@@ -461,6 +484,8 @@ export class SubscriptionService {
               paymentId: v.kind === "credit_voucher" ? voucherLegId : null,
             })),
           );
+          // product_330 P1-b1：订单实体 → paid（¥0 / 全券结清）。
+          await this.repo.markOrderPaidTx(client, order.orderNo);
           await this.repo.insertHistoryTx(client, {
             tenantId: order.tenantId,
             subscriptionId: order.id,
@@ -492,6 +517,8 @@ export class SubscriptionService {
           credential,
           actorId: input.userId,
         });
+        // product_330 P1-b1：订单实体 → pending_verify。
+        await this.repo.markOrderDeclaredTx(client, order.orderNo);
         await this.repo.insertHistoryTx(client, {
           tenantId: order.tenantId,
           subscriptionId: order.id,

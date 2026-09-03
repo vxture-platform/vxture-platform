@@ -352,12 +352,63 @@ export class PgSubscriptionRepository {
         ],
       );
 
+      // product_330 P1-b1：订单实体双写。billing.orders 是订单的权威面（意图 / 金额 /
+      // 付款态 / 履约态），旧的 suspended 订阅行只作过渡镜像（P2 退役）。
+      // product_id 取套餐主组件；在途订单部分唯一索引撞上 = 同工作区同产品已有在途单 → 409。
+      let orderId: string;
+      try {
+        const orderResult = await client.query<{ id: string }>(
+          `insert into billing.orders (
+             order_no, tenant_id, workspace_id, product_id, plan_version_id, intent,
+             cycle_unit, cycle_count, from_subscription_id,
+             list_amount, credit_amount, payable_amount, leftover_amount, currency,
+             status, payment_ttl_minutes, created_by_type, created_by_id, created_at, updated_at
+           ) values (
+             $1, $2, $3,
+             (select pc.product_id from product.plan_components pc
+               where pc.plan_version_id = $4 and pc.component_role = 'primary'
+               order by pc.priority asc, pc.sort_order asc limit 1),
+             $4, $5, $6, 1, $7,
+             $8, 0, $8, 0, $9,
+             'pending_payment', $10, 'customer', $11, now(), now()
+           ) returning id`,
+          [
+            orderNo,
+            input.tenantId,
+            input.workspaceId,
+            input.planVersionId,
+            input.intent,
+            input.cycleUnit,
+            input.intent === "upgrade"
+              ? (input.upgradeOfSubscriptionId ?? null)
+              : null,
+            input.price,
+            currency,
+            input.paymentTtlMinutes ?? null,
+            input.createdBy,
+          ],
+        );
+        orderId = orderResult.rows[0]!.id;
+      } catch (err) {
+        if ((err as { code?: string }).code === "23505") {
+          throw new ConflictException(
+            "该工作区在此产品上已有在途订单，请先完成或取消该订单",
+          );
+        }
+        throw err;
+      }
+      await client.query(
+        `update billing.invoices set order_id = $2, updated_at = now() where id = $1`,
+        [invoiceId, orderId],
+      );
+
       await client.query("commit");
       return {
         subscription: this.mapSubscription(subscription),
         invoiceId,
         billNo,
         orderNo: orderNo,
+        orderId,
       };
     } catch (err) {
       await client.query("rollback");
@@ -409,6 +460,26 @@ export class PgSubscriptionRepository {
          where subscription_id = $1 and status = 'active' and reset_period <> 'none'`,
         [id],
       );
+
+      // product_330 P1-b1：订单实体 → fulfilled 指向本行；本行记实付与履约它的订单。
+      const fulfilled = await client.query<{ id: string }>(
+        `update billing.orders
+            set status = 'fulfilled', subscription_id = $2,
+                paid_at = coalesce(paid_at, now()), fulfilled_at = now(),
+                closed_at = null, close_reason = null, updated_at = now()
+          where order_no = $1 and status <> 'fulfilled'
+          returning id`,
+        [updated.order_no, id],
+      );
+      await client.query(
+        `update metering.subscriptions
+            set paid_amount = coalesce(pay_amount, 0),
+                current_order_id = coalesce((select id from billing.orders where order_no = $2), current_order_id),
+                updated_at = now()
+          where id = $1`,
+        [id, updated.order_no],
+      );
+      void fulfilled;
 
       await client.query(
         `insert into metering.subscription_histories (
@@ -519,6 +590,22 @@ export class PgSubscriptionRepository {
       );
       const updated = updateResult.rows[0]!;
 
+      // product_330 P1-b1：订单实体同步关闭（客户取消 / 运营作废 = cancelled，TTL = expired）。
+      await client.query(
+        `update billing.orders
+            set status = $2, closed_at = now(), close_reason = $3, updated_at = now()
+          where order_no = $1 and status in ('pending_payment', 'pending_verify')`,
+        [
+          updated.order_no,
+          input.changeType === "order_expired" ? "expired" : "cancelled",
+          input.changeType === "order_expired"
+            ? "ttl_expired"
+            : input.actorType === "customer"
+              ? "customer_cancel"
+              : "operator_void",
+        ],
+      );
+
       await client.query(
         `insert into metering.subscription_histories (
           tenant_id, subscription_id, change_type, from_status, to_status,
@@ -613,6 +700,14 @@ export class PgSubscriptionRepository {
       );
       const updated = updateResult.rows[0]!;
 
+      // product_330 P1-b1：订单实体回到待付款。
+      await client.query(
+        `update billing.orders
+            set status = 'pending_payment', closed_at = null, close_reason = null, updated_at = now()
+          where order_no = $1 and status in ('cancelled', 'expired')`,
+        [updated.order_no],
+      );
+
       await client.query(
         `insert into metering.subscription_histories (
           tenant_id, subscription_id, change_type, from_status, to_status,
@@ -630,6 +725,116 @@ export class PgSubscriptionRepository {
 
       await client.query("commit");
       return this.mapSubscription(updated);
+    } catch (err) {
+      await client.query("rollback");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * product_330 P1-b1 —— 升级履约把订单条款搬到目标订阅（owner 2026-09-03 决策 2 的
+   * A 段：从履约时刻起按新周期重算；折抵留 P2）：cycle_unit / cycle_count 取订单、
+   * start_at = now、end_at = now + 周期、pay_amount / paid_amount = 订单实付、
+   * current_order_id = 订单；周期池按新锚点重置；订单实体 → fulfilled 指向目标。
+   *
+   * 此前升级只换 plan_version（upgradeSubscription），周期 / 到期 / 金额原样保留——
+   * caimc 付了 starter 一年拿到一个月，就是这里缺的一步。幂等：订单已 fulfilled 直接返回。
+   */
+  async applyOrderTermsOnUpgrade(
+    targetSubscriptionId: string,
+    orderSubscriptionId: string,
+    input: {
+      actorType: "operator" | "customer" | "system";
+      actorId: string | null;
+      remark?: string;
+    },
+  ): Promise<SubscriptionRecord | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const orderRow = await client.query<{
+        order_no: string | null;
+        cycle_unit: string;
+        cycle_count: number;
+        pay_amount: string | null;
+      }>(
+        `select order_no, cycle_unit, cycle_count, pay_amount
+           from metering.subscriptions where id = $1 and deleted_at is null for update`,
+        [orderSubscriptionId],
+      );
+      const order = orderRow.rows[0];
+      if (!order?.order_no) {
+        await client.query("rollback");
+        return null;
+      }
+      const entity = await client.query<{ id: string; status: string }>(
+        `select id, status from billing.orders where order_no = $1 for update`,
+        [order.order_no],
+      );
+      const orderEntity = entity.rows[0] ?? null;
+      if (orderEntity && orderEntity.status === "fulfilled") {
+        await client.query("rollback");
+        return this.getById(targetSubscriptionId);
+      }
+
+      const updated = await client.query<SubscriptionRow>(
+        `update metering.subscriptions
+            set cycle_unit = $2, cycle_count = $3,
+                start_at = now(),
+                end_at = now() + ($3::text || ' ' || $2)::interval,
+                pay_amount = $4, paid_amount = $4,
+                current_order_id = $5,
+                updated_at = now()
+          where id = $1 and deleted_at is null
+          returning *`,
+        [
+          targetSubscriptionId,
+          order.cycle_unit,
+          order.cycle_count,
+          order.pay_amount ?? 0,
+          orderEntity?.id ?? null,
+        ],
+      );
+      const target = updated.rows[0];
+      if (!target) {
+        await client.query("rollback");
+        return null;
+      }
+      await client.query(
+        `update metering.quota_pools
+            set period_anchor = now(), current_period_start = now(), updated_at = now()
+          where subscription_id = $1 and status = 'active' and reset_period <> 'none'`,
+        [targetSubscriptionId],
+      );
+      if (orderEntity) {
+        await client.query(
+          `update billing.orders
+              set status = 'fulfilled', subscription_id = $2,
+                  paid_at = coalesce(paid_at, now()), fulfilled_at = now(),
+                  closed_at = null, close_reason = null, updated_at = now()
+            where id = $1`,
+          [orderEntity.id, targetSubscriptionId],
+        );
+      }
+      await client.query(
+        `insert into metering.subscription_histories (
+           tenant_id, subscription_id, change_type, from_status, to_status,
+           actor_type, actor_id, remark, created_at
+         ) values ($1, $2, 'upgrade_terms_applied', $3, $3, $4, $5, $6, now())`,
+        [
+          target.tenant_id,
+          targetSubscriptionId,
+          target.status,
+          input.actorType,
+          input.actorId,
+          input.remark ??
+            `order ${order.order_no}: cycle ${order.cycle_count} ${order.cycle_unit}, paid ${order.pay_amount ?? "0"}`,
+        ],
+      );
+      await client.query("commit");
+      return this.mapSubscription(target);
     } catch (err) {
       await client.query("rollback");
       throw err;
@@ -1147,6 +1352,49 @@ export class PgSubscriptionRepository {
       [input.invoiceId, input.voucherLegYuan],
     );
     return { voucherLegId };
+  }
+
+  /** product_330 P1-b1：申报付款 → 订单实体 pending_verify（同一事务）。 */
+  async markOrderDeclaredTx(
+    client: PoolClient,
+    orderNo: string | null,
+  ): Promise<void> {
+    if (!orderNo) return;
+    await client.query(
+      `update billing.orders
+          set status = 'pending_verify', declared_at = now(), updated_at = now()
+        where order_no = $1 and status = 'pending_payment'`,
+      [orderNo],
+    );
+  }
+
+  /** product_330 P1-b1：账单结清 → 订单实体 paid（履约后再由 activate / upgrade 翻 fulfilled）。 */
+  async markOrderPaidTx(
+    client: PoolClient,
+    orderNo: string | null,
+    paidAt: Date | null = null,
+  ): Promise<void> {
+    if (!orderNo) return;
+    await client.query(
+      `update billing.orders
+          set status = 'paid', paid_at = coalesce($2, paid_at, now()), updated_at = now()
+        where order_no = $1 and status in ('pending_payment', 'pending_verify')`,
+      [orderNo, paidAt],
+    );
+  }
+
+  /** product_330 P1-b1：申报被驳回 → 订单实体回到 pending_payment。 */
+  async markOrderRejectedTx(
+    client: PoolClient,
+    orderNo: string | null,
+  ): Promise<void> {
+    if (!orderNo) return;
+    await client.query(
+      `update billing.orders
+          set status = 'pending_payment', declared_at = null, updated_at = now()
+        where order_no = $1 and status = 'pending_verify'`,
+      [orderNo],
+    );
   }
 
   /** Append a subscription_histories row inside the declare tx. */
