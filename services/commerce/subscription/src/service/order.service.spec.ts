@@ -233,8 +233,13 @@ describe("OrderService upgrade proration (P2-a)", () => {
       proration: { credit: number; payable: number; leftover: number };
     };
     // 30-day cycle, ~15 days left (r≈0.5), u=0.8, α default 0.5 → 100×(0.25+0.4)=65
-    expect(input.proration.credit).toBeCloseTo(65, 0);
-    expect(input.proration.payable).toBeCloseTo(235, 0);
+    // 剩余天数向下取整：夹在 14/30（63.33）与 15/30（65）之间，不依赖用例执行时刻
+    expect(input.proration.credit).toBeGreaterThanOrEqual(63.33);
+    expect(input.proration.credit).toBeLessThanOrEqual(65);
+    expect(input.proration.payable).toBeCloseTo(
+      300 - input.proration.credit,
+      2,
+    );
     expect(input.proration.leftover).toBe(0);
   });
 
