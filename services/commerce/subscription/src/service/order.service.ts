@@ -25,6 +25,13 @@ import {
 import { PgOrderRepository } from "../repository/pg-order.repository";
 import { PgSubscriptionRepository } from "../repository/pg-subscription.repository";
 import { SubscriptionService } from "./subscription.service";
+import {
+  DEFAULT_CONSUMABLE_SHARE,
+  computeProration,
+  cycleDays,
+  daysLeftOf,
+  type ProrationResult,
+} from "../money/proration";
 import type {
   CreateOrderInput,
   CreateOrderResult,
@@ -140,7 +147,48 @@ export class OrderService {
         }
       }
     }
+    if (input.intent === "upgrade" && input.fromSubscriptionId) {
+      // 折抵随单落库（P2-a）：确认页展示的报价与这里同一函数，同一时刻只差秒级。
+      const quote = await this.quoteUpgrade(
+        input.fromSubscriptionId,
+        input.price,
+      );
+      return this.orders.createOrder({
+        ...input,
+        proration: {
+          credit: quote.credit,
+          payable: quote.payable,
+          leftover: quote.leftover,
+          snapshot: { ...quote, computedAt: new Date().toISOString() },
+        },
+      });
+    }
     return this.orders.createOrder(input);
+  }
+
+  /**
+   * 升级报价（product_330 §4.1，owner 决策 2）：credit = P_old × ((1−α)·r + α·u)。
+   * P_old = 原订阅本周期实付；r = 剩余天数比；u = 消耗性池剩余比；α = 主组件 consumable_share
+   * （默认 0.5，无消耗性池为 0）。原订阅无到期日（perpetual）→ 视为周期已用尽（r=0）。
+   */
+  async quoteUpgrade(
+    fromSubscriptionId: string,
+    pNew: number,
+  ): Promise<ProrationResult> {
+    const basis = await this.orders.getProrationBasis(fromSubscriptionId);
+    if (!basis)
+      throw new NotFoundException(`订阅 ${fromSubscriptionId} 不存在`);
+    const now = new Date();
+    const daysTotal = basis.endAt ? cycleDays(basis.startAt, basis.endAt) : 1;
+    const daysLeft = basis.endAt ? daysLeftOf(basis.endAt, now) : 0;
+    return computeProration({
+      pOld: basis.paidAmount,
+      pNew,
+      daysTotal,
+      daysLeft,
+      usageRemainingRatio: basis.usageRemainingRatio,
+      consumableShare: basis.consumableShare ?? DEFAULT_CONSUMABLE_SHARE,
+    });
   }
 
   /**
@@ -378,6 +426,10 @@ export class OrderService {
         payAmount: order.payableAmount,
         orderId: order.id,
       });
+      // 折抵溢出进预付款（幂等，按 order_no 去重）——放在订阅改完之后，钱的动作最后做。
+      if (Number(order.leftoverAmount) > 0) {
+        await this.orders.grantLeftoverToPrepaid(order, actor);
+      }
       subscription = await this.subscriptions.getSubscription(from.id);
     } else if (mode === "renew" && from && RENEWABLE.has(from.status)) {
       const now = new Date();

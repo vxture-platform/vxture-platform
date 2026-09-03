@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ConflictException, NotFoundException } from "@nestjs/common";
 import { OrderService } from "./order.service";
 import type { OrderRecord } from "../types/order.types";
+import type { ProrationBasis } from "../repository/pg-order.repository";
 
 // product_330 P1-b2 — order orchestration over the order entity. The repo and
 // SubscriptionService are mocked: what is asserted is the dispatch/guard logic
@@ -71,6 +72,16 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
     markFulfilled: vi.fn(async () => true),
     cancelOrder: vi.fn(async () => ({ ...orderRow, status: "cancelled" })),
     restoreOrder: vi.fn(async () => orderRow),
+    getProrationBasis: vi.fn(
+      async (_id: string): Promise<ProrationBasis> => ({
+        paidAmount: 100,
+        startAt: new Date(Date.now() - 15 * 86_400_000),
+        endAt: new Date(Date.now() + 15 * 86_400_000),
+        consumableShare: null,
+        usageRemainingRatio: 0.8,
+      }),
+    ),
+    grantLeftoverToPrepaid: vi.fn(async () => true),
     findExpiredIds: vi.fn(
       async (_ttl: number, _limit: number): Promise<string[]> => [],
     ),
@@ -196,6 +207,81 @@ describe("OrderService.createOrder guards", () => {
       itemName: "Pro",
     });
     expect(orders.createOrder).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("OrderService upgrade proration (P2-a)", () => {
+  it("createOrder(upgrade) attaches the quote: credit = P_old × ((1−α)r + αu), payable = P_new − credit", async () => {
+    const { service, orders } = build(
+      order({ intent: "upgrade", fromSubscriptionId: "sub-1" }),
+      sub({ planVersionId: PV_FREE, status: "active" }),
+    );
+    await service.createOrder({
+      tenantId: "t-1",
+      workspaceId: WS,
+      planVersionId: PV_PRO,
+      cycleUnit: "month",
+      price: 300,
+      createdBy: "u-1",
+      intent: "upgrade",
+      fromSubscriptionId: "sub-1",
+      itemName: "Pro",
+    });
+    const input = (
+      orders.createOrder as unknown as { mock: { calls: unknown[][] } }
+    ).mock.calls[0]![0] as {
+      proration: { credit: number; payable: number; leftover: number };
+    };
+    // 30-day cycle, ~15 days left (r≈0.5), u=0.8, α default 0.5 → 100×(0.25+0.4)=65
+    // 剩余天数向下取整：夹在 14/30（63.33）与 15/30（65）之间，不依赖用例执行时刻
+    expect(input.proration.credit).toBeGreaterThanOrEqual(63.33);
+    expect(input.proration.credit).toBeLessThanOrEqual(65);
+    expect(input.proration.payable).toBeCloseTo(
+      300 - input.proration.credit,
+      2,
+    );
+    expect(input.proration.leftover).toBe(0);
+  });
+
+  it("quoteUpgrade: a subscription with no consumable pools credits by time only", async () => {
+    const { service, orders } = build(order(), sub());
+    orders.getProrationBasis.mockResolvedValueOnce({
+      paidAmount: 120,
+      startAt: new Date(Date.now() - 292 * 86_400_000),
+      endAt: new Date(Date.now() + 73 * 86_400_000),
+      consumableShare: null,
+      usageRemainingRatio: null,
+    });
+    const q = await service.quoteUpgrade("sub-1", 240);
+    expect(q.alpha).toBe(0);
+    expect(q.credit).toBeCloseTo(24, 0);
+  });
+
+  it("fulfill(upgrade) grants the leftover to the prepaid balance after the plan switch", async () => {
+    const { service, orders } = build(
+      order({
+        intent: "upgrade",
+        fromSubscriptionId: "sub-1",
+        payableAmount: "0.00",
+        creditAmount: "150.00",
+        leftoverAmount: "50.00",
+      }),
+      sub({ planVersionId: PV_FREE, status: "active" }),
+    );
+    await service.fulfill("ord-1", { actorType: "operator", actorId: "op" });
+    expect(orders.grantLeftoverToPrepaid).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "ord-1" }),
+      expect.objectContaining({ actorType: "operator" }),
+    );
+  });
+
+  it("fulfill(upgrade) with no leftover never touches the prepaid balance", async () => {
+    const { service, orders } = build(
+      order({ intent: "upgrade", fromSubscriptionId: "sub-1" }),
+      sub({ planVersionId: PV_FREE, status: "active" }),
+    );
+    await service.fulfill("ord-1", { actorType: "operator", actorId: "op" });
+    expect(orders.grantLeftoverToPrepaid).not.toHaveBeenCalled();
   });
 });
 

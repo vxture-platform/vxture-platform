@@ -79,6 +79,17 @@ export interface CreateOrderInput {
   itemName: string;
   /** 付款时效（分钟，个人 30 / 组织 2880）；omitted → 读取端回退 env */
   paymentTtlMinutes?: number;
+  /**
+   * 升级折抵（product_330 §4.1，P2-a）：由 OrderService.quoteUpgrade 算出后随单落库——
+   * credit 抵扣标价（账单落一条 credit_adjustment 负行），leftover 履约时进预付款余额，
+   * snapshot 原样写 orders.proration 供确认页 / 账单明细追溯。
+   */
+  proration?: {
+    credit: number;
+    payable: number;
+    leftover: number;
+    snapshot: Record<string, unknown>;
+  };
 }
 
 export interface CreateOrderResult {

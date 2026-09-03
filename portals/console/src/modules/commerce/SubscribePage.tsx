@@ -35,6 +35,8 @@ import { useRouter } from "@/lib/i18n/navigation";
 import { PageSection } from "@/layout/shell";
 import {
   createSubscriptionOrder,
+  fetchUpgradeQuote,
+  type UpgradeQuote,
   fetchSubscribeContext,
   type SubscribeContext,
   type SubscribePlanOption,
@@ -76,6 +78,77 @@ function priceForCycle(
   cycle: Cycle,
 ): SubscribePlanPrice | undefined {
   return plan.prices.find((p) => p.cycleUnit === cycle && p.cycleCount === 1);
+}
+
+/**
+ * 升级折抵摘要（product_330 §4.1）：自取报价，显示「升级折抵 / 应付合计 / 溢出提示」。
+ * 独立组件是因为 SubscribePage 在派生出套餐与周期之前有早退，hook 不能放在那之后。
+ */
+function UpgradeQuoteSummary({
+  subscriptionId,
+  planVersionId,
+  cycle,
+  fallbackTotal,
+}: {
+  subscriptionId: string;
+  planVersionId: string;
+  cycle: Cycle;
+  /** 报价未到 / 失败时显示的标价 */
+  fallbackTotal: string;
+}) {
+  const t = useTranslations("subscribePage");
+  const formatMoney = moneyFor(useLocale() as Locale);
+  const [quote, setQuote] = useState<UpgradeQuote | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setQuote(null);
+    void fetchUpgradeQuote({
+      subscriptionId,
+      planVersionId,
+      cycleUnit: cycle,
+    }).then((q) => {
+      if (alive) setQuote(q);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [subscriptionId, planVersionId, cycle]);
+
+  return (
+    <>
+      {quote && Number(quote.credit) > 0 ? (
+        <div className="flex flex-col gap-2xs">
+          <div className="flex items-baseline justify-between gap-md text-body-md">
+            <span className="text-muted-foreground">{t("confirm.credit")}</span>
+            <span className="font-medium text-foreground tabular-nums">
+              −{formatMoney(quote.credit, quote.currency)}
+            </span>
+          </div>
+          <p className="text-body-sm text-muted-foreground">
+            {t("confirm.creditNote", {
+              days: quote.daysLeft,
+              usage: Math.round(quote.usageRemainingRatio * 100),
+            })}
+          </p>
+        </div>
+      ) : null}
+      <div className="flex items-baseline justify-between gap-md border-t border-dashed border-primary/10 pt-md dark:border-primary/20">
+        <strong className="text-label-lg text-foreground">
+          {t("confirm.total")}
+        </strong>
+        <span className="text-heading-3 text-foreground tabular-nums">
+          {quote ? formatMoney(quote.payable, quote.currency) : fallbackTotal}
+        </span>
+      </div>
+      {quote && Number(quote.leftover) > 0 ? (
+        <p className="text-body-sm text-muted-foreground">
+          {t("confirm.leftoverNote", {
+            amount: formatMoney(quote.leftover, quote.currency),
+          })}
+        </p>
+      ) : null}
+    </>
+  );
 }
 
 export function SubscribePage() {
@@ -437,18 +510,28 @@ export function SubscribePage() {
                         : t("pricePending")}
                   </span>
                 </div>
-                <div className="flex items-baseline justify-between gap-md border-t border-dashed border-primary/10 pt-md dark:border-primary/20">
-                  <strong className="text-label-lg text-foreground">
-                    {t("confirm.total")}
-                  </strong>
-                  <span className="text-heading-3 text-foreground tabular-nums">
-                    {isEnterprise
-                      ? "—"
-                      : price
-                        ? formatMoney(price.price, price.currency)
-                        : "—"}
-                  </span>
-                </div>
+                {orderIntent === "upgrade" && current && price ? (
+                  // 折抵报价在子组件里取（hook 不能放在本组件的早退之后）
+                  <UpgradeQuoteSummary
+                    subscriptionId={current.subscriptionId}
+                    planVersionId={plan.planVersionId}
+                    cycle={cycle}
+                    fallbackTotal={formatMoney(price.price, price.currency)}
+                  />
+                ) : (
+                  <div className="flex items-baseline justify-between gap-md border-t border-dashed border-primary/10 pt-md dark:border-primary/20">
+                    <strong className="text-label-lg text-foreground">
+                      {t("confirm.total")}
+                    </strong>
+                    <span className="text-heading-3 text-foreground tabular-nums">
+                      {isEnterprise
+                        ? "—"
+                        : price
+                          ? formatMoney(price.price, price.currency)
+                          : "—"}
+                    </span>
+                  </div>
+                )}
                 {isEnterprise ? (
                   <>
                     <Button

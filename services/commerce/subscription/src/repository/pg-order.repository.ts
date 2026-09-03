@@ -72,6 +72,17 @@ interface AutoRenewCandidateRow {
   price: string | null;
 }
 
+/** 折抵三输入（product_330 §4.1）。 */
+export interface ProrationBasis {
+  paidAmount: number;
+  startAt: Date;
+  endAt: Date | null;
+  /** 主组件 quota._pricing.consumable_share；未配置 null → 默认值 */
+  consumableShare: number | null;
+  /** 消耗性池剩余比 [0,1]；null = 没有消耗性池 */
+  usageRemainingRatio: number | null;
+}
+
 export interface AutoRenewCandidate {
   subscriptionId: string;
   tenantId: string;
@@ -179,6 +190,12 @@ export class PgOrderRepository {
       const billNo = visibleCode("INV");
       const currency = input.currency ?? "CNY";
       const createdByType: OrderActorType = input.createdByType ?? "customer";
+      // 升级折抵（P2-a）：标价 → 折抵 → 应付 / 溢出；无折抵时 应付 = 标价。
+      const credit = input.proration?.credit ?? 0;
+      const payable = input.proration?.payable ?? input.price;
+      const leftover = input.proration?.leftover ?? 0;
+      const creditApplied =
+        Math.round(Math.min(credit, input.price) * 100) / 100;
 
       let orderRow: OrderRow;
       try {
@@ -186,7 +203,7 @@ export class PgOrderRepository {
           `insert into billing.orders (
              order_no, tenant_id, workspace_id, product_id, plan_version_id, intent,
              cycle_unit, cycle_count, from_subscription_id,
-             list_amount, credit_amount, payable_amount, leftover_amount, currency,
+             list_amount, credit_amount, payable_amount, leftover_amount, currency, proration,
              status, payment_ttl_minutes, created_by_type, created_by_id, created_at, updated_at
            ) values (
              $1, $2, $3,
@@ -194,7 +211,7 @@ export class PgOrderRepository {
                where pc.plan_version_id = $4 and pc.component_role = 'primary'
                order by pc.priority asc, pc.sort_order asc limit 1),
              $4, $5, $6, 1, $7,
-             $8, 0, $8, 0, $9,
+             $8, $13, $14, $15, $9, $16::jsonb,
              'pending_payment', $10, $12, $11, now(), now()
            ) returning *`,
           [
@@ -210,6 +227,10 @@ export class PgOrderRepository {
             input.paymentTtlMinutes ?? null,
             input.createdBy,
             createdByType,
+            credit,
+            payable,
+            leftover,
+            input.proration ? JSON.stringify(input.proration.snapshot) : null,
           ],
         );
         orderRow = res.rows[0]!;
@@ -247,7 +268,7 @@ export class PgOrderRepository {
           orderRow.from_subscription_id,
           orderRow.id,
           input.cycleUnit,
-          input.price,
+          payable,
           currency,
           input.createdBy,
           JSON.stringify({ intent: input.intent, order_no: orderNo }),
@@ -255,6 +276,25 @@ export class PgOrderRepository {
         ],
       );
       const invoiceId = invoice.rows[0]!.id;
+
+      // 折抵负行（credit_adjustment）：账单总额 = 标价 + (−折抵) = 应付；不用 discount 类型，
+      // 券的预留 / 释放 / 驳回回滚只动 discount 行，折抵行不受影响。
+      if (creditApplied > 0) {
+        await client.query(
+          `insert into billing.invoice_items (
+             bill_id, tenant_id, workspace_id, subscription_id,
+             item_name, item_type, quantity, unit_price, total_amount, remark, created_at, updated_at
+           ) values ($1, $2, $3, $4, '升级折抵', 'credit_adjustment', 1, $5, $5, $6, now(), now())`,
+          [
+            invoiceId,
+            input.tenantId,
+            input.workspaceId,
+            orderRow.from_subscription_id,
+            -creditApplied,
+            `product_330 §4.1 proration of ${orderRow.from_subscription_id}`,
+          ],
+        );
+      }
 
       await client.query(
         `insert into billing.invoice_items (
@@ -507,6 +547,128 @@ export class PgOrderRepository {
       remark: actor.remark ?? "zero-amount order settled",
       clientIp: actor.clientIp ?? null,
     });
+  }
+
+  /**
+   * 升级折抵的三个输入（product_330 §4.1）：原订阅本周期实付、周期起止、消耗性池剩余比
+   * （消耗性 = 产品 pool 型 metric 或平台 counter 型；按额度加权）、主组件 consumable_share。
+   */
+  async getProrationBasis(
+    subscriptionId: string,
+  ): Promise<ProrationBasis | null> {
+    const res = await this.pool.query<{
+      paid_amount: string | null;
+      pay_amount: string | null;
+      start_at: Date;
+      end_at: Date | null;
+      consumable_share: string | null;
+      pool_limit: string | null;
+      pool_remaining: string | null;
+    }>(
+      `select s.paid_amount, s.pay_amount, s.start_at, s.end_at,
+              pc.quota #>> '{_pricing,consumable_share}' as consumable_share,
+              pools.pool_limit, pools.pool_remaining
+         from metering.subscriptions s
+         left join lateral (
+           select quota from product.plan_components
+            where plan_version_id = s.plan_version_id and component_role = 'primary'
+            order by priority asc, sort_order asc limit 1
+         ) pc on true
+         left join lateral (
+           select sum(qp.quota_limit)::text as pool_limit,
+                  sum(greatest(0, qp.quota_limit - qp.quota_used))::text as pool_remaining
+             from metering.quota_pools qp
+            where qp.subscription_id = s.id and qp.status = 'active'
+              and qp.pool_source = 'subscription' and qp.quota_limit > 0
+              and (
+                exists (select 1 from product.product_metrics pm
+                         where pm.product_id = qp.product_id and pm.metric_key = qp.metric_key
+                           and pm.merge_strategy = 'pool')
+                or exists (select 1 from product.platform_metrics plm
+                            where plm.metric_key = qp.metric_key and plm.kind = 'counter')
+              )
+         ) pools on true
+        where s.id = $1 and s.deleted_at is null`,
+      [subscriptionId],
+    );
+    const r = res.rows[0];
+    if (!r) return null;
+    const limit = Number(r.pool_limit ?? 0);
+    return {
+      paidAmount: Number(r.paid_amount ?? r.pay_amount ?? 0),
+      startAt: r.start_at,
+      endAt: r.end_at,
+      consumableShare:
+        r.consumable_share !== null &&
+        Number.isFinite(Number(r.consumable_share))
+          ? Number(r.consumable_share)
+          : null,
+      usageRemainingRatio:
+        limit > 0 ? Number(r.pool_remaining ?? 0) / limit : null,
+    };
+  }
+
+  /**
+   * 折抵溢出进预付款余额（product_330 §4.1 leftover）：credits 池 += leftover + grant 流水；
+   * 以 transactions.related_no = order_no 幂等（履约重跑不重复入账）。
+   */
+  async grantLeftoverToPrepaid(
+    order: OrderRecord,
+    actor: OrderActor,
+  ): Promise<boolean> {
+    const leftover = Number(order.leftoverAmount);
+    if (!(leftover > 0)) return false;
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const dup = await client.query(
+        `select 1 from billing.transactions
+          where related_no = $1 and trade_type = 'grant' limit 1`,
+        [order.orderNo],
+      );
+      if (dup.rows[0]) {
+        await client.query("rollback");
+        return false;
+      }
+      const pool = await client.query<{ balance: string }>(
+        `insert into billing.credits (tenant_id, currency, balance, total_granted, version, created_at, updated_at)
+         values ($1, $2, $3, $3, 1, now(), now())
+         on conflict (tenant_id) do update set
+           balance = billing.credits.balance + excluded.balance,
+           total_granted = billing.credits.total_granted + excluded.total_granted,
+           version = billing.credits.version + 1,
+           updated_at = now()
+         returning balance`,
+        [order.tenantId, order.currency, leftover],
+      );
+      const after = Number(pool.rows[0]!.balance);
+      await client.query(
+        `insert into billing.transactions (
+           tenant_id, bill_id, transaction_no, trade_type, source_method,
+           amount, currency, balance_before, balance_after, trade_status,
+           related_no, remark, actor_type, actor_id
+         ) values ($1, null, $2, 'grant', null, $3, $4, $5, $6, 'success', $7, $8, $9, $10)`,
+        [
+          order.tenantId,
+          visibleCode("TXN"),
+          leftover,
+          order.currency,
+          Math.round((after - leftover) * 100) / 100,
+          after,
+          order.orderNo,
+          `upgrade proration leftover (order ${order.orderNo})`,
+          actor.actorType,
+          actor.actorId,
+        ],
+      );
+      await client.query("commit");
+      return true;
+    } catch (err) {
+      await client.query("rollback");
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   /**
