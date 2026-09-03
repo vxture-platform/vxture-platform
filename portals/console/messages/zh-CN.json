@@ -119,7 +119,7 @@
     "slotLevel": "用户等级",
     "slotLocked": "其他奖章 · 待解锁",
     "billing": "账单",
-    "monthlyCost": "订阅费用",
+    "monthlyCost": "本月费用",
     "noData": "无相关数据",
     "payBill": "支付账单",
     "trafficUsage": "流量用量",
@@ -145,7 +145,7 @@
       "unavailable": "暂不可用",
       "uncovered": "无额度池"
     },
-    "monthlyCostDesc": "当前订阅本周期实付与开票状态",
+    "monthlyCostDesc": "本月实付合计与开票状态",
     "payBillDesc": "管理支付方式与付款",
     "trafficUsageDesc": "查看流量与调用用量",
     "usageLimitDesc": "配额上限与告警阈值",

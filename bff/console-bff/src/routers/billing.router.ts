@@ -64,6 +64,12 @@ export interface BillingOverview {
   cancelled: number;
   /** 累计实收（元字符串，paid_amount 求和——含部分收款）。 */
   paidTotal: string;
+  /**
+   * 本自然月实付（元字符串）：billing.payments pay_status='paid' 且 paid_at 落在本月的
+   * paid_amount 合计。收付实现制（owner 2026-09-03）：钱在哪个月到就记哪个月，年付
+   * 之后的十一个月为 0 是对的，不做分摊。
+   */
+  paidThisMonth: string;
   currency: string;
 }
 
@@ -429,6 +435,15 @@ export class BillingRouter {
         sum + Math.round(Number.parseFloat(i.paidAmount || "0") * 100),
       0,
     );
+    // 本月实付：与 admin 租户「本月收入」同一口径（库会话时区的自然月，毛额不冲退款）。
+    const month = await this.pool.query<{ paid: string }>(
+      `select coalesce(sum(p.paid_amount), 0)::numeric(12,2)::text as paid
+         from billing.payments p
+        where p.tenant_id = $1 and p.pay_status = 'paid'
+          and p.paid_at >= date_trunc('month', now())
+          and p.paid_at <  date_trunc('month', now()) + interval '1 month'`,
+      [req.tenant.id],
+    );
     return {
       total: items.length,
       paid: items.filter((i) => i.billStatus === "paid").length,
@@ -436,6 +451,7 @@ export class BillingRouter {
       overdue: items.filter((i) => i.billStatus === "overdue").length,
       cancelled: items.filter((i) => i.billStatus === "cancelled").length,
       paidTotal: (paidCents / 100).toFixed(2),
+      paidThisMonth: month.rows[0]?.paid ?? "0.00",
       currency: items[0]?.currency ?? "CNY",
     };
   }

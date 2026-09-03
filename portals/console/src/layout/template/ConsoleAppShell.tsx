@@ -11,6 +11,7 @@ import { writeNavCollapsed } from "@vxture-platform/shared";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { appCenterModuleTiles, consoleDomains } from "@/config/navigation";
 import {
+  fetchBillingSummary,
   fetchMyApps,
   fetchMySubscriptions,
   fetchMyWorkspaces,
@@ -131,12 +132,21 @@ export function ConsoleAppShell({
 
     const loadBilling = async () => {
       try {
-        const subs = await fetchMySubscriptions();
-        const active = subs.find((s) => s.status === "active") ?? subs[0];
-        if (alive && active) {
-          setBilling({ amount: active.price, currency: active.currency });
-          setPlanName(active.planName || null);
+        // 「本月费用」= 本自然月实付合计（收付实现制，owner 2026-09-03）：年付在付款
+        // 那个月记整年，之后各月为 0 是对的；不再拿当前订阅的周期价冒充月费。
+        const [summary, subs] = await Promise.all([
+          fetchBillingSummary(),
+          fetchMySubscriptions(),
+        ]);
+        if (!alive) return;
+        if (summary) {
+          setBilling({
+            amount: Number(summary.paidThisMonth ?? 0),
+            currency: summary.currency,
+          });
         }
+        const active = subs.find((s) => s.status === "active") ?? subs[0];
+        if (active) setPlanName(active.planName || null);
       } catch {
         /* fallback 0 */
       }

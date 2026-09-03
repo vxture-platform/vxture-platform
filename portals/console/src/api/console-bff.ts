@@ -1125,6 +1125,8 @@ export interface ConsoleBillingSummary {
   cancelled: number;
   /** 累计实收（元字符串）。 */
   paidTotal: string;
+  /** 本自然月实付（元字符串）；收付实现制，年付后的月份为 0 是对的。 */
+  paidThisMonth: string;
   currency: string;
 }
 
