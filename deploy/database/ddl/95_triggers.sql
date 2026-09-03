@@ -417,3 +417,27 @@ CREATE TRIGGER trg_tenants_reprefix_ws
   AFTER UPDATE ON tenancy.tenants
   FOR EACH ROW WHEN (OLD.tenant_no IS DISTINCT FROM NEW.tenant_no)
   EXECUTE FUNCTION tenancy.reprefix_workspace_nos();
+
+-- ═══ product_330：订阅冗余列 product_id 自动填充 ═══
+-- metering.subscriptions.product_id = plan_version 主组件（component_role='primary'）的产品。写路径不必
+-- 自己算：INSERT 与改 plan_version_id 的 UPDATE 时由本触发器补齐，uidx_subscriptions_live_per_product
+-- 才能在库内兜底"一个 workspace × product 至多一条当前订阅"。幂等（CREATE OR REPLACE + DROP IF EXISTS）。
+CREATE OR REPLACE FUNCTION metering.fill_subscription_product_id() RETURNS trigger AS $$
+BEGIN
+  IF NEW.product_id IS NULL
+     OR (TG_OP = 'UPDATE' AND NEW.plan_version_id IS DISTINCT FROM OLD.plan_version_id) THEN
+    SELECT pc.product_id INTO NEW.product_id
+      FROM product.plan_components pc
+     WHERE pc.plan_version_id = NEW.plan_version_id
+       AND pc.component_role = 'primary'
+     ORDER BY pc.priority ASC, pc.sort_order ASC
+     LIMIT 1;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_subscriptions_fill_product_id ON metering.subscriptions;
+CREATE TRIGGER trg_subscriptions_fill_product_id
+  BEFORE INSERT OR UPDATE OF plan_version_id, product_id ON metering.subscriptions
+  FOR EACH ROW EXECUTE FUNCTION metering.fill_subscription_product_id();

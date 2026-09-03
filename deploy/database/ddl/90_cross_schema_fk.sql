@@ -246,6 +246,40 @@ DO $$ BEGIN
     FOREIGN KEY (result_invoice_id) REFERENCES billing.invoices(id);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+-- ── product_330：订单实体（billing.orders）与订阅冗余列的跨 schema FK ────────────
+DO $$ BEGIN
+  ALTER TABLE metering.subscriptions ADD CONSTRAINT fk_subscriptions_product
+    FOREIGN KEY (product_id) REFERENCES product.products(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE metering.subscriptions ADD CONSTRAINT fk_subscriptions_current_order
+    FOREIGN KEY (current_order_id) REFERENCES billing.orders(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE billing.orders ADD CONSTRAINT fk_orders_tenant
+    FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE billing.orders ADD CONSTRAINT fk_orders_workspace
+    FOREIGN KEY (workspace_id) REFERENCES tenancy.workspaces(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE billing.orders ADD CONSTRAINT fk_orders_product
+    FOREIGN KEY (product_id) REFERENCES product.products(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE billing.orders ADD CONSTRAINT fk_orders_plan_version
+    FOREIGN KEY (plan_version_id) REFERENCES product.plan_versions(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE billing.orders ADD CONSTRAINT fk_orders_from_subscription
+    FOREIGN KEY (from_subscription_id) REFERENCES metering.subscriptions(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE billing.orders ADD CONSTRAINT fk_orders_subscription
+    FOREIGN KEY (subscription_id) REFERENCES metering.subscriptions(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 -- ── 裸 UUID 边界#2（realm 硬隔离，铁律七）：一律不建 FK ──────────────────────────
 --   metering.subscriptions.created_by_id                         → account.users | admin.operator_accounts（按 created_by_type）
 --   metering.subscription_histories.actor_id                     → account.users | admin.operator_accounts（按 actor_type）

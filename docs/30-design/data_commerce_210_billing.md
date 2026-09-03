@@ -404,3 +404,27 @@ CREATE TRIGGER trg_tt_no_delete BEFORE DELETE ON billing.transactions
 - 迁移步骤由实施文档另定。
 - **预付费/卡券为结构预留，业务陆续实现**：以下属实施逻辑、本文只备数据结构——① 预付费 consume gate 改为**余额充足性**判断（metering consume 当前是 quota gate）；② ~5min 实时扣费 Job（聚合 usage_events→计价→扣 credits→写 prepaid_charges+transactions）；③ 低余额提醒/停服降级策略；④ 卡券五型核销引擎（§7.1）+ 折扣券×等级校验（§7.1.1）；⑤ 卡券是否长成独立 `promotion` schema（现放 billing）视活动/投放需求再定。
 - `billing_mode` 现挂 `credits`（per-tenant）——是否需 per-workspace/per-subscription 粒度待业务确认（当前 per-tenant 账号级）。
+
+## 13. `orders`（订单实体，product_330，2026-09-03）
+
+订单从 `metering.subscriptions` 拆出成独立实体（[`product_330`](./product_330_order-entity-split.md)），放在 billing 域：订单是钱、意图、履约态的载体，账单 / 付款 / 退款都挂 `order_id`；订阅只回答"现在有什么"。履约（fulfill）是订单→订阅的唯一入口，幂等。
+
+| 字段                                                                      | 类型          | 约束                                              | 说明                                                                                     |
+| ------------------------------------------------------------------------- | ------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `id`                                                                      | uuid          | PK                                                |                                                                                          |
+| `order_no`                                                                | varchar(64)   | UNIQUE NOT NULL                                   | 可视码 `ORD-{YYYYMM}-{10位hex}`（沿用）                                                  |
+| `tenant_id` / `workspace_id`                                              | uuid          | NOT NULL, FK→tenancy                              | 结算主体 / 权益主体                                                                      |
+| `product_id` / `plan_version_id`                                          | uuid          | NOT NULL, FK→product                              | 目标套餐版本与其主组件产品                                                               |
+| `intent`                                                                  | varchar(16)   | CHECK new/upgrade/renew                           |                                                                                          |
+| `cycle_unit` / `cycle_count`                                              |               |                                                   | 所购周期                                                                                 |
+| `from_subscription_id`                                                    | uuid          | FK→metering.subscriptions；`intent<>'new'` 时必填 | upgrade / renew 的原订阅                                                                 |
+| `subscription_id`                                                         | uuid          | FK→metering.subscriptions；fulfilled 时必填       | 履约后指向                                                                               |
+| `list_amount` / `credit_amount` / `payable_amount` / `leftover_amount`    | numeric(12,2) | ≥0                                                | 标价 / 折抵 / 应付 / 折抵溢出（进预付款）                                                |
+| `proration`                                                               | jsonb         |                                                   | 折抵输入与结果快照                                                                       |
+| `status`                                                                  | varchar(24)   | CHECK                                             | pending_payment → pending_verify → paid → fulfilled → refunded；旁路 cancelled / expired |
+| `declared_at` / `paid_at` / `fulfilled_at` / `closed_at` / `close_reason` |               |                                                   | 时间线                                                                                   |
+| `created_by_type` / `created_by_id`                                       |               |                                                   | §0.1 actor                                                                               |
+
+索引：`(tenant_id, created_at desc)`、`workspace_id`、`status`、`subscription_id`；部分唯一 `(workspace_id, product_id) WHERE status IN ('pending_payment','pending_verify','paid')`（一个工作区一个产品同一时刻只有一张在途订单）。
+
+联动：`invoices.order_id`（订单账单必填）、`refunds.order_id`（退款挂订单）、`metering.subscriptions.product_id / paid_amount / current_order_id`（product_id 由触发器自 plan_components 主组件填；`uidx_subscriptions_live_per_product` 保证一个 workspace × product 至多一条当前订阅）。金融例外：无 deleted_at。
