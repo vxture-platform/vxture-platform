@@ -1,3 +1,7 @@
+-- [product_330 P2-e] 旧列 metering.subscriptions.order_no 已删（2026-09-06）；本文件只在旧列仍在时重放，否则整体跳过（psql \if）。
+SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'metering' AND table_name = 'subscriptions' AND column_name = 'order_no') AS has_legacy_order_no \gset
+\if :has_legacy_order_no
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 前向迁移 — product_330 P2-d：退役 metering.subscriptions 上的旧「订单壳」
 --
@@ -55,3 +59,5 @@ BEGIN
 END $$;
 
 COMMIT;
+
+\endif

@@ -1048,7 +1048,6 @@ model TenantSubscription {
   hadTrialAt  DateTime? @map("had_trial_at")  @db.Timestamptz(6)
   status      String    @default("active") @db.VarChar(32)
   autoRenew  Boolean?  @default(true) @map("auto_renew")
-  orderNo    String?   @map("order_no") @db.VarChar(128)
   payAmount  Decimal?  @map("pay_amount") @db.Decimal(12, 2)
   currency   String?   @default("CNY") @db.VarChar(16)
   createdBy  String    @map("created_by") @db.Uuid
