@@ -1073,6 +1073,8 @@ export async function createSubscriptionOrder(body: {
   cycleUnit: "month" | "year";
   intent: "new" | "renew" | "upgrade";
   upgradeOfSubscriptionId?: string;
+  /** 自动续费 opt-in（owner 2026-09-03）：确认页开关，默认关。 */
+  autoRenew: boolean;
 }): Promise<CreateOrderResult> {
   const response = await fetch(
     `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/subscription/orders`,

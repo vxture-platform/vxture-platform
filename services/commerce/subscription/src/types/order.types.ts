@@ -40,6 +40,8 @@ export interface OrderRecord {
   proration: Record<string, unknown> | null;
   status: OrderStatus;
   paymentTtlMinutes: number | null;
+  /** 客户在确认页的自动续费选择（owner 2026-09-03：默认关、需用户开启）；履约时写入订阅。 */
+  autoRenew: boolean;
   declaredAt: Date | null;
   paidAt: Date | null;
   fulfilledAt: Date | null;
@@ -79,6 +81,11 @@ export interface CreateOrderInput {
   itemName: string;
   /** 付款时效（分钟，个人 30 / 组织 2880）；omitted → 读取端回退 env */
   paymentTtlMinutes?: number;
+  /**
+   * 自动续费（owner 2026-09-03）：默认 false，客户在订单确认页显式开启；
+   * 履约时写入订阅（new 建订阅带上；renew / upgrade 按订单值更新）。系统自动续费单固定 true。
+   */
+  autoRenew?: boolean;
   /**
    * 升级折抵（product_330 §4.1，P2-a）：由 OrderService.quoteUpgrade 算出后随单落库——
    * credit 抵扣标价（账单落一条 credit_adjustment 负行），leftover 履约时进预付款余额，

@@ -2281,6 +2281,8 @@
       "creditNote": "What you paid for the current period, prorated by time and unused quota ({days} days and {usage}% of quota left), applied to this order.",
       "leftoverNote": "The {amount} of credit beyond this order's price is added to your prepaid balance once activated.",
       "total": "Total due",
+      "autoRenew": "Auto-renew",
+      "autoRenewTip": "When on, a renewal order is created 3 days before expiry: ¥0 tiers renew automatically, paid tiers must be paid within the payment window. When off, access stops at expiry and you can renew manually anytime. You can change this later under My subscriptions.",
       "submit": "Place order",
       "fineOffline": "After submitting you'll go to the payment page - complete payment before the countdown ends or the order closes automatically. Vouchers are applied on the payment page. Zero-amount orders are placed the same way and settle automatically at the payment step.",
       "fineEnterprise": "Enterprise pricing is quoted by sales; self-serve checkout is not available.",

@@ -429,6 +429,7 @@ export class OrderService {
         payAmount: order.payableAmount,
         orderId: order.id,
       });
+      await this.applyOrderAutoRenew(from, order, actor);
       // 折抵溢出进预付款（幂等，按 order_no 去重）——放在订阅改完之后，钱的动作最后做。
       if (Number(order.leftoverAmount) > 0) {
         await this.orders.grantLeftoverToPrepaid(order, actor);
@@ -452,6 +453,7 @@ export class OrderService {
         payAmount: order.payableAmount,
         orderId: order.id,
       });
+      await this.applyOrderAutoRenew(from, order, actor);
       subscription = await this.subscriptions.getSubscription(from.id);
     } else {
       mode = "new";
@@ -468,8 +470,8 @@ export class OrderService {
         cycleCount: order.cycleCount,
         startAt: now,
         endAt,
-        // owner 决策 5：free 与付费一样默认自动续期、可关闭（续费引擎 P2-c）。
-        autoRenew: true,
+        // owner 2026-09-03：自动续费默认关，客户在订单确认页显式开启——按订单值写。
+        autoRenew: order.autoRenew,
         payAmount: price,
         currency: order.currency,
         createdBy: order.createdById ?? actor.actorId ?? order.tenantId,
@@ -493,6 +495,23 @@ export class OrderService {
     });
     const fresh = await this.getOrder(order.id);
     return { order: fresh, subscription };
+  }
+
+  /**
+   * 续费 / 升级履约时把订单上的自动续费选择写回订阅（owner 2026-09-03：默认关、客户显式开启；
+   * 确认页预填当前值，所以多数情况相等——不相等才写，并留 auto_renew_on/off 历史）。
+   */
+  private async applyOrderAutoRenew(
+    from: SubscriptionRecord,
+    order: OrderRecord,
+    actor: OrderActor,
+  ): Promise<void> {
+    if (from.autoRenew === order.autoRenew) return;
+    await this.subscriptions.setAutoRenew(from.id, order.autoRenew, {
+      actorId: actor.actorId,
+      actorType: actor.actorType,
+      remark: `order ${order.orderNo}`,
+    });
   }
 
   /**
@@ -544,6 +563,8 @@ export class OrderService {
           fromSubscriptionId: c.subscriptionId,
           itemName: c.planName,
           paymentTtlMinutes: ttlMinutes,
+          // 系统续费单：正因为订阅开着自动续费才产生，履约后保持开。
+          autoRenew: true,
         });
         created += 1;
         if (Number(c.price) > 0) continue;

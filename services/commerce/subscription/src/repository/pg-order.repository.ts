@@ -45,6 +45,7 @@ interface OrderRow {
   proration: Record<string, unknown> | null;
   status: string;
   payment_ttl_minutes: number | null;
+  auto_renew: boolean;
   declared_at: Date | null;
   paid_at: Date | null;
   fulfilled_at: Date | null;
@@ -251,7 +252,7 @@ export class PgOrderRepository {
              order_no, tenant_id, workspace_id, product_id, plan_version_id, intent,
              cycle_unit, cycle_count, from_subscription_id,
              list_amount, credit_amount, payable_amount, leftover_amount, currency, proration,
-             status, payment_ttl_minutes, created_by_type, created_by_id, created_at, updated_at
+             status, payment_ttl_minutes, auto_renew, created_by_type, created_by_id, created_at, updated_at
            ) values (
              $1, $2, $3,
              (select pc.product_id from product.plan_components pc
@@ -259,7 +260,7 @@ export class PgOrderRepository {
                order by pc.priority asc, pc.sort_order asc limit 1),
              $4, $5, $6, 1, $7,
              $8, $13, $14, $15, $9, $16::jsonb,
-             'pending_payment', $10, $12, $11, now(), now()
+             'pending_payment', $10, $17, $12, $11, now(), now()
            ) returning *`,
           [
             orderNo,
@@ -278,6 +279,7 @@ export class PgOrderRepository {
             payable,
             leftover,
             input.proration ? JSON.stringify(input.proration.snapshot) : null,
+            input.autoRenew ?? false,
           ],
         );
         orderRow = res.rows[0]!;
@@ -1438,6 +1440,7 @@ export class PgOrderRepository {
       proration: row.proration,
       status: row.status as OrderStatus,
       paymentTtlMinutes: row.payment_ttl_minutes,
+      autoRenew: row.auto_renew,
       declaredAt: row.declared_at,
       paidAt: row.paid_at,
       fulfilledAt: row.fulfilled_at,

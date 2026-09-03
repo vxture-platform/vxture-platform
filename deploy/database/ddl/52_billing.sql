@@ -158,6 +158,7 @@ CREATE TABLE billing.orders (
     proration             jsonb,                                    -- 折抵输入与结果快照 {days_left, days_total, r, u, alpha, p_old, credit_time, credit_usage}
     status                varchar(24)   NOT NULL DEFAULT 'pending_payment',
     payment_ttl_minutes   int,                                      -- 付款时效（个人 30 / 组织 2880）
+    auto_renew            boolean       NOT NULL DEFAULT false,     -- 客户确认页的自动续费选择（owner 2026-09-03：默认关、需用户开启）；履约时写入订阅；系统续费单恒 true
     declared_at           timestamptz,                              -- 客户申报付款
     paid_at               timestamptz,                              -- 运营确认 / 网关回调
     fulfilled_at          timestamptz,                              -- 履约完成

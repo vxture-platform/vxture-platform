@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import type { SessionSnapshot } from "@/entities/console";
 import { usePathname, useRouter } from "@/lib/i18n/navigation";
 import { useTranslations } from "next-intl";
+import { TooltipProvider } from "@vxture/design-system";
 import {
   ConsoleSessionProvider,
   useConsoleSession,
@@ -116,14 +117,18 @@ export function ConsoleShell({
   initialNavCollapsed?: boolean;
 }) {
   return (
-    <ConsoleSessionProvider initialSession={initialSession ?? null}>
-      <TenantProvider>
-        <PortalEntryProvider>
-          <ShellFrame initialNavCollapsed={initialNavCollapsed}>
-            {children}
-          </ShellFrame>
-        </PortalEntryProvider>
-      </TenantProvider>
-    </ConsoleSessionProvider>
+    /* Radix 的 Tooltip.Root 没有 Provider 会直接抛错（整页崩），所以同 opera/admin
+     * 一样挂在外壳上，全部页面共用一套延迟。 */
+    <TooltipProvider delayDuration={300}>
+      <ConsoleSessionProvider initialSession={initialSession ?? null}>
+        <TenantProvider>
+          <PortalEntryProvider>
+            <ShellFrame initialNavCollapsed={initialNavCollapsed}>
+              {children}
+            </ShellFrame>
+          </PortalEntryProvider>
+        </TenantProvider>
+      </ConsoleSessionProvider>
+    </TooltipProvider>
   );
 }

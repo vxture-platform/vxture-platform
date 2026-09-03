@@ -377,7 +377,7 @@ GRANT UPDATE (order_id, event_type, from_status, to_status, actor_type, actor_id
 
 -- billing.orders  [anchor: id, order_no, created_at]  (product_330：订单实体；状态/金额/履约由 OrderService 单一入口改)
 REVOKE UPDATE ON billing.orders FROM platform_svc;
-GRANT UPDATE (tenant_id, workspace_id, product_id, plan_version_id, intent, cycle_unit, cycle_count, from_subscription_id, subscription_id, list_amount, credit_amount, payable_amount, leftover_amount, currency, proration, status, payment_ttl_minutes, declared_at, paid_at, fulfilled_at, closed_at, close_reason, created_by_type, created_by_id, operator_remark, updated_at) ON billing.orders TO platform_svc;
+GRANT UPDATE (tenant_id, workspace_id, product_id, plan_version_id, intent, cycle_unit, cycle_count, from_subscription_id, subscription_id, list_amount, credit_amount, payable_amount, leftover_amount, currency, proration, status, payment_ttl_minutes, auto_renew, declared_at, paid_at, fulfilled_at, closed_at, close_reason, created_by_type, created_by_id, operator_remark, updated_at) ON billing.orders TO platform_svc;
 
 -- billing.prepaid_charges  [anchor: id, created_at]
 REVOKE UPDATE ON billing.prepaid_charges FROM platform_svc;

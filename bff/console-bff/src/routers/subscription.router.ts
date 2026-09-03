@@ -203,6 +203,8 @@ interface CreateOrderBody {
   cycleUnit: string;
   intent: string;
   upgradeOfSubscriptionId?: string;
+  /** 确认页的自动续费开关（owner 2026-09-03：默认关，需客户开启）；缺省 = false。 */
+  autoRenew?: boolean;
 }
 
 interface OfflinePaymentInstructions {
@@ -1204,6 +1206,7 @@ export class SubscriptionRouter {
         ...(fromSubscriptionId ? { fromSubscriptionId } : {}),
         itemName: plan.planName,
         paymentTtlMinutes: ttlMinutes,
+        autoRenew: body.autoRenew === true,
       });
       return {
         status: "pending_payment",
