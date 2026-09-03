@@ -768,6 +768,64 @@ export interface OrderDetail {
   vouchers: OrderVoucherOption[];
   legs: OrderPaymentLeg[];
   paymentChannels: PaymentChannelInfo[];
+  /** 退款单（product_330 §5）：最近一张；null = 没申请过。部署偏斜下可能缺字段。 */
+  refund?: OrderRefundView | null;
+}
+
+/** 客户可见的退款单投影（product_330 §5）。 */
+export interface OrderRefundView {
+  refundNo: string;
+  amount: string;
+  currency: string;
+  reason: string | null;
+  stage: "requested" | "approved" | "rejected" | "refunded";
+  auditRemark: string | null;
+  requestedAt: string;
+  auditedAt: string | null;
+  refundedAt: string | null;
+}
+
+export interface RefundEligibility {
+  eligible: boolean;
+  reasons: string[];
+  amount: string;
+  currency: string;
+  windowEndsAt: string | null;
+  usageRatio: number;
+  windowHours: number;
+  maxUsageRatio: number;
+}
+
+export async function fetchRefundEligibility(
+  orderId: string,
+): Promise<RefundEligibility | null> {
+  return readJson<RefundEligibility | null>(
+    `/api/subscription/orders/${encodeURIComponent(orderId)}/refund-eligibility`,
+    null,
+  );
+}
+
+export async function requestOrderRefund(
+  orderId: string,
+  reason: string,
+): Promise<OrderRefundView> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/subscription/orders/${encodeURIComponent(orderId)}/refund-request`,
+    {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
+    },
+  );
+  if (!response.ok) {
+    throw new ConsoleBffError(
+      await extractErrorMessage(response, ""),
+      response.status,
+    );
+  }
+  return (await response.json()) as OrderRefundView;
 }
 
 export interface OrderQuote {

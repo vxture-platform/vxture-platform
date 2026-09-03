@@ -1089,6 +1089,63 @@ export async function voidOrder(
   return (await response.json()) as OrderOperationDetailRecord;
 }
 
+/** 退款审核 / 执行（product_330 §5）：与 void/restore 同一 POST + reason 形状。 */
+async function postOrderAction(
+  orderId: string,
+  action: string,
+  body: Record<string, unknown>,
+  fallback: string,
+): Promise<OrderOperationDetailRecord> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${ADMIN_API_PREFIX}/api/orders/${encodeURIComponent(orderId)}/${action}`,
+    {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  if (!response.ok) {
+    let message = fallback;
+    try {
+      const parsed = (await response.json()) as { message?: string | string[] };
+      message = Array.isArray(parsed.message)
+        ? (parsed.message[0] ?? message)
+        : (parsed.message ?? message);
+    } catch {
+      // Keep a typed error for non-JSON proxy responses.
+    }
+    throw new AdminBffError(message, response.status);
+  }
+  return (await response.json()) as OrderOperationDetailRecord;
+}
+
+export function auditOrderRefund(
+  orderId: string,
+  decision: "approved" | "rejected",
+  remark: string,
+): Promise<OrderOperationDetailRecord> {
+  return postOrderAction(
+    orderId,
+    "refund-audit",
+    { decision, remark },
+    "Refund audit failed",
+  );
+}
+
+export function executeOrderRefund(
+  orderId: string,
+  reason: string,
+): Promise<OrderOperationDetailRecord> {
+  return postOrderAction(
+    orderId,
+    "refund-execute",
+    { reason },
+    "Refund execution failed",
+  );
+}
+
 export async function fetchBillingRecords(): Promise<BillingRecord[]> {
   return readJsonStrict<BillingRecord[]>("/api/billing");
 }

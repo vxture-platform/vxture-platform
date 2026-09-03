@@ -29,6 +29,8 @@ import {
   rejectOrderPaymentDeclaration,
   restoreOrder,
   voidOrder,
+  auditOrderRefund,
+  executeOrderRefund,
 } from "@/api/admin-bff";
 import type {
   OrderOperationDetailRecord,
@@ -450,6 +452,12 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
   const [restoreReason, setRestoreReason] = useState("");
   const [submittingRestore, setSubmittingRestore] = useState(false);
+  // 退款（product_330 §5）：approve / reject = 审核；execute = 已打款后执行（订单 refunded + 订阅回滚）
+  const [refundDialog, setRefundDialog] = useState<
+    "approve" | "reject" | "execute" | null
+  >(null);
+  const [refundRemark, setRefundRemark] = useState("");
+  const [submittingRefund, setSubmittingRefund] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [operationFeedback, setOperationFeedback] = useState<string | null>(
     null,
@@ -581,6 +589,38 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
       );
     } finally {
       setSubmittingVoid(false);
+    }
+  }
+
+  async function handleRefundAction() {
+    if (!order || !refundDialog) return;
+    setSubmittingRefund(true);
+    setOperationError(null);
+    try {
+      const updated =
+        refundDialog === "execute"
+          ? await executeOrderRefund(order.id, refundRemark)
+          : await auditOrderRefund(
+              order.id,
+              refundDialog === "approve" ? "approved" : "rejected",
+              refundRemark,
+            );
+      setOrder(updated);
+      setOperationFeedback(
+        refundDialog === "execute"
+          ? "退款已执行：订单已退款，订阅已回到未订阅状态。"
+          : refundDialog === "approve"
+            ? "退款申请已通过，请按原渠道打款后点「退款完成」。"
+            : "退款申请已驳回。",
+      );
+      setRefundDialog(null);
+      setRefundRemark("");
+    } catch (error) {
+      setOperationError(
+        error instanceof Error ? error.message : "退款操作失败，请稍后重试。",
+      );
+    } finally {
+      setSubmittingRefund(false);
     }
   }
 
@@ -734,6 +774,50 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                     <Icon name="play" size="xs" fallback="placeholder" />
                     恢复订单
                   </Button>
+                  {order.refund && order.refund.auditStatus === "pending" ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setOperationError(null);
+                          setOperationFeedback(null);
+                          setRefundRemark("");
+                          setRefundDialog("approve");
+                        }}
+                      >
+                        <Icon name="check" size="xs" fallback="placeholder" />
+                        同意退款
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setOperationError(null);
+                          setOperationFeedback(null);
+                          setRefundRemark("");
+                          setRefundDialog("reject");
+                        }}
+                      >
+                        <Icon name="x" size="xs" fallback="placeholder" />
+                        驳回退款
+                      </Button>
+                    </>
+                  ) : null}
+                  {order.refund &&
+                  order.refund.auditStatus === "approved" &&
+                  order.refund.refundStatus !== "success" ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setOperationError(null);
+                        setOperationFeedback(null);
+                        setRefundRemark("");
+                        setRefundDialog("execute");
+                      }}
+                    >
+                      <Icon name="check" size="xs" fallback="placeholder" />
+                      退款完成（已打款）
+                    </Button>
+                  ) : null}
                 </>
               ) : null}
             </div>
@@ -850,6 +934,72 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             value={rejectReason}
             onChange={(event) => setRejectReason(event.target.value)}
             placeholder="例如：未查到对应转账记录，请核对金额后重新付款；实收 500 与申报 860 不符。"
+            maxLength={512}
+            rows={3}
+            autoFocus
+          />
+          {operationError ? (
+            <p className="text-sm text-vx-danger">{operationError}</p>
+          ) : null}
+        </DialogForm>
+      ) : null}
+
+      {order && order.refund && refundDialog ? (
+        <DialogForm
+          open
+          title={
+            refundDialog === "approve"
+              ? "同意退款申请"
+              : refundDialog === "reject"
+                ? "驳回退款申请"
+                : "退款完成（已按原渠道打款）"
+          }
+          description={
+            <>
+              退款单 <strong>{order.refund.refundNo}</strong> ·{" "}
+              {formatCurrency(order.refund.amount, order.currency)}
+              {order.refund.reason ? ` · 客户原因：${order.refund.reason}` : ""}
+              {refundDialog === "execute"
+                ? "。执行后订单转为已退款，该产品订阅整体回到未订阅状态（含升级前的免费档），权益即时停止；折抵溢出曾计入的预付款将一并冲回。"
+                : refundDialog === "approve"
+                  ? "。通过后请按原支付渠道打款，再回到本页点「退款完成」。"
+                  : "。驳回原因将展示给客户。"}
+            </>
+          }
+          submitLabel={
+            refundDialog === "approve"
+              ? "确认通过"
+              : refundDialog === "reject"
+                ? "确认驳回"
+                : "确认退款完成"
+          }
+          cancelLabel={tShared("actions.cancel")}
+          submitting={submittingRefund}
+          submitDisabled={refundRemark.trim().length < 4}
+          onOpenChange={(open) => {
+            if (!open && !submittingRefund) setRefundDialog(null);
+          }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleRefundAction();
+          }}
+        >
+          <Label htmlFor="vx-order-refund-remark">
+            备注{" "}
+            <small>
+              （必填，最少 4 字
+              {refundDialog === "reject" ? "；将展示给客户" : ""}）
+            </small>
+          </Label>
+          <Textarea
+            id="vx-order-refund-remark"
+            value={refundRemark}
+            onChange={(event) => setRefundRemark(event.target.value)}
+            placeholder={
+              refundDialog === "execute"
+                ? "例如：已于 9/4 通过支付宝原路退回 ¥0.10，流水号 …"
+                : "例如：符合 24 小时首购退款条件；或：已超出退款窗口 / 用量已超阈值。"
+            }
             maxLength={512}
             rows={3}
             autoFocus

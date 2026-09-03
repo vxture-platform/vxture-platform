@@ -1256,9 +1256,24 @@ export interface OrderOperationRecord {
     amount: number;
     declaredAt: string;
   } | null;
+  /** 最近一张退款单（product_330 §5）；null = 没申请过 */
+  refund: OrderRefundSummary | null;
   createdAt: string;
   confirmedAt: string | null;
   updatedAt: string;
+}
+
+export interface OrderRefundSummary {
+  id: string;
+  refundNo: string;
+  amount: number;
+  reason: string | null;
+  auditStatus: "pending" | "approved" | "rejected";
+  auditRemark: string | null;
+  refundStatus: "pending" | "processing" | "success" | "failed";
+  requestedAt: string;
+  auditedAt: string | null;
+  refundedAt: string | null;
 }
 
 export interface OrderOperationDetailRecord extends OrderOperationRecord {

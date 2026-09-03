@@ -8,7 +8,14 @@ export { PgOrderRepository } from "./repository/pg-order.repository";
 export type {
   AutoRenewCandidate,
   ProrationBasis,
+  RefundBasis,
 } from "./repository/pg-order.repository";
+export type {
+  RefundPolicy,
+  RefundEligibility,
+  RefundIneligibleReason,
+  RefundRecordView,
+} from "./types/order.types";
 export {
   computeProration,
   cycleDays,

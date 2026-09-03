@@ -792,6 +792,71 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     expect(Number(after.rows[0]!.paid_amount)).toBeCloseTo(payable, 2);
   }, 30_000);
 
+  it("§8.18 24h 退款（P2-b）：资格 → 申请 → 审核通过 → 执行 → 订单 refunded、订阅回到未订阅、冲正流水", async () => {
+    const orderId = await mkOrder(1200);
+    await declare(orderId);
+    await confirm(orderId, 1200);
+    const facts = await orderFacts(orderId);
+    expect(facts.orderStatus).toBe("fulfilled");
+
+    const e = await orderService.getRefundEligibility(orderId);
+    expect(e.eligible).toBe(true);
+    expect(e.amount).toBe("1200.00");
+
+    const req1 = await orderService.requestRefund(orderId, {
+      userId,
+      reason: "e2e refund",
+    });
+    expect(req1.auditStatus).toBe("pending");
+    // 同一订单不能再申请
+    await expect(
+      orderService.requestRefund(orderId, { userId, reason: "again" }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    // 未审核不能执行
+    await expect(
+      orders.executeRefund(req(CAPS_SETTLE), orderId, {
+        reason: "e2e pay out",
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    const approved = await orders.auditRefund(req(CAPS_SETTLE), orderId, {
+      decision: "approved",
+      remark: "e2e approve",
+    });
+    expect(approved.refund?.auditStatus).toBe("approved");
+
+    const done = await orders.executeRefund(req(CAPS_SETTLE), orderId, {
+      reason: "e2e paid back via alipay",
+    });
+    expect(done.orderStatus).toBe("closed");
+    expect(done.refund?.refundStatus).toBe("success");
+    const after = await orderFacts(orderId);
+    expect(after.orderStatus).toBe("refunded");
+    expect(after.subStatus).toBe("cancelled");
+    const txn = await pool.query<{ amount: string; trade_type: string }>(
+      `select amount, trade_type from billing.transactions
+        where tenant_id = $1 and related_no = $2`,
+      [tenantId, req1.refundNo],
+    );
+    expect(txn.rows).toEqual([{ amount: "-1200.00", trade_type: "refund" }]);
+    const events = await orderEvents(orderId, "refunded");
+    expect(events.rows.length).toBe(1);
+  }, 30_000);
+
+  it("§8.18b 退款窗口外不可退：履约超过 24 小时", async () => {
+    const orderId = await mkOrder(300);
+    await declare(orderId);
+    await confirm(orderId, 300);
+    await pool.query(
+      `update billing.orders set fulfilled_at = now() - interval '25 hours' where id = $1`,
+      [orderId],
+    );
+    const e = await orderService.getRefundEligibility(orderId);
+    expect(e.eligible).toBe(false);
+    expect(e.reasons).toContain("window_elapsed");
+  }, 30_000);
+
   it("§8.13 发券边界：超发 409、per_user_limit 409、门槛字段拒绝", async () => {
     const { batchId } = await mkVoucher("discount", {
       discount_type: "percent",

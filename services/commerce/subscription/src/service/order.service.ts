@@ -37,6 +37,9 @@ import type {
   CreateOrderResult,
   OrderActor,
   OrderRecord,
+  RefundEligibility,
+  RefundIneligibleReason,
+  RefundRecordView,
 } from "../types/order.types";
 import type {
   DeclarePaymentInput,
@@ -583,6 +586,145 @@ export class OrderService {
       }
     }
     return { created, fulfilled, skipped };
+  }
+
+  // ── 退款（product_330 §5，owner 决策 3）──────────────────────────────────────
+
+  /**
+   * 24h 退款资格：已履约 new 单（折抵后的升级单不算首次）、该工作区×产品首笔、履约起
+   * windowHours 内、消耗性配额使用率 < maxUsageRatio、实付 > 0、无在途退款单。
+   */
+  async getRefundEligibility(orderId: string): Promise<RefundEligibility> {
+    const [order, policy, basis] = await Promise.all([
+      this.getOrder(orderId),
+      this.orders.getRefundPolicy(),
+      this.orders.getRefundBasis(orderId),
+    ]);
+    const reasons: RefundIneligibleReason[] = [];
+    const windowEndsAt = order.fulfilledAt
+      ? new Date(order.fulfilledAt.getTime() + policy.windowHours * 3_600_000)
+      : null;
+    if (order.status !== "fulfilled" || !order.fulfilledAt) {
+      reasons.push("not_fulfilled");
+    }
+    if (order.intent !== "new" || (basis && basis.earlierFulfilledCount > 0)) {
+      reasons.push("not_first_purchase");
+    }
+    if (windowEndsAt && windowEndsAt.getTime() <= Date.now()) {
+      reasons.push("window_elapsed");
+    }
+    const usageRatio = basis?.usageRatio ?? 0;
+    if (usageRatio >= policy.maxUsageRatio)
+      reasons.push("usage_over_threshold");
+    if (!(Number(order.payableAmount) > 0)) reasons.push("zero_amount");
+    if (basis?.existingRefundId) reasons.push("refund_exists");
+    return {
+      eligible: reasons.length === 0,
+      reasons,
+      amount: order.payableAmount,
+      currency: order.currency,
+      windowEndsAt,
+      usageRatio: Math.round(usageRatio * 10000) / 10000,
+      policy,
+    };
+  }
+
+  async getRefundForOrder(orderId: string): Promise<RefundRecordView | null> {
+    return this.orders.getRefundByOrder(orderId);
+  }
+
+  /** 客户申请退款：资格不满足 → 409（reasons 随消息带出）。 */
+  async requestRefund(
+    orderId: string,
+    input: { userId: string; reason: string | null; clientIp?: string | null },
+  ): Promise<RefundRecordView> {
+    const eligibility = await this.getRefundEligibility(orderId);
+    if (!eligibility.eligible) {
+      throw new ConflictException({
+        code: "REFUND_NOT_ELIGIBLE",
+        reasons: eligibility.reasons,
+        message: "该订单不符合退款条件",
+      });
+    }
+    const [order, basis] = await Promise.all([
+      this.getOrder(orderId),
+      this.orders.getRefundBasis(orderId),
+    ]);
+    if (!basis?.payRecordId || !basis.invoiceId) {
+      throw new ConflictException("订单没有可退的支付记录");
+    }
+    return this.orders.createRefundRequest({
+      order,
+      invoiceId: basis.invoiceId,
+      payRecordId: basis.payRecordId,
+      reason: input.reason,
+      userId: input.userId,
+      clientIp: input.clientIp ?? null,
+    });
+  }
+
+  async auditRefund(
+    refundId: string,
+    input: {
+      decision: "approved" | "rejected";
+      remark: string;
+      operatorId: string;
+      clientIp?: string | null;
+    },
+  ): Promise<RefundRecordView> {
+    const refund = await this.orders.getRefundById(refundId);
+    if (!refund) throw new NotFoundException(`退款单 ${refundId} 不存在`);
+    if (refund.auditStatus !== "pending") {
+      throw new ConflictException("退款申请已审核");
+    }
+    const order = await this.getOrder(refund.orderId);
+    return this.orders.auditRefund({ refund, order, ...input });
+  }
+
+  /**
+   * 退款执行（运营已按原渠道打款）：钱的冲正 + 订单 refunded 一个事务，随后订阅整体回到
+   * 未订阅（cancelled，end=now，含 free 前身——旧档价值已折进这张单）。订阅回滚失败不回滚
+   * 钱：记日志、留给 reconcile / 人工（订单已 refunded，订阅仍 active 是可见的异常态）。
+   */
+  async executeRefund(
+    refundId: string,
+    actor: OrderActor,
+  ): Promise<{ refund: RefundRecordView; order: OrderRecord }> {
+    const refund = await this.orders.getRefundById(refundId);
+    if (!refund) throw new NotFoundException(`退款单 ${refundId} 不存在`);
+    if (refund.auditStatus !== "approved") {
+      throw new ConflictException("退款申请未审核通过，不能执行");
+    }
+    if (refund.refundStatus === "success") {
+      const order = await this.getOrder(refund.orderId);
+      return { refund, order };
+    }
+    const order = await this.getOrder(refund.orderId);
+    const done = await this.orders.executeRefund({ refund, order, actor });
+    if (order.subscriptionId) {
+      try {
+        const sub = await this.subscriptions.getSubscription(
+          order.subscriptionId,
+        );
+        if (sub.status !== "cancelled" && sub.status !== "expired") {
+          await this.subscriptions.cancelSubscription(
+            sub.id,
+            actor.actorId ?? undefined,
+            `refund ${refund.refundNo} (order ${order.orderNo})`,
+            actor.actorType === "customer" ? "customer" : actor.actorType,
+          );
+        }
+      } catch (err) {
+        this.logger.error(
+          `refund ${refund.refundNo}: subscription rollback failed — ${String(err)}`,
+        );
+      }
+    }
+    return done;
+  }
+
+  async listRefunds(status?: "pending" | "approved" | "rejected") {
+    return this.orders.listRefunds(status);
   }
 
   async cancel(

@@ -175,7 +175,7 @@ CREATE TABLE billing.orders (
     CONSTRAINT chk_orders_cycle_count     CHECK (cycle_count >= 1),
     CONSTRAINT chk_orders_from            CHECK ((intent <> 'new') = (from_subscription_id IS NOT NULL)),
     CONSTRAINT chk_orders_amounts         CHECK (list_amount >= 0 AND credit_amount >= 0 AND payable_amount >= 0 AND leftover_amount >= 0),
-    CONSTRAINT chk_orders_fulfilled       CHECK ((status = 'fulfilled') = (fulfilled_at IS NOT NULL AND subscription_id IS NOT NULL)),
+    CONSTRAINT chk_orders_fulfilled       CHECK ((status IN ('fulfilled','refunded')) = (fulfilled_at IS NOT NULL AND subscription_id IS NOT NULL)),
     CONSTRAINT chk_orders_created_by_type CHECK (created_by_type IN ('system','customer','operator')),
     CONSTRAINT chk_orders_payment_ttl     CHECK (payment_ttl_minutes IS NULL OR payment_ttl_minutes >= 1)
 );

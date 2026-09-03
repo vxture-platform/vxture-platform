@@ -54,6 +54,7 @@ import type {
   OrderPaymentRecord,
   OrderPaymentStatus,
   OrderPaySource,
+  OrderRefundSummary,
   RequestContext,
   SubscriptionOperationCycle,
   SubscriptionOperationStatus,
@@ -717,6 +718,62 @@ export class OrdersRouter {
     }
     return detail;
   }
+
+  // ── 退款（product_330 §5，owner 决策 3）──────────────────────────────────────
+  // 审核（同意 / 驳回）与执行（已按原渠道打款后）都是钱的动作，复用 commerce:payment.settle
+  // + step-up；执行 = 冲正流水 + 订单 refunded + 订阅回滚到未订阅。
+
+  @Post(":orderId/refund-audit")
+  @RequireStepUp()
+  async auditRefund(
+    @Req() req: Request & RequestContext,
+    @Param("orderId") orderId: string,
+    @Body() body: { decision?: string; remark?: string },
+  ): Promise<OrderOperationDetailRecord> {
+    assertCanSettleOrderPayment(req);
+    const actorId = requireOperatorId(req.user?.id);
+    const orderEntityId = await this.resolveOrderId(orderId);
+    const decision = body?.decision;
+    if (decision !== "approved" && decision !== "rejected") {
+      throw new BadRequestException("decision must be approved or rejected");
+    }
+    const remark = normalizeVoidReason({ reason: body?.remark ?? "" });
+    const refund = await this.orders.getRefundForOrder(orderEntityId);
+    if (!refund) throw new BadRequestException("该订单没有退款申请");
+    await this.orders.auditRefund(refund.id, {
+      decision,
+      remark,
+      operatorId: actorId,
+      clientIp: extractClientIp(req),
+    });
+    const detail = await this.getOrder(req, orderEntityId);
+    if (!detail) throw new NotFoundException("Order not found after audit");
+    return detail;
+  }
+
+  @Post(":orderId/refund-execute")
+  @RequireStepUp()
+  async executeRefund(
+    @Req() req: Request & RequestContext,
+    @Param("orderId") orderId: string,
+    @Body() body: VoidOrderBody,
+  ): Promise<OrderOperationDetailRecord> {
+    assertCanSettleOrderPayment(req);
+    const actorId = requireOperatorId(req.user?.id);
+    const orderEntityId = await this.resolveOrderId(orderId);
+    const remark = normalizeVoidReason(body);
+    const refund = await this.orders.getRefundForOrder(orderEntityId);
+    if (!refund) throw new BadRequestException("该订单没有退款申请");
+    await this.orders.executeRefund(refund.id, {
+      actorType: "operator",
+      actorId,
+      remark,
+      clientIp: extractClientIp(req),
+    });
+    const detail = await this.getOrder(req, orderEntityId);
+    if (!detail) throw new NotFoundException("Order not found after refund");
+    return detail;
+  }
 }
 
 // 读取租户预付款池当前余额（无池视为 0）——供流水 balance 快照。
@@ -1013,7 +1070,17 @@ select
   pay.pay_method                   as pay_method,
   pay.pay_status                   as pay_status,
   pay.paid_amount                  as payment_paid_amount,
-  pay.paid_at                      as payment_paid_at
+  pay.paid_at                      as payment_paid_at,
+  rf.refund_id,
+  rf.refund_no,
+  rf.refund_amount,
+  rf.refund_reason,
+  rf.refund_audit_status,
+  rf.refund_audit_remark,
+  rf.refund_status,
+  rf.refund_requested_at,
+  rf.refund_audited_at,
+  rf.refund_refunded_at
 from billing.orders ord
 join tenancy.tenants tenant on tenant.id = ord.tenant_id
 -- 履约后的订阅（new：新建；upgrade/renew：被升级 / 被续订的那条）
@@ -1059,6 +1126,17 @@ left join lateral (
   order by p.created_at desc
   limit 1
 ) declared on true
+-- 最近一张退款单（product_330 §5）
+left join lateral (
+  select r.id as refund_id, r.refund_no, r.refund_amount, r.refund_reason,
+         r.audit_status as refund_audit_status, r.audit_remark as refund_audit_remark,
+         r.refund_status, r.created_at as refund_requested_at,
+         r.audit_at as refund_audited_at, r.refund_at as refund_refunded_at
+  from billing.refunds r
+  where r.order_id = ord.id
+  order by r.created_at desc
+  limit 1
+) rf on true
 where true
 `;
 
@@ -1322,6 +1400,22 @@ function mapOrderRow(row: OrderRow): OrderOperationRecord {
           declaredAt: toIso(row.declared_at),
         }
       : null,
+    refund: row.refund_id
+      ? {
+          id: row.refund_id,
+          refundNo: row.refund_no ?? "",
+          amount: toNumber(row.refund_amount),
+          reason: row.refund_reason,
+          auditStatus: (row.refund_audit_status ??
+            "pending") as OrderRefundSummary["auditStatus"],
+          auditRemark: row.refund_audit_remark,
+          refundStatus: (row.refund_status ??
+            "pending") as OrderRefundSummary["refundStatus"],
+          requestedAt: toIso(row.refund_requested_at),
+          auditedAt: toIsoOrNull(row.refund_audited_at),
+          refundedAt: toIsoOrNull(row.refund_refunded_at),
+        }
+      : null,
     createdAt: toIso(row.created_at),
     confirmedAt: toIsoOrNull(row.payment_paid_at ?? row.bill_paid_at),
     updatedAt: toIso(row.updated_at),
@@ -1452,6 +1546,17 @@ interface OrderRow {
   declared_remark: string | null;
   declared_amount: string | number | null;
   declared_at: Date | string | null;
+  // 最近一张退款单（product_330 §5）
+  refund_id: string | null;
+  refund_no: string | null;
+  refund_amount: string | number | null;
+  refund_reason: string | null;
+  refund_audit_status: string | null;
+  refund_audit_remark: string | null;
+  refund_status: string | null;
+  refund_requested_at: Date | string | null;
+  refund_audited_at: Date | string | null;
+  refund_refunded_at: Date | string | null;
 }
 
 interface InvoiceItemRow {

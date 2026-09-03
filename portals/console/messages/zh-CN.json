@@ -1845,7 +1845,8 @@
       "settleInstant": "确认并生效",
       "cancelOrder": "取消订单",
       "refresh": "刷新状态",
-      "backToSubscription": "返回订阅页"
+      "backToSubscription": "返回订阅页",
+      "cancel": "取消"
     },
     "declareDialog": {
       "title": "确认付款申报",
@@ -1870,6 +1871,35 @@
       "voucherOff": "券抵扣 {amount}",
       "creditsTitle": "账户余额（租户共享）",
       "creditsNote": "余额用于未来按量扣款，充值入口将随扣款业务开放。"
+    },
+    "refund": {
+      "title": "退款",
+      "policyLink": "退款说明",
+      "requestFailed": "退款申请失败",
+      "request": "申请退款",
+      "requestHint": "开通后 {hours} 小时内可申请全额退款（{deadline} 前）",
+      "ineligibleTitle": "本订单不可申请退款",
+      "reasons": {
+        "not_fulfilled": "订单尚未开通",
+        "not_first_purchase": "只有该产品的首次购买订单可退",
+        "window_elapsed": "已超过退款窗口",
+        "usage_over_threshold": "消耗性配额使用率已超过阈值",
+        "zero_amount": "0 元订单无需退款",
+        "refund_exists": "已有退款申请"
+      },
+      "dialogTitle": "申请退款",
+      "dialogDescription": "退款金额为本单实付 {amount}。退款完成后该产品的订阅将回到未订阅状态，权益即时停止。",
+      "reasonLabel": "退款原因",
+      "reasonPlaceholder": "请简要说明退款原因（选填）",
+      "submit": "提交申请",
+      "submitted": "退款申请已提交，运营审核后处理。",
+      "status": {
+        "requested": "退款审核中",
+        "approved": "退款已通过，等待打款",
+        "rejected": "退款申请被驳回",
+        "refunded": "已退款"
+      },
+      "auditRemark": "审核备注"
     }
   },
   "billingPage": {

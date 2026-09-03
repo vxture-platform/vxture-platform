@@ -241,7 +241,7 @@ const PORTALS_DIR = join(REPO_ROOT, "portals");
 const BASELINE = {
   console: 30,
   website: 40,
-  admin: 2502,
+  admin: 2522, // 2026-09-03: P2-b 退款审核/执行对话框（OrderDetailPage）随 admin 既有全中文写死体例落地，+20；admin 整页 i18n 化另开专项
   opera: 1931, // 2026-09-02: layout metadata 的写死中文标题/描述搬进 messages.meta（head 三平面统一），-2
   accounts: 290,
 };

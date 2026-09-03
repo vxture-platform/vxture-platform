@@ -19,6 +19,7 @@ const POLICY_KEYS = [
   "copyright",
   "brand",
   "cookies",
+  "refund",
 ] as const;
 
 type PolicyKey = (typeof POLICY_KEYS)[number];
@@ -58,7 +59,7 @@ export const legalLoader: ContentLoader = async (slug) => {
 
 /**
  * 生成 legal 区段的所有静态路径后缀：
- * [[], ['terms'], ['privacy'], ['copyright'], ['brand'], ['cookies']]
+ * [[], ['terms'], ['privacy'], ['copyright'], ['brand'], ['cookies'], ['refund']]
  */
 export function legalStaticParams(): string[][] {
   return [[], ...POLICY_KEYS.map((key) => [key])];

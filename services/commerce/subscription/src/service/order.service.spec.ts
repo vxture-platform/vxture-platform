@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { ConflictException, NotFoundException } from "@nestjs/common";
 import { OrderService } from "./order.service";
-import type { OrderRecord } from "../types/order.types";
-import type { ProrationBasis } from "../repository/pg-order.repository";
+import type { OrderRecord, RefundRecordView } from "../types/order.types";
+import type {
+  ProrationBasis,
+  RefundBasis,
+} from "../repository/pg-order.repository";
 
 // product_330 P1-b2 — order orchestration over the order entity. The repo and
 // SubscriptionService are mocked: what is asserted is the dispatch/guard logic
@@ -59,6 +62,24 @@ function sub(over: Record<string, unknown> = {}) {
   };
 }
 
+function refundView(over: Partial<RefundRecordView> = {}): RefundRecordView {
+  return {
+    id: "rfd-1",
+    refundNo: "RFD-202609-AAAAAAAAAA",
+    orderId: "ord-1",
+    amount: "100.00",
+    currency: "CNY",
+    reason: null,
+    auditStatus: "pending",
+    auditRemark: null,
+    refundStatus: "pending",
+    requestedAt: new Date(),
+    auditedAt: null,
+    refundedAt: null,
+    ...over,
+  };
+}
+
 function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
   const orders = {
     getById: vi.fn(async () => orderRow),
@@ -82,6 +103,27 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
       }),
     ),
     grantLeftoverToPrepaid: vi.fn(async () => true),
+    getRefundPolicy: vi.fn(async () => ({
+      windowHours: 24,
+      maxUsageRatio: 0.1,
+    })),
+    getRefundBasis: vi.fn(
+      async (_id: string): Promise<RefundBasis> => ({
+        earlierFulfilledCount: 0,
+        usageRatio: 0.02,
+        payRecordId: "pay-1",
+        invoiceId: "inv-1",
+        existingRefundId: null,
+      }),
+    ),
+    getRefundByOrder: vi.fn(async (): Promise<RefundRecordView | null> => null),
+    getRefundById: vi.fn(async (): Promise<RefundRecordView | null> => null),
+    createRefundRequest: vi.fn(async () => refundView()),
+    auditRefund: vi.fn(async () => refundView({ auditStatus: "approved" })),
+    executeRefund: vi.fn(async () => ({
+      refund: refundView({ auditStatus: "approved", refundStatus: "success" }),
+      order: order({ status: "refunded" }),
+    })),
     findExpiredIds: vi.fn(
       async (_ttl: number, _limit: number): Promise<string[]> => [],
     ),
@@ -282,6 +324,130 @@ describe("OrderService upgrade proration (P2-a)", () => {
     );
     await service.fulfill("ord-1", { actorType: "operator", actorId: "op" });
     expect(orders.grantLeftoverToPrepaid).not.toHaveBeenCalled();
+  });
+});
+
+describe("OrderService refund (P2-b, owner 决策 3)", () => {
+  const fulfilled = (over: Partial<OrderRecord> = {}) =>
+    order({
+      status: "fulfilled",
+      subscriptionId: "sub-new",
+      fulfilledAt: new Date(Date.now() - 2 * 3_600_000),
+      ...over,
+    });
+
+  it("eligible: fulfilled new order, first purchase, inside the window, low usage, paid > 0", async () => {
+    const { service } = build(fulfilled(), null);
+    const e = await service.getRefundEligibility("ord-1");
+    expect(e.eligible).toBe(true);
+    expect(e.reasons).toEqual([]);
+    expect(e.amount).toBe("100.00");
+    expect(e.windowEndsAt!.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("lists every failing condition: window elapsed + not first + usage + upgrade intent + existing refund", async () => {
+    const { service, orders } = build(
+      fulfilled({
+        intent: "upgrade",
+        fromSubscriptionId: "sub-1",
+        fulfilledAt: new Date(Date.now() - 30 * 3_600_000),
+      }),
+      null,
+    );
+    orders.getRefundBasis.mockResolvedValueOnce({
+      earlierFulfilledCount: 1,
+      usageRatio: 0.5,
+      payRecordId: "pay-1",
+      invoiceId: "inv-1",
+      existingRefundId: "rfd-0",
+    });
+    const e = await service.getRefundEligibility("ord-1");
+    expect(e.eligible).toBe(false);
+    expect(e.reasons).toEqual(
+      expect.arrayContaining([
+        "not_first_purchase",
+        "window_elapsed",
+        "usage_over_threshold",
+        "refund_exists",
+      ]),
+    );
+  });
+
+  it("zero-amount and not-yet-fulfilled orders are never refundable", async () => {
+    const { service } = build(
+      order({ status: "paid", payableAmount: "0.00" }),
+      null,
+    );
+    const e = await service.getRefundEligibility("ord-1");
+    expect(e.reasons).toEqual(
+      expect.arrayContaining(["not_fulfilled", "zero_amount"]),
+    );
+  });
+
+  it("requestRefund: 409 when ineligible, creates the refund row when eligible", async () => {
+    const { service, orders } = build(fulfilled(), null);
+    const r = await service.requestRefund("ord-1", {
+      userId: "u-1",
+      reason: "changed my mind",
+    });
+    expect(r.refundNo).toMatch(/^RFD-/);
+    expect(orders.createRefundRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ payRecordId: "pay-1", invoiceId: "inv-1" }),
+    );
+    orders.getRefundBasis.mockResolvedValue({
+      earlierFulfilledCount: 1,
+      usageRatio: 0,
+      payRecordId: "pay-1",
+      invoiceId: "inv-1",
+      existingRefundId: null,
+    });
+    await expect(
+      service.requestRefund("ord-1", { userId: "u-1", reason: null }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it("executeRefund: refuses an unapproved request; on approved runs the money tx then cancels the subscription", async () => {
+    const { service, orders, subscriptions } = build(fulfilled(), null);
+    (subscriptions as unknown as Record<string, unknown>).cancelSubscription =
+      vi.fn(async () => sub({ id: "sub-new", status: "cancelled" }));
+    orders.getRefundById.mockResolvedValueOnce(refundView());
+    await expect(
+      service.executeRefund("rfd-1", { actorType: "operator", actorId: "op" }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    orders.getRefundById.mockResolvedValueOnce(
+      refundView({ auditStatus: "approved" }),
+    );
+    const out = await service.executeRefund("rfd-1", {
+      actorType: "operator",
+      actorId: "op",
+    });
+    expect(out.order.status).toBe("refunded");
+    expect(orders.executeRefund).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        subscriptions as unknown as {
+          cancelSubscription: ReturnType<typeof vi.fn>;
+        }
+      ).cancelSubscription,
+    ).toHaveBeenCalledWith(
+      "sub-new",
+      "op",
+      expect.stringContaining("RFD-"),
+      "operator",
+    );
+  });
+
+  it("executeRefund is idempotent once the refund succeeded", async () => {
+    const { service, orders } = build(fulfilled({ status: "refunded" }), null);
+    orders.getRefundById.mockResolvedValueOnce(
+      refundView({ auditStatus: "approved", refundStatus: "success" }),
+    );
+    await service.executeRefund("rfd-1", {
+      actorType: "system",
+      actorId: null,
+    });
+    expect(orders.executeRefund).not.toHaveBeenCalled();
   });
 });
 

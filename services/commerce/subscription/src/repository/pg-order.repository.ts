@@ -21,6 +21,8 @@ import type {
   OrderInvoice,
   OrderRecord,
   OrderStatus,
+  RefundPolicy,
+  RefundRecordView,
 } from "../types/order.types";
 
 interface OrderRow {
@@ -70,6 +72,51 @@ interface AutoRenewCandidateRow {
   currency: string | null;
   plan_name: string;
   price: string | null;
+}
+
+interface RefundRow {
+  id: string;
+  tenant_id: string;
+  order_id: string | null;
+  refund_no: string;
+  refund_amount: string;
+  currency: string | null;
+  refund_reason: string | null;
+  audit_status: string;
+  audit_remark: string | null;
+  audit_at: Date | null;
+  refund_status: string;
+  refund_at: Date | null;
+  created_at: Date;
+}
+
+function mapRefund(r: RefundRow): RefundRecordView {
+  return {
+    id: r.id,
+    refundNo: r.refund_no,
+    orderId: r.order_id ?? "",
+    amount: r.refund_amount,
+    currency: r.currency ?? "CNY",
+    reason: r.refund_reason,
+    auditStatus: r.audit_status as RefundRecordView["auditStatus"],
+    auditRemark: r.audit_remark,
+    refundStatus: r.refund_status as RefundRecordView["refundStatus"],
+    requestedAt: r.created_at,
+    auditedAt: r.audit_at,
+    refundedAt: r.refund_at,
+  };
+}
+
+/** 退款判定输入（product_330 §5）。 */
+export interface RefundBasis {
+  /** 同工作区×产品、履约时间更早的已履约/已退款订单数（>0 = 不是首次购买） */
+  earlierFulfilledCount: number;
+  /** 消耗性配额已用比 [0,1]（无池 0） */
+  usageRatio: number;
+  payRecordId: string | null;
+  invoiceId: string | null;
+  /** 未被驳回/失败的既有退款单 */
+  existingRefundId: string | null;
 }
 
 /** 折抵三输入（product_330 §4.1）。 */
@@ -669,6 +716,332 @@ export class PgOrderRepository {
     } finally {
       client.release();
     }
+  }
+
+  // ── 退款（product_330 §5）────────────────────────────────────────────────────
+
+  /** 平台参数：refund.window_hours（int，默认 24）/ refund.max_usage_ratio（默认 0.10）。 */
+  async getRefundPolicy(): Promise<RefundPolicy> {
+    const res = await this.pool.query<{
+      config_key: string;
+      config_value: string;
+    }>(
+      `select config_key, config_value from admin.settings
+        where config_key in ('refund.window_hours', 'refund.max_usage_ratio')`,
+    );
+    const map = new Map(res.rows.map((r) => [r.config_key, r.config_value]));
+    const hours = Number(map.get("refund.window_hours"));
+    const ratio = Number(map.get("refund.max_usage_ratio"));
+    return {
+      windowHours: Number.isFinite(hours) && hours > 0 ? hours : 24,
+      maxUsageRatio: Number.isFinite(ratio) && ratio >= 0 ? ratio : 0.1,
+    };
+  }
+
+  /**
+   * 退款判定的三输入 + 落单所需引用：是否该工作区×产品的首笔已履约订单、消耗性配额已用比、
+   * 已付现金腿（退款单 pay_record_id NOT NULL）、账单、既有退款单。
+   */
+  async getRefundBasis(orderId: string): Promise<RefundBasis | null> {
+    const res = await this.pool.query<{
+      earlier_fulfilled: string;
+      usage_used: string | null;
+      usage_limit: string | null;
+      pay_record_id: string | null;
+      invoice_id: string | null;
+      existing_refund: string | null;
+    }>(
+      `select
+         (select count(*) from billing.orders p
+           where p.workspace_id = o.workspace_id and p.product_id = o.product_id
+             and p.status in ('fulfilled', 'refunded') and p.id <> o.id
+             and p.fulfilled_at < o.fulfilled_at)::text as earlier_fulfilled,
+         pools.usage_used, pools.usage_limit,
+         (select p.id from billing.payments p
+           join billing.invoices i on i.id = p.bill_id
+          where i.order_id = o.id and p.pay_status = 'paid'
+          order by (p.pay_source = 'voucher') asc, p.paid_at desc nulls last limit 1) as pay_record_id,
+         (select i.id from billing.invoices i
+           where i.order_id = o.id and i.deleted_at is null
+           order by i.created_at desc limit 1) as invoice_id,
+         (select r.id from billing.refunds r
+           where r.order_id = o.id
+             and not (r.audit_status = 'rejected' or r.refund_status = 'failed')
+           order by r.created_at desc limit 1) as existing_refund
+       from billing.orders o
+       left join lateral (
+         select sum(qp.quota_used)::text as usage_used, sum(qp.quota_limit)::text as usage_limit
+           from metering.quota_pools qp
+          where qp.subscription_id = o.subscription_id and qp.status = 'active'
+            and qp.pool_source = 'subscription' and qp.quota_limit > 0
+            and (
+              exists (select 1 from product.product_metrics pm
+                       where pm.product_id = qp.product_id and pm.metric_key = qp.metric_key
+                         and pm.merge_strategy = 'pool')
+              or exists (select 1 from product.platform_metrics plm
+                          where plm.metric_key = qp.metric_key and plm.kind = 'counter')
+            )
+       ) pools on true
+       where o.id = $1`,
+      [orderId],
+    );
+    const r = res.rows[0];
+    if (!r) return null;
+    const limit = Number(r.usage_limit ?? 0);
+    return {
+      earlierFulfilledCount: Number(r.earlier_fulfilled),
+      usageRatio: limit > 0 ? Number(r.usage_used ?? 0) / limit : 0,
+      payRecordId: r.pay_record_id,
+      invoiceId: r.invoice_id,
+      existingRefundId: r.existing_refund,
+    };
+  }
+
+  async getRefundByOrder(orderId: string): Promise<RefundRecordView | null> {
+    const res = await this.pool.query<RefundRow>(
+      `select * from billing.refunds where order_id = $1 order by created_at desc limit 1`,
+      [orderId],
+    );
+    const row = res.rows[0];
+    return row ? mapRefund(row) : null;
+  }
+
+  async getRefundById(refundId: string): Promise<RefundRecordView | null> {
+    const res = await this.pool.query<RefundRow>(
+      `select * from billing.refunds where id = $1 limit 1`,
+      [refundId],
+    );
+    const row = res.rows[0];
+    return row ? mapRefund(row) : null;
+  }
+
+  /** 客户申请：refunds(pending/pending) + order_events(refund_requested)，一个事务。 */
+  async createRefundRequest(input: {
+    order: OrderRecord;
+    invoiceId: string;
+    payRecordId: string;
+    reason: string | null;
+    userId: string;
+    clientIp?: string | null;
+  }): Promise<RefundRecordView> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const res = await client.query<RefundRow>(
+        `insert into billing.refunds (
+           tenant_id, bill_id, pay_record_id, order_id, refund_no,
+           refund_amount, currency, refund_reason, refund_type,
+           audit_status, refund_status, created_by_type, created_by_id, created_at, updated_at
+         ) values ($1, $2, $3, $4, $5, $6, $7, $8, 'normal',
+                   'pending', 'pending', 'customer', $9, now(), now())
+         returning *`,
+        [
+          input.order.tenantId,
+          input.invoiceId,
+          input.payRecordId,
+          input.order.id,
+          visibleCode("RFD"),
+          input.order.payableAmount,
+          input.order.currency,
+          input.reason,
+          input.userId,
+        ],
+      );
+      await this.insertEventTx(client, {
+        orderId: input.order.id,
+        eventType: "refund_requested",
+        fromStatus: input.order.status,
+        toStatus: input.order.status,
+        actorType: "customer",
+        actorId: input.userId,
+        remark: input.reason,
+        clientIp: input.clientIp ?? null,
+      });
+      await client.query("commit");
+      return mapRefund(res.rows[0]!);
+    } catch (err) {
+      await client.query("rollback");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /** 运营审核：approved / rejected + order_events。 */
+  async auditRefund(input: {
+    refund: RefundRecordView;
+    order: OrderRecord;
+    decision: "approved" | "rejected";
+    remark: string;
+    operatorId: string;
+    clientIp?: string | null;
+  }): Promise<RefundRecordView> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const res = await client.query<RefundRow>(
+        `update billing.refunds
+            set audit_status = $2, audit_remark = $3, auditor_id = $4, audit_at = now(), updated_at = now()
+          where id = $1 and audit_status = 'pending'
+          returning *`,
+        [input.refund.id, input.decision, input.remark, input.operatorId],
+      );
+      const row = res.rows[0];
+      if (!row) throw new ConflictException("退款申请不是待审核状态");
+      await this.insertEventTx(client, {
+        orderId: input.order.id,
+        eventType:
+          input.decision === "approved" ? "refund_approved" : "refund_rejected",
+        fromStatus: input.order.status,
+        toStatus: input.order.status,
+        actorType: "operator",
+        actorId: input.operatorId,
+        remark: input.remark,
+        clientIp: input.clientIp ?? null,
+      });
+      await client.query("commit");
+      return mapRefund(row);
+    } catch (err) {
+      await client.query("rollback");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 退款执行（运营已按原渠道打款后）：refunds → success + 冲正流水（trade_type=refund，
+   * 预付池不动、快照 before=after）+ 折抵溢出回冲（credits −= leftover，adjust 流水）
+   * + orders → refunded + order_events。订阅回滚由服务层随后经 SubscriptionService 做。
+   */
+  async executeRefund(input: {
+    refund: RefundRecordView;
+    order: OrderRecord;
+    actor: OrderActor;
+  }): Promise<{ refund: RefundRecordView; order: OrderRecord }> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const lock = await client.query<OrderRow>(
+        `select * from billing.orders where id = $1 for update`,
+        [input.order.id],
+      );
+      const ord = lock.rows[0];
+      if (!ord) throw new ConflictException("订单不存在");
+      if (ord.status !== "fulfilled") {
+        throw new ConflictException("只有已履约的订单可以退款");
+      }
+      const amount = Number(input.refund.amount);
+      const pool = await client.query<{ balance: string }>(
+        `select balance from billing.credits where tenant_id = $1`,
+        [ord.tenant_id],
+      );
+      const balance = Number(pool.rows[0]?.balance ?? 0);
+      const txn = await client.query<{ id: string }>(
+        `insert into billing.transactions (
+           tenant_id, bill_id, transaction_no, trade_type, source_method,
+           amount, currency, balance_before, balance_after, trade_status,
+           related_no, remark, actor_type, actor_id, client_ip
+         ) values ($1, $2, $3, 'refund', null, $4, $5, $6, $6, 'success', $7, $8, $9, $10, $11)
+         returning id`,
+        [
+          ord.tenant_id,
+          null,
+          visibleCode("TXN"),
+          -amount,
+          ord.currency,
+          balance,
+          input.refund.refundNo,
+          `refund of order ${ord.order_no}`,
+          input.actor.actorType,
+          input.actor.actorId,
+          input.actor.clientIp ?? null,
+        ],
+      );
+      const leftover = Number(ord.leftover_amount);
+      if (leftover > 0) {
+        // 折抵溢出当初进了预付池，退款把它冲回（余额可为负——运营对账处理）。
+        const after = await client.query<{ balance: string }>(
+          `update billing.credits
+              set balance = balance - $2, version = version + 1, updated_at = now()
+            where tenant_id = $1
+            returning balance`,
+          [ord.tenant_id, leftover],
+        );
+        const bal = Number(after.rows[0]?.balance ?? balance - leftover);
+        await client.query(
+          `insert into billing.transactions (
+             tenant_id, bill_id, transaction_no, trade_type, source_method,
+             amount, currency, balance_before, balance_after, trade_status,
+             related_no, remark, actor_type, actor_id
+           ) values ($1, null, $2, 'adjust', null, $3, $4, $5, $6, 'success', $7, $8, $9, $10)`,
+          [
+            ord.tenant_id,
+            visibleCode("TXN"),
+            -leftover,
+            ord.currency,
+            bal + leftover,
+            bal,
+            input.refund.refundNo,
+            `reverse upgrade proration leftover (order ${ord.order_no})`,
+            input.actor.actorType,
+            input.actor.actorId,
+          ],
+        );
+      }
+      const refundRow = await client.query<RefundRow>(
+        `update billing.refunds
+            set refund_status = 'success', refund_at = now(), transaction_id = $2, updated_at = now()
+          where id = $1 and audit_status = 'approved' and refund_status in ('pending', 'processing')
+          returning *`,
+        [input.refund.id, txn.rows[0]!.id],
+      );
+      const refund = refundRow.rows[0];
+      if (!refund) throw new ConflictException("退款单不是已审核待执行状态");
+      const updated = await client.query<OrderRow>(
+        `update billing.orders
+            set status = 'refunded', closed_at = now(), close_reason = 'refunded', updated_at = now()
+          where id = $1 returning *`,
+        [ord.id],
+      );
+      await this.insertEventTx(client, {
+        orderId: ord.id,
+        eventType: "refunded",
+        fromStatus: "fulfilled",
+        toStatus: "refunded",
+        actorType: input.actor.actorType,
+        actorId: input.actor.actorId,
+        remark: input.actor.remark ?? `refund ${refund.refund_no}`,
+        clientIp: input.actor.clientIp ?? null,
+      });
+      await client.query("commit");
+      return {
+        refund: mapRefund(refund),
+        order: this.mapOrder(updated.rows[0]!),
+      };
+    } catch (err) {
+      await client.query("rollback");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listRefunds(
+    status?: "pending" | "approved" | "rejected",
+  ): Promise<(RefundRecordView & { orderNo: string; tenantId: string })[]> {
+    const res = await this.pool.query<RefundRow & { order_no: string }>(
+      `select r.*, o.order_no from billing.refunds r
+         join billing.orders o on o.id = r.order_id
+        where ($1::text is null or r.audit_status = $1)
+        order by r.created_at desc limit 200`,
+      [status ?? null],
+    );
+    return res.rows.map((r) => ({
+      ...mapRefund(r),
+      orderNo: r.order_no,
+      tenantId: r.tenant_id,
+    }));
   }
 
   /**

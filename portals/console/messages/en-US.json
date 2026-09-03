@@ -1845,7 +1845,8 @@
       "settleInstant": "Confirm and activate",
       "cancelOrder": "Cancel order",
       "refresh": "Refresh",
-      "backToSubscription": "Back to subscription"
+      "backToSubscription": "Back to subscription",
+      "cancel": "Cancel"
     },
     "declareDialog": {
       "title": "Confirm payment declaration",
@@ -1870,6 +1871,35 @@
       "voucherOff": "Vouchers {amount}",
       "creditsTitle": "Account balance (tenant-wide)",
       "creditsNote": "The balance funds future usage-based charging; top-up opens with that capability."
+    },
+    "refund": {
+      "title": "Refund",
+      "policyLink": "Refund policy",
+      "requestFailed": "Refund request failed",
+      "request": "Request refund",
+      "requestHint": "Full refund available within {hours} hours of activation (before {deadline})",
+      "ineligibleTitle": "This order is not eligible for a refund",
+      "reasons": {
+        "not_fulfilled": "The order has not been activated yet",
+        "not_first_purchase": "Only the first purchase of a product can be refunded",
+        "window_elapsed": "The refund window has passed",
+        "usage_over_threshold": "Consumable quota usage is above the threshold",
+        "zero_amount": "Zero-amount orders need no refund",
+        "refund_exists": "A refund request already exists"
+      },
+      "dialogTitle": "Request a refund",
+      "dialogDescription": "The refund equals what you paid for this order ({amount}). Once completed, the subscription for this product returns to unsubscribed and entitlements stop immediately.",
+      "reasonLabel": "Reason",
+      "reasonPlaceholder": "Briefly describe why (optional)",
+      "submit": "Submit request",
+      "submitted": "Refund request submitted; operations will review it.",
+      "status": {
+        "requested": "Refund under review",
+        "approved": "Refund approved, payout pending",
+        "rejected": "Refund request rejected",
+        "refunded": "Refunded"
+      },
+      "auditRemark": "Review note"
     }
   },
   "billingPage": {

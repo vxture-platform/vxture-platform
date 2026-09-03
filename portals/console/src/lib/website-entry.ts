@@ -30,6 +30,11 @@ export function buildWebsiteProductsUrl(locale: string): string {
   return `${WEBSITE_BASE_URL}/${locale}/products`;
 }
 
+/** 退款说明（product_330 §5，官网统一维护，newtab）：/{locale}/legal/refund。 */
+export function buildWebsiteRefundPolicyUrl(locale: string): string {
+  return `${WEBSITE_BASE_URL}/${locale}/legal/refund`;
+}
+
 /** 定价 / 档位选择页：/{locale}/pricing?product={productCode}。「升级」从这里看清档位再下单。 */
 export function buildWebsitePricingUrl(
   locale: string,

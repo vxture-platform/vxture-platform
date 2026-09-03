@@ -43,6 +43,7 @@ import {
 } from "@vxture/service-subscription";
 import type {
   DeclarePaymentResult,
+  RefundRecordView,
   SubscriptionRecord,
 } from "@vxture/service-subscription";
 import {
@@ -341,6 +342,55 @@ interface OrderDetailResult {
   vouchers: OrderVoucherOption[];
   legs: OrderPaymentLeg[];
   paymentChannels: PaymentChannelInfo[];
+  /** 退款单（product_330 §5）：最近一张；null = 没申请过 */
+  refund: OrderRefundView | null;
+}
+
+/** 客户可见的退款单投影。 */
+export interface OrderRefundView {
+  refundNo: string;
+  amount: string;
+  currency: string;
+  reason: string | null;
+  /** requested → approved | rejected → refunded */
+  stage: "requested" | "approved" | "rejected" | "refunded";
+  auditRemark: string | null;
+  requestedAt: string;
+  auditedAt: string | null;
+  refundedAt: string | null;
+}
+
+export interface RefundEligibilityResult {
+  eligible: boolean;
+  reasons: string[];
+  amount: string;
+  currency: string;
+  windowEndsAt: string | null;
+  usageRatio: number;
+  windowHours: number;
+  maxUsageRatio: number;
+}
+
+function mapRefundView(r: RefundRecordView): OrderRefundView {
+  const stage: OrderRefundView["stage"] =
+    r.refundStatus === "success"
+      ? "refunded"
+      : r.auditStatus === "rejected"
+        ? "rejected"
+        : r.auditStatus === "approved"
+          ? "approved"
+          : "requested";
+  return {
+    refundNo: r.refundNo,
+    amount: r.amount,
+    currency: r.currency,
+    reason: r.reason,
+    stage,
+    auditRemark: r.auditRemark,
+    requestedAt: r.requestedAt.toISOString(),
+    auditedAt: r.auditedAt?.toISOString() ?? null,
+    refundedAt: r.refundedAt?.toISOString() ?? null,
+  };
 }
 
 interface QuoteBody {
@@ -1289,12 +1339,13 @@ export class SubscriptionRouter {
       workspaceId: row.workspace_id,
       userId: req.user.id,
     };
-    const [vouchers, legs, rejectReason] = await Promise.all([
+    const [vouchers, legs, rejectReason, refund] = await Promise.all([
       state === "pending_payment"
         ? this.promotionService.listAvailableVouchers(scope)
         : Promise.resolve([] as AvailableVoucher[]),
       this.loadPaymentLegs(row.invoice_id),
-      this.loadLatestRejectReason(orderId),
+      this.loadLatestRejectReason(row.order_id),
+      this.orderService.getRefundForOrder(row.order_id),
     ]);
 
     return {
@@ -1318,7 +1369,59 @@ export class SubscriptionRouter {
       vouchers: vouchers.map(mapVoucherOption),
       legs,
       paymentChannels: buildPaymentChannels(row.order_no),
+      refund: refund ? mapRefundView(refund) : null,
     };
+  }
+
+  /** GET /api/subscription/orders/:orderId/refund-eligibility — 24h 退款资格（product_330 §5） */
+  @Get("orders/:orderId/refund-eligibility")
+  async getRefundEligibility(
+    @Req() req: Request & RequestContext,
+    @Param("orderId") orderId: string,
+  ): Promise<RefundEligibilityResult> {
+    if (!req.user || !req.tenant) throw new UnauthorizedException("会话已失效");
+    const row = await this.loadOrderRow(req.tenant.id, orderId?.trim());
+    if (!row) throw new BadRequestException("订单不存在或无权查看");
+    const e = await this.orderService.getRefundEligibility(row.order_id);
+    return {
+      eligible: e.eligible,
+      reasons: e.reasons,
+      amount: e.amount,
+      currency: e.currency,
+      windowEndsAt: e.windowEndsAt?.toISOString() ?? null,
+      usageRatio: e.usageRatio,
+      windowHours: e.policy.windowHours,
+      maxUsageRatio: e.policy.maxUsageRatio,
+    };
+  }
+
+  /** POST /api/subscription/orders/:orderId/refund-request — 客户申请退款 */
+  @Post("orders/:orderId/refund-request")
+  async requestRefund(
+    @Req() req: Request & RequestContext,
+    @Param("orderId") orderId: string,
+    @Body() body: { reason?: string },
+  ): Promise<OrderRefundView> {
+    if (!req.user || !req.tenant) throw new UnauthorizedException("会话已失效");
+    const row = await this.loadOrderRow(req.tenant.id, orderId?.trim());
+    if (!row) throw new BadRequestException("订单不存在或无权操作");
+    const reason = body?.reason?.trim().slice(0, 512) || null;
+    try {
+      const refund = await this.orderService.requestRefund(row.order_id, {
+        userId: req.user.id,
+        reason,
+        clientIp: req.ip ?? null,
+      });
+      auditCustomerAction(this.pool, req, {
+        action: "order.refund_request",
+        resourceType: "order",
+        resourceId: row.order_no,
+        after: { refundNo: refund.refundNo, amount: refund.amount },
+      });
+      return mapRefundView(refund);
+    } catch (err) {
+      throw mapOrderError(err);
+    }
   }
 
   /** POST /api/subscription/orders/:orderId/quote — 纯试算（零副作用） */

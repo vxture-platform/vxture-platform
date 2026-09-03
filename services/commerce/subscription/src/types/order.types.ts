@@ -98,6 +98,51 @@ export interface CreateOrderResult {
   billNo: string;
 }
 
+// ── 退款（product_330 §5，owner 决策 3）────────────────────────────────────────
+
+/** 平台参数（admin.settings）：退款窗口与消耗性配额使用率阈值。 */
+export interface RefundPolicy {
+  windowHours: number;
+  maxUsageRatio: number;
+}
+
+export interface RefundEligibility {
+  eligible: boolean;
+  /** 不满足的原因码（全部列出，前端按码翻译） */
+  reasons: RefundIneligibleReason[];
+  /** 可退金额（= 订单实付） */
+  amount: string;
+  currency: string;
+  /** 窗口截止时刻（fulfilled_at + windowHours） */
+  windowEndsAt: Date | null;
+  /** 消耗性配额已用比 [0,1]（无池 0） */
+  usageRatio: number;
+  policy: RefundPolicy;
+}
+
+export type RefundIneligibleReason =
+  | "not_fulfilled"
+  | "not_first_purchase"
+  | "window_elapsed"
+  | "usage_over_threshold"
+  | "zero_amount"
+  | "refund_exists";
+
+export interface RefundRecordView {
+  id: string;
+  refundNo: string;
+  orderId: string;
+  amount: string;
+  currency: string;
+  reason: string | null;
+  auditStatus: "pending" | "approved" | "rejected";
+  auditRemark: string | null;
+  refundStatus: "pending" | "processing" | "success" | "failed";
+  requestedAt: Date;
+  auditedAt: Date | null;
+  refundedAt: Date | null;
+}
+
 /** 订单账单（锁定后交给申报编排）。 */
 export interface OrderInvoice {
   id: string;
