@@ -2047,15 +2047,15 @@
     "card": {
       "productDetail": "Product details",
       "version": "Latest v{version}",
-      "manage": "Manage",
       "upgrade": "Upgrade",
       "renew": "Renew",
       "moreActions": "More actions",
       "autoRenewOff": "Cancel at period end",
       "autoRenewOn": "Resume auto-renew",
-      "autoRenewNa": "Not applicable to free/trial/perpetual",
+      "autoRenewNa": "Not applicable to perpetual subscriptions",
       "unsubscribe": "Unsubscribe now",
       "optedOut": "Ends at period end",
+      "autoRenewOnBadge": "Auto-renews",
       "unsubscribeVerb": "Unsubscribe from",
       "unsubscribeConsequence": "The subscription ends when the current billing cycle closes; it will not renew or bill again. Access continues until then. Resuming means subscribing again at the price listed at that time.",
       "unsubscribeKeep": "Keep subscription"

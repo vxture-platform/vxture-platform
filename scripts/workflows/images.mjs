@@ -48,7 +48,9 @@ export const IMAGES = [
     image: ghcrImage("platform_console"),
     dockerfile: "deploy/docker/Dockerfile.nextjs",
     "build-args":
-      "PORTAL_PATH=portals/console\nPACKAGE_FILTER=@vxture/console\nNEXT_PUBLIC_API_URL=https://api.vxture.com\nNEXT_PUBLIC_CONSOLE_BFF_URL=https://console.vxture.com",
+      // NEXT_PUBLIC_WEBSITE_URL：console → 官网外链（产品详情 / 定价页）。此前未传，
+      // Dockerfile ARG 烘成空串、回退失效，线上全部落到 console.* 404（owner 2026-09-03）。
+      "PORTAL_PATH=portals/console\nPACKAGE_FILTER=@vxture/console\nNEXT_PUBLIC_API_URL=https://api.vxture.com\nNEXT_PUBLIC_CONSOLE_BFF_URL=https://console.vxture.com\nNEXT_PUBLIC_WEBSITE_URL=https://vxture.com",
   },
   // admin：NEXT_PUBLIC_ADMIN_BFF_URL 不在此处硬编码真实域名（加固决策,
   // 2026-07-28 追加,与 opera 同一性质）——由 docker-build.yml 从 GH Actions

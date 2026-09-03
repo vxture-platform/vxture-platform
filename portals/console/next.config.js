@@ -68,9 +68,10 @@ const nextConfig = {
     // 透传过 NEXT_PUBLIC_CF_TURNSTILE_TENANT_SITE_KEY，源码里没有任何消费方，只会让
     // 读配置的人以为 console 也在解 widget（2026-08-29 白名单排查时确实被误导过）。
     // 首次补齐页的法务链接指门户站（console 没有 /legal 路由）。缺省生产域：
-    // compose 未注入时（本地 dev）也不至于拼出相对 404。
+    // 未注入（本地 dev）或注入为空串（Dockerfile ARG 未传时 ENV 烘成 ""，2026-09-03
+    // 线上 404 根因）都回退，故用 || 不用 ??。
     NEXT_PUBLIC_WEBSITE_URL:
-      process.env.NEXT_PUBLIC_WEBSITE_URL ?? "https://vxture.com",
+      process.env.NEXT_PUBLIC_WEBSITE_URL || "https://vxture.com",
   },
   turbopack: {
     resolveAlias: turboAliases,
