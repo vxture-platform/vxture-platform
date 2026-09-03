@@ -757,6 +757,12 @@ left join lateral (
 const SUBSCRIPTION_LIST_SQL = `
 ${SUBSCRIPTION_BASE_SQL}
 where s.deleted_at is null
+  -- product_330 P1-b1：升级订单的旧镜像行（订单已履约到另一条订阅）不是权益实例，不列。
+  -- 钱与履约在「交易订单」看（billing.orders）。
+  and not exists (
+    select 1 from billing.orders o
+     where o.order_no = s.order_no and o.status = 'fulfilled' and o.subscription_id <> s.id
+  )
 order by s.created_at desc
 limit 500
 `;

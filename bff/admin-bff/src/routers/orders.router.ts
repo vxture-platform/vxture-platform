@@ -444,6 +444,17 @@ export class OrdersRouter {
           [invoice.id, newPaid, fullySettled, input.paidAt],
         );
 
+        // product_330 P1-b1：订单实体同步 paid（足额）；部分到账停在原态。段 2 履约再翻 fulfilled。
+        if (fullySettled) {
+          await client.query(
+            `update billing.orders
+                set status = 'paid', paid_at = coalesce($2, paid_at, now()), updated_at = now()
+              where order_no = (select order_no from metering.subscriptions where id = $1)
+                and status in ('pending_payment', 'pending_verify')`,
+            [subscriptionId, input.paidAt],
+          );
+        }
+
         if (!fullySettled) {
           // 未足额结清：无论是否待支付订单，都不激活、不触发段2，只留一条审计。
           await client.query(
@@ -683,6 +694,15 @@ export class OrdersRouter {
          ) values ($1, $2, 'payment_rejected', 'suspended', 'suspended',
                    'operator', $3, $4, $5)`,
         [sub.tenant_id, subscriptionId, actorId, reason, extractClientIp(req)],
+      );
+
+      // ⑥ product_330 P1-b1：订单实体回到 pending_payment。
+      await client.query(
+        `update billing.orders
+            set status = 'pending_payment', declared_at = null, updated_at = now()
+          where order_no = (select order_no from metering.subscriptions where id = $1)
+            and status = 'pending_verify'`,
+        [subscriptionId],
       );
 
       await client.query("commit");
@@ -1070,9 +1090,17 @@ select
   pay.pay_method                   as pay_method,
   pay.pay_status                   as pay_status,
   pay.paid_amount                  as payment_paid_amount,
-  pay.paid_at                      as payment_paid_at
+  pay.paid_at                      as payment_paid_at,
+  ord.status                       as order_entity_status,
+  ord.intent                       as order_intent,
+  ord.payable_amount               as order_payable_amount,
+  ord.subscription_id              as fulfilled_subscription_id,
+  tsub.status                      as target_subscription_status
 from metering.subscriptions sub
 join tenancy.tenants tenant on tenant.id = sub.tenant_id
+-- product_330 P1-b1：订单实体（权威态）；升级单履约后 subscription_id 指向被升级的订阅
+left join billing.orders ord on ord.order_no = sub.order_no
+left join metering.subscriptions tsub on tsub.id = ord.subscription_id
 left join tenancy.tenant_profiles profile on profile.tenant_id = tenant.id
 left join product.plan_versions pv on pv.id = sub.plan_version_id
 left join product.plans plan on plan.id = pv.plan_id
@@ -1271,20 +1299,55 @@ function operatorDisplay(
   return "未设置";
 }
 
+// product_330 P1-b1：订单实体状态 → 运营视图状态。partial 仍由账单态判（实体不分部分到账）。
+function mapEntityOrderStatus(
+  entityStatus: string,
+  billStatus: string | null,
+): OrderOperationStatus | null {
+  switch (entityStatus) {
+    case "pending_payment":
+      return billStatus === "partial" ? "partial_pending" : "pending";
+    case "pending_verify":
+      return "pending_verify";
+    case "paid":
+      return "paid_unprovisioned";
+    case "fulfilled":
+      return "confirmed";
+    case "cancelled":
+    case "expired":
+    case "refunded":
+      return "closed";
+    default:
+      return null;
+  }
+}
+
 function mapOrderRow(row: OrderRow): OrderOperationRecord {
   const hasInvoice = Boolean(row.bill_id);
-  const amount = toNumber(row.pay_amount ?? row.bill_payable_amount);
+  // 订单金额 = 订单实体的应付（product_330）；旧行退回订阅行 pay_amount / 账单应付。
+  // 订阅行的 pay_amount 是"本周期实付"，升级履约后会被改写，不再代表这张单的金额。
+  const amount = toNumber(
+    row.order_payable_amount ?? row.pay_amount ?? row.bill_payable_amount,
+  );
   // Invoice truth for money collected (product_321 §4.2) — the representative
   // leg's paid_amount is one leg, not the order's total income.
   const paidAmount = toNumber(row.bill_paid_amount ?? row.payment_paid_amount);
   const inFlightOrder =
     row.subscription_status === "suspended" &&
     row.activation_method === "offline_purchase";
-  const orderStatus = deriveOrderStatus(
-    row.pay_status,
-    row.bill_status,
-    inFlightOrder,
-  );
+  // 订单实体在（P1-a 回填 + P1-b1 双写）就以它为准；没有（极旧行）退回旧派生。
+  const orderStatus =
+    (row.order_entity_status
+      ? mapEntityOrderStatus(row.order_entity_status, row.bill_status)
+      : null) ??
+    deriveOrderStatus(row.pay_status, row.bill_status, inFlightOrder);
+  // 升级单履约到另一条订阅：服务态看被升级的那条，不看旧镜像行（它恒为 cancelled）。
+  const effectiveSubscriptionStatus =
+    row.fulfilled_subscription_id &&
+    row.fulfilled_subscription_id !== row.id &&
+    row.target_subscription_status
+      ? row.target_subscription_status
+      : row.subscription_status;
   // Restorable = a pending order that was voided/expired before ever being
   // activated (end_at is only ever set by cancelSubscription — see
   // repo.restoreOfflineOrder). paidAmount>0 also blocks it defensively,
@@ -1308,8 +1371,8 @@ function mapOrderRow(row: OrderRow): OrderOperationRecord {
     servicePlanCode: row.plan_code ?? "",
     servicePlanName: row.plan_name ?? "未设置",
     tierName: "未设置",
-    subscriptionId: row.id,
-    subscriptionStatus: mapSubscriptionStatus(row.subscription_status),
+    subscriptionId: row.fulfilled_subscription_id ?? row.id,
+    subscriptionStatus: mapSubscriptionStatus(effectiveSubscriptionStatus),
     cycleType: mapCycle(row.cycle_unit),
     orderStatus,
     restorable,
@@ -1450,6 +1513,12 @@ interface OrderRow {
   declared_remark: string | null;
   declared_amount: string | number | null;
   declared_at: Date | string | null;
+  // product_330 P1-b1：订单实体（billing.orders）投影——有则以它为准
+  order_entity_status: string | null;
+  order_intent: string | null;
+  order_payable_amount: string | number | null;
+  fulfilled_subscription_id: string | null;
+  target_subscription_status: string | null;
 }
 
 interface InvoiceItemRow {
