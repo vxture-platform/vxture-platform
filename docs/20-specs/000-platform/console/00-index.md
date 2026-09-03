@@ -22,25 +22,26 @@ JWT `userType = tenant_user`，`authScope = tenant_console`。Varda 智能助手
 
 ## 功能模块清单
 
-| 路由               | 功能                             | BFF Router     | 状态      |
-| ------------------ | -------------------------------- | -------------- | --------- |
-| `/`                | 仪表板（租户概览）               | tenant-context | ✅ 已完成 |
-| `/members`         | 成员管理（邀请、移除、角色分配） | iam            | ✅ 已完成 |
-| `/invitations`     | 邀请管理（待接受 / 已过期）      | iam            | ✅ 已完成 |
-| `/roles`           | 角色管理（自定义角色、权限分配） | iam            | ✅ 已完成 |
-| `/iam`             | 身份与访问管理（权限总览）       | iam            | ✅ 已完成 |
-| `/subscription`    | 订阅管理（当前套餐、升级入口）   | subscription   | ✅ 已完成 |
-| `/billing`         | 账单与用量（账单列表、用量明细） | billing        | ✅ 已完成 |
-| `/quotas`          | 配额管理（模型 Token 用量）      | subscription   | ✅ 已完成 |
-| `/model-platform`  | 模型平台配置（租户级模型访问）   | capabilities   | ✅ 已完成 |
-| `/profile`         | 个人资料（姓名、头像、联系方式） | me             | ✅ 已完成 |
-| `/security`        | 安全设置（密码修改、会话管理）   | me             | ✅ 已完成 |
-| `/notifications`   | 通知设置（接收偏好）             | me             | ✅ 已完成 |
-| `/organization`    | 组织信息（企业租户名称、Logo）   | tenant-context | ✅ 已完成 |
-| `/personal-tenant` | 个人租户设置                     | tenant-context | ✅ 已完成 |
-| `/settings`        | 租户通用设置                     | tenant-context | ✅ 已完成 |
-| `/tenant-settings` | 高级租户配置                     | tenant-context | ✅ 已完成 |
-| `/todos`           | 待办事项（待确认状态）           | —              | ⚠️ 待确认 |
+| 路由               | 功能                                 | BFF Router     | 状态      |
+| ------------------ | ------------------------------------ | -------------- | --------- |
+| `/`                | 仪表板（租户概览）                   | tenant-context | ✅ 已完成 |
+| `/members`         | 成员管理（邀请、移除、角色分配）     | iam            | ✅ 已完成 |
+| `/invitations`     | 邀请管理（待接受 / 已过期）          | iam            | ✅ 已完成 |
+| `/roles`           | 角色管理（自定义角色、权限分配）     | iam            | ✅ 已完成 |
+| `/iam`             | 身份与访问管理（权限总览）           | iam            | ✅ 已完成 |
+| `/subscription`    | 订阅管理（当前套餐、升级入口）       | subscription   | ✅ 已完成 |
+| `/billing`         | 账单与用量（账单列表、用量明细）     | billing        | ✅ 已完成 |
+| `/quotas`          | 配额管理（模型 Token 用量）          | subscription   | ✅ 已完成 |
+| `/model-platform`  | 模型平台配置（租户级模型访问）       | capabilities   | ✅ 已完成 |
+| `/profile`         | 个人资料（姓名、头像、联系方式）     | me             | ✅ 已完成 |
+| `/security`        | 安全设置（密码修改、会话管理）       | me             | ✅ 已完成 |
+| `/notifications`   | 通知设置（接收偏好）                 | me             | ✅ 已完成 |
+| `/inbox`           | 站内消息（收件箱，product_330 P2-g） | me             | ✅ 已完成 |
+| `/organization`    | 组织信息（企业租户名称、Logo）       | tenant-context | ✅ 已完成 |
+| `/personal-tenant` | 个人租户设置                         | tenant-context | ✅ 已完成 |
+| `/settings`        | 租户通用设置                         | tenant-context | ✅ 已完成 |
+| `/tenant-settings` | 高级租户配置                         | tenant-context | ✅ 已完成 |
+| `/todos`           | 待办事项（待确认状态）               | —              | ⚠️ 待确认 |
 
 ---
 

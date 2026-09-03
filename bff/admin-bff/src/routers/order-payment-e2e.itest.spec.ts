@@ -30,6 +30,7 @@ import {
   PgProvisioningRepository,
   ProvisioningService,
 } from "@vxture/service-provisioning";
+import { NotificationDispatcher } from "@vxture/service-notification";
 import { OrdersRouter } from "./orders.router";
 import { PaymentsRouter } from "./payments.router";
 import { CommercialRouter } from "./commercial.router";
@@ -223,6 +224,13 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       subscriptions,
       promotion,
     );
+    // P2-g：客户通知（站内；邮件 sender 不注入 → 只落 inbox + inapp 账本）
+    const notifier = new NotificationDispatcher(pool, {
+      mail: null,
+      logger: { warn: () => {} },
+    });
+    orderService.setCustomerNotifier(notifier);
+    subscriptions.setCustomerNotifier(notifier);
     orders = new OrdersRouter(pool, pool, orderService, promotion);
     payments = new PaymentsRouter(pool, pool);
     commercial = new CommercialRouter(pool, pool);
@@ -911,6 +919,61 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       [optInSub],
     );
     expect(hist.rows.length).toBe(1);
+  }, 60_000);
+
+  it("§8.20 客户通知（P2-g）：履约 → order.fulfilled 站内 + 账本；退款三阶段各一条；重复履约不重复通知", async () => {
+    const orderId = await mkOrder(300);
+    await declare(orderId);
+    await confirm(orderId, 300);
+    const inbox = await pool.query<{
+      template_code: string;
+      link: string | null;
+      read_at: Date | null;
+    }>(
+      `select template_code, link, read_at from support.inbox_messages
+        where reference_type = 'order' and reference_id = $1 order by created_at`,
+      [orderId],
+    );
+    expect(inbox.rows.map((r) => r.template_code)).toEqual(["order.fulfilled"]);
+    expect(inbox.rows[0]!.link).toBe(`/subscribe/pay/${orderId}`);
+    expect(inbox.rows[0]!.read_at).toBeNull();
+    const logs = await pool.query<{ channel: string; status: string }>(
+      `select channel, status from support.notification_logs
+        where reference_type = 'order' and reference_id = $1`,
+      [orderId],
+    );
+    expect(logs.rows).toEqual([{ channel: "inapp", status: "delivered" }]);
+
+    // 幂等履约（已 fulfilled 直接返回）不再通知
+    await orderService.fulfill(orderId, { actorType: "system", actorId: null });
+    const again = await pool.query(
+      `select 1 from support.inbox_messages where reference_type = 'order' and reference_id = $1`,
+      [orderId],
+    );
+    expect(again.rows.length).toBe(1);
+
+    // 退款：申请 / 通过 / 完成 各一条（按 refund:阶段 去重）
+    const req1 = await orderService.requestRefund(orderId, {
+      userId,
+      reason: "e2e notify",
+    });
+    await orders.auditRefund(req(CAPS_SETTLE), orderId, {
+      decision: "approved",
+      remark: "e2e approve",
+    });
+    await orders.executeRefund(req(CAPS_SETTLE), orderId, {
+      reason: "e2e paid back",
+    });
+    const refundInbox = await pool.query<{ template_code: string }>(
+      `select template_code from support.inbox_messages
+        where reference_type = 'refund' and reference_id like $1 order by created_at`,
+      [`${req1.id}:%`],
+    );
+    expect(refundInbox.rows.map((r) => r.template_code)).toEqual([
+      "refund.requested",
+      "refund.approved",
+      "refund.completed",
+    ]);
   }, 60_000);
 
   it("§8.13 发券边界：超发 409、per_user_limit 409、门槛字段拒绝", async () => {

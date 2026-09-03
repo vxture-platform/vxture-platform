@@ -201,8 +201,25 @@
     "close": "关闭",
     "notifications": {
       "title": "消息中心",
-      "markAllRead": "全部已读"
+      "markAllRead": "全部已读",
+      "empty": "暂无消息"
     }
+  },
+  "inbox": {
+    "header": {
+      "title": "站内消息",
+      "description": "订阅到期、续费订单、开通与退款进度的通知；邮件偏好在「通知提醒」调整。"
+    },
+    "unread": "{count} 条未读",
+    "allRead": "没有未读消息",
+    "markAllRead": "全部标为已读",
+    "loadMore": "加载更多",
+    "loading": "加载中…",
+    "empty": "还没有任何消息",
+    "loadError": "消息读取失败，请稍后再试",
+    "open": "查看",
+    "readBadge": "已读",
+    "unreadBadge": "未读"
   },
   "preferences": {
     "title": "显示偏好",
@@ -306,6 +323,10 @@
       "atlas": {
         "label": "模型接入",
         "description": "在线模型、自建模型与租户授权"
+      },
+      "inbox": {
+        "label": "站内消息",
+        "description": "订阅、订单与退款的通知"
       },
       "notifications": {
         "label": "通知提醒",

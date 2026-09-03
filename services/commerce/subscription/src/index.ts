@@ -2,6 +2,17 @@ export { SubscriptionModule } from "./module/subscription.module";
 export { SubscriptionService } from "./service/subscription.service";
 export { OrderService } from "./service/order.service";
 export type { FulfillResult } from "./service/order.service";
+export {
+  CUSTOMER_NOTIFIER,
+  customerRecipients,
+  formatNotifyDate,
+  formatNotifyMoney,
+} from "./service/customer-notifier";
+export type {
+  CustomerNotificationTemplate,
+  CustomerNotifier,
+  CustomerNotifyInput,
+} from "./service/customer-notifier";
 export { ConsumeService } from "./service/consume.service";
 export { PgSubscriptionRepository } from "./repository/pg-subscription.repository";
 export { PgOrderRepository } from "./repository/pg-order.repository";

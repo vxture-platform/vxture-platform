@@ -197,6 +197,12 @@ const advancedSettingsSection: NavigationSection = {
       descriptionKey: "systemSettings.description",
     },
     {
+      href: "/inbox",
+      labelKey: "inbox.label",
+      icon: "bell",
+      descriptionKey: "inbox.description",
+    },
+    {
       href: "/notifications",
       labelKey: "notifications.label",
       icon: "mail",

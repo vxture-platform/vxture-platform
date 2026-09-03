@@ -201,8 +201,25 @@
     "close": "Close",
     "notifications": {
       "title": "Message Center",
-      "markAllRead": "Mark all read"
+      "markAllRead": "Mark all read",
+      "empty": "No messages yet"
     }
+  },
+  "inbox": {
+    "header": {
+      "title": "Inbox",
+      "description": "Subscription expiry, renewal orders, activation and refund progress; email preferences live under Notifications."
+    },
+    "unread": "{count} unread",
+    "allRead": "No unread messages",
+    "markAllRead": "Mark all as read",
+    "loadMore": "Load more",
+    "loading": "Loading…",
+    "empty": "No messages yet",
+    "loadError": "Could not load messages, please try again later",
+    "open": "Open",
+    "readBadge": "Read",
+    "unreadBadge": "Unread"
   },
   "preferences": {
     "title": "Display preferences",
@@ -306,6 +323,10 @@
       "atlas": {
         "label": "Model Platform",
         "description": "Online models, private models, and tenant grants"
+      },
+      "inbox": {
+        "label": "Inbox",
+        "description": "Subscription, order and refund notices"
       },
       "notifications": {
         "label": "Notifications",

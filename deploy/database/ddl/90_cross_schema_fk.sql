@@ -512,6 +512,12 @@ DO $$ BEGIN
     FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants(id);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+DO $$ BEGIN
+  ALTER TABLE support.inbox_messages
+    ADD CONSTRAINT fk_inbox_messages_tenant
+    FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants(id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 -- ── 以下为刻意「裸值不建 FK」清单（注释留痕，非真 FK） ────────────────────────
 -- support.tickets.account_id              → account.users.id         裸值（边界#3：报单者可注销，工单留存）
 -- support.tickets.assignee_id             → admin.operator_accounts  裸值（边界#2：跨 realm workforce 隔离，铁律七）
@@ -519,6 +525,7 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 -- support.audit_logs.tenant_id            → tenancy.tenants          裸值（边界#3：合规不可变，须活过租户注销）
 -- support.audit_logs.actor_id             → account.users / operator 裸值（边界#3 + 边界#2：跨 realm）
 -- support.notification_logs.account_id    → account.users.id         裸值（边界#3：收件人可注销）
+-- support.inbox_messages.account_id       → account.users.id         裸值（边界#3：收件人可注销，同 notification_logs）
 -- support.audit_logs.request_id           → reqlog/usage_events/…    裸值（边界#1：跨库单一关联键）
 
 -- ═══ admin ═══

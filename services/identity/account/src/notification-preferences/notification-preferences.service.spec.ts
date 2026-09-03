@@ -37,8 +37,9 @@ describe("通知偏好规整", () => {
       expect(Object.keys(prefs[topic]).sort()).toEqual(
         [...NOTIFICATION_CHANNELS].sort(),
       );
-      // 默认开外发通道等于替用户同意打扰。
-      expect(prefs[topic].email).toBe(false);
+      // 默认开外发通道等于替用户同意打扰——事务性的订阅 / 账务邮件除外（owner 2026-09-03）。
+      const transactional = topic === "subscription" || topic === "billing";
+      expect(prefs[topic].email).toBe(transactional);
       expect(prefs[topic].sms).toBe(false);
     }
     expect(prefs.account.inbox).toBe(true);
@@ -81,7 +82,8 @@ describe("通知偏好规整", () => {
       billing: { email: "true", sms: 1, inbox: null },
     });
 
-    expect(saved.billing.email).toBe(false);
+    // 非布尔一律回落默认：billing.email 默认开（事务性）、sms 默认关、inbox 默认开。
+    expect(saved.billing.email).toBe(true);
     expect(saved.billing.sms).toBe(false);
     expect(saved.billing.inbox).toBe(true);
   });

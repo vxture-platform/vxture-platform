@@ -30,6 +30,7 @@ import { SubscriptionRenewalJob } from "./jobs/subscription-renewal.job";
 import { TrialExpiryJob } from "./jobs/trial-expiry.job";
 import { UsageRollupJob } from "./jobs/usage-rollup.job";
 import { WsBasePoolJob } from "./jobs/ws-base-pool.job";
+import { CustomerNotificationsWiring } from "./notifications/customer-notifications.wiring";
 import { IntegrationSignalService } from "./platform/integration-signal.service";
 import { PlatformEntitlementsService } from "./platform/platform-entitlements.service";
 import { PlatformUsageService } from "./platform/platform-usage.service";
@@ -61,6 +62,8 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     PlatformAuthGuard,
     S2sTokenVerifier,
     JobHeartbeatService,
+    // P2-g：客户通知（站内 + 邮件）挂到 OrderService / SubscriptionService（setter 注入）
+    CustomerNotificationsWiring,
     ProvisioningDispatchJob,
     SharingExpiryJob,
     TrialExpiryJob,

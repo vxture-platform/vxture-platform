@@ -441,6 +441,78 @@ export async function saveNotificationPreferences(
   return (await response.json()) as NotificationPreferences;
 }
 
+/** 站内消息（product_330 P2-g）：收件人视角的一条通知。 */
+export interface InboxMessage {
+  id: string;
+  templateCode: string;
+  title: string;
+  body: string;
+  /** console 内相对路径；null = 无跳转。 */
+  link: string | null;
+  referenceType: string;
+  referenceId: string;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface InboxPage {
+  items: InboxMessage[];
+  /** 下一页游标（上一页最后一条的 createdAt）；null = 没有更多。 */
+  nextBefore: string | null;
+  unreadCount: number;
+}
+
+const INBOX_URL = `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/me/inbox`;
+
+/** 收件箱一页；错误文案由调用方用 t() 补，这里只带状态码。 */
+export async function fetchInbox(
+  params: {
+    limit?: number;
+    before?: string | null;
+  } = {},
+): Promise<InboxPage> {
+  const q = new URLSearchParams();
+  if (params.limit) q.set("limit", String(params.limit));
+  if (params.before) q.set("before", params.before);
+  const suffix = q.size ? `?${q.toString()}` : "";
+  const response = await fetch(`${INBOX_URL}${suffix}`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!response.ok) throw new ConsoleBffError("", response.status);
+  return (await response.json()) as InboxPage;
+}
+
+export async function fetchInboxUnreadCount(): Promise<number> {
+  const response = await fetch(`${INBOX_URL}/unread-count`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!response.ok) throw new ConsoleBffError("", response.status);
+  const body = (await response.json()) as { unreadCount: number };
+  return body.unreadCount;
+}
+
+export async function markInboxRead(id: string): Promise<void> {
+  const response = await fetch(`${INBOX_URL}/${encodeURIComponent(id)}/read`, {
+    method: "POST",
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!response.ok) throw new ConsoleBffError("", response.status);
+}
+
+export async function markInboxAllRead(): Promise<number> {
+  const response = await fetch(`${INBOX_URL}/read-all`, {
+    method: "POST",
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!response.ok) throw new ConsoleBffError("", response.status);
+  const body = (await response.json()) as { updated: number };
+  return body.updated;
+}
+
 /**
  * 转让租户所有权(owner 2026-08-21 裁定,决策 3 批一)。
  *

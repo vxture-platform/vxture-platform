@@ -512,6 +512,35 @@ export class PgOrderRepository {
   }
 
   /**
+   * 通知展示用的套餐 / 产品名（P2-g）：主组件产品名 + 套餐名；查不到用占位，通知不因目录缺失而失败。
+   */
+  async getPlanDisplay(
+    planVersionId: string,
+  ): Promise<{ productName: string; planName: string }> {
+    const res = await this.pool.query<{
+      plan_name: string | null;
+      product_name: string | null;
+    }>(
+      `select pl.plan_name, pr.product_name
+         from product.plan_versions pv
+         join product.plans pl on pl.id = pv.plan_id
+         left join lateral (
+           select pc.product_id from product.plan_components pc
+            where pc.plan_version_id = pv.id and pc.component_role = 'primary'
+            order by pc.priority asc, pc.sort_order asc limit 1
+         ) pc on true
+         left join product.products pr on pr.id = pc.product_id
+        where pv.id = $1`,
+      [planVersionId],
+    );
+    const r = res.rows[0];
+    return {
+      productName: r?.product_name ?? "—",
+      planName: r?.plan_name ?? "—",
+    };
+  }
+
+  /**
    * 自动续费候选（product_330 P2-c）：auto_renew 开、在用族、非试用、end_at 落在 leadDays 内，
    * 同产品没有在途订单，且 leadDays 窗口内没为它开过续订单（避免关单后反复重开）。
    * 带同周期价目（缺价目 = 自定义/企业档 → 调用方跳过并记日志）与套餐名。

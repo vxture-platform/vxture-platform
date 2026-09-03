@@ -12,8 +12,11 @@
  * ProvisioningService here only enqueues — dispatch config is never
  * exercised because delivery dispatch runs in platform-api (D13), not here.
  */
-import { Provider } from "@nestjs/common";
+import { Logger, Provider } from "@nestjs/common";
 import { Pool } from "pg";
+import { MailService } from "@vxture/core-mail";
+import { NotificationPreferencesService } from "@vxture/service-account";
+import { NotificationDispatcher } from "@vxture/service-notification";
 import {
   AddonService,
   OrderService,
@@ -41,16 +44,41 @@ export const ADMIN_ADDON_SERVICE = "ADMIN_ADDON_SERVICE";
  * 订单实体编排（product_330 P1-b2）：orders.router 的履约 / 作废 / 恢复走它。
  * 与 ADMIN_SUBSCRIPTION_SERVICE 同一套 module-less 装配（同一个 pool，独立实例）。
  */
+/**
+ * 客户通知分发器（product_330 P2-g，owner 2026-09-03「通知先做站内 + 邮件」）：运营侧动作
+ * （确认收款履约 → order.fulfilled / subscription.renewed，退款审核 / 执行 → refund.*）
+ * 站内落 support.inbox_messages、邮件走 MailModule 的 MailService（此前 admin-bff 注册了
+ * MailModule 却无人用），按用户偏好过滤，投递记 support.notification_logs。
+ */
+function customerNotifier(
+  pool: Pool,
+  mail: MailService,
+): NotificationDispatcher {
+  return new NotificationDispatcher(pool, {
+    mail,
+    prefs: new NotificationPreferencesService(pool),
+    consoleBaseUrl: process.env.CONSOLE_BASE_URL?.replace(/\/$/, ""),
+    logger: new Logger("CustomerNotifications"),
+  });
+}
+
 export const orderServiceProvider: Provider = {
   provide: ADMIN_ORDER_SERVICE,
-  inject: [ADMIN_BFF_RW_POOL, ADMIN_SUBSCRIPTION_SERVICE],
-  useFactory: (pool: Pool, subscriptions: SubscriptionService): OrderService =>
-    new OrderService(
+  inject: [ADMIN_BFF_RW_POOL, ADMIN_SUBSCRIPTION_SERVICE, MailService],
+  useFactory: (
+    pool: Pool,
+    subscriptions: SubscriptionService,
+    mail: MailService,
+  ): OrderService => {
+    const orders = new OrderService(
       new PgOrderRepository(pool),
       new PgSubscriptionRepository(pool),
       subscriptions,
       new PromotionService(new PgPromotionRepository(pool)),
-    ),
+    );
+    orders.setCustomerNotifier(customerNotifier(pool, mail));
+    return orders;
+  },
 };
 
 /**
@@ -80,8 +108,8 @@ export const promotionServiceProvider: Provider = {
 
 export const commerceServicesProvider: Provider = {
   provide: ADMIN_SUBSCRIPTION_SERVICE,
-  inject: [ADMIN_BFF_RW_POOL],
-  useFactory: (pool: Pool): SubscriptionService => {
+  inject: [ADMIN_BFF_RW_POOL, MailService],
+  useFactory: (pool: Pool, mail: MailService): SubscriptionService => {
     const provisioning = new ProvisioningService(
       new PgProvisioningRepository(pool),
       {
@@ -97,9 +125,11 @@ export const commerceServicesProvider: Provider = {
     );
     // 订单侧动作（作废 / 驳回释放券）已整体迁到 OrderService（product_330 P2 退役旧
     // 订单方法），SubscriptionService 只剩权益动作，不再依赖 PromotionService。
-    return new SubscriptionService(
+    const subscriptions = new SubscriptionService(
       new PgSubscriptionRepository(pool),
       provisioning,
     );
+    subscriptions.setCustomerNotifier(customerNotifier(pool, mail));
+    return subscriptions;
   },
 };

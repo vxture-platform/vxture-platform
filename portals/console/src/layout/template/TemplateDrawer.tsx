@@ -8,7 +8,8 @@
  * 齿轮直接去 /settings——而它的四行值全是编出来的词条（会话超时 30 分钟、审计
  * 保留 180 天），与 /settings 的真实默认值还互相矛盾。
  *
- * 通知列表目前由调用方传空：没有消息源接进来之前，宁可空态也不放假消息。 */
+ * 消息源 = 站内收件箱（product_330 P2-g，console-bff /api/me/inbox）：调用方喂最近几条，
+ * 「全部已读」与「前往消息中心」由调用方接实现；空态是真实的"没有消息"。 */
 
 import {
   Button,
@@ -23,17 +24,21 @@ export interface DrawerNotif {
   title: string;
   meta: string;
   href: string;
+  unread?: boolean;
 }
 
 export interface TemplateDrawerProps {
   onClose: () => void;
   onNavigate: (href: string) => void;
+  onMarkAllRead?: () => void;
+  onOpenCenter?: () => void;
   notifications: DrawerNotif[];
   labels: {
     title: string;
     markAllRead: string;
     openCenter: string;
     close: string;
+    empty?: string;
   };
 }
 
@@ -46,6 +51,8 @@ const LEVEL_TONE: Record<DrawerNotif["level"], Tone> = {
 export function TemplateDrawer({
   onClose,
   onNavigate,
+  onMarkAllRead,
+  onOpenCenter,
   notifications,
   labels,
 }: TemplateDrawerProps) {
@@ -64,7 +71,12 @@ export function TemplateDrawer({
     >
       <div className="flex flex-col gap-xs">
         <div className="flex items-center justify-end gap-2xs">
-          <Button variant="ghost" size="sm" onClick={() => {}}>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!onMarkAllRead || !notifications.some((n) => n.unread)}
+            onClick={() => onMarkAllRead?.()}
+          >
             <i className="ph ph-checks" aria-hidden="true"></i>
             {labels.markAllRead}
           </Button>
@@ -73,11 +85,19 @@ export function TemplateDrawer({
             size="icon-sm"
             title={labels.openCenter}
             aria-label={labels.openCenter}
-            onClick={() => {}}
+            onClick={() => {
+              onClose();
+              onOpenCenter?.();
+            }}
           >
             <i className="ph ph-arrow-square-out" aria-hidden="true"></i>
           </Button>
         </div>
+        {notifications.length === 0 && labels.empty ? (
+          <p className="p-md text-center text-body-sm text-muted-foreground">
+            {labels.empty}
+          </p>
+        ) : null}
         {notifications.map((n, i) => (
           <button
             key={i}
@@ -94,7 +114,9 @@ export function TemplateDrawer({
               <i className={"ph-fill " + n.icon} aria-hidden="true"></i>
             </span>
             <span className="flex min-w-0 flex-1 flex-col gap-2xs">
-              <span className="truncate text-label-md font-semibold text-foreground">
+              <span
+                className={`truncate text-label-md text-foreground ${n.unread ? "font-semibold" : "font-normal"}`}
+              >
                 {n.title}
               </span>
               <span className="truncate text-body-sm text-muted-foreground">

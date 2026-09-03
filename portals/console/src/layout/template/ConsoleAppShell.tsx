@@ -4,22 +4,34 @@
  * Header 置顶 + 主体行(Sidebar / 内容 / Assistant) + Drawer——全 DS 组件与 T2 工具类。
  * 路由走 Next；导航/授权来自 P2 注册表；助手为真实 VardaChat。 */
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useTranslations } from "next-intl";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { Link, usePathname, useRouter } from "@/lib/i18n/navigation";
 import { writeNavCollapsed } from "@vxture-platform/shared";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { appCenterModuleTiles, consoleDomains } from "@/config/navigation";
 import {
   fetchBillingSummary,
+  fetchInbox,
+  fetchInboxUnreadCount,
   fetchMyApps,
   fetchMySubscriptions,
   fetchMyWorkspaces,
   fetchQuotaUsage,
   fetchTenantModelQuotas,
+  markInboxAllRead,
+  markInboxRead,
   type ConsoleQuotaUsage,
+  type InboxMessage,
   type ProductAppTile,
 } from "@/api/console-bff";
+import { formatInboxTime, inboxPresentation } from "@/lib/inbox-format";
 import {
   findActiveDomain,
   selectVisibleDomains,
@@ -68,6 +80,7 @@ export function ConsoleAppShell({
   const tSidebar = useTranslations("sidebar");
   const tShell = useTranslations("shell");
   const tDrawer = useTranslations("drawer");
+  const locale = useLocale();
 
   const [view, setViewState] = useState<ShellView>("console");
   /* 初始值由服务端从 cookie 读出后传入，首帧即最终态。写死 false 再在 effect 里
@@ -81,6 +94,40 @@ export function ConsoleAppShell({
     if (inSubscribeFlow) setNavCollapsed(true);
   }, [inSubscribeFlow]);
   const [drawer, setDrawer] = useState<ShellDrawerType | null>(null);
+  /* 站内收件箱（product_330 P2-g）：铃铛角标 = 未读数，抽屉 = 最近 8 条。读失败静默
+   * （壳层不能因通知接口挂掉而报错）；未读数每 60s 轮询一次，抽屉打开时把展示出来的
+   * 未读逐条标已读。 */
+  const [inboxItems, setInboxItems] = useState<InboxMessage[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const loadInbox = useCallback(async () => {
+    try {
+      const page = await fetchInbox({ limit: 8 });
+      setInboxItems(page.items);
+      setUnreadCount(page.unreadCount);
+    } catch {
+      /* 保持上一次的值 */
+    }
+  }, []);
+  useEffect(() => {
+    if (status !== "ready") return;
+    void loadInbox();
+    const timer = setInterval(() => {
+      fetchInboxUnreadCount()
+        .then((n) => setUnreadCount(n))
+        .catch(() => {});
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [status, loadInbox]);
+  useEffect(() => {
+    if (drawer !== "notifications") return;
+    const unread = inboxItems.filter((m) => m.readAt === null);
+    if (unread.length === 0) return;
+    void Promise.allSettled(unread.map((m) => markInboxRead(m.id))).then(() =>
+      loadInbox(),
+    );
+    // 只在抽屉打开的那一刻标已读；随后 loadInbox 更新 inboxItems 不应再触发。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawer]);
   /* 侧栏 Token 用量。null = 还没读到；"unavailable" = 读不到（BFF/Atlas 不可达）；
    * "uncovered" = 工作空间没有额度池。此前失败回落 0/100，故障时会画出一根像真
    * 的空仪表——三种非数字状态各自显式呈现，不再有假读数（2026-08-30）。 */
@@ -344,9 +391,18 @@ export function ConsoleAppShell({
   const billingAmount = Number(billing.amount ?? 0);
   const billingLabel = `${currencySymbol}${(Number.isFinite(billingAmount) ? billingAmount : 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  // No notification source is wired yet — render the drawer's own empty state
-  // rather than invented alerts.
-  const drawerNotifs: DrawerNotif[] = [];
+  // 抽屉条目 = 站内收件箱最近 8 条（P2-g）；点开去消息带的链接，没有链接去消息中心。
+  const drawerNotifs: DrawerNotif[] = inboxItems.map((m) => {
+    const p = inboxPresentation(m.templateCode);
+    return {
+      level: p.level,
+      icon: p.icon,
+      title: m.title,
+      meta: `${formatInboxTime(m.createdAt, locale)} · ${m.body}`,
+      href: m.link ?? "/inbox",
+      unread: m.readAt === null,
+    };
+  });
   /* 「系统设置」抽屉已删（2026-08-30）：它没有任何入口（header 的齿轮直接去
    * /settings），而它的四行值全是编出来的词条——会话超时/审计保留与 /settings
    * 的真实默认值还互相矛盾。主题/密度的真实状态在 header 的偏好面板里。 */
@@ -355,6 +411,7 @@ export function ConsoleAppShell({
     markAllRead: tDrawer("notifications.markAllRead"),
     openCenter: tShell("drawer.openCenter"),
     close: tDrawer("close"),
+    empty: tDrawer("notifications.empty"),
   };
 
   // ── App Center：产品磁贴来自 BFF，板块入口来自导航配置 ──
@@ -452,6 +509,7 @@ export function ConsoleAppShell({
         setView={setView}
         viewOptions={viewOptions}
         openDrawer={(type) => setDrawer(type)}
+        unreadCount={unreadCount}
         onNavigate={navigate}
         brandName="Workspace Console"
         navEntries={navEntries}
@@ -506,6 +564,12 @@ export function ConsoleAppShell({
         <TemplateDrawer
           onClose={() => setDrawer(null)}
           onNavigate={navigate}
+          onMarkAllRead={() => {
+            markInboxAllRead()
+              .then(() => loadInbox())
+              .catch(() => {});
+          }}
+          onOpenCenter={() => openInConsole("/inbox")}
           notifications={drawerNotifs}
           labels={drawerLabels}
         />

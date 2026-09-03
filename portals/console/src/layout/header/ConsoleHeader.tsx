@@ -74,6 +74,8 @@ export interface ConsoleHeaderProps {
   setView: (next: ShellView) => void;
   viewOptions: ConsoleHeaderViewOption[];
   openDrawer: (type: ShellDrawerType) => void;
+  /** 站内未读数（product_330 P2-g）；0 不画角标。 */
+  unreadCount?: number;
   onNavigate: (href: string) => void;
   brandName: string;
   /** 侧栏导航项（已过 i18n 与授权过滤），作为搜索的"页面"来源。 */
@@ -89,6 +91,7 @@ export function ConsoleHeader({
   setView,
   viewOptions,
   openDrawer,
+  unreadCount = 0,
   onNavigate,
   brandName,
   navEntries,
@@ -230,11 +233,26 @@ export function ConsoleHeader({
           {/* Varda 助手入口已随独立仓迁出移除(2026-08-18),重构发包后恢复。 */}
           <ShellIconGroup label={t("settings")}>
             <ShellIconButton icon="help" label={t("help")} onClick={() => {}} />
-            <ShellIconButton
-              icon="bell"
-              label={t("notifications")}
-              onClick={() => openDrawer("notifications")}
-            />
+            {/* 未读角标：站内收件箱（P2-g）。0 不画——空角标是噪音。 */}
+            <span className="relative inline-flex">
+              <ShellIconButton
+                icon="bell"
+                label={
+                  unreadCount > 0
+                    ? `${t("notifications")} (${unreadCount})`
+                    : t("notifications")
+                }
+                onClick={() => openDrawer("notifications")}
+              />
+              {unreadCount > 0 ? (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -right-2xs -top-2xs inline-flex min-w-4 items-center justify-center rounded-full bg-danger px-2xs text-label-sm leading-4 text-danger-foreground tabular-nums"
+                >
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              ) : null}
+            </span>
             <ShellIconButton
               icon="settings"
               label={t("settings")}

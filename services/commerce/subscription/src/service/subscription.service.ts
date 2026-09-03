@@ -8,6 +8,11 @@ import {
 } from "@nestjs/common";
 import { ProvisioningService } from "@vxture/service-provisioning";
 import { PgSubscriptionRepository } from "../repository/pg-subscription.repository";
+import {
+  formatNotifyDate,
+  type CustomerNotifier,
+  type CustomerNotifyInput,
+} from "./customer-notifier";
 import type {
   SubscriptionRecord,
   SubscriptionHistoryRecord,
@@ -40,6 +45,63 @@ export class SubscriptionService {
     @Inject(ProvisioningService)
     private readonly provisioning: ProvisioningService,
   ) {}
+
+  /** 客户通知（P2-g）：装配处注入；未注入 = 不发。通知 best-effort，失败只记日志。 */
+  private notifier: CustomerNotifier | null = null;
+
+  setCustomerNotifier(notifier: CustomerNotifier | null): void {
+    this.notifier = notifier;
+  }
+
+  private async emit(
+    label: string,
+    build: () => Promise<CustomerNotifyInput | null>,
+  ): Promise<boolean> {
+    if (!this.notifier) return false;
+    try {
+      const input = await build();
+      if (!input) return false;
+      await this.notifier.notify(input);
+      return true;
+    } catch (err) {
+      this.logger.warn(`notify ${label} failed — ${String(err)}`);
+      return false;
+    }
+  }
+
+  /**
+   * 到期前提醒（P2-g）：自动续费关着、leadDays 内到期的在用非试用订阅——站内 + 邮件。
+   * 去重由 dispatcher 按 (收件人, 模板, 订阅:到期日) 做；作业每分钟重跑只会碰唯一键。
+   * 返回本趟真正交给 notifier 的条数（不含未注入 / 失败）。
+   */
+  async notifyExpiringSoon(leadDays: number, limit = 200): Promise<number> {
+    if (!this.notifier) return 0;
+    const rows = await this.repo.findExpiringSoon(leadDays, limit);
+    let sent = 0;
+    for (const r of rows) {
+      const days = Math.max(
+        0,
+        Math.ceil((r.endAt.getTime() - Date.now()) / 86_400_000),
+      );
+      const ok = await this.emit(`expiring_soon ${r.id}`, async () => ({
+        tenantId: r.tenantId,
+        templateCode: "subscription.expiring_soon",
+        reference: {
+          type: "subscription",
+          id: `${r.id}:${r.endAt.toISOString().slice(0, 10)}`,
+        },
+        params: {
+          productName: r.productName,
+          planName: r.planName,
+          endAt: formatNotifyDate(r.endAt),
+          days,
+        },
+        link: "/subscription",
+      }));
+      if (ok) sent += 1;
+    }
+    return sent;
+  }
 
   async listSubscriptions(
     params: ListSubscriptionsParams,
@@ -275,11 +337,12 @@ export class SubscriptionService {
    */
   async sweepLapsedTrials(limit = 100): Promise<number> {
     const ids = await this.repo.findLapsedTrialIds(limit);
-    return this.sweepToExpired(
+    const done = await this.sweepToExpired(
       ids.map((id) => ({ id, status: "trialing" })),
       "trial expiry sweep",
       "trial ended without conversion (expiry sweep)",
     );
+    return done.length;
   }
 
   /**
@@ -290,8 +353,8 @@ export class SubscriptionService {
     rows: { id: string; status: string }[],
     label: string,
     remark: string,
-  ): Promise<number> {
-    let transitioned = 0;
+  ): Promise<string[]> {
+    const transitioned: string[] = [];
     for (const { id, status } of rows) {
       try {
         const before = await this.getSubscription(id);
@@ -309,7 +372,7 @@ export class SubscriptionService {
           continue;
         }
         await this.applyTransitionHooks(`sweep:${id}`, id, before, result);
-        transitioned += 1;
+        transitioned.push(id);
       } catch (err) {
         this.logger.error(
           `${label}: subscription ${id} failed to transition — ${String(err)}`,
@@ -327,11 +390,33 @@ export class SubscriptionService {
    */
   async sweepExpiredSubscriptions(limit = 100): Promise<number> {
     const rows = await this.repo.findExpiredSubscriptionIds(limit);
-    return this.sweepToExpired(
+    const expired = await this.sweepToExpired(
       rows,
       "expiry sweep",
       "cycle ended without renewal (expiry sweep)",
     );
+    // P2-g：到期通知（站内 + 邮件），按订阅 × 到期日去重；付款履约复活后再到期会再通知。
+    for (const id of expired) {
+      await this.emit(`expired ${id}`, async () => {
+        const d = await this.repo.getNotifyDisplay(id);
+        if (!d) return null;
+        return {
+          tenantId: d.tenantId,
+          templateCode: "subscription.expired",
+          reference: {
+            type: "subscription",
+            id: `${id}:${(d.endAt ?? new Date()).toISOString().slice(0, 10)}`,
+          },
+          params: {
+            productName: d.productName,
+            planName: d.planName,
+            endAt: formatNotifyDate(d.endAt),
+          },
+          link: "/subscription",
+        };
+      });
+    }
+    return expired.length;
   }
 
   /**

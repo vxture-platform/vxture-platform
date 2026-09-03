@@ -26,6 +26,13 @@ import { PgOrderRepository } from "../repository/pg-order.repository";
 import { PgSubscriptionRepository } from "../repository/pg-subscription.repository";
 import { SubscriptionService } from "./subscription.service";
 import {
+  customerRecipients,
+  formatNotifyDate,
+  formatNotifyMoney,
+  type CustomerNotifier,
+  type CustomerNotifyInput,
+} from "./customer-notifier";
+import {
   DEFAULT_CONSUMABLE_SHARE,
   computeProration,
   cycleDays,
@@ -89,6 +96,8 @@ export class OrderService {
   private readonly logger = new Logger(OrderService.name);
   private readonly reconcileFailures = new Map<string, number>();
   private static readonly RECONCILE_FAILURE_LIMIT = 3;
+  /** 客户通知（P2-g）：装配处 setCustomerNotifier 注入；未注入 = 不发。 */
+  private notifier: CustomerNotifier | null = null;
 
   constructor(
     @Inject(PgOrderRepository) private readonly orders: PgOrderRepository,
@@ -98,6 +107,26 @@ export class OrderService {
     private readonly subscriptions: SubscriptionService,
     @Inject(PromotionService) private readonly promotion: PromotionService,
   ) {}
+
+  setCustomerNotifier(notifier: CustomerNotifier | null): void {
+    this.notifier = notifier;
+  }
+
+  /**
+   * 通知一律 best-effort：业务写已提交，通知失败只记日志、不回滚不抛。
+   * build 延迟求值——未注入 notifier 时连展示数据都不查。
+   */
+  private async emit(
+    label: string,
+    build: () => Promise<CustomerNotifyInput>,
+  ): Promise<void> {
+    if (!this.notifier) return;
+    try {
+      await this.notifier.notify(await build());
+    } catch (err) {
+      this.logger.warn(`notify ${label} failed — ${String(err)}`);
+    }
+  }
 
   async getOrder(id: string): Promise<OrderRecord> {
     const order = await this.orders.getById(id);
@@ -494,6 +523,25 @@ export class OrderService {
       remark: actor.remark ?? `${mode} → subscription ${subscription.id}`,
     });
     const fresh = await this.getOrder(order.id);
+    const fulfilledSub = subscription;
+    await this.emit(`fulfill ${order.orderNo}`, async () => {
+      const display = await this.orders.getPlanDisplay(order.planVersionId);
+      return {
+        tenantId: order.tenantId,
+        templateCode:
+          mode === "renew" ? "subscription.renewed" : "order.fulfilled",
+        reference: { type: "order", id: order.id },
+        params: {
+          productName: display.productName,
+          planName: display.planName,
+          orderNo: order.orderNo,
+          endAt: formatNotifyDate(fulfilledSub.endAt),
+          amount: formatNotifyMoney(order.payableAmount, order.currency),
+        },
+        recipients: customerRecipients(order.createdByType, order.createdById),
+        link: `/subscribe/pay/${order.id}`,
+      };
+    });
     return { order: fresh, subscription };
   }
 
@@ -567,7 +615,28 @@ export class OrderService {
           autoRenew: true,
         });
         created += 1;
-        if (Number(c.price) > 0) continue;
+        if (Number(c.price) > 0) {
+          // 付费续费单：告诉客户去付（站内 + 邮件），逾期关闭、到期权益停止。
+          await this.emit(`renewal_created ${order.orderNo}`, async () => {
+            const display = await this.orders.getPlanDisplay(c.planVersionId);
+            return {
+              tenantId: c.tenantId,
+              templateCode: "order.renewal_created",
+              reference: { type: "order", id: order.id },
+              params: {
+                productName: display.productName,
+                planName: display.planName,
+                orderNo: order.orderNo,
+                amount: formatNotifyMoney(order.payableAmount, order.currency),
+                payBy: formatNotifyDate(
+                  new Date(c.endAt.getTime() + options.graceDays * 86_400_000),
+                ),
+              },
+              link: `/subscribe/pay/${order.id}`,
+            };
+          });
+          continue;
+        }
 
         const actor: OrderActor = {
           actorType: "system",
@@ -662,7 +731,7 @@ export class OrderService {
     if (!basis?.payRecordId || !basis.invoiceId) {
       throw new ConflictException("订单没有可退的支付记录");
     }
-    return this.orders.createRefundRequest({
+    const created = await this.orders.createRefundRequest({
       order,
       invoiceId: basis.invoiceId,
       payRecordId: basis.payRecordId,
@@ -670,6 +739,18 @@ export class OrderService {
       userId: input.userId,
       clientIp: input.clientIp ?? null,
     });
+    await this.emit(`refund_requested ${created.refundNo}`, async () => ({
+      tenantId: order.tenantId,
+      templateCode: "refund.requested",
+      reference: { type: "refund", id: `${created.id}:requested` },
+      params: {
+        orderNo: order.orderNo,
+        amount: formatNotifyMoney(created.amount, created.currency),
+      },
+      recipients: [input.userId],
+      link: `/subscribe/pay/${order.id}`,
+    }));
+    return created;
   }
 
   async auditRefund(
@@ -687,7 +768,24 @@ export class OrderService {
       throw new ConflictException("退款申请已审核");
     }
     const order = await this.getOrder(refund.orderId);
-    return this.orders.auditRefund({ refund, order, ...input });
+    const audited = await this.orders.auditRefund({ refund, order, ...input });
+    await this.emit(
+      `refund_${input.decision} ${refund.refundNo}`,
+      async () => ({
+        tenantId: order.tenantId,
+        templateCode:
+          input.decision === "approved" ? "refund.approved" : "refund.rejected",
+        reference: { type: "refund", id: `${refund.id}:${input.decision}` },
+        params: {
+          orderNo: order.orderNo,
+          amount: formatNotifyMoney(refund.amount, refund.currency),
+          reason: input.remark,
+        },
+        recipients: customerRecipients(order.createdByType, order.createdById),
+        link: `/subscribe/pay/${order.id}`,
+      }),
+    );
+    return audited;
   }
 
   /**
@@ -729,6 +827,17 @@ export class OrderService {
         );
       }
     }
+    await this.emit(`refund_completed ${refund.refundNo}`, async () => ({
+      tenantId: order.tenantId,
+      templateCode: "refund.completed",
+      reference: { type: "refund", id: `${refund.id}:completed` },
+      params: {
+        orderNo: order.orderNo,
+        amount: formatNotifyMoney(refund.amount, refund.currency),
+      },
+      recipients: customerRecipients(order.createdByType, order.createdById),
+      link: `/subscribe/pay/${order.id}`,
+    }));
     return done;
   }
 

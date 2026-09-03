@@ -392,6 +392,7 @@ services:
       [
         /srv/vxture/runtime/secrets/platform.env,
         /srv/vxture/runtime/secrets/platform-app.env,
+        /srv/vxture/runtime/secrets/platform-mail.env, # P2-g：作业发客户邮件（到期提醒 / 续费单 / 退款进度），同 console-bff 的 SMTP_*
         /srv/vxture/runtime/.env.platform-api,
       ]
     depends_on:

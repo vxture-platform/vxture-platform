@@ -57,9 +57,24 @@ const LOCKED: Partial<Record<NotificationTopic, NotificationChannel[]>> = {
   security: ["inbox"],
 };
 
+/**
+ * 主题级默认覆盖。订阅 / 账务是**事务性**通知（到期提醒、续费单待付、退款进度，owner
+ * 2026-09-03「通知先做站内 + 邮件」）：不发邮件用户会错过付款期与到期——默认开、可关。
+ * 其余主题仍是默认关（默认开外发通道等于替用户同意打扰）。
+ */
+const TOPIC_DEFAULT_OVERRIDES: Partial<
+  Record<NotificationTopic, Partial<NotificationChannelState>>
+> = {
+  subscription: { email: true },
+  billing: { email: true },
+};
+
 function defaults(): NotificationPreferences {
   return Object.fromEntries(
-    NOTIFICATION_TOPICS.map((topic) => [topic, { ...DEFAULT_CHANNELS }]),
+    NOTIFICATION_TOPICS.map((topic) => [
+      topic,
+      { ...DEFAULT_CHANNELS, ...(TOPIC_DEFAULT_OVERRIDES[topic] ?? {}) },
+    ]),
   ) as NotificationPreferences;
 }
 

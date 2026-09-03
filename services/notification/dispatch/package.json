@@ -1,0 +1,23 @@
+{
+  "name": "@vxture/service-notification",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Customer notification dispatcher — in-app inbox (support.inbox_messages) + email via an injected sender, every delivery logged to support.notification_logs",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "pg": "^8.13.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.8"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
