@@ -6,7 +6,11 @@ import { interpolate, render } from "./templates";
 // A tiny in-memory stand-in for the two tables the dispatcher touches: the
 // inbox unique key and the logs ledger are what the behaviour hinges on.
 function fakePool(
-  opts: { owner?: string | null; emails?: Record<string, string> } = {},
+  opts: {
+    owner?: string | null;
+    emails?: Record<string, string>;
+    languages?: Record<string, string>;
+  } = {},
 ) {
   const inbox = new Set<string>();
   const logs: Record<string, unknown>[] = [];
@@ -37,7 +41,8 @@ function fakePool(
     }
     if (sql.includes("from account.users")) {
       const email = opts.emails?.[String(params[0])] ?? null;
-      return { rows: email ? [{ email }] : [], rowCount: email ? 1 : 0 };
+      const language = opts.languages?.[String(params[0])] ?? null;
+      return { rows: [{ email, language }], rowCount: 1 };
     }
     throw new Error(`unexpected sql: ${sql}`);
   });
@@ -189,6 +194,42 @@ describe("NotificationDispatcher", () => {
       "email:failed",
     ]);
     expect(f.logs[1]!.error).toBe("smtp down");
+  });
+
+  it("renders in the recipient's language: en* profile → English, otherwise zh-CN", async () => {
+    const f = fakePool({
+      emails: { "owner-1": "o@x.test", "u-2": "u2@x.test" },
+      languages: { "owner-1": "en-US", "u-2": "zh-CN" },
+    });
+    const mail = { send: vi.fn(async () => undefined) };
+    const d = new NotificationDispatcher(f.pool, { mail });
+    await d.notify({ ...input, recipients: ["u-2"] });
+    const subjects = mail.send.mock.calls
+      .map((c) => (c as unknown[])[0] as { to: string; subject: string })
+      .sort((a, b) => a.to.localeCompare(b.to));
+    expect(subjects[0]!.subject).toContain("Subscription expiring soon");
+    expect(subjects[1]!.subject).toContain("订阅即将到期");
+  });
+
+  it("announcement: title/content come from params; absolute CTA link goes into the email as-is", async () => {
+    const f = fakePool({ emails: { "owner-1": "o@x.test" } });
+    const mail = { send: vi.fn(async () => undefined) };
+    const d = new NotificationDispatcher(f.pool, { mail });
+    const out = await d.notify({
+      tenantId: "t-1",
+      templateCode: "announcement.published",
+      reference: { type: "announcement", id: "ann-1" },
+      params: { title: "维护通知", content: "周六 02:00 升级。" },
+      link: "https://vxture.com/status",
+    });
+    expect(out.inboxCreated).toBe(1);
+    const sent = (mail.send.mock.calls as unknown as unknown[][])[0]![0] as {
+      subject: string;
+      text: string;
+    };
+    expect(sent.subject).toBe("[Vxture] 维护通知");
+    expect(sent.text).toContain("周六 02:00 升级。");
+    expect(sent.text).toContain("https://vxture.com/status");
   });
 
   it("no owner and no explicit recipient → skipped, nothing written", async () => {

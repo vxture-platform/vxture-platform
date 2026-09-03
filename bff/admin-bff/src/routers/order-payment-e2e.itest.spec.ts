@@ -30,7 +30,10 @@ import {
   PgProvisioningRepository,
   ProvisioningService,
 } from "@vxture/service-provisioning";
-import { NotificationDispatcher } from "@vxture/service-notification";
+import {
+  NotificationDispatcher,
+  broadcastAnnouncements,
+} from "@vxture/service-notification";
 import { OrdersRouter } from "./orders.router";
 import { PaymentsRouter } from "./payments.router";
 import { CommercialRouter } from "./commercial.router";
@@ -68,6 +71,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
   let userId: string;
   let tenantId: string;
   let planVersionId: string;
+  let customerNotifier: NotificationDispatcher;
 
   const CONFIRM = (paidAmount: number) => ({
     paidAmount,
@@ -231,6 +235,7 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
     });
     orderService.setCustomerNotifier(notifier);
     subscriptions.setCustomerNotifier(notifier);
+    customerNotifier = notifier;
     orders = new OrdersRouter(pool, pool, orderService, promotion);
     payments = new PaymentsRouter(pool, pool);
     commercial = new CommercialRouter(pool, pool);
@@ -974,6 +979,41 @@ describe.runIf(RUN)("product_321 §8 e2e (live DB)", () => {
       "refund.approved",
       "refund.completed",
     ]);
+  }, 60_000);
+
+  it("§8.21 公告推送（P2-h）：published 且到点的公告 → 目标租户 owner 站内一条；重跑不重复；meta.broadcast_at 打标", async () => {
+    const ann = await pool.query<{ id: string }>(
+      `insert into admin.announcements
+         (announcement_type, severity, status, lang, title, content, cta_url, target_plans, target_tenant_types, publish_at, created_by)
+       values ('maintenance', 'info', 'published', 'zh-CN', 'e2e 公告', '周六 02:00 升级。', 'https://vxture.com/status', '{}', '{}', now() - interval '1 minute', $1)
+       returning id`,
+      [OPERATOR],
+    );
+    const annId = ann.rows[0]!.id;
+    const first = await broadcastAnnouncements(pool, customerNotifier);
+    expect(first.announcements).toBeGreaterThanOrEqual(1);
+    const inbox = await pool.query<{ title: string; link: string | null }>(
+      `select title, link from support.inbox_messages
+        where reference_type = 'announcement' and reference_id = $1 and account_id = $2`,
+      [annId, userId],
+    );
+    expect(inbox.rows).toEqual([
+      { title: "e2e 公告", link: "https://vxture.com/status" },
+    ]);
+    const meta = await pool.query<{ meta: { broadcast_at?: string } | null }>(
+      `select meta from admin.announcements where id = $1`,
+      [annId],
+    );
+    expect(meta.rows[0]!.meta?.broadcast_at).toBeTruthy();
+    // 再跑：已打标，不再扫到；即使扫到，收件人级唯一键也挡住（本租户 owner 仍只有一条）
+    const again = await broadcastAnnouncements(pool, customerNotifier);
+    const stillOne = await pool.query(
+      `select 1 from support.inbox_messages
+        where reference_type = 'announcement' and reference_id = $1 and account_id = $2`,
+      [annId, userId],
+    );
+    expect(stillOne.rows.length).toBe(1);
+    expect(again.tenants).toBe(0);
   }, 60_000);
 
   it("§8.13 发券边界：超发 409、per_user_limit 409、门槛字段拒绝", async () => {
