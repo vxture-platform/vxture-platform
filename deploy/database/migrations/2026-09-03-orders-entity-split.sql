@@ -261,10 +261,17 @@ BEGIN
          updated_at = now()
    WHERE id = ob_id;
 
+  -- 幂等：db-init migrate 每次都重放全部迁移文件，审计行只落一次（2026-09-03 生产第二次重放曾多出一条）。
   INSERT INTO metering.subscription_histories (tenant_id, subscription_id, change_type, from_status, to_status, actor_type, actor_id, remark)
   SELECT tenant_id, a_id, 'operator_adjusted', status, status, 'operator', NULL,
          'product_330 repair: cycle month→year, end_at=start+1y, paid_amount=0.10 (order ORD-202609-D88DE76C8B)'
-    FROM metering.subscriptions WHERE id = a_id;
+    FROM metering.subscriptions
+   WHERE id = a_id
+     AND NOT EXISTS (
+       SELECT 1 FROM metering.subscription_histories h
+        WHERE h.subscription_id = a_id AND h.change_type = 'operator_adjusted'
+          AND h.remark LIKE 'product_330 repair:%'
+     );
 
   RAISE NOTICE '[orders-split] caimc repaired: subscription A=% now starter/year, order B=% fulfilled onto A', a_id, ob_id;
 END $$;

@@ -519,12 +519,9 @@ function mapSubscriptionRow(row: SubscriptionRow): SubscriptionOperationRecord {
   const cycle = normalizeCycle(row.cycle_unit);
   const status = normalizeStatus(row.raw_status);
   const payAmount = toNumber(row.pay_amount);
-  const monthlyRevenue =
-    cycle === "yearly"
-      ? Math.round((payAmount / 12) * 100) / 100
-      : cycle === "once"
-        ? 0
-        : payAmount;
+  // 收入是真实收入（owner 2026-09-03）：不再把年付折成月均。字段名保留给旧客户端，
+  // 值 = 本周期实付；一次性买断也是实收。
+  const monthlyRevenue = payAmount;
   const tierCode = normalizeTierCode(row.tier_code);
   const planName = row.plan_name ?? "未关联套餐";
   const operatorName =
@@ -535,10 +532,13 @@ function mapSubscriptionRow(row: SubscriptionRow): SubscriptionOperationRecord {
     row.latest_bill_status,
   );
 
+  // 订阅的可视码 = 最近一次履约它的订单号（product_330：升级 / 续订后 s.order_no 仍是首单号，
+  // 会把 ¥0 首单号挂在年付订阅上）；旧行没有 current_order_id 时退回首单号。
+  const currentOrderNo = row.current_order_no ?? row.order_no;
   return {
     id: row.id,
-    subscriptionCode: row.order_no ?? row.id,
-    orderNo: row.order_no,
+    subscriptionCode: currentOrderNo ?? row.id,
+    orderNo: currentOrderNo,
     tenantId: row.tenant_id,
     tenantCode: row.tenant_code,
     tenantName: row.tenant_name,
@@ -711,9 +711,12 @@ select
   op.display_name as operator_name,
   tier.tier as tier_code,
   quota.quota_limit_sum,
-  quota.quota_used_sum
+  quota.quota_used_sum,
+  cur.order_no as current_order_no
 from metering.subscriptions s
 join tenancy.tenants t on t.id = s.tenant_id
+-- 最近一次履约本订阅的订单（product_330）：订阅可视码 / 订单跳转都用它
+left join billing.orders cur on cur.id = s.current_order_id
 left join tenancy.tenant_profiles tp on tp.tenant_id = t.id
 left join product.plan_versions pv on pv.id = s.plan_version_id
 left join product.plans pl on pl.id = pv.plan_id
@@ -822,6 +825,8 @@ limit 200
 interface SubscriptionRow {
   id: string;
   order_no: string | null;
+  /** billing.orders.order_no of current_order_id（product_330）；旧行 null */
+  current_order_no: string | null;
   tenant_id: string;
   plan_version_id: string | null;
   subscription_kind: string;

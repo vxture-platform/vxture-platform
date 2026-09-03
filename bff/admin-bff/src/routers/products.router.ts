@@ -2201,39 +2201,22 @@ async function resolvePlan(
 // ── 解决方案：SQL 与投影 ────────────────────────────────────────────────────
 
 /**
- * MRR（月度经常性收入）的唯一定义——列表、详情、服务套餐三处共用这一段。
+ * 订阅收入的唯一定义——列表、详情、服务套餐三处共用这一段。
  *
- * 口径：只计 `status = 'active'` 的订阅（trialing 还没付钱，expiring/overdue 等
- * 也不计；它们进 subscriptionCount 但不进收入）。价格取该订阅所钉版本
- * （s.plan_version_id）上与订阅同周期（cycle_unit / cycle_count / currency）的
- * plan_prices 行——版本冻结，所以就是它当初买时的价——再按周期折到月：
- *   month → price / cycle_count
- *   year  → price / (12 × cycle_count)
- *   week  → price × 52 / (12 × cycle_count)
- *   day   → price × 365 / (12 × cycle_count)
- *   perpetual（一次性买断）→ 0，不是经常性收入
- * 找不到同周期价格行 → 0（不拿别的周期凑）。按面值相加，不做币种换算
- * （目前只有 CNY；多币种出现时这里要先分币再合）。结果保留两位小数。
+ * 口径（owner 2026-09-03：收入是真实收入，不做月均折算）：只计 `status = 'active'`
+ * 的订阅（trialing 还没付钱，expiring/overdue 等也不计；它们进 subscriptionCount 但
+ * 不进收入），金额 = 该订阅本周期实付 `paid_amount`（product_330，升级/续订履约时回写；
+ * 旧行退回 pay_amount）。年付 ¥0.10 就是 ¥0.10，不折成 ¥0.01。按面值相加，不做币种
+ * 换算（目前只有 CNY；多币种出现时这里要先分币再合）。列名 monthly_revenue 保留给
+ * 既有投影字段 monthlyRevenue。
  */
 const MRR_MONTHLY_EXPR = `
   CASE
-    WHEN s.status <> 'active' OR pp.price IS NULL THEN 0
-    WHEN s.cycle_unit = 'month' THEN pp.price / s.cycle_count
-    WHEN s.cycle_unit = 'year'  THEN pp.price / (12 * s.cycle_count)
-    WHEN s.cycle_unit = 'week'  THEN pp.price * 52 / (12 * s.cycle_count)
-    WHEN s.cycle_unit = 'day'   THEN pp.price * 365 / (12 * s.cycle_count)
-    ELSE 0
+    WHEN s.status <> 'active' THEN 0
+    ELSE COALESCE(s.paid_amount, s.pay_amount, 0)
   END`;
 
-/** 订阅 → 同周期价格行的连接条件（与 MRR 定义配套）。 */
-const SUBSCRIPTION_PRICE_JOIN = `
-  LEFT JOIN product.plan_prices pp
-    ON pp.plan_version_id = s.plan_version_id
-   AND pp.cycle_unit = s.cycle_unit
-   AND pp.cycle_count = s.cycle_count
-   AND pp.currency = COALESCE(s.currency, 'CNY')`;
-
-/** 计数三件套：active/trialing 订阅数、去重租户数、MRR。按绑定 plan 的全部版本归集。 */
+/** 计数三件套：active/trialing 订阅数、去重租户数、订阅收入。按绑定 plan 的全部版本归集。 */
 const SOLUTION_COUNTS_CTE = `
   counts AS (
     SELECT sp.solution_id,
@@ -2243,7 +2226,6 @@ const SOLUTION_COUNTS_CTE = `
       FROM product.solution_plans sp
       JOIN product.plan_versions pv ON pv.plan_id = sp.plan_id
       JOIN metering.subscriptions s ON s.plan_version_id = pv.id AND s.deleted_at IS NULL
-      ${SUBSCRIPTION_PRICE_JOIN}
      GROUP BY sp.solution_id
   )`;
 
@@ -2611,7 +2593,6 @@ const SERVICE_PLAN_SQL = `
              COALESCE(SUM(${MRR_MONTHLY_EXPR}), 0)::numeric(18,2) AS monthly_revenue
         FROM product.plan_versions pv
         JOIN metering.subscriptions s ON s.plan_version_id = pv.id AND s.deleted_at IS NULL
-        ${SUBSCRIPTION_PRICE_JOIN}
        WHERE pv.plan_id = pl.id
     ) c ON true
    WHERE pl.id = $1 AND pl.deleted_at IS NULL

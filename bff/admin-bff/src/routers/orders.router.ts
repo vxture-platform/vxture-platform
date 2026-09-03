@@ -992,6 +992,7 @@ select
   ord.updated_at,
   ord.subscription_id              as fulfilled_subscription_id,
   tsub.status                      as target_subscription_status,
+  tier.tier                        as tier_code,
   tenant.id                        as tenant_id,
   tenant.tenant_no::text           as tenant_code,
   tenant.name                      as tenant_name,
@@ -1022,6 +1023,13 @@ left join product.plan_versions pv on pv.id = ord.plan_version_id
 left join product.plans plan on plan.id = pv.plan_id
 left join admin.operator_account op
   on op.id = ord.created_by_id and ord.created_by_type = 'operator'
+-- 档位 = 目标套餐版本上本产品的主组件 tier（与订阅管理页同一口径）
+left join lateral (
+  select pc.tier from product.plan_components pc
+   where pc.plan_version_id = ord.plan_version_id and pc.product_id = ord.product_id
+   order by (pc.component_role = 'primary') desc, pc.priority asc
+   limit 1
+) tier on true
 left join lateral (
   select i.id, i.bill_no, i.bill_status, i.payable_amount, i.paid_amount, i.paid_at
   from billing.invoices i
@@ -1126,6 +1134,24 @@ function toNumber(value: string | number | null): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+// 档位中文名，与 subscriptions.router tierName 同一张表（五档 + 自定义）。
+function tierLabel(tier: string | null): string {
+  switch (tier) {
+    case "enterprise":
+      return "企业版";
+    case "business":
+      return "商业版";
+    case "pro":
+      return "专业版";
+    case "starter":
+      return "入门版";
+    case "free":
+      return "免费版";
+    default:
+      return tier ? "自定义" : "未设置";
+  }
+}
+
 function mapTenantType(type: string): TenantOperationType {
   return type === "personal" ? "individual" : "company";
 }
@@ -1163,7 +1189,13 @@ function mapPaySource(source: string | null): OrderPaySource {
 function mapPaymentStatus(
   payStatus: string | null,
   hasInvoice: boolean,
+  /** 订单侧补充：¥0 单无需支付；账单已清但无支付腿（券结清 / 回填单）按已支付。 */
+  order?: { amount: number; billStatus: string | null },
 ): OrderPaymentStatus {
+  if (!payStatus && order) {
+    if (order.amount === 0) return "not_required";
+    if (order.billStatus === "paid") return "paid";
+  }
   switch (payStatus) {
     case "paid":
       return "paid";
@@ -1257,14 +1289,17 @@ function mapOrderRow(row: OrderRow): OrderOperationRecord {
     solutionName: "未设置",
     servicePlanCode: row.plan_code ?? "",
     servicePlanName: row.plan_name ?? "未设置",
-    tierName: "未设置",
+    tierName: tierLabel(row.tier_code),
     // 未履约订单没有订阅 → 空串（前端按空值不渲染订阅入口）。
     subscriptionId: row.fulfilled_subscription_id ?? "",
     subscriptionStatus,
     cycleType: mapCycle(row.cycle_unit),
     orderStatus,
     restorable,
-    paymentStatus: mapPaymentStatus(row.pay_status, hasInvoice),
+    paymentStatus: mapPaymentStatus(row.pay_status, hasInvoice, {
+      amount,
+      billStatus: row.bill_status,
+    }),
     paySource: mapPaySource(row.pay_source),
     payMethod: row.pay_method,
     billId: row.bill_id,
@@ -1388,6 +1423,8 @@ interface OrderRow {
   /** 履约后指向的订阅（new 新建 / upgrade、renew 原订阅）；未履约 null */
   fulfilled_subscription_id: string | null;
   target_subscription_status: string | null;
+  /** 目标套餐在本产品上的档位（plan_components.tier）；无 → 自定义 */
+  tier_code: string | null;
   tenant_id: string;
   tenant_code: string;
   tenant_name: string;

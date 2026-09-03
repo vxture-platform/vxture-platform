@@ -411,7 +411,8 @@ export class OrderService {
         cycleCount: order.cycleCount,
         startAt: now,
         endAt,
-        autoRenew: false,
+        // owner 决策 5：free 与付费一样默认自动续期、可关闭（续费引擎 P2-c）。
+        autoRenew: true,
         payAmount: price,
         currency: order.currency,
         createdBy: order.createdById ?? actor.actorId ?? order.tenantId,

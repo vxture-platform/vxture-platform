@@ -1479,8 +1479,8 @@
       "tiers": "服务套餐",
       "tiersHelp": "各方案已绑定的档位数之和。",
       "subscriptionsTag": "订阅 {count}",
-      "revenue": "月度收入",
-      "revenueHelp": "各方案 MRR 之和：绑定套餐上启用中订阅的价格按周期折算到月。",
+      "revenue": "订阅收入",
+      "revenueHelp": "各方案订阅收入之和：绑定套餐上启用中订阅的本周期实付，不做月均折算。",
       "industriesTag": "行业 {count}"
     },
     "filters": {
@@ -1580,9 +1580,9 @@
       "subscriptions": "订阅使用",
       "subscriptionsHelp": "绑定套餐上启用中 / 试用中的订阅数。",
       "tenantsTag": "活跃租户 {count}",
-      "revenue": "月度收入",
-      "revenueHelp": "MRR：绑定套餐上启用中订阅的价格按周期折算到月；试用不计。",
-      "revenueTag": "MRR"
+      "revenue": "订阅收入",
+      "revenueHelp": "绑定套餐上启用中订阅的本周期实付之和（真实收入，不折月均）；试用不计。",
+      "revenueTag": "实付合计"
     },
     "sections": {
       "basics": "基础资料",
@@ -1686,9 +1686,9 @@
       "subscriptions": "订阅使用",
       "subscriptionsHelp": "各方案绑定套餐上启用中 / 试用中的订阅数之和。",
       "industriesTag": "行业 {count}",
-      "revenue": "月度收入",
-      "revenueHelp": "各方案 MRR 之和：绑定套餐上启用中订阅的价格按周期折算到月。",
-      "revenueTag": "MRR"
+      "revenue": "订阅收入",
+      "revenueHelp": "各方案订阅收入之和：绑定套餐上启用中订阅的本周期实付，不做月均折算。",
+      "revenueTag": "实付合计"
     },
     "filters": {
       "ariaLabel": "服务套餐筛选",
@@ -1713,7 +1713,7 @@
       "partner": "三方 {count}",
       "tiers": "{count} 个套餐",
       "subscriptions": "{count} 订阅",
-      "revenue": "{amount} / 月",
+      "revenue": "收入 {amount}",
       "updatedAt": "{date} 更新"
     },
     "table": {
