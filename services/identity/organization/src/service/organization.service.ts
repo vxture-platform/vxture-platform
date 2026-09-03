@@ -1,9 +1,13 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { ORGANIZATION_REPOSITORY } from "../tokens";
 import type {
+  AcceptInvitationResult,
   SubmitTenantVerificationInput,
   CreateInvitationInput,
+  InvitationLookup,
   InvitationView,
+  OrgMemberStatus,
+  RotatedInvitation,
   OrganizationProfileView,
   OrganizationReadRepository,
   OrgLogoRecord,
@@ -163,7 +167,25 @@ export class OrganizationService {
   acceptInvitation(
     token: string,
     userId: string,
+    userEmail: string | null,
+  ): Promise<AcceptInvitationResult> {
+    return this.repo.acceptInvitation(token, userId, userEmail);
+  }
+  getInvitationByToken(token: string): Promise<InvitationLookup | null> {
+    return this.repo.getInvitationByToken(token);
+  }
+  rotateInvitationToken(
+    invitationId: string,
+    tenantId: string,
+  ): Promise<RotatedInvitation | null> {
+    return this.repo.rotateInvitationToken(invitationId, tenantId);
+  }
+  /** 停用 / 恢复成员(两级 membership 同步);owner 保护在调用方(BFF 聚合器)做。 */
+  setOrgMemberStatus(
+    orgId: string,
+    userId: string,
+    status: OrgMemberStatus,
   ): Promise<OrgMembershipView | null> {
-    return this.repo.acceptInvitation(token, userId);
+    return this.repo.setOrgMemberStatus(orgId, userId, status);
   }
 }

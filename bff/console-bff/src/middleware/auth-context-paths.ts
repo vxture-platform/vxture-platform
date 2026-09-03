@@ -11,4 +11,10 @@
  * `req.tenant` without re-resolving the org. Two drifting copies could break
  * that invariant silently.
  */
-export const AUTH_CONTEXT_ONLY_PATHS = new Set(["/api/auth/tenant/switch"]);
+export const AUTH_CONTEXT_ONLY_PATHS = new Set([
+  "/api/auth/tenant/switch",
+  // 接受邀请发生在**进入**受邀租户之前:接受人当前活跃的是别的租户(常见是自己的
+  // 个人租户),甚至还没有任何租户;这两条只认登录态,租户由邀请 token 决定。
+  "/api/iam/invitations/lookup",
+  "/api/iam/invitations/accept",
+]);

@@ -57,7 +57,15 @@ function ShellFrame({
       needsOnboarding &&
       pathname !== ONBOARDING_PATH
     ) {
-      router.replace(ONBOARDING_PATH);
+      // 首次设置完成后要回到来处:受邀人从邮件链接进来、先被弹去补资料,
+      // 补完不能把邀请 token 丢在半路(批 2)。
+      const search =
+        typeof window === "undefined" ? "" : window.location.search;
+      const next =
+        pathname === "/"
+          ? ""
+          : `?next=${encodeURIComponent(pathname + search)}`;
+      router.replace(`${ONBOARDING_PATH}${next}`);
     }
   }, [
     needsOnboarding,

@@ -26,6 +26,7 @@ import {
   OrganizationService,
   type OrgRole,
 } from "@vxture/service-organization";
+import { AccountService } from "@vxture/service-account";
 import { AccessTokenGuard } from "../authn/access-token.guard";
 import { CurrentUser, type CurrentUserCtx } from "../authn/current-user";
 
@@ -46,6 +47,7 @@ export class GovernanceController {
     @Inject(OrganizationService) private readonly org: OrganizationService,
     @Inject(GovernanceService) private readonly gov: GovernanceService,
     @Inject(ActiveContextService) private readonly active: ActiveContextService,
+    @Inject(AccountService) private readonly account: AccountService,
   ) {}
 
   /** Create a team org (caller becomes owner; default workspace + owner@both). */
@@ -102,7 +104,11 @@ export class GovernanceController {
     return { invitationId: invitation.id, token };
   }
 
-  /** Accept an invitation as the caller. */
+  /**
+   * Accept an invitation as the caller. 邮箱邀请只能由该邮箱对应的账号接受
+   * (仓储层校验),所以这里要把接受人的邮箱一起递进去;拒绝原因原样作 message,
+   * 调用方按码给文案。
+   */
   @Post("invitations/accept")
   @HttpCode(HttpStatus.OK)
   async accept(
@@ -110,11 +116,19 @@ export class GovernanceController {
     @Body() body: { token?: string },
   ): Promise<{ organizationId: string; role: string }> {
     if (!body.token) throw new BadRequestException("token is required");
-    const membership = await this.org.acceptInvitation(body.token, me.userId);
-    if (!membership) {
-      throw new BadRequestException("invalid_or_expired_invitation");
+    const user = await this.account.getUserById(me.userId);
+    const result = await this.org.acceptInvitation(
+      body.token,
+      me.userId,
+      user?.email ?? null,
+    );
+    if (!result.ok) {
+      throw new BadRequestException(result.reason);
     }
-    return { organizationId: membership.organizationId, role: membership.role };
+    return {
+      organizationId: result.membership.organizationId,
+      role: result.membership.role,
+    };
   }
 
   /** List org members (any authenticated caller). */

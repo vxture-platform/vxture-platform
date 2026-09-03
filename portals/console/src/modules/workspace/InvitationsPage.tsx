@@ -1,15 +1,15 @@
 "use client";
 
 /**
- * InvitationsPage.tsx — 邀请管理(P1 占位页落地,owner 2026-08-21)。
+ * InvitationsPage.tsx — 邀请管理(批 2 收口)。
  * @package @vxture/console
  * @layer Application
  * @category Module
  *
- * 组织租户的成员邀请台账:发出的邀请、状态(待接受/已接受/已过期/已撤销)、
- * 撤销操作。发起邀请仍在成员管理页(邀请即建 pending 成员,两页一体);
- * 「重发」依赖通知系统邀请模板(design_notification_100 二期),灰位挂账。
- * expired 为读侧派生(pending ∧ 已过期,库内无清扫)。表格遵守默认结构。
+ * 组织租户的成员邀请台账:发出的邀请、状态(待接受 / 已接受 / 已过期 / 已撤销)、
+ * 撤销与重发。发起邀请仍在成员管理页(邀请即目录里的 Invited 行,两页一体)。
+ * 重发 = 换链接 + 顺延有效期 + 再发一封邮件(InviteLinkDialog 兜底复制);
+ * expired 为读侧派生(pending ∧ 已过期),所以过期的也能重发。表格遵守默认结构。
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -31,14 +31,23 @@ import type {
   StatusBadgeTone,
 } from "@vxture/design-system";
 import {
+  ConsoleBffError,
   fetchInvitations,
+  memberErrorCode,
+  resendInvitation,
   revokeInvitation,
   type ConsoleInvitation,
+  type InviteMemberResult,
 } from "@/api/console-bff";
 import { useRouter } from "@/lib/i18n/navigation";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { PageSection, SignalList } from "@/layout/shell";
+import {
+  LoadFailedBanner,
+  LoadFailedEmpty,
+} from "@/components/load/LoadFailed";
 import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
+import { InviteLinkDialog } from "./components/InviteLinkDialog";
 
 const STATUS_TONES: Record<ConsoleInvitation["status"], StatusBadgeTone> = {
   pending: "info",
@@ -55,6 +64,8 @@ const KNOWN_ROLES = new Set([
   "guest",
 ]);
 
+const EXPIRING_SOON_MS = 24 * 60 * 60 * 1000;
+
 export function InvitationsPage() {
   const t = useTranslations("invitationsPage");
   const router = useRouter();
@@ -62,40 +73,99 @@ export function InvitationsPage() {
 
   const [rows, setRows] = useState<ConsoleInvitation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [inviteResult, setInviteResult] = useState<InviteMemberResult | null>(
+    null,
+  );
   const withLabels = useConfirmLabels();
 
   const reload = useCallback(() => fetchInvitations().then(setRows), []);
 
   useEffect(() => {
+    let active = true;
     setLoading(true);
-    reload().finally(() => setLoading(false));
-  }, [reload, session.tenant?.id]);
+    setLoadFailed(false);
+    reload()
+      .catch(() => {
+        if (active) setLoadFailed(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [reload, session.tenant?.id, reloadKey]);
 
   const roleLabel = (code: string): string =>
     KNOWN_ROLES.has(code) ? t(`role.${code}`) : code;
 
+  const errorText = (caught: unknown, fallbackKey: string): string => {
+    const code = memberErrorCode(caught);
+    if (code) return t(`errors.${code}`);
+    return caught instanceof ConsoleBffError && caught.message
+      ? caught.message
+      : t(fallbackKey);
+  };
+
   const handleRevoke = async (inv: ConsoleInvitation) => {
     setError(null);
+    setMessage(null);
     setBusyId(inv.id);
     try {
-      const ok = await revokeInvitation(inv.id);
-      if (!ok) setError(t("revokeFailed"));
+      await revokeInvitation(inv.id);
       await reload();
-    } catch (e) {
-      /* 重新抛出：DS 的确认件按 Promise 是否 rejected 决定关不关框。失败的理由
-         已经落在 `error` 横幅上，但框不能关——用户得看见自己按的那一下没成。 */
-      throw e;
+      setMessage(t("revoked", { email: inv.email }));
+    } catch (caught) {
+      /* 重新抛出:DS 的确认件按 Promise 是否 rejected 决定关不关框。失败的理由
+         已经落在 `error` 横幅上,但框不能关——用户得看见自己按的那一下没成。 */
+      setError(errorText(caught, "revokeFailed"));
+      throw caught;
     } finally {
       setBusyId(null);
     }
   };
 
+  const handleResend = async (inv: ConsoleInvitation) => {
+    setError(null);
+    setMessage(null);
+    setBusyId(inv.id);
+    try {
+      const result = await resendInvitation(inv.id);
+      await reload();
+      setInviteResult(result);
+      setMessage(
+        result.emailSent
+          ? t("resent", { email: inv.email })
+          : t("resentNoEmail", { email: inv.email }),
+      );
+    } catch (caught) {
+      setError(errorText(caught, "resendFailed"));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const canResend = (inv: ConsoleInvitation) =>
+    inv.status === "pending" || inv.status === "expired";
+
   const menuItems = (inv: ConsoleInvitation): ActionMenuItem[] => [
+    {
+      id: "resend",
+      label: t("resend"),
+      icon: "mail",
+      disabled: !canResend(inv) || busyId !== null,
+      ...(canResend(inv) ? {} : { hint: t("resendHint") }),
+      onSelect: () => void handleResend(inv),
+    },
     {
       id: "revoke",
       label: t("revoke"),
+      icon: "x",
       danger: true,
       disabled: inv.status !== "pending" || busyId !== null,
       ...(inv.status !== "pending" ? { hint: t("revokeHint") } : {}),
@@ -107,13 +177,11 @@ export function InvitationsPage() {
         onConfirm: () => handleRevoke(inv),
       }),
     },
-    {
-      id: "resend",
-      label: t("resend"),
-      disabled: true,
-      hint: t("resendHint"),
-    },
   ];
+
+  const expiringSoon = (inv: ConsoleInvitation) =>
+    inv.status === "pending" &&
+    new Date(inv.expiresAt).getTime() - Date.now() < EXPIRING_SOON_MS;
 
   const columns: DataTableColumn<ConsoleInvitation>[] = [
     {
@@ -139,9 +207,14 @@ export function InvitationsPage() {
       header: t("table.colStatus"),
       align: "center",
       cell: (r) => (
-        <StatusBadge tone={STATUS_TONES[r.status]}>
-          {t(`status.${r.status}`)}
-        </StatusBadge>
+        <span className="inline-flex items-center gap-xs">
+          <StatusBadge tone={STATUS_TONES[r.status]}>
+            {t(`status.${r.status}`)}
+          </StatusBadge>
+          {expiringSoon(r) ? (
+            <StatusBadge tone="warning">{t("expiringSoon")}</StatusBadge>
+          ) : null}
+        </span>
       ),
     },
     {
@@ -164,7 +237,9 @@ export function InvitationsPage() {
             {t("table.acceptedAt", { date: fmtDate(r.acceptedAt) })}
           </span>
         ) : (
-          <span className="tabular-nums">{fmtDate(r.expiresAt)}</span>
+          <span className="tabular-nums">
+            {fmtDate(r.expiresAt)} {fmtTime(r.expiresAt)}
+          </span>
         ),
     },
   ];
@@ -182,6 +257,13 @@ export function InvitationsPage() {
         }
       />
 
+      {loadFailed ? (
+        <LoadFailedBanner
+          onRetry={() => setReloadKey((k) => k + 1)}
+          retrying={loading}
+        />
+      ) : null}
+      {message ? <Banner tone="success" title={message} /> : null}
       {error ? <Banner tone="danger" title={error} /> : null}
 
       <PageSection
@@ -199,7 +281,13 @@ export function InvitationsPage() {
           rowActions={(r) => (
             <ActionMenu label={t("rowMenu")} items={menuItems(r)} />
           )}
-          empty={<EmptyState title={t("table.empty")} />}
+          empty={
+            loadFailed ? (
+              <LoadFailedEmpty />
+            ) : (
+              <EmptyState title={t("table.empty")} />
+            )
+          }
         />
       </PageSection>
 
@@ -216,9 +304,19 @@ export function InvitationsPage() {
               title: t("notes.expiryTitle"),
               description: t("notes.expiryBody"),
             },
+            {
+              title: t("notes.resendTitle"),
+              description: t("notes.resendBody"),
+            },
           ]}
         />
       </PageSection>
+
+      <InviteLinkDialog
+        result={inviteResult}
+        resent
+        onClose={() => setInviteResult(null)}
+      />
     </ViewLayout>
   );
 }

@@ -1,20 +1,19 @@
 export class UpsertMemberDto {
   email!: string;
-  nickname?: string | null;
-  remark?: string | null;
   roleId?: string | null;
   roleCode?: string | null;
 }
 
 export class UpdateMemberDto {
-  nickname?: string | null;
-  remark?: string | null;
   roleId?: string | null;
-  /** New governance role code (owner/manager/member). */
+  /** New governance role code (manager/member/readonly/guest;owner 只能经转让)。 */
   roleCode?: string | null;
-  status?: "active" | "inactive" | "banned";
 }
 
 export class ResetMemberPasswordDto {
   nextPassword!: string;
+}
+
+export class AcceptInvitationDto {
+  token!: string;
 }

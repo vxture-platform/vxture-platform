@@ -1,10 +1,15 @@
 import { ConflictException, Inject, Injectable } from "@nestjs/common";
 import { createHash, randomBytes } from "node:crypto";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { ORG_PG_POOL } from "../tokens";
+import { deriveInvitationStatus, rejectAcceptance } from "./invitation-rules";
 import type {
+  AcceptInvitationResult,
   CreateInvitationInput,
+  InvitationLookup,
   InvitationView,
+  OrgMemberStatus,
+  RotatedInvitation,
   OrganizationProfileView,
   OrganizationReadRepository,
   OrgLogoRecord,
@@ -502,22 +507,33 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     userId: string,
     role: OrgRole,
   ): Promise<OrgMembershipView> {
-    // role code → role_id (scope 'tenant'); CTE resolves the code back for the view.
-    const r = await this.pool.query<OrgMembershipRow>(
-      `with upserted as (
-         insert into tenancy.tenant_memberships (tenant_id, user_id, role_id, role_scope, status, created_at, updated_at)
-         select $1, $2, r.id, 'tenant', 'active', now(), now()
-           from access.roles r
-          where r.scope = 'tenant' and r.role_code = $3
-         on conflict (tenant_id, user_id) do update set
-           role_id = excluded.role_id, status = 'active', updated_at = now()
-         returning tenant_id, user_id, role_id, status
-       )
-       select up.tenant_id, up.user_id, rr.role_code as role, up.status
-         from upserted up join access.roles rr on rr.id = up.role_id`,
-      [orgId, userId, role],
-    );
-    return mapMembership(r.rows[0]!);
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      // role code → role_id (scope 'tenant'); CTE resolves the code back for the view.
+      const r = await client.query<OrgMembershipRow>(
+        `with upserted as (
+           insert into tenancy.tenant_memberships (tenant_id, user_id, role_id, role_scope, status, created_at, updated_at)
+           select $1, $2, r.id, 'tenant', 'active', now(), now()
+             from access.roles r
+            where r.scope = 'tenant' and r.role_code = $3
+           on conflict (tenant_id, user_id) do update set
+             role_id = excluded.role_id, status = 'active', updated_at = now()
+           returning tenant_id, user_id, role_id, status
+         )
+         select up.tenant_id, up.user_id, rr.role_code as role, up.status
+           from upserted up join access.roles rr on rr.id = up.role_id`,
+        [orgId, userId, role],
+      );
+      await upsertDefaultWorkspaceMembership(client, orgId, userId, role);
+      await client.query("commit");
+      return mapMembership(r.rows[0]!);
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async updateOrgMemberRole(
@@ -525,29 +541,110 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     userId: string,
     role: OrgRole,
   ): Promise<OrgMembershipView | null> {
-    // role code → role_id (scope 'tenant'); CTE resolves the code back for the view.
-    const r = await this.pool.query<OrgMembershipRow>(
-      `with updated as (
-         update tenancy.tenant_memberships m
-            set role_id = r.id, updated_at = now()
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      // role code → role_id (scope 'tenant'); CTE resolves the code back for the view.
+      const r = await client.query<OrgMembershipRow>(
+        `with updated as (
+           update tenancy.tenant_memberships m
+              set role_id = r.id, updated_at = now()
+             from access.roles r
+            where m.tenant_id = $1 and m.user_id = $2
+              and r.scope = 'tenant' and r.role_code = $3
+           returning m.tenant_id, m.user_id, m.role_id, m.status
+         )
+         select up.tenant_id, up.user_id, rr.role_code as role, up.status
+           from updated up join access.roles rr on rr.id = up.role_id`,
+        [orgId, userId, role],
+      );
+      if (!r.rows[0]) {
+        await client.query("rollback");
+        return null;
+      }
+      // 工作空间级角色跟着租户级走(同角色码的 workspace 域角色);只改租户级会留下
+      // 「租户里是 manager、工作空间里还是 member」这种谁也解释不了的中间态。
+      await client.query(
+        `update tenancy.workspace_memberships wm
+            set role_id = r.id, role_scope = 'workspace', updated_at = now()
            from access.roles r
-          where m.tenant_id = $1 and m.user_id = $2
-            and r.scope = 'tenant' and r.role_code = $3
-         returning m.tenant_id, m.user_id, m.role_id, m.status
-       )
-       select up.tenant_id, up.user_id, rr.role_code as role, up.status
-         from updated up join access.roles rr on rr.id = up.role_id`,
-      [orgId, userId, role],
-    );
-    return r.rows[0] ? mapMembership(r.rows[0]) : null;
+          where wm.tenant_id = $1 and wm.user_id = $2
+            and r.scope = 'workspace' and r.role_code = $3`,
+        [orgId, userId, role],
+      );
+      await client.query("commit");
+      return mapMembership(r.rows[0]);
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async removeOrgMember(orgId: string, userId: string): Promise<boolean> {
-    const r = await this.pool.query(
-      `delete from tenancy.tenant_memberships where tenant_id = $1 and user_id = $2`,
-      [orgId, userId],
-    );
-    return (r.rowCount ?? 0) > 0;
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      // 解除关联 = 两级 membership 一起删。只删租户级会留下孤儿 workspace 行,
+      // 下次再被邀请时 upsert 会把它"复活"成旧角色。
+      await client.query(
+        `delete from tenancy.workspace_memberships where tenant_id = $1 and user_id = $2`,
+        [orgId, userId],
+      );
+      const r = await client.query(
+        `delete from tenancy.tenant_memberships where tenant_id = $1 and user_id = $2`,
+        [orgId, userId],
+      );
+      await client.query("commit");
+      return (r.rowCount ?? 0) > 0;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async setOrgMemberStatus(
+    orgId: string,
+    userId: string,
+    status: OrgMemberStatus,
+  ): Promise<OrgMembershipView | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const r = await client.query<OrgMembershipRow>(
+        `with updated as (
+           update tenancy.tenant_memberships m
+              set status = $3, updated_at = now()
+            where m.tenant_id = $1 and m.user_id = $2
+              and m.status in ('active', 'suspended')
+           returning m.tenant_id, m.user_id, m.role_id, m.status
+         )
+         select up.tenant_id, up.user_id, rr.role_code as role, up.status
+           from updated up join access.roles rr on rr.id = up.role_id`,
+        [orgId, userId, status],
+      );
+      if (!r.rows[0]) {
+        await client.query("rollback");
+        return null;
+      }
+      await client.query(
+        `update tenancy.workspace_memberships
+            set status = $3, updated_at = now()
+          where tenant_id = $1 and user_id = $2
+            and status in ('active', 'suspended')`,
+        [orgId, userId, status],
+      );
+      await client.query("commit");
+      return mapMembership(r.rows[0]);
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async transferOrgOwner(
@@ -778,7 +875,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
          join account.users u on u.id = m.user_id and u.deleted_at is null
          left join account.user_profiles p on p.user_id = u.id
          join access.roles rr on rr.id = m.role_id
-        where m.tenant_id = $1 and m.status = 'active'
+        where m.tenant_id = $1 and m.status in ('active', 'suspended')
         order by m.created_at asc`,
       [orgId],
     );
@@ -796,7 +893,8 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
          join account.users u on u.id = m.user_id and u.deleted_at is null
          left join account.user_profiles p on p.user_id = u.id
          join access.roles rr on rr.id = m.role_id
-        where m.tenant_id = $1 and m.user_id = $2 and m.status = 'active'
+        where m.tenant_id = $1 and m.user_id = $2
+          and m.status in ('active', 'suspended')
         limit 1`,
       [orgId, userId],
     );
@@ -961,10 +1059,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       id: row.id,
       email: row.target,
       roleCode: row.role_code ?? "member",
-      status:
-        row.status === "pending" && row.expires_at.getTime() < now
-          ? "expired"
-          : (row.status as InvitationListItem["status"]),
+      status: deriveInvitationStatus(row.status, row.expires_at, now),
       expiresAt: row.expires_at,
       acceptedAt: row.accepted_at,
       createdAt: row.created_at,
@@ -983,6 +1078,79 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       [invitationId, tenantId],
     );
     return (res.rowCount ?? 0) > 0;
+  }
+
+  async rotateInvitationToken(
+    invitationId: string,
+    tenantId: string,
+  ): Promise<RotatedInvitation | null> {
+    const token = randomBytes(32).toString("hex");
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const res = await this.pool.query<{
+      expires_at: Date;
+      target: string;
+      role_code: string | null;
+    }>(
+      `with rotated as (
+         update tenancy.invitations i
+            set token_hash = $3,
+                expires_at = now() + ($4 || ' seconds')::interval,
+                updated_at = now()
+          where i.id = $1 and i.tenant_id = $2 and i.status = 'pending'
+          returning i.expires_at, i.target, i.role_id
+       )
+       select r.expires_at, r.target, rr.role_code
+         from rotated r
+         left join access.roles rr on rr.id = r.role_id`,
+      [invitationId, tenantId, tokenHash, String(DEFAULT_INVITE_TTL_SECONDS)],
+    );
+    const row = res.rows[0];
+    return row
+      ? {
+          token,
+          expiresAt: row.expires_at,
+          email: row.target,
+          roleCode: row.role_code ?? "member",
+        }
+      : null;
+  }
+
+  async getInvitationByToken(token: string): Promise<InvitationLookup | null> {
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const res = await this.pool.query<{
+      id: string;
+      tenant_id: string | null;
+      tenant_name: string | null;
+      target: string;
+      role_code: string | null;
+      status: string;
+      expires_at: Date;
+      inviter_name: string | null;
+    }>(
+      `select i.id, i.tenant_id, t.name as tenant_name, i.target, rr.role_code,
+              i.status, i.expires_at,
+              coalesce(up.display_name, u.account) as inviter_name
+         from tenancy.invitations i
+         left join tenancy.tenants t on t.id = i.tenant_id
+         left join access.roles rr on rr.id = i.role_id
+         left join account.users u on u.id = i.created_by
+         left join account.user_profiles up on up.user_id = i.created_by
+        where i.token_hash = $1
+        limit 1`,
+      [tokenHash],
+    );
+    const row = res.rows[0];
+    if (!row) return null;
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      tenantName: row.tenant_name,
+      email: row.target,
+      roleCode: row.role_code ?? "member",
+      status: deriveInvitationStatus(row.status, row.expires_at),
+      expiresAt: row.expires_at,
+      inviterName: row.inviter_name,
+    };
   }
 
   async getEffectiveOrgPermissions(
@@ -1020,25 +1188,59 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
   async acceptInvitation(
     token: string,
     userId: string,
-  ): Promise<OrgMembershipView | null> {
+    userEmail: string | null,
+  ): Promise<AcceptInvitationResult> {
     const tokenHash = createHash("sha256").update(token).digest("hex");
     const client = await this.pool.connect();
     try {
       await client.query("begin");
-      const inv = await client.query(
-        `update tenancy.invitations
-            set status = 'accepted', accepted_at = now(), updated_at = now()
-          where token_hash = $1 and status = 'pending' and expires_at > now()
-          returning scope, tenant_id, workspace_id, role_id, role_scope`,
+      // 先锁行再判定:两个标签页同时点「接受」,后到的那个要看到 accepted 而不是
+      // 各自都成功一次。拒绝矩阵在 invitation-rules.ts,与 mock 仓储共用。
+      const found = await client.query<{
+        id: string;
+        scope: string;
+        tenant_id: string | null;
+        workspace_id: string | null;
+        role_id: string;
+        role_scope: string;
+        status: string;
+        expires_at: Date;
+        target_type: string;
+        target: string;
+        tenant_name: string | null;
+      }>(
+        `select i.id, i.scope, i.tenant_id, i.workspace_id, i.role_id, i.role_scope,
+                i.status, i.expires_at, i.target_type, i.target, t.name as tenant_name
+           from tenancy.invitations i
+           left join tenancy.tenants t on t.id = i.tenant_id
+          where i.token_hash = $1
+            for update of i`,
         [tokenHash],
       );
-      const row = inv.rows[0];
-      if (!row) {
+      const row = found.rows[0];
+      const rejection = row
+        ? rejectAcceptance(
+            {
+              status: row.status,
+              expiresAt: row.expires_at,
+              targetType: row.target_type,
+              target: row.target,
+            },
+            userEmail,
+          )
+        : "not_found";
+      if (!row || rejection) {
         await client.query("rollback");
-        return null;
+        return { ok: false, reason: rejection ?? "not_found" };
       }
-      let membership: OrgMembershipView | null = null;
-      if (row.scope === "org") {
+      await client.query(
+        `update tenancy.invitations
+            set status = 'accepted', accepted_at = now(), updated_at = now()
+          where id = $1`,
+        [row.id],
+      );
+      let membership: OrgMembershipView;
+      if (row.scope === "org" && row.tenant_id) {
         // Carry the invitation's resolved role_id + role_scope onto the membership.
         const m = await client.query<OrgMembershipRow>(
           `with upserted as (
@@ -1052,19 +1254,42 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
           [row.tenant_id, userId, row.role_id, row.role_scope],
         );
         membership = mapMembership(m.rows[0]!);
+        // 邀请说明页承诺「接受后成为租户与默认工作空间成员」——两级一起挂。
+        await upsertDefaultWorkspaceMembership(
+          client,
+          row.tenant_id,
+          userId,
+          membership.role,
+        );
       } else {
         // workspace_memberships requires tenant_id: derive it from the workspace.
-        await client.query(
-          `insert into tenancy.workspace_memberships (workspace_id, tenant_id, user_id, role_id, role_scope, status, created_at, updated_at)
-           select w.id, w.tenant_id, $2, $3, $4, 'active', now(), now()
-             from tenancy.workspaces w
-            where w.id = $1
-           on conflict (workspace_id, user_id) do update set role_id = excluded.role_id, status = 'active', updated_at = now()`,
+        const w = await client.query<{ tenant_id: string; role: string }>(
+          `with upserted as (
+             insert into tenancy.workspace_memberships (workspace_id, tenant_id, user_id, role_id, role_scope, status, created_at, updated_at)
+             select w.id, w.tenant_id, $2, $3, $4, 'active', now(), now()
+               from tenancy.workspaces w
+              where w.id = $1
+             on conflict (workspace_id, user_id) do update set role_id = excluded.role_id, status = 'active', updated_at = now()
+             returning tenant_id, role_id
+           )
+           select up.tenant_id, rr.role_code as role
+             from upserted up join access.roles rr on rr.id = up.role_id`,
           [row.workspace_id, userId, row.role_id, row.role_scope],
         );
+        const ws = w.rows[0];
+        if (!ws) {
+          await client.query("rollback");
+          return { ok: false, reason: "not_found" };
+        }
+        membership = {
+          organizationId: ws.tenant_id,
+          userId,
+          role: ws.role,
+          status: "active",
+        };
       }
       await client.query("commit");
-      return membership;
+      return { ok: true, membership, tenantName: row.tenant_name };
     } catch (error) {
       await client.query("rollback");
       if (isUniqueViolation(error))
@@ -1114,6 +1339,34 @@ function mapMembership(row: OrgMembershipRow): OrgMembershipView {
     status: row.status,
   };
 }
+/**
+ * 默认工作空间 membership 与租户级同步 upsert(同角色码的 workspace 域角色)。
+ * 配额与用量按工作空间记账,只挂租户级会得到一个自己不是成员的工作空间——
+ * transferOrgOwner 已为 owner 走过这条路,这里推广到加成员 / 接受邀请。
+ * 找不到默认工作空间(理论上不存在:开租户时一并建)时静默跳过,不让加成员失败。
+ */
+async function upsertDefaultWorkspaceMembership(
+  client: PoolClient,
+  orgId: string,
+  userId: string,
+  roleCode: string,
+): Promise<void> {
+  await client.query(
+    `insert into tenancy.workspace_memberships
+       (workspace_id, tenant_id, user_id, role_id, role_scope, status, created_at, updated_at)
+     select w.id, w.tenant_id, $2, r.id, 'workspace', 'active', now(), now()
+       from tenancy.workspaces w
+       join access.roles r on r.scope = 'workspace' and r.role_code = $3
+      where w.tenant_id = $1 and w.is_default and w.deleted_at is null
+     on conflict (workspace_id, user_id) do update
+        set role_id = excluded.role_id,
+            role_scope = 'workspace',
+            status = 'active',
+            updated_at = now()`,
+    [orgId, userId, roleCode],
+  );
+}
+
 function mapInvitation(row: {
   id: string;
   scope: string;

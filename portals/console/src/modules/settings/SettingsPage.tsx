@@ -503,7 +503,9 @@ export function SettingsPage() {
         open={transferOpen}
         onOpenChange={(open) => {
           if (!open && !transferBusy) {
+            // 关框即清空三项:上次选的人留着,下次打开会预选一个没再确认过的目标。
             setTransferOpen(false);
+            setTransferTarget("");
             setTransferConfirm("");
             setTransferError(null);
           }

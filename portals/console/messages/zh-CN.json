@@ -1356,8 +1356,11 @@
         "email": "邮箱",
         "role": "角色",
         "status": "状态",
-        "lastActive": "最近活跃"
-      }
+        "lastActive": "最近活跃",
+        "joinedAt": "加入时间"
+      },
+      "invitedExpires": "邀请有效期至 {date}",
+      "selfTag": "本人"
     },
     "status": {
       "Active": "活跃",
@@ -1380,11 +1383,12 @@
     "actions": {
       "menuLabel": "{name} 的成员操作",
       "edit": "编辑用户",
-      "disableInvite": "禁用用户",
       "disableMember": "禁用用户",
       "enableMember": "启用用户",
       "resetPassword": "重置密码",
-      "unlink": "解除关联"
+      "unlink": "解除关联",
+      "resendInvite": "重发邀请",
+      "revokeInvite": "撤销邀请"
     },
     "bulk": {
       "selected": "已选择 {count} 人",
@@ -1400,10 +1404,13 @@
     },
     "dialogs": {
       "create": {
-        "title": "新增成员"
+        "title": "新增成员",
+        "description": "按邮箱把已有 Vxture 账号加入本租户;对方尚未注册时请改用邀请。",
+        "switchToInvite": "改为发送邀请"
       },
       "invite": {
-        "title": "邀请成员"
+        "title": "邀请成员",
+        "description": "对方会收到一封带链接的邮件,接受后以所选角色加入租户与默认工作空间。"
       },
       "edit": {
         "title": "编辑成员"
@@ -1424,8 +1431,6 @@
       },
       "fields": {
         "email": "邮箱",
-        "nickname": "昵称",
-        "teamRemark": "团队备注",
         "role": "角色",
         "defaultRole": "默认成员",
         "nextPassword": "新临时密码"
@@ -1437,6 +1442,11 @@
         "save": "保存",
         "resetPassword": "确认重置",
         "unlink": "解除关联"
+      },
+      "revokeInvite": {
+        "verb": "撤销给",
+        "consequence": "邀请链接立刻失效,对方再打开会看到「邀请不存在」。撤销不可撤回——要让对方加入,需要再发一次邀请。",
+        "keep": "保留邀请"
       }
     },
     "feedback": {
@@ -1460,7 +1470,28 @@
       "bulkEnableError": "批量启用失败，请稍后重试。",
       "bulkUnlinkError": "批量解除关联失败，请稍后重试。",
       "memberDisableError": "成员禁用失败，请稍后重试。",
-      "memberEnableError": "成员启用失败，请稍后重试。"
+      "memberEnableError": "成员启用失败，请稍后重试。",
+      "inviteNoEmail": "邀请已创建,但邮件未能发出,请把链接手动发给对方。",
+      "inviteResent": "邀请已重发。",
+      "inviteRevoked": "邀请已撤销。",
+      "resendError": "重发失败,请稍后重试。",
+      "revokeError": "撤销失败,请稍后重试。",
+      "bulkPartial": "完成 {done} 项,失败 {failed} 项。",
+      "bulkSkipped": "已跳过所有者与本人。"
+    },
+    "hints": {
+      "ownerProtected": "所有者不可停用或解除关联,请先转让所有权",
+      "ownerRoleLocked": "所有者的角色只能通过「转让所有权」变更",
+      "selfProtected": "不能对自己执行此操作"
+    },
+    "errors": {
+      "owner_protected": "所有者不可停用或解除关联,请先转让所有权。",
+      "self_protected": "不能对自己执行此操作。",
+      "owner_role_locked": "所有者的角色只能通过「转让所有权」变更。",
+      "account_not_found": "该邮箱没有对应的 Vxture 账号,请改用邀请。",
+      "already_member": "该账号已是本租户成员。",
+      "invitation_pending": "该邮箱已有待接受的邀请,请到邀请管理页重发或撤销。",
+      "invalid_email": "邮箱格式不正确。"
     }
   },
   "rolesPage": {
@@ -2871,7 +2902,7 @@
     "revokeHint": "仅待接受的邀请可撤销",
     "revokeFailed": "撤销失败,请稍后重试",
     "resend": "重发邀请",
-    "resendHint": "邀请邮件通道即将开放",
+    "resendHint": "已撤销或已接受的邀请不能重发",
     "role": {
       "owner": "拥有者",
       "manager": "管理员",
@@ -2901,13 +2932,29 @@
       "title": "邀请说明",
       "description": "流程与时效",
       "flowTitle": "邀请流程",
-      "flowBody": "在成员管理页按邮箱+角色发出邀请;对方接受后自动成为租户与默认工作空间成员",
+      "flowBody": "在成员管理页按邮箱+角色发出邀请,对方会收到一封带链接的邮件;用受邀邮箱对应的账号登录并接受后,自动成为租户与默认工作空间成员",
       "expiryTitle": "时效",
-      "expiryBody": "邀请到期自动失效;撤销立即失效。同一邮箱可在失效后重新邀请"
+      "expiryBody": "邀请 7 天内有效,到期自动失效;撤销立即失效。同一邮箱在失效后可重新邀请",
+      "resendTitle": "重发",
+      "resendBody": "重发会生成新链接并使旧链接立即失效,有效期重新按 7 天计;邮件未能发出时可在对话框里复制链接手动转交"
     },
     "revokeVerb": "撤销给",
     "revokeConsequence": "邀请链接立刻失效，对方再打开会看到「邀请不存在」。撤销不可撤回——要让对方重新加入，需要再发一次邀请。",
-    "revokeKeep": "保留邀请"
+    "revokeKeep": "保留邀请",
+    "resendFailed": "重发失败,请稍后重试",
+    "resent": "已重发给 {email}。",
+    "resentNoEmail": "已生成新链接,但邮件未能发出,请把链接手动发给 {email}。",
+    "revoked": "已撤销给 {email} 的邀请。",
+    "expiringSoon": "24 小时内到期",
+    "errors": {
+      "owner_protected": "所有者不可停用或解除关联,请先转让所有权。",
+      "self_protected": "不能对自己执行此操作。",
+      "owner_role_locked": "所有者的角色只能通过「转让所有权」变更。",
+      "account_not_found": "该邮箱没有对应的 Vxture 账号,请改用邀请。",
+      "already_member": "该账号已是本租户成员。",
+      "invitation_pending": "该邮箱已有待接受的邀请。",
+      "invalid_email": "邮箱格式不正确。"
+    }
   },
   "todosPage": {
     "title": "待办事项",
@@ -2963,5 +3010,57 @@
     "description": "当前页面上的数字与列表不是真实数据，请重试；若持续失败请稍后再来。",
     "retry": "重试",
     "empty": "读取失败，暂时无法显示"
+  },
+  "inviteLinkDialog": {
+    "title": "邀请已发出",
+    "titleResent": "邀请已重发",
+    "sent": "邮件已发送至 {email};链接也可以直接转给对方。",
+    "notSent": "邮件未能发出,请把下面的链接手动发给 {email}。",
+    "notSentTitle": "邮件未能发出",
+    "linkLabel": "邀请链接",
+    "expires": "有效期至 {date};重发会生成新链接并使这条失效。",
+    "copy": "复制链接",
+    "copied": "已复制",
+    "copyFailed": "复制失败,请手动选中链接复制。",
+    "close": "关闭"
+  },
+  "acceptInvitationPage": {
+    "title": "接受邀请",
+    "description": "确认后你将加入该租户,并可在控制台切换过去。",
+    "cardTitle": "邀请详情",
+    "missingToken": "链接不完整,缺少邀请令牌;请从邮件里重新打开。",
+    "fields": {
+      "tenant": "租户",
+      "inviter": "邀请人",
+      "role": "角色",
+      "email": "受邀邮箱",
+      "expires": "有效期至"
+    },
+    "role": {
+      "owner": "拥有者",
+      "manager": "管理员",
+      "member": "成员",
+      "readonly": "只读成员",
+      "guest": "访客"
+    },
+    "actions": {
+      "accept": "接受并加入",
+      "later": "稍后再说",
+      "enter": "进入工作台",
+      "switchAccount": "退出并用受邀邮箱登录"
+    },
+    "reasons": {
+      "not_found": "邀请不存在:链接可能已被撤销,或者复制不完整。",
+      "expired": "邀请已过期,请联系邀请人重新发送。",
+      "revoked": "这封邀请已被撤销。",
+      "already_accepted": "这封邀请已经被接受过了;如果是你,直接切换到该租户即可。",
+      "email_mismatch": "当前登录账号的邮箱({email})与受邀邮箱不一致,请换用受邀邮箱对应的账号登录。"
+    },
+    "mismatchTitle": "登录账号与受邀邮箱不一致",
+    "mismatchHint": "你当前登录的是 {current},这封邀请发给 {invited}。",
+    "accepted": "已加入「{tenant}」",
+    "acceptedDescription": "已为你切换到该租户。",
+    "switchFailed": "已加入,但切换租户失败;可在顶部租户切换器手动切换。",
+    "acceptError": "接受失败,请稍后重试。"
   }
 }

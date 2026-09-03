@@ -211,6 +211,8 @@ export interface MemberRecord {
   team: string;
   joinedAt: string;
   isPrimaryOwner: boolean;
+  /** Invited 行:邀请到期时刻(ISO);在册成员为 null / 缺省。 */
+  invitationExpiresAt?: string | null;
 }
 
 export interface TenantRoleRecord {

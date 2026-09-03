@@ -1,7 +1,9 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { createHash } from "node:crypto";
@@ -24,12 +26,17 @@ import {
   ActiveContextService,
   GovernanceService,
   OrganizationService,
+  type AcceptInvitationResult,
+  type InvitationLookup,
   type OrgLogoRecord,
   type OrgMemberDetail,
+  type OrgMemberStatus,
   type OrgProfileUpdateInput,
   type OrgRole,
   type OrgRoleCatalogEntry,
+  type OrgView,
   type PermissionCatalogEntry,
+  type RotatedInvitation,
   type TransferOwnerResult,
 } from "@vxture/service-organization";
 import type {
@@ -537,8 +544,27 @@ export class SessionAggregator {
   ): Promise<MemberRecord[]> {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return [];
-    const members = await this.org.listOrgMembersWithUser(resolved.orgId);
-    const records = members.map(toMemberRecord);
+    // 目录 = 在册成员(active + suspended)+ 待接受的邀请(Invited 行,id = 邀请 id)。
+    // 此前邀请只在发出的那一刻回一条 pending 记录,刷新即消失,页面上的「已邀请」
+    // 筛选与计数从来没有真数据可数。
+    const [members, invitations] = await Promise.all([
+      this.org.listOrgMembersWithUser(resolved.orgId),
+      this.org.listInvitations(resolved.orgId),
+    ]);
+    const records = [
+      ...members.map(toMemberRecord),
+      ...invitations
+        .filter((i) => i.status === "pending")
+        .map((i) =>
+          pendingMemberRecord(
+            i.id,
+            i.email,
+            i.roleCode,
+            i.expiresAt,
+            i.createdAt,
+          ),
+        ),
+    ];
     return opts.includeContacts === false
       ? records.map(redactContacts)
       : records;
@@ -600,15 +626,34 @@ export class SessionAggregator {
     throw new BadRequestException(CUSTOM_ROLES_UNSUPPORTED);
   }
 
-  async createMember(
+  /**
+   * 「新增成员」= 把一个**已有账号**按邮箱直接加进租户(批 2 定义;此前与邀请是
+   * 同一条路径,两个按钮做同一件事)。账号不存在 → 404 `account_not_found`,
+   * 页面据此引导改走邀请;已是成员 → 409 `already_member`。
+   */
+  async addExistingMember(
     userId: string,
     orgId: string | undefined,
     input: { email: string; roleCode?: string | null },
   ): Promise<MemberRecord | null> {
-    return this.inviteMember(userId, orgId, input);
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    await this.gov.assertCan(
+      userId,
+      { orgId: resolved.orgId },
+      "tenant.member.manage",
+    );
+    const role = asAssignableRole(input.roleCode ?? "member");
+    const email = normalizeEmail(input.email);
+    const user = await this.account.findUserByIdentifier(email);
+    if (!user) throw new NotFoundException("account_not_found");
+    const existing = await this.org.getOrgMemberDetail(resolved.orgId, user.id);
+    if (existing) throw new ConflictException("already_member");
+    await this.org.addOrgMember(resolved.orgId, user.id, role);
+    this.invalidateCapabilities(user.id, resolved.orgId);
+    return this.getMember(userId, orgId, user.id);
   }
 
-  /** Invite a member by email (requires org.member.manage). Returns a pending record. */
   // ── 邀请台账(P1 /invitations 落地;读写同 member.manage 门)──────────────
   async listInvitations(userId: string, orgId?: string) {
     const resolved = await this.resolveOrg(userId, orgId);
@@ -636,11 +681,16 @@ export class SessionAggregator {
     return this.org.revokeInvitation(invitationId, resolved.orgId);
   }
 
+  /**
+   * 邀请成员(member.manage)。返回待接受记录 + 一次性 token(路由层据此发邮件
+   * 并回一条可复制的链接)。已是成员 → 409 `already_member`;该邮箱已有待接受的
+   * 邀请 → 409 `invitation_pending`(去邀请管理页重发或撤销,不再插第二行)。
+   */
   async inviteMember(
     userId: string,
     orgId: string | undefined,
     input: { email: string; roleCode?: string | null },
-  ): Promise<MemberRecord | null> {
+  ): Promise<InviteMemberOutcome | null> {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return null;
     await this.gov.assertCan(
@@ -648,19 +698,115 @@ export class SessionAggregator {
       { orgId: resolved.orgId },
       "tenant.member.manage",
     );
-    const role = asOrgRole(input.roleCode ?? "member");
-    const { invitation } = await this.org.createInvitation({
+    const role = asAssignableRole(input.roleCode ?? "member");
+    const email = normalizeEmail(input.email);
+    const existingUser = await this.account.findUserByIdentifier(email);
+    if (existingUser) {
+      const member = await this.org.getOrgMemberDetail(
+        resolved.orgId,
+        existingUser.id,
+      );
+      if (member) throw new ConflictException("already_member");
+    }
+    const pending = (await this.org.listInvitations(resolved.orgId)).find(
+      (i) => i.status === "pending" && i.email.toLowerCase() === email,
+    );
+    if (pending) throw new ConflictException("invitation_pending");
+
+    const { invitation, token } = await this.org.createInvitation({
       scope: "org",
       organizationId: resolved.orgId,
       targetType: "email",
-      target: input.email,
+      target: email,
       role,
       createdBy: userId,
     });
-    return pendingMemberRecord(invitation.id, input.email, role);
+    const inviter = await this.account.getUserById(userId);
+    return {
+      member: pendingMemberRecord(
+        invitation.id,
+        email,
+        role,
+        invitation.expiresAt,
+        new Date(),
+      ),
+      invitationId: invitation.id,
+      token,
+      email,
+      roleCode: role,
+      expiresAt: invitation.expiresAt,
+      tenantName: resolved.org.name,
+      inviterName: inviter?.name ?? inviter?.account ?? "",
+      inviterLanguage: inviter?.language ?? null,
+    };
   }
 
-  /** Update a member's role (requires org.role.assign). nickname/remark/status are retired. */
+  /** 重发邀请 = 轮换 token(旧链接失效)并顺延有效期;只对 pending 行有效。 */
+  async resendInvitation(
+    userId: string,
+    orgId: string | undefined,
+    invitationId: string,
+  ): Promise<InviteMemberOutcome | null> {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    await this.gov.assertCan(
+      userId,
+      { orgId: resolved.orgId },
+      "tenant.member.manage",
+    );
+    const rotated: RotatedInvitation | null =
+      await this.org.rotateInvitationToken(invitationId, resolved.orgId);
+    if (!rotated) return null;
+    const inviter = await this.account.getUserById(userId);
+    return {
+      member: pendingMemberRecord(
+        invitationId,
+        rotated.email,
+        rotated.roleCode,
+        rotated.expiresAt,
+        new Date(),
+      ),
+      invitationId,
+      token: rotated.token,
+      email: rotated.email,
+      roleCode: rotated.roleCode,
+      expiresAt: rotated.expiresAt,
+      tenantName: resolved.org.name,
+      inviterName: inviter?.name ?? inviter?.account ?? "",
+      inviterLanguage: inviter?.language ?? null,
+    };
+  }
+
+  /** 接受页预览:按 token 看这封邀请是谁、进哪个租户、什么角色、还有效没有。 */
+  lookupInvitation(token: string): Promise<InvitationLookup | null> {
+    return this.org.getInvitationByToken(token);
+  }
+
+  /**
+   * 接受邀请。租户由 token 决定,不看当前活跃租户;受邀邮箱须与账号邮箱一致
+   * (仓储层校验)。成功后清掉能力缓存——对方下一次切进该租户就该按新角色拿能力。
+   */
+  async acceptInvitation(
+    userId: string,
+    token: string,
+  ): Promise<AcceptInvitationResult> {
+    const user = await this.account.getUserById(userId);
+    const result = await this.org.acceptInvitation(
+      token,
+      userId,
+      user?.email ?? null,
+    );
+    if (result.ok) {
+      this.invalidateCapabilities(userId, result.membership.organizationId);
+    }
+    return result;
+  }
+
+  /**
+   * 改成员角色(role.assign)。三条保护:owner 的角色只能经「转让所有权」变更;
+   * 不能给别人 owner(同一理由);不能改自己的角色(把自己降级等于把租户锁在
+   * 一个没人能管的状态)。
+   */
   async updateMember(
     userId: string,
     orgId: string | undefined,
@@ -677,21 +823,50 @@ export class SessionAggregator {
       { orgId: resolved.orgId },
       "tenant.role.assign",
     );
-    await this.org.updateOrgMemberRole(
+    const role = asAssignableRole(input.roleCode);
+    assertNotOwner(resolved.org, memberUserId, "owner_role_locked");
+    if (memberUserId === userId) {
+      throw new BadRequestException("self_protected");
+    }
+    const updated = await this.org.updateOrgMemberRole(
       resolved.orgId,
       memberUserId,
-      asOrgRole(input.roleCode),
+      role,
     );
+    if (!updated) return null;
+    this.invalidateCapabilities(memberUserId, resolved.orgId);
     return this.getMember(userId, orgId, memberUserId);
   }
 
-  async disableMember(
+  /**
+   * 停用 / 恢复成员(member.manage)。停用是打标不是删行:成员的订单、用量、
+   * 审计足迹都还在,恢复即回到原角色。owner 与本人不可停用。
+   */
+  async setMemberStatus(
     userId: string,
     orgId: string | undefined,
     memberUserId: string,
+    status: OrgMemberStatus,
   ): Promise<MemberRecord | null> {
-    await this.removeMember(userId, orgId, memberUserId);
-    return null;
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) return null;
+    await this.gov.assertCan(
+      userId,
+      { orgId: resolved.orgId },
+      "tenant.member.manage",
+    );
+    assertNotOwner(resolved.org, memberUserId, "owner_protected");
+    if (memberUserId === userId) {
+      throw new BadRequestException("self_protected");
+    }
+    const updated = await this.org.setOrgMemberStatus(
+      resolved.orgId,
+      memberUserId,
+      status,
+    );
+    if (!updated) return null;
+    this.invalidateCapabilities(memberUserId, resolved.orgId);
+    return this.getMember(userId, orgId, memberUserId);
   }
 
   /**
@@ -743,6 +918,7 @@ export class SessionAggregator {
     return true;
   }
 
+  /** 解除关联(member.manage)。owner 与本人不可解除——owner 先转让,本人无「退出」动作。 */
   async removeMember(
     userId: string,
     orgId: string | undefined,
@@ -755,18 +931,61 @@ export class SessionAggregator {
       { orgId: resolved.orgId },
       "tenant.member.manage",
     );
-    return this.org.removeOrgMember(resolved.orgId, memberUserId);
+    assertNotOwner(resolved.org, memberUserId, "owner_protected");
+    if (memberUserId === userId) {
+      throw new BadRequestException("self_protected");
+    }
+    const removed = await this.org.removeOrgMember(
+      resolved.orgId,
+      memberUserId,
+    );
+    if (removed) this.invalidateCapabilities(memberUserId, resolved.orgId);
+    return removed;
   }
 }
 
-const ORG_ROLES = ["owner", "manager", "member", "readonly", "guest"] as const;
-function asOrgRole(value: string): OrgRole {
-  if (!ORG_ROLES.includes(value as OrgRole)) {
+/** 邀请 / 加人 / 改角色的产出:待接受记录 + 一次性 token + 发邮件要的材料。 */
+export interface InviteMemberOutcome {
+  member: MemberRecord;
+  invitationId: string;
+  token: string;
+  email: string;
+  roleCode: string;
+  expiresAt: Date;
+  tenantName: string;
+  inviterName: string;
+  inviterLanguage: string | null;
+}
+
+/**
+ * 可经邀请 / 加人 / 改角色赋予的角色:owner 不在其列——所有权只能经「转让」
+ * 变更(owner 2026-08-21 裁定),任何权限授予都不该能造出第二个 owner。
+ */
+const ASSIGNABLE_ROLES = ["manager", "member", "readonly", "guest"] as const;
+function asAssignableRole(value: string): OrgRole {
+  if (value === "owner") throw new BadRequestException("owner_role_locked");
+  if (!ASSIGNABLE_ROLES.includes(value as (typeof ASSIGNABLE_ROLES)[number])) {
     throw new BadRequestException(
-      "role must be one of owner|manager|member|readonly|guest",
+      "role must be one of manager|member|readonly|guest",
     );
   }
   return value as OrgRole;
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function normalizeEmail(value: string): string {
+  const email = (value ?? "").trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) throw new BadRequestException("invalid_email");
+  return email;
+}
+
+/** owner 保护:对租户 owner 的停用 / 解除 / 改角色一律拒——先转让所有权。 */
+function assertNotOwner(
+  org: OrgView,
+  memberUserId: string,
+  code: "owner_protected" | "owner_role_locked",
+): void {
+  if (org.ownerUserId === memberUserId) throw new BadRequestException(code);
 }
 
 /**
@@ -873,6 +1092,8 @@ function pendingMemberRecord(
   invitationId: string,
   email: string,
   role: string,
+  expiresAt: Date,
+  createdAt: Date,
 ): MemberRecord {
   return {
     id: invitationId,
@@ -884,13 +1105,14 @@ function pendingMemberRecord(
     phone: null,
     role,
     roleCode: role,
-    roleId: null,
+    roleId: role,
     status: "Invited",
     statusCode: "inactive",
-    lastActive: "Invitation sent",
+    lastActive: "—",
     team: "Workspace",
-    joinedAt: new Date().toISOString(),
+    joinedAt: createdAt.toISOString(),
     isPrimaryOwner: false,
+    invitationExpiresAt: expiresAt.toISOString(),
   };
 }
 
