@@ -28,60 +28,51 @@ export interface TemplateDef {
   body: string;
 }
 
+/** 标题（站内标题 / 邮件主题）。 */
+const TITLES: Record<NotificationTemplateCode, string> = {
+  "subscription.expiring_soon": "订阅即将到期：{{productName}} {{planName}}",
+  "subscription.expired": "订阅已到期：{{productName}} {{planName}}",
+  "subscription.renewed": "订阅已续费：{{productName}} {{planName}}",
+  "order.fulfilled": "订阅已开通：{{productName}} {{planName}}",
+  "order.renewal_created": "续费订单待付款：{{productName}} {{planName}}",
+  "refund.requested": "退款申请已收到：订单 {{orderNo}}",
+  "refund.approved": "退款已审核通过：订单 {{orderNo}}",
+  "refund.rejected": "退款申请未通过：订单 {{orderNo}}",
+  "refund.completed": "退款已完成：订单 {{orderNo}}",
+};
+
+/** 正文（站内正文 / 邮件正文）。 */
+const BODIES: Record<NotificationTemplateCode, string> = {
+  "subscription.expiring_soon":
+    "将于 {{endAt}} 到期（{{days}} 天后）。未开启自动续费，到期后权益停止；可在「我的订阅」续费或开启自动续费。",
+  "subscription.expired":
+    "已于 {{endAt}} 到期，权益已停止。随时可在「我的订阅」续费恢复。",
+  "subscription.renewed": "新周期至 {{endAt}}，实付 {{amount}}。",
+  "order.fulfilled":
+    "订单 {{orderNo}} 已开通，有效期至 {{endAt}}，实付 {{amount}}。",
+  "order.renewal_created":
+    "已按自动续费生成续费订单 {{orderNo}}，应付 {{amount}}，请在 {{payBy}} 前完成付款；逾期订单关闭，订阅到期后权益停止。",
+  "refund.requested": "退款金额 {{amount}}，我们会尽快审核。",
+  "refund.approved": "退款 {{amount}} 将按原付款渠道退回，到账后另行通知。",
+  "refund.rejected": "原因：{{reason}}。如有疑问请联系客服。",
+  "refund.completed":
+    "退款 {{amount}} 已退回原付款渠道，订阅已回到未订阅状态。",
+};
+
+/** 偏好主题由模板键前缀决定：subscription.* → subscription，其余（order / refund）→ billing。 */
+export function topicOf(code: NotificationTemplateCode): NotificationTopic {
+  return code.startsWith("subscription.") ? "subscription" : "billing";
+}
+
 export const NOTIFICATION_TEMPLATES: Record<
   NotificationTemplateCode,
   TemplateDef
-> = {
-  "subscription.expiring_soon": {
-    topic: "subscription",
-    title: "订阅即将到期：{{productName}} {{planName}}",
-    body: "将于 {{endAt}} 到期（{{days}} 天后）。未开启自动续费，到期后权益停止；可在「我的订阅」续费或开启自动续费。",
-  },
-  "subscription.expired": {
-    topic: "subscription",
-    title: "订阅已到期：{{productName}} {{planName}}",
-    body: "已于 {{endAt}} 到期，权益已停止。随时可在「我的订阅」续费恢复。",
-  },
-  "subscription.renewed": {
-    topic: "subscription",
-    title: "订阅已续费：{{productName}} {{planName}}",
-    body: "新周期至 {{endAt}}，实付 {{amount}}。",
-  },
-  "order.fulfilled": {
-    topic: "billing",
-    title: "订阅已开通：{{productName}} {{planName}}",
-    body: "订单 {{orderNo}} 已开通，有效期至 {{endAt}}，实付 {{amount}}。",
-  },
-  "order.renewal_created": {
-    topic: "billing",
-    title: "续费订单待付款：{{productName}} {{planName}}",
-    body: "已按自动续费生成续费订单 {{orderNo}}，应付 {{amount}}，请在 {{payBy}} 前完成付款；逾期订单关闭，订阅到期后权益停止。",
-  },
-  "refund.requested": {
-    topic: "billing",
-    title: "退款申请已收到：订单 {{orderNo}}",
-    body: "退款金额 {{amount}}，我们会尽快审核。",
-  },
-  "refund.approved": {
-    topic: "billing",
-    title: "退款已审核通过：订单 {{orderNo}}",
-    body: "退款 {{amount}} 将按原付款渠道退回，到账后另行通知。",
-  },
-  "refund.rejected": {
-    topic: "billing",
-    title: "退款申请未通过：订单 {{orderNo}}",
-    body: "原因：{{reason}}。如有疑问请联系客服。",
-  },
-  "refund.completed": {
-    topic: "billing",
-    title: "退款已完成：订单 {{orderNo}}",
-    body: "退款 {{amount}} 已退回原付款渠道，订阅已回到未订阅状态。",
-  },
-};
-
-export function topicOf(code: NotificationTemplateCode): NotificationTopic {
-  return NOTIFICATION_TEMPLATES[code].topic;
-}
+> = Object.fromEntries(
+  (Object.keys(TITLES) as NotificationTemplateCode[]).map((code) => [
+    code,
+    { topic: topicOf(code), title: TITLES[code], body: BODIES[code] },
+  ]),
+) as Record<NotificationTemplateCode, TemplateDef>;
 
 export type TemplateParams = Record<string, string | number>;
 
