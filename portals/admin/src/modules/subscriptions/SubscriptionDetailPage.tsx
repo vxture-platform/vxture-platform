@@ -156,9 +156,9 @@ function SubscriptionSummary({
             },
             {
               id: "revenue",
-              help: "年付按 12 个月折算，一次性买断计 0，其余取周期金额。",
-              label: "月收入",
-              value: formatMoney(subscription.monthlyRevenue),
+              help: "本周期实付金额（年付即整年金额，不折成月）。",
+              label: "订阅收入",
+              value: formatMoney(subscription.payAmount),
               tags: [cycleLabel(subscription.cycleType)],
             },
             {

@@ -352,14 +352,16 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
     },
     {
       id: "revenue",
-      header: "收入",
+      header: "订阅收入",
       align: "right",
+      // 订阅收入 = 本周期实付（owner 2026-09-03：年付 ¥0.10 就显示 ¥0.10，不是折成月的 ¥0.01）；
+      // 月均折算只在统计卡「月收入」里出现。
       cell: (subscription) => (
         <TableTitleCell
-          title={formatMoney(subscription.monthlyRevenue)}
-          description={
+          title={formatMoney(subscription.payAmount)}
+          description={`${cycleLabel(subscription.cycleType)} · ${
             subscription.autoRenew ? "自动续期" : subscription.operationHint
-          }
+          }`}
         />
       ),
     },
