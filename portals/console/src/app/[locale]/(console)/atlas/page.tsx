@@ -1,6 +1,14 @@
 "use client";
 
+/**
+ * /atlas — 模型平台(租户视角只读:可用模型 / 授权 / 配额 / 用量)。
+ * 批 0c:整页接 i18n(atlasPage 命名空间),此前表头 / 空态 / 指标是英文字面量、
+ * 标题是中文字面量,中英混排。页面门 = tenant.model.read(批 0a;暂不授予任何角色,
+ * 批 7 整改后再对客户开放)。
+ */
+
 import { useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { CapabilityGate } from "@/features/permissions/CapabilityGate";
 import {
   Banner,
@@ -33,44 +41,6 @@ type GrantRow = [string, string, string, string];
 type QuotaRow = [string, string, string, string];
 type UsageRow = [string, string, string, string];
 
-const modelColumns: DataTableColumn<ModelRow>[] = [
-  { id: "model", header: "Model", cell: (row) => row[0] },
-  { id: "provider", header: "Provider", cell: (row) => row[1] },
-  { id: "protocol", header: "Protocol", cell: (row) => row[2] },
-  { id: "capabilities", header: "Capabilities", cell: (row) => row[3] },
-];
-
-const grantColumns: DataTableColumn<GrantRow>[] = [
-  { id: "model", header: "Model", cell: (row) => row[0] },
-  { id: "scope", header: "Scope", cell: (row) => row[1] },
-  { id: "priority", header: "Priority", cell: (row) => row[2] },
-  { id: "expires", header: "Expires", cell: (row) => row[3] },
-];
-
-const quotaColumns: DataTableColumn<QuotaRow>[] = [
-  { id: "metric", header: "Metric", cell: (row) => row[0] },
-  { id: "remaining", header: "Remaining / Limit", cell: (row) => row[1] },
-  { id: "priority", header: "Priority", cell: (row) => row[2] },
-  { id: "tier", header: "Tier", cell: (row) => row[3] },
-];
-
-const usageColumns: DataTableColumn<UsageRow>[] = [
-  { id: "model", header: "Model", cell: (row) => row[0] },
-  { id: "provider", header: "Provider", cell: (row) => row[1] },
-  { id: "requests", header: "Requests", cell: (row) => row[2] },
-  { id: "tokens", header: "Tokens", cell: (row) => row[3], align: "right" },
-];
-
-function formatNumber(value: number) {
-  return new Intl.NumberFormat("zh-CN").format(value);
-}
-
-const quotaStatusLabel: Record<TenancyQuotaResponse["status"], string> = {
-  covered: "已开通",
-  uncovered: "未开通套餐",
-  unavailable: "平台不可达",
-};
-
 const quotaStatusTone: Record<
   TenancyQuotaResponse["status"],
   Exclude<SummaryMetric["tone"], undefined>
@@ -80,43 +50,9 @@ const quotaStatusTone: Record<
   unavailable: "warning",
 };
 
-function buildMetrics(
-  models: AiModelRecord[],
-  grants: AiModelGrantRecord[],
-  quotas: TenancyQuotaResponse | null,
-  usage: TenancyUsageResponse | null,
-  loading: boolean,
-): SummaryMetric[] {
-  const activeGrants = grants.filter((grant) => grant.isActive);
-  const totalTokens =
-    usage?.rows.reduce((total, row) => total + row.totalTokens, 0) ?? 0;
-
-  return [
-    {
-      id: "available-models",
-      label: "Available models",
-      value: loading ? "-" : formatNumber(models.length),
-      trend: `${formatNumber(activeGrants.length)} active grants`,
-      tone: models.length ? "success" : "warning",
-    },
-    {
-      id: "quota-status",
-      label: "Quota status",
-      value: loading || !quotas ? "-" : quotaStatusLabel[quotas.status],
-      trend: quotas?.tier ? `tier: ${quotas.tier}` : "no tier",
-      tone: quotas ? quotaStatusTone[quotas.status] : "neutral",
-    },
-    {
-      id: "token-usage",
-      label: "Token usage",
-      value: loading ? "-" : formatNumber(totalTokens),
-      trend: usage ? `${formatNumber(usage.rows.length)} rows` : "-",
-      tone: totalTokens > 0 ? "success" : "neutral",
-    },
-  ];
-}
-
 function AtlasPage() {
+  const t = useTranslations("atlasPage");
+  const locale = useLocale();
   const { session } = useConsoleSession();
   const [models, setModels] = useState<AiModelRecord[]>([]);
   const [grants, setGrants] = useState<AiModelGrantRecord[]>([]);
@@ -124,6 +60,9 @@ function AtlasPage() {
   const [usage, setUsage] = useState<TenancyUsageResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+
+  const formatNumber = (value: number) =>
+    new Intl.NumberFormat(locale).format(value);
 
   useEffect(() => {
     let active = true;
@@ -159,7 +98,75 @@ function AtlasPage() {
     () => new Map(models.map((model) => [model.id, model])),
     [models],
   );
-  const metrics = buildMetrics(models, grants, quotas, usage, loading);
+
+  const activeGrants = grants.filter((grant) => grant.isActive);
+  const totalTokens =
+    usage?.rows.reduce((total, row) => total + row.totalTokens, 0) ?? 0;
+  const metrics: SummaryMetric[] = [
+    {
+      id: "available-models",
+      label: t("metrics.models"),
+      value: loading ? "-" : formatNumber(models.length),
+      trend: t("metrics.modelsHint", { count: activeGrants.length }),
+      tone: models.length ? "success" : "warning",
+    },
+    {
+      id: "quota-status",
+      label: t("metrics.quota"),
+      value: loading || !quotas ? "-" : t(`quotaStatus.${quotas.status}`),
+      trend: quotas?.tier
+        ? t("metrics.quotaTier", { tier: quotas.tier })
+        : t("metrics.quotaNoTier"),
+      tone: quotas ? quotaStatusTone[quotas.status] : "neutral",
+    },
+    {
+      id: "token-usage",
+      label: t("metrics.tokens"),
+      value: loading ? "-" : formatNumber(totalTokens),
+      trend: usage
+        ? t("metrics.tokensHint", { count: usage.rows.length })
+        : "-",
+      tone: totalTokens > 0 ? "success" : "neutral",
+    },
+  ];
+
+  const modelColumns: DataTableColumn<ModelRow>[] = [
+    { id: "model", header: t("models.colModel"), cell: (row) => row[0] },
+    { id: "provider", header: t("models.colProvider"), cell: (row) => row[1] },
+    { id: "protocol", header: t("models.colProtocol"), cell: (row) => row[2] },
+    {
+      id: "capabilities",
+      header: t("models.colCapabilities"),
+      cell: (row) => row[3],
+    },
+  ];
+  const grantColumns: DataTableColumn<GrantRow>[] = [
+    { id: "model", header: t("grants.colModel"), cell: (row) => row[0] },
+    { id: "scope", header: t("grants.colScope"), cell: (row) => row[1] },
+    { id: "priority", header: t("grants.colPriority"), cell: (row) => row[2] },
+    { id: "expires", header: t("grants.colExpires"), cell: (row) => row[3] },
+  ];
+  const quotaColumns: DataTableColumn<QuotaRow>[] = [
+    { id: "metric", header: t("quotas.colMetric"), cell: (row) => row[0] },
+    {
+      id: "remaining",
+      header: t("quotas.colRemaining"),
+      cell: (row) => row[1],
+    },
+    { id: "priority", header: t("quotas.colPriority"), cell: (row) => row[2] },
+    { id: "tier", header: t("quotas.colTier"), cell: (row) => row[3] },
+  ];
+  const usageColumns: DataTableColumn<UsageRow>[] = [
+    { id: "model", header: t("usage.colModel"), cell: (row) => row[0] },
+    { id: "provider", header: t("usage.colProvider"), cell: (row) => row[1] },
+    { id: "requests", header: t("usage.colRequests"), cell: (row) => row[2] },
+    {
+      id: "tokens",
+      header: t("usage.colTokens"),
+      cell: (row) => row[3],
+      align: "right",
+    },
+  ];
 
   const modelRows = models.map<ModelRow>((model) => [
     model.modelName,
@@ -167,16 +174,14 @@ function AtlasPage() {
     model.protocol,
     model.capabilities.join(", ") || "-",
   ]);
-  const grantRows = grants
-    .filter((grant) => grant.isActive)
-    .map<GrantRow>((grant) => [
-      modelById.get(grant.modelId)?.modelName ?? grant.modelId,
-      grant.applicationType
-        ? `${grant.applicationType}:${grant.applicationId ?? "-"}`
-        : "tenant",
-      String(grant.priority),
-      grant.expiresAt ?? "Never",
-    ]);
+  const grantRows = activeGrants.map<GrantRow>((grant) => [
+    modelById.get(grant.modelId)?.modelName ?? grant.modelId,
+    grant.applicationType
+      ? `${grant.applicationType}:${grant.applicationId ?? "-"}`
+      : t("grants.scopeTenant"),
+    String(grant.priority),
+    grant.expiresAt ?? t("grants.never"),
+  ]);
   const quotaRows = (quotas?.pools ?? []).map<QuotaRow>((pool) => [
     pool.metric,
     `${formatNumber(pool.remaining)} / ${formatNumber(pool.limit)}`,
@@ -192,23 +197,22 @@ function AtlasPage() {
 
   const quotaEmptyMessage = quotas
     ? {
-        covered: "No active quota pools.",
-        uncovered: "No plan published for this workspace yet.",
-        unavailable: "Could not reach the platform's entitlement service.",
+        covered: t("quotas.emptyCovered"),
+        uncovered: t("quotas.emptyUncovered"),
+        unavailable: t("quotas.emptyUnavailable"),
       }[quotas.status]
-    : "No quota data.";
+    : t("quotas.emptyNone");
 
   const statusSignals = [
     {
-      title: "Tenant scope",
+      title: t("signals.scopeTitle"),
       description: session.tenant?.name
-        ? `Showing model-platform state for ${session.tenant.name}.`
-        : "Tenant context is required before model-platform state can be shown.",
+        ? t("signals.scopeBody", { tenant: session.tenant.name })
+        : t("signals.scopeMissing"),
     },
     {
-      title: "Control-plane boundary",
-      description:
-        "Provider, model, policy, price, and grant changes are managed by platform operators in Admin.",
+      title: t("signals.boundaryTitle"),
+      description: t("signals.boundaryBody"),
     },
   ];
 
@@ -216,44 +220,42 @@ function AtlasPage() {
     <ViewLayout>
       <ViewHeader
         icon="cube"
-        title="模型平台"
-        description="当前租户可用模型、应用授权、配额和用量状态。"
+        title={t("title")}
+        description={t("description")}
       />
 
-      {loadError ? (
-        <Banner tone="danger" title="模型平台状态加载失败，请稍后重试。" />
-      ) : null}
+      {loadError ? <Banner tone="danger" title={t("loadError")} /> : null}
 
-      <MetricGrid items={metrics} />
+      <MetricGrid items={metrics} aria-label={t("metrics.groupLabel")} />
 
       <DashboardSplit>
         <PageSection
           icon="cube"
           level={2}
-          title="可用模型"
-          description="由平台控制面授权给当前租户的模型。"
+          title={t("models.title")}
+          description={t("models.description")}
         >
           <DataTable
             columns={modelColumns}
             rows={modelRows}
             rowKey={(row, index) => row[0] ?? String(index)}
             loading={loading}
-            empty={<EmptyState title="No available models." />}
+            empty={<EmptyState title={t("models.empty")} />}
           />
         </PageSection>
 
         <PageSection
           icon="key"
           level={2}
-          title="模型授权"
-          description="租户级与应用级模型访问范围。"
+          title={t("grants.title")}
+          description={t("grants.description")}
         >
           <DataTable
             columns={grantColumns}
             rows={grantRows}
             rowKey={(row, index) => `${row[0]}-${row[1]}-${index}`}
             loading={loading}
-            empty={<EmptyState title="No active model grants." />}
+            empty={<EmptyState title={t("grants.empty")} />}
           />
         </PageSection>
       </DashboardSplit>
@@ -262,8 +264,8 @@ function AtlasPage() {
         <PageSection
           icon="database"
           level={2}
-          title="配额状态"
-          description="来自平台侧的套餐配额资源池（非 Atlas 自身数据）。"
+          title={t("quotas.title")}
+          description={t("quotas.description")}
         >
           <DataTable
             columns={quotaColumns}
@@ -277,15 +279,15 @@ function AtlasPage() {
         <PageSection
           icon="chart-bar"
           level={2}
-          title="用量记录"
-          description="近期实际调用记录（Atlas 自身日志，非计费口径）。"
+          title={t("usage.title")}
+          description={t("usage.description")}
         >
           <DataTable
             columns={usageColumns}
             rows={usageRows}
             rowKey={(row, index) => `${row[0]}-${row[1]}-${index}`}
             loading={loading}
-            empty={<EmptyState title="No model usage recorded." />}
+            empty={<EmptyState title={t("usage.empty")} />}
           />
         </PageSection>
       </DashboardSplit>
@@ -293,8 +295,8 @@ function AtlasPage() {
       <PageSection
         icon="info"
         level={2}
-        title="状态说明"
-        description="租户侧仅显示当前上下文可见状态。"
+        title={t("signals.title")}
+        description={t("signals.description")}
       >
         <SignalList items={statusSignals} />
       </PageSection>
@@ -304,7 +306,7 @@ function AtlasPage() {
 
 export default function Page() {
   return (
-    <CapabilityGate capability={"tenant.model.read"}>
+    <CapabilityGate capability="tenant.model.read">
       <AtlasPage />
     </CapabilityGate>
   );

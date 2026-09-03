@@ -733,7 +733,9 @@ export function OrderPayPage() {
                     </span>
                     {detail.refund.auditRemark ? (
                       <span className="text-muted-foreground">
-                        {t("refund.auditRemark")}：{detail.refund.auditRemark}
+                        {t("refund.auditRemarkLine", {
+                          remark: detail.refund.auditRemark,
+                        })}
                       </span>
                     ) : null}
                   </>
@@ -768,10 +770,11 @@ export function OrderPayPage() {
                   </>
                 ) : refundEligibility ? (
                   <span className="text-muted-foreground">
-                    {t("refund.ineligibleTitle")}：
-                    {refundEligibility.reasons
-                      .map((r) => t(`refund.reasons.${r}` as never))
-                      .join("；")}
+                    {t("refund.ineligibleLine", {
+                      reasons: refundEligibility.reasons
+                        .map((r) => t(`refund.reasons.${r}` as never))
+                        .join(t("refund.reasonSeparator")),
+                    })}
                   </span>
                 ) : null}
                 {refundFeedback ? (

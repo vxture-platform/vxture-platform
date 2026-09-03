@@ -23,7 +23,13 @@
     "actions": {
       "submit": "Finish setup",
       "submitting": "Submitting…"
-    }
+    },
+    "legal": {
+      "terms": "Terms of Service",
+      "privacy": "Privacy Policy",
+      "cookies": "Cookie Policy"
+    },
+    "copyright": "© {year} Vxture Studio. All rights reserved."
   },
   "shell": {
     "loading": {
@@ -151,7 +157,8 @@
     "usageLimitDesc": "Quota limits & alert thresholds",
     "verifyUnknown": "Verification unknown",
     "verifyActive": "Verified",
-    "verifySuspended": "Suspended"
+    "verifySuspended": "Suspended",
+    "brandName": "Workspace Console"
   },
   "header": {
     "title": "Console",
@@ -431,7 +438,8 @@
       "terms": "Terms of Service",
       "privacy": "Privacy Policy",
       "cookies": "Cookie Policy"
-    }
+    },
+    "redirecting": "Redirecting to sign in…"
   },
   "dashboard": {
     "eyebrow": "Overview",
@@ -492,7 +500,10 @@
         "scope": "Scope",
         "status": "Status",
         "amount": "Amount"
-      }
+      },
+      "loading": "Loading…",
+      "count": "{count} recent invoices",
+      "empty": "No invoices yet"
     },
     "quotas": {
       "title": "Quota posture",
@@ -502,7 +513,9 @@
         "usage": "Usage",
         "share": "Share",
         "status": "Status"
-      }
+      },
+      "pendingTitle": "Quota monitoring is not available yet",
+      "pendingDescription": "Check back after your first billing cycle."
     }
   },
   "settings": {
@@ -836,7 +849,8 @@
         "member": "Member"
       },
       "detail": "Details",
-      "joinedAt": "Joined"
+      "joinedAt": "Joined",
+      "defaultTag": "default"
     },
     "verification": {
       "unverified": "Unverified",
@@ -1375,7 +1389,8 @@
       "selected": "{count} selected",
       "disable": "Disable selected",
       "enable": "Enable selected",
-      "unlink": "Unlink selected"
+      "unlink": "Unlink selected",
+      "noun": "member(s)"
     },
     "pagination": {
       "summary": "Page {page} / {totalPages}, {total} total",
@@ -1654,6 +1669,76 @@
       "grantStateError": "Grant state update failed. Please try again later."
     }
   },
+  "atlasPage": {
+    "title": "Model Platform",
+    "description": "Models available to this tenant, application grants, quota and usage.",
+    "loadError": "Could not load model platform status, please retry later.",
+    "metrics": {
+      "groupLabel": "Model platform overview",
+      "models": "Available models",
+      "modelsHint": "{count} active grants",
+      "quota": "Quota status",
+      "quotaTier": "tier: {tier}",
+      "quotaNoTier": "no tier",
+      "tokens": "Token usage",
+      "tokensHint": "{count} rows"
+    },
+    "quotaStatus": {
+      "covered": "Covered",
+      "uncovered": "No plan",
+      "unavailable": "Platform unreachable"
+    },
+    "models": {
+      "title": "Available models",
+      "description": "Models granted to this tenant by the platform control plane.",
+      "empty": "No available models",
+      "colModel": "Model",
+      "colProvider": "Provider",
+      "colProtocol": "Protocol",
+      "colCapabilities": "Capabilities"
+    },
+    "grants": {
+      "title": "Model grants",
+      "description": "Tenant-level and application-level model access scope.",
+      "empty": "No active model grants",
+      "colModel": "Model",
+      "colScope": "Scope",
+      "colPriority": "Priority",
+      "colExpires": "Expires",
+      "scopeTenant": "tenant",
+      "never": "Never"
+    },
+    "quotas": {
+      "title": "Quota status",
+      "description": "Plan quota pools from the platform side (not Atlas data).",
+      "emptyCovered": "No active quota pools",
+      "emptyUncovered": "No plan published for this workspace yet",
+      "emptyUnavailable": "Could not reach the platform entitlement service",
+      "emptyNone": "No quota data",
+      "colMetric": "Metric",
+      "colRemaining": "Remaining / Limit",
+      "colPriority": "Priority",
+      "colTier": "Tier"
+    },
+    "usage": {
+      "title": "Usage records",
+      "description": "Recent actual calls (Atlas logs, not the billing basis).",
+      "empty": "No model usage recorded",
+      "colModel": "Model",
+      "colProvider": "Provider",
+      "colRequests": "Requests",
+      "colTokens": "Tokens"
+    },
+    "signals": {
+      "title": "Notes",
+      "description": "The tenant side only shows what is visible in the current context.",
+      "scopeTitle": "Tenant scope",
+      "scopeBody": "Showing model platform state for {tenant}.",
+      "scopeMissing": "Tenant context is required before model platform state can be shown.",
+      "boundaryTitle": "Control-plane boundary",
+      "boundaryBody": "Provider, model, policy, price and grant changes are managed by platform operators in the admin plane."
+    }
+  },
   "tenantPage": {
     "header": {
       "eyebrow": "Account & Tenant",
@@ -1750,7 +1835,8 @@
         "owner": "Owner",
         "manager": "Manager",
         "member": "Member"
-      }
+      },
+      "defaultTag": "default"
     }
   },
   "orderFlow": {
@@ -1925,7 +2011,10 @@
         "refunded": "Refunded"
       },
       "auditRemark": "Review note",
-      "noPermission": "Requesting a refund requires billing management; ask the tenant owner"
+      "noPermission": "Requesting a refund requires billing management; ask the tenant owner",
+      "auditRemarkLine": "Review note: {remark}",
+      "ineligibleLine": "Not eligible for refund: {reasons}",
+      "reasonSeparator": "; "
     }
   },
   "billingPage": {
@@ -2334,7 +2423,8 @@
     "orderCreated": "Order created; awaiting finance confirmation.",
     "orderFailed": "Failed to place the order. Please retry or contact support.",
     "cancelOrderFailed": "Failed to cancel the order. Please retry.",
-    "myOrdersEmpty": "No orders yet."
+    "myOrdersEmpty": "No orders yet.",
+    "contactSalesSubject": "{product} enterprise inquiry"
   },
   "manageSubscription": {
     "title": "Manage subscription",
@@ -2357,7 +2447,9 @@
   },
   "planned": {
     "badge": "Planned",
-    "sectionEmpty": "This feature is still planned — there is nothing to show yet."
+    "sectionEmpty": "This feature is still planned — there is nothing to show yet.",
+    "controlNotice": "The controls in this section are not wired to a backend yet; switches shown here do not take effect.",
+    "pageNotice": "This page is not wired to a backend yet and is still being planned."
   },
   "quotasPage": {
     "title": "Quota Management",

@@ -546,7 +546,9 @@ export function TenantInfoPage() {
                   {...(isDefault
                     ? {
                         status: (
-                          <StatusBadge tone="neutral">default</StatusBadge>
+                          <StatusBadge tone="neutral">
+                            {t("workspaces.defaultTag")}
+                          </StatusBadge>
                         ),
                       }
                     : {})}

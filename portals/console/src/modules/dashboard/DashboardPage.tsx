@@ -239,8 +239,8 @@ export function DashboardPage() {
         <div className="flex items-center justify-between gap-sm">
           <span className="text-label-sm text-muted-foreground">
             {invoicesLoading
-              ? "Loading…"
-              : `${invoiceRows.length} recent invoices`}
+              ? t("invoices.loading")
+              : t("invoices.count", { count: invoiceRows.length })}
           </span>
           <span className="text-label-sm text-muted-foreground">
             {t("invoices.headers.scope")}
@@ -251,7 +251,7 @@ export function DashboardPage() {
           rows={invoiceRows}
           rowKey={(row, index) => row[0] ?? String(index)}
           loading={invoicesLoading}
-          empty={<EmptyState title="No invoices found." />}
+          empty={<EmptyState title={t("invoices.empty")} />}
         />
       </PageSection>
 
@@ -263,8 +263,8 @@ export function DashboardPage() {
       >
         <EmptyState
           icon="chart-bar"
-          title="Quota monitoring is not yet available."
-          description="Check back after your first billing cycle."
+          title={t("quotas.pendingTitle")}
+          description={t("quotas.pendingDescription")}
         />
       </PageSection>
     </DashboardTemplate>

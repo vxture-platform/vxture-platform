@@ -30,11 +30,12 @@ const WEBSITE_URL = (process.env.NEXT_PUBLIC_WEBSITE_URL ?? "").replace(
   /\/+$/,
   "",
 );
+// 标签走 i18n(onboarding.legal.*),这里只定路径与键。
 const LEGAL_LINKS = [
-  { href: `${WEBSITE_URL}/legal/terms`, label: "服务条款" },
-  { href: `${WEBSITE_URL}/legal/privacy`, label: "隐私政策" },
-  { href: `${WEBSITE_URL}/legal/cookies`, label: "Cookie 使用政策" },
-];
+  { href: `${WEBSITE_URL}/legal/terms`, key: "terms" },
+  { href: `${WEBSITE_URL}/legal/privacy`, key: "privacy" },
+  { href: `${WEBSITE_URL}/legal/cookies`, key: "cookies" },
+] as const;
 
 function normalizeOptional(value: string) {
   const normalized = value.trim();
@@ -136,8 +137,11 @@ export function OnboardingPage() {
     <OnboardingChrome
       brandLogoSrc="/brand/vxture-logo-icon.svg"
       brandLabel={t("brand")}
-      copyright={`© ${new Date().getFullYear()} Vxture Studio. All rights reserved.`}
-      legalLinks={LEGAL_LINKS}
+      copyright={t("copyright", { year: new Date().getFullYear() })}
+      legalLinks={LEGAL_LINKS.map((l) => ({
+        href: l.href,
+        label: t(`legal.${l.key}`),
+      }))}
       title={t("title")}
       description={t("description")}
     >

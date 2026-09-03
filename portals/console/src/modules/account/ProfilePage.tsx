@@ -1295,7 +1295,9 @@ export function ProfilePage() {
                   title={workspaceName}
                   status={
                     isDefault ? (
-                      <StatusBadge tone="neutral">default</StatusBadge>
+                      <StatusBadge tone="neutral">
+                        {t("workspaces.defaultTag")}
+                      </StatusBadge>
                     ) : null
                   }
                   description={<span title={workspaceId}>{workspaceId}</span>}
