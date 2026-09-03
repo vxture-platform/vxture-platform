@@ -2238,7 +2238,6 @@
       "title": "确认订单",
       "who": "订阅归属",
       "what": "订阅套餐",
-      "reselect": "返回订阅重选",
       "whatUpgradeNote": "当前为 {plan}，升级立即生效，剩余周期按天折算。",
       "noFeatures": "权益明细以对比表为准。",
       "pickTier": "选择档位：",

@@ -2238,7 +2238,6 @@
       "title": "Confirm order",
       "who": "Subscription owner",
       "what": "Plan",
-      "reselect": "Back to plan selection",
       "whatUpgradeNote": "Currently on {plan}. Upgrades take effect immediately; the remaining period is prorated by day.",
       "noFeatures": "See the comparison table for full entitlements.",
       "pickTier": "Pick a tier:",

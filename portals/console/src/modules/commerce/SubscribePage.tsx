@@ -46,12 +46,6 @@ import { PlanSummaryCard } from "./components/PlanSummaryCard";
 import { SECTION_TIGHT, SectionTitle } from "./components/sectionKit";
 import { WorkspacePicker } from "./components/WorkspacePicker";
 
-/** 官网基址（与 OnboardingPage 同源做法）：「返回订阅重选」跳回定价页。 */
-const WEBSITE_URL = (process.env.NEXT_PUBLIC_WEBSITE_URL ?? "").replace(
-  /\/$/,
-  "",
-);
-
 const STATUS_KEYS = new Set([
   "active",
   "trialing",
@@ -337,14 +331,10 @@ export function SubscribePage() {
               <SectionTitle icon="package">{t("confirm.what")}</SectionTitle>
             }
             className={SECTION_TIGHT}
-            action={
-              <Button asChild variant="link" size="sm">
-                <a href={`${WEBSITE_URL}/pricing?product=${product.code}`}>
-                  {t("confirm.reselect")}
-                </a>
-              </Button>
-            }
           >
+            {/* 「返回订阅重选」已去掉（owner 2026-09-03）：本页是从官网定价页 newtab 进来的，
+                定价页本来就还开着；而且 NEXT_PUBLIC_WEBSITE_URL 未注入时链接会落到 console 自己的
+                /pricing（404，线上实测）。要重选直接回官网那一页。 */}
             {plan ? (
               <PlanSummaryCard
                 productName={product.name}
