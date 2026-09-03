@@ -469,15 +469,18 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
   }
   async listPermissionCatalog(): Promise<PermissionCatalogEntry[]> {
     const codes = new Set(Object.values(MOCK_ROLE_PERMS).flat());
-    return [...codes].sort().map((code, i) => ({
-      code,
-      name: code,
-      type: "api" as const,
-      parentCode: null,
-      routePath: null,
-      category: null,
-      sort: (i + 1) * 10,
-    }));
+    // 显式比较器:无参 sort 按 UTF-16 码元排,Sonar S2871 判为 bug。
+    return [...codes]
+      .sort((a, b) => a.localeCompare(b))
+      .map((code, i) => ({
+        code,
+        name: code,
+        type: "api" as const,
+        parentCode: null,
+        routePath: null,
+        category: null,
+        sort: (i + 1) * 10,
+      }));
   }
 
   async getEffectiveOrgPermissions(
