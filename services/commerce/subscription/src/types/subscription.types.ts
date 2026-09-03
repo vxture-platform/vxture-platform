@@ -36,7 +36,6 @@ export interface SubscriptionRecord {
   subscriptionKind: string; // paid/trial/free
   activationMethod: string; // online_purchase/offline_purchase/redemption/operator_grant/trial/free
   autoRenew: boolean;
-  orderNo: string | null;
   payAmount: string | null;
   currency: string;
   createdBy: string;
@@ -88,11 +87,10 @@ export interface CreateSubscriptionInput {
   endAt?: Date;
   trialEndAt?: Date;
   autoRenew?: boolean;
-  orderNo?: string;
   payAmount?: number;
   currency?: string;
   createdBy: string;
-  /** default 'active' (product_320: offline orders create 'suspended') */
+  /** default 'active' */
   status?: string;
   /** default 'paid' */
   subscriptionKind?: string;
@@ -123,84 +121,9 @@ export interface UpdateSubscriptionInput {
   expectedStatus?: string;
 }
 
-// ── Offline order primitives (product_320 §2) ──────────────────────────────
-// A pending order IS a subscription row (status='suspended', activation_method=
-// 'offline_purchase') paired 1:1 with an unpaid billing.invoices row. No 7th
-// subscription status, no separate order table — see product_320 §2 O1.
-
-export type OrderIntent = "new" | "renew" | "upgrade";
-
-export interface CreateOfflineOrderInput {
-  tenantId: string;
-  workspaceId: string;
-  planVersionId: string;
-  /** 'month' | 'year' — must have a matching product.plan_prices row */
-  cycleUnit: string;
-  price: number;
-  currency?: string;
-  createdBy: string;
-  intent: OrderIntent;
-  /** required when intent='upgrade': the live subscription being upgraded */
-  upgradeOfSubscriptionId?: string;
-  /** billing.invoice_items.item_name, e.g. "Arda Pro" */
-  itemName: string;
-  /**
-   * Payment window in minutes, fixed at order creation by tenant type
-   * (personal 30 / organization 2880 — product_321 P4 rev. 2026-08-20).
-   * Persisted to subscriptions.payment_ttl_minutes; omitted → column NULL and
-   * every reader falls back to env ORDER_PAYMENT_TTL_MINUTES (legacy behavior).
-   */
-  paymentTtlMinutes?: number;
-}
-
-export interface OfflineOrderRecord {
-  subscription: SubscriptionRecord;
-  invoiceId: string;
-  billNo: string;
-  orderNo: string;
-  /**
-   * billing.orders.id（product_330 P1-b1 双写）。订单实体从 2026-09-03 起与旧的
-   * "suspended 订阅行"并行存在：写路径两边都写，读路径以 orders 为准；旧行在
-   * P2 退役。当前对外的 orderId 仍是 subscription.id（URL / 权限校验未换轨）。
-   */
-  orderId: string;
-}
-
-export interface ActivateOrderInput {
-  /** null for system actors — actor_id is a uuid column (jobs have no uuid). */
-  operatorId: string | null;
-  remark?: string;
-  clientIp?: string;
-  /**
-   * History actor (product_321 P8): 'operator' (admin confirm, default),
-   * 'customer' (cashDue=0 instant settle) or 'system' (reconcile job).
-   */
-  actorType?: "operator" | "customer" | "system";
-}
-
-export interface CancelOfflineOrderInput {
-  actorType: "customer" | "operator" | "system";
-  /** null for system actors — actor_id is a uuid column (jobs have no uuid). */
-  actorId: string | null;
-  remark?: string;
-  clientIp?: string;
-  /**
-   * subscription_histories.change_type for the close (product_321 P4):
-   * 'cancelled' (default — customer cancel / admin void) or 'order_expired'
-   * (timeout sweep), so the six-state derivation can tell them apart.
-   */
-  changeType?: "cancelled" | "order_expired";
-}
-
-export interface RestoreOfflineOrderInput {
-  actorType: "operator" | "system";
-  /** null for system actors — actor_id is a uuid column (jobs have no uuid). */
-  actorId: string | null;
-  remark?: string;
-  clientIp?: string;
-}
-
 // ── Payment declaration (product_321 P8) ────────────────────────────────────
+// Orders live in billing.orders (product_330); the declare orchestration is
+// OrderService.declarePayment. These types are the shared contract for it.
 
 export type DeclarePayChannel = "alipay" | "bank_transfer";
 

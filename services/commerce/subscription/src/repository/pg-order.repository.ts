@@ -318,7 +318,8 @@ export class PgOrderRepository {
           payable,
           currency,
           input.createdBy,
-          JSON.stringify({ intent: input.intent, order_no: orderNo }),
+          // 意图的权威是 billing.orders.intent（product_330）；账单备注不再塞机器 JSON。
+          null,
           createdByType,
         ],
       );

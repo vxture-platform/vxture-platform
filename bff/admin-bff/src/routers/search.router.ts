@@ -67,17 +67,21 @@ order by t.created_at desc
 limit ${PER_KIND_LIMIT}
 `;
 
+/* 订阅的可读码 = 最近一次履约它的订单号（billing.orders 经 current_order_id，
+ * product_330）；旧列 subscriptions.order_no 已停写待删，不再匹配它。 */
 const ORDER_SEARCH_SQL = `
 select
   sub.id,
-  sub.order_no,
+  cur.order_no,
   sub.status,
   sub.pay_amount,
   sub.currency,
   tenant.name as tenant_name
 from metering.subscriptions sub
+join billing.orders cur on cur.id = sub.current_order_id
 join tenancy.tenants tenant on tenant.id = sub.tenant_id
-where sub.order_no ilike $1
+where sub.deleted_at is null
+  and cur.order_no ilike $1
 order by sub.created_at desc
 limit ${PER_KIND_LIMIT}
 `;

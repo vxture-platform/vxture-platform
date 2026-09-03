@@ -23,7 +23,6 @@ export const subscriptionFixture = (
   subscriptionKind: "paid",
   activationMethod: "offline_purchase",
   autoRenew: true,
-  orderNo: null,
   payAmount: null,
   currency: "CNY",
   createdBy: "u-1",
@@ -76,8 +75,6 @@ export const buildSweepMocks = (product: {
   const service = new SubscriptionService(
     repo as unknown as PgSubscriptionRepository,
     provisioning as unknown as ProvisioningService,
-    // Voucher-less suites: promotion is out of scope here (declare specs own it).
-    { reserveForOrder: async () => [] } as never,
   );
   return { repo, provisioning, service };
 };

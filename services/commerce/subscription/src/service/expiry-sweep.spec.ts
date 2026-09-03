@@ -17,7 +17,6 @@ const paidSub = (id: string, status = "active") =>
     cycleType: "year",
     startAt: new Date("2025-09-01T00:00:00Z"),
     endAt: new Date("2026-09-01T00:00:00Z"),
-    orderNo: "ORD-1",
     payAmount: "0.10",
   });
 

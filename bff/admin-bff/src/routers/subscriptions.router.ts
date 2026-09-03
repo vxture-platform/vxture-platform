@@ -82,19 +82,23 @@ export class SubscriptionsRouter {
   ) {}
 
   /**
-   * 路由参数是**面向用户的订阅编码**（`order_no`，如 `DEMO-ORD-0004`），不是内部
-   * UUID——地址栏是可见面，UUID 不在任何场景对外展示。同时仍接受 UUID：存量
-   * 书签、审计日志里记的 id、内部工具都还在传它。
+   * 路由参数是**面向用户的订阅编码**（最近一次履约它的订单号，如 `ORD-202609-XXXX`），
+   * 不是内部 UUID——地址栏是可见面，UUID 不在任何场景对外展示。同时仍接受 UUID：
+   * 存量书签、审计日志里记的 id、内部工具都还在传它。
    *
-   * 订阅与它的订单面共用一张 `metering.subscriptions`，可读码就是 `order_no`
-   *（库级唯一约束 `uq_subscriptions_order_no`）。解不出来 → 404，与「传了个
-   * 不存在的 UUID」同一个结果。
+   * 订阅的可读码 = `billing.orders.order_no`（经 `subscriptions.current_order_id`，
+   * product_330）。旧列 `metering.subscriptions.order_no` 已停写待删，不再读。
+   * 解不出来 → 404，与「传了个不存在的 UUID」同一个结果。
    */
   private async resolveSubscriptionId(value: string): Promise<string> {
     if (UUID_RE.test(value ?? "")) return value;
     if (!value) throw new NotFoundException("Subscription not found");
     const { rows } = await this.pool.query<{ id: string }>(
-      `select id from metering.subscriptions where order_no = $1 and deleted_at is null limit 1`,
+      `select s.id
+         from metering.subscriptions s
+         join billing.orders o on o.id = s.current_order_id
+        where o.order_no = $1 and s.deleted_at is null
+        limit 1`,
       [value],
     );
     if (!rows[0])
@@ -277,23 +281,8 @@ function resolveTargetStatus(
   current: SubscriptionActionRow,
 ): string {
   const status = current.status;
-  // 待收款订单壳：钱没到、权益没开过。四个动作对它全不成立——
-  //   renew/resume 会把一条没收钱的单直接翻成 active 并延一个周期（2026-09-02 实测：
-  //   运营在订阅页点「续期确认」，订单翻成已生效，账单仍 unpaid、付款腿仍 pending_verify，
-  //   客户端订单流程照样待付款，两边彻底对不上）；cancel 会写 end_at=now()，把订单侧
-  //   「恢复订单」（要求 end_at IS NULL）也一并封死。收款走 orders 的
-  //   offline-payment-confirm（段 1 记账 + 段 2 激活 + provisioning），驳回走 void。
-  if (
-    isPendingOrderRow(
-      status,
-      current.activation_method,
-      current.latest_bill_status,
-    )
-  ) {
-    throw new ConflictException(
-      "该订阅是待收款订单，尚未确认收款：请在「订单管理」里确认收款或驳回订单，订阅侧不能续期 / 暂停 / 恢复 / 取消",
-    );
-  }
+  // 钱的一侧不在这张表：下单只建 billing.orders（product_330 P1-b2），订阅行只在
+  // 履约后才存在，所以这里的每一行都是权益实例，四个动作只看订阅态本身。
   switch (action) {
     case "renew":
       if (status === "cancelled") {
@@ -477,30 +466,10 @@ function buildQuota(
   };
 }
 
-/**
- * 待收款订单壳（product_320 §2 O1 谓词，与 orders.router `isPendingOrderRow` +
- * console-bff `queryPendingOrder` 同一口径）：客户下了单、钱还没确认到账、权益
- * 从未开通。这一行在 metering.subscriptions 里长得像一条「暂停」的订阅，但它不是
- * 订阅——它是订单。订阅侧的四个动作对它都不成立（见 resolveTargetStatus）。
- */
-function isPendingOrderRow(
-  status: string,
-  activationMethod: string,
-  latestBillStatus: string | null,
-): boolean {
-  return (
-    status === "suspended" &&
-    activationMethod === "offline_purchase" &&
-    (latestBillStatus === "unpaid" || latestBillStatus === "partial")
-  );
-}
-
 function operationHint(
   status: SubscriptionOperationStatus,
   autoRenew: boolean,
-  pendingOrder: boolean,
 ): string {
-  if (pendingOrder) return "待收款订单，请在订单管理确认收款或驳回";
   switch (status) {
     case "overdue":
       return "存在逾期，需跟进催款";
@@ -526,15 +495,10 @@ function mapSubscriptionRow(row: SubscriptionRow): SubscriptionOperationRecord {
   const planName = row.plan_name ?? "未关联套餐";
   const operatorName =
     row.operator_name ?? (row.created_by_type === "system" ? "系统" : "—");
-  const pendingOrder = isPendingOrderRow(
-    row.raw_status,
-    row.activation_method,
-    row.latest_bill_status,
-  );
 
-  // 订阅的可视码 = 最近一次履约它的订单号（product_330：升级 / 续订后 s.order_no 仍是首单号，
-  // 会把 ¥0 首单号挂在年付订阅上）；旧行没有 current_order_id 时退回首单号。
-  const currentOrderNo = row.current_order_no ?? row.order_no;
+  // 订阅的可视码 = 最近一次履约它的订单号（billing.orders 经 current_order_id，product_330）。
+  // 不再退回 s.order_no：那列是升级 / 续订前的首单号，已停写待删。
+  const currentOrderNo = row.current_order_no;
   return {
     id: row.id,
     subscriptionCode: currentOrderNo ?? row.id,
@@ -554,7 +518,6 @@ function mapSubscriptionRow(row: SubscriptionRow): SubscriptionOperationRecord {
     tierName: tierName(tierCode),
     status,
     rawStatus: row.raw_status,
-    pendingOrder,
     cycleType: cycle,
     autoRenew: row.auto_renew,
     currency: row.currency ?? "CNY",
@@ -565,7 +528,7 @@ function mapSubscriptionRow(row: SubscriptionRow): SubscriptionOperationRecord {
     appName: null,
     appNameZh: null,
     operatorName,
-    operationHint: operationHint(status, row.auto_renew, pendingOrder),
+    operationHint: operationHint(status, row.auto_renew),
     startAt: toIso(row.start_at),
     endAt: toIsoNullable(row.end_at),
     trialEndAt: toIsoNullable(row.trial_end_at),
@@ -679,15 +642,12 @@ function buildTimeline(
 const SUBSCRIPTION_BASE_SQL = `
 select
   s.id,
-  s.order_no,
   s.tenant_id,
   s.plan_version_id,
   s.subscription_kind,
   s.cycle_unit,
   s.cycle_count,
   s.status as raw_status,
-  s.activation_method,
-  inv.bill_status as latest_bill_status,
   s.auto_renew,
   s.currency,
   s.pay_amount,
@@ -746,25 +706,18 @@ left join lateral (
   from metering.quota_pools qp
   where qp.subscription_id = s.id and qp.status = 'active'
 ) quota on true
--- 最新账单态：与 orders.router / console-bff 同一口径（每单最新一张未删账单），
--- 用来判「待收款订单壳」（product_320 O1 谓词）。
-left join lateral (
-  select i.bill_status
-  from billing.invoices i
-  where i.subscription_id = s.id and i.deleted_at is null
-  order by i.created_at desc
-  limit 1
-) inv on true
 `;
 
 const SUBSCRIPTION_LIST_SQL = `
 ${SUBSCRIPTION_BASE_SQL}
 where s.deleted_at is null
-  -- product_330 P1-b1：升级订单的旧镜像行（订单已履约到另一条订阅）不是权益实例，不列。
-  -- 钱与履约在「交易订单」看（billing.orders）。
+  -- product_330 P1-b1 双写期的升级镜像行（下单时建的 suspended 行，升级履约到原订阅后被标
+  -- cancelled）不是权益实例，不列。判据：它指向的订单履约到了另一条订阅
+  -- （orders.status='fulfilled' 且 orders.subscription_id <> 本行）。镜像行是 cancelled 不是
+  -- 待收款壳，不在 P2 软删范围内，所以这条过滤要留着。钱与履约在「交易订单」看。
   and not exists (
     select 1 from billing.orders o
-     where o.order_no = s.order_no and o.status = 'fulfilled' and o.subscription_id <> s.id
+     where o.id = s.current_order_id and o.status = 'fulfilled' and o.subscription_id <> s.id
   )
 order by s.created_at desc
 limit 500
@@ -824,8 +777,7 @@ limit 200
 
 interface SubscriptionRow {
   id: string;
-  order_no: string | null;
-  /** billing.orders.order_no of current_order_id（product_330）；旧行 null */
+  /** billing.orders.order_no of current_order_id（product_330）；没履约过的行 null */
   current_order_no: string | null;
   tenant_id: string;
   plan_version_id: string | null;
@@ -833,8 +785,6 @@ interface SubscriptionRow {
   cycle_unit: string;
   cycle_count: number;
   raw_status: string;
-  activation_method: string;
-  latest_bill_status: string | null;
   auto_renew: boolean;
   currency: string | null;
   pay_amount: string | null;
@@ -898,19 +848,11 @@ select
   s.id,
   s.tenant_id,
   s.status,
-  s.activation_method,
   s.auto_renew,
   s.cycle_unit,
   s.cycle_count,
   s.end_at,
-  s.subscription_kind,
-  (
-    select i.bill_status
-    from billing.invoices i
-    where i.subscription_id = s.id and i.deleted_at is null
-    order by i.created_at desc
-    limit 1
-  ) as latest_bill_status
+  s.subscription_kind
 from metering.subscriptions s
 where s.id = $1 and s.deleted_at is null
 for update of s
@@ -970,8 +912,6 @@ interface SubscriptionActionRow {
   id: string;
   tenant_id: string;
   status: string;
-  activation_method: string;
-  latest_bill_status: string | null;
   auto_renew: boolean;
   cycle_unit: string;
   cycle_count: number;

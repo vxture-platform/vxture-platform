@@ -1062,10 +1062,11 @@ interface TenantOperationRow {
 
 // 订阅：全部未软删的订阅（含已停 / 已取消，作为历史），权益仍在的排前面。
 // 产品名取套餐版本的 primary 组件（与 product_count 同口径），按 sort_order 排。
+// 可读码 = 最近一次履约它的订单号（billing.orders 经 current_order_id，product_330）。
 const TENANT_DETAIL_SUBSCRIPTIONS_SQL = `
 select
   s.id,
-  s.order_no,
+  cur.order_no,
   s.status,
   s.subscription_kind,
   s.cycle_unit,
@@ -1080,6 +1081,7 @@ select
   pv.version_no,
   prod.product_names
 from metering.subscriptions s
+left join billing.orders cur on cur.id = s.current_order_id
 left join product.plan_versions pv on pv.id = s.plan_version_id
 left join product.plans pl on pl.id = pv.plan_id
 left join lateral (

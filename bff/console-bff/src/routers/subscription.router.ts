@@ -218,7 +218,7 @@ interface CreateOrderResult {
   /** owner 2026-08-20 修订后恒为 pending_payment（0 元也是订单）；
    *  "active" 保留在值域内仅为旧客户端兼容，服务端不再产生。 */
   status: "pending_payment" | "active";
-  /** billing.orders.id（product_330 P1-b2 起；此前是 suspended 订阅行 id） */
+  /** billing.orders.id（product_330） */
   orderId: string | null;
   orderNo: string | null;
   billNo: string | null;
@@ -950,18 +950,10 @@ export class SubscriptionRouter {
          ) pc on true
          left join product.products prod on prod.id = pc.product_id
         where ts.workspace_id = $1 and ts.deleted_at is null
+          -- 下单只建 billing.orders（product_330 P1-b2），订阅行只在履约后存在；旧模型的
+          -- 待收款壳已在 P2 迁移里软删。页头「未支付、未开通的订单不在此列」由此成立。
+          -- cancelled 不展示：从未生效或已终止的意愿态（含 P1-b1 双写期的升级镜像行）。
           and ts.status <> 'cancelled'
-          -- 旧模型（product_330 P1-b2 之前）的待收款订单壳不是订阅：钱没到、权益没开过。
-          -- 新模型下单不再建订阅行，此谓词只挡存量壳（页头写着「未支付、未开通的订单不在此列」）。
-          and not (
-            ts.status = 'suspended'
-            and ts.activation_method = 'offline_purchase'
-            and coalesce((
-              select i.bill_status from billing.invoices i
-               where i.subscription_id = ts.id and i.deleted_at is null
-               order by i.created_at desc limit 1
-            ), 'unpaid') in ('unpaid', 'partial')
-          )
         order by coalesce(ts.start_at, ts.created_at) desc
         limit 100`,
       [workspaceId],
@@ -1801,7 +1793,7 @@ export class SubscriptionRouter {
     auditCustomerAction(this.pool, req, {
       action: `subscription.${action}`,
       resourceType: "subscription",
-      resourceId: updated.orderNo ?? subscriptionId,
+      resourceId: subscriptionId,
       after: { status: updated.status },
     });
 
@@ -1848,7 +1840,7 @@ export class SubscriptionRouter {
         ? "subscription.auto_renew_on"
         : "subscription.auto_renew_off",
       resourceType: "subscription",
-      resourceId: updated.orderNo ?? subscriptionId,
+      resourceId: subscriptionId,
       after: { autoRenew: updated.autoRenew },
     });
     return { subscriptionId, autoRenew: updated.autoRenew };

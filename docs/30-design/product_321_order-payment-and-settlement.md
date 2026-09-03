@@ -1,5 +1,6 @@
 # arda 订阅商业闭环二期：付款结算全链路（product_321）
 
+> ⚠️ **订单载体已迁到 [product_330](./product_330_order-entity-split.md)（2026-09-03）**：本文提到的 `SubscriptionService.declarePayment / sweepExpiredPaymentOrders / reconcileHungPaidOrders` 与 `subscriptions.payment_ttl_minutes` 已退役，对应机制改为 `OrderService.declarePayment / sweepExpired / reconcileHungPaid` 与 `billing.orders.payment_ttl_minutes`；付款页、申报、驳回、券结算引擎的业务口径不变。
 > 版本：**v1.3** · 状态：设计定稿（业务流程 / 金额模型 / UI 稿 owner 确认 2026-07-18；三轮对抗校审：v1.0→35 项→v1.1→11 项（否决"部分到账拆腿"改足额确认制）→v1.2→17 项（partial 族金额锚点/无腿路径恒等/段 2 永久失败出口/upgrade 幂等/admin partial 盲区）→v1.3），分批实施（PR0–PR5，见 §9）
 > 定位：[product_320](product_320_offline-subscription-order-flow.md) 的紧邻续篇（插档 321）。320 打通"下单—人工确认—激活"骨架；本篇补齐**付款环节**：付款页、用户申报、驳回/超时、券结算引擎、钱包预留。
 > 上游：[product_320](product_320_offline-subscription-order-flow.md) · [data_commerce_210_billing](data_commerce_210_billing.md) · [data_commerce_230_promotion](data_commerce_230_promotion.md) · `@vxture/shared` 值域

@@ -58,18 +58,12 @@ import {
 } from "@/modules/tenants/tenant-utils";
 import { useConfirmLabels } from "@/modules/shared/destructive";
 
-/** `pending_order` 不是库里的订阅态，是「待收款订单壳」的筛选档（见 pendingOrder）。 */
-type StatusFilter = "all" | "pending_order" | SubscriptionOperationStatus;
+type StatusFilter = "all" | SubscriptionOperationStatus;
 type TierFilter = "all" | TierFilterValue;
 type RiskFilter = "all" | SubscriptionOperationQuotaRisk;
 type RenewFilter = "all" | "auto" | "manual";
 
-/** 状态展示按记录判：待收款订单壳在库里是 suspended，但对运营它是「待收款」不是「暂停」。 */
-function subscriptionStatusLabel(
-  record: Pick<SubscriptionOperationRecord, "status" | "pendingOrder">,
-) {
-  if (record.pendingOrder) return "待收款";
-  const status = record.status;
+function subscriptionStatusLabel(status: SubscriptionOperationStatus) {
   if (status === "trialing") return "试用";
   if (status === "active") return "已生效";
   if (status === "expiring") return "即将到期";
@@ -79,11 +73,7 @@ function subscriptionStatusLabel(
   return "已取消";
 }
 
-function subscriptionStatusIcon(
-  record: Pick<SubscriptionOperationRecord, "status" | "pendingOrder">,
-): IconName {
-  if (record.pendingOrder) return "clock";
-  const status = record.status;
+function subscriptionStatusIcon(status: SubscriptionOperationStatus): IconName {
   if (status === "active") return "check";
   if (status === "trialing" || status === "expiring") return "clock";
   if (status === "cancelled" || status === "expired") return "x";
@@ -133,7 +123,7 @@ const SUBSCRIPTION_CSV_COLUMNS: CsvColumn<SubscriptionOperationRecord>[] = [
   { label: "套餐", value: (record) => record.tierName },
   { label: "套餐编码", value: (record) => record.servicePlanCode },
   { label: "周期", value: (record) => cycleLabel(record.cycleType) },
-  { label: "状态", value: (record) => subscriptionStatusLabel(record) },
+  { label: "状态", value: (record) => subscriptionStatusLabel(record.status) },
   { label: "自动续期", value: (record) => (record.autoRenew ? "是" : "否") },
   { label: "配额使用率", value: (record) => record.quota.usageRate },
   {
@@ -194,21 +184,6 @@ function SubscriptionActionsMenu({
             icon: "star",
             disabled: true,
           },
-          /* 待收款订单壳的唯一出口：去订单侧确认收款（记账 + 激活开通都在那边）。
-             只在 pendingOrder 时出现，避免与下面四个订阅动作并排时分不清谁管钱。 */
-          ...(subscription.pendingOrder && subscription.orderNo
-            ? [
-                {
-                  id: "confirm-payment",
-                  label: "确认收款",
-                  icon: "credit-card" as IconName,
-                  onSelect: () =>
-                    router.push(
-                      `/orders/${encodeURIComponent(subscription.orderNo!)}`,
-                    ),
-                },
-              ]
-            : []),
           {
             id: "renew",
             label: subscriptionActionLabel("renew"),
@@ -324,14 +299,10 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
         <TableTitleCell
           title={
             <StatusBadge
-              tone={
-                subscription.pendingOrder
-                  ? "warning"
-                  : SUBSCRIPTION_OPERATION_TONE[subscription.status]
-              }
-              icon={subscriptionStatusIcon(subscription)}
+              tone={SUBSCRIPTION_OPERATION_TONE[subscription.status]}
+              icon={subscriptionStatusIcon(subscription.status)}
             >
-              {subscriptionStatusLabel(subscription)}
+              {subscriptionStatusLabel(subscription.status)}
             </StatusBadge>
           }
           description={`${formatDate(subscription.startAt, locale)} - ${formatDate(subscription.endAt, locale)}`}
@@ -431,13 +402,8 @@ export function SubscriptionsPage() {
     const normalizedQuery = query.trim().toLowerCase();
 
     return subscriptions.filter((subscription) => {
-      if (statusFilter === "pending_order") {
-        if (!subscription.pendingOrder) return false;
-      } else if (statusFilter !== "all") {
-        // 待收款订单壳在库里是 suspended，按「暂停」筛不该把它混进来。
-        if (subscription.pendingOrder || subscription.status !== statusFilter)
-          return false;
-      }
+      if (statusFilter !== "all" && subscription.status !== statusFilter)
+        return false;
       if (
         tierFilter !== "all" &&
         tierFilterOf(subscription.tierName) !== tierFilter
@@ -468,12 +434,8 @@ export function SubscriptionsPage() {
   const effectiveCount = subscriptions.filter(
     (item) => item.status === "active" || item.status === "expiring",
   ).length;
-  const pendingOrderCount = subscriptions.filter(
-    (item) => item.pendingOrder,
-  ).length;
   const followUpCount = subscriptions.filter(
     (item) =>
-      item.pendingOrder ||
       item.status === "trialing" ||
       item.status === "expiring" ||
       item.status === "overdue" ||
@@ -564,7 +526,7 @@ export function SubscriptionsPage() {
             icon="star"
             eyebrow="订阅交易"
             title="租户订阅运营"
-            description="运营侧管理租户服务权益实例，跟进试用转正、续期、暂停、配额风险和收入状态。收款与驳回在订单管理：待收款订单在这里只读，确认收款后自动开通。"
+            description="运营侧管理租户服务权益实例，跟进试用转正、续期、暂停、配额风险和收入状态。收款与驳回在订单管理，确认收款后自动开通。"
           />
         }
         summary={
@@ -584,12 +546,11 @@ export function SubscriptionsPage() {
                 },
                 {
                   id: "follow-up",
-                  help: "需跟进的订阅：待收款订单、试用、即将到期、欠费，或配额风险非正常。",
+                  help: "需跟进的订阅：试用、即将到期、欠费，或配额风险非正常。",
                   icon: "warning",
                   label: "待跟进",
                   value: formatNumber(followUpCount),
                   tags: [
-                    `待收款 ${formatNumber(pendingOrderCount)}`,
                     `逾期 ${formatNumber(subscriptions.filter((item) => item.status === "overdue").length)}`,
                   ],
                   tone: followUpCount ? "warning" : "success",
@@ -677,7 +638,6 @@ export function SubscriptionsPage() {
                 aria-label="订阅状态"
               >
                 <option value="all">{tShared("filters.allStates")}</option>
-                <option value="pending_order">待收款</option>
                 <option value="trialing">
                   {tShared("status.generic.trial")}
                 </option>

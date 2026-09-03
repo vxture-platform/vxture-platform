@@ -458,7 +458,9 @@ export class OrderService {
       const now = new Date();
       const endAt = addCycle(now, order.cycleUnit, order.cycleCount);
       const price = Number(order.payableAmount);
-      const base = {
+      // 订阅↔订单的关联是 current_order_id（下面 applySubscriptionTerms 落）；
+      // subscriptions.order_no 已停写（product_330 P2）。
+      subscription = await this.subscriptions.createSubscription({
         tenantId: order.tenantId,
         workspaceId: order.workspaceId,
         planVersionId: order.planVersionId,
@@ -475,21 +477,7 @@ export class OrderService {
         subscriptionKind: price > 0 ? "paid" : "free",
         activationMethod: "offline_purchase",
         createdByType: order.createdByType,
-      };
-      try {
-        subscription = await this.subscriptions.createSubscription({
-          ...base,
-          orderNo: order.orderNo,
-        });
-      } catch (err) {
-        // 旧模型的镜像行占着 order_no（uq_subscriptions_order_no）：不带 order_no 再建，
-        // 订阅↔订单的真关联是 current_order_id。
-        if ((err as { code?: string }).code === "23505") {
-          subscription = await this.subscriptions.createSubscription(base);
-        } else {
-          throw err;
-        }
-      }
+      });
       await this.orders.applySubscriptionTerms(subscription.id, {
         mode: "new",
         cycleUnit: order.cycleUnit,

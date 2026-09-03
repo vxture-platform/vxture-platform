@@ -21,7 +21,6 @@ const SUB: SubscriptionRecord = {
   subscriptionKind: "paid",
   activationMethod: "online_purchase",
   autoRenew: true,
-  orderNo: null,
   payAmount: null,
   currency: "CNY",
   createdBy: "u-1",
@@ -80,8 +79,6 @@ const build = (): Mocks => {
   const service = new SubscriptionService(
     repo as unknown as PgSubscriptionRepository,
     provisioning as unknown as ProvisioningService,
-    // Voucher-less suite: promotion is out of scope here (declare specs own it).
-    { reserveForOrder: async () => [] } as never,
   );
   return { repo, provisioning, service };
 };

@@ -67,6 +67,22 @@ import { isStepUpCancelled, useStepUp } from "@/providers/StepUpProvider";
 /** next-intl translator scoped to the `planVersionsPage` namespace. */
 type Translator = ReturnType<typeof useTranslations<"planVersionsPage">>;
 
+/**
+ * 主组件 quota jsonb = 配额本体 + `_pricing`（计价参数，product_330 §4.1 α 在此）。
+ * 编辑器把两者分开：JSON 框只放本体，α 走独立字段。
+ */
+function splitPricing(quota: Record<string, unknown>): {
+  body: Record<string, unknown>;
+  pricing: Record<string, unknown>;
+} {
+  const { _pricing, ...body } = quota;
+  const pricing =
+    _pricing && typeof _pricing === "object" && !Array.isArray(_pricing)
+      ? (_pricing as Record<string, unknown>)
+      : {};
+  return { body, pricing };
+}
+
 /** Editor row for one bundled component (quota edited as JSON text). */
 interface BundledDraft {
   productCode: string;
@@ -153,6 +169,9 @@ export function PlanVersionsPage() {
   const [priceMonth, setPriceMonth] = useState("");
   const [priceYear, setPriceYear] = useState("");
   const [quotaText, setQuotaText] = useState("");
+  // product_330 §4.1 α：quota jsonb 的 `_pricing.consumable_share`，独立成字段，
+  // JSON 框只放配额本体（保存时再合回，其余 _pricing 键原样保留）。
+  const [consumableShare, setConsumableShare] = useState("");
   const [bundled, setBundled] = useState<BundledDraft[]>([]);
   const [bundledPick, setBundledPick] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -179,7 +198,13 @@ export function PlanVersionsPage() {
       setPriceYear(
         normalizePrice(d.prices.find((p) => p.cycleUnit === "year")?.price),
       );
-      setQuotaText(JSON.stringify(d.quota, null, 2));
+      const { body, pricing } = splitPricing(d.quota);
+      setQuotaText(JSON.stringify(body, null, 2));
+      setConsumableShare(
+        typeof pricing.consumable_share === "number"
+          ? String(pricing.consumable_share)
+          : "",
+      );
       setBundled(toBundledDrafts(d.components));
       setBundledPick("");
     }
@@ -243,6 +268,31 @@ export function PlanVersionsPage() {
         setMessage(t("editor.quotaInvalid"));
         return null;
       }
+    }
+    const shareText = consumableShare.trim();
+    if (shareText !== "") {
+      const share = Number(shareText);
+      if (!Number.isFinite(share) || share < 0 || share > 1) {
+        setMessage(t("editor.consumableShareInvalid"));
+        return null;
+      }
+    }
+    // 合回 _pricing：JSON 框里的配额本体 + α 字段；其余 _pricing 键沿用已存的。
+    if (quota !== undefined || shareText !== "" || detail) {
+      const base = quota ?? splitPricing(detail?.quota ?? {}).body;
+      const restPricing = Object.fromEntries(
+        Object.entries(splitPricing(detail?.quota ?? {}).pricing).filter(
+          ([key]) => key !== "consumable_share",
+        ),
+      );
+      const pricing: Record<string, unknown> =
+        shareText === ""
+          ? restPricing
+          : { ...restPricing, consumable_share: Number(shareText) };
+      quota =
+        Object.keys(pricing).length > 0
+          ? { ...base, _pricing: pricing }
+          : { ...base };
     }
     const prices: { cycleUnit: string; price: number }[] = [];
     if (priceMonth !== "")
@@ -659,6 +709,24 @@ export function PlanVersionsPage() {
                   rows={12}
                   className="font-mono"
                 />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium">
+                  {t("editor.consumableShare")}
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={consumableShare}
+                  disabled={!editable}
+                  onChange={(e) => setConsumableShare(e.target.value)}
+                />
+                <p className="text-xs text-vx-gray-500">
+                  {t("editor.consumableShareHint")}
+                </p>
               </div>
 
               <div className="flex items-center gap-3">
