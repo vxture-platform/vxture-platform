@@ -48,6 +48,7 @@ async function renderLegalIndex() {
     "copyright",
     "brand",
     "cookies",
+    "refund",
   ] as const;
 
   return (

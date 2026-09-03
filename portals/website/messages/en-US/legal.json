@@ -225,6 +225,44 @@
           ]
         }
       ]
+    },
+    "refund": {
+      "label": "Refund policy",
+      "title": "Vxture subscription refund policy",
+      "summary": "When a subscription order can be refunded, how much is refunded and how, and what happens to the subscription afterwards.",
+      "updatedAt": "2026-09-04",
+      "notice": "Eligibility follows this page and platform parameters; a request is judged by the rules in force when it is submitted.",
+      "sections": [
+        {
+          "heading": "1. Eligible orders",
+          "body": [
+            "The first purchase order of a product may be refunded within 24 hours of the entitlement being activated.",
+            "At the time of the request, the subscription's consumable quota (AI credits, API calls and similar) must be below the platform threshold.",
+            "Upgrade orders, renewal orders, zero-amount orders and orders that already have a refund request are not eligible."
+          ]
+        },
+        {
+          "heading": "2. Amount and method",
+          "body": [
+            "The refund equals the amount actually paid for the order; voucher deductions are not paid out.",
+            "Once approved, the refund goes back through the original payment channel; bank-transfer orders are returned to the paying account by operations."
+          ]
+        },
+        {
+          "heading": "3. The subscription after a refund",
+          "body": [
+            "When the refund completes, the subscription for that product returns to unsubscribed (including any free tier it was upgraded from) and entitlements stop immediately.",
+            "The subscription stays usable while the refund is being processed."
+          ]
+        },
+        {
+          "heading": "4. Requesting and review",
+          "body": [
+            "In the console, open My Orders, choose Request refund on an eligible order and state the reason; operations review and then execute the refund.",
+            "The review outcome and refund progress are shown in the order details."
+          ]
+        }
+      ]
     }
   }
 }

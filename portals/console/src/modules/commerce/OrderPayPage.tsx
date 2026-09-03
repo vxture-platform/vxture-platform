@@ -46,6 +46,9 @@ import {
   fetchOrderDetail,
   quoteOrder,
   cancelSubscriptionOrder,
+  fetchRefundEligibility,
+  requestOrderRefund,
+  type RefundEligibility,
   type OrderDetail,
   type OrderQuote,
   type OrderState,
@@ -54,6 +57,7 @@ import {
 } from "@/api/console-bff";
 import { OrderFlowStrip } from "./components/OrderFlowStrip";
 import { SECTION_TIGHT, SectionTitle } from "./components/sectionKit";
+import { buildWebsiteRefundPolicyUrl } from "@/lib/website-entry";
 
 const POLL_MS = 15_000;
 
@@ -127,6 +131,30 @@ export function OrderPayPage() {
   const { session } = useConsoleSession();
 
   const [detail, setDetail] = useState<OrderDetail | null>(null);
+  // 24h 退款（product_330 §5）：完成态才取资格；申请后以 detail.refund 展示进度
+  const [refundEligibility, setRefundEligibility] =
+    useState<RefundEligibility | null>(null);
+  const [refundDialogOpen, setRefundDialogOpen] = useState(false);
+  const [refundReason, setRefundReason] = useState("");
+  const [submittingRefund, setSubmittingRefund] = useState(false);
+  const [refundFeedback, setRefundFeedback] = useState<string | null>(null);
+  const locale = useLocale();
+
+  useEffect(() => {
+    let alive = true;
+    if (!detail || detail.orderState !== "completed" || detail.refund) {
+      setRefundEligibility(null);
+      return () => {
+        alive = false;
+      };
+    }
+    void fetchRefundEligibility(detail.orderId).then((e) => {
+      if (alive) setRefundEligibility(e);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [detail]);
   const [loading, setLoading] = useState(true);
   const [quote, setQuote] = useState<OrderQuote | null>(null);
   const [discountId, setDiscountId] = useState<string | null>(null);
@@ -321,6 +349,27 @@ export function OrderPayPage() {
   }
 
   const state = detail.orderState;
+
+  const submitRefundRequest = async () => {
+    if (!detail) return;
+    setSubmittingRefund(true);
+    setRefundFeedback(null);
+    try {
+      const refund = await requestOrderRefund(detail.orderId, refundReason);
+      setDetail({ ...detail, refund });
+      setRefundDialogOpen(false);
+      setRefundReason("");
+      setRefundFeedback(t("refund.submitted"));
+    } catch (error) {
+      setRefundFeedback(
+        error instanceof Error && error.message
+          ? error.message
+          : t("refund.requestFailed"),
+      );
+    } finally {
+      setSubmittingRefund(false);
+    }
+  };
   const isPending = state === "pending_payment";
   const fullVoucherCover = isPending && Number(cashDue) === 0;
   // 「产品主名 · 套餐名」——付款页是客户最后一次确认「我在为什么付钱」的地方，
@@ -657,6 +706,100 @@ export function OrderPayPage() {
                   {t("completedPanel.viewQuotas")}
                 </Button>
               </div>
+              {/* 24h 退款（product_330 §5）：已申请 → 进度；未申请 → 资格 + 申请入口；退款说明官网统一维护，newtab */}
+              <div className="mt-md flex flex-col gap-xs border-t border-dashed border-primary/10 pt-md text-body-sm dark:border-primary/20">
+                {detail.refund ? (
+                  <>
+                    <span className="font-medium text-foreground">
+                      {t(`refund.status.${detail.refund.stage}`)} ·{" "}
+                      {fmt(detail.refund.amount, detail.refund.currency)}
+                    </span>
+                    {detail.refund.auditRemark ? (
+                      <span className="text-muted-foreground">
+                        {t("refund.auditRemark")}：{detail.refund.auditRemark}
+                      </span>
+                    ) : null}
+                  </>
+                ) : refundEligibility?.eligible ? (
+                  <>
+                    <span className="text-muted-foreground">
+                      {t("refund.requestHint", {
+                        hours: refundEligibility.windowHours,
+                        deadline: refundEligibility.windowEndsAt
+                          ? new Date(
+                              refundEligibility.windowEndsAt,
+                            ).toLocaleString(locale)
+                          : "—",
+                      })}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setRefundFeedback(null);
+                        setRefundDialogOpen(true);
+                      }}
+                    >
+                      {t("refund.request")}
+                    </Button>
+                  </>
+                ) : refundEligibility ? (
+                  <span className="text-muted-foreground">
+                    {t("refund.ineligibleTitle")}：
+                    {refundEligibility.reasons
+                      .map((r) => t(`refund.reasons.${r}` as never))
+                      .join("；")}
+                  </span>
+                ) : null}
+                {refundFeedback ? (
+                  <span className="text-muted-foreground">
+                    {refundFeedback}
+                  </span>
+                ) : null}
+                <a
+                  href={buildWebsiteRefundPolicyUrl(locale)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary underline-offset-2 hover:underline"
+                >
+                  {t("refund.policyLink")}
+                </a>
+              </div>
+              {refundDialogOpen && refundEligibility ? (
+                <DialogForm
+                  open
+                  title={t("refund.dialogTitle")}
+                  description={t("refund.dialogDescription", {
+                    amount: fmt(
+                      refundEligibility.amount,
+                      refundEligibility.currency,
+                    ),
+                  })}
+                  submitLabel={t("refund.submit")}
+                  cancelLabel={t("actions.cancel")}
+                  submitting={submittingRefund}
+                  onOpenChange={(open) => {
+                    if (!open && !submittingRefund) setRefundDialogOpen(false);
+                  }}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void submitRefundRequest();
+                  }}
+                >
+                  <Field>
+                    <FieldLabel htmlFor="vx-order-refund-reason">
+                      {t("refund.reasonLabel")}
+                    </FieldLabel>
+                    <Input
+                      id="vx-order-refund-reason"
+                      value={refundReason}
+                      onChange={(event) => setRefundReason(event.target.value)}
+                      placeholder={t("refund.reasonPlaceholder")}
+                      maxLength={512}
+                    />
+                  </Field>
+                </DialogForm>
+              ) : null}
             </PageSection>
           </aside>
         </div>

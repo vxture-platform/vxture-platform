@@ -223,7 +223,10 @@ const OPERATOR_PERMISSIONS = [
   ["commerce:payment.settle", "Settle / confirm a payment (high-risk)"],
   ["commerce:refund.execute", "Execute refund (high-risk)"],
   ["promotion:campaign.read", "View voucher batches / redemptions"],
-  ["promotion:campaign.manage", "Create voucher batches / assign vouchers (high-risk)"],
+  [
+    "promotion:campaign.manage",
+    "Create voucher batches / assign vouchers (high-risk)",
+  ],
   ["product:plan.read", "View plans"],
   ["product:plan.manage", "Manage plans"],
   ["product:price.read", "View pricing"],
@@ -233,7 +236,10 @@ const OPERATOR_PERMISSIONS = [
   ["model:model.read", "View models"],
   ["model:model.manage", "Manage models"],
   ["capability:runos.read", "View runos capabilities and endpoints"],
-  ["capability:runos.manage", "Register / promote runos capabilities and endpoints"],
+  [
+    "capability:runos.manage",
+    "Register / promote runos capabilities and endpoints",
+  ],
   ["release:feature_flag.read", "View feature flags"],
   ["release:feature_flag.manage", "Manage feature flags"],
   ["release:maintenance.read", "View maintenance windows"],
@@ -370,8 +376,16 @@ const MENU_TREE = [
         code: "admin.menu.operation_overview_group",
         name: "运营总览",
         children: [
-          { code: "admin.menu.operation_overview", name: "运营总览", route: "/" },
-          { code: "admin.menu.operation_todo", name: "待办任务", route: "/ops-todos" },
+          {
+            code: "admin.menu.operation_overview",
+            name: "运营总览",
+            route: "/",
+          },
+          {
+            code: "admin.menu.operation_todo",
+            name: "待办任务",
+            route: "/ops-todos",
+          },
         ],
       },
       {
@@ -394,7 +408,11 @@ const MENU_TREE = [
             code: "admin.menu.account_system",
             name: "账号体系",
             route: "/accounts",
-            perms: ["user:profile.read", "user:pii.read", "user:account.manage"],
+            perms: [
+              "user:profile.read",
+              "user:pii.read",
+              "user:account.manage",
+            ],
           },
           {
             code: "admin.menu.identity_verification",
@@ -414,7 +432,11 @@ const MENU_TREE = [
             route: "/products",
             perms: ["platform:product.read", "platform:product.manage"],
           },
-          { code: "admin.menu.solution_package", name: "解决方案", route: "/product-solutions" },
+          {
+            code: "admin.menu.solution_package",
+            name: "解决方案",
+            route: "/product-solutions",
+          },
           {
             code: "admin.menu.service_plan",
             name: "服务套餐",
@@ -426,7 +448,11 @@ const MENU_TREE = [
               "product:price.manage",
             ],
           },
-          { code: "admin.menu.plan_version", name: "套餐版本", route: "/plan-versions" },
+          {
+            code: "admin.menu.plan_version",
+            name: "套餐版本",
+            route: "/plan-versions",
+          },
           {
             code: "admin.menu.promotion_campaign",
             name: "营销优惠",
@@ -443,31 +469,58 @@ const MENU_TREE = [
             code: "admin.menu.subscription",
             name: "订阅管理",
             route: "/subscriptions",
-            perms: ["commerce:subscription.read", "commerce:subscription.manage"],
+            perms: [
+              "commerce:subscription.read",
+              "commerce:subscription.manage",
+            ],
           },
           {
             code: "admin.menu.order_record",
             name: "交易订单",
             route: "/orders",
-            perms: ["commerce:order.read", "commerce:order.void", "commerce:order.restore"],
+            perms: [
+              "commerce:order.read",
+              "commerce:order.void",
+              "commerce:order.restore",
+            ],
           },
-          { code: "admin.menu.addon_order_record", name: "加油包订单", route: "/addon-orders" },
-          { code: "admin.menu.usage_billing", name: "用量计费", route: "/usage-metering" },
-          { code: "admin.menu.promotion_redeem", name: "优惠核销", route: "/promotion-redemptions" },
+          {
+            code: "admin.menu.addon_order_record",
+            name: "加油包订单",
+            route: "/addon-orders",
+          },
+          {
+            code: "admin.menu.usage_billing",
+            name: "用量计费",
+            route: "/usage-metering",
+          },
+          {
+            code: "admin.menu.promotion_redeem",
+            name: "优惠核销",
+            route: "/promotion-redemptions",
+          },
         ],
       },
       {
         code: "admin.menu.commercial_analysis",
         name: "商业分析",
         children: [
-          { code: "admin.menu.commerce_overview", name: "商业总览", route: "/commerce-overview" },
+          {
+            code: "admin.menu.commerce_overview",
+            name: "商业总览",
+            route: "/commerce-overview",
+          },
         ],
       },
       {
         code: "admin.menu.model_skill",
         name: "模型技能",
         children: [
-          { code: "admin.menu.model_access", name: "模型授权", route: "/model-grants" },
+          {
+            code: "admin.menu.model_access",
+            name: "模型授权",
+            route: "/model-grants",
+          },
           {
             code: "admin.menu.skill_market",
             name: "技能市场",
@@ -521,7 +574,11 @@ const MENU_TREE = [
             code: "admin.menu.support_ticket",
             name: "工单中心",
             route: "/tickets",
-            perms: ["support:ticket.read", "support:ticket.manage", "support:impersonate"],
+            perms: [
+              "support:ticket.read",
+              "support:ticket.manage",
+              "support:impersonate",
+            ],
           },
           {
             code: "admin.menu.notification_message",
@@ -539,7 +596,11 @@ const MENU_TREE = [
     icon: "shield-check",
     children: [
       // 「平台总览」这个 section 只有一个同名条目，不造冗余的分组层。
-      { code: "admin.menu.platform_overview", name: "平台总览", route: "/platform" },
+      {
+        code: "admin.menu.platform_overview",
+        name: "平台总览",
+        route: "/platform",
+      },
       {
         code: "admin.menu.identity_access",
         name: "身份权限",
@@ -556,7 +617,11 @@ const MENU_TREE = [
             route: "/admin-roles",
             perms: ["operator:role.manage"],
           },
-          { code: "admin.menu.permission_policy", name: "权限策略", route: "/admin-permissions" },
+          {
+            code: "admin.menu.permission_policy",
+            name: "权限策略",
+            route: "/admin-permissions",
+          },
         ],
       },
       {
@@ -584,7 +649,12 @@ const MENU_TREE = [
         code: "admin.menu.security_audit",
         name: "安全审计",
         children: [
-          { code: "admin.menu.audit_log", name: "审计日志", route: "/audit-logs", perms: ["audit:read"] },
+          {
+            code: "admin.menu.audit_log",
+            name: "审计日志",
+            route: "/audit-logs",
+            perms: ["audit:read"],
+          },
           {
             code: "admin.menu.risk_record",
             name: "风险记录",
@@ -615,7 +685,11 @@ const MENU_TREE = [
               "release:maintenance.manage",
             ],
           },
-          { code: "admin.menu.system_parameter", name: "参数配置", route: "/system-parameters" },
+          {
+            code: "admin.menu.system_parameter",
+            name: "参数配置",
+            route: "/system-parameters",
+          },
           {
             code: "admin.menu.feature_toggle",
             name: "开关控制",
@@ -652,7 +726,8 @@ function flattenMenuTree(nodes, parent = null, out = [], depth = 0) {
       sort: (i + 1) * 10,
       depth,
     });
-    if (node.children) flattenMenuTree(node.children, node.code, out, depth + 1);
+    if (node.children)
+      flattenMenuTree(node.children, node.code, out, depth + 1);
   });
   return out;
 }
@@ -1157,6 +1232,26 @@ export async function seedCatalog(client) {
     [SYS],
   );
   console.log("✓  admin — settings operator.mfa.policy=optional");
+
+  // 退款策略（product_330 §5，owner 决策 3）：履约起 window_hours 内、首次购买、消耗性
+  // 配额使用率 < max_usage_ratio 可申请全额退款。运营在治理台「平台参数」改值即生效。
+  await client.query(
+    `
+    insert into admin.settings (config_group, config_key, value_type, config_value, description, description_key, created_by, created_at, updated_at)
+    values
+      ('commerce', 'refund.window_hours', 'int', '24',
+       'Refund window in hours after fulfilment (first purchase of a product only).',
+       'ops.setting.refund.window_hours.desc', $1, now(), now()),
+      ('commerce', 'refund.max_usage_ratio', 'string', '0.10',
+       'Max consumed share of consumable quota (0-1) for a refund to stay eligible.',
+       'ops.setting.refund.max_usage_ratio.desc', $1, now(), now())
+    on conflict (config_key) do nothing
+  `,
+    [SYS],
+  );
+  console.log(
+    "✓  admin — settings refund.window_hours=24 / refund.max_usage_ratio=0.10",
+  );
 
   // ── 2. access.permissions (governance catalog; unified fields, console-mode) ─
   // perm_name = human label; render fields (perm_type/route/component/icon) left null,
@@ -1811,7 +1906,8 @@ export async function seedCatalog(client) {
     // 公共客户端没有 secret——这是协议属性，不是"没配"。env 里若还留着一份 hash
     // （U-line 之前 ruyin 曾是机密 web RP），这里不拿：拿了会撞
     // chk_oidc_clients_public_pkce，而且拿了也没有任何东西会用它。
-    const envSecretHash = process.env[`OIDC_CLIENT_SECRET_HASH_${envKey}`] || null;
+    const envSecretHash =
+      process.env[`OIDC_CLIENT_SECRET_HASH_${envKey}`] || null;
     if (authMethod === "none" && envSecretHash) {
       console.warn(
         `⚠  appoidc.oidc_clients — ${c.clientId} is a public client; ignoring OIDC_CLIENT_SECRET_HASH_${envKey} (public clients carry no secret)`,
@@ -2253,14 +2349,70 @@ export async function seedCatalog(client) {
   const MIB = 1024 * 1024;
   const ADDON_PACKS = [
     // [pack_code, pack_name, metric_key, amount, validity_days, price, sort]
-    ["addon-storage-500m", "存储扩展包 500MB", "storage.bytes", 500 * MIB, 365, "9.90", 10],
-    ["addon-storage-1g", "存储扩展包 1GB", "storage.bytes", 1024 * MIB, 365, "16.90", 20],
-    ["addon-storage-5g", "存储扩展包 5GB", "storage.bytes", 5 * 1024 * MIB, 365, "69.00", 30],
-    ["addon-credits-100", "AI 加油包 100 Credits", "ai.credit", 100, 365, "19.90", 40],
-    ["addon-credits-500", "AI 加油包 500 Credits", "ai.credit", 500, 365, "89.00", 50],
-    ["addon-credits-2000", "AI 加油包 2000 Credits", "ai.credit", 2000, 365, "299.00", 60],
+    [
+      "addon-storage-500m",
+      "存储扩展包 500MB",
+      "storage.bytes",
+      500 * MIB,
+      365,
+      "9.90",
+      10,
+    ],
+    [
+      "addon-storage-1g",
+      "存储扩展包 1GB",
+      "storage.bytes",
+      1024 * MIB,
+      365,
+      "16.90",
+      20,
+    ],
+    [
+      "addon-storage-5g",
+      "存储扩展包 5GB",
+      "storage.bytes",
+      5 * 1024 * MIB,
+      365,
+      "69.00",
+      30,
+    ],
+    [
+      "addon-credits-100",
+      "AI 加油包 100 Credits",
+      "ai.credit",
+      100,
+      365,
+      "19.90",
+      40,
+    ],
+    [
+      "addon-credits-500",
+      "AI 加油包 500 Credits",
+      "ai.credit",
+      500,
+      365,
+      "89.00",
+      50,
+    ],
+    [
+      "addon-credits-2000",
+      "AI 加油包 2000 Credits",
+      "ai.credit",
+      2000,
+      365,
+      "299.00",
+      60,
+    ],
   ];
-  for (const [code, name, metric, amount, validity, price, sort] of ADDON_PACKS) {
+  for (const [
+    code,
+    name,
+    metric,
+    amount,
+    validity,
+    price,
+    sort,
+  ] of ADDON_PACKS) {
     await client.query(
       `
       insert into product.addon_packs (pack_code, pack_name, metric_key, amount, validity_days, price, currency, status, sort, created_at, updated_at)
