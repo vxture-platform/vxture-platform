@@ -519,12 +519,9 @@ function mapSubscriptionRow(row: SubscriptionRow): SubscriptionOperationRecord {
   const cycle = normalizeCycle(row.cycle_unit);
   const status = normalizeStatus(row.raw_status);
   const payAmount = toNumber(row.pay_amount);
-  const monthlyRevenue =
-    cycle === "yearly"
-      ? Math.round((payAmount / 12) * 100) / 100
-      : cycle === "once"
-        ? 0
-        : payAmount;
+  // 收入是真实收入（owner 2026-09-03）：不再把年付折成月均。字段名保留给旧客户端，
+  // 值 = 本周期实付；一次性买断也是实收。
+  const monthlyRevenue = payAmount;
   const tierCode = normalizeTierCode(row.tier_code);
   const planName = row.plan_name ?? "未关联套餐";
   const operatorName =

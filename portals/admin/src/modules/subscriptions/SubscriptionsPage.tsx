@@ -142,8 +142,7 @@ const SUBSCRIPTION_CSV_COLUMNS: CsvColumn<SubscriptionOperationRecord>[] = [
   },
   { label: "席位", value: (record) => record.quota.maxUsers },
   { label: "货币", value: (record) => record.currency },
-  { label: "支付金额", value: (record) => record.payAmount },
-  { label: "月收入", value: (record) => record.monthlyRevenue },
+  { label: "订阅收入", value: (record) => record.payAmount },
   { label: "开始时间", value: (record) => record.startAt },
   { label: "结束时间", value: (record) => record.endAt ?? "" },
 ];
@@ -354,8 +353,8 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
       id: "revenue",
       header: "订阅收入",
       align: "right",
-      // 订阅收入 = 本周期实付（owner 2026-09-03：年付 ¥0.10 就显示 ¥0.10，不是折成月的 ¥0.01）；
-      // 月均折算只在统计卡「月收入」里出现。
+      // 订阅收入 = 本周期实付（owner 2026-09-03：收入是真实收入，年付 ¥0.10 就显示 ¥0.10，
+      // 任何地方都不折成月均）。
       cell: (subscription) => (
         <TableTitleCell
           title={formatMoney(subscription.payAmount)}
@@ -486,8 +485,9 @@ export function SubscriptionsPage() {
   const warningQuotaCount = subscriptions.filter(
     (item) => item.quota.risk === "warning",
   ).length;
-  const monthlyRevenue = subscriptions.reduce(
-    (sum, item) => sum + item.monthlyRevenue,
+  // 收入 = 真实实付（owner 2026-09-03），不折月均。
+  const subscriptionRevenue = subscriptions.reduce(
+    (sum, item) => sum + item.payAmount,
     0,
   );
 
@@ -595,12 +595,12 @@ export function SubscriptionsPage() {
                   tone: followUpCount ? "warning" : "success",
                 },
                 {
-                  id: "monthly-revenue",
-                  help: "这些订阅的月收入之和；年付按 12 个月折算，一次性买断计 0。",
+                  id: "subscription-revenue",
+                  help: "这些订阅本周期实付之和（真实收入，不做月均折算）。",
                   icon: "chart-bar",
-                  label: "月收入",
-                  value: formatMoney(monthlyRevenue),
-                  tags: ["运营口径"],
+                  label: "订阅收入",
+                  value: formatMoney(subscriptionRevenue),
+                  tags: ["实付合计"],
                   tone: "success",
                 },
                 {

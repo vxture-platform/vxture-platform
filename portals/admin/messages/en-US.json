@@ -1479,8 +1479,8 @@
       "tiers": "Service plans",
       "tiersHelp": "Sum of bound tiers across solutions.",
       "subscriptionsTag": "Subscriptions {count}",
-      "revenue": "Monthly revenue",
-      "revenueHelp": "Sum of MRR across solutions: active subscriptions on bound plans, price normalised to a month.",
+      "revenue": "Subscription revenue",
+      "revenueHelp": "Sum across solutions of what active subscriptions on bound plans actually paid this period; no monthly normalisation.",
       "industriesTag": "Industries {count}"
     },
     "filters": {
@@ -1580,9 +1580,9 @@
       "subscriptions": "Subscriptions",
       "subscriptionsHelp": "Active / trialing subscriptions on bound plans.",
       "tenantsTag": "Active tenants {count}",
-      "revenue": "Monthly revenue",
-      "revenueHelp": "MRR: active subscriptions on bound plans, price normalised to a month; trials excluded.",
-      "revenueTag": "MRR"
+      "revenue": "Subscription revenue",
+      "revenueHelp": "What active subscriptions on bound plans actually paid this period (real revenue, no monthly normalisation); trials excluded.",
+      "revenueTag": "Paid total"
     },
     "sections": {
       "basics": "Basics",
@@ -1686,9 +1686,9 @@
       "subscriptions": "Subscriptions",
       "subscriptionsHelp": "Sum of active / trialing subscriptions on bound plans.",
       "industriesTag": "Industries {count}",
-      "revenue": "Monthly revenue",
-      "revenueHelp": "Sum of MRR across solutions: active subscriptions on bound plans, price normalised to a month.",
-      "revenueTag": "MRR"
+      "revenue": "Subscription revenue",
+      "revenueHelp": "Sum across solutions of what active subscriptions on bound plans actually paid this period; no monthly normalisation.",
+      "revenueTag": "Paid total"
     },
     "filters": {
       "ariaLabel": "Service plan filters",
@@ -1713,7 +1713,7 @@
       "partner": "Partner {count}",
       "tiers": "{count} plans",
       "subscriptions": "{count} subscriptions",
-      "revenue": "{amount} / month",
+      "revenue": "Revenue {amount}",
       "updatedAt": "Updated {date}"
     },
     "table": {
