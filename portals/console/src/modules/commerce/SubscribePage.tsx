@@ -231,6 +231,7 @@ export function SubscribePage() {
     (tierMissing ? null : fallbackPlan);
 
   const showTierFallback = (!targetTier || tierMissing) && plans.length > 1;
+  // 选中的就是在用套餐：走「续订」（延长周期，product_330 renew），不再当成付费空操作挡住。
   const isCurrentPlan =
     plan !== null && plan.planVersionId === currentLiveVersionId;
 
@@ -247,14 +248,18 @@ export function SubscribePage() {
     return save > 0 ? { amount: save, currency: y.currency } : null;
   })();
 
+  // 意图（product_330）：没有订阅 → new；在用且选了别的档 → upgrade；在用且选了同档 → renew（延期）；
+  // 已到期/取消 → renew（同档复活；换档时服务端按 new 建新订阅）。
   const orderIntent: "new" | "renew" | "upgrade" = !current
     ? "new"
     : isLive
-      ? "upgrade"
+      ? isCurrentPlan
+        ? "renew"
+        : "upgrade"
       : "renew";
 
   const onSubmit = async () => {
-    if (!plan || isEnterprise || !price || isCurrentPlan) return;
+    if (!plan || isEnterprise || !price) return;
     setBusy(true);
     setError(null);
     try {
@@ -263,7 +268,7 @@ export function SubscribePage() {
         planVersionId: plan.planVersionId,
         cycleUnit: cycle,
         intent: orderIntent,
-        ...(orderIntent === "upgrade" && current
+        ...(orderIntent !== "new" && current
           ? { upgradeOfSubscriptionId: current.subscriptionId }
           : {}),
       });
@@ -462,7 +467,7 @@ export function SubscribePage() {
                   <>
                     <Button
                       size="xl"
-                      disabled={busy || !price || isCurrentPlan}
+                      disabled={busy || !price}
                       onClick={() => void onSubmit()}
                       className="w-full border-transparent bg-linear-to-r from-gradient-brand-from to-gradient-brand-to text-primary-foreground hover:brightness-110"
                     >
@@ -470,7 +475,7 @@ export function SubscribePage() {
                     </Button>
                     <p className="text-body-sm text-content-tertiary">
                       {isCurrentPlan
-                        ? t("confirm.alreadyCurrent")
+                        ? t("confirm.renewCurrent")
                         : t("confirm.fineOffline")}
                     </p>
                   </>
