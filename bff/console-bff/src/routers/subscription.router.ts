@@ -1842,6 +1842,7 @@ interface OrderRow {
   declared_at: Date | null;
   // product_330 P1-b1：订单实体（billing.orders）投影——有则以它为准
   order_entity_status: string | null;
+  order_payable_amount: string | null;
   target_start_at: Date | null;
   target_end_at: Date | null;
 }
@@ -1906,6 +1907,7 @@ select
      where p.bill_id = inv.id and p.pay_source <> 'voucher'
   )                    as declared_at,
   ord.status           as order_entity_status,
+  ord.payable_amount   as order_payable_amount,
   tsub.start_at        as target_start_at,
   tsub.end_at          as target_end_at
 from metering.subscriptions sub
@@ -2034,7 +2036,8 @@ function mapMyOrderRow(r: OrderRow): MyOrderRecord {
     planName: r.plan_name ?? "",
     tier: r.tier,
     cycleUnit: r.cycle_unit,
-    amount: r.pay_amount ?? "0",
+    // 订单金额 = 订单实体应付（product_330）；订阅行 pay_amount 升级履约后会被改写。
+    amount: r.order_payable_amount ?? r.pay_amount ?? "0",
     currency: r.currency ?? "CNY",
     orderStatus: state,
     orderType: "subscription",

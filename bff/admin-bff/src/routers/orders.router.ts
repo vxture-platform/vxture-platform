@@ -1093,6 +1093,7 @@ select
   pay.paid_at                      as payment_paid_at,
   ord.status                       as order_entity_status,
   ord.intent                       as order_intent,
+  ord.payable_amount               as order_payable_amount,
   ord.subscription_id              as fulfilled_subscription_id,
   tsub.status                      as target_subscription_status
 from metering.subscriptions sub
@@ -1323,7 +1324,11 @@ function mapEntityOrderStatus(
 
 function mapOrderRow(row: OrderRow): OrderOperationRecord {
   const hasInvoice = Boolean(row.bill_id);
-  const amount = toNumber(row.pay_amount ?? row.bill_payable_amount);
+  // 订单金额 = 订单实体的应付（product_330）；旧行退回订阅行 pay_amount / 账单应付。
+  // 订阅行的 pay_amount 是"本周期实付"，升级履约后会被改写，不再代表这张单的金额。
+  const amount = toNumber(
+    row.order_payable_amount ?? row.pay_amount ?? row.bill_payable_amount,
+  );
   // Invoice truth for money collected (product_321 §4.2) — the representative
   // leg's paid_amount is one leg, not the order's total income.
   const paidAmount = toNumber(row.bill_paid_amount ?? row.payment_paid_amount);
@@ -1511,6 +1516,7 @@ interface OrderRow {
   // product_330 P1-b1：订单实体（billing.orders）投影——有则以它为准
   order_entity_status: string | null;
   order_intent: string | null;
+  order_payable_amount: string | number | null;
   fulfilled_subscription_id: string | null;
   target_subscription_status: string | null;
 }
