@@ -26,6 +26,8 @@ export function inboxPresentation(templateCode: string): {
     case "order.fulfilled":
     case "subscription.renewed":
       return { level: "info", icon: "ph-check-circle" };
+    case "announcement.published":
+      return { level: "info", icon: "ph-megaphone" };
     default:
       return { level: "info", icon: "ph-bell" };
   }

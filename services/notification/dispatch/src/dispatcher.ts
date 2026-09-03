@@ -6,13 +6,17 @@
  *   1. 站内：insert support.inbox_messages（唯一键 收件人 × 模板 × 业务引用；冲突 = 已通知过 → 整条跳过）
  *      并记 notification_logs(channel=inapp, delivered)。
  *   2. 邮件：站内落成 且 注入了 sender 且 偏好允许 → 查邮箱 → 发；成功 / 失败各记一行 logs。
+ * 文案按收件人语言渲染（account.user_profiles.language，en* → en-US，其余 zh-CN；P2-h）；
+ * 公告类通知自带标题 / 正文（announcement.lang 已定），不走模板表。
  * 全程 best-effort：单个收件人失败只记日志，方法不抛（除非收件人查询本身失败）。
- * 收件人 = 调用方给的 ∪ 租户 owner（owner 永远在列）。
+ * 收件人 = 调用方给的 ∪ 租户 owner。
  */
 import type { Pool } from "pg";
 import {
+  localeOf,
   render,
   topicOf,
+  type NotificationLocale,
   type NotificationReferenceType,
   type NotificationTemplateCode,
   type NotificationTopic,
@@ -26,9 +30,9 @@ export interface NotifyInput {
   reference: { type: NotificationReferenceType; id: string };
   params: TemplateParams;
   /** 额外收件人 account id；租户 owner 永远包含。 */
-  recipients?: string[];
-  /** console 内相对路径。 */
-  link?: string;
+  recipients?: string[] | undefined;
+  /** console 内相对路径，或（公告 CTA）绝对 URL。 */
+  link?: string | undefined;
 }
 
 export interface MailSender {
@@ -58,7 +62,7 @@ export interface NotificationDispatcherOptions {
   prefs?: PreferenceGate | null | undefined;
   /** 写进 notification_logs.provider；默认 "smtp"。 */
   provider?: string | undefined;
-  /** 邮件里链接的绝对前缀（如 https://console.vxture.com）；未设则邮件不带链接。 */
+  /** 邮件里链接的绝对前缀（如 https://console.vxture.com）；未设则相对链接不进邮件。 */
   consoleBaseUrl?: string | null | undefined;
   logger?: NotifyLogger | undefined;
 }
@@ -106,11 +110,7 @@ export class NotificationDispatcher {
       return result;
     }
     const topic = topicOf(input.templateCode);
-    const absoluteLink =
-      this.consoleBaseUrl && input.link
-        ? `${this.consoleBaseUrl}${input.link.startsWith("/") ? "" : "/"}${input.link}`
-        : null;
-    const rendered = render(input.templateCode, input.params, absoluteLink);
+    const absoluteLink = this.absoluteLink(input.link);
 
     for (const accountId of recipients) {
       try {
@@ -118,6 +118,13 @@ export class NotificationDispatcher {
           result.skipped += 1;
           continue;
         }
+        const recipient = await this.lookupRecipient(accountId);
+        const rendered = render(
+          input.templateCode,
+          input.params,
+          absoluteLink,
+          recipient.locale,
+        );
         const inserted = await this.pool.query<{ id: string }>(
           `insert into support.inbox_messages
              (tenant_id, account_id, template_code, title, body, link, reference_type, reference_id)
@@ -128,7 +135,7 @@ export class NotificationDispatcher {
             input.tenantId,
             accountId,
             input.templateCode,
-            rendered.title,
+            rendered.title.slice(0, 256),
             rendered.body,
             input.link ?? null,
             input.reference.type,
@@ -155,7 +162,7 @@ export class NotificationDispatcher {
 
         if (!this.mail) continue;
         if (!(await this.allows(accountId, topic, "email"))) continue;
-        const email = await this.lookupEmail(accountId);
+        const email = recipient.email;
         if (!email) continue;
         let errorMessage: string | undefined;
         try {
@@ -198,6 +205,14 @@ export class NotificationDispatcher {
     return result;
   }
 
+  /** 相对路径拼 console 前缀；已是绝对 URL（公告 CTA）原样进邮件；没前缀的相对路径不进邮件。 */
+  private absoluteLink(link: string | undefined): string | null {
+    if (!link) return null;
+    if (/^https?:\/\//i.test(link)) return link;
+    if (!this.consoleBaseUrl) return null;
+    return `${this.consoleBaseUrl}${link.startsWith("/") ? "" : "/"}${link}`;
+  }
+
   /** 调用方给的收件人 ∪ 租户 owner，去重、去空。 */
   private async resolveRecipients(input: NotifyInput): Promise<string[]> {
     const res = await this.pool.query<{ owner_user_id: string | null }>(
@@ -226,13 +241,23 @@ export class NotificationDispatcher {
     }
   }
 
-  private async lookupEmail(accountId: string): Promise<string | null> {
-    const res = await this.pool.query<{ email: string | null }>(
-      `select email from account.users where id = $1 and deleted_at is null`,
+  /** 收件人邮箱 + 语言（一次查询）；查不到按 zh-CN、无邮箱。 */
+  private async lookupRecipient(
+    accountId: string,
+  ): Promise<{ email: string | null; locale: NotificationLocale }> {
+    const res = await this.pool.query<{
+      email: string | null;
+      language: string | null;
+    }>(
+      `select u.email, p.language
+         from account.users u
+         left join account.user_profiles p on p.user_id = u.id
+        where u.id = $1 and u.deleted_at is null`,
       [accountId],
     );
-    const email = res.rows[0]?.email?.trim();
-    return email ? email : null;
+    const row = res.rows[0];
+    const email = row?.email?.trim();
+    return { email: email ? email : null, locale: localeOf(row?.language) };
   }
 
   private async log(row: {

@@ -22,6 +22,7 @@ import { SharingModule } from "@vxture/service-sharing";
 import { SubscriptionModule } from "@vxture/service-subscription";
 import { PlatformAuthGuard } from "./authn/platform-auth.guard";
 import { S2sTokenVerifier } from "./authn/s2s-token-verifier.service";
+import { AnnouncementBroadcastJob } from "./jobs/announcement-broadcast.job";
 import { JobHeartbeatService } from "./jobs/job-heartbeat.service";
 import { OrderPaymentExpiryJob } from "./jobs/order-payment-expiry.job";
 import { ProvisioningDispatchJob } from "./jobs/provisioning-dispatch.job";
@@ -69,6 +70,8 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     TrialExpiryJob,
     OrderPaymentExpiryJob,
     SubscriptionRenewalJob,
+    // P2-h：公告推送（站内 + 按偏好邮件），publish_at 到点即播
+    AnnouncementBroadcastJob,
     WsBasePoolJob,
     UsageRollupJob,
   ],
