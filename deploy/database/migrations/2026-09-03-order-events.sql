@@ -42,6 +42,9 @@ SELECT o.id,
   JOIN billing.orders o ON o.order_no = s.order_no
  WHERE h.change_type IN ('order_created','payment_declared','payment_rejected','offline_payment_confirmed',
                          'cancelled','order_expired','restored')
+   -- 旧模型升级镜像行被标 cancelled（remark 'upgrade applied to <目标订阅>'）是旧模型内部动作，
+   -- 不是这张已履约升级单的事件：不回填（否则每次 db-init 重放都把 order-data-repair 删掉的行加回来）。
+   AND NOT (h.change_type = 'cancelled' AND h.remark LIKE 'upgrade applied to %')
    AND NOT EXISTS (
      SELECT 1 FROM billing.order_events e
       WHERE e.order_id = o.id AND e.created_at = h.created_at
