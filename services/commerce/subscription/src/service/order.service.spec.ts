@@ -360,10 +360,11 @@ describe("OrderService.runAutoRenewalPass (P2-c)", () => {
       order({ intent: "renew", fromSubscriptionId: "sub-1" }),
       sub({ planVersionId: PV_PRO, endAt: new Date() }),
     );
-    const orders = base.orders as unknown as Record<
-      string,
-      ReturnType<typeof vi.fn>
-    >;
+    const orders = base.orders as typeof base.orders & {
+      findAutoRenewCandidates: ReturnType<typeof vi.fn>;
+      withOrderTx: ReturnType<typeof vi.fn>;
+      settleZeroOrderTx: ReturnType<typeof vi.fn>;
+    };
     orders.findAutoRenewCandidates = vi.fn(async () => cands);
     orders.withOrderTx = vi.fn(
       async (_id: string, fn: (ctx: unknown) => Promise<unknown>) =>
@@ -374,7 +375,7 @@ describe("OrderService.runAutoRenewalPass (P2-c)", () => {
         }),
     );
     orders.settleZeroOrderTx = vi.fn(async () => undefined);
-    orders.getById = vi.fn(async () =>
+    orders.getById.mockImplementation(async () =>
       order({ intent: "renew", fromSubscriptionId: "sub-1", status: "paid" }),
     );
     return { ...base, orders };
@@ -393,9 +394,9 @@ describe("OrderService.runAutoRenewalPass (P2-c)", () => {
         price: 100,
       }),
     );
-    const input = orders.createOrder.mock.calls[0]![0] as unknown as {
-      paymentTtlMinutes: number;
-    };
+    const input = (
+      orders.createOrder as unknown as { mock: { calls: unknown[][] } }
+    ).mock.calls[0]![0] as { paymentTtlMinutes: number };
     // end in 2 days + 3 days grace ≈ 5 days, well above the 60-minute floor
     expect(input.paymentTtlMinutes).toBeGreaterThan(4 * 24 * 60);
     expect(orders.settleZeroOrderTx).not.toHaveBeenCalled();
