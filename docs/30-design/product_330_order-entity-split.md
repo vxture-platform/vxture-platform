@@ -20,7 +20,7 @@ owner 决策 1：拆分，参考大厂设计彻底拆，支撑订单各类流程
 ## 1. 目标模型
 
 ```
-commerce.orders ──fulfill(幂等)──▶ metering.subscriptions（workspace × product 唯一一条当前）
+billing.orders ──fulfill(幂等)──▶ metering.subscriptions（workspace × product 唯一一条当前）
       ▲                                   ▲
 billing.invoices / payments（挂 order_id）   billing.refunds（挂 order_id，成功后回滚订阅）
 ```
@@ -33,10 +33,10 @@ billing.invoices / payments（挂 order_id）   billing.refunds（挂 order_id�
 
 ## 2. 表设计
 
-### 2.1 新表 `commerce.orders`
+### 2.1 新表 `billing.orders`
 
 ```sql
-create table commerce.orders (
+create table billing.orders (
   id                     uuid primary key default gen_random_uuid(),
   order_no               varchar(32)  not null unique,                  -- ORD-YYYYMM-xxxxxxxxxx，沿用
   tenant_id              uuid not null,                                  -- 结算主体（90 跨 schema FK）
@@ -72,11 +72,11 @@ create table commerce.orders (
   constraint chk_orders_amounts check (list_amount >= 0 and credit_amount >= 0 and payable_amount >= 0 and leftover_amount >= 0),
   constraint chk_orders_fulfilled check ((status = 'fulfilled') = (fulfilled_at is not null and subscription_id is not null))
 );
-create index idx_orders_tenant_created   on commerce.orders (tenant_id, created_at desc);
-create index idx_orders_status           on commerce.orders (status);
-create index idx_orders_subscription     on commerce.orders (subscription_id);
+create index idx_orders_tenant_created   on billing.orders (tenant_id, created_at desc);
+create index idx_orders_status           on billing.orders (status);
+create index idx_orders_subscription     on billing.orders (subscription_id);
 -- 一个工作区一个产品同一时刻只能有一张在途订单
-create unique index uidx_orders_open_per_product on commerce.orders (workspace_id, product_id)
+create unique index uidx_orders_open_per_product on billing.orders (workspace_id, product_id)
   where status in ('pending_payment','pending_verify','paid');
 ```
 

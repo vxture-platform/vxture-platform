@@ -13,7 +13,9 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── §1 订阅（workspace 化成本中心，指向不可变 plan_version）。周期锚定 start_at（非日历）。
---   续费/升级 = 新增订阅指向新版本，不改老订阅。更新轨迹见 subscription_histories（故本表不设 updated_by）。
+--   product_330（2026-09-03）：订单拆到 billing.orders；升级 / 续订由订单履约**改本行**（tier/周期/到期/实付），
+--   不再新增行；一个 workspace × product 至多一条当前订阅（uidx_subscriptions_live_per_product）。
+--   更新轨迹见 subscription_histories（故本表不设 updated_by）。
 --   跨 schema：tenant_id→tenancy.tenants、workspace_id→tenancy.workspaces、plan_version_id→product.plan_versions、
 --   payment_mandate_id→billing.payment_mandates（均见 90）。created_by_id 裸 UUID（边界#2）。
 CREATE TABLE metering.subscriptions (
@@ -37,6 +39,9 @@ CREATE TABLE metering.subscriptions (
     order_no            varchar(128),                               -- 购买单号 ORD-{YYYYMM}-{10位随机hex}；trial/free/运营开通为 NULL（可视码，永不作 FK，铁律二）
     payment_ttl_minutes int,                                        -- 付款时效（分钟，321 P4 修订 2026-08-20）：下单时按租户类型定格（个人 30 / 组织 2880），仅 offline_purchase 订单行有值；NULL=存量单/非订单行 → 读取端回退 env ORDER_PAYMENT_TTL_MINUTES。锚点与驳回重锚语义不变（TTL 叠加在 P4 histories 锚点上）
     pay_amount          numeric(12,2),                              -- 与 plan_version.price 分离
+    product_id          uuid,                                       -- 主组件产品（冗余；BEFORE INSERT/UPDATE 触发器自 plan_components 填，95；跨 schema→product.products，90）product_330
+    paid_amount         numeric(12,2),                              -- 本周期实付（升级折抵输入 P_old；product_330 §4.1）
+    current_order_id    uuid,                                       -- 最近一次履约本行的订单（跨 schema→billing.orders，90）product_330
     currency            varchar(16)   DEFAULT 'CNY',
     created_by_type     varchar(16)   NOT NULL,                     -- §0.1 actor：system/customer/operator
     created_by_id       uuid,                                       -- 裸值，按 type 解引用 account.users / admin.operator_accounts（边界#2）
@@ -63,6 +68,10 @@ CREATE INDEX idx_subscriptions_plan_version_id ON metering.subscriptions (plan_v
 CREATE INDEX idx_subscriptions_status          ON metering.subscriptions (status);
 CREATE INDEX idx_subscriptions_next_renewal_at ON metering.subscriptions (next_renewal_at);  -- 续订 Job 扫描
 CREATE INDEX idx_subscriptions_deleted_at      ON metering.subscriptions (deleted_at);
+CREATE INDEX idx_subscriptions_product_id      ON metering.subscriptions (product_id);
+-- product_330 §8 不变式 1：一个 workspace × product 至多一条"当前"订阅（同档不同档都不能并存）
+CREATE UNIQUE INDEX uidx_subscriptions_live_per_product ON metering.subscriptions (workspace_id, product_id)
+  WHERE status IN ('active','trialing','expiring','overdue') AND deleted_at IS NULL;
 
 -- ── §2 订阅变更审计（append-only）。触发器见 95。tenant_id 跨 schema→tenancy.tenants（90）；
 --   subscription_id 域内 FK→subscriptions（内联）。actor_id 裸 UUID（边界#2）。仅 created_at（不可变）。

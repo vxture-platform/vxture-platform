@@ -269,7 +269,7 @@ GRANT UPDATE (is_satisfied, checked_at, checked_by, remark, updated_at) ON produ
 
 -- metering.subscriptions  [anchor: id, order_no, created_at]
 REVOKE UPDATE ON metering.subscriptions FROM platform_svc;
-GRANT UPDATE (tenant_id, workspace_id, plan_version_id, subscription_kind, cycle_unit, cycle_count, start_at, end_at, trial_end_at, had_trial_at, status, auto_renew, activation_method, next_renewal_at, renewal_source, payment_mandate_id, payment_ttl_minutes, pay_amount, currency, created_by_type, created_by_id, updated_at, deleted_at) ON metering.subscriptions TO platform_svc;
+GRANT UPDATE (tenant_id, workspace_id, plan_version_id, subscription_kind, cycle_unit, cycle_count, start_at, end_at, trial_end_at, had_trial_at, status, auto_renew, activation_method, next_renewal_at, renewal_source, payment_mandate_id, payment_ttl_minutes, pay_amount, product_id, paid_amount, current_order_id, currency, created_by_type, created_by_id, updated_at, deleted_at) ON metering.subscriptions TO platform_svc;
 
 -- metering.subscription_histories  [anchor: id, created_at]
 REVOKE UPDATE ON metering.subscription_histories FROM platform_svc;
@@ -350,7 +350,7 @@ GRANT UPDATE (tenant_id, user_id, payment_method_id, status, signed_at, expires_
 
 -- billing.invoices  [anchor: id, bill_no, transaction_no, created_at]
 REVOKE UPDATE ON billing.invoices FROM platform_svc;
-GRANT UPDATE (tenant_id, subscription_id, bill_cycle, cycle_start_date, cycle_end_date, total_amount, discount_amount, payable_amount, paid_amount, currency, bill_status, bill_type, paid_at, payment_method, created_by_type, created_by_id, operate_remark, updated_at, deleted_at) ON billing.invoices TO platform_svc;
+GRANT UPDATE (tenant_id, subscription_id, order_id, bill_cycle, cycle_start_date, cycle_end_date, total_amount, discount_amount, payable_amount, paid_amount, currency, bill_status, bill_type, paid_at, payment_method, created_by_type, created_by_id, operate_remark, updated_at, deleted_at) ON billing.invoices TO platform_svc;
 
 -- billing.invoice_items  [anchor: id, created_at]
 REVOKE UPDATE ON billing.invoice_items FROM platform_svc;
@@ -369,7 +369,11 @@ GRANT UPDATE (tenant_id, bill_id, transaction_id, pay_source, pay_channel, pay_m
 
 -- billing.refunds  [anchor: id, refund_no, channel_refund_no, created_at]
 REVOKE UPDATE ON billing.refunds FROM platform_svc;
-GRANT UPDATE (tenant_id, bill_id, pay_record_id, transaction_id, refund_amount, currency, refund_reason, refund_type, audit_status, audit_remark, auditor_id, audit_at, refund_status, refund_at, created_by_type, created_by_id, updated_at) ON billing.refunds TO platform_svc;
+GRANT UPDATE (tenant_id, bill_id, pay_record_id, transaction_id, order_id, refund_amount, currency, refund_reason, refund_type, audit_status, audit_remark, auditor_id, audit_at, refund_status, refund_at, created_by_type, created_by_id, updated_at) ON billing.refunds TO platform_svc;
+
+-- billing.orders  [anchor: id, order_no, created_at]  (product_330：订单实体；状态/金额/履约由 OrderService 单一入口改)
+REVOKE UPDATE ON billing.orders FROM platform_svc;
+GRANT UPDATE (tenant_id, workspace_id, product_id, plan_version_id, intent, cycle_unit, cycle_count, from_subscription_id, subscription_id, list_amount, credit_amount, payable_amount, leftover_amount, currency, proration, status, payment_ttl_minutes, declared_at, paid_at, fulfilled_at, closed_at, close_reason, created_by_type, created_by_id, operator_remark, updated_at) ON billing.orders TO platform_svc;
 
 -- billing.prepaid_charges  [anchor: id, created_at]
 REVOKE UPDATE ON billing.prepaid_charges FROM platform_svc;

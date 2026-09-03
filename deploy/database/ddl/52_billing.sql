@@ -132,6 +132,61 @@ CREATE INDEX idx_payment_mandates_tenant_status ON billing.payment_mandates (ten
 CREATE INDEX idx_payment_mandates_method_id     ON billing.payment_mandates (payment_method_id);
 CREATE INDEX idx_payment_mandates_deleted_at    ON billing.payment_mandates (deleted_at);
 
+-- 订单（product_330 §2.1，owner 2026-09-03 决策 1：订单从 metering.subscriptions 拆出成独立实体）。
+-- 订单 = 钱、意图、履约态的载体；订阅只回答"现在有什么"。履约（fulfill）是订单→订阅的唯一入口（幂等）。
+-- 状态机：pending_payment → pending_verify → paid → fulfilled → refunded；旁路 cancelled（仅未付）/ expired（TTL）。
+-- tenant_id/workspace_id→tenancy、product_id/plan_version_id→product、from_subscription_id/subscription_id→metering（均见 90）。
+-- created_by_id 裸值（按 created_by_type 解引用，边界#2）。金融例外：无 deleted_at（作废走 status）。
+-- 2026-09-03 起 metering.subscriptions.order_no / payment_ttl_minutes / 账单备注里的 intent JSON 停写（P2 退役）。
+CREATE TABLE billing.orders (
+    id                    uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_no              varchar(64)   NOT NULL,                   -- 可视码 ORD-{YYYYMM}-{10位随机hex}（沿用 visibleCode）
+    tenant_id             uuid          NOT NULL,                   -- 跨 schema→tenancy.tenants（90），结算主体
+    workspace_id          uuid          NOT NULL,                   -- 跨 schema→tenancy.workspaces（90），权益主体
+    product_id            uuid          NOT NULL,                   -- 跨 schema→product.products（90）；plan_version 主组件产品（冗余，唯一索引/查询用）
+    plan_version_id       uuid          NOT NULL,                   -- 跨 schema→product.plan_versions（90），目标套餐版本
+    intent                varchar(16)   NOT NULL,                   -- new / upgrade / renew
+    cycle_unit            varchar(16)   NOT NULL,
+    cycle_count           int           NOT NULL DEFAULT 1,
+    from_subscription_id  uuid,                                     -- 跨 schema→metering.subscriptions（90）；upgrade / renew 的原订阅
+    subscription_id       uuid,                                     -- 跨 schema→metering.subscriptions（90）；履约后指向（new 建的 / upgrade·renew 改的）
+    list_amount           numeric(12,2) NOT NULL,                   -- 标价 P_new
+    credit_amount         numeric(12,2) NOT NULL DEFAULT 0,         -- 升级折抵（product_330 §4.1）
+    payable_amount        numeric(12,2) NOT NULL,                   -- max(0, list − credit)
+    leftover_amount       numeric(12,2) NOT NULL DEFAULT 0,         -- 折抵溢出，进预付款
+    currency              varchar(16)   NOT NULL DEFAULT 'CNY',
+    proration             jsonb,                                    -- 折抵输入与结果快照 {days_left, days_total, r, u, alpha, p_old, credit_time, credit_usage}
+    status                varchar(24)   NOT NULL DEFAULT 'pending_payment',
+    payment_ttl_minutes   int,                                      -- 付款时效（个人 30 / 组织 2880）
+    declared_at           timestamptz,                              -- 客户申报付款
+    paid_at               timestamptz,                              -- 运营确认 / 网关回调
+    fulfilled_at          timestamptz,                              -- 履约完成
+    closed_at             timestamptz,                              -- cancelled / expired / refunded 落地时间
+    close_reason          varchar(32),                              -- customer_cancel / operator_void / ttl_expired / refunded / backfill
+    created_by_type       varchar(16)   NOT NULL,                   -- §0.1 system/customer/operator
+    created_by_id         uuid,                                     -- 裸值，按 type 解引用（边界#2）
+    operator_remark       varchar(512),
+    created_at            timestamptz   NOT NULL DEFAULT now(),
+    updated_at            timestamptz   NOT NULL DEFAULT now(),
+    CONSTRAINT uq_orders_order_no         UNIQUE (order_no),
+    CONSTRAINT chk_orders_intent          CHECK (intent IN ('new','upgrade','renew')),
+    CONSTRAINT chk_orders_status          CHECK (status IN ('pending_payment','pending_verify','paid','fulfilled','cancelled','expired','refunded')),
+    CONSTRAINT chk_orders_cycle_unit      CHECK (cycle_unit IN ('day','week','month','year','perpetual')),
+    CONSTRAINT chk_orders_cycle_count     CHECK (cycle_count >= 1),
+    CONSTRAINT chk_orders_from            CHECK ((intent <> 'new') = (from_subscription_id IS NOT NULL)),
+    CONSTRAINT chk_orders_amounts         CHECK (list_amount >= 0 AND credit_amount >= 0 AND payable_amount >= 0 AND leftover_amount >= 0),
+    CONSTRAINT chk_orders_fulfilled       CHECK ((status = 'fulfilled') = (fulfilled_at IS NOT NULL AND subscription_id IS NOT NULL)),
+    CONSTRAINT chk_orders_created_by_type CHECK (created_by_type IN ('system','customer','operator')),
+    CONSTRAINT chk_orders_payment_ttl     CHECK (payment_ttl_minutes IS NULL OR payment_ttl_minutes >= 1)
+);
+CREATE INDEX idx_orders_tenant_created ON billing.orders (tenant_id, created_at DESC);
+CREATE INDEX idx_orders_workspace      ON billing.orders (workspace_id);
+CREATE INDEX idx_orders_status         ON billing.orders (status);
+CREATE INDEX idx_orders_subscription   ON billing.orders (subscription_id);
+-- 一个工作区一个产品同一时刻只能有一张在途订单（product_330 §8 不变式 1）
+CREATE UNIQUE INDEX uidx_orders_open_per_product ON billing.orders (workspace_id, product_id)
+  WHERE status IN ('pending_payment','pending_verify','paid');
+
 -- 账单头（org/tenant 级 rollup，月末归集落点）。total_amount 已含折扣/税净额；payable_amount=total_amount
 -- （不再减 discount_amount，消除双减）。tenant_id→tenancy、subscription_id→metering（90）。
 -- created_by_id 裸值（按 created_by_type 解引用 account.users / operator，边界#2）。
@@ -140,6 +195,7 @@ CREATE TABLE billing.invoices (
     tenant_id         uuid          NOT NULL,                       -- 跨 schema→tenancy.tenants（90），结算主体
     bill_no           varchar(64)   NOT NULL,                       -- 可视码 INV-{YYYYMM}-{10位随机hex}（visibleCode() 同规，唯一约束兜底）
     subscription_id   uuid,                                         -- 跨 schema→metering.subscriptions（90，可空：rollup 跨多订阅）
+    order_id          uuid          REFERENCES billing.orders(id),  -- 域内真 FK（product_330：订单账单必填，周期账单/计量超额行为空）
     bill_cycle        varchar(8)    NOT NULL,                       -- 如 '202607'
     cycle_start_date  date          NOT NULL,
     cycle_end_date    date          NOT NULL,
@@ -167,6 +223,7 @@ CREATE TABLE billing.invoices (
 CREATE INDEX idx_invoices_tenant_cycle ON billing.invoices (tenant_id, bill_cycle);
 CREATE INDEX idx_invoices_bill_status  ON billing.invoices (bill_status);
 CREATE INDEX idx_invoices_deleted_at   ON billing.invoices (deleted_at);
+CREATE INDEX idx_invoices_order_id     ON billing.invoices (order_id);
 
 -- 账单明细行（+workspace 成本归集）。两类计费行：subscription_fee / metered_overage
 -- （从 metering.usage_events 按订阅锚定周期窗口求和，不读汇总表）。bill_id 域内 FK（内联）；
@@ -295,6 +352,7 @@ CREATE TABLE billing.refunds (
     bill_id           uuid          NOT NULL REFERENCES billing.invoices(id),      -- 域内真 FK
     pay_record_id     uuid          NOT NULL REFERENCES billing.payments(id),      -- 域内真 FK
     transaction_id    uuid          REFERENCES billing.transactions(id),           -- 域内真 FK（退款成功写冲正流水）
+    order_id          uuid          REFERENCES billing.orders(id),                 -- 域内真 FK（product_330 §5：退款挂订单，成功后回滚订阅）
     refund_no         varchar(64)   NOT NULL,                       -- 可视码
     refund_amount     numeric(12,2) NOT NULL,
     currency          varchar(16)   DEFAULT 'CNY',
@@ -321,6 +379,7 @@ CREATE INDEX idx_refunds_audit_status ON billing.refunds (audit_status);
 CREATE INDEX idx_refunds_tenant_id    ON billing.refunds (tenant_id);
 CREATE INDEX idx_refunds_bill_id      ON billing.refunds (bill_id);
 CREATE INDEX idx_refunds_pay_record   ON billing.refunds (pay_record_id);
+CREATE INDEX idx_refunds_order_id     ON billing.refunds (order_id);
 
 -- 预付费实时扣费批次（~5min）【结构预留，业务陆续接】。窗口用自然时间（非订阅锚定），pay-as-you-go。
 -- idempotency_key 全局唯一防同窗口重复扣。金融例外：无 updated_at/deleted_at（仅 created_at）。
