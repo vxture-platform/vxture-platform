@@ -641,7 +641,8 @@
         "noCandidates": "This tenant has no other active members, so there is nobody to transfer to. Invite someone and wait for them to join.",
         "notOwner": "Only the current owner can transfer ownership.",
         "personalTenant": "A personal tenant has no ownership to transfer.",
-        "success": "Ownership transferred to {name}. You are now a manager."
+        "success": "Ownership transferred to {name}. You are now a manager.",
+        "failed": "Ownership transfer failed, please retry"
       }
     },
     "feedback": {
@@ -1857,6 +1858,25 @@
       "done": "Activated"
     }
   },
+  "payChannels": {
+    "title": "Payment method",
+    "comingSoon": "coming soon",
+    "alipayQrAlt": "Alipay QR code",
+    "channel": {
+      "alipay": "Alipay",
+      "wechat": "WeChat Pay",
+      "bank_transfer": "Bank transfer"
+    },
+    "referenceNote": "Please put order number {orderNo} in the transfer note so we can reconcile quickly.",
+    "noneEnabled": "Payment channels are being configured; please contact support.",
+    "bank": {
+      "accountName": "Account name",
+      "bankName": "Bank",
+      "accountNo": "Account number",
+      "reference": "Transfer note",
+      "unavailable": "The corporate receiving account is not configured yet; please contact platform operations."
+    }
+  },
   "workspacePicker": {
     "defaultWorkspace": "Default workspace",
     "switchFailed": "Tenant switch failed — please retry; the order owner is unchanged"
@@ -1914,7 +1934,10 @@
       "creditVoucher": "Credit voucher",
       "noCreditVoucher": "No credit voucher",
       "alreadyPaid": "Already collected",
-      "cashDue": "Amount due"
+      "cashDue": "Amount due",
+      "pickDiscount": "Choose a discount voucher",
+      "pickCredit": "Choose a credit voucher",
+      "noneOption": "Do not use"
     },
     "voucher": {
       "percentOff": "{value}% off",
@@ -2015,7 +2038,13 @@
       "auditRemarkLine": "Review note: {remark}",
       "ineligibleLine": "Not eligible for refund: {reasons}",
       "reasonSeparator": "; "
-    }
+    },
+    "cancelConfirm": {
+      "verb": "Cancel order",
+      "consequence": "The order is closed and any selected vouchers are released; place a new order if you still want to subscribe."
+    },
+    "amountPending": "Calculating…",
+    "expiredNotice": "The payment window has closed; refreshing the order…"
   },
   "billingPage": {
     "title": "Billing",
@@ -2261,7 +2290,8 @@
       "cancelError": "Failed to cancel the order. Please try again.",
       "menuUnsubscribeHint": "Only provisioned orders can be unsubscribed",
       "cancelVerb": "Cancel order",
-      "cancelConsequence": "The order moves to a cancelled final state and cannot be restored. Buying it again means placing a new order."
+      "cancelConsequence": "The order moves to a cancelled final state and cannot be restored. Buying it again means placing a new order.",
+      "menuUnsubscribeNoSub": "This order is not linked to a subscription"
     },
     "payAxis": {
       "pending": "Awaiting payment",
@@ -2701,7 +2731,18 @@
     },
     "cancelOrder": "Cancel order",
     "declareFailed": "Declaration failed — please try again later",
-    "cancelFailed": "Cancel failed — please try again later"
+    "cancelFailed": "Cancel failed — please try again later",
+    "declareDialog": {
+      "title": "Confirm payment declaration",
+      "description": "Payment method: {channel} · amount: {amount}. After submitting, the order awaits confirmation; the quota is credited once operations confirm receipt.",
+      "confirm": "Submit",
+      "cancel": "Not yet"
+    },
+    "cancelConfirm": {
+      "verb": "Cancel order",
+      "consequence": "The order is closed; go back to Quotas to buy again if needed."
+    },
+    "expiredNotice": "The payment window has closed; refreshing the order…"
   },
   "vouchersPage": {
     "title": "My Vouchers",

@@ -17,7 +17,7 @@
  * DS 组合件、不自造样式层（owner 2026-08-20 评审）。全页无 UUID（可视码原则）。
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
@@ -65,6 +65,7 @@ import {
   SubscriptionProductCard,
 } from "./components/hubCards";
 import { OrderDetailPanel } from "./components/OrderDetailPanel";
+import { useOrderPolling } from "./components/pay/useOrderPolling";
 import { useConfirmLabels } from "@/lib/destructive";
 import {
   PAY_AXIS,
@@ -160,7 +161,7 @@ export function SubscriptionPage() {
         await reloadSubs();
       } catch (err) {
         setError(
-          err instanceof ConsoleBffError
+          err instanceof ConsoleBffError && err.message
             ? err.message
             : t("subs.autoRenewError"),
         );
@@ -190,7 +191,7 @@ export function SubscriptionPage() {
         await reloadSubs();
       } catch (err) {
         setError(
-          err instanceof ConsoleBffError
+          err instanceof ConsoleBffError && err.message
             ? err.message
             : t("subs.unsubscribeError"),
         );
@@ -212,6 +213,37 @@ export function SubscriptionPage() {
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(timer);
   }, [hasPending]);
+
+  /* 倒计时归零 → 重取一次,让服务端的超时关闭显影(此前订单行停在「去支付 00:00」)。
+   * 每张单只触发一次。 */
+  const expiredReloaded = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const dueIds = orders
+      .filter(
+        (o) =>
+          o.orderStatus === "pending_payment" &&
+          o.expireAt &&
+          new Date(o.expireAt).getTime() <= now &&
+          !expiredReloaded.current.has(o.orderId),
+      )
+      .map((o) => o.orderId);
+    if (dueIds.length === 0) return;
+    for (const id of dueIds) expiredReloaded.current.add(id);
+    void reloadSubs();
+  }, [orders, now, reloadSubs]);
+
+  /* 已申报待确认 / 开通中的单要自动前进:轮询订阅与订单(此前只能手动刷新)。 */
+  const hasInFlight = orders.some(
+    (o) =>
+      o.orderStatus === "paid_pending_verify" || o.orderStatus === "activating",
+  );
+  useOrderPolling(hasInFlight, reloadSubs, 15_000);
+
+  /* 取消订单后列表变短,当前页可能落空——夹回最后一页。 */
+  useEffect(() => {
+    const count = Math.max(1, Math.ceil(orders.length / ORDERS_PAGE_SIZE));
+    setPage((p) => Math.min(p, count));
+  }, [orders.length]);
 
   const money = useCallback(
     (v: string, currency: string) =>
@@ -242,7 +274,9 @@ export function SubscriptionPage() {
         .catch((err) => {
           apply(!next);
           setError(
-            err instanceof ConsoleBffError ? err.message : t("favorite.error"),
+            err instanceof ConsoleBffError && err.message
+              ? err.message
+              : t("favorite.error"),
           );
         })
         .finally(() =>
@@ -338,10 +372,13 @@ export function SubscriptionPage() {
     setCancelingId(orderId);
     try {
       await cancelSubscriptionOrder(orderId);
-      setOrders(await fetchMyOrders());
+      // 取消后订单与订阅卡、概览指标一起刷新(此前只刷订单表,指标停在旧值)。
+      await reloadSubs();
     } catch (err) {
       setError(
-        err instanceof ConsoleBffError ? err.message : t("orders.cancelError"),
+        err instanceof ConsoleBffError && err.message
+          ? err.message
+          : t("orders.cancelError"),
       );
       /* 重新抛出：DS 的确认件按 rejected 决定关不关框。理由已落在 `error`
          横幅上，但框不能关——用户得看见自己按的那一下没成。 */
@@ -508,17 +545,20 @@ export function SubscriptionPage() {
               }),
             },
             {
-              // 退订自助上线(P0):completed 单的 orderId 即订阅 id,弹确认后立即退订
+              // 退订:对订单履约后挂上的订阅落锤(o.subscriptionId,批 1)。此前把
+              // orderId 当订阅 id 提交,billing.orders 与 metering.subscriptions 是两
+              // 张表,必然 400。
               id: "unsubscribe",
               label: t("orders.menuUnsubscribe"),
               danger: true as const,
-              disabled: o.orderStatus !== "completed",
+              disabled: o.orderStatus !== "completed" || !o.subscriptionId,
               ...(o.orderStatus !== "completed"
                 ? { hint: t("orders.menuUnsubscribeHint") }
-                : {}),
+                : !o.subscriptionId
+                  ? { hint: t("orders.menuUnsubscribeNoSub") }
+                  : {}),
               /* 与产品卡上的退订是同一件事、同一份后果——所以用同一份文案与同一个
-           落锤，而不是各写一遍。找不到订阅行时用订单信息兜底（completed 单的
-           orderId 即订阅 id）。 */
+                 落锤,而不是各写一遍。 */
               confirm: withLabels({
                 verb: t("card.unsubscribeVerb"),
                 target: o.productName ?? "",
@@ -526,9 +566,11 @@ export function SubscriptionPage() {
                 cancelLabel: t("card.unsubscribeKeep"),
                 onConfirm: () =>
                   handleUnsubscribe(
-                    products.find((p) => p.subscriptionId === o.orderId) ??
+                    products.find(
+                      (p) => p.subscriptionId === o.subscriptionId,
+                    ) ??
                       ({
-                        subscriptionId: o.orderId,
+                        subscriptionId: o.subscriptionId ?? "",
                         productName: o.productName,
                       } as SubscribedProduct),
                   ),
