@@ -14,7 +14,6 @@
 
 import {
   Controller,
-  ForbiddenException,
   Get,
   Inject,
   Query,
@@ -24,6 +23,7 @@ import {
 import type { Request } from "express";
 import type { Pool } from "pg";
 import type { RequestContext } from "../types/console.types";
+import { RequireCapability } from "../auth/capability";
 
 // Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
 const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
@@ -42,6 +42,7 @@ export interface ConsoleAuditLogView {
   ipAddress: string | null;
 }
 
+@RequireCapability("tenant.audit.read")
 @Controller("api/audit")
 export class AuditRouter {
   constructor(@Inject(COMMERCE_PG_POOL) private readonly pool: Pool) {}
@@ -52,10 +53,8 @@ export class AuditRouter {
     @Query("result") resultRaw?: string,
     @Query("days") daysRaw?: string,
   ): Promise<ConsoleAuditLogView[]> {
+    // 权限门在类级 @RequireCapability("tenant.audit.read")(全局守卫),这里只剩上下文校验。
     if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
-    if (!req.capabilities?.includes("tenant.audit.read")) {
-      throw new ForbiddenException("无权查看审计日志");
-    }
     const daysNum = Number(daysRaw);
     const days =
       Number.isInteger(daysNum) && daysNum >= 1 ? Math.min(daysNum, 90) : 90;

@@ -1,16 +1,11 @@
-export type Capability =
-  | "platform.tenant.manage"
-  | "platform.product.manage"
-  | "platform.pricing.manage"
-  | "platform.model.manage"
-  | "tenant.user.manage"
-  | "tenant.role.manage"
-  | "tenant.subscription.read"
-  | "tenant.billing.read"
-  | "tenant.invoice.manage"
-  | "tenant.payment.manage"
-  | "tenant.quota.read"
-  | "tenant.audit.read";
+import type { GovernancePermissionCode } from "@vxture/core-utils";
+
+/**
+ * 能力 = 成员在当前租户实际持有的治理权限码(access.permissions),由 console-bff
+ * 回查下发;码表与蕴含规则的权威在 @vxture/core-utils(tenant-permissions),
+ * 前端不再有自己的一套「capability 词汇」。
+ */
+export type Capability = GovernancePermissionCode;
 
 export interface ConsoleUser {
   id: string;
@@ -228,12 +223,17 @@ export interface TenantRoleRecord {
   permissions: TenantPermissionRecord[];
 }
 
+/** 权限目录一行:菜单节点(板块/页面)与操作码同表,parentCode 表达层级。 */
 export interface TenantPermissionRecord {
   id: string;
   permissionCode: string;
   permissionName: string;
-  permissionType: string | null;
+  permissionType: "menu" | "api";
   description: string | null;
+  parentCode: string | null;
+  routePath: string | null;
+  category: string | null;
+  sort: number;
 }
 
 export interface AiModelRecord {

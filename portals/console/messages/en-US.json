@@ -1455,7 +1455,7 @@
       "roles": "Governance roles",
       "rolesHint": "Global fixed catalog (system preset)",
       "perms": "Permission points",
-      "permsHint": "Tenant-level + workspace-level governance actions",
+      "permsHint": "Tenant-level + workspace-level operation codes",
       "model": "Authorization model",
       "modelValue": "Fixed catalog",
       "modelHint": "Custom roles not yet available"
@@ -1468,11 +1468,11 @@
       "guest": "Guest"
     },
     "roleBlurb": {
-      "owner": "All governance permissions, incl. commerce (subscription/billing/vouchers) and tenant deletion",
-      "manager": "Member/role/workspace/settings management; deliberately excludes commerce and deletion",
-      "member": "Uses products and views quotas/usage; no governance permissions",
-      "readonly": "Read-only access; no governance permissions",
-      "guest": "Restricted guest; no governance permissions"
+      "owner": "All governance permissions, including commerce (subscriptions / bills / payments / invoices) and tenant deletion",
+      "manager": "Members / roles / workspaces / settings; can view subscriptions, bills and audit, cannot pay or unsubscribe",
+      "member": "Uses the products; can view the member directory and quotas, no governance permissions",
+      "readonly": "Internal read-only across the tenant: members, subscriptions & bills, quotas, audit; zero write",
+      "guest": "External limited guest: self-service pages only, no tenant-level data"
     },
     "perm": {
       "tenant_member_manage": "Member management",
@@ -1498,9 +1498,11 @@
     },
     "matrix": {
       "title": "Permission matrix",
-      "description": "Which roles hold each governance action, at a glance",
+      "description": "The catalog follows the sidebar: section → page → operation; see which roles hold each governance action at a glance",
       "colPerm": "Permission",
-      "empty": "Permission catalog is empty"
+      "empty": "Permission catalog is empty",
+      "openToAll": "Open to all members",
+      "groupOther": "Operations not tied to a page (workspace scope)"
     },
     "notes": {
       "title": "Governance model",
@@ -1511,7 +1513,8 @@
       "assignBody": "Change a member's role on the Members page (or pick one when inviting); changes take effect within a minute",
       "scopeTitle": "Governance ≠ business",
       "scopeBody": "Governance roles gate member/role/settings/commerce actions only; in-product feature access is gated by each product per subscription tier"
-    }
+    },
+    "loadFailed": "Could not load roles and permissions, please retry"
   },
   "modelPlatformPage": {
     "header": {
@@ -1867,7 +1870,8 @@
       "cancelOrder": "Cancel order",
       "refresh": "Refresh",
       "backToSubscription": "Back to subscription",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "noPaymentPermission": "Your role cannot make payments: declaring payment or cancelling this order is for the tenant owner"
     },
     "declareDialog": {
       "title": "Confirm payment declaration",
@@ -1920,7 +1924,8 @@
         "rejected": "Refund request rejected",
         "refunded": "Refunded"
       },
-      "auditRemark": "Review note"
+      "auditRemark": "Review note",
+      "noPermission": "Requesting a refund requires billing management; ask the tenant owner"
     }
   },
   "billingPage": {
@@ -2045,7 +2050,8 @@
       },
       "rowMenu": "Bill actions",
       "applyHintUnpaid": "Available once the bill is settled",
-      "applyHintApplied": "An application already exists"
+      "applyHintApplied": "An application already exists",
+      "applyHintNoPermission": "Your role cannot manage invoices"
     }
   },
   "subscriptionHub": {
@@ -2478,7 +2484,8 @@
       "continuePay": "Pay now",
       "orderDetail": "Order detail",
       "orderMenu": "Order actions",
-      "cancelHint": "Only pending orders can be cancelled"
+      "cancelHint": "Only pending orders can be cancelled",
+      "buyNoPermission": "Your role cannot make payments; ask the tenant owner to buy add-on packs"
     }
   },
   "usagePage": {

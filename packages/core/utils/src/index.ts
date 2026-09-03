@@ -93,3 +93,33 @@ export {
   isReleaseStageSubscribable,
 } from "./release-stage";
 export type { ReleaseStage, ReleaseStageDef } from "./release-stage";
+
+// ============================================
+// Tenant console permission catalog (customer realm 治理 RBAC 的代码侧镜像)
+// ============================================
+
+export {
+  TENANT_PERMISSION_CODES,
+  WORKSPACE_PERMISSION_CODES,
+  TENANT_ROLE_CODES,
+  TENANT_MENU_CODES,
+  TENANT_MENU_TREE,
+  TENANT_MENU_BY_ROUTE,
+  TENANT_PERMISSION_PAGE,
+  TENANT_PERMISSION_DEFS,
+  isTenantPermissionCode,
+  isGovernancePermissionCode,
+  capabilitySatisfies,
+  hasCapability,
+  hasAnyCapability,
+} from "./tenant-permissions";
+export type {
+  TenantPermissionCode,
+  WorkspacePermissionCode,
+  GovernancePermissionCode,
+  TenantPermissionCategory,
+  TenantPermissionDef,
+  TenantRoleCode,
+  TenantMenuCode,
+  TenantMenuNode,
+} from "./tenant-permissions";

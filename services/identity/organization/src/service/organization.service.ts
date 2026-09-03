@@ -13,6 +13,7 @@ import type {
   OrgRole,
   OrgRoleCatalogEntry,
   OrgView,
+  PermissionCatalogEntry,
   ProvisionedOrg,
   TransferOwnerResult,
   WorkspaceMembershipView,
@@ -114,6 +115,9 @@ export class OrganizationService {
   /** The fixed global org-scope role catalog (owner/manager/member) with permissions. */
   getOrgRolesCatalog(): Promise<OrgRoleCatalogEntry[]> {
     return this.repo.getOrgRolesCatalog();
+  }
+  listPermissionCatalog(): Promise<PermissionCatalogEntry[]> {
+    return this.repo.listPermissionCatalog();
   }
   addOrgMember(
     orgId: string,

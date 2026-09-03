@@ -1455,7 +1455,7 @@
       "roles": "治理角色",
       "rolesHint": "全局固定目录(系统预置)",
       "perms": "权限点",
-      "permsHint": "租户级 + 工作空间级治理动作",
+      "permsHint": "租户级 + 工作空间级操作码",
       "model": "授权模型",
       "modelValue": "固定目录",
       "modelHint": "自定义角色暂未开放"
@@ -1468,11 +1468,11 @@
       "guest": "访客"
     },
     "roleBlurb": {
-      "owner": "全部治理权限,含商业面(订阅/账单/卡券)与租户注销",
-      "manager": "成员/角色/工作空间/设置管理;刻意不含商业面与注销",
-      "member": "正常使用产品与查看配额用量;无治理权限",
-      "readonly": "只读访问;无治理权限",
-      "guest": "受限访客;无治理权限"
+      "owner": "全部治理权限,含商业面(订阅/账单/付款/发票)与租户注销",
+      "manager": "成员/角色/工作空间/设置管理;可看订阅账单与审计,不能付款与退订",
+      "member": "正常使用产品;可看成员目录与配额用量,无治理权限",
+      "readonly": "内部全域只读:成员、订阅账单、配额用量、审计均可看,零写",
+      "guest": "外部受限访客:只有本人相关页面,不见租户级数据"
     },
     "perm": {
       "tenant_member_manage": "成员管理",
@@ -1498,9 +1498,11 @@
     },
     "matrix": {
       "title": "权限矩阵",
-      "description": "每个治理动作由哪些角色持有,一览无余",
+      "description": "权限目录按侧栏结构分层:板块 → 页面 → 操作;每个治理动作由哪些角色持有,一览无余",
       "colPerm": "权限点",
-      "empty": "权限目录为空"
+      "empty": "权限目录为空",
+      "openToAll": "成员均可见",
+      "groupOther": "未挂到页面的操作码(工作空间级)"
     },
     "notes": {
       "title": "治理口径",
@@ -1511,7 +1513,8 @@
       "assignBody": "给成员换角色在「成员管理」页操作(邀请时也可直接选角色);变更最迟一分钟内生效",
       "scopeTitle": "治理 ≠ 业务",
       "scopeBody": "治理角色只闸成员/角色/设置/商业面等治理动作;各产品内的功能权限由产品按订阅档位自行门控"
-    }
+    },
+    "loadFailed": "角色与权限目录读取失败,请稍后重试"
   },
   "modelPlatformPage": {
     "header": {
@@ -1867,7 +1870,8 @@
       "cancelOrder": "取消订单",
       "refresh": "刷新状态",
       "backToSubscription": "返回订阅页",
-      "cancel": "取消"
+      "cancel": "取消",
+      "noPaymentPermission": "你的角色没有付款权限:申报付款与取消订单请由租户所有者操作"
     },
     "declareDialog": {
       "title": "确认付款申报",
@@ -1920,7 +1924,8 @@
         "rejected": "退款申请被驳回",
         "refunded": "已退款"
       },
-      "auditRemark": "审核备注"
+      "auditRemark": "审核备注",
+      "noPermission": "申请退款需要商业管理权限,请联系租户所有者"
     }
   },
   "billingPage": {
@@ -2045,7 +2050,8 @@
       },
       "rowMenu": "账单操作",
       "applyHintUnpaid": "账单结清后可申请",
-      "applyHintApplied": "已有开票申请"
+      "applyHintApplied": "已有开票申请",
+      "applyHintNoPermission": "你的角色没有发票管理权限"
     }
   },
   "subscriptionHub": {
@@ -2478,7 +2484,8 @@
       "continuePay": "去支付",
       "orderDetail": "订单详情",
       "orderMenu": "订单操作",
-      "cancelHint": "仅待支付订单可取消"
+      "cancelHint": "仅待支付订单可取消",
+      "buyNoPermission": "你的角色没有付款权限,购买加油包请联系租户所有者"
     }
   },
   "usagePage": {

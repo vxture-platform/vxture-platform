@@ -59,6 +59,7 @@ import {
   type PaymentChannelInfo,
 } from "../lib/payment-channels";
 import { PlatformEntitlementsClient } from "../platform/platform-entitlements.client";
+import { RequireCapability } from "../auth/capability";
 
 // Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
 const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
@@ -557,6 +558,7 @@ export class SubscriptionRouter {
   // GET /api/subscription/credits — 租户钱包余额（product_321 P6：V1 只读展示）
   // --------------------------------------------------------------------------
 
+  @RequireCapability("tenant.quota.read")
   @Get("credits")
   async getCredits(
     @Req() req: Request & RequestContext,
@@ -575,6 +577,7 @@ export class SubscriptionRouter {
   // 与具体产品无关, 故按 workspace 聚合展示, 不做 product 归属区分)
   // --------------------------------------------------------------------------
 
+  @RequireCapability("tenant.quota.read")
   @Get("quota-usage")
   async getQuotaUsage(
     @Req() req: Request & RequestContext,
@@ -596,6 +599,7 @@ export class SubscriptionRouter {
   // `/platform/entitlements` contract instead of leaving console blind to them)
   // --------------------------------------------------------------------------
 
+  @RequireCapability("tenant.quota.read")
   @Get("entitlements")
   async getEntitlements(
     @Req() req: Request & RequestContext,
@@ -663,6 +667,7 @@ export class SubscriptionRouter {
   // evolution signals; unknown target_tier/metric → dropped, flow proceeds.
   // --------------------------------------------------------------------------
 
+  @RequireCapability("tenant.billing.manage")
   @Get("subscribe-context")
   async getSubscribeContext(
     @Req() req: Request & RequestContext,
@@ -869,6 +874,7 @@ export class SubscriptionRouter {
   // contract here, same join pattern as ORDER_ROW_SELECT above.
   // --------------------------------------------------------------------------
 
+  @RequireCapability("tenant.quota.read")
   @Get("my")
   async getMySubscriptions(
     @Req() req: Request & RequestContext,
@@ -910,6 +916,7 @@ export class SubscriptionRouter {
   // 存量库未跑迁移时页面必须照常渲染）。
   // --------------------------------------------------------------------------
 
+  @RequireCapability("tenant.billing.read")
   @Get("subscribed-products")
   async getSubscribedProducts(
     @Req() req: Request & RequestContext,
@@ -987,6 +994,7 @@ export class SubscriptionRouter {
   // 起价 = 现行锁定版本各周期最低价；免费档无价目行时按 0 处理。
   // --------------------------------------------------------------------------
 
+  @RequireCapability("tenant.billing.read")
   @Get("recommended-products")
   async getRecommendedProducts(
     @Req() req: Request & RequestContext,
@@ -1058,6 +1066,7 @@ export class SubscriptionRouter {
   // 幂等：重复收藏/取消不报错。写路径走 @vxture/service-account（BFF 池只读惯例）。
   // --------------------------------------------------------------------------
 
+  @RequireCapability("tenant.billing.read")
   @Post("favorites/:productCode")
   async addFavorite(
     @Req() req: Request & RequestContext,
@@ -1069,6 +1078,7 @@ export class SubscriptionRouter {
     return { productCode, favorite: true };
   }
 
+  @RequireCapability("tenant.billing.read")
   @Delete("favorites/:productCode")
   async removeFavorite(
     @Req() req: Request & RequestContext,
@@ -1111,6 +1121,7 @@ export class SubscriptionRouter {
   // 档位冲突/不可购买 → 409/400 语义码。
   // --------------------------------------------------------------------------
 
+  @RequireCapability("tenant.billing.manage")
   @Post("orders")
   async createOrder(
     @Req() req: Request & RequestContext,
@@ -1228,6 +1239,7 @@ export class SubscriptionRouter {
 
   // GET /api/subscription/upgrade-quote — 升级折抵报价（product_330 §4.1，零副作用）
   // 与下单时落库的是同一函数；确认页拿它显示「套餐价 / 升级折抵 / 应付」。
+  @RequireCapability("tenant.billing.manage")
   @Get("upgrade-quote")
   async getUpgradeQuote(
     @Req() req: Request & RequestContext,
@@ -1278,6 +1290,7 @@ export class SubscriptionRouter {
   }
 
   // GET /api/subscription/orders — 我的订单（租户维度合成视图）
+  @RequireCapability("tenant.billing.read")
   @Get("orders")
   async getMyOrders(
     @Req() req: Request & RequestContext,
@@ -1288,6 +1301,7 @@ export class SubscriptionRouter {
   }
 
   // POST /api/subscription/orders/:orderId/cancel — 客户取消未付订单
+  @RequireCapability("tenant.billing.manage")
   @Post("orders/:orderId/cancel")
   async cancelOrder(
     @Req() req: Request & RequestContext,
@@ -1319,6 +1333,7 @@ export class SubscriptionRouter {
   // --------------------------------------------------------------------------
 
   /** GET /api/subscription/orders/:orderId — 付款页详情 */
+  @RequireCapability("tenant.billing.read")
   @Get("orders/:orderId")
   async getOrderDetail(
     @Req() req: Request & RequestContext,
@@ -1369,6 +1384,7 @@ export class SubscriptionRouter {
   }
 
   /** GET /api/subscription/orders/:orderId/refund-eligibility — 24h 退款资格（product_330 §5） */
+  @RequireCapability("tenant.billing.read")
   @Get("orders/:orderId/refund-eligibility")
   async getRefundEligibility(
     @Req() req: Request & RequestContext,
@@ -1391,6 +1407,7 @@ export class SubscriptionRouter {
   }
 
   /** POST /api/subscription/orders/:orderId/refund-request — 客户申请退款 */
+  @RequireCapability("tenant.billing.manage")
   @Post("orders/:orderId/refund-request")
   async requestRefund(
     @Req() req: Request & RequestContext,
@@ -1420,6 +1437,7 @@ export class SubscriptionRouter {
   }
 
   /** POST /api/subscription/orders/:orderId/quote — 纯试算（零副作用） */
+  @RequireCapability("tenant.billing.read")
   @Post("orders/:orderId/quote")
   async quoteOrder(
     @Req() req: Request & RequestContext,
@@ -1479,6 +1497,7 @@ export class SubscriptionRouter {
   }
 
   /** POST /api/subscription/orders/:orderId/payment-declare — 我已完成付款（P8） */
+  @RequireCapability("tenant.payment.manage")
   @Post("orders/:orderId/payment-declare")
   async declarePayment(
     @Req() req: Request & RequestContext,
@@ -1700,6 +1719,7 @@ export class SubscriptionRouter {
   // POST /api/subscription/actions — 执行订阅变更操作
   // --------------------------------------------------------------------------
 
+  @RequireCapability("tenant.billing.manage")
   @Post("actions")
   async executeAction(
     @Req() req: Request & RequestContext,
@@ -1814,6 +1834,7 @@ export class SubscriptionRouter {
   //  product_220 §3 cancel_at_period_end 口径,无独立列)
   // --------------------------------------------------------------------------
 
+  @RequireCapability("tenant.billing.manage")
   @Post("subscriptions/:id/auto-renew")
   async setAutoRenew(
     @Req() req: Request & RequestContext,

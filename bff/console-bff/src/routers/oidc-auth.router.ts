@@ -50,6 +50,7 @@ import {
   RP_SESSION_STORE,
   type RpRuntime,
 } from "../oidc/oidc-rp.tokens";
+import { Public } from "../auth/capability";
 
 interface AuthReq {
   codeVerifier: string;
@@ -58,6 +59,7 @@ interface AuthReq {
   prompt?: string;
 }
 
+@Public()
 @Controller("auth")
 export class OidcAuthRouter {
   constructor(

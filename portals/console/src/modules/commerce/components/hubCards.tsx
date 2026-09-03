@@ -126,6 +126,7 @@ export function SubscriptionProductCard({
   onToggleFavorite,
   onSetAutoRenew,
   onUnsubscribe,
+  canManage = true,
 }: {
   item: SubscribedProduct;
   favoriteBusy: boolean;
@@ -142,6 +143,8 @@ export function SubscriptionProductCard({
    * 负责"做这件事"，不再负责"问一句"。
    */
   onUnsubscribe: (item: SubscribedProduct) => Promise<void>;
+  /** tenant.billing.manage:无码时不出续费开关与退订菜单(与 BFF 守卫同码)。 */
+  canManage?: boolean;
 }) {
   const t = useTranslations("subscriptionHub");
   const withLabels = useConfirmLabels();
@@ -318,7 +321,9 @@ export function SubscriptionProductCard({
               </Link>
             </Button>
           ) : null}
-          <ActionMenu label={t("card.moreActions")} items={menuItems} />
+          {canManage ? (
+            <ActionMenu label={t("card.moreActions")} items={menuItems} />
+          ) : null}
         </span>
       </CardFooter>
     </Card>

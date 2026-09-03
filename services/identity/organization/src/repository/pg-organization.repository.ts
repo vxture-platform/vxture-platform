@@ -15,6 +15,7 @@ import type {
   TransferOwnerResult,
   OrgRoleCatalogEntry,
   OrgView,
+  PermissionCatalogEntry,
   ProvisionedOrg,
   InvitationListItem,
   SubmitTenantVerificationInput,
@@ -821,6 +822,35 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       code: row.code,
       name: row.name,
       permissions: row.permissions ?? [],
+    }));
+  }
+
+  async listPermissionCatalog(): Promise<PermissionCatalogEntry[]> {
+    const r = await this.pool.query<{
+      code: string;
+      name: string | null;
+      type: string | null;
+      parent_code: string | null;
+      route_path: string | null;
+      category: string | null;
+      sort: number;
+    }>(
+      `select p.perm_code as code, p.perm_name as name, p.perm_type as type,
+              parent.perm_code as parent_code, p.route_path, p.category, p.sort
+         from access.permissions p
+         left join access.permissions parent on parent.id = p.parent_id
+        where p.is_active and p.is_customer_visible
+          and (p.perm_code like 'tenant.%' or p.perm_code like 'workspace.%')
+        order by p.sort, p.perm_code`,
+    );
+    return r.rows.map((row) => ({
+      code: row.code,
+      name: row.name ?? row.code,
+      type: row.type === "menu" ? "menu" : "api",
+      parentCode: row.parent_code,
+      routePath: row.route_path,
+      category: row.category,
+      sort: row.sort,
     }));
   }
 

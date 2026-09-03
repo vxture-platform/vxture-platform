@@ -13,6 +13,7 @@ import type {
   OrgRoleCatalogEntry,
   InvitationListItem,
   OrgView,
+  PermissionCatalogEntry,
   ProvisionedOrg,
   SubmitTenantVerificationInput,
   TenantVerificationRecord,
@@ -465,6 +466,18 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
         permissions: [...(MOCK_ROLE_PERMS["org:member"] ?? [])],
       },
     ];
+  }
+  async listPermissionCatalog(): Promise<PermissionCatalogEntry[]> {
+    const codes = new Set(Object.values(MOCK_ROLE_PERMS).flat());
+    return [...codes].sort().map((code, i) => ({
+      code,
+      name: code,
+      type: "api" as const,
+      parentCode: null,
+      routePath: null,
+      category: null,
+      sort: (i + 1) * 10,
+    }));
   }
 
   async getEffectiveOrgPermissions(

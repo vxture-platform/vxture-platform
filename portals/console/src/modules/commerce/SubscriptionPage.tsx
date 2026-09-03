@@ -53,6 +53,7 @@ import {
   type SubscribedProduct,
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { hasCapability } from "@/features/permissions/can";
 import { PageSection } from "@/layout/shell";
 import { buildWebsiteProductsUrl } from "@/lib/website-entry";
 import {
@@ -81,6 +82,10 @@ export function SubscriptionPage() {
   const appLocale = locale as Locale;
   const router = useRouter();
   const { session } = useConsoleSession();
+  const canManageBilling = hasCapability(
+    session.capabilities,
+    "tenant.billing.manage",
+  );
 
   const [products, setProducts] = useState<SubscribedProduct[]>([]);
   const [orders, setOrders] = useState<MyOrder[]>([]);
@@ -456,50 +461,55 @@ export function SubscriptionPage() {
         icon: "list-checks",
         onSelect: () => toggleExpanded(o.orderId),
       },
-      {
-        id: "cancel",
-        label:
-          cancelingId === o.orderId
-            ? t("orders.menuCancelBusy")
-            : t("orders.menuCancel"),
-        icon: "x",
-        danger: true,
-        disabled: !cancellable || cancelingId === o.orderId,
-        hint: cancellable ? undefined : t("orders.menuCancelHint"),
-        confirm: withLabels({
-          verb: t("orders.cancelVerb"),
-          target: o.orderNo,
-          consequence: t("orders.cancelConsequence"),
-          onConfirm: () => handleCancelOrder(o.orderId),
-        }),
-      },
-      {
-        // 退订自助上线(P0):completed 单的 orderId 即订阅 id,弹确认后立即退订
-        id: "unsubscribe",
-        label: t("orders.menuUnsubscribe"),
-        danger: true,
-        disabled: o.orderStatus !== "completed",
-        ...(o.orderStatus !== "completed"
-          ? { hint: t("orders.menuUnsubscribeHint") }
-          : {}),
-        /* 与产品卡上的退订是同一件事、同一份后果——所以用同一份文案与同一个
+      // 取消订单 / 退订 = tenant.billing.manage(与 BFF 守卫同码);无码的人只看到详情与开票入口。
+      ...(canManageBilling
+        ? [
+            {
+              id: "cancel",
+              label:
+                cancelingId === o.orderId
+                  ? t("orders.menuCancelBusy")
+                  : t("orders.menuCancel"),
+              icon: "x" as const,
+              danger: true as const,
+              disabled: !cancellable || cancelingId === o.orderId,
+              hint: cancellable ? undefined : t("orders.menuCancelHint"),
+              confirm: withLabels({
+                verb: t("orders.cancelVerb"),
+                target: o.orderNo,
+                consequence: t("orders.cancelConsequence"),
+                onConfirm: () => handleCancelOrder(o.orderId),
+              }),
+            },
+            {
+              // 退订自助上线(P0):completed 单的 orderId 即订阅 id,弹确认后立即退订
+              id: "unsubscribe",
+              label: t("orders.menuUnsubscribe"),
+              danger: true as const,
+              disabled: o.orderStatus !== "completed",
+              ...(o.orderStatus !== "completed"
+                ? { hint: t("orders.menuUnsubscribeHint") }
+                : {}),
+              /* 与产品卡上的退订是同一件事、同一份后果——所以用同一份文案与同一个
            落锤，而不是各写一遍。找不到订阅行时用订单信息兜底（completed 单的
            orderId 即订阅 id）。 */
-        confirm: withLabels({
-          verb: t("subs.card.unsubscribeVerb"),
-          target: o.productName ?? "",
-          consequence: t("subs.card.unsubscribeConsequence"),
-          cancelLabel: t("subs.card.unsubscribeKeep"),
-          onConfirm: () =>
-            handleUnsubscribe(
-              products.find((p) => p.subscriptionId === o.orderId) ??
-                ({
-                  subscriptionId: o.orderId,
-                  productName: o.productName,
-                } as SubscribedProduct),
-            ),
-        }),
-      },
+              confirm: withLabels({
+                verb: t("subs.card.unsubscribeVerb"),
+                target: o.productName ?? "",
+                consequence: t("subs.card.unsubscribeConsequence"),
+                cancelLabel: t("subs.card.unsubscribeKeep"),
+                onConfirm: () =>
+                  handleUnsubscribe(
+                    products.find((p) => p.subscriptionId === o.orderId) ??
+                      ({
+                        subscriptionId: o.orderId,
+                        productName: o.productName,
+                      } as SubscribedProduct),
+                  ),
+              }),
+            },
+          ]
+        : []),
       {
         // 申请发票已上线(owner 2026-08-21 归集账单管理):深链到账单管理页,
         // 对已结清账单行内点「申请发票」。
@@ -580,6 +590,7 @@ export function SubscriptionPage() {
                   void handleSetAutoRenew(target, enabled)
                 }
                 onUnsubscribe={handleUnsubscribe}
+                canManage={canManageBilling}
               />
             ))}
           </div>

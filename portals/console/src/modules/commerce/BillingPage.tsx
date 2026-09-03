@@ -46,6 +46,7 @@ import {
   type ConsoleInvoiceReceipt,
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { hasCapability } from "@/features/permissions/can";
 import { PlannedBadge } from "@/components/planned";
 import { PageSection, SignalList } from "@/layout/shell";
 import { fmtDate, fmtTime } from "./components/hubModel";
@@ -79,6 +80,10 @@ export function BillingPage() {
   const locale = useLocale();
   const appLocale = locale as Locale;
   const { session } = useConsoleSession();
+  const canManageInvoices = hasCapability(
+    session.capabilities,
+    "tenant.invoice.manage",
+  );
 
   const [summary, setSummary] = useState<ConsoleBillingSummary | null>(null);
   const [bills, setBills] = useState<ConsoleBill[]>([]);
@@ -282,13 +287,19 @@ export function BillingPage() {
       {
         id: "apply-invoice",
         label: t("invoicing.applyAction"),
-        // 开票资格 = 已结清;不限来源(直接订阅付款/预付款扣费对账单同栈)
-        disabled: b.billStatus !== "paid" || receipt !== undefined,
-        ...(b.billStatus !== "paid"
-          ? { hint: t("invoicing.applyHintUnpaid") }
-          : receipt
-            ? { hint: t("invoicing.applyHintApplied") }
-            : {}),
+        // 开票资格 = 已结清;不限来源(直接订阅付款/预付款扣费对账单同栈)。
+        // 申请动作 = tenant.invoice.manage(与 BFF 守卫同码)。
+        disabled:
+          !canManageInvoices ||
+          b.billStatus !== "paid" ||
+          receipt !== undefined,
+        ...(!canManageInvoices
+          ? { hint: t("invoicing.applyHintNoPermission") }
+          : b.billStatus !== "paid"
+            ? { hint: t("invoicing.applyHintUnpaid") }
+            : receipt
+              ? { hint: t("invoicing.applyHintApplied") }
+              : {}),
         onSelect: () => setApplyBill(b),
       },
       {
@@ -384,6 +395,7 @@ export function BillingPage() {
         receipts={receipts}
         addresses={addresses}
         loading={loading}
+        readOnly={!canManageInvoices}
         applyBill={applyBill}
         onApplyClose={() => setApplyBill(null)}
         onChanged={reloadInvoicing}

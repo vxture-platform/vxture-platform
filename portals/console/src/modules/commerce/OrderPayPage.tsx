@@ -40,6 +40,7 @@ import {
 } from "@vxture/design-system";
 import { PageSection } from "@/layout/shell";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { hasCapability } from "@/features/permissions/can";
 import {
   ConsoleBffError,
   declareOrderPayment,
@@ -129,6 +130,13 @@ export function OrderPayPage() {
   const params = useParams<{ orderId: string }>();
   const orderId = params?.orderId ?? "";
   const { session } = useConsoleSession();
+  // 申报付款 = tenant.payment.manage;取消订单 / 申请退款 = tenant.billing.manage
+  // (与 BFF 守卫同码)。无码的人能看订单,但落锤按钮不可用并说明原因。
+  const canPay = hasCapability(session.capabilities, "tenant.payment.manage");
+  const canManageBilling = hasCapability(
+    session.capabilities,
+    "tenant.billing.manage",
+  );
 
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   // 24h 退款（product_330 §5）：完成态才取资格；申请后以 detail.refund 展示进度
@@ -611,7 +619,7 @@ export function OrderPayPage() {
                     setError(null);
                     setDeclareOpen(true);
                   }}
-                  disabled={submitting || !quote}
+                  disabled={submitting || !quote || !canPay}
                   className="w-full border-transparent bg-linear-to-r from-gradient-brand-from to-gradient-brand-to text-primary-foreground hover:brightness-110"
                 >
                   {fullVoucherCover
@@ -622,13 +630,22 @@ export function OrderPayPage() {
                   variant="ghost"
                   className="w-full text-muted-foreground"
                   onClick={() => void handleCancel()}
-                  disabled={submitting || Number(detail.paidAmount) > 0}
+                  disabled={
+                    submitting ||
+                    Number(detail.paidAmount) > 0 ||
+                    !canManageBilling
+                  }
                 >
                   {t("actions.cancelOrder")}
                 </Button>
                 <p className="text-center text-body-sm text-content-tertiary">
                   {t("ttlFine")}
                 </p>
+                {!canPay || !canManageBilling ? (
+                  <p className="text-center text-body-sm text-warning-text">
+                    {t("actions.noPaymentPermission")}
+                  </p>
+                ) : null}
               </div>
             </PageSection>
           </aside>
@@ -732,16 +749,22 @@ export function OrderPayPage() {
                           : "—",
                       })}
                     </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setRefundFeedback(null);
-                        setRefundDialogOpen(true);
-                      }}
-                    >
-                      {t("refund.request")}
-                    </Button>
+                    {canManageBilling ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setRefundFeedback(null);
+                          setRefundDialogOpen(true);
+                        }}
+                      >
+                        {t("refund.request")}
+                      </Button>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        {t("refund.noPermission")}
+                      </span>
+                    )}
                   </>
                 ) : refundEligibility ? (
                   <span className="text-muted-foreground">

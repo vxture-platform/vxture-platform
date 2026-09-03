@@ -4,6 +4,7 @@ import {
   NestModule,
   RequestMethod,
 } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
 import { VxConfigModule } from "@vxture/core-config";
 import { MailModule } from "@vxture/core-mail";
 import { AccountModule } from "@vxture/service-account";
@@ -15,6 +16,7 @@ import { SubscriptionModule } from "@vxture/service-subscription";
 import { SmsModule } from "@vxture/service-sms";
 import { OidcRpModule } from "./oidc/oidc-rp.module";
 import { ConsoleAuthService } from "./auth/auth.service";
+import { CapabilityGuard } from "./auth/capability";
 import { S2sExchangeService } from "./auth/s2s-exchange.service";
 import { SessionAggregator } from "./aggregators/session.aggregator";
 import { PhoneChangeService } from "./services/phone-change.service";
@@ -83,6 +85,9 @@ import { VerificationRouter } from "./routers/verification.router";
     customerNotificationsProvider,
     PlatformEntitlementsClient,
     S2sExchangeService,
+    // 批 0a:每条路由必须声明访问策略(@Public / @SelfScope / @RequireCapability),
+    // 漏标即 403——默认拒绝,不默认放行。
+    { provide: APP_GUARD, useClass: CapabilityGuard },
   ],
 })
 export class AppModule implements NestModule {

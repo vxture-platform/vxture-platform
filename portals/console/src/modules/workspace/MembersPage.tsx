@@ -41,6 +41,7 @@ import {
 import type { MemberRecord, TenantRoleRecord } from "@/entities/console";
 import { useTranslations } from "next-intl";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { hasCapability } from "@/features/permissions/can";
 import { useConfirmLabels } from "@/lib/destructive";
 
 type MemberStatusFilter = "all" | "active" | "invited" | "suspended";
@@ -417,10 +418,20 @@ export function MembersPage() {
    * disable/enable buttons. Both buttons are hard-disabled until the backend
    * grows a real suspend (the current endpoint hard-deletes), so the gates
    * have no reader — reinstate them together with the buttons. */
+  /* 动作门与 BFF 守卫同一套码(批 0a):邀请/添加/批量/重置/解除 = member.manage,
+   * 改角色 = role.assign。无码的人连按钮都不见,而不是点下去才 403。 */
+  const canManageMembers = hasCapability(
+    session.capabilities,
+    "tenant.member.manage",
+  );
+  const canAssignRoles = hasCapability(
+    session.capabilities,
+    "tenant.role.assign",
+  );
   const memberActionVisibility = {
-    bulk: selectedCount > 0,
-    invite: true,
-    create: true,
+    bulk: selectedCount > 0 && canManageMembers,
+    invite: canManageMembers,
+    create: canManageMembers,
   };
 
   const statusFilters = [
@@ -488,52 +499,61 @@ export function MembersPage() {
   }
 
   function memberMenu(member: MemberRecord) {
+    if (!canManageMembers && !canAssignRoles) return null;
     return (
       <ActionMenu
         label={t("actions.menuLabel", { name: member.name })}
         items={[
-          {
-            id: "edit",
-            label: t("actions.edit"),
-            icon: "edit",
-            onSelect: () => openEditDialog(member),
-          },
-          {
-            id: "toggle-status",
-            label:
-              member.status === "Suspended"
-                ? t("actions.enableMember")
-                : member.status === "Invited"
-                  ? t("actions.disableInvite")
-                  : t("actions.disableMember"),
-            icon: "shield-check",
-            /* Disabled until the backend has a real suspend: today
-             * POST /members/:id/disable calls removeMember() — it HARD DELETES
-             * the member and then returns null, so the router 404s and the UI
-             * shows a failure while the person is already gone. Enabling is
-             * blocked by the same handler pair, so the whole toggle is off. */
-            disabled: true,
-            onSelect: () => void handleToggleMemberStatus(member),
-          },
-          {
-            id: "reset-password",
-            label: t("actions.resetPassword"),
-            icon: "key",
-            onSelect: () => openResetDialog(member),
-          },
-          {
-            id: "unlink",
-            label: t("actions.unlink"),
-            icon: "user-switch",
-            disabled: submitting,
-            danger: true,
-            confirm: withLabels({
-              verb: t("dialogs.unlink.verb"),
-              target: member.name,
-              consequence: t("dialogs.unlink.consequence"),
-              onConfirm: () => handleUnlinkMember(member),
-            }),
-          },
+          ...(canAssignRoles
+            ? [
+                {
+                  id: "edit",
+                  label: t("actions.edit"),
+                  icon: "edit" as const,
+                  onSelect: () => openEditDialog(member),
+                },
+              ]
+            : []),
+          ...(canManageMembers
+            ? [
+                {
+                  id: "toggle-status",
+                  label:
+                    member.status === "Suspended"
+                      ? t("actions.enableMember")
+                      : member.status === "Invited"
+                        ? t("actions.disableInvite")
+                        : t("actions.disableMember"),
+                  icon: "shield-check" as const,
+                  /* Disabled until the backend has a real suspend: today
+                   * POST /members/:id/disable calls removeMember() — it HARD DELETES
+                   * the member and then returns null, so the router 404s and the UI
+                   * shows a failure while the person is already gone. Enabling is
+                   * blocked by the same handler pair, so the whole toggle is off. */
+                  disabled: true,
+                  onSelect: () => void handleToggleMemberStatus(member),
+                },
+                {
+                  id: "reset-password",
+                  label: t("actions.resetPassword"),
+                  icon: "key" as const,
+                  onSelect: () => openResetDialog(member),
+                },
+                {
+                  id: "unlink",
+                  label: t("actions.unlink"),
+                  icon: "user-switch" as const,
+                  disabled: submitting,
+                  danger: true as const,
+                  confirm: withLabels({
+                    verb: t("dialogs.unlink.verb"),
+                    target: member.name,
+                    consequence: t("dialogs.unlink.consequence"),
+                    onConfirm: () => handleUnlinkMember(member),
+                  }),
+                },
+              ]
+            : []),
         ]}
       />
     );

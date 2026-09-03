@@ -7,6 +7,7 @@ import {
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { VxConfigService } from "@vxture/core-config";
+import { isGovernancePermissionCode } from "@vxture/core-utils";
 import { COMMERCE_PG_POOL } from "@vxture/service-subscription";
 import {
   AccountService,
@@ -28,6 +29,7 @@ import {
   type OrgProfileUpdateInput,
   type OrgRole,
   type OrgRoleCatalogEntry,
+  type PermissionCatalogEntry,
   type TransferOwnerResult,
 } from "@vxture/service-organization";
 import type {
@@ -42,22 +44,15 @@ import type {
 } from "../types/console.types";
 
 /**
- * capability 派生(owner 2026-08-21 P0 分权;取代旧「有租户全给 5 个」):
- * - 只读运营面(配额/用量)随成员身份即给——成员用产品就该看得到额度;
- * - 商业面(产品订阅/账单/卡券页可见性)随治理权限 tenant.billing.manage
- *   (seed 裁定:仅 owner 持有,manager 刻意不含 billing);
- * - 成员/角色管理面随对应治理权限(tenant.member.manage / tenant.role.assign)。
- * 治理权限经 GovernanceService 回查(identity/040 D-6:capability 不进 token,
- * BFF 回查为主、可缓存);每 (tenant,user) 短 TTL 内存缓存,改角色最迟一分钟生效。
+ * capability 派生(2026-09-04 批 0a 权限配置体系;取代 2026-08-21 的手写映射表):
+ * 能力 = 成员在当前租户的**有效治理权限码本身**(access.role_permissions →
+ * GovernanceService 回查),不再经一张 BFF 私有的 PERM_TO_CAPABILITIES 翻译——
+ * 读侧码(`*.read`)与商业面细分码已进目录,五角色矩阵写在 seed / 迁移里,
+ * 「谁能看哪页」由数据说了算。治理权限经 GovernanceService 回查(identity/040 D-6:
+ * capability 不进 token,BFF 回查为主、可缓存);每 (tenant,user) 短 TTL 内存缓存,
+ * 改角色最迟一分钟生效。回查失败给只读保底(用产品的人至少看得到额度),绝不放大权限。
  */
-const MEMBER_BASE_CAPABILITIES: Capability[] = ["tenant.quota.read"];
-const PERM_TO_CAPABILITIES: Record<string, Capability[]> = {
-  "tenant.member.manage": ["tenant.user.manage"],
-  "tenant.role.assign": ["tenant.role.manage"],
-  "tenant.billing.manage": ["tenant.billing.read", "tenant.subscription.read"],
-  // 审计属租户设置治理面(owner/manager;成员不可见他人操作轨迹)
-  "tenant.settings.manage": ["tenant.audit.read"],
-};
+const FALLBACK_CAPABILITIES: Capability[] = ["tenant.quota.read"];
 const CAPS_CACHE_TTL_MS = 60_000;
 
 const CUSTOM_ROLES_UNSUPPORTED =
@@ -485,13 +480,10 @@ export class SessionAggregator {
       const perms = await this.gov.getEffectivePermissions(userId, {
         orgId: tenantId,
       });
-      const derived = new Set<Capability>(MEMBER_BASE_CAPABILITIES);
-      for (const p of perms) {
-        for (const c of PERM_TO_CAPABILITIES[p] ?? []) derived.add(c);
-      }
-      caps = [...derived];
+      // 只认目录里登记过的码:库里若混进未知码(手工 SQL / 旧数据),不让它流到前端。
+      caps = [...new Set(perms.filter(isGovernancePermissionCode))];
     } catch {
-      caps = [...MEMBER_BASE_CAPABILITIES];
+      caps = [...FALLBACK_CAPABILITIES];
     }
     this.capsCache.set(key, { at: Date.now(), caps });
     return [...caps];
@@ -534,11 +526,22 @@ export class SessionAggregator {
     };
   }
 
-  async listMembers(userId: string, orgId?: string): Promise<MemberRecord[]> {
+  /**
+   * 成员目录。`includeContacts=false`(持 tenant.member.read 但无 member.manage 的
+   * 普通成员 / 只读成员)时邮箱与手机号打码——目录对同事可见,联系方式只给管理者。
+   */
+  async listMembers(
+    userId: string,
+    orgId?: string,
+    opts: { includeContacts?: boolean } = {},
+  ): Promise<MemberRecord[]> {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return [];
     const members = await this.org.listOrgMembersWithUser(resolved.orgId);
-    return members.map(toMemberRecord);
+    const records = members.map(toMemberRecord);
+    return opts.includeContacts === false
+      ? records.map(redactContacts)
+      : records;
   }
 
   async getMember(
@@ -562,15 +565,15 @@ export class SessionAggregator {
     return catalog.map(toConsoleRole);
   }
 
+  /** 权限目录全树(板块 → 页面 → 操作码),角色页据此画矩阵;按 sort 升序。 */
   async listTenantPermissions(
     userId: string,
     orgId?: string,
   ): Promise<ConsoleTenantPermission[]> {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return [];
-    const catalog = await this.org.getOrgRolesCatalog();
-    const codes = [...new Set(catalog.flatMap((r) => r.permissions))];
-    return codes.map(toConsolePermission);
+    const catalog = await this.org.listPermissionCatalog();
+    return catalog.map(toConsolePermission);
   }
 
   // ── Custom roles retired: roles are a fixed global catalog (owner/manager/member) ──
@@ -891,6 +894,20 @@ function pendingMemberRecord(
   };
 }
 
+/** 邮箱打码:保留首字符与域名;手机号保留前 3 后 4。 */
+function redactContacts(m: MemberRecord): MemberRecord {
+  const at = m.email.indexOf("@");
+  const email =
+    at > 0 ? `${m.email.slice(0, 1)}***${m.email.slice(at)}` : "***";
+  const phone =
+    m.phone && m.phone.length >= 7
+      ? `${m.phone.slice(0, 3)}****${m.phone.slice(-4)}`
+      : m.phone
+        ? "****"
+        : null;
+  return { ...m, email, phone };
+}
+
 function toConsoleRole(e: OrgRoleCatalogEntry): ConsoleTenantRole {
   return {
     id: e.code,
@@ -899,16 +916,33 @@ function toConsoleRole(e: OrgRoleCatalogEntry): ConsoleTenantRole {
     description: null,
     status: "active",
     isSystem: true,
-    permissions: e.permissions.map(toConsolePermission),
+    // 角色行只带它持有的操作码;层级信息由 listTenantPermissions 的目录全树提供。
+    permissions: e.permissions.map((code) =>
+      toConsolePermission({
+        code,
+        name: code,
+        type: "api",
+        parentCode: null,
+        routePath: null,
+        category: null,
+        sort: 999,
+      }),
+    ),
   };
 }
 
-function toConsolePermission(code: string): ConsoleTenantPermission {
+function toConsolePermission(
+  e: PermissionCatalogEntry,
+): ConsoleTenantPermission {
   return {
-    id: code,
-    permissionCode: code,
-    permissionName: code,
-    permissionType: "governance",
+    id: e.code,
+    permissionCode: e.code,
+    permissionName: e.name,
+    permissionType: e.type,
     description: null,
+    parentCode: e.parentCode,
+    routePath: e.routePath,
+    category: e.category,
+    sort: e.sort,
   };
 }

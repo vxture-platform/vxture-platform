@@ -42,6 +42,7 @@ import {
 import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { PageSection, SignalList } from "@/layout/shell";
+import { hasCapability } from "@/features/permissions/can";
 import { AddonPacksSection } from "./components/AddonPacksSection";
 import { fmtDate, fmtTime } from "./components/hubModel";
 
@@ -555,6 +556,10 @@ export function QuotasPage() {
       <AddonPacksSection
         onSettledRefresh={() => setReloadKey((k) => k + 1)}
         formatMoney={money}
+        canPurchase={hasCapability(
+          session.capabilities,
+          "tenant.payment.manage",
+        )}
       />
 
       {/* ④ 各产品配额明细 */}

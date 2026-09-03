@@ -47,6 +47,7 @@ import type {
 } from "@vxture/service-billing";
 import type { RequestContext } from "../types/console.types";
 import { auditCustomerAction } from "../audit/audit-log";
+import { RequireCapability } from "../auth/capability";
 
 // Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
 const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
@@ -225,6 +226,7 @@ function parseAddressBody(
   };
 }
 
+@RequireCapability("tenant.billing.read")
 @Controller("api/billing")
 export class BillingRouter {
   constructor(
@@ -249,6 +251,7 @@ export class BillingRouter {
     return rows.map(mapAddressView);
   }
 
+  @RequireCapability("tenant.invoice.manage")
   @Post("addresses")
   async createAddress(
     @Req() req: Request & RequestContext,
@@ -269,6 +272,7 @@ export class BillingRouter {
     return created;
   }
 
+  @RequireCapability("tenant.invoice.manage")
   @Patch("addresses/:id")
   async updateAddress(
     @Req() req: Request & RequestContext,
@@ -293,6 +297,7 @@ export class BillingRouter {
     return updated;
   }
 
+  @RequireCapability("tenant.invoice.manage")
   @Post("addresses/:id/default")
   async setDefaultAddress(
     @Req() req: Request & RequestContext,
@@ -305,6 +310,7 @@ export class BillingRouter {
     return { ok: true };
   }
 
+  @RequireCapability("tenant.invoice.manage")
   @Delete("addresses/:id")
   async deleteAddress(
     @Req() req: Request & RequestContext,
@@ -331,6 +337,7 @@ export class BillingRouter {
     return rows.map(mapReceiptView);
   }
 
+  @RequireCapability("tenant.invoice.manage")
   @Post("receipts")
   async applyReceipt(
     @Req() req: Request & RequestContext,

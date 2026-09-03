@@ -57,11 +57,11 @@ export function TodosPage() {
   const { session } = useConsoleSession();
   const canManageMembers = hasCapability(
     session.capabilities,
-    "tenant.user.manage",
+    "tenant.member.manage",
   );
   const canSeeCommerce = hasCapability(
     session.capabilities,
-    "tenant.subscription.read",
+    "tenant.billing.read",
   );
 
   const [orders, setOrders] = useState<MyOrder[]>([]);

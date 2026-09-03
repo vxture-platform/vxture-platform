@@ -8,6 +8,7 @@ import {
 import type { Request } from "express";
 import { COMMERCE_PG_POOL } from "@vxture/service-subscription";
 import type { RequestContext } from "../types/console.types";
+import { SelfScope } from "../auth/capability";
 
 interface PgPool {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -32,6 +33,7 @@ interface ApplicationRow {
   sort: number;
 }
 
+@SelfScope()
 @Controller("api/applications")
 export class ApplicationsRouter {
   constructor(@Inject(COMMERCE_PG_POOL) private readonly pool: PgPool) {}

@@ -41,6 +41,7 @@ import { IdentityCard } from "@/components/detail";
 import { PageSection, SignalList } from "@/layout/shell";
 import type { ConsoleOrganizationProfile } from "@/entities/console";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { hasCapability } from "@/features/permissions/can";
 import { formatTenantDisplay } from "@/features/tenant/tenant-display";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -166,6 +167,10 @@ export function OrganizationPage() {
   const locale = useLocale();
   const router = useRouter();
   const { session } = useConsoleSession();
+  const canManageSettings = hasCapability(
+    session.capabilities,
+    "tenant.settings.manage",
+  );
   const logoFileInputRef = useRef<HTMLInputElement | null>(null);
   const [profile, setProfile] = useState<ConsoleOrganizationProfile | null>(
     null,
@@ -335,7 +340,7 @@ export function OrganizationPage() {
         level={2}
         description={t("sections.foundation.description")}
         action={
-          !isPersonal ? (
+          !isPersonal && canManageSettings ? (
             <Button
               variant="outline"
               size="md"
@@ -364,7 +369,7 @@ export function OrganizationPage() {
           }
           avatarLabel={t("logo.edit")}
           onAvatarClick={() => logoFileInputRef.current?.click()}
-          avatarDisabled={submitting}
+          avatarDisabled={submitting || !canManageSettings}
           name={loading ? loadingText : displayName}
           tags={
             loading ? null : (
@@ -373,25 +378,29 @@ export function OrganizationPage() {
           }
           meta={profile?.tenantCode || session.tenant?.tenantCode || empty}
           actions={
-            <>
-              <Button
-                size="md"
-                onClick={() => logoFileInputRef.current?.click()}
-                disabled={submitting}
-              >
-                <Icon name="plus" size="xs" fallback="placeholder" />
-                <span>{t("actions.uploadLogo")}</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="md"
-                onClick={clearLogo}
-                disabled={!logoSrc || submitting}
-              >
-                <Icon name="x" size="xs" fallback="placeholder" />
-                <span>{t("actions.clearLogo")}</span>
-              </Button>
-            </>
+            /* 资料与 logo 写侧 = tenant.settings.manage(与 BFF 守卫同码);
+             * 无码成员看不到按钮,而不是点了才 403。 */
+            canManageSettings ? (
+              <>
+                <Button
+                  size="md"
+                  onClick={() => logoFileInputRef.current?.click()}
+                  disabled={submitting}
+                >
+                  <Icon name="plus" size="xs" fallback="placeholder" />
+                  <span>{t("actions.uploadLogo")}</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="md"
+                  onClick={() => void clearLogo()}
+                  disabled={!logoSrc || submitting}
+                >
+                  <Icon name="x" size="xs" fallback="placeholder" />
+                  <span>{t("actions.clearLogo")}</span>
+                </Button>
+              </>
+            ) : undefined
           }
         />
         <Input

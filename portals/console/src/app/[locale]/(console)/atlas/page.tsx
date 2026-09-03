@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CapabilityGate } from "@/features/permissions/CapabilityGate";
 import {
   Banner,
   DataTable,
@@ -115,7 +116,7 @@ function buildMetrics(
   ];
 }
 
-export default function Page() {
+function AtlasPage() {
   const { session } = useConsoleSession();
   const [models, setModels] = useState<AiModelRecord[]>([]);
   const [grants, setGrants] = useState<AiModelGrantRecord[]>([]);
@@ -298,5 +299,13 @@ export default function Page() {
         <SignalList items={statusSignals} />
       </PageSection>
     </ViewLayout>
+  );
+}
+
+export default function Page() {
+  return (
+    <CapabilityGate capability={"tenant.model.read"}>
+      <AtlasPage />
+    </CapabilityGate>
   );
 }

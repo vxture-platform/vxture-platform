@@ -124,7 +124,7 @@ const membersPermissionsSection: NavigationSection = {
       labelKey: "members.label",
       icon: "users",
       descriptionKey: "members.description",
-      capability: "tenant.user.manage",
+      capability: "tenant.member.read",
       tenantTypes: ["organization"],
     },
     {
@@ -132,7 +132,7 @@ const membersPermissionsSection: NavigationSection = {
       labelKey: "roles.label",
       icon: "shield-check",
       descriptionKey: "roles.description",
-      capability: "tenant.role.manage",
+      capability: "tenant.member.read",
       tenantTypes: ["organization"],
     },
     {
@@ -140,7 +140,7 @@ const membersPermissionsSection: NavigationSection = {
       labelKey: "invitations.label",
       icon: "mail",
       descriptionKey: "invitations.description",
-      capability: "tenant.user.manage",
+      capability: "tenant.member.manage",
       tenantTypes: ["organization"],
     },
   ],
@@ -154,7 +154,7 @@ const subscriptionBillingSection: NavigationSection = {
       labelKey: "subscription.label",
       icon: "chart-bar",
       descriptionKey: "subscription.description",
-      capability: "tenant.subscription.read",
+      capability: "tenant.billing.read",
     },
     {
       href: "/billing",
@@ -232,17 +232,15 @@ const platformSection: NavigationSection = {
       labelKey: "atlas.label",
       icon: "database",
       descriptionKey: "atlas.description",
-      capability: "platform.model.manage",
+      capability: "tenant.model.read",
     },
   ],
 };
 
-const PLATFORM_CAPABILITIES: Capability[] = [
-  "platform.tenant.manage",
-  "platform.product.manage",
-  "platform.pricing.manage",
-  "platform.model.manage",
-];
+/* 平台能力域的门:2026-09-04 起用租户侧目录码(tenant.model.read)。它暂不授予任何
+ * 角色——/atlas 页面整改(批 7)前不对客户开放;此前挂的 platform.* 码在 console
+ * 的能力派生里永远不会出现,等于一个永远关着、却没有锁的门。 */
+const PLATFORM_CAPABILITIES: Capability[] = ["tenant.model.read"];
 
 /**
  * 扁平导航分组（向后兼容）。不含平台域——平台能力仅经 consoleDomains 暴露。

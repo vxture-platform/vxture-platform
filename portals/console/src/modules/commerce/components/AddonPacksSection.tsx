@@ -152,10 +152,13 @@ function AddonPackCard({
 export function AddonPacksSection({
   onSettledRefresh,
   formatMoney,
+  canPurchase = true,
 }: {
   /** 订单状态变化后让父页刷新配额总览(额度入池后立即可见)。 */
   onSettledRefresh: () => void;
   formatMoney: (yuan: string, currency: string) => string;
+  /** tenant.payment.manage:无码只能看目录与订单,不能下单/取消(与 BFF 守卫同码)。 */
+  canPurchase?: boolean;
 }) {
   const t = useTranslations("quotasPage.addons");
   const withLabels = useConfirmLabels();
@@ -320,8 +323,12 @@ export function AddonPacksSection({
     {
       id: "cancel",
       label: t("cancel"),
-      disabled: o.status !== "pending_payment",
-      ...(o.status !== "pending_payment" ? { hint: t("cancelHint") } : {}),
+      disabled: !canPurchase || o.status !== "pending_payment",
+      ...(!canPurchase
+        ? { hint: t("buyNoPermission") }
+        : o.status !== "pending_payment"
+          ? { hint: t("cancelHint") }
+          : {}),
       danger: true,
       confirm: withLabels({
         verb: t("cancelVerb"),
@@ -340,6 +347,9 @@ export function AddonPacksSection({
       description={t("description")}
     >
       {error ? <Banner tone="danger" title={error} /> : null}
+      {!canPurchase ? (
+        <Banner tone="info" title={t("buyNoPermission")} />
+      ) : null}
 
       {/* 服务卡片栅格(与订阅 hub 卡同构,3/行) */}
       {packs.length > 0 ? (
@@ -349,7 +359,7 @@ export function AddonPacksSection({
               key={p.packCode}
               pack={p}
               pendingOrderNo={pendingOrderFor(p.packCode)}
-              busy={busy}
+              busy={busy || !canPurchase}
               onBuy={(pack) => void handleBuy(pack)}
               onContinue={goPay}
               formatMoney={formatMoney}

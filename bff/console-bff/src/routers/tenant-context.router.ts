@@ -8,7 +8,9 @@ import {
 import type { Request } from "express";
 import { SessionAggregator } from "../aggregators/session.aggregator";
 import type { RequestContext } from "../types/console.types";
+import { SelfScope } from "../auth/capability";
 
+@SelfScope()
 @Controller("api/tenant-context")
 export class TenantContextRouter {
   constructor(

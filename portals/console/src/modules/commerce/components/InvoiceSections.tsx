@@ -94,6 +94,7 @@ export function InvoiceSections({
   receipts,
   addresses,
   loading,
+  readOnly = false,
   applyBill,
   onApplyClose,
   onChanged,
@@ -102,6 +103,8 @@ export function InvoiceSections({
   receipts: ConsoleInvoiceReceipt[];
   addresses: ConsoleBillingAddress[];
   loading: boolean;
+  /** 无 tenant.invoice.manage:只看发票记录与抬头,不出现新增/编辑/删除入口。 */
+  readOnly?: boolean;
   /** 账单表「申请发票」选中的账单;null = 弹窗关闭 */
   applyBill: ConsoleBill | null;
   onApplyClose: () => void;
@@ -381,13 +384,15 @@ export function InvoiceSections({
         title={t("addresses.title")}
         description={t("addresses.description")}
         action={
-          <Button
-            size="md"
-            variant="outline"
-            onClick={() => setAddressForm({ ...EMPTY_ADDRESS_FORM })}
-          >
-            {t("addresses.add")}
-          </Button>
+          readOnly ? undefined : (
+            <Button
+              size="md"
+              variant="outline"
+              onClick={() => setAddressForm({ ...EMPTY_ADDRESS_FORM })}
+            >
+              {t("addresses.add")}
+            </Button>
+          )
         }
       >
         <DataTable<ConsoleBillingAddress>
@@ -396,12 +401,16 @@ export function InvoiceSections({
           rowKey={(a) => a.id}
           loading={loading}
           indexStart={1}
-          rowActions={(a) => (
-            <ActionMenu
-              label={t("addresses.rowMenu")}
-              items={addressActions(a)}
-            />
-          )}
+          {...(readOnly
+            ? {}
+            : {
+                rowActions: (a: ConsoleBillingAddress) => (
+                  <ActionMenu
+                    label={t("addresses.rowMenu")}
+                    items={addressActions(a)}
+                  />
+                ),
+              })}
           empty={<EmptyState title={t("addresses.empty")} />}
         />
       </PageSection>

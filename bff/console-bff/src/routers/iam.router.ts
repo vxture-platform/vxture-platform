@@ -25,6 +25,11 @@ import {
 import { CreateRoleDto, UpdateRoleDto } from "../dto/role.dto";
 import type { RequestContext } from "../types/console.types";
 import type { TransferOwnerRejection } from "@vxture/service-organization";
+import {
+  RequireCapability,
+  SelfScope,
+  holdsAnyCapability,
+} from "../auth/capability";
 
 function requireTenantSession(req: Request & RequestContext) {
   if (!req.user) {
@@ -62,6 +67,7 @@ export class IamRouter {
     @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
   ) {}
 
+  @RequireCapability("tenant.member.read")
   @Get("summary")
   async getSummary(@Req() req: Request & RequestContext) {
     const { accountId, tenantId } = requireTenantSession(req);
@@ -79,13 +85,18 @@ export class IamRouter {
     };
   }
 
+  @RequireCapability("tenant.member.read")
   @Get("members")
   async getMembers(@Req() req: Request & RequestContext) {
     const { accountId, tenantId } = requireTenantSession(req);
 
-    return this.sessionAggregator.listMembers(accountId, tenantId);
+    // 目录对持 member.read 的同事可见;邮箱/手机号只给能管成员的人,其余打码。
+    return this.sessionAggregator.listMembers(accountId, tenantId, {
+      includeContacts: holdsAnyCapability(req, ["tenant.member.manage"]),
+    });
   }
 
+  @RequireCapability("tenant.member.read")
   @Get("members/:memberId")
   async getMember(
     @Req() req: Request & RequestContext,
@@ -105,6 +116,7 @@ export class IamRouter {
     return member;
   }
 
+  @RequireCapability("tenant.member.read")
   @Get("roles")
   async getRoles(@Req() req: Request & RequestContext) {
     const { accountId, tenantId } = requireTenantSession(req);
@@ -112,6 +124,7 @@ export class IamRouter {
     return this.sessionAggregator.listTenantRoles(accountId, tenantId);
   }
 
+  @RequireCapability("tenant.member.read")
   @Get("permissions")
   async getPermissions(@Req() req: Request & RequestContext) {
     const { accountId, tenantId } = requireTenantSession(req);
@@ -119,6 +132,7 @@ export class IamRouter {
     return this.sessionAggregator.listTenantPermissions(accountId, tenantId);
   }
 
+  @RequireCapability("tenant.role.assign")
   @Post("roles")
   async createRole(
     @Req() req: Request & RequestContext,
@@ -138,6 +152,7 @@ export class IamRouter {
     return role;
   }
 
+  @RequireCapability("tenant.role.assign")
   @Put("roles/:roleId")
   async updateRole(
     @Req() req: Request & RequestContext,
@@ -159,6 +174,7 @@ export class IamRouter {
     return role;
   }
 
+  @RequireCapability("tenant.role.assign")
   @Delete("roles/:roleId")
   async deleteRole(
     @Req() req: Request & RequestContext,
@@ -180,12 +196,14 @@ export class IamRouter {
 
   // ── 邀请台账(P1 /invitations 落地)────────────────────────────────────────
 
+  @RequireCapability("tenant.member.manage")
   @Get("invitations")
   async listInvitations(@Req() req: Request & RequestContext) {
     const { accountId, tenantId } = requireTenantSession(req);
     return this.sessionAggregator.listInvitations(accountId, tenantId);
   }
 
+  @RequireCapability("tenant.member.manage")
   @Post("invitations/:invitationId/revoke")
   async revokeInvitation(
     @Req() req: Request & RequestContext,
@@ -208,6 +226,7 @@ export class IamRouter {
     return { status: "ok" as const };
   }
 
+  @RequireCapability("tenant.member.manage")
   @Post("members")
   async createMember(
     @Req() req: Request & RequestContext,
@@ -234,6 +253,7 @@ export class IamRouter {
     return member;
   }
 
+  @RequireCapability("tenant.member.manage")
   @Post("members/invite")
   async inviteMember(
     @Req() req: Request & RequestContext,
@@ -260,6 +280,7 @@ export class IamRouter {
     return member;
   }
 
+  @RequireCapability("tenant.role.assign")
   @Put("members/:memberId")
   async updateMember(
     @Req() req: Request & RequestContext,
@@ -288,6 +309,7 @@ export class IamRouter {
     return member;
   }
 
+  @RequireCapability("tenant.member.manage")
   @Post("members/:memberId/disable")
   async disableMember(
     @Req() req: Request & RequestContext,
@@ -313,6 +335,7 @@ export class IamRouter {
     return member;
   }
 
+  @RequireCapability("tenant.member.manage")
   @Post("members/:memberId/reset-password")
   async resetMemberPassword(
     @Req() req: Request & RequestContext,
@@ -340,6 +363,7 @@ export class IamRouter {
     return { status: "ok" as const };
   }
 
+  @RequireCapability("tenant.member.manage")
   @Delete("members/:memberId")
   async removeMember(
     @Req() req: Request & RequestContext,
@@ -376,6 +400,7 @@ export class IamRouter {
    * 最需要知道的恰恰是**哪一条**没满足(对方不是成员?自己已不是 owner?)。
    * 无论成败都写审计:被拒的转让尝试本身就是要留痕的事。
    */
+  @SelfScope()
   @Post("members/:memberId/transfer-owner")
   async transferOwner(
     @Req() req: Request & RequestContext,

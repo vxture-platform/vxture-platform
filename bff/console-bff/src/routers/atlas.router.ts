@@ -76,6 +76,7 @@ import type {
   TenancyQuotaResponse,
   TenancyUsageResponse,
 } from "../types/console.types";
+import { RequireCapability } from "../auth/capability";
 
 /** Exchange audience for atlas's capability plane (product_100 code). */
 const ATLAS_AUDIENCE = "atlas";
@@ -90,6 +91,7 @@ interface AtlasErrorBody {
 
 // ── Router ───────────────────────────────────────────────────────────────────
 
+@RequireCapability("tenant.model.read")
 @Controller("api/atlas")
 export class AtlasRouter {
   private readonly atlasApiUrl: string;

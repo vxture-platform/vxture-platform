@@ -38,6 +38,7 @@ import {
 } from "../lib/payment-channels";
 import type { RequestContext } from "../types/console.types";
 import { auditCustomerAction } from "../audit/audit-log";
+import { RequireCapability } from "../auth/capability";
 
 // Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
 const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
@@ -210,6 +211,7 @@ function mapAddonOrder(r: AddonPurchaseRecord): AddonOrderView {
   };
 }
 
+@RequireCapability("tenant.quota.read")
 @Controller("api/quota")
 export class QuotaRouter {
   constructor(
@@ -235,6 +237,7 @@ export class QuotaRouter {
     }));
   }
 
+  @RequireCapability("tenant.billing.read")
   @Get("addon-orders")
   async listAddonOrders(
     @Req() req: Request & RequestContext,
@@ -245,6 +248,7 @@ export class QuotaRouter {
     return rows.map(mapAddonOrder);
   }
 
+  @RequireCapability("tenant.payment.manage")
   @Post("addon-orders")
   async createAddonOrder(
     @Req() req: Request & RequestContext,
@@ -277,6 +281,7 @@ export class QuotaRouter {
   }
 
   /** 加油包订单详情(支付页 /quotas/addon-pay/[orderNo] 数据源)。 */
+  @RequireCapability("tenant.billing.read")
   @Get("addon-orders/:orderNo")
   async getAddonOrder(
     @Req() req: Request & RequestContext,
@@ -295,6 +300,7 @@ export class QuotaRouter {
   }
 
   /** 线下转账收款信息(渠道配置随 env;reference = 订单号,汇款附言用)。 */
+  @RequireCapability("tenant.billing.read")
   @Get("addon-orders/:orderNo/payment-channels")
   async getAddonPaymentChannels(
     @Req() req: Request & RequestContext,
@@ -305,6 +311,7 @@ export class QuotaRouter {
     return buildPaymentChannels(orderNo);
   }
 
+  @RequireCapability("tenant.payment.manage")
   @Post("addon-orders/:orderNo/payment-declare")
   async declareAddonPayment(
     @Req() req: Request & RequestContext,
@@ -340,6 +347,7 @@ export class QuotaRouter {
     return { ok: true };
   }
 
+  @RequireCapability("tenant.payment.manage")
   @Post("addon-orders/:orderNo/cancel")
   async cancelAddonOrder(
     @Req() req: Request & RequestContext,
