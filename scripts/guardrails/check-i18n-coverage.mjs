@@ -243,7 +243,8 @@ const BASELINE = {
   //   atlas 整页 / 成员批量栏 / 「default」徽章 / 付款页全角冒号拼接 / 联系销售主题。
   //   剩下 8 条全在 api/console-bff.ts 的 ConsoleBffError 兜底文案(非组件,拿不到
   //   译器);要清得改成错误码 + 页面侧翻译,归批 1。
-  console: 8,
+  // 2026-09-04 console 8 → 0:批 1 把客户端兜底改成空串 + 页面侧翻译,棘轮归零。
+  console: 0,
   website: 40,
   admin: 2516, // 2026-09-04: 公告列表「推送」列（P2-h 推送结果）随 admin 全中文写死体例 +4；admin 整页 i18n 化另开专项
   opera: 1931, // 2026-09-02: layout metadata 的写死中文标题/描述搬进 messages.meta（head 三平面统一），-2

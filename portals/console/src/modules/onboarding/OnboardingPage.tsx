@@ -21,6 +21,12 @@ import {
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { useRouter } from "@/lib/i18n/navigation";
+import { useSearchParams } from "next/navigation";
+
+/** 只接受站内相对路径(以单个 / 开头):`next` 来自地址栏,不能成为开放跳转。 */
+function safeNextPath(value: string | null): string {
+  return value && /^\/(?!\/)/.test(value) ? value : "/";
+}
 
 const ACCOUNT_RE = /^[A-Za-z][A-Za-z0-9_]{2,23}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -78,6 +84,7 @@ export function OnboardingPage() {
   const t = useTranslations("onboarding");
   const { session, refreshSession } = useConsoleSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [account, setAccount] = useState("");
   const [displayName, setDisplayName] = useState(
@@ -115,7 +122,8 @@ export function OnboardingPage() {
       });
       await updateUsername(trimmedAccount);
       await refreshSession();
-      router.replace("/");
+      // 回到来处:从邀请链接进来的人补完资料要接着去接受邀请,不是落到首页。
+      router.replace(safeNextPath(searchParams.get("next")));
     } catch (caught) {
       const status =
         caught instanceof ConsoleBffError ? caught.status : undefined;

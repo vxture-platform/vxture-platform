@@ -189,7 +189,7 @@ export async function fetchCapabilities(): Promise<Capability[]> {
 }
 
 export async function fetchMembers(): Promise<MemberRecord[]> {
-  return readJson<MemberRecord[]>(withTenant("/api/iam/members"), []);
+  return readJsonStrict<MemberRecord[]>(withTenant("/api/iam/members"));
 }
 
 export async function fetchMember(
@@ -202,7 +202,7 @@ export async function fetchMember(
 }
 
 export async function fetchTenantRoles(): Promise<TenantRoleRecord[]> {
-  return readJson<TenantRoleRecord[]>(withTenant("/api/iam/roles"), []);
+  return readJsonStrict<TenantRoleRecord[]>(withTenant("/api/iam/roles"));
 }
 
 export async function fetchTenantPermissions(): Promise<
@@ -322,11 +322,61 @@ export async function deleteTenantRole(roleId: string) {
   }
 }
 
+/**
+ * 成员线的错误要带**原因码**回页面:BFF 把 owner 保护 / 账号不存在 / 已是成员 /
+ * 邀请待接受 这些拒绝原因放在 message 里,页面按码给文案。合并成一句
+ * "操作失败"等于让用户猜(与 transferTenantOwner 同一条理由)。
+ */
+async function throwMemberError(
+  response: Response,
+  fallback: string,
+): Promise<never> {
+  let detail = "";
+  try {
+    const body = (await response.json()) as { message?: string | string[] };
+    const message = Array.isArray(body?.message)
+      ? body.message[0]
+      : body?.message;
+    if (message) detail = message;
+  } catch {
+    /* 非 JSON 响应(网关层错误):保留兜底文案 */
+  }
+  throw new ConsoleBffError(detail || fallback, response.status);
+}
+
+/** 成员线拒绝原因码(BFF message);页面据此选文案,未知码回落成通用失败。 */
+export const MEMBER_ERROR_CODES = [
+  "owner_protected",
+  "self_protected",
+  "owner_role_locked",
+  "account_not_found",
+  "already_member",
+  "invitation_pending",
+  "invalid_email",
+] as const;
+export type MemberErrorCode = (typeof MEMBER_ERROR_CODES)[number];
+
+export function memberErrorCode(error: unknown): MemberErrorCode | null {
+  if (!(error instanceof ConsoleBffError)) return null;
+  return (MEMBER_ERROR_CODES as readonly string[]).includes(error.message)
+    ? (error.message as MemberErrorCode)
+    : null;
+}
+
+/** 邀请 / 重发的产出:待接受记录 + 一次性链接 + 邮件是否发出。 */
+export interface InviteMemberResult {
+  member: MemberRecord;
+  invitationId: string;
+  email: string;
+  roleCode: string;
+  inviteLink: string;
+  emailSent: boolean;
+  expiresAt: string;
+}
+
+/** 「新增成员」= 把已有账号按邮箱加进租户;账号不存在 → 404 account_not_found。 */
 export async function createMember(payload: {
   email: string;
-  nickname?: string | null;
-  remark?: string | null;
-  roleId?: string | null;
   roleCode?: string | null;
 }): Promise<MemberRecord> {
   const response = await fetch(
@@ -341,7 +391,7 @@ export async function createMember(payload: {
   );
 
   if (!response.ok) {
-    throw new ConsoleBffError("Member creation failed", response.status);
+    await throwMemberError(response, "");
   }
 
   return (await response.json()) as MemberRecord;
@@ -349,11 +399,8 @@ export async function createMember(payload: {
 
 export async function inviteMember(payload: {
   email: string;
-  nickname?: string | null;
-  remark?: string | null;
-  roleId?: string | null;
   roleCode?: string | null;
-}): Promise<MemberRecord> {
+}): Promise<InviteMemberResult> {
   const response = await fetch(
     `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant("/api/iam/members/invite")}`,
     {
@@ -366,23 +413,17 @@ export async function inviteMember(payload: {
   );
 
   if (!response.ok) {
-    throw new ConsoleBffError("Member invite failed", response.status);
+    await throwMemberError(response, "");
   }
 
-  return (await response.json()) as MemberRecord;
+  return (await response.json()) as InviteMemberResult;
 }
 
 export async function updateMember(
   memberId: string,
   payload: {
-    nickname?: string | null;
-    remark?: string | null;
-    /** The backend only reads `roleCode`; `roleId` was silently dropped. The
-     *  role catalog sets `id === roleCode` (toConsoleRole), so callers pass the
-     *  same value under the name the backend actually reads. */
+    /** The backend only reads `roleCode`; the role catalog sets `id === roleCode`. */
     roleCode?: string | null;
-    roleId?: string | null;
-    status?: "active" | "inactive" | "banned";
   },
 ): Promise<MemberRecord> {
   const response = await fetch(
@@ -397,7 +438,7 @@ export async function updateMember(
   );
 
   if (!response.ok) {
-    throw new ConsoleBffError("Member update failed", response.status);
+    await throwMemberError(response, "");
   }
 
   return (await response.json()) as MemberRecord;
@@ -542,9 +583,12 @@ export async function transferTenantOwner(memberId: string): Promise<void> {
   }
 }
 
-export async function disableMember(memberId: string): Promise<MemberRecord> {
+async function postMemberStatus(
+  memberId: string,
+  action: "disable" | "enable",
+): Promise<MemberRecord> {
   const response = await fetch(
-    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/members/${memberId}/disable`)}`,
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}${withTenant(`/api/iam/members/${memberId}/${action}`)}`,
     {
       method: "POST",
       credentials: "include",
@@ -553,10 +597,19 @@ export async function disableMember(memberId: string): Promise<MemberRecord> {
   );
 
   if (!response.ok) {
-    throw new ConsoleBffError("Member disable failed", response.status);
+    await throwMemberError(response, "");
   }
 
   return (await response.json()) as MemberRecord;
+}
+
+/** 停用 = 打标不删行(批 2 起 BFF 真停用);恢复走 enableMember。 */
+export function disableMember(memberId: string): Promise<MemberRecord> {
+  return postMemberStatus(memberId, "disable");
+}
+
+export function enableMember(memberId: string): Promise<MemberRecord> {
+  return postMemberStatus(memberId, "enable");
 }
 
 export async function resetMemberPassword(
@@ -590,7 +643,7 @@ export async function unlinkMember(memberId: string) {
   );
 
   if (!response.ok) {
-    throw new ConsoleBffError("Member unlink failed", response.status);
+    await throwMemberError(response, "");
   }
 }
 
@@ -2484,13 +2537,100 @@ export interface ConsoleInvitation {
 }
 
 export async function fetchInvitations(): Promise<ConsoleInvitation[]> {
-  return readJson<ConsoleInvitation[]>("/api/iam/invitations", []);
+  return readJsonStrict<ConsoleInvitation[]>("/api/iam/invitations");
 }
 
-export async function revokeInvitation(id: string): Promise<boolean> {
+/** 撤销失败抛错(不再回 false):确认件按 Promise 是否 rejected 决定关不关框。 */
+export async function revokeInvitation(id: string): Promise<void> {
   const response = await fetch(
     `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/iam/invitations/${encodeURIComponent(id)}/revoke`,
-    { method: "POST", credentials: "include" },
+    { method: "POST", credentials: "include", cache: "no-store" },
   );
-  return response.ok;
+  if (!response.ok) {
+    await throwMemberError(response, "");
+  }
+}
+
+/** 重发 = 换链接 + 顺延有效期 + 再发一封邮件;旧链接立即失效。 */
+export async function resendInvitation(
+  id: string,
+): Promise<InviteMemberResult> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/iam/invitations/${encodeURIComponent(id)}/resend`,
+    { method: "POST", credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) {
+    await throwMemberError(response, "");
+  }
+  return (await response.json()) as InviteMemberResult;
+}
+
+// ── 接受邀请(只认登录态,租户由 token 决定;不带 X-Tenant)────────────────
+
+export interface InvitationLookup {
+  id: string;
+  tenantName: string | null;
+  email: string;
+  roleCode: string;
+  status: "pending" | "accepted" | "expired" | "revoked";
+  expiresAt: string;
+  inviterName: string | null;
+}
+
+export const ACCEPT_INVITATION_REASONS = [
+  "not_found",
+  "expired",
+  "revoked",
+  "already_accepted",
+  "email_mismatch",
+] as const;
+export type AcceptInvitationReason = (typeof ACCEPT_INVITATION_REASONS)[number];
+
+export function acceptInvitationReason(
+  error: unknown,
+): AcceptInvitationReason | null {
+  if (!(error instanceof ConsoleBffError)) return null;
+  return (ACCEPT_INVITATION_REASONS as readonly string[]).includes(
+    error.message,
+  )
+    ? (error.message as AcceptInvitationReason)
+    : null;
+}
+
+export async function lookupInvitation(
+  token: string,
+): Promise<InvitationLookup> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/iam/invitations/lookup?token=${encodeURIComponent(token)}`,
+    { credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) {
+    await throwMemberError(response, "");
+  }
+  return (await response.json()) as InvitationLookup;
+}
+
+export interface AcceptedInvitation {
+  tenantId: string;
+  tenantName: string | null;
+  role: string;
+}
+
+export async function acceptInvitation(
+  token: string,
+): Promise<AcceptedInvitation> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/iam/invitations/accept`,
+    {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    },
+  );
+  if (!response.ok) {
+    await throwMemberError(response, "");
+  }
+  return (await response.json()) as AcceptedInvitation;
 }

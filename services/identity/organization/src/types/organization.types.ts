@@ -206,6 +206,48 @@ export interface InvitationView {
   expiresAt: Date;
 }
 
+/**
+ * 成员在租户内的可写状态(tenant_memberships.status)。`removed` 是 DDL 允许值但
+ * 读写两侧都不用——解除关联是删行,不是打标(批 2 裁定:留一行 removed 只会让
+ * 「同一邮箱再邀请」撞唯一键)。
+ */
+export type OrgMemberStatus = "active" | "suspended";
+
+/** 按原始 token 查到的邀请(接受页预览用);status 含读侧派生的 expired。 */
+export interface InvitationLookup {
+  id: string;
+  tenantId: string | null;
+  tenantName: string | null;
+  email: string;
+  roleCode: string;
+  status: "pending" | "accepted" | "expired" | "revoked";
+  expiresAt: Date;
+  inviterName: string | null;
+}
+
+/** 重发邀请:轮换 token 并顺延有效期后返回的新链接材料。 */
+export interface RotatedInvitation {
+  token: string;
+  expiresAt: Date;
+  email: string;
+  roleCode: string;
+}
+
+/**
+ * 接受邀请的拒绝原因。每一条对应接受页上一句不同的解释,所以是枚举不是布尔:
+ * 「链接失效」与「你登录的不是受邀邮箱」是两件用户要做不同事的事。
+ */
+export type AcceptInvitationRejection =
+  | "not_found"
+  | "expired"
+  | "revoked"
+  | "already_accepted"
+  | "email_mismatch";
+
+export type AcceptInvitationResult =
+  | { ok: true; membership: OrgMembershipView; tenantName: string | null }
+  | { ok: false; reason: AcceptInvitationRejection };
+
 /** Data access contract for identity-core organizations (raw SQL impl + mock impl). */
 export interface OrganizationReadRepository {
   /** Provision a personal org + default workspace + owner membership at both levels (§13.1). */
@@ -293,10 +335,36 @@ export interface OrganizationReadRepository {
   createInvitation(
     input: CreateInvitationInput,
   ): Promise<{ invitation: InvitationView; token: string }>;
-  /** Accept an invitation by raw token for a user; creates the membership. Returns null if invalid/expired. */
+  /**
+   * 接受邀请:按原始 token 找到 pending 且未过期的邀请,校验受邀邮箱与接受人一致
+   * (邮箱邀请只能由该邮箱对应的账号接受——链接被转发给别人不该等于把租户交出去),
+   * 然后建租户级 + 默认工作空间两级 membership。拒绝原因判别式返回,不抛。
+   */
   acceptInvitation(
     token: string,
     userId: string,
+    userEmail: string | null,
+  ): Promise<AcceptInvitationResult>;
+  /** 按原始 token 查邀请(接受页先看清楚再点);查不到返回 null。 */
+  getInvitationByToken(token: string): Promise<InvitationLookup | null>;
+  /**
+   * 重发邀请 = 轮换 token 并把有效期顺延到「现在 + 默认 TTL」。只作用于 pending
+   * 行(含已过期的 pending:过期是读侧派生,行仍是 pending);已撤销 / 已接受返回 null。
+   * 旧链接立即失效——同一封邀请永远只有一个活的链接。
+   */
+  rotateInvitationToken(
+    invitationId: string,
+    tenantId: string,
+  ): Promise<RotatedInvitation | null>;
+  /**
+   * 停用 / 恢复成员:租户级 membership 与本租户下全部 workspace membership 同步
+   * 改 status。停用不是删除——成员的订单、用量、审计足迹都还在,恢复即回到原角色。
+   * 非本租户成员返回 null。
+   */
+  setOrgMemberStatus(
+    orgId: string,
+    userId: string,
+    status: OrgMemberStatus,
   ): Promise<OrgMembershipView | null>;
 
   // ── Governance RBAC (Task 3.2): effective permission codes via the global catalog ──
@@ -315,9 +383,9 @@ export interface OrganizationReadRepository {
   ): Promise<WorkspaceMembershipView | null>;
 
   // ── Console reads (members joined with user, + the global role catalog) ──
-  /** Org members joined with their user record. */
+  /** Org members joined with their user record(active + suspended;停用的人还在目录里,只是状态不同)。 */
   listOrgMembersWithUser(orgId: string): Promise<OrgMemberDetail[]>;
-  /** A single org member joined with their user record; null if not a member. */
+  /** A single org member joined with their user record(active + suspended); null if not a member. */
   getOrgMemberDetail(
     orgId: string,
     userId: string,

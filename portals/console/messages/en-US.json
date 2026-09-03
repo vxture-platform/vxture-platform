@@ -1356,8 +1356,11 @@
         "email": "Email",
         "role": "Role",
         "status": "Status",
-        "lastActive": "Last active"
-      }
+        "lastActive": "Last active",
+        "joinedAt": "Joined"
+      },
+      "invitedExpires": "Invitation valid until {date}",
+      "selfTag": "You"
     },
     "status": {
       "Active": "Active",
@@ -1380,11 +1383,12 @@
     "actions": {
       "menuLabel": "Member actions for {name}",
       "edit": "Edit user",
-      "disableInvite": "Disable user",
       "disableMember": "Disable user",
       "enableMember": "Enable user",
       "resetPassword": "Reset password",
-      "unlink": "Unlink"
+      "unlink": "Unlink",
+      "resendInvite": "Resend invitation",
+      "revokeInvite": "Revoke invitation"
     },
     "bulk": {
       "selected": "{count} selected",
@@ -1400,10 +1404,13 @@
     },
     "dialogs": {
       "create": {
-        "title": "Add member"
+        "title": "Add member",
+        "description": "Add an existing Vxture account to this tenant by email; if they have no account yet, invite them instead.",
+        "switchToInvite": "Send an invitation instead"
       },
       "invite": {
-        "title": "Invite member"
+        "title": "Invite member",
+        "description": "They receive an email with a link; once accepted they join the tenant and its default workspace with the selected role."
       },
       "edit": {
         "title": "Edit member"
@@ -1424,8 +1431,6 @@
       },
       "fields": {
         "email": "Email",
-        "nickname": "Nickname",
-        "teamRemark": "Team remark",
         "role": "Role",
         "defaultRole": "Default member",
         "nextPassword": "New temporary password"
@@ -1437,6 +1442,11 @@
         "save": "Save",
         "resetPassword": "Reset password",
         "unlink": "Unlink"
+      },
+      "revokeInvite": {
+        "verb": "Revoke the invitation to",
+        "consequence": "The invitation link stops working immediately and the recipient sees \"invitation not found\". This cannot be undone — send a new invitation to let them join.",
+        "keep": "Keep invitation"
       }
     },
     "feedback": {
@@ -1460,7 +1470,28 @@
       "bulkEnableError": "Could not enable the selected members. Try again later.",
       "bulkUnlinkError": "Could not unlink the selected members. Try again later.",
       "memberDisableError": "Could not disable the member. Try again later.",
-      "memberEnableError": "Could not enable the member. Try again later."
+      "memberEnableError": "Could not enable the member. Try again later.",
+      "inviteNoEmail": "Invitation created, but the email could not be sent; share the link manually.",
+      "inviteResent": "Invitation resent.",
+      "inviteRevoked": "Invitation revoked.",
+      "resendError": "Could not resend the invitation. Try again later.",
+      "revokeError": "Could not revoke the invitation. Try again later.",
+      "bulkPartial": "{done} done, {failed} failed.",
+      "bulkSkipped": "The owner and yourself were skipped."
+    },
+    "hints": {
+      "ownerProtected": "The owner cannot be disabled or unlinked; transfer ownership first",
+      "ownerRoleLocked": "The owner's role only changes through ownership transfer",
+      "selfProtected": "You cannot do this to yourself"
+    },
+    "errors": {
+      "owner_protected": "The owner cannot be disabled or unlinked; transfer ownership first.",
+      "self_protected": "You cannot do this to yourself.",
+      "owner_role_locked": "The owner's role only changes through ownership transfer.",
+      "account_not_found": "No Vxture account uses this email; send an invitation instead.",
+      "already_member": "This account is already a member of the tenant.",
+      "invitation_pending": "This email already has a pending invitation; resend or revoke it on the Invitations page.",
+      "invalid_email": "The email address is not valid."
     }
   },
   "rolesPage": {
@@ -2871,7 +2902,7 @@
     "revokeHint": "Only pending invitations can be revoked",
     "revokeFailed": "Revoke failed — please try again",
     "resend": "Resend",
-    "resendHint": "Invitation email channel coming soon",
+    "resendHint": "Revoked or accepted invitations cannot be resent",
     "role": {
       "owner": "Owner",
       "manager": "Manager",
@@ -2901,13 +2932,29 @@
       "title": "How invitations work",
       "description": "Flow and validity",
       "flowTitle": "Flow",
-      "flowBody": "Send by email + role from the Members page; on acceptance the invitee joins the tenant and its default workspace",
+      "flowBody": "Send by email + role from the Members page; the recipient gets an email with a link. Once they sign in with the invited email and accept, they join the tenant and its default workspace",
       "expiryTitle": "Validity",
-      "expiryBody": "Invitations expire automatically; revocation is immediate. The same email can be re-invited after expiry"
+      "expiryBody": "Invitations are valid for 7 days and expire automatically; revocation is immediate. The same email can be invited again after the invitation lapses",
+      "resendTitle": "Resending",
+      "resendBody": "Resending creates a new link, voids the old one immediately and restarts the 7-day validity; if the email cannot be sent, copy the link from the dialog and share it manually"
     },
     "revokeVerb": "Revoke the invitation to",
     "revokeConsequence": "The invitation link stops working immediately and the recipient sees \"invitation not found\". This cannot be undone — re-inviting them means sending a new invitation.",
-    "revokeKeep": "Keep invitation"
+    "revokeKeep": "Keep invitation",
+    "resendFailed": "Resend failed — please try again",
+    "resent": "Resent to {email}.",
+    "resentNoEmail": "A new link was created, but the email could not be sent; share the link with {email} manually.",
+    "revoked": "The invitation to {email} was revoked.",
+    "expiringSoon": "Expires within 24h",
+    "errors": {
+      "owner_protected": "The owner cannot be disabled or unlinked; transfer ownership first.",
+      "self_protected": "You cannot do this to yourself.",
+      "owner_role_locked": "The owner's role only changes through ownership transfer.",
+      "account_not_found": "No Vxture account uses this email; send an invitation instead.",
+      "already_member": "This account is already a member of the tenant.",
+      "invitation_pending": "This email already has a pending invitation.",
+      "invalid_email": "The email address is not valid."
+    }
   },
   "todosPage": {
     "title": "To-dos",
@@ -2963,5 +3010,57 @@
     "description": "The figures and lists on this page are not real data. Retry, or come back later if it keeps failing.",
     "retry": "Retry",
     "empty": "Could not load; nothing to show yet"
+  },
+  "inviteLinkDialog": {
+    "title": "Invitation sent",
+    "titleResent": "Invitation resent",
+    "sent": "Email sent to {email}; you can also share the link directly.",
+    "notSent": "The email could not be sent; share the link below with {email} manually.",
+    "notSentTitle": "Email not sent",
+    "linkLabel": "Invitation link",
+    "expires": "Valid until {date}; resending creates a new link and voids this one.",
+    "copy": "Copy link",
+    "copied": "Copied",
+    "copyFailed": "Copy failed — select the link and copy it manually.",
+    "close": "Close"
+  },
+  "acceptInvitationPage": {
+    "title": "Accept invitation",
+    "description": "After confirming you join the tenant and can switch to it in the console.",
+    "cardTitle": "Invitation details",
+    "missingToken": "The link is incomplete (no invitation token); open it again from the email.",
+    "fields": {
+      "tenant": "Tenant",
+      "inviter": "Invited by",
+      "role": "Role",
+      "email": "Invited email",
+      "expires": "Valid until"
+    },
+    "role": {
+      "owner": "Owner",
+      "manager": "Manager",
+      "member": "Member",
+      "readonly": "Read-only member",
+      "guest": "Guest"
+    },
+    "actions": {
+      "accept": "Accept and join",
+      "later": "Not now",
+      "enter": "Go to the workspace",
+      "switchAccount": "Sign out and sign in with the invited email"
+    },
+    "reasons": {
+      "not_found": "Invitation not found: the link may have been revoked or copied incompletely.",
+      "expired": "This invitation has expired; ask the inviter to resend it.",
+      "revoked": "This invitation has been revoked.",
+      "already_accepted": "This invitation was already accepted; if that was you, just switch to the tenant.",
+      "email_mismatch": "Your account email ({email}) does not match the invited email; sign in with the account that owns the invited mailbox."
+    },
+    "mismatchTitle": "Signed-in account does not match the invited email",
+    "mismatchHint": "You are signed in as {current}; this invitation was sent to {invited}.",
+    "accepted": "You have joined \"{tenant}\"",
+    "acceptedDescription": "Switched you to that tenant.",
+    "switchFailed": "Joined, but switching tenants failed; use the tenant switcher at the top.",
+    "acceptError": "Could not accept the invitation. Try again later."
   }
 }

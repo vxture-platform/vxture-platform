@@ -41,6 +41,11 @@ export type {
   TenantVerificationRecord,
   SubmitTenantVerificationInput,
   InvitationListItem,
+  InvitationLookup,
+  RotatedInvitation,
+  AcceptInvitationResult,
+  AcceptInvitationRejection,
+  OrgMemberStatus,
   TransferOwnerResult,
   TransferOwnerRejection,
 } from "./types/organization.types";

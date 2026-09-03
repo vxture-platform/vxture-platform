@@ -1,30 +1,46 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Delete,
   ForbiddenException,
   Get,
   Inject,
+  Logger,
   NotFoundException,
   Param,
   Post,
   Put,
+  Query,
   Req,
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
-import { SessionAggregator } from "../aggregators/session.aggregator";
+import { VxConfigService } from "@vxture/core-config";
+import { MailService } from "@vxture/core-mail";
+import {
+  SessionAggregator,
+  type InviteMemberOutcome,
+} from "../aggregators/session.aggregator";
 import { auditCustomerAction } from "../audit/audit-log";
 import {
+  AcceptInvitationDto,
   ResetMemberPasswordDto,
   UpdateMemberDto,
   UpsertMemberDto,
 } from "../dto/member.dto";
 import { CreateRoleDto, UpdateRoleDto } from "../dto/role.dto";
+import {
+  invitationMailLocale,
+  renderInvitationMail,
+} from "../services/invitation-mail";
 import type { RequestContext } from "../types/console.types";
-import type { TransferOwnerRejection } from "@vxture/service-organization";
+import type {
+  AcceptInvitationRejection,
+  TransferOwnerRejection,
+} from "@vxture/service-organization";
 import {
   RequireCapability,
   SelfScope,
@@ -58,14 +74,88 @@ const TRANSFER_OWNER_ERRORS: Record<TransferOwnerRejection, () => Error> = {
     new BadRequestException("目标必须是本租户的在职成员"),
 };
 
+/**
+ * 接受邀请的拒绝原因 → HTTP 语义。message 就是原因码,接受页按码给文案——
+ * 「链接失效」「已被撤销」「你登录的不是受邀邮箱」是三件用户要做不同事的事。
+ */
+const ACCEPT_INVITATION_ERRORS: Record<
+  AcceptInvitationRejection,
+  (reason: string) => Error
+> = {
+  not_found: (reason) => new NotFoundException(reason),
+  expired: (reason) => new BadRequestException(reason),
+  revoked: (reason) => new BadRequestException(reason),
+  already_accepted: (reason) => new ConflictException(reason),
+  email_mismatch: (reason) => new ForbiddenException(reason),
+};
+
 @Controller("api/iam")
 export class IamRouter {
+  private readonly logger = new Logger(IamRouter.name);
+
   constructor(
     @Inject(SessionAggregator)
     private readonly sessionAggregator: SessionAggregator,
     /** 仅供租户审计写钩子(support.audit_logs INSERT,fire-and-forget)。 */
     @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
+    @Inject(MailService) private readonly mail: MailService,
+    @Inject(VxConfigService) private readonly config: VxConfigService,
   ) {}
+
+  /** 邀请链接:CONSOLE_BASE_URL + 语言前缀(console 路由 localePrefix=always)+ 接受页。 */
+  private inviteLink(token: string, language: string | null): string {
+    const base = this.config.platform.CONSOLE_BASE_URL.replace(/\/$/, "");
+    const locale = invitationMailLocale(language);
+    return `${base}/${locale}/accept-invitation?token=${encodeURIComponent(token)}`;
+  }
+
+  /**
+   * 发邀请邮件。发送失败**不让邀请失败**:邀请已经建好、链接已经生成,页面上
+   * 给「复制链接」兜底,只把 emailSent=false 报回去让邀请人知道要手动转交。
+   */
+  private async sendInvitationMail(
+    outcome: InviteMemberOutcome,
+    link: string,
+  ): Promise<boolean> {
+    const rendered = renderInvitationMail({
+      locale: invitationMailLocale(outcome.inviterLanguage),
+      tenantName: outcome.tenantName,
+      inviterName: outcome.inviterName,
+      roleCode: outcome.roleCode,
+      link,
+      expiresAt: outcome.expiresAt,
+    });
+    try {
+      await this.mail.send({
+        to: outcome.email,
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+      });
+      return true;
+    } catch (error) {
+      this.logger.warn(
+        `invitation mail to ${outcome.email} failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return false;
+    }
+  }
+
+  private async deliverInvitation(outcome: InviteMemberOutcome) {
+    const inviteLink = this.inviteLink(outcome.token, outcome.inviterLanguage);
+    const emailSent = await this.sendInvitationMail(outcome, inviteLink);
+    return {
+      member: outcome.member,
+      invitationId: outcome.invitationId,
+      email: outcome.email,
+      roleCode: outcome.roleCode,
+      inviteLink,
+      emailSent,
+      expiresAt: outcome.expiresAt.toISOString(),
+    };
+  }
 
   @RequireCapability("tenant.member.read")
   @Get("summary")
@@ -227,6 +317,74 @@ export class IamRouter {
   }
 
   @RequireCapability("tenant.member.manage")
+  @Post("invitations/:invitationId/resend")
+  async resendInvitation(
+    @Req() req: Request & RequestContext,
+    @Param("invitationId") invitationId: string,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+    const outcome = await this.sessionAggregator.resendInvitation(
+      accountId,
+      tenantId,
+      invitationId,
+    );
+    if (!outcome) {
+      throw new NotFoundException("Invitation not found or not pending");
+    }
+    const delivered = await this.deliverInvitation(outcome);
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.invitation.resend",
+      resourceType: "invitation",
+      resourceId: invitationId,
+      after: { email: outcome.email, emailSent: delivered.emailSent },
+    });
+    return delivered;
+  }
+
+  /**
+   * 接受页预览 / 接受:只认登录态,不看当前活跃租户(见 auth-context-paths)。
+   * 租户由 token 决定——受邀人此刻活跃的多半是自己的个人租户。
+   */
+  @SelfScope()
+  @Get("invitations/lookup")
+  async lookupInvitation(@Query("token") token?: string) {
+    if (!token) throw new BadRequestException("token is required");
+    const found = await this.sessionAggregator.lookupInvitation(token);
+    if (!found) throw new NotFoundException("not_found");
+    return {
+      id: found.id,
+      tenantName: found.tenantName,
+      email: found.email,
+      roleCode: found.roleCode,
+      status: found.status,
+      expiresAt: found.expiresAt.toISOString(),
+      inviterName: found.inviterName,
+    };
+  }
+
+  @SelfScope()
+  @Post("invitations/accept")
+  async acceptInvitation(
+    @Req() req: Request & RequestContext,
+    @Body() body: AcceptInvitationDto,
+  ) {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    if (!body.token) throw new BadRequestException("token is required");
+    const result = await this.sessionAggregator.acceptInvitation(
+      req.user.id,
+      body.token,
+    );
+    if (!result.ok)
+      throw ACCEPT_INVITATION_ERRORS[result.reason](result.reason);
+    return {
+      tenantId: result.membership.organizationId,
+      tenantName: result.tenantName,
+      role: result.membership.role,
+    };
+  }
+
+  /** 「新增成员」= 把已有账号按邮箱直接加进租户;账号不存在 → 404 account_not_found。 */
+  @RequireCapability("tenant.member.manage")
   @Post("members")
   async createMember(
     @Req() req: Request & RequestContext,
@@ -234,7 +392,7 @@ export class IamRouter {
   ) {
     const { accountId, tenantId } = requireTenantSession(req);
 
-    const member = await this.sessionAggregator.createMember(
+    const member = await this.sessionAggregator.addExistingMember(
       accountId,
       tenantId,
       body,
@@ -244,10 +402,10 @@ export class IamRouter {
     }
 
     auditCustomerAction(this.pool, req, {
-      action: "tenant.member.invite",
+      action: "tenant.member.add",
       resourceType: "member",
-      resourceId: member.email ?? member.id,
-      after: { role: member.roleCode },
+      resourceId: member.id,
+      after: { role: member.roleCode, email: member.email },
     });
 
     return member;
@@ -261,23 +419,28 @@ export class IamRouter {
   ) {
     const { accountId, tenantId } = requireTenantSession(req);
 
-    const member = await this.sessionAggregator.inviteMember(
+    const outcome = await this.sessionAggregator.inviteMember(
       accountId,
       tenantId,
       body,
     );
-    if (!member) {
+    if (!outcome) {
       throw new NotFoundException("Tenant member could not be invited");
     }
+    const delivered = await this.deliverInvitation(outcome);
 
     auditCustomerAction(this.pool, req, {
       action: "tenant.member.invite",
-      resourceType: "member",
-      resourceId: member.email ?? member.id,
-      after: { role: member.roleCode },
+      resourceType: "invitation",
+      resourceId: outcome.invitationId,
+      after: {
+        email: outcome.email,
+        role: outcome.roleCode,
+        emailSent: delivered.emailSent,
+      },
     });
 
-    return member;
+    return delivered;
   }
 
   @RequireCapability("tenant.role.assign")
@@ -309,6 +472,7 @@ export class IamRouter {
     return member;
   }
 
+  /** 停用:打标不删行,恢复走 /enable。owner 与本人 400(owner_protected / self_protected)。 */
   @RequireCapability("tenant.member.manage")
   @Post("members/:memberId/disable")
   async disableMember(
@@ -317,10 +481,11 @@ export class IamRouter {
   ) {
     const { accountId, tenantId } = requireTenantSession(req);
 
-    const member = await this.sessionAggregator.disableMember(
+    const member = await this.sessionAggregator.setMemberStatus(
       accountId,
       tenantId,
       memberId,
+      "suspended",
     );
     if (!member) {
       throw new NotFoundException("Member not found");
@@ -328,6 +493,33 @@ export class IamRouter {
 
     auditCustomerAction(this.pool, req, {
       action: "tenant.member.disable",
+      resourceType: "member",
+      resourceId: memberId,
+    });
+
+    return member;
+  }
+
+  @RequireCapability("tenant.member.manage")
+  @Post("members/:memberId/enable")
+  async enableMember(
+    @Req() req: Request & RequestContext,
+    @Param("memberId") memberId: string,
+  ) {
+    const { accountId, tenantId } = requireTenantSession(req);
+
+    const member = await this.sessionAggregator.setMemberStatus(
+      accountId,
+      tenantId,
+      memberId,
+      "active",
+    );
+    if (!member) {
+      throw new NotFoundException("Member not found");
+    }
+
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.member.enable",
       resourceType: "member",
       resourceId: memberId,
     });

@@ -1,7 +1,12 @@
 import { Injectable } from "@nestjs/common";
+import { deriveInvitationStatus, rejectAcceptance } from "./invitation-rules";
 import type {
+  AcceptInvitationResult,
   CreateInvitationInput,
+  InvitationLookup,
   InvitationView,
+  OrgMemberStatus,
+  RotatedInvitation,
   OrganizationProfileView,
   OrganizationReadRepository,
   OrgLogoRecord,
@@ -40,6 +45,8 @@ const EMPTY_PROFILE: OrganizationProfileView = {
   logoHash: null,
   updatedAt: null,
 };
+
+const MOCK_INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function mockMemberDetail(
   userId: string,
@@ -84,12 +91,91 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     return (this.tenantVerifications.get(tenantId) ?? []).slice(0, limit);
   }
 
-  async listInvitations(): Promise<InvitationListItem[]> {
-    return [];
+  // ── 邀请台账(mock:内存,token 明文保存——只在无库模式跑)──────────────
+  private readonly invitations = new Map<
+    string,
+    {
+      view: InvitationView;
+      token: string;
+      createdBy: string;
+      createdAt: Date;
+      acceptedAt: Date | null;
+    }
+  >();
+
+  async listInvitations(
+    tenantId: string,
+    limit = 100,
+  ): Promise<InvitationListItem[]> {
+    return [...this.invitations.values()]
+      .filter((i) => i.view.organizationId === tenantId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit)
+      .map((i) => ({
+        id: i.view.id,
+        email: i.view.target,
+        roleCode: i.view.role,
+        status: deriveInvitationStatus(i.view.status, i.view.expiresAt),
+        expiresAt: i.view.expiresAt,
+        acceptedAt: i.acceptedAt,
+        createdAt: i.createdAt,
+        inviterName: null,
+      }));
   }
 
-  async revokeInvitation(): Promise<boolean> {
-    return false;
+  async revokeInvitation(
+    invitationId: string,
+    tenantId: string,
+  ): Promise<boolean> {
+    const inv = this.invitations.get(invitationId);
+    if (
+      !inv ||
+      inv.view.organizationId !== tenantId ||
+      inv.view.status !== "pending"
+    ) {
+      return false;
+    }
+    inv.view.status = "revoked";
+    return true;
+  }
+
+  async rotateInvitationToken(
+    invitationId: string,
+    tenantId: string,
+  ): Promise<RotatedInvitation | null> {
+    const inv = this.invitations.get(invitationId);
+    if (
+      !inv ||
+      inv.view.organizationId !== tenantId ||
+      inv.view.status !== "pending"
+    ) {
+      return null;
+    }
+    inv.token = crypto.randomUUID();
+    inv.view.expiresAt = new Date(Date.now() + MOCK_INVITE_TTL_MS);
+    return {
+      token: inv.token,
+      expiresAt: inv.view.expiresAt,
+      email: inv.view.target,
+      roleCode: inv.view.role,
+    };
+  }
+
+  async getInvitationByToken(token: string): Promise<InvitationLookup | null> {
+    const inv = [...this.invitations.values()].find((i) => i.token === token);
+    if (!inv) return null;
+    return {
+      id: inv.view.id,
+      tenantId: inv.view.organizationId,
+      tenantName: inv.view.organizationId
+        ? (this.orgs.get(inv.view.organizationId)?.name ?? null)
+        : null,
+      email: inv.view.target,
+      roleCode: inv.view.role,
+      status: deriveInvitationStatus(inv.view.status, inv.view.expiresAt),
+      expiresAt: inv.view.expiresAt,
+      inviterName: null,
+    };
   }
 
   async submitTenantVerification(
@@ -336,7 +422,38 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     );
     if (i < 0) return false;
     this.orgMembers.splice(i, 1);
+    // 与 pg 同档:两级 membership 一起删。
+    const wsIds = new Set(this.workspaceIdsOf(orgId));
+    for (let k = this.wsMembers.length - 1; k >= 0; k -= 1) {
+      const w = this.wsMembers[k]!;
+      if (w.userId === userId && wsIds.has(w.workspaceId)) {
+        this.wsMembers.splice(k, 1);
+      }
+    }
     return true;
+  }
+
+  async setOrgMemberStatus(
+    orgId: string,
+    userId: string,
+    status: OrgMemberStatus,
+  ): Promise<OrgMembershipView | null> {
+    const m = this.orgMembers.find(
+      (x) => x.organizationId === orgId && x.userId === userId,
+    );
+    if (!m) return null;
+    m.status = status;
+    const wsIds = new Set(this.workspaceIdsOf(orgId));
+    for (const w of this.wsMembers) {
+      if (w.userId === userId && wsIds.has(w.workspaceId)) w.status = status;
+    }
+    return m;
+  }
+
+  private workspaceIdsOf(orgId: string): string[] {
+    return [...this.workspaces.values()]
+      .filter((w) => w.organizationId === orgId)
+      .map((w) => w.id);
   }
 
   async transferOrgOwner(
@@ -406,15 +523,69 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       target: input.target,
       role: input.role,
       status: "pending",
-      expiresAt: new Date(0),
+      expiresAt: new Date(
+        Date.now() +
+          (input.ttlSeconds ? input.ttlSeconds * 1000 : MOCK_INVITE_TTL_MS),
+      ),
     };
-    return { invitation, token: "mock-token" };
+    const token = crypto.randomUUID();
+    this.invitations.set(invitation.id, {
+      view: invitation,
+      token,
+      createdBy: input.createdBy,
+      createdAt: new Date(),
+      acceptedAt: null,
+    });
+    return { invitation, token };
   }
   async acceptInvitation(
-    _token: string,
-    _userId: string,
-  ): Promise<OrgMembershipView | null> {
-    return null;
+    token: string,
+    userId: string,
+    userEmail: string | null,
+  ): Promise<AcceptInvitationResult> {
+    const inv = [...this.invitations.values()].find((i) => i.token === token);
+    if (!inv) return { ok: false, reason: "not_found" };
+    const rejection = rejectAcceptance(
+      {
+        status: inv.view.status,
+        expiresAt: inv.view.expiresAt,
+        targetType: inv.view.targetType,
+        target: inv.view.target,
+      },
+      userEmail,
+    );
+    if (rejection) return { ok: false, reason: rejection };
+    inv.view.status = "accepted";
+    inv.acceptedAt = new Date();
+    const role = inv.view.role as OrgRole;
+    if (inv.view.scope === "org" && inv.view.organizationId) {
+      const orgId = inv.view.organizationId;
+      const membership = await this.addOrgMember(orgId, userId, role);
+      const ws = [...this.workspaces.values()].find(
+        (w) => w.organizationId === orgId && w.isDefault,
+      );
+      if (ws) await this.addWorkspaceMember(ws.id, userId, role);
+      return {
+        ok: true,
+        membership,
+        tenantName: this.orgs.get(orgId)?.name ?? null,
+      };
+    }
+    const workspace = inv.view.workspaceId
+      ? this.workspaces.get(inv.view.workspaceId)
+      : undefined;
+    if (!workspace) return { ok: false, reason: "not_found" };
+    await this.addWorkspaceMember(workspace.id, userId, role);
+    return {
+      ok: true,
+      membership: {
+        organizationId: workspace.organizationId,
+        userId,
+        role,
+        status: "active",
+      },
+      tenantName: this.orgs.get(workspace.organizationId)?.name ?? null,
+    };
   }
 
   async getWorkspaceMembership(
@@ -433,7 +604,7 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
 
   async listOrgMembersWithUser(orgId: string): Promise<OrgMemberDetail[]> {
     return this.orgMembers
-      .filter((m) => m.organizationId === orgId && m.status === "active")
+      .filter((m) => m.organizationId === orgId && m.status !== "removed")
       .map((m) => mockMemberDetail(m.userId, m.role, m.status));
   }
   async getOrgMemberDetail(
@@ -444,7 +615,7 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       (x) =>
         x.organizationId === orgId &&
         x.userId === userId &&
-        x.status === "active",
+        x.status !== "removed",
     );
     return m ? mockMemberDetail(m.userId, m.role, m.status) : null;
   }

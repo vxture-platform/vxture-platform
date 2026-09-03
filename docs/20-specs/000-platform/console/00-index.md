@@ -77,20 +77,21 @@ Console 展示租户当前订阅状态（套餐、有效期、功能开关）和
 > 2026-09-04 起按**权限目录**（`access.permissions`）门控，不再按角色名硬判。目录、角色矩阵、执行点见
 > [`docs/30-design/identity/070-tenant-console-permission-catalog.md`](../../../30-design/identity/070-tenant-console-permission-catalog.md)。
 
-| 页面 / 动作                                     | 所需权限码                | owner | manager | member | readonly | guest |
-| ----------------------------------------------- | ------------------------- | :---: | :-----: | :----: | :------: | :---: |
-| 成员管理（目录；无管理码者联系方式打码）        | `tenant.member.read`      |   ✔   |    ✔    |   ✔    |    ✔     |   —   |
-| 邀请 / 添加 / 停用 / 重置密码 / 解除 / 邀请记录 | `tenant.member.manage`    |   ✔   |    ✔    |   —    |    —     |   —   |
-| 改成员角色                                      | `tenant.role.assign`      |   ✔   |    ✔    |   —    |    —     |   —   |
-| 组织资料 / Logo / 企业认证提交                  | `tenant.settings.manage`  |   ✔   |    ✔    |   —    |    —     |   —   |
-| 产品订阅 / 订单 / 账单 / 卡券（看）             | `tenant.billing.read`     |   ✔   |    ✔    |   —    |    ✔     |   —   |
-| 下单 / 取消 / 退订 / 自动续费 / 退款申请        | `tenant.billing.manage`   |   ✔   |    —    |   —    |    —     |   —   |
-| 申报付款 / 加油包购买                           | `tenant.payment.manage`   |   ✔   |    —    |   —    |    —     |   —   |
-| 申请发票 / 抬头簿                               | `tenant.invoice.manage`   |   ✔   |    —    |   —    |    —     |   —   |
-| 配额 / 用量                                     | `tenant.quota.read`       |   ✔   |    ✔    |   ✔    |    ✔     |   —   |
-| 审计日志                                        | `tenant.audit.read`       |   ✔   |    ✔    |   —    |    ✔     |   —   |
-| 个人信息 / 安全 / 通知偏好 / 站内消息 / 总览    | 无（登录即可）            |   ✔   |    ✔    |   ✔    |    ✔     |   ✔   |
-| 转让所有权                                      | 当前 owner 身份（不走码） |   ✔   |    —    |   —    |    —     |   —   |
+| 页面 / 动作                                                                     | 所需权限码                | owner | manager | member | readonly | guest |
+| ------------------------------------------------------------------------------- | ------------------------- | :---: | :-----: | :----: | :------: | :---: |
+| 成员管理（目录；无管理码者联系方式打码）                                        | `tenant.member.read`      |   ✔   |    ✔    |   ✔    |    ✔     |   —   |
+| 邀请 / 重发 / 撤销 / 添加 / 停用 / 恢复 / 重置密码 / 解除 / 邀请记录            | `tenant.member.manage`    |   ✔   |    ✔    |   —    |    —     |   —   |
+| 改成员角色（owner 只能经「转让所有权」；不能改自己）                            | `tenant.role.assign`      |   ✔   |    ✔    |   —    |    —     |   —   |
+| 接受邀请 `/accept-invitation?token=`（租户由 token 决定，受邀邮箱须与账号一致） | 登录即可（`@SelfScope`）  |   ✔   |    ✔    |   ✔    |    ✔     |   ✔   |
+| 组织资料 / Logo / 企业认证提交                                                  | `tenant.settings.manage`  |   ✔   |    ✔    |   —    |    —     |   —   |
+| 产品订阅 / 订单 / 账单 / 卡券（看）                                             | `tenant.billing.read`     |   ✔   |    ✔    |   —    |    ✔     |   —   |
+| 下单 / 取消 / 退订 / 自动续费 / 退款申请                                        | `tenant.billing.manage`   |   ✔   |    —    |   —    |    —     |   —   |
+| 申报付款 / 加油包购买                                                           | `tenant.payment.manage`   |   ✔   |    —    |   —    |    —     |   —   |
+| 申请发票 / 抬头簿                                                               | `tenant.invoice.manage`   |   ✔   |    —    |   —    |    —     |   —   |
+| 配额 / 用量                                                                     | `tenant.quota.read`       |   ✔   |    ✔    |   ✔    |    ✔     |   —   |
+| 审计日志                                                                        | `tenant.audit.read`       |   ✔   |    ✔    |   —    |    ✔     |   —   |
+| 个人信息 / 安全 / 通知偏好 / 站内消息 / 总览                                    | 无（登录即可）            |   ✔   |    ✔    |   ✔    |    ✔     |   ✔   |
+| 转让所有权                                                                      | 当前 owner 身份（不走码） |   ✔   |    —    |   —    |    —     |   —   |
 
 角色是全局固定目录（owner / manager / member / readonly / guest），自定义角色未开放；成员的角色指派在成员管理页。缺码时页面显示「没有访问权限」状态（说明所需权限），BFF 同码 403。
 
