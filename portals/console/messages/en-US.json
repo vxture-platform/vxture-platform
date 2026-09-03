@@ -119,7 +119,7 @@
     "slotLevel": "Level",
     "slotLocked": "More badges · locked",
     "billing": "Billing",
-    "monthlyCost": "This month",
+    "monthlyCost": "Subscription fee",
     "noData": "No data",
     "payBill": "Pay invoice",
     "trafficUsage": "Traffic usage",
@@ -145,7 +145,7 @@
       "unavailable": "Unavailable",
       "uncovered": "No quota pool"
     },
-    "monthlyCostDesc": "This month’s charges & invoicing",
+    "monthlyCostDesc": "What the current subscription paid this period & invoicing",
     "payBillDesc": "Manage payment methods",
     "trafficUsageDesc": "Traffic & call usage",
     "usageLimitDesc": "Quota limits & alert thresholds",
