@@ -28,9 +28,19 @@ function isoDate(d: Date): string {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
-/** 以当前时刻为起点估算周期起止（含首日，止日 = 起日 + 周期 − 1 天）。 */
-function rangeFor(cycle: CycleValue): { start: string; end: string } {
-  const start = new Date();
+/**
+ * 估算周期起止（含首日，止日 = 起日 + 周期 − 1 天）。起点默认此刻;续订传当前订阅的
+ * 到期时刻(批 1c:此前续订也按「此刻」算,把一个还剩 20 天的订阅画成明天就换周期)。
+ */
+function rangeFor(
+  cycle: CycleValue,
+  startAt?: string | null,
+): { start: string; end: string } {
+  const parsed = startAt ? new Date(startAt) : null;
+  const start =
+    parsed && !Number.isNaN(parsed.getTime()) && parsed.getTime() > Date.now()
+      ? parsed
+      : new Date();
   const end = new Date(start);
   if (cycle === "month") end.setMonth(end.getMonth() + 1);
   else end.setFullYear(end.getFullYear() + 1);
@@ -44,6 +54,8 @@ export interface CyclePickerProps {
   /** 年付省额徽章文案（已格式化）；null 时不显示。 */
   readonly yearSavings?: string | null;
   readonly disabled?: boolean;
+  /** 周期起点(ISO);续订 = 当前订阅到期时刻,缺省 = 此刻。 */
+  readonly startAt?: string | null;
 }
 
 export function CyclePicker({
@@ -51,11 +63,12 @@ export function CyclePicker({
   onChange,
   yearSavings,
   disabled,
+  startAt,
 }: CyclePickerProps) {
   const t = useTranslations("subscribePage");
   const label = (c: CycleValue) =>
     t(`cycleToggle.${c === "month" ? "monthly" : "yearly"}`);
-  const range = rangeFor(value);
+  const range = rangeFor(value, startAt);
 
   return (
     <div className={infoRow}>

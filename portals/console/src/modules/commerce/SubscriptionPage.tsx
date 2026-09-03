@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
@@ -86,6 +87,7 @@ export function SubscriptionPage() {
   const locale = useLocale();
   const appLocale = locale as Locale;
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { session } = useConsoleSession();
   const canManageBilling = hasCapability(
     session.capabilities,
@@ -609,6 +611,11 @@ export function SubscriptionPage() {
       />
 
       {error ? <Banner tone="danger" title={error} /> : null}
+      {/* 下单页深链里的产品 / 意图无法识别时带 ?notice=unknown-link 跳回来:说明理由,
+          不再静默。 */}
+      {searchParams.get("notice") === "unknown-link" ? (
+        <Banner tone="info" title={t("unknownLink")} />
+      ) : null}
       {loadFailed ? (
         <LoadFailedBanner
           onRetry={() => setReloadKey((k) => k + 1)}

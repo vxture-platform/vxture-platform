@@ -2338,7 +2338,8 @@
       "freeNote": "Free plan available",
       "fromPerMonth": "from / month",
       "learnMore": "Learn more"
-    }
+    },
+    "unknownLink": "The product or intent in the link is not recognized; returned to the subscription overview."
   },
   "subscribePage": {
     "title": {
@@ -2432,7 +2433,11 @@
       "submit": "Place order",
       "fineOffline": "After submitting you'll go to the payment page - complete payment before the countdown ends or the order closes automatically. Vouchers are applied on the payment page. Zero-amount orders are placed the same way and settle automatically at the payment step.",
       "fineEnterprise": "Enterprise pricing is quoted by sales; self-serve checkout is not available.",
-      "priceOnRequest": "Price on request"
+      "priceOnRequest": "Price on request",
+      "creditPending": "Calculating credit…",
+      "creditFailed": "Could not calculate the upgrade credit; showing the list price. The final amount is computed on submit.",
+      "creditRetry": "Retry",
+      "startNoteRenew": "Renewal starts when the current subscription ends; remaining time is not shortened"
     },
     "pending": {
       "title": "Order awaiting confirmation",
@@ -2448,7 +2453,9 @@
       "configPending": "Bank details not configured — please contact support for transfer instructions.",
       "cancel": "Cancel order",
       "goPay": "Pay now",
-      "cancelling": "Cancelling…"
+      "cancelling": "Cancelling…",
+      "countdown": "{time} left to pay",
+      "expired": "The payment window has closed; refreshing the order…"
     },
     "orderCreated": "Order created; awaiting finance confirmation.",
     "orderFailed": "Failed to place the order. Please retry or contact support.",

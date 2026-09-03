@@ -2338,7 +2338,8 @@
       "freeNote": "提供免费版",
       "fromPerMonth": "起 / 月",
       "learnMore": "了解详情"
-    }
+    },
+    "unknownLink": "链接里的产品或意图无法识别，已回到订阅总览。"
   },
   "subscribePage": {
     "title": {
@@ -2432,7 +2433,11 @@
       "submit": "提交订单",
       "fineOffline": "提交后进入付款页，请在倒计时内完成付款，超时订单自动关闭；优惠券在付款页勾选抵扣。0 元订单同样先生成订单，在付款环节自动结清开通。",
       "fineEnterprise": "企业档由销售报价，暂不支持自助下单。",
-      "priceOnRequest": "价格面议"
+      "priceOnRequest": "价格面议",
+      "creditPending": "折抵试算中…",
+      "creditFailed": "折抵计算失败，当前按原价显示；提交后以服务端实算为准。",
+      "creditRetry": "重试",
+      "startNoteRenew": "续订周期在当前订阅到期后接续起算，不会缩短剩余时间"
     },
     "pending": {
       "title": "订单待确认",
@@ -2448,7 +2453,9 @@
       "configPending": "收款账户信息待配置，请联系客服获取汇款方式。",
       "cancel": "取消订单",
       "goPay": "去付款",
-      "cancelling": "取消中…"
+      "cancelling": "取消中…",
+      "countdown": "付款剩余 {time}",
+      "expired": "付款时限已到，正在刷新订单状态…"
     },
     "orderCreated": "订单已创建，等待财务确认收款。",
     "orderFailed": "下单失败，请稍后重试或联系支持。",
