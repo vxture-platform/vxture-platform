@@ -525,31 +525,30 @@ function requireUuid(value: string | undefined, message: string): string {
 
 // 备注归一：去空白，空串→null，截断到 transactions.remark(varchar 512) 上限。
 /**
- * In-flight-order bill fencing (product_321 P9): bills of a pending offline
- * order (suspended + offline_purchase) must be settled/rejected from the
- * order side — the ledger endpoints lack activation, voucher finalize/release
- * and the payment_rejected trail. 409 with a pointer, not a silent bypass.
+ * In-flight-order bill fencing (product_321 P9): bills of a pending order
+ * must be settled/rejected from the order side — the ledger endpoints lack
+ * fulfilment, voucher finalize/release and the payment_rejected trail. 409
+ * with a pointer, not a silent bypass. 在途 = billing.orders 未终态
+ * （product_330 P1-b2：订单实体是唯一判据）。
  */
 async function assertNotInFlightOrderBill(
   client: PoolClient,
   billId: string | null,
 ): Promise<void> {
   if (!billId) return;
-  const res = await client.query<{ subscription_id: string }>(
-    `select s.id as subscription_id
+  const res = await client.query<{ order_no: string }>(
+    `select o.order_no
        from billing.invoices i
-       join metering.subscriptions s on s.id = i.subscription_id
+       join billing.orders o on o.id = i.order_id
       where i.id = $1
-        and s.status = 'suspended'
-        and s.activation_method = 'offline_purchase'
-        and s.deleted_at is null
+        and o.status in ('pending_payment', 'pending_verify', 'paid')
       limit 1`,
     [billId],
   );
   const hit = res.rows[0];
   if (hit) {
     throw new ConflictException(
-      `该账单关联在途订单（${hit.subscription_id}），请从订单侧处理：确认收款走 offline-payment-confirm，驳回申报走 payment-reject`,
+      `该账单关联在途订单（${hit.order_no}），请从订单侧处理：确认收款走 offline-payment-confirm，驳回申报走 payment-reject`,
     );
   }
 }

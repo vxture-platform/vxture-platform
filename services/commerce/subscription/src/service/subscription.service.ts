@@ -914,6 +914,22 @@ export class SubscriptionService {
    * merge degenerate (at most one distinct tier per product). Same-tier
    * concurrency and bundled+standalone coexistence stay legal (ADR-11 §8).
    */
+  /**
+   * 对外暴露给 OrderService（product_330 P1-b2）：下单 / 履约前的档位并存守卫。
+   * 与内部 assertNoTierConflict 同一实现。
+   */
+  async assertTierAvailable(
+    workspaceId: string,
+    planVersionId: string,
+    excludeSubscriptionId?: string,
+  ): Promise<void> {
+    return this.assertNoTierConflict(
+      workspaceId,
+      planVersionId,
+      excludeSubscriptionId,
+    );
+  }
+
   private async assertNoTierConflict(
     workspaceId: string,
     planVersionId: string,

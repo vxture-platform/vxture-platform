@@ -1,6 +1,15 @@
+import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import type { Pool, PoolClient } from "pg";
 import { COMMERCE_PG_POOL } from "../tokens";
+
+/** 可视码 {PREFIX}-{YYYYMM}-{10位}（与 bill_no / pay_order_no 同规；唯一约束兜底）。 */
+function visibleCode(prefix: string): string {
+  const now = new Date();
+  const ym = `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  const suffix = randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase();
+  return `${prefix}-${ym}-${suffix}`;
+}
 import type {
   AvailableVoucher,
   FinalizeVoucherInput,
@@ -175,11 +184,13 @@ export class PgPromotionRepository {
       );
     }
 
+    // redemption_no 是本表的对外可视码（NOT NULL，铁律二：UUID 不对外）——此前漏写，
+    // 首次真实核销即 23502 整条结算回滚（2026-09-03 活库 e2e 抓到）。
     const inserted = await client.query<{ id: string }>(
       `insert into promotion.voucher_redemptions
-              (voucher_id, tenant_id, workspace_id, user_id, kind,
+              (redemption_no, voucher_id, tenant_id, workspace_id, user_id, kind,
                effect_snapshot, invoice_item_id, payment_id)
-       values ($1, $2, $3, $4, $5, $6, $7, $8)
+       values ($9, $1, $2, $3, $4, $5, $6, $7, $8)
        returning id`,
       [
         input.voucherId,
@@ -190,6 +201,7 @@ export class PgPromotionRepository {
         JSON.stringify(input.effectSnapshot),
         input.invoiceItemId ?? null,
         input.paymentId ?? null,
+        visibleCode("RDM"),
       ],
     );
     const insertedRow = inserted.rows[0];

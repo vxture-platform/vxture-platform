@@ -712,29 +712,28 @@ function toIsoOrNull(value: Date | string | null): string | null {
 
 /**
  * In-flight-order bill fencing (product_321 P5/P10): bills of a pending
- * offline order must not be cancelled / marked overdue / written off from the
+ * order must not be cancelled / marked overdue / written off from the
  * billing side — those overwrite operate_remark (killing the machine intent)
  * and open a second discount channel. Order-side endpoints own these bills.
+ * 在途 = billing.orders 未终态（product_330 P1-b2：订单实体是唯一判据）。
  */
 async function assertNotInFlightOrderBill(
   client: PoolClient,
   billId: string,
 ): Promise<void> {
-  const res = await client.query<{ subscription_id: string }>(
-    `select s.id as subscription_id
+  const res = await client.query<{ order_no: string }>(
+    `select o.order_no
        from billing.invoices i
-       join metering.subscriptions s on s.id = i.subscription_id
+       join billing.orders o on o.id = i.order_id
       where i.id = $1
-        and s.status = 'suspended'
-        and s.activation_method = 'offline_purchase'
-        and s.deleted_at is null
+        and o.status in ('pending_payment', 'pending_verify', 'paid')
       limit 1`,
     [billId],
   );
   const hit = res.rows[0];
   if (hit) {
     throw new ConflictException(
-      `该账单关联在途订单（${hit.subscription_id}），请从订单侧处理（作废走 void，实收不符走 payment-reject）`,
+      `该账单关联在途订单（${hit.order_no}），请从订单侧处理（作废走 void，实收不符走 payment-reject）`,
     );
   }
 }

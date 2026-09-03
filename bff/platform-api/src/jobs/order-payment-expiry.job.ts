@@ -18,15 +18,12 @@
  * ORDER_PAYMENT_SWEEP_INTERVAL_MS tunes the cadence (default 60s);
  * ORDER_PAYMENT_TTL_MINUTES (default 30) is only the FALLBACK window for
  * legacy rows — since P4 rev. 2026-08-20 each order carries its own
- * subscriptions.payment_ttl_minutes fixed at creation by tenant type
+ * billing.orders.payment_ttl_minutes fixed at creation by tenant type
  * (personal 30min / organization 48h) and the sweep predicate reads that.
  */
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
-import {
-  AddonService,
-  SubscriptionService,
-} from "@vxture/service-subscription";
+import { AddonService, OrderService } from "@vxture/service-subscription";
 import { JobHeartbeatService } from "./job-heartbeat.service";
 import { sweepIntervalMs } from "./sweep-interval.util";
 
@@ -47,8 +44,9 @@ export class OrderPaymentExpiryJob {
   );
 
   constructor(
-    @Inject(SubscriptionService)
-    private readonly subscriptions: SubscriptionService,
+    // product_330 P1-b2：两趟都在订单实体（billing.orders）上跑。
+    @Inject(OrderService)
+    private readonly orders: OrderService,
     @Inject(AddonService)
     private readonly addons: AddonService,
     @Inject(JobHeartbeatService)
@@ -62,14 +60,13 @@ export class OrderPaymentExpiryJob {
     const startedAt = Date.now();
     await this.heartbeat.recordStart(JOB_NAME, this.intervalMs);
     try {
-      const closed =
-        await this.subscriptions.sweepExpiredPaymentOrders(ttlMinutes());
+      const closed = await this.orders.sweepExpired(ttlMinutes());
       if (closed > 0) {
         this.logger.log(`payment expiry sweep: ${closed} order(s) closed`);
       }
-      const healed = await this.subscriptions.reconcileHungPaidOrders();
+      const healed = await this.orders.reconcileHungPaid();
       if (healed > 0) {
-        this.logger.log(`payment reconcile: ${healed} hung order(s) activated`);
+        this.logger.log(`payment reconcile: ${healed} hung order(s) fulfilled`);
       }
       // Addon orders share the same TTL policy (per-order persisted TTL with
       // this env fallback); declared legs are never auto-expired.
