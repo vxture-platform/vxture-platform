@@ -47,6 +47,10 @@ import {
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
+import {
+  LoadFailedBanner,
+  LoadFailedEmpty,
+} from "@/components/load/LoadFailed";
 import { PlannedBadge } from "@/components/planned";
 import { PageSection, SignalList } from "@/layout/shell";
 import { fmtDate, fmtTime } from "./components/hubModel";
@@ -94,6 +98,10 @@ export function BillingPage() {
   const [receipts, setReceipts] = useState<ConsoleInvoiceReceipt[]>([]);
   const [addresses, setAddresses] = useState<ConsoleBillingAddress[]>([]);
   const [loading, setLoading] = useState(true);
+  /* 读失败显影(批 0b):四路读全是 strict,任一失败置 loadFailed——指标画「—」、
+   * 账单表画「读取失败」,不再把回落的 null / [] 画成「0 张待付、¥0 累计实收」。 */
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [page, setPage] = useState(1);
   const [applyBill, setApplyBill] = useState<ConsoleBill | null>(null);
 
@@ -107,7 +115,9 @@ export function BillingPage() {
   }, []);
 
   useEffect(() => {
+    let active = true;
     setLoading(true);
+    setLoadFailed(false);
     Promise.all([
       fetchBillingSummary(),
       fetchBills(),
@@ -115,12 +125,25 @@ export function BillingPage() {
       reloadInvoicing(),
     ])
       .then(([sum, rows, creditRecord]) => {
+        if (!active) return;
         setSummary(sum);
         setBills(rows);
         setCredits(creditRecord);
       })
-      .finally(() => setLoading(false));
-  }, [session.tenant?.id, reloadInvoicing]);
+      .catch(() => {
+        if (!active) return;
+        setSummary(null);
+        setBills([]);
+        setCredits(null);
+        setLoadFailed(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [session.tenant?.id, reloadInvoicing, reloadKey]);
 
   // 账单 → 活跃开票申请(rejected/voided 之外均占位,防重复申请)
   const receiptByBill = useMemo(() => {
@@ -144,15 +167,17 @@ export function BillingPage() {
     const currency = summary?.currency ?? "CNY";
     const unpaid = summary?.unpaid ?? 0;
     const overdue = summary?.overdue ?? 0;
+    // 没读到就是「—」:读失败时的 0 不是没有账单,是没有数据。
     return [
       {
         id: "unpaid",
         icon: "receipt",
         label: t("metrics.unpaid"),
-        value: String(unpaid),
+        value: summary ? String(unpaid) : "—",
         ...(unpaid > 0 ? { tone: "warning" as const } : {}),
-        trend:
-          overdue > 0
+        trend: !summary
+          ? ""
+          : overdue > 0
             ? t("metrics.unpaidOverdue", { count: overdue })
             : t("metrics.unpaidNone"),
         ...(overdue > 0 ? { trendTone: "warning" as const } : {}),
@@ -161,15 +186,17 @@ export function BillingPage() {
         id: "paid-total",
         icon: "seal-check",
         label: t("metrics.paidTotal"),
-        value: money(summary?.paidTotal ?? "0", currency),
-        trend: t("metrics.paidTotalHint", { count: summary?.paid ?? 0 }),
+        value: summary ? money(summary.paidTotal, currency) : "—",
+        trend: summary
+          ? t("metrics.paidTotalHint", { count: summary.paid })
+          : "",
       },
       {
         id: "credits",
         icon: "wallet",
         label: t("metrics.credits"),
-        value: money(credits?.balance ?? "0", credits?.currency ?? "CNY"),
-        trend: t("metrics.creditsHint"),
+        value: credits ? money(credits.balance, credits.currency) : "—",
+        trend: credits ? t("metrics.creditsHint") : "",
       },
     ];
   }, [summary, credits, t, money]);
@@ -332,6 +359,13 @@ export function BillingPage() {
         }
       />
 
+      {loadFailed ? (
+        <LoadFailedBanner
+          onRetry={() => setReloadKey((k) => k + 1)}
+          retrying={loading}
+        />
+      ) : null}
+
       <MetricGrid
         items={metrics}
         columns={3}
@@ -355,11 +389,17 @@ export function BillingPage() {
           rowActions={(b) => (
             <ActionMenu label={t("invoicing.rowMenu")} items={billActions(b)} />
           )}
-          empty={<EmptyState title={t("table.empty")} />}
+          empty={
+            loadFailed ? (
+              <LoadFailedEmpty />
+            ) : (
+              <EmptyState title={t("table.empty")} />
+            )
+          }
           footer={
             <div className="flex w-full items-center justify-between gap-md text-body-sm text-muted-foreground">
               <span className="tabular-nums">
-                {t("table.total", { count: bills.length })}
+                {loadFailed ? "—" : t("table.total", { count: bills.length })}
               </span>
               {pageCount > 1 ? (
                 <span className="flex items-center gap-xs">

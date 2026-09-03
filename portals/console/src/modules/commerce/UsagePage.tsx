@@ -42,6 +42,10 @@ import {
   type ConsoleUsageTrendBucket,
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import {
+  LoadFailedBanner,
+  LoadFailedEmpty,
+} from "@/components/load/LoadFailed";
 import { PageSection } from "@/layout/shell";
 import { fmtDate, fmtTime } from "./components/hubModel";
 
@@ -81,10 +85,16 @@ export function UsagePage() {
   const [loading, setLoading] = useState(true);
   const [trendLoading, setTrendLoading] = useState(true);
   const [eventsPage, setEventsPage] = useState(1);
+  /* 读失败显影(批 0b):四个读都是 strict,任一失败置 loadFailed——指标画「—」、
+   * 表格画「读取失败」,不再把回落的空 trend 画成「0 credits」。重试走 reloadKey。 */
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // 首屏:概览(日/年两档)+ 记录 + 成员一次取齐
   useEffect(() => {
+    let active = true;
     setLoading(true);
+    setLoadFailed(false);
     Promise.all([
       fetchUsageTrend("day", 30),
       fetchUsageTrend("year", 2),
@@ -92,13 +102,27 @@ export function UsagePage() {
       fetchUsageMembers(30),
     ])
       .then(([day, year, evts, mbrs]) => {
+        if (!active) return;
         setDayTrend(day);
         setYearTrend(year);
         setEvents(evts);
         setMembers(mbrs);
       })
-      .finally(() => setLoading(false));
-  }, [session.tenant?.id]);
+      .catch(() => {
+        if (!active) return;
+        setDayTrend(null);
+        setYearTrend(null);
+        setEvents([]);
+        setMembers([]);
+        setLoadFailed(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [session.tenant?.id, reloadKey]);
 
   // 趋势区:随窗口切换独立刷新(day 档直接复用首屏数据)
   useEffect(() => {
@@ -107,11 +131,24 @@ export function UsagePage() {
       setTrendLoading(false);
       return;
     }
+    let active = true;
     setTrendLoading(true);
     fetchUsageTrend(trendWindow)
-      .then(setTrend)
-      .finally(() => setTrendLoading(false));
-  }, [trendWindow, dayTrend, session.tenant?.id]);
+      .then((next) => {
+        if (active) setTrend(next);
+      })
+      .catch(() => {
+        if (!active) return;
+        setTrend(null);
+        setLoadFailed(true);
+      })
+      .finally(() => {
+        if (active) setTrendLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [trendWindow, dayTrend, session.tenant?.id, reloadKey]);
 
   // ── 概览指标(本页业务 3 个指标 → columns=3 铺满,列数随业务不写死)────────
   const metrics = useMemo<MetricGridItem[]>(() => {
@@ -121,26 +158,28 @@ export function UsagePage() {
     const thisYear = String(new Date().getUTCFullYear());
     const yearTotal =
       yearTrend?.buckets.find((b) => b.period === thisYear)?.total ?? 0;
+    // 没读到就是「—」:读失败时的 0 不是用量为零,是没有数据。
+    const dayValue = (n: number) => (dayTrend ? fmtCount(sumLast(n)) : "—");
     return [
       {
         id: "last7",
         icon: "gauge",
         label: t("metrics.last7"),
-        value: fmtCount(sumLast(7)),
+        value: dayValue(7),
         trend: t("metrics.creditsUnit"),
       },
       {
         id: "last30",
         icon: "chart-line",
         label: t("metrics.last30"),
-        value: fmtCount(sumLast(30)),
+        value: dayValue(30),
         trend: t("metrics.creditsUnit"),
       },
       {
         id: "year",
         icon: "calendar",
         label: t("metrics.thisYear"),
-        value: fmtCount(yearTotal),
+        value: yearTrend ? fmtCount(yearTotal) : "—",
         trend: t("metrics.creditsUnit"),
       },
     ];
@@ -382,6 +421,13 @@ export function UsagePage() {
         description={t("description")}
       />
 
+      {loadFailed ? (
+        <LoadFailedBanner
+          onRetry={() => setReloadKey((k) => k + 1)}
+          retrying={loading || trendLoading}
+        />
+      ) : null}
+
       <MetricGrid
         items={metrics}
         columns={3}
@@ -427,7 +473,13 @@ export function UsagePage() {
           rowKey={(r) => r.period}
           loading={trendLoading}
           indexStart={1}
-          empty={<EmptyState title={t("trend.empty")} />}
+          empty={
+            loadFailed ? (
+              <LoadFailedEmpty />
+            ) : (
+              <EmptyState title={t("trend.empty")} />
+            )
+          }
         />
       </PageSection>
 
@@ -455,7 +507,13 @@ export function UsagePage() {
           rowKey={(p) => p.productCode}
           loading={trendLoading}
           indexStart={1}
-          empty={<EmptyState title={t("share.empty")} />}
+          empty={
+            loadFailed ? (
+              <LoadFailedEmpty />
+            ) : (
+              <EmptyState title={t("share.empty")} />
+            )
+          }
         />
       </PageSection>
 
@@ -472,7 +530,13 @@ export function UsagePage() {
           rowKey={(e) => `${e.at}:${e.requestId ?? ""}:${e.productCode}`}
           loading={loading}
           indexStart={(eventsPage - 1) * EVENTS_PAGE_SIZE + 1}
-          empty={<EmptyState title={t("events.empty")} />}
+          empty={
+            loadFailed ? (
+              <LoadFailedEmpty />
+            ) : (
+              <EmptyState title={t("events.empty")} />
+            )
+          }
           footer={
             <div className="flex w-full items-center justify-between gap-md text-body-sm text-muted-foreground">
               <span className="tabular-nums">
@@ -533,7 +597,13 @@ export function UsagePage() {
             rowKey={(m) => m.userName ?? "__unattributed__"}
             loading={loading}
             indexStart={1}
-            empty={<EmptyState title={t("members.empty")} />}
+            empty={
+              loadFailed ? (
+                <LoadFailedEmpty />
+              ) : (
+                <EmptyState title={t("members.empty")} />
+              )
+            }
           />
         </PageSection>
       ) : null}

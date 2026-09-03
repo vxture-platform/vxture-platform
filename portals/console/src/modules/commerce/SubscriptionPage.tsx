@@ -54,6 +54,10 @@ import {
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
+import {
+  LoadFailedBanner,
+  LoadFailedEmpty,
+} from "@/components/load/LoadFailed";
 import { PageSection } from "@/layout/shell";
 import { buildWebsiteProductsUrl } from "@/lib/website-entry";
 import {
@@ -111,20 +115,40 @@ export function SubscriptionPage() {
     setOrders(ords);
   }, []);
 
+  /* 读失败显影(批 0b):三路读全是 strict,任一失败置 loadFailed——指标画「—」、
+   * 订阅区与订单表画「读取失败」,不再把回落的 [] 画成「没有订阅」。 */
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
   useEffect(() => {
+    let active = true;
     setLoading(true);
+    setLoadFailed(false);
     Promise.all([
       fetchSubscribedProducts(),
       fetchMyOrders(),
       fetchRecommendedProducts(),
     ])
       .then(([subs, ords, recos]) => {
+        if (!active) return;
         setProducts(subs);
         setOrders(ords);
         setRecommended(recos);
       })
-      .finally(() => setLoading(false));
-  }, [session.tenant?.id]);
+      .catch(() => {
+        if (!active) return;
+        setProducts([]);
+        setOrders([]);
+        setRecommended([]);
+        setLoadFailed(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [session.tenant?.id, reloadKey]);
 
   // ── P0 订阅自助:到期不续/恢复续费 + 立即退订 ────────────────────────────
   const handleSetAutoRenew = useCallback(
@@ -262,14 +286,16 @@ export function SubscriptionPage() {
       .sort((a, b) => (a.endAt ?? "").localeCompare(b.endAt ?? ""))[0];
     const expiringLeft = expiring ? daysLeft(expiring.endAt) : null;
 
+    // 没读到就是「—」:读失败时的 0 不是没有订阅,是没有数据。
     return [
       {
         id: "products",
         icon: "package",
         label: t("stats.products"),
-        value: String(inService.length),
-        trend:
-          freeCount > 0
+        value: loadFailed ? "—" : String(inService.length),
+        trend: loadFailed
+          ? ""
+          : freeCount > 0
             ? t("stats.productsHint", { free: freeCount })
             : t("stats.productsHintNoFree"),
       },
@@ -277,7 +303,7 @@ export function SubscriptionPage() {
         id: "pending",
         icon: "receipt",
         label: t("stats.pendingOrders"),
-        value: String(pending.length),
+        value: loadFailed ? "—" : String(pending.length),
         ...(pending.length > 0 ? { tone: "warning" as const } : {}),
         trend: nextDeadline
           ? `${t("stats.pendingHint", { total: orders.length })} · ${t(
@@ -304,7 +330,7 @@ export function SubscriptionPage() {
           : t("stats.expiringNone"),
       },
     ];
-  }, [products, orders, now, t]);
+  }, [products, orders, now, t, loadFailed]);
 
   // ── 我的订单 ──────────────────────────────────────────────────────────────
   async function handleCancelOrder(orderId: string) {
@@ -541,6 +567,12 @@ export function SubscriptionPage() {
       />
 
       {error ? <Banner tone="danger" title={error} /> : null}
+      {loadFailed ? (
+        <LoadFailedBanner
+          onRetry={() => setReloadKey((k) => k + 1)}
+          retrying={loading}
+        />
+      ) : null}
 
       {/* 本页业务 3 个指标 → columns=3 铺满一行（列数随业务定，不写死）。 */}
       <MetricGrid
@@ -570,6 +602,8 @@ export function SubscriptionPage() {
       >
         {loading ? (
           <EmptyState icon="clock" title={t("loading")} />
+        ) : loadFailed ? (
+          <LoadFailedEmpty />
         ) : visibleProducts.length === 0 ? (
           <EmptyState
             icon="package"
@@ -643,11 +677,17 @@ export function SubscriptionPage() {
               />
             </span>
           )}
-          empty={<EmptyState title={t("orders.empty")} />}
+          empty={
+            loadFailed ? (
+              <LoadFailedEmpty />
+            ) : (
+              <EmptyState title={t("orders.empty")} />
+            )
+          }
           footer={
             <div className="flex w-full items-center justify-between gap-md text-body-sm text-muted-foreground">
               <span className="tabular-nums">
-                {t("orders.total", { count: orders.length })}
+                {loadFailed ? "—" : t("orders.total", { count: orders.length })}
               </span>
               {pageCount > 1 ? (
                 <span className="flex items-center gap-xs">

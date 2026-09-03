@@ -181,8 +181,11 @@ export function AddonPacksSection({
 
   useEffect(() => {
     setLoading(true);
-    reload().finally(() => setLoading(false));
-  }, [reload]);
+    // 目录与订单是 strict 读(批 0b):失败要说出来,不能画成「没有加油包」。
+    reload()
+      .catch(() => setError(t("loadFailed")))
+      .finally(() => setLoading(false));
+  }, [reload, t]);
 
   const pendingOrderFor = (packCode: string): string | null =>
     orders.find(

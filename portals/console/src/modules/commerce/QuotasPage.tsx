@@ -43,6 +43,10 @@ import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { PageSection, SignalList } from "@/layout/shell";
 import { hasCapability } from "@/features/permissions/can";
+import {
+  LoadFailedBanner,
+  LoadFailedEmpty,
+} from "@/components/load/LoadFailed";
 import { AddonPacksSection } from "./components/AddonPacksSection";
 import { fmtDate, fmtTime } from "./components/hubModel";
 
@@ -96,14 +100,31 @@ export function QuotasPage() {
 
   const [overview, setOverview] = useState<ConsoleQuotaOverview | null>(null);
   const [loading, setLoading] = useState(true);
-  // 加油包核销/取消后自增,触发总览重取(额度入池立即可见)
+  /* 读失败显影(批 0b):总览是 strict 读,失败置 loadFailed——指标画「—」、表格画
+   * 「读取失败」,不再把回落的零值对象画成「0 B / 0 B」。 */
+  const [loadFailed, setLoadFailed] = useState(false);
+  // 加油包核销/取消后自增,触发总览重取(额度入池立即可见);重试也走它
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    let active = true;
     setLoading(true);
+    setLoadFailed(false);
     fetchQuotaOverview()
-      .then(setOverview)
-      .finally(() => setLoading(false));
+      .then((next) => {
+        if (active) setOverview(next);
+      })
+      .catch(() => {
+        if (!active) return;
+        setOverview(null);
+        setLoadFailed(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [session.tenant?.id, reloadKey]);
 
   const money = useCallback(
@@ -190,10 +211,12 @@ export function QuotasPage() {
         id: "addons",
         icon: "lightning",
         label: t("metrics.addons"),
-        value: fmtCount(addonPools.length),
-        trend: earliestExpiry
-          ? t("metrics.addonsExpiry", { date: fmtDate(earliestExpiry) })
-          : t("metrics.addonsNone"),
+        value: overview ? fmtCount(addonPools.length) : "—",
+        trend: !overview
+          ? ""
+          : earliestExpiry
+            ? t("metrics.addonsExpiry", { date: fmtDate(earliestExpiry) })
+            : t("metrics.addonsNone"),
       },
     ];
   }, [overview, t]);
@@ -482,6 +505,13 @@ export function QuotasPage() {
         description={t("description")}
       />
 
+      {loadFailed ? (
+        <LoadFailedBanner
+          onRetry={() => setReloadKey((k) => k + 1)}
+          retrying={loading}
+        />
+      ) : null}
+
       <MetricGrid
         items={metrics}
         columns={3}
@@ -502,13 +532,21 @@ export function QuotasPage() {
           rowKey={(r) => r.key}
           loading={loading}
           indexStart={1}
-          empty={<EmptyState title={t("storage.emptySources")} />}
+          empty={
+            loadFailed ? (
+              <LoadFailedEmpty />
+            ) : (
+              <EmptyState title={t("storage.emptySources")} />
+            )
+          }
           footer={
             <span className="tabular-nums text-body-sm text-muted-foreground">
-              {t("storage.totalLine", {
-                limit: formatBytes(overview?.storage.limitBytes ?? 0),
-                remaining: formatBytes(overview?.storage.remainingBytes ?? 0),
-              })}
+              {overview
+                ? t("storage.totalLine", {
+                    limit: formatBytes(overview.storage.limitBytes),
+                    remaining: formatBytes(overview.storage.remainingBytes),
+                  })
+                : "—"}
             </span>
           }
         />
@@ -529,7 +567,13 @@ export function QuotasPage() {
           }
           loading={loading}
           indexStart={1}
-          empty={<EmptyState title={t("credits.empty")} />}
+          empty={
+            loadFailed ? (
+              <LoadFailedEmpty />
+            ) : (
+              <EmptyState title={t("credits.empty")} />
+            )
+          }
         />
         <SignalList
           items={[
@@ -575,7 +619,13 @@ export function QuotasPage() {
           rowKey={(r) => r.rowKey}
           loading={loading}
           indexStart={1}
-          empty={<EmptyState title={t("products.empty")} />}
+          empty={
+            loadFailed ? (
+              <LoadFailedEmpty />
+            ) : (
+              <EmptyState title={t("products.empty")} />
+            )
+          }
         />
       </PageSection>
     </ViewLayout>

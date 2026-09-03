@@ -2485,7 +2485,8 @@
       "orderDetail": "Order detail",
       "orderMenu": "Order actions",
       "cancelHint": "Only pending orders can be cancelled",
-      "buyNoPermission": "Your role cannot make payments; ask the tenant owner to buy add-on packs"
+      "buyNoPermission": "Your role cannot make payments; ask the tenant owner to buy add-on packs",
+      "loadFailed": "Could not load add-on packs and orders, please retry"
     }
   },
   "usagePage": {
@@ -2808,12 +2809,19 @@
       "description": "Where to-dos come from",
       "derivedTitle": "Derived to-dos",
       "derivedBody": "This page keeps no task records: every row reflects real business state and disappears once you resolve the source"
-    }
+    },
+    "loadFailed": "Some to-do sources failed to load; the list may be incomplete"
   },
   "destructive": {
     "titleTemplate": "{verb} {target}?",
     "cancel": "Cancel",
     "pending": "Working…",
     "blocked": "Preconditions not met — resolve the items marked above first."
+  },
+  "loadState": {
+    "title": "Could not load data",
+    "description": "The figures and lists on this page are not real data. Retry, or come back later if it keeps failing.",
+    "retry": "Retry",
+    "empty": "Could not load; nothing to show yet"
   }
 }

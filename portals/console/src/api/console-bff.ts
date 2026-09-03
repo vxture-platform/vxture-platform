@@ -988,9 +988,8 @@ export async function fetchCredits(): Promise<{
   balance: string;
   currency: string;
 }> {
-  return readJson<{ balance: string; currency: string }>(
+  return readJsonStrict<{ balance: string; currency: string }>(
     "/api/subscription/credits",
-    { balance: "0.00", currency: "CNY" },
   );
 }
 
@@ -1168,22 +1167,20 @@ export async function createSubscriptionOrder(body: {
 }
 
 export async function fetchMyOrders(): Promise<MyOrder[]> {
-  return readJson<MyOrder[]>("/api/subscription/orders", []);
+  return readJsonStrict<MyOrder[]>("/api/subscription/orders");
 }
 
 export async function fetchSubscribedProducts(): Promise<SubscribedProduct[]> {
-  return readJson<SubscribedProduct[]>(
+  return readJsonStrict<SubscribedProduct[]>(
     "/api/subscription/subscribed-products",
-    [],
   );
 }
 
 export async function fetchRecommendedProducts(): Promise<
   RecommendedProduct[]
 > {
-  return readJson<RecommendedProduct[]>(
+  return readJsonStrict<RecommendedProduct[]>(
     "/api/subscription/recommended-products",
-    [],
   );
 }
 
@@ -1309,17 +1306,17 @@ export interface ConsoleBill {
   createdAt: string;
 }
 
-export async function fetchBillingSummary(): Promise<ConsoleBillingSummary | null> {
-  return readJson<ConsoleBillingSummary | null>(
+/* 批 0b:账单 / 配额 / 用量 / 订阅四页的读全部改 strict——失败要显影成 Error 态,
+ * 不能再回落成空数组或零值对象让页面画出「0 B / 0 B」这种像真的假零。 */
+export async function fetchBillingSummary(): Promise<ConsoleBillingSummary> {
+  return readJsonStrict<ConsoleBillingSummary>(
     withTenant("/api/billing/overview"),
-    null,
   );
 }
 
 export async function fetchBills(limit = 100): Promise<ConsoleBill[]> {
-  return readJson<ConsoleBill[]>(
+  return readJsonStrict<ConsoleBill[]>(
     withTenant(`/api/billing/bills?limit=${limit}`),
-    [],
   );
 }
 
@@ -2017,23 +2014,9 @@ export interface ConsoleQuotaOverview {
   products: ConsoleProductQuota[];
 }
 
-const EMPTY_QUOTA_OVERVIEW: ConsoleQuotaOverview = {
-  storage: {
-    limitBytes: 0,
-    usedBytes: 0,
-    remainingBytes: 0,
-    sources: [],
-    slices: [],
-  },
-  aiCredit: { limit: 0, used: 0, remaining: 0, pools: [], sharingProducts: [] },
-  products: [],
-};
-
+/* strict(批 0b):此前失败回落成全零总览,配额页画出「0 B / 0 B」这种像真的假零。 */
 export async function fetchQuotaOverview(): Promise<ConsoleQuotaOverview> {
-  return readJson<ConsoleQuotaOverview>(
-    "/api/quota/overview",
-    EMPTY_QUOTA_OVERVIEW,
-  );
+  return readJsonStrict<ConsoleQuotaOverview>("/api/quota/overview");
 }
 
 // ============================================================================
@@ -2076,20 +2059,21 @@ export async function fetchUsageTrend(
   span?: number,
 ): Promise<ConsoleUsageTrend> {
   const spanQ = span ? `&span=${span}` : "";
-  return readJson<ConsoleUsageTrend>(
+  return readJsonStrict<ConsoleUsageTrend>(
     `/api/usage/trend?granularity=${encodeURIComponent(granularity)}${spanQ}`,
-    { metric: "ai.credit", granularity, buckets: [] },
   );
 }
 
 export async function fetchUsageEvents(): Promise<ConsoleUsageEvent[]> {
-  return readJson<ConsoleUsageEvent[]>("/api/usage/events", []);
+  return readJsonStrict<ConsoleUsageEvent[]>("/api/usage/events");
 }
 
 export async function fetchUsageMembers(
   days = 30,
 ): Promise<ConsoleUsageMember[]> {
-  return readJson<ConsoleUsageMember[]>(`/api/usage/members?days=${days}`, []);
+  return readJsonStrict<ConsoleUsageMember[]>(
+    `/api/usage/members?days=${days}`,
+  );
 }
 
 // ============================================================================
@@ -2126,11 +2110,11 @@ export interface ConsoleAddonOrder {
 }
 
 export async function fetchAddonPacks(): Promise<ConsoleAddonPack[]> {
-  return readJson<ConsoleAddonPack[]>("/api/quota/addon-packs", []);
+  return readJsonStrict<ConsoleAddonPack[]>("/api/quota/addon-packs");
 }
 
 export async function fetchAddonOrders(): Promise<ConsoleAddonOrder[]> {
-  return readJson<ConsoleAddonOrder[]>("/api/quota/addon-orders", []);
+  return readJsonStrict<ConsoleAddonOrder[]>("/api/quota/addon-orders");
 }
 
 /** 下单失败要把 409(已有待支付单)等报文透给用户 → strict,调用方 catch。 */
@@ -2246,11 +2230,11 @@ export interface ConsoleBillingAddressInput {
 export async function fetchBillingAddresses(): Promise<
   ConsoleBillingAddress[]
 > {
-  return readJson<ConsoleBillingAddress[]>("/api/billing/addresses", []);
+  return readJsonStrict<ConsoleBillingAddress[]>("/api/billing/addresses");
 }
 
 export async function fetchInvoiceReceipts(): Promise<ConsoleInvoiceReceipt[]> {
-  return readJson<ConsoleInvoiceReceipt[]>("/api/billing/receipts", []);
+  return readJsonStrict<ConsoleInvoiceReceipt[]>("/api/billing/receipts");
 }
 
 /** 写路径共用:非 2xx 时把 BFF 报文透给用户(校验/冲突信息可读)。 */
@@ -2392,7 +2376,7 @@ export interface ConsoleVoucher {
 }
 
 export async function fetchVouchers(): Promise<ConsoleVoucher[]> {
-  return readJson<ConsoleVoucher[]>("/api/promotion/vouchers", []);
+  return readJsonStrict<ConsoleVoucher[]>("/api/promotion/vouchers");
 }
 
 // ============================================================================
