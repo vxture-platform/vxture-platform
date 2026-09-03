@@ -4,10 +4,11 @@
  *
  * console 侧触发的通知：客户申请退款（refund.requested）、¥0 新订即时履约（order.fulfilled）。
  * 站内落 support.inbox_messages，邮件走 MailModule 的 MailService，按 NotificationPreferences
- * 的 subscription / billing 主题过滤，每次投递记 support.notification_logs。setter 注入，
- * 原因见 platform-api 同名文件。
+ * 的 subscription / billing 主题过滤，每次投递记 support.notification_logs。
+ * 工厂 provider 在模块初始化时即执行（Nest 急切实例化），用 setter 注入——SubscriptionModule
+ * 是自包含模块，跨模块的构造器令牌不可见。
  */
-import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
+import { Logger, type Provider } from "@nestjs/common";
 import type { Pool } from "pg";
 import { MailService } from "@vxture/core-mail";
 import { NotificationPreferencesService } from "@vxture/service-account";
@@ -18,28 +19,32 @@ import {
   SubscriptionService,
 } from "@vxture/service-subscription";
 
-@Injectable()
-export class CustomerNotificationsWiring implements OnModuleInit {
-  private readonly logger = new Logger(CustomerNotificationsWiring.name);
+export const CUSTOMER_NOTIFIER = "CONSOLE_CUSTOMER_NOTIFIER";
 
-  constructor(
-    @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
-    @Inject(MailService) private readonly mail: MailService,
-    @Inject(NotificationPreferencesService)
-    private readonly prefs: NotificationPreferencesService,
-    @Inject(OrderService) private readonly orders: OrderService,
-    @Inject(SubscriptionService)
-    private readonly subscriptions: SubscriptionService,
-  ) {}
-
-  onModuleInit(): void {
-    const dispatcher = new NotificationDispatcher(this.pool, {
-      mail: this.mail,
-      prefs: this.prefs,
+export const customerNotificationsProvider: Provider = {
+  provide: CUSTOMER_NOTIFIER,
+  inject: [
+    COMMERCE_PG_POOL,
+    MailService,
+    NotificationPreferencesService,
+    OrderService,
+    SubscriptionService,
+  ],
+  useFactory: (
+    pool: Pool,
+    mail: MailService,
+    prefs: NotificationPreferencesService,
+    orders: OrderService,
+    subscriptions: SubscriptionService,
+  ): NotificationDispatcher => {
+    const dispatcher = new NotificationDispatcher(pool, {
+      mail,
+      prefs,
       consoleBaseUrl: process.env.CONSOLE_BASE_URL?.replace(/\/$/, ""),
-      logger: this.logger,
+      logger: new Logger("CustomerNotifications"),
     });
-    this.orders.setCustomerNotifier(dispatcher);
-    this.subscriptions.setCustomerNotifier(dispatcher);
-  }
-}
+    orders.setCustomerNotifier(dispatcher);
+    subscriptions.setCustomerNotifier(dispatcher);
+    return dispatcher;
+  },
+};
