@@ -12,8 +12,10 @@
  * StatusBadge。概览统计不在本文件——页面直接用 DS MetricGrid（同 /billing）。
  *
  * 1) SubscriptionProductCard：「我的订阅」卡。★ = 收藏（排序优先）；操作区
- *    规则：管理常驻，free/starter 追加升级，剩余 ≤5 天或已过期追加续订
- *    （主按钮）；「最新版 vX.Y.Z」纯文本——平台只有一套最新实例，版本恒为
+ *    规则（owner 2026-09-03 P0）：「管理」撤掉（它只是跳回本页）；free/starter
+ *    追加「升级」——外链官网 /pricing 先看档位与价格再下单，不再直落 console
+ *    结账页；剩余 ≤5 天或已过期追加续订（主按钮）；自动续费状态正向显示
+ *    （开 / 到期不续），free 档与普通订阅一样可开可关；「最新版 vX.Y.Z」纯文本——平台只有一套最新实例，版本恒为
  *    当前发布号（products.release_version），随产品更新自动跟进，展示它是
  *    为了传达「持续创新」，不随订阅冻结。
  * 2) RecommendedProductCard：「新品推荐」卡，CTA 外链 website 产品详情页，
@@ -36,7 +38,10 @@ import {
 import type { ActionMenuItem, IconName } from "@vxture/design-system";
 import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import { Link } from "@/lib/i18n/navigation";
-import { buildWebsiteProductUrl } from "@/lib/website-entry";
+import {
+  buildWebsitePricingUrl,
+  buildWebsiteProductUrl,
+} from "@/lib/website-entry";
 import type { RecommendedProduct, SubscribedProduct } from "@/api/console-bff";
 import { useConfirmLabels } from "@/lib/destructive";
 import {
@@ -125,7 +130,7 @@ export function SubscriptionProductCard({
   item: SubscribedProduct;
   favoriteBusy: boolean;
   onToggleFavorite: (productCode: string, next: boolean) => void;
-  /** 到期不续 / 恢复续费(P0 自助;free/trial/永久订阅不适用由本卡判定灰) */
+  /** 到期不续 / 恢复续费(P0 自助;仅永久订阅(无 end_at)不适用,free 同普通订阅) */
   onSetAutoRenew: (item: SubscribedProduct, enabled: boolean) => void;
   /** 立即退订(危操作,父页出确认弹窗) */
   /**
@@ -152,10 +157,12 @@ export function SubscriptionProductCard({
     !expired && (item.tier === "free" || item.tier === "starter");
   const showRenew = expired || nearExpiry;
   const productCode = item.productCode ?? "";
-  // 续费开关适用面:付费、有界周期、非试用、未终态
-  const renewToggleable =
-    !expired && item.kind === "paid" && item.endAt !== null;
+  // 续费开关适用面:有界周期、未终态。free 档与普通订阅一样按周期到期、可开可关
+  // （owner 2026-09-03 决策 5）；此前按 kind==='paid' 判，而 free 订单入库 kind 写死
+  // 'paid'，两个判据打架，free 卡永远显示「到期不续」却又不给开关。
+  const renewToggleable = !expired && item.endAt !== null;
   const optedOut = !item.autoRenew && item.endAt !== null && !expired;
+  const autoRenewOn = item.autoRenew && item.endAt !== null && !expired;
 
   const menuItems: ActionMenuItem[] = [
     optedOut
@@ -284,19 +291,24 @@ export function SubscriptionProductCard({
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-xs">
-          {optedOut ? (
+          {/* 自动续费正向显示：开 = 中性徽章；到期不续 = 警示徽章 */}
+          {autoRenewOn ? (
+            <StatusBadge tone="neutral">
+              {t("card.autoRenewOnBadge")}
+            </StatusBadge>
+          ) : optedOut ? (
             <StatusBadge tone="warning">{t("card.optedOut")}</StatusBadge>
           ) : null}
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/subscribe?product=${productCode}`}>
-              {t("card.manage")}
-            </Link>
-          </Button>
-          {showUpgrade ? (
+          {/* 「升级」外链官网定价页：先看档位与价格，再进 console 下单（与官网卡片同一裁定） */}
+          {showUpgrade && productCode ? (
             <Button asChild variant="outline" size="sm">
-              <Link href={`/subscribe?product=${productCode}&intent=upgrade`}>
+              <a
+                href={buildWebsitePricingUrl(locale, productCode)}
+                target="_blank"
+                rel="noreferrer"
+              >
                 {t("card.upgrade")}
-              </Link>
+              </a>
             </Button>
           ) : null}
           {showRenew ? (

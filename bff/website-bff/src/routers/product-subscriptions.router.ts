@@ -57,10 +57,14 @@ export class ProductSubscriptionsRouter {
     }>(
       `with ranked as (
          select prod.id as product_id, prod.product_code, ts.status, pc.tier,
+                -- 代表行：状态优先级 → 档位高者优先（付费行压过 free）→ 周期末最新。
+                -- 此前次序是 end_at desc nulls first：free 行 end_at 为 NULL 时压过付费行，
+                -- 付费租户在官网被提示「升级」到自己已有的档（owner 2026-09-03 caimc 案）。
                 row_number() over (
                   partition by prod.product_code
                   order by array_position($2::text[], ts.status) asc,
-                           ts.end_at desc nulls first
+                           array_position($3::text[], pc.tier) desc nulls last,
+                           ts.end_at desc nulls last
                 ) as rn
            from metering.subscriptions ts
            join product.plan_components pc

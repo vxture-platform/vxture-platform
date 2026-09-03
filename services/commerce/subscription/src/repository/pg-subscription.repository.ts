@@ -262,7 +262,11 @@ export class PgSubscriptionRepository {
           start_at, status, activation_method, auto_renew, order_no, pay_amount, currency,
           created_by_type, created_by_id, payment_ttl_minutes, created_at, updated_at
         ) values (
-          $1, $2, $3, 'paid', $4, 1, now(), 'suspended', 'offline_purchase', false, $5, $6, $7,
+          $1, $2, $3,
+          -- ¥0 档是 free 订阅，不是"付了 0 元"的 paid：此前写死 'paid'，console 卡片按 kind
+          -- 判"到期不续/不适用"时与 tier 打架（owner 2026-09-03）。
+          case when $6::numeric = 0 then 'free' else 'paid' end,
+          $4, 1, now(), 'suspended', 'offline_purchase', false, $5, $6, $7,
           'customer', $8, $9, now(), now()
         ) returning *`,
         [

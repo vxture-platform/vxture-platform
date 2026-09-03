@@ -2047,15 +2047,15 @@
     "card": {
       "productDetail": "产品详情",
       "version": "最新版 v{version}",
-      "manage": "管理",
       "upgrade": "升级",
       "renew": "续订",
       "moreActions": "更多操作",
       "autoRenewOff": "到期不续",
       "autoRenewOn": "恢复自动续费",
-      "autoRenewNa": "免费/试用/永久订阅不适用",
+      "autoRenewNa": "永久订阅不适用",
       "unsubscribe": "立即退订",
       "optedOut": "到期不续",
+      "autoRenewOnBadge": "自动续费",
       "unsubscribeVerb": "退订",
       "unsubscribeConsequence": "订阅将在当前计费周期结束时终止，之后不再续费也不再计费。周期内仍可正常使用。要恢复需要重新订阅，价格以届时的挂牌价为准。",
       "unsubscribeKeep": "保留订阅"
