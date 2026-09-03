@@ -1,8 +1,9 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 前向迁移 — product_330 P1-c：订单 / 订阅数据清理（v0.26.48 上线后的核对结果）
 --
--- ① 重复的 caimc 修复审计行：orders-entity-split 的 history insert 原来不幂等，db-init 每次重放全部
---    迁移文件就多落一条 operator_adjusted；只保留最早一条（源文件已加 NOT EXISTS 守卫）。
+-- ① （撤销）重复的 caimc 修复审计行：subscription_histories 是 append-only（95_triggers
+--    forbid_mutation，DELETE 直接 RAISE，2026-09-03 生产实跑抓到）。多出的那条 operator_adjusted
+--    留着——审计表不删行；源文件已加 NOT EXISTS 守卫，不会再多。
 -- ② order_events 回填把旧模型「升级镜像行」的 cancelled 历史也复制到了已履约的升级订单上——那是旧
 --    模型的内部动作（镜像行被标 cancelled），不是这张单的事；删掉，时间线只留真实订单事件。
 -- ③ 自动续费默认开（owner 决策 5：free 与付费一样显示自动续期、可关闭）：旧下单路径把 auto_renew
@@ -14,17 +15,7 @@
 
 BEGIN;
 
--- ① 去重修复审计行（保留最早）
-DELETE FROM metering.subscription_histories h
- USING (
-   SELECT id,
-          row_number() OVER (PARTITION BY subscription_id ORDER BY created_at ASC) AS rn
-     FROM metering.subscription_histories
-    WHERE change_type = 'operator_adjusted' AND remark LIKE 'product_330 repair:%'
- ) d
- WHERE h.id = d.id AND d.rn > 1;
-
--- ② 已履约订单上的镜像行 cancelled 事件
+-- ② 已履约订单上的镜像行 cancelled 事件（order_events 不是 append-only 表，见 95_triggers）
 DELETE FROM billing.order_events e
  USING billing.orders o
  WHERE e.order_id = o.id
@@ -50,7 +41,7 @@ BEGIN
    WHERE change_type = 'operator_adjusted' AND remark LIKE 'product_330 repair:%';
   SELECT count(*) INTO n_off FROM metering.subscriptions
    WHERE deleted_at IS NULL AND status IN ('active','trialing','expiring') AND auto_renew = false;
-  RAISE NOTICE '[order-data-repair] repair audit rows=% (expect 1), live subscriptions still auto_renew=false=%', n_dup, n_off;
+  RAISE NOTICE '[order-data-repair] repair audit rows=% (append-only, duplicates stay), live subscriptions still auto_renew=false=%', n_dup, n_off;
 END $$;
 
 COMMIT;
