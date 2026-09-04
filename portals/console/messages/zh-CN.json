@@ -852,7 +852,7 @@
       "currentPassword": "当前密码",
       "nextPassword": "新密码",
       "confirmPassword": "再次输入",
-      "userNo": "USR_ID",
+      "userNo": "用户编号",
       "accountStatus": "账号状态",
       "newPhone": "新手机号",
       "verificationCode": "验证码",

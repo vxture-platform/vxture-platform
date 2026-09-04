@@ -14,6 +14,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { formatPrincipalNo } from "@/lib/principal-no";
 import {
   Popover,
   PopoverTrigger,
@@ -118,7 +119,12 @@ export function TenantPanel({
           }
           metaRows={[
             ...(tenant?.tenantNo
-              ? [{ key: "no", content: `T-${tenant.tenantNo}` }]
+              ? [
+                  {
+                    key: "no",
+                    content: formatPrincipalNo(tenant.tenantNo, "tenant") ?? "",
+                  },
+                ]
               : []),
             { key: "type", content: tenantTypeLabel },
             {

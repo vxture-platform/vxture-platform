@@ -30,7 +30,8 @@ import {
 import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import type { MyOrder } from "@/api/console-bff";
 import { infoRow, infoRowGlyph, infoRowText } from "./sectionKit";
-import { fmtStamp, groupVisibleCode } from "./hubModel";
+import { fmtStamp } from "./hubModel";
+import { formatPrincipalNoOr } from "@/lib/principal-no";
 
 interface Step {
   key: string;
@@ -175,7 +176,7 @@ export function OrderDetailPanel({
                 .join(" · ") || "—"}
             </b>
             <span className="text-body-sm text-muted-foreground tabular-nums">
-              {groupVisibleCode(order.workspaceNo)}
+              {formatPrincipalNoOr(order.workspaceNo, "workspace", "—")}
             </span>
           </span>
         </div>

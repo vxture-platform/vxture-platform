@@ -852,7 +852,7 @@
       "currentPassword": "Current password",
       "nextPassword": "New password",
       "confirmPassword": "Confirm",
-      "userNo": "USR_ID",
+      "userNo": "User ID",
       "accountStatus": "Status",
       "newPhone": "New phone number",
       "verificationCode": "Code",
