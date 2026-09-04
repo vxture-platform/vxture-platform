@@ -123,6 +123,16 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       }));
   }
 
+  async renameTenant(
+    tenantId: string,
+    name: string,
+  ): Promise<{ verificationSuperseded: boolean } | null> {
+    const org = this.orgs.get(tenantId);
+    if (!org) return null;
+    org.name = name;
+    return { verificationSuperseded: false };
+  }
+
   async revokeInvitationsCreatedBy(_userId: string): Promise<number> {
     return 0;
   }

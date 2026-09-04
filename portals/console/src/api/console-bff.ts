@@ -2426,14 +2426,14 @@ export interface ConsoleVerification {
   verificationType: string;
   businessLicenseNo: string | null;
   legalPersonName: string | null;
-  status: "unverified" | "pending" | "verified" | "rejected";
+  status: "unverified" | "pending" | "verified" | "rejected" | "superseded";
   rejectReason: string | null;
   reviewedAt: string | null;
   createdAt: string;
 }
 
 export interface ConsoleTenantVerificationState {
-  status: "unverified" | "pending" | "verified" | "rejected";
+  status: "unverified" | "pending" | "verified" | "rejected" | "superseded";
   latest: ConsoleVerification | null;
   history: ConsoleVerification[];
 }

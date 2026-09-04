@@ -327,14 +327,6 @@
         "label": "账号信息",
         "description": "头像、资料、联系方式、登录方式与偏好"
       },
-      "personalTenant": {
-        "label": "租户信息",
-        "description": "个人租户信息，仅个人租户可见"
-      },
-      "organization": {
-        "label": "组织信息",
-        "description": "组织名称、Logo、简介、认证状态与本地化"
-      },
       "members": {
         "label": "成员管理",
         "description": "邀请、访问审查与团队成员管理"
@@ -379,10 +371,6 @@
         "label": "租户设置",
         "description": "语言、时区与租户注销危险操作"
       },
-      "systemSettings": {
-        "label": "系统设置",
-        "description": "平台与账户的系统级设置"
-      },
       "usage": {
         "label": "用量分析",
         "description": "消耗趋势、调用记录与成员细分"
@@ -394,6 +382,10 @@
       "auditLogs": {
         "label": "审计日志",
         "description": "租户内成员操作与商业动作的轨迹"
+      },
+      "tenantInfo": {
+        "label": "租户信息",
+        "description": "租户资料、联系人、默认区域与危险操作"
       }
     }
   },
@@ -418,7 +410,9 @@
     "addonPay": "加油包支付",
     "vouchers": "我的卡券",
     "auditLogs": "审计日志",
-    "inbox": "待办与消息"
+    "inbox": "待办与消息",
+    "tenant": "租户信息",
+    "tenantVerification": "企业认证"
   },
   "login": {
     "hero": {
@@ -556,138 +550,6 @@
       "count": "最近 {count} 张账单",
       "empty": "暂无账单",
       "viewAll": "账单管理"
-    }
-  },
-  "settings": {
-    "eyebrow": "高级设置",
-    "title": "租户设置",
-    "description": "配置租户级策略、准入控制、安全约束与审计规则。",
-    "save": "保存更改",
-    "reset": "恢复默认",
-    "backend": {
-      "pending": "待后端实现"
-    },
-    "summary": {
-      "title": "租户设置概览",
-      "scope": "配置范围",
-      "scopeValue": "租户策略",
-      "enabled": "已启用",
-      "enabledValue": "{count} 项",
-      "profile": "资料维护",
-      "profileValue": "另页管理"
-    },
-    "general": {
-      "title": "一般设置",
-      "count": "{count} 组"
-    },
-    "table": {
-      "policy": "策略",
-      "state": "状态",
-      "value": "设置"
-    },
-    "states": {
-      "enabled": "已启用",
-      "disabled": "已关闭"
-    },
-    "sections": {
-      "access": {
-        "title": "访问准入",
-        "count": "{count} 项"
-      },
-      "security": {
-        "title": "安全策略",
-        "count": "{count} 项"
-      },
-      "data": {
-        "title": "数据与审计",
-        "count": "{count} 项"
-      }
-    },
-    "rows": {
-      "inviteApproval": {
-        "title": "邀请审批",
-        "hint": "成员邀请进入租户前需要管理员确认。"
-      },
-      "externalMembers": {
-        "title": "外部成员",
-        "hint": "允许非组织域账号加入当前租户。"
-      },
-      "defaultRole": {
-        "title": "默认角色",
-        "hint": "新成员通过邀请后获得的初始角色。"
-      },
-      "mfaRequired": {
-        "title": "强制多因素认证",
-        "hint": "要求成员登录控制台时完成额外验证。"
-      },
-      "trustedDeviceReview": {
-        "title": "新设备复核",
-        "hint": "首次使用新设备登录后记录并进入复核。"
-      },
-      "sessionTimeout": {
-        "title": "会话有效期",
-        "hint": "控制台登录会话保持在线的最长时间。"
-      },
-      "auditRetention": {
-        "title": "审计保留",
-        "hint": "租户操作日志在平台侧保留的时间。"
-      },
-      "exportApproval": {
-        "title": "数据导出审批",
-        "hint": "导出成员、账单和审计数据前需要确认。"
-      },
-      "apiKeyCreation": {
-        "title": "API Key 自助创建",
-        "hint": "允许成员自行创建集成用访问密钥。"
-      }
-    },
-    "options": {
-      "defaultRole": {
-        "readonly": "只读成员",
-        "member": "普通成员",
-        "admin": "管理员"
-      },
-      "sessionTimeout": {
-        "8h": "8 小时",
-        "24h": "24 小时",
-        "7d": "7 天"
-      },
-      "auditRetention": {
-        "90": "90 天",
-        "180": "180 天",
-        "365": "365 天"
-      }
-    },
-    "danger": {
-      "title": "危险区域",
-      "count": "高风险操作",
-      "confirmRequired": "需要确认",
-      "cancelTenant": {
-        "title": "租户注销",
-        "confirmHint": "执行前需要二次确认，并输入当前租户名称。",
-        "action": "注销租户"
-      },
-      "transferOwner": {
-        "title": "转让所有权",
-        "hint": "把本租户的所有者身份转给另一位在职成员。转让后你将降为管理员。",
-        "action": "转让所有权",
-        "dialogTitle": "转让租户所有权",
-        "dialogBody": "转让后，对方成为本租户所有者，你将降为管理员（仍可管理成员与角色，但不再拥有所有者专属能力）。此操作立即生效，且只能由新所有者转回。",
-        "targetLabel": "接收人",
-        "targetPlaceholder": "选择一位在职成员",
-        "confirmLabel": "输入租户名称以确认",
-        "cancel": "取消",
-        "confirm": "确认转让",
-        "noCandidates": "本租户没有其他在职成员，无法转让。先邀请成员并等其加入。",
-        "notOwner": "只有当前所有者可以转让所有权。",
-        "personalTenant": "个人租户没有可转让的所有权。",
-        "success": "所有权已转让给 {name}。你现在是管理员。",
-        "failed": "所有权转让失败，请稍后重试"
-      }
-    },
-    "feedback": {
-      "saved": "租户设置已保存到前端本地状态，待后端实现后同步到服务端。",
-      "reset": "租户设置已恢复为默认策略。"
     }
   },
   "notificationsPage": {
@@ -1255,166 +1117,6 @@
       }
     }
   },
-  "organizationPage": {
-    "header": {
-      "eyebrow": "租户中心",
-      "title": "组织信息",
-      "description": "组织等同当前租户，集中展示组织 Logo、认证状态、联系地址和本地化配置。"
-    },
-    "common": {
-      "empty": "--",
-      "loading": "加载中...",
-      "yes": "是",
-      "no": "否"
-    },
-    "summary": {
-      "organization": "组织",
-      "logo": "Logo",
-      "tenant": "租户",
-      "scope": "范围",
-      "verified": "认证",
-      "updatedAt": "更新于",
-      "customLogo": "自定义 Logo",
-      "defaultLogo": "默认 Logo",
-      "orgEqualsTenant": "组织即租户"
-    },
-    "sections": {
-      "foundation": {
-        "title": "基础资料",
-        "description": "租户名称、Logo、编码、类型、状态与简介。"
-      },
-      "business": {
-        "title": "工商信息",
-        "description": "行业、企业规模与官网（组织租户）。"
-      },
-      "status": {
-        "title": "认证与状态",
-        "description": "展示租户运行状态、企业认证和审核信息。"
-      },
-      "contact": {
-        "title": "管理员 / 联系人",
-        "description": "租户对外联系窗口，与认证、合规、账单通知相关。"
-      },
-      "verification": {
-        "title": "租户认证",
-        "personalHint": "个人租户认证关联到个人实名认证。",
-        "orgHint": "组织租户需完成企业认证；发起前要求经办人已完成个人实名认证。"
-      },
-      "localization": {
-        "title": "本地化配置",
-        "description": "决定当前组织默认语言、时区和基础资料附件。"
-      },
-      "workspace": {
-        "title": "工作空间",
-        "description": "订阅按租户支付、用量按工作空间记账。当前阶段每个租户固定一个默认工作空间，本期不开放自建。"
-      }
-    },
-    "fields": {
-      "organizationName": "组织名称",
-      "companyName": "企业名称",
-      "tenantCode": "ORG_ID",
-      "tenantType": "租户类型",
-      "createdAt": "创建时间",
-      "industry": "所属行业",
-      "scale": "企业规模",
-      "website": "官网地址",
-      "industryScale": "行业 / 规模",
-      "description": "描述",
-      "tenantStatus": "租户状态",
-      "contactRole": "职务 / 角色",
-      "region": "国家 / 地区",
-      "countryCode": "国家 / 地区代码",
-      "isBillingRecipient": "账单接收人",
-      "verifiedStatus": "认证状态",
-      "unifiedSocialCreditCode": "统一社会信用代码",
-      "verifiedAt": "认证时间",
-      "rejectedReason": "拒绝原因",
-      "contactName": "联系人",
-      "contactPhone": "联系电话",
-      "contactEmail": "联系邮箱",
-      "primaryDomain": "主域名",
-      "location": "地区",
-      "address": "详细地址",
-      "postalCode": "邮编",
-      "language": "语言",
-      "timeZone": "时区",
-      "currency": "货币",
-      "businessLicenseUrl": "营业执照",
-      "logoUrl": "Logo 链接",
-      "updatedAt": "最近更新时间",
-      "workspaceName": "工作空间名称",
-      "workspaceCode": "工作空间可视码",
-      "ownerTenant": "所属租户",
-      "isDefault": "默认工作空间"
-    },
-    "actions": {
-      "edit": "编辑",
-      "editLogo": "编辑 Logo",
-      "clearLogo": "清除 Logo",
-      "uploadLogo": "上传 Logo",
-      "goVerify": "前往认证",
-      "cancel": "取消",
-      "save": "保存",
-      "clear": "清除"
-    },
-    "tenantType": {
-      "personal": "个人租户",
-      "organization": "组织租户",
-      "company": "组织",
-      "individual": "个人"
-    },
-    "status": {
-      "tenant": {
-        "trial": "试用中",
-        "active": "正常",
-        "suspended": "已暂停",
-        "cancelled": "已注销"
-      },
-      "verified": {
-        "unverified": "未认证",
-        "pending": "审核中",
-        "verified": "已认证",
-        "rejected": "已拒绝"
-      }
-    },
-    "logo": {
-      "alt": "{name} 的组织 Logo",
-      "edit": "编辑组织 Logo",
-      "previewAlt": "{name} 的组织 Logo 预览",
-      "customPreview": "使用自定义 Logo",
-      "defaultPreview": "使用默认 Logo"
-    },
-    "dialogs": {
-      "edit": {
-        "title": "编辑租户资料",
-        "description": "工商信息与联系人资料，保存后同步到租户信息页。"
-      },
-      "logo": {
-        "title": "编辑组织 Logo",
-        "description": "支持上传图片或填写 Logo 链接，保存后会同步到当前组织信息页。",
-        "uploadHint": "建议上传 1:1 比例 PNG 或 JPG，文件不超过 5MB。"
-      }
-    },
-    "placeholders": {
-      "logoUrl": "https://example.com/logo.png"
-    },
-    "feedback": {
-      "noProfile": "未读取到组织资料。",
-      "loadError": "组织资料读取失败，请稍后重试。",
-      "saved": "租户资料已更新。",
-      "saveError": "租户资料保存失败，请稍后重试。",
-      "logoSaved": "组织 Logo 已更新。",
-      "logoCleared": "组织 Logo 已清除。",
-      "logoUploadError": "Logo 上传失败，请稍后重试。",
-      "logoFileTypeError": "请选择图片文件。",
-      "logoFileSizeError": "图片文件不能超过 5MB。",
-      "logoReadError": "Logo 图片读取失败，请重新选择。"
-    },
-    "workspace": {
-      "defaultYes": "是",
-      "multiWorkspaceNote": "多工作空间为后续演进方向：其商业含义（按工作空间记账、订阅归属、席位分配）尚未定案，本期先保持一租户一工作空间。"
-    }
-  },
   "verificationPage": {
     "personal": {
       "eyebrow": "个人信息",
@@ -1969,106 +1671,6 @@
       "scopeMissing": "需要租户上下文才能显示模型平台状态。",
       "boundaryTitle": "控制面边界",
       "boundaryBody": "供应方、模型、策略、价格与授权的变更由平台运营在管理面完成。"
-    }
-  },
-  "tenantPage": {
-    "header": {
-      "eyebrow": "账户与租户",
-      "title": "租户信息",
-      "description": "查看租户名称、标识、状态与本地化设置。"
-    },
-    "sections": {
-      "info": {
-        "title": "租户信息",
-        "description": "租户的名称、标识、类型与状态。"
-      },
-      "localization": {
-        "title": "本地化",
-        "description": "语言、时区与货币偏好。"
-      },
-      "subscription": {
-        "title": "订阅",
-        "description": "当前租户的套餐与计费。",
-        "empty": "暂无有效订阅。"
-      },
-      "workspaces": {
-        "title": "工作空间",
-        "description": "该租户下的工作空间及你的角色。",
-        "empty": "暂无工作空间。"
-      }
-    },
-    "fields": {
-      "tenantName": "租户名称",
-      "tenantId": "ORG_ID",
-      "tenantType": "租户类型",
-      "status": "状态",
-      "createdAt": "创建时间",
-      "description": "简介",
-      "language": "语言",
-      "timezone": "时区",
-      "currency": "货币",
-      "price": "价格",
-      "nextBilling": "下次扣费",
-      "role": "角色",
-      "joinedAt": "加入时间"
-    },
-    "status": {
-      "active": "生效中",
-      "suspended": "已暂停",
-      "trial": "试用中",
-      "cancelled": "已取消"
-    },
-    "type": {
-      "personal": "个人租户",
-      "organization": "组织"
-    },
-    "subscription": {
-      "active": "生效中",
-      "trial": "试用中"
-    },
-    "language": {
-      "zhCN": "简体中文",
-      "enUS": "English"
-    },
-    "actions": {
-      "edit": "编辑",
-      "save": "保存",
-      "cancel": "取消",
-      "uploadLogo": "上传 Logo",
-      "clearLogo": "清除 Logo",
-      "viewPlans": "查看套餐"
-    },
-    "dialogs": {
-      "localization": {
-        "title": "编辑本地化",
-        "description": "设置语言、时区与货币。"
-      }
-    },
-    "logo": {
-      "alt": "{name} 的 Logo"
-    },
-    "feedback": {
-      "loadError": "加载租户信息失败。",
-      "noProfile": "未找到租户信息。",
-      "logoSaved": "Logo 已更新。",
-      "logoCleared": "Logo 已清除。",
-      "logoUploadError": "Logo 操作失败，请重试。",
-      "logoFileTypeError": "仅支持 PNG / JPEG / WebP / GIF 图片。",
-      "logoFileSizeError": "图片不能超过 5MB。",
-      "localizationSaved": "本地化设置已保存。",
-      "localizationSaveError": "保存失败，请重试。"
-    },
-    "common": {
-      "empty": "—",
-      "loading": "加载中…"
-    },
-    "workspaces": {
-      "role": {
-        "owner": "所有者",
-        "manager": "管理员",
-        "member": "成员"
-      },
-      "defaultTag": "默认"
     }
   },
   "orderFlow": {
@@ -3254,5 +2856,154 @@
   },
   "principalNo": {
     "label": "ID:"
+  },
+  "tenantInfoPage": {
+    "header": {
+      "title": "租户信息",
+      "description": "当前租户的资料、联系人与默认设置。成员、订阅、账单各在自己的板块。"
+    },
+    "common": {
+      "loading": "加载中…",
+      "unset": "未设置",
+      "cancel": "取消"
+    },
+    "logo": {
+      "upload": "上传租户标识",
+      "clear": "清除标识"
+    },
+    "tenantType": {
+      "personal": "个人租户",
+      "organization": "组织租户"
+    },
+    "status": {
+      "active": "正常",
+      "suspended": "已停用"
+    },
+    "verify": {
+      "unverified": "未认证",
+      "pending": "审核中",
+      "verified": "已认证",
+      "rejected": "认证失败",
+      "superseded": "已作废",
+      "go": "去认证",
+      "view": "查看认证"
+    },
+    "identity": {
+      "createdOn": "{date} 创建",
+      "owner": "所有者 {name}",
+      "members": "成员 {count} · 成员管理"
+    },
+    "workspaces": {
+      "toggle": "工作空间 · {count} 个",
+      "unnamed": "默认工作空间",
+      "defaultTag": "默认",
+      "empty": "暂无工作空间。",
+      "hint": "这里只列出工作空间。切换在顶栏的租户面板;多工作空间是后续演进。"
+    },
+    "cards": {
+      "basic": {
+        "title": "基本信息",
+        "description": "租户对外呈现的名称与介绍。"
+      },
+      "contact": {
+        "title": "联系人",
+        "description": "租户的官方对外窗口:认证结果、账单与发票通知发到这里。"
+      },
+      "region": {
+        "title": "默认区域",
+        "description": "租户层默认值,工作空间继承。你自己看到的界面语言与时区在「账号信息 · 个人偏好」里,两者互不覆盖。"
+      },
+      "policy": {
+        "title": "租户策略",
+        "toggle": "查看规划中的策略项"
+      },
+      "danger": {
+        "title": "危险操作"
+      }
+    },
+    "fields": {
+      "name": "租户名称",
+      "nameResetsVerification": "改名后原企业认证作废,需重新认证。",
+      "description": "简介",
+      "industry": "所属行业",
+      "scale": "企业规模",
+      "website": "官网",
+      "contactName": "联系人",
+      "contactRole": "职务",
+      "contactEmail": "邮箱",
+      "contactPhone": "电话",
+      "countryCode": "国家 / 地区",
+      "address": "地址",
+      "postalCode": "邮编",
+      "isBillingRecipient": "账单接收人",
+      "isBillingRecipientHint": "发票与账单通知发给此联系人",
+      "language": "默认语言",
+      "timezone": "默认时区",
+      "currency": "结算货币"
+    },
+    "scale": {
+      "people": "{range} 人"
+    },
+    "language": {
+      "zhCN": "简体中文",
+      "enUS": "English"
+    },
+    "policy": {
+      "access": {
+        "title": "访问:",
+        "items": "邀请审批 · 外部成员 · 默认角色"
+      },
+      "security": {
+        "title": "安全:",
+        "items": "强制二次验证 · 可信设备 · 会话时长"
+      },
+      "data": {
+        "title": "数据:",
+        "items": "审计保留期 · 导出审批 · API Key"
+      }
+    },
+    "danger": {
+      "closeConditionsLabel": "注销条件",
+      "closeConditions": {
+        "noBills": "无未清账单",
+        "noBalance": "无付费余额",
+        "noInProgress": "无进行中的退款或开票",
+        "noPaidOrder": "无已付款待确认订单",
+        "membersCleared": "成员已清退"
+      },
+      "transfer": {
+        "label": "转让所有权",
+        "action": "转让",
+        "summary": "选一名活跃成员并输入租户名称确认,立即生效;你降为管理员。",
+        "noCandidate": "租户里还没有其他活跃成员,无处可转。",
+        "ownerOnly": "只有当前所有者可以转让。",
+        "title": "转让所有权",
+        "description": "转让后你将降为管理员,此操作立即生效。",
+        "target": "接收人",
+        "targetEmpty": "请选择成员",
+        "confirmLabel": "输入租户名称「{name}」确认",
+        "failed": "转让失败,请稍后重试。"
+      },
+      "close": {
+        "label": "注销租户",
+        "summary": "满足上述条件后可注销,30 天保留期内可撤销。后端建设中,暂不可用。",
+        "action": "注销"
+      }
+    },
+    "footer": {
+      "dirty": "{count} 处改动未保存",
+      "clean": "没有未保存的改动",
+      "discard": "放弃",
+      "save": "保存"
+    },
+    "feedback": {
+      "saved": "已保存。",
+      "savedVerificationReset": "已保存。租户名称已变更,原企业认证作废,请重新提交认证。",
+      "saveFailed": "保存失败,请稍后重试。",
+      "logoSaved": "标识已更新。",
+      "logoCleared": "标识已清除。",
+      "logoFailed": "标识操作失败,请稍后重试。",
+      "transferred": "所有权已转让,你已降为管理员。"
+    }
   }
 }

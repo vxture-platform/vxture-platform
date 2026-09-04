@@ -13,6 +13,11 @@ export class UpdateUsernameDto {
 }
 
 export class UpdateOrganizationDto {
+  /**
+   * 租户名称(批 5c 新增)。个人与组织租户都可改;**组织租户改名即作废原企业认证**
+   * (规格 §3.4),响应里的 verificationSuperseded 告诉前端要不要提示重新认证。
+   */
+  name?: string | null;
   description?: string | null;
   industry?: string | null;
   scale?: string | null;

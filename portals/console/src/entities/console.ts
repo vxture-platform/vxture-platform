@@ -168,12 +168,21 @@ export interface ConsoleOrganizationProfile {
   language: string | null;
   currency: string | null;
   /** KYC verification (§3.4) — deferred; read-only summary, skeleton only. */
-  verifiedStatus: "unverified" | "pending" | "verified" | "rejected" | null;
+  verifiedStatus:
+    | "unverified"
+    | "pending"
+    | "verified"
+    | "rejected"
+    // 批 5c:组织改名即作废原认证
+    | "superseded"
+    | null;
   updatedAt: string | null;
 }
 
 /** Editable subset of the tenant profile (PUT /api/me/organization). */
 export interface OrganizationProfileUpdate {
+  /** 租户名称(批 5c);组织租户改名即作废原企业认证。 */
+  name?: string | null;
   description?: string | null;
   industry?: string | null;
   scale?: string | null;

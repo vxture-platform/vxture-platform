@@ -143,6 +143,70 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     return this.provisionOrg(ownerUserId, "organization", name.trim());
   }
 
+  /**
+   * 改租户名(批 5c)。个人租户随便改;**组织租户改名即作废原企业认证**——名称与
+   * 营业执照挂钩,规格 §3.4「关键信息变更需重新审核」。作废 = 当前认证记录置
+   * `superseded`(备注记下改名前后),租户侧 verification_status 回 `unverified`;
+   * 认证记录不删,历史时间线上留一条「作废」。
+   *
+   * 返回本次是否作废了认证,调用方据此提示用户。租户不存在 / 已删 → null。
+   */
+  async renameTenant(
+    tenantId: string,
+    name: string,
+  ): Promise<{ verificationSuperseded: boolean } | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const t = await client.query<{
+        name: string;
+        type: string;
+        verification_status: string;
+      }>(
+        `select name, type, verification_status from tenancy.tenants
+          where id = $1 and deleted_at is null for update`,
+        [tenantId],
+      );
+      const tenant = t.rows[0];
+      if (!tenant) {
+        await client.query("rollback");
+        return null;
+      }
+      const supersede =
+        tenant.type === "organization" &&
+        (tenant.verification_status === "verified" ||
+          tenant.verification_status === "pending");
+
+      await client.query(
+        `update tenancy.tenants set name = $2, updated_at = now() where id = $1`,
+        [tenantId, name],
+      );
+      if (supersede) {
+        await client.query(
+          `update kyc.tenant_verifications
+              set status = 'superseded',
+                  reject_reason = $2,
+                  updated_at = now()
+            where tenant_id = $1 and status in ('verified', 'pending')`,
+          [tenantId, `名称变更:${tenant.name} → ${name}`],
+        );
+        await client.query(
+          `update tenancy.tenants
+              set verification_status = 'unverified', updated_at = now()
+            where id = $1`,
+          [tenantId],
+        );
+      }
+      await client.query("commit");
+      return { verificationSuperseded: supersede };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async renamePersonalOrg(userId: string, name: string): Promise<boolean> {
     const result = await this.pool.query(
       `update tenancy.tenants set name = $2, updated_at = now()

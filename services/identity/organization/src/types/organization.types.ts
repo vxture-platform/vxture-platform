@@ -37,7 +37,12 @@ export interface OrgView {
   /** ISO timestamp of org creation (present on getOrgById reads). */
   createdAt?: string;
   /** tenancy.tenants.verification_status 反规范化快查(权威在 kyc.tenant_verifications)。 */
-  verificationStatus?: "unverified" | "pending" | "verified" | "rejected";
+  verificationStatus?:
+    | "unverified"
+    | "pending"
+    | "verified"
+    | "rejected"
+    | "superseded";
 }
 
 /** 组织实名认证申请行(kyc.tenant_verifications;审核在 admin 侧)。 */
@@ -46,7 +51,7 @@ export interface TenantVerificationRecord {
   verificationType: "individual" | "enterprise";
   businessLicenseNo: string | null;
   legalPersonName: string | null;
-  status: "unverified" | "pending" | "verified" | "rejected";
+  status: "unverified" | "pending" | "verified" | "rejected" | "superseded";
   rejectReason: string | null;
   reviewedAt: Date | null;
   createdAt: Date;
@@ -262,6 +267,14 @@ export interface OrganizationReadRepository {
    * Never touches team/organization-type tenants.
    */
   renamePersonalOrg(userId: string, name: string): Promise<boolean>;
+  /**
+   * 改租户名(批 5c)。组织租户改名即作废原企业认证(规格 §3.4);返回是否作废,
+   * 租户不存在 / 已删返回 null。
+   */
+  renameTenant(
+    tenantId: string,
+    name: string,
+  ): Promise<{ verificationSuperseded: boolean } | null>;
   /** Provision a team org + default workspace + owner membership at both levels. */
   createTeamOrg(ownerUserId: string, name: string): Promise<ProvisionedOrg>;
   getOrgById(orgId: string): Promise<OrgView | null>;

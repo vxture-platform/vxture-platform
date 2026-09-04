@@ -46,6 +46,8 @@ const STATUS_TONES: Record<ConsoleVerification["status"], StatusBadgeTone> = {
   pending: "info",
   verified: "success",
   rejected: "warning",
+  // 批 5c:组织租户改名即作废原认证(设计 §5.1),历史里留一条「已作废」
+  superseded: "danger",
 };
 
 export function TenantVerificationPage() {

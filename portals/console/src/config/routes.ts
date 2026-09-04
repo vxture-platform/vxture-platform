@@ -5,6 +5,9 @@ const routeLabels = new Map<string, string>([
   ["/todos", "todos"],
   ["/inbox", "inbox"],
   ["/profile", "profile"],
+  ["/tenant", "tenant"],
+  ["/tenant/verification", "tenantVerification"],
+  // 旧路由保留跳转,面包屑在跳转那一帧仍有名字
   ["/personal-tenant", "personalTenant"],
   ["/organization", "organization"],
   ["/members", "members"],

@@ -98,16 +98,18 @@ const TENANT_MENU_TREE = [
         route: "/profile",
         icon: "user",
       },
+      // 批 5c(2026-09-05):租户信息 / 组织信息 / 系统设置三页合并为 `/tenant`。
+      // 码不删(角色授权引用它们,删码即失权),三个节点同指新页;整树清理归批 8。
       {
         code: "tenant.menu.personal_tenant",
         name: "租户信息",
-        route: "/personal-tenant",
+        route: "/tenant",
         icon: "buildings",
       },
       {
         code: "tenant.menu.organization",
         name: "组织信息",
-        route: "/organization",
+        route: "/tenant",
         icon: "building-library",
         perms: ["tenant.settings.manage"],
       },
@@ -193,9 +195,10 @@ const TENANT_MENU_TREE = [
     icon: "settings",
     children: [
       {
+        // 批 5c:并入 `/tenant`(策略与危险操作成为该页的两张卡)
         code: "tenant.menu.settings",
         name: "系统设置",
-        route: "/settings",
+        route: "/tenant",
         icon: "settings",
         perms: ["tenant.workspace.manage", "tenant.delete"],
       },

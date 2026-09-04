@@ -100,19 +100,13 @@ const accountTenantSection: NavigationSection = {
       icon: "user",
       descriptionKey: "profile.description",
     },
+    // 批 5c:租户信息 / 组织信息合成一条(个人与组织同结构,不再按租户类型分)。
+    // 系统设置也并入这一页,故「高级设置」里不再有它。
     {
-      href: "/personal-tenant",
-      labelKey: "personalTenant.label",
+      href: "/tenant",
+      labelKey: "tenantInfo.label",
       icon: "buildings",
-      descriptionKey: "personalTenant.description",
-      tenantTypes: ["personal"],
-    },
-    {
-      href: "/organization",
-      labelKey: "organization.label",
-      icon: "building-library",
-      descriptionKey: "organization.description",
-      tenantTypes: ["organization"],
+      descriptionKey: "tenantInfo.description",
     },
   ],
 };
@@ -191,12 +185,7 @@ const subscriptionBillingSection: NavigationSection = {
 const advancedSettingsSection: NavigationSection = {
   titleKey: "advancedSettings",
   items: [
-    {
-      href: "/settings",
-      labelKey: "systemSettings.label",
-      icon: "settings",
-      descriptionKey: "systemSettings.description",
-    },
+    // 批 5c:「系统设置」并入「租户信息」(/tenant),/settings 路由保留跳转。
     {
       href: "/notifications",
       labelKey: "notifications.label",
