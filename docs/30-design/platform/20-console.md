@@ -233,8 +233,8 @@ Settings
 >
 > 本节写作时，UI 层用 "workspace" 指代租户——它自己的类型定义就是证据
 > （`WorkspaceContextState.currentTenantId`）。平台后来引入了 `tenancy.workspaces`
-> 这个**独立子实体**（workspace 是 tenant 的下级，`workspace_no = tenant_no × 1000 + 序号`，
-> 每租户上限 999），于是同一个词在本文档里和在 DDL 里指两样东西。
+> 这个**独立子实体**（workspace 是 tenant 的下级，归属走 `workspaces.tenant_id`；
+> 编号自 2026-09-05 §11 v4 起与租户号解耦、每租户空间数无上限），于是同一个词在本文档里和在 DDL 里指两样东西。
 >
 > 照本节实现时的对应关系：
 >

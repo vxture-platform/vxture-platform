@@ -322,27 +322,83 @@ CREATE TRIGGER trg_product_metrics_no_platform_shadow
   BEFORE INSERT OR UPDATE ON product.product_metrics
   FOR EACH ROW EXECUTE FUNCTION product.forbid_platform_metric_shadow();
 
--- ── B9:可视码分配(2026-08-19 编号定版 v3「人租同号」,§11)────────────────────
--- tenant_no:个人租户继承 owner 的 user_no(人租同号);组织租户自取主体号
---   (与 user_no 共享 account.principal_no_seq,号空间统一,跨表永不撞号)。
--- workspace_no = 完整 12 位租户号 ×1000 + 租户内终身序号(001-999;号不复用,15 位)。
--- 计数器 tenants.workspace_counter 原子递增,超 999 由 chk_tenants_workspace_counter 硬拦。
--- 显式携号插入放行(迁移/修复用)。注意:ON CONFLICT DO NOTHING 的跳过行也会烧掉一个
--- 计数(BEFORE 触发器先于冲突判定),幂等 seed 重跑每次至多烧 1,可接受。
-CREATE OR REPLACE FUNCTION tenancy.assign_tenant_no() RETURNS trigger AS $$
+-- ── B9:主体码分配(2026-09-05 编号定版 v4「三号解耦」,§11)─────────────────────
+-- 三个号各自独立取号,互不推导:user_no 类别位 1、tenant_no 类别位 2、workspace_no
+-- 类别位 3;号形与生成规则见 00_schemas.sql 的 public.new_principal_no。
+-- 归属只走 uuid 外键,号里不含任何关系——因此:个人租户与组织租户一视同仁取号,
+-- 个人转组织**不换号**,空间号**不跟随**租户号,每租户空间数**不再有 999 上限**。
+--
+-- 分配器 = 取号 + 查重重试。剩余竞态(两并发事务在各自快照里都没看见对方的号)由
+-- UNIQUE 约束兜底,概率约 1/10^8;显式携号插入放行(迁移 / 修复用)。
+CREATE OR REPLACE FUNCTION account.alloc_user_no() RETURNS bigint
+  LANGUAGE plpgsql VOLATILE AS $$
 DECLARE
-  v_user_no bigint;
+  v_no  bigint;
+  v_try int := 0;
 BEGIN
-  IF NEW.tenant_no IS NOT NULL THEN RETURN NEW; END IF;
-  IF NEW.type = 'personal' THEN
-    SELECT user_no INTO v_user_no FROM account.users WHERE id = NEW.owner_user_id;
-    IF v_user_no IS NULL THEN
-      RAISE EXCEPTION 'tenant_no: owner user % not found', NEW.owner_user_id;
+  LOOP
+    v_no := public.new_principal_no(1);
+    EXIT WHEN NOT EXISTS (SELECT 1 FROM account.users WHERE user_no = v_no);
+    v_try := v_try + 1;
+    IF v_try >= 20 THEN
+      RAISE EXCEPTION 'user_no 分配失败:连续 % 次撞号(号段将满?)', v_try;
     END IF;
-    NEW.tenant_no := v_user_no;
-  ELSE
-    NEW.tenant_no := nextval('account.principal_no_seq') * 1000 + floor(random()*1000)::bigint;
-  END IF;
+  END LOOP;
+  RETURN v_no;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION tenancy.alloc_tenant_no() RETURNS bigint
+  LANGUAGE plpgsql VOLATILE AS $$
+DECLARE
+  v_no  bigint;
+  v_try int := 0;
+BEGIN
+  LOOP
+    v_no := public.new_principal_no(2);
+    EXIT WHEN NOT EXISTS (SELECT 1 FROM tenancy.tenants WHERE tenant_no = v_no);
+    v_try := v_try + 1;
+    IF v_try >= 20 THEN
+      RAISE EXCEPTION 'tenant_no 分配失败:连续 % 次撞号(号段将满?)', v_try;
+    END IF;
+  END LOOP;
+  RETURN v_no;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION tenancy.alloc_workspace_no() RETURNS bigint
+  LANGUAGE plpgsql VOLATILE AS $$
+DECLARE
+  v_no  bigint;
+  v_try int := 0;
+BEGIN
+  LOOP
+    v_no := public.new_principal_no(3);
+    EXIT WHEN NOT EXISTS (SELECT 1 FROM tenancy.workspaces WHERE workspace_no = v_no);
+    v_try := v_try + 1;
+    IF v_try >= 20 THEN
+      RAISE EXCEPTION 'workspace_no 分配失败:连续 % 次撞号(号段将满?)', v_try;
+    END IF;
+  END LOOP;
+  RETURN v_no;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION account.assign_user_no() RETURNS trigger AS $$
+BEGIN
+  IF NEW.user_no IS NULL THEN NEW.user_no := account.alloc_user_no(); END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_users_assign_no ON account.users;
+CREATE TRIGGER trg_users_assign_no
+  BEFORE INSERT ON account.users
+  FOR EACH ROW EXECUTE FUNCTION account.assign_user_no();
+
+CREATE OR REPLACE FUNCTION tenancy.assign_tenant_no() RETURNS trigger AS $$
+BEGIN
+  IF NEW.tenant_no IS NULL THEN NEW.tenant_no := tenancy.alloc_tenant_no(); END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -351,20 +407,10 @@ DROP TRIGGER IF EXISTS trg_tenants_assign_no ON tenancy.tenants;
 CREATE TRIGGER trg_tenants_assign_no
   BEFORE INSERT ON tenancy.tenants
   FOR EACH ROW EXECUTE FUNCTION tenancy.assign_tenant_no();
+
 CREATE OR REPLACE FUNCTION tenancy.assign_workspace_no() RETURNS trigger AS $$
-DECLARE
-  v_counter   int;
-  v_tenant_no bigint;
 BEGIN
-  IF NEW.workspace_no IS NOT NULL THEN RETURN NEW; END IF;
-  UPDATE tenancy.tenants
-     SET workspace_counter = workspace_counter + 1
-   WHERE id = NEW.tenant_id
-  RETURNING workspace_counter, tenant_no INTO v_counter, v_tenant_no;
-  IF v_counter IS NULL THEN
-    RAISE EXCEPTION 'workspace_no: tenant % not found', NEW.tenant_id;
-  END IF;
-  NEW.workspace_no := v_tenant_no * 1000 + v_counter;
+  IF NEW.workspace_no IS NULL THEN NEW.workspace_no := tenancy.alloc_workspace_no(); END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -374,49 +420,11 @@ CREATE TRIGGER trg_workspaces_assign_no
   BEFORE INSERT ON tenancy.workspaces
   FOR EACH ROW EXECUTE FUNCTION tenancy.assign_workspace_no();
 
--- ── B9b:个人转组织「号跟人」换发(A 方案,owner 定案 2026-08-19,§11)──────────
--- 个人租户认证升级为组织时:user_no 是人的终身号,留给人;租户行换发独立主体号
--- (组织从此有自己的号,与创始人解耦,归属查 owner_user_id)。释放的 user_no 由
--- 之后重建的个人租户经 assign_tenant_no 自动收回。显式携号更新(type 与 tenant_no
--- 同时改)放行不换发(迁移/修复通道)。组织→个人为未定义流程,硬拦。
--- 注:BEFORE 触发器改 NEW 列不受 98 列锁限制(列锁只约束语句显式目标列)。
-CREATE OR REPLACE FUNCTION tenancy.reissue_tenant_no_on_conversion() RETURNS trigger AS $$
-BEGIN
-  IF OLD.type = 'personal' AND NEW.type = 'organization' AND NEW.tenant_no = OLD.tenant_no THEN
-    NEW.tenant_no := nextval('account.principal_no_seq') * 1000 + floor(random()*1000)::bigint;
-  ELSIF OLD.type = 'organization' AND NEW.type = 'personal' THEN
-    RAISE EXCEPTION 'tenant type downgrade organization -> personal is not a defined flow (tenant %)', OLD.id;
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
+-- v3 的换发 / 跟随两个触发器随解耦退役;此处 DROP 使 DDL 在存量库上重跑也收敛。
 DROP TRIGGER IF EXISTS trg_tenants_reissue_no_on_conversion ON tenancy.tenants;
-CREATE TRIGGER trg_tenants_reissue_no_on_conversion
-  BEFORE UPDATE OF type ON tenancy.tenants
-  FOR EACH ROW WHEN (OLD.type IS DISTINCT FROM NEW.type)
-  EXECUTE FUNCTION tenancy.reissue_tenant_no_on_conversion();
-
--- ── B9c:空间号前缀跟随租户号(任何 tenant_no 变更,含换发/修复)────────────────
--- 不变量:workspace_no 前 12 位恒等于所属租户现行 tenant_no。注意不能用 UPDATE OF
--- tenant_no 列限定——BEFORE 触发器改写的 NEW.tenant_no 不算语句目标列,OF 会漏触发。SECURITY DEFINER:
--- workspace_no 对 platform_svc 是列锁锚点,跟随改号是唯一合法通路,以 owner 身份执行。
-CREATE OR REPLACE FUNCTION tenancy.reprefix_workspace_nos() RETURNS trigger
-  SECURITY DEFINER SET search_path = tenancy, pg_temp AS $$
-BEGIN
-  UPDATE tenancy.workspaces
-     SET workspace_no = NEW.tenant_no * 1000 + (workspace_no % 1000),
-         updated_at = now()
-   WHERE tenant_id = NEW.id;
-  RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
 DROP TRIGGER IF EXISTS trg_tenants_reprefix_ws ON tenancy.tenants;
-CREATE TRIGGER trg_tenants_reprefix_ws
-  AFTER UPDATE ON tenancy.tenants
-  FOR EACH ROW WHEN (OLD.tenant_no IS DISTINCT FROM NEW.tenant_no)
-  EXECUTE FUNCTION tenancy.reprefix_workspace_nos();
+DROP FUNCTION IF EXISTS tenancy.reissue_tenant_no_on_conversion();
+DROP FUNCTION IF EXISTS tenancy.reprefix_workspace_nos();
 
 -- ═══ product_330：订阅冗余列 product_id 自动填充 ═══
 -- metering.subscriptions.product_id = plan_version 主组件（component_role='primary'）的产品。写路径不必

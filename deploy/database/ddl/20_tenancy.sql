@@ -8,14 +8,15 @@
 -- 租户（personal 个人 / organization 组织）。owner_user_id 跨 schema→account.users（见 90）。
 CREATE TABLE tenancy.tenants (
     id                   uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_no            bigint       NOT NULL,  -- 可视码 12 位:个人租户=owner 的 user_no(人租同号);组织租户自取主体号(95 触发器分配,§11)
+    tenant_no            bigint       NOT NULL,  -- 可视码 10 位:类别位 2 + 随机 8 + Luhn(§11 v4「三号解耦」;个人/组织一视同仁,转换不换号)
     name                 varchar(128) NOT NULL,
     type                 varchar(16)  NOT NULL,
     owner_user_id        uuid         NOT NULL,                    -- 跨 schema→account.users（90）
     status               varchar(32)  NOT NULL DEFAULT 'active',
     verification_status  varchar(32)  NOT NULL DEFAULT 'unverified',  -- 反规范化只读，SoT=kyc.tenant_verifications
     verification_type    varchar(32),
-    workspace_counter    int          NOT NULL DEFAULT 0,          -- 内部记账:workspace_no 终身分配数(触发器递增,不外显,不复用)
+    -- workspace_counter 已随 §11 v4 解耦退役:空间号不再由租户号 ×1000 + 序号推导,
+    -- 每租户空间数因此不再被三位序号卡在 999(2026-09-05)。
     created_at           timestamptz  NOT NULL DEFAULT now(),
     updated_at           timestamptz  NOT NULL DEFAULT now(),
     deleted_at           timestamptz,
@@ -23,7 +24,7 @@ CREATE TABLE tenancy.tenants (
     CONSTRAINT chk_tenants_type              CHECK (type IN ('personal','organization')),
     CONSTRAINT chk_tenants_status            CHECK (status IN ('active','suspended','deleted')),
     CONSTRAINT chk_tenants_verification_status CHECK (verification_status IN ('unverified','pending','verified','rejected')),
-    CONSTRAINT chk_tenants_workspace_counter   CHECK (workspace_counter BETWEEN 0 AND 999)  -- 999=每租户终身 workspace 硬上限(编号方案,owner 定案 2026-08-19)
+    CONSTRAINT chk_tenants_tenant_no           CHECK (public.principal_no_valid(tenant_no, 2))  -- 类别位 2 + Luhn(§11 v4)
 );
 CREATE INDEX idx_tenants_owner_user_id ON tenancy.tenants (owner_user_id);
 CREATE INDEX idx_tenants_type          ON tenancy.tenants (type);
@@ -112,7 +113,7 @@ CREATE TABLE tenancy.tenant_branding (
 -- 工作空间：tenant 1:N。注册即建 1 个 default。UNIQUE(id, tenant_id) 供复合 FK 引用。
 CREATE TABLE tenancy.workspaces (
     id            uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_no  bigint       NOT NULL,  -- 可视码 15 位:完整租户号(12位)+租户内序号001-999(95 触发器分配,§11)
+    workspace_no  bigint       NOT NULL,  -- 可视码 10 位:类别位 3 + 随机 8 + Luhn(§11 v4「三号解耦」;与租户号无推导关系)
     tenant_id     uuid         NOT NULL REFERENCES tenancy.tenants(id) ON DELETE CASCADE,
     name          varchar(128) NOT NULL,
     is_default    boolean      NOT NULL DEFAULT false,
@@ -124,7 +125,8 @@ CREATE TABLE tenancy.workspaces (
     deleted_at    timestamptz,
     CONSTRAINT uq_workspaces_workspace_no UNIQUE (workspace_no),
     CONSTRAINT uq_workspaces_id_tenant UNIQUE (id, tenant_id),         -- 复合 FK 目标
-    CONSTRAINT chk_workspaces_status   CHECK (status IN ('active','archived','deleted'))
+    CONSTRAINT chk_workspaces_status   CHECK (status IN ('active','archived','deleted')),
+    CONSTRAINT chk_workspaces_workspace_no CHECK (public.principal_no_valid(workspace_no, 3))  -- 类别位 3 + Luhn(§11 v4)
 );
 CREATE INDEX idx_workspaces_tenant_id  ON tenancy.workspaces (tenant_id);
 CREATE INDEX idx_workspaces_deleted_at ON tenancy.workspaces (deleted_at);
