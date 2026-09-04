@@ -53,7 +53,7 @@
     "notifications": "Notifications",
     "settings": "System settings",
     "assistant": "Varda · data assistant",
-    "userMenu": "Profile",
+    "userMenu": "Account",
     "verified": "Verified",
     "tenantOrg": "Organization / tenant",
     "tenantVerified": "Verified",
@@ -317,8 +317,8 @@
         "description": "Key actions waiting for the current tenant"
       },
       "profile": {
-        "label": "Profile",
-        "description": "Avatar, name, password, phone, and email binding"
+        "label": "Account",
+        "description": "Avatar, profile, contact details, sign-in methods and preferences"
       },
       "personalTenant": {
         "label": "Tenant info",
@@ -393,7 +393,7 @@
   "routes": {
     "dashboard": "Dashboard",
     "todos": "Todo Items",
-    "profile": "Profile",
+    "profile": "Account",
     "personalTenant": "Tenant info",
     "organization": "Organization Info",
     "members": "Members",
@@ -404,7 +404,7 @@
     "quotas": "Quotas",
     "atlas": "Model Platform",
     "notifications": "Notifications",
-    "security": "Security Settings",
+    "security": "Security",
     "settings": "Tenant Settings",
     "tenantSettings": "Tenant Settings",
     "usage": "Usage",
@@ -776,8 +776,8 @@
   "profilePage": {
     "header": {
       "eyebrow": "Account center",
-      "title": "Profile",
-      "description": "Manage your avatar, display name, contact details, and account credentials."
+      "title": "Account",
+      "description": "Avatar, profile, contact details, sign-in methods and preferences."
     },
     "common": {
       "empty": "--",
@@ -867,7 +867,20 @@
       "enableLogin": "Enable username login",
       "loginDisabled": "Login disabled",
       "canLogin": "Login enabled",
-      "cannotLogin": "Login disabled"
+      "cannotLogin": "Login disabled",
+      "cannotLoginTip": "Username & password sign-in is off; sign in with a phone, email or social one-time code.",
+      "accountLogin": "Password sign-in",
+      "accountLoginHint": "When off, the username row shows “Sign-in disabled” and only phone, email or social one-time codes work.",
+      "twoFactor": "Two-factor authentication",
+      "twoFactorEnable": "Enable",
+      "twoFactorHint": "A one-time code (TOTP) at sign-in.",
+      "sessions": "Active sessions",
+      "manageSessions": "Manage sessions",
+      "sessionsCount": "{count} devices online",
+      "sessionsUnknown": "Expand to see online devices",
+      "sessionsEmpty": "No other devices online.",
+      "lastActive": "Last active {time}",
+      "revoke": "Sign out"
     },
     "verified": {
       "verified": "Verified",
@@ -884,7 +897,8 @@
       },
       "detail": "Details",
       "joinedAt": "Joined",
-      "defaultTag": "default"
+      "defaultTag": "default",
+      "joinedOn": "Joined {date}"
     },
     "verification": {
       "unverified": "Unverified",
@@ -921,7 +935,9 @@
       "resendCode": "Resend",
       "verify": "Verify",
       "change": "Change",
-      "confirm": "Confirm"
+      "confirm": "Confirm",
+      "modify": "Edit",
+      "changeUsername": "Change username"
     },
     "dialogs": {
       "profile": {
@@ -940,7 +956,8 @@
         "title": "Change password",
         "description": "Use a new password with at least 6 characters.",
         "setupTitle": "Set password",
-        "setupDescription": "You signed up with phone/social login and have no password yet. Set one with at least 6 characters to also log in with an account and password."
+        "setupDescription": "You signed up with phone/social login and have no password yet. Set one with at least 6 characters to also log in with an account and password.",
+        "rule": "At least {min} characters."
       },
       "phoneChange": {
         "step1Title": "Change phone number",
@@ -1009,7 +1026,7 @@
       "passwordSaved": "Password updated.",
       "passwordSaveError": "Password update failed. Check the current password and try again.",
       "passwordMismatch": "The two new password entries do not match.",
-      "passwordTooShort": "The new password must contain at least 6 characters.",
+      "passwordTooShort": "The new password needs at least {min} characters.",
       "avatarCleared": "Avatar cleared.",
       "avatarClearError": "Could not clear the avatar. Please try again later.",
       "avatarUploaded": "Avatar updated.",
@@ -1036,26 +1053,28 @@
       "phoneVerified": "Phone verified.",
       "emailInvalid": "Please enter a valid email address.",
       "emailInUse": "This email is already used by another account.",
-      "verifyError": "Code is incorrect or expired, please retry."
+      "verifyError": "Code is incorrect or expired, please retry.",
+      "sessionRevoked": "That device has been signed out.",
+      "sessionRevokeError": "Could not sign the device out. Try again later."
     },
     "connectedAccounts": {
       "summary": "{count} / {total} connected",
       "providers": {
         "wechat": {
           "name": "WeChat",
-          "description": "Use WeChat scan sign-in and official-account identity linking."
+          "description": "Sign in with WeChat (scan)"
         },
         "dingtalk": {
           "name": "DingTalk",
-          "description": "Use DingTalk sign-in for enterprise collaboration scenarios."
+          "description": "Sign in with DingTalk"
         },
         "feishu": {
           "name": "Feishu",
-          "description": "Use Feishu sign-in and identity recognition inside organizations."
+          "description": "Sign in with Feishu"
         },
         "google": {
           "name": "Google",
-          "description": "Use Google sign-in for global and general SaaS access."
+          "description": "Sign in with Google"
         }
       },
       "fields": {
@@ -1066,7 +1085,8 @@
         "connected": "Connected",
         "disconnected": "Not connected",
         "bindable": "Available",
-        "unavailable": "Unavailable"
+        "unavailable": "Unavailable",
+        "integrating": "Integrating"
       },
       "sso": "Supports SSO sign-in",
       "actions": {
@@ -1079,13 +1099,59 @@
         "unbindTitle": "Disconnect account",
         "unbindDescription": "Disconnect this account from {provider}? You will not be able to use this method to sign in until it is connected again."
       },
-      "empty": "No linked third-party accounts."
+      "empty": "No linked third-party accounts.",
+      "connectedOn": "Linked {date}"
     },
     "loginHistory": {
       "index": "#",
       "time": "Time",
       "ip": "IP",
       "os": "OS"
+    },
+    "cards": {
+      "basic": {
+        "title": "Basic information",
+        "description": "Profile and contact details; items that need verification get their own action."
+      },
+      "security": {
+        "title": "Security",
+        "description": "Sign-in credentials, two-factor authentication and active devices."
+      },
+      "thirdParty": {
+        "title": "Social sign-in",
+        "description": "Sign in to Vxture directly with a Google, Feishu, DingTalk or WeChat account (open sign-in, independent of any organization); linking opens once integrated."
+      },
+      "prefs": {
+        "title": "Preferences",
+        "description": "Language and time zone drive copy and times; theme, density and font size preview instantly and apply across portals once saved."
+      }
+    },
+    "identity": {
+      "registeredAt": "Registered {date}",
+      "tenants": "Tenants · {count}",
+      "personalTenant": "Personal",
+      "orgTenant": "Organization",
+      "workspace": "Workspace",
+      "tenantInfo": "Tenant details"
+    },
+    "login": {
+      "history": "Sign-in history",
+      "historyEmpty": "No sign-in records yet.",
+      "historyWindow": "Sign-ins from the last 90 days.",
+      "success": "Success",
+      "failed": "Failed"
+    },
+    "prefs": {
+      "theme": "Theme",
+      "density": "Density",
+      "fontSize": "Font size",
+      "timezoneUnset": "Follow the browser"
+    },
+    "footer": {
+      "dirty": "{count} unsaved changes",
+      "clean": "No unsaved changes",
+      "discard": "Discard",
+      "save": "Save"
     }
   },
   "organizationPage": {

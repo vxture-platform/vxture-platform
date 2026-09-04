@@ -22,26 +22,26 @@ JWT `userType = tenant_user`，`authScope = tenant_console`。Varda 智能助手
 
 ## 功能模块清单
 
-| 路由               | 功能                                                  | BFF Router     | 状态      |
-| ------------------ | ----------------------------------------------------- | -------------- | --------- |
-| `/`                | 仪表板（租户概览）                                    | tenant-context | ✅ 已完成 |
-| `/members`         | 成员管理（邀请、移除、角色分配）                      | iam            | ✅ 已完成 |
-| `/invitations`     | 邀请管理（待接受 / 已过期）                           | iam            | ✅ 已完成 |
-| `/roles`           | 角色管理（自定义角色、权限分配）                      | iam            | ✅ 已完成 |
-| `/iam`             | 身份与访问管理（权限总览）                            | iam            | ✅ 已完成 |
-| `/subscription`    | 订阅管理（当前套餐、升级入口）                        | subscription   | ✅ 已完成 |
-| `/billing`         | 账单与用量（账单列表、用量明细）                      | billing        | ✅ 已完成 |
-| `/quotas`          | 配额管理（模型 Token 用量）                           | subscription   | ✅ 已完成 |
-| `/model-platform`  | 模型平台配置（租户级模型访问）                        | capabilities   | ✅ 已完成 |
-| `/profile`         | 个人资料（姓名、头像、联系方式）                      | me             | ✅ 已完成 |
-| `/security`        | 安全设置（密码修改、会话管理）                        | me             | ✅ 已完成 |
-| `/notifications`   | 通知设置（接收偏好）                                  | me             | ✅ 已完成 |
-| `/inbox`           | 待办与消息（待办派生 + 站内消息合并入口，2026-09-04） | me             | ✅ 已完成 |
-| `/organization`    | 组织信息（企业租户名称、Logo）                        | tenant-context | ✅ 已完成 |
-| `/personal-tenant` | 个人租户设置                                          | tenant-context | ✅ 已完成 |
-| `/settings`        | 租户通用设置                                          | tenant-context | ✅ 已完成 |
-| `/tenant-settings` | 高级租户配置                                          | tenant-context | ✅ 已完成 |
-| `/todos`           | 并入 `/inbox` 待办与消息（保留跳转 `?filter=todo`）   | —              | ✅ 已完成 |
+| 路由               | 功能                                                                 | BFF Router     | 状态      |
+| ------------------ | -------------------------------------------------------------------- | -------------- | --------- |
+| `/`                | 仪表板（租户概览）                                                   | tenant-context | ✅ 已完成 |
+| `/members`         | 成员管理（邀请、移除、角色分配）                                     | iam            | ✅ 已完成 |
+| `/invitations`     | 邀请管理（待接受 / 已过期）                                          | iam            | ✅ 已完成 |
+| `/roles`           | 角色管理（自定义角色、权限分配）                                     | iam            | ✅ 已完成 |
+| `/iam`             | 身份与访问管理（权限总览）                                           | iam            | ✅ 已完成 |
+| `/subscription`    | 订阅管理（当前套餐、升级入口）                                       | subscription   | ✅ 已完成 |
+| `/billing`         | 账单与用量（账单列表、用量明细）                                     | billing        | ✅ 已完成 |
+| `/quotas`          | 配额管理（模型 Token 用量）                                          | subscription   | ✅ 已完成 |
+| `/model-platform`  | 模型平台配置（租户级模型访问）                                       | capabilities   | ✅ 已完成 |
+| `/profile`         | 账号信息（身份卡含所属租户、基本信息、安全设置、三方登录、个人偏好） | me             | ✅ 已完成 |
+| `/security`        | 并入 `/profile?panel=sessions`（跳转，展开活跃会话）                 | me             | ✅ 已完成 |
+| `/notifications`   | 通知设置（接收偏好）                                                 | me             | ✅ 已完成 |
+| `/inbox`           | 待办与消息（待办派生 + 站内消息合并入口，2026-09-04）                | me             | ✅ 已完成 |
+| `/organization`    | 组织信息（企业租户名称、Logo）                                       | tenant-context | ✅ 已完成 |
+| `/personal-tenant` | 个人租户设置                                                         | tenant-context | ✅ 已完成 |
+| `/settings`        | 租户通用设置                                                         | tenant-context | ✅ 已完成 |
+| `/tenant-settings` | 高级租户配置                                                         | tenant-context | ✅ 已完成 |
+| `/todos`           | 并入 `/inbox` 待办与消息（保留跳转 `?filter=todo`）                  | —              | ✅ 已完成 |
 
 ---
 
@@ -90,7 +90,7 @@ Console 展示租户当前订阅状态（套餐、有效期、功能开关）和
 | 申请发票 / 抬头簿                                                               | `tenant.invoice.manage`   |   ✔   |    —    |   —    |    —     |   —   |
 | 配额 / 用量                                                                     | `tenant.quota.read`       |   ✔   |    ✔    |   ✔    |    ✔     |   —   |
 | 审计日志                                                                        | `tenant.audit.read`       |   ✔   |    ✔    |   —    |    ✔     |   —   |
-| 个人信息 / 安全 / 通知偏好 / 站内消息 / 总览                                    | 无（登录即可）            |   ✔   |    ✔    |   ✔    |    ✔     |   ✔   |
+| 账号信息（含安全设置、三方登录、个人偏好）/ 通知偏好 / 待办与消息 / 总览        | 无（登录即可）            |   ✔   |    ✔    |   ✔    |    ✔     |   ✔   |
 | 转让所有权                                                                      | 当前 owner 身份（不走码） |   ✔   |    —    |   —    |    —     |   —   |
 
 角色是全局固定目录（owner / manager / member / readonly / guest），自定义角色未开放；成员的角色指派在成员管理页。缺码时页面显示「没有访问权限」状态（说明所需权限），BFF 同码 403。
