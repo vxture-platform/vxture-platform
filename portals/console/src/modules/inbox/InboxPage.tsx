@@ -1,18 +1,31 @@
 "use client";
 
-/* 站内消息收件箱（product_330 P2-g，owner 2026-09-03「通知先做站内 + 邮件」）。
- * 数据 = console-bff /api/me/inbox（收件人视角）；点开一条 = 标已读 + 去它带的链接。
- * 邮件 / 站内偏好在 /notifications（通知提醒），这里只看消息。 */
+/**
+ * InboxPage.tsx — 「待办与消息」(批 4b,owner 2026-09-04 裁定:待办与消息合并入口、按
+ * 消息类型统一)。
+ * @package @vxture/console
+ * @layer Application
+ * @category Module
+ *
+ * 一张列表两种类型:**待办**(派生自订单 / 订阅 / 配额 / 邀请 / 加油包真实状态,
+ * 不落库、永远置顶、没有已读,处理完才消失)与 **消息**(inbox_messages 落库,有已读)。
+ * 筛选:全部 / 待办 / 消息 / 未读(未读只对消息生效)。去重:同一件事有待办时,
+ * 「全部」里只显示待办那一条,对应的知情类消息留在「消息」筛选下当历史。
+ * `/todos` 保留并跳到 `?filter=todo`。
+ */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import {
+  Badge,
   Banner,
   Button,
-  FormPageTemplate,
   Icon,
+  SegmentedControl,
   StatusBadge,
   ViewHeader,
+  ViewLayout,
 } from "@vxture/design-system";
 import { PageSection } from "@/layout/shell";
 import { useRouter } from "@/lib/i18n/navigation";
@@ -23,40 +36,75 @@ import {
   type InboxMessage,
 } from "@/api/console-bff";
 import { formatInboxTime } from "@/lib/inbox-format";
+import {
+  isCoveredByTodo,
+  useDerivedTodos,
+  type TodoItem,
+} from "@/features/todos/useDerivedTodos";
+import { LoadFailedBanner } from "@/components/load/LoadFailed";
 
 const PAGE_SIZE = 20;
 
+type Filter = "all" | "todo" | "message" | "unread";
+const FILTERS: Filter[] = ["all", "todo", "message", "unread"];
+
+function parseFilter(raw: string | null): Filter {
+  return FILTERS.includes(raw as Filter) ? (raw as Filter) : "all";
+}
+
 export function InboxPage() {
   const t = useTranslations("inbox");
+  const tTodo = useTranslations("todosPage");
   const locale = useLocale();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const [filter, setFilter] = useState<Filter>(() =>
+    parseFilter(searchParams.get("filter")),
+  );
+  useEffect(() => {
+    setFilter(parseFilter(searchParams.get("filter")));
+  }, [searchParams]);
+
   const [items, setItems] = useState<InboxMessage[]>([]);
   const [nextBefore, setNextBefore] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const load = useCallback(
-    async (before: string | null) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const page = await fetchInbox({ limit: PAGE_SIZE, before });
-        setItems((cur) => (before ? [...cur, ...page.items] : page.items));
-        setNextBefore(page.nextBefore);
-        setUnreadCount(page.unreadCount);
-      } catch {
-        setError(t("loadError"));
-      } finally {
-        setLoading(false);
-      }
-    },
-    [t],
-  );
+  const derived = useDerivedTodos();
+
+  const load = useCallback(async (before: string | null) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const page = await fetchInbox({ limit: PAGE_SIZE, before });
+      setItems((cur) => (before ? [...cur, ...page.items] : page.items));
+      setNextBefore(page.nextBefore);
+      setUnreadCount(page.unreadCount);
+      setLoadFailed(false);
+    } catch {
+      setLoadFailed(true);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     void load(null);
-  }, [load]);
+  }, [load, reloadKey]);
+
+  const retry = () => {
+    setReloadKey((k) => k + 1);
+    derived.reload();
+  };
+
+  const changeFilter = (next: Filter) => {
+    setFilter(next);
+    router.replace(next === "all" ? "/inbox" : `/inbox?filter=${next}`);
+  };
 
   async function open(message: InboxMessage) {
     if (message.readAt === null) {
@@ -78,57 +126,119 @@ export function InboxPage() {
   }
 
   async function markAll() {
+    setError(null);
     try {
       await markInboxAllRead();
       const now = new Date().toISOString();
       setItems((cur) => cur.map((m) => ({ ...m, readAt: m.readAt ?? now })));
       setUnreadCount(0);
     } catch {
-      setError(t("loadError"));
+      setError(t("markAllFailed"));
     }
   }
 
+  const todos: TodoItem[] =
+    filter === "message" || filter === "unread" ? [] : derived.todos;
+  const messages = useMemo(() => {
+    if (filter === "todo") return [];
+    let list = items;
+    if (filter === "unread") list = list.filter((m) => m.readAt === null);
+    // 「全部」里同一件事只出现一次:有待办就藏起对应的知情类消息。
+    if (filter === "all")
+      list = list.filter((m) => !isCoveredByTodo(m, derived.todos));
+    return list;
+  }, [filter, items, derived.todos]);
+
+  const busy = loading || derived.loading;
+  const nothing = !busy && todos.length === 0 && messages.length === 0;
+  const emptyText =
+    filter === "todo"
+      ? t("emptyTodo")
+      : filter === "unread"
+        ? t("allRead")
+        : filter === "message"
+          ? t("empty")
+          : t("emptyAll");
+
   return (
-    <FormPageTemplate
-      header={
-        <div className="flex flex-col gap-md">
-          <ViewHeader
-            icon="bell"
-            title={t("header.title")}
-            description={t("header.description")}
+    <ViewLayout>
+      <ViewHeader
+        icon="bell"
+        title={t("header.title")}
+        description={t("header.description")}
+      />
+
+      {loadFailed ? <LoadFailedBanner onRetry={retry} retrying={busy} /> : null}
+      {derived.partialFailed ? (
+        <Banner tone="warning" title={tTodo("loadFailed")} />
+      ) : null}
+      {error !== null ? <Banner tone="danger" title={error} /> : null}
+
+      <PageSection
+        icon="bell"
+        level={2}
+        title={t("list.title")}
+        description={t("list.description")}
+        action={
+          <SegmentedControl<Filter>
+            size="sm"
+            ariaLabel={t("filters.label")}
+            value={filter}
+            onChange={changeFilter}
+            items={FILTERS.map((f) => ({ value: f, label: t(`filters.${f}`) }))}
           />
-          {error !== null ? <Banner tone="danger" title={error} /> : null}
-        </div>
-      }
-      footer={
-        <Button
-          size="md"
-          variant="outline"
-          disabled={loading || unreadCount === 0}
-          onClick={() => void markAll()}
-        >
-          <Icon name="check" size="xs" fallback="placeholder" />
-          <span>{t("markAllRead")}</span>
-        </Button>
-      }
-    >
-      <PageSection>
+        }
+      >
         <div className="flex items-center justify-between gap-md text-body-sm text-muted-foreground">
-          <span>
-            {unreadCount > 0
-              ? t("unread", { count: unreadCount })
-              : t("allRead")}
+          <span className="tabular-nums">
+            {t("counts", {
+              todos: derived.todos.length,
+              unread: unreadCount,
+            })}
           </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy || unreadCount === 0}
+            onClick={() => void markAll()}
+          >
+            <Icon name="check" size="xs" fallback="placeholder" />
+            <span>{t("markAllRead")}</span>
+          </Button>
         </div>
 
-        {items.length === 0 && !loading ? (
+        {nothing ? (
           <p className="p-lg text-center text-body-sm text-muted-foreground">
-            {t("empty")}
+            {emptyText}
           </p>
         ) : null}
 
         <ul className="flex flex-col divide-y divide-border">
-          {items.map((m) => {
+          {todos.map((todo) => (
+            <li
+              key={todo.key}
+              className="flex items-start justify-between gap-md py-md"
+            >
+              <span className="flex min-w-0 flex-1 flex-col gap-2xs">
+                <span className="flex items-center gap-sm">
+                  <StatusBadge tone="warning" dot>
+                    {t("todoBadge")}
+                  </StatusBadge>
+                  <Badge variant="outline">{tTodo(`kind.${todo.kind}`)}</Badge>
+                  <span className="min-w-0 truncate text-label-md font-semibold text-foreground">
+                    {todo.title}
+                  </span>
+                </span>
+                <span className="text-body-sm text-muted-foreground">
+                  {todo.detail}
+                </span>
+              </span>
+              <Button size="sm" onClick={() => router.push(todo.href)}>
+                {todo.actionLabel}
+              </Button>
+            </li>
+          ))}
+          {messages.map((m) => {
             const unread = m.readAt === null;
             return (
               <li key={m.id}>
@@ -140,14 +250,15 @@ export function InboxPage() {
                 >
                   <span className="flex min-w-0 flex-1 flex-col gap-2xs">
                     <span className="flex items-center gap-sm">
+                      <StatusBadge tone={unread ? "info" : "neutral"} dot>
+                        {unread ? t("unreadBadge") : t("readBadge")}
+                      </StatusBadge>
+                      <Badge variant="outline">{t("messageBadge")}</Badge>
                       <span
                         className={`min-w-0 truncate text-label-md text-foreground ${unread ? "font-semibold" : "font-normal"}`}
                       >
                         {m.title}
                       </span>
-                      <StatusBadge tone={unread ? "info" : "neutral"} dot>
-                        {unread ? t("unreadBadge") : t("readBadge")}
-                      </StatusBadge>
                     </span>
                     <span className="text-body-sm text-muted-foreground">
                       {m.body}
@@ -172,7 +283,7 @@ export function InboxPage() {
           })}
         </ul>
 
-        {nextBefore ? (
+        {filter !== "todo" && nextBefore ? (
           <div className="flex justify-center">
             <Button
               variant="outline"
@@ -185,6 +296,10 @@ export function InboxPage() {
           </div>
         ) : null}
       </PageSection>
-    </FormPageTemplate>
+
+      <PageSection icon="info" level={2} title={t("notes.title")}>
+        <p className="text-body-sm text-muted-foreground">{t("notes.body")}</p>
+      </PageSection>
+    </ViewLayout>
   );
 }

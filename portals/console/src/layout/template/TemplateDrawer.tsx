@@ -34,6 +34,15 @@ export interface DrawerNotif {
   unread?: boolean;
 }
 
+/** 待办(批 4b):派生自真实业务状态,置顶、无已读,带「去处理」。 */
+export interface DrawerTodo {
+  key: string;
+  title: string;
+  detail: string;
+  href: string;
+  actionLabel: string;
+}
+
 export interface TemplateDrawerProps {
   onClose: () => void;
   onNavigate: (href: string) => void;
@@ -41,6 +50,7 @@ export interface TemplateDrawerProps {
   /** 整个收件箱还有没有未读(抽屉只展示最近几条,不能拿它们判断)。 */
   canMarkAllRead?: boolean;
   onOpenCenter?: () => void;
+  todos?: DrawerTodo[];
   notifications: DrawerNotif[];
   labels: {
     title: string;
@@ -48,6 +58,8 @@ export interface TemplateDrawerProps {
     openCenter: string;
     close: string;
     empty?: string;
+    todosTitle?: string;
+    messagesTitle?: string;
   };
 }
 
@@ -63,6 +75,7 @@ export function TemplateDrawer({
   onMarkAllRead,
   canMarkAllRead = false,
   onOpenCenter,
+  todos = [],
   notifications,
   labels,
 }: TemplateDrawerProps) {
@@ -103,7 +116,56 @@ export function TemplateDrawer({
             <Icon name="arrow-right" size="xs" fallback="placeholder" />
           </Button>
         </div>
-        {notifications.length === 0 && labels.empty ? (
+        {/* 待办置顶:同一件事只出现一次(有待办的事项不再在下面的消息里重复)。 */}
+        {todos.length > 0 ? (
+          <div className="flex flex-col gap-2xs">
+            {labels.todosTitle ? (
+              <span className="px-md pt-xs text-label-sm text-muted-foreground">
+                {labels.todosTitle}
+              </span>
+            ) : null}
+            {todos.map((todo) => (
+              <div
+                key={todo.key}
+                className="flex items-center gap-md rounded-lg p-md"
+              >
+                <span
+                  className={`inline-flex size-icon-xl shrink-0 items-center justify-center rounded-lg ${toneSurfaceClasses.warning}`}
+                >
+                  <Icon
+                    name="list-checks"
+                    size="sm"
+                    fallback="info"
+                    aria-hidden="true"
+                  />
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col gap-2xs">
+                  <span className="truncate text-label-md font-semibold text-foreground">
+                    {todo.title}
+                  </span>
+                  <span className="truncate text-body-sm text-muted-foreground">
+                    {todo.detail}
+                  </span>
+                </span>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    onClose();
+                    onNavigate(todo.href);
+                  }}
+                >
+                  {todo.actionLabel}
+                </Button>
+              </div>
+            ))}
+            {labels.messagesTitle && notifications.length > 0 ? (
+              <span className="px-md pt-sm text-label-sm text-muted-foreground">
+                {labels.messagesTitle}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+        {notifications.length === 0 && todos.length === 0 && labels.empty ? (
           <p className="p-md text-center text-body-sm text-muted-foreground">
             {labels.empty}
           </p>

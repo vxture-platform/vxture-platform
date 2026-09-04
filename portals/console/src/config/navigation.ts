@@ -81,11 +81,12 @@ const workspaceSection: NavigationSection = {
       icon: "home",
       descriptionKey: "overview.description",
     },
+    // 批 4b(owner 2026-09-04):待办与消息合并为一个入口;/todos 路由保留跳转。
     {
-      href: "/todos",
-      labelKey: "todos.label",
-      icon: "calendar",
-      descriptionKey: "todos.description",
+      href: "/inbox",
+      labelKey: "inbox.label",
+      icon: "bell",
+      descriptionKey: "inbox.description",
     },
   ],
 };
@@ -195,12 +196,6 @@ const advancedSettingsSection: NavigationSection = {
       labelKey: "systemSettings.label",
       icon: "settings",
       descriptionKey: "systemSettings.description",
-    },
-    {
-      href: "/inbox",
-      labelKey: "inbox.label",
-      icon: "bell",
-      descriptionKey: "inbox.description",
     },
     {
       href: "/notifications",

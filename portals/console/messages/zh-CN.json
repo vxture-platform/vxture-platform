@@ -209,15 +209,17 @@
   "drawer": {
     "close": "关闭",
     "notifications": {
-      "title": "消息中心",
+      "title": "待办与消息",
       "markAllRead": "全部已读",
-      "empty": "暂无消息"
+      "empty": "没有待办,也没有消息",
+      "todosTitle": "待办",
+      "messagesTitle": "消息"
     }
   },
   "inbox": {
     "header": {
-      "title": "站内消息",
-      "description": "订阅到期、续费订单、开通与退款进度的通知；邮件偏好在「通知提醒」调整。"
+      "title": "待办与消息",
+      "description": "待办由订单、订阅、配额、邀请与加油包的真实状态派生,处理完自动消失;消息是订阅到期、续费订单、开通与退款进度的通知,邮件偏好在「通知提醒」调整。"
     },
     "unread": "{count} 条未读",
     "allRead": "没有未读消息",
@@ -228,7 +230,28 @@
     "loadError": "消息读取失败，请稍后再试",
     "open": "查看",
     "readBadge": "已读",
-    "unreadBadge": "未读"
+    "unreadBadge": "未读",
+    "list": {
+      "title": "列表",
+      "description": "待办置顶;同一件事只出现一次"
+    },
+    "filters": {
+      "label": "筛选",
+      "all": "全部",
+      "todo": "待办",
+      "message": "消息",
+      "unread": "未读"
+    },
+    "counts": "{todos} 项待办 · {unread} 条未读",
+    "todoBadge": "待办",
+    "messageBadge": "消息",
+    "emptyTodo": "没有需要你处理的事",
+    "emptyAll": "没有待办,也没有消息",
+    "markAllFailed": "标记失败,请稍后重试",
+    "notes": {
+      "title": "口径说明",
+      "body": "待办没有「已读」:它是真实状态的镜子,处理完才消失,未处理会一直显示。消息有已读 / 未读;「未读」筛选只针对消息。有待办的事项在「全部」里只显示待办那一条,对应的消息留在「消息」筛选下作为历史。"
+    }
   },
   "preferences": {
     "title": "显示偏好",
@@ -334,8 +357,8 @@
         "description": "在线模型、自建模型与租户授权"
       },
       "inbox": {
-        "label": "站内消息",
-        "description": "订阅、订单与退款的通知"
+        "label": "待办与消息",
+        "description": "需要你处理的待办,与订阅、订单、退款的消息"
       },
       "notifications": {
         "label": "通知提醒",
@@ -387,7 +410,8 @@
     "usage": "用量分析",
     "addonPay": "加油包支付",
     "vouchers": "我的卡券",
-    "auditLogs": "审计日志"
+    "auditLogs": "审计日志",
+    "inbox": "待办与消息"
   },
   "login": {
     "hero": {
@@ -2968,8 +2992,6 @@
     }
   },
   "todosPage": {
-    "title": "待办事项",
-    "description": "需要你处理的事:待付订单、临期续订、配额吃紧、待处理邀请——处理完自动消失",
     "kind": {
       "payment": "待支付",
       "renewal": "续订",
@@ -2996,20 +3018,6 @@
       "addonTitle": "支付加油包「{pack}」的订单",
       "addonDetail": "请在 {date} 前完成转账申报,逾期自动取消",
       "addonAction": "去申报"
-    },
-    "table": {
-      "title": "待办清单",
-      "description": "由订单/订阅/配额/邀请实时派生,不需要手动勾选完成",
-      "colKind": "类型",
-      "colTitle": "事项",
-      "empty": "全部处理完毕",
-      "emptyHint": "订单、续订、配额与邀请都没有需要你操心的事"
-    },
-    "notes": {
-      "title": "口径说明",
-      "description": "待办从哪来",
-      "derivedTitle": "派生式待办",
-      "derivedBody": "本页不单独记录任务:每一项都来自真实业务状态(待付订单/临期订阅/配额水位/待接受邀请),处理源头后自动消失"
     },
     "loadFailed": "部分待办来源读取失败，列表可能不完整"
   },
