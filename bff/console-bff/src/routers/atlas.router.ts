@@ -70,7 +70,6 @@ import { VxConfigService } from "@vxture/core-config";
 import { S2sExchangeService } from "../auth/s2s-exchange.service";
 
 import type {
-  AiModelGrantRecord,
   AiModelRecord,
   RequestContext,
   TenancyQuotaResponse,
@@ -138,21 +137,15 @@ export class AtlasRouter {
     );
   }
 
-  /** `/tenancy/grants` scopes to this workspace's own token — no caller-supplied filters accepted. */
-  @Get("grants")
-  async listGrants(
-    @Req() req: Request & RequestContext,
-  ): Promise<AiModelGrantRecord[]> {
-    const tenantId = requireTenantId(req);
-    const workspaceId = requireWorkspaceId(req);
-    return this.request<AiModelGrantRecord[]>(
-      workspaceId,
-      tenantId,
-      "/tenancy/grants",
-    );
-  }
-
-  /** Single entitlement envelope, not a list — see the `status` field for coverage vs reachability. */
+  /**
+   * Single entitlement envelope, not a list — see the `status` field for coverage vs reachability.
+   *
+   * 批 7:这一条降到 `tenant.quota.read`。类级的 `tenant.model.read` 自批 0a 起
+   * **没有任何角色持有**,而外壳的用量卡每页都调它——于是每个用户拿到 403、被
+   * readJson 吞成 `status: "unavailable"`,侧栏那张卡对所有租户永远显示「不可用」。
+   * 配额读本来就是配额的事,归 `tenant.quota.read`(owner/manager/member/readonly 都有)。
+   */
+  @RequireCapability("tenant.quota.read")
   @Get("quotas")
   async quotas(
     @Req() req: Request & RequestContext,

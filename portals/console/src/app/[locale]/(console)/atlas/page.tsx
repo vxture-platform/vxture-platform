@@ -7,7 +7,7 @@
  * 批 7 整改后再对客户开放)。
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { CapabilityGate } from "@/features/permissions/CapabilityGate";
 import {
@@ -21,13 +21,13 @@ import {
 import type { DataTableColumn } from "@vxture/design-system";
 
 import {
-  fetchAiModelGrants,
   fetchAiModels,
+  fetchEntitlements,
   fetchTenantModelQuotas,
   fetchTenantModelUsage,
+  type WorkspaceEntitlement,
 } from "@/api/console-bff";
 import type {
-  AiModelGrantRecord,
   AiModelRecord,
   SummaryMetric,
   TenancyQuotaResponse,
@@ -37,7 +37,7 @@ import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { DashboardSplit, PageSection, SignalList } from "@/layout/shell";
 
 type ModelRow = [string, string, string, string];
-type GrantRow = [string, string, string, string];
+type EntitlementRow = [string, string, string, string];
 type QuotaRow = [string, string, string, string];
 type UsageRow = [string, string, string, string];
 
@@ -55,7 +55,10 @@ function AtlasPage() {
   const locale = useLocale();
   const { session } = useConsoleSession();
   const [models, setModels] = useState<AiModelRecord[]>([]);
-  const [grants, setGrants] = useState<AiModelGrantRecord[]>([]);
+  // 批 7:「模型授权」(tenant↔model)是 Atlas 自己标注为不应存在的 legacy 轴,
+  // 管理面已随 #129 退役。这里换成**产品权益**(tenant↔product)——#129 指明的
+  // 正确来源;`/tenancy/models` 本来就按授权在服务端过滤过,删掉授权表不丢信息。
+  const [entitlements, setEntitlements] = useState<WorkspaceEntitlement[]>([]);
   const [quotas, setQuotas] = useState<TenancyQuotaResponse | null>(null);
   const [usage, setUsage] = useState<TenancyUsageResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,14 +74,14 @@ function AtlasPage() {
 
     Promise.all([
       fetchAiModels(),
-      fetchAiModelGrants(),
+      fetchEntitlements(),
       fetchTenantModelQuotas(),
       fetchTenantModelUsage(),
     ])
-      .then(([modelRecords, grantRecords, quotaEnvelope, usageEnvelope]) => {
+      .then(([modelRecords, entitlementRows, quotaEnvelope, usageEnvelope]) => {
         if (!active) return;
         setModels(modelRecords);
-        setGrants(grantRecords);
+        setEntitlements(entitlementRows);
         setQuotas(quotaEnvelope);
         setUsage(usageEnvelope);
       })
@@ -94,12 +97,9 @@ function AtlasPage() {
     };
   }, [session.tenant?.id]);
 
-  const modelById = useMemo(
-    () => new Map(models.map((model) => [model.id, model])),
-    [models],
+  const liveEntitlements = entitlements.filter(
+    (e) => e.status !== null && e.status !== "expired",
   );
-
-  const activeGrants = grants.filter((grant) => grant.isActive);
   const totalTokens =
     usage?.rows.reduce((total, row) => total + row.totalTokens, 0) ?? 0;
   const metrics: SummaryMetric[] = [
@@ -107,7 +107,7 @@ function AtlasPage() {
       id: "available-models",
       label: t("metrics.models"),
       value: loading ? "-" : formatNumber(models.length),
-      trend: t("metrics.modelsHint", { count: activeGrants.length }),
+      trend: t("metrics.modelsHint", { count: liveEntitlements.length }),
       tone: models.length ? "success" : "warning",
     },
     {
@@ -140,11 +140,23 @@ function AtlasPage() {
       cell: (row) => row[3],
     },
   ];
-  const grantColumns: DataTableColumn<GrantRow>[] = [
-    { id: "model", header: t("grants.colModel"), cell: (row) => row[0] },
-    { id: "scope", header: t("grants.colScope"), cell: (row) => row[1] },
-    { id: "priority", header: t("grants.colPriority"), cell: (row) => row[2] },
-    { id: "expires", header: t("grants.colExpires"), cell: (row) => row[3] },
+  const entitlementColumns: DataTableColumn<EntitlementRow>[] = [
+    {
+      id: "product",
+      header: t("entitlements.colProduct"),
+      cell: (row) => row[0],
+    },
+    { id: "tier", header: t("entitlements.colTier"), cell: (row) => row[1] },
+    {
+      id: "status",
+      header: t("entitlements.colStatus"),
+      cell: (row) => row[2],
+    },
+    {
+      id: "limits",
+      header: t("entitlements.colLimits"),
+      cell: (row) => row[3],
+    },
   ];
   const quotaColumns: DataTableColumn<QuotaRow>[] = [
     { id: "metric", header: t("quotas.colMetric"), cell: (row) => row[0] },
@@ -174,13 +186,15 @@ function AtlasPage() {
     model.protocol,
     model.capabilities.join(", ") || "-",
   ]);
-  const grantRows = activeGrants.map<GrantRow>((grant) => [
-    modelById.get(grant.modelId)?.modelName ?? grant.modelId,
-    grant.applicationType
-      ? `${grant.applicationType}:${grant.applicationId ?? "-"}`
-      : t("grants.scopeTenant"),
-    String(grant.priority),
-    grant.expiresAt ?? t("grants.never"),
+  const entitlementRows = entitlements.map<EntitlementRow>((e) => [
+    e.bundled
+      ? `${e.productCode} · ${t("entitlements.bundled")}`
+      : e.productCode,
+    e.tier ?? t("entitlements.none"),
+    e.status ?? t("entitlements.none"),
+    Object.entries(e.limits)
+      .map(([k, v]) => `${k} ${formatNumber(v)}`)
+      .join(" · ") || "-",
   ]);
   const quotaRows = (quotas?.pools ?? []).map<QuotaRow>((pool) => [
     pool.metric,
@@ -247,15 +261,15 @@ function AtlasPage() {
         <PageSection
           icon="key"
           level={2}
-          title={t("grants.title")}
-          description={t("grants.description")}
+          title={t("entitlements.title")}
+          description={t("entitlements.description")}
         >
           <DataTable
-            columns={grantColumns}
-            rows={grantRows}
-            rowKey={(row, index) => `${row[0]}-${row[1]}-${index}`}
+            columns={entitlementColumns}
+            rows={entitlementRows}
+            rowKey={(row, index) => `${row[0]}-${index}`}
             loading={loading}
-            empty={<EmptyState title={t("grants.empty")} />}
+            empty={<EmptyState title={t("entitlements.empty")} />}
           />
         </PageSection>
       </DashboardSplit>

@@ -314,24 +314,9 @@ export interface AiModelRecord {
   updatedAt: string;
 }
 
-export type ModelApplicationType =
-  | "agent"
-  | "workflow"
-  | "api_client"
-  | "internal_service";
-
-/** Tenant-facing grant view (`/api/atlas/grants` → atlas `/tenancy/grants`). */
-export interface AiModelGrantRecord {
-  id: string;
-  modelId: string;
-  applicationId: string | null;
-  applicationType: ModelApplicationType | null;
-  agentId: string | null;
-  taskProfile: string | null;
-  priority: number;
-  expiresAt: string | null;
-  isActive: boolean;
-}
+// 「模型授权」(tenant↔model)的类型随批 7 退役:那是 Atlas 自己标注为不应存在的
+// legacy 轴,管理面已随 #129 删除,console 侧的最后一个消费方(/atlas 授权表)
+// 在批 7 改为读产品权益(tenant↔product)。Atlas 的上游端点仍在,只是不再有人读。
 
 /**
  * Entitlement envelope (`/api/atlas/quotas` → atlas `/tenancy/quotas`,

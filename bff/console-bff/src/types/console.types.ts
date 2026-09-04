@@ -195,30 +195,9 @@ export interface AiModelRecord {
   updatedAt: string;
 }
 
-export type ModelApplicationType =
-  | "agent"
-  | "workflow"
-  | "api_client"
-  | "internal_service";
-
-/**
- * Tenant-facing grant view (`GET /tenancy/grants`, atlas `vxture-atlas`#74).
- * Deliberately narrower than the operator view (`/capability/grants`) —
- * `reason` is an operator's internal justification and atlas does not
- * project it here; scope (which workspace) comes from the S2S token, not a
- * field on the record.
- */
-export interface AiModelGrantRecord {
-  id: string;
-  modelId: string;
-  applicationId: string | null;
-  applicationType: ModelApplicationType | null;
-  agentId: string | null;
-  taskProfile: string | null;
-  priority: number;
-  expiresAt: string | null;
-  isActive: boolean;
-}
+// 「模型授权」(tenant↔model)的租户视图随批 7 退役:那是 Atlas 自己标注为不应
+// 存在的 legacy 轴,管理面已随 #129 删除,console 侧最后一个消费方(/atlas 的授权表)
+// 改读产品权益(tenant↔product)。Atlas 上游端点仍在,只是本平台不再代理。
 
 /**
  * Entitlement as the tenant sees it (`GET /tenancy/quotas`, atlas #74) —

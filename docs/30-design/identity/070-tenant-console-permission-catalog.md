@@ -40,24 +40,24 @@ updated: 2026-09-04
 
 ## 3. 操作码目录（tenant scope）
 
-| 码                          | 分组     | 挂在哪一页 | 语义                                                     |
-| --------------------------- | -------- | ---------- | -------------------------------------------------------- |
-| `tenant.member.read`        | member   | 成员管理   | 看成员目录（无 `member.manage` 者邮箱/手机号打码）       |
-| `tenant.member.manage`      | member   | 成员管理   | 邀请 / 添加 / 停用 / 重置密码 / 解除关联 / 邀请台账      |
-| `tenant.role.assign`        | security | 成员管理   | 改成员角色                                               |
-| `tenant.workspace.manage`   | settings | 系统设置   | 工作空间管理（本期不开放自建，码保留）                   |
-| `tenant.settings.manage`    | settings | 组织信息   | 租户资料 / Logo / 本地化 / 企业认证提交                  |
-| `tenant.delete`             | security | 系统设置   | 注销租户（决策 3 批二待裁定，码保留）                    |
-| `tenant.billing.read`       | billing  | 产品订阅   | 看订阅 / 订单 / 账单 / 发票记录 / 卡券 / 加油包订单      |
-| `tenant.billing.manage`     | billing  | 产品订阅   | 下单 / 取消订单 / 退订 / 自动续费 / 申请退款 / 升级折抵  |
-| `tenant.payment.manage`     | billing  | 产品订阅   | 申报付款（订阅单与加油包单）/ 加油包下单与取消           |
-| `tenant.invoice.manage`     | billing  | 账单管理   | 申请发票 / 抬头簿增删改与设默认                          |
-| `tenant.quota.read`         | quota    | 配额管理   | 配额 / 用量 / Credits 余额 / 当前套餐名                  |
-| `tenant.audit.read`         | audit    | 审计日志   | 租户审计台账                                             |
-| `tenant.model.read`         | model    | 模型接入   | `/atlas`；**暂不授予任何角色**（页面整改前不对客户开放） |
-| `workspace.member.manage`   | member   | —（根）    | 工作空间级，console 暂无页面                             |
-| `workspace.role.assign`     | security | —（根）    | 同上                                                     |
-| `workspace.settings.manage` | settings | —（根）    | 同上                                                     |
+| 码                          | 分组     | 挂在哪一页 | 语义                                                         |
+| --------------------------- | -------- | ---------- | ------------------------------------------------------------ |
+| `tenant.member.read`        | member   | 成员管理   | 看成员目录（无 `member.manage` 者邮箱/手机号打码）           |
+| `tenant.member.manage`      | member   | 成员管理   | 邀请 / 添加 / 停用 / 重置密码 / 解除关联 / 邀请台账          |
+| `tenant.role.assign`        | security | 成员管理   | 改成员角色                                                   |
+| `tenant.workspace.manage`   | settings | 系统设置   | 工作空间管理（本期不开放自建，码保留）                       |
+| `tenant.settings.manage`    | settings | 组织信息   | 租户资料 / Logo / 本地化 / 企业认证提交                      |
+| `tenant.delete`             | security | 系统设置   | 注销租户（决策 3 批二待裁定，码保留）                        |
+| `tenant.billing.read`       | billing  | 产品订阅   | 看订阅 / 订单 / 账单 / 发票记录 / 卡券 / 加油包订单          |
+| `tenant.billing.manage`     | billing  | 产品订阅   | 下单 / 取消订单 / 退订 / 自动续费 / 申请退款 / 升级折抵      |
+| `tenant.payment.manage`     | billing  | 产品订阅   | 申报付款（订阅单与加油包单）/ 加油包下单与取消               |
+| `tenant.invoice.manage`     | billing  | 账单管理   | 申请发票 / 抬头簿增删改与设默认                              |
+| `tenant.quota.read`         | quota    | 配额管理   | 配额 / 用量 / Credits 余额 / 当前套餐名                      |
+| `tenant.audit.read`         | audit    | 审计日志   | 租户审计台账                                                 |
+| `tenant.model.read`         | model    | 模型接入   | `/atlas`；**批 7（2026-09-05）起授予 owner**，其余角色不持有 |
+| `workspace.member.manage`   | member   | —（根）    | 工作空间级，console 暂无页面                                 |
+| `workspace.role.assign`     | security | —（根）    | 同上                                                         |
+| `workspace.settings.manage` | settings | —（根）    | 同上                                                         |
 
 **蕴含规则（唯一一条）**：`{scope}.{resource}.manage` 蕴含同资源的 `.read`（`capabilitySatisfies`）。不做别的蕴含：`member.manage` 不含 `role.assign`；`payment.manage` 不含 `billing.read`（付款经办人若要看订单列表，需同时授 `billing.read`——owner 天然全有）。
 
@@ -134,6 +134,6 @@ L3 操作  §3 的 13 个 tenant.* 码，各挂在它实际作用的那一页下
 ## 8. 边界与待办
 
 - **自定义角色**：仍是全局固定目录（data_identity_200 §6.1 说明），iam 三条写路由继续恒 400；开放需先加 `roles.tenant_id`。
-- **`tenant.model.read` 无人持有**：`/atlas` 页在批 7 整改（i18n、去授权表）后再决定授予 owner。
+- **`tenant.model.read` 只授 owner**（批 7，2026-09-05）：`/atlas` 页整改完成——授权表换成产品权益（tenant↔product，#129 指明的正确来源）。manager 及以下看配额与用量即可，那两处走 `tenant.quota.read`；`/api/atlas/quotas` 也在批 7 从 `model.read` 降到 `quota.read`（外壳用量卡每页都调它，此前对所有人 403、被吞成「不可用」）。
 - **`workspace.*` 挂在根上**：console 没有工作空间页（决策 2a 本期不开放自建）。
 - **两 realm 码形**：customer realm 仍是点分 `{scope}.{resource}.{action}`，与运营 realm 的冒号约定统一列为后续待办（data_identity_200 §6.4 原话）。

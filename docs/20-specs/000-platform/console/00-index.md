@@ -32,7 +32,7 @@ JWT `userType = tenant_user`，`authScope = tenant_console`。Varda 智能助手
 | `/subscription`        | 订阅管理（当前套餐、升级入口）                                                                                         | subscription        | ✅ 已完成 |
 | `/billing`             | 账单与用量（账单列表、用量明细）                                                                                       | billing             | ✅ 已完成 |
 | `/quotas`              | 配额管理（模型 Token 用量）                                                                                            | subscription        | ✅ 已完成 |
-| `/model-platform`      | 模型平台配置（租户级模型访问）                                                                                         | capabilities        | ✅ 已完成 |
+| `/atlas`               | 模型接入（可用模型 · 产品权益 · 配额 · 用量；`tenant.model.read`，批 7 起授予 owner）                                  | atlas               | ✅ 已完成 |
 | `/profile`             | 账号信息（设计见 `21-account-page-design.md`：身份卡 · 基本信息 · 个人偏好 · 安全设置 · 三方登录 · 危险操作/删除账号） | me                  | ✅ 已完成 |
 | `/security`            | 并入 `/profile?panel=sessions`（跳转，展开活跃会话）                                                                   | me                  | ✅ 已完成 |
 | `/tenant`              | 租户信息（设计见 `20-tenant-page-design.md`：身份卡 · 基本信息 · 联系人 · 默认区域 · 租户策略 · 危险操作）             | tenant-context / me | ✅ 已完成 |

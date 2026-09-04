@@ -353,7 +353,7 @@
       },
       "atlas": {
         "label": "模型接入",
-        "description": "在线模型、自建模型与租户授权"
+        "description": "在线模型、自建模型与产品权益"
       },
       "inbox": {
         "label": "待办与消息",
@@ -1610,7 +1610,7 @@
     "metrics": {
       "groupLabel": "模型平台概览",
       "models": "可用模型",
-      "modelsHint": "{count} 条生效授权",
+      "modelsHint": "{count} 项生效权益",
       "quota": "配额状态",
       "quotaTier": "档位：{tier}",
       "quotaNoTier": "无档位",
@@ -1630,17 +1630,6 @@
       "colProvider": "供应方",
       "colProtocol": "协议",
       "colCapabilities": "能力"
-    },
-    "grants": {
-      "title": "模型授权",
-      "description": "租户级与应用级模型访问范围。",
-      "empty": "暂无生效授权",
-      "colModel": "模型",
-      "colScope": "范围",
-      "colPriority": "优先级",
-      "colExpires": "到期",
-      "scopeTenant": "租户",
-      "never": "不过期"
     },
     "quotas": {
       "title": "配额状态",
@@ -1671,6 +1660,17 @@
       "scopeMissing": "需要租户上下文才能显示模型平台状态。",
       "boundaryTitle": "控制面边界",
       "boundaryBody": "供应方、模型、策略、价格与授权的变更由平台运营在管理面完成。"
+    },
+    "entitlements": {
+      "title": "产品权益",
+      "description": "本工作空间已订阅的产品与档位。模型可用范围由此派生,不再单列租户级模型授权。",
+      "colProduct": "产品",
+      "colTier": "档位",
+      "colStatus": "状态",
+      "colLimits": "额度",
+      "bundled": "随套餐",
+      "none": "未订阅",
+      "empty": "尚无产品权益。"
     }
   },
   "orderFlow": {

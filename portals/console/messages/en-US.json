@@ -353,7 +353,7 @@
       },
       "atlas": {
         "label": "Model Platform",
-        "description": "Online models, private models, and tenant grants"
+        "description": "Hosted models, self-hosted models and product entitlements"
       },
       "inbox": {
         "label": "To-dos & Messages",
@@ -1610,7 +1610,7 @@
     "metrics": {
       "groupLabel": "Model platform overview",
       "models": "Available models",
-      "modelsHint": "{count} active grants",
+      "modelsHint": "{count} live entitlements",
       "quota": "Quota status",
       "quotaTier": "tier: {tier}",
       "quotaNoTier": "no tier",
@@ -1630,17 +1630,6 @@
       "colProvider": "Provider",
       "colProtocol": "Protocol",
       "colCapabilities": "Capabilities"
-    },
-    "grants": {
-      "title": "Model grants",
-      "description": "Tenant-level and application-level model access scope.",
-      "empty": "No active model grants",
-      "colModel": "Model",
-      "colScope": "Scope",
-      "colPriority": "Priority",
-      "colExpires": "Expires",
-      "scopeTenant": "tenant",
-      "never": "Never"
     },
     "quotas": {
       "title": "Quota status",
@@ -1671,6 +1660,17 @@
       "scopeMissing": "Tenant context is required before model platform state can be shown.",
       "boundaryTitle": "Control-plane boundary",
       "boundaryBody": "Provider, model, policy, price and grant changes are managed by platform operators in the admin plane."
+    },
+    "entitlements": {
+      "title": "Product entitlements",
+      "description": "Products and tiers this workspace subscribes to. Model availability is derived from these; there is no separate tenant-level model grant.",
+      "colProduct": "Product",
+      "colTier": "Tier",
+      "colStatus": "Status",
+      "colLimits": "Limits",
+      "bundled": "bundled",
+      "none": "Not subscribed",
+      "empty": "No product entitlements yet."
     }
   },
   "orderFlow": {
