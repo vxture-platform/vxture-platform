@@ -636,9 +636,9 @@
       "system": "Product & system"
     },
     "feedback": {
-      "saved": "Notification preferences were saved to local frontend state and will sync to the server after backend support lands.",
+      "saved": "Notification preferences saved.",
       "reset": "Notification preferences restored to defaults.",
-      "loadFailed": "Could not load notification preferences; showing defaults.",
+      "loadFailed": "Could not load your notification preferences.",
       "saveFailed": "Could not save notification preferences. Try again."
     }
   },
@@ -2675,7 +2675,7 @@
     },
     "table": {
       "title": "Activity",
-      "description": "Last 90 days, up to 200 entries, newest first",
+      "description": "Activity from the last 90 days, newest first.",
       "filterLabel": "Result",
       "filterAll": "All",
       "filterSuccess": "Success",
@@ -2686,7 +2686,13 @@
       "colResource": "Target",
       "colResult": "Result",
       "colIp": "Source IP",
-      "empty": "No activity yet — key actions from now on will appear here"
+      "empty": "No activity yet — key actions from now on will appear here",
+      "filterActionLabel": "Filter by action",
+      "filterActionAll": "All actions",
+      "total": "{count} entries",
+      "prev": "Previous",
+      "next": "Next",
+      "pageOf": "Page {page} of {pageCount}"
     },
     "notes": {
       "title": "Scope",

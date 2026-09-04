@@ -2503,11 +2503,33 @@ export interface ConsoleAuditLog {
   ipAddress: string | null;
 }
 
-export async function fetchAuditLogs(
-  result?: "success" | "failure",
-): Promise<ConsoleAuditLog[]> {
-  const q = result ? `?result=${result}` : "";
-  return readJson<ConsoleAuditLog[]>(`/api/audit/logs${q}`, []);
+/** 服务端分页的一页(批 6;与账单页同一形状)。 */
+export interface ConsoleAuditLogPage {
+  items: ConsoleAuditLog[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/**
+ * 审计日志(批 6:服务端分页 + 筛选)。**strict**:审计页读失败必须显影,
+ * 此前走 readJson 回退空数组——一次故障看起来就像「暂无操作记录」。
+ */
+export async function fetchAuditLogs(params: {
+  result?: "success" | "failure";
+  action?: string;
+  days?: number;
+  page?: number;
+  pageSize?: number;
+}): Promise<ConsoleAuditLogPage> {
+  const q = new URLSearchParams();
+  if (params.result) q.set("result", params.result);
+  if (params.action) q.set("action", params.action);
+  if (params.days) q.set("days", String(params.days));
+  if (params.page) q.set("page", String(params.page));
+  if (params.pageSize) q.set("pageSize", String(params.pageSize));
+  const suffix = q.size > 0 ? `?${q.toString()}` : "";
+  return readJsonStrict<ConsoleAuditLogPage>(`/api/audit/logs${suffix}`);
 }
 
 // ============================================================================

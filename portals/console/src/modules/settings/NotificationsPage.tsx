@@ -11,6 +11,7 @@ import {
   StatusBadge,
   ViewHeader,
 } from "@vxture/design-system";
+import { LoadFailedBanner } from "@/components/load/LoadFailed";
 import type { DataTableColumn, IconName } from "@vxture/design-system";
 import { PageSection, SummaryStrip } from "@/layout/shell";
 import { useTranslations } from "next-intl";
@@ -112,6 +113,14 @@ export function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * 批 6:读失败**不再拿前端默认值当数据**。此前 state 一开始就是
+   * DEFAULT_NOTIFICATION_STATE,读挂了只加一条横幅、矩阵照常渲染且开关可点——
+   * 用户以为在改自己的设置,一按保存就把一整套编出来的默认值盖到服务端真值上。
+   * 现在读失败就显影 + 停掉整张矩阵与保存,只留重试。
+   */
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   /** 服务端矩阵 → 页面结构。分组/图标是纯呈现,留在前端;开关值一律以服务端为准。 */
   const applyPreferences = useCallback((prefs: NotificationPreferences) => {
@@ -129,12 +138,14 @@ export function NotificationsPage() {
 
   useEffect(() => {
     let alive = true;
+    setLoading(true);
+    setLoadFailed(false);
     fetchNotificationPreferences()
       .then((prefs) => {
         if (alive) applyPreferences(prefs);
       })
       .catch(() => {
-        if (alive) setError(t("feedback.loadFailed"));
+        if (alive) setLoadFailed(true);
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -142,7 +153,7 @@ export function NotificationsPage() {
     return () => {
       alive = false;
     };
-  }, [applyPreferences, t]);
+  }, [applyPreferences, reloadKey]);
 
   /** 提交后按**服务端返回值**回填,而不是沿用本地状态:锁定通道会被服务端
    *  强制打开,不回填的话界面会显示一个与库里不一致的关态。 */
@@ -251,7 +262,7 @@ export function NotificationsPage() {
           >
             <Checkbox
               checked={topic.channels[channel.key]}
-              disabled={channelLocked || loading || saving}
+              disabled={channelLocked || loading || saving || loadFailed}
               aria-label={t("topics.toggleLabel", {
                 topic: t(`topics.items.${topic.key}.title`),
                 channel: t(`channels.items.${channel.key}.title`),
@@ -288,6 +299,12 @@ export function NotificationsPage() {
             title={t("header.title")}
             description={t("header.description")}
           />
+          {loadFailed ? (
+            <LoadFailedBanner
+              onRetry={() => setReloadKey((k) => k + 1)}
+              retrying={loading}
+            />
+          ) : null}
           {error !== null ? <Banner tone="danger" title={error} /> : null}
         </div>
       }
@@ -296,7 +313,7 @@ export function NotificationsPage() {
           <Button
             size="md"
             variant="outline"
-            disabled={loading || saving}
+            disabled={loading || saving || loadFailed}
             onClick={resetDefaults}
           >
             <Icon name="x" size="xs" fallback="placeholder" />
@@ -304,7 +321,7 @@ export function NotificationsPage() {
           </Button>
           <Button
             size="md"
-            disabled={loading || saving}
+            disabled={loading || saving || loadFailed}
             onClick={() => void handleSave()}
           >
             <Icon name="check" size="xs" fallback="placeholder" />
