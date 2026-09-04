@@ -158,7 +158,9 @@
     "verifyUnknown": "认证未知",
     "verifyActive": "已认证",
     "verifySuspended": "已暂停",
-    "brandName": "工作台控制台"
+    "brandName": "工作台控制台",
+    "tenantList": "可切换的租户",
+    "currentTag": "当前"
   },
   "header": {
     "title": "控制台",
@@ -491,31 +493,38 @@
         "description": "有两位受邀成员尚未接受访问。"
       }
     },
-    "invoices": {
-      "title": "最近发票",
-      "description": "订阅与超额费用保持为次级信息，不压过套餐状态本身。",
-      "headers": {
-        "invoice": "发票",
-        "date": "日期",
-        "scope": "范围",
-        "status": "状态",
-        "amount": "金额"
-      },
-      "loading": "加载中…",
-      "count": "最近 {count} 张发票",
-      "empty": "暂无发票"
-    },
     "quotas": {
       "title": "配额态势",
-      "description": "保持用量可见，但不把页面做成巨大的运维大盘。",
+      "description": "工作空间的存储与 AI Credits 当前用量;明细与加油包在配额管理页",
       "headers": {
         "pool": "资源池",
-        "usage": "使用量",
+        "usage": "用量 / 额度",
         "share": "占比",
         "status": "状态"
       },
-      "pendingTitle": "配额监控尚未接入",
-      "pendingDescription": "首个计费周期结束后再来看。"
+      "rows": {
+        "storage": "存储空间",
+        "aiCredit": "AI Credits"
+      },
+      "status": {
+        "ok": "正常",
+        "tight": "余量不足 10%"
+      },
+      "empty": "暂无配额数据,订阅产品后自动生成",
+      "viewAll": "配额管理"
+    },
+    "bills": {
+      "title": "最近账单",
+      "description": "最近 5 张账单;全部记录与发票申请在账单管理页",
+      "headers": {
+        "billNo": "账单号",
+        "cycle": "账期",
+        "status": "状态",
+        "amount": "应付"
+      },
+      "count": "最近 {count} 张账单",
+      "empty": "暂无账单",
+      "viewAll": "账单管理"
     }
   },
   "settings": {
@@ -2983,7 +2992,10 @@
       "quotaAction": "去配额管理",
       "invitesTitle": "{count} 封成员邀请待接受",
       "invitesDetail": "临期未接受的邀请可撤销后重新发出",
-      "invitesAction": "去邀请管理"
+      "invitesAction": "去邀请管理",
+      "addonTitle": "支付加油包「{pack}」的订单",
+      "addonDetail": "请在 {date} 前完成转账申报,逾期自动取消",
+      "addonAction": "去申报"
     },
     "table": {
       "title": "待办清单",

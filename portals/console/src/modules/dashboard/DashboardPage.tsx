@@ -1,6 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+/**
+ * DashboardPage.tsx — 工作台首页(批 4 收口)。
+ * @package @vxture/console
+ * @layer Application
+ * @category Module
+ *
+ * 三格摘要(套餐 / 配额健康度 / 待处理)+ 三张入口卡 + 最近账单 + 配额态势。
+ * 此前「最近发票」读的是待退役的 /api/billing/invoices 透传(字段名与账单页对不上,
+ * 状态列还是英文首字母大写),「配额态势」是一块永久占位——批 4:账单读同一份
+ * /api/billing/bills 的最近 5 张,配额画真实读数(与租户面板同源 /quota-usage)。
+ * 读全部 allSettled:一路失败只让它自己那块显影为「—」/ 读取失败,并给一次重试。
+ * 各块按能力码显隐(billing.read / quota.read),没码的人不发那一路读。
+ */
+
+import { useEffect, useMemo, useState } from "react";
 import { getPathname, useRouter } from "@/lib/i18n/navigation";
 import {
   Button,
@@ -9,141 +23,131 @@ import {
   EmptyState,
   EntryCard,
   Icon,
+  Progress,
+  StatusBadge,
   ViewHeader,
 } from "@vxture/design-system";
-import type { DataTableColumn, IconName } from "@vxture/design-system";
+import type {
+  DataTableColumn,
+  IconName,
+  StatusBadgeTone,
+} from "@vxture/design-system";
+import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import {
-  fetchBillingInvoices,
+  fetchBillingSummary,
+  fetchBills,
   fetchMyOrders,
   fetchMySubscriptions,
   fetchQuotaUsage,
-  type ConsoleInvoice,
+  type ConsoleBill,
+  type ConsoleBillingSummary,
   type ConsoleQuotaUsage,
   type ConsoleSubscription,
   type MyOrder,
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { hasCapability } from "@/features/permissions/can";
 import { useLocale, useTranslations } from "next-intl";
+import {
+  LoadFailedBanner,
+  LoadFailedEmpty,
+} from "@/components/load/LoadFailed";
 import { PageSection, SummaryStrip } from "@/layout/shell";
+import { fmtDate } from "@/modules/commerce/components/hubModel";
+import { fmtCount, formatBytes } from "@/lib/format-metrics";
 
-// ============================================================================
-// 数据格式化工具
-// ============================================================================
+const RECENT_BILLS = 5;
 
-/* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言。这一处用的是
-   `month: "short"`，中英差得更远——`8月18日` 对 `Aug 18, 2026`。 */
-function formatDate(dateStr: string, locale: string): string {
-  try {
-    return new Date(dateStr).toLocaleDateString(locale, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return dateStr;
-  }
-}
+/** bill_status 六值域 → 徽章语气(与账单页同一张表)。 */
+const BILL_STATUS_TONES: Record<string, StatusBadgeTone> = {
+  unpaid: "warning",
+  paying: "info",
+  partial: "info",
+  paid: "success",
+  overdue: "warning",
+  cancelled: "neutral",
+};
+const KNOWN_BILL_STATUSES = new Set(Object.keys(BILL_STATUS_TONES));
 
-function formatAmount(amount: number, currency = "CNY"): string {
-  const n = Number(amount);
-  const value = Number.isFinite(n)
-    ? n.toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
-    : "—";
-  return currency === "CNY" ? `¥${value}` : `${currency} ${value}`;
-}
-
-/* 也收 `locale` 往下传：它自己是纯函数，但里头调的 `formatDate` 现在按语言排
-   日期。这是「模块级辅助函数拿不到运行时上下文」的标准形态——上提到调用点
-   由组件传，比在这里读一个全局状态可靠（服务端并发渲染会串）。 */
-function buildInvoiceRows(
-  invoices: ConsoleInvoice[],
-  locale: string,
-): string[][] {
-  return invoices.map((inv) => [
-    inv.invoiceNumber,
-    formatDate(inv.dueDate, locale),
-    inv.lineItems[0]?.description ?? "—",
-    inv.status.charAt(0).toUpperCase() + inv.status.slice(1),
-    formatAmount(inv.totalAmount, inv.currency),
-  ]);
-}
-
-function invoiceColumns(
-  t: ReturnType<typeof useTranslations>,
-): DataTableColumn<string[]>[] {
-  return [
-    {
-      id: "invoice",
-      header: t("invoices.headers.invoice"),
-      cell: (row) => row[0],
-    },
-    { id: "date", header: t("invoices.headers.date"), cell: (row) => row[1] },
-    { id: "scope", header: t("invoices.headers.scope"), cell: (row) => row[2] },
-    {
-      id: "status",
-      header: t("invoices.headers.status"),
-      cell: (row) => row[3],
-    },
-    {
-      id: "amount",
-      header: t("invoices.headers.amount"),
-      cell: (row) => row[4],
-      align: "right",
-    },
-  ];
-}
-
-// ============================================================================
-// DashboardPage
-// ============================================================================
+type QuotaRow = {
+  key: "storage" | "aiCredit";
+  used: number;
+  limit: number;
+};
 
 export function DashboardPage() {
   const { session } = useConsoleSession();
   const t = useTranslations("dashboard");
-  // localePrefix="always"：EntryCard 是个原生 <a>，不能套在 next-intl 的 Link
-  // 里（<a> 嵌 <a> 非法），所以自己把 locale 前缀拼进 href。
+  const tBilling = useTranslations("billingPage");
+  // localePrefix="always":EntryCard 是个原生 <a>,不能套在 next-intl 的 Link
+  // 里(<a> 嵌 <a> 非法),所以自己把 locale 前缀拼进 href。
   const locale = useLocale();
   const router = useRouter();
-  const [invoices, setInvoices] = useState<ConsoleInvoice[]>([]);
-  const [invoicesLoading, setInvoicesLoading] = useState(true);
+
+  const canSeeBilling = hasCapability(
+    session.capabilities,
+    "tenant.billing.read",
+  );
+  const canSeeQuota = hasCapability(session.capabilities, "tenant.quota.read");
+
+  const [bills, setBills] = useState<ConsoleBill[]>([]);
+  const [summary, setSummary] = useState<ConsoleBillingSummary | null>(null);
   const [subscriptions, setSubscriptions] = useState<ConsoleSubscription[]>([]);
   const [quota, setQuota] = useState<ConsoleQuotaUsage | null>(null);
-  /* fetchQuotaUsage 是 strict 读（失败即 reject，2026-08-30）：把「读不到」和
-   * 「还没读」分开——前者要在卡片上明说，不能和 0% 或 — 混在一起。 */
-  const [quotaUnavailable, setQuotaUnavailable] = useState(false);
   const [orders, setOrders] = useState<MyOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState<{
+    bills: boolean;
+    summary: boolean;
+    quota: boolean;
+    any: boolean;
+  }>({ bills: false, summary: false, quota: false, any: false });
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    setInvoicesLoading(true);
-    fetchBillingInvoices(5)
-      .then(setInvoices)
-      .finally(() => setInvoicesLoading(false));
-  }, [session.tenant?.id]);
-
-  /* The three summary tiles used to render i18n literals — "Growth", "78%",
-   * "3" — presented as this tenant's own plan, quota and pending items. They
-   * are computed from live reads now; allSettled so one failing endpoint
-   * blanks only its own tile. */
-  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    const skip = <T,>(value: T) => Promise.resolve(value);
     void Promise.allSettled([
-      fetchMySubscriptions(),
-      fetchQuotaUsage(),
-      fetchMyOrders(),
-    ]).then(([subs, q, ord]) => {
-      if (subs.status === "fulfilled") setSubscriptions(subs.value);
-      if (q.status === "fulfilled") {
-        setQuota(q.value);
-        setQuotaUnavailable(false);
-      } else {
-        setQuota(null);
-        setQuotaUnavailable(true);
-      }
-      if (ord.status === "fulfilled") setOrders(ord.value);
-    });
-  }, [session.tenant?.id]);
+      canSeeBilling ? fetchBills(1, RECENT_BILLS) : skip(null),
+      canSeeBilling ? fetchBillingSummary() : skip(null),
+      canSeeBilling ? fetchMySubscriptions() : skip([]),
+      canSeeQuota ? fetchQuotaUsage() : skip(null),
+      canSeeBilling ? fetchMyOrders() : skip([]),
+    ])
+      .then(([billsRes, summaryRes, subsRes, quotaRes, ordersRes]) => {
+        if (!active) return;
+        setBills(
+          billsRes.status === "fulfilled" ? (billsRes.value?.items ?? []) : [],
+        );
+        setSummary(summaryRes.status === "fulfilled" ? summaryRes.value : null);
+        setSubscriptions(subsRes.status === "fulfilled" ? subsRes.value : []);
+        setQuota(quotaRes.status === "fulfilled" ? quotaRes.value : null);
+        setOrders(ordersRes.status === "fulfilled" ? ordersRes.value : []);
+        const f = {
+          bills: billsRes.status === "rejected",
+          summary: summaryRes.status === "rejected",
+          quota: quotaRes.status === "rejected",
+          any: false,
+        };
+        f.any =
+          f.bills ||
+          f.summary ||
+          f.quota ||
+          subsRes.status === "rejected" ||
+          ordersRes.status === "rejected";
+        setFailed(f);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [session.tenant?.id, canSeeBilling, canSeeQuota, reloadKey]);
+
+  const money = (v: string, currency: string) =>
+    formatCurrency(Number.parseFloat(v || "0"), locale as Locale, currency);
 
   const activeSubscription =
     subscriptions.find((s) => s.status === "active") ?? subscriptions[0];
@@ -152,9 +156,13 @@ export function DashboardPage() {
     aiCredit && aiCredit.limit > 0
       ? `${Math.round((aiCredit.used / aiCredit.limit) * 100)}%`
       : null;
+  /* 待处理 = 待付订单 + 待收款账单(概览的 unpaid + overdue,库内计数,不再只数
+   * 最近 5 张)。读不到就是「—」,不是 0。 */
   const openItems =
-    orders.filter((o) => o.orderStatus === "pending_payment").length +
-    invoices.filter((i) => i.status === "pending").length;
+    summary === null && failed.summary
+      ? null
+      : orders.filter((o) => o.orderStatus === "pending_payment").length +
+        (summary ? summary.unpaid + summary.overdue : 0);
 
   const quickActions = [
     { id: "addMember", href: "/members", icon: "users" },
@@ -163,11 +171,9 @@ export function DashboardPage() {
   ] as const;
 
   /* Labels stay in i18n; values come from the reads above. No `hint` is
-   * passed: the old hints were specific fabricated sentences ("renews on
-   * 2026-05-18", "GPU fine-tuning is near its threshold") and there is no
+   * passed: the old hints were specific fabricated sentences and there is no
    * endpoint that could produce a true equivalent — a bare true value beats a
-   * plausible false sentence. `—` marks "not loaded / not applicable" rather
-   * than inventing a number. */
+   * plausible false sentence. `—` marks "not loaded / not applicable". */
   const summaryItems = [
     {
       label: t("stats.plan.label"),
@@ -176,25 +182,138 @@ export function DashboardPage() {
     },
     {
       label: t("stats.quota.label"),
-      value:
-        quotaPct ?? (quotaUnavailable ? t("stats.quota.unavailable") : "—"),
+      value: quotaPct ?? (failed.quota ? t("stats.quota.unavailable") : "—"),
       aside: <Icon name="chart-bar" size="sm" fallback="info" />,
     },
     {
       label: t("stats.reminders.label"),
-      value: String(openItems),
+      value: openItems === null ? "—" : String(openItems),
       aside: <Icon name="warning" size="sm" fallback="info" />,
     },
   ];
 
-  const invoiceRows = buildInvoiceRows(invoices, locale);
-  const invoiceTableColumns = invoiceColumns(t);
+  const billColumns: DataTableColumn<ConsoleBill>[] = [
+    {
+      id: "billNo",
+      header: t("bills.headers.billNo"),
+      cell: (b) => (
+        <span className="flex flex-col">
+          <span className="font-mono text-label-md text-foreground">
+            {b.billNo}
+          </span>
+          <span className="text-body-sm text-muted-foreground tabular-nums">
+            {fmtDate(b.createdAt)}
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "cycle",
+      header: t("bills.headers.cycle"),
+      cell: (b) =>
+        b.cycleStartDate && b.cycleEndDate ? (
+          <span className="tabular-nums">
+            {fmtDate(b.cycleStartDate)} ~ {fmtDate(b.cycleEndDate)}
+          </span>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      id: "status",
+      header: t("bills.headers.status"),
+      align: "center",
+      cell: (b) => (
+        <StatusBadge tone={BILL_STATUS_TONES[b.billStatus] ?? "neutral"}>
+          {KNOWN_BILL_STATUSES.has(b.billStatus)
+            ? tBilling(`status.${b.billStatus}`)
+            : b.billStatus}
+        </StatusBadge>
+      ),
+    },
+    {
+      id: "amount",
+      header: t("bills.headers.amount"),
+      align: "right",
+      cell: (b) => (
+        <span className="tabular-nums font-semibold text-foreground">
+          {money(b.payableAmount, b.currency)}
+        </span>
+      ),
+    },
+  ];
+
+  const quotaRows = useMemo<QuotaRow[]>(
+    () =>
+      quota
+        ? [
+            {
+              key: "storage",
+              used: quota.storage.used,
+              limit: quota.storage.limit,
+            },
+            {
+              key: "aiCredit",
+              used: quota.aiCredit.used,
+              limit: quota.aiCredit.limit,
+            },
+          ]
+        : [],
+    [quota],
+  );
+  const quotaValue = (row: QuotaRow, v: number) =>
+    row.key === "storage" ? formatBytes(v) : fmtCount(v);
+  const quotaColumns: DataTableColumn<QuotaRow>[] = [
+    {
+      id: "pool",
+      header: t("quotas.headers.pool"),
+      cell: (r) => t(`quotas.rows.${r.key}`),
+    },
+    {
+      id: "usage",
+      header: t("quotas.headers.usage"),
+      align: "right",
+      cell: (r) => (
+        <span className="inline-flex items-baseline gap-xs tabular-nums">
+          <span className="text-info-text">{quotaValue(r, r.used)}</span>
+          <span className="text-muted-foreground">/</span>
+          <span className="text-foreground">{quotaValue(r, r.limit)}</span>
+        </span>
+      ),
+    },
+    {
+      id: "share",
+      header: t("quotas.headers.share"),
+      width: "md",
+      cell: (r) => (
+        <Progress
+          value={
+            r.limit > 0
+              ? Math.min(100, Math.round((r.used / r.limit) * 100))
+              : 0
+          }
+          aria-label={t("quotas.headers.share")}
+        />
+      ),
+    },
+    {
+      id: "status",
+      header: t("quotas.headers.status"),
+      align: "center",
+      cell: (r) => {
+        const tight = r.limit > 0 && r.limit - r.used < r.limit * 0.1;
+        return (
+          <StatusBadge tone={tight ? "warning" : "success"}>
+            {tight ? t("quotas.status.tight") : t("quotas.status.ok")}
+          </StatusBadge>
+        );
+      },
+    },
+  ];
 
   return (
-    /* DashboardTemplate 焊死工作台的阅读顺序：先看数（metrics）、再选路
-     * （entries）、最后处理具体事项（children）。原实现把「快捷入口」和
-     * 「信号」并排塞在同一层，入口卡因此沉在指标下方与正文同级——这里让它
-     * 回到模板的 entries 槽。 */
+    /* DashboardTemplate 焊死工作台的阅读顺序:先看数(metrics)、再选路
+     * (entries)、最后处理具体事项(children)。 */
     <DashboardTemplate
       header={
         <ViewHeader
@@ -203,7 +322,17 @@ export function DashboardPage() {
           description={t("description")}
         />
       }
-      metrics={<SummaryStrip items={summaryItems} />}
+      metrics={
+        <div className="flex flex-col gap-md">
+          {failed.any ? (
+            <LoadFailedBanner
+              onRetry={() => setReloadKey((k) => k + 1)}
+              retrying={loading}
+            />
+          ) : null}
+          <SummaryStrip items={summaryItems} />
+        </div>
+      }
       entries={
         <div className="grid gap-md sm:grid-cols-2 xl:grid-cols-3">
           {quickActions.map((action) => (
@@ -218,55 +347,78 @@ export function DashboardPage() {
         </div>
       }
     >
-      <PageSection
-        icon="receipt"
-        level={2}
-        title={t("invoices.title")}
-        description={t("invoices.description")}
-        action={
-          /* Was inert. It is navigation, not a feature — point it at the
-           * billing page instead of leaving a button that does nothing. */
-          <Button
-            size="md"
-            variant="outline"
-            onClick={() => router.push("/billing")}
-          >
-            <Icon name="arrow-right" size="xs" fallback="placeholder" />
-            <span>{t("signals.billing.title")}</span>
-          </Button>
-        }
-      >
-        <div className="flex items-center justify-between gap-sm">
-          <span className="text-label-sm text-muted-foreground">
-            {invoicesLoading
-              ? t("invoices.loading")
-              : t("invoices.count", { count: invoiceRows.length })}
-          </span>
-          <span className="text-label-sm text-muted-foreground">
-            {t("invoices.headers.scope")}
-          </span>
-        </div>
-        <DataTable
-          columns={invoiceTableColumns}
-          rows={invoiceRows}
-          rowKey={(row, index) => row[0] ?? String(index)}
-          loading={invoicesLoading}
-          empty={<EmptyState title={t("invoices.empty")} />}
-        />
-      </PageSection>
+      {canSeeBilling ? (
+        <PageSection
+          icon="receipt"
+          level={2}
+          title={t("bills.title")}
+          description={t("bills.description")}
+          action={
+            <Button
+              size="md"
+              variant="outline"
+              onClick={() => router.push("/billing")}
+            >
+              <Icon name="arrow-right" size="xs" fallback="placeholder" />
+              <span>{t("bills.viewAll")}</span>
+            </Button>
+          }
+        >
+          <DataTable<ConsoleBill>
+            columns={billColumns}
+            rows={bills}
+            rowKey={(b) => b.id}
+            loading={loading}
+            empty={
+              failed.bills ? (
+                <LoadFailedEmpty />
+              ) : (
+                <EmptyState title={t("bills.empty")} />
+              )
+            }
+            footer={
+              <span className="text-body-sm text-muted-foreground tabular-nums">
+                {loading || failed.bills
+                  ? "—"
+                  : t("bills.count", { count: bills.length })}
+              </span>
+            }
+          />
+        </PageSection>
+      ) : null}
 
-      <PageSection
-        icon="gauge"
-        level={2}
-        title={t("quotas.title")}
-        description={t("quotas.description")}
-      >
-        <EmptyState
-          icon="chart-bar"
-          title={t("quotas.pendingTitle")}
-          description={t("quotas.pendingDescription")}
-        />
-      </PageSection>
+      {canSeeQuota ? (
+        <PageSection
+          icon="gauge"
+          level={2}
+          title={t("quotas.title")}
+          description={t("quotas.description")}
+          action={
+            <Button
+              size="md"
+              variant="outline"
+              onClick={() => router.push("/quotas")}
+            >
+              <Icon name="arrow-right" size="xs" fallback="placeholder" />
+              <span>{t("quotas.viewAll")}</span>
+            </Button>
+          }
+        >
+          <DataTable<QuotaRow>
+            columns={quotaColumns}
+            rows={quotaRows}
+            rowKey={(r) => r.key}
+            loading={loading}
+            empty={
+              failed.quota ? (
+                <LoadFailedEmpty />
+              ) : (
+                <EmptyState title={t("quotas.empty")} />
+              )
+            }
+          />
+        </PageSection>
+      ) : null}
     </DashboardTemplate>
   );
 }

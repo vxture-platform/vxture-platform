@@ -158,7 +158,9 @@
     "verifyUnknown": "Verification unknown",
     "verifyActive": "Verified",
     "verifySuspended": "Suspended",
-    "brandName": "Workspace Console"
+    "brandName": "Workspace Console",
+    "tenantList": "Tenants you can switch to",
+    "currentTag": "Current"
   },
   "header": {
     "title": "Console",
@@ -491,31 +493,38 @@
         "description": "Two invited members have not accepted access yet."
       }
     },
-    "invoices": {
-      "title": "Recent invoices",
-      "description": "Subscription and overage charges stay secondary to plan status.",
-      "headers": {
-        "invoice": "Invoice",
-        "date": "Date",
-        "scope": "Scope",
-        "status": "Status",
-        "amount": "Amount"
-      },
-      "loading": "Loading…",
-      "count": "{count} recent invoices",
-      "empty": "No invoices yet"
-    },
     "quotas": {
       "title": "Quota posture",
-      "description": "Usage remains visible, but not as an oversized ops dashboard.",
+      "description": "Current storage and AI Credits usage for the workspace; details and add-on packs live on the Quotas page",
       "headers": {
         "pool": "Pool",
-        "usage": "Usage",
+        "usage": "Used / limit",
         "share": "Share",
         "status": "Status"
       },
-      "pendingTitle": "Quota monitoring is not available yet",
-      "pendingDescription": "Check back after your first billing cycle."
+      "rows": {
+        "storage": "Storage",
+        "aiCredit": "AI Credits"
+      },
+      "status": {
+        "ok": "OK",
+        "tight": "Under 10% left"
+      },
+      "empty": "No quota data yet; it appears once a product is subscribed",
+      "viewAll": "Quotas"
+    },
+    "bills": {
+      "title": "Recent bills",
+      "description": "The 5 most recent bills; the full list and invoice requests live on the Billing page",
+      "headers": {
+        "billNo": "Bill no.",
+        "cycle": "Cycle",
+        "status": "Status",
+        "amount": "Payable"
+      },
+      "count": "{count} most recent bills",
+      "empty": "No bills yet",
+      "viewAll": "Billing"
     }
   },
   "settings": {
@@ -2983,7 +2992,10 @@
       "quotaAction": "Open Quotas",
       "invitesTitle": "{count} member invitation(s) pending",
       "invitesDetail": "Expiring unaccepted invitations can be revoked and re-sent",
-      "invitesAction": "Open Invitations"
+      "invitesAction": "Open Invitations",
+      "addonTitle": "Pay the order for add-on pack \"{pack}\"",
+      "addonDetail": "Complete the transfer and declare it before {date}; the order closes automatically afterwards",
+      "addonAction": "Declare payment"
     },
     "table": {
       "title": "To-do list",

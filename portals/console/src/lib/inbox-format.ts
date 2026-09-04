@@ -1,35 +1,38 @@
 /**
- * inbox-format.ts — 站内消息的展示辅助（product_330 P2-g）。
- * 时间：7 天内相对时间（Intl.RelativeTimeFormat），更早显示日期；模板键 → 抽屉图标 / 语气。
+ * inbox-format.ts — 站内消息的展示辅助(product_330 P2-g)。
+ * 时间:7 天内相对时间(Intl.RelativeTimeFormat),更早显示日期;模板键 → 抽屉图标 / 语气。
+ * 批 4:图标从 Phosphor 字体类改为 DS IconName(fill 字体从未加载,图标位一直是空的)。
  */
+
+import type { IconName } from "@vxture/design-system";
 
 export type InboxLevel = "danger" | "warning" | "info";
 
-/** 模板键 → 抽屉里的语气与 phosphor 图标类（与 TemplateDrawer 的 DrawerNotif 对齐）。 */
+/** 模板键 → 抽屉里的语气与 DS 图标(与 TemplateDrawer 的 DrawerNotif 对齐)。 */
 export function inboxPresentation(templateCode: string): {
   level: InboxLevel;
-  icon: string;
+  icon: IconName;
 } {
   switch (templateCode) {
     case "subscription.expired":
-      return { level: "danger", icon: "ph-clock-countdown" };
+      return { level: "danger", icon: "warning" };
     case "refund.rejected":
-      return { level: "danger", icon: "ph-warning-circle" };
+      return { level: "danger", icon: "warning" };
     case "subscription.expiring_soon":
-      return { level: "warning", icon: "ph-clock" };
+      return { level: "warning", icon: "calendar" };
     case "order.renewal_created":
-      return { level: "warning", icon: "ph-receipt" };
+      return { level: "warning", icon: "receipt" };
     case "refund.requested":
     case "refund.approved":
     case "refund.completed":
-      return { level: "info", icon: "ph-arrow-u-up-left" };
+      return { level: "info", icon: "wallet" };
     case "order.fulfilled":
     case "subscription.renewed":
-      return { level: "info", icon: "ph-check-circle" };
+      return { level: "info", icon: "seal-check" };
     case "announcement.published":
-      return { level: "info", icon: "ph-megaphone" };
+      return { level: "info", icon: "bell" };
     default:
-      return { level: "info", icon: "ph-bell" };
+      return { level: "info", icon: "bell" };
   }
 }
 

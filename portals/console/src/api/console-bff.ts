@@ -37,28 +37,6 @@ export interface ConsoleSubscription {
   isTrial: boolean;
 }
 
-/**
- * Frontend view-model for a billing record. This is deliberately decoupled from
- * the raw `InvoiceRecord` the BFF passes through (see `RawBillRecord` /
- * `toConsoleInvoice` below): the list endpoint returns bill headers only, with
- * no line items, so `lineItems` is always `[]` here. Consumers must keep
- * treating `lineItems` as possibly empty.
- */
-export interface ConsoleInvoice {
-  id: string;
-  invoiceNumber: string;
-  status: string;
-  totalAmount: number;
-  currency: string;
-  dueDate: string;
-  lineItems: Array<{
-    description: string;
-    quantity: number;
-    unitPrice: number;
-    amount: number;
-  }>;
-}
-
 function normalizeOrigin(value: string | undefined): string {
   const normalized = value?.trim().replace(/\/+$/, "");
   if (!normalized) {
@@ -1279,52 +1257,9 @@ export async function cancelSubscriptionOrder(
   }
 }
 
-/**
- * Raw bill header as returned by the BFF `/api/billing/invoices` passthrough
- * (upstream `InvoiceRecord`). Fields are optional/loosely typed on purpose so a
- * missing or renamed field degrades gracefully instead of throwing at render.
- */
-interface RawBillRecord {
-  id?: string;
-  billNo?: string;
-  billStatus?: string;
-  totalAmount?: string | number;
-  payableAmount?: string | number;
-  currency?: string;
-  billCycle?: string;
-  cycleEndDate?: string;
-  createdAt?: string;
-}
-
-function toConsoleInvoice(raw: RawBillRecord): ConsoleInvoice {
-  const amount = Number(raw.totalAmount);
-  return {
-    id: raw.id ?? "",
-    invoiceNumber: raw.billNo ?? raw.id ?? "",
-    status: raw.billStatus ?? "",
-    totalAmount: Number.isFinite(amount) ? amount : 0,
-    currency: raw.currency ?? "CNY",
-    // Bill issue date — cycleEndDate can be a full year out on annual plans, so
-    // createdAt is the meaningful "invoice date" for the list view.
-    dueDate: raw.createdAt ?? raw.cycleEndDate ?? "",
-    // The list endpoint returns bill headers only; line items live on the
-    // per-invoice detail endpoint, so there is nothing to populate here.
-    lineItems: [],
-  };
-}
-
-export async function fetchBillingInvoices(
-  limit = 20,
-): Promise<ConsoleInvoice[]> {
-  const params = new URLSearchParams({ limit: String(limit) });
-  const raw = await readJson<RawBillRecord[]>(
-    `/api/billing/invoices?${params.toString()}`,
-    [],
-  );
-  return Array.isArray(raw) ? raw.map(toConsoleInvoice) : [];
-}
-
 // ── 账单管理页（product_331）：BFF 重写后的一手视图，不再需要 wire 适配 ──
+// 批 4:首页「最近发票」改读同一份 /api/billing/bills,旧的 /api/billing/invoices
+// 透传适配(RawBillRecord → ConsoleInvoice)随之退役;BFF 端点保留(X8)。
 
 export interface ConsoleBillingSummary {
   total: number;

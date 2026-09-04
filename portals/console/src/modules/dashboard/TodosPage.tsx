@@ -27,10 +27,12 @@ import {
 } from "@vxture/design-system";
 import type { DataTableColumn } from "@vxture/design-system";
 import {
+  fetchAddonOrders,
   fetchInvitations,
   fetchMyOrders,
   fetchQuotaOverview,
   fetchSubscribedProducts,
+  type ConsoleAddonOrder,
   type ConsoleQuotaOverview,
   type MyOrder,
   type SubscribedProduct,
@@ -67,6 +69,7 @@ export function TodosPage() {
 
   const [orders, setOrders] = useState<MyOrder[]>([]);
   const [subs, setSubs] = useState<SubscribedProduct[]>([]);
+  const [addonOrders, setAddonOrders] = useState<ConsoleAddonOrder[]>([]);
   const [quota, setQuota] = useState<ConsoleQuotaOverview | null>(null);
   const [pendingInvites, setPendingInvites] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -83,8 +86,10 @@ export function TodosPage() {
       canSeeCommerce ? fetchSubscribedProducts() : Promise.resolve([]),
       fetchQuotaOverview(),
       canManageMembers ? fetchInvitations() : Promise.resolve([]),
+      // 待申报加油包单(批 4:此前只有 kind 类型没有来源)——与订阅单同门 billing.read
+      canSeeCommerce ? fetchAddonOrders() : Promise.resolve([]),
     ])
-      .then(([ords, products, quotaOverview, invites]) => {
+      .then(([ords, products, quotaOverview, invites, addons]) => {
         if (!active) return;
         setOrders(ords.status === "fulfilled" ? ords.value : []);
         setSubs(products.status === "fulfilled" ? products.value : []);
@@ -96,8 +101,9 @@ export function TodosPage() {
             ? invites.value.filter((i) => i.status === "pending").length
             : 0,
         );
+        setAddonOrders(addons.status === "fulfilled" ? addons.value : []);
         setPartialFailed(
-          [ords, products, quotaOverview, invites].some(
+          [ords, products, quotaOverview, invites, addons].some(
             (r) => r.status === "rejected",
           ),
         );
@@ -179,8 +185,22 @@ export function TodosPage() {
         actionLabel: t("items.invitesAction"),
       });
     }
+    for (const a of addonOrders) {
+      if (a.status === "pending_payment" && !a.paymentDeclared) {
+        rows.push({
+          key: `addon:${a.orderNo}`,
+          kind: "addon",
+          title: t("items.addonTitle", { pack: a.packName }),
+          detail: a.expireAt
+            ? t("items.addonDetail", { date: fmtDate(a.expireAt) })
+            : t("items.payDetailNoTtl"),
+          href: `/quotas/addon-pay/${a.orderNo}`,
+          actionLabel: t("items.addonAction"),
+        });
+      }
+    }
     return rows;
-  }, [orders, subs, quota, pendingInvites, t]);
+  }, [orders, subs, quota, pendingInvites, addonOrders, t]);
 
   const columns: DataTableColumn<TodoRow>[] = [
     {
