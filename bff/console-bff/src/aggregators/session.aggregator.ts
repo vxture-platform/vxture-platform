@@ -350,11 +350,19 @@ export class SessionAggregator {
   async updateCurrentOrganizationProfile(
     userId: string,
     orgId: string | undefined,
-    input: OrgProfileUpdateInput,
+    // name 不属于 profile 表(它在 tenancy.tenants 上),故在此就地放宽一格,
+    // 不去污染 service-organization 的 OrgProfileUpdateInput(批 5c)。
+    input: OrgProfileUpdateInput & { name?: string | null },
   ): Promise<ConsoleOrganizationProfile | null> {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return null;
-    await this.org.upsertOrgProfile(resolved.org.id, input);
+    // 名称在 tenancy.tenants 上,不在 profile 表里——upsertOrgProfile 碰不到它(批 5c)。
+    const { name, ...profile } = input;
+    const trimmed = typeof name === "string" ? name.trim() : null;
+    if (trimmed && trimmed !== resolved.org.name) {
+      await this.org.renameTenant(resolved.org.id, trimmed);
+    }
+    await this.org.upsertOrgProfile(resolved.org.id, profile);
     return this.getCurrentOrganizationProfile(userId, orgId);
   }
 

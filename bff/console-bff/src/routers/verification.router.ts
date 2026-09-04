@@ -44,7 +44,7 @@ export interface ConsoleVerificationView {
   verificationType: string;
   businessLicenseNo: string | null;
   legalPersonName: string | null;
-  status: "unverified" | "pending" | "verified" | "rejected";
+  status: "unverified" | "pending" | "verified" | "rejected" | "superseded";
   rejectReason: string | null;
   reviewedAt: string | null;
   createdAt: string;
@@ -52,7 +52,7 @@ export interface ConsoleVerificationView {
 
 export interface ConsoleTenantVerificationState {
   /** 当前有效状态(最新一条;无申请 = unverified) */
-  status: "unverified" | "pending" | "verified" | "rejected";
+  status: "unverified" | "pending" | "verified" | "rejected" | "superseded";
   latest: ConsoleVerificationView | null;
   history: ConsoleVerificationView[];
 }

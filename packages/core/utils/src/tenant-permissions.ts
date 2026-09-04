@@ -133,10 +133,11 @@ export const TENANT_MENU_TREE: readonly TenantMenuNode[] = [
     code: "tenant.menu.account_tenant",
     children: [
       { code: "tenant.menu.profile", route: "/profile" },
-      { code: "tenant.menu.personal_tenant", route: "/personal-tenant" },
+      // 批 5c:三页合并为 `/tenant`,码保留、同指新页(见 seed-catalog 同处注释)
+      { code: "tenant.menu.personal_tenant", route: "/tenant" },
       {
         code: "tenant.menu.organization",
-        route: "/organization",
+        route: "/tenant",
         perms: ["tenant.settings.manage"],
       },
     ],
@@ -188,7 +189,7 @@ export const TENANT_MENU_TREE: readonly TenantMenuNode[] = [
     children: [
       {
         code: "tenant.menu.settings",
-        route: "/settings",
+        route: "/tenant",
         perms: ["tenant.workspace.manage", "tenant.delete"],
       },
       { code: "tenant.menu.inbox", route: "/inbox" },

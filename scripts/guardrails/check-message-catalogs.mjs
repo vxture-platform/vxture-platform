@@ -45,6 +45,7 @@ const NATIVE_NAME_KEYS = new Set([
   'preferences.locale.zh-CN',
   'preferences.locale.zhCN',
   'profilePage.language.zhCN',
+  'tenantInfoPage.language.zhCN',
   'tenantPage.language.zhCN',
 ]);
 

@@ -83,7 +83,13 @@ export interface ConsoleOrganizationProfile {
   language: string | null;
   currency: string | null;
   // Verification (KYC §3.4) — deferred; read-only summary, skeleton only.
-  verifiedStatus: "unverified" | "pending" | "verified" | "rejected" | null;
+  verifiedStatus:
+    | "unverified"
+    | "pending"
+    | "verified"
+    | "rejected"
+    | "superseded"
+    | null;
   updatedAt: string | null;
 }
 

@@ -327,14 +327,6 @@
         "label": "Account",
         "description": "Avatar, profile, contact details, sign-in methods and preferences"
       },
-      "personalTenant": {
-        "label": "Tenant info",
-        "description": "Personal tenant information, visible for personal tenants"
-      },
-      "organization": {
-        "label": "Organization Info",
-        "description": "Organization name, logo, bio, verification, and locale"
-      },
       "members": {
         "label": "Member Management",
         "description": "Invites, access review, and team membership"
@@ -379,10 +371,6 @@
         "label": "Tenant Settings",
         "description": "Language, timezone, and dangerous tenant cancellation"
       },
-      "systemSettings": {
-        "label": "System settings",
-        "description": "Platform and account system settings"
-      },
       "usage": {
         "label": "Usage Analytics",
         "description": "Consumption trends, call records, and member breakdown"
@@ -394,6 +382,10 @@
       "auditLogs": {
         "label": "Audit Logs",
         "description": "Trail of member and commerce actions in this tenant"
+      },
+      "tenantInfo": {
+        "label": "Tenant",
+        "description": "Tenant profile, contact, defaults and danger zone"
       }
     }
   },
@@ -418,7 +410,9 @@
     "addonPay": "Booster Pack Payment",
     "vouchers": "Vouchers",
     "auditLogs": "Audit Logs",
-    "inbox": "To-dos & Messages"
+    "inbox": "To-dos & Messages",
+    "tenant": "Tenant",
+    "tenantVerification": "Business verification"
   },
   "login": {
     "hero": {
@@ -556,138 +550,6 @@
       "count": "{count} most recent bills",
       "empty": "No bills yet",
       "viewAll": "Billing"
-    }
-  },
-  "settings": {
-    "eyebrow": "Advanced settings",
-    "title": "Tenant settings",
-    "description": "Configure tenant-level policies, access controls, security constraints, and audit rules.",
-    "save": "Save changes",
-    "reset": "Restore defaults",
-    "backend": {
-      "pending": "Backend pending"
-    },
-    "summary": {
-      "title": "Tenant settings overview",
-      "scope": "Scope",
-      "scopeValue": "Tenant policy",
-      "enabled": "Enabled",
-      "enabledValue": "{count}",
-      "profile": "Profile fields",
-      "profileValue": "Managed elsewhere"
-    },
-    "general": {
-      "title": "General settings",
-      "count": "{count} groups"
-    },
-    "table": {
-      "policy": "Policy",
-      "state": "State",
-      "value": "Setting"
-    },
-    "states": {
-      "enabled": "Enabled",
-      "disabled": "Off"
-    },
-    "sections": {
-      "access": {
-        "title": "Access entry",
-        "count": "{count} items"
-      },
-      "security": {
-        "title": "Security policy",
-        "count": "{count} items"
-      },
-      "data": {
-        "title": "Data & audit",
-        "count": "{count} items"
-      }
-    },
-    "rows": {
-      "inviteApproval": {
-        "title": "Invite approval",
-        "hint": "Member invitations require admin confirmation before joining the tenant."
-      },
-      "externalMembers": {
-        "title": "External members",
-        "hint": "Allow accounts outside the organization domain to join this tenant."
-      },
-      "defaultRole": {
-        "title": "Default role",
-        "hint": "Initial role granted to a member after accepting an invitation."
-      },
-      "mfaRequired": {
-        "title": "Require MFA",
-        "hint": "Require additional verification when members sign in to the console."
-      },
-      "trustedDeviceReview": {
-        "title": "New device review",
-        "hint": "Record first-time device sign-ins for later review."
-      },
-      "sessionTimeout": {
-        "title": "Session lifetime",
-        "hint": "Maximum time a console session can stay signed in."
-      },
-      "auditRetention": {
-        "title": "Audit retention",
-        "hint": "How long tenant operation logs are retained by the platform."
-      },
-      "exportApproval": {
-        "title": "Export approval",
-        "hint": "Require confirmation before exporting members, billing, or audit data."
-      },
-      "apiKeyCreation": {
-        "title": "API key self-service",
-        "hint": "Allow members to create integration access keys by themselves."
-      }
-    },
-    "options": {
-      "defaultRole": {
-        "readonly": "Readonly",
-        "member": "Member",
-        "admin": "Admin"
-      },
-      "sessionTimeout": {
-        "8h": "8 hours",
-        "24h": "24 hours",
-        "7d": "7 days"
-      },
-      "auditRetention": {
-        "90": "90 days",
-        "180": "180 days",
-        "365": "365 days"
-      }
-    },
-    "danger": {
-      "title": "Danger Zone",
-      "count": "High-risk action",
-      "confirmRequired": "Confirmation required",
-      "cancelTenant": {
-        "title": "Cancel tenant",
-        "confirmHint": "Requires secondary confirmation and the current tenant name before execution.",
-        "action": "Cancel tenant"
-      },
-      "transferOwner": {
-        "title": "Transfer ownership",
-        "hint": "Hand the tenant owner role to another active member. You become a manager afterwards.",
-        "action": "Transfer ownership",
-        "dialogTitle": "Transfer tenant ownership",
-        "dialogBody": "After the transfer this person owns the tenant and you become a manager — still able to manage members and roles, but without owner-only capabilities. It takes effect immediately and only the new owner can transfer it back.",
-        "targetLabel": "Recipient",
-        "targetPlaceholder": "Pick an active member",
-        "confirmLabel": "Type the tenant name to confirm",
-        "cancel": "Cancel",
-        "confirm": "Transfer ownership",
-        "noCandidates": "This tenant has no other active members, so there is nobody to transfer to. Invite someone and wait for them to join.",
-        "notOwner": "Only the current owner can transfer ownership.",
-        "personalTenant": "A personal tenant has no ownership to transfer.",
-        "success": "Ownership transferred to {name}. You are now a manager.",
-        "failed": "Ownership transfer failed, please retry"
-      }
-    },
-    "feedback": {
-      "saved": "Tenant settings were saved to local frontend state and will sync to the server after backend support lands.",
-      "reset": "Tenant settings restored to default policy."
     }
   },
   "notificationsPage": {
@@ -1255,166 +1117,6 @@
       }
     }
   },
-  "organizationPage": {
-    "header": {
-      "eyebrow": "Tenant center",
-      "title": "Organization",
-      "description": "The organization is the current tenant for now. Review the logo, verification state, contact address, and localization settings."
-    },
-    "common": {
-      "empty": "--",
-      "loading": "Loading...",
-      "yes": "Yes",
-      "no": "No"
-    },
-    "summary": {
-      "organization": "Organization",
-      "logo": "Logo",
-      "tenant": "Tenant",
-      "scope": "Scope",
-      "verified": "Verification",
-      "updatedAt": "Updated",
-      "customLogo": "Custom logo",
-      "defaultLogo": "Default logo",
-      "orgEqualsTenant": "Organization is tenant"
-    },
-    "sections": {
-      "foundation": {
-        "title": "Foundation",
-        "description": "Tenant name, logo, code, type, status, and description."
-      },
-      "business": {
-        "title": "Business info",
-        "description": "Industry, company size, and website (organization tenants)."
-      },
-      "status": {
-        "title": "Verification & status",
-        "description": "Shows tenant operating state, business verification, and review details."
-      },
-      "contact": {
-        "title": "Admin / contact",
-        "description": "The tenant's official contact for verification, compliance, and billing."
-      },
-      "verification": {
-        "title": "Tenant verification",
-        "personalHint": "Personal-tenant verification is linked to your personal real-name verification.",
-        "orgHint": "Organization tenants complete enterprise verification; the operator must finish personal verification first."
-      },
-      "localization": {
-        "title": "Localization",
-        "description": "Controls the default language, timezone, and basic profile attachments."
-      },
-      "workspace": {
-        "title": "Workspace",
-        "description": "The tenant pays; the workspace consumes. Each tenant currently has exactly one default workspace, and creating more is not open this period."
-      }
-    },
-    "fields": {
-      "organizationName": "Organization name",
-      "companyName": "Company name",
-      "tenantCode": "ORG_ID",
-      "tenantType": "Tenant type",
-      "createdAt": "Created at",
-      "industry": "Industry",
-      "scale": "Company size",
-      "website": "Website",
-      "industryScale": "Industry / scale",
-      "description": "Description",
-      "tenantStatus": "Tenant status",
-      "contactRole": "Title / role",
-      "region": "Country / region",
-      "countryCode": "Country / region code",
-      "isBillingRecipient": "Billing recipient",
-      "verifiedStatus": "Verification status",
-      "unifiedSocialCreditCode": "Unified social credit code",
-      "verifiedAt": "Verified at",
-      "rejectedReason": "Rejected reason",
-      "contactName": "Contact",
-      "contactPhone": "Phone",
-      "contactEmail": "Email",
-      "primaryDomain": "Primary domain",
-      "location": "Location",
-      "address": "Address",
-      "postalCode": "Postal code",
-      "language": "Language",
-      "timeZone": "Timezone",
-      "currency": "Currency",
-      "businessLicenseUrl": "Business license",
-      "logoUrl": "Logo URL",
-      "updatedAt": "Last updated",
-      "workspaceName": "Workspace name",
-      "workspaceCode": "Workspace code",
-      "ownerTenant": "Owning tenant",
-      "isDefault": "Default workspace"
-    },
-    "actions": {
-      "edit": "Edit",
-      "editLogo": "Edit logo",
-      "clearLogo": "Clear logo",
-      "uploadLogo": "Upload logo",
-      "goVerify": "Go to verification",
-      "cancel": "Cancel",
-      "save": "Save",
-      "clear": "Clear"
-    },
-    "tenantType": {
-      "personal": "Personal tenant",
-      "organization": "Organization tenant",
-      "company": "Organization",
-      "individual": "Personal"
-    },
-    "status": {
-      "tenant": {
-        "trial": "Trial",
-        "active": "Active",
-        "suspended": "Suspended",
-        "cancelled": "Cancelled"
-      },
-      "verified": {
-        "unverified": "Unverified",
-        "pending": "Pending",
-        "verified": "Verified",
-        "rejected": "Rejected"
-      }
-    },
-    "logo": {
-      "alt": "{name} organization logo",
-      "edit": "Edit organization logo",
-      "previewAlt": "{name} organization logo preview",
-      "customPreview": "Using custom logo",
-      "defaultPreview": "Using default logo"
-    },
-    "dialogs": {
-      "edit": {
-        "title": "Edit tenant profile",
-        "description": "Business info and contact details. Saving syncs to the tenant page."
-      },
-      "logo": {
-        "title": "Edit organization logo",
-        "description": "Upload an image or paste a logo URL. Saving updates the current organization page.",
-        "uploadHint": "Use a 1:1 PNG or JPG under 5MB."
-      }
-    },
-    "placeholders": {
-      "logoUrl": "https://example.com/logo.png"
-    },
-    "feedback": {
-      "noProfile": "No organization profile was found.",
-      "loadError": "Failed to load organization profile. Please try again later.",
-      "saved": "Tenant profile updated.",
-      "saveError": "Failed to save the tenant profile. Please try again later.",
-      "logoSaved": "Organization logo updated.",
-      "logoCleared": "Organization logo cleared.",
-      "logoUploadError": "Logo upload failed. Please try again later.",
-      "logoFileTypeError": "Choose an image file.",
-      "logoFileSizeError": "Logo image must be under 5MB.",
-      "logoReadError": "Could not read the logo image. Choose another file."
-    },
-    "workspace": {
-      "defaultYes": "Yes",
-      "multiWorkspaceNote": "Multiple workspaces are a future direction: the commercial semantics (per-workspace accounting, subscription ownership, seat allocation) are not settled, so one tenant keeps one workspace for now."
-    }
-  },
   "verificationPage": {
     "personal": {
       "eyebrow": "Personal info",
@@ -1969,106 +1671,6 @@
       "scopeMissing": "Tenant context is required before model platform state can be shown.",
       "boundaryTitle": "Control-plane boundary",
       "boundaryBody": "Provider, model, policy, price and grant changes are managed by platform operators in the admin plane."
-    }
-  },
-  "tenantPage": {
-    "header": {
-      "eyebrow": "Account & Tenant",
-      "title": "Tenant info",
-      "description": "View your tenant's name, ID, status and localization settings."
-    },
-    "sections": {
-      "info": {
-        "title": "Tenant info",
-        "description": "The tenant's name, ID, type and status."
-      },
-      "localization": {
-        "title": "Localization",
-        "description": "Language, timezone and currency preferences."
-      },
-      "subscription": {
-        "title": "Subscription",
-        "description": "This tenant's plan and billing.",
-        "empty": "No active subscription."
-      },
-      "workspaces": {
-        "title": "Workspaces",
-        "description": "Workspaces under this tenant and your role.",
-        "empty": "No workspaces yet."
-      }
-    },
-    "fields": {
-      "tenantName": "Tenant name",
-      "tenantId": "ORG_ID",
-      "tenantType": "Type",
-      "status": "Status",
-      "createdAt": "Created",
-      "description": "Description",
-      "language": "Language",
-      "timezone": "Timezone",
-      "currency": "Currency",
-      "price": "Price",
-      "nextBilling": "Next billing",
-      "role": "Role",
-      "joinedAt": "Joined"
-    },
-    "status": {
-      "active": "Active",
-      "suspended": "Suspended",
-      "trial": "Trial",
-      "cancelled": "Cancelled"
-    },
-    "type": {
-      "personal": "Personal",
-      "organization": "Organization"
-    },
-    "subscription": {
-      "active": "Active",
-      "trial": "Trial"
-    },
-    "language": {
-      "zhCN": "简体中文",
-      "enUS": "English"
-    },
-    "actions": {
-      "edit": "Edit",
-      "save": "Save",
-      "cancel": "Cancel",
-      "uploadLogo": "Upload logo",
-      "clearLogo": "Clear logo",
-      "viewPlans": "View plans"
-    },
-    "dialogs": {
-      "localization": {
-        "title": "Edit localization",
-        "description": "Set language, timezone and currency."
-      }
-    },
-    "logo": {
-      "alt": "{name} logo"
-    },
-    "feedback": {
-      "loadError": "Failed to load tenant info.",
-      "noProfile": "Tenant info not found.",
-      "logoSaved": "Logo updated.",
-      "logoCleared": "Logo cleared.",
-      "logoUploadError": "Logo operation failed, please retry.",
-      "logoFileTypeError": "Only PNG / JPEG / WebP / GIF images are supported.",
-      "logoFileSizeError": "Image must be under 5MB.",
-      "localizationSaved": "Localization settings saved.",
-      "localizationSaveError": "Save failed, please retry."
-    },
-    "common": {
-      "empty": "—",
-      "loading": "Loading…"
-    },
-    "workspaces": {
-      "role": {
-        "owner": "Owner",
-        "manager": "Manager",
-        "member": "Member"
-      },
-      "defaultTag": "default"
     }
   },
   "orderFlow": {
@@ -3254,5 +2856,154 @@
   },
   "principalNo": {
     "label": "ID:"
+  },
+  "tenantInfoPage": {
+    "header": {
+      "title": "Tenant",
+      "description": "Profile, contact and defaults for the current tenant. Members, subscriptions and billing live in their own sections."
+    },
+    "common": {
+      "loading": "Loading…",
+      "unset": "Not set",
+      "cancel": "Cancel"
+    },
+    "logo": {
+      "upload": "Upload tenant logo",
+      "clear": "Clear logo"
+    },
+    "tenantType": {
+      "personal": "Personal tenant",
+      "organization": "Organization tenant"
+    },
+    "status": {
+      "active": "Active",
+      "suspended": "Suspended"
+    },
+    "verify": {
+      "unverified": "Unverified",
+      "pending": "Under review",
+      "verified": "Verified",
+      "rejected": "Verification failed",
+      "superseded": "Superseded",
+      "go": "Verify",
+      "view": "View verification"
+    },
+    "identity": {
+      "createdOn": "Created {date}",
+      "owner": "Owner {name}",
+      "members": "{count} members · Manage"
+    },
+    "workspaces": {
+      "toggle": "Workspaces · {count}",
+      "unnamed": "Default workspace",
+      "defaultTag": "Default",
+      "empty": "No workspaces yet.",
+      "hint": "Workspaces are listed here only. Switch from the tenant panel in the header; multiple workspaces come later."
+    },
+    "cards": {
+      "basic": {
+        "title": "Basic information",
+        "description": "The name and description this tenant shows publicly."
+      },
+      "contact": {
+        "title": "Contact",
+        "description": "The tenant's official point of contact: verification results, bills and invoices go here."
+      },
+      "region": {
+        "title": "Regional defaults",
+        "description": "Tenant-level defaults, inherited by workspaces. Your own interface language and time zone live under Account · Preferences; the two never override each other."
+      },
+      "policy": {
+        "title": "Tenant policies",
+        "toggle": "See the planned policies"
+      },
+      "danger": {
+        "title": "Danger zone"
+      }
+    },
+    "fields": {
+      "name": "Tenant name",
+      "nameResetsVerification": "Renaming supersedes the current business verification; you will need to verify again.",
+      "description": "Description",
+      "industry": "Industry",
+      "scale": "Company size",
+      "website": "Website",
+      "contactName": "Contact name",
+      "contactRole": "Role",
+      "contactEmail": "Email",
+      "contactPhone": "Phone",
+      "countryCode": "Country / region",
+      "address": "Address",
+      "postalCode": "Postal code",
+      "isBillingRecipient": "Billing recipient",
+      "isBillingRecipientHint": "Invoices and billing notices go to this contact",
+      "language": "Default language",
+      "timezone": "Default time zone",
+      "currency": "Settlement currency"
+    },
+    "scale": {
+      "people": "{range} people"
+    },
+    "language": {
+      "zhCN": "简体中文",
+      "enUS": "English"
+    },
+    "policy": {
+      "access": {
+        "title": "Access:",
+        "items": "invite approval · external members · default role"
+      },
+      "security": {
+        "title": "Security:",
+        "items": "enforced two-factor · trusted devices · session length"
+      },
+      "data": {
+        "title": "Data:",
+        "items": "audit retention · export approval · API keys"
+      }
+    },
+    "danger": {
+      "closeConditionsLabel": "Closing conditions",
+      "closeConditions": {
+        "noBills": "No unpaid bills",
+        "noBalance": "No paid balance",
+        "noInProgress": "No refund or invoice in progress",
+        "noPaidOrder": "No paid order awaiting confirmation",
+        "membersCleared": "Members removed"
+      },
+      "transfer": {
+        "label": "Transfer ownership",
+        "action": "Transfer",
+        "summary": "Pick an active member and type the tenant name to confirm. Takes effect immediately; you become an admin.",
+        "noCandidate": "There is no other active member to transfer to.",
+        "ownerOnly": "Only the current owner can transfer ownership.",
+        "title": "Transfer ownership",
+        "description": "You will become an admin. This takes effect immediately.",
+        "target": "New owner",
+        "targetEmpty": "Select a member",
+        "confirmLabel": "Type the tenant name “{name}” to confirm",
+        "failed": "Transfer failed. Please try again."
+      },
+      "close": {
+        "label": "Close tenant",
+        "summary": "Available once the conditions above are met, with a 30-day window to cancel. Backend in progress.",
+        "action": "Close"
+      }
+    },
+    "footer": {
+      "dirty": "{count} unsaved changes",
+      "clean": "No unsaved changes",
+      "discard": "Discard",
+      "save": "Save"
+    },
+    "feedback": {
+      "saved": "Saved.",
+      "savedVerificationReset": "Saved. The tenant was renamed, so the previous business verification is superseded — please verify again.",
+      "saveFailed": "Save failed. Please try again.",
+      "logoSaved": "Logo updated.",
+      "logoCleared": "Logo cleared.",
+      "logoFailed": "Logo update failed. Please try again.",
+      "transferred": "Ownership transferred. You are now an admin."
+    }
   }
 }

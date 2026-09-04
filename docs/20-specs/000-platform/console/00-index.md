@@ -22,26 +22,28 @@ JWT `userType = tenant_user`，`authScope = tenant_console`。Varda 智能助手
 
 ## 功能模块清单
 
-| 路由               | 功能                                                                                                                   | BFF Router     | 状态      |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------- | -------------- | --------- |
-| `/`                | 仪表板（租户概览）                                                                                                     | tenant-context | ✅ 已完成 |
-| `/members`         | 成员管理（邀请、移除、角色分配）                                                                                       | iam            | ✅ 已完成 |
-| `/invitations`     | 邀请管理（待接受 / 已过期）                                                                                            | iam            | ✅ 已完成 |
-| `/roles`           | 角色管理（自定义角色、权限分配）                                                                                       | iam            | ✅ 已完成 |
-| `/iam`             | 身份与访问管理（权限总览）                                                                                             | iam            | ✅ 已完成 |
-| `/subscription`    | 订阅管理（当前套餐、升级入口）                                                                                         | subscription   | ✅ 已完成 |
-| `/billing`         | 账单与用量（账单列表、用量明细）                                                                                       | billing        | ✅ 已完成 |
-| `/quotas`          | 配额管理（模型 Token 用量）                                                                                            | subscription   | ✅ 已完成 |
-| `/model-platform`  | 模型平台配置（租户级模型访问）                                                                                         | capabilities   | ✅ 已完成 |
-| `/profile`         | 账号信息（设计见 `21-account-page-design.md`：身份卡 · 基本信息 · 个人偏好 · 安全设置 · 三方登录 · 危险操作/删除账号） | me             | ✅ 已完成 |
-| `/security`        | 并入 `/profile?panel=sessions`（跳转，展开活跃会话）                                                                   | me             | ✅ 已完成 |
-| `/notifications`   | 通知设置（接收偏好）                                                                                                   | me             | ✅ 已完成 |
-| `/inbox`           | 待办与消息（待办派生 + 站内消息合并入口，2026-09-04）                                                                  | me             | ✅ 已完成 |
-| `/organization`    | 并入 `/tenant` 租户信息(批 5c)                                                                                         | tenant-context | 🔜 批 5c  |
-| `/personal-tenant` | 并入 `/tenant` 租户信息(批 5c 设计定稿 2026-09-05,见 20-tenant-page-design.md)                                         | tenant-context | 🔜 批 5c  |
-| `/settings`        | 并入 `/tenant` 租户信息(策略规划中卡 + 危险操作;批 5c)                                                                 | tenant-context | 🔜 批 5c  |
-| `/tenant-settings` | 跳转 `/settings` → 批 5c 后跳转 `/tenant`                                                                              | tenant-context | 🔜 批 5c  |
-| `/todos`           | 并入 `/inbox` 待办与消息（保留跳转 `?filter=todo`）                                                                    | —              | ✅ 已完成 |
+| 路由                   | 功能                                                                                                                   | BFF Router          | 状态      |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------- | --------- |
+| `/`                    | 仪表板（租户概览）                                                                                                     | tenant-context      | ✅ 已完成 |
+| `/members`             | 成员管理（邀请、移除、角色分配）                                                                                       | iam                 | ✅ 已完成 |
+| `/invitations`         | 邀请管理（待接受 / 已过期）                                                                                            | iam                 | ✅ 已完成 |
+| `/roles`               | 角色管理（自定义角色、权限分配）                                                                                       | iam                 | ✅ 已完成 |
+| `/iam`                 | 身份与访问管理（权限总览）                                                                                             | iam                 | ✅ 已完成 |
+| `/subscription`        | 订阅管理（当前套餐、升级入口）                                                                                         | subscription        | ✅ 已完成 |
+| `/billing`             | 账单与用量（账单列表、用量明细）                                                                                       | billing             | ✅ 已完成 |
+| `/quotas`              | 配额管理（模型 Token 用量）                                                                                            | subscription        | ✅ 已完成 |
+| `/model-platform`      | 模型平台配置（租户级模型访问）                                                                                         | capabilities        | ✅ 已完成 |
+| `/profile`             | 账号信息（设计见 `21-account-page-design.md`：身份卡 · 基本信息 · 个人偏好 · 安全设置 · 三方登录 · 危险操作/删除账号） | me                  | ✅ 已完成 |
+| `/security`            | 并入 `/profile?panel=sessions`（跳转，展开活跃会话）                                                                   | me                  | ✅ 已完成 |
+| `/tenant`              | 租户信息（设计见 `20-tenant-page-design.md`：身份卡 · 基本信息 · 联系人 · 默认区域 · 租户策略 · 危险操作）             | tenant-context / me | ✅ 已完成 |
+| `/tenant/verification` | 企业认证（状态 · 当前信息 · 申请 / 重提 · 历史；组织租户）                                                             | verification        | ✅ 已完成 |
+| `/notifications`       | 通知设置（接收偏好）                                                                                                   | me                  | ✅ 已完成 |
+| `/inbox`               | 待办与消息（待办派生 + 站内消息合并入口，2026-09-04）                                                                  | me                  | ✅ 已完成 |
+| `/organization`        | 并入 `/tenant` 租户信息（跳转）                                                                                        | tenant-context      | ✅ 已完成 |
+| `/personal-tenant`     | 并入 `/tenant` 租户信息（跳转）                                                                                        | tenant-context      | ✅ 已完成 |
+| `/settings`            | 并入 `/tenant` 租户信息（策略卡 + 危险操作；跳转）                                                                     | tenant-context      | ✅ 已完成 |
+| `/tenant-settings`     | 并入 `/tenant` 租户信息（跳转）                                                                                        | tenant-context      | ✅ 已完成 |
+| `/todos`               | 并入 `/inbox` 待办与消息（保留跳转 `?filter=todo`）                                                                    | —                   | ✅ 已完成 |
 
 ---
 
