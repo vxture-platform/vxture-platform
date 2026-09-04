@@ -14,7 +14,7 @@
  * `/todos` 保留并跳到 `?filter=todo`。
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import {
@@ -52,6 +52,20 @@ function parseFilter(raw: string | null): Filter {
   return FILTERS.includes(raw as Filter) ? (raw as Filter) : "all";
 }
 
+/** 绝对地址(http/https)= 站外链接;其余按站内路径走本地路由。 */
+function isExternalLink(link: string): boolean {
+  return /^https?:\/\//i.test(link);
+}
+
+/** 追加分页时按 id 去重,后到的不覆盖已有行。 */
+function mergeById(
+  current: readonly InboxMessage[],
+  incoming: readonly InboxMessage[],
+): InboxMessage[] {
+  const seen = new Set(current.map((m) => m.id));
+  return [...current, ...incoming.filter((m) => !seen.has(m.id))];
+}
+
 export function InboxPage() {
   const t = useTranslations("inbox");
   const tTodo = useTranslations("todosPage");
@@ -76,19 +90,29 @@ export function InboxPage() {
 
   const derived = useDerivedTodos();
 
+  /**
+   * 请求代次(批 6)。此前没有任何取消守卫:「加载更多」还在飞的时候点重试,
+   * 那一页回来会把第 2 页接到刚重置的第 1 页后面——重复行 + React 重复 key。
+   * 两次「加载更多」叠在一起同理。代次对不上的响应直接丢弃;合并时再按 id 去重,
+   * 兜住服务端游标在同一时间戳上重叠的情形。
+   */
+  const loadSeq = useRef(0);
+
   const load = useCallback(async (before: string | null) => {
+    const seq = ++loadSeq.current;
     setLoading(true);
     setError(null);
     try {
       const page = await fetchInbox({ limit: PAGE_SIZE, before });
-      setItems((cur) => (before ? [...cur, ...page.items] : page.items));
+      if (seq !== loadSeq.current) return;
+      setItems((cur) => (before ? mergeById(cur, page.items) : page.items));
       setNextBefore(page.nextBefore);
       setUnreadCount(page.unreadCount);
       setLoadFailed(false);
     } catch {
-      setLoadFailed(true);
+      if (seq === loadSeq.current) setLoadFailed(true);
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, []);
 
@@ -122,7 +146,14 @@ export function InboxPage() {
         /* 标已读失败不拦跳转 */
       }
     }
-    if (message.link) router.push(message.link);
+    if (!message.link) return;
+    // 外链不能走 next-intl 的路由器:它会加语言前缀,`https://…` 变成
+    // `/zh-CN/https://…`(公告的 ctaUrl 就可能是绝对地址,库里也没有约束拦它)。
+    if (isExternalLink(message.link)) {
+      window.open(message.link, "_blank", "noopener,noreferrer");
+      return;
+    }
+    router.push(message.link);
   }
 
   async function markAll() {

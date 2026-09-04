@@ -636,9 +636,9 @@
       "system": "产品与系统"
     },
     "feedback": {
-      "saved": "通知偏好已保存到前端本地状态，待后端接入后同步到服务端。",
+      "saved": "通知偏好已保存。",
       "reset": "通知偏好已恢复为默认配置。",
-      "loadFailed": "通知偏好读取失败，显示的是默认值。",
+      "loadFailed": "通知偏好读取失败。",
       "saveFailed": "通知偏好保存失败，请重试。"
     }
   },
@@ -2675,7 +2675,7 @@
     },
     "table": {
       "title": "操作记录",
-      "description": "近 90 天,最多展示 200 条,时间倒序",
+      "description": "近 90 天的操作记录,时间倒序。",
       "filterLabel": "结果筛选",
       "filterAll": "全部",
       "filterSuccess": "成功",
@@ -2686,7 +2686,13 @@
       "colResource": "对象",
       "colResult": "结果",
       "colIp": "来源 IP",
-      "empty": "暂无操作记录;本页上线后的关键动作会陆续出现在这里"
+      "empty": "暂无操作记录;本页上线后的关键动作会陆续出现在这里",
+      "filterActionLabel": "按操作类型筛选",
+      "filterActionAll": "全部操作",
+      "total": "共 {count} 条",
+      "prev": "上一页",
+      "next": "下一页",
+      "pageOf": "第 {page} / {pageCount} 页"
     },
     "notes": {
       "title": "口径说明",

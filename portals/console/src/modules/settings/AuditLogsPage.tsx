@@ -16,8 +16,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   Badge,
+  Button,
   DataTable,
   EmptyState,
+  FilterBar,
+  NativeSelect,
   SegmentedControl,
   StatusBadge,
   ViewHeader,
@@ -25,6 +28,10 @@ import {
 } from "@vxture/design-system";
 import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
 import { fetchAuditLogs, type ConsoleAuditLog } from "@/api/console-bff";
+import {
+  LoadFailedBanner,
+  LoadFailedEmpty,
+} from "@/components/load/LoadFailed";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { PageSection, SignalList } from "@/layout/shell";
 import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
@@ -59,20 +66,62 @@ const KNOWN_ACTIONS = new Set([
 
 type ResultFilter = "all" | "success" | "failure";
 
+/** 服务端分页页大小(与账单页同档)。 */
+const PAGE_SIZE = 20;
+/** 动作筛选的选项 = 有译名的受管动作码,按字母序。 */
+const ACTION_OPTIONS = [...KNOWN_ACTIONS].sort();
+
 export function AuditLogsPage() {
   const t = useTranslations("auditPage");
   const { session } = useConsoleSession();
 
   const [rows, setRows] = useState<ConsoleAuditLog[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [filter, setFilter] = useState<ResultFilter>("all");
+  const [action, setAction] = useState<string>("all");
 
+  // 换租户或换筛选都回到第一页——否则会停在一个新条件下不存在的页码上,
+  // 表格空着而用户以为「没有记录」。
   useEffect(() => {
+    setPage(1);
+  }, [session.tenant?.id, filter, action]);
+
+  // 批 6:服务端分页(此前是 limit 200 硬顶、无分页也无总数,超过 200 条的租户
+  // 看不到更早的记录且界面毫无提示);读失败显影,不再回退成「暂无操作记录」。
+  useEffect(() => {
+    let active = true;
     setLoading(true);
-    fetchAuditLogs(filter === "all" ? undefined : filter)
-      .then(setRows)
-      .finally(() => setLoading(false));
-  }, [session.tenant?.id, filter]);
+    setLoadFailed(false);
+    fetchAuditLogs({
+      ...(filter === "all" ? {} : { result: filter }),
+      ...(action === "all" ? {} : { action }),
+      page,
+      pageSize: PAGE_SIZE,
+    })
+      .then((res) => {
+        if (!active) return;
+        setRows(res.items);
+        setTotal(res.total);
+      })
+      .catch(() => {
+        if (!active) return;
+        setRows([]);
+        setTotal(0);
+        setLoadFailed(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [session.tenant?.id, filter, action, page, reloadKey]);
+
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // useCallback 而非普通函数:它被 columns 的 useMemo 引用,不稳定的话
   // 要么进依赖数组导致每渲染重建列、要么被漏掉留一条 exhaustive-deps 警告。
@@ -169,6 +218,13 @@ export function AuditLogsPage() {
         description={t("description")}
       />
 
+      {loadFailed ? (
+        <LoadFailedBanner
+          onRetry={() => setReloadKey((k) => k + 1)}
+          retrying={loading}
+        />
+      ) : null}
+
       <PageSection
         icon="clipboard"
         level={2}
@@ -187,13 +243,63 @@ export function AuditLogsPage() {
           />
         }
       >
+        <FilterBar>
+          <NativeSelect
+            wrapperClassName="w-full max-w-media-3xl"
+            value={action}
+            onChange={(event) => setAction(event.target.value)}
+            aria-label={t("table.filterActionLabel")}
+          >
+            <option value="all">{t("table.filterActionAll")}</option>
+            {ACTION_OPTIONS.map((a) => (
+              <option key={a} value={a}>
+                {actionLabel(a)}
+              </option>
+            ))}
+          </NativeSelect>
+        </FilterBar>
+
         <DataTable<ConsoleAuditLog>
           columns={columns}
           rows={rows}
           rowKey={(r) => r.id}
           loading={loading}
-          indexStart={1}
-          empty={<EmptyState title={t("table.empty")} />}
+          indexStart={(page - 1) * PAGE_SIZE + 1}
+          empty={
+            loadFailed ? (
+              <LoadFailedEmpty />
+            ) : (
+              <EmptyState title={t("table.empty")} />
+            )
+          }
+          footer={
+            <div className="flex w-full flex-wrap items-center justify-between gap-md">
+              <span className="text-body-sm text-muted-foreground">
+                {loadFailed ? "—" : t("table.total", { count: total })}
+              </span>
+              <span className="flex items-center gap-sm">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1 || loading}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  {t("table.prev")}
+                </Button>
+                <span className="text-body-sm text-muted-foreground tabular-nums">
+                  {t("table.pageOf", { page, pageCount })}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= pageCount || loading}
+                  onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                >
+                  {t("table.next")}
+                </Button>
+              </span>
+            </div>
+          }
         />
       </PageSection>
 
