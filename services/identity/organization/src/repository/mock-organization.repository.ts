@@ -123,6 +123,26 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       }));
   }
 
+  async convertPersonalToOrganization(
+    tenantId: string,
+    ownerUserId: string,
+    name: string,
+  ): Promise<import("../types/organization.types").ConvertPersonalResult> {
+    const org = this.orgs.get(tenantId);
+    if (!org) return { ok: false, reason: "tenant_not_found" };
+    if (org.ownerUserId !== ownerUserId)
+      return { ok: false, reason: "not_owner" };
+    if (org.type !== "personal") return { ok: false, reason: "not_personal" };
+    org.type = "organization";
+    org.name = name;
+    return {
+      ok: true,
+      tenantNo: org.tenantNo ?? null,
+      newPersonalTenantId: crypto.randomUUID(),
+      newPersonalTenantNo: null,
+    };
+  }
+
   async renameTenant(
     tenantId: string,
     name: string,

@@ -366,6 +366,40 @@ export class SessionAggregator {
     return this.getCurrentOrganizationProfile(userId, orgId);
   }
 
+  /**
+   * 个人租户转组织(批 5c-2)。一个事务在仓储层完成:改类型 / 名称 / 认证状态 +
+   * 立刻补建这个人的新个人租户。主体码 v4 之后**不换号**,钱、订阅、成员、工作空间
+   * 全部原样跟着这一行租户(tenant id 不变),所以不需要清账前置。不可回退。
+   */
+  async convertCurrentTenantToOrganization(
+    userId: string,
+    orgId: string | undefined,
+    name: string,
+  ) {
+    const resolved = await this.resolveOrg(userId, orgId);
+    if (!resolved) throw new NotFoundException("tenant_not_found");
+    const trimmed = name.trim();
+    if (!trimmed) throw new BadRequestException("name_required");
+    const result = await this.org.convertPersonalToOrganization(
+      resolved.org.id,
+      userId,
+      trimmed,
+    );
+    if (!result.ok) {
+      if (result.reason === "tenant_not_found") {
+        throw new NotFoundException(result.reason);
+      }
+      throw new ConflictException(result.reason);
+    }
+    return {
+      tenantId: resolved.org.id,
+      name: trimmed,
+      tenantNo: result.tenantNo,
+      newPersonalTenantId: result.newPersonalTenantId,
+      newPersonalTenantNo: result.newPersonalTenantNo,
+    };
+  }
+
   /** Store/replace the active org's logo (bytes already validated). */
   async setCurrentOrgLogo(
     userId: string,

@@ -2988,6 +2988,12 @@
         "label": "Close tenant",
         "summary": "Available once the conditions above are met, with a 30-day window to cancel. Backend in progress.",
         "action": "Close"
+      },
+      "personalDescription": "A personal tenant can be upgraded to an organization tenant, which turns on member management. This cannot be undone.",
+      "convert": {
+        "label": "Convert to organization",
+        "action": "Convert",
+        "summary": "Subscriptions, balance, bills and workspaces stay as they are and the tenant ID does not change. Member management turns on and verification resets. This cannot be undone."
       }
     },
     "footer": {
@@ -3004,6 +3010,39 @@
       "logoCleared": "Logo cleared.",
       "logoFailed": "Logo update failed. Please try again.",
       "transferred": "Ownership transferred. You are now an admin."
+    },
+    "convert": {
+      "title": "Convert to an organization tenant",
+      "description": "This tenant becomes an organization tenant with you as its only member and owner. Subscriptions, balance, bills and workspaces all stay as they are.",
+      "nameLabel": "Organization name",
+      "namePlaceholder": "The organization's formal name",
+      "ackTitle": "After the upgrade:",
+      "ack": {
+        "verification": "Verification resets to unverified; business verification must be submitted separately",
+        "members": "Member management turns on, with you as the only member",
+        "paymentTtl": "New orders get a 2-day payment window instead of 30 minutes",
+        "irreversible": "This cannot be undone"
+      },
+      "ackConfirm": "I understand these changes",
+      "confirmLabel": "Type the current tenant name “{name}” to confirm",
+      "start": "Start conversion",
+      "cancel": "Cancel",
+      "failed": "Conversion failed. Please try again.",
+      "running": "Converting",
+      "runningHint": "The change is committed; walking through what happened.",
+      "steps": {
+        "check": "Verify owner and tenant state",
+        "type": "Change tenant type and name; the ID stays the same",
+        "verification": "Reset verification to unverified",
+        "personal": "Provision your new personal tenant",
+        "session": "Switch to the organization view and refresh the session"
+      },
+      "done": {
+        "title": "{name} is now an organization tenant",
+        "description": "Subscriptions, balance, bills and workspaces are unchanged. Your new personal tenant is ready — switch to it from the tenant panel in the header.",
+        "stay": "Stay here",
+        "verify": "Verify the business"
+      }
     }
   }
 }

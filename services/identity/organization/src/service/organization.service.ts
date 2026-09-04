@@ -48,6 +48,15 @@ export class OrganizationService {
     return this.repo.createTeamOrg(ownerUserId, name);
   }
   /** Keep the user's personal org name in sync with their account/display name. */
+  /** 个人租户转组织租户(批 5c-2);不可回退。 */
+  convertPersonalToOrganization(
+    tenantId: string,
+    ownerUserId: string,
+    name: string,
+  ) {
+    return this.repo.convertPersonalToOrganization(tenantId, ownerUserId, name);
+  }
+
   /** 改租户名;组织租户改名即作废原企业认证(批 5c)。 */
   renameTenant(tenantId: string, name: string) {
     return this.repo.renameTenant(tenantId, name);

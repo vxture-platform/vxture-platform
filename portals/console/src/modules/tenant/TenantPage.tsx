@@ -69,6 +69,7 @@ import {
   type TenantDraftPatch,
 } from "./TenantFormCards";
 import { TenantDangerCard } from "./TenantDangerCard";
+import { ConvertTenantDialog } from "./ConvertTenantDialog";
 
 const LOGO_ACCEPT = "image/png,image/jpeg,image/webp";
 
@@ -142,6 +143,7 @@ export function TenantPage() {
 
   const [draft, setDraft] = useState<TenantDraft>(EMPTY_DRAFT);
   const [workspacesOpen, setWorkspacesOpen] = useState(false);
+  const [convertOpen, setConvertOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── 读(allSettled:任一失败显影,不让一条读挂掉整页)────────────────────────
@@ -428,19 +430,30 @@ export function TenantPage() {
       />
       <TenantPolicyCard />
 
-      {/* 个人租户的「转为组织租户」归 5c 第二段;本段组织租户才有危险操作 */}
-      {isOrg ? (
-        <TenantDangerCard
-          isOwner={isOwner}
-          transferReady={transferCandidates.length > 0}
-          onTransfer={() => {
-            setTransferTarget("");
-            setTransferConfirm("");
-            setTransferError(null);
-            setTransferOpen(true);
-          }}
-        />
-      ) : null}
+      {/* 组织租户:转让所有权 + 注销;个人租户:转为组织租户(批 5c-2) */}
+      <TenantDangerCard
+        isPersonal={!isOrg}
+        isOwner={isOrg ? isOwner : true}
+        transferReady={transferCandidates.length > 0}
+        onTransfer={() => {
+          setTransferTarget("");
+          setTransferConfirm("");
+          setTransferError(null);
+          setTransferOpen(true);
+        }}
+        onConvert={() => setConvertOpen(true)}
+      />
+
+      <ConvertTenantDialog
+        open={convertOpen}
+        currentName={tenantName}
+        onClose={() => setConvertOpen(false)}
+        onDone={() => {
+          // 转换后当前会话的 active_org 就是这个租户(id 未变),整页重载拿到
+          // 新类型 / 名称,页面随之变成组织形态;顶栏面板会多出新的个人租户。
+          window.location.reload();
+        }}
+      />
 
       <AlertDialog open={transferOpen} onOpenChange={setTransferOpen}>
         <AlertDialogContent>
