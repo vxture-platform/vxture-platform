@@ -24,6 +24,7 @@ import {
   Section,
   StatusBadge,
 } from "@vxture/design-system";
+import { CardRows, DETAIL_LIST_CLASS } from "./CardRows";
 
 export type ThirdPartyProvider = "google" | "feishu" | "dingtalk" | "wechat";
 
@@ -78,8 +79,8 @@ export function ThirdPartyLoginCard({
       title={t("cards.thirdParty.title")}
       description={t("cards.thirdParty.description")}
     >
-      <div className="pl-md">
-        <DetailList>
+      <CardRows>
+        <DetailList className={DETAIL_LIST_CLASS}>
           {accounts.map((account) => {
             const name = t(
               `connectedAccounts.providers.${account.provider}.name`,
@@ -148,7 +149,7 @@ export function ThirdPartyLoginCard({
             );
           })}
         </DetailList>
-      </div>
+      </CardRows>
     </Section>
   );
 }

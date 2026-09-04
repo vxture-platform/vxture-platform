@@ -28,6 +28,7 @@ import type { LoginHistoryEntry } from "@/entities/console";
 import { LoadFailedEmpty } from "@/components/load/LoadFailed";
 import { formatProfileDate, parseBrowser, parseOS } from "./format";
 import { RowExpand } from "./RowExpand";
+import { CardRows, DETAIL_LIST_CLASS } from "./CardRows";
 
 /** 登录历史展开后默认露出的条数,其余点「更多」再展开。 */
 const HISTORY_PREVIEW_COUNT = 3;
@@ -143,8 +144,8 @@ export function BasicInfoCard({
       title={t("cards.basic.title")}
       description={t("cards.basic.description")}
     >
-      <div className="pl-md">
-        <DetailList>
+      <CardRows>
+        <DetailList className={DETAIL_LIST_CLASS}>
           <DetailRow
             label={t("fields.displayName")}
             actions={
@@ -375,7 +376,7 @@ export function BasicInfoCard({
             ) : null}
           </div>
         </RowExpand>
-      </div>
+      </CardRows>
     </Section>
   );
 }

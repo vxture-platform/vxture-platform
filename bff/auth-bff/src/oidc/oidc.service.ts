@@ -32,6 +32,7 @@ import {
 } from "@vxture/service-iam";
 import { RedisService, type OidcLoginChallenge } from "../redis/redis.service";
 import { AuthnService } from "../authn/authn.service";
+import { SessionService } from "../authn/session.service";
 import { UserOnboardingService } from "../authn/user-onboarding.service";
 import { LoginAttemptRepository } from "../token/login-attempt.repository";
 import { TokenService } from "../token/token.service";
@@ -220,6 +221,7 @@ export class OidcService {
     @Inject(ActiveContextService)
     private readonly activeContext: ActiveContextService,
     @Inject(AuthnService) private readonly authn: AuthnService,
+    @Inject(SessionService) private readonly durableSession: SessionService,
     @Inject(UserOnboardingService)
     private readonly onboarding: UserOnboardingService,
     @Inject(LoginAttemptRepository)
@@ -406,6 +408,13 @@ export class OidcService {
       clientIds = [...new Set([...clientIds, ...sessionClients])];
       await this.redis.deleteOidcSession(sid);
       await this.token.revokeSession(sid);
+      try {
+        await this.durableSession.revoke(sid);
+      } catch (err) {
+        this.logger.warn(
+          `durable session revoke failed for ${sid}: ${String(err)}`,
+        );
+      }
       if (session) {
         await this.sendBackChannelLogouts(sid, session.sub, sessionClients);
       }
@@ -507,7 +516,13 @@ export class OidcService {
       return this.errorRedirect(req, "invalid_scope");
     }
 
-    const session = sid ? await this.redis.getOidcSession(sid) : null;
+    let session = sid ? await this.redis.getOidcSession(sid) : null;
+    // 已被远程下线(持久镜像 status ≠ active)的中央会话不再可用于静默 SSO。
+    if (session && sid && (await this.durableSession.isRevoked(sid))) {
+      await this.redis.deleteOidcSession(sid);
+      await this.token.revokeSession(sid);
+      session = null;
+    }
     const hasUsableSession = Boolean(session && session.realm === client.realm);
 
     if (!hasUsableSession) {
@@ -672,7 +687,10 @@ export class OidcService {
       ipAddress: input.clientIp,
       userAgent: input.userAgent,
     });
-    return this.finishTenantLogin(user.id, client, challenge, "password");
+    return this.finishTenantLogin(user.id, client, challenge, "password", {
+      ipAddress: input.clientIp,
+      userAgent: input.userAgent,
+    });
   }
 
   /** Interactive phone-code login (tenant realm only; login == registration for new phones). */
@@ -714,7 +732,10 @@ export class OidcService {
       ipAddress: input.clientIp,
       userAgent: input.userAgent,
     });
-    return this.finishTenantLogin(user.id, client, challenge, "phone");
+    return this.finishTenantLogin(user.id, client, challenge, "phone", {
+      ipAddress: input.clientIp,
+      userAgent: input.userAgent,
+    });
   }
 
   /**
@@ -759,7 +780,10 @@ export class OidcService {
       ipAddress: input.clientIp,
       userAgent: input.userAgent,
     });
-    return this.finishTenantLogin(user.id, client, challenge, "email");
+    return this.finishTenantLogin(user.id, client, challenge, "email", {
+      ipAddress: input.clientIp,
+      userAgent: input.userAgent,
+    });
   }
 
   /**
@@ -801,7 +825,10 @@ export class OidcService {
       ipAddress: options?.ipAddress,
       userAgent: options?.userAgent,
     });
-    return this.finishTenantLogin(userId, client, challenge, authMethod);
+    return this.finishTenantLogin(userId, client, challenge, authMethod, {
+      ipAddress: options?.ipAddress,
+      userAgent: options?.userAgent,
+    });
   }
 
   /**
@@ -821,6 +848,7 @@ export class OidcService {
 
     const session = await this.redis.getOidcSession(sid);
     if (!session || session.realm !== peeked.realm) return null;
+    if (await this.durableSession.isRevoked(sid)) return null;
 
     const client = await this.clients.findEnabledByClientId(peeked.clientId);
     if (!client) return null;
@@ -865,6 +893,7 @@ export class OidcService {
     client: OidcClientConfig,
     challenge: OidcLoginChallenge,
     authMethod: string,
+    meta?: { ipAddress?: string | undefined; userAgent?: string | undefined },
   ): Promise<OidcLoginCompletion> {
     let ctx = await this.activeContext.resolveActiveContext(
       userId,
@@ -900,6 +929,23 @@ export class OidcService {
     );
     if (activeOrg) {
       await this.redis.setOidcActiveOrg(sid, client.clientId, activeOrg);
+    }
+    // 持久镜像(session.auth_sessions,同 sid):console「活跃会话」按它列设备、
+    // 「下线」翻它的 status,刷新 / 静默 SSO 再回查。镜像失败不挡登录——Redis 才是主。
+    try {
+      await this.durableSession.create({
+        sid,
+        userId,
+        realm: "customer",
+        authMethod,
+        ip: meta?.ipAddress ?? null,
+        userAgent: meta?.userAgent ?? null,
+        absTtlSeconds: absTtl,
+      });
+    } catch (err) {
+      this.logger.warn(
+        `durable session mirror failed for ${sid}: ${String(err)}`,
+      );
     }
 
     const code = await this.issueAuthCode({
@@ -1884,6 +1930,13 @@ export class OidcService {
     }
     const session = await this.redis.getOidcSession(rotated.sessionId);
     if (!session) {
+      throw new BadRequestException("invalid_grant");
+    }
+    // console「下线此设备」只翻持久镜像的 status:刷新时回查,已吊销就把 Redis 会话
+    // 一并收掉——远程下线在下一次刷新生效。
+    if (await this.durableSession.isRevoked(rotated.sessionId)) {
+      await this.redis.deleteOidcSession(rotated.sessionId);
+      await this.token.revokeSession(rotated.sessionId);
       throw new BadRequestException("invalid_grant");
     }
     const activeOrg =
