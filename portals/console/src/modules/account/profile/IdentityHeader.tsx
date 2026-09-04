@@ -116,9 +116,15 @@ export function IdentityHeader({
           }
           meta={
             <span className="flex flex-wrap items-center gap-lg">
-              {/* 三个主体码统一带字母前缀展示(§11 v4):U- 用户 / T- 租户 / W- 工作空间 */}
-              <span className="font-mono" title={t("fields.userNo")}>
-                {formatPrincipalNoOr(userNo, "user", userNo)}
+              {/* 三个主体码统一带字母前缀展示(§11 v4):U- 用户 / T- 租户 / W- 工作空间。
+                  独立成条的事实要带字段名——旁边是「注册于 …」这类带名的事实,
+                  中间夹一个裸号读不出是什么(owner 2026-09-05)。前缀不因此省略:
+                  标签是给页面上的人看的,前缀是跟着号被复制进工单 / 搜索框的。 */}
+              <span className="flex items-center gap-xs">
+                <span>{t("fields.userNo")}</span>
+                <span className="font-mono">
+                  {formatPrincipalNoOr(userNo, "user", userNo)}
+                </span>
               </span>
               <span>{t("identity.registeredAt", { date: createdAt })}</span>
             </span>
