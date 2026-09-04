@@ -10,6 +10,9 @@
  * 两个维度分开(owner 2026-09-04):值列只表**绑定状态**(已绑定 / 未绑定),动作列表
  * **接入状态**——平台尚未接入的,动作列显示「对接中」、无按钮;已接入且未绑定的给
  * 「绑定」;已绑定的可解绑。哪家接入了是配置,不是代码(INTEGRATED_PROVIDERS)。
+ *
+ * 值列三块(徽标 / 绑定状态 / 说明)用 gap-lg 排开;已绑定的也保留「用 X 账号登录」
+ * 这句说明,不再露绑定的号——那串打码 id 对用户没有意义(owner 走查)。
  */
 
 import { useTranslations } from "next-intl";
@@ -17,10 +20,10 @@ import {
   Button,
   DetailList,
   DetailRow,
+  Icon,
   Section,
   StatusBadge,
 } from "@vxture/design-system";
-import { maskConnectedAccountId } from "./format";
 
 export type ThirdPartyProvider = "google" | "feishu" | "dingtalk" | "wechat";
 
@@ -66,7 +69,6 @@ export function ThirdPartyLoginCard({
   readonly formatDate: (iso: string | null) => string;
 }) {
   const t = useTranslations("profilePage");
-  const empty = t("common.empty");
 
   return (
     <Section
@@ -95,7 +97,8 @@ export function ThirdPartyLoginCard({
                       onClick={() => onUnbind(account)}
                       disabled={loading}
                     >
-                      {t("connectedAccounts.actions.unbind")}
+                      <Icon name="x" size="xs" fallback="placeholder" />
+                      <span>{t("connectedAccounts.actions.unbind")}</span>
                     </Button>
                   ) : integrated ? (
                     <Button
@@ -104,7 +107,8 @@ export function ThirdPartyLoginCard({
                       onClick={() => onBind(account)}
                       disabled={loading}
                     >
-                      {t("connectedAccounts.actions.bind")}
+                      <Icon name="link" size="xs" fallback="placeholder" />
+                      <span>{t("connectedAccounts.actions.bind")}</span>
                     </Button>
                   ) : (
                     <StatusBadge tone="neutral">
@@ -113,37 +117,33 @@ export function ThirdPartyLoginCard({
                   )
                 }
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={PROVIDER_LOGO_SRC[account.provider]}
-                  alt=""
-                  width={20}
-                  height={20}
-                  aria-hidden="true"
-                />
-                <StatusBadge tone={account.connected ? "success" : "neutral"}>
-                  {account.connected
-                    ? t("connectedAccounts.status.connected")
-                    : t("connectedAccounts.status.disconnected")}
-                </StatusBadge>
-                {account.connected ? (
-                  <>
-                    <span className="font-mono text-body-sm text-muted-foreground">
-                      {maskConnectedAccountId(account.accountId) ?? empty}
-                    </span>
-                    <span className="text-body-sm text-muted-foreground">
-                      {t("connectedAccounts.connectedOn", {
-                        date: formatDate(account.connectedAt),
-                      })}
-                    </span>
-                  </>
-                ) : (
+                <span className="flex flex-wrap items-center gap-lg">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={PROVIDER_LOGO_SRC[account.provider]}
+                    alt=""
+                    width={20}
+                    height={20}
+                    aria-hidden="true"
+                  />
+                  <StatusBadge tone={account.connected ? "success" : "neutral"}>
+                    {account.connected
+                      ? t("connectedAccounts.status.connected")
+                      : t("connectedAccounts.status.disconnected")}
+                  </StatusBadge>
                   <span className="text-body-sm text-muted-foreground">
                     {t(
                       `connectedAccounts.providers.${account.provider}.description`,
                     )}
                   </span>
-                )}
+                  {account.connected && account.connectedAt ? (
+                    <span className="text-body-sm text-muted-foreground">
+                      {t("connectedAccounts.connectedOn", {
+                        date: formatDate(account.connectedAt),
+                      })}
+                    </span>
+                  ) : null}
+                </span>
               </DetailRow>
             );
           })}

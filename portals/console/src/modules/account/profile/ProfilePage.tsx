@@ -181,30 +181,31 @@ export function ProfilePage() {
     () => searchParams.get("panel") === "sessions",
   );
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [tenantsOpen, setTenantsOpen] = useState(true);
+  const [tenantsOpen, setTenantsOpen] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
 
+  // 展开时才取一次。守卫用 ref 而不是 effect 的 cleanup 标记:setSessionsLoading(true)
+  // 本身会让 effect 依赖变化、cleanup 把标记翻成 false,请求回来时 finally 不再落地,
+  // 「加载中」就永远停在那里(owner 2026-09-04 走查抓到的)。
+  const sessionsRequested = useRef(false);
   useEffect(() => {
-    if (!sessionsOpen || sessionsLoaded || sessionsLoading) return;
-    let active = true;
+    if (!sessionsOpen || sessionsRequested.current) return;
+    sessionsRequested.current = true;
     setSessionsLoading(true);
     setSessionsFailed(false);
     fetchSessions()
       .then((rows) => {
-        if (!active) return;
         setSessions(rows);
         setSessionsLoaded(true);
       })
       .catch(() => {
-        if (active) setSessionsFailed(true);
+        setSessionsFailed(true);
+        sessionsRequested.current = false;
       })
       .finally(() => {
-        if (active) setSessionsLoading(false);
+        setSessionsLoading(false);
       });
-    return () => {
-      active = false;
-    };
-  }, [sessionsOpen, sessionsLoaded, sessionsLoading]);
+  }, [sessionsOpen]);
 
   async function handleRevoke(sid: string) {
     setRevoking(sid);

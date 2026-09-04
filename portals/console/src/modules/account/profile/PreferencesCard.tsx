@@ -32,7 +32,12 @@ export interface PreferencesDraft {
   fontSize: FontSizeChoice;
 }
 
-const CONTROL_CLASS = "w-full max-w-panel-sm";
+/**
+ * 五个控件同宽同高:宽度 panel-md(32rem,三段按钮组每段够手指点),高度全走
+ * h-control-md——NativeSelect 固定 md,按钮组因此也用 md 档而不是 sm,否则并排
+ * 五行高矮不齐(owner 2026-09-04 走查)。
+ */
+const CONTROL_CLASS = "w-full max-w-panel-md";
 
 export function PreferencesCard({
   draft,
@@ -91,7 +96,7 @@ export function PreferencesCard({
           </DetailRow>
           <DetailRow label={t("prefs.theme")}>
             <SegmentedControl<ThemeChoice>
-              size="sm"
+              size="md"
               fill
               className={CONTROL_CLASS}
               ariaLabel={t("prefs.theme")}
@@ -106,7 +111,7 @@ export function PreferencesCard({
           </DetailRow>
           <DetailRow label={t("prefs.density")}>
             <SegmentedControl<DensityChoice>
-              size="sm"
+              size="md"
               fill
               className={CONTROL_CLASS}
               ariaLabel={t("prefs.density")}
@@ -121,7 +126,7 @@ export function PreferencesCard({
           </DetailRow>
           <DetailRow label={t("prefs.fontSize")}>
             <SegmentedControl<FontSizeChoice>
-              size="sm"
+              size="md"
               fill
               className={CONTROL_CLASS}
               ariaLabel={t("prefs.fontSize")}

@@ -142,9 +142,3 @@ export function parseBrowser(userAgent: string | null): string {
   if (/Safari\//i.test(userAgent)) return "Safari";
   return "";
 }
-
-export function maskConnectedAccountId(value: string | null) {
-  if (!value) return null;
-  if (value.length <= 8) return value;
-  return `${value.slice(0, 4)}...${value.slice(-4)}`;
-}

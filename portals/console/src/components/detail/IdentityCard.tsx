@@ -32,6 +32,12 @@ export interface IdentityCardProps {
   /** 次要标识行，如用户编号 / 租户编号。 */
   readonly meta?: ReactNode;
   readonly actions?: ReactNode;
+  /**
+   * 自带描边卡框(默认)。放进一张已经是卡片的容器里时置 false,只出内容行——
+   * 账号信息页的身份卡下面还挂着所在租户展开区,整块才是一张卡,不能卡套卡
+   * (owner 2026-09-04 走查)。
+   */
+  readonly frame?: boolean;
 }
 
 export function IdentityCard({
@@ -43,9 +49,16 @@ export function IdentityCard({
   tags,
   meta,
   actions,
+  frame = true,
 }: IdentityCardProps) {
   return (
-    <div className="flex flex-wrap items-center gap-lg rounded-md border border-primary/10 bg-card/58 p-lg dark:border-primary/20">
+    <div
+      className={
+        frame
+          ? "flex flex-wrap items-center gap-lg rounded-md border border-primary/10 bg-card/58 p-lg dark:border-primary/20"
+          : "flex flex-wrap items-center gap-lg"
+      }
+    >
       {onAvatarClick ? (
         <Button
           variant="ghost"

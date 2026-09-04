@@ -6,9 +6,11 @@
  * @layer Application
  * @category Module
  *
- * 身份卡:头像 / 显示名 / 账号状态 / USR_ID / 注册时间(不写「控制台用户」)。
- * 展开区一次列出所在租户:名称 · 类型 · 角色标签(icon + 身份)· T-编号 · 加入时间 ·
- * 「租户信息」跳转;工作区行与租户名左对齐、字号小一档;不给切换(切换归顶栏面板)。
+ * 整块是**一张**卡(不卡套卡):上半是身份行(头像 / 显示名 / 账号状态 / USR_ID /
+ * 注册时间,不写「控制台用户」),右下角一枚「所在租户 · N 个」开关,默认收起;
+ * 展开区在同一张卡里列出所在租户,租户之间实线分隔:名称 · 类型 · 角色标签
+ * (icon + 身份)· T-编号 · 加入时间 · 「租户信息」跳转;工作区行与租户名左对齐、
+ * 字号小一档、多工作区同一行;不给切换(切换归顶栏面板)。
  */
 
 import { useTranslations } from "next-intl";
@@ -16,7 +18,6 @@ import {
   Button,
   Collapsible,
   CollapsibleContent,
-  CollapsibleTrigger,
   Icon,
   StatusBadge,
   UserAvatar,
@@ -86,9 +87,10 @@ export function IdentityHeader({
     KNOWN_ROLES.has(role) ? t(`workspaces.role.${role}`) : role;
 
   return (
-    <div className="flex flex-col gap-md rounded-lg border border-border bg-card">
-      <div className="px-lg pt-md">
+    <div className="flex flex-col rounded-xl bg-card shadow-raised ring-1 ring-foreground/10">
+      <div className="px-lg pt-lg">
         <IdentityCard
+          frame={false}
           avatar={
             <UserAvatar
               className="size-full"
@@ -133,115 +135,119 @@ export function IdentityHeader({
         />
       </div>
 
-      {/* 所在租户:一次全展开,不给切换 */}
+      {/* 所在租户开关:身份行右下角;默认收起 */}
+      <div className="flex justify-end px-md pb-xs pt-sm">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onTenantsOpenChange(!tenantsOpen)}
+          aria-expanded={tenantsOpen}
+        >
+          <Icon name="buildings" size="xs" fallback="placeholder" />
+          <span>{t("identity.tenants", { count: tenants.length })}</span>
+          <Icon
+            name={tenantsOpen ? "chevron-up" : "chevron-down"}
+            size="xs"
+            fallback="placeholder"
+          />
+        </Button>
+      </div>
+
+      {/* 所在租户:一次全展开,租户之间实线分隔,不给切换 */}
       <Collapsible open={tenantsOpen} onOpenChange={onTenantsOpenChange}>
-        <div className="border-t border-border px-lg py-sm">
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm">
-              <Icon
-                name={tenantsOpen ? "chevron-down" : "chevron-right"}
-                size="xs"
-                fallback="placeholder"
-              />
-              <span>{t("identity.tenants", { count: tenants.length })}</span>
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <ul className="flex flex-col pl-md pt-xs [&>*+*]:border-t [&>*+*]:border-dashed [&>*+*]:border-primary/10 dark:[&>*+*]:border-primary/20">
-              {tenants.map((tenant) => (
-                <li
-                  key={tenant.tenantId}
-                  className="flex items-start gap-md py-sm"
+        <CollapsibleContent>
+          <ul className="flex flex-col border-t border-border px-lg [&>*+*]:border-t [&>*+*]:border-border">
+            {tenants.map((tenant) => (
+              <li
+                key={tenant.tenantId}
+                className="flex items-start gap-md py-md"
+              >
+                <span
+                  className="mt-2xs inline-flex size-icon-lg shrink-0 items-center justify-center rounded-md bg-accent text-muted-foreground"
+                  aria-hidden="true"
                 >
-                  <span
-                    className="mt-2xs inline-flex size-icon-lg shrink-0 items-center justify-center rounded-md bg-accent text-muted-foreground"
-                    aria-hidden="true"
-                  >
-                    <Icon
-                      name={tenant.type === "personal" ? "user" : "buildings"}
-                      size="sm"
-                      fallback="placeholder"
-                    />
-                  </span>
-                  <span className="flex min-w-0 flex-1 flex-col gap-2xs">
-                    <span className="flex flex-wrap items-center gap-md">
-                      <span className="text-label-md text-foreground">
-                        {formatTenantDisplay(tenant.name, tenant.type)}
-                      </span>
-                      {tenant.isCurrent ? (
-                        <StatusBadge tone="brand">
-                          {t("workspaces.current")}
-                        </StatusBadge>
-                      ) : null}
-                      <StatusBadge tone="neutral">
-                        {tenant.type === "personal"
-                          ? t("identity.personalTenant")
-                          : t("identity.orgTenant")}
-                      </StatusBadge>
-                      <StatusBadge tone="info">
-                        <Icon
-                          name={ROLE_ICON[tenant.role] ?? "user"}
-                          size="xs"
-                          fallback="placeholder"
-                        />
-                        {roleLabel(tenant.role)}
-                      </StatusBadge>
-                      {tenant.tenantNo ? (
-                        <span className="font-mono text-body-sm text-muted-foreground">
-                          T-{tenant.tenantNo}
-                        </span>
-                      ) : null}
-                      <span className="text-body-sm text-muted-foreground">
-                        {t("workspaces.joinedOn", { date: tenant.joinedAt })}
-                      </span>
-                    </span>
-                    {/* 工作区:与租户名左对齐(徽标占左侧一列、盖住两行),字号小一档;
-                        多个工作区排在同一行,默认的在最前,其余用间距分隔不换行 */}
-                    <span className="flex flex-wrap items-center gap-md text-body-sm text-muted-foreground">
-                      <span>{t("identity.workspace")}</span>
-                      {(tenant.workspaces.length > 0
-                        ? tenant.workspaces
-                        : [
-                            {
-                              name: t("workspaces.defaultTag"),
-                              isDefault: true,
-                            },
-                          ]
-                      ).map((ws) => (
-                        <span
-                          key={ws.name}
-                          className="inline-flex items-center gap-xs text-foreground"
-                        >
-                          {ws.name}
-                          {ws.isDefault ? (
-                            <StatusBadge tone="neutral">
-                              {t("workspaces.defaultTag")}
-                            </StatusBadge>
-                          ) : null}
-                        </span>
-                      ))}
-                    </span>
-                  </span>
-                  <Button
-                    variant="ghost"
+                  <Icon
+                    name={tenant.type === "personal" ? "user" : "buildings"}
                     size="sm"
-                    onClick={() => onOpenTenant(tenant)}
-                  >
-                    <span>{t("identity.tenantInfo")}</span>
-                    <Icon name="arrow-right" size="xs" fallback="placeholder" />
-                  </Button>
-                </li>
-              ))}
-              {tenants.length === 0 ? (
-                <li className="py-sm text-body-sm text-muted-foreground">
-                  {loading
-                    ? t("common.loading")
-                    : t("sections.workspaces.empty")}
-                </li>
-              ) : null}
-            </ul>
-          </CollapsibleContent>
-        </div>
+                    fallback="placeholder"
+                  />
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col gap-2xs">
+                  <span className="flex flex-wrap items-center gap-md">
+                    <span className="text-label-md text-foreground">
+                      {formatTenantDisplay(tenant.name, tenant.type)}
+                    </span>
+                    {tenant.isCurrent ? (
+                      <StatusBadge tone="brand">
+                        {t("workspaces.current")}
+                      </StatusBadge>
+                    ) : null}
+                    <StatusBadge tone="neutral">
+                      {tenant.type === "personal"
+                        ? t("identity.personalTenant")
+                        : t("identity.orgTenant")}
+                    </StatusBadge>
+                    <StatusBadge tone="info">
+                      <Icon
+                        name={ROLE_ICON[tenant.role] ?? "user"}
+                        size="xs"
+                        fallback="placeholder"
+                      />
+                      {roleLabel(tenant.role)}
+                    </StatusBadge>
+                    {tenant.tenantNo ? (
+                      <span className="font-mono text-body-sm text-muted-foreground">
+                        T-{tenant.tenantNo}
+                      </span>
+                    ) : null}
+                    <span className="text-body-sm text-muted-foreground">
+                      {t("workspaces.joinedOn", { date: tenant.joinedAt })}
+                    </span>
+                  </span>
+                  {/* 工作区:与租户名左对齐(徽标占左侧一列、盖住两行),字号小一档;
+                      多个工作区排在同一行,默认的在最前,其余用间距分隔不换行 */}
+                  <span className="flex flex-wrap items-center gap-md text-body-sm text-muted-foreground">
+                    <span>{t("identity.workspace")}</span>
+                    {(tenant.workspaces.length > 0
+                      ? tenant.workspaces
+                      : [
+                          {
+                            name: t("workspaces.defaultTag"),
+                            isDefault: true,
+                          },
+                        ]
+                    ).map((ws) => (
+                      <span
+                        key={ws.name}
+                        className="inline-flex items-center gap-xs text-foreground"
+                      >
+                        {ws.name}
+                        {ws.isDefault ? (
+                          <StatusBadge tone="neutral">
+                            {t("workspaces.defaultTag")}
+                          </StatusBadge>
+                        ) : null}
+                      </span>
+                    ))}
+                  </span>
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onOpenTenant(tenant)}
+                >
+                  <span>{t("identity.tenantInfo")}</span>
+                  <Icon name="arrow-right" size="xs" fallback="placeholder" />
+                </Button>
+              </li>
+            ))}
+            {tenants.length === 0 ? (
+              <li className="py-md text-body-sm text-muted-foreground">
+                {loading ? t("common.loading") : t("sections.workspaces.empty")}
+              </li>
+            ) : null}
+          </ul>
+        </CollapsibleContent>
       </Collapsible>
     </div>
   );

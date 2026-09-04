@@ -936,8 +936,7 @@
       "verify": "Verify",
       "change": "Change",
       "confirm": "Confirm",
-      "modify": "Edit",
-      "changeUsername": "Change username"
+      "modify": "Edit"
     },
     "dialogs": {
       "profile": {
@@ -1137,9 +1136,11 @@
     "login": {
       "history": "Sign-in history",
       "historyEmpty": "No sign-in records yet.",
-      "historyWindow": "Sign-ins from the last 90 days.",
+      "historyWindow": "Sign-ins from the last 30 days.",
       "success": "Success",
-      "failed": "Failed"
+      "failed": "Failed",
+      "showMore": "{count} more",
+      "showLess": "Show less"
     },
     "prefs": {
       "theme": "Theme",
