@@ -44,12 +44,12 @@ import {
   type ConsoleAddonPack,
 } from "@/api/console-bff";
 import { useRouter } from "@/lib/i18n/navigation";
+import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { PageSection } from "@/layout/shell";
+import { LoadFailedBanner } from "@/components/load/LoadFailed";
 import { fmtDate, fmtTime } from "./hubModel";
-import { formatBytes } from "../QuotasPage";
+import { fmtCount, formatBytes } from "@/lib/format-metrics";
 import { useConfirmLabels } from "@/lib/destructive";
-
-const fmtCount = (v: number): string => v.toLocaleString("en-US");
 
 /** 包内容展示:存储字节格式化,credits 计数。 */
 const packAmount = (metricKey: string, amount: number): string =>
@@ -164,10 +164,13 @@ export function AddonPacksSection({
   const t = useTranslations("quotasPage.addons");
   const withLabels = useConfirmLabels();
   const router = useRouter();
+  const { session } = useConsoleSession();
 
   const [packs, setPacks] = useState<ConsoleAddonPack[]>([]);
   const [orders, setOrders] = useState<ConsoleAddonOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -180,13 +183,23 @@ export function AddonPacksSection({
     );
   }, []);
 
+  /* 随租户切换重取(批 3:此前只在挂载时读一次,切租户后订单表还是上一个租户的);
+   * 目录与订单是 strict 读(批 0b):失败画「读取失败 + 重试」,不能画成「没有加油包」。 */
   useEffect(() => {
+    let active = true;
     setLoading(true);
-    // 目录与订单是 strict 读(批 0b):失败要说出来,不能画成「没有加油包」。
+    setLoadFailed(false);
     reload()
-      .catch(() => setError(t("loadFailed")))
-      .finally(() => setLoading(false));
-  }, [reload, t]);
+      .catch(() => {
+        if (active) setLoadFailed(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [reload, session.tenant?.id, reloadKey]);
 
   const pendingOrderFor = (packCode: string): string | null =>
     orders.find(
@@ -355,6 +368,12 @@ export function AddonPacksSection({
       title={t("title")}
       description={t("description")}
     >
+      {loadFailed ? (
+        <LoadFailedBanner
+          onRetry={() => setReloadKey((k) => k + 1)}
+          retrying={loading}
+        />
+      ) : null}
       {error ? <Banner tone="danger" title={error} /> : null}
       {!canPurchase ? (
         <Banner tone="info" title={t("buyNoPermission")} />
@@ -375,7 +394,7 @@ export function AddonPacksSection({
             />
           ))}
         </div>
-      ) : loading ? null : (
+      ) : loading || loadFailed ? null : (
         <EmptyState title={t("packsEmpty")} />
       )}
 

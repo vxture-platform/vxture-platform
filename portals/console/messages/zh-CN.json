@@ -2661,7 +2661,7 @@
     },
     "trend": {
       "title": "用量趋势",
-      "description": "按周期查看 AI Credits 消耗;统计口径为纯看板数据,不作计费依据",
+      "description": "按周期查看 AI Credits 消耗;桶按 UTC 日切分,窗口内没有用量的周期记 0。统计口径为纯看板数据,不作计费依据",
       "windowLabel": "统计周期",
       "windowDay": "近 30 天",
       "windowWeek": "近 12 周",
@@ -2672,7 +2672,8 @@
       "colByProduct": "按产品",
       "colDelta": "环比",
       "empty": "所选周期内暂无用量数据",
-      "windowHour": "按小时(24h)"
+      "windowHour": "按小时(24h)",
+      "descriptionHour": "近 24 小时逐时消耗;横轴已换算为你的本地时刻。统计口径为纯看板数据,不作计费依据"
     },
     "share": {
       "title": "按产品分布",
@@ -2692,10 +2693,11 @@
       "colUser": "用户",
       "colRequest": "请求号",
       "unattributed": "未归集",
-      "total": "近 90 天共 {count} 条",
+      "total": "近 {days} 天共 {count} 条",
       "prevPage": "上一页",
       "nextPage": "下一页",
-      "empty": "暂无调用记录"
+      "empty": "暂无调用记录",
+      "truncated": "只显示最近 {limit} 条(近 {days} 天),更早的调用不在列表里"
     },
     "members": {
       "title": "按成员统计",

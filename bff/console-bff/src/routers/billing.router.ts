@@ -92,7 +92,13 @@ export interface ConsoleBillView {
   createdAt: string;
 }
 
-const OPEN_STATUSES = new Set(["unpaid", "paying", "partial"]);
+/** 账单分页视图(console 批 3:服务端分页)。 */
+export interface ConsoleBillPage {
+  items: ConsoleBillView[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
 
 function toIso(d: Date | null | undefined): string | null {
   return d ? new Date(d).toISOString() : null;
@@ -398,29 +404,45 @@ export class BillingRouter {
     return result.items;
   }
 
-  // ── GET /api/billing/bills（账单管理页，product_331）──────────────────────
+  // ── GET /api/billing/bills?page=1&pageSize=10（账单管理页，product_331）────
 
+  /**
+   * 账单分页(console 批 3):此前一次拉 100 条在页面里翻,超过 100 条的租户
+   * 看不到更早的账单也没人告诉他。改成服务端分页,total 由库数。
+   */
   @Get("bills")
   async getBills(
     @Req() req: Request & RequestContext,
-    @Query("limit") limit?: string,
-  ): Promise<ConsoleBillView[]> {
+    @Query("page") pageRaw?: string,
+    @Query("pageSize") pageSizeRaw?: string,
+  ): Promise<ConsoleBillPage> {
     if (!req.tenant) {
       throw new UnauthorizedException("租户上下文缺失");
     }
-    const pageSize = Math.min(Number(limit) || 50, 100);
+    const page = parsePositiveInt(pageRaw, 1, 100_000);
+    const pageSize = parsePositiveInt(
+      pageSizeRaw,
+      BILLS_DEFAULT_PAGE_SIZE,
+      100,
+    );
     const result = await this.billingService.listInvoices({
       tenantId: req.tenant.id,
+      page,
       pageSize,
     });
-    return result.items.map(mapBill);
+    return {
+      items: result.items.map(mapBill),
+      total: result.total,
+      page,
+      pageSize,
+    };
   }
 
   // ── GET /api/billing/overview ──────────────────────────────────────────────
 
   /**
-   * 账单概览：按真实 bill_status 值域聚合 + 累计实收。
-   * 量级 = 租户自身账单数（假数据阶段远小于 200），全取聚合即可。
+   * 账单概览:库内按真实 bill_status 值域聚合 + 累计实收 + 本月实付
+   * (console 批 3:取代「拉 200 条到内存数」,金额不经浮点)。
    */
   @Get("overview")
   async getOverview(
@@ -429,37 +451,29 @@ export class BillingRouter {
     if (!req.tenant) {
       throw new UnauthorizedException("租户上下文缺失");
     }
-
-    const result = await this.billingService.listInvoices({
-      tenantId: req.tenant.id,
-      pageSize: 200,
-    });
-
-    const items = result.items;
-    // 金额走分账避免浮点渐进误差（与 promotion 的 cents 口径一致）。
-    const paidCents = items.reduce(
-      (sum, i) =>
-        sum + Math.round(Number.parseFloat(i.paidAmount || "0") * 100),
-      0,
-    );
-    // 本月实付：与 admin 租户「本月收入」同一口径（库会话时区的自然月，毛额不冲退款）。
-    const month = await this.pool.query<{ paid: string }>(
-      `select coalesce(sum(p.paid_amount), 0)::numeric(12,2)::text as paid
-         from billing.payments p
-        where p.tenant_id = $1 and p.pay_status = 'paid'
-          and p.paid_at >= date_trunc('month', now())
-          and p.paid_at <  date_trunc('month', now()) + interval '1 month'`,
-      [req.tenant.id],
+    const overview = await this.billingService.getTenantBillingOverview(
+      req.tenant.id,
     );
     return {
-      total: items.length,
-      paid: items.filter((i) => i.billStatus === "paid").length,
-      unpaid: items.filter((i) => OPEN_STATUSES.has(i.billStatus)).length,
-      overdue: items.filter((i) => i.billStatus === "overdue").length,
-      cancelled: items.filter((i) => i.billStatus === "cancelled").length,
-      paidTotal: (paidCents / 100).toFixed(2),
-      paidThisMonth: month.rows[0]?.paid ?? "0.00",
-      currency: items[0]?.currency ?? "CNY",
+      total: overview.total,
+      paid: overview.paid,
+      unpaid: overview.unpaid,
+      overdue: overview.overdue,
+      cancelled: overview.cancelled,
+      paidTotal: overview.paidTotal,
+      paidThisMonth: overview.paidThisMonth,
+      currency: overview.currency ?? "CNY",
     };
   }
+}
+
+const BILLS_DEFAULT_PAGE_SIZE = 10;
+
+function parsePositiveInt(
+  raw: string | undefined,
+  fallback: number,
+  max: number,
+): number {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 ? Math.min(n, max) : fallback;
 }

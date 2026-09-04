@@ -1366,9 +1366,20 @@ export async function fetchBillingSummary(): Promise<ConsoleBillingSummary> {
   );
 }
 
-export async function fetchBills(limit = 100): Promise<ConsoleBill[]> {
-  return readJsonStrict<ConsoleBill[]>(
-    withTenant(`/api/billing/bills?limit=${limit}`),
+/** 账单分页(批 3:服务端分页,total 由库数;此前一次拉 100 条页面里翻)。 */
+export interface ConsoleBillPage {
+  items: ConsoleBill[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export async function fetchBills(
+  page = 1,
+  pageSize = 10,
+): Promise<ConsoleBillPage> {
+  return readJsonStrict<ConsoleBillPage>(
+    withTenant(`/api/billing/bills?page=${page}&pageSize=${pageSize}`),
   );
 }
 
@@ -2076,6 +2087,10 @@ export async function fetchQuotaOverview(): Promise<ConsoleQuotaOverview> {
 // ============================================================================
 
 export interface ConsoleUsageTrendBucket {
+  /**
+   * UTC 桶键:hour `YYYY-MM-DD HH:00` / day、week(ISO 周一)`YYYY-MM-DD` /
+   * month `YYYYMM` / year `YYYY`。窗口内每个周期都有一桶(无数据补零)。
+   */
   period: string;
   total: number;
   byProduct: { productCode: string; productName: string; total: number }[];
@@ -2116,8 +2131,16 @@ export async function fetchUsageTrend(
   );
 }
 
-export async function fetchUsageEvents(): Promise<ConsoleUsageEvent[]> {
-  return readJsonStrict<ConsoleUsageEvent[]>("/api/usage/events");
+/** 调用记录 + 硬顶说明(批 3):满额即可能被截断,页面据此提示而不是装作全量。 */
+export interface ConsoleUsageEvents {
+  items: ConsoleUsageEvent[];
+  days: number;
+  limit: number;
+  truncated: boolean;
+}
+
+export async function fetchUsageEvents(): Promise<ConsoleUsageEvents> {
+  return readJsonStrict<ConsoleUsageEvents>("/api/usage/events");
 }
 
 export async function fetchUsageMembers(

@@ -97,7 +97,9 @@ export function BillingPage() {
   } | null>(null);
   const [receipts, setReceipts] = useState<ConsoleInvoiceReceipt[]>([]);
   const [addresses, setAddresses] = useState<ConsoleBillingAddress[]>([]);
+  const [billsTotal, setBillsTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [billsLoading, setBillsLoading] = useState(true);
   /* 读失败显影(批 0b):四路读全是 strict,任一失败置 loadFailed——指标画「—」、
    * 账单表画「读取失败」,不再把回落的 null / [] 画成「0 张待付、¥0 累计实收」。 */
   const [loadFailed, setLoadFailed] = useState(false);
@@ -118,22 +120,16 @@ export function BillingPage() {
     let active = true;
     setLoading(true);
     setLoadFailed(false);
-    Promise.all([
-      fetchBillingSummary(),
-      fetchBills(),
-      fetchCredits(),
-      reloadInvoicing(),
-    ])
-      .then(([sum, rows, creditRecord]) => {
+    setPage(1);
+    Promise.all([fetchBillingSummary(), fetchCredits(), reloadInvoicing()])
+      .then(([sum, creditRecord]) => {
         if (!active) return;
         setSummary(sum);
-        setBills(rows);
         setCredits(creditRecord);
       })
       .catch(() => {
         if (!active) return;
         setSummary(null);
-        setBills([]);
         setCredits(null);
         setLoadFailed(true);
       })
@@ -144,6 +140,31 @@ export function BillingPage() {
       active = false;
     };
   }, [session.tenant?.id, reloadInvoicing, reloadKey]);
+
+  /* 账单表服务端分页(批 3):翻页只取那一页,total 由库数——此前一次拉 100 条在
+   * 页面里翻,第 101 张账单起看不到也没人说。 */
+  useEffect(() => {
+    let active = true;
+    setBillsLoading(true);
+    fetchBills(page, BILLS_PAGE_SIZE)
+      .then((result) => {
+        if (!active) return;
+        setBills(result.items);
+        setBillsTotal(result.total);
+      })
+      .catch(() => {
+        if (!active) return;
+        setBills([]);
+        setBillsTotal(0);
+        setLoadFailed(true);
+      })
+      .finally(() => {
+        if (active) setBillsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [session.tenant?.id, reloadKey, page]);
 
   // 账单 → 活跃开票申请(rejected/voided 之外均占位,防重复申请)
   const receiptByBill = useMemo(() => {
@@ -201,12 +222,8 @@ export function BillingPage() {
     ];
   }, [summary, credits, t, money]);
 
-  // ── 账单表 ────────────────────────────────────────────────────────────────
-  const pageCount = Math.max(1, Math.ceil(bills.length / BILLS_PAGE_SIZE));
-  const pagedBills = useMemo(
-    () => bills.slice((page - 1) * BILLS_PAGE_SIZE, page * BILLS_PAGE_SIZE),
-    [bills, page],
-  );
+  // ── 账单表(服务端分页) ───────────────────────────────────────────────────
+  const pageCount = Math.max(1, Math.ceil(billsTotal / BILLS_PAGE_SIZE));
 
   const billColumns: DataTableColumn<ConsoleBill>[] = [
     {
@@ -382,9 +399,9 @@ export function BillingPage() {
       >
         <DataTable<ConsoleBill>
           columns={billColumns}
-          rows={pagedBills}
+          rows={bills}
           rowKey={(b) => b.id}
-          loading={loading}
+          loading={loading || billsLoading}
           indexStart={(page - 1) * BILLS_PAGE_SIZE + 1}
           rowActions={(b) => (
             <ActionMenu label={t("invoicing.rowMenu")} items={billActions(b)} />
@@ -399,14 +416,14 @@ export function BillingPage() {
           footer={
             <div className="flex w-full items-center justify-between gap-md text-body-sm text-muted-foreground">
               <span className="tabular-nums">
-                {loadFailed ? "—" : t("table.total", { count: bills.length })}
+                {loadFailed ? "—" : t("table.total", { count: billsTotal })}
               </span>
               {pageCount > 1 ? (
                 <span className="flex items-center gap-xs">
                   <Button
                     variant="ghost"
                     size="sm"
-                    disabled={page <= 1}
+                    disabled={page <= 1 || billsLoading}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
                     {t("table.prevPage")}
@@ -417,7 +434,7 @@ export function BillingPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    disabled={page >= pageCount}
+                    disabled={page >= pageCount || billsLoading}
                     onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
                   >
                     {t("table.nextPage")}

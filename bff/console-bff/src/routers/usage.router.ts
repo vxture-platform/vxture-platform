@@ -6,15 +6,18 @@
  *
  * 用量分析页(/usage,owner 2026-08-20 用量配额线)的读侧:
  *   GET /api/usage/trend   — 周期趋势(usage_summary_* 五档降采样,纯统计/
- *                            看板,永不作计费依据):granularity=day|week|
- *                            month|year × span,含按产品拆分;
+ *                            看板,永不作计费依据):granularity=hour|day|week|
+ *                            month|year × span,含按产品拆分;窗口内每个周期
+ *                            都有一桶(无数据补零),末桶 = 当前周期,全程 UTC;
  *   GET /api/usage/events  — 任务级调用记录(usage_events,每次 consume 一行,
- *                            含终端用户归因;NULL = 未归集用户容错桶);
+ *                            含终端用户归因;NULL = 未归集用户容错桶),带硬顶
+ *                            与是否截断;
  *   GET /api/usage/members — 商业版按成员统计(近 N 天 usage_events 按
  *                            end_user_id 聚合,未归集单列一桶)。
  *
- * 只读直查(console-bff 约定);全页无 UUID 出口——事件行以 request_id/时间
- * 定位,成员以显示名呈现。
+ * SQL 归 @vxture/service-subscription 的 MeteringReadService(console 批 3
+ * 下沉);这里只做参数收口与视图映射。全页无 UUID 出口——事件行以 request_id/
+ * 时间定位,成员以显示名呈现。
  */
 
 import {
@@ -27,19 +30,22 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request } from "express";
-import type { Pool } from "pg";
+import {
+  MeteringReadService,
+  type UsageGranularity,
+} from "@vxture/service-subscription";
 import type { RequestContext } from "../types/console.types";
 import { RequireCapability } from "../auth/capability";
-
-// Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
-const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
 
 // ============================================================================
 // View types (mirrored by portals/console/src/api/console-bff.ts)
 // ============================================================================
 
 export interface UsageTrendBucket {
-  /** day: YYYY-MM-DD / week: YYYY-MM-DD(ISO 周一) / month: YYYYMM / year: YYYY */
+  /**
+   * UTC 桶键:hour `YYYY-MM-DD HH:00` / day `YYYY-MM-DD` / week `YYYY-MM-DD`
+   * (ISO 周一)/ month `YYYYMM` / year `YYYY`
+   */
   period: string;
   total: number;
   byProduct: { productCode: string; productName: string; total: number }[];
@@ -63,6 +69,14 @@ export interface UsageEventView {
   requestId: string | null;
 }
 
+/** 调用记录 + 硬顶说明:满额即可能被截断,页面据此提示。 */
+export interface UsageEventsView {
+  items: UsageEventView[];
+  days: number;
+  limit: number;
+  truncated: boolean;
+}
+
 export interface UsageMemberView {
   /** null = 未归集桶 */
   userName: string | null;
@@ -71,16 +85,41 @@ export interface UsageMemberView {
   lastAt: string;
 }
 
-const GRANULARITIES = new Set(["hour", "day", "week", "month", "year"]);
+const GRANULARITIES = new Set<UsageGranularity>([
+  "hour",
+  "day",
+  "week",
+  "month",
+  "year",
+]);
 
 /** 每档默认/最大跨度(桶数)。hour = 近 24 小时逐时(柱状图,2026-08-21)。 */
-const SPAN_LIMITS: Record<string, { def: number; max: number }> = {
+const SPAN_LIMITS: Record<UsageGranularity, { def: number; max: number }> = {
   hour: { def: 24, max: 48 },
   day: { def: 30, max: 90 },
   week: { def: 12, max: 26 },
   month: { def: 12, max: 24 },
   year: { def: 5, max: 10 },
 };
+
+const EVENTS_DAYS = 90;
+const EVENTS_DEFAULT_LIMIT = 200;
+const EVENTS_MAX_LIMIT = 500;
+
+const METRIC_RE = /^[a-z][a-z0-9_.\-]{0,63}$/;
+
+function parseMetric(raw: string | undefined): string {
+  return METRIC_RE.test(raw ?? "") ? raw! : "ai.credit";
+}
+
+function parsePositiveInt(
+  raw: string | undefined,
+  fallback: number,
+  max: number,
+): number {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 ? Math.min(n, max) : fallback;
+}
 
 // ============================================================================
 // UsageRouter
@@ -89,7 +128,10 @@ const SPAN_LIMITS: Record<string, { def: number; max: number }> = {
 @RequireCapability("tenant.quota.read")
 @Controller("api/usage")
 export class UsageRouter {
-  constructor(@Inject(COMMERCE_PG_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(MeteringReadService)
+    private readonly metering: MeteringReadService,
+  ) {}
 
   // --------------------------------------------------------------------------
   // GET /api/usage/trend?metric=ai.credit&granularity=day&span=30
@@ -105,77 +147,23 @@ export class UsageRouter {
     if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
     const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
 
-    const metric = /^[a-z][a-z0-9_.\-]{0,63}$/.test(metricRaw ?? "")
-      ? metricRaw!
-      : "ai.credit";
-    const granularity = GRANULARITIES.has(granularityRaw ?? "")
-      ? granularityRaw!
+    const granularity: UsageGranularity = GRANULARITIES.has(
+      granularityRaw as UsageGranularity,
+    )
+      ? (granularityRaw as UsageGranularity)
       : "day";
-    const limits = SPAN_LIMITS[granularity]!;
-    const spanNum = Number(spanRaw);
-    const span =
-      Number.isInteger(spanNum) && spanNum >= 1
-        ? Math.min(spanNum, limits.max)
-        : limits.def;
-
-    // 每档一张表、一种 period 列;period 统一 text 化返回,窗口按档推算。
-    const table = {
-      hour: "usage_summary_hours",
-      day: "usage_summary_days",
-      week: "usage_summary_weeks",
-      month: "usage_summary_months",
-      year: "usage_summary_years",
-    }[granularity]!;
-    const periodExpr = {
-      // hour 带全日期保证排序正确;展示端截取 HH:00
-      hour: "to_char(s.period_hour at time zone 'UTC', 'YYYY-MM-DD HH24:00')",
-      day: "to_char(s.period_day, 'YYYY-MM-DD')",
-      week: "to_char(s.period_week, 'YYYY-MM-DD')",
-      month: "s.period_month",
-      year: "s.period_year",
-    }[granularity]!;
-    const windowPred = {
-      hour: `s.period_hour >= date_trunc('hour', now()) - make_interval(hours => $3)`,
-      day: `s.period_day >= (now() at time zone 'UTC')::date - make_interval(days => $3)`,
-      week: `s.period_week >= date_trunc('week', (now() at time zone 'UTC')::date)::date - make_interval(weeks => $3)`,
-      month: `s.period_month >= to_char((now() at time zone 'UTC')::date - make_interval(months => $3), 'YYYYMM')`,
-      year: `s.period_year >= to_char((now() at time zone 'UTC')::date - make_interval(years => $3), 'YYYY')`,
-    }[granularity]!;
-
-    const res = await this.pool.query<{
-      period: string;
-      product_code: string;
-      product_name: string;
-      total: string;
-    }>(
-      `select ${periodExpr} as period, prod.product_code, prod.product_name,
-              sum(s.total_amount)::text as total
-         from metering.${table} s
-         join product.products prod on prod.id = s.product_id
-        where s.workspace_id = $1
-          and s.metric_key = $2
-          and ${windowPred}
-        group by 1, 2, 3
-        order by 1 asc, 2 asc`,
-      [workspaceId, metric, span],
-    );
-
-    const byPeriod = new Map<string, UsageTrendBucket>();
-    for (const r of res.rows) {
-      let bucket = byPeriod.get(r.period);
-      if (!bucket) {
-        bucket = { period: r.period, total: 0, byProduct: [] };
-        byPeriod.set(r.period, bucket);
-      }
-      const total = Number(r.total);
-      bucket.total += total;
-      bucket.byProduct.push({
-        productCode: r.product_code,
-        productName: r.product_name,
-        total,
-      });
-    }
-    return { metric, granularity, buckets: [...byPeriod.values()] };
+    const limits = SPAN_LIMITS[granularity];
+    const result = await this.metering.getUsageTrend({
+      workspaceId,
+      metric: parseMetric(metricRaw),
+      granularity,
+      span: parsePositiveInt(spanRaw, limits.def, limits.max),
+    });
+    return {
+      metric: result.metric,
+      granularity: result.granularity,
+      buckets: result.buckets,
+    };
   }
 
   // --------------------------------------------------------------------------
@@ -186,49 +174,28 @@ export class UsageRouter {
   async getEvents(
     @Req() req: Request & RequestContext,
     @Query("limit") limitRaw?: string,
-  ): Promise<UsageEventView[]> {
+  ): Promise<UsageEventsView> {
     if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
     const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
-    const limitNum = Number(limitRaw);
-    const limit =
-      Number.isInteger(limitNum) && limitNum >= 1
-        ? Math.min(limitNum, 500)
-        : 200;
-
-    // created_at 窗口谓词裁剪月分区;end_user_id 裸 UUID → account 解引用
-    // (边界#2 的读侧解引用,与订单页 subscriber_name 同法)。
-    const res = await this.pool.query<{
-      created_at: Date;
-      product_code: string;
-      product_name: string;
-      metric_key: string;
-      total_amount: string;
-      user_name: string | null;
-      request_id: string | null;
-    }>(
-      `select e.created_at, prod.product_code, prod.product_name,
-              e.metric_key, e.total_amount::text as total_amount,
-              coalesce(up.display_name, u.account) as user_name,
-              e.request_id
-         from metering.usage_events e
-         join product.products prod on prod.id = e.product_id
-         left join account.users u on u.id = e.end_user_id
-         left join account.user_profiles up on up.user_id = e.end_user_id
-        where e.workspace_id = $1
-          and e.created_at >= now() - interval '90 days'
-        order by e.created_at desc
-        limit $2`,
-      [workspaceId, limit],
-    );
-    return res.rows.map((r) => ({
-      at: r.created_at.toISOString(),
-      productCode: r.product_code,
-      productName: r.product_name,
-      metric: r.metric_key,
-      amount: Number(r.total_amount),
-      userName: r.user_name,
-      requestId: r.request_id,
-    }));
+    const result = await this.metering.listUsageEvents({
+      workspaceId,
+      days: EVENTS_DAYS,
+      limit: parsePositiveInt(limitRaw, EVENTS_DEFAULT_LIMIT, EVENTS_MAX_LIMIT),
+    });
+    return {
+      items: result.items.map((r) => ({
+        at: r.createdAt.toISOString(),
+        productCode: r.productCode,
+        productName: r.productName,
+        metric: r.metricKey,
+        amount: r.totalAmount,
+        userName: r.userName,
+        requestId: r.requestId,
+      })),
+      days: result.days,
+      limit: result.limit,
+      truncated: result.truncated,
+    };
   }
 
   // --------------------------------------------------------------------------
@@ -243,50 +210,21 @@ export class UsageRouter {
   ): Promise<UsageMemberView[]> {
     if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
     const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
-    const daysNum = Number(daysRaw);
-    const days =
-      Number.isInteger(daysNum) && daysNum >= 1 ? Math.min(daysNum, 365) : 30;
-    const metric = /^[a-z][a-z0-9_.\-]{0,63}$/.test(metricRaw ?? "")
-      ? metricRaw!
-      : "ai.credit";
-
-    const res = await this.pool.query<{
-      user_name: string | null;
-      total: string;
-      event_count: string;
-      last_at: Date;
-    }>(
-      `select case when e.end_user_id is null then null
-                   else coalesce(up.display_name, u.account) end as user_name,
-              sum(e.total_amount)::text as total,
-              count(*)::text as event_count,
-              max(e.created_at) as last_at
-         from metering.usage_events e
-         left join account.users u on u.id = e.end_user_id
-         left join account.user_profiles up on up.user_id = e.end_user_id
-        where e.workspace_id = $1
-          and e.metric_key = $2
-          and e.created_at >= now() - make_interval(days => $3)
-        group by e.end_user_id, 1
-        order by sum(e.total_amount) desc`,
-      [workspaceId, metric, days],
-    );
-    return res.rows.map((r) => ({
-      userName: r.user_name,
-      total: Number(r.total),
-      eventCount: Number(r.event_count),
-      lastAt: r.last_at.toISOString(),
+    const rows = await this.metering.listUsageByMember({
+      workspaceId,
+      metric: parseMetric(metricRaw),
+      days: parsePositiveInt(daysRaw, 30, 365),
+    });
+    return rows.map((r) => ({
+      userName: r.userName,
+      total: r.total,
+      eventCount: r.eventCount,
+      lastAt: r.lastAt.toISOString(),
     }));
   }
 
   private async resolveDefaultWorkspace(tenantId: string): Promise<string> {
-    const res = await this.pool.query<{ id: string }>(
-      `select id from tenancy.workspaces
-        where tenant_id = $1 and is_default and deleted_at is null
-        limit 1`,
-      [tenantId],
-    );
-    const id = res.rows[0]?.id;
+    const id = await this.metering.findDefaultWorkspaceId(tenantId);
     if (!id) throw new BadRequestException("租户缺少默认工作空间");
     return id;
   }
