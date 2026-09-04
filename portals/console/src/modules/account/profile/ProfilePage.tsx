@@ -687,6 +687,9 @@ export function ProfilePage() {
         locale={locale}
       />
 
+      {/* 个人偏好排在基本信息之后、安全设置之前(owner 2026-09-04 二次走查) */}
+      <PreferencesCard draft={prefs} onChange={changePrefs} loading={loading} />
+
       <SecurityCard
         loading={loading}
         hasPassword={profile?.hasPassword ?? false}
@@ -724,8 +727,6 @@ export function ProfilePage() {
         }}
         formatDate={(iso) => formatProfileDay(iso, locale, empty)}
       />
-
-      <PreferencesCard draft={prefs} onChange={changePrefs} loading={loading} />
 
       <DangerZoneCard
         retentionDays={DELETION_RETENTION_DAYS}

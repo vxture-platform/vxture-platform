@@ -6,10 +6,10 @@
  * @layer Application
  * @category Module
  *
- * 入口按钮不是 destructive 档:它只打开两步流程的第一屏(资格清单 + 知悉确认),
- * 落锤在对话框的提交按钮(`DialogForm danger`)。末行「删除条件」说明与面头**标题
- * 文字**左对齐——照 SectionHeader 的骨架留一个 icon 宽的占位,而不是顶到卡片边
- * (owner 2026-09-04)。
+ * 整张卡红色警示(描边 + 底色 + 图标 / 标题着色),不只在文字上;「删除条件」作为
+ * 语气标签一排放在标题下、前缀红色加粗(owner 2026-09-04 二次走查)。入口按钮不是
+ * destructive 档:它只打开两步流程的第一屏(资格清单 + 知悉确认),落锤在对话框的
+ * 提交按钮(`DialogForm danger`)。
  */
 
 import { useTranslations } from "next-intl";
@@ -19,7 +19,24 @@ import {
   DetailRow,
   Icon,
   Section,
+  StatusBadge,
 } from "@vxture/design-system";
+import { CardRows, DETAIL_LIST_CLASS } from "./CardRows";
+
+const CONDITION_TAGS = [
+  "orgOwner",
+  "unpaidBills",
+  "paidBalance",
+  "inProgress",
+  "paidOrder",
+] as const;
+
+/**
+ * 卡面红色警示:描边 + 淡红底;面头的 icon 与 h2 是 SectionHeader 的固定结构,
+ * 这里用后代选择器把它们的颜色一起翻红(Section 没有 tone=danger 一档)。
+ */
+const DANGER_SECTION_CLASS =
+  "ring-destructive-border/60 bg-destructive-muted/30 [&>div:first-child>span:first-child]:text-destructive-text [&_h2]:text-destructive-text";
 
 export function DangerZoneCard({
   retentionDays,
@@ -37,17 +54,30 @@ export function DangerZoneCard({
       tone="raised"
       level={2}
       icon="warning"
+      className={DANGER_SECTION_CLASS}
       title={t("cards.danger.title")}
-      description={t("cards.danger.description")}
+      description={
+        <span className="flex flex-wrap items-center gap-sm">
+          <strong className="font-semibold text-destructive-text">
+            {t("deletion.conditionsLabel")}
+          </strong>
+          {CONDITION_TAGS.map((tag) => (
+            <StatusBadge key={tag} tone="danger" icon={false}>
+              {t(`deletion.conditionTags.${tag}`)}
+            </StatusBadge>
+          ))}
+        </span>
+      }
     >
-      <div className="pl-md">
-        <DetailList>
+      <CardRows>
+        <DetailList className={DETAIL_LIST_CLASS}>
           <DetailRow
             label={t("deletion.label")}
             actions={
               <Button
                 variant="outline"
                 size="sm"
+                className="border-destructive-border text-destructive-text"
                 onClick={onDelete}
                 disabled={disabled}
               >
@@ -61,18 +91,7 @@ export function DangerZoneCard({
             </span>
           </DetailRow>
         </DetailList>
-      </div>
-
-      {/* 删除条件:与面头标题文字对齐(icon lg 宽 + gap-lg 的占位) */}
-      <div className="flex gap-lg">
-        <span aria-hidden="true" className="w-icon-lg shrink-0" />
-        <p className="text-body-sm text-muted-foreground">
-          <span className="text-foreground">
-            {t("deletion.conditionsLabel")}
-          </span>
-          {t("deletion.conditions")}
-        </p>
-      </div>
+      </CardRows>
     </Section>
   );
 }

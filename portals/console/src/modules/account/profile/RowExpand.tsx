@@ -14,6 +14,7 @@
 
 import type { ReactNode } from "react";
 import { Collapsible, CollapsibleContent } from "@vxture/design-system";
+import { ROW_LABEL_WIDTH_CLASS } from "./CardRows";
 
 export function RowExpand({
   open,
@@ -30,7 +31,7 @@ export function RowExpand({
         <div className="flex flex-col pb-sm sm:flex-row sm:gap-lg">
           <span
             aria-hidden="true"
-            className="hidden sm:block sm:w-media-3xl sm:shrink-0"
+            className={`hidden sm:block ${ROW_LABEL_WIDTH_CLASS} sm:shrink-0`}
           />
           <div className="min-w-0 flex-1 rounded-md border border-border bg-muted/30 px-md py-xs">
             {children}

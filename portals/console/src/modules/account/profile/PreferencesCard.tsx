@@ -19,6 +19,7 @@ import {
   SegmentedControl,
 } from "@vxture/design-system";
 import { TIMEZONE_OPTIONS, formatTimezone } from "./format";
+import { CardRows, DETAIL_LIST_CLASS } from "./CardRows";
 
 export type ThemeChoice = "system" | "light" | "dark";
 export type DensityChoice = "compact" | "default" | "comfortable";
@@ -33,11 +34,12 @@ export interface PreferencesDraft {
 }
 
 /**
- * 五个控件同宽同高:宽度 panel-md(32rem,三段按钮组每段够手指点),高度全走
- * h-control-md——NativeSelect 固定 md,按钮组因此也用 md 档而不是 sm,否则并排
- * 五行高矮不齐(owner 2026-09-04 走查)。
+ * 五个控件同宽同高:宽度 media-3xl(12rem ≈ 200px,owner 2026-09-04 二次走查定),
+ * 高度全走 h-control-md——NativeSelect 固定 md,按钮组因此也用 md 档而不是 sm。
+ * 按钮组去掉槽内边距(p-0):分段上下填满外框、但不越过外框描边。
  */
-const CONTROL_CLASS = "w-full max-w-panel-md";
+const CONTROL_CLASS = "w-full max-w-media-3xl";
+const SEGMENTED_CLASS = `${CONTROL_CLASS} p-0`;
 
 export function PreferencesCard({
   draft,
@@ -59,8 +61,8 @@ export function PreferencesCard({
       title={t("cards.prefs.title")}
       description={t("cards.prefs.description")}
     >
-      <div className="pl-md">
-        <DetailList>
+      <CardRows>
+        <DetailList className={DETAIL_LIST_CLASS}>
           <DetailRow label={t("fields.language")}>
             <NativeSelect
               wrapperClassName={CONTROL_CLASS}
@@ -98,7 +100,7 @@ export function PreferencesCard({
             <SegmentedControl<ThemeChoice>
               size="md"
               fill
-              className={CONTROL_CLASS}
+              className={SEGMENTED_CLASS}
               ariaLabel={t("prefs.theme")}
               value={draft.theme}
               onChange={(theme) => onChange({ theme })}
@@ -113,7 +115,7 @@ export function PreferencesCard({
             <SegmentedControl<DensityChoice>
               size="md"
               fill
-              className={CONTROL_CLASS}
+              className={SEGMENTED_CLASS}
               ariaLabel={t("prefs.density")}
               value={draft.density}
               onChange={(density) => onChange({ density })}
@@ -128,7 +130,7 @@ export function PreferencesCard({
             <SegmentedControl<FontSizeChoice>
               size="md"
               fill
-              className={CONTROL_CLASS}
+              className={SEGMENTED_CLASS}
               ariaLabel={t("prefs.fontSize")}
               value={draft.fontSize}
               onChange={(fontSize) => onChange({ fontSize })}
@@ -140,7 +142,7 @@ export function PreferencesCard({
             />
           </DetailRow>
         </DetailList>
-      </div>
+      </CardRows>
     </Section>
   );
 }

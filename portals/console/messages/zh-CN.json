@@ -1169,8 +1169,7 @@
       "label": "删除账号",
       "action": "删除账号",
       "summary": "删除后账号进入 {days} 天保留期,期间重新登录可撤销;到期后永久删除个人数据,个人租户一并删除。",
-      "conditionsLabel": "删除条件:",
-      "conditions": "不是任何组织租户的所有者;没有未结清的账单、付费余额、进行中的退款或开票、已付款待确认的订单。",
+      "conditionsLabel": "删除条件",
       "dialog": {
         "title": "删除账号",
         "description": "请核对以下事项。确认后账号进入 {days} 天保留期,期间重新登录可撤销;到期后永久删除。",
@@ -1246,6 +1245,13 @@
           "tag": "个人租户",
           "text": "个人租户随账号一并删除。"
         }
+      },
+      "conditionTags": {
+        "orgOwner": "不是组织所有者",
+        "unpaidBills": "无未清账单",
+        "paidBalance": "无付费余额",
+        "inProgress": "无进行中的退款或开票",
+        "paidOrder": "无已付款待确认订单"
       }
     }
   },

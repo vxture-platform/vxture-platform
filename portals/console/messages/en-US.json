@@ -1169,8 +1169,7 @@
       "label": "Delete account",
       "action": "Delete account",
       "summary": "The account enters a {days}-day retention period; signing in again during that time cancels the deletion. Afterwards personal data and the personal tenant are permanently deleted.",
-      "conditionsLabel": "Conditions: ",
-      "conditions": "you must not own any organization tenant, and there must be no unpaid bills, paid balance, in-progress refunds or invoices, or paid orders awaiting confirmation.",
+      "conditionsLabel": "Conditions",
       "dialog": {
         "title": "Delete account",
         "description": "Review the items below. After confirming, the account enters a {days}-day retention period; signing in again cancels the deletion. Afterwards it is permanently deleted.",
@@ -1246,6 +1245,13 @@
           "tag": "Personal tenant",
           "text": "The personal tenant is deleted together with the account."
         }
+      },
+      "conditionTags": {
+        "orgOwner": "Not an organization owner",
+        "unpaidBills": "No unpaid bills",
+        "paidBalance": "No paid balance",
+        "inProgress": "No refund or invoice in progress",
+        "paidOrder": "No paid order awaiting confirmation"
       }
     }
   },

@@ -47,6 +47,12 @@ const ROLE_ICON: Record<string, IconName> = {
 };
 const KNOWN_ROLES = new Set(Object.keys(ROLE_ICON));
 
+/** 首字母牌:取名称第一个字符(中文名取首字),没有名字给「?」。 */
+function tenantInitial(name: string): string {
+  const first = Array.from(name.trim())[0];
+  return first ? first.toUpperCase() : "?";
+}
+
 export function IdentityHeader({
   picture,
   displayName,
@@ -160,41 +166,41 @@ export function IdentityHeader({
             {tenants.map((tenant) => (
               <li
                 key={tenant.tenantId}
-                className="flex items-start gap-md py-md"
+                className="flex items-start gap-lg py-md"
               >
+                {/* 租户标识:自有 logo 之前先用首字母牌(与顶栏租户面板同一形状);
+                    宽度 = icon-lg,名称因此与下方各卡的标题文字同一竖线 */}
                 <span
-                  className="mt-2xs inline-flex size-icon-lg shrink-0 items-center justify-center rounded-md bg-accent text-muted-foreground"
+                  className="inline-flex size-icon-lg shrink-0 items-center justify-center rounded-md bg-accent text-label-sm font-semibold text-muted-foreground"
                   aria-hidden="true"
                 >
-                  <Icon
-                    name={tenant.type === "personal" ? "user" : "buildings"}
-                    size="sm"
-                    fallback="placeholder"
-                  />
+                  {tenantInitial(tenant.name)}
                 </span>
-                <span className="flex min-w-0 flex-1 flex-col gap-2xs">
+                <span className="flex min-w-0 flex-1 flex-col gap-xs">
                   <span className="flex flex-wrap items-center gap-md">
                     <span className="text-label-md text-foreground">
                       {formatTenantDisplay(tenant.name, tenant.type)}
                     </span>
+                    {/* 标签顺序:类型 → 角色 → 当前(owner 二次走查) */}
+                    <StatusBadge
+                      tone="neutral"
+                      icon={tenant.type === "personal" ? "user" : "buildings"}
+                    >
+                      {tenant.type === "personal"
+                        ? t("identity.personalTenant")
+                        : t("identity.orgTenant")}
+                    </StatusBadge>
+                    <StatusBadge
+                      tone="info"
+                      icon={ROLE_ICON[tenant.role] ?? "user"}
+                    >
+                      {roleLabel(tenant.role)}
+                    </StatusBadge>
                     {tenant.isCurrent ? (
                       <StatusBadge tone="brand">
                         {t("workspaces.current")}
                       </StatusBadge>
                     ) : null}
-                    <StatusBadge tone="neutral">
-                      {tenant.type === "personal"
-                        ? t("identity.personalTenant")
-                        : t("identity.orgTenant")}
-                    </StatusBadge>
-                    <StatusBadge tone="info">
-                      <Icon
-                        name={ROLE_ICON[tenant.role] ?? "user"}
-                        size="xs"
-                        fallback="placeholder"
-                      />
-                      {roleLabel(tenant.role)}
-                    </StatusBadge>
                     {tenant.tenantNo ? (
                       <span className="font-mono text-body-sm text-muted-foreground">
                         T-{tenant.tenantNo}

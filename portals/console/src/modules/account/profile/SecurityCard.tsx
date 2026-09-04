@@ -23,6 +23,7 @@ import { PlannedBadge } from "@/components/planned";
 import { LoadFailedEmpty } from "@/components/load/LoadFailed";
 import { formatProfileDate, parseBrowser, parseOS } from "./format";
 import { RowExpand } from "./RowExpand";
+import { CardRows, DETAIL_LIST_CLASS } from "./CardRows";
 
 export interface SessionsState {
   items: AuthSessionRecord[];
@@ -70,8 +71,8 @@ export function SecurityCard({
       title={t("cards.security.title")}
       description={t("cards.security.description")}
     >
-      <div className="pl-md">
-        <DetailList>
+      <CardRows>
+        <DetailList className={DETAIL_LIST_CLASS}>
           <DetailRow
             label={t("fields.password")}
             actions={
@@ -196,7 +197,7 @@ export function SecurityCard({
             </ul>
           )}
         </RowExpand>
-      </div>
+      </CardRows>
     </Section>
   );
 }
