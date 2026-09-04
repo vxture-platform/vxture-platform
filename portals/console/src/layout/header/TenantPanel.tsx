@@ -14,7 +14,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { formatPrincipalNo } from "@/lib/principal-no";
+import { PrincipalNo } from "@/components/principal-no";
 import {
   Popover,
   PopoverTrigger,
@@ -122,7 +122,7 @@ export function TenantPanel({
               ? [
                   {
                     key: "no",
-                    content: formatPrincipalNo(tenant.tenantNo, "tenant") ?? "",
+                    content: <PrincipalNo no={tenant.tenantNo} kind="tenant" />,
                   },
                 ]
               : []),

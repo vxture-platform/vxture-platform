@@ -3251,5 +3251,8 @@
     "acceptedDescription": "已为你切换到该租户。",
     "switchFailed": "已加入,但切换租户失败;可在顶部租户切换器手动切换。",
     "acceptError": "接受失败,请稍后重试。"
+  },
+  "principalNo": {
+    "label": "ID:"
   }
 }
