@@ -79,13 +79,11 @@ export class PgUserRepository implements UserReadRepository {
       await client.query("begin");
       // Allocate the stable public user number first so it seeds the default
       // username (`_{user_no}`) when the caller supplied none.
-      // user_no 走 account.principal_no_seq（与 account.users.user_no 的列默认值、
-      // 以及 tenant_no 同一条序列+公式，见 ddl/10_account.sql、95_triggers.sql）——
-      // 用户与组织租户共享主体号空间，跨表永不撞号。旧写法 `account.user_no_seq`
-      // 是 identity.*→account.* 迁移遗留的死序列（生产从未建），会 500。
+      // 取号走 account.alloc_user_no()(§11 v4「三号解耦」:10 位 = 类别位 1 +
+      // 随机 8 + Luhn,查重重试在函数里;见 ddl/00_schemas.sql、95_triggers.sql)。
+      // 三个主体号互不推导,租户号 / 空间号各有自己的分配器。
       const seq = await client.query<{ user_no: string }>(
-        `select nextval('account.principal_no_seq') * 1000
-                + floor(random() * 1000)::bigint as user_no`,
+        `select account.alloc_user_no() as user_no`,
       );
       const userNo = seq.rows[0]?.user_no;
       if (!userNo) throw new Error("failed to allocate user_no");

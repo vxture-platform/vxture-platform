@@ -29,8 +29,14 @@ export class MockUserRepository implements UserReadRepository {
   private readonly users = new Map<string, UserCredentialRecord>();
   private readonly identities = new Map<string, string>(); // `${provider}:${subject}` -> userId
   private readonly avatars = new Map<string, AvatarRecord>();
-  // Mirrors the DB user_no sequence so the default username is `_{user_no}`.
-  private userNoSeq = 1000010000;
+  // 与库里的 user_no 同形(§11 v4「三号解耦」):10 位 = 类别位 1 + 随机 8 + Luhn,
+  // 这样离线跑出来的默认句柄 `_{user_no}` 与生产是同一个形状。
+  private nextUserNo(): number {
+    const body = `1${Math.floor(Math.random() * 100_000_000)
+      .toString()
+      .padStart(8, "0")}`;
+    return Number(`${body}${luhnCheckDigit(body)}`);
+  }
 
   constructor() {
     const zhangsan: UserCredentialRecord = {
@@ -49,7 +55,7 @@ export class MockUserRepository implements UserReadRepository {
 
   async createUser(record: CreateUserRecord): Promise<UserView> {
     const id = crypto.randomUUID();
-    const userNo = this.userNoSeq++;
+    const userNo = this.nextUserNo();
     const view: UserCredentialRecord = {
       id,
       account: record.account?.trim() || `_${userNo}`,
@@ -318,6 +324,22 @@ export class MockUserRepository implements UserReadRepository {
   async purgeUser(_userId: string): Promise<boolean> {
     return false;
   }
+}
+
+/** Luhn 校验位(与 DDL 的 public.luhn_check_digit 同规则;§11 v4)。 */
+function luhnCheckDigit(digits: string): number {
+  let sum = 0;
+  let double = true; // 自右向左,紧邻校验位的那位起加倍
+  for (let i = digits.length - 1; i >= 0; i -= 1) {
+    let d = Number(digits[i]);
+    if (double) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+    double = !double;
+  }
+  return (10 - (sum % 10)) % 10;
 }
 
 function toView(u: UserCredentialRecord): UserView {

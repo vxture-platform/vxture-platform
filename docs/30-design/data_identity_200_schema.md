@@ -279,18 +279,18 @@
 
 ### 5.4 `workspaces`
 
-| 字段                        | 类型         | 约束                                                        | 说明                                                  |
-| --------------------------- | ------------ | ----------------------------------------------------------- | ----------------------------------------------------- |
-| `id`                        | uuid         | PK                                                          |                                                       |
-| `workspace_no`              | bigint       | NOT NULL, UNIQUE；95 触发器分配                             | 可视码 15 位：完整租户号 + 租户内序号 001-999，见 §11 |
-| `tenant_id`                 | uuid         | FK→`tenants.id` ON DELETE CASCADE                           |                                                       |
-| `name`                      | varchar(128) | NOT NULL                                                    |                                                       |
-| `is_default`                | boolean      | NOT NULL DEFAULT false                                      | 每 tenant 仅一 default（部分唯一索引）                |
-| `description`               | text         | NULL                                                        |                                                       |
-| `icon`                      | varchar(64)  | NULL                                                        |                                                       |
-| `status`                    | varchar(16)  | NOT NULL DEFAULT `'active'`, CHECK(active/archived/deleted) |                                                       |
-| `created_at` / `updated_at` | timestamptz  | NOT NULL DEFAULT now()                                      |                                                       |
-| `deleted_at`                | timestamptz  | NULL                                                        |                                                       |
+| 字段                        | 类型         | 约束                                                        | 说明                                                               |
+| --------------------------- | ------------ | ----------------------------------------------------------- | ------------------------------------------------------------------ |
+| `id`                        | uuid         | PK                                                          |                                                                    |
+| `workspace_no`              | bigint       | NOT NULL, UNIQUE；95 触发器分配                             | 可视码 10 位：类别位 3 + 随机 8 + Luhn，与租户号无推导关系，见 §11 |
+| `tenant_id`                 | uuid         | FK→`tenants.id` ON DELETE CASCADE                           |                                                                    |
+| `name`                      | varchar(128) | NOT NULL                                                    |                                                                    |
+| `is_default`                | boolean      | NOT NULL DEFAULT false                                      | 每 tenant 仅一 default（部分唯一索引）                             |
+| `description`               | text         | NULL                                                        |                                                                    |
+| `icon`                      | varchar(64)  | NULL                                                        |                                                                    |
+| `status`                    | varchar(16)  | NOT NULL DEFAULT `'active'`, CHECK(active/archived/deleted) |                                                                    |
+| `created_at` / `updated_at` | timestamptz  | NOT NULL DEFAULT now()                                      |                                                                    |
+| `deleted_at`                | timestamptz  | NULL                                                        |                                                                    |
 
 约束：`UNIQUE(id, tenant_id)`（**新增**，`uq_workspaces_id_tenant`——为 §5.6 `workspace_memberships` 的复合 FK 提供目标，锁定"ws 成员的 tenant_id 必须是该 ws 真实所属 tenant"）。
 
@@ -746,21 +746,28 @@ ALTER TABLE tenancy.workspace_memberships
 
 ## 11. 可视码方案
 
-**定版 v3「人租同号」（2026-08-19 owner 定案，取代同日 v2 尾-000 方案与旧 6 位方案）**：主体号 = 9 位顺序段（1 亿起，首位恒 1）×1000 + 3 位随机尾，12 位。用户与组织租户共享**同一主体号序列**（号空间统一，跨表永不撞号）；个人租户不另取号，**直接继承 owner 的 user_no**。JSON 安全（15 位 < 2^53），顺序段保证唯一（随机尾纯装饰）。
+**定版 v4「三号解耦」（2026-09-05 owner 定案，取代 v3「人租同号」）**：三个主体号**各自独立取号、互不推导**，归属关系只走 uuid 外键。
 
-| 码             | 位置                 | 生成（均落 DDL/触发器，应用零参与）                        | 规则                                                        | 位数 |
-| -------------- | -------------------- | ---------------------------------------------------------- | ----------------------------------------------------------- | ---- |
-| `user_no`      | `account.users`      | DEFAULT `nextval(principal_no_seq)×1000 + random(000-999)` | 主体号                                                      | 12   |
-| `tenant_no`    | `tenancy.tenants`    | 95 触发器：个人 = owner 的 `user_no`；组织 = 自取主体号    | **人租同号**（个人租户与其 owner 同一个 12 位号）           | 12   |
-| `workspace_no` | `tenancy.workspaces` | 95 触发器：`tenant_no×1000 + workspace_counter` 原子递增   | `001-999` 租户内终身序号，不复用；999 = 产品硬上限（CHECK） | 15   |
+> **为什么推翻 v3**：v3 把归属写进号里（个人租户号 = owner 的 `user_no`；`workspace_no = tenant_no×1000 + 序号`），这等于隐式外键，与 [`data_platform_100_architecture.md`](./data_platform_100_architecture.md) §2.2.4 铁律二「可视码永不做 FK / 关联键，改码换规则不动任何数据关系」直接冲突。代价是三处债：个人转组织必须换发租户号、空间号必须整批跟随（需要一个 `SECURITY DEFINER` 触发器绕开列锁去写锚点列）、每租户空间数被三位序号钉死 999。v4 取消全部推导，上述三处随之消失——转换退化成改 `type` + `name` 两个字段。
 
-示例：第 1234 个用户 `100001234765` → 其个人租户同为 `100001234765` → 默认空间 `100001234765001`。一个号说清一个人的全部归属；组织租户是独立主体号（如 `100005678214`），其空间 `100005678214001`。
+**号形**：10 位 = 类别位（1）+ 随机段（8）+ Luhn 校验位（1）。
 
-**转换与收回（A 方案「号跟人」，owner 定案 2026-08-19）**：user_no 是人的终身号，跟人不跟租户行。个人租户认证升级为组织时，租户行（uuid、订阅、成员、空间全保留）由触发器**换发**独立主体号，其全部 workspace_no 前缀同步跟随（B9c 不变量：空间号前 12 位恒等于所属租户现行号）；释放的 user_no 由之后重建的个人租户自动**收回**——一个人终身一个号，无论删、建、转多少次。组织与创始人解耦，归属关系查 `owner_user_id`（界面可显示「创始人 {user_no}」），不烧进号里。组织→个人为未定义流程，触发器硬拦。
+| 码             | 位置                 | 类别位 | 值域                      | 生成                                       |
+| -------------- | -------------------- | :----: | ------------------------- | ------------------------------------------ |
+| `user_no`      | `account.users`      |   1    | `1000000000`–`1999999999` | 95 触发器 → `account.alloc_user_no()`      |
+| `tenant_no`    | `tenancy.tenants`    |   2    | `2000000000`–`2999999999` | 95 触发器 → `tenancy.alloc_tenant_no()`    |
+| `workspace_no` | `tenancy.workspaces` |   3    | `3000000000`–`3999999999` | 95 触发器 → `tenancy.alloc_workspace_no()` |
 
-```sql
-CREATE SEQUENCE account.principal_no_seq AS bigint START WITH 100000001 INCREMENT BY 1 MINVALUE 100000001;
-```
+- **类别位编的是「我是哪一类主体」，不是「我属于谁」**。个人租户与组织租户同为租户、同用类别位 2，所以**个人转组织不换号**。
+- **随机段直取随机，不走序列**：号不承载先后，拿到两个号推不出增长量。每类容量 1 亿；分配器取号后查重重试（20 次上限），`UNIQUE` 约束兜底，剩余竞态约 1/10⁸。
+- **Luhn 校验位**：客服手输 / 电话报号错一位、相邻换位当场可查。生成与校验是 `public.luhn_check_digit(text)` 与 `public.principal_no_valid(bigint, int)`（`IMMUTABLE`，三张表的 `CHECK` 直接复用）。
+- 10 位恒定长度，JSON 安全（< 2⁵³）。展示前缀 `U-` / `T-` / `W-`，裸号也自明（首位即类别）。
+- 显式携号插入放行（迁移 / 修复通道）；号一旦分配**永不回收**，删除只做脱敏软删。
+- 内部表（membership / credential / session / loyalty 明细等）不设可视码，只用 `id uuid`。
+
+示例：用户 `1799729056` 的个人租户是 `2765455965`，其默认空间是 `3549118424`——三个号毫无关系，归属查 `tenants.owner_user_id` 与 `workspaces.tenant_id`。界面需要「一眼看归属」时由页面并列展示（账号信息页身份卡、运营台租户详情），不靠号推导。
+
+**落地**：DDL `00_schemas.sql`（三个 `public` 函数）+ `95_triggers.sql` B9（三个分配器 + 三个 `BEFORE INSERT` 触发器）；迁移 `2026-09-12-principal-no-decoupling.sql`（存量重编号、旧号备份进 `public.vx_principal_no_backup_v3`、退役 `workspace_counter` 与 `account.principal_no_seq`）。v3 的换发（B9b）与跟随（B9c）触发器已删除。
 
 内部表（membership / credential / session / loyalty 明细等）不设可视码，只用 `id uuid`。
 

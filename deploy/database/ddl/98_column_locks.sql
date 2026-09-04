@@ -103,7 +103,7 @@ GRANT UPDATE (is_system) ON access.role_permissions TO platform_svc;
 
 -- tenancy.tenants  [anchor: id, tenant_no, created_at]
 REVOKE UPDATE ON tenancy.tenants FROM platform_svc;
-GRANT UPDATE (name, type, owner_user_id, status, verification_status, verification_type, workspace_counter, updated_at, deleted_at) ON tenancy.tenants TO platform_svc;  -- workspace_counter:95 触发器以调用者身份递增,需此授权
+GRANT UPDATE (name, type, owner_user_id, status, verification_status, verification_type, updated_at, deleted_at) ON tenancy.tenants TO platform_svc;  -- workspace_counter 随 §11 v4 解耦退役(2026-09-05)
 
 -- tenancy.tenant_profiles  [anchor: tenant_id, created_at]
 REVOKE UPDATE ON tenancy.tenant_profiles FROM platform_svc;

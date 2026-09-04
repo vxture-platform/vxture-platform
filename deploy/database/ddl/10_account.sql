@@ -8,7 +8,7 @@
 -- phone 为强制全局锚点（NOT NULL + 已验证）。瘦主体，增长信息挂属性表。
 CREATE TABLE account.users (
     id                   uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_no              bigint       NOT NULL DEFAULT (nextval('account.principal_no_seq') * 1000 + floor(random()*1000)::bigint),  -- 可视码 12 位:主体号(§11,与组织租户共号空间)
+    user_no              bigint       NOT NULL,                     -- 可视码 10 位:类别位 1 + 随机 8 + Luhn(§11 v4「三号解耦」;95 触发器分配,应用可先取号)
     account              varchar(64)  NOT NULL,                     -- 登录句柄，可改限频，非关联键
     email                varchar(128),
     email_verified_at    timestamptz,
@@ -28,7 +28,8 @@ CREATE TABLE account.users (
     CONSTRAINT uq_users_email    UNIQUE (email),
     CONSTRAINT uq_users_phone    UNIQUE (phone),
     CONSTRAINT chk_users_status  CHECK (status IN ('active','disabled','pending','deleting')),
-    CONSTRAINT chk_users_level_no CHECK (level_no >= 1)
+    CONSTRAINT chk_users_level_no CHECK (level_no >= 1),
+    CONSTRAINT chk_users_user_no  CHECK (public.principal_no_valid(user_no, 1))  -- 类别位 1 + Luhn(§11 v4)
 );
 CREATE INDEX idx_users_status     ON account.users (status);
 CREATE INDEX idx_users_level_no   ON account.users (level_no);
