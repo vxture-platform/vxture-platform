@@ -531,9 +531,9 @@ ALTER TABLE tenancy.workspace_memberships
 | `tenant.invoice.manage`                        | billing  |   ✔   |    —    |   —    |    —     |   —   |
 | `tenant.quota.read`                            | quota    |   ✔   |    ✔    |   ✔    |    ✔     |   —   |
 | `tenant.audit.read`                            | audit    |   ✔   |    ✔    |   —    |    ✔     |   —   |
-| `tenant.model.read`                            | model    |   —   |    —    |   —    |    —     |   —   |
+| `tenant.model.read`                            | model    |   ✔   |    —    |   —    |    —     |   —   |
 
-> `.manage` 蕴含同资源的 `.read`（`@vxture/core-utils` `capabilitySatisfies`，BFF 守卫与前端门共用）。`tenant.model.read` 暂不授予任何角色（`/atlas` 页整改前不对客户开放）。
+> `.manage` 蕴含同资源的 `.read`（`@vxture/core-utils` `capabilitySatisfies`，BFF 守卫与前端门共用）。`tenant.model.read` 自批 7（2026-09-05）起只授予 owner（`/atlas` 页整改完成）。
 > `tenant:owner` 额外并入其下所有 `workspace.*` 治理权（承租户对旗下空间的全权，照现 seed `TENANT_ALL ∪ WS_ALL`）。perm code 现用 `{scope}.{resource}.{action}` 点分隔；与运营 realm 的 `{domain}:{resource}.{action}` 冒号约定的**统一（点→冒号）列为后续待办**，本轮不改（避免牵动 console 治理授权代码，守边界）。存量库由 `deploy/database/migrations/2026-09-10-access-console-permission-catalog.sql` 补齐；seed / core-utils / console 导航 / 迁移四处由 `check-tenant-permission-catalog` 守卫逐码比对。
 
 ---

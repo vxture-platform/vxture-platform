@@ -1,7 +1,6 @@
 import type {
   AccountDeletionState,
   Capability,
-  AiModelGrantRecord,
   AiModelRecord,
   AuthSessionRecord,
   ConsoleOrganizationProfile,
@@ -198,10 +197,6 @@ export async function fetchAiModels(): Promise<AiModelRecord[]> {
 }
 
 /** `/tenancy/grants` scopes to this workspace's own token — no caller-supplied filters accepted. */
-export async function fetchAiModelGrants(): Promise<AiModelGrantRecord[]> {
-  return readJson<AiModelGrantRecord[]>("/api/atlas/grants", []);
-}
-
 /** Single entitlement envelope — see `status` for coverage vs unreachable. */
 export async function fetchTenantModelQuotas(): Promise<TenancyQuotaResponse> {
   return readJson<TenancyQuotaResponse>("/api/atlas/quotas", {

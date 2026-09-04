@@ -347,14 +347,11 @@ const WS_ALL = PERMISSIONS.filter((p) => p[0].startsWith("workspace.")).map(
 // 2026-09-04 起 member / readonly / guest 不再皆空:读侧码让三者在 console 里可区分
 // (data_identity_200 §6.4 矩阵)。readonly = 内部全域只读(所有 .read);member =
 // 用产品的人(看成员目录 + 配额用量);guest = 外部受限,只有自助页。
-// `tenant.model.read` 暂不授予任何角色:/atlas 页面整改(批 7)前不对客户开放,
-// 但守卫已按它把 URL 直达封死。
-const TENANT_MODEL_READ = "tenant.model.read";
+// `tenant.model.read` 自批 7(2026-09-05)起授予 owner:/atlas 页整改完成——授权表
+// 换成产品权益、页面已 i18n,可以对租户所有者开放。其余角色仍不持有:模型接入是
+// 所有者关心的事,manager 及以下看配额与用量就够(那两处走 tenant.quota.read)。
 const ROLE_PERMS = {
-  "tenant:owner": [
-    ...TENANT_ALL.filter((c) => c !== TENANT_MODEL_READ),
-    ...WS_ALL,
-  ],
+  "tenant:owner": [...TENANT_ALL, ...WS_ALL],
   "tenant:manager": [
     "tenant.member.read",
     "tenant.member.manage",
