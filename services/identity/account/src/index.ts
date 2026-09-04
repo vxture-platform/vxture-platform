@@ -27,7 +27,10 @@ export type {
 export {
   AccountService,
   assertValidAccount,
+  accountPurgeAt,
+  ACCOUNT_DELETION_RETENTION_DAYS,
   USERNAME_CHANGE_COOLDOWN_DAYS,
+  type DeletionRequestResult,
 } from "./service/account.service";
 export { PgUserRepository, MockUserRepository } from "./repository";
 export { ACCOUNT_PG_POOL, USER_REPOSITORY } from "./tokens";

@@ -123,6 +123,14 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       }));
   }
 
+  async revokeInvitationsCreatedBy(_userId: string): Promise<number> {
+    return 0;
+  }
+
+  async softDeletePersonalOrg(_ownerUserId: string): Promise<boolean> {
+    return false;
+  }
+
   async revokeInvitation(
     invitationId: string,
     tenantId: string,

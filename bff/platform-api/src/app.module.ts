@@ -17,11 +17,14 @@
 import { Module } from "@nestjs/common";
 import { ScheduleModule } from "@nestjs/schedule";
 import { VxConfigModule } from "@vxture/core-config";
+import { AccountModule } from "@vxture/service-account";
+import { OrganizationModule } from "@vxture/service-organization";
 import { ProvisioningModule } from "@vxture/service-provisioning";
 import { SharingModule } from "@vxture/service-sharing";
 import { SubscriptionModule } from "@vxture/service-subscription";
 import { PlatformAuthGuard } from "./authn/platform-auth.guard";
 import { S2sTokenVerifier } from "./authn/s2s-token-verifier.service";
+import { AccountDeletionPurgeJob } from "./jobs/account-deletion-purge.job";
 import { AnnouncementBroadcastJob } from "./jobs/announcement-broadcast.job";
 import { JobHeartbeatService } from "./jobs/job-heartbeat.service";
 import { OrderPaymentExpiryJob } from "./jobs/order-payment-expiry.job";
@@ -49,6 +52,9 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     SubscriptionModule,
     SharingModule,
     ProvisioningModule,
+    // 批 5b:删除账号 30 天保留期清扫(AccountDeletionPurgeJob)要账号与租户两个服务
+    AccountModule,
+    OrganizationModule,
   ],
   controllers: [
     HealthRouter,
@@ -74,6 +80,8 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     AnnouncementBroadcastJob,
     WsBasePoolJob,
     UsageRollupJob,
+    // 批 5b:自助删除账号 30 天保留期到期清扫
+    AccountDeletionPurgeJob,
   ],
 })
 export class AppModule {}

@@ -16,6 +16,9 @@ export interface ConsoleUser {
   roleLabel: string;
   username?: string;
   phone?: string | null;
+  /** account.users.status: active | deleting(保留期)| … */
+  accountStatus?: string;
+  deletionRequestedAt?: string | null;
 }
 
 export interface ConsoleUserProfile {
@@ -44,8 +47,10 @@ export interface ConsoleUserProfile {
   userNo: string | null;
   /** ISO timestamp of account creation. */
   accountCreatedAt: string | null;
-  /** Account status: active | suspended. */
+  /** Account status: active | deleting | suspended. */
   accountStatus?: string | null;
+  /** ISO timestamp the user asked to delete the account (status='deleting'); null otherwise. */
+  deletionRequestedAt?: string | null;
   /** Whether the user has a password credential set (false for phone/social-only registrants). */
   hasPassword: boolean;
 }

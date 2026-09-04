@@ -412,6 +412,14 @@ export interface OrganizationReadRepository {
   ): Promise<InvitationListItem[]>;
   /** 撤销 pending 邀请;非 pending / 不属本租户返回 false。 */
   revokeInvitation(invitationId: string, tenantId: string): Promise<boolean>;
+  /** Revoke every pending invitation the user sent (account deletion); returns the count. */
+  revokeInvitationsCreatedBy(userId: string): Promise<number>;
+  /**
+   * Soft-delete the user's personal tenant (status='deleted', deleted_at=now())
+   * when the account is purged after its retention window (050-account §7).
+   * Idempotent; true when a row changed.
+   */
+  softDeletePersonalOrg(ownerUserId: string): Promise<boolean>;
 }
 
 /** Org membership joined with the member's user record (for management UIs). */

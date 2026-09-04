@@ -160,7 +160,14 @@
     "verifySuspended": "Suspended",
     "brandName": "Workspace Console",
     "tenantList": "Tenants you can switch to",
-    "currentTag": "Current"
+    "currentTag": "Current",
+    "accountDeleting": {
+      "title": "Account in deletion retention",
+      "body": "You asked to delete this account on {requestedAt}; it will be permanently deleted on {purgeAt}. Cancel the deletion and reactivate?",
+      "reactivate": "Cancel deletion and reactivate",
+      "keep": "Keep deleting and sign out",
+      "error": "Something went wrong. Please try again."
+    }
   },
   "header": {
     "title": "Console",
@@ -1123,6 +1130,10 @@
       "prefs": {
         "title": "Preferences",
         "description": "Language and time zone drive copy and times; theme, density and font size preview instantly and apply across portals once saved."
+      },
+      "danger": {
+        "title": "Danger zone",
+        "description": "These actions affect the whole account. Review carefully before proceeding."
       }
     },
     "identity": {
@@ -1153,6 +1164,89 @@
       "clean": "No unsaved changes",
       "discard": "Discard",
       "save": "Save"
+    },
+    "deletion": {
+      "label": "Delete account",
+      "action": "Delete account",
+      "summary": "The account enters a {days}-day retention period; signing in again during that time cancels the deletion. Afterwards personal data and the personal tenant are permanently deleted.",
+      "conditionsLabel": "Conditions: ",
+      "conditions": "you must not own any organization tenant, and there must be no unpaid bills, paid balance, in-progress refunds or invoices, or paid orders awaiting confirmation.",
+      "dialog": {
+        "title": "Delete account",
+        "description": "Review the items below. After confirming, the account enters a {days}-day retention period; signing in again cancels the deletion. Afterwards it is permanently deleted.",
+        "loading": "Checking the account…",
+        "blocked": "The items below block deletion. Resolve them and try again.",
+        "blockersTitle": "Blocking deletion",
+        "confirmTitle": "Forfeited on deletion",
+        "autoTitle": "Handled automatically",
+        "acknowledge": "I understand the above and confirm deleting the account (permanently deleted after {days} days)",
+        "submit": "Delete account",
+        "cancel": "Cancel"
+      },
+      "errorBlocked": "The conditions have changed. Please review again.",
+      "error": "Deletion failed. Please try again later.",
+      "blockers": {
+        "org_owner": {
+          "tag": "Organization owner",
+          "text": "You own {names}. Transfer ownership or close the organization first."
+        },
+        "unpaid_bills": {
+          "tag": "Unpaid bills",
+          "text": "{count} bill(s) are still unpaid."
+        },
+        "paid_balance": {
+          "tag": "Paid balance",
+          "text": "A paid balance of {amount} {currency} remains. Use it up or request a refund first."
+        },
+        "refund_in_progress": {
+          "tag": "Refund in progress",
+          "text": "{count} refund(s) are still in progress."
+        },
+        "receipt_in_progress": {
+          "tag": "Invoice in progress",
+          "text": "{count} invoice(s) have not been issued yet."
+        },
+        "pending_order_with_payment": {
+          "tag": "Order awaiting confirmation",
+          "text": "{count} paid order(s) are awaiting confirmation. Wait for confirmation or contact us."
+        }
+      },
+      "confirmations": {
+        "active_subscription": {
+          "tag": "Active subscription",
+          "text": "{count} subscription(s) have not expired; the remaining period is forfeited."
+        },
+        "gifted_balance": {
+          "tag": "Gifted balance",
+          "text": "The gifted balance of {amount} {currency} is forfeited."
+        }
+      },
+      "auto": {
+        "cancel_pending_orders": {
+          "tag": "Cancel orders",
+          "text": "{count} unpaid order(s) will be cancelled."
+        },
+        "leave_organizations": {
+          "tag": "Leave organizations",
+          "text": "You will leave {names}."
+        },
+        "revoke_sessions": {
+          "tag": "Sign out devices",
+          "text": "All signed-in devices will be signed out."
+        },
+        "unbind_identities": {
+          "tag": "Unlink sign-ins",
+          "text": "{count} third-party sign-in(s) will be unlinked."
+        },
+        "revoke_invitations": {
+          "tag": "Revoke invitations",
+          "text": "Pending invitations you sent will be revoked."
+        },
+        "delete_personal_tenant": {
+          "tag": "Personal tenant",
+          "text": "The personal tenant is deleted together with the account."
+        }
+      }
     }
   },
   "organizationPage": {

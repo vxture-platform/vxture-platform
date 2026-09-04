@@ -86,6 +86,35 @@ export class AuthMiddleware implements NestMiddleware {
     const context = req as Request & RequestContext;
     context.auth = payload;
     context.user = user;
+    // 删除保留期(050-account §7):账号还在、能登录,但工作台不可用——只放行会话恢复
+    // 的几条读与删除相关的三条,其余一律 403,前端据码画「撤销删除并重新启用」。
+    if (user.accountStatus === "deleting" && !isDeletionAllowedRoute(req)) {
+      res.status(403).json({
+        code: "ACCOUNT_DELETING",
+        message: "account_deleting",
+        deletionRequestedAt: user.deletionRequestedAt ?? null,
+      });
+      return;
+    }
     next();
   }
+}
+
+const DELETION_READ_ALLOWLIST = new Set([
+  "/api/me",
+  "/api/tenant-context",
+  "/api/tenant-context/options",
+  "/api/capabilities",
+]);
+
+/** 保留期内仍可达的路由:会话恢复读(GET)+ 删除资格 / 撤销(任意方法)。 */
+export function isDeletionAllowedRoute(
+  req: Pick<Request, "method" | "originalUrl" | "url">,
+): boolean {
+  const raw = (req.originalUrl ?? req.url ?? "").split("?")[0] ?? "";
+  const path = raw.length > 1 ? raw.replace(/\/+$/, "") : raw;
+  if (path === "/api/me/deletion" || path === "/api/me/deletion/cancel") {
+    return true;
+  }
+  return req.method === "GET" && DELETION_READ_ALLOWLIST.has(path);
 }

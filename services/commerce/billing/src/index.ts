@@ -13,6 +13,8 @@ export type {
   UpdateInvoiceStatusInput,
 } from "./types/billing.types";
 export { InvoiceReceiptService } from "./service/receipt.service";
+export { TenantClosureReadService } from "./service/tenant-closure.service";
+export type { TenantClosureSnapshot } from "./types/closure.types";
 export type {
   BillingAddressRecord,
   InvoiceReceiptRecord,

@@ -1018,6 +1018,7 @@ function toUserProfile(
     userNo?: string;
     createdAt?: string;
     hasPassword?: boolean;
+    deletionRequestedAt?: string | null;
   },
   picture: string | null,
 ): ConsoleUserProfile {
@@ -1040,6 +1041,7 @@ function toUserProfile(
     userNo: user.userNo ?? null,
     accountCreatedAt: user.createdAt ?? null,
     accountStatus: user.status ?? null,
+    deletionRequestedAt: user.deletionRequestedAt ?? null,
     hasPassword: user.hasPassword ?? false,
   };
 }

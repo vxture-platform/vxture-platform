@@ -27,6 +27,10 @@ export class ConsoleAuthService {
       roleLabel: "Authenticated User",
       username: user.account,
       phone: user.phone,
+      // 保留期(deleting)的用户仍能解析出来;auth.middleware 据此把非删除相关的
+      // 路由挡成 403,console 则提示「撤销删除并重新启用」(050-account §7)。
+      accountStatus: user.status,
+      deletionRequestedAt: user.deletionRequestedAt ?? null,
     };
   }
 }

@@ -36,7 +36,15 @@ interface UserRow {
   user_no: string | null;
   created_at: string | null;
   has_password: boolean | null;
+  deletion_requested_at?: string | null;
 }
+
+/**
+ * 读路径放行的状态:active 之外还有 deleting(自助删除的 30 天保留期,050-account §7)。
+ * 保留期内用户仍能登录——登录后由 console 提示「撤销删除并重新启用」;disabled /
+ * pending 照旧隐身。三条读谓词共用这一句,别各写各的。
+ */
+const READABLE_STATUS_SQL = `u.status in ('active', 'deleting')`;
 
 interface UserCredentialRow {
   id: string;
@@ -154,11 +162,12 @@ export class PgUserRepository implements UserReadRepository {
               u.account_changed_at::text as account_changed_at,
               u.account_login_disabled,
               u.user_no::text as user_no, u.created_at::text as created_at,
-              (c.password_hash is not null) as has_password
+              (c.password_hash is not null) as has_password,
+              u.deletion_requested_at::text as deletion_requested_at
          from account.users u
          left join account.user_profiles p on p.user_id = u.id
          left join credential.user_credentials c on c.user_id = u.id
-        where u.id = $1 and u.deleted_at is null and u.status = 'active'
+        where u.id = $1 and u.deleted_at is null and ${READABLE_STATUS_SQL}
         limit 1`,
       [userId],
     );
@@ -176,7 +185,7 @@ export class PgUserRepository implements UserReadRepository {
          from account.users u
          left join credential.user_credentials c on c.user_id = u.id
          left join account.user_profiles p on p.user_id = u.id
-        where u.deleted_at is null and u.status = 'active'
+        where u.deleted_at is null and ${READABLE_STATUS_SQL}
           and (
             lower(u.account) = lower($1)
             or lower(coalesce(u.email, '')) = lower($1)
@@ -197,7 +206,7 @@ export class PgUserRepository implements UserReadRepository {
          from account.users u
          left join credential.user_credentials c on c.user_id = u.id
          left join account.user_profiles p on p.user_id = u.id
-        where u.id = $1 and u.deleted_at is null and u.status = 'active'
+        where u.id = $1 and u.deleted_at is null and ${READABLE_STATUS_SQL}
         limit 1`,
       [userId],
     );
@@ -654,6 +663,132 @@ export class PgUserRepository implements UserReadRepository {
     );
     return result.rowCount ?? 0;
   }
+
+  async revokeAllRefreshTokens(userId: string): Promise<number> {
+    const result = await this.pool.query(
+      `update session.refresh_tokens
+          set status = 'revoked'
+        where user_id = $1 and status = 'active'`,
+      [userId],
+    );
+    return result.rowCount ?? 0;
+  }
+
+  async removeAllIdentities(userId: string): Promise<number> {
+    const result = await this.pool.query(
+      `delete from identity.identities where user_id = $1`,
+      [userId],
+    );
+    return result.rowCount ?? 0;
+  }
+
+  // ── 自助删除(050-account §7):active → deleting(保留期)→ 清扫 ──────────
+
+  async requestDeletion(userId: string): Promise<UserView | null> {
+    const result = await this.pool.query(
+      `update account.users
+          set status = 'deleting', deletion_requested_at = now(), updated_at = now()
+        where id = $1 and deleted_at is null and status = 'active'
+        returning id`,
+      [userId],
+    );
+    if ((result.rowCount ?? 0) === 0) return null;
+    return this.getUserById(userId);
+  }
+
+  async cancelDeletion(userId: string): Promise<UserView | null> {
+    const result = await this.pool.query(
+      `update account.users
+          set status = 'active', deletion_requested_at = null, updated_at = now()
+        where id = $1 and deleted_at is null and status = 'deleting'
+        returning id`,
+      [userId],
+    );
+    if ((result.rowCount ?? 0) === 0) return null;
+    return this.getUserById(userId);
+  }
+
+  async listDeletionDue(
+    retentionDays: number,
+    limit: number,
+  ): Promise<string[]> {
+    const result = await this.pool.query<{ id: string }>(
+      `select id
+         from account.users
+        where status = 'deleting' and deleted_at is null
+          and deletion_requested_at is not null
+          and deletion_requested_at < now() - make_interval(days => $1)
+        order by deletion_requested_at asc
+        limit $2`,
+      [retentionDays, Math.min(Math.max(limit, 1), 500)],
+    );
+    return result.rows.map((r) => r.id);
+  }
+
+  /**
+   * 清扫 = 脱敏 + 软删,不物理删主体行:user_no 永不回收(050-account §1),订单 /
+   * 账单 / 审计里的裸 user_id 还要能解引用到"一个已删除的用户"。三个唯一标识改成
+   * 不可能再被人占用的形状(account 走 deleted_<user_no>,phone 走 deleted:<id 前缀>,
+   * email 置空),展示资料清空,凭据 / 三方绑定 / 头像整行删掉。
+   */
+  async purgeUser(userId: string): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const marked = await client.query(
+        `update account.users
+            set account = 'deleted_' || user_no::text,
+                email = null,
+                phone = 'deleted:' || left(id::text, 24),
+                account_login_disabled = true,
+                deleted_at = now(),
+                updated_at = now()
+          where id = $1 and status = 'deleting' and deleted_at is null
+          returning id`,
+        [userId],
+      );
+      if ((marked.rowCount ?? 0) === 0) {
+        await client.query("rollback");
+        return false;
+      }
+      await client.query(
+        `update account.user_profiles
+            set display_name = null, avatar_url = null, avatar_hash = null,
+                gender = null, birthday = null, bio = null, updated_at = now()
+          where user_id = $1`,
+        [userId],
+      );
+      await client.query(
+        `delete from account.user_avatars where user_id = $1`,
+        [userId],
+      );
+      await client.query(
+        `delete from credential.user_credentials where user_id = $1`,
+        [userId],
+      );
+      await client.query(`delete from identity.identities where user_id = $1`, [
+        userId,
+      ]);
+      await client.query(
+        `update session.auth_sessions
+            set status = 'revoked', revoked_at = now()
+          where user_id = $1 and status = 'active'`,
+        [userId],
+      );
+      await client.query(
+        `update session.refresh_tokens set status = 'revoked'
+          where user_id = $1 and status = 'active'`,
+        [userId],
+      );
+      await client.query("commit");
+      return true;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 function mapUser(row?: UserRow): UserView | null {
@@ -677,6 +812,7 @@ function mapUser(row?: UserRow): UserView | null {
   if (row.user_no != null) view.userNo = row.user_no;
   if (row.created_at != null) view.createdAt = row.created_at;
   view.hasPassword = row.has_password ?? false;
+  view.deletionRequestedAt = row.deletion_requested_at ?? null;
   return view;
 }
 

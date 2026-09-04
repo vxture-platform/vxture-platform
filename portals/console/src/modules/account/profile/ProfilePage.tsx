@@ -10,7 +10,8 @@
  * 页底保存 / 放弃(粘底)。能直接改的(显示名、五项偏好)内联改、随页底一次提交;
  * 需要验证或有副作用的(账号名、手机、邮箱、密码、三方绑定、登录开关)逐行按钮进各自
  * 流程。原 /security 页并入本页(`?panel=sessions` 直接展开会话)。
- * 读全部 allSettled,任一失败显影为「读取失败 + 重试」。删除账号归批 5b(要后端)。
+ * 读全部 allSettled,任一失败显影为「读取失败 + 重试」。页底危险操作:删除账号
+ * (批 5b,050-account §7)——资格清单对话框确认后进入 30 天保留期并登出。
  */
 
 import {
@@ -39,6 +40,7 @@ import {
 } from "@vxture/platform-browser";
 import {
   ConsoleBffError,
+  buildLogoutUrl,
   changeUserPassword,
   deleteUserAvatar,
   fetchLoginHistory,
@@ -68,6 +70,11 @@ import { LoadFailedBanner } from "@/components/load/LoadFailed";
 import { IdentityHeader, type TenantRow } from "./IdentityHeader";
 import { BasicInfoCard } from "./BasicInfoCard";
 import { SecurityCard } from "./SecurityCard";
+import { DangerZoneCard } from "./DangerZoneCard";
+import { DeleteAccountDialog } from "./dialogs/DeleteAccountDialog";
+
+/** 删除保留期天数(与 service-account ACCOUNT_DELETION_RETENTION_DAYS 一致;快照会带真值)。 */
+const DELETION_RETENTION_DAYS = 30;
 import {
   PROVIDER_ORDER,
   ThirdPartyLoginCard,
@@ -182,6 +189,7 @@ export function ProfilePage() {
   );
   const [historyOpen, setHistoryOpen] = useState(false);
   const [tenantsOpen, setTenantsOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
 
   // 展开时才取一次。守卫用 ref 而不是 effect 的 cleanup 标记:setSessionsLoading(true)
@@ -718,6 +726,24 @@ export function ProfilePage() {
       />
 
       <PreferencesCard draft={prefs} onChange={changePrefs} loading={loading} />
+
+      <DangerZoneCard
+        retentionDays={DELETION_RETENTION_DAYS}
+        disabled={loading || submitting}
+        onDelete={() => {
+          setFeedback(null);
+          setDeleteOpen(true);
+        }}
+      />
+
+      <DeleteAccountDialog
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={() => {
+          // 账号已进保留期,BFF 对其余路由一律 403:直接登出,下次登录再选撤销与否。
+          window.location.assign(buildLogoutUrl());
+        }}
+      />
 
       <UsernameDialog
         open={usernameOpen}
