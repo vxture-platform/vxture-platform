@@ -31,7 +31,7 @@ import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import type { MyOrder } from "@/api/console-bff";
 import { infoRow, infoRowGlyph, infoRowText } from "./sectionKit";
 import { fmtStamp } from "./hubModel";
-import { formatPrincipalNoOr } from "@/lib/principal-no";
+import { PrincipalNo } from "@/components/principal-no";
 
 interface Step {
   key: string;
@@ -175,9 +175,12 @@ export function OrderDetailPanel({
                 .filter(Boolean)
                 .join(" · ") || "—"}
             </b>
-            <span className="text-body-sm text-muted-foreground tabular-nums">
-              {formatPrincipalNoOr(order.workspaceNo, "workspace", "—")}
-            </span>
+            <PrincipalNo
+              no={order.workspaceNo}
+              kind="workspace"
+              fallback="—"
+              className="text-body-sm text-muted-foreground tabular-nums"
+            />
           </span>
         </div>
       </DetailCard>

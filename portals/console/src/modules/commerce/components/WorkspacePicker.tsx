@@ -30,7 +30,7 @@ import {
 import type { TenantContext } from "@/entities/console";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { useTenant } from "@/features/tenant";
-import { formatPrincipalNo } from "@/lib/principal-no";
+import { PrincipalNo } from "@/components/principal-no";
 import { infoRow, infoRowGlyph, infoRowText } from "./sectionKit";
 
 function TenantGlyph({ type }: { readonly type: "personal" | "organization" }) {
@@ -58,7 +58,6 @@ function TenantLine({
 }) {
   // 结构（owner 2026-08-20 条 4）：第一行 = 租户名称（主）+ 工作区名称（副）；
   // 第二行 = workspace_no 可视码小字。UUID/内部 id 一律不出现。
-  const no = formatPrincipalNo(tenant.workspaceNo, "workspace");
   return (
     <span className={infoRowText}>
       <span className="flex min-w-0 items-baseline gap-xs">
@@ -69,11 +68,11 @@ function TenantLine({
           {tenant.workspaceName ?? labels.ws}
         </span>
       </span>
-      {no ? (
-        <span className="truncate text-body-sm text-muted-foreground tabular-nums">
-          {no}
-        </span>
-      ) : null}
+      <PrincipalNo
+        no={tenant.workspaceNo}
+        kind="workspace"
+        className="truncate text-body-sm text-muted-foreground tabular-nums"
+      />
     </span>
   );
 }

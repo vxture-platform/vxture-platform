@@ -3251,5 +3251,8 @@
     "acceptedDescription": "Switched you to that tenant.",
     "switchFailed": "Joined, but switching tenants failed; use the tenant switcher at the top.",
     "acceptError": "Could not accept the invitation. Try again later."
+  },
+  "principalNo": {
+    "label": "ID:"
   }
 }
