@@ -160,11 +160,14 @@ test("image set: services/identity/organization → 依赖它的 BFF（回归 #2
   // organization; the old hand-maintained rules still pointed at the stale
   // path and silently missed console-bff/website-bff (a real console-login fix
   // nearly didn't ship). Derived rules must catch every real consumer of
-  // @vxture/service-organization.
+  // @vxture/service-organization. platform-api joined the consumers on
+  // 2026-09-04 (console 批 5b: the account-deletion purge job soft-deletes the
+  // personal tenant through OrganizationService).
   assert.deepEqual(builtImages(["services/identity/organization/src/x.ts"]), [
     "platform_bff-auth",
     "platform_bff-website",
     "platform_bff-console",
+    "platform_bff-platform-api",
   ]);
 });
 
