@@ -569,6 +569,7 @@ export function ConsoleAppShell({
               .then(() => loadInbox())
               .catch(() => {});
           }}
+          canMarkAllRead={unreadCount > 0}
           onOpenCenter={() => openInConsole("/inbox")}
           notifications={drawerNotifs}
           labels={drawerLabels}

@@ -1,26 +1,33 @@
 "use client";
 
-/* 通知抽屉：外壳走 DS Drawer（批 D——Radix 底座自带遮罩/Escape/动效/关闭钮，
- * 替代 shell-template 的 .drawer-* 手搓层）。宽度按 Drawer 的 panel 梯取 sm
- * （448px，原 400px 就近吸附）。
+/* 通知抽屉:外壳走 DS Drawer(批 D——Radix 底座自带遮罩/Escape/动效/关闭钮,
+ * 替代 shell-template 的 .drawer-* 手搓层)。宽度按 Drawer 的 panel 梯取 sm
+ * (448px,原 400px 就近吸附)。
  *
- * 原先还兼做「系统设置」抽屉（2026-08-30 删）：那一支没有任何入口——header 的
- * 齿轮直接去 /settings——而它的四行值全是编出来的词条（会话超时 30 分钟、审计
- * 保留 180 天），与 /settings 的真实默认值还互相矛盾。
+ * 原先还兼做「系统设置」抽屉(2026-08-30 删):那一支没有任何入口——header 的
+ * 齿轮直接去 /settings——而它的四行值全是编出来的词条(会话超时 30 分钟、审计
+ * 保留 180 天),与 /settings 的真实默认值还互相矛盾。
  *
- * 消息源 = 站内收件箱（product_330 P2-g，console-bff /api/me/inbox）：调用方喂最近几条，
- * 「全部已读」与「前往消息中心」由调用方接实现；空态是真实的"没有消息"。 */
+ * 消息源 = 站内收件箱(product_330 P2-g,console-bff /api/me/inbox):调用方喂最近几条,
+ * 「全部已读」与「前往消息中心」由调用方接实现;空态是真实的"没有消息"。
+ *
+ * 批 4:图标改走 DS `Icon`(此前是 Phosphor 字体类 `ph-fill ph-*`,而 console 只挂了
+ * regular / bold 两套字体,fill 那套从来没加载——图标位一直是空的);「全部已读」
+ * 按**整个收件箱**的未读数启用(此前按抽屉里那几条算,而抽屉一打开就把展示出来的
+ * 逐条标已读,按钮永远是灰的)。 */
 
 import {
   Button,
   Drawer,
+  Icon,
   toneSurfaceClasses,
+  type IconName,
   type Tone,
 } from "@vxture/design-system";
 
 export interface DrawerNotif {
   level: "danger" | "warning" | "info";
-  icon: string;
+  icon: IconName;
   title: string;
   meta: string;
   href: string;
@@ -31,6 +38,8 @@ export interface TemplateDrawerProps {
   onClose: () => void;
   onNavigate: (href: string) => void;
   onMarkAllRead?: () => void;
+  /** 整个收件箱还有没有未读(抽屉只展示最近几条,不能拿它们判断)。 */
+  canMarkAllRead?: boolean;
   onOpenCenter?: () => void;
   notifications: DrawerNotif[];
   labels: {
@@ -52,6 +61,7 @@ export function TemplateDrawer({
   onClose,
   onNavigate,
   onMarkAllRead,
+  canMarkAllRead = false,
   onOpenCenter,
   notifications,
   labels,
@@ -64,7 +74,7 @@ export function TemplateDrawer({
       width="sm"
       title={
         <span className="flex items-center gap-sm">
-          <i className="ph ph-bell" aria-hidden="true"></i>
+          <Icon name="bell" size="sm" fallback="info" aria-hidden="true" />
           {labels.title}
         </span>
       }
@@ -74,10 +84,10 @@ export function TemplateDrawer({
           <Button
             variant="ghost"
             size="sm"
-            disabled={!onMarkAllRead || !notifications.some((n) => n.unread)}
+            disabled={!onMarkAllRead || !canMarkAllRead}
             onClick={() => onMarkAllRead?.()}
           >
-            <i className="ph ph-checks" aria-hidden="true"></i>
+            <Icon name="check" size="xs" fallback="placeholder" />
             {labels.markAllRead}
           </Button>
           <Button
@@ -90,7 +100,7 @@ export function TemplateDrawer({
               onOpenCenter?.();
             }}
           >
-            <i className="ph ph-arrow-square-out" aria-hidden="true"></i>
+            <Icon name="arrow-right" size="xs" fallback="placeholder" />
           </Button>
         </div>
         {notifications.length === 0 && labels.empty ? (
@@ -111,7 +121,12 @@ export function TemplateDrawer({
             <span
               className={`inline-flex size-icon-xl shrink-0 items-center justify-center rounded-lg ${toneSurfaceClasses[LEVEL_TONE[n.level]]}`}
             >
-              <i className={"ph-fill " + n.icon} aria-hidden="true"></i>
+              <Icon
+                name={n.icon}
+                size="sm"
+                fallback="info"
+                aria-hidden="true"
+              />
             </span>
             <span className="flex min-w-0 flex-1 flex-col gap-2xs">
               <span
@@ -123,10 +138,13 @@ export function TemplateDrawer({
                 {n.meta}
               </span>
             </span>
-            <i
-              className="ph ph-caret-right shrink-0 text-muted-foreground"
+            <Icon
+              name="arrow-right"
+              size="xs"
+              fallback="placeholder"
+              className="shrink-0 text-muted-foreground"
               aria-hidden="true"
-            ></i>
+            />
           </button>
         ))}
       </div>

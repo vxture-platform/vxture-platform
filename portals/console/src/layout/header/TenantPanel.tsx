@@ -44,8 +44,16 @@ export interface TenantPanelProps {
   billingLabel: string;
   /** 生效订阅的套餐名；null 表示未订阅，回落到免费套餐文案。 */
   planName: string | null;
-  /** 可切换的租户列表；≤1 项时切换入口置灰保留（功能在，只是无处可切）。 */
-  tenantOptions: ReadonlyArray<{ id: string; isCurrent: boolean }>;
+  /**
+   * 可切换的租户列表(真列表,批 4):每个租户一行,当前项标出;≤1 项时只剩当前
+   * 一行,切换入口自然无处可点(功能在,只是无处可切)。
+   */
+  tenantOptions: ReadonlyArray<{
+    id: string;
+    name: string;
+    type: "personal" | "organization";
+    isCurrent: boolean;
+  }>;
   onSwitchTenant: (tenantId: string) => void;
   onNavigate: (href: string) => void;
   /** 面板里任何一次跳转都要让 header 上其它弹层一起收起。 */
@@ -73,7 +81,6 @@ export function TenantPanel({
     tenant?.tenantType === "personal" ? t("personalTenant") : t("orgTenant");
   const suspended =
     tenant?.status === "suspended" || tenant?.status === "cancelled";
-  const singleTenant = tenantOptions.length <= 1;
 
   const go = (href: string) => {
     setOpen(false);
@@ -185,11 +192,12 @@ export function TenantPanel({
           <ShellPanelRow
             icon="settings"
             label={t("tenantSettings")}
-            onClick={() => go("/tenant-settings")}
+            onClick={() => go("/settings")}
           />
 
-          {/* 切换范围：嵌套弹层，锚在这一行右侧。组织可切、工作区暂不可切
-              （后端尚无多工作区），后者保留结构置灰，不假装能点。 */}
+          {/* 切换范围:嵌套弹层,锚在这一行右侧。租户是真列表(批 4:此前只有一行
+              「切换组织」,点下去跳到第一个非当前租户,三个租户的用户根本选不到
+              第三个);工作区暂不可切(后端尚无多工作区),保留结构置灰,不假装能点。 */}
           <Popover open={scopeOpen} onOpenChange={setScopeOpen}>
             <PopoverTrigger asChild>
               <div>
@@ -202,24 +210,29 @@ export function TenantPanel({
               </div>
             </PopoverTrigger>
             <ShellPanelContent side="right" align="start">
-              <ShellPanelSection title={t("organization")} divided={false}>
-                <ShellPanelRow
-                  icon="arrow-left-right"
-                  label={t("switchOrg")}
-                  disabled={singleTenant}
-                  {...(singleTenant
-                    ? {}
-                    : {
-                        onClick: () => {
-                          const next = tenantOptions.find(
-                            (option) => !option.isCurrent,
-                          );
-                          setOpen(false);
-                          setScopeOpen(false);
-                          if (next) onSwitchTenant(next.id);
-                        },
-                      })}
-                />
+              <ShellPanelSection title={t("tenantList")} divided={false}>
+                {tenantOptions.map((option) => (
+                  <ShellPanelRow
+                    key={option.id}
+                    icon={option.type === "personal" ? "user" : "buildings"}
+                    label={formatTenantDisplay(option.name, option.type)}
+                    description={
+                      option.type === "personal"
+                        ? t("personalTenant")
+                        : t("orgTenant")
+                    }
+                    active={option.isCurrent}
+                    {...(option.isCurrent
+                      ? { value: t("currentTag"), disabled: true }
+                      : {
+                          onClick: () => {
+                            setOpen(false);
+                            setScopeOpen(false);
+                            onSwitchTenant(option.id);
+                          },
+                        })}
+                  />
+                ))}
               </ShellPanelSection>
               <ShellPanelSection title={t("workspace")}>
                 <ShellPanelRow
