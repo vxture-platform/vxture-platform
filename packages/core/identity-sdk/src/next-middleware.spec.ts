@@ -38,6 +38,37 @@ describe("createAuthMiddleware", () => {
     expect(location(res).pathname).toBe("/auth/login");
   });
 
+  /* 2026-09-04 实测：容器里 Next 自己拼的 origin 是绑定地址 https://0.0.0.0:3020，
+   * 用它拼的 returnTo 被 BFF 白名单挡掉、回落首页，首访深链（邀请邮件链接）登录后
+   * 丢路径。returnTo 必须按 nginx 转发的 Host / X-Forwarded-Proto 拼。 */
+  it("returnTo 用转发头里的公开 origin，不用容器绑定地址", () => {
+    const r = new NextRequest(
+      new URL("/zh-CN/accept-invitation?token=abc", "http://0.0.0.0:3020"),
+      {
+        headers: {
+          host: "console.example.com",
+          "x-forwarded-proto": "https",
+        },
+      },
+    );
+    expect(location(mw(r)).searchParams.get("returnTo")).toBe(
+      "https://console.example.com/zh-CN/accept-invitation?token=abc",
+    );
+  });
+
+  it("X-Forwarded-Host 优先于 Host（多级代理取第一个）", () => {
+    const r = new NextRequest(new URL("/tenants", "http://0.0.0.0:3020"), {
+      headers: {
+        host: "vx-platform-console:3020",
+        "x-forwarded-host": "console.example.com, internal",
+        "x-forwarded-proto": "https, http",
+      },
+    });
+    expect(location(mw(r)).searchParams.get("returnTo")).toBe(
+      "https://console.example.com/tenants",
+    );
+  });
+
   it("returnTo 里剥掉 vx_sso_silent，避免参数一层层套下去", () => {
     const res = mw(req("/tenants?vx_sso_silent=0&keep=1"));
     expect(location(res).searchParams.get("returnTo")).toBe(

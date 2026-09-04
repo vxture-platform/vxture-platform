@@ -71,6 +71,27 @@ export interface AuthMiddlewareOptions {
 }
 
 /**
+ * 浏览器看到的站点 origin。
+ *
+ * 容器里 Next 自己拼的 `req.nextUrl.origin` 是它的绑定地址（实测生产
+ * `https://0.0.0.0:3020`，2026-09-04），不是 nginx 前面的公开域名。returnTo 用它
+ * 拼出来的绝对 URL 会被 BFF 的 returnTo 白名单挡掉、回落到站点首页——首访深链
+ * （邮件里的邀请链接、订阅深链）登录后全部丢路径。nginx 转发了 `Host` /
+ * `X-Forwarded-Proto`（部分片段还有 `X-Forwarded-Host`），按这个顺序取；本地
+ * 直连没有这些头，就还是 nextUrl 自己的 origin。
+ */
+export function publicOrigin(req: NextRequest): string {
+  const host =
+    req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() ||
+    req.headers.get("host")?.trim();
+  if (!host) return req.nextUrl.origin;
+  const proto =
+    req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
+    req.nextUrl.protocol.replace(/:$/, "");
+  return `${proto}://${host}`;
+}
+
+/**
  * 造一个门户的认证 middleware。
  *
  * ```ts
@@ -124,7 +145,7 @@ export function createAuthMiddleware(
     loginUrl.search = "";
     loginUrl.searchParams.set(
       "returnTo",
-      `${target.origin}${target.pathname}${target.search}`,
+      `${publicOrigin(req)}${target.pathname}${target.search}`,
     );
     if (decision.prompt) loginUrl.searchParams.set("prompt", decision.prompt);
 
