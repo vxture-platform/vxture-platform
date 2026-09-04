@@ -210,12 +210,7 @@ const advancedSettingsSection: NavigationSection = {
       descriptionKey: "auditLogs.description",
       capability: "tenant.audit.read",
     },
-    {
-      href: "/security",
-      labelKey: "security.label",
-      icon: "shield-check",
-      descriptionKey: "security.description",
-    },
+    // 批 5a:「安全设置」并入「账号信息」(/profile),/security 路由保留跳转。
   ],
 };
 

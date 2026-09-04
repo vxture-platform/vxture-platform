@@ -1,0 +1,141 @@
+"use client";
+
+/**
+ * PreferencesCard — 个人偏好:语言 / 时区(下拉)+ 主题 / 密度 / 文字大小(按钮组)。
+ * @package @vxture/console
+ * @layer Application
+ * @category Module
+ *
+ * 五个控件统一宽度(不全宽)、从同一竖线起;主题 / 密度 / 字号即时预览(调用方接
+ * useTheme),放弃回滚、保存才持久化;语言与时区随页底保存。
+ */
+
+import { useTranslations } from "next-intl";
+import {
+  DetailList,
+  DetailRow,
+  NativeSelect,
+  Section,
+  SegmentedControl,
+} from "@vxture/design-system";
+import { TIMEZONE_OPTIONS, formatTimezone } from "./format";
+
+export type ThemeChoice = "system" | "light" | "dark";
+export type DensityChoice = "compact" | "default" | "comfortable";
+export type FontSizeChoice = "small" | "default" | "large";
+
+export interface PreferencesDraft {
+  language: string;
+  timezone: string;
+  theme: ThemeChoice;
+  density: DensityChoice;
+  fontSize: FontSizeChoice;
+}
+
+const CONTROL_CLASS = "w-full max-w-panel-sm";
+
+export function PreferencesCard({
+  draft,
+  onChange,
+  loading,
+}: {
+  readonly draft: PreferencesDraft;
+  readonly onChange: (patch: Partial<PreferencesDraft>) => void;
+  readonly loading: boolean;
+}) {
+  const t = useTranslations("profilePage");
+  const tShell = useTranslations("shell");
+
+  return (
+    <Section
+      tone="raised"
+      level={2}
+      icon="faders"
+      title={t("cards.prefs.title")}
+      description={t("cards.prefs.description")}
+    >
+      <div className="pl-md">
+        <DetailList>
+          <DetailRow label={t("fields.language")}>
+            <NativeSelect
+              wrapperClassName={CONTROL_CLASS}
+              value={draft.language}
+              disabled={loading}
+              onChange={(event) => onChange({ language: event.target.value })}
+              aria-label={t("fields.language")}
+            >
+              <option value="zh-CN">{t("language.zhCN")}</option>
+              <option value="en-US">{t("language.enUS")}</option>
+            </NativeSelect>
+          </DetailRow>
+          <DetailRow label={t("fields.timezone")}>
+            <NativeSelect
+              wrapperClassName={CONTROL_CLASS}
+              value={draft.timezone}
+              disabled={loading}
+              onChange={(event) => onChange({ timezone: event.target.value })}
+              aria-label={t("fields.timezone")}
+            >
+              <option value="">{t("prefs.timezoneUnset")}</option>
+              {draft.timezone && !TIMEZONE_OPTIONS.includes(draft.timezone) ? (
+                <option value={draft.timezone}>
+                  {formatTimezone(draft.timezone, draft.timezone)}
+                </option>
+              ) : null}
+              {TIMEZONE_OPTIONS.map((tz) => (
+                <option key={tz} value={tz}>
+                  {formatTimezone(tz, tz)}
+                </option>
+              ))}
+            </NativeSelect>
+          </DetailRow>
+          <DetailRow label={t("prefs.theme")}>
+            <SegmentedControl<ThemeChoice>
+              size="sm"
+              fill
+              className={CONTROL_CLASS}
+              ariaLabel={t("prefs.theme")}
+              value={draft.theme}
+              onChange={(theme) => onChange({ theme })}
+              items={[
+                { value: "system", label: tShell("themeSystem") },
+                { value: "light", label: tShell("themeLight") },
+                { value: "dark", label: tShell("themeDark") },
+              ]}
+            />
+          </DetailRow>
+          <DetailRow label={t("prefs.density")}>
+            <SegmentedControl<DensityChoice>
+              size="sm"
+              fill
+              className={CONTROL_CLASS}
+              ariaLabel={t("prefs.density")}
+              value={draft.density}
+              onChange={(density) => onChange({ density })}
+              items={[
+                { value: "compact", label: tShell("densityCompact") },
+                { value: "default", label: tShell("densityDefault") },
+                { value: "comfortable", label: tShell("densityComfy") },
+              ]}
+            />
+          </DetailRow>
+          <DetailRow label={t("prefs.fontSize")}>
+            <SegmentedControl<FontSizeChoice>
+              size="sm"
+              fill
+              className={CONTROL_CLASS}
+              ariaLabel={t("prefs.fontSize")}
+              value={draft.fontSize}
+              onChange={(fontSize) => onChange({ fontSize })}
+              items={[
+                { value: "small", label: tShell("fontSmall") },
+                { value: "default", label: tShell("fontDefault") },
+                { value: "large", label: tShell("fontLarge") },
+              ]}
+            />
+          </DetailRow>
+        </DetailList>
+      </div>
+    </Section>
+  );
+}
