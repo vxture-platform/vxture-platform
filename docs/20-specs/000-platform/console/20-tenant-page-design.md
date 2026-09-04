@@ -94,15 +94,16 @@
 
 ### 4.1 转换后
 
-| 维度                          | 转换后                                               | 说明                                               |
-| ----------------------------- | ---------------------------------------------------- | -------------------------------------------------- |
-| 类型 / 名称                   | organization / 对话框里填的组织名称                  | 页面结构不变                                       |
-| T-编号                        | **换发**新主体号                                     | B9b:user_no 是人的终身号,留给人;组织从此有自己的号 |
-| 认证                          | 重置为「未认证」,入口变企业认证                      | 个人实名留在账号上不受影响                         |
-| 成员                          | 成员 / 邀请 / 角色三页出现;你是唯一成员、owner       | 导航按租户类型显隐                                 |
-| 订阅 / 余额 / 账单 / 工作空间 | 全部原样跟着租户                                     | tenant id 不变;新订单付款时效改 2880 分钟          |
-| 个人租户                      | **转换事务里立刻补建**一个新的个人租户,收回原编号    | owner 2026-09-05 定;不靠下次登录的 onboarding 补建 |
-| 默认租户                      | **新的组织租户**(同 id,当前会话的 active_org 就是它) | 顶栏租户面板多出新的个人租户,可切过去              |
+| 维度                          | 转换后                                               | 说明                                                                                                                                                                                        |
+| ----------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 类型 / 名称                   | organization / 对话框里填的组织名称                  | 页面结构不变                                                                                                                                                                                |
+| T-编号                        | **换发**新主体号                                     | B9b:user_no 是人的终身号,留给人;组织从此有自己的号                                                                                                                                          |
+| WS-编号                       | **前缀同步换发**,租户内序号(后三位)保留              | B9c 触发器 `trg_tenants_reprefix_ws`(已在库里):tenant_no 一变,该租户全部 workspace_no 改为 新号×1000+原序号,SECURITY DEFINER 绕列锁;workspace uuid 不变;旧 WS-号随旧 T-号回到重建的个人租户 |
+| 认证                          | 重置为「未认证」,入口变企业认证                      | 个人实名留在账号上不受影响                                                                                                                                                                  |
+| 成员                          | 成员 / 邀请 / 角色三页出现;你是唯一成员、owner       | 导航按租户类型显隐                                                                                                                                                                          |
+| 订阅 / 余额 / 账单 / 工作空间 | 全部原样跟着租户                                     | tenant id 不变;新订单付款时效改 2880 分钟                                                                                                                                                   |
+| 个人租户                      | **转换事务里立刻补建**一个新的个人租户,收回原编号    | owner 2026-09-05 定;不靠下次登录的 onboarding 补建                                                                                                                                          |
+| 默认租户                      | **新的组织租户**(同 id,当前会话的 active_org 就是它) | 顶栏租户面板多出新的个人租户,可切过去                                                                                                                                                       |
 
 ### 4.2 过程:正式、有视觉进度、至少 5 秒
 
@@ -114,7 +115,32 @@
 
 ### 4.3 后端
 
-`POST /api/me/organization/convert {name}`:一个事务——锁租户行 → `type='organization'`、`name`、`verification_status='unverified'`(B9b 触发器换号)→ 用既有 `provisionOrg(owner,'personal',null)` 补建个人租户 + 默认工作空间 + owner 成员关系(触发器把原 user_no 发给它)→ 返回新旧编号与新个人租户 id。列锁核对:`tenancy.tenants.type` 若不在 98 的 UPDATE 白名单里,随本批迁移一起授权。
+`POST /api/me/organization/convert {name}`:一个事务——锁租户行 → `type='organization'`、`name`、`verification_status='unverified'`(B9b 触发器换号)→ 用既有 `provisionOrg(owner,'personal',null)` 补建个人租户 + 默认工作空间 + owner 成员关系(触发器把原 user_no 发给它)→ 返回新旧编号与新个人租户 id。列锁核对:`tenancy.tenants.type` 已在 98 的 UPDATE 白名单里,不必另授权。
+
+### 4.4 安全保障:绑定工作空间的表很多,转换碰不到它们
+
+库里 6 个 schema、27 个列挂在工作空间上(tenancy 3 · metering 12 · billing 3 · provisioning 2 · promotion 2 · sharing 5),**全部挂 uuid**;没有任何表复制 tenant_no / workspace_no(可视码只在 tenants / workspaces 各自一列,对外编号一律走各表自己的 `*_no`)。转换只改两处:`tenants` 的 type / name / tenant_no / verification_status,`workspaces` 的 workspace_no 前缀;其余数据一行不动。
+
+- **一个事务 + 行锁**:`select … for update` 锁租户行;前置(owner、personal、未删除、名称合法)在锁内判;失败整体回滚,页面上对应步骤变红。
+- **提交前断言不变量**,不成立就 raise 回滚:该租户所有 workspace_no 前 12 位 = 新 tenant_no;新个人租户的 tenant_no = 所有者 user_no;每人恰好一个个人租户;原租户 type = organization。
+- **库级校验**:同样的不变量写进 `deploy/database/verify/baseline-assertions.sql`,每次 db-init verify 全库重算。
+- **幂等**:重复调用 409(已是组织);前端进度页失败给「重试」,重试走同一事务。
+- **留痕**:转换写一条审计(旧号 / 新号 / 新个人租户 id / 操作者)。
+- **上线顺序**:先在本地库跑仓储层集成测试(convert → 校验不变量 → 回滚);上线后 owner 先用一个一次性新账号在生产转一次,核对顶栏面板、订阅页、配额页都还挂在原 uuid 上,再对外。
+
+### 4.5 对各 agent 产品的权益与订阅:零影响
+
+| 链路                                                            | 键                                                            | 转换后                                                               |
+| --------------------------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 订阅(metering.subscriptions)                                    | workspace_id / tenant_id uuid                                 | 不动;状态、周期、自动续费、档位全保留                                |
+| 配额池 / 用量 / 加油包                                          | workspace_id uuid                                             | 不动;基础池作业按 uuid 巡检                                          |
+| 开通与权益下发(provisioning.provisionings / webhook_deliveries) | workspace_id + product_id uuid;幂等键派生自 workspace_id      | 不动;**不需要重发 subscription_changed**——订阅事实没变               |
+| Atlas / RunOS 侧的权益读取(platform-api entitlements)           | 按 workspaceId 查;响应里没有租户类型、租户号、空间号          | 产品侧感知不到转换;它们的库里也只存 tenant_id / workspace_id         |
+| 订单 / 账单 / 余额 / 卡券                                       | tenant_id / workspace_id uuid;对外编号各表自己的 `*_no`       | 不动;已开的待付订单沿用自己存的付款时效(30 分钟),**新**订单起改 2880 |
+| 套餐档位                                                        | free / starter / pro / business / enterprise,不按租户类型限制 | 可订阅的档位不变                                                     |
+| 会话 / 登录                                                     | active_org = tenant id                                        | 不动;刷新会话后拿到新类型 / 名称 / 编号                              |
+
+代码里唯一按租户类型分叉的商业逻辑就是付款时效;促销、订阅、开通、配额四个服务都不看租户类型。
 
 ---
 
