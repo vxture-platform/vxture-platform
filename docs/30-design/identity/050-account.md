@@ -285,3 +285,30 @@ GET {ACCOUNTS_BASE}/avatar/usr_<id>?v=<hash>[&s=64]
 - **operator 隔离不变**：所有验证码 / 社交 / 注册 / 找回密码能力仅 tenant realm；operator 永远密码-only（预建、无自助注册）。
 - **不自动并号**：无论社交联邦还是邮箱码登录，绝不因 `email` 相同而自动合并身份；并号只经 `sso_connection(sub)` 或已验证手机锚点。
 - **跨域 RP 不查库**：ruyin（umbra，跨仓）消费 `picture` 走 token；其头像上传须走 IdP Bearer API（未来单列，本文 OUT）。
+
+## 7. 删除账号（自助，30 天保留期）
+
+> 2026-09-04 owner 裁定，console 批 5b 实施。入口在 console「账号信息」页底的危险操作区；后端 `AccountService.requestDeletion / cancelDeletion / purgeUser`，跨域资格判定在 console-bff `AccountDeletionAggregator`，清扫在 platform-api `account-deletion-purge` 作业。
+
+**状态机**：`active` →（申请）→ `deleting`（`deletion_requested_at = now()`）→（30 天后清扫）→ `deleted_at` 置位、标识脱敏。保留期内重新登录可撤销（`deleting` → `active`，清 `deletion_requested_at`）。
+
+**判定范围** = 本人是所有者的租户（个人租户 + 组织租户）。
+
+| 类别                   | 项                                                                                                                      | 判据                                                                                                           |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 阻断（任一命中不能删） | 组织租户所有者                                                                                                          | `tenancy.tenants.owner_user_id = 本人 and type='organization'`；先转让或注销                                   |
+|                        | 未清账单                                                                                                                | `billing.invoices.bill_status in (unpaid, paying, partial, overdue)`                                           |
+|                        | 付费余额 > 0                                                                                                            | 付费余额 = min(`credits.balance`, Σrecharge − Σrefund)——库里一池不分，从 `transactions` 流水推，**先消耗赠送** |
+|                        | 进行中退款                                                                                                              | `refunds.audit_status='pending'` 或 approved 且 `refund_status in (pending, processing)`                       |
+|                        | 进行中开票                                                                                                              | `invoice_receipts.invoice_status in (applying, approved)`                                                      |
+|                        | 有钱在途的待付订单                                                                                                      | `pending_verify`，或账单已有实收，或存在待核实付款腿（与订单取消的 409 条件同源）                              |
+| 确认（能删，须知悉）   | 订阅未到期                                                                                                              | `metering.subscriptions` 未过期且非 cancelled，剩余周期作废                                                    |
+|                        | 赠送余额                                                                                                                | balance − 付费余额，作废                                                                                       |
+| 自动（删除时连带）     | 一分钱没收到的待付订单取消；非所有者的组织成员关系解除；会话 / 刷新令牌全部吊销；三方绑定解除；本人发出的待接受邀请撤销 | 申请时即做，连带动作任一失败不动账号                                                                           |
+|                        | 个人租户软删                                                                                                            | **清扫时**做（保留期内撤销无需恢复）                                                                           |
+
+**保留期内的登录**：读路径（`getUserById / findUserByIdentifier / findCredentialById`）放行 `deleting`，登录照常完成；console-bff 对该用户除会话恢复读（`GET /api/me`、tenant-context、capabilities）与 `/api/me/deletion*` 之外一律 `403 ACCOUNT_DELETING`，console 外壳据此只画「账号在删除保留期：撤销删除并重新启用 / 保持删除并退出」。
+
+**清扫**（`AccountService.purgeUser`，事务）：`account = deleted_<user_no>`、`email = null`、`phone = deleted:<id 前 24 位>`、`account_login_disabled = true`、`deleted_at = now()`；`user_profiles` 展示字段清空；`user_avatars / user_credentials / identities` 整行删除；会话与刷新令牌吊销。`user_no` 永不回收（§1），订单 / 账单 / 支付 / 审计里的裸 `user_id` 仍能解引用到「一个已删除的用户」。
+
+**DDL / 迁移**：`account.users.deletion_requested_at`、`chk_users_status` 加 `deleting`、部分索引 `idx_users_deletion_requested_at`、98 列锁白名单加新列；迁移 `2026-09-11-account-deletion-retention.sql`。

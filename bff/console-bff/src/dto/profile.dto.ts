@@ -73,3 +73,8 @@ export class ConfirmEmailChangeDto {
 export class SetAccountLoginEnabledDto {
   enabled = false;
 }
+
+/** 删除账号:用户必须勾过「已知悉确认项与连带动作」才能提交(050-account §7)。 */
+export class RequestAccountDeletionDto {
+  acknowledged = false;
+}

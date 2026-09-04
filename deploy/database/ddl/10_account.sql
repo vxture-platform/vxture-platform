@@ -22,16 +22,18 @@ CREATE TABLE account.users (
     created_at           timestamptz  NOT NULL DEFAULT now(),
     updated_at           timestamptz  NOT NULL DEFAULT now(),
     deleted_at           timestamptz,
+    deletion_requested_at timestamptz,                             -- 自助删除申请时刻:status='deleting' 起 30 天保留期,到期清扫(050-account §7)
     CONSTRAINT uq_users_user_no  UNIQUE (user_no),
     CONSTRAINT uq_users_account  UNIQUE (account),
     CONSTRAINT uq_users_email    UNIQUE (email),
     CONSTRAINT uq_users_phone    UNIQUE (phone),
-    CONSTRAINT chk_users_status  CHECK (status IN ('active','disabled','pending')),
+    CONSTRAINT chk_users_status  CHECK (status IN ('active','disabled','pending','deleting')),
     CONSTRAINT chk_users_level_no CHECK (level_no >= 1)
 );
 CREATE INDEX idx_users_status     ON account.users (status);
 CREATE INDEX idx_users_level_no   ON account.users (level_no);
 CREATE INDEX idx_users_deleted_at ON account.users (deleted_at);
+CREATE INDEX idx_users_deletion_requested_at ON account.users (deletion_requested_at) WHERE deletion_requested_at IS NOT NULL;
 
 -- 1:1 展示 / 本地化资料（§1.2）。核心鉴权表 users 只留认证列；资料编辑接口无从触及安全列。
 CREATE TABLE account.user_profiles (

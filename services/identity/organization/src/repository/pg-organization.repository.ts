@@ -1080,6 +1080,26 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     return (res.rowCount ?? 0) > 0;
   }
 
+  async revokeInvitationsCreatedBy(userId: string): Promise<number> {
+    const res = await this.pool.query(
+      `update tenancy.invitations
+          set status = 'revoked', updated_at = now()
+        where created_by = $1 and status = 'pending'`,
+      [userId],
+    );
+    return res.rowCount ?? 0;
+  }
+
+  async softDeletePersonalOrg(ownerUserId: string): Promise<boolean> {
+    const res = await this.pool.query(
+      `update tenancy.tenants
+          set status = 'deleted', deleted_at = now(), updated_at = now()
+        where owner_user_id = $1 and type = 'personal' and deleted_at is null`,
+      [ownerUserId],
+    );
+    return (res.rowCount ?? 0) > 0;
+  }
+
   async rotateInvitationToken(
     invitationId: string,
     tenantId: string,

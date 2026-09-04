@@ -23,10 +23,12 @@ import {
 import { PhoneCodeService } from "@vxture/service-sms";
 import { COMMERCE_PG_POOL } from "@vxture/service-subscription";
 import { SessionAggregator } from "../aggregators/session.aggregator";
+import { AccountDeletionAggregator } from "../aggregators/account-deletion.aggregator";
 import {
   ChangePasswordDto,
   ConfirmEmailChangeDto,
   ConfirmPhoneChangeDto,
+  RequestAccountDeletionDto,
   SendNewEmailOtpDto,
   SetAccountLoginEnabledDto,
   SetInitialPasswordDto,
@@ -52,6 +54,8 @@ export class MeRouter {
   constructor(
     @Inject(SessionAggregator)
     private readonly sessionAggregator: SessionAggregator,
+    @Inject(AccountDeletionAggregator)
+    private readonly accountDeletion: AccountDeletionAggregator,
     @Inject(COMMERCE_PG_POOL)
     private readonly pool: Pool,
     @Inject(PhoneChangeService)
@@ -171,6 +175,36 @@ export class MeRouter {
   async getSessions(@Req() req: Request & RequestContext) {
     if (!req.user) throw new UnauthorizedException("No active session");
     return this.sessionAggregator.getUserSessions(req.user.id);
+  }
+
+  // ── 删除账号(批 5b,050-account §7)。三条都是 @SelfScope(类级):保留期内
+  //    auth.middleware 只放行这几条与会话恢复读,其余 403 ACCOUNT_DELETING。
+
+  /** 资格快照:阻断 / 确认 / 连带动作 + 当前状态与保留期。 */
+  @Get("deletion")
+  async getAccountDeletion(@Req() req: Request & RequestContext) {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    return this.accountDeletion.getState(req.user.id);
+  }
+
+  /** 申请删除:再判一次资格,连带动作做完后账号进 30 天保留期。 */
+  @Post("deletion")
+  async requestAccountDeletion(
+    @Req() req: Request & RequestContext,
+    @Body() body: RequestAccountDeletionDto,
+  ) {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    if (body?.acknowledged !== true) {
+      throw new BadRequestException("acknowledgement_required");
+    }
+    return this.accountDeletion.request(req.user.id, req.ip);
+  }
+
+  /** 保留期内撤销删除并重新启用。 */
+  @Post("deletion/cancel")
+  async cancelAccountDeletion(@Req() req: Request & RequestContext) {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    return this.accountDeletion.cancel(req.user.id);
   }
 
   @Get("workspaces")

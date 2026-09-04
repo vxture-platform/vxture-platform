@@ -285,6 +285,39 @@ export class MockUserRepository implements UserReadRepository {
   async revokeAllSessions(_userId: string): Promise<number> {
     return 0;
   }
+
+  async revokeAllRefreshTokens(_userId: string): Promise<number> {
+    return 0;
+  }
+
+  async removeAllIdentities(_userId: string): Promise<number> {
+    return 0;
+  }
+
+  async requestDeletion(userId: string): Promise<UserView | null> {
+    const u = this.users.get(userId);
+    if (!u || u.status !== "active") return null;
+    u.status = "deleting";
+    return toView(u);
+  }
+
+  async cancelDeletion(userId: string): Promise<UserView | null> {
+    const u = this.users.get(userId);
+    if (!u || u.status !== "deleting") return null;
+    u.status = "active";
+    return toView(u);
+  }
+
+  async listDeletionDue(
+    _retentionDays: number,
+    _limit: number,
+  ): Promise<string[]> {
+    return [];
+  }
+
+  async purgeUser(_userId: string): Promise<boolean> {
+    return false;
+  }
 }
 
 function toView(u: UserCredentialRecord): UserView {

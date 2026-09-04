@@ -160,7 +160,14 @@
     "verifySuspended": "已暂停",
     "brandName": "工作台控制台",
     "tenantList": "可切换的租户",
-    "currentTag": "当前"
+    "currentTag": "当前",
+    "accountDeleting": {
+      "title": "账号在删除保留期",
+      "body": "你在 {requestedAt} 申请删除账号,将于 {purgeAt} 永久删除。是否撤销删除并重新启用?",
+      "reactivate": "撤销删除并重新启用",
+      "keep": "保持删除并退出",
+      "error": "操作失败,请稍后重试。"
+    }
   },
   "header": {
     "title": "控制台",
@@ -1123,6 +1130,10 @@
       "prefs": {
         "title": "个人偏好",
         "description": "语言与时区决定文案与时间显示;主题、密度、字号即时预览,保存后跨门户生效。"
+      },
+      "danger": {
+        "title": "危险操作",
+        "description": "以下操作影响整个账号,执行前请仔细核对。"
       }
     },
     "identity": {
@@ -1153,6 +1164,89 @@
       "clean": "没有未保存的修改",
       "discard": "放弃",
       "save": "保存"
+    },
+    "deletion": {
+      "label": "删除账号",
+      "action": "删除账号",
+      "summary": "删除后账号进入 {days} 天保留期,期间重新登录可撤销;到期后永久删除个人数据,个人租户一并删除。",
+      "conditionsLabel": "删除条件:",
+      "conditions": "不是任何组织租户的所有者;没有未结清的账单、付费余额、进行中的退款或开票、已付款待确认的订单。",
+      "dialog": {
+        "title": "删除账号",
+        "description": "请核对以下事项。确认后账号进入 {days} 天保留期,期间重新登录可撤销;到期后永久删除。",
+        "loading": "正在核对账号状态…",
+        "blocked": "以下事项阻止删除,处理完成后再试。",
+        "blockersTitle": "阻止删除",
+        "confirmTitle": "删除将作废",
+        "autoTitle": "删除时自动处理",
+        "acknowledge": "我已知悉以上事项,确认删除账号(保留 {days} 天后永久删除)",
+        "submit": "确认删除",
+        "cancel": "取消"
+      },
+      "errorBlocked": "删除条件已变化,请重新核对。",
+      "error": "删除失败,请稍后重试。",
+      "blockers": {
+        "org_owner": {
+          "tag": "组织所有者",
+          "text": "你是 {names} 的所有者。先转让所有权或注销组织。"
+        },
+        "unpaid_bills": {
+          "tag": "未清账单",
+          "text": "有 {count} 张账单未结清。"
+        },
+        "paid_balance": {
+          "tag": "付费余额",
+          "text": "账户里还有付费余额 {amount} {currency},先用完或申请退款。"
+        },
+        "refund_in_progress": {
+          "tag": "退款进行中",
+          "text": "有 {count} 笔退款尚未完成。"
+        },
+        "receipt_in_progress": {
+          "tag": "开票进行中",
+          "text": "有 {count} 张发票尚未开出。"
+        },
+        "pending_order_with_payment": {
+          "tag": "订单待确认",
+          "text": "有 {count} 笔已付款的订单等待确认,先等确认或联系我们。"
+        }
+      },
+      "confirmations": {
+        "active_subscription": {
+          "tag": "订阅未到期",
+          "text": "有 {count} 个订阅尚未到期,剩余周期作废。"
+        },
+        "gifted_balance": {
+          "tag": "赠送余额",
+          "text": "赠送余额 {amount} {currency} 将作废。"
+        }
+      },
+      "auto": {
+        "cancel_pending_orders": {
+          "tag": "取消订单",
+          "text": "{count} 笔未付款的订单将自动取消。"
+        },
+        "leave_organizations": {
+          "tag": "退出组织",
+          "text": "将退出 {names}。"
+        },
+        "revoke_sessions": {
+          "tag": "下线设备",
+          "text": "所有在线设备将被下线。"
+        },
+        "unbind_identities": {
+          "tag": "解绑三方",
+          "text": "{count} 个三方登录绑定将被解除。"
+        },
+        "revoke_invitations": {
+          "tag": "撤销邀请",
+          "text": "你发出的待接受邀请将被撤销。"
+        },
+        "delete_personal_tenant": {
+          "tag": "个人租户",
+          "text": "个人租户随账号一并删除。"
+        }
+      }
     }
   },
   "organizationPage": {

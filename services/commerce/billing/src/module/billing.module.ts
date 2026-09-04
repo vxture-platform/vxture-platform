@@ -4,8 +4,10 @@ import { Pool } from "pg";
 import { COMMERCE_PG_POOL } from "../tokens";
 import { PgBillingRepository } from "../repository/pg-billing.repository";
 import { PgReceiptRepository } from "../repository/pg-receipt.repository";
+import { PgTenantClosureRepository } from "../repository/pg-tenant-closure.repository";
 import { BillingService } from "../service/billing.service";
 import { InvoiceReceiptService } from "../service/receipt.service";
+import { TenantClosureReadService } from "../service/tenant-closure.service";
 
 @Module({
   imports: [VxConfigModule.register({ domains: ["database"] })],
@@ -37,7 +39,9 @@ import { InvoiceReceiptService } from "../service/receipt.service";
     BillingService,
     PgReceiptRepository,
     InvoiceReceiptService,
+    PgTenantClosureRepository,
+    TenantClosureReadService,
   ],
-  exports: [BillingService, InvoiceReceiptService],
+  exports: [BillingService, InvoiceReceiptService, TenantClosureReadService],
 })
 export class BillingModule {}

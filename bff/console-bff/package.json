@@ -29,6 +29,7 @@
     "@vxture/service-notification": "workspace:*",
     "@vxture/core-oidc-rp": "workspace:*",
     "@vxture/service-account": "workspace:*",
+    "@vxture/service-billing": "workspace:*",
     "@vxture/service-iam": "workspace:*",
     "@vxture/service-organization": "workspace:*",
     "@vxture/service-promotion": "workspace:*",

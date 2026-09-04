@@ -70,6 +70,16 @@ export class OrganizationService {
     return this.repo.revokeInvitation(invitationId, tenantId);
   }
 
+  /** Account deletion: revoke every pending invitation the user sent; returns the count. */
+  revokeInvitationsCreatedBy(userId: string): Promise<number> {
+    return this.repo.revokeInvitationsCreatedBy(userId);
+  }
+
+  /** Account purge (050-account §7): soft-delete the user's personal tenant. */
+  softDeletePersonalOrg(ownerUserId: string): Promise<boolean> {
+    return this.repo.softDeletePersonalOrg(ownerUserId);
+  }
+
   // ── 组织实名认证(owner 2026-08-21 P0;审核在 admin 侧,本面只提交/读)────
   getLatestTenantVerification(tenantId: string) {
     return this.repo.getLatestTenantVerification(tenantId);

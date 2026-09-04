@@ -13,6 +13,7 @@
     "@nestjs/swagger": "^11.0.0",
     "@vxture-platform/shared": "workspace:*",
     "@vxture/core-api": "workspace:*",
+    "@vxture/core-config": "workspace:*",
     "@vxture/core-utils": "workspace:*",
     "class-validator": "^0.14.0",
     "pg": "^8.13.3"

@@ -25,6 +25,7 @@
     "@vxture/core-config": "workspace:*",
     "@vxture/core-mail": "workspace:*",
     "@vxture/service-account": "workspace:*",
+    "@vxture/service-organization": "workspace:*",
     "@vxture/service-notification": "workspace:*",
     "@vxture/service-sms": "workspace:*",
     "@vxture/service-provisioning": "workspace:*",

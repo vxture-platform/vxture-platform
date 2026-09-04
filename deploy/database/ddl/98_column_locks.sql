@@ -36,7 +36,7 @@
 
 -- account.users  [anchor: id, user_no, level_no, created_at]
 REVOKE UPDATE ON account.users FROM platform_svc;
-GRANT UPDATE (account, email, email_verified_at, phone, phone_verified_at, account_changed_at, account_login_disabled, status, source, updated_at, deleted_at) ON account.users TO platform_svc;
+GRANT UPDATE (account, email, email_verified_at, phone, phone_verified_at, account_changed_at, account_login_disabled, status, source, updated_at, deleted_at, deletion_requested_at) ON account.users TO platform_svc;
 
 -- account.user_profiles  [anchor: user_id, created_at]
 REVOKE UPDATE ON account.user_profiles FROM platform_svc;

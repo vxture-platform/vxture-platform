@@ -24,23 +24,24 @@
 
 ### 1.1 `users`
 
-| 字段                        | 类型         | 约束                                          | 说明                                                    |
-| --------------------------- | ------------ | --------------------------------------------- | ------------------------------------------------------- |
-| `id`                        | uuid         | PK, default `gen_random_uuid()`               | 唯一关联键                                              |
-| `user_no`                   | bigint       | UNIQUE, default 主体号seq×1000+3位随机(12 位) | 可视码，见 §11                                          |
-| `account`                   | varchar(64)  | UNIQUE NOT NULL                               | 登录句柄，可改限频，非关联键                            |
-| `email`                     | varchar(128) | UNIQUE NULL                                   | 可空                                                    |
-| `email_verified_at`         | timestamptz  | NULL                                          |                                                         |
-| `phone`                     | varchar(32)  | UNIQUE NOT NULL                               | 强锚点                                                  |
-| `phone_verified_at`         | timestamptz  | NOT NULL                                      |                                                         |
-| `account_changed_at`        | timestamptz  | NULL                                          | 限频判据                                                |
-| `status`                    | varchar(32)  | NOT NULL DEFAULT `'active'`, CHECK            | active/disabled/pending                                 |
-| `level_no`                  | int          | NOT NULL DEFAULT 1, CHECK `>=1`               | 反规范化只读列，SoT 在 `loyalty.level_policies`（§9.1） |
-| `source`                    | varchar(32)  | NULL                                          | 注册来源：web/invite/oidc，不可变事实                   |
-| `created_at` / `updated_at` | timestamptz  | NOT NULL DEFAULT now()                        |                                                         |
-| `deleted_at`                | timestamptz  | NULL                                          | 软删                                                    |
+| 字段                        | 类型         | 约束                                          | 说明                                                                                     |
+| --------------------------- | ------------ | --------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `id`                        | uuid         | PK, default `gen_random_uuid()`               | 唯一关联键                                                                               |
+| `user_no`                   | bigint       | UNIQUE, default 主体号seq×1000+3位随机(12 位) | 可视码，见 §11                                                                           |
+| `account`                   | varchar(64)  | UNIQUE NOT NULL                               | 登录句柄，可改限频，非关联键                                                             |
+| `email`                     | varchar(128) | UNIQUE NULL                                   | 可空                                                                                     |
+| `email_verified_at`         | timestamptz  | NULL                                          |                                                                                          |
+| `phone`                     | varchar(32)  | UNIQUE NOT NULL                               | 强锚点                                                                                   |
+| `phone_verified_at`         | timestamptz  | NOT NULL                                      |                                                                                          |
+| `account_changed_at`        | timestamptz  | NULL                                          | 限频判据                                                                                 |
+| `status`                    | varchar(32)  | NOT NULL DEFAULT `'active'`, CHECK            | active/disabled/pending/deleting(自助删除保留期,050-account §7)                          |
+| `level_no`                  | int          | NOT NULL DEFAULT 1, CHECK `>=1`               | 反规范化只读列，SoT 在 `loyalty.level_policies`（§9.1）                                  |
+| `source`                    | varchar(32)  | NULL                                          | 注册来源：web/invite/oidc，不可变事实                                                    |
+| `created_at` / `updated_at` | timestamptz  | NOT NULL DEFAULT now()                        |                                                                                          |
+| `deleted_at`                | timestamptz  | NULL                                          | 软删                                                                                     |
+| `deletion_requested_at`     | timestamptz  | NULL                                          | 自助删除申请时刻;status=`deleting` 起 30 天保留期,到期清扫(2026-09-04 加,050-account §7) |
 
-索引：`idx_users_user_no`、`idx_users_email`、`idx_users_phone`、`idx_users_status`、`idx_users_deleted_at`。
+索引：`idx_users_user_no`、`idx_users_email`、`idx_users_phone`、`idx_users_status`、`idx_users_deleted_at`、`idx_users_deletion_requested_at`（部分索引，仅非空行）。
 
 ### 1.2 `user_profiles`
 

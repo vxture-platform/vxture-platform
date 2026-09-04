@@ -372,6 +372,9 @@ importers:
       '@vxture/service-account':
         specifier: workspace:*
         version: link:../../services/identity/account
+      '@vxture/service-billing':
+        specifier: workspace:*
+        version: link:../../services/commerce/billing
       '@vxture/service-iam':
         specifier: workspace:*
         version: link:../../services/identity/iam
@@ -529,6 +532,9 @@ importers:
       '@vxture/service-notification':
         specifier: workspace:*
         version: link:../../services/notification/dispatch
+      '@vxture/service-organization':
+        specifier: workspace:*
+        version: link:../../services/identity/organization
       '@vxture/service-provisioning':
         specifier: workspace:*
         version: link:../../services/commerce/provisioning
@@ -1431,6 +1437,9 @@ importers:
       '@vxture/core-api':
         specifier: workspace:*
         version: link:../../../packages/core/api
+      '@vxture/core-config':
+        specifier: workspace:*
+        version: link:../../../packages/core/config
       '@vxture/core-utils':
         specifier: workspace:*
         version: link:../../../packages/core/utils

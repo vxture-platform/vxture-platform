@@ -34,6 +34,8 @@ export interface UserView {
   createdAt?: string;
   /** Whether the user has a password credential set (false for phone/social-only registrants). */
   hasPassword?: boolean;
+  /** ISO timestamp the user asked to delete the account (status='deleting'); null otherwise. */
+  deletionRequestedAt?: string | null;
 }
 
 /** Mutable profile fields a user may edit (console info spec §1.1). */
@@ -220,4 +222,24 @@ export interface UserReadRepository {
   ): Promise<UserView | null>;
   /** Admin: revoke ALL of the user's active customer-realm sessions; returns the count. */
   revokeAllSessions(userId: string): Promise<number>;
+  /** Revoke ALL of the user's active refresh tokens (session.refresh_tokens); returns the count. */
+  revokeAllRefreshTokens(userId: string): Promise<number>;
+  /** Unbind every federated identity of the user; returns the count removed. */
+  removeAllIdentities(userId: string): Promise<number>;
+  /**
+   * Self-service deletion (050-account §7): active → deleting, stamp
+   * deletion_requested_at = now(). Returns the updated view, or null when the
+   * user is gone or not active (the caller maps to 404 / 409).
+   */
+  requestDeletion(userId: string): Promise<UserView | null>;
+  /** Undo a pending deletion: deleting → active, clear deletion_requested_at. Null when not deleting. */
+  cancelDeletion(userId: string): Promise<UserView | null>;
+  /** Users whose retention window has elapsed (status='deleting', not yet purged), oldest first. */
+  listDeletionDue(retentionDays: number, limit: number): Promise<string[]>;
+  /**
+   * Purge a user after the retention window: anonymise the identifiers,
+   * drop profile / avatar / credentials / identities, set deleted_at. Idempotent;
+   * true when this call performed the purge.
+   */
+  purgeUser(userId: string): Promise<boolean>;
 }

@@ -1,4 +1,5 @@
 import type {
+  AccountDeletionState,
   Capability,
   AiModelGrantRecord,
   AiModelRecord,
@@ -1357,6 +1358,22 @@ export async function fetchSessions(): Promise<AuthSessionRecord[]> {
 
 export async function fetchMyWorkspaces(): Promise<ConsoleWorkspaceItem[]> {
   return readJson<ConsoleWorkspaceItem[]>("/api/me/workspaces", []);
+}
+
+// ── 删除账号(批 5b):资格快照 / 申请 / 撤销。保留期内 BFF 只放行这几条与会话恢复读。
+
+export async function fetchAccountDeletion(): Promise<AccountDeletionState> {
+  return readJsonStrict<AccountDeletionState>("/api/me/deletion");
+}
+
+export async function requestAccountDeletion(): Promise<AccountDeletionState> {
+  return writeJson<AccountDeletionState>("/api/me/deletion", "POST", {
+    acknowledged: true,
+  });
+}
+
+export async function cancelAccountDeletion(): Promise<AccountDeletionState> {
+  return writeJson<AccountDeletionState>("/api/me/deletion/cancel", "POST");
 }
 
 /** Remote-logout a session by sid. */

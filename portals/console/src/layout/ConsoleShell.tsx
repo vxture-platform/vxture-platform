@@ -12,6 +12,7 @@ import {
 } from "@/features/session/ConsoleSessionProvider";
 import { TenantProvider } from "@/features/tenant";
 import { PortalEntryProvider } from "@/contexts/PortalEntryContext";
+import { AccountDeletingGate } from "@/features/session/AccountDeletingGate";
 import { ConsoleAppShell } from "@/layout/template/ConsoleAppShell";
 
 // Default username shape assigned at account creation (`_{user_no}`, see
@@ -104,6 +105,12 @@ function ShellFrame({
   // 这里只决定"过了闸之后套不套外壳"。
   if (pathname === ONBOARDING_PATH) {
     return <>{children}</>;
+  }
+
+  // 删除保留期(批 5b):账号还能登录,工作台不可用。BFF 对其余路由一律 403,这里
+  // 直接画「撤销删除 / 保持删除」两选一,同样不套外壳。
+  if (session.user.accountStatus === "deleting") {
+    return <AccountDeletingGate />;
   }
 
   return (

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -34,6 +35,28 @@ const ACCOUNT_RE = /^[A-Za-z][A-Za-z0-9_]{2,23}$/;
 export const USERNAME_CHANGE_COOLDOWN_DAYS = 30;
 const USERNAME_CHANGE_COOLDOWN_MS =
   USERNAME_CHANGE_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+
+/**
+ * 自助删除的保留期(050-account §7,owner 2026-09-04):申请后 30 天内重新登录可撤销,
+ * 到期由 platform-api 的 account-deletion-purge 清扫。
+ */
+export const ACCOUNT_DELETION_RETENTION_DAYS = 30;
+
+export interface DeletionRequestResult {
+  deletionRequestedAt: string;
+  /** 保留期到期、可被清扫的时刻(ISO)。 */
+  purgeAt: string;
+  revokedSessions: number;
+  unboundIdentities: number;
+}
+
+/** 保留期到期时刻 = 申请时刻 + 30 天。 */
+export function accountPurgeAt(deletionRequestedAt: string): string {
+  return new Date(
+    new Date(deletionRequestedAt).getTime() +
+      ACCOUNT_DELETION_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+}
 
 /** Throw 400 if a user-supplied account does not meet the format rules (§4.2). */
 export function assertValidAccount(account: string): void {
@@ -335,5 +358,57 @@ export class AccountService {
     }
     const revoked = await this.users.revokeAllSessions(userId);
     return { revoked };
+  }
+
+  // ── Self-service deletion (050-account §7) ──────────────────────────────
+  //   资格判定(组织 owner / 未清账单 / 付费余额 / 在途退款开票 / 有钱在途的订单)不在
+  //   这里——那些事实分属 organization / billing / subscription,由 console-bff 的
+  //   AccountDeletionAggregator 汇总后才调本方法。本方法只管账号自己这一段:状态、
+  //   会话、刷新令牌、三方绑定。
+
+  /**
+   * Enter the retention window: active → deleting, revoke every session and
+   * refresh token, unbind all federated identities. 404 when gone, 409 when
+   * already deleting or otherwise not active.
+   */
+  async requestDeletion(userId: string): Promise<DeletionRequestResult> {
+    const user = await this.users.getUserById(userId);
+    if (!user) throw new NotFoundException("account_not_found");
+    if (user.status === "deleting") {
+      throw new ConflictException("account_already_deleting");
+    }
+    if (user.status !== "active") {
+      throw new ConflictException("account_not_active");
+    }
+    const updated = await this.users.requestDeletion(userId);
+    if (!updated?.deletionRequestedAt) {
+      throw new ConflictException("account_not_active");
+    }
+    const revokedSessions = await this.users.revokeAllSessions(userId);
+    await this.users.revokeAllRefreshTokens(userId);
+    const unboundIdentities = await this.users.removeAllIdentities(userId);
+    return {
+      deletionRequestedAt: updated.deletionRequestedAt,
+      purgeAt: accountPurgeAt(updated.deletionRequestedAt),
+      revokedSessions,
+      unboundIdentities,
+    };
+  }
+
+  /** Undo within the retention window: deleting → active. 409 when not deleting. */
+  async cancelDeletion(userId: string): Promise<UserView> {
+    const user = await this.users.cancelDeletion(userId);
+    if (!user) throw new ConflictException("account_not_deleting");
+    return user;
+  }
+
+  /** Users whose 30-day window has elapsed and that still await the purge. */
+  listDeletionDue(limit = 50): Promise<string[]> {
+    return this.users.listDeletionDue(ACCOUNT_DELETION_RETENTION_DAYS, limit);
+  }
+
+  /** Anonymise + soft-delete one due user; true when this call did the work. */
+  purgeUser(userId: string): Promise<boolean> {
+    return this.users.purgeUser(userId);
   }
 }

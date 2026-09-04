@@ -17,6 +17,10 @@ export interface ConsoleUser {
   phone?: string | null;
   /** Platform avatar URL (versioned); null/absent → default silhouette. */
   picture?: string | null;
+  /** account.users.status: active | deleting(30 天删除保留期)| … */
+  accountStatus?: string | null;
+  /** ISO timestamp the user asked to delete the account; set while deleting. */
+  deletionRequestedAt?: string | null;
 }
 
 export interface ConsoleUserProfile {
@@ -43,8 +47,10 @@ export interface ConsoleUserProfile {
   userNo?: string | null;
   /** Account creation timestamp (ISO). Returned by BFF when available. */
   accountCreatedAt?: string | null;
-  /** Account status: active | suspended. */
+  /** Account status: active | deleting | suspended. */
   accountStatus?: string | null;
+  /** ISO timestamp the user asked to delete the account (status='deleting'); null otherwise. */
+  deletionRequestedAt?: string | null;
   /** Whether username+password login is disabled (phone/email/social unaffected). */
   accountLoginDisabled?: boolean;
   /** Whether the user has a password credential set (false for phone/social-only registrants). */
@@ -55,6 +61,47 @@ export interface IdentityRecord {
   provider: string;
   providerSubject: string;
   connectedAt: string;
+}
+
+// ── 删除账号(批 5b,050-account §7):console-bff AccountDeletionAggregator 的快照 ──
+
+export type AccountDeletionBlockerCode =
+  | "org_owner"
+  | "unpaid_bills"
+  | "paid_balance"
+  | "refund_in_progress"
+  | "receipt_in_progress"
+  | "pending_order_with_payment";
+
+export type AccountDeletionConfirmCode =
+  | "active_subscription"
+  | "gifted_balance";
+
+export type AccountDeletionAutoCode =
+  | "cancel_pending_orders"
+  | "leave_organizations"
+  | "revoke_sessions"
+  | "unbind_identities"
+  | "revoke_invitations"
+  | "delete_personal_tenant";
+
+export interface AccountDeletionItem<TCode extends string = string> {
+  code: TCode;
+  count?: number;
+  amount?: string;
+  currency?: string;
+  names?: string[];
+}
+
+export interface AccountDeletionState {
+  status: "active" | "deleting" | "other";
+  deletionRequestedAt: string | null;
+  purgeAt: string | null;
+  retentionDays: number;
+  canDelete: boolean;
+  blockers: AccountDeletionItem<AccountDeletionBlockerCode>[];
+  confirmations: AccountDeletionItem<AccountDeletionConfirmCode>[];
+  autoActions: AccountDeletionItem<AccountDeletionAutoCode>[];
 }
 
 export interface LastLoginInfo {
