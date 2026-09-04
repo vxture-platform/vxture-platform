@@ -25,6 +25,7 @@ import {
 } from "@vxture/design-system";
 import { IdentityCard } from "@/components/detail";
 import { formatTenantDisplay } from "@/features/tenant/tenant-display";
+import { formatPrincipalNo, formatPrincipalNoOr } from "@/lib/principal-no";
 
 export interface TenantRow {
   tenantId: string;
@@ -115,8 +116,9 @@ export function IdentityHeader({
           }
           meta={
             <span className="flex flex-wrap items-center gap-lg">
-              <span className="font-mono">
-                {t("fields.userNo")}: {userNo}
+              {/* 三个主体码统一带字母前缀展示(§11 v4):U- 用户 / T- 租户 / W- 工作空间 */}
+              <span className="font-mono" title={t("fields.userNo")}>
+                {formatPrincipalNoOr(userNo, "user", userNo)}
               </span>
               <span>{t("identity.registeredAt", { date: createdAt })}</span>
             </span>
@@ -203,7 +205,7 @@ export function IdentityHeader({
                     ) : null}
                     {tenant.tenantNo ? (
                       <span className="font-mono text-body-sm text-muted-foreground">
-                        T-{tenant.tenantNo}
+                        {formatPrincipalNo(tenant.tenantNo, "tenant")}
                       </span>
                     ) : null}
                     <span className="text-body-sm text-muted-foreground">

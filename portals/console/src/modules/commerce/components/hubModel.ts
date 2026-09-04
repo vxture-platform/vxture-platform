@@ -110,12 +110,6 @@ export function cyclePercent(
   return Math.min(100, Math.max(0, Math.round(p)));
 }
 
-/** 12/15 位可视码 4 位分组展示（3301 0042 7719）。 */
-export function groupVisibleCode(no: string | null): string {
-  if (!no) return "—";
-  return no.replace(/(\d{4})(?=\d)/g, "$1 ");
-}
-
 /** 剩余毫秒 → mm:ss / hh:mm:ss（与 OrderPayPage useCountdown 同刻度）。 */
 export function formatRemain(deadlineIso: string, now: number): string {
   const remain = new Date(deadlineIso).getTime() - now;

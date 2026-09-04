@@ -245,7 +245,7 @@
 
 不变量：每 user ≤1 personal tenant（部分唯一索引 `WHERE type='personal' AND deleted_at IS NULL`）；`owner_user_id` 与 `tenant_memberships(role='owner')` 一致性只经 `transfer_tenant_owner()` 原子转移。
 
-> **个人租户自动开通与命名（2026-07-06 owner 定案）**：仅 personal 类型自动创建（注册 / 首次登录 PLG 懒兜底自愈，收口在 `bff/auth-bff/src/authn/user-onboarding.service.ts`——用户创建后续动作唯一归集清单文件）。`tenants.name` 命名链 = **`display_name > account(username) > user_no`**（显式传名优先；未传时 provision 事务内从 DB 解析，`'Personal'` 仅作最终防御回退）。**对外默认显示** = `{tenant.name} + 空格 + {tenant.type}`（如 `yanhaoguo personal` / `yanhaoguo organization`——同名跨类型可区分；组织租户同规则），前端统一走 `formatTenantDisplay`。可视码对外标签：`USR_ID: {user_no}` / `ORG_ID: {tenant_no}`。
+> **个人租户自动开通与命名（2026-07-06 owner 定案）**：仅 personal 类型自动创建（注册 / 首次登录 PLG 懒兜底自愈，收口在 `bff/auth-bff/src/authn/user-onboarding.service.ts`——用户创建后续动作唯一归集清单文件）。`tenants.name` 命名链 = **`display_name > account(username) > user_no`**（显式传名优先；未传时 provision 事务内从 DB 解析，`'Personal'` 仅作最终防御回退）。**对外默认显示** = `{tenant.name} + 空格 + {tenant.type}`（如 `yanhaoguo personal` / `yanhaoguo organization`——同名跨类型可区分；组织租户同规则），前端统一走 `formatTenantDisplay`。可视码对外一律带类别前缀展示（§11 v4）：`U-{user_no}` / `T-{tenant_no}` / `W-{workspace_no}`；旧标签写法 `USR_ID:` / `ORG_ID:` 已退役。
 
 ### 5.2 `tenant_profiles`
 

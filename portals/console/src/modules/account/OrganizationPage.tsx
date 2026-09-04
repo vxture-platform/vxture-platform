@@ -44,6 +44,7 @@ import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
 import { formatTenantDisplay } from "@/features/tenant/tenant-display";
 import { useLocale, useTranslations } from "next-intl";
+import { formatPrincipalNoOr } from "@/lib/principal-no";
 
 const LOGO_UPLOAD_MAX_SIZE = 5 * 1024 * 1024;
 const CURRENCY_OPTIONS = ["CNY", "USD", "EUR", "GBP", "JPY", "HKD", "SGD"];
@@ -447,7 +448,11 @@ export function OrganizationPage() {
           )}
           {readonlyRow(
             t("fields.workspaceCode"),
-            displayValue(session.tenant?.workspaceNo, empty),
+            formatPrincipalNoOr(
+              session.tenant?.workspaceNo,
+              "workspace",
+              empty,
+            ),
           )}
           {readonlyRow(
             t("fields.ownerTenant"),
