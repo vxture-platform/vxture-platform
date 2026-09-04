@@ -3,6 +3,7 @@ import type { BreadcrumbItem } from "@/entities/console";
 const routeLabels = new Map<string, string>([
   ["/", "dashboard"],
   ["/todos", "todos"],
+  ["/inbox", "inbox"],
   ["/profile", "profile"],
   ["/personal-tenant", "personalTenant"],
   ["/organization", "organization"],

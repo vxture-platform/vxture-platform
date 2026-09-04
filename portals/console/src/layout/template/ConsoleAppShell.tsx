@@ -33,6 +33,10 @@ import {
 } from "@/api/console-bff";
 import { formatInboxTime, inboxPresentation } from "@/lib/inbox-format";
 import {
+  isCoveredByTodo,
+  useDerivedTodos,
+} from "@/features/todos/useDerivedTodos";
+import {
   findActiveDomain,
   selectVisibleDomains,
 } from "@/features/permissions/navigation-access";
@@ -128,6 +132,13 @@ export function ConsoleAppShell({
     // 只在抽屉打开的那一刻标已读；随后 loadInbox 更新 inboxItems 不应再触发。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawer]);
+  /* 待办(批 4b):与「待办与消息」页同一份派生逻辑——铃铛角标 = 待办数 + 未读消息数,
+   * 抽屉里待办置顶带「去处理」。抽屉打开时重取一次,处理完的事项别在抽屉里赖着。 */
+  const derivedTodos = useDerivedTodos({ enabled: status === "ready" });
+  const reloadTodos = derivedTodos.reload;
+  useEffect(() => {
+    if (drawer === "notifications") reloadTodos();
+  }, [drawer, reloadTodos]);
   /* 侧栏 Token 用量。null = 还没读到；"unavailable" = 读不到（BFF/Atlas 不可达）；
    * "uncovered" = 工作空间没有额度池。此前失败回落 0/100，故障时会画出一根像真
    * 的空仪表——三种非数字状态各自显式呈现，不再有假读数（2026-08-30）。 */
@@ -391,18 +402,29 @@ export function ConsoleAppShell({
   const billingAmount = Number(billing.amount ?? 0);
   const billingLabel = `${currencySymbol}${(Number.isFinite(billingAmount) ? billingAmount : 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  // 抽屉条目 = 站内收件箱最近 8 条（P2-g）；点开去消息带的链接，没有链接去消息中心。
-  const drawerNotifs: DrawerNotif[] = inboxItems.map((m) => {
-    const p = inboxPresentation(m.templateCode);
-    return {
-      level: p.level,
-      icon: p.icon,
-      title: m.title,
-      meta: `${formatInboxTime(m.createdAt, locale)} · ${m.body}`,
-      href: m.link ?? "/inbox",
-      unread: m.readAt === null,
-    };
-  });
+  // 抽屉条目 = 站内收件箱最近 8 条（P2-g）；点开去消息带的链接，没有链接去「待办与消息」。
+  // 同一件事只出现一次:有待办覆盖的知情类消息不再列(去重口径与页面一致)。
+  const drawerNotifs: DrawerNotif[] = inboxItems
+    .filter((m) => !isCoveredByTodo(m, derivedTodos.todos))
+    .map((m) => {
+      const p = inboxPresentation(m.templateCode);
+      return {
+        level: p.level,
+        icon: p.icon,
+        title: m.title,
+        meta: `${formatInboxTime(m.createdAt, locale)} · ${m.body}`,
+        href: m.link ?? "/inbox",
+        unread: m.readAt === null,
+      };
+    });
+  const drawerTodos = derivedTodos.todos.map((todo) => ({
+    key: todo.key,
+    title: todo.title,
+    detail: todo.detail,
+    href: todo.href,
+    actionLabel: todo.actionLabel,
+  }));
+  const badgeCount = unreadCount + derivedTodos.todos.length;
   /* 「系统设置」抽屉已删（2026-08-30）：它没有任何入口（header 的齿轮直接去
    * /settings），而它的四行值全是编出来的词条——会话超时/审计保留与 /settings
    * 的真实默认值还互相矛盾。主题/密度的真实状态在 header 的偏好面板里。 */
@@ -412,6 +434,8 @@ export function ConsoleAppShell({
     openCenter: tShell("drawer.openCenter"),
     close: tDrawer("close"),
     empty: tDrawer("notifications.empty"),
+    todosTitle: tDrawer("notifications.todosTitle"),
+    messagesTitle: tDrawer("notifications.messagesTitle"),
   };
 
   // ── App Center：产品磁贴来自 BFF，板块入口来自导航配置 ──
@@ -509,7 +533,7 @@ export function ConsoleAppShell({
         setView={setView}
         viewOptions={viewOptions}
         openDrawer={(type) => setDrawer(type)}
-        unreadCount={unreadCount}
+        unreadCount={badgeCount}
         onNavigate={navigate}
         brandName={tShell("brandName")}
         navEntries={navEntries}
@@ -571,6 +595,7 @@ export function ConsoleAppShell({
           }}
           canMarkAllRead={unreadCount > 0}
           onOpenCenter={() => openInConsole("/inbox")}
+          todos={drawerTodos}
           notifications={drawerNotifs}
           labels={drawerLabels}
         />

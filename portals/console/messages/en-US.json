@@ -209,15 +209,17 @@
   "drawer": {
     "close": "Close",
     "notifications": {
-      "title": "Message Center",
+      "title": "To-dos & Messages",
       "markAllRead": "Mark all read",
-      "empty": "No messages yet"
+      "empty": "No to-dos and no messages",
+      "todosTitle": "To-dos",
+      "messagesTitle": "Messages"
     }
   },
   "inbox": {
     "header": {
-      "title": "Inbox",
-      "description": "Subscription expiry, renewal orders, activation and refund progress; email preferences live under Notifications."
+      "title": "To-dos & Messages",
+      "description": "To-dos derive from the live state of orders, subscriptions, quotas, invitations and add-on packs and disappear once handled; messages are notices about expiry, renewal orders, activation and refunds. Email preferences live under Notifications."
     },
     "unread": "{count} unread",
     "allRead": "No unread messages",
@@ -228,7 +230,28 @@
     "loadError": "Could not load messages, please try again later",
     "open": "Open",
     "readBadge": "Read",
-    "unreadBadge": "Unread"
+    "unreadBadge": "Unread",
+    "list": {
+      "title": "List",
+      "description": "To-dos stay on top; each matter appears only once"
+    },
+    "filters": {
+      "label": "Filter",
+      "all": "All",
+      "todo": "To-dos",
+      "message": "Messages",
+      "unread": "Unread"
+    },
+    "counts": "{todos} to-dos · {unread} unread",
+    "todoBadge": "To-do",
+    "messageBadge": "Message",
+    "emptyTodo": "Nothing waiting on you",
+    "emptyAll": "No to-dos and no messages",
+    "markAllFailed": "Could not mark as read; try again later",
+    "notes": {
+      "title": "How this works",
+      "body": "To-dos have no read state: they mirror the live state and only disappear once handled. Messages have read / unread; the Unread filter applies to messages only. When a to-do exists for a matter, All shows only the to-do; the matching message stays under Messages as history."
+    }
   },
   "preferences": {
     "title": "Display preferences",
@@ -334,8 +357,8 @@
         "description": "Online models, private models, and tenant grants"
       },
       "inbox": {
-        "label": "Inbox",
-        "description": "Subscription, order and refund notices"
+        "label": "To-dos & Messages",
+        "description": "Things waiting on you, plus subscription, order and refund notices"
       },
       "notifications": {
         "label": "Notifications",
@@ -387,7 +410,8 @@
     "usage": "Usage",
     "addonPay": "Booster Pack Payment",
     "vouchers": "Vouchers",
-    "auditLogs": "Audit Logs"
+    "auditLogs": "Audit Logs",
+    "inbox": "To-dos & Messages"
   },
   "login": {
     "hero": {
@@ -2968,8 +2992,6 @@
     }
   },
   "todosPage": {
-    "title": "To-dos",
-    "description": "Things needing your attention: pending payments, expiring renewals, tight quotas, open invitations — resolved items disappear automatically",
     "kind": {
       "payment": "Payment",
       "renewal": "Renewal",
@@ -2996,20 +3018,6 @@
       "addonTitle": "Pay the order for add-on pack \"{pack}\"",
       "addonDetail": "Complete the transfer and declare it before {date}; the order closes automatically afterwards",
       "addonAction": "Declare payment"
-    },
-    "table": {
-      "title": "To-do list",
-      "description": "Derived live from orders/subscriptions/quotas/invitations — no manual check-off",
-      "colKind": "Kind",
-      "colTitle": "Item",
-      "empty": "All clear",
-      "emptyHint": "Nothing in orders, renewals, quotas, or invitations needs you right now"
-    },
-    "notes": {
-      "title": "How this works",
-      "description": "Where to-dos come from",
-      "derivedTitle": "Derived to-dos",
-      "derivedBody": "This page keeps no task records: every row reflects real business state and disappears once you resolve the source"
     },
     "loadFailed": "Some to-do sources failed to load; the list may be incomplete"
   },
