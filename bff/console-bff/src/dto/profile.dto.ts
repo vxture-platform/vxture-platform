@@ -79,6 +79,12 @@ export class SetAccountLoginEnabledDto {
   enabled = false;
 }
 
+/** 个人租户转组织租户(批 5c-2):组织名称 + 知悉勾选。 */
+export class ConvertTenantDto {
+  name = "";
+  acknowledged = false;
+}
+
 /** 删除账号:用户必须勾过「已知悉确认项与连带动作」才能提交(050-account §7)。 */
 export class RequestAccountDeletionDto {
   acknowledged = false;

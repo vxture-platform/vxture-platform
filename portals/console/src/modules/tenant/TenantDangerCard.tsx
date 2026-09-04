@@ -9,9 +9,8 @@
  * 与账号信息页的危险操作卡同一形状:整卡红(描边 + 淡红底 + 面头图标 / 标题着色),
  * 条件以 danger 标签排在面头说明里。
  *
- * 组织租户:转让所有权(可用,自 SettingsPage 迁来)· 注销租户(本期只画入口 + 条件,
- * 后端另起一批,owner 2026-09-05 决策 5)。
- * 个人租户:转为组织租户归 5c 第二段,本段不画——画一个按不动的按钮不如不画。
+ * 组织租户:转让所有权(可用)· 注销租户(只画入口 + 条件,后端另起一批,决策 5)。
+ * 个人租户:转为组织租户(可用,批 5c-2)——不可回退,走三屏仪式。
  */
 
 import { useTranslations } from "next-intl";
@@ -40,14 +39,18 @@ const CLOSE_CONDITIONS = [
 ] as const;
 
 export function TenantDangerCard({
+  isPersonal,
   isOwner,
   transferReady,
   onTransfer,
+  onConvert,
 }: {
+  readonly isPersonal: boolean;
   readonly isOwner: boolean;
   /** 有可接收的活跃成员时才可点(只有自己一个人时无处可转)。 */
   readonly transferReady: boolean;
   readonly onTransfer: () => void;
+  readonly onConvert: () => void;
 }) {
   const t = useTranslations("tenantInfoPage");
 
@@ -59,66 +62,99 @@ export function TenantDangerCard({
       className={DANGER_SECTION_CLASS}
       title={t("cards.danger.title")}
       description={
-        <span className="flex flex-wrap items-center gap-sm">
-          <strong className="font-semibold text-destructive-text">
-            {t("danger.closeConditionsLabel")}
-          </strong>
-          {CLOSE_CONDITIONS.map((c) => (
-            <StatusBadge key={c} tone="danger" icon={false}>
-              {t(`danger.closeConditions.${c}`)}
-            </StatusBadge>
-          ))}
-        </span>
+        isPersonal ? (
+          t("danger.personalDescription")
+        ) : (
+          <span className="flex flex-wrap items-center gap-sm">
+            <strong className="font-semibold text-destructive-text">
+              {t("danger.closeConditionsLabel")}
+            </strong>
+            {CLOSE_CONDITIONS.map((c) => (
+              <StatusBadge key={c} tone="danger" icon={false}>
+                {t(`danger.closeConditions.${c}`)}
+              </StatusBadge>
+            ))}
+          </span>
+        )
       }
     >
       <CardRows>
         <DetailList className={DETAIL_LIST_CLASS}>
-          <DetailRow
-            label={t("danger.transfer.label")}
-            actions={
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-destructive-border text-destructive-text"
-                onClick={onTransfer}
-                disabled={!isOwner || !transferReady}
-              >
-                <Icon
-                  name="arrow-left-right"
-                  size="xs"
-                  fallback="placeholder"
-                />
-                <span>{t("danger.transfer.action")}</span>
-              </Button>
-            }
-          >
-            <span className="text-body-sm text-muted-foreground">
-              {isOwner
-                ? transferReady
-                  ? t("danger.transfer.summary")
-                  : t("danger.transfer.noCandidate")
-                : t("danger.transfer.ownerOnly")}
-            </span>
-          </DetailRow>
+          {isPersonal ? (
+            <DetailRow
+              label={t("danger.convert.label")}
+              actions={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-destructive-border text-destructive-text"
+                  onClick={onConvert}
+                  disabled={!isOwner}
+                >
+                  <Icon
+                    name="building-library"
+                    size="xs"
+                    fallback="placeholder"
+                  />
+                  <span>{t("danger.convert.action")}</span>
+                </Button>
+              }
+            >
+              <span className="text-body-sm text-muted-foreground">
+                {t("danger.convert.summary")}
+              </span>
+            </DetailRow>
+          ) : null}
+          {isPersonal ? null : (
+            <DetailRow
+              label={t("danger.transfer.label")}
+              actions={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-destructive-border text-destructive-text"
+                  onClick={onTransfer}
+                  disabled={!isOwner || !transferReady}
+                >
+                  <Icon
+                    name="arrow-left-right"
+                    size="xs"
+                    fallback="placeholder"
+                  />
+                  <span>{t("danger.transfer.action")}</span>
+                </Button>
+              }
+            >
+              <span className="text-body-sm text-muted-foreground">
+                {isOwner
+                  ? transferReady
+                    ? t("danger.transfer.summary")
+                    : t("danger.transfer.noCandidate")
+                  : t("danger.transfer.ownerOnly")}
+              </span>
+            </DetailRow>
+          )}
 
-          <DetailRow
-            label={t("danger.close.label")}
-            actions={
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-destructive-border text-destructive-text"
-                disabled
-              >
-                <Icon name="trash" size="xs" fallback="placeholder" />
-                <span>{t("danger.close.action")}</span>
-              </Button>
-            }
-          >
-            <span className="text-body-sm text-muted-foreground">
-              {t("danger.close.summary")}
-            </span>
-          </DetailRow>
+          {isPersonal ? null : (
+            <DetailRow
+              label={t("danger.close.label")}
+              actions={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-destructive-border text-destructive-text"
+                  disabled
+                >
+                  <Icon name="trash" size="xs" fallback="placeholder" />
+                  <span>{t("danger.close.action")}</span>
+                </Button>
+              }
+            >
+              <span className="text-body-sm text-muted-foreground">
+                {t("danger.close.summary")}
+              </span>
+            </DetailRow>
+          )}
         </DetailList>
       </CardRows>
     </Section>

@@ -20,6 +20,7 @@ export {
 export { ORG_PG_POOL, ORGANIZATION_REPOSITORY } from "./tokens";
 
 export type {
+  ConvertPersonalResult,
   OrgType,
   OrgRole,
   OrgView,

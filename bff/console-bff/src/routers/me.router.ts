@@ -28,6 +28,7 @@ import {
   ChangePasswordDto,
   ConfirmEmailChangeDto,
   ConfirmPhoneChangeDto,
+  ConvertTenantDto,
   RequestAccountDeletionDto,
   SendNewEmailOtpDto,
   SetAccountLoginEnabledDto,
@@ -262,6 +263,27 @@ export class MeRouter {
       );
     if (!profile) throw new NotFoundException("Organization profile not found");
     return profile;
+  }
+
+  /**
+   * 个人租户转为组织租户(批 5c-2)。owner 且个人类型才放行(仓储层再判一次);
+   * 不可回退。主体码 v4 之后不换号,钱 / 订阅 / 成员 / 工作空间原样跟着租户。
+   */
+  @RequireCapability("tenant.settings.manage")
+  @Post("organization/convert")
+  async convertTenant(
+    @Req() req: Request & RequestContext,
+    @Body() body: ConvertTenantDto,
+  ) {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    if (body?.acknowledged !== true) {
+      throw new BadRequestException("acknowledgement_required");
+    }
+    return this.sessionAggregator.convertCurrentTenantToOrganization(
+      req.user.id,
+      req.tenant?.id,
+      body?.name ?? "",
+    );
   }
 
   @RequireCapability("tenant.settings.manage")

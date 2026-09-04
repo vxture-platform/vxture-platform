@@ -1417,6 +1417,20 @@ export async function updateOrganization(
 }
 
 /** Upload the tenant logo (raw image bytes); returns the new content hash. */
+/** 个人租户转为组织租户(批 5c-2);不可回退。 */
+export async function convertTenantToOrganization(name: string): Promise<{
+  tenantId: string;
+  name: string;
+  tenantNo: string | null;
+  newPersonalTenantId: string;
+  newPersonalTenantNo: string | null;
+}> {
+  return writeJson("/api/me/organization/convert", "POST", {
+    name,
+    acknowledged: true,
+  });
+}
+
 export async function uploadOrgLogo(file: Blob): Promise<{ logoHash: string }> {
   const response = await fetch(
     `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/me/organization/logo`,

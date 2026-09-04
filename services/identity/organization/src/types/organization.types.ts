@@ -107,6 +107,15 @@ export interface OrganizationProfileView {
 }
 
 /** Editable subset of the org profile (no logo bytes, no timestamps). */
+export type ConvertPersonalResult =
+  | {
+      ok: true;
+      tenantNo: string | null;
+      newPersonalTenantId: string;
+      newPersonalTenantNo: string | null;
+    }
+  | { ok: false; reason: "tenant_not_found" | "not_owner" | "not_personal" };
+
 export interface OrgProfileUpdateInput {
   description?: string | null;
   industry?: string | null;
@@ -275,6 +284,15 @@ export interface OrganizationReadRepository {
     tenantId: string,
     name: string,
   ): Promise<{ verificationSuperseded: boolean } | null>;
+  /**
+   * 个人租户转组织(批 5c-2):一个事务里改类型 / 名称 / 认证状态,并立刻补建
+   * 这个人的新个人租户。主体码 v4 之后不换号。不可回退。
+   */
+  convertPersonalToOrganization(
+    tenantId: string,
+    ownerUserId: string,
+    name: string,
+  ): Promise<ConvertPersonalResult>;
   /** Provision a team org + default workspace + owner membership at both levels. */
   createTeamOrg(ownerUserId: string, name: string): Promise<ProvisionedOrg>;
   getOrgById(orgId: string): Promise<OrgView | null>;

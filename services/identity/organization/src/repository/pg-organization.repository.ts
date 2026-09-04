@@ -144,6 +144,133 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
   }
 
   /**
+   * 个人租户转为组织租户(批 5c-2,owner 2026-09-05)。**一个事务**:
+   *   ① 锁租户行,核对是本人的、个人类型、未删
+   *   ② type → organization、改名、认证状态回 unverified
+   *   ③ 立刻补建这个人的新个人租户(+ 默认工作空间 + owner 两级成员关系)
+   *
+   * 主体码 v4「三号解耦」之后**不换号**:租户号与空间号都不含归属关系,转换只是
+   * 两个字段的 UPDATE(v3 时代要换发租户号、整批改写空间号前缀,还得靠一个绕列锁的
+   * SECURITY DEFINER 触发器——那些随 v4 一起没了)。新个人租户自取一个新的类别位 2 号。
+   *
+   * 不可回退(组织 → 个人在触发器层就没有定义)。钱、订阅、成员、工作空间全部
+   * 原样跟着这一行租户,tenant id 不变,所以不需要清账前置。
+   */
+  async convertPersonalToOrganization(
+    tenantId: string,
+    ownerUserId: string,
+    name: string,
+  ): Promise<
+    | {
+        ok: true;
+        tenantNo: string | null;
+        newPersonalTenantId: string;
+        newPersonalTenantNo: string | null;
+      }
+    | { ok: false; reason: "tenant_not_found" | "not_owner" | "not_personal" }
+  > {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const t = await client.query<{
+        type: string;
+        owner_user_id: string;
+        tenant_no: string;
+      }>(
+        `select type, owner_user_id, tenant_no::text as tenant_no
+           from tenancy.tenants
+          where id = $1 and deleted_at is null
+          for update`,
+        [tenantId],
+      );
+      const tenant = t.rows[0];
+      if (!tenant) {
+        await client.query("rollback");
+        return { ok: false, reason: "tenant_not_found" };
+      }
+      // 权限门在这里,不在上层:任何授权都不该替代「你就是这个租户的所有者」这个事实
+      // (同 transferOrgOwner 的判据)。
+      if (tenant.owner_user_id !== ownerUserId) {
+        await client.query("rollback");
+        return { ok: false, reason: "not_owner" };
+      }
+      if (tenant.type !== "personal") {
+        await client.query("rollback");
+        return { ok: false, reason: "not_personal" };
+      }
+
+      await client.query(
+        `update tenancy.tenants
+            set type = 'organization',
+                name = $2,
+                verification_status = 'unverified',
+                updated_at = now()
+          where id = $1`,
+        [tenantId, name],
+      );
+
+      // 立刻补建新的个人租户(owner 2026-09-05:不靠下次登录的 onboarding 兜底)。
+      // 与 provisionOrg 同样的四条写入,只是必须落在同一个事务里。
+      const newTenantId = crypto.randomUUID();
+      const newWorkspaceId = crypto.randomUUID();
+      const named = await client.query<{ n: string | null }>(
+        `select coalesce(nullif(p.display_name, ''), u.account, u.user_no::text) as n
+           from account.users u
+           left join account.user_profiles p on p.user_id = u.id
+          where u.id = $1`,
+        [ownerUserId],
+      );
+      await client.query(
+        `insert into tenancy.tenants (id, name, type, owner_user_id, status, created_at, updated_at)
+         values ($1, $2, 'personal', $3, 'active', now(), now())`,
+        [newTenantId, named.rows[0]?.n ?? "Personal", ownerUserId],
+      );
+      await client.query(
+        `insert into tenancy.workspaces (id, tenant_id, name, is_default, created_at, updated_at)
+         values ($1, $2, 'default workspace', true, now(), now())`,
+        [newWorkspaceId, newTenantId],
+      );
+      await client.query(
+        `insert into tenancy.tenant_memberships (tenant_id, user_id, role_id, role_scope, status, created_at, updated_at)
+         select $1, $2, r.id, 'tenant', 'active', now(), now()
+           from access.roles r
+          where r.scope = 'tenant' and r.role_code = 'owner'`,
+        [newTenantId, ownerUserId],
+      );
+      await client.query(
+        `insert into tenancy.workspace_memberships (workspace_id, tenant_id, user_id, role_id, role_scope, status, created_at, updated_at)
+         select $1, $3, $2, r.id, 'workspace', 'active', now(), now()
+           from access.roles r
+          where r.scope = 'workspace' and r.role_code = 'owner'`,
+        [newWorkspaceId, ownerUserId, newTenantId],
+      );
+
+      const created = await client.query<{ tenant_no: string }>(
+        `select tenant_no::text as tenant_no from tenancy.tenants where id = $1`,
+        [newTenantId],
+      );
+
+      // 提交前的不变量:两行租户号必须互不相同(v4 各自独立取号),且原租户已是组织。
+      if (created.rows[0]?.tenant_no === tenant.tenant_no) {
+        throw new Error("convert: 新个人租户与原租户撞号");
+      }
+
+      await client.query("commit");
+      return {
+        ok: true,
+        tenantNo: tenant.tenant_no,
+        newPersonalTenantId: newTenantId,
+        newPersonalTenantNo: created.rows[0]?.tenant_no ?? null,
+      };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * 改租户名(批 5c)。个人租户随便改;**组织租户改名即作废原企业认证**——名称与
    * 营业执照挂钩,规格 §3.4「关键信息变更需重新审核」。作废 = 当前认证记录置
    * `superseded`(备注记下改名前后),租户侧 verification_status 回 `unverified`;
