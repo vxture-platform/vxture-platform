@@ -37,6 +37,7 @@ import {
   fetchUsageMembers,
   fetchUsageTrend,
   type ConsoleUsageEvent,
+  type ConsoleUsageEvents,
   type ConsoleUsageMember,
   type ConsoleUsageTrend,
   type ConsoleUsageTrendBucket,
@@ -47,17 +48,27 @@ import {
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
 import { PageSection } from "@/layout/shell";
+import { fmtCount } from "@/lib/format-metrics";
 import { fmtDate, fmtTime } from "./components/hubModel";
-
-const fmtCount = (v: number): string => v.toLocaleString("en-US");
 
 const EVENTS_PAGE_SIZE = 10;
 
 type TrendWindow = "hour" | "day" | "week" | "month" | "year";
 
-/** 桶期间 → 展示文本(hour 截 HH:00,month=YYYYMM → YYYY-MM,其余原样)。 */
+/**
+ * 桶期间 → 展示文本。桶键全程 UTC(与 rollup 同口径):
+ *   - hour:`YYYY-MM-DD HH:00`(UTC)→ 换算成浏览器本地时刻 `HH:00`(逐时看板
+ *     跨时区看着才对得上「刚才」);
+ *   - day / week 保持 UTC 日期(表头注明 UTC,不做换算——换了日期边界反而对不上
+ *     后台的桶),month=YYYYMM → YYYY-MM,year 原样。
+ */
 const periodLabel = (granularity: string, period: string): string => {
-  if (granularity === "hour" && period.length >= 16) return period.slice(11);
+  if (granularity === "hour" && period.length >= 16) {
+    const d = new Date(`${period.slice(0, 10)}T${period.slice(11, 16)}:00Z`);
+    return Number.isNaN(d.getTime())
+      ? period.slice(11)
+      : `${String(d.getHours()).padStart(2, "0")}:00`;
+  }
   if (granularity === "month" && period.length === 6)
     return `${period.slice(0, 4)}-${period.slice(4)}`;
   return period;
@@ -80,7 +91,7 @@ export function UsagePage() {
   const [trend, setTrend] = useState<ConsoleUsageTrend | null>(null);
   const [dayTrend, setDayTrend] = useState<ConsoleUsageTrend | null>(null);
   const [yearTrend, setYearTrend] = useState<ConsoleUsageTrend | null>(null);
-  const [events, setEvents] = useState<ConsoleUsageEvent[]>([]);
+  const [events, setEvents] = useState<ConsoleUsageEvents | null>(null);
   const [members, setMembers] = useState<ConsoleUsageMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [trendLoading, setTrendLoading] = useState(true);
@@ -112,7 +123,7 @@ export function UsagePage() {
         if (!active) return;
         setDayTrend(null);
         setYearTrend(null);
-        setEvents([]);
+        setEvents(null);
         setMembers([]);
         setLoadFailed(true);
       })
@@ -124,11 +135,12 @@ export function UsagePage() {
     };
   }, [session.tenant?.id, reloadKey]);
 
-  // 趋势区:随窗口切换独立刷新(day 档直接复用首屏数据)
+  /* 趋势区:随窗口切换独立刷新;day 档**只**复用首屏数据——此前 dayTrend 还没
+   * 回来时这里也发一次 day 请求,首屏同一份数据取两遍(批 3)。 */
   useEffect(() => {
-    if (trendWindow === "day" && dayTrend) {
+    if (trendWindow === "day") {
       setTrend(dayTrend);
-      setTrendLoading(false);
+      setTrendLoading(loading);
       return;
     }
     let active = true;
@@ -148,7 +160,7 @@ export function UsagePage() {
     return () => {
       active = false;
     };
-  }, [trendWindow, dayTrend, session.tenant?.id, reloadKey]);
+  }, [trendWindow, dayTrend, loading, session.tenant?.id, reloadKey]);
 
   // ── 概览指标(本页业务 3 个指标 → columns=3 铺满,列数随业务不写死)────────
   const metrics = useMemo<MetricGridItem[]>(() => {
@@ -305,17 +317,18 @@ export function UsagePage() {
   ];
 
   // ── ③ 调用记录(任务级) ──────────────────────────────────────────────────
+  const eventItems = useMemo(() => events?.items ?? [], [events]);
   const eventsPageCount = Math.max(
     1,
-    Math.ceil(events.length / EVENTS_PAGE_SIZE),
+    Math.ceil(eventItems.length / EVENTS_PAGE_SIZE),
   );
   const pagedEvents = useMemo(
     () =>
-      events.slice(
+      eventItems.slice(
         (eventsPage - 1) * EVENTS_PAGE_SIZE,
         eventsPage * EVENTS_PAGE_SIZE,
       ),
-    [events, eventsPage],
+    [eventItems, eventsPage],
   );
 
   const eventColumns: DataTableColumn<ConsoleUsageEvent>[] = [
@@ -440,7 +453,11 @@ export function UsagePage() {
         icon="chart-line"
         level={2}
         title={t("trend.title")}
-        description={t("trend.description")}
+        description={
+          trendWindow === "hour"
+            ? t("trend.descriptionHour")
+            : t("trend.description")
+        }
         action={
           <SegmentedControl<TrendWindow>
             ariaLabel={t("trend.windowLabel")}
@@ -540,7 +557,17 @@ export function UsagePage() {
           footer={
             <div className="flex w-full items-center justify-between gap-md text-body-sm text-muted-foreground">
               <span className="tabular-nums">
-                {t("events.total", { count: events.length })}
+                {loadFailed || !events
+                  ? "—"
+                  : events.truncated
+                    ? t("events.truncated", {
+                        limit: events.limit,
+                        days: events.days,
+                      })
+                    : t("events.total", {
+                        count: eventItems.length,
+                        days: events.days,
+                      })}
               </span>
               {eventsPageCount > 1 ? (
                 <span className="flex items-center gap-xs">

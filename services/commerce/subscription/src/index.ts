@@ -45,6 +45,21 @@ export type {
   CreateOrderResult,
 } from "./types/order.types";
 export { PgUsageRollupRepository } from "./repository/pg-usage-rollup.repository";
+export { MeteringReadService } from "./service/metering-read.service";
+export type {
+  QuotaPoolRow,
+  UsageGaugeRow,
+  SharingPolicyRow,
+  QuotaOverviewRows,
+  UsageGranularity,
+  UsageTrendQuery,
+  UsageTrendBucket,
+  UsageTrendResult,
+  UsageEventRow,
+  UsageEventsQuery,
+  UsageEventsResult,
+  UsageMemberRow,
+} from "./types/metering-read.types";
 export { AddonService } from "./service/addon.service";
 export { PgAddonRepository } from "./repository/pg-addon.repository";
 export type {

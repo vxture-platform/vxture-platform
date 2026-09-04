@@ -61,7 +61,7 @@ import {
 } from "./components/pay/PayChannelPanel";
 import { useCountdown } from "./components/pay/useCountdown";
 import { useOrderPolling } from "./components/pay/useOrderPolling";
-import { formatBytes } from "./QuotasPage";
+import { formatBytes } from "@/lib/format-metrics";
 
 const POLL_MS = 30_000;
 

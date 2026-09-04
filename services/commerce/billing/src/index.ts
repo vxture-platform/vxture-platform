@@ -7,6 +7,7 @@ export type {
   CreditRecord,
   ListInvoicesParams,
   ListInvoicesResult,
+  TenantBillingOverview,
   CreateInvoiceInput,
   CreateInvoiceItemInput,
   UpdateInvoiceStatusInput,

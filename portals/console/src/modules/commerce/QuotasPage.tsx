@@ -49,24 +49,7 @@ import {
 } from "@/components/load/LoadFailed";
 import { AddonPacksSection } from "./components/AddonPacksSection";
 import { fmtDate, fmtTime } from "./components/hubModel";
-
-// ── 展示工具(格式化,非样式) ────────────────────────────────────────────────
-
-/** 二进制字节格式化(200 MiB 底池等额度都是 2 的幂,用 1024 进位)。 */
-export function formatBytes(value: number): string {
-  const neg = value < 0 ? "-" : "";
-  let v = Math.abs(value);
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i += 1;
-  }
-  const digits = v >= 100 || i === 0 ? 0 : 1;
-  return `${neg}${v.toFixed(digits)} ${units[i]}`;
-}
-
-const fmtCount = (v: number): string => v.toLocaleString("en-US");
+import { fmtCount, formatBytes } from "@/lib/format-metrics";
 
 /** 用量占比(额度 0 时归 0,超冲钳 100)。 */
 const percentOf = (used: number, limit: number): number =>

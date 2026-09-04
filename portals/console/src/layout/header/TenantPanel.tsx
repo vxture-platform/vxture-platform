@@ -28,22 +28,7 @@ import {
 import type { ConsoleQuotaUsage } from "@/api/console-bff";
 import type { TenantContext } from "@/entities/console";
 import { formatTenantDisplay } from "@/features/tenant/tenant-display";
-
-const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB", "PB"] as const;
-
-function formatBytes(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "0 B";
-  const exp = Math.min(
-    Math.floor(Math.log(value) / Math.log(1024)),
-    BYTE_UNITS.length - 1,
-  );
-  const size = value / 1024 ** exp;
-  return `${exp === 0 ? size : size.toFixed(1)} ${BYTE_UNITS[exp]}`;
-}
-
-function formatCount(value: number): string {
-  return Number.isFinite(value) ? value.toLocaleString() : "0";
-}
+import { fmtCount as formatCount, formatBytes } from "@/lib/format-metrics";
 
 function percentOf(used: number, limit: number): number {
   if (!Number.isFinite(limit) || limit <= 0) return 0;

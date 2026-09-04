@@ -12,6 +12,7 @@ import type {
   ListInvoicesParams,
   ListInvoicesResult,
   CreateInvoiceInput,
+  TenantBillingOverview,
   UpdateInvoiceStatusInput,
 } from "../types/billing.types";
 
@@ -28,6 +29,10 @@ export class BillingService {
 
   async listInvoices(params: ListInvoicesParams): Promise<ListInvoicesResult> {
     return this.billing.listInvoices(params);
+  }
+
+  getTenantBillingOverview(tenantId: string): Promise<TenantBillingOverview> {
+    return this.billing.getTenantBillingOverview(tenantId);
   }
 
   async getInvoice(id: string): Promise<InvoiceRecord> {

@@ -13,6 +13,8 @@ import { PgConsumeRepository } from "../repository/pg-consume.repository";
 import { PgUsageRollupRepository } from "../repository/pg-usage-rollup.repository";
 import { AddonService } from "../service/addon.service";
 import { ConsumeService } from "../service/consume.service";
+import { PgMeteringReadRepository } from "../repository/pg-metering-read.repository";
+import { MeteringReadService } from "../service/metering-read.service";
 
 @Module({
   // ProvisioningModule: the subscription lifecycle is the provisioning-enqueue
@@ -60,6 +62,9 @@ import { ConsumeService } from "../service/consume.service";
     PgUsageRollupRepository,
     PgAddonRepository,
     AddonService,
+    // console 批 3:配额总览 / 用量分析的读侧从 console-bff 下沉
+    PgMeteringReadRepository,
+    MeteringReadService,
   ],
   exports: [
     COMMERCE_PG_POOL,
@@ -68,6 +73,7 @@ import { ConsumeService } from "../service/consume.service";
     ConsumeService,
     PgUsageRollupRepository,
     AddonService,
+    MeteringReadService,
   ],
 })
 export class SubscriptionModule {}

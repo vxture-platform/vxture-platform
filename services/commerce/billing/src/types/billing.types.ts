@@ -75,6 +75,29 @@ export interface ListInvoicesResult {
   total: number;
 }
 
+/**
+ * 租户账单概览(console 批 3:SQL 聚合,取代「拉 200 条到内存数」)。
+ * 金额一律 numeric(14,2) 文本(元,两位小数),不经浮点。
+ */
+export interface TenantBillingOverview {
+  total: number;
+  paid: number;
+  /** 待收款合集:unpaid + paying + partial */
+  unpaid: number;
+  overdue: number;
+  cancelled: number;
+  /** 累计实收(paid_amount 求和,含部分收款) */
+  paidTotal: string;
+  /**
+   * 本自然月实付:billing.payments pay_status='paid' 且 paid_at 落在本月(库会话
+   * 时区的自然月,与 admin 租户「本月收入」同一口径)。收付实现制:钱在哪个月到
+   * 就记哪个月,不做分摊。
+   */
+  paidThisMonth: string;
+  /** 最近一张账单的币种;没有账单为 null */
+  currency: string | null;
+}
+
 export interface CreateInvoiceItemInput {
   workspaceId?: string;
   productId?: string;

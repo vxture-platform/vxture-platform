@@ -13,8 +13,9 @@
  *       视图与 C2 同口径)+ 共享策略参与产品;
  *     - products: 按产品的池明细(产品级指标 + 平台指标贡献)+ 存储切片。
  *
- * 只读直查(console-bff 约定:SELECT only,写一律走 service);全部聚合
- * 一次往返四条查询。全页无 UUID 出口——产品用 product_code 可视标识。
+ * 读侧 SQL 归 @vxture/service-subscription 的 MeteringReadService(console 批 3
+ * 下沉,X5);这里只做权限门与视图映射。全页无 UUID 出口——产品用 product_code
+ * 可视标识。
  */
 
 import {
@@ -30,8 +31,14 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import type { Pool } from "pg";
-import { AddonService } from "@vxture/service-subscription";
-import type { AddonPurchaseRecord } from "@vxture/service-subscription";
+import {
+  AddonService,
+  MeteringReadService,
+} from "@vxture/service-subscription";
+import type {
+  AddonPurchaseRecord,
+  QuotaPoolRow,
+} from "@vxture/service-subscription";
 import {
   buildPaymentChannels,
   type PaymentChannelInfo,
@@ -104,32 +111,6 @@ export interface ConsoleQuotaOverview {
   products: ProductQuotaView[];
 }
 
-interface PoolSqlRow {
-  metric_key: string;
-  pool_source: string;
-  product_code: string | null;
-  product_name: string | null;
-  quota_limit: string;
-  effective_used: string;
-  reset_period: string;
-  expires_at: Date | null;
-  platform_kind: string | null;
-}
-
-interface GaugeSqlRow {
-  metric_key: string;
-  product_code: string;
-  product_name: string;
-  value: string;
-  observed_at: Date;
-}
-
-interface SharingSqlRow {
-  metric_key: string;
-  product_code: string;
-  product_name: string;
-}
-
 // ============================================================================
 // QuotaRouter
 // ============================================================================
@@ -180,11 +161,20 @@ export interface AddonOrderView {
   createdAt: string;
 }
 
-function mapAddonOrder(r: AddonPurchaseRecord): AddonOrderView {
+/**
+ * 订单视图。付款截止 = 建单 + TTL;行上没记 TTL 时按**租户类型**回退(个人 30 /
+ * 组织 2880),不再一律 30 分钟——审计 P0 #12:组织租户的旧单被画成「半小时后
+ * 关闭」,而后台清扫按 2880 算。
+ */
+function mapAddonOrder(
+  r: AddonPurchaseRecord,
+  fallbackTtlMinutes: number,
+): AddonOrderView {
   const expireAt =
     r.status === "pending_payment" && !r.paymentDeclared
       ? new Date(
-          r.createdAt.getTime() + (r.paymentTtlMinutes ?? 30) * 60_000,
+          r.createdAt.getTime() +
+            (r.paymentTtlMinutes ?? fallbackTtlMinutes) * 60_000,
         ).toISOString()
       : null;
   const validUntil = r.activatedAt
@@ -215,8 +205,11 @@ function mapAddonOrder(r: AddonPurchaseRecord): AddonOrderView {
 @Controller("api/quota")
 export class QuotaRouter {
   constructor(
+    /** 仅供租户审计写钩子(support.audit_logs INSERT,fire-and-forget)。 */
     @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
     @Inject(AddonService) private readonly addons: AddonService,
+    @Inject(MeteringReadService)
+    private readonly metering: MeteringReadService,
   ) {}
 
   // --------------------------------------------------------------------------
@@ -245,7 +238,8 @@ export class QuotaRouter {
     if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
     const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
     const rows = await this.addons.listPurchases(workspaceId);
-    return rows.map(mapAddonOrder);
+    const ttl = paymentTtlMinutesFor(req.tenant.tenantType);
+    return rows.map((r) => mapAddonOrder(r, ttl));
   }
 
   @RequireCapability("tenant.payment.manage")
@@ -275,7 +269,7 @@ export class QuotaRouter {
       after: { pack: record.packCode, price: record.price },
     });
     return {
-      order: mapAddonOrder(record),
+      order: mapAddonOrder(record, paymentTtlMinutesFor(req.tenant.tenantType)),
       paymentChannels: buildPaymentChannels(record.orderNo),
     };
   }
@@ -294,7 +288,7 @@ export class QuotaRouter {
       throw new BadRequestException("加油包订单不存在");
     }
     return {
-      order: mapAddonOrder(record),
+      order: mapAddonOrder(record, paymentTtlMinutesFor(req.tenant.tenantType)),
       paymentChannels: buildPaymentChannels(record.orderNo),
     };
   }
@@ -375,54 +369,47 @@ export class QuotaRouter {
     if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
     const workspaceId = await this.resolveDefaultWorkspace(req.tenant.id);
 
-    const [pools, gauges, sharing] = await Promise.all([
-      this.queryPools(workspaceId),
-      this.queryGauges(workspaceId),
-      this.querySharing(workspaceId),
-    ]);
+    const { pools, gauges, sharing } =
+      await this.metering.getQuotaOverviewRows(workspaceId);
 
-    const toView = (r: PoolSqlRow): QuotaPoolView => {
-      const limit = Number(r.quota_limit);
-      const used = Number(r.effective_used);
-      return {
-        metric: r.metric_key,
-        source: r.pool_source,
-        productCode: r.product_code,
-        productName: r.product_name,
-        limit,
-        used,
-        remaining: Math.max(0, limit - used),
-        resetPeriod: r.reset_period,
-        expiresAt: r.expires_at ? r.expires_at.toISOString() : null,
-      };
-    };
+    const toView = (r: QuotaPoolRow): QuotaPoolView => ({
+      metric: r.metricKey,
+      source: r.poolSource,
+      productCode: r.productCode,
+      productName: r.productName,
+      limit: r.quotaLimit,
+      used: r.effectiveUsed,
+      remaining: Math.max(0, r.quotaLimit - r.effectiveUsed),
+      resetPeriod: r.resetPeriod,
+      expiresAt: r.expiresAt ? r.expiresAt.toISOString() : null,
+    });
 
     // ── storage: WS 总账(gauge — used 来自水位切片,池的 used 无意义) ────────
     const storagePools = pools
-      .filter((r) => r.metric_key === "storage.bytes")
+      .filter((r) => r.metricKey === "storage.bytes")
       .map(toView);
     const storageSlices = gauges
-      .filter((r) => r.metric_key === "storage.bytes")
+      .filter((r) => r.metricKey === "storage.bytes")
       .map((r) => ({
-        productCode: r.product_code,
-        productName: r.product_name,
-        usedBytes: Number(r.value),
-        observedAt: r.observed_at.toISOString(),
+        productCode: r.productCode,
+        productName: r.productName,
+        usedBytes: r.value,
+        observedAt: r.observedAt.toISOString(),
       }));
     const storageLimit = storagePools.reduce((s, p) => s + p.limit, 0);
     const storageUsed = storageSlices.reduce((s, g) => s + g.usedBytes, 0);
 
     // ── ai.credit: 池明细 + 共享参与 ─────────────────────────────────────────
     const creditPools = pools
-      .filter((r) => r.metric_key === "ai.credit")
+      .filter((r) => r.metricKey === "ai.credit")
       .map(toView);
     const creditLimit = creditPools.reduce((s, p) => s + p.limit, 0);
     const creditUsed = creditPools.reduce((s, p) => s + p.used, 0);
     const sharingProducts = sharing
-      .filter((r) => r.metric_key === "ai.credit")
+      .filter((r) => r.metricKey === "ai.credit")
       .map((r) => ({
-        productCode: r.product_code,
-        productName: r.product_name,
+        productCode: r.productCode,
+        productName: r.productName,
       }));
 
     // ── products: 按产品聚合池明细 + 存储切片 ────────────────────────────────
@@ -441,18 +428,17 @@ export class QuotaRouter {
       return v;
     };
     for (const r of pools) {
-      if (!r.product_code) continue; // WS 级池不属任何产品
+      if (!r.productCode) continue; // WS 级池不属任何产品
       const view = toView(r);
-      ensureProduct(
-        r.product_code,
-        r.product_name ?? r.product_code,
-      ).metrics.push({
-        metric: view.metric,
-        limit: view.limit,
-        used: view.used,
-        remaining: view.remaining,
-        resetPeriod: view.resetPeriod,
-      });
+      ensureProduct(r.productCode, r.productName ?? r.productCode).metrics.push(
+        {
+          metric: view.metric,
+          limit: view.limit,
+          used: view.used,
+          remaining: view.remaining,
+          resetPeriod: view.resetPeriod,
+        },
+      );
     }
     for (const g of storageSlices) {
       ensureProduct(g.productCode, g.productName).storageUsedBytes =
@@ -480,81 +466,8 @@ export class QuotaRouter {
     };
   }
 
-  /**
-   * 活跃可用池(与 consume/C2 同门:活跃、未过期、订阅池须订阅 live——D10)。
-   * effective_used = 懒重置周期感知视图(周期翻篇按 0 计,只读不落库,归零
-   * 仍归 consume 写路径),UTC 口径与引擎 needsReset 一致。
-   */
-  private async queryPools(workspaceId: string): Promise<PoolSqlRow[]> {
-    const res = await this.pool.query<PoolSqlRow>(
-      `select qp.metric_key, qp.pool_source,
-              prod.product_code, prod.product_name,
-              qp.quota_limit::text as quota_limit,
-              (case
-                 when qp.reset_period = 'day'
-                      and qp.current_period_start is not null
-                      and date_trunc('day', qp.current_period_start at time zone 'UTC')
-                          <> date_trunc('day', now() at time zone 'UTC') then 0
-                 when qp.reset_period = 'month'
-                      and qp.current_period_start is not null
-                      and date_trunc('month', qp.current_period_start at time zone 'UTC')
-                          <> date_trunc('month', now() at time zone 'UTC') then 0
-                 else qp.quota_used
-               end)::text as effective_used,
-              qp.reset_period, qp.expires_at,
-              plm.kind as platform_kind
-         from metering.quota_pools qp
-         left join product.products prod on prod.id = qp.product_id
-         left join product.platform_metrics plm on plm.metric_key = qp.metric_key
-        where qp.workspace_id = $1
-          and qp.status = 'active'
-          and (qp.expires_at is null or qp.expires_at > now())
-          and (qp.subscription_id is null or exists (
-                 select 1 from metering.subscriptions ts
-                  where ts.id = qp.subscription_id
-                    and ts.status in ('active', 'trialing')
-                    and ts.deleted_at is null))
-        order by qp.metric_key asc, qp.priority asc, qp.effective_at asc`,
-      [workspaceId],
-    );
-    return res.rows;
-  }
-
-  /** 各产品最新水位切片(usage_gauges,LWW 快照)。 */
-  private async queryGauges(workspaceId: string): Promise<GaugeSqlRow[]> {
-    const res = await this.pool.query<GaugeSqlRow>(
-      `select ug.metric_key, prod.product_code, prod.product_name,
-              ug.value::text as value, ug.observed_at
-         from metering.usage_gauges ug
-         join product.products prod on prod.id = ug.product_id
-        where ug.workspace_id = $1
-        order by prod.product_code asc`,
-      [workspaceId],
-    );
-    return res.rows;
-  }
-
-  /** 共享策略参与行(空 = 全保留,product_220 §4.3 安全默认)。 */
-  private async querySharing(workspaceId: string): Promise<SharingSqlRow[]> {
-    const res = await this.pool.query<SharingSqlRow>(
-      `select rsp.metric_key, prod.product_code, prod.product_name
-         from metering.resource_sharing_policies rsp
-         join product.products prod on prod.id = rsp.product_id
-        where rsp.workspace_id = $1
-        order by prod.product_code asc`,
-      [workspaceId],
-    );
-    return res.rows;
-  }
-
   private async resolveDefaultWorkspace(tenantId: string): Promise<string> {
-    const res = await this.pool.query<{ id: string }>(
-      `select id from tenancy.workspaces
-        where tenant_id = $1 and is_default and deleted_at is null
-        limit 1`,
-      [tenantId],
-    );
-    const id = res.rows[0]?.id;
+    const id = await this.metering.findDefaultWorkspaceId(tenantId);
     if (!id) throw new BadRequestException("租户缺少默认工作空间");
     return id;
   }

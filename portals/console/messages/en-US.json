@@ -2661,7 +2661,7 @@
     },
     "trend": {
       "title": "Usage trend",
-      "description": "AI Credits consumption by period; dashboard figures only, never a billing basis",
+      "description": "AI Credits consumption by period; buckets are cut on UTC days and periods without usage show 0. Dashboard figures only — never a billing basis",
       "windowLabel": "Period",
       "windowDay": "30 days",
       "windowWeek": "12 weeks",
@@ -2672,7 +2672,8 @@
       "colByProduct": "By product",
       "colDelta": "Change",
       "empty": "No usage data in this period",
-      "windowHour": "Hourly (24h)"
+      "windowHour": "Hourly (24h)",
+      "descriptionHour": "Hourly consumption over the last 24 hours; the axis is shown in your local time. Dashboard figures only — never a billing basis"
     },
     "share": {
       "title": "By product",
@@ -2692,10 +2693,11 @@
       "colUser": "User",
       "colRequest": "Request ID",
       "unattributed": "Unattributed",
-      "total": "{count} records in the last 90 days",
+      "total": "{count} records in the last {days} days",
       "prevPage": "Previous",
       "nextPage": "Next",
-      "empty": "No call records yet"
+      "empty": "No call records yet",
+      "truncated": "Showing the most recent {limit} records (last {days} days); earlier calls are not listed"
     },
     "members": {
       "title": "By member",

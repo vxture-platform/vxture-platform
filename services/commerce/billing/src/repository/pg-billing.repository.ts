@@ -9,6 +9,7 @@ import type {
   ListInvoicesParams,
   ListInvoicesResult,
   CreateInvoiceInput,
+  TenantBillingOverview,
   UpdateInvoiceStatusInput,
 } from "../types/billing.types";
 
@@ -74,6 +75,51 @@ interface CreditRow {
 @Injectable()
 export class PgBillingRepository {
   constructor(@Inject(COMMERCE_PG_POOL) private readonly pool: Pool) {}
+
+  /** 租户账单概览:状态计数 + 累计实收 + 本月实付,一次往返、库内聚合。 */
+  async getTenantBillingOverview(
+    tenantId: string,
+  ): Promise<TenantBillingOverview> {
+    const res = await this.pool.query<{
+      total: string;
+      paid: string;
+      unpaid: string;
+      overdue: string;
+      cancelled: string;
+      paid_total: string;
+      paid_this_month: string;
+      currency: string | null;
+    }>(
+      `select count(*)::text as total,
+              count(*) filter (where i.bill_status = 'paid')::text as paid,
+              count(*) filter (where i.bill_status in ('unpaid', 'paying', 'partial'))::text as unpaid,
+              count(*) filter (where i.bill_status = 'overdue')::text as overdue,
+              count(*) filter (where i.bill_status = 'cancelled')::text as cancelled,
+              coalesce(sum(i.paid_amount), 0)::numeric(14,2)::text as paid_total,
+              (select coalesce(sum(p.paid_amount), 0)::numeric(14,2)::text
+                 from billing.payments p
+                where p.tenant_id = $1 and p.pay_status = 'paid'
+                  and p.paid_at >= date_trunc('month', now())
+                  and p.paid_at <  date_trunc('month', now()) + interval '1 month') as paid_this_month,
+              (select i2.currency from billing.invoices i2
+                where i2.tenant_id = $1 and i2.deleted_at is null
+                order by i2.created_at desc limit 1) as currency
+         from billing.invoices i
+        where i.tenant_id = $1 and i.deleted_at is null`,
+      [tenantId],
+    );
+    const r = res.rows[0];
+    return {
+      total: Number(r?.total ?? 0),
+      paid: Number(r?.paid ?? 0),
+      unpaid: Number(r?.unpaid ?? 0),
+      overdue: Number(r?.overdue ?? 0),
+      cancelled: Number(r?.cancelled ?? 0),
+      paidTotal: r?.paid_total ?? "0.00",
+      paidThisMonth: r?.paid_this_month ?? "0.00",
+      currency: r?.currency ?? null,
+    };
+  }
 
   async listInvoices(params: ListInvoicesParams): Promise<ListInvoicesResult> {
     const conditions: string[] = ["i.deleted_at is null"];
