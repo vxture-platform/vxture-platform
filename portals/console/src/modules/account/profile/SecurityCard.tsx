@@ -12,9 +12,6 @@
 import { useTranslations } from "next-intl";
 import {
   Button,
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
   DetailList,
   DetailRow,
   Icon,
@@ -25,6 +22,7 @@ import type { AuthSessionRecord } from "@/entities/console";
 import { PlannedBadge } from "@/components/planned";
 import { LoadFailedEmpty } from "@/components/load/LoadFailed";
 import { formatProfileDate, parseBrowser, parseOS } from "./format";
+import { RowExpand } from "./RowExpand";
 
 export interface SessionsState {
   items: AuthSessionRecord[];
@@ -146,67 +144,58 @@ export function SecurityCard({
           </DetailRow>
         </DetailList>
 
-        <Collapsible open={sessionsOpen} onOpenChange={onSessionsOpenChange}>
-          <CollapsibleTrigger asChild>
-            <span hidden />
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="ml-media-md mt-xs rounded-md bg-muted/40 px-md py-xs">
-              {sessions.failed ? (
-                <LoadFailedEmpty />
-              ) : sessions.loading ? (
-                <p className="py-sm text-body-sm text-muted-foreground">
-                  {loadingText}
-                </p>
-              ) : sessions.items.length === 0 ? (
-                <p className="py-sm text-body-sm text-muted-foreground">
-                  {t("security.sessionsEmpty")}
-                </p>
-              ) : (
-                <ul className="flex flex-col [&>*+*]:border-t [&>*+*]:border-dashed [&>*+*]:border-primary/10 dark:[&>*+*]:border-primary/20">
-                  {sessions.items.map((s) => {
-                    const os = parseOS(s.userAgent);
-                    const browser = parseBrowser(s.userAgent);
-                    return (
-                      <li
-                        key={s.sid}
-                        className="flex flex-wrap items-center gap-md py-xs text-body-sm"
-                      >
-                        <span className="text-foreground">
-                          {[os, browser].filter(Boolean).join(" · ") || empty}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {s.ipAddress || empty}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {s.authMethod}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {t("security.lastActive", {
-                            time: formatProfileDate(
-                              s.lastActiveAt,
-                              locale,
-                              empty,
-                            ),
-                          })}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="ml-auto"
-                          onClick={() => onRevoke(s.sid)}
-                          disabled={revoking === s.sid}
-                        >
-                          {t("security.revoke")}
-                        </Button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
+        {/* 活跃会话:行内下拉展开、与值列对齐;只看会话,不放历史 */}
+        <RowExpand open={sessionsOpen} onOpenChange={onSessionsOpenChange}>
+          {sessions.failed ? (
+            <LoadFailedEmpty />
+          ) : sessions.loading || !sessions.loaded ? (
+            <p className="py-sm text-body-sm text-muted-foreground">
+              {loadingText}
+            </p>
+          ) : sessions.items.length === 0 ? (
+            <p className="py-sm text-body-sm text-muted-foreground">
+              {t("security.sessionsEmpty")}
+            </p>
+          ) : (
+            <ul className="flex flex-col [&>*+*]:border-t [&>*+*]:border-dashed [&>*+*]:border-primary/10 dark:[&>*+*]:border-primary/20">
+              {sessions.items.map((s) => {
+                const os = parseOS(s.userAgent);
+                const browser = parseBrowser(s.userAgent);
+                return (
+                  <li
+                    key={s.sid}
+                    className="flex flex-wrap items-center gap-lg py-xs text-body-sm"
+                  >
+                    <span className="text-foreground">
+                      {[os, browser].filter(Boolean).join(" · ") || empty}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {s.ipAddress || empty}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {s.authMethod}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {t("security.lastActive", {
+                        time: formatProfileDate(s.lastActiveAt, locale, empty),
+                      })}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto"
+                      onClick={() => onRevoke(s.sid)}
+                      disabled={revoking === s.sid}
+                    >
+                      <Icon name="sign-out" size="xs" fallback="placeholder" />
+                      <span>{t("security.revoke")}</span>
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </RowExpand>
       </div>
     </Section>
   );

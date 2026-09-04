@@ -163,7 +163,8 @@ export class MeRouter {
   @Get("login-history")
   async getLoginHistory(@Req() req: Request & RequestContext) {
     if (!req.user) throw new UnauthorizedException("No active session");
-    return this.sessionAggregator.getUserLoginHistory(req.user.id, 20);
+    // 近 30 天(窗口在仓储层),最多 50 条;页面默认只露 3 条,其余「更多」展开。
+    return this.sessionAggregator.getUserLoginHistory(req.user.id, 50);
   }
 
   @Get("sessions")

@@ -936,8 +936,7 @@
       "verify": "验证",
       "change": "更换",
       "confirm": "确认",
-      "modify": "修改",
-      "changeUsername": "改账号"
+      "modify": "修改"
     },
     "dialogs": {
       "profile": {
@@ -1137,9 +1136,11 @@
     "login": {
       "history": "登录历史",
       "historyEmpty": "暂无登录记录。",
-      "historyWindow": "近 90 天的登录记录。",
+      "historyWindow": "近 30 天的登录记录。",
       "success": "成功",
-      "failed": "失败"
+      "failed": "失败",
+      "showMore": "更多 {count} 条",
+      "showLess": "收起"
     },
     "prefs": {
       "theme": "主题",

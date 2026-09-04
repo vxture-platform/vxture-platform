@@ -576,6 +576,7 @@ export class PgUserRepository implements UserReadRepository {
               country_code, auth_method, result
          from session.login_attempts
         where user_id = $1
+          and created_at > now() - interval '30 days'
         order by created_at desc
         limit $2`,
       [userId, cap],

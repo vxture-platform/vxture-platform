@@ -10,12 +10,10 @@
  * 可登录 / 禁止登录(禁止时 tooltip 说明);最近登录行尾「登录历史」行内下拉展开。
  */
 
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   Button,
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
   DetailList,
   DetailRow,
   Icon,
@@ -29,6 +27,10 @@ import {
 import type { LoginHistoryEntry } from "@/entities/console";
 import { LoadFailedEmpty } from "@/components/load/LoadFailed";
 import { formatProfileDate, parseBrowser, parseOS } from "./format";
+import { RowExpand } from "./RowExpand";
+
+/** 登录历史展开后默认露出的条数,其余点「更多」再展开。 */
+const HISTORY_PREVIEW_COUNT = 3;
 
 export interface LoginHistoryState {
   items: LoginHistoryEntry[];
@@ -96,6 +98,15 @@ export function BasicInfoCard({
   const t = useTranslations("profilePage");
   const empty = t("common.empty");
   const loadingText = t("common.loading");
+
+  const [historyShowAll, setHistoryShowAll] = useState(false);
+  const visibleHistory = historyShowAll
+    ? history.items
+    : history.items.slice(0, HISTORY_PREVIEW_COUNT);
+  const hiddenHistoryCount = Math.max(
+    0,
+    history.items.length - HISTORY_PREVIEW_COUNT,
+  );
 
   const verifiedBadge = (verified: boolean) => (
     <StatusBadge tone={verified ? "success" : "warning"}>
@@ -182,7 +193,7 @@ export function BasicInfoCard({
                 disabled={loading || !usernameChangeable}
               >
                 <Icon name="edit" size="xs" fallback="placeholder" />
-                <span>{t("actions.changeUsername")}</span>
+                <span>{t("actions.modify")}</span>
               </Button>
             }
           >
@@ -306,48 +317,64 @@ export function BasicInfoCard({
           </DetailRow>
         </DetailList>
 
-        {/* 登录历史:行内下拉展开,只看历史 */}
-        <Collapsible open={historyOpen} onOpenChange={onHistoryOpenChange}>
-          <CollapsibleTrigger asChild>
-            <span hidden />
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="ml-media-md mt-xs rounded-md bg-muted/40 px-md py-xs">
-              {history.failed ? (
-                <LoadFailedEmpty />
-              ) : history.loading ? (
-                <p className="py-sm text-body-sm text-muted-foreground">
-                  {loadingText}
-                </p>
-              ) : history.items.length === 0 ? (
-                <p className="py-sm text-body-sm text-muted-foreground">
-                  {t("login.historyEmpty")}
-                </p>
-              ) : (
-                <ul className="flex flex-col [&>*+*]:border-t [&>*+*]:border-dashed [&>*+*]:border-primary/10 dark:[&>*+*]:border-primary/20">
-                  {history.items.map((entry, index) => (
-                    <li
-                      key={`${entry.loginAt}-${index}`}
-                      className="flex flex-wrap items-center gap-md py-xs text-body-sm"
-                    >
-                      {loginLine(entry)}
-                      <StatusBadge
-                        tone={entry.result === "success" ? "success" : "danger"}
-                      >
-                        {entry.result === "success"
-                          ? t("login.success")
-                          : t("login.failed")}
-                      </StatusBadge>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <p className="pt-xs text-body-sm text-muted-foreground">
-                {t("login.historyWindow")}
-              </p>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
+        {/* 登录历史:行内下拉展开、与值列对齐;默认露 3 条,其余「更多」再展开;
+            结果标靠右;窗口近 30 天(仓储层截) */}
+        <RowExpand open={historyOpen} onOpenChange={onHistoryOpenChange}>
+          {history.failed ? (
+            <LoadFailedEmpty />
+          ) : history.loading ? (
+            <p className="py-sm text-body-sm text-muted-foreground">
+              {loadingText}
+            </p>
+          ) : history.items.length === 0 ? (
+            <p className="py-sm text-body-sm text-muted-foreground">
+              {t("login.historyEmpty")}
+            </p>
+          ) : (
+            <ul className="flex flex-col [&>*+*]:border-t [&>*+*]:border-dashed [&>*+*]:border-primary/10 dark:[&>*+*]:border-primary/20">
+              {visibleHistory.map((entry, index) => (
+                <li
+                  key={`${entry.loginAt}-${index}`}
+                  className="flex flex-wrap items-center gap-lg py-xs text-body-sm"
+                >
+                  {loginLine(entry)}
+                  <StatusBadge
+                    className="ml-auto"
+                    tone={entry.result === "success" ? "success" : "danger"}
+                  >
+                    {entry.result === "success"
+                      ? t("login.success")
+                      : t("login.failed")}
+                  </StatusBadge>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex items-center justify-between gap-md pt-xs">
+            <p className="text-body-sm text-muted-foreground">
+              {t("login.historyWindow")}
+            </p>
+            {hiddenHistoryCount > 0 || historyShowAll ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setHistoryShowAll((prev) => !prev)}
+                aria-expanded={historyShowAll}
+              >
+                <span>
+                  {historyShowAll
+                    ? t("login.showLess")
+                    : t("login.showMore", { count: hiddenHistoryCount })}
+                </span>
+                <Icon
+                  name={historyShowAll ? "chevron-up" : "chevron-down"}
+                  size="xs"
+                  fallback="placeholder"
+                />
+              </Button>
+            ) : null}
+          </div>
+        </RowExpand>
       </div>
     </Section>
   );
