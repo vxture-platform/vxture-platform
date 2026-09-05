@@ -16,9 +16,10 @@
 ## 职责
 
 租户工作台：面向租户管理员，管理租户成员、订阅、权限、设置等。
-Varda 智能助手嵌入点（console surface），入口文件 `app/[locale]/(console)/ConsoleVardaPanel.tsx`。
 
 ## 路由结构
+
+> 2026-09-05（批 8）按实际目录重写。带「→」的目录只剩一个 `redirect()` 壳，为旧链接保留。
 
 ```
 app/
@@ -26,40 +27,53 @@ app/
 ├── [locale]/
 │   ├── (auth)/signin/                ← 登录页
 │   └── (console)/
-│       ├── layout.tsx                ← Console 布局（含 ConsoleVardaPanel）
-│       ├── page.tsx                  ← 首页 / 仪表板
-│       ├── billing/                  ← 账单管理
-│       ├── iam/                      ← 身份与访问管理
-│       ├── invitations/              ← 邀请管理
+│       ├── layout.tsx                ← Console 布局（外壳 / 侧栏 / 租户面板）
+│       ├── page.tsx                  ← 数据总览
+│       ├── inbox/                    ← 待办与消息（todos/ → 此处 ?filter=todo）
+│       ├── profile/                  ← 账号信息（security/ → 此处 ?panel=sessions）
+│       │   └── verification/         ← 个人实名（骨架）
+│       ├── tenant/                   ← 租户信息（organization/ personal-tenant/ settings/ tenant-settings/ → 此处）
+│       │   └── verification/         ← 企业认证（organization/verification/ → 此处）
 │       ├── members/                  ← 成员管理
-│       ├── model-platform/            ← 模型平台配置
-│       ├── notifications/            ← 通知设置
-│       ├── organization/             ← 组织信息
-│       ├── personal-tenant/          ← 个人租户设置
-│       ├── profile/                  ← 个人资料
-│       ├── quotas/                   ← 配额管理
 │       ├── roles/                    ← 角色管理
-│       ├── security/                 ← 安全设置
-│       ├── settings/                 ← 租户设置
-│       ├── subscription/             ← 订阅管理
-│       ├── tenant-settings/          ← 高级租户配置
-│       └── todos/                    ← 待办事项
-├── iam/                              ← （根级路由，待确认用途）
-└── subscription/                     ← （根级路由，待确认用途）
+│       ├── invitations/              ← 邀请记录
+│       ├── accept-invitation/        ← 接受邀请（?token=）
+│       ├── subscription/             ← 产品订阅
+│       ├── subscribe/                ← 订阅下单
+│       │   └── pay/[orderId]/        ← 订单付款
+│       ├── billing/                  ← 账单管理
+│       ├── vouchers/                 ← 我的卡券
+│       ├── quotas/                   ← 配额管理
+│       │   └── addon-pay/[orderNo]/  ← 加油包付款
+│       ├── usage/                    ← 用量分析
+│       ├── notifications/            ← 通知提醒
+│       ├── audit-logs/               ← 审计日志
+│       ├── atlas/                    ← 模型接入（tenant.model.read，owner）
+│       └── onboarding/               ← 首次补齐
+└── api/                              ← 健康检查等
 ```
 
 ## BFF 接口（console-bff）
 
-| Router 文件                | 职责                     |
-| -------------------------- | ------------------------ |
-| `auth.router.ts`           | 登录 / 登出 / token 刷新 |
-| `me.router.ts`             | 当前用户信息             |
-| `iam.router.ts`            | 成员 / 角色 / 权限查询   |
-| `billing.router.ts`        | 账单信息                 |
-| `subscription.router.ts`   | 订阅信息 / feature 开关  |
-| `capabilities.router.ts`   | 功能能力列表             |
-| `tenant-context.router.ts` | 租户上下文               |
-| `phone-auth.router.ts`     | 手机号认证               |
+| Router 文件                | 职责                                                                               |
+| -------------------------- | ---------------------------------------------------------------------------------- |
+| `oidc-auth.router.ts`      | OIDC 登录回调 / 登出 / 静默续期                                                    |
+| `me.router.ts`             | 当前用户：资料 / 偏好 / 安全 / 通知偏好 / 组织资料与改名 / 转为组织租户 / 删除账号 |
+| `tenant-context.router.ts` | 租户上下文与切换                                                                   |
+| `iam.router.ts`            | 成员 / 角色 / 邀请（含接受邀请）                                                   |
+| `verification.router.ts`   | 企业认证                                                                           |
+| `subscription.router.ts`   | 订阅 / 订单 / 下单 / 付款申报 / 权益                                               |
+| `billing.router.ts`        | 账单 / 发票 / 抬头簿（服务端分页）                                                 |
+| `promotion.router.ts`      | 卡券                                                                               |
+| `quota.router.ts`          | 配额 / 加油包                                                                      |
+| `usage.router.ts`          | 用量趋势                                                                           |
+| `inbox.router.ts`          | 站内消息（游标分页 / 已读）                                                        |
+| `audit.router.ts`          | 审计日志（服务端分页 + 动作筛选）                                                  |
+| `atlas.router.ts`          | 模型接入（models / quotas / usage；quotas 走 `tenant.quota.read`）                 |
+| `capabilities.router.ts`   | 能力列表                                                                           |
+| `applications.router.ts`   | 应用中心磁贴                                                                       |
+| `search.router.ts`         | 全局搜索                                                                           |
+| `health.router.ts`         | 健康检查                                                                           |
 
 ## UI 分层框架
 
@@ -78,14 +92,14 @@ app/
 
 ## 模块规划
 
-| 一级模块  | 二级页面                                        | 权限要求                                           |
-| --------- | ----------------------------------------------- | -------------------------------------------------- |
-| Overview  | Dashboard、关键指标                             | —                                                  |
-| Workspace | Members / Roles / Organization / Access Control | `tenant.user.manage` / `tenant.role.manage`        |
-| Commerce  | Subscription / Billing / Quotas                 | `tenant.subscription.read` / `tenant.billing.read` |
-| Platform  | Tenants / Products / Pricing / Models           | `platform.*` 系列能力                              |
-| Usage     | 用量概览 / 消耗记录                             | `tenant.quota.read`                                |
-| Settings  | 租户设置 / 通知 / 个人偏好                      | —                                                  |
+| 一级模块  | 二级页面                                            | 权限要求                                                                                            |
+| --------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Overview  | Dashboard、关键指标                                 | —                                                                                                   |
+| Workspace | 成员管理 / 角色管理 / 邀请记录                      | `tenant.member.read` / `tenant.member.manage` / `tenant.role.assign`                                |
+| Commerce  | 产品订阅 / 账单 / 卡券                              | `tenant.billing.read` / `tenant.billing.manage` / `tenant.payment.manage` / `tenant.invoice.manage` |
+| Platform  | 模型接入 `/atlas`                                   | `tenant.model.read`（仅 owner）                                                                     |
+| Usage     | 配额管理 / 用量分析                                 | `tenant.quota.read`                                                                                 |
+| Settings  | 租户信息 `/tenant` / 通知提醒 / 审计日志 / 账号信息 | `tenant.settings.manage` / `tenant.audit.read`；账号信息与通知登录即可                              |
 
 设计规范见 [`docs/30-design/console.md`](../../../30-design/platform/20-console.md)。
 

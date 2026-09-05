@@ -10,7 +10,8 @@
     "start": "next start -p 3020",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
-    "clean": "rimraf .next"
+    "clean": "rimraf .next",
+    "test": "vitest run"
   },
   "dependencies": {
     "@vxture/core-identity-sdk": "workspace:*",
@@ -38,7 +39,8 @@
     "postcss": "^8.5.19",
     "rimraf": "^6.0.1",
     "tailwindcss": "^4.2.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.8"
   },
   "engines": {
     "node": ">=22.0.0"

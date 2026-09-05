@@ -270,6 +270,8 @@ function walk(dir, out = []) {
     if (["node_modules", ".next", "dist"].includes(entry.name)) continue;
     const full = join(dir, entry.name);
     if (entry.isDirectory()) walk(full, out);
+    // 测试文件从不渲染,用例名写中文是仓内惯例(BFF spec 同款),不算界面硬编码。
+    else if (/\.(test|spec)\.tsx?$/.test(entry.name)) continue;
     else if ([".ts", ".tsx"].includes(extname(entry.name))) out.push(full);
   }
   return out;

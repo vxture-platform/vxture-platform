@@ -87,19 +87,26 @@
 导航结构（全部按 capability 过滤）：
 
 ```
-Overview
+工作空间
+  数据总览 · 待办与消息
 
-Workspace
-  Members · Roles · Organization
+账户与租户
+  账号信息 · 租户信息
 
-Commerce
-  Subscription · Billing · Quotas
+成员与权限
+  成员管理 · 角色管理 · 邀请记录
 
-Platform（需 platform.* 能力）
-  Tenants · Products · Pricing · Models
+订阅与计费
+  产品订阅 · 账单管理 · 我的卡券 · 配额管理 · 用量分析
 
-Settings
+高级设置
+  通知提醒 · 审计日志
+
+平台能力（tenant.model.read，仅 owner）
+  模型接入
 ```
+
+> 2026-09-05（批 8）按 `navigation.ts` 现状重写；权威源是 `deploy/database/seed/seed-catalog.mjs` 的 `TENANT_MENU_TREE`（守卫 `lint:permission-catalog` 三处比对）。
 
 **规则：** 每项 = icon + label，无副标题无描述。选中态清晰但轻量，不用厚重高亮块。折叠模式保留 icon + hover tooltip + 选中指示。sidebar 视觉融入 shell，不做深色独立面板。
 

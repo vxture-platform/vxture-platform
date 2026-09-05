@@ -1,6 +1,6 @@
 # Console「租户信息」页设计(批 5c)
 
-> 状态:定稿 v3(owner 2026-09-05 九条决策已齐,待实施)
+> 状态:**已实施**(5c-1 #189 → v0.26.77、5c-2 #190 → v0.26.78,2026-09-05);定稿 v3(owner 九条决策)
 > 范围:console 里租户层信息与配置的页面结构、字段、显隐、转为组织租户流程、认证子页、路由与迁移。
 > 上游规格:[`docs/20-specs/20-vxture-tenant-console-info-spec.md`](../../20-vxture-tenant-console-info-spec.md) §三(租户信息)、§四(工作空间);本文覆盖其中的页面形态部分。
 > 交互稿(线框,同步本文):https://claude.ai/code/artifact/b30e8618-bea7-4792-8fb3-a1cb8c40e9b5

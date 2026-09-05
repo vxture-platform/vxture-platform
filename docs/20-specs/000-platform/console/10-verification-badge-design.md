@@ -8,7 +8,7 @@
 
 首用户（feishu）用户名后标签显示"已认证",但库里 `kyc.user_kycs=0`、tenant `verification_status=unverified`——即**"手机已验证"被笼统显示成"已认证"**,易被误解为已实名。现状实现还不一致:
 
-- `ProfilePage.tsx:931` 硬编码渲染 `verification.unverified`（永远"未认证"占位）;
+- 旧 `ProfilePage.tsx:931`（批 5a 重排前；现为 `modules/account/profile/ProfilePage.tsx`）硬编码渲染 `verification.unverified`（永远"未认证"占位）;
 - 用户名后标签又按 `phone_verified` 显示"已认证";
 - 二者都是**二态**(verified / unverified),语义模糊。
 
@@ -62,5 +62,5 @@ verificationTier: 'real_name' | 'phone_verified' | 'none'
 ## 5. 开放问题（待 owner 确认后进实现）
 
 1. KYC `pending`（审核中）在顶层徽章里归"手机已验证"还是单列一个"审核中"次态?本稿建议归手机态(徽章只三态),审核态在认证页内。
-2. tenant（组织）也有一套 `verification_status`(§OrganizationPage),是**组织实名** vs 本稿的**用户实名**——两者是否用同一套三态文案/图标?建议同构但数据源分开(user kyc vs tenant verification)。
+2. tenant（组织）也有一套 `verification_status`（`/tenant` 的 `TenantPage`，批 5c 合并后）,是**组织实名** vs 本稿的**用户实名**——两者是否用同一套三态文案/图标?建议同构但数据源分开(user kyc vs tenant verification)。
 3. "去认证"入口 `/profile/verification` 目前是 skeleton(`VerificationSkeleton.tsx`),实名 KYC 流程本身未接线(铁律四预留)——徽章三态可先上,实名流程另立项。
