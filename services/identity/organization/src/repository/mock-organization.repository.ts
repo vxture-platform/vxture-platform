@@ -229,6 +229,8 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
     const record: TenantVerificationRecord = {
       id: `mock-verification-${list.length + 1}`,
       verificationType: "enterprise",
+      verificationMethod: input.method,
+      companyName: input.companyName,
       businessLicenseNo: input.businessLicenseNo,
       legalPersonName: input.legalPersonName,
       status: "pending",

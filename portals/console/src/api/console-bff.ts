@@ -2428,9 +2428,17 @@ export async function fetchVouchers(): Promise<ConsoleVoucher[]> {
 // Tenant verification (组织企业认证 — /api/verification/tenant)
 // ============================================================================
 
+/** 认证方式(owner 2026-09-06):本期只开放 lite,另两种页面占位禁用。 */
+export type ConsoleVerificationMethod = "lite" | "face" | "documents";
+
+/** 认证能力等级:none / lite(可订阅不可开票)/ full。 */
+export type ConsoleVerificationLevel = "none" | "lite" | "full";
+
 export interface ConsoleVerification {
   id: string;
   verificationType: string;
+  verificationMethod: ConsoleVerificationMethod;
+  companyName: string | null;
   businessLicenseNo: string | null;
   legalPersonName: string | null;
   status: "unverified" | "pending" | "verified" | "rejected" | "superseded";
@@ -2441,6 +2449,10 @@ export interface ConsoleVerification {
 
 export interface ConsoleTenantVerificationState {
   status: "unverified" | "pending" | "verified" | "rejected" | "superseded";
+  level: ConsoleVerificationLevel;
+  /** 当前等级能否申请开票(简易认证为 false);页面据此提示局限性。 */
+  canIssueInvoice: boolean;
+  availableMethods: ConsoleVerificationMethod[];
   latest: ConsoleVerification | null;
   history: ConsoleVerification[];
 }
@@ -2455,6 +2467,8 @@ export async function fetchTenantVerification(): Promise<ConsoleTenantVerificati
 
 /** 提交企业认证;409(审核中)/403(无权限)/400(校验)报文透传。 */
 export async function submitTenantVerification(input: {
+  method: ConsoleVerificationMethod;
+  companyName: string;
   businessLicenseNo: string;
   legalPersonName: string;
 }): Promise<ConsoleVerification> {

@@ -1179,6 +1179,10 @@ export interface TenantVerificationRecord {
   tenantType: string; // personal | organization
   tenantStatus: string; // active | suspended | deleted
   verificationType: string; // individual | enterprise
+  /** 认证方式(2026-09-06):lite 简易 / face 法人扫脸 / documents 提交资料。 */
+  verificationMethod: string;
+  /** 申报的企业名称;历史行可能为 null。 */
+  companyName: string | null;
   businessLicenseNo: string | null;
   businessLicenseImageRef: string | null;
   legalPersonName: string | null;

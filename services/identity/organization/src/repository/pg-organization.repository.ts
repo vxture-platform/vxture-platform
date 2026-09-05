@@ -1364,13 +1364,19 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       }
       const inserted = await client.query<TenantVerificationRow>(
         `insert into kyc.tenant_verifications (
-           tenant_id, verification_type, business_license_no,
-           legal_person_name, status, created_at, updated_at
-         ) values ($1, 'enterprise', $2, $3, 'pending', now(), now())
-         returning id, verification_type, business_license_no,
-                   legal_person_name, status, reject_reason, reviewed_at,
-                   created_at`,
-        [input.tenantId, input.businessLicenseNo, input.legalPersonName],
+           tenant_id, verification_type, verification_method, company_name,
+           business_license_no, legal_person_name, status, created_at, updated_at
+         ) values ($1, 'enterprise', $2, $3, $4, $5, 'pending', now(), now())
+         returning id, verification_type, verification_method, company_name,
+                   business_license_no, legal_person_name, status,
+                   reject_reason, reviewed_at, created_at`,
+        [
+          input.tenantId,
+          input.method,
+          input.companyName,
+          input.businessLicenseNo,
+          input.legalPersonName,
+        ],
       );
       await client.query(
         `update tenancy.tenants
@@ -1791,10 +1797,14 @@ interface TenantVerificationRow {
   reject_reason: string | null;
   reviewed_at: Date | null;
   created_at: Date;
+  /** 2026-09-20 迁移新增;老快照 / 未迁移库读回 undefined,映射时归 lite / null。 */
+  verification_method?: string | null;
+  company_name?: string | null;
 }
 
 const TENANT_VERIFICATION_SELECT = `
-      select id, verification_type, business_license_no, legal_person_name,
+      select id, verification_type, verification_method, company_name,
+             business_license_no, legal_person_name,
              status, reject_reason, reviewed_at, created_at
         from kyc.tenant_verifications`;
 
@@ -1805,6 +1815,10 @@ function mapTenantVerification(
     id: row.id,
     verificationType:
       row.verification_type as TenantVerificationRecord["verificationType"],
+    // 迁移前的历史行没有这一列;读侧按当时唯一存在的路径归为 lite。
+    verificationMethod: (row.verification_method ??
+      "lite") as TenantVerificationRecord["verificationMethod"],
+    companyName: row.company_name ?? null,
     businessLicenseNo: row.business_license_no,
     legalPersonName: row.legal_person_name,
     status: row.status as TenantVerificationRecord["status"],

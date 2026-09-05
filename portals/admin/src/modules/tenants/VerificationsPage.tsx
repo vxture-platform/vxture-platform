@@ -97,8 +97,15 @@ const verificationTenantType: Record<string, TenantOperationType> = {
   personal: "individual",
 };
 
+/**
+ * 认证方式(2026-09-06):审核人得知道自己批的是哪条路径——简易与实名的能力不同
+ * (简易可订阅不可开票)。方式名走词典(status.verificationMethod.*),不写死在这里。
+ */
+const KNOWN_VERIFICATION_METHODS = new Set(["lite", "face", "documents"]);
+
 function mapVerificationToRow(
   record: TenantVerificationRecord,
+  methodLabel: (method: string) => string,
 ): VerificationRow {
   const contactName = record.legalPersonName ?? record.tenantName;
   return {
@@ -106,16 +113,18 @@ function mapVerificationToRow(
     id: record.tenantId,
     tenantCode: record.tenantNo,
     tenantName: record.tenantName,
-    displayName: record.tenantName,
     tenantType: verificationTenantType[record.tenantType] ?? "company",
     verifiedStatus: record.status,
     verificationSubmittedAt: record.createdAt,
     verifiedAt: record.reviewedAt,
     riskLevel: "normal",
     region: "",
-    industry:
-      record.verificationType === "enterprise" ? "企业认证" : "个人认证",
+    industry: `${
+      record.verificationType === "enterprise" ? "企业认证" : "个人认证"
+    } · ${methodLabel(record.verificationMethod)}`,
     scale: record.businessLicenseNo ?? "—",
+    // 申报的企业名称与租户名可能不同(改名即作废,通常一致);审核人看申报名
+    displayName: record.companyName ?? record.tenantName,
     ownerName: record.legalPersonName ?? "",
     ownerEmail: "",
     contactName,
@@ -362,12 +371,21 @@ export function VerificationsPage() {
     if (tenantId) setQuery(tenantId);
   }, []);
 
+  /** 方式名走词典;未登记的方式码原样显影,不静默吞掉。 */
+  const methodLabel = useCallback(
+    (method: string) =>
+      KNOWN_VERIFICATION_METHODS.has(method)
+        ? tShared(`status.verificationMethod.${method}`)
+        : method,
+    [tShared],
+  );
+
   const loadVerifications = useCallback(
     async (silent = false) => {
       if (!silent) setLoading(true);
       try {
         const records = await fetchTenantVerifications();
-        setTenants(records.map(mapVerificationToRow));
+        setTenants(records.map((r) => mapVerificationToRow(r, methodLabel)));
         setVerificationsTruncated(isListTruncated(records));
       } catch (error) {
         setVerificationsTruncated(false);
@@ -383,7 +401,7 @@ export function VerificationsPage() {
         if (!silent) setLoading(false);
       }
     },
-    [toast],
+    [toast, methodLabel],
   );
 
   useEffect(() => {

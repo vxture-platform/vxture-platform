@@ -191,19 +191,21 @@
 
 ### 4.2 `tenant_verifications`（组织实名明细，预留）
 
-| 字段                         | 类型         | 约束                                      | 说明                     |
-| ---------------------------- | ------------ | ----------------------------------------- | ------------------------ |
-| `id`                         | uuid         | PK                                        |                          |
-| `tenant_id`                  | uuid         | FK→`tenancy.tenants.id` ON DELETE CASCADE |                          |
-| `verification_type`          | varchar(32)  | NOT NULL, CHECK(individual/enterprise)    |                          |
-| `business_license_no`        | varchar(64)  | NULL                                      |                          |
-| `business_license_image_ref` | varchar(255) | NULL                                      | 对象存储引用             |
-| `legal_person_name`          | varchar(64)  | NULL                                      |                          |
-| `status`                     | varchar(32)  | NOT NULL DEFAULT `'unverified'`, CHECK    |                          |
-| `reviewer_id`                | uuid         | NULL                                      | 逻辑引用（同上，边界#2） |
-| `reviewed_at`                | timestamptz  | NULL                                      |                          |
-| `reject_reason`              | varchar(255) | NULL                                      |                          |
-| `created_at` / `updated_at`  | timestamptz  | NOT NULL DEFAULT now()                    |                          |
+| 字段                         | 类型         | 约束                                                  | 说明                                                                                                                                                                                                                                                         |
+| ---------------------------- | ------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                         | uuid         | PK                                                    |                                                                                                                                                                                                                                                              |
+| `tenant_id`                  | uuid         | FK→`tenancy.tenants.id` ON DELETE CASCADE             |                                                                                                                                                                                                                                                              |
+| `verification_type`          | varchar(32)  | NOT NULL, CHECK(individual/enterprise)                | **主体轴**：证的是谁                                                                                                                                                                                                                                         |
+| `verification_method`        | varchar(32)  | NOT NULL DEFAULT `'lite'`, CHECK(lite/face/documents) | **方式轴**（2026-09-06，与主体轴正交）：怎么证的。`lite` 简易企业实名（企业名称 + 统一社会信用代码 + 法定代表人姓名，可订阅**不可开票**）/ `face` 法人扫脸 / `documents` 提交资料（后两者可开票，开发中）。能力判定收在 console-bff `lib/verification-level` |
+| `company_name`               | varchar(128) | NULL                                                  | 申报的企业名称；通过后即租户认证名（改名作废原认证）。迁移前的历史行按 `pending`/`verified` 从 `tenancy.tenants.name` 回填，其余留空                                                                                                                         |
+| `business_license_no`        | varchar(64)  | NULL                                                  |                                                                                                                                                                                                                                                              |
+| `business_license_image_ref` | varchar(255) | NULL                                                  | 对象存储引用                                                                                                                                                                                                                                                 |
+| `legal_person_name`          | varchar(64)  | NULL                                                  |                                                                                                                                                                                                                                                              |
+| `status`                     | varchar(32)  | NOT NULL DEFAULT `'unverified'`, CHECK                |                                                                                                                                                                                                                                                              |
+| `reviewer_id`                | uuid         | NULL                                                  | 逻辑引用（同上，边界#2）                                                                                                                                                                                                                                     |
+| `reviewed_at`                | timestamptz  | NULL                                                  |                                                                                                                                                                                                                                                              |
+| `reject_reason`              | varchar(255) | NULL                                                  |                                                                                                                                                                                                                                                              |
+| `created_at` / `updated_at`  | timestamptz  | NOT NULL DEFAULT now()                                |                                                                                                                                                                                                                                                              |
 
 > `tenancy.tenants.verification_status`/`verification_type` 保留为反规范化只读列（快查），审核流水明细权威在本表。
 

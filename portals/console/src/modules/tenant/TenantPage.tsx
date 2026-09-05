@@ -448,6 +448,7 @@ export function TenantPage() {
         tenantNo={session.tenant?.tenantNo ?? null}
         status={profile?.status ?? null}
         verifiedStatus={profile?.verifiedStatus ?? null}
+        verifiedLevel={profile?.verifiedLevel ?? "none"}
         createdAt={formatProfileDay(profile?.createdAt, locale, "—")}
         ownerName={
           members.find((m) => m.roleCode === "owner")?.name ??

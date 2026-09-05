@@ -83,7 +83,7 @@ GRANT UPDATE (real_name, id_type, id_no_encrypted, status, verified_at, reviewer
 
 -- kyc.tenant_verifications  [anchor: id, business_license_no, created_at]
 REVOKE UPDATE ON kyc.tenant_verifications FROM platform_svc;
-GRANT UPDATE (tenant_id, verification_type, business_license_image_ref, legal_person_name, status, reviewer_id, reviewed_at, reject_reason, updated_at) ON kyc.tenant_verifications TO platform_svc;
+GRANT UPDATE (tenant_id, verification_type, verification_method, company_name, business_license_image_ref, legal_person_name, status, reviewer_id, reviewed_at, reject_reason, updated_at) ON kyc.tenant_verifications TO platform_svc;
 
 -- kyc.verification_policies  [anchor: id, created_at]
 REVOKE UPDATE ON kyc.verification_policies FROM platform_svc;

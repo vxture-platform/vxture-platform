@@ -99,6 +99,7 @@ export function InvoiceSections({
   onApplyClose,
   onChanged,
   money,
+  invoiceBlockedBy = null,
 }: {
   receipts: ConsoleInvoiceReceipt[];
   addresses: ConsoleBillingAddress[];
@@ -111,6 +112,13 @@ export function InvoiceSections({
   /** 任一写操作成功后,父页重取发票/抬头数据 */
   onChanged: () => Promise<void>;
   money: (v: string, currency: string) => string;
+  /**
+   * 认证等级挡住开票时的原因(owner 2026-09-06「需要提醒局限性」):
+   * `"lite"` = 简易企业实名认证不支持开票;`"none"` = 还没认证;null = 不挡。
+   * 这里只是**提前告知**,真门在 console-bff(填完一屏再被拒是糟糕的体验,
+   * 但读不到认证态时也不该反过来锁住页面——所以父页读失败传 null)。
+   */
+  invoiceBlockedBy?: "lite" | "none" | null;
 }) {
   const t = useTranslations("billingPage.invoicing");
 
@@ -435,6 +443,18 @@ export function InvoiceSections({
             </DialogDescription>
           </DialogHeader>
 
+          {invoiceBlockedBy ? (
+            <Banner
+              tone="warning"
+              title={t(
+                invoiceBlockedBy === "lite"
+                  ? "apply.blockedLite"
+                  : "apply.blockedUnverified",
+              )}
+              description={t("apply.blockedHint")}
+            />
+          ) : null}
+
           {addresses.length === 0 ? (
             <Banner tone="info" title={t("apply.noAddress")} />
           ) : (
@@ -492,7 +512,12 @@ export function InvoiceSections({
             ) : (
               <Button
                 onClick={() => void handleApply()}
-                disabled={busy || !applyAddress || !effectiveApplyType}
+                disabled={
+                  busy ||
+                  !applyAddress ||
+                  !effectiveApplyType ||
+                  invoiceBlockedBy !== null
+                }
               >
                 {t("apply.submit")}
               </Button>

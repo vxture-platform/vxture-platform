@@ -39,6 +39,7 @@ import {
   fetchBillingSummary,
   fetchBills,
   fetchCredits,
+  fetchTenantVerification,
   fetchInvoiceReceipts,
   type ConsoleBill,
   type ConsoleBillingAddress,
@@ -107,6 +108,15 @@ export function BillingPage() {
   const [page, setPage] = useState(1);
   const [applyBill, setApplyBill] = useState<ConsoleBill | null>(null);
 
+  /**
+   * 开票的认证门(owner 2026-09-06):简易企业实名认证可订阅、不可开票。这里只为
+   * **提前告知**——真门在 console-bff。故单独一路读、失败不显影也不锁页面:读不到
+   * 认证态就当不挡(null),让后端去拒,而不是因为一次读失败把开票入口关掉。
+   */
+  const [invoiceBlockedBy, setInvoiceBlockedBy] = useState<
+    "lite" | "none" | null
+  >(null);
+
   const reloadInvoicing = useCallback(async () => {
     const [receiptRows, addressRows] = await Promise.all([
       fetchInvoiceReceipts(),
@@ -115,6 +125,23 @@ export function BillingPage() {
     setReceipts(receiptRows);
     setAddresses(addressRows);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetchTenantVerification()
+      .then((s) => {
+        if (!active) return;
+        setInvoiceBlockedBy(
+          s.canIssueInvoice ? null : s.level === "lite" ? "lite" : "none",
+        );
+      })
+      .catch(() => {
+        if (active) setInvoiceBlockedBy(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [session.tenant?.id, reloadKey]);
 
   useEffect(() => {
     let active = true;
@@ -457,6 +484,7 @@ export function BillingPage() {
         onApplyClose={() => setApplyBill(null)}
         onChanged={reloadInvoicing}
         money={money}
+        invoiceBlockedBy={invoiceBlockedBy}
       />
 
       {/* ④ 收款与计费口径 */}

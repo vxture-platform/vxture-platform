@@ -2131,6 +2131,11 @@
       "finished": "已完成",
       "rejected": "已驳回",
       "red": "已红冲"
+    },
+    "verificationMethod": {
+      "lite": "简易",
+      "face": "法人扫脸",
+      "documents": "提交资料"
     }
   },
   "platformGovernance": {

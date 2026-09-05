@@ -1161,40 +1161,93 @@
       }
     },
     "org": {
-      "title": "Business Verification",
-      "description": "Verify your organization to unlock special VAT invoices and other business capabilities; verify once, valid long-term",
+      "title": "Business verification",
+      "description": "Verify your business to unlock subscriptions and invoicing; one verification stays valid",
       "status": {
-        "unverified": "Unverified",
-        "pending": "In review",
+        "unverified": "Not verified",
+        "pending": "Under review",
         "verified": "Verified",
-        "rejected": "Rejected"
+        "rejected": "Rejected",
+        "superseded": "Superseded",
+        "lite": "Simple verification",
+        "full": "Full verification"
       },
-      "pendingBanner": "Application submitted — platform operations will review within 1-2 business days",
-      "rejectedBanner": "Previous application rejected: {reason}. Please check the details and resubmit",
-      "submittedBanner": "Submitted — awaiting review; the result also updates the badge on the Organization page",
-      "submitFailed": "Submission failed — please try again later",
+      "pendingBanner": "Your application is submitted; platform operations will review it within 1-2 business days",
+      "rejectedBanner": "Your last application was rejected: {reason}. Check the details and submit again",
+      "submittedBanner": "Submitted. Awaiting review; the result syncs to the badge on the tenant page",
+      "submitFailed": "Submission failed. Please try again later",
+      "liteLimitBanner": "You are verified via simple business verification: you can subscribe, but cannot request invoices",
+      "liteLimitBannerBody": "Simple verification checks registration details only, without verifying the legal representative in person or their documents, so invoicing is not available. Face verification and document verification are in development and will offer an upgrade path.",
+      "methods": {
+        "title": "Verification methods",
+        "description": "The three methods differ in what they require and what they unlock. Simple business verification is available now; the other two are in development",
+        "needLabel": "What you provide",
+        "capabilityLabel": "What you get",
+        "canSubscribe": "Subscribe to products and plans",
+        "canInvoice": "Request invoices",
+        "cannotInvoice": "Cannot request invoices",
+        "useThis": "Use this method",
+        "inDevelopment": "In development",
+        "availableTag": "Available now",
+        "currentTag": "Current method",
+        "lite": {
+          "name": "Simple business verification",
+          "summary": "Registration details only, reviewed by operations. The fastest path",
+          "items": {
+            "0": "Company name",
+            "1": "Unified social credit code",
+            "2": "Legal representative name"
+          }
+        },
+        "face": {
+          "name": "Legal representative face verification",
+          "summary": "The legal representative verifies in person by face scan; unlocks invoicing",
+          "items": {
+            "0": "Registration details",
+            "1": "Face scan by the legal representative"
+          }
+        },
+        "documents": {
+          "name": "Document verification",
+          "summary": "Upload the business licence and ID images for manual review; unlocks invoicing",
+          "items": {
+            "0": "Registration details",
+            "1": "Business licence image",
+            "2": "Legal representative ID image"
+          }
+        }
+      },
       "current": {
         "title": "Current verification",
-        "description": "Verification is active; changes require re-submission and review",
-        "verifiedAt": "Verified at"
+        "description": "Verification is in effect; changes require another review",
+        "method": "Method",
+        "verifiedAt": "Verified at",
+        "invoicing": "Invoicing",
+        "invoicingAllowed": "Can request invoices",
+        "invoicingBlocked": "Cannot request invoices (simple verification)"
       },
       "form": {
         "title": "Submit business verification",
-        "description": "Lightweight: registration details only — no document images required",
-        "retitleTitle": "Update verification details",
-        "retitleDescription": "Updates require re-review; the current verification stays valid meanwhile",
-        "licenseNo": "Unified Social Credit Code",
-        "licenseNoPlaceholder": "18-character USCC",
+        "description": "Only simple business verification is open this cycle: registration details, no document images",
+        "retitleTitle": "Change verification details",
+        "retitleDescription": "Changes require another review; the existing verification stays valid meanwhile",
+        "liteNotice": "Simple business verification: once approved you can subscribe, but cannot request invoices",
+        "companyName": "Company name",
+        "companyNamePlaceholder": "Exactly as registered on the business licence",
+        "licenseNo": "Unified social credit code",
+        "licenseNoPlaceholder": "18-character unified social credit code",
         "legalName": "Legal representative",
-        "legalNamePlaceholder": "As on the business license",
+        "legalNamePlaceholder": "As shown on the business licence",
         "submit": "Submit application",
-        "pendingLocked": "In review — submission locked"
+        "pendingLocked": "Under review, cannot submit"
       },
       "history": {
         "title": "Application history",
-        "description": "All applications and review outcomes for this organization",
-        "colAt": "Submitted at",
-        "colLicense": "USCC",
+        "description": "Past verification applications and their outcomes",
+        "colAt": "Submitted",
+        "colMethod": "Method",
+        "colCompany": "Company",
+        "colLicense": "Unified social credit code",
         "colStatus": "Status",
         "colResult": "Outcome / time",
         "awaiting": "Awaiting review",
@@ -1203,12 +1256,12 @@
       "notes": {
         "title": "About verification",
         "description": "Scope and effect",
-        "liteTitle": "Lightweight mode",
-        "liteBody": "No document images this phase; the platform verifies registration details, and operations may contact you for extras when needed",
+        "liteTitle": "Limits of simple verification",
+        "liteBody": "Simple verification checks registration details without document images, so it allows subscribing but not invoicing. For invoicing, wait for face or document verification",
         "effectTitle": "Scope",
-        "effectBody": "Verification attaches to the tenant; all workspaces inherit it. Special VAT invoices require completed business verification"
+        "effectBody": "Verification lives on the tenant and every workspace inherits it; the tenant name follows the verified company name, and renaming voids the verification"
       },
-      "loadFailed": "Could not load the verification status; the form is locked. Retry or come back later.",
+      "loadFailed": "Could not read the verification status; the form is locked. Retry or come back later.",
       "retry": "Retry"
     }
   },
@@ -2008,7 +2061,10 @@
         "noAddress": "No invoice title yet — create one first",
         "createAddress": "Create a title",
         "cancel": "Cancel",
-        "submit": "Submit"
+        "submit": "Submit",
+        "blockedLite": "Simple business verification does not support invoicing",
+        "blockedUnverified": "Complete business verification before requesting an invoice",
+        "blockedHint": "See Tenant → Business verification for the available methods; invoicing opens once face or document verification ships."
       },
       "rowMenu": "Bill actions",
       "applyHintUnpaid": "Available once the bill is settled",
@@ -2907,7 +2963,9 @@
       "rejected": "Verification failed",
       "superseded": "Superseded",
       "go": "Verify",
-      "view": "View verification"
+      "view": "View verification",
+      "lite": "Simple verification",
+      "full": "Full verification"
     },
     "identity": {
       "createdOn": "Created {date}",

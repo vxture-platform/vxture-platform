@@ -37,6 +37,9 @@ export type TenantVerifiedStatus =
   | "superseded"
   | null;
 
+/** 认证等级:已认证分「简易认证」(lite)与「实名认证」(full)两档(owner 2026-09-06)。 */
+export type TenantVerifiedLevel = "none" | "lite" | "full";
+
 export interface TenantWorkspaceRow {
   workspaceId: string | null;
   name: string | null;
@@ -62,6 +65,7 @@ export function TenantIdentityCard({
   tenantNo,
   status,
   verifiedStatus,
+  verifiedLevel,
   createdAt,
   ownerName,
   memberCount,
@@ -84,6 +88,8 @@ export function TenantIdentityCard({
   readonly tenantNo: string | null;
   readonly status: string | null;
   readonly verifiedStatus: TenantVerifiedStatus;
+  /** 已认证时按等级分档呈现:简易认证 / 实名认证。 */
+  readonly verifiedLevel: TenantVerifiedLevel;
   readonly createdAt: string;
   readonly ownerName: string | null;
   readonly memberCount: number | null;
@@ -131,10 +137,18 @@ export function TenantIdentityCard({
                   ? t("status.active")
                   : t("status.suspended")}
               </StatusBadge>
+              {/* 已认证分两档(owner 2026-09-06):简易认证可订阅不可开票,
+                  实名认证全功能;其余状态照旧一个词 */}
               <StatusBadge
-                tone={VERIFY_TONE[verifiedStatus ?? "unverified"] ?? "neutral"}
+                tone={
+                  verifiedStatus === "verified" && verifiedLevel === "lite"
+                    ? "info"
+                    : (VERIFY_TONE[verifiedStatus ?? "unverified"] ?? "neutral")
+                }
               >
-                {t(`verify.${verifiedStatus ?? "unverified"}`)}
+                {verifiedStatus === "verified"
+                  ? t(verifiedLevel === "lite" ? "verify.lite" : "verify.full")
+                  : t(`verify.${verifiedStatus ?? "unverified"}`)}
               </StatusBadge>
             </>
           }
