@@ -28,6 +28,24 @@ BEGIN
   END IF;
 END $$;
 
+-- 两列并存:09-17 在改名之后又被整轮重跑、把 salutation 加了回来(2026-09-05 生产实测;
+-- 09-17 已改成 gender 存在即跳过,这里再兜一层)。把 salutation 里的值并入 gender
+-- (gender 为空时才取),再连同它的 CHECK 一起删掉,后面的断言才成立。
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'tenancy' AND table_name = 'tenant_contacts' AND column_name = 'salutation')
+     AND EXISTS (SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'tenancy' AND table_name = 'tenant_contacts' AND column_name = 'gender') THEN
+    UPDATE tenancy.tenant_contacts
+       SET gender = CASE salutation WHEN 'mr' THEN 'male' WHEN 'ms' THEN 'female' END
+     WHERE gender IS NULL AND salutation IN ('mr', 'ms');
+    ALTER TABLE tenancy.tenant_contacts DROP CONSTRAINT IF EXISTS chk_tenant_contacts_salutation;
+    ALTER TABLE tenancy.tenant_contacts DROP COLUMN salutation;
+    RAISE NOTICE '[contact-gender] salutation 与 gender 并存:已并入 gender 并删除 salutation';
+  END IF;
+END $$;
+
 ALTER TABLE tenancy.tenant_contacts DROP CONSTRAINT IF EXISTS chk_tenant_contacts_salutation;
 
 UPDATE tenancy.tenant_contacts
