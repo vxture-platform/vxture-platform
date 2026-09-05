@@ -255,7 +255,7 @@ CREATE TABLE product.solutions (
     solution_code        varchar(64)  NOT NULL,                       -- 可视码（kebab，如 flood-regulation；铁律二不作 FK 目标）
     solution_name        varchar(128) NOT NULL,
     description          text,
-    industry             varchar(128),                                -- 行业领域（水利 / 法务…；自由文本，不建字典）
+    industry             varchar(128),                                -- 行业领域：存 core-utils industry-taxonomy 自定义清单的码（与租户所属行业同一清单，2026-09-06）；历史自由文本原样保留
     scenario             varchar(128),                                -- 业务场景
     customer_segment     varchar(255),                                -- 目标客户群
     owner_team           varchar(128),                                -- 负责团队（展示）

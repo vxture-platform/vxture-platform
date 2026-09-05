@@ -1534,6 +1534,7 @@
         "solutionCodeInvalid": "Invalid code: use lowercase letters, digits, and hyphens only (e.g. flood-regulation)",
         "solutionName": "Solution name",
         "industry": "Industry",
+        "industryUnset": "Not set",
         "scenario": "Scenario",
         "customerSegment": "Customer segment",
         "ownerTeam": "Owner team",
@@ -1642,6 +1643,7 @@
     "editDialog": {
       "title": "Edit solution",
       "description": "The solution code cannot change; state moves via the state actions in the header.",
+      "industryUnset": "Not set",
       "submit": "Save changes",
       "descriptionField": "Description",
       "tags": "Tags",
