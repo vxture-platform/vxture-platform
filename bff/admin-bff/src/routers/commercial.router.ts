@@ -62,6 +62,7 @@ import type {
   UsageMeteringRecord,
   UsageMeteringRisk,
 } from "../types/console.types";
+import { industryLabel } from "@vxture/core-utils";
 
 // ── 发券写端点契约（product_321 §4.2，TD-028 部分销号）─────────────────────────
 
@@ -478,7 +479,8 @@ function mapUsageMeteringRow(row: UsageMeteringRow): UsageMeteringRecord {
     tenantName: row.tenant_name,
     tenantType: normalizeTenantType(row.tenant_type),
     region: "未设置",
-    industry: row.industry ?? "未设置",
+    // 所属行业:console 存的是 core-utils 清单码,这里翻成中文标签;历史自由文本原样显示
+    industry: row.industry ? industryLabel(row.industry) : "未设置",
     subscriptionId: row.subscription_id,
     orderNo: row.order_no,
     servicePlanName: row.plan_name,

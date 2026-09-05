@@ -20,6 +20,7 @@ import type {
   SupportTicketRecord,
   TenantOperationTicket,
 } from "../types/console.types";
+import { industryLabel } from "@vxture/core-utils";
 
 @Controller("api/tickets")
 export class TicketsRouter {
@@ -307,7 +308,8 @@ function mapSupportTicketRow(row: SupportTicketRow): SupportTicketRecord {
           ? "follow_up"
           : "normal",
     region: [row.province, row.city].filter(Boolean).join(" / ") || "未设置",
-    industry: row.industry ?? "未设置",
+    // 所属行业:console 存的是 core-utils 清单码,这里翻成中文标签;历史自由文本原样显示
+    industry: row.industry ? industryLabel(row.industry) : "未设置",
     ownerName: row.owner_name ?? "未设置",
   };
 }

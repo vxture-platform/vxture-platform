@@ -7,9 +7,10 @@ import {
   DataTable,
   DialogForm,
   EmptyState,
+  Field,
+  FieldLabel,
   FilterBar,
   Input,
-  Label,
   ListPageTemplate,
   NativeSelect,
   StatusBadge,
@@ -271,10 +272,11 @@ export function SystemParametersPage() {
           }}
           onSubmit={(event) => void submitEdit(event)}
         >
-          <Label>
-            配置值
+          <Field>
+            <FieldLabel htmlFor="systemparameterspage-value">配置值</FieldLabel>
             {editing.valueType === "bool" ? (
               <NativeSelect
+                id="systemparameterspage-value"
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
               >
@@ -283,6 +285,7 @@ export function SystemParametersPage() {
               </NativeSelect>
             ) : editing.valueType === "json" ? (
               <Textarea
+                id="systemparameterspage-value"
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
                 rows={6}
@@ -290,12 +293,13 @@ export function SystemParametersPage() {
               />
             ) : (
               <Input
+                id="systemparameterspage-value"
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
                 inputMode={editing.valueType === "int" ? "numeric" : undefined}
               />
             )}
-          </Label>
+          </Field>
           {editing.description ? (
             <p className="m-0 text-body-sm text-muted-foreground">
               {editing.description}

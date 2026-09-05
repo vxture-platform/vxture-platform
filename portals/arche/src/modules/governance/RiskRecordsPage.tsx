@@ -8,10 +8,11 @@ import {
   DataTable,
   DialogForm,
   EmptyState,
+  Field,
+  FieldLabel,
   FilterBar,
   Icon,
   Input,
-  Label,
   ListPageTemplate,
   MetricGrid,
   NativeSelect,
@@ -530,9 +531,10 @@ export function RiskRecordsPage() {
           onSubmit={(event) => void submitForm(event)}
         >
           {dialogMode === "create" ? (
-            <Label>
-              租户 ID
+            <Field>
+              <FieldLabel htmlFor="riskrecordspage-field">租户 ID</FieldLabel>
               <Input
+                id="riskrecordspage-field"
                 value={form.tenantId}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, tenantId: e.target.value }))
@@ -540,12 +542,15 @@ export function RiskRecordsPage() {
                 placeholder="tenancy.tenants 的 uuid"
                 required
               />
-            </Label>
+            </Field>
           ) : null}
           <div>
-            <Label>
-              风险等级
+            <Field>
+              <FieldLabel htmlFor="riskrecordspage-field-2">
+                风险等级
+              </FieldLabel>
               <NativeSelect
+                id="riskrecordspage-field-2"
                 value={form.riskLevel}
                 onChange={(e) =>
                   setForm((f) => ({
@@ -558,10 +563,13 @@ export function RiskRecordsPage() {
                 <option value="follow_up">需跟进</option>
                 <option value="high">高风险</option>
               </NativeSelect>
-            </Label>
-            <Label>
-              风险评分（0–100，可选）
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="riskrecordspage-field-3">
+                风险评分（0–100，可选）
+              </FieldLabel>
               <Input
+                id="riskrecordspage-field-3"
                 type="number"
                 min={0}
                 max={100}
@@ -570,11 +578,14 @@ export function RiskRecordsPage() {
                   setForm((f) => ({ ...f, riskScore: e.target.value }))
                 }
               />
-            </Label>
+            </Field>
           </div>
-          <Label>
-            风险范围（可选）
+          <Field>
+            <FieldLabel htmlFor="riskrecordspage-field-4">
+              风险范围（可选）
+            </FieldLabel>
             <Input
+              id="riskrecordspage-field-4"
               value={form.scope}
               maxLength={160}
               onChange={(e) =>
@@ -582,10 +593,11 @@ export function RiskRecordsPage() {
               }
               placeholder="如 billing / 内容安全 / API 滥用"
             />
-          </Label>
-          <Label>
-            原因说明
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="riskrecordspage-field-5">原因说明</FieldLabel>
             <Textarea
+              id="riskrecordspage-field-5"
               value={form.reason}
               onChange={(e) =>
                 setForm((f) => ({ ...f, reason: e.target.value }))
@@ -594,15 +606,18 @@ export function RiskRecordsPage() {
               rows={4}
               required
             />
-          </Label>
-          <Label>
-            标签（逗号分隔，可选）
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="riskrecordspage-field-6">
+              标签（逗号分隔，可选）
+            </FieldLabel>
             <Input
+              id="riskrecordspage-field-6"
               value={form.tags}
               onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
               placeholder="如 usage, kyc"
             />
-          </Label>
+          </Field>
         </DialogForm>
       ) : null}
     </>

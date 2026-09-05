@@ -82,6 +82,18 @@ export type {
 } from "./product-taxonomy";
 
 // ============================================
+// Industry Taxonomy (租户所属行业 自定义清单单一权威源)
+// ============================================
+
+export {
+  INDUSTRIES,
+  INDUSTRY_DEFS,
+  industryLabel,
+  isValidIndustry,
+} from "./industry-taxonomy";
+export type { Industry, IndustryDef } from "./industry-taxonomy";
+
+// ============================================
 // Release Stage (product 成熟度轴单一权威源)
 // ============================================
 

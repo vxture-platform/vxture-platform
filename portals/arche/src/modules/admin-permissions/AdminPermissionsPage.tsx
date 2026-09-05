@@ -16,9 +16,10 @@ import {
   DialogForm,
   DialogTitle,
   EmptyState,
+  Field,
+  FieldLabel,
   Icon,
   Input,
-  Label,
   ListCardGrid,
   MetricGrid,
   MetricListCard,
@@ -625,29 +626,36 @@ function PermissionFormDialog({
       onSubmit={onSubmit}
     >
       <div>
-        <Label>
-          权限编码
+        <Field>
+          <FieldLabel htmlFor="adminpermissionspage-field">权限编码</FieldLabel>
           <Input
+            id="adminpermissionspage-field"
             value={form.permCode}
             onChange={(event) => onChange({ permCode: event.target.value })}
             placeholder="如 admin.section.tenant"
             required
           />
-        </Label>
-        <Label>
-          权限名称
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="adminpermissionspage-field-2">
+            权限名称
+          </FieldLabel>
           <Input
+            id="adminpermissionspage-field-2"
             value={form.permName}
             onChange={(event) => onChange({ permName: event.target.value })}
             placeholder="权限展示名称"
             required
           />
-        </Label>
+        </Field>
       </div>
       <div>
-        <Label>
-          权限类型
+        <Field>
+          <FieldLabel htmlFor="adminpermissionspage-field-3">
+            权限类型
+          </FieldLabel>
           <NativeSelect
+            id="adminpermissionspage-field-3"
             value={form.permType}
             onChange={(event) =>
               onChange({
@@ -659,10 +667,13 @@ function PermissionFormDialog({
             <option value="button">按钮</option>
             <option value="api">接口</option>
           </NativeSelect>
-        </Label>
-        <Label>
-          上级权限
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="adminpermissionspage-field-4">
+            上级权限
+          </FieldLabel>
           <NativeSelect
+            id="adminpermissionspage-field-4"
             value={form.parentId}
             onChange={(event) => onChange({ parentId: event.target.value })}
           >
@@ -673,54 +684,61 @@ function PermissionFormDialog({
               </option>
             ))}
           </NativeSelect>
-        </Label>
+        </Field>
       </div>
       <div>
-        <Label>
-          路由路径
+        <Field>
+          <FieldLabel htmlFor="adminpermissionspage-field-5">
+            路由路径
+          </FieldLabel>
           <Input
+            id="adminpermissionspage-field-5"
             value={form.routePath}
             onChange={(event) => onChange({ routePath: event.target.value })}
             placeholder="如 /tenants"
           />
-        </Label>
-        <Label>
-          组件
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="adminpermissionspage-field-6">组件</FieldLabel>
           <Input
+            id="adminpermissionspage-field-6"
             value={form.component}
             onChange={(event) => onChange({ component: event.target.value })}
             placeholder="前端组件路径"
           />
-        </Label>
+        </Field>
       </div>
       <div>
-        <Label>
-          图标
+        <Field>
+          <FieldLabel htmlFor="adminpermissionspage-field-7">图标</FieldLabel>
           <Input
+            id="adminpermissionspage-field-7"
             value={form.icon}
             onChange={(event) => onChange({ icon: event.target.value })}
             placeholder="图标名称"
           />
-        </Label>
-        <Label>
-          排序
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="adminpermissionspage-field-8">排序</FieldLabel>
           <Input
+            id="adminpermissionspage-field-8"
             type="number"
             value={form.sort}
             onChange={(event) => onChange({ sort: event.target.value })}
             placeholder="排序值"
           />
-        </Label>
+        </Field>
       </div>
-      <Label>
-        描述
+      <Field>
+        <FieldLabel htmlFor="adminpermissionspage-field-9">描述</FieldLabel>
         <Textarea
+          id="adminpermissionspage-field-9"
           value={form.description}
           onChange={(event) => onChange({ description: event.target.value })}
           placeholder="权限用途说明"
           rows={3}
         />
-      </Label>
+      </Field>
     </DialogForm>
   );
 }

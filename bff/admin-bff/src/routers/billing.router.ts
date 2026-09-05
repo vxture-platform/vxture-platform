@@ -52,6 +52,7 @@ import type {
   OrderPaySource,
   RequestContext,
 } from "../types/console.types";
+import { industryLabel } from "@vxture/core-utils";
 
 @Controller("api/billing")
 export class BillingRouter {
@@ -761,7 +762,8 @@ function mapBillingRow(row: BillingListRow): BillingRecord {
     tenantName: row.tenant_name,
     tenantType: normalizeTenantType(row.tenant_type),
     region: "未设置",
-    industry: row.industry ?? "未设置",
+    // 所属行业:console 存的是 core-utils 清单码,这里翻成中文标签;历史自由文本原样显示
+    industry: row.industry ? industryLabel(row.industry) : "未设置",
     subscriptionId: row.subscription_id,
     orderNo: null,
     servicePlanName: null,

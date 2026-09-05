@@ -9,9 +9,10 @@ import {
   DataTable,
   DialogForm,
   EmptyState,
+  Field,
+  FieldLabel,
   FilterBar,
   Input,
-  Label,
   ListCardGrid,
   ListPageTemplate,
   MetricGrid,
@@ -1531,9 +1532,10 @@ export function ModelPlatformPage() {
             </p>
           ) : null}
           <div>
-            <Label>
-              模型
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field">模型</FieldLabel>
               <NativeSelect
+                id="modelplatformpage-field"
                 value={priceRuleForm.modelId}
                 disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
@@ -1549,10 +1551,13 @@ export function ModelPlatformPage() {
                   </option>
                 ))}
               </NativeSelect>
-            </Label>
-            <Label>
-              计费模式
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-2">
+                计费模式
+              </FieldLabel>
               <Input
+                id="modelplatformpage-field-2"
                 value={priceRuleForm.billingMode}
                 disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
@@ -1563,10 +1568,13 @@ export function ModelPlatformPage() {
                 }
                 placeholder="token"
               />
-            </Label>
-            <Label>
-              {tShared("columns.currency")}
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-columns-currency">
+                {tShared("columns.currency")}
+              </FieldLabel>
               <Input
+                id="modelplatformpage-columns-currency"
                 value={priceRuleForm.currency}
                 disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
@@ -1577,10 +1585,13 @@ export function ModelPlatformPage() {
                 }
                 placeholder="CNY"
               />
-            </Label>
-            <Label>
-              计价单位（tokens）
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-3">
+                计价单位（tokens）
+              </FieldLabel>
               <Input
+                id="modelplatformpage-field-3"
                 type="number"
                 min={1}
                 value={priceRuleForm.unitTokens}
@@ -1592,12 +1603,15 @@ export function ModelPlatformPage() {
                   }))
                 }
               />
-            </Label>
+            </Field>
           </div>
           <div>
-            <Label>
-              输入单价
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-4">
+                输入单价
+              </FieldLabel>
               <Input
+                id="modelplatformpage-field-4"
                 value={priceRuleForm.inputUnitPrice}
                 disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
@@ -1608,10 +1622,13 @@ export function ModelPlatformPage() {
                 }
                 placeholder="0"
               />
-            </Label>
-            <Label>
-              输出单价
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-5">
+                输出单价
+              </FieldLabel>
               <Input
+                id="modelplatformpage-field-5"
                 value={priceRuleForm.outputUnitPrice}
                 disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
@@ -1622,10 +1639,13 @@ export function ModelPlatformPage() {
                 }
                 placeholder="0"
               />
-            </Label>
-            <Label>
-              缓存输入单价
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-6">
+                缓存输入单价
+              </FieldLabel>
               <Input
+                id="modelplatformpage-field-6"
                 value={priceRuleForm.cachedInputUnitPrice}
                 disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
@@ -1636,10 +1656,13 @@ export function ModelPlatformPage() {
                 }
                 placeholder="留空 = 不声明"
               />
-            </Label>
-            <Label>
-              请求单价
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-7">
+                请求单价
+              </FieldLabel>
               <Input
+                id="modelplatformpage-field-7"
                 value={priceRuleForm.requestUnitPrice}
                 disabled={priceRuleDialog.mode === "edit"}
                 onChange={(event) =>
@@ -1650,12 +1673,15 @@ export function ModelPlatformPage() {
                 }
                 placeholder="0"
               />
-            </Label>
+            </Field>
           </div>
           <div>
-            <Label>
-              生效时间
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-8">
+                生效时间
+              </FieldLabel>
               <Input
+                id="modelplatformpage-field-8"
                 type="datetime-local"
                 value={priceRuleForm.effectiveAt}
                 disabled={priceRuleDialog.mode === "edit"}
@@ -1666,10 +1692,13 @@ export function ModelPlatformPage() {
                   }))
                 }
               />
-            </Label>
-            <Label>
-              失效时间（可选）
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-9">
+                失效时间（可选）
+              </FieldLabel>
               <Input
+                id="modelplatformpage-field-9"
                 type="datetime-local"
                 value={priceRuleForm.expiresAt}
                 onChange={(event) =>
@@ -1679,7 +1708,7 @@ export function ModelPlatformPage() {
                   }))
                 }
               />
-            </Label>
+            </Field>
           </div>
         </DialogForm>
       ) : null}
@@ -1717,9 +1746,10 @@ export function ModelPlatformPage() {
             />
           ) : null}
           <div>
-            <Label>
-              模型
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-10">模型</FieldLabel>
               <NativeSelect
+                id="modelplatformpage-field-10"
                 value={policyForm.modelId}
                 /* atlas 的 update body 里没有 modelId：一条策略属于它被创建时
                    针对的那个模型。 */
@@ -1737,13 +1767,14 @@ export function ModelPlatformPage() {
                   </option>
                 ))}
               </NativeSelect>
-            </Label>
-            <Label>
-              作用域
-              {/* **下拉而不是 UUID 输入框**：选项上出的是租户可视码，送出去的才是
-                  UUID（owner 2026-08-20：UUID 任何场景都不面向用户）。
-                  编辑态锁死——atlas 对 update 里的 tenantId 是「出现即拒」。 */}
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-11">
+                作用域
+                {/* **下拉而不是 UUID 输入框**：选项上出的是租户可视码，送出去的才是UUID（owner 2026-08-20：UUID 任何场景都不面向用户）。编辑态锁死——atlas 对 update 里的 tenantId 是「出现即拒」。 */}
+              </FieldLabel>
               <NativeSelect
+                id="modelplatformpage-field-11"
                 value={policyForm.tenantId}
                 disabled={policyDialog.mode === "edit"}
                 onChange={(event) =>
@@ -1768,22 +1799,28 @@ export function ModelPlatformPage() {
                   </option>
                 ))}
               </NativeSelect>
-            </Label>
+            </Field>
           </div>
           <div>
-            <Label>
-              名称（可留空）
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-12">
+                名称（可留空）
+              </FieldLabel>
               <Input
+                id="modelplatformpage-field-12"
                 value={policyForm.name}
                 onChange={(event) =>
                   setPolicyForm((old) => ({ ...old, name: event.target.value }))
                 }
                 placeholder="如 默认限流"
               />
-            </Label>
-            <Label>
-              优先级（小者先）
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-13">
+                优先级（小者先）
+              </FieldLabel>
               <Input
+                id="modelplatformpage-field-13"
                 type="number"
                 min={0}
                 value={policyForm.priority}
@@ -1794,12 +1831,15 @@ export function ModelPlatformPage() {
                   }))
                 }
               />
-            </Label>
+            </Field>
           </div>
           <div>
-            <Label>
-              RPM 上限
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-14">
+                RPM 上限
+              </FieldLabel>
               <Input
+                id="modelplatformpage-field-14"
                 inputMode="numeric"
                 value={policyForm.rateLimitRpm}
                 onChange={(event) =>
@@ -1810,10 +1850,13 @@ export function ModelPlatformPage() {
                 }
                 placeholder="留空 = 不限"
               />
-            </Label>
-            <Label>
-              最大并发
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-15">
+                最大并发
+              </FieldLabel>
               <Input
+                id="modelplatformpage-field-15"
                 inputMode="numeric"
                 value={policyForm.maxConcurrent}
                 onChange={(event) =>
@@ -1824,12 +1867,15 @@ export function ModelPlatformPage() {
                 }
                 placeholder="留空 = 不限；0 = 全部拒绝"
               />
-            </Label>
+            </Field>
           </div>
           <div>
-            <Label>
-              TPM 上限（已登记未生效）
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-16">
+                TPM 上限（已登记未生效）
+              </FieldLabel>
               <Input
+                id="modelplatformpage-field-16"
                 inputMode="numeric"
                 value={policyForm.rateLimitTpm}
                 onChange={(event) =>
@@ -1840,10 +1886,13 @@ export function ModelPlatformPage() {
                 }
                 placeholder="留空 = 不限"
               />
-            </Label>
-            <Label>
-              TPD 上限（已登记未生效）
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-17">
+                TPD 上限（已登记未生效）
+              </FieldLabel>
               <Input
+                id="modelplatformpage-field-17"
                 inputMode="numeric"
                 value={policyForm.rateLimitTpd}
                 onChange={(event) =>
@@ -1854,12 +1903,15 @@ export function ModelPlatformPage() {
                 }
                 placeholder="留空 = 不限"
               />
-            </Label>
+            </Field>
           </div>
           <div>
-            <Label>
-              最大上下文（已登记未生效）
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-18">
+                最大上下文（已登记未生效）
+              </FieldLabel>
               <Input
+                id="modelplatformpage-field-18"
                 inputMode="numeric"
                 value={policyForm.maxContextTokens}
                 onChange={(event) =>
@@ -1870,10 +1922,13 @@ export function ModelPlatformPage() {
                 }
                 placeholder="留空 = 不限"
               />
-            </Label>
-            <Label>
-              生效时间
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="modelplatformpage-field-19">
+                生效时间
+              </FieldLabel>
               <Input
+                id="modelplatformpage-field-19"
                 type="datetime-local"
                 value={policyForm.effectiveAt}
                 /* 创建后固定。atlas 对 update 里的 effectiveAt 同样「出现即拒」，
@@ -1886,11 +1941,14 @@ export function ModelPlatformPage() {
                   }))
                 }
               />
-            </Label>
+            </Field>
           </div>
-          <Label>
-            失效时间（可选）
+          <Field>
+            <FieldLabel htmlFor="modelplatformpage-field-20">
+              失效时间（可选）
+            </FieldLabel>
             <Input
+              id="modelplatformpage-field-20"
               type="datetime-local"
               value={policyForm.expiresAt}
               onChange={(event) =>
@@ -1900,7 +1958,7 @@ export function ModelPlatformPage() {
                 }))
               }
             />
-          </Label>
+          </Field>
         </DialogForm>
       ) : null}
     </>

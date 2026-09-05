@@ -33,6 +33,7 @@ import type {
   RequestContext,
   TenantOperationType,
 } from "../types/console.types";
+import { industryLabel } from "@vxture/core-utils";
 
 @Controller("api/invoices")
 export class InvoicesRouter {
@@ -198,7 +199,8 @@ function mapInvoiceLedgerRow(
     tenantName: row.tenant_name,
     tenantType: mapTenantType(row.tenant_type),
     region: row.country_code ?? "未设置",
-    industry: row.industry ?? "未设置",
+    // 所属行业:console 存的是 core-utils 清单码,这里翻成中文标签;历史自由文本原样显示
+    industry: row.industry ? industryLabel(row.industry) : "未设置",
     subscriptionId: row.subscription_id,
     // 无对应真实列（订单/服务方案/档位不在 billing 台账链路）→ 空态兜底
     orderNo: null,

@@ -250,18 +250,18 @@
 
 ### 5.2 `tenant_profiles`
 
-| 字段                                 | 类型         | 约束                                  | 说明                                                             |
-| ------------------------------------ | ------------ | ------------------------------------- | ---------------------------------------------------------------- |
-| `tenant_id`                          | uuid         | PK, FK→`tenants.id` ON DELETE CASCADE |                                                                  |
-| `logo_hash`                          | varchar(64)  | NULL                                  | 与 `tenant_logos.hash` 冗余同步，供展示轻读（大对象已拆至 §5.3） |
-| `description`                        | text         | NULL                                  |                                                                  |
-| `industry` / `scale` / `website`     | varchar      | NULL                                  |                                                                  |
-| `country_code`                       | varchar(8)   | NULL                                  |                                                                  |
-| `address`                            | varchar(255) | NULL                                  | **组织注册地址**（地址三层 SoT 第一层，见 §7）                   |
-| `postal_code`                        | varchar(16)  | NULL                                  |                                                                  |
-| `is_billing_recipient`               | boolean      | NOT NULL DEFAULT false                |                                                                  |
-| `timezone` / `language` / `currency` | varchar      | NULL                                  |                                                                  |
-| `created_at` / `updated_at`          | timestamptz  | NOT NULL DEFAULT now()                |                                                                  |
+| 字段                                 | 类型         | 约束                                  | 说明                                                                                                                                                                                 |
+| ------------------------------------ | ------------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tenant_id`                          | uuid         | PK, FK→`tenants.id` ON DELETE CASCADE |                                                                                                                                                                                      |
+| `logo_hash`                          | varchar(64)  | NULL                                  | 与 `tenant_logos.hash` 冗余同步，供展示轻读（大对象已拆至 §5.3）                                                                                                                     |
+| `description`                        | text         | NULL                                  |                                                                                                                                                                                      |
+| `industry` / `scale` / `website`     | varchar      | NULL                                  | `industry` 自 2026-09-06 起 console 写入只认 core-utils `industry-taxonomy` 的清单码(自定义清单,不套国标);历史自由文本原样保留,admin 侧仍可自由填写;展示按码翻标签、未登记值原样显示 |
+| `country_code`                       | varchar(8)   | NULL                                  |                                                                                                                                                                                      |
+| `address`                            | varchar(255) | NULL                                  | **组织注册地址**（地址三层 SoT 第一层，见 §7）                                                                                                                                       |
+| `postal_code`                        | varchar(16)  | NULL                                  |                                                                                                                                                                                      |
+| `is_billing_recipient`               | boolean      | NOT NULL DEFAULT false                |                                                                                                                                                                                      |
+| `timezone` / `language` / `currency` | varchar      | NULL                                  |                                                                                                                                                                                      |
+| `created_at` / `updated_at`          | timestamptz  | NOT NULL DEFAULT now()                |                                                                                                                                                                                      |
 
 > **联系人迁出（2026-07-05 二次吸纳修正）**：round-1 吸纳曾把原稿（`inputs/tenancy_core_tables.sql` §4）的 1:N 多类型联系人**有损折叠**为本表 4 个 `contact_*` 列且无落盘记录；现按原设计恢复为独立 `tenant_contacts` 表（§5.8），本表不再承载联系人。运行时主联系人读写 = `tenant_contacts` 的 `contact_type='primary'` 首行（API 面 `contactName/Role/Email/Phone` 保持不变，`contact_role`→`title` 映射）。
 

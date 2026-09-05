@@ -14,10 +14,11 @@ import {
   DialogForm,
   DialogTitle,
   EmptyState,
+  Field,
+  FieldLabel,
   FilterBar,
   Icon,
   Input,
-  Label,
   ListPageTemplate,
   MetricGrid,
   NativeSelect,
@@ -880,30 +881,33 @@ function AdminRoleFormDialog({
       onSubmit={onSubmit}
     >
       <div>
-        <Label>
-          角色编码
+        <Field>
+          <FieldLabel htmlFor="adminrolespage-field">角色编码</FieldLabel>
           <Input
+            id="adminrolespage-field"
             value={form.roleCode}
             onChange={(event) => onChange({ roleCode: event.target.value })}
             placeholder="如 platform_ops"
             disabled={mode === "edit"}
             required={mode === "create"}
           />
-        </Label>
-        <Label>
-          英文名称
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="adminrolespage-field-2">英文名称</FieldLabel>
           <Input
+            id="adminrolespage-field-2"
             value={form.nameEn}
             onChange={(event) => onChange({ nameEn: event.target.value })}
             placeholder="如 Platform Operations"
             required
           />
-        </Label>
+        </Field>
       </div>
       <div>
-        <Label>
-          MFA 最低等级
+        <Field>
+          <FieldLabel htmlFor="adminrolespage-field-3">MFA 最低等级</FieldLabel>
           <NativeSelect
+            id="adminrolespage-field-3"
             value={form.mfaMinLevel}
             onChange={(event) =>
               onChange({
@@ -916,26 +920,28 @@ function AdminRoleFormDialog({
             <option value="optional">可选</option>
             <option value="required">必需</option>
           </NativeSelect>
-        </Label>
-        <Label>
-          排序
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="adminrolespage-field-4">排序</FieldLabel>
           <Input
+            id="adminrolespage-field-4"
             type="number"
             value={form.sort}
             onChange={(event) => onChange({ sort: event.target.value })}
             placeholder="排序值"
           />
-        </Label>
+        </Field>
       </div>
-      <Label>
-        描述
+      <Field>
+        <FieldLabel htmlFor="adminrolespage-field-5">描述</FieldLabel>
         <Textarea
+          id="adminrolespage-field-5"
           value={form.description}
           onChange={(event) => onChange({ description: event.target.value })}
           placeholder="角色用途说明"
           rows={3}
         />
-      </Label>
+      </Field>
     </DialogForm>
   );
 }
@@ -968,32 +974,35 @@ function AdminRoleCopyDialog({
       }}
       onSubmit={onSubmit}
     >
-      <Label>
-        新角色编码
+      <Field>
+        <FieldLabel htmlFor="adminrolespage-field-6">新角色编码</FieldLabel>
         <Input
+          id="adminrolespage-field-6"
           value={form.roleCode}
           onChange={(event) => onChange({ roleCode: event.target.value })}
           placeholder="如 platform_ops_copy"
           required
         />
-      </Label>
-      <Label>
-        英文名称
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="adminrolespage-field-7">英文名称</FieldLabel>
         <Input
+          id="adminrolespage-field-7"
           value={form.nameEn}
           onChange={(event) => onChange({ nameEn: event.target.value })}
           placeholder="新角色英文名称"
         />
-      </Label>
-      <Label>
-        描述
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="adminrolespage-field-8">描述</FieldLabel>
         <Textarea
+          id="adminrolespage-field-8"
           value={form.description}
           onChange={(event) => onChange({ description: event.target.value })}
           placeholder="角色用途说明"
           rows={3}
         />
-      </Label>
+      </Field>
     </DialogForm>
   );
 }

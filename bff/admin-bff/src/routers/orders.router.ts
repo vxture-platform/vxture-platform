@@ -34,7 +34,7 @@ import {
 import { randomUUID } from "node:crypto";
 import type { Request } from "express";
 import type { Pool, PoolClient } from "pg";
-import { extractClientIp } from "@vxture/core-utils";
+import { extractClientIp, industryLabel } from "@vxture/core-utils";
 import type { PromotionService } from "@vxture/service-promotion";
 import type { OrderService } from "@vxture/service-subscription";
 import { assertAnyCapability } from "../auth/capability";
@@ -1362,7 +1362,8 @@ function mapOrderRow(row: OrderRow): OrderOperationRecord {
     tenantName: row.tenant_name,
     tenantType: mapTenantType(row.tenant_type),
     region: "未设置",
-    industry: row.industry ?? "未设置",
+    // 所属行业:console 存的是 core-utils 清单码,这里翻成中文标签;历史自由文本原样显示
+    industry: row.industry ? industryLabel(row.industry) : "未设置",
     solutionCode: null,
     solutionName: "未设置",
     servicePlanCode: row.plan_code ?? "",

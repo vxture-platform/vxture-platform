@@ -26,8 +26,9 @@ import {
   Badge,
   Button,
   DialogForm,
+  Field,
+  FieldLabel,
   Input,
-  Label,
   NativeSelect,
   PanelItem,
   PanelList,
@@ -937,33 +938,42 @@ function PlanCreateDialog({
       onSubmit={submit}
     >
       {error ? <p className="text-sm text-vx-danger">{error}</p> : null}
-      <Label>
-        {t("create.codeLabel")}
+      <Field>
+        <FieldLabel htmlFor="planversionspage-create-codelabel">
+          {t("create.codeLabel")}
+        </FieldLabel>
         <Input
+          id="planversionspage-create-codelabel"
           value={planCode}
           onChange={(e) => setPlanCode(e.target.value)}
           placeholder={t("create.codePlaceholder")}
           required
         />
-      </Label>
-      <Label>
-        {t("create.nameLabel")}
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="planversionspage-create-namelabel">
+          {t("create.nameLabel")}
+        </FieldLabel>
         <Input
+          id="planversionspage-create-namelabel"
           value={planName}
           onChange={(e) => setPlanName(e.target.value)}
           placeholder={t("create.namePlaceholder")}
           required
         />
-      </Label>
-      <Label>
-        {t("create.descLabel")}
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="planversionspage-create-desclabel">
+          {t("create.descLabel")}
+        </FieldLabel>
         <Textarea
+          id="planversionspage-create-desclabel"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder={t("create.descPlaceholder")}
           rows={3}
         />
-      </Label>
+      </Field>
     </DialogForm>
   );
 }

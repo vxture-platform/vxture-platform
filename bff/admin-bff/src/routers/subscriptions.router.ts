@@ -37,7 +37,7 @@ import {
 import type { Request } from "express";
 import type { Pool } from "pg";
 import type { ComponentRole } from "@vxture-platform/shared";
-import { extractClientIp } from "@vxture/core-utils";
+import { extractClientIp, industryLabel } from "@vxture/core-utils";
 import { assertAnyCapability } from "../auth/capability";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import { UUID_RE } from "./governance.shared";
@@ -509,7 +509,8 @@ function mapSubscriptionRow(row: SubscriptionRow): SubscriptionOperationRecord {
     tenantType: normalizeTenantType(row.tenant_type),
     tenantStatus: normalizeTenantStatus(row.tenant_status),
     region: row.country_code ?? "未设置",
-    industry: row.industry ?? "未设置",
+    // 所属行业:console 存的是 core-utils 清单码,这里翻成中文标签;历史自由文本原样显示
+    industry: row.industry ? industryLabel(row.industry) : "未设置",
     solutionCode: row.solution_code,
     solutionName: row.solution_name ?? planName,
     servicePlanCode: row.plan_code ?? "",
