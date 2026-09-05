@@ -14,10 +14,23 @@
 
 BEGIN;
 
-ALTER TABLE tenancy.tenant_contacts ADD COLUMN IF NOT EXISTS salutation varchar(8);
-
+-- 2026-09-18 把这一列改名成了 gender。migrate 每次按序重跑**全部**脚本:这里若无条件
+-- ADD COLUMN IF NOT EXISTS,改名之后再跑就会把 salutation 重新加回来,09-18 的收尾断言
+-- 「salutation 列仍在」随即失败(2026-09-05 生产 db-init 实测,整轮迁移卡在这里)。
+-- 所以只在 gender 尚不存在——即 09-18 还没跑过——时才加列;跑过就整段跳过。
 DO $$
+DECLARE v_grant int;
 BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'tenancy' AND table_name = 'tenant_contacts' AND column_name = 'gender'
+  ) THEN
+    RAISE NOTICE '[tenant-contact-salutation] 已由 2026-09-18 改名为 gender,本段跳过';
+    RETURN;
+  END IF;
+
+  ALTER TABLE tenancy.tenant_contacts ADD COLUMN IF NOT EXISTS salutation varchar(8);
+
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint
      WHERE conname = 'chk_tenant_contacts_salutation'
@@ -26,13 +39,9 @@ BEGIN
     ALTER TABLE tenancy.tenant_contacts
       ADD CONSTRAINT chk_tenant_contacts_salutation CHECK (salutation IN ('mr', 'ms'));
   END IF;
-END $$;
 
-GRANT UPDATE (salutation) ON tenancy.tenant_contacts TO platform_svc;
+  GRANT UPDATE (salutation) ON tenancy.tenant_contacts TO platform_svc;
 
-DO $$
-DECLARE v_grant int;
-BEGIN
   SELECT count(*) INTO v_grant
     FROM information_schema.column_privileges
    WHERE table_schema = 'tenancy' AND table_name = 'tenant_contacts'
