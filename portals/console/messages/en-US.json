@@ -882,6 +882,8 @@
       "cooldownHint": "Changeable after {date}"
     },
     "feedback": {
+      "defaultTenantSet": "“{name}” is now your default tenant; you will enter it after your next sign-in.",
+      "defaultTenantError": "Could not set the default tenant. Please try again later.",
       "noProfile": "No profile was found.",
       "loadError": "Failed to load your profile. Please try again later.",
       "profileSaved": "Profile updated.",
@@ -1005,7 +1007,10 @@
       "personalTenant": "Personal",
       "orgTenant": "Organization",
       "workspace": "Workspace",
-      "tenantInfo": "Tenant details"
+      "tenantInfo": "Tenant details",
+      "defaultTag": "Default",
+      "setDefault": "Set as default",
+      "setDefaultTitle": "Enter this tenant by default after every sign-in"
     },
     "login": {
       "history": "Sign-in history",
@@ -2915,8 +2920,7 @@
       "toggle": "Workspaces · {count}",
       "unnamed": "Default workspace",
       "defaultTag": "Default",
-      "empty": "No workspaces yet.",
-      "hint": "Workspaces are listed here only. Switch from the tenant panel in the header; multiple workspaces come later."
+      "empty": "No workspaces yet."
     },
     "cards": {
       "basic": {
@@ -2925,7 +2929,7 @@
       },
       "contact": {
         "title": "Primary administrator",
-        "description": "Linked to the owner by default, who is also the billing recipient; switch to another member, or unlink and fill in manually. Linked details follow the member's account and are not edited here."
+        "description": "The owner by default, who is also the billing recipient; there is exactly one, and it can only be transferred to another member. Name, gender, email and phone follow their account profile and are not edited here."
       },
       "region": {
         "title": "Regional defaults",
@@ -3068,13 +3072,13 @@
       "summaryPending": "“{from}” will become an organization tenant; enter the organization name first."
     },
     "contact": {
-      "link": "Link member",
-      "linked": "Linked to {name}",
-      "unlink": "Unlink",
-      "pickTitle": "Link a member",
-      "pickDescription": "Choose a member as the contact; name, email and phone follow their account profile.",
-      "pickLabel": "Member",
-      "confirm": "Link"
+      "current": "Currently {name}",
+      "transfer": "Transfer",
+      "transferTitle": "Transfer primary administrator",
+      "transferDescription": "Choose a member to take over as primary administrator; name, gender, email and phone follow their account profile. The transfer takes effect when you save at the bottom of the page.",
+      "transferConfirm": "Transfer",
+      "pickLabel": "Successor",
+      "pickPlaceholder": "Choose a member"
     },
     "gender": {
       "male": "Male",

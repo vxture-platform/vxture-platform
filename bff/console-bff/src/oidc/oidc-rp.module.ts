@@ -114,6 +114,14 @@ const CLIENT_ID = "console";
       ) => new RpAuthService(store, client, rt.config.sessionTtlSec),
     },
   ],
-  exports: [RP_AUTH_SERVICE, RP_SESSION_STORE, RP_OIDC_CLIENT, RP_RUNTIME],
+  // RP_REDIS 也导出:根模块里的 TenantSwitchRouter 要把待授权请求暂存到与
+  // OidcAuthRouter 同一把 key 下(/auth/callback 才找得到 PKCE verifier)。
+  exports: [
+    RP_AUTH_SERVICE,
+    RP_SESSION_STORE,
+    RP_OIDC_CLIENT,
+    RP_RUNTIME,
+    RP_REDIS,
+  ],
 })
 export class OidcRpModule {}

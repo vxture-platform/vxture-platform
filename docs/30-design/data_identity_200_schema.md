@@ -299,21 +299,22 @@
 
 ### 5.5 `tenant_memberships`
 
-| 字段                        | 类型        | 约束                                                                          | 说明                                                                                                         |
-| --------------------------- | ----------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `id`                        | uuid        | PK                                                                            |                                                                                                              |
-| `tenant_id`                 | uuid        | FK→`tenants.id` ON DELETE CASCADE                                             |                                                                                                              |
-| `user_id`                   | uuid        | FK→`account.users.id`                                                         |                                                                                                              |
-| `role_id`                   | uuid        | NOT NULL, 复合 FK 见下                                                        | 基础角色，**唯一承载授权判断的列**（见下方纪律说明）                                                         |
-| `role_scope`                | varchar(16) | NOT NULL DEFAULT `'tenant'`, CHECK(`role_scope='tenant'`)                     | 判别列，配合复合 FK 锁定 scope（见下）                                                                       |
-| `status`                    | varchar(32) | NOT NULL DEFAULT `'active'`, CHECK(active/suspended/removed)                  |                                                                                                              |
-| `title`                     | varchar(64) | NULL                                                                          | 职务（原参考清单"组织/职业"归位于此，非 users）**——纯展示/HR 属性，非授权属性**                              |
-| `department`                | varchar(64) | NULL                                                                          | 同上，非授权属性                                                                                             |
-| `employee_no`               | varchar(32) | NULL                                                                          | 同上，非授权属性                                                                                             |
-| `job_level`                 | varchar(32) | NULL                                                                          | 同上，**非授权属性——严禁任何鉴权代码读取此列做权限判断**（见下方纪律说明）                                   |
-| `default_workspace_id`      | uuid        | NULL, 复合 FK `(default_workspace_id, tenant_id)`→`workspaces(id, tenant_id)` | 该用户在此租户下的默认空间；**修正**：用复合 FK 锁"默认 ws 必属本 tenant"(同 §5.6 严谨标准)，NULL 行自动放行 |
-| `member_extra`              | jsonb       | NULL                                                                          |                                                                                                              |
-| `created_at` / `updated_at` | timestamptz | NOT NULL DEFAULT now()                                                        |                                                                                                              |
+| 字段                        | 类型        | 约束                                                                          | 说明                                                                                                                                       |
+| --------------------------- | ----------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                        | uuid        | PK                                                                            |                                                                                                                                            |
+| `tenant_id`                 | uuid        | FK→`tenants.id` ON DELETE CASCADE                                             |                                                                                                                                            |
+| `user_id`                   | uuid        | FK→`account.users.id`                                                         |                                                                                                                                            |
+| `role_id`                   | uuid        | NOT NULL, 复合 FK 见下                                                        | 基础角色，**唯一承载授权判断的列**（见下方纪律说明）                                                                                       |
+| `role_scope`                | varchar(16) | NOT NULL DEFAULT `'tenant'`, CHECK(`role_scope='tenant'`)                     | 判别列，配合复合 FK 锁定 scope（见下）                                                                                                     |
+| `status`                    | varchar(32) | NOT NULL DEFAULT `'active'`, CHECK(active/suspended/removed)                  |                                                                                                                                            |
+| `title`                     | varchar(64) | NULL                                                                          | 职务（原参考清单"组织/职业"归位于此，非 users）**——纯展示/HR 属性，非授权属性**                                                            |
+| `department`                | varchar(64) | NULL                                                                          | 同上，非授权属性                                                                                                                           |
+| `employee_no`               | varchar(32) | NULL                                                                          | 同上，非授权属性                                                                                                                           |
+| `job_level`                 | varchar(32) | NULL                                                                          | 同上，**非授权属性——严禁任何鉴权代码读取此列做权限判断**（见下方纪律说明）                                                                 |
+| `default_workspace_id`      | uuid        | NULL, 复合 FK `(default_workspace_id, tenant_id)`→`workspaces(id, tenant_id)` | 该用户在此租户下的默认空间；**修正**：用复合 FK 锁"默认 ws 必属本 tenant"(同 §5.6 严谨标准)，NULL 行自动放行                               |
+| `is_default`                | boolean     | NOT NULL DEFAULT false；部分唯一 `(user_id) WHERE is_default`                 | 该用户**登录后默认进入的租户**（账号信息页「设为默认」，2026-09-05）；挂成员关系不挂 users：成员关系没了默认自然消失，登录解析回落个人租户 |
+| `member_extra`              | jsonb       | NULL                                                                          |                                                                                                                                            |
+| `created_at` / `updated_at` | timestamptz | NOT NULL DEFAULT now()                                                        |                                                                                                                                            |
 
 约束：`UNIQUE(tenant_id, user_id)`。
 

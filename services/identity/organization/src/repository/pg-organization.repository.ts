@@ -115,6 +115,8 @@ interface OrgRow {
   tenant_no?: string | null;
   created_at?: string | null;
   verification_status?: string | null;
+  /** tenancy.tenant_logos.hash(kind='logo');只有 join 了标识表的读才带。 */
+  logo_hash?: string | null;
 }
 interface WorkspaceRow {
   id: string;
@@ -518,13 +520,16 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
   }
 
   async getOrgById(orgId: string): Promise<OrgView | null> {
+    // 标识哈希一并带出:顶栏租户面板 / 会话上下文要画租户头像,免得再回查一次。
     const r = await this.pool.query<OrgRow>(
-      `select id, name, display_name, type, owner_user_id, status,
-              tenant_no::text as tenant_no,
-              created_at::text as created_at,
-              verification_status
-         from tenancy.tenants
-        where id = $1 and deleted_at is null
+      `select o.id, o.name, o.display_name, o.type, o.owner_user_id, o.status,
+              o.tenant_no::text as tenant_no,
+              o.created_at::text as created_at,
+              o.verification_status,
+              tl.hash as logo_hash
+         from tenancy.tenants o
+         left join tenancy.tenant_logos tl on tl.tenant_id = o.id and tl.kind = 'logo'
+        where o.id = $1 and o.deleted_at is null
         limit 1`,
       [orgId],
     );
@@ -773,13 +778,18 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
   async listOrgMembershipsForUser(
     userId: string,
   ): Promise<OrgMembershipView[]> {
+    // 顺序保持个人租户在前(列表展示的稳定顺序);「默认租户」不改顺序,由
+    // ActiveContextService 在登录解析时按 is_default 挑选。
     const r = await this.pool.query(
       `select m.tenant_id, m.user_id, rr.role_code as role, m.status, m.created_at as joined_at,
+              m.is_default,
               o.id as o_id, o.name as o_name, o.type as o_type,
-              o.owner_user_id as o_owner, o.status as o_status
+              o.owner_user_id as o_owner, o.status as o_status,
+              tl.hash as o_logo_hash
          from tenancy.tenant_memberships m
          join tenancy.tenants o on o.id = m.tenant_id and o.deleted_at is null
          join access.roles rr on rr.id = m.role_id
+         left join tenancy.tenant_logos tl on tl.tenant_id = o.id and tl.kind = 'logo'
         where m.user_id = $1 and m.status = 'active'
         order by (o.type = 'personal') desc, o.created_at asc`,
       [userId],
@@ -790,14 +800,55 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       role: row.role,
       status: row.status,
       joinedAt: row.joined_at,
+      isDefault: row.is_default === true,
       organization: {
         id: row.o_id,
         name: row.o_name,
         type: row.o_type,
         ownerUserId: row.o_owner,
         status: row.o_status,
+        logoHash: row.o_logo_hash ?? null,
       },
     }));
+  }
+
+  async setDefaultOrgForUser(userId: string, orgId: string): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const target = await client.query(
+        `select 1
+           from tenancy.tenant_memberships m
+           join tenancy.tenants o on o.id = m.tenant_id and o.deleted_at is null
+          where m.user_id = $1 and m.tenant_id = $2 and m.status = 'active'
+          for update of m`,
+        [userId, orgId],
+      );
+      if (target.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return false;
+      }
+      // 先清后设:部分唯一索引(每用户一条 is_default)按语句检查,顺序反了会撞索引。
+      await client.query(
+        `update tenancy.tenant_memberships
+            set is_default = false, updated_at = now()
+          where user_id = $1 and is_default and tenant_id <> $2`,
+        [userId, orgId],
+      );
+      await client.query(
+        `update tenancy.tenant_memberships
+            set is_default = true, updated_at = now()
+          where user_id = $1 and tenant_id = $2 and not is_default`,
+        [userId, orgId],
+      );
+      await client.query("COMMIT");
+      return true;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async listOrgMembers(orgId: string): Promise<OrgMembershipView[]> {
@@ -1643,6 +1694,7 @@ function mapOrg(row?: OrgRow): OrgView | null {
   if (row.display_name != null) view.displayName = row.display_name;
   if (row.tenant_no != null) view.tenantNo = row.tenant_no;
   if (row.created_at != null) view.createdAt = row.created_at;
+  if (row.logo_hash !== undefined) view.logoHash = row.logo_hash;
   if (
     row.verification_status === "unverified" ||
     row.verification_status === "pending" ||

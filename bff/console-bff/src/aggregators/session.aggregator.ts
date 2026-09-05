@@ -299,6 +299,8 @@ export class SessionAggregator {
         workspaceId: ws?.id ?? null,
         workspaceName: ws?.name ?? null,
         isCurrent: org.id === activeOrgId,
+        isDefault: m.isDefault === true,
+        logoHash: org.logoHash ?? null,
         joinedAt: m.joinedAt ? m.joinedAt.toISOString() : null,
       });
     }
@@ -557,10 +559,36 @@ export class SessionAggregator {
           ? ("organization" as const)
           : ("personal" as const),
       tenantCode: o.orgId,
+      logoHash: o.logoHash,
+      isDefault: o.isDefault,
       workspaceName: meta.get(o.orgId)?.name ?? null,
       workspaceNo: meta.get(o.orgId)?.workspaceNo ?? null,
       status: "active",
     }));
+  }
+
+  /** 切换租户前的服务端预检(identity/080 §2.8):目标须在本人可进入的租户内。 */
+  async isMemberOf(userId: string, tenantId: string): Promise<boolean> {
+    const orgs = await this.active.listOrgsForSwitch(userId);
+    return orgs.some((o) => o.orgId === tenantId);
+  }
+
+  /**
+   * 账号信息页「设为默认」:每次登录后默认进入的租户(owner 2026-09-05)。
+   * 目标须是本人的活跃成员关系,否则 404——不是成员的租户设不了默认。
+   */
+  async setDefaultTenant(userId: string, tenantId: string): Promise<void> {
+    const ok = await this.org.setDefaultOrgForUser(userId, tenantId);
+    if (!ok) throw new NotFoundException("tenant_not_found");
+  }
+
+  /** 本人所在任一租户的标识字节(账号页所在租户列表 / 顶栏面板);非成员或无标识 null。 */
+  async getTenantLogoForMember(
+    userId: string,
+    tenantId: string,
+  ): Promise<OrgLogoRecord | null> {
+    if (!(await this.isMemberOf(userId, tenantId))) return null;
+    return this.org.getOrgLogo(tenantId);
   }
 
   /** (tenant,user) → caps 短 TTL 缓存(middleware 每请求命中内存,不打 DB)。 */
@@ -1154,6 +1182,7 @@ function toTenantContext(
     type: string;
     status: string;
     tenantNo?: string;
+    logoHash?: string | null;
   },
   workspace: string | null,
   workspaceMeta: { name: string; workspaceNo: string | null } | null = null,
@@ -1167,6 +1196,7 @@ function toTenantContext(
     workspace: workspace ?? "default",
     tenantType: org.type === "organization" ? "organization" : "personal",
     tenantCode: orgId,
+    logoHash: org.logoHash ?? null,
     tenantNo: org.tenantNo ?? null,
     workspaceName: workspaceMeta?.name ?? null,
     workspaceNo: workspaceMeta?.workspaceNo ?? null,

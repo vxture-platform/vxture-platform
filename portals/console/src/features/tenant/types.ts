@@ -28,6 +28,10 @@ export interface TenantListItem {
   type: TenantType;
   role: TenantRole;
   isCurrent: boolean;
+  /** 登录后默认进入的租户(账号信息页「设为默认」)。 */
+  isDefault: boolean;
+  /** 租户标识内容哈希;null = 无自定义标识。 */
+  logoHash: string | null;
   source?: "session";
 }
 
@@ -42,7 +46,11 @@ export interface TenantContextState {
   currentTenant: TenantListItem | null;
   tenantList: TenantListItem[];
   hasPersonalTenant: boolean;
-  switchTenantContext: (tenantId: string) => Promise<void>;
+  /**
+   * 切换活跃租户(顶层导航,页面整体重载;见 ConsoleSessionProvider.switchTenant)。
+   * 切完要落到别的页面就传 `returnTo`;不传则回到当前地址。
+   */
+  switchTenantContext: (tenantId: string, returnTo?: string) => Promise<void>;
   createTenant: (payload: CreateTenantPayload) => Promise<void>;
 }
 

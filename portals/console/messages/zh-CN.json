@@ -882,6 +882,8 @@
       "cooldownHint": "{date} 后可再次修改"
     },
     "feedback": {
+      "defaultTenantSet": "已把「{name}」设为默认租户,下次登录默认进入。",
+      "defaultTenantError": "设置默认租户失败,请稍后重试。",
       "noProfile": "未读取到个人资料。",
       "loadError": "个人资料读取失败，请稍后重试。",
       "profileSaved": "基础资料已更新。",
@@ -1005,7 +1007,10 @@
       "personalTenant": "个人",
       "orgTenant": "组织",
       "workspace": "工作区",
-      "tenantInfo": "租户信息"
+      "tenantInfo": "租户信息",
+      "defaultTag": "默认",
+      "setDefault": "设为默认",
+      "setDefaultTitle": "每次登录后默认进入这个租户"
     },
     "login": {
       "history": "登录历史",
@@ -2915,8 +2920,7 @@
       "toggle": "工作空间 · {count} 个",
       "unnamed": "默认工作空间",
       "defaultTag": "默认",
-      "empty": "暂无工作空间。",
-      "hint": "这里只列出工作空间。切换在顶栏的租户面板;多工作空间是后续演进。"
+      "empty": "暂无工作空间。"
     },
     "cards": {
       "basic": {
@@ -2925,7 +2929,7 @@
       },
       "contact": {
         "title": "主管理员",
-        "description": "默认关联所有者,也是账单接收人;可换成其他成员,或解除关联手动填写。关联信息随成员账号,不在这里改。"
+        "description": "默认是所有者,也是账单接收人;只有一位,只能转让给其他成员。姓名、性别、邮箱、电话随其账号资料,不在这里改。"
       },
       "region": {
         "title": "默认区域",
@@ -3068,13 +3072,13 @@
       "summaryPending": "「{from}」将转换为组织租户;请先填写组织名称。"
     },
     "contact": {
-      "link": "关联成员",
-      "linked": "已关联 {name}",
-      "unlink": "解除关联",
-      "pickTitle": "关联成员",
-      "pickDescription": "选一位成员作为联系人,姓名、邮箱、电话随其账号资料。",
-      "pickLabel": "成员",
-      "confirm": "关联"
+      "current": "当前 {name}",
+      "transfer": "转让",
+      "transferTitle": "转让主管理员",
+      "transferDescription": "选一位成员接任主管理员;姓名、性别、邮箱、电话随其账号资料。转让后随页底「保存」生效。",
+      "transferConfirm": "转让",
+      "pickLabel": "接任成员",
+      "pickPlaceholder": "请选择成员"
     },
     "gender": {
       "male": "男",

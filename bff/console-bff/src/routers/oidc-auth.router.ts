@@ -52,11 +52,21 @@ import {
 } from "../oidc/oidc-rp.tokens";
 import { Public } from "../auth/capability";
 
-interface AuthReq {
+/** A pending authorize request, stashed under `state` until /auth/callback. */
+export interface AuthReq {
   codeVerifier: string;
   nonce: string;
   returnTo: string;
   prompt?: string;
+}
+
+/**
+ * Redis key of a pending authorize request. Shared with TenantSwitchRouter: its
+ * silent re-authorize (prompt=none + tenant_hint) lands on the same /auth/callback,
+ * which must find the PKCE verifier under the same key.
+ */
+export function consoleAuthReqKey(prefix: string, state: string): string {
+  return `${prefix}rp:console:authreq:${state}`;
 }
 
 @Public()
@@ -71,7 +81,7 @@ export class OidcAuthRouter {
   ) {}
 
   private authReqKey(state: string): string {
-    return `${this.rt.keyPrefix}rp:console:authreq:${state}`;
+    return consoleAuthReqKey(this.rt.keyPrefix, state);
   }
 
   /** __Host- in prod https; bare name over local http so the browser stores it. */
@@ -150,6 +160,7 @@ export class OidcAuthRouter {
     @Query("code") code: string | undefined,
     @Query("state") state: string | undefined,
     @Query("error") error: string | undefined,
+    @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
     if (error) {
@@ -205,6 +216,13 @@ export class OidcAuthRouter {
     };
     const rpsid = randomToken();
     await this.store.create(rpsid, session, this.rt.config.sessionTtlSec);
+    /* 切租户走的是「静默重授权 → 新会话」:浏览器手里的旧 rpsid 随即被下面的
+     * Set-Cookie 覆盖,服务端那份不收就一直躺到 TTL。顺手销毁(best-effort:
+     * 收不掉也不该让登录失败)。 */
+    const previous = req.cookies?.[this.cookieName] as string | undefined;
+    if (previous && previous !== rpsid) {
+      await this.store.destroy(previous).catch(() => undefined);
+    }
 
     res.cookie(this.cookieName, rpsid, {
       httpOnly: true,

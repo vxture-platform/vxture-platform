@@ -146,6 +146,9 @@ export function WorkspacePicker({ onSwitched }: WorkspacePickerProps) {
                   if (isCurrent) return;
                   setBusy(true);
                   setSwitchError(null);
+                  // 切租户是顶层导航(identity/080 §2.8):页面整体重载回到本页、
+                  // 查询串保留;导航一旦开始本组件就随页面卸载,下面的 then 只在
+                  // 切换没能发起时才会走到。
                   void switchTenantContext(tenant.id)
                     .then(() => onSwitched?.())
                     .catch(() => setSwitchError(t("switchFailed")))

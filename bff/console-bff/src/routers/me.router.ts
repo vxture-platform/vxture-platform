@@ -219,6 +219,45 @@ export class MeRouter {
     return this.sessionAggregator.getMyWorkspaces(req.user.id, req.tenant?.id);
   }
 
+  /**
+   * 账号信息页「设为默认」(owner 2026-09-05):每次登录后默认进入的租户。
+   * 自持数据(本人的成员关系),不需要租户能力;目标非本人所在租户 404。
+   */
+  @Put("tenants/:tenantId/default")
+  async setDefaultTenant(
+    @Req() req: Request & RequestContext,
+    @Param("tenantId") tenantId: string,
+  ) {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    await this.sessionAggregator.setDefaultTenant(req.user.id, tenantId);
+    return { status: "ok" as const };
+  }
+
+  /**
+   * 本人所在任一租户的标识(账号信息页所在租户列表画头像用;当前租户的另有
+   * `organization/logo`)。不是成员一律 404,不区分「没这个租户」与「不是成员」。
+   */
+  @Get("tenants/:tenantId/logo")
+  async getTenantLogo(
+    @Req() req: Request & RequestContext,
+    @Param("tenantId") tenantId: string,
+    @Res() res: Response,
+  ) {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    const logo = await this.sessionAggregator.getTenantLogoForMember(
+      req.user.id,
+      tenantId,
+    );
+    if (!logo) {
+      res.status(404).end();
+      return;
+    }
+    res.setHeader("Content-Type", logo.contentType);
+    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+    res.setHeader("ETag", `"${logo.hash}"`);
+    res.end(logo.data);
+  }
+
   @Delete("sessions/:sid")
   async revokeSession(
     @Req() req: Request & RequestContext,

@@ -14,8 +14,8 @@ import { IDLE_MS, startIdleWatcher } from "@vxture/core-identity-sdk";
 import {
   buildLogoutUrl,
   buildRpLoginUrl,
+  buildTenantSwitchUrl,
   restoreSession,
-  switchTenantSession,
 } from "@/api/console-bff";
 import type { SessionSnapshot } from "@/entities/console";
 
@@ -42,7 +42,12 @@ interface SessionContextValue {
   session: SessionSnapshot;
   status: SessionStatus;
   signOut: () => void;
-  switchTenant: (tenantId: string) => Promise<void>;
+  /**
+   * 切换活跃租户:一次**顶层导航**去 console-bff 的 /auth/switch-tenant(identity/080
+   * §2.8),回来时页面已整体重载到新租户。返回的 Promise 在页面卸载前不会 resolve,
+   * 调用方不要在它之后排任何事;切完要落到别的页面就传 `returnTo`。
+   */
+  switchTenant: (tenantId: string, returnTo?: string) => Promise<void>;
   refreshSession: (options?: RefreshSessionOptions) => Promise<SessionSnapshot>;
 }
 
@@ -54,64 +59,6 @@ const SessionContext = createContext<SessionContextValue>({
   refreshSession: async () => ANONYMOUS_SESSION,
 });
 
-const ACTIVE_TENANT_STORAGE_KEY = "vx-console-active-tenant-id";
-// Mirror of the active tenant in a cookie so the server (a future (console)
-// server-layout building the initial session snapshot for SSR) can read the
-// user's selected tenant — localStorage is not visible server-side. Non-sensitive
-// (the BFF still validates membership per request); SameSite=Lax so it rides
-// top-level navigations. Written client-side, hence not HttpOnly.
-const ACTIVE_TENANT_COOKIE = "vx-console-active-tenant";
-const ACTIVE_TENANT_COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
-
-function readTenantCookie(): string | undefined {
-  if (typeof document === "undefined") {
-    return undefined;
-  }
-  const match = document.cookie.match(
-    new RegExp(`(?:^|; )${ACTIVE_TENANT_COOKIE}=([^;]*)`),
-  );
-  return match?.[1] ? decodeURIComponent(match[1]) : undefined;
-}
-
-function writeTenantCookie(tenantId: string) {
-  if (typeof document === "undefined") {
-    return;
-  }
-  const secure = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie = `${ACTIVE_TENANT_COOKIE}=${encodeURIComponent(tenantId)}; Path=/; Max-Age=${ACTIVE_TENANT_COOKIE_MAX_AGE}; SameSite=Lax${secure}`;
-}
-
-function readStoredTenantId() {
-  if (typeof window === "undefined") {
-    return undefined;
-  }
-
-  return (
-    window.localStorage.getItem(ACTIVE_TENANT_STORAGE_KEY) ??
-    readTenantCookie() ??
-    undefined
-  );
-}
-
-function writeStoredTenantId(tenantId: string) {
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(ACTIVE_TENANT_STORAGE_KEY, tenantId);
-    writeTenantCookie(tenantId);
-  }
-}
-
-async function applyStoredTenant(snapshot: SessionSnapshot) {
-  const storedTenantId = readStoredTenantId();
-  if (!storedTenantId || snapshot.tenant?.id === storedTenantId) {
-    return snapshot;
-  }
-
-  const canUseStoredTenant = (snapshot.tenantOptions ?? []).some(
-    (tenant) => tenant.id === storedTenantId,
-  );
-  return canUseStoredTenant ? switchTenantSession(storedTenantId) : snapshot;
-}
-
 function getSessionIdentity(snapshot: SessionSnapshot) {
   return JSON.stringify({
     isAuthenticated: snapshot.isAuthenticated,
@@ -122,6 +69,12 @@ function getSessionIdentity(snapshot: SessionSnapshot) {
   });
 }
 
+/*
+ * 活跃租户只有一个真相:服务端的 RP 会话(access token 里的 active_org)。
+ * 此前这里还在 localStorage / cookie 里存一份「上次选的租户」,恢复会话时替用户切回去——
+ * 它会抢在「登录后默认进入的租户」(账号信息页「设为默认」)前面,而且它依赖的那条切换
+ * 从未生效(POST 到一个退役路由)。2026-09-05 整体撤掉。
+ */
 export function ConsoleSessionProvider({
   children,
   initialSession,
@@ -163,7 +116,7 @@ export function ConsoleSessionProvider({
       }
 
       try {
-        const snapshot = await applyStoredTenant(await restoreSession());
+        const snapshot = await restoreSession();
         commitSession(snapshot);
         setStatus("ready");
 
@@ -271,21 +224,20 @@ export function ConsoleSessionProvider({
   }, [signOut]);
 
   const switchTenant = useCallback(
-    async (tenantId: string) => {
+    async (tenantId: string, returnTo?: string) => {
+      // 顶层导航(见 buildTenantSwitchUrl):IdP 要收到中央会话 cookie 才能静默发码。
+      // 不传 returnTo 就回到当前地址,查询串原样保留(/subscribe?product=… 之类的
+      // 深链上下文不能丢)。
       setStatus("loading");
-      try {
-        const snapshot = await switchTenantSession(tenantId);
-        writeStoredTenantId(tenantId);
-        commitSession(snapshot);
-        setStatus("ready");
-      } catch (error) {
-        // 切换失败会话未变：恢复可用态再上抛，让调用方呈现错误——
-        // 否则 provider 卡在 loading，整站看似在转圈。
-        setStatus("ready");
-        throw error;
-      }
+      const dest = new URL(
+        returnTo ?? `${window.location.pathname}${window.location.search}`,
+        window.location.origin,
+      ).toString();
+      window.location.assign(buildTenantSwitchUrl(tenantId, dest));
+      // 页面即将卸载:不 resolve,免得调用方在导航中途继续改状态。
+      await new Promise<void>(() => undefined);
     },
-    [commitSession],
+    [],
   );
 
   // Stable context value: consumers only re-render when session/status actually

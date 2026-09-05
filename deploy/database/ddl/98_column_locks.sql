@@ -127,7 +127,7 @@ GRANT UPDATE (tenant_id, name, is_default, description, icon, status, updated_at
 
 -- tenancy.tenant_memberships  [anchor: id, employee_no, created_at]
 REVOKE UPDATE ON tenancy.tenant_memberships FROM platform_svc;
-GRANT UPDATE (tenant_id, user_id, role_id, role_scope, status, default_workspace_id, title, department, job_level, member_extra, updated_at) ON tenancy.tenant_memberships TO platform_svc;
+GRANT UPDATE (tenant_id, user_id, role_id, role_scope, status, default_workspace_id, is_default, title, department, job_level, member_extra, updated_at) ON tenancy.tenant_memberships TO platform_svc;
 
 -- tenancy.workspace_memberships  [anchor: id, created_at]
 REVOKE UPDATE ON tenancy.workspace_memberships FROM platform_svc;

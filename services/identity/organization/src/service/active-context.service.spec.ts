@@ -108,6 +108,32 @@ describe("resolveActiveContext", () => {
     expect(ctx?.roles).toEqual(["org:owner"]);
   });
 
+  it("prefers the membership marked default over personal-first order when there is no hint", async () => {
+    const { service } = build({
+      listOrgMembershipsForUser: vi
+        .fn()
+        .mockResolvedValue([
+          membership("org-personal", "owner", "personal", "Personal"),
+          { ...membership("org-2", "manager"), isDefault: true },
+        ]),
+    });
+    const ctx = await service.resolveActiveContext("u-1");
+    expect(ctx?.activeOrg).toBe("org-2");
+  });
+
+  it("lets a valid hint beat the default membership", async () => {
+    const { service } = build({
+      listOrgMembershipsForUser: vi
+        .fn()
+        .mockResolvedValue([
+          membership("org-personal", "owner", "personal", "Personal"),
+          { ...membership("org-2", "manager"), isDefault: true },
+        ]),
+    });
+    const ctx = await service.resolveActiveContext("u-1", "org-personal");
+    expect(ctx?.activeOrg).toBe("org-personal");
+  });
+
   it("resolves the hinted org and targets it in the merged workspace lookup", async () => {
     const { service, repo } = build({
       listOrgMembershipsForUser: vi

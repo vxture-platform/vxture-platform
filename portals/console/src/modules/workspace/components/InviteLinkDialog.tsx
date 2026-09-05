@@ -12,7 +12,13 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Banner, DialogForm, Input, Label } from "@vxture/design-system";
+import {
+  Banner,
+  DialogForm,
+  Field,
+  FieldLabel,
+  Input,
+} from "@vxture/design-system";
 import type { InviteMemberResult } from "@/api/console-bff";
 import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
 
@@ -67,14 +73,16 @@ export function InviteLinkDialog({
       {!result.emailSent ? (
         <Banner tone="warning" title={t("notSentTitle")} />
       ) : null}
-      <Label>
-        {t("linkLabel")}
+      {/* 标签在上、控件在下(DS Field);标签与控件同塞一个 Label 会把标题挤到逐字换行 */}
+      <Field>
+        <FieldLabel htmlFor="invite-link">{t("linkLabel")}</FieldLabel>
         <Input
+          id="invite-link"
           value={result.inviteLink}
           readOnly
           onFocus={(event) => event.currentTarget.select()}
         />
-      </Label>
+      </Field>
       <p className="text-body-sm text-muted-foreground">
         {t("expires", {
           date: `${fmtDate(result.expiresAt)} ${fmtTime(result.expiresAt)}`,

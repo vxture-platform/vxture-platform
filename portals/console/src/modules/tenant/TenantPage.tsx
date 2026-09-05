@@ -30,9 +30,10 @@ import {
   AlertDialogTitle,
   Banner,
   Button,
+  Field,
+  FieldLabel,
   FormPageTemplate,
   Input,
-  Label,
   NativeSelect,
   ViewHeader,
 } from "@vxture/design-system";
@@ -543,9 +544,14 @@ export function TenantPage() {
             {transferError ? (
               <Banner tone="danger" title={transferError} />
             ) : null}
-            <Label>
-              {t("danger.transfer.target")}
+            {/* 标签在上、控件在下(DS Field):标签与控件不能同塞进一个 Label——DS Label
+                是横排 flex,控件占满一行会把标题挤到只剩一字宽、逐字换行(走查第八轮) */}
+            <Field>
+              <FieldLabel htmlFor="transfer-owner-target">
+                {t("danger.transfer.target")}
+              </FieldLabel>
               <NativeSelect
+                id="transfer-owner-target"
                 value={transferTarget}
                 onChange={(event) => setTransferTarget(event.target.value)}
               >
@@ -556,14 +562,17 @@ export function TenantPage() {
                   </option>
                 ))}
               </NativeSelect>
-            </Label>
-            <Label>
-              {t("danger.transfer.confirmLabel", { name: tenantName })}
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="transfer-owner-confirm">
+                {t("danger.transfer.confirmLabel", { name: tenantName })}
+              </FieldLabel>
               <Input
+                id="transfer-owner-confirm"
                 value={transferConfirm}
                 onChange={(event) => setTransferConfirm(event.target.value)}
               />
-            </Label>
+            </Field>
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={transferBusy}>

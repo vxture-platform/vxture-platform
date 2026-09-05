@@ -10,14 +10,12 @@
  * 外层卡里),右下角一枚展开开关。只读事实全部收在这里——类型、状态、认证、
  * `ID: T-…`、创建时间、所有者、成员数——下面的信息卡不再重复(owner 2026-09-05)。
  *
- * 展开区列所在工作空间:名称 · 默认标签 · `ID: W-…` · 只列不建不切。
+ * 展开区列所在工作空间:名称 · 默认标签 · `ID: W-…` · 只列不建不切(走查第八轮:
+ * 下方不再放切换说明)。
  */
 
 import { useTranslations } from "next-intl";
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
   Button,
   Collapsible,
   CollapsibleContent,
@@ -28,6 +26,7 @@ import {
 } from "@vxture/design-system";
 import { IdentityCard } from "@/components/detail";
 import { PrincipalNo } from "@/components/principal-no";
+import { TenantAvatar, tenantTypeIcon } from "@/components/tenant-avatar";
 import { formatTenantDisplay } from "@/features/tenant/tenant-display";
 
 export type TenantVerifiedStatus =
@@ -104,8 +103,7 @@ export function TenantIdentityCard({
   readonly loading: boolean;
 }) {
   const t = useTranslations("tenantInfoPage");
-  const typeIcon: IconName =
-    tenantType === "personal" ? "user" : "building-library";
+  const typeIcon: IconName = tenantTypeIcon(tenantType);
 
   return (
     <div className="flex flex-col rounded-xl bg-card shadow-raised ring-1 ring-foreground/10">
@@ -113,24 +111,9 @@ export function TenantIdentityCard({
         <IdentityCard
           frame={false}
           avatar={
-            // 走查(owner 2026-09-05):租户要有默认头像。此前无 logo 时画首字母,
-            // 在可点击的上传按钮壳里没有自己的尺寸,看上去就是一块空白。改用 DS Avatar:
-            // 有 logo 画图,图挂了或没有都回落到「建筑 / 用户」图标块,方角区别于人像。
-            <Avatar className="size-media-md rounded-md">
-              {logoSrc ? (
-                <AvatarImage
-                  src={logoSrc}
-                  alt=""
-                  className="rounded-md object-cover"
-                />
-              ) : null}
-              <AvatarFallback
-                className="rounded-md bg-accent text-muted-foreground"
-                aria-hidden="true"
-              >
-                <Icon name={typeIcon} size="md" fallback="placeholder" />
-              </AvatarFallback>
-            </Avatar>
+            // 走查(owner 2026-09-05):租户要有默认头像;第八轮收成全站一件
+            // (components/tenant-avatar):有 logo 画图,否则「建筑 / 用户」图标块,方角。
+            <TenantAvatar src={logoSrc} tenantType={tenantType} size="lg" />
           }
           avatarLabel={t("logo.upload")}
           {...(canManage ? { onAvatarClick: onLogoClick } : {})}
@@ -274,9 +257,6 @@ export function TenantIdentityCard({
               </li>
             ) : null}
           </ul>
-          <p className="px-lg pb-md pt-xs text-body-sm text-muted-foreground">
-            {t("workspaces.hint")}
-          </p>
         </CollapsibleContent>
       </Collapsible>
     </div>

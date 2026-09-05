@@ -449,6 +449,20 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
         return organization ? { ...m, organization } : { ...m };
       });
   }
+  async setDefaultOrgForUser(userId: string, orgId: string): Promise<boolean> {
+    const target = this.orgMembers.find(
+      (m) =>
+        m.userId === userId &&
+        m.organizationId === orgId &&
+        m.status === "active" &&
+        this.orgs.has(orgId),
+    );
+    if (!target) return false;
+    for (const m of this.orgMembers) {
+      if (m.userId === userId) m.isDefault = m === target;
+    }
+    return true;
+  }
   async listOrgMembers(orgId: string): Promise<OrgMembershipView[]> {
     return this.orgMembers.filter(
       (m) => m.organizationId === orgId && m.status === "active",

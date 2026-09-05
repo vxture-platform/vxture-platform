@@ -140,6 +140,10 @@ export interface ConsoleWorkspaceItem {
   workspaceId: string | null;
   workspaceName: string | null;
   isCurrent: boolean;
+  /** 登录后默认进入的租户(账号信息页「设为默认」)。 */
+  isDefault?: boolean;
+  /** 租户标识内容哈希;null = 无自定义标识。 */
+  logoHash?: string | null;
   /** ISO timestamp the user joined this tenant. */
   joinedAt?: string | null;
 }
@@ -220,6 +224,10 @@ export interface TenantContext {
   workspace: string;
   tenantType?: "personal" | "organization";
   tenantCode?: string;
+  /** 租户标识内容哈希;null = 无自定义标识(画类型图标)。 */
+  logoHash?: string | null;
+  /** 登录后默认进入的租户(账号信息页「设为默认」)。 */
+  isDefault?: boolean;
   /** Human-friendly tenant number ("可视码"), bigint as string; null when unavailable. */
   tenantNo?: string | null;
   /** Default workspace 名称；null 表示 BFF 未解析（部署偏斜等）。UUID 禁展示。 */

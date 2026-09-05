@@ -146,6 +146,7 @@ CREATE TABLE tenancy.tenant_memberships (
     role_scope           varchar(16)  NOT NULL,
     status               varchar(32)  NOT NULL DEFAULT 'active',
     default_workspace_id uuid,                                    -- 复合 FK（域内，下方）
+    is_default           boolean      NOT NULL DEFAULT false,    -- 该用户登录后默认进入的租户(账号信息页「设为默认」,2026-09-05);每用户至多一条(部分唯一,下方)
     title                varchar(64),                             -- HR 展示属性，非授权属性
     department           varchar(64),
     employee_no          varchar(32),
@@ -163,6 +164,8 @@ CREATE TABLE tenancy.tenant_memberships (
 CREATE INDEX idx_tenant_memberships_user_id ON tenancy.tenant_memberships (user_id);
 CREATE INDEX idx_tenant_memberships_role    ON tenancy.tenant_memberships (role_id, role_scope);  -- 复合,兼作 FK 支撑(2026-08-19)
 CREATE INDEX idx_tenant_memberships_status  ON tenancy.tenant_memberships (status);
+-- 每用户至多 1 个默认租户（部分唯一）；无默认时登录解析回落到个人租户
+CREATE UNIQUE INDEX uq_tenant_memberships_one_default_per_user ON tenancy.tenant_memberships (user_id) WHERE is_default;
 
 -- 工作空间成员。复合 FK 保 ws⊆tenant 且 ws-member⊆tenant-member 两不变量（域内）。
 CREATE TABLE tenancy.workspace_memberships (
