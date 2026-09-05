@@ -16,6 +16,7 @@ import {
   Button,
   DetailList,
   DetailRow,
+  EditableRow,
   Icon,
   Input,
   Section,
@@ -113,6 +114,8 @@ export function BasicInfoCard({
   const t = useTranslations("profilePage");
   const empty = t("common.empty");
   const loadingText = t("common.loading");
+  // DS EditableRow(10.1.0):展示态文字、编辑态控件;文案由门户传
+  const rowLabels = { edit: t("actions.modify"), cancel: t("actions.cancel") };
 
   const [historyShowAll, setHistoryShowAll] = useState(false);
   const visibleHistory = historyShowAll
@@ -160,91 +163,54 @@ export function BasicInfoCard({
     >
       <CardRows>
         <DetailList className={DETAIL_LIST_CLASS}>
-          <DetailRow
+          <EditableRow
             label={t("fields.displayName")}
-            actions={
-              nameEditing ? (
-                <Button variant="ghost" size="sm" onClick={onCancelEditName}>
-                  {t("actions.cancel")}
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onStartEditName}
-                  disabled={loading}
-                >
-                  <Icon name="edit" size="xs" fallback="placeholder" />
-                  <span>{t("actions.modify")}</span>
-                </Button>
-              )
-            }
+            value={loading ? loadingText : displayName}
+            editing={nameEditing}
+            onEdit={onStartEditName}
+            onCancel={onCancelEditName}
+            labels={rowLabels}
+            disabled={loading}
           >
-            {nameEditing ? (
-              <Input
-                className="w-full max-w-panel-sm"
-                value={nameDraft}
-                onChange={(event) => onNameDraftChange(event.target.value)}
-                autoComplete="name"
-                autoFocus
-              />
-            ) : (
-              <Input
-                className="w-full max-w-panel-sm"
-                value={loading ? loadingText : displayName}
-                readOnly
-                disabled
-              />
-            )}
-          </DetailRow>
+            <Input
+              className="w-full max-w-panel-sm"
+              value={nameDraft}
+              onChange={(event) => onNameDraftChange(event.target.value)}
+              autoComplete="name"
+              autoFocus
+            />
+          </EditableRow>
 
           {/* 称呼(性别):先生 / 女士 / 未设定,同显示名的「修改 → 页底保存」模式(走查 2026-09-05) */}
-          <DetailRow
+          <EditableRow
             label={t("fields.gender")}
-            actions={
-              genderEditing ? (
-                <Button variant="ghost" size="sm" onClick={onCancelEditGender}>
-                  {t("actions.cancel")}
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onStartEditGender}
-                  disabled={loading}
-                >
-                  <Icon name="edit" size="xs" fallback="placeholder" />
-                  <span>{t("actions.modify")}</span>
-                </Button>
-              )
+            value={
+              loading
+                ? loadingText
+                : gender === "male"
+                  ? t("gender.male")
+                  : gender === "female"
+                    ? t("gender.female")
+                    : t("gender.unset")
             }
+            editing={genderEditing}
+            onEdit={onStartEditGender}
+            onCancel={onCancelEditGender}
+            labels={rowLabels}
+            disabled={loading}
           >
-            {genderEditing ? (
-              <SegmentedControl<"" | "male" | "female">
-                size="md"
-                ariaLabel={t("fields.gender")}
-                value={genderDraft}
-                onChange={onGenderDraftChange}
-                items={[
-                  { value: "male", label: t("gender.male") },
-                  { value: "female", label: t("gender.female") },
-                  { value: "", label: t("gender.unset") },
-                ]}
-              />
-            ) : (
-              // 展示态是文字、编辑态才是控件(owner 2026-09-05:禁用控件当展示看不清);
-              // 行高按控件高度撑住,切换时位置不跳
-              <span className="inline-flex h-control-md items-center text-body-md text-foreground">
-                {loading
-                  ? loadingText
-                  : gender === "male"
-                    ? t("gender.male")
-                    : gender === "female"
-                      ? t("gender.female")
-                      : t("gender.unset")}
-              </span>
-            )}
-          </DetailRow>
+            <SegmentedControl<"" | "male" | "female">
+              size="md"
+              ariaLabel={t("fields.gender")}
+              value={genderDraft}
+              onChange={onGenderDraftChange}
+              items={[
+                { value: "male", label: t("gender.male") },
+                { value: "female", label: t("gender.female") },
+                { value: "", label: t("gender.unset") },
+              ]}
+            />
+          </EditableRow>
           <DetailRow
             label={t("fields.username")}
             actions={

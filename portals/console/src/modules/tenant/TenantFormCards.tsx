@@ -29,6 +29,7 @@ import {
   DetailList,
   DetailRow,
   DialogForm,
+  EditableRow,
   Icon,
   Input,
   Label,
@@ -134,6 +135,8 @@ export function TenantBasicCard({
 }) {
   const t = useTranslations("tenantInfoPage");
   const [editing, setEditing] = useState<ReadonlySet<BasicField>>(new Set());
+  // DS EditableRow(10.1.0):展示态是文字、点「修改」才变控件;文案由门户传
+  const rowLabels = { edit: t("common.modify"), cancel: t("common.cancel") };
 
   const isEditing = (f: BasicField) => editing.has(f);
   const start = (f: BasicField) => {
@@ -152,40 +155,33 @@ export function TenantBasicCard({
       return next;
     });
   };
-  const rowActions = (f: BasicField) => {
-    if (readOnly) return null;
-    return isEditing(f) ? (
-      <Button variant="ghost" size="sm" onClick={() => cancel(f)}>
-        {t("common.cancel")}
-      </Button>
-    ) : (
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled={loading}
-        onClick={() => start(f)}
-      >
-        <Icon name="edit" size="xs" fallback="placeholder" />
-        <span>{t("common.modify")}</span>
-      </Button>
-    );
-  };
-  const textRow = (f: BasicField, hint?: ReactNode, placeholder?: string) => (
-    <DetailRow label={t(`fields.${f}`)} actions={rowActions(f)}>
-      <ControlWithHint hint={hint}>
-        <Input
-          className={CONTROL_CLASS}
-          value={draft[f]}
-          readOnly={!isEditing(f)}
-          disabled={!isEditing(f)}
-          {...(placeholder ? { placeholder } : {})}
-          onChange={(event) =>
-            onChange({ [f]: event.target.value } as TenantDraftPatch)
-          }
-        />
-      </ControlWithHint>
-    </DetailRow>
+  const textRow = (f: BasicField, hint?: ReactNode) => (
+    <EditableRow
+      label={t(`fields.${f}`)}
+      value={draft[f]}
+      editing={isEditing(f)}
+      onEdit={() => start(f)}
+      onCancel={() => cancel(f)}
+      labels={rowLabels}
+      readOnly={readOnly}
+      disabled={loading}
+      hint={hint}
+    >
+      <Input
+        className={CONTROL_CLASS}
+        value={draft[f]}
+        onChange={(event) =>
+          onChange({ [f]: event.target.value } as TenantDraftPatch)
+        }
+        autoFocus
+      />
+    </EditableRow>
   );
+  const scaleText = draft.scale
+    ? SCALE_OPTIONS.includes(draft.scale)
+      ? t("scale.people", { range: draft.scale })
+      : draft.scale
+    : "";
 
   return (
     <TenantSection
@@ -198,47 +194,56 @@ export function TenantBasicCard({
           {textRow("displayName", t("fields.displayNameHint"))}
 
           {/* 租户名称:已认证 → 操作是「重新认证」;未认证 → 可修改(走查第 6 条) */}
-          <DetailRow
+          <EditableRow
             label={t("fields.name")}
-            actions={
-              verified ? (
-                readOnly ? null : (
-                  <Button variant="ghost" size="sm" onClick={onGoVerify}>
-                    <Icon
-                      name="shield-check"
-                      size="xs"
-                      fallback="placeholder"
-                    />
-                    <span>{t("fields.reverify")}</span>
-                  </Button>
-                )
-              ) : (
-                rowActions("name")
-              )
+            value={draft.name}
+            editing={!verified && isEditing("name")}
+            onEdit={() => start("name")}
+            onCancel={() => cancel("name")}
+            labels={rowLabels}
+            readOnly={readOnly}
+            disabled={loading}
+            hint={
+              verified ? t("fields.nameVerifiedHint") : t("fields.nameHint")
             }
+            {...(verified
+              ? {
+                  action: (
+                    <Button variant="ghost" size="sm" onClick={onGoVerify}>
+                      <Icon
+                        name="shield-check"
+                        size="xs"
+                        fallback="placeholder"
+                      />
+                      <span>{t("fields.reverify")}</span>
+                    </Button>
+                  ),
+                }
+              : {})}
           >
-            <ControlWithHint
-              hint={
-                verified ? t("fields.nameVerifiedHint") : t("fields.nameHint")
-              }
-            >
-              <Input
-                className={CONTROL_CLASS}
-                value={draft.name}
-                readOnly={verified || !isEditing("name")}
-                disabled={verified || !isEditing("name")}
-                onChange={(event) => onChange({ name: event.target.value })}
-              />
-            </ControlWithHint>
-          </DetailRow>
+            <Input
+              className={CONTROL_CLASS}
+              value={draft.name}
+              onChange={(event) => onChange({ name: event.target.value })}
+              autoFocus
+            />
+          </EditableRow>
 
           {textRow("industry")}
 
-          <DetailRow label={t("fields.scale")} actions={rowActions("scale")}>
+          <EditableRow
+            label={t("fields.scale")}
+            value={scaleText}
+            editing={isEditing("scale")}
+            onEdit={() => start("scale")}
+            onCancel={() => cancel("scale")}
+            labels={rowLabels}
+            readOnly={readOnly}
+            disabled={loading}
+          >
             <NativeSelect
               wrapperClassName={CONTROL_CLASS}
               value={draft.scale}
-              disabled={!isEditing("scale")}
               onChange={(event) => onChange({ scale: event.target.value })}
               aria-label={t("fields.scale")}
             >
@@ -252,7 +257,7 @@ export function TenantBasicCard({
                 </option>
               ))}
             </NativeSelect>
-          </DetailRow>
+          </EditableRow>
 
           {textRow("website")}
         </DetailList>
@@ -268,19 +273,33 @@ function ContactRow({
   value,
   onChange,
   disabled,
+  labels,
 }: {
   readonly label: string;
   readonly value: string;
   readonly onChange: (next: string) => void;
+  /** 锁定(关联成员随资料走)或只读:显示为文字,不画禁用框。 */
   readonly disabled: boolean;
+  readonly labels: { edit: string; cancel: string };
 }) {
+  if (disabled) {
+    return (
+      <EditableRow
+        label={label}
+        value={value}
+        editing={false}
+        labels={labels}
+        readOnly
+      >
+        <span />
+      </EditableRow>
+    );
+  }
   return (
     <DetailRow label={label}>
       <Input
         className={CONTROL_CLASS}
         value={value}
-        readOnly={disabled}
-        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
       />
     </DetailRow>
@@ -304,6 +323,7 @@ export function TenantContactCard({
   readonly loading: boolean;
 }) {
   const t = useTranslations("tenantInfoPage");
+  const rowLabels = { edit: t("common.modify"), cancel: t("common.cancel") };
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pick, setPick] = useState("");
 
@@ -373,15 +393,19 @@ export function TenantContactCard({
               {/* 姓名 + 称呼同占一行(走查 2026-09-05);关联成员时称呼随成员的性别派生,锁定 */}
               <DetailRow label={t("fields.contactName")}>
                 <span className="flex w-full flex-wrap items-center gap-sm">
-                  <Input
-                    className={CONTROL_CLASS}
-                    value={name}
-                    readOnly={readOnly || locked}
-                    disabled={readOnly || locked}
-                    onChange={(event) =>
-                      onChange({ contactName: event.target.value })
-                    }
-                  />
+                  {readOnly || locked ? (
+                    <span className="inline-flex h-control-md items-center text-body-md text-foreground">
+                      {name || "—"}
+                    </span>
+                  ) : (
+                    <Input
+                      className={CONTROL_CLASS}
+                      value={name}
+                      onChange={(event) =>
+                        onChange({ contactName: event.target.value })
+                      }
+                    />
+                  )}
                   {readOnly || locked ? (
                     <span className="inline-flex h-control-md items-center text-body-md text-foreground">
                       {draft.contactSalutation === "mr"
@@ -412,12 +436,14 @@ export function TenantContactCard({
                 value={email}
                 disabled={readOnly || locked}
                 onChange={(contactEmail) => onChange({ contactEmail })}
+                labels={rowLabels}
               />
               <ContactRow
                 label={t("fields.address")}
                 value={draft.address}
                 disabled={readOnly}
                 onChange={(address) => onChange({ address })}
+                labels={rowLabels}
               />
             </DetailList>
             <DetailList className={DETAIL_LIST_CLASS}>
@@ -426,18 +452,21 @@ export function TenantContactCard({
                 value={draft.contactRole}
                 disabled={readOnly}
                 onChange={(contactRole) => onChange({ contactRole })}
+                labels={rowLabels}
               />
               <ContactRow
                 label={t("fields.contactPhone")}
                 value={phone}
                 disabled={readOnly || locked}
                 onChange={(contactPhone) => onChange({ contactPhone })}
+                labels={rowLabels}
               />
               <ContactRow
                 label={t("fields.postalCode")}
                 value={draft.postalCode}
                 disabled={readOnly}
                 onChange={(postalCode) => onChange({ postalCode })}
+                labels={rowLabels}
               />
               <DetailRow label={t("fields.isBillingRecipient")}>
                 <ControlWithHint hint={t("fields.isBillingRecipientHint")}>
