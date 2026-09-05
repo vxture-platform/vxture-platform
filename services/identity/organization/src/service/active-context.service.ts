@@ -25,8 +25,10 @@ export class ActiveContextService {
 
   /**
    * Resolve a user's active-org context. Selection: a valid `activeOrgHint` the user
-   * is a member of, else the personal org, else the first membership. Returns null if
-   * the user has no org membership. `roles` are scope-prefixed governance role codes.
+   * is a member of, else the membership the user marked as default (账号信息页
+   * 「设为默认」— 每次登录后默认进入的租户), else the personal org, else the first
+   * membership. Returns null if the user has no org membership. `roles` are
+   * scope-prefixed governance role codes.
    */
   async resolveActiveContext(
     userId: string,
@@ -35,10 +37,12 @@ export class ActiveContextService {
     const memberships = await this.repo.listOrgMembershipsForUser(userId);
     if (memberships.length === 0) return null;
 
-    // memberships are ordered personal-first, so [0] is the natural default.
+    // memberships are ordered personal-first, so [0] is the natural fallback
+    // when the user never chose a default (and the chosen default is gone).
     const active =
       (activeOrgHint &&
         memberships.find((m) => m.organizationId === activeOrgHint)) ||
+      memberships.find((m) => m.isDefault) ||
       memberships[0]!;
 
     const roles = [`org:${active.role}`];
@@ -80,6 +84,8 @@ export class ActiveContextService {
         name: m.organization!.name,
         type: m.organization!.type,
         role: m.role,
+        isDefault: m.isDefault === true,
+        logoHash: m.organization!.logoHash ?? null,
       }));
   }
 }

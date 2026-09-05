@@ -11,7 +11,7 @@
  * BFF auth/tenant/permission middleware sees the logged-in user.
  */
 
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import type {
   Capability,
   ConsoleUser,
@@ -20,9 +20,6 @@ import type {
 } from "@/entities/console";
 
 const INTERNAL_BFF_FALLBACK = "http://localhost:3021";
-
-// Mirror of ConsoleSessionProvider's ACTIVE_TENANT_COOKIE — kept in sync by name.
-const ACTIVE_TENANT_COOKIE = "vx-console-active-tenant";
 
 /**
  * Base URL the console server uses to reach console-bff.
@@ -38,12 +35,6 @@ export function resolveInternalBffBaseUrl(): string {
     process.env.NEXT_PUBLIC_API_URL ??
     INTERNAL_BFF_FALLBACK;
   return raw.trim().replace(/\/+$/, "") || INTERNAL_BFF_FALLBACK;
-}
-
-/** The user's selected tenant, read server-side from the mirror cookie. */
-export async function readActiveTenantCookie(): Promise<string | undefined> {
-  const store = await cookies();
-  return store.get(ACTIVE_TENANT_COOKIE)?.value || undefined;
 }
 
 /**
@@ -103,12 +94,7 @@ export async function loadServerSessionSnapshot(): Promise<SessionSnapshot | nul
   // do the full restore rather than seed a partial snapshot.
   if (!user || !tenant) return null;
 
-  // Only seed when the server-resolved tenant matches the user's selected tenant
-  // (the mirror cookie). If they differ, a tenant-switcher's RP active_org lags
-  // the cookie and seeding would flash the wrong tenant's capabilities — skip it
-  // and let the client reconcile as before.
-  const activeTenant = await readActiveTenantCookie();
-  if (activeTenant && tenant.id !== activeTenant) return null;
-
+  // 活跃租户只有服务端 RP 会话一个真相(切换 = 静默重授权换新会话,identity/080 §2.8),
+  // 服务端解析到的就是用户看到的;此前还比对一枚客户端镜像 cookie,已随之撤掉。
   return { isAuthenticated: true, user, tenant, tenantOptions, capabilities };
 }

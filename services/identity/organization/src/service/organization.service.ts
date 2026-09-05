@@ -141,6 +141,10 @@ export class OrganizationService {
   listOrgMembershipsForUser(userId: string): Promise<OrgMembershipView[]> {
     return this.repo.listOrgMembershipsForUser(userId);
   }
+  /** 登录后默认进入的租户(账号信息页「设为默认」);目标非本人活跃成员关系返回 false。 */
+  setDefaultOrgForUser(userId: string, orgId: string): Promise<boolean> {
+    return this.repo.setDefaultOrgForUser(userId, orgId);
+  }
   listOrgMembers(orgId: string): Promise<OrgMembershipView[]> {
     return this.repo.listOrgMembers(orgId);
   }

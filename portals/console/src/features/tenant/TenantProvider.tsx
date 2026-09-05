@@ -1,7 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useRef } from "react";
-import { usePathname, useRouter } from "@/lib/i18n/navigation";
+import { createContext, useCallback, useContext, useMemo } from "react";
 import type { TenantContext } from "@/entities/console";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import type {
@@ -48,6 +47,8 @@ function mapTenantContextToItem(
     type: tenant.tenantType ?? "organization",
     role: inferRole(tenant),
     isCurrent: tenant.id === currentTenantId,
+    isDefault: tenant.isDefault === true,
+    logoHash: tenant.logoHash ?? null,
     source: "session",
   };
 }
@@ -67,14 +68,6 @@ function sortTenants(items: TenantListItem[]) {
 
 export function TenantProvider({ children }: TenantProviderProps) {
   const { session, switchTenant } = useConsoleSession();
-  const router = useRouter();
-  // Read pathname through a ref so switchTenantContext can stay referentially
-  // stable — subscribing to usePathname re-renders this provider on every
-  // navigation, but the memoized context value below keeps consumers from
-  // re-rendering unless the tenant data itself changed.
-  const pathname = usePathname();
-  const pathnameRef = useRef(pathname);
-  pathnameRef.current = pathname;
 
   const baseTenants = useMemo(() => {
     const tenantMap = new Map<string, TenantContext>();
@@ -105,21 +98,17 @@ export function TenantProvider({ children }: TenantProviderProps) {
   );
 
   const switchTenantContext = useCallback(
-    async (tenantId: string) => {
+    async (tenantId: string, returnTo?: string) => {
       const tenant = tenantList.find((item) => item.id === tenantId);
       if (!tenant || tenant.id === currentTenant?.id) {
         return;
       }
 
-      await switchTenant(tenant.id);
-      // usePathname 不含查询串：裸 replace 会把 /subscribe?product=… 之类的
-      // 深链上下文清掉，切租户后页面失去订单参数。保留 search 原样回放。
-      const search =
-        typeof window !== "undefined" ? window.location.search : "";
-      router.replace(`${pathnameRef.current}${search}`);
-      router.refresh();
+      // 顶层导航、页面整体重载(identity/080 §2.8);此前这里还接着 router.replace
+      // + refresh 想就地换上下文,那是给一条从未生效的 XHR 切换配的。
+      await switchTenant(tenant.id, returnTo);
     },
-    [tenantList, currentTenant?.id, switchTenant, router],
+    [tenantList, currentTenant?.id, switchTenant],
   );
 
   const createTenant = useCallback(

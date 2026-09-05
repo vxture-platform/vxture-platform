@@ -9,12 +9,14 @@
  * 先看清楚再点:按 token 读出「谁邀你、进哪个租户、什么角色、发给哪个邮箱、
  * 有效期到几时」,再给一个「接受并加入」。租户由 token 决定,不看当前活跃租户;
  * 受邀邮箱与登录账号邮箱不一致时在这一页就说出来(BFF 也会拒),并给出换账号的路。
- * 接受成功后直接切到该租户,再让用户自己进工作台——不静默跳转。
+ * 接受成功后先在本页说「已加入」,「进入」才切到该租户——切租户是一次顶层导航
+ * (identity/080 §2.8,页面整体重载到工作台首页),不静默跳转。
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import type { Locale } from "@vxture-platform/shared";
 import {
   Banner,
   Button,
@@ -34,7 +36,7 @@ import {
   type InvitationLookup,
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
-import { useRouter } from "@/lib/i18n/navigation";
+import { getPathname, useRouter } from "@/lib/i18n/navigation";
 import { PageSection } from "@/layout/shell";
 import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
 
@@ -55,6 +57,7 @@ type LookupState =
 export function AcceptInvitationPage() {
   const t = useTranslations("acceptInvitationPage");
   const tLoad = useTranslations("loadState");
+  const locale = useLocale();
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token") ?? "";
@@ -63,12 +66,13 @@ export function AcceptInvitationPage() {
   const [lookup, setLookup] = useState<LookupState>({ kind: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
   const [accepting, setAccepting] = useState(false);
+  const [entering, setEntering] = useState(false);
   const [acceptError, setAcceptError] = useState<string | null>(null);
   const [acceptedReason, setAcceptedReason] =
     useState<AcceptInvitationReason | null>(null);
   const [done, setDone] = useState<{
+    tenantId: string;
     tenantName: string | null;
-    switched: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -123,13 +127,7 @@ export function AcceptInvitationPage() {
     setAcceptError(null);
     try {
       const accepted = await acceptInvitation(token);
-      let switched = true;
-      try {
-        await switchTenant(accepted.tenantId);
-      } catch {
-        switched = false;
-      }
-      setDone({ tenantName: accepted.tenantName, switched });
+      setDone({ tenantId: accepted.tenantId, tenantName: accepted.tenantName });
     } catch (caught) {
       const reason = acceptInvitationReason(caught);
       if (reason) {
@@ -170,17 +168,27 @@ export function AcceptInvitationPage() {
       return <Banner tone="danger" title={t("missingToken")} />;
     }
     if (done) {
+      const target = done;
       return (
         <div className="flex flex-col gap-md">
           <Banner
             tone="success"
-            title={t("accepted", { tenant: done.tenantName ?? "—" })}
-            description={
-              done.switched ? t("acceptedDescription") : t("switchFailed")
-            }
+            title={t("accepted", { tenant: target.tenantName ?? "—" })}
+            description={t("acceptedDescription")}
           />
           <div>
-            <Button size="md" onClick={() => router.replace("/")}>
+            <Button
+              size="md"
+              disabled={entering}
+              onClick={() => {
+                // 顶层导航:切到受邀租户并落到工作台首页(页面整体重载)
+                setEntering(true);
+                void switchTenant(
+                  target.tenantId,
+                  getPathname({ href: "/", locale: locale as Locale }),
+                );
+              }}
+            >
               {t("actions.enter")}
             </Button>
           </div>

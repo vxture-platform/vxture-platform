@@ -38,6 +38,8 @@ export interface OrgView {
   tenantNo?: string;
   /** ISO timestamp of org creation (present on getOrgById reads). */
   createdAt?: string;
+  /** Content hash of the tenant logo (tenancy.tenant_logos); null / absent = no logo. */
+  logoHash?: string | null;
   /** tenancy.tenants.verification_status 反规范化快查(权威在 kyc.tenant_verifications)。 */
   verificationStatus?:
     | "unverified"
@@ -171,6 +173,11 @@ export interface OrgMembershipView {
   status: string;
   /** Membership join time (tenant_membership.created_at); present on list-for-user reads. */
   joinedAt?: Date;
+  /**
+   * 用户登录后默认进入的租户(tenant_memberships.is_default;每用户至多一条,
+   * 部分唯一索引兜底)。present on list-for-user reads.
+   */
+  isDefault?: boolean;
   /** Joined organization snapshot (present on list-for-user reads). */
   organization?: OrgView;
 }
@@ -217,6 +224,10 @@ export interface OrgSwitchOption {
   name: string;
   type: OrgType;
   role: string;
+  /** 登录后默认进入的租户(账号信息页「设为默认」)。 */
+  isDefault: boolean;
+  /** 租户标识内容哈希;null = 无自定义标识,前端画类型图标。 */
+  logoHash: string | null;
 }
 
 export interface CreateInvitationInput {
@@ -367,6 +378,12 @@ export interface OrganizationReadRepository {
   /** Remove the org's logo bytes (clears logo_hash). */
   deleteOrgLogo(orgId: string): Promise<void>;
   listOrgMembershipsForUser(userId: string): Promise<OrgMembershipView[]>;
+  /**
+   * 把某个租户设为该用户登录后默认进入的租户(owner 2026-09-05 走查):同一用户
+   * 其它成员关系的 is_default 清掉,目标置 true,一个事务。目标不是该用户的活跃
+   * 成员关系(或租户已删)时返回 false、什么都不改。
+   */
+  setDefaultOrgForUser(userId: string, orgId: string): Promise<boolean>;
   listOrgMembers(orgId: string): Promise<OrgMembershipView[]>;
   addOrgMember(
     orgId: string,

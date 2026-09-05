@@ -24,13 +24,14 @@ import {
   DataTable,
   DialogForm,
   EmptyState,
+  Field,
+  FieldLabel,
   FilterBar,
   Icon,
   Input,
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-  Label,
   ListCard,
   ListCardGrid,
   ListPageTemplate,
@@ -730,10 +731,14 @@ export function MembersPage() {
     />
   );
 
+  // 对话框字段一律「标签在上、控件在下」(DS Field)。标签与控件不能同塞进一个
+  // Label:DS Label 是横排 flex,控件占满一行会把中文标题挤到只剩一字宽、逐字换行
+  // (租户信息页走查第八轮抓到的,同一写法全站一起改)。
   const roleSelect = (
-    <Label>
-      {t("dialogs.fields.role")}
+    <Field>
+      <FieldLabel htmlFor="member-role">{t("dialogs.fields.role")}</FieldLabel>
       <NativeSelect
+        id="member-role"
         value={memberForm.roleId}
         onChange={(event) =>
           setMemberForm((old) => ({ ...old, roleId: event.target.value }))
@@ -746,7 +751,7 @@ export function MembersPage() {
           </option>
         ))}
       </NativeSelect>
-    </Label>
+    </Field>
   );
 
   const emptyState = loadFailed ? (
@@ -1000,9 +1005,12 @@ export function MembersPage() {
               </Button>
             </div>
           ) : null}
-          <Label>
-            {t("dialogs.fields.email")}
+          <Field>
+            <FieldLabel htmlFor="member-email">
+              {t("dialogs.fields.email")}
+            </FieldLabel>
             <Input
+              id="member-email"
               type="email"
               value={memberForm.email}
               onChange={(event) =>
@@ -1010,7 +1018,7 @@ export function MembersPage() {
               }
               required
             />
-          </Label>
+          </Field>
           {roleSelect}
         </DialogForm>
       ) : null}
@@ -1028,10 +1036,12 @@ export function MembersPage() {
           onSubmit={(event) => void submitEdit(event)}
         >
           {dialogError ? <Banner tone="danger" title={dialogError} /> : null}
-          <Label>
-            {t("dialogs.fields.email")}
-            <Input value={selected.email} disabled />
-          </Label>
+          <Field>
+            <FieldLabel htmlFor="member-email-current">
+              {t("dialogs.fields.email")}
+            </FieldLabel>
+            <Input id="member-email-current" value={selected.email} disabled />
+          </Field>
           {roleSelect}
         </DialogForm>
       ) : null}
@@ -1052,9 +1062,12 @@ export function MembersPage() {
           onSubmit={(event) => void submitResetPassword(event)}
         >
           {dialogError ? <Banner tone="danger" title={dialogError} /> : null}
-          <Label>
-            {t("dialogs.fields.nextPassword")}
+          <Field>
+            <FieldLabel htmlFor="member-next-password">
+              {t("dialogs.fields.nextPassword")}
+            </FieldLabel>
             <Input
+              id="member-next-password"
               type="password"
               value={passwordForm.nextPassword}
               onChange={(event) =>
@@ -1063,7 +1076,7 @@ export function MembersPage() {
               minLength={6}
               required
             />
-          </Label>
+          </Field>
         </DialogForm>
       ) : null}
 

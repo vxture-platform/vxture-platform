@@ -153,6 +153,10 @@ export interface TenantContext {
   workspace: string;
   tenantType?: "personal" | "organization";
   tenantCode?: string;
+  /** 租户标识内容哈希;null = 无自定义标识(前端画类型图标)。FE 用它拼版本化 URL。 */
+  logoHash?: string | null;
+  /** 登录后默认进入的租户(账号信息页「设为默认」)。 */
+  isDefault?: boolean;
   /** Human-friendly tenant number (tenancy.tenants.tenant_no "可视码"), bigint as string; null when unavailable. */
   tenantNo?: string | null;
   /** Default workspace display name; null when unresolved. UUID 禁展示（owner 2026-08-20）——前端一律用这里的名称+可视码。 */
@@ -178,6 +182,10 @@ export interface ConsoleWorkspaceItem {
   workspaceId: string | null;
   workspaceName: string | null;
   isCurrent: boolean;
+  /** 登录后默认进入的租户(账号信息页「设为默认」;每用户至多一个)。 */
+  isDefault: boolean;
+  /** 租户标识内容哈希;null = 无自定义标识。 */
+  logoHash: string | null;
   /** ISO timestamp the user joined this tenant (tenant_membership.created_at). */
   joinedAt: string | null;
 }

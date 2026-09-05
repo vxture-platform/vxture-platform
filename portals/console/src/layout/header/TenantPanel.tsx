@@ -15,7 +15,9 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { PrincipalNo } from "@/components/principal-no";
+import { tenantTypeIcon } from "@/components/tenant-avatar";
 import {
+  Icon,
   Popover,
   PopoverTrigger,
   ShellPanelContent,
@@ -26,10 +28,19 @@ import {
   ShellScopeButton,
   StatusBadge,
 } from "@vxture/design-system";
-import type { ConsoleQuotaUsage } from "@/api/console-bff";
+import { tenantLogoUrl, type ConsoleQuotaUsage } from "@/api/console-bff";
 import type { TenantContext } from "@/entities/console";
 import { formatTenantDisplay } from "@/features/tenant/tenant-display";
 import { fmtCount as formatCount, formatBytes } from "@/lib/format-metrics";
+
+/**
+ * 面板头部的租户头像要与账号页所在租户列表、租户信息页身份卡同一形状(方角;有标识
+ * 画图,否则类型图标——见 components/tenant-avatar)。DS 头部件的标识块默认是人像的圆,
+ * 这里用后代选择器把它(Avatar 根 + 回落块,都是头部容器的第一个 span)改成方角;
+ * DS 还没有 avatarClassName 之类的口子,等有了再收回去。
+ */
+const SQUARE_AVATAR_CLASS =
+  "[&>span:first-child]:rounded-md [&>span:first-child>span]:rounded-md";
 
 function percentOf(used: number, limit: number): number {
   if (!Number.isFinite(limit) || limit <= 0) return 0;
@@ -110,7 +121,20 @@ export function TenantPanel({
 
       <ShellPanelContent align="start">
         <ShellPanelHeader
-          icon="buildings"
+          avatarSrc={
+            tenant?.logoHash
+              ? tenantLogoUrl(tenant.id, tenant.logoHash)
+              : undefined
+          }
+          avatarAlt={tenantName}
+          avatarFallback={
+            <Icon
+              name={tenantTypeIcon(tenant?.tenantType)}
+              className="size-icon-xl"
+              fallback="placeholder"
+            />
+          }
+          className={SQUARE_AVATAR_CLASS}
           title={tenantName}
           titleAside={
             <StatusBadge tone={suspended ? "warning" : "neutral"}>

@@ -1356,6 +1356,17 @@ export async function fetchMyWorkspaces(): Promise<ConsoleWorkspaceItem[]> {
   return readJson<ConsoleWorkspaceItem[]>("/api/me/workspaces", []);
 }
 
+/** 账号信息页「设为默认」:每次登录后默认进入的租户(目标须是本人所在租户)。 */
+export async function setDefaultTenant(tenantId: string): Promise<void> {
+  const response = await fetch(
+    `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/me/tenants/${encodeURIComponent(tenantId)}/default`,
+    { method: "PUT", credentials: "include", cache: "no-store" },
+  );
+  if (!response.ok) {
+    throw new ConsoleBffError("Set default tenant failed", response.status);
+  }
+}
+
 // ── 删除账号(批 5b):资格快照 / 申请 / 撤销。保留期内 BFF 只放行这几条与会话恢复读。
 
 export async function fetchAccountDeletion(): Promise<AccountDeletionState> {
@@ -1468,6 +1479,14 @@ export async function deleteOrgLogo(): Promise<void> {
   if (!response.ok) {
     throw new ConsoleBffError("Logo delete failed", response.status);
   }
+}
+
+/**
+ * 本人所在任一租户的标识 URL(按内容哈希版本化)——账号信息页所在租户列表、
+ * 顶栏租户面板画头像用;非成员 404。当前租户的另有 `orgLogoUrl`(租户信息页)。
+ */
+export function tenantLogoUrl(tenantId: string, logoHash: string): string {
+  return `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/me/tenants/${encodeURIComponent(tenantId)}/logo?v=${encodeURIComponent(logoHash)}`;
 }
 
 /** Versioned URL for the active tenant's logo (cache-busted by content hash). */
@@ -1877,58 +1896,19 @@ export async function restoreSession(): Promise<SessionSnapshot> {
   return snapshot;
 }
 
-// NOTE: legacy active-org switch seam. It still targets the retired
-// /api/auth/tenant/switch proxy (removed in Batch 11.3); the OIDC-RP-based
-// active-org switch is deferred to Batch 14 (frontend active-org UI). See
-// docs/design/identity-platform-implementation.md.
-export async function switchTenantSession(
+/**
+ * 切换活跃租户的入口 URL(identity/080 §2.8)。这是一次**顶层导航**而不是 fetch:
+ * console-bff 预检成员关系 → 302 IdP 静默重授权(prompt=none + tenant_hint)→
+ * /auth/callback 建新 RP 会话(新 active_org)→ 回到 returnTo,页面整体重载到新租户。
+ * IdP 必须收到中央会话 cookie 才能静默发码,所以不能走 XHR。
+ * 此前这里 POST 到一个早已退役的 /api/auth/tenant/switch,切换从未生效。
+ */
+export function buildTenantSwitchUrl(
   tenantId: string,
-): Promise<SessionSnapshot> {
-  let response: Response;
-
-  try {
-    response = await fetch(
-      `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/auth/tenant/switch`,
-      {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ tenantId }),
-      },
-    );
-  } catch {
-    throw new ConsoleBffError("Console BFF is unavailable.", 503);
-  }
-
-  if (!response.ok) {
-    let message = "Tenant switch failed";
-
-    try {
-      const body = (await response.json()) as { message?: string | string[] };
-      if (Array.isArray(body.message)) {
-        message = body.message[0] ?? message;
-      } else if (body.message) {
-        message = body.message;
-      }
-    } catch {
-      // Ignore malformed error body and fall back to generic message.
-    }
-
-    throw new ConsoleBffError(message, response.status);
-  }
-
-  const snapshot = await restoreSession();
-  if (!snapshot.isAuthenticated) {
-    throw new ConsoleBffError(
-      "Authenticated session could not be restored after tenant switch.",
-      500,
-    );
-  }
-
-  return snapshot;
+  returnTo: string,
+): string {
+  const params = new URLSearchParams({ tenantId, returnTo });
+  return `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/auth/switch-tenant?${params.toString()}`;
 }
 
 /**

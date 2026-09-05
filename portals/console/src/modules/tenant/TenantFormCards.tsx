@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * TenantFormCards — 租户信息页的四张表单卡:基本信息 / 联系人 / 默认区域 / 租户策略。
+ * TenantFormCards — 租户信息页的四张表单卡:基本信息 / 主管理员 / 默认区域 / 租户策略。
  * @package @vxture/console
  * @layer Application
  * @category Module
@@ -9,13 +9,14 @@
  * 个人租户与组织租户**同结构、同字段**(owner 2026-09-05):字段允许为空,不按类型
  * 藏卡——这样个人转组织时页面不换。缩进与名列宽度复用账号信息页的 CardRows。
  *
- * 走查修正(owner 2026-09-05,两轮):
+ * 走查修正(owner 2026-09-05,多轮):
  * - 基本信息与账号信息页同一模式:每行默认只读,右侧「修改」才解锁;提示文字放在
  *   输入框**后面**。租户名称已认证时操作换成「重新认证」(去认证页),未认证才可修改。
- * - 联系人:「关联成员」是标题行右侧的一个动作(图标 + 按钮,弹窗选人),不是字段;
- *   关联后姓名 / 邮箱 / 电话随成员资料锁定,只填补充项;个人租户固定关联所有者、按钮禁用。
+ * - 主管理员:只有一位,**只能转让、不能解除**(第八轮)。「转让」是标题行右侧的一个
+ *   动作(图标 + 按钮,弹窗选一位成员接任),不是字段;姓名 / 性别 / 邮箱 / 电话永远
+ *   随其账号资料,只填职务、地址等补充项;个人租户固定是所有者、按钮禁用。
  *   布局仍是「标题 内容」横排、内容框与其它卡全局对齐等宽,只是一行两个。
- *   填写的联系人默认就是账单接收人。
+ *   填写的主管理员默认就是账单接收人。
  * - 默认区域托底按中国设定;租户策略只标规划中。
  *
  * 可改字段一律随页底「保存」一次提交(草稿态在 TenantPage 里)。没有
@@ -30,9 +31,10 @@ import {
   DetailRow,
   DialogForm,
   EditableRow,
+  Field,
+  FieldLabel,
   Icon,
   Input,
-  Label,
   NativeSelect,
   StatusBadge,
   Switch,
@@ -46,7 +48,7 @@ import {
   TIMEZONE_OPTIONS,
   formatTimezone,
 } from "@/modules/account/profile/format";
-import { GenderMark, GenderRadio } from "@/components/gender/GenderRadio";
+import { GenderMark } from "@/components/gender/GenderRadio";
 import { TenantSection } from "./TenantIdentityCard";
 
 /** 与账号信息页个人偏好同一档宽度(≈300px,owner 2026-09-05);四张卡的内容框都用它。 */
@@ -60,10 +62,10 @@ export interface TenantDraft {
   industry: string;
   scale: string;
   website: string;
-  /** 联系人关联的成员 id;空串 = 不关联、手填。 */
+  /** 主管理员关联的成员 id;空串只出现在没有关联行的历史数据上。 */
   contactUserId: string;
   contactName: string;
-  /** 称呼:mr / ms / 空串未设定。 */
+  /** 性别:male / female / 空串未设定(关联成员时随其账号资料)。 */
   contactGender: "" | "male" | "female";
   contactRole: string;
   contactEmail: string;
@@ -79,7 +81,7 @@ export interface TenantDraft {
 
 export type TenantDraftPatch = Partial<TenantDraft>;
 
-/** 联系人可关联的成员(组织 = 活跃成员;个人租户 = 自己)。 */
+/** 主管理员可转让给的成员(组织 = 活跃成员;个人租户 = 自己)。 */
 export interface ContactOption {
   id: string;
   name: string;
@@ -90,7 +92,7 @@ export interface ContactOption {
 const SCALE_OPTIONS = ["1-10", "11-50", "51-200", "201-500", "500+"];
 const CURRENCY_OPTIONS = ["CNY", "USD"];
 
-// ── 基本信息// ── 基本信息 ────────────────────────────────────────────────────────────────
+// ── 基本信息 ────────────────────────────────────────────────────────────────
 
 type BasicField = "displayName" | "name" | "industry" | "scale" | "website";
 
@@ -252,12 +254,13 @@ export function TenantBasicCard({
 // ── 主管理员 ────────────────────────────────────────────────────────────────
 
 /**
- * 主管理员(走查 2026-09-05 第四轮):与账号基本信息同构。
- * - 标题后紧跟「已关联 xx」徽章与「关联成员」按钮;右侧是卡级「编辑 / 取消」——
- *   展示态全是文字,点编辑才变控件(EditableRow),编辑期间关联信息(姓名 / 性别 /
- *   邮箱 / 电话随成员账号)仍是文字、不在这里改;地址两段式;填写的主管理员默认
+ * 主管理员(走查 2026-09-05 第四轮 + 第八轮):与账号基本信息同构。
+ * - **只有一位、只能转让、不能解除**:标题后紧跟「当前 xx」徽章与「转让」按钮
+ *   (弹窗选一位成员接任);姓名 / 性别 / 邮箱 / 电话永远随其账号资料,这里不改。
+ * - 右侧是卡级「编辑 / 取消」——展示态全是文字,点编辑才变控件(EditableRow),
+ *   能编的只有职务、地址两段、邮编、账单接收人;地址两段式;填写的主管理员默认
  *   就是账单接收人。
- * - 个人租户:固定关联所有者,「关联成员」禁用。
+ * - 个人租户:主管理员固定是所有者,「转让」禁用(没有别的成员)。
  */
 export function TenantContactCard({
   draft,
@@ -271,7 +274,7 @@ export function TenantContactCard({
   readonly options: readonly ContactOption[];
   readonly onChange: (patch: TenantDraftPatch) => void;
   readonly readOnly: boolean;
-  /** 个人租户:主管理员固定是所有者,「关联成员」禁用。 */
+  /** 个人租户:主管理员固定是所有者,「转让」禁用。 */
   readonly isPersonal: boolean;
   readonly loading: boolean;
 }) {
@@ -289,15 +292,14 @@ export function TenantContactCard({
   const linked = draft.contactUserId
     ? options.find((o) => o.id === draft.contactUserId)
     : undefined;
-  // 关联了成员:姓名 / 性别 / 邮箱 / 电话取自成员账号(锁定);未关联才手填。
-  const locked = Boolean(draft.contactUserId);
+  // 关联信息随成员账号(永远只读);没有关联行的历史数据仍显示存下来的文字。
   const name = linked ? linked.name : draft.contactName;
   const email = linked ? (linked.email ?? "") : draft.contactEmail;
   const phone = linked ? (linked.phone ?? "") : draft.contactPhone;
   const editable = editing && !readOnly;
-  const editableUnlinked = editable && !locked;
+  const candidates = options.filter((o) => o.id !== draft.contactUserId);
 
-  function link(id: string) {
+  function transferTo(id: string) {
     const option = options.find((o) => o.id === id);
     if (!option) return;
     onChange({
@@ -310,34 +312,25 @@ export function TenantContactCard({
 
   const titleExtra = (
     <>
-      {locked ? (
+      {name ? (
         <StatusBadge tone="neutral" icon="user">
-          {t("contact.linked", { name: name || draft.contactUserId })}
+          {t("contact.current", { name })}
         </StatusBadge>
       ) : null}
       {readOnly ? null : (
         <Button
           variant="outline"
           size="sm"
-          disabled={isPersonal || loading}
+          disabled={isPersonal || loading || candidates.length === 0}
           onClick={() => {
-            setPick(draft.contactUserId);
+            setPick("");
             setPickerOpen(true);
           }}
         >
-          <Icon name="users" size="xs" fallback="placeholder" />
-          <span>{t("contact.link")}</span>
+          <Icon name="user-switch" size="xs" fallback="placeholder" />
+          <span>{t("contact.transfer")}</span>
         </Button>
       )}
-      {locked && !isPersonal && editable ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onChange({ contactUserId: "" })}
-        >
-          {t("contact.unlink")}
-        </Button>
-      ) : null}
     </>
   );
 
@@ -360,7 +353,7 @@ export function TenantContactCard({
   /** 卡级编辑:各行不出自己的修改 / 取消(action=null),只跟随卡的编辑态。 */
   const row = (
     label: string,
-    value: string,
+    value: ReactNode,
     editingRow: boolean,
     control: ReactNode,
   ) => (
@@ -387,6 +380,9 @@ export function TenantContactCard({
         }
       />,
     );
+  /** 随成员账号的只读行:展示态永远是文字,编辑期间也不给控件。 */
+  const locked = (label: string, value: ReactNode) =>
+    row(label, value, false, null);
 
   return (
     <>
@@ -401,67 +397,24 @@ export function TenantContactCard({
           {/* 「标题 内容」横排、与其它卡同一名列宽与内容框宽;一行两个 */}
           <div className="grid gap-x-lg xl:grid-cols-2">
             <DetailList className={DETAIL_LIST_CLASS}>
-              {/* 姓名 + 性别同一行(走查):关联成员时随成员账号,只读 */}
-              <EditableRow
-                label={t("fields.contactName")}
-                value={
-                  <span className="flex flex-wrap items-center gap-md">
-                    <span>{name || "—"}</span>
-                    <GenderMark
-                      value={draft.contactGender}
-                      labels={genderLabels}
-                    />
-                  </span>
-                }
-                editing={editableUnlinked}
-                labels={rowLabels}
-                action={null}
-              >
-                <span className="flex w-full flex-wrap items-center gap-md">
-                  <Input
-                    className={CONTROL_CLASS}
-                    value={name}
-                    onChange={(event) =>
-                      onChange({ contactName: event.target.value })
-                    }
-                  />
-                  <GenderRadio
+              {/* 姓名 + 性别同一行(走查):随成员账号,只读 */}
+              {locked(
+                t("fields.contactName"),
+                <span className="flex flex-wrap items-center gap-md">
+                  <span>{name || "—"}</span>
+                  <GenderMark
                     value={draft.contactGender}
-                    onChange={(contactGender) => onChange({ contactGender })}
                     labels={genderLabels}
-                    ariaLabel={t("fields.contactGender")}
                   />
-                </span>
-              </EditableRow>
-              {row(
-                t("fields.contactEmail"),
-                email,
-                editableUnlinked,
-                <Input
-                  className={CONTROL_CLASS}
-                  value={email}
-                  onChange={(event) =>
-                    onChange({ contactEmail: event.target.value })
-                  }
-                />,
+                </span>,
               )}
+              {locked(t("fields.contactEmail"), email)}
               {text("address")}
               {text("address2")}
             </DetailList>
             <DetailList className={DETAIL_LIST_CLASS}>
               {text("contactRole")}
-              {row(
-                t("fields.contactPhone"),
-                phone,
-                editableUnlinked,
-                <Input
-                  className={CONTROL_CLASS}
-                  value={phone}
-                  onChange={(event) =>
-                    onChange({ contactPhone: event.target.value })
-                  }
-                />,
-              )}
+              {locked(t("fields.contactPhone"), phone)}
               {text("postalCode")}
               <EditableRow
                 label={t("fields.isBillingRecipient")}
@@ -517,34 +470,39 @@ export function TenantContactCard({
       <DialogForm
         open={pickerOpen}
         size="sm"
-        title={t("contact.pickTitle")}
-        description={t("contact.pickDescription")}
-        submitLabel={t("contact.confirm")}
+        title={t("contact.transferTitle")}
+        description={t("contact.transferDescription")}
+        submitLabel={t("contact.transferConfirm")}
         cancelLabel={t("common.cancel")}
         submitDisabled={!pick}
         onOpenChange={setPickerOpen}
         onSubmit={(event) => {
           event.preventDefault();
-          link(pick);
+          transferTo(pick);
           setPickerOpen(false);
         }}
       >
-        <Label>
-          {t("contact.pickLabel")}
+        {/* 标签在上、控件在下(DS Field,与其它对话框一致)。走查第八轮:此前把标签文字
+            与下拉同塞进一个 Label——DS Label 是横排 flex,下拉占满一行,标题被挤到只剩
+            一个字宽、逐字换行。 */}
+        <Field>
+          <FieldLabel htmlFor="contact-transfer-target">
+            {t("contact.pickLabel")}
+          </FieldLabel>
           <NativeSelect
+            id="contact-transfer-target"
             value={pick}
             onChange={(event) => setPick(event.target.value)}
-            aria-label={t("contact.pickLabel")}
           >
-            <option value="">{t("common.unset")}</option>
-            {options.map((o) => (
+            <option value="">{t("contact.pickPlaceholder")}</option>
+            {candidates.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.name}
                 {o.email ? ` · ${o.email}` : ""}
               </option>
             ))}
           </NativeSelect>
-        </Label>
+        </Field>
       </DialogForm>
     </>
   );

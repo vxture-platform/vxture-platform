@@ -3,10 +3,13 @@
 /**
  * SimpleDialogs — 改账号名 / 改密码 / 关闭账号密码登录确认 / 解绑三方 四个小对话框。
  * 外壳统一走 DS `DialogForm`(批 5a:此前四份各自手搭 Dialog + form)。
+ * 字段一律「标签在上、控件在下」(DS Field):标签与控件不能同塞进一个 Label——
+ * DS Label 是横排 flex,控件占满一行会把中文标题挤到只剩一字宽、逐字换行
+ * (租户信息页走查第八轮抓到的,同一写法全站一起改)。
  */
 
 import { useTranslations } from "next-intl";
-import { DialogForm, Input, Label } from "@vxture/design-system";
+import { DialogForm, Field, FieldLabel, Input } from "@vxture/design-system";
 import type { FormEvent } from "react";
 
 export function UsernameDialog({
@@ -39,16 +42,19 @@ export function UsernameDialog({
       }}
       onSubmit={onSubmit}
     >
-      <Label>
-        {t("fields.username")}
+      <Field>
+        <FieldLabel htmlFor="profile-username">
+          {t("fields.username")}
+        </FieldLabel>
         <Input
+          id="profile-username"
           value={value}
           onChange={(event) => onChange(event.target.value)}
           autoComplete="username"
           placeholder={t("placeholders.username")}
           required
         />
-      </Label>
+      </Field>
     </DialogForm>
   );
 }
@@ -104,9 +110,12 @@ export function PasswordDialog({
       onSubmit={onSubmit}
     >
       {hasPassword ? (
-        <Label>
-          {t("fields.currentPassword")}
+        <Field>
+          <FieldLabel htmlFor="profile-current-password">
+            {t("fields.currentPassword")}
+          </FieldLabel>
           <Input
+            id="profile-current-password"
             type="password"
             value={form.currentPassword}
             onChange={(event) =>
@@ -115,11 +124,14 @@ export function PasswordDialog({
             autoComplete="current-password"
             required
           />
-        </Label>
+        </Field>
       ) : null}
-      <Label>
-        {t("fields.nextPassword")}
+      <Field>
+        <FieldLabel htmlFor="profile-next-password">
+          {t("fields.nextPassword")}
+        </FieldLabel>
         <Input
+          id="profile-next-password"
           type="password"
           value={form.nextPassword}
           onChange={(event) =>
@@ -129,10 +141,13 @@ export function PasswordDialog({
           minLength={minLength}
           required
         />
-      </Label>
-      <Label>
-        {t("fields.confirmPassword")}
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="profile-confirm-password">
+          {t("fields.confirmPassword")}
+        </FieldLabel>
         <Input
+          id="profile-confirm-password"
           type="password"
           value={form.confirmPassword}
           onChange={(event) =>
@@ -142,7 +157,7 @@ export function PasswordDialog({
           minLength={minLength}
           required
         />
-      </Label>
+      </Field>
       <p className="text-body-sm text-muted-foreground">
         {t("dialogs.password.rule", { min: minLength })}
       </p>

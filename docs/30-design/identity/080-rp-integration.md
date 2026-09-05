@@ -133,14 +133,17 @@ IdP 发 `POST {back_channel_logout_uri}`，`application/x-www-form-urlencoded`�
 ### 2.8 切租户（仅 console / 需切组织租户的 app）
 
 ```
-前端 ─POST /auth/switch-tenant {tenantId}──▶ app-bff
-  预检：app-bff 服务端回查该 user 的成员关系（tenantId 须在其可访问 org 内,否则 403;tenants[] 已不进 token,见 §2.11 ⚠️）
+前端 ─顶层 GET /auth/switch-tenant?tenantId&returnTo──▶ app-bff
+  预检：app-bff 服务端回查该 user 的成员关系（tenantId 须在其可访问 org 内,否则原样回到 returnTo;tenants[] 已不进 token,见 §2.11 ⚠️）
   302 IdP /oidc/authorize?prompt=none&tenant_hint={tenantId}
-  IdP 更新 (sid, client_id)→tenantId → 静默发码 → /auth/callback → 新会话(新 active_org)
-  前端 reload
+  IdP 更新 (sid, client_id)→tenantId → 静默发码 → /auth/callback → 新会话(新 active_org;浏览器手里的旧 RP 会话顺手销毁)
+  302 returnTo,页面整体重载
 ```
 
+- **必须是顶层导航不是 fetch**：IdP 要收到中央会话 cookie（`vx_sid`）才能静默发码，XHR 到 app-bff 再 302 出去浏览器跟不过跨站重定向。所以入口是 GET（与 `/auth/login` 同形），前端 `location.assign`；原稿的 `POST {tenantId}` 按此修正（console 2026-09-05 落地：`bff/console-bff/src/routers/tenant-switch.router.ts`。此前前端 POST 到一个早已退役的 `/api/auth/tenant/switch`，切换从未生效）。
 - **作用域按应用**：IdP 只改 `(sid, client_id)` 的 active_org，不波及其它 app（如 console 切租户不影响 ruyin / website）。
+- **RP 侧不再自存「上次选的租户」**：活跃租户只有 RP 会话一个真相。console 此前在 localStorage / cookie 里镜像一份、恢复会话时替用户切回去，它会抢在「登录后默认进入的租户」前面，已撤。
+- **登录后默认进入的租户**：`tenancy.tenant_memberships.is_default`（console 账号信息页「设为默认」，每用户至多一条）。IdP `ActiveContextService` 解析 active_org 时无 hint → 先取默认成员关系 → 再回落个人租户；新登录（新 sid、无 per-client 记录）因此进默认租户。
 - website 无切租户（恒个人或单一上下文）；xuanzhen 有（组织租户）；ruyin 恒个人无切。
 
 ### 2.9 静默续期与降级
@@ -284,7 +287,7 @@ ruyin.ai 是**首个跨域应用**（模式 B）：`client_id=ruyin`、`realm=te
 - [ ] 浏览器**零 OIDC token**，仅 `__Host-vx_rp_session`（DevTools 核验）。
 - [ ] access 过期 → 静默 refresh；refresh 过期 → `prompt=none` 重授权；IdP 无会话 → 全量登录。
 - [ ] refresh 轮换：旧 refresh 重放被拒（family 吊销）。
-- [ ] 切租户（console/xuanzhen）：`prompt=none` + `tenant_hint` 静默换发新 `active_org`，**不影响**其它 app。
+- [x] 切租户（console 2026-09-05 落地，xuanzhen 待接）：顶层 `GET /auth/switch-tenant` → `prompt=none` + `tenant_hint` 静默换发新 `active_org`，**不影响**其它 app。
 - [ ] 全局登出 → app 经 **back-channel** 会话被杀，下次请求重登；非顶级（iframe）静默授权**不被依赖**。
 
 **验收（business-app provisioning，起步期按需）**：

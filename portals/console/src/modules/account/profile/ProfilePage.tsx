@@ -50,7 +50,9 @@ import {
   fetchUserProfile,
   revokeSession,
   setAccountLogin,
+  setDefaultTenant,
   setInitialUserPassword,
+  tenantLogoUrl,
   unbindIdentity,
   updateUsername,
   updateUserProfile,
@@ -65,7 +67,8 @@ import type {
 } from "@/entities/console";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { useTenant } from "@/features/tenant";
-import { usePathname, useRouter } from "@/lib/i18n/navigation";
+import { formatTenantDisplay } from "@/features/tenant/tenant-display";
+import { getPathname, usePathname, useRouter } from "@/lib/i18n/navigation";
 import { LoadFailedBanner } from "@/components/load/LoadFailed";
 import { IdentityHeader, type TenantRow } from "./IdentityHeader";
 import { BasicInfoCard } from "./BasicInfoCard";
@@ -191,6 +194,7 @@ export function ProfilePage() {
   const [tenantsOpen, setTenantsOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
+  const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
 
   // 展开时才取一次。守卫用 ref 而不是 effect 的 cleanup 标记:setSessionsLoading(true)
   // 本身会让 effect 依赖变化、cleanup 把标记翻成 false,请求回来时 finally 不再落地,
@@ -553,6 +557,8 @@ export function ProfilePage() {
     role: ws.role,
     joinedAt: formatProfileDay(ws.joinedAt, locale, empty),
     isCurrent: ws.isCurrent,
+    isDefault: ws.isDefault === true,
+    logoSrc: ws.logoHash ? tenantLogoUrl(ws.tenantId, ws.logoHash) : null,
     workspaces: ws.workspaceName
       ? [{ name: ws.workspaceName, isDefault: true }]
       : [],
@@ -566,10 +572,35 @@ export function ProfilePage() {
     : null;
 
   async function openTenant(tenant: TenantRow) {
-    if (!tenant.isCurrent) await switchTenantContext(tenant.tenantId);
-    router.push(
-      tenant.type === "personal" ? "/personal-tenant" : "/organization",
+    if (tenant.isCurrent) {
+      router.push("/tenant");
+      return;
+    }
+    // 切租户是一次顶层导航(页面整体重载,identity/080 §2.8):落点直接给成目标页,
+    // 不能「切完再 push」——切完这个组件已经不在了。
+    await switchTenantContext(
+      tenant.tenantId,
+      getPathname({ href: "/tenant", locale: locale as Locale }),
     );
+  }
+
+  /** 「设为默认」:每次登录后默认进入的租户(每用户至多一个,后端清旧设新)。 */
+  async function handleSetDefault(tenant: TenantRow) {
+    setSettingDefaultId(tenant.tenantId);
+    setFeedback(null);
+    try {
+      await setDefaultTenant(tenant.tenantId);
+      setWorkspaces(await fetchMyWorkspaces());
+      setFeedback({
+        tone: "success",
+        key: "feedback.defaultTenantSet",
+        values: { name: formatTenantDisplay(tenant.name, tenant.type) },
+      });
+    } catch {
+      setFeedback({ tone: "error", key: "feedback.defaultTenantError" });
+    } finally {
+      setSettingDefaultId(null);
+    }
   }
 
   return (
@@ -647,6 +678,8 @@ export function ProfilePage() {
         tenantsOpen={tenantsOpen}
         onTenantsOpenChange={setTenantsOpen}
         onOpenTenant={(tenant) => void openTenant(tenant)}
+        onSetDefault={(tenant) => void handleSetDefault(tenant)}
+        settingDefaultId={settingDefaultId}
       />
 
       <BasicInfoCard
