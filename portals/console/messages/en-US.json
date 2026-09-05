@@ -3022,9 +3022,10 @@
       "ackTitle": "After the upgrade:",
       "ack": {
         "verification": "Verification resets to unverified; business verification must be submitted separately",
-        "members": "Member management turns on, with you as the only member",
+        "members": "Member management turns on; you are the only member and become the primary administrator and owner",
         "paymentTtl": "New orders get a 2-day payment window instead of 30 minutes",
-        "irreversible": "This cannot be undone"
+        "irreversible": "This cannot be undone",
+        "entitlements": "All current subscriptions, entitlements and records move to the organization tenant"
       },
       "ackConfirm": "I understand these changes",
       "confirmLabel": "Type the current tenant name “{name}” to confirm",
@@ -3049,7 +3050,19 @@
       "warning": "Major operation: this cannot be undone. Check every item below.",
       "processTitle": "What happens",
       "processHint": "Committed in one transaction, then replayed step by step; at least 5 seconds.",
-      "confirmTitle": "Confirm"
+      "confirmTitle": "Confirm",
+      "stepOf": "Step {current} of {total}",
+      "stepTitles": {
+        "changes": "What changes",
+        "name": "Organization name",
+        "process": "What happens",
+        "confirm": "Confirm and start"
+      },
+      "prev": "Back",
+      "next": "Next",
+      "summary": "“{from}” will become the organization tenant “{to}”.",
+      "completeTitle": "Conversion complete",
+      "nameHint": "Used as the registered name (as verified by business verification); the short name starts the same and can be changed later."
     },
     "contact": {
       "link": "Link member",
