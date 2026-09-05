@@ -32,10 +32,11 @@ export class UpdateOrganizationDto {
   contactPhone?: string | null;
   /** 关联成员:给了就从该成员的账号资料取姓名 / 邮箱 / 电话;null 解除关联。 */
   contactUserId?: string | null;
-  /** 称呼:mr 先生 / ms 女士 / null 未设定。 */
-  contactSalutation?: "mr" | "ms" | null;
+  /** 性别:male / female / null。关联成员时由成员派生,此处传入被忽略。 */
+  contactGender?: "male" | "female" | null;
   countryCode?: string | null;
   address?: string | null;
+  address2?: string | null;
   postalCode?: string | null;
   isBillingRecipient?: boolean;
   timezone?: string | null;
@@ -96,4 +97,10 @@ export class ConvertTenantDto {
 /** 删除账号:用户必须勾过「已知悉确认项与连带动作」才能提交(050-account §7)。 */
 export class RequestAccountDeletionDto {
   acknowledged = false;
+}
+
+/** 注销租户:勾过知悉 + 输入租户名称确认(走查 2026-09-05)。 */
+export class RequestTenantClosureDto {
+  acknowledged = false;
+  confirmName = "";
 }

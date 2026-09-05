@@ -36,7 +36,8 @@ const EMPTY_PROFILE: OrganizationProfileView = {
   contactEmail: null,
   contactPhone: null,
   contactUserId: null,
-  contactSalutation: null,
+  contactGender: null,
+  address2: null,
   countryCode: null,
   address: null,
   postalCode: null,
@@ -289,6 +290,24 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
   ): Promise<ProvisionedOrg> {
     return this.provision(ownerUserId, "organization", name.trim());
   }
+  async countOtherActiveMembers(): Promise<number> {
+    return 0;
+  }
+
+  async closeTenant(
+    tenantId: string,
+    ownerUserId: string,
+  ): Promise<import("../types/organization.types").CloseTenantResult> {
+    const org = this.orgs.get(tenantId);
+    if (!org) return { ok: false, reason: "tenant_not_found" };
+    if (org.ownerUserId !== ownerUserId)
+      return { ok: false, reason: "not_owner" };
+    if (org.type !== "organization")
+      return { ok: false, reason: "personal_tenant" };
+    org.status = "deleted";
+    return { ok: true };
+  }
+
   async setTenantDisplayName(
     tenantId: string,
     displayName: string,
@@ -392,7 +411,8 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       contactEmail: input.contactEmail ?? null,
       contactPhone: input.contactPhone ?? null,
       contactUserId: input.contactUserId ?? null,
-      contactSalutation: input.contactSalutation ?? null,
+      contactGender: input.contactGender ?? null,
+      address2: input.address2 ?? null,
       countryCode: input.countryCode ?? null,
       address: input.address ?? null,
       postalCode: input.postalCode ?? null,

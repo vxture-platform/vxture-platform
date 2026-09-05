@@ -18,6 +18,7 @@ import type {
   TenantContext,
   TenantPermissionRecord,
   TenantRoleRecord,
+  TenantClosureState,
 } from "@/entities/console";
 
 // ── 订阅与账单 DTO（与 BFF 响应结构对齐）────────────────────────────────────
@@ -1423,6 +1424,21 @@ export async function convertTenantToOrganization(name: string): Promise<{
   return writeJson("/api/me/organization/convert", "POST", {
     name,
     acknowledged: true,
+  });
+}
+
+/** 注销资格快照(阻断 / 确认 / 连带动作)。strict:读失败要显影。 */
+export async function fetchTenantClosure(): Promise<TenantClosureState> {
+  return readJsonStrict<TenantClosureState>("/api/me/organization/closure");
+}
+
+/** 注销组织租户;不可回退。会话随后回落到个人租户。 */
+export async function requestTenantClosure(
+  confirmName: string,
+): Promise<TenantClosureState> {
+  return writeJson<TenantClosureState>("/api/me/organization/closure", "POST", {
+    acknowledged: true,
+    confirmName,
   });
 }
 

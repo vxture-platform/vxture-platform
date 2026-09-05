@@ -71,6 +71,7 @@ import {
 } from "./TenantFormCards";
 import { TenantDangerCard } from "./TenantDangerCard";
 import { ConvertTenantDialog } from "./ConvertTenantDialog";
+import { CloseTenantDialog } from "./CloseTenantDialog";
 
 const LOGO_ACCEPT = "image/png,image/jpeg,image/webp";
 
@@ -89,11 +90,12 @@ const EMPTY_DRAFT: TenantDraft = {
   scale: "",
   website: "",
   contactName: "",
-  contactSalutation: "",
+  contactGender: "",
   contactRole: "",
   contactEmail: "",
   contactPhone: "",
   address: "",
+  address2: "",
   postalCode: "",
   isBillingRecipient: false,
   timezone: REGION_DEFAULTS.timezone,
@@ -111,11 +113,12 @@ function toDraft(p: ConsoleOrganizationProfile | null): TenantDraft {
     scale: p.scale ?? "",
     website: p.website ?? "",
     contactName: p.contactName ?? "",
-    contactSalutation: p.contactSalutation ?? "",
+    contactGender: p.contactGender ?? "",
     contactRole: p.contactRole ?? "",
     contactEmail: p.contactEmail ?? "",
     contactPhone: p.contactPhone ?? "",
     address: p.address ?? "",
+    address2: p.address2 ?? "",
     postalCode: p.postalCode ?? "",
     isBillingRecipient: p.isBillingRecipient ?? false,
     // 走查(owner 2026-09-05):默认区域三项托底按中国设定,可改。库里为空时不画
@@ -156,6 +159,7 @@ export function TenantPage() {
   const [draft, setDraft] = useState<TenantDraft>(EMPTY_DRAFT);
   const [workspacesOpen, setWorkspacesOpen] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
   // 保存 / 放弃后重置基本信息卡的行级「修改」状态(用 key 重挂)
   const [cardsVersion, setCardsVersion] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -244,8 +248,8 @@ export function TenantPage() {
       if ("contactUserId" in patch) {
         patch.contactUserId = draft.contactUserId || null;
       }
-      if ("contactSalutation" in patch) {
-        patch.contactSalutation = draft.contactSalutation || null;
+      if ("contactGender" in patch) {
+        patch.contactGender = draft.contactGender || null;
       }
       const next = await updateOrganization(patch);
       setProfile(next);
@@ -455,6 +459,17 @@ export function TenantPage() {
         onClearLogo={() => void clearLogo()}
         onGoVerify={() => router.push("/tenant/verification")}
         onOpenMembers={() => router.push("/members")}
+        {...(!isOrg ? { onConvert: () => setConvertOpen(true) } : {})}
+        {...(isOrg && isOwner
+          ? {
+              onTransfer: () => {
+                setTransferTarget("");
+                setTransferConfirm("");
+                setTransferError(null);
+                setTransferOpen(true);
+              },
+            }
+          : {})}
         workspaces={workspaceRows}
         workspacesOpen={workspacesOpen}
         onWorkspacesOpenChange={setWorkspacesOpen}
@@ -472,6 +487,7 @@ export function TenantPage() {
         onGoVerify={() => router.push("/tenant/verification")}
       />
       <TenantContactCard
+        key={`contact-${cardsVersion}`}
         draft={draft}
         options={contactOptions}
         onChange={changeDraft}
@@ -486,18 +502,22 @@ export function TenantPage() {
       />
       <TenantPolicyCard />
 
-      {/* 组织租户:转让所有权 + 注销;个人租户:转为组织租户(批 5c-2) */}
-      <TenantDangerCard
-        isPersonal={!isOrg}
-        isOwner={isOrg ? isOwner : true}
-        transferReady={transferCandidates.length > 0}
-        onTransfer={() => {
-          setTransferTarget("");
-          setTransferConfirm("");
-          setTransferError(null);
-          setTransferOpen(true);
+      {/* 危险操作只有注销(走查 2026-09-05);个人租户随账号删除,不显示本卡 */}
+      {isOrg ? (
+        <TenantDangerCard
+          disabled={!isOwner || loading}
+          onCloseTenant={() => setCloseOpen(true)}
+        />
+      ) : null}
+
+      <CloseTenantDialog
+        open={closeOpen}
+        tenantName={profile?.displayName || tenantName}
+        onClose={() => setCloseOpen(false)}
+        onClosed={() => {
+          // 租户已软删:会话下一次解析回落到个人租户,整页回首页重载
+          window.location.assign("/");
         }}
-        onConvert={() => setConvertOpen(true)}
       />
 
       <ConvertTenantDialog

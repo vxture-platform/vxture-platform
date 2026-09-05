@@ -341,9 +341,10 @@ export class SessionAggregator {
       contactEmail: p?.contactEmail ?? owner?.email ?? null,
       contactPhone: p?.contactPhone ?? owner?.phone ?? null,
       contactUserId: p?.contactUserId ?? (owner ? org.ownerUserId : null),
-      contactSalutation: p?.contactSalutation ?? null,
+      contactGender: p?.contactGender ?? owner?.gender ?? null,
       countryCode: p?.countryCode ?? null,
       address: p?.address ?? null,
+      address2: p?.address2 ?? null,
       postalCode: p?.postalCode ?? null,
       // 走查(owner 2026-09-05):填写的联系人默认就是账单接收人;有资料行时以行为准。
       isBillingRecipient: p ? p.isBillingRecipient : true,
@@ -412,7 +413,7 @@ export class SessionAggregator {
         merged.contactEmail = linked?.email ?? merged.contactEmail ?? "";
         merged.contactPhone = linked?.phone ?? merged.contactPhone ?? null;
         // 称呼随成员的性别派生(读侧),联系人行自己的值清掉
-        merged.contactSalutation = null;
+        merged.contactGender = null;
       } else {
         merged.contactUserId = null;
       }

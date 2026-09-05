@@ -24,11 +24,14 @@ import { PhoneCodeService } from "@vxture/service-sms";
 import { COMMERCE_PG_POOL } from "@vxture/service-subscription";
 import { SessionAggregator } from "../aggregators/session.aggregator";
 import { AccountDeletionAggregator } from "../aggregators/account-deletion.aggregator";
+import { auditCustomerAction } from "../audit/audit-log";
+import { TenantClosureAggregator } from "../aggregators/tenant-closure.aggregator";
 import {
   ChangePasswordDto,
   ConfirmEmailChangeDto,
   ConfirmPhoneChangeDto,
   ConvertTenantDto,
+  RequestTenantClosureDto,
   RequestAccountDeletionDto,
   SendNewEmailOtpDto,
   SetAccountLoginEnabledDto,
@@ -57,6 +60,8 @@ export class MeRouter {
     private readonly sessionAggregator: SessionAggregator,
     @Inject(AccountDeletionAggregator)
     private readonly accountDeletion: AccountDeletionAggregator,
+    @Inject(TenantClosureAggregator)
+    private readonly tenantClosure: TenantClosureAggregator,
     @Inject(COMMERCE_PG_POOL)
     private readonly pool: Pool,
     @Inject(PhoneChangeService)
@@ -284,6 +289,45 @@ export class MeRouter {
       req.tenant?.id,
       body?.name ?? "",
     );
+  }
+
+  /** 注销资格:阻断 / 确认 / 连带动作(走查 2026-09-05;照账号删除的三档)。 */
+  @RequireCapability("tenant.delete")
+  @Get("organization/closure")
+  async getTenantClosure(@Req() req: Request & RequestContext) {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
+    return this.tenantClosure.getState(req.user.id, req.tenant.id);
+  }
+
+  /**
+   * 注销租户:再判一次资格,输入的名称须与租户名一致;可取消的订单先取消,然后
+   * 软删 + 撤邀请。会话下一次解析自动回落到个人租户。
+   */
+  @RequireCapability("tenant.delete")
+  @Post("organization/closure")
+  async requestTenantClosure(
+    @Req() req: Request & RequestContext,
+    @Body() body: RequestTenantClosureDto,
+  ) {
+    if (!req.user) throw new UnauthorizedException("No active session");
+    if (!req.tenant) throw new UnauthorizedException("租户上下文缺失");
+    if (body?.acknowledged !== true) {
+      throw new BadRequestException("acknowledgement_required");
+    }
+    const result = await this.tenantClosure.request(
+      req.user.id,
+      req.tenant.id,
+      body?.confirmName ?? "",
+      req.ip,
+    );
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.close",
+      resourceType: "tenant",
+      resourceId: req.tenant.id,
+      result: "success",
+    });
+    return result;
   }
 
   @RequireCapability("tenant.settings.manage")
