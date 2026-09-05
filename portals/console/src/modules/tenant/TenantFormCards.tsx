@@ -9,9 +9,10 @@
  * 个人租户与组织租户**同结构、同字段**(owner 2026-09-05):字段允许为空,不按类型
  * 藏卡——这样个人转组织时页面不换。缩进与名列宽度复用账号信息页的 CardRows。
  *
- * 走查修正(owner 2026-09-05,多轮):
- * - 基本信息与账号信息页同一模式:每行默认只读,右侧「修改」才解锁;提示文字放在
- *   输入框**后面**。租户名称已认证时操作换成「重新认证」(去认证页),未认证才可修改。
+ * 走查修正(owner 2026-09-05 / 06,多轮):
+ * - 基本信息与主管理员卡同一模式(第九轮:五行各带「修改」太细):标题行右侧一个
+ *   「编辑 / 取消」,五行随卡一起解锁;提示文字放在输入框**后面**。租户名称已认证时
+ *   始终只读、行尾「重新认证」(去认证页),未认证才随卡可改。
  * - 主管理员:只有一位,**只能转让、不能解除**(第八轮)。「转让」是标题行右侧的一个
  *   动作(图标 + 按钮,弹窗选一位成员接任),不是字段;姓名 / 性别 / 邮箱 / 电话永远
  *   随其账号资料,只填职务、地址等补充项;个人租户固定是所有者、按钮禁用。
@@ -95,10 +96,19 @@ const CURRENCY_OPTIONS = ["CNY", "USD"];
 // ── 基本信息 ────────────────────────────────────────────────────────────────
 
 type BasicField = "displayName" | "name" | "industry" | "scale" | "website";
+const BASIC_FIELDS: readonly BasicField[] = [
+  "displayName",
+  "name",
+  "industry",
+  "scale",
+  "website",
+];
 
 /**
- * 每行默认只读;右侧「修改」解锁该行,「取消」把该行退回已保存值并重新锁上。
- * 解锁后的改动仍随页底「保存」一起提交(TenantPage 在保存 / 放弃后用 key 重置本卡)。
+ * 卡级编辑,与主管理员卡同一模式(owner 2026-09-06:五行各带「修改」太细):标题行右侧
+ * 一个「编辑 / 取消」——展示态全是文字,点编辑五行一起变控件;「取消」把五项退回已保存值
+ * 并重新锁上。解锁后的改动仍随页底「保存」一起提交(TenantPage 在保存 / 放弃后用 key
+ * 重置本卡)。租户名称已认证时始终只读,行尾操作是「重新认证」。
  */
 export function TenantBasicCard({
   draft,
@@ -119,37 +129,41 @@ export function TenantBasicCard({
   readonly onGoVerify: () => void;
 }) {
   const t = useTranslations("tenantInfoPage");
-  const [editing, setEditing] = useState<ReadonlySet<BasicField>>(new Set());
-  // DS EditableRow(10.1.0):展示态是文字、点「修改」才变控件;文案由门户传
+  const [editing, setEditing] = useState(false);
+  // DS EditableRow(10.1.0):展示态是文字、编辑态才是控件;行不带自己的按钮(action=null)
   const rowLabels = { edit: t("common.modify"), cancel: t("common.cancel") };
+  const editable = editing && !readOnly;
 
-  const isEditing = (f: BasicField) => editing.has(f);
-  const start = (f: BasicField) => {
-    // 官网(走查 2026-09-05):空值解锁时预填「https://」当起始内容,用户接着补齐、
-    // 也可改成 http;存的就是框里的内容,不做前缀拼接。
-    if (f === "website" && draft.website.trim() === "") {
-      onChange({ website: "https://" });
-    }
-    setEditing((s) => new Set([...s, f]));
+  const cancelAll = () => {
+    const revert: TenantDraftPatch = {};
+    for (const f of BASIC_FIELDS) revert[f] = saved[f];
+    onChange(revert);
+    setEditing(false);
   };
-  const cancel = (f: BasicField) => {
-    onChange({ [f]: saved[f] } as TenantDraftPatch);
-    setEditing((s) => {
-      const next = new Set(s);
-      next.delete(f);
-      return next;
-    });
-  };
+
+  const action = readOnly ? null : editing ? (
+    <Button variant="ghost" size="sm" onClick={cancelAll}>
+      {t("common.cancel")}
+    </Button>
+  ) : (
+    <Button
+      variant="ghost"
+      size="sm"
+      disabled={loading}
+      onClick={() => setEditing(true)}
+    >
+      <Icon name="edit" size="xs" fallback="placeholder" />
+      <span>{t("common.edit")}</span>
+    </Button>
+  );
+
   const textRow = (f: BasicField, hint?: ReactNode) => (
     <EditableRow
       label={t(`fields.${f}`)}
       value={draft[f]}
-      editing={isEditing(f)}
-      onEdit={() => start(f)}
-      onCancel={() => cancel(f)}
+      editing={editable}
       labels={rowLabels}
-      readOnly={readOnly}
-      disabled={loading}
+      action={null}
       hint={hint}
     >
       <Input
@@ -158,7 +172,17 @@ export function TenantBasicCard({
         onChange={(event) =>
           onChange({ [f]: event.target.value } as TenantDraftPatch)
         }
-        autoFocus
+        // 官网(走查 2026-09-05):空值时预填「https://」当起始内容,用户接着补齐、也可改成
+        // http;存的就是框里的内容,不做前缀拼接。卡级编辑下改在**聚焦到这一框**时才补——
+        // 一点「编辑」就填进去,会把只想改行业的人的官网悄悄存成一个空前缀。
+        onFocus={
+          f === "website"
+            ? () => {
+                if (draft.website.trim() === "")
+                  onChange({ website: "https://" });
+              }
+            : undefined
+        }
       />
     </EditableRow>
   );
@@ -173,44 +197,34 @@ export function TenantBasicCard({
       icon="buildings"
       titleKey="cards.basic.title"
       descriptionKey="cards.basic.description"
+      action={action}
     >
       <CardRows>
         <DetailList className={DETAIL_LIST_CLASS}>
           {textRow("displayName", t("fields.displayNameHint"))}
 
-          {/* 租户名称:已认证 → 操作是「重新认证」;未认证 → 可修改(走查第 6 条) */}
+          {/* 租户名称:已认证 → 只读、行尾「重新认证」;未认证 → 随卡编辑(走查第 6 条) */}
           <EditableRow
             label={t("fields.name")}
             value={draft.name}
-            editing={!verified && isEditing("name")}
-            onEdit={() => start("name")}
-            onCancel={() => cancel("name")}
+            editing={!verified && editable}
             labels={rowLabels}
-            readOnly={readOnly}
-            disabled={loading}
+            action={
+              verified && !readOnly ? (
+                <Button variant="ghost" size="sm" onClick={onGoVerify}>
+                  <Icon name="shield-check" size="xs" fallback="placeholder" />
+                  <span>{t("fields.reverify")}</span>
+                </Button>
+              ) : null
+            }
             hint={
               verified ? t("fields.nameVerifiedHint") : t("fields.nameHint")
             }
-            {...(verified
-              ? {
-                  action: (
-                    <Button variant="ghost" size="sm" onClick={onGoVerify}>
-                      <Icon
-                        name="shield-check"
-                        size="xs"
-                        fallback="placeholder"
-                      />
-                      <span>{t("fields.reverify")}</span>
-                    </Button>
-                  ),
-                }
-              : {})}
           >
             <Input
               className={CONTROL_CLASS}
               value={draft.name}
               onChange={(event) => onChange({ name: event.target.value })}
-              autoFocus
             />
           </EditableRow>
 
@@ -219,12 +233,9 @@ export function TenantBasicCard({
           <EditableRow
             label={t("fields.scale")}
             value={scaleText}
-            editing={isEditing("scale")}
-            onEdit={() => start("scale")}
-            onCancel={() => cancel("scale")}
+            editing={editable}
             labels={rowLabels}
-            readOnly={readOnly}
-            disabled={loading}
+            action={null}
           >
             <NativeSelect
               wrapperClassName={CONTROL_CLASS}
