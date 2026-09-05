@@ -260,11 +260,14 @@ export function TenantSection({
   icon,
   titleKey,
   descriptionKey,
+  action,
   children,
 }: {
   readonly icon: IconName;
   readonly titleKey: string;
   readonly descriptionKey?: string;
+  /** 标题行右侧的动作(如联系人卡的「关联成员」)。 */
+  readonly action?: React.ReactNode;
   readonly children: React.ReactNode;
 }) {
   const t = useTranslations("tenantInfoPage");
@@ -275,6 +278,7 @@ export function TenantSection({
       icon={icon}
       title={t(titleKey)}
       {...(descriptionKey ? { description: t(descriptionKey) } : {})}
+      {...(action ? { action } : {})}
     >
       {children}
     </Section>

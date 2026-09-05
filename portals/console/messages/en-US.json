@@ -2871,7 +2871,8 @@
     "common": {
       "loading": "Loading…",
       "unset": "Not set",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "modify": "Edit"
     },
     "logo": {
       "upload": "Upload tenant logo",
@@ -2913,7 +2914,7 @@
       },
       "contact": {
         "title": "Contact",
-        "description": "Linked to the owner by default; link another member or fill in manually."
+        "description": "Linked to the owner by default, who is also the billing recipient; switch to another member, or unlink and fill in manually."
       },
       "region": {
         "title": "Regional defaults",
@@ -2929,7 +2930,6 @@
     },
     "fields": {
       "name": "Tenant name",
-      "nameResetsVerification": "Renaming supersedes the current business verification; you will need to verify again.",
       "industry": "Industry",
       "scale": "Company size",
       "website": "Website",
@@ -2941,16 +2941,15 @@
       "address": "Address",
       "postalCode": "Postal code",
       "isBillingRecipient": "Billing recipient",
-      "isBillingRecipientHint": "Invoices and billing notices go to this contact",
+      "isBillingRecipientHint": "Bills and invoice notices go to this contact.",
       "language": "Default language",
       "timezone": "Default time zone",
       "currency": "Settlement currency",
       "displayName": "Short name",
       "displayNameHint": "The everyday name shown in the sidebar and tenant panel.",
       "nameHint": "The registered name that business verification is issued against.",
-      "contactUser": "Linked member",
-      "contactUserNone": "Not linked, fill in manually",
-      "contactLinkedHint": "Name, email and phone come from this member's account profile; change them there."
+      "reverify": "Re-verify",
+      "nameVerifiedHint": "Verified name; to change it, go through verification again."
     },
     "scale": {
       "people": "{range} people"
@@ -3040,6 +3039,15 @@
         "stay": "Stay here",
         "verify": "Verify the business"
       }
+    },
+    "contact": {
+      "link": "Link member",
+      "linked": "Linked to {name}",
+      "unlink": "Unlink",
+      "pickTitle": "Link a member",
+      "pickDescription": "Choose a member as the contact; name, email and phone follow their account profile.",
+      "pickLabel": "Member",
+      "confirm": "Link"
     }
   }
 }

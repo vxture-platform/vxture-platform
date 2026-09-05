@@ -156,6 +156,8 @@ export function TenantPage() {
   const [draft, setDraft] = useState<TenantDraft>(EMPTY_DRAFT);
   const [workspacesOpen, setWorkspacesOpen] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);
+  // 保存 / 放弃后重置基本信息卡的行级「修改」状态(用 key 重挂)
+  const [cardsVersion, setCardsVersion] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── 读(allSettled:任一失败显影,不让一条读挂掉整页)────────────────────────
@@ -226,6 +228,7 @@ export function TenantPage() {
   function discard() {
     setDraft(saved);
     setFeedback(null);
+    setCardsVersion((v) => v + 1);
   }
 
   async function save() {
@@ -244,6 +247,7 @@ export function TenantPage() {
       const next = await updateOrganization(patch);
       setProfile(next);
       setDraft(toDraft(next));
+      setCardsVersion((v) => v + 1);
       await refreshSession({ silent: true });
       setFeedback({
         tone: "success",
@@ -455,16 +459,22 @@ export function TenantPage() {
       />
 
       <TenantBasicCard
+        key={cardsVersion}
         draft={draft}
+        saved={saved}
         onChange={changeDraft}
-        readOnly={!canManage || loading}
+        readOnly={!canManage}
         verified={Boolean(verifiedLocksName)}
+        loading={loading}
+        onGoVerify={() => router.push("/tenant/verification")}
       />
       <TenantContactCard
         draft={draft}
         options={contactOptions}
         onChange={changeDraft}
         readOnly={!canManage || loading}
+        isPersonal={!isOrg}
+        loading={loading}
       />
       <TenantRegionCard
         draft={draft}

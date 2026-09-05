@@ -2871,7 +2871,8 @@
     "common": {
       "loading": "加载中…",
       "unset": "未设置",
-      "cancel": "取消"
+      "cancel": "取消",
+      "modify": "修改"
     },
     "logo": {
       "upload": "上传租户标识",
@@ -2913,7 +2914,7 @@
       },
       "contact": {
         "title": "联系人",
-        "description": "默认关联所有者;可改为关联其他成员,或不关联手动填写。"
+        "description": "默认关联所有者,也是账单接收人;可换成其他成员,或解除关联手动填写。"
       },
       "region": {
         "title": "默认区域",
@@ -2929,7 +2930,6 @@
     },
     "fields": {
       "name": "租户名称",
-      "nameResetsVerification": "改名后原企业认证作废,需重新认证。",
       "industry": "所属行业",
       "scale": "企业规模",
       "website": "官网",
@@ -2941,16 +2941,15 @@
       "address": "地址",
       "postalCode": "邮编",
       "isBillingRecipient": "账单接收人",
-      "isBillingRecipientHint": "发票与账单通知发给此联系人",
+      "isBillingRecipientHint": "账单与发票通知发给这位联系人。",
       "language": "默认语言",
       "timezone": "默认时区",
       "currency": "结算货币",
       "displayName": "租户简称",
       "displayNameHint": "日常展示用的名称,侧栏与租户面板显示它。",
       "nameHint": "认证名称,企业认证以它为准。",
-      "contactUser": "关联成员",
-      "contactUserNone": "不关联,手动填写",
-      "contactLinkedHint": "姓名、邮箱、电话来自该成员的账号资料,在账号信息里修改。"
+      "reverify": "重新认证",
+      "nameVerifiedHint": "已认证的名称;改名请走重新认证。"
     },
     "scale": {
       "people": "{range} 人"
@@ -3040,6 +3039,15 @@
         "stay": "留在本页",
         "verify": "去企业认证"
       }
+    },
+    "contact": {
+      "link": "关联成员",
+      "linked": "已关联 {name}",
+      "unlink": "解除关联",
+      "pickTitle": "关联成员",
+      "pickDescription": "选一位成员作为联系人,姓名、邮箱、电话随其账号资料。",
+      "pickLabel": "成员",
+      "confirm": "关联"
     }
   }
 }
