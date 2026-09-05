@@ -339,6 +339,7 @@ export class SessionAggregator {
       contactEmail: p?.contactEmail ?? owner?.email ?? null,
       contactPhone: p?.contactPhone ?? owner?.phone ?? null,
       contactUserId: p?.contactUserId ?? (owner ? org.ownerUserId : null),
+      contactSalutation: p?.contactSalutation ?? null,
       countryCode: p?.countryCode ?? null,
       address: p?.address ?? null,
       postalCode: p?.postalCode ?? null,

@@ -2937,7 +2937,6 @@
       "contactRole": "Role",
       "contactEmail": "Email",
       "contactPhone": "Phone",
-      "countryCode": "Country / region",
       "address": "Address",
       "postalCode": "Postal code",
       "isBillingRecipient": "Billing recipient",
@@ -2949,7 +2948,8 @@
       "displayNameHint": "The everyday name shown in the sidebar and tenant panel.",
       "nameHint": "The registered name that business verification is issued against.",
       "reverify": "Re-verify",
-      "nameVerifiedHint": "Verified name; to change it, go through verification again."
+      "nameVerifiedHint": "Verified name; to change it, go through verification again.",
+      "contactSalutation": "Salutation"
     },
     "scale": {
       "people": "{range} people"
@@ -3048,6 +3048,11 @@
       "pickDescription": "Choose a member as the contact; name, email and phone follow their account profile.",
       "pickLabel": "Member",
       "confirm": "Link"
+    },
+    "salutation": {
+      "mr": "Mr.",
+      "ms": "Ms.",
+      "unset": "Not set"
     }
   }
 }

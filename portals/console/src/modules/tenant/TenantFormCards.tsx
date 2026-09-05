@@ -33,6 +33,7 @@ import {
   Input,
   Label,
   NativeSelect,
+  SegmentedControl,
   StatusBadge,
   Switch,
 } from "@vxture/design-system";
@@ -61,10 +62,11 @@ export interface TenantDraft {
   /** 联系人关联的成员 id;空串 = 不关联、手填。 */
   contactUserId: string;
   contactName: string;
+  /** 称呼:mr / ms / 空串未设定。 */
+  contactSalutation: "" | "mr" | "ms";
   contactRole: string;
   contactEmail: string;
   contactPhone: string;
-  countryCode: string;
   address: string;
   postalCode: string;
   isBillingRecipient: boolean;
@@ -134,7 +136,14 @@ export function TenantBasicCard({
   const [editing, setEditing] = useState<ReadonlySet<BasicField>>(new Set());
 
   const isEditing = (f: BasicField) => editing.has(f);
-  const start = (f: BasicField) => setEditing((s) => new Set([...s, f]));
+  const start = (f: BasicField) => {
+    // 官网(走查 2026-09-05):空值解锁时预填「https://」当起始内容,用户接着补齐、
+    // 也可改成 http;存的就是框里的内容,不做前缀拼接。
+    if (f === "website" && draft.website.trim() === "") {
+      onChange({ website: "https://" });
+    }
+    setEditing((s) => new Set([...s, f]));
+  };
   const cancel = (f: BasicField) => {
     onChange({ [f]: saved[f] } as TenantDraftPatch);
     setEditing((s) => {
@@ -245,7 +254,7 @@ export function TenantBasicCard({
             </NativeSelect>
           </DetailRow>
 
-          {textRow("website", undefined, "https://")}
+          {textRow("website")}
         </DetailList>
       </CardRows>
     </TenantSection>
@@ -361,23 +370,38 @@ export function TenantContactCard({
           {/* 仍是「标题 内容」横排、与其它卡同一名列宽与内容框宽;只是一行两个 */}
           <div className="grid gap-x-lg xl:grid-cols-2">
             <DetailList className={DETAIL_LIST_CLASS}>
-              <ContactRow
-                label={t("fields.contactName")}
-                value={name}
-                disabled={readOnly || locked}
-                onChange={(contactName) => onChange({ contactName })}
-              />
+              {/* 姓名 + 称呼同占一行(走查 2026-09-05):称呼是补充项,关联成员时也可填 */}
+              <DetailRow label={t("fields.contactName")}>
+                <span className="flex w-full flex-wrap items-center gap-sm">
+                  <Input
+                    className={CONTROL_CLASS}
+                    value={name}
+                    readOnly={readOnly || locked}
+                    disabled={readOnly || locked}
+                    onChange={(event) =>
+                      onChange({ contactName: event.target.value })
+                    }
+                  />
+                  <SegmentedControl<TenantDraft["contactSalutation"]>
+                    size="md"
+                    ariaLabel={t("fields.contactSalutation")}
+                    value={draft.contactSalutation}
+                    onChange={(contactSalutation) =>
+                      onChange({ contactSalutation })
+                    }
+                    items={[
+                      { value: "mr", label: t("salutation.mr") },
+                      { value: "ms", label: t("salutation.ms") },
+                      { value: "", label: t("salutation.unset") },
+                    ]}
+                  />
+                </span>
+              </DetailRow>
               <ContactRow
                 label={t("fields.contactEmail")}
                 value={email}
                 disabled={readOnly || locked}
                 onChange={(contactEmail) => onChange({ contactEmail })}
-              />
-              <ContactRow
-                label={t("fields.countryCode")}
-                value={draft.countryCode}
-                disabled={readOnly}
-                onChange={(countryCode) => onChange({ countryCode })}
               />
               <ContactRow
                 label={t("fields.address")}

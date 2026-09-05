@@ -111,7 +111,7 @@ GRANT UPDATE (description, industry, scale, website, country_code, address, post
 
 -- tenancy.tenant_contacts  [anchor: id, created_at]
 REVOKE UPDATE ON tenancy.tenant_contacts FROM platform_svc;
-GRANT UPDATE (tenant_id, contact_type, name, title, email, phone, user_id, updated_at) ON tenancy.tenant_contacts TO platform_svc;
+GRANT UPDATE (tenant_id, contact_type, name, title, email, phone, user_id, salutation, updated_at) ON tenancy.tenant_contacts TO platform_svc;
 
 -- tenancy.tenant_logos  [anchor: tenant_id, kind]
 REVOKE UPDATE ON tenancy.tenant_logos FROM platform_svc;

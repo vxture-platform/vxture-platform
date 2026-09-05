@@ -89,10 +89,10 @@ const EMPTY_DRAFT: TenantDraft = {
   scale: "",
   website: "",
   contactName: "",
+  contactSalutation: "",
   contactRole: "",
   contactEmail: "",
   contactPhone: "",
-  countryCode: "",
   address: "",
   postalCode: "",
   isBillingRecipient: false,
@@ -111,10 +111,10 @@ function toDraft(p: ConsoleOrganizationProfile | null): TenantDraft {
     scale: p.scale ?? "",
     website: p.website ?? "",
     contactName: p.contactName ?? "",
+    contactSalutation: p.contactSalutation ?? "",
     contactRole: p.contactRole ?? "",
     contactEmail: p.contactEmail ?? "",
     contactPhone: p.contactPhone ?? "",
-    countryCode: p.countryCode ?? "",
     address: p.address ?? "",
     postalCode: p.postalCode ?? "",
     isBillingRecipient: p.isBillingRecipient ?? false,
@@ -243,6 +243,9 @@ export function TenantPage() {
       // 关联成员:空串是「不关联」,传 null 让后端解除关联
       if ("contactUserId" in patch) {
         patch.contactUserId = draft.contactUserId || null;
+      }
+      if ("contactSalutation" in patch) {
+        patch.contactSalutation = draft.contactSalutation || null;
       }
       const next = await updateOrganization(patch);
       setProfile(next);
