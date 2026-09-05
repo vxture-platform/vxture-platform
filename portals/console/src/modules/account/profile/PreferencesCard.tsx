@@ -34,11 +34,12 @@ export interface PreferencesDraft {
 }
 
 /**
- * 五个控件同宽同高:宽度 media-3xl(12rem ≈ 200px,owner 2026-09-04 二次走查定),
+ * 五个控件同宽同高:宽度 overlay-lg(≈300px,owner 2026-09-05 走查:与租户信息页
+ * 「默认区域」的控件同一档;此前 2026-09-04 定的 media-3xl 200px 偏窄),
  * 高度全走 h-control-md——NativeSelect 固定 md,按钮组因此也用 md 档而不是 sm。
  * 按钮组去掉槽内边距(p-0):分段上下填满外框、但不越过外框描边。
  */
-const CONTROL_CLASS = "w-full max-w-media-3xl";
+const CONTROL_CLASS = "w-full max-w-overlay-lg";
 const SEGMENTED_CLASS = `${CONTROL_CLASS} p-0`;
 
 export function PreferencesCard({

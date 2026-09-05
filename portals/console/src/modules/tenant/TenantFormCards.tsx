@@ -9,24 +9,31 @@
  * 个人租户与组织租户**同结构、同字段**(owner 2026-09-05):字段允许为空,不按类型
  * 藏卡——这样个人转组织时页面不换。缩进与名列宽度复用账号信息页的 CardRows。
  *
- * 走查修正(owner 2026-09-05):
- * - 名称拆两条,与用户的 account / display_name 同构:**租户简称**是日常展示名、自由改;
- *   **租户名称**是认证名,组织租户改它会作废已有认证。
- * - 简介删掉;联系人默认关联所有者,可改为关联别的成员(姓名 / 邮箱 / 电话随成员资料),
- *   不关联才全手填;联系人卡改成一行两块。
+ * 走查修正(owner 2026-09-05,两轮):
+ * - 基本信息与账号信息页同一模式:每行默认只读,右侧「修改」才解锁;提示文字放在
+ *   输入框**后面**。租户名称已认证时操作换成「重新认证」(去认证页),未认证才可修改。
+ * - 联系人:「关联成员」是标题行右侧的一个动作(图标 + 按钮,弹窗选人),不是字段;
+ *   关联后姓名 / 邮箱 / 电话随成员资料锁定,只填补充项;个人租户固定关联所有者、按钮禁用。
+ *   布局仍是「标题 内容」横排、内容框与其它卡全局对齐等宽,只是一行两个。
+ *   填写的联系人默认就是账单接收人。
  * - 默认区域托底按中国设定;租户策略只标规划中。
  *
  * 可改字段一律随页底「保存」一次提交(草稿态在 TenantPage 里)。没有
  * `tenant.settings.manage` 的成员看到的是同一批字段的只读形态。
  */
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import {
+  Button,
   DetailList,
   DetailRow,
+  DialogForm,
+  Icon,
   Input,
+  Label,
   NativeSelect,
+  StatusBadge,
   Switch,
 } from "@vxture/design-system";
 import { PlannedBadge, PlannedNotice } from "@/components/planned";
@@ -40,7 +47,7 @@ import {
 } from "@/modules/account/profile/format";
 import { TenantSection } from "./TenantIdentityCard";
 
-/** 与账号信息页个人偏好同一档宽度(≈300px,owner 2026-09-05)。 */
+/** 与账号信息页个人偏好同一档宽度(≈300px,owner 2026-09-05);四张卡的内容框都用它。 */
 const CONTROL_CLASS = "w-full max-w-overlay-lg";
 
 export interface TenantDraft {
@@ -79,53 +86,98 @@ export interface ContactOption {
 const SCALE_OPTIONS = ["1-10", "11-50", "51-200", "201-500", "500+"];
 const CURRENCY_OPTIONS = ["CNY", "USD"];
 
-function TextRow({
-  label,
-  value,
-  onChange,
-  readOnly,
-  placeholder,
+/** 内容框 + 后置提示:提示放在框后面而不是下面(走查 2026-09-05)。 */
+function ControlWithHint({
+  children,
   hint,
 }: {
-  readonly label: string;
-  readonly value: string;
-  readonly onChange: (next: string) => void;
-  readonly readOnly: boolean;
-  readonly placeholder?: string;
+  readonly children: ReactNode;
   readonly hint?: ReactNode;
 }) {
   return (
-    <DetailRow label={label}>
-      <span className="flex w-full flex-col gap-2xs">
-        <Input
-          className={CONTROL_CLASS}
-          value={value}
-          readOnly={readOnly}
-          disabled={readOnly}
-          {...(placeholder ? { placeholder } : {})}
-          onChange={(event) => onChange(event.target.value)}
-        />
-        {hint ? (
-          <span className="text-body-sm text-muted-foreground">{hint}</span>
-        ) : null}
-      </span>
-    </DetailRow>
+    <span className="flex w-full flex-wrap items-center gap-md">
+      {children}
+      {hint ? (
+        <span className="text-body-sm text-muted-foreground">{hint}</span>
+      ) : null}
+    </span>
   );
 }
 
+// ── 基本信息 ────────────────────────────────────────────────────────────────
+
+type BasicField = "displayName" | "name" | "industry" | "scale" | "website";
+
+/**
+ * 每行默认只读;右侧「修改」解锁该行,「取消」把该行退回已保存值并重新锁上。
+ * 解锁后的改动仍随页底「保存」一起提交(TenantPage 在保存 / 放弃后用 key 重置本卡)。
+ */
 export function TenantBasicCard({
   draft,
+  saved,
   onChange,
   readOnly,
   verified,
+  loading,
+  onGoVerify,
 }: {
   readonly draft: TenantDraft;
+  readonly saved: TenantDraft;
   readonly onChange: (patch: TenantDraftPatch) => void;
   readonly readOnly: boolean;
-  /** 已认证 / 审核中的组织租户:改认证名会作废认证,行下给一句提醒。 */
+  /** 已认证 / 审核中的组织租户:认证名不可直接改,操作换成「重新认证」。 */
   readonly verified: boolean;
+  readonly loading: boolean;
+  readonly onGoVerify: () => void;
 }) {
   const t = useTranslations("tenantInfoPage");
+  const [editing, setEditing] = useState<ReadonlySet<BasicField>>(new Set());
+
+  const isEditing = (f: BasicField) => editing.has(f);
+  const start = (f: BasicField) => setEditing((s) => new Set([...s, f]));
+  const cancel = (f: BasicField) => {
+    onChange({ [f]: saved[f] } as TenantDraftPatch);
+    setEditing((s) => {
+      const next = new Set(s);
+      next.delete(f);
+      return next;
+    });
+  };
+  const rowActions = (f: BasicField) => {
+    if (readOnly) return null;
+    return isEditing(f) ? (
+      <Button variant="ghost" size="sm" onClick={() => cancel(f)}>
+        {t("common.cancel")}
+      </Button>
+    ) : (
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={loading}
+        onClick={() => start(f)}
+      >
+        <Icon name="edit" size="xs" fallback="placeholder" />
+        <span>{t("common.modify")}</span>
+      </Button>
+    );
+  };
+  const textRow = (f: BasicField, hint?: ReactNode, placeholder?: string) => (
+    <DetailRow label={t(`fields.${f}`)} actions={rowActions(f)}>
+      <ControlWithHint hint={hint}>
+        <Input
+          className={CONTROL_CLASS}
+          value={draft[f]}
+          readOnly={!isEditing(f)}
+          disabled={!isEditing(f)}
+          {...(placeholder ? { placeholder } : {})}
+          onChange={(event) =>
+            onChange({ [f]: event.target.value } as TenantDraftPatch)
+          }
+        />
+      </ControlWithHint>
+    </DetailRow>
+  );
+
   return (
     <TenantSection
       icon="buildings"
@@ -134,39 +186,50 @@ export function TenantBasicCard({
     >
       <CardRows>
         <DetailList className={DETAIL_LIST_CLASS}>
-          <TextRow
-            label={t("fields.displayName")}
-            value={draft.displayName}
-            readOnly={readOnly}
-            onChange={(displayName) => onChange({ displayName })}
-            hint={t("fields.displayNameHint")}
-          />
-          <TextRow
+          {textRow("displayName", t("fields.displayNameHint"))}
+
+          {/* 租户名称:已认证 → 操作是「重新认证」;未认证 → 可修改(走查第 6 条) */}
+          <DetailRow
             label={t("fields.name")}
-            value={draft.name}
-            readOnly={readOnly}
-            onChange={(name) => onChange({ name })}
-            hint={
+            actions={
               verified ? (
-                <span className="text-warning">
-                  {t("fields.nameResetsVerification")}
-                </span>
+                readOnly ? null : (
+                  <Button variant="ghost" size="sm" onClick={onGoVerify}>
+                    <Icon
+                      name="shield-check"
+                      size="xs"
+                      fallback="placeholder"
+                    />
+                    <span>{t("fields.reverify")}</span>
+                  </Button>
+                )
               ) : (
-                t("fields.nameHint")
+                rowActions("name")
               )
             }
-          />
-          <TextRow
-            label={t("fields.industry")}
-            value={draft.industry}
-            readOnly={readOnly}
-            onChange={(industry) => onChange({ industry })}
-          />
-          <DetailRow label={t("fields.scale")}>
+          >
+            <ControlWithHint
+              hint={
+                verified ? t("fields.nameVerifiedHint") : t("fields.nameHint")
+              }
+            >
+              <Input
+                className={CONTROL_CLASS}
+                value={draft.name}
+                readOnly={verified || !isEditing("name")}
+                disabled={verified || !isEditing("name")}
+                onChange={(event) => onChange({ name: event.target.value })}
+              />
+            </ControlWithHint>
+          </DetailRow>
+
+          {textRow("industry")}
+
+          <DetailRow label={t("fields.scale")} actions={rowActions("scale")}>
             <NativeSelect
               wrapperClassName={CONTROL_CLASS}
               value={draft.scale}
-              disabled={readOnly}
+              disabled={!isEditing("scale")}
               onChange={(event) => onChange({ scale: event.target.value })}
               aria-label={t("fields.scale")}
             >
@@ -181,36 +244,37 @@ export function TenantBasicCard({
               ))}
             </NativeSelect>
           </DetailRow>
-          <TextRow
-            label={t("fields.website")}
-            value={draft.website}
-            readOnly={readOnly}
-            onChange={(website) => onChange({ website })}
-            placeholder="https://"
-          />
+
+          {textRow("website", undefined, "https://")}
         </DetailList>
       </CardRows>
     </TenantSection>
   );
 }
 
-/** 联系人卡的一格:标签在上、控件在下,两格一行。 */
-function GridField({
+// ── 联系人 ──────────────────────────────────────────────────────────────────
+
+function ContactRow({
   label,
-  children,
-  span,
+  value,
+  onChange,
+  disabled,
 }: {
   readonly label: string;
-  readonly children: ReactNode;
-  readonly span?: boolean;
+  readonly value: string;
+  readonly onChange: (next: string) => void;
+  readonly disabled: boolean;
 }) {
   return (
-    <label
-      className={`flex min-w-0 flex-col gap-2xs ${span ? "sm:col-span-2" : ""}`}
-    >
-      <span className="text-label-sm text-muted-foreground">{label}</span>
-      {children}
-    </label>
+    <DetailRow label={label}>
+      <Input
+        className={CONTROL_CLASS}
+        value={value}
+        readOnly={disabled}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </DetailRow>
   );
 }
 
@@ -219,161 +283,182 @@ export function TenantContactCard({
   options,
   onChange,
   readOnly,
+  isPersonal,
+  loading,
 }: {
   readonly draft: TenantDraft;
   readonly options: readonly ContactOption[];
   readonly onChange: (patch: TenantDraftPatch) => void;
   readonly readOnly: boolean;
+  /** 个人租户:联系人固定是所有者,「关联成员」禁用。 */
+  readonly isPersonal: boolean;
+  readonly loading: boolean;
 }) {
   const t = useTranslations("tenantInfoPage");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pick, setPick] = useState("");
+
   const linked = draft.contactUserId
     ? options.find((o) => o.id === draft.contactUserId)
     : undefined;
-  // 关联了成员:姓名 / 邮箱 / 电话取自成员资料(只读);未关联才手填。
-  const derivedLocked = Boolean(draft.contactUserId);
+  // 关联了成员:姓名 / 邮箱 / 电话取自成员资料(锁定);未关联才手填。
+  const locked = Boolean(draft.contactUserId);
   const name = linked ? linked.name : draft.contactName;
   const email = linked ? (linked.email ?? "") : draft.contactEmail;
   const phone = linked ? (linked.phone ?? "") : draft.contactPhone;
 
   function link(id: string) {
     const option = options.find((o) => o.id === id);
-    onChange(
-      option
-        ? {
-            contactUserId: id,
-            contactName: option.name,
-            contactEmail: option.email ?? "",
-            contactPhone: option.phone ?? "",
-          }
-        : { contactUserId: "" },
-    );
+    if (!option) return;
+    onChange({
+      contactUserId: id,
+      contactName: option.name,
+      contactEmail: option.email ?? "",
+      contactPhone: option.phone ?? "",
+    });
   }
 
+  const action = (
+    <span className="flex flex-wrap items-center gap-sm">
+      {locked ? (
+        <StatusBadge tone="neutral" icon="user">
+          {t("contact.linked", { name: name || draft.contactUserId })}
+        </StatusBadge>
+      ) : null}
+      {locked && !isPersonal && !readOnly ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onChange({ contactUserId: "" })}
+        >
+          {t("contact.unlink")}
+        </Button>
+      ) : null}
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={readOnly || isPersonal || loading}
+        onClick={() => {
+          setPick(draft.contactUserId);
+          setPickerOpen(true);
+        }}
+      >
+        <Icon name="users" size="xs" fallback="placeholder" />
+        <span>{t("contact.link")}</span>
+      </Button>
+    </span>
+  );
+
   return (
-    <TenantSection
-      icon="user"
-      titleKey="cards.contact.title"
-      descriptionKey="cards.contact.description"
-    >
-      <CardRows>
-        <div className="grid gap-md sm:grid-cols-2">
-          <GridField label={t("fields.contactUser")}>
-            <NativeSelect
-              value={draft.contactUserId}
-              disabled={readOnly}
-              onChange={(event) => link(event.target.value)}
-              aria-label={t("fields.contactUser")}
-            >
-              <option value="">{t("fields.contactUserNone")}</option>
-              {draft.contactUserId && !linked ? (
-                <option value={draft.contactUserId}>
-                  {draft.contactName || draft.contactUserId}
-                </option>
-              ) : null}
-              {options.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
-                </option>
-              ))}
-            </NativeSelect>
-          </GridField>
-          <GridField label={t("fields.contactRole")}>
-            <Input
-              value={draft.contactRole}
-              readOnly={readOnly}
-              disabled={readOnly}
-              onChange={(event) =>
-                onChange({ contactRole: event.target.value })
-              }
-            />
-          </GridField>
-
-          <GridField label={t("fields.contactName")}>
-            <Input
-              value={name}
-              readOnly={readOnly || derivedLocked}
-              disabled={readOnly || derivedLocked}
-              onChange={(event) =>
-                onChange({ contactName: event.target.value })
-              }
-            />
-          </GridField>
-          <GridField label={t("fields.contactEmail")}>
-            <Input
-              value={email}
-              readOnly={readOnly || derivedLocked}
-              disabled={readOnly || derivedLocked}
-              onChange={(event) =>
-                onChange({ contactEmail: event.target.value })
-              }
-            />
-          </GridField>
-
-          <GridField label={t("fields.contactPhone")}>
-            <Input
-              value={phone}
-              readOnly={readOnly || derivedLocked}
-              disabled={readOnly || derivedLocked}
-              onChange={(event) =>
-                onChange({ contactPhone: event.target.value })
-              }
-            />
-          </GridField>
-          <GridField label={t("fields.countryCode")}>
-            <Input
-              value={draft.countryCode}
-              readOnly={readOnly}
-              disabled={readOnly}
-              onChange={(event) =>
-                onChange({ countryCode: event.target.value })
-              }
-            />
-          </GridField>
-
-          <GridField label={t("fields.address")}>
-            <Input
-              value={draft.address}
-              readOnly={readOnly}
-              disabled={readOnly}
-              onChange={(event) => onChange({ address: event.target.value })}
-            />
-          </GridField>
-          <GridField label={t("fields.postalCode")}>
-            <Input
-              value={draft.postalCode}
-              readOnly={readOnly}
-              disabled={readOnly}
-              onChange={(event) => onChange({ postalCode: event.target.value })}
-            />
-          </GridField>
-
-          {derivedLocked ? (
-            <span className="text-body-sm text-muted-foreground sm:col-span-2">
-              {t("fields.contactLinkedHint")}
-            </span>
-          ) : null}
-
-          <div className="flex items-center gap-sm sm:col-span-2">
-            <Switch
-              checked={draft.isBillingRecipient}
-              disabled={readOnly}
-              onCheckedChange={(isBillingRecipient) =>
-                onChange({ isBillingRecipient })
-              }
-              aria-label={t("fields.isBillingRecipient")}
-            />
-            <span className="text-body-sm text-foreground">
-              {t("fields.isBillingRecipient")}
-            </span>
-            <span className="text-body-sm text-muted-foreground">
-              {t("fields.isBillingRecipientHint")}
-            </span>
+    <>
+      <TenantSection
+        icon="user"
+        titleKey="cards.contact.title"
+        descriptionKey="cards.contact.description"
+        action={action}
+      >
+        <CardRows>
+          {/* 仍是「标题 内容」横排、与其它卡同一名列宽与内容框宽;只是一行两个 */}
+          <div className="grid gap-x-lg xl:grid-cols-2">
+            <DetailList className={DETAIL_LIST_CLASS}>
+              <ContactRow
+                label={t("fields.contactName")}
+                value={name}
+                disabled={readOnly || locked}
+                onChange={(contactName) => onChange({ contactName })}
+              />
+              <ContactRow
+                label={t("fields.contactEmail")}
+                value={email}
+                disabled={readOnly || locked}
+                onChange={(contactEmail) => onChange({ contactEmail })}
+              />
+              <ContactRow
+                label={t("fields.countryCode")}
+                value={draft.countryCode}
+                disabled={readOnly}
+                onChange={(countryCode) => onChange({ countryCode })}
+              />
+              <ContactRow
+                label={t("fields.address")}
+                value={draft.address}
+                disabled={readOnly}
+                onChange={(address) => onChange({ address })}
+              />
+            </DetailList>
+            <DetailList className={DETAIL_LIST_CLASS}>
+              <ContactRow
+                label={t("fields.contactRole")}
+                value={draft.contactRole}
+                disabled={readOnly}
+                onChange={(contactRole) => onChange({ contactRole })}
+              />
+              <ContactRow
+                label={t("fields.contactPhone")}
+                value={phone}
+                disabled={readOnly || locked}
+                onChange={(contactPhone) => onChange({ contactPhone })}
+              />
+              <ContactRow
+                label={t("fields.postalCode")}
+                value={draft.postalCode}
+                disabled={readOnly}
+                onChange={(postalCode) => onChange({ postalCode })}
+              />
+              <DetailRow label={t("fields.isBillingRecipient")}>
+                <ControlWithHint hint={t("fields.isBillingRecipientHint")}>
+                  <Switch
+                    checked={draft.isBillingRecipient}
+                    disabled={readOnly}
+                    onCheckedChange={(isBillingRecipient) =>
+                      onChange({ isBillingRecipient })
+                    }
+                    aria-label={t("fields.isBillingRecipient")}
+                  />
+                </ControlWithHint>
+              </DetailRow>
+            </DetailList>
           </div>
-        </div>
-      </CardRows>
-    </TenantSection>
+        </CardRows>
+      </TenantSection>
+
+      <DialogForm
+        open={pickerOpen}
+        size="sm"
+        title={t("contact.pickTitle")}
+        description={t("contact.pickDescription")}
+        submitLabel={t("contact.confirm")}
+        cancelLabel={t("common.cancel")}
+        submitDisabled={!pick}
+        onOpenChange={setPickerOpen}
+        onSubmit={(event) => {
+          event.preventDefault();
+          link(pick);
+          setPickerOpen(false);
+        }}
+      >
+        <Label>
+          {t("contact.pickLabel")}
+          <NativeSelect
+            value={pick}
+            onChange={(event) => setPick(event.target.value)}
+            aria-label={t("contact.pickLabel")}
+          >
+            <option value="">{t("common.unset")}</option>
+            {options.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+                {o.email ? ` · ${o.email}` : ""}
+              </option>
+            ))}
+          </NativeSelect>
+        </Label>
+      </DialogForm>
+    </>
   );
 }
+
+// ── 默认区域 ────────────────────────────────────────────────────────────────
 
 export function TenantRegionCard({
   draft,
@@ -445,6 +530,8 @@ export function TenantRegionCard({
     </TenantSection>
   );
 }
+
+// ── 租户策略 ────────────────────────────────────────────────────────────────
 
 /**
  * 租户策略:板块保留、只标「规划中」(owner 走查 2026-09-05:内部细节删掉——那九条

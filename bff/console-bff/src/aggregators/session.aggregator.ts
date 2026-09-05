@@ -342,7 +342,8 @@ export class SessionAggregator {
       countryCode: p?.countryCode ?? null,
       address: p?.address ?? null,
       postalCode: p?.postalCode ?? null,
-      isBillingRecipient: p?.isBillingRecipient ?? false,
+      // 走查(owner 2026-09-05):填写的联系人默认就是账单接收人;有资料行时以行为准。
+      isBillingRecipient: p ? p.isBillingRecipient : true,
       timezone: p?.timezone ?? null,
       language: p?.language ?? null,
       currency: p?.currency ?? null,
@@ -388,6 +389,10 @@ export class SessionAggregator {
       ? (({ logoHash: _l, updatedAt: _u, ...rest }) => rest)(current)
       : {};
     Object.assign(merged, patch);
+    // 首次建资料行且没明说时,联系人默认就是账单接收人
+    if (!current && merged.isBillingRecipient === undefined) {
+      merged.isBillingRecipient = true;
+    }
 
     // 关联成员(走查 2026-09-05):必须是本租户的成员;姓名 / 邮箱 / 电话取自其账号资料
     // (联系人表这三列里姓名与邮箱非空,落库要有值;读侧再实时覆盖)。null = 解除关联。
