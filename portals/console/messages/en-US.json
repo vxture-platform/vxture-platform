@@ -2957,9 +2957,9 @@
       "currency": "Settlement currency",
       "displayName": "Short name",
       "displayNameHint": "The everyday name shown in the sidebar and tenant panel.",
-      "nameHint": "The registered name that business verification is issued against.",
+      "nameHint": "The registered name as verified by business verification.",
       "reverify": "Re-verify",
-      "nameVerifiedHint": "Verified name; to change it, go through verification again.",
+      "nameVerifiedHint": "Verified: the name is as verified by business verification; changing it requires re-verification.",
       "contactGender": "Gender",
       "address2": "Address line 2"
     },

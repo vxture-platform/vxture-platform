@@ -46,7 +46,7 @@ import {
   TIMEZONE_OPTIONS,
   formatTimezone,
 } from "@/modules/account/profile/format";
-import { GenderRadio, genderLabel } from "@/components/gender/GenderRadio";
+import { GenderMark, GenderRadio } from "@/components/gender/GenderRadio";
 import { TenantSection } from "./TenantIdentityCard";
 
 /** 与账号信息页个人偏好同一档宽度(≈300px,owner 2026-09-05);四张卡的内容框都用它。 */
@@ -407,9 +407,10 @@ export function TenantContactCard({
                 value={
                   <span className="flex flex-wrap items-center gap-md">
                     <span>{name || "—"}</span>
-                    <span className="text-muted-foreground">
-                      {genderLabel(draft.contactGender, genderLabels)}
-                    </span>
+                    <GenderMark
+                      value={draft.contactGender}
+                      labels={genderLabels}
+                    />
                   </span>
                 }
                 editing={editableUnlinked}

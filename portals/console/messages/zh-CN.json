@@ -2957,9 +2957,9 @@
       "currency": "结算货币",
       "displayName": "租户简称",
       "displayNameHint": "日常展示用的名称,侧栏与租户面板显示它。",
-      "nameHint": "认证名称,企业认证以它为准。",
+      "nameHint": "以企业认证的名称为准。",
       "reverify": "重新认证",
-      "nameVerifiedHint": "已认证的名称;改名请走重新认证。",
+      "nameVerifiedHint": "已认证:以企业认证的名称为准,变更须重新认证。",
       "contactGender": "性别",
       "address2": "地址二"
     },

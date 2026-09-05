@@ -28,7 +28,7 @@ import {
 import type { LoginHistoryEntry } from "@/entities/console";
 import { LoadFailedEmpty } from "@/components/load/LoadFailed";
 import { formatProfileDate, parseBrowser, parseOS } from "./format";
-import { GenderRadio, genderLabel } from "@/components/gender/GenderRadio";
+import { GenderMark, GenderRadio } from "@/components/gender/GenderRadio";
 import { RowExpand } from "./RowExpand";
 import { CardRows, DETAIL_LIST_CLASS } from "./CardRows";
 
@@ -171,9 +171,7 @@ export function BasicInfoCard({
               ) : (
                 <span className="flex flex-wrap items-center gap-md">
                   <span>{displayName}</span>
-                  <span className="text-muted-foreground">
-                    {genderLabel(gender, genderLabels)}
-                  </span>
+                  <GenderMark value={gender} labels={genderLabels} />
                 </span>
               )
             }
