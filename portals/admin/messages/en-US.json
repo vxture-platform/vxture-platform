@@ -2131,6 +2131,11 @@
       "finished": "Completed",
       "rejected": "Rejected",
       "red": "Reversed"
+    },
+    "verificationMethod": {
+      "lite": "Simple",
+      "face": "Face scan",
+      "documents": "Documents"
     }
   },
   "platformGovernance": {

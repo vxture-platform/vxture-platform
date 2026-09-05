@@ -187,6 +187,8 @@ export interface ConsoleOrganizationProfile {
     // 批 5c:组织改名即作废原认证
     | "superseded"
     | null;
+  /** 认证等级:lite「简易认证」/ full「实名认证」/ none。徽章按它分档。 */
+  verifiedLevel: "none" | "lite" | "full";
   updatedAt: string | null;
 }
 

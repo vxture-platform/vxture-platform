@@ -1342,6 +1342,9 @@ function mapVerificationRow(
     tenantType: row.tenant_type,
     tenantStatus: row.tenant_status,
     verificationType: row.verification_type,
+    // 认证方式(2026-09-06):审核人要知道自己批的是哪一条路径;历史行归 lite。
+    verificationMethod: row.verification_method ?? "lite",
+    companyName: row.company_name ?? null,
     businessLicenseNo: row.business_license_no ?? null,
     businessLicenseImageRef: row.business_license_image_ref ?? null,
     legalPersonName: row.legal_person_name ?? null,
@@ -1404,6 +1407,8 @@ select
   v.id,
   v.tenant_id,
   v.verification_type,
+  v.verification_method,
+  v.company_name,
   v.business_license_no,
   v.business_license_image_ref,
   v.legal_person_name,
@@ -1491,6 +1496,8 @@ interface TenantVerificationRow {
   id: string;
   tenant_id: string;
   verification_type: string;
+  verification_method: string | null;
+  company_name: string | null;
   business_license_no: string | null;
   business_license_image_ref: string | null;
   legal_person_name: string | null;
@@ -1515,6 +1522,10 @@ interface TenantVerificationRecord {
   tenantType: string; // personal | organization
   tenantStatus: string; // active | suspended | deleted
   verificationType: string; // individual | enterprise
+  /** 认证方式(2026-09-06):lite 简易 / face 法人扫脸 / documents 提交资料。 */
+  verificationMethod: string;
+  /** 申报的企业名称;历史行可能为 null。 */
+  companyName: string | null;
   businessLicenseNo: string | null;
   businessLicenseImageRef: string | null;
   legalPersonName: string | null;

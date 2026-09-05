@@ -13,6 +13,7 @@ import {
   isGovernancePermissionCode,
   isValidIndustry,
 } from "@vxture/core-utils";
+import { verificationLevelOf } from "../lib/verification-level";
 import { COMMERCE_PG_POOL } from "@vxture/service-subscription";
 import {
   AccountService,
@@ -359,6 +360,11 @@ export class SessionAggregator {
       // 反规范化快查列(权威在 kyc.tenant_verifications;admin 审核/console 提交
       // 都会同步回写)——P0 认证提交上线后本字段接真值(2026-08-21)。
       verifiedStatus: org.verificationStatus ?? "unverified",
+      // 认证等级(owner 2026-09-06):已认证要分「简易认证」与「实名认证」两档,
+      // 光看 verification_status 分不出——方式在 kyc 明细行上,这里一并带出。
+      verifiedLevel: verificationLevelOf(
+        await this.org.getLatestTenantVerification(org.id),
+      ),
       updatedAt: p?.updatedAt ?? null,
     };
   }

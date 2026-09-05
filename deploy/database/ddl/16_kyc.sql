@@ -32,7 +32,9 @@ CREATE INDEX idx_user_kycs_reviewer_id ON kyc.user_kycs (reviewer_id);
 CREATE TABLE kyc.tenant_verifications (
     id                          uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id                   uuid         NOT NULL,               -- 跨 schema→tenancy.tenants（90，CASCADE）
-    verification_type           varchar(32)  NOT NULL,
+    verification_type           varchar(32)  NOT NULL,               -- 主体轴：individual / enterprise
+    verification_method         varchar(32)  NOT NULL DEFAULT 'lite', -- 方式轴（2026-09-06）：lite 简易 / face 法人扫脸 / documents 提交资料
+    company_name                varchar(128),                        -- 认证申报的企业名称（方式一必填；审核通过后即租户认证名）
     business_license_no         varchar(64),
     business_license_image_ref  varchar(255),                       -- 对象存储引用
     legal_person_name           varchar(64),
@@ -43,6 +45,8 @@ CREATE TABLE kyc.tenant_verifications (
     created_at                  timestamptz  NOT NULL DEFAULT now(),
     updated_at                  timestamptz  NOT NULL DEFAULT now(),
     CONSTRAINT chk_tenant_verifications_type   CHECK (verification_type IN ('individual','enterprise')),
+    -- 方式轴与主体轴正交：能力差异（可订阅 / 可开票）按方式派生，见 console 认证页设计
+    CONSTRAINT chk_tenant_verifications_method CHECK (verification_method IN ('lite','face','documents')),
     CONSTRAINT chk_tenant_verifications_status CHECK (status IN ('unverified','pending','verified','rejected'))
 );
 CREATE INDEX idx_tenant_verifications_tenant_id   ON kyc.tenant_verifications (tenant_id);

@@ -50,9 +50,19 @@ export interface OrgView {
 }
 
 /** 组织实名认证申请行(kyc.tenant_verifications;审核在 admin 侧)。 */
+/**
+ * 认证方式(owner 2026-09-06)——与主体轴(individual / enterprise)正交的第二根轴。
+ * 能力差异按方式派生:`lite` 可订阅但不可开票;`face` / `documents` 为完整认证。
+ * 本期只开放 `lite`,另两种在页面上占位标「开发中」。
+ */
+export type TenantVerificationMethod = "lite" | "face" | "documents";
+
 export interface TenantVerificationRecord {
   id: string;
   verificationType: "individual" | "enterprise";
+  verificationMethod: TenantVerificationMethod;
+  /** 申报的企业名称(方式一必填);历史行可能为 null。 */
+  companyName: string | null;
   businessLicenseNo: string | null;
   legalPersonName: string | null;
   status: "unverified" | "pending" | "verified" | "rejected" | "superseded";
@@ -77,6 +87,10 @@ export interface SubmitTenantVerificationInput {
   tenantId: string;
   /** 提交人(customer),写不进本表——审计走 support.audit_logs;这里仅做守卫上下文 */
   userId: string;
+  /** 认证方式;本期调用方只会送 `lite`(另两种页面占位禁用)。 */
+  method: TenantVerificationMethod;
+  /** 申报的企业名称。 */
+  companyName: string;
   businessLicenseNo: string;
   legalPersonName: string;
 }

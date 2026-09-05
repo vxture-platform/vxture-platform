@@ -97,6 +97,11 @@ export interface ConsoleOrganizationProfile {
     | "rejected"
     | "superseded"
     | null;
+  /**
+   * 认证等级(owner 2026-09-06):verified 要分两档展示——`lite`「简易认证」
+   * (可订阅不可开票)、`full`「实名认证」(全功能)。未通过一律 none。
+   */
+  verifiedLevel: "none" | "lite" | "full";
   updatedAt: string | null;
 }
 

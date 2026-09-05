@@ -45,9 +45,14 @@ import type {
   InvoiceRecord,
   UpsertBillingAddressInput,
 } from "@vxture/service-billing";
+import { OrganizationService } from "@vxture/service-organization";
 import type { RequestContext } from "../types/console.types";
 import { auditCustomerAction } from "../audit/audit-log";
 import { RequireCapability } from "../auth/capability";
+import {
+  canIssueInvoice,
+  verificationLevelOf,
+} from "../lib/verification-level";
 
 // Inline the DI token (repo-wide pattern): SubscriptionModule provides the pool.
 const COMMERCE_PG_POOL = "COMMERCE_PG_POOL";
@@ -240,6 +245,8 @@ export class BillingRouter {
     private readonly billingService: BillingService,
     @Inject(InvoiceReceiptService)
     private readonly receipts: InvoiceReceiptService,
+    /** 开票资格要读租户的认证方式(见 applyReceipt 的认证门)。 */
+    @Inject(OrganizationService) private readonly org: OrganizationService,
     /** 仅供租户审计写钩子。 */
     @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
   ) {}
@@ -362,6 +369,22 @@ export class BillingRouter {
     if (!INVOICE_TYPES.has(invoiceType)) {
       throw new BadRequestException("invoiceType 非法");
     }
+
+    /* 认证门(owner 2026-09-06):开票要求完整企业认证。简易企业实名认证「可订阅、
+       不可开票」——它只核了登记信息,没核到法人本人或证件影像。页面已在认证页与
+       开票入口两处提示,这里是真门:页面提示挡不住直接打接口的人。
+       等级判定收在 lib/verification-level(过渡期要不要放开也只改那一处)。 */
+    const level = verificationLevelOf(
+      await this.org.getLatestTenantVerification(req.tenant.id),
+    );
+    if (!canIssueInvoice(level)) {
+      throw new BadRequestException(
+        level === "lite"
+          ? "简易企业实名认证不支持开票;请在企业认证页完成法人扫脸或提交资料认证后再申请"
+          : "开具发票前请先完成企业实名认证",
+      );
+    }
+
     const record = await this.receipts.applyReceipt({
       tenantId: req.tenant.id,
       userId: req.user.id,

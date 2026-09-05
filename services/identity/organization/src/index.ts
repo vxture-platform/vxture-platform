@@ -41,6 +41,7 @@ export type {
   InvitationView,
   OrganizationReadRepository,
   TenantVerificationRecord,
+  TenantVerificationMethod,
   SubmitTenantVerificationInput,
   InvitationListItem,
   InvitationLookup,
