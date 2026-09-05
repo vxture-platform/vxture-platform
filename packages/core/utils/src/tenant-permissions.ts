@@ -95,11 +95,10 @@ export interface TenantMenuNode {
 export const TENANT_MENU_CODES = [
   "tenant.menu.workspace",
   "tenant.menu.overview",
-  "tenant.menu.todos",
+  "tenant.menu.inbox",
   "tenant.menu.account_tenant",
   "tenant.menu.profile",
   "tenant.menu.personal_tenant",
-  "tenant.menu.organization",
   "tenant.menu.members_permissions",
   "tenant.menu.members",
   "tenant.menu.roles",
@@ -111,11 +110,8 @@ export const TENANT_MENU_CODES = [
   "tenant.menu.quotas",
   "tenant.menu.usage",
   "tenant.menu.advanced_settings",
-  "tenant.menu.settings",
-  "tenant.menu.inbox",
   "tenant.menu.notifications",
   "tenant.menu.audit_logs",
-  "tenant.menu.security",
   "tenant.menu.platform",
   "tenant.menu.atlas",
 ] as const;
@@ -126,19 +122,23 @@ export const TENANT_MENU_TREE: readonly TenantMenuNode[] = [
     code: "tenant.menu.workspace",
     children: [
       { code: "tenant.menu.overview", route: "/" },
-      { code: "tenant.menu.todos", route: "/todos" },
+      // 批 4b 合并待办与消息;批 8 节点搬到工作空间,todos 退役(见 seed-catalog 同处注释)
+      { code: "tenant.menu.inbox", route: "/inbox" },
     ],
   },
   {
     code: "tenant.menu.account_tenant",
     children: [
       { code: "tenant.menu.profile", route: "/profile" },
-      // 批 5c:三页合并为 `/tenant`,码保留、同指新页(见 seed-catalog 同处注释)
-      { code: "tenant.menu.personal_tenant", route: "/tenant" },
+      // 批 5c:三页合并为 `/tenant`;批 8:organization / settings 两节点退役,操作码并到此
       {
-        code: "tenant.menu.organization",
+        code: "tenant.menu.personal_tenant",
         route: "/tenant",
-        perms: ["tenant.settings.manage"],
+        perms: [
+          "tenant.settings.manage",
+          "tenant.workspace.manage",
+          "tenant.delete",
+        ],
       },
     ],
   },
@@ -187,19 +187,12 @@ export const TENANT_MENU_TREE: readonly TenantMenuNode[] = [
   {
     code: "tenant.menu.advanced_settings",
     children: [
-      {
-        code: "tenant.menu.settings",
-        route: "/tenant",
-        perms: ["tenant.workspace.manage", "tenant.delete"],
-      },
-      { code: "tenant.menu.inbox", route: "/inbox" },
       { code: "tenant.menu.notifications", route: "/notifications" },
       {
         code: "tenant.menu.audit_logs",
         route: "/audit-logs",
         perms: ["tenant.audit.read"],
       },
-      { code: "tenant.menu.security", route: "/security" },
     ],
   },
   {

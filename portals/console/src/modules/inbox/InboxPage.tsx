@@ -28,6 +28,7 @@ import {
   ViewLayout,
 } from "@vxture/design-system";
 import { PageSection } from "@/layout/shell";
+import { isExternalLink, mergeById } from "@/lib/inbox-list";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
   fetchInbox,
@@ -50,20 +51,6 @@ const FILTERS: Filter[] = ["all", "todo", "message", "unread"];
 
 function parseFilter(raw: string | null): Filter {
   return FILTERS.includes(raw as Filter) ? (raw as Filter) : "all";
-}
-
-/** 绝对地址(http/https)= 站外链接;其余按站内路径走本地路由。 */
-function isExternalLink(link: string): boolean {
-  return /^https?:\/\//i.test(link);
-}
-
-/** 追加分页时按 id 去重,后到的不覆盖已有行。 */
-function mergeById(
-  current: readonly InboxMessage[],
-  incoming: readonly InboxMessage[],
-): InboxMessage[] {
-  const seen = new Set(current.map((m) => m.id));
-  return [...current, ...incoming.filter((m) => !seen.has(m.id))];
 }
 
 export function InboxPage() {

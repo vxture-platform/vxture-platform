@@ -79,11 +79,13 @@ const TENANT_MENU_TREE = [
         route: "/",
         icon: "home",
       },
+      // 批 4b:待办与站内消息合成一个入口 `/inbox`;批 8 把节点从「高级设置」搬到这里
+      // 与侧栏一致,`tenant.menu.todos` 随之退役(/todos 只剩跳转)。
       {
-        code: "tenant.menu.todos",
-        name: "待办事项",
-        route: "/todos",
-        icon: "calendar",
+        code: "tenant.menu.inbox",
+        name: "待办与消息",
+        route: "/inbox",
+        icon: "bell",
       },
     ],
   },
@@ -98,20 +100,19 @@ const TENANT_MENU_TREE = [
         route: "/profile",
         icon: "user",
       },
-      // 批 5c(2026-09-05):租户信息 / 组织信息 / 系统设置三页合并为 `/tenant`。
-      // 码不删(角色授权引用它们,删码即失权),三个节点同指新页;整树清理归批 8。
+      // 批 5c(2026-09-05):租户信息 / 组织信息 / 系统设置三页合并为 `/tenant`;
+      // 批 8:`tenant.menu.organization` 与 `tenant.menu.settings` 两个节点退役
+      // (菜单码本就不进 role_permissions,删码不影响授权),它们挂的操作码并到这里。
       {
         code: "tenant.menu.personal_tenant",
         name: "租户信息",
         route: "/tenant",
         icon: "buildings",
-      },
-      {
-        code: "tenant.menu.organization",
-        name: "组织信息",
-        route: "/tenant",
-        icon: "building-library",
-        perms: ["tenant.settings.manage"],
+        perms: [
+          "tenant.settings.manage",
+          "tenant.workspace.manage",
+          "tenant.delete",
+        ],
       },
     ],
   },
@@ -194,20 +195,8 @@ const TENANT_MENU_TREE = [
     name: "高级设置",
     icon: "settings",
     children: [
-      {
-        // 批 5c:并入 `/tenant`(策略与危险操作成为该页的两张卡)
-        code: "tenant.menu.settings",
-        name: "系统设置",
-        route: "/tenant",
-        icon: "settings",
-        perms: ["tenant.workspace.manage", "tenant.delete"],
-      },
-      {
-        code: "tenant.menu.inbox",
-        name: "站内消息",
-        route: "/inbox",
-        icon: "bell",
-      },
+      // 批 8:「系统设置」(并入 /tenant)与「安全设置」(并入 /profile)两节点退役;
+      // 「站内消息」搬到工作空间。
       {
         code: "tenant.menu.notifications",
         name: "通知提醒",
@@ -220,12 +209,6 @@ const TENANT_MENU_TREE = [
         route: "/audit-logs",
         icon: "clipboard",
         perms: ["tenant.audit.read"],
-      },
-      {
-        code: "tenant.menu.security",
-        name: "安全设置",
-        route: "/security",
-        icon: "shield-check",
       },
     ],
   },
@@ -755,11 +738,7 @@ const MENU_TREE = [
         code: "admin.menu.model_skill",
         name: "模型技能",
         children: [
-          {
-            code: "admin.menu.model_access",
-            name: "模型授权",
-            route: "/model-grants",
-          },
+          // `admin.menu.model_access`(/model-grants「模型授权」)随 #129 退役,批 8 摘掉节点。
           {
             code: "admin.menu.skill_market",
             name: "技能市场",
