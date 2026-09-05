@@ -2913,7 +2913,7 @@
       },
       "contact": {
         "title": "Contact",
-        "description": "The tenant's official point of contact: verification results, bills and invoices go here."
+        "description": "Linked to the owner by default; link another member or fill in manually."
       },
       "region": {
         "title": "Regional defaults",
@@ -2921,7 +2921,7 @@
       },
       "policy": {
         "title": "Tenant policies",
-        "toggle": "See the planned policies"
+        "description": "Tenant-level access, security and data policies. Planned."
       },
       "danger": {
         "title": "Danger zone"
@@ -2930,7 +2930,6 @@
     "fields": {
       "name": "Tenant name",
       "nameResetsVerification": "Renaming supersedes the current business verification; you will need to verify again.",
-      "description": "Description",
       "industry": "Industry",
       "scale": "Company size",
       "website": "Website",
@@ -2945,7 +2944,13 @@
       "isBillingRecipientHint": "Invoices and billing notices go to this contact",
       "language": "Default language",
       "timezone": "Default time zone",
-      "currency": "Settlement currency"
+      "currency": "Settlement currency",
+      "displayName": "Short name",
+      "displayNameHint": "The everyday name shown in the sidebar and tenant panel.",
+      "nameHint": "The registered name that business verification is issued against.",
+      "contactUser": "Linked member",
+      "contactUserNone": "Not linked, fill in manually",
+      "contactLinkedHint": "Name, email and phone come from this member's account profile; change them there."
     },
     "scale": {
       "people": "{range} people"
@@ -2953,20 +2958,6 @@
     "language": {
       "zhCN": "简体中文",
       "enUS": "English"
-    },
-    "policy": {
-      "access": {
-        "title": "Access:",
-        "items": "invite approval · external members · default role"
-      },
-      "security": {
-        "title": "Security:",
-        "items": "enforced two-factor · trusted devices · session length"
-      },
-      "data": {
-        "title": "Data:",
-        "items": "audit retention · export approval · API keys"
-      }
     },
     "danger": {
       "closeConditionsLabel": "Closing conditions",

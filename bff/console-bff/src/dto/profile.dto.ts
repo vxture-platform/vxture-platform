@@ -18,6 +18,8 @@ export class UpdateOrganizationDto {
    * (规格 §3.4),响应里的 verificationSuperseded 告诉前端要不要提示重新认证。
    */
   name?: string | null;
+  /** 简称(走查 2026-09-05):日常展示名,自由改,不碰认证。 */
+  displayName?: string | null;
   description?: string | null;
   industry?: string | null;
   scale?: string | null;
@@ -26,6 +28,8 @@ export class UpdateOrganizationDto {
   contactRole?: string | null;
   contactEmail?: string | null;
   contactPhone?: string | null;
+  /** 关联成员:给了就从该成员的账号资料取姓名 / 邮箱 / 电话;null 解除关联。 */
+  contactUserId?: string | null;
   countryCode?: string | null;
   address?: string | null;
   postalCode?: string | null;

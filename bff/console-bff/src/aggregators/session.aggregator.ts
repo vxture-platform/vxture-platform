@@ -315,11 +315,17 @@ export class SessionAggregator {
     if (!resolved) return null;
     const { org } = resolved;
     const p = await this.org.getOrgProfile(org.id);
+    // 走查(owner 2026-09-05):联系人默认关联所有者。还没有联系人行时,用所有者的
+    // 账号资料托底展示(关联 = 所有者);用户保存时才落库成一行。
+    const owner =
+      p?.contactUserId || p?.contactName
+        ? null
+        : await this.account.getUserById(org.ownerUserId);
     return {
       tenantId: org.id,
       tenantCode: org.id,
       tenantName: org.name,
-      displayName: org.name,
+      displayName: org.displayName ?? org.name,
       tenantType: org.type === "organization" ? "organization" : "personal",
       status: org.status === "active" ? "active" : "suspended",
       createdAt: org.createdAt ?? null,
@@ -328,10 +334,11 @@ export class SessionAggregator {
       industry: p?.industry ?? null,
       scale: p?.scale ?? null,
       website: p?.website ?? null,
-      contactName: p?.contactName ?? null,
+      contactName: p?.contactName ?? owner?.name ?? null,
       contactRole: p?.contactRole ?? null,
-      contactEmail: p?.contactEmail ?? null,
-      contactPhone: p?.contactPhone ?? null,
+      contactEmail: p?.contactEmail ?? owner?.email ?? null,
+      contactPhone: p?.contactPhone ?? owner?.phone ?? null,
+      contactUserId: p?.contactUserId ?? (owner ? org.ownerUserId : null),
       countryCode: p?.countryCode ?? null,
       address: p?.address ?? null,
       postalCode: p?.postalCode ?? null,
@@ -352,17 +359,55 @@ export class SessionAggregator {
     orgId: string | undefined,
     // name 不属于 profile 表(它在 tenancy.tenants 上),故在此就地放宽一格,
     // 不去污染 service-organization 的 OrgProfileUpdateInput(批 5c)。
-    input: OrgProfileUpdateInput & { name?: string | null },
+    input: OrgProfileUpdateInput & {
+      name?: string | null;
+      displayName?: string | null;
+    },
   ): Promise<ConsoleOrganizationProfile | null> {
     const resolved = await this.resolveOrg(userId, orgId);
     if (!resolved) return null;
-    // 名称在 tenancy.tenants 上,不在 profile 表里——upsertOrgProfile 碰不到它(批 5c)。
-    const { name, ...profile } = input;
+    // 名称与简称在 tenancy.tenants 上,不在 profile 表里——upsertOrgProfile 碰不到(批 5c)。
+    const { name, displayName, contactUserId, ...patch } = input;
     const trimmed = typeof name === "string" ? name.trim() : null;
     if (trimmed && trimmed !== resolved.org.name) {
       await this.org.renameTenant(resolved.org.id, trimmed);
     }
-    await this.org.upsertOrgProfile(resolved.org.id, profile);
+    const trimmedDisplay =
+      typeof displayName === "string" ? displayName.trim() : null;
+    if (
+      trimmedDisplay &&
+      trimmedDisplay !== (resolved.org.displayName ?? resolved.org.name)
+    ) {
+      await this.org.setTenantDisplayName(resolved.org.id, trimmedDisplay);
+    }
+
+    // **合并再写**:upsertOrgProfile 是整体覆盖语义(漏掉的字段写 NULL),而页面自
+    // 批 5c-1 起只提交改过的字段——不合并的话,保存任何一项都会把其它字段清空。
+    const current = await this.org.getOrgProfile(resolved.org.id);
+    const merged: OrgProfileUpdateInput = current
+      ? (({ logoHash: _l, updatedAt: _u, ...rest }) => rest)(current)
+      : {};
+    Object.assign(merged, patch);
+
+    // 关联成员(走查 2026-09-05):必须是本租户的成员;姓名 / 邮箱 / 电话取自其账号资料
+    // (联系人表这三列里姓名与邮箱非空,落库要有值;读侧再实时覆盖)。null = 解除关联。
+    if (contactUserId !== undefined) {
+      if (contactUserId) {
+        const member = await this.org.getOrgMemberDetail(
+          resolved.org.id,
+          contactUserId,
+        );
+        if (!member) throw new BadRequestException("contact_user_not_member");
+        const linked = await this.account.getUserById(contactUserId);
+        merged.contactUserId = contactUserId;
+        merged.contactName = linked?.name ?? merged.contactName ?? null;
+        merged.contactEmail = linked?.email ?? merged.contactEmail ?? "";
+        merged.contactPhone = linked?.phone ?? merged.contactPhone ?? null;
+      } else {
+        merged.contactUserId = null;
+      }
+    }
+    await this.org.upsertOrgProfile(resolved.org.id, merged);
     return this.getCurrentOrganizationProfile(userId, orgId);
   }
 
@@ -1090,13 +1135,20 @@ function toUserProfile(
 
 function toTenantContext(
   orgId: string,
-  org: { name: string; type: string; status: string; tenantNo?: string },
+  org: {
+    name: string;
+    displayName?: string | null;
+    type: string;
+    status: string;
+    tenantNo?: string;
+  },
   workspace: string | null,
   workspaceMeta: { name: string; workspaceNo: string | null } | null = null,
 ): TenantContext {
   return {
     id: orgId,
-    name: org.name,
+    // 简称是日常展示名(侧栏 / 面板 / 标题);没有简称时退到认证名。
+    name: org.displayName ?? org.name,
     mode: "tenant",
     // 内部路由用途保留；展示一律用下方 workspaceName/workspaceNo（UUID 禁展示）。
     workspace: workspace ?? "default",

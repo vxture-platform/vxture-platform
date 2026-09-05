@@ -15,6 +15,9 @@
 
 import { useTranslations } from "next-intl";
 import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
   Button,
   Collapsible,
   CollapsibleContent,
@@ -104,21 +107,24 @@ export function TenantIdentityCard({
         <IdentityCard
           frame={false}
           avatar={
-            logoSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={logoSrc}
-                alt=""
-                className="size-full rounded-md object-cover"
-              />
-            ) : (
-              <span
-                className="inline-flex size-full items-center justify-center rounded-md bg-accent text-title-md font-semibold text-muted-foreground"
+            // 走查(owner 2026-09-05):租户要有默认头像。此前无 logo 时画首字母,
+            // 在可点击的上传按钮壳里没有自己的尺寸,看上去就是一块空白。改用 DS Avatar:
+            // 有 logo 画图,图挂了或没有都回落到「建筑 / 用户」图标块,方角区别于人像。
+            <Avatar className="size-media-md rounded-md">
+              {logoSrc ? (
+                <AvatarImage
+                  src={logoSrc}
+                  alt=""
+                  className="rounded-md object-cover"
+                />
+              ) : null}
+              <AvatarFallback
+                className="rounded-md bg-accent text-muted-foreground"
                 aria-hidden="true"
               >
-                {Array.from(name.trim())[0]?.toUpperCase() ?? "?"}
-              </span>
-            )
+                <Icon name={typeIcon} size="md" fallback="placeholder" />
+              </AvatarFallback>
+            </Avatar>
           }
           avatarLabel={t("logo.upload")}
           {...(canManage ? { onAvatarClick: onLogoClick } : {})}

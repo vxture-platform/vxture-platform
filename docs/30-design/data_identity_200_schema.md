@@ -230,22 +230,23 @@
 
 ### 5.1 `tenants`
 
-| 字段                        | 类型         | 约束                                                                         | 说明                                                              |
-| --------------------------- | ------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `id`                        | uuid         | PK                                                                           |                                                                   |
-| `tenant_no`                 | bigint       | UNIQUE；95 触发器分配（个人 = owner user_no，组织 = 自取主体号）             | 可视码，见 §11                                                    |
-| `name`                      | varchar(128) | NOT NULL                                                                     |                                                                   |
-| `type`                      | varchar(16)  | NOT NULL, CHECK(personal/organization)                                       |                                                                   |
-| `owner_user_id`             | uuid         | FK→`account.users.id`                                                        |                                                                   |
-| `status`                    | varchar(32)  | NOT NULL DEFAULT `'active'`, CHECK(active/suspended/deleted)                 | **修正**：补 CHECK（同 users.status 一致标准）                    |
-| `verification_status`       | varchar(32)  | NOT NULL DEFAULT `'unverified'`, CHECK(unverified/pending/verified/rejected) | 反规范化只读，详见 `kyc.tenant_verifications`；**修正**：补 CHECK |
-| `verification_type`         | varchar(32)  | NULL                                                                         |                                                                   |
-| `created_at` / `updated_at` | timestamptz  | NOT NULL DEFAULT now()                                                       |                                                                   |
-| `deleted_at`                | timestamptz  | NULL                                                                         |                                                                   |
+| 字段                        | 类型         | 约束                                                                         | 说明                                                                                                   |
+| --------------------------- | ------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `id`                        | uuid         | PK                                                                           |                                                                                                        |
+| `tenant_no`                 | bigint       | UNIQUE；95 触发器分配（个人 = owner user_no，组织 = 自取主体号）             | 可视码，见 §11                                                                                         |
+| `name`                      | varchar(128) | NOT NULL                                                                     |                                                                                                        |
+| `display_name`              | varchar(96)  | NULL(迁移 2026-09-16 回填 = name)                                            | 简称:日常展示名(侧栏 / 面板 / 身份卡),自由改;`name` 是认证名(改名作废企业认证)。新建与转组织时两者相同 |
+| `type`                      | varchar(16)  | NOT NULL, CHECK(personal/organization)                                       |                                                                                                        |
+| `owner_user_id`             | uuid         | FK→`account.users.id`                                                        |                                                                                                        |
+| `status`                    | varchar(32)  | NOT NULL DEFAULT `'active'`, CHECK(active/suspended/deleted)                 | **修正**：补 CHECK（同 users.status 一致标准）                                                         |
+| `verification_status`       | varchar(32)  | NOT NULL DEFAULT `'unverified'`, CHECK(unverified/pending/verified/rejected) | 反规范化只读，详见 `kyc.tenant_verifications`；**修正**：补 CHECK                                      |
+| `verification_type`         | varchar(32)  | NULL                                                                         |                                                                                                        |
+| `created_at` / `updated_at` | timestamptz  | NOT NULL DEFAULT now()                                                       |                                                                                                        |
+| `deleted_at`                | timestamptz  | NULL                                                                         |                                                                                                        |
 
 不变量：每 user ≤1 personal tenant（部分唯一索引 `WHERE type='personal' AND deleted_at IS NULL`）；`owner_user_id` 与 `tenant_memberships(role='owner')` 一致性只经 `transfer_tenant_owner()` 原子转移。
 
-> **个人租户自动开通与命名（2026-07-06 owner 定案）**：仅 personal 类型自动创建（注册 / 首次登录 PLG 懒兜底自愈，收口在 `bff/auth-bff/src/authn/user-onboarding.service.ts`——用户创建后续动作唯一归集清单文件）。`tenants.name` 命名链 = **`display_name > account(username) > user_no`**（显式传名优先；未传时 provision 事务内从 DB 解析，`'Personal'` 仅作最终防御回退）。**对外默认显示** = `{tenant.name} + 空格 + {tenant.type}`（如 `yanhaoguo personal` / `yanhaoguo organization`——同名跨类型可区分；组织租户同规则），前端统一走 `formatTenantDisplay`。可视码对外一律带类别前缀展示（§11 v4）：`U-{user_no}` / `T-{tenant_no}` / `W-{workspace_no}`；旧标签写法 `USR_ID:` / `ORG_ID:` 已退役。
+> **个人租户自动开通与命名（2026-07-06 owner 定案）**：仅 personal 类型自动创建（注册 / 首次登录 PLG 懒兜底自愈，收口在 `bff/auth-bff/src/authn/user-onboarding.service.ts`——用户创建后续动作唯一归集清单文件）。`tenants.name` 命名链 = **`display_name > account(username) > user_no`**（显式传名优先；未传时 provision 事务内从 DB 解析，`'Personal'` 仅作最终防御回退）。**对外默认显示** = `{tenant.display_name ?? tenant.name} + 空格 + {tenant.type}`(2026-09-05 起简称优先)（如 `yanhaoguo personal` / `yanhaoguo organization`——同名跨类型可区分；组织租户同规则），前端统一走 `formatTenantDisplay`。可视码对外一律带类别前缀展示（§11 v4）：`U-{user_no}` / `T-{tenant_no}` / `W-{workspace_no}`；旧标签写法 `USR_ID:` / `ORG_ID:` 已退役。
 
 ### 5.2 `tenant_profiles`
 

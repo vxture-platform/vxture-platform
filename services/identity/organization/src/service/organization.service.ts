@@ -57,6 +57,11 @@ export class OrganizationService {
     return this.repo.convertPersonalToOrganization(tenantId, ownerUserId, name);
   }
 
+  /** 改简称(display_name),不碰认证。 */
+  setTenantDisplayName(tenantId: string, displayName: string) {
+    return this.repo.setTenantDisplayName(tenantId, displayName);
+  }
+
   /** 改租户名;组织租户改名即作废原企业认证(批 5c)。 */
   renameTenant(tenantId: string, name: string) {
     return this.repo.renameTenant(tenantId, name);
