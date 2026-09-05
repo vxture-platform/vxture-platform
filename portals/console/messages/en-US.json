@@ -3033,7 +3033,7 @@
       "cancel": "Cancel",
       "failed": "Conversion failed. Please try again.",
       "running": "Converting",
-      "runningHint": "The change is committed; walking through what happened.",
+      "runningHint": "Converting… please keep this window open.",
       "steps": {
         "check": "Verify owner and tenant state",
         "type": "Change tenant type and name; the ID stays the same",
@@ -3049,20 +3049,23 @@
       },
       "warning": "Major operation: this cannot be undone. Check every item below.",
       "processTitle": "What happens",
-      "processHint": "Committed in one transaction, then replayed step by step; at least 5 seconds.",
+      "processHint": "Runs immediately after you confirm; please keep this window open.",
       "confirmTitle": "Confirm",
       "stepOf": "Step {current} of {total}",
       "stepTitles": {
         "changes": "What changes",
-        "name": "Organization name",
-        "process": "What happens",
-        "confirm": "Confirm and start"
+        "process": "Converting",
+        "confirm": "Name and confirm"
       },
       "prev": "Back",
-      "next": "Next",
       "summary": "“{from}” will become the organization tenant “{to}”.",
       "completeTitle": "Conversion complete",
-      "nameHint": "Used as the registered name (as verified by business verification); the short name starts the same and can be changed later."
+      "nameHint": "Used as the registered name (as verified by business verification); the short name starts the same and can be changed later.",
+      "actions": {
+        "understand": "I understand, continue",
+        "confirmConvert": "Confirm conversion"
+      },
+      "summaryPending": "“{from}” will become an organization tenant; enter the organization name first."
     },
     "contact": {
       "link": "Link member",

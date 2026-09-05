@@ -3033,7 +3033,7 @@
       "cancel": "取消",
       "failed": "转换失败,请稍后重试。",
       "running": "正在转换",
-      "runningHint": "转换已在库内完成,正在逐项核对结果,请稍候。",
+      "runningHint": "正在转换,请勿关闭窗口。",
       "steps": {
         "check": "核对所有者与租户状态",
         "type": "变更租户类型与名称,编号不变",
@@ -3049,20 +3049,23 @@
       },
       "warning": "重大操作:转换后不可回退。请逐项核对下方内容。",
       "processTitle": "转换过程",
-      "processHint": "提交后在库内一个事务完成,随后逐项回放结果,整段不少于 5 秒。",
+      "processHint": "确认后立即执行,过程中请勿关闭窗口。",
       "confirmTitle": "确认",
       "stepOf": "第 {current} / {total} 步",
       "stepTitles": {
         "changes": "升级后的变化",
-        "name": "组织名称",
         "process": "转换过程",
-        "confirm": "确认并开始"
+        "confirm": "组织名称与确认"
       },
       "prev": "上一步",
-      "next": "下一步",
       "summary": "「{from}」将转换为组织租户「{to}」。",
       "completeTitle": "转换完成",
-      "nameHint": "作为认证名,以企业认证的名称为准;简称初始与之相同,之后可改。"
+      "nameHint": "作为认证名,以企业认证的名称为准;简称初始与之相同,之后可改。",
+      "actions": {
+        "understand": "我已了解,继续",
+        "confirmConvert": "确认转换"
+      },
+      "summaryPending": "「{from}」将转换为组织租户;请先填写组织名称。"
     },
     "contact": {
       "link": "关联成员",
