@@ -2,6 +2,8 @@ export class UpdateProfileDto {
   displayName?: string | null;
   avatarUrl?: string | null;
   bio?: string | null;
+  /** 性别:male / female;空串 = 清除;缺省 = 不改。 */
+  gender?: "male" | "female" | "" | null;
   email?: string | null;
   phone?: string | null;
   timezone?: string | null;
@@ -30,6 +32,8 @@ export class UpdateOrganizationDto {
   contactPhone?: string | null;
   /** 关联成员:给了就从该成员的账号资料取姓名 / 邮箱 / 电话;null 解除关联。 */
   contactUserId?: string | null;
+  /** 称呼:mr 先生 / ms 女士 / null 未设定。 */
+  contactSalutation?: "mr" | "ms" | null;
   countryCode?: string | null;
   address?: string | null;
   postalCode?: string | null;

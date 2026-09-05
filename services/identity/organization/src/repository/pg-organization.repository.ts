@@ -39,6 +39,7 @@ interface OrgProfileRow {
   contact_email: string | null;
   contact_phone: string | null;
   contact_user_id?: string | null;
+  contact_salutation?: string | null;
   country_code: string | null;
   address: string | null;
   postal_code: string | null;
@@ -61,6 +62,10 @@ function mapOrgProfile(row: OrgProfileRow): OrganizationProfileView {
     contactEmail: row.contact_email,
     contactPhone: row.contact_phone,
     contactUserId: row.contact_user_id ?? null,
+    contactSalutation:
+      row.contact_salutation === "mr" || row.contact_salutation === "ms"
+        ? row.contact_salutation
+        : null,
     countryCode: row.country_code,
     address: row.address,
     postalCode: row.postal_code,
@@ -521,7 +526,10 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
                   c.title,
                   coalesce(u.email, c.email) as email,
                   coalesce(u.phone, c.phone) as phone,
-                  c.user_id
+                  c.user_id,
+                  case when c.user_id is not null
+                       then case up.gender when 'male' then 'mr' when 'female' then 'ms' else null end
+                       else c.salutation end as salutation
              from tenancy.tenant_contacts c
              left join account.users u on u.id = c.user_id and u.deleted_at is null
              left join account.user_profiles up on up.user_id = c.user_id
@@ -535,6 +543,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
               pc.name as contact_name, pc.title as contact_role,
               pc.email as contact_email, pc.phone as contact_phone,
               pc.user_id as contact_user_id,
+              pc.salutation as contact_salutation,
               tl.hash as logo_hash, tp.updated_at::text as updated_at
          from tenancy.tenant_profiles tp
          left join tenancy.tenant_logos tl on tl.tenant_id = tp.tenant_id and tl.kind = 'logo'${this.primaryContactJoin}
@@ -587,15 +596,15 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
        ),
        updc as (
          update tenancy.tenant_contacts tc
-            set name = $13, title = $14, email = $15, phone = $16, user_id = $17, updated_at = now()
+            set name = $13, title = $14, email = $15, phone = $16, user_id = $17, salutation = $18, updated_at = now()
            from cur
           where tc.id = cur.id
             and $13::varchar is not null and $15::varchar is not null
           returning tc.id
        ),
        insc as (
-         insert into tenancy.tenant_contacts (tenant_id, contact_type, name, title, email, phone, user_id)
-         select $1, 'primary', $13, $14, $15, $16, $17
+         insert into tenancy.tenant_contacts (tenant_id, contact_type, name, title, email, phone, user_id, salutation)
+         select $1, 'primary', $13, $14, $15, $16, $17, $18
           where $13::varchar is not null and $15::varchar is not null
             and not exists (select 1 from cur)
          returning id
@@ -625,6 +634,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
         input.contactEmail ?? null,
         input.contactPhone ?? null,
         input.contactUserId ?? null,
+        input.contactSalutation ?? null,
       ],
     );
     return mapOrgProfile(r.rows[0]!);

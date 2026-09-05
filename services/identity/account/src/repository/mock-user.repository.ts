@@ -111,6 +111,9 @@ export class MockUserRepository implements UserReadRepository {
     if (input.name !== undefined) u.name = input.name;
     if (input.email !== undefined) u.email = input.email;
     if (input.bio !== undefined) u.bio = input.bio;
+    if (input.gender !== undefined && input.gender !== null) {
+      u.gender = input.gender === "" ? null : input.gender;
+    }
     if (input.timezone !== undefined) u.timezone = input.timezone;
     if (input.language !== undefined) u.language = input.language;
     return toView(u);
@@ -357,6 +360,7 @@ function toView(u: UserCredentialRecord): UserView {
     status: u.status,
     avatarHash: u.avatarHash,
     bio: u.bio ?? null,
+    gender: u.gender ?? null,
     timezone: u.timezone ?? null,
     language: u.language ?? null,
     accountChangedAt: u.accountChangedAt ?? null,

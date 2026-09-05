@@ -98,6 +98,8 @@ export interface OrganizationProfileView {
   contactPhone: string | null;
   /** 联系人关联的成员(tenant_contacts.user_id);关联时姓名 / 邮箱 / 电话取自成员资料。 */
   contactUserId: string | null;
+  /** 称呼:mr 先生 / ms 女士 / null 未设定。 */
+  contactSalutation: "mr" | "ms" | null;
   countryCode: string | null;
   address: string | null;
   postalCode: string | null;
@@ -130,6 +132,7 @@ export interface OrgProfileUpdateInput {
   contactEmail?: string | null;
   contactPhone?: string | null;
   contactUserId?: string | null;
+  contactSalutation?: "mr" | "ms" | null;
   countryCode?: string | null;
   address?: string | null;
   postalCode?: string | null;

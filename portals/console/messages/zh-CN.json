@@ -723,7 +723,8 @@
       "lastLoginIp": "登录 IP",
       "lastLoginOs": "操作系统",
       "role": "角色",
-      "newEmail": "新邮箱"
+      "newEmail": "新邮箱",
+      "gender": "称呼"
     },
     "language": {
       "zhCN": "简体中文",
@@ -1115,6 +1116,11 @@
         "inProgress": "无进行中的退款或开票",
         "paidOrder": "无已付款待确认订单"
       }
+    },
+    "gender": {
+      "male": "先生",
+      "female": "女士",
+      "unset": "未设定"
     }
   },
   "verificationPage": {
@@ -2937,7 +2943,6 @@
       "contactRole": "职务",
       "contactEmail": "邮箱",
       "contactPhone": "电话",
-      "countryCode": "国家 / 地区",
       "address": "地址",
       "postalCode": "邮编",
       "isBillingRecipient": "账单接收人",
@@ -2949,7 +2954,8 @@
       "displayNameHint": "日常展示用的名称,侧栏与租户面板显示它。",
       "nameHint": "认证名称,企业认证以它为准。",
       "reverify": "重新认证",
-      "nameVerifiedHint": "已认证的名称;改名请走重新认证。"
+      "nameVerifiedHint": "已认证的名称;改名请走重新认证。",
+      "contactSalutation": "称呼"
     },
     "scale": {
       "people": "{range} 人"
@@ -3048,6 +3054,11 @@
       "pickDescription": "选一位成员作为联系人,姓名、邮箱、电话随其账号资料。",
       "pickLabel": "成员",
       "confirm": "关联"
+    },
+    "salutation": {
+      "mr": "先生",
+      "ms": "女士",
+      "unset": "未设定"
     }
   }
 }

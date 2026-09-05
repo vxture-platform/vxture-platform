@@ -66,6 +66,7 @@ CREATE TABLE tenancy.tenant_contacts (
     email         varchar(128) NOT NULL,
     phone         varchar(32),
     user_id       uuid,                               -- 可选：联系人是平台用户时关联（FK 见 90）
+    salutation    varchar(8)   CHECK (salutation IN ('mr', 'ms')),  -- 称呼:先生 / 女士 / NULL 未设定(走查 2026-09-05)
     created_at    timestamptz  NOT NULL DEFAULT now(),
     updated_at    timestamptz  NOT NULL DEFAULT now(),
     UNIQUE (tenant_id, contact_type, email)

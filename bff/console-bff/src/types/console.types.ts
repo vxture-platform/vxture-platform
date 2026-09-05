@@ -32,6 +32,8 @@ export interface ConsoleUserProfile {
   /** @deprecated legacy paste-URL field; superseded by `picture` (always null). */
   avatarUrl: string | null;
   bio: string | null;
+  /** 性别:账号页显示为先生 / 女士 / 未设定。 */
+  gender: "male" | "female" | null;
   email: string | null;
   /** Whether the email is verified. */
   emailVerified: boolean;
@@ -76,6 +78,8 @@ export interface ConsoleOrganizationProfile {
   contactPhone: string | null;
   /** 联系人关联的成员;关联时姓名 / 邮箱 / 电话取自成员资料。 */
   contactUserId: string | null;
+  /** 称呼:mr 先生 / ms 女士 / null 未设定。 */
+  contactSalutation: "mr" | "ms" | null;
   countryCode: string | null;
   address: string | null;
   postalCode: string | null;

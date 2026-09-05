@@ -1465,6 +1465,8 @@ export async function updateUserProfile(payload: {
   displayName?: string | null;
   avatarUrl?: string | null;
   bio?: string | null;
+  /** male / female;空串 = 清除。 */
+  gender?: "male" | "female" | "" | null;
   email?: string | null;
   phone?: string | null;
   timezone?: string | null;

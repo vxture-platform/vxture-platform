@@ -29,6 +29,7 @@ interface UserRow {
   status: string;
   avatar_hash: string | null;
   bio: string | null;
+  gender: string | null;
   timezone: string | null;
   language: string | null;
   account_changed_at: string | null;
@@ -156,7 +157,7 @@ export class PgUserRepository implements UserReadRepository {
     const result = await this.pool.query<UserRow>(
       `select u.id, u.account, u.email, u.email_verified_at::text as email_verified_at,
               u.phone, u.phone_verified_at::text as phone_verified_at,
-              p.display_name as name, u.status, p.avatar_hash, p.bio, p.timezone, p.language,
+              p.display_name as name, u.status, p.avatar_hash, p.bio, p.gender, p.timezone, p.language,
               u.account_changed_at::text as account_changed_at,
               u.account_login_disabled,
               u.user_no::text as user_no, u.created_at::text as created_at,
@@ -243,11 +244,13 @@ export class PgUserRepository implements UserReadRepository {
       // current value when the param is null (leave-unchanged sentinel).
       await client.query(
         `insert into account.user_profiles
-           (user_id, display_name, bio, timezone, language, created_at, updated_at)
-         values ($1, $2, $3, $4, $5, now(), now())
+           (user_id, display_name, bio, gender, timezone, language, created_at, updated_at)
+         values ($1, $2, $3, nullif($4, ''), $5, $6, now(), now())
          on conflict (user_id) do update set
            display_name = coalesce(excluded.display_name, account.user_profiles.display_name),
            bio          = coalesce(excluded.bio, account.user_profiles.bio),
+           -- gender:null = 不改;'' = 清成 NULL(未设定);其它 = 设值
+           gender       = case when $4::text is null then account.user_profiles.gender else nullif($4::text, '') end,
            timezone     = coalesce(excluded.timezone, account.user_profiles.timezone),
            language     = coalesce(excluded.language, account.user_profiles.language),
            updated_at   = now()`,
@@ -255,6 +258,7 @@ export class PgUserRepository implements UserReadRepository {
           userId,
           input.name ?? null,
           input.bio ?? null,
+          input.gender ?? null,
           input.timezone ?? null,
           input.language ?? null,
         ],
@@ -803,6 +807,8 @@ function mapUser(row?: UserRow): UserView | null {
     status: row.status,
     avatarHash: row.avatar_hash,
     bio: row.bio,
+    gender:
+      row.gender === "male" || row.gender === "female" ? row.gender : null,
     timezone: row.timezone,
     language: row.language,
     accountChangedAt: row.account_changed_at,

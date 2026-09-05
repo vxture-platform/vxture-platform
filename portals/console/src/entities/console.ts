@@ -34,6 +34,8 @@ export interface ConsoleUserProfile {
   /** @deprecated legacy paste-URL field; superseded by `picture`. */
   avatarUrl: string | null;
   bio: string | null;
+  /** 性别:显示为先生 / 女士 / 未设定。 */
+  gender: "male" | "female" | null;
   email: string | null;
   /** Whether the email is verified. */
   emailVerified?: boolean;
@@ -162,6 +164,8 @@ export interface ConsoleOrganizationProfile {
   contactPhone: string | null;
   /** 联系人关联的成员;关联时姓名 / 邮箱 / 电话取自成员资料。 */
   contactUserId: string | null;
+  /** 称呼:mr 先生 / ms 女士 / null 未设定。 */
+  contactSalutation: "mr" | "ms" | null;
   countryCode: string | null;
   address: string | null;
   postalCode: string | null;
@@ -187,6 +191,7 @@ export interface OrganizationProfileUpdate {
   displayName?: string | null;
   /** 关联成员;null 解除关联。 */
   contactUserId?: string | null;
+  contactSalutation?: "mr" | "ms" | null;
   /** 租户名称(批 5c);组织租户改名即作废原企业认证。 */
   name?: string | null;
   description?: string | null;
