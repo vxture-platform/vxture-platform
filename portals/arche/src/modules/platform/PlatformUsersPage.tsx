@@ -15,9 +15,10 @@ import {
   DialogHeader,
   DialogTitle,
   EmptyState,
+  Field,
+  FieldLabel,
   FilterBar,
   Input,
-  Label,
   ListPageTemplate,
   MetricGrid,
   NativeSelect,
@@ -448,9 +449,10 @@ function PlatformUserRoleDialog({
       }}
       onSubmit={onSubmit}
     >
-      <Label>
-        平台角色
+      <Field>
+        <FieldLabel htmlFor="platformuserspage-field">平台角色</FieldLabel>
         <NativeSelect
+          id="platformuserspage-field"
           value={value}
           onChange={(event) => onChange(event.target.value)}
         >
@@ -463,7 +465,7 @@ function PlatformUserRoleDialog({
             </option>
           ))}
         </NativeSelect>
-      </Label>
+      </Field>
     </DialogForm>
   );
 }
@@ -510,41 +512,50 @@ function PlatformUserCreateDialog({
       }}
       onSubmit={onSubmit}
     >
-      <Label>
-        用户名
+      <Field>
+        <FieldLabel htmlFor="platformuserspage-field-2">用户名</FieldLabel>
         <Input
+          id="platformuserspage-field-2"
           value={form.username}
           onChange={(e) => onChange({ username: e.target.value })}
           autoComplete="off"
         />
-      </Label>
-      <Label>
-        显示名
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="platformuserspage-field-3">显示名</FieldLabel>
         <Input
+          id="platformuserspage-field-3"
           value={form.displayName}
           onChange={(e) => onChange({ displayName: e.target.value })}
         />
-      </Label>
-      <Label>
-        邮箱（初始设置密码邮件将发送至此）
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="platformuserspage-field-4">
+          邮箱（初始设置密码邮件将发送至此）
+        </FieldLabel>
         <Input
+          id="platformuserspage-field-4"
           type="email"
           value={form.email}
           onChange={(e) => onChange({ email: e.target.value })}
           autoComplete="off"
         />
-      </Label>
-      <Label>
-        手机号（可选）
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="platformuserspage-field-5">
+          手机号（可选）
+        </FieldLabel>
         <Input
+          id="platformuserspage-field-5"
           value={form.phone}
           onChange={(e) => onChange({ phone: e.target.value })}
           autoComplete="off"
         />
-      </Label>
-      <Label>
-        平台角色
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="platformuserspage-field-6">平台角色</FieldLabel>
         <NativeSelect
+          id="platformuserspage-field-6"
           value={form.roleId}
           onChange={(e) => onChange({ roleId: e.target.value })}
         >
@@ -555,7 +566,7 @@ function PlatformUserCreateDialog({
             </option>
           ))}
         </NativeSelect>
-      </Label>
+      </Field>
     </DialogForm>
   );
 }
@@ -588,53 +599,58 @@ function PlatformUserMetadataDialog({
       onSubmit={onSubmit}
     >
       <div>
-        <Label>
-          显示名
+        <Field>
+          <FieldLabel htmlFor="platformuserspage-field-7">显示名</FieldLabel>
           <Input
+            id="platformuserspage-field-7"
             value={form.displayName}
             maxLength={128}
             onChange={(event) => onChange({ displayName: event.target.value })}
             placeholder="显示名"
           />
-        </Label>
-        <Label>
-          排序
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="platformuserspage-field-8">排序</FieldLabel>
           <Input
+            id="platformuserspage-field-8"
             type="number"
             value={form.sort}
             onChange={(event) => onChange({ sort: event.target.value })}
             placeholder="排序值"
           />
-        </Label>
+        </Field>
       </div>
       <div>
-        <Label>
-          邮箱
+        <Field>
+          <FieldLabel htmlFor="platformuserspage-field-9">邮箱</FieldLabel>
           <Input
+            id="platformuserspage-field-9"
             type="email"
             value={form.email}
             onChange={(event) => onChange({ email: event.target.value })}
             placeholder="邮箱地址"
           />
-        </Label>
-        <Label>
-          手机
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="platformuserspage-field-10">手机</FieldLabel>
           <Input
+            id="platformuserspage-field-10"
             value={form.phone}
             onChange={(event) => onChange({ phone: event.target.value })}
             placeholder="手机号"
           />
-        </Label>
+        </Field>
       </div>
-      <Label>
-        备注
+      <Field>
+        <FieldLabel htmlFor="platformuserspage-field-11">备注</FieldLabel>
         <Textarea
+          id="platformuserspage-field-11"
           value={form.remark}
           onChange={(event) => onChange({ remark: event.target.value })}
           placeholder="内部备注"
           rows={3}
         />
-      </Label>
+      </Field>
     </DialogForm>
   );
 }

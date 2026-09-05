@@ -9,7 +9,10 @@ import {
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { VxConfigService } from "@vxture/core-config";
-import { isGovernancePermissionCode } from "@vxture/core-utils";
+import {
+  isGovernancePermissionCode,
+  isValidIndustry,
+} from "@vxture/core-utils";
 import { COMMERCE_PG_POOL } from "@vxture/service-subscription";
 import {
   AccountService,
@@ -395,6 +398,11 @@ export class SessionAggregator {
       ? (({ logoHash: _l, updatedAt: _u, ...rest }) => rest)(current)
       : {};
     Object.assign(merged, patch);
+    // 所属行业只认 core-utils 自定义清单里的码(owner 2026-09-06「先自定义」);空 = 清掉。
+    // 历史自由文本留在库里可读可显,但从 console 再写入只能是清单码。
+    if (patch.industry && !isValidIndustry(patch.industry)) {
+      throw new BadRequestException("invalid_industry");
+    }
     // 首次建资料行且没明说时,联系人默认就是账单接收人
     if (!current && merged.isBillingRecipient === undefined) {
       merged.isBillingRecipient = true;

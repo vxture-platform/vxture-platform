@@ -25,9 +25,10 @@ import {
   DetailRow,
   DialogForm,
   EmptyState,
+  Field,
+  FieldLabel,
   Icon,
   Input,
-  Label,
   MetricGrid,
   NativeSelect,
   PanelItem,
@@ -1168,10 +1169,13 @@ export function ProductSolutionDetailPage({
               })}
             />
           ) : null}
-          <Label>
-            {t("bindDialog.plan")}
-            <span className="text-destructive-text"> *</span>
+          <Field>
+            <FieldLabel htmlFor="productsolutiondetailpage-binddialog-plan">
+              {t("bindDialog.plan")}
+              <span className="text-destructive-text"> *</span>
+            </FieldLabel>
             <NativeSelect
+              id="productsolutiondetailpage-binddialog-plan"
               value={planPick}
               disabled={plans === null}
               onChange={(event) => setPlanPick(event.target.value)}
@@ -1189,7 +1193,7 @@ export function ProductSolutionDetailPage({
                 </option>
               ))}
             </NativeSelect>
-          </Label>
+          </Field>
           <p className="m-0 text-body-sm text-muted-foreground">
             {t("bindDialog.hint")}
           </p>

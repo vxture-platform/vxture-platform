@@ -54,6 +54,7 @@ import type {
   TenantRiskLevel,
   TenantVerificationStatus,
 } from "../types/console.types";
+import { industryLabel } from "@vxture/core-utils";
 
 @Controller("api/tenants")
 export class TenantsRouter {
@@ -743,7 +744,8 @@ function mapTenantRow(row: TenantOperationRow): TenantOperationRecord {
         : null,
     riskLevel: normalizeRiskLevel(row.risk_level),
     region,
-    industry: row.industry ?? "未设置",
+    // 所属行业:console 存的是 core-utils 清单码,这里翻成中文标签;历史自由文本原样显示
+    industry: row.industry ? industryLabel(row.industry) : "未设置",
     scale: row.scale ?? "未设置",
     ownerName,
     ownerEmail: row.owner_email ?? "",

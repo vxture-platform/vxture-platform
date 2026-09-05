@@ -10,9 +10,10 @@ import {
   DataTable,
   DialogForm,
   EmptyState,
+  Field,
+  FieldLabel,
   FilterBar,
   Input,
-  Label,
   ListPageTemplate,
   MetricGrid,
   NativeSelect,
@@ -780,16 +781,17 @@ export function AccountsPage({
           }}
           onSubmit={(event) => void confirmPending(event)}
         >
-          <Label>
-            备注（可选）
+          <Field>
+            <FieldLabel htmlFor="accountspage-field">备注（可选）</FieldLabel>
             <Textarea
+              id="accountspage-field"
               value={actionReason}
               onChange={(e) => setActionReason(e.target.value)}
               rows={3}
               placeholder="记录处置原因，将写入审计日志"
               maxLength={512}
             />
-          </Label>
+          </Field>
         </DialogForm>
       ) : null}
     </>

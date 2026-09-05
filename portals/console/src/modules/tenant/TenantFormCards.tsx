@@ -25,7 +25,8 @@
  */
 
 import { useState, type ReactNode } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { INDUSTRY_DEFS, industryLabel } from "@vxture/core-utils";
 import {
   Button,
   DetailList,
@@ -129,6 +130,7 @@ export function TenantBasicCard({
   readonly onGoVerify: () => void;
 }) {
   const t = useTranslations("tenantInfoPage");
+  const labelLocale = useLocale().startsWith("en") ? "en" : "zh";
   const [editing, setEditing] = useState(false);
   // DS EditableRow(10.1.0):展示态是文字、编辑态才是控件;行不带自己的按钮(action=null)
   const rowLabels = { edit: t("common.modify"), cancel: t("common.cancel") };
@@ -228,7 +230,35 @@ export function TenantBasicCard({
             />
           </EditableRow>
 
-          {textRow("industry")}
+          {/* 所属行业:自定义清单下拉(owner 2026-09-06「先自定义」,权威源 core-utils
+              industry-taxonomy,库里存码);历史手填的自由文本不在清单里时当一个额外选项显影 */}
+          <EditableRow
+            label={t("fields.industry")}
+            value={
+              draft.industry ? industryLabel(draft.industry, labelLocale) : ""
+            }
+            editing={editable}
+            labels={rowLabels}
+            action={null}
+          >
+            <NativeSelect
+              wrapperClassName={CONTROL_CLASS}
+              value={draft.industry}
+              onChange={(event) => onChange({ industry: event.target.value })}
+              aria-label={t("fields.industry")}
+            >
+              <option value="">{t("common.unset")}</option>
+              {draft.industry &&
+              !INDUSTRY_DEFS.some((d) => d.value === draft.industry) ? (
+                <option value={draft.industry}>{draft.industry}</option>
+              ) : null}
+              {INDUSTRY_DEFS.map((d) => (
+                <option key={d.value} value={d.value}>
+                  {labelLocale === "en" ? d.labelEn : d.labelZh}
+                </option>
+              ))}
+            </NativeSelect>
+          </EditableRow>
 
           <EditableRow
             label={t("fields.scale")}

@@ -8,10 +8,11 @@ import {
   DataTable,
   DialogForm,
   EmptyState,
+  Field,
+  FieldLabel,
   FilterBar,
   Icon,
   Input,
-  Label,
   ListPageTemplate,
   MetricGrid,
   NativeSelect,
@@ -573,9 +574,12 @@ export function ComplianceEventsPage() {
           onSubmit={(event) => void submitForm(event)}
         >
           <div>
-            <Label>
-              事件类型
+            <Field>
+              <FieldLabel htmlFor="complianceeventspage-field">
+                事件类型
+              </FieldLabel>
               <Input
+                id="complianceeventspage-field"
                 value={form.eventType}
                 maxLength={64}
                 onChange={(e) =>
@@ -584,10 +588,13 @@ export function ComplianceEventsPage() {
                 placeholder="如 kyc_review / content_takedown"
                 required
               />
-            </Label>
-            <Label>
-              法规条款（可选）
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="complianceeventspage-field-2">
+                法规条款（可选）
+              </FieldLabel>
               <Input
+                id="complianceeventspage-field-2"
                 value={form.regulationCode}
                 maxLength={64}
                 onChange={(e) =>
@@ -595,21 +602,27 @@ export function ComplianceEventsPage() {
                 }
                 placeholder="如 GDPR-32"
               />
-            </Label>
+            </Field>
           </div>
-          <Label>
-            关联租户 ID（可选，留空 = 平台级事件）
+          <Field>
+            <FieldLabel htmlFor="complianceeventspage-field-3">
+              关联租户 ID（可选，留空 = 平台级事件）
+            </FieldLabel>
             <Input
+              id="complianceeventspage-field-3"
               value={form.tenantId}
               onChange={(e) =>
                 setForm((f) => ({ ...f, tenantId: e.target.value }))
               }
               placeholder="tenancy.tenants 的 uuid"
             />
-          </Label>
-          <Label>
-            证据材料 URL（可选，仅 http/https）
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="complianceeventspage-field-4">
+              证据材料 URL（可选，仅 http/https）
+            </FieldLabel>
             <Input
+              id="complianceeventspage-field-4"
               type="url"
               value={form.evidenceUrl}
               onChange={(e) =>
@@ -617,16 +630,19 @@ export function ComplianceEventsPage() {
               }
               placeholder="https://…"
             />
-          </Label>
-          <Label>
-            标签（逗号分隔，可选）
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="complianceeventspage-field-5">
+              标签（逗号分隔，可选）
+            </FieldLabel>
             <Textarea
+              id="complianceeventspage-field-5"
               value={form.tags}
               onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
               rows={2}
               placeholder="如 kyc, quarterly"
             />
-          </Label>
+          </Field>
         </DialogForm>
       ) : null}
 
@@ -643,10 +659,13 @@ export function ComplianceEventsPage() {
           }}
           onSubmit={(event) => void confirmAssign(event)}
         >
-          <Label>
-            处理人
+          <Field>
+            <FieldLabel htmlFor="complianceeventspage-handler">
+              处理人
+            </FieldLabel>
             {handlerOptions.length > 0 ? (
               <NativeSelect
+                id="complianceeventspage-handler"
                 value={handlerId}
                 onChange={(e) => setHandlerId(e.target.value)}
               >
@@ -659,12 +678,13 @@ export function ComplianceEventsPage() {
               </NativeSelect>
             ) : (
               <Input
+                id="complianceeventspage-handler"
                 value={handlerId}
                 onChange={(e) => setHandlerId(e.target.value)}
                 placeholder="处理人 operator uuid"
               />
             )}
-          </Label>
+          </Field>
         </DialogForm>
       ) : null}
     </>

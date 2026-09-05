@@ -8,10 +8,11 @@ import {
   DataTable,
   DialogForm,
   EmptyState,
+  Field,
+  FieldLabel,
   FilterBar,
   Icon,
   Input,
-  Label,
   ListPageTemplate,
   MetricGrid,
   NativeSelect,
@@ -516,39 +517,45 @@ export function FeatureTogglesPage() {
           onSubmit={(event) => void submitForm(event)}
         >
           <div>
-            <Label>
-              开关键
+            <Field>
+              <FieldLabel htmlFor="featuretogglespage-field">开关键</FieldLabel>
               <Input
+                id="featuretogglespage-field"
                 value={form.flagKey}
                 onChange={(e) => setForm({ ...form, flagKey: e.target.value })}
                 placeholder="如 billing.new_invoice_flow"
                 disabled={dialogMode === "edit"}
                 required
               />
-            </Label>
-            <Label>
-              分类
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="featuretogglespage-field-2">分类</FieldLabel>
               <Input
+                id="featuretogglespage-field-2"
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value })}
                 placeholder="release"
               />
-            </Label>
+            </Field>
           </div>
           <div>
-            <Label>
-              环境
+            <Field>
+              <FieldLabel htmlFor="featuretogglespage-field-3">环境</FieldLabel>
               <Input
+                id="featuretogglespage-field-3"
                 value={form.environment}
                 onChange={(e) =>
                   setForm({ ...form, environment: e.target.value })
                 }
                 placeholder="all"
               />
-            </Label>
-            <Label>
-              灰度百分比
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="featuretogglespage-field-4">
+                灰度百分比
+              </FieldLabel>
               <Input
+                id="featuretogglespage-field-4"
                 type="number"
                 min={0}
                 max={100}
@@ -557,19 +564,23 @@ export function FeatureTogglesPage() {
                   setForm({ ...form, rolloutPercentage: e.target.value })
                 }
               />
-            </Label>
+            </Field>
           </div>
-          <Label>
-            过期时间（可选）
+          <Field>
+            <FieldLabel htmlFor="featuretogglespage-field-5">
+              过期时间（可选）
+            </FieldLabel>
             <Input
+              id="featuretogglespage-field-5"
               type="datetime-local"
               value={form.expiresAt}
               onChange={(e) => setForm({ ...form, expiresAt: e.target.value })}
             />
-          </Label>
-          <Label>
-            描述
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="featuretogglespage-field-6">描述</FieldLabel>
             <Textarea
+              id="featuretogglespage-field-6"
               value={form.description}
               onChange={(e) =>
                 setForm({ ...form, description: e.target.value })
@@ -578,7 +589,7 @@ export function FeatureTogglesPage() {
               rows={3}
               maxLength={512}
             />
-          </Label>
+          </Field>
           {Object.keys(form.tenantOverrides).length > 0 ? (
             <p className="m-0 text-body-sm text-muted-foreground">
               逐租户覆盖：{overrideSummary(form.tenantOverrides)}

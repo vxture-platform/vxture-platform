@@ -21,9 +21,10 @@ import {
   Banner,
   Button,
   Card,
+  Field,
+  FieldLabel,
   Icon,
   Input,
-  Label,
   Skeleton,
   StatusBadge,
 } from "@vxture/design-system";
@@ -208,11 +209,14 @@ function ReadyView({
             onSubmit={onSubmitContact}
           >
             {flow.step === "input" ? (
-              <Label>
-                {flow.kind === "email"
-                  ? t("email.newLabel")
-                  : t("phone.newLabel")}
+              <Field>
+                <FieldLabel htmlFor="operatoraccountcenter-email-newlabel">
+                  {flow.kind === "email"
+                    ? t("email.newLabel")
+                    : t("phone.newLabel")}
+                </FieldLabel>
                 <Input
+                  id="operatoraccountcenter-email-newlabel"
                   type={flow.kind === "email" ? "email" : "tel"}
                   value={flow.value}
                   onChange={(ev) =>
@@ -223,15 +227,18 @@ function ReadyView({
                   }
                   autoComplete={flow.kind === "email" ? "email" : "tel"}
                 />
-              </Label>
+              </Field>
             ) : (
               <>
                 <p className="text-body-sm text-muted-foreground">
                   {t("email.sentHint", { target: flow.sentTo })}
                 </p>
-                <Label>
-                  {t("email.codeLabel")}
+                <Field>
+                  <FieldLabel htmlFor="operatoraccountcenter-email-codelabel">
+                    {t("email.codeLabel")}
+                  </FieldLabel>
                   <Input
+                    id="operatoraccountcenter-email-codelabel"
                     value={flow.code}
                     onChange={(ev) =>
                       setFlow({ ...flow, code: ev.target.value })
@@ -239,7 +246,7 @@ function ReadyView({
                     inputMode="numeric"
                     autoComplete="one-time-code"
                   />
-                </Label>
+                </Field>
               </>
             )}
             {error ? (
@@ -390,15 +397,18 @@ function MfaCard({
               {secret}
             </code>
           </p>
-          <Label>
-            {t("mfa.codeLabel")}
+          <Field>
+            <FieldLabel htmlFor="operatoraccountcenter-mfa-codelabel">
+              {t("mfa.codeLabel")}
+            </FieldLabel>
             <Input
+              id="operatoraccountcenter-mfa-codelabel"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               inputMode="numeric"
               autoComplete="one-time-code"
             />
-          </Label>
+          </Field>
           {error ? <Banner tone="danger" title={error} /> : null}
           <div className="flex gap-xs">
             <Button type="submit" size="sm" disabled={busy || !code.trim()}>
@@ -516,33 +526,42 @@ function PasswordCard({ onDone }: { onDone: () => void }) {
       <h2 className="text-title-sm font-semibold">{t("password.title")}</h2>
       {open ? (
         <form className="flex flex-col gap-sm" onSubmit={onSubmit}>
-          <Label>
-            {t("password.current")}
+          <Field>
+            <FieldLabel htmlFor="operatoraccountcenter-password-current">
+              {t("password.current")}
+            </FieldLabel>
             <Input
+              id="operatoraccountcenter-password-current"
               type="password"
               value={current}
               onChange={(e) => setCurrent(e.target.value)}
               autoComplete="current-password"
             />
-          </Label>
-          <Label>
-            {t("password.new")}
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="operatoraccountcenter-password-new">
+              {t("password.new")}
+            </FieldLabel>
             <Input
+              id="operatoraccountcenter-password-new"
               type="password"
               value={next}
               onChange={(e) => setNext(e.target.value)}
               autoComplete="new-password"
             />
-          </Label>
-          <Label>
-            {t("password.confirm")}
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="operatoraccountcenter-password-confirm">
+              {t("password.confirm")}
+            </FieldLabel>
             <Input
+              id="operatoraccountcenter-password-confirm"
               type="password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               autoComplete="new-password"
             />
-          </Label>
+          </Field>
           <p className="text-body-sm text-muted-foreground">
             {t("password.hint")}
           </p>

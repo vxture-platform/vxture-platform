@@ -8,9 +8,10 @@ import {
   DataTable,
   DialogForm,
   EmptyState,
+  Field,
+  FieldLabel,
   FilterBar,
   Input,
-  Label,
   ListPageTemplate,
   MetricGrid,
   NativeSelect,
@@ -471,9 +472,12 @@ function AnnouncementFormDialog({
       onSubmit={onSubmit}
     >
       <div>
-        <Label>
-          {tShared("columns.kind")}
+        <Field>
+          <FieldLabel htmlFor="announcementspage-columns-kind">
+            {tShared("columns.kind")}
+          </FieldLabel>
           <NativeSelect
+            id="announcementspage-columns-kind"
             value={form.announcementType}
             onChange={(e) =>
               onChange({
@@ -486,10 +490,11 @@ function AnnouncementFormDialog({
             <option value="marketing">营销</option>
             <option value="security">安全</option>
           </NativeSelect>
-        </Label>
-        <Label>
-          严重度
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="announcementspage-field">严重度</FieldLabel>
           <NativeSelect
+            id="announcementspage-field"
             value={form.severity}
             onChange={(e) => onChange({ severity: e.target.value as Severity })}
           >
@@ -497,32 +502,35 @@ function AnnouncementFormDialog({
             <option value="warning">警告</option>
             <option value="critical">严重</option>
           </NativeSelect>
-        </Label>
+        </Field>
       </div>
-      <Label>
-        标题
+      <Field>
+        <FieldLabel htmlFor="announcementspage-field-2">标题</FieldLabel>
         <Input
+          id="announcementspage-field-2"
           value={form.title}
           maxLength={256}
           onChange={(e) => onChange({ title: e.target.value })}
           placeholder="公告标题"
           required
         />
-      </Label>
-      <Label>
-        正文
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="announcementspage-field-3">正文</FieldLabel>
         <Textarea
+          id="announcementspage-field-3"
           value={form.content}
           onChange={(e) => onChange({ content: e.target.value })}
           placeholder="公告正文内容"
           rows={5}
           required
         />
-      </Label>
+      </Field>
       <div>
-        <Label>
-          投放对象
+        <Field>
+          <FieldLabel htmlFor="announcementspage-field-4">投放对象</FieldLabel>
           <NativeSelect
+            id="announcementspage-field-4"
             value={form.targeting}
             onChange={(e) =>
               onChange({ targeting: e.target.value as Targeting })
@@ -532,25 +540,29 @@ function AnnouncementFormDialog({
             <option value="personal">仅个人用户</option>
             <option value="organization">仅组织用户</option>
           </NativeSelect>
-        </Label>
-        <Label>
-          发布时间
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="announcementspage-field-5">发布时间</FieldLabel>
           <Input
+            id="announcementspage-field-5"
             type="datetime-local"
             value={form.publishAt}
             onChange={(e) => onChange({ publishAt: e.target.value })}
             required
           />
-        </Label>
+        </Field>
       </div>
-      <Label>
-        到期时间（可选）
+      <Field>
+        <FieldLabel htmlFor="announcementspage-field-6">
+          到期时间（可选）
+        </FieldLabel>
         <Input
+          id="announcementspage-field-6"
           type="datetime-local"
           value={form.expiresAt}
           onChange={(e) => onChange({ expiresAt: e.target.value })}
         />
-      </Label>
+      </Field>
     </DialogForm>
   );
 }
