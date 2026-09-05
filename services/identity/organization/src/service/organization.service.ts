@@ -57,6 +57,15 @@ export class OrganizationService {
     return this.repo.convertPersonalToOrganization(tenantId, ownerUserId, name);
   }
 
+  /** 注销组织租户(走查 2026-09-05);不可回退。 */
+  closeTenant(tenantId: string, ownerUserId: string) {
+    return this.repo.closeTenant(tenantId, ownerUserId);
+  }
+
+  countOtherActiveMembers(tenantId: string, ownerUserId: string) {
+    return this.repo.countOtherActiveMembers(tenantId, ownerUserId);
+  }
+
   /** 改简称(display_name),不碰认证。 */
   setTenantDisplayName(tenantId: string, displayName: string) {
     return this.repo.setTenantDisplayName(tenantId, displayName);

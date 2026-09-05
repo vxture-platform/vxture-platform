@@ -44,7 +44,8 @@ CREATE TABLE tenancy.tenant_profiles (
     scale                varchar(32),
     website              varchar(255),
     country_code         varchar(8),
-    address              varchar(255),
+    address              varchar(255),                                  -- 地址一
+    address2             varchar(255),                                  -- 地址二(走查 2026-09-05,两段式)
     postal_code          varchar(16),
     is_billing_recipient boolean      NOT NULL DEFAULT false,
     timezone             varchar(64),
@@ -66,7 +67,7 @@ CREATE TABLE tenancy.tenant_contacts (
     email         varchar(128) NOT NULL,
     phone         varchar(32),
     user_id       uuid,                               -- 可选：联系人是平台用户时关联（FK 见 90）
-    salutation    varchar(8)   CHECK (salutation IN ('mr', 'ms')),  -- 称呼:先生 / 女士 / NULL 未设定(走查 2026-09-05)
+    gender        varchar(8)   CHECK (gender IN ('male', 'female')),  -- 性别,与 account.user_profiles.gender 同构;关联成员时由成员派生(走查 2026-09-05)
     created_at    timestamptz  NOT NULL DEFAULT now(),
     updated_at    timestamptz  NOT NULL DEFAULT now(),
     UNIQUE (tenant_id, contact_type, email)

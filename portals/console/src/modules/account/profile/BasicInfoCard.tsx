@@ -20,7 +20,6 @@ import {
   Icon,
   Input,
   Section,
-  SegmentedControl,
   StatusBadge,
   Tooltip,
   TooltipContent,
@@ -29,6 +28,7 @@ import {
 import type { LoginHistoryEntry } from "@/entities/console";
 import { LoadFailedEmpty } from "@/components/load/LoadFailed";
 import { formatProfileDate, parseBrowser, parseOS } from "./format";
+import { GenderRadio, genderLabel } from "@/components/gender/GenderRadio";
 import { RowExpand } from "./RowExpand";
 import { CardRows, DETAIL_LIST_CLASS } from "./CardRows";
 
@@ -50,11 +50,8 @@ export function BasicInfoCard({
   onStartEditName,
   onCancelEditName,
   gender,
-  genderEditing,
   genderDraft,
   onGenderDraftChange,
-  onStartEditGender,
-  onCancelEditGender,
   username,
   loginEnabled,
   usernameChangeable,
@@ -85,11 +82,8 @@ export function BasicInfoCard({
   readonly onCancelEditName: () => void;
   /** 称呼(性别):空串 = 未设定。 */
   readonly gender: "" | "male" | "female";
-  readonly genderEditing: boolean;
   readonly genderDraft: "" | "male" | "female";
   readonly onGenderDraftChange: (next: "" | "male" | "female") => void;
-  readonly onStartEditGender: () => void;
-  readonly onCancelEditGender: () => void;
   readonly username: string;
   readonly loginEnabled: boolean;
   readonly usernameChangeable: boolean;
@@ -116,6 +110,11 @@ export function BasicInfoCard({
   const loadingText = t("common.loading");
   // DS EditableRow(10.1.0):展示态文字、编辑态控件;文案由门户传
   const rowLabels = { edit: t("actions.modify"), cancel: t("actions.cancel") };
+  const genderLabels = {
+    male: t("gender.male"),
+    female: t("gender.female"),
+    unset: t("gender.unset"),
+  };
 
   const [historyShowAll, setHistoryShowAll] = useState(false);
   const visibleHistory = historyShowAll
@@ -163,53 +162,42 @@ export function BasicInfoCard({
     >
       <CardRows>
         <DetailList className={DETAIL_LIST_CLASS}>
+          {/* 显示名 + 性别同一行(走查 2026-09-05):一个「修改」一起解锁 */}
           <EditableRow
             label={t("fields.displayName")}
-            value={loading ? loadingText : displayName}
+            value={
+              loading ? (
+                loadingText
+              ) : (
+                <span className="flex flex-wrap items-center gap-md">
+                  <span>{displayName}</span>
+                  <span className="text-muted-foreground">
+                    {genderLabel(gender, genderLabels)}
+                  </span>
+                </span>
+              )
+            }
             editing={nameEditing}
             onEdit={onStartEditName}
             onCancel={onCancelEditName}
             labels={rowLabels}
             disabled={loading}
           >
-            <Input
-              className="w-full max-w-panel-sm"
-              value={nameDraft}
-              onChange={(event) => onNameDraftChange(event.target.value)}
-              autoComplete="name"
-              autoFocus
-            />
-          </EditableRow>
-
-          {/* 称呼(性别):先生 / 女士 / 未设定,同显示名的「修改 → 页底保存」模式(走查 2026-09-05) */}
-          <EditableRow
-            label={t("fields.gender")}
-            value={
-              loading
-                ? loadingText
-                : gender === "male"
-                  ? t("gender.male")
-                  : gender === "female"
-                    ? t("gender.female")
-                    : t("gender.unset")
-            }
-            editing={genderEditing}
-            onEdit={onStartEditGender}
-            onCancel={onCancelEditGender}
-            labels={rowLabels}
-            disabled={loading}
-          >
-            <SegmentedControl<"" | "male" | "female">
-              size="md"
-              ariaLabel={t("fields.gender")}
-              value={genderDraft}
-              onChange={onGenderDraftChange}
-              items={[
-                { value: "male", label: t("gender.male") },
-                { value: "female", label: t("gender.female") },
-                { value: "", label: t("gender.unset") },
-              ]}
-            />
+            <span className="flex w-full flex-wrap items-center gap-md">
+              <Input
+                className="w-full max-w-panel-sm"
+                value={nameDraft}
+                onChange={(event) => onNameDraftChange(event.target.value)}
+                autoComplete="name"
+                autoFocus
+              />
+              <GenderRadio
+                value={genderDraft}
+                onChange={onGenderDraftChange}
+                labels={genderLabels}
+                ariaLabel={t("fields.gender")}
+              />
+            </span>
           </EditableRow>
           <DetailRow
             label={t("fields.username")}

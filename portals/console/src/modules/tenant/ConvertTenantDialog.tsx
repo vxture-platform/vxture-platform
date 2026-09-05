@@ -6,15 +6,15 @@
  * @layer Application
  * @category Module
  *
- * ① 确认框:组织名称 + 知悉四项 + 输入当前租户名称确认
- * ② 转换中:整页遮罩、五步、**整段不少于 5 秒**、每步不少于 1 秒
+ * ① 确认框(重大操作,lg 档):警示横幅 → 组织名称 → 升级后的变化 → 转换过程 →
+ *    知悉 + 输入当前租户名确认。所有提示与过程都在这一屏里体现(owner 走查:此前
+ *    弹窗太小、标题换行、信息挤在一起——重大操作要放大、警示明确、信息松开)。
+ * ② 转换中:整页遮罩、五步回放、**整段不少于 5 秒**、每步不少于 1 秒
  * ③ 完成:新形态说明 + 两个去处
  *
- * 关于进度的诚实性(第一版设计的自我修正):后端是**一个事务**,几百毫秒就完。
- * 如果一边跑事务一边按时间把步骤逐个打勾,事务失败时前几步的勾就是假的——用户
- * 会看到「编号已换发」然后被告知失败,不知道到底改没改。所以这里是**先跑完事务、
- * 成功后再回放**:每步展示的是已经发生的事实,失败则根本不进第二屏,直接在
- * 第一屏给错误。仪式感照旧(≥5 秒、逐步亮起),但它不会撒谎。
+ * 关于进度的诚实性:后端是**一个事务**,几百毫秒就完。一边跑事务一边按时间打勾,
+ * 事务失败时前几步的勾就是假的。所以这里是**先跑完事务、成功后再回放**:每步展示的
+ * 是已经发生的事实,失败则根本不进第二屏,直接在第一屏给错误。
  */
 
 import { useEffect, useState } from "react";
@@ -30,18 +30,19 @@ import {
   Progress,
   StatusBadge,
 } from "@vxture/design-system";
+import type { IconName } from "@vxture/design-system";
 import {
   ConsoleBffError,
   convertTenantToOrganization,
 } from "@/api/console-bff";
 import { PrincipalNo } from "@/components/principal-no";
 
-const ACK_ITEMS = [
-  "verification",
-  "members",
-  "paymentTtl",
-  "irreversible",
-] as const;
+const ACK_ITEMS: readonly { key: string; icon: IconName }[] = [
+  { key: "verification", icon: "shield-check" },
+  { key: "members", icon: "users" },
+  { key: "paymentTtl", icon: "clock-counter-clockwise" },
+  { key: "irreversible", icon: "warning" },
+];
 
 /** 回放的五步。每步至少 1 秒,整段 ≥ 5 秒。 */
 const STEPS = ["check", "type", "verification", "personal", "session"] as const;
@@ -129,23 +130,23 @@ export function ConvertTenantDialog({
   if (result) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-lg">
-        <div className="flex w-full max-w-panel-md flex-col gap-lg rounded-xl bg-card p-xl shadow-raised ring-1 ring-foreground/10">
-          <div className="flex flex-col gap-2xs">
-            <h2 className="text-title-md text-foreground">
+        <div className="flex w-full max-w-panel-lg flex-col gap-xl rounded-xl bg-card p-2xl shadow-dialog ring-1 ring-foreground/10">
+          <div className="flex flex-col gap-xs">
+            <h2 className="text-title-lg text-foreground">
               {finished ? t("done.title", { name: result.name }) : t("running")}
             </h2>
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-md text-muted-foreground">
               {finished ? t("done.description") : t("runningHint")}
             </p>
           </div>
 
           <Progress value={(step / STEPS.length) * 100} />
 
-          <ul className="flex flex-col gap-sm">
+          <ul className="flex flex-col gap-md">
             {STEPS.map((s, index) => (
               <li
                 key={s}
-                className="flex flex-wrap items-center gap-md text-body-sm"
+                className="flex flex-wrap items-center gap-md text-body-md"
               >
                 <StatusBadge
                   tone={index < step ? "success" : "neutral"}
@@ -198,12 +199,12 @@ export function ConvertTenantDialog({
     );
   }
 
-  // ① 确认框
+  // ① 确认框(重大操作:lg 档、警示在最上面、四段信息各自成块、标签在上不换行)
   return (
     <DialogForm
       open
       danger
-      size="md"
+      size="lg"
       title={t("title")}
       description={t("description")}
       submitLabel={t("start")}
@@ -215,27 +216,66 @@ export function ConvertTenantDialog({
       }}
       onSubmit={(event) => void submit(event)}
     >
-      <div className="flex flex-col gap-lg">
+      <div className="flex flex-col gap-xl">
+        <Banner tone="danger" title={t("warning")} />
         {error ? <Banner tone="danger" title={error} /> : null}
-        <Label>
-          {t("nameLabel")}
+
+        <div className="flex flex-col gap-xs">
+          <Label htmlFor="convert-org-name" className="text-label-md">
+            {t("nameLabel")}
+          </Label>
           <Input
+            id="convert-org-name"
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder={t("namePlaceholder")}
             required
           />
-        </Label>
-        <div className="flex flex-col gap-xs">
+        </div>
+
+        <div className="flex flex-col gap-sm">
           <p className="text-label-md text-foreground">{t("ackTitle")}</p>
-          <ul className="flex flex-col gap-2xs">
+          <ul className="flex flex-col gap-sm">
             {ACK_ITEMS.map((item) => (
-              <li key={item} className="text-body-sm text-muted-foreground">
-                · {t(`ack.${item}`)}
+              <li
+                key={item.key}
+                className="flex items-start gap-sm text-body-md text-foreground"
+              >
+                <Icon
+                  name={item.icon}
+                  size="sm"
+                  fallback="placeholder"
+                  className="mt-2xs shrink-0 text-destructive-text"
+                />
+                <span>{t(`ack.${item.key}`)}</span>
               </li>
             ))}
           </ul>
-          <Label className="flex items-start gap-sm text-body-sm">
+        </div>
+
+        <div className="flex flex-col gap-sm">
+          <p className="text-label-md text-foreground">{t("processTitle")}</p>
+          <ol className="flex flex-col gap-xs">
+            {STEPS.map((s, index) => (
+              <li
+                key={s}
+                className="flex items-center gap-md text-body-md text-muted-foreground"
+              >
+                <StatusBadge tone="neutral" icon={false}>
+                  {index + 1}
+                </StatusBadge>
+                <span>{t(`steps.${s}`)}</span>
+              </li>
+            ))}
+          </ol>
+          <p className="text-body-sm text-muted-foreground">
+            {t("processHint")}
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-sm">
+          <p className="text-label-md text-foreground">{t("confirmTitle")}</p>
+          <Label className="flex items-start gap-sm text-body-md">
             <Checkbox
               checked={acknowledged}
               onCheckedChange={(value) => setAcknowledged(value === true)}
@@ -243,14 +283,17 @@ export function ConvertTenantDialog({
             />
             <span>{t("ackConfirm")}</span>
           </Label>
+          <div className="flex flex-col gap-xs">
+            <Label htmlFor="convert-confirm-name" className="text-label-md">
+              {t("confirmLabel", { name: currentName })}
+            </Label>
+            <Input
+              id="convert-confirm-name"
+              value={confirmName}
+              onChange={(event) => setConfirmName(event.target.value)}
+            />
+          </div>
         </div>
-        <Label>
-          {t("confirmLabel", { name: currentName })}
-          <Input
-            value={confirmName}
-            onChange={(event) => setConfirmName(event.target.value)}
-          />
-        </Label>
       </div>
     </DialogForm>
   );

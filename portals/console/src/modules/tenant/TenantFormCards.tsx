@@ -34,7 +34,6 @@ import {
   Input,
   Label,
   NativeSelect,
-  SegmentedControl,
   StatusBadge,
   Switch,
 } from "@vxture/design-system";
@@ -47,6 +46,7 @@ import {
   TIMEZONE_OPTIONS,
   formatTimezone,
 } from "@/modules/account/profile/format";
+import { GenderRadio, genderLabel } from "@/components/gender/GenderRadio";
 import { TenantSection } from "./TenantIdentityCard";
 
 /** 与账号信息页个人偏好同一档宽度(≈300px,owner 2026-09-05);四张卡的内容框都用它。 */
@@ -64,11 +64,12 @@ export interface TenantDraft {
   contactUserId: string;
   contactName: string;
   /** 称呼:mr / ms / 空串未设定。 */
-  contactSalutation: "" | "mr" | "ms";
+  contactGender: "" | "male" | "female";
   contactRole: string;
   contactEmail: string;
   contactPhone: string;
   address: string;
+  address2: string;
   postalCode: string;
   isBillingRecipient: boolean;
   timezone: string;
@@ -89,25 +90,7 @@ export interface ContactOption {
 const SCALE_OPTIONS = ["1-10", "11-50", "51-200", "201-500", "500+"];
 const CURRENCY_OPTIONS = ["CNY", "USD"];
 
-/** 内容框 + 后置提示:提示放在框后面而不是下面(走查 2026-09-05)。 */
-function ControlWithHint({
-  children,
-  hint,
-}: {
-  readonly children: ReactNode;
-  readonly hint?: ReactNode;
-}) {
-  return (
-    <span className="flex w-full flex-wrap items-center gap-md">
-      {children}
-      {hint ? (
-        <span className="text-body-sm text-muted-foreground">{hint}</span>
-      ) : null}
-    </span>
-  );
-}
-
-// ── 基本信息 ────────────────────────────────────────────────────────────────
+// ── 基本信息// ── 基本信息 ────────────────────────────────────────────────────────────────
 
 type BasicField = "displayName" | "name" | "industry" | "scale" | "website";
 
@@ -266,46 +249,16 @@ export function TenantBasicCard({
   );
 }
 
-// ── 联系人 ──────────────────────────────────────────────────────────────────
+// ── 主管理员 ────────────────────────────────────────────────────────────────
 
-function ContactRow({
-  label,
-  value,
-  onChange,
-  disabled,
-  labels,
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly onChange: (next: string) => void;
-  /** 锁定(关联成员随资料走)或只读:显示为文字,不画禁用框。 */
-  readonly disabled: boolean;
-  readonly labels: { edit: string; cancel: string };
-}) {
-  if (disabled) {
-    return (
-      <EditableRow
-        label={label}
-        value={value}
-        editing={false}
-        labels={labels}
-        readOnly
-      >
-        <span />
-      </EditableRow>
-    );
-  }
-  return (
-    <DetailRow label={label}>
-      <Input
-        className={CONTROL_CLASS}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </DetailRow>
-  );
-}
-
+/**
+ * 主管理员(走查 2026-09-05 第四轮):与账号基本信息同构。
+ * - 标题后紧跟「已关联 xx」徽章与「关联成员」按钮;右侧是卡级「编辑 / 取消」——
+ *   展示态全是文字,点编辑才变控件(EditableRow),编辑期间关联信息(姓名 / 性别 /
+ *   邮箱 / 电话随成员账号)仍是文字、不在这里改;地址两段式;填写的主管理员默认
+ *   就是账单接收人。
+ * - 个人租户:固定关联所有者,「关联成员」禁用。
+ */
 export function TenantContactCard({
   draft,
   options,
@@ -318,23 +271,31 @@ export function TenantContactCard({
   readonly options: readonly ContactOption[];
   readonly onChange: (patch: TenantDraftPatch) => void;
   readonly readOnly: boolean;
-  /** 个人租户:联系人固定是所有者,「关联成员」禁用。 */
+  /** 个人租户:主管理员固定是所有者,「关联成员」禁用。 */
   readonly isPersonal: boolean;
   readonly loading: boolean;
 }) {
   const t = useTranslations("tenantInfoPage");
   const rowLabels = { edit: t("common.modify"), cancel: t("common.cancel") };
+  const genderLabels = {
+    male: t("gender.male"),
+    female: t("gender.female"),
+    unset: t("gender.unset"),
+  };
+  const [editing, setEditing] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pick, setPick] = useState("");
 
   const linked = draft.contactUserId
     ? options.find((o) => o.id === draft.contactUserId)
     : undefined;
-  // 关联了成员:姓名 / 邮箱 / 电话取自成员资料(锁定);未关联才手填。
+  // 关联了成员:姓名 / 性别 / 邮箱 / 电话取自成员账号(锁定);未关联才手填。
   const locked = Boolean(draft.contactUserId);
   const name = linked ? linked.name : draft.contactName;
   const email = linked ? (linked.email ?? "") : draft.contactEmail;
   const phone = linked ? (linked.phone ?? "") : draft.contactPhone;
+  const editable = editing && !readOnly;
+  const editableUnlinked = editable && !locked;
 
   function link(id: string) {
     const option = options.find((o) => o.id === id);
@@ -347,14 +308,28 @@ export function TenantContactCard({
     });
   }
 
-  const action = (
-    <span className="flex flex-wrap items-center gap-sm">
+  const titleExtra = (
+    <>
       {locked ? (
         <StatusBadge tone="neutral" icon="user">
           {t("contact.linked", { name: name || draft.contactUserId })}
         </StatusBadge>
       ) : null}
-      {locked && !isPersonal && !readOnly ? (
+      {readOnly ? null : (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isPersonal || loading}
+          onClick={() => {
+            setPick(draft.contactUserId);
+            setPickerOpen(true);
+          }}
+        >
+          <Icon name="users" size="xs" fallback="placeholder" />
+          <span>{t("contact.link")}</span>
+        </Button>
+      )}
+      {locked && !isPersonal && editable ? (
         <Button
           variant="ghost"
           size="sm"
@@ -363,20 +338,55 @@ export function TenantContactCard({
           {t("contact.unlink")}
         </Button>
       ) : null}
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={readOnly || isPersonal || loading}
-        onClick={() => {
-          setPick(draft.contactUserId);
-          setPickerOpen(true);
-        }}
-      >
-        <Icon name="users" size="xs" fallback="placeholder" />
-        <span>{t("contact.link")}</span>
-      </Button>
-    </span>
+    </>
   );
+
+  const action = readOnly ? null : editing ? (
+    <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
+      {t("common.cancel")}
+    </Button>
+  ) : (
+    <Button
+      variant="ghost"
+      size="sm"
+      disabled={loading}
+      onClick={() => setEditing(true)}
+    >
+      <Icon name="edit" size="xs" fallback="placeholder" />
+      <span>{t("common.edit")}</span>
+    </Button>
+  );
+
+  /** 卡级编辑:各行不出自己的修改 / 取消(action=null),只跟随卡的编辑态。 */
+  const row = (
+    label: string,
+    value: string,
+    editingRow: boolean,
+    control: ReactNode,
+  ) => (
+    <EditableRow
+      label={label}
+      value={value}
+      editing={editingRow}
+      labels={rowLabels}
+      action={null}
+    >
+      {control}
+    </EditableRow>
+  );
+  const text = (field: "contactRole" | "address" | "address2" | "postalCode") =>
+    row(
+      t(`fields.${field}`),
+      draft[field],
+      editable,
+      <Input
+        className={CONTROL_CLASS}
+        value={draft[field]}
+        onChange={(event) =>
+          onChange({ [field]: event.target.value } as TenantDraftPatch)
+        }
+      />,
+    );
 
   return (
     <>
@@ -384,102 +394,92 @@ export function TenantContactCard({
         icon="user"
         titleKey="cards.contact.title"
         descriptionKey="cards.contact.description"
+        titleExtra={titleExtra}
         action={action}
       >
         <CardRows>
-          {/* 仍是「标题 内容」横排、与其它卡同一名列宽与内容框宽;只是一行两个 */}
+          {/* 「标题 内容」横排、与其它卡同一名列宽与内容框宽;一行两个 */}
           <div className="grid gap-x-lg xl:grid-cols-2">
             <DetailList className={DETAIL_LIST_CLASS}>
-              {/* 姓名 + 称呼同占一行(走查 2026-09-05);关联成员时称呼随成员的性别派生,锁定 */}
-              <DetailRow label={t("fields.contactName")}>
-                <span className="flex w-full flex-wrap items-center gap-sm">
-                  {readOnly || locked ? (
-                    <span className="inline-flex h-control-md items-center text-body-md text-foreground">
-                      {name || "—"}
+              {/* 姓名 + 性别同一行(走查):关联成员时随成员账号,只读 */}
+              <EditableRow
+                label={t("fields.contactName")}
+                value={
+                  <span className="flex flex-wrap items-center gap-md">
+                    <span>{name || "—"}</span>
+                    <span className="text-muted-foreground">
+                      {genderLabel(draft.contactGender, genderLabels)}
                     </span>
-                  ) : (
-                    <Input
-                      className={CONTROL_CLASS}
-                      value={name}
-                      onChange={(event) =>
-                        onChange({ contactName: event.target.value })
-                      }
-                    />
-                  )}
-                  {readOnly || locked ? (
-                    <span className="inline-flex h-control-md items-center text-body-md text-foreground">
-                      {draft.contactSalutation === "mr"
-                        ? t("salutation.mr")
-                        : draft.contactSalutation === "ms"
-                          ? t("salutation.ms")
-                          : t("salutation.unset")}
-                    </span>
-                  ) : (
-                    <SegmentedControl<TenantDraft["contactSalutation"]>
-                      size="md"
-                      ariaLabel={t("fields.contactSalutation")}
-                      value={draft.contactSalutation}
-                      onChange={(contactSalutation) =>
-                        onChange({ contactSalutation })
-                      }
-                      items={[
-                        { value: "mr", label: t("salutation.mr") },
-                        { value: "ms", label: t("salutation.ms") },
-                        { value: "", label: t("salutation.unset") },
-                      ]}
-                    />
-                  )}
+                  </span>
+                }
+                editing={editableUnlinked}
+                labels={rowLabels}
+                action={null}
+              >
+                <span className="flex w-full flex-wrap items-center gap-md">
+                  <Input
+                    className={CONTROL_CLASS}
+                    value={name}
+                    onChange={(event) =>
+                      onChange({ contactName: event.target.value })
+                    }
+                  />
+                  <GenderRadio
+                    value={draft.contactGender}
+                    onChange={(contactGender) => onChange({ contactGender })}
+                    labels={genderLabels}
+                    ariaLabel={t("fields.contactGender")}
+                  />
                 </span>
-              </DetailRow>
-              <ContactRow
-                label={t("fields.contactEmail")}
-                value={email}
-                disabled={readOnly || locked}
-                onChange={(contactEmail) => onChange({ contactEmail })}
-                labels={rowLabels}
-              />
-              <ContactRow
-                label={t("fields.address")}
-                value={draft.address}
-                disabled={readOnly}
-                onChange={(address) => onChange({ address })}
-                labels={rowLabels}
-              />
+              </EditableRow>
+              {row(
+                t("fields.contactEmail"),
+                email,
+                editableUnlinked,
+                <Input
+                  className={CONTROL_CLASS}
+                  value={email}
+                  onChange={(event) =>
+                    onChange({ contactEmail: event.target.value })
+                  }
+                />,
+              )}
+              {text("address")}
+              {text("address2")}
             </DetailList>
             <DetailList className={DETAIL_LIST_CLASS}>
-              <ContactRow
-                label={t("fields.contactRole")}
-                value={draft.contactRole}
-                disabled={readOnly}
-                onChange={(contactRole) => onChange({ contactRole })}
+              {text("contactRole")}
+              {row(
+                t("fields.contactPhone"),
+                phone,
+                editableUnlinked,
+                <Input
+                  className={CONTROL_CLASS}
+                  value={phone}
+                  onChange={(event) =>
+                    onChange({ contactPhone: event.target.value })
+                  }
+                />,
+              )}
+              {text("postalCode")}
+              <EditableRow
+                label={t("fields.isBillingRecipient")}
+                value={
+                  draft.isBillingRecipient ? t("common.yes") : t("common.no")
+                }
+                editing={editable}
                 labels={rowLabels}
-              />
-              <ContactRow
-                label={t("fields.contactPhone")}
-                value={phone}
-                disabled={readOnly || locked}
-                onChange={(contactPhone) => onChange({ contactPhone })}
-                labels={rowLabels}
-              />
-              <ContactRow
-                label={t("fields.postalCode")}
-                value={draft.postalCode}
-                disabled={readOnly}
-                onChange={(postalCode) => onChange({ postalCode })}
-                labels={rowLabels}
-              />
-              <DetailRow label={t("fields.isBillingRecipient")}>
-                <ControlWithHint hint={t("fields.isBillingRecipientHint")}>
-                  <Switch
-                    checked={draft.isBillingRecipient}
-                    disabled={readOnly}
-                    onCheckedChange={(isBillingRecipient) =>
-                      onChange({ isBillingRecipient })
-                    }
-                    aria-label={t("fields.isBillingRecipient")}
-                  />
-                </ControlWithHint>
-              </DetailRow>
+                action={null}
+                hint={t("fields.isBillingRecipientHint")}
+              >
+                <Switch
+                  checked={draft.isBillingRecipient}
+                  onCheckedChange={(isBillingRecipient) =>
+                    onChange({ isBillingRecipient })
+                  }
+                  aria-label={t("fields.isBillingRecipient")}
+                />
+              </EditableRow>
             </DetailList>
           </div>
         </CardRows>

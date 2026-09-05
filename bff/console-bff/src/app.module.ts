@@ -20,6 +20,7 @@ import { CapabilityGuard } from "./auth/capability";
 import { S2sExchangeService } from "./auth/s2s-exchange.service";
 import { SessionAggregator } from "./aggregators/session.aggregator";
 import { AccountDeletionAggregator } from "./aggregators/account-deletion.aggregator";
+import { TenantClosureAggregator } from "./aggregators/tenant-closure.aggregator";
 import { PhoneChangeService } from "./services/phone-change.service";
 import { EmailChangeService } from "./services/email-change.service";
 import { customerNotificationsProvider } from "./services/customer-notifications.wiring";
@@ -81,6 +82,7 @@ import { VerificationRouter } from "./routers/verification.router";
     ConsoleAuthService,
     SessionAggregator,
     AccountDeletionAggregator,
+    TenantClosureAggregator,
     PhoneChangeService,
     EmailChangeService,
     // P2-g：客户通知（站内 + 邮件）挂到 OrderService / SubscriptionService

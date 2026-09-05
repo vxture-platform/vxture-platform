@@ -78,10 +78,11 @@ export interface ConsoleOrganizationProfile {
   contactPhone: string | null;
   /** 联系人关联的成员;关联时姓名 / 邮箱 / 电话取自成员资料。 */
   contactUserId: string | null;
-  /** 称呼:mr 先生 / ms 女士 / null 未设定。 */
-  contactSalutation: "mr" | "ms" | null;
+  /** 性别(与账号同构);关联成员时由成员派生。 */
+  contactGender: "male" | "female" | null;
   countryCode: string | null;
   address: string | null;
+  address2: string | null;
   postalCode: string | null;
   isBillingRecipient: boolean;
   // Localization (§3.6)
@@ -248,4 +249,37 @@ export interface TenancyUsageResponse {
     errors: number;
   }>;
   source: "atlas.reqlog";
+}
+
+// ── 注销租户(走查 2026-09-05;照账号删除的三档:阻断 / 确认 / 连带动作)──
+export type TenantClosureBlockerCode =
+  | "personal_tenant"
+  | "not_owner"
+  | "active_members"
+  | "unpaid_bills"
+  | "paid_balance"
+  | "refund_in_progress"
+  | "receipt_in_progress"
+  | "pending_order_with_payment";
+export type TenantClosureConfirmCode = "active_subscription" | "gifted_balance";
+export type TenantClosureAutoCode =
+  | "cancel_pending_orders"
+  | "revoke_invitations"
+  | "switch_to_personal";
+
+export interface TenantClosureItem<TCode extends string = string> {
+  code: TCode;
+  count?: number;
+  amount?: string;
+  currency?: string;
+}
+
+export interface TenantClosureState {
+  tenantId: string;
+  tenantName: string;
+  status: string;
+  canClose: boolean;
+  blockers: TenantClosureItem<TenantClosureBlockerCode>[];
+  confirmations: TenantClosureItem<TenantClosureConfirmCode>[];
+  autoActions: TenantClosureItem<TenantClosureAutoCode>[];
 }

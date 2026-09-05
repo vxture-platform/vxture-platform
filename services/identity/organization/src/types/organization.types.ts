@@ -98,10 +98,12 @@ export interface OrganizationProfileView {
   contactPhone: string | null;
   /** 联系人关联的成员(tenant_contacts.user_id);关联时姓名 / 邮箱 / 电话取自成员资料。 */
   contactUserId: string | null;
-  /** 称呼:mr 先生 / ms 女士 / null 未设定。 */
-  contactSalutation: "mr" | "ms" | null;
+  /** 性别(与 account.user_profiles.gender 同构);关联成员时由成员派生。 */
+  contactGender: "male" | "female" | null;
   countryCode: string | null;
   address: string | null;
+  /** 地址二(两段式,走查 2026-09-05)。 */
+  address2: string | null;
   postalCode: string | null;
   isBillingRecipient: boolean;
   timezone: string | null;
@@ -122,6 +124,18 @@ export type ConvertPersonalResult =
     }
   | { ok: false; reason: "tenant_not_found" | "not_owner" | "not_personal" };
 
+/** 注销组织租户的结果(走查 2026-09-05)。 */
+export type CloseTenantResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason:
+        | "tenant_not_found"
+        | "not_owner"
+        | "personal_tenant"
+        | "active_members";
+    };
+
 export interface OrgProfileUpdateInput {
   description?: string | null;
   industry?: string | null;
@@ -132,9 +146,10 @@ export interface OrgProfileUpdateInput {
   contactEmail?: string | null;
   contactPhone?: string | null;
   contactUserId?: string | null;
-  contactSalutation?: "mr" | "ms" | null;
+  contactGender?: "male" | "female" | null;
   countryCode?: string | null;
   address?: string | null;
+  address2?: string | null;
   postalCode?: string | null;
   isBillingRecipient?: boolean;
   timezone?: string | null;
@@ -303,6 +318,19 @@ export interface OrganizationReadRepository {
     ownerUserId: string,
     name: string,
   ): Promise<ConvertPersonalResult>;
+  /**
+   * 注销组织租户(走查 2026-09-05):所有者、组织类型、除所有者外无活跃成员;
+   * 一个事务里软删(status=deleted, deleted_at)并撤销待接受的邀请。
+   */
+  closeTenant(
+    tenantId: string,
+    ownerUserId: string,
+  ): Promise<CloseTenantResult>;
+  /** 除所有者外的活跃成员数(注销资格用)。 */
+  countOtherActiveMembers(
+    tenantId: string,
+    ownerUserId: string,
+  ): Promise<number>;
   /** Provision a team org + default workspace + owner membership at both levels. */
   createTeamOrg(ownerUserId: string, name: string): Promise<ProvisionedOrg>;
   getOrgById(orgId: string): Promise<OrgView | null>;

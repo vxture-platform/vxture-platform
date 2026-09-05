@@ -724,7 +724,7 @@
       "lastLoginOs": "操作系统",
       "role": "角色",
       "newEmail": "新邮箱",
-      "gender": "称呼"
+      "gender": "性别"
     },
     "language": {
       "zhCN": "简体中文",
@@ -1118,8 +1118,8 @@
       }
     },
     "gender": {
-      "male": "先生",
-      "female": "女士",
+      "male": "男",
+      "female": "女",
       "unset": "未设定"
     }
   },
@@ -2878,7 +2878,10 @@
       "loading": "加载中…",
       "unset": "未设置",
       "cancel": "取消",
-      "modify": "修改"
+      "modify": "修改",
+      "edit": "编辑",
+      "yes": "是",
+      "no": "否"
     },
     "logo": {
       "upload": "上传租户标识",
@@ -2904,7 +2907,9 @@
     "identity": {
       "createdOn": "{date} 创建",
       "owner": "所有者 {name}",
-      "members": "成员 {count} · 成员管理"
+      "members": "成员 {count} · 成员管理",
+      "transfer": "转让",
+      "convert": "转为组织租户"
     },
     "workspaces": {
       "toggle": "工作空间 · {count} 个",
@@ -2919,8 +2924,8 @@
         "description": "租户对外呈现的名称与介绍。"
       },
       "contact": {
-        "title": "联系人",
-        "description": "默认关联所有者,也是账单接收人;可换成其他成员,或解除关联手动填写。"
+        "title": "主管理员",
+        "description": "默认关联所有者,也是账单接收人;可换成其他成员,或解除关联手动填写。关联信息随成员账号,不在这里改。"
       },
       "region": {
         "title": "默认区域",
@@ -2943,7 +2948,7 @@
       "contactRole": "职务",
       "contactEmail": "邮箱",
       "contactPhone": "电话",
-      "address": "地址",
+      "address": "地址一",
       "postalCode": "邮编",
       "isBillingRecipient": "账单接收人",
       "isBillingRecipientHint": "账单与发票通知发给这位联系人。",
@@ -2955,7 +2960,8 @@
       "nameHint": "认证名称,企业认证以它为准。",
       "reverify": "重新认证",
       "nameVerifiedHint": "已认证的名称;改名请走重新认证。",
-      "contactSalutation": "称呼"
+      "contactGender": "性别",
+      "address2": "地址二"
     },
     "scale": {
       "people": "{range} 人"
@@ -2969,9 +2975,10 @@
       "closeConditions": {
         "noBills": "无未清账单",
         "noBalance": "无付费余额",
-        "noInProgress": "无进行中的退款或开票",
-        "noPaidOrder": "无已付款待确认订单",
-        "membersCleared": "成员已清退"
+        "noInProgress": "无在途退款 / 收款",
+        "noPaidOrder": "无在途付费订单",
+        "ownerOnly": "由所有者操作",
+        "noMembers": "无其他成员"
       },
       "transfer": {
         "label": "转让所有权",
@@ -2988,14 +2995,8 @@
       },
       "close": {
         "label": "注销租户",
-        "summary": "满足上述条件后可注销,30 天保留期内可撤销。后端建设中,暂不可用。",
+        "summary": "注销后租户及其工作空间不可再进入,会话回到你的个人租户。此操作不可回退。",
         "action": "注销"
-      },
-      "personalDescription": "个人租户可以升级为组织租户,升级后开启成员管理。此操作不可回退。",
-      "convert": {
-        "label": "转为组织租户",
-        "action": "转为组织租户",
-        "summary": "订阅、余额、账单、工作空间原样保留,租户编号不变;开启成员管理,认证重置为未认证。不可回退。"
       }
     },
     "footer": {
@@ -3044,7 +3045,11 @@
         "description": "订阅、余额、账单、工作空间原样保留。你的新个人租户已就绪,可在顶栏租户面板切换。",
         "stay": "留在本页",
         "verify": "去企业认证"
-      }
+      },
+      "warning": "重大操作:转换后不可回退。请逐项核对下方内容。",
+      "processTitle": "转换过程",
+      "processHint": "提交后在库内一个事务完成,随后逐项回放结果,整段不少于 5 秒。",
+      "confirmTitle": "确认"
     },
     "contact": {
       "link": "关联成员",
@@ -3055,10 +3060,86 @@
       "pickLabel": "成员",
       "confirm": "关联"
     },
-    "salutation": {
-      "mr": "先生",
-      "ms": "女士",
+    "gender": {
+      "male": "男",
+      "female": "女",
       "unset": "未设定"
+    },
+    "closure": {
+      "title": "注销租户「{name}」",
+      "description": "先核对资格清单,再勾选知悉并输入租户名称。",
+      "warning": "重大操作:注销后不可回退,租户内的工作空间、订阅与账单记录随之封存。",
+      "loading": "正在核对资格…",
+      "loadFailed": "资格清单读取失败,请稍后重试。",
+      "eligible": "资格核对通过,没有阻断项。",
+      "blockersTitle": "以下条件未满足,暂不能注销",
+      "confirmationsTitle": "请知悉",
+      "autoTitle": "注销时会一并处理",
+      "blockers": {
+        "personal_tenant": {
+          "tag": "个人租户",
+          "text": "个人租户随账号删除,不在这里注销。"
+        },
+        "not_owner": {
+          "tag": "非所有者",
+          "text": "只有租户所有者可以注销。"
+        },
+        "active_members": {
+          "tag": "仍有成员",
+          "text": "还有 {count} 位其他成员,请先在成员管理里移除。"
+        },
+        "unpaid_bills": {
+          "tag": "未清账单",
+          "text": "有 {count} 张账单未结清。"
+        },
+        "paid_balance": {
+          "tag": "付费余额",
+          "text": "还有 {amount} {currency} 付费余额,请先消耗或申请退款。"
+        },
+        "refund_in_progress": {
+          "tag": "退款在途",
+          "text": "有 {count} 笔退款正在处理。"
+        },
+        "receipt_in_progress": {
+          "tag": "收款在途",
+          "text": "有 {count} 笔付款申报待确认。"
+        },
+        "pending_order_with_payment": {
+          "tag": "付费订单在途",
+          "text": "有 {count} 笔已付款的订单尚未完成。"
+        }
+      },
+      "confirmations": {
+        "active_subscription": {
+          "tag": "订阅仍在有效期",
+          "text": "{count} 项订阅尚未到期,注销后不再可用,也不退还剩余周期。"
+        },
+        "gifted_balance": {
+          "tag": "赠送余额",
+          "text": "还有 {amount} {currency} 赠送余额,注销后作废。"
+        }
+      },
+      "auto": {
+        "cancel_pending_orders": {
+          "tag": "取消待付订单",
+          "text": "{count} 笔未付款的订单将自动取消。"
+        },
+        "revoke_invitations": {
+          "tag": "撤销邀请",
+          "text": "尚未接受的邀请将全部撤销。"
+        },
+        "switch_to_personal": {
+          "tag": "回到个人租户",
+          "text": "你的会话将切回个人租户。"
+        }
+      },
+      "confirmTitle": "确认",
+      "ackConfirm": "我已知悉以上内容,确认注销",
+      "confirmLabel": "输入租户名称「{name}」确认",
+      "submit": "注销租户",
+      "cancel": "取消",
+      "errorBlocked": "资格已变化,请按最新清单处理后再试。",
+      "error": "注销失败,请稍后重试。"
     }
   }
 }

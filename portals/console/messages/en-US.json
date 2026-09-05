@@ -724,7 +724,7 @@
       "lastLoginOs": "OS",
       "role": "Role",
       "newEmail": "New email",
-      "gender": "Salutation"
+      "gender": "Gender"
     },
     "language": {
       "zhCN": "简体中文",
@@ -1118,8 +1118,8 @@
       }
     },
     "gender": {
-      "male": "Mr.",
-      "female": "Ms.",
+      "male": "Male",
+      "female": "Female",
       "unset": "Not set"
     }
   },
@@ -2878,7 +2878,10 @@
       "loading": "Loading…",
       "unset": "Not set",
       "cancel": "Cancel",
-      "modify": "Edit"
+      "modify": "Edit",
+      "edit": "Edit",
+      "yes": "Yes",
+      "no": "No"
     },
     "logo": {
       "upload": "Upload tenant logo",
@@ -2904,7 +2907,9 @@
     "identity": {
       "createdOn": "Created {date}",
       "owner": "Owner {name}",
-      "members": "{count} members · Manage"
+      "members": "{count} members · Manage",
+      "transfer": "Transfer",
+      "convert": "Convert to organization"
     },
     "workspaces": {
       "toggle": "Workspaces · {count}",
@@ -2919,8 +2924,8 @@
         "description": "The name and description this tenant shows publicly."
       },
       "contact": {
-        "title": "Contact",
-        "description": "Linked to the owner by default, who is also the billing recipient; switch to another member, or unlink and fill in manually."
+        "title": "Primary administrator",
+        "description": "Linked to the owner by default, who is also the billing recipient; switch to another member, or unlink and fill in manually. Linked details follow the member's account and are not edited here."
       },
       "region": {
         "title": "Regional defaults",
@@ -2943,7 +2948,7 @@
       "contactRole": "Role",
       "contactEmail": "Email",
       "contactPhone": "Phone",
-      "address": "Address",
+      "address": "Address line 1",
       "postalCode": "Postal code",
       "isBillingRecipient": "Billing recipient",
       "isBillingRecipientHint": "Bills and invoice notices go to this contact.",
@@ -2955,7 +2960,8 @@
       "nameHint": "The registered name that business verification is issued against.",
       "reverify": "Re-verify",
       "nameVerifiedHint": "Verified name; to change it, go through verification again.",
-      "contactSalutation": "Salutation"
+      "contactGender": "Gender",
+      "address2": "Address line 2"
     },
     "scale": {
       "people": "{range} people"
@@ -2969,9 +2975,10 @@
       "closeConditions": {
         "noBills": "No unpaid bills",
         "noBalance": "No paid balance",
-        "noInProgress": "No refund or invoice in progress",
-        "noPaidOrder": "No paid order awaiting confirmation",
-        "membersCleared": "Members removed"
+        "noInProgress": "No refunds / receipts in progress",
+        "noPaidOrder": "No paid orders in progress",
+        "ownerOnly": "Owner only",
+        "noMembers": "No other members"
       },
       "transfer": {
         "label": "Transfer ownership",
@@ -2988,14 +2995,8 @@
       },
       "close": {
         "label": "Close tenant",
-        "summary": "Available once the conditions above are met, with a 30-day window to cancel. Backend in progress.",
+        "summary": "After closing, the tenant and its workspaces can no longer be entered and your session returns to your personal tenant. This cannot be undone.",
         "action": "Close"
-      },
-      "personalDescription": "A personal tenant can be upgraded to an organization tenant, which turns on member management. This cannot be undone.",
-      "convert": {
-        "label": "Convert to organization",
-        "action": "Convert",
-        "summary": "Subscriptions, balance, bills and workspaces stay as they are and the tenant ID does not change. Member management turns on and verification resets. This cannot be undone."
       }
     },
     "footer": {
@@ -3044,7 +3045,11 @@
         "description": "Subscriptions, balance, bills and workspaces are unchanged. Your new personal tenant is ready — switch to it from the tenant panel in the header.",
         "stay": "Stay here",
         "verify": "Verify the business"
-      }
+      },
+      "warning": "Major operation: this cannot be undone. Check every item below.",
+      "processTitle": "What happens",
+      "processHint": "Committed in one transaction, then replayed step by step; at least 5 seconds.",
+      "confirmTitle": "Confirm"
     },
     "contact": {
       "link": "Link member",
@@ -3055,10 +3060,86 @@
       "pickLabel": "Member",
       "confirm": "Link"
     },
-    "salutation": {
-      "mr": "Mr.",
-      "ms": "Ms.",
+    "gender": {
+      "male": "Male",
+      "female": "Female",
       "unset": "Not set"
+    },
+    "closure": {
+      "title": "Close tenant “{name}”",
+      "description": "Review the eligibility list, then acknowledge and type the tenant name.",
+      "warning": "Major operation: closing cannot be undone. Workspaces, subscriptions and billing records are archived with the tenant.",
+      "loading": "Checking eligibility…",
+      "loadFailed": "Could not load the eligibility list. Please try again later.",
+      "eligible": "Eligibility check passed; nothing is blocking.",
+      "blockersTitle": "Not eligible yet",
+      "confirmationsTitle": "Please note",
+      "autoTitle": "Handled automatically on closing",
+      "blockers": {
+        "personal_tenant": {
+          "tag": "Personal tenant",
+          "text": "A personal tenant is removed with the account, not here."
+        },
+        "not_owner": {
+          "tag": "Not the owner",
+          "text": "Only the tenant owner can close it."
+        },
+        "active_members": {
+          "tag": "Members remain",
+          "text": "{count} other members remain; remove them in Members first."
+        },
+        "unpaid_bills": {
+          "tag": "Unpaid bills",
+          "text": "{count} bills are unpaid."
+        },
+        "paid_balance": {
+          "tag": "Paid balance",
+          "text": "{amount} {currency} of paid balance remains; use it or request a refund first."
+        },
+        "refund_in_progress": {
+          "tag": "Refund in progress",
+          "text": "{count} refunds are being processed."
+        },
+        "receipt_in_progress": {
+          "tag": "Receipt in progress",
+          "text": "{count} payment declarations await confirmation."
+        },
+        "pending_order_with_payment": {
+          "tag": "Paid order in progress",
+          "text": "{count} paid orders are not yet fulfilled."
+        }
+      },
+      "confirmations": {
+        "active_subscription": {
+          "tag": "Active subscription",
+          "text": "{count} subscriptions are still active; they stop on closing and the remaining period is not refunded."
+        },
+        "gifted_balance": {
+          "tag": "Gifted balance",
+          "text": "{amount} {currency} of gifted balance will be forfeited."
+        }
+      },
+      "auto": {
+        "cancel_pending_orders": {
+          "tag": "Cancel unpaid orders",
+          "text": "{count} unpaid orders will be cancelled."
+        },
+        "revoke_invitations": {
+          "tag": "Revoke invitations",
+          "text": "All pending invitations will be revoked."
+        },
+        "switch_to_personal": {
+          "tag": "Back to personal tenant",
+          "text": "Your session will switch back to your personal tenant."
+        }
+      },
+      "confirmTitle": "Confirm",
+      "ackConfirm": "I understand the above and confirm closing",
+      "confirmLabel": "Type the tenant name “{name}” to confirm",
+      "submit": "Close tenant",
+      "cancel": "Cancel",
+      "errorBlocked": "Eligibility changed; resolve the latest list and try again.",
+      "error": "Closing failed. Please try again later."
     }
   }
 }

@@ -232,7 +232,6 @@ export function ProfilePage() {
   const [nameEditing, setNameEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   // 称呼(性别):先生 / 女士 / 未设定,与显示名同一套「修改 → 页底保存」
-  const [genderEditing, setGenderEditing] = useState(false);
   const [genderDraft, setGenderDraft] = useState<"" | "male" | "female">("");
   const initialAppearance = useRef<{
     theme: ThemeChoice;
@@ -271,7 +270,7 @@ export function ProfilePage() {
 
   const nameDirty =
     nameEditing && nameDraft.trim() !== (profile?.displayName ?? "").trim();
-  const genderDirty = genderEditing && genderDraft !== (profile?.gender ?? "");
+  const genderDirty = nameEditing && genderDraft !== (profile?.gender ?? "");
   const prefsDirty =
     prefs.language !== savedPrefs.language ||
     prefs.timezone !== savedPrefs.timezone ||
@@ -284,7 +283,6 @@ export function ProfilePage() {
   function discard() {
     setNameEditing(false);
     setNameDraft(profile?.displayName ?? "");
-    setGenderEditing(false);
     setGenderDraft(profile?.gender ?? "");
     setPrefs(savedPrefs);
     setTheme(savedPrefs.theme as Parameters<typeof setTheme>[0]);
@@ -321,7 +319,6 @@ export function ProfilePage() {
         fontSize: prefs.fontSize,
       };
       setNameEditing(false);
-      setGenderEditing(false);
       setFeedback({ tone: "success", key: "feedback.profileSaved" });
       await refreshSession();
       if (prefs.language !== savedPrefs.language) {
@@ -660,24 +657,17 @@ export function ProfilePage() {
         onNameDraftChange={setNameDraft}
         onStartEditName={() => {
           setNameDraft(profile?.displayName ?? "");
+          setGenderDraft(profile?.gender ?? "");
           setNameEditing(true);
         }}
         onCancelEditName={() => {
           setNameEditing(false);
           setNameDraft(profile?.displayName ?? "");
+          setGenderDraft(profile?.gender ?? "");
         }}
         gender={profile?.gender ?? ""}
-        genderEditing={genderEditing}
         genderDraft={genderDraft}
         onGenderDraftChange={setGenderDraft}
-        onStartEditGender={() => {
-          setGenderDraft(profile?.gender ?? "");
-          setGenderEditing(true);
-        }}
-        onCancelEditGender={() => {
-          setGenderEditing(false);
-          setGenderDraft(profile?.gender ?? "");
-        }}
         username={username}
         loginEnabled={accountLoginEnabled}
         usernameChangeable={usernameChangeable}

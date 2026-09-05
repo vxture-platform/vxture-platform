@@ -4,6 +4,7 @@ import type { Pool, PoolClient } from "pg";
 import { ORG_PG_POOL } from "../tokens";
 import { deriveInvitationStatus, rejectAcceptance } from "./invitation-rules";
 import type {
+  CloseTenantResult,
   AcceptInvitationResult,
   CreateInvitationInput,
   InvitationLookup,
@@ -39,9 +40,10 @@ interface OrgProfileRow {
   contact_email: string | null;
   contact_phone: string | null;
   contact_user_id?: string | null;
-  contact_salutation?: string | null;
+  contact_gender?: string | null;
   country_code: string | null;
   address: string | null;
+  address2?: string | null;
   postal_code: string | null;
   is_billing_recipient: boolean;
   timezone: string | null;
@@ -62,10 +64,11 @@ function mapOrgProfile(row: OrgProfileRow): OrganizationProfileView {
     contactEmail: row.contact_email,
     contactPhone: row.contact_phone,
     contactUserId: row.contact_user_id ?? null,
-    contactSalutation:
-      row.contact_salutation === "mr" || row.contact_salutation === "ms"
-        ? row.contact_salutation
+    contactGender:
+      row.contact_gender === "male" || row.contact_gender === "female"
+        ? row.contact_gender
         : null,
+    address2: row.address2 ?? null,
     countryCode: row.country_code,
     address: row.address,
     postalCode: row.postal_code,
@@ -343,6 +346,85 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     }
   }
 
+  async countOtherActiveMembers(
+    tenantId: string,
+    ownerUserId: string,
+  ): Promise<number> {
+    const r = await this.pool.query<{ n: string }>(
+      `select count(*)::text as n
+         from tenancy.tenant_memberships
+        where tenant_id = $1 and status = 'active' and user_id <> $2`,
+      [tenantId, ownerUserId],
+    );
+    return Number(r.rows[0]?.n ?? 0);
+  }
+
+  /**
+   * 注销组织租户(走查 2026-09-05)。一个事务:锁租户行 → 核对所有者 / 组织类型 /
+   * 除所有者外无活跃成员 → 软删(status=deleted, deleted_at)→ 撤销待接受的邀请。
+   * 钱的判据(未清账单 / 付费余额 / 在途退款收款 / 在途付费订单)在 BFF 聚合层用
+   * TenantClosureReadService 判过才会走到这里;这里只守身份与成员两条硬条件。
+   * 成员关系不动:所有读路径都按 tenants.deleted_at 过滤,会话解析会自动回落到个人租户。
+   */
+  async closeTenant(
+    tenantId: string,
+    ownerUserId: string,
+  ): Promise<CloseTenantResult> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const t = await client.query<{ type: string; owner_user_id: string }>(
+        `select type, owner_user_id
+           from tenancy.tenants
+          where id = $1 and deleted_at is null
+          for update`,
+        [tenantId],
+      );
+      const row = t.rows[0];
+      if (!row) {
+        await client.query("rollback");
+        return { ok: false, reason: "tenant_not_found" };
+      }
+      if (row.owner_user_id !== ownerUserId) {
+        await client.query("rollback");
+        return { ok: false, reason: "not_owner" };
+      }
+      if (row.type !== "organization") {
+        await client.query("rollback");
+        return { ok: false, reason: "personal_tenant" };
+      }
+      const others = await client.query<{ n: string }>(
+        `select count(*)::text as n
+           from tenancy.tenant_memberships
+          where tenant_id = $1 and status = 'active' and user_id <> $2`,
+        [tenantId, ownerUserId],
+      );
+      if (Number(others.rows[0]?.n ?? 0) > 0) {
+        await client.query("rollback");
+        return { ok: false, reason: "active_members" };
+      }
+      await client.query(
+        `update tenancy.tenants
+            set status = 'deleted', deleted_at = now(), updated_at = now()
+          where id = $1`,
+        [tenantId],
+      );
+      await client.query(
+        `update tenancy.invitations
+            set status = 'revoked', updated_at = now()
+          where tenant_id = $1 and status = 'pending'`,
+        [tenantId],
+      );
+      await client.query("commit");
+      return { ok: true };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   /** 改简称(display_name)。日常展示名,不碰认证状态。 */
   async setTenantDisplayName(
     tenantId: string,
@@ -514,7 +596,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
   // logo bytes/hash moved to tenancy.tenant_logos (per 20_tenancy.sql), joined in below.
   // Contacts moved to tenancy.tenant_contacts 1:N (data_identity_200 §5.8); the API-facing
   // contactName/Role/Email/Phone map to the tenant's 'primary' contact row (role→title).
-  private readonly profileCols = `description, industry, scale, website, country_code, address, postal_code,
+  private readonly profileCols = `description, industry, scale, website, country_code, address, address2, postal_code,
      is_billing_recipient, timezone, language, currency`;
 
   // Primary-contact lateral join, shared by profile reads (first 'primary' row wins).
@@ -527,9 +609,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
                   coalesce(u.email, c.email) as email,
                   coalesce(u.phone, c.phone) as phone,
                   c.user_id,
-                  case when c.user_id is not null
-                       then case up.gender when 'male' then 'mr' when 'female' then 'ms' else null end
-                       else c.salutation end as salutation
+                  case when c.user_id is not null then up.gender else c.gender end as gender
              from tenancy.tenant_contacts c
              left join account.users u on u.id = c.user_id and u.deleted_at is null
              left join account.user_profiles up on up.user_id = c.user_id
@@ -543,7 +623,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
               pc.name as contact_name, pc.title as contact_role,
               pc.email as contact_email, pc.phone as contact_phone,
               pc.user_id as contact_user_id,
-              pc.salutation as contact_salutation,
+              pc.gender as contact_gender,
               tl.hash as logo_hash, tp.updated_at::text as updated_at
          from tenancy.tenant_profiles tp
          left join tenancy.tenant_logos tl on tl.tenant_id = tp.tenant_id and tl.kind = 'logo'${this.primaryContactJoin}
@@ -567,8 +647,8 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
          insert into tenancy.tenant_profiles
            (tenant_id, description, industry, scale, website,
             country_code, address, postal_code, is_billing_recipient,
-            timezone, language, currency, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, now(), now())
+            timezone, language, currency, address2, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, $19, now(), now())
          on conflict (tenant_id) do update set
            description = excluded.description,
            industry = excluded.industry,
@@ -576,6 +656,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
            website = excluded.website,
            country_code = excluded.country_code,
            address = excluded.address,
+           address2 = excluded.address2,
            postal_code = excluded.postal_code,
            is_billing_recipient = excluded.is_billing_recipient,
            timezone = excluded.timezone,
@@ -596,14 +677,14 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
        ),
        updc as (
          update tenancy.tenant_contacts tc
-            set name = $13, title = $14, email = $15, phone = $16, user_id = $17, salutation = $18, updated_at = now()
+            set name = $13, title = $14, email = $15, phone = $16, user_id = $17, gender = $18, updated_at = now()
            from cur
           where tc.id = cur.id
             and $13::varchar is not null and $15::varchar is not null
           returning tc.id
        ),
        insc as (
-         insert into tenancy.tenant_contacts (tenant_id, contact_type, name, title, email, phone, user_id, salutation)
+         insert into tenancy.tenant_contacts (tenant_id, contact_type, name, title, email, phone, user_id, gender)
          select $1, 'primary', $13, $14, $15, $16, $17, $18
           where $13::varchar is not null and $15::varchar is not null
             and not exists (select 1 from cur)
@@ -634,7 +715,8 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
         input.contactEmail ?? null,
         input.contactPhone ?? null,
         input.contactUserId ?? null,
-        input.contactSalutation ?? null,
+        input.contactGender ?? null,
+        input.address2 ?? null,
       ],
     );
     return mapOrgProfile(r.rows[0]!);

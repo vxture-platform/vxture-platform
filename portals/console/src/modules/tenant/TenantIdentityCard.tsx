@@ -71,6 +71,8 @@ export function TenantIdentityCard({
   onLogoClick,
   onClearLogo,
   onGoVerify,
+  onConvert,
+  onTransfer,
   onOpenMembers,
   workspaces,
   workspacesOpen,
@@ -91,6 +93,10 @@ export function TenantIdentityCard({
   readonly onLogoClick: () => void;
   readonly onClearLogo: () => void;
   readonly onGoVerify: () => void;
+  /** 个人租户:转为组织租户(走查 2026-09-05:入口在认证之后)。 */
+  readonly onConvert?: () => void;
+  /** 组织租户所有者:转让所有权(走查 2026-09-05:从危险操作搬到所有者一行)。 */
+  readonly onTransfer?: () => void;
   readonly onOpenMembers: () => void;
   readonly workspaces: readonly TenantWorkspaceRow[];
   readonly workspacesOpen: boolean;
@@ -154,7 +160,19 @@ export function TenantIdentityCard({
               <PrincipalNo no={tenantNo} kind="tenant" />
               <span>{t("identity.createdOn", { date: createdAt })}</span>
               {ownerName ? (
-                <span>{t("identity.owner", { name: ownerName })}</span>
+                <span className="inline-flex items-center gap-xs">
+                  <span>{t("identity.owner", { name: ownerName })}</span>
+                  {tenantType === "organization" && onTransfer ? (
+                    <Button
+                      variant="link"
+                      size="xs"
+                      className="h-auto p-0"
+                      onClick={onTransfer}
+                    >
+                      {t("identity.transfer")}
+                    </Button>
+                  ) : null}
+                </span>
               ) : null}
               {tenantType === "organization" && memberCount !== null ? (
                 <Button
@@ -189,6 +207,16 @@ export function TenantIdentityCard({
                     : t("verify.go")}
                 </span>
               </Button>
+              {tenantType === "personal" && onConvert ? (
+                <Button variant="outline" size="md" onClick={onConvert}>
+                  <Icon
+                    name="building-library"
+                    size="xs"
+                    fallback="placeholder"
+                  />
+                  <span>{t("identity.convert")}</span>
+                </Button>
+              ) : null}
             </>
           }
         />
@@ -261,13 +289,16 @@ export function TenantSection({
   titleKey,
   descriptionKey,
   action,
+  titleExtra,
   children,
 }: {
   readonly icon: IconName;
   readonly titleKey: string;
   readonly descriptionKey?: string;
-  /** 标题行右侧的动作(如联系人卡的「关联成员」)。 */
+  /** 标题行右侧的动作(如「编辑」)。 */
   readonly action?: React.ReactNode;
+  /** 紧跟在标题文字后面的内容(如主管理员卡的已关联徽章 + 关联成员按钮)。 */
+  readonly titleExtra?: React.ReactNode;
   readonly children: React.ReactNode;
 }) {
   const t = useTranslations("tenantInfoPage");
@@ -276,7 +307,16 @@ export function TenantSection({
       tone="raised"
       level={2}
       icon={icon}
-      title={t(titleKey)}
+      title={
+        titleExtra ? (
+          <span className="flex flex-wrap items-center gap-sm">
+            <span>{t(titleKey)}</span>
+            {titleExtra}
+          </span>
+        ) : (
+          t(titleKey)
+        )
+      }
       {...(descriptionKey ? { description: t(descriptionKey) } : {})}
       {...(action ? { action } : {})}
     >
