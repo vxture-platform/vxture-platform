@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # deploy/scripts/lib/prune-images.test.sh
-# 纯文本单测：select_stale_platform_images 只能挑出「本平台、旧 tag、无容器引用」的镜像。
-# 运行：bash deploy/scripts/lib/prune-images.test.sh
+# 纯文本单测:select_stale_platform_images 只能挑出「本平台、无容器引用」的镜像 ID。
+# 运行:bash deploy/scripts/lib/prune-images.test.sh
 # @package  @vxture/repo
 # @layer    Infrastructure
 # @category deployment-script
@@ -26,74 +26,62 @@ assert_eq() {
 ACR="registry.example.test/vx-platform"
 GHCR="ghcr.io/vxture-platform"
 
+# `docker images --no-trunc --format '{{.Repository}} {{.ID}}'` 的样子:按摘要拉的镜像
+# 只有仓库名没有 tag(2026-09-05 之后线上全是这种);同一 ID 可因多 tag 出现多行。
 images="$(cat <<EOF
-$ACR/platform_bff-auth:v0.26.2
-$ACR/platform_bff-auth:v0.26.1
-$ACR/platform_bff-auth:v0.26.0
-$ACR/platform_accounts:v0.26.2
-$ACR/platform_accounts:v0.26.1
-$GHCR/platform_admin:v0.25.0
-$ACR/platform_website:v0.26.2
-$ACR/platform_website:<none>
-postgres:18-alpine
-nginx:1.29-alpine
-alpine/socat:latest
-ghcr.io/vxture/karda-app:local
+$ACR/platform_bff-auth sha256:aaaa
+$ACR/platform_bff-auth sha256:bbbb
+$ACR/platform_bff-auth sha256:cccc
+$ACR/platform_accounts sha256:dddd
+$ACR/platform_accounts sha256:eeee
+$GHCR/platform_admin sha256:ffff
+$ACR/platform_website sha256:1111
+$ACR/platform_website sha256:1111
+postgres sha256:2222
+nginx sha256:3333
+alpine/socat sha256:4444
+ghcr.io/vxture/karda-app sha256:5555
 EOF
 )"
 
-# 在用：当前版本在跑（website 例外——模拟它此刻正好没起来，当前 tag 也必须保住）；
-# 另有一个已停止但仍引用 v0.26.1 accounts 的容器。
+# 在用:全长 ID(`docker inspect --format '{{.Image}}'`)。aaaa / dddd 在跑;eeee 被一个
+# 已停止的容器引用,也要保住;website 的 1111 此刻正好没起来,但它没被引用就该回收——
+# 回收只看引用,不看"当前版本",当前版本的镜像一定被刚起的容器引用着。
 inuse="$(mktemp)"
 cat > "$inuse" <<EOF
-$ACR/platform_bff-auth:v0.26.2
-$ACR/platform_accounts:v0.26.2
-$ACR/platform_accounts:v0.26.1
-nginx:1.29-alpine
+sha256:aaaa
+sha256:dddd
+sha256:eeee
+sha256:3333
 EOF
 
-actual="$(printf '%s\n' "$images" | select_stale_platform_images "v0.26.2" "$inuse")"
+actual="$(printf '%s\n' "$images" | select_stale_platform_images "$inuse")"
 expected="$(cat <<EOF
-$ACR/platform_bff-auth:v0.26.1
-$ACR/platform_bff-auth:v0.26.0
-$GHCR/platform_admin:v0.25.0
+sha256:bbbb
+sha256:cccc
+sha256:ffff
+sha256:1111
 EOF
 )"
-assert_eq "picks only stale platform_* images not referenced by any container" "$expected" "$actual"
+assert_eq "picks platform_* image IDs not referenced by any container, once each" "$expected" "$actual"
 
-# 工具镜像绝不出现在结果里——这正是这次修的东西。
+# 工具镜像绝不出现在结果里——2026-08-29 修的东西。
 case "$actual" in
-  *postgres*|*socat*|*karda*) echo "FAIL - tool/third-party image selected" >&2; fail=1 ;;
+  *2222*|*4444*|*5555*) echo "FAIL - tool/third-party image selected" >&2; fail=1 ;;
   *) echo "ok   - tool images (postgres/socat/karda) untouched" ;;
 esac
 
-# 当前 tag 绝不出现。
+# 在用的绝不出现(含已停止容器引用的)。
 case "$actual" in
-  *":v0.26.2"*) echo "FAIL - current tag selected" >&2; fail=1 ;;
-  *) echo "ok   - current tag never selected" ;;
+  *aaaa*|*dddd*|*eeee*) echo "FAIL - in-use image selected" >&2; fail=1 ;;
+  *) echo "ok   - in-use images (running or stopped container) never selected" ;;
 esac
 
-# <none> 交给 prune -f，不在这里 rmi。
-case "$actual" in
-  *"<none>"*) echo "FAIL - <none> selected" >&2; fail=1 ;;
-  *) echo "ok   - <none> left to docker image prune -f" ;;
-esac
+# 在用清单为空 = docker ps 没跑成,一个都不能选。
+empty="$(mktemp)"
+: > "$empty"
+none="$(printf '%s\n' "$images" | select_stale_platform_images "$empty" 2>/dev/null)"
+assert_eq "empty in-use list selects nothing" "" "$none"
+rm -f "$inuse" "$empty"
 
-# keep_tag 为空：宁可什么都不删。
-actual_empty="$(printf '%s\n' "$images" | select_stale_platform_images "" "$inuse" 2>/dev/null)"
-assert_eq "empty keep_tag selects nothing" "" "$actual_empty"
-
-# 在用清单为空文件：不能因此把所有旧版本都放行成"可删"之外，也不能误删当前。
-: > "$inuse"
-actual_noinuse="$(printf '%s\n' "$images" | select_stale_platform_images "v0.26.2" "$inuse")"
-expected_noinuse="$(cat <<EOF
-$ACR/platform_bff-auth:v0.26.1
-$ACR/platform_bff-auth:v0.26.0
-$ACR/platform_accounts:v0.26.1
-$GHCR/platform_admin:v0.25.0
-EOF
-)"
-assert_eq "empty in-use list: stale versions selectable, current tag still kept" "$expected_noinuse" "$actual_noinuse"
-
-rm -f "$inuse"
-exit $fail
+exit "$fail"

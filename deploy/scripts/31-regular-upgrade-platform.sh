@@ -86,25 +86,31 @@ run_step "21 检查平台数据库" bash "$SCRIPT_DIR/21-prepare-platform-databa
 run_step "30 更新平台栈" bash "$SCRIPT_DIR/30-deploy-platform-stack.sh"
 run_step "40 验证平台运行态" bash "$SCRIPT_DIR/40-verify-platform-runtime.sh"
 # 新栈验证健康后，回收上一版本遗留的平台镜像，避免根盘随每次部署累积撑满。
-# 只回收 platform_* 的旧版本 + dangling 层；**不再 `prune -a`**——那会把 21-prepare
+# 只回收 platform_* 且没有任何容器引用的镜像；**不再 `prune -a`**——那会把 21-prepare
 # 的 postgres 工具镜像一起删掉，让下一次部署先去 Docker Hub 拉 5 分钟（见
-# lib/prune-images.sh 头注里的三次实测）。清理失败不阻断本次已成功的部署。
+# lib/prune-images.sh 头注）。清理失败不阻断本次已成功的部署。
+#
+# 2026-09-05 改为按**镜像 ID** 比对：按摘要拉取的镜像没有 tag，旧逻辑按 repo:tag 挑、
+# 又跳过 <none>，对它们一个都不删，366 个版本堆满了 40 GB 根盘（见 lib 头注）。
 prune_stale_platform_images() {
   docker image prune -f >/dev/null 2>&1 || true
   local inuse_file stale
   inuse_file="$(mktemp)"
-  docker ps -a --format '{{.Image}}' > "$inuse_file" 2>/dev/null || true
-  stale="$(docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null     | select_stale_platform_images "${VX_IMAGE_TAG:-}" "$inuse_file")"
+  # 容器引用统一解析成全长镜像 ID（tag / repo@digest / 短 ID 三种形态都归一）。
+  docker ps -aq 2>/dev/null | xargs -r docker inspect --format '{{.Image}}' > "$inuse_file" 2>/dev/null || true
+  stale="$(docker images --no-trunc --format '{{.Repository}} {{.ID}}' 2>/dev/null     | select_stale_platform_images "$inuse_file")"
   rm -f "$inuse_file"
   if [ -z "$stale" ]; then
     echo "  没有可回收的平台旧镜像。"
-    return 0
-  fi
-  echo "  回收（当前 tag ${VX_IMAGE_TAG:-?} 与在用镜像已排除）："
-  printf '    %s
+  else
+    echo "  回收 $(printf '%s
+' $stale | wc -l | tr -d ' ') 个未被任何容器引用的平台镜像："
+    printf '    %s
 ' $stale
-  # shellcheck disable=SC2086
-  docker rmi $stale >/dev/null 2>&1 || true
+    # shellcheck disable=SC2086
+    docker rmi $stale >/dev/null 2>&1 || true
+  fi
+  echo "  根盘：$(df -h / | awk 'NR==2 {print $3 " 已用 / " $4 " 可用（" $5 "）"}')"
 }
 run_step "41 回收平台旧镜像（控制根盘占用；工具镜像不动）" prune_stale_platform_images
 
