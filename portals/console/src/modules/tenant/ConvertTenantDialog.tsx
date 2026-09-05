@@ -1,20 +1,21 @@
 "use client";
 
 /**
- * ConvertTenantDialog — 个人租户转为组织租户的三屏(批 5c-2,owner 2026-09-05)。
+ * ConvertTenantDialog — 个人租户转为组织租户的向导(批 5c-2;owner 2026-09-05 走查重做)。
  * @package @vxture/console
  * @layer Application
  * @category Module
  *
- * ① 确认框(重大操作,lg 档):警示横幅 → 组织名称 → 升级后的变化 → 转换过程 →
- *    知悉 + 输入当前租户名确认。所有提示与过程都在这一屏里体现(owner 走查:此前
- *    弹窗太小、标题换行、信息挤在一起——重大操作要放大、警示明确、信息松开)。
- * ② 转换中:整页遮罩、五步回放、**整段不少于 5 秒**、每步不少于 1 秒
- * ③ 完成:新形态说明 + 两个去处
+ * 一个固定尺寸的面板(lg 档、正文最小高度一致),**无滚动条**,按步推进、每页只聚焦一件事:
+ *   1/4 升级后的变化(警示 + 五条变化)
+ *   2/4 组织名称(认证名;简称初始相同)
+ *   3/4 转换过程(五步预览 + 时长说明)
+ *   4/4 确认并开始(摘要 + 我已知悉 + 输入当前租户名;「开始转换」就在这一块的操作栏)
+ * 提交后同一面板进入回放(五步逐项亮起,整段不少于 5 秒),最后一屏「转换完成」。
+ * 页脚左侧始终显示「第 N / 4 步」,右侧是上一步 / 下一步(或开始转换)。
  *
- * 关于进度的诚实性:后端是**一个事务**,几百毫秒就完。一边跑事务一边按时间打勾,
- * 事务失败时前几步的勾就是假的。所以这里是**先跑完事务、成功后再回放**:每步展示的
- * 是已经发生的事实,失败则根本不进第二屏,直接在第一屏给错误。
+ * 关于进度的诚实性:后端是**一个事务**,几百毫秒就完。这里是**先跑完事务、成功后再回放**:
+ * 每步展示的是已经发生的事实,失败则留在第 4 步给错误,不进回放。
  */
 
 import { useEffect, useState } from "react";
@@ -23,7 +24,12 @@ import {
   Banner,
   Button,
   Checkbox,
-  DialogForm,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   Icon,
   Input,
   Label,
@@ -40,6 +46,7 @@ import { PrincipalNo } from "@/components/principal-no";
 const ACK_ITEMS: readonly { key: string; icon: IconName }[] = [
   { key: "verification", icon: "shield-check" },
   { key: "members", icon: "users" },
+  { key: "entitlements", icon: "receipt" },
   { key: "paymentTtl", icon: "clock-counter-clockwise" },
   { key: "irreversible", icon: "warning" },
 ];
@@ -47,6 +54,12 @@ const ACK_ITEMS: readonly { key: string; icon: IconName }[] = [
 /** 回放的五步。每步至少 1 秒,整段 ≥ 5 秒。 */
 const STEPS = ["check", "type", "verification", "personal", "session"] as const;
 const STEP_MS = 1000;
+const WIZARD_STEPS = 4;
+
+type Phase =
+  | { kind: "wizard"; step: 1 | 2 | 3 | 4 }
+  | { kind: "replay" }
+  | { kind: "done" };
 
 export interface ConvertResult {
   tenantId: string;
@@ -65,56 +78,60 @@ export function ConvertTenantDialog({
   readonly open: boolean;
   readonly currentName: string;
   readonly onClose: () => void;
-  /** 回放结束后调用:调用方刷新会话并把页面切成组织形态。 */
+  /** 「转换完成」后调用:调用方刷新会话并把页面切成组织形态。 */
   readonly onDone: (result: ConvertResult) => void;
 }) {
   const t = useTranslations("tenantInfoPage.convert");
 
+  const [phase, setPhase] = useState<Phase>({ kind: "wizard", step: 1 });
   const [name, setName] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
   const [confirmName, setConfirmName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ConvertResult | null>(null);
-  const [step, setStep] = useState(0);
+  const [replayStep, setReplayStep] = useState(0);
 
   useEffect(() => {
     if (!open) {
+      setPhase({ kind: "wizard", step: 1 });
       setName("");
       setAcknowledged(false);
       setConfirmName("");
       setError(null);
       setResult(null);
-      setStep(0);
+      setReplayStep(0);
       setSubmitting(false);
     }
   }, [open]);
 
-  // 回放:事务已经成功,这里逐步亮起已发生的事实。
+  // 回放:事务已经成功,逐步亮起已发生的事实;走完进入「转换完成」。
   useEffect(() => {
-    if (!result || step >= STEPS.length) return;
-    const timer = setTimeout(() => setStep((s) => s + 1), STEP_MS);
+    if (phase.kind !== "replay") return;
+    if (replayStep >= STEPS.length) {
+      setPhase({ kind: "done" });
+      return;
+    }
+    const timer = setTimeout(() => setReplayStep((s) => s + 1), STEP_MS);
     return () => clearTimeout(timer);
-  }, [result, step]);
+  }, [phase.kind, replayStep]);
 
   if (!open) return null;
 
-  const ready =
-    name.trim().length > 0 &&
-    acknowledged &&
-    confirmName.trim() === currentName;
-  const replaying = result !== null && step < STEPS.length;
-  const finished = result !== null && step >= STEPS.length;
+  const busy = submitting || phase.kind === "replay";
+  const nameReady = name.trim().length > 0;
+  const confirmReady =
+    nameReady && acknowledged && confirmName.trim() === currentName;
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!ready || submitting) return;
+  async function start() {
+    if (!confirmReady || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
       const next = await convertTenantToOrganization(name.trim());
       setResult(next);
-      setStep(0);
+      setReplayStep(0);
+      setPhase({ kind: "replay" });
     } catch (err) {
       setError(
         err instanceof ConsoleBffError && err.message
@@ -126,175 +143,263 @@ export function ConvertTenantDialog({
     }
   }
 
-  // ② / ③ 回放与完成:整页遮罩,回放期间不可关闭。
-  if (result) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-lg">
-        <div className="flex w-full max-w-panel-lg flex-col gap-xl rounded-xl bg-card p-2xl shadow-dialog ring-1 ring-foreground/10">
-          <div className="flex flex-col gap-xs">
-            <h2 className="text-title-lg text-foreground">
-              {finished ? t("done.title", { name: result.name }) : t("running")}
-            </h2>
-            <p className="text-body-md text-muted-foreground">
-              {finished ? t("done.description") : t("runningHint")}
-            </p>
-          </div>
+  const stepTitle =
+    phase.kind === "wizard"
+      ? t(
+          `stepTitles.${["changes", "name", "process", "confirm"][phase.step - 1]}`,
+        )
+      : phase.kind === "replay"
+        ? t("running")
+        : t("completeTitle");
 
-          <Progress value={(step / STEPS.length) * 100} />
+  const stepIndicator =
+    phase.kind === "wizard"
+      ? t("stepOf", { current: phase.step, total: WIZARD_STEPS })
+      : phase.kind === "replay"
+        ? t("runningHint")
+        : t("done.description");
 
-          <ul className="flex flex-col gap-md">
-            {STEPS.map((s, index) => (
-              <li
-                key={s}
-                className="flex flex-wrap items-center gap-md text-body-md"
-              >
-                <StatusBadge
-                  tone={index < step ? "success" : "neutral"}
-                  icon={index < step ? "check" : "placeholder"}
-                >
-                  {index + 1}
-                </StatusBadge>
-                <span
-                  className={
-                    index < step ? "text-foreground" : "text-muted-foreground"
-                  }
-                >
-                  {t(`steps.${s}`)}
-                </span>
-                {index < step && s === "type" ? (
-                  <PrincipalNo
-                    no={result.tenantNo}
-                    kind="tenant"
-                    className="text-muted-foreground"
-                  />
-                ) : null}
-                {index < step && s === "personal" ? (
-                  <PrincipalNo
-                    no={result.newPersonalTenantNo}
-                    kind="tenant"
-                    className="text-muted-foreground"
-                  />
-                ) : null}
-              </li>
-            ))}
-          </ul>
+  const replayList = (
+    <ul className="flex flex-col gap-md">
+      {STEPS.map((s, index) => {
+        const lit = phase.kind === "done" || index < replayStep;
+        return (
+          <li
+            key={s}
+            className="flex flex-wrap items-center gap-md text-body-md"
+          >
+            <StatusBadge
+              tone={lit ? "success" : "neutral"}
+              icon={lit ? "check" : "placeholder"}
+            >
+              {index + 1}
+            </StatusBadge>
+            <span className={lit ? "text-foreground" : "text-muted-foreground"}>
+              {t(`steps.${s}`)}
+            </span>
+            {lit && s === "type" && result ? (
+              <PrincipalNo
+                no={result.tenantNo}
+                kind="tenant"
+                className="text-muted-foreground"
+              />
+            ) : null}
+            {lit && s === "personal" && result ? (
+              <PrincipalNo
+                no={result.newPersonalTenantNo}
+                kind="tenant"
+                className="text-muted-foreground"
+              />
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
 
-          {finished ? (
-            <div className="flex flex-wrap items-center justify-end gap-sm">
-              <Button
-                variant="outline"
-                size="md"
-                onClick={() => onDone(result)}
-              >
-                {t("done.stay")}
-              </Button>
-              <Button size="md" onClick={() => onDone(result)}>
-                <Icon name="shield-check" size="xs" fallback="placeholder" />
-                <span>{t("done.verify")}</span>
-              </Button>
-            </div>
-          ) : null}
-        </div>
+  let body: React.ReactNode;
+  if (phase.kind === "wizard" && phase.step === 1) {
+    body = (
+      <>
+        <Banner tone="danger" title={t("warning")} />
+        <ul className="flex flex-col gap-md">
+          {ACK_ITEMS.map((item) => (
+            <li
+              key={item.key}
+              className="flex items-start gap-md text-body-md text-foreground"
+            >
+              <Icon
+                name={item.icon}
+                size="sm"
+                fallback="placeholder"
+                className="mt-2xs shrink-0 text-destructive-text"
+              />
+              <span>{t(`ack.${item.key}`)}</span>
+            </li>
+          ))}
+        </ul>
+      </>
+    );
+  } else if (phase.kind === "wizard" && phase.step === 2) {
+    body = (
+      <div className="flex flex-col gap-sm">
+        <Label htmlFor="convert-org-name" className="text-label-md">
+          {t("nameLabel")}
+        </Label>
+        <Input
+          id="convert-org-name"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder={t("namePlaceholder")}
+          autoFocus
+          required
+        />
+        <p className="text-body-sm text-muted-foreground">{t("nameHint")}</p>
       </div>
+    );
+  } else if (phase.kind === "wizard" && phase.step === 3) {
+    body = (
+      <>
+        <ol className="flex flex-col gap-md">
+          {STEPS.map((s, index) => (
+            <li
+              key={s}
+              className="flex items-center gap-md text-body-md text-foreground"
+            >
+              <StatusBadge tone="neutral" icon={false}>
+                {index + 1}
+              </StatusBadge>
+              <span>{t(`steps.${s}`)}</span>
+            </li>
+          ))}
+        </ol>
+        <p className="text-body-sm text-muted-foreground">{t("processHint")}</p>
+      </>
+    );
+  } else if (phase.kind === "wizard") {
+    body = (
+      <>
+        {error ? <Banner tone="danger" title={error} /> : null}
+        <p className="text-body-md text-foreground">
+          {t("summary", { from: currentName, to: name.trim() })}
+        </p>
+        <Label className="flex items-start gap-sm text-body-md">
+          <Checkbox
+            checked={acknowledged}
+            onCheckedChange={(value) => setAcknowledged(value === true)}
+            aria-label={t("ackConfirm")}
+          />
+          <span>{t("ackConfirm")}</span>
+        </Label>
+        <div className="flex flex-col gap-xs">
+          <Label htmlFor="convert-confirm-name" className="text-label-md">
+            {t("confirmLabel", { name: currentName })}
+          </Label>
+          <Input
+            id="convert-confirm-name"
+            value={confirmName}
+            onChange={(event) => setConfirmName(event.target.value)}
+          />
+        </div>
+      </>
+    );
+  } else {
+    body = (
+      <>
+        <Progress
+          value={
+            phase.kind === "done" ? 100 : (replayStep / STEPS.length) * 100
+          }
+        />
+        {replayList}
+        {phase.kind === "done" ? (
+          <Banner
+            tone="success"
+            title={t("done.title", { name: result?.name ?? name })}
+          />
+        ) : null}
+      </>
     );
   }
 
-  // ① 确认框(重大操作:lg 档、警示在最上面、四段信息各自成块、标签在上不换行)
+  let footerActions: React.ReactNode;
+  if (phase.kind === "wizard") {
+    const { step } = phase;
+    footerActions = (
+      <>
+        {step === 1 ? (
+          <Button variant="outline" size="md" onClick={onClose}>
+            {t("cancel")}
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            size="md"
+            onClick={() =>
+              setPhase({ kind: "wizard", step: (step - 1) as 1 | 2 | 3 })
+            }
+            disabled={submitting}
+          >
+            {t("prev")}
+          </Button>
+        )}
+        {step < WIZARD_STEPS ? (
+          <Button
+            size="md"
+            onClick={() =>
+              setPhase({ kind: "wizard", step: (step + 1) as 2 | 3 | 4 })
+            }
+            disabled={step === 2 && !nameReady}
+          >
+            {t("next")}
+          </Button>
+        ) : (
+          <Button
+            size="md"
+            onClick={() => void start()}
+            disabled={!confirmReady || submitting}
+          >
+            {t("start")}
+          </Button>
+        )}
+      </>
+    );
+  } else if (phase.kind === "done" && result) {
+    const done = result;
+    footerActions = (
+      <>
+        <Button variant="outline" size="md" onClick={() => onDone(done)}>
+          {t("done.stay")}
+        </Button>
+        <Button size="md" onClick={() => onDone(done)}>
+          <Icon name="shield-check" size="xs" fallback="placeholder" />
+          <span>{t("done.verify")}</span>
+        </Button>
+      </>
+    );
+  } else {
+    footerActions = null;
+  }
+
   return (
-    <DialogForm
+    <Dialog
       open
-      danger
-      size="lg"
-      title={t("title")}
-      description={t("description")}
-      submitLabel={t("start")}
-      cancelLabel={t("cancel")}
-      submitting={submitting || replaying}
-      submitDisabled={!ready}
       onOpenChange={(next) => {
-        if (!next && !submitting) onClose();
+        if (!next && !busy) onClose();
       }}
-      onSubmit={(event) => void submit(event)}
     >
-      <div className="flex flex-col gap-xl">
-        <Banner tone="danger" title={t("warning")} />
-        {error ? <Banner tone="danger" title={error} /> : null}
+      <DialogContent
+        width="lg"
+        onInteractOutside={(event) => {
+          if (busy) event.preventDefault();
+        }}
+        onEscapeKeyDown={(event) => {
+          if (busy) event.preventDefault();
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>
+            {phase.kind === "wizard" ? t("title") : stepTitle}
+          </DialogTitle>
+          <DialogDescription>
+            {phase.kind === "wizard" ? stepTitle : stepIndicator}
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="flex flex-col gap-xs">
-          <Label htmlFor="convert-org-name" className="text-label-md">
-            {t("nameLabel")}
-          </Label>
-          <Input
-            id="convert-org-name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder={t("namePlaceholder")}
-            required
-          />
-        </div>
+        {/* 正文:各步同一最小高度,不出滚动条 */}
+        <div className="flex min-h-panel-sm flex-col gap-lg py-md">{body}</div>
 
-        <div className="flex flex-col gap-sm">
-          <p className="text-label-md text-foreground">{t("ackTitle")}</p>
-          <ul className="flex flex-col gap-sm">
-            {ACK_ITEMS.map((item) => (
-              <li
-                key={item.key}
-                className="flex items-start gap-sm text-body-md text-foreground"
-              >
-                <Icon
-                  name={item.icon}
-                  size="sm"
-                  fallback="placeholder"
-                  className="mt-2xs shrink-0 text-destructive-text"
-                />
-                <span>{t(`ack.${item.key}`)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="flex flex-col gap-sm">
-          <p className="text-label-md text-foreground">{t("processTitle")}</p>
-          <ol className="flex flex-col gap-xs">
-            {STEPS.map((s, index) => (
-              <li
-                key={s}
-                className="flex items-center gap-md text-body-md text-muted-foreground"
-              >
-                <StatusBadge tone="neutral" icon={false}>
-                  {index + 1}
-                </StatusBadge>
-                <span>{t(`steps.${s}`)}</span>
-              </li>
-            ))}
-          </ol>
-          <p className="text-body-sm text-muted-foreground">
-            {t("processHint")}
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-sm">
-          <p className="text-label-md text-foreground">{t("confirmTitle")}</p>
-          <Label className="flex items-start gap-sm text-body-md">
-            <Checkbox
-              checked={acknowledged}
-              onCheckedChange={(value) => setAcknowledged(value === true)}
-              aria-label={t("ackConfirm")}
-            />
-            <span>{t("ackConfirm")}</span>
-          </Label>
-          <div className="flex flex-col gap-xs">
-            <Label htmlFor="convert-confirm-name" className="text-label-md">
-              {t("confirmLabel", { name: currentName })}
-            </Label>
-            <Input
-              id="convert-confirm-name"
-              value={confirmName}
-              onChange={(event) => setConfirmName(event.target.value)}
-            />
-          </div>
-        </div>
-      </div>
-    </DialogForm>
+        <DialogFooter className="flex items-center justify-between gap-md sm:justify-between">
+          <span className="text-body-sm text-muted-foreground">
+            {phase.kind === "wizard"
+              ? stepIndicator
+              : phase.kind === "replay"
+                ? t("running")
+                : t("completeTitle")}
+          </span>
+          <span className="flex items-center gap-sm">{footerActions}</span>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

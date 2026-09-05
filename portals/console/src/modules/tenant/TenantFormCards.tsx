@@ -466,7 +466,35 @@ export function TenantContactCard({
               <EditableRow
                 label={t("fields.isBillingRecipient")}
                 value={
-                  draft.isBillingRecipient ? t("common.yes") : t("common.no")
+                  // 走查(owner 2026-09-05):用圈圈对勾图标,不写「是」
+                  <span
+                    role="img"
+                    aria-label={
+                      draft.isBillingRecipient
+                        ? t("common.yes")
+                        : t("common.no")
+                    }
+                    title={
+                      draft.isBillingRecipient
+                        ? t("common.yes")
+                        : t("common.no")
+                    }
+                    className={
+                      draft.isBillingRecipient
+                        ? "inline-flex text-success-text"
+                        : "inline-flex text-muted-foreground"
+                    }
+                  >
+                    <Icon
+                      name={
+                        draft.isBillingRecipient
+                          ? "seal-check"
+                          : "circle-dashed"
+                      }
+                      size="sm"
+                      fallback="placeholder"
+                    />
+                  </span>
                 }
                 editing={editable}
                 labels={rowLabels}
