@@ -35,6 +35,7 @@ const EMPTY_PROFILE: OrganizationProfileView = {
   contactRole: null,
   contactEmail: null,
   contactPhone: null,
+  contactUserId: null,
   countryCode: null,
   address: null,
   postalCode: null,
@@ -287,6 +288,16 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
   ): Promise<ProvisionedOrg> {
     return this.provision(ownerUserId, "organization", name.trim());
   }
+  async setTenantDisplayName(
+    tenantId: string,
+    displayName: string,
+  ): Promise<boolean> {
+    const org = this.orgs.get(tenantId);
+    if (!org) return false;
+    org.displayName = displayName;
+    return true;
+  }
+
   async renamePersonalOrg(userId: string, name: string): Promise<boolean> {
     const org = [...this.orgs.values()].find(
       (o) => o.ownerUserId === userId && o.type === "personal",
@@ -379,6 +390,7 @@ export class MockOrganizationRepository implements OrganizationReadRepository {
       contactRole: input.contactRole ?? null,
       contactEmail: input.contactEmail ?? null,
       contactPhone: input.contactPhone ?? null,
+      contactUserId: input.contactUserId ?? null,
       countryCode: input.countryCode ?? null,
       address: input.address ?? null,
       postalCode: input.postalCode ?? null,

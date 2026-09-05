@@ -38,6 +38,7 @@ interface OrgProfileRow {
   contact_role: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  contact_user_id?: string | null;
   country_code: string | null;
   address: string | null;
   postal_code: string | null;
@@ -59,6 +60,7 @@ function mapOrgProfile(row: OrgProfileRow): OrganizationProfileView {
     contactRole: row.contact_role,
     contactEmail: row.contact_email,
     contactPhone: row.contact_phone,
+    contactUserId: row.contact_user_id ?? null,
     countryCode: row.country_code,
     address: row.address,
     postalCode: row.postal_code,
@@ -98,6 +100,7 @@ function mapMemberDetail(row: OrgMemberDetailRow): OrgMemberDetail {
 interface OrgRow {
   id: string;
   name: string;
+  display_name?: string | null;
   type: string;
   owner_user_id: string;
   status: string;
@@ -203,6 +206,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
         `update tenancy.tenants
             set type = 'organization',
                 name = $2,
+                display_name = $2,
                 verification_status = 'unverified',
                 updated_at = now()
           where id = $1`,
@@ -221,8 +225,8 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
         [ownerUserId],
       );
       await client.query(
-        `insert into tenancy.tenants (id, name, type, owner_user_id, status, created_at, updated_at)
-         values ($1, $2, 'personal', $3, 'active', now(), now())`,
+        `insert into tenancy.tenants (id, name, display_name, type, owner_user_id, status, created_at, updated_at)
+         values ($1, $2, $2, 'personal', $3, 'active', now(), now())`,
         [newTenantId, named.rows[0]?.n ?? "Personal", ownerUserId],
       );
       await client.query(
@@ -334,9 +338,22 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     }
   }
 
+  /** 改简称(display_name)。日常展示名,不碰认证状态。 */
+  async setTenantDisplayName(
+    tenantId: string,
+    displayName: string,
+  ): Promise<boolean> {
+    const result = await this.pool.query(
+      `update tenancy.tenants set display_name = $2, updated_at = now()
+        where id = $1 and deleted_at is null`,
+      [tenantId, displayName],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
   async renamePersonalOrg(userId: string, name: string): Promise<boolean> {
     const result = await this.pool.query(
-      `update tenancy.tenants set name = $2, updated_at = now()
+      `update tenancy.tenants set name = $2, display_name = $2, updated_at = now()
         where owner_user_id = $1 and type = 'personal'`,
       [userId, name],
     );
@@ -369,8 +386,8 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
         name = named.rows[0]?.n ?? "Personal";
       }
       await client.query(
-        `insert into tenancy.tenants (id, name, type, owner_user_id, status, created_at, updated_at)
-         values ($1, $2, $3, $4, 'active', now(), now())`,
+        `insert into tenancy.tenants (id, name, display_name, type, owner_user_id, status, created_at, updated_at)
+         values ($1, $2, $2, $3, $4, 'active', now(), now())`,
         [orgId, name, type, ownerUserId],
       );
       // Default workspace name 'default workspace' + is_default marker (owner 2026-08-19;
@@ -415,7 +432,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
 
   async getOrgById(orgId: string): Promise<OrgView | null> {
     const r = await this.pool.query<OrgRow>(
-      `select id, name, type, owner_user_id, status,
+      `select id, name, display_name, type, owner_user_id, status,
               tenant_no::text as tenant_no,
               created_at::text as created_at,
               verification_status
@@ -431,7 +448,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
     const like = `%${query.trim().toLowerCase()}%`;
     const cap = Math.min(Math.max(limit, 1), 50);
     const r = await this.pool.query<OrgRow>(
-      `select id, name, type, owner_user_id, status
+      `select id, name, display_name, type, owner_user_id, status
          from tenancy.tenants
         where deleted_at is null
           and (lower(name) like $1 or lower(id::text) like $1)
@@ -496,10 +513,18 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
      is_billing_recipient, timezone, language, currency`;
 
   // Primary-contact lateral join, shared by profile reads (first 'primary' row wins).
+  // 关联了成员(user_id)时,姓名 / 邮箱 / 电话实时取自该成员的账号资料——联系人跟着
+  // 人走,不用两头维护;未关联才用联系人行自己填的值(走查 2026-09-05)。
   private readonly primaryContactJoin = `
          left join lateral (
-           select c.name, c.title, c.email, c.phone
+           select coalesce(nullif(up.display_name, ''), u.account, c.name) as name,
+                  c.title,
+                  coalesce(u.email, c.email) as email,
+                  coalesce(u.phone, c.phone) as phone,
+                  c.user_id
              from tenancy.tenant_contacts c
+             left join account.users u on u.id = c.user_id and u.deleted_at is null
+             left join account.user_profiles up on up.user_id = c.user_id
             where c.tenant_id = tp.tenant_id and c.contact_type = 'primary'
             order by c.created_at asc limit 1
          ) pc on true`;
@@ -509,6 +534,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
       `select ${this.profileCols},
               pc.name as contact_name, pc.title as contact_role,
               pc.email as contact_email, pc.phone as contact_phone,
+              pc.user_id as contact_user_id,
               tl.hash as logo_hash, tp.updated_at::text as updated_at
          from tenancy.tenant_profiles tp
          left join tenancy.tenant_logos tl on tl.tenant_id = tp.tenant_id and tl.kind = 'logo'${this.primaryContactJoin}
@@ -561,15 +587,15 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
        ),
        updc as (
          update tenancy.tenant_contacts tc
-            set name = $13, title = $14, email = $15, phone = $16, updated_at = now()
+            set name = $13, title = $14, email = $15, phone = $16, user_id = $17, updated_at = now()
            from cur
           where tc.id = cur.id
             and $13::varchar is not null and $15::varchar is not null
           returning tc.id
        ),
        insc as (
-         insert into tenancy.tenant_contacts (tenant_id, contact_type, name, title, email, phone)
-         select $1, 'primary', $13, $14, $15, $16
+         insert into tenancy.tenant_contacts (tenant_id, contact_type, name, title, email, phone, user_id)
+         select $1, 'primary', $13, $14, $15, $16, $17
           where $13::varchar is not null and $15::varchar is not null
             and not exists (select 1 from cur)
          returning id
@@ -598,6 +624,7 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
         input.contactRole ?? null,
         input.contactEmail ?? null,
         input.contactPhone ?? null,
+        input.contactUserId ?? null,
       ],
     );
     return mapOrgProfile(r.rows[0]!);
@@ -1521,6 +1548,7 @@ function mapOrg(row?: OrgRow): OrgView | null {
     ownerUserId: row.owner_user_id,
     status: row.status,
   };
+  if (row.display_name != null) view.displayName = row.display_name;
   if (row.tenant_no != null) view.tenantNo = row.tenant_no;
   if (row.created_at != null) view.createdAt = row.created_at;
   if (

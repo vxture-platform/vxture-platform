@@ -74,6 +74,8 @@ export interface ConsoleOrganizationProfile {
   contactRole: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
+  /** 联系人关联的成员;关联时姓名 / 邮箱 / 电话取自成员资料。 */
+  contactUserId: string | null;
   countryCode: string | null;
   address: string | null;
   postalCode: string | null;

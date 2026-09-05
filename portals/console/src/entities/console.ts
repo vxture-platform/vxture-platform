@@ -160,6 +160,8 @@ export interface ConsoleOrganizationProfile {
   contactRole: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
+  /** 联系人关联的成员;关联时姓名 / 邮箱 / 电话取自成员资料。 */
+  contactUserId: string | null;
   countryCode: string | null;
   address: string | null;
   postalCode: string | null;
@@ -181,6 +183,10 @@ export interface ConsoleOrganizationProfile {
 
 /** Editable subset of the tenant profile (PUT /api/me/organization). */
 export interface OrganizationProfileUpdate {
+  /** 简称(日常展示名),自由改。 */
+  displayName?: string | null;
+  /** 关联成员;null 解除关联。 */
+  contactUserId?: string | null;
   /** 租户名称(批 5c);组织租户改名即作废原企业认证。 */
   name?: string | null;
   description?: string | null;

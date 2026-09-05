@@ -29,6 +29,8 @@ export type TransferOwnerResult =
 export interface OrgView {
   id: string;
   name: string;
+  /** 简称:日常展示名(侧栏 / 面板 / 身份卡);null 时退到 name。 */
+  displayName?: string | null;
   type: OrgType;
   ownerUserId: string;
   status: string;
@@ -94,6 +96,8 @@ export interface OrganizationProfileView {
   contactRole: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
+  /** 联系人关联的成员(tenant_contacts.user_id);关联时姓名 / 邮箱 / 电话取自成员资料。 */
+  contactUserId: string | null;
   countryCode: string | null;
   address: string | null;
   postalCode: string | null;
@@ -125,6 +129,7 @@ export interface OrgProfileUpdateInput {
   contactRole?: string | null;
   contactEmail?: string | null;
   contactPhone?: string | null;
+  contactUserId?: string | null;
   countryCode?: string | null;
   address?: string | null;
   postalCode?: string | null;
@@ -284,6 +289,8 @@ export interface OrganizationReadRepository {
     tenantId: string,
     name: string,
   ): Promise<{ verificationSuperseded: boolean } | null>;
+  /** 改简称(display_name):日常展示名,不碰认证。 */
+  setTenantDisplayName(tenantId: string, displayName: string): Promise<boolean>;
   /**
    * 个人租户转组织(批 5c-2):一个事务里改类型 / 名称 / 认证状态,并立刻补建
    * 这个人的新个人租户。主体码 v4 之后不换号。不可回退。

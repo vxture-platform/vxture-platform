@@ -67,15 +67,24 @@ import {
   TenantRegionCard,
   type TenantDraft,
   type TenantDraftPatch,
+  type ContactOption,
 } from "./TenantFormCards";
 import { TenantDangerCard } from "./TenantDangerCard";
 import { ConvertTenantDialog } from "./ConvertTenantDialog";
 
 const LOGO_ACCEPT = "image/png,image/jpeg,image/webp";
 
+/** 默认区域的托底值(owner 2026-09-05:按中国设定,三项可改)。 */
+const REGION_DEFAULTS = {
+  timezone: "Asia/Shanghai",
+  language: "zh-CN",
+  currency: "CNY",
+} as const;
+
 const EMPTY_DRAFT: TenantDraft = {
   name: "",
-  description: "",
+  displayName: "",
+  contactUserId: "",
   industry: "",
   scale: "",
   website: "",
@@ -87,16 +96,17 @@ const EMPTY_DRAFT: TenantDraft = {
   address: "",
   postalCode: "",
   isBillingRecipient: false,
-  timezone: "",
-  language: "",
-  currency: "",
+  timezone: REGION_DEFAULTS.timezone,
+  language: REGION_DEFAULTS.language,
+  currency: REGION_DEFAULTS.currency,
 };
 
 function toDraft(p: ConsoleOrganizationProfile | null): TenantDraft {
   if (!p) return EMPTY_DRAFT;
   return {
     name: p.tenantName ?? "",
-    description: p.description ?? "",
+    displayName: p.displayName ?? "",
+    contactUserId: p.contactUserId ?? "",
     industry: p.industry ?? "",
     scale: p.scale ?? "",
     website: p.website ?? "",
@@ -108,9 +118,11 @@ function toDraft(p: ConsoleOrganizationProfile | null): TenantDraft {
     address: p.address ?? "",
     postalCode: p.postalCode ?? "",
     isBillingRecipient: p.isBillingRecipient ?? false,
-    timezone: p.timezone ?? "",
-    language: p.language ?? "",
-    currency: p.currency ?? "",
+    // 走查(owner 2026-09-05):默认区域三项托底按中国设定,可改。库里为空时不画
+    // 「未设置」,直接显示托底值;基线与草稿同源,所以不会凭空算成「有改动」。
+    timezone: p.timezone || REGION_DEFAULTS.timezone,
+    language: p.language || REGION_DEFAULTS.language,
+    currency: p.currency || REGION_DEFAULTS.currency,
   };
 }
 
@@ -225,6 +237,10 @@ export function TenantPage() {
       for (const key of Object.keys(saved) as (keyof TenantDraft)[]) {
         if (draft[key] !== saved[key]) patch[key] = draft[key];
       }
+      // 关联成员:空串是「不关联」,传 null 让后端解除关联
+      if ("contactUserId" in patch) {
+        patch.contactUserId = draft.contactUserId || null;
+      }
       const next = await updateOrganization(patch);
       setProfile(next);
       setDraft(toDraft(next));
@@ -299,6 +315,30 @@ export function TenantPage() {
     [members, session.user?.id],
   );
   const tenantName = profile?.tenantName ?? session.tenant?.name ?? "";
+  // 联系人可关联的成员:组织租户 = 活跃成员;个人租户只有自己(成员接口不对个人租户开)。
+  const contactOptions = useMemo<ContactOption[]>(
+    () =>
+      isOrg
+        ? members
+            .filter((m) => m.statusCode === "active")
+            .map((m) => ({
+              id: m.id,
+              name: m.name,
+              email: m.email ?? null,
+              phone: m.phone ?? null,
+            }))
+        : session.user
+          ? [
+              {
+                id: session.user.id,
+                name: session.user.name,
+                email: session.user.email ?? null,
+                phone: session.user.phone ?? null,
+              },
+            ]
+          : [],
+    [isOrg, members, session.user],
+  );
   const transferReady =
     transferTarget !== "" && transferConfirm.trim() === tenantName;
 
@@ -389,7 +429,9 @@ export function TenantPage() {
     >
       <TenantIdentityCard
         logoSrc={logoSrc}
-        name={loading ? t("common.loading") : tenantName}
+        name={
+          loading ? t("common.loading") : profile?.displayName || tenantName
+        }
         tenantType={tenantType}
         tenantNo={session.tenant?.tenantNo ?? null}
         status={profile?.status ?? null}
@@ -420,6 +462,7 @@ export function TenantPage() {
       />
       <TenantContactCard
         draft={draft}
+        options={contactOptions}
         onChange={changeDraft}
         readOnly={!canManage || loading}
       />

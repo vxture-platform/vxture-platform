@@ -10,6 +10,7 @@ CREATE TABLE tenancy.tenants (
     id                   uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_no            bigint       NOT NULL,  -- 可视码 10 位:类别位 2 + 随机 8 + Luhn(§11 v4「三号解耦」;个人/组织一视同仁,转换不换号)
     name                 varchar(128) NOT NULL,
+    display_name         varchar(96),                                 -- 简称:日常展示名,自由改;name 是认证名(走查 2026-09-05,批 5c 修正)
     type                 varchar(16)  NOT NULL,
     owner_user_id        uuid         NOT NULL,                    -- 跨 schema→account.users（90）
     status               varchar(32)  NOT NULL DEFAULT 'active',

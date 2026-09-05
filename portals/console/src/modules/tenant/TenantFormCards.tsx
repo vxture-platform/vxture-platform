@@ -9,23 +9,25 @@
  * 个人租户与组织租户**同结构、同字段**(owner 2026-09-05):字段允许为空,不按类型
  * 藏卡——这样个人转组织时页面不换。缩进与名列宽度复用账号信息页的 CardRows。
  *
+ * 走查修正(owner 2026-09-05):
+ * - 名称拆两条,与用户的 account / display_name 同构:**租户简称**是日常展示名、自由改;
+ *   **租户名称**是认证名,组织租户改它会作废已有认证。
+ * - 简介删掉;联系人默认关联所有者,可改为关联别的成员(姓名 / 邮箱 / 电话随成员资料),
+ *   不关联才全手填;联系人卡改成一行两块。
+ * - 默认区域托底按中国设定;租户策略只标规划中。
+ *
  * 可改字段一律随页底「保存」一次提交(草稿态在 TenantPage 里)。没有
  * `tenant.settings.manage` 的成员看到的是同一批字段的只读形态。
  */
 
+import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import {
-  Button,
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
   DetailList,
   DetailRow,
-  Icon,
   Input,
   NativeSelect,
   Switch,
-  Textarea,
 } from "@vxture/design-system";
 import { PlannedBadge, PlannedNotice } from "@/components/planned";
 import {
@@ -42,11 +44,15 @@ import { TenantSection } from "./TenantIdentityCard";
 const CONTROL_CLASS = "w-full max-w-overlay-lg";
 
 export interface TenantDraft {
+  /** 认证名(tenancy.tenants.name)。 */
   name: string;
-  description: string;
+  /** 简称(tenancy.tenants.display_name)。 */
+  displayName: string;
   industry: string;
   scale: string;
   website: string;
+  /** 联系人关联的成员 id;空串 = 不关联、手填。 */
+  contactUserId: string;
   contactName: string;
   contactRole: string;
   contactEmail: string;
@@ -62,6 +68,14 @@ export interface TenantDraft {
 
 export type TenantDraftPatch = Partial<TenantDraft>;
 
+/** 联系人可关联的成员(组织 = 活跃成员;个人租户 = 自己)。 */
+export interface ContactOption {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+}
+
 const SCALE_OPTIONS = ["1-10", "11-50", "51-200", "201-500", "500+"];
 const CURRENCY_OPTIONS = ["CNY", "USD"];
 
@@ -71,23 +85,30 @@ function TextRow({
   onChange,
   readOnly,
   placeholder,
+  hint,
 }: {
   readonly label: string;
   readonly value: string;
   readonly onChange: (next: string) => void;
   readonly readOnly: boolean;
   readonly placeholder?: string;
+  readonly hint?: ReactNode;
 }) {
   return (
     <DetailRow label={label}>
-      <Input
-        className={CONTROL_CLASS}
-        value={value}
-        readOnly={readOnly}
-        disabled={readOnly}
-        {...(placeholder ? { placeholder } : {})}
-        onChange={(event) => onChange(event.target.value)}
-      />
+      <span className="flex w-full flex-col gap-2xs">
+        <Input
+          className={CONTROL_CLASS}
+          value={value}
+          readOnly={readOnly}
+          disabled={readOnly}
+          {...(placeholder ? { placeholder } : {})}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        {hint ? (
+          <span className="text-body-sm text-muted-foreground">{hint}</span>
+        ) : null}
+      </span>
     </DetailRow>
   );
 }
@@ -101,7 +122,7 @@ export function TenantBasicCard({
   readonly draft: TenantDraft;
   readonly onChange: (patch: TenantDraftPatch) => void;
   readonly readOnly: boolean;
-  /** 已认证 / 审核中的组织租户:改名会作废认证,行下给一句提醒。 */
+  /** 已认证 / 审核中的组织租户:改认证名会作废认证,行下给一句提醒。 */
   readonly verified: boolean;
 }) {
   const t = useTranslations("tenantInfoPage");
@@ -113,34 +134,28 @@ export function TenantBasicCard({
     >
       <CardRows>
         <DetailList className={DETAIL_LIST_CLASS}>
-          <DetailRow label={t("fields.name")}>
-            <span className="flex flex-col gap-2xs">
-              <Input
-                className={CONTROL_CLASS}
-                value={draft.name}
-                readOnly={readOnly}
-                disabled={readOnly}
-                onChange={(event) => onChange({ name: event.target.value })}
-              />
-              {verified ? (
-                <span className="text-body-sm text-warning">
+          <TextRow
+            label={t("fields.displayName")}
+            value={draft.displayName}
+            readOnly={readOnly}
+            onChange={(displayName) => onChange({ displayName })}
+            hint={t("fields.displayNameHint")}
+          />
+          <TextRow
+            label={t("fields.name")}
+            value={draft.name}
+            readOnly={readOnly}
+            onChange={(name) => onChange({ name })}
+            hint={
+              verified ? (
+                <span className="text-warning">
                   {t("fields.nameResetsVerification")}
                 </span>
-              ) : null}
-            </span>
-          </DetailRow>
-          <DetailRow label={t("fields.description")}>
-            <Textarea
-              className={CONTROL_CLASS}
-              rows={2}
-              value={draft.description}
-              readOnly={readOnly}
-              disabled={readOnly}
-              onChange={(event) =>
-                onChange({ description: event.target.value })
-              }
-            />
-          </DetailRow>
+              ) : (
+                t("fields.nameHint")
+              )
+            }
+          />
           <TextRow
             label={t("fields.industry")}
             value={draft.industry}
@@ -179,16 +194,61 @@ export function TenantBasicCard({
   );
 }
 
+/** 联系人卡的一格:标签在上、控件在下,两格一行。 */
+function GridField({
+  label,
+  children,
+  span,
+}: {
+  readonly label: string;
+  readonly children: ReactNode;
+  readonly span?: boolean;
+}) {
+  return (
+    <label
+      className={`flex min-w-0 flex-col gap-2xs ${span ? "sm:col-span-2" : ""}`}
+    >
+      <span className="text-label-sm text-muted-foreground">{label}</span>
+      {children}
+    </label>
+  );
+}
+
 export function TenantContactCard({
   draft,
+  options,
   onChange,
   readOnly,
 }: {
   readonly draft: TenantDraft;
+  readonly options: readonly ContactOption[];
   readonly onChange: (patch: TenantDraftPatch) => void;
   readonly readOnly: boolean;
 }) {
   const t = useTranslations("tenantInfoPage");
+  const linked = draft.contactUserId
+    ? options.find((o) => o.id === draft.contactUserId)
+    : undefined;
+  // 关联了成员:姓名 / 邮箱 / 电话取自成员资料(只读);未关联才手填。
+  const derivedLocked = Boolean(draft.contactUserId);
+  const name = linked ? linked.name : draft.contactName;
+  const email = linked ? (linked.email ?? "") : draft.contactEmail;
+  const phone = linked ? (linked.phone ?? "") : draft.contactPhone;
+
+  function link(id: string) {
+    const option = options.find((o) => o.id === id);
+    onChange(
+      option
+        ? {
+            contactUserId: id,
+            contactName: option.name,
+            contactEmail: option.email ?? "",
+            contactPhone: option.phone ?? "",
+          }
+        : { contactUserId: "" },
+    );
+  }
+
   return (
     <TenantSection
       icon="user"
@@ -196,50 +256,104 @@ export function TenantContactCard({
       descriptionKey="cards.contact.description"
     >
       <CardRows>
-        <DetailList className={DETAIL_LIST_CLASS}>
-          <TextRow
-            label={t("fields.contactName")}
-            value={draft.contactName}
-            readOnly={readOnly}
-            onChange={(contactName) => onChange({ contactName })}
-          />
-          <TextRow
-            label={t("fields.contactRole")}
-            value={draft.contactRole}
-            readOnly={readOnly}
-            onChange={(contactRole) => onChange({ contactRole })}
-          />
-          <TextRow
-            label={t("fields.contactEmail")}
-            value={draft.contactEmail}
-            readOnly={readOnly}
-            onChange={(contactEmail) => onChange({ contactEmail })}
-          />
-          <TextRow
-            label={t("fields.contactPhone")}
-            value={draft.contactPhone}
-            readOnly={readOnly}
-            onChange={(contactPhone) => onChange({ contactPhone })}
-          />
-          <TextRow
-            label={t("fields.countryCode")}
-            value={draft.countryCode}
-            readOnly={readOnly}
-            onChange={(countryCode) => onChange({ countryCode })}
-          />
-          <TextRow
-            label={t("fields.address")}
-            value={draft.address}
-            readOnly={readOnly}
-            onChange={(address) => onChange({ address })}
-          />
-          <TextRow
-            label={t("fields.postalCode")}
-            value={draft.postalCode}
-            readOnly={readOnly}
-            onChange={(postalCode) => onChange({ postalCode })}
-          />
-          <DetailRow label={t("fields.isBillingRecipient")}>
+        <div className="grid gap-md sm:grid-cols-2">
+          <GridField label={t("fields.contactUser")}>
+            <NativeSelect
+              value={draft.contactUserId}
+              disabled={readOnly}
+              onChange={(event) => link(event.target.value)}
+              aria-label={t("fields.contactUser")}
+            >
+              <option value="">{t("fields.contactUserNone")}</option>
+              {draft.contactUserId && !linked ? (
+                <option value={draft.contactUserId}>
+                  {draft.contactName || draft.contactUserId}
+                </option>
+              ) : null}
+              {options.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </NativeSelect>
+          </GridField>
+          <GridField label={t("fields.contactRole")}>
+            <Input
+              value={draft.contactRole}
+              readOnly={readOnly}
+              disabled={readOnly}
+              onChange={(event) =>
+                onChange({ contactRole: event.target.value })
+              }
+            />
+          </GridField>
+
+          <GridField label={t("fields.contactName")}>
+            <Input
+              value={name}
+              readOnly={readOnly || derivedLocked}
+              disabled={readOnly || derivedLocked}
+              onChange={(event) =>
+                onChange({ contactName: event.target.value })
+              }
+            />
+          </GridField>
+          <GridField label={t("fields.contactEmail")}>
+            <Input
+              value={email}
+              readOnly={readOnly || derivedLocked}
+              disabled={readOnly || derivedLocked}
+              onChange={(event) =>
+                onChange({ contactEmail: event.target.value })
+              }
+            />
+          </GridField>
+
+          <GridField label={t("fields.contactPhone")}>
+            <Input
+              value={phone}
+              readOnly={readOnly || derivedLocked}
+              disabled={readOnly || derivedLocked}
+              onChange={(event) =>
+                onChange({ contactPhone: event.target.value })
+              }
+            />
+          </GridField>
+          <GridField label={t("fields.countryCode")}>
+            <Input
+              value={draft.countryCode}
+              readOnly={readOnly}
+              disabled={readOnly}
+              onChange={(event) =>
+                onChange({ countryCode: event.target.value })
+              }
+            />
+          </GridField>
+
+          <GridField label={t("fields.address")}>
+            <Input
+              value={draft.address}
+              readOnly={readOnly}
+              disabled={readOnly}
+              onChange={(event) => onChange({ address: event.target.value })}
+            />
+          </GridField>
+          <GridField label={t("fields.postalCode")}>
+            <Input
+              value={draft.postalCode}
+              readOnly={readOnly}
+              disabled={readOnly}
+              onChange={(event) => onChange({ postalCode: event.target.value })}
+            />
+          </GridField>
+
+          {derivedLocked ? (
+            <span className="text-body-sm text-muted-foreground sm:col-span-2">
+              {t("fields.contactLinkedHint")}
+            </span>
+          ) : null}
+
+          <div className="flex items-center gap-sm sm:col-span-2">
             <Switch
               checked={draft.isBillingRecipient}
               disabled={readOnly}
@@ -248,11 +362,14 @@ export function TenantContactCard({
               }
               aria-label={t("fields.isBillingRecipient")}
             />
+            <span className="text-body-sm text-foreground">
+              {t("fields.isBillingRecipient")}
+            </span>
             <span className="text-body-sm text-muted-foreground">
               {t("fields.isBillingRecipientHint")}
             </span>
-          </DetailRow>
-        </DetailList>
+          </div>
+        </div>
       </CardRows>
     </TenantSection>
   );
@@ -284,7 +401,6 @@ export function TenantRegionCard({
               onChange={(event) => onChange({ language: event.target.value })}
               aria-label={t("fields.language")}
             >
-              <option value="">{t("common.unset")}</option>
               <option value="zh-CN">{t("language.zhCN")}</option>
               <option value="en-US">{t("language.enUS")}</option>
             </NativeSelect>
@@ -297,7 +413,6 @@ export function TenantRegionCard({
               onChange={(event) => onChange({ timezone: event.target.value })}
               aria-label={t("fields.timezone")}
             >
-              <option value="">{t("common.unset")}</option>
               {draft.timezone && !TIMEZONE_OPTIONS.includes(draft.timezone) ? (
                 <option value={draft.timezone}>
                   {formatTimezone(draft.timezone, draft.timezone)}
@@ -318,7 +433,6 @@ export function TenantRegionCard({
               onChange={(event) => onChange({ currency: event.target.value })}
               aria-label={t("fields.currency")}
             >
-              <option value="">{t("common.unset")}</option>
               {CURRENCY_OPTIONS.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -333,39 +447,23 @@ export function TenantRegionCard({
 }
 
 /**
- * 租户策略:九条,后端未建。默认折叠、控件不渲染(此前那版是渲染成禁用控件并写
- * localStorage——写了个只有自己看得见的假设置,批 5c 一并去掉)。
+ * 租户策略:板块保留、只标「规划中」(owner 走查 2026-09-05:内部细节删掉——那九条
+ * 的定位还没定,列出来反而像承诺)。后端未建,不渲染任何控件。
  */
 export function TenantPolicyCard() {
-  const t = useTranslations("tenantInfoPage");
-  const groups = ["access", "security", "data"] as const;
   return (
-    <TenantSection icon="settings" titleKey="cards.policy.title">
+    <TenantSection
+      icon="settings"
+      titleKey="cards.policy.title"
+      descriptionKey="cards.policy.description"
+    >
       <CardRows>
-        <Collapsible>
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm" className="justify-start">
-              <PlannedBadge />
-              <span>{t("cards.policy.toggle")}</span>
-              <Icon name="chevron-down" size="xs" fallback="placeholder" />
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="flex flex-col gap-sm pt-sm">
-              <PlannedNotice variant="controls" />
-              <ul className="flex flex-col gap-xs">
-                {groups.map((g) => (
-                  <li key={g} className="text-body-sm text-muted-foreground">
-                    <span className="text-foreground">
-                      {t(`policy.${g}.title`)}
-                    </span>
-                    {t(`policy.${g}.items`)}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
+        <div className="flex flex-col gap-sm">
+          <span>
+            <PlannedBadge />
+          </span>
+          <PlannedNotice variant="controls" />
+        </div>
       </CardRows>
     </TenantSection>
   );
