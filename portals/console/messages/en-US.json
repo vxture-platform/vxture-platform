@@ -3033,7 +3033,7 @@
       "cancel": "Cancel",
       "failed": "Conversion failed. Please try again.",
       "running": "Converting",
-      "runningHint": "The change is committed; walking through what happened.",
+      "runningHint": "Converting… please keep this window open.",
       "steps": {
         "check": "Verify owner and tenant state",
         "type": "Change tenant type and name; the ID stays the same",
@@ -3049,7 +3049,7 @@
       },
       "warning": "Major operation: this cannot be undone. Check every item below.",
       "processTitle": "What happens",
-      "processHint": "Committed in one transaction, then shown step by step; at least 3 seconds.",
+      "processHint": "Runs immediately after you confirm; please keep this window open.",
       "confirmTitle": "Confirm",
       "stepOf": "Step {current} of {total}",
       "stepTitles": {
