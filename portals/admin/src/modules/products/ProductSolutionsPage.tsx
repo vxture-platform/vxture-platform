@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import { INDUSTRY_DEFS, industryLabel } from "@vxture/core-utils";
 import {
   ActionButton,
   ActionMenu,
@@ -190,6 +191,7 @@ export function ProductSolutionsPage() {
   const tShared = useTranslations();
   const labels = useSolutionLabels();
   const locale = useLocale();
+  const labelLocale = locale.startsWith("en") ? "en" : "zh";
   const router = useRouter();
   const { toast } = useToast();
   /* 方案写操作走 step-up（与套餐版本发布同一风险级，70-product-solutions.md §7）。 */
@@ -527,7 +529,12 @@ export function ProductSolutionsPage() {
             </span>
           }
           description={
-            [solution.industry, solution.scenario]
+            [
+              solution.industry
+                ? industryLabel(solution.industry, labelLocale)
+                : "",
+              solution.scenario,
+            ]
               .filter(Boolean)
               .join(" | ") || t("columns.noScenario")
           }
@@ -759,7 +766,7 @@ export function ProductSolutionsPage() {
                 <option value="all">{t("filters.allIndustries")}</option>
                 {industries.map((industry) => (
                   <option key={industry} value={industry}>
-                    {industry}
+                    {industryLabel(industry, labelLocale)}
                   </option>
                 ))}
               </NativeSelect>
@@ -887,17 +894,27 @@ export function ProductSolutionsPage() {
             </SolutionField>
           </div>
           <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
-            <SolutionField
-              label={t("dialog.fields.industry")}
-              count={{ value: form.industry, max: 128 }}
-            >
-              <Input
+            {/* 行业领域:与租户所属行业同一份 core-utils 自定义清单(owner 2026-09-06),
+                存码;历史手填的自由文本不在清单里时当一个额外选项显影 */}
+            <SolutionField label={t("dialog.fields.industry")}>
+              <NativeSelect
                 value={form.industry}
-                maxLength={128}
                 onChange={(event) =>
                   setForm((old) => ({ ...old, industry: event.target.value }))
                 }
-              />
+                aria-label={t("dialog.fields.industry")}
+              >
+                <option value="">{t("dialog.fields.industryUnset")}</option>
+                {form.industry &&
+                !INDUSTRY_DEFS.some((d) => d.value === form.industry) ? (
+                  <option value={form.industry}>{form.industry}</option>
+                ) : null}
+                {INDUSTRY_DEFS.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {labelLocale === "en" ? d.labelEn : d.labelZh}
+                  </option>
+                ))}
+              </NativeSelect>
             </SolutionField>
             <SolutionField
               label={t("dialog.fields.ownerTeam")}

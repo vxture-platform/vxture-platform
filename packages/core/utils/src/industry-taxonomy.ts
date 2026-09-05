@@ -9,11 +9,11 @@
  *   按 locale 取标签。历史上手填的自由文本仍可能留在列里:`industryLabel` 对未登记值
  *   退回原字符串,页面把它当一个额外选项显影而不是吞掉。
  *
- *   product.solutions.industry(方案的行业领域)是另一列、明文自由文本(DDL 注明
- *   「不建字典」),本清单**不**收编它;owner 决定要统一时再让方案侧改读这里。
+ *   product.solutions.industry(方案的行业领域)同样改读本清单(owner 2026-09-06「修改」):
+ *   admin 方案表单下拉、admin-bff 写入校验都认这里的码;方案侧历史自由文本同样原样显影。
  *
- *   顺序即下拉呈现顺序。改清单只改本文件;消费方(console 下拉 / console-bff 写入校验 /
- *   admin-bff 展示映射)都从这里取。
+ *   顺序即下拉呈现顺序。改清单只改本文件;消费方(console / admin 下拉、console-bff /
+ *   admin-bff 写入校验、admin-bff 展示映射)都从这里取。
  */
 
 /** 受管的行业码全集——console 下拉与写入校验只认这些。 */

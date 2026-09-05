@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
+import { INDUSTRY_DEFS, industryLabel } from "@vxture/core-utils";
 import {
   ActionButton,
   ActionMenu,
@@ -263,6 +264,7 @@ function ProductSolutionDetails({
   const tShared = useTranslations();
   const labels = useSolutionLabels();
   const locale = useLocale();
+  const labelLocale = locale.startsWith("en") ? "en" : "zh";
   const withLabels = useConfirmLabels();
   const tierByCode = useMemo(
     () => new Map(solution.tiers.map((tier) => [tier.tierCode, tier])),
@@ -355,7 +357,11 @@ function ProductSolutionDetails({
         <DetailSectionHeading icon="map-pin" title={t("sections.scope")} />
         <DetailList columns={3}>
           <DetailRow label={t("fields.industry")}>
-            {orUnset(solution.industry)}
+            {orUnset(
+              solution.industry
+                ? industryLabel(solution.industry, labelLocale)
+                : null,
+            )}
           </DetailRow>
           <DetailRow label={t("fields.scenario")}>
             {orUnset(solution.scenario)}
@@ -560,6 +566,8 @@ export function ProductSolutionDetailPage({
   const t = useTranslations("productSolutionDetailPage");
   const tShared = useTranslations();
   const labels = useSolutionLabels();
+  // 行业清单标签按界面语言取(编辑框在本组件里,不共享 ProductSolutionDetails 的 locale)
+  const labelLocale = useLocale().startsWith("en") ? "en" : "zh";
   const { toast } = useToast();
   /* 方案写操作走 step-up（与套餐版本发布同一风险级，70-product-solutions.md §7）。 */
   const { runWithStepUp } = useStepUp();
@@ -945,19 +953,29 @@ export function ProductSolutionDetailPage({
             </SolutionField>
           </div>
           <div className="grid grid-cols-1 gap-md sm:grid-cols-2">
-            <SolutionField
-              label={t("fields.industry")}
-              count={{ value: editForm.industry, max: 128 }}
-            >
-              <Input
+            {/* 行业领域:与租户所属行业同一份 core-utils 自定义清单(owner 2026-09-06),
+                存码;历史手填的自由文本不在清单里时当一个额外选项显影 */}
+            <SolutionField label={t("fields.industry")}>
+              <NativeSelect
                 value={editForm.industry}
-                maxLength={128}
                 onChange={(event) =>
                   setEditForm((old) =>
                     old ? { ...old, industry: event.target.value } : old,
                   )
                 }
-              />
+                aria-label={t("fields.industry")}
+              >
+                <option value="">{t("editDialog.industryUnset")}</option>
+                {editForm.industry &&
+                !INDUSTRY_DEFS.some((d) => d.value === editForm.industry) ? (
+                  <option value={editForm.industry}>{editForm.industry}</option>
+                ) : null}
+                {INDUSTRY_DEFS.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {labelLocale === "en" ? d.labelEn : d.labelZh}
+                  </option>
+                ))}
+              </NativeSelect>
             </SolutionField>
             <SolutionField label={t("editDialog.tags")}>
               <Input

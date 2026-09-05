@@ -1534,6 +1534,7 @@
         "solutionCodeInvalid": "编码格式不对：只能用小写字母、数字和连字符（如 flood-regulation）",
         "solutionName": "方案名称",
         "industry": "行业领域",
+        "industryUnset": "未设置",
         "scenario": "业务场景",
         "customerSegment": "客户群体",
         "ownerTeam": "负责团队",
@@ -1642,6 +1643,7 @@
     "editDialog": {
       "title": "修改方案",
       "description": "方案编码不可改；状态在页头的状态操作里迁移。",
+      "industryUnset": "未设置",
       "submit": "保存修改",
       "descriptionField": "方案描述",
       "tags": "标签",

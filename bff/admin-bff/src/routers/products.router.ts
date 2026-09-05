@@ -21,7 +21,11 @@ import { TIERS, type Tier } from "@vxture-platform/shared";
 import { ADMIN_BFF_RO_POOL, ADMIN_BFF_RW_POOL } from "../tokens";
 import { RequireStepUp } from "../auth/step-up.decorator";
 import { insertOperatorAuditLog } from "../audit/audit-log";
-import { isValidReleaseStage, RELEASE_STAGES } from "@vxture/core-utils";
+import {
+  isValidIndustry,
+  isValidReleaseStage,
+  RELEASE_STAGES,
+} from "@vxture/core-utils";
 import { pgErrorCode, withTransaction } from "../db/tx";
 import type {
   ProductAgentRecord,
@@ -1998,8 +2002,15 @@ function readSolutionFields(
       "description",
       4000,
     );
-  if (input.industry !== undefined)
-    fields.industry = readOptionalText(input.industry, "industry", 128);
+  if (input.industry !== undefined) {
+    // 行业领域只认 core-utils industry-taxonomy 清单码(与租户所属行业同一清单,
+    // owner 2026-09-06);空 = 清掉。历史自由文本留在库里可读,再写入只能是码。
+    const industry = readOptionalText(input.industry, "industry", 128);
+    if (industry && !isValidIndustry(industry)) {
+      throw new BadRequestException("invalid_industry");
+    }
+    fields.industry = industry;
+  }
   if (input.scenario !== undefined)
     fields.scenario = readOptionalText(input.scenario, "scenario", 128);
   if (input.customerSegment !== undefined)
