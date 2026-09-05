@@ -19,6 +19,7 @@ import {
   Icon,
   Input,
   Section,
+  SegmentedControl,
   StatusBadge,
   Tooltip,
   TooltipContent,
@@ -47,6 +48,12 @@ export function BasicInfoCard({
   onNameDraftChange,
   onStartEditName,
   onCancelEditName,
+  gender,
+  genderEditing,
+  genderDraft,
+  onGenderDraftChange,
+  onStartEditGender,
+  onCancelEditGender,
   username,
   loginEnabled,
   usernameChangeable,
@@ -75,6 +82,13 @@ export function BasicInfoCard({
   readonly onNameDraftChange: (next: string) => void;
   readonly onStartEditName: () => void;
   readonly onCancelEditName: () => void;
+  /** 称呼(性别):空串 = 未设定。 */
+  readonly gender: "" | "male" | "female";
+  readonly genderEditing: boolean;
+  readonly genderDraft: "" | "male" | "female";
+  readonly onGenderDraftChange: (next: "" | "male" | "female") => void;
+  readonly onStartEditGender: () => void;
+  readonly onCancelEditGender: () => void;
   readonly username: string;
   readonly loginEnabled: boolean;
   readonly usernameChangeable: boolean;
@@ -184,6 +198,53 @@ export function BasicInfoCard({
             )}
           </DetailRow>
 
+          {/* 称呼(性别):先生 / 女士 / 未设定,同显示名的「修改 → 页底保存」模式(走查 2026-09-05) */}
+          <DetailRow
+            label={t("fields.gender")}
+            actions={
+              genderEditing ? (
+                <Button variant="ghost" size="sm" onClick={onCancelEditGender}>
+                  {t("actions.cancel")}
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onStartEditGender}
+                  disabled={loading}
+                >
+                  <Icon name="edit" size="xs" fallback="placeholder" />
+                  <span>{t("actions.modify")}</span>
+                </Button>
+              )
+            }
+          >
+            {genderEditing ? (
+              <SegmentedControl<"" | "male" | "female">
+                size="md"
+                ariaLabel={t("fields.gender")}
+                value={genderDraft}
+                onChange={onGenderDraftChange}
+                items={[
+                  { value: "male", label: t("gender.male") },
+                  { value: "female", label: t("gender.female") },
+                  { value: "", label: t("gender.unset") },
+                ]}
+              />
+            ) : (
+              // 展示态是文字、编辑态才是控件(owner 2026-09-05:禁用控件当展示看不清);
+              // 行高按控件高度撑住,切换时位置不跳
+              <span className="inline-flex h-control-md items-center text-body-md text-foreground">
+                {loading
+                  ? loadingText
+                  : gender === "male"
+                    ? t("gender.male")
+                    : gender === "female"
+                      ? t("gender.female")
+                      : t("gender.unset")}
+              </span>
+            )}
+          </DetailRow>
           <DetailRow
             label={t("fields.username")}
             actions={

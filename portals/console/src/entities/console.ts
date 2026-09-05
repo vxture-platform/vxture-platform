@@ -34,6 +34,8 @@ export interface ConsoleUserProfile {
   /** @deprecated legacy paste-URL field; superseded by `picture`. */
   avatarUrl: string | null;
   bio: string | null;
+  /** 性别:显示为先生 / 女士 / 未设定。 */
+  gender: "male" | "female" | null;
   email: string | null;
   /** Whether the email is verified. */
   emailVerified?: boolean;

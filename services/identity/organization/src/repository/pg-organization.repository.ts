@@ -527,7 +527,9 @@ export class PgOrganizationRepository implements OrganizationReadRepository {
                   coalesce(u.email, c.email) as email,
                   coalesce(u.phone, c.phone) as phone,
                   c.user_id,
-                  c.salutation
+                  case when c.user_id is not null
+                       then case up.gender when 'male' then 'mr' when 'female' then 'ms' else null end
+                       else c.salutation end as salutation
              from tenancy.tenant_contacts c
              left join account.users u on u.id = c.user_id and u.deleted_at is null
              left join account.user_profiles up on up.user_id = c.user_id

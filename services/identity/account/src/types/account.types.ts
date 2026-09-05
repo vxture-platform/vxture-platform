@@ -22,6 +22,8 @@ export interface UserView {
   avatarHash: string | null;
   /** Free-text self introduction (console info spec §1.1). */
   bio?: string | null;
+  /** 性别:账号页显示为先生 / 女士 / 未设定(NULL)。 */
+  gender?: "male" | "female" | null;
   /** IANA timezone preference, e.g. "Asia/Shanghai" (§1.1). */
   timezone?: string | null;
   /** UI language preference, e.g. "zh-CN" (§1.1). */
@@ -43,6 +45,8 @@ export interface UpdateProfileInput {
   name?: string | null;
   email?: string | null;
   bio?: string | null;
+  /** 性别:male / female;空串 = 清除;undefined / null = 不改(与其它字段的 coalesce 语义一致)。 */
+  gender?: "male" | "female" | "" | null;
   timezone?: string | null;
   language?: string | null;
 }

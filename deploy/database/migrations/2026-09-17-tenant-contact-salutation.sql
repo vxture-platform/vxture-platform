@@ -45,3 +45,28 @@ BEGIN
 END $$;
 
 COMMIT;
+
+-- ── 二、账号个人信息表的性别 ──────────────────────────────────────────────
+-- account.user_profiles.gender 早就有列、从没人用。账号页现在显示为先生 / 女士 / 未设定
+-- ('male' / 'female' / NULL);关联了成员的联系人,称呼由成员的这个字段派生。
+-- 列已在 98 列锁的 GRANT 里,只补 CHECK;存量不合法的值先归空(生产实测为空)。
+BEGIN;
+
+UPDATE account.user_profiles
+   SET gender = NULL
+ WHERE gender IS NOT NULL AND gender NOT IN ('male', 'female');
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conname = 'chk_user_profiles_gender'
+       AND conrelid = 'account.user_profiles'::regclass
+  ) THEN
+    ALTER TABLE account.user_profiles
+      ADD CONSTRAINT chk_user_profiles_gender CHECK (gender IN ('male', 'female'));
+  END IF;
+  RAISE NOTICE '[user-profile-gender] gender CHECK(male/female) 已就位';
+END $$;
+
+COMMIT;

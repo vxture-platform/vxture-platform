@@ -370,7 +370,7 @@ export function TenantContactCard({
           {/* 仍是「标题 内容」横排、与其它卡同一名列宽与内容框宽;只是一行两个 */}
           <div className="grid gap-x-lg xl:grid-cols-2">
             <DetailList className={DETAIL_LIST_CLASS}>
-              {/* 姓名 + 称呼同占一行(走查 2026-09-05):称呼是补充项,关联成员时也可填 */}
+              {/* 姓名 + 称呼同占一行(走查 2026-09-05);关联成员时称呼随成员的性别派生,锁定 */}
               <DetailRow label={t("fields.contactName")}>
                 <span className="flex w-full flex-wrap items-center gap-sm">
                   <Input
@@ -382,19 +382,29 @@ export function TenantContactCard({
                       onChange({ contactName: event.target.value })
                     }
                   />
-                  <SegmentedControl<TenantDraft["contactSalutation"]>
-                    size="md"
-                    ariaLabel={t("fields.contactSalutation")}
-                    value={draft.contactSalutation}
-                    onChange={(contactSalutation) =>
-                      onChange({ contactSalutation })
-                    }
-                    items={[
-                      { value: "mr", label: t("salutation.mr") },
-                      { value: "ms", label: t("salutation.ms") },
-                      { value: "", label: t("salutation.unset") },
-                    ]}
-                  />
+                  {readOnly || locked ? (
+                    <span className="inline-flex h-control-md items-center text-body-md text-foreground">
+                      {draft.contactSalutation === "mr"
+                        ? t("salutation.mr")
+                        : draft.contactSalutation === "ms"
+                          ? t("salutation.ms")
+                          : t("salutation.unset")}
+                    </span>
+                  ) : (
+                    <SegmentedControl<TenantDraft["contactSalutation"]>
+                      size="md"
+                      ariaLabel={t("fields.contactSalutation")}
+                      value={draft.contactSalutation}
+                      onChange={(contactSalutation) =>
+                        onChange({ contactSalutation })
+                      }
+                      items={[
+                        { value: "mr", label: t("salutation.mr") },
+                        { value: "ms", label: t("salutation.ms") },
+                        { value: "", label: t("salutation.unset") },
+                      ]}
+                    />
+                  )}
                 </span>
               </DetailRow>
               <ContactRow

@@ -723,7 +723,8 @@
       "lastLoginIp": "登录 IP",
       "lastLoginOs": "操作系统",
       "role": "角色",
-      "newEmail": "新邮箱"
+      "newEmail": "新邮箱",
+      "gender": "称呼"
     },
     "language": {
       "zhCN": "简体中文",
@@ -1115,6 +1116,11 @@
         "inProgress": "无进行中的退款或开票",
         "paidOrder": "无已付款待确认订单"
       }
+    },
+    "gender": {
+      "male": "先生",
+      "female": "女士",
+      "unset": "未设定"
     }
   },
   "verificationPage": {

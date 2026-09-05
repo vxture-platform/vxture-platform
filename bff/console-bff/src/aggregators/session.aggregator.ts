@@ -168,6 +168,7 @@ export class SessionAggregator {
       displayName?: string | null;
       email?: string | null;
       bio?: string | null;
+      gender?: "male" | "female" | "" | null;
       timezone?: string | null;
       language?: string | null;
     },
@@ -176,6 +177,7 @@ export class SessionAggregator {
       name: input.displayName ?? null,
       email: input.email ?? null,
       bio: input.bio ?? null,
+      gender: input.gender ?? null,
       timezone: input.timezone ?? null,
       language: input.language ?? null,
     });
@@ -409,6 +411,8 @@ export class SessionAggregator {
         merged.contactName = linked?.name ?? merged.contactName ?? null;
         merged.contactEmail = linked?.email ?? merged.contactEmail ?? "";
         merged.contactPhone = linked?.phone ?? merged.contactPhone ?? null;
+        // 称呼随成员的性别派生(读侧),联系人行自己的值清掉
+        merged.contactSalutation = null;
       } else {
         merged.contactUserId = null;
       }
@@ -1105,6 +1109,7 @@ function toUserProfile(
     name: string | null;
     status?: string;
     bio?: string | null;
+    gender?: "male" | "female" | null;
     timezone?: string | null;
     language?: string | null;
     accountChangedAt?: string | null;
@@ -1123,6 +1128,7 @@ function toUserProfile(
     picture,
     avatarUrl: null,
     bio: user.bio ?? null,
+    gender: user.gender ?? null,
     email: user.email,
     emailVerified: user.emailVerified ?? false,
     phone: user.phone,

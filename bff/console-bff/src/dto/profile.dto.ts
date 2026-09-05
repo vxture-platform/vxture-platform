@@ -2,6 +2,8 @@ export class UpdateProfileDto {
   displayName?: string | null;
   avatarUrl?: string | null;
   bio?: string | null;
+  /** 性别:male / female;空串 = 清除;缺省 = 不改。 */
+  gender?: "male" | "female" | "" | null;
   email?: string | null;
   phone?: string | null;
   timezone?: string | null;

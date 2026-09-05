@@ -42,7 +42,7 @@ CREATE TABLE account.user_profiles (
     display_name  varchar(96),
     avatar_url    varchar(512),
     avatar_hash   varchar(64),                                    -- 与 user_avatars.hash 冗余，供 claim 轻读
-    gender        varchar(16),
+    gender        varchar(16)  CHECK (gender IN ('male', 'female')),  -- 账号页显示为先生 / 女士 / NULL 未设定(走查 2026-09-05)
     birthday      date,
     bio           varchar(512),
     language      varchar(16),

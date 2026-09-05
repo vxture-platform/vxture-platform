@@ -231,6 +231,9 @@ export function ProfilePage() {
   // ── 内联草稿:显示名 + 五项偏好;主题 / 密度 / 字号即时预览,放弃回滚 ──────
   const [nameEditing, setNameEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+  // 称呼(性别):先生 / 女士 / 未设定,与显示名同一套「修改 → 页底保存」
+  const [genderEditing, setGenderEditing] = useState(false);
+  const [genderDraft, setGenderDraft] = useState<"" | "male" | "female">("");
   const initialAppearance = useRef<{
     theme: ThemeChoice;
     density: DensityChoice;
@@ -268,17 +271,21 @@ export function ProfilePage() {
 
   const nameDirty =
     nameEditing && nameDraft.trim() !== (profile?.displayName ?? "").trim();
+  const genderDirty = genderEditing && genderDraft !== (profile?.gender ?? "");
   const prefsDirty =
     prefs.language !== savedPrefs.language ||
     prefs.timezone !== savedPrefs.timezone ||
     prefs.theme !== savedPrefs.theme ||
     prefs.density !== savedPrefs.density ||
     prefs.fontSize !== savedPrefs.fontSize;
-  const dirtyCount = (nameDirty ? 1 : 0) + (prefsDirty ? 1 : 0);
+  const dirtyCount =
+    (nameDirty ? 1 : 0) + (genderDirty ? 1 : 0) + (prefsDirty ? 1 : 0);
 
   function discard() {
     setNameEditing(false);
     setNameDraft(profile?.displayName ?? "");
+    setGenderEditing(false);
+    setGenderDraft(profile?.gender ?? "");
     setPrefs(savedPrefs);
     setTheme(savedPrefs.theme as Parameters<typeof setTheme>[0]);
     setDensity(savedPrefs.density as Parameters<typeof setDensity>[0]);
@@ -293,6 +300,7 @@ export function ProfilePage() {
     try {
       const patch: Parameters<typeof updateUserProfile>[0] = {};
       if (nameDirty) patch.displayName = normalizeOptional(nameDraft);
+      if (genderDirty) patch.gender = genderDraft; // 空串 = 清成未设定
       if (prefs.language !== savedPrefs.language)
         patch.language = prefs.language;
       if (prefs.timezone !== savedPrefs.timezone)
@@ -313,6 +321,7 @@ export function ProfilePage() {
         fontSize: prefs.fontSize,
       };
       setNameEditing(false);
+      setGenderEditing(false);
       setFeedback({ tone: "success", key: "feedback.profileSaved" });
       await refreshSession();
       if (prefs.language !== savedPrefs.language) {
@@ -656,6 +665,18 @@ export function ProfilePage() {
         onCancelEditName={() => {
           setNameEditing(false);
           setNameDraft(profile?.displayName ?? "");
+        }}
+        gender={profile?.gender ?? ""}
+        genderEditing={genderEditing}
+        genderDraft={genderDraft}
+        onGenderDraftChange={setGenderDraft}
+        onStartEditGender={() => {
+          setGenderDraft(profile?.gender ?? "");
+          setGenderEditing(true);
+        }}
+        onCancelEditGender={() => {
+          setGenderEditing(false);
+          setGenderDraft(profile?.gender ?? "");
         }}
         username={username}
         loginEnabled={accountLoginEnabled}

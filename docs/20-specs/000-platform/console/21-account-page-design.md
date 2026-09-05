@@ -152,3 +152,8 @@
 ## 10. 结构
 
 `portals/console/src/modules/account/profile/`:`ProfilePage`(壳 + 表单状态)· `IdentityHeader` · `BasicInfoCard` · `PreferencesCard` · `SecurityCard` · `ThirdPartyLoginCard` · `DangerZoneCard` · `CardRows`(缩进骨架)· `RowExpand`(行内展开)· `flows`(换手机 / 联系方式验证两条流程 hook)· `dialogs/*`(账号名 / 密码 / 关闭登录 / 解绑 / 删除账号,均走 DS `DialogForm`)· `format`(格式化纯函数)。原 2030 行单文件与 `SecurityPage` 已退役。
+
+## 走查修正(owner 2026-09-05)
+
+- 基本信息加「称呼」行(显示名之后):先生 / 女士 / 未设定,落 `account.user_profiles.gender`('male' / 'female' / NULL);同显示名的「修改 → 页底保存」模式;展示态是文字、编辑态才是分段控件。租户信息页里关联了成员的联系人,称呼由此派生。
+- 个人偏好五个控件加宽到 ≈300px,与租户信息页「默认区域」同档。
