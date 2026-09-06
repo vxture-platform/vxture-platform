@@ -1262,7 +1262,9 @@
         "effectBody": "认证状态挂在租户层,所有工作空间继承;租户名称以认证通过的企业名称为准,改名即作废原认证"
       },
       "loadFailed": "认证状态读取失败，表单已锁定；请重试或稍后再来。",
-      "retry": "重试"
+      "retry": "重试",
+      "personalTenantBanner": "企业认证仅适用于组织租户",
+      "personalTenantBannerBody": "当前是个人租户。个人实名认证在账号信息页,组织能力(成员、企业认证、开票)需要先转为组织租户。"
     }
   },
   "securityPage": {

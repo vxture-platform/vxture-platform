@@ -541,9 +541,15 @@ export class TenantsRouter {
     try {
       await client.query("begin");
 
-      const current = await client.query<{ id: string; tenant_id: string }>(
+      const current = await client.query<{
+        id: string;
+        tenant_id: string;
+        company_name: string | null;
+        verification_type: string;
+      }>(
         `
-          select id, tenant_id from kyc.tenant_verifications
+          select id, tenant_id, company_name, verification_type
+          from kyc.tenant_verifications
           where id = $1
           for update
         `,
@@ -567,13 +573,29 @@ export class TenantsRouter {
         [verificationId, nextStatus, reviewerId, reason],
       );
 
+      /* 通过时租户认证名归位到申报的企业名称(2026-09-06)。规则早有:
+         「租户名称以企业认证的名称为准」——改名作废原认证是反方向,通过审核则是
+         正方向,不落这一步会留下「认证过的名字」与「租户名」不一致且没人能修的态。
+         只在 verified 且申报名非空且确有变化时改;display_name(简称)不动。
+         verification_type 是同一行的反规范化只读列,一并落位(此前从没写过)。 */
       await client.query(
         `
           update tenancy.tenants
-          set verification_status = $2, updated_at = now()
+          set verification_status = $2,
+              verification_type   = case when $2 = 'verified'
+                                         then $4 else verification_type end,
+              name                = case when $2 = 'verified'
+                                          and $3 is not null and $3 <> ''
+                                         then $3 else name end,
+              updated_at          = now()
           where id = $1
         `,
-        [record.tenant_id, nextStatus],
+        [
+          record.tenant_id,
+          nextStatus,
+          record.company_name,
+          record.verification_type,
+        ],
       );
 
       await client.query("commit");

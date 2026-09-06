@@ -1262,7 +1262,9 @@
         "effectBody": "Verification lives on the tenant and every workspace inherits it; the tenant name follows the verified company name, and renaming voids the verification"
       },
       "loadFailed": "Could not read the verification status; the form is locked. Retry or come back later.",
-      "retry": "Retry"
+      "retry": "Retry",
+      "personalTenantBanner": "Business verification applies to organization tenants only",
+      "personalTenantBannerBody": "This is a personal tenant. Personal identity verification lives on the account page; convert to an organization tenant first for members, business verification and invoicing."
     }
   },
   "securityPage": {
