@@ -73,6 +73,7 @@ import { hasCapability } from "@/features/permissions/can";
 import { useConfirmLabels } from "@/lib/destructive";
 import { useRouter } from "@/lib/i18n/navigation";
 import { ListPagination } from "@/components/pagination";
+import { RoleTag } from "@/components/role-tag";
 import {
   LoadFailedBanner,
   LoadFailedEmpty,
@@ -979,7 +980,9 @@ export function MembersPage() {
                     id: "role",
                     header: t("table.columns.role"),
                     align: "center",
-                    cell: (member: MemberRecord) => member.role,
+                    cell: (member: MemberRecord) => (
+                      <RoleTag code={member.roleCode} fallback={member.role} />
+                    ),
                   },
                   {
                     id: "status",

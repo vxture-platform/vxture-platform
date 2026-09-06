@@ -24,8 +24,9 @@
  * 治理 RBAC ≠ 业务授权(铁律):本页只解释「谁能做哪些治理动作」,产品内的功能
  * 权限由产品按订阅档位自行门控。本页由 tenant.member.read 门控。
  *
- * 角色的显示名读 `rolesPage.role.*`:两页各持一半权威——角色名在角色页词条,权限名
- * 在本页词条,谁要谁引,不复制第二份。
+ * 角色的图标、显示名与固定序都走 `components/role-tag`(owner 2026-09-06:角色一律
+ * icon + 名);权限点的名字在本页词条里。矩阵的列头用轻量版(图标 + 名,不套贴标)
+ * ——五个角色列各塞一枚贴标会把表头撑成两倍高。
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -54,9 +55,9 @@ import type {
 } from "@vxture/design-system";
 import {
   TENANT_PERMISSION_CODES,
-  TENANT_ROLE_CODES,
   WORKSPACE_PERMISSION_CODES,
 } from "@vxture/core-utils";
+import { RoleHeaderLabel, roleRank } from "@/components/role-tag";
 import { fetchTenantPermissions, fetchTenantRoles } from "@/api/console-bff";
 import { consoleDomains } from "@/config/navigation";
 import type {
@@ -67,8 +68,7 @@ import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { useRouter } from "@/lib/i18n/navigation";
 import { PageSection, SignalList } from "@/layout/shell";
 
-/** 固定目录的 5 个角色码与目录里的操作码(权威在 core-utils);未知码回退服务端名称。 */
-const KNOWN_ROLES: readonly string[] = TENANT_ROLE_CODES;
+/** 目录里的操作码(权威在 core-utils);角色的图标、显示名与排序归 components/role-tag。 */
 const KNOWN_PERMS = new Set<string>([
   ...TENANT_PERMISSION_CODES,
   ...WORKSPACE_PERMISSION_CODES,
@@ -157,7 +157,6 @@ function collectExpandable(nodes: readonly MatrixNode[], out: string[] = []) {
 export function PermissionsPage() {
   const t = useTranslations("permissionsPage");
   // 角色名归角色管理页那份词条(见文件头)
-  const tRole = useTranslations("rolesPage");
   const tableLabels = useTableLabels();
   const tSidebar = useTranslations("sidebar");
   const router = useRouter();
@@ -192,19 +191,15 @@ export function PermissionsPage() {
     };
   }, [session.tenant?.id]);
 
-  const roleLabel = (code: string, fallback: string): string =>
-    KNOWN_ROLES.includes(code) ? tRole(`role.${code}`) : fallback;
   const permLabel = (code: string): string =>
     KNOWN_PERMS.has(code) ? t(`perm.${code.replace(/\./g, "_")}`) : code;
 
-  // 列按固定序展示(owner→guest),未知码排尾
-  const orderedRoles = useMemo(() => {
-    const rank = (c: string) => {
-      const i = KNOWN_ROLES.indexOf(c);
-      return i === -1 ? KNOWN_ROLES.length : i;
-    };
-    return [...roles].sort((a, b) => rank(a.roleCode) - rank(b.roleCode));
-  }, [roles]);
+  // 列按固定序展示(owner→guest),未知码排尾;判据与角色页共用一份
+  const orderedRoles = useMemo(
+    () =>
+      [...roles].sort((a, b) => roleRank(a.roleCode) - roleRank(b.roleCode)),
+    [roles],
+  );
 
   // ── 目录树 → 矩阵树(板块 → 页面 → 操作码;没挂页面的操作码归「其他」)──────
   const { tree, permCount } = useMemo(() => {
@@ -453,7 +448,7 @@ export function PermissionsPage() {
     },
     ...orderedRoles.map<DataTableColumn<MatrixNode>>((r) => ({
       id: `role-${r.roleCode}`,
-      header: roleLabel(r.roleCode, r.roleName),
+      header: <RoleHeaderLabel code={r.roleCode} fallback={r.roleName} />,
       align: "center",
       cell: (row) =>
         row.kind !== "perm" ? null : grantSets
