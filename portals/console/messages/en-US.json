@@ -302,7 +302,6 @@
     "sections": {
       "workspace": "Workspace",
       "accountTenant": "Account & Tenant",
-      "membersPermissions": "Members & Permissions",
       "subscriptionBilling": "Subscription & Billing",
       "advancedSettings": "Advanced Settings",
       "platform": "Platform"
@@ -330,14 +329,6 @@
       "members": {
         "label": "Member Management",
         "description": "Invites, access review, and team membership"
-      },
-      "roles": {
-        "label": "Role Management",
-        "description": "Tenant roles such as admin, member, and readonly"
-      },
-      "invitations": {
-        "label": "Invitation Records",
-        "description": "Pending and historical workspace invitations"
       },
       "subscription": {
         "label": "Product Subscriptions",
@@ -396,6 +387,7 @@
     "personalTenant": "Tenant info",
     "organization": "Organization Info",
     "members": "Members",
+    "membersRoles": "Roles & permissions",
     "roles": "Roles & Permissions",
     "invitations": "Invitation Records",
     "subscription": "Product Subscriptions",
@@ -1314,7 +1306,12 @@
       "title": "Members",
       "description": "Manage tenant members, roles, and access status.",
       "addMember": "Add member",
-      "inviteMember": "Invite member"
+      "inviteMember": "Invite member",
+      "viewRoles": "Roles & permissions"
+    },
+    "directory": {
+      "title": "Member directory",
+      "description": "Members on the roster plus invitations awaiting acceptance; disable, restore, change role, and unlink all happen here"
     },
     "table": {
       "toolbarTitle": "{count} members",
@@ -1375,11 +1372,6 @@
       "enable": "Enable selected",
       "unlink": "Unlink selected",
       "noun": "member(s)"
-    },
-    "pagination": {
-      "summary": "Page {page} / {totalPages}, {total} total",
-      "previous": "Previous",
-      "next": "Next"
     },
     "dialogs": {
       "create": {
@@ -1540,7 +1532,8 @@
       "scopeTitle": "Governance ≠ business",
       "scopeBody": "Governance roles gate member/role/settings/commerce actions only; in-product feature access is gated by each product per subscription tier"
     },
-    "loadFailed": "Could not load roles and permissions, please retry"
+    "loadFailed": "Could not load roles and permissions, please retry",
+    "backToMembers": "Back to members"
   },
   "modelPlatformPage": {
     "header": {
@@ -2784,9 +2777,6 @@
     }
   },
   "invitationsPage": {
-    "title": "Invitations",
-    "description": "Member invitations you've sent and their status; send new ones from the Members page",
-    "inviteAction": "Invite members",
     "rowMenu": "Invitation actions",
     "revoke": "Revoke",
     "revokeHint": "Only pending invitations can be revoked",
@@ -3239,5 +3229,13 @@
     "selectAll": "Select all rows on this page",
     "deselectAll": "Deselect all rows on this page",
     "selectRow": "Select row"
+  },
+  "pagination": {
+    "total": "{total} records",
+    "totalFiltered": "{total} records / {filtered} filtered",
+    "previous": "Previous page",
+    "next": "Next page",
+    "pageSizeLabel": "Rows per page",
+    "pageSizeOption": "{size} per page"
   }
 }

@@ -108,34 +108,15 @@ const accountTenantSection: NavigationSection = {
       icon: "buildings",
       descriptionKey: "tenantInfo.description",
     },
-  ],
-};
-
-const membersPermissionsSection: NavigationSection = {
-  titleKey: "membersPermissions",
-  items: [
+    // 批 9(owner 2026-09-06):「成员与权限」整组撤销。成员管理并到这里,租户侧
+    // 最终只剩三个板块;邀请记录成为成员管理页里的一段,角色管理成为它的二级页
+    // `/members/roles`(平台统一定义、租户不可自定义,只提供查看)。
     {
       href: "/members",
       labelKey: "members.label",
       icon: "users",
       descriptionKey: "members.description",
       capability: "tenant.member.read",
-      tenantTypes: ["organization"],
-    },
-    {
-      href: "/roles",
-      labelKey: "roles.label",
-      icon: "shield-check",
-      descriptionKey: "roles.description",
-      capability: "tenant.member.read",
-      tenantTypes: ["organization"],
-    },
-    {
-      href: "/invitations",
-      labelKey: "invitations.label",
-      icon: "mail",
-      descriptionKey: "invitations.description",
-      capability: "tenant.member.manage",
       tenantTypes: ["organization"],
     },
   ],
@@ -227,7 +208,6 @@ const PLATFORM_CAPABILITIES: Capability[] = ["tenant.model.read"];
 export const navigationSections: NavigationSection[] = [
   workspaceSection,
   accountTenantSection,
-  membersPermissionsSection,
   subscriptionBillingSection,
   advancedSettingsSection,
 ];
@@ -246,7 +226,7 @@ export const consoleDomains: ConsoleDomain[] = [
     id: "org",
     labelKey: "org",
     icon: "building-library",
-    sections: [accountTenantSection, membersPermissionsSection],
+    sections: [accountTenantSection],
   },
   {
     id: "billing",

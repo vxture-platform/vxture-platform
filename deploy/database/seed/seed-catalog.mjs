@@ -114,13 +114,10 @@ const TENANT_MENU_TREE = [
           "tenant.delete",
         ],
       },
-    ],
-  },
-  {
-    code: "tenant.menu.members_permissions",
-    name: "成员与权限",
-    icon: "users",
-    children: [
+      // 批 9(owner 2026-09-06):「成员与权限」整组撤销,成员管理并入本组
+      // (`tenant.menu.members_permissions` / `roles` / `invitations` 三节点退役)。
+      // 邀请记录成为成员管理页里的一段;角色管理成为它的二级页 `/members/roles`,
+      // 平台统一定义、租户只读——二级页不进菜单树(与 `/tenant/verification` 同)。
       {
         code: "tenant.menu.members",
         name: "成员管理",
@@ -131,18 +128,6 @@ const TENANT_MENU_TREE = [
           "tenant.member.manage",
           "tenant.role.assign",
         ],
-      },
-      {
-        code: "tenant.menu.roles",
-        name: "角色管理",
-        route: "/roles",
-        icon: "shield-check",
-      },
-      {
-        code: "tenant.menu.invitations",
-        name: "邀请记录",
-        route: "/invitations",
-        icon: "mail",
       },
     ],
   },

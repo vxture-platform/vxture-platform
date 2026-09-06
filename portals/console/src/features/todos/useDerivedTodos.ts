@@ -205,7 +205,8 @@ export function useDerivedTodos(options: { enabled?: boolean } = {}) {
         kind: "invitation",
         title: t("items.invitesTitle", { count: sources.pendingInvites }),
         detail: t("items.invitesDetail"),
-        href: "/invitations",
+        // 批 9:邀请记录并进成员管理页,待办直接把人送到那一页
+        href: "/members",
         actionLabel: t("items.invitesAction"),
         refs: [],
       });

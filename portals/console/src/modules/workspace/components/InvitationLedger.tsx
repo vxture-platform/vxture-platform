@@ -1,15 +1,23 @@
 "use client";
 
 /**
- * InvitationsPage.tsx — 邀请管理(批 2 收口)。
+ * InvitationLedger.tsx — 邀请记录(成员管理页里的一段)。
  * @package @vxture/console
  * @layer Application
  * @category Module
  *
- * 组织租户的成员邀请台账:发出的邀请、状态(待接受 / 已接受 / 已过期 / 已撤销)、
- * 撤销与重发。发起邀请仍在成员管理页(邀请即目录里的 Invited 行,两页一体)。
+ * 批 9(owner 2026-09-06):原独立页 `/invitations` 并进成员管理。理由是它与成员
+ * 目录说的是同一件事的两面——目录里的 Invited 行是"还没接受的那几个",这张台账是
+ * "发出过的全部"(待接受 / 已接受 / 已过期 / 已撤销)。两页并排时,发起邀请在这边、
+ * 台账在那边,人得来回跳;并成一页后,发出与追踪在同一屏。
+ *
+ * 由 `tenant.member.manage` 门控:调用方(成员管理页)只在持码时渲染本段,BFF 再拒
+ * 一遍。发起邀请仍在成员目录的工具条上,本段只做追踪与两个动作:
  * 重发 = 换链接 + 顺延有效期 + 再发一封邮件(InviteLinkDialog 兜底复制);
- * expired 为读侧派生(pending ∧ 已过期),所以过期的也能重发。表格遵守默认结构。
+ * 撤销 = 原链接立即失效。expired 是读侧派生(pending ∧ 已过期),所以过期的也能重发。
+ *
+ * 两向刷新:本段的动作会改变目录里的 Invited 行(`onChanged`),目录里发出的邀请
+ * 也要落到本段(`refreshKey`)——不然同一页上两处数字对不上。
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -19,12 +27,10 @@ import { useTableLabels } from "@/lib/table";
 import {
   ActionMenu,
   Banner,
-  Button,
   DataTable,
   EmptyState,
   StatusBadge,
-  ViewHeader,
-  ViewLayout,
+  useListPagination,
 } from "@vxture/design-system";
 import type {
   ActionMenuItem,
@@ -40,15 +46,15 @@ import {
   type ConsoleInvitation,
   type InviteMemberResult,
 } from "@/api/console-bff";
-import { useRouter } from "@/lib/i18n/navigation";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { PageSection, SignalList } from "@/layout/shell";
+import { ListPagination } from "@/components/pagination";
 import {
   LoadFailedBanner,
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
 import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
-import { InviteLinkDialog } from "./components/InviteLinkDialog";
+import { InviteLinkDialog } from "./InviteLinkDialog";
 
 const STATUS_TONES: Record<ConsoleInvitation["status"], StatusBadgeTone> = {
   pending: "info",
@@ -67,10 +73,19 @@ const KNOWN_ROLES = new Set([
 
 const EXPIRING_SOON_MS = 24 * 60 * 60 * 1000;
 
-export function InvitationsPage() {
+export interface InvitationLedgerProps {
+  /** 成员目录那边发出 / 重发 / 撤销之后 +1,台账跟着重读。 */
+  readonly refreshKey: number;
+  /** 本段的动作改了 Invited 行,通知成员目录重读。 */
+  readonly onChanged: () => void;
+}
+
+export function InvitationLedger({
+  refreshKey,
+  onChanged,
+}: InvitationLedgerProps) {
   const t = useTranslations("invitationsPage");
   const tableLabels = useTableLabels();
-  const router = useRouter();
   const { session } = useConsoleSession();
 
   const [rows, setRows] = useState<ConsoleInvitation[]>([]);
@@ -84,6 +99,7 @@ export function InvitationsPage() {
     null,
   );
   const withLabels = useConfirmLabels();
+  const pager = useListPagination(rows, 10);
 
   const reload = useCallback(() => fetchInvitations().then(setRows), []);
 
@@ -101,7 +117,7 @@ export function InvitationsPage() {
     return () => {
       active = false;
     };
-  }, [reload, session.tenant?.id, reloadKey]);
+  }, [reload, session.tenant?.id, reloadKey, refreshKey]);
 
   const roleLabel = (code: string): string =>
     KNOWN_ROLES.has(code) ? t(`role.${code}`) : code;
@@ -121,6 +137,7 @@ export function InvitationsPage() {
     try {
       await revokeInvitation(inv.id);
       await reload();
+      onChanged();
       setMessage(t("revoked", { email: inv.email }));
     } catch (caught) {
       /* 重新抛出:DS 的确认件按 Promise 是否 rejected 决定关不关框。失败的理由
@@ -139,6 +156,7 @@ export function InvitationsPage() {
     try {
       const result = await resendInvitation(inv.id);
       await reload();
+      onChanged();
       setInviteResult(result);
       setMessage(
         result.emailSent
@@ -247,51 +265,52 @@ export function InvitationsPage() {
   ];
 
   return (
-    <ViewLayout>
-      <ViewHeader
-        icon="mail"
-        title={t("title")}
-        description={t("description")}
-        action={
-          <Button size="md" onClick={() => router.push("/members")}>
-            {t("inviteAction")}
-          </Button>
-        }
-      />
-
-      {loadFailed ? (
-        <LoadFailedBanner
-          onRetry={() => setReloadKey((k) => k + 1)}
-          retrying={loading}
-        />
-      ) : null}
-      {message ? <Banner tone="success" title={message} /> : null}
-      {error ? <Banner tone="danger" title={error} /> : null}
-
+    <>
       <PageSection
         icon="mail"
         level={2}
         title={t("table.title")}
         description={t("table.description")}
       >
-        <DataTable<ConsoleInvitation>
-          labels={tableLabels}
-          columns={columns}
-          rows={rows}
-          rowKey={(r) => r.id}
-          loading={loading}
-          indexStart={1}
-          rowActions={(r) => (
-            <ActionMenu label={t("rowMenu")} items={menuItems(r)} />
-          )}
-          empty={
-            loadFailed ? (
-              <LoadFailedEmpty />
-            ) : (
-              <EmptyState title={t("table.empty")} />
-            )
-          }
-        />
+        <div className="flex flex-col gap-md">
+          {loadFailed ? (
+            <LoadFailedBanner
+              onRetry={() => setReloadKey((k) => k + 1)}
+              retrying={loading}
+            />
+          ) : null}
+          {message ? <Banner tone="success" title={message} /> : null}
+          {error ? <Banner tone="danger" title={error} /> : null}
+
+          <DataTable<ConsoleInvitation>
+            labels={tableLabels}
+            columns={columns}
+            rows={pager.pageRows}
+            rowKey={(r) => r.id}
+            loading={loading}
+            indexStart={pager.indexStart}
+            rowActions={(r) => (
+              <ActionMenu label={t("rowMenu")} items={menuItems(r)} />
+            )}
+            empty={
+              loadFailed ? (
+                <LoadFailedEmpty />
+              ) : (
+                <EmptyState title={t("table.empty")} />
+              )
+            }
+            footer={
+              <ListPagination
+                page={pager.page}
+                pageCount={pager.pageCount}
+                total={rows.length}
+                pageSize={pager.pageSize}
+                onPageSizeChange={pager.onPageSizeChange}
+                onPageChange={pager.onPageChange}
+              />
+            }
+          />
+        </div>
       </PageSection>
 
       <PageSection
@@ -320,6 +339,6 @@ export function InvitationsPage() {
         resent
         onClose={() => setInviteResult(null)}
       />
-    </ViewLayout>
+    </>
   );
 }
