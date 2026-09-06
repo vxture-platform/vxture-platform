@@ -449,7 +449,7 @@ export default function CapabilityMeteringPage() {
             />
           }
         >
-          <InputGroup className="grow basis-media-3xl max-w-panel-sm">
+          <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
             <InputGroupAddon>
               <Icon name="search" size="sm" aria-hidden="true" />
             </InputGroupAddon>

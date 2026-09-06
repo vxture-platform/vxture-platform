@@ -1084,7 +1084,7 @@ export function PlatformUsersPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索用户名、显示名、邮箱、手机、角色"
-                className="grow basis-media-3xl max-w-panel-sm"
+                className="min-w-media-2xl grow basis-0 max-w-panel-sm"
                 aria-label="搜索平台用户"
               />
             }

@@ -405,7 +405,7 @@ export function ComplianceEventsPage() {
             aria-label="合规事件筛选"
             search={
               <Input
-                className="grow basis-media-3xl max-w-panel-sm"
+                className="min-w-media-2xl grow basis-0 max-w-panel-sm"
                 type="search"
                 placeholder="搜索事件类型、租户、法规、处理人…"
                 value={search}

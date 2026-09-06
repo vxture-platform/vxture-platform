@@ -718,7 +718,7 @@ export function ProductSolutionsPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={t("filters.searchPlaceholder")}
-                className="grow basis-media-3xl max-w-panel-sm"
+                className="min-w-media-2xl grow basis-0 max-w-panel-sm"
                 aria-label={t("filters.searchAriaLabel")}
               />
             }

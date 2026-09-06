@@ -764,7 +764,7 @@ export function BillingPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索账单、租户、订单、发票"
-                className="grow basis-media-3xl max-w-panel-sm"
+                className="min-w-media-2xl grow basis-0 max-w-panel-sm"
                 aria-label="搜索账单"
               />
             }

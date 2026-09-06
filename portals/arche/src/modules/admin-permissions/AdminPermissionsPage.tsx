@@ -1198,7 +1198,7 @@ function PermissionDomainSection({
           value={filters.query}
           onChange={(event) => onFilterChange({ query: event.target.value })}
           placeholder="搜索权限 code、名称、路径、组件"
-          className="grow basis-media-3xl max-w-panel-sm"
+          className="min-w-media-2xl grow basis-0 max-w-panel-sm"
           aria-label={`搜索${group.title}`}
         />
         <Button variant="outline" onClick={onResetFilters}>

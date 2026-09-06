@@ -379,7 +379,7 @@ export function RiskRecordsPage() {
             aria-label="风险记录筛选"
             search={
               <Input
-                className="grow basis-media-3xl max-w-panel-sm"
+                className="min-w-media-2xl grow basis-0 max-w-panel-sm"
                 type="search"
                 placeholder="搜索租户、范围、原因、标签…"
                 value={search}

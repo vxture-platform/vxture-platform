@@ -655,7 +655,7 @@ export function VerificationsPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索组织、编码、联系人、地区"
-                className="grow basis-media-3xl max-w-panel-sm"
+                className="min-w-media-2xl grow basis-0 max-w-panel-sm"
                 aria-label="搜索实名认证"
               />
             }

@@ -670,7 +670,7 @@ export function InvoicesPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索发票、租户、账单、快递"
-                className="grow basis-media-3xl max-w-panel-sm"
+                className="min-w-media-2xl grow basis-0 max-w-panel-sm"
                 aria-label="搜索发票"
               />
             }

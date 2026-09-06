@@ -947,7 +947,7 @@ function TenantMembersTab({ tenantId }: { tenantId: string }) {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="搜索账号、账号代码、邮箱"
-          className="grow basis-media-3xl max-w-panel-sm"
+          className="min-w-media-2xl grow basis-0 max-w-panel-sm"
           aria-label="搜索账号"
         />
         <Button variant="outline" onClick={handleReset}>

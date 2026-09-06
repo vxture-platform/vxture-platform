@@ -549,7 +549,7 @@ export function OpsTodosPage() {
             search={
               <Input
                 type="search"
-                className="grow basis-media-3xl max-w-panel-sm"
+                className="min-w-media-2xl grow basis-0 max-w-panel-sm"
                 placeholder="搜索事项、租户、标签…"
                 value={query}
                 onChange={(event) => {

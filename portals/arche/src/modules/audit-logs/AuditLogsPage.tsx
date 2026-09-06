@@ -136,7 +136,7 @@ function AuditToolbar({
           placeholder="搜索操作员、操作类型、对象…"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="grow basis-media-3xl max-w-panel-sm"
+          className="min-w-media-2xl grow basis-0 max-w-panel-sm"
           aria-label="搜索审计日志（当前结果内）"
         />
       }

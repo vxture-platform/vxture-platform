@@ -860,7 +860,7 @@ export function TicketsPage() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="搜索工单、租户、行业、负责人"
-              className="grow basis-media-3xl max-w-panel-sm"
+              className="min-w-media-2xl grow basis-0 max-w-panel-sm"
               aria-label="搜索工单"
             />
             <div className="flex-1 max-lg:hidden" aria-hidden="true" />

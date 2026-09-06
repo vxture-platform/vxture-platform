@@ -426,7 +426,7 @@ export function TenantsPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索租户、编码、联系人、产品"
-                className="grow basis-media-3xl max-w-panel-sm"
+                className="min-w-media-2xl grow basis-0 max-w-panel-sm"
                 aria-label="搜索租户"
               />
             }

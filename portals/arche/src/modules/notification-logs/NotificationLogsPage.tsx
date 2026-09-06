@@ -227,7 +227,7 @@ export function NotificationLogsPage() {
           search={
             <Input
               type="search"
-              className="grow basis-media-3xl max-w-panel-sm"
+              className="min-w-media-2xl grow basis-0 max-w-panel-sm"
               placeholder="搜索接收方、模板、业务号、租户…"
               value={search}
               onChange={(e) => {
