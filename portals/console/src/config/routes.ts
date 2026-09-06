@@ -7,6 +7,8 @@ const routeLabels = new Map<string, string>([
   ["/profile", "profile"],
   ["/tenant", "tenant"],
   ["/tenant/verification", "tenantVerification"],
+  // 提交与结果拆两页(owner 2026-09-06):面包屑最后一节要有名字,别显示 "apply"
+  ["/tenant/verification/apply", "tenantVerificationApply"],
   // 旧路由保留跳转,面包屑在跳转那一帧仍有名字
   ["/personal-tenant", "personalTenant"],
   ["/organization", "organization"],

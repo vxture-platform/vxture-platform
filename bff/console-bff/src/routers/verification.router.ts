@@ -182,13 +182,16 @@ export class VerificationRouter {
     if (!LICENSE_NO_RE.test(licenseNo)) {
       throw new BadRequestException("统一社会信用代码格式不正确(18 位)");
     }
-    const legalPersonName =
+    /* 法定代表人姓名:简易认证不收(owner 2026-09-06「只保留两项」)。这里收成可选——
+       送来就存(留给扫脸 / 提交资料方式),不送就是 null,不再当必填拦。 */
+    const rawLegalName =
       typeof body.legalPersonName === "string"
         ? body.legalPersonName.trim()
         : "";
-    if (!legalPersonName || legalPersonName.length > 64) {
-      throw new BadRequestException("法定代表人姓名必填(不超过 64 字)");
+    if (rawLegalName.length > 64) {
+      throw new BadRequestException("法定代表人姓名不超过 64 字");
     }
+    const legalPersonName = rawLegalName || null;
 
     // 治理门:tenant.settings.manage(owner/manager)才可提交
     await this.gov.assertCan(

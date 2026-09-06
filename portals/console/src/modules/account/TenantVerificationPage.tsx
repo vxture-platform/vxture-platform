@@ -1,184 +1,104 @@
 "use client";
 
 /**
- * TenantVerificationPage.tsx — 组织企业认证(owner 2026-08-21 P0;2026-09-06 三方式重排)。
+ * TenantVerificationPage.tsx — 企业认证**结果**页(owner 2026-09-06:提交与结果拆开)。
  * @package @vxture/console
  * @layer Application
  * @category Module
  *
- * spec 20-vxture-tenant-console-info §3.4 组织租户独立详情页。页面自上而下:
- * 认证方式(三张卡,能力对比)→ 当前认证信息(已认证)→ 提交表单 → 申请历史 → 说明。
+ * 路由 `/tenant/verification`。这一页只讲结果:当前是什么状态、认证信息是什么、
+ * 历次申请、口径说明。**提交在 `/tenant/verification/apply`**——此前一屏里既是结果
+ * 又是表单,已认证的人还得在下面看见一张空表(owner:「认证提交和认证结果页面应该
+ * 拆分,不能混在一起」)。页头右侧一个按钮去提交页。
  *
- * 三种方式(owner 2026-09-06),资料要求与能力各不同:
- *   1. 简易企业实名认证 —— 企业名称 + 统一社会信用代码 + 法定代表人姓名;
- *      **可订阅、不可开票**;本期唯一开放。
- *   2. 法人扫脸实名认证 —— 开发中,卡片占位禁用。
- *   3. 提交资料实名认证 —— 开发中,卡片占位禁用。
- *
- * 局限性要说在明处(owner:「需要提醒局限性」),页面三处提醒:方式卡的能力行、
- * 已认证时的横幅、提交表单的说明;开票入口另有一处(账单页申请开票弹窗)。
- * 后端同门:未开放的方式提交一律 400,简易认证申请开票一律 400——页面提示挡不住
- * 直接打接口的人(bff lib/verification-level 是唯一判定)。
- *
- * 提交 → pending → admin 既有台账审核 → 状态回流(approve 同步 tenants.
- * verification_status,租户信息页徽章即变)。pending 拒重复提交;rejected 显示驳回
- * 原因可重新提交;verified 后再提交 = 变更重审(spec 245)。
- * 个人实名(/profile/verification)另立项仍为骨架。
+ * 认证状态两档(owner 2026-09-06):简易认证(可订阅、不可开票)/ 实名认证(全功能);
+ * 由 BFF 的 level 派生,不在页面里推。局限性在横幅与当前认证信息里各说一次。
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
+  ActionMenu,
   Banner,
   Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
   DataTable,
   DetailList,
   DetailRow,
   EmptyState,
-  Field,
-  FieldLabel,
   Icon,
-  Input,
   StatusBadge,
   ViewHeader,
   ViewLayout,
 } from "@vxture/design-system";
-import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
+import type { ActionMenuItem, DataTableColumn } from "@vxture/design-system";
 import {
   fetchTenantVerification,
-  submitTenantVerification,
-  ConsoleBffError,
   type ConsoleTenantVerificationState,
   type ConsoleVerification,
-  type ConsoleVerificationMethod,
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
-import { PlannedBadge } from "@/components/planned";
+import { useRouter } from "@/lib/i18n/navigation";
 import { PageSection, SignalList } from "@/layout/shell";
+import { CardRows } from "@/modules/account/profile/CardRows";
 import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
-
-const STATUS_TONES: Record<ConsoleVerification["status"], StatusBadgeTone> = {
-  unverified: "neutral",
-  pending: "info",
-  verified: "success",
-  rejected: "warning",
-  // 批 5c:组织租户改名即作废原认证(设计 §5.1),历史里留一条「已作废」
-  superseded: "danger",
-};
-
-/**
- * 三种方式的呈现次序与能力。`canInvoice` 是**说明**不是判据——真判据在 BFF
- * (lib/verification-level),这里只负责把差异摆给用户看。
- */
-const METHODS: readonly {
-  key: ConsoleVerificationMethod;
-  icon: "file-text" | "user" | "folder";
-  canInvoice: boolean;
-}[] = [
-  { key: "lite", icon: "file-text", canInvoice: false },
-  // 扫脸没有对应图标(装着的 DS 10.1.0 无 camera / scan),用「人」表示核到本人
-  { key: "face", icon: "user", canInvoice: true },
-  { key: "documents", icon: "folder", canInvoice: true },
-];
-
-/** 每种方式要填 / 要交的东西,逐条列在卡里(文案键 methods.<key>.items.<n>)。 */
-const METHOD_ITEM_COUNT: Record<ConsoleVerificationMethod, number> = {
-  lite: 3,
-  face: 2,
-  documents: 3,
-};
+import { VERIFICATION_STATUS_TONES } from "./verification-methods";
 
 export function TenantVerificationPage() {
   const t = useTranslations("verificationPage.org");
   const { session } = useConsoleSession();
+  const router = useRouter();
 
   const [state, setState] = useState<ConsoleTenantVerificationState | null>(
     null,
   );
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [companyName, setCompanyName] = useState("");
-  const [licenseNo, setLicenseNo] = useState("");
-  const [legalName, setLegalName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState(false);
-  const companyRef = useRef<HTMLInputElement>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  /* fetchTenantVerification 是 strict 读（2026-08-30）：此前失败回落成
-   * "unverified"，页面会照常放开表单、徽章写「未认证」——把一次故障演成一个
-   * 可以重新提交的干净状态。现在读不到就锁表单、明说、给重试。 */
-  const reload = () =>
+  /* strict 读(2026-08-30):读不到就显影 + 重试,不回落成「未认证」——那会把一次
+     故障演成一个干净可提交的状态。 */
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
     fetchTenantVerification()
       .then((s) => {
+        if (!active) return;
         setState(s);
         setLoadFailed(false);
-        /* 企业名称只回填**上次申报过的**值。不拿 session.tenant.name 托底:那是
-           简称优先的展示名(见 BFF toTenantContext),拿它预填等于诱导用户拿简称
-           去认证;首次提交留空,由 placeholder 说清楚要填营业执照上的登记名称。 */
-        setCompanyName(s.latest?.companyName ?? "");
-        if (s.latest?.businessLicenseNo)
-          setLicenseNo(s.latest.businessLicenseNo);
-        if (s.latest?.legalPersonName) setLegalName(s.latest.legalPersonName);
       })
       .catch(() => {
+        if (!active) return;
         setState(null);
         setLoadFailed(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
-
-  useEffect(() => {
-    setLoading(true);
-    reload().finally(() => setLoading(false));
-  }, [session.tenant?.id]);
+    return () => {
+      active = false;
+    };
+  }, [session.tenant?.id, reloadKey]);
 
   const status = state?.status ?? "unverified";
-  /* 个人租户走到这一页(旧链接 / 直接输地址):企业认证只对组织租户开放,后端也会拒。
-     此前页面照常放开表单,填完一屏才被 400 顶回来——现在直接说清楚并锁住。 */
   const isOrganization = session.tenant?.tenantType === "organization";
-  // state 为 null 的两种情况（还没读到 / 读取失败）都不放开表单。
-  const canSubmit = state !== null && status !== "pending" && isOrganization;
-  const isAvailable = (m: ConsoleVerificationMethod) =>
-    state?.availableMethods.includes(m) ?? m === "lite";
   /** 已按简易方式认证:能订阅但不能开票,这条要一直摆在明处。 */
   const liteVerified = status === "verified" && state?.level === "lite";
 
-  const handleSubmit = async () => {
-    setBusy(true);
-    setError(null);
-    setSubmitted(false);
-    try {
-      await submitTenantVerification({
-        method: "lite",
-        companyName: companyName.trim(),
-        businessLicenseNo: licenseNo.trim(),
-        legalPersonName: legalName.trim(),
-      });
-      setSubmitted(true);
-      await reload();
-    } catch (e) {
-      setError(
-        e instanceof ConsoleBffError && e.message
-          ? e.message
-          : t("submitFailed"),
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
+  /* 列序(owner 2026-09-06 走查):企业主体(名称主 / 信用代码辅)为首列 → 认证方式 →
+     状态 → 提交时间 → 审核结果(时间与结果相邻)→ 操作(rowActions 单列,表格规范)。 */
   const historyColumns: DataTableColumn<ConsoleVerification>[] = [
     {
-      id: "at",
-      header: t("history.colAt"),
+      id: "subject",
+      header: t("history.colSubject"),
+      // 主辅:企业名称在上、统一社会信用代码在下(等宽小字),一列两读不占两列
       cell: (r) => (
-        <span className="tabular-nums">
-          {fmtDate(r.createdAt)} {fmtTime(r.createdAt)}
+        <span className="flex min-w-0 flex-col gap-2xs">
+          <span className="truncate text-label-md text-foreground">
+            {r.companyName ?? "—"}
+          </span>
+          <span className="font-mono text-body-sm text-muted-foreground">
+            {r.businessLicenseNo ?? "—"}
+          </span>
         </span>
       ),
     },
@@ -188,28 +108,22 @@ export function TenantVerificationPage() {
       cell: (r) => t(`methods.${r.verificationMethod}.name`),
     },
     {
-      id: "company",
-      header: t("history.colCompany"),
-      cell: (r) => r.companyName ?? "—",
-    },
-    {
-      id: "license",
-      header: t("history.colLicense"),
-      cell: (r) =>
-        r.businessLicenseNo ? (
-          <span className="font-mono text-body-sm">{r.businessLicenseNo}</span>
-        ) : (
-          "—"
-        ),
-    },
-    {
       id: "status",
       header: t("history.colStatus"),
       align: "center",
       cell: (r) => (
-        <StatusBadge tone={STATUS_TONES[r.status]}>
+        <StatusBadge tone={VERIFICATION_STATUS_TONES[r.status] ?? "neutral"}>
           {t(`status.${r.status}`)}
         </StatusBadge>
+      ),
+    },
+    {
+      id: "at",
+      header: t("history.colAt"),
+      cell: (r) => (
+        <span className="tabular-nums">
+          {fmtDate(r.createdAt)} {fmtTime(r.createdAt)}
+        </span>
       ),
     },
     {
@@ -230,22 +144,25 @@ export function TenantVerificationPage() {
     },
   ];
 
-  /** 能力行:一个图标 + 一句话,可与不可用同一形状,不用颜色单独承载信息。 */
-  const capability = (ok: boolean, label: string) => (
-    <span
-      className={`flex items-center gap-xs text-body-sm ${
-        ok ? "text-foreground" : "text-muted-foreground"
-      }`}
-    >
-      <Icon
-        name={ok ? "check" : "x"}
-        size="xs"
-        fallback="placeholder"
-        className={ok ? "text-success-text" : "text-muted-foreground"}
-      />
-      <span>{label}</span>
-    </span>
-  );
+  /* 行操作:只有**最新一条**能接着动作(重新提交 / 变更认证信息)——历史行是既成事实,
+     给它一个点了没反应的菜单不如不给。审核中不放行,与页头按钮同一判据。 */
+  const latestId = state?.latest?.id ?? null;
+  const rowActions = (r: ConsoleVerification) => {
+    if (r.id !== latestId || !isOrganization || status === "pending") {
+      return null;
+    }
+    const items: ActionMenuItem[] = [
+      {
+        id: "apply",
+        label:
+          status === "verified"
+            ? t("actions.changeApply")
+            : t("actions.goApply"),
+        onSelect: () => router.push("/tenant/verification/apply"),
+      },
+    ];
+    return <ActionMenu label={t("history.rowMenu")} items={items} />;
+  };
 
   return (
     <ViewLayout>
@@ -254,20 +171,37 @@ export function TenantVerificationPage() {
         title={t("title")}
         description={t("description")}
         action={
-          state ? (
-            /* 已认证分两档(owner 2026-09-06):简易认证 / 实名认证 */
-            <StatusBadge
-              tone={
-                status === "verified" && state.level === "lite"
-                  ? "info"
-                  : STATUS_TONES[status]
-              }
-            >
-              {status === "verified"
-                ? t(state.level === "lite" ? "status.lite" : "status.full")
-                : t(`status.${status}`)}
-            </StatusBadge>
-          ) : null
+          <span className="flex flex-wrap items-center gap-sm">
+            {state ? (
+              /* 已认证分两档(owner 2026-09-06):简易认证 / 实名认证 */
+              <StatusBadge
+                tone={
+                  status === "verified" && state.level === "lite"
+                    ? "info"
+                    : (VERIFICATION_STATUS_TONES[status] ?? "neutral")
+                }
+              >
+                {status === "verified"
+                  ? t(state.level === "lite" ? "status.lite" : "status.full")
+                  : t(`status.${status}`)}
+              </StatusBadge>
+            ) : null}
+            {isOrganization ? (
+              <Button
+                size="md"
+                variant={status === "verified" ? "outline" : "default"}
+                disabled={status === "pending"}
+                onClick={() => router.push("/tenant/verification/apply")}
+              >
+                <Icon name="file-text" size="xs" fallback="placeholder" />
+                <span>
+                  {status === "verified"
+                    ? t("actions.changeApply")
+                    : t("actions.goApply")}
+                </span>
+              </Button>
+            ) : null}
+          </span>
         }
       />
 
@@ -278,16 +212,16 @@ export function TenantVerificationPage() {
           description={t("personalTenantBannerBody")}
         />
       ) : null}
+      {status === "pending" ? (
+        <Banner tone="info" title={t("pendingBanner")} />
+      ) : null}
       {status === "rejected" && state?.latest?.rejectReason ? (
         <Banner
           tone="warning"
           title={t("rejectedBanner", { reason: state.latest.rejectReason })}
         />
       ) : null}
-      {status === "pending" ? (
-        <Banner tone="info" title={t("pendingBanner")} />
-      ) : null}
-      {/* 局限性提醒之一(owner 2026-09-06):已按简易方式认证 = 可订阅、不可开票 */}
+      {/* 局限性(owner 2026-09-06):已按简易方式认证 = 可订阅、不可开票 */}
       {liteVerified ? (
         <Banner
           tone="warning"
@@ -295,10 +229,6 @@ export function TenantVerificationPage() {
           description={t("liteLimitBannerBody")}
         />
       ) : null}
-      {submitted ? (
-        <Banner tone="success" title={t("submittedBanner")} />
-      ) : null}
-      {error ? <Banner tone="danger" title={error} /> : null}
       {loadFailed ? (
         <Banner
           tone="danger"
@@ -307,105 +237,13 @@ export function TenantVerificationPage() {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => {
-                setLoading(true);
-                void reload().finally(() => setLoading(false));
-              }}
+              onClick={() => setReloadKey((k) => k + 1)}
             >
               {t("retry")}
             </Button>
           }
         />
       ) : null}
-
-      {/* 认证方式:三张卡摆能力差异;只有开放的那一种能进表单 */}
-      <PageSection
-        icon="shield-check"
-        level={2}
-        title={t("methods.title")}
-        description={t("methods.description")}
-      >
-        <div className="grid gap-lg lg:grid-cols-3">
-          {METHODS.map((m) => {
-            const available = isAvailable(m.key);
-            const active = liteVerified && m.key === "lite";
-            return (
-              <Card key={m.key} surface="soft" className="h-full">
-                <CardHeader>
-                  <span className="flex flex-wrap items-center gap-sm">
-                    <Icon
-                      name={m.icon}
-                      size="sm"
-                      fallback="placeholder"
-                      className="text-muted-foreground"
-                    />
-                    <CardTitle>{t(`methods.${m.key}.name`)}</CardTitle>
-                    {available ? (
-                      <StatusBadge tone={active ? "success" : "info"}>
-                        {active
-                          ? t("methods.currentTag")
-                          : t("methods.availableTag")}
-                      </StatusBadge>
-                    ) : (
-                      <PlannedBadge />
-                    )}
-                  </span>
-                  <CardDescription>
-                    {t(`methods.${m.key}.summary`)}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-md">
-                  <div className="flex flex-col gap-2xs">
-                    <span className="text-label-sm text-muted-foreground">
-                      {t("methods.needLabel")}
-                    </span>
-                    <ul className="flex flex-col gap-2xs text-body-sm text-foreground">
-                      {Array.from(
-                        { length: METHOD_ITEM_COUNT[m.key] },
-                        (_, i) => (
-                          <li key={i} className="flex items-start gap-xs">
-                            <Icon
-                              name="circle-dashed"
-                              size="xs"
-                              fallback="placeholder"
-                              className="mt-2xs shrink-0 text-muted-foreground"
-                            />
-                            <span>{t(`methods.${m.key}.items.${i}`)}</span>
-                          </li>
-                        ),
-                      )}
-                    </ul>
-                  </div>
-                  <div className="flex flex-col gap-2xs">
-                    <span className="text-label-sm text-muted-foreground">
-                      {t("methods.capabilityLabel")}
-                    </span>
-                    {capability(true, t("methods.canSubscribe"))}
-                    {capability(
-                      m.canInvoice,
-                      m.canInvoice
-                        ? t("methods.canInvoice")
-                        : t("methods.cannotInvoice"),
-                    )}
-                  </div>
-                </CardContent>
-                <CardFooter className="justify-end">
-                  <Button
-                    size="sm"
-                    variant={available ? "default" : "outline"}
-                    disabled={!available || !canSubmit || busy}
-                    onClick={() => companyRef.current?.focus()}
-                  >
-                    {available
-                      ? t("methods.useThis")
-                      : t("methods.inDevelopment")}
-                  </Button>
-                </CardFooter>
-              </Card>
-            );
-          })}
-        </div>
-      </PageSection>
 
       {/* 当前认证信息(verified 展示) */}
       {status === "verified" && state?.latest ? (
@@ -415,104 +253,39 @@ export function TenantVerificationPage() {
           title={t("current.title")}
           description={t("current.description")}
         >
-          <DetailList>
-            <DetailRow label={t("current.method")}>
-              {t(`methods.${state.latest.verificationMethod}.name`)}
-            </DetailRow>
-            <DetailRow label={t("form.companyName")}>
-              {state.latest.companyName ?? "—"}
-            </DetailRow>
-            <DetailRow label={t("form.licenseNo")}>
-              <span className="font-mono">
-                {state.latest.businessLicenseNo}
-              </span>
-            </DetailRow>
-            <DetailRow label={t("form.legalName")}>
-              {state.latest.legalPersonName}
-            </DetailRow>
-            <DetailRow label={t("current.verifiedAt")}>
-              {state.latest.reviewedAt
-                ? `${fmtDate(state.latest.reviewedAt)} ${fmtTime(state.latest.reviewedAt)}`
-                : "—"}
-            </DetailRow>
-            <DetailRow label={t("current.invoicing")}>
-              {state.canIssueInvoice
-                ? t("current.invoicingAllowed")
-                : t("current.invoicingBlocked")}
-            </DetailRow>
-          </DetailList>
+          <CardRows>
+            <DetailList>
+              <DetailRow label={t("current.method")}>
+                {t(`methods.${state.latest.verificationMethod}.name`)}
+              </DetailRow>
+              <DetailRow label={t("form.companyName")}>
+                {state.latest.companyName ?? "—"}
+              </DetailRow>
+              <DetailRow label={t("form.licenseNo")}>
+                <span className="font-mono">
+                  {state.latest.businessLicenseNo}
+                </span>
+              </DetailRow>
+              {/* 简易认证不收法定代表人姓名:没有就不出这一行,不画一个空「—」 */}
+              {state.latest.legalPersonName ? (
+                <DetailRow label={t("form.legalName")}>
+                  {state.latest.legalPersonName}
+                </DetailRow>
+              ) : null}
+              <DetailRow label={t("current.verifiedAt")}>
+                {state.latest.reviewedAt
+                  ? `${fmtDate(state.latest.reviewedAt)} ${fmtTime(state.latest.reviewedAt)}`
+                  : "—"}
+              </DetailRow>
+              <DetailRow label={t("current.invoicing")}>
+                {state.canIssueInvoice
+                  ? t("current.invoicingAllowed")
+                  : t("current.invoicingBlocked")}
+              </DetailRow>
+            </DetailList>
+          </CardRows>
         </PageSection>
       ) : null}
-
-      {/* 申请表单(本期只有简易方式) */}
-      <PageSection
-        icon="file-text"
-        level={2}
-        title={status === "verified" ? t("form.retitleTitle") : t("form.title")}
-        description={
-          status === "verified"
-            ? t("form.retitleDescription")
-            : t("form.description")
-        }
-      >
-        <div className="flex max-w-panel-md flex-col gap-sm">
-          {/* 局限性提醒之二:表单里再说一次这条路径不能开票 */}
-          <Banner tone="info" title={t("form.liteNotice")} />
-          <Field>
-            <FieldLabel htmlFor="verify-company-name">
-              {t("form.companyName")} *
-            </FieldLabel>
-            <Input
-              id="verify-company-name"
-              ref={companyRef}
-              value={companyName}
-              disabled={!canSubmit || busy}
-              onChange={(e) => setCompanyName(e.target.value)}
-              placeholder={t("form.companyNamePlaceholder")}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="verify-license-no">
-              {t("form.licenseNo")} *
-            </FieldLabel>
-            <Input
-              id="verify-license-no"
-              value={licenseNo}
-              disabled={!canSubmit || busy}
-              onChange={(e) => setLicenseNo(e.target.value)}
-              placeholder={t("form.licenseNoPlaceholder")}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="verify-legal-name">
-              {t("form.legalName")} *
-            </FieldLabel>
-            <Input
-              id="verify-legal-name"
-              value={legalName}
-              disabled={!canSubmit || busy}
-              onChange={(e) => setLegalName(e.target.value)}
-              placeholder={t("form.legalNamePlaceholder")}
-            />
-          </Field>
-          <div className="flex justify-end">
-            <Button
-              disabled={
-                !canSubmit ||
-                busy ||
-                !companyName.trim() ||
-                !licenseNo.trim() ||
-                !legalName.trim()
-              }
-              onClick={() => void handleSubmit()}
-            >
-              {status === "pending"
-                ? t("form.pendingLocked")
-                : t("form.submit")}
-            </Button>
-          </div>
-        </div>
-      </PageSection>
 
       {/* 历史记录 */}
       <PageSection
@@ -521,32 +294,40 @@ export function TenantVerificationPage() {
         title={t("history.title")}
         description={t("history.description")}
       >
+        {/* 表格不套 CardRows:console 各页的 DataTable 一律与面头同宽铺开
+            (账单 / 成员 / 审计都是),缩进只用于字段行与说明这类内容块 */}
         <DataTable<ConsoleVerification>
           columns={historyColumns}
           rows={state?.history ?? []}
           rowKey={(r) => r.id}
           loading={loading}
           indexStart={1}
+          rowActions={rowActions}
           empty={<EmptyState title={t("history.empty")} />}
         />
       </PageSection>
 
-      {/* 口径说明 */}
+      {/* 口径说明。走查(owner 2026-09-06):内容块不能顶头,与面头标题文字对齐——
+          `CardRows` 就是那道缩进骨架(留一个 icon 宽的占位),与账号 / 租户各卡同源。 */}
       <PageSection
         icon="info"
         level={2}
         title={t("notes.title")}
         description={t("notes.description")}
       >
-        <SignalList
-          items={[
-            { title: t("notes.liteTitle"), description: t("notes.liteBody") },
-            {
-              title: t("notes.effectTitle"),
-              description: t("notes.effectBody"),
-            },
-          ]}
-        />
+        <CardRows>
+          <SignalList
+            items={[
+              { title: t("notes.liteTitle"), description: t("notes.liteBody") },
+              // owner 2026-09-06 明令:所有认证都不收身份证件影像,写进说明
+              { title: t("notes.noIdTitle"), description: t("notes.noIdBody") },
+              {
+                title: t("notes.effectTitle"),
+                description: t("notes.effectBody"),
+              },
+            ]}
+          />
+        </CardRows>
       </PageSection>
     </ViewLayout>
   );
