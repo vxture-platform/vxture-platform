@@ -1241,14 +1241,14 @@
         "pendingLocked": "Under review, cannot submit"
       },
       "history": {
-        "title": "Application history",
+        "title": "Applications",
         "description": "Past verification applications and their outcomes",
-        "colAt": "Submitted",
+        "colSubject": "Company",
         "colMethod": "Method",
-        "colCompany": "Company",
-        "colLicense": "Unified social credit code",
         "colStatus": "Status",
+        "colAt": "Submitted",
         "colResult": "Outcome / time",
+        "rowMenu": "Record actions",
         "awaiting": "Awaiting review",
         "empty": "No applications yet"
       },

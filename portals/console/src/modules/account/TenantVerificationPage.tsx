@@ -18,6 +18,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
+  ActionMenu,
   Banner,
   Button,
   DataTable,
@@ -29,7 +30,7 @@ import {
   ViewHeader,
   ViewLayout,
 } from "@vxture/design-system";
-import type { DataTableColumn } from "@vxture/design-system";
+import type { ActionMenuItem, DataTableColumn } from "@vxture/design-system";
 import {
   fetchTenantVerification,
   type ConsoleTenantVerificationState,
@@ -83,13 +84,21 @@ export function TenantVerificationPage() {
   /** 已按简易方式认证:能订阅但不能开票,这条要一直摆在明处。 */
   const liteVerified = status === "verified" && state?.level === "lite";
 
+  /* 列序(owner 2026-09-06 走查):企业主体(名称主 / 信用代码辅)为首列 → 认证方式 →
+     状态 → 提交时间 → 审核结果(时间与结果相邻)→ 操作(rowActions 单列,表格规范)。 */
   const historyColumns: DataTableColumn<ConsoleVerification>[] = [
     {
-      id: "at",
-      header: t("history.colAt"),
+      id: "subject",
+      header: t("history.colSubject"),
+      // 主辅:企业名称在上、统一社会信用代码在下(等宽小字),一列两读不占两列
       cell: (r) => (
-        <span className="tabular-nums">
-          {fmtDate(r.createdAt)} {fmtTime(r.createdAt)}
+        <span className="flex min-w-0 flex-col gap-2xs">
+          <span className="truncate text-label-md text-foreground">
+            {r.companyName ?? "—"}
+          </span>
+          <span className="font-mono text-body-sm text-muted-foreground">
+            {r.businessLicenseNo ?? "—"}
+          </span>
         </span>
       ),
     },
@@ -99,21 +108,6 @@ export function TenantVerificationPage() {
       cell: (r) => t(`methods.${r.verificationMethod}.name`),
     },
     {
-      id: "company",
-      header: t("history.colCompany"),
-      cell: (r) => r.companyName ?? "—",
-    },
-    {
-      id: "license",
-      header: t("history.colLicense"),
-      cell: (r) =>
-        r.businessLicenseNo ? (
-          <span className="font-mono text-body-sm">{r.businessLicenseNo}</span>
-        ) : (
-          "—"
-        ),
-    },
-    {
       id: "status",
       header: t("history.colStatus"),
       align: "center",
@@ -121,6 +115,15 @@ export function TenantVerificationPage() {
         <StatusBadge tone={VERIFICATION_STATUS_TONES[r.status] ?? "neutral"}>
           {t(`status.${r.status}`)}
         </StatusBadge>
+      ),
+    },
+    {
+      id: "at",
+      header: t("history.colAt"),
+      cell: (r) => (
+        <span className="tabular-nums">
+          {fmtDate(r.createdAt)} {fmtTime(r.createdAt)}
+        </span>
       ),
     },
     {
@@ -140,6 +143,26 @@ export function TenantVerificationPage() {
         ),
     },
   ];
+
+  /* 行操作:只有**最新一条**能接着动作(重新提交 / 变更认证信息)——历史行是既成事实,
+     给它一个点了没反应的菜单不如不给。审核中不放行,与页头按钮同一判据。 */
+  const latestId = state?.latest?.id ?? null;
+  const rowActions = (r: ConsoleVerification) => {
+    if (r.id !== latestId || !isOrganization || status === "pending") {
+      return null;
+    }
+    const items: ActionMenuItem[] = [
+      {
+        id: "apply",
+        label:
+          status === "verified"
+            ? t("actions.changeApply")
+            : t("actions.goApply"),
+        onSelect: () => router.push("/tenant/verification/apply"),
+      },
+    ];
+    return <ActionMenu label={t("history.rowMenu")} items={items} />;
+  };
 
   return (
     <ViewLayout>
@@ -279,6 +302,7 @@ export function TenantVerificationPage() {
           rowKey={(r) => r.id}
           loading={loading}
           indexStart={1}
+          rowActions={rowActions}
           empty={<EmptyState title={t("history.empty")} />}
         />
       </PageSection>

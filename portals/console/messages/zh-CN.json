@@ -1241,14 +1241,14 @@
         "pendingLocked": "审核中,暂不可提交"
       },
       "history": {
-        "title": "申请历史",
+        "title": "申请记录",
         "description": "本组织的历次认证申请与审核结果",
-        "colAt": "提交时间",
+        "colSubject": "企业主体",
         "colMethod": "认证方式",
-        "colCompany": "企业名称",
-        "colLicense": "统一社会信用代码",
         "colStatus": "状态",
+        "colAt": "提交时间",
         "colResult": "审核结果 / 时间",
+        "rowMenu": "记录操作",
         "awaiting": "等待审核",
         "empty": "暂无认证申请"
       },
