@@ -285,3 +285,6 @@
 - **真门在后端**:未开放的方式提交一律 400;简易认证申请开票一律 400。页面禁用只是提示,挡不住直接打接口的人。判定收在 console-bff `lib/verification-level`(`verificationLevelOf` / `canIssueInvoice`),过渡期要不要放开简易认证开票也只改那一处。
 - ⚠️ **连带后果**:本期只有 `lite` 可提交,于是开票入口在扫脸 / 资料认证上线前对所有租户是关的。这是分期的必然结果,不是漏改。
 - 库:`kyc.tenant_verifications` 加 `verification_method`(CHECK lite/face/documents,默认 lite)与 `company_name`(迁移 2026-09-20);存量按 lite 落位,企业名称从租户名回填 `pending`/`verified` 两态。admin 审核台账带出方式与申报企业名,审核人知道自己批的是哪条路径。
+- **审核通过时认证名归位**(2026-09-06 补):「租户名称以企业认证的名称为准」此前只落了反方向(改名即作废),正方向缺着——admin 通过审核时把 `tenancy.tenants.name` 改成申报的企业名称(仅 verified、申报名非空且有变化时;`display_name` 简称不动),并顺带落位从没写过的反规范化列 `tenants.verification_type`。不落这一步会留下「认证过的名字」与租户名不一致、且没人能修的态。
+- 认证页的企业名称**只回填上次申报过的值**,不拿 `session.tenant.name` 托底——那是简称优先的展示名,拿它预填等于诱导用户拿简称去认证。
+- 个人租户走到 `/tenant/verification`(旧链接 / 直接输地址)给明确说明并锁表单:企业认证只对组织租户开放,后端本来就会拒,不该让人填完一屏才被顶回来。

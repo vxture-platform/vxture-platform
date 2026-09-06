@@ -119,8 +119,10 @@ export function TenantVerificationPage() {
       .then((s) => {
         setState(s);
         setLoadFailed(false);
-        // 企业名称:上次申报的优先,没有就用租户认证名托底(两者本就应当一致)
-        setCompanyName(s.latest?.companyName ?? session.tenant?.name ?? "");
+        /* 企业名称只回填**上次申报过的**值。不拿 session.tenant.name 托底:那是
+           简称优先的展示名(见 BFF toTenantContext),拿它预填等于诱导用户拿简称
+           去认证;首次提交留空,由 placeholder 说清楚要填营业执照上的登记名称。 */
+        setCompanyName(s.latest?.companyName ?? "");
         if (s.latest?.businessLicenseNo)
           setLicenseNo(s.latest.businessLicenseNo);
         if (s.latest?.legalPersonName) setLegalName(s.latest.legalPersonName);
@@ -136,8 +138,11 @@ export function TenantVerificationPage() {
   }, [session.tenant?.id]);
 
   const status = state?.status ?? "unverified";
+  /* 个人租户走到这一页(旧链接 / 直接输地址):企业认证只对组织租户开放,后端也会拒。
+     此前页面照常放开表单,填完一屏才被 400 顶回来——现在直接说清楚并锁住。 */
+  const isOrganization = session.tenant?.tenantType === "organization";
   // state 为 null 的两种情况（还没读到 / 读取失败）都不放开表单。
-  const canSubmit = state !== null && status !== "pending";
+  const canSubmit = state !== null && status !== "pending" && isOrganization;
   const isAvailable = (m: ConsoleVerificationMethod) =>
     state?.availableMethods.includes(m) ?? m === "lite";
   /** 已按简易方式认证:能订阅但不能开票,这条要一直摆在明处。 */
@@ -266,6 +271,13 @@ export function TenantVerificationPage() {
         }
       />
 
+      {!isOrganization ? (
+        <Banner
+          tone="info"
+          title={t("personalTenantBanner")}
+          description={t("personalTenantBannerBody")}
+        />
+      ) : null}
       {status === "rejected" && state?.latest?.rejectReason ? (
         <Banner
           tone="warning"
