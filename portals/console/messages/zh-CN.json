@@ -332,11 +332,11 @@
       },
       "subscription": {
         "label": "产品订阅",
-        "description": "已订产品、订单记录与新品推荐"
+        "description": "已订产品、到期提醒与新品推荐"
       },
       "billing": {
-        "label": "账单管理",
-        "description": "账单记录、收款状态与对账"
+        "label": "费用中心",
+        "description": "订单、账单、发票与收款记录"
       },
       "quotas": {
         "label": "配额管理",
@@ -393,7 +393,8 @@
     "roles": "角色管理",
     "invitations": "邀请记录",
     "subscription": "产品订阅",
-    "billing": "账单管理",
+    "billing": "费用中心",
+    "billingInvoices": "发票与抬头",
     "quotas": "配额管理",
     "atlas": "模型接入",
     "notifications": "通知提醒",
@@ -2008,8 +2009,8 @@
     "expiredNotice": "付款时限已到，正在刷新订单状态…"
   },
   "billingPage": {
-    "title": "账单管理",
-    "description": "订阅订单产生的账单与收款记录，线下对公收款、人工核销。",
+    "title": "费用中心",
+    "description": "一笔钱从下单到开票的完整台账:订单、账单与收款记录,线下对公收款、人工核销。",
     "exportStatement": "导出对账单",
     "metrics": {
       "groupLabel": "账单统计",
@@ -2134,11 +2135,17 @@
       "applyHintUnpaid": "账单结清后可申请",
       "applyHintApplied": "已有开票申请",
       "applyHintNoPermission": "你的角色没有发票管理权限"
+    },
+    "viewInvoices": "发票与抬头",
+    "invoicesPage": {
+      "title": "发票与抬头",
+      "description": "已开发票记录与开票抬头;申请发票在费用中心的账单行上发起。",
+      "backToBilling": "返回费用中心"
     }
   },
   "subscriptionHub": {
     "title": "产品订阅",
-    "description": "当前工作区订阅的全部产品、订单记录与推荐，免费版同样计入订阅。",
+    "description": "当前工作区订阅的全部产品与推荐,免费版同样计入订阅;订单与账单在费用中心。",
     "browseMarket": "浏览产品市场",
     "loading": "正在加载…",
     "favorite": {
@@ -2204,9 +2211,6 @@
       "products": "在订产品",
       "productsHint": "含 {free} 个免费版",
       "productsHintNoFree": "当前工作区",
-      "pendingOrders": "待付订单",
-      "pendingHint": "共 {total} 单",
-      "pendingRemain": "剩余 {time}",
       "expiring": "即将到期",
       "expiringHint": "{product} · {cycle} · 剩 {days} 天",
       "expiringNone": "暂无到期压力"
@@ -2228,7 +2232,7 @@
     },
     "orders": {
       "title": "我的订单",
-      "description": "最近订单记录，展开查看归属、金额构成与进度。",
+      "description": "下单 → 出账 → 付款 → 开票,一笔钱的第一环;展开查看归属、金额构成与进度。",
       "colOrder": "订单",
       "colProduct": "产品 / 套餐",
       "colCycle": "周期",
@@ -2248,14 +2252,12 @@
       "menuCancel": "取消订单",
       "menuCancelBusy": "取消中…",
       "menuCancelHint": "仅未付款的订单可取消",
-      "menuUnsubscribe": "退订",
-      "menuInvoice": "申请发票",
       "menuPlannedHint": "即将上线",
       "cancelError": "取消订单失败，请稍后重试。",
-      "menuUnsubscribeHint": "仅已开通订单可退订",
       "cancelVerb": "取消订单",
       "cancelConsequence": "订单迁到已取消终态，不可恢复。要买回来得重新下单走一遍付款。",
-      "menuUnsubscribeNoSub": "该订单未关联到订阅"
+      "menuSubscription": "查看订阅",
+      "menuSubscriptionHint": "订单履约后才会挂上订阅"
     },
     "payAxis": {
       "pending": "待付款",
@@ -2303,7 +2305,13 @@
       "fromPerMonth": "起 / 月",
       "learnMore": "了解详情"
     },
-    "unknownLink": "链接里的产品或意图无法识别，已回到订阅总览。"
+    "unknownLink": "链接里的产品或意图无法识别，已回到订阅总览。",
+    "pendingBanner": {
+      "title": "有 {count} 笔订单待支付",
+      "description": "去费用中心完成支付,订单履约后订阅才会开通。",
+      "deadline": "最早一笔 {time} 到期,逾期自动关闭。",
+      "action": "去费用中心支付"
+    }
   },
   "subscribePage": {
     "title": {
