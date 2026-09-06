@@ -77,7 +77,7 @@ import {
   LoadFailedBanner,
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
-import { fmtDate } from "@/modules/commerce/components/hubModel";
+import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
 import { InviteLinkDialog } from "./components/InviteLinkDialog";
 
 type MemberStatusFilter = "all" | "active" | "invited" | "suspended";
@@ -593,6 +593,7 @@ export function MembersPage() {
     );
   }
 
+  /** 卡片视图的一行文字版(卡片 meta 是一行内联文本,放不下主辅两行)。 */
   function memberTimeline(member: MemberRecord) {
     if (member.status === "Invited") {
       return member.invitationExpiresAt
@@ -602,6 +603,30 @@ export function MembersPage() {
         : "—";
     }
     return fmtDate(member.joinedAt);
+  }
+
+  /**
+   * 表格版:日期主、时刻辅(owner 2026-09-06)。同一列里两种含义——在册成员是
+   * 加入时间,待接受的邀请是有效期至——主行各自说清是哪种,辅行只给时刻。
+   */
+  function memberTimelineCell(member: MemberRecord) {
+    const at =
+      member.status === "Invited"
+        ? member.invitationExpiresAt
+        : member.joinedAt;
+    if (!at) return <span className="text-muted-foreground">—</span>;
+    return (
+      <span className="flex flex-col items-center gap-2xs">
+        <span className="tabular-nums text-foreground">
+          {member.status === "Invited"
+            ? t("table.invitedExpires", { date: fmtDate(at) })
+            : fmtDate(at)}
+        </span>
+        <span className="tabular-nums text-body-sm text-muted-foreground">
+          {fmtTime(at)}
+        </span>
+      </span>
+    );
   }
 
   /** 待接受邀请行的菜单:重发 / 撤销,没有编辑 / 重置 / 解除。 */
@@ -783,7 +808,7 @@ export function MembersPage() {
             title={t("header.title")}
             description={t("header.description")}
             action={
-              /* 两个二级页的入口。它们是**去处**不是本页的动作,所以放页头右侧,
+              /* 三个二级页的入口。它们是**去处**不是本页的动作,所以放页头右侧,
                  不与工具条上的新增 / 邀请挤在一起——那两个才是作用在本页目录上的。 */
               <>
                 {canManageMembers ? (
@@ -803,6 +828,14 @@ export function MembersPage() {
                 >
                   <Icon name="shield-check" size="xs" fallback="placeholder" />
                   <span>{t("header.viewRoles")}</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="md"
+                  onClick={() => router.push("/members/permissions")}
+                >
+                  <Icon name="key" size="xs" fallback="placeholder" />
+                  <span>{t("header.viewPermissions")}</span>
                 </Button>
               </>
             }
@@ -914,6 +947,8 @@ export function MembersPage() {
             {view === "list" ? (
               <DataTable
                 labels={tableLabels}
+                /* 列对齐(owner 2026-09-06):只有姓名列左对齐——它是主列,头像 +
+                   两行文字,居中会让每行的起点跟着名字长短乱跳;其余全部居中。 */
                 columns={[
                   {
                     id: "name",
@@ -923,6 +958,7 @@ export function MembersPage() {
                   {
                     id: "phone",
                     header: t("table.columns.phone"),
+                    align: "center",
                     cell: (member: MemberRecord) => (
                       <span className="text-muted-foreground">
                         {member.phone ?? t("table.emptyPhone")}
@@ -932,6 +968,7 @@ export function MembersPage() {
                   {
                     id: "email",
                     header: t("table.columns.email"),
+                    align: "center",
                     cell: (member: MemberRecord) => (
                       <span className="text-muted-foreground">
                         {member.email}
@@ -941,21 +978,20 @@ export function MembersPage() {
                   {
                     id: "role",
                     header: t("table.columns.role"),
+                    align: "center",
                     cell: (member: MemberRecord) => member.role,
                   },
                   {
                     id: "status",
                     header: t("table.columns.status"),
+                    align: "center",
                     cell: (member: MemberRecord) => memberStatusBadge(member),
                   },
                   {
                     id: "joinedAt",
                     header: t("table.columns.joinedAt"),
-                    cell: (member: MemberRecord) => (
-                      <span className="tabular-nums text-muted-foreground">
-                        {memberTimeline(member)}
-                      </span>
-                    ),
+                    align: "center",
+                    cell: (member: MemberRecord) => memberTimelineCell(member),
                   },
                 ]}
                 rows={pagedMembers}

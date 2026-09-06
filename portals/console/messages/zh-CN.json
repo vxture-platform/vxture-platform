@@ -388,7 +388,8 @@
     "organization": "组织信息",
     "members": "成员管理",
     "membersInvitations": "邀请记录",
-    "membersRoles": "角色与权限",
+    "membersRoles": "角色管理",
+    "membersPermissions": "权限管理",
     "roles": "角色与权限",
     "invitations": "邀请记录",
     "subscription": "产品订阅",
@@ -1309,7 +1310,8 @@
       "addMember": "新增成员",
       "inviteMember": "邀请成员",
       "viewRoles": "角色与权限",
-      "viewInvitations": "邀请记录"
+      "viewInvitations": "邀请记录",
+      "viewPermissions": "权限管理"
     },
     "table": {
       "toolbarTitle": "{count} 人",
@@ -1321,7 +1323,7 @@
       "statusTitle": "当前状态：{status}",
       "avatarAlt": "{name} 的头像",
       "emptyPhone": "未填写",
-      "primaryOwner": "主要所有者",
+      "primaryOwner": "主管理员",
       "selectPage": "选择当前页成员",
       "selectMember": "选择 {name}",
       "columns": {
@@ -1464,17 +1466,23 @@
     }
   },
   "rolesPage": {
-    "title": "角色与权限",
-    "description": "租户治理角色的固定目录与权限矩阵;成员的角色指派在成员管理页完成",
+    "title": "角色管理",
+    "description": "租户治理角色的固定目录;成员的角色指派在成员管理页完成",
+    "viewPermissions": "权限管理",
+    "backToMembers": "返回成员管理",
     "metrics": {
       "groupLabel": "角色概览",
       "roles": "治理角色",
       "rolesHint": "全局固定目录(系统预置)",
-      "perms": "权限点",
-      "permsHint": "租户级 + 工作空间级操作码",
       "model": "授权模型",
       "modelValue": "固定目录",
-      "modelHint": "自定义角色暂未开放"
+      "modelHint": "自定义角色暂未开放",
+      "rolesHelp": "平台统一定义的租户治理角色总数,租户不可增删。",
+      "rolesSystemTag": "系统预置 {count}",
+      "assignable": "可指派角色",
+      "assignableHelp": "成员管理页角色下拉里能选到的角色数。所有者不在其中——它只能经「转让所有权」产生。",
+      "assignableTag": "在成员管理页指派",
+      "modelHelp": "角色是平台全局目录,不带租户维度,所以租户自定义角色暂未开放。"
     },
     "role": {
       "owner": "拥有者",
@@ -1490,35 +1498,18 @@
       "readonly": "内部全域只读:成员、订阅账单、配额用量、审计均可看,零写",
       "guest": "外部受限访客:只有本人相关页面,不见租户级数据"
     },
-    "perm": {
-      "tenant_member_manage": "成员管理",
-      "tenant_role_assign": "角色指派",
-      "tenant_workspace_manage": "工作空间管理",
-      "tenant_billing_manage": "商业与账务管理",
-      "tenant_settings_manage": "租户设置管理",
-      "tenant_delete": "租户注销",
-      "workspace_member_manage": "工作空间成员管理",
-      "workspace_role_assign": "工作空间角色指派",
-      "workspace_settings_manage": "工作空间设置管理"
-    },
     "directory": {
       "title": "角色目录",
       "description": "系统预置的治理角色;每位成员在租户内持有其中一个",
       "colRole": "角色",
       "colBlurb": "定位",
-      "colPermCount": "权限数",
-      "colKind": "类别",
+      "colPermCount": "权限点",
       "system": "系统预置",
       "custom": "自定义",
-      "empty": "角色目录为空"
-    },
-    "matrix": {
-      "title": "权限矩阵",
-      "description": "权限目录按侧栏结构分层:板块 → 页面 → 操作;每个治理动作由哪些角色持有,一览无余",
-      "colPerm": "权限点",
-      "empty": "权限目录为空",
-      "openToAll": "成员均可见",
-      "groupOther": "未挂到页面的操作码(工作空间级)"
+      "empty": "角色目录为空",
+      "permCount": "{count} 个",
+      "menuLabel": "{name} 操作",
+      "viewPerms": "权限详情"
     },
     "notes": {
       "title": "治理口径",
@@ -1527,11 +1518,91 @@
       "fixedBody": "角色是平台全局目录,暂不支持租户自定义;需要新角色形态请联系平台运营",
       "assignTitle": "在哪指派",
       "assignBody": "给成员换角色在「成员管理」页操作(邀请时也可直接选角色);变更最迟一分钟内生效",
+      "permTitle": "每个角色带哪些码",
+      "permBody": "本页只给每个角色的权限点**数量**;具体是哪些码、哪个角色有,在「权限管理」页的矩阵里逐行看"
+    },
+    "loadFailed": "角色与权限目录读取失败,请稍后重试",
+    "permDialog": {
+      "countLabel": "{count} 个权限点",
+      "empty": "该角色未授予任何权限点"
+    }
+  },
+  "permissionsPage": {
+    "title": "权限管理",
+    "description": "治理权限目录与角色矩阵:每个治理动作由哪些角色持有",
+    "viewRoles": "角色管理",
+    "backToMembers": "返回成员管理",
+    "metrics": {
+      "groupLabel": "权限概览",
+      "perms": "权限点",
+      "permsHint": "租户级 + 工作空间级",
+      "model": "授权模型",
+      "modelValue": "固定目录",
+      "modelHint": "租户不可自定义",
+      "permsHelp": "治理权限目录里的操作码总数,含租户级与工作空间级。",
+      "roles": "治理角色",
+      "rolesHelp": "矩阵里的角色列数,与角色管理页同一份目录。",
+      "rolesTag": "矩阵的列",
+      "modelHelp": "权限目录由平台统一定义,不带租户维度,租户不能增删改。"
+    },
+    "perm": {
+      "tenant_member_read": "成员查看",
+      "tenant_member_manage": "成员管理",
+      "tenant_role_assign": "角色指派",
+      "tenant_workspace_manage": "工作空间管理",
+      "tenant_settings_manage": "租户设置管理",
+      "tenant_delete": "租户注销",
+      "tenant_billing_read": "商业与账务查看",
+      "tenant_billing_manage": "商业与账务管理",
+      "tenant_payment_manage": "付款申报",
+      "tenant_invoice_manage": "发票与抬头管理",
+      "tenant_quota_read": "配额与用量查看",
+      "tenant_audit_read": "审计日志查看",
+      "tenant_model_read": "模型接入查看",
+      "workspace_member_manage": "工作空间成员管理",
+      "workspace_role_assign": "工作空间角色指派",
+      "workspace_settings_manage": "工作空间设置管理"
+    },
+    "matrix": {
+      "title": "权限矩阵",
+      "description": "权限目录按侧栏结构分层:板块 → 页面 → 操作;每个治理动作由哪些角色持有,一览无余",
+      "colPerm": "权限点",
+      "empty": "权限目录为空",
+      "openToAll": "成员均可见",
+      "groupOther": "未挂到页面的操作码(工作空间级)",
+      "colKind": "层级",
+      "expand": "展开子级",
+      "collapse": "收起子级",
+      "childCount": "{count} 子级",
+      "emptyHint": "清空筛选条件后可查看完整权限目录"
+    },
+    "notes": {
+      "title": "权限口径",
+      "description": "本页只回答「谁能做哪些治理动作」",
+      "readTitle": "只读目录",
+      "readBody": "权限目录由平台统一定义,租户不能增删改;需要新的权限形态请联系平台运营",
+      "openTitle": "没有操作码的页面",
+      "openBody": "标「成员均可见」的页面不挂任何操作码,任何成员都能打开;门只落在带码的动作上",
       "scopeTitle": "治理 ≠ 业务",
       "scopeBody": "治理角色只闸成员/角色/设置/商业面等治理动作;各产品内的功能权限由产品按订阅档位自行门控"
     },
-    "loadFailed": "角色与权限目录读取失败,请稍后重试",
-    "backToMembers": "返回成员管理"
+    "loadFailed": "权限目录读取失败,请稍后重试",
+    "filters": {
+      "groupLabel": "权限目录筛选",
+      "count": "{count} 行",
+      "searchPlaceholder": "搜索权限码、名称、页面",
+      "searchAriaLabel": "搜索权限目录",
+      "kindAriaLabel": "行类型",
+      "kindAll": "全部层级",
+      "reset": "清空筛选",
+      "listOnly": "权限目录是一棵树,只有列表视图"
+    },
+    "kind": {
+      "section": "板块",
+      "page": "页面",
+      "perm": "操作",
+      "group": "其他"
+    }
   },
   "modelPlatformPage": {
     "header": {
