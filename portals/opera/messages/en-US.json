@@ -196,5 +196,12 @@
     "delete": "Delete",
     "disable": "Disable",
     "enable": "Enable"
+  },
+  "table": {
+    "rowActions": "Actions",
+    "expand": "Expand",
+    "selectAll": "Select all rows on this page",
+    "deselectAll": "Deselect all rows on this page",
+    "selectRow": "Select row"
   }
 }

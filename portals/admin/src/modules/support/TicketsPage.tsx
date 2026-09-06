@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -668,6 +669,7 @@ function TicketDetailDrawer({
 
 export function TicketsPage() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const [tickets, setTickets] = useState<SupportTicketRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -939,6 +941,7 @@ export function TicketsPage() {
               <EmptyState title="工单数据读取失败" description={loadError} />
             ) : (
               <DataTable
+                labels={tableLabels}
                 columns={ticketColumns}
                 rows={visibleTickets}
                 rowKey={ticketKey}

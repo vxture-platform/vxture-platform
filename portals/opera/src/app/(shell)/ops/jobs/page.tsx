@@ -23,6 +23,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   ActionMenu,
   Badge,
@@ -188,6 +189,7 @@ async function copyRowText(
 
 export default function JobSchedulerPage() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const { toast } = useToast();
   const [snapshot, setSnapshot] =
     useState<JobSchedulerSnapshot>(EMPTY_SNAPSHOT);
@@ -358,6 +360,7 @@ export default function JobSchedulerPage() {
               </InputGroup>
             </FilterBar>
             <DataTable
+              labels={tableLabels}
               columns={[
                 {
                   id: "jobName",
@@ -570,6 +573,7 @@ export default function JobSchedulerPage() {
               </InputGroup>
             </FilterBar>
             <DataTable
+              labels={tableLabels}
               columns={[
                 {
                   id: "event",

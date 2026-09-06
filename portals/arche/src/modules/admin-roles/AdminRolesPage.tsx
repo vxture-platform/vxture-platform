@@ -50,6 +50,7 @@ import type {
   PlatformRoleRecord,
 } from "@/entities/console";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import { formatDate, formatNumber } from "@/lib/format";
@@ -1009,6 +1010,7 @@ function AdminRoleCopyDialog({
 
 export function AdminRolesPage() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const t = useTranslations();
   const { toast } = useToast();
   const { runWithStepUp } = useStepUp();
@@ -1479,6 +1481,7 @@ export function AdminRolesPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
 
             <DataTable
+              labels={tableLabels}
               columns={adminRoleColumns}
               rows={visibleRoles}
               rowKey={(role) => role.id}

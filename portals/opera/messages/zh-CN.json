@@ -196,5 +196,12 @@
     "delete": "删除",
     "disable": "停用",
     "enable": "启用"
+  },
+  "table": {
+    "rowActions": "操作",
+    "expand": "展开",
+    "selectAll": "全选本页",
+    "deselectAll": "取消本页全选",
+    "selectRow": "选择本行"
   }
 }

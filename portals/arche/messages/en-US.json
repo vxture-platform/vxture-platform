@@ -207,5 +207,12 @@
     "create": "Create",
     "edit": "Edit",
     "archive": "Archive"
+  },
+  "table": {
+    "rowActions": "Actions",
+    "expand": "Expand",
+    "selectAll": "Select all rows on this page",
+    "deselectAll": "Deselect all rows on this page",
+    "selectRow": "Select row"
   }
 }

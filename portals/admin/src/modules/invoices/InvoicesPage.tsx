@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -397,6 +398,7 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
 export function InvoicesPage() {
   const locale = useLocale();
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const [invoices, setInvoices] = useState<BillingInvoiceLedgerRecord[]>([]);
   const [invoicesTruncated, setInvoicesTruncated] = useState(false);
   const [query, setQuery] = useState("");
@@ -779,6 +781,7 @@ export function InvoicesPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
 
             <DataTable
+              labels={tableLabels}
               columns={invoiceColumns}
               rows={visibleInvoices}
               rowKey={(invoice) => invoice.id}

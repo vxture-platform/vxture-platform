@@ -37,6 +37,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   Badge,
   Banner,
@@ -212,6 +213,7 @@ function axisIdentity(row: UsageSummaryRow): string {
 export default function CapabilityMeteringPage() {
   const locale = useLocale();
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const { toast } = useToast();
   const [axis, setAxis] = useState<UsageAxis>("workspace");
   const [window_, setWindow] = useState(currentMonth);
@@ -491,6 +493,7 @@ export default function CapabilityMeteringPage() {
       }
       table={
         <DataTable
+          labels={tableLabels}
           columns={[
             {
               id: "identity",

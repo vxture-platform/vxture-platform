@@ -39,6 +39,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -209,6 +210,7 @@ export default function ProductEntitlementsPage() {
 function ProductEntitlements() {
   const locale = useLocale();
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
   const router = useRouter();
   const params = useSearchParams();
@@ -702,6 +704,7 @@ function ProductEntitlements() {
               ) : null}
             </div>
             <DataTable
+              labels={tableLabels}
               columns={[
                 {
                   id: "endpoint",
@@ -837,6 +840,7 @@ function ProductEntitlements() {
               ) : null}
             </div>
             <DataTable
+              labels={tableLabels}
               columns={[
                 {
                   /* 折叠开关在这一列里，不用 DataTable 的展开列——一张表两种行，
@@ -1429,6 +1433,7 @@ function ProductEntitlements() {
             />
           ) : null}
           <DataTable
+            labels={tableLabels}
             columns={[
               {
                 id: "product",

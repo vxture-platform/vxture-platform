@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -236,6 +237,7 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
 export function PromotionRedemptionsPage() {
   const locale = useLocale();
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const [records, setRecords] = useState<PromotionRedemptionRecord[]>([]);
   const [recordsTruncated, setRecordsTruncated] = useState(false);
   const [query, setQuery] = useState("");
@@ -491,6 +493,7 @@ export function PromotionRedemptionsPage() {
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             <DataTable
+              labels={tableLabels}
               columns={redemptionColumns}
               rows={visibleRecords}
               rowKey={(record) => record.id}

@@ -61,6 +61,7 @@ import type {
   TenantUsageSummaryRecord,
 } from "@/entities/console";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 
@@ -381,6 +382,7 @@ function detectModelLinkStatus(model: AiModelRecord): ModelLinkStatus {
 
 export function ModelPlatformPage() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const t = useTranslations("modelPlatformPage");
   const { toast } = useToast();
   const [models, setModels] = useState<AiModelRecord[]>([]);
@@ -1104,6 +1106,7 @@ export function ModelPlatformPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
 
             <DataTable
+              labels={tableLabels}
               columns={modelColumns}
               rows={pagedModels}
               rowKey={(model) => model.id}

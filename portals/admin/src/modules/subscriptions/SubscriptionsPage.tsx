@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -340,6 +341,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
 
 export function SubscriptionsPage() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const [subscriptions, setSubscriptions] = useState<
     SubscriptionOperationRecord[]
   >([]);
@@ -718,6 +720,7 @@ export function SubscriptionsPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
 
             <DataTable
+              labels={tableLabels}
               columns={subscriptionColumns}
               rows={visibleSubscriptions}
               rowKey={(subscription) => subscription.id}

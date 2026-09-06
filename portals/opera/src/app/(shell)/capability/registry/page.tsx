@@ -94,6 +94,7 @@ import {
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
 import { RISK_LEVEL_META } from "@/lib/status";
@@ -509,6 +510,7 @@ type LoadState =
 
 export default function CapabilitiesPage() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
@@ -1206,6 +1208,7 @@ export default function CapabilitiesPage() {
         }
         table={
           <DataTable
+            labels={tableLabels}
             columns={[
               {
                 /* 主名换成 `displayName`（业务语言），`capabilityId` 落到副行——

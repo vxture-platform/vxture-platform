@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import {
   ActionButton,
   ActionMenu,
@@ -343,6 +344,7 @@ function useVerificationColumns(): DataTableColumn<VerificationRow>[] {
 
 export function VerificationsPage() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const { toast } = useToast();
   const [tenants, setTenants] = useState<VerificationRow[]>([]);
   const [verificationsTruncated, setVerificationsTruncated] = useState(false);
@@ -724,6 +726,7 @@ export function VerificationsPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
 
             <DataTable
+              labels={tableLabels}
               columns={verificationColumns}
               rows={visibleTenants}
               rowKey={(tenant) => tenant.id}

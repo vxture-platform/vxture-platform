@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -331,6 +332,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
 
 export function OrdersPage() {
   const t = useTranslations();
+  const tableLabels = useTableLabels();
   const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
   const [orders, setOrders] = useState<OrderOperationRecord[]>([]);
@@ -730,6 +732,7 @@ export function OrdersPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
 
             <DataTable
+              labels={tableLabels}
               columns={orderColumns}
               rows={visibleOrders}
               rowKey={(order) => order.id}

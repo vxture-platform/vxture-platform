@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import {
   ActionMenu,
   Button,
@@ -183,6 +184,7 @@ export function RiskRecordsPage() {
      身份稳定。不 memo 等于每次渲染换一套列。 */
   const tableColumns = useMemo(() => columnsOf(locale), [locale]);
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const [items, setItems] = useState<RiskRecordItem[]>([]);
@@ -436,6 +438,7 @@ export function RiskRecordsPage() {
         }
         table={
           <DataTable
+            labels={tableLabels}
             columns={tableColumns}
             rows={pageItems}
             rowKey={(item) => item.id}

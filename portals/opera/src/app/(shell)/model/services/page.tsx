@@ -38,6 +38,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import { useSearchParams } from "next/navigation";
 import {
   ActionMenu,
@@ -997,6 +998,7 @@ export default function ModelServicePage() {
 function ModelServiceContent() {
   const locale = useLocale();
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
@@ -1700,6 +1702,7 @@ function ModelServiceContent() {
     return (
       <div>
         <DataTable
+          labels={tableLabels}
           leadingSpacer
           indexStart={1}
           columns={[
@@ -2110,6 +2113,7 @@ function ModelServiceContent() {
         }
         table={
           <DataTable
+            labels={tableLabels}
             columns={[
               {
                 id: "name",

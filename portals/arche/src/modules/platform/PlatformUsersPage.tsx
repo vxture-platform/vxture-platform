@@ -51,6 +51,7 @@ import type {
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import { formatDate, formatNumber } from "@/lib/format";
 import { useStepUp, isStepUpCancelled } from "@/features/stepup/StepUpProvider";
 
@@ -657,6 +658,7 @@ function PlatformUserMetadataDialog({
 
 export function PlatformUsersPage() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const t = useTranslations();
   const { toast } = useToast();
   const { runWithStepUp } = useStepUp();
@@ -1138,6 +1140,7 @@ export function PlatformUsersPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
 
             <DataTable
+              labels={tableLabels}
               columns={platformUserColumns}
               rows={visibleAdmins}
               rowKey={(admin) => admin.id}

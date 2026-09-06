@@ -49,6 +49,7 @@ import {
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
 
@@ -209,6 +210,7 @@ function describeError(error: unknown): { description?: string } {
 
 export default function MaintenanceWindowsPage() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
   const [rows, setRows] = useState<MaintenanceWindowItem[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
@@ -432,6 +434,7 @@ export default function MaintenanceWindowsPage() {
         }
         table={
           <DataTable
+            labels={tableLabels}
             columns={[
               {
                 id: "title",

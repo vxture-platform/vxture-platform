@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import type { FormEvent, ReactNode } from "react";
 import Link from "next/link";
 import {
@@ -663,9 +664,11 @@ function TenantMemberList({
   members: TenantMemberView[];
   actions: MemberActionHandlers;
 }) {
+  const tableLabels = useTableLabels();
   const columns = useTenantMemberColumns();
   return (
     <DataTable
+      labels={tableLabels}
       columns={columns}
       rows={members}
       rowKey={(member) => member.id}
