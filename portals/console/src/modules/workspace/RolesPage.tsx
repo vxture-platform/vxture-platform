@@ -30,7 +30,6 @@ import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import {
   ActionMenu,
-  Badge,
   Button,
   DataTable,
   Dialog,
@@ -226,19 +225,29 @@ export function RolesPage() {
         <TableTitleCell
           icon={roleIcon(r.roleCode)}
           title={roleLabel(r.roleCode, r.roleName)}
-          titleSuffix={
-            r.isSystem ? (
-              <Badge>{t("directory.system")}</Badge>
-            ) : (
-              <Badge variant="outline">{t("directory.custom")}</Badge>
-            )
-          }
           description={r.roleCode}
           {...(roleBlurb(r.roleCode)
             ? { tooltip: roleBlurb(r.roleCode) as string }
             : {})}
         />
       ),
+    },
+    {
+      /* 角色类型单独成列(owner 2026-09-06:原来贴在标题后太轻,看不出是一类事实)。
+         贴标而不是纯文本:它是**类目**,与状态一样用一枚标读得最快。 */
+      id: "kind",
+      header: t("directory.colKind"),
+      align: "center",
+      cell: (r) =>
+        r.isSystem ? (
+          <StatusBadge tone="info" icon="lock">
+            {t("directory.system")}
+          </StatusBadge>
+        ) : (
+          <StatusBadge tone="neutral" icon="edit">
+            {t("directory.custom")}
+          </StatusBadge>
+        ),
     },
     {
       id: "blurb",

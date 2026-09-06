@@ -1497,7 +1497,8 @@
       "empty": "角色目录为空",
       "permCount": "{count} 个",
       "menuLabel": "{name} 操作",
-      "viewPerms": "权限详情"
+      "viewPerms": "权限详情",
+      "colKind": "角色类型"
     },
     "notes": {
       "title": "治理口径",
@@ -1586,7 +1587,7 @@
       "listOnly": "权限目录是一棵树,只有列表视图"
     },
     "kind": {
-      "section": "板块",
+      "section": "模块",
       "page": "页面",
       "perm": "操作",
       "group": "其他"

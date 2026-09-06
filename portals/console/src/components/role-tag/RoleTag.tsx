@@ -18,8 +18,11 @@
  * 命名空间——它有四个消费方,不该挂在某一页名下(与 `table.*`、`pagination.*` 同一
  * 处理)。角色说明(roleBlurb)只有角色管理页用,仍留在那一页的词条里。
  *
- * 图标是**三档分组**而不是五个各一个:所有者(medal)/ 管理者(shield-check)/ 普通成员
- * (member、readonly、guest 同为 user)。沿用身份卡定下的那一份,不在这里另发明语义。
+ * 图标五个角色各一个(owner 2026-09-06:「成员、只读成员、访客 icon 一样的,能否有
+ * 可区别 icon」——身份卡原来那份把这三个都画成 user,等于图标对五分之三的角色不表意)。
+ * 判据是**这个角色能做什么**,不是它排第几:所有者 medal(唯一、最高)、管理者
+ * shield-check(治理)、成员 user(常规的人)、只读成员 eye(只能看)、访客 user-circle
+ * (也是人,但是外部的另一类)。前三个沿用身份卡原有语义,只补后两个。
  * 语气统一一档:角色是**类目不是严重度**,分档用色会让人以为 guest 比 member「更危险」
  * ——区分交给图标与名字(与权限页对权限类型的同一判断)。
  *
@@ -36,8 +39,8 @@ export const ROLE_ICON: Readonly<Record<string, IconName>> = {
   owner: "medal",
   manager: "shield-check",
   member: "user",
-  readonly: "user",
-  guest: "user",
+  readonly: "eye",
+  guest: "user-circle",
 };
 
 const KNOWN_ROLES = new Set<string>(TENANT_ROLE_CODES);

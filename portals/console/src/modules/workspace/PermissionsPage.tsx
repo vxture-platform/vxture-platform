@@ -88,7 +88,7 @@ function sectionKeyOf(code: string): string {
 }
 
 type RowKind = "section" | "page" | "perm" | "group";
-type KindFilter = "all" | "page" | "perm";
+type KindFilter = "all" | "section" | "page" | "perm";
 
 /**
  * 行的类目 → 语气与图标。三者是**类目**不是严重度(与治理平面的 `PERM_TYPE_TONE`
@@ -109,8 +109,18 @@ const KIND_META: Record<
  *
  * 定长表而不是算出来的值:内联 style 承载间距会被 `ds/no-inline-design-style` 拦,
  * `ps-[Nrem]` 会被 `ds/no-app-tailwind-arbitrary-scale` 拦(与治理平面同一处理)。
+ *
+ * **等距 32px 一级**(media-xs / media-md / media-xl)。原来照搬治理平面的
+ * `md / lg / xl` 是 0→16→24→32px:第二级到第三级只差 8px,三级树看着像两级
+ * (owner 2026-09-06:「缩进太小,缩进留白增加,层次感更明显一些」)。行首还有
+ * 展开按钮与类型图标各占一份宽,阶梯不拉开就被它们吃掉了。
  */
-const DEPTH_INDENT = ["ps-0", "ps-md", "ps-lg", "ps-xl"] as const;
+const DEPTH_INDENT = [
+  "ps-0",
+  "ps-media-xs",
+  "ps-media-md",
+  "ps-media-xl",
+] as const;
 function depthIndentClass(depth: number) {
   return DEPTH_INDENT[Math.min(Math.max(depth, 0), DEPTH_INDENT.length - 1)];
 }
@@ -306,10 +316,9 @@ export function PermissionsPage() {
   /** 命中子节点时连祖先一起留下——只留命中的那一行,读者看不出它在哪个板块下。 */
   const filteredTree = useMemo(() => {
     const q = query.trim().toLowerCase();
+    /* 层级筛选:模块 / 页面 / 操作三档,与树的三级一一对应。 */
     const kindOk = (node: MatrixNode) =>
-      kindFilter === "all" ||
-      (kindFilter === "perm" && node.kind === "perm") ||
-      (kindFilter === "page" && node.kind === "page");
+      kindFilter === "all" || node.kind === kindFilter;
     if (!q && kindFilter === "all") return tree;
 
     const keep = (node: MatrixNode): MatrixNode | null => {
@@ -427,7 +436,10 @@ export function PermissionsPage() {
                   ) : null}
                 </>
               }
-              {...(row.kind === "perm" ? { description: row.code } : {})}
+              /* 每一行都给码:模块与页面也有自己的菜单码,只给操作码看等于
+                 三级里有两级说不清自己是谁(owner 2026-09-06)。「其他」那一行
+                 是本页拼出来的分组,没有码。 */
+              {...(row.code ? { description: row.code } : {})}
             />
           </span>
         );
@@ -534,6 +546,7 @@ export function PermissionsPage() {
               aria-label={t("filters.kindAriaLabel")}
             >
               <option value="all">{t("filters.kindAll")}</option>
+              <option value="section">{t("kind.section")}</option>
               <option value="page">{t("kind.page")}</option>
               <option value="perm">{t("kind.perm")}</option>
             </NativeSelect>
