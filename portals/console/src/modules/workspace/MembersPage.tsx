@@ -10,7 +10,8 @@
  * 原「成员与权限」分组撤销。本页是成员管理的主页 = 成员目录(在册成员 + 待接受的
  * 邀请行,id = 邀请 id),另外两块收成它的**二级页**,入口在页头右侧:
  *   · `/members/invitations` 邀请记录 —— 发出过的全部邀请台账(持 member.manage);
- *   · `/members/roles`       角色与权限 —— 平台统一定义、租户不可自定义,只读。
+ *   · `/members/roles`       角色管理 —— 平台统一定义、租户不可自定义,只读;
+ *   · `/members/permissions` 权限管理 —— 权限目录与角色矩阵,同样只读。
  *
  * 动作门与 BFF 守卫同一套码(批 0a):邀请 / 添加 / 停用 / 恢复 / 重置 / 解除 =
  * member.manage,改角色 = role.assign。owner 与本人的行在这里就把停用 / 解除 /
@@ -872,7 +873,7 @@ export function MembersPage() {
               </>
             }
           >
-            <InputGroup className="grow basis-media-3xl max-w-panel-sm">
+            <InputGroup className="min-w-media-2xl grow basis-0 max-w-panel-sm">
               <InputGroupAddon>
                 <Icon name="search" size="sm" aria-hidden="true" />
               </InputGroupAddon>

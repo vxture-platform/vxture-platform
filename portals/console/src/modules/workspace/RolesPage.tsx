@@ -52,7 +52,7 @@ import type { TenantRoleRecord } from "@/entities/console";
 import { roleIcon, roleRank, useRoleLabel } from "@/components/role-tag";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { useRouter } from "@/lib/i18n/navigation";
-import { PageSection, SignalList } from "@/layout/shell";
+import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 
 /** 目录里的操作码(权威在 core-utils);角色码序与图标、显示名都归 components/role-tag。 */
 const KNOWN_PERMS = new Set<string>(TENANT_PERMISSION_CODES);
@@ -344,22 +344,24 @@ export function RolesPage() {
         title={t("notes.title")}
         description={t("notes.description")}
       >
-        <SignalList
-          items={[
-            {
-              title: t("notes.fixedTitle"),
-              description: t("notes.fixedBody"),
-            },
-            {
-              title: t("notes.assignTitle"),
-              description: t("notes.assignBody"),
-            },
-            {
-              title: t("notes.permTitle"),
-              description: t("notes.permBody"),
-            },
-          ]}
-        />
+        <SectionBody>
+          <SignalList
+            items={[
+              {
+                title: t("notes.fixedTitle"),
+                description: t("notes.fixedBody"),
+              },
+              {
+                title: t("notes.assignTitle"),
+                description: t("notes.assignBody"),
+              },
+              {
+                title: t("notes.permTitle"),
+                description: t("notes.permBody"),
+              },
+            ]}
+          />
+        </SectionBody>
       </PageSection>
 
       {detailRole ? (

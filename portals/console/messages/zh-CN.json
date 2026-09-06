@@ -390,7 +390,7 @@
     "membersInvitations": "邀请记录",
     "membersRoles": "角色管理",
     "membersPermissions": "权限管理",
-    "roles": "角色与权限",
+    "roles": "角色管理",
     "invitations": "邀请记录",
     "subscription": "产品订阅",
     "billing": "账单管理",
@@ -1304,7 +1304,7 @@
       "description": "管理当前租户的成员、角色和访问状态。",
       "addMember": "新增成员",
       "inviteMember": "邀请成员",
-      "viewRoles": "角色与权限",
+      "viewRoles": "角色管理",
       "viewInvitations": "邀请记录",
       "viewPermissions": "权限管理"
     },
@@ -1509,7 +1509,7 @@
       "permTitle": "每个角色带哪些码",
       "permBody": "本页只给每个角色的权限点**数量**;具体是哪些码、哪个角色有,在「权限管理」页的矩阵里逐行看"
     },
-    "loadFailed": "角色与权限目录读取失败,请稍后重试",
+    "loadFailed": "角色目录读取失败,请稍后重试",
     "permDialog": {
       "countLabel": "{count} 个权限点",
       "empty": "该角色未授予任何权限点"

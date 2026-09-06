@@ -48,7 +48,7 @@ import {
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { useRouter } from "@/lib/i18n/navigation";
-import { PageSection, SignalList } from "@/layout/shell";
+import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 import { ListPagination } from "@/components/pagination";
 import { RoleTag } from "@/components/role-tag";
 import {
@@ -315,19 +315,21 @@ export function InvitationsPage() {
         title={t("notes.title")}
         description={t("notes.description")}
       >
-        <SignalList
-          items={[
-            { title: t("notes.flowTitle"), description: t("notes.flowBody") },
-            {
-              title: t("notes.expiryTitle"),
-              description: t("notes.expiryBody"),
-            },
-            {
-              title: t("notes.resendTitle"),
-              description: t("notes.resendBody"),
-            },
-          ]}
-        />
+        <SectionBody>
+          <SignalList
+            items={[
+              { title: t("notes.flowTitle"), description: t("notes.flowBody") },
+              {
+                title: t("notes.expiryTitle"),
+                description: t("notes.expiryBody"),
+              },
+              {
+                title: t("notes.resendTitle"),
+                description: t("notes.resendBody"),
+              },
+            ]}
+          />
+        </SectionBody>
       </PageSection>
 
       <InviteLinkDialog
