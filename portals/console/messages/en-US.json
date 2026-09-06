@@ -98,15 +98,14 @@
         "unavailable": "Subscribed products are temporarily unavailable. Please refresh.",
         "trialing": "Trial",
         "open": "Open",
-        "detail": "Product page"
+        "detail": "Product page",
+        "updatedAt": "Updated {date}"
       },
       "reco": {
         "title": "Popular",
         "desc": "Agents you haven't subscribed to — read the product page or subscribe directly.",
         "learnMore": "Product page",
-        "subscribe": "Subscribe",
-        "free": "Free tier available",
-        "from": "from / month"
+        "subscribe": "Subscribe"
       }
     },
     "realNameVerified": "Verified",
@@ -131,7 +130,7 @@
     "defaultTag": "Default",
     "workspaceSwitchComingSoon": "Multi-workspace switching coming soon",
     "plan": "Plan",
-    "freePlan": "Free plan",
+    "freePlan": "No subscription",
     "orgTenant": "Organization tenant",
     "personalTenant": "Personal tenant",
     "fontSmall": "S",
@@ -2136,7 +2135,7 @@
   },
   "subscriptionHub": {
     "title": "Product Subscriptions",
-    "description": "Every product this workspace subscribes to, plus recommendations; free tiers count as subscriptions. Orders and bills live in the billing center.",
+    "description": "Every product this workspace subscribes to, plus recommendations; orders and bills live in the billing center.",
     "browseMarket": "Browse products",
     "loading": "Loading…",
     "favorite": {
@@ -2162,7 +2161,6 @@
       "private": "Private · {seats} {seats, plural, one {seat} other {seats}}"
     },
     "cycle": {
-      "free": "Free",
       "month": "Monthly",
       "year": "Yearly"
     },
@@ -2179,7 +2177,6 @@
       "perpetual": "No expiry",
       "expired": "Expired",
       "daysLeft": "{days} {days, plural, one {day} other {days}} left",
-      "freeNote": "Free plans count as subscriptions",
       "until": "Valid until {date}"
     },
     "card": {
@@ -2201,7 +2198,7 @@
     "stats": {
       "groupLabel": "Subscription metrics",
       "products": "Active products",
-      "productsHint": "incl. {free} free {free, plural, one {plan} other {plans}}",
+      "productsHint": "{free} on Free tier",
       "productsHintNoFree": "in this workspace",
       "expiring": "Next expiry",
       "expiringHint": "{product} · {cycle} · {days} days left",
@@ -2214,7 +2211,7 @@
       "filterActive": "Active",
       "filterAll": "All",
       "emptyTitle": "No active subscriptions yet",
-      "emptyDescription": "Pick a product from the marketplace to get started — free plans count too.",
+      "emptyDescription": "Pick a product from the marketplace to start. The Free tier counts as a subscription and expires per cycle like any other.",
       "autoRenewError": "Failed to update renewal setting — please try again",
       "unsubscribeError": "Unsubscribe failed — please try again",
       "unsubscribeTitle": "Unsubscribe from {product}?",
@@ -2288,14 +2285,6 @@
         "cancelled": "Order cancelled",
         "expiredClosed": "Closed on timeout"
       }
-    },
-    "reco": {
-      "title": "Recommended for you",
-      "description": "Products you haven't subscribed to yet — learn more and subscribe from the product page.",
-      "free": "¥0",
-      "freeNote": "Free plan available",
-      "fromPerMonth": "from / month",
-      "learnMore": "Learn more"
     },
     "unknownLink": "The product or intent in the link is not recognized; returned to the subscription overview.",
     "pendingBanner": {

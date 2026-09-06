@@ -17,12 +17,26 @@
  * 页头名字从「应用中心」改成「智能体」——切换器里一直叫智能体，页面却自称应用中心，
  * 同一个东西两个名字。
  *
- * 两张卡都是**为这里新写的**，不是把订阅页那两张搬过来：
- *   · 已订阅卡——**借订阅卡的信息、去掉它的管理操作**（owner 2026-09-07）。留档位 /
- *     周期 / 状态 / 有效期这些"这个智能体现在是什么状况"，去掉收藏★、自动续费开关、
- *     退订菜单、升级续费按钮、进度条与版本号。这一页的动作只有一个:**打开它**。
- *   · 推荐卡——这里是引导不是目录，砍掉收藏★、标签行、两行描述与版本号，只留购买判断
- *     真正要看的价格，高度从五段降到两段（owner：「相比订阅高度也降低，信息减少一些」）。
+ * ## 两张卡的排布规则（2026-09-07 owner 走查后重定）
+ *
+ * 两张卡**共用一条规则**，不是各摆各的：
+ *
+ *   · **右上角 = 这张卡的"一眼判断"**。已订阅看**状态**（服务中 / 试用中 / 已过期）：
+ *     右对齐，一列卡扫下来状态在同一条竖线上；它标的是整张卡的性质，混进内容区就跟
+ *     事实混成一片了。**推荐卡这一格是空的**——它的判断就是名字与简介本身
+ *     （owner 2026-09-07：价格不在这里露），不为了对称硬塞。
+ *   · **内容区 = 支撑那个判断的事实**。已订阅：档位 / 周期 + 有效期至；推荐：一句
+ *     简介。末行统一是**版本号 · 发布时间**——它回答"我用的是哪一版、多久没动了"，
+ *     是补充不是判断，所以压成小字放在内容区末尾，两张卡同一个位置。
+ *   · **卡底 = 动作**。已订阅：产品介绍 / 打开；推荐：产品介绍 / 订阅。
+ *
+ * 「更新时间」取 `released_at`（这一版什么时候发出来的），**不是 `updated_at`**——那是
+ * 行审计列，后台改一句描述也会变，对客户不构成"产品有更新"。两个字段本轮从 BFF 补出。
+ *
+ * **价格不出现在这一页**（owner 2026-09-07）：这里是引导，报价与档位是下单页与产品
+ * 详情页的事。**更不把 0 元说成「免费」**——`0.00` 只是这一档现在的价格，不等于免费，
+ * 更不等于永远免费；平台不替产品做没人授权的商业承诺（owner 2026-09-07：「不要你来
+ * 承诺商业逻辑，除非我明确要求，0.00 不等于免费，别制造错觉」）。
  *
  * 档位 / 周期 / 状态这些词读 `subscriptionHub.*`：那是**订阅这个域**的词典，
  * OrdersSection / hubCards / 付款页早就在共用；把二十个词当 props 一路传进来，等于在
@@ -47,7 +61,6 @@ import {
   ViewLayout,
 } from "@vxture/design-system";
 import type { StatusBadgeTone } from "@vxture/design-system";
-import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import { getPathname } from "@/lib/i18n/navigation";
 import { PageSection } from "@/layout/shell";
 import { buildWebsiteProductUrl } from "@/lib/website-entry";
@@ -83,12 +96,12 @@ export interface AppCenterProps {
     trialing: string;
     open: string;
     productDetail: string;
+    /** 版本行里发布时间那一半，形如「{date} 更新」。 */
+    updatedAt: string;
     recoTitle: string;
     recoDesc: string;
     recoLearnMore: string;
     recoSubscribe: string;
-    recoFree: string;
-    recoFrom: string;
   };
 }
 
@@ -105,6 +118,31 @@ const SUB_STATUS_TONES: Readonly<Record<string, StatusBadgeTone>> = {
   trialing: "info",
   expired: "neutral",
 };
+
+/**
+ * 内容区末行：版本号 · 发布时间。两张卡同一个位置、同一种压法。
+ * 两者都没有就整行不出现——不画一行「— · —」凑版式。
+ */
+function ReleaseLine({
+  version,
+  releasedAt,
+  updatedLabel,
+}: {
+  version: string | null;
+  releasedAt: string | null;
+  updatedLabel: (date: string) => string;
+}) {
+  const parts = [
+    version ? "v" + version : null,
+    releasedAt ? updatedLabel(fmtDate(releasedAt)) : null,
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  return (
+    <span className="truncate text-body-sm text-muted-foreground tabular-nums">
+      {parts.join(" · ")}
+    </span>
+  );
+}
 
 /** 产品字母牌（icon_url 未接入前的缺省底板；同 hubCards 的 ProductGlyph 规格）。 */
 function ProductGlyph({ name, code }: { name: string; code: string }) {
@@ -129,9 +167,11 @@ export function AppCenter({
   labels,
 }: AppCenterProps) {
   const locale = useLocale();
-  const appLocale = locale as Locale;
   /* 订阅这个域的词典(档位/周期/状态/期限),与 hubCards、OrdersSection、付款页共用。 */
   const tSub = useTranslations("subscriptionHub");
+  /** 发布时间那一半的文案；`{date}` 是槽位，件不替调用方定语序。 */
+  const updatedLabel = (date: string) =>
+    labels.updatedAt.replace("{date}", date);
 
   /** 按产品码把订阅信息挂到磁贴上：磁贴有入口没档位，订阅有档位没入口。 */
   const subByCode = new Map(
@@ -203,11 +243,11 @@ export function AppCenter({
             {products.map((product) => {
               const sub = subByCode.get(product.code);
               const status = sub?.status ?? product.status;
-              const isFree = sub?.kind === "free" || sub?.tier === "free";
               return (
                 <Card key={product.code} surface="base" className="py-md">
                   <CardContent className="flex flex-col gap-sm">
-                    <div className="flex items-center gap-sm">
+                    {/* 身份在左，状态在右上角——一列卡扫下来状态在同一条竖线上。 */}
+                    <div className="flex items-start gap-sm">
                       <ProductGlyph name={product.name} code={product.code} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-label-md text-foreground">
@@ -217,9 +257,17 @@ export function AppCenter({
                           {product.nick ?? product.planName}
                         </span>
                       </span>
+                      <StatusBadge
+                        tone={SUB_STATUS_TONES[status] ?? "neutral"}
+                        className="shrink-0"
+                      >
+                        {status === "trialing"
+                          ? labels.trialing
+                          : tSub(`subStatus.${status}`)}
+                      </StatusBadge>
                     </div>
 
-                    {/* 档位 / 周期 / 状态——「这个智能体现在是什么状况」。 */}
+                    {/* 内容区：支撑那个判断的事实——什么档、什么周期、到什么时候。 */}
                     <div className="flex flex-wrap items-center gap-xs">
                       {product.tier ? (
                         <Badge variant="secondary">
@@ -228,28 +276,25 @@ export function AppCenter({
                       ) : null}
                       {sub ? (
                         <Badge variant="outline">
-                          {isFree
-                            ? tSub("cycle.free")
-                            : sub.cycleUnit === "year"
-                              ? tSub("cycle.year")
-                              : tSub("cycle.month")}
+                          {sub.cycleUnit === "year"
+                            ? tSub("cycle.year")
+                            : tSub("cycle.month")}
                         </Badge>
                       ) : null}
-                      <StatusBadge tone={SUB_STATUS_TONES[status] ?? "neutral"}>
-                        {status === "trialing"
-                          ? labels.trialing
-                          : tSub(`subStatus.${status}`)}
-                      </StatusBadge>
+                      {sub ? (
+                        <span className="text-body-sm text-muted-foreground tabular-nums">
+                          {sub.endAt
+                            ? tSub("term.until", { date: fmtDate(sub.endAt) })
+                            : tSub("term.perpetual")}
+                        </span>
+                      ) : null}
                     </div>
 
-                    {/* 有效期:到期那一天最要紧,起始日期与进度条留给订阅页。 */}
-                    {sub ? (
-                      <span className="text-body-sm text-muted-foreground tabular-nums">
-                        {sub.endAt
-                          ? tSub("term.until", { date: fmtDate(sub.endAt) })
-                          : tSub("term.perpetual")}
-                      </span>
-                    ) : null}
+                    <ReleaseLine
+                      version={sub?.releaseVersion ?? null}
+                      releasedAt={sub?.releasedAt ?? null}
+                      updatedLabel={updatedLabel}
+                    />
                   </CardContent>
 
                   {/* 卡底:一条外链看介绍,一个按钮打开它——这一页的动作只有这一个。 */}
@@ -297,68 +342,64 @@ export function AppCenter({
           description={labels.recoDesc}
         >
           <div className={ENTRY_GRID}>
-            {recoRows.map((item) => {
-              const free = Number.parseFloat(item.minPrice) === 0;
-              return (
-                <Card key={item.productCode} surface="base" className="py-md">
-                  <CardContent className="flex flex-col gap-sm">
-                    <div className="flex items-center gap-sm">
-                      <ProductGlyph
-                        name={item.productName}
-                        code={item.productCode}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-label-md text-foreground">
-                          {item.productName}
-                        </span>
-                        <span className="block truncate text-body-sm text-muted-foreground">
-                          {item.productNick ?? item.productCode}
-                        </span>
+            {recoRows.map((item) => (
+              <Card key={item.productCode} surface="base" className="py-md">
+                <CardContent className="flex flex-col gap-sm">
+                  {/* 身份在左，价格在右上角——一行三张扫过去价格在同一条竖线上，可比。 */}
+                  <div className="flex items-start gap-sm">
+                    <ProductGlyph
+                      name={item.productName}
+                      code={item.productCode}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-label-md text-foreground">
+                        {item.productName}
                       </span>
-                    </div>
+                      <span className="block truncate text-body-sm text-muted-foreground">
+                        {item.productNick ?? item.productCode}
+                      </span>
+                    </span>
+                  </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-sm">
-                      <span className="text-body-sm text-muted-foreground tabular-nums">
-                        {free
-                          ? labels.recoFree
-                          : `${formatCurrency(
-                              Number.parseFloat(item.minPrice),
-                              appLocale,
-                              item.currency,
-                            )} ${labels.recoFrom}`}
-                      </span>
-                      <span className="flex items-center gap-xs">
-                        <Button asChild variant="outline" size="sm">
-                          <a
-                            href={buildWebsiteProductUrl(
-                              locale,
-                              item.productCode,
-                            )}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {labels.recoLearnMore}
-                            <Icon name="external-link" size="xs" aria-hidden />
-                          </a>
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() =>
-                            onNavigate(
-                              `/subscribe?product=${encodeURIComponent(
-                                item.productCode,
-                              )}&intent=subscribe`,
-                            )
-                          }
-                        >
-                          {labels.recoSubscribe}
-                        </Button>
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                  {/* 内容区：一句它是干什么的，再就是版本与发布时间。 */}
+                  {item.description ? (
+                    <p className="line-clamp-2 text-body-sm text-muted-foreground">
+                      {item.description}
+                    </p>
+                  ) : null}
+
+                  <ReleaseLine
+                    version={item.releaseVersion}
+                    releasedAt={item.releasedAt}
+                    updatedLabel={updatedLabel}
+                  />
+                </CardContent>
+
+                {/* 卡底 = 动作：先看介绍，或直接订阅。 */}
+                <CardFooter className="justify-between gap-md text-body-sm">
+                  <a
+                    href={buildWebsiteProductUrl(locale, item.productCode)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0 text-primary-text hover:underline"
+                  >
+                    {labels.recoLearnMore}
+                  </a>
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      onNavigate(
+                        "/subscribe?product=" +
+                          encodeURIComponent(item.productCode) +
+                          "&intent=subscribe",
+                      )
+                    }
+                  >
+                    {labels.recoSubscribe}
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))}
           </div>
         </PageSection>
       ) : null}
