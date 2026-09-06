@@ -1451,14 +1451,14 @@
       "partner": "三方"
     },
     "tier": {
-      "free": "免费版",
+      "free": "Free 档",
       "starter": "入门版",
       "pro": "专业版",
       "business": "商业版",
       "enterprise": "企业版"
     },
     "priceKind": {
-      "free": "免费",
+      "free": "¥0 定价",
       "paid": "标准定价",
       "contract": "合同报价"
     }
