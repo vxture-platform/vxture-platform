@@ -1187,8 +1187,6 @@
         "canSubscribe": "可订阅产品与套餐",
         "canInvoice": "可申请开具发票",
         "cannotInvoice": "不可申请开具发票",
-        "useThis": "用这种方式认证",
-        "inDevelopment": "开发中",
         "availableTag": "本期可用",
         "currentTag": "当前认证方式",
         "lite": {
@@ -1214,7 +1212,8 @@
             "0": "认证申请表(下载模板,盖章后上传)",
             "1": "营业执照影像"
           }
-        }
+        },
+        "selectedTag": "已选择"
       },
       "current": {
         "title": "当前认证信息",
@@ -1238,7 +1237,8 @@
         "legalName": "法定代表人姓名",
         "legalNamePlaceholder": "与营业执照一致",
         "submit": "提交认证申请",
-        "pendingLocked": "审核中,暂不可提交"
+        "pendingLocked": "审核中,暂不可提交",
+        "selectedMethod": "当前选择:{method};下方填写这种方式所需的资料"
       },
       "history": {
         "title": "申请记录",
@@ -3232,5 +3232,12 @@
       "errorBlocked": "资格已变化,请按最新清单处理后再试。",
       "error": "注销失败,请稍后重试。"
     }
+  },
+  "table": {
+    "rowActions": "操作",
+    "expand": "展开",
+    "selectAll": "全选本页",
+    "deselectAll": "取消本页全选",
+    "selectRow": "选择本行"
   }
 }

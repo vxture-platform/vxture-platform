@@ -18,6 +18,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   Badge,
   DataTable,
@@ -75,6 +76,7 @@ interface MatrixRow {
 
 export function RolesPage() {
   const t = useTranslations("rolesPage");
+  const tableLabels = useTableLabels();
   const tSidebar = useTranslations("sidebar");
   const { session } = useConsoleSession();
 
@@ -348,6 +350,7 @@ export function RolesPage() {
         description={t("directory.description")}
       >
         <DataTable<TenantRoleRecord>
+          labels={tableLabels}
           columns={roleColumns}
           rows={orderedRoles}
           rowKey={(r) => r.roleCode}
@@ -369,6 +372,7 @@ export function RolesPage() {
         description={t("matrix.description")}
       >
         <DataTable<MatrixRow>
+          labels={tableLabels}
           columns={matrixColumns}
           rows={matrixRows}
           rowKey={(row) => row.key}

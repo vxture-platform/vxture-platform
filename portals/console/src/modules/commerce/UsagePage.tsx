@@ -19,6 +19,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   BarChart,
   Button,
@@ -82,6 +83,7 @@ const axisLabel = (granularity: string, period: string): string =>
 
 export function UsagePage() {
   const t = useTranslations("usagePage");
+  const tableLabels = useTableLabels();
   const { session } = useConsoleSession();
   const isOrganization =
     session.tenant?.mode === "tenant" &&
@@ -485,6 +487,7 @@ export function UsagePage() {
           />
         ) : null}
         <DataTable<TrendRow>
+          labels={tableLabels}
           columns={trendColumns}
           rows={trendRows}
           rowKey={(r) => r.period}
@@ -519,6 +522,7 @@ export function UsagePage() {
           />
         ) : null}
         <DataTable<ProductShare>
+          labels={tableLabels}
           columns={shareColumns}
           rows={productShares}
           rowKey={(p) => p.productCode}
@@ -542,6 +546,7 @@ export function UsagePage() {
         description={t("events.description")}
       >
         <DataTable<ConsoleUsageEvent>
+          labels={tableLabels}
           columns={eventColumns}
           rows={pagedEvents}
           rowKey={(e) => `${e.at}:${e.requestId ?? ""}:${e.productCode}`}
@@ -619,6 +624,7 @@ export function UsagePage() {
             />
           ) : null}
           <DataTable<ConsoleUsageMember>
+            labels={tableLabels}
             columns={memberColumns}
             rows={members}
             rowKey={(m) => m.userName ?? "__unattributed__"}

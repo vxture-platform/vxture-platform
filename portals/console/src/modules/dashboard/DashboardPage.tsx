@@ -48,6 +48,7 @@ import {
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   LoadFailedBanner,
   LoadFailedEmpty,
@@ -78,6 +79,7 @@ type QuotaRow = {
 export function DashboardPage() {
   const { session } = useConsoleSession();
   const t = useTranslations("dashboard");
+  const tableLabels = useTableLabels();
   const tBilling = useTranslations("billingPage");
   // localePrefix="always":EntryCard 是个原生 <a>,不能套在 next-intl 的 Link
   // 里(<a> 嵌 <a> 非法),所以自己把 locale 前缀拼进 href。
@@ -365,6 +367,7 @@ export function DashboardPage() {
           }
         >
           <DataTable<ConsoleBill>
+            labels={tableLabels}
             columns={billColumns}
             rows={bills}
             rowKey={(b) => b.id}
@@ -405,6 +408,7 @@ export function DashboardPage() {
           }
         >
           <DataTable<QuotaRow>
+            labels={tableLabels}
             columns={quotaColumns}
             rows={quotaRows}
             rowKey={(r) => r.key}

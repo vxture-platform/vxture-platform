@@ -16,6 +16,7 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   ActionMenu,
   Banner,
@@ -121,6 +122,7 @@ export function InvoiceSections({
   invoiceBlockedBy?: "lite" | "none" | null;
 }) {
   const t = useTranslations("billingPage.invoicing");
+  const tableLabels = useTableLabels();
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -376,6 +378,7 @@ export function InvoiceSections({
       >
         {error ? <Banner tone="danger" title={error} /> : null}
         <DataTable<ConsoleInvoiceReceipt>
+          labels={tableLabels}
           columns={receiptColumns}
           rows={receipts}
           rowKey={(r) => r.id}
@@ -404,6 +407,7 @@ export function InvoiceSections({
         }
       >
         <DataTable<ConsoleBillingAddress>
+          labels={tableLabels}
           columns={addressColumns}
           rows={addresses}
           rowKey={(a) => a.id}

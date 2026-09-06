@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   ActionMenu,
   Button,
@@ -82,6 +83,7 @@ const KNOWN_BILL_TYPES = new Set([
 
 export function BillingPage() {
   const t = useTranslations("billingPage");
+  const tableLabels = useTableLabels();
   const locale = useLocale();
   const appLocale = locale as Locale;
   const { session } = useConsoleSession();
@@ -425,6 +427,7 @@ export function BillingPage() {
         description={t("table.description")}
       >
         <DataTable<ConsoleBill>
+          labels={tableLabels}
           columns={billColumns}
           rows={bills}
           rowKey={(b) => b.id}
