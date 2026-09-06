@@ -6,15 +6,20 @@
  * @layer Application
  * @category Module
  *
- * 多产品订阅中枢，三个板块（owner 2026-08-20 设计稿 v8 定稿）：
- *   ① 我的订阅——整行铺开每行 3 卡，★ 收藏即排序优先，{服务中|全部} 筛选
- *      （「全部」才显示已过期；未支付/未开通订单不在此板块——未生效）；
- *   ② 我的订单——展开式表格：首列展开箭头，订单列 = 租户(主)·工作区(辅) +
- *      订单号辅行，六态投影为付费/服务两轴，操作 = 去支付(主) + ⋯ 菜单；
- *   ③ 新品推荐——未订阅产品卡，外链 website 产品详情页承接订阅。
- * 概览指标：在订产品 / 待付订单(TTL 倒计时) / 即将到期——DS MetricGrid，
- * 与 /billing 完全同款；板块标题走 PageSection 原生 icon prop，全页只用
- * DS 组合件、不自造样式层（owner 2026-08-20 评审）。全页无 UUID（可视码原则）。
+ * **资产视图**:这一页只答一个问题——**我现在有什么、什么时候到期**。owner 2026-08-20
+ * 设计稿 v8 起是三块,两次减法之后只剩一块:
+ *   · 2026-09-06 **订单迁走** —— 订单是钱那条链的第一环,归费用中心(交易视图);
+ *   · 2026-09-07 **新品推荐去掉** —— 「还没订的产品」是**选购**,不是资产。选购的去处
+ *     是产品市场,页头右上角那个外链就是它;把推荐塞在自己的资产清单下面,等于在
+ *     「我有什么」里混进「你还可以买什么」。
+ *
+ * 剩下的一块:我的订阅——整行铺开每行 3 卡，★ 收藏即排序优先，{服务中|全部} 筛选
+ * （「全部」才显示已过期；未支付/未开通订单不在此板块——未生效）。待付订单只留一条
+ * 横幅指向费用中心(拆页时补的连接点),不落台账。
+ *
+ * 概览指标：在订产品 / 即将到期——DS MetricGrid；板块标题走 PageSection 原生 icon
+ * prop，全页只用 DS 组合件、不自造样式层（owner 2026-08-20 评审）。
+ * 全页无 UUID（可视码原则）。
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -35,13 +40,11 @@ import type { MetricGridItem } from "@vxture/design-system";
 import {
   executeSubscriptionAction,
   fetchMyOrders,
-  fetchRecommendedProducts,
   fetchSubscribedProducts,
   setProductFavorite,
   setSubscriptionAutoRenew,
   ConsoleBffError,
   type MyOrder,
-  type RecommendedProduct,
   type SubscribedProduct,
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
@@ -52,10 +55,7 @@ import {
 } from "@/components/load/LoadFailed";
 import { PageSection } from "@/layout/shell";
 import { buildWebsiteProductsUrl } from "@/lib/website-entry";
-import {
-  RecommendedProductCard,
-  SubscriptionProductCard,
-} from "./components/hubCards";
+import { SubscriptionProductCard } from "./components/hubCards";
 import { daysLeft, fmtDate, fmtTime } from "./components/hubModel";
 
 type SubFilter = "active" | "all";
@@ -73,7 +73,6 @@ export function SubscriptionPage() {
 
   const [products, setProducts] = useState<SubscribedProduct[]>([]);
   const [orders, setOrders] = useState<MyOrder[]>([]);
-  const [recommended, setRecommended] = useState<RecommendedProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [subFilter, setSubFilter] = useState<SubFilter>("active");
   const [favBusy, setFavBusy] = useState<ReadonlySet<string>>(new Set());
@@ -101,22 +100,16 @@ export function SubscriptionPage() {
     let active = true;
     setLoading(true);
     setLoadFailed(false);
-    Promise.all([
-      fetchSubscribedProducts(),
-      fetchMyOrders(),
-      fetchRecommendedProducts(),
-    ])
-      .then(([subs, ords, recos]) => {
+    Promise.all([fetchSubscribedProducts(), fetchMyOrders()])
+      .then(([subs, ords]) => {
         if (!active) return;
         setProducts(subs);
         setOrders(ords);
-        setRecommended(recos);
       })
       .catch(() => {
         if (!active) return;
         setProducts([]);
         setOrders([]);
-        setRecommended([]);
         setLoadFailed(true);
       })
       .finally(() => {
@@ -187,11 +180,6 @@ export function SubscriptionPage() {
       setFavBusy((prev) => new Set(prev).add(productCode));
       const apply = (fav: boolean) => {
         setProducts((list) =>
-          list.map((p) =>
-            p.productCode === productCode ? { ...p, favorite: fav } : p,
-          ),
-        );
-        setRecommended((list) =>
           list.map((p) =>
             p.productCode === productCode ? { ...p, favorite: fav } : p,
           ),
@@ -402,26 +390,6 @@ export function SubscriptionPage() {
         )}
       </PageSection>
 
-      {/* ② 新品推荐 */}
-      {!loading && recommended.length > 0 ? (
-        <PageSection
-          icon="sparkles"
-          level={2}
-          title={t("reco.title")}
-          description={t("reco.description")}
-        >
-          <div className="grid gap-md md:grid-cols-2 xl:grid-cols-3">
-            {recommended.map((item) => (
-              <RecommendedProductCard
-                key={item.productId}
-                item={item}
-                favoriteBusy={favBusy.has(item.productCode)}
-                onToggleFavorite={toggleFavorite}
-              />
-            ))}
-          </div>
-        </PageSection>
-      ) : null}
       {/* 退订确认(危操作:立即终止、不退款,AlertDialog 强确认) */}
     </ViewLayout>
   );

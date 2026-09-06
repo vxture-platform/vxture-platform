@@ -1203,6 +1203,11 @@ export async function fetchSubscribedProducts(): Promise<SubscribedProduct[]> {
   );
 }
 
+/**
+ * 「新品推荐」读。**当前没有消费方**(owner 2026-09-07 把板块从产品订阅页去掉),
+ * 与 `RecommendedProductCard`、BFF 的 `/api/subscription/recommended-products` 一并
+ * 保留——去掉的是**位置**不是能力,去处未定。见 hubCards 里那张卡的注释。
+ */
 export async function fetchRecommendedProducts(): Promise<
   RecommendedProduct[]
 > {
