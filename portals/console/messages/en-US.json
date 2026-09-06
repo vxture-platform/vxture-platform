@@ -412,7 +412,8 @@
     "auditLogs": "Audit Logs",
     "inbox": "To-dos & Messages",
     "tenant": "Tenant",
-    "tenantVerification": "Business verification"
+    "tenantVerification": "Business verification",
+    "tenantVerificationApply": "Submit verification"
   },
   "login": {
     "hero": {
@@ -1209,11 +1210,10 @@
         },
         "documents": {
           "name": "Document verification",
-          "summary": "Upload the business licence and ID images for manual review; unlocks invoicing",
+          "summary": "Submit the signed application form and the business licence image for manual review; unlocks invoicing",
           "items": {
-            "0": "Registration details",
-            "1": "Business licence image",
-            "2": "Legal representative ID image"
+            "0": "Verification application form (download, stamp, upload)",
+            "1": "Business licence image"
           }
         }
       },
@@ -1257,14 +1257,26 @@
         "title": "About verification",
         "description": "Scope and effect",
         "liteTitle": "Limits of simple verification",
-        "liteBody": "Simple verification checks registration details without document images, so it allows subscribing but not invoicing. For invoicing, wait for face or document verification",
+        "liteBody": "Simple verification checks registration details and takes no document images, so it allows subscribing but not invoicing. For invoicing, wait for face or document verification",
         "effectTitle": "Scope",
-        "effectBody": "Verification lives on the tenant and every workspace inherits it; the tenant name follows the verified company name, and renaming voids the verification"
+        "effectBody": "Verification lives on the tenant and every workspace inherits it; the tenant name follows the verified company name, and renaming voids the verification",
+        "noIdTitle": "No identity document images",
+        "noIdBody": "None of the three methods asks for identity document images: simple verification checks registration details, face verification verifies the person, and document verification takes only the application form and the business licence"
       },
       "loadFailed": "Could not read the verification status; the form is locked. Retry or come back later.",
       "retry": "Retry",
       "personalTenantBanner": "Business verification applies to organization tenants only",
-      "personalTenantBannerBody": "This is a personal tenant. Personal identity verification lives on the account page; convert to an organization tenant first for members, business verification and invoicing."
+      "personalTenantBannerBody": "This is a personal tenant. Personal identity verification lives on the account page; convert to an organization tenant first for members, business verification and invoicing.",
+      "apply": {
+        "title": "Submit business verification",
+        "description": "Choose a method and fill in the details; operations reviews the application and the result appears on the verification page",
+        "backToResult": "Back to result",
+        "cancel": "Cancel"
+      },
+      "actions": {
+        "goApply": "Submit application",
+        "changeApply": "Change verification details"
+      }
     }
   },
   "securityPage": {
