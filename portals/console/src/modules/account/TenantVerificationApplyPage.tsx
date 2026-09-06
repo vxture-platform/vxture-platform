@@ -23,16 +23,18 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
   Field,
   FieldLabel,
   Icon,
   Input,
+  RadioGroup,
+  RadioGroupItem,
   StatusBadge,
   ViewHeader,
   ViewLayout,
+  cn,
 } from "@vxture/design-system";
 import {
   fetchTenantVerification,
@@ -57,6 +59,9 @@ export function TenantVerificationApplyPage() {
     null,
   );
   const [loadFailed, setLoadFailed] = useState(false);
+  /** 选中的认证方式(owner 2026-09-06:方式可选中,下方资料填写与提交跟着它走)。
+      本期只有 lite 可选,另两种卡片禁用、选不中。 */
+  const [method, setMethod] = useState<ConsoleVerificationMethod>("lite");
   const [companyName, setCompanyName] = useState("");
   const [licenseNo, setLicenseNo] = useState("");
   const [busy, setBusy] = useState(false);
@@ -100,7 +105,7 @@ export function TenantVerificationApplyPage() {
     try {
       // 简易认证只两项(owner 2026-09-06):法定代表人姓名已去掉,后端也不再必填
       await submitTenantVerification({
-        method: "lite",
+        method,
         companyName: companyName.trim(),
         businessLicenseNo: licenseNo.trim(),
       });
@@ -178,84 +183,110 @@ export function TenantVerificationApplyPage() {
         description={t("methods.description")}
       >
         <CardRows>
-          <div className="grid gap-lg lg:grid-cols-3">
+          {/* 单选组:卡片可选中,下方资料填写与提交跟着选中的方式走(owner 2026-09-06)。
+              整张卡是 label——点卡面任意处即选中;开发中的方式 disabled,选不动。 */}
+          <RadioGroup
+            value={method}
+            onValueChange={(v) => {
+              setMethod(v as ConsoleVerificationMethod);
+              // 选中即把光标送到下面第一格——「关联下方填写」要看得见,不是一句话
+              companyRef.current?.focus();
+            }}
+            aria-label={t("methods.title")}
+            className="grid gap-lg lg:grid-cols-3"
+          >
             {VERIFICATION_METHODS.map((m) => {
               const available = isAvailable(m.key);
+              const selected = method === m.key;
               return (
-                <Card key={m.key} surface="soft" className="h-full">
-                  <CardHeader>
-                    <span className="flex flex-wrap items-center gap-sm">
-                      <Icon
-                        name={m.icon}
-                        size="sm"
-                        fallback="placeholder"
-                        className="text-muted-foreground"
-                      />
-                      <CardTitle>{t(`methods.${m.key}.name`)}</CardTitle>
-                      {available ? (
-                        <StatusBadge tone="info">
-                          {t("methods.availableTag")}
-                        </StatusBadge>
-                      ) : (
-                        <PlannedBadge />
-                      )}
-                    </span>
-                    <CardDescription>
-                      {t(`methods.${m.key}.summary`)}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-md">
-                    <div className="flex flex-col gap-2xs">
-                      <span className="text-label-sm text-muted-foreground">
-                        {t("methods.needLabel")}
+                <label
+                  key={m.key}
+                  htmlFor={`verify-method-${m.key}`}
+                  className={cn(
+                    "block h-full",
+                    available ? "cursor-pointer" : "cursor-not-allowed",
+                  )}
+                >
+                  <Card
+                    surface="soft"
+                    className={cn(
+                      "h-full",
+                      selected && available
+                        ? "ring-2 ring-primary"
+                        : "ring-1 ring-foreground/10",
+                      !available && "opacity-disabled",
+                    )}
+                  >
+                    <CardHeader>
+                      <span className="flex flex-wrap items-center gap-sm">
+                        <RadioGroupItem
+                          id={`verify-method-${m.key}`}
+                          value={m.key}
+                          disabled={!available}
+                          aria-label={t(`methods.${m.key}.name`)}
+                        />
+                        <Icon
+                          name={m.icon}
+                          size="sm"
+                          fallback="placeholder"
+                          className="text-muted-foreground"
+                        />
+                        <CardTitle>{t(`methods.${m.key}.name`)}</CardTitle>
+                        {available ? (
+                          <StatusBadge tone={selected ? "brand" : "info"}>
+                            {selected
+                              ? t("methods.selectedTag")
+                              : t("methods.availableTag")}
+                          </StatusBadge>
+                        ) : (
+                          <PlannedBadge />
+                        )}
                       </span>
-                      <ul className="flex flex-col gap-2xs text-body-sm text-foreground">
-                        {Array.from({ length: m.itemCount }, (_, i) => (
-                          <li key={i} className="flex items-start gap-xs">
-                            <Icon
-                              name="circle-dashed"
-                              size="xs"
-                              fallback="placeholder"
-                              className="mt-2xs shrink-0 text-muted-foreground"
-                            />
-                            <span>{t(`methods.${m.key}.items.${i}`)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div className="flex flex-col gap-2xs">
-                      <span className="text-label-sm text-muted-foreground">
-                        {t("methods.capabilityLabel")}
-                      </span>
-                      {capability(true, t("methods.canSubscribe"))}
-                      {capability(
-                        m.canInvoice,
-                        m.canInvoice
-                          ? t("methods.canInvoice")
-                          : t("methods.cannotInvoice"),
-                      )}
-                    </div>
-                  </CardContent>
-                  <CardFooter className="justify-end">
-                    <Button
-                      size="sm"
-                      variant={available ? "default" : "outline"}
-                      disabled={!available || !canSubmit || busy}
-                      onClick={() => companyRef.current?.focus()}
-                    >
-                      {available
-                        ? t("methods.useThis")
-                        : t("methods.inDevelopment")}
-                    </Button>
-                  </CardFooter>
-                </Card>
+                      <CardDescription>
+                        {t(`methods.${m.key}.summary`)}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-md">
+                      <div className="flex flex-col gap-2xs">
+                        <span className="text-label-sm text-muted-foreground">
+                          {t("methods.needLabel")}
+                        </span>
+                        <ul className="flex flex-col gap-2xs text-body-sm text-foreground">
+                          {Array.from({ length: m.itemCount }, (_, i) => (
+                            <li key={i} className="flex items-start gap-xs">
+                              <Icon
+                                name="circle-dashed"
+                                size="xs"
+                                fallback="placeholder"
+                                className="mt-2xs shrink-0 text-muted-foreground"
+                              />
+                              <span>{t(`methods.${m.key}.items.${i}`)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="flex flex-col gap-2xs">
+                        <span className="text-label-sm text-muted-foreground">
+                          {t("methods.capabilityLabel")}
+                        </span>
+                        {capability(true, t("methods.canSubscribe"))}
+                        {capability(
+                          m.canInvoice,
+                          m.canInvoice
+                            ? t("methods.canInvoice")
+                            : t("methods.cannotInvoice"),
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </label>
               );
             })}
-          </div>
+          </RadioGroup>
         </CardRows>
       </PageSection>
 
-      {/* 申请表单(本期只有简易方式) */}
+      {/* 申请资料:跟着上面选中的方式走 */}
       <PageSection
         icon="file-text"
         level={2}
@@ -268,8 +299,16 @@ export function TenantVerificationApplyPage() {
       >
         <CardRows>
           <div className="flex max-w-panel-md flex-col gap-sm">
+            {/* 与上方选中项的关联:这一段填的是哪种方式的资料,写在明处 */}
+            <p className="text-body-sm text-muted-foreground">
+              {t("form.selectedMethod", {
+                method: t(`methods.${method}.name`),
+              })}
+            </p>
             {/* 局限性:表单里再说一次这条路径不能开票 */}
-            <Banner tone="info" title={t("form.liteNotice")} />
+            {method === "lite" ? (
+              <Banner tone="info" title={t("form.liteNotice")} />
+            ) : null}
             <Field>
               <FieldLabel htmlFor="verify-company-name">
                 {t("form.companyName")} *

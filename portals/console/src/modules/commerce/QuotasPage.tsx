@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   Badge,
   DataTable,
@@ -78,6 +79,7 @@ type ProductMetricRow = ConsoleProductQuota["metrics"][number] & {
 
 export function QuotasPage() {
   const t = useTranslations("quotasPage");
+  const tableLabels = useTableLabels();
   const locale = useLocale();
   const { session } = useConsoleSession();
 
@@ -510,6 +512,7 @@ export function QuotasPage() {
         description={t("storage.description")}
       >
         <DataTable<StorageRow>
+          labels={tableLabels}
           columns={storageColumns}
           rows={storageRows}
           rowKey={(r) => r.key}
@@ -543,6 +546,7 @@ export function QuotasPage() {
         description={t("credits.description")}
       >
         <DataTable<ConsoleQuotaPool>
+          labels={tableLabels}
           columns={creditPoolColumns}
           rows={overview?.aiCredit.pools ?? []}
           rowKey={(p) =>
@@ -597,6 +601,7 @@ export function QuotasPage() {
         description={t("products.description")}
       >
         <DataTable<ProductMetricRow>
+          labels={tableLabels}
           columns={productColumns}
           rows={productRows}
           rowKey={(r) => r.rowKey}

@@ -1187,8 +1187,6 @@
         "canSubscribe": "Subscribe to products and plans",
         "canInvoice": "Request invoices",
         "cannotInvoice": "Cannot request invoices",
-        "useThis": "Use this method",
-        "inDevelopment": "In development",
         "availableTag": "Available now",
         "currentTag": "Current method",
         "lite": {
@@ -1214,7 +1212,8 @@
             "0": "Verification application form (download, stamp, upload)",
             "1": "Business licence image"
           }
-        }
+        },
+        "selectedTag": "Selected"
       },
       "current": {
         "title": "Current verification",
@@ -1238,7 +1237,8 @@
         "legalName": "Legal representative",
         "legalNamePlaceholder": "As shown on the business licence",
         "submit": "Submit application",
-        "pendingLocked": "Under review, cannot submit"
+        "pendingLocked": "Under review, cannot submit",
+        "selectedMethod": "Selected: {method}. Fill in the details this method requires."
       },
       "history": {
         "title": "Applications",
@@ -3232,5 +3232,12 @@
       "errorBlocked": "Eligibility changed; resolve the latest list and try again.",
       "error": "Closing failed. Please try again later."
     }
+  },
+  "table": {
+    "rowActions": "Actions",
+    "expand": "Expand",
+    "selectAll": "Select all rows on this page",
+    "deselectAll": "Deselect all rows on this page",
+    "selectRow": "Select row"
   }
 }

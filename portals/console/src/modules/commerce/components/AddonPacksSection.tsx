@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   ActionMenu,
   Badge,
@@ -162,6 +163,7 @@ export function AddonPacksSection({
   canPurchase?: boolean;
 }) {
   const t = useTranslations("quotasPage.addons");
+  const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
   const router = useRouter();
   const { session } = useConsoleSession();
@@ -400,6 +402,7 @@ export function AddonPacksSection({
 
       {orders.length > 0 ? (
         <DataTable<ConsoleAddonOrder>
+          labels={tableLabels}
           columns={orderColumns}
           rows={orders}
           rowKey={(o) => o.orderNo}

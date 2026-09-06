@@ -63,6 +63,7 @@ import {
 } from "@/api/console-bff";
 import type { MemberRecord, TenantRoleRecord } from "@/entities/console";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
 import { useConfirmLabels } from "@/lib/destructive";
@@ -104,6 +105,7 @@ function memberSearchText(member: MemberRecord) {
 
 export function MembersPage() {
   const t = useTranslations("membersPage");
+  const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
   const { session } = useConsoleSession();
   const [members, setMembers] = useState<MemberRecord[]>([]);
@@ -881,6 +883,7 @@ export function MembersPage() {
             {error ? <Banner tone="danger" title={error} /> : null}
             {view === "list" ? (
               <DataTable
+                labels={tableLabels}
                 columns={[
                   {
                     id: "name",

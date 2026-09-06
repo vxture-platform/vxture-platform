@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   Badge,
   Button,
@@ -73,6 +74,7 @@ const ACTION_OPTIONS = [...KNOWN_ACTIONS].sort();
 
 export function AuditLogsPage() {
   const t = useTranslations("auditPage");
+  const tableLabels = useTableLabels();
   const { session } = useConsoleSession();
 
   const [rows, setRows] = useState<ConsoleAuditLog[]>([]);
@@ -260,6 +262,7 @@ export function AuditLogsPage() {
         </FilterBar>
 
         <DataTable<ConsoleAuditLog>
+          labels={tableLabels}
           columns={columns}
           rows={rows}
           rowKey={(r) => r.id}

@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import { CapabilityGate } from "@/features/permissions/CapabilityGate";
 import {
   Banner,
@@ -52,6 +53,7 @@ const quotaStatusTone: Record<
 
 function AtlasPage() {
   const t = useTranslations("atlasPage");
+  const tableLabels = useTableLabels();
   const locale = useLocale();
   const { session } = useConsoleSession();
   const [models, setModels] = useState<AiModelRecord[]>([]);
@@ -250,6 +252,7 @@ function AtlasPage() {
           description={t("models.description")}
         >
           <DataTable
+            labels={tableLabels}
             columns={modelColumns}
             rows={modelRows}
             rowKey={(row, index) => row[0] ?? String(index)}
@@ -265,6 +268,7 @@ function AtlasPage() {
           description={t("entitlements.description")}
         >
           <DataTable
+            labels={tableLabels}
             columns={entitlementColumns}
             rows={entitlementRows}
             rowKey={(row, index) => `${row[0]}-${index}`}
@@ -282,6 +286,7 @@ function AtlasPage() {
           description={t("quotas.description")}
         >
           <DataTable
+            labels={tableLabels}
             columns={quotaColumns}
             rows={quotaRows}
             rowKey={(row, index) => `${row[0]}-${index}`}
@@ -297,6 +302,7 @@ function AtlasPage() {
           description={t("usage.description")}
         >
           <DataTable
+            labels={tableLabels}
             columns={usageColumns}
             rows={usageRows}
             rowKey={(row, index) => `${row[0]}-${row[1]}-${index}`}

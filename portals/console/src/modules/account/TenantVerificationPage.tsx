@@ -17,6 +17,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   ActionMenu,
   Banner,
@@ -45,6 +46,7 @@ import { VERIFICATION_STATUS_TONES } from "./verification-methods";
 
 export function TenantVerificationPage() {
   const t = useTranslations("verificationPage.org");
+  const tableLabels = useTableLabels();
   const { session } = useConsoleSession();
   const router = useRouter();
 
@@ -297,6 +299,7 @@ export function TenantVerificationPage() {
         {/* 表格不套 CardRows:console 各页的 DataTable 一律与面头同宽铺开
             (账单 / 成员 / 审计都是),缩进只用于字段行与说明这类内容块 */}
         <DataTable<ConsoleVerification>
+          labels={tableLabels}
           columns={historyColumns}
           rows={state?.history ?? []}
           rowKey={(r) => r.id}

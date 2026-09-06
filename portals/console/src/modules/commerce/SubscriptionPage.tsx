@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
   ActionMenu,
@@ -83,6 +84,7 @@ type SubFilter = "active" | "all";
 
 export function SubscriptionPage() {
   const t = useTranslations("subscriptionHub");
+  const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
   const locale = useLocale();
   const appLocale = locale as Locale;
@@ -688,6 +690,7 @@ export function SubscriptionPage() {
         description={t("orders.description")}
       >
         <DataTable<MyOrder>
+          labels={tableLabels}
           columns={orderColumns}
           rows={pagedOrders}
           rowKey={(o) => o.orderId}

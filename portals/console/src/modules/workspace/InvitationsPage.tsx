@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useConfirmLabels } from "@/lib/destructive";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   ActionMenu,
   Banner,
@@ -68,6 +69,7 @@ const EXPIRING_SOON_MS = 24 * 60 * 60 * 1000;
 
 export function InvitationsPage() {
   const t = useTranslations("invitationsPage");
+  const tableLabels = useTableLabels();
   const router = useRouter();
   const { session } = useConsoleSession();
 
@@ -273,6 +275,7 @@ export function InvitationsPage() {
         description={t("table.description")}
       >
         <DataTable<ConsoleInvitation>
+          labels={tableLabels}
           columns={columns}
           rows={rows}
           rowKey={(r) => r.id}

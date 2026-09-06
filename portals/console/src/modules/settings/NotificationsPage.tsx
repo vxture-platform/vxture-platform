@@ -15,6 +15,7 @@ import { LoadFailedBanner } from "@/components/load/LoadFailed";
 import type { DataTableColumn, IconName } from "@vxture/design-system";
 import { PageSection, SummaryStrip } from "@/layout/shell";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   fetchNotificationPreferences,
   saveNotificationPreferences,
@@ -106,6 +107,7 @@ const DEFAULT_NOTIFICATION_STATE: NotificationState = {
 
 export function NotificationsPage() {
   const t = useTranslations("notificationsPage");
+  const tableLabels = useTableLabels();
   const [state, setState] = useState<NotificationState>(
     DEFAULT_NOTIFICATION_STATE,
   );
@@ -392,6 +394,7 @@ export function NotificationsPage() {
               })}
             >
               <DataTable
+                labels={tableLabels}
                 columns={topicColumns}
                 rows={groupTopics}
                 rowKey={(topic) => topic.key}

@@ -14,6 +14,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   Badge,
   DataTable,
@@ -59,6 +60,7 @@ type VoucherFilter = "available" | "all";
 
 export function VouchersPage() {
   const t = useTranslations("vouchersPage");
+  const tableLabels = useTableLabels();
   const locale = useLocale();
   const { session } = useConsoleSession();
 
@@ -279,6 +281,7 @@ export function VouchersPage() {
         }
       >
         <DataTable<ConsoleVoucher>
+          labels={tableLabels}
           columns={columns}
           rows={visible}
           rowKey={(v) => v.id}
