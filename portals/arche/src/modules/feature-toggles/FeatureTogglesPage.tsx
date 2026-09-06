@@ -348,7 +348,7 @@ export function FeatureTogglesPage() {
             aria-label="功能开关筛选"
             search={
               <Input
-                className="grow basis-media-3xl max-w-panel-sm"
+                className="min-w-media-2xl grow basis-0 max-w-panel-sm"
                 type="search"
                 placeholder="搜索开关键、描述、分类…"
                 value={search}

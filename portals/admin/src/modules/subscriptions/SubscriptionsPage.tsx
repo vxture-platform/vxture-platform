@@ -607,7 +607,7 @@ export function SubscriptionsPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="搜索租户、方案、套餐、订单"
-                className="grow basis-media-3xl max-w-panel-sm"
+                className="min-w-media-2xl grow basis-0 max-w-panel-sm"
                 aria-label="搜索租户订阅"
               />
             }

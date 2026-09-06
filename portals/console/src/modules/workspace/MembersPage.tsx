@@ -566,6 +566,10 @@ export function MembersPage() {
             <span className="truncate text-label-md text-foreground">
               {member.name}
             </span>
+            {/* 「主管理员」与角色列的「所有者」是**两件事,不要统一**(owner
+                2026-09-06 裁定):角色说的是**角色定义**(这个人被授予了哪一档治理
+                权限),这一枚标说的是**隶属与管理关系**(这个租户的主管理员是谁)。
+                同一个人身上两个词看着像漂移,其实各答各的问题。 */}
             {member.isPrimaryOwner ? (
               <StatusBadge tone="brand">{t("table.primaryOwner")}</StatusBadge>
             ) : null}
