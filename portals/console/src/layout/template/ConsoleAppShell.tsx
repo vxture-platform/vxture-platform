@@ -15,7 +15,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Link, usePathname, useRouter } from "@/lib/i18n/navigation";
 import { writeNavCollapsed } from "@vxture-platform/shared";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
-import { appCenterModuleTiles, consoleDomains } from "@/config/navigation";
+import { consoleDomains } from "@/config/navigation";
 import {
   fetchBillingSummary,
   fetchInbox,
@@ -24,10 +24,14 @@ import {
   fetchMySubscriptions,
   fetchMyWorkspaces,
   fetchQuotaUsage,
+  fetchRecommendedProducts,
+  fetchSubscribedProducts,
   fetchTenantModelQuotas,
   markInboxAllRead,
   markInboxRead,
   type ConsoleQuotaUsage,
+  type RecommendedProduct,
+  type SubscribedProduct,
   type InboxMessage,
   type ProductAppTile,
 } from "@/api/console-bff";
@@ -57,7 +61,7 @@ import {
 } from "../header/ConsoleHeader";
 import type { NavSearchEntry } from "../header/useGlobalSearch";
 import { TemplateDrawer, type DrawerNotif } from "./TemplateDrawer";
-import { AppCenter, type AppCenterModuleEntry } from "./AppCenter";
+import { AppCenter } from "./AppCenter";
 
 /* 内容滚动区：原先是遗留 CSS 的 `.content-scroll`（shell-template 已随批 D
  * 整体退役）。等价 Tailwind 写法在此。`data-content-scroll` 是给路由跳转后复位滚动条用的
@@ -158,6 +162,14 @@ export function ConsoleAppShell({
     null,
   );
   const [productsFailed, setProductsFailed] = useState(false);
+  /* 智能体页的两路补充数据。null = 没读到:磁贴退回只有名字与入口的形态、推荐块整块
+     不出现——它们是**补充**,读不到不该把这一页拖成读取失败。 */
+  const [subscribedProducts, setSubscribedProducts] = useState<
+    SubscribedProduct[] | null
+  >(null);
+  const [recommendedProducts, setRecommendedProducts] = useState<
+    RecommendedProduct[] | null
+  >(null);
   /* 配额与当前工作空间原先由 header 自己取。上提到这里是因为它们现在同时喂
    * 「当前范围」面板与侧栏页脚——留在 header 里会让同一份数据被拉两遍。 */
   const [quotaUsage, setQuotaUsage] = useState<ConsoleQuotaUsage | null>(null);
@@ -223,6 +235,18 @@ export function ConsoleAppShell({
       }
     };
 
+    /* 智能体页的两路补充读:订阅给磁贴补档位/周期/到期(磁贴只有入口),推荐是引导位。
+       两者都**不阻断页面**——读不到就少画一块,不把整页拖成读取失败。 */
+    const loadAgentExtras = async () => {
+      const [subs, recos] = await Promise.allSettled([
+        fetchSubscribedProducts(),
+        fetchRecommendedProducts(),
+      ]);
+      if (!alive) return;
+      setSubscribedProducts(subs.status === "fulfilled" ? subs.value : null);
+      setRecommendedProducts(recos.status === "fulfilled" ? recos.value : null);
+    };
+
     const loadQuota = async () => {
       const usage = await fetchQuotaUsage();
       if (alive) setQuotaUsage(usage);
@@ -246,6 +270,7 @@ export function ConsoleAppShell({
       loadUsage(),
       loadBilling(),
       loadApps(),
+      loadAgentExtras(),
       loadQuota(),
       loadWorkspace(),
     ]);
@@ -438,32 +463,25 @@ export function ConsoleAppShell({
     messagesTitle: tDrawer("notifications.messagesTitle"),
   };
 
-  // ── App Center：产品磁贴来自 BFF，板块入口来自导航配置 ──
-  const moduleEntries: AppCenterModuleEntry[] = useMemo(
-    () =>
-      appCenterModuleTiles.map((tile) => ({
-        id: tile.id,
-        icon: tile.icon,
-        href: tile.href,
-        name: tShell(`apps.${tile.id}.name`),
-        desc: tShell(`apps.${tile.id}.desc`),
-      })),
-    [tShell],
-  );
+  /* 智能体页(owner 2026-09-07:只装「已订阅产品」与「热门推荐」两块)。
+     原来的「控制台板块」入口去掉了——那是控制台的内容,它的侧栏里本来就有。 */
   const appCenterLabels = {
     title: tShell("appcenter.title"),
     desc: tShell("appcenter.desc"),
-    shortcutTag: tShell("appcenter.shortcutTag", {
-      count: (productTiles?.length ?? 0) + moduleEntries.length,
-    }),
     productsTitle: tShell("appcenter.products.title"),
     productsDesc: tShell("appcenter.products.desc"),
     productsEmpty: tShell("appcenter.products.empty"),
     productsBrowse: tShell("appcenter.products.browse"),
     productsUnavailable: tShell("appcenter.products.unavailable"),
     trialing: tShell("appcenter.products.trialing"),
-    modulesTitle: tShell("appcenter.modules.title"),
-    modulesDesc: tShell("appcenter.modules.desc"),
+    open: tShell("appcenter.products.open"),
+    productDetail: tShell("appcenter.products.detail"),
+    recoTitle: tShell("appcenter.reco.title"),
+    recoDesc: tShell("appcenter.reco.desc"),
+    recoLearnMore: tShell("appcenter.reco.learnMore"),
+    recoSubscribe: tShell("appcenter.reco.subscribe"),
+    recoFree: tShell("appcenter.reco.free"),
+    recoFrom: tShell("appcenter.reco.from"),
   };
 
   /* 站内入口：切回控制台视图再路由。登记了主页的产品不经这里——AppCenter 直接
@@ -550,7 +568,8 @@ export function ConsoleAppShell({
               <AppCenter
                 products={productTiles}
                 productsFailed={productsFailed}
-                modules={moduleEntries}
+                subscriptions={subscribedProducts}
+                recommended={recommendedProducts}
                 onNavigate={openInConsole}
                 labels={appCenterLabels}
               />

@@ -88,34 +88,25 @@
       "openCenter": "Open message center"
     },
     "appcenter": {
-      "title": "App Center",
-      "desc": "Products this workspace subscribes to, plus entry points to the console's own boards.",
-      "shortcutTag": "{count} entries",
+      "title": "Agents",
+      "desc": "Agents this workspace subscribes to — open and use. Recommendations below.",
       "products": {
-        "title": "Subscribed products",
-        "desc": "Listed from this workspace's in-force subscriptions (trials included). Click to open the product.",
-        "empty": "This workspace has no in-force product subscription yet.",
+        "title": "Subscribed",
+        "desc": "Listed from this workspace's active subscriptions, trials included.",
+        "empty": "This workspace has no active product subscription yet.",
         "browse": "View subscriptions",
-        "unavailable": "Subscribed products could not be loaded. Refresh to try again.",
-        "trialing": "Trial"
+        "unavailable": "Subscribed products are temporarily unavailable. Please refresh.",
+        "trialing": "Trial",
+        "open": "Open",
+        "detail": "Product page"
       },
-      "modules": {
-        "title": "Console boards",
-        "desc": "The console's own sections; not tied to any subscription."
-      }
-    },
-    "apps": {
-      "workspace": {
-        "name": "Data workspace",
-        "desc": "Business overview and daily to-dos"
-      },
-      "members": {
-        "name": "Members & permissions",
-        "desc": "Members, roles and invitations"
-      },
-      "billing": {
-        "name": "Subscription & billing",
-        "desc": "Plans, invoices and quotas"
+      "reco": {
+        "title": "Popular",
+        "desc": "Agents you haven't subscribed to — read the product page or subscribe directly.",
+        "learnMore": "Product page",
+        "subscribe": "Subscribe",
+        "free": "Free tier available",
+        "from": "from / month"
       }
     },
     "realNameVerified": "Verified",
@@ -2188,7 +2179,8 @@
       "perpetual": "No expiry",
       "expired": "Expired",
       "daysLeft": "{days} {days, plural, one {day} other {days}} left",
-      "freeNote": "Free plans count as subscriptions"
+      "freeNote": "Free plans count as subscriptions",
+      "until": "Valid until {date}"
     },
     "card": {
       "productDetail": "Product details",

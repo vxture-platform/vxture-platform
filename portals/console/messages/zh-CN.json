@@ -88,34 +88,25 @@
       "openCenter": "前往消息中心"
     },
     "appcenter": {
-      "title": "应用中心",
-      "desc": "当前工作空间已订阅的产品，以及控制台各板块的入口。",
-      "shortcutTag": "{count} 个入口",
+      "title": "智能体",
+      "desc": "当前工作空间已订阅的智能体,点开就用;下方是还没订的推荐。",
       "products": {
-        "title": "已订阅产品",
-        "desc": "按当前工作空间的生效订阅（含试用）列出，点击打开产品。",
+        "title": "已订阅",
+        "desc": "按当前工作空间的生效订阅(含试用)列出。",
         "empty": "当前工作空间还没有生效的产品订阅。",
         "browse": "查看订阅",
-        "unavailable": "已订阅产品暂时读不到，请稍后刷新。",
-        "trialing": "试用中"
+        "unavailable": "已订阅产品暂时读不到,请稍后刷新。",
+        "trialing": "试用中",
+        "open": "打开",
+        "detail": "产品介绍"
       },
-      "modules": {
-        "title": "控制台板块",
-        "desc": "控制台自身的功能入口，不依赖订阅。"
-      }
-    },
-    "apps": {
-      "workspace": {
-        "name": "数据工作台",
-        "desc": "综合业务概览与日常待办"
-      },
-      "members": {
-        "name": "成员与权限",
-        "desc": "成员、角色与邀请管理"
-      },
-      "billing": {
-        "name": "订阅与账单",
-        "desc": "套餐、账单与用量配额"
+      "reco": {
+        "title": "热门推荐",
+        "desc": "你还没订阅的智能体,先看介绍或直接订阅。",
+        "learnMore": "产品介绍",
+        "subscribe": "订阅",
+        "free": "提供免费版",
+        "from": "起 / 月"
       }
     },
     "realNameVerified": "实名认证",
@@ -2188,7 +2179,8 @@
       "perpetual": "长期有效",
       "expired": "已过期",
       "daysLeft": "剩余 {days} 天",
-      "freeNote": "免费版计入订阅"
+      "freeNote": "免费版计入订阅",
+      "until": "有效期至 {date}"
     },
     "card": {
       "productDetail": "产品详情",
