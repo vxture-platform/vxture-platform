@@ -390,7 +390,7 @@
     "membersInvitations": "Invitations",
     "membersRoles": "Roles",
     "membersPermissions": "Permissions",
-    "roles": "Roles & Permissions",
+    "roles": "Roles",
     "invitations": "Invitation Records",
     "subscription": "Product Subscriptions",
     "billing": "Billing",
@@ -1304,7 +1304,7 @@
       "description": "Manage tenant members, roles, and access status.",
       "addMember": "Add member",
       "inviteMember": "Invite member",
-      "viewRoles": "Roles & permissions",
+      "viewRoles": "Roles",
       "viewInvitations": "Invitations",
       "viewPermissions": "Permissions"
     },
@@ -1509,7 +1509,7 @@
       "permTitle": "Which codes each role holds",
       "permBody": "This page shows only the count per role; the matrix on the Permissions page lists every code and who holds it"
     },
-    "loadFailed": "Could not load roles and permissions, please retry",
+    "loadFailed": "Could not load the role catalog. Please try again.",
     "permDialog": {
       "countLabel": "{count} permission points",
       "empty": "This role holds no permission points"

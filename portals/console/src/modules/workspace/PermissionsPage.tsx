@@ -66,7 +66,7 @@ import type {
 } from "@/entities/console";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { useRouter } from "@/lib/i18n/navigation";
-import { PageSection, SignalList } from "@/layout/shell";
+import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 
 /** 目录里的操作码(权威在 core-utils);角色的图标、显示名与排序归 components/role-tag。 */
 const KNOWN_PERMS = new Set<string>([
@@ -520,7 +520,7 @@ export function PermissionsPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={t("filters.searchPlaceholder")}
-                className="grow basis-media-3xl max-w-panel-sm"
+                className="min-w-media-2xl grow basis-0 max-w-panel-sm"
                 aria-label={t("filters.searchAriaLabel")}
               />
             }
@@ -569,22 +569,24 @@ export function PermissionsPage() {
         title={t("notes.title")}
         description={t("notes.description")}
       >
-        <SignalList
-          items={[
-            {
-              title: t("notes.readTitle"),
-              description: t("notes.readBody"),
-            },
-            {
-              title: t("notes.openTitle"),
-              description: t("notes.openBody"),
-            },
-            {
-              title: t("notes.scopeTitle"),
-              description: t("notes.scopeBody"),
-            },
-          ]}
-        />
+        <SectionBody>
+          <SignalList
+            items={[
+              {
+                title: t("notes.readTitle"),
+                description: t("notes.readBody"),
+              },
+              {
+                title: t("notes.openTitle"),
+                description: t("notes.openBody"),
+              },
+              {
+                title: t("notes.scopeTitle"),
+                description: t("notes.scopeBody"),
+              },
+            ]}
+          />
+        </SectionBody>
       </PageSection>
     </ViewLayout>
   );
