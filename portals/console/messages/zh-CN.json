@@ -99,7 +99,7 @@
         "trialing": "试用中",
         "open": "打开",
         "detail": "产品介绍",
-        "updatedAt": "{date} 更新"
+        "versionAt": "v {version} at {date}"
       },
       "reco": {
         "title": "热门推荐",

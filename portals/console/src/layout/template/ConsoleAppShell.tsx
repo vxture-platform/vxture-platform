@@ -476,7 +476,7 @@ export function ConsoleAppShell({
     trialing: tShell("appcenter.products.trialing"),
     open: tShell("appcenter.products.open"),
     productDetail: tShell("appcenter.products.detail"),
-    updatedAt: tShell("appcenter.products.updatedAt"),
+    versionAt: tShell("appcenter.products.versionAt"),
     recoTitle: tShell("appcenter.reco.title"),
     recoDesc: tShell("appcenter.reco.desc"),
     recoLearnMore: tShell("appcenter.reco.learnMore"),

@@ -17,18 +17,23 @@
  * 页头名字从「应用中心」改成「智能体」——切换器里一直叫智能体，页面却自称应用中心，
  * 同一个东西两个名字。
  *
- * ## 两张卡的排布规则（2026-09-07 owner 走查后重定）
+ * ## 两张卡的排布规则——**照官网那张已定稿的卡**
  *
- * 两张卡**共用一条规则**，不是各摆各的：
+ * `/appcenter` 与 `/products` 共用的 `ProductCatalogCard`（website 侧，owner 2026-09-03
+ * 定稿）早把这件事排好了；2026-09-07 owner 指出我自造了一套更丑的。现在对齐它：
  *
  *   · **右上角 = 这张卡的"一眼判断"**。已订阅看**状态**（服务中 / 试用中 / 已过期）：
  *     右对齐，一列卡扫下来状态在同一条竖线上；它标的是整张卡的性质，混进内容区就跟
  *     事实混成一片了。**推荐卡这一格是空的**——它的判断就是名字与简介本身
  *     （owner 2026-09-07：价格不在这里露），不为了对称硬塞。
- *   · **内容区 = 支撑那个判断的事实**。已订阅：档位 / 周期 + 有效期至；推荐：一句
- *     简介。末行统一是**版本号 · 发布时间**——它回答"我用的是哪一版、多久没动了"，
- *     是补充不是判断，所以压成小字放在内容区末尾，两张卡同一个位置。
- *   · **卡底 = 动作**。已订阅：产品介绍 / 打开；推荐：产品介绍 / 订阅。
+ *   · **内容区 = 支撑那个判断的事实**。已订阅：档位 / 周期 + 有效期至；推荐：一句简介。
+ *   · **卡底一行**：左边 `v 1.2.3 at 2026/9/12`，右边动作——「产品介绍」走**文字链**
+ *     （官网也是链不是按钮，它是次要去处），主按钮在最右。版本行与动作**同一行**、
+ *     不另起一行占高度，这正是我原来做错的地方。
+ *
+ * 文案模板沿用官网那份（`v {version} at {date}`），日期按 locale 数字格式（zh 不补零：
+ * 2026/9/12）。样式仍走 DS 语义类——官网那张卡用的是 website 自己的 `vx-*` 营销层，
+ * console 不抄那个（本门户禁自造样式层）。
  *
  * 「更新时间」取 `released_at`（这一版什么时候发出来的），**不是 `updated_at`**——那是
  * 行审计列，后台改一句描述也会变，对客户不构成"产品有更新"。两个字段本轮从 BFF 补出。
@@ -96,8 +101,8 @@ export interface AppCenterProps {
     trialing: string;
     open: string;
     productDetail: string;
-    /** 版本行里发布时间那一半，形如「{date} 更新」。 */
-    updatedAt: string;
+    /** 卡底版本行模板，沿用官网那份：`v {version} at {date}`。 */
+    versionAt: string;
     recoTitle: string;
     recoDesc: string;
     recoLearnMore: string;
@@ -120,26 +125,36 @@ const SUB_STATUS_TONES: Readonly<Record<string, StatusBadgeTone>> = {
 };
 
 /**
- * 内容区末行：版本号 · 发布时间。两张卡同一个位置、同一种压法。
- * 两者都没有就整行不出现——不画一行「— · —」凑版式。
+ * 卡底左侧的版本行，形如 `v 1.2.3 at 2026/9/12`——与官网 `ProductCatalogCard` 同一模板。
+ *
+ * 没有版本就整段不出现（不画「— at —」凑版式）；有版本没发布时间就只出 `v 1.2.3`。
+ * 日期按 locale 的数字格式，zh 下不补零。
  */
 function ReleaseLine({
   version,
   releasedAt,
-  updatedLabel,
+  versionAtLabel,
+  locale,
 }: {
   version: string | null;
   releasedAt: string | null;
-  updatedLabel: (date: string) => string;
+  versionAtLabel: string;
+  locale: string;
 }) {
-  const parts = [
-    version ? "v" + version : null,
-    releasedAt ? updatedLabel(fmtDate(releasedAt)) : null,
-  ].filter(Boolean);
-  if (parts.length === 0) return null;
+  if (!version) return null;
+  const text = releasedAt
+    ? versionAtLabel.replace("{version}", version).replace(
+        "{date}",
+        new Intl.DateTimeFormat(locale, {
+          year: "numeric",
+          month: "numeric",
+          day: "numeric",
+        }).format(new Date(releasedAt)),
+      )
+    : "v " + version;
   return (
     <span className="truncate text-body-sm text-muted-foreground tabular-nums">
-      {parts.join(" · ")}
+      {text}
     </span>
   );
 }
@@ -169,9 +184,6 @@ export function AppCenter({
   const locale = useLocale();
   /* 订阅这个域的词典(档位/周期/状态/期限),与 hubCards、OrdersSection、付款页共用。 */
   const tSub = useTranslations("subscriptionHub");
-  /** 发布时间那一半的文案；`{date}` 是槽位，件不替调用方定语序。 */
-  const updatedLabel = (date: string) =>
-    labels.updatedAt.replace("{date}", date);
 
   /** 按产品码把订阅信息挂到磁贴上：磁贴有入口没档位，订阅有档位没入口。 */
   const subByCode = new Map(
@@ -289,42 +301,45 @@ export function AppCenter({
                         </span>
                       ) : null}
                     </div>
+                  </CardContent>
 
+                  {/* 卡底一行：左 = v x.y.z at 日期，右 = 产品介绍(链) + 打开(按钮)。
+                      与官网 ProductCatalogCard 同一骨架。 */}
+                  <CardFooter className="justify-between gap-md text-body-sm">
                     <ReleaseLine
                       version={sub?.releaseVersion ?? null}
                       releasedAt={sub?.releasedAt ?? null}
-                      updatedLabel={updatedLabel}
+                      versionAtLabel={labels.versionAt}
+                      locale={locale}
                     />
-                  </CardContent>
-
-                  {/* 卡底:一条外链看介绍,一个按钮打开它——这一页的动作只有这一个。 */}
-                  <CardFooter className="justify-between gap-md text-body-sm">
-                    <a
-                      href={buildWebsiteProductUrl(locale, product.code)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="shrink-0 text-primary-text hover:underline"
-                    >
-                      {labels.productDetail}
-                    </a>
-                    {product.homeUrl ? (
-                      <Button asChild size="sm">
-                        <a
-                          href={product.homeUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          {labels.open}
-                          <Icon name="external-link" size="xs" aria-hidden />
-                        </a>
-                      </Button>
-                    ) : (
-                      <Button asChild variant="outline" size="sm">
-                        <a {...internalLink(SUBSCRIPTION_HREF)}>
-                          {labels.productsBrowse}
-                        </a>
-                      </Button>
-                    )}
+                    <span className="flex shrink-0 items-center gap-sm">
+                      <a
+                        href={buildWebsiteProductUrl(locale, product.code)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="shrink-0 text-primary-text hover:underline"
+                      >
+                        {labels.productDetail}
+                      </a>
+                      {product.homeUrl ? (
+                        <Button asChild size="sm">
+                          <a
+                            href={product.homeUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {labels.open}
+                            <Icon name="external-link" size="xs" aria-hidden />
+                          </a>
+                        </Button>
+                      ) : (
+                        <Button asChild variant="outline" size="sm">
+                          <a {...internalLink(SUBSCRIPTION_HREF)}>
+                            {labels.productsBrowse}
+                          </a>
+                        </Button>
+                      )}
+                    </span>
                   </CardFooter>
                 </Card>
               );
@@ -367,36 +382,38 @@ export function AppCenter({
                       {item.description}
                     </p>
                   ) : null}
+                </CardContent>
 
+                {/* 卡底一行：左 = v x.y.z at 日期，右 = 产品介绍(链) + 订阅(按钮)。 */}
+                <CardFooter className="justify-between gap-md text-body-sm">
                   <ReleaseLine
                     version={item.releaseVersion}
                     releasedAt={item.releasedAt}
-                    updatedLabel={updatedLabel}
+                    versionAtLabel={labels.versionAt}
+                    locale={locale}
                   />
-                </CardContent>
-
-                {/* 卡底 = 动作：先看介绍，或直接订阅。 */}
-                <CardFooter className="justify-between gap-md text-body-sm">
-                  <a
-                    href={buildWebsiteProductUrl(locale, item.productCode)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="shrink-0 text-primary-text hover:underline"
-                  >
-                    {labels.recoLearnMore}
-                  </a>
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      onNavigate(
-                        "/subscribe?product=" +
-                          encodeURIComponent(item.productCode) +
-                          "&intent=subscribe",
-                      )
-                    }
-                  >
-                    {labels.recoSubscribe}
-                  </Button>
+                  <span className="flex shrink-0 items-center gap-sm">
+                    <a
+                      href={buildWebsiteProductUrl(locale, item.productCode)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0 text-primary-text hover:underline"
+                    >
+                      {labels.recoLearnMore}
+                    </a>
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        onNavigate(
+                          "/subscribe?product=" +
+                            encodeURIComponent(item.productCode) +
+                            "&intent=subscribe",
+                        )
+                      }
+                    >
+                      {labels.recoSubscribe}
+                    </Button>
+                  </span>
                 </CardFooter>
               </Card>
             ))}
