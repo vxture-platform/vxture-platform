@@ -1492,12 +1492,13 @@
       "colRole": "Role",
       "colBlurb": "Positioning",
       "colPermCount": "Permissions",
-      "system": "System",
+      "system": "System preset",
       "custom": "Custom",
       "empty": "Role catalog is empty",
       "permCount": "{count}",
       "menuLabel": "{name} actions",
-      "viewPerms": "Permission details"
+      "viewPerms": "Permission details",
+      "colKind": "Role type"
     },
     "notes": {
       "title": "Governance model",
@@ -1586,7 +1587,7 @@
       "listOnly": "The permission catalog is a tree; list view only"
     },
     "kind": {
-      "section": "Section",
+      "section": "Module",
       "page": "Page",
       "perm": "Operation",
       "group": "Other"
