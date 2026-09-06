@@ -2648,7 +2648,8 @@
       "colCount": "调用次数",
       "colLast": "最近调用",
       "empty": "近 30 天暂无成员用量"
-    }
+    },
+    "chartPeak": "峰值"
   },
   "addonPay": {
     "title": "加油包订单支付",

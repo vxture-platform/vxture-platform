@@ -2648,7 +2648,8 @@
       "colCount": "Calls",
       "colLast": "Last call",
       "empty": "No member usage in the last 30 days"
-    }
+    },
+    "chartPeak": "Peak"
   },
   "addonPay": {
     "title": "Booster Pack Payment",

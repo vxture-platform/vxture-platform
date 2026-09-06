@@ -479,6 +479,7 @@ export function UsagePage() {
         {(trend?.buckets.length ?? 0) > 0 ? (
           <BarChart
             aria-label={t("trend.title")}
+            peakLabel={t("chartPeak")}
             data={(trend?.buckets ?? []).map((b) => ({
               key: b.period,
               label: axisLabel(trend?.granularity ?? "day", b.period),
@@ -513,6 +514,7 @@ export function UsagePage() {
         {productShares.length > 0 ? (
           <BarChart
             aria-label={t("share.title")}
+            peakLabel={t("chartPeak")}
             data={productShares.map((p) => ({
               key: p.productCode,
               label: p.productName,
@@ -615,6 +617,7 @@ export function UsagePage() {
           {members.length > 0 ? (
             <BarChart
               aria-label={t("members.title")}
+              peakLabel={t("chartPeak")}
               data={members.map((m) => ({
                 key: m.userName ?? "__unattributed__",
                 label: m.userName ?? t("events.unattributed"),
