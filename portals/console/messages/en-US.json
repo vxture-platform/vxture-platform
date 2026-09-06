@@ -755,11 +755,6 @@
     "workspaces": {
       "current": "Current",
       "switch": "Switch",
-      "role": {
-        "owner": "Owner",
-        "manager": "Manager",
-        "member": "Member"
-      },
       "detail": "Details",
       "joinedAt": "Joined",
       "defaultTag": "default",
@@ -1483,13 +1478,6 @@
       "assignableHelp": "Roles available in the role picker on the Members page. Owner is not among them — it can only arise from a transfer of ownership.",
       "assignableTag": "Assign on the Members page",
       "modelHelp": "Roles are a platform-global catalog with no tenant dimension, so tenant-defined roles are not yet available."
-    },
-    "role": {
-      "owner": "Owner",
-      "manager": "Manager",
-      "member": "Member",
-      "readonly": "Read-only",
-      "guest": "Guest"
     },
     "roleBlurb": {
       "owner": "All governance permissions, including commerce (subscriptions / bills / payments / invoices) and tenant deletion",
@@ -2855,13 +2843,6 @@
     "revokeFailed": "Revoke failed — please try again",
     "resend": "Resend",
     "resendHint": "Revoked or accepted invitations cannot be resent",
-    "role": {
-      "owner": "Owner",
-      "manager": "Manager",
-      "member": "Member",
-      "readonly": "Read-only",
-      "guest": "Guest"
-    },
     "status": {
       "pending": "Pending",
       "accepted": "Accepted",
@@ -2974,13 +2955,6 @@
       "role": "Role",
       "email": "Invited email",
       "expires": "Valid until"
-    },
-    "role": {
-      "owner": "Owner",
-      "manager": "Manager",
-      "member": "Member",
-      "readonly": "Read-only member",
-      "guest": "Guest"
     },
     "actions": {
       "accept": "Accept and join",
@@ -3301,6 +3275,13 @@
     "selectAll": "Select all rows on this page",
     "deselectAll": "Deselect all rows on this page",
     "selectRow": "Select row"
+  },
+  "role": {
+    "owner": "Owner",
+    "manager": "Manager",
+    "member": "Member",
+    "readonly": "Read-only",
+    "guest": "Guest"
   },
   "pagination": {
     "total": "{total} records",

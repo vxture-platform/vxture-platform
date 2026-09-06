@@ -50,6 +50,7 @@ import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { useRouter } from "@/lib/i18n/navigation";
 import { PageSection, SignalList } from "@/layout/shell";
 import { ListPagination } from "@/components/pagination";
+import { RoleTag } from "@/components/role-tag";
 import {
   LoadFailedBanner,
   LoadFailedEmpty,
@@ -63,14 +64,6 @@ const STATUS_TONES: Record<ConsoleInvitation["status"], StatusBadgeTone> = {
   expired: "neutral",
   revoked: "neutral",
 };
-
-const KNOWN_ROLES = new Set([
-  "owner",
-  "manager",
-  "member",
-  "readonly",
-  "guest",
-]);
 
 const EXPIRING_SOON_MS = 24 * 60 * 60 * 1000;
 
@@ -110,9 +103,6 @@ export function InvitationsPage() {
       active = false;
     };
   }, [reload, session.tenant?.id, reloadKey]);
-
-  const roleLabel = (code: string): string =>
-    KNOWN_ROLES.has(code) ? t(`role.${code}`) : code;
 
   const errorText = (caught: unknown, fallbackKey: string): string => {
     const code = memberErrorCode(caught);
@@ -210,7 +200,7 @@ export function InvitationsPage() {
       id: "role",
       header: t("table.colRole"),
       align: "center",
-      cell: (r) => roleLabel(r.roleCode),
+      cell: (r) => <RoleTag code={r.roleCode} />,
     },
     {
       id: "status",

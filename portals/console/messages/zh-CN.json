@@ -755,11 +755,6 @@
     "workspaces": {
       "current": "当前",
       "switch": "切换",
-      "role": {
-        "owner": "所有者",
-        "manager": "管理员",
-        "member": "成员"
-      },
       "detail": "详情",
       "joinedAt": "加入时间",
       "defaultTag": "默认",
@@ -1483,13 +1478,6 @@
       "assignableHelp": "成员管理页角色下拉里能选到的角色数。所有者不在其中——它只能经「转让所有权」产生。",
       "assignableTag": "在成员管理页指派",
       "modelHelp": "角色是平台全局目录,不带租户维度,所以租户自定义角色暂未开放。"
-    },
-    "role": {
-      "owner": "拥有者",
-      "manager": "管理员",
-      "member": "成员",
-      "readonly": "只读成员",
-      "guest": "访客"
     },
     "roleBlurb": {
       "owner": "全部治理权限,含商业面(订阅/账单/付款/发票)与租户注销",
@@ -2855,13 +2843,6 @@
     "revokeFailed": "撤销失败,请稍后重试",
     "resend": "重发邀请",
     "resendHint": "已撤销或已接受的邀请不能重发",
-    "role": {
-      "owner": "拥有者",
-      "manager": "管理员",
-      "member": "成员",
-      "readonly": "只读成员",
-      "guest": "访客"
-    },
     "status": {
       "pending": "待接受",
       "accepted": "已接受",
@@ -2974,13 +2955,6 @@
       "role": "角色",
       "email": "受邀邮箱",
       "expires": "有效期至"
-    },
-    "role": {
-      "owner": "拥有者",
-      "manager": "管理员",
-      "member": "成员",
-      "readonly": "只读成员",
-      "guest": "访客"
     },
     "actions": {
       "accept": "接受并加入",
@@ -3301,6 +3275,13 @@
     "selectAll": "全选本页",
     "deselectAll": "取消本页全选",
     "selectRow": "选择本行"
+  },
+  "role": {
+    "owner": "所有者",
+    "manager": "管理员",
+    "member": "成员",
+    "readonly": "只读成员",
+    "guest": "访客"
   },
   "pagination": {
     "total": "共 {total} 条",

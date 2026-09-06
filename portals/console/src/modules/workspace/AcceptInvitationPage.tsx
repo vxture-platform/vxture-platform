@@ -23,7 +23,6 @@ import {
   DetailList,
   DetailRow,
   Skeleton,
-  StatusBadge,
   ViewHeader,
   ViewLayout,
 } from "@vxture/design-system";
@@ -39,14 +38,7 @@ import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { getPathname, useRouter } from "@/lib/i18n/navigation";
 import { PageSection } from "@/layout/shell";
 import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
-
-const KNOWN_ROLES = new Set([
-  "owner",
-  "manager",
-  "member",
-  "readonly",
-  "guest",
-]);
+import { RoleTag } from "@/components/role-tag";
 
 type LookupState =
   | { kind: "loading" }
@@ -112,9 +104,6 @@ export function AcceptInvitationPage() {
       currentEmail !== invitation.email.trim().toLowerCase(),
     [currentEmail, invitation],
   );
-
-  const roleLabel = (code: string) =>
-    KNOWN_ROLES.has(code) ? t(`role.${code}`) : code;
 
   const reasonText = (reason: AcceptInvitationReason) =>
     reason === "email_mismatch"
@@ -254,7 +243,7 @@ export function AcceptInvitationPage() {
             {inv.inviterName ?? "—"}
           </DetailRow>
           <DetailRow label={t("fields.role")}>
-            <StatusBadge tone="brand">{roleLabel(inv.roleCode)}</StatusBadge>
+            <RoleTag code={inv.roleCode} />
           </DetailRow>
           <DetailRow label={t("fields.email")}>{inv.email}</DetailRow>
           <DetailRow label={t("fields.expires")}>

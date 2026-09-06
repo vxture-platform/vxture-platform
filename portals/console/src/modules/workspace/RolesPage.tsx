@@ -21,8 +21,8 @@
  * 不搬的是写侧那一整套(新建 / 复制 / 停用 / 删除 / 授权树 + step-up)——租户不能改
  * 平台角色,DB 层就不成立(roles 无 tenant_id)。
  *
- * 权限点的中文名读 `permissionsPage.perm.*`:两页各持一半权威——角色名在本页词条,
- * 权限名在权限页词条,谁要谁引,不复制第二份。
+ * 权限点的中文名读 `permissionsPage.perm.*`(权限名的权威在权限页);角色的图标、
+ * 显示名与固定序走 `components/role-tag`。角色说明(roleBlurb)只有本页用,留在本页词条。
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -46,15 +46,15 @@ import {
   ViewLayout,
 } from "@vxture/design-system";
 import type { DataTableColumn, MetricGridItem } from "@vxture/design-system";
-import { TENANT_PERMISSION_CODES, TENANT_ROLE_CODES } from "@vxture/core-utils";
+import { TENANT_PERMISSION_CODES } from "@vxture/core-utils";
 import { fetchTenantRoles } from "@/api/console-bff";
 import type { TenantRoleRecord } from "@/entities/console";
+import { roleIcon, roleRank, useRoleLabel } from "@/components/role-tag";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { useRouter } from "@/lib/i18n/navigation";
 import { PageSection, SignalList } from "@/layout/shell";
 
-/** 固定目录的 5 个角色码(权威在 core-utils);未知码回退服务端名称。 */
-const KNOWN_ROLES: readonly string[] = TENANT_ROLE_CODES;
+/** 目录里的操作码(权威在 core-utils);角色码序与图标、显示名都归 components/role-tag。 */
 const KNOWN_PERMS = new Set<string>(TENANT_PERMISSION_CODES);
 
 /** 单个角色的权限明细。只读:租户改不了平台角色,这里没有勾选框。 */
@@ -95,7 +95,11 @@ function RolePermissionDialog({
             className="inline-grid size-icon-2xl place-items-center rounded-full bg-primary-muted text-primary-text"
             aria-hidden="true"
           >
-            <Icon name="shield-check" size="lg" fallback="placeholder" />
+            <Icon
+              name={roleIcon(role.roleCode)}
+              size="lg"
+              fallback="placeholder"
+            />
           </span>
           <div>
             <DialogTitle>{roleLabel}</DialogTitle>
@@ -165,22 +169,19 @@ export function RolesPage() {
     };
   }, [session.tenant?.id]);
 
-  const roleLabel = (code: string, fallback: string): string =>
-    KNOWN_ROLES.includes(code) ? t(`role.${code}`) : fallback;
+  const roleLabel = useRoleLabel();
   const roleBlurb = (code: string): string | null =>
-    KNOWN_ROLES.includes(code) ? t(`roleBlurb.${code}`) : null;
+    t.has(`roleBlurb.${code}`) ? t(`roleBlurb.${code}`) : null;
   /** 目录里没有的码回退成码本身:一个没见过的权限点不该让整页崩掉。 */
   const permLabel = (code: string): string =>
     KNOWN_PERMS.has(code) ? tPerm(code.replace(/\./g, "_")) : code;
 
-  // 目录按固定序展示(owner→guest),未知码排尾
-  const orderedRoles = useMemo(() => {
-    const rank = (c: string) => {
-      const i = KNOWN_ROLES.indexOf(c);
-      return i === -1 ? KNOWN_ROLES.length : i;
-    };
-    return [...roles].sort((a, b) => rank(a.roleCode) - rank(b.roleCode));
-  }, [roles]);
+  // 目录按固定序展示(owner→guest),未知码排尾;判据与权限页共用一份
+  const orderedRoles = useMemo(
+    () =>
+      [...roles].sort((a, b) => roleRank(a.roleCode) - roleRank(b.roleCode)),
+    [roles],
+  );
 
   const systemRoles = roles.filter((r) => r.isSystem).length;
   /* owner 只能经「转让所有权」产生,不出现在成员管理的角色下拉里——「可指派」数
@@ -223,7 +224,7 @@ export function RolesPage() {
       header: t("directory.colRole"),
       cell: (r) => (
         <TableTitleCell
-          icon="shield-check"
+          icon={roleIcon(r.roleCode)}
           title={roleLabel(r.roleCode, r.roleName)}
           titleSuffix={
             r.isSystem ? (

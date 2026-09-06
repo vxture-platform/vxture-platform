@@ -22,12 +22,12 @@ import {
   Icon,
   StatusBadge,
   UserAvatar,
-  type IconName,
 } from "@vxture/design-system";
 import { IdentityCard } from "@/components/detail";
 import { TenantAvatar } from "@/components/tenant-avatar";
 import { formatTenantDisplay } from "@/features/tenant/tenant-display";
 import { PrincipalNo } from "@/components/principal-no";
+import { RoleTag } from "@/components/role-tag";
 
 export interface TenantRow {
   tenantId: string;
@@ -44,15 +44,6 @@ export interface TenantRow {
   /** 该租户下本人所在的工作区,默认工作区排第一;后端尚无多工作区时只有一个。 */
   workspaces: readonly { name: string; isDefault: boolean }[];
 }
-
-const ROLE_ICON: Record<string, IconName> = {
-  owner: "medal",
-  manager: "shield-check",
-  member: "user",
-  readonly: "user",
-  guest: "user",
-};
-const KNOWN_ROLES = new Set(Object.keys(ROLE_ICON));
 
 export function IdentityHeader({
   picture,
@@ -96,9 +87,6 @@ export function IdentityHeader({
   readonly settingDefaultId: string | null;
 }) {
   const t = useTranslations("profilePage");
-  const roleLabel = (role: string) =>
-    KNOWN_ROLES.has(role) ? t(`workspaces.role.${role}`) : role;
-
   return (
     <div className="flex flex-col rounded-xl bg-card shadow-raised ring-1 ring-foreground/10">
       <div className="px-lg pt-lg">
@@ -196,12 +184,7 @@ export function IdentityHeader({
                         ? t("identity.personalTenant")
                         : t("identity.orgTenant")}
                     </StatusBadge>
-                    <StatusBadge
-                      tone="info"
-                      icon={ROLE_ICON[tenant.role] ?? "user"}
-                    >
-                      {roleLabel(tenant.role)}
-                    </StatusBadge>
+                    <RoleTag code={tenant.role} />
                     {tenant.isDefault ? (
                       <StatusBadge tone="neutral" icon="check">
                         {t("identity.defaultTag")}
