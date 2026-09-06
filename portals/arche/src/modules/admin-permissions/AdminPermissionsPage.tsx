@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import {
   ActionButton,
   ActionMenu,
@@ -1141,6 +1142,7 @@ function PermissionDomainSection({
   onTogglePermission: (permission: PlatformAdminPermissionRecord) => void;
 }) {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const domainPermissionIds = useMemo(
     () => collectPermissionIds(group.nodes),
     [group.nodes],
@@ -1267,6 +1269,7 @@ function PermissionDomainSection({
       {group.nodes.length ? (
         viewMode === "list" ? (
           <DataTable
+            labels={tableLabels}
             columns={treeColumns}
             rows={visibleNodes}
             rowKey={(node) => node.permission.id}

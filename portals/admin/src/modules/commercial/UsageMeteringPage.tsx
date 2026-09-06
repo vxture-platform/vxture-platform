@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -232,6 +233,7 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
 
 export function UsageMeteringPage() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const [records, setRecords] = useState<UsageMeteringRecord[]>([]);
   const [recordsTruncated, setRecordsTruncated] = useState(false);
   const [query, setQuery] = useState("");
@@ -515,6 +517,7 @@ export function UsageMeteringPage() {
           >
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
             <DataTable
+              labels={tableLabels}
               columns={usageColumns}
               rows={visibleRecords}
               rowKey={(record) => record.id}

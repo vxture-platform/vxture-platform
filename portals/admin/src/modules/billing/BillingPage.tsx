@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -467,6 +468,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
 
 export function BillingPage() {
   const t = useTranslations();
+  const tableLabels = useTableLabels();
   const locale = useLocale();
   const tShared = useTranslations();
   const [bills, setBills] = useState<BillingRecord[]>([]);
@@ -910,6 +912,7 @@ export function BillingPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
 
             <DataTable
+              labels={tableLabels}
               columns={billingColumns}
               rows={visibleBills}
               rowKey={(bill) => bill.id}

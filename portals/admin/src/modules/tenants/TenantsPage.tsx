@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -193,6 +194,7 @@ function useTenantColumns(): DataTableColumn<TenantOperationRecord>[] {
 
 export function TenantsPage() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const { toast } = useToast();
   const { runWithStepUp } = useStepUp();
   const [tenants, setTenants] = useState<TenantOperationRecord[]>([]);
@@ -510,6 +512,7 @@ export function TenantsPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
 
             <DataTable
+              labels={tableLabels}
               columns={tenantColumns}
               rows={visibleTenants}
               rowKey={(tenant) => tenant.id}

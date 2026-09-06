@@ -26,6 +26,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   Badge,
   Banner,
@@ -89,6 +90,7 @@ function formatTime(iso: string, locale: string): string {
 export function RunosChangeTable() {
   const locale = useLocale();
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const { toast } = useToast();
   const [rows, setRows] = useState<MgmtEventRecord[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
@@ -224,6 +226,7 @@ export function RunosChangeTable() {
       </FilterBar>
 
       <DataTable
+        labels={tableLabels}
         columns={[
           {
             id: "time",

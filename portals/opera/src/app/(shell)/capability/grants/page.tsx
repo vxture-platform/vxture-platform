@@ -66,6 +66,7 @@
 
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -179,6 +180,7 @@ export default function RunosGrantsPage() {
 
 function RunosGrantsPageContent() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
@@ -703,6 +705,7 @@ function RunosGrantsPageContent() {
         {lookupLoad.kind === "idle" ? null : (
           <div className="mt-md">
             <DataTable
+              labels={tableLabels}
               columns={grantColumns}
               rows={grants ?? []}
               rowKey={(r) => r.grantId}
@@ -833,6 +836,7 @@ function RunosGrantsPageContent() {
         {capLoad.kind === "idle" ? null : (
           <div className="mt-md">
             <DataTable
+              labels={tableLabels}
               columns={[
                 {
                   id: "subject",

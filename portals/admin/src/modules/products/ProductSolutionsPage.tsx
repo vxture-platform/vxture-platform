@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import { useRouter } from "next/navigation";
 import { INDUSTRY_DEFS, industryLabel } from "@vxture/core-utils";
 import {
@@ -188,6 +189,7 @@ function CapabilityTags({
 
 export function ProductSolutionsPage() {
   const t = useTranslations("productSolutionsPage");
+  const tableLabels = useTableLabels();
   const tShared = useTranslations();
   const labels = useSolutionLabels();
   const locale = useLocale();
@@ -791,6 +793,7 @@ export function ProductSolutionsPage() {
             aria-label={t("table.ariaLabel")}
           >
             <DataTable
+              labels={tableLabels}
               columns={columns}
               rows={visibleSolutions}
               rowKey={(solution) => solution.id}

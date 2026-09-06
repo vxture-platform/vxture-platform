@@ -86,6 +86,7 @@ import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { api, OperaApiError } from "@/lib/api";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import { useConfirmLabels } from "@/lib/destructive";
 import {
   KEY_STATE_TONE,
@@ -186,6 +187,7 @@ type LoadState =
 export default function KeysPage() {
   const withLabels = useConfirmLabels();
   const t = useTranslations("modelKeysPage");
+  const tableLabels = useTableLabels();
   const tCommon = useTranslations("common");
   /* 状态词表单独一个命名空间：`KEY_STATE_TONE` 只留语气，文案在这里取。
      两者判据同源（同一个 state 值），但一个是产品判断、一个是翻译。 */
@@ -670,6 +672,7 @@ export default function KeysPage() {
         }
         table={
           <DataTable
+            labels={tableLabels}
             columns={[
               {
                 id: "name",

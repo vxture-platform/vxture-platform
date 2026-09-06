@@ -63,6 +63,7 @@ import {
 import { ListPagination } from "@/modules/shared/ListPagination";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import { PRODUCT_TYPE_DEFS, isValidProductType } from "@vxture/core-utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -303,6 +304,7 @@ export default function ProductsPage() {
 function ProductsPageContent() {
   const locale = useLocale();
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const router = useRouter();
@@ -936,6 +938,7 @@ function ProductsPageContent() {
         }
         table={
           <DataTable
+            labels={tableLabels}
             columns={[
               {
                 id: "name",

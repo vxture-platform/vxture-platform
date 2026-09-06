@@ -2260,5 +2260,12 @@
     "noPending": "无待处理",
     "totalHelp": "当前{object}记录总数，不区分状态。",
     "searchAria": "搜索{object}"
+  },
+  "table": {
+    "rowActions": "操作",
+    "expand": "展开",
+    "selectAll": "全选本页",
+    "deselectAll": "取消本页全选",
+    "selectRow": "选择本行"
   }
 }

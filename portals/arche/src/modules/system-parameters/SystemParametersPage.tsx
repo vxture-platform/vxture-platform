@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import {
   ActionMenu,
   DataTable,
@@ -74,6 +75,7 @@ const COLUMNS: readonly DataTableColumn<PlatformSettingRecord>[] = [
 
 export function SystemParametersPage() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const { toast } = useToast();
   const [items, setItems] = useState<PlatformSettingRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -209,6 +211,7 @@ export function SystemParametersPage() {
         }
         table={
           <DataTable
+            labels={tableLabels}
             columns={COLUMNS}
             rows={pageItems}
             rowKey={(item) => item.id}

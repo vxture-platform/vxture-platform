@@ -207,5 +207,12 @@
     "create": "创建",
     "edit": "编辑",
     "archive": "归档"
+  },
+  "table": {
+    "rowActions": "操作",
+    "expand": "展开",
+    "selectAll": "全选本页",
+    "deselectAll": "取消本页全选",
+    "selectRow": "选择本行"
   }
 }

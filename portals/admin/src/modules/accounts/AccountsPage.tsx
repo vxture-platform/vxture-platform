@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import {
   ActionButton,
   ActionMenu,
@@ -382,6 +383,7 @@ export function AccountsPage({
   showTenantContext?: boolean;
 } = {}) {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const pageCopy = { ...defaultAccountsPageCopy, ...copy };
   const [accounts, setAccounts] = useState<AccountOperationRecord[]>([]);
   const [accountsTruncated, setAccountsTruncated] = useState(false);
@@ -704,6 +706,7 @@ export function AccountsPage({
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
 
             <DataTable
+              labels={tableLabels}
               columns={accountColumns}
               rows={visibleAccounts}
               rowKey={(account) => account.id}

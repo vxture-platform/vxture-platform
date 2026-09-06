@@ -56,6 +56,7 @@ import {
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { useOperatorSession } from "@/features/session/SessionProvider";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import { isStepUpCancelled, useStepUp } from "@/features/stepup/StepUpProvider";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
@@ -132,6 +133,7 @@ type LoadState =
 export default function RunosCredentialsPage() {
   const locale = useLocale();
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
@@ -372,6 +374,7 @@ export default function RunosCredentialsPage() {
         }
         table={
           <DataTable
+            labels={tableLabels}
             columns={[
               {
                 id: "class",

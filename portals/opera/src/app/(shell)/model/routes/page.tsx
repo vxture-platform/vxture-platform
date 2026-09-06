@@ -40,6 +40,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import { useSearchParams } from "next/navigation";
 import {
   ActionMenu,
@@ -202,6 +203,7 @@ export default function EndpointsPage() {
 
 function EndpointsPageContent() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
@@ -713,6 +715,7 @@ function EndpointsPageContent() {
         }
         table={
           <DataTable
+            labels={tableLabels}
             columns={[
               {
                 id: "code",

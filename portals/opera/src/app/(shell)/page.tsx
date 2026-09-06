@@ -21,6 +21,7 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActionMenu,
@@ -133,6 +134,7 @@ function formatTime(iso: string, locale: string): string {
 export default function DashboardPage() {
   const locale = useLocale();
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const { toast } = useToast();
   const [providers, setProviders] = useState<ModelProviderRecord[]>([]);
   const [models, setModels] = useState<AiModelRecord[]>([]);
@@ -331,6 +333,7 @@ export default function DashboardPage() {
         }
       >
         <DataTable
+          labels={tableLabels}
           columns={[
             {
               id: "name",
@@ -423,6 +426,7 @@ export default function DashboardPage() {
         }
       >
         <DataTable
+          labels={tableLabels}
           columns={[
             {
               id: "occurredAt",

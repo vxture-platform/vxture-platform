@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import {
   Banner,
   Button,
@@ -37,6 +38,7 @@ function money(yuan: string, currency: string): string {
 }
 
 export function AddonOrdersPage() {
+  const tableLabels = useTableLabels();
   const locale = useLocale();
   const { runWithStepUp } = useStepUp();
   const [orders, setOrders] = useState<AddonOrderOperationRecord[]>([]);
@@ -165,6 +167,7 @@ export function AddonOrdersPage() {
       {error ? <Banner tone="danger" title={error} /> : null}
       {notice ? <Banner tone="success" title={notice} /> : null}
       <DataTable<AddonOrderOperationRecord>
+        labels={tableLabels}
         columns={columns}
         rows={orders}
         rowKey={(o) => o.id}

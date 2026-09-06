@@ -47,6 +47,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   ActionMenu,
   Badge,
@@ -462,6 +463,7 @@ function productCsvRows(item: ProductHealthItem): string[][] {
 
 export default function ServiceMonitorPage() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const { toast } = useToast();
   const [items, setItems] = useState<ProductHealthItem[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
@@ -794,6 +796,7 @@ export default function ServiceMonitorPage() {
         }
         table={
           <DataTable
+            labels={tableLabels}
             columns={[
               {
                 /* 折叠开关放在这一列里，不用 DataTable 的展开列——一张表两种行，

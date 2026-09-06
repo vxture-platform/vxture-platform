@@ -21,6 +21,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -133,6 +134,7 @@ export default function ProductClientsPage() {
 
 function ProductClients() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const canManage = can(MANAGE);
@@ -454,6 +456,7 @@ function ProductClients() {
         }
         table={
           <DataTable
+            labels={tableLabels}
             columns={[
               {
                 id: "clientId",

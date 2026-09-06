@@ -40,6 +40,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   ActionMenu,
   Badge,
@@ -135,6 +136,7 @@ function isRouteMissing(error: unknown): boolean {
 export function AtlasChangeTable() {
   const locale = useLocale();
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const { toast } = useToast();
   const { can } = useOperatorSession();
   const canRead = can(MANAGE);
@@ -363,6 +365,7 @@ export function AtlasChangeTable() {
       </FilterBar>
 
       <DataTable
+        labels={tableLabels}
         columns={[
           {
             id: "time",

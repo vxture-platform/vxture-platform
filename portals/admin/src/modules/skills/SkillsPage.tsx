@@ -25,6 +25,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import {
   ActionMenu,
   Badge,
@@ -433,6 +434,7 @@ function CapabilityDetailDrawer({
   onClose: () => void;
 }) {
   const t = useTranslations("skillsPage");
+  const tableLabels = useTableLabels();
   const tShared = useTranslations();
   const locale = useLocale();
   const [detail, setDetail] = useState<RunosCapabilityDetailRecord | null>(
@@ -613,6 +615,7 @@ function CapabilityDetailDrawer({
               }
             />
             <DataTable
+              labels={tableLabels}
               columns={versionColumns}
               rows={detail.versions}
               rowKey={(v) => `${v.capabilityId}@${v.version}`}
@@ -647,6 +650,7 @@ function CapabilityDetailDrawer({
               }
             />
             <DataTable
+              labels={tableLabels}
               columns={endpointColumns}
               rows={detail.endpoints}
               rowKey={(e) => e.id}
@@ -664,6 +668,7 @@ function CapabilityDetailDrawer({
 export function SkillsPage() {
   const locale = useLocale();
   const t = useTranslations("skillsPage");
+  const tableLabels = useTableLabels();
   const tShared = useTranslations();
   const [capabilities, setCapabilities] = useState<RunosCapabilityRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -812,6 +817,7 @@ export function SkillsPage() {
         }
         table={
           <DataTable
+            labels={tableLabels}
             columns={tableColumns}
             rows={pageRows}
             rowKey={(record) => record.capabilityId}

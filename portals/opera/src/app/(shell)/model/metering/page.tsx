@@ -41,6 +41,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   ActionMenu,
   Banner,
@@ -279,6 +280,7 @@ function toCsvRow(
 
 export default function MeteringPage() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const { toast } = useToast();
   const [axis, setAxis] = useState<RollupDimension>("tenant");
   /** 上游回显的轴。见 `reload()` 里为什么不直接用 `axis`。 */
@@ -660,6 +662,7 @@ export default function MeteringPage() {
         />
 
         <DataTable
+          labels={tableLabels}
           columns={columns}
           rows={pager.pageRows}
           rowKey={(r) => rowKey(resolvedAxis, r)}

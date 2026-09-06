@@ -2260,5 +2260,12 @@
     "noPending": "Nothing pending",
     "totalHelp": "Total {object} records, regardless of state.",
     "searchAria": "Search {object}"
+  },
+  "table": {
+    "rowActions": "Actions",
+    "expand": "Expand",
+    "selectAll": "Select all rows on this page",
+    "deselectAll": "Deselect all rows on this page",
+    "selectRow": "Select row"
   }
 }

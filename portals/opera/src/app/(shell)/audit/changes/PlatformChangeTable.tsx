@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   ActionMenu,
   Button,
@@ -72,6 +73,7 @@ function formatTime(iso: string, locale: string): string {
 export function PlatformChangeTable() {
   const locale = useLocale();
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const { toast } = useToast();
   const [rows, setRows] = useState<AuditLogEntry[]>([]);
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
@@ -228,6 +230,7 @@ export function PlatformChangeTable() {
       </FilterBar>
 
       <DataTable
+        labels={tableLabels}
         columns={[
           {
             id: "occurredAt",

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import {
   ActionButton,
   DataTable,
@@ -264,6 +265,7 @@ function auditColumns(
 // ─── 主组件 ───────────────────────────────────────────────────────────────────
 
 export function AuditLogsPage() {
+  const tableLabels = useTableLabels();
   const locale = useLocale();
   /* 钉在 locale 上：工厂每次调用都新建一个数组，而这套列此前是模块常量、
      身份稳定。不 memo 等于每次渲染换一套列。 */
@@ -388,6 +390,7 @@ export function AuditLogsPage() {
       }
       table={
         <DataTable
+          labels={tableLabels}
           columns={columns}
           rows={pageLogs}
           rowKey={(log) => log.id}

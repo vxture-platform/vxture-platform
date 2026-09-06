@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -244,6 +245,7 @@ function useProductColumns(
 
 export function ProductsPage() {
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const router = useRouter();
   const [products, setProducts] = useState<ProductCapabilityRecord[]>([]);
   const [selectedProductCodes, setSelectedProductCodes] = useState<Set<string>>(
@@ -495,6 +497,7 @@ export function ProductsPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
 
             <DataTable
+              labels={tableLabels}
               columns={productColumns}
               rows={visibleProducts}
               rowKey={(product) => product.productCode}

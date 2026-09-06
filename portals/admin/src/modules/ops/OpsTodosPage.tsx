@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import { useRouter } from "next/navigation";
 import {
   ActionButton,
@@ -302,6 +303,7 @@ const CSV_COLUMNS: readonly CsvColumn<OpsTodoItem>[] = [
 export function OpsTodosPage() {
   const locale = useLocale();
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const router = useRouter();
   const [tenants, setTenants] = useState<TenantOperationRecord[]>([]);
   const [tickets, setTickets] = useState<SupportTicketRecord[]>([]);
@@ -599,6 +601,7 @@ export function OpsTodosPage() {
           </FilterBar>
 
           <DataTable
+            labels={tableLabels}
             columns={[
               {
                 id: "item",

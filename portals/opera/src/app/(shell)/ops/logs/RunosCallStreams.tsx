@@ -34,6 +34,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import {
   Button,
   DataTable,
@@ -162,6 +163,7 @@ export function RunosCallStreams({
 }) {
   const locale = useLocale();
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const { toast } = useToast();
   const [stream, setStream] = useState<StreamKey>("calls");
   const [keyword, setKeyword] = useState("");
@@ -375,6 +377,7 @@ export function RunosCallStreams({
 
       {stream === "calls" ? (
         <DataTable
+          labels={tableLabels}
           columns={[
             {
               id: "time",
@@ -587,6 +590,7 @@ export function RunosCallStreams({
         />
       ) : (
         <DataTable
+          labels={tableLabels}
           columns={[
             {
               id: "time",

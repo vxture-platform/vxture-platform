@@ -19,6 +19,7 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/lib/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActionMenu,
@@ -175,6 +176,7 @@ type LoadState =
 export default function MetricsPage() {
   const locale = useLocale();
   const tShared = useTranslations();
+  const tableLabels = useTableLabels();
   const { toast } = useToast();
   const [snapshot, setSnapshot] = useState<JobSchedulerSnapshot | null>(null);
   const [perf, setPerf] = useState<ProviderPerformanceSnapshot | null>(null);
@@ -345,6 +347,7 @@ export default function MetricsPage() {
           ]}
         />
         <DataTable
+          labels={tableLabels}
           columns={[
             {
               id: "group",
@@ -486,6 +489,7 @@ export default function MetricsPage() {
           ]}
         />
         <DataTable
+          labels={tableLabels}
           columns={[
             {
               id: "provider",
@@ -591,6 +595,7 @@ export default function MetricsPage() {
           </InputGroup>
         </FilterBar>
         <DataTable
+          labels={tableLabels}
           columns={[
             {
               id: "job",

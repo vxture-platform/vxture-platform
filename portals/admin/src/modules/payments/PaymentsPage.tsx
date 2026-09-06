@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useTableLabels } from "@/modules/shared/table";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -484,6 +485,7 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
 
 export function PaymentsPage() {
   const t = useTranslations();
+  const tableLabels = useTableLabels();
   const tShared = useTranslations();
   const { runWithStepUp } = useStepUp();
   const [payments, setPayments] = useState<PaymentOperationRecord[]>([]);
@@ -897,6 +899,7 @@ export function PaymentsPage() {
             {/* 列表态的加载由 DataTable 出骨架行，卡片态没有骨架，仍留这行提示。 */}
 
             <DataTable
+              labels={tableLabels}
               columns={paymentColumns}
               rows={visiblePayments}
               rowKey={(payment) => payment.id}
