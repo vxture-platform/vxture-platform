@@ -34,8 +34,9 @@ export interface CapabilityGateProps {
 export function CapabilityGate({ capability, children }: CapabilityGateProps) {
   const { session, status } = useConsoleSession();
   const t = useTranslations("access");
-  // 权限码的人话标签与角色页共用一份词条(rolesPage.perm),不再各写一套。
-  const tPerm = useTranslations("rolesPage.perm");
+  // 权限码的人话标签与权限管理页共用一份词条(permissionsPage.perm),不再各写一套
+  // (批 9 角色页与权限页拆开时,这份词条跟着码走进了 permissionsPage)。
+  const tPerm = useTranslations("permissionsPage.perm");
   const router = useRouter();
   const required = Array.isArray(capability)
     ? (capability as readonly Capability[])

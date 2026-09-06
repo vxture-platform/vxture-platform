@@ -388,7 +388,8 @@
     "organization": "Organization Info",
     "members": "Members",
     "membersInvitations": "Invitations",
-    "membersRoles": "Roles & permissions",
+    "membersRoles": "Roles",
+    "membersPermissions": "Permissions",
     "roles": "Roles & Permissions",
     "invitations": "Invitation Records",
     "subscription": "Product Subscriptions",
@@ -1309,7 +1310,8 @@
       "addMember": "Add member",
       "inviteMember": "Invite member",
       "viewRoles": "Roles & permissions",
-      "viewInvitations": "Invitations"
+      "viewInvitations": "Invitations",
+      "viewPermissions": "Permissions"
     },
     "table": {
       "toolbarTitle": "{count} members",
@@ -1321,7 +1323,7 @@
       "statusTitle": "Current status: {status}",
       "avatarAlt": "{name} avatar",
       "emptyPhone": "Not set",
-      "primaryOwner": "Primary owner",
+      "primaryOwner": "Primary administrator",
       "selectPage": "Select members on this page",
       "selectMember": "Select {name}",
       "columns": {
@@ -1464,17 +1466,23 @@
     }
   },
   "rolesPage": {
-    "title": "Roles & Permissions",
-    "description": "The fixed catalog of tenant governance roles and their permission matrix; assign roles on the Members page",
+    "title": "Roles",
+    "description": "The fixed catalog of tenant governance roles; assign roles on the Members page",
+    "viewPermissions": "Permissions",
+    "backToMembers": "Back to members",
     "metrics": {
       "groupLabel": "Roles overview",
       "roles": "Governance roles",
       "rolesHint": "Global fixed catalog (system preset)",
-      "perms": "Permission points",
-      "permsHint": "Tenant-level + workspace-level operation codes",
       "model": "Authorization model",
       "modelValue": "Fixed catalog",
-      "modelHint": "Custom roles not yet available"
+      "modelHint": "Custom roles not yet available",
+      "rolesHelp": "Total tenant governance roles defined platform-wide; tenants cannot add or remove them.",
+      "rolesSystemTag": "{count} system preset",
+      "assignable": "Assignable roles",
+      "assignableHelp": "Roles available in the role picker on the Members page. Owner is not among them — it can only arise from a transfer of ownership.",
+      "assignableTag": "Assign on the Members page",
+      "modelHelp": "Roles are a platform-global catalog with no tenant dimension, so tenant-defined roles are not yet available."
     },
     "role": {
       "owner": "Owner",
@@ -1490,35 +1498,18 @@
       "readonly": "Internal read-only across the tenant: members, subscriptions & bills, quotas, audit; zero write",
       "guest": "External limited guest: self-service pages only, no tenant-level data"
     },
-    "perm": {
-      "tenant_member_manage": "Member management",
-      "tenant_role_assign": "Role assignment",
-      "tenant_workspace_manage": "Workspace management",
-      "tenant_billing_manage": "Commerce & billing management",
-      "tenant_settings_manage": "Tenant settings management",
-      "tenant_delete": "Tenant deletion",
-      "workspace_member_manage": "Workspace member management",
-      "workspace_role_assign": "Workspace role assignment",
-      "workspace_settings_manage": "Workspace settings management"
-    },
     "directory": {
       "title": "Role catalog",
       "description": "System-preset governance roles; every member holds exactly one per tenant",
       "colRole": "Role",
       "colBlurb": "Positioning",
       "colPermCount": "Permissions",
-      "colKind": "Kind",
       "system": "System",
       "custom": "Custom",
-      "empty": "Role catalog is empty"
-    },
-    "matrix": {
-      "title": "Permission matrix",
-      "description": "The catalog follows the sidebar: section → page → operation; see which roles hold each governance action at a glance",
-      "colPerm": "Permission",
-      "empty": "Permission catalog is empty",
-      "openToAll": "Open to all members",
-      "groupOther": "Operations not tied to a page (workspace scope)"
+      "empty": "Role catalog is empty",
+      "permCount": "{count}",
+      "menuLabel": "{name} actions",
+      "viewPerms": "Permission details"
     },
     "notes": {
       "title": "Governance model",
@@ -1527,11 +1518,91 @@
       "fixedBody": "Roles are a platform-global catalog; tenant-defined roles are not yet supported — contact platform operations for new role shapes",
       "assignTitle": "Where to assign",
       "assignBody": "Change a member's role on the Members page (or pick one when inviting); changes take effect within a minute",
+      "permTitle": "Which codes each role holds",
+      "permBody": "This page shows only the count per role; the matrix on the Permissions page lists every code and who holds it"
+    },
+    "loadFailed": "Could not load roles and permissions, please retry",
+    "permDialog": {
+      "countLabel": "{count} permission points",
+      "empty": "This role holds no permission points"
+    }
+  },
+  "permissionsPage": {
+    "title": "Permissions",
+    "description": "The governance permission catalog and role matrix: which roles hold each governance action",
+    "viewRoles": "Roles",
+    "backToMembers": "Back to members",
+    "metrics": {
+      "groupLabel": "Permissions overview",
+      "perms": "Permission points",
+      "permsHint": "Tenant + workspace scope",
+      "model": "Authorization model",
+      "modelValue": "Fixed catalog",
+      "modelHint": "Not tenant-definable",
+      "permsHelp": "Total operation codes in the governance permission catalog, tenant-level and workspace-level.",
+      "roles": "Governance roles",
+      "rolesHelp": "Role columns in the matrix, from the same catalog as the Roles page.",
+      "rolesTag": "Matrix columns",
+      "modelHelp": "The permission catalog is defined platform-wide with no tenant dimension; tenants cannot change it."
+    },
+    "perm": {
+      "tenant_member_read": "View members",
+      "tenant_member_manage": "Member management",
+      "tenant_role_assign": "Role assignment",
+      "tenant_workspace_manage": "Workspace management",
+      "tenant_settings_manage": "Tenant settings management",
+      "tenant_delete": "Tenant deletion",
+      "tenant_billing_read": "View commerce & billing",
+      "tenant_billing_manage": "Commerce & billing management",
+      "tenant_payment_manage": "Declare payments",
+      "tenant_invoice_manage": "Invoice & title management",
+      "tenant_quota_read": "View quota & usage",
+      "tenant_audit_read": "View audit log",
+      "tenant_model_read": "View model access",
+      "workspace_member_manage": "Workspace member management",
+      "workspace_role_assign": "Workspace role assignment",
+      "workspace_settings_manage": "Workspace settings management"
+    },
+    "matrix": {
+      "title": "Permission matrix",
+      "description": "The catalog follows the sidebar: section → page → operation; see which roles hold each governance action at a glance",
+      "colPerm": "Permission",
+      "empty": "Permission catalog is empty",
+      "openToAll": "Open to all members",
+      "groupOther": "Operations not tied to a page (workspace scope)",
+      "colKind": "Level",
+      "expand": "Expand children",
+      "collapse": "Collapse children",
+      "childCount": "{count} children",
+      "emptyHint": "Clear the filters to see the full permission catalog"
+    },
+    "notes": {
+      "title": "Permission model",
+      "description": "This page answers one question: who can perform which governance actions",
+      "readTitle": "Read-only catalog",
+      "readBody": "The permission catalog is defined platform-wide; tenants cannot add, edit, or remove entries — contact platform operations for new permission shapes",
+      "openTitle": "Pages without operation codes",
+      "openBody": "A page marked \"Open to all members\" carries no operation code, so any member can open it; gates apply only to actions that have a code",
       "scopeTitle": "Governance ≠ business",
       "scopeBody": "Governance roles gate member/role/settings/commerce actions only; in-product feature access is gated by each product per subscription tier"
     },
-    "loadFailed": "Could not load roles and permissions, please retry",
-    "backToMembers": "Back to members"
+    "loadFailed": "Could not load the permission catalog. Please try again.",
+    "filters": {
+      "groupLabel": "Permission catalog filters",
+      "count": "{count} rows",
+      "searchPlaceholder": "Search code, name, or page",
+      "searchAriaLabel": "Search the permission catalog",
+      "kindAriaLabel": "Row level",
+      "kindAll": "All levels",
+      "reset": "Clear filters",
+      "listOnly": "The permission catalog is a tree; list view only"
+    },
+    "kind": {
+      "section": "Section",
+      "page": "Page",
+      "perm": "Operation",
+      "group": "Other"
+    }
   },
   "modelPlatformPage": {
     "header": {

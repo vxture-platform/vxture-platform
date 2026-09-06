@@ -105,7 +105,7 @@
 
 > 2026-09-05（批 8）按 `navigation.ts` 现状重写；权威源是 `deploy/database/seed/seed-catalog.mjs` 的 `TENANT_MENU_TREE`（守卫 `lint:permission-catalog` 三处比对）。
 >
-> 2026-09-06（批 9，owner 裁定）：「成员与权限」整组撤销，租户侧最终只留**账号信息 / 租户信息 / 成员管理**三个板块。邀请记录与角色管理都收成成员管理的**二级页**（`/members/invitations`、`/members/roles`，入口在成员管理页头右侧）——它们是成员管理的下一层，不是同一层的三件事；角色是平台整体定义、租户不可自定义，**只提供查看**。二级页不进菜单树（`/tenant/verification` 同例），旧地址 `/roles`、`/invitations` 只保留跳转。
+> 2026-09-06（批 9，owner 裁定）：「成员与权限」整组撤销，租户侧最终只留**账号信息 / 租户信息 / 成员管理**三个板块。邀请记录、角色管理、权限管理都收成成员管理的**三个二级页**（`/members/invitations`、`/members/roles`、`/members/permissions`，入口在成员管理页头右侧）——它们是成员管理的下一层，不是同一层的几件事；角色与权限目录都是平台整体定义、租户不可自定义，**只提供查看**。两页的呈现照治理平面既有的 `AdminRolesPage` / `AdminPermissionsPage`（指标排带 help 与 tags、主辅走 `TableTitleCell`、权限树可展开收起 + 搜索与层级筛选、单角色明细走对话框），不搬写侧那一整套。二级页不进菜单树（`/tenant/verification` 同例），旧地址 `/roles`、`/invitations` 只保留跳转。
 
 **规则：** 每项 = icon + label，无副标题无描述。选中态清晰但轻量，不用厚重高亮块。折叠模式保留 icon + hover tooltip + 选中指示。sidebar 视觉融入 shell，不做深色独立面板。
 

@@ -13,10 +13,11 @@ const routeLabels = new Map<string, string>([
   ["/personal-tenant", "personalTenant"],
   ["/organization", "organization"],
   ["/members", "members"],
-  // 批 9:邀请记录与角色管理成为成员管理的二级页;面包屑最后一节要有名字,
-  // 别显示 "invitations" / "roles"
+  // 批 9:邀请记录 / 角色管理 / 权限管理都是成员管理的二级页;面包屑最后一节
+  // 要有名字,别显示 "invitations" / "roles" / "permissions"
   ["/members/invitations", "membersInvitations"],
   ["/members/roles", "membersRoles"],
+  ["/members/permissions", "membersPermissions"],
   // 旧路由保留跳转,面包屑在跳转那一帧仍有名字
   ["/roles", "roles"],
   ["/invitations", "invitations"],
