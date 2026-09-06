@@ -243,9 +243,12 @@ export function TenantVerificationPage() {
                   {state.latest.businessLicenseNo}
                 </span>
               </DetailRow>
-              <DetailRow label={t("form.legalName")}>
-                {state.latest.legalPersonName}
-              </DetailRow>
+              {/* 简易认证不收法定代表人姓名:没有就不出这一行,不画一个空「—」 */}
+              {state.latest.legalPersonName ? (
+                <DetailRow label={t("form.legalName")}>
+                  {state.latest.legalPersonName}
+                </DetailRow>
+              ) : null}
               <DetailRow label={t("current.verifiedAt")}>
                 {state.latest.reviewedAt
                   ? `${fmtDate(state.latest.reviewedAt)} ${fmtTime(state.latest.reviewedAt)}`

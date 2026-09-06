@@ -2470,7 +2470,8 @@ export async function submitTenantVerification(input: {
   method: ConsoleVerificationMethod;
   companyName: string;
   businessLicenseNo: string;
-  legalPersonName: string;
+  /** 简易认证不收(owner 2026-09-06);扫脸 / 提交资料方式落地时再按需送。 */
+  legalPersonName?: string;
 }): Promise<ConsoleVerification> {
   const response = await fetch(
     `${DEFAULT_BFF_URL}${CONSOLE_API_PREFIX}/api/verification/tenant`,

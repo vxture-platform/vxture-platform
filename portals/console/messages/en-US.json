@@ -1193,11 +1193,10 @@
         "currentTag": "Current method",
         "lite": {
           "name": "Simple business verification",
-          "summary": "Registration details only, reviewed by operations. The fastest path",
+          "summary": "Company name and unified social credit code only, reviewed by operations. The fastest path",
           "items": {
             "0": "Company name",
-            "1": "Unified social credit code",
-            "2": "Legal representative name"
+            "1": "Unified social credit code"
           }
         },
         "face": {

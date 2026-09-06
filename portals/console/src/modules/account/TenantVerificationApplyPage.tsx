@@ -59,7 +59,6 @@ export function TenantVerificationApplyPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [licenseNo, setLicenseNo] = useState("");
-  const [legalName, setLegalName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const companyRef = useRef<HTMLInputElement>(null);
@@ -78,7 +77,6 @@ export function TenantVerificationApplyPage() {
         setCompanyName(s.latest?.companyName ?? "");
         if (s.latest?.businessLicenseNo)
           setLicenseNo(s.latest.businessLicenseNo);
-        if (s.latest?.legalPersonName) setLegalName(s.latest.legalPersonName);
       })
       .catch(() => {
         if (!active) return;
@@ -100,11 +98,11 @@ export function TenantVerificationApplyPage() {
     setBusy(true);
     setError(null);
     try {
+      // 简易认证只两项(owner 2026-09-06):法定代表人姓名已去掉,后端也不再必填
       await submitTenantVerification({
         method: "lite",
         companyName: companyName.trim(),
         businessLicenseNo: licenseNo.trim(),
-        legalPersonName: legalName.trim(),
       });
       // 提交完回结果页:状态与历史都在那边,这一页不承载结果
       router.push("/tenant/verification");
@@ -297,18 +295,6 @@ export function TenantVerificationApplyPage() {
                 placeholder={t("form.licenseNoPlaceholder")}
               />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="verify-legal-name">
-                {t("form.legalName")} *
-              </FieldLabel>
-              <Input
-                id="verify-legal-name"
-                value={legalName}
-                disabled={!canSubmit || busy}
-                onChange={(e) => setLegalName(e.target.value)}
-                placeholder={t("form.legalNamePlaceholder")}
-              />
-            </Field>
             <div className="flex justify-end gap-sm">
               <Button
                 variant="outline"
@@ -320,11 +306,7 @@ export function TenantVerificationApplyPage() {
               </Button>
               <Button
                 disabled={
-                  !canSubmit ||
-                  busy ||
-                  !companyName.trim() ||
-                  !licenseNo.trim() ||
-                  !legalName.trim()
+                  !canSubmit || busy || !companyName.trim() || !licenseNo.trim()
                 }
                 onClick={() => void handleSubmit()}
               >

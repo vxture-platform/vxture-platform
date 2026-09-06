@@ -92,7 +92,11 @@ export interface SubmitTenantVerificationInput {
   /** 申报的企业名称。 */
   companyName: string;
   businessLicenseNo: string;
-  legalPersonName: string;
+  /**
+   * 法定代表人姓名。简易认证不收(owner 2026-09-06:只留企业名称 + 统一社会信用代码),
+   * 传 null;扫脸 / 提交资料方式落地时再按各自的资料要求收。
+   */
+  legalPersonName: string | null;
 }
 
 export interface WorkspaceView {
