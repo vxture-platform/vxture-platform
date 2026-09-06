@@ -387,6 +387,7 @@
     "personalTenant": "租户信息",
     "organization": "组织信息",
     "members": "成员管理",
+    "membersInvitations": "邀请记录",
     "membersRoles": "角色与权限",
     "roles": "角色与权限",
     "invitations": "邀请记录",
@@ -1307,11 +1308,8 @@
       "description": "管理当前租户的成员、角色和访问状态。",
       "addMember": "新增成员",
       "inviteMember": "邀请成员",
-      "viewRoles": "角色与权限"
-    },
-    "directory": {
-      "title": "成员目录",
-      "description": "在册成员与待接受的邀请;停用、恢复、改角色、解除关联都在这里"
+      "viewRoles": "角色与权限",
+      "viewInvitations": "邀请记录"
     },
     "table": {
       "toolbarTitle": "{count} 人",
@@ -2777,6 +2775,9 @@
     }
   },
   "invitationsPage": {
+    "title": "邀请记录",
+    "description": "发出的成员邀请与状态;发起新邀请在成员管理页完成",
+    "backToMembers": "返回成员管理",
     "rowMenu": "邀请操作",
     "revoke": "撤销邀请",
     "revokeHint": "仅待接受的邀请可撤销",

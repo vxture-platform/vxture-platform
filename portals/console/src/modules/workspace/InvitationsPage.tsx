@@ -1,23 +1,19 @@
 "use client";
 
 /**
- * InvitationLedger.tsx — 邀请记录(成员管理页里的一段)。
+ * InvitationsPage.tsx — 邀请记录(成员管理的二级页)。
  * @package @vxture/console
  * @layer Application
  * @category Module
  *
- * 批 9(owner 2026-09-06):原独立页 `/invitations` 并进成员管理。理由是它与成员
- * 目录说的是同一件事的两面——目录里的 Invited 行是"还没接受的那几个",这张台账是
- * "发出过的全部"(待接受 / 已接受 / 已过期 / 已撤销)。两页并排时,发起邀请在这边、
- * 台账在那边,人得来回跳;并成一页后,发出与追踪在同一屏。
+ * 路由 `/members/invitations`(旧地址 `/invitations` 只剩跳转)。批 9(owner
+ * 2026-09-06):「成员与权限」分组撤销后,邀请记录与角色管理都收成成员管理的二级页,
+ * 不再与它在侧栏并列——它们是成员管理的下一层,不是同一层的三件事。
  *
- * 由 `tenant.member.manage` 门控:调用方(成员管理页)只在持码时渲染本段,BFF 再拒
- * 一遍。发起邀请仍在成员目录的工具条上,本段只做追踪与两个动作:
+ * 组织租户的成员邀请台账:发出的邀请、状态(待接受 / 已接受 / 已过期 / 已撤销)、
+ * 撤销与重发。发起邀请仍在成员管理页(邀请即目录里的 Invited 行,两页一体)。
  * 重发 = 换链接 + 顺延有效期 + 再发一封邮件(InviteLinkDialog 兜底复制);
- * 撤销 = 原链接立即失效。expired 是读侧派生(pending ∧ 已过期),所以过期的也能重发。
- *
- * 两向刷新:本段的动作会改变目录里的 Invited 行(`onChanged`),目录里发出的邀请
- * 也要落到本段(`refreshKey`)——不然同一页上两处数字对不上。
+ * expired 为读侧派生(pending ∧ 已过期),所以过期的也能重发。表格遵守默认结构。
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -27,10 +23,14 @@ import { useTableLabels } from "@/lib/table";
 import {
   ActionMenu,
   Banner,
+  Button,
   DataTable,
   EmptyState,
+  Icon,
   StatusBadge,
   useListPagination,
+  ViewHeader,
+  ViewLayout,
 } from "@vxture/design-system";
 import type {
   ActionMenuItem,
@@ -47,6 +47,7 @@ import {
   type InviteMemberResult,
 } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { useRouter } from "@/lib/i18n/navigation";
 import { PageSection, SignalList } from "@/layout/shell";
 import { ListPagination } from "@/components/pagination";
 import {
@@ -54,7 +55,7 @@ import {
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
 import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
-import { InviteLinkDialog } from "./InviteLinkDialog";
+import { InviteLinkDialog } from "./components/InviteLinkDialog";
 
 const STATUS_TONES: Record<ConsoleInvitation["status"], StatusBadgeTone> = {
   pending: "info",
@@ -73,19 +74,10 @@ const KNOWN_ROLES = new Set([
 
 const EXPIRING_SOON_MS = 24 * 60 * 60 * 1000;
 
-export interface InvitationLedgerProps {
-  /** 成员目录那边发出 / 重发 / 撤销之后 +1,台账跟着重读。 */
-  readonly refreshKey: number;
-  /** 本段的动作改了 Invited 行,通知成员目录重读。 */
-  readonly onChanged: () => void;
-}
-
-export function InvitationLedger({
-  refreshKey,
-  onChanged,
-}: InvitationLedgerProps) {
+export function InvitationsPage() {
   const t = useTranslations("invitationsPage");
   const tableLabels = useTableLabels();
+  const router = useRouter();
   const { session } = useConsoleSession();
 
   const [rows, setRows] = useState<ConsoleInvitation[]>([]);
@@ -117,7 +109,7 @@ export function InvitationLedger({
     return () => {
       active = false;
     };
-  }, [reload, session.tenant?.id, reloadKey, refreshKey]);
+  }, [reload, session.tenant?.id, reloadKey]);
 
   const roleLabel = (code: string): string =>
     KNOWN_ROLES.has(code) ? t(`role.${code}`) : code;
@@ -137,7 +129,6 @@ export function InvitationLedger({
     try {
       await revokeInvitation(inv.id);
       await reload();
-      onChanged();
       setMessage(t("revoked", { email: inv.email }));
     } catch (caught) {
       /* 重新抛出:DS 的确认件按 Promise 是否 rejected 决定关不关框。失败的理由
@@ -156,7 +147,6 @@ export function InvitationLedger({
     try {
       const result = await resendInvitation(inv.id);
       await reload();
-      onChanged();
       setInviteResult(result);
       setMessage(
         result.emailSent
@@ -265,7 +255,23 @@ export function InvitationLedger({
   ];
 
   return (
-    <>
+    <ViewLayout>
+      <ViewHeader
+        icon="mail"
+        title={t("title")}
+        description={t("description")}
+        action={
+          <Button
+            variant="outline"
+            size="md"
+            onClick={() => router.push("/members")}
+          >
+            <Icon name="arrow-left" size="xs" fallback="placeholder" />
+            <span>{t("backToMembers")}</span>
+          </Button>
+        }
+      />
+
       <PageSection
         icon="mail"
         level={2}
@@ -339,6 +345,6 @@ export function InvitationLedger({
         resent
         onClose={() => setInviteResult(null)}
       />
-    </>
+    </ViewLayout>
   );
 }

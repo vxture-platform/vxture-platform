@@ -387,6 +387,7 @@
     "personalTenant": "Tenant info",
     "organization": "Organization Info",
     "members": "Members",
+    "membersInvitations": "Invitations",
     "membersRoles": "Roles & permissions",
     "roles": "Roles & Permissions",
     "invitations": "Invitation Records",
@@ -1307,11 +1308,8 @@
       "description": "Manage tenant members, roles, and access status.",
       "addMember": "Add member",
       "inviteMember": "Invite member",
-      "viewRoles": "Roles & permissions"
-    },
-    "directory": {
-      "title": "Member directory",
-      "description": "Members on the roster plus invitations awaiting acceptance; disable, restore, change role, and unlink all happen here"
+      "viewRoles": "Roles & permissions",
+      "viewInvitations": "Invitations"
     },
     "table": {
       "toolbarTitle": "{count} members",
@@ -2777,6 +2775,9 @@
     }
   },
   "invitationsPage": {
+    "title": "Invitations",
+    "description": "Member invitations you've sent and their status; send new ones from the Members page",
+    "backToMembers": "Back to members",
     "rowMenu": "Invitation actions",
     "revoke": "Revoke",
     "revokeHint": "Only pending invitations can be revoked",

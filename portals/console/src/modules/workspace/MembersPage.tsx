@@ -7,11 +7,10 @@
  * @category Module
  *
  * 批 9(owner 2026-09-06):租户侧最终只留「账号信息 / 租户信息 / 成员管理」三个板块,
- * 原「成员与权限」分组撤销。本页因此从一张表变成两段 + 一个二级页入口:
- *   ① 成员目录 —— 在册成员(活跃 / 已禁用)+ 待接受的邀请(Invited 行,id = 邀请 id);
- *   ② 邀请记录 —— 发出过的全部邀请台账(原 `/invitations`,持 member.manage 才渲染);
- *   ③ 角色与权限 —— 二级页 `/members/roles`,平台统一定义、租户不可自定义,只读。
- * 两段说的是同一件事的两面,所以并在一页:发出邀请与追踪它不再隔着一次跳转。
+ * 原「成员与权限」分组撤销。本页是成员管理的主页 = 成员目录(在册成员 + 待接受的
+ * 邀请行,id = 邀请 id),另外两块收成它的**二级页**,入口在页头右侧:
+ *   · `/members/invitations` 邀请记录 —— 发出过的全部邀请台账(持 member.manage);
+ *   · `/members/roles`       角色与权限 —— 平台统一定义、租户不可自定义,只读。
  *
  * 动作门与 BFF 守卫同一套码(批 0a):邀请 / 添加 / 停用 / 恢复 / 重置 / 解除 =
  * member.manage,改角色 = role.assign。owner 与本人的行在这里就把停用 / 解除 /
@@ -40,6 +39,7 @@ import {
   InputGroupInput,
   ListCard,
   ListCardGrid,
+  ListPageTemplate,
   NativeSelect,
   StatusBadge,
   type ActionMenuItem,
@@ -48,7 +48,6 @@ import {
   useListPagination,
   UserAvatar,
   ViewHeader,
-  ViewLayout,
 } from "@vxture/design-system";
 import {
   ConsoleBffError,
@@ -73,14 +72,12 @@ import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
 import { useConfirmLabels } from "@/lib/destructive";
 import { useRouter } from "@/lib/i18n/navigation";
-import { PageSection } from "@/layout/shell";
 import { ListPagination } from "@/components/pagination";
 import {
   LoadFailedBanner,
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
 import { fmtDate } from "@/modules/commerce/components/hubModel";
-import { InvitationLedger } from "./components/InvitationLedger";
 import { InviteLinkDialog } from "./components/InviteLinkDialog";
 
 type MemberStatusFilter = "all" | "active" | "invited" | "suspended";
@@ -123,8 +120,6 @@ export function MembersPage() {
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  /* 目录这边发出 / 重发 / 撤销之后 +1,同页的邀请记录跟着重读——两处数字不能对不上。 */
-  const [invitationKey, setInvitationKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -243,7 +238,6 @@ export function MembersPage() {
       if (createMode === "invite") {
         const result = await inviteMember(payload);
         await reloadMembers(result.member.id);
-        setInvitationKey((k) => k + 1);
         setCreateMode(null);
         resetMemberForm();
         setInviteResult({ result, resent: false });
@@ -379,7 +373,6 @@ export function MembersPage() {
     try {
       const result = await resendInvitation(member.id);
       await reloadMembers(member.id);
-      setInvitationKey((k) => k + 1);
       setInviteResult({ result, resent: true });
       setMessage(
         result.emailSent
@@ -399,7 +392,6 @@ export function MembersPage() {
     try {
       await revokeInvitation(member.id);
       await reloadMembers();
-      setInvitationKey((k) => k + 1);
       setMessage(t("feedback.inviteRevoked"));
     } catch (caught) {
       setError(errorText(caught, "feedback.revokeError"));
@@ -783,32 +775,40 @@ export function MembersPage() {
   );
 
   return (
-    <ViewLayout>
-      <ViewHeader
-        icon="users"
-        title={t("header.title")}
-        description={t("header.description")}
-        action={
-          /* 二级页入口:角色与权限是平台统一定义、租户只读的一张目录,不是本页的
-             一个动作,所以放页头右侧「去看」,不与新增 / 邀请挤在工具条上。 */
-          <Button
-            variant="outline"
-            size="md"
-            onClick={() => router.push("/members/roles")}
-          >
-            <Icon name="shield-check" size="xs" fallback="placeholder" />
-            <span>{t("header.viewRoles")}</span>
-          </Button>
+    <>
+      <ListPageTemplate
+        header={
+          <ViewHeader
+            icon="users"
+            title={t("header.title")}
+            description={t("header.description")}
+            action={
+              /* 两个二级页的入口。它们是**去处**不是本页的动作,所以放页头右侧,
+                 不与工具条上的新增 / 邀请挤在一起——那两个才是作用在本页目录上的。 */
+              <>
+                {canManageMembers ? (
+                  <Button
+                    variant="outline"
+                    size="md"
+                    onClick={() => router.push("/members/invitations")}
+                  >
+                    <Icon name="mail" size="xs" fallback="placeholder" />
+                    <span>{t("header.viewInvitations")}</span>
+                  </Button>
+                ) : null}
+                <Button
+                  variant="outline"
+                  size="md"
+                  onClick={() => router.push("/members/roles")}
+                >
+                  <Icon name="shield-check" size="xs" fallback="placeholder" />
+                  <span>{t("header.viewRoles")}</span>
+                </Button>
+              </>
+            }
+          />
         }
-      />
-
-      <PageSection
-        icon="users"
-        level={2}
-        title={t("directory.title")}
-        description={t("directory.description")}
-      >
-        <div className="flex flex-col gap-sm">
+        filters={
           <FilterBar
             view={view}
             onViewChange={setView}
@@ -868,8 +868,9 @@ export function MembersPage() {
               ))}
             </NativeSelect>
           </FilterBar>
-
-          {memberActionVisibility.bulk ? (
+        }
+        bulkBar={
+          memberActionVisibility.bulk ? (
             <BulkActionBar
               count={selectedCount}
               noun={t("bulk.noun")}
@@ -898,8 +899,9 @@ export function MembersPage() {
                 },
               ]}
             />
-          ) : null}
-
+          ) : null
+        }
+        table={
           <div className="flex flex-col gap-md">
             {loadFailed ? (
               <LoadFailedBanner
@@ -990,17 +992,8 @@ export function MembersPage() {
               </div>
             )}
           </div>
-        </div>
-      </PageSection>
-
-      {/* 邀请记录:发出过的全部邀请台账。持 member.manage 才看得见——原独立页
-          `/invitations` 就是这个门,并页之后门跟着内容走,不跟着页面走。 */}
-      {canManageMembers ? (
-        <InvitationLedger
-          refreshKey={invitationKey}
-          onChanged={() => setReloadKey((k) => k + 1)}
-        />
-      ) : null}
+        }
+      />
 
       {createMode ? (
         <DialogForm
@@ -1146,6 +1139,6 @@ export function MembersPage() {
         resent={inviteResult?.resent ?? false}
         onClose={() => setInviteResult(null)}
       />
-    </ViewLayout>
+    </>
   );
 }
