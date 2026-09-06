@@ -473,6 +473,13 @@ export interface SubscribedProductView {
   productCode: string | null;
   productName: string | null;
   productNick: string | null;
+  /**
+   * 产品最近一次发布的时刻（`products.released_at`，ISO）。
+   *
+   * **不是 `updated_at`**：那是行审计列，后台改一句描述也会变，对客户不是"产品有更新"。
+   * `released_at` 才是"这一版什么时候发出来的"，与 `release_version` 成对出现。
+   */
+  releasedAt: string | null;
   /** 产品对外发布号（products.release_version）——平台只有一套最新实例，
    *  恒为当前最新版、随产品更新自动跟进；不存在按订阅冻结的旧版本。 */
   releaseVersion: string | null;
@@ -498,9 +505,17 @@ export interface RecommendedProductView {
   productNick: string | null;
   description: string | null;
   releaseVersion: string | null;
+  /** 产品最近一次发布的时刻（`products.released_at`，ISO）。见 SubscribedProductView 同名字段。 */
+  releasedAt: string | null;
   iconUrl: string | null;
   tags: string[];
-  /** 现行锁定版本各周期最低价（元字符串）；"0.00" = 提供免费版。 */
+  /**
+   * 现行锁定版本各周期最低价（元字符串）。
+   *
+   * `"0.00"` 就是 0 元,**不要在文案上把它说成「免费版」/「永久免费」**:¥0 档同样是
+   * 按周期的订阅、同样会到期(owner 2026-09-03 决策 5),说成"免费"是平台替产品做了一个
+   * 没人授权的商业承诺。展示一律与其它价格同一格式(`¥0 起 / 月`),不特判。
+   */
   minPrice: string;
   currency: string;
   favorite: boolean;
@@ -935,6 +950,7 @@ export class SubscriptionRouter {
       product_name: string | null;
       product_nick: string | null;
       release_version: string | null;
+      released_at: Date | null;
       plan_name: string;
       tier: string | null;
       seats: string | null;
@@ -947,7 +963,7 @@ export class SubscriptionRouter {
     }>(
       `select ts.id as subscription_id,
               prod.id as product_id, prod.product_code, prod.product_name,
-              prod.product_nick, prod.release_version,
+              prod.product_nick, prod.release_version, prod.released_at,
               pl.plan_name, pc.tier, pc.quota->>'member.max' as seats,
               ts.subscription_kind, ts.cycle_unit, ts.status,
               ts.start_at, ts.end_at, ts.auto_renew
@@ -976,6 +992,7 @@ export class SubscriptionRouter {
       productName: r.product_name,
       productNick: r.product_nick,
       releaseVersion: r.release_version,
+      releasedAt: r.released_at?.toISOString() ?? null,
       planName: r.plan_name,
       tier: r.tier,
       seats: r.seats != null && r.seats !== "" ? Number(r.seats) : null,
@@ -1012,6 +1029,7 @@ export class SubscriptionRouter {
       product_nick: string | null;
       description: string | null;
       release_version: string | null;
+      released_at: Date | null;
       icon_url: string | null;
       tags: string[] | null;
       min_price: string;
@@ -1019,6 +1037,7 @@ export class SubscriptionRouter {
     }>(
       `select prod.id as product_id, prod.product_code, prod.product_name,
               prod.product_nick, prod.description, prod.release_version,
+              prod.released_at,
               prod.icon_url, prod.tags,
               to_char(coalesce(min(pp.price), 0), 'FM999999999990.00') as min_price,
               coalesce(min(pp.currency), 'CNY') as currency
@@ -1043,7 +1062,8 @@ export class SubscriptionRouter {
                and sub_pc.product_id = prod.id
           )
         group by prod.id, prod.product_code, prod.product_name, prod.product_nick,
-                 prod.description, prod.release_version, prod.icon_url, prod.tags, prod.sort
+                 prod.description, prod.release_version, prod.released_at,
+                 prod.icon_url, prod.tags, prod.sort
         order by prod.sort asc, prod.product_code asc
         limit 6`,
       [req.tenant.id],
@@ -1055,6 +1075,7 @@ export class SubscriptionRouter {
       productNick: r.product_nick,
       description: r.description,
       releaseVersion: r.release_version,
+      releasedAt: r.released_at?.toISOString() ?? null,
       iconUrl: r.icon_url,
       tags: r.tags ?? [],
       minPrice: r.min_price,

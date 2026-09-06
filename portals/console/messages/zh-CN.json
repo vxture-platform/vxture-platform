@@ -98,15 +98,14 @@
         "unavailable": "已订阅产品暂时读不到,请稍后刷新。",
         "trialing": "试用中",
         "open": "打开",
-        "detail": "产品介绍"
+        "detail": "产品介绍",
+        "updatedAt": "{date} 更新"
       },
       "reco": {
         "title": "热门推荐",
         "desc": "你还没订阅的智能体,先看介绍或直接订阅。",
         "learnMore": "产品介绍",
-        "subscribe": "订阅",
-        "free": "提供免费版",
-        "from": "起 / 月"
+        "subscribe": "订阅"
       }
     },
     "realNameVerified": "实名认证",
@@ -131,7 +130,7 @@
     "defaultTag": "默认",
     "workspaceSwitchComingSoon": "多工作空间切换即将支持",
     "plan": "计划",
-    "freePlan": "免费套餐计划",
+    "freePlan": "未订阅",
     "orgTenant": "组织租户",
     "personalTenant": "个人租户",
     "fontSmall": "小",
@@ -2136,7 +2135,7 @@
   },
   "subscriptionHub": {
     "title": "产品订阅",
-    "description": "当前工作区订阅的全部产品与推荐,免费版同样计入订阅;订单与账单在费用中心。",
+    "description": "当前工作区订阅的全部产品与推荐；订单与账单在费用中心。",
     "browseMarket": "浏览产品市场",
     "loading": "正在加载…",
     "favorite": {
@@ -2162,7 +2161,6 @@
       "private": "私有化 · {seats} 席位"
     },
     "cycle": {
-      "free": "免费",
       "month": "月付",
       "year": "年付"
     },
@@ -2179,7 +2177,6 @@
       "perpetual": "长期有效",
       "expired": "已过期",
       "daysLeft": "剩余 {days} 天",
-      "freeNote": "免费版计入订阅",
       "until": "有效期至 {date}"
     },
     "card": {
@@ -2201,7 +2198,7 @@
     "stats": {
       "groupLabel": "产品订阅统计",
       "products": "在订产品",
-      "productsHint": "含 {free} 个免费版",
+      "productsHint": "含 {free} 个 Free 档",
       "productsHintNoFree": "当前工作区",
       "expiring": "即将到期",
       "expiringHint": "{product} · {cycle} · 剩 {days} 天",
@@ -2214,7 +2211,7 @@
       "filterActive": "服务中",
       "filterAll": "全部",
       "emptyTitle": "还没有生效的订阅",
-      "emptyDescription": "从产品市场挑选一个产品开始，免费版同样计入订阅。",
+      "emptyDescription": "从产品市场挑选一个产品开始，Free 档同样计入订阅、同样按周期到期。",
       "autoRenewError": "续费设置更新失败,请稍后重试",
       "unsubscribeError": "退订失败,请稍后重试",
       "unsubscribeTitle": "确认退订 {product}?",
@@ -2288,14 +2285,6 @@
         "cancelled": "取消订单",
         "expiredClosed": "超时关闭"
       }
-    },
-    "reco": {
-      "title": "新品推荐",
-      "description": "你还未订阅的产品，了解详情后可直接订阅。",
-      "free": "¥0",
-      "freeNote": "提供免费版",
-      "fromPerMonth": "起 / 月",
-      "learnMore": "了解详情"
     },
     "unknownLink": "链接里的产品或意图无法识别，已回到订阅总览。",
     "pendingBanner": {

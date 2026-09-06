@@ -18,7 +18,6 @@
  *    （开 / 到期不续），free 档与普通订阅一样可开可关；「最新版 vX.Y.Z」纯文本——平台只有一套最新实例，版本恒为
  *    当前发布号（products.release_version），随产品更新自动跟进，展示它是
  *    为了传达「持续创新」，不随订阅冻结。
- * 2) RecommendedProductCard：「新品推荐」卡，CTA 外链 website 产品详情页，
  *    订阅动作由详情页承接。
  */
 
@@ -36,13 +35,12 @@ import {
   cn,
 } from "@vxture/design-system";
 import type { ActionMenuItem, IconName } from "@vxture/design-system";
-import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import { Link } from "@/lib/i18n/navigation";
 import {
   buildWebsitePricingUrl,
   buildWebsiteProductUrl,
 } from "@/lib/website-entry";
-import type { RecommendedProduct, SubscribedProduct } from "@/api/console-bff";
+import type { SubscribedProduct } from "@/api/console-bff";
 import { useConfirmLabels } from "@/lib/destructive";
 import {
   SUB_STATUS_TONES,
@@ -155,7 +153,6 @@ export function SubscriptionProductCard({
   const expired = item.status === "expired";
   const percent = cyclePercent(item.startAt, item.endAt);
   const nearExpiry = !expired && left != null && left <= RENEW_THRESHOLD_DAYS;
-  const isFree = item.kind === "free" || item.tier === "free";
   const showUpgrade =
     !expired && (item.tier === "free" || item.tier === "starter");
   const showRenew = expired || nearExpiry;
@@ -233,12 +230,10 @@ export function SubscriptionProductCard({
                 : t(`audience.${audience}`)}
             </Badge>
           ) : null}
+          {/* 周期就是周期:¥0 档同样是按月/按年的订阅,把这一格换成「免费」是错两次
+              ——既不是周期,又把一个短期验证价说成了产品形态(owner 2026-09-07)。 */}
           <Badge variant="outline">
-            {isFree
-              ? t("cycle.free")
-              : item.cycleUnit === "year"
-                ? t("cycle.year")
-                : t("cycle.month")}
+            {item.cycleUnit === "year" ? t("cycle.year") : t("cycle.month")}
           </Badge>
           <StatusBadge tone={SUB_STATUS_TONES[item.status] ?? "neutral"}>
             {t(`subStatus.${item.status}`)}
@@ -265,9 +260,7 @@ export function SubscriptionProductCard({
                 ? t("term.expired")
                 : left != null
                   ? t("term.daysLeft", { days: left })
-                  : isFree
-                    ? t("term.freeNote")
-                    : ""}
+                  : ""}
             </span>
           </div>
           {percent != null && !expired ? <Progress value={percent} /> : null}
@@ -333,100 +326,3 @@ export function SubscriptionProductCard({
 // ============================================================================
 // 「新品推荐」卡
 // ============================================================================
-
-/**
- * 「新品推荐」卡。**当前没有消费方**——owner 2026-09-07:推荐不该在产品订阅页,
- * 那一页是**资产视图**(我现在有什么),推荐是**选购**。板块已从那一页去掉。
- *
- * 件与它背后的 `/api/subscription/recommended-products` 一并**保留**:owner 说的是
- * 「不该在这里」,不是「这个能力不要了」;去处未定(产品市场?首页磁贴?)。删掉等于
- * 替 owner 把话说成后一种,重新放置时还得重写。仓里对零消费方的既有口径也是如此
- * (批 4「零消费方核过一遍…属既有能力的公开面,保留」)。
- */
-export function RecommendedProductCard({
-  item,
-  favoriteBusy,
-  onToggleFavorite,
-}: {
-  item: RecommendedProduct;
-  favoriteBusy: boolean;
-  onToggleFavorite: (productCode: string, next: boolean) => void;
-}) {
-  const t = useTranslations("subscriptionHub");
-  const locale = useLocale();
-  const appLocale = locale as Locale;
-  const free = Number.parseFloat(item.minPrice) === 0;
-
-  return (
-    <Card surface="base" className="gap-md py-lg">
-      <CardContent className="flex flex-1 flex-col gap-md">
-        <div className="flex items-center gap-md">
-          <ProductGlyph name={item.productName} code={item.productCode} />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-label-md text-foreground">
-              {item.productName}
-            </span>
-            <span className="block truncate text-body-sm text-muted-foreground">
-              {item.productNick ?? item.productCode}
-            </span>
-          </span>
-          <FavoriteStar
-            active={item.favorite}
-            busy={favoriteBusy}
-            onToggle={() => onToggleFavorite(item.productCode, !item.favorite)}
-            labelOn={t("favorite.remove")}
-            labelOff={t("favorite.add")}
-          />
-        </div>
-
-        {item.description ? (
-          <p className="line-clamp-2 text-body-sm text-muted-foreground">
-            {item.description}
-          </p>
-        ) : null}
-
-        {item.tags.length > 0 ? (
-          <div className="flex flex-wrap gap-xs">
-            {item.tags.slice(0, 3).map((tag) => (
-              <Badge key={tag} variant="outline">
-                {tag}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="mt-auto flex items-baseline gap-xs pt-sm">
-          <strong className="text-title-sm text-foreground tabular-nums">
-            {free
-              ? t("reco.free")
-              : formatCurrency(
-                  Number.parseFloat(item.minPrice),
-                  appLocale,
-                  item.currency,
-                )}
-          </strong>
-          <span className="text-body-sm text-muted-foreground">
-            {free ? t("reco.freeNote") : t("reco.fromPerMonth")}
-          </span>
-        </div>
-      </CardContent>
-
-      <CardFooter className="justify-between gap-md text-body-sm">
-        <a
-          href={buildWebsiteProductUrl(locale, item.productCode)}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-2xs text-primary-text hover:underline"
-        >
-          {t("reco.learnMore")}
-          <Icon name="external-link" size="xs" aria-hidden />
-        </a>
-        {item.releaseVersion ? (
-          <span className="text-muted-foreground tabular-nums">
-            {t("card.version", { version: item.releaseVersion })}
-          </span>
-        ) : null}
-      </CardFooter>
-    </Card>
-  );
-}

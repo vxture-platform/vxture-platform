@@ -476,12 +476,11 @@ export function ConsoleAppShell({
     trialing: tShell("appcenter.products.trialing"),
     open: tShell("appcenter.products.open"),
     productDetail: tShell("appcenter.products.detail"),
+    updatedAt: tShell("appcenter.products.updatedAt"),
     recoTitle: tShell("appcenter.reco.title"),
     recoDesc: tShell("appcenter.reco.desc"),
     recoLearnMore: tShell("appcenter.reco.learnMore"),
     recoSubscribe: tShell("appcenter.reco.subscribe"),
-    recoFree: tShell("appcenter.reco.free"),
-    recoFrom: tShell("appcenter.reco.from"),
   };
 
   /* 站内入口：切回控制台视图再路由。登记了主页的产品不经这里——AppCenter 直接

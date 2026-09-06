@@ -788,6 +788,8 @@ export interface SubscribedProduct {
   productName: string | null;
   productNick: string | null;
   releaseVersion: string | null;
+  /** 产品最近一次发布的时刻(ISO)。不是 updated_at——那是行审计列。 */
+  releasedAt: string | null;
   planName: string;
   tier: string | null;
   seats: number | null;
@@ -807,8 +809,11 @@ export interface RecommendedProduct {
   productNick: string | null;
   description: string | null;
   releaseVersion: string | null;
+  /** 产品最近一次发布的时刻(ISO)。 */
+  releasedAt: string | null;
   iconUrl: string | null;
   tags: string[];
+  /** 各周期最低价(元字符串)。`"0.00"` 就是 0 元,展示与其它价格同一格式,不说成「免费」。 */
   minPrice: string;
   currency: string;
   favorite: boolean;
@@ -1203,11 +1208,7 @@ export async function fetchSubscribedProducts(): Promise<SubscribedProduct[]> {
   );
 }
 
-/**
- * 「新品推荐」读。**当前没有消费方**(owner 2026-09-07 把板块从产品订阅页去掉),
- * 与 `RecommendedProductCard`、BFF 的 `/api/subscription/recommended-products` 一并
- * 保留——去掉的是**位置**不是能力,去处未定。见 hubCards 里那张卡的注释。
- */
+/** 「热门推荐」读:未订阅的产品。消费方是智能体页(shell 的 AppCenter)。 */
 export async function fetchRecommendedProducts(): Promise<
   RecommendedProduct[]
 > {

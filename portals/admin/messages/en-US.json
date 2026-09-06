@@ -1458,7 +1458,7 @@
       "enterprise": "Enterprise"
     },
     "priceKind": {
-      "free": "Free",
+      "free": "Zero pricing",
       "paid": "Standard pricing",
       "contract": "Contract pricing"
     }
