@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * BillingPage.tsx — 账单管理（product_331 重构）。
+ * BillingPage.tsx — 费用中心（product_331 重构；2026-09-06 归集订单、更名）。
  * @package @vxture/console
  * @layer Application
  * @category Module
@@ -12,11 +12,18 @@
  * 指标数=3 铺满）+ PageSection 原生 icon prop + DataTable + SignalList，
  * 无自造样式层。中文为基准，zh/en 双份 i18n（billingPage 命名空间）。
  * 全页无 UUID：账单号 = bill_no 可视码。
+ *
+ * **2026-09-06 owner 裁定**:订单从「产品订阅」迁进来,页面随之更名「账单管理」→
+ * 「费用中心」——装了订单+账单+发票之后,「账单」只是其中一块,名字太窄。钱这条链
+ * 现在完整地落在一页:下单(OrdersSection)→ 出账(账单记录)→ 付款 → 开票。
+ * 发票记录与开票抬头是**台账**,降为二级页 `/billing/invoices`;「申请发票」是账单行
+ * 上的**动作**,留在本页(动作要发生在对象所在的那一页)。
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
+import { useRouter } from "@/lib/i18n/navigation";
 import {
   ActionMenu,
   Button,
@@ -56,6 +63,7 @@ import {
 import { PlannedBadge } from "@/components/planned";
 import { PageSection, SignalList } from "@/layout/shell";
 import { fmtDate, fmtTime } from "./components/hubModel";
+import { OrdersSection } from "./components/OrdersSection";
 import {
   InvoiceSections,
   RECEIPT_STATUS_TONES,
@@ -84,6 +92,7 @@ const KNOWN_BILL_TYPES = new Set([
 export function BillingPage() {
   const t = useTranslations("billingPage");
   const tableLabels = useTableLabels();
+  const router = useRouter();
   const locale = useLocale();
   const appLocale = locale as Locale;
   const { session } = useConsoleSession();
@@ -394,14 +403,24 @@ export function BillingPage() {
         title={t("title")}
         description={t("description")}
         action={
-          /* 对账单导出无端点；保持意图可见、禁用不装样。 */
-          <span className="flex items-center gap-sm">
-            <Button size="md" variant="outline" disabled>
-              <Icon name="arrow-down" size="xs" fallback="placeholder" />
-              <span>{t("exportStatement")}</span>
+          <>
+            <Button
+              variant="outline"
+              size="md"
+              onClick={() => router.push("/billing/invoices")}
+            >
+              <Icon name="file-text" size="xs" fallback="placeholder" />
+              <span>{t("viewInvoices")}</span>
             </Button>
-            <PlannedBadge />
-          </span>
+            {/* 对账单导出无端点；保持意图可见、禁用不装样。 */}
+            <span className="flex items-center gap-sm">
+              <Button size="md" variant="outline" disabled>
+                <Icon name="arrow-down" size="xs" fallback="placeholder" />
+                <span>{t("exportStatement")}</span>
+              </Button>
+              <PlannedBadge />
+            </span>
+          </>
         }
       />
 
@@ -419,7 +438,10 @@ export function BillingPage() {
         aria-label={t("metrics.groupLabel")}
       />
 
-      {/* ① 账单记录 */}
+      {/* ① 我的订单(owner 2026-09-06:订单是钱这条链的第一环,从产品订阅迁来) */}
+      <OrdersSection />
+
+      {/* ② 账单记录 */}
       <PageSection
         icon="receipt"
         level={2}
@@ -476,9 +498,10 @@ export function BillingPage() {
         />
       </PageSection>
 
-      {/* ②③ 发票记录 + 开票抬头(owner 2026-08-21:归集账单管理,位于账单表
-          下方、收款口径上方;两个开票来源同为已结清账单不分流) */}
+      {/* 申请发票弹窗:动作留在账单所在的这一页;发票记录与开票抬头两块台账
+          在二级页 `/billing/invoices`(owner 2026-09-06) */}
       <InvoiceSections
+        mode="apply"
         receipts={receipts}
         addresses={addresses}
         loading={loading}
@@ -490,7 +513,7 @@ export function BillingPage() {
         invoiceBlockedBy={invoiceBlockedBy}
       />
 
-      {/* ④ 收款与计费口径 */}
+      {/* ③ 收款与计费口径 */}
       <PageSection
         icon="seal-check"
         level={2}

@@ -23,6 +23,8 @@ const routeLabels = new Map<string, string>([
   ["/invitations", "invitations"],
   ["/subscription", "subscription"],
   ["/billing", "billing"],
+  // 发票与抬头是费用中心的二级页(owner 2026-09-06);面包屑最后一节要有名字
+  ["/billing/invoices", "billingInvoices"],
   ["/vouchers", "vouchers"],
   ["/quotas", "quotas"],
   ["/quotas/addon-pay", "addonPay"],

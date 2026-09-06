@@ -17,32 +17,22 @@
  * DS 组合件、不自造样式层（owner 2026-08-20 评审）。全页无 UUID（可视码原则）。
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { useTableLabels } from "@/lib/table";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
-  ActionMenu,
   Banner,
   Button,
-  DataTable,
   EmptyState,
   Icon,
   MetricGrid,
   SegmentedControl,
-  StatusBadge,
   ViewHeader,
   ViewLayout,
 } from "@vxture/design-system";
-import type {
-  ActionMenuItem,
-  DataTableColumn,
-  MetricGridItem,
-} from "@vxture/design-system";
-import { formatCurrency, type Locale } from "@vxture-platform/shared";
+import type { MetricGridItem } from "@vxture/design-system";
 import {
-  cancelSubscriptionOrder,
   executeSubscriptionAction,
   fetchMyOrders,
   fetchRecommendedProducts,
@@ -66,28 +56,13 @@ import {
   RecommendedProductCard,
   SubscriptionProductCard,
 } from "./components/hubCards";
-import { OrderDetailPanel } from "./components/OrderDetailPanel";
-import { useOrderPolling } from "./components/pay/useOrderPolling";
-import { useConfirmLabels } from "@/lib/destructive";
-import {
-  PAY_AXIS,
-  SVC_AXIS,
-  daysLeft,
-  fmtDate,
-  fmtTime,
-  formatRemain,
-} from "./components/hubModel";
-
-const ORDERS_PAGE_SIZE = 8;
+import { daysLeft, fmtDate, fmtTime } from "./components/hubModel";
 
 type SubFilter = "active" | "all";
 
 export function SubscriptionPage() {
   const t = useTranslations("subscriptionHub");
-  const tableLabels = useTableLabels();
-  const withLabels = useConfirmLabels();
   const locale = useLocale();
-  const appLocale = locale as Locale;
   const router = useRouter();
   const searchParams = useSearchParams();
   const { session } = useConsoleSession();
@@ -101,11 +76,8 @@ export function SubscriptionPage() {
   const [recommended, setRecommended] = useState<RecommendedProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [subFilter, setSubFilter] = useState<SubFilter>("active");
-  const [expandedKeys, setExpandedKeys] = useState<readonly string[]>([]);
   const [favBusy, setFavBusy] = useState<ReadonlySet<string>>(new Set());
-  const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
   // P0 订阅自助:退订确认弹窗目标 + 续费开关在途标记
   /* 只剩 setter：忙态现在由 DS 的确认件按 Promise 自己接管（「处理中…」与
      关闭时机都在件里），页面不再需要读它。 */
@@ -207,54 +179,6 @@ export function SubscriptionPage() {
     [reloadSubs, t],
   );
 
-  // 待付款单存在时每秒走时（表格倒计时 + 概览条 TTL）。
-  const hasPending = orders.some(
-    (o) => o.orderStatus === "pending_payment" && o.expireAt,
-  );
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!hasPending) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
-  }, [hasPending]);
-
-  /* 倒计时归零 → 重取一次,让服务端的超时关闭显影(此前订单行停在「去支付 00:00」)。
-   * 每张单只触发一次。 */
-  const expiredReloaded = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const dueIds = orders
-      .filter(
-        (o) =>
-          o.orderStatus === "pending_payment" &&
-          o.expireAt &&
-          new Date(o.expireAt).getTime() <= now &&
-          !expiredReloaded.current.has(o.orderId),
-      )
-      .map((o) => o.orderId);
-    if (dueIds.length === 0) return;
-    for (const id of dueIds) expiredReloaded.current.add(id);
-    void reloadSubs();
-  }, [orders, now, reloadSubs]);
-
-  /* 已申报待确认 / 开通中的单要自动前进:轮询订阅与订单(此前只能手动刷新)。 */
-  const hasInFlight = orders.some(
-    (o) =>
-      o.orderStatus === "paid_pending_verify" || o.orderStatus === "activating",
-  );
-  useOrderPolling(hasInFlight, reloadSubs, 15_000);
-
-  /* 取消订单后列表变短,当前页可能落空——夹回最后一页。 */
-  useEffect(() => {
-    const count = Math.max(1, Math.ceil(orders.length / ORDERS_PAGE_SIZE));
-    setPage((p) => Math.min(p, count));
-  }, [orders.length]);
-
-  const money = useCallback(
-    (v: string, currency: string) =>
-      formatCurrency(Number.parseFloat(v || "0"), appLocale, currency),
-    [appLocale],
-  );
-
   // ── 收藏开关（乐观更新，失败回滚）────────────────────────────────────────
   const toggleFavorite = useCallback(
     (productCode: string, next: boolean) => {
@@ -306,18 +230,29 @@ export function SubscriptionPage() {
     );
   }, [products, subFilter]);
 
-  // ── 概览指标（DS MetricGrid，同 /billing 的统计卡）─────────────────────────
+  /* 待付订单的**去处**(owner 2026-09-06 拆页):台账搬去费用中心了,这里只留一条
+     提示——订完产品找不到付款入口是不行的。横幅比指标卡好:没有待付时它完全不出现,
+     有待付时它带着「去支付」的按钮。倒计时也留在费用中心的订单表里,那边才动得了它,
+     这里给绝对到期时刻就够,页面因此不必每秒重绘。 */
+  const pendingOrders = useMemo(
+    () => orders.filter((o) => o.orderStatus === "pending_payment"),
+    [orders],
+  );
+  const nextDeadline = useMemo(
+    () =>
+      pendingOrders
+        .map((o) => o.expireAt)
+        .filter((v): v is string => Boolean(v))
+        .sort()[0],
+    [pendingOrders],
+  );
+
+  // ── 概览指标（DS MetricGrid）───────────────────────────────────────────────
   const stats = useMemo<MetricGridItem[]>(() => {
     const inService = products.filter((p) => p.status !== "expired");
     const freeCount = inService.filter(
       (p) => p.kind === "free" || p.tier === "free",
     ).length;
-
-    const pending = orders.filter((o) => o.orderStatus === "pending_payment");
-    const nextDeadline = pending
-      .map((o) => o.expireAt)
-      .filter((v): v is string => Boolean(v))
-      .sort()[0];
 
     const expiring = inService
       .filter((p) => p.endAt)
@@ -338,20 +273,6 @@ export function SubscriptionPage() {
             : t("stats.productsHintNoFree"),
       },
       {
-        id: "pending",
-        icon: "receipt",
-        label: t("stats.pendingOrders"),
-        value: loadFailed ? "—" : String(pending.length),
-        ...(pending.length > 0 ? { tone: "warning" as const } : {}),
-        trend: nextDeadline
-          ? `${t("stats.pendingHint", { total: orders.length })} · ${t(
-              "stats.pendingRemain",
-              { time: formatRemain(nextDeadline, now) },
-            )}`
-          : t("stats.pendingHint", { total: orders.length }),
-        ...(nextDeadline ? { trendTone: "warning" as const } : {}),
-      },
-      {
         id: "expiring",
         icon: "clock",
         label: t("stats.expiring"),
@@ -368,229 +289,7 @@ export function SubscriptionPage() {
           : t("stats.expiringNone"),
       },
     ];
-  }, [products, orders, now, t, loadFailed]);
-
-  // ── 我的订单 ──────────────────────────────────────────────────────────────
-  async function handleCancelOrder(orderId: string) {
-    setError(null);
-    setCancelingId(orderId);
-    try {
-      await cancelSubscriptionOrder(orderId);
-      // 取消后订单与订阅卡、概览指标一起刷新(此前只刷订单表,指标停在旧值)。
-      await reloadSubs();
-    } catch (err) {
-      setError(
-        err instanceof ConsoleBffError && err.message
-          ? err.message
-          : t("orders.cancelError"),
-      );
-      /* 重新抛出：DS 的确认件按 rejected 决定关不关框。理由已落在 `error`
-         横幅上，但框不能关——用户得看见自己按的那一下没成。 */
-      throw err;
-    } finally {
-      setCancelingId(null);
-    }
-  }
-
-  const pageCount = Math.max(1, Math.ceil(orders.length / ORDERS_PAGE_SIZE));
-  const pagedOrders = useMemo(
-    () => orders.slice((page - 1) * ORDERS_PAGE_SIZE, page * ORDERS_PAGE_SIZE),
-    [orders, page],
-  );
-
-  const toggleExpanded = useCallback((orderId: string) => {
-    setExpandedKeys((keys) =>
-      keys.includes(orderId)
-        ? keys.filter((k) => k !== orderId)
-        : [...keys, orderId],
-    );
-  }, []);
-
-  const orderColumns: DataTableColumn<MyOrder>[] = [
-    {
-      id: "order",
-      header: t("orders.colOrder"),
-      cell: (o) => (
-        <span className="flex flex-col">
-          <span className="text-label-md text-foreground">
-            {o.tenantName ?? "—"}
-            {o.workspaceName ? (
-              <span className="font-normal text-muted-foreground">
-                {" "}
-                · {o.workspaceName}
-              </span>
-            ) : null}
-          </span>
-          <span className="font-mono text-body-sm text-muted-foreground">
-            {o.orderNo}
-          </span>
-        </span>
-      ),
-    },
-    {
-      id: "product",
-      header: t("orders.colProduct"),
-      cell: (o) => (
-        <span className="flex flex-col">
-          <span className="text-label-md text-foreground">
-            {o.productName ?? o.planName}
-          </span>
-          <span className="text-body-sm text-muted-foreground">
-            {o.tier ? t(`tier.${o.tier}`) : o.planName}
-          </span>
-        </span>
-      ),
-    },
-    {
-      id: "cycle",
-      header: t("orders.colCycle"),
-      width: "sm",
-      cell: (o) =>
-        Number.parseFloat(o.amount) === 0
-          ? "—"
-          : o.cycleUnit === "year"
-            ? t("cycle.year")
-            : t("cycle.month"),
-    },
-    {
-      id: "amount",
-      header: t("orders.colAmount"),
-      align: "right",
-      cell: (o) => (
-        <span className="flex flex-col items-end tabular-nums">
-          <span className="font-semibold text-foreground">
-            {money(o.amount, o.currency)}
-          </span>
-          {Number.parseFloat(o.voucherOff) > 0 ? (
-            <span className="text-body-sm text-muted-foreground">
-              {t("orders.voucherOff", {
-                amount: money(o.voucherOff, o.currency),
-              })}
-            </span>
-          ) : null}
-        </span>
-      ),
-    },
-    {
-      id: "payStatus",
-      header: t("orders.colPayStatus"),
-      align: "center",
-      cell: (o) => {
-        const zeroSettled =
-          o.orderStatus === "completed" && Number.parseFloat(o.amount) === 0;
-        const axis = PAY_AXIS[o.orderStatus];
-        return (
-          <StatusBadge tone={axis.tone}>
-            {zeroSettled ? t("payAxis.settledZero") : t(`payAxis.${axis.key}`)}
-            {o.orderStatus === "pending_payment" && o.expireAt ? (
-              <span className="tabular-nums">
-                {" "}
-                {formatRemain(o.expireAt, now)}
-              </span>
-            ) : null}
-          </StatusBadge>
-        );
-      },
-    },
-    {
-      id: "svcStatus",
-      header: t("orders.colSvcStatus"),
-      align: "center",
-      cell: (o) => {
-        const axis = SVC_AXIS[o.orderStatus];
-        return (
-          <StatusBadge tone={axis.tone}>{t(`svcAxis.${axis.key}`)}</StatusBadge>
-        );
-      },
-    },
-    {
-      id: "placed",
-      header: t("orders.colPlaced"),
-      cell: (o) => (
-        <span className="flex flex-col tabular-nums">
-          <span className="text-foreground">{fmtDate(o.createdAt)}</span>
-          <span className="text-body-sm text-muted-foreground">
-            {fmtTime(o.createdAt)}
-          </span>
-        </span>
-      ),
-    },
-  ];
-
-  function orderMenuItems(o: MyOrder): ActionMenuItem[] {
-    const cancellable =
-      o.orderStatus === "pending_payment" &&
-      Number.parseFloat(o.paidAmount) === 0;
-    return [
-      {
-        id: "detail",
-        label: t("orders.menuDetail"),
-        icon: "list-checks",
-        onSelect: () => toggleExpanded(o.orderId),
-      },
-      // 取消订单 / 退订 = tenant.billing.manage(与 BFF 守卫同码);无码的人只看到详情与开票入口。
-      ...(canManageBilling
-        ? [
-            {
-              id: "cancel",
-              label:
-                cancelingId === o.orderId
-                  ? t("orders.menuCancelBusy")
-                  : t("orders.menuCancel"),
-              icon: "x" as const,
-              danger: true as const,
-              disabled: !cancellable || cancelingId === o.orderId,
-              hint: cancellable ? undefined : t("orders.menuCancelHint"),
-              confirm: withLabels({
-                verb: t("orders.cancelVerb"),
-                target: o.orderNo,
-                consequence: t("orders.cancelConsequence"),
-                onConfirm: () => handleCancelOrder(o.orderId),
-              }),
-            },
-            {
-              // 退订:对订单履约后挂上的订阅落锤(o.subscriptionId,批 1)。此前把
-              // orderId 当订阅 id 提交,billing.orders 与 metering.subscriptions 是两
-              // 张表,必然 400。
-              id: "unsubscribe",
-              label: t("orders.menuUnsubscribe"),
-              danger: true as const,
-              disabled: o.orderStatus !== "completed" || !o.subscriptionId,
-              ...(o.orderStatus !== "completed"
-                ? { hint: t("orders.menuUnsubscribeHint") }
-                : !o.subscriptionId
-                  ? { hint: t("orders.menuUnsubscribeNoSub") }
-                  : {}),
-              /* 与产品卡上的退订是同一件事、同一份后果——所以用同一份文案与同一个
-                 落锤,而不是各写一遍。 */
-              confirm: withLabels({
-                verb: t("card.unsubscribeVerb"),
-                target: o.productName ?? "",
-                consequence: t("card.unsubscribeConsequence"),
-                cancelLabel: t("card.unsubscribeKeep"),
-                onConfirm: () =>
-                  handleUnsubscribe(
-                    products.find(
-                      (p) => p.subscriptionId === o.subscriptionId,
-                    ) ??
-                      ({
-                        subscriptionId: o.subscriptionId ?? "",
-                        productName: o.productName,
-                      } as SubscribedProduct),
-                  ),
-              }),
-            },
-          ]
-        : []),
-      {
-        // 申请发票已上线(owner 2026-08-21 归集账单管理):深链到账单管理页,
-        // 对已结清账单行内点「申请发票」。
-        id: "invoice",
-        label: t("orders.menuInvoice"),
-        onSelect: () => router.push("/billing"),
-      },
-    ];
-  }
+  }, [products, t, loadFailed]);
 
   return (
     <ViewLayout>
@@ -625,10 +324,31 @@ export function SubscriptionPage() {
         />
       ) : null}
 
-      {/* 本页业务 3 个指标 → columns=3 铺满一行（列数随业务定，不写死）。 */}
+      {/* 待付订单只提示、不落台账:台账在费用中心(owner 2026-09-06 拆页) */}
+      {!loadFailed && pendingOrders.length > 0 ? (
+        <Banner
+          tone="warning"
+          title={t("pendingBanner.title", { count: pendingOrders.length })}
+          description={
+            nextDeadline
+              ? t("pendingBanner.deadline", {
+                  time: `${fmtDate(nextDeadline)} ${fmtTime(nextDeadline)}`,
+                })
+              : t("pendingBanner.description")
+          }
+          action={
+            <Button size="md" onClick={() => router.push("/billing")}>
+              <Icon name="receipt" size="xs" fallback="placeholder" />
+              <span>{t("pendingBanner.action")}</span>
+            </Button>
+          }
+        />
+      ) : null}
+
+      {/* 本页业务 2 个指标 → columns=2（列数随业务定，不写死）。 */}
       <MetricGrid
         items={stats}
-        columns={3}
+        columns={2}
         loading={loading}
         aria-label={t("stats.groupLabel")}
       />
@@ -682,94 +402,7 @@ export function SubscriptionPage() {
         )}
       </PageSection>
 
-      {/* ② 我的订单 */}
-      <PageSection
-        icon="receipt"
-        level={2}
-        title={t("orders.title")}
-        description={t("orders.description")}
-      >
-        <DataTable<MyOrder>
-          labels={tableLabels}
-          columns={orderColumns}
-          rows={pagedOrders}
-          rowKey={(o) => o.orderId}
-          loading={loading}
-          indexStart={(page - 1) * ORDERS_PAGE_SIZE + 1}
-          expandedContent={(o) => (
-            <OrderDetailPanel
-              order={o}
-              countdown={
-                o.orderStatus === "pending_payment" && o.expireAt
-                  ? t("detail.payRemain", {
-                      time: formatRemain(o.expireAt, now),
-                    })
-                  : null
-              }
-              fmtLocale={appLocale}
-            />
-          )}
-          expandedKeys={expandedKeys}
-          onExpandedChange={setExpandedKeys}
-          rowActions={(o) => (
-            // 单操作列(2026-08-21 owner 整改:此前 去支付 独占一根内容列,
-            // 与 ⋯ 菜单成了两根操作列):主操作 + 菜单同格,操作列 min 64 自适应。
-            <span className="inline-flex items-center justify-center gap-xs">
-              {o.orderStatus === "pending_payment" ? (
-                <Button
-                  size="sm"
-                  onClick={() => router.push(`/subscribe/pay/${o.orderId}`)}
-                >
-                  {t("orders.payNow")}
-                </Button>
-              ) : null}
-              <ActionMenu
-                label={t("orders.menuLabel")}
-                items={orderMenuItems(o)}
-              />
-            </span>
-          )}
-          empty={
-            loadFailed ? (
-              <LoadFailedEmpty />
-            ) : (
-              <EmptyState title={t("orders.empty")} />
-            )
-          }
-          footer={
-            <div className="flex w-full items-center justify-between gap-md text-body-sm text-muted-foreground">
-              <span className="tabular-nums">
-                {loadFailed ? "—" : t("orders.total", { count: orders.length })}
-              </span>
-              {pageCount > 1 ? (
-                <span className="flex items-center gap-xs">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    {t("orders.prevPage")}
-                  </Button>
-                  <span className="tabular-nums">
-                    {page} / {pageCount}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={page >= pageCount}
-                    onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                  >
-                    {t("orders.nextPage")}
-                  </Button>
-                </span>
-              ) : null}
-            </div>
-          }
-        />
-      </PageSection>
-
-      {/* ③ 新品推荐 */}
+      {/* ② 新品推荐 */}
       {!loading && recommended.length > 0 ? (
         <PageSection
           icon="sparkles"
