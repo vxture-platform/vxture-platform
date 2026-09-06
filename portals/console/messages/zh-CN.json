@@ -302,7 +302,6 @@
     "sections": {
       "workspace": "工作空间",
       "accountTenant": "账户与租户",
-      "membersPermissions": "成员与权限",
       "subscriptionBilling": "订阅与计费",
       "advancedSettings": "高级设置",
       "platform": "平台能力"
@@ -330,14 +329,6 @@
       "members": {
         "label": "成员管理",
         "description": "邀请、访问审查与团队成员管理"
-      },
-      "roles": {
-        "label": "角色管理",
-        "description": "租户内管理员、成员、只读等角色定义"
-      },
-      "invitations": {
-        "label": "邀请记录",
-        "description": "待接受邀请与历史邀请记录"
       },
       "subscription": {
         "label": "产品订阅",
@@ -395,7 +386,9 @@
     "profile": "账号信息",
     "personalTenant": "租户信息",
     "organization": "组织信息",
-    "members": "成员",
+    "members": "成员管理",
+    "membersInvitations": "邀请记录",
+    "membersRoles": "角色与权限",
     "roles": "角色与权限",
     "invitations": "邀请记录",
     "subscription": "产品订阅",
@@ -1314,7 +1307,9 @@
       "title": "成员管理",
       "description": "管理当前租户的成员、角色和访问状态。",
       "addMember": "新增成员",
-      "inviteMember": "邀请成员"
+      "inviteMember": "邀请成员",
+      "viewRoles": "角色与权限",
+      "viewInvitations": "邀请记录"
     },
     "table": {
       "toolbarTitle": "{count} 人",
@@ -1375,11 +1370,6 @@
       "enable": "批量启用",
       "unlink": "批量解除关联",
       "noun": "人"
-    },
-    "pagination": {
-      "summary": "第 {page} / {totalPages} 页，共 {total} 人",
-      "previous": "上一页",
-      "next": "下一页"
     },
     "dialogs": {
       "create": {
@@ -1540,7 +1530,8 @@
       "scopeTitle": "治理 ≠ 业务",
       "scopeBody": "治理角色只闸成员/角色/设置/商业面等治理动作;各产品内的功能权限由产品按订阅档位自行门控"
     },
-    "loadFailed": "角色与权限目录读取失败,请稍后重试"
+    "loadFailed": "角色与权限目录读取失败,请稍后重试",
+    "backToMembers": "返回成员管理"
   },
   "modelPlatformPage": {
     "header": {
@@ -2784,9 +2775,9 @@
     }
   },
   "invitationsPage": {
-    "title": "邀请管理",
+    "title": "邀请记录",
     "description": "发出的成员邀请与状态;发起新邀请在成员管理页完成",
-    "inviteAction": "去邀请成员",
+    "backToMembers": "返回成员管理",
     "rowMenu": "邀请操作",
     "revoke": "撤销邀请",
     "revokeHint": "仅待接受的邀请可撤销",
@@ -3239,5 +3230,13 @@
     "selectAll": "全选本页",
     "deselectAll": "取消本页全选",
     "selectRow": "选择本行"
+  },
+  "pagination": {
+    "total": "共 {total} 条",
+    "totalFiltered": "共 {total} 条,当前筛选 {filtered} 条",
+    "previous": "上一页",
+    "next": "下一页",
+    "pageSizeLabel": "每页条数",
+    "pageSizeOption": "每页 {size} 条"
   }
 }

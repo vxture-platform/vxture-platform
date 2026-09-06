@@ -1,12 +1,17 @@
 "use client";
 
 /**
- * MembersPage.tsx — 成员管理(批 2 收口)。
+ * MembersPage.tsx — 成员管理(批 2 收口;批 9 收编邀请记录与角色管理)。
  * @package @vxture/console
  * @layer Application
  * @category Module
  *
- * 目录 = 在册成员(活跃 / 已禁用)+ 待接受的邀请(Invited 行,id = 邀请 id)。
+ * 批 9(owner 2026-09-06):租户侧最终只留「账号信息 / 租户信息 / 成员管理」三个板块,
+ * 原「成员与权限」分组撤销。本页是成员管理的主页 = 成员目录(在册成员 + 待接受的
+ * 邀请行,id = 邀请 id),另外两块收成它的**二级页**,入口在页头右侧:
+ *   · `/members/invitations` 邀请记录 —— 发出过的全部邀请台账(持 member.manage);
+ *   · `/members/roles`       角色与权限 —— 平台统一定义、租户不可自定义,只读。
+ *
  * 动作门与 BFF 守卫同一套码(批 0a):邀请 / 添加 / 停用 / 恢复 / 重置 / 解除 =
  * member.manage,改角色 = role.assign。owner 与本人的行在这里就把停用 / 解除 /
  * 改角色关掉(带提示),BFF 再拒一遍——两边都拒,页面这边只是不让人白点。
@@ -36,7 +41,6 @@ import {
   ListCardGrid,
   ListPageTemplate,
   NativeSelect,
-  Pagination,
   StatusBadge,
   type ActionMenuItem,
   type FilterBarView,
@@ -67,6 +71,8 @@ import { useTableLabels } from "@/lib/table";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
 import { useConfirmLabels } from "@/lib/destructive";
+import { useRouter } from "@/lib/i18n/navigation";
+import { ListPagination } from "@/components/pagination";
 import {
   LoadFailedBanner,
   LoadFailedEmpty,
@@ -107,6 +113,7 @@ export function MembersPage() {
   const t = useTranslations("membersPage");
   const tableLabels = useTableLabels();
   const withLabels = useConfirmLabels();
+  const router = useRouter();
   const { session } = useConsoleSession();
   const [members, setMembers] = useState<MemberRecord[]>([]);
   const [roles, setRoles] = useState<TenantRoleRecord[]>([]);
@@ -496,7 +503,9 @@ export function MembersPage() {
   );
 
   const selected = members.find((member) => member.id === selectedId) ?? null;
-  const pager = useListPagination(filtered);
+  /* 初始档给定值:console 的分页档位是 10/20/50/100(没有 DS 默认的 "auto" 自适应
+     档),而 `useListPagination` 的默认初值正是 "auto"——不给,分段控件一格都选不中。 */
+  const pager = useListPagination(filtered, 20);
   const pagedMembers = pager.pageRows;
   const selectedCount = members.filter((member) =>
     selectedIds.has(member.id),
@@ -719,8 +728,7 @@ export function MembersPage() {
   );
 
   const pagination = (
-    <Pagination
-      className="w-full"
+    <ListPagination
       page={pager.page}
       pageCount={pager.pageCount}
       total={members.length}
@@ -728,8 +736,6 @@ export function MembersPage() {
       pageSize={pager.pageSize}
       onPageSizeChange={pager.onPageSizeChange}
       onPageChange={pager.onPageChange}
-      previousLabel={t("pagination.previous")}
-      nextLabel={t("pagination.next")}
     />
   );
 
@@ -776,6 +782,30 @@ export function MembersPage() {
             icon="users"
             title={t("header.title")}
             description={t("header.description")}
+            action={
+              /* 两个二级页的入口。它们是**去处**不是本页的动作,所以放页头右侧,
+                 不与工具条上的新增 / 邀请挤在一起——那两个才是作用在本页目录上的。 */
+              <>
+                {canManageMembers ? (
+                  <Button
+                    variant="outline"
+                    size="md"
+                    onClick={() => router.push("/members/invitations")}
+                  >
+                    <Icon name="mail" size="xs" fallback="placeholder" />
+                    <span>{t("header.viewInvitations")}</span>
+                  </Button>
+                ) : null}
+                <Button
+                  variant="outline"
+                  size="md"
+                  onClick={() => router.push("/members/roles")}
+                >
+                  <Icon name="shield-check" size="xs" fallback="placeholder" />
+                  <span>{t("header.viewRoles")}</span>
+                </Button>
+              </>
+            }
           />
         }
         filters={

@@ -1,10 +1,14 @@
 "use client";
 
 /**
- * InvitationsPage.tsx — 邀请管理(批 2 收口)。
+ * InvitationsPage.tsx — 邀请记录(成员管理的二级页)。
  * @package @vxture/console
  * @layer Application
  * @category Module
+ *
+ * 路由 `/members/invitations`(旧地址 `/invitations` 只剩跳转)。批 9(owner
+ * 2026-09-06):「成员与权限」分组撤销后,邀请记录与角色管理都收成成员管理的二级页,
+ * 不再与它在侧栏并列——它们是成员管理的下一层,不是同一层的三件事。
  *
  * 组织租户的成员邀请台账:发出的邀请、状态(待接受 / 已接受 / 已过期 / 已撤销)、
  * 撤销与重发。发起邀请仍在成员管理页(邀请即目录里的 Invited 行,两页一体)。
@@ -22,7 +26,9 @@ import {
   Button,
   DataTable,
   EmptyState,
+  Icon,
   StatusBadge,
+  useListPagination,
   ViewHeader,
   ViewLayout,
 } from "@vxture/design-system";
@@ -40,9 +46,10 @@ import {
   type ConsoleInvitation,
   type InviteMemberResult,
 } from "@/api/console-bff";
-import { useRouter } from "@/lib/i18n/navigation";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { useRouter } from "@/lib/i18n/navigation";
 import { PageSection, SignalList } from "@/layout/shell";
+import { ListPagination } from "@/components/pagination";
 import {
   LoadFailedBanner,
   LoadFailedEmpty,
@@ -84,6 +91,7 @@ export function InvitationsPage() {
     null,
   );
   const withLabels = useConfirmLabels();
+  const pager = useListPagination(rows, 10);
 
   const reload = useCallback(() => fetchInvitations().then(setRows), []);
 
@@ -253,20 +261,16 @@ export function InvitationsPage() {
         title={t("title")}
         description={t("description")}
         action={
-          <Button size="md" onClick={() => router.push("/members")}>
-            {t("inviteAction")}
+          <Button
+            variant="outline"
+            size="md"
+            onClick={() => router.push("/members")}
+          >
+            <Icon name="arrow-left" size="xs" fallback="placeholder" />
+            <span>{t("backToMembers")}</span>
           </Button>
         }
       />
-
-      {loadFailed ? (
-        <LoadFailedBanner
-          onRetry={() => setReloadKey((k) => k + 1)}
-          retrying={loading}
-        />
-      ) : null}
-      {message ? <Banner tone="success" title={message} /> : null}
-      {error ? <Banner tone="danger" title={error} /> : null}
 
       <PageSection
         icon="mail"
@@ -274,24 +278,45 @@ export function InvitationsPage() {
         title={t("table.title")}
         description={t("table.description")}
       >
-        <DataTable<ConsoleInvitation>
-          labels={tableLabels}
-          columns={columns}
-          rows={rows}
-          rowKey={(r) => r.id}
-          loading={loading}
-          indexStart={1}
-          rowActions={(r) => (
-            <ActionMenu label={t("rowMenu")} items={menuItems(r)} />
-          )}
-          empty={
-            loadFailed ? (
-              <LoadFailedEmpty />
-            ) : (
-              <EmptyState title={t("table.empty")} />
-            )
-          }
-        />
+        <div className="flex flex-col gap-md">
+          {loadFailed ? (
+            <LoadFailedBanner
+              onRetry={() => setReloadKey((k) => k + 1)}
+              retrying={loading}
+            />
+          ) : null}
+          {message ? <Banner tone="success" title={message} /> : null}
+          {error ? <Banner tone="danger" title={error} /> : null}
+
+          <DataTable<ConsoleInvitation>
+            labels={tableLabels}
+            columns={columns}
+            rows={pager.pageRows}
+            rowKey={(r) => r.id}
+            loading={loading}
+            indexStart={pager.indexStart}
+            rowActions={(r) => (
+              <ActionMenu label={t("rowMenu")} items={menuItems(r)} />
+            )}
+            empty={
+              loadFailed ? (
+                <LoadFailedEmpty />
+              ) : (
+                <EmptyState title={t("table.empty")} />
+              )
+            }
+            footer={
+              <ListPagination
+                page={pager.page}
+                pageCount={pager.pageCount}
+                total={rows.length}
+                pageSize={pager.pageSize}
+                onPageSizeChange={pager.onPageSizeChange}
+                onPageChange={pager.onPageChange}
+              />
+            }
+          />
+        </div>
       </PageSection>
 
       <PageSection

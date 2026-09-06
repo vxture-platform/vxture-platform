@@ -99,10 +99,7 @@ export const TENANT_MENU_CODES = [
   "tenant.menu.account_tenant",
   "tenant.menu.profile",
   "tenant.menu.personal_tenant",
-  "tenant.menu.members_permissions",
   "tenant.menu.members",
-  "tenant.menu.roles",
-  "tenant.menu.invitations",
   "tenant.menu.subscription_billing",
   "tenant.menu.subscription",
   "tenant.menu.billing",
@@ -140,11 +137,9 @@ export const TENANT_MENU_TREE: readonly TenantMenuNode[] = [
           "tenant.delete",
         ],
       },
-    ],
-  },
-  {
-    code: "tenant.menu.members_permissions",
-    children: [
+      // 批 9(owner 2026-09-06):「成员与权限」整组撤销,成员管理并入本组;
+      // 邀请记录成为成员管理页里的一段,角色管理成为它的二级页 `/members/roles`
+      // ——二级页不进菜单树(与 `/tenant/verification` 同,树只收侧栏那一层)。
       {
         code: "tenant.menu.members",
         route: "/members",
@@ -154,8 +149,6 @@ export const TENANT_MENU_TREE: readonly TenantMenuNode[] = [
           "tenant.role.assign",
         ],
       },
-      { code: "tenant.menu.roles", route: "/roles" },
-      { code: "tenant.menu.invitations", route: "/invitations" },
     ],
   },
   {

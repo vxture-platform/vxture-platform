@@ -2,10 +2,14 @@
 
 /**
  * RolesPage.tsx — 角色与权限(P0 分权,2026-08-21 去 Planned 重建;2026-09-04 批 0a
- * 权限配置体系:矩阵改按目录树呈现)。
+ * 权限配置体系:矩阵改按目录树呈现;2026-09-06 批 9 成为成员管理的二级页)。
  * @package @vxture/console
  * @layer Application
  * @category Module
+ *
+ * 路由 `/members/roles`(旧地址 `/roles` 只剩跳转)。owner 2026-09-06:角色是平台
+ * 整体定义、当前不支持租户自定义,所以它不该在侧栏与成员管理并列,而是成员管理
+ * 底下的一张只读目录——**只提供查看**。
  *
  * 定位 = **只读角色目录 + 权限矩阵**(data_identity_200 §6/§13 裁定:角色是
  * 全局固定目录,自定义角色属未来待办——roles 无 tenant_id,放开写在 DB 层
@@ -21,6 +25,7 @@ import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import {
   Badge,
+  Button,
   DataTable,
   EmptyState,
   Icon,
@@ -42,6 +47,7 @@ import type {
   TenantRoleRecord,
 } from "@/entities/console";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { useRouter } from "@/lib/i18n/navigation";
 import { PageSection, SignalList } from "@/layout/shell";
 
 /** 固定目录的 5 个角色码与目录里的操作码(权威在 core-utils);未知码回退服务端名称。 */
@@ -78,6 +84,7 @@ export function RolesPage() {
   const t = useTranslations("rolesPage");
   const tableLabels = useTableLabels();
   const tSidebar = useTranslations("sidebar");
+  const router = useRouter();
   const { session } = useConsoleSession();
 
   const [roles, setRoles] = useState<TenantRoleRecord[]>([]);
@@ -333,6 +340,16 @@ export function RolesPage() {
         icon="shield-check"
         title={t("title")}
         description={t("description")}
+        action={
+          <Button
+            variant="outline"
+            size="md"
+            onClick={() => router.push("/members")}
+          >
+            <Icon name="arrow-left" size="xs" fallback="placeholder" />
+            <span>{t("backToMembers")}</span>
+          </Button>
+        }
       />
 
       <MetricGrid
