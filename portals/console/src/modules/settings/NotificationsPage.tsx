@@ -10,6 +10,7 @@ import {
   Icon,
   StatusBadge,
   ViewHeader,
+  TableTitleCell,
 } from "@vxture/design-system";
 import { LoadFailedBanner } from "@/components/load/LoadFailed";
 import type { DataTableColumn, IconName } from "@vxture/design-system";
@@ -225,21 +226,19 @@ export function NotificationsPage() {
       id: "topic",
       header: t("topics.columns.topic"),
       cell: (topic) => (
-        <span className="flex min-w-0 items-center gap-sm">
-          <Icon
-            name={topic.icon}
-            size="sm"
-            fallback="placeholder"
-            aria-hidden="true"
-            className="shrink-0 text-muted-foreground"
-          />
-          <strong className="min-w-0 truncate text-label-md text-foreground">
-            {t(`topics.items.${topic.key}.title`)}
-          </strong>
-          {topic.lockedChannels?.length ? (
-            <StatusBadge tone="neutral">{t("topics.policyLocked")}</StatusBadge>
-          ) : null}
-        </span>
+        <TableTitleCell
+          icon={topic.icon}
+          title={t(`topics.items.${topic.key}.title`)}
+          {...(topic.lockedChannels?.length
+            ? {
+                titleSuffix: (
+                  <StatusBadge tone="neutral">
+                    {t("topics.policyLocked")}
+                  </StatusBadge>
+                ),
+              }
+            : {})}
+        />
       ),
     },
     ...CHANNELS.map<DataTableColumn<TopicPreference>>((channel) => ({

@@ -367,7 +367,7 @@ export function BillingPage() {
       // 金额列走 DS 的 numeric 档:右对齐 + 右内边距 + tabular-nums,由件统一给。
       id: "amount",
       header: t("table.colAmount"),
-      align: "numeric",
+      align: "money",
       cell: (b) => (
         <span className="flex flex-col">
           <span className="font-semibold text-foreground">

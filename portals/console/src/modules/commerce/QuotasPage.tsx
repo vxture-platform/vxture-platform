@@ -46,6 +46,7 @@ import {
   StatusBadge,
   ViewHeader,
   ViewLayout,
+  TableTitleCell,
 } from "@vxture/design-system";
 import type {
   DataTableColumn,
@@ -340,18 +341,20 @@ export function QuotasPage() {
       id: "item",
       header: t("storage.colItem"),
       cell: (r) => (
-        <span className="flex items-center gap-sm">
-          <span className="text-foreground">{r.name}</span>
-          <Badge>
-            {r.source ? sourceLabel(r.source) : t("storage.usageOnly")}
-          </Badge>
-        </span>
+        <TableTitleCell
+          title={r.name}
+          titleSuffix={
+            <Badge>
+              {r.source ? sourceLabel(r.source) : t("storage.usageOnly")}
+            </Badge>
+          }
+        />
       ),
     },
     {
       id: "limit",
-      header: t("storage.colLimit"),
       align: "numeric",
+      header: t("storage.colLimit"),
       cell: (r) =>
         r.limitBytes !== null ? (
           <span className="tabular-nums font-medium text-foreground">
@@ -363,8 +366,8 @@ export function QuotasPage() {
     },
     {
       id: "used",
-      header: t("storage.colUsed"),
       align: "numeric",
+      header: t("storage.colUsed"),
       cell: (r) =>
         r.usedBytes !== null ? (
           <span className="tabular-nums text-info-text">
@@ -414,32 +417,28 @@ export function QuotasPage() {
       id: "source",
       header: t("credits.colSource"),
       cell: (p) => (
-        <span className="flex flex-col">
-          <span className="text-foreground">
-            {p.productName ?? sourceLabel(p.source)}
-          </span>
-          <span className="text-body-sm text-muted-foreground">
-            {sourceLabel(p.source)}
-          </span>
-        </span>
+        <TableTitleCell
+          title={p.productName ?? sourceLabel(p.source)}
+          description={sourceLabel(p.source)}
+        />
       ),
     },
     {
       id: "limit",
-      header: t("credits.colLimit"),
       align: "numeric",
+      header: t("credits.colLimit"),
       cell: (p) => <span className="tabular-nums">{fmtCount(p.limit)}</span>,
     },
     {
       id: "used",
-      header: t("credits.colUsed"),
       align: "numeric",
+      header: t("credits.colUsed"),
       cell: (p) => <span className="tabular-nums">{fmtCount(p.used)}</span>,
     },
     {
       id: "remaining",
-      header: t("credits.colRemaining"),
       align: "numeric",
+      header: t("credits.colRemaining"),
       cell: (p) => {
         const dry = p.limit > 0 && p.remaining <= 0;
         return (
@@ -553,16 +552,16 @@ export function QuotasPage() {
     },
     {
       id: "limit",
-      header: t("products.colLimit"),
       align: "numeric",
+      header: t("products.colLimit"),
       cell: (r) => (
         <span className="tabular-nums">{metricValue(r.metric, r.limit)}</span>
       ),
     },
     {
       id: "used",
-      header: t("products.colUsed"),
       align: "numeric",
+      header: t("products.colUsed"),
       cell: (r) =>
         r.metric === "storage.bytes" ? (
           // 存储是 WS 总账,池级 used 无意义 → 用 BFF 按产品算好的水位
@@ -577,8 +576,8 @@ export function QuotasPage() {
     },
     {
       id: "remaining",
-      header: t("products.colRemaining"),
       align: "numeric",
+      header: t("products.colRemaining"),
       cell: (r) =>
         r.metric === "storage.bytes" ? (
           <span className="tabular-nums text-muted-foreground">

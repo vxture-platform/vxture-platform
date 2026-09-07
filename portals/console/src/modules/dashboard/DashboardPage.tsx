@@ -26,6 +26,7 @@ import {
   Progress,
   StatusBadge,
   ViewHeader,
+  TableTitleCell,
 } from "@vxture/design-system";
 import type {
   DataTableColumn,
@@ -199,14 +200,12 @@ export function DashboardPage() {
       id: "billNo",
       header: t("bills.headers.billNo"),
       cell: (b) => (
-        <span className="flex flex-col">
-          <span className="font-mono text-label-md text-foreground">
-            {b.billNo}
-          </span>
-          <span className="text-body-sm text-muted-foreground tabular-nums">
-            {fmtDate(b.createdAt)}
-          </span>
-        </span>
+        <TableTitleCell
+          title={<span className="font-mono">{b.billNo}</span>}
+          description={
+            <span className="tabular-nums">{fmtDate(b.createdAt)}</span>
+          }
+        />
       ),
     },
     {
@@ -236,7 +235,7 @@ export function DashboardPage() {
     {
       id: "amount",
       header: t("bills.headers.amount"),
-      align: "numeric",
+      align: "money",
       cell: (b) => (
         <span className="tabular-nums font-semibold text-foreground">
           {money(b.payableAmount, b.currency)}
@@ -274,7 +273,6 @@ export function DashboardPage() {
     {
       id: "usage",
       header: t("quotas.headers.usage"),
-      align: "numeric",
       cell: (r) => (
         <span className="inline-flex items-baseline gap-xs tabular-nums">
           <span className="text-info-text">{quotaValue(r, r.used)}</span>

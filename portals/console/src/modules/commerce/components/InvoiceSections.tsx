@@ -33,6 +33,7 @@ import {
   Input,
   NativeSelect,
   StatusBadge,
+  TableTitleCell,
 } from "@vxture/design-system";
 import type {
   ActionMenuItem,
@@ -218,14 +219,14 @@ export function InvoiceSections({
       id: "invoiceNo",
       header: t("records.colNo"),
       cell: (r) => (
-        <span className="flex flex-col">
-          <span className="font-mono text-label-md text-foreground">
-            {r.invoiceNo}
-          </span>
-          <span className="text-body-sm text-muted-foreground tabular-nums">
-            {fmtDate(r.createdAt)} {fmtTime(r.createdAt)}
-          </span>
-        </span>
+        <TableTitleCell
+          title={<span className="font-mono">{r.invoiceNo}</span>}
+          description={
+            <span className="tabular-nums">
+              {fmtDate(r.createdAt)} {fmtTime(r.createdAt)}
+            </span>
+          }
+        />
       ),
     },
     {
@@ -253,7 +254,7 @@ export function InvoiceSections({
     {
       id: "amount",
       header: t("records.colAmount"),
-      align: "numeric",
+      align: "money",
       cell: (r) => (
         <span className="tabular-nums font-medium text-foreground">
           {money(r.invoiceAmount, r.currency)}

@@ -30,6 +30,7 @@ import {
   StatusBadge,
   ViewHeader,
   ViewLayout,
+  TableTitleCell,
 } from "@vxture/design-system";
 import type { ActionMenuItem, DataTableColumn } from "@vxture/design-system";
 import {
@@ -94,14 +95,12 @@ export function TenantVerificationPage() {
       header: t("history.colSubject"),
       // 主辅:企业名称在上、统一社会信用代码在下(等宽小字),一列两读不占两列
       cell: (r) => (
-        <span className="flex min-w-0 flex-col gap-2xs">
-          <span className="truncate text-label-md text-foreground">
-            {r.companyName ?? "—"}
-          </span>
-          <span className="font-mono text-body-sm text-muted-foreground">
-            {r.businessLicenseNo ?? "—"}
-          </span>
-        </span>
+        <TableTitleCell
+          title={r.companyName ?? "—"}
+          description={
+            <span className="font-mono">{r.businessLicenseNo ?? "—"}</span>
+          }
+        />
       ),
     },
     {

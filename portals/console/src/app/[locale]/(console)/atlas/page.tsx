@@ -18,6 +18,7 @@ import {
   MetricGrid,
   ViewHeader,
   ViewLayout,
+  TableTitleCell,
 } from "@vxture/design-system";
 import type { DataTableColumn } from "@vxture/design-system";
 
@@ -133,7 +134,11 @@ function AtlasPage() {
   ];
 
   const modelColumns: DataTableColumn<ModelRow>[] = [
-    { id: "model", header: t("models.colModel"), cell: (row) => row[0] },
+    {
+      id: "model",
+      header: t("models.colModel"),
+      cell: (row) => <TableTitleCell title={row[0]} />,
+    },
     { id: "provider", header: t("models.colProvider"), cell: (row) => row[1] },
     { id: "protocol", header: t("models.colProtocol"), cell: (row) => row[2] },
     {
@@ -146,7 +151,7 @@ function AtlasPage() {
     {
       id: "product",
       header: t("entitlements.colProduct"),
-      cell: (row) => row[0],
+      cell: (row) => <TableTitleCell title={row[0]} />,
     },
     { id: "tier", header: t("entitlements.colTier"), cell: (row) => row[1] },
     {
@@ -161,7 +166,11 @@ function AtlasPage() {
     },
   ];
   const quotaColumns: DataTableColumn<QuotaRow>[] = [
-    { id: "metric", header: t("quotas.colMetric"), cell: (row) => row[0] },
+    {
+      id: "metric",
+      header: t("quotas.colMetric"),
+      cell: (row) => <TableTitleCell title={row[0]} />,
+    },
     {
       id: "remaining",
       header: t("quotas.colRemaining"),
@@ -171,14 +180,23 @@ function AtlasPage() {
     { id: "tier", header: t("quotas.colTier"), cell: (row) => row[3] },
   ];
   const usageColumns: DataTableColumn<UsageRow>[] = [
-    { id: "model", header: t("usage.colModel"), cell: (row) => row[0] },
+    {
+      id: "model",
+      header: t("usage.colModel"),
+      cell: (row) => <TableTitleCell title={row[0]} />,
+    },
     { id: "provider", header: t("usage.colProvider"), cell: (row) => row[1] },
-    { id: "requests", header: t("usage.colRequests"), cell: (row) => row[2] },
+    {
+      id: "requests",
+      header: t("usage.colRequests"),
+      align: "numeric",
+      cell: (row) => row[2],
+    },
     {
       id: "tokens",
+      align: "numeric",
       header: t("usage.colTokens"),
       cell: (row) => row[3],
-      align: "numeric",
     },
   ];
 

@@ -31,6 +31,7 @@ import {
   useListPagination,
   ViewHeader,
   ViewLayout,
+  TableTitleCell,
 } from "@vxture/design-system";
 import type {
   ActionMenuItem,
@@ -188,12 +189,10 @@ export function InvitationsPage() {
       id: "email",
       header: t("table.colEmail"),
       cell: (r) => (
-        <span className="flex flex-col">
-          <span className="text-foreground">{r.email}</span>
-          <span className="text-body-sm text-muted-foreground">
-            {t("table.invitedBy", { name: r.inviterName ?? "—" })}
-          </span>
-        </span>
+        <TableTitleCell
+          title={r.email}
+          description={t("table.invitedBy", { name: r.inviterName ?? "—" })}
+        />
       ),
     },
     {

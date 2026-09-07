@@ -38,6 +38,7 @@ import {
   StatusBadge,
   ViewHeader,
   ViewLayout,
+  TableTitleCell,
 } from "@vxture/design-system";
 import type { DataTableColumn, MetricGridItem } from "@vxture/design-system";
 import {
@@ -215,12 +216,10 @@ export function UsageRecordsPage() {
       id: "at",
       header: t("table.colAt"),
       cell: (e) => (
-        <span className="flex flex-col tabular-nums">
-          <span className="text-foreground">{fmtDate(e.at)}</span>
-          <span className="text-body-sm text-muted-foreground">
-            {fmtTime(e.at)}
-          </span>
-        </span>
+        <TableTitleCell
+          title={<span className="tabular-nums">{fmtDate(e.at)}</span>}
+          description={<span className="tabular-nums">{fmtTime(e.at)}</span>}
+        />
       ),
     },
     {
@@ -237,8 +236,8 @@ export function UsageRecordsPage() {
     },
     {
       id: "amount",
-      header: t("table.colAmount"),
       align: "numeric",
+      header: t("table.colAmount"),
       cell: (e) => {
         // 申请 ≠ 实扣 = 这次没能全额扣到(超额准入自愈)。差额直接写在行上,
         // 这正是「我调用了为什么没扣」的答案;相等时不出副行,免得每行都挂一句废话。
