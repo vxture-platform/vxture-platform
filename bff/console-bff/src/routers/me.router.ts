@@ -161,6 +161,13 @@ export class MeRouter {
       throw new BadRequestException("Unknown provider");
     }
     await this.sessionAggregator.removeUserIdentity(req.user.id, provider);
+    /* 安全档审计（owner 2026-09-08）：审计日志的第一用途是账号被接管时复盘。
+       解绑三方登录是攻击者常做的第一步（断掉本人的找回路径），必须留痕。 */
+    auditCustomerAction(this.pool, req, {
+      action: "account.identity.unbind",
+      resourceType: "identity",
+      resourceId: provider,
+    });
     return { ok: true };
   }
 
@@ -203,14 +210,26 @@ export class MeRouter {
     if (body?.acknowledged !== true) {
       throw new BadRequestException("acknowledgement_required");
     }
-    return this.accountDeletion.request(req.user.id, req.ip);
+    const requested = await this.accountDeletion.request(req.user.id, req.ip);
+    auditCustomerAction(this.pool, req, {
+      action: "account.deletion.request",
+      resourceType: "account",
+      resourceId: req.user.id,
+    });
+    return requested;
   }
 
   /** 保留期内撤销删除并重新启用。 */
   @Post("deletion/cancel")
   async cancelAccountDeletion(@Req() req: Request & RequestContext) {
     if (!req.user) throw new UnauthorizedException("No active session");
-    return this.accountDeletion.cancel(req.user.id);
+    const cancelled = await this.accountDeletion.cancel(req.user.id);
+    auditCustomerAction(this.pool, req, {
+      action: "account.deletion.cancel",
+      resourceType: "account",
+      resourceId: req.user.id,
+    });
+    return cancelled;
   }
 
   @Get("workspaces")
@@ -268,6 +287,14 @@ export class MeRouter {
       req.user.id,
       sid,
     );
+    /* 只在真吊销到时记：没命中的 sid 是无效请求，记了会把日志灌满噪音。 */
+    if (revoked) {
+      auditCustomerAction(this.pool, req, {
+        action: "account.session.revoke",
+        resourceType: "session",
+        resourceId: sid,
+      });
+    }
     return { revoked };
   }
 
@@ -512,6 +539,13 @@ export class MeRouter {
       body.currentPassword,
       body.nextPassword,
     );
+    /* 密码变更必须留痕。**不记 before/after** —— 审计表不是存凭据的地方，
+       记「什么时候被谁改的」就够复盘，记内容反而多一处泄露面。 */
+    auditCustomerAction(this.pool, req, {
+      action: "account.password.change",
+      resourceType: "account",
+      resourceId: req.user.id,
+    });
 
     return { status: "ok" as const };
   }
@@ -537,6 +571,11 @@ export class MeRouter {
       req.user.id,
       body.nextPassword,
     );
+    auditCustomerAction(this.pool, req, {
+      action: "account.password.set_initial",
+      resourceType: "account",
+      resourceId: req.user.id,
+    });
 
     return { status: "ok" as const };
   }
@@ -653,6 +692,14 @@ export class MeRouter {
       newPhone,
     );
     if (!profile) throw new NotFoundException("user_not_found");
+    /* 记**结果**不记过程：发验证码那几步是中间态，逐条记会把日志灌满而复盘时
+       真正要看的只有「号码在什么时候被换成了什么」。号码本身不入 after——
+       审计表不存联系方式明文，资源 id 记用户自己即可。 */
+    auditCustomerAction(this.pool, req, {
+      action: "account.phone.change",
+      resourceType: "account",
+      resourceId: req.user.id,
+    });
 
     return profile;
   }
@@ -757,6 +804,11 @@ export class MeRouter {
       verified.email,
     );
     if (!profile) throw new NotFoundException("user_not_found");
+    auditCustomerAction(this.pool, req, {
+      action: "account.email.change",
+      resourceType: "account",
+      resourceId: req.user.id,
+    });
     return profile;
   }
 
@@ -773,6 +825,14 @@ export class MeRouter {
       body.enabled,
     );
     if (!profile) throw new NotFoundException("user_not_found");
+    /* 开关登录方式改变的是「这个账号能被怎么登进来」，与密码同档。
+       开/关记进 after —— 这一条不是凭据，是配置。 */
+    auditCustomerAction(this.pool, req, {
+      action: "account.login_method.update",
+      resourceType: "account",
+      resourceId: req.user.id,
+      after: { accountLoginEnabled: body.enabled },
+    });
     return profile;
   }
 }

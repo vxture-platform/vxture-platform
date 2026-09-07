@@ -46,25 +46,54 @@ const RESULT_TONES: Record<ConsoleAuditLog["result"], StatusBadgeTone> = {
 };
 
 /** 已知动作 → i18n 键(点转下划线;未知动作回退原码,契约演进容错)。 */
+/**
+ * 已知动作码 —— **必须与 console-bff 实写的集合一致**（守卫 lint:audit-actions）。
+ *
+ * 不一致的两种后果都不报错、都只在界面上现形：
+ *  · UI 多 → 筛选项永远空列表，而空列表看起来像「没发生过」；
+ *  · UI 少 → 日志显示成原始码（`tenant.owner.transfer`），且筛不到——转让所有权、
+ *    注销租户这两条恰恰是这一页最该被看见的。
+ *
+ * 2026-09-08 清点：BFF 实写 37 个，UI 只认 18 个，差 19 个全是「少」。
+ */
 const KNOWN_ACTIONS = new Set([
-  "tenant.member.invite",
-  "tenant.member.update",
-  "tenant.member.disable",
-  "tenant.member.reset_password",
-  "tenant.member.remove",
-  "tenant.verification.submit",
-  "subscription.pause",
-  "subscription.resume",
-  "subscription.cancel",
-  "subscription.auto_renew_on",
-  "subscription.auto_renew_off",
+  "account.deletion.cancel",
+  "account.deletion.request",
+  "account.email.change",
+  "account.identity.unbind",
+  "account.login_method.update",
+  "account.password.change",
+  "account.password.set_initial",
+  "account.phone.change",
+  "account.session.revoke",
+  "addon.order.cancel",
   "addon.order.create",
   "addon.order.payment_declare",
-  "addon.order.cancel",
   "billing.address.create",
-  "billing.address.update",
   "billing.address.delete",
+  "billing.address.update",
   "billing.invoice.apply",
+  "order.refund_request",
+  "subscription.auto_renew_off",
+  "subscription.auto_renew_on",
+  "subscription.cancel",
+  "subscription.pause",
+  "subscription.resume",
+  "tenant.close",
+  "tenant.invitation.resend",
+  "tenant.invitation.revoke",
+  "tenant.member.add",
+  "tenant.member.disable",
+  "tenant.member.enable",
+  "tenant.member.invite",
+  "tenant.member.remove",
+  "tenant.member.reset_password",
+  "tenant.member.update",
+  "tenant.owner.transfer",
+  "tenant.role.create",
+  "tenant.role.delete",
+  "tenant.role.update",
+  "tenant.verification.submit",
 ]);
 
 type ResultFilter = "all" | "success" | "failure";
