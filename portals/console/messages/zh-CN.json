@@ -2052,6 +2052,8 @@
     },
     "invoicing": {
       "applyAction": "申请发票",
+      "mergeAction": "合并开票",
+      "mergeActionCount": "合并开票（已选 {count} 张）",
       "writeFailed": "操作失败,请稍后重试",
       "status": {
         "applying": "申请中",
@@ -2060,6 +2062,11 @@
         "sent": "已寄送",
         "rejected": "已驳回",
         "voided": "已作废"
+      },
+      "phase": {
+        "none": "未开票",
+        "processing": "开票中",
+        "issued": "已开票"
       },
       "type": {
         "electronic_general": "电子普票",
@@ -2124,6 +2131,7 @@
       "rowMenu": "账单操作",
       "applyHintUnpaid": "账单结清后可申请",
       "applyHintApplied": "已有开票申请",
+      "applyHintZero": "¥0 账单没有可开票的金额",
       "applyHintNoPermission": "你的角色没有发票管理权限"
     },
     "viewInvoices": "发票与抬头",

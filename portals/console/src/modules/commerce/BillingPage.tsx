@@ -61,13 +61,11 @@ import {
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
 import { PlannedBadge } from "@/components/planned";
+import { NumericCell } from "@/components/table/NumericCell";
 import { PageSection, SignalList } from "@/layout/shell";
 import { fmtDate, fmtTime } from "./components/hubModel";
 import { OrdersSection } from "./components/OrdersSection";
-import {
-  InvoiceSections,
-  RECEIPT_STATUS_TONES,
-} from "./components/InvoiceSections";
+import { InvoiceSections } from "./components/InvoiceSections";
 
 const BILLS_PAGE_SIZE = 10;
 
@@ -88,6 +86,30 @@ const KNOWN_BILL_TYPES = new Set([
   "adjustment",
   "prepaid_statement",
 ]);
+
+/**
+ * 发票列的三态（owner 2026-09-07）。库里 `invoice_status` 有六值，但客户在账单表上
+ * 要回答的只有一个问题:这张账单的票办到哪一步了。
+ *
+ * 为什么不压成两值:「已开票」是对税务凭证的事实陈述,票还没开出来就写「已开票」
+ * 是假的。`applying` / `approved` 归「开票中」。
+ * `rejected` / `voided` 不在这张表里——它们已被 `receiptByBill` 滤掉,账单因此回到
+ * 「未开票」,可以重新申请。
+ */
+type InvoicePhase = "none" | "processing" | "issued";
+
+const INVOICE_PHASE_BY_STATUS: Record<string, InvoicePhase> = {
+  applying: "processing",
+  approved: "processing",
+  issued: "issued",
+  sent: "issued",
+};
+
+const INVOICE_PHASE_TONES: Record<InvoicePhase, StatusBadgeTone> = {
+  none: "neutral",
+  processing: "info",
+  issued: "success",
+};
 
 export function BillingPage() {
   const t = useTranslations("billingPage");
@@ -118,6 +140,9 @@ export function BillingPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [page, setPage] = useState(1);
   const [applyBill, setApplyBill] = useState<ConsoleBill | null>(null);
+  /* 勾选（合并开票的候选集）。表是服务端分页的,勾选只在本页内有效——翻页即清空:
+   * 跨页累积会让「合并开票」把用户当下看不见的账单也开进一张票里。 */
+  const [selectedBillIds, setSelectedBillIds] = useState<readonly string[]>([]);
 
   /**
    * 开票的认证门(owner 2026-09-06):简易企业实名认证可订阅、不可开票。这里只为
@@ -215,6 +240,38 @@ export function BillingPage() {
     return map;
   }, [receipts]);
 
+  useEffect(() => {
+    setSelectedBillIds([]);
+  }, [page, reloadKey]);
+
+  /** 账单 → 发票三态。未开票 = 没有活跃申请（驳回/作废已在上面滤掉）。 */
+  const invoicePhase = useCallback(
+    (b: ConsoleBill): InvoicePhase => {
+      const receipt = receiptByBill.get(b.id);
+      if (!receipt) return "none";
+      return INVOICE_PHASE_BY_STATUS[receipt.invoiceStatus] ?? "processing";
+    },
+    [receiptByBill],
+  );
+
+  /**
+   * 可开票 = 已结清 ∧ 非零 ∧ 未开票（owner 2026-09-07）。
+   *
+   * 非零是这次新加的门:¥0 账单没有可开的税额,不该出现在开票链路里（¥0 订单同样
+   * 出账是既有口径,见文件头）。金额取 `payableAmount`——它是账单的应付面额,也是表上
+   * 显示、发票上要开的那个数。
+   *
+   * 同一个判据供三处用:行操作的「申请发票」是否可点、哪些行可勾选、以及勾选后
+   * 「合并开票」的候选集。三者必须同源,否则会出现「能勾但不能开」这种自相矛盾。
+   */
+  const canApplyInvoice = useCallback(
+    (b: ConsoleBill) =>
+      b.billStatus === "paid" &&
+      Number.parseFloat(b.payableAmount || "0") > 0 &&
+      invoicePhase(b) === "none",
+    [invoicePhase],
+  );
+
   const money = useCallback(
     (v: string, currency: string) =>
       formatCurrency(Number.parseFloat(v || "0"), appLocale, currency),
@@ -263,10 +320,16 @@ export function BillingPage() {
   // ── 账单表(服务端分页) ───────────────────────────────────────────────────
   const pageCount = Math.max(1, Math.ceil(billsTotal / BILLS_PAGE_SIZE));
 
+  /*
+   * 列对齐 = 全站表格规范（owner 2026-09-07,见 components/table/NumericCell.tsx 的
+   * 文件头）:选择列 / 序号列 / 操作列居中（DS 自管）;首列局左（DS 默认,不必写）;
+   * 数值列走 NumericCell;其余列一律显式 center——DS 的默认是 left,不写就不居中。
+   */
   const billColumns: DataTableColumn<ConsoleBill>[] = [
     {
       id: "billNo",
       header: t("table.colBillNo"),
+      // 首列（标题列）局左 = DS 默认,不显式标 align。
       cell: (b) => (
         <span className="flex flex-col">
           <span className="font-mono text-label-md text-foreground">
@@ -281,6 +344,7 @@ export function BillingPage() {
     {
       id: "cycle",
       header: t("table.colCycle"),
+      align: "center",
       cell: (b) =>
         b.cycleStartDate && b.cycleEndDate ? (
           <span className="tabular-nums">
@@ -293,6 +357,7 @@ export function BillingPage() {
     {
       id: "type",
       header: t("table.colType"),
+      align: "center",
       width: "sm",
       cell: (b) =>
         b.billType && KNOWN_BILL_TYPES.has(b.billType)
@@ -300,22 +365,21 @@ export function BillingPage() {
           : t("type.normal"),
     },
     {
+      // 数值列:居中的是那个等宽块,块内的值居右——所以标 center 不是 right。
       id: "amount",
       header: t("table.colAmount"),
-      align: "right",
+      align: "center",
       cell: (b) => (
-        <span className="flex flex-col items-end tabular-nums">
-          <span className="font-semibold text-foreground">
-            {money(b.payableAmount, b.currency)}
-          </span>
-          {Number.parseFloat(b.discountAmount) > 0 ? (
-            <span className="text-body-sm text-muted-foreground">
-              {t("table.discountOff", {
-                amount: money(b.discountAmount, b.currency),
-              })}
-            </span>
-          ) : null}
-        </span>
+        <NumericCell
+          value={money(b.payableAmount, b.currency)}
+          {...(Number.parseFloat(b.discountAmount) > 0
+            ? {
+                sub: t("table.discountOff", {
+                  amount: money(b.discountAmount, b.currency),
+                }),
+              }
+            : {})}
+        />
       ),
     },
     {
@@ -331,9 +395,10 @@ export function BillingPage() {
     {
       id: "paidAt",
       header: t("table.colPaidAt"),
+      align: "center",
       cell: (b) =>
         b.paidAt ? (
-          <span className="flex flex-col tabular-nums">
+          <span className="flex flex-col items-center tabular-nums">
             <span className="text-foreground">{fmtDate(b.paidAt)}</span>
             <span className="text-body-sm text-muted-foreground">
               {fmtTime(b.paidAt)}
@@ -348,14 +413,16 @@ export function BillingPage() {
       header: t("table.colInvoice"),
       align: "center",
       cell: (b) => {
-        // 状态列只表状态;申请动作按表格规范归操作列(rowActions)
-        const receipt = receiptByBill.get(b.id);
-        if (!receipt) return "—";
+        /*
+         * 状态列只表状态;申请动作按表格规范归操作列(rowActions)。
+         * 三态而非二态:见 INVOICE_PHASE_BY_STATUS 的注释——票没开出来不写「已开票」。
+         * 库里那六个状态的细分（申请中 / 已受理 / 已寄送…）在 /billing/invoices 台账里
+         * 逐条可查,本列不复述。
+         */
+        const phase = invoicePhase(b);
         return (
-          <StatusBadge
-            tone={RECEIPT_STATUS_TONES[receipt.invoiceStatus] ?? "neutral"}
-          >
-            {t(`invoicing.status.${receipt.invoiceStatus}`)}
+          <StatusBadge tone={INVOICE_PHASE_TONES[phase]}>
+            {t(`invoicing.phase.${phase}`)}
           </StatusBadge>
         );
       },
@@ -365,23 +432,24 @@ export function BillingPage() {
   // ── 账单行操作(表格规范:操作归 rowActions 单列)──────────────────────────
   const billActions = (b: ConsoleBill): ActionMenuItem[] => {
     const receipt = receiptByBill.get(b.id);
+    const zeroAmount = Number.parseFloat(b.payableAmount || "0") <= 0;
     return [
       {
         id: "apply-invoice",
         label: t("invoicing.applyAction"),
-        // 开票资格 = 已结清;不限来源(直接订阅付款/预付款扣费对账单同栈)。
+        // 开票资格 = 已结清 ∧ 非零 ∧ 未开票(canApplyInvoice 同一判据)。
+        // 不限来源(直接订阅付款/预付款扣费对账单同栈)。
         // 申请动作 = tenant.invoice.manage(与 BFF 守卫同码)。
-        disabled:
-          !canManageInvoices ||
-          b.billStatus !== "paid" ||
-          receipt !== undefined,
+        disabled: !canManageInvoices || !canApplyInvoice(b),
         ...(!canManageInvoices
           ? { hint: t("invoicing.applyHintNoPermission") }
           : b.billStatus !== "paid"
             ? { hint: t("invoicing.applyHintUnpaid") }
-            : receipt
-              ? { hint: t("invoicing.applyHintApplied") }
-              : {}),
+            : zeroAmount
+              ? { hint: t("invoicing.applyHintZero") }
+              : receipt
+                ? { hint: t("invoicing.applyHintApplied") }
+                : {}),
         onSelect: () => setApplyBill(b),
       },
       {
@@ -447,6 +515,27 @@ export function BillingPage() {
         level={2}
         title={t("table.title")}
         description={t("table.description")}
+        action={
+          /* 合并开票:一张发票覆盖多张账单。库里还表达不了——invoice_receipts.bill_id
+           * 是 NOT NULL 单值外键,一票一单;要做得先加关联表并改 admin 的审核/开具侧。
+           * 按本页 exportStatement 的既有做法:意图可见、禁用不装样。
+           * 与选择列同一个门:没有开票权限的角色不出这个动作。 */
+          canManageInvoices ? (
+            <span className="flex items-center gap-sm">
+              <Button size="md" variant="outline" disabled>
+                <Icon name="receipt" size="xs" fallback="placeholder" />
+                <span>
+                  {selectedBillIds.length > 0
+                    ? t("invoicing.mergeActionCount", {
+                        count: selectedBillIds.length,
+                      })
+                    : t("invoicing.mergeAction")}
+                </span>
+              </Button>
+              <PlannedBadge />
+            </span>
+          ) : undefined
+        }
       >
         <DataTable<ConsoleBill>
           labels={tableLabels}
@@ -455,6 +544,16 @@ export function BillingPage() {
           rowKey={(b) => b.id}
           loading={loading || billsLoading}
           indexStart={(page - 1) * BILLS_PAGE_SIZE + 1}
+          /* 选择列只对能开票的人出现（DS:给了 selectedKeys 才有这一列）。没有
+           * tenant.invoice.manage 的角色勾了也没有能做的事,给一列点不动的复选框
+           * 比不给更糟。行级判据与「申请发票」同源,避免「勾得上却开不了」。 */
+          {...(canManageInvoices
+            ? {
+                selectedKeys: selectedBillIds,
+                onSelectionChange: setSelectedBillIds,
+                isRowSelectable: canApplyInvoice,
+              }
+            : {})}
           rowActions={(b) => (
             <ActionMenu label={t("invoicing.rowMenu")} items={billActions(b)} />
           )}
