@@ -76,30 +76,60 @@ export interface UsageEventRow {
   productCode: string;
   productName: string;
   metricKey: string;
+  /** 实扣量(= Σ 各池 took);超额时可能小于 requestedAmount,甚至为 0 */
   totalAmount: number;
+  /** 申请量;与 totalAmount 不等即说明这次调用没能全额扣到(超额准入自愈) */
+  requestedAmount: number | null;
   /** 终端用户显示名;null = 产品未归集(容错桶) */
   userName: string | null;
+  /** 终端用户可视码(主体码 v4);null = 未归集。UUID 不出口 */
+  userNo: string | null;
   requestId: string | null;
 }
 
+/**
+ * 调用记录查询(2026-09-07 重建)。
+ *
+ * 原来只有 `days` + `limit`:固定 90 天、最多 500 条、无筛选无分页无合计。
+ * 客户拿这页质疑计量时,既定位不到争议的那几条,也没法把明细加总去对账——
+ * 所以这次把它做成**能查得准**的接口:时间窗 + 四个筛选维度 + 分页 + 独立合计。
+ */
 export interface UsageEventsQuery {
   workspaceId: string;
-  /** 回看天数(月分区裁剪谓词) */
-  days: number;
+  /** 时间窗(闭开区间 [from, to));也是月分区的裁剪谓词 */
+  from: Date;
+  to: Date;
+  productCode?: string;
+  metricKey?: string;
+  /**
+   * 终端用户筛选:可视码 user_no,或 `"unattributed"` 单独筛未归集那一桶。
+   * 不收 UUID——本页出口一律可视码。
+   */
+  user?: string;
+  requestId?: string;
+  offset: number;
   limit: number;
 }
 
-/** 调用记录:items 之外把硬顶说出来——满额即可能被截断,页面据此提示。 */
+/**
+ * 调用记录结果。`total` / `totalAmount` 是**筛选后全集**的口径(不随分页变)——
+ * 客户能用它直接与配额页、账单对数,这正是这张表存在的理由。
+ */
 export interface UsageEventsResult {
   items: UsageEventRow[];
-  days: number;
+  /** 筛选后总条数 */
+  total: number;
+  /** 筛选后实扣量合计 */
+  totalAmount: number;
+  offset: number;
   limit: number;
-  truncated: boolean;
 }
 
 export interface UsageMemberRow {
   /** null = 未归集桶 */
   userName: string | null;
+  /** 可视码;null = 未归集桶。二级页按它做成员筛选 */
+  userNo: string | null;
   total: number;
   eventCount: number;
   lastAt: Date;

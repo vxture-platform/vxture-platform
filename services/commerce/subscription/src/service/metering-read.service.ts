@@ -63,14 +63,23 @@ export class MeteringReadService {
     };
   }
 
-  /** 调用记录;满额即标 truncated,页面据此提示「只显示最近 N 条」。 */
+  /**
+   * 调用记录:一页明细 + **筛选后全集**的条数与实扣量合计。
+   *
+   * 两条查询并发发出——它们读同一份谓词、互不依赖,串行只是白等一个 RTT。
+   * 合计不随分页变,客户能直接拿它跟配额页、账单对数。
+   */
   async listUsageEvents(query: UsageEventsQuery): Promise<UsageEventsResult> {
-    const items = await this.repo.listUsageEvents(query);
+    const [items, totals] = await Promise.all([
+      this.repo.listUsageEvents(query),
+      this.repo.countUsageEvents(query),
+    ]);
     return {
       items,
-      days: query.days,
+      total: totals.total,
+      totalAmount: totals.totalAmount,
+      offset: query.offset,
       limit: query.limit,
-      truncated: items.length >= query.limit,
     };
   }
 

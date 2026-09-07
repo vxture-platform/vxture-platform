@@ -2072,15 +2072,22 @@ export interface ConsoleUsageEvent {
   productCode: string;
   productName: string;
   metric: string;
+  /** 实扣量 */
   amount: number;
+  /** 申请量;与 amount 不等 = 这次没能全额扣到(超额准入自愈)。null = 未记录 */
+  requestedAmount: number | null;
   /** null = 产品未归集用户(容错桶) */
   userName: string | null;
+  /** 终端用户可视码;null = 未归集 */
+  userNo: string | null;
   requestId: string | null;
 }
 
 export interface ConsoleUsageMember {
   /** null = 未归集桶 */
   userName: string | null;
+  /** 可视码;null = 未归集桶。调用记录页按它筛成员 */
+  userNo: string | null;
   total: number;
   eventCount: number;
   lastAt: string;
@@ -2096,16 +2103,48 @@ export async function fetchUsageTrend(
   );
 }
 
-/** 调用记录 + 硬顶说明(批 3):满额即可能被截断,页面据此提示而不是装作全量。 */
+/**
+ * 一页调用记录 + **筛选后全集**的合计。
+ *
+ * `total` / `totalAmount` 不随分页变——它们是客户拿去跟配额页、账单对数的那个数,
+ * 也是调用记录页存在的理由(owner 2026-09-07:「一定程度上解决客户对计量正确性的质疑」)。
+ */
 export interface ConsoleUsageEvents {
   items: ConsoleUsageEvent[];
-  days: number;
-  limit: number;
-  truncated: boolean;
+  total: number;
+  totalAmount: number;
+  page: number;
+  pageSize: number;
+  /** 服务端实际生效的时间窗(ISO) */
+  from: string;
+  to: string;
 }
 
-export async function fetchUsageEvents(): Promise<ConsoleUsageEvents> {
-  return readJsonStrict<ConsoleUsageEvents>("/api/usage/events");
+/** 调用记录筛选;字段留空即不收窄(服务端形状不合的值一律当没传)。 */
+export interface ConsoleUsageEventsQuery {
+  /** `YYYY-MM-DD`,含当天 */
+  from?: string;
+  to?: string;
+  product?: string;
+  metric?: string;
+  /** 成员可视码,或 `"unattributed"` 单筛未归集那一桶 */
+  user?: string;
+  requestId?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export async function fetchUsageEvents(
+  query: ConsoleUsageEventsQuery = {},
+): Promise<ConsoleUsageEvents> {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) {
+    if (v !== undefined && v !== "") params.set(k, String(v));
+  }
+  const qs = params.toString();
+  return readJsonStrict<ConsoleUsageEvents>(
+    `/api/usage/events${qs ? `?${qs}` : ""}`,
+  );
 }
 
 export async function fetchUsageMembers(
