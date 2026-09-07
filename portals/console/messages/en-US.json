@@ -99,7 +99,7 @@
         "trialing": "Trial",
         "open": "Open",
         "detail": "Product page",
-        "updatedAt": "Updated {date}"
+        "versionAt": "v {version} at {date}"
       },
       "reco": {
         "title": "Popular",
