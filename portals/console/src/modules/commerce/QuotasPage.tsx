@@ -70,18 +70,11 @@ import {
 import { AddonPacksSection } from "./components/AddonPacksSection";
 import { fmtDate, fmtTime } from "./components/hubModel";
 import { fmtCount, formatBytes } from "@/lib/format-metrics";
+import { useMetricLabel } from "@/lib/metric-label";
 
 /** 用量占比(额度 0 时归 0,超冲钳 100)。 */
 const percentOf = (used: number, limit: number): number =>
   limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
-
-/** 已知指标 → i18n 键(未知键回退原文,契约演进容错)。 */
-const METRIC_LABEL_KEYS: Record<string, string> = {
-  "storage.bytes": "metric.storage",
-  "ai.credit": "metric.aiCredit",
-  "service.api.call": "metric.apiCall",
-  "quality.check.run": "metric.qualityCheck",
-};
 
 const KNOWN_SOURCES = new Set([
   "ws_base",
@@ -156,13 +149,8 @@ export function QuotasPage() {
     [locale],
   );
 
-  const metricLabel = useCallback(
-    (metric: string): string => {
-      const key = METRIC_LABEL_KEYS[metric];
-      return key ? t(key) : metric;
-    },
-    [t],
-  );
+  // 指标名走共用字典(用量页读同一份;见 lib/metric-label)
+  const metricLabel = useMetricLabel();
   const metricValue = (metric: string, v: number): string =>
     metric === "storage.bytes" ? formatBytes(v) : fmtCount(v);
   const sourceLabel = useCallback(

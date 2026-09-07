@@ -2457,12 +2457,6 @@
       "addonsExpiry": "Earliest expiry {date}",
       "addonsNone": "No active packs — buy one below"
     },
-    "metric": {
-      "storage": "Storage",
-      "aiCredit": "AI Credits",
-      "apiCall": "API calls",
-      "qualityCheck": "Quality checks"
-    },
     "source": {
       "ws_base": "Base grant",
       "subscription": "Subscription",
@@ -2598,7 +2592,6 @@
       "windowYear": "Yearly",
       "colPeriod": "Period",
       "colTotal": "Consumed",
-      "colByProduct": "By product",
       "colDelta": "Change",
       "empty": "No usage data in this period",
       "windowHour": "Hourly (24h)",
@@ -2623,8 +2616,6 @@
       "colRequest": "Request ID",
       "unattributed": "Unattributed",
       "total": "{count} records in the last {days} days",
-      "prevPage": "Previous",
-      "nextPage": "Next",
       "empty": "No call records yet",
       "truncated": "Showing the most recent {limit} records (last {days} days); earlier calls are not listed"
     },
@@ -2637,7 +2628,25 @@
       "colLast": "Last call",
       "empty": "No member usage in the last 30 days"
     },
-    "chartPeak": "Peak"
+    "chartPeak": "Peak",
+    "filters": {
+      "groupLabel": "Call record filters",
+      "listOnly": "Call records are list-only",
+      "count": "{count} total",
+      "searchPlaceholder": "Search product, metric, user or request ID",
+      "searchAriaLabel": "Search call records",
+      "reset": "Reset"
+    },
+    "notes": {
+      "title": "How these numbers work",
+      "description": "Where the figures on this page come from",
+      "scopeTitle": "A dashboard, not a bill",
+      "scopeBody": "This page reports usage from downsampled statistics; actual charges follow your orders and invoices, and the two can differ slightly because of reporting lag",
+      "bucketTitle": "How time is bucketed",
+      "bucketBody": "Trends are bucketed in UTC, with one bucket per period in the window (zero-filled when there were no calls); the hourly view converts to your local time, while daily and weekly keep UTC dates so they line up with the backend buckets",
+      "attributionTitle": "What “Unattributed” means",
+      "attributionBody": "The product did not pass a user identity with the call, so that usage lands in the unattributed bucket; it still counts toward the total, it just cannot be traced to a person"
+    }
   },
   "addonPay": {
     "title": "Booster Pack Payment",
@@ -3300,6 +3309,12 @@
     "member": "Member",
     "readonly": "Read-only",
     "guest": "Guest"
+  },
+  "metric": {
+    "storage": "Storage",
+    "aiCredit": "AI Credits",
+    "apiCall": "API calls",
+    "qualityCheck": "Quality checks"
   },
   "pagination": {
     "total": "{total} records",

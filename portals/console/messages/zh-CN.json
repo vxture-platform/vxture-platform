@@ -2457,12 +2457,6 @@
       "addonsExpiry": "最早到期 {date}",
       "addonsNone": "暂无生效加油包,可在下方购买"
     },
-    "metric": {
-      "storage": "存储空间",
-      "aiCredit": "AI Credits",
-      "apiCall": "API 调用",
-      "qualityCheck": "质量检查"
-    },
     "source": {
       "ws_base": "基础授予",
       "subscription": "订阅权益",
@@ -2598,7 +2592,6 @@
       "windowYear": "按年",
       "colPeriod": "期间",
       "colTotal": "消耗量",
-      "colByProduct": "按产品",
       "colDelta": "环比",
       "empty": "所选周期内暂无用量数据",
       "windowHour": "按小时(24h)",
@@ -2623,8 +2616,6 @@
       "colRequest": "请求号",
       "unattributed": "未归集",
       "total": "近 {days} 天共 {count} 条",
-      "prevPage": "上一页",
-      "nextPage": "下一页",
       "empty": "暂无调用记录",
       "truncated": "只显示最近 {limit} 条(近 {days} 天),更早的调用不在列表里"
     },
@@ -2637,7 +2628,25 @@
       "colLast": "最近调用",
       "empty": "近 30 天暂无成员用量"
     },
-    "chartPeak": "峰值"
+    "chartPeak": "峰值",
+    "filters": {
+      "groupLabel": "调用记录筛选",
+      "listOnly": "调用记录只有列表视图",
+      "count": "共 {count} 条",
+      "searchPlaceholder": "搜索产品、指标、用户或请求号",
+      "searchAriaLabel": "搜索调用记录",
+      "reset": "复位"
+    },
+    "notes": {
+      "title": "统计口径",
+      "description": "这页的数是怎么来的",
+      "scopeTitle": "看板不是账单",
+      "scopeBody": "本页是用量统计看板,数字按周期降采样后展示;实际计费以订单与账单为准,两者可能因统计延迟略有出入",
+      "bucketTitle": "时间怎么切",
+      "bucketBody": "趋势按 UTC 切桶,窗口内每个周期都有一桶(无调用补零);逐时档换算成你所在时区显示,日/周档保持 UTC 日期以对齐后台的桶",
+      "attributionTitle": "「未归集」是什么",
+      "attributionBody": "产品在调用时没有带上使用者身份,这部分用量归到未归集桶;它照常计入总量,只是分不到具体的人"
+    }
   },
   "addonPay": {
     "title": "加油包订单支付",
@@ -3300,6 +3309,12 @@
     "member": "成员",
     "readonly": "只读成员",
     "guest": "访客"
+  },
+  "metric": {
+    "storage": "存储空间",
+    "aiCredit": "AI Credits",
+    "apiCall": "API 调用",
+    "qualityCheck": "质量检查"
   },
   "pagination": {
     "total": "共 {total} 条",
