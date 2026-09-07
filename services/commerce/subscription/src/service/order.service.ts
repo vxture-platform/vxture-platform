@@ -32,6 +32,7 @@ import {
   type CustomerNotifier,
   type CustomerNotifyInput,
 } from "./customer-notifier";
+import type { OpsAlerter } from "./ops-alerter";
 import {
   DEFAULT_CONSUMABLE_SHARE,
   computeProration,
@@ -42,6 +43,7 @@ import {
 import type {
   CreateOrderInput,
   CreateOrderResult,
+  OpsTodoOrderRow,
   OrderActor,
   OrderRecord,
   RefundEligibility,
@@ -98,6 +100,10 @@ export class OrderService {
   private static readonly RECONCILE_FAILURE_LIMIT = 3;
   /** 客户通知（P2-g）：装配处 setCustomerNotifier 注入；未注入 = 不发。 */
   private notifier: CustomerNotifier | null = null;
+  /** 运营告警（#231）：装配处 setOpsAlerter 注入；未注入 = 不发。 */
+  private opsAlerter: OpsAlerter | null = null;
+  /** 自愈最后一次失败的原因，供放弃时报给运营（内存，随 reconcileFailures 同生命周期）。 */
+  private readonly reconcileLastError = new Map<string, string>();
 
   constructor(
     @Inject(PgOrderRepository) private readonly orders: PgOrderRepository,
@@ -110,6 +116,18 @@ export class OrderService {
 
   setCustomerNotifier(notifier: CustomerNotifier | null): void {
     this.notifier = notifier;
+  }
+
+  setOpsAlerter(alerter: OpsAlerter | null): void {
+    this.opsAlerter = alerter;
+  }
+
+  /** 运营待办告警的候选单（#231）；判据与注释见仓储层 findOpsTodoOrders。 */
+  async listOpsTodoOrders(
+    minAgeMinutes: number,
+    limit = 50,
+  ): Promise<OpsTodoOrderRow[]> {
+    return this.orders.findOpsTodoOrders(minAgeMinutes, limit);
   }
 
   /**
@@ -926,6 +944,10 @@ export class OrderService {
         this.logger.warn(
           `reconcile: order ${id} exceeded ${failures} failures — auto-retry stopped, operator action required`,
         );
+        // 放弃状态是**持续**的：这条分支每 tick 都会走到，所以每 tick 都报一次，
+        // 由告警侧的 4h 静默窗口收敛。不只在「刚放弃」那一刻报——进程重启会清空
+        // reconcileFailures，那个瞬间没人接得住（#231 的病根就是「只报一次、漏看就没了」）。
+        await this.reportGaveUp(id, failures);
         continue;
       }
       try {
@@ -936,13 +958,40 @@ export class OrderService {
         });
         healed += 1;
         this.reconcileFailures.delete(id);
+        this.reconcileLastError.delete(id);
       } catch (err) {
         this.reconcileFailures.set(id, failures + 1);
+        this.reconcileLastError.set(id, String(err));
         this.logger.error(
           `reconcile: order ${id} failed (${failures + 1}/${OrderService.RECONCILE_FAILURE_LIMIT}) — ${String(err)}`,
         );
+        // 撞到上限的这一次就报，别等下一个 tick——单据已经彻底不动了。
+        if (failures + 1 >= OrderService.RECONCILE_FAILURE_LIMIT) {
+          await this.reportGaveUp(id, failures + 1);
+        }
       }
     }
     return healed;
+  }
+
+  /**
+   * 自愈放弃 → 报运营（#231）。best-effort：告警本身失败只记日志，
+   * 绝不能让它把 reconcile 这一轮打断——后面还有别的单等着自愈。
+   */
+  private async reportGaveUp(orderId: string, attempts: number): Promise<void> {
+    if (!this.opsAlerter) return;
+    try {
+      const order = await this.getOrder(orderId);
+      await this.opsAlerter.orderSelfHealGaveUp({
+        orderId,
+        orderNo: order.orderNo,
+        attempts,
+        lastError: this.reconcileLastError.get(orderId) ?? null,
+      });
+    } catch (err) {
+      this.logger.warn(
+        `reconcile: order ${orderId} 放弃告警发送失败 — ${String(err)}`,
+      );
+    }
   }
 }

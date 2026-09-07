@@ -13,6 +13,7 @@ export type {
   CustomerNotifier,
   CustomerNotifyInput,
 } from "./service/customer-notifier";
+export type { OpsAlerter, OpsSelfHealGaveUpInput } from "./service/ops-alerter";
 export { ConsumeService } from "./service/consume.service";
 export { PgSubscriptionRepository } from "./repository/pg-subscription.repository";
 export { PgOrderRepository } from "./repository/pg-order.repository";
@@ -41,6 +42,7 @@ export type {
   OrderActorType,
   OrderEventRecord,
   OrderInvoice,
+  OpsTodoOrderRow,
   CreateOrderInput,
   CreateOrderResult,
 } from "./types/order.types";

@@ -173,3 +173,19 @@ export interface OrderEventRecord {
   clientIp: string | null;
   createdAt: Date;
 }
+
+/**
+ * 运营待办告警（#231）的候选单。两个状态就是原始订单态：
+ * `pending_verify`（客户已申报付款，等运营确认收款）、
+ * `paid`（钱已到、权益没开通——运营页显示为「已收款未开通」）。
+ */
+export interface OpsTodoOrderRow {
+  id: string;
+  orderNo: string;
+  status: "pending_verify" | "paid";
+  tenantName: string;
+  payableAmount: number;
+  currency: string;
+  /** 从这一刻起就在等人处理（申报时间 / 到账时间）。 */
+  waitingSince: Date;
+}
