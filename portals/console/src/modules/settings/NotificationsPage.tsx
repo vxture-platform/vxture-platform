@@ -15,7 +15,7 @@ import {
 } from "@vxture/design-system";
 import { LoadFailedBanner } from "@/components/load/LoadFailed";
 import type { DataTableColumn, IconName } from "@vxture/design-system";
-import { PageSection, SummaryStrip } from "@/layout/shell";
+import { PageSection } from "@/layout/shell";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import {
@@ -26,13 +26,17 @@ import {
 
 type ChannelKey = "inbox" | "email" | "sms";
 type TopicKey =
-  | "account"
+  | "subscription_expiry"
+  | "provision_result"
+  | "payment_due"
+  | "refund_progress"
+  | "announcement"
   | "security"
-  | "subscription"
-  | "billing"
-  | "usage"
-  | "product";
-type TopicGroupKey = "identity" | "commerce" | "system";
+  | "invoice_progress"
+  | "verification_result"
+  | "member_invitation"
+  | "quota_alert"
+  | "ticket_activity";
 
 type ChannelMeta = {
   key: ChannelKey;
@@ -41,10 +45,11 @@ type ChannelMeta = {
 
 type TopicPreference = {
   key: TopicKey;
-  group: TopicGroupKey;
   icon: IconName;
   channels: Record<ChannelKey, boolean>;
   lockedChannels?: ChannelKey[];
+  /** 事件源已存在但通知模板未接：标「开发中」并禁用三个渠道开关，不给假开关。 */
+  planned?: boolean;
 };
 
 type NotificationState = {
@@ -57,52 +62,85 @@ const CHANNELS: ChannelMeta[] = [
   { key: "sms", icon: "phone" },
 ];
 
-const TOPIC_GROUPS: Array<{ key: TopicGroupKey; icon: IconName }> = [
-  { key: "identity", icon: "user" },
-  { key: "commerce", icon: "chart-bar" },
-  { key: "system", icon: "server" },
-];
-
+/**
+ * 主题清单（owner 2026-09-08 重排）。**平铺，不分组**：11 个主题各自四字自足，
+ * 组名拼进项名等于把删掉的分组用文字再写一遍，还占列宽。
+ *
+ * 前 5 个有模板已经在发；后 6 个的**事件源都已存在**（各自的状态机或 webhook 事件
+ * 类型跑着），只是通知模板还没接——`planned: true` 让它们在界面上挂「开发中」标并
+ * **禁用三个渠道开关**。
+ *
+ * 为什么要把未接的也列出来：改之前页面有 6 个主题，其中 3 个没有任何模板会落到它们
+ * 头上（`account` / `security` / `usage`），客户勾了等于没勾——**页面在说假话**。
+ * 现在要么有模板、要么明说「开发中」并关掉开关，没有第三种。
+ *
+ * 事务性的四个（到期/开通/待付/退款——错过了会有实际损失）邮件默认开、可关，与服务端
+ * `NotificationPreferencesService` 的 `TOPIC_DEFAULT_OVERRIDES` 同源:「恢复默认」用的
+ * 就是这一份。
+ */
 const DEFAULT_NOTIFICATION_STATE: NotificationState = {
   topics: [
     {
-      key: "account",
-      group: "identity",
-      icon: "user",
+      key: "subscription_expiry",
+      icon: "clock",
+      channels: { inbox: true, email: true, sms: false },
+    },
+    {
+      key: "provision_result",
+      icon: "seal-check",
+      channels: { inbox: true, email: true, sms: false },
+    },
+    {
+      key: "payment_due",
+      icon: "credit-card",
+      channels: { inbox: true, email: true, sms: false },
+    },
+    {
+      key: "refund_progress",
+      icon: "arrow-left",
+      channels: { inbox: true, email: true, sms: false },
+    },
+    {
+      key: "announcement",
+      icon: "megaphone",
       channels: { inbox: true, email: false, sms: false },
     },
     {
       key: "security",
-      group: "identity",
       icon: "shield-check",
       channels: { inbox: true, email: false, sms: false },
       lockedChannels: ["inbox"],
-    },
-    // 订阅 / 账务是事务性通知（到期提醒、续费单待付、退款进度，owner 2026-09-03）：邮件默认开、可关。
-    // 与服务端 NotificationPreferencesService 的 TOPIC_DEFAULT_OVERRIDES 同源——「恢复默认」用的是这份。
-    {
-      key: "subscription",
-      group: "commerce",
-      icon: "chart-bar",
-      channels: { inbox: true, email: true, sms: false },
+      planned: true,
     },
     {
-      key: "billing",
-      group: "commerce",
-      icon: "calendar",
-      channels: { inbox: true, email: true, sms: false },
-    },
-    {
-      key: "usage",
-      group: "commerce",
-      icon: "database",
+      key: "invoice_progress",
+      icon: "receipt",
       channels: { inbox: true, email: false, sms: false },
+      planned: true,
     },
     {
-      key: "product",
-      group: "system",
-      icon: "sparkles",
+      key: "verification_result",
+      icon: "shield",
       channels: { inbox: true, email: false, sms: false },
+      planned: true,
+    },
+    {
+      key: "member_invitation",
+      icon: "users",
+      channels: { inbox: true, email: false, sms: false },
+      planned: true,
+    },
+    {
+      key: "quota_alert",
+      icon: "gauge",
+      channels: { inbox: true, email: false, sms: false },
+      planned: true,
+    },
+    {
+      key: "ticket_activity",
+      icon: "chat-circle",
+      channels: { inbox: true, email: false, sms: false },
+      planned: true,
     },
   ],
 };
@@ -178,15 +216,6 @@ export function NotificationsPage() {
     }
   }, [applyPreferences, state.topics, t]);
 
-  const totalTopics = state.topics.length;
-  const enabledTopics = state.topics.filter((topic) =>
-    CHANNELS.some((channel) => topic.channels[channel.key]),
-  ).length;
-  const emailTopics = state.topics.filter(
-    (topic) => topic.channels.email,
-  ).length;
-  const smsTopics = state.topics.filter((topic) => topic.channels.sms).length;
-
   function resetDefaults() {
     // 只回到默认值,不落库——保存仍是显式动作,避免误点即生效。
     setState(DEFAULT_NOTIFICATION_STATE);
@@ -230,12 +259,21 @@ export function NotificationsPage() {
         <TableTitleCell
           icon={topic.icon}
           title={t(`topics.items.${topic.key}.title`)}
-          {...(topic.lockedChannels?.length
+          {...(topic.planned || topic.lockedChannels?.length
             ? {
                 titleSuffix: (
-                  <StatusBadge tone="neutral">
-                    {t("topics.policyLocked")}
-                  </StatusBadge>
+                  <>
+                    {topic.planned ? (
+                      <StatusBadge tone="warning">
+                        {t("topics.planned")}
+                      </StatusBadge>
+                    ) : null}
+                    {topic.lockedChannels?.length ? (
+                      <StatusBadge tone="neutral">
+                        {t("topics.policyLocked")}
+                      </StatusBadge>
+                    ) : null}
+                  </>
                 ),
               }
             : {})}
@@ -257,14 +295,24 @@ export function NotificationsPage() {
         return (
           <span
             title={
-              channelLocked
-                ? t("topics.policyLockedDescription")
-                : t(`channels.short.${channel.key}`)
+              topic.planned
+                ? t("topics.plannedDescription")
+                : channelLocked
+                  ? t("topics.policyLockedDescription")
+                  : t(`channels.short.${channel.key}`)
             }
           >
             <Checkbox
               checked={topic.channels[channel.key]}
-              disabled={channelLocked || loading || saving || loadFailed}
+              /* 「开发中」= 事件源在、模板未接：三个开关一律禁用。给一个点得动却
+                 什么都不会发生的开关，正是这一页改之前的毛病。 */
+              disabled={
+                topic.planned ||
+                channelLocked ||
+                loading ||
+                saving ||
+                loadFailed
+              }
               aria-label={t("topics.toggleLabel", {
                 topic: t(`topics.items.${topic.key}.title`),
                 channel: t(`channels.items.${channel.key}.title`),
@@ -333,82 +381,27 @@ export function NotificationsPage() {
     >
       {messageKey ? <Banner tone="success" title={t(messageKey)} /> : null}
 
-      <PageSection>
-        <SummaryStrip
-          items={[
-            {
-              label: t("preference.label"),
-              value: t("preference.enabled"),
-              aside: <Icon name="bell" size="sm" fallback="placeholder" />,
-            },
-            {
-              label: t("summary.topics"),
-              value: t("summary.topicsValue", {
-                enabled: enabledTopics,
-                total: totalTopics,
-              }),
-            },
-          ]}
-        />
-        {/* Channel coverage sentences — prose, not label/value pairs, so they
-         * stay a chip row rather than being forced into SummaryStrip. */}
-        <div
-          className="flex flex-wrap items-center gap-lg text-body-sm text-muted-foreground"
-          aria-label={t("summary.title")}
-        >
-          <span className="flex items-center gap-2xs">
-            <Icon name="bell" size="xs" fallback="placeholder" />
-            {t("summary.inboxDefault")}
-          </span>
-          <span className="flex items-center gap-2xs">
-            <Icon name="mail" size="xs" fallback="placeholder" />
-            {t("summary.emailValue", { count: emailTopics })}
-          </span>
-          <span className="flex items-center gap-2xs">
-            <Icon name="phone" size="xs" fallback="placeholder" />
-            {t("summary.smsValue", { count: smsTopics })}
-          </span>
-        </div>
-      </PageSection>
-
+      {/* 页面只剩一张表（owner 2026-09-08 简化）。删掉的三样都是同一信息的第二处
+          写法：概览卡的「主题 5/11」「邮件 4 项」下面就是表本身；「渠道提醒方式」
+          板块列的三个渠道就是表的三列；分组表头对 11 行来说是给十几行以上用的。 */}
       <PageSection
         icon="megaphone"
         level={2}
         title={t("topics.title")}
-        description={t("topics.count", { count: totalTopics })}
+        description={t("topics.description")}
       >
-        {TOPIC_GROUPS.map((group) => {
-          const groupTopics = state.topics.filter(
-            (topic) => topic.group === group.key,
-          );
-
-          return (
-            <PageSection
-              key={group.key}
-              level={3}
-              icon={group.icon}
-              title={t(`groups.${group.key}`)}
-              description={t("topics.groupCount", {
-                count: groupTopics.length,
-              })}
-            >
-              <DataTable
-                labels={tableLabels}
-                columns={topicColumns}
-                rows={groupTopics}
-                rowKey={(topic) => topic.key}
-                /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
-                   与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
-                leadingSpacer
-                indexStart={1}
-                /* 操作列占位：本表当前没有行动作，补一格禁用的汇聚按钮——列的位置
-                   先占住，右缘与同页其它表对齐；将来加动作时改的是这一格的内容，
-                   不是整张表的列结构（owner 2026-09-07）。 */
-                rowActions={() => <RowActionsPlaceholder />}
-              />
-            </PageSection>
-          );
-        })}
+        <DataTable
+          labels={tableLabels}
+          columns={topicColumns}
+          rows={state.topics}
+          rowKey={(topic) => topic.key}
+          /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列与同页
+             其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
+          leadingSpacer
+          indexStart={1}
+          /* 操作列占位：本表当前没有行动作，补一格禁用的汇聚按钮。 */
+          rowActions={() => <RowActionsPlaceholder />}
+        />
       </PageSection>
     </FormPageTemplate>
   );

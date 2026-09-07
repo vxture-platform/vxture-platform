@@ -293,7 +293,7 @@
       "workspace": "Workspace",
       "accountTenant": "Account & Tenant",
       "subscriptionBilling": "Subscription & Billing",
-      "advancedSettings": "Advanced Settings",
+      "settingsSecurity": "Settings & Security",
       "platform": "Platform"
     },
     "domains": {
@@ -551,20 +551,7 @@
     "backend": {
       "pending": "Backend pending"
     },
-    "preference": {
-      "label": "Notification preference",
-      "enabled": "Subscriptions enabled"
-    },
-    "summary": {
-      "title": "Notification subscription overview",
-      "topics": "Topics",
-      "topicsValue": "{enabled}/{total}",
-      "inboxDefault": "Inbox by default",
-      "emailValue": "Email {count}",
-      "smsValue": "SMS {count}"
-    },
     "channels": {
-      "title": "Base reminder channels",
       "short": {
         "inbox": "Inbox",
         "email": "Email",
@@ -584,8 +571,6 @@
     },
     "topics": {
       "title": "Subscription topics",
-      "count": "{count} items",
-      "groupCount": "{count} items",
       "policyLocked": "Policy locked",
       "policyLockedDescription": "This reminder is locked by platform policy and cannot be turned off by the current user.",
       "toggleLabel": "{topic} - {channel}",
@@ -596,30 +581,43 @@
         "status": "Status"
       },
       "items": {
-        "account": {
-          "title": "Account activity"
+        "subscription_expiry": {
+          "title": "Subscription expiry"
+        },
+        "provision_result": {
+          "title": "Provisioning result"
+        },
+        "payment_due": {
+          "title": "Payment due"
+        },
+        "refund_progress": {
+          "title": "Refund progress"
+        },
+        "announcement": {
+          "title": "Announcements"
         },
         "security": {
-          "title": "Security risk"
+          "title": "Security alerts"
         },
-        "subscription": {
-          "title": "Product Subscriptions"
+        "invoice_progress": {
+          "title": "Invoice progress"
         },
-        "billing": {
-          "title": "Billing & invoices"
+        "verification_result": {
+          "title": "Verification result"
         },
-        "usage": {
-          "title": "Usage & quotas"
+        "member_invitation": {
+          "title": "Member invitations"
         },
-        "product": {
-          "title": "Product & system"
+        "quota_alert": {
+          "title": "Quota alerts"
+        },
+        "ticket_activity": {
+          "title": "Ticket updates"
         }
-      }
-    },
-    "groups": {
-      "identity": "Account & security",
-      "commerce": "Subscription & usage",
-      "system": "Product & system"
+      },
+      "planned": "In development",
+      "plannedDescription": "This notification type is under development and cannot be subscribed yet.",
+      "description": "Choose the channels for each notification type. In-app messages are always available; email and SMS are opt-in."
     },
     "feedback": {
       "saved": "Notification preferences saved.",

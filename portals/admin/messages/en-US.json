@@ -370,8 +370,7 @@
       "workspace": "Workspace",
       "accountTenant": "Account & Tenant",
       "membersPermissions": "Members & Permissions",
-      "subscriptionBilling": "Subscription & Billing",
-      "advancedSettings": "Advanced Settings"
+      "subscriptionBilling": "Subscription & Billing"
     },
     "items": {
       "overview": {
@@ -597,7 +596,7 @@
     }
   },
   "settings": {
-    "eyebrow": "Advanced settings",
+    "eyebrow": "Settings & Security",
     "title": "Tenant settings",
     "description": "Configure tenant-level policies, access controls, security constraints, and audit rules.",
     "save": "Save changes",
