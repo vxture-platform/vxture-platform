@@ -198,7 +198,6 @@ export function AuditLogsPage() {
       {
         id: "ip",
         header: t("table.colIp"),
-        align: "right",
         cell: (r) =>
           r.ipAddress ? (
             <span className="font-mono text-body-sm text-muted-foreground">

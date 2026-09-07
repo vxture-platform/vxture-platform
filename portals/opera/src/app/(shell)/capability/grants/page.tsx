@@ -579,14 +579,14 @@ function RunosGrantsPageContent() {
     {
       id: "quota",
       header: "配额",
-      align: "right" as const,
+      align: "numeric" as const,
       width: "xs" as const,
       cell: (r: GrantRecord) => formatQuota(r.quotaLimit),
     },
     {
       id: "consumption",
       header: "已消费",
-      align: "right" as const,
+      align: "numeric" as const,
       width: "xs" as const,
       cell: quotaCell,
     },
@@ -872,7 +872,7 @@ function RunosGrantsPageContent() {
                 {
                   id: "quota",
                   header: "配额",
-                  align: "right",
+                  align: "numeric",
                   width: "xs",
                   cell: (r: GrantRecord) => formatQuota(r.quotaLimit),
                 },

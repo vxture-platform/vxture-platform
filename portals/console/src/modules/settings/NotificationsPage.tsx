@@ -280,7 +280,6 @@ export function NotificationsPage() {
     {
       id: "status",
       header: t("topics.columns.status"),
-      align: "right",
       cell: (topic) => {
         const enabled = CHANNELS.some((channel) => topic.channels[channel.key]);
         return (

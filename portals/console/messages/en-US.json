@@ -2052,6 +2052,8 @@
     },
     "invoicing": {
       "applyAction": "Request invoice",
+      "mergeAction": "Merge into one invoice",
+      "mergeActionCount": "Merge into one invoice ({count} selected)",
       "writeFailed": "Operation failed — please try again later",
       "status": {
         "applying": "Applying",
@@ -2060,6 +2062,11 @@
         "sent": "Shipped",
         "rejected": "Rejected",
         "voided": "Voided"
+      },
+      "phase": {
+        "none": "Not invoiced",
+        "processing": "In progress",
+        "issued": "Invoiced"
       },
       "type": {
         "electronic_general": "E-invoice (general)",
@@ -2124,6 +2131,7 @@
       "rowMenu": "Bill actions",
       "applyHintUnpaid": "Available once the bill is settled",
       "applyHintApplied": "An application already exists",
+      "applyHintZero": "A zero-amount bill has nothing to invoice",
       "applyHintNoPermission": "Your role cannot manage invoices"
     },
     "viewInvoices": "Invoices & titles",

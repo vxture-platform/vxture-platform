@@ -256,7 +256,7 @@ export function OrdersSection() {
     {
       id: "amount",
       header: t("orders.colAmount"),
-      align: "right",
+      align: "numeric",
       cell: (o) => (
         <span className="flex flex-col items-end tabular-nums">
           <span className="font-semibold text-foreground">

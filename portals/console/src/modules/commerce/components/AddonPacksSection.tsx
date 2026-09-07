@@ -289,7 +289,7 @@ export function AddonPacksSection({
     {
       id: "price",
       header: t("colPrice"),
-      align: "right",
+      align: "numeric",
       cell: (o) => (
         <span className="tabular-nums font-medium text-foreground">
           {formatMoney(o.price, o.currency)}

@@ -351,7 +351,7 @@ export function QuotasPage() {
     {
       id: "limit",
       header: t("storage.colLimit"),
-      align: "right",
+      align: "numeric",
       cell: (r) =>
         r.limitBytes !== null ? (
           <span className="tabular-nums font-medium text-foreground">
@@ -364,7 +364,7 @@ export function QuotasPage() {
     {
       id: "used",
       header: t("storage.colUsed"),
-      align: "right",
+      align: "numeric",
       cell: (r) =>
         r.usedBytes !== null ? (
           <span className="tabular-nums text-info-text">
@@ -427,19 +427,19 @@ export function QuotasPage() {
     {
       id: "limit",
       header: t("credits.colLimit"),
-      align: "right",
+      align: "numeric",
       cell: (p) => <span className="tabular-nums">{fmtCount(p.limit)}</span>,
     },
     {
       id: "used",
       header: t("credits.colUsed"),
-      align: "right",
+      align: "numeric",
       cell: (p) => <span className="tabular-nums">{fmtCount(p.used)}</span>,
     },
     {
       id: "remaining",
       header: t("credits.colRemaining"),
-      align: "right",
+      align: "numeric",
       cell: (p) => {
         const dry = p.limit > 0 && p.remaining <= 0;
         return (
@@ -554,7 +554,7 @@ export function QuotasPage() {
     {
       id: "limit",
       header: t("products.colLimit"),
-      align: "right",
+      align: "numeric",
       cell: (r) => (
         <span className="tabular-nums">{metricValue(r.metric, r.limit)}</span>
       ),
@@ -562,7 +562,7 @@ export function QuotasPage() {
     {
       id: "used",
       header: t("products.colUsed"),
-      align: "right",
+      align: "numeric",
       cell: (r) =>
         r.metric === "storage.bytes" ? (
           // 存储是 WS 总账,池级 used 无意义 → 用 BFF 按产品算好的水位
@@ -578,7 +578,7 @@ export function QuotasPage() {
     {
       id: "remaining",
       header: t("products.colRemaining"),
-      align: "right",
+      align: "numeric",
       cell: (r) =>
         r.metric === "storage.bytes" ? (
           <span className="tabular-nums text-muted-foreground">

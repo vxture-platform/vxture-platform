@@ -579,7 +579,7 @@ export default function LogsPage() {
             {
               id: "tokens",
               header: "Token（入/出）",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: AtlasRequestLogRecord) =>
                 `${r.inputTokens ?? 0} / ${r.outputTokens ?? 0}`,
@@ -587,7 +587,7 @@ export default function LogsPage() {
             {
               id: "latency",
               header: "延迟",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: AtlasRequestLogRecord) =>
                 r.latencyMs != null ? `${r.latencyMs}ms` : "—",

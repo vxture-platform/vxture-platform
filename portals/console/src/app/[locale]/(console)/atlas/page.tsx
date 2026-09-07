@@ -178,7 +178,7 @@ function AtlasPage() {
       id: "tokens",
       header: t("usage.colTokens"),
       cell: (row) => row[3],
-      align: "right",
+      align: "numeric",
     },
   ];
 

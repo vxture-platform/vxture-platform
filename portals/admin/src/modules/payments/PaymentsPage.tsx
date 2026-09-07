@@ -433,7 +433,7 @@ function usePaymentColumns(): DataTableColumn<PaymentOperationRecord>[] {
     {
       id: "amount",
       header: "金额",
-      align: "right",
+      align: "numeric",
       cell: (payment) => (
         <TableTitleCell
           title={formatCurrency(payment.paidAmount, payment.currency)}

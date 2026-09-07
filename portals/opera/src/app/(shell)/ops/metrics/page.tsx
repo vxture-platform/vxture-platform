@@ -384,14 +384,14 @@ export default function MetricsPage() {
             {
               id: "requests",
               header: "请求数",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: LogSummary["items"][number]) => r.requests,
             },
             {
               id: "tokens",
               header: "Token 数",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: LogSummary["items"][number]) =>
                 r.totalTokens === undefined
@@ -401,21 +401,21 @@ export default function MetricsPage() {
             {
               id: "errors",
               header: "错误数",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: LogSummary["items"][number]) => r.errors,
             },
             {
               id: "errorRate",
               header: "错误率",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: LogSummary["items"][number]) => formatRate(r.errorRate),
             },
             {
               id: "p95",
               header: "P95 延迟",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: LogSummary["items"][number]) =>
                 formatMs(r.p95LatencyMs),
@@ -501,28 +501,28 @@ export default function MetricsPage() {
             {
               id: "attempts",
               header: "累计请求",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: ProviderPerformanceRow) => r.attempts,
             },
             {
               id: "errorRate",
               header: "错误率",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: ProviderPerformanceRow) => formatRate(r.errorRate),
             },
             {
               id: "avgLatency",
               header: "平均延迟",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: ProviderPerformanceRow) => formatMs(r.avgLatencyMs),
             },
             {
               id: "p95Latency",
               header: "P95 延迟",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: ProviderPerformanceRow) => formatMs(r.p95LatencyMs),
             },
@@ -605,7 +605,7 @@ export default function MetricsPage() {
             {
               id: "duration",
               header: "最近耗时",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: JobHeartbeatItem) =>
                 r.lastDurationMs != null ? `${r.lastDurationMs}ms` : "—",
@@ -613,14 +613,14 @@ export default function MetricsPage() {
             {
               id: "runs",
               header: "累计运行",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: JobHeartbeatItem) => r.runCount,
             },
             {
               id: "failures",
               header: "累计失败",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: JobHeartbeatItem) => r.failureCount,
             },

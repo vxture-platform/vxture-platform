@@ -301,7 +301,7 @@ function useOrderColumns(): DataTableColumn<OrderOperationRecord>[] {
     {
       id: "amount",
       header: "金额",
-      align: "right",
+      align: "numeric",
       cell: (order) => (
         <TableTitleCell
           title={formatCurrency(order.amount, order.currency)}

@@ -1769,7 +1769,7 @@ function ModelServiceContent() {
             {
               id: "context",
               header: "上下文 / 输出",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (m: AiModelRecord) => (
                 <span className="flex flex-col items-end gap-2xs text-body-sm">
@@ -1794,7 +1794,7 @@ function ModelServiceContent() {
                  管理面在 admin，链到本门户会是个假入口。 */
               id: "refs",
               header: "被引用",
-              align: "right",
+              align: "numeric",
               width: "sm",
               cell: (m: AiModelRecord) => (
                 <span className="flex flex-col items-end gap-2xs text-body-sm">
@@ -2147,7 +2147,7 @@ function ModelServiceContent() {
                    就在这一行展开，不用跳走。挡住删除的仍然是这个数。 */
                 id: "models",
                 header: "模型数",
-                align: "right",
+                align: "numeric",
                 width: "xs",
                 cell: (r: ModelProviderRecord) => {
                   const owned = modelsByProvider.get(r.id) ?? [];

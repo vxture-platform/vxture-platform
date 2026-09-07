@@ -346,7 +346,7 @@ function useInvoiceColumns(): DataTableColumn<BillingInvoiceLedgerRecord>[] {
     {
       id: "amount",
       header: "金额",
-      align: "right",
+      align: "numeric",
       cell: (invoice) => (
         <TableTitleCell
           title={formatCurrency(invoice.invoiceAmount, invoice.currency)}

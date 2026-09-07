@@ -349,7 +349,7 @@ export default function DashboardPage() {
             {
               id: "models",
               header: "模型数",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: ModelProviderRecord) =>
                 modelCountByProvider.get(r.id) ?? 0,

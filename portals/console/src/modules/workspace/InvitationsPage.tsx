@@ -220,7 +220,6 @@ export function InvitationsPage() {
     {
       id: "createdAt",
       header: t("table.colCreatedAt"),
-      align: "right",
       cell: (r) => (
         <span className="tabular-nums text-body-sm text-muted-foreground">
           {fmtDate(r.createdAt)} {fmtTime(r.createdAt)}
@@ -230,7 +229,6 @@ export function InvitationsPage() {
     {
       id: "expiresAt",
       header: t("table.colExpiresAt"),
-      align: "right",
       cell: (r) =>
         r.status === "accepted" && r.acceptedAt ? (
           <span className="tabular-nums text-body-sm text-muted-foreground">

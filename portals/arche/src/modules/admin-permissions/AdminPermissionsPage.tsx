@@ -1103,7 +1103,7 @@ function usePermissionTreeColumns({
     {
       id: "roles",
       header: "授权角色",
-      align: "right",
+      align: "numeric",
       cell: ({ permission }) =>
         `${formatNumber(permission.activeRoleCount)} / ${formatNumber(permission.roleCount)}`,
     },

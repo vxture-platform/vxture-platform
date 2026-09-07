@@ -199,7 +199,7 @@ function useUsageColumns(): DataTableColumn<UsageMeteringRecord>[] {
     {
       id: "usage",
       header: "用量",
-      align: "right",
+      align: "numeric",
       cell: (record) => (
         <TableTitleCell
           title={formatUsageValue(record.usedValue, record.metricUnit)}
