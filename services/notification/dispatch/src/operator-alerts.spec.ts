@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 import type { Pool } from "pg";
+import type { MailSender } from "./dispatcher";
 import {
   DEDUPE_SQL,
   OPS_ALERT_RETRY_BACKOFF_MS,
@@ -86,9 +87,11 @@ const twoOperators = [
   { id: "op-2", email: "b@example.com" },
 ];
 
+// `ReturnType<typeof vi.fn>` 会退化成 Mock<Procedure | Constructable>，接不上
+// MailSender["send"] 的签名；显式给型参，mock 才既保留调用记录又受签名约束。
 function dispatcherWith(
   pool: Pool,
-  send: ReturnType<typeof vi.fn> = vi.fn(async () => undefined),
+  send: Mock<MailSender["send"]> = vi.fn(async () => undefined),
 ) {
   return {
     dispatcher: new OperatorAlertDispatcher(pool, {
