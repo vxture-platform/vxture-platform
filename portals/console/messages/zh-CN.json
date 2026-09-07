@@ -2454,8 +2454,6 @@
       "creditUsedHint": "AI Credits · 随订阅周期重置",
       "credits": "AI Credits",
       "addons": "生效中的加油包",
-      "remainHint": "剩余 {remaining}",
-      "creditsRemainHint": "本期剩余 {remaining} · 随周期重置",
       "addonsExpiry": "最早到期 {date}",
       "addonsNone": "暂无生效加油包,可在下方购买"
     },
@@ -2479,17 +2477,14 @@
     "storage": {
       "title": "存储空间",
       "description": "工作空间级共享资源:每行一个额度来源或用量主体,同产品的贡献与用量并读",
-      "colSource": "来源",
       "colLimit": "额度",
       "colExpires": "有效期至",
       "noExpiry": "长期有效",
-      "colProduct": "产品",
       "colUsed": "已用",
       "colShare": "占总额度",
       "colObserved": "上报时间",
-      "totalLine": "合计额度 {limit} · 剩余 {remaining}",
+      "totalLine": "合计额度 {limit} · {remaining}",
       "emptySources": "暂无存储额度来源",
-      "emptySlices": "各产品尚未上报存储用量",
       "colItem": "项目",
       "usageOnly": "产品用量"
     },
@@ -2518,7 +2513,8 @@
       "colUsed": "本期已用",
       "colRemaining": "剩余",
       "wsShared": "全工作空间共用",
-      "empty": "暂无产品配额,订阅产品后自动生成"
+      "empty": "暂无产品配额,订阅产品后自动生成",
+      "colReset": "重置周期"
     },
     "addons": {
       "title": "加油包与扩展包",
@@ -2569,6 +2565,17 @@
       "cancelHint": "仅待支付订单可取消",
       "buyNoPermission": "你的角色没有付款权限,购买加油包请联系租户所有者",
       "loadFailed": "加油包目录与订单读取失败，请重试"
+    },
+    "gotoAddons": "去加购",
+    "remainBy": "剩余 {amount}",
+    "overBy": "已超出 {amount}",
+    "filters": {
+      "groupLabel": "产品配额筛选",
+      "listOnly": "产品配额只有列表视图",
+      "count": "共 {count} 条",
+      "searchPlaceholder": "搜索产品名、产品代码或指标",
+      "searchAriaLabel": "搜索产品配额",
+      "reset": "复位"
     }
   },
   "usagePage": {

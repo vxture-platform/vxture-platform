@@ -152,10 +152,13 @@ function AddonPackCard({
 // ============================================================================
 
 export function AddonPacksSection({
+  id,
   onSettledRefresh,
   formatMoney,
   canPurchase = true,
 }: {
+  /** 锚点 id:存储/Credits 板块的「去加购」滚到这里(配额页额度告急时的去处)。 */
+  id?: string;
   /** 订单状态变化后让父页刷新配额总览(额度入池后立即可见)。 */
   onSettledRefresh: () => void;
   formatMoney: (yuan: string, currency: string) => string;
@@ -365,6 +368,7 @@ export function AddonPacksSection({
 
   return (
     <PageSection
+      {...(id ? { id } : {})}
       icon="lightning"
       level={2}
       title={t("title")}
