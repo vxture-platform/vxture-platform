@@ -410,6 +410,43 @@ export class PgSubscriptionRepository {
   }
 
   /**
+   * 被中断的履约留下的「孤儿订阅」：该 workspace × 目标产品下**在用**、且还没有任何
+   * 订单认领（`current_order_id IS NULL`）的那一条。
+   *
+   * 2026-09-07 生产事故：`fulfill()` 的 new 分支先建订阅、再回写条款、最后才翻订单，
+   * 三步各自独立事务。中间失败（当时是生产列级 GRANT 滞后于 DDL，写
+   * `paid_amount`/`current_order_id` 吃 42501）时订阅已经生效、订单仍停在 `paid`；
+   * 此后每一次重试又走一遍「建订阅」，撞 `uidx_subscriptions_live_per_product` 的
+   * 23505——**第一次尝试自己的副作用把所有重试永久挡死**，设计上的 reconcile 兜底
+   * 形同虚设。状态集与那条唯一索引严格一致（active/trialing/expiring/overdue），
+   * 因为挡住 INSERT 的正是它；少一个状态就会漏掉一类挡路行。
+   */
+  async findUnclaimedLiveForProduct(
+    workspaceId: string,
+    planVersionId: string,
+  ): Promise<SubscriptionRecord | null> {
+    const result = await this.pool.query<SubscriptionRow>(
+      `select s.*
+         from metering.subscriptions s
+        where s.workspace_id = $1
+          and s.deleted_at is null
+          and s.current_order_id is null
+          and s.status in ('active', 'trialing', 'expiring', 'overdue')
+          and s.product_id = (
+            select pc.product_id
+              from product.plan_components pc
+             where pc.plan_version_id = $2 and pc.component_role = 'primary'
+             limit 1
+          )
+        order by s.created_at desc
+        limit 1`,
+      [workspaceId, planVersionId],
+    );
+    const row = result.rows[0];
+    return row ? this.mapSubscription(row) : null;
+  }
+
+  /**
    * Tier-conflict probe for the D12 stacking invariant (arda reply-07 §3,
    * owner ruling 2026-07-14): one product must never be covered by several
    * live subscriptions at DIFFERENT tiers — an upgrade modifies the original

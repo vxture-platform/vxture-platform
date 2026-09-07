@@ -831,6 +831,25 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
         </div>
       ) : null}
 
+      {/*
+       * 页头动作（「重试开通」）不开对话框，失败时 operationError 此前只在五个
+       * 对话框内部渲染 —— 报错等于没报：2026-09-07 生产上运营点「重试开通」、
+       * TOTP 过了、后端报错了，界面上什么都没有。错误必须有页面级落脚处。
+       */}
+      {!paymentDialogOpen &&
+      !rejectDialogOpen &&
+      !voidDialogOpen &&
+      !restoreDialogOpen &&
+      !refundDialog &&
+      operationError ? (
+        <div
+          className="inline-flex w-fit items-center rounded-lg px-sm py-xs text-body-sm font-semibold text-destructive-text"
+          role="alert"
+        >
+          {operationError}
+        </div>
+      ) : null}
+
       {order ? (
         <>
           {order.declaredPayment ? (

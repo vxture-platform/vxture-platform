@@ -60,4 +60,16 @@ docker run --rm \
   postgres:18-alpine \
   sh -lc 'H="$(cat /ddl/[0-9]*.sql | md5sum | awk "{print \$1}")" && psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -v expected_tables="$EXPECTED_TABLES" -v expected_ddl_hash="$H" -f /verify/baseline-assertions.sql'
 
+# D. 列级锁「声明 ↔ 活库」一致（2026-09-07 事故整改）。前三项断言比的是表与行，
+#    列级 GRANT 是第四个可漂移面：98_column_locks.sql 只在 28-apply 跑，已有库不重放，
+#    于是迁移新增的列在生产没有授权，应用写它就 42501——而静态守卫拿代码比的是仓库里
+#    的锁文件（是对的），两边各自自洽，差异只在活库上，只能在这里抓。
+docker run --rm \
+  --network vxture-prod \
+  --env-file "$PLATFORM_ENV" \
+  -v "$DDL_DIR:/ddl:ro" \
+  -v "$VERIFY_DIR:/verify:ro" \
+  postgres:18-alpine \
+  sh -lc 'psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f /verify/column-locks-drift.sql'
+
 echo "=== Platform baseline audit PASSED ==="

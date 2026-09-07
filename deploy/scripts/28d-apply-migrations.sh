@@ -47,6 +47,7 @@ docker run --rm \
   --env-file "$PLATFORM_ENV" \
   --env MIGRATE_TIMEOUT_SECONDS="$MIGRATE_TIMEOUT_SECONDS" \
   -v "$MIG_DIR:/migrations:ro" \
+  -v "$COMPOSE_DIR/database/ddl/98_column_locks.sql:/column_locks.sql:ro" \
   postgres:18-alpine \
   sh -lc '
     set -e
@@ -54,6 +55,14 @@ docker run --rm \
       echo "==> $f"
       timeout "$MIGRATE_TIMEOUT_SECONDS" psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
     done
+    # 列级锁随迁移重放（2026-09-07 事故）：迁移能加列，却没有任何东西把新列授给
+    # platform_svc——98_column_locks.sql 只在 28-apply（全量 DDL）里跑，已有库永远不
+    # 重放。product_330 新增的 metering.subscriptions.paid_amount/current_order_id 等
+    # 5 张表的列就这样在生产缺了授权，履约写它们时 42501，订阅已生效而订单停在 paid。
+    # 文件本身幂等（REVOKE + GRANT 白名单），-1 单事务：中途出错整体回滚，绝不会把表
+    # REVOKE 掉却没 GRANT 回去。
+    echo "==> /column_locks.sql（列级锁重放，随 DDL 保持一致）"
+    timeout "$MIGRATE_TIMEOUT_SECONDS" psql "$DATABASE_URL" -1 -v ON_ERROR_STOP=1 -f /column_locks.sql
   '
 
 echo "=== Forward migrations done（调用方须随后 28c restamp + 30-verify）==="

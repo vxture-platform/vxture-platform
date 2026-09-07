@@ -489,26 +489,43 @@ export class OrderService {
       const now = new Date();
       const endAt = addCycle(now, order.cycleUnit, order.cycleCount);
       const price = Number(order.payableAmount);
-      // 订阅↔订单的关联是 current_order_id（下面 applySubscriptionTerms 落）；
-      // subscriptions.order_no 已停写（product_330 P2）。
-      subscription = await this.subscriptions.createSubscription({
-        tenantId: order.tenantId,
-        workspaceId: order.workspaceId,
-        planVersionId: order.planVersionId,
-        cycleType: order.cycleUnit,
-        cycleCount: order.cycleCount,
-        startAt: now,
-        endAt,
-        // owner 2026-09-03：自动续费默认关，客户在订单确认页显式开启——按订单值写。
-        autoRenew: order.autoRenew,
-        payAmount: price,
-        currency: order.currency,
-        createdBy: order.createdById ?? actor.actorId ?? order.tenantId,
-        status: "active",
-        subscriptionKind: price > 0 ? "paid" : "free",
-        activationMethod: "offline_purchase",
-        createdByType: order.createdByType,
-      });
+      // 幂等（2026-09-07 事故）：建订阅、回写条款、翻订单是三个独立事务，中间断掉
+      // 就会留下一条已生效、但没有订单认领的订阅。此时**必须认领它**而不是再建一条：
+      // 再建一定撞 uidx_subscriptions_live_per_product（一个 workspace × product 至多
+      // 一条在用订阅），于是第一次尝试的副作用把后续所有重试——包括 reconcile 兜底和
+      // 运营台「重试开通」——永久挡死。判据只认「没有订单认领」的行，不碰客户已有的
+      // 正常订阅：那属于「买了已经拥有的产品」，是另一回事，下面单独报错。
+      const orphan = await this.subscriptions.findUnclaimedLiveForProduct(
+        order.workspaceId,
+        order.planVersionId,
+      );
+      if (orphan) {
+        this.logger.warn(
+          `fulfill ${order.orderNo}: adopting subscription ${orphan.id} left behind by an interrupted attempt`,
+        );
+        subscription = orphan;
+      } else {
+        // 订阅↔订单的关联是 current_order_id（下面 applySubscriptionTerms 落）；
+        // subscriptions.order_no 已停写（product_330 P2）。
+        subscription = await this.subscriptions.createSubscription({
+          tenantId: order.tenantId,
+          workspaceId: order.workspaceId,
+          planVersionId: order.planVersionId,
+          cycleType: order.cycleUnit,
+          cycleCount: order.cycleCount,
+          startAt: now,
+          endAt,
+          // owner 2026-09-03：自动续费默认关，客户在订单确认页显式开启——按订单值写。
+          autoRenew: order.autoRenew,
+          payAmount: price,
+          currency: order.currency,
+          createdBy: order.createdById ?? actor.actorId ?? order.tenantId,
+          status: "active",
+          subscriptionKind: price > 0 ? "paid" : "free",
+          activationMethod: "offline_purchase",
+          createdByType: order.createdByType,
+        });
+      }
       await this.orders.applySubscriptionTerms(subscription.id, {
         mode: "new",
         cycleUnit: order.cycleUnit,
@@ -518,11 +535,19 @@ export class OrderService {
       });
     }
 
-    await this.orders.markFulfilled(order.id, subscription.id, {
+    // 翻订单是 CAS（where status = 'paid'）：0 行不是异常，但**也不是成功**。此前返回值
+    // 被丢掉，订单没翻也照走通知、照返回「已履约」——调用方拿不到任何信号（2026-09-07
+    // 事故的放大器之一）。并发履约先翻了是良性的，所以复读一次再判，只对真没翻的报错。
+    const flipped = await this.orders.markFulfilled(order.id, subscription.id, {
       ...actor,
       remark: actor.remark ?? `${mode} → subscription ${subscription.id}`,
     });
     const fresh = await this.getOrder(order.id);
+    if (!flipped && fresh.status !== "fulfilled") {
+      throw new ConflictException(
+        `订单 ${order.orderNo} 履约未落地：订阅 ${subscription.id} 已生效，但订单仍停在 ${fresh.status}`,
+      );
+    }
     const fulfilledSub = subscription;
     await this.emit(`fulfill ${order.orderNo}`, async () => {
       const display = await this.orders.getPlanDisplay(order.planVersionId);
