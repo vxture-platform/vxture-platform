@@ -440,7 +440,7 @@ export function RunosCallStreams({
                  的第一个分叉，但把三个数平铺在列里会把这张表挤成一堵数字墙。 */
               id: "latency",
               header: "延迟",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: CapabilityCallRecord) =>
                 r.latencyTotalMs != null ? (
@@ -512,7 +512,7 @@ export function RunosCallStreams({
                */
               id: "cost",
               header: "计量",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: CapabilityCallRecord) =>
                 r.costAmount != null ? (
@@ -543,7 +543,7 @@ export function RunosCallStreams({
                */
               id: "quota",
               header: "配额位置",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: CapabilityCallRecord) =>
                 r.quotaLimit ? (

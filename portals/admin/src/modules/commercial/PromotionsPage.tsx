@@ -184,7 +184,7 @@ function usePromotionColumns(): DataTableColumn<PromotionOperationRecord>[] {
     {
       id: "redemption",
       header: "核销",
-      align: "right",
+      align: "numeric",
       cell: (record) => (
         <TableTitleCell
           title={formatNumber(record.redemptionCount)}

@@ -401,14 +401,14 @@ export default function JobSchedulerPage() {
                 {
                   id: "interval",
                   header: "心跳间隔",
-                  align: "right",
+                  align: "numeric",
                   width: "xs",
                   cell: (r: JobHeartbeatItem) => formatIntervalMs(r.intervalMs),
                 },
                 {
                   id: "duration",
                   header: "耗时",
-                  align: "right",
+                  align: "numeric",
                   width: "xs",
                   cell: (r: JobHeartbeatItem) =>
                     formatDuration(r.lastDurationMs),
@@ -416,14 +416,14 @@ export default function JobSchedulerPage() {
                 {
                   id: "items",
                   header: "处理项数",
-                  align: "right",
+                  align: "numeric",
                   width: "xs",
                   cell: (r: JobHeartbeatItem) => r.lastItemsProcessed ?? "—",
                 },
                 {
                   id: "counts",
                   header: "运行 / 失败次数",
-                  align: "right",
+                  align: "numeric",
                   width: "sm",
                   cell: (r: JobHeartbeatItem) =>
                     `${r.runCount} / ${r.failureCount}`,
@@ -629,7 +629,7 @@ export default function JobSchedulerPage() {
                 {
                   id: "attempts",
                   header: "尝试次数",
-                  align: "right",
+                  align: "numeric",
                   width: "xs",
                   cell: (r: WebhookDeliveryIssue) =>
                     `${r.attempts} / ${r.maxAttempts}`,

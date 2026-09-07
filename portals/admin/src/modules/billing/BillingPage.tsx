@@ -383,7 +383,7 @@ function useBillingColumns(): DataTableColumn<BillingRecord>[] {
     {
       id: "amount",
       header: "金额",
-      align: "right",
+      align: "numeric",
       cell: (bill) => (
         <TableTitleCell
           title={formatCurrency(bill.payableAmount, bill.currency)}

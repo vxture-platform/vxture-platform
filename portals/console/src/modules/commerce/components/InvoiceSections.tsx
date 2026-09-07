@@ -253,7 +253,7 @@ export function InvoiceSections({
     {
       id: "amount",
       header: t("records.colAmount"),
-      align: "right",
+      align: "numeric",
       cell: (r) => (
         <span className="tabular-nums font-medium text-foreground">
           {money(r.invoiceAmount, r.currency)}

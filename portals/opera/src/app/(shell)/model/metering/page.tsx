@@ -418,7 +418,7 @@ export default function MeteringPage() {
       {
         id: "requests",
         header: "请求数",
-        align: "right",
+        align: "numeric",
         width: "sm",
         cell: (r: UsageSummaryRecord) =>
           `${formatNumber(r.requests)}（错误 ${formatNumber(r.errors)}）`,
@@ -426,7 +426,7 @@ export default function MeteringPage() {
       {
         id: "tokens",
         header: "Token（入/出/总）",
-        align: "right",
+        align: "numeric",
         width: "sm",
         cell: (r: UsageSummaryRecord) =>
           `${formatNumber(r.inputTokens)} / ${formatNumber(r.outputTokens)} / ${formatNumber(r.totalTokens)}`,

@@ -131,7 +131,7 @@ function useTenantColumns(): DataTableColumn<TenantOperationRecord>[] {
     {
       id: "member",
       header: "成员",
-      align: "right",
+      align: "numeric",
       cell: (tenant) => formatNumber(tenant.memberCount),
     },
     {

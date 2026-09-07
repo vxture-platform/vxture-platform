@@ -32,6 +32,7 @@ import {
   Icon,
   MetricGrid,
   StatusBadge,
+  TableTitleCell,
   ViewHeader,
   ViewLayout,
 } from "@vxture/design-system";
@@ -61,7 +62,7 @@ import {
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
 import { PlannedBadge } from "@/components/planned";
-import { NumericCell } from "@/components/table/NumericCell";
+
 import { PageSection, SignalList } from "@/layout/shell";
 import { fmtDate, fmtTime } from "./components/hubModel";
 import { OrdersSection } from "./components/OrdersSection";
@@ -321,24 +322,22 @@ export function BillingPage() {
   const pageCount = Math.max(1, Math.ceil(billsTotal / BILLS_PAGE_SIZE));
 
   /*
-   * 列对齐 = 全站表格规范（owner 2026-09-07,见 components/table/NumericCell.tsx 的
-   * 文件头）:选择列 / 序号列 / 操作列居中（DS 自管）;首列局左（DS 默认,不必写）;
-   * 数值列走 NumericCell;其余列一律显式 center——DS 的默认是 left,不写就不居中。
+   * 列对齐 = 全站表格规范（owner 2026-09-07，规范全文在 DS 的 `DataTable` 文件头）。
+   * DS 11.0.0 起这条规范由件**结构性**保证:默认值随位置——首列 `left`、其余
+   * `center`，新表不必逐列写。下面几处 `align:"center"` 与默认同值、留着不碍事;
+   * 真正偏离默认的只有金额列的 `numeric`。
    */
   const billColumns: DataTableColumn<ConsoleBill>[] = [
     {
       id: "billNo",
       header: t("table.colBillNo"),
-      // 首列（标题列）局左 = DS 默认,不显式标 align。
+      // 首列（标题列）局左 = DS 默认,不显式标 align。两行主副走 DS 的
+      // TableTitleCell,不再手写 flex-col——字号/行高/截断由件统一给。
       cell: (b) => (
-        <span className="flex flex-col">
-          <span className="font-mono text-label-md text-foreground">
-            {b.billNo}
-          </span>
-          <span className="text-body-sm text-muted-foreground tabular-nums">
-            {fmtDate(b.createdAt)} {fmtTime(b.createdAt)}
-          </span>
-        </span>
+        <TableTitleCell
+          title={<span className="font-mono">{b.billNo}</span>}
+          description={`${fmtDate(b.createdAt)} ${fmtTime(b.createdAt)}`}
+        />
       ),
     },
     {
@@ -365,21 +364,23 @@ export function BillingPage() {
           : t("type.normal"),
     },
     {
-      // 数值列:居中的是那个等宽块,块内的值居右——所以标 center 不是 right。
+      // 金额列走 DS 的 numeric 档:右对齐 + 右内边距 + tabular-nums,由件统一给。
       id: "amount",
       header: t("table.colAmount"),
-      align: "center",
+      align: "numeric",
       cell: (b) => (
-        <NumericCell
-          value={money(b.payableAmount, b.currency)}
-          {...(Number.parseFloat(b.discountAmount) > 0
-            ? {
-                sub: t("table.discountOff", {
-                  amount: money(b.discountAmount, b.currency),
-                }),
-              }
-            : {})}
-        />
+        <span className="flex flex-col">
+          <span className="font-semibold text-foreground">
+            {money(b.payableAmount, b.currency)}
+          </span>
+          {Number.parseFloat(b.discountAmount) > 0 ? (
+            <span className="text-body-sm text-muted-foreground">
+              {t("table.discountOff", {
+                amount: money(b.discountAmount, b.currency),
+              })}
+            </span>
+          ) : null}
+        </span>
       ),
     },
     {

@@ -238,7 +238,7 @@ export function UsageRecordsPage() {
     {
       id: "amount",
       header: t("table.colAmount"),
-      align: "right",
+      align: "numeric",
       cell: (e) => {
         // 申请 ≠ 实扣 = 这次没能全额扣到(超额准入自愈)。差额直接写在行上,
         // 这正是「我调用了为什么没扣」的答案;相等时不出副行,免得每行都挂一句废话。

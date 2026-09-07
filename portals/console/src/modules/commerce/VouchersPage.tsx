@@ -275,7 +275,7 @@ export function VouchersPage() {
     {
       id: "face",
       header: t("table.colFace"),
-      align: "right",
+      align: "numeric",
       cell: (v) => (
         <span className="flex flex-col tabular-nums">
           <span className="font-medium text-foreground">{faceValue(v)}</span>

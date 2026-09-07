@@ -658,7 +658,6 @@ export function OpsTodosPage() {
               {
                 id: "updated",
                 header: tShared("columns.updatedAt"),
-                align: "right",
                 cell: (item) => formatDateTime(item.updatedAt, locale),
               },
             ]}

@@ -598,7 +598,7 @@ export function ProductSolutionsPage() {
     {
       id: "operation",
       header: t("columns.operation"),
-      align: "right",
+      align: "numeric",
       cell: (solution) => (
         <TableTitleCell
           title={formatMoney(solution.monthlyRevenue)}

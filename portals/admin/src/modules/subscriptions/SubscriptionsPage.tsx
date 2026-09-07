@@ -313,7 +313,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
     {
       id: "quota",
       header: "配额",
-      align: "right",
+      align: "numeric",
       cell: (subscription) => (
         <TableTitleCell
           title={`${formatNumber(subscription.quota.usageRate)}%`}
@@ -324,7 +324,7 @@ function useSubscriptionColumns(): DataTableColumn<SubscriptionOperationRecord>[
     {
       id: "revenue",
       header: "订阅收入",
-      align: "right",
+      align: "numeric",
       // 订阅收入 = 本周期实付（owner 2026-09-03：收入是真实收入，年付 ¥0.10 就显示 ¥0.10，
       // 任何地方都不折成月均）。
       cell: (subscription) => (

@@ -236,7 +236,7 @@ export function DashboardPage() {
     {
       id: "amount",
       header: t("bills.headers.amount"),
-      align: "right",
+      align: "numeric",
       cell: (b) => (
         <span className="tabular-nums font-semibold text-foreground">
           {money(b.payableAmount, b.currency)}
@@ -274,7 +274,7 @@ export function DashboardPage() {
     {
       id: "usage",
       header: t("quotas.headers.usage"),
-      align: "right",
+      align: "numeric",
       cell: (r) => (
         <span className="inline-flex items-baseline gap-xs tabular-nums">
           <span className="text-info-text">{quotaValue(r, r.used)}</span>

@@ -204,7 +204,7 @@ function useRedemptionColumns(): DataTableColumn<PromotionRedemptionRecord>[] {
     {
       id: "discount",
       header: "优惠金额",
-      align: "right",
+      align: "numeric",
       cell: (record) => (
         <TableTitleCell
           title={formatCurrency(record.discountAmount, record.currency)}

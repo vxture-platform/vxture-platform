@@ -123,7 +123,7 @@ export function AddonOrdersPage() {
     {
       id: "price",
       header: "应收",
-      align: "right",
+      align: "numeric",
       cell: (o) => (
         <span className="tabular-nums font-medium text-foreground">
           {money(o.price, o.currency)}
@@ -144,7 +144,7 @@ export function AddonOrdersPage() {
     {
       id: "actions",
       header: "",
-      align: "right",
+      align: "numeric",
       cell: (o) => (
         <Button
           size="sm"

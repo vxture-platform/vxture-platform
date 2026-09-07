@@ -528,14 +528,14 @@ export default function CapabilityMeteringPage() {
             {
               id: "calls",
               header: "调用数",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: UsageSummaryRow) => r.calls.toLocaleString("zh-CN"),
             },
             {
               id: "allowed",
               header: "放行数",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: UsageSummaryRow) =>
                 r.allowedCalls.toLocaleString("zh-CN"),
@@ -543,7 +543,7 @@ export default function CapabilityMeteringPage() {
             {
               id: "success",
               header: "成功数",
-              align: "right",
+              align: "numeric",
               width: "xs",
               cell: (r: UsageSummaryRow) => (
                 <span className="flex flex-col items-end gap-2xs">
@@ -561,7 +561,7 @@ export default function CapabilityMeteringPage() {
             {
               id: "cost",
               header: "成本（运营口径）",
-              align: "right",
+              align: "numeric",
               width: "sm",
               cell: (r: UsageSummaryRow) => (
                 <span className="font-mono text-code-sm">{r.costAmount}</span>

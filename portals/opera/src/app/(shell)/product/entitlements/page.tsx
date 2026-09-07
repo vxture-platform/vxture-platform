@@ -933,7 +933,7 @@ function ProductEntitlements() {
                 {
                   id: "quota",
                   header: "配额",
-                  align: "right",
+                  align: "numeric",
                   width: "sm",
                   cell: (r: CapabilityRow) => formatQuota(r.grant.quotaLimit),
                 },
