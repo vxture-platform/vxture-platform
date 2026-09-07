@@ -146,6 +146,14 @@ function build(orderRow: OrderRecord, fromSub: Record<string, unknown> | null) {
     createSubscription: vi.fn(async (_input: Record<string, unknown>) =>
       sub({ id: "sub-new", planVersionId: PV_PRO }),
     ),
+    // 缺省「没有孤儿订阅」= 正常首次履约，走建订阅那条路（2026-09-07 事故后加的
+    // 幂等分支；要验认领路径的用例自己 mockResolvedValueOnce 一条订阅）。
+    findUnclaimedLiveForProduct: vi.fn(
+      async (
+        _ws: string,
+        _pv: string,
+      ): Promise<ReturnType<typeof sub> | null> => null,
+    ),
     upgradeSubscription: vi.fn(
       async (_id: string, _pv: string, _actor?: string, _remark?: string) =>
         sub({ planVersionId: PV_PRO }),
@@ -330,6 +338,47 @@ describe("OrderService upgrade proration (P2-a)", () => {
     );
     await service.fulfill("ord-1", { actorType: "operator", actorId: "op" });
     expect(orders.grantLeftoverToPrepaid).not.toHaveBeenCalled();
+  });
+
+  // 2026-09-07 生产事故：建订阅成功、回写条款失败（列级 GRANT 滞后 → 42501），订阅
+  // 生效而订单停在 paid。此后每次重试再建一条，撞 uidx_subscriptions_live_per_product
+  // 的 23505，永远好不了。重试必须认领上一次留下的那条，而不是再建。
+  it("fulfill(new) 认领上次中断留下的孤儿订阅，不再新建", async () => {
+    const { service, orders, subscriptions } = build(
+      order({ intent: "new" }),
+      null,
+    );
+    subscriptions.findUnclaimedLiveForProduct.mockResolvedValueOnce(
+      sub({ id: "sub-orphan", planVersionId: PV_PRO }),
+    );
+
+    await service.fulfill("ord-1", { actorType: "system", actorId: null });
+
+    expect(subscriptions.createSubscription).not.toHaveBeenCalled();
+    expect(orders.applySubscriptionTerms).toHaveBeenCalledWith(
+      "sub-orphan",
+      expect.objectContaining({ mode: "new", orderId: "ord-1" }),
+    );
+    expect(orders.markFulfilled).toHaveBeenCalledWith(
+      "ord-1",
+      "sub-orphan",
+      expect.anything(),
+    );
+  });
+
+  it("fulfill(new) 没有孤儿订阅时照常新建", async () => {
+    const { service, subscriptions } = build(order({ intent: "new" }), null);
+    await service.fulfill("ord-1", { actorType: "system", actorId: null });
+    expect(subscriptions.createSubscription).toHaveBeenCalledTimes(1);
+  });
+
+  // markFulfilled 是 CAS：0 行说明订单没翻。此前返回值被丢掉，调用方以为成功。
+  it("markFulfilled 未翻动订单且订单仍非 fulfilled 时抛错，不再静默成功", async () => {
+    const { service, orders } = build(order({ intent: "new" }), null);
+    orders.markFulfilled.mockResolvedValueOnce(false);
+    await expect(
+      service.fulfill("ord-1", { actorType: "system", actorId: null }),
+    ).rejects.toThrow(/履约未落地/);
   });
 });
 

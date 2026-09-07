@@ -472,6 +472,17 @@ export class SubscriptionService {
     );
   }
 
+  /**
+   * 上一次履约中断后遗留的、还没被任何订单认领的在用订阅（2026-09-07 事故）。
+   * OrderService.fulfill 的 new 分支用它做幂等：有就认领，不再新建。
+   */
+  findUnclaimedLiveForProduct(
+    workspaceId: string,
+    planVersionId: string,
+  ): Promise<SubscriptionRecord | null> {
+    return this.repo.findUnclaimedLiveForProduct(workspaceId, planVersionId);
+  }
+
   private async assertNoTierConflict(
     workspaceId: string,
     planVersionId: string,
