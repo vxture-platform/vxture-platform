@@ -16,6 +16,7 @@ import { RowActionsPlaceholder } from "@/components/table/RowActionsPlaceholder"
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
+import { useTableSort } from "@/lib/table-sort";
 import {
   Badge,
   Button,
@@ -80,6 +81,19 @@ export function AuditLogsPage() {
   const { session } = useConsoleSession();
 
   const [rows, setRows] = useState<ConsoleAuditLog[]>([]);
+  const sortAccessors = useMemo(
+    () => ({
+      at: (r: ConsoleAuditLog) => new Date(r.at).getTime(),
+      actor: (r: ConsoleAuditLog) => r.actorName ?? "",
+      action: (r: ConsoleAuditLog) => r.action,
+    }),
+    [],
+  );
+  const {
+    sort,
+    onSortChange,
+    rows: sortedRows,
+  } = useTableSort(rows, sortAccessors);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -142,6 +156,7 @@ export function AuditLogsPage() {
     () => [
       {
         id: "at",
+        sortable: true,
         header: t("table.colAt"),
         cell: (r) => (
           <TableTitleCell
@@ -152,6 +167,7 @@ export function AuditLogsPage() {
       },
       {
         id: "actor",
+        sortable: true,
         header: t("table.colActor"),
         cell: (r) =>
           r.actorType === "customer" ? (
@@ -166,6 +182,7 @@ export function AuditLogsPage() {
       },
       {
         id: "action",
+        sortable: true,
         header: t("table.colAction"),
         cell: (r) => (
           <span className="flex flex-col">
@@ -263,7 +280,9 @@ export function AuditLogsPage() {
         <DataTable<ConsoleAuditLog>
           labels={tableLabels}
           columns={columns}
-          rows={rows}
+          rows={sortedRows}
+          {...(sort ? { sort } : {})}
+          onSortChange={onSortChange}
           rowKey={(r) => r.id}
           /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
              与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */

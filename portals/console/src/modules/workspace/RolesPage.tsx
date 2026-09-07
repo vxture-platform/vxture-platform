@@ -28,6 +28,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
+import { useTableSort } from "@/lib/table-sort";
 import {
   ActionMenu,
   Button,
@@ -182,6 +183,20 @@ export function RolesPage() {
     [roles],
   );
 
+  /* 排序叠在固定序之上：hook 在没有生效排序时原样返回，默认的 owner→guest 不变。 */
+  const sortAccessors = useMemo(
+    () => ({
+      role: (r: (typeof orderedRoles)[number]) => r.roleName,
+      permCount: (r: (typeof orderedRoles)[number]) => r.permissions.length,
+    }),
+    [],
+  );
+  const {
+    sort,
+    onSortChange,
+    rows: sortedRoles,
+  } = useTableSort(orderedRoles, sortAccessors);
+
   const systemRoles = roles.filter((r) => r.isSystem).length;
   /* owner 只能经「转让所有权」产生,不出现在成员管理的角色下拉里——「可指派」数
      必须把它减掉,否则这个数与用户在下拉里数到的对不上。 */
@@ -220,6 +235,7 @@ export function RolesPage() {
   const roleColumns: DataTableColumn<TenantRoleRecord>[] = [
     {
       id: "role",
+      sortable: true,
       header: t("directory.colRole"),
       cell: (r) => (
         <TableTitleCell
@@ -260,6 +276,7 @@ export function RolesPage() {
     },
     {
       id: "permCount",
+      sortable: true,
       header: t("directory.colPermCount"),
       align: "center",
       cell: (r) => (
@@ -320,7 +337,9 @@ export function RolesPage() {
         <DataTable<TenantRoleRecord>
           labels={tableLabels}
           columns={roleColumns}
-          rows={orderedRoles}
+          rows={sortedRoles}
+          {...(sort ? { sort } : {})}
+          onSortChange={onSortChange}
           rowKey={(r) => r.roleCode}
           /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
              与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */

@@ -69,6 +69,7 @@ import {
 import type { MemberRecord, TenantRoleRecord } from "@/entities/console";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
+import { useTableSort } from "@/lib/table-sort";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
 import { useConfirmLabels } from "@/lib/destructive";
@@ -507,7 +508,19 @@ export function MembersPage() {
   const selected = members.find((member) => member.id === selectedId) ?? null;
   /* 初始档给定值:console 的分页档位是 10/20/50/100(没有 DS 默认的 "auto" 自适应
      档),而 `useListPagination` 的默认初值正是 "auto"——不给,分段控件一格都选不中。 */
-  const pager = useListPagination(filtered, 20);
+  /* 排序在分页之前。默认序（后端给的）在没有生效排序时原样保留。 */
+  const sortAccessors = useMemo(
+    () => ({
+      name: (m: MemberRecord) => m.name,
+    }),
+    [],
+  );
+  const {
+    sort,
+    onSortChange,
+    rows: sortedMembers,
+  } = useTableSort(filtered, sortAccessors);
+  const pager = useListPagination(sortedMembers, 20);
   const pagedMembers = pager.pageRows;
   const selectedCount = members.filter((member) =>
     selectedIds.has(member.id),
@@ -963,6 +976,7 @@ export function MembersPage() {
                 columns={[
                   {
                     id: "name",
+                    sortable: true,
                     header: t("table.columns.name"),
                     cell: (member: MemberRecord) => memberIdentity(member),
                   },
@@ -1008,6 +1022,8 @@ export function MembersPage() {
                   },
                 ]}
                 rows={pagedMembers}
+                {...(sort ? { sort } : {})}
+                onSortChange={onSortChange}
                 rowKey={(member: MemberRecord) => member.id}
                 loading={loading}
                 selectedKeys={[...selectedIds]}

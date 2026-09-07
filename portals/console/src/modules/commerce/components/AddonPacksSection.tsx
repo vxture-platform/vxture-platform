@@ -13,9 +13,10 @@
  * 单操作列:去支付主按钮 + ⋯ 取消,遵守表格规范)。
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
+import { useTableSort } from "@/lib/table-sort";
 import {
   ActionMenu,
   Badge,
@@ -174,6 +175,18 @@ export function AddonPacksSection({
 
   const [packs, setPacks] = useState<ConsoleAddonPack[]>([]);
   const [orders, setOrders] = useState<ConsoleAddonOrder[]>([]);
+  const sortAccessors = useMemo(
+    () => ({
+      order: (o: ConsoleAddonOrder) => new Date(o.createdAt).getTime(),
+      price: (o: ConsoleAddonOrder) => Number.parseFloat(o.price || "0"),
+    }),
+    [],
+  );
+  const {
+    sort,
+    onSortChange,
+    rows: sortedOrders,
+  } = useTableSort(orders, sortAccessors);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -263,6 +276,7 @@ export function AddonPacksSection({
   const orderColumns: DataTableColumn<ConsoleAddonOrder>[] = [
     {
       id: "order",
+      sortable: true,
       header: t("colOrder"),
       cell: (o) => (
         <TableTitleCell
@@ -289,6 +303,7 @@ export function AddonPacksSection({
     },
     {
       id: "price",
+      sortable: true,
       header: t("colPrice"),
       align: "money",
       cell: (o) => (
@@ -409,7 +424,9 @@ export function AddonPacksSection({
         <DataTable<ConsoleAddonOrder>
           labels={tableLabels}
           columns={orderColumns}
-          rows={orders}
+          rows={sortedOrders}
+          {...(sort ? { sort } : {})}
+          onSortChange={onSortChange}
           rowKey={(o) => o.orderNo}
           /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
              与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
