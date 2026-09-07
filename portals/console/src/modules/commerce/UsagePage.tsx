@@ -15,6 +15,20 @@
  * 本页聚焦 AI Credits(owner:细化统计主要针对 ai.credit);趋势可视化
  * 待 DS 图表原语落地后升级,现以数据表表达(不自造图表基础件)。
  * 严格 DS 组合件拼装;中文基准,zh/en 双份 i18n(usagePage 命名空间)。
+ *
+ * ## 2026-09-07 页面级走查改了什么
+ *
+ *   · **指标名不再印原始键**:调用记录的「指标」列直排 `ai.credit`,而配额页
+ *     照字典显示「AI Credits」——同一个值两页两副面孔。字典收进 `lib/metric-label`
+ *     的顶层 `metric` 命名空间,两页读同一份。
+ *   · **翻页只留一种**:调用记录自造了一套「上一页 / 1 of 3 / 下一页」ghost 按钮,
+ *     没有每页行数、没有统一计数语;换成 ListPagination,原来的「近 N 天共 M 条 /
+ *     只显示最近 N 条」提示留在表尾左侧(与配额页存储表尾同一手法)。四张表全部有分页。
+ *   · **长文本列并进主辅**:趋势表的「按产品」是一串明细不是一个值,居中难读、
+ *     左对齐又和别的列打架;并进用量列副行,趋势表回到三列。
+ *   · **对齐与时间列**:首列左、数字右、其余居中;成员表的「最近使用」改日期主/时间辅。
+ *   · **补说明板块**:这页的数是**看板不是账单依据**、桶按 UTC 切、「未归集」是什么——
+ *     此前只写在代码注释里,屏幕上一个字没有,而「未归集」徽章天天在用户眼前。
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -25,6 +39,9 @@ import {
   Button,
   DataTable,
   EmptyState,
+  FilterBar,
+  Icon,
+  Input,
   MetricGrid,
   Progress,
   SegmentedControl,
@@ -48,11 +65,13 @@ import {
   LoadFailedBanner,
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
-import { PageSection } from "@/layout/shell";
+import { ListPagination } from "@/components/pagination";
+import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 import { fmtCount } from "@/lib/format-metrics";
+import { useMetricLabel } from "@/lib/metric-label";
 import { fmtDate, fmtTime } from "./components/hubModel";
 
-const EVENTS_PAGE_SIZE = 10;
+const PAGE_SIZE = 10;
 
 type TrendWindow = "hour" | "day" | "week" | "month" | "year";
 
@@ -84,6 +103,8 @@ const axisLabel = (granularity: string, period: string): string =>
 export function UsagePage() {
   const t = useTranslations("usagePage");
   const tableLabels = useTableLabels();
+  // 指标名走共用字典(配额页读同一份;见 lib/metric-label)
+  const metricLabel = useMetricLabel();
   const { session } = useConsoleSession();
   const isOrganization =
     session.tenant?.mode === "tenant" &&
@@ -97,7 +118,16 @@ export function UsagePage() {
   const [members, setMembers] = useState<ConsoleUsageMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [trendLoading, setTrendLoading] = useState(true);
+  /* 四张表各自翻页:趋势桶/产品分布/调用记录/成员是四份互不相干的清单。 */
+  const [trendPage, setTrendPage] = useState(1);
+  const [trendPageSize, setTrendPageSize] = useState<number>(PAGE_SIZE);
+  const [sharePage, setSharePage] = useState(1);
+  const [sharePageSize, setSharePageSize] = useState<number>(PAGE_SIZE);
   const [eventsPage, setEventsPage] = useState(1);
+  const [eventsPageSize, setEventsPageSize] = useState<number>(PAGE_SIZE);
+  const [eventsQuery, setEventsQuery] = useState("");
+  const [memberPage, setMemberPage] = useState(1);
+  const [memberPageSize, setMemberPageSize] = useState<number>(PAGE_SIZE);
   /* 读失败显影(批 0b):四个读都是 strict,任一失败置 loadFailed——指标画「—」、
    * 表格画「读取失败」,不再把回落的空 trend 画成「0 credits」。重试走 reloadKey。 */
   const [loadFailed, setLoadFailed] = useState(false);
@@ -217,6 +247,27 @@ export function UsagePage() {
       .reverse();
   }, [trend]);
 
+  const trendPageCount = Math.max(
+    1,
+    Math.ceil(trendRows.length / trendPageSize),
+  );
+  useEffect(() => {
+    setTrendPage(1);
+  }, [trendWindow]);
+  useEffect(() => {
+    setTrendPage((p) =>
+      Math.min(p, Math.max(1, Math.ceil(trendRows.length / trendPageSize))),
+    );
+  }, [trendRows.length, trendPageSize]);
+  const pagedTrendRows = useMemo(
+    () =>
+      trendRows.slice(
+        (trendPage - 1) * trendPageSize,
+        trendPage * trendPageSize,
+      ),
+    [trendRows, trendPage, trendPageSize],
+  );
+
   const trendColumns: DataTableColumn<TrendRow>[] = [
     {
       id: "period",
@@ -232,26 +283,25 @@ export function UsagePage() {
       header: t("trend.colTotal"),
       align: "right",
       cell: (r) => (
-        <span className="tabular-nums font-medium text-foreground">
-          {fmtCount(r.total)}
-        </span>
-      ),
-    },
-    {
-      id: "byProduct",
-      header: t("trend.colByProduct"),
-      cell: (r) => (
-        <span className="text-body-sm text-muted-foreground">
-          {r.byProduct
-            .map((p) => `${p.productName} ${fmtCount(p.total)}`)
-            .join(" · ")}
+        // 「按产品」并进副行:它是这一桶总量的拆解,不是并列的第四个值。
+        <span className="flex flex-col tabular-nums">
+          <span className="font-medium text-foreground">
+            {fmtCount(r.total)}
+          </span>
+          {r.byProduct.length > 0 ? (
+            <span className="text-body-sm text-muted-foreground">
+              {r.byProduct
+                .map((p) => `${p.productName} ${fmtCount(p.total)}`)
+                .join(" · ")}
+            </span>
+          ) : null}
         </span>
       ),
     },
     {
       id: "delta",
       header: t("trend.colDelta"),
-      align: "right",
+      align: "center",
       cell: (r) =>
         r.delta === null ? (
           "—"
@@ -308,6 +358,7 @@ export function UsagePage() {
     {
       id: "share",
       header: t("share.colShare"),
+      align: "center",
       width: "md",
       cell: (p) => (
         <Progress
@@ -318,19 +369,55 @@ export function UsagePage() {
     },
   ];
 
+  const sharePageCount = Math.max(
+    1,
+    Math.ceil(productShares.length / sharePageSize),
+  );
+  useEffect(() => {
+    setSharePage((p) =>
+      Math.min(p, Math.max(1, Math.ceil(productShares.length / sharePageSize))),
+    );
+  }, [productShares.length, sharePageSize]);
+  const pagedShares = productShares.slice(
+    (sharePage - 1) * sharePageSize,
+    sharePage * sharePageSize,
+  );
+
   // ── ③ 调用记录(任务级) ──────────────────────────────────────────────────
   const eventItems = useMemo(() => events?.items ?? [], [events]);
+  const visibleEvents = useMemo(() => {
+    const q = eventsQuery.trim().toLowerCase();
+    if (!q) return eventItems;
+    // 搜索面:产品、指标名、归因用户、请求号——屏幕上能看到的字都能搜。
+    return eventItems.filter((e) =>
+      [
+        e.productName,
+        e.productCode,
+        metricLabel(e.metric),
+        e.userName ?? "",
+        e.requestId ?? "",
+      ].some((s) => s.toLowerCase().includes(q)),
+    );
+  }, [eventItems, eventsQuery, metricLabel]);
   const eventsPageCount = Math.max(
     1,
-    Math.ceil(eventItems.length / EVENTS_PAGE_SIZE),
+    Math.ceil(visibleEvents.length / eventsPageSize),
   );
+  useEffect(() => {
+    setEventsPage((p) =>
+      Math.min(
+        p,
+        Math.max(1, Math.ceil(visibleEvents.length / eventsPageSize)),
+      ),
+    );
+  }, [visibleEvents.length, eventsPageSize]);
   const pagedEvents = useMemo(
     () =>
-      eventItems.slice(
-        (eventsPage - 1) * EVENTS_PAGE_SIZE,
-        eventsPage * EVENTS_PAGE_SIZE,
+      visibleEvents.slice(
+        (eventsPage - 1) * eventsPageSize,
+        eventsPage * eventsPageSize,
       ),
-    [eventItems, eventsPage],
+    [visibleEvents, eventsPage, eventsPageSize],
   );
 
   const eventColumns: DataTableColumn<ConsoleUsageEvent>[] = [
@@ -349,12 +436,15 @@ export function UsagePage() {
     {
       id: "product",
       header: t("events.colProduct"),
+      align: "center",
       cell: (e) => e.productName,
     },
     {
       id: "metric",
       header: t("events.colMetric"),
-      cell: (e) => e.metric,
+      align: "center",
+      // 走共用字典:此前这里直排原始键(`ai.credit`),配额页却显示「AI Credits」。
+      cell: (e) => metricLabel(e.metric),
     },
     {
       id: "amount",
@@ -369,6 +459,7 @@ export function UsagePage() {
     {
       id: "user",
       header: t("events.colUser"),
+      align: "center",
       cell: (e) =>
         e.userName ?? (
           <StatusBadge tone="neutral">{t("events.unattributed")}</StatusBadge>
@@ -377,6 +468,7 @@ export function UsagePage() {
     {
       id: "request",
       header: t("events.colRequest"),
+      align: "center",
       cell: (e) =>
         e.requestId ? (
           <span className="font-mono text-body-sm text-muted-foreground">
@@ -419,14 +511,32 @@ export function UsagePage() {
     {
       id: "last",
       header: t("members.colLast"),
-      align: "right",
+      align: "center",
+      // 与调用记录的时间列同一种写法:日期为主、时间为辅。
       cell: (m) => (
-        <span className="tabular-nums text-body-sm text-muted-foreground">
-          {fmtDate(m.lastAt)} {fmtTime(m.lastAt)}
+        <span className="flex flex-col tabular-nums">
+          <span className="text-foreground">{fmtDate(m.lastAt)}</span>
+          <span className="text-body-sm text-muted-foreground">
+            {fmtTime(m.lastAt)}
+          </span>
         </span>
       ),
     },
   ];
+
+  const memberPageCount = Math.max(
+    1,
+    Math.ceil(members.length / memberPageSize),
+  );
+  useEffect(() => {
+    setMemberPage((p) =>
+      Math.min(p, Math.max(1, Math.ceil(members.length / memberPageSize))),
+    );
+  }, [members.length, memberPageSize]);
+  const pagedMembers = members.slice(
+    (memberPage - 1) * memberPageSize,
+    memberPage * memberPageSize,
+  );
 
   return (
     <ViewLayout>
@@ -490,16 +600,26 @@ export function UsagePage() {
         <DataTable<TrendRow>
           labels={tableLabels}
           columns={trendColumns}
-          rows={trendRows}
+          rows={pagedTrendRows}
           rowKey={(r) => r.period}
           loading={trendLoading}
-          indexStart={1}
+          indexStart={(trendPage - 1) * trendPageSize + 1}
           empty={
             loadFailed ? (
               <LoadFailedEmpty />
             ) : (
               <EmptyState title={t("trend.empty")} />
             )
+          }
+          footer={
+            <ListPagination
+              page={trendPage}
+              pageCount={trendPageCount}
+              total={loadFailed ? 0 : trendRows.length}
+              pageSize={trendPageSize}
+              onPageSizeChange={setTrendPageSize}
+              onPageChange={setTrendPage}
+            />
           }
         />
       </PageSection>
@@ -526,16 +646,26 @@ export function UsagePage() {
         <DataTable<ProductShare>
           labels={tableLabels}
           columns={shareColumns}
-          rows={productShares}
+          rows={pagedShares}
           rowKey={(p) => p.productCode}
           loading={trendLoading}
-          indexStart={1}
+          indexStart={(sharePage - 1) * sharePageSize + 1}
           empty={
             loadFailed ? (
               <LoadFailedEmpty />
             ) : (
               <EmptyState title={t("share.empty")} />
             )
+          }
+          footer={
+            <ListPagination
+              page={sharePage}
+              pageCount={sharePageCount}
+              total={loadFailed ? 0 : productShares.length}
+              pageSize={sharePageSize}
+              onPageSizeChange={setSharePageSize}
+              onPageChange={setSharePage}
+            />
           }
         />
       </PageSection>
@@ -547,63 +677,89 @@ export function UsagePage() {
         title={t("events.title")}
         description={t("events.description")}
       >
-        <DataTable<ConsoleUsageEvent>
-          labels={tableLabels}
-          columns={eventColumns}
-          rows={pagedEvents}
-          rowKey={(e) => `${e.at}:${e.requestId ?? ""}:${e.productCode}`}
-          loading={loading}
-          indexStart={(eventsPage - 1) * EVENTS_PAGE_SIZE + 1}
-          empty={
-            loadFailed ? (
-              <LoadFailedEmpty />
-            ) : (
-              <EmptyState title={t("events.empty")} />
-            )
-          }
-          footer={
-            <div className="flex w-full items-center justify-between gap-md text-body-sm text-muted-foreground">
-              <span className="tabular-nums">
-                {loadFailed || !events
-                  ? "—"
-                  : events.truncated
-                    ? t("events.truncated", {
-                        limit: events.limit,
-                        days: events.days,
-                      })
-                    : t("events.total", {
-                        count: eventItems.length,
-                        days: events.days,
-                      })}
-              </span>
-              {eventsPageCount > 1 ? (
-                <span className="flex items-center gap-xs">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={eventsPage <= 1}
-                    onClick={() => setEventsPage((p) => Math.max(1, p - 1))}
-                  >
-                    {t("events.prevPage")}
-                  </Button>
-                  <span className="tabular-nums">
-                    {eventsPage} / {eventsPageCount}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={eventsPage >= eventsPageCount}
-                    onClick={() =>
-                      setEventsPage((p) => Math.min(eventsPageCount, p + 1))
-                    }
-                  >
-                    {t("events.nextPage")}
-                  </Button>
+        <div className="flex flex-col gap-sm">
+          <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={t("filters.listOnly")}
+            count={t("filters.count", { count: visibleEvents.length })}
+            aria-label={t("filters.groupLabel")}
+            onReset={() => {
+              setEventsQuery("");
+              setEventsPage(1);
+            }}
+            search={
+              <Input
+                value={eventsQuery}
+                onChange={(event) => {
+                  setEventsQuery(event.target.value);
+                  setEventsPage(1);
+                }}
+                placeholder={t("filters.searchPlaceholder")}
+                className="min-w-media-2xl grow basis-0 max-w-panel-sm"
+                aria-label={t("filters.searchAriaLabel")}
+              />
+            }
+          />
+
+          <DataTable<ConsoleUsageEvent>
+            labels={tableLabels}
+            columns={eventColumns}
+            rows={pagedEvents}
+            rowKey={(e) => `${e.at}:${e.requestId ?? ""}:${e.productCode}`}
+            loading={loading}
+            indexStart={(eventsPage - 1) * eventsPageSize + 1}
+            empty={
+              loadFailed ? (
+                <LoadFailedEmpty />
+              ) : (
+                <EmptyState
+                  title={t("events.empty")}
+                  {...(eventsQuery
+                    ? {
+                        action: (
+                          <Button
+                            variant="outline"
+                            size="md"
+                            onClick={() => setEventsQuery("")}
+                          >
+                            <Icon name="x" size="xs" fallback="placeholder" />
+                            <span>{t("filters.reset")}</span>
+                          </Button>
+                        ),
+                      }
+                    : {})}
+                />
+              )
+            }
+            footer={
+              <span className="flex flex-wrap items-center justify-between gap-sm">
+                {/* 取数范围留在表尾左侧:它说的是「这张表能看到多远」,不是翻页。 */}
+                <span className="tabular-nums text-body-sm text-muted-foreground">
+                  {loadFailed || !events
+                    ? "—"
+                    : events.truncated
+                      ? t("events.truncated", {
+                          limit: events.limit,
+                          days: events.days,
+                        })
+                      : t("events.total", {
+                          count: eventItems.length,
+                          days: events.days,
+                        })}
                 </span>
-              ) : null}
-            </div>
-          }
-        />
+                <ListPagination
+                  page={eventsPage}
+                  pageCount={eventsPageCount}
+                  total={loadFailed ? 0 : visibleEvents.length}
+                  pageSize={eventsPageSize}
+                  onPageSizeChange={setEventsPageSize}
+                  onPageChange={setEventsPage}
+                />
+              </span>
+            }
+          />
+        </div>
       </PageSection>
 
       {/* ④ 按成员统计(organization 细分) */}
@@ -629,10 +785,10 @@ export function UsagePage() {
           <DataTable<ConsoleUsageMember>
             labels={tableLabels}
             columns={memberColumns}
-            rows={members}
+            rows={pagedMembers}
             rowKey={(m) => m.userName ?? "__unattributed__"}
             loading={loading}
-            indexStart={1}
+            indexStart={(memberPage - 1) * memberPageSize + 1}
             empty={
               loadFailed ? (
                 <LoadFailedEmpty />
@@ -640,9 +796,47 @@ export function UsagePage() {
                 <EmptyState title={t("members.empty")} />
               )
             }
+            footer={
+              <ListPagination
+                page={memberPage}
+                pageCount={memberPageCount}
+                total={loadFailed ? 0 : members.length}
+                pageSize={memberPageSize}
+                onPageSizeChange={setMemberPageSize}
+                onPageChange={setMemberPage}
+              />
+            }
           />
         </PageSection>
       ) : null}
+
+      {/* ⑤ 口径说明:这三条此前只写在代码注释里,屏幕上一个字没有——而「未归集」
+          徽章天天在用户眼前,「看板不是账单」更是会引起争议的那条。 */}
+      <PageSection
+        icon="info"
+        level={2}
+        title={t("notes.title")}
+        description={t("notes.description")}
+      >
+        <SectionBody>
+          <SignalList
+            items={[
+              {
+                title: t("notes.scopeTitle"),
+                description: t("notes.scopeBody"),
+              },
+              {
+                title: t("notes.bucketTitle"),
+                description: t("notes.bucketBody"),
+              },
+              {
+                title: t("notes.attributionTitle"),
+                description: t("notes.attributionBody"),
+              },
+            ]}
+          />
+        </SectionBody>
+      </PageSection>
     </ViewLayout>
   );
 }
