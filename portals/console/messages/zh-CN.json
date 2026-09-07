@@ -2741,17 +2741,16 @@
     },
     "table": {
       "title": "卡券列表",
-      "description": "「使用中」= 已挂在待支付订单上锁定;取消该订单会自动释放",
-      "filterLabel": "筛选",
-      "filterAvailable": "可用",
-      "filterAll": "全部",
+      "description": "「使用中」= 已挂在待支付订单上锁定,取消该订单会自动释放;挂在哪张单直接显示在状态下方",
       "colCode": "券码",
       "colKind": "类型",
       "colFace": "面值",
-      "colStatus": "状态",
+      "colStatus": "状态 / 挂单",
       "colExpires": "有效期至",
       "colUsedAt": "使用时间 / 核销号",
-      "empty": "暂无卡券"
+      "empty": "暂无卡券",
+      "usesLeft": "剩 {left} / 共 {total} 次",
+      "emptyHint": "平台活动发放的卡券会出现在这里"
     },
     "notes": {
       "title": "使用说明",
@@ -2759,7 +2758,28 @@
       "useTitle": "在哪使用",
       "useBody": "订单支付页结算时选择:折扣券作用于订单价格,抵扣金券抵减应付金额;两类可各选一张叠加",
       "sourceTitle": "卡券来源",
-      "sourceBody": "由平台运营活动发放(定向到租户、工作空间或个人);有效期以本页展示为准"
+      "sourceBody": "由平台运营活动发放(定向到租户、工作空间或个人);有效期以本页展示为准",
+      "holdTitle": "挂单与释放",
+      "holdBody": "下单时选中的券会被锁定为「使用中」并显示挂单号;订单取消或超时关闭后自动释放回可用,支付完成才真正核销"
+    },
+    "filters": {
+      "groupLabel": "卡券筛选",
+      "listOnly": "卡券只有列表视图",
+      "count": "共 {count} 条",
+      "searchPlaceholder": "搜索券码、批次名或挂单号",
+      "searchAriaLabel": "搜索卡券",
+      "statusAriaLabel": "按状态筛选",
+      "statusAll": "全部状态",
+      "reset": "复位"
+    },
+    "actions": {
+      "menuLabel": "卡券操作",
+      "copy": "复制券码",
+      "copied": "已复制",
+      "viewOrder": "查看挂单",
+      "viewOrderHint": "这张券还没有挂在任何订单上",
+      "use": "去结算使用",
+      "useHint": "只有可用状态的券能参与结算"
     }
   },
   "auditPage": {

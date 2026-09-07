@@ -1,31 +1,51 @@
 "use client";
 
 /**
- * VouchersPage.tsx — 我的卡券(owner 2026-08-21 P0)。
+ * VouchersPage.tsx — 我的卡券(owner 2026-08-21 P0;2026-09-07 页面级走查后重做)。
  * @package @vxture/console
  * @layer Application
  * @category Module
  *
  * 租户视角的卡券台账:折扣券/抵扣金券在订单支付页参与结算,本页负责
- * 「我有什么、什么时候到期、用掉的去了哪」。{可用|全部} 筛选;过期为读侧
- * 派生口径(与支付页可用清单一致)。DS 组合件;中文+i18n(vouchersPage);
- * 表格遵守默认结构(序号列;无行操作,不出操作列)。
+ * 「我有什么、还能用几次、什么时候到期、押在哪张单上、用掉的去了哪」。
+ *
+ * ## 2026-09-07 走查改了什么
+ *
+ * 原页把 `usedCount/maxUses` 读回来却一个字不显示(多次券看不出还剩几次)、
+ * 券码不能复制、没有搜索、可用的券没有去处、「使用中」看不出押在哪张单;
+ * 一致性上还缺分页与行操作列,两个时间列各写各的,说明板块没缩进。逐条落回口径:
+ *
+ *   · **主辅制**:三列带副行——券码/批次名、面值/可用次数、状态/挂单号。
+ *     副行永远是「支撑主行判断的那一条事实」,不是塞不下的边角料。
+ *   · **对齐**:首列左,金额右(与订单/账单同口径),其余居中。
+ *   · **两个时间列同一种写法**:日期为主、时间为辅。到期在 7 天内的日期转 warning 色
+ *     ——紧迫性用颜色说,不另起一种「还剩 N 天」的写法把时间列写成两副面孔。
+ *   · **挂单反查**:BFF 顺着核销行/支付凭据反查回订单可视码(见 promotion.router 头注),
+ *     行上直接显示,操作里可跳到费用中心并展开那张单。
+ *
+ * DS 组合件;中文+i18n(vouchersPage);表格遵守默认结构(序号列 + 单操作列 + 分页)。
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import {
+  ActionMenu,
   Badge,
+  Button,
   DataTable,
   EmptyState,
+  FilterBar,
+  Icon,
+  Input,
   MetricGrid,
-  SegmentedControl,
+  NativeSelect,
   StatusBadge,
   ViewHeader,
   ViewLayout,
 } from "@vxture/design-system";
 import type {
+  ActionMenuItem,
   DataTableColumn,
   MetricGridItem,
   StatusBadgeTone,
@@ -33,11 +53,13 @@ import type {
 import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import { fetchVouchers, type ConsoleVoucher } from "@/api/console-bff";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
+import { useRouter } from "@/lib/i18n/navigation";
 import {
   LoadFailedBanner,
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
-import { PageSection, SignalList } from "@/layout/shell";
+import { ListPagination } from "@/components/pagination";
+import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 import { fmtDate, fmtTime } from "./components/hubModel";
 
 const STATUS_TONES: Record<ConsoleVoucher["status"], StatusBadgeTone> = {
@@ -56,17 +78,30 @@ const KNOWN_KINDS = new Set([
   "extension",
 ]);
 
-type VoucherFilter = "available" | "all";
+/** 状态筛选的取值:券的五个状态,外加「全部」。默认落在「可用」。 */
+type VoucherFilter = ConsoleVoucher["status"] | "all";
+
+const VOUCHERS_PAGE_SIZE = 10;
+/** 到期告急阈值:与概览卡「{n} 张将于 7 天内到期」同一条线。 */
+const SOON_MS = 7 * 86_400_000;
+/** 费用中心(待付订单在这;挂单反查与「去使用」都指向它)。 */
+const BILLING_HREF = "/billing";
 
 export function VouchersPage() {
   const t = useTranslations("vouchersPage");
   const tableLabels = useTableLabels();
   const locale = useLocale();
+  const router = useRouter();
   const { session } = useConsoleSession();
 
   const [vouchers, setVouchers] = useState<ConsoleVoucher[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<VoucherFilter>("available");
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(VOUCHERS_PAGE_SIZE);
+  /** 刚复制过的那张券(2 秒后回落),让菜单项自己报「已复制」。 */
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   /* 读失败显影(批 0b):strict 读,失败置 loadFailed——指标画「—」、表格画「读取
    * 失败」,不再把回落的 [] 画成「没有卡券」。 */
   const [loadFailed, setLoadFailed] = useState(false);
@@ -92,6 +127,12 @@ export function VouchersPage() {
       active = false;
     };
   }, [session.tenant?.id, reloadKey]);
+
+  useEffect(() => {
+    if (!copiedId) return;
+    const timer = window.setTimeout(() => setCopiedId(null), 2_000);
+    return () => window.clearTimeout(timer);
+  }, [copiedId]);
 
   const kindLabel = (kind: string): string =>
     KNOWN_KINDS.has(kind) ? t(`kind.${kind}`) : kind;
@@ -127,18 +168,40 @@ export function VouchersPage() {
     return "—";
   };
 
-  const visible = useMemo(
-    () =>
-      filter === "all"
-        ? vouchers
-        : vouchers.filter((v) => v.status === "available"),
-    [vouchers, filter],
+  const resetFilters = useCallback(() => {
+    setFilter("available");
+    setQuery("");
+    setPage(1);
+  }, []);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return vouchers.filter((v) => {
+      if (filter !== "all" && v.status !== filter) return false;
+      if (!q) return true;
+      // 搜索面:券码、批次名、挂单号——客服对单时手上就这三样。
+      return [v.code, v.batchName, v.orderNo ?? ""].some((s) =>
+        s.toLowerCase().includes(q),
+      );
+    });
+  }, [vouchers, filter, query]);
+
+  /* 筛掉之后当前页可能落空——夹回最后一页。 */
+  const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
+  useEffect(() => {
+    setPage((p) =>
+      Math.min(p, Math.max(1, Math.ceil(visible.length / pageSize))),
+    );
+  }, [visible.length, pageSize]);
+  const pagedVouchers = useMemo(
+    () => visible.slice((page - 1) * pageSize, page * pageSize),
+    [visible, page, pageSize],
   );
 
   const metrics = useMemo<MetricGridItem[]>(() => {
     const available = vouchers.filter((v) => v.status === "available");
     const soon = available.filter(
-      (v) => new Date(v.expiresAt).getTime() - Date.now() < 7 * 86_400_000,
+      (v) => new Date(v.expiresAt).getTime() - Date.now() < SOON_MS,
     ).length;
     const used = vouchers.filter((v) => v.status === "redeemed").length;
     // 没读到就是「—」:读失败时的 0 不是没有券,是没有数据。
@@ -173,6 +236,21 @@ export function VouchersPage() {
     ];
   }, [vouchers, t, loadFailed]);
 
+  /** 两个时间列共用的写法:日期为主、时间为辅;`urgent` 时主行转告急色。 */
+  const timeCell = (iso: string | null, urgent = false) =>
+    iso ? (
+      <span className="flex flex-col tabular-nums">
+        <span className={urgent ? "text-warning-text" : "text-foreground"}>
+          {fmtDate(iso)}
+        </span>
+        <span className="text-body-sm text-muted-foreground">
+          {fmtTime(iso)}
+        </span>
+      </span>
+    ) : (
+      "—"
+    );
+
   const columns: DataTableColumn<ConsoleVoucher>[] = [
     {
       id: "code",
@@ -199,8 +277,17 @@ export function VouchersPage() {
       header: t("table.colFace"),
       align: "right",
       cell: (v) => (
-        <span className="tabular-nums font-medium text-foreground">
-          {faceValue(v)}
+        <span className="flex flex-col tabular-nums">
+          <span className="font-medium text-foreground">{faceValue(v)}</span>
+          {/* 可用次数只在多次券上出现:单次券每行都写「1/1」是噪音。 */}
+          {v.maxUses > 1 ? (
+            <span className="text-body-sm text-muted-foreground">
+              {t("table.usesLeft", {
+                left: Math.max(0, v.maxUses - v.usedCount),
+                total: v.maxUses,
+              })}
+            </span>
+          ) : null}
         </span>
       ),
     },
@@ -209,37 +296,88 @@ export function VouchersPage() {
       header: t("table.colStatus"),
       align: "center",
       cell: (v) => (
-        <StatusBadge tone={STATUS_TONES[v.status]}>
-          {t(`status.${v.status}`)}
-        </StatusBadge>
+        <span className="flex flex-col items-center gap-xs">
+          <StatusBadge tone={STATUS_TONES[v.status]}>
+            {t(`status.${v.status}`)}
+          </StatusBadge>
+          {/* 挂单号 = 这个状态的原因:押在哪张单上 / 用到了哪张单上。 */}
+          {v.orderNo ? (
+            <span className="font-mono text-body-sm text-muted-foreground">
+              {v.orderNo}
+            </span>
+          ) : null}
+        </span>
       ),
     },
     {
       id: "expires",
       header: t("table.colExpires"),
-      align: "right",
-      cell: (v) => <span className="tabular-nums">{fmtDate(v.expiresAt)}</span>,
+      align: "center",
+      cell: (v) =>
+        timeCell(
+          v.expiresAt,
+          v.status === "available" &&
+            new Date(v.expiresAt).getTime() - Date.now() < SOON_MS,
+        ),
     },
     {
       id: "usedAt",
       header: t("table.colUsedAt"),
-      cell: (v) =>
-        v.redeemedAt ? (
-          <span className="flex flex-col tabular-nums">
-            <span className="text-foreground">
-              {fmtDate(v.redeemedAt)} {fmtTime(v.redeemedAt)}
+      align: "center",
+      cell: (v) => (
+        <span className="flex flex-col items-center">
+          {timeCell(v.redeemedAt)}
+          {v.redemptionNo ? (
+            <span className="font-mono text-body-sm text-muted-foreground">
+              {v.redemptionNo}
             </span>
-            {v.redemptionNo ? (
-              <span className="font-mono text-body-sm text-muted-foreground">
-                {v.redemptionNo}
-              </span>
-            ) : null}
-          </span>
-        ) : (
-          "—"
-        ),
+          ) : null}
+        </span>
+      ),
     },
   ];
+
+  async function copyCode(v: ConsoleVoucher) {
+    try {
+      await navigator.clipboard.writeText(v.code);
+      setCopiedId(v.id);
+    } catch {
+      // 剪贴板被浏览器拒了(非安全上下文/无权限):券码本就在行上摆着,不再弹错打断。
+    }
+  }
+
+  function voucherMenuItems(v: ConsoleVoucher): ActionMenuItem[] {
+    return [
+      {
+        id: "copy",
+        label: copiedId === v.id ? t("actions.copied") : t("actions.copy"),
+        icon: copiedId === v.id ? "check" : "copy",
+        onSelect: () => void copyCode(v),
+      },
+      /* 挂单反查的落点:带上单号跳费用中心,那边按 order_no 展开对应的单。
+         查不到单号就摆着禁用态并说明为什么——不隐藏,免得以为漏了功能。 */
+      {
+        id: "order",
+        label: t("actions.viewOrder"),
+        icon: "receipt",
+        disabled: !v.orderNo,
+        ...(v.orderNo ? {} : { hint: t("actions.viewOrderHint") }),
+        onSelect: () =>
+          router.push(
+            `${BILLING_HREF}?order=${encodeURIComponent(v.orderNo ?? "")}`,
+          ),
+      },
+      /* 可用券的去处:券在订单支付页参与结算,这里只负责把人送到有待付单的地方。 */
+      {
+        id: "use",
+        label: t("actions.use"),
+        icon: "credit-card",
+        disabled: v.status !== "available",
+        ...(v.status === "available" ? {} : { hint: t("actions.useHint") }),
+        onSelect: () => router.push(BILLING_HREF),
+      },
+    ];
+  }
 
   return (
     <ViewLayout>
@@ -268,33 +406,100 @@ export function VouchersPage() {
         level={2}
         title={t("table.title")}
         description={t("table.description")}
-        action={
-          <SegmentedControl<VoucherFilter>
-            ariaLabel={t("table.filterLabel")}
-            value={filter}
-            onChange={setFilter}
-            items={[
-              { value: "available", label: t("table.filterAvailable") },
-              { value: "all", label: t("table.filterAll") },
-            ]}
-          />
-        }
       >
-        <DataTable<ConsoleVoucher>
-          labels={tableLabels}
-          columns={columns}
-          rows={visible}
-          rowKey={(v) => v.id}
-          loading={loading}
-          indexStart={1}
-          empty={
-            loadFailed ? (
-              <LoadFailedEmpty />
-            ) : (
-              <EmptyState title={t("table.empty")} />
-            )
-          }
-        />
+        <div className="flex flex-col gap-sm">
+          <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={t("filters.listOnly")}
+            count={t("filters.count", { count: visible.length })}
+            aria-label={t("filters.groupLabel")}
+            onReset={resetFilters}
+            search={
+              <Input
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setPage(1);
+                }}
+                placeholder={t("filters.searchPlaceholder")}
+                className="min-w-media-2xl grow basis-0 max-w-panel-sm"
+                aria-label={t("filters.searchAriaLabel")}
+              />
+            }
+          >
+            <NativeSelect
+              wrapperClassName="w-fit basis-media-xl"
+              value={filter}
+              onChange={(event) => {
+                setFilter(event.target.value as VoucherFilter);
+                setPage(1);
+              }}
+              aria-label={t("filters.statusAriaLabel")}
+            >
+              <option value="available">{t("status.available")}</option>
+              <option value="reserved">{t("status.reserved")}</option>
+              <option value="redeemed">{t("status.redeemed")}</option>
+              <option value="expired">{t("status.expired")}</option>
+              <option value="revoked">{t("status.revoked")}</option>
+              <option value="all">{t("filters.statusAll")}</option>
+            </NativeSelect>
+          </FilterBar>
+
+          <DataTable<ConsoleVoucher>
+            labels={tableLabels}
+            columns={columns}
+            rows={pagedVouchers}
+            rowKey={(v) => v.id}
+            loading={loading}
+            indexStart={(page - 1) * pageSize + 1}
+            rowActions={(v) => (
+              // 单操作列:券没有主操作(动作都在结算侧),菜单独占,操作列 min 64。
+              <span className="inline-flex items-center justify-center">
+                <ActionMenu
+                  items={voucherMenuItems(v)}
+                  label={t("actions.menuLabel")}
+                />
+              </span>
+            )}
+            empty={
+              loadFailed ? (
+                <LoadFailedEmpty />
+              ) : (
+                <EmptyState
+                  title={t("table.empty")}
+                  {...(query || filter !== "available"
+                    ? {}
+                    : { description: t("table.emptyHint") })}
+                  {...(query || filter !== "available"
+                    ? {
+                        action: (
+                          <Button
+                            variant="outline"
+                            size="md"
+                            onClick={resetFilters}
+                          >
+                            <Icon name="x" size="xs" fallback="placeholder" />
+                            <span>{t("filters.reset")}</span>
+                          </Button>
+                        ),
+                      }
+                    : {})}
+                />
+              )
+            }
+            footer={
+              <ListPagination
+                page={page}
+                pageCount={pageCount}
+                total={loadFailed ? 0 : visible.length}
+                pageSize={pageSize}
+                onPageSizeChange={setPageSize}
+                onPageChange={setPage}
+              />
+            }
+          />
+        </div>
       </PageSection>
 
       <PageSection
@@ -303,15 +508,21 @@ export function VouchersPage() {
         title={t("notes.title")}
         description={t("notes.description")}
       >
-        <SignalList
-          items={[
-            { title: t("notes.useTitle"), description: t("notes.useBody") },
-            {
-              title: t("notes.sourceTitle"),
-              description: t("notes.sourceBody"),
-            },
-          ]}
-        />
+        <SectionBody>
+          <SignalList
+            items={[
+              { title: t("notes.useTitle"), description: t("notes.useBody") },
+              {
+                title: t("notes.sourceTitle"),
+                description: t("notes.sourceBody"),
+              },
+              {
+                title: t("notes.holdTitle"),
+                description: t("notes.holdBody"),
+              },
+            ]}
+          />
+        </SectionBody>
       </PageSection>
     </ViewLayout>
   );

@@ -2424,6 +2424,8 @@ export interface ConsoleVoucher {
   expiresAt: string;
   redeemedAt: string | null;
   redemptionNo: string | null;
+  /** 挂单可视码(BFF 反查:核销行 ∨ 支付凭据里的结算快照);没挂单为 null。 */
+  orderNo: string | null;
 }
 
 export async function fetchVouchers(): Promise<ConsoleVoucher[]> {

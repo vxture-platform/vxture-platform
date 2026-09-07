@@ -23,6 +23,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import {
   ActionMenu,
   Button,
@@ -165,6 +166,25 @@ export function OrdersSection() {
         : [...keys, orderId],
     );
   }, []);
+
+  /* 深链接 `?order=ORD-…`:卡券页反查出挂单后要把人送到**那一张**单上,
+     光跳到本页会落在第一页、还得自己找。按可视码定位 → 翻到它所在的页 → 展开。
+     只在单号变化时跑一次,免得用户手动收起后又被拽开。 */
+  const deepLinkOrderNo = useSearchParams().get("order");
+  const deepLinked = useRef<string | null>(null);
+  useEffect(() => {
+    if (!deepLinkOrderNo || orders.length === 0) return;
+    if (deepLinked.current === deepLinkOrderNo) return;
+    const index = orders.findIndex((o) => o.orderNo === deepLinkOrderNo);
+    if (index < 0) return;
+    deepLinked.current = deepLinkOrderNo;
+    const target = orders[index];
+    if (!target) return;
+    setPage(Math.floor(index / pageSize) + 1);
+    setExpandedKeys((keys) =>
+      keys.includes(target.orderId) ? keys : [...keys, target.orderId],
+    );
+  }, [deepLinkOrderNo, orders, pageSize]);
 
   async function handleCancelOrder(orderId: string) {
     setError(null);
