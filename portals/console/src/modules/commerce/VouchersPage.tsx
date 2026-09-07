@@ -43,6 +43,7 @@ import {
   StatusBadge,
   ViewHeader,
   ViewLayout,
+  TableTitleCell,
 } from "@vxture/design-system";
 import type {
   ActionMenuItem,
@@ -256,14 +257,10 @@ export function VouchersPage() {
       id: "code",
       header: t("table.colCode"),
       cell: (v) => (
-        <span className="flex flex-col">
-          <span className="font-mono text-label-md text-foreground">
-            {v.code}
-          </span>
-          <span className="text-body-sm text-muted-foreground">
-            {v.batchName}
-          </span>
-        </span>
+        <TableTitleCell
+          title={<span className="font-mono">{v.code}</span>}
+          description={v.batchName}
+        />
       ),
     },
     {
@@ -275,9 +272,10 @@ export function VouchersPage() {
     {
       id: "face",
       header: t("table.colFace"),
-      align: "numeric",
+      // 不走 money 档：本列是**混合值**——折扣券的面值是「9折（最高减 ¥100）」这类
+      // 文字，只有代金券才是纯金额。把文字塞进右对齐的定宽金额块不成立，走默认居中。
       cell: (v) => (
-        <span className="flex flex-col tabular-nums">
+        <span className="flex flex-col items-center tabular-nums">
           <span className="font-medium text-foreground">{faceValue(v)}</span>
           {/* 可用次数只在多次券上出现:单次券每行都写「1/1」是噪音。 */}
           {v.maxUses > 1 ? (

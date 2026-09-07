@@ -26,6 +26,7 @@ import {
   StatusBadge,
   ViewHeader,
   ViewLayout,
+  TableTitleCell,
 } from "@vxture/design-system";
 import type { DataTableColumn, StatusBadgeTone } from "@vxture/design-system";
 import { fetchAuditLogs, type ConsoleAuditLog } from "@/api/console-bff";
@@ -142,12 +143,10 @@ export function AuditLogsPage() {
         id: "at",
         header: t("table.colAt"),
         cell: (r) => (
-          <span className="flex flex-col tabular-nums">
-            <span className="text-foreground">{fmtDate(r.at)}</span>
-            <span className="text-body-sm text-muted-foreground">
-              {fmtTime(r.at)}
-            </span>
-          </span>
+          <TableTitleCell
+            title={<span className="tabular-nums">{fmtDate(r.at)}</span>}
+            description={<span className="tabular-nums">{fmtTime(r.at)}</span>}
+          />
         ),
       },
       {

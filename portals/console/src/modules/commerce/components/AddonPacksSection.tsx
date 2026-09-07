@@ -28,6 +28,7 @@ import {
   EmptyState,
   Icon,
   StatusBadge,
+  TableTitleCell,
 } from "@vxture/design-system";
 import type {
   ActionMenuItem,
@@ -264,14 +265,14 @@ export function AddonPacksSection({
       id: "order",
       header: t("colOrder"),
       cell: (o) => (
-        <span className="flex flex-col">
-          <span className="font-mono text-label-md text-foreground">
-            {o.orderNo}
-          </span>
-          <span className="text-body-sm text-muted-foreground tabular-nums">
-            {fmtDate(o.createdAt)} {fmtTime(o.createdAt)}
-          </span>
-        </span>
+        <TableTitleCell
+          title={<span className="font-mono">{o.orderNo}</span>}
+          description={
+            <span className="tabular-nums">
+              {fmtDate(o.createdAt)} {fmtTime(o.createdAt)}
+            </span>
+          }
+        />
       ),
     },
     {
@@ -289,7 +290,7 @@ export function AddonPacksSection({
     {
       id: "price",
       header: t("colPrice"),
-      align: "numeric",
+      align: "money",
       cell: (o) => (
         <span className="tabular-nums font-medium text-foreground">
           {formatMoney(o.price, o.currency)}

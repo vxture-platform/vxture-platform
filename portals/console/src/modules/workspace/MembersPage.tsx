@@ -563,7 +563,12 @@ export function MembersPage() {
         />
         <span className="flex min-w-0 flex-col gap-2xs">
           <span className="flex items-center gap-xs">
-            <span className="truncate text-label-md text-foreground">
+            {/* 与 DS `TableTitleCell` 的主信息同一档:`label-md` + `font-semibold`
+                (默认全局字号下 14px 加粗)。本列**用不了那个件**——它的前置槽只收
+                `icon?: IconName`,收不了 `UserAvatar` 这样的节点,而全平台只有这一张
+                表是头像打头,不值得为一个调用点给 DS 开一个 `leading` 槽。代价是这两行
+                的字号得手工跟着件走;件改了这里要跟。 */}
+            <span className="truncate text-label-md font-semibold text-foreground">
               {member.name}
             </span>
             {/* 「主管理员」与角色列的「所有者」是**两件事,不要统一**(owner

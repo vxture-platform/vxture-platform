@@ -30,6 +30,7 @@ import {
   DataTable,
   EmptyState,
   StatusBadge,
+  TableTitleCell,
 } from "@vxture/design-system";
 import type { ActionMenuItem, DataTableColumn } from "@vxture/design-system";
 import { formatCurrency, type Locale } from "@vxture-platform/shared";
@@ -211,20 +212,20 @@ export function OrdersSection() {
       id: "order",
       header: t("orders.colOrder"),
       cell: (o) => (
-        <span className="flex flex-col">
-          <span className="text-label-md text-foreground">
-            {o.tenantName ?? "—"}
-            {o.workspaceName ? (
-              <span className="font-normal text-muted-foreground">
-                {" "}
-                · {o.workspaceName}
-              </span>
-            ) : null}
-          </span>
-          <span className="font-mono text-body-sm text-muted-foreground">
-            {o.orderNo}
-          </span>
-        </span>
+        <TableTitleCell
+          title={
+            <>
+              {o.tenantName ?? "—"}
+              {o.workspaceName ? (
+                <span className="font-normal text-muted-foreground">
+                  {" "}
+                  · {o.workspaceName}
+                </span>
+              ) : null}
+            </>
+          }
+          description={<span className="font-mono">{o.orderNo}</span>}
+        />
       ),
     },
     {
@@ -256,7 +257,7 @@ export function OrdersSection() {
     {
       id: "amount",
       header: t("orders.colAmount"),
-      align: "numeric",
+      align: "money",
       cell: (o) => (
         <span className="flex flex-col items-end tabular-nums">
           <span className="font-semibold text-foreground">
