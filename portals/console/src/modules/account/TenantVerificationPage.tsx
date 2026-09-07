@@ -15,9 +15,10 @@
  * 由 BFF 的 level 派生,不在页面里推。局限性在横幅与当前认证信息里各说一次。
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
+import { useTableSort } from "@/lib/table-sort";
 import {
   ActionMenu,
   Banner,
@@ -89,9 +90,23 @@ export function TenantVerificationPage() {
 
   /* 列序(owner 2026-09-06 走查):企业主体(名称主 / 信用代码辅)为首列 → 认证方式 →
      状态 → 提交时间 → 审核结果(时间与结果相邻)→ 操作(rowActions 单列,表格规范)。 */
+  const sortAccessors = useMemo(
+    () => ({
+      subject: (r: ConsoleVerification) => r.companyName ?? "",
+      at: (r: ConsoleVerification) => new Date(r.createdAt).getTime(),
+    }),
+    [],
+  );
+  const {
+    sort,
+    onSortChange,
+    rows: sortedHistory,
+  } = useTableSort(state?.history ?? [], sortAccessors);
+
   const historyColumns: DataTableColumn<ConsoleVerification>[] = [
     {
       id: "subject",
+      sortable: true,
       header: t("history.colSubject"),
       // 主辅:企业名称在上、统一社会信用代码在下(等宽小字),一列两读不占两列
       cell: (r) => (
@@ -120,6 +135,7 @@ export function TenantVerificationPage() {
     },
     {
       id: "at",
+      sortable: true,
       header: t("history.colAt"),
       cell: (r) => (
         <span className="tabular-nums">
@@ -300,8 +316,13 @@ export function TenantVerificationPage() {
         <DataTable<ConsoleVerification>
           labels={tableLabels}
           columns={historyColumns}
-          rows={state?.history ?? []}
+          rows={sortedHistory}
+          {...(sort ? { sort } : {})}
+          onSortChange={onSortChange}
           rowKey={(r) => r.id}
+          /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
+             与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
+          leadingSpacer
           loading={loading}
           indexStart={1}
           rowActions={rowActions}

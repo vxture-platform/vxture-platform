@@ -14,9 +14,11 @@
  * 申请后运营在 admin 发票台账开具/寄送,状态回流本区。DS 组合件,无自造样式。
  */
 
+import { RowActionsPlaceholder } from "@/components/table/RowActionsPlaceholder";
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
+import { useTableSort } from "@/lib/table-sort";
 import {
   ActionMenu,
   Banner,
@@ -214,9 +216,24 @@ export function InvoiceSections({
   };
 
   // ── ① 发票记录 ────────────────────────────────────────────────────────────
+  const receiptSort = useMemo(
+    () => ({
+      invoiceNo: (r: ConsoleInvoiceReceipt) => r.invoiceNo,
+      amount: (r: ConsoleInvoiceReceipt) =>
+        Number.parseFloat(r.invoiceAmount || "0"),
+    }),
+    [],
+  );
+  const {
+    sort: receiptSortState,
+    onSortChange: onReceiptSortChange,
+    rows: sortedReceipts,
+  } = useTableSort(receipts, receiptSort);
+
   const receiptColumns: DataTableColumn<ConsoleInvoiceReceipt>[] = [
     {
       id: "invoiceNo",
+      sortable: true,
       header: t("records.colNo"),
       cell: (r) => (
         <TableTitleCell
@@ -253,6 +270,7 @@ export function InvoiceSections({
     },
     {
       id: "amount",
+      sortable: true,
       header: t("records.colAmount"),
       align: "money",
       cell: (r) => (
@@ -392,8 +410,17 @@ export function InvoiceSections({
             <DataTable<ConsoleInvoiceReceipt>
               labels={tableLabels}
               columns={receiptColumns}
-              rows={receipts}
+              rows={sortedReceipts}
+              {...(receiptSortState ? { sort: receiptSortState } : {})}
+              onSortChange={onReceiptSortChange}
               rowKey={(r) => r.id}
+              /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
+                 与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
+              leadingSpacer
+              /* 操作列占位：本表当前没有行动作，补一格禁用的汇聚按钮——列的位置
+                 先占住，右缘与同页其它表对齐；将来加动作时改的是这一格的内容，
+                 不是整张表的列结构（owner 2026-09-07）。 */
+              rowActions={() => <RowActionsPlaceholder />}
               loading={loading}
               indexStart={1}
               empty={<EmptyState title={t("records.empty")} />}
@@ -423,6 +450,9 @@ export function InvoiceSections({
               columns={addressColumns}
               rows={addresses}
               rowKey={(a) => a.id}
+              /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
+                 与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
+              leadingSpacer
               loading={loading}
               indexStart={1}
               {...(readOnly

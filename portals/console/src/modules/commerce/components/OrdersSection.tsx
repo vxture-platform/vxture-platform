@@ -44,6 +44,7 @@ import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
 import { hasCapability } from "@/features/permissions/can";
 import { useConfirmLabels } from "@/lib/destructive";
 import { useTableLabels } from "@/lib/table";
+import { useTableSort } from "@/lib/table-sort";
 import { useRouter } from "@/lib/i18n/navigation";
 import { Banner } from "@vxture/design-system";
 import {
@@ -155,9 +156,23 @@ export function OrdersSection() {
   );
 
   const pageCount = Math.max(1, Math.ceil(orders.length / pageSize));
+  /* 排序在分页之前：只排当前页等于只排看得见的那几条。 */
+  const sortAccessors = useMemo(
+    () => ({
+      order: (o: MyOrder) => o.tenantName ?? "",
+      amount: (o: MyOrder) => Number.parseFloat(o.amount || "0"),
+      placed: (o: MyOrder) => new Date(o.createdAt).getTime(),
+    }),
+    [],
+  );
+  const {
+    sort,
+    onSortChange,
+    rows: sortedOrders,
+  } = useTableSort(orders, sortAccessors);
   const pagedOrders = useMemo(
-    () => orders.slice((page - 1) * pageSize, page * pageSize),
-    [orders, page, pageSize],
+    () => sortedOrders.slice((page - 1) * pageSize, page * pageSize),
+    [sortedOrders, page, pageSize],
   );
 
   const toggleExpanded = useCallback((orderId: string) => {
@@ -210,6 +225,7 @@ export function OrdersSection() {
   const orderColumns: DataTableColumn<MyOrder>[] = [
     {
       id: "order",
+      sortable: true,
       header: t("orders.colOrder"),
       cell: (o) => (
         <TableTitleCell
@@ -256,6 +272,7 @@ export function OrdersSection() {
     },
     {
       id: "amount",
+      sortable: true,
       header: t("orders.colAmount"),
       align: "money",
       cell: (o) => (
@@ -307,6 +324,7 @@ export function OrdersSection() {
     },
     {
       id: "placed",
+      sortable: true,
       header: t("orders.colPlaced"),
       align: "center",
       cell: (o) => (
@@ -388,6 +406,8 @@ export function OrdersSection() {
           labels={tableLabels}
           columns={orderColumns}
           rows={pagedOrders}
+          {...(sort ? { sort } : {})}
+          onSortChange={onSortChange}
           rowKey={(o) => o.orderId}
           loading={loading}
           indexStart={(page - 1) * pageSize + 1}

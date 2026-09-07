@@ -30,9 +30,11 @@
  * 真正的动作(加购)是板块级的,不该在每行摆一个只有一项的菜单凑格式。
  */
 
+import { RowActionsPlaceholder } from "@/components/table/RowActionsPlaceholder";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
+import { useTableSort } from "@/lib/table-sort";
 import {
   Badge,
   Button,
@@ -327,18 +329,34 @@ export function QuotasPage() {
       Math.min(p, Math.max(1, Math.ceil(storageRows.length / storagePageSize))),
     );
   }, [storageRows.length, storagePageSize]);
+  /* 三张表各自排序，都在**分页之前**——只排当前页等于只排看得见的那几条。 */
+  const storageSortAcc = useMemo(
+    () => ({
+      item: (r: StorageRow) => r.name,
+      limit: (r: StorageRow) => r.limitBytes,
+      used: (r: StorageRow) => r.usedBytes,
+    }),
+    [],
+  );
+  const {
+    sort: storageSort,
+    onSortChange: onStorageSortChange,
+    rows: sortedStorageRows,
+  } = useTableSort(storageRows, storageSortAcc);
+
   const pagedStorageRows = useMemo(
     () =>
-      storageRows.slice(
+      sortedStorageRows.slice(
         (storagePage - 1) * storagePageSize,
         storagePage * storagePageSize,
       ),
-    [storageRows, storagePage, storagePageSize],
+    [sortedStorageRows, storagePage, storagePageSize],
   );
 
   const storageColumns: DataTableColumn<StorageRow>[] = [
     {
       id: "item",
+      sortable: true,
       header: t("storage.colItem"),
       cell: (r) => (
         <TableTitleCell
@@ -353,6 +371,7 @@ export function QuotasPage() {
     },
     {
       id: "limit",
+      sortable: true,
       align: "numeric",
       header: t("storage.colLimit"),
       cell: (r) =>
@@ -366,6 +385,7 @@ export function QuotasPage() {
     },
     {
       id: "used",
+      sortable: true,
       align: "numeric",
       header: t("storage.colUsed"),
       cell: (r) =>
@@ -415,6 +435,7 @@ export function QuotasPage() {
   const creditPoolColumns: DataTableColumn<ConsoleQuotaPool>[] = [
     {
       id: "source",
+      sortable: true,
       header: t("credits.colSource"),
       cell: (p) => (
         <TableTitleCell
@@ -425,18 +446,21 @@ export function QuotasPage() {
     },
     {
       id: "limit",
+      sortable: true,
       align: "numeric",
       header: t("credits.colLimit"),
       cell: (p) => <span className="tabular-nums">{fmtCount(p.limit)}</span>,
     },
     {
       id: "used",
+      sortable: true,
       align: "numeric",
       header: t("credits.colUsed"),
       cell: (p) => <span className="tabular-nums">{fmtCount(p.used)}</span>,
     },
     {
       id: "remaining",
+      sortable: true,
       align: "numeric",
       header: t("credits.colRemaining"),
       cell: (p) => {
@@ -479,7 +503,22 @@ export function QuotasPage() {
       Math.min(p, Math.max(1, Math.ceil(creditPools.length / creditPageSize))),
     );
   }, [creditPools.length, creditPageSize]);
-  const pagedCreditPools = creditPools.slice(
+  const creditSortAcc = useMemo(
+    () => ({
+      source: (p: ConsoleQuotaPool) => p.productName ?? p.source,
+      limit: (p: ConsoleQuotaPool) => p.limit,
+      used: (p: ConsoleQuotaPool) => p.used,
+      remaining: (p: ConsoleQuotaPool) => p.remaining,
+    }),
+    [],
+  );
+  const {
+    sort: creditSort,
+    onSortChange: onCreditSortChange,
+    rows: sortedCreditPools,
+  } = useTableSort(creditPools, creditSortAcc);
+
+  const pagedCreditPools = sortedCreditPools.slice(
     (creditPage - 1) * creditPageSize,
     creditPage * creditPageSize,
   );
@@ -522,13 +561,27 @@ export function QuotasPage() {
       ),
     );
   }, [visibleProductRows.length, productPageSize]);
+  const productSortAcc = useMemo(
+    () => ({
+      limit: (r: ProductMetricRow) => r.limit,
+      used: (r: ProductMetricRow) => r.used,
+      remaining: (r: ProductMetricRow) => r.remaining,
+    }),
+    [],
+  );
+  const {
+    sort: productSort,
+    onSortChange: onProductSortChange,
+    rows: sortedProductRows,
+  } = useTableSort(visibleProductRows, productSortAcc);
+
   const pagedProductRows = useMemo(
     () =>
-      visibleProductRows.slice(
+      sortedProductRows.slice(
         (productPage - 1) * productPageSize,
         productPage * productPageSize,
       ),
-    [visibleProductRows, productPage, productPageSize],
+    [sortedProductRows, productPage, productPageSize],
   );
 
   const productColumns: DataTableColumn<ProductMetricRow>[] = [
@@ -552,6 +605,7 @@ export function QuotasPage() {
     },
     {
       id: "limit",
+      sortable: true,
       align: "numeric",
       header: t("products.colLimit"),
       cell: (r) => (
@@ -560,6 +614,7 @@ export function QuotasPage() {
     },
     {
       id: "used",
+      sortable: true,
       align: "numeric",
       header: t("products.colUsed"),
       cell: (r) =>
@@ -576,6 +631,7 @@ export function QuotasPage() {
     },
     {
       id: "remaining",
+      sortable: true,
       align: "numeric",
       header: t("products.colRemaining"),
       cell: (r) =>
@@ -637,7 +693,16 @@ export function QuotasPage() {
           labels={tableLabels}
           columns={storageColumns}
           rows={pagedStorageRows}
+          {...(storageSort ? { sort: storageSort } : {})}
+          onSortChange={onStorageSortChange}
           rowKey={(r) => r.key}
+          /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
+             与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
+          leadingSpacer
+          /* 操作列占位：本表当前没有行动作，补一格禁用的汇聚按钮——列的位置
+             先占住，右缘与同页其它表对齐；将来加动作时改的是这一格的内容，
+             不是整张表的列结构（owner 2026-09-07）。 */
+          rowActions={() => <RowActionsPlaceholder />}
           loading={loading}
           indexStart={(storagePage - 1) * storagePageSize + 1}
           empty={
@@ -686,9 +751,18 @@ export function QuotasPage() {
           labels={tableLabels}
           columns={creditPoolColumns}
           rows={pagedCreditPools}
+          {...(creditSort ? { sort: creditSort } : {})}
+          onSortChange={onCreditSortChange}
           rowKey={(p) =>
             `${p.source}:${p.productCode ?? "ws"}:${p.expiresAt ?? ""}:${p.limit}`
           }
+          /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
+             与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
+          leadingSpacer
+          /* 操作列占位：本表当前没有行动作，补一格禁用的汇聚按钮——列的位置
+             先占住，右缘与同页其它表对齐；将来加动作时改的是这一格的内容，
+             不是整张表的列结构（owner 2026-09-07）。 */
+          rowActions={() => <RowActionsPlaceholder />}
           loading={loading}
           indexStart={(creditPage - 1) * creditPageSize + 1}
           empty={
@@ -780,7 +854,16 @@ export function QuotasPage() {
             labels={tableLabels}
             columns={productColumns}
             rows={pagedProductRows}
+            {...(productSort ? { sort: productSort } : {})}
+            onSortChange={onProductSortChange}
             rowKey={(r) => r.rowKey}
+            /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
+               与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
+            leadingSpacer
+            /* 操作列占位：本表当前没有行动作，补一格禁用的汇聚按钮——列的位置
+               先占住，右缘与同页其它表对齐；将来加动作时改的是这一格的内容，
+               不是整张表的列结构（owner 2026-09-07）。 */
+            rowActions={() => <RowActionsPlaceholder />}
             loading={loading}
             indexStart={(productPage - 1) * productPageSize + 1}
             empty={

@@ -29,6 +29,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
+import { useTableSort } from "@/lib/table-sort";
 import {
   ActionMenu,
   Badge,
@@ -187,6 +188,24 @@ export function VouchersPage() {
     });
   }, [vouchers, filter, query]);
 
+  /* 排序在**分页之前**：只排当前页等于只排看得见的那 10 条。取值器给的是可比较的
+   * 原始值（时间戳、券码串），不是渲染结果——按渲染结果排会得到字典序。
+   * 「面值」不排：它是混合值（折扣券是「9折」这类文字），排不出有意义的顺序。 */
+  const sortAccessors = useMemo(
+    () => ({
+      code: (v: ConsoleVoucher) => v.code,
+      expires: (v: ConsoleVoucher) => new Date(v.expiresAt).getTime(),
+      usedAt: (v: ConsoleVoucher) =>
+        v.redeemedAt ? new Date(v.redeemedAt).getTime() : null,
+    }),
+    [],
+  );
+  const {
+    sort,
+    onSortChange,
+    rows: sortedVouchers,
+  } = useTableSort(visible, sortAccessors);
+
   /* 筛掉之后当前页可能落空——夹回最后一页。 */
   const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
   useEffect(() => {
@@ -195,8 +214,8 @@ export function VouchersPage() {
     );
   }, [visible.length, pageSize]);
   const pagedVouchers = useMemo(
-    () => visible.slice((page - 1) * pageSize, page * pageSize),
-    [visible, page, pageSize],
+    () => sortedVouchers.slice((page - 1) * pageSize, page * pageSize),
+    [sortedVouchers, page, pageSize],
   );
 
   const metrics = useMemo<MetricGridItem[]>(() => {
@@ -255,6 +274,7 @@ export function VouchersPage() {
   const columns: DataTableColumn<ConsoleVoucher>[] = [
     {
       id: "code",
+      sortable: true,
       header: t("table.colCode"),
       cell: (v) => (
         <TableTitleCell
@@ -309,6 +329,7 @@ export function VouchersPage() {
     },
     {
       id: "expires",
+      sortable: true,
       header: t("table.colExpires"),
       align: "center",
       cell: (v) =>
@@ -320,6 +341,7 @@ export function VouchersPage() {
     },
     {
       id: "usedAt",
+      sortable: true,
       header: t("table.colUsedAt"),
       align: "center",
       cell: (v) => (
@@ -449,6 +471,11 @@ export function VouchersPage() {
             columns={columns}
             rows={pagedVouchers}
             rowKey={(v) => v.id}
+            {...(sort ? { sort } : {})}
+            onSortChange={onSortChange}
+            /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
+               与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
+            leadingSpacer
             loading={loading}
             indexStart={(page - 1) * pageSize + 1}
             rowActions={(v) => (

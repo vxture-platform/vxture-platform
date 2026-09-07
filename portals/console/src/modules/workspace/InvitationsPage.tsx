@@ -16,10 +16,11 @@
  * expired 为读侧派生(pending ∧ 已过期),所以过期的也能重发。表格遵守默认结构。
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useConfirmLabels } from "@/lib/destructive";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
+import { useTableSort } from "@/lib/table-sort";
 import {
   ActionMenu,
   Banner,
@@ -85,7 +86,21 @@ export function InvitationsPage() {
     null,
   );
   const withLabels = useConfirmLabels();
-  const pager = useListPagination(rows, 10);
+  /* 排序在分页之前——`useListPagination` 拿到的必须是已排好的全集。 */
+  const sortAccessors = useMemo(
+    () => ({
+      email: (r: ConsoleInvitation) => r.email,
+      createdAt: (r: ConsoleInvitation) => new Date(r.createdAt).getTime(),
+      expiresAt: (r: ConsoleInvitation) => new Date(r.expiresAt).getTime(),
+    }),
+    [],
+  );
+  const {
+    sort,
+    onSortChange,
+    rows: sortedRows,
+  } = useTableSort(rows, sortAccessors);
+  const pager = useListPagination(sortedRows, 10);
 
   const reload = useCallback(() => fetchInvitations().then(setRows), []);
 
@@ -187,6 +202,7 @@ export function InvitationsPage() {
   const columns: DataTableColumn<ConsoleInvitation>[] = [
     {
       id: "email",
+      sortable: true,
       header: t("table.colEmail"),
       cell: (r) => (
         <TableTitleCell
@@ -218,6 +234,7 @@ export function InvitationsPage() {
     },
     {
       id: "createdAt",
+      sortable: true,
       header: t("table.colCreatedAt"),
       cell: (r) => (
         <span className="tabular-nums text-body-sm text-muted-foreground">
@@ -227,6 +244,7 @@ export function InvitationsPage() {
     },
     {
       id: "expiresAt",
+      sortable: true,
       header: t("table.colExpiresAt"),
       cell: (r) =>
         r.status === "accepted" && r.acceptedAt ? (
@@ -279,7 +297,12 @@ export function InvitationsPage() {
             labels={tableLabels}
             columns={columns}
             rows={pager.pageRows}
+            {...(sort ? { sort } : {})}
+            onSortChange={onSortChange}
             rowKey={(r) => r.id}
+            /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
+               与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
+            leadingSpacer
             loading={loading}
             indexStart={pager.indexStart}
             rowActions={(r) => (
