@@ -21,13 +21,43 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Pool } from "pg";
 import { ACCOUNT_PG_POOL } from "../tokens";
 
+/**
+ * 偏好主题（owner 2026-09-08 重排）。
+ *
+ * 判据：**一个主题必须对应真实发生的事件**。改之前有 6 个主题，其中 `account` /
+ * `security` / `usage` 三个没有任何模板会落到它们头上（见 dispatch 的 `topicOf`），
+ * 客户勾了等于没勾——页面在说假话。
+ *
+ * 现在 11 个主题，前 5 个有模板已经在发，后 6 个的**事件源都已存在**（各自的状态机
+ * 或 webhook 事件类型跑着），只是通知模板还没接：这些在界面上挂「开发中」标并**禁用
+ * 三个渠道开关**，不给假开关。
+ *
+ * 顺序即页面顺序（平铺，不分组）。
+ */
 export const NOTIFICATION_TOPICS = [
-  "account",
+  // ── 已有模板 ──────────────────────────────────────────────────────────────
+  "subscription_expiry", // subscription.expiring_soon / expired / renewed
+  "provision_result", // order.fulfilled
+  "payment_due", // order.renewal_created
+  "refund_progress", // refund.requested / approved / rejected / completed
+  "announcement", // announcement.published
+  // ── 事件源已存在、模板待接（界面标「开发中」）────────────────────────────
+  "security", // 站内强制锁定；异地登录/凭据变更等
+  "invoice_progress", // billing.invoice_receipts 六态
+  "verification_result", // kyc.tenant_verifications 四态
+  "member_invitation", // tenancy.invitations 四态
+  "quota_alert", // provisioning webhook 的 quota_warning
+  "ticket_activity", // support.tickets 七态
+] as const;
+
+/** 事件源已存在但通知模板未接：界面上标「开发中」并禁用三个渠道开关。 */
+export const NOTIFICATION_TOPICS_PLANNED = [
   "security",
-  "subscription",
-  "billing",
-  "usage",
-  "product",
+  "invoice_progress",
+  "verification_result",
+  "member_invitation",
+  "quota_alert",
+  "ticket_activity",
 ] as const;
 
 export const NOTIFICATION_CHANNELS = ["inbox", "email", "sms"] as const;
@@ -58,15 +88,20 @@ const LOCKED: Partial<Record<NotificationTopic, NotificationChannel[]>> = {
 };
 
 /**
- * 主题级默认覆盖。订阅 / 账务是**事务性**通知（到期提醒、续费单待付、退款进度，owner
- * 2026-09-03「通知先做站内 + 邮件」）：不发邮件用户会错过付款期与到期——默认开、可关。
- * 其余主题仍是默认关（默认开外发通道等于替用户同意打扰）。
+ * 主题级默认覆盖。**事务性**通知默认开邮件（owner 2026-09-03「通知先做站内 + 邮件」）：
+ * 不发邮件用户会错过付款期与到期。其余主题默认关——默认开外发通道等于替用户同意打扰。
+ *
+ * 2026-09-08 主题重排后，原「订阅」「账单」两档拆成了四个，事务性的判据不变：
+ * 到期提醒、开通结果、待付订单、退款进度——**错过了会有实际损失**的那几件。
+ * 公告与「开发中」的六个都不属于此列。
  */
 const TOPIC_DEFAULT_OVERRIDES: Partial<
   Record<NotificationTopic, Partial<NotificationChannelState>>
 > = {
-  subscription: { email: true },
-  billing: { email: true },
+  subscription_expiry: { email: true },
+  provision_result: { email: true },
+  payment_due: { email: true },
+  refund_progress: { email: true },
 };
 
 function defaults(): NotificationPreferences {

@@ -146,8 +146,8 @@ const subscriptionBillingSection: NavigationSection = {
   ],
 };
 
-const advancedSettingsSection: NavigationSection = {
-  titleKey: "advancedSettings",
+const settingsSecuritySection: NavigationSection = {
+  titleKey: "settingsSecurity",
   items: [
     // 批 5c:「系统设置」并入「租户信息」(/tenant),/settings 路由保留跳转。
     {
@@ -192,7 +192,7 @@ export const navigationSections: NavigationSection[] = [
   workspaceSection,
   accountTenantSection,
   subscriptionBillingSection,
-  advancedSettingsSection,
+  settingsSecuritySection,
 ];
 
 /**
@@ -221,7 +221,7 @@ export const consoleDomains: ConsoleDomain[] = [
     id: "settings",
     labelKey: "settings",
     icon: "settings",
-    sections: [advancedSettingsSection],
+    sections: [settingsSecuritySection],
   },
   {
     id: "platform",

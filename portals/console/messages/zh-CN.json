@@ -293,7 +293,7 @@
       "workspace": "工作空间",
       "accountTenant": "账户与租户",
       "subscriptionBilling": "订阅与计费",
-      "advancedSettings": "高级设置",
+      "settingsSecurity": "设置与安全",
       "platform": "平台能力"
     },
     "domains": {
@@ -551,20 +551,7 @@
     "backend": {
       "pending": "待后端实现"
     },
-    "preference": {
-      "label": "通知偏好",
-      "enabled": "订阅已开启"
-    },
-    "summary": {
-      "title": "通知订阅概览",
-      "topics": "订阅主题",
-      "topicsValue": "{enabled}/{total}",
-      "inboxDefault": "站内默认",
-      "emailValue": "邮件 {count} 项",
-      "smsValue": "短信 {count} 项"
-    },
     "channels": {
-      "title": "基础提醒方式",
       "short": {
         "inbox": "站内",
         "email": "邮件",
@@ -584,8 +571,6 @@
     },
     "topics": {
       "title": "订阅主题",
-      "count": "共 {count} 项",
-      "groupCount": "{count} 项",
       "policyLocked": "策略锁定",
       "policyLockedDescription": "该提醒由平台策略锁定，当前用户不能关闭。",
       "toggleLabel": "{topic} - {channel}",
@@ -596,30 +581,43 @@
         "status": "状态"
       },
       "items": {
-        "account": {
-          "title": "账号动态"
+        "subscription_expiry": {
+          "title": "订阅到期"
+        },
+        "provision_result": {
+          "title": "开通结果"
+        },
+        "payment_due": {
+          "title": "待付订单"
+        },
+        "refund_progress": {
+          "title": "退款进度"
+        },
+        "announcement": {
+          "title": "平台公告"
         },
         "security": {
-          "title": "安全风险"
+          "title": "安全提醒"
         },
-        "subscription": {
-          "title": "产品订阅"
+        "invoice_progress": {
+          "title": "开票进度"
         },
-        "billing": {
-          "title": "账单与发票"
+        "verification_result": {
+          "title": "认证结果"
         },
-        "usage": {
-          "title": "用量与配额"
+        "member_invitation": {
+          "title": "成员邀请"
         },
-        "product": {
-          "title": "产品与系统"
+        "quota_alert": {
+          "title": "配额告警"
+        },
+        "ticket_activity": {
+          "title": "工单动态"
         }
-      }
-    },
-    "groups": {
-      "identity": "账号与安全",
-      "commerce": "订阅与用量",
-      "system": "产品与系统"
+      },
+      "planned": "开发中",
+      "plannedDescription": "该类通知正在开发，暂不可订阅。",
+      "description": "选择每类通知走哪些渠道。站内消息始终可查，邮件与短信按需开启。"
     },
     "feedback": {
       "saved": "通知偏好已保存。",

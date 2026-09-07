@@ -37,12 +37,19 @@ describe("通知偏好规整", () => {
       expect(Object.keys(prefs[topic]).sort()).toEqual(
         [...NOTIFICATION_CHANNELS].sort(),
       );
-      // 默认开外发通道等于替用户同意打扰——事务性的订阅 / 账务邮件除外（owner 2026-09-03）。
-      const transactional = topic === "subscription" || topic === "billing";
+      // 默认开外发通道等于替用户同意打扰——事务性的四个除外（错过了会有实际损失）。
+      const transactional = (
+        [
+          "subscription_expiry",
+          "provision_result",
+          "payment_due",
+          "refund_progress",
+        ] as readonly string[]
+      ).includes(topic);
       expect(prefs[topic].email).toBe(transactional);
       expect(prefs[topic].sms).toBe(false);
     }
-    expect(prefs.account.inbox).toBe(true);
+    expect(prefs.announcement.inbox).toBe(true);
   });
 
   it("安全类站内信即使库里存着 false 也强制为 true", async () => {
@@ -68,33 +75,33 @@ describe("通知偏好规整", () => {
   it("未知主题与未知渠道一律丢弃", async () => {
     const { service } = build(null);
     const saved = await service.replace("u-1", {
-      account: { inbox: true, telepathy: true },
+      announcement: { inbox: true, telepathy: true },
       marketing_blast: { email: true },
     });
 
     expect(saved).not.toHaveProperty("marketing_blast");
-    expect(saved.account).not.toHaveProperty("telepathy");
+    expect(saved.announcement).not.toHaveProperty("telepathy");
   });
 
   it("非布尔值不覆盖默认(字符串 'true' 不算开)", async () => {
     const { service } = build(null);
     const saved = await service.replace("u-1", {
-      billing: { email: "true", sms: 1, inbox: null },
+      payment_due: { email: "true", sms: 1, inbox: null },
     });
 
-    // 非布尔一律回落默认：billing.email 默认开（事务性）、sms 默认关、inbox 默认开。
-    expect(saved.billing.email).toBe(true);
-    expect(saved.billing.sms).toBe(false);
-    expect(saved.billing.inbox).toBe(true);
+    // 非布尔一律回落默认：payment_due.email 默认开（事务性）、sms 默认关、inbox 默认开。
+    expect(saved.payment_due.email).toBe(true);
+    expect(saved.payment_due.sms).toBe(false);
+    expect(saved.payment_due.inbox).toBe(true);
   });
 
   it("已保存的合法开关照常保留", async () => {
-    const { service } = build({ billing: { email: true, sms: true } });
+    const { service } = build({ payment_due: { email: true, sms: true } });
     const prefs = await service.get("u-1");
-    expect(prefs.billing.email).toBe(true);
-    expect(prefs.billing.sms).toBe(true);
+    expect(prefs.payment_due.email).toBe(true);
+    expect(prefs.payment_due.sms).toBe(true);
     // 未提及的主题回落默认,而不是变成 undefined。
-    expect(prefs.usage.inbox).toBe(true);
+    expect(prefs.quota_alert.inbox).toBe(true);
   });
 
   it("写入 SQL 只替换 notifications 键,不整列覆写", async () => {
@@ -107,8 +114,12 @@ describe("通知偏好规整", () => {
   });
 
   it("allows() 是发信侧的判据", async () => {
-    const { service } = build({ billing: { email: true } });
-    await expect(service.allows("u-1", "billing", "email")).resolves.toBe(true);
-    await expect(service.allows("u-1", "billing", "sms")).resolves.toBe(false);
+    const { service } = build({ payment_due: { email: true } });
+    await expect(service.allows("u-1", "payment_due", "email")).resolves.toBe(
+      true,
+    );
+    await expect(service.allows("u-1", "payment_due", "sms")).resolves.toBe(
+      false,
+    );
   });
 });

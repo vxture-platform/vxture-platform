@@ -370,8 +370,7 @@
       "workspace": "工作空间",
       "accountTenant": "账户与租户",
       "membersPermissions": "成员与权限",
-      "subscriptionBilling": "订阅与计费",
-      "advancedSettings": "高级设置"
+      "subscriptionBilling": "订阅与计费"
     },
     "items": {
       "overview": {
@@ -597,7 +596,7 @@
     }
   },
   "settings": {
-    "eyebrow": "高级设置",
+    "eyebrow": "设置与安全",
     "title": "租户设置",
     "description": "配置租户级策略、准入控制、安全约束与审计规则。",
     "save": "保存更改",

@@ -26,14 +26,19 @@ export type NotificationReferenceType =
   | "refund"
   | "announcement";
 
-/** 偏好主题（与 @vxture/service-account NOTIFICATION_TOPICS 同一集合）。 */
+/**
+ * 偏好主题（与 @vxture/service-account NOTIFICATION_TOPICS 同一集合）。
+ *
+ * 这里只列**本包发得出模板**的那几个；那边的全集还含事件源已存在、模板待接的六个
+ * （界面标「开发中」）。两边不一致会被 `topicOf` 的穷尽映射挡住——它对每个模板键
+ * 显式给主题，加模板忘了给主题就编译不过。
+ */
 export type NotificationTopic =
-  | "account"
-  | "security"
-  | "subscription"
-  | "billing"
-  | "usage"
-  | "product";
+  | "subscription_expiry"
+  | "provision_result"
+  | "payment_due"
+  | "refund_progress"
+  | "announcement";
 
 export type NotificationLocale = "zh-CN" | "en-US";
 
@@ -126,11 +131,31 @@ const TABLES: Record<
   "en-US": { titles: TITLES_EN, bodies: BODIES_EN },
 };
 
-/** 偏好主题由模板键前缀决定：subscription.* → subscription；announcement.* → product；其余（order / refund）→ billing。 */
+/**
+ * 模板 → 偏好主题。**逐条显式映射，不按前缀猜**（owner 2026-09-08）。
+ *
+ * 旧实现按前缀分三档，于是 `order.fulfilled`（开通成功）与 `order.renewal_created`
+ * （有单要付）落进同一个「账单」主题，退款四态也一起——客户想只收「退款完成」做不到，
+ * 想关掉催款又会连开通通知一起关掉。主题要贴着**用户关心的那件事**切，而不是贴着
+ * 模板键的前缀。
+ *
+ * 用 `Record` 而不是 if 链：加模板时忘了给主题**编译不过**，不会静默落进某个兜底档。
+ */
+const TOPIC_OF: Record<NotificationTemplateCode, NotificationTopic> = {
+  "subscription.expiring_soon": "subscription_expiry",
+  "subscription.expired": "subscription_expiry",
+  "subscription.renewed": "subscription_expiry",
+  "order.fulfilled": "provision_result",
+  "order.renewal_created": "payment_due",
+  "refund.requested": "refund_progress",
+  "refund.approved": "refund_progress",
+  "refund.rejected": "refund_progress",
+  "refund.completed": "refund_progress",
+  "announcement.published": "announcement",
+};
+
 export function topicOf(code: NotificationTemplateCode): NotificationTopic {
-  if (code.startsWith("subscription.")) return "subscription";
-  if (code.startsWith("announcement.")) return "product";
-  return "billing";
+  return TOPIC_OF[code];
 }
 
 /** 收件人语言 → 模板语言：en* → en-US，其余（含 null）→ zh-CN。 */
