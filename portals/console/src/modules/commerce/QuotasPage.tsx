@@ -14,6 +14,20 @@
  * 严格 DS 组合件拼装(billing 页口径):MetricGrid columns=3(本页 3 指标铺满,
  * 列数随业务不写死)+ PageSection 原生 icon + DataTable + SignalList,无自造
  * 样式层。中文基准,zh/en 双份 i18n(quotasPage 命名空间)。全页无 UUID。
+ *
+ * ## 2026-09-07 页面级走查改了什么
+ *
+ *   · **用上读回来却没用的两个字段**:产品明细的已用存储改读 `storageUsedBytes`
+ *     (原来在 cell 里对 `slices` 现扫一遍,每次渲染 O(n));补「重置周期」列
+ *     ——`metrics[].resetPeriod` 一直返回却不显示,月度重置与一次性额度长得一样。
+ *   · **超冲要能读**:剩余为负是有意义的状态(见 API 契约注释),但「剩余 -1.2 GB」
+ *     是数学不是话。负值一律改说「已超出 1.2 GB」,概览卡与表尾同一个表达。
+ *   · **额度告急有去处**:存储/Credits 板块加「去加购」,滚到本页的加油包板块。
+ *   · **一致性**:三张表补 ListPagination;产品明细补 FilterBar;日期列改居中
+ *     (金额/数字才右对齐);上报时间改日期主/时间辅;说明裹 SectionBody。
+ *
+ * 这三张表**不设行操作列**——它们是读数不是台账,配额行上没有可做的动作;
+ * 真正的动作(加购)是板块级的,不该在每行摆一个只有一项的菜单凑格式。
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -21,8 +35,12 @@ import { useLocale, useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
 import {
   Badge,
+  Button,
   DataTable,
   EmptyState,
+  FilterBar,
+  Icon,
+  Input,
   MetricGrid,
   Progress,
   StatusBadge,
@@ -42,7 +60,8 @@ import {
 } from "@/api/console-bff";
 import { formatCurrency, type Locale } from "@vxture-platform/shared";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
-import { PageSection, SignalList } from "@/layout/shell";
+import { ListPagination } from "@/components/pagination";
+import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 import { hasCapability } from "@/features/permissions/can";
 import {
   LoadFailedBanner,
@@ -74,8 +93,14 @@ const KNOWN_SOURCES = new Set([
 type ProductMetricRow = ConsoleProductQuota["metrics"][number] & {
   productCode: string;
   productName: string;
+  /** 该产品的存储水位(BFF 已按产品算好,不必在 cell 里对 slices 现扫)。 */
+  storageUsedBytes: number | null;
   rowKey: string;
 };
+
+const PAGE_SIZE = 10;
+/** 加油包板块的锚点:额度告急时「去加购」滚到这里。 */
+const ADDON_ANCHOR = "quota-addons";
 
 export function QuotasPage() {
   const t = useTranslations("quotasPage");
@@ -90,6 +115,15 @@ export function QuotasPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   // 加油包核销/取消后自增,触发总览重取(额度入池立即可见);重试也走它
   const [reloadKey, setReloadKey] = useState(0);
+
+  /* 三张表各自翻页:来源/池/产品指标是三份互不相干的清单,共用一个页码只会互相踩。 */
+  const [storagePage, setStoragePage] = useState(1);
+  const [storagePageSize, setStoragePageSize] = useState<number>(PAGE_SIZE);
+  const [creditPage, setCreditPage] = useState(1);
+  const [creditPageSize, setCreditPageSize] = useState<number>(PAGE_SIZE);
+  const [productPage, setProductPage] = useState(1);
+  const [productPageSize, setProductPageSize] = useState<number>(PAGE_SIZE);
+  const [productQuery, setProductQuery] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -122,16 +156,53 @@ export function QuotasPage() {
     [locale],
   );
 
-  const metricLabel = (metric: string): string => {
-    const key = METRIC_LABEL_KEYS[metric];
-    return key ? t(key) : metric;
-  };
+  const metricLabel = useCallback(
+    (metric: string): string => {
+      const key = METRIC_LABEL_KEYS[metric];
+      return key ? t(key) : metric;
+    },
+    [t],
+  );
   const metricValue = (metric: string, v: number): string =>
     metric === "storage.bytes" ? formatBytes(v) : fmtCount(v);
   const sourceLabel = useCallback(
     (source: string): string =>
       KNOWN_SOURCES.has(source) ? t(`source.${source}`) : source,
     [t],
+  );
+
+  /* 剩余为负 = 超冲(API 契约里明写不钳制)。「剩余 -1.2 GB」是数学不是话,
+     一律翻成「已超出 1.2 GB」;概览卡与表尾走同一个表达。 */
+  const remainText = useCallback(
+    (remaining: number, fmt: (v: number) => string): string =>
+      remaining < 0
+        ? t("overBy", { amount: fmt(-remaining) })
+        : t("remainBy", { amount: fmt(remaining) }),
+    [t],
+  );
+
+  /** 重置周期徽章:Credits 池表与产品明细表共用一种写法(原来只有前者有)。 */
+  const resetBadge = (period: string) => {
+    const known = period === "day" || period === "month";
+    const tone: StatusBadgeTone = known ? "info" : "neutral";
+    return (
+      <StatusBadge tone={tone}>
+        {t(`reset.${known ? period : "none"}`)}
+      </StatusBadge>
+    );
+  };
+
+  /** 「去加购」:滚到本页下方的加油包板块——额度告急时唯一能做的事。 */
+  const gotoAddons = () => {
+    document
+      .getElementById(ADDON_ANCHOR)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const addonsAction = (
+    <Button variant="outline" size="sm" onClick={gotoAddons}>
+      <Icon name="lightning" size="xs" fallback="placeholder" />
+      <span>{t("gotoAddons")}</span>
+    </Button>
   );
 
   // ── 概览指标(本页业务 3 个指标 → columns=3 铺满,列数随业务不写死)────────
@@ -172,11 +243,7 @@ export function QuotasPage() {
             )
           : "—",
         ...(storageTight ? { tone: "warning" as const } : {}),
-        trend: st
-          ? t("metrics.remainHint", {
-              remaining: formatBytes(st.remainingBytes),
-            })
-          : "",
+        trend: st ? remainText(st.remainingBytes, formatBytes) : "",
         ...(storageTight ? { trendTone: "warning" as const } : {}),
       },
       {
@@ -185,11 +252,7 @@ export function QuotasPage() {
         label: t("metrics.credits"),
         value: cr ? usageOverTotal(fmtCount(cr.used), fmtCount(cr.limit)) : "—",
         ...(creditDry ? { tone: "warning" as const } : {}),
-        trend: cr
-          ? t("metrics.creditsRemainHint", {
-              remaining: fmtCount(cr.remaining),
-            })
-          : "",
+        trend: cr ? remainText(cr.remaining, fmtCount) : "",
         ...(creditDry ? { trendTone: "warning" as const } : {}),
       },
       {
@@ -204,7 +267,20 @@ export function QuotasPage() {
             : t("metrics.addonsNone"),
       },
     ];
-  }, [overview, t]);
+  }, [overview, t, remainText]);
+
+  /** 时间列的统一写法(与卡券页同口径):日期为主、时间为辅。 */
+  const timeCell = (iso: string | null) =>
+    iso ? (
+      <span className="flex flex-col tabular-nums">
+        <span className="text-foreground">{fmtDate(iso)}</span>
+        <span className="text-body-sm text-muted-foreground">
+          {fmtTime(iso)}
+        </span>
+      </span>
+    ) : (
+      "—"
+    );
 
   // ── ① 存储:统一行模式(2026-08-21 owner 整改:不再拆「额度构成/用量切片」
   //    左右两表——每行一个主体,来源类别用 Badge 标注;同产品的订阅贡献与
@@ -253,6 +329,24 @@ export function QuotasPage() {
     return rows;
   }, [overview, sourceLabel]);
 
+  const storagePageCount = Math.max(
+    1,
+    Math.ceil(storageRows.length / storagePageSize),
+  );
+  useEffect(() => {
+    setStoragePage((p) =>
+      Math.min(p, Math.max(1, Math.ceil(storageRows.length / storagePageSize))),
+    );
+  }, [storageRows.length, storagePageSize]);
+  const pagedStorageRows = useMemo(
+    () =>
+      storageRows.slice(
+        (storagePage - 1) * storagePageSize,
+        storagePage * storagePageSize,
+      ),
+    [storageRows, storagePage, storagePageSize],
+  );
+
   const storageColumns: DataTableColumn<StorageRow>[] = [
     {
       id: "item",
@@ -295,6 +389,7 @@ export function QuotasPage() {
     {
       id: "share",
       header: t("storage.colShare"),
+      align: "center",
       width: "sm",
       cell: (r) =>
         r.usedBytes !== null ? (
@@ -307,7 +402,7 @@ export function QuotasPage() {
     {
       id: "expires",
       header: t("storage.colExpires"),
-      align: "right",
+      align: "center",
       cell: (r) =>
         r.limitBytes === null ? (
           "—"
@@ -320,15 +415,8 @@ export function QuotasPage() {
     {
       id: "observed",
       header: t("storage.colObserved"),
-      align: "right",
-      cell: (r) =>
-        r.observedAt ? (
-          <span className="tabular-nums text-body-sm text-muted-foreground">
-            {fmtDate(r.observedAt)} {fmtTime(r.observedAt)}
-          </span>
-        ) : (
-          "—"
-        ),
+      align: "center",
+      cell: (r) => timeCell(r.observedAt),
     },
   ];
 
@@ -379,22 +467,12 @@ export function QuotasPage() {
       id: "reset",
       header: t("credits.colReset"),
       align: "center",
-      cell: (p) => {
-        const tone: StatusBadgeTone =
-          p.resetPeriod === "none" ? "neutral" : "info";
-        return (
-          <StatusBadge tone={tone}>
-            {t(
-              `reset.${p.resetPeriod === "day" || p.resetPeriod === "month" ? p.resetPeriod : "none"}`,
-            )}
-          </StatusBadge>
-        );
-      },
+      cell: (p) => resetBadge(p.resetPeriod),
     },
     {
       id: "expires",
       header: t("credits.colExpires"),
-      align: "right",
+      align: "center",
       cell: (p) =>
         p.expiresAt ? (
           <span className="tabular-nums">{fmtDate(p.expiresAt)}</span>
@@ -404,6 +482,21 @@ export function QuotasPage() {
     },
   ];
 
+  const creditPools = overview?.aiCredit.pools ?? [];
+  const creditPageCount = Math.max(
+    1,
+    Math.ceil(creditPools.length / creditPageSize),
+  );
+  useEffect(() => {
+    setCreditPage((p) =>
+      Math.min(p, Math.max(1, Math.ceil(creditPools.length / creditPageSize))),
+    );
+  }, [creditPools.length, creditPageSize]);
+  const pagedCreditPools = creditPools.slice(
+    (creditPage - 1) * creditPageSize,
+    creditPage * creditPageSize,
+  );
+
   // ── ③ 各产品配额明细 ─────────────────────────────────────────────────────
   const productRows = useMemo<ProductMetricRow[]>(
     () =>
@@ -412,10 +505,43 @@ export function QuotasPage() {
           ...m,
           productCode: p.productCode,
           productName: p.productName,
+          storageUsedBytes: p.storageUsedBytes,
           rowKey: `${p.productCode}:${m.metric}`,
         })),
       ),
     [overview],
+  );
+
+  const visibleProductRows = useMemo(() => {
+    const q = productQuery.trim().toLowerCase();
+    if (!q) return productRows;
+    // 搜索面:产品名、产品代码、指标名——三样都是屏幕上能看到的字。
+    return productRows.filter((r) =>
+      [r.productName, r.productCode, metricLabel(r.metric)].some((s) =>
+        s.toLowerCase().includes(q),
+      ),
+    );
+  }, [productRows, productQuery, metricLabel]);
+
+  const productPageCount = Math.max(
+    1,
+    Math.ceil(visibleProductRows.length / productPageSize),
+  );
+  useEffect(() => {
+    setProductPage((p) =>
+      Math.min(
+        p,
+        Math.max(1, Math.ceil(visibleProductRows.length / productPageSize)),
+      ),
+    );
+  }, [visibleProductRows.length, productPageSize]);
+  const pagedProductRows = useMemo(
+    () =>
+      visibleProductRows.slice(
+        (productPage - 1) * productPageSize,
+        productPage * productPageSize,
+      ),
+    [visibleProductRows, productPage, productPageSize],
   );
 
   const productColumns: DataTableColumn<ProductMetricRow>[] = [
@@ -434,6 +560,7 @@ export function QuotasPage() {
     {
       id: "metric",
       header: t("products.colMetric"),
+      align: "center",
       cell: (r) => metricLabel(r.metric),
     },
     {
@@ -450,14 +577,11 @@ export function QuotasPage() {
       align: "right",
       cell: (r) =>
         r.metric === "storage.bytes" ? (
-          // 存储是 WS 总账,池级 used 无意义 → 展示该产品水位切片
+          // 存储是 WS 总账,池级 used 无意义 → 用 BFF 按产品算好的水位
           <span className="tabular-nums">
-            {(() => {
-              const slice = overview?.storage.slices.find(
-                (s) => s.productCode === r.productCode,
-              );
-              return slice ? formatBytes(slice.usedBytes) : "—";
-            })()}
+            {r.storageUsedBytes !== null
+              ? formatBytes(r.storageUsedBytes)
+              : "—"}
           </span>
         ) : (
           <span className="tabular-nums">{metricValue(r.metric, r.used)}</span>
@@ -473,10 +597,20 @@ export function QuotasPage() {
             {t("products.wsShared")}
           </span>
         ) : (
-          <span className="tabular-nums font-medium text-foreground">
+          <span
+            className={`tabular-nums font-medium ${r.remaining < 0 ? "text-warning-text" : "text-foreground"}`}
+          >
             {metricValue(r.metric, r.remaining)}
           </span>
         ),
+    },
+    {
+      id: "reset",
+      header: t("products.colReset"),
+      align: "center",
+      cell: (r) =>
+        // 存储不按周期重置(WS 总账),这一格空着比画一个「一次性」准确。
+        r.metric === "storage.bytes" ? "—" : resetBadge(r.resetPeriod),
     },
   ];
 
@@ -510,14 +644,15 @@ export function QuotasPage() {
         level={2}
         title={t("storage.title")}
         description={t("storage.description")}
+        action={addonsAction}
       >
         <DataTable<StorageRow>
           labels={tableLabels}
           columns={storageColumns}
-          rows={storageRows}
+          rows={pagedStorageRows}
           rowKey={(r) => r.key}
           loading={loading}
-          indexStart={1}
+          indexStart={(storagePage - 1) * storagePageSize + 1}
           empty={
             loadFailed ? (
               <LoadFailedEmpty />
@@ -526,13 +661,27 @@ export function QuotasPage() {
             )
           }
           footer={
-            <span className="tabular-nums text-body-sm text-muted-foreground">
-              {overview
-                ? t("storage.totalLine", {
-                    limit: formatBytes(overview.storage.limitBytes),
-                    remaining: formatBytes(overview.storage.remainingBytes),
-                  })
-                : "—"}
+            <span className="flex flex-wrap items-center justify-between gap-sm">
+              {/* 合计行留在表尾左侧:它是这张表的读数,不是翻页控件的一部分。 */}
+              <span className="tabular-nums text-body-sm text-muted-foreground">
+                {overview
+                  ? t("storage.totalLine", {
+                      limit: formatBytes(overview.storage.limitBytes),
+                      remaining: remainText(
+                        overview.storage.remainingBytes,
+                        formatBytes,
+                      ),
+                    })
+                  : "—"}
+              </span>
+              <ListPagination
+                page={storagePage}
+                pageCount={storagePageCount}
+                total={loadFailed ? 0 : storageRows.length}
+                pageSize={storagePageSize}
+                onPageSizeChange={setStoragePageSize}
+                onPageChange={setStoragePage}
+              />
             </span>
           }
         />
@@ -544,16 +693,17 @@ export function QuotasPage() {
         level={2}
         title={t("credits.title")}
         description={t("credits.description")}
+        action={addonsAction}
       >
         <DataTable<ConsoleQuotaPool>
           labels={tableLabels}
           columns={creditPoolColumns}
-          rows={overview?.aiCredit.pools ?? []}
+          rows={pagedCreditPools}
           rowKey={(p) =>
             `${p.source}:${p.productCode ?? "ws"}:${p.expiresAt ?? ""}:${p.limit}`
           }
           loading={loading}
-          indexStart={1}
+          indexStart={(creditPage - 1) * creditPageSize + 1}
           empty={
             loadFailed ? (
               <LoadFailedEmpty />
@@ -561,30 +711,44 @@ export function QuotasPage() {
               <EmptyState title={t("credits.empty")} />
             )
           }
+          footer={
+            <ListPagination
+              page={creditPage}
+              pageCount={creditPageCount}
+              total={loadFailed ? 0 : creditPools.length}
+              pageSize={creditPageSize}
+              onPageSizeChange={setCreditPageSize}
+              onPageChange={setCreditPage}
+            />
+          }
         />
-        <SignalList
-          items={[
-            {
-              title: t("credits.sharingTitle"),
-              description:
-                sharingProducts.length > 0
-                  ? t("credits.sharingOn", {
-                      products: sharingProducts
-                        .map((p) => p.productName)
-                        .join(" / "),
-                    })
-                  : t("credits.sharingOff"),
-            },
-            {
-              title: t("credits.boosterTitle"),
-              description: t("credits.boosterBody"),
-            },
-          ]}
-        />
+        {/* 说明缩进到与板块标题文字对齐(二级页说明口径,owner 2026-09-06)。 */}
+        <SectionBody>
+          <SignalList
+            items={[
+              {
+                title: t("credits.sharingTitle"),
+                description:
+                  sharingProducts.length > 0
+                    ? t("credits.sharingOn", {
+                        products: sharingProducts
+                          .map((p) => p.productName)
+                          .join(" / "),
+                      })
+                    : t("credits.sharingOff"),
+              },
+              {
+                title: t("credits.boosterTitle"),
+                description: t("credits.boosterBody"),
+              },
+            ]}
+          />
+        </SectionBody>
       </PageSection>
 
       {/* ③ 加油包与扩展包(自助购买闭环) */}
       <AddonPacksSection
+        id={ADDON_ANCHOR}
         onSettledRefresh={() => setReloadKey((k) => k + 1)}
         formatMoney={money}
         canPurchase={hasCapability(
@@ -600,21 +764,73 @@ export function QuotasPage() {
         title={t("products.title")}
         description={t("products.description")}
       >
-        <DataTable<ProductMetricRow>
-          labels={tableLabels}
-          columns={productColumns}
-          rows={productRows}
-          rowKey={(r) => r.rowKey}
-          loading={loading}
-          indexStart={1}
-          empty={
-            loadFailed ? (
-              <LoadFailedEmpty />
-            ) : (
-              <EmptyState title={t("products.empty")} />
-            )
-          }
-        />
+        <div className="flex flex-col gap-sm">
+          <FilterBar
+            view="list"
+            onViewChange={() => {}}
+            cardsDisabledReason={t("filters.listOnly")}
+            count={t("filters.count", { count: visibleProductRows.length })}
+            aria-label={t("filters.groupLabel")}
+            onReset={() => {
+              setProductQuery("");
+              setProductPage(1);
+            }}
+            search={
+              <Input
+                value={productQuery}
+                onChange={(event) => {
+                  setProductQuery(event.target.value);
+                  setProductPage(1);
+                }}
+                placeholder={t("filters.searchPlaceholder")}
+                className="min-w-media-2xl grow basis-0 max-w-panel-sm"
+                aria-label={t("filters.searchAriaLabel")}
+              />
+            }
+          />
+
+          <DataTable<ProductMetricRow>
+            labels={tableLabels}
+            columns={productColumns}
+            rows={pagedProductRows}
+            rowKey={(r) => r.rowKey}
+            loading={loading}
+            indexStart={(productPage - 1) * productPageSize + 1}
+            empty={
+              loadFailed ? (
+                <LoadFailedEmpty />
+              ) : (
+                <EmptyState
+                  title={t("products.empty")}
+                  {...(productQuery
+                    ? {
+                        action: (
+                          <Button
+                            variant="outline"
+                            size="md"
+                            onClick={() => setProductQuery("")}
+                          >
+                            <Icon name="x" size="xs" fallback="placeholder" />
+                            <span>{t("filters.reset")}</span>
+                          </Button>
+                        ),
+                      }
+                    : {})}
+                />
+              )
+            }
+            footer={
+              <ListPagination
+                page={productPage}
+                pageCount={productPageCount}
+                total={loadFailed ? 0 : visibleProductRows.length}
+                pageSize={productPageSize}
+                onPageSizeChange={setProductPageSize}
+                onPageChange={setProductPage}
+              />
+            }
+          />
+        </div>
       </PageSection>
     </ViewLayout>
   );

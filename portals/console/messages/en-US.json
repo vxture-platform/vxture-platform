@@ -2454,8 +2454,6 @@
       "creditUsedHint": "AI Credits · resets with the subscription cycle",
       "credits": "AI Credits",
       "addons": "Active booster packs",
-      "remainHint": "{remaining} left",
-      "creditsRemainHint": "{remaining} left this cycle · resets with the cycle",
       "addonsExpiry": "Earliest expiry {date}",
       "addonsNone": "No active packs — buy one below"
     },
@@ -2479,17 +2477,14 @@
     "storage": {
       "title": "Storage",
       "description": "A workspace-level shared resource: one row per grant source or usage subject; a product's contribution and usage read side by side",
-      "colSource": "Source",
       "colLimit": "Grant",
       "colExpires": "Valid until",
       "noExpiry": "No expiry",
-      "colProduct": "Product",
       "colUsed": "Used",
       "colShare": "Of total",
       "colObserved": "Reported at",
-      "totalLine": "Total {limit} · {remaining} left",
+      "totalLine": "Total {limit} · {remaining}",
       "emptySources": "No storage grants yet",
-      "emptySlices": "No product has reported storage usage yet",
       "colItem": "Item",
       "usageOnly": "Product usage"
     },
@@ -2518,7 +2513,8 @@
       "colUsed": "Used this cycle",
       "colRemaining": "Left",
       "wsShared": "Shared workspace-wide",
-      "empty": "No product quotas yet — they appear once you subscribe"
+      "empty": "No product quotas yet — they appear once you subscribe",
+      "colReset": "Resets"
     },
     "addons": {
       "title": "Booster & Extension Packs",
@@ -2569,6 +2565,17 @@
       "cancelHint": "Only pending orders can be cancelled",
       "buyNoPermission": "Your role cannot make payments; ask the tenant owner to buy add-on packs",
       "loadFailed": "Could not load add-on packs and orders, please retry"
+    },
+    "gotoAddons": "Buy add-ons",
+    "remainBy": "{amount} left",
+    "overBy": "{amount} over",
+    "filters": {
+      "groupLabel": "Product quota filters",
+      "listOnly": "Product quotas are list-only",
+      "count": "{count} total",
+      "searchPlaceholder": "Search product, code or metric",
+      "searchAriaLabel": "Search product quotas",
+      "reset": "Reset"
     }
   },
   "usagePage": {
