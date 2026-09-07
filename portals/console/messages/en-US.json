@@ -2574,7 +2574,7 @@
   },
   "usagePage": {
     "title": "Usage Analytics",
-    "description": "AI Credits consumption trends, product distribution, and task-level call records",
+    "description": "AI Credits usage for this workspace: trend, product mix and member split at a glance",
     "metrics": {
       "groupLabel": "Usage overview",
       "last7": "Last 7 days",
@@ -2590,62 +2590,90 @@
       "windowWeek": "12 weeks",
       "windowMonth": "12 months",
       "windowYear": "Yearly",
-      "colPeriod": "Period",
-      "colTotal": "Consumed",
-      "colDelta": "Change",
       "empty": "No usage data in this period",
       "windowHour": "Hourly (24h)",
-      "descriptionHour": "Hourly consumption over the last 24 hours; the axis is shown in your local time. Dashboard figures only — never a billing basis"
+      "descriptionHour": "Hourly consumption over the last 24 hours; the axis is shown in your local time. Dashboard figures only — never a billing basis",
+      "statTotal": "Window total",
+      "statPeak": "Peak",
+      "statDelta": "Latest change"
     },
     "share": {
       "title": "By product",
-      "description": "Each product's share of consumption in the selected period",
-      "colProduct": "Product",
-      "colTotal": "Consumed",
-      "colShare": "Share",
+      "description": "Product mix within the current window; share is against the window total",
       "empty": "No product consumption yet"
     },
-    "events": {
-      "title": "Call records",
-      "description": "Task-level detail: one row per call, with amount and user attribution (last 90 days)",
+    "members": {
+      "title": "By member",
+      "description": "Member split over the last 30 days; calls with no reported user land in Unattributed",
+      "empty": "No member usage in the last 30 days"
+    },
+    "chartPeak": "Peak",
+    "filters": {},
+    "notes": {
+      "title": "How these numbers work",
+      "description": "Where the figures on this page come from",
+      "scopeTitle": "A dashboard, not a bill",
+      "scopeBody": "This page reports AI Credits from downsampled dashboard data; actual charges follow your orders and invoices, and the two can differ slightly because of reporting lag. For other metrics or line-by-line checks, use the call records",
+      "bucketTitle": "How time is bucketed",
+      "bucketBody": "Trends are bucketed in UTC, with one bucket per period in the window (zero-filled when there were no calls); the hourly view converts to your local time, while daily and weekly keep UTC dates so they line up with the backend buckets",
+      "attributionTitle": "What “Unattributed” means",
+      "attributionBody": "The product did not pass a user identity with the call, so that usage lands in the unattributed bucket; it still counts toward the total, it just cannot be traced to a person",
+      "recordsTitle": "Checking line by line",
+      "recordsBody": "The call records page has full filters (time window, product, metric, member, request ID) plus a filtered total, so you can sum the detail and reconcile it against the quota page and your invoices"
+    },
+    "viewRecords": "View call records",
+    "unattributed": "Unattributed"
+  },
+  "usageRecordsPage": {
+    "title": "Call records",
+    "description": "Task-level detail: one row per call, searchable by time, product, metric, member and request ID",
+    "backToUsage": "Back to usage",
+    "metrics": {
+      "groupLabel": "Filtered result",
+      "count": "Records matched",
+      "countHint": "All records under the current filters",
+      "amount": "Charged total",
+      "amountHint": "Sum of charged amounts under the same filters; does not change as you page"
+    },
+    "table": {
+      "title": "Detail",
+      "description": "Newest first; the amount column shows what was charged, with the requested amount below when it could not be charged in full",
       "colAt": "Time",
       "colProduct": "Product",
       "colMetric": "Metric",
       "colAmount": "Amount",
       "colUser": "User",
       "colRequest": "Request ID",
+      "requestedWas": "requested {amount}",
       "unattributed": "Unattributed",
-      "total": "{count} records in the last {days} days",
-      "empty": "No call records yet",
-      "truncated": "Showing the most recent {limit} records (last {days} days); earlier calls are not listed"
+      "empty": "No call records match",
+      "emptyHint": "Try a different time window or loosen the filters"
     },
-    "members": {
-      "title": "By member",
-      "description": "Each member's AI Credits consumption over the last 30 days (calls without user attribution fall into \"Unattributed\")",
-      "colMember": "Member",
-      "colTotal": "Consumed",
-      "colCount": "Calls",
-      "colLast": "Last call",
-      "empty": "No member usage in the last 30 days"
-    },
-    "chartPeak": "Peak",
     "filters": {
       "groupLabel": "Call record filters",
       "listOnly": "Call records are list-only",
       "count": "{count} total",
-      "searchPlaceholder": "Search product, metric, user or request ID",
-      "searchAriaLabel": "Search call records",
+      "requestPlaceholder": "Find by exact request ID",
+      "requestAriaLabel": "Find by request ID",
+      "fromAriaLabel": "From date",
+      "toAriaLabel": "To date",
+      "productAriaLabel": "Filter by product",
+      "productAll": "All products",
+      "metricAriaLabel": "Filter by metric",
+      "metricAll": "All metrics",
+      "userAriaLabel": "Filter by member",
+      "userAll": "All members",
       "reset": "Reset"
     },
     "notes": {
-      "title": "How these numbers work",
-      "description": "Where the figures on this page come from",
-      "scopeTitle": "A dashboard, not a bill",
-      "scopeBody": "This page reports usage from downsampled statistics; actual charges follow your orders and invoices, and the two can differ slightly because of reporting lag",
-      "bucketTitle": "How time is bucketed",
-      "bucketBody": "Trends are bucketed in UTC, with one bucket per period in the window (zero-filled when there were no calls); the hourly view converts to your local time, while daily and weekly keep UTC dates so they line up with the backend buckets",
-      "attributionTitle": "What “Unattributed” means",
-      "attributionBody": "The product did not pass a user identity with the call, so that usage lands in the unattributed bucket; it still counts toward the total, it just cannot be traced to a person"
+      "title": "Reconciling with this page",
+      "description": "Narrow the detail, sum it, and match it against quota and invoices",
+      "reconcileTitle": "Reading the totals",
+      "reconcileBody": "The two figures above cover every record under the current filters and do not change as you page; set the time window to match your billing cycle and they line up with the quota page and your invoices",
+      "shortfallTitle": "Requested vs charged",
+      "shortfallBody": "A “requested N” line under the amount means the call could not be charged in full — when the balance runs short, only what was available is charged and the rest is not counted; nothing is shown when the two match",
+      "rangeTitle": "How far back",
+      "rangeBody": "Up to {days} days; older records have been archived with their partitions and are outside this view"
     }
   },
   "addonPay": {

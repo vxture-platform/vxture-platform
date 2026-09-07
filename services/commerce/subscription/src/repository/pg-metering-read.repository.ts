@@ -10,6 +10,49 @@ import type {
   UsageMemberRow,
 } from "../types/metering-read.types";
 
+/* ── 调用记录的 FROM / WHERE:明细与合计**共用一份** ───────────────────────────
+ *
+ * 分成两条查询是为了让明细走 limit/offset、合计走聚合,各自选到合适的计划;
+ * 但谓词必须是同一份,否则「明细逐条加起来 ≠ 表尾合计」——而这张表存在的理由
+ * 恰恰是让客户自己加总对账,一旦对不上就适得其反。所以抽成常量,改一处两边同步。
+ *
+ * 参数位固定:$1 workspace / $2 from / $3 to / $4 product / $5 metric /
+ * $6 user(可视码或 'unattributed')/ $7 requestId。明细查询在其后接 $8 limit、
+ * $9 offset。
+ */
+const USAGE_EVENTS_FROM = `from metering.usage_events e
+         join product.products prod on prod.id = e.product_id
+         left join account.users u on u.id = e.end_user_id
+         left join account.user_profiles up on up.user_id = e.end_user_id`;
+
+const USAGE_EVENTS_WHERE = `e.workspace_id = $1
+          and e.created_at >= $2 and e.created_at < $3
+          and ($4::text is null or prod.product_code = $4)
+          and ($5::text is null or e.metric_key = $5)
+          and ($6::text is null
+               or ($6 = 'unattributed' and e.end_user_id is null)
+               or ($6 <> 'unattributed' and u.user_no::text = $6))
+          and ($7::text is null or e.request_id = $7)`;
+
+/** 两条查询共用的 $1..$7。 */
+const usageEventsParams = (input: {
+  workspaceId: string;
+  from: Date;
+  to: Date;
+  productCode?: string;
+  metricKey?: string;
+  user?: string;
+  requestId?: string;
+}): unknown[] => [
+  input.workspaceId,
+  input.from,
+  input.to,
+  input.productCode ?? null,
+  input.metricKey ?? null,
+  input.user ?? null,
+  input.requestId ?? null,
+];
+
 /**
  * 计量读侧仓储(配额总览 / 用量分析;console 批 3 从 console-bff 下沉)。
  * 只读 SELECT;写一律走 consume / addon 服务。所有周期口径 UTC,与 rollup /
@@ -185,12 +228,22 @@ export class PgMeteringReadRepository {
   }
 
   /**
-   * 任务级调用记录(时间倒序)。created_at 窗口谓词裁剪月分区;end_user_id 裸
-   * UUID → account 解引用(边界#2 的读侧解引用,与订单页 subscriber_name 同法)。
+   * 任务级调用记录(时间倒序,可筛可翻页)。`created_at` 窗口谓词裁剪月分区;
+   * `end_user_id` 裸 UUID → account 解引用(边界#2 的读侧解引用,与订单页
+   * subscriber_name 同法),出口只给 `user_no` 可视码,不给 UUID。
+   *
+   * 筛选条件全部写成 `$n is null or <谓词>` 的形式:一条 SQL 覆盖所有组合,
+   * 不拼字符串(拼串是注入面,也让 plan 缓存失效)。
    */
   async listUsageEvents(input: {
     workspaceId: string;
-    days: number;
+    from: Date;
+    to: Date;
+    productCode?: string;
+    metricKey?: string;
+    user?: string;
+    requestId?: string;
+    offset: number;
     limit: number;
   }): Promise<UsageEventRow[]> {
     const res = await this.pool.query<{
@@ -199,22 +252,22 @@ export class PgMeteringReadRepository {
       product_name: string;
       metric_key: string;
       total_amount: string;
+      requested_amount: string | null;
       user_name: string | null;
+      user_no: string | null;
       request_id: string | null;
     }>(
       `select e.created_at, prod.product_code, prod.product_name,
               e.metric_key, e.total_amount::text as total_amount,
+              e.requested_amount::text as requested_amount,
               coalesce(up.display_name, u.account) as user_name,
+              u.user_no::text as user_no,
               e.request_id
-         from metering.usage_events e
-         join product.products prod on prod.id = e.product_id
-         left join account.users u on u.id = e.end_user_id
-         left join account.user_profiles up on up.user_id = e.end_user_id
-        where e.workspace_id = $1
-          and e.created_at >= now() - make_interval(days => $2)
+         ${USAGE_EVENTS_FROM}
+        where ${USAGE_EVENTS_WHERE}
         order by e.created_at desc
-        limit $3`,
-      [input.workspaceId, input.days, input.limit],
+        limit $8 offset $9`,
+      [...usageEventsParams(input), input.limit, input.offset],
     );
     return res.rows.map((r) => ({
       createdAt: r.created_at,
@@ -222,9 +275,39 @@ export class PgMeteringReadRepository {
       productName: r.product_name,
       metricKey: r.metric_key,
       totalAmount: Number(r.total_amount),
+      requestedAmount:
+        r.requested_amount === null ? null : Number(r.requested_amount),
       userName: r.user_name,
+      userNo: r.user_no,
       requestId: r.request_id,
     }));
+  }
+
+  /**
+   * 同一筛选下的条数与实扣量合计——**独立于分页**,客户拿它跟配额页/账单对数。
+   * 与明细查询共用 FROM / WHERE,免得两边谓词漂移导致「明细加起来不等于合计」。
+   */
+  async countUsageEvents(input: {
+    workspaceId: string;
+    from: Date;
+    to: Date;
+    productCode?: string;
+    metricKey?: string;
+    user?: string;
+    requestId?: string;
+  }): Promise<{ total: number; totalAmount: number }> {
+    const res = await this.pool.query<{ total: string; total_amount: string }>(
+      `select count(*)::text as total,
+              coalesce(sum(e.total_amount), 0)::text as total_amount
+         ${USAGE_EVENTS_FROM}
+        where ${USAGE_EVENTS_WHERE}`,
+      usageEventsParams(input),
+    );
+    const row = res.rows[0];
+    return {
+      total: Number(row?.total ?? 0),
+      totalAmount: Number(row?.total_amount ?? 0),
+    };
   }
 
   /** 按成员统计(近 N 天 usage_events 按 end_user_id 聚合,未归集单列一桶)。 */
@@ -235,12 +318,15 @@ export class PgMeteringReadRepository {
   }): Promise<UsageMemberRow[]> {
     const res = await this.pool.query<{
       user_name: string | null;
+      user_no: string | null;
       total: string;
       event_count: string;
       last_at: Date;
     }>(
+      // user_no 一并带出:调用记录二级页按它筛成员(可视码,UUID 不出口)
       `select case when e.end_user_id is null then null
                    else coalesce(up.display_name, u.account) end as user_name,
+              u.user_no::text as user_no,
               sum(e.total_amount)::text as total,
               count(*)::text as event_count,
               max(e.created_at) as last_at
@@ -250,12 +336,13 @@ export class PgMeteringReadRepository {
         where e.workspace_id = $1
           and e.metric_key = $2
           and e.created_at >= now() - make_interval(days => $3)
-        group by e.end_user_id, 1
+        group by e.end_user_id, 1, u.user_no
         order by sum(e.total_amount) desc`,
       [input.workspaceId, input.metric, input.days],
     );
     return res.rows.map((r) => ({
       userName: r.user_name,
+      userNo: r.user_no,
       total: Number(r.total),
       eventCount: Number(r.event_count),
       lastAt: r.last_at,
