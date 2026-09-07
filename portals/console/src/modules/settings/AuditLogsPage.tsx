@@ -12,6 +12,7 @@
  * tenant.audit.read(owner/manager)。表格遵守默认结构(序号列,无操作列)。
  */
 
+import { RowActionsPlaceholder } from "@/components/table/RowActionsPlaceholder";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
@@ -264,6 +265,13 @@ export function AuditLogsPage() {
           columns={columns}
           rows={rows}
           rowKey={(r) => r.id}
+          /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
+             与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
+          leadingSpacer
+          /* 操作列占位：本表当前没有行动作，补一格禁用的汇聚按钮——列的位置
+             先占住，右缘与同页其它表对齐；将来加动作时改的是这一格的内容，
+             不是整张表的列结构（owner 2026-09-07）。 */
+          rowActions={() => <RowActionsPlaceholder />}
           loading={loading}
           indexStart={(page - 1) * PAGE_SIZE + 1}
           empty={

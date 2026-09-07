@@ -411,6 +411,9 @@ export function AddonPacksSection({
           columns={orderColumns}
           rows={orders}
           rowKey={(o) => o.orderNo}
+          /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
+             与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
+          leadingSpacer
           loading={loading}
           indexStart={1}
           rowActions={(o) => (
