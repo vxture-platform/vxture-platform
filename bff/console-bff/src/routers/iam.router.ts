@@ -238,6 +238,15 @@ export class IamRouter {
     if (!role) {
       throw new NotFoundException("Role could not be created");
     }
+    /* 角色定义变更直接改变「谁能做什么」（owner 2026-09-08）。此前只记了「成员被
+       授予角色」，没记「角色本身被改了权限」——前者可查后者不可查，追责链是断的。
+       权限码入 after：复盘时要答的正是「那时这个角色能做什么」。 */
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.role.create",
+      resourceType: "role",
+      resourceId: role.roleCode ?? role.id,
+      after: { roleName: role.roleName, permissions: role.permissions },
+    });
 
     return role;
   }
@@ -260,6 +269,12 @@ export class IamRouter {
     if (!role) {
       throw new NotFoundException("Role not found");
     }
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.role.update",
+      resourceType: "role",
+      resourceId: role.roleCode ?? role.id,
+      after: { roleName: role.roleName, permissions: role.permissions },
+    });
 
     return role;
   }
@@ -280,6 +295,11 @@ export class IamRouter {
     if (!removed) {
       throw new NotFoundException("Role not found");
     }
+    auditCustomerAction(this.pool, req, {
+      action: "tenant.role.delete",
+      resourceType: "role",
+      resourceId: roleId,
+    });
 
     return { status: "ok" as const };
   }

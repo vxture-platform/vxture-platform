@@ -173,6 +173,20 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:design
 
+      # 说明类板块的正文要缩进到与标题文字对齐。漏套**不报错、不影响构建**，
+      # 只是那一块的左缘比别处少 24px——一页里有的缩了有的没缩，肉眼要来回比
+      # 才看得出。人工核了两轮仍有漏网，所以收成守卫。
+      - name: Section body indent guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:section-indent
+
+      # 审计动作码：UI 目录、BFF 实写集合、动作文案三者必须一致。不一致不报错，
+      # 只在界面上现形——UI 多则筛选项永远空列表（看起来像「没发生过」），UI 少则
+      # 日志显示成原始码且筛不到。人工核对过一轮仍漏了整批模板串写法。
+      - name: Audit action catalogue guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:audit-actions
+
       # 两类不报错的样式缺陷：CSS 注释提前收口（`next build` 走的
       # Lightning CSS 会自行恢复、照常打包成功，Turbopack dev 却直接拒收），
       # 以及被主题踩掉的关键字工具类（`max-w-none` 实际是 `max-width: 0`）。

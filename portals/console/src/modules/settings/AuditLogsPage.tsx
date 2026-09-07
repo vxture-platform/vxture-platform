@@ -16,7 +16,6 @@ import { RowActionsPlaceholder } from "@/components/table/RowActionsPlaceholder"
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
-import { useTableSort } from "@/lib/table-sort";
 import {
   Badge,
   Button,
@@ -37,7 +36,7 @@ import {
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
-import { PageSection, SignalList } from "@/layout/shell";
+import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
 
 const RESULT_TONES: Record<ConsoleAuditLog["result"], StatusBadgeTone> = {
@@ -47,25 +46,54 @@ const RESULT_TONES: Record<ConsoleAuditLog["result"], StatusBadgeTone> = {
 };
 
 /** 已知动作 → i18n 键(点转下划线;未知动作回退原码,契约演进容错)。 */
+/**
+ * 已知动作码 —— **必须与 console-bff 实写的集合一致**（守卫 lint:audit-actions）。
+ *
+ * 不一致的两种后果都不报错、都只在界面上现形：
+ *  · UI 多 → 筛选项永远空列表，而空列表看起来像「没发生过」；
+ *  · UI 少 → 日志显示成原始码（`tenant.owner.transfer`），且筛不到——转让所有权、
+ *    注销租户这两条恰恰是这一页最该被看见的。
+ *
+ * 2026-09-08 清点：BFF 实写 37 个，UI 只认 18 个，差 19 个全是「少」。
+ */
 const KNOWN_ACTIONS = new Set([
-  "tenant.member.invite",
-  "tenant.member.update",
-  "tenant.member.disable",
-  "tenant.member.reset_password",
-  "tenant.member.remove",
-  "tenant.verification.submit",
-  "subscription.pause",
-  "subscription.resume",
-  "subscription.cancel",
-  "subscription.auto_renew_on",
-  "subscription.auto_renew_off",
+  "account.deletion.cancel",
+  "account.deletion.request",
+  "account.email.change",
+  "account.identity.unbind",
+  "account.login_method.update",
+  "account.password.change",
+  "account.password.set_initial",
+  "account.phone.change",
+  "account.session.revoke",
+  "addon.order.cancel",
   "addon.order.create",
   "addon.order.payment_declare",
-  "addon.order.cancel",
   "billing.address.create",
-  "billing.address.update",
   "billing.address.delete",
+  "billing.address.update",
   "billing.invoice.apply",
+  "order.refund_request",
+  "subscription.auto_renew_off",
+  "subscription.auto_renew_on",
+  "subscription.cancel",
+  "subscription.pause",
+  "subscription.resume",
+  "tenant.close",
+  "tenant.invitation.resend",
+  "tenant.invitation.revoke",
+  "tenant.member.add",
+  "tenant.member.disable",
+  "tenant.member.enable",
+  "tenant.member.invite",
+  "tenant.member.remove",
+  "tenant.member.reset_password",
+  "tenant.member.update",
+  "tenant.owner.transfer",
+  "tenant.role.create",
+  "tenant.role.delete",
+  "tenant.role.update",
+  "tenant.verification.submit",
 ]);
 
 type ResultFilter = "all" | "success" | "failure";
@@ -81,19 +109,10 @@ export function AuditLogsPage() {
   const { session } = useConsoleSession();
 
   const [rows, setRows] = useState<ConsoleAuditLog[]>([]);
-  const sortAccessors = useMemo(
-    () => ({
-      at: (r: ConsoleAuditLog) => new Date(r.at).getTime(),
-      actor: (r: ConsoleAuditLog) => r.actorName ?? "",
-      action: (r: ConsoleAuditLog) => r.action,
-    }),
-    [],
-  );
-  const {
-    sort,
-    onSortChange,
-    rows: sortedRows,
-  } = useTableSort(rows, sortAccessors);
+  /* **不接前端排序**：本表是服务端分页（page / pageSize / total），手上只有当前这
+   * 一页。排它等于排「看得见的这 20 条」，而用户以为看到的是「全部里最新/最大的
+   * 20 条」——那是在界面上说假话。要排得由 BFF 支持 order by。
+   * （2026-09-08 订正：上一轮误当成不分页的表接了 `useTableSort`。） */
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -155,19 +174,34 @@ export function AuditLogsPage() {
   const columns = useMemo<DataTableColumn<ConsoleAuditLog>[]>(
     () => [
       {
-        id: "at",
-        sortable: true,
-        header: t("table.colAt"),
+        /* 首列 = **操作内容**（owner 2026-09-08）。这一行说的是「发生了什么操作」，
+           时间是元信息不是主语——原先把时间当标题列，读一屏只看见一列日期。
+           副行给原始码：中文名便于人读，原始码便于对着权限目录/工单核。 */
+        id: "action",
+        header: t("table.colAction"),
         cell: (r) => (
           <TableTitleCell
-            title={<span className="tabular-nums">{fmtDate(r.at)}</span>}
-            description={<span className="tabular-nums">{fmtTime(r.at)}</span>}
+            title={actionLabel(r.action)}
+            description={<span className="font-mono">{r.action}</span>}
           />
         ),
       },
       {
+        id: "at",
+        align: "center",
+        header: t("table.colAt"),
+        cell: (r) => (
+          <span className="flex flex-col items-center tabular-nums">
+            <span className="text-foreground">{fmtDate(r.at)}</span>
+            <span className="text-body-sm text-muted-foreground">
+              {fmtTime(r.at)}
+            </span>
+          </span>
+        ),
+      },
+      {
         id: "actor",
-        sortable: true,
+        align: "center",
         header: t("table.colActor"),
         cell: (r) =>
           r.actorType === "customer" ? (
@@ -179,19 +213,6 @@ export function AuditLogsPage() {
               )}
             </Badge>
           ),
-      },
-      {
-        id: "action",
-        sortable: true,
-        header: t("table.colAction"),
-        cell: (r) => (
-          <span className="flex flex-col">
-            <span className="text-foreground">{actionLabel(r.action)}</span>
-            <span className="font-mono text-body-sm text-muted-foreground">
-              {r.action}
-            </span>
-          </span>
-        ),
       },
       {
         id: "resource",
@@ -280,9 +301,7 @@ export function AuditLogsPage() {
         <DataTable<ConsoleAuditLog>
           labels={tableLabels}
           columns={columns}
-          rows={sortedRows}
-          {...(sort ? { sort } : {})}
-          onSortChange={onSortChange}
+          rows={rows}
           rowKey={(r) => r.id}
           /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
              与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
@@ -337,15 +356,20 @@ export function AuditLogsPage() {
         title={t("notes.title")}
         description={t("notes.description")}
       >
-        <SignalList
-          items={[
-            { title: t("notes.scopeTitle"), description: t("notes.scopeBody") },
-            {
-              title: t("notes.retainTitle"),
-              description: t("notes.retainBody"),
-            },
-          ]}
-        />
+        <SectionBody>
+          <SignalList
+            items={[
+              {
+                title: t("notes.scopeTitle"),
+                description: t("notes.scopeBody"),
+              },
+              {
+                title: t("notes.retainTitle"),
+                description: t("notes.retainBody"),
+              },
+            ]}
+          />
+        </SectionBody>
       </PageSection>
     </ViewLayout>
   );

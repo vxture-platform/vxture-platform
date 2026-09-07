@@ -27,7 +27,7 @@ import {
   ViewHeader,
   ViewLayout,
 } from "@vxture/design-system";
-import { PageSection } from "@/layout/shell";
+import { PageSection, SectionBody } from "@/layout/shell";
 import { isExternalLink, mergeById } from "@/lib/inbox-list";
 import { useRouter } from "@/lib/i18n/navigation";
 import {
@@ -316,7 +316,11 @@ export function InboxPage() {
       </PageSection>
 
       <PageSection icon="info" level={2} title={t("notes.title")}>
-        <p className="text-body-sm text-muted-foreground">{t("notes.body")}</p>
+        <SectionBody>
+          <p className="text-body-sm text-muted-foreground">
+            {t("notes.body")}
+          </p>
+        </SectionBody>
       </PageSection>
     </ViewLayout>
   );
