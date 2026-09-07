@@ -2741,17 +2741,16 @@
     },
     "table": {
       "title": "Vouchers",
-      "description": "\"In use\" = locked on a pending order; cancelling that order releases it automatically",
-      "filterLabel": "Filter",
-      "filterAvailable": "Available",
-      "filterAll": "All",
+      "description": "\"In use\" = locked on a pending order; cancelling that order releases it automatically. The order it is held by shows under the status",
       "colCode": "Code",
       "colKind": "Kind",
       "colFace": "Face value",
-      "colStatus": "Status",
+      "colStatus": "Status / Held by",
       "colExpires": "Valid until",
       "colUsedAt": "Used at / Redemption no.",
-      "empty": "No vouchers yet"
+      "empty": "No vouchers yet",
+      "usesLeft": "{left} of {total} left",
+      "emptyHint": "Vouchers issued by platform promotions show up here"
     },
     "notes": {
       "title": "How it works",
@@ -2759,7 +2758,28 @@
       "useTitle": "Where to use",
       "useBody": "Pick them on the order payment page: discounts act on the order price, credit vouchers offset the amount due; one of each can stack",
       "sourceTitle": "Where they come from",
-      "sourceBody": "Issued by platform promotions (targeted at your tenant, workspace, or you); validity shown here is authoritative"
+      "sourceBody": "Issued by platform promotions (targeted at your tenant, workspace, or you); validity shown here is authoritative",
+      "holdTitle": "Holding and release",
+      "holdBody": "A voucher picked at checkout is locked as “In use” and shows its order no.; cancelling or letting the order expire releases it back to available, and only a completed payment redeems it"
+    },
+    "filters": {
+      "groupLabel": "Voucher filters",
+      "listOnly": "Vouchers are list-only",
+      "count": "{count} total",
+      "searchPlaceholder": "Search code, batch or order no.",
+      "searchAriaLabel": "Search vouchers",
+      "statusAriaLabel": "Filter by status",
+      "statusAll": "All statuses",
+      "reset": "Reset"
+    },
+    "actions": {
+      "menuLabel": "Voucher actions",
+      "copy": "Copy code",
+      "copied": "Copied",
+      "viewOrder": "View held order",
+      "viewOrderHint": "This voucher is not held by any order",
+      "use": "Use at checkout",
+      "useHint": "Only available vouchers can join settlement"
     }
   },
   "auditPage": {
