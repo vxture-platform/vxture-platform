@@ -37,7 +37,12 @@ import type {
   TenancyUsageResponse,
 } from "@/entities/console";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
-import { DashboardSplit, PageSection, SignalList } from "@/layout/shell";
+import {
+  DashboardSplit,
+  PageSection,
+  SectionBody,
+  SignalList,
+} from "@/layout/shell";
 
 type ModelRow = [string, string, string, string];
 type EntitlementRow = [string, string, string, string];
@@ -369,7 +374,9 @@ function AtlasPage() {
         title={t("signals.title")}
         description={t("signals.description")}
       >
-        <SignalList items={statusSignals} />
+        <SectionBody>
+          <SignalList items={statusSignals} />
+        </SectionBody>
       </PageSection>
     </ViewLayout>
   );

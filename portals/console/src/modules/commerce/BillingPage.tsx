@@ -63,7 +63,7 @@ import {
 } from "@/components/load/LoadFailed";
 import { PlannedBadge } from "@/components/planned";
 
-import { PageSection, SignalList } from "@/layout/shell";
+import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 import { fmtDate, fmtTime } from "./components/hubModel";
 import { OrdersSection } from "./components/OrdersSection";
 import { InvoiceSections } from "./components/InvoiceSections";
@@ -620,18 +620,20 @@ export function BillingPage() {
         title={t("notes.title")}
         description={t("notes.description")}
       >
-        <SignalList
-          items={[
-            {
-              title: t("notes.paymentTitle"),
-              description: t("notes.paymentBody"),
-            },
-            {
-              title: t("notes.billingTitle"),
-              description: t("notes.billingBody"),
-            },
-          ]}
-        />
+        <SectionBody>
+          <SignalList
+            items={[
+              {
+                title: t("notes.paymentTitle"),
+                description: t("notes.paymentBody"),
+              },
+              {
+                title: t("notes.billingTitle"),
+                description: t("notes.billingBody"),
+              },
+            ]}
+          />
+        </SectionBody>
       </PageSection>
     </ViewLayout>
   );

@@ -16,7 +16,6 @@ import { RowActionsPlaceholder } from "@/components/table/RowActionsPlaceholder"
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTableLabels } from "@/lib/table";
-import { useTableSort } from "@/lib/table-sort";
 import {
   Badge,
   Button,
@@ -37,7 +36,7 @@ import {
   LoadFailedEmpty,
 } from "@/components/load/LoadFailed";
 import { useConsoleSession } from "@/features/session/ConsoleSessionProvider";
-import { PageSection, SignalList } from "@/layout/shell";
+import { PageSection, SectionBody, SignalList } from "@/layout/shell";
 import { fmtDate, fmtTime } from "@/modules/commerce/components/hubModel";
 
 const RESULT_TONES: Record<ConsoleAuditLog["result"], StatusBadgeTone> = {
@@ -81,19 +80,10 @@ export function AuditLogsPage() {
   const { session } = useConsoleSession();
 
   const [rows, setRows] = useState<ConsoleAuditLog[]>([]);
-  const sortAccessors = useMemo(
-    () => ({
-      at: (r: ConsoleAuditLog) => new Date(r.at).getTime(),
-      actor: (r: ConsoleAuditLog) => r.actorName ?? "",
-      action: (r: ConsoleAuditLog) => r.action,
-    }),
-    [],
-  );
-  const {
-    sort,
-    onSortChange,
-    rows: sortedRows,
-  } = useTableSort(rows, sortAccessors);
+  /* **不接前端排序**：本表是服务端分页（page / pageSize / total），手上只有当前这
+   * 一页。排它等于排「看得见的这 20 条」，而用户以为看到的是「全部里最新/最大的
+   * 20 条」——那是在界面上说假话。要排得由 BFF 支持 order by。
+   * （2026-09-08 订正：上一轮误当成不分页的表接了 `useTableSort`。） */
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -155,19 +145,34 @@ export function AuditLogsPage() {
   const columns = useMemo<DataTableColumn<ConsoleAuditLog>[]>(
     () => [
       {
-        id: "at",
-        sortable: true,
-        header: t("table.colAt"),
+        /* 首列 = **操作内容**（owner 2026-09-08）。这一行说的是「发生了什么操作」，
+           时间是元信息不是主语——原先把时间当标题列，读一屏只看见一列日期。
+           副行给原始码：中文名便于人读，原始码便于对着权限目录/工单核。 */
+        id: "action",
+        header: t("table.colAction"),
         cell: (r) => (
           <TableTitleCell
-            title={<span className="tabular-nums">{fmtDate(r.at)}</span>}
-            description={<span className="tabular-nums">{fmtTime(r.at)}</span>}
+            title={actionLabel(r.action)}
+            description={<span className="font-mono">{r.action}</span>}
           />
         ),
       },
       {
+        id: "at",
+        align: "center",
+        header: t("table.colAt"),
+        cell: (r) => (
+          <span className="flex flex-col items-center tabular-nums">
+            <span className="text-foreground">{fmtDate(r.at)}</span>
+            <span className="text-body-sm text-muted-foreground">
+              {fmtTime(r.at)}
+            </span>
+          </span>
+        ),
+      },
+      {
         id: "actor",
-        sortable: true,
+        align: "center",
         header: t("table.colActor"),
         cell: (r) =>
           r.actorType === "customer" ? (
@@ -179,19 +184,6 @@ export function AuditLogsPage() {
               )}
             </Badge>
           ),
-      },
-      {
-        id: "action",
-        sortable: true,
-        header: t("table.colAction"),
-        cell: (r) => (
-          <span className="flex flex-col">
-            <span className="text-foreground">{actionLabel(r.action)}</span>
-            <span className="font-mono text-body-sm text-muted-foreground">
-              {r.action}
-            </span>
-          </span>
-        ),
       },
       {
         id: "resource",
@@ -280,9 +272,7 @@ export function AuditLogsPage() {
         <DataTable<ConsoleAuditLog>
           labels={tableLabels}
           columns={columns}
-          rows={sortedRows}
-          {...(sort ? { sort } : {})}
-          onSortChange={onSortChange}
+          rows={rows}
           rowKey={(r) => r.id}
           /* 首格占位：这张表既没有多选也没有展开，补一格空位让首个业务列
              与同页其它表的首列落在同一条 x 上（规范：首格 64px 常态占据）。 */
@@ -337,15 +327,20 @@ export function AuditLogsPage() {
         title={t("notes.title")}
         description={t("notes.description")}
       >
-        <SignalList
-          items={[
-            { title: t("notes.scopeTitle"), description: t("notes.scopeBody") },
-            {
-              title: t("notes.retainTitle"),
-              description: t("notes.retainBody"),
-            },
-          ]}
-        />
+        <SectionBody>
+          <SignalList
+            items={[
+              {
+                title: t("notes.scopeTitle"),
+                description: t("notes.scopeBody"),
+              },
+              {
+                title: t("notes.retainTitle"),
+                description: t("notes.retainBody"),
+              },
+            ]}
+          />
+        </SectionBody>
       </PageSection>
     </ViewLayout>
   );

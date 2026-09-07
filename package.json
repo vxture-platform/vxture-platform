@@ -54,6 +54,7 @@
     "// === 代码质量 ===": "",
     "lint": "pnpm --recursive --if-present lint",
     "lint:design": "node scripts/guardrails/check-design-system.mjs",
+    "lint:section-indent": "node scripts/guardrails/check-section-body-indent.mjs",
     "lint:css-traps": "node scripts/guardrails/check-css-traps.mjs",
     "lint:destructive": "node scripts/guardrails/check-destructive-confirmations.mjs",
     "lint:messages": "node scripts/guardrails/check-message-catalogs.mjs",
