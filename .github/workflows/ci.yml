@@ -194,12 +194,13 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:ops-todo-alerts
 
-      # 显示了时分却没有秒:不报错、不影响构建、页面照常渲染,只是表里少两个字符。
-      # 而排查订单/审计/通知时,同一分钟内的先后顺序恰恰最要紧——两个「15:04」
-      # 摆在一起看不出谁先谁后。2026-09-08 清点全仓 8 处,是本地副本各自漂移。
-      - name: Datetime seconds guardrail
+      # 日期时间三条纪律(owner 2026-09-08),三条都不报错、不影响构建:
+      #  §1 界面到秒——手搓一个 Intl 只是那处日期跟别处长得不一样;
+      #  §2 存储到微秒——timestamptz(0) 把记录本身截了,界面少显示能加回来、库里补不回来;
+      #  §3 格式化不入写路径——显示串进了请求体,几个月后表现为「这条记录时间对不上」。
+      - name: Datetime discipline guardrail
         if: steps.changes.outputs.docs_only != 'true'
-        run: pnpm lint:datetime-seconds
+        run: pnpm lint:datetime-discipline
 
       # 两类不报错的样式缺陷：CSS 注释提前收口（`next build` 走的
       # Lightning CSS 会自行恢复、照常打包成功，Turbopack dev 却直接拒收），
