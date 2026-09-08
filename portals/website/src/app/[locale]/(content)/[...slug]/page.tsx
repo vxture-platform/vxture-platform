@@ -149,26 +149,55 @@ const STUB_LOOK: Record<string, { icon: IconName; accent: ComingSoonAccent }> =
     blog: { icon: "newspaper", accent: "emerald" },
   };
 
-async function renderComingSoon(section: string) {
+/**
+ * 有独立外观与文案的**子页**（2026-09-08）。
+ *
+ * console 侧栏「模型服务 / 技能工具」的行尾外链落在这两条上。没有这张表的话
+ * 两条路径都按 `docs` 取文案，渲染出一模一样的页面——点下去分不出点的是哪个。
+ *
+ * 键是 `区段/子页`，与文案里的 `comingSoon.pages.*` 一一对应。
+ */
+const STUB_PAGE_LOOK: Record<
+  string,
+  { icon: IconName; accent: ComingSoonAccent }
+> = {
+  "docs/models": { icon: "database", accent: "brand" },
+  "docs/skills": { icon: "stack", accent: "emerald" },
+};
+
+async function renderComingSoon(section: string, page?: string) {
   const t = await getTranslations("comingSoon");
-  const look = STUB_LOOK[section] ?? { icon: "file-text", accent: "brand" };
+  const key = page ? `${section}/${page}` : section;
+  const look = STUB_PAGE_LOOK[key] ??
+    STUB_LOOK[section] ?? { icon: "file-text", accent: "brand" };
+  /* 子页有自己的文案就用自己的，否则回落到区段的——新增一条允许的子页时
+     忘了配文案，页面仍然能开（回落到「产品文档」），不会抛。 */
+  const hasPageCopy = page !== undefined && key in STUB_PAGE_LOOK;
 
   return (
     <ComingSoonPage
       icon={look.icon}
       accent={look.accent}
       eyebrow={t("eyebrow")}
-      title={t(`sections.${section}.name`)}
+      title={
+        hasPageCopy
+          ? t(`pages.${section}.${page}.name`)
+          : t(`sections.${section}.name`)
+      }
       subtitle={t("subtitle")}
-      description={t(`sections.${section}.description`)}
+      description={
+        hasPageCopy
+          ? t(`pages.${section}.${page}.description`)
+          : t(`sections.${section}.description`)
+      }
       primaryAction={{ href: "/contact", label: t("action") }}
       backAction={{ href: "/", label: t("back") }}
     />
   );
 }
 
-function renderStub({ section }: StubEntry) {
-  return renderComingSoon(section);
+function renderStub({ section, page }: StubEntry) {
+  return renderComingSoon(section, page);
 }
 
 // =============================================================================

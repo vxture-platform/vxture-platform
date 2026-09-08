@@ -39,7 +39,7 @@ export function createStubLoader(
     // 只认单段、且声明过的子页；更深的路径与未声明的名字一律 404。
     const [first] = slug;
     if (slug.length === 1 && first && allowed.has(first)) {
-      return { type: "stub", layout: "prose", section };
+      return { type: "stub", layout: "prose", section, page: first };
     }
     return null;
   };
