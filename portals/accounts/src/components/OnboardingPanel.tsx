@@ -33,8 +33,12 @@ import {
   OnboardingSessionError,
 } from "@/api/oidc";
 
-/** 与后端 assertValidAccount 同口径：字母开头，字母数字下划线，4–32 位。 */
-const ACCOUNT_RE = /^[A-Za-z][A-Za-z0-9_]{3,31}$/;
+/* 与后端 assertValidAccount 同口径：字母开头，只能用字母/数字/下划线，3–24 位。
+   **这一行必须与 services/identity/account 的 ACCOUNT_RE 逐字一致**——
+   2026-09-08 首版写成了 {3,31}（4–32 位），注释却写着「与后端同口径」：
+   填 3 位的被前端拦下（后端本来接受），填 25 位的前端放行、后端回 400。
+   两种都不报错，只表现为「这个用户名怎么不让用」。 */
+const ACCOUNT_RE = /^[A-Za-z][A-Za-z0-9_]{2,23}$/;
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 /** 建号时发的默认用户名（`_{user_no}`）——预填时要清掉，不能让人直接提交它。 */
 const DEFAULT_ACCOUNT_RE = /^_\d+$/;
@@ -105,7 +109,7 @@ export function OnboardingPanel() {
     // 还有一条」。
     const next: Record<string, string> = {};
     if (!ACCOUNT_RE.test(a))
-      next.account = "4–32 位，字母开头，只能用字母、数字、下划线";
+      next.account = "3–24 位，字母开头，只能用字母、数字、下划线";
     if (!n) next.displayName = "请填写显示名称";
     if (!EMAIL_RE.test(e)) next.email = "请填写有效的邮箱地址";
     setErrors(next);
@@ -181,7 +185,7 @@ export function OnboardingPanel() {
             id="onboarding-account"
             value={account}
             onChange={(ev) => setAccount(ev.target.value)}
-            placeholder="用于登录，4–32 位"
+            placeholder="用于登录，3–24 位"
             autoComplete="username"
             disabled={loading || submitting}
           />
