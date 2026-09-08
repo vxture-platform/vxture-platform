@@ -211,12 +211,15 @@ const TENANT_MENU_TREE = [
         perms: ["tenant.model.read"],
       },
       {
-        // 技能工具（占位页）：与模型服务同码，理由见 core-utils 那份。
+        // 技能工具（占位页）：**不列 perms**——perms 是操作码的归属（DB 的
+        // parent_id，一个码只能有一个父），tenant.model.read 归属在模型服务
+        // 那一节点。两页共用这个码靠的是门（导航 capability + CapabilityGate），
+        // 不是靠第二条挂靠关系。理由见 core-utils 那份。
         code: "tenant.menu.skills",
         name: "技能工具",
         route: "/skills",
         icon: "stack",
-        perms: ["tenant.model.read"],
+        perms: [],
       },
     ],
   },

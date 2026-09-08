@@ -201,12 +201,19 @@ export const TENANT_MENU_TREE: readonly TenantMenuNode[] = [
         perms: ["tenant.model.read"],
       },
       {
-        /* 技能工具（占位页）。与模型服务同码 tenant.model.read：两者是同一类
-           东西的两个供给方，拆成两个码会让「能看模型的人看不了技能」，
-           而那不是任何人做过的裁定。 */
+        /* 技能工具（占位页）。**不列 perms**——这里的 perms 是「操作码挂在哪个
+           页面下」的**归属**关系（对应 DB 的 access.permissions.parent_id，一个
+           码只能有一个父），不是「这一页需要什么码才能进」的门。
+           tenant.model.read 归属在模型服务那一节点。
+
+           两页共用同一个码是靠**门**共用：导航项的 capability 与页面的
+           CapabilityGate 都写 tenant.model.read。两者是同一类东西的两个供给方，
+           拆成两个码会让「能看模型的人看不了技能」，而那不是任何人做过的裁定。
+
+           初稿我在这里也写了 perms: ["tenant.model.read"]，把归属当成了门——
+           本地 23 个守卫全过，是 core-utils 自己的不变式测试在 CI 抓到的。 */
         code: "tenant.menu.skills",
         route: "/skills",
-        perms: ["tenant.model.read"],
       },
     ],
   },

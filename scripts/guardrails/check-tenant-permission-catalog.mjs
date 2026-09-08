@@ -97,6 +97,25 @@ for (const n of seedTree)
   for (const p of n.perms)
     if (!seedCodes.includes(p)) fail(`${n.code} 挂了目录里没有的操作码:${p}`);
 
+// ②-b 操作码的归属唯一:一个码只能挂在一个页面下。
+//
+// perms 是**归属**(对应 DB 的 access.permissions.parent_id,一个码只有一个父),
+// 不是「进这一页要什么码」的门。门是导航项的 capability 与页面的 CapabilityGate,
+// 两个页面共用一个码走门,不是靠第二条挂靠关系。
+//
+// 为什么单加这一条:上面 ① 比的是 seed 与 core-utils **是否一样**,而 2026-09-08
+// 我把同一个错误同时写进了两边——两边一样地错,一致性检查一个字都不会说。
+// 这条不看两边是否一致,只看这一份**自身是否成立**:两类判据缺一不可。
+{
+  const owner = new Map();
+  for (const n of seedTree)
+    for (const p of n.perms) {
+      if (owner.has(p))
+        fail(`操作码 ${p} 同时挂在 ${owner.get(p)} 与 ${n.code} 下——归属只能有一个;两页共用同一个码请走门(navigation 的 capability),不要挂两次`);
+      else owner.set(p, n.code);
+    }
+}
+
 // ③ console 导航
 const routes = new Set(seedTree.map((n) => n.route).filter(Boolean));
 for (const m of navSrc.matchAll(/href:\s*"([^"]+)"/g)) {
