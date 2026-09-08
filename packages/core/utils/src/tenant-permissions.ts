@@ -111,6 +111,7 @@ export const TENANT_MENU_CODES = [
   "tenant.menu.audit_logs",
   "tenant.menu.platform",
   "tenant.menu.atlas",
+  "tenant.menu.skills",
 ] as const;
 export type TenantMenuCode = (typeof TENANT_MENU_CODES)[number];
 
@@ -189,11 +190,22 @@ export const TENANT_MENU_TREE: readonly TenantMenuNode[] = [
     ],
   },
   {
+    /* 界面上叫「模型与能力」（owner 2026-09-08 改名），**码不动**：
+       tenant.menu.platform / tenant.menu.atlas 在生产已有授权行，
+       改码要连着迁移一起动，而这次只是显示名变了。 */
     code: "tenant.menu.platform",
     children: [
       {
         code: "tenant.menu.atlas",
         route: "/atlas",
+        perms: ["tenant.model.read"],
+      },
+      {
+        /* 技能工具（占位页）。与模型服务同码 tenant.model.read：两者是同一类
+           东西的两个供给方，拆成两个码会让「能看模型的人看不了技能」，
+           而那不是任何人做过的裁定。 */
+        code: "tenant.menu.skills",
+        route: "/skills",
         perms: ["tenant.model.read"],
       },
     ],

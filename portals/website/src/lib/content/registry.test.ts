@@ -115,3 +115,43 @@ describe("locale 与路由判定无关", () => {
     }
   });
 });
+
+describe("docs 子页 —— 外链不能落到 404", () => {
+  const docs = CONTENT_REGISTRY.docs.loader;
+
+  it("/docs 根路径仍是占位页", async () => {
+    await expect(docs([], LOCALE)).resolves.toMatchObject({ type: "stub" });
+  });
+
+  it("console 侧栏外链的两个子页都不 404", async () => {
+    // 这两条是 console「模型服务 / 技能工具」右侧外链的落点（owner 2026-09-08）。
+    // 指向 404 的外链比没有外链更糟：让人以为文档丢了，而不是还没写。
+    for (const page of ["models", "skills"]) {
+      await expect(docs([page], LOCALE), page).resolves.toMatchObject({
+        type: "stub",
+      });
+    }
+  });
+
+  it("没声明的子页仍然 404（白名单，不是全放行）", async () => {
+    // 全放行会让 /docs/随便什么 都渲染成占位页：搜索引擎收录一堆不存在的路径，
+    // 打错字也看不出来。
+    await expect(docs(["not-declared"], LOCALE)).resolves.toBeNull();
+  });
+
+  it("更深的路径 404", async () => {
+    await expect(docs(["models", "extra"], LOCALE)).resolves.toBeNull();
+  });
+
+  it("静态路径与 loader 认的白名单一致", async () => {
+    // 签名允许返回 Promise（别的区段确实要读文件系统），await 一下才通用。
+    const params = (await CONTENT_REGISTRY.docs.staticParams?.()) ?? [];
+    expect(params).toHaveLength(3);
+    for (const p of params) {
+      await expect(
+        docs(p, LOCALE),
+        p.join("/") || "(root)",
+      ).resolves.not.toBeNull();
+    }
+  });
+});

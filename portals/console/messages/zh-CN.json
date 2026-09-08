@@ -1,453 +1,404 @@
 {
-  "onboarding": {
-    "brand": "Vxture Studio",
-    "title": "完善你的账号",
-    "description": "还差几步就能开始。账号名用于登录，显示名称是别人看到的你。",
+  "acceptInvitationPage": {
+    "title": "接受邀请",
+    "description": "确认后你将加入该租户,并可在控制台切换过去。",
+    "cardTitle": "邀请详情",
+    "missingToken": "链接不完整,缺少邀请令牌;请从邮件里重新打开。",
     "fields": {
-      "account": "账号",
-      "accountPlaceholder": "字母、数字、下划线，字母开头",
-      "displayName": "显示名称",
-      "phone": "手机号",
-      "phoneVerified": "已验证",
-      "email": "邮箱",
-      "emailPlaceholder": "you@company.com",
-      "emailHint": "选填。填了之后可在个人中心完成验证，用于找回账号。"
-    },
-    "errors": {
-      "accountFormat": "账号需以字母开头，仅含字母/数字/下划线，长度 3-24 位。",
-      "displayNameRequired": "请填写显示名称。",
-      "emailFormat": "请填写有效的邮箱地址。",
-      "accountTaken": "该账号已被占用。",
-      "generic": "设置失败，请重试。"
+      "tenant": "租户",
+      "inviter": "邀请人",
+      "role": "角色",
+      "email": "受邀邮箱",
+      "expires": "有效期至"
     },
     "actions": {
-      "submit": "完成设置",
-      "submitting": "提交中…"
+      "accept": "接受并加入",
+      "later": "稍后再说",
+      "enter": "进入工作台",
+      "switchAccount": "退出并用受邀邮箱登录"
     },
-    "legal": {
-      "terms": "服务条款",
-      "privacy": "隐私政策",
-      "cookies": "Cookie 使用政策"
+    "reasons": {
+      "not_found": "邀请不存在:链接可能已被撤销,或者复制不完整。",
+      "expired": "邀请已过期,请联系邀请人重新发送。",
+      "revoked": "这封邀请已被撤销。",
+      "already_accepted": "这封邀请已经被接受过了;如果是你,直接切换到该租户即可。",
+      "email_mismatch": "当前登录账号的邮箱({email})与受邀邮箱不一致,请换用受邀邮箱对应的账号登录。"
     },
-    "copyright": "© {year} Vxture Studio. 保留所有权利。"
+    "mismatchTitle": "登录账号与受邀邮箱不一致",
+    "mismatchHint": "你当前登录的是 {current},这封邀请发给 {invited}。",
+    "accepted": "已加入「{tenant}」",
+    "acceptedDescription": "已为你切换到该租户。",
+    "switchFailed": "已加入,但切换租户失败;可在顶部租户切换器手动切换。",
+    "acceptError": "接受失败,请稍后重试。"
   },
-  "shell": {
-    "loading": {
-      "label": "加载中"
+  "addonPay": {
+    "title": "加油包订单支付",
+    "description": "订单 {orderNo}",
+    "notFound": "订单不存在或不属于当前租户",
+    "backToQuotas": "返回配额管理",
+    "status": {
+      "pending": "待支付",
+      "declared": "已申报待确认",
+      "completed": "已开通",
+      "cancelled": "已取消"
     },
-    "featureBoards": "功能板块",
-    "searchPlaceholder": "搜索成员、订阅、设置…",
-    "search": {
-      "title": "全局搜索",
-      "description": "输入关键词检索页面与业务数据",
-      "empty": "没有匹配结果",
-      "error": "搜索服务暂时不可用，仅显示页面匹配",
-      "loading": "检索中",
-      "groups": {
-        "pages": "页面",
-        "member": "成员",
-        "invoice": "发票"
-      }
+    "summary": {
+      "title": "订单摘要",
+      "description": "加油包内容与应付金额;运营确认收款后自动入池",
+      "pack": "加油包",
+      "content": "内容",
+      "validity": "有效期",
+      "validUntil": "至 {date}",
+      "validityDaysFromActivation": "自开通之日起 {days} 天",
+      "amountDue": "应付金额",
+      "billNo": "账单号",
+      "createdAt": "下单时间"
     },
-    "help": "帮助",
-    "notifications": "告警通知",
-    "settings": "系统设置",
-    "assistant": "Varda · 数据助手",
-    "userMenu": "账号信息",
-    "verified": "已认证",
-    "tenantOrg": "组织 / 租户",
-    "tenantVerified": "已认证",
-    "tenantSettings": "租户设置",
-    "switchOrg": "切换组织",
-    "prefsTitle": "偏好设置",
-    "themeSystem": "系统",
-    "themeLight": "亮色",
-    "themeDark": "暗色",
-    "densityCompact": "紧凑",
-    "densityDefault": "默认",
-    "densityComfy": "宽松",
-    "switchUser": "切换用户",
-    "signOut": "退出登录",
-    "views": {
-      "appcenter": {
-        "name": "智能体",
-        "desc": "已订阅应用 · 快速进入"
-      },
-      "console": {
-        "name": "控制台",
-        "desc": "管理视角 · 数据与运营"
-      }
+    "pay": {
+      "title": "线下支付与申报",
+      "description": "完成转账后提交申报,运营核销即生效",
+      "deadline": "请在 {remain} 内完成支付申报,逾期订单自动取消",
+      "channelLabel": "支付渠道",
+      "referenceNote": "请在转账附言中注明订单号 {orderNo},以便对账"
     },
-    "sidebar": {
-      "expandNav": "展开导航",
-      "collapseNav": "收起导航",
-      "expandAllGroups": "展开全部分组",
-      "collapseAllGroups": "收起全部分组"
+    "channels": {
+      "alipay": "支付宝",
+      "bank_transfer": "对公转账",
+      "wechat": "微信支付",
+      "comingSoon": "即将开放",
+      "alipayQrAlt": "支付宝收款二维码"
     },
-    "drawer": {
-      "openCenter": "前往消息中心"
+    "bank": {
+      "accountName": "户名",
+      "bankName": "开户行",
+      "accountNo": "账号",
+      "reference": "转账附言(必填)",
+      "unavailable": "对公收款账户暂未配置,请联系平台运营"
     },
-    "appcenter": {
-      "title": "智能体",
-      "desc": "当前工作空间已订阅的智能体,点开就用;下方是还没订的推荐。",
-      "products": {
-        "title": "已订阅",
-        "desc": "按当前工作空间的生效订阅(含试用)列出。",
-        "empty": "当前工作空间还没有生效的产品订阅。",
-        "browse": "查看订阅",
-        "unavailable": "已订阅产品暂时读不到,请稍后刷新。",
-        "trialing": "试用中",
-        "open": "打开",
-        "detail": "产品介绍",
-        "versionAt": "v {version} at {date}"
-      },
-      "reco": {
-        "title": "热门推荐",
-        "desc": "你还没订阅的智能体,先看介绍或直接订阅。",
-        "learnMore": "产品介绍",
-        "subscribe": "订阅"
-      }
+    "declare": {
+      "payerName": "付款方名称",
+      "payerNamePlaceholder": "转出账户户名(便于对账)",
+      "transactionNo": "转账流水号",
+      "transactionNoPlaceholder": "银行回单流水号(选填)",
+      "submit": "已完成转账,提交申报"
     },
-    "realNameVerified": "实名认证",
-    "missingPhone": "缺少手机号",
-    "missingEmail": "缺少 email",
-    "slotRole": "角色",
-    "slotLevel": "用户等级",
-    "slotLocked": "其他奖章 · 待解锁",
-    "billing": "账单",
-    "monthlyCost": "本月费用",
-    "noData": "无相关数据",
-    "payBill": "支付账单",
-    "trafficUsage": "流量用量",
-    "usageLimit": "用量限额",
-    "usageQuota": "配额 / Usage Quota",
-    "storageQuota": "存储容量 / Storage",
-    "aiCredits": "AI Credits",
-    "switchScope": "切换范围",
-    "organization": "组织",
-    "workspace": "工作空间",
-    "defaultWorkspace": "默认工作空间",
-    "defaultTag": "默认",
-    "workspaceSwitchComingSoon": "多工作空间切换即将支持",
-    "plan": "计划",
-    "freePlan": "未订阅",
-    "orgTenant": "组织租户",
-    "personalTenant": "个人租户",
-    "fontSmall": "小",
-    "fontDefault": "默认",
-    "fontLarge": "大",
-    "monthlyCostDesc": "本月实付合计与开票状态",
-    "payBillDesc": "管理支付方式与付款",
-    "trafficUsageDesc": "查看流量与调用用量",
-    "usageLimitDesc": "配额上限与告警阈值",
-    "verifyUnknown": "认证未知",
-    "verifyActive": "已认证",
-    "verifySuspended": "已暂停",
-    "brandName": "Workspace Console",
-    "tenantList": "可切换的租户",
-    "currentTag": "当前",
-    "accountDeleting": {
-      "title": "账号在删除保留期",
-      "body": "你在 {requestedAt} 申请删除账号,将于 {purgeAt} 永久删除。是否撤销删除并重新启用?",
-      "reactivate": "撤销删除并重新启用",
-      "keep": "保持删除并退出",
-      "error": "操作失败,请稍后重试。"
+    "declared": {
+      "note": "申报已提交,等待运营确认收款;确认后额度自动入池,本页会自动刷新"
+    },
+    "completed": {
+      "note": "已开通!额度已入池,有效期至 {date};可回配额管理页查看"
+    },
+    "cancelled": {
+      "note": "订单已取消;如需购买请回配额管理页重新下单"
+    },
+    "cancelOrder": "取消订单",
+    "declareFailed": "申报失败,请稍后重试",
+    "cancelFailed": "取消失败,请稍后重试",
+    "declareDialog": {
+      "title": "确认付款申报",
+      "description": "支付方式：{channel} · 金额：{amount}。提交后订单进入待确认，运营核销后额度自动入池。",
+      "confirm": "提交申报",
+      "cancel": "再想想"
+    },
+    "cancelConfirm": {
+      "verb": "取消订单",
+      "consequence": "取消后订单关闭；如需购买请回配额管理页重新下单。"
+    },
+    "expiredNotice": "付款时限已到，正在刷新订单状态…"
+  },
+  "atlasPage": {
+    "title": "模型平台",
+    "description": "当前租户可用模型、应用授权、配额和用量状态。",
+    "loadError": "模型平台状态加载失败，请稍后重试。",
+    "metrics": {
+      "groupLabel": "模型平台概览",
+      "models": "可用模型",
+      "modelsHint": "{count} 项生效权益",
+      "quota": "配额状态",
+      "quotaTier": "档位：{tier}",
+      "quotaNoTier": "无档位",
+      "tokens": "Token 用量",
+      "tokensHint": "{count} 条记录"
+    },
+    "quotaStatus": {
+      "covered": "已开通",
+      "uncovered": "未开通套餐",
+      "unavailable": "平台不可达"
+    },
+    "models": {
+      "title": "可用模型",
+      "description": "由平台控制面授权给当前租户的模型。",
+      "empty": "暂无可用模型",
+      "colModel": "模型",
+      "colProvider": "供应方",
+      "colProtocol": "协议",
+      "colCapabilities": "能力"
+    },
+    "quotas": {
+      "title": "配额状态",
+      "description": "来自平台侧的套餐配额资源池（非 Atlas 自身数据）。",
+      "emptyCovered": "暂无生效的配额池",
+      "emptyUncovered": "当前工作空间尚未发布套餐",
+      "emptyUnavailable": "无法连接平台权益服务",
+      "emptyNone": "暂无配额数据",
+      "colMetric": "指标",
+      "colRemaining": "剩余 / 总量",
+      "colPriority": "优先级",
+      "colTier": "档位"
+    },
+    "usage": {
+      "title": "用量记录",
+      "description": "近期实际调用记录（Atlas 自身日志，非计费口径）。",
+      "empty": "暂无模型用量记录",
+      "colModel": "模型",
+      "colProvider": "供应方",
+      "colRequests": "请求数",
+      "colTokens": "Token"
+    },
+    "signals": {
+      "title": "状态说明",
+      "description": "租户侧仅显示当前上下文可见状态。",
+      "scopeTitle": "租户范围",
+      "scopeBody": "正在显示 {tenant} 的模型平台状态。",
+      "scopeMissing": "需要租户上下文才能显示模型平台状态。",
+      "boundaryTitle": "控制面边界",
+      "boundaryBody": "供应方、模型、策略、价格与授权的变更由平台运营在管理面完成。"
+    },
+    "entitlements": {
+      "title": "产品权益",
+      "description": "本工作空间已订阅的产品与档位。模型可用范围由此派生,不再单列租户级模型授权。",
+      "colProduct": "产品",
+      "colTier": "档位",
+      "colStatus": "状态",
+      "colLimits": "额度",
+      "bundled": "随套餐",
+      "none": "未订阅",
+      "empty": "尚无产品权益。"
     }
   },
-  "header": {
-    "title": "控制台",
-    "searchPlaceholder": "搜索成员、租户、订阅、账单",
-    "workspace": "工作台",
-    "switchWorkspace": "切换工作区",
-    "platformMode": "平台",
-    "tenantMode": "租户",
-    "appLauncher": "应用入口",
-    "featureOverview": "功能总览",
-    "quickPreferences": "快捷偏好",
-    "workspaceActions": "工作台操作",
-    "assistant": "Varda 数据助手",
-    "help": "帮助",
-    "notifications": "通知",
-    "settings": "设置",
-    "toggleTheme": "切换主题",
-    "toggleLanguage": "切换语言",
-    "fullscreen": {
-      "enter": "显示器全屏",
-      "exit": "退出显示器全屏"
+  "auditPage": {
+    "title": "审计日志",
+    "description": "谁在什么时候做了什么:成员管理、订阅与订单、发票与抬头等关键动作的操作轨迹",
+    "actorType": {
+      "operator": "平台运营",
+      "system": "系统"
     },
-    "userMenu": {
-      "returnTo": "返回 {caller}",
-      "dismissReturn": "取消返回入口",
-      "signOut": "退出登录"
+    "result": {
+      "success": "成功",
+      "failure": "失败",
+      "denied": "已拒绝"
     },
-    "openNavigation": "展开导航",
-    "closeNavigation": "关闭导航",
-    "collapseNavigation": "收起导航",
-    "views": {
-      "appcenter": {
-        "label": "应用中心",
-        "description": "已订阅应用 · 快速进入"
-      },
-      "console": {
-        "label": "控制台",
-        "description": "管理视角 · 账户与运营"
-      }
+    "action": {
+      "account_deletion_cancel": "撤销注销申请",
+      "account_deletion_request": "申请注销账号",
+      "account_email_change": "更换邮箱",
+      "account_identity_unbind": "解绑三方登录",
+      "account_login_method_update": "变更登录方式",
+      "account_password_change": "修改密码",
+      "account_password_set_initial": "设置初始密码",
+      "account_phone_change": "更换手机号",
+      "account_session_revoke": "吊销登录会话",
+      "addon_order_cancel": "取消加油包订单",
+      "addon_order_create": "购买加油包",
+      "addon_order_payment_declare": "加油包转账申报",
+      "billing_address_create": "新增开票抬头",
+      "billing_address_delete": "删除开票抬头",
+      "billing_address_update": "编辑开票抬头",
+      "billing_invoice_apply": "申请发票",
+      "order_refund_request": "申请退款",
+      "subscription_auto_renew_off": "到期不续",
+      "subscription_auto_renew_on": "恢复自动续费",
+      "subscription_cancel": "退订",
+      "subscription_pause": "暂停订阅",
+      "subscription_resume": "恢复订阅",
+      "tenant_close": "注销租户",
+      "tenant_invitation_resend": "重发邀请",
+      "tenant_invitation_revoke": "撤销邀请",
+      "tenant_member_add": "添加成员",
+      "tenant_member_disable": "停用成员",
+      "tenant_member_enable": "启用成员",
+      "tenant_member_invite": "邀请成员",
+      "tenant_member_remove": "移除成员",
+      "tenant_member_reset_password": "重置成员密码",
+      "tenant_member_update": "变更成员",
+      "tenant_owner_transfer": "转让所有权",
+      "tenant_role_create": "新建角色",
+      "tenant_role_delete": "删除角色",
+      "tenant_role_update": "修改角色",
+      "tenant_verification_submit": "提交企业认证"
     },
-    "tenantType": {
-      "individual": "个人",
-      "company": "组织"
-    }
-  },
-  "drawer": {
-    "close": "关闭",
-    "notifications": {
-      "title": "消息中心",
-      "markAllRead": "全部已读",
-      "empty": "没有待办,也没有消息",
-      "todosTitle": "待办",
-      "messagesTitle": "消息"
-    }
-  },
-  "inbox": {
-    "header": {
-      "title": "消息中心",
-      "description": "待办由订单、订阅、配额、邀请与加油包的真实状态派生,处理完自动消失;消息是订阅到期、续费订单、开通与退款进度的通知,邮件偏好在「通知提醒」调整。"
+    "table": {
+      "title": "操作记录",
+      "description": "近 90 天的操作记录,时间倒序。",
+      "filterLabel": "结果筛选",
+      "filterAll": "全部",
+      "filterSuccess": "成功",
+      "filterFailure": "失败",
+      "colAt": "时间",
+      "colActor": "操作人",
+      "colAction": "动作",
+      "colResource": "对象",
+      "colResult": "结果",
+      "colIp": "来源 IP",
+      "empty": "暂无操作记录;本页上线后的关键动作会陆续出现在这里",
+      "filterActionLabel": "按操作类型筛选",
+      "filterActionAll": "全部操作",
+      "total": "共 {count} 条",
+      "prev": "上一页",
+      "next": "下一页",
+      "pageOf": "第 {page} / {pageCount} 页"
     },
-    "unread": "{count} 条未读",
-    "allRead": "没有未读消息",
-    "markAllRead": "全部标为已读",
-    "loadMore": "加载更多",
-    "loading": "加载中…",
-    "empty": "还没有任何消息",
-    "loadError": "消息读取失败，请稍后再试",
-    "open": "查看",
-    "readBadge": "已读",
-    "unreadBadge": "未读",
-    "list": {
-      "title": "列表",
-      "description": "待办置顶;同一件事只出现一次"
-    },
-    "filters": {
-      "label": "筛选",
-      "all": "全部",
-      "todo": "待办",
-      "message": "消息",
-      "unread": "未读"
-    },
-    "counts": "{todos} 项待办 · {unread} 条未读",
-    "todoBadge": "待办",
-    "messageBadge": "消息",
-    "emptyTodo": "没有需要你处理的事",
-    "emptyAll": "没有待办,也没有消息",
-    "markAllFailed": "标记失败,请稍后重试",
     "notes": {
       "title": "口径说明",
-      "body": "待办没有「已读」:它是真实状态的镜子,处理完才消失,未处理会一直显示。消息有已读 / 未读;「未读」筛选只针对消息。有待办的事项在「全部」里只显示待办那一条,对应的消息留在「消息」筛选下作为历史。"
+      "description": "记录范围与留存",
+      "scopeTitle": "记录范围",
+      "scopeBody": "覆盖 console 内的关键写操作(成员/订阅/订单/发票等);平台运营对本租户的操作与产品内业务操作不在本页范围",
+      "retainTitle": "留存与不可篡改",
+      "retainBody": "审计流水只增不改(append-only);本页展示近 90 天,更早记录由平台按合规策略留存"
     }
   },
-  "preferences": {
-    "title": "显示偏好",
-    "locale": {
-      "label": "语言",
-      "zh-CN": "简体中文",
-      "en-US": "English (US)"
+  "billingPage": {
+    "title": "费用中心",
+    "description": "一笔钱从下单到开票的完整台账:订单、账单与收款记录,线下对公收款、人工核销。",
+    "exportStatement": "导出对账单",
+    "metrics": {
+      "groupLabel": "账单统计",
+      "unpaid": "待付账单",
+      "unpaidOverdue": "{count} 笔逾期",
+      "unpaidNone": "无逾期账单",
+      "paidTotal": "累计已付",
+      "paidTotalHint": "{count} 笔已结清",
+      "credits": "钱包余额",
+      "creditsHint": "暂不支持在线充值"
     },
-    "density": {
-      "label": "密度",
-      "compact": "紧凑",
-      "default": "默认",
-      "comfortable": "宽松"
+    "table": {
+      "title": "账单记录",
+      "description": "账单随订阅订单生成，0 元订单同样出账。",
+      "colBillNo": "账单号",
+      "colCycle": "账期",
+      "colType": "类型",
+      "colAmount": "金额",
+      "colStatus": "状态",
+      "colPaidAt": "结清时间",
+      "discountOff": "优惠 −{amount}",
+      "empty": "暂无账单记录。",
+      "total": "共 {count} 条",
+      "prevPage": "上一页",
+      "nextPage": "下一页",
+      "colInvoice": "发票"
     },
-    "theme": {
-      "system": "跟随系统",
-      "light": "浅色",
-      "dark": "深色",
-      "switchTo": "切换到{theme}"
+    "type": {
+      "normal": "订阅费",
+      "one_off": "一次性",
+      "adjustment": "调整",
+      "prepaid_statement": "预付结算"
+    },
+    "status": {
+      "unpaid": "待付款",
+      "paying": "收款中",
+      "partial": "部分收款",
+      "paid": "已结清",
+      "overdue": "已逾期",
+      "cancelled": "已取消"
+    },
+    "notes": {
+      "title": "收款与计费口径",
+      "description": "订阅制从简：以下两条为当前唯一口径。",
+      "paymentTitle": "收款方式",
+      "paymentBody": "线下对公汇款，备注订单号，运营人工核销后账单结清；0 元账单在收款环节自动结清。",
+      "billingTitle": "计费口径",
+      "billingBody": "账单随订阅订单生成；订阅周期自服务开通时刻起算（支持提前续订），不以收款确认时刻为准。"
+    },
+    "invoicing": {
+      "applyAction": "申请发票",
+      "mergeAction": "合并开票",
+      "mergeActionCount": "合并开票（已选 {count} 张）",
+      "writeFailed": "操作失败,请稍后重试",
+      "status": {
+        "applying": "申请中",
+        "approved": "已受理",
+        "issued": "已开具",
+        "sent": "已寄送",
+        "rejected": "已驳回",
+        "voided": "已作废"
+      },
+      "phase": {
+        "none": "未开票",
+        "processing": "开票中",
+        "issued": "已开票"
+      },
+      "type": {
+        "electronic_general": "电子普票",
+        "electronic_special": "电子专票",
+        "paper_special": "纸质专票"
+      },
+      "taxType": {
+        "general": "普票抬头",
+        "special": "专票抬头"
+      },
+      "records": {
+        "title": "发票记录",
+        "description": "对已结清账单开具的发票:直接订阅付款与预付款扣费对账单均可申请,开具后此处下载",
+        "colNo": "申请号",
+        "colBill": "账单号",
+        "colTitle": "抬头 / 类型",
+        "colAmount": "价税合计",
+        "colStatus": "状态",
+        "colDelivery": "文件 / 寄送",
+        "download": "下载发票",
+        "empty": "暂无发票记录,在账单表对已结清账单点「申请发票」"
+      },
+      "addresses": {
+        "title": "开票抬头",
+        "description": "抬头信息在申请时快照进发票,后续修改不影响已提交的申请",
+        "add": "新增抬头",
+        "addTitle": "新增开票抬头",
+        "editTitle": "编辑开票抬头",
+        "formHint": "专票抬头需填写税号与开户信息;首条抬头自动设为默认",
+        "colTitle": "抬头",
+        "colTaxType": "类型",
+        "colTaxNo": "税号",
+        "default": "默认",
+        "edit": "编辑",
+        "setDefault": "设为默认",
+        "delete": "删除",
+        "save": "保存",
+        "rowMenu": "抬头操作",
+        "fieldTitle": "抬头名称",
+        "fieldTaxNo": "税号",
+        "fieldBankName": "开户行",
+        "fieldBankAccount": "开户账号",
+        "fieldPhone": "联系电话",
+        "fieldAddress": "地址(纸质票寄送用)",
+        "empty": "暂无开票抬头,点右上角新增",
+        "deleteVerb": "删除开票抬头",
+        "deleteConsequence": "这条抬头会被删掉，且没有回收站。已开出的发票不受影响，但下次开票要重新录入税号、开户行与地址。"
+      },
+      "apply": {
+        "title": "申请发票",
+        "description": "账单 {billNo} · 价税合计 {amount}。提交后由平台运营审核开具",
+        "address": "开票抬头",
+        "type": "发票类型",
+        "noAddress": "还没有开票抬头,请先创建一条",
+        "createAddress": "去创建抬头",
+        "cancel": "取消",
+        "submit": "提交申请",
+        "blockedLite": "简易企业实名认证不支持开票",
+        "blockedUnverified": "开票前需先完成企业实名认证",
+        "blockedHint": "请到「租户信息 → 企业认证」查看认证方式;法人扫脸认证与提交资料认证上线后即可开票。"
+      },
+      "rowMenu": "账单操作",
+      "applyHintUnpaid": "账单结清后可申请",
+      "applyHintApplied": "已有开票申请",
+      "applyHintZero": "¥0 账单没有可开票的金额",
+      "applyHintNoPermission": "你的角色没有发票管理权限"
+    },
+    "viewInvoices": "发票与抬头",
+    "invoicesPage": {
+      "title": "发票与抬头",
+      "description": "已开发票记录与开票抬头;申请发票在费用中心的账单行上发起。",
+      "backToBilling": "返回费用中心"
     }
-  },
-  "sidebar": {
-    "eyebrow": "Vxture 控制台",
-    "title": "控制台",
-    "description": "账户、租户、成员与订阅自主管理",
-    "ariaLabel": "控制台导航",
-    "expandAll": "展开全部分组",
-    "collapseAll": "收起全部分组",
-    "footer": {
-      "label": "状态",
-      "value": "自主管理平台"
-    },
-    "footerCard": {
-      "title": "合规态势",
-      "meta": "分级分类覆盖率 96%"
-    },
-    "workspaceMode": {
-      "platform": "平台工作区",
-      "tenant": "租户工作区"
-    },
-    "sections": {
-      "workspace": "工作空间",
-      "accountTenant": "账户与租户",
-      "subscriptionBilling": "订阅与计费",
-      "settingsSecurity": "设置与安全",
-      "platform": "平台能力"
-    },
-    "domains": {
-      "workspace": "工作台",
-      "org": "组织与成员",
-      "billing": "订阅与计费",
-      "settings": "设置与安全",
-      "platform": "平台能力"
-    },
-    "items": {
-      "overview": {
-        "label": "数据总览",
-        "description": "租户状态、订阅到期、用量概览与快捷入口"
-      },
-      "todos": {
-        "label": "待办事项",
-        "description": "需要当前租户处理的关键事项"
-      },
-      "profile": {
-        "label": "账号信息",
-        "description": "头像、资料、联系方式、登录方式与偏好"
-      },
-      "members": {
-        "label": "成员管理",
-        "description": "邀请、访问审查与团队成员管理"
-      },
-      "subscription": {
-        "label": "订阅管理",
-        "description": "已订产品、到期提醒与新品推荐"
-      },
-      "billing": {
-        "label": "费用中心",
-        "description": "订单、账单、发票与收款记录"
-      },
-      "quotas": {
-        "label": "配额管理",
-        "description": "存储与 AI Credits 的额度与用量"
-      },
-      "atlas": {
-        "label": "模型接入",
-        "description": "在线模型、自建模型与产品权益"
-      },
-      "inbox": {
-        "label": "消息中心",
-        "description": "需要你处理的待办,与订阅、订单、退款的消息"
-      },
-      "notifications": {
-        "label": "通知提醒",
-        "description": "邮件与站内信通知偏好"
-      },
-      "security": {
-        "label": "安全设置",
-        "description": "登录日志、设备管理等安全能力"
-      },
-      "tenantSettings": {
-        "label": "租户设置",
-        "description": "语言、时区与租户注销危险操作"
-      },
-      "usage": {
-        "label": "用量分析",
-        "description": "消耗趋势、调用记录与成员细分"
-      },
-      "vouchers": {
-        "label": "我的卡券",
-        "description": "折扣券与抵扣金券的持有、有效期与使用记录"
-      },
-      "auditLogs": {
-        "label": "审计日志",
-        "description": "租户内成员操作与商业动作的轨迹"
-      },
-      "tenantInfo": {
-        "label": "租户信息",
-        "description": "租户资料、联系人、默认区域与危险操作"
-      }
-    }
-  },
-  "routes": {
-    "dashboard": "仪表盘",
-    "todos": "待办事项",
-    "profile": "账号信息",
-    "personalTenant": "租户信息",
-    "organization": "组织信息",
-    "members": "成员管理",
-    "membersInvitations": "邀请记录",
-    "membersRoles": "角色管理",
-    "membersPermissions": "权限管理",
-    "roles": "角色管理",
-    "invitations": "邀请记录",
-    "subscription": "订阅管理",
-    "billing": "费用中心",
-    "billingInvoices": "发票与抬头",
-    "quotas": "配额管理",
-    "atlas": "模型接入",
-    "notifications": "通知提醒",
-    "security": "安全设置",
-    "settings": "租户设置",
-    "tenantSettings": "租户设置",
-    "usage": "用量分析",
-    "addonPay": "加油包支付",
-    "vouchers": "我的卡券",
-    "auditLogs": "审计日志",
-    "inbox": "消息中心",
-    "tenant": "租户信息",
-    "tenantVerification": "企业认证",
-    "tenantVerificationApply": "提交认证"
-  },
-  "login": {
-    "hero": {
-      "eyebrow": "统一访问入口",
-      "title": "登录 Vxture 控制台",
-      "description": "通过一个受控入口访问平台运营、租户管理和按能力划分的模块。",
-      "signals": {
-        "capability": "能力感知导航",
-        "tenant": "租户上下文解析",
-        "session": "控制台 BFF 会话网关"
-      }
-    },
-    "card": {
-      "eyebrow": "控制台登录",
-      "title": "登录您的账户",
-      "description": "使用你的账号继续访问工作区。"
-    },
-    "form": {
-      "account": "账号",
-      "accountPlaceholder": "用户名 / 邮箱 / 手机号",
-      "password": "密码",
-      "passwordPlaceholder": "输入你的密码",
-      "forgotPassword": "忘记密码？",
-      "acceptPrefix": "我已阅读并同意",
-      "terms": "用户协议",
-      "acceptJoiner": "和",
-      "privacy": "隐私政策",
-      "submit": "登录",
-      "submitting": "登录中...",
-      "register": "注册账号"
-    },
-    "social": {
-      "label": "第三方登录",
-      "divider": "其他登录方式",
-      "dingtalk": "钉钉登录",
-      "dingtalkShort": "钉钉",
-      "feishu": "飞书登录",
-      "feishuShort": "飞书",
-      "wechat": "微信登录",
-      "wechatShort": "微信"
-    },
-    "errors": {
-      "required": "账号和密码不能为空。",
-      "terms": "请先阅读并同意用户协议和隐私政策。",
-      "invalid": "当前凭据无法完成登录。",
-      "unavailable": "控制台登录服务当前不可用，请先启动 console-bff。"
-    },
-    "footer": {
-      "copyright": "© 2026 vxture.ai. All rights reserved.",
-      "terms": "服务条款",
-      "privacy": "隐私政策",
-      "cookies": "Cookie 使用政策"
-    },
-    "redirecting": "正在跳转到登录…"
   },
   "dashboard": {
     "eyebrow": "概览",
@@ -531,6 +482,558 @@
       "count": "最近 {count} 张账单",
       "empty": "暂无账单",
       "viewAll": "账单管理"
+    }
+  },
+  "destructive": {
+    "titleTemplate": "{verb}{target}？",
+    "cancel": "取消",
+    "pending": "处理中…",
+    "blocked": "前置条件未满足，先处理上面标红的那几条。"
+  },
+  "drawer": {
+    "close": "关闭",
+    "notifications": {
+      "title": "消息中心",
+      "markAllRead": "全部已读",
+      "empty": "没有待办,也没有消息",
+      "todosTitle": "待办",
+      "messagesTitle": "消息"
+    }
+  },
+  "header": {
+    "title": "控制台",
+    "searchPlaceholder": "搜索成员、租户、订阅、账单",
+    "workspace": "工作台",
+    "switchWorkspace": "切换工作区",
+    "platformMode": "平台",
+    "tenantMode": "租户",
+    "appLauncher": "应用入口",
+    "featureOverview": "功能总览",
+    "quickPreferences": "快捷偏好",
+    "workspaceActions": "工作台操作",
+    "assistant": "Varda 数据助手",
+    "help": "帮助",
+    "notifications": "通知",
+    "settings": "设置",
+    "toggleTheme": "切换主题",
+    "toggleLanguage": "切换语言",
+    "fullscreen": {
+      "enter": "显示器全屏",
+      "exit": "退出显示器全屏"
+    },
+    "userMenu": {
+      "returnTo": "返回 {caller}",
+      "dismissReturn": "取消返回入口",
+      "signOut": "退出登录"
+    },
+    "openNavigation": "展开导航",
+    "closeNavigation": "关闭导航",
+    "collapseNavigation": "收起导航",
+    "views": {
+      "appcenter": {
+        "label": "应用中心",
+        "description": "已订阅应用 · 快速进入"
+      },
+      "console": {
+        "label": "控制台",
+        "description": "管理视角 · 账户与运营"
+      }
+    },
+    "tenantType": {
+      "individual": "个人",
+      "company": "组织"
+    }
+  },
+  "inbox": {
+    "header": {
+      "title": "消息中心",
+      "description": "待办由订单、订阅、配额、邀请与加油包的真实状态派生,处理完自动消失;消息是订阅到期、续费订单、开通与退款进度的通知,邮件偏好在「通知提醒」调整。"
+    },
+    "unread": "{count} 条未读",
+    "allRead": "没有未读消息",
+    "markAllRead": "全部标为已读",
+    "loadMore": "加载更多",
+    "loading": "加载中…",
+    "empty": "还没有任何消息",
+    "loadError": "消息读取失败，请稍后再试",
+    "open": "查看",
+    "readBadge": "已读",
+    "unreadBadge": "未读",
+    "list": {
+      "title": "列表",
+      "description": "待办置顶;同一件事只出现一次"
+    },
+    "filters": {
+      "label": "筛选",
+      "all": "全部",
+      "todo": "待办",
+      "message": "消息",
+      "unread": "未读"
+    },
+    "counts": "{todos} 项待办 · {unread} 条未读",
+    "todoBadge": "待办",
+    "messageBadge": "消息",
+    "emptyTodo": "没有需要你处理的事",
+    "emptyAll": "没有待办,也没有消息",
+    "markAllFailed": "标记失败,请稍后重试",
+    "notes": {
+      "title": "口径说明",
+      "body": "待办没有「已读」:它是真实状态的镜子,处理完才消失,未处理会一直显示。消息有已读 / 未读;「未读」筛选只针对消息。有待办的事项在「全部」里只显示待办那一条,对应的消息留在「消息」筛选下作为历史。"
+    }
+  },
+  "invitationsPage": {
+    "title": "邀请记录",
+    "description": "发出的成员邀请与状态;发起新邀请在成员管理页完成",
+    "backToMembers": "返回成员管理",
+    "rowMenu": "邀请操作",
+    "revoke": "撤销邀请",
+    "revokeHint": "仅待接受的邀请可撤销",
+    "revokeFailed": "撤销失败,请稍后重试",
+    "resend": "重发邀请",
+    "resendHint": "已撤销或已接受的邀请不能重发",
+    "status": {
+      "pending": "待接受",
+      "accepted": "已接受",
+      "expired": "已过期",
+      "revoked": "已撤销"
+    },
+    "table": {
+      "title": "邀请记录",
+      "description": "「已过期」按到期时间派生;撤销后原链接立即失效",
+      "colEmail": "受邀邮箱",
+      "invitedBy": "邀请人:{name}",
+      "colRole": "角色",
+      "colStatus": "状态",
+      "colCreatedAt": "发出时间",
+      "colExpiresAt": "有效期至",
+      "acceptedAt": "{date} 接受",
+      "empty": "暂无邀请记录,去成员管理页发出第一封邀请"
+    },
+    "notes": {
+      "title": "邀请说明",
+      "description": "流程与时效",
+      "flowTitle": "邀请流程",
+      "flowBody": "在成员管理页按邮箱+角色发出邀请,对方会收到一封带链接的邮件;用受邀邮箱对应的账号登录并接受后,自动成为租户与默认工作空间成员",
+      "expiryTitle": "时效",
+      "expiryBody": "邀请 7 天内有效,到期自动失效;撤销立即失效。同一邮箱在失效后可重新邀请",
+      "resendTitle": "重发",
+      "resendBody": "重发会生成新链接并使旧链接立即失效,有效期重新按 7 天计;邮件未能发出时可在对话框里复制链接手动转交"
+    },
+    "revokeVerb": "撤销给",
+    "revokeConsequence": "邀请链接立刻失效，对方再打开会看到「邀请不存在」。撤销不可撤回——要让对方重新加入，需要再发一次邀请。",
+    "revokeKeep": "保留邀请",
+    "resendFailed": "重发失败,请稍后重试",
+    "resent": "已重发给 {email}。",
+    "resentNoEmail": "已生成新链接,但邮件未能发出,请把链接手动发给 {email}。",
+    "revoked": "已撤销给 {email} 的邀请。",
+    "expiringSoon": "24 小时内到期",
+    "errors": {
+      "owner_protected": "所有者不可停用或解除关联,请先转让所有权。",
+      "self_protected": "不能对自己执行此操作。",
+      "owner_role_locked": "所有者的角色只能通过「转让所有权」变更。",
+      "account_not_found": "该邮箱没有对应的 Vxture 账号,请改用邀请。",
+      "already_member": "该账号已是本租户成员。",
+      "invitation_pending": "该邮箱已有待接受的邀请。",
+      "invalid_email": "邮箱格式不正确。"
+    }
+  },
+  "inviteLinkDialog": {
+    "title": "邀请已发出",
+    "titleResent": "邀请已重发",
+    "sent": "邮件已发送至 {email};链接也可以直接转给对方。",
+    "notSent": "邮件未能发出,请把下面的链接手动发给 {email}。",
+    "notSentTitle": "邮件未能发出",
+    "linkLabel": "邀请链接",
+    "expires": "有效期至 {date};重发会生成新链接并使这条失效。",
+    "copy": "复制链接",
+    "copied": "已复制",
+    "copyFailed": "复制失败,请手动选中链接复制。",
+    "close": "关闭"
+  },
+  "loadState": {
+    "title": "数据读取失败",
+    "description": "当前页面上的数字与列表不是真实数据，请重试；若持续失败请稍后再来。",
+    "retry": "重试",
+    "empty": "读取失败，暂时无法显示"
+  },
+  "login": {
+    "hero": {
+      "eyebrow": "统一访问入口",
+      "title": "登录 Vxture 控制台",
+      "description": "通过一个受控入口访问平台运营、租户管理和按能力划分的模块。",
+      "signals": {
+        "capability": "能力感知导航",
+        "tenant": "租户上下文解析",
+        "session": "控制台 BFF 会话网关"
+      }
+    },
+    "card": {
+      "eyebrow": "控制台登录",
+      "title": "登录您的账户",
+      "description": "使用你的账号继续访问工作区。"
+    },
+    "form": {
+      "account": "账号",
+      "accountPlaceholder": "用户名 / 邮箱 / 手机号",
+      "password": "密码",
+      "passwordPlaceholder": "输入你的密码",
+      "forgotPassword": "忘记密码？",
+      "acceptPrefix": "我已阅读并同意",
+      "terms": "用户协议",
+      "acceptJoiner": "和",
+      "privacy": "隐私政策",
+      "submit": "登录",
+      "submitting": "登录中...",
+      "register": "注册账号"
+    },
+    "social": {
+      "label": "第三方登录",
+      "divider": "其他登录方式",
+      "dingtalk": "钉钉登录",
+      "dingtalkShort": "钉钉",
+      "feishu": "飞书登录",
+      "feishuShort": "飞书",
+      "wechat": "微信登录",
+      "wechatShort": "微信"
+    },
+    "errors": {
+      "required": "账号和密码不能为空。",
+      "terms": "请先阅读并同意用户协议和隐私政策。",
+      "invalid": "当前凭据无法完成登录。",
+      "unavailable": "控制台登录服务当前不可用，请先启动 console-bff。"
+    },
+    "footer": {
+      "copyright": "© 2026 vxture.ai. All rights reserved.",
+      "terms": "服务条款",
+      "privacy": "隐私政策",
+      "cookies": "Cookie 使用政策"
+    },
+    "redirecting": "正在跳转到登录…"
+  },
+  "manageSubscription": {
+    "title": "管理订阅",
+    "description": "对当前生效的订阅执行暂停、恢复或退订。变更即时生效。",
+    "confirm": "确认执行",
+    "cancel": "取消",
+    "actionPause": "暂停订阅",
+    "actionResume": "恢复订阅",
+    "actionCancel": "退订",
+    "actionPauseHint": "暂停后停止计费与服务，可随时恢复。",
+    "actionResumeHint": "恢复后重新开始计费并继续提供服务。",
+    "actionCancelHint": "退订后订阅终止且不可恢复，需重新下单。",
+    "reasonLabel": "原因（可选）",
+    "upgradeHint": "升级 / 变更套餐请前往订阅页选择新套餐，不在此处操作。",
+    "goUpgrade": "变更套餐",
+    "successPause": "订阅已暂停。",
+    "successResume": "订阅已恢复。",
+    "successCancel": "订阅已退订。",
+    "error": "操作失败，请稍后重试。"
+  },
+  "membersPage": {
+    "header": {
+      "eyebrow": "租户管理",
+      "title": "成员管理",
+      "description": "管理当前租户的成员、角色和访问状态。",
+      "addMember": "新增成员",
+      "inviteMember": "邀请成员",
+      "viewRoles": "角色管理",
+      "viewInvitations": "邀请记录",
+      "viewPermissions": "权限管理"
+    },
+    "table": {
+      "toolbarTitle": "{count} 人",
+      "countHint": "共 {total} 人，活跃 {active} 人，邀请 {invited} 人，禁用 {suspended} 人",
+      "searchPlaceholder": "按姓名、邮箱或角色搜索",
+      "searchAriaLabel": "搜索成员",
+      "filterAriaLabel": "成员状态筛选",
+      "memberTitle": "{name}，{username}，{phone}，{email}，{role}，{team}，{status}",
+      "statusTitle": "当前状态：{status}",
+      "avatarAlt": "{name} 的头像",
+      "emptyPhone": "未填写",
+      "primaryOwner": "主管理员",
+      "selectPage": "选择当前页成员",
+      "selectMember": "选择 {name}",
+      "columns": {
+        "name": "姓名",
+        "phone": "电话",
+        "email": "邮箱",
+        "role": "角色",
+        "status": "状态",
+        "lastActive": "最近活跃",
+        "joinedAt": "加入时间"
+      },
+      "invitedExpires": "邀请有效期至 {date}",
+      "selfTag": "本人"
+    },
+    "status": {
+      "Active": "活跃",
+      "Invited": "已邀请",
+      "Suspended": "已禁用"
+    },
+    "filters": {
+      "all": "全部成员",
+      "active": "活跃",
+      "invited": "已邀请",
+      "suspended": "已禁用"
+    },
+    "empty": {
+      "loadingTitle": "正在加载成员...",
+      "loadingDescription": "正在从 console BFF 读取工作区成员。",
+      "title": "没有符合当前筛选条件的成员。",
+      "description": "可以放宽状态范围，或改用其他字段搜索。",
+      "resetFilters": "重置筛选"
+    },
+    "actions": {
+      "menuLabel": "{name} 的成员操作",
+      "edit": "编辑用户",
+      "disableMember": "禁用用户",
+      "enableMember": "启用用户",
+      "resetPassword": "重置密码",
+      "unlink": "解除关联",
+      "resendInvite": "重发邀请",
+      "revokeInvite": "撤销邀请"
+    },
+    "bulk": {
+      "selected": "已选择 {count} 人",
+      "disable": "批量禁用",
+      "enable": "批量启用",
+      "unlink": "批量解除关联",
+      "noun": "人"
+    },
+    "dialogs": {
+      "create": {
+        "title": "新增成员",
+        "description": "按邮箱把已有 Vxture 账号加入本租户;对方尚未注册时请改用邀请。",
+        "switchToInvite": "改为发送邀请"
+      },
+      "invite": {
+        "title": "邀请成员",
+        "description": "对方会收到一封带链接的邮件,接受后以所选角色加入租户与默认工作空间。"
+      },
+      "edit": {
+        "title": "编辑成员"
+      },
+      "reset": {
+        "title": "重置密码",
+        "description": "为 {name} 设置新的临时密码。"
+      },
+      "unlink": {
+        "title": "解除成员关联",
+        "description": "确认解除 {name} 与当前租户的关联？该操作不会删除用户账号。",
+        "verb": "解除关联",
+        "consequence": "该成员将不再属于本工作区，立刻失去这里的全部访问权。账号本身不受影响，重新加入需要再发一次邀请。"
+      },
+      "bulkUnlink": {
+        "title": "批量解除成员关联",
+        "description": "确认解除已选 {count} 名成员与当前租户的关联？该操作不会删除用户账号。"
+      },
+      "fields": {
+        "email": "邮箱",
+        "role": "角色",
+        "defaultRole": "默认成员",
+        "nextPassword": "新临时密码"
+      },
+      "actions": {
+        "cancel": "取消",
+        "create": "创建成员",
+        "sendInvite": "发送邀请",
+        "save": "保存",
+        "resetPassword": "确认重置",
+        "unlink": "解除关联"
+      },
+      "revokeInvite": {
+        "verb": "撤销给",
+        "consequence": "邀请链接立刻失效,对方再打开会看到「邀请不存在」。撤销不可撤回——要让对方加入,需要再发一次邀请。",
+        "keep": "保留邀请"
+      }
+    },
+    "feedback": {
+      "createSuccess": "成员已创建。",
+      "inviteSuccess": "成员邀请已创建。",
+      "updateSuccess": "成员资料已更新。",
+      "resetPasswordSuccess": "{name} 的密码已重置。",
+      "unlinkSuccess": "成员关联已解除。",
+      "bulkDisabled": "已禁用 {count} 名成员。",
+      "bulkEnabled": "已启用 {count} 名成员。",
+      "bulkUnlinkSuccess": "已解除 {count} 名成员关联。",
+      "memberDisabled": "成员已禁用。",
+      "memberEnabled": "成员已启用。",
+      "createError": "成员创建失败，请稍后重试。",
+      "inviteError": "成员邀请失败，请稍后重试。",
+      "updateError": "成员资料保存失败，请稍后重试。",
+      "resetPasswordError": "密码重置失败，请稍后重试。",
+      "resetPasswordLength": "新临时密码至少需要 6 位。",
+      "unlinkError": "成员关联解除失败，请稍后重试。",
+      "bulkDisableError": "批量禁用失败，请稍后重试。",
+      "bulkEnableError": "批量启用失败，请稍后重试。",
+      "bulkUnlinkError": "批量解除关联失败，请稍后重试。",
+      "memberDisableError": "成员禁用失败，请稍后重试。",
+      "memberEnableError": "成员启用失败，请稍后重试。",
+      "inviteNoEmail": "邀请已创建,但邮件未能发出,请把链接手动发给对方。",
+      "inviteResent": "邀请已重发。",
+      "inviteRevoked": "邀请已撤销。",
+      "resendError": "重发失败,请稍后重试。",
+      "revokeError": "撤销失败,请稍后重试。",
+      "bulkPartial": "完成 {done} 项,失败 {failed} 项。",
+      "bulkSkipped": "已跳过所有者与本人。"
+    },
+    "hints": {
+      "ownerProtected": "所有者不可停用或解除关联,请先转让所有权",
+      "ownerRoleLocked": "所有者的角色只能通过「转让所有权」变更",
+      "selfProtected": "不能对自己执行此操作"
+    },
+    "errors": {
+      "owner_protected": "所有者不可停用或解除关联,请先转让所有权。",
+      "self_protected": "不能对自己执行此操作。",
+      "owner_role_locked": "所有者的角色只能通过「转让所有权」变更。",
+      "account_not_found": "该邮箱没有对应的 Vxture 账号,请改用邀请。",
+      "already_member": "该账号已是本租户成员。",
+      "invitation_pending": "该邮箱已有待接受的邀请,请到邀请管理页重发或撤销。",
+      "invalid_email": "邮箱格式不正确。"
+    }
+  },
+  "metric": {
+    "storage": "存储空间",
+    "aiCredit": "AI Credits",
+    "apiCall": "API 调用",
+    "qualityCheck": "质量检查"
+  },
+  "modelPlatformPage": {
+    "header": {
+      "eyebrow": "Model Platform",
+      "title": "模型接入管理",
+      "description": "统一管理在线模型、自建模型、调用端点、能力标签与租户/智能体授权。",
+      "badge": "待接入生产密钥"
+    },
+    "summary": {
+      "ariaLabel": "模型接入概览",
+      "models": "模型注册",
+      "modelsValue": "{active} / {total} 启用",
+      "privateModels": "自建模型",
+      "grants": "授权关系",
+      "grantsValue": "{active} / {total} 启用"
+    },
+    "providers": {
+      "doubao": "doubao",
+      "claude": "Claude",
+      "private": "自建模型",
+      "custom": "自定义"
+    },
+    "filters": {
+      "all": "全部模型",
+      "active": "启用",
+      "inactive": "停用",
+      "online": "在线",
+      "private": "自建"
+    },
+    "actions": {
+      "addModel": "新增模型",
+      "addGrant": "新增授权",
+      "modelMenu": "{name} 的模型操作",
+      "grantMenu": "授权操作",
+      "editModel": "编辑模型",
+      "grantModel": "授权租户",
+      "enableModel": "启用模型",
+      "disableModel": "停用模型",
+      "editGrant": "编辑授权",
+      "enableGrant": "启用授权",
+      "disableGrant": "停用授权"
+    },
+    "table": {
+      "searchPlaceholder": "按模型、Provider、端点或能力搜索",
+      "searchAriaLabel": "搜索模型",
+      "filterAriaLabel": "模型筛选",
+      "toolbarTitle": "{count} 个模型",
+      "columns": {
+        "model": "模型",
+        "provider": "Provider",
+        "capabilities": "能力",
+        "endpoint": "端点",
+        "key": "密钥变量",
+        "status": "状态"
+      }
+    },
+    "grants": {
+      "title": "模型授权",
+      "count": "{count} 条授权",
+      "allAgents": "全部智能体",
+      "noReason": "暂无授权说明",
+      "permanent": "长期",
+      "columns": {
+        "model": "模型",
+        "tenant": "租户",
+        "agent": "智能体",
+        "priority": "优先级",
+        "expires": "有效期",
+        "status": "状态"
+      }
+    },
+    "status": {
+      "active": "启用",
+      "inactive": "停用"
+    },
+    "pagination": {
+      "summary": "第 {page} / {totalPages} 页，共 {total} 个模型",
+      "previous": "上一页",
+      "next": "下一页"
+    },
+    "dialogs": {
+      "createModel": {
+        "title": "新增模型"
+      },
+      "editModel": {
+        "title": "编辑模型"
+      },
+      "createGrant": {
+        "title": "新增授权"
+      },
+      "editGrant": {
+        "title": "编辑授权"
+      },
+      "fields": {
+        "modelName": "模型名称",
+        "modelCode": "模型编码",
+        "provider": "Provider",
+        "protocol": "协议",
+        "endpointUrl": "Endpoint URL",
+        "keyReference": "Key 引用",
+        "capabilities": "能力标签，逗号分隔",
+        "config": "非敏感配置 JSON",
+        "grantModel": "授权模型",
+        "selectModel": "选择模型",
+        "tenantId": "ORG_ID",
+        "agentId": "智能体 ID，可为空",
+        "priority": "优先级，数值越小越优先",
+        "reason": "授权说明",
+        "expiresAt": "到期日期",
+        "grantActive": "授权立即启用"
+      },
+      "actions": {
+        "cancel": "取消",
+        "save": "保存"
+      }
+    },
+    "empty": {
+      "loadingTitle": "正在加载模型...",
+      "loadingDescription": "正在从 Model Platform 读取模型注册和授权关系。",
+      "title": "没有符合当前筛选条件的模型。",
+      "description": "可以放宽筛选范围，或新增一个在线/自建模型。",
+      "resetFilters": "重置筛选"
+    },
+    "feedback": {
+      "loadError": "模型数据读取失败，请确认 Model Platform 是否已启动。",
+      "modelCreated": "模型已创建。",
+      "modelUpdated": "模型已更新。",
+      "modelEnabled": "模型已启用。",
+      "modelDisabled": "模型已停用。",
+      "modelSaveError": "模型保存失败，请检查端点、能力标签和配置 JSON。",
+      "modelStateError": "模型状态更新失败，请稍后重试。",
+      "grantCreated": "授权已创建。",
+      "grantUpdated": "授权已更新。",
+      "grantEnabled": "授权已启用。",
+      "grantDisabled": "授权已停用。",
+      "grantSaveError": "授权保存失败，请检查租户、模型和配额。",
+      "grantStateError": "授权状态更新失败，请稍后重试。"
     }
   },
   "notificationsPage": {
@@ -620,6 +1123,354 @@
       "loadFailed": "通知偏好读取失败。",
       "saveFailed": "通知偏好保存失败，请重试。"
     }
+  },
+  "onboarding": {
+    "brand": "Vxture Studio",
+    "title": "完善你的账号",
+    "description": "还差几步就能开始。账号名用于登录，显示名称是别人看到的你。",
+    "fields": {
+      "account": "账号",
+      "accountPlaceholder": "字母、数字、下划线，字母开头",
+      "displayName": "显示名称",
+      "phone": "手机号",
+      "phoneVerified": "已验证",
+      "email": "邮箱",
+      "emailPlaceholder": "you@company.com",
+      "emailHint": "选填。填了之后可在个人中心完成验证，用于找回账号。"
+    },
+    "errors": {
+      "accountFormat": "账号需以字母开头，仅含字母/数字/下划线，长度 3-24 位。",
+      "displayNameRequired": "请填写显示名称。",
+      "emailFormat": "请填写有效的邮箱地址。",
+      "accountTaken": "该账号已被占用。",
+      "generic": "设置失败，请重试。"
+    },
+    "actions": {
+      "submit": "完成设置",
+      "submitting": "提交中…"
+    },
+    "legal": {
+      "terms": "服务条款",
+      "privacy": "隐私政策",
+      "cookies": "Cookie 使用政策"
+    },
+    "copyright": "© {year} Vxture Studio. 保留所有权利。"
+  },
+  "orderFlow": {
+    "order": {
+      "pending": "下单中",
+      "done": "已下单"
+    },
+    "pay": {
+      "pending": "待付款",
+      "done": "已付款"
+    },
+    "verify": {
+      "pending": "待收款",
+      "done": "已收款"
+    },
+    "provision": {
+      "pending": "待开通",
+      "done": "已开通"
+    }
+  },
+  "orderPay": {
+    "title": "订单付款",
+    "notFound": "订单不存在或无权查看。",
+    "countdown": "付款剩余 {time}",
+    "rejectBanner": "上次付款申报未通过：{reason} 券与折扣已释放，可重新申报或取消订单，倒计时已重置。",
+    "cycleStartNote": "订阅周期自服务开通时刻起算",
+    "status": {
+      "pending_payment": "待付款",
+      "paid_pending_verify": "已付款 · 待确认",
+      "activating": "开通处理中",
+      "completed": "已完成",
+      "cancelled": "已取消",
+      "expired": "已超时"
+    },
+    "stateTitle": {
+      "paid_pending_verify": "我们正在核对你的付款",
+      "activating": "付款成功 · 开通处理中",
+      "completed": "订阅已生效",
+      "cancelled": "订单已取消",
+      "expired": "订单已超时关闭"
+    },
+    "stateHint": {
+      "paid_pending_verify": "已收到付款申报，确认到账后订阅立即生效，一般 1 个工作日内完成，页面会自动刷新。",
+      "activating": "款项已结清，正在为你开通订阅，通常几分钟内完成，页面会自动刷新。",
+      "completed": "订阅已生效，可前往订阅页查看权益。",
+      "cancelled": "该订单已取消，如需订阅请重新下单。",
+      "expired": "超过付款时限订单已自动关闭，如需订阅请重新下单。",
+      "already_settled": "该订单已结清。"
+    },
+    "cycle": {
+      "day": "日付",
+      "week": "周付",
+      "month": "月付",
+      "year": "年付",
+      "perpetual": "永久"
+    },
+    "breakdown": {
+      "title": "金额明细",
+      "listPrice": "套餐原价",
+      "discountVoucher": "折扣券",
+      "noDiscountVoucher": "无折扣券",
+      "creditVoucher": "代金券",
+      "noCreditVoucher": "无代金券",
+      "alreadyPaid": "已收款",
+      "cashDue": "还需支付",
+      "pickDiscount": "选择折扣券",
+      "pickCredit": "选择代金券",
+      "noneOption": "不使用"
+    },
+    "voucher": {
+      "percentOff": "立减 {value}%",
+      "fixedOff": "立减 ¥{value}"
+    },
+    "channels": {
+      "title": "选择支付方式",
+      "alipay": "支付宝",
+      "wechat": "微信支付",
+      "bank_transfer": "银行转账",
+      "comingSoon": "即将开放",
+      "alipayQrAlt": "支付宝收款码",
+      "noneEnabled": "支付渠道配置中，请联系客服。"
+    },
+    "bank": {
+      "accountName": "户名",
+      "bankName": "开户行",
+      "accountNo": "账号"
+    },
+    "referenceNote": "转账请备注订单号 {orderNo}，以便我们快速核账。",
+    "amountDue": "应付金额",
+    "manualNote": "申报后由运营人工核销（通常 1 个工作日内）；在线支付接入后，此步骤将由支付回调自动完成。",
+    "ttlFine": "请在倒计时结束前完成付款，超时订单自动关闭。",
+    "info": {
+      "title": "订单信息",
+      "owner": "归属",
+      "plan": "套餐",
+      "orderNo": "订单号"
+    },
+    "completedPanel": {
+      "next": "接下来",
+      "viewSubscription": "查看订阅与权益",
+      "viewBilling": "查看账单与发票",
+      "viewQuotas": "查看配额用量"
+    },
+    "actions": {
+      "declarePaid": "我已完成付款",
+      "settleInstant": "确认并生效",
+      "cancelOrder": "取消订单",
+      "refresh": "刷新状态",
+      "backToSubscription": "返回订阅页",
+      "cancel": "取消",
+      "noPaymentPermission": "你的角色没有付款权限:申报付款与取消订单请由租户所有者操作"
+    },
+    "declareDialog": {
+      "title": "确认付款申报",
+      "titleInstant": "确认使用券结清",
+      "description": "支付方式：{channel} · 金额：{amount}。提交后订单进入待确认，运营核对到账后订阅生效。",
+      "confirm": "提交申报",
+      "cancel": "再想想",
+      "payerName": "付款人（选填）",
+      "payerPlaceholder": "转账户名，便于核账",
+      "transactionNo": "转账流水号（选填）",
+      "optional": "选填"
+    },
+    "errors": {
+      "quote": "金额试算失败，请刷新重试。",
+      "declare": "付款申报失败，请稍后重试。",
+      "cancel": "取消订单失败，请稍后重试。"
+    },
+    "list": {
+      "typeSubscription": "订阅",
+      "payNow": "去付款",
+      "view": "查看",
+      "voucherOff": "券抵扣 {amount}",
+      "creditsTitle": "账户余额（租户共享）",
+      "creditsNote": "余额用于未来按量扣款，充值入口将随扣款业务开放。"
+    },
+    "refund": {
+      "title": "退款",
+      "policyLink": "退款说明",
+      "requestFailed": "退款申请失败",
+      "request": "申请退款",
+      "requestHint": "开通后 {hours} 小时内可申请全额退款（{deadline} 前）",
+      "ineligibleTitle": "本订单不可申请退款",
+      "reasons": {
+        "not_fulfilled": "订单尚未开通",
+        "not_first_purchase": "只有该产品的首次购买订单可退",
+        "window_elapsed": "已超过退款窗口",
+        "usage_over_threshold": "消耗性配额使用率已超过阈值",
+        "zero_amount": "0 元订单无需退款",
+        "refund_exists": "已有退款申请"
+      },
+      "dialogTitle": "申请退款",
+      "dialogDescription": "退款金额为本单实付 {amount}。退款完成后该产品的订阅将回到未订阅状态，权益即时停止。",
+      "reasonLabel": "退款原因",
+      "reasonPlaceholder": "请简要说明退款原因（选填）",
+      "submit": "提交申请",
+      "submitted": "退款申请已提交，运营审核后处理。",
+      "status": {
+        "requested": "退款审核中",
+        "approved": "退款已通过，等待打款",
+        "rejected": "退款申请被驳回",
+        "refunded": "已退款"
+      },
+      "auditRemark": "审核备注",
+      "noPermission": "申请退款需要商业管理权限,请联系租户所有者",
+      "auditRemarkLine": "审核备注：{remark}",
+      "ineligibleLine": "不符合退款条件：{reasons}",
+      "reasonSeparator": "；"
+    },
+    "cancelConfirm": {
+      "verb": "取消订单",
+      "consequence": "取消后订单关闭，已勾选的券会释放；如需订阅请重新下单。"
+    },
+    "amountPending": "试算中…",
+    "expiredNotice": "付款时限已到，正在刷新订单状态…"
+  },
+  "pagination": {
+    "total": "共 {total} 条",
+    "totalFiltered": "共 {total} 条,当前筛选 {filtered} 条",
+    "previous": "上一页",
+    "next": "下一页",
+    "pageSizeLabel": "每页条数",
+    "pageSizeOption": "每页 {size} 条"
+  },
+  "payChannels": {
+    "title": "选择支付方式",
+    "comingSoon": "即将开放",
+    "alipayQrAlt": "支付宝收款码",
+    "channel": {
+      "alipay": "支付宝",
+      "wechat": "微信支付",
+      "bank_transfer": "银行转账"
+    },
+    "referenceNote": "转账请备注订单号 {orderNo}，以便我们快速核账。",
+    "noneEnabled": "支付渠道配置中，请联系客服。",
+    "bank": {
+      "accountName": "户名",
+      "bankName": "开户行",
+      "accountNo": "账号",
+      "reference": "转账附言",
+      "unavailable": "对公收款账户暂未配置，请联系平台运营。"
+    }
+  },
+  "permissionsPage": {
+    "title": "权限管理",
+    "description": "治理权限目录与角色矩阵:每个治理动作由哪些角色持有",
+    "viewRoles": "角色管理",
+    "backToMembers": "返回成员管理",
+    "metrics": {
+      "groupLabel": "权限概览",
+      "perms": "权限点",
+      "permsHint": "租户级 + 工作空间级",
+      "model": "授权模型",
+      "modelValue": "固定目录",
+      "modelHint": "租户不可自定义",
+      "permsHelp": "治理权限目录里的操作码总数,含租户级与工作空间级。",
+      "roles": "治理角色",
+      "rolesHelp": "矩阵里的角色列数,与角色管理页同一份目录。",
+      "rolesTag": "矩阵的列",
+      "modelHelp": "权限目录由平台统一定义,不带租户维度,租户不能增删改。"
+    },
+    "perm": {
+      "tenant_member_read": "成员查看",
+      "tenant_member_manage": "成员管理",
+      "tenant_role_assign": "角色指派",
+      "tenant_workspace_manage": "工作空间管理",
+      "tenant_settings_manage": "租户设置管理",
+      "tenant_delete": "租户注销",
+      "tenant_billing_read": "商业与账务查看",
+      "tenant_billing_manage": "商业与账务管理",
+      "tenant_payment_manage": "付款申报",
+      "tenant_invoice_manage": "发票与抬头管理",
+      "tenant_quota_read": "配额与用量查看",
+      "tenant_audit_read": "审计日志查看",
+      "tenant_model_read": "模型接入查看",
+      "workspace_member_manage": "工作空间成员管理",
+      "workspace_role_assign": "工作空间角色指派",
+      "workspace_settings_manage": "工作空间设置管理"
+    },
+    "matrix": {
+      "title": "权限矩阵",
+      "description": "权限目录按侧栏结构分层:板块 → 页面 → 操作;每个治理动作由哪些角色持有,一览无余",
+      "colPerm": "权限点",
+      "empty": "权限目录为空",
+      "openToAll": "成员均可见",
+      "groupOther": "未挂到页面的操作码(工作空间级)",
+      "colKind": "层级",
+      "expand": "展开子级",
+      "collapse": "收起子级",
+      "childCount": "{count} 子级",
+      "emptyHint": "清空筛选条件后可查看完整权限目录"
+    },
+    "notes": {
+      "title": "权限口径",
+      "description": "本页只回答「谁能做哪些治理动作」",
+      "readTitle": "只读目录",
+      "readBody": "权限目录由平台统一定义,租户不能增删改;需要新的权限形态请联系平台运营",
+      "openTitle": "没有操作码的页面",
+      "openBody": "标「成员均可见」的页面不挂任何操作码,任何成员都能打开;门只落在带码的动作上",
+      "scopeTitle": "治理 ≠ 业务",
+      "scopeBody": "治理角色只闸成员/角色/设置/商业面等治理动作;各产品内的功能权限由产品按订阅档位自行门控"
+    },
+    "loadFailed": "权限目录读取失败,请稍后重试",
+    "filters": {
+      "groupLabel": "权限目录筛选",
+      "count": "{count} 行",
+      "searchPlaceholder": "搜索权限码、名称、页面",
+      "searchAriaLabel": "搜索权限目录",
+      "kindAriaLabel": "行类型",
+      "kindAll": "全部层级",
+      "reset": "清空筛选",
+      "listOnly": "权限目录是一棵树,只有列表视图"
+    },
+    "kind": {
+      "section": "模块",
+      "page": "页面",
+      "perm": "操作",
+      "group": "其他"
+    }
+  },
+  "planFeatures": {
+    "governance_quality": "数据质量治理",
+    "governance_standards": "数据标准管理",
+    "governance_lineage": "数据血缘分析",
+    "governance_security": "数据安全策略",
+    "governance_policies": "治理策略中心",
+    "governance_mdm": "主数据管理",
+    "governance_custom": "自定义治理域"
+  },
+  "planned": {
+    "badge": "规划中",
+    "sectionEmpty": "该功能仍在规划中，暂无可展示的数据。",
+    "controlNotice": "这一节的控件尚未接通后端，当前为规划中状态；显示的开关不会生效。",
+    "pageNotice": "这一页尚未接通后端，当前为规划中状态。"
+  },
+  "preferences": {
+    "title": "显示偏好",
+    "locale": {
+      "label": "语言",
+      "zh-CN": "简体中文",
+      "en-US": "English (US)"
+    },
+    "density": {
+      "label": "密度",
+      "compact": "紧凑",
+      "default": "默认",
+      "comfortable": "宽松"
+    },
+    "theme": {
+      "system": "跟随系统",
+      "light": "浅色",
+      "dark": "深色",
+      "switchTo": "切换到{theme}"
+    }
+  },
+  "principalNo": {
+    "label": "ID:"
   },
   "profilePage": {
     "header": {
@@ -1102,347 +1953,143 @@
       "unset": "未设定"
     }
   },
-  "verificationPage": {
-    "personal": {
-      "eyebrow": "个人信息",
-      "title": "实名认证",
-      "description": "完成个人实名认证后，将关联到你的个人租户。"
+  "quotasPage": {
+    "title": "配额管理",
+    "description": "工作空间的存储与 AI Credits:额度构成、当前用量与剩余一目了然",
+    "metrics": {
+      "groupLabel": "配额概览",
+      "storage": "存储空间",
+      "storageHint": "总额度 {limit} · 剩余 {remaining}",
+      "creditRemaining": "AI Credits 余额",
+      "creditRemainingHint": "总额度 {limit}",
+      "creditUsed": "本期已消耗",
+      "creditUsedHint": "AI Credits · 随订阅周期重置",
+      "credits": "AI Credits",
+      "addons": "生效中的加油包",
+      "addonsExpiry": "最早到期 {date}",
+      "addonsNone": "暂无生效加油包,可在下方购买"
     },
-    "organization": {
-      "eyebrow": "租户信息",
-      "title": "企业认证",
-      "description": "完成企业认证以解锁组织租户的合规能力。"
+    "source": {
+      "ws_base": "基础授予",
+      "subscription": "订阅权益",
+      "addon_purchase": "加油包",
+      "manual_override": "运营授予"
     },
-    "fields": {
-      "status": "认证状态"
+    "reset": {
+      "none": "不重置",
+      "day": "按日重置",
+      "month": "按月重置"
     },
-    "status": {
-      "unverified": "未认证"
+    "storage": {
+      "title": "存储空间",
+      "description": "工作空间级共享资源:每行一个额度来源或用量主体,同产品的贡献与用量并读",
+      "colLimit": "额度",
+      "colExpires": "有效期至",
+      "noExpiry": "长期有效",
+      "colUsed": "已用",
+      "colShare": "占总额度",
+      "colObserved": "上报时间",
+      "totalLine": "合计额度 {limit} · {remaining}",
+      "emptySources": "暂无存储额度来源",
+      "colItem": "项目",
+      "usageOnly": "产品用量"
     },
-    "timeline": {
-      "empty": "尚未发起认证。"
+    "credits": {
+      "title": "AI Credits",
+      "description": "各产品订阅权益累加,自留先用、共享兜底;全部用完可通过加油包补充",
+      "colSource": "来源",
+      "colLimit": "额度",
+      "colUsed": "本期已用",
+      "colRemaining": "剩余",
+      "colReset": "重置周期",
+      "colExpires": "有效期至",
+      "empty": "暂无 AI Credits 额度,订阅产品后自动获得",
+      "sharingTitle": "跨产品共享",
+      "sharingOn": "已默认开启:{products} 参与共享——单个产品用完后可使用其他产品的剩余额度,消耗均按产品归因记录",
+      "sharingOff": "当前无产品参与共享,各产品额度独立使用",
+      "boosterTitle": "AI Credits 加油包",
+      "boosterBody": "订阅额度全部用完后,可购买加油包补充;加油包在订阅额度之后消耗,有效期更长"
     },
-    "sections": {
-      "form": {
-        "title": "认证信息",
-        "description": "填写并提交认证材料（即将开放）。",
-        "empty": "认证功能即将开放，敬请期待。"
-      },
-      "history": {
-        "title": "历史记录",
-        "description": "发起、审核与变更记录。",
-        "empty": "暂无认证记录。"
-      }
+    "products": {
+      "title": "各产品配额明细",
+      "description": "按产品独立统计:产品自身服务配额与平台资源贡献",
+      "colProduct": "产品",
+      "colMetric": "指标",
+      "colLimit": "额度",
+      "colUsed": "本期已用",
+      "colRemaining": "剩余",
+      "wsShared": "全工作空间共用",
+      "empty": "暂无产品配额,订阅产品后自动生成",
+      "colReset": "重置周期"
     },
-    "org": {
-      "title": "企业认证",
-      "description": "完成企业实名认证,解锁订阅与开票等企业能力;一次认证长期有效",
-      "status": {
-        "unverified": "未认证",
-        "pending": "审核中",
-        "verified": "已认证",
-        "rejected": "已驳回",
-        "superseded": "已作废",
-        "lite": "简易认证",
-        "full": "实名认证"
-      },
-      "pendingBanner": "认证申请已提交,平台运营将在 1-2 个工作日内完成审核",
-      "rejectedBanner": "上次申请被驳回:{reason}。请核对信息后重新提交",
-      "submittedBanner": "提交成功,等待运营审核;结果会同步到租户信息页的认证徽章",
-      "submitFailed": "提交失败,请稍后重试",
-      "liteLimitBanner": "当前是简易企业实名认证:可以订阅,不能开票",
-      "liteLimitBannerBody": "简易认证只核验企业登记信息,未核到法人本人或证件影像,因此不支持申请发票。法人扫脸认证与提交资料认证开发中,上线后可升级。",
-      "methods": {
-        "title": "认证方式",
-        "description": "三种方式的资料要求与获得的能力不同;本期开放简易企业实名认证,另两种开发中",
-        "needLabel": "需要提供",
-        "capabilityLabel": "获得能力",
-        "canSubscribe": "可订阅产品与套餐",
-        "canInvoice": "可申请开具发票",
-        "cannotInvoice": "不可申请开具发票",
-        "availableTag": "本期可用",
-        "currentTag": "当前认证方式",
-        "lite": {
-          "name": "简易企业实名认证",
-          "summary": "只填企业名称与统一社会信用代码,提交后由运营核验,最快的一条路径",
-          "items": {
-            "0": "企业名称",
-            "1": "统一社会信用代码"
-          }
-        },
-        "face": {
-          "name": "法人扫脸实名认证",
-          "summary": "法定代表人本人扫脸核身,核到人,认证后可开票",
-          "items": {
-            "0": "企业登记信息",
-            "1": "法定代表人本人扫脸核身"
-          }
-        },
-        "documents": {
-          "name": "提交资料实名认证",
-          "summary": "提交认证申请表与营业执照影像,由运营人工审核,认证后可开票",
-          "items": {
-            "0": "认证申请表(下载模板,盖章后上传)",
-            "1": "营业执照影像"
-          }
-        },
-        "selectedTag": "已选择"
-      },
-      "current": {
-        "title": "当前认证信息",
-        "description": "认证已生效;信息变更需重新提交并审核",
-        "method": "认证方式",
-        "verifiedAt": "认证通过时间",
-        "invoicing": "开票能力",
-        "invoicingAllowed": "可申请开具发票",
-        "invoicingBlocked": "不可申请开具发票(简易认证)"
-      },
-      "form": {
-        "title": "提交企业认证",
-        "description": "本期只开放简易企业实名认证:填写企业登记信息即可,无需上传证件影像",
-        "retitleTitle": "变更认证信息",
-        "retitleDescription": "变更后需重新审核;审核期间原认证保持有效",
-        "liteNotice": "简易企业实名认证:通过后可以订阅,但不能申请开票",
-        "companyName": "企业名称",
-        "companyNamePlaceholder": "与营业执照登记名称一致",
-        "licenseNo": "统一社会信用代码",
-        "licenseNoPlaceholder": "18 位统一社会信用代码",
-        "legalName": "法定代表人姓名",
-        "legalNamePlaceholder": "与营业执照一致",
-        "submit": "提交认证申请",
-        "pendingLocked": "审核中,暂不可提交",
-        "selectedMethod": "当前选择:{method};下方填写这种方式所需的资料"
-      },
-      "history": {
-        "title": "申请记录",
-        "description": "本组织的历次认证申请与审核结果",
-        "colSubject": "企业主体",
-        "colMethod": "认证方式",
-        "colStatus": "状态",
-        "colAt": "提交时间",
-        "colResult": "审核结果 / 时间",
-        "rowMenu": "记录操作",
-        "awaiting": "等待审核",
-        "empty": "暂无认证申请"
-      },
-      "notes": {
-        "title": "认证说明",
-        "description": "口径与生效范围",
-        "liteTitle": "简易认证的边界",
-        "liteBody": "简易认证以企业登记信息核验,不上传任何证件影像,因此可以订阅但不能开票;需要开票请等待法人扫脸认证或提交资料认证上线",
-        "effectTitle": "生效范围",
-        "effectBody": "认证状态挂在租户层,所有工作空间继承;租户名称以认证通过的企业名称为准,改名即作废原认证",
-        "noIdTitle": "不收身份证件影像",
-        "noIdBody": "三种方式都不要求上传身份证件影像:简易认证只核企业登记信息,扫脸认证是本人核身,提交资料认证只收认证申请表与营业执照影像"
-      },
-      "loadFailed": "认证状态读取失败，表单已锁定；请重试或稍后再来。",
-      "retry": "重试",
-      "personalTenantBanner": "企业认证仅适用于组织租户",
-      "personalTenantBannerBody": "当前是个人租户。个人实名认证在账号信息页,组织能力(成员、企业认证、开票)需要先转为组织租户。",
-      "apply": {
-        "title": "提交企业认证",
-        "description": "选择认证方式并填写资料;提交后由平台运营审核,结果在企业认证页查看",
-        "backToResult": "返回认证结果",
-        "cancel": "取消"
-      },
-      "actions": {
-        "goApply": "提交认证申请",
-        "changeApply": "变更认证信息"
-      }
-    }
-  },
-  "securityPage": {
-    "header": {
-      "eyebrow": "账户安全",
-      "title": "安全设置",
-      "description": "查看登录历史与登录设备，保障账号安全。"
+    "addons": {
+      "title": "加油包与扩展包",
+      "description": "存储扩展包与 AI 加油包:选卡下单,走完整订单流程——付款申报、运营核销后额度自动入池生效",
+      "colPack": "包",
+      "colContent": "内容",
+      "colValidity": "有效期",
+      "validityDays": "{days} 天",
+      "colPrice": "价格",
+      "buy": "购买",
+      "pendingExists": "已有待支付单",
+      "buyFailed": "下单失败,请稍后重试",
+      "colOrder": "订单",
+      "colStatus": "状态",
+      "colNote": "说明",
+      "statusPending": "待支付",
+      "statusDeclared": "已申报",
+      "statusCompleted": "已开通",
+      "statusCancelled": "已取消",
+      "validUntil": "有效期至 {date}",
+      "payBefore": "请在 {date} 前完成转账申报",
+      "awaitingConfirm": "等待运营确认收款",
+      "declare": "申报转账",
+      "cancel": "取消订单",
+      "cancelFailed": "取消失败,请稍后重试",
+      "ordersEmpty": "暂无加油包订单",
+      "packsEmpty": "暂无可购买的加油包",
+      "declareTitle": "对公转账申报",
+      "declareDescription": "{pack} · 应付 {price}。请按以下账户完成转账,并填写申报信息",
+      "bankAccountName": "户名",
+      "bankName": "开户行",
+      "bankAccountNo": "账号",
+      "bankReference": "转账附言(必填)",
+      "bankUnavailable": "收款账户信息暂未配置,请联系平台运营获取转账信息",
+      "payerName": "付款方名称",
+      "payerNamePlaceholder": "转出账户的户名(便于对账)",
+      "transactionNo": "转账流水号",
+      "transactionNoPlaceholder": "银行回单流水号(选填)",
+      "declareLater": "稍后申报",
+      "declareSubmit": "已完成转账,提交申报",
+      "declareFailed": "申报失败,请稍后重试",
+      "kindStorage": "存储",
+      "kindCredits": "AI Credits",
+      "oneOffNote": "一次性买断",
+      "continuePay": "去支付",
+      "orderDetail": "订单详情",
+      "orderMenu": "订单操作",
+      "cancelHint": "仅待支付订单可取消",
+      "buyNoPermission": "你的角色没有付款权限,购买加油包请联系租户所有者",
+      "loadFailed": "加油包目录与订单读取失败，请重试"
     },
-    "common": {
-      "empty": "--",
-      "loading": "加载中...",
-      "loadError": "无法读取登录记录与会话，请稍后重试。",
-      "revokeError": "下线该设备失败，请稍后重试。"
-    },
-    "sections": {
-      "loginHistory": {
-        "title": "登录历史",
-        "description": "最近的登录记录（含失败尝试），含时间、IP、地点与设备。",
-        "empty": "暂无登录记录。"
-      },
-      "sessions": {
-        "title": "登录设备",
-        "description": "当前活跃的登录会话，可远程下线不再使用的设备。",
-        "empty": "暂无活跃会话。",
-        "revoke": "下线"
-      }
-    },
-    "status": {
-      "success": "成功",
-      "failed": "失败"
-    }
-  },
-  "membersPage": {
-    "header": {
-      "eyebrow": "租户管理",
-      "title": "成员管理",
-      "description": "管理当前租户的成员、角色和访问状态。",
-      "addMember": "新增成员",
-      "inviteMember": "邀请成员",
-      "viewRoles": "角色管理",
-      "viewInvitations": "邀请记录",
-      "viewPermissions": "权限管理"
-    },
-    "table": {
-      "toolbarTitle": "{count} 人",
-      "countHint": "共 {total} 人，活跃 {active} 人，邀请 {invited} 人，禁用 {suspended} 人",
-      "searchPlaceholder": "按姓名、邮箱或角色搜索",
-      "searchAriaLabel": "搜索成员",
-      "filterAriaLabel": "成员状态筛选",
-      "memberTitle": "{name}，{username}，{phone}，{email}，{role}，{team}，{status}",
-      "statusTitle": "当前状态：{status}",
-      "avatarAlt": "{name} 的头像",
-      "emptyPhone": "未填写",
-      "primaryOwner": "主管理员",
-      "selectPage": "选择当前页成员",
-      "selectMember": "选择 {name}",
-      "columns": {
-        "name": "姓名",
-        "phone": "电话",
-        "email": "邮箱",
-        "role": "角色",
-        "status": "状态",
-        "lastActive": "最近活跃",
-        "joinedAt": "加入时间"
-      },
-      "invitedExpires": "邀请有效期至 {date}",
-      "selfTag": "本人"
-    },
-    "status": {
-      "Active": "活跃",
-      "Invited": "已邀请",
-      "Suspended": "已禁用"
-    },
+    "gotoAddons": "去加购",
+    "remainBy": "剩余 {amount}",
+    "overBy": "已超出 {amount}",
     "filters": {
-      "all": "全部成员",
-      "active": "活跃",
-      "invited": "已邀请",
-      "suspended": "已禁用"
-    },
-    "empty": {
-      "loadingTitle": "正在加载成员...",
-      "loadingDescription": "正在从 console BFF 读取工作区成员。",
-      "title": "没有符合当前筛选条件的成员。",
-      "description": "可以放宽状态范围，或改用其他字段搜索。",
-      "resetFilters": "重置筛选"
-    },
-    "actions": {
-      "menuLabel": "{name} 的成员操作",
-      "edit": "编辑用户",
-      "disableMember": "禁用用户",
-      "enableMember": "启用用户",
-      "resetPassword": "重置密码",
-      "unlink": "解除关联",
-      "resendInvite": "重发邀请",
-      "revokeInvite": "撤销邀请"
-    },
-    "bulk": {
-      "selected": "已选择 {count} 人",
-      "disable": "批量禁用",
-      "enable": "批量启用",
-      "unlink": "批量解除关联",
-      "noun": "人"
-    },
-    "dialogs": {
-      "create": {
-        "title": "新增成员",
-        "description": "按邮箱把已有 Vxture 账号加入本租户;对方尚未注册时请改用邀请。",
-        "switchToInvite": "改为发送邀请"
-      },
-      "invite": {
-        "title": "邀请成员",
-        "description": "对方会收到一封带链接的邮件,接受后以所选角色加入租户与默认工作空间。"
-      },
-      "edit": {
-        "title": "编辑成员"
-      },
-      "reset": {
-        "title": "重置密码",
-        "description": "为 {name} 设置新的临时密码。"
-      },
-      "unlink": {
-        "title": "解除成员关联",
-        "description": "确认解除 {name} 与当前租户的关联？该操作不会删除用户账号。",
-        "verb": "解除关联",
-        "consequence": "该成员将不再属于本工作区，立刻失去这里的全部访问权。账号本身不受影响，重新加入需要再发一次邀请。"
-      },
-      "bulkUnlink": {
-        "title": "批量解除成员关联",
-        "description": "确认解除已选 {count} 名成员与当前租户的关联？该操作不会删除用户账号。"
-      },
-      "fields": {
-        "email": "邮箱",
-        "role": "角色",
-        "defaultRole": "默认成员",
-        "nextPassword": "新临时密码"
-      },
-      "actions": {
-        "cancel": "取消",
-        "create": "创建成员",
-        "sendInvite": "发送邀请",
-        "save": "保存",
-        "resetPassword": "确认重置",
-        "unlink": "解除关联"
-      },
-      "revokeInvite": {
-        "verb": "撤销给",
-        "consequence": "邀请链接立刻失效,对方再打开会看到「邀请不存在」。撤销不可撤回——要让对方加入,需要再发一次邀请。",
-        "keep": "保留邀请"
-      }
-    },
-    "feedback": {
-      "createSuccess": "成员已创建。",
-      "inviteSuccess": "成员邀请已创建。",
-      "updateSuccess": "成员资料已更新。",
-      "resetPasswordSuccess": "{name} 的密码已重置。",
-      "unlinkSuccess": "成员关联已解除。",
-      "bulkDisabled": "已禁用 {count} 名成员。",
-      "bulkEnabled": "已启用 {count} 名成员。",
-      "bulkUnlinkSuccess": "已解除 {count} 名成员关联。",
-      "memberDisabled": "成员已禁用。",
-      "memberEnabled": "成员已启用。",
-      "createError": "成员创建失败，请稍后重试。",
-      "inviteError": "成员邀请失败，请稍后重试。",
-      "updateError": "成员资料保存失败，请稍后重试。",
-      "resetPasswordError": "密码重置失败，请稍后重试。",
-      "resetPasswordLength": "新临时密码至少需要 6 位。",
-      "unlinkError": "成员关联解除失败，请稍后重试。",
-      "bulkDisableError": "批量禁用失败，请稍后重试。",
-      "bulkEnableError": "批量启用失败，请稍后重试。",
-      "bulkUnlinkError": "批量解除关联失败，请稍后重试。",
-      "memberDisableError": "成员禁用失败，请稍后重试。",
-      "memberEnableError": "成员启用失败，请稍后重试。",
-      "inviteNoEmail": "邀请已创建,但邮件未能发出,请把链接手动发给对方。",
-      "inviteResent": "邀请已重发。",
-      "inviteRevoked": "邀请已撤销。",
-      "resendError": "重发失败,请稍后重试。",
-      "revokeError": "撤销失败,请稍后重试。",
-      "bulkPartial": "完成 {done} 项,失败 {failed} 项。",
-      "bulkSkipped": "已跳过所有者与本人。"
-    },
-    "hints": {
-      "ownerProtected": "所有者不可停用或解除关联,请先转让所有权",
-      "ownerRoleLocked": "所有者的角色只能通过「转让所有权」变更",
-      "selfProtected": "不能对自己执行此操作"
-    },
-    "errors": {
-      "owner_protected": "所有者不可停用或解除关联,请先转让所有权。",
-      "self_protected": "不能对自己执行此操作。",
-      "owner_role_locked": "所有者的角色只能通过「转让所有权」变更。",
-      "account_not_found": "该邮箱没有对应的 Vxture 账号,请改用邀请。",
-      "already_member": "该账号已是本租户成员。",
-      "invitation_pending": "该邮箱已有待接受的邀请,请到邀请管理页重发或撤销。",
-      "invalid_email": "邮箱格式不正确。"
+      "groupLabel": "产品配额筛选",
+      "listOnly": "产品配额只有列表视图",
+      "count": "共 {count} 条",
+      "searchPlaceholder": "搜索产品名、产品代码或指标",
+      "searchAriaLabel": "搜索产品配额",
+      "reset": "复位"
     }
+  },
+  "role": {
+    "owner": "所有者",
+    "manager": "管理员",
+    "member": "成员",
+    "readonly": "只读成员",
+    "guest": "访客"
   },
   "rolesPage": {
     "title": "角色管理",
@@ -1500,639 +2147,428 @@
       "empty": "该角色未授予任何权限点"
     }
   },
-  "permissionsPage": {
-    "title": "权限管理",
-    "description": "治理权限目录与角色矩阵:每个治理动作由哪些角色持有",
-    "viewRoles": "角色管理",
-    "backToMembers": "返回成员管理",
-    "metrics": {
-      "groupLabel": "权限概览",
-      "perms": "权限点",
-      "permsHint": "租户级 + 工作空间级",
-      "model": "授权模型",
-      "modelValue": "固定目录",
-      "modelHint": "租户不可自定义",
-      "permsHelp": "治理权限目录里的操作码总数,含租户级与工作空间级。",
-      "roles": "治理角色",
-      "rolesHelp": "矩阵里的角色列数,与角色管理页同一份目录。",
-      "rolesTag": "矩阵的列",
-      "modelHelp": "权限目录由平台统一定义,不带租户维度,租户不能增删改。"
-    },
-    "perm": {
-      "tenant_member_read": "成员查看",
-      "tenant_member_manage": "成员管理",
-      "tenant_role_assign": "角色指派",
-      "tenant_workspace_manage": "工作空间管理",
-      "tenant_settings_manage": "租户设置管理",
-      "tenant_delete": "租户注销",
-      "tenant_billing_read": "商业与账务查看",
-      "tenant_billing_manage": "商业与账务管理",
-      "tenant_payment_manage": "付款申报",
-      "tenant_invoice_manage": "发票与抬头管理",
-      "tenant_quota_read": "配额与用量查看",
-      "tenant_audit_read": "审计日志查看",
-      "tenant_model_read": "模型接入查看",
-      "workspace_member_manage": "工作空间成员管理",
-      "workspace_role_assign": "工作空间角色指派",
-      "workspace_settings_manage": "工作空间设置管理"
-    },
-    "matrix": {
-      "title": "权限矩阵",
-      "description": "权限目录按侧栏结构分层:板块 → 页面 → 操作;每个治理动作由哪些角色持有,一览无余",
-      "colPerm": "权限点",
-      "empty": "权限目录为空",
-      "openToAll": "成员均可见",
-      "groupOther": "未挂到页面的操作码(工作空间级)",
-      "colKind": "层级",
-      "expand": "展开子级",
-      "collapse": "收起子级",
-      "childCount": "{count} 子级",
-      "emptyHint": "清空筛选条件后可查看完整权限目录"
-    },
-    "notes": {
-      "title": "权限口径",
-      "description": "本页只回答「谁能做哪些治理动作」",
-      "readTitle": "只读目录",
-      "readBody": "权限目录由平台统一定义,租户不能增删改;需要新的权限形态请联系平台运营",
-      "openTitle": "没有操作码的页面",
-      "openBody": "标「成员均可见」的页面不挂任何操作码,任何成员都能打开;门只落在带码的动作上",
-      "scopeTitle": "治理 ≠ 业务",
-      "scopeBody": "治理角色只闸成员/角色/设置/商业面等治理动作;各产品内的功能权限由产品按订阅档位自行门控"
-    },
-    "loadFailed": "权限目录读取失败,请稍后重试",
-    "filters": {
-      "groupLabel": "权限目录筛选",
-      "count": "{count} 行",
-      "searchPlaceholder": "搜索权限码、名称、页面",
-      "searchAriaLabel": "搜索权限目录",
-      "kindAriaLabel": "行类型",
-      "kindAll": "全部层级",
-      "reset": "清空筛选",
-      "listOnly": "权限目录是一棵树,只有列表视图"
-    },
-    "kind": {
-      "section": "模块",
-      "page": "页面",
-      "perm": "操作",
-      "group": "其他"
-    }
+  "routes": {
+    "dashboard": "仪表盘",
+    "todos": "待办事项",
+    "profile": "账号信息",
+    "personalTenant": "租户信息",
+    "organization": "组织信息",
+    "members": "成员管理",
+    "membersInvitations": "邀请记录",
+    "membersRoles": "角色管理",
+    "membersPermissions": "权限管理",
+    "roles": "角色管理",
+    "invitations": "邀请记录",
+    "subscription": "订阅管理",
+    "billing": "费用中心",
+    "billingInvoices": "发票与抬头",
+    "quotas": "配额管理",
+    "atlas": "模型服务",
+    "notifications": "通知提醒",
+    "security": "安全设置",
+    "settings": "租户设置",
+    "tenantSettings": "租户设置",
+    "usage": "用量分析",
+    "addonPay": "加油包支付",
+    "vouchers": "我的卡券",
+    "auditLogs": "审计日志",
+    "inbox": "消息中心",
+    "tenant": "租户信息",
+    "tenantVerification": "企业认证",
+    "tenantVerificationApply": "提交认证",
+    "skills": "技能工具"
   },
-  "modelPlatformPage": {
+  "securityPage": {
     "header": {
-      "eyebrow": "Model Platform",
-      "title": "模型接入管理",
-      "description": "统一管理在线模型、自建模型、调用端点、能力标签与租户/智能体授权。",
-      "badge": "待接入生产密钥"
+      "eyebrow": "账户安全",
+      "title": "安全设置",
+      "description": "查看登录历史与登录设备，保障账号安全。"
     },
-    "summary": {
-      "ariaLabel": "模型接入概览",
-      "models": "模型注册",
-      "modelsValue": "{active} / {total} 启用",
-      "privateModels": "自建模型",
-      "grants": "授权关系",
-      "grantsValue": "{active} / {total} 启用"
+    "common": {
+      "empty": "--",
+      "loading": "加载中...",
+      "loadError": "无法读取登录记录与会话，请稍后重试。",
+      "revokeError": "下线该设备失败，请稍后重试。"
     },
-    "providers": {
-      "doubao": "doubao",
-      "claude": "Claude",
-      "private": "自建模型",
-      "custom": "自定义"
-    },
-    "filters": {
-      "all": "全部模型",
-      "active": "启用",
-      "inactive": "停用",
-      "online": "在线",
-      "private": "自建"
-    },
-    "actions": {
-      "addModel": "新增模型",
-      "addGrant": "新增授权",
-      "modelMenu": "{name} 的模型操作",
-      "grantMenu": "授权操作",
-      "editModel": "编辑模型",
-      "grantModel": "授权租户",
-      "enableModel": "启用模型",
-      "disableModel": "停用模型",
-      "editGrant": "编辑授权",
-      "enableGrant": "启用授权",
-      "disableGrant": "停用授权"
-    },
-    "table": {
-      "searchPlaceholder": "按模型、Provider、端点或能力搜索",
-      "searchAriaLabel": "搜索模型",
-      "filterAriaLabel": "模型筛选",
-      "toolbarTitle": "{count} 个模型",
-      "columns": {
-        "model": "模型",
-        "provider": "Provider",
-        "capabilities": "能力",
-        "endpoint": "端点",
-        "key": "密钥变量",
-        "status": "状态"
-      }
-    },
-    "grants": {
-      "title": "模型授权",
-      "count": "{count} 条授权",
-      "allAgents": "全部智能体",
-      "noReason": "暂无授权说明",
-      "permanent": "长期",
-      "columns": {
-        "model": "模型",
-        "tenant": "租户",
-        "agent": "智能体",
-        "priority": "优先级",
-        "expires": "有效期",
-        "status": "状态"
+    "sections": {
+      "loginHistory": {
+        "title": "登录历史",
+        "description": "最近的登录记录（含失败尝试），含时间、IP、地点与设备。",
+        "empty": "暂无登录记录。"
+      },
+      "sessions": {
+        "title": "登录设备",
+        "description": "当前活跃的登录会话，可远程下线不再使用的设备。",
+        "empty": "暂无活跃会话。",
+        "revoke": "下线"
       }
     },
     "status": {
-      "active": "启用",
-      "inactive": "停用"
+      "success": "成功",
+      "failed": "失败"
+    }
+  },
+  "shell": {
+    "loading": {
+      "label": "加载中"
     },
-    "pagination": {
-      "summary": "第 {page} / {totalPages} 页，共 {total} 个模型",
-      "previous": "上一页",
-      "next": "下一页"
-    },
-    "dialogs": {
-      "createModel": {
-        "title": "新增模型"
-      },
-      "editModel": {
-        "title": "编辑模型"
-      },
-      "createGrant": {
-        "title": "新增授权"
-      },
-      "editGrant": {
-        "title": "编辑授权"
-      },
-      "fields": {
-        "modelName": "模型名称",
-        "modelCode": "模型编码",
-        "provider": "Provider",
-        "protocol": "协议",
-        "endpointUrl": "Endpoint URL",
-        "keyReference": "Key 引用",
-        "capabilities": "能力标签，逗号分隔",
-        "config": "非敏感配置 JSON",
-        "grantModel": "授权模型",
-        "selectModel": "选择模型",
-        "tenantId": "ORG_ID",
-        "agentId": "智能体 ID，可为空",
-        "priority": "优先级，数值越小越优先",
-        "reason": "授权说明",
-        "expiresAt": "到期日期",
-        "grantActive": "授权立即启用"
-      },
-      "actions": {
-        "cancel": "取消",
-        "save": "保存"
+    "featureBoards": "功能板块",
+    "searchPlaceholder": "搜索成员、订阅、设置…",
+    "search": {
+      "title": "全局搜索",
+      "description": "输入关键词检索页面与业务数据",
+      "empty": "没有匹配结果",
+      "error": "搜索服务暂时不可用，仅显示页面匹配",
+      "loading": "检索中",
+      "groups": {
+        "pages": "页面",
+        "member": "成员",
+        "invoice": "发票"
       }
+    },
+    "help": "帮助",
+    "notifications": "告警通知",
+    "settings": "系统设置",
+    "assistant": "Varda · 数据助手",
+    "userMenu": "账号信息",
+    "verified": "已认证",
+    "tenantOrg": "组织 / 租户",
+    "tenantVerified": "已认证",
+    "tenantSettings": "租户设置",
+    "switchOrg": "切换组织",
+    "prefsTitle": "偏好设置",
+    "themeSystem": "系统",
+    "themeLight": "亮色",
+    "themeDark": "暗色",
+    "densityCompact": "紧凑",
+    "densityDefault": "默认",
+    "densityComfy": "宽松",
+    "switchUser": "切换用户",
+    "signOut": "退出登录",
+    "views": {
+      "appcenter": {
+        "name": "智能体",
+        "desc": "已订阅应用 · 快速进入"
+      },
+      "console": {
+        "name": "控制台",
+        "desc": "管理视角 · 数据与运营"
+      }
+    },
+    "sidebar": {
+      "expandNav": "展开导航",
+      "collapseNav": "收起导航",
+      "expandAllGroups": "展开全部分组",
+      "collapseAllGroups": "收起全部分组"
+    },
+    "drawer": {
+      "openCenter": "前往消息中心"
+    },
+    "appcenter": {
+      "title": "智能体",
+      "desc": "当前工作空间已订阅的智能体,点开就用;下方是还没订的推荐。",
+      "products": {
+        "title": "已订阅",
+        "desc": "按当前工作空间的生效订阅(含试用)列出。",
+        "empty": "当前工作空间还没有生效的产品订阅。",
+        "browse": "查看订阅",
+        "unavailable": "已订阅产品暂时读不到,请稍后刷新。",
+        "trialing": "试用中",
+        "open": "打开",
+        "detail": "产品介绍",
+        "versionAt": "v {version} at {date}"
+      },
+      "reco": {
+        "title": "热门推荐",
+        "desc": "你还没订阅的智能体,先看介绍或直接订阅。",
+        "learnMore": "产品介绍",
+        "subscribe": "订阅"
+      }
+    },
+    "realNameVerified": "实名认证",
+    "missingPhone": "缺少手机号",
+    "missingEmail": "缺少 email",
+    "slotRole": "角色",
+    "slotLevel": "用户等级",
+    "slotLocked": "其他奖章 · 待解锁",
+    "billing": "账单",
+    "monthlyCost": "本月费用",
+    "noData": "无相关数据",
+    "payBill": "支付账单",
+    "trafficUsage": "流量用量",
+    "usageLimit": "用量限额",
+    "usageQuota": "配额 / Usage Quota",
+    "storageQuota": "存储容量 / Storage",
+    "aiCredits": "AI Credits",
+    "switchScope": "切换范围",
+    "organization": "组织",
+    "workspace": "工作空间",
+    "defaultWorkspace": "默认工作空间",
+    "defaultTag": "默认",
+    "workspaceSwitchComingSoon": "多工作空间切换即将支持",
+    "plan": "计划",
+    "freePlan": "未订阅",
+    "orgTenant": "组织租户",
+    "personalTenant": "个人租户",
+    "fontSmall": "小",
+    "fontDefault": "默认",
+    "fontLarge": "大",
+    "monthlyCostDesc": "本月实付合计与开票状态",
+    "payBillDesc": "管理支付方式与付款",
+    "trafficUsageDesc": "查看流量与调用用量",
+    "usageLimitDesc": "配额上限与告警阈值",
+    "verifyUnknown": "认证未知",
+    "verifyActive": "已认证",
+    "verifySuspended": "已暂停",
+    "brandName": "Workspace Console",
+    "tenantList": "可切换的租户",
+    "currentTag": "当前",
+    "accountDeleting": {
+      "title": "账号在删除保留期",
+      "body": "你在 {requestedAt} 申请删除账号,将于 {purgeAt} 永久删除。是否撤销删除并重新启用?",
+      "reactivate": "撤销删除并重新启用",
+      "keep": "保持删除并退出",
+      "error": "操作失败,请稍后重试。"
+    }
+  },
+  "sidebar": {
+    "ariaLabel": "控制台导航",
+    "collapseAll": "收起全部分组",
+    "description": "账户、租户、成员与订阅自主管理",
+    "domains": {
+      "workspace": "工作台",
+      "org": "组织与成员",
+      "billing": "订阅与计费",
+      "settings": "设置与安全",
+      "capability": "模型与能力"
+    },
+    "expandAll": "展开全部分组",
+    "eyebrow": "Vxture 控制台",
+    "footer": {
+      "label": "状态",
+      "value": "自主管理平台"
+    },
+    "footerCard": {
+      "title": "合规态势",
+      "meta": "分级分类覆盖率 96%"
+    },
+    "items": {
+      "overview": {
+        "label": "数据总览",
+        "description": "租户状态、订阅到期、用量概览与快捷入口"
+      },
+      "todos": {
+        "label": "待办事项",
+        "description": "需要当前租户处理的关键事项"
+      },
+      "profile": {
+        "label": "账号信息",
+        "description": "头像、资料、联系方式、登录方式与偏好"
+      },
+      "members": {
+        "label": "成员管理",
+        "description": "邀请、访问审查与团队成员管理"
+      },
+      "subscription": {
+        "label": "订阅管理",
+        "description": "已订产品、到期提醒与新品推荐"
+      },
+      "billing": {
+        "label": "费用中心",
+        "description": "订单、账单、发票与收款记录"
+      },
+      "quotas": {
+        "label": "配额管理",
+        "description": "存储与 AI Credits 的额度与用量"
+      },
+      "inbox": {
+        "label": "消息中心",
+        "description": "需要你处理的待办,与订阅、订单、退款的消息"
+      },
+      "notifications": {
+        "label": "通知提醒",
+        "description": "邮件与站内信通知偏好"
+      },
+      "security": {
+        "label": "安全设置",
+        "description": "登录日志、设备管理等安全能力"
+      },
+      "tenantSettings": {
+        "label": "租户设置",
+        "description": "语言、时区与租户注销危险操作"
+      },
+      "usage": {
+        "label": "用量分析",
+        "description": "消耗趋势、调用记录与成员细分"
+      },
+      "vouchers": {
+        "label": "我的卡券",
+        "description": "折扣券与抵扣金券的持有、有效期与使用记录"
+      },
+      "auditLogs": {
+        "label": "审计日志",
+        "description": "租户内成员操作与商业动作的轨迹"
+      },
+      "tenantInfo": {
+        "label": "租户信息",
+        "description": "租户资料、联系人、默认区域与危险操作"
+      },
+      "modelService": {
+        "label": "模型服务",
+        "description": "本工作空间可用的模型、额度与用量"
+      },
+      "skillTools": {
+        "label": "技能工具",
+        "description": "本工作空间可用的技能与工具（开发中）"
+      }
+    },
+    "openDocs": "查看文档",
+    "sections": {
+      "workspace": "工作空间",
+      "accountTenant": "账户与租户",
+      "subscriptionBilling": "订阅与计费",
+      "settingsSecurity": "设置与安全",
+      "capability": "模型与能力"
+    },
+    "title": "控制台",
+    "workspaceMode": {
+      "platform": "平台工作区",
+      "tenant": "租户工作区"
+    }
+  },
+  "skillsPage": {
+    "title": "技能工具",
+    "description": "本工作空间可用的技能与工具、额度与用量。只读——授权与配置在运维侧。",
+    "planned": {
+      "title": "开发中",
+      "body": "取数通路尚未接通。接通后这一页会列出本工作空间已获得的技能与工具，形状与「模型服务」一致。"
     },
     "empty": {
-      "loadingTitle": "正在加载模型...",
-      "loadingDescription": "正在从 Model Platform 读取模型注册和授权关系。",
-      "title": "没有符合当前筛选条件的模型。",
-      "description": "可以放宽筛选范围，或新增一个在线/自建模型。",
-      "resetFilters": "重置筛选"
-    },
-    "feedback": {
-      "loadError": "模型数据读取失败，请确认 Model Platform 是否已启动。",
-      "modelCreated": "模型已创建。",
-      "modelUpdated": "模型已更新。",
-      "modelEnabled": "模型已启用。",
-      "modelDisabled": "模型已停用。",
-      "modelSaveError": "模型保存失败，请检查端点、能力标签和配置 JSON。",
-      "modelStateError": "模型状态更新失败，请稍后重试。",
-      "grantCreated": "授权已创建。",
-      "grantUpdated": "授权已更新。",
-      "grantEnabled": "授权已启用。",
-      "grantDisabled": "授权已停用。",
-      "grantSaveError": "授权保存失败，请检查租户、模型和配额。",
-      "grantStateError": "授权状态更新失败，请稍后重试。"
+      "title": "暂无可展示的内容",
+      "description": "这不表示你没有技能——是这一页还没接上数据。"
     }
   },
-  "atlasPage": {
-    "title": "模型平台",
-    "description": "当前租户可用模型、应用授权、配额和用量状态。",
-    "loadError": "模型平台状态加载失败，请稍后重试。",
-    "metrics": {
-      "groupLabel": "模型平台概览",
-      "models": "可用模型",
-      "modelsHint": "{count} 项生效权益",
-      "quota": "配额状态",
-      "quotaTier": "档位：{tier}",
-      "quotaNoTier": "无档位",
-      "tokens": "Token 用量",
-      "tokensHint": "{count} 条记录"
+  "subscribePage": {
+    "title": {
+      "upgrade": "升级套餐",
+      "renew": "续费订阅",
+      "addon": "购买加油包",
+      "subscribe": "订阅套餐"
     },
-    "quotaStatus": {
-      "covered": "已开通",
-      "uncovered": "未开通套餐",
-      "unavailable": "平台不可达"
+    "hint": {
+      "none": "当前产品尚未订阅——在下方选择套餐即可开通。",
+      "active": "订阅生效中。可在下方对比套餐并变更档位。",
+      "trialing": "当前为试用——转为付费套餐以保留访问。",
+      "renewOff": "自动续费已关闭——套餐将在周期结束时到期，请在下方续费。",
+      "overdue": "费用逾期——请补款以保留权益。",
+      "suspended": "订阅已被暂停，请联系支持恢复。",
+      "expired": "订阅已过期——在下方续订以恢复访问。",
+      "cancelled": "订阅已取消——可在下方重新订阅。"
     },
-    "models": {
-      "title": "可用模型",
-      "description": "由平台控制面授权给当前租户的模型。",
-      "empty": "暂无可用模型",
-      "colModel": "模型",
-      "colProvider": "供应方",
-      "colProtocol": "协议",
-      "colCapabilities": "能力"
-    },
-    "quotas": {
-      "title": "配额状态",
-      "description": "来自平台侧的套餐配额资源池（非 Atlas 自身数据）。",
-      "emptyCovered": "暂无生效的配额池",
-      "emptyUncovered": "当前工作空间尚未发布套餐",
-      "emptyUnavailable": "无法连接平台权益服务",
-      "emptyNone": "暂无配额数据",
-      "colMetric": "指标",
-      "colRemaining": "剩余 / 总量",
-      "colPriority": "优先级",
-      "colTier": "档位"
-    },
-    "usage": {
-      "title": "用量记录",
-      "description": "近期实际调用记录（Atlas 自身日志，非计费口径）。",
-      "empty": "暂无模型用量记录",
-      "colModel": "模型",
-      "colProvider": "供应方",
-      "colRequests": "请求数",
-      "colTokens": "Token"
-    },
-    "signals": {
-      "title": "状态说明",
-      "description": "租户侧仅显示当前上下文可见状态。",
-      "scopeTitle": "租户范围",
-      "scopeBody": "正在显示 {tenant} 的模型平台状态。",
-      "scopeMissing": "需要租户上下文才能显示模型平台状态。",
-      "boundaryTitle": "控制面边界",
-      "boundaryBody": "供应方、模型、策略、价格与授权的变更由平台运营在管理面完成。"
-    },
-    "entitlements": {
-      "title": "产品权益",
-      "description": "本工作空间已订阅的产品与档位。模型可用范围由此派生,不再单列租户级模型授权。",
-      "colProduct": "产品",
-      "colTier": "档位",
-      "colStatus": "状态",
-      "colLimits": "额度",
-      "bundled": "随套餐",
-      "none": "未订阅",
-      "empty": "尚无产品权益。"
-    }
-  },
-  "orderFlow": {
-    "order": {
-      "pending": "下单中",
-      "done": "已下单"
-    },
-    "pay": {
-      "pending": "待付款",
-      "done": "已付款"
-    },
-    "verify": {
-      "pending": "待收款",
-      "done": "已收款"
-    },
-    "provision": {
-      "pending": "待开通",
-      "done": "已开通"
-    }
-  },
-  "payChannels": {
-    "title": "选择支付方式",
-    "comingSoon": "即将开放",
-    "alipayQrAlt": "支付宝收款码",
-    "channel": {
-      "alipay": "支付宝",
-      "wechat": "微信支付",
-      "bank_transfer": "银行转账"
-    },
-    "referenceNote": "转账请备注订单号 {orderNo}，以便我们快速核账。",
-    "noneEnabled": "支付渠道配置中，请联系客服。",
-    "bank": {
-      "accountName": "户名",
-      "bankName": "开户行",
-      "accountNo": "账号",
-      "reference": "转账附言",
-      "unavailable": "对公收款账户暂未配置，请联系平台运营。"
-    }
-  },
-  "workspacePicker": {
-    "defaultWorkspace": "默认工作区",
-    "switchFailed": "切换租户失败，请重试；当前归属未变更"
-  },
-  "planFeatures": {
-    "governance_quality": "数据质量治理",
-    "governance_standards": "数据标准管理",
-    "governance_lineage": "数据血缘分析",
-    "governance_security": "数据安全策略",
-    "governance_policies": "治理策略中心",
-    "governance_mdm": "主数据管理",
-    "governance_custom": "自定义治理域"
-  },
-  "orderPay": {
-    "title": "订单付款",
-    "notFound": "订单不存在或无权查看。",
-    "countdown": "付款剩余 {time}",
-    "rejectBanner": "上次付款申报未通过：{reason} 券与折扣已释放，可重新申报或取消订单，倒计时已重置。",
-    "cycleStartNote": "订阅周期自服务开通时刻起算",
-    "status": {
-      "pending_payment": "待付款",
-      "paid_pending_verify": "已付款 · 待确认",
-      "activating": "开通处理中",
-      "completed": "已完成",
-      "cancelled": "已取消",
-      "expired": "已超时"
-    },
-    "stateTitle": {
-      "paid_pending_verify": "我们正在核对你的付款",
-      "activating": "付款成功 · 开通处理中",
-      "completed": "订阅已生效",
-      "cancelled": "订单已取消",
-      "expired": "订单已超时关闭"
-    },
-    "stateHint": {
-      "paid_pending_verify": "已收到付款申报，确认到账后订阅立即生效，一般 1 个工作日内完成，页面会自动刷新。",
-      "activating": "款项已结清，正在为你开通订阅，通常几分钟内完成，页面会自动刷新。",
-      "completed": "订阅已生效，可前往订阅页查看权益。",
-      "cancelled": "该订单已取消，如需订阅请重新下单。",
-      "expired": "超过付款时限订单已自动关闭，如需订阅请重新下单。",
-      "already_settled": "该订单已结清。"
-    },
-    "cycle": {
-      "day": "日付",
-      "week": "周付",
-      "month": "月付",
-      "year": "年付",
-      "perpetual": "永久"
-    },
-    "breakdown": {
-      "title": "金额明细",
-      "listPrice": "套餐原价",
-      "discountVoucher": "折扣券",
-      "noDiscountVoucher": "无折扣券",
-      "creditVoucher": "代金券",
-      "noCreditVoucher": "无代金券",
-      "alreadyPaid": "已收款",
-      "cashDue": "还需支付",
-      "pickDiscount": "选择折扣券",
-      "pickCredit": "选择代金券",
-      "noneOption": "不使用"
-    },
-    "voucher": {
-      "percentOff": "立减 {value}%",
-      "fixedOff": "立减 ¥{value}"
-    },
-    "channels": {
-      "title": "选择支付方式",
-      "alipay": "支付宝",
-      "wechat": "微信支付",
-      "bank_transfer": "银行转账",
-      "comingSoon": "即将开放",
-      "alipayQrAlt": "支付宝收款码",
-      "noneEnabled": "支付渠道配置中，请联系客服。"
-    },
-    "bank": {
-      "accountName": "户名",
-      "bankName": "开户行",
-      "accountNo": "账号"
-    },
-    "referenceNote": "转账请备注订单号 {orderNo}，以便我们快速核账。",
-    "amountDue": "应付金额",
-    "manualNote": "申报后由运营人工核销（通常 1 个工作日内）；在线支付接入后，此步骤将由支付回调自动完成。",
-    "ttlFine": "请在倒计时结束前完成付款，超时订单自动关闭。",
-    "info": {
-      "title": "订单信息",
-      "owner": "归属",
-      "plan": "套餐",
-      "orderNo": "订单号"
-    },
-    "completedPanel": {
-      "next": "接下来",
-      "viewSubscription": "查看订阅与权益",
-      "viewBilling": "查看账单与发票",
-      "viewQuotas": "查看配额用量"
-    },
-    "actions": {
-      "declarePaid": "我已完成付款",
-      "settleInstant": "确认并生效",
-      "cancelOrder": "取消订单",
-      "refresh": "刷新状态",
-      "backToSubscription": "返回订阅页",
-      "cancel": "取消",
-      "noPaymentPermission": "你的角色没有付款权限:申报付款与取消订单请由租户所有者操作"
-    },
-    "declareDialog": {
-      "title": "确认付款申报",
-      "titleInstant": "确认使用券结清",
-      "description": "支付方式：{channel} · 金额：{amount}。提交后订单进入待确认，运营核对到账后订阅生效。",
-      "confirm": "提交申报",
-      "cancel": "再想想",
-      "payerName": "付款人（选填）",
-      "payerPlaceholder": "转账户名，便于核账",
-      "transactionNo": "转账流水号（选填）",
-      "optional": "选填"
-    },
-    "errors": {
-      "quote": "金额试算失败，请刷新重试。",
-      "declare": "付款申报失败，请稍后重试。",
-      "cancel": "取消订单失败，请稍后重试。"
-    },
-    "list": {
-      "typeSubscription": "订阅",
-      "payNow": "去付款",
-      "view": "查看",
-      "voucherOff": "券抵扣 {amount}",
-      "creditsTitle": "账户余额（租户共享）",
-      "creditsNote": "余额用于未来按量扣款，充值入口将随扣款业务开放。"
-    },
-    "refund": {
-      "title": "退款",
-      "policyLink": "退款说明",
-      "requestFailed": "退款申请失败",
-      "request": "申请退款",
-      "requestHint": "开通后 {hours} 小时内可申请全额退款（{deadline} 前）",
-      "ineligibleTitle": "本订单不可申请退款",
-      "reasons": {
-        "not_fulfilled": "订单尚未开通",
-        "not_first_purchase": "只有该产品的首次购买订单可退",
-        "window_elapsed": "已超过退款窗口",
-        "usage_over_threshold": "消耗性配额使用率已超过阈值",
-        "zero_amount": "0 元订单无需退款",
-        "refund_exists": "已有退款申请"
-      },
-      "dialogTitle": "申请退款",
-      "dialogDescription": "退款金额为本单实付 {amount}。退款完成后该产品的订阅将回到未订阅状态，权益即时停止。",
-      "reasonLabel": "退款原因",
-      "reasonPlaceholder": "请简要说明退款原因（选填）",
-      "submit": "提交申请",
-      "submitted": "退款申请已提交，运营审核后处理。",
-      "status": {
-        "requested": "退款审核中",
-        "approved": "退款已通过，等待打款",
-        "rejected": "退款申请被驳回",
-        "refunded": "已退款"
-      },
-      "auditRemark": "审核备注",
-      "noPermission": "申请退款需要商业管理权限,请联系租户所有者",
-      "auditRemarkLine": "审核备注：{remark}",
-      "ineligibleLine": "不符合退款条件：{reasons}",
-      "reasonSeparator": "；"
-    },
-    "cancelConfirm": {
-      "verb": "取消订单",
-      "consequence": "取消后订单关闭，已勾选的券会释放；如需订阅请重新下单。"
-    },
-    "amountPending": "试算中…",
-    "expiredNotice": "付款时限已到，正在刷新订单状态…"
-  },
-  "billingPage": {
-    "title": "费用中心",
-    "description": "一笔钱从下单到开票的完整台账:订单、账单与收款记录,线下对公收款、人工核销。",
-    "exportStatement": "导出对账单",
-    "metrics": {
-      "groupLabel": "账单统计",
-      "unpaid": "待付账单",
-      "unpaidOverdue": "{count} 笔逾期",
-      "unpaidNone": "无逾期账单",
-      "paidTotal": "累计已付",
-      "paidTotalHint": "{count} 笔已结清",
-      "credits": "钱包余额",
-      "creditsHint": "暂不支持在线充值"
-    },
-    "table": {
-      "title": "账单记录",
-      "description": "账单随订阅订单生成，0 元订单同样出账。",
-      "colBillNo": "账单号",
-      "colCycle": "账期",
-      "colType": "类型",
-      "colAmount": "金额",
-      "colStatus": "状态",
-      "colPaidAt": "结清时间",
-      "discountOff": "优惠 −{amount}",
-      "empty": "暂无账单记录。",
-      "total": "共 {count} 条",
-      "prevPage": "上一页",
-      "nextPage": "下一页",
-      "colInvoice": "发票"
-    },
-    "type": {
-      "normal": "订阅费",
-      "one_off": "一次性",
-      "adjustment": "调整",
-      "prepaid_statement": "预付结算"
+    "loading": "加载中…",
+    "currentSection": "当前订阅",
+    "noSubscription": "当前租户暂无该产品的订阅。",
+    "fields": {
+      "tier": "档位",
+      "trialEndsAt": "试用截止",
+      "periodEnd": "本期结束",
+      "autoRenew": "自动续费",
+      "autoRenewOn": "开启",
+      "autoRenewOff": "关闭"
     },
     "status": {
-      "unpaid": "待付款",
-      "paying": "收款中",
-      "partial": "部分收款",
-      "paid": "已结清",
-      "overdue": "已逾期",
+      "active": "生效中",
+      "trialing": "试用中",
+      "overdue": "欠费宽限",
+      "suspended": "已暂停",
+      "expired": "已过期",
       "cancelled": "已取消"
     },
-    "notes": {
-      "title": "收款与计费口径",
-      "description": "订阅制从简：以下两条为当前唯一口径。",
-      "paymentTitle": "收款方式",
-      "paymentBody": "线下对公汇款，备注订单号，运营人工核销后账单结清；0 元账单在收款环节自动结清。",
-      "billingTitle": "计费口径",
-      "billingBody": "账单随订阅订单生成；订阅周期自服务开通时刻起算（支持提前续订），不以收款确认时刻为准。"
+    "addonSection": "加油包",
+    "addonNotice": "加油包即将上线。当前可通过升级套餐提升额度。",
+    "addonNoticeMetric": "{metric} 的加油包即将上线。当前可通过升级套餐提升该额度。",
+    "plansSection": "套餐",
+    "noPlans": "该产品暂无公开套餐。",
+    "badges": {
+      "current": "当前",
+      "recommended": "推荐"
     },
-    "invoicing": {
-      "applyAction": "申请发票",
-      "mergeAction": "合并开票",
-      "mergeActionCount": "合并开票（已选 {count} 张）",
-      "writeFailed": "操作失败,请稍后重试",
-      "status": {
-        "applying": "申请中",
-        "approved": "已受理",
-        "issued": "已开具",
-        "sent": "已寄送",
-        "rejected": "已驳回",
-        "voided": "已作废"
-      },
-      "phase": {
-        "none": "未开票",
-        "processing": "开票中",
-        "issued": "已开票"
-      },
-      "type": {
-        "electronic_general": "电子普票",
-        "electronic_special": "电子专票",
-        "paper_special": "纸质专票"
-      },
-      "taxType": {
-        "general": "普票抬头",
-        "special": "专票抬头"
-      },
-      "records": {
-        "title": "发票记录",
-        "description": "对已结清账单开具的发票:直接订阅付款与预付款扣费对账单均可申请,开具后此处下载",
-        "colNo": "申请号",
-        "colBill": "账单号",
-        "colTitle": "抬头 / 类型",
-        "colAmount": "价税合计",
-        "colStatus": "状态",
-        "colDelivery": "文件 / 寄送",
-        "download": "下载发票",
-        "empty": "暂无发票记录,在账单表对已结清账单点「申请发票」"
-      },
-      "addresses": {
-        "title": "开票抬头",
-        "description": "抬头信息在申请时快照进发票,后续修改不影响已提交的申请",
-        "add": "新增抬头",
-        "addTitle": "新增开票抬头",
-        "editTitle": "编辑开票抬头",
-        "formHint": "专票抬头需填写税号与开户信息;首条抬头自动设为默认",
-        "colTitle": "抬头",
-        "colTaxType": "类型",
-        "colTaxNo": "税号",
-        "default": "默认",
-        "edit": "编辑",
-        "setDefault": "设为默认",
-        "delete": "删除",
-        "save": "保存",
-        "rowMenu": "抬头操作",
-        "fieldTitle": "抬头名称",
-        "fieldTaxNo": "税号",
-        "fieldBankName": "开户行",
-        "fieldBankAccount": "开户账号",
-        "fieldPhone": "联系电话",
-        "fieldAddress": "地址(纸质票寄送用)",
-        "empty": "暂无开票抬头,点右上角新增",
-        "deleteVerb": "删除开票抬头",
-        "deleteConsequence": "这条抬头会被删掉，且没有回收站。已开出的发票不受影响，但下次开票要重新录入税号、开户行与地址。"
-      },
-      "apply": {
-        "title": "申请发票",
-        "description": "账单 {billNo} · 价税合计 {amount}。提交后由平台运营审核开具",
-        "address": "开票抬头",
-        "type": "发票类型",
-        "noAddress": "还没有开票抬头,请先创建一条",
-        "createAddress": "去创建抬头",
-        "cancel": "取消",
-        "submit": "提交申请",
-        "blockedLite": "简易企业实名认证不支持开票",
-        "blockedUnverified": "开票前需先完成企业实名认证",
-        "blockedHint": "请到「租户信息 → 企业认证」查看认证方式;法人扫脸认证与提交资料认证上线后即可开票。"
-      },
-      "rowMenu": "账单操作",
-      "applyHintUnpaid": "账单结清后可申请",
-      "applyHintApplied": "已有开票申请",
-      "applyHintZero": "¥0 账单没有可开票的金额",
-      "applyHintNoPermission": "你的角色没有发票管理权限"
+    "cycle": {
+      "day": "天",
+      "week": "周",
+      "month": "月",
+      "year": "年",
+      "perpetual": "一次性"
     },
-    "viewInvoices": "发票与抬头",
-    "invoicesPage": {
-      "title": "发票与抬头",
-      "description": "已开发票记录与开票抬头;申请发票在费用中心的账单行上发起。",
-      "backToBilling": "返回费用中心"
-    }
+    "pricePending": "定价即将公布",
+    "contactToSubscribe": "自助开通即将上线——如需订阅请联系您的客户经理。",
+    "actions": {
+      "switchTo": "切换到此套餐",
+      "processing": "处理中…",
+      "backToSubscription": "返回订阅总览",
+      "subscribe": "订阅",
+      "renew": "续费",
+      "upgrade": "升级",
+      "contactSales": "联系销售",
+      "refresh": "刷新状态"
+    },
+    "upgradeFailed": "套餐变更失败——请重试或联系支持。",
+    "moreSection": "更多",
+    "cycleToggle": {
+      "monthly": "月付",
+      "yearly": "年付"
+    },
+    "confirm": {
+      "title": "确认订单",
+      "who": "订阅归属",
+      "what": "订阅套餐",
+      "whatUpgradeNote": "当前为 {plan}，升级立即生效，剩余周期按天折算。",
+      "noFeatures": "权益明细以对比表为准。",
+      "pickTier": "选择档位：",
+      "tierUnavailable": "链接指定的档位当前不可订购，请在下方选择档位",
+      "renewCurrent": "已是当前套餐：本单为续订，付款后到期日顺延一个周期",
+      "howLong": "订阅周期",
+      "yearlySave": "年付省 {amount}",
+      "startNote": "订阅周期自服务开通时刻起算；上方起止日期按当前时刻估算。",
+      "summary": "订单摘要",
+      "credit": "升级折抵",
+      "creditNote": "原套餐本周期已付 × 剩余时间与剩余用量折算（剩 {days} 天，用量剩 {usage}%），自动抵扣本单。",
+      "leftoverNote": "折抵超出本单价格的 {amount} 将在开通后计入预付款余额。",
+      "total": "应付合计",
+      "autoRenew": "自动续费",
+      "autoRenewTip": "开启后到期前 3 天自动生成续费订单：¥0 档自动续期，付费档需在付款时限内完成付款。关闭则到期后权益停止，可随时手动续费。可在「我的订阅」随时更改。",
+      "submit": "提交订单",
+      "fineOffline": "提交后进入付款页，请在倒计时内完成付款，超时订单自动关闭；优惠券在付款页勾选抵扣。0 元订单同样先生成订单，在付款环节自动结清开通。",
+      "fineEnterprise": "企业档由销售报价，暂不支持自助下单。",
+      "priceOnRequest": "价格面议",
+      "creditPending": "折抵试算中…",
+      "creditFailed": "折抵计算失败，当前按原价显示；提交后以服务端实算为准。",
+      "creditRetry": "重试",
+      "startNoteRenew": "续订周期在当前订阅到期后接续起算，不会缩短剩余时间"
+    },
+    "pending": {
+      "title": "订单待确认",
+      "orderNo": "订单号",
+      "amount": "应付金额",
+      "awaiting": "订单已生成。请按下方信息汇款并在备注填写订单号；财务确认到账后自动开通。",
+      "bankTitle": "线下汇款信息",
+      "accountName": "收款户名",
+      "bankName": "开户行",
+      "accountNo": "账号",
+      "reference": "汇款备注",
+      "referenceHint": "务必填写订单号，便于核销",
+      "configPending": "收款账户信息待配置，请联系客服获取汇款方式。",
+      "cancel": "取消订单",
+      "goPay": "去付款",
+      "cancelling": "取消中…",
+      "countdown": "付款剩余 {time}",
+      "expired": "付款时限已到，正在刷新订单状态…"
+    },
+    "orderCreated": "订单已创建，等待财务确认收款。",
+    "orderFailed": "下单失败，请稍后重试或联系支持。",
+    "cancelOrderFailed": "取消订单失败，请稍后重试。",
+    "myOrdersEmpty": "暂无订单。",
+    "contactSalesSubject": "{product} 企业版咨询"
   },
   "subscriptionHub": {
     "title": "产品订阅",
@@ -2295,764 +2731,12 @@
       "action": "去费用中心支付"
     }
   },
-  "subscribePage": {
-    "title": {
-      "upgrade": "升级套餐",
-      "renew": "续费订阅",
-      "addon": "购买加油包",
-      "subscribe": "订阅套餐"
-    },
-    "hint": {
-      "none": "当前产品尚未订阅——在下方选择套餐即可开通。",
-      "active": "订阅生效中。可在下方对比套餐并变更档位。",
-      "trialing": "当前为试用——转为付费套餐以保留访问。",
-      "renewOff": "自动续费已关闭——套餐将在周期结束时到期，请在下方续费。",
-      "overdue": "费用逾期——请补款以保留权益。",
-      "suspended": "订阅已被暂停，请联系支持恢复。",
-      "expired": "订阅已过期——在下方续订以恢复访问。",
-      "cancelled": "订阅已取消——可在下方重新订阅。"
-    },
-    "loading": "加载中…",
-    "currentSection": "当前订阅",
-    "noSubscription": "当前租户暂无该产品的订阅。",
-    "fields": {
-      "tier": "档位",
-      "trialEndsAt": "试用截止",
-      "periodEnd": "本期结束",
-      "autoRenew": "自动续费",
-      "autoRenewOn": "开启",
-      "autoRenewOff": "关闭"
-    },
-    "status": {
-      "active": "生效中",
-      "trialing": "试用中",
-      "overdue": "欠费宽限",
-      "suspended": "已暂停",
-      "expired": "已过期",
-      "cancelled": "已取消"
-    },
-    "addonSection": "加油包",
-    "addonNotice": "加油包即将上线。当前可通过升级套餐提升额度。",
-    "addonNoticeMetric": "{metric} 的加油包即将上线。当前可通过升级套餐提升该额度。",
-    "plansSection": "套餐",
-    "noPlans": "该产品暂无公开套餐。",
-    "badges": {
-      "current": "当前",
-      "recommended": "推荐"
-    },
-    "cycle": {
-      "day": "天",
-      "week": "周",
-      "month": "月",
-      "year": "年",
-      "perpetual": "一次性"
-    },
-    "pricePending": "定价即将公布",
-    "contactToSubscribe": "自助开通即将上线——如需订阅请联系您的客户经理。",
-    "actions": {
-      "switchTo": "切换到此套餐",
-      "processing": "处理中…",
-      "backToSubscription": "返回订阅总览",
-      "subscribe": "订阅",
-      "renew": "续费",
-      "upgrade": "升级",
-      "contactSales": "联系销售",
-      "refresh": "刷新状态"
-    },
-    "upgradeFailed": "套餐变更失败——请重试或联系支持。",
-    "moreSection": "更多",
-    "cycleToggle": {
-      "monthly": "月付",
-      "yearly": "年付"
-    },
-    "confirm": {
-      "title": "确认订单",
-      "who": "订阅归属",
-      "what": "订阅套餐",
-      "whatUpgradeNote": "当前为 {plan}，升级立即生效，剩余周期按天折算。",
-      "noFeatures": "权益明细以对比表为准。",
-      "pickTier": "选择档位：",
-      "tierUnavailable": "链接指定的档位当前不可订购，请在下方选择档位",
-      "renewCurrent": "已是当前套餐：本单为续订，付款后到期日顺延一个周期",
-      "howLong": "订阅周期",
-      "yearlySave": "年付省 {amount}",
-      "startNote": "订阅周期自服务开通时刻起算；上方起止日期按当前时刻估算。",
-      "summary": "订单摘要",
-      "credit": "升级折抵",
-      "creditNote": "原套餐本周期已付 × 剩余时间与剩余用量折算（剩 {days} 天，用量剩 {usage}%），自动抵扣本单。",
-      "leftoverNote": "折抵超出本单价格的 {amount} 将在开通后计入预付款余额。",
-      "total": "应付合计",
-      "autoRenew": "自动续费",
-      "autoRenewTip": "开启后到期前 3 天自动生成续费订单：¥0 档自动续期，付费档需在付款时限内完成付款。关闭则到期后权益停止，可随时手动续费。可在「我的订阅」随时更改。",
-      "submit": "提交订单",
-      "fineOffline": "提交后进入付款页，请在倒计时内完成付款，超时订单自动关闭；优惠券在付款页勾选抵扣。0 元订单同样先生成订单，在付款环节自动结清开通。",
-      "fineEnterprise": "企业档由销售报价，暂不支持自助下单。",
-      "priceOnRequest": "价格面议",
-      "creditPending": "折抵试算中…",
-      "creditFailed": "折抵计算失败，当前按原价显示；提交后以服务端实算为准。",
-      "creditRetry": "重试",
-      "startNoteRenew": "续订周期在当前订阅到期后接续起算，不会缩短剩余时间"
-    },
-    "pending": {
-      "title": "订单待确认",
-      "orderNo": "订单号",
-      "amount": "应付金额",
-      "awaiting": "订单已生成。请按下方信息汇款并在备注填写订单号；财务确认到账后自动开通。",
-      "bankTitle": "线下汇款信息",
-      "accountName": "收款户名",
-      "bankName": "开户行",
-      "accountNo": "账号",
-      "reference": "汇款备注",
-      "referenceHint": "务必填写订单号，便于核销",
-      "configPending": "收款账户信息待配置，请联系客服获取汇款方式。",
-      "cancel": "取消订单",
-      "goPay": "去付款",
-      "cancelling": "取消中…",
-      "countdown": "付款剩余 {time}",
-      "expired": "付款时限已到，正在刷新订单状态…"
-    },
-    "orderCreated": "订单已创建，等待财务确认收款。",
-    "orderFailed": "下单失败，请稍后重试或联系支持。",
-    "cancelOrderFailed": "取消订单失败，请稍后重试。",
-    "myOrdersEmpty": "暂无订单。",
-    "contactSalesSubject": "{product} 企业版咨询"
-  },
-  "manageSubscription": {
-    "title": "管理订阅",
-    "description": "对当前生效的订阅执行暂停、恢复或退订。变更即时生效。",
-    "confirm": "确认执行",
-    "cancel": "取消",
-    "actionPause": "暂停订阅",
-    "actionResume": "恢复订阅",
-    "actionCancel": "退订",
-    "actionPauseHint": "暂停后停止计费与服务，可随时恢复。",
-    "actionResumeHint": "恢复后重新开始计费并继续提供服务。",
-    "actionCancelHint": "退订后订阅终止且不可恢复，需重新下单。",
-    "reasonLabel": "原因（可选）",
-    "upgradeHint": "升级 / 变更套餐请前往订阅页选择新套餐，不在此处操作。",
-    "goUpgrade": "变更套餐",
-    "successPause": "订阅已暂停。",
-    "successResume": "订阅已恢复。",
-    "successCancel": "订阅已退订。",
-    "error": "操作失败，请稍后重试。"
-  },
-  "planned": {
-    "badge": "规划中",
-    "sectionEmpty": "该功能仍在规划中，暂无可展示的数据。",
-    "controlNotice": "这一节的控件尚未接通后端，当前为规划中状态；显示的开关不会生效。",
-    "pageNotice": "这一页尚未接通后端，当前为规划中状态。"
-  },
-  "quotasPage": {
-    "title": "配额管理",
-    "description": "工作空间的存储与 AI Credits:额度构成、当前用量与剩余一目了然",
-    "metrics": {
-      "groupLabel": "配额概览",
-      "storage": "存储空间",
-      "storageHint": "总额度 {limit} · 剩余 {remaining}",
-      "creditRemaining": "AI Credits 余额",
-      "creditRemainingHint": "总额度 {limit}",
-      "creditUsed": "本期已消耗",
-      "creditUsedHint": "AI Credits · 随订阅周期重置",
-      "credits": "AI Credits",
-      "addons": "生效中的加油包",
-      "addonsExpiry": "最早到期 {date}",
-      "addonsNone": "暂无生效加油包,可在下方购买"
-    },
-    "source": {
-      "ws_base": "基础授予",
-      "subscription": "订阅权益",
-      "addon_purchase": "加油包",
-      "manual_override": "运营授予"
-    },
-    "reset": {
-      "none": "不重置",
-      "day": "按日重置",
-      "month": "按月重置"
-    },
-    "storage": {
-      "title": "存储空间",
-      "description": "工作空间级共享资源:每行一个额度来源或用量主体,同产品的贡献与用量并读",
-      "colLimit": "额度",
-      "colExpires": "有效期至",
-      "noExpiry": "长期有效",
-      "colUsed": "已用",
-      "colShare": "占总额度",
-      "colObserved": "上报时间",
-      "totalLine": "合计额度 {limit} · {remaining}",
-      "emptySources": "暂无存储额度来源",
-      "colItem": "项目",
-      "usageOnly": "产品用量"
-    },
-    "credits": {
-      "title": "AI Credits",
-      "description": "各产品订阅权益累加,自留先用、共享兜底;全部用完可通过加油包补充",
-      "colSource": "来源",
-      "colLimit": "额度",
-      "colUsed": "本期已用",
-      "colRemaining": "剩余",
-      "colReset": "重置周期",
-      "colExpires": "有效期至",
-      "empty": "暂无 AI Credits 额度,订阅产品后自动获得",
-      "sharingTitle": "跨产品共享",
-      "sharingOn": "已默认开启:{products} 参与共享——单个产品用完后可使用其他产品的剩余额度,消耗均按产品归因记录",
-      "sharingOff": "当前无产品参与共享,各产品额度独立使用",
-      "boosterTitle": "AI Credits 加油包",
-      "boosterBody": "订阅额度全部用完后,可购买加油包补充;加油包在订阅额度之后消耗,有效期更长"
-    },
-    "products": {
-      "title": "各产品配额明细",
-      "description": "按产品独立统计:产品自身服务配额与平台资源贡献",
-      "colProduct": "产品",
-      "colMetric": "指标",
-      "colLimit": "额度",
-      "colUsed": "本期已用",
-      "colRemaining": "剩余",
-      "wsShared": "全工作空间共用",
-      "empty": "暂无产品配额,订阅产品后自动生成",
-      "colReset": "重置周期"
-    },
-    "addons": {
-      "title": "加油包与扩展包",
-      "description": "存储扩展包与 AI 加油包:选卡下单,走完整订单流程——付款申报、运营核销后额度自动入池生效",
-      "colPack": "包",
-      "colContent": "内容",
-      "colValidity": "有效期",
-      "validityDays": "{days} 天",
-      "colPrice": "价格",
-      "buy": "购买",
-      "pendingExists": "已有待支付单",
-      "buyFailed": "下单失败,请稍后重试",
-      "colOrder": "订单",
-      "colStatus": "状态",
-      "colNote": "说明",
-      "statusPending": "待支付",
-      "statusDeclared": "已申报",
-      "statusCompleted": "已开通",
-      "statusCancelled": "已取消",
-      "validUntil": "有效期至 {date}",
-      "payBefore": "请在 {date} 前完成转账申报",
-      "awaitingConfirm": "等待运营确认收款",
-      "declare": "申报转账",
-      "cancel": "取消订单",
-      "cancelFailed": "取消失败,请稍后重试",
-      "ordersEmpty": "暂无加油包订单",
-      "packsEmpty": "暂无可购买的加油包",
-      "declareTitle": "对公转账申报",
-      "declareDescription": "{pack} · 应付 {price}。请按以下账户完成转账,并填写申报信息",
-      "bankAccountName": "户名",
-      "bankName": "开户行",
-      "bankAccountNo": "账号",
-      "bankReference": "转账附言(必填)",
-      "bankUnavailable": "收款账户信息暂未配置,请联系平台运营获取转账信息",
-      "payerName": "付款方名称",
-      "payerNamePlaceholder": "转出账户的户名(便于对账)",
-      "transactionNo": "转账流水号",
-      "transactionNoPlaceholder": "银行回单流水号(选填)",
-      "declareLater": "稍后申报",
-      "declareSubmit": "已完成转账,提交申报",
-      "declareFailed": "申报失败,请稍后重试",
-      "kindStorage": "存储",
-      "kindCredits": "AI Credits",
-      "oneOffNote": "一次性买断",
-      "continuePay": "去支付",
-      "orderDetail": "订单详情",
-      "orderMenu": "订单操作",
-      "cancelHint": "仅待支付订单可取消",
-      "buyNoPermission": "你的角色没有付款权限,购买加油包请联系租户所有者",
-      "loadFailed": "加油包目录与订单读取失败，请重试"
-    },
-    "gotoAddons": "去加购",
-    "remainBy": "剩余 {amount}",
-    "overBy": "已超出 {amount}",
-    "filters": {
-      "groupLabel": "产品配额筛选",
-      "listOnly": "产品配额只有列表视图",
-      "count": "共 {count} 条",
-      "searchPlaceholder": "搜索产品名、产品代码或指标",
-      "searchAriaLabel": "搜索产品配额",
-      "reset": "复位"
-    }
-  },
-  "usagePage": {
-    "title": "用量分析",
-    "description": "工作空间的 AI Credits 用量:趋势、产品构成与成员分布一眼看完",
-    "metrics": {
-      "groupLabel": "用量概览",
-      "last7": "近 7 天消耗",
-      "last30": "近 30 天消耗",
-      "thisYear": "本年累计",
-      "creditsUnit": "AI Credits"
-    },
-    "trend": {
-      "title": "用量趋势",
-      "description": "按周期查看 AI Credits 消耗;桶按 UTC 日切分,窗口内没有用量的周期记 0。统计口径为纯看板数据,不作计费依据",
-      "windowLabel": "统计周期",
-      "windowDay": "近 30 天",
-      "windowWeek": "近 12 周",
-      "windowMonth": "近 12 月",
-      "windowYear": "按年",
-      "empty": "所选周期内暂无用量数据",
-      "windowHour": "按小时(24h)",
-      "descriptionHour": "近 24 小时逐时消耗;横轴已换算为你的本地时刻。统计口径为纯看板数据,不作计费依据",
-      "statTotal": "窗口合计",
-      "statPeak": "峰值",
-      "statDelta": "最近环比"
-    },
-    "share": {
-      "title": "按产品分布",
-      "description": "当前窗口内各产品的用量构成;占比按窗口合计计算",
-      "empty": "暂无产品消耗数据"
-    },
-    "members": {
-      "title": "按成员统计",
-      "description": "近 30 天各成员的用量构成;产品未上报使用者的部分归入未归集",
-      "empty": "近 30 天暂无成员用量"
-    },
-    "chartPeak": "峰值",
-    "filters": {},
-    "notes": {
-      "title": "统计口径",
-      "description": "这页的数是怎么来的",
-      "scopeTitle": "看板不是账单",
-      "scopeBody": "本页统一按 AI Credits 口径统计,数字来自按周期降采样的看板数据;实际计费以订单与账单为准,两者可能因统计延迟略有出入。要看别的指标或逐条核对,去调用记录",
-      "bucketTitle": "时间怎么切",
-      "bucketBody": "趋势按 UTC 切桶,窗口内每个周期都有一桶(无调用补零);逐时档换算成你所在时区显示,日/周档保持 UTC 日期以对齐后台的桶",
-      "attributionTitle": "「未归集」是什么",
-      "attributionBody": "产品在调用时没有带上使用者身份,这部分用量归到未归集桶;它照常计入总量,只是分不到具体的人",
-      "recordsTitle": "要逐条核对",
-      "recordsBody": "调用记录页有完整筛选(时间窗、产品、指标、成员、请求号)与筛选后合计,可以把明细加总后与配额页的本期已用、与账单逐项对上"
-    },
-    "viewRecords": "查看调用记录",
-    "unattributed": "未归集"
-  },
-  "usageRecordsPage": {
-    "title": "调用记录",
-    "description": "任务级明细:每次调用一行,可按时间、产品、指标、成员、请求号精确查询",
-    "backToUsage": "返回用量分析",
-    "metrics": {
-      "groupLabel": "筛选结果",
-      "count": "命中条数",
-      "countHint": "当前筛选条件下的全部记录",
-      "amount": "实扣量合计",
-      "amountHint": "同一筛选下的实扣量总和,不随翻页变化"
-    },
-    "table": {
-      "title": "明细",
-      "description": "时间倒序;数量列上方为实扣量,下方标出未能全额扣到的申请量",
-      "colAt": "时间",
-      "colProduct": "产品",
-      "colMetric": "指标",
-      "colAmount": "数量",
-      "colUser": "用户",
-      "colRequest": "请求号",
-      "requestedWas": "申请 {amount}",
-      "unattributed": "未归集",
-      "empty": "没有符合条件的调用记录",
-      "emptyHint": "换个时间窗或放宽筛选条件再试"
-    },
-    "filters": {
-      "groupLabel": "调用记录筛选",
-      "listOnly": "调用记录只有列表视图",
-      "count": "共 {count} 条",
-      "requestPlaceholder": "按请求号精确查找",
-      "requestAriaLabel": "按请求号查找",
-      "fromAriaLabel": "起始日期",
-      "toAriaLabel": "结束日期",
-      "productAriaLabel": "按产品筛选",
-      "productAll": "全部产品",
-      "metricAriaLabel": "按指标筛选",
-      "metricAll": "全部指标",
-      "userAriaLabel": "按成员筛选",
-      "userAll": "全部成员",
-      "reset": "复位"
-    },
-    "notes": {
-      "title": "怎么用这页对账",
-      "description": "把明细查准、加总、与配额和账单对上",
-      "reconcileTitle": "合计怎么读",
-      "reconcileBody": "上方两个数是当前筛选条件下的全部记录,不随翻页变化;把时间窗调成与计费周期一致,就能与配额页的本期已用、与账单逐项对照",
-      "shortfallTitle": "申请量与实扣量",
-      "shortfallBody": "数量列下方出现「申请 N」说明这次调用没能全额扣到——余额不足时按可用额度扣,不足的部分不计入;两个数相等时不显示",
-      "rangeTitle": "可查范围",
-      "rangeBody": "最远可回看 {days} 天;更早的记录已随分区归档,不在查询范围内"
-    }
-  },
-  "addonPay": {
-    "title": "加油包订单支付",
-    "description": "订单 {orderNo}",
-    "notFound": "订单不存在或不属于当前租户",
-    "backToQuotas": "返回配额管理",
-    "status": {
-      "pending": "待支付",
-      "declared": "已申报待确认",
-      "completed": "已开通",
-      "cancelled": "已取消"
-    },
-    "summary": {
-      "title": "订单摘要",
-      "description": "加油包内容与应付金额;运营确认收款后自动入池",
-      "pack": "加油包",
-      "content": "内容",
-      "validity": "有效期",
-      "validUntil": "至 {date}",
-      "validityDaysFromActivation": "自开通之日起 {days} 天",
-      "amountDue": "应付金额",
-      "billNo": "账单号",
-      "createdAt": "下单时间"
-    },
-    "pay": {
-      "title": "线下支付与申报",
-      "description": "完成转账后提交申报,运营核销即生效",
-      "deadline": "请在 {remain} 内完成支付申报,逾期订单自动取消",
-      "channelLabel": "支付渠道",
-      "referenceNote": "请在转账附言中注明订单号 {orderNo},以便对账"
-    },
-    "channels": {
-      "alipay": "支付宝",
-      "bank_transfer": "对公转账",
-      "wechat": "微信支付",
-      "comingSoon": "即将开放",
-      "alipayQrAlt": "支付宝收款二维码"
-    },
-    "bank": {
-      "accountName": "户名",
-      "bankName": "开户行",
-      "accountNo": "账号",
-      "reference": "转账附言(必填)",
-      "unavailable": "对公收款账户暂未配置,请联系平台运营"
-    },
-    "declare": {
-      "payerName": "付款方名称",
-      "payerNamePlaceholder": "转出账户户名(便于对账)",
-      "transactionNo": "转账流水号",
-      "transactionNoPlaceholder": "银行回单流水号(选填)",
-      "submit": "已完成转账,提交申报"
-    },
-    "declared": {
-      "note": "申报已提交,等待运营确认收款;确认后额度自动入池,本页会自动刷新"
-    },
-    "completed": {
-      "note": "已开通!额度已入池,有效期至 {date};可回配额管理页查看"
-    },
-    "cancelled": {
-      "note": "订单已取消;如需购买请回配额管理页重新下单"
-    },
-    "cancelOrder": "取消订单",
-    "declareFailed": "申报失败,请稍后重试",
-    "cancelFailed": "取消失败,请稍后重试",
-    "declareDialog": {
-      "title": "确认付款申报",
-      "description": "支付方式：{channel} · 金额：{amount}。提交后订单进入待确认，运营核销后额度自动入池。",
-      "confirm": "提交申报",
-      "cancel": "再想想"
-    },
-    "cancelConfirm": {
-      "verb": "取消订单",
-      "consequence": "取消后订单关闭；如需购买请回配额管理页重新下单。"
-    },
-    "expiredNotice": "付款时限已到，正在刷新订单状态…"
-  },
-  "vouchersPage": {
-    "title": "我的卡券",
-    "description": "持有的卡券一目了然:可用的去支付页直接抵扣,用掉的能查到去向",
-    "metrics": {
-      "groupLabel": "卡券概览",
-      "available": "可用卡券",
-      "expiringSoon": "{count} 张将于 7 天内到期",
-      "noExpiring": "近期无到期",
-      "used": "已使用",
-      "usedHint": "累计核销",
-      "total": "全部卡券",
-      "totalHint": "含已用/已过期/已撤销"
-    },
-    "kind": {
-      "discount": "折扣券",
-      "credit_voucher": "抵扣金券",
-      "recharge_card": "充值卡",
-      "redemption": "兑换码",
-      "extension": "延期券"
-    },
-    "status": {
-      "available": "可用",
-      "reserved": "使用中",
-      "redeemed": "已使用",
-      "expired": "已过期",
-      "revoked": "已撤销"
-    },
-    "face": {
-      "percentOff": "减 {percent}%",
-      "maxOff": "(封顶 {amount})",
-      "fixedOff": "立减 {amount}"
-    },
-    "table": {
-      "title": "卡券列表",
-      "description": "「使用中」= 已挂在待支付订单上锁定,取消该订单会自动释放;挂在哪张单直接显示在状态下方",
-      "colCode": "券码",
-      "colKind": "类型",
-      "colFace": "面值",
-      "colStatus": "状态 / 挂单",
-      "colExpires": "有效期至",
-      "colUsedAt": "使用时间 / 核销号",
-      "empty": "暂无卡券",
-      "usesLeft": "剩 {left} / 共 {total} 次",
-      "emptyHint": "平台活动发放的卡券会出现在这里"
-    },
-    "notes": {
-      "title": "使用说明",
-      "description": "卡券如何参与结算",
-      "useTitle": "在哪使用",
-      "useBody": "订单支付页结算时选择:折扣券作用于订单价格,抵扣金券抵减应付金额;两类可各选一张叠加",
-      "sourceTitle": "卡券来源",
-      "sourceBody": "由平台运营活动发放(定向到租户、工作空间或个人);有效期以本页展示为准",
-      "holdTitle": "挂单与释放",
-      "holdBody": "下单时选中的券会被锁定为「使用中」并显示挂单号;订单取消或超时关闭后自动释放回可用,支付完成才真正核销"
-    },
-    "filters": {
-      "groupLabel": "卡券筛选",
-      "listOnly": "卡券只有列表视图",
-      "count": "共 {count} 条",
-      "searchPlaceholder": "搜索券码、批次名或挂单号",
-      "searchAriaLabel": "搜索卡券",
-      "statusAriaLabel": "按状态筛选",
-      "statusAll": "全部状态",
-      "reset": "复位"
-    },
-    "actions": {
-      "menuLabel": "卡券操作",
-      "copy": "复制券码",
-      "copied": "已复制",
-      "viewOrder": "查看挂单",
-      "viewOrderHint": "这张券还没有挂在任何订单上",
-      "use": "去结算使用",
-      "useHint": "只有可用状态的券能参与结算"
-    }
-  },
-  "auditPage": {
-    "title": "审计日志",
-    "description": "谁在什么时候做了什么:成员管理、订阅与订单、发票与抬头等关键动作的操作轨迹",
-    "actorType": {
-      "operator": "平台运营",
-      "system": "系统"
-    },
-    "result": {
-      "success": "成功",
-      "failure": "失败",
-      "denied": "已拒绝"
-    },
-    "action": {
-      "account_deletion_cancel": "撤销注销申请",
-      "account_deletion_request": "申请注销账号",
-      "account_email_change": "更换邮箱",
-      "account_identity_unbind": "解绑三方登录",
-      "account_login_method_update": "变更登录方式",
-      "account_password_change": "修改密码",
-      "account_password_set_initial": "设置初始密码",
-      "account_phone_change": "更换手机号",
-      "account_session_revoke": "吊销登录会话",
-      "addon_order_cancel": "取消加油包订单",
-      "addon_order_create": "购买加油包",
-      "addon_order_payment_declare": "加油包转账申报",
-      "billing_address_create": "新增开票抬头",
-      "billing_address_delete": "删除开票抬头",
-      "billing_address_update": "编辑开票抬头",
-      "billing_invoice_apply": "申请发票",
-      "order_refund_request": "申请退款",
-      "subscription_auto_renew_off": "到期不续",
-      "subscription_auto_renew_on": "恢复自动续费",
-      "subscription_cancel": "退订",
-      "subscription_pause": "暂停订阅",
-      "subscription_resume": "恢复订阅",
-      "tenant_close": "注销租户",
-      "tenant_invitation_resend": "重发邀请",
-      "tenant_invitation_revoke": "撤销邀请",
-      "tenant_member_add": "添加成员",
-      "tenant_member_disable": "停用成员",
-      "tenant_member_enable": "启用成员",
-      "tenant_member_invite": "邀请成员",
-      "tenant_member_remove": "移除成员",
-      "tenant_member_reset_password": "重置成员密码",
-      "tenant_member_update": "变更成员",
-      "tenant_owner_transfer": "转让所有权",
-      "tenant_role_create": "新建角色",
-      "tenant_role_delete": "删除角色",
-      "tenant_role_update": "修改角色",
-      "tenant_verification_submit": "提交企业认证"
-    },
-    "table": {
-      "title": "操作记录",
-      "description": "近 90 天的操作记录,时间倒序。",
-      "filterLabel": "结果筛选",
-      "filterAll": "全部",
-      "filterSuccess": "成功",
-      "filterFailure": "失败",
-      "colAt": "时间",
-      "colActor": "操作人",
-      "colAction": "动作",
-      "colResource": "对象",
-      "colResult": "结果",
-      "colIp": "来源 IP",
-      "empty": "暂无操作记录;本页上线后的关键动作会陆续出现在这里",
-      "filterActionLabel": "按操作类型筛选",
-      "filterActionAll": "全部操作",
-      "total": "共 {count} 条",
-      "prev": "上一页",
-      "next": "下一页",
-      "pageOf": "第 {page} / {pageCount} 页"
-    },
-    "notes": {
-      "title": "口径说明",
-      "description": "记录范围与留存",
-      "scopeTitle": "记录范围",
-      "scopeBody": "覆盖 console 内的关键写操作(成员/订阅/订单/发票等);平台运营对本租户的操作与产品内业务操作不在本页范围",
-      "retainTitle": "留存与不可篡改",
-      "retainBody": "审计流水只增不改(append-only);本页展示近 90 天,更早记录由平台按合规策略留存"
-    }
-  },
-  "invitationsPage": {
-    "title": "邀请记录",
-    "description": "发出的成员邀请与状态;发起新邀请在成员管理页完成",
-    "backToMembers": "返回成员管理",
-    "rowMenu": "邀请操作",
-    "revoke": "撤销邀请",
-    "revokeHint": "仅待接受的邀请可撤销",
-    "revokeFailed": "撤销失败,请稍后重试",
-    "resend": "重发邀请",
-    "resendHint": "已撤销或已接受的邀请不能重发",
-    "status": {
-      "pending": "待接受",
-      "accepted": "已接受",
-      "expired": "已过期",
-      "revoked": "已撤销"
-    },
-    "table": {
-      "title": "邀请记录",
-      "description": "「已过期」按到期时间派生;撤销后原链接立即失效",
-      "colEmail": "受邀邮箱",
-      "invitedBy": "邀请人:{name}",
-      "colRole": "角色",
-      "colStatus": "状态",
-      "colCreatedAt": "发出时间",
-      "colExpiresAt": "有效期至",
-      "acceptedAt": "{date} 接受",
-      "empty": "暂无邀请记录,去成员管理页发出第一封邀请"
-    },
-    "notes": {
-      "title": "邀请说明",
-      "description": "流程与时效",
-      "flowTitle": "邀请流程",
-      "flowBody": "在成员管理页按邮箱+角色发出邀请,对方会收到一封带链接的邮件;用受邀邮箱对应的账号登录并接受后,自动成为租户与默认工作空间成员",
-      "expiryTitle": "时效",
-      "expiryBody": "邀请 7 天内有效,到期自动失效;撤销立即失效。同一邮箱在失效后可重新邀请",
-      "resendTitle": "重发",
-      "resendBody": "重发会生成新链接并使旧链接立即失效,有效期重新按 7 天计;邮件未能发出时可在对话框里复制链接手动转交"
-    },
-    "revokeVerb": "撤销给",
-    "revokeConsequence": "邀请链接立刻失效，对方再打开会看到「邀请不存在」。撤销不可撤回——要让对方重新加入，需要再发一次邀请。",
-    "revokeKeep": "保留邀请",
-    "resendFailed": "重发失败,请稍后重试",
-    "resent": "已重发给 {email}。",
-    "resentNoEmail": "已生成新链接,但邮件未能发出,请把链接手动发给 {email}。",
-    "revoked": "已撤销给 {email} 的邀请。",
-    "expiringSoon": "24 小时内到期",
-    "errors": {
-      "owner_protected": "所有者不可停用或解除关联,请先转让所有权。",
-      "self_protected": "不能对自己执行此操作。",
-      "owner_role_locked": "所有者的角色只能通过「转让所有权」变更。",
-      "account_not_found": "该邮箱没有对应的 Vxture 账号,请改用邀请。",
-      "already_member": "该账号已是本租户成员。",
-      "invitation_pending": "该邮箱已有待接受的邀请。",
-      "invalid_email": "邮箱格式不正确。"
-    }
-  },
-  "todosPage": {
-    "kind": {
-      "payment": "待支付",
-      "renewal": "续订",
-      "quota": "配额",
-      "invitation": "邀请",
-      "addon": "加油包"
-    },
-    "items": {
-      "payTitle": "支付「{product}」的订阅订单",
-      "payDetail": "请在 {date} 前完成支付申报,逾期自动取消",
-      "payDetailNoTtl": "订单等待支付",
-      "payAction": "去支付",
-      "renewTitle": "「{product}」即将到期",
-      "renewDetail": "剩余 {days} 天,续订后服务无缝衔接",
-      "renewAction": "去续订",
-      "storageTitle": "存储空间余量不足 10%",
-      "storageDetail": "可购买存储扩展包,或清理产品内数据",
-      "creditsTitle": "AI Credits 本期已用尽",
-      "creditsDetail": "可购买 AI 加油包,或等待周期重置",
-      "quotaAction": "去配额管理",
-      "invitesTitle": "{count} 封成员邀请待接受",
-      "invitesDetail": "临期未接受的邀请可撤销后重新发出",
-      "invitesAction": "去邀请管理",
-      "addonTitle": "支付加油包「{pack}」的订单",
-      "addonDetail": "请在 {date} 前完成转账申报,逾期自动取消",
-      "addonAction": "去申报"
-    },
-    "loadFailed": "部分待办来源读取失败，列表可能不完整"
-  },
-  "destructive": {
-    "titleTemplate": "{verb}{target}？",
-    "cancel": "取消",
-    "pending": "处理中…",
-    "blocked": "前置条件未满足，先处理上面标红的那几条。"
-  },
-  "loadState": {
-    "title": "数据读取失败",
-    "description": "当前页面上的数字与列表不是真实数据，请重试；若持续失败请稍后再来。",
-    "retry": "重试",
-    "empty": "读取失败，暂时无法显示"
-  },
-  "inviteLinkDialog": {
-    "title": "邀请已发出",
-    "titleResent": "邀请已重发",
-    "sent": "邮件已发送至 {email};链接也可以直接转给对方。",
-    "notSent": "邮件未能发出,请把下面的链接手动发给 {email}。",
-    "notSentTitle": "邮件未能发出",
-    "linkLabel": "邀请链接",
-    "expires": "有效期至 {date};重发会生成新链接并使这条失效。",
-    "copy": "复制链接",
-    "copied": "已复制",
-    "copyFailed": "复制失败,请手动选中链接复制。",
-    "close": "关闭"
-  },
-  "acceptInvitationPage": {
-    "title": "接受邀请",
-    "description": "确认后你将加入该租户,并可在控制台切换过去。",
-    "cardTitle": "邀请详情",
-    "missingToken": "链接不完整,缺少邀请令牌;请从邮件里重新打开。",
-    "fields": {
-      "tenant": "租户",
-      "inviter": "邀请人",
-      "role": "角色",
-      "email": "受邀邮箱",
-      "expires": "有效期至"
-    },
-    "actions": {
-      "accept": "接受并加入",
-      "later": "稍后再说",
-      "enter": "进入工作台",
-      "switchAccount": "退出并用受邀邮箱登录"
-    },
-    "reasons": {
-      "not_found": "邀请不存在:链接可能已被撤销,或者复制不完整。",
-      "expired": "邀请已过期,请联系邀请人重新发送。",
-      "revoked": "这封邀请已被撤销。",
-      "already_accepted": "这封邀请已经被接受过了;如果是你,直接切换到该租户即可。",
-      "email_mismatch": "当前登录账号的邮箱({email})与受邀邮箱不一致,请换用受邀邮箱对应的账号登录。"
-    },
-    "mismatchTitle": "登录账号与受邀邮箱不一致",
-    "mismatchHint": "你当前登录的是 {current},这封邀请发给 {invited}。",
-    "accepted": "已加入「{tenant}」",
-    "acceptedDescription": "已为你切换到该租户。",
-    "switchFailed": "已加入,但切换租户失败;可在顶部租户切换器手动切换。",
-    "acceptError": "接受失败,请稍后重试。"
-  },
-  "principalNo": {
-    "label": "ID:"
+  "table": {
+    "rowActions": "操作",
+    "expand": "展开",
+    "selectAll": "全选本页",
+    "deselectAll": "取消本页全选",
+    "selectRow": "选择本行"
   },
   "tenantInfoPage": {
     "header": {
@@ -3344,32 +3028,366 @@
       "error": "注销失败,请稍后重试。"
     }
   },
-  "table": {
-    "rowActions": "操作",
-    "expand": "展开",
-    "selectAll": "全选本页",
-    "deselectAll": "取消本页全选",
-    "selectRow": "选择本行"
+  "todosPage": {
+    "kind": {
+      "payment": "待支付",
+      "renewal": "续订",
+      "quota": "配额",
+      "invitation": "邀请",
+      "addon": "加油包"
+    },
+    "items": {
+      "payTitle": "支付「{product}」的订阅订单",
+      "payDetail": "请在 {date} 前完成支付申报,逾期自动取消",
+      "payDetailNoTtl": "订单等待支付",
+      "payAction": "去支付",
+      "renewTitle": "「{product}」即将到期",
+      "renewDetail": "剩余 {days} 天,续订后服务无缝衔接",
+      "renewAction": "去续订",
+      "storageTitle": "存储空间余量不足 10%",
+      "storageDetail": "可购买存储扩展包,或清理产品内数据",
+      "creditsTitle": "AI Credits 本期已用尽",
+      "creditsDetail": "可购买 AI 加油包,或等待周期重置",
+      "quotaAction": "去配额管理",
+      "invitesTitle": "{count} 封成员邀请待接受",
+      "invitesDetail": "临期未接受的邀请可撤销后重新发出",
+      "invitesAction": "去邀请管理",
+      "addonTitle": "支付加油包「{pack}」的订单",
+      "addonDetail": "请在 {date} 前完成转账申报,逾期自动取消",
+      "addonAction": "去申报"
+    },
+    "loadFailed": "部分待办来源读取失败，列表可能不完整"
   },
-  "role": {
-    "owner": "所有者",
-    "manager": "管理员",
-    "member": "成员",
-    "readonly": "只读成员",
-    "guest": "访客"
+  "usagePage": {
+    "title": "用量分析",
+    "description": "工作空间的 AI Credits 用量:趋势、产品构成与成员分布一眼看完",
+    "metrics": {
+      "groupLabel": "用量概览",
+      "last7": "近 7 天消耗",
+      "last30": "近 30 天消耗",
+      "thisYear": "本年累计",
+      "creditsUnit": "AI Credits"
+    },
+    "trend": {
+      "title": "用量趋势",
+      "description": "按周期查看 AI Credits 消耗;桶按 UTC 日切分,窗口内没有用量的周期记 0。统计口径为纯看板数据,不作计费依据",
+      "windowLabel": "统计周期",
+      "windowDay": "近 30 天",
+      "windowWeek": "近 12 周",
+      "windowMonth": "近 12 月",
+      "windowYear": "按年",
+      "empty": "所选周期内暂无用量数据",
+      "windowHour": "按小时(24h)",
+      "descriptionHour": "近 24 小时逐时消耗;横轴已换算为你的本地时刻。统计口径为纯看板数据,不作计费依据",
+      "statTotal": "窗口合计",
+      "statPeak": "峰值",
+      "statDelta": "最近环比"
+    },
+    "share": {
+      "title": "按产品分布",
+      "description": "当前窗口内各产品的用量构成;占比按窗口合计计算",
+      "empty": "暂无产品消耗数据"
+    },
+    "members": {
+      "title": "按成员统计",
+      "description": "近 30 天各成员的用量构成;产品未上报使用者的部分归入未归集",
+      "empty": "近 30 天暂无成员用量"
+    },
+    "chartPeak": "峰值",
+    "filters": {},
+    "notes": {
+      "title": "统计口径",
+      "description": "这页的数是怎么来的",
+      "scopeTitle": "看板不是账单",
+      "scopeBody": "本页统一按 AI Credits 口径统计,数字来自按周期降采样的看板数据;实际计费以订单与账单为准,两者可能因统计延迟略有出入。要看别的指标或逐条核对,去调用记录",
+      "bucketTitle": "时间怎么切",
+      "bucketBody": "趋势按 UTC 切桶,窗口内每个周期都有一桶(无调用补零);逐时档换算成你所在时区显示,日/周档保持 UTC 日期以对齐后台的桶",
+      "attributionTitle": "「未归集」是什么",
+      "attributionBody": "产品在调用时没有带上使用者身份,这部分用量归到未归集桶;它照常计入总量,只是分不到具体的人",
+      "recordsTitle": "要逐条核对",
+      "recordsBody": "调用记录页有完整筛选(时间窗、产品、指标、成员、请求号)与筛选后合计,可以把明细加总后与配额页的本期已用、与账单逐项对上"
+    },
+    "viewRecords": "查看调用记录",
+    "unattributed": "未归集"
   },
-  "metric": {
-    "storage": "存储空间",
-    "aiCredit": "AI Credits",
-    "apiCall": "API 调用",
-    "qualityCheck": "质量检查"
+  "usageRecordsPage": {
+    "title": "调用记录",
+    "description": "任务级明细:每次调用一行,可按时间、产品、指标、成员、请求号精确查询",
+    "backToUsage": "返回用量分析",
+    "metrics": {
+      "groupLabel": "筛选结果",
+      "count": "命中条数",
+      "countHint": "当前筛选条件下的全部记录",
+      "amount": "实扣量合计",
+      "amountHint": "同一筛选下的实扣量总和,不随翻页变化"
+    },
+    "table": {
+      "title": "明细",
+      "description": "时间倒序;数量列上方为实扣量,下方标出未能全额扣到的申请量",
+      "colAt": "时间",
+      "colProduct": "产品",
+      "colMetric": "指标",
+      "colAmount": "数量",
+      "colUser": "用户",
+      "colRequest": "请求号",
+      "requestedWas": "申请 {amount}",
+      "unattributed": "未归集",
+      "empty": "没有符合条件的调用记录",
+      "emptyHint": "换个时间窗或放宽筛选条件再试"
+    },
+    "filters": {
+      "groupLabel": "调用记录筛选",
+      "listOnly": "调用记录只有列表视图",
+      "count": "共 {count} 条",
+      "requestPlaceholder": "按请求号精确查找",
+      "requestAriaLabel": "按请求号查找",
+      "fromAriaLabel": "起始日期",
+      "toAriaLabel": "结束日期",
+      "productAriaLabel": "按产品筛选",
+      "productAll": "全部产品",
+      "metricAriaLabel": "按指标筛选",
+      "metricAll": "全部指标",
+      "userAriaLabel": "按成员筛选",
+      "userAll": "全部成员",
+      "reset": "复位"
+    },
+    "notes": {
+      "title": "怎么用这页对账",
+      "description": "把明细查准、加总、与配额和账单对上",
+      "reconcileTitle": "合计怎么读",
+      "reconcileBody": "上方两个数是当前筛选条件下的全部记录,不随翻页变化;把时间窗调成与计费周期一致,就能与配额页的本期已用、与账单逐项对照",
+      "shortfallTitle": "申请量与实扣量",
+      "shortfallBody": "数量列下方出现「申请 N」说明这次调用没能全额扣到——余额不足时按可用额度扣,不足的部分不计入;两个数相等时不显示",
+      "rangeTitle": "可查范围",
+      "rangeBody": "最远可回看 {days} 天;更早的记录已随分区归档,不在查询范围内"
+    }
   },
-  "pagination": {
-    "total": "共 {total} 条",
-    "totalFiltered": "共 {total} 条,当前筛选 {filtered} 条",
-    "previous": "上一页",
-    "next": "下一页",
-    "pageSizeLabel": "每页条数",
-    "pageSizeOption": "每页 {size} 条"
+  "verificationPage": {
+    "personal": {
+      "eyebrow": "个人信息",
+      "title": "实名认证",
+      "description": "完成个人实名认证后，将关联到你的个人租户。"
+    },
+    "organization": {
+      "eyebrow": "租户信息",
+      "title": "企业认证",
+      "description": "完成企业认证以解锁组织租户的合规能力。"
+    },
+    "fields": {
+      "status": "认证状态"
+    },
+    "status": {
+      "unverified": "未认证"
+    },
+    "timeline": {
+      "empty": "尚未发起认证。"
+    },
+    "sections": {
+      "form": {
+        "title": "认证信息",
+        "description": "填写并提交认证材料（即将开放）。",
+        "empty": "认证功能即将开放，敬请期待。"
+      },
+      "history": {
+        "title": "历史记录",
+        "description": "发起、审核与变更记录。",
+        "empty": "暂无认证记录。"
+      }
+    },
+    "org": {
+      "title": "企业认证",
+      "description": "完成企业实名认证,解锁订阅与开票等企业能力;一次认证长期有效",
+      "status": {
+        "unverified": "未认证",
+        "pending": "审核中",
+        "verified": "已认证",
+        "rejected": "已驳回",
+        "superseded": "已作废",
+        "lite": "简易认证",
+        "full": "实名认证"
+      },
+      "pendingBanner": "认证申请已提交,平台运营将在 1-2 个工作日内完成审核",
+      "rejectedBanner": "上次申请被驳回:{reason}。请核对信息后重新提交",
+      "submittedBanner": "提交成功,等待运营审核;结果会同步到租户信息页的认证徽章",
+      "submitFailed": "提交失败,请稍后重试",
+      "liteLimitBanner": "当前是简易企业实名认证:可以订阅,不能开票",
+      "liteLimitBannerBody": "简易认证只核验企业登记信息,未核到法人本人或证件影像,因此不支持申请发票。法人扫脸认证与提交资料认证开发中,上线后可升级。",
+      "methods": {
+        "title": "认证方式",
+        "description": "三种方式的资料要求与获得的能力不同;本期开放简易企业实名认证,另两种开发中",
+        "needLabel": "需要提供",
+        "capabilityLabel": "获得能力",
+        "canSubscribe": "可订阅产品与套餐",
+        "canInvoice": "可申请开具发票",
+        "cannotInvoice": "不可申请开具发票",
+        "availableTag": "本期可用",
+        "currentTag": "当前认证方式",
+        "lite": {
+          "name": "简易企业实名认证",
+          "summary": "只填企业名称与统一社会信用代码,提交后由运营核验,最快的一条路径",
+          "items": {
+            "0": "企业名称",
+            "1": "统一社会信用代码"
+          }
+        },
+        "face": {
+          "name": "法人扫脸实名认证",
+          "summary": "法定代表人本人扫脸核身,核到人,认证后可开票",
+          "items": {
+            "0": "企业登记信息",
+            "1": "法定代表人本人扫脸核身"
+          }
+        },
+        "documents": {
+          "name": "提交资料实名认证",
+          "summary": "提交认证申请表与营业执照影像,由运营人工审核,认证后可开票",
+          "items": {
+            "0": "认证申请表(下载模板,盖章后上传)",
+            "1": "营业执照影像"
+          }
+        },
+        "selectedTag": "已选择"
+      },
+      "current": {
+        "title": "当前认证信息",
+        "description": "认证已生效;信息变更需重新提交并审核",
+        "method": "认证方式",
+        "verifiedAt": "认证通过时间",
+        "invoicing": "开票能力",
+        "invoicingAllowed": "可申请开具发票",
+        "invoicingBlocked": "不可申请开具发票(简易认证)"
+      },
+      "form": {
+        "title": "提交企业认证",
+        "description": "本期只开放简易企业实名认证:填写企业登记信息即可,无需上传证件影像",
+        "retitleTitle": "变更认证信息",
+        "retitleDescription": "变更后需重新审核;审核期间原认证保持有效",
+        "liteNotice": "简易企业实名认证:通过后可以订阅,但不能申请开票",
+        "companyName": "企业名称",
+        "companyNamePlaceholder": "与营业执照登记名称一致",
+        "licenseNo": "统一社会信用代码",
+        "licenseNoPlaceholder": "18 位统一社会信用代码",
+        "legalName": "法定代表人姓名",
+        "legalNamePlaceholder": "与营业执照一致",
+        "submit": "提交认证申请",
+        "pendingLocked": "审核中,暂不可提交",
+        "selectedMethod": "当前选择:{method};下方填写这种方式所需的资料"
+      },
+      "history": {
+        "title": "申请记录",
+        "description": "本组织的历次认证申请与审核结果",
+        "colSubject": "企业主体",
+        "colMethod": "认证方式",
+        "colStatus": "状态",
+        "colAt": "提交时间",
+        "colResult": "审核结果 / 时间",
+        "rowMenu": "记录操作",
+        "awaiting": "等待审核",
+        "empty": "暂无认证申请"
+      },
+      "notes": {
+        "title": "认证说明",
+        "description": "口径与生效范围",
+        "liteTitle": "简易认证的边界",
+        "liteBody": "简易认证以企业登记信息核验,不上传任何证件影像,因此可以订阅但不能开票;需要开票请等待法人扫脸认证或提交资料认证上线",
+        "effectTitle": "生效范围",
+        "effectBody": "认证状态挂在租户层,所有工作空间继承;租户名称以认证通过的企业名称为准,改名即作废原认证",
+        "noIdTitle": "不收身份证件影像",
+        "noIdBody": "三种方式都不要求上传身份证件影像:简易认证只核企业登记信息,扫脸认证是本人核身,提交资料认证只收认证申请表与营业执照影像"
+      },
+      "loadFailed": "认证状态读取失败，表单已锁定；请重试或稍后再来。",
+      "retry": "重试",
+      "personalTenantBanner": "企业认证仅适用于组织租户",
+      "personalTenantBannerBody": "当前是个人租户。个人实名认证在账号信息页,组织能力(成员、企业认证、开票)需要先转为组织租户。",
+      "apply": {
+        "title": "提交企业认证",
+        "description": "选择认证方式并填写资料;提交后由平台运营审核,结果在企业认证页查看",
+        "backToResult": "返回认证结果",
+        "cancel": "取消"
+      },
+      "actions": {
+        "goApply": "提交认证申请",
+        "changeApply": "变更认证信息"
+      }
+    }
+  },
+  "vouchersPage": {
+    "title": "我的卡券",
+    "description": "持有的卡券一目了然:可用的去支付页直接抵扣,用掉的能查到去向",
+    "metrics": {
+      "groupLabel": "卡券概览",
+      "available": "可用卡券",
+      "expiringSoon": "{count} 张将于 7 天内到期",
+      "noExpiring": "近期无到期",
+      "used": "已使用",
+      "usedHint": "累计核销",
+      "total": "全部卡券",
+      "totalHint": "含已用/已过期/已撤销"
+    },
+    "kind": {
+      "discount": "折扣券",
+      "credit_voucher": "抵扣金券",
+      "recharge_card": "充值卡",
+      "redemption": "兑换码",
+      "extension": "延期券"
+    },
+    "status": {
+      "available": "可用",
+      "reserved": "使用中",
+      "redeemed": "已使用",
+      "expired": "已过期",
+      "revoked": "已撤销"
+    },
+    "face": {
+      "percentOff": "减 {percent}%",
+      "maxOff": "(封顶 {amount})",
+      "fixedOff": "立减 {amount}"
+    },
+    "table": {
+      "title": "卡券列表",
+      "description": "「使用中」= 已挂在待支付订单上锁定,取消该订单会自动释放;挂在哪张单直接显示在状态下方",
+      "colCode": "券码",
+      "colKind": "类型",
+      "colFace": "面值",
+      "colStatus": "状态 / 挂单",
+      "colExpires": "有效期至",
+      "colUsedAt": "使用时间 / 核销号",
+      "empty": "暂无卡券",
+      "usesLeft": "剩 {left} / 共 {total} 次",
+      "emptyHint": "平台活动发放的卡券会出现在这里"
+    },
+    "notes": {
+      "title": "使用说明",
+      "description": "卡券如何参与结算",
+      "useTitle": "在哪使用",
+      "useBody": "订单支付页结算时选择:折扣券作用于订单价格,抵扣金券抵减应付金额;两类可各选一张叠加",
+      "sourceTitle": "卡券来源",
+      "sourceBody": "由平台运营活动发放(定向到租户、工作空间或个人);有效期以本页展示为准",
+      "holdTitle": "挂单与释放",
+      "holdBody": "下单时选中的券会被锁定为「使用中」并显示挂单号;订单取消或超时关闭后自动释放回可用,支付完成才真正核销"
+    },
+    "filters": {
+      "groupLabel": "卡券筛选",
+      "listOnly": "卡券只有列表视图",
+      "count": "共 {count} 条",
+      "searchPlaceholder": "搜索券码、批次名或挂单号",
+      "searchAriaLabel": "搜索卡券",
+      "statusAriaLabel": "按状态筛选",
+      "statusAll": "全部状态",
+      "reset": "复位"
+    },
+    "actions": {
+      "menuLabel": "卡券操作",
+      "copy": "复制券码",
+      "copied": "已复制",
+      "viewOrder": "查看挂单",
+      "viewOrderHint": "这张券还没有挂在任何订单上",
+      "use": "去结算使用",
+      "useHint": "只有可用状态的券能参与结算"
+    }
+  },
+  "workspacePicker": {
+    "defaultWorkspace": "默认工作区",
+    "switchFailed": "切换租户失败，请重试；当前归属未变更"
   }
 }
