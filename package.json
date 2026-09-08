@@ -122,6 +122,7 @@
     "@types/react-dom": "^19.2.2",
     "@typescript-eslint/eslint-plugin": "^8.46.1",
     "@typescript-eslint/parser": "^8.46.1",
+    "@vitest/coverage-v8": "^4.1.8",
     "dependency-cruiser": "^16.0.0",
     "eslint": "^9.39.3",
     "husky": "^9.1.7",

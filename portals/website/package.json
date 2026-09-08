@@ -10,7 +10,8 @@
     "start": "next start -p 3000",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
-    "clean": "rimraf .next"
+    "clean": "rimraf .next",
+    "test": "vitest run"
   },
   "dependencies": {
     "@types/uuid": "^11.0.0",
@@ -46,6 +47,7 @@
     "postcss": "^8.5.19",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3",
+    "vitest": "^4.1.8",
     "webpack": "^5.105.4",
     "webpack-cli": "^7.0.0",
     "webpack-dev-server": "^5.2.6"

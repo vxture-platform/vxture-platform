@@ -14,6 +14,8 @@ yarn.lock
 
 # Testing
 coverage/
+# 逐包跑 vitest --coverage 时的临时汇总目录（脚本自建自删，兜一道防止漏在工作区）
+.cov-tmp/
 .nyc_output/
 *.lcov
 
