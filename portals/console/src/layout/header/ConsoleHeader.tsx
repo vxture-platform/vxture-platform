@@ -19,6 +19,7 @@
 
 import { useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { formatTenantDisplay } from "@/features/tenant/tenant-display";
 import {
   ShellBrand,
   ShellHeader,
@@ -108,6 +109,14 @@ export function ConsoleHeader({
   const pathname = usePathname();
   const { theme, setTheme, density, setDensity, fontSize, setFontSize } =
     useTheme();
+
+  /* 品牌第二段的租户名。与 TenantPanel 按钮上的走**同一个** formatTenantDisplay
+     ——两处显示同一个租户却长得不一样，比两处都显示更糟。
+     还没解析出租户时给 undefined：ShellBrand 拿不到 tag 就只画字标，
+     好过先闪一个占位词再跳成真名。 */
+  const brandTenantTag =
+    formatTenantDisplay(session.tenant?.name, session.tenant?.tenantType) ||
+    undefined;
   const search = useGlobalSearch(navEntries);
 
   const user = session.user;
@@ -193,18 +202,18 @@ export function ConsoleHeader({
             onSelect={(key) => setView(key as ShellView)}
             buttonLabel={t("featureBoards")}
           />
-          {/* owner 2026-09-08:字标全英文 `Console`,tag 标出所在平面。
-              tag 是 DS 的品牌锁定式第二段(比字标小一档、弱一级色),不是旁边另起
-              的一行字。
+          {/* owner 2026-09-08:字标 `Workspace Console`(全英文,品牌不翻译——
+              中英文同一个串,与 admin 的 `vxture studio` 同体例),tag 是当前租户。
+              tag 走 DS 的品牌锁定式第二段:比字标小一档、弱一级色,是标识的组成部分,
+              不是旁边另起的一行字。
 
-              标「Tenant」而不是租户名,是**冲着右边的 TenantPanel 去的**:
-              `Console Tenant` 紧接着 `[某某租户 ▾]`,两段连起来读成一句——前半句
-              说这是哪个平面的控制台,后半句说当前是哪一个租户。放租户名反而会与
-              紧挨着的按钮并排重复同一个词。 */}
+              租户名与右边 TenantPanel 按钮上的是同一个值(都经 formatTenantDisplay),
+              这是 owner 2026-09-08 的裁定:品牌那段说明「这是谁的工作台」,
+              TenantPanel 仍是切换器。 */}
           <ShellBrand
             href="/"
             label={brandName}
-            tag="Tenant"
+            tag={brandTenantTag}
             logoSrc="/brand/vxture-logo-white.png"
           />
           <span className="h-lg w-px bg-border" aria-hidden="true" />

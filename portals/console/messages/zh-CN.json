@@ -143,7 +143,7 @@
     "verifyUnknown": "认证未知",
     "verifyActive": "已认证",
     "verifySuspended": "已暂停",
-    "brandName": "Console",
+    "brandName": "Workspace Console",
     "tenantList": "可切换的租户",
     "currentTag": "当前",
     "accountDeleting": {
