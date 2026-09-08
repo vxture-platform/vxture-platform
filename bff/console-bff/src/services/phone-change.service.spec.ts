@@ -74,6 +74,9 @@ describe("邮箱 OTP", () => {
     const token = await svc.sendEmailOtp(USER, "a@example.com");
     const code = codeFromMail();
     const tampered = token.slice(0, -1) + (token.at(-1) === "a" ? "b" : "a");
+    // 断言"确实改动了"——三元保证了这一点,但写出来才挡得住哪天有人改成写死一个字符
+    // (那正是下面「签名被改」踩过的坑)。
+    expect(tampered).not.toBe(token);
     expect(svc.verifyEmailOtp(tampered, code, USER)).toBe(false);
   });
 
@@ -117,9 +120,12 @@ describe("身份令牌", () => {
       t.slice(0, t.lastIndexOf(".")),
       t.slice(t.lastIndexOf(".") + 1),
     ];
-    expect(
-      svc.validateIdentityToken(`${body}.${sig.slice(0, -1)}0`, USER),
-    ).toBeNull();
+    /* 末位翻成**一定不同**的字符。原先写死成 "0"：签名是随机 secret 算出来的
+       hex，本来就以 "0" 结尾时那次「篡改」等于没改，断言随即失败——本机跑十次
+       九次不碰，CI 上碰上了（2026-09-08）。随机输入下的「大概率不同」不是判据。 */
+    const flipped = sig.slice(0, -1) + (sig.at(-1) === "0" ? "1" : "0");
+    expect(flipped).not.toBe(sig);
+    expect(svc.validateIdentityToken(`${body}.${flipped}`, USER)).toBeNull();
   });
 
   it("载荷被改（换个手机号）→ null，签名保护的正是这个", () => {
