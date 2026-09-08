@@ -1,453 +1,404 @@
 {
-  "onboarding": {
-    "brand": "Vxture Studio",
-    "title": "Finish your account",
-    "description": "A few details and you're in. The account name is how you sign in; the display name is what others see.",
+  "acceptInvitationPage": {
+    "title": "Accept invitation",
+    "description": "After confirming you join the tenant and can switch to it in the console.",
+    "cardTitle": "Invitation details",
+    "missingToken": "The link is incomplete (no invitation token); open it again from the email.",
     "fields": {
-      "account": "Account",
-      "accountPlaceholder": "Letters, digits, underscore — starts with a letter",
-      "displayName": "Display name",
-      "phone": "Phone",
-      "phoneVerified": "Verified",
-      "email": "Email",
-      "emailPlaceholder": "you@company.com",
-      "emailHint": "Optional. Verify it later in your profile to use it for account recovery."
-    },
-    "errors": {
-      "accountFormat": "Account must start with a letter, contain only letters/digits/underscore, and be 3-24 characters.",
-      "displayNameRequired": "Display name is required.",
-      "emailFormat": "Enter a valid email address.",
-      "accountTaken": "This account name is already taken.",
-      "generic": "Setup failed. Please try again."
+      "tenant": "Tenant",
+      "inviter": "Invited by",
+      "role": "Role",
+      "email": "Invited email",
+      "expires": "Valid until"
     },
     "actions": {
-      "submit": "Finish setup",
-      "submitting": "Submitting…"
+      "accept": "Accept and join",
+      "later": "Not now",
+      "enter": "Go to the workspace",
+      "switchAccount": "Sign out and sign in with the invited email"
     },
-    "legal": {
-      "terms": "Terms of Service",
-      "privacy": "Privacy Policy",
-      "cookies": "Cookie Policy"
+    "reasons": {
+      "not_found": "Invitation not found: the link may have been revoked or copied incompletely.",
+      "expired": "This invitation has expired; ask the inviter to resend it.",
+      "revoked": "This invitation has been revoked.",
+      "already_accepted": "This invitation was already accepted; if that was you, just switch to the tenant.",
+      "email_mismatch": "Your account email ({email}) does not match the invited email; sign in with the account that owns the invited mailbox."
     },
-    "copyright": "© {year} Vxture Studio. All rights reserved."
+    "mismatchTitle": "Signed-in account does not match the invited email",
+    "mismatchHint": "You are signed in as {current}; this invitation was sent to {invited}.",
+    "accepted": "You have joined \"{tenant}\"",
+    "acceptedDescription": "Switched you to that tenant.",
+    "switchFailed": "Joined, but switching tenants failed; use the tenant switcher at the top.",
+    "acceptError": "Could not accept the invitation. Try again later."
   },
-  "shell": {
-    "loading": {
-      "label": "Loading"
+  "addonPay": {
+    "title": "Booster Pack Payment",
+    "description": "Order {orderNo}",
+    "notFound": "Order not found or not owned by this tenant",
+    "backToQuotas": "Back to Quotas",
+    "status": {
+      "pending": "Awaiting payment",
+      "declared": "Declared",
+      "completed": "Active",
+      "cancelled": "Cancelled"
     },
-    "featureBoards": "Feature boards",
-    "searchPlaceholder": "Search members, subscriptions, settings…",
-    "search": {
-      "title": "Global search",
-      "description": "Search pages and business data by keyword",
-      "empty": "No matches",
-      "error": "Search is unavailable; showing page matches only",
-      "loading": "Searching",
-      "groups": {
-        "pages": "Pages",
-        "member": "Members",
-        "invoice": "Invoices"
-      }
+    "summary": {
+      "title": "Order summary",
+      "description": "Pack contents and amount due; the grant lands automatically once operations confirms",
+      "pack": "Pack",
+      "content": "Contents",
+      "validity": "Validity",
+      "validUntil": "Until {date}",
+      "validityDaysFromActivation": "{days} days from activation",
+      "amountDue": "Amount due",
+      "billNo": "Bill no.",
+      "createdAt": "Ordered at"
     },
-    "help": "Help",
-    "notifications": "Notifications",
-    "settings": "System settings",
-    "assistant": "Varda · data assistant",
-    "userMenu": "Account",
-    "verified": "Verified",
-    "tenantOrg": "Organization / tenant",
-    "tenantVerified": "Verified",
-    "tenantSettings": "Tenant settings",
-    "switchOrg": "Switch organization",
-    "prefsTitle": "Preferences",
-    "themeSystem": "System",
-    "themeLight": "Light",
-    "themeDark": "Dark",
-    "densityCompact": "Compact",
-    "densityDefault": "Default",
-    "densityComfy": "Comfortable",
-    "switchUser": "Switch user",
-    "signOut": "Sign out",
-    "views": {
-      "appcenter": {
-        "name": "Agents Center",
-        "desc": "Subscribed apps · quick access"
-      },
-      "console": {
-        "name": "Tenant Console",
-        "desc": "Management · data & operations"
-      }
+    "pay": {
+      "title": "Offline payment & declaration",
+      "description": "Wire the payment, submit the declaration, and it activates on confirmation",
+      "deadline": "Declare within {remain} — overdue orders are cancelled automatically",
+      "channelLabel": "Channel",
+      "referenceNote": "Include order no. {orderNo} in the transfer reference for reconciliation"
     },
-    "sidebar": {
-      "expandNav": "Expand navigation",
-      "collapseNav": "Collapse navigation",
-      "expandAllGroups": "Expand all groups",
-      "collapseAllGroups": "Collapse all groups"
+    "channels": {
+      "alipay": "Alipay",
+      "bank_transfer": "Bank transfer",
+      "wechat": "WeChat Pay",
+      "comingSoon": "coming soon",
+      "alipayQrAlt": "Alipay QR code"
     },
-    "drawer": {
-      "openCenter": "Open message center"
+    "bank": {
+      "accountName": "Account name",
+      "bankName": "Bank",
+      "accountNo": "Account number",
+      "reference": "Transfer reference (required)",
+      "unavailable": "Receiving account not configured — contact platform operations"
     },
-    "appcenter": {
-      "title": "Agents",
-      "desc": "Agents this workspace subscribes to — open and use. Recommendations below.",
-      "products": {
-        "title": "Subscribed",
-        "desc": "Listed from this workspace's active subscriptions, trials included.",
-        "empty": "This workspace has no active product subscription yet.",
-        "browse": "View subscriptions",
-        "unavailable": "Subscribed products are temporarily unavailable. Please refresh.",
-        "trialing": "Trial",
-        "open": "Open",
-        "detail": "Product page",
-        "versionAt": "v {version} at {date}"
-      },
-      "reco": {
-        "title": "Popular",
-        "desc": "Agents you haven't subscribed to — read the product page or subscribe directly.",
-        "learnMore": "Product page",
-        "subscribe": "Subscribe"
-      }
+    "declare": {
+      "payerName": "Payer name",
+      "payerNamePlaceholder": "Name on the sending account",
+      "transactionNo": "Transfer reference no.",
+      "transactionNoPlaceholder": "Bank slip reference (optional)",
+      "submit": "Transfer done — submit declaration"
     },
-    "realNameVerified": "Verified",
-    "missingPhone": "No phone",
-    "missingEmail": "No email",
-    "slotRole": "Role",
-    "slotLevel": "Level",
-    "slotLocked": "More badges · locked",
-    "billing": "Billing",
-    "monthlyCost": "This month",
-    "noData": "No data",
-    "payBill": "Pay invoice",
-    "trafficUsage": "Traffic usage",
-    "usageLimit": "Usage limits",
-    "usageQuota": "Usage Quota",
-    "storageQuota": "Storage",
-    "aiCredits": "AI Credits",
-    "switchScope": "Switch scope",
-    "organization": "Organization",
-    "workspace": "Workspace",
-    "defaultWorkspace": "Default workspace",
-    "defaultTag": "Default",
-    "workspaceSwitchComingSoon": "Multi-workspace switching coming soon",
-    "plan": "Plan",
-    "freePlan": "No subscription",
-    "orgTenant": "Organization tenant",
-    "personalTenant": "Personal tenant",
-    "fontSmall": "S",
-    "fontDefault": "M",
-    "fontLarge": "L",
-    "monthlyCostDesc": "Paid this month & invoicing",
-    "payBillDesc": "Manage payment methods",
-    "trafficUsageDesc": "Traffic & call usage",
-    "usageLimitDesc": "Quota limits & alert thresholds",
-    "verifyUnknown": "Verification unknown",
-    "verifyActive": "Verified",
-    "verifySuspended": "Suspended",
-    "brandName": "Workspace Console",
-    "tenantList": "Tenants you can switch to",
-    "currentTag": "Current",
-    "accountDeleting": {
-      "title": "Account in deletion retention",
-      "body": "You asked to delete this account on {requestedAt}; it will be permanently deleted on {purgeAt}. Cancel the deletion and reactivate?",
-      "reactivate": "Cancel deletion and reactivate",
-      "keep": "Keep deleting and sign out",
-      "error": "Something went wrong. Please try again."
+    "declared": {
+      "note": "Declaration submitted — awaiting operations confirmation; this page refreshes automatically"
+    },
+    "completed": {
+      "note": "Active! The grant is in your pools, valid until {date}"
+    },
+    "cancelled": {
+      "note": "This order was cancelled; place a new one from the Quotas page"
+    },
+    "cancelOrder": "Cancel order",
+    "declareFailed": "Declaration failed — please try again later",
+    "cancelFailed": "Cancel failed — please try again later",
+    "declareDialog": {
+      "title": "Confirm payment declaration",
+      "description": "Payment method: {channel} · amount: {amount}. After submitting, the order awaits confirmation; the quota is credited once operations confirm receipt.",
+      "confirm": "Submit",
+      "cancel": "Not yet"
+    },
+    "cancelConfirm": {
+      "verb": "Cancel order",
+      "consequence": "The order is closed; go back to Quotas to buy again if needed."
+    },
+    "expiredNotice": "The payment window has closed; refreshing the order…"
+  },
+  "atlasPage": {
+    "title": "Model Platform",
+    "description": "Models available to this tenant, application grants, quota and usage.",
+    "loadError": "Could not load model platform status, please retry later.",
+    "metrics": {
+      "groupLabel": "Model platform overview",
+      "models": "Available models",
+      "modelsHint": "{count} live entitlements",
+      "quota": "Quota status",
+      "quotaTier": "tier: {tier}",
+      "quotaNoTier": "no tier",
+      "tokens": "Token usage",
+      "tokensHint": "{count} rows"
+    },
+    "quotaStatus": {
+      "covered": "Covered",
+      "uncovered": "No plan",
+      "unavailable": "Platform unreachable"
+    },
+    "models": {
+      "title": "Available models",
+      "description": "Models granted to this tenant by the platform control plane.",
+      "empty": "No available models",
+      "colModel": "Model",
+      "colProvider": "Provider",
+      "colProtocol": "Protocol",
+      "colCapabilities": "Capabilities"
+    },
+    "quotas": {
+      "title": "Quota status",
+      "description": "Plan quota pools from the platform side (not Atlas data).",
+      "emptyCovered": "No active quota pools",
+      "emptyUncovered": "No plan published for this workspace yet",
+      "emptyUnavailable": "Could not reach the platform entitlement service",
+      "emptyNone": "No quota data",
+      "colMetric": "Metric",
+      "colRemaining": "Remaining / Limit",
+      "colPriority": "Priority",
+      "colTier": "Tier"
+    },
+    "usage": {
+      "title": "Usage records",
+      "description": "Recent actual calls (Atlas logs, not the billing basis).",
+      "empty": "No model usage recorded",
+      "colModel": "Model",
+      "colProvider": "Provider",
+      "colRequests": "Requests",
+      "colTokens": "Tokens"
+    },
+    "signals": {
+      "title": "Notes",
+      "description": "The tenant side only shows what is visible in the current context.",
+      "scopeTitle": "Tenant scope",
+      "scopeBody": "Showing model platform state for {tenant}.",
+      "scopeMissing": "Tenant context is required before model platform state can be shown.",
+      "boundaryTitle": "Control-plane boundary",
+      "boundaryBody": "Provider, model, policy, price and grant changes are managed by platform operators in the admin plane."
+    },
+    "entitlements": {
+      "title": "Product entitlements",
+      "description": "Products and tiers this workspace subscribes to. Model availability is derived from these; there is no separate tenant-level model grant.",
+      "colProduct": "Product",
+      "colTier": "Tier",
+      "colStatus": "Status",
+      "colLimits": "Limits",
+      "bundled": "bundled",
+      "none": "Not subscribed",
+      "empty": "No product entitlements yet."
     }
   },
-  "header": {
-    "title": "Console",
-    "searchPlaceholder": "Search members, tenants, subscriptions, billing",
-    "workspace": "Workspace",
-    "switchWorkspace": "Switch workspace",
-    "platformMode": "Platform",
-    "tenantMode": "Tenant",
-    "appLauncher": "App launcher",
-    "featureOverview": "Feature overview",
-    "quickPreferences": "Quick preferences",
-    "workspaceActions": "Workspace actions",
-    "assistant": "Varda assistant",
-    "help": "Help",
-    "notifications": "Notifications",
-    "settings": "Settings",
-    "toggleTheme": "Toggle theme",
-    "toggleLanguage": "Toggle language",
-    "fullscreen": {
-      "enter": "Enter fullscreen",
-      "exit": "Exit fullscreen"
+  "auditPage": {
+    "title": "Audit Logs",
+    "description": "Who did what, when: a trail of member management, subscription/order, and invoicing actions",
+    "actorType": {
+      "operator": "Platform ops",
+      "system": "System"
     },
-    "userMenu": {
-      "returnTo": "Back to {caller}",
-      "dismissReturn": "Dismiss return entry",
-      "signOut": "Sign out"
+    "result": {
+      "success": "Success",
+      "failure": "Failed",
+      "denied": "Denied"
     },
-    "openNavigation": "Open navigation",
-    "closeNavigation": "Close navigation",
-    "collapseNavigation": "Collapse navigation",
-    "views": {
-      "appcenter": {
-        "label": "App Center",
-        "description": "Subscribed apps · Quick access"
-      },
-      "console": {
-        "label": "Console",
-        "description": "Management view · Account & operations"
-      }
+    "action": {
+      "account_deletion_cancel": "Cancel account deletion",
+      "account_deletion_request": "Request account deletion",
+      "account_email_change": "Change email",
+      "account_identity_unbind": "Unbind third-party login",
+      "account_login_method_update": "Change login method",
+      "account_password_change": "Change password",
+      "account_password_set_initial": "Set initial password",
+      "account_phone_change": "Change phone number",
+      "account_session_revoke": "Revoke session",
+      "addon_order_cancel": "Cancel booster order",
+      "addon_order_create": "Buy booster pack",
+      "addon_order_payment_declare": "Declare booster payment",
+      "billing_address_create": "Add invoice title",
+      "billing_address_delete": "Delete invoice title",
+      "billing_address_update": "Edit invoice title",
+      "billing_invoice_apply": "Request invoice",
+      "order_refund_request": "Request refund",
+      "subscription_auto_renew_off": "Cancel at period end",
+      "subscription_auto_renew_on": "Resume auto-renew",
+      "subscription_cancel": "Unsubscribe",
+      "subscription_pause": "Pause subscription",
+      "subscription_resume": "Resume subscription",
+      "tenant_close": "Close tenant",
+      "tenant_invitation_resend": "Resend invitation",
+      "tenant_invitation_revoke": "Revoke invitation",
+      "tenant_member_add": "Add member",
+      "tenant_member_disable": "Disable member",
+      "tenant_member_enable": "Enable member",
+      "tenant_member_invite": "Invite member",
+      "tenant_member_remove": "Remove member",
+      "tenant_member_reset_password": "Reset member password",
+      "tenant_member_update": "Update member",
+      "tenant_owner_transfer": "Transfer ownership",
+      "tenant_role_create": "Create role",
+      "tenant_role_delete": "Delete role",
+      "tenant_role_update": "Update role",
+      "tenant_verification_submit": "Submit business verification"
     },
-    "tenantType": {
-      "individual": "Personal",
-      "company": "Organization"
-    }
-  },
-  "drawer": {
-    "close": "Close",
-    "notifications": {
-      "title": "Message Center",
-      "markAllRead": "Mark all read",
-      "empty": "No to-dos and no messages",
-      "todosTitle": "To-dos",
-      "messagesTitle": "Messages"
-    }
-  },
-  "inbox": {
-    "header": {
-      "title": "Message Center",
-      "description": "To-dos derive from the live state of orders, subscriptions, quotas, invitations and add-on packs and disappear once handled; messages are notices about expiry, renewal orders, activation and refunds. Email preferences live under Notifications."
+    "table": {
+      "title": "Activity",
+      "description": "Activity from the last 90 days, newest first.",
+      "filterLabel": "Result",
+      "filterAll": "All",
+      "filterSuccess": "Success",
+      "filterFailure": "Failed",
+      "colAt": "Time",
+      "colActor": "Actor",
+      "colAction": "Action",
+      "colResource": "Target",
+      "colResult": "Result",
+      "colIp": "Source IP",
+      "empty": "No activity yet — key actions from now on will appear here",
+      "filterActionLabel": "Filter by action",
+      "filterActionAll": "All actions",
+      "total": "{count} entries",
+      "prev": "Previous",
+      "next": "Next",
+      "pageOf": "Page {page} of {pageCount}"
     },
-    "unread": "{count} unread",
-    "allRead": "No unread messages",
-    "markAllRead": "Mark all as read",
-    "loadMore": "Load more",
-    "loading": "Loading…",
-    "empty": "No messages yet",
-    "loadError": "Could not load messages, please try again later",
-    "open": "Open",
-    "readBadge": "Read",
-    "unreadBadge": "Unread",
-    "list": {
-      "title": "List",
-      "description": "To-dos stay on top; each matter appears only once"
-    },
-    "filters": {
-      "label": "Filter",
-      "all": "All",
-      "todo": "To-dos",
-      "message": "Messages",
-      "unread": "Unread"
-    },
-    "counts": "{todos} to-dos · {unread} unread",
-    "todoBadge": "To-do",
-    "messageBadge": "Message",
-    "emptyTodo": "Nothing waiting on you",
-    "emptyAll": "No to-dos and no messages",
-    "markAllFailed": "Could not mark as read; try again later",
     "notes": {
-      "title": "How this works",
-      "body": "To-dos have no read state: they mirror the live state and only disappear once handled. Messages have read / unread; the Unread filter applies to messages only. When a to-do exists for a matter, All shows only the to-do; the matching message stays under Messages as history."
+      "title": "Scope",
+      "description": "Coverage and retention",
+      "scopeTitle": "What's recorded",
+      "scopeBody": "Key console writes (members / subscriptions / orders / invoicing); platform-ops actions on this tenant and in-product business events are out of scope here",
+      "retainTitle": "Retention & immutability",
+      "retainBody": "The trail is append-only; this page shows 90 days, older entries are retained per platform compliance policy"
     }
   },
-  "preferences": {
-    "title": "Display preferences",
-    "locale": {
-      "label": "Language",
-      "zh-CN": "简体中文",
-      "en-US": "English (US)"
+  "billingPage": {
+    "title": "Billing center",
+    "description": "The full ledger from order to invoice: orders, bills, and payment records. Offline corporate transfer, reconciled manually.",
+    "exportStatement": "Export statement",
+    "metrics": {
+      "groupLabel": "Billing metrics",
+      "unpaid": "Awaiting payment",
+      "unpaidOverdue": "{count} overdue",
+      "unpaidNone": "Nothing overdue",
+      "paidTotal": "Total paid",
+      "paidTotalHint": "{count} bills settled",
+      "credits": "Wallet balance",
+      "creditsHint": "Online top-up not yet available"
     },
-    "density": {
-      "label": "Density",
-      "compact": "Compact",
-      "default": "Default",
-      "comfortable": "Comfortable"
+    "table": {
+      "title": "Bills",
+      "description": "A bill is issued for every subscription order — ¥0 orders included.",
+      "colBillNo": "Bill no.",
+      "colCycle": "Billing period",
+      "colType": "Type",
+      "colAmount": "Amount",
+      "colStatus": "Status",
+      "colPaidAt": "Settled at",
+      "discountOff": "discount −{amount}",
+      "empty": "No bills yet.",
+      "total": "{count} bills",
+      "prevPage": "Previous",
+      "nextPage": "Next",
+      "colInvoice": "Invoice"
     },
-    "theme": {
-      "system": "System",
-      "light": "Light",
-      "dark": "Dark",
-      "switchTo": "Switch to {theme}"
+    "type": {
+      "normal": "Subscription fee",
+      "one_off": "One-off",
+      "adjustment": "Adjustment",
+      "prepaid_statement": "Prepaid statement"
+    },
+    "status": {
+      "unpaid": "Awaiting payment",
+      "paying": "Collecting",
+      "partial": "Partially paid",
+      "paid": "Settled",
+      "overdue": "Overdue",
+      "cancelled": "Cancelled"
+    },
+    "notes": {
+      "title": "Payment & billing terms",
+      "description": "Subscription-first and deliberately simple — these two rules are the only ones in effect.",
+      "paymentTitle": "How to pay",
+      "paymentBody": "Offline corporate remittance with the order number as reference; operations verify receipt manually and the bill settles. ¥0 bills settle automatically at the payment step.",
+      "billingTitle": "Billing terms",
+      "billingBody": "Bills are generated with subscription orders; the subscription cycle starts when the service is provisioned (early renewal supported), not when payment is confirmed."
+    },
+    "invoicing": {
+      "applyAction": "Request invoice",
+      "mergeAction": "Merge into one invoice",
+      "mergeActionCount": "Merge into one invoice ({count} selected)",
+      "writeFailed": "Operation failed — please try again later",
+      "status": {
+        "applying": "Applying",
+        "approved": "Accepted",
+        "issued": "Issued",
+        "sent": "Shipped",
+        "rejected": "Rejected",
+        "voided": "Voided"
+      },
+      "phase": {
+        "none": "Not invoiced",
+        "processing": "In progress",
+        "issued": "Invoiced"
+      },
+      "type": {
+        "electronic_general": "E-invoice (general)",
+        "electronic_special": "E-invoice (special VAT)",
+        "paper_special": "Paper (special VAT)"
+      },
+      "taxType": {
+        "general": "General",
+        "special": "Special VAT"
+      },
+      "records": {
+        "title": "Invoices",
+        "description": "Invoices issued against settled bills — both direct subscription payments and prepaid deduction statements qualify; download here once issued",
+        "colNo": "Application no.",
+        "colBill": "Bill no.",
+        "colTitle": "Title / Type",
+        "colAmount": "Amount (tax incl.)",
+        "colStatus": "Status",
+        "colDelivery": "File / Shipping",
+        "download": "Download",
+        "empty": "No invoices yet — use \"Request invoice\" on a settled bill above"
+      },
+      "addresses": {
+        "title": "Invoice Titles",
+        "description": "Title details are snapshotted into each application; later edits never affect submitted requests",
+        "add": "Add title",
+        "addTitle": "Add invoice title",
+        "editTitle": "Edit invoice title",
+        "formHint": "Special VAT titles require a tax number and bank details; your first title becomes the default",
+        "colTitle": "Title",
+        "colTaxType": "Type",
+        "colTaxNo": "Tax no.",
+        "default": "Default",
+        "edit": "Edit",
+        "setDefault": "Set default",
+        "delete": "Delete",
+        "save": "Save",
+        "rowMenu": "Title actions",
+        "fieldTitle": "Title",
+        "fieldTaxNo": "Tax number",
+        "fieldBankName": "Bank",
+        "fieldBankAccount": "Bank account",
+        "fieldPhone": "Phone",
+        "fieldAddress": "Address (for paper delivery)",
+        "empty": "No invoice titles yet — add one via the button above",
+        "deleteVerb": "Delete billing profile",
+        "deleteConsequence": "This profile is removed and there is no undo. Invoices already issued are unaffected, but the next one needs the tax ID, bank and address entered again."
+      },
+      "apply": {
+        "title": "Request invoice",
+        "description": "Bill {billNo} · {amount} (tax incl.). Platform operations will review and issue it",
+        "address": "Invoice title",
+        "type": "Invoice type",
+        "noAddress": "No invoice title yet — create one first",
+        "createAddress": "Create a title",
+        "cancel": "Cancel",
+        "submit": "Submit",
+        "blockedLite": "Simple business verification does not support invoicing",
+        "blockedUnverified": "Complete business verification before requesting an invoice",
+        "blockedHint": "See Tenant → Business verification for the available methods; invoicing opens once face or document verification ships."
+      },
+      "rowMenu": "Bill actions",
+      "applyHintUnpaid": "Available once the bill is settled",
+      "applyHintApplied": "An application already exists",
+      "applyHintZero": "A zero-amount bill has nothing to invoice",
+      "applyHintNoPermission": "Your role cannot manage invoices"
+    },
+    "viewInvoices": "Invoices & titles",
+    "invoicesPage": {
+      "title": "Invoices & titles",
+      "description": "Issued invoices and billing titles; apply for an invoice from a bill row in the billing center.",
+      "backToBilling": "Back to billing center"
     }
-  },
-  "sidebar": {
-    "eyebrow": "Vxture Console",
-    "title": "Console",
-    "description": "Self-service account, tenant, member, and subscription management",
-    "ariaLabel": "Console navigation",
-    "expandAll": "Expand all groups",
-    "collapseAll": "Collapse all groups",
-    "footer": {
-      "label": "Status",
-      "value": "Self-service platform"
-    },
-    "footerCard": {
-      "title": "Compliance posture",
-      "meta": "Classification coverage 96%"
-    },
-    "workspaceMode": {
-      "platform": "Platform workspace",
-      "tenant": "Tenant workspace"
-    },
-    "sections": {
-      "workspace": "Workspace",
-      "accountTenant": "Account & Tenant",
-      "subscriptionBilling": "Subscription & Billing",
-      "settingsSecurity": "Settings & Security",
-      "platform": "Platform"
-    },
-    "domains": {
-      "workspace": "Workspace",
-      "org": "Org & Members",
-      "billing": "Subscription & Billing",
-      "settings": "Settings & Security",
-      "platform": "Platform"
-    },
-    "items": {
-      "overview": {
-        "label": "Data Overview",
-        "description": "Tenant status, subscription expiry, usage, and quick entries"
-      },
-      "todos": {
-        "label": "Todo Items",
-        "description": "Key actions waiting for the current tenant"
-      },
-      "profile": {
-        "label": "Account",
-        "description": "Avatar, profile, contact details, sign-in methods and preferences"
-      },
-      "members": {
-        "label": "Member Management",
-        "description": "Invites, access review, and team membership"
-      },
-      "subscription": {
-        "label": "Subscriptions",
-        "description": "Subscribed products, renewal alerts, and recommendations"
-      },
-      "billing": {
-        "label": "Billing center",
-        "description": "Orders, bills, invoices, and payment records"
-      },
-      "quotas": {
-        "label": "Quotas",
-        "description": "Storage and AI Credits grants and usage"
-      },
-      "atlas": {
-        "label": "Model Platform",
-        "description": "Hosted models, self-hosted models and product entitlements"
-      },
-      "inbox": {
-        "label": "Message Center",
-        "description": "Things waiting on you, plus subscription, order and refund notices"
-      },
-      "notifications": {
-        "label": "Notifications",
-        "description": "Email and in-console notification preferences"
-      },
-      "security": {
-        "label": "Security Settings",
-        "description": "Login logs, device management, and future controls"
-      },
-      "tenantSettings": {
-        "label": "Tenant Settings",
-        "description": "Language, timezone, and dangerous tenant cancellation"
-      },
-      "usage": {
-        "label": "Usage Analytics",
-        "description": "Consumption trends, call records, and member breakdown"
-      },
-      "vouchers": {
-        "label": "Vouchers",
-        "description": "Your discount and credit vouchers, validity and usage"
-      },
-      "auditLogs": {
-        "label": "Audit Logs",
-        "description": "Trail of member and commerce actions in this tenant"
-      },
-      "tenantInfo": {
-        "label": "Tenant",
-        "description": "Tenant profile, contact, defaults and danger zone"
-      }
-    }
-  },
-  "routes": {
-    "dashboard": "Dashboard",
-    "todos": "Todo Items",
-    "profile": "Account",
-    "personalTenant": "Tenant info",
-    "organization": "Organization Info",
-    "members": "Members",
-    "membersInvitations": "Invitations",
-    "membersRoles": "Roles",
-    "membersPermissions": "Permissions",
-    "roles": "Roles",
-    "invitations": "Invitation Records",
-    "subscription": "Subscriptions",
-    "billing": "Billing center",
-    "billingInvoices": "Invoices & titles",
-    "quotas": "Quotas",
-    "atlas": "Model Platform",
-    "notifications": "Notifications",
-    "security": "Security",
-    "settings": "Tenant Settings",
-    "tenantSettings": "Tenant Settings",
-    "usage": "Usage",
-    "addonPay": "Booster Pack Payment",
-    "vouchers": "Vouchers",
-    "auditLogs": "Audit Logs",
-    "inbox": "Message Center",
-    "tenant": "Tenant",
-    "tenantVerification": "Business verification",
-    "tenantVerificationApply": "Submit verification"
-  },
-  "login": {
-    "hero": {
-      "eyebrow": "Unified access",
-      "title": "Sign in to the Vxture console.",
-      "description": "Access platform operations, tenant management, and capability-scoped modules from one controlled entry point.",
-      "signals": {
-        "capability": "Capability-aware navigation",
-        "tenant": "Tenant context resolution",
-        "session": "Console BFF session gateway"
-      }
-    },
-    "card": {
-      "eyebrow": "Console login",
-      "title": "Sign in",
-      "description": "Use your account to continue to the workspace."
-    },
-    "form": {
-      "account": "Account",
-      "accountPlaceholder": "username / email / phone",
-      "password": "Password",
-      "passwordPlaceholder": "Enter your password",
-      "forgotPassword": "Forgot password?",
-      "acceptPrefix": "I have read and agree to the ",
-      "terms": "User Agreement",
-      "acceptJoiner": " and ",
-      "privacy": "Privacy Policy",
-      "submit": "Sign in",
-      "submitting": "Signing in...",
-      "register": "Create account"
-    },
-    "social": {
-      "label": "Third-party sign in",
-      "divider": "Other sign-in options",
-      "dingtalk": "Sign in with DingTalk",
-      "dingtalkShort": "DingTalk",
-      "feishu": "Sign in with Feishu",
-      "feishuShort": "Feishu",
-      "wechat": "Sign in with WeChat",
-      "wechatShort": "WeChat"
-    },
-    "errors": {
-      "required": "Account and password are required.",
-      "terms": "Please agree to the User Agreement and Privacy Policy first.",
-      "invalid": "Unable to sign in with the current credentials.",
-      "unavailable": "The console login service is unavailable. Start console-bff first."
-    },
-    "footer": {
-      "copyright": "© 2026 vxture.ai. All rights reserved.",
-      "terms": "Terms of Service",
-      "privacy": "Privacy Policy",
-      "cookies": "Cookie Policy"
-    },
-    "redirecting": "Redirecting to sign in…"
   },
   "dashboard": {
     "eyebrow": "Overview",
@@ -531,6 +482,558 @@
       "count": "{count} most recent bills",
       "empty": "No bills yet",
       "viewAll": "Billing"
+    }
+  },
+  "destructive": {
+    "titleTemplate": "{verb} {target}?",
+    "cancel": "Cancel",
+    "pending": "Working…",
+    "blocked": "Preconditions not met — resolve the items marked above first."
+  },
+  "drawer": {
+    "close": "Close",
+    "notifications": {
+      "title": "Message Center",
+      "markAllRead": "Mark all read",
+      "empty": "No to-dos and no messages",
+      "todosTitle": "To-dos",
+      "messagesTitle": "Messages"
+    }
+  },
+  "header": {
+    "title": "Console",
+    "searchPlaceholder": "Search members, tenants, subscriptions, billing",
+    "workspace": "Workspace",
+    "switchWorkspace": "Switch workspace",
+    "platformMode": "Platform",
+    "tenantMode": "Tenant",
+    "appLauncher": "App launcher",
+    "featureOverview": "Feature overview",
+    "quickPreferences": "Quick preferences",
+    "workspaceActions": "Workspace actions",
+    "assistant": "Varda assistant",
+    "help": "Help",
+    "notifications": "Notifications",
+    "settings": "Settings",
+    "toggleTheme": "Toggle theme",
+    "toggleLanguage": "Toggle language",
+    "fullscreen": {
+      "enter": "Enter fullscreen",
+      "exit": "Exit fullscreen"
+    },
+    "userMenu": {
+      "returnTo": "Back to {caller}",
+      "dismissReturn": "Dismiss return entry",
+      "signOut": "Sign out"
+    },
+    "openNavigation": "Open navigation",
+    "closeNavigation": "Close navigation",
+    "collapseNavigation": "Collapse navigation",
+    "views": {
+      "appcenter": {
+        "label": "App Center",
+        "description": "Subscribed apps · Quick access"
+      },
+      "console": {
+        "label": "Console",
+        "description": "Management view · Account & operations"
+      }
+    },
+    "tenantType": {
+      "individual": "Personal",
+      "company": "Organization"
+    }
+  },
+  "inbox": {
+    "header": {
+      "title": "Message Center",
+      "description": "To-dos derive from the live state of orders, subscriptions, quotas, invitations and add-on packs and disappear once handled; messages are notices about expiry, renewal orders, activation and refunds. Email preferences live under Notifications."
+    },
+    "unread": "{count} unread",
+    "allRead": "No unread messages",
+    "markAllRead": "Mark all as read",
+    "loadMore": "Load more",
+    "loading": "Loading…",
+    "empty": "No messages yet",
+    "loadError": "Could not load messages, please try again later",
+    "open": "Open",
+    "readBadge": "Read",
+    "unreadBadge": "Unread",
+    "list": {
+      "title": "List",
+      "description": "To-dos stay on top; each matter appears only once"
+    },
+    "filters": {
+      "label": "Filter",
+      "all": "All",
+      "todo": "To-dos",
+      "message": "Messages",
+      "unread": "Unread"
+    },
+    "counts": "{todos} to-dos · {unread} unread",
+    "todoBadge": "To-do",
+    "messageBadge": "Message",
+    "emptyTodo": "Nothing waiting on you",
+    "emptyAll": "No to-dos and no messages",
+    "markAllFailed": "Could not mark as read; try again later",
+    "notes": {
+      "title": "How this works",
+      "body": "To-dos have no read state: they mirror the live state and only disappear once handled. Messages have read / unread; the Unread filter applies to messages only. When a to-do exists for a matter, All shows only the to-do; the matching message stays under Messages as history."
+    }
+  },
+  "invitationsPage": {
+    "title": "Invitations",
+    "description": "Member invitations you've sent and their status; send new ones from the Members page",
+    "backToMembers": "Back to members",
+    "rowMenu": "Invitation actions",
+    "revoke": "Revoke",
+    "revokeHint": "Only pending invitations can be revoked",
+    "revokeFailed": "Revoke failed — please try again",
+    "resend": "Resend",
+    "resendHint": "Revoked or accepted invitations cannot be resent",
+    "status": {
+      "pending": "Pending",
+      "accepted": "Accepted",
+      "expired": "Expired",
+      "revoked": "Revoked"
+    },
+    "table": {
+      "title": "Invitation records",
+      "description": "\"Expired\" derives from the expiry time; revoking voids the link immediately",
+      "colEmail": "Invitee",
+      "invitedBy": "Invited by {name}",
+      "colRole": "Role",
+      "colStatus": "Status",
+      "colCreatedAt": "Sent at",
+      "colExpiresAt": "Valid until",
+      "acceptedAt": "Accepted {date}",
+      "empty": "No invitations yet — send the first one from the Members page"
+    },
+    "notes": {
+      "title": "How invitations work",
+      "description": "Flow and validity",
+      "flowTitle": "Flow",
+      "flowBody": "Send by email + role from the Members page; the recipient gets an email with a link. Once they sign in with the invited email and accept, they join the tenant and its default workspace",
+      "expiryTitle": "Validity",
+      "expiryBody": "Invitations are valid for 7 days and expire automatically; revocation is immediate. The same email can be invited again after the invitation lapses",
+      "resendTitle": "Resending",
+      "resendBody": "Resending creates a new link, voids the old one immediately and restarts the 7-day validity; if the email cannot be sent, copy the link from the dialog and share it manually"
+    },
+    "revokeVerb": "Revoke the invitation to",
+    "revokeConsequence": "The invitation link stops working immediately and the recipient sees \"invitation not found\". This cannot be undone — re-inviting them means sending a new invitation.",
+    "revokeKeep": "Keep invitation",
+    "resendFailed": "Resend failed — please try again",
+    "resent": "Resent to {email}.",
+    "resentNoEmail": "A new link was created, but the email could not be sent; share the link with {email} manually.",
+    "revoked": "The invitation to {email} was revoked.",
+    "expiringSoon": "Expires within 24h",
+    "errors": {
+      "owner_protected": "The owner cannot be disabled or unlinked; transfer ownership first.",
+      "self_protected": "You cannot do this to yourself.",
+      "owner_role_locked": "The owner's role only changes through ownership transfer.",
+      "account_not_found": "No Vxture account uses this email; send an invitation instead.",
+      "already_member": "This account is already a member of the tenant.",
+      "invitation_pending": "This email already has a pending invitation.",
+      "invalid_email": "The email address is not valid."
+    }
+  },
+  "inviteLinkDialog": {
+    "title": "Invitation sent",
+    "titleResent": "Invitation resent",
+    "sent": "Email sent to {email}; you can also share the link directly.",
+    "notSent": "The email could not be sent; share the link below with {email} manually.",
+    "notSentTitle": "Email not sent",
+    "linkLabel": "Invitation link",
+    "expires": "Valid until {date}; resending creates a new link and voids this one.",
+    "copy": "Copy link",
+    "copied": "Copied",
+    "copyFailed": "Copy failed — select the link and copy it manually.",
+    "close": "Close"
+  },
+  "loadState": {
+    "title": "Could not load data",
+    "description": "The figures and lists on this page are not real data. Retry, or come back later if it keeps failing.",
+    "retry": "Retry",
+    "empty": "Could not load; nothing to show yet"
+  },
+  "login": {
+    "hero": {
+      "eyebrow": "Unified access",
+      "title": "Sign in to the Vxture console.",
+      "description": "Access platform operations, tenant management, and capability-scoped modules from one controlled entry point.",
+      "signals": {
+        "capability": "Capability-aware navigation",
+        "tenant": "Tenant context resolution",
+        "session": "Console BFF session gateway"
+      }
+    },
+    "card": {
+      "eyebrow": "Console login",
+      "title": "Sign in",
+      "description": "Use your account to continue to the workspace."
+    },
+    "form": {
+      "account": "Account",
+      "accountPlaceholder": "username / email / phone",
+      "password": "Password",
+      "passwordPlaceholder": "Enter your password",
+      "forgotPassword": "Forgot password?",
+      "acceptPrefix": "I have read and agree to the ",
+      "terms": "User Agreement",
+      "acceptJoiner": " and ",
+      "privacy": "Privacy Policy",
+      "submit": "Sign in",
+      "submitting": "Signing in...",
+      "register": "Create account"
+    },
+    "social": {
+      "label": "Third-party sign in",
+      "divider": "Other sign-in options",
+      "dingtalk": "Sign in with DingTalk",
+      "dingtalkShort": "DingTalk",
+      "feishu": "Sign in with Feishu",
+      "feishuShort": "Feishu",
+      "wechat": "Sign in with WeChat",
+      "wechatShort": "WeChat"
+    },
+    "errors": {
+      "required": "Account and password are required.",
+      "terms": "Please agree to the User Agreement and Privacy Policy first.",
+      "invalid": "Unable to sign in with the current credentials.",
+      "unavailable": "The console login service is unavailable. Start console-bff first."
+    },
+    "footer": {
+      "copyright": "© 2026 vxture.ai. All rights reserved.",
+      "terms": "Terms of Service",
+      "privacy": "Privacy Policy",
+      "cookies": "Cookie Policy"
+    },
+    "redirecting": "Redirecting to sign in…"
+  },
+  "manageSubscription": {
+    "title": "Manage subscription",
+    "description": "Pause, resume, or cancel the active subscription. Changes take effect immediately.",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "actionPause": "Pause subscription",
+    "actionResume": "Resume subscription",
+    "actionCancel": "Cancel subscription",
+    "actionPauseHint": "Pausing stops billing and service; you can resume at any time.",
+    "actionResumeHint": "Resuming restarts billing and restores service.",
+    "actionCancelHint": "Cancelling ends the subscription for good — you would need to order again.",
+    "reasonLabel": "Reason (optional)",
+    "upgradeHint": "To upgrade or switch plans, pick a new plan on the subscribe page — not here.",
+    "goUpgrade": "Change plan",
+    "successPause": "Subscription paused.",
+    "successResume": "Subscription resumed.",
+    "successCancel": "Subscription cancelled.",
+    "error": "The operation failed. Please retry."
+  },
+  "membersPage": {
+    "header": {
+      "eyebrow": "Tenant management",
+      "title": "Members",
+      "description": "Manage tenant members, roles, and access status.",
+      "addMember": "Add member",
+      "inviteMember": "Invite member",
+      "viewRoles": "Roles",
+      "viewInvitations": "Invitations",
+      "viewPermissions": "Permissions"
+    },
+    "table": {
+      "toolbarTitle": "{count} members",
+      "countHint": "{total} total, {active} active, {invited} invited, {suspended} suspended",
+      "searchPlaceholder": "Search by name, email, or role",
+      "searchAriaLabel": "Search members",
+      "filterAriaLabel": "Member status filters",
+      "memberTitle": "{name}, {username}, {phone}, {email}, {role}, {team}, {status}",
+      "statusTitle": "Current status: {status}",
+      "avatarAlt": "{name} avatar",
+      "emptyPhone": "Not set",
+      "primaryOwner": "Primary administrator",
+      "selectPage": "Select members on this page",
+      "selectMember": "Select {name}",
+      "columns": {
+        "name": "Name",
+        "phone": "Phone",
+        "email": "Email",
+        "role": "Role",
+        "status": "Status",
+        "lastActive": "Last active",
+        "joinedAt": "Joined"
+      },
+      "invitedExpires": "Invitation valid until {date}",
+      "selfTag": "You"
+    },
+    "status": {
+      "Active": "Active",
+      "Invited": "Invited",
+      "Suspended": "Suspended"
+    },
+    "filters": {
+      "all": "All members",
+      "active": "Active",
+      "invited": "Invited",
+      "suspended": "Suspended"
+    },
+    "empty": {
+      "loadingTitle": "Loading members...",
+      "loadingDescription": "Reading workspace members from the console BFF.",
+      "title": "No members match the current filters.",
+      "description": "Try widening the status scope or searching by another field.",
+      "resetFilters": "Reset filters"
+    },
+    "actions": {
+      "menuLabel": "Member actions for {name}",
+      "edit": "Edit user",
+      "disableMember": "Disable user",
+      "enableMember": "Enable user",
+      "resetPassword": "Reset password",
+      "unlink": "Unlink",
+      "resendInvite": "Resend invitation",
+      "revokeInvite": "Revoke invitation"
+    },
+    "bulk": {
+      "selected": "{count} selected",
+      "disable": "Disable selected",
+      "enable": "Enable selected",
+      "unlink": "Unlink selected",
+      "noun": "member(s)"
+    },
+    "dialogs": {
+      "create": {
+        "title": "Add member",
+        "description": "Add an existing Vxture account to this tenant by email; if they have no account yet, invite them instead.",
+        "switchToInvite": "Send an invitation instead"
+      },
+      "invite": {
+        "title": "Invite member",
+        "description": "They receive an email with a link; once accepted they join the tenant and its default workspace with the selected role."
+      },
+      "edit": {
+        "title": "Edit member"
+      },
+      "reset": {
+        "title": "Reset password",
+        "description": "Set a new temporary password for {name}."
+      },
+      "unlink": {
+        "title": "Unlink member",
+        "description": "Unlink {name} from the current tenant? This will not delete the user account.",
+        "verb": "Unlink",
+        "consequence": "This member leaves the workspace and loses all access to it immediately. Their account is unaffected; rejoining needs a new invitation."
+      },
+      "bulkUnlink": {
+        "title": "Unlink selected members",
+        "description": "Unlink {count} selected members from the current tenant? This will not delete user accounts."
+      },
+      "fields": {
+        "email": "Email",
+        "role": "Role",
+        "defaultRole": "Default member",
+        "nextPassword": "New temporary password"
+      },
+      "actions": {
+        "cancel": "Cancel",
+        "create": "Create member",
+        "sendInvite": "Send invite",
+        "save": "Save",
+        "resetPassword": "Reset password",
+        "unlink": "Unlink"
+      },
+      "revokeInvite": {
+        "verb": "Revoke the invitation to",
+        "consequence": "The invitation link stops working immediately and the recipient sees \"invitation not found\". This cannot be undone — send a new invitation to let them join.",
+        "keep": "Keep invitation"
+      }
+    },
+    "feedback": {
+      "createSuccess": "Member created.",
+      "inviteSuccess": "Member invitation created.",
+      "updateSuccess": "Member profile updated.",
+      "resetPasswordSuccess": "{name}'s password has been reset.",
+      "unlinkSuccess": "Member association unlinked.",
+      "bulkDisabled": "{count} members disabled.",
+      "bulkEnabled": "{count} members enabled.",
+      "bulkUnlinkSuccess": "{count} member associations unlinked.",
+      "memberDisabled": "Member disabled.",
+      "memberEnabled": "Member enabled.",
+      "createError": "Could not create the member. Try again later.",
+      "inviteError": "Could not create the invitation. Try again later.",
+      "updateError": "Could not save the member profile. Try again later.",
+      "resetPasswordError": "Could not reset the password. Try again later.",
+      "resetPasswordLength": "The new temporary password must contain at least 6 characters.",
+      "unlinkError": "Could not unlink the member association. Try again later.",
+      "bulkDisableError": "Could not disable the selected members. Try again later.",
+      "bulkEnableError": "Could not enable the selected members. Try again later.",
+      "bulkUnlinkError": "Could not unlink the selected members. Try again later.",
+      "memberDisableError": "Could not disable the member. Try again later.",
+      "memberEnableError": "Could not enable the member. Try again later.",
+      "inviteNoEmail": "Invitation created, but the email could not be sent; share the link manually.",
+      "inviteResent": "Invitation resent.",
+      "inviteRevoked": "Invitation revoked.",
+      "resendError": "Could not resend the invitation. Try again later.",
+      "revokeError": "Could not revoke the invitation. Try again later.",
+      "bulkPartial": "{done} done, {failed} failed.",
+      "bulkSkipped": "The owner and yourself were skipped."
+    },
+    "hints": {
+      "ownerProtected": "The owner cannot be disabled or unlinked; transfer ownership first",
+      "ownerRoleLocked": "The owner's role only changes through ownership transfer",
+      "selfProtected": "You cannot do this to yourself"
+    },
+    "errors": {
+      "owner_protected": "The owner cannot be disabled or unlinked; transfer ownership first.",
+      "self_protected": "You cannot do this to yourself.",
+      "owner_role_locked": "The owner's role only changes through ownership transfer.",
+      "account_not_found": "No Vxture account uses this email; send an invitation instead.",
+      "already_member": "This account is already a member of the tenant.",
+      "invitation_pending": "This email already has a pending invitation; resend or revoke it on the Invitations page.",
+      "invalid_email": "The email address is not valid."
+    }
+  },
+  "metric": {
+    "storage": "Storage",
+    "aiCredit": "AI Credits",
+    "apiCall": "API calls",
+    "qualityCheck": "Quality checks"
+  },
+  "modelPlatformPage": {
+    "header": {
+      "eyebrow": "Model Platform",
+      "title": "Model Platform",
+      "description": "Manage online models, private models, endpoints, capability tags, and tenant/agent grants.",
+      "badge": "Production keys pending"
+    },
+    "summary": {
+      "ariaLabel": "Model platform summary",
+      "models": "Registered models",
+      "modelsValue": "{active} / {total} active",
+      "privateModels": "Private models",
+      "grants": "Grants",
+      "grantsValue": "{active} / {total} active"
+    },
+    "providers": {
+      "doubao": "Doubao",
+      "claude": "Claude",
+      "private": "Private",
+      "custom": "Custom"
+    },
+    "filters": {
+      "all": "All models",
+      "active": "Active",
+      "inactive": "Inactive",
+      "online": "Online",
+      "private": "Private"
+    },
+    "actions": {
+      "addModel": "Add model",
+      "addGrant": "Add grant",
+      "modelMenu": "Model actions for {name}",
+      "grantMenu": "Grant actions",
+      "editModel": "Edit model",
+      "grantModel": "Grant tenant",
+      "enableModel": "Enable model",
+      "disableModel": "Disable model",
+      "editGrant": "Edit grant",
+      "enableGrant": "Enable grant",
+      "disableGrant": "Disable grant"
+    },
+    "table": {
+      "searchPlaceholder": "Search by model, provider, endpoint, or capability",
+      "searchAriaLabel": "Search models",
+      "filterAriaLabel": "Model filters",
+      "toolbarTitle": "{count} models",
+      "columns": {
+        "model": "Model",
+        "provider": "Provider",
+        "capabilities": "Capabilities",
+        "endpoint": "Endpoint",
+        "key": "Key env",
+        "status": "Status"
+      }
+    },
+    "grants": {
+      "title": "Model grants",
+      "count": "{count} grants",
+      "allAgents": "All agents",
+      "noReason": "No grant reason",
+      "permanent": "Permanent",
+      "columns": {
+        "model": "Model",
+        "tenant": "Tenant",
+        "agent": "Agent",
+        "priority": "Priority",
+        "expires": "Expires",
+        "status": "Status"
+      }
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "pagination": {
+      "summary": "Page {page} / {totalPages}, {total} models",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "dialogs": {
+      "createModel": {
+        "title": "Add model"
+      },
+      "editModel": {
+        "title": "Edit model"
+      },
+      "createGrant": {
+        "title": "Add grant"
+      },
+      "editGrant": {
+        "title": "Edit grant"
+      },
+      "fields": {
+        "modelName": "Model name",
+        "modelCode": "Model code",
+        "provider": "Provider",
+        "protocol": "Protocol",
+        "endpointUrl": "Endpoint URL",
+        "keyReference": "Key reference",
+        "capabilities": "Capabilities, comma separated",
+        "config": "Non-sensitive config JSON",
+        "grantModel": "Grant model",
+        "selectModel": "Select model",
+        "tenantId": "ORG_ID",
+        "agentId": "Agent ID, optional",
+        "priority": "Priority, lower value wins",
+        "reason": "Grant reason",
+        "expiresAt": "Expiration date",
+        "grantActive": "Enable grant now"
+      },
+      "actions": {
+        "cancel": "Cancel",
+        "save": "Save"
+      }
+    },
+    "empty": {
+      "loadingTitle": "Loading models...",
+      "loadingDescription": "Reading model registry and grants from Model Platform.",
+      "title": "No models match the current filters.",
+      "description": "Try widening the filters or adding an online/private model.",
+      "resetFilters": "Reset filters"
+    },
+    "feedback": {
+      "loadError": "Failed to load model data. Check whether Model Platform is running.",
+      "modelCreated": "Model created.",
+      "modelUpdated": "Model updated.",
+      "modelEnabled": "Model enabled.",
+      "modelDisabled": "Model disabled.",
+      "modelSaveError": "Model save failed. Check endpoint, capability tags, and config JSON.",
+      "modelStateError": "Model state update failed. Please try again later.",
+      "grantCreated": "Grant created.",
+      "grantUpdated": "Grant updated.",
+      "grantEnabled": "Grant enabled.",
+      "grantDisabled": "Grant disabled.",
+      "grantSaveError": "Grant save failed. Check tenant, model, and quota.",
+      "grantStateError": "Grant state update failed. Please try again later."
     }
   },
   "notificationsPage": {
@@ -620,6 +1123,354 @@
       "loadFailed": "Could not load your notification preferences.",
       "saveFailed": "Could not save notification preferences. Try again."
     }
+  },
+  "onboarding": {
+    "brand": "Vxture Studio",
+    "title": "Finish your account",
+    "description": "A few details and you're in. The account name is how you sign in; the display name is what others see.",
+    "fields": {
+      "account": "Account",
+      "accountPlaceholder": "Letters, digits, underscore — starts with a letter",
+      "displayName": "Display name",
+      "phone": "Phone",
+      "phoneVerified": "Verified",
+      "email": "Email",
+      "emailPlaceholder": "you@company.com",
+      "emailHint": "Optional. Verify it later in your profile to use it for account recovery."
+    },
+    "errors": {
+      "accountFormat": "Account must start with a letter, contain only letters/digits/underscore, and be 3-24 characters.",
+      "displayNameRequired": "Display name is required.",
+      "emailFormat": "Enter a valid email address.",
+      "accountTaken": "This account name is already taken.",
+      "generic": "Setup failed. Please try again."
+    },
+    "actions": {
+      "submit": "Finish setup",
+      "submitting": "Submitting…"
+    },
+    "legal": {
+      "terms": "Terms of Service",
+      "privacy": "Privacy Policy",
+      "cookies": "Cookie Policy"
+    },
+    "copyright": "© {year} Vxture Studio. All rights reserved."
+  },
+  "orderFlow": {
+    "order": {
+      "pending": "Placing order",
+      "done": "Order placed"
+    },
+    "pay": {
+      "pending": "Awaiting payment",
+      "done": "Paid"
+    },
+    "verify": {
+      "pending": "Awaiting receipt",
+      "done": "Funds received"
+    },
+    "provision": {
+      "pending": "Awaiting activation",
+      "done": "Activated"
+    }
+  },
+  "orderPay": {
+    "title": "Order payment",
+    "notFound": "Order not found or you have no access.",
+    "countdown": "Time left {time}",
+    "rejectBanner": "Your payment declaration was rejected: {reason} Vouchers were released; you can re-declare or cancel the order. The countdown has been reset.",
+    "cycleStartNote": "The subscription cycle starts when the service is provisioned",
+    "status": {
+      "pending_payment": "Awaiting payment",
+      "paid_pending_verify": "Paid · awaiting confirmation",
+      "activating": "Activating",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "expired": "Expired"
+    },
+    "stateTitle": {
+      "paid_pending_verify": "We are verifying your payment",
+      "activating": "Paid · activating your subscription",
+      "completed": "Subscription is live",
+      "cancelled": "Order cancelled",
+      "expired": "Order expired"
+    },
+    "stateHint": {
+      "paid_pending_verify": "Declaration received. Your subscription activates once we confirm the funds, usually within 1 business day. This page refreshes automatically.",
+      "activating": "Funds settled. Activation usually completes within minutes; this page refreshes automatically.",
+      "completed": "Your subscription is live. Check the subscription page for entitlements.",
+      "cancelled": "This order was cancelled. Place a new order to subscribe.",
+      "expired": "The payment window elapsed and the order was closed automatically. Place a new order to subscribe.",
+      "already_settled": "This order is already settled."
+    },
+    "cycle": {
+      "day": "Daily",
+      "week": "Weekly",
+      "month": "Monthly",
+      "year": "Yearly",
+      "perpetual": "Perpetual"
+    },
+    "breakdown": {
+      "title": "Amount breakdown",
+      "listPrice": "List price",
+      "discountVoucher": "Discount voucher",
+      "noDiscountVoucher": "No discount voucher",
+      "creditVoucher": "Credit voucher",
+      "noCreditVoucher": "No credit voucher",
+      "alreadyPaid": "Already collected",
+      "cashDue": "Amount due",
+      "pickDiscount": "Choose a discount voucher",
+      "pickCredit": "Choose a credit voucher",
+      "noneOption": "Do not use"
+    },
+    "voucher": {
+      "percentOff": "{value}% off",
+      "fixedOff": "¥{value} off"
+    },
+    "channels": {
+      "title": "Payment method",
+      "alipay": "Alipay",
+      "wechat": "WeChat Pay",
+      "bank_transfer": "Bank transfer",
+      "comingSoon": "coming soon",
+      "alipayQrAlt": "Alipay payment QR code",
+      "noneEnabled": "Payment channels are being configured. Please contact support."
+    },
+    "bank": {
+      "accountName": "Account name",
+      "bankName": "Bank",
+      "accountNo": "Account no."
+    },
+    "referenceNote": "Please include order no. {orderNo} in the transfer memo so we can reconcile quickly.",
+    "amountDue": "Amount due",
+    "manualNote": "After you declare, operations verifies the funds manually (usually within 1 business day). Once online payment gateways land, this step completes automatically via the payment callback.",
+    "ttlFine": "Complete payment before the countdown ends; overdue orders close automatically.",
+    "info": {
+      "title": "Order details",
+      "owner": "Owner",
+      "plan": "Plan",
+      "orderNo": "Order no."
+    },
+    "completedPanel": {
+      "next": "Next steps",
+      "viewSubscription": "View subscription & entitlements",
+      "viewBilling": "View bills & invoices",
+      "viewQuotas": "View quota usage"
+    },
+    "actions": {
+      "declarePaid": "I have paid",
+      "settleInstant": "Confirm and activate",
+      "cancelOrder": "Cancel order",
+      "refresh": "Refresh",
+      "backToSubscription": "Back to subscription",
+      "cancel": "Cancel",
+      "noPaymentPermission": "Your role cannot make payments: declaring payment or cancelling this order is for the tenant owner"
+    },
+    "declareDialog": {
+      "title": "Confirm payment declaration",
+      "titleInstant": "Settle with vouchers",
+      "description": "Method: {channel} · Amount: {amount}. After submitting, the order awaits confirmation; your subscription activates once we verify the funds.",
+      "confirm": "Submit",
+      "cancel": "Not yet",
+      "payerName": "Payer (optional)",
+      "payerPlaceholder": "Transfer account name, for reconciliation",
+      "transactionNo": "Transfer reference (optional)",
+      "optional": "Optional"
+    },
+    "errors": {
+      "quote": "Quote failed. Please refresh and retry.",
+      "declare": "Payment declaration failed. Please retry later.",
+      "cancel": "Cancel failed. Please retry later."
+    },
+    "list": {
+      "typeSubscription": "Subscription",
+      "payNow": "Pay now",
+      "view": "View",
+      "voucherOff": "Vouchers {amount}",
+      "creditsTitle": "Account balance (tenant-wide)",
+      "creditsNote": "The balance funds future usage-based charging; top-up opens with that capability."
+    },
+    "refund": {
+      "title": "Refund",
+      "policyLink": "Refund policy",
+      "requestFailed": "Refund request failed",
+      "request": "Request refund",
+      "requestHint": "Full refund available within {hours} hours of activation (before {deadline})",
+      "ineligibleTitle": "This order is not eligible for a refund",
+      "reasons": {
+        "not_fulfilled": "The order has not been activated yet",
+        "not_first_purchase": "Only the first purchase of a product can be refunded",
+        "window_elapsed": "The refund window has passed",
+        "usage_over_threshold": "Consumable quota usage is above the threshold",
+        "zero_amount": "Zero-amount orders need no refund",
+        "refund_exists": "A refund request already exists"
+      },
+      "dialogTitle": "Request a refund",
+      "dialogDescription": "The refund equals what you paid for this order ({amount}). Once completed, the subscription for this product returns to unsubscribed and entitlements stop immediately.",
+      "reasonLabel": "Reason",
+      "reasonPlaceholder": "Briefly describe why (optional)",
+      "submit": "Submit request",
+      "submitted": "Refund request submitted; operations will review it.",
+      "status": {
+        "requested": "Refund under review",
+        "approved": "Refund approved, payout pending",
+        "rejected": "Refund request rejected",
+        "refunded": "Refunded"
+      },
+      "auditRemark": "Review note",
+      "noPermission": "Requesting a refund requires billing management; ask the tenant owner",
+      "auditRemarkLine": "Review note: {remark}",
+      "ineligibleLine": "Not eligible for refund: {reasons}",
+      "reasonSeparator": "; "
+    },
+    "cancelConfirm": {
+      "verb": "Cancel order",
+      "consequence": "The order is closed and any selected vouchers are released; place a new order if you still want to subscribe."
+    },
+    "amountPending": "Calculating…",
+    "expiredNotice": "The payment window has closed; refreshing the order…"
+  },
+  "pagination": {
+    "total": "{total} records",
+    "totalFiltered": "{total} records / {filtered} filtered",
+    "previous": "Previous page",
+    "next": "Next page",
+    "pageSizeLabel": "Rows per page",
+    "pageSizeOption": "{size} per page"
+  },
+  "payChannels": {
+    "title": "Payment method",
+    "comingSoon": "coming soon",
+    "alipayQrAlt": "Alipay QR code",
+    "channel": {
+      "alipay": "Alipay",
+      "wechat": "WeChat Pay",
+      "bank_transfer": "Bank transfer"
+    },
+    "referenceNote": "Please put order number {orderNo} in the transfer note so we can reconcile quickly.",
+    "noneEnabled": "Payment channels are being configured; please contact support.",
+    "bank": {
+      "accountName": "Account name",
+      "bankName": "Bank",
+      "accountNo": "Account number",
+      "reference": "Transfer note",
+      "unavailable": "The corporate receiving account is not configured yet; please contact platform operations."
+    }
+  },
+  "permissionsPage": {
+    "title": "Permissions",
+    "description": "The governance permission catalog and role matrix: which roles hold each governance action",
+    "viewRoles": "Roles",
+    "backToMembers": "Back to members",
+    "metrics": {
+      "groupLabel": "Permissions overview",
+      "perms": "Permission points",
+      "permsHint": "Tenant + workspace scope",
+      "model": "Authorization model",
+      "modelValue": "Fixed catalog",
+      "modelHint": "Not tenant-definable",
+      "permsHelp": "Total operation codes in the governance permission catalog, tenant-level and workspace-level.",
+      "roles": "Governance roles",
+      "rolesHelp": "Role columns in the matrix, from the same catalog as the Roles page.",
+      "rolesTag": "Matrix columns",
+      "modelHelp": "The permission catalog is defined platform-wide with no tenant dimension; tenants cannot change it."
+    },
+    "perm": {
+      "tenant_member_read": "View members",
+      "tenant_member_manage": "Member management",
+      "tenant_role_assign": "Role assignment",
+      "tenant_workspace_manage": "Workspace management",
+      "tenant_settings_manage": "Tenant settings management",
+      "tenant_delete": "Tenant deletion",
+      "tenant_billing_read": "View commerce & billing",
+      "tenant_billing_manage": "Commerce & billing management",
+      "tenant_payment_manage": "Declare payments",
+      "tenant_invoice_manage": "Invoice & title management",
+      "tenant_quota_read": "View quota & usage",
+      "tenant_audit_read": "View audit log",
+      "tenant_model_read": "View model access",
+      "workspace_member_manage": "Workspace member management",
+      "workspace_role_assign": "Workspace role assignment",
+      "workspace_settings_manage": "Workspace settings management"
+    },
+    "matrix": {
+      "title": "Permission matrix",
+      "description": "The catalog follows the sidebar: section → page → operation; see which roles hold each governance action at a glance",
+      "colPerm": "Permission",
+      "empty": "Permission catalog is empty",
+      "openToAll": "Open to all members",
+      "groupOther": "Operations not tied to a page (workspace scope)",
+      "colKind": "Level",
+      "expand": "Expand children",
+      "collapse": "Collapse children",
+      "childCount": "{count} children",
+      "emptyHint": "Clear the filters to see the full permission catalog"
+    },
+    "notes": {
+      "title": "Permission model",
+      "description": "This page answers one question: who can perform which governance actions",
+      "readTitle": "Read-only catalog",
+      "readBody": "The permission catalog is defined platform-wide; tenants cannot add, edit, or remove entries — contact platform operations for new permission shapes",
+      "openTitle": "Pages without operation codes",
+      "openBody": "A page marked \"Open to all members\" carries no operation code, so any member can open it; gates apply only to actions that have a code",
+      "scopeTitle": "Governance ≠ business",
+      "scopeBody": "Governance roles gate member/role/settings/commerce actions only; in-product feature access is gated by each product per subscription tier"
+    },
+    "loadFailed": "Could not load the permission catalog. Please try again.",
+    "filters": {
+      "groupLabel": "Permission catalog filters",
+      "count": "{count} rows",
+      "searchPlaceholder": "Search code, name, or page",
+      "searchAriaLabel": "Search the permission catalog",
+      "kindAriaLabel": "Row level",
+      "kindAll": "All levels",
+      "reset": "Clear filters",
+      "listOnly": "The permission catalog is a tree; list view only"
+    },
+    "kind": {
+      "section": "Module",
+      "page": "Page",
+      "perm": "Operation",
+      "group": "Other"
+    }
+  },
+  "planFeatures": {
+    "governance_quality": "Data quality governance",
+    "governance_standards": "Data standards",
+    "governance_lineage": "Data lineage",
+    "governance_security": "Data security policies",
+    "governance_policies": "Governance policy center",
+    "governance_mdm": "Master data management",
+    "governance_custom": "Custom governance domains"
+  },
+  "planned": {
+    "badge": "Planned",
+    "sectionEmpty": "This feature is still planned — there is nothing to show yet.",
+    "controlNotice": "The controls in this section are not wired to a backend yet; switches shown here do not take effect.",
+    "pageNotice": "This page is not wired to a backend yet and is still being planned."
+  },
+  "preferences": {
+    "title": "Display preferences",
+    "locale": {
+      "label": "Language",
+      "zh-CN": "简体中文",
+      "en-US": "English (US)"
+    },
+    "density": {
+      "label": "Density",
+      "compact": "Compact",
+      "default": "Default",
+      "comfortable": "Comfortable"
+    },
+    "theme": {
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark",
+      "switchTo": "Switch to {theme}"
+    }
+  },
+  "principalNo": {
+    "label": "ID:"
   },
   "profilePage": {
     "header": {
@@ -1102,347 +1953,143 @@
       "unset": "Not set"
     }
   },
-  "verificationPage": {
-    "personal": {
-      "eyebrow": "Personal info",
-      "title": "Identity verification",
-      "description": "Completing personal verification links it to your personal tenant."
+  "quotasPage": {
+    "title": "Quota Management",
+    "description": "Storage and AI Credits for this workspace: grant makeup, current usage, and what's left at a glance",
+    "metrics": {
+      "groupLabel": "Quota overview",
+      "storage": "Storage",
+      "storageHint": "Total {limit} · {remaining} left",
+      "creditRemaining": "AI Credits balance",
+      "creditRemainingHint": "Total {limit}",
+      "creditUsed": "Used this cycle",
+      "creditUsedHint": "AI Credits · resets with the subscription cycle",
+      "credits": "AI Credits",
+      "addons": "Active booster packs",
+      "addonsExpiry": "Earliest expiry {date}",
+      "addonsNone": "No active packs — buy one below"
     },
-    "organization": {
-      "eyebrow": "Tenant info",
-      "title": "Enterprise verification",
-      "description": "Complete enterprise verification to unlock organization-tenant compliance."
+    "source": {
+      "ws_base": "Base grant",
+      "subscription": "Subscription",
+      "addon_purchase": "Booster pack",
+      "manual_override": "Operator grant"
     },
-    "fields": {
-      "status": "Verification status"
+    "reset": {
+      "none": "No reset",
+      "day": "Daily reset",
+      "month": "Monthly reset"
     },
-    "status": {
-      "unverified": "Unverified"
+    "storage": {
+      "title": "Storage",
+      "description": "A workspace-level shared resource: one row per grant source or usage subject; a product's contribution and usage read side by side",
+      "colLimit": "Grant",
+      "colExpires": "Valid until",
+      "noExpiry": "No expiry",
+      "colUsed": "Used",
+      "colShare": "Of total",
+      "colObserved": "Reported at",
+      "totalLine": "Total {limit} · {remaining}",
+      "emptySources": "No storage grants yet",
+      "colItem": "Item",
+      "usageOnly": "Product usage"
     },
-    "timeline": {
-      "empty": "No verification started yet."
+    "credits": {
+      "title": "AI Credits",
+      "description": "Subscription grants stack across products — own pool first, shared pools as fallback; top up with booster packs when everything runs dry",
+      "colSource": "Source",
+      "colLimit": "Grant",
+      "colUsed": "Used this cycle",
+      "colRemaining": "Left",
+      "colReset": "Reset",
+      "colExpires": "Valid until",
+      "empty": "No AI Credits yet — subscribe to a product to receive them",
+      "sharingTitle": "Cross-product sharing",
+      "sharingOn": "On by default: {products} participate — a product that runs dry can draw on the others' remainder, with every spend attributed per product",
+      "sharingOff": "No products currently share — each product's credits stay reserved",
+      "boosterTitle": "AI Credits booster packs",
+      "boosterBody": "When subscription credits run out, booster packs top you up; they burn after subscription pools and stay valid longer"
     },
-    "sections": {
-      "form": {
-        "title": "Verification details",
-        "description": "Fill in and submit verification materials (coming soon).",
-        "empty": "Verification is coming soon."
-      },
-      "history": {
-        "title": "History",
-        "description": "Submission, review, and change records.",
-        "empty": "No verification records yet."
-      }
+    "products": {
+      "title": "Per-product quotas",
+      "description": "Independent per-product view: the product's own service quotas plus its platform resource contributions",
+      "colProduct": "Product",
+      "colMetric": "Metric",
+      "colLimit": "Grant",
+      "colUsed": "Used this cycle",
+      "colRemaining": "Left",
+      "wsShared": "Shared workspace-wide",
+      "empty": "No product quotas yet — they appear once you subscribe",
+      "colReset": "Resets"
     },
-    "org": {
-      "title": "Business verification",
-      "description": "Verify your business to unlock subscriptions and invoicing; one verification stays valid",
-      "status": {
-        "unverified": "Not verified",
-        "pending": "Under review",
-        "verified": "Verified",
-        "rejected": "Rejected",
-        "superseded": "Superseded",
-        "lite": "Simple verification",
-        "full": "Full verification"
-      },
-      "pendingBanner": "Your application is submitted; platform operations will review it within 1-2 business days",
-      "rejectedBanner": "Your last application was rejected: {reason}. Check the details and submit again",
-      "submittedBanner": "Submitted. Awaiting review; the result syncs to the badge on the tenant page",
-      "submitFailed": "Submission failed. Please try again later",
-      "liteLimitBanner": "You are verified via simple business verification: you can subscribe, but cannot request invoices",
-      "liteLimitBannerBody": "Simple verification checks registration details only, without verifying the legal representative in person or their documents, so invoicing is not available. Face verification and document verification are in development and will offer an upgrade path.",
-      "methods": {
-        "title": "Verification methods",
-        "description": "The three methods differ in what they require and what they unlock. Simple business verification is available now; the other two are in development",
-        "needLabel": "What you provide",
-        "capabilityLabel": "What you get",
-        "canSubscribe": "Subscribe to products and plans",
-        "canInvoice": "Request invoices",
-        "cannotInvoice": "Cannot request invoices",
-        "availableTag": "Available now",
-        "currentTag": "Current method",
-        "lite": {
-          "name": "Simple business verification",
-          "summary": "Company name and unified social credit code only, reviewed by operations. The fastest path",
-          "items": {
-            "0": "Company name",
-            "1": "Unified social credit code"
-          }
-        },
-        "face": {
-          "name": "Legal representative face verification",
-          "summary": "The legal representative verifies in person by face scan; unlocks invoicing",
-          "items": {
-            "0": "Registration details",
-            "1": "Face scan by the legal representative"
-          }
-        },
-        "documents": {
-          "name": "Document verification",
-          "summary": "Submit the signed application form and the business licence image for manual review; unlocks invoicing",
-          "items": {
-            "0": "Verification application form (download, stamp, upload)",
-            "1": "Business licence image"
-          }
-        },
-        "selectedTag": "Selected"
-      },
-      "current": {
-        "title": "Current verification",
-        "description": "Verification is in effect; changes require another review",
-        "method": "Method",
-        "verifiedAt": "Verified at",
-        "invoicing": "Invoicing",
-        "invoicingAllowed": "Can request invoices",
-        "invoicingBlocked": "Cannot request invoices (simple verification)"
-      },
-      "form": {
-        "title": "Submit business verification",
-        "description": "Only simple business verification is open this cycle: registration details, no document images",
-        "retitleTitle": "Change verification details",
-        "retitleDescription": "Changes require another review; the existing verification stays valid meanwhile",
-        "liteNotice": "Simple business verification: once approved you can subscribe, but cannot request invoices",
-        "companyName": "Company name",
-        "companyNamePlaceholder": "Exactly as registered on the business licence",
-        "licenseNo": "Unified social credit code",
-        "licenseNoPlaceholder": "18-character unified social credit code",
-        "legalName": "Legal representative",
-        "legalNamePlaceholder": "As shown on the business licence",
-        "submit": "Submit application",
-        "pendingLocked": "Under review, cannot submit",
-        "selectedMethod": "Selected: {method}. Fill in the details this method requires."
-      },
-      "history": {
-        "title": "Applications",
-        "description": "Past verification applications and their outcomes",
-        "colSubject": "Company",
-        "colMethod": "Method",
-        "colStatus": "Status",
-        "colAt": "Submitted",
-        "colResult": "Outcome / time",
-        "rowMenu": "Record actions",
-        "awaiting": "Awaiting review",
-        "empty": "No applications yet"
-      },
-      "notes": {
-        "title": "About verification",
-        "description": "Scope and effect",
-        "liteTitle": "Limits of simple verification",
-        "liteBody": "Simple verification checks registration details and takes no document images, so it allows subscribing but not invoicing. For invoicing, wait for face or document verification",
-        "effectTitle": "Scope",
-        "effectBody": "Verification lives on the tenant and every workspace inherits it; the tenant name follows the verified company name, and renaming voids the verification",
-        "noIdTitle": "No identity document images",
-        "noIdBody": "None of the three methods asks for identity document images: simple verification checks registration details, face verification verifies the person, and document verification takes only the application form and the business licence"
-      },
-      "loadFailed": "Could not read the verification status; the form is locked. Retry or come back later.",
-      "retry": "Retry",
-      "personalTenantBanner": "Business verification applies to organization tenants only",
-      "personalTenantBannerBody": "This is a personal tenant. Personal identity verification lives on the account page; convert to an organization tenant first for members, business verification and invoicing.",
-      "apply": {
-        "title": "Submit business verification",
-        "description": "Choose a method and fill in the details; operations reviews the application and the result appears on the verification page",
-        "backToResult": "Back to result",
-        "cancel": "Cancel"
-      },
-      "actions": {
-        "goApply": "Submit application",
-        "changeApply": "Change verification details"
-      }
-    }
-  },
-  "securityPage": {
-    "header": {
-      "eyebrow": "Account security",
-      "title": "Security",
-      "description": "Review login history and devices to keep your account safe."
+    "addons": {
+      "title": "Booster & Extension Packs",
+      "description": "Storage extensions and AI booster packs: pick a card to order, then follow the full order flow — declare the payment, operations confirms, and the grant lands in your pools",
+      "colPack": "Pack",
+      "colContent": "Contents",
+      "colValidity": "Validity",
+      "validityDays": "{days} days",
+      "colPrice": "Price",
+      "buy": "Buy",
+      "pendingExists": "Order pending",
+      "buyFailed": "Order failed — please try again later",
+      "colOrder": "Order",
+      "colStatus": "Status",
+      "colNote": "Note",
+      "statusPending": "Awaiting payment",
+      "statusDeclared": "Declared",
+      "statusCompleted": "Active",
+      "statusCancelled": "Cancelled",
+      "validUntil": "Valid until {date}",
+      "payBefore": "Complete the transfer and declare before {date}",
+      "awaitingConfirm": "Awaiting operations confirmation",
+      "declare": "Declare transfer",
+      "cancel": "Cancel order",
+      "cancelFailed": "Cancel failed — please try again later",
+      "ordersEmpty": "No booster pack orders yet",
+      "packsEmpty": "No packs available right now",
+      "declareTitle": "Bank transfer declaration",
+      "declareDescription": "{pack} · {price} due. Wire the payment to the account below, then submit the declaration",
+      "bankAccountName": "Account name",
+      "bankName": "Bank",
+      "bankAccountNo": "Account number",
+      "bankReference": "Transfer reference (required)",
+      "bankUnavailable": "Receiving account not configured yet — contact platform operations for transfer details",
+      "payerName": "Payer name",
+      "payerNamePlaceholder": "Name on the sending account (for reconciliation)",
+      "transactionNo": "Transfer reference no.",
+      "transactionNoPlaceholder": "Bank slip reference (optional)",
+      "declareLater": "Declare later",
+      "declareSubmit": "Transfer done — submit declaration",
+      "declareFailed": "Declaration failed — please try again later",
+      "kindStorage": "Storage",
+      "kindCredits": "AI Credits",
+      "oneOffNote": "one-off purchase",
+      "continuePay": "Pay now",
+      "orderDetail": "Order detail",
+      "orderMenu": "Order actions",
+      "cancelHint": "Only pending orders can be cancelled",
+      "buyNoPermission": "Your role cannot make payments; ask the tenant owner to buy add-on packs",
+      "loadFailed": "Could not load add-on packs and orders, please retry"
     },
-    "common": {
-      "empty": "--",
-      "loading": "Loading...",
-      "loadError": "Could not load login history and sessions. Please retry.",
-      "revokeError": "Could not sign this device out. Please retry."
-    },
-    "sections": {
-      "loginHistory": {
-        "title": "Login history",
-        "description": "Recent sign-in attempts (including failures) with time, IP, location, and device.",
-        "empty": "No login records yet."
-      },
-      "sessions": {
-        "title": "Devices",
-        "description": "Active login sessions. Sign out devices you no longer use.",
-        "empty": "No active sessions.",
-        "revoke": "Sign out"
-      }
-    },
-    "status": {
-      "success": "Success",
-      "failed": "Failed"
-    }
-  },
-  "membersPage": {
-    "header": {
-      "eyebrow": "Tenant management",
-      "title": "Members",
-      "description": "Manage tenant members, roles, and access status.",
-      "addMember": "Add member",
-      "inviteMember": "Invite member",
-      "viewRoles": "Roles",
-      "viewInvitations": "Invitations",
-      "viewPermissions": "Permissions"
-    },
-    "table": {
-      "toolbarTitle": "{count} members",
-      "countHint": "{total} total, {active} active, {invited} invited, {suspended} suspended",
-      "searchPlaceholder": "Search by name, email, or role",
-      "searchAriaLabel": "Search members",
-      "filterAriaLabel": "Member status filters",
-      "memberTitle": "{name}, {username}, {phone}, {email}, {role}, {team}, {status}",
-      "statusTitle": "Current status: {status}",
-      "avatarAlt": "{name} avatar",
-      "emptyPhone": "Not set",
-      "primaryOwner": "Primary administrator",
-      "selectPage": "Select members on this page",
-      "selectMember": "Select {name}",
-      "columns": {
-        "name": "Name",
-        "phone": "Phone",
-        "email": "Email",
-        "role": "Role",
-        "status": "Status",
-        "lastActive": "Last active",
-        "joinedAt": "Joined"
-      },
-      "invitedExpires": "Invitation valid until {date}",
-      "selfTag": "You"
-    },
-    "status": {
-      "Active": "Active",
-      "Invited": "Invited",
-      "Suspended": "Suspended"
-    },
+    "gotoAddons": "Buy add-ons",
+    "remainBy": "{amount} left",
+    "overBy": "{amount} over",
     "filters": {
-      "all": "All members",
-      "active": "Active",
-      "invited": "Invited",
-      "suspended": "Suspended"
-    },
-    "empty": {
-      "loadingTitle": "Loading members...",
-      "loadingDescription": "Reading workspace members from the console BFF.",
-      "title": "No members match the current filters.",
-      "description": "Try widening the status scope or searching by another field.",
-      "resetFilters": "Reset filters"
-    },
-    "actions": {
-      "menuLabel": "Member actions for {name}",
-      "edit": "Edit user",
-      "disableMember": "Disable user",
-      "enableMember": "Enable user",
-      "resetPassword": "Reset password",
-      "unlink": "Unlink",
-      "resendInvite": "Resend invitation",
-      "revokeInvite": "Revoke invitation"
-    },
-    "bulk": {
-      "selected": "{count} selected",
-      "disable": "Disable selected",
-      "enable": "Enable selected",
-      "unlink": "Unlink selected",
-      "noun": "member(s)"
-    },
-    "dialogs": {
-      "create": {
-        "title": "Add member",
-        "description": "Add an existing Vxture account to this tenant by email; if they have no account yet, invite them instead.",
-        "switchToInvite": "Send an invitation instead"
-      },
-      "invite": {
-        "title": "Invite member",
-        "description": "They receive an email with a link; once accepted they join the tenant and its default workspace with the selected role."
-      },
-      "edit": {
-        "title": "Edit member"
-      },
-      "reset": {
-        "title": "Reset password",
-        "description": "Set a new temporary password for {name}."
-      },
-      "unlink": {
-        "title": "Unlink member",
-        "description": "Unlink {name} from the current tenant? This will not delete the user account.",
-        "verb": "Unlink",
-        "consequence": "This member leaves the workspace and loses all access to it immediately. Their account is unaffected; rejoining needs a new invitation."
-      },
-      "bulkUnlink": {
-        "title": "Unlink selected members",
-        "description": "Unlink {count} selected members from the current tenant? This will not delete user accounts."
-      },
-      "fields": {
-        "email": "Email",
-        "role": "Role",
-        "defaultRole": "Default member",
-        "nextPassword": "New temporary password"
-      },
-      "actions": {
-        "cancel": "Cancel",
-        "create": "Create member",
-        "sendInvite": "Send invite",
-        "save": "Save",
-        "resetPassword": "Reset password",
-        "unlink": "Unlink"
-      },
-      "revokeInvite": {
-        "verb": "Revoke the invitation to",
-        "consequence": "The invitation link stops working immediately and the recipient sees \"invitation not found\". This cannot be undone — send a new invitation to let them join.",
-        "keep": "Keep invitation"
-      }
-    },
-    "feedback": {
-      "createSuccess": "Member created.",
-      "inviteSuccess": "Member invitation created.",
-      "updateSuccess": "Member profile updated.",
-      "resetPasswordSuccess": "{name}'s password has been reset.",
-      "unlinkSuccess": "Member association unlinked.",
-      "bulkDisabled": "{count} members disabled.",
-      "bulkEnabled": "{count} members enabled.",
-      "bulkUnlinkSuccess": "{count} member associations unlinked.",
-      "memberDisabled": "Member disabled.",
-      "memberEnabled": "Member enabled.",
-      "createError": "Could not create the member. Try again later.",
-      "inviteError": "Could not create the invitation. Try again later.",
-      "updateError": "Could not save the member profile. Try again later.",
-      "resetPasswordError": "Could not reset the password. Try again later.",
-      "resetPasswordLength": "The new temporary password must contain at least 6 characters.",
-      "unlinkError": "Could not unlink the member association. Try again later.",
-      "bulkDisableError": "Could not disable the selected members. Try again later.",
-      "bulkEnableError": "Could not enable the selected members. Try again later.",
-      "bulkUnlinkError": "Could not unlink the selected members. Try again later.",
-      "memberDisableError": "Could not disable the member. Try again later.",
-      "memberEnableError": "Could not enable the member. Try again later.",
-      "inviteNoEmail": "Invitation created, but the email could not be sent; share the link manually.",
-      "inviteResent": "Invitation resent.",
-      "inviteRevoked": "Invitation revoked.",
-      "resendError": "Could not resend the invitation. Try again later.",
-      "revokeError": "Could not revoke the invitation. Try again later.",
-      "bulkPartial": "{done} done, {failed} failed.",
-      "bulkSkipped": "The owner and yourself were skipped."
-    },
-    "hints": {
-      "ownerProtected": "The owner cannot be disabled or unlinked; transfer ownership first",
-      "ownerRoleLocked": "The owner's role only changes through ownership transfer",
-      "selfProtected": "You cannot do this to yourself"
-    },
-    "errors": {
-      "owner_protected": "The owner cannot be disabled or unlinked; transfer ownership first.",
-      "self_protected": "You cannot do this to yourself.",
-      "owner_role_locked": "The owner's role only changes through ownership transfer.",
-      "account_not_found": "No Vxture account uses this email; send an invitation instead.",
-      "already_member": "This account is already a member of the tenant.",
-      "invitation_pending": "This email already has a pending invitation; resend or revoke it on the Invitations page.",
-      "invalid_email": "The email address is not valid."
+      "groupLabel": "Product quota filters",
+      "listOnly": "Product quotas are list-only",
+      "count": "{count} total",
+      "searchPlaceholder": "Search product, code or metric",
+      "searchAriaLabel": "Search product quotas",
+      "reset": "Reset"
     }
+  },
+  "role": {
+    "owner": "Owner",
+    "manager": "Manager",
+    "member": "Member",
+    "readonly": "Read-only",
+    "guest": "Guest"
   },
   "rolesPage": {
     "title": "Roles",
@@ -1500,639 +2147,428 @@
       "empty": "This role holds no permission points"
     }
   },
-  "permissionsPage": {
-    "title": "Permissions",
-    "description": "The governance permission catalog and role matrix: which roles hold each governance action",
-    "viewRoles": "Roles",
-    "backToMembers": "Back to members",
-    "metrics": {
-      "groupLabel": "Permissions overview",
-      "perms": "Permission points",
-      "permsHint": "Tenant + workspace scope",
-      "model": "Authorization model",
-      "modelValue": "Fixed catalog",
-      "modelHint": "Not tenant-definable",
-      "permsHelp": "Total operation codes in the governance permission catalog, tenant-level and workspace-level.",
-      "roles": "Governance roles",
-      "rolesHelp": "Role columns in the matrix, from the same catalog as the Roles page.",
-      "rolesTag": "Matrix columns",
-      "modelHelp": "The permission catalog is defined platform-wide with no tenant dimension; tenants cannot change it."
-    },
-    "perm": {
-      "tenant_member_read": "View members",
-      "tenant_member_manage": "Member management",
-      "tenant_role_assign": "Role assignment",
-      "tenant_workspace_manage": "Workspace management",
-      "tenant_settings_manage": "Tenant settings management",
-      "tenant_delete": "Tenant deletion",
-      "tenant_billing_read": "View commerce & billing",
-      "tenant_billing_manage": "Commerce & billing management",
-      "tenant_payment_manage": "Declare payments",
-      "tenant_invoice_manage": "Invoice & title management",
-      "tenant_quota_read": "View quota & usage",
-      "tenant_audit_read": "View audit log",
-      "tenant_model_read": "View model access",
-      "workspace_member_manage": "Workspace member management",
-      "workspace_role_assign": "Workspace role assignment",
-      "workspace_settings_manage": "Workspace settings management"
-    },
-    "matrix": {
-      "title": "Permission matrix",
-      "description": "The catalog follows the sidebar: section → page → operation; see which roles hold each governance action at a glance",
-      "colPerm": "Permission",
-      "empty": "Permission catalog is empty",
-      "openToAll": "Open to all members",
-      "groupOther": "Operations not tied to a page (workspace scope)",
-      "colKind": "Level",
-      "expand": "Expand children",
-      "collapse": "Collapse children",
-      "childCount": "{count} children",
-      "emptyHint": "Clear the filters to see the full permission catalog"
-    },
-    "notes": {
-      "title": "Permission model",
-      "description": "This page answers one question: who can perform which governance actions",
-      "readTitle": "Read-only catalog",
-      "readBody": "The permission catalog is defined platform-wide; tenants cannot add, edit, or remove entries — contact platform operations for new permission shapes",
-      "openTitle": "Pages without operation codes",
-      "openBody": "A page marked \"Open to all members\" carries no operation code, so any member can open it; gates apply only to actions that have a code",
-      "scopeTitle": "Governance ≠ business",
-      "scopeBody": "Governance roles gate member/role/settings/commerce actions only; in-product feature access is gated by each product per subscription tier"
-    },
-    "loadFailed": "Could not load the permission catalog. Please try again.",
-    "filters": {
-      "groupLabel": "Permission catalog filters",
-      "count": "{count} rows",
-      "searchPlaceholder": "Search code, name, or page",
-      "searchAriaLabel": "Search the permission catalog",
-      "kindAriaLabel": "Row level",
-      "kindAll": "All levels",
-      "reset": "Clear filters",
-      "listOnly": "The permission catalog is a tree; list view only"
-    },
-    "kind": {
-      "section": "Module",
-      "page": "Page",
-      "perm": "Operation",
-      "group": "Other"
-    }
+  "routes": {
+    "dashboard": "Dashboard",
+    "todos": "Todo Items",
+    "profile": "Account",
+    "personalTenant": "Tenant info",
+    "organization": "Organization Info",
+    "members": "Members",
+    "membersInvitations": "Invitations",
+    "membersRoles": "Roles",
+    "membersPermissions": "Permissions",
+    "roles": "Roles",
+    "invitations": "Invitation Records",
+    "subscription": "Subscriptions",
+    "billing": "Billing center",
+    "billingInvoices": "Invoices & titles",
+    "quotas": "Quotas",
+    "atlas": "Model Services",
+    "notifications": "Notifications",
+    "security": "Security",
+    "settings": "Tenant Settings",
+    "tenantSettings": "Tenant Settings",
+    "usage": "Usage",
+    "addonPay": "Booster Pack Payment",
+    "vouchers": "Vouchers",
+    "auditLogs": "Audit Logs",
+    "inbox": "Message Center",
+    "tenant": "Tenant",
+    "tenantVerification": "Business verification",
+    "tenantVerificationApply": "Submit verification",
+    "skills": "Skills & Tools"
   },
-  "modelPlatformPage": {
+  "securityPage": {
     "header": {
-      "eyebrow": "Model Platform",
-      "title": "Model Platform",
-      "description": "Manage online models, private models, endpoints, capability tags, and tenant/agent grants.",
-      "badge": "Production keys pending"
+      "eyebrow": "Account security",
+      "title": "Security",
+      "description": "Review login history and devices to keep your account safe."
     },
-    "summary": {
-      "ariaLabel": "Model platform summary",
-      "models": "Registered models",
-      "modelsValue": "{active} / {total} active",
-      "privateModels": "Private models",
-      "grants": "Grants",
-      "grantsValue": "{active} / {total} active"
+    "common": {
+      "empty": "--",
+      "loading": "Loading...",
+      "loadError": "Could not load login history and sessions. Please retry.",
+      "revokeError": "Could not sign this device out. Please retry."
     },
-    "providers": {
-      "doubao": "Doubao",
-      "claude": "Claude",
-      "private": "Private",
-      "custom": "Custom"
-    },
-    "filters": {
-      "all": "All models",
-      "active": "Active",
-      "inactive": "Inactive",
-      "online": "Online",
-      "private": "Private"
-    },
-    "actions": {
-      "addModel": "Add model",
-      "addGrant": "Add grant",
-      "modelMenu": "Model actions for {name}",
-      "grantMenu": "Grant actions",
-      "editModel": "Edit model",
-      "grantModel": "Grant tenant",
-      "enableModel": "Enable model",
-      "disableModel": "Disable model",
-      "editGrant": "Edit grant",
-      "enableGrant": "Enable grant",
-      "disableGrant": "Disable grant"
-    },
-    "table": {
-      "searchPlaceholder": "Search by model, provider, endpoint, or capability",
-      "searchAriaLabel": "Search models",
-      "filterAriaLabel": "Model filters",
-      "toolbarTitle": "{count} models",
-      "columns": {
-        "model": "Model",
-        "provider": "Provider",
-        "capabilities": "Capabilities",
-        "endpoint": "Endpoint",
-        "key": "Key env",
-        "status": "Status"
-      }
-    },
-    "grants": {
-      "title": "Model grants",
-      "count": "{count} grants",
-      "allAgents": "All agents",
-      "noReason": "No grant reason",
-      "permanent": "Permanent",
-      "columns": {
-        "model": "Model",
-        "tenant": "Tenant",
-        "agent": "Agent",
-        "priority": "Priority",
-        "expires": "Expires",
-        "status": "Status"
+    "sections": {
+      "loginHistory": {
+        "title": "Login history",
+        "description": "Recent sign-in attempts (including failures) with time, IP, location, and device.",
+        "empty": "No login records yet."
+      },
+      "sessions": {
+        "title": "Devices",
+        "description": "Active login sessions. Sign out devices you no longer use.",
+        "empty": "No active sessions.",
+        "revoke": "Sign out"
       }
     },
     "status": {
-      "active": "Active",
-      "inactive": "Inactive"
+      "success": "Success",
+      "failed": "Failed"
+    }
+  },
+  "shell": {
+    "loading": {
+      "label": "Loading"
     },
-    "pagination": {
-      "summary": "Page {page} / {totalPages}, {total} models",
-      "previous": "Previous",
-      "next": "Next"
-    },
-    "dialogs": {
-      "createModel": {
-        "title": "Add model"
-      },
-      "editModel": {
-        "title": "Edit model"
-      },
-      "createGrant": {
-        "title": "Add grant"
-      },
-      "editGrant": {
-        "title": "Edit grant"
-      },
-      "fields": {
-        "modelName": "Model name",
-        "modelCode": "Model code",
-        "provider": "Provider",
-        "protocol": "Protocol",
-        "endpointUrl": "Endpoint URL",
-        "keyReference": "Key reference",
-        "capabilities": "Capabilities, comma separated",
-        "config": "Non-sensitive config JSON",
-        "grantModel": "Grant model",
-        "selectModel": "Select model",
-        "tenantId": "ORG_ID",
-        "agentId": "Agent ID, optional",
-        "priority": "Priority, lower value wins",
-        "reason": "Grant reason",
-        "expiresAt": "Expiration date",
-        "grantActive": "Enable grant now"
-      },
-      "actions": {
-        "cancel": "Cancel",
-        "save": "Save"
+    "featureBoards": "Feature boards",
+    "searchPlaceholder": "Search members, subscriptions, settings…",
+    "search": {
+      "title": "Global search",
+      "description": "Search pages and business data by keyword",
+      "empty": "No matches",
+      "error": "Search is unavailable; showing page matches only",
+      "loading": "Searching",
+      "groups": {
+        "pages": "Pages",
+        "member": "Members",
+        "invoice": "Invoices"
       }
+    },
+    "help": "Help",
+    "notifications": "Notifications",
+    "settings": "System settings",
+    "assistant": "Varda · data assistant",
+    "userMenu": "Account",
+    "verified": "Verified",
+    "tenantOrg": "Organization / tenant",
+    "tenantVerified": "Verified",
+    "tenantSettings": "Tenant settings",
+    "switchOrg": "Switch organization",
+    "prefsTitle": "Preferences",
+    "themeSystem": "System",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "densityCompact": "Compact",
+    "densityDefault": "Default",
+    "densityComfy": "Comfortable",
+    "switchUser": "Switch user",
+    "signOut": "Sign out",
+    "views": {
+      "appcenter": {
+        "name": "Agents Center",
+        "desc": "Subscribed apps · quick access"
+      },
+      "console": {
+        "name": "Tenant Console",
+        "desc": "Management · data & operations"
+      }
+    },
+    "sidebar": {
+      "expandNav": "Expand navigation",
+      "collapseNav": "Collapse navigation",
+      "expandAllGroups": "Expand all groups",
+      "collapseAllGroups": "Collapse all groups"
+    },
+    "drawer": {
+      "openCenter": "Open message center"
+    },
+    "appcenter": {
+      "title": "Agents",
+      "desc": "Agents this workspace subscribes to — open and use. Recommendations below.",
+      "products": {
+        "title": "Subscribed",
+        "desc": "Listed from this workspace's active subscriptions, trials included.",
+        "empty": "This workspace has no active product subscription yet.",
+        "browse": "View subscriptions",
+        "unavailable": "Subscribed products are temporarily unavailable. Please refresh.",
+        "trialing": "Trial",
+        "open": "Open",
+        "detail": "Product page",
+        "versionAt": "v {version} at {date}"
+      },
+      "reco": {
+        "title": "Popular",
+        "desc": "Agents you haven't subscribed to — read the product page or subscribe directly.",
+        "learnMore": "Product page",
+        "subscribe": "Subscribe"
+      }
+    },
+    "realNameVerified": "Verified",
+    "missingPhone": "No phone",
+    "missingEmail": "No email",
+    "slotRole": "Role",
+    "slotLevel": "Level",
+    "slotLocked": "More badges · locked",
+    "billing": "Billing",
+    "monthlyCost": "This month",
+    "noData": "No data",
+    "payBill": "Pay invoice",
+    "trafficUsage": "Traffic usage",
+    "usageLimit": "Usage limits",
+    "usageQuota": "Usage Quota",
+    "storageQuota": "Storage",
+    "aiCredits": "AI Credits",
+    "switchScope": "Switch scope",
+    "organization": "Organization",
+    "workspace": "Workspace",
+    "defaultWorkspace": "Default workspace",
+    "defaultTag": "Default",
+    "workspaceSwitchComingSoon": "Multi-workspace switching coming soon",
+    "plan": "Plan",
+    "freePlan": "No subscription",
+    "orgTenant": "Organization tenant",
+    "personalTenant": "Personal tenant",
+    "fontSmall": "S",
+    "fontDefault": "M",
+    "fontLarge": "L",
+    "monthlyCostDesc": "Paid this month & invoicing",
+    "payBillDesc": "Manage payment methods",
+    "trafficUsageDesc": "Traffic & call usage",
+    "usageLimitDesc": "Quota limits & alert thresholds",
+    "verifyUnknown": "Verification unknown",
+    "verifyActive": "Verified",
+    "verifySuspended": "Suspended",
+    "brandName": "Workspace Console",
+    "tenantList": "Tenants you can switch to",
+    "currentTag": "Current",
+    "accountDeleting": {
+      "title": "Account in deletion retention",
+      "body": "You asked to delete this account on {requestedAt}; it will be permanently deleted on {purgeAt}. Cancel the deletion and reactivate?",
+      "reactivate": "Cancel deletion and reactivate",
+      "keep": "Keep deleting and sign out",
+      "error": "Something went wrong. Please try again."
+    }
+  },
+  "sidebar": {
+    "ariaLabel": "Console navigation",
+    "collapseAll": "Collapse all groups",
+    "description": "Self-service account, tenant, member, and subscription management",
+    "domains": {
+      "workspace": "Workspace",
+      "org": "Org & Members",
+      "billing": "Subscription & Billing",
+      "settings": "Settings & Security",
+      "capability": "Models & Capabilities"
+    },
+    "expandAll": "Expand all groups",
+    "eyebrow": "Vxture Console",
+    "footer": {
+      "label": "Status",
+      "value": "Self-service platform"
+    },
+    "footerCard": {
+      "title": "Compliance posture",
+      "meta": "Classification coverage 96%"
+    },
+    "items": {
+      "overview": {
+        "label": "Data Overview",
+        "description": "Tenant status, subscription expiry, usage, and quick entries"
+      },
+      "todos": {
+        "label": "Todo Items",
+        "description": "Key actions waiting for the current tenant"
+      },
+      "profile": {
+        "label": "Account",
+        "description": "Avatar, profile, contact details, sign-in methods and preferences"
+      },
+      "members": {
+        "label": "Member Management",
+        "description": "Invites, access review, and team membership"
+      },
+      "subscription": {
+        "label": "Subscriptions",
+        "description": "Subscribed products, renewal alerts, and recommendations"
+      },
+      "billing": {
+        "label": "Billing center",
+        "description": "Orders, bills, invoices, and payment records"
+      },
+      "quotas": {
+        "label": "Quotas",
+        "description": "Storage and AI Credits grants and usage"
+      },
+      "inbox": {
+        "label": "Message Center",
+        "description": "Things waiting on you, plus subscription, order and refund notices"
+      },
+      "notifications": {
+        "label": "Notifications",
+        "description": "Email and in-console notification preferences"
+      },
+      "security": {
+        "label": "Security Settings",
+        "description": "Login logs, device management, and future controls"
+      },
+      "tenantSettings": {
+        "label": "Tenant Settings",
+        "description": "Language, timezone, and dangerous tenant cancellation"
+      },
+      "usage": {
+        "label": "Usage Analytics",
+        "description": "Consumption trends, call records, and member breakdown"
+      },
+      "vouchers": {
+        "label": "Vouchers",
+        "description": "Your discount and credit vouchers, validity and usage"
+      },
+      "auditLogs": {
+        "label": "Audit Logs",
+        "description": "Trail of member and commerce actions in this tenant"
+      },
+      "tenantInfo": {
+        "label": "Tenant",
+        "description": "Tenant profile, contact, defaults and danger zone"
+      },
+      "modelService": {
+        "label": "Model Services",
+        "description": "Models, quotas and usage available to this workspace"
+      },
+      "skillTools": {
+        "label": "Skills & Tools",
+        "description": "Skills and tools available to this workspace (in development)"
+      }
+    },
+    "openDocs": "View documentation",
+    "sections": {
+      "workspace": "Workspace",
+      "accountTenant": "Account & Tenant",
+      "subscriptionBilling": "Subscription & Billing",
+      "settingsSecurity": "Settings & Security",
+      "capability": "Models & Capabilities"
+    },
+    "title": "Console",
+    "workspaceMode": {
+      "platform": "Platform workspace",
+      "tenant": "Tenant workspace"
+    }
+  },
+  "skillsPage": {
+    "title": "Skills & Tools",
+    "description": "Skills and tools available to this workspace, with quotas and usage. Read-only — grants and configuration live on the operations side.",
+    "planned": {
+      "title": "In development",
+      "body": "The data path is not wired up yet. Once it is, this page will list the skills and tools this workspace has been granted, in the same shape as Model Services."
     },
     "empty": {
-      "loadingTitle": "Loading models...",
-      "loadingDescription": "Reading model registry and grants from Model Platform.",
-      "title": "No models match the current filters.",
-      "description": "Try widening the filters or adding an online/private model.",
-      "resetFilters": "Reset filters"
-    },
-    "feedback": {
-      "loadError": "Failed to load model data. Check whether Model Platform is running.",
-      "modelCreated": "Model created.",
-      "modelUpdated": "Model updated.",
-      "modelEnabled": "Model enabled.",
-      "modelDisabled": "Model disabled.",
-      "modelSaveError": "Model save failed. Check endpoint, capability tags, and config JSON.",
-      "modelStateError": "Model state update failed. Please try again later.",
-      "grantCreated": "Grant created.",
-      "grantUpdated": "Grant updated.",
-      "grantEnabled": "Grant enabled.",
-      "grantDisabled": "Grant disabled.",
-      "grantSaveError": "Grant save failed. Check tenant, model, and quota.",
-      "grantStateError": "Grant state update failed. Please try again later."
+      "title": "Nothing to show yet",
+      "description": "This does not mean you have no skills — the page is not wired to data yet."
     }
   },
-  "atlasPage": {
-    "title": "Model Platform",
-    "description": "Models available to this tenant, application grants, quota and usage.",
-    "loadError": "Could not load model platform status, please retry later.",
-    "metrics": {
-      "groupLabel": "Model platform overview",
-      "models": "Available models",
-      "modelsHint": "{count} live entitlements",
-      "quota": "Quota status",
-      "quotaTier": "tier: {tier}",
-      "quotaNoTier": "no tier",
-      "tokens": "Token usage",
-      "tokensHint": "{count} rows"
+  "subscribePage": {
+    "title": {
+      "upgrade": "Upgrade plan",
+      "renew": "Renew subscription",
+      "addon": "Buy add-on pack",
+      "subscribe": "Subscribe"
     },
-    "quotaStatus": {
-      "covered": "Covered",
-      "uncovered": "No plan",
-      "unavailable": "Platform unreachable"
+    "hint": {
+      "none": "No subscription for this product yet - pick a plan below to get started.",
+      "active": "Your subscription is active. Compare plans below to change tiers.",
+      "trialing": "You are on a trial - convert to a paid plan to keep access.",
+      "renewOff": "Auto-renew is off - your plan lapses at period end. Renew below.",
+      "overdue": "Payment is overdue - settle to keep your entitlements.",
+      "suspended": "This subscription is suspended. Contact support to restore it.",
+      "expired": "Your subscription has expired - renew below to restore access.",
+      "cancelled": "Your subscription was cancelled - resubscribe below."
     },
-    "models": {
-      "title": "Available models",
-      "description": "Models granted to this tenant by the platform control plane.",
-      "empty": "No available models",
-      "colModel": "Model",
-      "colProvider": "Provider",
-      "colProtocol": "Protocol",
-      "colCapabilities": "Capabilities"
-    },
-    "quotas": {
-      "title": "Quota status",
-      "description": "Plan quota pools from the platform side (not Atlas data).",
-      "emptyCovered": "No active quota pools",
-      "emptyUncovered": "No plan published for this workspace yet",
-      "emptyUnavailable": "Could not reach the platform entitlement service",
-      "emptyNone": "No quota data",
-      "colMetric": "Metric",
-      "colRemaining": "Remaining / Limit",
-      "colPriority": "Priority",
-      "colTier": "Tier"
-    },
-    "usage": {
-      "title": "Usage records",
-      "description": "Recent actual calls (Atlas logs, not the billing basis).",
-      "empty": "No model usage recorded",
-      "colModel": "Model",
-      "colProvider": "Provider",
-      "colRequests": "Requests",
-      "colTokens": "Tokens"
-    },
-    "signals": {
-      "title": "Notes",
-      "description": "The tenant side only shows what is visible in the current context.",
-      "scopeTitle": "Tenant scope",
-      "scopeBody": "Showing model platform state for {tenant}.",
-      "scopeMissing": "Tenant context is required before model platform state can be shown.",
-      "boundaryTitle": "Control-plane boundary",
-      "boundaryBody": "Provider, model, policy, price and grant changes are managed by platform operators in the admin plane."
-    },
-    "entitlements": {
-      "title": "Product entitlements",
-      "description": "Products and tiers this workspace subscribes to. Model availability is derived from these; there is no separate tenant-level model grant.",
-      "colProduct": "Product",
-      "colTier": "Tier",
-      "colStatus": "Status",
-      "colLimits": "Limits",
-      "bundled": "bundled",
-      "none": "Not subscribed",
-      "empty": "No product entitlements yet."
-    }
-  },
-  "orderFlow": {
-    "order": {
-      "pending": "Placing order",
-      "done": "Order placed"
-    },
-    "pay": {
-      "pending": "Awaiting payment",
-      "done": "Paid"
-    },
-    "verify": {
-      "pending": "Awaiting receipt",
-      "done": "Funds received"
-    },
-    "provision": {
-      "pending": "Awaiting activation",
-      "done": "Activated"
-    }
-  },
-  "payChannels": {
-    "title": "Payment method",
-    "comingSoon": "coming soon",
-    "alipayQrAlt": "Alipay QR code",
-    "channel": {
-      "alipay": "Alipay",
-      "wechat": "WeChat Pay",
-      "bank_transfer": "Bank transfer"
-    },
-    "referenceNote": "Please put order number {orderNo} in the transfer note so we can reconcile quickly.",
-    "noneEnabled": "Payment channels are being configured; please contact support.",
-    "bank": {
-      "accountName": "Account name",
-      "bankName": "Bank",
-      "accountNo": "Account number",
-      "reference": "Transfer note",
-      "unavailable": "The corporate receiving account is not configured yet; please contact platform operations."
-    }
-  },
-  "workspacePicker": {
-    "defaultWorkspace": "Default workspace",
-    "switchFailed": "Tenant switch failed — please retry; the order owner is unchanged"
-  },
-  "planFeatures": {
-    "governance_quality": "Data quality governance",
-    "governance_standards": "Data standards",
-    "governance_lineage": "Data lineage",
-    "governance_security": "Data security policies",
-    "governance_policies": "Governance policy center",
-    "governance_mdm": "Master data management",
-    "governance_custom": "Custom governance domains"
-  },
-  "orderPay": {
-    "title": "Order payment",
-    "notFound": "Order not found or you have no access.",
-    "countdown": "Time left {time}",
-    "rejectBanner": "Your payment declaration was rejected: {reason} Vouchers were released; you can re-declare or cancel the order. The countdown has been reset.",
-    "cycleStartNote": "The subscription cycle starts when the service is provisioned",
-    "status": {
-      "pending_payment": "Awaiting payment",
-      "paid_pending_verify": "Paid · awaiting confirmation",
-      "activating": "Activating",
-      "completed": "Completed",
-      "cancelled": "Cancelled",
-      "expired": "Expired"
-    },
-    "stateTitle": {
-      "paid_pending_verify": "We are verifying your payment",
-      "activating": "Paid · activating your subscription",
-      "completed": "Subscription is live",
-      "cancelled": "Order cancelled",
-      "expired": "Order expired"
-    },
-    "stateHint": {
-      "paid_pending_verify": "Declaration received. Your subscription activates once we confirm the funds, usually within 1 business day. This page refreshes automatically.",
-      "activating": "Funds settled. Activation usually completes within minutes; this page refreshes automatically.",
-      "completed": "Your subscription is live. Check the subscription page for entitlements.",
-      "cancelled": "This order was cancelled. Place a new order to subscribe.",
-      "expired": "The payment window elapsed and the order was closed automatically. Place a new order to subscribe.",
-      "already_settled": "This order is already settled."
-    },
-    "cycle": {
-      "day": "Daily",
-      "week": "Weekly",
-      "month": "Monthly",
-      "year": "Yearly",
-      "perpetual": "Perpetual"
-    },
-    "breakdown": {
-      "title": "Amount breakdown",
-      "listPrice": "List price",
-      "discountVoucher": "Discount voucher",
-      "noDiscountVoucher": "No discount voucher",
-      "creditVoucher": "Credit voucher",
-      "noCreditVoucher": "No credit voucher",
-      "alreadyPaid": "Already collected",
-      "cashDue": "Amount due",
-      "pickDiscount": "Choose a discount voucher",
-      "pickCredit": "Choose a credit voucher",
-      "noneOption": "Do not use"
-    },
-    "voucher": {
-      "percentOff": "{value}% off",
-      "fixedOff": "¥{value} off"
-    },
-    "channels": {
-      "title": "Payment method",
-      "alipay": "Alipay",
-      "wechat": "WeChat Pay",
-      "bank_transfer": "Bank transfer",
-      "comingSoon": "coming soon",
-      "alipayQrAlt": "Alipay payment QR code",
-      "noneEnabled": "Payment channels are being configured. Please contact support."
-    },
-    "bank": {
-      "accountName": "Account name",
-      "bankName": "Bank",
-      "accountNo": "Account no."
-    },
-    "referenceNote": "Please include order no. {orderNo} in the transfer memo so we can reconcile quickly.",
-    "amountDue": "Amount due",
-    "manualNote": "After you declare, operations verifies the funds manually (usually within 1 business day). Once online payment gateways land, this step completes automatically via the payment callback.",
-    "ttlFine": "Complete payment before the countdown ends; overdue orders close automatically.",
-    "info": {
-      "title": "Order details",
-      "owner": "Owner",
-      "plan": "Plan",
-      "orderNo": "Order no."
-    },
-    "completedPanel": {
-      "next": "Next steps",
-      "viewSubscription": "View subscription & entitlements",
-      "viewBilling": "View bills & invoices",
-      "viewQuotas": "View quota usage"
-    },
-    "actions": {
-      "declarePaid": "I have paid",
-      "settleInstant": "Confirm and activate",
-      "cancelOrder": "Cancel order",
-      "refresh": "Refresh",
-      "backToSubscription": "Back to subscription",
-      "cancel": "Cancel",
-      "noPaymentPermission": "Your role cannot make payments: declaring payment or cancelling this order is for the tenant owner"
-    },
-    "declareDialog": {
-      "title": "Confirm payment declaration",
-      "titleInstant": "Settle with vouchers",
-      "description": "Method: {channel} · Amount: {amount}. After submitting, the order awaits confirmation; your subscription activates once we verify the funds.",
-      "confirm": "Submit",
-      "cancel": "Not yet",
-      "payerName": "Payer (optional)",
-      "payerPlaceholder": "Transfer account name, for reconciliation",
-      "transactionNo": "Transfer reference (optional)",
-      "optional": "Optional"
-    },
-    "errors": {
-      "quote": "Quote failed. Please refresh and retry.",
-      "declare": "Payment declaration failed. Please retry later.",
-      "cancel": "Cancel failed. Please retry later."
-    },
-    "list": {
-      "typeSubscription": "Subscription",
-      "payNow": "Pay now",
-      "view": "View",
-      "voucherOff": "Vouchers {amount}",
-      "creditsTitle": "Account balance (tenant-wide)",
-      "creditsNote": "The balance funds future usage-based charging; top-up opens with that capability."
-    },
-    "refund": {
-      "title": "Refund",
-      "policyLink": "Refund policy",
-      "requestFailed": "Refund request failed",
-      "request": "Request refund",
-      "requestHint": "Full refund available within {hours} hours of activation (before {deadline})",
-      "ineligibleTitle": "This order is not eligible for a refund",
-      "reasons": {
-        "not_fulfilled": "The order has not been activated yet",
-        "not_first_purchase": "Only the first purchase of a product can be refunded",
-        "window_elapsed": "The refund window has passed",
-        "usage_over_threshold": "Consumable quota usage is above the threshold",
-        "zero_amount": "Zero-amount orders need no refund",
-        "refund_exists": "A refund request already exists"
-      },
-      "dialogTitle": "Request a refund",
-      "dialogDescription": "The refund equals what you paid for this order ({amount}). Once completed, the subscription for this product returns to unsubscribed and entitlements stop immediately.",
-      "reasonLabel": "Reason",
-      "reasonPlaceholder": "Briefly describe why (optional)",
-      "submit": "Submit request",
-      "submitted": "Refund request submitted; operations will review it.",
-      "status": {
-        "requested": "Refund under review",
-        "approved": "Refund approved, payout pending",
-        "rejected": "Refund request rejected",
-        "refunded": "Refunded"
-      },
-      "auditRemark": "Review note",
-      "noPermission": "Requesting a refund requires billing management; ask the tenant owner",
-      "auditRemarkLine": "Review note: {remark}",
-      "ineligibleLine": "Not eligible for refund: {reasons}",
-      "reasonSeparator": "; "
-    },
-    "cancelConfirm": {
-      "verb": "Cancel order",
-      "consequence": "The order is closed and any selected vouchers are released; place a new order if you still want to subscribe."
-    },
-    "amountPending": "Calculating…",
-    "expiredNotice": "The payment window has closed; refreshing the order…"
-  },
-  "billingPage": {
-    "title": "Billing center",
-    "description": "The full ledger from order to invoice: orders, bills, and payment records. Offline corporate transfer, reconciled manually.",
-    "exportStatement": "Export statement",
-    "metrics": {
-      "groupLabel": "Billing metrics",
-      "unpaid": "Awaiting payment",
-      "unpaidOverdue": "{count} overdue",
-      "unpaidNone": "Nothing overdue",
-      "paidTotal": "Total paid",
-      "paidTotalHint": "{count} bills settled",
-      "credits": "Wallet balance",
-      "creditsHint": "Online top-up not yet available"
-    },
-    "table": {
-      "title": "Bills",
-      "description": "A bill is issued for every subscription order — ¥0 orders included.",
-      "colBillNo": "Bill no.",
-      "colCycle": "Billing period",
-      "colType": "Type",
-      "colAmount": "Amount",
-      "colStatus": "Status",
-      "colPaidAt": "Settled at",
-      "discountOff": "discount −{amount}",
-      "empty": "No bills yet.",
-      "total": "{count} bills",
-      "prevPage": "Previous",
-      "nextPage": "Next",
-      "colInvoice": "Invoice"
-    },
-    "type": {
-      "normal": "Subscription fee",
-      "one_off": "One-off",
-      "adjustment": "Adjustment",
-      "prepaid_statement": "Prepaid statement"
+    "loading": "Loading...",
+    "currentSection": "Current subscription",
+    "noSubscription": "No subscription for this product in the current tenant.",
+    "fields": {
+      "tier": "Tier",
+      "trialEndsAt": "Trial ends",
+      "periodEnd": "Current period ends",
+      "autoRenew": "Auto-renew",
+      "autoRenewOn": "On",
+      "autoRenewOff": "Off"
     },
     "status": {
-      "unpaid": "Awaiting payment",
-      "paying": "Collecting",
-      "partial": "Partially paid",
-      "paid": "Settled",
+      "active": "Active",
+      "trialing": "Trialing",
       "overdue": "Overdue",
+      "suspended": "Suspended",
+      "expired": "Expired",
       "cancelled": "Cancelled"
     },
-    "notes": {
-      "title": "Payment & billing terms",
-      "description": "Subscription-first and deliberately simple — these two rules are the only ones in effect.",
-      "paymentTitle": "How to pay",
-      "paymentBody": "Offline corporate remittance with the order number as reference; operations verify receipt manually and the bill settles. ¥0 bills settle automatically at the payment step.",
-      "billingTitle": "Billing terms",
-      "billingBody": "Bills are generated with subscription orders; the subscription cycle starts when the service is provisioned (early renewal supported), not when payment is confirmed."
+    "addonSection": "Add-on packs",
+    "addonNotice": "Add-on packs are coming soon. Upgrading your plan raises quotas today.",
+    "addonNoticeMetric": "Add-on packs for {metric} are coming soon. Upgrading your plan raises this quota today.",
+    "plansSection": "Plans",
+    "noPlans": "No public plans available for this product yet.",
+    "badges": {
+      "current": "Current",
+      "recommended": "Recommended"
     },
-    "invoicing": {
-      "applyAction": "Request invoice",
-      "mergeAction": "Merge into one invoice",
-      "mergeActionCount": "Merge into one invoice ({count} selected)",
-      "writeFailed": "Operation failed — please try again later",
-      "status": {
-        "applying": "Applying",
-        "approved": "Accepted",
-        "issued": "Issued",
-        "sent": "Shipped",
-        "rejected": "Rejected",
-        "voided": "Voided"
-      },
-      "phase": {
-        "none": "Not invoiced",
-        "processing": "In progress",
-        "issued": "Invoiced"
-      },
-      "type": {
-        "electronic_general": "E-invoice (general)",
-        "electronic_special": "E-invoice (special VAT)",
-        "paper_special": "Paper (special VAT)"
-      },
-      "taxType": {
-        "general": "General",
-        "special": "Special VAT"
-      },
-      "records": {
-        "title": "Invoices",
-        "description": "Invoices issued against settled bills — both direct subscription payments and prepaid deduction statements qualify; download here once issued",
-        "colNo": "Application no.",
-        "colBill": "Bill no.",
-        "colTitle": "Title / Type",
-        "colAmount": "Amount (tax incl.)",
-        "colStatus": "Status",
-        "colDelivery": "File / Shipping",
-        "download": "Download",
-        "empty": "No invoices yet — use \"Request invoice\" on a settled bill above"
-      },
-      "addresses": {
-        "title": "Invoice Titles",
-        "description": "Title details are snapshotted into each application; later edits never affect submitted requests",
-        "add": "Add title",
-        "addTitle": "Add invoice title",
-        "editTitle": "Edit invoice title",
-        "formHint": "Special VAT titles require a tax number and bank details; your first title becomes the default",
-        "colTitle": "Title",
-        "colTaxType": "Type",
-        "colTaxNo": "Tax no.",
-        "default": "Default",
-        "edit": "Edit",
-        "setDefault": "Set default",
-        "delete": "Delete",
-        "save": "Save",
-        "rowMenu": "Title actions",
-        "fieldTitle": "Title",
-        "fieldTaxNo": "Tax number",
-        "fieldBankName": "Bank",
-        "fieldBankAccount": "Bank account",
-        "fieldPhone": "Phone",
-        "fieldAddress": "Address (for paper delivery)",
-        "empty": "No invoice titles yet — add one via the button above",
-        "deleteVerb": "Delete billing profile",
-        "deleteConsequence": "This profile is removed and there is no undo. Invoices already issued are unaffected, but the next one needs the tax ID, bank and address entered again."
-      },
-      "apply": {
-        "title": "Request invoice",
-        "description": "Bill {billNo} · {amount} (tax incl.). Platform operations will review and issue it",
-        "address": "Invoice title",
-        "type": "Invoice type",
-        "noAddress": "No invoice title yet — create one first",
-        "createAddress": "Create a title",
-        "cancel": "Cancel",
-        "submit": "Submit",
-        "blockedLite": "Simple business verification does not support invoicing",
-        "blockedUnverified": "Complete business verification before requesting an invoice",
-        "blockedHint": "See Tenant → Business verification for the available methods; invoicing opens once face or document verification ships."
-      },
-      "rowMenu": "Bill actions",
-      "applyHintUnpaid": "Available once the bill is settled",
-      "applyHintApplied": "An application already exists",
-      "applyHintZero": "A zero-amount bill has nothing to invoice",
-      "applyHintNoPermission": "Your role cannot manage invoices"
+    "cycle": {
+      "day": "day",
+      "week": "week",
+      "month": "month",
+      "year": "year",
+      "perpetual": "one-time"
     },
-    "viewInvoices": "Invoices & titles",
-    "invoicesPage": {
-      "title": "Invoices & titles",
-      "description": "Issued invoices and billing titles; apply for an invoice from a bill row in the billing center.",
-      "backToBilling": "Back to billing center"
-    }
+    "pricePending": "Pricing to be announced",
+    "contactToSubscribe": "Self-serve checkout is not open yet - contact your account manager to subscribe.",
+    "actions": {
+      "switchTo": "Switch to this plan",
+      "processing": "Processing...",
+      "backToSubscription": "Back to subscription overview",
+      "subscribe": "Subscribe",
+      "renew": "Renew",
+      "upgrade": "Upgrade",
+      "contactSales": "Contact sales",
+      "refresh": "Refresh"
+    },
+    "upgradeFailed": "Plan change failed - please retry or contact support.",
+    "moreSection": "More",
+    "cycleToggle": {
+      "monthly": "Monthly",
+      "yearly": "Yearly"
+    },
+    "confirm": {
+      "title": "Confirm order",
+      "who": "Subscription owner",
+      "what": "Plan",
+      "whatUpgradeNote": "Currently on {plan}. Upgrades take effect immediately; the remaining period is prorated by day.",
+      "noFeatures": "See the comparison table for full entitlements.",
+      "pickTier": "Pick a tier:",
+      "tierUnavailable": "The plan tier from the link isn't available right now — pick a tier below",
+      "renewCurrent": "You're on this plan — this order renews it and extends the end date by one period",
+      "howLong": "Subscription period",
+      "yearlySave": "Save {amount} yearly",
+      "startNote": "The subscription period starts at service activation; the dates above are estimated from the current moment.",
+      "summary": "Order summary",
+      "credit": "Upgrade credit",
+      "creditNote": "What you paid for the current period, prorated by time and unused quota ({days} days and {usage}% of quota left), applied to this order.",
+      "leftoverNote": "The {amount} of credit beyond this order's price is added to your prepaid balance once activated.",
+      "total": "Total due",
+      "autoRenew": "Auto-renew",
+      "autoRenewTip": "When on, a renewal order is created 3 days before expiry: ¥0 tiers renew automatically, paid tiers must be paid within the payment window. When off, access stops at expiry and you can renew manually anytime. You can change this later under My subscriptions.",
+      "submit": "Place order",
+      "fineOffline": "After submitting you'll go to the payment page - complete payment before the countdown ends or the order closes automatically. Vouchers are applied on the payment page. Zero-amount orders are placed the same way and settle automatically at the payment step.",
+      "fineEnterprise": "Enterprise pricing is quoted by sales; self-serve checkout is not available.",
+      "priceOnRequest": "Price on request",
+      "creditPending": "Calculating credit…",
+      "creditFailed": "Could not calculate the upgrade credit; showing the list price. The final amount is computed on submit.",
+      "creditRetry": "Retry",
+      "startNoteRenew": "Renewal starts when the current subscription ends; remaining time is not shortened"
+    },
+    "pending": {
+      "title": "Order awaiting confirmation",
+      "orderNo": "Order No.",
+      "amount": "Amount due",
+      "awaiting": "Order created. Transfer the amount below and put the order number in the reference; it activates automatically once finance confirms receipt.",
+      "bankTitle": "Offline transfer details",
+      "accountName": "Account name",
+      "bankName": "Bank",
+      "accountNo": "Account no.",
+      "reference": "Reference",
+      "referenceHint": "Include the order number for reconciliation.",
+      "configPending": "Bank details not configured — please contact support for transfer instructions.",
+      "cancel": "Cancel order",
+      "goPay": "Pay now",
+      "cancelling": "Cancelling…",
+      "countdown": "{time} left to pay",
+      "expired": "The payment window has closed; refreshing the order…"
+    },
+    "orderCreated": "Order created; awaiting finance confirmation.",
+    "orderFailed": "Failed to place the order. Please retry or contact support.",
+    "cancelOrderFailed": "Failed to cancel the order. Please retry.",
+    "myOrdersEmpty": "No orders yet.",
+    "contactSalesSubject": "{product} enterprise inquiry"
   },
   "subscriptionHub": {
     "title": "Product Subscriptions",
@@ -2295,764 +2731,12 @@
       "action": "Pay in billing center"
     }
   },
-  "subscribePage": {
-    "title": {
-      "upgrade": "Upgrade plan",
-      "renew": "Renew subscription",
-      "addon": "Buy add-on pack",
-      "subscribe": "Subscribe"
-    },
-    "hint": {
-      "none": "No subscription for this product yet - pick a plan below to get started.",
-      "active": "Your subscription is active. Compare plans below to change tiers.",
-      "trialing": "You are on a trial - convert to a paid plan to keep access.",
-      "renewOff": "Auto-renew is off - your plan lapses at period end. Renew below.",
-      "overdue": "Payment is overdue - settle to keep your entitlements.",
-      "suspended": "This subscription is suspended. Contact support to restore it.",
-      "expired": "Your subscription has expired - renew below to restore access.",
-      "cancelled": "Your subscription was cancelled - resubscribe below."
-    },
-    "loading": "Loading...",
-    "currentSection": "Current subscription",
-    "noSubscription": "No subscription for this product in the current tenant.",
-    "fields": {
-      "tier": "Tier",
-      "trialEndsAt": "Trial ends",
-      "periodEnd": "Current period ends",
-      "autoRenew": "Auto-renew",
-      "autoRenewOn": "On",
-      "autoRenewOff": "Off"
-    },
-    "status": {
-      "active": "Active",
-      "trialing": "Trialing",
-      "overdue": "Overdue",
-      "suspended": "Suspended",
-      "expired": "Expired",
-      "cancelled": "Cancelled"
-    },
-    "addonSection": "Add-on packs",
-    "addonNotice": "Add-on packs are coming soon. Upgrading your plan raises quotas today.",
-    "addonNoticeMetric": "Add-on packs for {metric} are coming soon. Upgrading your plan raises this quota today.",
-    "plansSection": "Plans",
-    "noPlans": "No public plans available for this product yet.",
-    "badges": {
-      "current": "Current",
-      "recommended": "Recommended"
-    },
-    "cycle": {
-      "day": "day",
-      "week": "week",
-      "month": "month",
-      "year": "year",
-      "perpetual": "one-time"
-    },
-    "pricePending": "Pricing to be announced",
-    "contactToSubscribe": "Self-serve checkout is not open yet - contact your account manager to subscribe.",
-    "actions": {
-      "switchTo": "Switch to this plan",
-      "processing": "Processing...",
-      "backToSubscription": "Back to subscription overview",
-      "subscribe": "Subscribe",
-      "renew": "Renew",
-      "upgrade": "Upgrade",
-      "contactSales": "Contact sales",
-      "refresh": "Refresh"
-    },
-    "upgradeFailed": "Plan change failed - please retry or contact support.",
-    "moreSection": "More",
-    "cycleToggle": {
-      "monthly": "Monthly",
-      "yearly": "Yearly"
-    },
-    "confirm": {
-      "title": "Confirm order",
-      "who": "Subscription owner",
-      "what": "Plan",
-      "whatUpgradeNote": "Currently on {plan}. Upgrades take effect immediately; the remaining period is prorated by day.",
-      "noFeatures": "See the comparison table for full entitlements.",
-      "pickTier": "Pick a tier:",
-      "tierUnavailable": "The plan tier from the link isn't available right now — pick a tier below",
-      "renewCurrent": "You're on this plan — this order renews it and extends the end date by one period",
-      "howLong": "Subscription period",
-      "yearlySave": "Save {amount} yearly",
-      "startNote": "The subscription period starts at service activation; the dates above are estimated from the current moment.",
-      "summary": "Order summary",
-      "credit": "Upgrade credit",
-      "creditNote": "What you paid for the current period, prorated by time and unused quota ({days} days and {usage}% of quota left), applied to this order.",
-      "leftoverNote": "The {amount} of credit beyond this order's price is added to your prepaid balance once activated.",
-      "total": "Total due",
-      "autoRenew": "Auto-renew",
-      "autoRenewTip": "When on, a renewal order is created 3 days before expiry: ¥0 tiers renew automatically, paid tiers must be paid within the payment window. When off, access stops at expiry and you can renew manually anytime. You can change this later under My subscriptions.",
-      "submit": "Place order",
-      "fineOffline": "After submitting you'll go to the payment page - complete payment before the countdown ends or the order closes automatically. Vouchers are applied on the payment page. Zero-amount orders are placed the same way and settle automatically at the payment step.",
-      "fineEnterprise": "Enterprise pricing is quoted by sales; self-serve checkout is not available.",
-      "priceOnRequest": "Price on request",
-      "creditPending": "Calculating credit…",
-      "creditFailed": "Could not calculate the upgrade credit; showing the list price. The final amount is computed on submit.",
-      "creditRetry": "Retry",
-      "startNoteRenew": "Renewal starts when the current subscription ends; remaining time is not shortened"
-    },
-    "pending": {
-      "title": "Order awaiting confirmation",
-      "orderNo": "Order No.",
-      "amount": "Amount due",
-      "awaiting": "Order created. Transfer the amount below and put the order number in the reference; it activates automatically once finance confirms receipt.",
-      "bankTitle": "Offline transfer details",
-      "accountName": "Account name",
-      "bankName": "Bank",
-      "accountNo": "Account no.",
-      "reference": "Reference",
-      "referenceHint": "Include the order number for reconciliation.",
-      "configPending": "Bank details not configured — please contact support for transfer instructions.",
-      "cancel": "Cancel order",
-      "goPay": "Pay now",
-      "cancelling": "Cancelling…",
-      "countdown": "{time} left to pay",
-      "expired": "The payment window has closed; refreshing the order…"
-    },
-    "orderCreated": "Order created; awaiting finance confirmation.",
-    "orderFailed": "Failed to place the order. Please retry or contact support.",
-    "cancelOrderFailed": "Failed to cancel the order. Please retry.",
-    "myOrdersEmpty": "No orders yet.",
-    "contactSalesSubject": "{product} enterprise inquiry"
-  },
-  "manageSubscription": {
-    "title": "Manage subscription",
-    "description": "Pause, resume, or cancel the active subscription. Changes take effect immediately.",
-    "confirm": "Confirm",
-    "cancel": "Cancel",
-    "actionPause": "Pause subscription",
-    "actionResume": "Resume subscription",
-    "actionCancel": "Cancel subscription",
-    "actionPauseHint": "Pausing stops billing and service; you can resume at any time.",
-    "actionResumeHint": "Resuming restarts billing and restores service.",
-    "actionCancelHint": "Cancelling ends the subscription for good — you would need to order again.",
-    "reasonLabel": "Reason (optional)",
-    "upgradeHint": "To upgrade or switch plans, pick a new plan on the subscribe page — not here.",
-    "goUpgrade": "Change plan",
-    "successPause": "Subscription paused.",
-    "successResume": "Subscription resumed.",
-    "successCancel": "Subscription cancelled.",
-    "error": "The operation failed. Please retry."
-  },
-  "planned": {
-    "badge": "Planned",
-    "sectionEmpty": "This feature is still planned — there is nothing to show yet.",
-    "controlNotice": "The controls in this section are not wired to a backend yet; switches shown here do not take effect.",
-    "pageNotice": "This page is not wired to a backend yet and is still being planned."
-  },
-  "quotasPage": {
-    "title": "Quota Management",
-    "description": "Storage and AI Credits for this workspace: grant makeup, current usage, and what's left at a glance",
-    "metrics": {
-      "groupLabel": "Quota overview",
-      "storage": "Storage",
-      "storageHint": "Total {limit} · {remaining} left",
-      "creditRemaining": "AI Credits balance",
-      "creditRemainingHint": "Total {limit}",
-      "creditUsed": "Used this cycle",
-      "creditUsedHint": "AI Credits · resets with the subscription cycle",
-      "credits": "AI Credits",
-      "addons": "Active booster packs",
-      "addonsExpiry": "Earliest expiry {date}",
-      "addonsNone": "No active packs — buy one below"
-    },
-    "source": {
-      "ws_base": "Base grant",
-      "subscription": "Subscription",
-      "addon_purchase": "Booster pack",
-      "manual_override": "Operator grant"
-    },
-    "reset": {
-      "none": "No reset",
-      "day": "Daily reset",
-      "month": "Monthly reset"
-    },
-    "storage": {
-      "title": "Storage",
-      "description": "A workspace-level shared resource: one row per grant source or usage subject; a product's contribution and usage read side by side",
-      "colLimit": "Grant",
-      "colExpires": "Valid until",
-      "noExpiry": "No expiry",
-      "colUsed": "Used",
-      "colShare": "Of total",
-      "colObserved": "Reported at",
-      "totalLine": "Total {limit} · {remaining}",
-      "emptySources": "No storage grants yet",
-      "colItem": "Item",
-      "usageOnly": "Product usage"
-    },
-    "credits": {
-      "title": "AI Credits",
-      "description": "Subscription grants stack across products — own pool first, shared pools as fallback; top up with booster packs when everything runs dry",
-      "colSource": "Source",
-      "colLimit": "Grant",
-      "colUsed": "Used this cycle",
-      "colRemaining": "Left",
-      "colReset": "Reset",
-      "colExpires": "Valid until",
-      "empty": "No AI Credits yet — subscribe to a product to receive them",
-      "sharingTitle": "Cross-product sharing",
-      "sharingOn": "On by default: {products} participate — a product that runs dry can draw on the others' remainder, with every spend attributed per product",
-      "sharingOff": "No products currently share — each product's credits stay reserved",
-      "boosterTitle": "AI Credits booster packs",
-      "boosterBody": "When subscription credits run out, booster packs top you up; they burn after subscription pools and stay valid longer"
-    },
-    "products": {
-      "title": "Per-product quotas",
-      "description": "Independent per-product view: the product's own service quotas plus its platform resource contributions",
-      "colProduct": "Product",
-      "colMetric": "Metric",
-      "colLimit": "Grant",
-      "colUsed": "Used this cycle",
-      "colRemaining": "Left",
-      "wsShared": "Shared workspace-wide",
-      "empty": "No product quotas yet — they appear once you subscribe",
-      "colReset": "Resets"
-    },
-    "addons": {
-      "title": "Booster & Extension Packs",
-      "description": "Storage extensions and AI booster packs: pick a card to order, then follow the full order flow — declare the payment, operations confirms, and the grant lands in your pools",
-      "colPack": "Pack",
-      "colContent": "Contents",
-      "colValidity": "Validity",
-      "validityDays": "{days} days",
-      "colPrice": "Price",
-      "buy": "Buy",
-      "pendingExists": "Order pending",
-      "buyFailed": "Order failed — please try again later",
-      "colOrder": "Order",
-      "colStatus": "Status",
-      "colNote": "Note",
-      "statusPending": "Awaiting payment",
-      "statusDeclared": "Declared",
-      "statusCompleted": "Active",
-      "statusCancelled": "Cancelled",
-      "validUntil": "Valid until {date}",
-      "payBefore": "Complete the transfer and declare before {date}",
-      "awaitingConfirm": "Awaiting operations confirmation",
-      "declare": "Declare transfer",
-      "cancel": "Cancel order",
-      "cancelFailed": "Cancel failed — please try again later",
-      "ordersEmpty": "No booster pack orders yet",
-      "packsEmpty": "No packs available right now",
-      "declareTitle": "Bank transfer declaration",
-      "declareDescription": "{pack} · {price} due. Wire the payment to the account below, then submit the declaration",
-      "bankAccountName": "Account name",
-      "bankName": "Bank",
-      "bankAccountNo": "Account number",
-      "bankReference": "Transfer reference (required)",
-      "bankUnavailable": "Receiving account not configured yet — contact platform operations for transfer details",
-      "payerName": "Payer name",
-      "payerNamePlaceholder": "Name on the sending account (for reconciliation)",
-      "transactionNo": "Transfer reference no.",
-      "transactionNoPlaceholder": "Bank slip reference (optional)",
-      "declareLater": "Declare later",
-      "declareSubmit": "Transfer done — submit declaration",
-      "declareFailed": "Declaration failed — please try again later",
-      "kindStorage": "Storage",
-      "kindCredits": "AI Credits",
-      "oneOffNote": "one-off purchase",
-      "continuePay": "Pay now",
-      "orderDetail": "Order detail",
-      "orderMenu": "Order actions",
-      "cancelHint": "Only pending orders can be cancelled",
-      "buyNoPermission": "Your role cannot make payments; ask the tenant owner to buy add-on packs",
-      "loadFailed": "Could not load add-on packs and orders, please retry"
-    },
-    "gotoAddons": "Buy add-ons",
-    "remainBy": "{amount} left",
-    "overBy": "{amount} over",
-    "filters": {
-      "groupLabel": "Product quota filters",
-      "listOnly": "Product quotas are list-only",
-      "count": "{count} total",
-      "searchPlaceholder": "Search product, code or metric",
-      "searchAriaLabel": "Search product quotas",
-      "reset": "Reset"
-    }
-  },
-  "usagePage": {
-    "title": "Usage Analytics",
-    "description": "AI Credits usage for this workspace: trend, product mix and member split at a glance",
-    "metrics": {
-      "groupLabel": "Usage overview",
-      "last7": "Last 7 days",
-      "last30": "Last 30 days",
-      "thisYear": "This year",
-      "creditsUnit": "AI Credits"
-    },
-    "trend": {
-      "title": "Usage trend",
-      "description": "AI Credits consumption by period; buckets are cut on UTC days and periods without usage show 0. Dashboard figures only — never a billing basis",
-      "windowLabel": "Period",
-      "windowDay": "30 days",
-      "windowWeek": "12 weeks",
-      "windowMonth": "12 months",
-      "windowYear": "Yearly",
-      "empty": "No usage data in this period",
-      "windowHour": "Hourly (24h)",
-      "descriptionHour": "Hourly consumption over the last 24 hours; the axis is shown in your local time. Dashboard figures only — never a billing basis",
-      "statTotal": "Window total",
-      "statPeak": "Peak",
-      "statDelta": "Latest change"
-    },
-    "share": {
-      "title": "By product",
-      "description": "Product mix within the current window; share is against the window total",
-      "empty": "No product consumption yet"
-    },
-    "members": {
-      "title": "By member",
-      "description": "Member split over the last 30 days; calls with no reported user land in Unattributed",
-      "empty": "No member usage in the last 30 days"
-    },
-    "chartPeak": "Peak",
-    "filters": {},
-    "notes": {
-      "title": "How these numbers work",
-      "description": "Where the figures on this page come from",
-      "scopeTitle": "A dashboard, not a bill",
-      "scopeBody": "This page reports AI Credits from downsampled dashboard data; actual charges follow your orders and invoices, and the two can differ slightly because of reporting lag. For other metrics or line-by-line checks, use the call records",
-      "bucketTitle": "How time is bucketed",
-      "bucketBody": "Trends are bucketed in UTC, with one bucket per period in the window (zero-filled when there were no calls); the hourly view converts to your local time, while daily and weekly keep UTC dates so they line up with the backend buckets",
-      "attributionTitle": "What “Unattributed” means",
-      "attributionBody": "The product did not pass a user identity with the call, so that usage lands in the unattributed bucket; it still counts toward the total, it just cannot be traced to a person",
-      "recordsTitle": "Checking line by line",
-      "recordsBody": "The call records page has full filters (time window, product, metric, member, request ID) plus a filtered total, so you can sum the detail and reconcile it against the quota page and your invoices"
-    },
-    "viewRecords": "View call records",
-    "unattributed": "Unattributed"
-  },
-  "usageRecordsPage": {
-    "title": "Call records",
-    "description": "Task-level detail: one row per call, searchable by time, product, metric, member and request ID",
-    "backToUsage": "Back to usage",
-    "metrics": {
-      "groupLabel": "Filtered result",
-      "count": "Records matched",
-      "countHint": "All records under the current filters",
-      "amount": "Charged total",
-      "amountHint": "Sum of charged amounts under the same filters; does not change as you page"
-    },
-    "table": {
-      "title": "Detail",
-      "description": "Newest first; the amount column shows what was charged, with the requested amount below when it could not be charged in full",
-      "colAt": "Time",
-      "colProduct": "Product",
-      "colMetric": "Metric",
-      "colAmount": "Amount",
-      "colUser": "User",
-      "colRequest": "Request ID",
-      "requestedWas": "requested {amount}",
-      "unattributed": "Unattributed",
-      "empty": "No call records match",
-      "emptyHint": "Try a different time window or loosen the filters"
-    },
-    "filters": {
-      "groupLabel": "Call record filters",
-      "listOnly": "Call records are list-only",
-      "count": "{count} total",
-      "requestPlaceholder": "Find by exact request ID",
-      "requestAriaLabel": "Find by request ID",
-      "fromAriaLabel": "From date",
-      "toAriaLabel": "To date",
-      "productAriaLabel": "Filter by product",
-      "productAll": "All products",
-      "metricAriaLabel": "Filter by metric",
-      "metricAll": "All metrics",
-      "userAriaLabel": "Filter by member",
-      "userAll": "All members",
-      "reset": "Reset"
-    },
-    "notes": {
-      "title": "Reconciling with this page",
-      "description": "Narrow the detail, sum it, and match it against quota and invoices",
-      "reconcileTitle": "Reading the totals",
-      "reconcileBody": "The two figures above cover every record under the current filters and do not change as you page; set the time window to match your billing cycle and they line up with the quota page and your invoices",
-      "shortfallTitle": "Requested vs charged",
-      "shortfallBody": "A “requested N” line under the amount means the call could not be charged in full — when the balance runs short, only what was available is charged and the rest is not counted; nothing is shown when the two match",
-      "rangeTitle": "How far back",
-      "rangeBody": "Up to {days} days; older records have been archived with their partitions and are outside this view"
-    }
-  },
-  "addonPay": {
-    "title": "Booster Pack Payment",
-    "description": "Order {orderNo}",
-    "notFound": "Order not found or not owned by this tenant",
-    "backToQuotas": "Back to Quotas",
-    "status": {
-      "pending": "Awaiting payment",
-      "declared": "Declared",
-      "completed": "Active",
-      "cancelled": "Cancelled"
-    },
-    "summary": {
-      "title": "Order summary",
-      "description": "Pack contents and amount due; the grant lands automatically once operations confirms",
-      "pack": "Pack",
-      "content": "Contents",
-      "validity": "Validity",
-      "validUntil": "Until {date}",
-      "validityDaysFromActivation": "{days} days from activation",
-      "amountDue": "Amount due",
-      "billNo": "Bill no.",
-      "createdAt": "Ordered at"
-    },
-    "pay": {
-      "title": "Offline payment & declaration",
-      "description": "Wire the payment, submit the declaration, and it activates on confirmation",
-      "deadline": "Declare within {remain} — overdue orders are cancelled automatically",
-      "channelLabel": "Channel",
-      "referenceNote": "Include order no. {orderNo} in the transfer reference for reconciliation"
-    },
-    "channels": {
-      "alipay": "Alipay",
-      "bank_transfer": "Bank transfer",
-      "wechat": "WeChat Pay",
-      "comingSoon": "coming soon",
-      "alipayQrAlt": "Alipay QR code"
-    },
-    "bank": {
-      "accountName": "Account name",
-      "bankName": "Bank",
-      "accountNo": "Account number",
-      "reference": "Transfer reference (required)",
-      "unavailable": "Receiving account not configured — contact platform operations"
-    },
-    "declare": {
-      "payerName": "Payer name",
-      "payerNamePlaceholder": "Name on the sending account",
-      "transactionNo": "Transfer reference no.",
-      "transactionNoPlaceholder": "Bank slip reference (optional)",
-      "submit": "Transfer done — submit declaration"
-    },
-    "declared": {
-      "note": "Declaration submitted — awaiting operations confirmation; this page refreshes automatically"
-    },
-    "completed": {
-      "note": "Active! The grant is in your pools, valid until {date}"
-    },
-    "cancelled": {
-      "note": "This order was cancelled; place a new one from the Quotas page"
-    },
-    "cancelOrder": "Cancel order",
-    "declareFailed": "Declaration failed — please try again later",
-    "cancelFailed": "Cancel failed — please try again later",
-    "declareDialog": {
-      "title": "Confirm payment declaration",
-      "description": "Payment method: {channel} · amount: {amount}. After submitting, the order awaits confirmation; the quota is credited once operations confirm receipt.",
-      "confirm": "Submit",
-      "cancel": "Not yet"
-    },
-    "cancelConfirm": {
-      "verb": "Cancel order",
-      "consequence": "The order is closed; go back to Quotas to buy again if needed."
-    },
-    "expiredNotice": "The payment window has closed; refreshing the order…"
-  },
-  "vouchersPage": {
-    "title": "My Vouchers",
-    "description": "Everything you hold at a glance: usable ones apply at checkout, used ones show where they went",
-    "metrics": {
-      "groupLabel": "Voucher overview",
-      "available": "Available",
-      "expiringSoon": "{count} expiring within 7 days",
-      "noExpiring": "None expiring soon",
-      "used": "Used",
-      "usedHint": "Total redeemed",
-      "total": "All vouchers",
-      "totalHint": "Including used / expired / revoked"
-    },
-    "kind": {
-      "discount": "Discount",
-      "credit_voucher": "Credit voucher",
-      "recharge_card": "Recharge card",
-      "redemption": "Redemption code",
-      "extension": "Extension"
-    },
-    "status": {
-      "available": "Available",
-      "reserved": "In use",
-      "redeemed": "Used",
-      "expired": "Expired",
-      "revoked": "Revoked"
-    },
-    "face": {
-      "percentOff": "{percent}% off",
-      "maxOff": " (up to {amount})",
-      "fixedOff": "{amount} off"
-    },
-    "table": {
-      "title": "Vouchers",
-      "description": "\"In use\" = locked on a pending order; cancelling that order releases it automatically. The order it is held by shows under the status",
-      "colCode": "Code",
-      "colKind": "Kind",
-      "colFace": "Face value",
-      "colStatus": "Status / Held by",
-      "colExpires": "Valid until",
-      "colUsedAt": "Used at / Redemption no.",
-      "empty": "No vouchers yet",
-      "usesLeft": "{left} of {total} left",
-      "emptyHint": "Vouchers issued by platform promotions show up here"
-    },
-    "notes": {
-      "title": "How it works",
-      "description": "How vouchers join settlement",
-      "useTitle": "Where to use",
-      "useBody": "Pick them on the order payment page: discounts act on the order price, credit vouchers offset the amount due; one of each can stack",
-      "sourceTitle": "Where they come from",
-      "sourceBody": "Issued by platform promotions (targeted at your tenant, workspace, or you); validity shown here is authoritative",
-      "holdTitle": "Holding and release",
-      "holdBody": "A voucher picked at checkout is locked as “In use” and shows its order no.; cancelling or letting the order expire releases it back to available, and only a completed payment redeems it"
-    },
-    "filters": {
-      "groupLabel": "Voucher filters",
-      "listOnly": "Vouchers are list-only",
-      "count": "{count} total",
-      "searchPlaceholder": "Search code, batch or order no.",
-      "searchAriaLabel": "Search vouchers",
-      "statusAriaLabel": "Filter by status",
-      "statusAll": "All statuses",
-      "reset": "Reset"
-    },
-    "actions": {
-      "menuLabel": "Voucher actions",
-      "copy": "Copy code",
-      "copied": "Copied",
-      "viewOrder": "View held order",
-      "viewOrderHint": "This voucher is not held by any order",
-      "use": "Use at checkout",
-      "useHint": "Only available vouchers can join settlement"
-    }
-  },
-  "auditPage": {
-    "title": "Audit Logs",
-    "description": "Who did what, when: a trail of member management, subscription/order, and invoicing actions",
-    "actorType": {
-      "operator": "Platform ops",
-      "system": "System"
-    },
-    "result": {
-      "success": "Success",
-      "failure": "Failed",
-      "denied": "Denied"
-    },
-    "action": {
-      "account_deletion_cancel": "Cancel account deletion",
-      "account_deletion_request": "Request account deletion",
-      "account_email_change": "Change email",
-      "account_identity_unbind": "Unbind third-party login",
-      "account_login_method_update": "Change login method",
-      "account_password_change": "Change password",
-      "account_password_set_initial": "Set initial password",
-      "account_phone_change": "Change phone number",
-      "account_session_revoke": "Revoke session",
-      "addon_order_cancel": "Cancel booster order",
-      "addon_order_create": "Buy booster pack",
-      "addon_order_payment_declare": "Declare booster payment",
-      "billing_address_create": "Add invoice title",
-      "billing_address_delete": "Delete invoice title",
-      "billing_address_update": "Edit invoice title",
-      "billing_invoice_apply": "Request invoice",
-      "order_refund_request": "Request refund",
-      "subscription_auto_renew_off": "Cancel at period end",
-      "subscription_auto_renew_on": "Resume auto-renew",
-      "subscription_cancel": "Unsubscribe",
-      "subscription_pause": "Pause subscription",
-      "subscription_resume": "Resume subscription",
-      "tenant_close": "Close tenant",
-      "tenant_invitation_resend": "Resend invitation",
-      "tenant_invitation_revoke": "Revoke invitation",
-      "tenant_member_add": "Add member",
-      "tenant_member_disable": "Disable member",
-      "tenant_member_enable": "Enable member",
-      "tenant_member_invite": "Invite member",
-      "tenant_member_remove": "Remove member",
-      "tenant_member_reset_password": "Reset member password",
-      "tenant_member_update": "Update member",
-      "tenant_owner_transfer": "Transfer ownership",
-      "tenant_role_create": "Create role",
-      "tenant_role_delete": "Delete role",
-      "tenant_role_update": "Update role",
-      "tenant_verification_submit": "Submit business verification"
-    },
-    "table": {
-      "title": "Activity",
-      "description": "Activity from the last 90 days, newest first.",
-      "filterLabel": "Result",
-      "filterAll": "All",
-      "filterSuccess": "Success",
-      "filterFailure": "Failed",
-      "colAt": "Time",
-      "colActor": "Actor",
-      "colAction": "Action",
-      "colResource": "Target",
-      "colResult": "Result",
-      "colIp": "Source IP",
-      "empty": "No activity yet — key actions from now on will appear here",
-      "filterActionLabel": "Filter by action",
-      "filterActionAll": "All actions",
-      "total": "{count} entries",
-      "prev": "Previous",
-      "next": "Next",
-      "pageOf": "Page {page} of {pageCount}"
-    },
-    "notes": {
-      "title": "Scope",
-      "description": "Coverage and retention",
-      "scopeTitle": "What's recorded",
-      "scopeBody": "Key console writes (members / subscriptions / orders / invoicing); platform-ops actions on this tenant and in-product business events are out of scope here",
-      "retainTitle": "Retention & immutability",
-      "retainBody": "The trail is append-only; this page shows 90 days, older entries are retained per platform compliance policy"
-    }
-  },
-  "invitationsPage": {
-    "title": "Invitations",
-    "description": "Member invitations you've sent and their status; send new ones from the Members page",
-    "backToMembers": "Back to members",
-    "rowMenu": "Invitation actions",
-    "revoke": "Revoke",
-    "revokeHint": "Only pending invitations can be revoked",
-    "revokeFailed": "Revoke failed — please try again",
-    "resend": "Resend",
-    "resendHint": "Revoked or accepted invitations cannot be resent",
-    "status": {
-      "pending": "Pending",
-      "accepted": "Accepted",
-      "expired": "Expired",
-      "revoked": "Revoked"
-    },
-    "table": {
-      "title": "Invitation records",
-      "description": "\"Expired\" derives from the expiry time; revoking voids the link immediately",
-      "colEmail": "Invitee",
-      "invitedBy": "Invited by {name}",
-      "colRole": "Role",
-      "colStatus": "Status",
-      "colCreatedAt": "Sent at",
-      "colExpiresAt": "Valid until",
-      "acceptedAt": "Accepted {date}",
-      "empty": "No invitations yet — send the first one from the Members page"
-    },
-    "notes": {
-      "title": "How invitations work",
-      "description": "Flow and validity",
-      "flowTitle": "Flow",
-      "flowBody": "Send by email + role from the Members page; the recipient gets an email with a link. Once they sign in with the invited email and accept, they join the tenant and its default workspace",
-      "expiryTitle": "Validity",
-      "expiryBody": "Invitations are valid for 7 days and expire automatically; revocation is immediate. The same email can be invited again after the invitation lapses",
-      "resendTitle": "Resending",
-      "resendBody": "Resending creates a new link, voids the old one immediately and restarts the 7-day validity; if the email cannot be sent, copy the link from the dialog and share it manually"
-    },
-    "revokeVerb": "Revoke the invitation to",
-    "revokeConsequence": "The invitation link stops working immediately and the recipient sees \"invitation not found\". This cannot be undone — re-inviting them means sending a new invitation.",
-    "revokeKeep": "Keep invitation",
-    "resendFailed": "Resend failed — please try again",
-    "resent": "Resent to {email}.",
-    "resentNoEmail": "A new link was created, but the email could not be sent; share the link with {email} manually.",
-    "revoked": "The invitation to {email} was revoked.",
-    "expiringSoon": "Expires within 24h",
-    "errors": {
-      "owner_protected": "The owner cannot be disabled or unlinked; transfer ownership first.",
-      "self_protected": "You cannot do this to yourself.",
-      "owner_role_locked": "The owner's role only changes through ownership transfer.",
-      "account_not_found": "No Vxture account uses this email; send an invitation instead.",
-      "already_member": "This account is already a member of the tenant.",
-      "invitation_pending": "This email already has a pending invitation.",
-      "invalid_email": "The email address is not valid."
-    }
-  },
-  "todosPage": {
-    "kind": {
-      "payment": "Payment",
-      "renewal": "Renewal",
-      "quota": "Quota",
-      "invitation": "Invitation",
-      "addon": "Booster"
-    },
-    "items": {
-      "payTitle": "Pay the subscription order for {product}",
-      "payDetail": "Declare payment before {date} — overdue orders auto-cancel",
-      "payDetailNoTtl": "Order awaiting payment",
-      "payAction": "Pay now",
-      "renewTitle": "{product} is expiring soon",
-      "renewDetail": "{days} days left — renew for uninterrupted service",
-      "renewAction": "Renew",
-      "storageTitle": "Storage below 10% remaining",
-      "storageDetail": "Buy a storage extension pack, or clean up in-product data",
-      "creditsTitle": "AI Credits exhausted this cycle",
-      "creditsDetail": "Buy an AI booster pack, or wait for the cycle reset",
-      "quotaAction": "Open Quotas",
-      "invitesTitle": "{count} member invitation(s) pending",
-      "invitesDetail": "Expiring unaccepted invitations can be revoked and re-sent",
-      "invitesAction": "Open Invitations",
-      "addonTitle": "Pay the order for add-on pack \"{pack}\"",
-      "addonDetail": "Complete the transfer and declare it before {date}; the order closes automatically afterwards",
-      "addonAction": "Declare payment"
-    },
-    "loadFailed": "Some to-do sources failed to load; the list may be incomplete"
-  },
-  "destructive": {
-    "titleTemplate": "{verb} {target}?",
-    "cancel": "Cancel",
-    "pending": "Working…",
-    "blocked": "Preconditions not met — resolve the items marked above first."
-  },
-  "loadState": {
-    "title": "Could not load data",
-    "description": "The figures and lists on this page are not real data. Retry, or come back later if it keeps failing.",
-    "retry": "Retry",
-    "empty": "Could not load; nothing to show yet"
-  },
-  "inviteLinkDialog": {
-    "title": "Invitation sent",
-    "titleResent": "Invitation resent",
-    "sent": "Email sent to {email}; you can also share the link directly.",
-    "notSent": "The email could not be sent; share the link below with {email} manually.",
-    "notSentTitle": "Email not sent",
-    "linkLabel": "Invitation link",
-    "expires": "Valid until {date}; resending creates a new link and voids this one.",
-    "copy": "Copy link",
-    "copied": "Copied",
-    "copyFailed": "Copy failed — select the link and copy it manually.",
-    "close": "Close"
-  },
-  "acceptInvitationPage": {
-    "title": "Accept invitation",
-    "description": "After confirming you join the tenant and can switch to it in the console.",
-    "cardTitle": "Invitation details",
-    "missingToken": "The link is incomplete (no invitation token); open it again from the email.",
-    "fields": {
-      "tenant": "Tenant",
-      "inviter": "Invited by",
-      "role": "Role",
-      "email": "Invited email",
-      "expires": "Valid until"
-    },
-    "actions": {
-      "accept": "Accept and join",
-      "later": "Not now",
-      "enter": "Go to the workspace",
-      "switchAccount": "Sign out and sign in with the invited email"
-    },
-    "reasons": {
-      "not_found": "Invitation not found: the link may have been revoked or copied incompletely.",
-      "expired": "This invitation has expired; ask the inviter to resend it.",
-      "revoked": "This invitation has been revoked.",
-      "already_accepted": "This invitation was already accepted; if that was you, just switch to the tenant.",
-      "email_mismatch": "Your account email ({email}) does not match the invited email; sign in with the account that owns the invited mailbox."
-    },
-    "mismatchTitle": "Signed-in account does not match the invited email",
-    "mismatchHint": "You are signed in as {current}; this invitation was sent to {invited}.",
-    "accepted": "You have joined \"{tenant}\"",
-    "acceptedDescription": "Switched you to that tenant.",
-    "switchFailed": "Joined, but switching tenants failed; use the tenant switcher at the top.",
-    "acceptError": "Could not accept the invitation. Try again later."
-  },
-  "principalNo": {
-    "label": "ID:"
+  "table": {
+    "rowActions": "Actions",
+    "expand": "Expand",
+    "selectAll": "Select all rows on this page",
+    "deselectAll": "Deselect all rows on this page",
+    "selectRow": "Select row"
   },
   "tenantInfoPage": {
     "header": {
@@ -3344,32 +3028,366 @@
       "error": "Closing failed. Please try again later."
     }
   },
-  "table": {
-    "rowActions": "Actions",
-    "expand": "Expand",
-    "selectAll": "Select all rows on this page",
-    "deselectAll": "Deselect all rows on this page",
-    "selectRow": "Select row"
+  "todosPage": {
+    "kind": {
+      "payment": "Payment",
+      "renewal": "Renewal",
+      "quota": "Quota",
+      "invitation": "Invitation",
+      "addon": "Booster"
+    },
+    "items": {
+      "payTitle": "Pay the subscription order for {product}",
+      "payDetail": "Declare payment before {date} — overdue orders auto-cancel",
+      "payDetailNoTtl": "Order awaiting payment",
+      "payAction": "Pay now",
+      "renewTitle": "{product} is expiring soon",
+      "renewDetail": "{days} days left — renew for uninterrupted service",
+      "renewAction": "Renew",
+      "storageTitle": "Storage below 10% remaining",
+      "storageDetail": "Buy a storage extension pack, or clean up in-product data",
+      "creditsTitle": "AI Credits exhausted this cycle",
+      "creditsDetail": "Buy an AI booster pack, or wait for the cycle reset",
+      "quotaAction": "Open Quotas",
+      "invitesTitle": "{count} member invitation(s) pending",
+      "invitesDetail": "Expiring unaccepted invitations can be revoked and re-sent",
+      "invitesAction": "Open Invitations",
+      "addonTitle": "Pay the order for add-on pack \"{pack}\"",
+      "addonDetail": "Complete the transfer and declare it before {date}; the order closes automatically afterwards",
+      "addonAction": "Declare payment"
+    },
+    "loadFailed": "Some to-do sources failed to load; the list may be incomplete"
   },
-  "role": {
-    "owner": "Owner",
-    "manager": "Manager",
-    "member": "Member",
-    "readonly": "Read-only",
-    "guest": "Guest"
+  "usagePage": {
+    "title": "Usage Analytics",
+    "description": "AI Credits usage for this workspace: trend, product mix and member split at a glance",
+    "metrics": {
+      "groupLabel": "Usage overview",
+      "last7": "Last 7 days",
+      "last30": "Last 30 days",
+      "thisYear": "This year",
+      "creditsUnit": "AI Credits"
+    },
+    "trend": {
+      "title": "Usage trend",
+      "description": "AI Credits consumption by period; buckets are cut on UTC days and periods without usage show 0. Dashboard figures only — never a billing basis",
+      "windowLabel": "Period",
+      "windowDay": "30 days",
+      "windowWeek": "12 weeks",
+      "windowMonth": "12 months",
+      "windowYear": "Yearly",
+      "empty": "No usage data in this period",
+      "windowHour": "Hourly (24h)",
+      "descriptionHour": "Hourly consumption over the last 24 hours; the axis is shown in your local time. Dashboard figures only — never a billing basis",
+      "statTotal": "Window total",
+      "statPeak": "Peak",
+      "statDelta": "Latest change"
+    },
+    "share": {
+      "title": "By product",
+      "description": "Product mix within the current window; share is against the window total",
+      "empty": "No product consumption yet"
+    },
+    "members": {
+      "title": "By member",
+      "description": "Member split over the last 30 days; calls with no reported user land in Unattributed",
+      "empty": "No member usage in the last 30 days"
+    },
+    "chartPeak": "Peak",
+    "filters": {},
+    "notes": {
+      "title": "How these numbers work",
+      "description": "Where the figures on this page come from",
+      "scopeTitle": "A dashboard, not a bill",
+      "scopeBody": "This page reports AI Credits from downsampled dashboard data; actual charges follow your orders and invoices, and the two can differ slightly because of reporting lag. For other metrics or line-by-line checks, use the call records",
+      "bucketTitle": "How time is bucketed",
+      "bucketBody": "Trends are bucketed in UTC, with one bucket per period in the window (zero-filled when there were no calls); the hourly view converts to your local time, while daily and weekly keep UTC dates so they line up with the backend buckets",
+      "attributionTitle": "What “Unattributed” means",
+      "attributionBody": "The product did not pass a user identity with the call, so that usage lands in the unattributed bucket; it still counts toward the total, it just cannot be traced to a person",
+      "recordsTitle": "Checking line by line",
+      "recordsBody": "The call records page has full filters (time window, product, metric, member, request ID) plus a filtered total, so you can sum the detail and reconcile it against the quota page and your invoices"
+    },
+    "viewRecords": "View call records",
+    "unattributed": "Unattributed"
   },
-  "metric": {
-    "storage": "Storage",
-    "aiCredit": "AI Credits",
-    "apiCall": "API calls",
-    "qualityCheck": "Quality checks"
+  "usageRecordsPage": {
+    "title": "Call records",
+    "description": "Task-level detail: one row per call, searchable by time, product, metric, member and request ID",
+    "backToUsage": "Back to usage",
+    "metrics": {
+      "groupLabel": "Filtered result",
+      "count": "Records matched",
+      "countHint": "All records under the current filters",
+      "amount": "Charged total",
+      "amountHint": "Sum of charged amounts under the same filters; does not change as you page"
+    },
+    "table": {
+      "title": "Detail",
+      "description": "Newest first; the amount column shows what was charged, with the requested amount below when it could not be charged in full",
+      "colAt": "Time",
+      "colProduct": "Product",
+      "colMetric": "Metric",
+      "colAmount": "Amount",
+      "colUser": "User",
+      "colRequest": "Request ID",
+      "requestedWas": "requested {amount}",
+      "unattributed": "Unattributed",
+      "empty": "No call records match",
+      "emptyHint": "Try a different time window or loosen the filters"
+    },
+    "filters": {
+      "groupLabel": "Call record filters",
+      "listOnly": "Call records are list-only",
+      "count": "{count} total",
+      "requestPlaceholder": "Find by exact request ID",
+      "requestAriaLabel": "Find by request ID",
+      "fromAriaLabel": "From date",
+      "toAriaLabel": "To date",
+      "productAriaLabel": "Filter by product",
+      "productAll": "All products",
+      "metricAriaLabel": "Filter by metric",
+      "metricAll": "All metrics",
+      "userAriaLabel": "Filter by member",
+      "userAll": "All members",
+      "reset": "Reset"
+    },
+    "notes": {
+      "title": "Reconciling with this page",
+      "description": "Narrow the detail, sum it, and match it against quota and invoices",
+      "reconcileTitle": "Reading the totals",
+      "reconcileBody": "The two figures above cover every record under the current filters and do not change as you page; set the time window to match your billing cycle and they line up with the quota page and your invoices",
+      "shortfallTitle": "Requested vs charged",
+      "shortfallBody": "A “requested N” line under the amount means the call could not be charged in full — when the balance runs short, only what was available is charged and the rest is not counted; nothing is shown when the two match",
+      "rangeTitle": "How far back",
+      "rangeBody": "Up to {days} days; older records have been archived with their partitions and are outside this view"
+    }
   },
-  "pagination": {
-    "total": "{total} records",
-    "totalFiltered": "{total} records / {filtered} filtered",
-    "previous": "Previous page",
-    "next": "Next page",
-    "pageSizeLabel": "Rows per page",
-    "pageSizeOption": "{size} per page"
+  "verificationPage": {
+    "personal": {
+      "eyebrow": "Personal info",
+      "title": "Identity verification",
+      "description": "Completing personal verification links it to your personal tenant."
+    },
+    "organization": {
+      "eyebrow": "Tenant info",
+      "title": "Enterprise verification",
+      "description": "Complete enterprise verification to unlock organization-tenant compliance."
+    },
+    "fields": {
+      "status": "Verification status"
+    },
+    "status": {
+      "unverified": "Unverified"
+    },
+    "timeline": {
+      "empty": "No verification started yet."
+    },
+    "sections": {
+      "form": {
+        "title": "Verification details",
+        "description": "Fill in and submit verification materials (coming soon).",
+        "empty": "Verification is coming soon."
+      },
+      "history": {
+        "title": "History",
+        "description": "Submission, review, and change records.",
+        "empty": "No verification records yet."
+      }
+    },
+    "org": {
+      "title": "Business verification",
+      "description": "Verify your business to unlock subscriptions and invoicing; one verification stays valid",
+      "status": {
+        "unverified": "Not verified",
+        "pending": "Under review",
+        "verified": "Verified",
+        "rejected": "Rejected",
+        "superseded": "Superseded",
+        "lite": "Simple verification",
+        "full": "Full verification"
+      },
+      "pendingBanner": "Your application is submitted; platform operations will review it within 1-2 business days",
+      "rejectedBanner": "Your last application was rejected: {reason}. Check the details and submit again",
+      "submittedBanner": "Submitted. Awaiting review; the result syncs to the badge on the tenant page",
+      "submitFailed": "Submission failed. Please try again later",
+      "liteLimitBanner": "You are verified via simple business verification: you can subscribe, but cannot request invoices",
+      "liteLimitBannerBody": "Simple verification checks registration details only, without verifying the legal representative in person or their documents, so invoicing is not available. Face verification and document verification are in development and will offer an upgrade path.",
+      "methods": {
+        "title": "Verification methods",
+        "description": "The three methods differ in what they require and what they unlock. Simple business verification is available now; the other two are in development",
+        "needLabel": "What you provide",
+        "capabilityLabel": "What you get",
+        "canSubscribe": "Subscribe to products and plans",
+        "canInvoice": "Request invoices",
+        "cannotInvoice": "Cannot request invoices",
+        "availableTag": "Available now",
+        "currentTag": "Current method",
+        "lite": {
+          "name": "Simple business verification",
+          "summary": "Company name and unified social credit code only, reviewed by operations. The fastest path",
+          "items": {
+            "0": "Company name",
+            "1": "Unified social credit code"
+          }
+        },
+        "face": {
+          "name": "Legal representative face verification",
+          "summary": "The legal representative verifies in person by face scan; unlocks invoicing",
+          "items": {
+            "0": "Registration details",
+            "1": "Face scan by the legal representative"
+          }
+        },
+        "documents": {
+          "name": "Document verification",
+          "summary": "Submit the signed application form and the business licence image for manual review; unlocks invoicing",
+          "items": {
+            "0": "Verification application form (download, stamp, upload)",
+            "1": "Business licence image"
+          }
+        },
+        "selectedTag": "Selected"
+      },
+      "current": {
+        "title": "Current verification",
+        "description": "Verification is in effect; changes require another review",
+        "method": "Method",
+        "verifiedAt": "Verified at",
+        "invoicing": "Invoicing",
+        "invoicingAllowed": "Can request invoices",
+        "invoicingBlocked": "Cannot request invoices (simple verification)"
+      },
+      "form": {
+        "title": "Submit business verification",
+        "description": "Only simple business verification is open this cycle: registration details, no document images",
+        "retitleTitle": "Change verification details",
+        "retitleDescription": "Changes require another review; the existing verification stays valid meanwhile",
+        "liteNotice": "Simple business verification: once approved you can subscribe, but cannot request invoices",
+        "companyName": "Company name",
+        "companyNamePlaceholder": "Exactly as registered on the business licence",
+        "licenseNo": "Unified social credit code",
+        "licenseNoPlaceholder": "18-character unified social credit code",
+        "legalName": "Legal representative",
+        "legalNamePlaceholder": "As shown on the business licence",
+        "submit": "Submit application",
+        "pendingLocked": "Under review, cannot submit",
+        "selectedMethod": "Selected: {method}. Fill in the details this method requires."
+      },
+      "history": {
+        "title": "Applications",
+        "description": "Past verification applications and their outcomes",
+        "colSubject": "Company",
+        "colMethod": "Method",
+        "colStatus": "Status",
+        "colAt": "Submitted",
+        "colResult": "Outcome / time",
+        "rowMenu": "Record actions",
+        "awaiting": "Awaiting review",
+        "empty": "No applications yet"
+      },
+      "notes": {
+        "title": "About verification",
+        "description": "Scope and effect",
+        "liteTitle": "Limits of simple verification",
+        "liteBody": "Simple verification checks registration details and takes no document images, so it allows subscribing but not invoicing. For invoicing, wait for face or document verification",
+        "effectTitle": "Scope",
+        "effectBody": "Verification lives on the tenant and every workspace inherits it; the tenant name follows the verified company name, and renaming voids the verification",
+        "noIdTitle": "No identity document images",
+        "noIdBody": "None of the three methods asks for identity document images: simple verification checks registration details, face verification verifies the person, and document verification takes only the application form and the business licence"
+      },
+      "loadFailed": "Could not read the verification status; the form is locked. Retry or come back later.",
+      "retry": "Retry",
+      "personalTenantBanner": "Business verification applies to organization tenants only",
+      "personalTenantBannerBody": "This is a personal tenant. Personal identity verification lives on the account page; convert to an organization tenant first for members, business verification and invoicing.",
+      "apply": {
+        "title": "Submit business verification",
+        "description": "Choose a method and fill in the details; operations reviews the application and the result appears on the verification page",
+        "backToResult": "Back to result",
+        "cancel": "Cancel"
+      },
+      "actions": {
+        "goApply": "Submit application",
+        "changeApply": "Change verification details"
+      }
+    }
+  },
+  "vouchersPage": {
+    "title": "My Vouchers",
+    "description": "Everything you hold at a glance: usable ones apply at checkout, used ones show where they went",
+    "metrics": {
+      "groupLabel": "Voucher overview",
+      "available": "Available",
+      "expiringSoon": "{count} expiring within 7 days",
+      "noExpiring": "None expiring soon",
+      "used": "Used",
+      "usedHint": "Total redeemed",
+      "total": "All vouchers",
+      "totalHint": "Including used / expired / revoked"
+    },
+    "kind": {
+      "discount": "Discount",
+      "credit_voucher": "Credit voucher",
+      "recharge_card": "Recharge card",
+      "redemption": "Redemption code",
+      "extension": "Extension"
+    },
+    "status": {
+      "available": "Available",
+      "reserved": "In use",
+      "redeemed": "Used",
+      "expired": "Expired",
+      "revoked": "Revoked"
+    },
+    "face": {
+      "percentOff": "{percent}% off",
+      "maxOff": " (up to {amount})",
+      "fixedOff": "{amount} off"
+    },
+    "table": {
+      "title": "Vouchers",
+      "description": "\"In use\" = locked on a pending order; cancelling that order releases it automatically. The order it is held by shows under the status",
+      "colCode": "Code",
+      "colKind": "Kind",
+      "colFace": "Face value",
+      "colStatus": "Status / Held by",
+      "colExpires": "Valid until",
+      "colUsedAt": "Used at / Redemption no.",
+      "empty": "No vouchers yet",
+      "usesLeft": "{left} of {total} left",
+      "emptyHint": "Vouchers issued by platform promotions show up here"
+    },
+    "notes": {
+      "title": "How it works",
+      "description": "How vouchers join settlement",
+      "useTitle": "Where to use",
+      "useBody": "Pick them on the order payment page: discounts act on the order price, credit vouchers offset the amount due; one of each can stack",
+      "sourceTitle": "Where they come from",
+      "sourceBody": "Issued by platform promotions (targeted at your tenant, workspace, or you); validity shown here is authoritative",
+      "holdTitle": "Holding and release",
+      "holdBody": "A voucher picked at checkout is locked as “In use” and shows its order no.; cancelling or letting the order expire releases it back to available, and only a completed payment redeems it"
+    },
+    "filters": {
+      "groupLabel": "Voucher filters",
+      "listOnly": "Vouchers are list-only",
+      "count": "{count} total",
+      "searchPlaceholder": "Search code, batch or order no.",
+      "searchAriaLabel": "Search vouchers",
+      "statusAriaLabel": "Filter by status",
+      "statusAll": "All statuses",
+      "reset": "Reset"
+    },
+    "actions": {
+      "menuLabel": "Voucher actions",
+      "copy": "Copy code",
+      "copied": "Copied",
+      "viewOrder": "View held order",
+      "viewOrderHint": "This voucher is not held by any order",
+      "use": "Use at checkout",
+      "useHint": "Only available vouchers can join settlement"
+    }
+  },
+  "workspacePicker": {
+    "defaultWorkspace": "Default workspace",
+    "switchFailed": "Tenant switch failed — please retry; the order owner is unchanged"
   }
 }

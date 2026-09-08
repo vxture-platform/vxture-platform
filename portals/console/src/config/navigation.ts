@@ -8,6 +8,25 @@ export interface NavigationItem {
   descriptionKey: string;
   capability?: Capability;
   tenantTypes?: Array<"personal" | "organization">;
+  /**
+   * 副名，渲染成主名下方的小字第二行（DS 的 `ShellNavItem.subLabel`）。
+   *
+   * console 用它标**供给来源**：`模型服务 / Atlas`、`技能工具 / Runos`。
+   * 注意这是**来源标注，不是入口**——点进去仍是租户自己的只读清单，
+   * 既不通往 opera（那是运维平面），也不通往产品本体。
+   *
+   * 与 opera 的用法同源但更弱一层：opera 后置产品代号是因为「opera 管理 Atlas，
+   * 不属于 Atlas」；console 连管理都不做，只是被供给方。
+   */
+  subLabel?: string;
+  /**
+   * 文档站的区段名。给了就在行尾渲染一个外链图标（DS 12.2.0 的
+   * `ShellNavItem.external`），点它去 `/{locale}/docs/{docsSection}`。
+   *
+   * 这里存**区段名**而不是完整 URL：URL 要拼当前 locale，而导航配置是静态的、
+   * 拿不到 locale。拼接在外壳里做。
+   */
+  docsSection?: string;
 }
 
 export interface NavigationSection {
@@ -167,26 +186,50 @@ const settingsSecuritySection: NavigationSection = {
   ],
 };
 
-const platformSection: NavigationSection = {
-  titleKey: "platform",
+/**
+ * 模型与能力（owner 2026-09-08，原名「平台能力」）。
+ *
+ * **租户视角、只读**：回答「我这个工作空间现在能用哪些模型 / 技能，额度多少、
+ * 用了多少」。不回答「谁能用」「怎么配」——那些是运维平面（opera）的事。
+ * 代码上也是这个形状：console-bff 的 atlas.router 只有三个 @Get，一个写入都没有，
+ * 且整个 controller 挂 `tenant.model.read`；取数经 S2S 换 token 代理到上游，
+ * 上游的 `/tenancy/*` 已按本工作空间的有效授权过滤。
+ *
+ * 项上的 subLabel 标供给来源（Atlas / Runos），**不是入口**。
+ */
+const capabilitySection: NavigationSection = {
+  titleKey: "capability",
   items: [
     {
       href: "/atlas",
-      labelKey: "atlas.label",
+      labelKey: "modelService.label",
       icon: "database",
-      descriptionKey: "atlas.description",
+      descriptionKey: "modelService.description",
+      subLabel: "Atlas",
+      docsSection: "models",
+      capability: "tenant.model.read",
+    },
+    {
+      // 占位页（owner 2026-09-08）：console-bff 目前没有 runos 取数通路，
+      // 页面明确标「开发中」。菜单先就位是 owner 的裁定——占位≠无用。
+      href: "/skills",
+      labelKey: "skillTools.label",
+      icon: "stack",
+      descriptionKey: "skillTools.description",
+      subLabel: "Runos",
+      docsSection: "skills",
       capability: "tenant.model.read",
     },
   ],
 };
 
-/* 平台能力域的门:2026-09-04 起用租户侧目录码(tenant.model.read)。它暂不授予任何
+/* 模型与能力域的门:2026-09-04 起用租户侧目录码(tenant.model.read)。它暂不授予任何
  * 角色——/atlas 页面整改(批 7)前不对客户开放;此前挂的 platform.* 码在 console
  * 的能力派生里永远不会出现,等于一个永远关着、却没有锁的门。 */
 const PLATFORM_CAPABILITIES: Capability[] = ["tenant.model.read"];
 
 /**
- * 扁平导航分组（向后兼容）。不含平台域——平台能力仅经 consoleDomains 暴露。
+ * 扁平导航分组（向后兼容）。不含模型与能力域——它仅经 consoleDomains 暴露。
  */
 export const navigationSections: NavigationSection[] = [
   workspaceSection,
@@ -224,10 +267,10 @@ export const consoleDomains: ConsoleDomain[] = [
     sections: [settingsSecuritySection],
   },
   {
-    id: "platform",
-    labelKey: "platform",
+    id: "capability",
+    labelKey: "capability",
     icon: "database",
     capabilityAnyOf: PLATFORM_CAPABILITIES,
-    sections: [platformSection],
+    sections: [capabilitySection],
   },
 ];

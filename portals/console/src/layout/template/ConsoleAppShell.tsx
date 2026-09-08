@@ -56,6 +56,7 @@ import {
 import type { NavSearchEntry } from "../header/useGlobalSearch";
 import { TemplateDrawer, type DrawerNotif } from "./TemplateDrawer";
 import { AppCenter } from "./AppCenter";
+import { buildWebsiteDocsUrl } from "@/lib/website-entry";
 
 /* 内容滚动区：原先是遗留 CSS 的 `.content-scroll`（shell-template 已随批 D
  * 整体退役）。等价 Tailwind 写法在此。`data-content-scroll` 是给路由跳转后复位滚动条用的
@@ -308,10 +309,25 @@ export function ConsoleAppShell({
             href: it.href,
             label: tSidebar(`items.${it.labelKey}`),
             icon: it.icon,
+            /* 副名标供给来源(Atlas / Runos)。**不走 i18n**:它是产品代号,
+               翻译它等于把一个专名改掉。不传的项仍是单行,行为不变。 */
+            ...(it.subLabel ? { subLabel: it.subLabel } : {}),
+            /* 行尾外链 → 文档站(DS 12.2.0 的 external 槽位)。URL 在这里拼是因为
+               它要带当前 locale,而导航配置是静态的、拿不到 locale。
+               点行仍进应用内页面,点图标才去文档——两个目的地都保留。 */
+            ...(it.docsSection
+              ? {
+                  external: {
+                    href: buildWebsiteDocsUrl(locale, it.docsSection),
+                    label: tSidebar("openDocs"),
+                  },
+                }
+              : {}),
           })),
         })),
       ),
-    [visibleDomains, tSidebar],
+    /* locale 进依赖:外链 URL 里带着它,漏了的话切语言后图标仍指向旧 locale。 */
+    [visibleDomains, tSidebar, locale],
   );
 
   /* launcher 的两个目的地。icon 现在是 DS IconName（原先是 Phosphor class

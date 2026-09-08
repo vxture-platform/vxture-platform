@@ -42,3 +42,20 @@ export function buildWebsitePricingUrl(
 ): string {
   return `${WEBSITE_BASE_URL}/${locale}/pricing?product=${encodeURIComponent(productCode)}`;
 }
+
+/**
+ * 文档页：`/{locale}/docs/{section}`（owner 2026-09-08）。
+ *
+ * 侧栏「模型服务 / 技能工具」行尾那个外链图标落到这里：**工作台只答「你有什么」，
+ * 能力说明与用法在文档**。图标而不是整行跳转——两个目的地都要保留。
+ *
+ * 路径按**能力域**切、产品代号不进地址（`/docs/models` 而不是 `/docs/atlas`）：
+ * 将来第二家模型供给方接进来是进「模型」这个域，不是并列出一个新的产品代号目录；
+ * 按代号切的 URL 换供给方时要么撒谎、要么得做重定向。供给方写在页面内容里。
+ *
+ * 这两条子页已在 website 的 CONTENT_REGISTRY 里声明（占位页，**不会 404**）——
+ * 一个指向 404 的外链比没有外链更糟：它让人以为文档丢了，而不是还没写。
+ */
+export function buildWebsiteDocsUrl(locale: string, section: string): string {
+  return `${WEBSITE_BASE_URL}/${locale}/docs/${encodeURIComponent(section)}`;
+}

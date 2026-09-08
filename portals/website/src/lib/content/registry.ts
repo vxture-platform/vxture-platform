@@ -36,7 +36,14 @@ export const CONTENT_REGISTRY: Record<ContentSection, ContentSectionConfig> = {
   },
   // ── 占位实现（原 [footerSlug] 路由收拢至此） ─────────────────────────────
   // docs 之前只在页脚有链接、从未注册 → /docs 一直是 404（2026-08-23 审计发现）。
-  docs: { loader: createStubLoader("docs") },
+  /* docs 的子页（2026-09-08）：console 侧栏的「模型服务 / 技能工具」外链到这里。
+     按**能力域**切分、产品代号不进路径——将来第二家模型供给方接进来是进「模型」
+     这个域，不是并列出一个 `/docs/atlas`；那样的 URL 换供给方时要么撒谎要么重定向。
+     供给方（Atlas / Runos）写在页面内容里，不写在地址里。 */
+  docs: {
+    loader: createStubLoader("docs", ["models", "skills"]),
+    staticParams: () => [[], ["models"], ["skills"]],
+  },
   faq: { loader: createStubLoader("faq") },
   support: { loader: createStubLoader("support") },
   insights: { loader: createStubLoader("insights") },

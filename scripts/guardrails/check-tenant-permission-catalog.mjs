@@ -18,7 +18,7 @@
 // 退出码:任一不一致 → 1。
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -28,8 +28,11 @@ const read = (p) => readFileSync(resolve(REPO_ROOT, p), "utf8");
 const SEED = "deploy/database/seed/seed-catalog.mjs";
 const CORE = "packages/core/utils/src/tenant-permissions.ts";
 const NAV = "portals/console/src/config/navigation.ts";
-const MIGRATION =
-  "deploy/database/migrations/2026-09-10-access-console-permission-catalog.sql";
+/* 菜单码不是只出现在最初那一份迁移里——后来新增的节点各自有自己的迁移
+   （2026-09-08：tenant.menu.skills 落在 2026-09-23-tenant-menu-skills.sql）。
+   原先写死一份文件名，等于假设「以后不会再加菜单」；那个假设一破，
+   守卫就会对着一条完全正确的新增迁移报错。改成扫全部迁移。 */
+const MIGRATION_DIR = "deploy/database/migrations";
 
 /** 取 `const NAME = [ … ];`(或带类型标注)的数组字面量并求值——字面量里只有数据。 */
 function literalArray(src, name, where) {
@@ -58,7 +61,10 @@ const fail = (msg) => errors.push(msg);
 const seedSrc = read(SEED);
 const coreSrc = read(CORE);
 const navSrc = read(NAV);
-const migrationSrc = read(MIGRATION);
+const migrationSrc = readdirSync(resolve(REPO_ROOT, MIGRATION_DIR))
+  .filter((f) => f.endsWith(".sql"))
+  .map((f) => read(`${MIGRATION_DIR}/${f}`))
+  .join(String.fromCharCode(10));
 
 // ① 操作码集合
 const seedCodes = literalArray(seedSrc, "PERMISSIONS", SEED).map((p) => p[0]);
@@ -91,6 +97,25 @@ for (const n of seedTree)
   for (const p of n.perms)
     if (!seedCodes.includes(p)) fail(`${n.code} 挂了目录里没有的操作码:${p}`);
 
+// ②-b 操作码的归属唯一:一个码只能挂在一个页面下。
+//
+// perms 是**归属**(对应 DB 的 access.permissions.parent_id,一个码只有一个父),
+// 不是「进这一页要什么码」的门。门是导航项的 capability 与页面的 CapabilityGate,
+// 两个页面共用一个码走门,不是靠第二条挂靠关系。
+//
+// 为什么单加这一条:上面 ① 比的是 seed 与 core-utils **是否一样**,而 2026-09-08
+// 我把同一个错误同时写进了两边——两边一样地错,一致性检查一个字都不会说。
+// 这条不看两边是否一致,只看这一份**自身是否成立**:两类判据缺一不可。
+{
+  const owner = new Map();
+  for (const n of seedTree)
+    for (const p of n.perms) {
+      if (owner.has(p))
+        fail(`操作码 ${p} 同时挂在 ${owner.get(p)} 与 ${n.code} 下——归属只能有一个;两页共用同一个码请走门(navigation 的 capability),不要挂两次`);
+      else owner.set(p, n.code);
+    }
+}
+
 // ③ console 导航
 const routes = new Set(seedTree.map((n) => n.route).filter(Boolean));
 for (const m of navSrc.matchAll(/href:\s*"([^"]+)"/g)) {
@@ -106,7 +131,8 @@ for (const m of navSrc.matchAll(/capabilityAnyOf:\s*(\[[^\]]*\])/g)) {
 
 // ④ 迁移覆盖
 for (const code of [...menuCodes, ...seedCodes.filter((c) => c.startsWith("tenant."))]) {
-  if (!migrationSrc.includes(`'${code}'`)) fail(`迁移 ${MIGRATION} 没有提到 ${code}`);
+  if (!migrationSrc.includes(`'${code}'`))
+    fail(`${MIGRATION_DIR} 下没有任何一份迁移提到 ${code}——新菜单节点要连着迁移一起加`);
 }
 
 console.log("══ 租户权限目录一致性(check-tenant-permission-catalog)══");

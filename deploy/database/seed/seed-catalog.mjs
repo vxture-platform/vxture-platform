@@ -198,16 +198,28 @@ const TENANT_MENU_TREE = [
     ],
   },
   {
+    // 显示名 2026-09-08 改为「模型与能力」；**码不动**（生产已有授权行）。
     code: "tenant.menu.platform",
-    name: "平台能力",
+    name: "模型与能力",
     icon: "database",
     children: [
       {
         code: "tenant.menu.atlas",
-        name: "模型接入",
+        name: "模型服务",
         route: "/atlas",
         icon: "database",
         perms: ["tenant.model.read"],
+      },
+      {
+        // 技能工具（占位页）：**不列 perms**——perms 是操作码的归属（DB 的
+        // parent_id，一个码只能有一个父），tenant.model.read 归属在模型服务
+        // 那一节点。两页共用这个码靠的是门（导航 capability + CapabilityGate），
+        // 不是靠第二条挂靠关系。理由见 core-utils 那份。
+        code: "tenant.menu.skills",
+        name: "技能工具",
+        route: "/skills",
+        icon: "stack",
+        perms: [],
       },
     ],
   },
