@@ -280,7 +280,9 @@ export class PaymentsRouter {
     return this.loadPaymentRecord(targetId);
   }
 
-  // 写后回读单条支付明细（RO 池，同库读己写；与 admin-roles.router 回读约定一致），复用列表映射。
+  // 写后回读单条支付明细（RO 池，同库读己写），复用列表映射。
+  // 这条回读约定原先指 admin-roles.router；那个路由随治理平面 cutover 迁去 arche 了
+  // （2026-09-08 删），同款写法在 arche-bff/src/routers/admin-roles.router.ts。
   private async loadPaymentRecord(
     paymentId: string,
   ): Promise<PaymentOperationRecord> {

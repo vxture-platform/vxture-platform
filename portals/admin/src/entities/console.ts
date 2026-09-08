@@ -23,57 +23,6 @@ export interface ConsoleUser {
   phone?: string | null;
 }
 
-export interface ConsoleUserProfile {
-  id: string;
-  username: string;
-  displayName: string | null;
-  avatarUrl: string | null;
-  headline: string | null;
-  bio: string | null;
-  email: string | null;
-  phone: string | null;
-  timezone: string | null;
-  language: string | null;
-  profileUpdatedAt: string | null;
-}
-
-export interface ConsoleOrganizationProfile {
-  tenantId: string;
-  tenantCode: string;
-  tenantName: string;
-  displayName: string;
-  tenantType: "company" | "individual";
-  status: "trial" | "active" | "suspended" | "cancelled";
-  logoUrl: string | null;
-  description: string | null;
-  language: string;
-  timeZone: string;
-  companyName: string | null;
-  unifiedSocialCreditCode: string | null;
-  businessLicenseUrl: string | null;
-  industry: string | null;
-  scale: string | null;
-  contactName: string | null;
-  contactPhone: string | null;
-  contactEmail: string | null;
-  countryCode: string | null;
-  province: string | null;
-  city: string | null;
-  district: string | null;
-  address: string | null;
-  postalCode: string | null;
-  verifiedStatus: "unverified" | "pending" | "verified" | "rejected" | null;
-  verifiedAt: string | null;
-  rejectedReason: string | null;
-  primaryDomain: string | null;
-  updatedAt: string | null;
-}
-
-export interface BreadcrumbItem {
-  href: string;
-  label: string;
-}
-
 export interface SessionSnapshot {
   isAuthenticated: boolean;
   user: ConsoleUser | null;
@@ -82,63 +31,6 @@ export interface SessionSnapshot {
 
 // PlatformGovernance*（审批中心 / 平台密钥）2026-08-31 随页面一起退役：
 // admin.governance_record 从未建表，那两页永远为空。
-
-export interface ModuleCardStat {
-  label: string;
-  value: string;
-  hint: string;
-}
-
-export interface SummaryMetric {
-  label: string;
-  value: string;
-  trend?: string;
-  tone?: "default" | "positive" | "warning";
-}
-
-export interface QuickAction {
-  label: string;
-  description: string;
-  href: string;
-  icon: string;
-}
-
-export interface MemberRecord {
-  id: string;
-  accountId: string;
-  name: string;
-  username?: string | null;
-  avatarUrl?: string | null;
-  email: string;
-  phone: string | null;
-  role: string;
-  roleCode: string | null;
-  roleId: string | null;
-  status: "Active" | "Invited" | "Suspended";
-  statusCode: "active" | "inactive" | "banned";
-  lastActive: string;
-  team: string;
-  joinedAt: string;
-  isPrimaryOwner: boolean;
-}
-
-export interface TenantRoleRecord {
-  id: string;
-  roleCode: string;
-  roleName: string;
-  description: string | null;
-  status: "active" | "disabled";
-  isSystem: boolean;
-  permissions: TenantPermissionRecord[];
-}
-
-export interface TenantPermissionRecord {
-  id: string;
-  permissionCode: string;
-  permissionName: string;
-  permissionType: string | null;
-  description: string | null;
-}
 
 export interface AiModelRecord {
   id: string;
@@ -460,22 +352,6 @@ export interface ProductPlanAgent {
   status: "active" | "inactive" | "draft";
 }
 
-export interface AuditLogRecord {
-  id: string;
-  operatorId: string;
-  operatorName: string;
-  operatorEmail: string;
-  action: string;
-  targetType: string;
-  targetId: string | null;
-  targetLabel: string | null;
-  module: string;
-  ip: string | null;
-  result: "success" | "failure";
-  errorMessage: string | null;
-  createdAt: string;
-}
-
 export interface AnnouncementRecord {
   id: string;
   title: string;
@@ -502,69 +378,6 @@ export interface AnnouncementRecord {
 }
 
 // ── TD-021 governance records（镜像 bff-admin console.types）──────────────
-
-export interface RiskRecordItem {
-  id: string;
-  tenantId: string;
-  tenantName: string | null;
-  tenantNo: string | null;
-  riskLevel: "normal" | "follow_up" | "high";
-  riskScore: number | null;
-  scope: string | null;
-  reason: string;
-  reviewerId: string | null;
-  reviewerName: string | null;
-  tags: string[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ComplianceEventItem {
-  id: string;
-  tenantId: string | null;
-  tenantName: string | null;
-  eventType: string;
-  status: "open" | "in_review" | "resolved" | "dismissed";
-  regulationCode: string | null;
-  evidenceUrl: string | null;
-  handlerId: string | null;
-  handlerName: string | null;
-  detail: unknown;
-  tags: string[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface FeatureFlagRecord {
-  id: string;
-  flagKey: string;
-  category: string;
-  environment: string;
-  description: string | null;
-  isGloballyEnabled: boolean;
-  isArchived: boolean;
-  rolloutPercentage: number;
-  tenantOverrides: Record<string, boolean>;
-  expiresAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PlatformSettingRecord {
-  id: string;
-  configGroup: string;
-  configKey: string;
-  valueType: "string" | "int" | "bool" | "json";
-  configValue: string;
-  isSensitive: boolean;
-  isEncrypted: boolean;
-  isReadonly: boolean;
-  isMasked: boolean;
-  isEditable: boolean;
-  validationRule: string | null;
-  description: string | null;
-  updatedAt: string;
-}
 
 export interface NotificationLogRecord {
   id: string;
@@ -1766,90 +1579,4 @@ export interface AccountOperationRecord {
   lastActiveLocation: string;
   loginCount30d: number;
   tenantBindings: AccountTenantBinding[];
-}
-
-/**
- * platform_permissions.perm_type 的真实取值——**小写**，与接口返回一致
- * （`/api/admin-permissions` 实测 2026-08-06：55 条全是 "api"）。
- *
- * 此前声明为大写 MENU|BUTTON|API，前端据此建的查表全部落空，权限树整页崩在
- * `meta.className` 上。类型说的是契约，不是期望。
- */
-export type PlatformPermissionType = "menu" | "button" | "api";
-
-export interface PlatformRolePermissionRecord {
-  id: string;
-  parentId: string | null;
-  permCode: string;
-  permName: string;
-  permType: PlatformPermissionType;
-  status: boolean;
-  description: string;
-  routePath: string | null;
-}
-
-export interface PlatformAdminPermissionRecord extends PlatformRolePermissionRecord {
-  icon: string | null;
-  /** 平台预置（seed 灌入）还是运营自建。此前前端拿不到这一列，只能从
-   *  permCode 的命名空间猜；59 个三段操作码因此全被误标成「自定义」。 */
-  isSystem: boolean;
-  sort: number;
-  component: string | null;
-  roleCount: number;
-  activeRoleCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PlatformRoleRecord {
-  id: string;
-  roleCode: string;
-  /** Role security tier (TD-017). */
-  rank: number;
-  nameI18nKey: string;
-  nameEn: string;
-  descriptionI18nKey: string | null;
-  description: string;
-  isSystem: boolean;
-  statusCode: "active" | "disabled" | "archived";
-  status: boolean;
-  sort: number;
-  adminCount: number;
-  activeAdminCount: number;
-  permissionCount: number;
-  menuPermissionCount: number;
-  buttonPermissionCount: number;
-  apiPermissionCount: number;
-  createdBy: string | null;
-  createdByName: string | null;
-  createdAt: string;
-  updatedAt: string;
-  permissions: PlatformRolePermissionRecord[];
-}
-
-export interface PlatformAdminRecord {
-  id: string;
-  sort: number;
-  username: string;
-  displayName: string;
-  phone: string | null;
-  email: string | null;
-  roleId: string;
-  roleCode: string;
-  roleNameI18nKey: string;
-  roleNameEn: string;
-  /** Role security tier (TD-017 graded model). */
-  roleRank: number;
-  /** Server-computed: whether the current actor may manage this operator. */
-  canManage?: boolean;
-  roleStatusCode: "active" | "disabled" | "archived";
-  roleStatus: boolean;
-  statusCode: "active" | "disabled" | "locked" | "pending" | "suspended";
-  status: boolean;
-  isSystem: boolean;
-  lastLoginAt: string | null;
-  lastLoginIp: string | null;
-  remark: string | null;
-  createdAt: string;
-  updatedAt: string;
 }

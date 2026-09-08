@@ -1172,7 +1172,8 @@ order by k.metric_key asc
 `;
 
 // 审计：support.audit_logs 按 tenant_id 取最近 20 条（按月分区，tenant_id+created_at 有索引）。
-// actor 解析与 audit-logs.router 同法：operator → admin.operator_account；customer 多补一层
+// actor 解析：operator → admin.operator_account；customer 多补一层。同款写法原在
+// admin-bff 的 audit-logs.router，那个路由已随治理平面 cutover 迁去 arche（2026-09-08 删）。
 // account.users / user_profiles（这是租户视角，成员操作才是主角）；system / api 没有账号。
 const TENANT_DETAIL_AUDIT_SQL = `
 select

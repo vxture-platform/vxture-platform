@@ -24,7 +24,8 @@ export interface DrawerNotif {
   icon: string;
   title: string;
   meta: string;
-  href: string;
+  /** 落地页；没有就渲染成不可点的一行（见 notificationCenterHref 的注释）。 */
+  href?: string | undefined;
 }
 
 export interface TemplateDrawerProps {
@@ -34,8 +35,14 @@ export interface TemplateDrawerProps {
   notifications: DrawerNotif[];
   /** 台账还没回来。与"回来了但是空"分开画，免得先闪一下空态。 */
   notificationsLoading?: boolean;
-  /** "前往消息中心"落到的完整台账页。 */
-  notificationCenterHref: string;
+  /**
+   * "前往消息中心"落到的完整台账页。**不给就不渲染那个按钮**——
+   * admin 侧自 2026-09-08 起就是不给：完整台账页随治理平面 cutover（#121）
+   * 迁去 arche 了，admin 里那个 `/notification-logs` 路由已不存在，
+   * 按钮和每一行都还指着它（点了 404，直到 2026-09-08 走查才发现）。
+   * 抽屉本身照常——看最近几条投递记录不需要落地页。
+   */
+  notificationCenterHref?: string | undefined;
   settingsRows: Array<[string, string]>;
   labels: {
     notificationsTitle: string;
@@ -83,19 +90,21 @@ export function TemplateDrawer({
     >
       {isNotif ? (
         <div className="flex flex-col gap-xs">
-          <div className="flex items-center justify-end gap-2xs">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                onClose();
-                onNavigate(notificationCenterHref);
-              }}
-            >
-              <i className="ph ph-arrow-square-out" aria-hidden="true"></i>
-              {labels.openCenter}
-            </Button>
-          </div>
+          {notificationCenterHref ? (
+            <div className="flex items-center justify-end gap-2xs">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  onClose();
+                  onNavigate(notificationCenterHref);
+                }}
+              >
+                <i className="ph ph-arrow-square-out" aria-hidden="true"></i>
+                {labels.openCenter}
+              </Button>
+            </div>
+          ) : null}
           {notificationsLoading ? (
             <p className="p-md text-body-sm text-muted-foreground">
               {labels.loading}
@@ -106,35 +115,50 @@ export function TemplateDrawer({
               description={labels.emptyDescription}
             />
           ) : null}
-          {notifications.map((n) => (
-            <button
-              key={n.id}
-              type="button"
-              className="flex w-full items-center gap-md rounded-lg p-md text-left transition-colors hover:bg-accent"
-              onClick={() => {
-                onClose();
-                onNavigate(n.href);
-              }}
-            >
-              <span
-                className={`inline-flex size-icon-xl shrink-0 items-center justify-center rounded-lg ${toneSurfaceClasses[LEVEL_TONE[n.level]]}`}
+          {notifications.map((n) => {
+            const href = n.href;
+            /* 没有落地页就不做成按钮：不可点的东西长得像按钮（hover 变色、右侧
+               箭头）是在骗人。整行降级成静态展示，箭头也一并撤掉。 */
+            const Row = href ? "button" : "div";
+            return (
+              <Row
+                key={n.id}
+                {...(href
+                  ? {
+                      type: "button" as const,
+                      onClick: () => {
+                        onClose();
+                        onNavigate(href);
+                      },
+                    }
+                  : {})}
+                className={
+                  "flex w-full items-center gap-md rounded-lg p-md text-left" +
+                  (href ? " transition-colors hover:bg-accent" : "")
+                }
               >
-                <i className={"ph-fill " + n.icon} aria-hidden="true"></i>
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col gap-2xs">
-                <span className="truncate text-label-md font-semibold text-foreground">
-                  {n.title}
+                <span
+                  className={`inline-flex size-icon-xl shrink-0 items-center justify-center rounded-lg ${toneSurfaceClasses[LEVEL_TONE[n.level]]}`}
+                >
+                  <i className={"ph-fill " + n.icon} aria-hidden="true"></i>
                 </span>
-                <span className="truncate text-body-sm text-muted-foreground">
-                  {n.meta}
+                <span className="flex min-w-0 flex-1 flex-col gap-2xs">
+                  <span className="truncate text-label-md font-semibold text-foreground">
+                    {n.title}
+                  </span>
+                  <span className="truncate text-body-sm text-muted-foreground">
+                    {n.meta}
+                  </span>
                 </span>
-              </span>
-              <i
-                className="ph ph-caret-right shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              ></i>
-            </button>
-          ))}
+                {href ? (
+                  <i
+                    className="ph ph-caret-right shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  ></i>
+                ) : null}
+              </Row>
+            );
+          })}
         </div>
       ) : (
         <div className="flex flex-col">
