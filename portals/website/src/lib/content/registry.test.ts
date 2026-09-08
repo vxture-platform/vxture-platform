@@ -143,6 +143,23 @@ describe("docs 子页 —— 外链不能落到 404", () => {
     await expect(docs(["models", "extra"], LOCALE)).resolves.toBeNull();
   });
 
+  it("子页带出自己的名字 —— 两条外链不能落到一模一样的页面", async () => {
+    // 渲染层按 `section/page` 取文案。不带 page 的话 /docs/models 与 /docs/skills
+    // 都按 `docs` 取，渲染出**同一个**「产品文档 敬请期待」——console 侧栏那两个
+    // 外链点下去分不出点的是哪个，「模型文档 / 技能文档」这层意思整个丢掉。
+    await expect(docs(["models"], LOCALE)).resolves.toMatchObject({
+      page: "models",
+    });
+    await expect(docs(["skills"], LOCALE)).resolves.toMatchObject({
+      page: "skills",
+    });
+  });
+
+  it("区段根路径不带 page —— 它就该用区段自己的文案", async () => {
+    const root = await docs([], LOCALE);
+    expect(root && "page" in root ? root.page : undefined).toBeUndefined();
+  });
+
   it("静态路径与 loader 认的白名单一致", async () => {
     // 签名允许返回 Promise（别的区段确实要读文件系统），await 一下才通用。
     const params = (await CONTENT_REGISTRY.docs.staticParams?.()) ?? [];

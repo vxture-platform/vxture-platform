@@ -61,6 +61,14 @@ export interface StubEntry {
   type: "stub";
   layout: "prose";
   section: ContentSection;
+  /**
+   * 子页 slug（单段）。区段根路径为 undefined。
+   *
+   * 有它才能让 `/docs/models` 与 `/docs/skills` 显示各自的标题：没有的话两条路径
+   * 都按 `section` 取文案，渲染出**一模一样**的页面——console 侧栏那两个外链
+   * 点下去分不出点的是哪个，「模型文档 / 技能文档」这层意思整个丢掉。
+   */
+  page?: string;
 }
 
 export type ContentEntry =
