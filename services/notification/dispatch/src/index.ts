@@ -35,6 +35,7 @@ export {
   type OperatorAlertCode,
   type OperatorAlertInput,
   type OperatorAlertOptions,
+  type OperatorAlertReferenceType,
   type OperatorAlertResult,
 } from "./operator-alerts";
 export {

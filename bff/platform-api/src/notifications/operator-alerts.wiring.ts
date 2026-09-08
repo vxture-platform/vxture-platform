@@ -52,14 +52,17 @@ function money(amount: number, currency: string): string {
 export class OperatorAlertsWiring implements OnModuleInit, OpsAlerter {
   private readonly logger = new Logger(OperatorAlertsWiring.name);
   private readonly dispatcher: OperatorAlertDispatcher;
-  /** 运营台绝对前缀；没配就不给链接（邮件里放相对路径没意义）。 */
+  /** 运营台（admin）绝对前缀；没配就不给链接（邮件里放相对路径没意义）。 */
   private readonly adminBaseUrl: string | null;
+  /** 运维台（opera）绝对前缀，作业健康告警的深链用。 */
+  private readonly operaBaseUrl: string | null;
 
   constructor(
     @Inject(COMMERCE_PG_POOL) private readonly pool: Pool,
     @Inject(OrderService) private readonly orders: OrderService,
   ) {
     this.adminBaseUrl = process.env.ADMIN_BASE_URL?.replace(/\/$/, "") ?? null;
+    this.operaBaseUrl = process.env.OPERA_BASE_URL?.replace(/\/$/, "") ?? null;
     this.dispatcher = new OperatorAlertDispatcher(this.pool, {
       mail: new MailService(),
       logger: this.logger,
@@ -68,14 +71,24 @@ export class OperatorAlertsWiring implements OnModuleInit, OpsAlerter {
 
   onModuleInit(): void {
     this.orders.setOpsAlerter(this);
+    const missing = [
+      this.adminBaseUrl ? null : "ADMIN_BASE_URL",
+      this.operaBaseUrl ? null : "OPERA_BASE_URL",
+    ].filter(Boolean);
     this.logger.log(
-      `operator alerts wired (email only${this.adminBaseUrl ? ", links → " + this.adminBaseUrl : ", no ADMIN_BASE_URL → 邮件不带链接"})`,
+      `operator alerts wired (email only)${missing.length ? ` — 未配 ${missing.join(" / ")}，相应告警邮件不带链接` : ""}`,
     );
   }
 
   private orderLink(orderNo: string): string | undefined {
     if (!this.adminBaseUrl) return undefined;
     return `${this.adminBaseUrl}/orders/${encodeURIComponent(orderNo)}`;
+  }
+
+  /** opera 的「任务调度」页——作业心跳就在那一页。 */
+  private jobsLink(): string | undefined {
+    if (!this.operaBaseUrl) return undefined;
+    return `${this.operaBaseUrl}/ops/jobs`;
   }
 
   /** 两类订单态待办。文案按类分，处理动作说清楚在哪一页做什么。 */
@@ -125,6 +138,49 @@ export class OperatorAlertsWiring implements OnModuleInit, OpsAlerter {
           : "（本进程内没有留下失败原因，多半是重启后重新计数到上限。）",
       ],
       link: this.orderLink(input.orderNo),
+    });
+  }
+
+  /**
+   * 后台作业健康（opera 平面，owner 2026-09-08 定「失败 + 静默」)。
+   * 静默那条把「多久没动」和阈值都写进正文——不然收信人无从判断这是真死了还是刚好慢。
+   */
+  async alertJobHealth(input: {
+    verdict: "failed" | "stalled";
+    jobName: string;
+    idleMs: number;
+    thresholdMs: number;
+    intervalMs: number | null;
+    lastError: string | null;
+    failureCount: number;
+  }): Promise<OperatorAlertResult> {
+    const idle = humanizeWaiting(new Date(Date.now() - input.idleMs));
+    if (input.verdict === "stalled") {
+      return this.alert({
+        code: "ops.job.stalled",
+        reference: { type: "job", id: input.jobName },
+        subject: `后台作业 ${input.jobName} 已静默 ${idle}`,
+        lines: [
+          `作业 ${input.jobName} 距上次开跑已 ${idle}，超过 ${Math.round(input.thresholdMs / 60000)} 分钟阈值` +
+            `（心跳间隔 ${input.intervalMs ? Math.round(input.intervalMs / 1000) + " 秒" : "未记录"}）。`,
+          "两种可能:调度没起来(进程/注册)，或卡在某一轮出不来。两种都不会留下失败记录。",
+          "先在 opera「任务调度」看这一行的最后状态，再查 platform-api 容器日志。",
+        ],
+        link: this.jobsLink(),
+      });
+    }
+    return this.alert({
+      code: "ops.job.failed",
+      reference: { type: "job", id: input.jobName },
+      subject: `后台作业 ${input.jobName} 上次执行失败`,
+      lines: [
+        `作业 ${input.jobName} 最近一轮执行失败，累计失败 ${input.failureCount} 次。`,
+        input.lastError
+          ? `错误：${input.lastError.slice(0, 800)}`
+          : "（心跳里没有留下错误文本。）",
+        "作业本身不会因为一轮失败停摆,下一轮会重试;连续失败才需要人介入。",
+      ],
+      link: this.jobsLink(),
     });
   }
 

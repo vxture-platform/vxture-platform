@@ -28,7 +28,7 @@
  */
 import type { Pool } from "pg";
 import type { MailSender, NotifyLogger } from "./dispatcher";
-import { escapeHtml, type NotificationReferenceType } from "./templates";
+import { escapeHtml } from "./templates";
 
 /**
  * 运营告警的模板码。**刻意不并入 `NotificationTemplateCode`**——那个联合是客户模板集，
@@ -36,9 +36,21 @@ import { escapeHtml, type NotificationReferenceType } from "./templates";
  * 两者共用 notification_logs.template_code 这一列（varchar，无枚举约束），`ops.` 前缀区分。
  */
 export type OperatorAlertCode =
+  // 运营平面（admin）：订单待办
   | "ops.order.pending_verify"
   | "ops.order.paid_unprovisioned"
-  | "ops.order.selfheal_gave_up";
+  | "ops.order.selfheal_gave_up"
+  // 运维平面（opera）：后台作业健康
+  | "ops.job.failed"
+  | "ops.job.stalled";
+
+/**
+ * 运营告警的业务引用类型。**同样不复用 `NotificationReferenceType`**——那个联合是
+ * 客户通知的引用域（subscription / order / refund / announcement），后台作业不属于
+ * 其中任何一个，硬塞进去会让客户侧的类型跟着长出运营概念。
+ * 落库同一列（varchar(64)，无枚举约束）。
+ */
+export type OperatorAlertReferenceType = "order" | "job";
 
 /** 成功投递后的静默时长（owner 2026-09-08 定 4 小时）。 */
 export const OPS_ALERT_SILENCE_MS = 4 * 60 * 60 * 1000;
@@ -47,12 +59,12 @@ export const OPS_ALERT_RETRY_BACKOFF_MS = 15 * 60 * 1000;
 
 export interface OperatorAlertInput {
   code: OperatorAlertCode;
-  reference: { type: NotificationReferenceType; id: string };
+  reference: { type: OperatorAlertReferenceType; id: string };
   /** 邮件主题（不含前缀，由本类统一加）。 */
   subject: string;
   /** 正文段落，按顺序渲染成 text 的行与 html 的 <p>。 */
   lines: string[];
-  /** 运营台绝对链接；没有 ADMIN_BASE_URL 时由调用方传 undefined。 */
+  /** 目标门户的绝对链接；对应的 *_BASE_URL 没配时由调用方传 undefined。 */
   link?: string | undefined;
 }
 

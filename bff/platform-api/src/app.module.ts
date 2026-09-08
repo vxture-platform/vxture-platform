@@ -26,6 +26,7 @@ import { PlatformAuthGuard } from "./authn/platform-auth.guard";
 import { S2sTokenVerifier } from "./authn/s2s-token-verifier.service";
 import { AccountDeletionPurgeJob } from "./jobs/account-deletion-purge.job";
 import { AnnouncementBroadcastJob } from "./jobs/announcement-broadcast.job";
+import { JobHealthAlertJob } from "./jobs/job-health-alert.job";
 import { JobHeartbeatService } from "./jobs/job-heartbeat.service";
 import { OpsTodoAlertJob } from "./jobs/ops-todo-alert.job";
 import { OrderPaymentExpiryJob } from "./jobs/order-payment-expiry.job";
@@ -76,6 +77,8 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     // #231：运营待办告警（只发邮件，4h 静默窗口）；自愈放弃经 setOpsAlerter 挂 OrderService
     OperatorAlertsWiring,
     OpsTodoAlertJob,
+    // #231 第二段：后台作业健康（失败 + 静默）——静默是真盲区，作业死了什么都不留
+    JobHealthAlertJob,
     ProvisioningDispatchJob,
     SharingExpiryJob,
     TrialExpiryJob,
