@@ -202,6 +202,13 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:datetime-discipline
 
+      # 用户名格式写在三处(后端判据 + 两个补齐页的前端校验),漂了不报错:
+      # 前端比后端松 → 用户填得进去、提交被 400 拒;紧 → 后端接受的名字被拦下,
+      # 用户永远不知道那可以用。2026-09-08 实际漂过一次,是靠人翻源码撞见的。
+      - name: Account rules guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:account-rules
+
       # 两类不报错的样式缺陷：CSS 注释提前收口（`next build` 走的
       # Lightning CSS 会自行恢复、照常打包成功，Turbopack dev 却直接拒收），
       # 以及被主题踩掉的关键字工具类（`max-w-none` 实际是 `max-width: 0`）。
