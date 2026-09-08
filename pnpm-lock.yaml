@@ -57,6 +57,9 @@ importers:
       '@typescript-eslint/parser':
         specifier: ^8.46.1
         version: 8.56.1(eslint@9.39.3(jiti@2.6.1))(typescript@5.9.3)
+      '@vitest/coverage-v8':
+        specifier: ^4.1.8
+        version: 4.1.8(vitest@4.1.8)
       dependency-cruiser:
         specifier: ^16.0.0
         version: 16.10.4
@@ -8557,7 +8560,6 @@ snapshots:
   '@babel/parser@7.29.8':
     dependencies:
       '@babel/types': 7.29.8
-    optional: true
 
   '@babel/plugin-bugfix-firefox-class-in-computed-class-key@7.28.5(@babel/core@7.29.7)':
     dependencies:
@@ -9080,10 +9082,8 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
-    optional: true
 
-  '@bcoe/v8-coverage@1.0.2':
-    optional: true
+  '@bcoe/v8-coverage@1.0.2': {}
 
   '@borewit/text-codec@0.2.2': {}
 
@@ -11280,7 +11280,6 @@ snapshots:
       std-env: 4.2.0
       tinyrainbow: 3.1.1
       vitest: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(vite@7.3.6(@types/node@24.13.0)(jiti@2.6.1)(lightningcss@1.31.1)(sass@1.97.3)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))
-    optional: true
 
   '@vitest/expect@4.1.8':
     dependencies:
@@ -11649,7 +11648,6 @@ snapshots:
       '@jridgewell/trace-mapping': 0.3.31
       estree-walker: 3.0.3
       js-tokens: 10.0.0
-    optional: true
 
   async-function@1.0.0: {}
 
@@ -12906,8 +12904,7 @@ snapshots:
       readable-stream: 2.3.8
       wbuf: 1.7.3
 
-  html-escaper@2.0.2:
-    optional: true
+  html-escaper@2.0.2: {}
 
   http-deceiver@1.2.7: {}
 
@@ -13197,21 +13194,18 @@ snapshots:
 
   isobject@3.0.1: {}
 
-  istanbul-lib-coverage@3.2.2:
-    optional: true
+  istanbul-lib-coverage@3.2.2: {}
 
   istanbul-lib-report@3.0.1:
     dependencies:
       istanbul-lib-coverage: 3.2.2
       make-dir: 4.0.0
       supports-color: 7.2.0
-    optional: true
 
   istanbul-reports@3.2.0:
     dependencies:
       html-escaper: 2.0.2
       istanbul-lib-report: 3.0.1
-    optional: true
 
   iterare@1.2.1: {}
 
@@ -13234,8 +13228,7 @@ snapshots:
 
   joycon@3.1.1: {}
 
-  js-tokens@10.0.0:
-    optional: true
+  js-tokens@10.0.0: {}
 
   js-tokens@4.0.0: {}
 
@@ -13462,12 +13455,10 @@ snapshots:
       '@babel/parser': 7.29.8
       '@babel/types': 7.29.8
       source-map-js: 1.2.1
-    optional: true
 
   make-dir@4.0.0:
     dependencies:
       semver: 7.8.5
-    optional: true
 
   math-intrinsics@1.1.0: {}
 
