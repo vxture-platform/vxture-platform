@@ -26,6 +26,18 @@ export {
   type TemplateParams,
 } from "./templates";
 export {
+  DEDUPE_SQL,
+  OPS_ALERT_RETRY_BACKOFF_MS,
+  OPS_ALERT_SILENCE_MS,
+  OperatorAlertDispatcher,
+  renderAlert,
+  suppressionOf,
+  type OperatorAlertCode,
+  type OperatorAlertInput,
+  type OperatorAlertOptions,
+  type OperatorAlertResult,
+} from "./operator-alerts";
+export {
   broadcastAnnouncements,
   findAnnouncementTenants,
   findPendingAnnouncements,

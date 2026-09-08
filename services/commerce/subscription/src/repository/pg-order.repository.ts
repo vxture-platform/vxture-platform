@@ -14,6 +14,7 @@ import { COMMERCE_PG_POOL } from "../tokens";
 import type {
   CreateOrderInput,
   CreateOrderResult,
+  OpsTodoOrderRow,
   OrderActor,
   OrderActorType,
   OrderEventRecord,
@@ -1346,6 +1347,63 @@ export class PgOrderRepository {
       [fallbackTtlMinutes, limit],
     );
     return res.rows.map((r) => r.id);
+  }
+
+  /**
+   * 运营待办告警（#231）的候选单：停留超过 minAge 分钟的两类订单态。
+   *
+   * 两类**就是原始订单态**，不是派生态——admin-bff 的 `mapEntityOrderStatus` 里
+   * `pending_verify → pending_verify`、`paid → paid_unprovisioned` 是一一对应的直映；
+   * 运营页第三类 `partial_pending` 才是派生（pending_payment + 账单 partial），
+   * 而它按 owner 2026-09-08 裁定**不告警**（那一类在等客户，不在等运营），所以这里不查。
+   * 这层对应关系由 `scripts/guardrails/check-ops-todo-alerts.mjs` 守着。
+   *
+   * 停留时长按各自该看的那个钟：申报态看 `declared_at`（客户什么时候开始等），
+   * 已付态看 `paid_at`（钱什么时候到的），都兜底到 `updated_at`。
+   */
+  async findOpsTodoOrders(
+    minAgeMinutes: number,
+    limit: number,
+  ): Promise<OpsTodoOrderRow[]> {
+    const res = await this.pool.query<{
+      id: string;
+      order_no: string;
+      status: string;
+      tenant_name: string | null;
+      payable_amount: string;
+      currency: string;
+      waiting_since: Date;
+    }>(
+      `select o.id,
+              o.order_no,
+              o.status,
+              t.name as tenant_name,
+              o.payable_amount,
+              o.currency,
+              case when o.status = 'pending_verify'
+                   then coalesce(o.declared_at, o.updated_at)
+                   else coalesce(o.paid_at, o.updated_at)
+              end as waiting_since
+         from billing.orders o
+         left join tenancy.tenants t on t.id = o.tenant_id
+        where o.status in ('pending_verify', 'paid')
+          and case when o.status = 'pending_verify'
+                   then coalesce(o.declared_at, o.updated_at)
+                   else coalesce(o.paid_at, o.updated_at)
+              end + make_interval(mins => $1) <= now()
+        order by o.created_at asc
+        limit $2`,
+      [minAgeMinutes, limit],
+    );
+    return res.rows.map((r) => ({
+      id: r.id,
+      orderNo: r.order_no,
+      status: r.status === "pending_verify" ? "pending_verify" : "paid",
+      tenantName: r.tenant_name?.trim() || "（租户已删除）",
+      payableAmount: Number(r.payable_amount),
+      currency: r.currency,
+      waitingSince: r.waiting_since,
+    }));
   }
 
   /** 已收款未履约（paid 停留超过 minAge 分钟）→ reconcile 候选。 */

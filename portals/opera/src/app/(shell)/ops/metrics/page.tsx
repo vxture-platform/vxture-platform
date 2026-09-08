@@ -567,7 +567,7 @@ export default function MetricsPage() {
         title="后台任务执行统计"
         icon="gauge"
         level={2}
-        description="opera-bff 自有的四个后台作业（provisioning-dispatch / sharing-expiry / trial-expiry / order-payment-expiry），真实心跳数据。"
+        description="平台后台作业的真实心跳数据，每个作业各占一行（不列举——每加一个作业这行字就会过期一次）。"
       >
         <FilterBar
           view="list"

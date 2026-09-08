@@ -2,8 +2,8 @@
  * job-heartbeat.service.ts — 后台任务心跳写入。
  * @package @vxture/bff-platform-api
  *
- * 四个 @Interval 作业（provisioning-dispatch / sharing-expiry / trial-expiry /
- * order-payment-expiry）各自在 tick 首尾调用，原地 UPSERT 一行到
+ * 各 @Interval 作业在 tick 首尾调用（不列举——每加一个作业这里就会过期一次），
+ * 原地 UPSERT 一行到
  * provisioning.background_jobs——是"这个作业现在活着吗、上次跑得怎么样"的当前态，
  * 不是逐 tick 追加的执行日志（最短 10s 一跳的作业逐条落库一天上万行，见该表 DDL
  * 表头注）。复用 ProvisioningModule 导出的 PROVISIONING_PG_POOL，不为一张心跳表

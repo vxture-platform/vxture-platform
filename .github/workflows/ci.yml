@@ -187,6 +187,13 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm lint:audit-actions
 
+      # 运营待办清单在浏览器里拼、告警在服务端扫，两边各写各的判据。往页面上加一类
+      # 待办**不报错、不影响构建**，只是那一类永远不会有人被通知——而它看起来完全正常
+      # （页面上红红地列着，只是没人收到邮件）。#231 的病根就是这种坏法。
+      - name: Ops todo alert coverage guardrail
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm lint:ops-todo-alerts
+
       # 两类不报错的样式缺陷：CSS 注释提前收口（`next build` 走的
       # Lightning CSS 会自行恢复、照常打包成功，Turbopack dev 却直接拒收），
       # 以及被主题踩掉的关键字工具类（`max-w-none` 实际是 `max-width: 0`）。

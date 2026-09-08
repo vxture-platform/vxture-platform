@@ -27,6 +27,7 @@ import { S2sTokenVerifier } from "./authn/s2s-token-verifier.service";
 import { AccountDeletionPurgeJob } from "./jobs/account-deletion-purge.job";
 import { AnnouncementBroadcastJob } from "./jobs/announcement-broadcast.job";
 import { JobHeartbeatService } from "./jobs/job-heartbeat.service";
+import { OpsTodoAlertJob } from "./jobs/ops-todo-alert.job";
 import { OrderPaymentExpiryJob } from "./jobs/order-payment-expiry.job";
 import { ProvisioningDispatchJob } from "./jobs/provisioning-dispatch.job";
 import { SharingExpiryJob } from "./jobs/sharing-expiry.job";
@@ -35,6 +36,7 @@ import { TrialExpiryJob } from "./jobs/trial-expiry.job";
 import { UsageRollupJob } from "./jobs/usage-rollup.job";
 import { WsBasePoolJob } from "./jobs/ws-base-pool.job";
 import { CustomerNotificationsWiring } from "./notifications/customer-notifications.wiring";
+import { OperatorAlertsWiring } from "./notifications/operator-alerts.wiring";
 import { IntegrationSignalService } from "./platform/integration-signal.service";
 import { PlatformEntitlementsService } from "./platform/platform-entitlements.service";
 import { PlatformUsageService } from "./platform/platform-usage.service";
@@ -71,6 +73,9 @@ import { PlatformUsageRouter } from "./routers/platform-usage.router";
     JobHeartbeatService,
     // P2-g：客户通知（站内 + 邮件）挂到 OrderService / SubscriptionService（setter 注入）
     CustomerNotificationsWiring,
+    // #231：运营待办告警（只发邮件，4h 静默窗口）；自愈放弃经 setOpsAlerter 挂 OrderService
+    OperatorAlertsWiring,
+    OpsTodoAlertJob,
     ProvisioningDispatchJob,
     SharingExpiryJob,
     TrialExpiryJob,
