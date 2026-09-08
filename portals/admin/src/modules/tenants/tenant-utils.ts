@@ -1,4 +1,8 @@
 import type { StatusTone } from "@vxture-platform/shared";
+import {
+  formatDateTime as sharedDateTime,
+  formatDay as sharedDay,
+} from "@vxture-platform/shared";
 import type {
   TenantOperationAuditEvent,
   TenantOperationMember,
@@ -45,12 +49,7 @@ export function formatMoney(value: number) {
 /* 参数由调用点传，不用模块级可变状态存当前 locale：服务端并发渲染时
    两个不同语言的请求会互相覆盖，后写的赢。 */
 export function formatDate(value: string | null, locale: string) {
-  if (!value) return "未设置";
-  return new Date(value).toLocaleDateString(locale, {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
+  return sharedDay(value, locale, "未设置");
 }
 
 /**
@@ -61,16 +60,7 @@ export function formatDate(value: string | null, locale: string) {
  * 看到 500 条全是 2026/08/07）。秒不是装饰——同一分钟内的先后要能分辨。
  */
 export function formatDateTime(value: string | null, locale: string) {
-  if (!value) return "未设置";
-  return new Date(value).toLocaleString(locale, {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
+  return sharedDateTime(value, locale, "未设置");
 }
 
 export function statusLabel(status: TenantOperationRecord["status"]) {

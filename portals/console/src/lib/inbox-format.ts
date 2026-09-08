@@ -5,6 +5,7 @@
  */
 
 import type { IconName } from "@vxture/design-system";
+import { formatDay } from "@vxture-platform/shared";
 
 export type InboxLevel = "danger" | "warning" | "info";
 
@@ -50,9 +51,5 @@ export function formatInboxTime(iso: string, locale: string): string {
     if (abs < day) return rtf.format(Math.round(diffMs / hour), "hour");
     return rtf.format(Math.round(diffMs / day), "day");
   }
-  return at.toLocaleDateString(locale, {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
+  return formatDay(at, locale);
 }

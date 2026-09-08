@@ -26,7 +26,6 @@ import {
   fetchQuotaUsage,
   fetchRecommendedProducts,
   fetchSubscribedProducts,
-  fetchTenantModelQuotas,
   markInboxAllRead,
   markInboxRead,
   type ConsoleQuotaUsage,
@@ -40,13 +39,8 @@ import {
   isCoveredByTodo,
   useDerivedTodos,
 } from "@/features/todos/useDerivedTodos";
+import { selectVisibleDomains } from "@/features/permissions/navigation-access";
 import {
-  findActiveDomain,
-  selectVisibleDomains,
-} from "@/features/permissions/navigation-access";
-import {
-  Icon,
-  Progress,
   ShellHeader,
   ShellPageContainer,
   ShellSidebarFrame,
@@ -143,12 +137,6 @@ export function ConsoleAppShell({
   useEffect(() => {
     if (drawer === "notifications") reloadTodos();
   }, [drawer, reloadTodos]);
-  /* 侧栏 Token 用量。null = 还没读到；"unavailable" = 读不到（BFF/Atlas 不可达）；
-   * "uncovered" = 工作空间没有额度池。此前失败回落 0/100，故障时会画出一根像真
-   * 的空仪表——三种非数字状态各自显式呈现，不再有假读数（2026-08-30）。 */
-  const [usage, setUsage] = useState<
-    { used: number; total: number } | "unavailable" | "uncovered" | null
-  >(null);
   const [billing, setBilling] = useState<{ amount: number; currency: string }>({
     amount: 0,
     currency: "CNY",
@@ -178,27 +166,6 @@ export function ConsoleAppShell({
   const tenantId = session.tenant?.id;
   useEffect(() => {
     let alive = true;
-
-    const loadUsage = async () => {
-      try {
-        const quotas = await fetchTenantModelQuotas();
-        if (!alive) return;
-        // fetchTenantModelQuotas 自己会把失败折成 status:"unavailable"，这里必须
-        // 认这个信号——否则空的 pools 会被当成「用量为 0」画出来。
-        if (quotas.status === "unavailable") {
-          setUsage("unavailable");
-          return;
-        }
-        const pool = quotas.pools[0];
-        setUsage(
-          pool
-            ? { used: pool.limit - pool.remaining, total: pool.limit }
-            : "uncovered",
-        );
-      } catch {
-        if (alive) setUsage("unavailable");
-      }
-    };
 
     const loadBilling = async () => {
       try {
@@ -262,12 +229,11 @@ export function ConsoleAppShell({
     };
 
     // These reads are independent — fire them concurrently instead of chaining
-    // awaits, so the shell's usage/billing/apps/quota data lands after one
-    // round-trip rather than five. allSettled, not all: one failing read must
-    // not blank the other four (fetchMyApps / fetchQuotaUsage are strict reads
+    // awaits, so the shell's billing/apps/quota data lands after one
+    // round-trip rather than several. allSettled, not all: one failing read must
+    // not blank the others (fetchMyApps / fetchQuotaUsage are strict reads
     // that reject on failure; the rest can still reject on a network error).
     void Promise.allSettled([
-      loadUsage(),
       loadBilling(),
       loadApps(),
       loadAgentExtras(),
@@ -348,11 +314,6 @@ export function ConsoleAppShell({
     [visibleDomains, tSidebar],
   );
 
-  const activeDomain = findActiveDomain(visibleDomains, pathname);
-  const domainName = activeDomain
-    ? tSidebar(`domains.${activeDomain.labelKey}`)
-    : undefined;
-
   /* launcher 的两个目的地。icon 现在是 DS IconName（原先是 Phosphor class
    * 串 "ph-squares-four"，随字体图标一起退役）。 */
   const viewOptions: ConsoleHeaderViewOption[] = [
@@ -390,37 +351,6 @@ export function ConsoleAppShell({
     expandAllGroups: tShell("sidebar.expandAllGroups"),
     collapseAllGroups: tShell("sidebar.collapseAllGroups"),
   };
-
-  const usageNumbers = typeof usage === "object" ? usage : null;
-  const usagePct =
-    usageNumbers && usageNumbers.total > 0
-      ? Math.round((usageNumbers.used / usageNumbers.total) * 100)
-      : 0;
-  /* The DS nav's footer slot is a fixed 64px block, so the token-usage card is
-   * rebuilt compact (one label row + a progress bar) instead of the old
-   * three-row card, which would overflow it. Hidden while collapsed — there is
-   * no room for a label at rail width. */
-  const sidebarFooter = navCollapsed ? null : (
-    <div className="flex w-full flex-col justify-center gap-2xs px-2xs">
-      <div className="flex items-center gap-2xs text-label-sm text-muted-foreground">
-        <Icon name="coins" size="xs" fallback="placeholder" />
-        <span className="min-w-0 flex-1 truncate">
-          {tShell("tokenCard.title")}
-        </span>
-        <span className="shrink-0 tabular-nums">
-          {usageNumbers
-            ? `${usageNumbers.used.toLocaleString()} / ${usageNumbers.total.toLocaleString()}`
-            : usage === "unavailable"
-              ? tShell("tokenCard.unavailable")
-              : usage === "uncovered"
-                ? tShell("tokenCard.uncovered")
-                : "—"}
-        </span>
-      </div>
-      {/* 只有拿到真实读数才画进度条：没有数字的状态画一根空条就是在造假。 */}
-      {usageNumbers ? <Progress value={usagePct} /> : null}
-    </div>
-  );
 
   const currencySymbol =
     billing.currency === "USD" ? "$" : billing.currency === "EUR" ? "€" : "¥";
@@ -583,7 +513,10 @@ export function ConsoleAppShell({
            * 两个门户间距对不齐的来源（批 D：.sidebar 已随 shell-template 退役）。 */}
           <ShellSidebarFrame mode={navCollapsed ? "collapsed" : "expanded"}>
             <ShellSidebarNav
-              domainName={domainName ?? tShell("views.console.name")}
+              /* owner 2026-09-08:侧栏头部不再显示分组名(与设计不符)。传空串而不是
+                 改 DS——那一格是 flex-1 的占位,空着正好让右侧「展开/收起全部分组」
+                 按钮保持靠右;有了名字反而是多余的一层标题。 */
+              domainName=""
               sections={navSections}
               collapsed={navCollapsed}
               onToggleCollapsed={toggleNav}
@@ -593,7 +526,6 @@ export function ConsoleAppShell({
               storageKeyPrefix="vx-console-nav"
               linkComponent={Link}
               labels={sidebarLabels}
-              footer={sidebarFooter}
             />
           </ShellSidebarFrame>
           <main className={CONTENT_SCROLL} {...{ [CONTENT_SCROLL_ATTR]: "" }}>

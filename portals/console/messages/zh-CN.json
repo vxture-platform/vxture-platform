@@ -136,11 +136,6 @@
     "fontSmall": "小",
     "fontDefault": "默认",
     "fontLarge": "大",
-    "tokenCard": {
-      "title": "Token 用量",
-      "unavailable": "暂不可用",
-      "uncovered": "无额度池"
-    },
     "monthlyCostDesc": "本月实付合计与开票状态",
     "payBillDesc": "管理支付方式与付款",
     "trafficUsageDesc": "查看流量与调用用量",
@@ -148,7 +143,7 @@
     "verifyUnknown": "认证未知",
     "verifyActive": "已认证",
     "verifySuspended": "已暂停",
-    "brandName": "工作台控制台",
+    "brandName": "Workspace Console",
     "tenantList": "可切换的租户",
     "currentTag": "当前",
     "accountDeleting": {
@@ -206,7 +201,7 @@
   "drawer": {
     "close": "关闭",
     "notifications": {
-      "title": "待办与消息",
+      "title": "消息中心",
       "markAllRead": "全部已读",
       "empty": "没有待办,也没有消息",
       "todosTitle": "待办",
@@ -215,7 +210,7 @@
   },
   "inbox": {
     "header": {
-      "title": "待办与消息",
+      "title": "消息中心",
       "description": "待办由订单、订阅、配额、邀请与加油包的真实状态派生,处理完自动消失;消息是订阅到期、续费订单、开通与退款进度的通知,邮件偏好在「通知提醒」调整。"
     },
     "unread": "{count} 条未读",
@@ -321,7 +316,7 @@
         "description": "邀请、访问审查与团队成员管理"
       },
       "subscription": {
-        "label": "产品订阅",
+        "label": "订阅管理",
         "description": "已订产品、到期提醒与新品推荐"
       },
       "billing": {
@@ -337,7 +332,7 @@
         "description": "在线模型、自建模型与产品权益"
       },
       "inbox": {
-        "label": "待办与消息",
+        "label": "消息中心",
         "description": "需要你处理的待办,与订阅、订单、退款的消息"
       },
       "notifications": {
@@ -382,7 +377,7 @@
     "membersPermissions": "权限管理",
     "roles": "角色管理",
     "invitations": "邀请记录",
-    "subscription": "产品订阅",
+    "subscription": "订阅管理",
     "billing": "费用中心",
     "billingInvoices": "发票与抬头",
     "quotas": "配额管理",
@@ -395,7 +390,7 @@
     "addonPay": "加油包支付",
     "vouchers": "我的卡券",
     "auditLogs": "审计日志",
-    "inbox": "待办与消息",
+    "inbox": "消息中心",
     "tenant": "租户信息",
     "tenantVerification": "企业认证",
     "tenantVerificationApply": "提交认证"

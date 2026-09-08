@@ -82,6 +82,7 @@ import {
   type ObjectState,
 } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
+import { formatDateTime } from "@vxture-platform/shared";
 
 const PROVIDER_MANAGE = "model:provider.manage";
 const MODEL_MANAGE = "model:model.manage";
@@ -285,9 +286,7 @@ const HEALTH_META: Record<
    没跟着改，见 scripts/guardrails 旁的说明。） */
 function formatTime(iso: string, locale: string): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString(locale, { hour12: false });
+  return Number.isNaN(d.getTime()) ? iso : formatDateTime(d, locale);
 }
 
 /**

@@ -63,6 +63,7 @@ import { ListPagination } from "@/modules/shared/ListPagination";
 import { useTenancyDirectory } from "@/features/tenancy/directory";
 import { WorkspaceCell } from "@/features/tenancy/WorkspaceCell";
 import { api, OperaApiError } from "@/lib/api";
+import { formatDay } from "@vxture-platform/shared";
 
 type UsageAxis =
   | "tenant"
@@ -174,7 +175,8 @@ function formatWindow(iso: string, locale: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleDateString(locale, { timeZone: "UTC" });
+    : // 计量窗口按 UTC 切分,时区必须固定;形态走共用件(年月日,与别处一致)。
+      formatDay(d, locale, iso, { timeZone: "UTC" });
 }
 
 function downloadCsv(filename: string, rows: readonly string[][]) {

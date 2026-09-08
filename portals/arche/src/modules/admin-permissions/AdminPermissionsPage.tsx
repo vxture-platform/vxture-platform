@@ -53,6 +53,7 @@ import type {
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { formatNumber } from "@/lib/format";
 import { useStepUp, isStepUpCancelled } from "@/features/stepup/StepUpProvider";
+import { formatDateTime } from "@vxture-platform/shared";
 
 type PermissionFilter = "all" | PlatformPermissionType;
 type StatusFilter = "all" | "active" | "disabled";
@@ -854,7 +855,7 @@ function PermissionDetailDialog({
           <DetailRow label="排序">{formatNumber(permission.sort)}</DetailRow>
           <DetailRow label={tShared("columns.updatedAt")}>
             {permission.updatedAt
-              ? new Date(permission.updatedAt).toLocaleString(locale)
+              ? formatDateTime(permission.updatedAt, locale, EMPTY_MARK)
               : EMPTY_MARK}
           </DetailRow>
           <DetailRow label="描述" className="sm:col-span-2">

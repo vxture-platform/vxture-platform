@@ -35,6 +35,7 @@ import {
 } from "@/api/operator-webauthn";
 import { useLocale, useTranslations } from "next-intl";
 import { useConfirmLabels } from "@/lib/destructive";
+import { formatDay } from "@vxture-platform/shared";
 
 /* 收 `locale` 与 `t`：`toLocaleDateString()` 不带参数走的是**浏览器默认语言**，
    和界面选的语言没有关系——一个中文界面配英文日期，或者反过来。 */
@@ -43,11 +44,11 @@ function formatUsage(
   locale: string,
   t: ReturnType<typeof useTranslations<"passkeys">>,
 ) {
-  const added = new Date(passkey.createdAt).toLocaleDateString(locale);
+  const added = formatDay(passkey.createdAt, locale);
   if (!passkey.lastUsedAt) return t("addedNeverUsed", { added });
   return t("addedLastUsed", {
     added,
-    lastUsed: new Date(passkey.lastUsedAt).toLocaleDateString(locale),
+    lastUsed: formatDay(passkey.lastUsedAt, locale),
   });
 }
 

@@ -47,6 +47,7 @@ import {
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { api, OperaApiError } from "@/lib/api";
 import { useVisiblePolling } from "@/lib/useVisiblePolling";
+import { formatDateTime } from "@vxture-platform/shared";
 
 const REFRESH_INTERVAL_MS = 30_000;
 
@@ -132,19 +133,11 @@ function queueStatusTone(status: WebhookDeliveryStatus): StatusBadgeTone {
   return "neutral";
 }
 
-const TIME_FORMAT = new Intl.DateTimeFormat("zh-CN", {
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hour12: false,
-});
-
 function formatTime(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : TIME_FORMAT.format(d);
+  // locale 沿用本页原有的固定 zh-CN(只统一形态,不动 locale)。
+  return formatDateTime(d, "zh-CN", "—");
 }
 
 function formatDuration(ms: number | null): string {

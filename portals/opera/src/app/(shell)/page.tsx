@@ -42,6 +42,7 @@ import {
 } from "@vxture/design-system";
 import { isEnabled, isServing } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
+import { formatDateTime } from "@vxture-platform/shared";
 
 type ProviderHealthStatus = "healthy" | "degraded" | "down" | "unknown";
 
@@ -126,9 +127,7 @@ const HEALTH_META: Record<
    没跟着改，见 scripts/guardrails 旁的说明。） */
 function formatTime(iso: string, locale: string): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString(locale, { hour12: false });
+  return Number.isNaN(d.getTime()) ? iso : formatDateTime(d, locale);
 }
 
 export default function DashboardPage() {

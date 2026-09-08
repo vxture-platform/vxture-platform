@@ -77,6 +77,7 @@ import { useOperatorSession } from "@/features/session/SessionProvider";
 import { isEnabled } from "@/features/atlas/state";
 import { api, OperaApiError } from "@/lib/api";
 import { useConfirmLabels } from "@/lib/destructive";
+import { formatDay } from "@vxture-platform/shared";
 
 interface ProductLite {
   id: string;
@@ -190,9 +191,7 @@ function formatQuota(limit: number | null): string {
 function formatTime(iso: string | null, locale: string): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString(locale, { hour12: false });
+  return Number.isNaN(d.getTime()) ? iso : formatDay(d, locale, iso);
 }
 
 function message(error: unknown, fallback: string): string {

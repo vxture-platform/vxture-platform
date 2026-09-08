@@ -23,19 +23,14 @@ import { exportRowsToCsv, type CsvColumn } from "@/lib/exportCsv";
 import { PageHeader } from "@/modules/shared/PageHeader";
 import { ListPagination } from "@/modules/shared/ListPagination";
 import { type PageSize } from "@/modules/shared/PageSizePicker";
+import { formatDateTime as sharedDateTime } from "@vxture-platform/shared";
 
 /* 收 `locale` 而不是写死 `"zh-CN"`：日期的字段顺序属于语言——中文
    `2026/08/18`，英文 `08/18/2026`。同一串数字，读出来是两个日期。 */
 function formatDateTime(value: string, locale: string) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleString(locale, {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return sharedDateTime(d, locale);
 }
 
 // P2 占位板块建设：通知投递台账（support.notification_logs，只读）。

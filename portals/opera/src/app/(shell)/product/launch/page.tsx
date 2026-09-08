@@ -60,6 +60,7 @@ import {
   type CheckResult,
 } from "@/features/product/launch-checks";
 import { api, OperaApiError } from "@/lib/api";
+import { formatDateTime } from "@vxture-platform/shared";
 
 interface ProductRecord {
   id: string;
@@ -153,7 +154,7 @@ function ProductLaunch() {
       try {
         const results = await runLaunchChecks(p, { locale });
         setChecks(results);
-        setCheckedAt(new Date().toLocaleString(locale, { hour12: false }));
+        setCheckedAt(formatDateTime(new Date(), locale));
         /* 把能映射到检查项的结果写回检查单（`checked_by` 由 BFF 填当前操作员；
            DDL 预留的"自动校验为 NULL"要等 BFF 支持自动标记时再用）。写失败不影响
            页面上的结论——结论来自刚跑完的这一次，不是来自库里那一行。 */

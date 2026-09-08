@@ -57,6 +57,7 @@
     "lint:section-indent": "node scripts/guardrails/check-section-body-indent.mjs",
     "lint:audit-actions": "node scripts/guardrails/check-audit-actions.mjs",
     "lint:ops-todo-alerts": "node scripts/guardrails/check-ops-todo-alerts.mjs",
+    "lint:datetime-discipline": "node scripts/guardrails/check-datetime-discipline.mjs",
     "lint:css-traps": "node scripts/guardrails/check-css-traps.mjs",
     "lint:destructive": "node scripts/guardrails/check-destructive-confirmations.mjs",
     "lint:messages": "node scripts/guardrails/check-message-catalogs.mjs",

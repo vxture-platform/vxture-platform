@@ -75,6 +75,7 @@ import type {
   RecommendedProduct,
   SubscribedProduct,
 } from "@/api/console-bff";
+import { formatDay } from "@vxture-platform/shared";
 
 export interface AppCenterProps {
   /** null = 还没读到：加载中，或读取失败（由 productsFailed 区分）。空数组是真实的「没订阅任何产品」。 */
@@ -143,14 +144,9 @@ function ReleaseLine({
 }) {
   if (!version) return null;
   const text = releasedAt
-    ? versionAtLabel.replace("{version}", version).replace(
-        "{date}",
-        new Intl.DateTimeFormat(locale, {
-          year: "numeric",
-          month: "numeric",
-          day: "numeric",
-        }).format(new Date(releasedAt)),
-      )
+    ? versionAtLabel
+        .replace("{version}", version)
+        .replace("{date}", formatDay(releasedAt, locale))
     : "v " + version;
   return (
     <span className="truncate text-body-sm text-muted-foreground tabular-nums">

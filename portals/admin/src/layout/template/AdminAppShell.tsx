@@ -21,7 +21,7 @@ import {
   type Density,
   type ShellNavSection,
 } from "@vxture/design-system";
-import { writeNavCollapsed } from "@vxture-platform/shared";
+import { formatDateTime, writeNavCollapsed } from "@vxture-platform/shared";
 import { useAdminSession } from "@/features/session/AdminSessionProvider";
 import { fetchNotificationLogs } from "@/api/admin-bff";
 import type { NotificationLogRecord } from "@/entities/console";
@@ -74,12 +74,7 @@ const NOTIF_ICON: Record<string, string> = {
 function formatNotifTime(value: string, locale: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString(locale, {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatDateTime(date, locale, "");
 }
 
 /* ── 设置抽屉：两行都读当前状态 ──

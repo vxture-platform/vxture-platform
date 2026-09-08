@@ -72,7 +72,14 @@ export interface FulfillResult {
   subscription: SubscriptionRecord;
 }
 
-function addCycle(base: Date, unit: string, count: number): Date {
+/**
+ * 周期推进：到期日 = 起算日 + count 个 unit。**导出仅为可测**——它决定订阅到期日,
+ * 算错直接影响收费与权益关断,而它此前一行都没被测到(2026-09-08 覆盖率清点)。
+ *
+ * 全程走 UTC 的 setUTC*：本地时区会让跨夏令时的月份多出/少掉一天。
+ * 未知 unit 原样返回不推进——宁可到期日不动被人发现,也不要悄悄按某个默认单位算。
+ */
+export function addCycle(base: Date, unit: string, count: number): Date {
   const d = new Date(base.getTime());
   switch (unit) {
     case "day":
