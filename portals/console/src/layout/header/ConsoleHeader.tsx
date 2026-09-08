@@ -193,9 +193,18 @@ export function ConsoleHeader({
             onSelect={(key) => setView(key as ShellView)}
             buttonLabel={t("featureBoards")}
           />
+          {/* owner 2026-09-08:字标全英文 `Console`,tag 标出所在平面。
+              tag 是 DS 的品牌锁定式第二段(比字标小一档、弱一级色),不是旁边另起
+              的一行字。
+
+              标「Tenant」而不是租户名,是**冲着右边的 TenantPanel 去的**:
+              `Console Tenant` 紧接着 `[某某租户 ▾]`,两段连起来读成一句——前半句
+              说这是哪个平面的控制台,后半句说当前是哪一个租户。放租户名反而会与
+              紧挨着的按钮并排重复同一个词。 */}
           <ShellBrand
             href="/"
             label={brandName}
+            tag="Tenant"
             logoSrc="/brand/vxture-logo-white.png"
           />
           <span className="h-lg w-px bg-border" aria-hidden="true" />
